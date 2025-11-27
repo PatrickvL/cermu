@@ -20,15 +20,12 @@
  */
 bus_state_t op_jmp(bus_state_t pins) {
   trace_operation(__func__);
-  
   switch (this->half_cycle) {
     case 0: // PHI2: Dummy bus cycle
       // Addressing mode has already set up AB register with target address
       return pins;
-      
     case 1: // PHI1: Set PC and transition
       this->set(REG_PC, this->get(REG_AB));
-      this->half_cycle++;
       this->transition_to_fetch();
       return pins;
   }
@@ -42,15 +39,12 @@ bus_state_t op_jmp(bus_state_t pins) {
  */
 bus_state_t op_jml(bus_state_t pins) {
   trace_operation(__func__);
-  
   switch (this->half_cycle) {
     case 0: // PHI2: Dummy bus cycle
       // Addressing mode has already set up AB register with target address
-      return pins;
-      
+      return pins;      
     case 1: // PHI1: Set PC and transition
       this->set(REG_PC, this->get(REG_AB));
-      this->half_cycle++;
       this->transition_to_fetch();
       return pins;
   }
@@ -65,7 +59,6 @@ bus_state_t op_jsr(bus_state_t pins) {
     /* PHI2: Read low byte of target address from PC directly to ABL */
     pins = this->bus_setup_read<Addr::PC>(pins);
     return pins;
-
   case 1:
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_ABL, pins);  // Load low byte into ABL (was REG_DL)
@@ -77,7 +70,6 @@ bus_state_t op_jsr(bus_state_t pins) {
     /* PHI2: Dummy read from stack pointer (internal operation) */
     pins = this->bus_setup_dummy<Addr::SP>(pins);
     return pins;
-
   case 3:
     /* PHI1: Increment cycle index */
     this->half_cycle++;
@@ -86,8 +78,7 @@ bus_state_t op_jsr(bus_state_t pins) {
   case 4:
     /* PHI2: Push PCH (high byte of return address) to stack */
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
-    return pins;
-    
+    return pins;    
   case 5:
     /* PHI1: Decrement SP */
     this->dec(REG_S);
@@ -97,8 +88,7 @@ bus_state_t op_jsr(bus_state_t pins) {
   case 6:
     /* PHI2: Push PCL (low byte of return address) to stack */
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCL));
-    return pins;
-    
+    return pins;    
   case 7:
     /* PHI1: Decrement SP */
     this->dec(REG_S);
@@ -109,7 +99,6 @@ bus_state_t op_jsr(bus_state_t pins) {
     /* PHI2: Read high byte of target address */
     pins = this->bus_setup_read<Addr::PC>(pins);
     return pins;
-
   case 9:
     /* PHI1: Load high byte, set PC to target address, and transition */
     this->bus_load_reg(REG_ABH, pins);  // Load high byte into ABH
@@ -126,9 +115,7 @@ bus_state_t op_rts(bus_state_t pins) {
   case 0:
     /* PHI2: Dummy read from PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-
     return pins;
-
   case 1:
     /* PHI1: Increment SP */
     this->inc(REG_S);
@@ -139,10 +126,9 @@ bus_state_t op_rts(bus_state_t pins) {
     /* PHI2: Pull PCL from stack */
     pins = this->bus_setup_read<Addr::SP>(pins);
     return pins;
-
   case 3:
-    /* PHI1: Load PCL into ABL and increment SP */
-    this->bus_load_reg(REG_ABL, pins);
+    /* PHI1: Load PCL and increment SP */
+    this->bus_load_reg(REG_PCL, pins);
     this->inc(REG_S);
     this->half_cycle++;
     return pins;
@@ -150,21 +136,17 @@ bus_state_t op_rts(bus_state_t pins) {
   case 4:
     /* PHI2: Pull PCH from stack */
     pins = this->bus_setup_read<Addr::SP>(pins);
-
     return pins;
-
   case 5:
-    /* PHI1: Load PCH into ABH */
-    this->bus_load_reg(REG_ABH, pins);
+    /* PHI1: Load PCH */
+    this->bus_load_reg(REG_PCH, pins);
     this->half_cycle++;
     return pins;
     
   case 6:
-    /* PHI2: Dummy read from reconstructed address in AB */
-    this->set(REG_PC, this->get(REG_AB));
+    /* PHI2: Dummy read from reconstructed address  */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
     return pins;
-    
   case 7:
     /* PHI1: Increment PC and transition */
     this->inc(REG_PC);
@@ -248,7 +230,6 @@ bus_state_t op_brk(bus_state_t pins) {
     /* PHI2: Dummy read from PC+1 (BRK has optional signature byte) */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
     return pins;
-
   case 1:
     /* PHI1: Increment PC and set interrupt type */
     this->inc(REG_PC);
@@ -263,8 +244,7 @@ bus_state_t op_brk(bus_state_t pins) {
   case 2:
     /* PHI2: Push PCH to stack */
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
-    return pins;
-    
+    return pins;    
   case 3:
     /* PHI1: Decrement SP */
     this->dec(REG_S);
@@ -274,8 +254,7 @@ bus_state_t op_brk(bus_state_t pins) {
   case 4:
     /* PHI2: Push PCL to stack */
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCL));
-    return pins;
-    
+    return pins;    
   case 5:
     /* PHI1: Decrement SP and prepare status */
     this->dec(REG_S);
@@ -286,8 +265,7 @@ bus_state_t op_brk(bus_state_t pins) {
   case 6:
     /* PHI2: Push P|B|U to stack (B flag set for BRK) */
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DL));
-    return pins;
-    
+    return pins;    
   case 7:
     /* PHI1: Decrement SP, set interrupt flags, get vector address */
     this->dec(REG_S);
@@ -309,7 +287,6 @@ bus_state_t op_brk(bus_state_t pins) {
      * 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
-
   case 9:
     /* PHI1: Load vector low byte into DL temporarily, then increment vector address in AB */
     this->bus_load_reg(REG_DL, pins);
@@ -322,7 +299,6 @@ bus_state_t op_brk(bus_state_t pins) {
      * 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
-
   case 11:
     /* PHI1: Load vector high byte, assemble target address, and set PC */
     this->bus_load_reg(REG_ABH, pins);
@@ -349,9 +325,7 @@ bus_state_t op_rti(bus_state_t pins) {
   case 0:
     /* PHI2: Dummy read from PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
-
     return pins;
-
   case 1:
     /* PHI1: Increment SP */
     this->inc(REG_S);
@@ -362,7 +336,6 @@ bus_state_t op_rti(bus_state_t pins) {
     /* PHI2: Pull P from stack (clear B, set U) */
     pins = this->bus_setup_read<Addr::SP>(pins);
     return pins;
-
   case 3:
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_DL, pins);
@@ -375,7 +348,6 @@ bus_state_t op_rti(bus_state_t pins) {
     /* PHI2: Pull PCL from stack */
     pins = this->bus_setup_read<Addr::SP>(pins);
     return pins;
-
   case 5:
     /* PHI1: Load PCL into ABL and increment SP */
     this->bus_load_reg(REG_ABL, pins);  // Load PCL into ABL (was REG_DL)
@@ -386,8 +358,7 @@ bus_state_t op_rti(bus_state_t pins) {
   case 6:
     /* PHI2: Pull PCH from stack */
     pins = this->bus_setup_read<Addr::SP>(pins);
-    return pins;
-    
+    return pins;    
   case 7:
     /* PHI1: Load PCH and transition */
     this->bus_load_reg(REG_ABH, pins);

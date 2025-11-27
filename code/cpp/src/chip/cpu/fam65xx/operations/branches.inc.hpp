@@ -20,7 +20,6 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
   case 0:
     pins = this->bus_setup_read<Addr::PC>(pins);
     return pins;
-
   case 1: {
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_ABL, pins);
@@ -43,11 +42,9 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     /* PHI2: Dummy read from incremented PC (hardware behavior) */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
     return pins;
-
   case 3: {
     /* PHI1: Check for page cross */
     bool page_cross = this->page_crossed(this->get(REG_PC), this->get(REG_AB));
-
     if (!page_cross) {
       /* No page cross: set final PC and complete after 3 cycles */
       this->set(REG_PC, this->get(REG_AB));
@@ -74,7 +71,6 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     /* PHI2: Page cross penalty - dummy read from intermediate address in PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
     return pins;
-
   case 5:
     /* PHI1: Set final correct target PC and complete instruction */
     /* REG_AB contains the correct target from case 1 */
@@ -82,6 +78,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     this->transition_to_fetch();
     return pins;
   }
+
   return pins;
 }
 

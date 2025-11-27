@@ -25,7 +25,6 @@ bus_state_t op_lda(bus_state_t pins) {
       case 0: // PHI2 - Read low byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
-
       case 1: // PHI1 - Load and increment
         this->bus_load_reg(REG_AL, pins);
         this->inc(REG_AB);
@@ -35,7 +34,6 @@ bus_state_t op_lda(bus_state_t pins) {
       case 2: // PHI2 - Read high byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
-
       case 3: // PHI1 - Load and update flags
         this->bus_load_reg(REG_AH, pins);
         uint16_t value = this->get(REG_A_16);
@@ -53,7 +51,6 @@ bus_state_t op_lda(bus_state_t pins) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;
-
   case 1: // PHI1
     this->bus_load_operand(REG_A, pins);
     this->update_nz_flags(this->get(REG_A));
@@ -78,7 +75,6 @@ bus_state_t op_ldx(bus_state_t pins) {
       case 0: // PHI2 - Read low byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
-
       case 1: // PHI1 - Load and increment
         this->bus_load_reg(REG_XL, pins);
         this->inc(REG_AB);
@@ -88,7 +84,6 @@ bus_state_t op_ldx(bus_state_t pins) {
       case 2: // PHI2 - Read high byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
-
       case 3: // PHI1 - Load and update flags
         this->bus_load_reg(REG_XH, pins);
         uint16_t value = this->get(REG_X_16);
@@ -106,7 +101,6 @@ bus_state_t op_ldx(bus_state_t pins) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;
-
   case 1: // PHI1
     this->bus_load_operand(REG_X, pins);
     this->update_nz_flags(this->get(REG_X));
@@ -131,7 +125,6 @@ bus_state_t op_ldy(bus_state_t pins) {
       case 0: // PHI2 - Read low byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
-
       case 1: // PHI1 - Load and increment
         this->bus_load_reg(REG_YL, pins);
         this->inc(REG_AB);
@@ -141,7 +134,6 @@ bus_state_t op_ldy(bus_state_t pins) {
       case 2: // PHI2 - Read high byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
-
       case 3: // PHI1 - Load and update flags
         this->bus_load_reg(REG_YH, pins);
         uint16_t value = this->get(REG_Y_16);
@@ -159,7 +151,6 @@ bus_state_t op_ldy(bus_state_t pins) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;
-
   case 1: // PHI1
     this->bus_load_operand(REG_Y, pins);
     this->update_nz_flags(this->get(REG_Y));
@@ -183,16 +174,18 @@ bus_state_t op_sta(bus_state_t pins) {
       switch (this->half_cycle) {
       case 0:
         // Store low byte of accumulator
-
         pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_AL));
+        return pins;
+      case 1:
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
         return pins;
 
-      case 1:
+      case 2:
         // Store high byte of accumulator
-
         pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_AH));
+        return pins;
+      case 3:
         this->transition_to_fetch();
         return pins;
       }
@@ -205,7 +198,6 @@ bus_state_t op_sta(bus_state_t pins) {
   case 0: // PHI2 - Write accumulator to address
     pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_A));
     return pins;
-
   case 1: // PHI1 - Complete and transition
     this->transition_to_fetch();
     return pins;
@@ -227,16 +219,18 @@ bus_state_t op_stx(bus_state_t pins) {
       switch (this->half_cycle) {
       case 0:
         // Store low byte of X register
-
         pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_XL));
+        return pins;
+      case 1:
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
         return pins;
 
-      case 1:
+      case 2:
         // Store high byte of X register
-
         pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_XH));
+        return pins;
+      case 3:
         this->transition_to_fetch();
         return pins;
       }
@@ -271,16 +265,18 @@ bus_state_t op_sty(bus_state_t pins) {
       switch (this->half_cycle) {
       case 0:
         // Store low byte of Y register
-
         pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_YL));
+        return pins;
+      case 1:
         // For 65C816 native mode, increment address bus with bank handling
         this->inc(REG_AB);
         return pins;
 
       case 1:
         // Store high byte of Y register
-
         pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_YH));
+        return pins;
+      case 3:
         this->transition_to_fetch();
         return pins;
       }
@@ -293,7 +289,6 @@ bus_state_t op_sty(bus_state_t pins) {
   case 0: // PHI2 - Write Y register to address
     pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_Y));
     return pins;
-
   case 1: // PHI1 - Complete and transition
     this->transition_to_fetch();
     return pins;
@@ -317,7 +312,6 @@ bus_state_t op_and(bus_state_t pins) {
       case 0: // PHI2 - Read low byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
-
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
         this->inc(REG_AB);
@@ -327,8 +321,7 @@ bus_state_t op_and(bus_state_t pins) {
       case 2: // PHI2 - Read high byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
-
-      case 3: // PHI1 - Load and perform 16-bit AND
+      case 3: { // PHI1 - Load and perform 16-bit AND
         this->bus_load_operand(REG_DL, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
@@ -340,6 +333,7 @@ bus_state_t op_and(bus_state_t pins) {
         this->transition_to_fetch();
         return pins;
       }
+      }
       return pins;
     }
   }
@@ -349,7 +343,6 @@ bus_state_t op_and(bus_state_t pins) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;
-
   case 1: // PHI1
     this->bus_load_operand(REG_DL, pins);
     this->set(REG_A, this->get(REG_A) & this->get(REG_DL));
@@ -372,7 +365,6 @@ bus_state_t op_ora(bus_state_t pins) {
       case 0: // PHI2 - Read low byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
-
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
         this->inc(REG_AB);
@@ -382,8 +374,7 @@ bus_state_t op_ora(bus_state_t pins) {
       case 2: // PHI2 - Read high byte
         pins = this->bus_setup_read<Addr::AB, Bank::PBR>(pins);
         return pins;
-
-      case 3: // PHI1 - Load and perform 16-bit ORA
+      case 3: { // PHI1 - Load and perform 16-bit ORA
         this->bus_load_operand(REG_DL, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
@@ -395,6 +386,7 @@ bus_state_t op_ora(bus_state_t pins) {
         this->transition_to_fetch();
         return pins;
       }
+      }
       return pins;
     }
   }
@@ -404,7 +396,6 @@ bus_state_t op_ora(bus_state_t pins) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;
-
   case 1: // PHI1
     this->bus_load_operand(REG_DL, pins);
     this->set(REG_A, this->get(REG_A) | this->get(REG_DL));
@@ -427,7 +418,6 @@ bus_state_t op_eor(bus_state_t pins) {
       case 0: // PHI2 - Read low byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
-
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
         this->inc(REG_AB);
@@ -437,7 +427,6 @@ bus_state_t op_eor(bus_state_t pins) {
       case 2: // PHI2 - Read high byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
-
       case 3: // PHI1 - Load and perform 16-bit EOR
         this->bus_load_operand(REG_DL, pins);
         this->set(REG_ABL, this->get(REG_DL));
@@ -459,7 +448,6 @@ bus_state_t op_eor(bus_state_t pins) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;
-
   case 1: // PHI1
     this->bus_load_operand(REG_DL, pins);
     this->set(REG_A, this->get(REG_A) ^ this->get(REG_DL));
@@ -485,7 +473,6 @@ bus_state_t op_bit(bus_state_t pins) {
       case 0: // PHI2 - Read low byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
-
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
         this->inc(REG_AB);
@@ -495,8 +482,7 @@ bus_state_t op_bit(bus_state_t pins) {
       case 2: // PHI2 - Read high byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
-
-      case 3: // PHI1 - Load and perform 16-bit BIT
+      case 3: { // PHI1 - Load and perform 16-bit BIT
         this->bus_load_operand(REG_DL, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
@@ -511,6 +497,7 @@ bus_state_t op_bit(bus_state_t pins) {
         this->transition_to_fetch();
         return pins;
       }
+      }
       return pins;
     }
   }
@@ -520,12 +507,10 @@ bus_state_t op_bit(bus_state_t pins) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;
-
-  case 1: // PHI1
+  case 1: { // PHI1
     this->bus_load_operand(REG_DL, pins);
     uint8_t operand = this->get(REG_DL);
     uint8_t result = this->get(REG_A) & operand;
-
     // BIT immediate (65C02) only affects Z flag - N and V are NOT affected
     // BIT memory affects N, V, and Z flags normally
     if (this->opcode_entry.am_index == to_index(AM::IMM)) {
@@ -536,17 +521,15 @@ bus_state_t op_bit(bus_state_t pins) {
       // N = bit 7 of operand (copy bit 7 directly)
       // V = bit 6 of operand (copy bit 6 directly)
       // Z = result of A & operand (set if result is zero)
-
       // Extract N and V flags from operand in one operation (more efficient)
       uint8_t flags_from_operand = operand & (FLAG_N | FLAG_V);
-
       this->update_flags(FLAG_N | FLAG_V | FLAG_Z,
                          flags_from_operand | this->calc_z_flag(result));
     }
-
     // Complete instruction
     this->transition_to_fetch();
     return pins;
+  }
   }
   return pins;
 }

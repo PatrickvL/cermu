@@ -23,16 +23,13 @@ bus_state_t op_bra(bus_state_t pins) {
       // PHI2: Setup read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
-
     case 1:
       // PHI1: Load data and increment PC
       this->bus_load_reg(REG_DL, pins);
       this->inc(REG_PC);
-
       // Apply branch offset
       int8_t offset = static_cast<int8_t>(this->get(REG_DL));
       this->set(REG_PC, this->get(REG_PC) + offset);
-
       this->transition_to_fetch();
       return pins;
     }
@@ -61,27 +58,31 @@ bus_state_t op_trb(bus_state_t pins) {
       // Cycle 0: Read original value from memory
       pins = this->bus_setup_read<Addr::AB>(pins);
       return pins;
+    case 1:
+      pins = this->bus_load_reg(REG_DL);
+      this->half_cycle++;
+      return pins;  
 
-    case 1: {
+    case 2:
       // Cycle 1: Dummy write original value back + modify
       pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
-
+      return pins;
+    case 3: {
       uint8_t accumulator = this->get(REG_A);
-
       // Test bits (set Z flag if A & memory == 0)
       uint8_t test_result = this->get(REG_DL) & accumulator;
       this->update_flag(FLAG_Z, test_result == 0);
-
       // Reset bits (memory = memory & ~A)
       this->set(REG_DL, this->get(REG_DL) & ~accumulator);
-
       this->half_cycle++;
       return pins;
     }
 
-    case 2:
+    case 4:
       // Cycle 2: Write modified result back
       pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
+      return pins;
+    case 5:
       this->transition_to_fetch();
       return pins;
     }
@@ -99,27 +100,30 @@ bus_state_t op_tsb(bus_state_t pins) {
       // Cycle 0: Read original value from memory
       pins = this->bus_setup_read<Addr::AB>(pins);
       return pins;
+    case 1:
+      pins = this->bus_load_reg(REG_DL);
+      this->half_cycle++;
+      return pins;
 
-    case 1: {
+    case 2:
       // Cycle 1: Dummy write original value back + modify
       pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
-
+      return pins;
+    case 3: {
       uint8_t accumulator = this->get(REG_A);
-
       // Test bits (set Z flag if A & memory == 0)
       uint8_t test_result = this->get(REG_DL) & accumulator;
       this->update_flag(FLAG_Z, test_result == 0);
-
       // Set bits (memory = memory | A)
       this->set(REG_DL, this->get(REG_DL) | accumulator);
-
       this->half_cycle++;
       return pins;
     }
 
-    case 2:
-      // Cycle 2: Write modified result back
+    case 2: // Cycle 2: Write modified result back
       pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
+      return pins;
+    case 3:
       this->transition_to_fetch();
       return pins;
     }
@@ -151,7 +155,6 @@ bus_state_t op_stp(bus_state_t pins) {
       // PHI2: Setup read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
-
     case 1:
       // PHI1: Load data and increment PC
       this->bus_load_reg(REG_DL, pins);
@@ -177,7 +180,6 @@ bus_state_t op_phx(bus_state_t pins) {
       /* Dummy cycle for internal operation */
       pins = this->bus_setup_dummy<Addr::PC>(pins);
       return pins;
-
     case 1:
       /* PHI2: Write X to stack with processor-specific RDY handling */
       pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_X));
@@ -198,7 +200,6 @@ bus_state_t op_phy(bus_state_t pins) {
       /* Dummy cycle for internal operation */
       pins = this->bus_setup_dummy<Addr::PC>(pins);
       return pins;
-
     case 1:
       /* PHI2: Write Y to stack with processor-specific RDY handling */
       pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_Y));
@@ -219,11 +220,7 @@ bus_state_t op_plx(bus_state_t pins) {
       /* PHI2: Dummy read from PC */
       pins = this->bus_setup_dummy<Addr::PC>(pins);
       return pins;
-
     case 1:
-      /* PHI2: Dummy read from current stack pointer, then increment SP */
-      pins = this->bus_setup_dummy<Addr::SP>(pins);
-
       /* PHI1: Increment stack pointer */
       this->inc(REG_S);
       this->half_cycle++;
@@ -232,7 +229,8 @@ bus_state_t op_plx(bus_state_t pins) {
     case 2:
       /* PHI2: Read from incremented stack pointer directly into X (eliminates copy) */
       pins = this->bus_setup_read<Addr::SP>(pins);
-
+      return pins;
+    case 3:
       /* PHI1: Set flags based on X register value */
       this->update_nz_flags(this->get(REG_X));
       this->transition_to_fetch();
@@ -251,7 +249,6 @@ bus_state_t op_ply(bus_state_t pins) {
       /* PHI2: Dummy read from PC */
       pins = this->bus_setup_dummy<Addr::PC>(pins);
       return pins;
-
     case 1:
       /* PHI2: Dummy read from current stack pointer, then increment SP */
       pins = this->bus_setup_dummy<Addr::SP>(pins);
@@ -264,7 +261,8 @@ bus_state_t op_ply(bus_state_t pins) {
     case 2:
       /* PHI2: Read from incremented stack pointer directly into Y (eliminates copy) */
       pins = this->bus_setup_read<Addr::SP>(pins);
-
+      return pins;
+    case 3:
       /* PHI1: Set flags based on Y register value */
       this->update_nz_flags(this->get(REG_Y));
       this->transition_to_fetch();
