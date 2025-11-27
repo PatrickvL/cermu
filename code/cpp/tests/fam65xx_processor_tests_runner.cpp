@@ -276,8 +276,8 @@ private:
             value = (it != harness->extended_memory.end()) ? it->second : 0;  // Extended memory or default 0
         }
         
-        // Record bus cycle for tracking (use 16-bit for compatibility)
-        harness->record_bus_cycle(static_cast<uint16_t>(addr & 0xFFFF), value, false);
+        // Record bus cycle for tracking
+        harness->record_bus_cycle(addr, value, false);
         
         return value;
     }
@@ -294,22 +294,12 @@ private:
             harness->extended_memory[addr] = data;  // Extended memory
         }
         
-        // Record bus cycle for tracking (use 16-bit for compatibility)
-        harness->record_bus_cycle(static_cast<uint16_t>(addr & 0xFFFF), data, true);
+        // Record bus cycle for tracking
+        harness->record_bus_cycle(addr, data, true);
     }
     
     // Record bus cycle for comparison with JSON test data
 public:
-    void record_bus_cycle(uint16_t addr, uint8_t data, bool is_write) {
-        bus_cycle_t cycle;
-        cycle.address = addr;
-        cycle.data = data;
-        cycle.is_write = is_write;
-        cycle.has_65816_flags = false;
-        actual_bus_cycles.push_back(cycle);
-    }
-    
-    // Overloaded version for 32-bit addresses (65C816)
     void record_bus_cycle(uint32_t addr, uint8_t data, bool is_write) {
         bus_cycle_t cycle;
         cycle.address = addr;
@@ -505,7 +495,7 @@ public:
             pins = FAM65XX_SET_DATA(pins, value);
             
             // Record bus cycle
-            record_bus_cycle(static_cast<uint16_t>(masked_addr & 0xFFFF), value, false);
+            record_bus_cycle(masked_addr, value, false);
         } else {
             // WRITE CYCLE: Store data from pins into memory
             uint8_t data = FAM65XX_GET_DATA(pins);
@@ -518,7 +508,7 @@ public:
             }
             
             // Record bus cycle
-            record_bus_cycle(static_cast<uint16_t>(masked_addr & 0xFFFF), data, true);
+            record_bus_cycle(masked_addr, data, true);
         }
         
         return pins;
@@ -633,7 +623,7 @@ private:
             // Use harness memory access (supports 24-bit addresses for 65816)
             value = harness->get_memory(addr);
             
-            // Always use full 32-bit address for bus cycle tracking - the harness will handle masking
+            // Always use full 32-bit address for bus cycle tracking
             harness->record_bus_cycle(addr, value, false);
         } else {
             // Fallback to direct memory access (mask to 16-bit for safety)
@@ -651,7 +641,7 @@ private:
             // Use harness memory access (supports 24-bit addresses for 65816)
             harness->set_memory(addr, data);
             
-            // Always use full 32-bit address for bus cycle tracking - the harness will handle masking
+            // Always use full 32-bit address for bus cycle tracking
             harness->record_bus_cycle(addr, data, true);
         } else {
             // Fallback to direct memory access (mask to 16-bit for safety)

@@ -631,6 +631,7 @@ bus_state_t am_dpx(bus_state_t pins) {
     // Native mode: True Direct Page,X addressing
     switch (this->cycle_index) {
     case 0:
+      // PHI2: Read Direct Page offset from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
 
@@ -644,7 +645,7 @@ bus_state_t am_dpx(bus_state_t pins) {
       if ((this->get(REG_D) & 0xFF) != 0x00) {
         this->cycle_index++;
       } else {
-        this->cycle_index = 3;
+        this->cycle_index = 4; // Skip penalty cycle
       }
       return pins;
     }
@@ -654,7 +655,12 @@ bus_state_t am_dpx(bus_state_t pins) {
       this->cycle_index++;
       return pins;
 
-    case 3: {
+    case 3:
+      // PHI1: Direct Page penalty cycle
+      this->cycle_index++;
+      return pins;
+
+    case 4: {
       // PHI2: Dummy read from Direct Page address while adding X
       pins = this->bus_setup_dummy<Addr::AB>(pins);
 
