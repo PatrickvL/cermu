@@ -289,7 +289,7 @@ bus_state_t op_brk(bus_state_t pins) {
         return pins;
 
       case 10:
-        // Read interrupt vector low byte
+        // Read interrupt vector low byte (always from bank 0 via ZBR)
         pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
         return pins;
       case 11:
@@ -297,8 +297,9 @@ bus_state_t op_brk(bus_state_t pins) {
         this->inc(REG_AB);
         this->half_cycle++;
         return pins;
-
+    
       case 12:
+        // Read interrupt vector high byte (always from bank 0 via ZBR)
         pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
         return pins;
       case 13:
@@ -379,7 +380,7 @@ bus_state_t op_brk(bus_state_t pins) {
     return pins;
 
   case 10:
-    /* PHI2: Read interrupt vector low byte (always from bank 0 using ZBR for 65C816) */
+    /* PHI2: Read interrupt vector low byte (always from bank 0 via ZBR for 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
   case 11:
@@ -390,7 +391,7 @@ bus_state_t op_brk(bus_state_t pins) {
     return pins;
 
   case 12:
-    /* PHI2: Read interrupt vector high byte (always from bank 0 using ZBR for 65C816) */
+    /* PHI2: Read interrupt vector high byte (always from bank 0 via ZBR for 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
   case 13:

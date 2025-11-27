@@ -361,15 +361,11 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     if constexpr (Traits.update_bus_lines()) {
       // For 65816: Split 24-bit address into 16-bit address + 8-bit bank
       if constexpr (has_wide_registers()) {
-        if (!this->in_emulation_mode()) {
-          // Native mode: Set lower 16 bits in address field and upper 8 bits in
-          // bank field
-          pins = FAM65XX_SET_ADDR(pins, addr & 0xFFFF);
-          pins = FAM65XX_SET_BANK(pins, (addr >> 16) & 0xFF);
-        } else {
-          // Emulation mode: use address field only like 8-bit CPUs
-          pins = FAM65XX_SET_ADDR(pins, addr & Traits.address_mask());
-        }
+        // 65C816: Always set both address (16-bit) and bank (8-bit) fields
+        // In emulation mode, PC uses PBR while data/stack use bank 0
+        // In native mode, all addresses use their respective bank registers
+        pins = FAM65XX_SET_ADDR(pins, addr & 0xFFFF);
+        pins = FAM65XX_SET_BANK(pins, (addr >> 16) & 0xFF);
       } else {
         // For 8/16-bit CPUs: use address field only (zero overhead)
         pins = FAM65XX_SET_ADDR(pins, addr & Traits.address_mask());
