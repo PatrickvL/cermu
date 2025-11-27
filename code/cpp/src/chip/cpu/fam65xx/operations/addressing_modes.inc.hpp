@@ -289,9 +289,15 @@ bus_state_t am_ind(bus_state_t pins) {
     pins = this->bus_setup_read<Addr::AB>(pins);
     return pins;
   case 5:
-    /* PHI1: Load low byte and save to TMP */
-    this->bus_load_reg(REG_AH, pins);  // Save low byte to AH (unused on 6502)
-    this->set(REG_ABL, this->get(REG_ABL) + 1);
+    /* PHI1: Load low byte and save to TMP, then increment pointer address */
+    this->bus_load_reg(REG_AH, pins);  // Save low byte to AH (temporary storage)
+    /* NMOS 6502 bug: JMP ($xxFF) reads high byte from $xx00 instead of $xy00
+     * CMOS 65C02 fix: Properly increment full 16-bit address */
+    if constexpr (has_cmos()) {
+      this->inc(REG_AB);  // 65C02: Proper 16-bit increment (fixes page-crossing bug)
+    } else {
+      this->set(REG_ABL, this->get(REG_ABL) + 1);  // 6502: 8-bit increment only (wraps within page)
+    }
     this->half_cycle++;
     return pins;
 
@@ -469,8 +475,8 @@ bus_state_t am_zpi(bus_state_t pins) {
     pins = this->bus_setup_read<Addr::PC>(pins);
     return pins;
   case 1:
-    /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_DL, pins);
+    /* PHI1: Load zero page address into ABL */
+    this->bus_load_reg(REG_ABL, pins);
     this->set(REG_ABH, 0x00); // High byte is always 0 for zero page
     this->inc(REG_PC);
     this->half_cycle++;
@@ -481,19 +487,20 @@ bus_state_t am_zpi(bus_state_t pins) {
     pins = this->bus_setup_read<Addr::AB>(pins);
     return pins;
   case 3:
-    /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_DL, pins);
-    this->set(REG_ABL, this->get(REG_ABL) + 1);
+    /* PHI1: Load low byte and save to AH (temporary storage) */
+    this->bus_load_reg(REG_AH, pins);  // Save low byte to AH
+    this->set(REG_ABL, this->get(REG_ABL) + 1);  // Increment ZP pointer
     this->half_cycle++;
     return pins;
 
   case 4:
+    // PHI2: Read high byte of target address from zero page+1
     pins = this->bus_setup_read<Addr::AB>(pins);
     return pins;
   case 5:
-    /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_DL, pins);
-    this->set(REG_ABL, this->get(REG_DL)); // Low byte from cycle 1
+    /* PHI1: Assemble final address from saved low byte and high byte */
+    this->bus_load_reg(REG_ABH, pins);  // High byte to ABH
+    this->set(REG_ABL, this->get(REG_AH)); // Low byte from AH to ABL
     this->transition_to_operation();
     return pins;
   }

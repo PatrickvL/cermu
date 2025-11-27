@@ -481,7 +481,7 @@ bus_state_t op_dey(bus_state_t pins) {
       if constexpr (!this->has_optimized_cycles()) {
         return this->bus_setup_dummy<Addr::PC>(pins);
       }
-      return pins;      
+      return pins;  
     case 1: // PHI1: Operation
       if constexpr (has_wide_registers()) {
         if (this->is_index_16bit()) {
