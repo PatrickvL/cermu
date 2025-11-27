@@ -424,7 +424,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
    * memory addressing modes are fundamentally different operations at the
    * hardware level (operand in instruction stream vs operand at address).
    */
-  bus_state_t bus_setup_read_operand(bus_state_t pins) {
+  inline bus_state_t bus_setup_read_operand(bus_state_t pins) {
     // Immediate mode: operand is at PC (instruction stream)
     if (this->opcode_entry.am_index == to_index(AM::IMM)) {
       return this->bus_setup_read<Addr::PC>(pins);
@@ -930,7 +930,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     return op_handler;
   }
 
-  void transition_to_opcode(const opcode_info_t entry) {
+  inline void transition_to_opcode(const opcode_info_t entry) {
     this->opcode_entry = entry;
     this->half_cycle = 0;
     // Set up first instruction cycle handler
@@ -971,7 +971,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
   }
 
   // Transition to next instruction fetch (public for bootstrap function)
-  void transition_to_fetch() {
+  inline void transition_to_fetch() {
     if constexpr (ENABLE_TRACING) {
       trace("transition_to_fetch() called - resetting to fetch mode");
     }
@@ -979,7 +979,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     this->half_cycle = 0;
   }
 
-  void transition_to_operation() {
+  inline void transition_to_operation() {
     this->half_cycle = 0;
     this->current_handler =
         this->operation_handlers[this->opcode_entry.op_index];
