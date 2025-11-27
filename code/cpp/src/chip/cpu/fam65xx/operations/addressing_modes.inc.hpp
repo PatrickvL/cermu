@@ -144,7 +144,7 @@ bus_state_t am_abx(bus_state_t pins) {
     return pins;
   case 1:
     /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_DL, pins);
+    this->bus_load_reg(REG_ABL, pins);
     this->inc(REG_PC);
     this->half_cycle++;
     return pins;
