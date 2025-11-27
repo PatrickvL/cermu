@@ -1561,7 +1561,9 @@ using wdc65c816_cpu_impl_t = fam65xx_t<WDC_65C816>;
 template class fam65xx_t<MOS6502>;
 template class fam65xx_t<MOS6510>;
 template class fam65xx_t<RICOH_2A03>;
+template class fam65xx_t<SYNERTEK_65C02>;
 template class fam65xx_t<WDC_65C02_EARLY>;
+template class fam65xx_t<WDC_W65C02S>;
 template class fam65xx_t<ROCKWELL_R65C02>;
 template class fam65xx_t<WDC_65C816>;
 
