@@ -344,10 +344,9 @@ constexpr CPUTraits WDC_65SC02 = WDC_65C02_EARLY;
 constexpr CPUTraits GTE_G65SC02 = WDC_65C02_EARLY;
 
 constexpr CPUTraits SYNERTEK_65C02 = {
-    "Synertek", // vendor
-    "65C02",    // chip_id
-    CPUCoreFlags::CMOS_BASE | CPUCoreFlags::HAS_DECIMAL_MODE |
-        CPUCoreFlags::BCD_EXTRA_CYCLE,            // core_flags
+    "Synertek",                                   // vendor
+    "65C02",                                      // chip_id
+    CoreFlags::CMOS_BASE_FLAGS,                   // core_flags
     16,                                           // address_bits
     0x00,                                         // io_port_mask
     BankingType::NONE,                            // banking

@@ -682,12 +682,6 @@ public:
         if constexpr (Traits.has_apu()) {
             cpu->set_processor_tests_mode(true);
         }
-        
-        // TODO: Memory callbacks API removed during PHI2/PHI1 refactoring
-        // Memory access is now handled through bus_state_t pins interface
-        // The harness-based memory access (via instance_mem_read/instance_mem_write)
-        // is still used via the harness_ptr mechanism during tick() operations
-        // cpu->set_memory_callbacks(instance_mem_read, instance_mem_write, this);
     }
     
     ~ProcessorWrapper() {
