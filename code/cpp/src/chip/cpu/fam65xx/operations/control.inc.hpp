@@ -123,41 +123,31 @@ bus_state_t op_rts(bus_state_t pins) {
     return pins;
 
   case 2:
-    /* PHI2: Dummy read from PC */
-    pins = this->bus_setup_dummy<Addr::PC>(pins);
-    return pins;
-  case 3:
-    /* PHI1: Increment SP */
-    this->inc(REG_S);
-    this->half_cycle++;
-    return pins;
-
-  case 4:
     /* PHI2: Pull PCL from stack */
     pins = this->bus_setup_read<Addr::SP>(pins);
     return pins;
-  case 5:
+  case 3:
     /* PHI1: Load PCL and increment SP */
     this->bus_load_reg(REG_PCL, pins);
     this->inc(REG_S);
     this->half_cycle++;
     return pins;
 
-  case 6:
+  case 4:
     /* PHI2: Pull PCH from stack */
     pins = this->bus_setup_read<Addr::SP>(pins);
     return pins;
-  case 7:
+  case 5:
     /* PHI1: Load PCH */
     this->bus_load_reg(REG_PCH, pins);
     this->half_cycle++;
     return pins;
-
-  case 8:
+    
+  case 6:
     /* PHI2: Dummy read from reconstructed address  */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
     return pins;
-  case 9:
+  case 7:
     /* PHI1: Increment PC and transition */
     this->inc(REG_PC);
     this->transition_to_fetch();
