@@ -222,9 +222,97 @@ uint16_t get_vector_addr() const {
   return standard_vectors[interrupt_index];
 }
 
-/* BRK - Break (Software Interrupt) */
+/* BRK - Break (Software Interrupt)
+ * 
+ * Unified implementation handling both native and emulation modes.
+ * Native mode (65C816): Pushes 4 bytes (PBR, PCH, PCL, P) - uses all cycles
+ * Emulation mode: Pushes 3 bytes (PCH, PCL, P|B) - skips PBR push cycles
+ */
 bus_state_t op_brk(bus_state_t pins) {
   trace_operation(__func__);
+  
+  if constexpr (has_wide_registers()) {
+    // 65C816: Check if we're in native mode
+    if (!this->in_emulation_mode()) {
+      // Native mode: 4-byte stack frame (PBR, PCH, PCL, P)
+      switch (this->half_cycle) {
+      case 0:
+        // PHI2: Read signature byte (ignored, but must be read for timing)
+        pins = this->bus_setup_dummy<Addr::PC>(pins);
+        return pins;
+      case 1:
+        this->inc(REG_PC);
+        // Set interrupt type to BRK if no hardware interrupt is active
+        if (this->active_interrupt == FAM65XX_INT_NONE) {
+          this->active_interrupt = FAM65XX_INT_BRK;
+        }
+        this->half_cycle++;
+        return pins;
+
+      case 2:
+        // PHI2: Push program bank register
+        pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PBR));
+        return pins;
+      case 3:
+        this->dec(REG_S);
+        this->half_cycle++;
+        return pins;
+
+      case 4:
+        // PHI2: Push PC high byte
+        pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
+        return pins;
+      case 5:
+        this->dec(REG_S);
+        this->half_cycle++;
+        return pins;
+
+      case 6:
+        // PHI2: Push PC low byte
+        pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCL));
+        return pins;
+      case 7:
+        this->dec(REG_S);
+        this->half_cycle++;
+        return pins;
+
+      case 8:
+        // PHI2: Push processor status register (no B flag in native mode)
+        pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_P));
+        return pins;
+      case 9:
+        this->dec(REG_S);
+        this->set_flag(FLAG_I);   // Disable interrupts
+        this->clear_flag(FLAG_D); // Clear decimal mode
+        this->set(REG_AB, this->get_vector_addr());
+        this->half_cycle++;
+        return pins;
+
+      case 10:
+        // Read interrupt vector low byte
+        pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
+        return pins;
+      case 11:
+        this->bus_load_reg(REG_PCL, pins);
+        this->inc(REG_AB);
+        this->half_cycle++;
+        return pins;
+
+      case 12:
+        pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
+        return pins;
+      case 13:
+        this->bus_load_reg(REG_PCH, pins);
+        this->set(REG_PBR, 0); // Clear PBR for interrupt vectors
+        this->active_interrupt = FAM65XX_INT_NONE;
+        this->transition_to_fetch();
+        return pins;
+      }
+      return pins;
+    }
+  }
+  
+  // 6502/65C02/65C816 Emulation Mode: Standard 3-byte stack frame
   switch (this->half_cycle) {
   case 0:
     /* PHI2: Dummy read from PC+1 (BRK has optional signature byte) */
@@ -232,9 +320,8 @@ bus_state_t op_brk(bus_state_t pins) {
     return pins;
   case 1:
     /* PHI1: Increment PC and set interrupt type */
-    this->inc(REG_PC);  // 65C02 increments PC once more (PC now at opcode+2)
+    this->inc(REG_PC);
     /* Set interrupt type to BRK if no hardware interrupt is active */
-    /* Hardware interrupts (IRQ, NMI) take priority over software BRK */
     if (this->active_interrupt == FAM65XX_INT_NONE) {
       this->active_interrupt = FAM65XX_INT_BRK;
     }
@@ -258,13 +345,12 @@ bus_state_t op_brk(bus_state_t pins) {
   case 5:
     /* PHI1: Decrement SP and prepare status */
     this->dec(REG_S);
-    this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
     this->half_cycle++;
     return pins;
 
   case 6:
     /* PHI2: Push P|B|U to stack (B flag set for BRK) */
-    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DL));
+    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_P) | FLAG_B | FLAG_U);
     return pins;
   case 7:
     /* PHI1: Decrement SP, set interrupt flags, get vector address */
@@ -282,42 +368,28 @@ bus_state_t op_brk(bus_state_t pins) {
     this->half_cycle++;
     return pins;
 
-  case 8: // Note : reset() starts at half_cycle 8 now!
-    /* PHI2: Read interrupt vector low byte (always from bank 0 using ZBR for
-     * 65C816) */
+  case 8: // Note: reset() starts at half_cycle 8 for emulation mode!
+    /* PHI2: Read interrupt vector low byte (always from bank 0 using ZBR for 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
   case 9:
-    /* PHI1: Load vector low byte into DL temporarily, then increment vector address in AB */
-    this->bus_load_reg(REG_DL, pins);
+    /* PHI1: Load vector low byte into PCL, then increment vector address in AB */
+    this->bus_load_reg(REG_PCL, pins);
     this->inc(REG_AB);
     this->half_cycle++;
     return pins;
 
   case 10:
-    /* PHI2: Read interrupt vector high byte (always from bank 0 using ZBR for
-     * 65C816) */
+    /* PHI2: Read interrupt vector high byte (always from bank 0 using ZBR for 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
   case 11:
-    /* PHI1: Construct PC from PCH and DL registers which contain the interrupt vector bytes */
+    /* PHI1: Construct PC from vector bytes and clear PBR if needed */
     this->bus_load_reg(REG_PCH, pins);
-    this->set(REG_PCL, this->get(REG_DL));
-    /* 65C816: Clear PBR immediately after vector read in emulation mode */
+    /* 65C816: Clear PBR for interrupt vectors in emulation mode */
     if constexpr (has_wide_registers()) {
-      if (this->in_emulation_mode()) {
-        this->set(REG_PBR, 0);
-      }
+      this->set(REG_PBR, 0);
     }
-    this->half_cycle++;
-    return pins;
-
-  case 12:
-    /* PHI2: Final cycle - dummy read from new PC to prepare for next instruction */
-    pins = this->bus_setup_read<Addr::PC>(pins);
-    return pins;
-  case 13:
-    /* PHI1: Clear active interrupt - interrupt processing complete */
     this->active_interrupt = FAM65XX_INT_NONE;
     this->transition_to_fetch();
     return pins;
