@@ -272,7 +272,7 @@ bus_state_t op_sty(bus_state_t pins) {
         this->inc(REG_AB);
         return pins;
 
-      case 1:
+      case 2:
         // Store high byte of Y register
         pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_YH));
         return pins;

@@ -59,9 +59,9 @@ bus_state_t op_trb(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::AB>(pins);
       return pins;
     case 1:
-      pins = this->bus_load_reg(REG_DL);
+      this->bus_load_reg(REG_DL, pins);
       this->half_cycle++;
-      return pins;  
+      return pins;
 
     case 2:
       // Cycle 1: Dummy write original value back + modify
@@ -101,7 +101,7 @@ bus_state_t op_tsb(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::AB>(pins);
       return pins;
     case 1:
-      pins = this->bus_load_reg(REG_DL);
+      this->bus_load_reg(REG_DL, pins);
       this->half_cycle++;
       return pins;
 
@@ -120,10 +120,10 @@ bus_state_t op_tsb(bus_state_t pins) {
       return pins;
     }
 
-    case 2: // Cycle 2: Write modified result back
+    case 4: // Cycle 2: Write modified result back
       pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
       return pins;
-    case 3:
+    case 5:
       this->transition_to_fetch();
       return pins;
     }
