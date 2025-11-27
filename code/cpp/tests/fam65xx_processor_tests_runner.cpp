@@ -819,6 +819,9 @@ public:
     }
     
     void set_sp(uint8_t sp) override {
+        // Set stack pointer low byte only
+        // REG_SPH is initialized to 0x01 in init_registers() and never changes
+        // This ensures stack is always on page 1 (0x0100-0x01FF) for all 65xx CPUs
         cpu->set(REG_S, sp);
     }
     
@@ -1147,8 +1150,12 @@ private:
         const cpu_state_t* previous_final = previous_test ? &previous_test->final : nullptr;
         harness->setup_memory_for_test(&test->initial, previous_final);
         
-        // CRITICAL FIX: Bootstrap CPU to reset state before setting test state
+        // Bootstrap CPU to reset internal state machine between tests
+        // This is essential - without it, instruction decode state from previous tests contaminates subsequent tests
         harness->bootstrap_processor_for_tests();
+        
+        // Reset cycle count for this test
+        harness->reset_cycle_count();
         
         // THREAD SAFETY FIX: Set harness in processor wrapper for bus cycle recording
         harness->set_harness_for_bus_recording();
@@ -1173,7 +1180,17 @@ private:
         harness->set_a(test->initial.a);
         harness->set_x(test->initial.x);
         harness->set_y(test->initial.y);
-        harness->set_sp(test->initial.s);
+        
+        // CRITICAL FIX: For 65816 emulation mode, SP must use only low 8 bits
+        // ProcessorTests provides SP as 16-bit value, but emulation mode ignores high byte
+        if (test->initial.has_65816_state && test->initial.e != 0) {
+            // Emulation mode: use only low byte, force stack to page 1
+            harness->set_sp(static_cast<uint8_t>(test->initial.s & 0xFF));
+        } else {
+            // Native mode or non-65816: use full value
+            harness->set_sp(static_cast<uint8_t>(test->initial.s & 0xFF));
+        }
+        
         harness->set_status(test->initial.p);
         
         if (verbose_mode && !suppress_verbose) {
