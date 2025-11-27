@@ -55,11 +55,6 @@ inline void inc(reg16_t reg_pair) { reg16[reg_pair]++; }
 
 inline void dec(reg16_t reg_pair) { reg16[reg_pair]--; }
 
-// === Load function for bus operations ===
-inline void load(reg8_t data_reg, bus_state_t pins) {
-  reg8[data_reg] = FAM65XX_GET_DATA(pins);
-}
-
 // ========================================================================
 // REGISTER ACCESS METHODS (override mixin methods with constexpr wide
 // detection)

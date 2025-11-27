@@ -643,7 +643,7 @@ bus_state_t op_mvn(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     switch (this->cycle_index) {
     case 0:
-      // Read destination bank
+      // PHI2: Read destination bank
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
 
@@ -655,7 +655,7 @@ bus_state_t op_mvn(bus_state_t pins) {
       return pins;
 
     case 2:
-      // Read source bank
+      // PHI2: Read source bank
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
 
@@ -668,7 +668,7 @@ bus_state_t op_mvn(bus_state_t pins) {
       return pins;
 
     case 4:
-      // Read from source address (bank:X)
+      // PHI2: Read from source address (bank:X)
       pins = this->bus_setup_read<Addr::AB, Bank::SBR>(pins);
       return pins;
 
@@ -695,8 +695,8 @@ bus_state_t op_mvn(bus_state_t pins) {
       // Check if more bytes to transfer
       if (this->get(REG_C) != 0xFFFF) {
         this->set(REG_AB, this->get(REG_X));
-        // Continue transfer - go back to cycle 2
-        this->cycle_index = 2;
+        // Continue transfer - go back to cycle 4
+        this->cycle_index = 4;
       } else {
         // Transfer complete
         this->transition_to_fetch();
@@ -713,7 +713,7 @@ bus_state_t op_mvp(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     switch (this->cycle_index) {
     case 0:
-      // Read destination bank
+      // PHI2: Read destination bank
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
 
@@ -725,7 +725,7 @@ bus_state_t op_mvp(bus_state_t pins) {
       return pins;
 
     case 2:
-      // Read source bank
+      // PHI2: Read source bank
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
 
@@ -739,7 +739,7 @@ bus_state_t op_mvp(bus_state_t pins) {
       return pins;
 
     case 4:
-      // Read from source address (bank:X)
+      // PHI2: Read from source address (bank:X)
       pins = this->bus_setup_read<Addr::AB, Bank::SBR>(pins);
       return pins;
 
@@ -751,10 +751,8 @@ bus_state_t op_mvp(bus_state_t pins) {
       return pins;
 
     case 6:
-      // Write to destination address (bank:Y)
-
-      pins =
-          this->bus_setup_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));
+      // PHI2: Write to destination address (bank:Y)
+      pins = this->bus_setup_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));
       // Decrement X and Y (move in opposite direction from MVN)
       this->dec(REG_X);
       this->dec(REG_Y);
@@ -765,8 +763,8 @@ bus_state_t op_mvp(bus_state_t pins) {
       // Check if more bytes to transfer
       if (this->get(REG_C) != 0xFFFF) {
         this->set(REG_AB, this->get(REG_X));
-        // Continue transfer - go back to cycle 2
-        this->cycle_index = 2;
+        // Continue transfer - go back to cycle 4
+        this->cycle_index = 4;
       } else {
         // Transfer complete
         this->transition_to_fetch();

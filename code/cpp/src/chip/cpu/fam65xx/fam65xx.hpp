@@ -422,7 +422,6 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
   /**
    * Unified operand read helper for PHI2 phase
    * Handles immediate vs memory mode addressing automatically
-   * Based on the old phi2_read_operand() implementation
    *
    * For immediate mode: reads from PC (operand follows opcode)
    * For memory modes: reads from AB (effective address calculated)
@@ -445,19 +444,19 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
   // ========================================================================
 
   /**
-   * Load register from bus data (PHI1 phase)
-   * Single-line helper for clean read handling
-   */
-  inline void bus_load_reg(reg8_t data_reg, bus_state_t pins) {
-    this->set(data_reg, FAM65XX_GET_DATA(pins));
-  }
-
-  /**
    * Get data from bus without storing (PHI1 phase)
    * Use when you need the value for calculations
    */
   inline uint8_t bus_get_data(bus_state_t pins) const {
     return FAM65XX_GET_DATA(pins);
+  }
+
+  /**
+   * Load register from bus data (PHI1 phase)
+   * Single-line helper for clean read handling
+   */
+  inline void bus_load_reg(reg8_t data_reg, bus_state_t pins) {
+    this->set(data_reg, bus_get_data(pins));
   }
 
   /**
@@ -934,18 +933,20 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
   std::array<InstructionHandler, to_index(AM::COUNT)> addressing_mode_handlers;
 
   inline InstructionHandler get_instruction_handler() {
-    // Validate op_index bounds
-    if (this->opcode_entry.op_index >= to_index(OP::COUNT)) {
-      printf("ERROR: op_index %d >= COUNT %d\n", this->opcode_entry.op_index,
-             to_index(OP::COUNT));
-      return &fam65xx_t::op_nop; // Safe fallback
-    }
+    if constexpr (ENABLE_TRACING) {
+      // Validate op_index bounds
+      if (this->opcode_entry.op_index >= to_index(OP::COUNT)) {
+        printf("ERROR: op_index %d >= COUNT %d\n", this->opcode_entry.op_index,
+                to_index(OP::COUNT));
+        return &fam65xx_t::op_nop; // Safe fallback
+      }
 
-    // Validate am_index bounds
-    if (this->opcode_entry.am_index >= to_index(AM::COUNT)) {
-      printf("ERROR: am_index %d >= COUNT %d\n", this->opcode_entry.am_index,
-             to_index(AM::COUNT));
-      return &fam65xx_t::op_nop; // Safe fallback
+      // Validate am_index bounds
+      if (this->opcode_entry.am_index >= to_index(AM::COUNT)) {
+        printf("ERROR: am_index %d >= COUNT %d\n", this->opcode_entry.am_index,
+                to_index(AM::COUNT));
+        return &fam65xx_t::op_nop; // Safe fallback
+      }
     }
 
     // For addressing modes that need address calculation, start with addressing mode handler
@@ -954,11 +955,13 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       InstructionHandler am_handler =
           addressing_mode_handlers[this->opcode_entry.am_index];
 
-      // VALIDATION: Check for null addressing mode handler
-      if (am_handler == nullptr) {
-        printf("ERROR: NULL addressing mode handler for am_index=%d\n",
-               this->opcode_entry.am_index);
-        return &fam65xx_t::op_nop; // Safe fallback
+      if constexpr (ENABLE_TRACING) {
+        // VALIDATION: Check for null addressing mode handler
+        if (am_handler == nullptr) {
+          printf("ERROR: NULL addressing mode handler for am_index=%d\n",
+            this->opcode_entry.am_index);
+          return &fam65xx_t::op_nop; // Safe fallback
+        }
       }
 
       return am_handler;
@@ -968,11 +971,13 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     InstructionHandler op_handler =
         this->operation_handlers[this->opcode_entry.op_index];
 
-    // VALIDATION: Check for null operation handler
-    if (op_handler == nullptr) {
-      printf("ERROR: NULL operation handler for op_index=%d\n",
-             this->opcode_entry.op_index);
-      return &fam65xx_t::op_nop; // Safe fallback
+    if constexpr (ENABLE_TRACING) {
+      // VALIDATION: Check for null operation handler
+      if (op_handler == nullptr) {
+        printf("ERROR: NULL operation handler for op_index=%d\n",
+          this->opcode_entry.op_index);
+        return &fam65xx_t::op_nop; // Safe fallback
+      }
     }
 
     return op_handler;
@@ -1355,7 +1360,7 @@ public:
     // instruction
     this->opcode_entry = get_opcode_info(0x00); // = {OP_BRK, AM_NON, OF_NONE};
     this->current_handler = &fam65xx_t::op_brk;
-    this->cycle_index = 4;                      // Jump to vector loading phase
+    this->cycle_index = 8;                      // Jump to vector loading phase
     this->set(REG_AB, this->get_vector_addr()); // Do the same memory setup as
                                                 // preceding op_brk cycle 3
 
