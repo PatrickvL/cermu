@@ -347,6 +347,12 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     constexpr reg16_t addr_reg = static_cast<reg16_t>(addr_arg);
     uint32_t addr = this->get(addr_reg);
 
+    // Special SP handling not needed here, because:
+    // 1. REG_SPH is initialized to 0x01 in init_registers() and never changes
+    // 2. We only ever set REG_SPL (8-bit), never touch REG_SPH
+    // 3. REG_SP (16-bit) automatically combines SPL+SPH correctly
+    // The stack is ALWAYS on page 1 (0x01xx) for all 65xx processors
+
     // 65C816 banking: OR bank into high bits (optimizer eliminates for non-wide
     // CPUs)
     addr |= static_cast<uint32_t>(get_address_bank<addr_arg>(bank_arg)) << 16;
