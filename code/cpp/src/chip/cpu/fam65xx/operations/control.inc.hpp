@@ -311,7 +311,7 @@ bus_state_t op_brk(bus_state_t pins) {
     return pins;
 
   case 9:
-    /* PHI1: Load data and increment AB */
+    /* PHI1: Load vector low byte into DL temporarily, then increment vector address in AB */
     this->bus_load_reg(REG_DL, pins);
     this->inc(REG_AB);
     this->cycle_index++;
@@ -324,8 +324,9 @@ bus_state_t op_brk(bus_state_t pins) {
     return pins;
 
   case 11:
-    /* PHI1: Load data and set PC */
+    /* PHI1: Load vector high byte, assemble target address, and set PC */
     this->bus_load_reg(REG_ABH, pins);
+    this->set(REG_ABL, this->get(REG_DL));  // Move low byte from DL to ABL
     this->set(REG_PC, this->get(REG_AB));
     /* 65C816: Clear PBR on interrupts in emulation mode */
     if constexpr (has_wide_registers()) {
