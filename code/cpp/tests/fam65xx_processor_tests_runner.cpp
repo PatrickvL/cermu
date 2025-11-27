@@ -1440,7 +1440,7 @@ void collect_tests_from_file(const std::string& filepath, std::vector<TestItem>&
 }
 
 // Optimized directory processing for parallel execution
-std::vector<TestItem> collect_all_tests(const std::vector<std::string>& test_paths) {
+std::vector<TestItem> collect_all_tests(const std::vector<std::string>& test_paths, const std::string& opcode_filter = "") {
     std::vector<TestItem> all_tests;
     
     // First pass: count all JSON files to reserve space
@@ -1459,18 +1459,37 @@ std::vector<TestItem> collect_all_tests(const std::vector<std::string>& test_pat
                     }
                     
                     if (entry.is_regular_file(ec) && !ec && entry.path().extension() == ".json") {
+                        // Apply opcode filter if specified
+                        if (!opcode_filter.empty()) {
+                            std::string filename = entry.path().stem().string();
+                            std::transform(filename.begin(), filename.end(), filename.begin(),
+                                          [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                            if (filename != opcode_filter) {
+                                continue; // Skip files that don't match opcode filter
+                            }
+                        }
                         json_files.push_back(entry.path().string());
                         total_files++;
                     }
                 }
             } else if (fs::is_regular_file(test_path)) {
+                // Apply opcode filter if specified
+                if (!opcode_filter.empty()) {
+                    fs::path file_path(test_path);
+                    std::string filename = file_path.stem().string();
+                    std::transform(filename.begin(), filename.end(), filename.begin(),
+                                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                    if (filename != opcode_filter) {
+                        continue; // Skip files that don't match opcode filter
+                    }
+                }
                 json_files.push_back(test_path);
                 total_files++;
             } else {
                 std::cout << "ERROR: Invalid path: " << test_path << std::endl;
             }
         } catch (const fs::filesystem_error& ex) {
-            std::cout << "ERROR: Could not access path: " << test_path 
+            std::cout << "ERROR: Could not access path: " << test_path
                       << " (" << ex.what() << ")" << std::endl;
         }
     }
@@ -1508,6 +1527,7 @@ void print_usage(const char* program_name) {
     std::cout << "  -c, --continue     Continue testing after failures (default: stop on first failure)\n";
     std::cout << "  -s, --stop-first   Stop on first failure (default behavior)\n";
     std::cout << "  -j, --jobs N       Number of parallel jobs (default: CPU cores - 1)\n";
+    std::cout << "  -o, --opcode HH    Filter tests to only run specified opcode (e.g., 7c or 0x7C)\n";
     std::cout << "  -h, --help         Show this help message\n";
     std::cout << "\nProcessor Auto-Detection:\n";
     std::cout << "  If no -p flag is specified, processor type is auto-detected from test path:\n";
@@ -1522,6 +1542,8 @@ void print_usage(const char* program_name) {
     std::cout << "  " << program_name << " -p nes6502 processor_tests/6502/v1/          # Force NES 6502 on 6502 tests\n";
     std::cout << "  " << program_name << " -j 4 -v processor_tests/synertek65c02/v1/    # Auto-detect Synertek, 4 workers, verbose\n";
     std::cout << "  " << program_name << " -p wdc65c02 -q -c processor_tests/wdc65c02/ # Force WDC 65C02, quiet mode\n";
+    std::cout << "  " << program_name << " -o 7c processor_tests/synertek65c02/v1/      # Test only opcode 0x7C (JMP abs,X)\n";
+    std::cout << "  " << program_name << " --opcode 0x12 -q processor_tests/wdc65c02/   # Test only opcode 0x12, quiet\n";
     std::cout << "\nFeatures:\n";
     std::cout << "  ✓ Multi-processor support (6502 family)\n";
     std::cout << "  ✓ Automatic processor detection from test path\n";
@@ -1617,6 +1639,7 @@ int main(int argc, char* argv[]) {
     size_t num_workers = std::max(1u, std::thread::hardware_concurrency() - 1); // CPU cores - 1
     ProcessorType processor_type_override = ProcessorType::MOS6502;  // Default fallback
     bool processor_specified = false;
+    std::string opcode_filter;  // Optional opcode filter (e.g., "7c" or "0x7c")
     
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -1643,6 +1666,16 @@ int main(int argc, char* argv[]) {
                     print_usage(argv[0]);
                     return 1;
                 }
+            }
+        } else if (arg == "-o" || arg == "--opcode") {
+            if (i + 1 < argc) {
+                opcode_filter = argv[++i];
+                // Normalize opcode format (remove 0x prefix if present, convert to lowercase)
+                if (opcode_filter.substr(0, 2) == "0x" || opcode_filter.substr(0, 2) == "0X") {
+                    opcode_filter = opcode_filter.substr(2);
+                }
+                std::transform(opcode_filter.begin(), opcode_filter.end(), opcode_filter.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
             }
         } else if (arg == "-h" || arg == "--help") {
             print_usage(argv[0]);
@@ -1671,6 +1704,9 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "Test paths: " << test_paths.size() << " specified\n";
     std::cout << "Worker threads: " << num_workers << "\n";
+    if (!opcode_filter.empty()) {
+        std::cout << "Opcode filter: 0x" << opcode_filter << " (only this opcode will be tested)\n";
+    }
     std::cout << "Verbose: " << (verbose_output ? "enabled" : "disabled") << "\n";
     std::cout << "Quiet mode: " << (g_quiet_mode ? "enabled" : "disabled") << "\n";
     std::cout << "Stop on failure: " << (g_stop_on_failure ? "enabled" : "disabled") << "\n\n";
@@ -1680,7 +1716,7 @@ int main(int argc, char* argv[]) {
     // Collect all tests first with timing
     std::cout << "Collecting tests..." << std::flush;
     auto collect_start = std::chrono::high_resolution_clock::now();
-    auto all_tests = collect_all_tests(test_paths);
+    auto all_tests = collect_all_tests(test_paths, opcode_filter);
     auto collect_end = std::chrono::high_resolution_clock::now();
     auto collect_duration = std::chrono::duration_cast<std::chrono::milliseconds>(collect_end - collect_start);
     std::cout << " Found " << all_tests.size() << " tests in " << collect_duration.count() << "ms\n";
