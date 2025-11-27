@@ -162,21 +162,36 @@ private:
 // ========================================================================
 
 // === Building blocks ===
-inline void set_flag(uint8_t flag_mask) {
-  this->set(REG_P, this->get(REG_P) | flag_mask);
+inline void set_flag(data_t flag_mask) {
+  if constexpr (has_wide_registers()) {
+    // 65C816: Use 16-bit P register (data_t is uint16_t)
+    this->set(REG_P_16, this->get(REG_P_16) | flag_mask);
+  } else {
+    // Non-65C816 processors: Use 8-bit P register (data_t is uint8_t)
+    this->set(REG_P, this->get(REG_P) | flag_mask);
+  }
 }
-
-inline void clear_flag(uint8_t flag_mask) {
-  this->set(REG_P, this->get(REG_P) & ~flag_mask);
+inline void clear_flag(data_t flag_mask) {
+  if constexpr (has_wide_registers()) {
+    // 65C816: Use 16-bit P register (data_t is uint16_t)
+    this->set(REG_P_16, this->get(REG_P_16) & ~flag_mask);
+  } else {
+    // Non-65C816 processors: Use 8-bit P register (data_t is uint8_t)
+    this->set(REG_P, this->get(REG_P) & ~flag_mask);
+  }
 }
-
 // === Foundation: Single memory write ===
-inline void update_flags(uint8_t clear_mask, uint8_t set_mask) {
-  this->set(REG_P, (this->get(REG_P) & ~clear_mask) | set_mask);
+inline void update_flags(data_t clear_mask, data_t set_mask) {
+  if constexpr (has_wide_registers()) {
+    // 65C816: Use 16-bit P register (data_t is uint16_t)
+    this->set(REG_P_16, (this->get(REG_P_16) & ~clear_mask) | set_mask);
+  } else {
+    // Non-65C816 processors: Use 8-bit P register (data_t is uint8_t)
+    this->set(REG_P, (this->get(REG_P) & ~clear_mask) | set_mask);
+  }
 }
-
-inline void update_flag(uint8_t flag_mask, bool condition) {
-  update_flags(flag_mask, (uint8_t)condition * flag_mask);
+inline void update_flag(data_t flag_mask, bool condition) {
+  update_flags(flag_mask, static_cast<data_t>(condition) * flag_mask);
 }
 
 // ========================================================================
@@ -333,6 +348,11 @@ void init_registers() {
   // Clear all registers to zero
   std::memset(&reg8, 0, sizeof(reg8));
 
+  // CRITICAL: Initialize stack pointer high byte to 0x01 for ALL processors
+  // The 6502 hardware stack is always at 0x0100-0x01FF (page 1)
+  set(REG_SPH, 0x01);   // Stack pointer high byte (hardwired to page 1)
+  set(REG_SPL, 0xFF);   // Stack pointer low byte (default reset value)
+
   // Initialize P register based on CPU type
   if constexpr (has_wide_registers()) {
     // 65C816 starts in emulation mode with M=1, X=1 flags
@@ -344,7 +364,6 @@ void init_registers() {
     // Standard 8-bit processors
     set(REG_P, FLAG_I); // Only interrupt disable flag
   }
-  set(REG_SP, 0x01FF); // Standard stack pointer
 }
 
 public:
