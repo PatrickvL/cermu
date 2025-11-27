@@ -312,7 +312,7 @@ bus_state_t op_brk(bus_state_t pins) {
     }
   }
   
-  // 6502/65C02/65C816 Emulation Mode: Standard 3-byte stack frame
+  // 6502/65C02/65C816 Emulation Mode: Standard 3-byte stack frame (7 cycles total)
   switch (this->half_cycle) {
   case 0:
     /* PHI2: Dummy read from PC+1 (BRK has optional signature byte) */
@@ -329,30 +329,40 @@ bus_state_t op_brk(bus_state_t pins) {
     return pins;
 
   case 2:
+    /* PHI2: Dummy internal operation cycle (stack pointer setup) */
+    pins = this->bus_setup_dummy<Addr::SP>(pins);
+    return pins;
+  case 3:
+    /* PHI1: Internal operation */
+    this->half_cycle++;
+    return pins;
+
+  case 4:
     /* PHI2: Push PCH to stack */
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
     return pins;
-  case 3:
+  case 5:
     /* PHI1: Decrement SP */
     this->dec(REG_S);
     this->half_cycle++;
     return pins;
 
-  case 4:
+  case 6:
     /* PHI2: Push PCL to stack */
     pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCL));
     return pins;
-  case 5:
-    /* PHI1: Decrement SP and prepare status */
+  case 7:
+    /* PHI1: Decrement SP */
     this->dec(REG_S);
+    this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
     this->half_cycle++;
     return pins;
 
-  case 6:
+  case 8:
     /* PHI2: Push P|B|U to stack (B flag set for BRK) */
-    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_P) | FLAG_B | FLAG_U);
+    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DL));
     return pins;
-  case 7:
+  case 9:
     /* PHI1: Decrement SP, set interrupt flags, get vector address */
     this->dec(REG_S);
     /* Set interrupt disable flag - processor specific behavior */
@@ -368,22 +378,22 @@ bus_state_t op_brk(bus_state_t pins) {
     this->half_cycle++;
     return pins;
 
-  case 8: // Note: reset() starts at half_cycle 8 for emulation mode!
+  case 10:
     /* PHI2: Read interrupt vector low byte (always from bank 0 using ZBR for 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
-  case 9:
+  case 11:
     /* PHI1: Load vector low byte into PCL, then increment vector address in AB */
     this->bus_load_reg(REG_PCL, pins);
     this->inc(REG_AB);
     this->half_cycle++;
     return pins;
 
-  case 10:
+  case 12:
     /* PHI2: Read interrupt vector high byte (always from bank 0 using ZBR for 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
-  case 11:
+  case 13:
     /* PHI1: Construct PC from vector bytes and clear PBR if needed */
     this->bus_load_reg(REG_PCH, pins);
     /* 65C816: Clear PBR for interrupt vectors in emulation mode */

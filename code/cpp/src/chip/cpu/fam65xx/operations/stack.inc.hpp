@@ -87,12 +87,13 @@ bus_state_t op_php(bus_state_t pins) {
     return pins;
   case 1:
     /* PHI1: Prepare status byte and increment cycle */
+    this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
     this->half_cycle++;
     return pins;
 
   case 2:
     /* PHI2: Write P|B|U to stack */
-    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_P) | FLAG_B | FLAG_U);
+    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DL));
     return pins;
   case 3:
     /* PHI1: Decrement SP and transition */
