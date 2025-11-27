@@ -837,7 +837,14 @@ public:
     }
     
     void set_status(uint8_t p) override {
-        cpu->set(REG_P, p);
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            // For 65C816, preserve the high byte (E flag) when setting low byte (P flags)
+            uint16_t p16 = cpu->get(REG_P_16);
+            p16 = (p16 & 0xFF00) | p;  // Keep high byte, set low byte
+            cpu->set(REG_P_16, p16);
+        } else {
+            cpu->set(REG_P, p);
+        }
     }
     
     // 65816-specific methods - only compile for 65816
@@ -1161,22 +1168,24 @@ private:
         const cpu_state_t* previous_final = previous_test ? &previous_test->final : nullptr;
         harness->setup_memory_for_test(&test->initial, previous_final);
         
-        // Bootstrap CPU to reset internal state machine between tests
-        // This is essential - without it, instruction decode state from previous tests contaminates subsequent tests
-        harness->bootstrap_processor_for_tests();
-        
         // Reset cycle count for this test
         harness->reset_cycle_count();
         
         // THREAD SAFETY FIX: Set harness in processor wrapper for bus cycle recording
         harness->set_harness_for_bus_recording();
         
-        // Set 65816-specific state (except emulation mode which is set last)
+        // CRITICAL: For 65816, set emulation mode FIRST before setting any registers
+        // This ensures SP and other registers are interpreted correctly for the mode
         if (test->initial.has_65816_state) {
+            harness->set_emulation_mode(test->initial.e != 0);
             harness->set_d(test->initial.d);
             harness->set_dbr(test->initial.dbr);
             harness->set_pbr(test->initial.pbr);
         }
+        
+        // Bootstrap CPU to reset internal state machine AFTER setting emulation mode
+        // This ensures the CPU starts in the correct mode
+        harness->bootstrap_processor_for_tests();
 
         // Set the standard registers
         harness->set_pc(test->initial.pc);
@@ -1190,15 +1199,8 @@ private:
         harness->set_a(test->initial.a);
         harness->set_x(test->initial.x);
         harness->set_y(test->initial.y);
-        
         harness->set_sp(test->initial.s);
         harness->set_status(test->initial.p);
-        
-        // CRITICAL: For 65816, set emulation mode LAST to ensure proper SP handling
-        // Setting emulation mode after SP ensures the SP value is correctly interpreted
-        if (test->initial.has_65816_state) {
-            harness->set_emulation_mode(test->initial.e != 0);
-        }
         
         if (verbose_mode && !suppress_verbose) {
             debug_output << "  [Worker " << worker_id << "] After setting: A=0x" << std::hex
