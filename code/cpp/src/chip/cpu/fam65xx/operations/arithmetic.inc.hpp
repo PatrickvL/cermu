@@ -136,42 +136,36 @@ bus_state_t op_nop(bus_state_t pins) {
     });
   }
 
-  // Regular NOP handling for non-RMW modes
-  switch (this->opcode_entry.am_index) {
-  case to_index(AM::IMM):
-    // AM_IMM: All immediate NOPs read operand and increment PC
-    pins = this->bus_setup_dummy<Addr::PC>(pins);
-    this->inc(REG_PC);
-    break;
+  // Regular NOP handling for non-RMW modes using PHI2/PHI1 split
+  switch (this->half_cycle) {
+  case 0: // PHI2
+    // Set up bus based on addressing mode
+    switch (this->opcode_entry.am_index) {
+    case to_index(AM::IMM):
+      // Immediate: read from PC
+      pins = this->bus_setup_read<Addr::PC>(pins);
+      break;
+    case to_index(AM::NON):
+      // Implicit: dummy read from PC
+      pins = this->bus_setup_dummy<Addr::PC>(pins);
+      break;
+    default:
+      // Memory modes: dummy read from AB (address already set up by AM handler)
+      pins = this->bus_setup_dummy<Addr::AB>(pins);
+      break;
+    }
+    return pins;
 
-  case to_index(AM::NON):
-    // Implicit NOPs do dummy read from PC without increment
-    pins = this->bus_setup_dummy<Addr::PC>(pins);
-    break;
-
-  default:
-    // Memory addressing modes (AM_ABS, AM_ABX, AM_ABY, AM_ZER, AM_ZPX, AM_ZPY)
-    // need dummy read The addressing mode handler has already consumed operands
-    // and set up AB register Now we need to complete the read cycle for proper
-    // timing
-    pins = this->bus_setup_dummy<Addr::AB>(
-        pins); /**
-                * Handle NES6502 test syscalls as documented at
-                * https://github.com/search?q=repo%3Arofl0r%2Fblargg-6502-cpu-test+syscall&type=code
-                * Pattern: $fc, $13, $37 indicates character output syscall
-                * Character byte awaits at address 0x2000
-                */
-    // TODO: NES6502 syscall support was removed during PHI2/PHI1 refactoring
-    // The mem_read/mem_write callback API is no longer available
-    // Syscall detection pattern: if (REG_IR==0xFC && ABL==0x13 && ABH==0x37)
-    // would output character from memory address 0x2000
-    // This functionality needs to be reimplemented at the bus/system level
-    // if NES6502 test ROM support is required
-    break;
+  case 1: // PHI1
+    // Increment PC for immediate mode only
+    if (this->opcode_entry.am_index == to_index(AM::IMM)) {
+      this->inc(REG_PC);
+    }
+    this->half_cycle++;
+    this->transition_to_fetch();
+    return pins;
   }
 
-  // Complete instruction
-  this->transition_to_fetch();
   return pins;
 }
 
