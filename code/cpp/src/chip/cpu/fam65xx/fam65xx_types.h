@@ -430,11 +430,11 @@ typedef enum : uint8_t {
   REG_DPH = 16, // Direct Page high byte (65C816 only)
   REG_DPL = 17, // Direct Page low byte (65C816 only)
 #endif
-  REG_PBR = 18, // Program Bank register (65C816 only)
-  REG_SBR = 19, // Source Bank register (65C816 only)
-  REG_ZBR = 20, // Zero Bank register (always 0x00, for 65C816 emulation mode
+  REG_DBR = 18, // Data Bank register (65C816 only)
+  REG_PBR = 19, // Program Bank register (65C816 only)
+  REG_SBR = 20, // Source Bank register (65C816 only)
+  REG_ZBR = 21, // Zero Bank register (always 0x00, for 65C816 emulation mode
                 // and stack/DP access)
-  REG_DBR = 21, // Data Bank register (65C816 only)
 
   REG_COUNT_16BIT, // Number of 8-bit registers for 65C816
   REG_COUNT_8BIT =
