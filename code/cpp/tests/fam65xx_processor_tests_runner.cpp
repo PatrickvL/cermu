@@ -473,15 +473,15 @@ public:
     // Memory tick function - injects memory data into pins after CPU sets address
     // This mimics the C64's c64_memory_tick() function for test harness use
     // Returns updated pins value for caller to use
-    uint64_t memory_tick(uint64_t pins) {
+    uint64_t memory_tick(uint64_t bus_pins) {
         // Extract address from pins (always present)
-        uint16_t addr = FAM65XX_GET_ADDR(pins);
+        uint16_t addr = FAM65XX_GET_ADDR(bus_pins);
         
         // Apply address mask for processor type
         uint32_t masked_addr = addr & address_mask;
         
         // Check if this is a read cycle (RW bit set)
-        if (pins & FAM65XX_RW) {
+        if (bus_pins & FAM65XX_RW) {
             // READ CYCLE: Load data from memory into pins
             uint8_t value;
             if (masked_addr < 65536) {
@@ -492,13 +492,13 @@ public:
             }
             
             // Inject data into pins (macro returns new pins value)
-            pins = FAM65XX_SET_DATA(pins, value);
+            bus_pins = FAM65XX_SET_DATA(bus_pins, value);
             
             // Record bus cycle
             record_bus_cycle(masked_addr, value, false);
         } else {
             // WRITE CYCLE: Store data from pins into memory
-            uint8_t data = FAM65XX_GET_DATA(pins);
+            uint8_t data = FAM65XX_GET_DATA(bus_pins);
             
             // Write to memory
             if (masked_addr < 65536) {
@@ -511,7 +511,7 @@ public:
             record_bus_cycle(masked_addr, data, true);
         }
         
-        return pins;
+        return bus_pins;
     }
     
     // Execute one instruction with detailed cycle logging for debugging
