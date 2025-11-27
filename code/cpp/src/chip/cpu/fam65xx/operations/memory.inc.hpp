@@ -21,7 +21,7 @@ bus_state_t op_lda(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     if (this->is_accumulator_16bit()) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit LDA
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
@@ -29,7 +29,7 @@ bus_state_t op_lda(bus_state_t pins) {
       case 1: // PHI1 - Load and increment
         this->bus_load_reg(REG_AL, pins);
         this->inc(REG_AB);
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
@@ -49,7 +49,7 @@ bus_state_t op_lda(bus_state_t pins) {
   }
 
   // Standard 8-bit LDA operation (emulation mode and non-wide CPUs)
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;
@@ -74,7 +74,7 @@ bus_state_t op_ldx(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     if (this->is_index_16bit()) {
       // 65C816 native mode, 16-bit X register - perform 16-bit LDX
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
@@ -82,7 +82,7 @@ bus_state_t op_ldx(bus_state_t pins) {
       case 1: // PHI1 - Load and increment
         this->bus_load_reg(REG_XL, pins);
         this->inc(REG_AB);
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
@@ -102,7 +102,7 @@ bus_state_t op_ldx(bus_state_t pins) {
   }
 
   // Standard 8-bit LDX operation (emulation mode and non-wide CPUs)
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;
@@ -127,7 +127,7 @@ bus_state_t op_ldy(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     if (this->is_index_16bit()) {
       // 65C816 native mode, 16-bit Y register - perform 16-bit LDY
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
@@ -135,7 +135,7 @@ bus_state_t op_ldy(bus_state_t pins) {
       case 1: // PHI1 - Load and increment
         this->bus_load_reg(REG_YL, pins);
         this->inc(REG_AB);
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
@@ -155,7 +155,7 @@ bus_state_t op_ldy(bus_state_t pins) {
   }
 
   // Standard 8-bit LDY operation (emulation mode and non-wide CPUs)
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;
@@ -180,7 +180,7 @@ bus_state_t op_sta(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     if (this->is_accumulator_16bit()) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit STA
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0:
         // Store low byte of accumulator
 
@@ -201,7 +201,7 @@ bus_state_t op_sta(bus_state_t pins) {
   }
 
   // Standard 8-bit STA operation (emulation mode and non-wide CPUs)
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0: // PHI2 - Write accumulator to address
     pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_A));
     return pins;
@@ -224,7 +224,7 @@ bus_state_t op_stx(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     if (this->is_index_16bit()) {
       // 65C816 native mode, 16-bit X register - perform 16-bit STX
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0:
         // Store low byte of X register
 
@@ -245,7 +245,7 @@ bus_state_t op_stx(bus_state_t pins) {
   }
 
   // Standard 8-bit STX operation (emulation mode and non-wide CPUs)
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0: // PHI2 - Write X register to address
     pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_X));
     return pins;
@@ -268,7 +268,7 @@ bus_state_t op_sty(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     if (this->is_index_16bit()) {
       // 65C816 native mode, 16-bit Y register - perform 16-bit STY
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0:
         // Store low byte of Y register
 
@@ -289,7 +289,7 @@ bus_state_t op_sty(bus_state_t pins) {
   }
 
   // Standard 8-bit STY operation (emulation mode and non-wide CPUs)
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0: // PHI2 - Write Y register to address
     pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_Y));
     return pins;
@@ -313,7 +313,7 @@ bus_state_t op_and(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     if (this->is_accumulator_16bit()) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit AND
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
@@ -321,7 +321,7 @@ bus_state_t op_and(bus_state_t pins) {
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
         this->inc(REG_AB);
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
@@ -345,7 +345,7 @@ bus_state_t op_and(bus_state_t pins) {
   }
 
   // Standard 8-bit AND operation (emulation mode and non-wide CPUs)
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;
@@ -368,7 +368,7 @@ bus_state_t op_ora(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     if (this->is_accumulator_16bit()) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit ORA
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
@@ -376,7 +376,7 @@ bus_state_t op_ora(bus_state_t pins) {
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
         this->inc(REG_AB);
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
@@ -400,7 +400,7 @@ bus_state_t op_ora(bus_state_t pins) {
   }
 
   // Standard 8-bit ORA operation (emulation mode and non-wide CPUs)
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;
@@ -423,7 +423,7 @@ bus_state_t op_eor(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     if (this->is_accumulator_16bit()) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit EOR
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
@@ -431,7 +431,7 @@ bus_state_t op_eor(bus_state_t pins) {
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
         this->inc(REG_AB);
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
@@ -455,7 +455,7 @@ bus_state_t op_eor(bus_state_t pins) {
   }
 
   // Standard 8-bit EOR operation (emulation mode and non-wide CPUs)
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;
@@ -481,7 +481,7 @@ bus_state_t op_bit(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     if (this->is_accumulator_16bit()) {
       // 65816 native mode, 16-bit accumulator - read 2 bytes
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
@@ -489,7 +489,7 @@ bus_state_t op_bit(bus_state_t pins) {
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
         this->inc(REG_AB);
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
@@ -516,7 +516,7 @@ bus_state_t op_bit(bus_state_t pins) {
   }
 
   // Standard 8-bit BIT operation (emulation mode and non-wide CPUs)
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;

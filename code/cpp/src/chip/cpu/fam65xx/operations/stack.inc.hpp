@@ -21,7 +21,7 @@ bus_state_t op_pha(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     if (this->is_accumulator_16bit()) {
       // Native mode, 16-bit accumulator - perform 16-bit PHA
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0:
         /* Dummy cycle for internal operation */
         pins = this->bus_setup_dummy<Addr::PC>(pins);
@@ -33,7 +33,7 @@ bus_state_t op_pha(bus_state_t pins) {
 
         pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_AH));
         this->dec(REG_S);
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
 
       case 2:
@@ -49,7 +49,7 @@ bus_state_t op_pha(bus_state_t pins) {
   }
 
   // Standard 8-bit PHA operation (emulation mode and non-wide CPUs)
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     /* PHI2: Dummy read from PC+1 */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
@@ -57,7 +57,7 @@ bus_state_t op_pha(bus_state_t pins) {
 
   case 1:
     /* PHI1: Increment cycle */
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -77,7 +77,7 @@ bus_state_t op_pha(bus_state_t pins) {
 /* PHP - Push Processor Status */
 bus_state_t op_php(bus_state_t pins) {
   trace_operation(__func__);
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     /* PHI2: Dummy read from PC+1 */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
@@ -85,7 +85,7 @@ bus_state_t op_php(bus_state_t pins) {
 
   case 1:
     /* PHI1: Prepare status byte and increment cycle */
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -110,7 +110,7 @@ bus_state_t op_pla(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     if (this->is_accumulator_16bit()) {
       // Native mode, 16-bit accumulator - perform 16-bit PLA
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0:
         /* PHI2: Dummy read from PC */
         pins = this->bus_setup_dummy<Addr::PC>(pins);
@@ -118,7 +118,7 @@ bus_state_t op_pla(bus_state_t pins) {
 
       case 1:
         /* PHI1: No operation - just increment cycle */
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
 
       case 2:
@@ -129,7 +129,7 @@ bus_state_t op_pla(bus_state_t pins) {
       case 3:
         /* PHI1: Increment stack pointer */
         this->inc(REG_S);
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
 
       case 4:
@@ -141,7 +141,7 @@ bus_state_t op_pla(bus_state_t pins) {
         /* PHI1: Load low byte from bus and increment SP */
         this->bus_load_reg(REG_AL, pins);
         this->inc(REG_S);
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
 
       case 6:
@@ -163,7 +163,7 @@ bus_state_t op_pla(bus_state_t pins) {
   }
 
   // Standard 8-bit PLA operation (emulation mode and non-wide CPUs)
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     /* PHI2: Dummy read from PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
@@ -171,7 +171,7 @@ bus_state_t op_pla(bus_state_t pins) {
 
   case 1:
     /* PHI1: No operation - just increment cycle */
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -182,7 +182,7 @@ bus_state_t op_pla(bus_state_t pins) {
   case 3:
     /* PHI1: Increment stack pointer */
     this->inc(REG_S);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 4:
@@ -203,7 +203,7 @@ bus_state_t op_pla(bus_state_t pins) {
 /* PLP - Pull Processor Status */
 bus_state_t op_plp(bus_state_t pins) {
   trace_operation(__func__);
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     /* PHI2: Dummy read from PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
@@ -211,7 +211,7 @@ bus_state_t op_plp(bus_state_t pins) {
 
   case 1:
     /* PHI1: No operation - just increment cycle */
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -222,7 +222,7 @@ bus_state_t op_plp(bus_state_t pins) {
   case 3:
     /* PHI1: Increment stack pointer */
     this->inc(REG_S);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 4:

@@ -21,14 +21,14 @@
 bus_state_t op_jmp(bus_state_t pins) {
   trace_operation(__func__);
   
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
     case 0: // PHI2: Dummy bus cycle
       // Addressing mode has already set up AB register with target address
       return pins;
       
     case 1: // PHI1: Set PC and transition
       this->set(REG_PC, this->get(REG_AB));
-      this->cycle_index++;
+      this->half_cycle++;
       this->transition_to_fetch();
       return pins;
   }
@@ -43,14 +43,14 @@ bus_state_t op_jmp(bus_state_t pins) {
 bus_state_t op_jml(bus_state_t pins) {
   trace_operation(__func__);
   
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
     case 0: // PHI2: Dummy bus cycle
       // Addressing mode has already set up AB register with target address
       return pins;
       
     case 1: // PHI1: Set PC and transition
       this->set(REG_PC, this->get(REG_AB));
-      this->cycle_index++;
+      this->half_cycle++;
       this->transition_to_fetch();
       return pins;
   }
@@ -60,7 +60,7 @@ bus_state_t op_jml(bus_state_t pins) {
 /* JSR - Jump to Subroutine */
 bus_state_t op_jsr(bus_state_t pins) {
   trace_operation(__func__);
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     /* PHI2: Read low byte of target address from PC directly to ABL */
     pins = this->bus_setup_read<Addr::PC>(pins);
@@ -70,7 +70,7 @@ bus_state_t op_jsr(bus_state_t pins) {
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_ABL, pins);  // Load low byte into ABL (was REG_DL)
     this->inc(REG_PC);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -80,7 +80,7 @@ bus_state_t op_jsr(bus_state_t pins) {
 
   case 3:
     /* PHI1: Increment cycle index */
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 4:
@@ -91,7 +91,7 @@ bus_state_t op_jsr(bus_state_t pins) {
   case 5:
     /* PHI1: Decrement SP */
     this->dec(REG_S);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 6:
@@ -102,7 +102,7 @@ bus_state_t op_jsr(bus_state_t pins) {
   case 7:
     /* PHI1: Decrement SP */
     this->dec(REG_S);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 8:
@@ -122,7 +122,7 @@ bus_state_t op_jsr(bus_state_t pins) {
 /* RTS - Return from Subroutine */
 bus_state_t op_rts(bus_state_t pins) {
   trace_operation(__func__);
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     /* PHI2: Dummy read from PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
@@ -132,7 +132,7 @@ bus_state_t op_rts(bus_state_t pins) {
   case 1:
     /* PHI1: Increment SP */
     this->inc(REG_S);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -144,7 +144,7 @@ bus_state_t op_rts(bus_state_t pins) {
     /* PHI1: Load PCL into ABL and increment SP */
     this->bus_load_reg(REG_ABL, pins);
     this->inc(REG_S);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 4:
@@ -156,7 +156,7 @@ bus_state_t op_rts(bus_state_t pins) {
   case 5:
     /* PHI1: Load PCH into ABH */
     this->bus_load_reg(REG_ABH, pins);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
     
   case 6:
@@ -243,7 +243,7 @@ uint16_t get_vector_addr() const {
 /* BRK - Break (Software Interrupt) */
 bus_state_t op_brk(bus_state_t pins) {
   trace_operation(__func__);
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     /* PHI2: Dummy read from PC+1 (BRK has optional signature byte) */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
@@ -257,7 +257,7 @@ bus_state_t op_brk(bus_state_t pins) {
     if (this->active_interrupt == FAM65XX_INT_NONE) {
       this->active_interrupt = FAM65XX_INT_BRK;
     }
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -268,7 +268,7 @@ bus_state_t op_brk(bus_state_t pins) {
   case 3:
     /* PHI1: Decrement SP */
     this->dec(REG_S);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 4:
@@ -280,7 +280,7 @@ bus_state_t op_brk(bus_state_t pins) {
     /* PHI1: Decrement SP and prepare status */
     this->dec(REG_S);
     this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 6:
@@ -301,10 +301,10 @@ bus_state_t op_brk(bus_state_t pins) {
       clear_flag(FLAG_D);
     }
     this->set(REG_AB, this->get_vector_addr());
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
-  case 8: // Note : reset() starts at cycle_index 8 now!
+  case 8: // Note : reset() starts at half_cycle 8 now!
     /* PHI2: Read interrupt vector low byte (always from bank 0 using ZBR for
      * 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
@@ -314,7 +314,7 @@ bus_state_t op_brk(bus_state_t pins) {
     /* PHI1: Load vector low byte into DL temporarily, then increment vector address in AB */
     this->bus_load_reg(REG_DL, pins);
     this->inc(REG_AB);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 10:
@@ -345,7 +345,7 @@ bus_state_t op_brk(bus_state_t pins) {
 /* RTI - Return from Interrupt */
 bus_state_t op_rti(bus_state_t pins) {
   trace_operation(__func__);
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     /* PHI2: Dummy read from PC */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
@@ -355,7 +355,7 @@ bus_state_t op_rti(bus_state_t pins) {
   case 1:
     /* PHI1: Increment SP */
     this->inc(REG_S);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -368,7 +368,7 @@ bus_state_t op_rti(bus_state_t pins) {
     this->bus_load_reg(REG_DL, pins);
     this->set(REG_P, (this->get(REG_DL) & ~FLAG_B) | FLAG_U);
     this->inc(REG_S);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 4:
@@ -380,7 +380,7 @@ bus_state_t op_rti(bus_state_t pins) {
     /* PHI1: Load PCL into ABL and increment SP */
     this->bus_load_reg(REG_ABL, pins);  // Load PCL into ABL (was REG_DL)
     this->inc(REG_S);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 6:
