@@ -356,7 +356,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         // 65C816: Runtime check for emulation mode (can't use constexpr if with runtime value)
         if (!this->in_emulation_mode()) {
           // Native mode: Use full 16-bit SP (can be anywhere in bank 0)
-          addr = this->get(addr_reg);  // REG_SP contains full 16-bit value
+          addr = this->get(REG_SP);  // Use REG_SP directly (addr_reg is wrong for SP!)
         } else {
           // Emulation mode: Force SP to page 1 (0x01xx) for 6502 compatibility
           addr = 0x0100 | this->get(REG_SPL);
