@@ -149,10 +149,9 @@ bus_state_t op_pea(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     switch (this->half_cycle) {
     case 0:
-      // Read address low byte
+      // PHI2: Read address low byte
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
-
     case 1:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
@@ -161,10 +160,9 @@ bus_state_t op_pea(bus_state_t pins) {
       return pins;
 
     case 2:
-      // Read address high byte
+      // PHI2: Read address high byte
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
-
     case 3:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
@@ -173,22 +171,24 @@ bus_state_t op_pea(bus_state_t pins) {
       return pins;
 
     case 4:
-      // Push high byte first
-
+      // PHI2: Push high byte first
       pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_ABH));
+      return pins;
+    case 5:
       this->dec(REG_S);
+      this->half_cycle++;
       return pins;
 
-    case 5:
-      // Push low byte
-
+    case 6:
+      // PHI2: Push low byte
       pins = this->bus_setup_write<Addr::SP>(
           pins, this->get(REG_ABL)); // addr_low from case 0
+      return pins;
+    case 7:
       this->dec(REG_S);
       this->transition_to_fetch();
       return pins;
     }
-    return pins;
   }
 
   // PEA is illegal on non-wide CPUs - acts as NOP
@@ -200,12 +200,16 @@ bus_state_t op_pea(bus_state_t pins) {
 bus_state_t op_phb(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_wide_registers()) {
-    // Push DBR to stack
-
-    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DBR));
-    this->dec(REG_S);
-    this->transition_to_fetch();
-    return pins;
+    switch (this->half_cycle) {
+    case 0:
+      // PHI2: Push DBR to stack
+      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DBR));
+      return pins;
+    case 1:
+      this->dec(REG_S);
+      this->transition_to_fetch();
+      return pins;
+    }
   }
 
   // PHB is illegal on non-wide CPUs - acts as NOP
@@ -219,21 +223,23 @@ bus_state_t op_phd(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     switch (this->half_cycle) {
     case 0:
-      // Push D high byte first
-
+      // PHI2: Push D register (Direct Page) high byte first
       pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DPH));
+      return pins;
+    case 1:
       this->dec(REG_S);
+      this->half_cycle++;
       return pins;
 
-    case 1:
-      // Push D low byte
-
+    case 2:
+      // PHI2: Push D register (Direct Page) low byte
       pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DPL));
+      return pins;
+    case 3:
       this->dec(REG_S);
       this->transition_to_fetch();
       return pins;
     }
-    return pins;
   }
 
   // PHD is illegal on non-wide CPUs - acts as NOP
@@ -310,37 +316,40 @@ bus_state_t op_pld(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     switch (this->half_cycle) {
     case 0:
-      // Dummy read from current SP, then increment SP for low byte
+      // PHI2: Dummy read from current SP, then increment SP for low byte
       pins = this->bus_setup_dummy<Addr::SP>(pins);
-
-      this->inc(REG_S);
       return pins;
-
+      
     case 1:
-      // Pull D register low byte first
-      pins = this->bus_setup_read<Addr::SP>(pins);
+      this->inc(REG_S); // Increment for low byte
       this->half_cycle++;
       return pins;
 
     case 2:
-      /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_S); // Increment for high byte
-      return pins;
-
-    case 3:
+      // PHI2: Pull D register (Direct Page) low byte first
       pins = this->bus_setup_read<Addr::SP>(pins);
+      return pins;
+      
+    case 3:
+      /* PHI1: Load data and perform operations */
+      this->bus_load_reg(REG_DPL, pins);
+      this->inc(REG_S); // Increment for high byte
       this->half_cycle++;
       return pins;
 
     case 4:
+      // PHI2: Pull D register (Direct Page) low byte first
+      pins = this->bus_setup_read<Addr::SP>(pins);
+      return pins;
+
+    case 5:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
+      this->bus_load_reg(REG_DPH, pins);
       this->update_nz_flags(
           this->get(REG_DPL)); // Only check low byte for flags
       this->transition_to_fetch();
+      return pins;
     }
-    return pins;
   }
 
   // PLD is illegal on non-wide CPUs - acts as NOP
@@ -661,7 +670,7 @@ bus_state_t op_mvn(bus_state_t pins) {
 
     case 3:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
+      this->bus_load_reg(REG_SBR, pins);
       this->inc(REG_PC);
       this->set(REG_AB, this->get(REG_X));
       this->half_cycle++;
@@ -731,9 +740,9 @@ bus_state_t op_mvp(bus_state_t pins) {
 
     case 3:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
+      this->bus_load_reg(REG_SBR, pins);
       this->inc(REG_PC);
-      this->set(REG_DBR, this->get(REG_DL)); // destination bank from case 0
+      this->set(REG_DBR, this->get(REG_DL)); // destination bank from case 1
       this->set(REG_AB, this->get(REG_X));
       this->half_cycle++;
       return pins;

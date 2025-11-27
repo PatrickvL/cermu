@@ -616,7 +616,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
       case 3: {
         // Cycle 3 PHI1: Load high byte and perform dummy cycle setup
-        this->bus_load_reg(REG_DPL, pins);
+        this->bus_load_reg(REG_SBR, pins); // Note : Uses REG_SBR as temporary storage (allowed gievn its limited scope)
         this->half_cycle++;
         return pins;
       }
@@ -626,7 +626,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         if (this->has_rmw_dummy_write()) {
           // NMOS: Dummy write of high byte
           pins = this->bus_setup_write<Addr::AB, BankArg>(
-              pins, this->get(REG_DPL));
+              pins, this->get(REG_SBR));
         } else {
           // CMOS: Dummy read instead of write
           pins = this->bus_setup_dummy<Addr::AB, BankArg>(pins);
@@ -637,12 +637,12 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       case 5: {
         // Cycle 5 PHI1: Perform 16-bit operation
         uint16_t value16 = static_cast<uint16_t>(this->get(REG_DL)) |
-                           (static_cast<uint16_t>(this->get(REG_DPL)) << 8);
+                           (static_cast<uint16_t>(this->get(REG_SBR)) << 8);
         data_t value = static_cast<data_t>(value16);
         operation_func(value);
         value16 = static_cast<uint16_t>(value);
         this->set(REG_DL, static_cast<uint8_t>(value16 & 0xFF)); // Low byte
-        this->set(REG_DPL,
+        this->set(REG_SBR, // Note : Uses REG_SBR as temporary storage (allowed gievn its limited scope)
                   static_cast<uint8_t>((value16 >> 8) & 0xFF)); // High byte
         this->half_cycle++;
         return pins;
@@ -651,7 +651,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       case 6: {
         // Cycle 6 PHI2: Write high byte back to memory (address + 1)
         pins = this->bus_setup_write<Addr::AB, BankArg>(
-            pins, this->get(REG_DPL));
+            pins, this->get(REG_SBR));
         return pins;
       }
 
