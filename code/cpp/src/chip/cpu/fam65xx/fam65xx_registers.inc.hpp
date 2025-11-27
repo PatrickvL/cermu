@@ -348,10 +348,11 @@ void init_registers() {
   // Clear all registers to zero
   std::memset(&reg8, 0, sizeof(reg8));
 
-  // CRITICAL: Initialize stack pointer high byte to 0x01 for ALL processors
-  // The 6502 hardware stack is always at 0x0100-0x01FF (page 1)
-  set(REG_SPH, 0x01);   // Stack pointer high byte (hardwired to page 1)
-  set(REG_SPL, 0xFF);   // Stack pointer low byte (default reset value)
+  // Initialize stack pointer to 0x01FF for all processors
+  // - 6502/6510/65C02: SP always on page 1 (0x0100-0x01FF)
+  // - 65C816 emulation mode: SP forced to page 1 for compatibility
+  // - 65C816 native mode: SP can be set anywhere, but starts at 0x01FF
+  set(REG_SP, 0x01FF);
 
   // Initialize P register based on CPU type
   if constexpr (has_wide_registers()) {
@@ -362,8 +363,8 @@ void init_registers() {
     set(REG_DBR, 0x00); // Data bank register
     set(REG_ZBR, 0x00); // Zero page bank register
   } else {
-    // Standard 8-bit processors
-    set(REG_P, FLAG_I); // Only interrupt disable flag
+    // Standard 8-bit processors: Only interrupt disable flag
+    set(REG_P, FLAG_I);
   }
 }
 

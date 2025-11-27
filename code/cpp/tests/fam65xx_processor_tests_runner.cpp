@@ -146,14 +146,14 @@ public:
     virtual uint16_t get_a() = 0;  // Return 16-bit for 65816, 8-bit extended to 16-bit for others
     virtual uint16_t get_x() = 0;  // Return 16-bit for 65816, 8-bit extended to 16-bit for others
     virtual uint16_t get_y() = 0;  // Return 16-bit for 65816, 8-bit extended to 16-bit for others
-    virtual uint8_t get_sp() = 0;  // Always 8-bit
+    virtual uint8_t get_sp() = 0;  // Returns low byte only (for compatibility)
     virtual uint8_t get_status() = 0; // Always 8-bit
     
     virtual void set_pc(uint16_t pc) = 0;
     virtual void set_a(uint16_t a) = 0;   // Accept 16-bit, truncate to 8-bit for non-65816
     virtual void set_x(uint16_t x) = 0;   // Accept 16-bit, truncate to 8-bit for non-65816
     virtual void set_y(uint16_t y) = 0;   // Accept 16-bit, truncate to 8-bit for non-65816
-    virtual void set_sp(uint8_t sp) = 0;  // Always 8-bit
+    virtual void set_sp(uint16_t sp) = 0;  // Accept 16-bit for 65816 native mode
     virtual void set_status(uint8_t p) = 0; // Always 8-bit
     
     // 65816-specific methods (no-op for other processors)
@@ -421,7 +421,7 @@ public:
     void set_a(uint16_t a) { cpu_wrapper->set_a(a); }     // Accept 16-bit for 65816 compatibility
     void set_x(uint16_t x) { cpu_wrapper->set_x(x); }     // Accept 16-bit for 65816 compatibility
     void set_y(uint16_t y) { cpu_wrapper->set_y(y); }     // Accept 16-bit for 65816 compatibility
-    void set_sp(uint8_t sp) { cpu_wrapper->set_sp(sp); }  // Always 8-bit
+    void set_sp(uint16_t sp) { cpu_wrapper->set_sp(sp); }  // 16-bit for 65816 native mode
     void set_status(uint8_t p) { cpu_wrapper->set_status(p); } // Always 8-bit
     
     // 65816-specific state setters
@@ -826,11 +826,14 @@ public:
         }
     }
     
-    void set_sp(uint8_t sp) override {
-        // Set stack pointer low byte only
-        // REG_SPH is initialized to 0x01 in init_registers() and never changes
-        // This ensures stack is always on page 1 (0x0100-0x01FF) for all 65xx CPUs
-        cpu->set(REG_S, sp);
+    void set_sp(uint16_t sp) override {
+        // For 65C816 in native mode, set full 16-bit stack pointer
+        // For other processors, only use low byte (high byte forced to 0x01)
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            cpu->set(REG_SP, sp);  // Set full 16-bit SP
+        } else {
+            cpu->set(REG_S, static_cast<uint8_t>(sp & 0xFF));  // Set low byte only
+        }
     }
     
     void set_status(uint8_t p) override {
@@ -1168,15 +1171,14 @@ private:
         // THREAD SAFETY FIX: Set harness in processor wrapper for bus cycle recording
         harness->set_harness_for_bus_recording();
         
-        // CRITICAL FIX: Set 65816-specific state FIRST before other registers
+        // Set 65816-specific state (except emulation mode which is set last)
         if (test->initial.has_65816_state) {
-            harness->set_emulation_mode(test->initial.e != 0);
             harness->set_d(test->initial.d);
             harness->set_dbr(test->initial.dbr);
             harness->set_pbr(test->initial.pbr);
         }
 
-        // Then set the standard registers
+        // Set the standard registers
         harness->set_pc(test->initial.pc);
         
         if (verbose_mode && !suppress_verbose) {
@@ -1189,17 +1191,14 @@ private:
         harness->set_x(test->initial.x);
         harness->set_y(test->initial.y);
         
-        // CRITICAL FIX: For 65816 emulation mode, SP must use only low 8 bits
-        // ProcessorTests provides SP as 16-bit value, but emulation mode ignores high byte
-        if (test->initial.has_65816_state && test->initial.e != 0) {
-            // Emulation mode: use only low byte, force stack to page 1
-            harness->set_sp(static_cast<uint8_t>(test->initial.s & 0xFF));
-        } else {
-            // Native mode or non-65816: use full value
-            harness->set_sp(static_cast<uint8_t>(test->initial.s & 0xFF));
-        }
-        
+        harness->set_sp(test->initial.s);
         harness->set_status(test->initial.p);
+        
+        // CRITICAL: For 65816, set emulation mode LAST to ensure proper SP handling
+        // Setting emulation mode after SP ensures the SP value is correctly interpreted
+        if (test->initial.has_65816_state) {
+            harness->set_emulation_mode(test->initial.e != 0);
+        }
         
         if (verbose_mode && !suppress_verbose) {
             debug_output << "  [Worker " << worker_id << "] After setting: A=0x" << std::hex

@@ -290,10 +290,11 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     if (this->in_emulation_mode())
       return 0;
 
-    // Native mode: SP uses ZBR, data addresses use provided bank (typically
-    // DBR)
+    // Native mode: Stack always uses bank 0, data addresses use provided bank
+    // In 65C816 native mode, SP is 16-bit and can address anywhere in bank 0
+    // The bank byte is always 0 for stack operations, but the full 16-bit SP is used
     if constexpr (addr_arg == Addr::SP) {
-      return this->get(REG_ZBR);
+      return 0;  // Stack always in bank 0 in native mode
     } else {
       return this->get(static_cast<reg8_t>(bank_arg));
     }
@@ -345,13 +346,29 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
     // Get address from the specified address register
     constexpr reg16_t addr_reg = static_cast<reg16_t>(addr_arg);
-    uint32_t addr = this->get(addr_reg);
-
-    // Special SP handling not needed here, because:
-    // 1. REG_SPH is initialized to 0x01 in init_registers() and never changes
-    // 2. We only ever set REG_SPL (8-bit), never touch REG_SPH
-    // 3. REG_SP (16-bit) automatically combines SPL+SPH correctly
-    // The stack is ALWAYS on page 1 (0x01xx) for all 65xx processors
+    uint32_t addr;
+    
+    // Special handling for stack pointer in 65C816 native mode
+    // In native mode (E=0), SP is a full 16-bit register that can address anywhere in bank 0
+    // In emulation mode and all other processors, SP is forced to page 1 (0x01xx)
+    if constexpr (addr_arg == Addr::SP) {
+      if constexpr (has_wide_registers()) {
+        // 65C816: Runtime check for emulation mode (can't use constexpr if with runtime value)
+        if (!this->in_emulation_mode()) {
+          // Native mode: Use full 16-bit SP (can be anywhere in bank 0)
+          addr = this->get(addr_reg);  // REG_SP contains full 16-bit value
+        } else {
+          // Emulation mode: Force SP to page 1 (0x01xx) for 6502 compatibility
+          addr = 0x0100 | this->get(REG_SPL);
+        }
+      } else {
+        // Non-65C816: Always force SP to page 1 (0x01xx)
+        addr = 0x0100 | this->get(REG_SPL);
+      }
+    } else {
+      // Non-SP addresses: Use register directly
+      addr = this->get(addr_reg);
+    }
 
     // 65C816 banking: OR bank into high bits (optimizer eliminates for non-wide
     // CPUs)
