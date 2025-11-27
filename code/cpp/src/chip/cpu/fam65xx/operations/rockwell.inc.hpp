@@ -108,12 +108,12 @@ bus_state_t bit_branch_helper(bus_state_t pins, uint8_t bit_mask,
     pins = this->bus_setup_read<Addr::AB>(pins);
     return pins;
   case 1: {
-    // PHI1: Load data, test bit and decide whether to branch
-    this->bus_load_reg(REG_ABH, pins);
-    bool bit_is_set = (this->get(REG_ABH) & bit_mask) != 0;
+    // PHI1: Load data from zero page, test bit and decide whether to branch
+    uint8_t bus_data = this->bus_get_data(pins); // Load ZP memory value
+    bool bit_is_set = (bus_data & bit_mask) != 0;
     bool branch_taken = (bit_is_set == bit_set);
     if (branch_taken) {
-      int8_t signed_offset = (int8_t)this->get(REG_DL);
+      int8_t signed_offset = (int8_t)this->get(REG_DL);  // DL contains branch offset
       // Branch taken: calculate target address and jump
       this->set(REG_PC, this->get(REG_PC) + signed_offset);
     }
