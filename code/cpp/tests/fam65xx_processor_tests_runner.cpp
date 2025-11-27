@@ -485,8 +485,16 @@ public:
         // Extract address from pins (always present)
         uint16_t addr = FAM65XX_GET_ADDR(bus_pins);
         
+        // For 65816, also extract bank byte (24-bit addressing)
+        uint32_t full_addr = addr;
+        if (address_mask > 0xFFFF) {
+            // 65816: Combine 16-bit address with 8-bit bank for full 24-bit address
+            uint8_t bank = FAM65XX_GET_BANK(bus_pins);
+            full_addr = (static_cast<uint32_t>(bank) << 16) | addr;
+        }
+        
         // Apply address mask for processor type
-        uint32_t masked_addr = addr & address_mask;
+        uint32_t masked_addr = full_addr & address_mask;
         
         // Check if this is a read cycle (RW bit set)
         if (bus_pins & FAM65XX_RW) {
