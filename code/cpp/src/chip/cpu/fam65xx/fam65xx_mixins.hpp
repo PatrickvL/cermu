@@ -81,6 +81,7 @@ template <const CPUTraits &Traits> struct apu_mixin_t {
 
   // Initialize APU
   void init_apu() {
+    apu_state.apu_instance = nullptr;       // CRITICAL: Initialize pointer first to prevent access violation
     apu_state.is_pal = false;               // Default to NTSC
     apu_state.processor_tests_mode = false; // Default to normal APU mode
     destroy_apu(); // Ensure no existing instance as we're creating a new one,
