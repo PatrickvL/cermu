@@ -1180,14 +1180,13 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     if constexpr (Traits.has(fam65xx::CPUCoreFlags::CMOS_BASE)) {
       addressing_mode_handlers[to_index(AM::ZPI)] =
           &fam65xx_t::am_zpi;  // Zero Page Indirect
+      addressing_mode_handlers[to_index(AM::ABI)] =
+          &fam65xx_t::am_abi; // Absolute Indexed Indirect (abs,X) - JMP ($nnnn,X) - ALL 65C02
     }
 
     // WDC 65C816 modifications (16-bit enhanced instructions)
-    if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {        
+    if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
       // Initialize 65C816 exclusive addressing modes
-      addressing_mode_handlers[to_index(AM::ABI)] =
-          &fam65xx_t::am_abi; // Absolute Indexed Indirect (abs,X) - JMP/JSR
-                              // ($nnnn,X)
       addressing_mode_handlers[to_index(AM::ABL)] =
           &fam65xx_t::am_abl; // Absolute Long
       addressing_mode_handlers[to_index(AM::ABLX)] =

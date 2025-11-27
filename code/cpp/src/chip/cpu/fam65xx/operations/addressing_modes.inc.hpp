@@ -510,15 +510,15 @@ bus_state_t am_zpi(bus_state_t pins) {
 // Absolute Indexed Indirect addressing: ($nnnn,X) - 65C02 JMP only
 bus_state_t am_abi(bus_state_t pins) {
   trace_addressing_mode(__func__);
-  if constexpr (has_cmos()) {
-    // WDC 65C02 absolute indexed indirect: JMP (abs,X)
-    switch (this->half_cycle) {
+  // All 65C02 variants support absolute indexed indirect: JMP (abs,X)
+  // This function should only be called on CMOS processors
+  switch (this->half_cycle) {
     case 0:
       // PHI2: Read low byte of base address from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
     case 1:
-      /* PHI1: Load data and perform operations */
+      /* PHI1: Load low byte and increment PC */
       this->bus_load_reg(REG_ABL, pins);
       this->inc(REG_PC);
       this->half_cycle++;
@@ -529,33 +529,43 @@ bus_state_t am_abi(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
     case 3:
-      /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
+      /* PHI1: Load high byte (don't increment PC yet) */
+      this->bus_load_reg(REG_ABH, pins);
+      this->half_cycle++;
+      return pins;
+
+    case 4:
+      // PHI2: Dummy read from PC (still pointing at high byte location)
+      pins = this->bus_setup_dummy<Addr::PC>(pins);
+      return pins;
+    case 5:
+      /* PHI1: Increment PC and add X to base address to form pointer address */
       this->inc(REG_PC);
       this->set(REG_AB, this->get(REG_AB) + this->get(REG_X));
       this->half_cycle++;
       return pins;
 
-    case 4:
+    case 6:
       // PHI2: Read low byte of target address from (base+X)
       pins = this->bus_setup_read<Addr::AB>(pins);
       return pins;
-    case 5:
-      /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
+    case 7:
+      /* PHI1: Load low byte and save to SBR (temporary storage), increment pointer */
+      this->bus_load_reg(REG_SBR, pins);  // Save low byte to SBR
       this->inc(REG_AB);
       this->half_cycle++;
       return pins;
 
-    case 6:
+    case 8:
+      // PHI2: Read high byte of target address from (base+X+1)
       pins = this->bus_setup_read<Addr::AB>(pins);
       return pins;
-    case 7:
-      /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->set(REG_ABL, this->get(REG_DL)); // Low byte from cycle 2
+    case 9:
+      /* PHI1: Assemble final target address and transition */
+      this->bus_load_reg(REG_ABH, pins);  // High byte to ABH
+      this->set(REG_ABL, this->get(REG_SBR)); // Low byte from SBR to ABL
       this->transition_to_operation();
-    }
+      return pins;
   }
   return pins;
 }
