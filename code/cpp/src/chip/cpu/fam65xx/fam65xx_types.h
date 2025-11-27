@@ -222,9 +222,9 @@ enum class AddressingMode : uint8_t {
   // Aliases for 65C816 compatibility
   // ========================================================================
   DP = ZER,  /* Direct Page -> Zero Page */
-  DPI = ZPI, /* Direct Page Indirect (dp) -> Zero Page Indirect */
   DPX = ZPX, /* Direct Page,X -> Zero Page,X */
-  DPY = ZPY  /* Direct Page,Y -> Zero Page,Y */
+  DPY = ZPY, /* Direct Page,Y -> Zero Page,Y */
+  DPI = ZPI  /* Direct Page Indirect (dp) -> Zero Page Indirect */
 };
 
 enum class Operation : uint8_t {

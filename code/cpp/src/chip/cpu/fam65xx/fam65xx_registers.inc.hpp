@@ -334,19 +334,17 @@ void init_registers() {
   std::memset(&reg8, 0, sizeof(reg8));
 
   // Initialize P register based on CPU type
-  if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+  if constexpr (has_wide_registers()) {
     // 65C816 starts in emulation mode with M=1, X=1 flags
     set(REG_P, FLAG_I | FLAG_M | FLAG_X);
     set(REG_PBR, 0x00); // Program bank register
     set(REG_DBR, 0x00); // Data bank register
     set(REG_ZBR, 0x00); // Zero page bank register
-    set(REG_SPH, 0x01); // Stack pointer high byte
-    set(REG_SPL, 0xFF); // Stack pointer low byte
   } else {
     // Standard 8-bit processors
     set(REG_P, FLAG_I); // Only interrupt disable flag
-    set(REG_SPL, 0xFF); // Standard stack pointer
   }
+  set(REG_SP, 0x01FF); // Standard stack pointer
 }
 
 public:
