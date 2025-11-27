@@ -309,6 +309,7 @@ bus_state_t op_arr(bus_state_t pins) {
       this->update_nz_flags<REG_A>(shifted_a);
 
       if constexpr (has_bcd()) {
+        // Processors with BCD support
         if (this->get(REG_P) & FLAG_D) {
           // Decimal mode - ARR with BCD correction
 
@@ -357,10 +358,25 @@ bus_state_t op_arr(bus_state_t pins) {
             this->set(REG_P, this->get(REG_P) | FLAG_V);
           }
         }
+      } else {
+        // Processors without BCD support (NES6502) - always binary mode
+        this->set(REG_A, shifted_a);
 
-        this->transition_to_fetch();
-        return pins;
+        // ARR has special C and V flag behavior:
+        // C = bit 6 of result (not the shifted-out bit!)
+        // V = bit 6 XOR bit 5 of result
+        if (this->get(REG_A) & 0x40) {
+          this->set(REG_P, this->get(REG_P) | FLAG_C);
+        }
+        if ((this->get(REG_A) & 0x60) == 0x60 || (this->get(REG_A) & 0x60) == 0x00) {
+          // V is clear
+        } else {
+          this->set(REG_P, this->get(REG_P) | FLAG_V);
+        }
       }
+
+      this->transition_to_fetch();
+      return pins;
     }
   }
 

@@ -472,14 +472,15 @@ bus_state_t op_rtl(bus_state_t pins) {
       return pins;
 
     case 6:
-      /* PHI1: Load data and perform operations */
+      // PHI2: Pull program bank register
       pins = this->bus_setup_read<Addr::SP>(pins);
       return pins;
     case 7:
-      /* PHI1: Load data and perform operations */
+      // PHI1: Load PBR, increment PC, and complete
       this->bus_load_reg(REG_PBR, pins);
       this->inc(REG_PC);
       this->transition_to_fetch();
+      return pins;
     }
     return pins;
   }
