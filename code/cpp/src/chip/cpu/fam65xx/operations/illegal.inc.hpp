@@ -308,58 +308,47 @@ bus_state_t op_arr(bus_state_t pins) {
       // Set N and Z flags based on shifted result (reference does this first)
       this->update_nz_flags<REG_A>(shifted_a);
 
+      // Check if we're in decimal mode (only for processors with BCD support)
+      bool decimal_mode = false;
       if constexpr (has_bcd()) {
-        // Processors with BCD support
-        if (this->get(REG_P) & FLAG_D) {
-          // Decimal mode - ARR with BCD correction
+        decimal_mode = (this->get(REG_P) & FLAG_D) != 0;
+      }
 
-          // Start with shifted result
-          uint8_t result = shifted_a;
+      if (decimal_mode) {
+        // Decimal mode - ARR with BCD correction (BCD-capable processors only)
+        
+        // Start with shifted result
+        uint8_t result = shifted_a;
 
-          // BCD correction using ORIGINAL A value for nibble checks
-          // Low nibble correction
-          if ((original_a & 0x0F) >= 5) {
-            result = ((result + 6) & 0x0F) | (result & 0xF0);
-          }
-
-          // High nibble correction
-          if ((original_a & 0xF0) >= 0x50) {
-            result += 0x60;
-          }
-
-          // Set result in accumulator
-          this->set(REG_A, result);
-
-          // V flag: bit 6 changed between original and shifted
-          if ((shifted_a ^ original_a) & 0x40) {
-            this->set(REG_P, this->get(REG_P) | FLAG_V);
-          }
-
-          // C flag: bit 6 of result OR high nibble correction was applied
-          if ((original_a & 0xF0) >= 0x50) {
-            this->set(REG_P, this->get(REG_P) | FLAG_C);
-          }
-
-          // N and Z flags were already set based on shifted_a before BCD correction
-          // DO NOT update them again - this matches hardware behavior
-        } else {
-          // Binary mode - special C and V flag behavior
-          this->set(REG_A, shifted_a);
-
-          // ARR has special C and V flag behavior:
-          // C = bit 6 of result (not the shifted-out bit!)
-          // V = bit 6 XOR bit 5 of result
-          if (this->get(REG_A) & 0x40) {
-            this->set(REG_P, this->get(REG_P) | FLAG_C);
-          }
-          if ((this->get(REG_A) & 0x60) == 0x60 || (this->get(REG_A) & 0x60) == 0x00) {
-            // V is clear
-          } else {
-            this->set(REG_P, this->get(REG_P) | FLAG_V);
-          }
+        // BCD correction using ORIGINAL A value for nibble checks
+        // Low nibble correction
+        if ((original_a & 0x0F) >= 5) {
+          result = ((result + 6) & 0x0F) | (result & 0xF0);
         }
+
+        // High nibble correction
+        if ((original_a & 0xF0) >= 0x50) {
+          result += 0x60;
+        }
+
+        // Set result in accumulator
+        this->set(REG_A, result);
+
+        // V flag: bit 6 changed between original and shifted
+        if ((shifted_a ^ original_a) & 0x40) {
+          this->set(REG_P, this->get(REG_P) | FLAG_V);
+        }
+
+        // C flag: bit 6 of result OR high nibble correction was applied
+        if ((original_a & 0xF0) >= 0x50) {
+          this->set(REG_P, this->get(REG_P) | FLAG_C);
+        }
+
+        // N and Z flags were already set based on shifted_a before BCD correction
+        // DO NOT update them again - this matches hardware behavior
       } else {
-        // Processors without BCD support (NES6502) - always binary mode
+        // Binary mode - special C and V flag behavior
+        // (Used by both BCD-capable processors in binary mode and non-BCD processors)
         this->set(REG_A, shifted_a);
 
         // ARR has special C and V flag behavior:
