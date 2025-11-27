@@ -102,7 +102,7 @@ bus_state_t op_smb7(bus_state_t pins) {
  */
 bus_state_t bit_branch_helper(bus_state_t pins, uint8_t bit_mask,
                               bool bit_set) {
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     // PHI2: Setup read from zero page address
     pins = this->bus_setup_read<Addr::AB>(pins);

@@ -234,7 +234,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
   void trace_addressing_mode(const char *am_name) const {
     if constexpr (ENABLE_TRACING) {
       trace("AM %s: IR=0x%02X cycle=%d AB=%04X PC=%04X", am_name,
-            this->get(REG_IR), this->cycle_index, this->get(REG_AB),
+            this->get(REG_IR), this->half_cycle, this->get(REG_AB),
             this->get(REG_PC));
     }
   }
@@ -242,13 +242,13 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
   void trace_operation(const char *function_name) const {
     if constexpr (ENABLE_TRACING) {
       trace("OP: %s (IR=0x%02X cycle=%d)", function_name, this->get(REG_IR),
-            this->cycle_index);
+            this->half_cycle);
     }
   }
 
   void trace_instruction(uint8_t opcode, const char *mnemonic) const {
     if constexpr (ENABLE_TRACING) {
-      trace("EXEC: %02X %s (cycle %d)", opcode, mnemonic, this->cycle_index);
+      trace("EXEC: %02X %s (cycle %d)", opcode, mnemonic, this->half_cycle);
     }
   }
 
@@ -593,7 +593,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
     if (is_16bit_memory) {
       // 16-bit memory RMW operation (6 cycles for 65C816)
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0: {
         // Cycle 0 PHI2: Set up bus for reading low byte
         pins = this->bus_setup_read<Addr::AB, BankArg>(pins);
@@ -604,7 +604,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         // Cycle 1 PHI1: Load low byte from bus
         this->bus_load_reg(REG_DL, pins);
         this->inc(REG_ABL); // Increment address for high byte
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
       }
 
@@ -617,7 +617,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       case 3: {
         // Cycle 3 PHI1: Load high byte and perform dummy cycle setup
         this->bus_load_reg(REG_DPL, pins);
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
       }
 
@@ -644,7 +644,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         this->set(REG_DL, static_cast<uint8_t>(value16 & 0xFF)); // Low byte
         this->set(REG_DPL,
                   static_cast<uint8_t>((value16 >> 8) & 0xFF)); // High byte
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
       }
 
@@ -658,7 +658,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       case 7: {
         // Cycle 7 PHI1: Decrement address
         this->dec(REG_ABL); // Decrement address back to low byte
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
       }
 
@@ -671,14 +671,14 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
       case 9: {
         // Cycle 9 PHI1: Complete operation
-        this->cycle_index++;
+        this->half_cycle++;
         this->transition_to_fetch();
         return pins;
       }
       }
     } else {
       // 8-bit memory RMW operation (PHI2/PHI1 split)
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0: {
         // Cycle 0 PHI2: Set up bus for reading original value
         pins = this->bus_setup_read<Addr::AB, BankArg>(pins);
@@ -688,7 +688,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       case 1: {
         // Cycle 1 PHI1: Load original value from bus
         this->bus_load_reg(REG_DL, pins);
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
       }
 
@@ -710,7 +710,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         data_t value = static_cast<data_t>(this->get(REG_DL));
         operation_func(value);
         this->set(REG_DL, static_cast<uint8_t>(value & 0xFF));
-        this->cycle_index++;
+        this->half_cycle++;
         return pins;
       }
 
@@ -723,7 +723,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
       case 5: {
         // Cycle 5 PHI1: Complete operation
-        this->cycle_index++;
+        this->half_cycle++;
         this->transition_to_fetch();
         return pins;
       }
@@ -763,7 +763,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       }
     } else {
       // Accumulator mode - two-phase operation (PHI2 + PHI1)
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0: {
         // Cycle 0 PHI2: Set up dummy read from PC
         pins = this->bus_setup_dummy<Addr::PC>(pins);
@@ -775,7 +775,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         data_t value = this->get_accumulator(); // Automatically handles 8/16-bit based on M flag
         operation_func(value);
         this->set_accumulator(value); // Automatically handles 8/16-bit based on M flag
-        this->cycle_index++;
+        this->half_cycle++;
         this->transition_to_fetch();
         return pins;
       }
@@ -957,7 +957,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
   void transition_to_opcode(const opcode_info_t entry) {
     this->opcode_entry = entry;
-    this->cycle_index = 0;
+    this->half_cycle = 0;
     // Set up first instruction cycle handler
     this->current_handler = this->get_instruction_handler();
   }
@@ -970,7 +970,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
   // Instruction fetch and decode - PHI2/PHI1 split pattern
   bus_state_t fetch_opcode(bus_state_t pins) {
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Set up bus for opcode read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -988,10 +988,10 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       // Clear SYNC signal after opcode fetch completes (hardware-accurate timing)
       pins &= ~FAM65XX_SYNC;
   
-      // Increment cycle_index before transition (PHI1 always increments)
-      this->cycle_index++;
+      // Increment half_cycle before transition (PHI1 always increments)
+      this->half_cycle++;
       
-      // Transition resets cycle_index to 0 for new instruction
+      // Transition resets half_cycle to 0 for new instruction
       opcode_info_t entry = get_opcode_info(opcode);
       this->transition_to_opcode(entry);
       return pins;
@@ -1007,11 +1007,11 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       trace("transition_to_fetch() called - resetting to fetch mode");
     }
     this->current_handler = &fam65xx_t::fetch_opcode;
-    this->cycle_index = 0;
+    this->half_cycle = 0;
   }
 
   void transition_to_operation() {
-    this->cycle_index = 0;
+    this->half_cycle = 0;
     this->current_handler =
         this->operation_handlers[this->opcode_entry.op_index];
   }
@@ -1351,7 +1351,7 @@ public:
     // instruction
     this->opcode_entry = get_opcode_info(0x00); // = {OP_BRK, AM_NON, OF_NONE};
     this->current_handler = &fam65xx_t::op_brk;
-    this->cycle_index = 8;                      // Jump to vector loading phase
+    this->half_cycle = 8;                      // Jump to vector loading phase
     this->set(REG_AB, this->get_vector_addr()); // Do the same memory setup as
                                                 // preceding op_brk cycle 3
 
@@ -1410,7 +1410,7 @@ public:
         if (this->active_interrupt == FAM65XX_INT_RESET) {
           return reset(pins);
         } else if (this->current_handler == &fam65xx_t::fetch_opcode &&
-                   this->cycle_index == 0) {
+                   this->half_cycle == 0) {
           this->current_handler = &fam65xx_t::op_brk;
         }
       }
@@ -1424,7 +1424,7 @@ public:
         return pins;
       }
 
-      // Call handler to set up bus (sees current even cycle_index)
+      // Call handler to set up bus (sees current even half_cycle)
       if (this->current_handler != nullptr) {
         pins = this->call_current_handler(pins);
       } else {
@@ -1432,10 +1432,10 @@ public:
         pins = this->fetch_opcode(pins);
       }
 
-      // PHI2 increments cycle_index AFTER handler execution
+      // PHI2 increments half_cycle AFTER handler execution
       // so PHI1 sees the next odd cycle number
       // This allows PHI2 (even) and PHI1 (odd) to execute different code
-      cycle_index++;
+      half_cycle++;
 
       trace_registers("after PHI2");
       trace_exit("tick<PHI2>");
@@ -1446,7 +1446,7 @@ public:
       trace_registers("before PHI1");
 
       // Call handler to perform internal operations
-      // Handler will increment cycle_index by 1 (odd → even)
+      // Handler will increment half_cycle by 1 (odd → even)
       if (this->current_handler != nullptr) {
         pins = this->call_current_handler(pins);
       }
@@ -1494,7 +1494,7 @@ public:
     // Initialize CPU state to zero
     opcode_entry = {};
     current_handler = nullptr;
-    cycle_index = 0;
+    half_cycle = 0;
     active_interrupt = FAM65XX_INT_NONE;
     nmi_prev = 0;
     interrupt_shift_register = 0;
@@ -1527,7 +1527,7 @@ public:
   opcode_info_t opcode_entry; /* Cached opcode entry (copied once) */
   bus_state_t (fam65xx_t::*current_handler)(
       bus_state_t);    /* Current instruction handler */
-  uint8_t cycle_index; /* Current cycle within instruction */
+  uint8_t half_cycle; /* Current cycle within instruction */
 
   /* Interrupt state - hardware-accurate shift register system */
   interrupt_t active_interrupt; /* Currently active interrupt (enum serves as

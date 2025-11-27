@@ -180,7 +180,7 @@ void render_internal_state(fam65xx_t<Traits> *cpu) {
       ImGui::Text("Address Bus:       $%06X", cpu->get(REG_AB));
     }
 
-    ImGui::Text("Cycle Index:           %d", cpu->cycle_index);
+    ImGui::Text("Cycle Index:           %d", cpu->half_cycle);
 
     ImGui::Separator();
 
@@ -196,7 +196,7 @@ void render_internal_state(fam65xx_t<Traits> *cpu) {
       ImGui::Text("Current Opcode:      $%02X", cpu->get(REG_IR));
       ImGui::Text("Addressing Mode:     %s", am_name);
       ImGui::Text("Instruction:         %s", op_name);
-      ImGui::Text("Instruction Cycle:   %d", cpu->cycle_index);
+      ImGui::Text("Instruction Cycle:   %d", cpu->half_cycle);
       ImGui::Text("Opcode Done:         %s", cpu->opdone() ? "Yes" : "No");
     } else {
       ImGui::Text("Current Opcode:      N/A (CPU not available)");

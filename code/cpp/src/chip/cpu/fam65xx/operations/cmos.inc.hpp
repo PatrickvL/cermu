@@ -18,7 +18,7 @@ bus_state_t op_bra(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_cmos()) {
     // Read relative offset
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Setup read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -56,7 +56,7 @@ bus_state_t op_trb(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_cmos()) {
     // Hardware-accurate 3-cycle Read-Modify-Write operation
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // Cycle 0: Read original value from memory
       pins = this->bus_setup_read<Addr::AB>(pins);
@@ -75,7 +75,7 @@ bus_state_t op_trb(bus_state_t pins) {
       // Reset bits (memory = memory & ~A)
       this->set(REG_DL, this->get(REG_DL) & ~accumulator);
 
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
     }
 
@@ -94,7 +94,7 @@ bus_state_t op_tsb(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_cmos()) {
     // Hardware-accurate 3-cycle Read-Modify-Write operation
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // Cycle 0: Read original value from memory
       pins = this->bus_setup_read<Addr::AB>(pins);
@@ -113,7 +113,7 @@ bus_state_t op_tsb(bus_state_t pins) {
       // Set bits (memory = memory | A)
       this->set(REG_DL, this->get(REG_DL) | accumulator);
 
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
     }
 
@@ -146,7 +146,7 @@ bus_state_t op_stp(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_cmos()) {
     // Read immediate byte (required for 2-byte instruction)
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Setup read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -172,7 +172,7 @@ bus_state_t op_stp(bus_state_t pins) {
 bus_state_t op_phx(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_cmos()) {
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       /* Dummy cycle for internal operation */
       pins = this->bus_setup_dummy<Addr::PC>(pins);
@@ -193,7 +193,7 @@ bus_state_t op_phx(bus_state_t pins) {
 bus_state_t op_phy(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_cmos()) {
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       /* Dummy cycle for internal operation */
       pins = this->bus_setup_dummy<Addr::PC>(pins);
@@ -214,7 +214,7 @@ bus_state_t op_phy(bus_state_t pins) {
 bus_state_t op_plx(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_cmos()) {
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       /* PHI2: Dummy read from PC */
       pins = this->bus_setup_dummy<Addr::PC>(pins);
@@ -226,7 +226,7 @@ bus_state_t op_plx(bus_state_t pins) {
 
       /* PHI1: Increment stack pointer */
       this->inc(REG_S);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
 
     case 2:
@@ -246,7 +246,7 @@ bus_state_t op_plx(bus_state_t pins) {
 bus_state_t op_ply(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_cmos()) {
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       /* PHI2: Dummy read from PC */
       pins = this->bus_setup_dummy<Addr::PC>(pins);
@@ -258,7 +258,7 @@ bus_state_t op_ply(bus_state_t pins) {
 
       /* PHI1: Increment stack pointer */
       this->inc(REG_S);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
 
     case 2:

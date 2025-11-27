@@ -21,7 +21,7 @@
 // Zero Page addressing: $nn (cycle-accurate)
 bus_state_t am_zp(bus_state_t pins) {
   trace_addressing_mode(__func__);
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     /* PHI2: Set up bus read for zero page address from PC */
     pins = this->bus_setup_read<Addr::PC>(pins);
@@ -41,7 +41,7 @@ bus_state_t am_zp(bus_state_t pins) {
 // Zero Page,X addressing: $nn,X (cycle-accurate)
 bus_state_t am_zpx(bus_state_t pins) {
   trace_addressing_mode(__func__);
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     /* PHI2: Set up bus read for base address from PC */
     pins = this->bus_setup_read<Addr::PC>(pins);
@@ -52,7 +52,7 @@ bus_state_t am_zpx(bus_state_t pins) {
     this->bus_load_reg(REG_ABL, pins);
     this->inc(REG_PC);
     this->set(REG_ABH, 0x00); // High byte is always 0 for zero page
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -72,7 +72,7 @@ bus_state_t am_zpx(bus_state_t pins) {
 // Zero Page,Y addressing: $nn,Y (cycle-accurate)
 bus_state_t am_zpy(bus_state_t pins) {
   trace_addressing_mode(__func__);
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     /* PHI2: Set up bus read for base address from PC */
     pins = this->bus_setup_read<Addr::PC>(pins);
@@ -83,7 +83,7 @@ bus_state_t am_zpy(bus_state_t pins) {
     this->bus_load_reg(REG_ABL, pins);
     this->inc(REG_PC);
     this->set(REG_ABH, 0x00); // High byte is always 0 for zero page
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -112,7 +112,7 @@ bus_state_t am_abs(bus_state_t pins) {
     }
   }
 
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     /* PHI2: Set up bus read for low byte from PC */
     pins = this->bus_setup_read<Addr::PC>(pins);
@@ -122,7 +122,7 @@ bus_state_t am_abs(bus_state_t pins) {
     /* PHI1: Load low byte */
     this->bus_load_reg(REG_ABL, pins);
     this->inc(REG_PC);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -143,7 +143,7 @@ bus_state_t am_abs(bus_state_t pins) {
 // Absolute,X addressing: $nnnn,X (cycle-accurate with page crossing)
 bus_state_t am_abx(bus_state_t pins) {
   trace_addressing_mode(__func__);
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     // PHI2: Read low byte from PC
     pins = this->bus_setup_read<Addr::PC>(pins);
@@ -153,7 +153,7 @@ bus_state_t am_abx(bus_state_t pins) {
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_DL, pins);
     this->inc(REG_PC);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -176,7 +176,7 @@ bus_state_t am_abx(bus_state_t pins) {
         !(this->opcode_entry.flags &
           to_index(OF::SKIP_PAGE)); // No skip allowed
     if (needs_penalty) {
-      this->cycle_index++;
+      this->half_cycle++;
     } else {
       this->set(REG_AB, effective);
       this->transition_to_operation();
@@ -206,7 +206,7 @@ bus_state_t am_abx(bus_state_t pins) {
 // Absolute,Y addressing: $nnnn,Y (cycle-accurate with page crossing)
 bus_state_t am_aby(bus_state_t pins) {
   trace_addressing_mode(__func__);
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     // PHI2: Read low byte from PC
     pins = this->bus_setup_read<Addr::PC>(pins);
@@ -216,7 +216,7 @@ bus_state_t am_aby(bus_state_t pins) {
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_ABL, pins);
     this->inc(REG_PC);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -239,7 +239,7 @@ bus_state_t am_aby(bus_state_t pins) {
         !(this->opcode_entry.flags &
           to_index(OF::SKIP_PAGE)); // No skip allowed
     if (needs_penalty) {
-      this->cycle_index++;
+      this->half_cycle++;
     } else {
       this->set(REG_AB, effective);
       this->transition_to_operation();
@@ -269,7 +269,7 @@ bus_state_t am_aby(bus_state_t pins) {
 // Indirect addressing: ($nnnn) - Used only by JMP instruction
 bus_state_t am_ind(bus_state_t pins) {
   trace_addressing_mode(__func__);
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     // PHI2: Read low byte of pointer address from PC
     pins = this->bus_setup_read<Addr::PC>(pins);
@@ -279,7 +279,7 @@ bus_state_t am_ind(bus_state_t pins) {
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_ABL, pins);
     this->inc(REG_PC);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -291,7 +291,7 @@ bus_state_t am_ind(bus_state_t pins) {
     /* PHI1: Load high byte of pointer and assemble pointer address */
     this->bus_load_reg(REG_ABH, pins);
     this->inc(REG_PC);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 4:
@@ -303,7 +303,7 @@ bus_state_t am_ind(bus_state_t pins) {
     /* PHI1: Load low byte and save to TMP */
     this->bus_load_reg(REG_AH, pins);  // Save low byte to AH (unused on 6502)
     this->set(REG_ABL, this->get(REG_ABL) + 1);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 6:
@@ -324,7 +324,7 @@ bus_state_t am_ind(bus_state_t pins) {
 // Indexed Indirect addressing: ($nn,X)
 bus_state_t am_inx(bus_state_t pins) {
   trace_addressing_mode(__func__);
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     /* Read pointer from PC */
     pins = this->bus_setup_read<Addr::PC>(pins);
@@ -335,7 +335,7 @@ bus_state_t am_inx(bus_state_t pins) {
     this->bus_load_reg(REG_ABL, pins);
     this->inc(REG_PC);
     this->set(REG_ABH, 0x00); // High byte is always 0 for zero page
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -347,7 +347,7 @@ bus_state_t am_inx(bus_state_t pins) {
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_DL, pins);
     this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_X));
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 4:
@@ -359,7 +359,7 @@ bus_state_t am_inx(bus_state_t pins) {
     /* PHI1: Load low byte and save to TMP */
     this->bus_load_reg(REG_AH, pins);  // Save low byte to AH (unused on 6502)
     this->set(REG_ABL, this->get(REG_ABL) + 1);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 6:
@@ -380,7 +380,7 @@ bus_state_t am_inx(bus_state_t pins) {
 // Indirect Indexed addressing: ($nn),Y
 bus_state_t am_iny(bus_state_t pins) {
   trace_addressing_mode(__func__);
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     /* Read pointer from PC */
     pins = this->bus_setup_read<Addr::PC>(pins);
@@ -391,7 +391,7 @@ bus_state_t am_iny(bus_state_t pins) {
     this->bus_load_reg(REG_ABL, pins);
     this->inc(REG_PC);
     this->set(REG_ABH, 0x00); // High byte is always 0 for zero page
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -403,7 +403,7 @@ bus_state_t am_iny(bus_state_t pins) {
     /* PHI1: Load low byte and save to TMP */
     this->bus_load_reg(REG_AH, pins);  // Save low byte to AH (unused on 6502)
     this->set(REG_ABL, this->get(REG_ABL) + 1); // Increment zero page pointer
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 4:
@@ -435,7 +435,7 @@ bus_state_t am_iny(bus_state_t pins) {
     if (needs_penalty) {
       /* Page crossing, RMW, or illegal store - need penalty cycle with
        * intermediate address */
-      this->cycle_index++;
+      this->half_cycle++;
     } else {
       /* No page cross, not RMW, and not illegal store - can skip penalty, set
        * correct address */
@@ -483,7 +483,7 @@ bus_state_t am_zpi(bus_state_t pins) {
 
   // CRITICAL FIX: Remove constexpr conditional - all CMOS processors should
   // support ZPI The constexpr condition was preventing proper execution
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     // PHI2: Read zero page address from PC
     pins = this->bus_setup_read<Addr::PC>(pins);
@@ -494,7 +494,7 @@ bus_state_t am_zpi(bus_state_t pins) {
     this->bus_load_reg(REG_DL, pins);
     this->set(REG_ABH, 0x00); // High byte is always 0 for zero page
     this->inc(REG_PC);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -506,7 +506,7 @@ bus_state_t am_zpi(bus_state_t pins) {
     /* PHI1: Load data and perform operations */
     this->bus_load_reg(REG_DL, pins);
     this->set(REG_ABL, this->get(REG_ABL) + 1);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 4:
@@ -528,7 +528,7 @@ bus_state_t am_abi(bus_state_t pins) {
   trace_addressing_mode(__func__);
   if constexpr (has_cmos()) {
     // WDC 65C02 absolute indexed indirect: JMP (abs,X)
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Read low byte of base address from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -538,7 +538,7 @@ bus_state_t am_abi(bus_state_t pins) {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_ABL, pins);
       this->inc(REG_PC);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
 
     case 2:
@@ -551,7 +551,7 @@ bus_state_t am_abi(bus_state_t pins) {
       this->bus_load_reg(REG_DL, pins);
       this->inc(REG_PC);
       this->set(REG_AB, this->get(REG_AB) + this->get(REG_X));
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
 
     case 4:
@@ -563,7 +563,7 @@ bus_state_t am_abi(bus_state_t pins) {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->inc(REG_AB);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
 
     case 6:
@@ -586,7 +586,7 @@ bus_state_t am_abi(bus_state_t pins) {
 bus_state_t am_dp(bus_state_t pins) {
   trace_addressing_mode(__func__);
   if constexpr (has_wide_registers()) {
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
@@ -599,7 +599,7 @@ bus_state_t am_dp(bus_state_t pins) {
       this->set(REG_ABL, dp_addr & 0xFF);
       this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
       if ((this->get(REG_D) & 0xFF) != 0x00) {
-        this->cycle_index++;
+        this->half_cycle++;
       } else {
         this->transition_to_operation();
       }
@@ -629,7 +629,7 @@ bus_state_t am_dpx(bus_state_t pins) {
     }
 
     // Native mode: True Direct Page,X addressing
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Read Direct Page offset from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -643,21 +643,21 @@ bus_state_t am_dpx(bus_state_t pins) {
       this->set(REG_ABL, dp_addr & 0xFF);
       this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
       if ((this->get(REG_D) & 0xFF) != 0x00) {
-        this->cycle_index++;
+        this->half_cycle++;
       } else {
-        this->cycle_index = 4; // Skip penalty cycle
+        this->half_cycle = 4; // Skip penalty cycle
       }
       return pins;
     }
 
     case 2:
       // PHI2: Direct Page penalty cycle
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
 
     case 3:
       // PHI1: Direct Page penalty cycle
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
 
     case 4: {
@@ -706,7 +706,7 @@ bus_state_t am_dpi(bus_state_t pins) {
 bus_state_t am_dpil(bus_state_t pins) {
   trace_addressing_mode(__func__);
   if constexpr (has_wide_registers()) {
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Read Direct Page offset from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -719,7 +719,7 @@ bus_state_t am_dpil(bus_state_t pins) {
       uint16_t dp_addr = this->get(REG_D) + this->get(REG_DL);
       this->set(REG_ABL, dp_addr & 0xFF);
       this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
     }
 
@@ -733,7 +733,7 @@ bus_state_t am_dpil(bus_state_t pins) {
       this->bus_load_reg(REG_DL, pins);
       uint16_t next_addr = this->get(REG_AB) + 1;
       this->set(REG_AB, next_addr);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
     }
 
@@ -747,7 +747,7 @@ bus_state_t am_dpil(bus_state_t pins) {
       this->bus_load_reg(REG_DL, pins);
       uint16_t next_addr = this->get(REG_AB) + 1;
       this->set(REG_AB, next_addr);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
     }
 
@@ -765,7 +765,7 @@ bus_state_t am_dpil(bus_state_t pins) {
       this->set(REG_ABH, mid_byte);
       this->set(REG_DL, bank_byte); // Bank byte for memory system
       if ((this->get(REG_D) & 0xFF) != 0x00) {
-        this->cycle_index++;
+        this->half_cycle++;
       } else {
         this->transition_to_operation();
       }
@@ -789,7 +789,7 @@ bus_state_t am_dpil(bus_state_t pins) {
 bus_state_t am_dpily(bus_state_t pins) {
   trace_addressing_mode(__func__);
   if constexpr (has_wide_registers()) {
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Read Direct Page offset from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -802,7 +802,7 @@ bus_state_t am_dpily(bus_state_t pins) {
       uint16_t dp_addr = this->get(REG_D) + this->get(REG_DL);
       this->set(REG_ABL, dp_addr & 0xFF);
       this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
     }
 
@@ -816,7 +816,7 @@ bus_state_t am_dpily(bus_state_t pins) {
       this->bus_load_reg(REG_DL, pins);
       uint16_t next_addr = this->get(REG_AB) + 1;
       this->set(REG_AB, next_addr);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
     }
 
@@ -830,7 +830,7 @@ bus_state_t am_dpily(bus_state_t pins) {
       this->bus_load_reg(REG_DL, pins);
       uint16_t next_addr = this->get(REG_AB) + 1;
       this->set(REG_AB, next_addr);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
     }
 
@@ -851,7 +851,7 @@ bus_state_t am_dpily(bus_state_t pins) {
       this->set(REG_ABH, (final_addr >> 8) & 0xFF);
       this->set(REG_DL, bank_byte); // Bank byte for memory system
       if ((this->get(REG_D) & 0xFF) != 0x00) {
-        this->cycle_index++;
+        this->half_cycle++;
       } else {
         this->transition_to_operation();
       }
@@ -883,7 +883,7 @@ bus_state_t am_abl(bus_state_t pins) {
       return this->call_current_handler(pins);
     }
 
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Read low byte from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -893,7 +893,7 @@ bus_state_t am_abl(bus_state_t pins) {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->inc(REG_PC);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
 
     case 2:
@@ -905,7 +905,7 @@ bus_state_t am_abl(bus_state_t pins) {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->inc(REG_PC);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
 
     case 4:
@@ -929,7 +929,7 @@ bus_state_t am_abl(bus_state_t pins) {
 bus_state_t am_ablx(bus_state_t pins) {
   trace_addressing_mode(__func__);
   if constexpr (has_wide_registers()) {
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Read low byte from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -939,7 +939,7 @@ bus_state_t am_ablx(bus_state_t pins) {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->inc(REG_PC);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
 
     case 2:
@@ -951,7 +951,7 @@ bus_state_t am_ablx(bus_state_t pins) {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->inc(REG_PC);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
 
     case 4:
@@ -981,7 +981,7 @@ bus_state_t am_ablx(bus_state_t pins) {
 bus_state_t am_sr(bus_state_t pins) {
   trace_addressing_mode(__func__);
   if constexpr (has_wide_registers()) {
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Read stack offset from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -991,7 +991,7 @@ bus_state_t am_sr(bus_state_t pins) {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
       this->inc(REG_PC);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
 
     case 2: {
@@ -1017,7 +1017,7 @@ bus_state_t am_sr(bus_state_t pins) {
 bus_state_t am_sri(bus_state_t pins) {
   trace_addressing_mode(__func__);
   if constexpr (has_wide_registers()) {
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Read stack offset from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -1027,7 +1027,7 @@ bus_state_t am_sri(bus_state_t pins) {
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_ABL, pins);
       this->inc(REG_PC);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
 
     case 2: {
@@ -1043,7 +1043,7 @@ bus_state_t am_sri(bus_state_t pins) {
     case 3:
       // PHI2: Read low byte of pointer from stack
       pins = this->bus_setup_read<Addr::AB>(pins);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
 
     case 4: {
@@ -1051,13 +1051,13 @@ bus_state_t am_sri(bus_state_t pins) {
       this->bus_load_reg(REG_DL, pins);
       uint16_t next_addr = this->get(REG_AB) + 1;
       this->set(REG_AB, next_addr);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
     }
 
     case 5:
       pins = this->bus_setup_read<Addr::AB>(pins);
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
 
     case 6: {
@@ -1084,7 +1084,7 @@ bus_state_t am_zpr(bus_state_t pins) {
   trace_addressing_mode(__func__);
   if constexpr (has_bit_manipulation()) {
     // BBR/BBS instructions: $nn,$offset
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Read zero page address from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -1095,7 +1095,7 @@ bus_state_t am_zpr(bus_state_t pins) {
       this->bus_load_reg(REG_DL, pins);
       this->inc(REG_PC);
       this->set(REG_ABH, 0x00); // High byte is always 0 for zero page
-      this->cycle_index++;
+      this->half_cycle++;
       return pins;
 
     case 2:

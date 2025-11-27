@@ -21,7 +21,7 @@ bus_state_t op_lax(bus_state_t pins) {
     // operand
     if (this->opcode_entry.am_index == to_index(AM::IMM)) {
       // LAX immediate - unstable behavior with magic constant
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0:
         // PHI2: Setup read from PC
         pins = this->bus_setup_read<Addr::PC>(pins);
@@ -43,7 +43,7 @@ bus_state_t op_lax(bus_state_t pins) {
       }
     } else {
       // LAX memory modes - normal behavior
-      switch (this->cycle_index) {
+      switch (this->half_cycle) {
       case 0:
         // PHI2: Setup read from AB
         pins = this->bus_setup_read<Addr::AB>(pins);
@@ -214,17 +214,17 @@ bus_state_t op_jam(bus_state_t pins) {
   // - Performs 3-cycle pattern: opcode read, operand read, operand read
   // - For test compatibility: complete after 3 cycles with PC at opcode address
 
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     // PHI2: Read operand from PC+1 (this was PC++ after opcode fetch)
     pins = this->bus_setup_read<Addr::PC>(pins);
 
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 1:
     pins = this->bus_setup_read<Addr::PC>(pins);
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
 
   case 2:
@@ -244,7 +244,7 @@ bus_state_t op_anc(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_illegal_opcodes()) {
     // ANC - AND with carry (AND immediate, then copy N flag to C flag)
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Setup read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -275,7 +275,7 @@ bus_state_t op_arr(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // ARR - AND + ROR with BCD correction in decimal mode (reference
     // implementation)
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Setup read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -365,7 +365,7 @@ bus_state_t op_alr(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_illegal_opcodes()) {
     // ALR - AND + LSR (AND immediate, then LSR A)
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Setup read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -404,7 +404,7 @@ bus_state_t op_xaa(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // XAA - Transfer X AND immediate to A (illegal)
     // Hardware quirk: Uses unstable constant 0xEE like LAX immediate
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Setup read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -430,7 +430,7 @@ bus_state_t op_sbx(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_illegal_opcodes()) {
     // SBX - Compare X with A AND immediate (illegal) (also called AXS)
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Setup read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
@@ -562,7 +562,7 @@ bus_state_t op_las(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_illegal_opcodes()) {
     // LAS - Load A, X, and S with memory AND stack pointer (illegal)
-    switch (this->cycle_index) {
+    switch (this->half_cycle) {
     case 0:
       // PHI2: Setup read from AB
       pins = this->bus_setup_read<Addr::AB>(pins);

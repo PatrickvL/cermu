@@ -16,7 +16,7 @@
 /* Helper function for branch operations - hardware-accurate 6502 timing */
 bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
                           bool flag_value) {
-  switch (this->cycle_index) {
+  switch (this->half_cycle) {
   case 0:
     pins = this->bus_setup_read<Addr::PC>(pins);
     return pins;
@@ -35,7 +35,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
 
     /* Branch taken: calculate correct target address */
     this->set(REG_AB, this->get(REG_PC) + (int8_t)this->get(REG_ABL));  // Use REG_ABL (was REG_DL)
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
   }
 
@@ -66,7 +66,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     /* Store intermediate address in PC for penalty cycle read */
     this->set(REG_PC, intermediate_addr);
     /* REG_AB still contains the correct final target from case 1 */
-    this->cycle_index++;
+    this->half_cycle++;
     return pins;
   }
 
