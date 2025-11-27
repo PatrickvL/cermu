@@ -636,12 +636,14 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
       case 5: {
         // Cycle 5 PHI1: Perform 16-bit operation
-        data_t value = static_cast<data_t>(this->get(REG_DL)) |
-                       (static_cast<data_t>(this->get(REG_DPL)) << 8);
+        uint16_t value16 = static_cast<uint16_t>(this->get(REG_DL)) |
+                           (static_cast<uint16_t>(this->get(REG_DPL)) << 8);
+        data_t value = static_cast<data_t>(value16);
         operation_func(value);
-        this->set(REG_DL, static_cast<uint8_t>(value & 0xFF)); // Low byte
+        value16 = static_cast<uint16_t>(value);
+        this->set(REG_DL, static_cast<uint8_t>(value16 & 0xFF)); // Low byte
         this->set(REG_DPL,
-                  static_cast<uint8_t>((value >> 8) & 0xFF)); // High byte
+                  static_cast<uint8_t>((value16 >> 8) & 0xFF)); // High byte
         this->cycle_index++;
         return pins;
       }

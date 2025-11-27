@@ -19,8 +19,9 @@ bus_state_t op_asl(bus_state_t pins) {
     if (this->is_accumulator_16bit() &&
         !(this->opcode_entry.flags & to_index(OF::RMW))) {
       // 16-bit accumulator operation
-      const uint16_t carry_out = (value >> 15) & FLAG_C;
-      value = (value << 1) & 0xFFFF;
+      const uint16_t val16 = static_cast<uint16_t>(value);
+      const uint16_t carry_out = (val16 >> 15) & FLAG_C;
+      value = (val16 << 1) & 0xFFFF;
       this->update_nz_flags<REG_A>(value);
       this->update_flag(FLAG_C, carry_out != 0);
     } else {
@@ -89,8 +90,9 @@ bus_state_t op_rol(bus_state_t pins) {
     if (this->is_accumulator_16bit() &&
         !(this->opcode_entry.flags & to_index(OF::RMW))) {
       // 16-bit accumulator operation
-      const uint16_t carry_out = (value >> 15) & FLAG_C;
-      value = ((value << 1) | carry_in) & 0xFFFF;
+      const uint16_t val16 = static_cast<uint16_t>(value);
+      const uint16_t carry_out = (val16 >> 15) & FLAG_C;
+      value = ((val16 << 1) | carry_in) & 0xFFFF;
       this->update_nz_flags<REG_A>(value);
       this->update_flag(FLAG_C, carry_out != 0);
     } else {
