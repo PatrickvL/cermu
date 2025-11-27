@@ -1356,86 +1356,79 @@ private:
 bool verbose_output = false;
 static TestResults results;
 
-// Parallel file processing - reuses pre-allocated vector for performance
+// Parallel file processing - simple and robust approach
 void collect_tests_from_file(const std::string& filepath, std::vector<TestItem>& tests) {
-    tests.clear(); // Clear previous contents but keep allocated memory
+    tests.clear();
     
-    // Optimize: Use memory-mapped file reading for better performance
     std::ifstream file(filepath, std::ios::binary | std::ios::ate);
     if (!file.is_open()) {
         std::cout << "ERROR: Could not open file: " << filepath << std::endl;
-        return; // Early return, tests vector remains empty
+        return;
     }
     
-    // Get file size and read in one go
     std::streamsize size = file.tellg();
     if (size <= 0) {
-        return; // Early return, tests vector remains empty
+        return;
     }
     
     file.seekg(0, std::ios::beg);
     std::string json_content(size, '\0');
-    if (!file.read(json_content.data(), size)) {
+    if (!file.read(&json_content[0], size)) {
         std::cout << "ERROR: Could not read file: " << filepath << std::endl;
-        return; // Early return, tests vector remains empty
+        return;
     }
     file.close();
     
-    // Fastest possible approach for large JSON arrays
-    tests.reserve(10000); // Pre-allocate for typical test count
+    tests.reserve(10000);
     
-    if (json_content[0] == '[') {
-        // Use raw pointers for maximum performance on large data
-        const char* data = json_content.data();
-        const char* end = data + json_content.size();
-        const char* pos = data + 1; // Skip opening [
-        
+    if (!json_content.empty() && json_content[0] == '[') {
+        // Array format - extract objects using simple brace counting
+        size_t pos = 1;
         size_t test_index = 0;
-        size_t safety_limit = 1000000; // Prevent infinite loops
         
-        while (pos < end && safety_limit-- > 0) {
-            // Fast search for opening brace using memchr
-            pos = static_cast<const char*>(memchr(pos, '{', end - pos));
-            if (!pos) break;
-            
-            // Fast brace matching using pointer arithmetic
-            const char* obj_start = pos;
-            int depth = 1;
-            ++pos; // Skip opening brace
-            
-            while (pos < end && depth > 0) {
-                if (*pos == '{') ++depth;
-                else if (*pos == '}') --depth;
+        while (pos < json_content.length()) {
+            // Skip whitespace and commas
+            while (pos < json_content.length() &&
+                   (json_content[pos] == ' ' || json_content[pos] == '\n' ||
+                    json_content[pos] == '\r' || json_content[pos] == '\t' ||
+                    json_content[pos] == ',')) {
                 ++pos;
             }
             
-            if (depth == 0) {
-                // Use emplace_back to construct in-place
-                tests.emplace_back();
-                TestItem& item = tests.back();
-                item.filepath = filepath;
-                item.test_json.assign(obj_start, pos - obj_start);
-                item.test_name = "test_" + std::to_string(test_index++);
+            if (pos >= json_content.length() || json_content[pos] == ']') {
+                break;
+            }
+            
+            if (json_content[pos] == '{') {
+                size_t start = pos;
+                int depth = 1;
+                ++pos;
+                
+                // Count braces (ignore strings for simplicity - works for well-formed JSON)
+                while (pos < json_content.length() && depth > 0) {
+                    if (json_content[pos] == '{') ++depth;
+                    else if (json_content[pos] == '}') --depth;
+                    ++pos;
+                }
+                
+                if (depth == 0) {
+                    TestItem item;
+                    item.filepath = filepath;
+                    item.test_json = json_content.substr(start, pos - start);
+                    item.test_name = "test_" + std::to_string(test_index++);
+                    tests.push_back(std::move(item));
+                }
+            } else {
+                ++pos;
             }
         }
-    } else {
-        // Single test OR single object - handle both cases gracefully
-        // Check if it's a single object that should be wrapped in an array
-        if (json_content[0] == '{') {
-            // Single object - wrap it in an array format for consistency
-            TestItem item;
-            item.filepath = filepath;
-            item.test_json = std::move(json_content);
-            item.test_name = "single_test";
-            tests.push_back(std::move(item));
-        } else {
-            // Some other format - try to parse as-is (could be malformed)
-            TestItem item;
-            item.filepath = filepath;
-            item.test_json = std::move(json_content);
-            item.test_name = "unknown_format";
-            tests.push_back(std::move(item));
-        }
+    } else if (!json_content.empty() && json_content[0] == '{') {
+        // Single object
+        TestItem item;
+        item.filepath = filepath;
+        item.test_json = std::move(json_content);
+        item.test_name = "single_test";
+        tests.push_back(std::move(item));
     }
 }
 
@@ -1443,8 +1436,7 @@ void collect_tests_from_file(const std::string& filepath, std::vector<TestItem>&
 std::vector<TestItem> collect_all_tests(const std::vector<std::string>& test_paths, const std::string& opcode_filter = "") {
     std::vector<TestItem> all_tests;
     
-    // First pass: count all JSON files to reserve space
-    size_t total_files = 0;
+    // First pass: count all JSON files
     std::vector<std::string> json_files;
     
     for (const auto& test_path : test_paths) {
@@ -1469,7 +1461,6 @@ std::vector<TestItem> collect_all_tests(const std::vector<std::string>& test_pat
                             }
                         }
                         json_files.push_back(entry.path().string());
-                        total_files++;
                     }
                 }
             } else if (fs::is_regular_file(test_path)) {
@@ -1484,7 +1475,6 @@ std::vector<TestItem> collect_all_tests(const std::vector<std::string>& test_pat
                     }
                 }
                 json_files.push_back(test_path);
-                total_files++;
             } else {
                 std::cout << "ERROR: Invalid path: " << test_path << std::endl;
             }
@@ -1494,20 +1484,35 @@ std::vector<TestItem> collect_all_tests(const std::vector<std::string>& test_pat
         }
     }
     
-    // Reserve space for better performance (expect 10000 tests per file)
-    all_tests.reserve(total_files * 10000);
+    // CRITICAL FIX: Don't pre-allocate huge memory blocks that cause heap corruption
+    // Instead, let vector grow dynamically as needed
+    // For NES6502: 256 files × 10,000 tests = 2.56M tests
+    // Pre-allocating all at once can cause heap corruption on Windows
     
-    // Pre-allocate reusable vector for file processing (avoid repeated allocations)
+    // Pre-allocate reusable vector for file processing
     std::vector<TestItem> file_tests;
-    // Reserve space for 10000 tests (typical per file) for better performance
-    file_tests.reserve(10000);
+    file_tests.reserve(10000); // Just enough for one file
     
-    // Second pass: actually collect tests using reusable vector
+    // Process files one at a time to avoid massive memory allocation
+    size_t file_num = 0;
     for (const auto& json_file : json_files) {
+        // Show progress for large test suites
+        if (json_files.size() > 50 && file_num % 50 == 0) {
+            std::cout << "." << std::flush;
+        }
+        
         collect_tests_from_file(json_file, file_tests);
-        all_tests.insert(all_tests.end(), 
+        
+        // Move tests into main vector
+        all_tests.insert(all_tests.end(),
                         std::make_move_iterator(file_tests.begin()),
                         std::make_move_iterator(file_tests.end()));
+        
+        file_num++;
+    }
+    
+    if (json_files.size() > 50) {
+        std::cout << std::endl; // End progress dots
     }
     
     return all_tests;

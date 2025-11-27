@@ -544,6 +544,15 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
                      OF::NONE}; // STP -> 2-byte NOP (immediate) - not supported
                                 // on Synertek 65C02
     }
+
+    // Rockwell 65C02 doesn't support WAI/STP - override with proper NOPs
+    if (traits.has(fam65xx::CPUCoreFlags::ROCKWELL_BITS) &&
+        !traits.has(fam65xx::CPUCoreFlags::WAI_STP)) {
+      table[0xCB] = {OP::NOP, AM::NON,
+                     OF::NONE}; // WAI -> 1-byte NOP (implied) - halt
+      table[0xDB] = {OP::NOP, AM::IMM,
+                     OF::NONE}; // STP -> 2-byte NOP (immediate) - stop
+    }
   }
 
   // Rockwell 65C02 modifications (add RMB/SMB/BBR/BBS instructions)
