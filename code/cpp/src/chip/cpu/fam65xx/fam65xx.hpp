@@ -1311,17 +1311,16 @@ public:
     this->init_conditional_features();
 
     // Use unified interrupt handler for vector loading
-    // Skip stack operations (cycles 0-3) and jump to vector loading (cycles
-    // 4-5)
     this->active_interrupt = FAM65XX_INT_RESET;
 
-    // Set up opcode_entry for BRK (opcode $00) so tracing shows correct
-    // instruction
+    // Set up opcode_entry for BRK (opcode $00) so tracing shows correct instruction
     this->opcode_entry = get_opcode_info(0x00); // = {OP_BRK, AM_NON, OF_NONE};
     this->current_handler = &fam65xx_t::op_brk;
-    this->half_cycle = 8;                      // Jump to vector loading phase
-    this->set(REG_AB, this->get_vector_addr()); // Do the same memory setup as
-                                                // preceding op_brk cycle 3
+    
+    // Jump to vector loading phase - emulation mode uses cycle 8, native would use cycle 10
+    // but reset always uses emulation-style entry (no PBR push)
+    this->half_cycle = 8;
+    this->set(REG_AB, this->get_vector_addr()); // Same memory setup as preceding cycle
 
     return pins;
   }

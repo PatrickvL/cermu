@@ -781,6 +781,7 @@ bus_state_t op_mvp(bus_state_t pins) {
 }
 
 // COP - Co-processor Instruction (65C816)
+// Forwards to BRK after setting COP interrupt type
 bus_state_t op_cop(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_wide_registers()) {
@@ -791,68 +792,13 @@ bus_state_t op_cop(bus_state_t pins) {
       return pins;
     case 1:
       this->inc(REG_PC);
-      this->half_cycle++;
-      return pins;
-
-    case 2:
-      // PHI2: Push program bank register
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PBR));
-    case 3:      
-      this->dec(REG_S);
-      this->half_cycle++;
-      return pins;
-
-    case 4:
-      // PHI2: Push PC high byte
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
-      return pins;
-    case 5:
-      this->dec(REG_S);
-      this->half_cycle++;
-      return pins;
-
-    case 6:
-      // PHI2: Push PC low byte
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCL));
-      return pins;
-    case 7:
-      this->dec(REG_S);
-      this->half_cycle++;
-      return pins;
-
-    case 8:
-      // PHI2: Push processor status register
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_P));
-      return pins;
-    case 9:
-      this->dec(REG_S);
-      // Set up interrupt type and vector address
+      // Set up interrupt type to COP (only difference from BRK)
       this->active_interrupt = FAM65XX_INT_COP;
-      this->set(REG_AB, this->get_vector_addr());
-      this->half_cycle++;
-      return pins;
-
-    case 10:
-      // Read interrupt vector low byte
-      pins = this->bus_setup_read<Addr::AB>(pins);
-      return pins;
-    case 11:
-      /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_PCL, pins);
-      this->inc(REG_AB);
-      this->half_cycle++;
-      return pins;
-
-    case 12:
-      pins = this->bus_setup_read<Addr::AB>(pins);
-      return pins;
-    case 13:
-      /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_PCH, pins);
-      this->clear_flag(FLAG_D); // Clear decimal mode
-      this->set_flag(FLAG_I);   // Disable interrupts
-      this->active_interrupt = FAM65XX_INT_NONE;
-      this->transition_to_fetch();
+      // Redirect handler to BRK for remaining cycles
+      this->current_handler = &fam65xx_t::op_brk;
+      // Forward to BRK handler starting at cycle 2 (after signature byte read)
+      this->half_cycle = 2;
+      return this->op_brk(pins);
     }
     return pins;
   }
