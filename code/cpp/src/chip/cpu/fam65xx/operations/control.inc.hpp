@@ -201,7 +201,7 @@ uint16_t get_vector_addr() const {
 
   static constexpr uint16_t native_65C816_vectors[7] = {
       0xFFE6, // FAM65XX_INT_NONE: Default to BRK vector (native mode)
-      0xFFE6, // FAM65XX_INT_BRK: Software interrupt and default (native mode)
+      0xFFE6, // FAM65XX_INT_BRK: Software interrupt (native mode)
       0xFFEE, // FAM65XX_INT_IRQ: Hardware interrupt (native mode)
       0xFFE4, // FAM65XX_INT_COP: CoProcessor (native mode)
       0xFFEA, // FAM65XX_INT_NMI: Non-maskable interrupt (native mode)
