@@ -254,7 +254,7 @@ bus_state_t op_brk(bus_state_t pins) {
         pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PBR));
         return pins;
       case 3:
-        this->dec(REG_S);
+        this->dec(REG_SP);  // Native mode: decrement full 16-bit SP
         this->half_cycle++;
         return pins;
 
@@ -263,7 +263,7 @@ bus_state_t op_brk(bus_state_t pins) {
         pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
         return pins;
       case 5:
-        this->dec(REG_S);
+        this->dec(REG_SP);  // Native mode: decrement full 16-bit SP
         this->half_cycle++;
         return pins;
 
@@ -272,7 +272,7 @@ bus_state_t op_brk(bus_state_t pins) {
         pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCL));
         return pins;
       case 7:
-        this->dec(REG_S);
+        this->dec(REG_SP);  // Native mode: decrement full 16-bit SP
         this->half_cycle++;
         return pins;
 
@@ -281,7 +281,7 @@ bus_state_t op_brk(bus_state_t pins) {
         pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_P));
         return pins;
       case 9:
-        this->dec(REG_S);
+        this->dec(REG_SP);  // Native mode: decrement full 16-bit SP
         this->set_flag(FLAG_I);   // Disable interrupts
         this->clear_flag(FLAG_D); // Clear decimal mode
         this->set(REG_AB, this->get_vector_addr());

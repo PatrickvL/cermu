@@ -42,7 +42,7 @@ typedef struct {
 // CPU state structure matching ProcessorTests format
 typedef struct {
     uint16_t pc;
-    uint8_t s;     // stack pointer (always 8-bit)
+    uint16_t s;    // stack pointer (8-bit for 6502, 16-bit for 65816 native mode)
     uint16_t a;    // accumulator (8-bit for 6502, 16-bit for 65816)
     uint16_t x;    // X register (8-bit for 6502, 16-bit for 65816)
     uint16_t y;    // Y register (8-bit for 6502, 16-bit for 65816)
