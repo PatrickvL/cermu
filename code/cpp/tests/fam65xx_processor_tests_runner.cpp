@@ -80,15 +80,12 @@ ProcessorType detect_processor_from_path(const std::string& test_path) {
     // Normalize path separators for Windows/Unix compatibility
     std::replace(path_lower.begin(), path_lower.end(), '\\', '/');
     
-    if (path_lower.find("processor_tests/6502/") != std::string::npos) {
-        return ProcessorType::MOS6502;
+    // Add trailing slash if not present for consistent matching
+    if (!path_lower.empty() && path_lower.back() != '/') {
+        path_lower += '/';
     }
-    if (path_lower.find("processor_tests/nes6502/") != std::string::npos) {
-        return ProcessorType::NES6502;
-    }
-    if (path_lower.find("processor_tests/mos6510/") != std::string::npos) {
-        return ProcessorType::MOS6510;
-    }
+    
+    // Check for specific processor paths - order matters (most specific first)
     if (path_lower.find("processor_tests/synertek65c02/") != std::string::npos) {
         return ProcessorType::SYNERTEK65C02;
     }
@@ -101,6 +98,15 @@ ProcessorType detect_processor_from_path(const std::string& test_path) {
     if (path_lower.find("processor_tests/wdc65c816/") != std::string::npos ||
         path_lower.find("processor_tests/65816/") != std::string::npos) {
         return ProcessorType::WDC65C816;
+    }
+    if (path_lower.find("processor_tests/nes6502/") != std::string::npos) {
+        return ProcessorType::NES6502;
+    }
+    if (path_lower.find("processor_tests/mos6510/") != std::string::npos) {
+        return ProcessorType::MOS6510;
+    }
+    if (path_lower.find("processor_tests/6502/") != std::string::npos) {
+        return ProcessorType::MOS6502;
     }
     return ProcessorType::MOS6502;  // Default fallback
 }

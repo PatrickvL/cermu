@@ -41,9 +41,15 @@ bus_state_t op_bra(bus_state_t pins) {
 bus_state_t op_stz(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_cmos()) {
-    // Store zero to target address with proper RDY handling
-    pins = this->bus_setup_write<Addr::AB>(pins, 0x00);
-    this->transition_to_fetch();
+    // Hardware-accurate STZ operation (PHI2/PHI1 split pattern)
+    switch (this->half_cycle) {
+    case 0: // PHI2 - Write zero to address
+      pins = this->bus_setup_write<Addr::AB>(pins, 0x00);
+      return pins;
+    case 1: // PHI1 - Complete and transition
+      this->transition_to_fetch();
+      return pins;
+    }
   }
   return pins;
 }
@@ -177,12 +183,20 @@ bus_state_t op_phx(bus_state_t pins) {
   if constexpr (has_cmos()) {
     switch (this->half_cycle) {
     case 0:
-      /* Dummy cycle for internal operation */
+      /* PHI2: Dummy read from PC+1 */
       pins = this->bus_setup_dummy<Addr::PC>(pins);
       return pins;
     case 1:
-      /* PHI2: Write X to stack with processor-specific RDY handling */
+      /* PHI1: Increment cycle */
+      this->half_cycle++;
+      return pins;
+
+    case 2:
+      /* PHI2: Write X to stack */
       pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_X));
+      return pins;
+    case 3:
+      /* PHI1: Decrement SP and transition */
       this->dec(REG_S);
       this->transition_to_fetch();
       return pins;
@@ -197,12 +211,20 @@ bus_state_t op_phy(bus_state_t pins) {
   if constexpr (has_cmos()) {
     switch (this->half_cycle) {
     case 0:
-      /* Dummy cycle for internal operation */
+      /* PHI2: Dummy read from PC+1 */
       pins = this->bus_setup_dummy<Addr::PC>(pins);
       return pins;
     case 1:
-      /* PHI2: Write Y to stack with processor-specific RDY handling */
+      /* PHI1: Increment cycle */
+      this->half_cycle++;
+      return pins;
+
+    case 2:
+      /* PHI2: Write Y to stack */
       pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_Y));
+      return pins;
+    case 3:
+      /* PHI1: Decrement SP and transition */
       this->dec(REG_S);
       this->transition_to_fetch();
       return pins;
