@@ -286,18 +286,17 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     if constexpr (addr_arg == Addr::PC)
       return this->get(REG_PBR);
 
-    // Emulation mode: non-PC addresses don't use banking (6502 compatibility)
-    if (this->in_emulation_mode())
-      return 0;
-
-    // Native mode: Stack always uses bank 0, data addresses use provided bank
-    // In 65C816 native mode, SP is 16-bit and can address anywhere in bank 0
-    // The bank byte is always 0 for stack operations, but the full 16-bit SP is used
+    // Stack always uses bank 0 (both emulation and native mode)
+    // In emulation mode: SP is 8-bit constrained to page 1 (0x0100-0x01FF)
+    // In native mode: SP is 16-bit and can address anywhere in bank 0
     if constexpr (addr_arg == Addr::SP) {
-      return 0;  // Stack always in bank 0 in native mode
-    } else {
-      return this->get(static_cast<reg8_t>(bank_arg));
+      return 0;
     }
+
+    // For data addresses (Addr::AB):
+    // In emulation mode: DBR is used for absolute addressing (bank_arg specifies which)
+    // In native mode: Use the provided bank register (DBR or ZBR)
+    return this->get(static_cast<reg8_t>(bank_arg));
   }
 
   // ========================================================================
