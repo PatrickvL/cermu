@@ -500,8 +500,9 @@ enum class Bank : uint8_t {
 enum class OpcodeFlags : uint8_t {
   NONE = 0x0,          // No special flags
   ILLEGAL_STORE = 0x1, // Illegal store quirk - uses wrong address on page cross
-  SKIP_PAGE = 0x2, // Can skip page cross penalty cycle (read operations only)
-  RMW = 0x4        // Read-Modify-Write operation
+  SKIP_PAGE = 0x2,     // Can skip page cross penalty cycle (read operations only)
+  OPTIMIZED_CYCLE = 0x2, // Single-cycle optimizable (AM::NON implicit operations only) - SHARES bit with SKIP_PAGE
+  RMW = 0x4            // Read-Modify-Write operation
 };
 
 // ============================================================================
@@ -523,12 +524,24 @@ struct opcode_info_t {
   inline bool is_illegal_store() const {
     return (flags & to_index(OpcodeFlags::ILLEGAL_STORE)) != 0;
   }
+  
   inline bool can_skip_page() const {
-    return (flags & to_index(OpcodeFlags::SKIP_PAGE)) != 0;
+    // SKIP_PAGE only valid for non-NON addressing modes (memory operations)
+    return am_index != to_index(AM::NON) &&
+           (flags & to_index(OpcodeFlags::SKIP_PAGE)) != 0;
   }
+  
+  inline bool is_optimized_cycle() const {
+    // OPTIMIZED_CYCLE only valid for AM::NON addressing mode (implicit operations)
+    // Shares bit with SKIP_PAGE but contexts are mutually exclusive
+    return am_index == to_index(AM::NON) &&
+           (flags & to_index(OpcodeFlags::OPTIMIZED_CYCLE)) != 0;
+  }
+  
   inline bool is_rmw() const {
     return (flags & to_index(OpcodeFlags::RMW)) != 0;
   }
+  
   // Constructor to handle scoped enum conversion
   constexpr opcode_info_t(Operation op, AddressingMode am, OpcodeFlags fl)
       : op_index(to_index(op)), am_index(to_index(am)), flags(to_index(fl)) {}

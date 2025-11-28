@@ -64,7 +64,7 @@ constexpr uint32_t NO_IRQ_LINE = 1 << 21; // ✓ IMPLEMENTED: IRQ disabled (6507
 // === Timing (bits 24-27) ===
 constexpr uint32_t OPTIMIZED_CYCLES =
     1 << 24; // ✓ IMPLEMENTED: 65CE02 removed dummy cycles - implemented in
-             // flags.inc.hpp
+             // transition_to_opcode()
 constexpr uint32_t VARIABLE_CLOCK =
     1 << 25; // TODO: Can switch speeds (8502, HuC6280)
 constexpr uint32_t ACCURATE_INTERNAL_CYCLES =
