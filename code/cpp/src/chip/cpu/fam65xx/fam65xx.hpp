@@ -937,11 +937,28 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     return op_handler;
   }
 
-  inline void transition_to_opcode(const opcode_info_t entry) {
+  inline bus_state_t transition_to_opcode(bus_state_t pins, const opcode_info_t entry) {
     this->opcode_entry = entry;
-    this->half_cycle = 0;
     // Set up first instruction cycle handler
     this->current_handler = this->get_instruction_handler();
+    
+    // For OPTIMIZED_CYCLES: Check if this is a single-cycle implicit operation
+    // that can execute immediately during fetch's PHI1 phase
+    if constexpr (has_optimized_cycles()) {
+      // Only optimize simple implicit operations with no addressing mode
+      if (entry.am_index == to_index(AM::NON) &&
+          (entry.flags & to_index(OF::RMW)) == 0) {
+        // Set half_cycle to 1 to skip dummy bus setup (case 0)
+        // and execute operation directly (case 1)
+        this->half_cycle = 1;
+        // Execute the operation immediately in this PHI1 phase
+        return this->call_current_handler(pins);
+      }
+    }
+    
+    // Default path: normal execution starting at cycle 0
+    this->half_cycle = 0;
+    return pins;
   }
 
   // Helper method for calling current handler with proper member function
@@ -964,12 +981,13 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     case 1: {
       // PHI1: Sample opcode from bus and decode
       uint8_t opcode = this->bus_get_data(pins);
-      this->set(REG_IR, opcode);  
+      this->set(REG_IR, opcode);
       // Clear SYNC signal after opcode fetch completes (hardware-accurate timing)
-      pins &= ~FAM65XX_SYNC;  
+      pins &= ~FAM65XX_SYNC;
       // Transition resets half_cycle to 0 for new instruction
+      // For OPTIMIZED_CYCLES, this may execute the operation immediately
       opcode_info_t entry = get_opcode_info(opcode);
-      this->transition_to_opcode(entry);
+      pins = this->transition_to_opcode(pins, entry);
       return pins;
     }
     }

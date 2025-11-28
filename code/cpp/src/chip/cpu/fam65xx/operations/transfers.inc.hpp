@@ -18,21 +18,9 @@ bus_state_t op_tax(bus_state_t pins) {
   trace_operation(__func__);
   
   switch (this->half_cycle) {
-    case 0: // PHI2: Bus setup
-      if constexpr (has_wide_registers()) {
-        if (!this->in_emulation_mode()) {
-          // 65C816 native mode path
-          if constexpr (!this->has_optimized_cycles()) {
-            return this->bus_setup_dummy<Addr::PC>(pins);
-          }
-          return pins;
-        }
-      }
-      // Standard 8-bit path
-      if constexpr (!this->has_optimized_cycles()) {
-        return this->bus_setup_dummy<Addr::PC>(pins);
-      }
-      return pins;
+    case 0: // PHI2: Bus setup - dummy cycle for non-optimized CPUs
+      // OPTIMIZED_CYCLES: transition_to_opcode sets half_cycle=1, skipping this
+      return this->bus_setup_dummy<Addr::PC>(pins);
       
     case 1: // PHI1: Operation
       if constexpr (has_wide_registers()) {
@@ -84,21 +72,9 @@ bus_state_t op_tay(bus_state_t pins) {
   trace_operation(__func__);
   
   switch (this->half_cycle) {
-    case 0: // PHI2: Bus setup
-      if constexpr (has_wide_registers()) {
-        if (!this->in_emulation_mode()) {
-          // 65C816 native mode path
-          if constexpr (!this->has_optimized_cycles()) {
-            return this->bus_setup_dummy<Addr::PC>(pins);
-          }
-          return pins;
-        }
-      }
-      // Standard 8-bit path
-      if constexpr (!this->has_optimized_cycles()) {
-        return this->bus_setup_dummy<Addr::PC>(pins);
-      }
-      return pins;
+    case 0: // PHI2: Bus setup - dummy cycle for non-optimized CPUs
+      // OPTIMIZED_CYCLES: transition_to_opcode sets half_cycle=1, skipping this
+      return this->bus_setup_dummy<Addr::PC>(pins);
       
     case 1: // PHI1: Operation
       if constexpr (has_wide_registers()) {
@@ -150,21 +126,9 @@ bus_state_t op_tsx(bus_state_t pins) {
   trace_operation(__func__);
   
   switch (this->half_cycle) {
-    case 0: // PHI2: Bus setup
-      if constexpr (has_wide_registers()) {
-        if (this->is_index_16bit()) {
-          // 65C816 native mode path
-          if constexpr (!this->has_optimized_cycles()) {
-            return this->bus_setup_dummy<Addr::PC>(pins);
-          }
-          return pins;
-        }
-      }
-      // Standard 8-bit path
-      if constexpr (!this->has_optimized_cycles()) {
-        return this->bus_setup_dummy<Addr::PC>(pins);
-      }
-      return pins;
+    case 0: // PHI2: Bus setup - dummy cycle for non-optimized CPUs
+      // OPTIMIZED_CYCLES: transition_to_opcode sets half_cycle=1, skipping this
+      return this->bus_setup_dummy<Addr::PC>(pins);
       
     case 1: // PHI1: Operation
       if constexpr (has_wide_registers()) {
@@ -194,21 +158,9 @@ bus_state_t op_txa(bus_state_t pins) {
   trace_operation(__func__);
   
   switch (this->half_cycle) {
-    case 0: // PHI2: Bus setup
-      if constexpr (has_wide_registers()) {
-        if (!this->in_emulation_mode()) {
-          // 65C816 native mode path
-          if constexpr (!this->has_optimized_cycles()) {
-            return this->bus_setup_dummy<Addr::PC>(pins);
-          }
-          return pins;
-        }
-      }
-      // Standard 8-bit path
-      if constexpr (!this->has_optimized_cycles()) {
-        return this->bus_setup_dummy<Addr::PC>(pins);
-      }
-      return pins;
+    case 0: // PHI2: Bus setup - dummy cycle for non-optimized CPUs
+      // OPTIMIZED_CYCLES: transition_to_opcode sets half_cycle=1, skipping this
+      return this->bus_setup_dummy<Addr::PC>(pins);
       
     case 1: // PHI1: Operation
       if constexpr (has_wide_registers()) {
@@ -260,21 +212,9 @@ bus_state_t op_txs(bus_state_t pins) {
   trace_operation(__func__);
   
   switch (this->half_cycle) {
-    case 0: // PHI2: Bus setup
-      if constexpr (has_wide_registers()) {
-        if (!this->in_emulation_mode()) {
-          // 65C816 native mode path
-          if constexpr (!this->has_optimized_cycles()) {
-            return this->bus_setup_dummy<Addr::PC>(pins);
-          }
-          return pins;
-        }
-      }
-      // Standard 8-bit path
-      if constexpr (!this->has_optimized_cycles()) {
-        return this->bus_setup_dummy<Addr::PC>(pins);
-      }
-      return pins;
+    case 0: // PHI2: Bus setup - dummy cycle for non-optimized CPUs
+      // OPTIMIZED_CYCLES: transition_to_opcode sets half_cycle=1, skipping this
+      return this->bus_setup_dummy<Addr::PC>(pins);
       
     case 1: // PHI1: Operation
       if constexpr (has_wide_registers()) {
@@ -308,21 +248,9 @@ bus_state_t op_tya(bus_state_t pins) {
   trace_operation(__func__);
   
   switch (this->half_cycle) {
-    case 0: // PHI2: Bus setup
-      if constexpr (has_wide_registers()) {
-        if (!this->in_emulation_mode()) {
-          // 65C816 native mode path
-          if constexpr (!this->has_optimized_cycles()) {
-            return this->bus_setup_dummy<Addr::PC>(pins);
-          }
-          return pins;
-        }
-      }
-      // Standard 8-bit path
-      if constexpr (!this->has_optimized_cycles()) {
-        return this->bus_setup_dummy<Addr::PC>(pins);
-      }
-      return pins;
+    case 0: // PHI2: Bus setup - dummy cycle for non-optimized CPUs
+      // OPTIMIZED_CYCLES: transition_to_opcode sets half_cycle=1, skipping this
+      return this->bus_setup_dummy<Addr::PC>(pins);
       
     case 1: // PHI1: Operation
       if constexpr (has_wide_registers()) {
@@ -378,11 +306,9 @@ bus_state_t op_inx(bus_state_t pins) {
   trace_operation(__func__);
   
   switch (this->half_cycle) {
-    case 0: // PHI2: Bus setup
-      if constexpr (!this->has_optimized_cycles()) {
-        return this->bus_setup_dummy<Addr::PC>(pins);
-      }
-      return pins;
+    case 0: // PHI2: Bus setup - dummy cycle for non-optimized CPUs
+      // OPTIMIZED_CYCLES: transition_to_opcode sets half_cycle=1, skipping this
+      return this->bus_setup_dummy<Addr::PC>(pins);
     case 1: // PHI1: Operation
       if constexpr (has_wide_registers()) {
         if (this->is_index_16bit()) {
@@ -411,11 +337,9 @@ bus_state_t op_inx(bus_state_t pins) {
 bus_state_t op_iny(bus_state_t pins) {
   trace_operation(__func__);
   switch (this->half_cycle) {
-    case 0: // PHI2: Bus setup
-      if constexpr (!this->has_optimized_cycles()) {
-        return this->bus_setup_dummy<Addr::PC>(pins);
-      }
-      return pins;
+    case 0: // PHI2: Bus setup - dummy cycle for non-optimized CPUs
+      // OPTIMIZED_CYCLES: transition_to_opcode sets half_cycle=1, skipping this
+      return this->bus_setup_dummy<Addr::PC>(pins);
     case 1: // PHI1: Operation
       if constexpr (has_wide_registers()) {
         if (this->is_index_16bit()) {
@@ -444,11 +368,9 @@ bus_state_t op_iny(bus_state_t pins) {
 bus_state_t op_dex(bus_state_t pins) {
   trace_operation(__func__);
   switch (this->half_cycle) {
-    case 0: // PHI2: Bus setup
-      if constexpr (!this->has_optimized_cycles()) {
-        return this->bus_setup_dummy<Addr::PC>(pins);
-      }
-      return pins;
+    case 0: // PHI2: Bus setup - dummy cycle for non-optimized CPUs
+      // OPTIMIZED_CYCLES: transition_to_opcode sets half_cycle=1, skipping this
+      return this->bus_setup_dummy<Addr::PC>(pins);
     case 1: // PHI1: Operation
       if constexpr (has_wide_registers()) {
         if (this->is_index_16bit()) {
@@ -475,13 +397,11 @@ bus_state_t op_dex(bus_state_t pins) {
 
 /* DEY - Decrement Y */
 bus_state_t op_dey(bus_state_t pins) {
-  trace_operation(__func__);  
+  trace_operation(__func__);
   switch (this->half_cycle) {
-    case 0: // PHI2: Bus setup
-      if constexpr (!this->has_optimized_cycles()) {
-        return this->bus_setup_dummy<Addr::PC>(pins);
-      }
-      return pins;  
+    case 0: // PHI2: Bus setup - dummy cycle for non-optimized CPUs
+      // OPTIMIZED_CYCLES: transition_to_opcode sets half_cycle=1, skipping this
+      return this->bus_setup_dummy<Addr::PC>(pins);
     case 1: // PHI1: Operation
       if constexpr (has_wide_registers()) {
         if (this->is_index_16bit()) {

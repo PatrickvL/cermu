@@ -103,7 +103,7 @@ bus_state_t am_abs(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     if (this->in_emulation_mode() && this->get(REG_IR) == 0xF4) {
       // PEA in emulation mode should behave as NOP zp,X
-      this->transition_to_opcode(opcode_info_t{OP::NOP, AM::ZPX, OF::NONE});
+      pins = this->transition_to_opcode(pins, opcode_info_t{OP::NOP, AM::ZPX, OF::NONE});
       return this->call_current_handler(pins);
     }
   }
@@ -462,7 +462,7 @@ bus_state_t am_zpi(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     if (this->in_emulation_mode() && this->get(REG_IR) == 0xD4) {
       // PEI in emulation mode should behave as NOP zp,X
-      this->transition_to_opcode(opcode_info_t{OP::NOP, AM::ZPX, OF::NONE});
+      pins = this->transition_to_opcode(pins, opcode_info_t{OP::NOP, AM::ZPX, OF::NONE});
       return this->call_current_handler(pins);
     }
   }
@@ -857,7 +857,7 @@ bus_state_t am_abl(bus_state_t pins) {
     // addressing
     if (this->in_emulation_mode() && this->get(REG_IR) == 0x22) {
       // PEI in emulation mode should behave as NOP zp,X
-      this->transition_to_opcode(opcode_info_t{OP::NOP, AM::IMM, OF::NONE});
+      pins = this->transition_to_opcode(pins, opcode_info_t{OP::NOP, AM::IMM, OF::NONE});
       return this->call_current_handler(pins);
     }
 

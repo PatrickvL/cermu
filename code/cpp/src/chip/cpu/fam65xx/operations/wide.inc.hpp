@@ -71,7 +71,7 @@ bus_state_t op_sep(bus_state_t pins) {
       return pins;
     } else {
       // In emulation mode, SEP becomes a 2-byte NOP - redirect to NOP handler
-      this->transition_to_opcode(opcode_info_t{OP::NOP, AM::IMM, OF::NONE});
+      pins = this->transition_to_opcode(pins, opcode_info_t{OP::NOP, AM::IMM, OF::NONE});
       return this->call_current_handler(pins);
     }
   }
