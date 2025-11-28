@@ -161,12 +161,10 @@ bus_state_t am_abx(bus_state_t pins) {
     uint16_t effective = base + this->get(REG_X);
     this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_X));
     bool needs_penalty =
-        this->page_crossed(base, effective) ||            // Page crossing
-        (this->opcode_entry.flags & to_index(OF::RMW)) || // RMW operations
-        (this->opcode_entry.flags &
-         to_index(OF::ILLEGAL_STORE)) || // SHY illegal store
-        !(this->opcode_entry.flags &
-          to_index(OF::SKIP_PAGE)); // No skip allowed
+        this->page_crossed(base, effective) ||      // Page crossing
+        (this->opcode_entry.is_rmw()) ||            // RMW operations
+        (this->opcode_entry.is_illegal_store()) ||  // SHY illegal store
+        !(this->opcode_entry.can_skip_page());      // No skip allowed
     if (needs_penalty) {
       this->half_cycle++;
     } else {
@@ -223,12 +221,10 @@ bus_state_t am_aby(bus_state_t pins) {
     uint16_t effective = base + this->get(REG_Y);
     this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_Y));
     bool needs_penalty =
-        this->page_crossed(base, effective) ||            // Page crossing
-        (this->opcode_entry.flags & to_index(OF::RMW)) || // RMW operations
-        (this->opcode_entry.flags &
-         to_index(OF::ILLEGAL_STORE)) || // SHA illegal store
-        !(this->opcode_entry.flags &
-          to_index(OF::SKIP_PAGE)); // No skip allowed
+        this->page_crossed(base, effective) ||      // Page crossing
+        (this->opcode_entry.is_rmw()) ||            // RMW operations
+        (this->opcode_entry.is_illegal_store()) ||  // SHA illegal store
+        !(this->opcode_entry.can_skip_page());      // No skip allowed
     if (needs_penalty) {
       this->half_cycle++;
     } else {
@@ -412,13 +408,10 @@ bus_state_t am_iny(bus_state_t pins) {
     this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_Y));
     /* Check if penalty cycle is needed */
     bool needs_penalty =
-        this->page_crossed(base_addr, final_addr) ||      // Page crossing
-        (this->opcode_entry.flags & to_index(OF::RMW)) || // RMW operations
-        (this->opcode_entry.flags &
-         to_index(OF::ILLEGAL_STORE)) || // SHA illegal store
-        !(this->opcode_entry.flags &
-          to_index(
-              OF::SKIP_PAGE)); // Store operations and others that can't skip
+        this->page_crossed(base_addr, final_addr) ||  // Page crossing
+        (this->opcode_entry.is_rmw()) ||              // RMW operations
+        (this->opcode_entry.is_illegal_store()) ||    // SHA illegal store
+        !(this->opcode_entry.can_skip_page());        // Store operations and others that can't skip
     if (needs_penalty) {
       /* Page crossing, RMW, or illegal store - need penalty cycle with
        * intermediate address */

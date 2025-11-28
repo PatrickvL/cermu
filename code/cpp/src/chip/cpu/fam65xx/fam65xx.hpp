@@ -723,7 +723,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
   template <typename OperationFunc>
   bus_state_t rmw_operation_helper(bus_state_t pins,
                                    OperationFunc operation_func) {
-    if (this->opcode_entry.flags & to_index(OF::RMW)) {
+    if (this->opcode_entry.is_rmw()) {
       // Memory mode - determine banking once at function entry
       // For 65C816, Direct Page operations use Bank 0 (ZBR) instead of DBR
       constexpr bool can_use_direct_page = has_wide_registers();
@@ -947,7 +947,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     if constexpr (has_optimized_cycles()) {
       // Only optimize simple implicit operations with no addressing mode
       if (entry.am_index == to_index(AM::NON) &&
-          (entry.flags & to_index(OF::RMW)) == 0) {
+          (entry.is_rmw()) == 0) {
         // Set half_cycle to 1 to skip dummy bus setup (case 0)
         // and execute operation directly (case 1)
         this->half_cycle = 1;

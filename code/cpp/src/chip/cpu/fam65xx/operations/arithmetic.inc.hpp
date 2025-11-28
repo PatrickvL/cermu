@@ -118,7 +118,7 @@ bus_state_t op_nop(bus_state_t pins) {
 
     // Only proceed with RMW if we have RMW flags AND we're not in 65C816
     // emulation mode
-    if (not_in_emulation && (this->opcode_entry.flags & to_index(OF::RMW))) {
+    if (not_in_emulation && this->opcode_entry.is_rmw()) {
       use_cmos_rmw = true;
     }
   }
