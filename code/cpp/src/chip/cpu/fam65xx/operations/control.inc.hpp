@@ -242,8 +242,9 @@ bus_state_t op_brk(bus_state_t pins) {
         return pins;
       case 1:
         this->inc(REG_PC);
-        // Set interrupt type to BRK if no hardware interrupt is active
-        if (this->active_interrupt == FAM65XX_INT_NONE) {
+        // Set interrupt type to BRK (unconditionally for software interrupt)
+        // Only higher priority interrupts (NMI, RESET) should override BRK
+        if (this->active_interrupt < FAM65XX_INT_COP) {
           this->active_interrupt = FAM65XX_INT_BRK;
         }
         this->half_cycle++;
@@ -322,8 +323,9 @@ bus_state_t op_brk(bus_state_t pins) {
   case 1:
     /* PHI1: Increment PC and set interrupt type */
     this->inc(REG_PC);
-    /* Set interrupt type to BRK if no hardware interrupt is active */
-    if (this->active_interrupt == FAM65XX_INT_NONE) {
+    /* Set interrupt type to BRK (unconditionally for software interrupt) */
+    /* Only higher priority interrupts (NMI, RESET) should override BRK */
+    if (this->active_interrupt < FAM65XX_INT_COP) {
       this->active_interrupt = FAM65XX_INT_BRK;
     }
     this->half_cycle++;
