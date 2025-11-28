@@ -360,28 +360,26 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     // CPUs)
     addr |= static_cast<uint32_t>(get_address_bank<addr_arg>(bank_arg)) << 16;
 
-    // Update bus lines (for simulation/test environments)
-    if constexpr (Traits.update_bus_lines()) {
-      // For 65816: Split 24-bit address into 16-bit address + 8-bit bank
-      if constexpr (has_wide_registers()) {
-        // 65C816: Always set both address (16-bit) and bank (8-bit) fields
-        // In emulation mode, PC uses PBR while data/stack use bank 0
-        // In native mode, all addresses use their respective bank registers
-        pins = FAM65XX_SET_ADDR(pins, addr & 0xFFFF);
-        pins = FAM65XX_SET_BANK(pins, (addr >> 16) & 0xFF);
-      } else {
-        // For 8/16-bit CPUs: use address field only (zero overhead)
-        pins = FAM65XX_SET_ADDR(pins, addr & Traits.address_mask());
-      }
+    // Update bus lines - always enabled for external bus-based memory access
+    // For 65816: Split 24-bit address into 16-bit address + 8-bit bank
+    if constexpr (has_wide_registers()) {
+      // 65C816: Always set both address (16-bit) and bank (8-bit) fields
+      // In emulation mode, PC uses PBR while data/stack use bank 0
+      // In native mode, all addresses use their respective bank registers
+      pins = FAM65XX_SET_ADDR(pins, addr & 0xFFFF);
+      pins = FAM65XX_SET_BANK(pins, (addr >> 16) & 0xFF);
+    } else {
+      // For 8/16-bit CPUs: use address field only (zero overhead)
+      pins = FAM65XX_SET_ADDR(pins, addr & Traits.address_mask());
+    }
 
-      // Set R/W signal
-      if constexpr (IsWrite) {
-        pins &= ~FAM65XX_RW;                 // Clear RW for write
-        pins = FAM65XX_SET_DATA(pins, data); // Output data for write
-      } else {
-        pins |= FAM65XX_RW; // Set RW for read
-        // External code will put data on bus during memory access
-      }
+    // Set R/W signal
+    if constexpr (IsWrite) {
+      pins &= ~FAM65XX_RW;                 // Clear RW for write
+      pins = FAM65XX_SET_DATA(pins, data); // Output data for write
+    } else {
+      pins |= FAM65XX_RW; // Set RW for read
+      // External code will put data on bus during memory access
     }
 
     return pins; // Bus setup complete - NO MEMORY ACCESS
