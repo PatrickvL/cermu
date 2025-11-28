@@ -465,11 +465,21 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
    * Unified helper for immediate mode operand handling
    */
   inline void bus_load_operand(reg8_t data_reg, bus_state_t pins) {
-    this->bus_load_reg(data_reg, pins);
-    // Increment PC for immediate mode (operand was at PC)
     if (this->opcode_entry.am_index == to_index(AM::IMM)) {
+      // Increment PC for immediate mode (operand was at PC)
       this->inc(REG_PC);
+    } else {
+      // Otherwise, increment AB for memory mode (operand was at AB)
+      // but only for wide CPUs (65C816), since 8 bit CPUs (like 6502)
+      // never perform a second bus_load_operand anyway
+      if constexpr (has_wide_registers()) {
+        this->inc(REG_AB);
+      }
     }
+    // Only AFTER the increment, load data from bus into register, so that
+    // even when the destination register is PC or AB, it still gets the
+    // correct value
+    this->bus_load_reg(data_reg, pins);
   }
 
   // ========================================================================
