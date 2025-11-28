@@ -149,6 +149,12 @@ public:
     virtual uint16_t get_sp() = 0;  // Returns 16-bit for 65816, 8-bit extended to 16-bit for others
     virtual uint8_t get_status() = 0; // Always 8-bit
     
+    // 65816-specific getters (return 0 for other processors)
+    virtual bool get_emulation_mode() { return false; }
+    virtual uint16_t get_d() { return 0; }
+    virtual uint8_t get_dbr() { return 0; }
+    virtual uint8_t get_pbr() { return 0; }
+    
     virtual void set_pc(uint16_t pc) = 0;
     virtual void set_a(uint16_t a) = 0;   // Accept 16-bit, truncate to 8-bit for non-65816
     virtual void set_x(uint16_t x) = 0;   // Accept 16-bit, truncate to 8-bit for non-65816
@@ -259,8 +265,9 @@ public:
 
 // Updated test harness using the unified processor wrapper
 class ProcessorTestHarness {
+public:
+    std::unique_ptr<UnifiedProcessorInterface> cpu_wrapper;  // Made public for test validation access
 private:
-    std::unique_ptr<UnifiedProcessorInterface> cpu_wrapper;
     ProcessorType processor_type;
     uint8_t* memory;  // Point to global test_memory array (64KB base memory)
     std::unordered_map<uint32_t, uint8_t> extended_memory;  // For 24-bit addresses outside 64KB
@@ -883,6 +890,34 @@ public:
         }
     }
     
+    bool get_emulation_mode() override {
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            return cpu->in_emulation_mode();
+        }
+        return true;
+    }
+    
+    uint16_t get_d() override {
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            return cpu->get(REG_D);
+        }
+        return 0;
+    }
+    
+    uint8_t get_dbr() override {
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            return cpu->get(REG_DBR);
+        }
+        return 0;
+    }
+    
+    uint8_t get_pbr() override {
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            return cpu->get(REG_PBR);
+        }
+        return 0;
+    }
+    
     // Set harness for bus cycle recording (thread-safe)
     void set_harness(ProcessorTestHarness* harness) override {
         harness_ptr = harness;
@@ -1341,6 +1376,52 @@ private:
                             << (int)test->final.p << ", got 0x" << (int)harness->get_status() << std::dec << std::endl;
             }
             state_match = false;
+        }
+        
+        // Check 65C816-specific registers - use cpu_wrapper methods through harness
+        if (test->final.has_65816_state) {
+            // Get actual values from the harness (which delegates to cpu_wrapper)
+            bool actual_e = harness->cpu_wrapper->get_emulation_mode();
+            uint16_t actual_d = harness->cpu_wrapper->get_d();
+            uint8_t actual_dbr = harness->cpu_wrapper->get_dbr();
+            uint8_t actual_pbr = harness->cpu_wrapper->get_pbr();
+            
+            // Compare emulation mode flag
+            bool expected_e = (test->final.e != 0);
+            if (actual_e != expected_e) {
+                if (!quiet_mode) {
+                    debug_output << "FAIL " << test->name << ": E flag - expected "
+                                << (expected_e ? "1" : "0") << ", got " << (actual_e ? "1" : "0") << std::endl;
+                }
+                state_match = false;
+            }
+            
+            // Compare Direct Page register
+            if (actual_d != test->final.d) {
+                if (!quiet_mode) {
+                    debug_output << "FAIL " << test->name << ": D - expected 0x" << std::hex
+                                << test->final.d << ", got 0x" << actual_d << std::dec << std::endl;
+                }
+                state_match = false;
+            }
+            
+            // Compare Data Bank Register
+            if (actual_dbr != test->final.dbr) {
+                if (!quiet_mode) {
+                    debug_output << "FAIL " << test->name << ": DBR - expected 0x" << std::hex
+                                << (int)test->final.dbr << ", got 0x" << (int)actual_dbr << std::dec << std::endl;
+                }
+                state_match = false;
+            }
+            
+            // Compare Program Bank Register
+            if (actual_pbr != test->final.pbr) {
+                if (!quiet_mode) {
+                    debug_output << "FAIL " << test->name << ": PBR - expected 0x" << std::hex
+                                << (int)test->final.pbr << ", got 0x" << (int)actual_pbr << std::dec << std::endl;
+                }
+                state_match = false;
+            }
         }
         
         // Memory state comparison (supports 24-bit addresses)
