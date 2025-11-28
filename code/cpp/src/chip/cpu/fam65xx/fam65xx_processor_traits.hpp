@@ -67,9 +67,8 @@ constexpr uint32_t OPTIMIZED_CYCLES =
              // transition_to_opcode()
 constexpr uint32_t VARIABLE_CLOCK =
     1 << 25; // TODO: Can switch speeds (8502, HuC6280)
-constexpr uint32_t ACCURATE_INTERNAL_CYCLES =
-    1 << 26; // Simulate internal dummy cycles for accuracy
-// Bit 27 reserved (was UPDATE_BUS_LINES - now always enabled)
+// Bit 26 reserved (was ACCURATE_INTERNAL_CYCLES - removed, now always enabled)
+// Bit 27 reserved (was UPDATE_BUS_LINES - removed, now always enabled)
 } // namespace CPUCoreFlags
 
 // ============================================================================
@@ -180,10 +179,6 @@ struct CPUTraits {
     return has(CPUCoreFlags::ROCKWELL_BITS);
   }
 
-  // Additional traits for phi2_access template method
-  constexpr bool accurate_internal_cycles() const {
-    return has(CPUCoreFlags::ACCURATE_INTERNAL_CYCLES);
-  }
 
   // Equality operator for constexpr comparisons
   // Since CPUTraits instances use string literals, we can use pointer
@@ -212,12 +207,12 @@ namespace CoreFlags {
 constexpr uint32_t NMOS_BASE =
     CPUCoreFlags::ILLEGAL_OPCODES | CPUCoreFlags::JMP_INDIRECT_BUG |
     CPUCoreFlags::RMW_DUMMY_WRITE | CPUCoreFlags::HAS_DECIMAL_MODE |
-    CPUCoreFlags::BCD_NMOS_FLAGS | CPUCoreFlags::ACCURATE_INTERNAL_CYCLES;
+    CPUCoreFlags::BCD_NMOS_FLAGS;
 
 // CMOS common flags
 constexpr uint32_t CMOS_BASE_FLAGS =
     CPUCoreFlags::CMOS_BASE | CPUCoreFlags::HAS_DECIMAL_MODE |
-    CPUCoreFlags::BCD_EXTRA_CYCLE | CPUCoreFlags::ACCURATE_INTERNAL_CYCLES;
+    CPUCoreFlags::BCD_EXTRA_CYCLE;
 
 // CMOS with Rockwell extensions
 constexpr uint32_t ROCKWELL_BASE =
@@ -311,7 +306,7 @@ constexpr CPUTraits RICOH_2A03 = {
     "Ricoh", // vendor
     "2A03",  // chip_id
     CPUCoreFlags::ILLEGAL_OPCODES | CPUCoreFlags::JMP_INDIRECT_BUG |
-        CPUCoreFlags::RMW_DUMMY_WRITE | CPUCoreFlags::ACCURATE_INTERNAL_CYCLES, // core_flags (NO HAS_DECIMAL_MODE!)
+        CPUCoreFlags::RMW_DUMMY_WRITE, // core_flags (NO HAS_DECIMAL_MODE!)
     16,                                 // address_bits
     0x00,                               // io_port_mask
     BankingType::NONE,                  // banking

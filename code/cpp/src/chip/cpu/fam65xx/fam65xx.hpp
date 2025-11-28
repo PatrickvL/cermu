@@ -339,11 +339,6 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
   template <bool IsWrite, bool IsDummy, Addr addr_arg,
             Bank bank_arg = Bank::DBR>
   bus_state_t bus_setup(bus_state_t pins, uint8_t data = 0) {
-    // Skip dummy cycles if not simulating internal timing
-    if constexpr (IsDummy && !Traits.accurate_internal_cycles()) {
-      return pins;
-    }
-
     // Get address from the specified address register
     constexpr reg16_t addr_reg = static_cast<reg16_t>(addr_arg);
     uint32_t addr;
@@ -418,7 +413,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
   /**
    * Set up bus for dummy cycle - NO MEMORY ACCESS
-   * May be optimized out if accurate_internal_cycles() is false
+   * Used for internal CPU operations and timing penalties
    */
   template <Addr addr_reg, Bank bank_arg = Bank::DBR>
   inline bus_state_t bus_setup_dummy(bus_state_t pins) {
