@@ -348,23 +348,9 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     constexpr reg16_t addr_reg = static_cast<reg16_t>(addr_arg);
     uint32_t addr;
     
-    // Special handling for stack pointer in 65C816 native mode
-    // In native mode (E=0), SP is a full 16-bit register that can address anywhere in bank 0
-    // In emulation mode and all other processors, SP is forced to page 1 (0x01xx)
+    // Special handling for stack pointer - use get_sp() for correct behavior
     if constexpr (addr_arg == Addr::SP) {
-      if constexpr (has_wide_registers()) {
-        // 65C816: Runtime check for emulation mode (can't use constexpr if with runtime value)
-        if (!this->in_emulation_mode()) {
-          // Native mode: Use full 16-bit SP (can be anywhere in bank 0)
-          addr = this->get(REG_SP);  // Use REG_SP directly (addr_reg is wrong for SP!)
-        } else {
-          // Emulation mode: Force SP to page 1 (0x01xx) for 6502 compatibility
-          addr = 0x0100 | this->get(REG_SPL);
-        }
-      } else {
-        // Non-65C816: Always force SP to page 1 (0x01xx)
-        addr = 0x0100 | this->get(REG_SPL);
-      }
+      addr = this->get_sp();
     } else {
       // Non-SP addresses: Use register directly
       addr = this->get(addr_reg);

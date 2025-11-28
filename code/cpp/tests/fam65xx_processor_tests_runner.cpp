@@ -814,19 +814,8 @@ public:
     }
     
     uint16_t get_sp() override {
-        // REG_SP returns correct 16-bit SP for all processors:
-        // - 8-bit processors: high byte is always 0x01 (page 1 forced by hardware)
-        // - 65C816 native mode: full 16-bit SP value
-        // - 65C816 emulation mode: needs normalization to force page 1
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            if (cpu->in_emulation_mode()) {
-                // Emulation mode: force page 1 (hardware behavior)
-                return 0x0100 | cpu->get(REG_SPL);
-            }
-        }
-
-        // 8-bit processors: REG_SP already has high byte = 0x01
-        return cpu->get(REG_SP);
+        // Use the CPU's get_sp() which handles all processor variants correctly
+        return cpu->get_sp();
     }
     
     uint8_t get_status() override {

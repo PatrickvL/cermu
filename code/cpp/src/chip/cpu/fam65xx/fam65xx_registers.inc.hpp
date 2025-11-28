@@ -138,6 +138,28 @@ inline void set_y_register(data_t value) {
   this->set(REG_Y, static_cast<uint8_t>(value & 0xFF));
 }
 
+/**
+ * Get stack pointer value with automatic 8/16-bit handling
+ * Uses constexpr wide check for compile-time optimization
+ *
+ * Returns correct 16-bit SP for all processors:
+ * - 8-bit processors: high byte is always 0x01 (page 1 forced by hardware)
+ * - 65C816 native mode: full 16-bit SP value
+ * - 65C816 emulation mode: force page 1 (0x01xx) for 6502 compatibility
+ */
+inline uint16_t get_sp() const {
+  if constexpr (has_wide_registers()) {
+    // 65C816: Runtime check for emulation mode
+    if (this->in_emulation_mode()) {
+      // Emulation mode: Force SP to page 1 (0x01xx) for 6502 compatibility
+      return 0x0100 | this->get(REG_SPL);
+    }
+  }
+  // Native mode: Use full 16-bit SP (can be anywhere in bank 0)
+  // Non-65C816: Always uses page 1 (like hardware, high byte REG_SPH is fixed to 0x01)
+  return this->get(REG_SP);
+}
+
 private:
 // ========================================================================
 // HELPER FUNCTIONS (needed by operation files)
