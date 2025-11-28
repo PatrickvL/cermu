@@ -146,7 +146,7 @@ public:
     virtual uint16_t get_a() = 0;  // Return 16-bit for 65816, 8-bit extended to 16-bit for others
     virtual uint16_t get_x() = 0;  // Return 16-bit for 65816, 8-bit extended to 16-bit for others
     virtual uint16_t get_y() = 0;  // Return 16-bit for 65816, 8-bit extended to 16-bit for others
-    virtual uint8_t get_sp() = 0;  // Returns low byte only (for compatibility)
+    virtual uint16_t get_sp() = 0;  // Returns 16-bit for 65816, 8-bit extended to 16-bit for others
     virtual uint8_t get_status() = 0; // Always 8-bit
     
     virtual void set_pc(uint16_t pc) = 0;
@@ -452,7 +452,7 @@ public:
     uint16_t get_a() const { return cpu_wrapper->get_a(); }   // Return 16-bit for consistency
     uint16_t get_x() const { return cpu_wrapper->get_x(); }   // Return 16-bit for consistency
     uint16_t get_y() const { return cpu_wrapper->get_y(); }   // Return 16-bit for consistency
-    uint8_t get_sp() const { return cpu_wrapper->get_sp(); }  // Always 8-bit
+    uint16_t get_sp() const { return cpu_wrapper->get_sp(); }  // 16-bit for 65816, 8-bit extended to 16-bit for others
     uint8_t get_status() const { return cpu_wrapper->get_status(); } // Always 8-bit
     
     // Memory access methods with address wrapping
@@ -813,19 +813,11 @@ public:
         }
     }
     
-    uint8_t get_sp() override {
-        // For 65C816 in native mode, this returns only the low byte
-        // The test harness only uses this for display/comparison, not for setting SP
-        return cpu->get(REG_S);
-    }
-    
-    // Get full 16-bit SP for 65C816 native mode
-    uint16_t get_sp_16bit() const {
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            return cpu->get(REG_SP);
-        } else {
-            return 0x0100 | cpu->get(REG_S);
-        }
+    uint16_t get_sp() override {
+        // REG_SP always returns 16-bit value:
+        // - For 65C816: full 16-bit SP (can be anywhere in bank 0)
+        // - For 8-bit processors: high byte is always 0x01 (page 1 forced by hardware)
+        return cpu->get(REG_SP);
     }
     
     uint8_t get_status() override {
@@ -1323,11 +1315,23 @@ private:
             state_match = false;
         }
         
-        // Additional register checks with detailed failure reporting
-        if (harness->get_sp() != test->final.s) {
+        // Check stack pointer - get_sp() returns accurate 16-bit value
+        // REG_SP automatically handles hardware differences:
+        // - 65C816 native mode (E=0): full 16-bit SP
+        // - 65C816 emulation mode (E=1): 0x01XX (page 1 forced)
+        // - 8-bit processors: 0x01XX (page 1 forced)
+        uint16_t actual_sp = harness->get_sp();
+        uint16_t expected_sp = test->final.s;
+        
+        // For emulation mode and 8-bit processors, normalize to page 1
+        if ((test->final.has_65816_state && test->final.e != 0) || !test->final.has_65816_state) {
+            expected_sp = 0x0100 | (expected_sp & 0xFF);
+        }
+        
+        if (actual_sp != expected_sp) {
             if (!quiet_mode) {
                 debug_output << "FAIL " << test->name << ": SP - expected 0x" << std::hex
-                            << (int)test->final.s << ", got 0x" << (int)harness->get_sp() << std::dec << std::endl;
+                            << expected_sp << ", got 0x" << actual_sp << std::dec << std::endl;
             }
             state_match = false;
         }
