@@ -163,7 +163,7 @@ bus_state_t op_pea(bus_state_t pins) {
 
     case 4:
       // PHI2: Push high byte first
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_ABH));
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_ABH);
       return pins;
     case 5:
       this->dec(REG_S);
@@ -172,8 +172,7 @@ bus_state_t op_pea(bus_state_t pins) {
 
     case 6:
       // PHI2: Push low byte
-      pins = this->bus_setup_write<Addr::SP>(
-          pins, this->get(REG_ABL)); // addr_low from case 0
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_ABL);
       return pins;
     case 7:
       this->dec(REG_S);
@@ -194,7 +193,7 @@ bus_state_t op_phb(bus_state_t pins) {
     switch (this->half_cycle) {
     case 0:
       // PHI2: Push DBR to stack
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DBR));
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_DBR);
       return pins;
     case 1:
       this->dec(REG_S);
@@ -215,7 +214,7 @@ bus_state_t op_phd(bus_state_t pins) {
     switch (this->half_cycle) {
     case 0:
       // PHI2: Push D register (Direct Page) high byte first
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DPH));
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_DPH);
       return pins;
     case 1:
       this->dec(REG_S);
@@ -224,7 +223,7 @@ bus_state_t op_phd(bus_state_t pins) {
 
     case 2:
       // PHI2: Push D register (Direct Page) low byte
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DPL));
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_DPL);
       return pins;
     case 3:
       this->dec(REG_S);
@@ -253,7 +252,7 @@ bus_state_t op_phk(bus_state_t pins) {
 
     case 2:
       // Push PBR to stack
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PBR));
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_PBR);
       return pins;
     case 3:
       this->dec(REG_S);
@@ -397,7 +396,7 @@ bus_state_t op_jsl(bus_state_t pins) {
     case 6:
       // Push program bank register
       // Store PBR in TMP for pushing
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PBR));
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_PBR);
       return pins;
     case 7:
       // Push PC high byte (return address - 1)
@@ -408,7 +407,7 @@ bus_state_t op_jsl(bus_state_t pins) {
     case 8:
       // Push PC low byte
 
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_PCH);
       return pins;
 
     case 9:
@@ -417,7 +416,7 @@ bus_state_t op_jsl(bus_state_t pins) {
       return pins;
 
     case 10:
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCL));
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_PCL);
       this->half_cycle++;
       return pins;
     case 11:
@@ -529,7 +528,7 @@ bus_state_t op_per(bus_state_t pins) {
 
     case 4:
       // Push high byte of effective address
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_ABH));
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_ABH);
       return pins;
     case 5:
       this->dec(REG_S);
@@ -538,7 +537,7 @@ bus_state_t op_per(bus_state_t pins) {
 
     case 6:
       // Push low byte of effective address
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_ABL));
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_ABL);
       return pins;
     case 7:
       this->dec(REG_S);
@@ -594,7 +593,7 @@ bus_state_t op_pei(bus_state_t pins) {
 
     case 6:
       // Push high byte of effective address
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_ABH));
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_ABH);
       return pins;
     case 7:
       this->dec(REG_S);
@@ -603,7 +602,7 @@ bus_state_t op_pei(bus_state_t pins) {
 
     case 8:
       // Push low byte of effective address
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_ABL));
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_ABL);
       return pins;
     case 9:
       this->dec(REG_S);
@@ -688,8 +687,7 @@ bus_state_t op_mvn(bus_state_t pins) {
 
     case 6:
       // PHI2: Write to destination address (bank:Y)
-      pins =
-          this->bus_setup_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));
+      pins = this->bus_setup_write<Addr::AB, Bank::DBR>(pins, REG_DL);
       return pins;
     case 7:
       // Increment X and Y
@@ -754,7 +752,7 @@ bus_state_t op_mvp(bus_state_t pins) {
 
     case 6:
       // PHI2: Write to destination address (bank:Y)
-      pins = this->bus_setup_write<Addr::AB, Bank::DBR>(pins, this->get(REG_DL));
+      pins = this->bus_setup_write<Addr::AB, Bank::DBR>(pins, REG_DL);
       return pins;
     case 7:
       // Decrement X and Y (move in opposite direction from MVN)

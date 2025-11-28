@@ -174,7 +174,7 @@ bus_state_t op_sta(bus_state_t pins) {
       switch (this->half_cycle) {
       case 0:
         // Store low byte of accumulator
-        pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_AL));
+        pins = this->bus_setup_write<Addr::AB>(pins, REG_AL);
         return pins;
       case 1:
         // For 65C816 native mode, increment address bus with bank handling
@@ -183,7 +183,7 @@ bus_state_t op_sta(bus_state_t pins) {
 
       case 2:
         // Store high byte of accumulator
-        pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_AH));
+        pins = this->bus_setup_write<Addr::AB>(pins, REG_AH);
         return pins;
       case 3:
         this->transition_to_fetch();
@@ -196,7 +196,7 @@ bus_state_t op_sta(bus_state_t pins) {
   // Standard 8-bit STA operation (emulation mode and non-wide CPUs)
   switch (this->half_cycle) {
   case 0: // PHI2 - Write accumulator to address
-    pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_A));
+    pins = this->bus_setup_write<Addr::AB>(pins, REG_A);
     return pins;
   case 1: // PHI1 - Complete and transition
     this->transition_to_fetch();
@@ -219,7 +219,7 @@ bus_state_t op_stx(bus_state_t pins) {
       switch (this->half_cycle) {
       case 0:
         // Store low byte of X register
-        pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_XL));
+        pins = this->bus_setup_write<Addr::AB>(pins, REG_XL);
         return pins;
       case 1:
         // For 65C816 native mode, increment address bus with bank handling
@@ -228,7 +228,7 @@ bus_state_t op_stx(bus_state_t pins) {
 
       case 2:
         // Store high byte of X register
-        pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_XH));
+        pins = this->bus_setup_write<Addr::AB>(pins, REG_XH);
         return pins;
       case 3:
         this->transition_to_fetch();
@@ -241,7 +241,7 @@ bus_state_t op_stx(bus_state_t pins) {
   // Standard 8-bit STX operation (emulation mode and non-wide CPUs)
   switch (this->half_cycle) {
   case 0: // PHI2 - Write X register to address
-    pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_X));
+    pins = this->bus_setup_write<Addr::AB>(pins, REG_X);
     return pins;
 
   case 1: // PHI1 - Complete and transition
@@ -265,7 +265,7 @@ bus_state_t op_sty(bus_state_t pins) {
       switch (this->half_cycle) {
       case 0:
         // Store low byte of Y register
-        pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_YL));
+        pins = this->bus_setup_write<Addr::AB>(pins, REG_YL);
         return pins;
       case 1:
         // For 65C816 native mode, increment address bus with bank handling
@@ -274,7 +274,7 @@ bus_state_t op_sty(bus_state_t pins) {
 
       case 2:
         // Store high byte of Y register
-        pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_YH));
+        pins = this->bus_setup_write<Addr::AB>(pins, REG_YH);
         return pins;
       case 3:
         this->transition_to_fetch();
@@ -287,7 +287,7 @@ bus_state_t op_sty(bus_state_t pins) {
   // Standard 8-bit STY operation (emulation mode and non-wide CPUs)
   switch (this->half_cycle) {
   case 0: // PHI2 - Write Y register to address
-    pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_Y));
+    pins = this->bus_setup_write<Addr::AB>(pins, REG_Y);
     return pins;
   case 1: // PHI1 - Complete and transition
     this->transition_to_fetch();

@@ -71,7 +71,7 @@ bus_state_t op_trb(bus_state_t pins) {
 
     case 2:
       // Cycle 1: Dummy write original value back + modify
-      pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
+      pins = this->bus_setup_write<Addr::AB>(pins, REG_DL);
       return pins;
     case 3: {
       uint8_t accumulator = this->get(REG_A);
@@ -86,7 +86,7 @@ bus_state_t op_trb(bus_state_t pins) {
 
     case 4:
       // Cycle 2: Write modified result back
-      pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
+      pins = this->bus_setup_write<Addr::AB>(pins, REG_DL);
       return pins;
     case 5:
       this->transition_to_fetch();
@@ -113,7 +113,7 @@ bus_state_t op_tsb(bus_state_t pins) {
 
     case 2:
       // Cycle 1: Dummy write original value back + modify
-      pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
+      pins = this->bus_setup_write<Addr::AB>(pins, REG_DL);
       return pins;
     case 3: {
       uint8_t accumulator = this->get(REG_A);
@@ -127,7 +127,7 @@ bus_state_t op_tsb(bus_state_t pins) {
     }
 
     case 4: // Cycle 2: Write modified result back
-      pins = this->bus_setup_write<Addr::AB>(pins, this->get(REG_DL));
+      pins = this->bus_setup_write<Addr::AB>(pins, REG_DL);
       return pins;
     case 5:
       this->transition_to_fetch();
@@ -193,7 +193,7 @@ bus_state_t op_phx(bus_state_t pins) {
 
     case 2:
       /* PHI2: Write X to stack */
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_X));
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_X);
       return pins;
     case 3:
       /* PHI1: Decrement SP and transition */
@@ -221,7 +221,7 @@ bus_state_t op_phy(bus_state_t pins) {
 
     case 2:
       /* PHI2: Write Y to stack */
-      pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_Y));
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_Y);
       return pins;
     case 3:
       /* PHI1: Decrement SP and transition */

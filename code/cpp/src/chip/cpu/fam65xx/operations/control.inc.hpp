@@ -77,7 +77,7 @@ bus_state_t op_jsr(bus_state_t pins) {
 
   case 4:
     /* PHI2: Push PCH (high byte of return address) to stack */
-    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
+    pins = this->bus_setup_write<Addr::SP>(pins, REG_PCH);
     return pins;
   case 5:
     /* PHI1: Decrement SP */
@@ -87,7 +87,7 @@ bus_state_t op_jsr(bus_state_t pins) {
 
   case 6:
     /* PHI2: Push PCL (low byte of return address) to stack */
-    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCL));
+    pins = this->bus_setup_write<Addr::SP>(pins, REG_PCL);
     return pins;
   case 7:
     /* PHI1: Decrement SP */
@@ -252,7 +252,7 @@ bus_state_t op_brk(bus_state_t pins) {
 
       case 2:
         // PHI2: Push program bank register
-        pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PBR));
+        pins = this->bus_setup_write<Addr::SP>(pins, REG_PBR);
         return pins;
       case 3:
         this->dec(REG_SP);  // Native mode: decrement full 16-bit SP
@@ -261,7 +261,7 @@ bus_state_t op_brk(bus_state_t pins) {
 
       case 4:
         // PHI2: Push PC high byte
-        pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
+        pins = this->bus_setup_write<Addr::SP>(pins, REG_PCH);
         return pins;
       case 5:
         this->dec(REG_SP);  // Native mode: decrement full 16-bit SP
@@ -270,7 +270,7 @@ bus_state_t op_brk(bus_state_t pins) {
 
       case 6:
         // PHI2: Push PC low byte
-        pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCL));
+        pins = this->bus_setup_write<Addr::SP>(pins, REG_PCL);
         return pins;
       case 7:
         this->dec(REG_SP);  // Native mode: decrement full 16-bit SP
@@ -279,7 +279,7 @@ bus_state_t op_brk(bus_state_t pins) {
 
       case 8:
         // PHI2: Push processor status register (no B flag in native mode)
-        pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_P));
+        pins = this->bus_setup_write<Addr::SP>(pins, REG_P);
         return pins;
       case 9:
         this->dec(REG_SP);  // Native mode: decrement full 16-bit SP
@@ -342,7 +342,7 @@ bus_state_t op_brk(bus_state_t pins) {
 
   case 4:
     /* PHI2: Push PCH to stack */
-    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCH));
+    pins = this->bus_setup_write<Addr::SP>(pins, REG_PCH);
     return pins;
   case 5:
     /* PHI1: Decrement SP */
@@ -352,7 +352,7 @@ bus_state_t op_brk(bus_state_t pins) {
 
   case 6:
     /* PHI2: Push PCL to stack */
-    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_PCL));
+    pins = this->bus_setup_write<Addr::SP>(pins, REG_PCL);
     return pins;
   case 7:
     /* PHI1: Decrement SP */
@@ -363,7 +363,7 @@ bus_state_t op_brk(bus_state_t pins) {
 
   case 8:
     /* PHI2: Push P|B|U to stack (B flag set for BRK) */
-    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DL));
+    pins = this->bus_setup_write<Addr::SP>(pins, REG_DL);
     return pins;
   case 9:
     /* PHI1: Decrement SP, set interrupt flags, get vector address */
