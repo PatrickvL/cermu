@@ -81,6 +81,7 @@ inline void set_accumulator(data_t value) {
   if constexpr (has_wide_registers()) {
     if (this->is_accumulator_16bit()) {
       this->set(REG_A_16, value);
+      return;
     }
   }
   this->set(REG_A, static_cast<uint8_t>(value & 0xFF));
@@ -107,6 +108,7 @@ inline void set_x_register(data_t value) {
   if constexpr (has_wide_registers()) {
     if (this->is_index_16bit()) {
       this->set(REG_X_16, value);
+      return;
     }
   }
   this->set(REG_X, static_cast<uint8_t>(value & 0xFF));
@@ -133,6 +135,7 @@ inline void set_y_register(data_t value) {
   if constexpr (has_wide_registers()) {
     if (this->is_index_16bit()) {
       this->set(REG_Y_16, value);
+      return;
     }
   }
   this->set(REG_Y, static_cast<uint8_t>(value & 0xFF));

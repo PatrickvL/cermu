@@ -569,10 +569,10 @@ public:
                 
                 // Capture state before tick
                 uint16_t pc_before = cpu_wrapper->get_pc();
-                uint8_t a_before = cpu_wrapper->get_a();
-                uint8_t x_before = cpu_wrapper->get_x();
-                uint8_t y_before = cpu_wrapper->get_y();
-                uint8_t s_before = cpu_wrapper->get_sp();
+                uint16_t a_before = cpu_wrapper->get_a();  // 16-bit for 65C816 compatibility
+                uint16_t x_before = cpu_wrapper->get_x();  // 16-bit for 65C816 compatibility
+                uint16_t y_before = cpu_wrapper->get_y();  // 16-bit for 65C816 compatibility
+                uint16_t s_before = cpu_wrapper->get_sp();  // 16-bit for 65C816 native mode
                 uint8_t p_before = cpu_wrapper->get_status();
                 
                 // Execute PHI2 phase (bus setup)
@@ -589,10 +589,10 @@ public:
                 
                 // Capture state after tick
                 uint16_t pc_after = cpu_wrapper->get_pc();
-                uint8_t a_after = cpu_wrapper->get_a();
-                uint8_t x_after = cpu_wrapper->get_x();
-                uint8_t y_after = cpu_wrapper->get_y();
-                uint8_t s_after = cpu_wrapper->get_sp();
+                uint16_t a_after = cpu_wrapper->get_a();  // 16-bit for 65C816 compatibility
+                uint16_t x_after = cpu_wrapper->get_x();  // 16-bit for 65C816 compatibility
+                uint16_t y_after = cpu_wrapper->get_y();  // 16-bit for 65C816 compatibility
+                uint16_t s_after = cpu_wrapper->get_sp();  // 16-bit for 65C816 native mode
                 uint8_t p_after = cpu_wrapper->get_status();
                 
                 // Log detailed cycle information if debug output provided
@@ -600,8 +600,8 @@ public:
                     *debug_output << "    Cycle " << cycle_in_instruction << ": "
                                   << "PC 0x" << std::hex << std::setfill('0') << std::setw(4) << pc_before
                                   << "->0x" << pc_after << std::dec
-                                  << " A:0x" << std::hex << std::setfill('0') << std::setw(2) << (int)a_before
-                                  << "->0x" << (int)a_after << std::dec;
+                                  << " A:0x" << std::hex << std::setfill('0') << std::setw(4) << a_before
+                                  << "->0x" << std::setw(4) << a_after << std::dec;
                     
                     // Show significant register changes
                     if (x_before != x_after || y_before != y_after || s_before != s_after || p_before != p_after) {
@@ -766,8 +766,8 @@ public:
     
     uint16_t get_a() override {
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            // For 65C816, always return the full 16-bit A register value
-            // The M flag controls instruction behavior, not register reporting in ProcessorTests
+            // For 65C816, always return the full 16-bit C register value (A+B combined)
+            // ProcessorTests expects full 16-bit value even in emulation mode
             return cpu->get(REG_A_16);
         } else {
             // For 8-bit processors, extend to 16-bit
@@ -777,17 +777,9 @@ public:
     
     uint16_t get_x() override {
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            // For 65C816, check the X flag to determine register width
-            uint8_t status = cpu->get(REG_P);
-            bool x_flag = (status & FLAG_X) != 0;
-            
-            if (x_flag) {
-                // 8-bit mode: return only low byte
-                return cpu->get(REG_X) & 0xFF;
-            } else {
-                // 16-bit mode: return full 16-bit value
-                return cpu->get(REG_X_16);
-            }
+            // For 65C816, always return the full 16-bit X register value
+            // ProcessorTests expects full 16-bit value even in emulation mode
+            return cpu->get(REG_X_16);
         } else {
             // For 8-bit processors, extend to 16-bit
             return cpu->get(REG_X);
@@ -796,17 +788,9 @@ public:
     
     uint16_t get_y() override {
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            // For 65C816, check the X flag to determine register width
-            uint8_t status = cpu->get(REG_P);
-            bool x_flag = (status & FLAG_X) != 0;
-            
-            if (x_flag) {
-                // 8-bit mode: return only low byte
-                return cpu->get(REG_Y) & 0xFF;
-            } else {
-                // 16-bit mode: return full 16-bit value
-                return cpu->get(REG_Y_16);
-            }
+            // For 65C816, always return the full 16-bit Y register value
+            // ProcessorTests expects full 16-bit value even in emulation mode
+            return cpu->get(REG_Y_16);
         } else {
             // For 8-bit processors, extend to 16-bit
             return cpu->get(REG_Y);
