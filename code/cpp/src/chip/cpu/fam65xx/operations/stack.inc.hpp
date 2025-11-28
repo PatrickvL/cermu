@@ -33,7 +33,7 @@ bus_state_t op_pha(bus_state_t pins) {
 
       case 2:
         /* PHI2: Write high byte of A to stack */
-        pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_AH));
+        pins = this->bus_setup_write<Addr::SP>(pins, REG_AH);
         return pins;
       case 3:
         this->dec(REG_S);
@@ -42,7 +42,7 @@ bus_state_t op_pha(bus_state_t pins) {
 
       case 4:
         /* PHI2: Write low byte of A to stack */
-        pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_AL));
+        pins = this->bus_setup_write<Addr::SP>(pins, REG_AL);
         return pins;
       case 5:
         this->dec(REG_S);
@@ -66,7 +66,7 @@ bus_state_t op_pha(bus_state_t pins) {
 
   case 2:
     /* PHI2: Write A to stack */
-    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_A));
+    pins = this->bus_setup_write<Addr::SP>(pins, REG_A);
     return pins;
   case 3:
     /* PHI1: Decrement SP and transition */
@@ -93,7 +93,7 @@ bus_state_t op_php(bus_state_t pins) {
 
   case 2:
     /* PHI2: Write P|B|U to stack */
-    pins = this->bus_setup_write<Addr::SP>(pins, this->get(REG_DL));
+    pins = this->bus_setup_write<Addr::SP>(pins, REG_DL);
     return pins;
   case 3:
     /* PHI1: Decrement SP and transition */

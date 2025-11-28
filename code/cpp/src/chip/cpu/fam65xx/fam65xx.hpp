@@ -424,6 +424,15 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
   }
 
   /**
+   * Set up bus for write cycle with register enum - NO MEMORY ACCESS
+   * Overload that accepts reg8_t enum, retrieves value, and forwards to original
+   */
+  template <Addr addr_reg, Bank bank_arg = Bank::DBR>
+  inline bus_state_t bus_setup_write(bus_state_t pins, reg8_t data_reg) {
+    return bus_setup_write<addr_reg, bank_arg>(pins, this->get(data_reg));
+  }
+
+  /**
    * Set up bus for dummy cycle - NO MEMORY ACCESS
    * May be optimized out if accurate_internal_cycles() is false
    */
@@ -638,8 +647,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         // PHI2: Dummy cycle
         if (this->has_rmw_dummy_write()) {
           // NMOS: Dummy write of high byte
-          pins = this->bus_setup_write<Addr::AB, BankArg>(
-              pins, this->get(REG_SBR));
+          pins = this->bus_setup_write<Addr::AB, BankArg>(pins, REG_SBR);
         } else {
           // CMOS: Dummy read instead of write
           pins = this->bus_setup_dummy<Addr::AB, BankArg>(pins);
@@ -661,8 +669,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
       case 6:
         // Cycle 6 PHI2: Write high byte back to memory (address + 1)
-        pins = this->bus_setup_write<Addr::AB, BankArg>(
-            pins, this->get(REG_SBR));
+        pins = this->bus_setup_write<Addr::AB, BankArg>(pins, REG_SBR);
         return pins;
       case 7:
         // Cycle 7 PHI1: Decrement address
@@ -672,8 +679,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
       case 8:
         // Cycle 8 PHI2: Write low byte back to memory (address)
-        pins = this->bus_setup_write<Addr::AB, BankArg>(
-            pins, this->get(REG_DL));
+        pins = this->bus_setup_write<Addr::AB, BankArg>(pins, REG_DL);
         return pins;
       case 9:
         // Cycle 9 PHI1: Complete operation
@@ -697,8 +703,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         // PHI2: Dummy cycle
         if (this->has_rmw_dummy_write()) {
           // NMOS: Dummy write of original value
-          pins = this->bus_setup_write<Addr::AB, BankArg>(
-              pins, this->get(REG_DL));
+          pins = this->bus_setup_write<Addr::AB, BankArg>(pins, REG_DL);
         } else {
           // CMOS: Dummy read instead of write
           pins = this->bus_setup_dummy<Addr::AB, BankArg>(pins);
@@ -715,8 +720,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
 
       case 4:
         // PHI2: Write modified value back to memory
-        pins = this->bus_setup_write<Addr::AB, BankArg>(
-            pins, this->get(REG_DL));
+        pins = this->bus_setup_write<Addr::AB, BankArg>(pins, REG_DL);
         return pins;
       case 5:
         // Cycle 5 PHI1: Complete operation
