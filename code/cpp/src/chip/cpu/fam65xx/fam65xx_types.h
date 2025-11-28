@@ -520,6 +520,15 @@ struct opcode_info_t {
                          // AddressingMode]
   uint16_t flags : 3;    // Opcode flags (bits 13-15) [type OpcodeFlags]
 
+  inline bool is_illegal_store() const {
+    return (flags & to_index(OpcodeFlags::ILLEGAL_STORE)) != 0;
+  }
+  inline bool can_skip_page() const {
+    return (flags & to_index(OpcodeFlags::SKIP_PAGE)) != 0;
+  }
+  inline bool is_rmw() const {
+    return (flags & to_index(OpcodeFlags::RMW)) != 0;
+  }
   // Constructor to handle scoped enum conversion
   constexpr opcode_info_t(Operation op, AddressingMode am, OpcodeFlags fl)
       : op_index(to_index(op)), am_index(to_index(am)), flags(to_index(fl)) {}
