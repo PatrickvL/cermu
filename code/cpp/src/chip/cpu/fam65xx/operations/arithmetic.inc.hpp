@@ -138,7 +138,7 @@ bus_state_t op_nop(bus_state_t pins) {
 
   // Regular NOP handling for non-RMW modes using PHI2/PHI1 split
   switch (this->half_cycle) {
-  case 0: // PHI2
+  case 0: // PHI2: Bus setup - dummy cycle
     // Set up bus based on addressing mode
     switch (this->opcode_entry.am_index) {
     case to_index(AM::IMM):
@@ -146,7 +146,7 @@ bus_state_t op_nop(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::PC>(pins);
       break;
     case to_index(AM::NON):
-      // Implicit: dummy read from PC
+      // OPTIMIZED_CYCLES: transition_to_opcode sets half_cycle=1, skipping this
       pins = this->bus_setup_dummy<Addr::PC>(pins);
       break;
     default:
@@ -155,7 +155,6 @@ bus_state_t op_nop(bus_state_t pins) {
       break;
     }
     return pins;
-
   case 1: // PHI1
     // Increment PC for immediate mode only
     if (this->opcode_entry.am_index == to_index(AM::IMM)) {
