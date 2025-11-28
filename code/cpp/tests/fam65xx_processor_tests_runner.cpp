@@ -773,8 +773,9 @@ public:
     
     uint16_t get_a() override {
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            // For 65C816, always return the full 16-bit C register value (A+B combined)
-            // ProcessorTests expects full 16-bit value even in emulation mode
+            // For 65C816, ALWAYS return the full 16-bit C register value (A+B combined)
+            // ProcessorTests JSON format stores the complete 16-bit register state
+            // regardless of M flag or emulation mode - this is the raw hardware state
             return cpu->get(REG_A_16);
         } else {
             // For 8-bit processors, extend to 16-bit
@@ -784,8 +785,9 @@ public:
     
     uint16_t get_x() override {
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            // For 65C816, always return the full 16-bit X register value
-            // ProcessorTests expects full 16-bit value even in emulation mode
+            // For 65C816, ALWAYS return the full 16-bit X register value
+            // ProcessorTests JSON format stores the complete 16-bit register state
+            // regardless of X flag or emulation mode - this is the raw hardware state
             return cpu->get(REG_X_16);
         } else {
             // For 8-bit processors, extend to 16-bit
@@ -795,8 +797,9 @@ public:
     
     uint16_t get_y() override {
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            // For 65C816, always return the full 16-bit Y register value
-            // ProcessorTests expects full 16-bit value even in emulation mode
+            // For 65C816, ALWAYS return the full 16-bit Y register value
+            // ProcessorTests JSON format stores the complete 16-bit register state
+            // regardless of X flag or emulation mode - this is the raw hardware state
             return cpu->get(REG_Y_16);
         } else {
             // For 8-bit processors, extend to 16-bit
@@ -818,7 +821,7 @@ public:
     }
     
     void set_a(uint16_t a) override {
-        // For 65816, set both low and high bytes
+        // For 65816, ALWAYS set the full 16-bit C register (A+B combined)
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
             cpu->set(REG_A_16, a);
         } else {
@@ -828,7 +831,7 @@ public:
     }
     
     void set_x(uint16_t x) override {
-        // For 65816, set both low and high bytes
+        // For 65816, ALWAYS set the full 16-bit X register
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
             cpu->set(REG_X_16, x);
         } else {
@@ -838,7 +841,7 @@ public:
     }
     
     void set_y(uint16_t y) override {
-        // For 65816, set both low and high bytes
+        // For 65816, ALWAYS set the full 16-bit Y register
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
             cpu->set(REG_Y_16, y);
         } else {
