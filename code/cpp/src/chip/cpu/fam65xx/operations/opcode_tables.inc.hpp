@@ -56,7 +56,7 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
   table[0x16] = {OP::ASL, AM::ZPX, OF::RMW};
   table[0x17] = {OP::SLO, AM::ZPX,
                  OF::RMW}; // SLO - Shift Left then OR (illegal)
-  table[0x18] = {OP::CLC, AM::NON, OF::NONE};
+  table[0x18] = {OP::CLC, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0x19] = {OP::ORA, AM::ABY, OF::SKIP_PAGE};
   table[0x1A] = {OP::NOP, AM::NON, OF::NONE}; // INC A - illegal NOP (1-byte)
   table[0x1B] = {OP::SLO, AM::ABY,
@@ -95,7 +95,7 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
   table[0x36] = {OP::ROL, AM::ZPX, OF::RMW};
   table[0x37] = {OP::RLA, AM::ZPX,
                  OF::RMW}; // RLA - Rotate Left then AND (illegal)
-  table[0x38] = {OP::SEC, AM::NON, OF::NONE};
+  table[0x38] = {OP::SEC, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0x39] = {OP::AND, AM::ABY, OF::SKIP_PAGE};
   table[0x3A] = {OP::NOP, AM::NON, OF::NONE}; // DEC A - illegal NOP (1-byte)
   table[0x3B] = {OP::RLA, AM::ABY,
@@ -137,7 +137,7 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
   table[0x56] = {OP::LSR, AM::ZPX, OF::RMW};
   table[0x57] = {OP::SRE, AM::ZPX,
                  OF::RMW}; // SRE - Shift Right then EOR (illegal)
-  table[0x58] = {OP::CLI, AM::NON, OF::NONE};
+  table[0x58] = {OP::CLI, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0x59] = {OP::EOR, AM::ABY, OF::SKIP_PAGE};
   table[0x5A] = {OP::NOP, AM::NON, OF::NONE}; // NOP - illegal NOP
   table[0x5B] = {OP::SRE, AM::ABY,
@@ -178,7 +178,7 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
   table[0x76] = {OP::ROR, AM::ZPX, OF::RMW};
   table[0x77] = {OP::RRA, AM::ZPX,
                  OF::RMW}; // RRA - Rotate Right then ADC (illegal)
-  table[0x78] = {OP::SEI, AM::NON, OF::NONE};
+  table[0x78] = {OP::SEI, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0x79] = {OP::ADC, AM::ABY, OF::SKIP_PAGE};
   table[0x7A] = {OP::NOP, AM::NON, OF::NONE}; // NOP - illegal NOP
   table[0x7B] = {OP::RRA, AM::ABY,
@@ -198,9 +198,9 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
   table[0x85] = {OP::STA, AM::ZER, OF::NONE};
   table[0x86] = {OP::STX, AM::ZER, OF::NONE};
   table[0x87] = {OP::SAX, AM::ZER, OF::NONE}; // SAX - Store A AND X (illegal)
-  table[0x88] = {OP::DEY, AM::NON, OF::NONE};
+  table[0x88] = {OP::DEY, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0x89] = {OP::NOP, AM::IMM, OF::NONE}; // NOP #imm - illegal NOP
-  table[0x8A] = {OP::TXA, AM::NON, OF::NONE};
+  table[0x8A] = {OP::TXA, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0x8B] = {OP::XAA, AM::IMM,
                  OF::NONE}; // XAA - Transfer X AND imm to A (illegal)
   table[0x8C] = {OP::STY, AM::ABS, OF::NONE};
@@ -219,9 +219,9 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
   table[0x95] = {OP::STA, AM::ZPX, OF::NONE};
   table[0x96] = {OP::STX, AM::ZPY, OF::NONE};
   table[0x97] = {OP::SAX, AM::ZPY, OF::NONE}; // SAX - Store A AND X (illegal)
-  table[0x98] = {OP::TYA, AM::NON, OF::NONE};
+  table[0x98] = {OP::TYA, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0x99] = {OP::STA, AM::ABY, OF::NONE};
-  table[0x9A] = {OP::TXS, AM::NON, OF::NONE};
+  table[0x9A] = {OP::TXS, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0x9B] = {OP::SHS, AM::ABY,
                  OF::ILLEGAL_STORE}; // SHS - Store (A AND X) AND ((addr_hi)+1)
                                      // to S (illegal)
@@ -243,9 +243,9 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
   table[0xA5] = {OP::LDA, AM::ZER, OF::NONE};
   table[0xA6] = {OP::LDX, AM::ZER, OF::NONE};
   table[0xA7] = {OP::LAX, AM::ZER, OF::NONE}; // LAX - Load A and X (illegal)
-  table[0xA8] = {OP::TAY, AM::NON, OF::NONE};
+  table[0xA8] = {OP::TAY, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0xA9] = {OP::LDA, AM::IMM, OF::NONE};
-  table[0xAA] = {OP::TAX, AM::NON, OF::NONE};
+  table[0xAA] = {OP::TAX, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0xAB] = {OP::LAX, AM::IMM, OF::NONE}; // LAX - Load A and X (illegal)
   table[0xAC] = {OP::LDY, AM::ABS, OF::NONE};
   table[0xAD] = {OP::LDA, AM::ABS, OF::NONE};
@@ -260,9 +260,9 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
   table[0xB5] = {OP::LDA, AM::ZPX, OF::NONE};
   table[0xB6] = {OP::LDX, AM::ZPY, OF::NONE};
   table[0xB7] = {OP::LAX, AM::ZPY, OF::NONE}; // LAX - Load A and X (illegal)
-  table[0xB8] = {OP::CLV, AM::NON, OF::NONE};
+  table[0xB8] = {OP::CLV, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0xB9] = {OP::LDA, AM::ABY, OF::SKIP_PAGE};
-  table[0xBA] = {OP::TSX, AM::NON, OF::NONE};
+  table[0xBA] = {OP::TSX, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0xBB] = {OP::LAS, AM::ABY,
                  OF::SKIP_PAGE}; // LAS - Load A, X, S (illegal)
   table[0xBC] = {OP::LDY, AM::ABX, OF::SKIP_PAGE};
@@ -280,9 +280,9 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
   table[0xC6] = {OP::DEC, AM::ZER, OF::RMW};
   table[0xC7] = {OP::DCP, AM::ZER,
                  OF::RMW}; // DCP - Decrement then Compare (illegal)
-  table[0xC8] = {OP::INY, AM::NON, OF::NONE};
+  table[0xC8] = {OP::INY, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0xC9] = {OP::CMP, AM::IMM, OF::NONE};
-  table[0xCA] = {OP::DEX, AM::NON, OF::NONE};
+  table[0xCA] = {OP::DEX, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0xCB] = {
       OP::SBX, AM::IMM,
       OF::NONE}; // SBX - Compare X with A AND imm (illegal) (also called AXS)
@@ -301,7 +301,7 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
   table[0xD6] = {OP::DEC, AM::ZPX, OF::RMW};
   table[0xD7] = {OP::DCP, AM::ZPX,
                  OF::RMW}; // DCP - Decrement then Compare (illegal)
-  table[0xD8] = {OP::CLD, AM::NON, OF::NONE};
+  table[0xD8] = {OP::CLD, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0xD9] = {OP::CMP, AM::ABY, OF::SKIP_PAGE};
   table[0xDA] = {OP::NOP, AM::NON, OF::NONE}; // NOP - illegal NOP
   table[0xDB] = {OP::DCP, AM::ABY,
@@ -321,9 +321,9 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
   table[0xE6] = {OP::INC, AM::ZER, OF::RMW};
   table[0xE7] = {OP::ISC, AM::ZER,
                  OF::RMW}; // ISC - Increment then SBC (illegal)
-  table[0xE8] = {OP::INX, AM::NON, OF::NONE};
+  table[0xE8] = {OP::INX, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0xE9] = {OP::SBC, AM::IMM, OF::NONE};
-  table[0xEA] = {OP::NOP, AM::NON, OF::NONE};
+  table[0xEA] = {OP::NOP, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0xEB] = {OP::SBC, AM::IMM, OF::NONE}; // SBC #imm - illegal SBC
   table[0xEC] = {OP::CPX, AM::ABS, OF::NONE};
   table[0xED] = {OP::SBC, AM::ABS, OF::NONE};
@@ -340,7 +340,7 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
   table[0xF6] = {OP::INC, AM::ZPX, OF::RMW};
   table[0xF7] = {OP::ISC, AM::ZPX,
                  OF::RMW}; // ISC - Increment then SBC (illegal)
-  table[0xF8] = {OP::SED, AM::NON, OF::NONE};
+  table[0xF8] = {OP::SED, AM::NON, OF::OPTIMIZED_CYCLE};
   table[0xF9] = {OP::SBC, AM::ABY, OF::SKIP_PAGE};
   table[0xFA] = {OP::NOP, AM::NON, OF::NONE}; // NOP - illegal NOP
   table[0xFB] = {OP::ISC, AM::ABY,

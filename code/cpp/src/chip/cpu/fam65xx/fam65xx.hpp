@@ -945,9 +945,8 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     // For OPTIMIZED_CYCLES: Check if this is a single-cycle implicit operation
     // that can execute immediately during fetch's PHI1 phase
     if constexpr (has_optimized_cycles()) {
-      // Only optimize simple implicit operations with no addressing mode
-      if (entry.am_index == to_index(AM::NON) &&
-          (entry.is_rmw()) == 0) {
+      // Use new helper method that checks both AM::NON and OPTIMIZED_CYCLE flag
+      if (entry.is_optimized_cycle()) {
         // Set half_cycle to 1 to skip dummy bus setup (case 0)
         // and execute operation directly (case 1)
         this->half_cycle = 1;
@@ -984,8 +983,9 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       this->set(REG_IR, opcode);
       // Clear SYNC signal after opcode fetch completes (hardware-accurate timing)
       pins &= ~FAM65XX_SYNC;
-      // Transition resets half_cycle to 0 for new instruction
-      // For OPTIMIZED_CYCLES, this may execute the operation immediately
+      // Transition resets half_cycle to 0 for new instructions except
+      // for OPTIMIZED_CYCLES, which executes the operation immediately
+      // with half_cycle set to 1 (which skips the initial dummy cycle)
       opcode_info_t entry = get_opcode_info(opcode);
       pins = this->transition_to_opcode(pins, entry);
       return pins;
