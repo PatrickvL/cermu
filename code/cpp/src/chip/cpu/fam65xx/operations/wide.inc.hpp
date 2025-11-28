@@ -20,18 +20,22 @@ bus_state_t op_rep(bus_state_t pins) {
   if constexpr (has_wide_registers()) {
     switch (this->half_cycle) {
     case 0:
-      // Fetch immediate operand
+      // Cycle 1 PHI2: Fetch immediate operand
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
     case 1:
-      /* PHI1: Load data and perform operations */
+      // Cycle 1 PHI1: Load data and increment PC
       this->bus_load_reg(REG_DL, pins);
       this->inc(REG_PC);
       this->half_cycle++;
       return pins;
 
-    case 2: {
-      // Reset specified status bits (clear bits that are 1 in operand)
+    case 2:
+      // Cycle 2 PHI2: Dummy cycle (internal operation)
+      pins = this->bus_setup_dummy<Addr::PC>(pins);
+      return pins;
+    case 3: {
+      // Cycle 2 PHI1: Reset specified status bits (clear bits that are 1 in operand)
       uint8_t mask = this->get(REG_DL);
       if (this->in_emulation_mode()) {
         // In emulation mode, cannot clear M or X flags (bits 5 and 4)
