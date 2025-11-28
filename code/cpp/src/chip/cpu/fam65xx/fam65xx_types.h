@@ -506,6 +506,15 @@ enum class OpcodeFlags : uint8_t {
 };
 
 // ============================================================================
+// CONVENIENT TYPE ALIASES FOR CLEAN SYNTAX
+// ============================================================================
+
+// Type aliases for cleaner opcode table syntax
+using OP = Operation;
+using AM = AddressingMode;
+using OF = OpcodeFlags;
+
+// ============================================================================
 // MODERN C++ HELPER FUNCTIONS
 // ============================================================================
 
@@ -517,44 +526,34 @@ template <typename E> constexpr inline auto to_index(E e) noexcept {
 
 struct opcode_info_t {
   uint16_t op_index : 8; // Operation index (0-255, bits 0-7) [type Operation]
-  uint16_t am_index : 5; // Addressing mode index (0-31, bits 8-12) [type
-                         // AddressingMode]
+  uint16_t am_index : 5; // Addressing mode index (0-31, bits 8-12) [type AddressingMode]
   uint16_t flags : 3;    // Opcode flags (bits 13-15) [type OpcodeFlags]
 
   inline bool is_illegal_store() const {
-    return (flags & to_index(OpcodeFlags::ILLEGAL_STORE)) != 0;
+    return (flags & to_index(OF::ILLEGAL_STORE)) != 0;
   }
   
   inline bool can_skip_page() const {
     // SKIP_PAGE only valid for non-NON addressing modes (memory operations)
     return am_index != to_index(AM::NON) &&
-           (flags & to_index(OpcodeFlags::SKIP_PAGE)) != 0;
+           (flags & to_index(OF::SKIP_PAGE)) != 0;
   }
   
   inline bool is_optimized_cycle() const {
     // OPTIMIZED_CYCLE only valid for AM::NON addressing mode (implicit operations)
     // Shares bit with SKIP_PAGE but contexts are mutually exclusive
     return am_index == to_index(AM::NON) &&
-           (flags & to_index(OpcodeFlags::OPTIMIZED_CYCLE)) != 0;
+           (flags & to_index(OF::OPTIMIZED_CYCLE)) != 0;
   }
   
   inline bool is_rmw() const {
-    return (flags & to_index(OpcodeFlags::RMW)) != 0;
+    return (flags & to_index(OF::RMW)) != 0;
   }
   
   // Constructor to handle scoped enum conversion
-  constexpr opcode_info_t(Operation op, AddressingMode am, OpcodeFlags fl)
+  constexpr opcode_info_t(OP op, AM am, OF fl)
       : op_index(to_index(op)), am_index(to_index(am)), flags(to_index(fl)) {}
 
   // Default constructor for aggregate initialization
   constexpr opcode_info_t() : op_index(0), am_index(0), flags(0) {}
 };
-
-// ============================================================================
-// CONVENIENT TYPE ALIASES FOR CLEAN SYNTAX
-// ============================================================================
-
-// Type aliases for cleaner opcode table syntax
-using OP = Operation;
-using AM = AddressingMode;
-using OF = OpcodeFlags;
