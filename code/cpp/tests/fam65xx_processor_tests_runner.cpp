@@ -816,7 +816,7 @@ public:
             cpu->set(REG_A_16, a);
         } else {
             // For 8-bit processors, truncate to low byte
-            cpu->set(REG_A, a & 0xFF);
+            cpu->set(REG_A, static_cast<uint8_t>(a & 0xFF));
         }
     }
     
@@ -826,7 +826,7 @@ public:
             cpu->set(REG_X_16, x);
         } else {
             // For 8-bit processors, truncate to low byte
-            cpu->set(REG_X, x & 0xFF);
+            cpu->set(REG_X, static_cast<uint8_t>(x & 0xFF));
         }
     }
     
@@ -836,7 +836,7 @@ public:
             cpu->set(REG_Y_16, y);
         } else {
             // For 8-bit processors, truncate to low byte
-            cpu->set(REG_Y, y & 0xFF);
+            cpu->set(REG_Y, static_cast<uint8_t>(y & 0xFF));
         }
     }
     
@@ -855,14 +855,7 @@ public:
     }
     
     void set_status(uint8_t p) override {
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            // For 65C816, preserve the high byte (E flag) when setting low byte (P flags)
-            uint16_t p16 = cpu->get(REG_P_16);
-            p16 = (p16 & 0xFF00) | p;  // Keep high byte, set low byte
-            cpu->set(REG_P_16, p16);
-        } else {
-            cpu->set(REG_P, p);
-        }
+        cpu->set(REG_P, p);
     }
     
     // 65816-specific methods - only compile for 65816
