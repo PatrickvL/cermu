@@ -56,28 +56,35 @@ bus_state_t op_rep(bus_state_t pins) {
 bus_state_t op_sep(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_wide_registers()) {
-    // Check emulation mode at runtime - SEP is only valid in native mode
-    if (!this->in_emulation_mode()) {
-      switch (this->half_cycle) {
-      case 0:
-        // Fetch immediate operand
-        pins = this->bus_setup_read<Addr::PC>(pins);
-        return pins;
-      case 1:
-        /* PHI1: Load data and perform operations */
-        this->bus_load_reg(REG_DL, pins);
-        this->inc(REG_PC);
-        // Set specified status bits (set bits that are 1 in operand)
-        this->set(REG_P, this->get(REG_P) | this->get(REG_DL));
-        this->transition_to_fetch();
-        return pins;
-      }
+    switch (this->half_cycle) {
+    case 0:
+      // Cycle 1 PHI2: Fetch immediate operand
+      pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
-    } else {
-      // In emulation mode, SEP becomes a 2-byte NOP - redirect to NOP handler
-      pins = this->transition_to_opcode(pins, opcode_info_t{OP::NOP, AM::IMM, OF::NONE});
-      return this->call_current_handler(pins);
+    case 1:
+      // Cycle 1 PHI1: Load data and increment PC
+      this->bus_load_reg(REG_DL, pins);
+      this->inc(REG_PC);
+      this->half_cycle++;
+      return pins;
+
+    case 2:
+      // Cycle 2 PHI2: Dummy cycle (internal operation)
+      pins = this->bus_setup_dummy<Addr::PC>(pins);
+      return pins;
+    case 3: {
+      // Cycle 2 PHI1: Set specified status bits (set bits that are 1 in operand)
+      uint8_t mask = this->get(REG_DL);
+      if (this->in_emulation_mode()) {
+        // In emulation mode, cannot set M or X flags (bits 5 and 4)
+        mask &= ~(FLAG_M | FLAG_X);
+      }
+      this->set(REG_P, this->get(REG_P) | mask);
+      this->transition_to_fetch();
+      return pins;
     }
+    }
+    return pins;
   }
 
   return pins;
