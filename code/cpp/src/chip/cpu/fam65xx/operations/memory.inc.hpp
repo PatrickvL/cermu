@@ -23,19 +23,18 @@ bus_state_t op_lda(bus_state_t pins) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit LDA
       switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
       case 1: // PHI1 - Load and increment
-        this->bus_load_reg(REG_AL, pins);
-        this->inc(REG_AB);
+        this->bus_load_operand(REG_AL, pins);
         this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
       case 3: // PHI1 - Load and update flags
-        this->bus_load_reg(REG_AH, pins);
+        this->bus_load_operand(REG_AH, pins);
         uint16_t value = this->get(REG_A_16);
         this->update_flag(FLAG_Z, value == 0);
         this->update_flag(FLAG_N, (value & 0x8000) != 0);
@@ -73,19 +72,18 @@ bus_state_t op_ldx(bus_state_t pins) {
       // 65C816 native mode, 16-bit X register - perform 16-bit LDX
       switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
       case 1: // PHI1 - Load and increment
-        this->bus_load_reg(REG_XL, pins);
-        this->inc(REG_AB);
+        this->bus_load_operand(REG_XL, pins);
         this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
       case 3: // PHI1 - Load and update flags
-        this->bus_load_reg(REG_XH, pins);
+        this->bus_load_operand(REG_XH, pins);
         uint16_t value = this->get(REG_X_16);
         this->update_flag(FLAG_Z, value == 0);
         this->update_flag(FLAG_N, (value & 0x8000) != 0);
@@ -123,19 +121,18 @@ bus_state_t op_ldy(bus_state_t pins) {
       // 65C816 native mode, 16-bit Y register - perform 16-bit LDY
       switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
       case 1: // PHI1 - Load and increment
-        this->bus_load_reg(REG_YL, pins);
-        this->inc(REG_AB);
+        this->bus_load_operand(REG_YL, pins);
         this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
       case 3: // PHI1 - Load and update flags
-        this->bus_load_reg(REG_YH, pins);
+        this->bus_load_operand(REG_YH, pins);
         uint16_t value = this->get(REG_Y_16);
         this->update_flag(FLAG_Z, value == 0);
         this->update_flag(FLAG_N, (value & 0x8000) != 0);
@@ -310,19 +307,18 @@ bus_state_t op_and(bus_state_t pins) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit AND
       switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
-        this->inc(REG_AB);
         this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
       case 3: { // PHI1 - Load and perform 16-bit AND
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(REG_ABH, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t acc = this->get(REG_A_16);
@@ -363,19 +359,18 @@ bus_state_t op_ora(bus_state_t pins) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit ORA
       switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
-        this->inc(REG_AB);
         this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
-        pins = this->bus_setup_read<Addr::AB, Bank::PBR>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
       case 3: { // PHI1 - Load and perform 16-bit ORA
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(REG_ABH, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t acc = this->get(REG_A_16);
@@ -416,21 +411,20 @@ bus_state_t op_eor(bus_state_t pins) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit EOR
       switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
-        this->inc(REG_AB);
         this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
       case 3: // PHI1 - Load and perform 16-bit EOR
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(REG_ABH, pins);
         this->set(REG_ABL, this->get(REG_DL));
-        uint16_t operand = this->get(REG_ABL);
+        uint16_t operand = this->get(REG_AB);
         uint16_t acc = this->get(REG_A_16);
         uint16_t result = acc ^ operand;
         this->set(REG_A_16, result);
@@ -471,19 +465,18 @@ bus_state_t op_bit(bus_state_t pins) {
       // 65816 native mode, 16-bit accumulator - read 2 bytes
       switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
-        this->inc(REG_AB);
         this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
       case 3: { // PHI1 - Load and perform 16-bit BIT
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(REG_ABH, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t acc = this->get(REG_A_16);

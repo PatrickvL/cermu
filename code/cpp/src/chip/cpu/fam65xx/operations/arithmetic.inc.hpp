@@ -23,21 +23,20 @@ bus_state_t op_adc(bus_state_t pins) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit ADC
       switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
 
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
-        this->inc(REG_AB);
         this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
 
       case 3: // PHI1 - Load and perform 16-bit ADC
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(REG_ABH, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t acc = this->get(REG_A_16);
@@ -181,21 +180,20 @@ bus_state_t op_sbc(bus_state_t pins) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit SBC
       switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
 
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
-        this->inc(REG_AB);
         this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
 
       case 3: // PHI1 - Load and perform 16-bit SBC
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(REG_ABH, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t acc = this->get(REG_A_16);
@@ -261,21 +259,20 @@ bus_state_t op_cmp(bus_state_t pins) {
       // 65C816 native mode, 16-bit accumulator - perform 16-bit CMP
       switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
 
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
-        this->inc(REG_AB);
         this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
 
       case 3: // PHI1 - Load and perform 16-bit CMP
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(REG_ABH, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t acc = this->get(REG_A_16);
@@ -321,21 +318,20 @@ bus_state_t op_cpx(bus_state_t pins) {
       // 65C816 native mode, 16-bit X register - perform 16-bit CPX
       switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
 
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
-        this->inc(REG_AB);
         this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
 
       case 3: // PHI1 - Load and perform 16-bit CPX
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(REG_ABH, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t x = this->get_x_register();
@@ -381,21 +377,20 @@ bus_state_t op_cpy(bus_state_t pins) {
       // 65C816 native mode, 16-bit Y register - perform 16-bit CPY
       switch (this->half_cycle) {
       case 0: // PHI2 - Read low byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
 
       case 1: // PHI1 - Load and increment
         this->bus_load_operand(REG_DL, pins);
-        this->inc(REG_AB);
         this->half_cycle++;
         return pins;
 
       case 2: // PHI2 - Read high byte
-        pins = this->bus_setup_read<Addr::AB>(pins);
+        pins = this->bus_setup_read_operand(pins);
         return pins;
 
       case 3: // PHI1 - Load and perform 16-bit CPY
-        this->bus_load_operand(REG_DL, pins);
+        this->bus_load_operand(REG_ABH, pins);
         this->set(REG_ABL, this->get(REG_DL));
         uint16_t operand = this->get(REG_AB);
         uint16_t y = this->get_y_register();
