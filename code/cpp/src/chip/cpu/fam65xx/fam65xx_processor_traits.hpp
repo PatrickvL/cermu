@@ -21,54 +21,58 @@ namespace fam65xx {
 namespace CPUCoreFlags {
 // === Instruction Set (bits 0-7) ===
 constexpr uint32_t ILLEGAL_OPCODES =
-    1 << 0; // NMOS undocumented opcodes work ✓ IMPLEMENTED
+    1 << 0; // ✓ IMPLEMENTED: NMOS undocumented opcodes (LAX, SAX, DCP, ISC, etc.)
 constexpr uint32_t CMOS_BASE =
-    1 << 1; // CMOS instruction set (BRA, STZ, etc.) ✓ IMPLEMENTED
+    1 << 1; // ✓ IMPLEMENTED: CMOS instruction set (BRA, STZ, PHX/PLX, PHY/PLY, TRB/TSB, etc.)
 constexpr uint32_t ROCKWELL_BITS =
-    1 << 2; // RMB/SMB/BBR/BBS instructions ✓ IMPLEMENTED
-constexpr uint32_t WAI_STP = 1 << 3; // WAI and STP instructions ✓ IMPLEMENTED
+    1 << 2; // ✓ IMPLEMENTED: Rockwell bit manipulation (RMB0-7, SMB0-7, BBR0-7, BBS0-7)
+constexpr uint32_t WAI_STP =
+    1 << 3; // ✓ IMPLEMENTED: WAI (wait for interrupt) and STP (stop processor)
 constexpr uint32_t CE02_EXTENDED =
-    1 << 4; // TODO: 65CE02 extensions (Z register, etc.)
-constexpr uint32_t C816_16BIT = 1 << 5; // 65C816 16-bit mode ✓ IMPLEMENTED
-constexpr uint32_t HUC6280_EXTENDED = 1
-                                      << 6; // TODO: HuC6280 unique instructions
+    1 << 4; // ⚠ NOT IMPLEMENTED: 65CE02 extensions (Z register, PHZ/PLZ, TAZ/TZA, BASE page, etc.)
+constexpr uint32_t C816_16BIT =
+    1 << 5; // ✓ IMPLEMENTED: 65C816 16-bit mode (native mode, M/X flags, 24-bit addressing)
+constexpr uint32_t HUC6280_EXTENDED =
+    1 << 6; // ⚠ NOT IMPLEMENTED: HuC6280 unique instructions (TII, TAM, TMA, CSH/CSL, etc.)
 // Bit 7 reserved
 
 // === Hardware Bugs (bits 8-11) ===
 constexpr uint32_t JMP_INDIRECT_BUG =
-    1 << 8; // JMP ($xxFF) wraps within page ✓ IMPLEMENTED
+    1 << 8; // ✓ IMPLEMENTED: NMOS JMP ($xxFF) wraps within page instead of crossing
 constexpr uint32_t RMW_DUMMY_WRITE =
-    1 << 9; // ✓ IMPLEMENTED: RMW writes original (vs dummy read)
+    1 << 9; // ✓ IMPLEMENTED: NMOS RMW operations write original value during dummy cycle (CMOS does dummy read)
 // Bits 10-11 reserved for other quirks
 
 // === Decimal Mode (bits 12-15) ===
 constexpr uint32_t HAS_DECIMAL_MODE =
-    1 << 12; // BCD mode exists (2A03 lacks this) ✓ IMPLEMENTED
+    1 << 12; // ✓ IMPLEMENTED: BCD arithmetic supported (2A03/2A07 lack this)
 constexpr uint32_t BCD_NMOS_FLAGS =
-    1 << 13; // N,V,Z from binary (NMOS) vs BCD (CMOS) ✓ IMPLEMENTED
+    1 << 13; // ✓ IMPLEMENTED: N/V/Z flags set from binary result (NMOS) vs BCD result (CMOS)
 constexpr uint32_t BCD_EXTRA_CYCLE =
-    1 << 14; // CMOS takes extra cycle in decimal ✓ IMPLEMENTED
+    1 << 14; // ✓ IMPLEMENTED: CMOS processors take extra cycle for ADC/SBC in decimal mode
 // Bit 15 reserved
 
 // === Memory & Banking (bits 16-19) ===
-constexpr uint32_t HAS_IO_PORT = 1
-                                 << 16; // Memory-mapped I/O port ✓ IMPLEMENTED
-constexpr uint32_t HAS_BANKING = 1 << 17; // TODO: Banking/MMU present
+constexpr uint32_t HAS_IO_PORT =
+    1 << 16; // ✓ IMPLEMENTED: Memory-mapped I/O port at $00-$01 (6510, 7501, 8502)
+constexpr uint32_t HAS_BANKING =
+    1 << 17; // ⚠ PARTIALLY IMPLEMENTED: Banking/MMU support (defined in BankingType enum, not fully implemented)
 // Bits 18-19 reserved
 
 // === Interrupts (bits 20-23) ===
-constexpr uint32_t NO_NMI_LINE = 1 << 20; // ✓ IMPLEMENTED: NMI disabled (7501)
-constexpr uint32_t NO_IRQ_LINE = 1 << 21; // ✓ IMPLEMENTED: IRQ disabled (6507)
+constexpr uint32_t NO_NMI_LINE =
+    1 << 20; // ✓ IMPLEMENTED: NMI line disabled/missing (7501)
+constexpr uint32_t NO_IRQ_LINE =
+    1 << 21; // ✓ IMPLEMENTED: IRQ line disabled/missing (6507 for Atari 2600)
 // Bits 22-23 reserved
 
 // === Timing (bits 24-27) ===
 constexpr uint32_t OPTIMIZED_CYCLES =
-    1 << 24; // ✓ IMPLEMENTED: 65CE02 removed dummy cycles - implemented in
-             // transition_to_opcode()
+    1 << 24; // ✓ IMPLEMENTED: 65CE02/4510 eliminated dummy cycles for single-cycle operations via improved CMOS timing
 constexpr uint32_t VARIABLE_CLOCK =
-    1 << 25; // TODO: Can switch speeds (8502, HuC6280)
-// Bit 26 reserved (was ACCURATE_INTERNAL_CYCLES - removed, now always enabled)
-// Bit 27 reserved (was UPDATE_BUS_LINES - removed, now always enabled)
+    1 << 25; // ⚠ NOT IMPLEMENTED: CPU can switch clock speeds (8502, HuC6280)
+// Bit 26 reserved (was ACCURATE_INTERNAL_CYCLES - removed, dummy cycles now always simulated)
+// Bit 27 reserved (was UPDATE_BUS_LINES - removed, bus updates now always enabled)
 } // namespace CPUCoreFlags
 
 // ============================================================================
@@ -77,9 +81,9 @@ constexpr uint32_t VARIABLE_CLOCK =
 
 enum class BankingType : uint8_t {
   NONE = 0, // Standard 64KB flat addressing
-  MOS6509,  // 6509 banking (indirect-Y indexed)
-  HUC6280,  // HuC6280 8-bank mapper
-  CSG4510,  // 4510 MAP instruction
+  MOS6509,  // ⚠ NOT IMPLEMENTED: 6509 banking (indirect-Y indexed, 20-bit addressing)
+  HUC6280,  // ⚠ NOT IMPLEMENTED: HuC6280 8-bank mapper (21-bit addressing)
+  CSG4510,  // ⚠ NOT IMPLEMENTED: 4510 MAP instruction (20-bit addressing with memory mapping)
             // Future: Add more as needed
 };
 
@@ -89,15 +93,15 @@ enum class BankingType : uint8_t {
 
 enum class SoundChip : uint8_t {
   NONE = 0,
-  RICOH_APU,   // 2A03/2A07 5-channel APU
-  HUC6280_PSG, // HuC6280 6-channel PSG
+  RICOH_APU,   // ✓ IMPLEMENTED: 2A03/2A07 5-channel APU (NES)
+  HUC6280_PSG, // ⚠ NOT IMPLEMENTED: HuC6280 6-channel PSG (PC Engine/TurboGrafx-16)
                // Future: Others if needed
 };
 
 enum class DMAController : uint8_t {
   NONE = 0,
-  CSG4510_DMA,    // 4510 integrated DMA
-  RICOH_5A22_DMA, // 5A22 SNES DMA/HDMA
+  CSG4510_DMA,    // ⚠ NOT IMPLEMENTED: 4510 integrated DMA (Commodore 65)
+  RICOH_5A22_DMA, // ⚠ NOT IMPLEMENTED: 5A22 SNES DMA/HDMA
                   // Future: Others
 };
 
