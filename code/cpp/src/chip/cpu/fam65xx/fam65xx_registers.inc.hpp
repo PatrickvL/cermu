@@ -68,12 +68,9 @@ inline data_t get_accumulator() const {
   if constexpr (has_wide_registers()) {
     if (this->is_accumulator_16bit()) {
       return this->get(REG_A_16);
-    } else {
-      return this->get(REG_A);
     }
-  } else {
-    return this->get(REG_A);
   }
+  return this->get(REG_A);
 }
 
 /**
@@ -84,12 +81,9 @@ inline void set_accumulator(data_t value) {
   if constexpr (has_wide_registers()) {
     if (this->is_accumulator_16bit()) {
       this->set(REG_A_16, value);
-    } else {
-      this->set(REG_A, static_cast<uint8_t>(value & 0xFF));
     }
-  } else {
-    this->set(REG_A, static_cast<uint8_t>(value & 0xFF));
   }
+  this->set(REG_A, static_cast<uint8_t>(value & 0xFF));
 }
 
 /**
@@ -100,12 +94,9 @@ inline data_t get_x_register() const {
   if constexpr (has_wide_registers()) {
     if (this->is_index_16bit()) {
       return this->get(REG_X_16);
-    } else {
-      return this->get(REG_X);
     }
-  } else {
-    return this->get(REG_X);
   }
+  return this->get(REG_X);
 }
 
 /**
@@ -116,12 +107,9 @@ inline void set_x_register(data_t value) {
   if constexpr (has_wide_registers()) {
     if (this->is_index_16bit()) {
       this->set(REG_X_16, value);
-    } else {
-      this->set(REG_X, static_cast<uint8_t>(value & 0xFF));
     }
-  } else {
-    this->set(REG_X, static_cast<uint8_t>(value & 0xFF));
   }
+  this->set(REG_X, static_cast<uint8_t>(value & 0xFF));
 }
 
 /**
@@ -132,12 +120,9 @@ inline data_t get_y_register() const {
   if constexpr (has_wide_registers()) {
     if (this->is_index_16bit()) {
       return this->get(REG_Y_16);
-    } else {
-      return this->get(REG_Y);
     }
-  } else {
-    return this->get(REG_Y);
   }
+  return this->get(REG_Y);
 }
 
 /**
@@ -148,12 +133,9 @@ inline void set_y_register(data_t value) {
   if constexpr (has_wide_registers()) {
     if (this->is_index_16bit()) {
       this->set(REG_Y_16, value);
-    } else {
-      this->set(REG_Y, static_cast<uint8_t>(value & 0xFF));
     }
-  } else {
-    this->set(REG_Y, static_cast<uint8_t>(value & 0xFF));
   }
+  this->set(REG_Y, static_cast<uint8_t>(value & 0xFF));
 }
 
 private:
