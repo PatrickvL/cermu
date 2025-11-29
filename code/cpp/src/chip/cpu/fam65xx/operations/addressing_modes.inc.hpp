@@ -616,9 +616,8 @@ bus_state_t am_dpx(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
     case 1: {
-      /* PHI1: Load Direct Page offset from bus and store for later */
+      /* PHI1: Load Direct Page offset from bus */
       uint8_t dp_offset = this->bus_get_data(pins);
-      this->set(REG_DL, dp_offset); // Store operand for use in case 5
       this->inc(REG_PC);
       uint16_t dp_addr = this->get(REG_D) + dp_offset;
       this->set(REG_ABL, dp_addr & 0xFF);
@@ -647,13 +646,10 @@ bus_state_t am_dpx(bus_state_t pins) {
       pins = this->bus_setup_dummy<Addr::AB, Bank::ZBR>(pins);
       return pins;
     case 5: {
-      // PHI1: Add X register to Direct Page offset, then add to D
-      // CRITICAL: For Direct Page indexed, (offset + X) wraps to 8-bit, THEN added to D!
-      // This matches 6502 zero-page indexed behavior
-      uint8_t dp_offset = this->get(REG_DL); // Operand stored in case 1
-      uint8_t x_val = this->get(REG_X);
-      uint8_t wrapped_offset = dp_offset + x_val; // 8-bit addition (wraps naturally)
-      uint16_t final_addr = this->get(REG_D) + wrapped_offset; // Add to 16-bit D
+      // PHI1: Add X register to Direct Page address (wraps within bank $00)
+      uint16_t base_addr = this->get(REG_AB);
+      uint16_t x_val = this->get_x_register();
+      uint16_t final_addr = (base_addr + x_val) & 0xFFFF;
 
       this->set(REG_AB, final_addr);
       this->transition_to_operation();
