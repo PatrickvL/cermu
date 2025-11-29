@@ -442,10 +442,10 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       return this->bus_setup_read<Addr::PC>(pins);
     }
     
-    // For 65C816: Zero-page modes (ZER=2, ZPX=3, ZPY=4) use bank 0
-    // Optimized: single comparison since they're grouped after IMM
+    // For 65C816: Direct Page modes always use bank 0 (ZBR)
+    // Includes: ZER(2), ZPX(3), ZPY(4), ZPI(5) - contiguous range
     if constexpr (has_wide_registers()) {
-      if (am <= to_index(AM::ZPY)) {
+      if (am <= to_index(AM::ZPI)) {
         return this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
       }
     }
@@ -486,9 +486,8 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       this->inc(REG_PC);
     } else if constexpr (has_wide_registers()) {
       // Memory modes for 65C816: increment address for next byte
-      // Zero-page modes (ZER=2, ZPX=3, ZPY=4) in native mode: increment only ABL
-      // Optimized: single comparison since they're grouped after IMM
-      if (am <= to_index(AM::ZPY) && !this->in_emulation_mode()) {
+      // Direct Page modes (ZER, ZPX, ZPY, ZPI) in native mode: increment only ABL
+      if (am <= to_index(AM::ZPI) && !this->in_emulation_mode()) {
         this->inc(REG_ABL);
       } else {
         this->inc(REG_AB);
@@ -1210,6 +1209,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     addressing_mode_handlers[to_index(AM::INX)] = &fam65xx_t::am_inx;
     addressing_mode_handlers[to_index(AM::INY)] = &fam65xx_t::am_iny;
     // 6502/6510 Zero Page addressing modes
+    // Note: 65C816 will overwrite these with Direct Page handlers below
     addressing_mode_handlers[to_index(AM::ZER)] =
         &fam65xx_t::am_zp; // Zero Page (replaced by Direct Page in 65C816)
     addressing_mode_handlers[to_index(AM::ZPX)] =
@@ -1248,20 +1248,16 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
           &fam65xx_t::am_sri; // Stack Relative Indirect Indexed
 
       // Overwrite 65C816 replacement addressing modes
-      // (all support fallback to emulation modes)
-      addressing_mode_handlers[to_index(AM::DP)] =
-          &fam65xx_t::am_dp; // Direct/Zero Page (aliassed to AM::ZER, am_zp)
-                             // implementation for pre-65C816 compatibility
-      addressing_mode_handlers[to_index(AM::DPX)] =
-          &fam65xx_t::am_dpx; // Direct/Zero Page,X (aliassed to AM::ZPX, am_zpx)
-                              // implementation for pre-65C816 compatibility
-      addressing_mode_handlers[to_index(AM::DPY)] =
-          &fam65xx_t::am_dpy; // Direct/Zero Page,Y (aliassed to AM::ZPY, am_zpy)
-                              // implementation for pre-65C816 compatibility
-      addressing_mode_handlers[to_index(AM::DPI)] =
-          &fam65xx_t::am_dpi; // Direct/Zero Page Indirect (maps to AM::ZPI,
-                              // am_zpi) implementation for pre-65C816
-                              // compatibility
+      // CRITICAL: 65C816 uses Direct Page addressing even in emulation mode
+      // ZER, ZPX, ZPY are aliases for DP, DPX, DPY - same enum values
+      addressing_mode_handlers[to_index(AM::ZER)] =
+          &fam65xx_t::am_dp; // Direct/Zero Page - handles D register offset
+      addressing_mode_handlers[to_index(AM::ZPX)] =
+          &fam65xx_t::am_dpx; // Direct/Zero Page,X - handles D register offset
+      addressing_mode_handlers[to_index(AM::ZPY)] =
+          &fam65xx_t::am_dpy; // Direct/Zero Page,Y - handles D register offset
+      addressing_mode_handlers[to_index(AM::ZPI)] =
+          &fam65xx_t::am_dpi; // Direct/Zero Page Indirect - handles D register offset
     }
   }
 

@@ -607,12 +607,8 @@ bus_state_t am_dp(bus_state_t pins) {
 bus_state_t am_dpx(bus_state_t pins) {
   trace_addressing_mode(__func__);
   if constexpr (has_wide_registers()) {
-    // Check for emulation mode - fall back to zero page,X behavior
-    if (this->in_emulation_mode()) {
-      return am_zpx(pins);
-    }
-
-    // Native mode: True Direct Page,X addressing
+    // CRITICAL: Direct Page works in BOTH emulation and native mode!
+    // The D register is active even in emulation mode.
     switch (this->half_cycle) {
     case 0:
       // PHI2: Read Direct Page offset from PC
@@ -668,18 +664,117 @@ bus_state_t am_dpx(bus_state_t pins) {
 bus_state_t am_dpy(bus_state_t pins) {
   trace_addressing_mode(__func__);
   if constexpr (has_wide_registers()) {
-    // TODO : Implement similarly to am_dpx
+    // CRITICAL: Direct Page works in BOTH emulation and native mode!
+    // Implement similarly to am_dpx
+    switch (this->half_cycle) {
+    case 0:
+      // PHI2: Read Direct Page offset from PC
+      pins = this->bus_setup_read<Addr::PC>(pins);
+      return pins;
+    case 1: {
+      /* PHI1: Load data and perform operations */
+      this->bus_load_reg(REG_ABL, pins);
+      this->inc(REG_PC);
+      uint16_t dp_addr = this->get(REG_D) + this->get(REG_DL);
+      this->set(REG_ABL, dp_addr & 0xFF);
+      this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
+      if ((this->get(REG_D) & 0xFF) != 0x00) {
+        this->half_cycle++;
+      } else {
+        this->half_cycle = 4; // Skip penalty cycle
+      }
+      return pins;
+    }
+
+    case 2:
+      // PHI2: Direct Page penalty cycle
+      pins = this->bus_setup_dummy<Addr::AB>(pins);
+      return pins;
+    case 3:
+      // PHI1: Direct Page penalty cycle
+      this->half_cycle++;
+      return pins;
+
+    case 4:
+      // PHI2: Dummy read from Direct Page address while adding Y
+      pins = this->bus_setup_dummy<Addr::AB>(pins);
+      return pins;
+    case 5: {
+      // PHI1: Add Y register to Direct Page address (wraps within bank $00)
+      uint16_t base_addr = this->get(REG_AB);
+      uint16_t y_val = this->get_y_register();
+      uint16_t final_addr = (base_addr + y_val) & 0xFFFF;
+
+      this->set(REG_AB, final_addr);
+      this->transition_to_operation();
+      return pins;
+    }
+    }
+    return pins;
   }
 
   // Fall back to zero page,Y on non-wide processors
   return am_zpy(pins);
 }
 
-// Direct Page Indirect addressing: [dp] (65C816)
+// Direct Page Indirect addressing: (dp) (65C816)
 bus_state_t am_dpi(bus_state_t pins) {
   trace_addressing_mode(__func__);
   if constexpr (has_wide_registers()) {
-    // TODO : Implement similarly to am_dpil
+    // CRITICAL: Direct Page works in BOTH emulation and native mode!
+    // Similar to am_dp but reads pointer from Direct Page location
+    switch (this->half_cycle) {
+    case 0:
+      // PHI2: Read Direct Page offset from PC
+      pins = this->bus_setup_read<Addr::PC>(pins);
+      return pins;
+    case 1: {
+      /* PHI1: Calculate Direct Page address */
+      this->bus_load_reg(REG_ABL, pins);
+      this->inc(REG_PC);
+      uint16_t dp_addr = this->get(REG_D) + this->get(REG_DL);
+      this->set(REG_ABL, dp_addr & 0xFF);
+      this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
+      if ((this->get(REG_D) & 0xFF) != 0x00) {
+        this->half_cycle++;
+      } else {
+        this->half_cycle = 4; // Skip penalty cycle
+      }
+      return pins;
+    }
+
+    case 2:
+      // PHI2: Direct Page penalty cycle
+      pins = this->bus_setup_dummy<Addr::AB>(pins);
+      return pins;
+    case 3:
+      // PHI1: Direct Page penalty cycle
+      this->half_cycle++;
+      return pins;
+
+    case 4:
+      // PHI2: Read low byte of target address from Direct Page
+      pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
+      return pins;
+    case 5:
+      /* PHI1: Load low byte and save to AH (temporary storage) */
+      this->bus_load_reg(REG_AH, pins);
+      this->inc(REG_ABL);  // Increment within Direct Page
+      this->half_cycle++;
+      return pins;
+
+    case 6:
+      // PHI2: Read high byte of target address from Direct Page+1
+      pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
+      return pins;
+    case 7:
+      /* PHI1: Assemble final address from saved low byte and high byte */
+      this->bus_load_reg(REG_ABH, pins);
+      this->set(REG_ABL, this->get(REG_AH));
+      this->transition_to_operation();
+      return pins;
+    }
+    return pins;
   }
 
   return am_zpi(pins);
