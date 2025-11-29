@@ -263,7 +263,7 @@ inline uint8_t calc_nzc_flags(data_t minuend, data_t subtrahend) {
     // 8-bit comparison
     data_t result = minuend - subtrahend;
     return calc_n_flag<reg_type>(result) | calc_z_flag<reg_type>(result) |
-           calc_c_flag(~result);
+           (minuend >= subtrahend ? FLAG_C : 0);
   }
 }
 
