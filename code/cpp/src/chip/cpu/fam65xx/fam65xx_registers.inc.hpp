@@ -169,36 +169,22 @@ private:
 // ========================================================================
 
 // === Building blocks ===
-inline void set_flag(data_t flag_mask) {
-  if constexpr (has_wide_registers()) {
-    // 65C816: Use 16-bit P register (data_t is uint16_t)
-    this->set(REG_P_16, this->get(REG_P_16) | flag_mask);
-  } else {
-    // Non-65C816 processors: Use 8-bit P register (data_t is uint8_t)
-    this->set(REG_P, this->get(REG_P) | flag_mask);
-  }
+inline void set_flag(uint8_t flag_mask) {
+  // Always use 8-bit P register (REG_P = REG_PL) for flag operations
+  // The E flag (65C816) is in REG_PH and should never be modified by flag ops
+  this->set(REG_P, this->get(REG_P) | flag_mask);
 }
-inline void clear_flag(data_t flag_mask) {
-  if constexpr (has_wide_registers()) {
-    // 65C816: Use 16-bit P register (data_t is uint16_t)
-    this->set(REG_P_16, this->get(REG_P_16) & ~flag_mask);
-  } else {
-    // Non-65C816 processors: Use 8-bit P register (data_t is uint8_t)
-    this->set(REG_P, this->get(REG_P) & ~flag_mask);
-  }
+inline void clear_flag(uint8_t flag_mask) {
+  // Always use 8-bit P register (REG_P = REG_PL) for flag operations
+  this->set(REG_P, this->get(REG_P) & ~flag_mask);
 }
 // === Foundation: Single memory write ===
-inline void update_flags(data_t clear_mask, data_t set_mask) {
-  if constexpr (has_wide_registers()) {
-    // 65C816: Use 16-bit P register (data_t is uint16_t)
-    this->set(REG_P_16, (this->get(REG_P_16) & ~clear_mask) | set_mask);
-  } else {
-    // Non-65C816 processors: Use 8-bit P register (data_t is uint8_t)
-    this->set(REG_P, (this->get(REG_P) & ~clear_mask) | set_mask);
-  }
+inline void update_flags(uint8_t clear_mask, uint8_t set_mask) {
+  // Always use 8-bit P register (REG_P = REG_PL) for flag operations
+  this->set(REG_P, (this->get(REG_P) & ~clear_mask) | set_mask);
 }
-inline void update_flag(data_t flag_mask, bool condition) {
-  update_flags(flag_mask, static_cast<data_t>(condition) * flag_mask);
+inline void update_flag(uint8_t flag_mask, bool condition) {
+  update_flags(flag_mask, static_cast<uint8_t>(condition) * flag_mask);
 }
 
 // ========================================================================
