@@ -275,11 +275,14 @@ inline uint8_t calc_nzc_flags(data_t minuend, data_t subtrahend) {
            (minuend >= subtrahend ? FLAG_C : 0);
   } else {
     // 8-bit comparison
-    uint16_t result =
+    uint8_t result_8bit =
         static_cast<uint8_t>(minuend) - static_cast<uint8_t>(subtrahend);
-    return calc_n_flag<reg_type>(static_cast<uint8_t>(result)) |
-           calc_z_flag<reg_type>(static_cast<uint8_t>(result)) |
-           calc_c_flag(~result); // Inverted for subtraction
+    // For 8-bit subtraction: C=1 if no borrow (minuend >= subtrahend)
+    // This is equivalent to checking if bit 8 of the 16-bit result is 0
+    uint8_t carry = (static_cast<uint8_t>(minuend) >= static_cast<uint8_t>(subtrahend)) ? FLAG_C : 0;
+    return calc_n_flag<reg_type>(result_8bit) |
+           calc_z_flag<reg_type>(result_8bit) |
+           carry;
   }
 }
 
