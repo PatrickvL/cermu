@@ -746,20 +746,21 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
                                    OperationFunc operation_func) {
     if (this->opcode_entry.is_rmw()) {
       // Memory mode - determine banking once at function entry
-      // For 65C816, Direct Page operations use Bank 0 (ZBR) instead of DBR
+      // For 65C816, Direct Page operations ALWAYS use Bank 0 (ZBR)
+      // This is true in both emulation and native modes
       constexpr bool can_use_direct_page = has_wide_registers();
       if constexpr (can_use_direct_page) {
+        // Check if this is a Direct Page addressing mode
+        // Direct Page modes: ZER(2), ZPX(3), ZPY(4), ZPI(5)
         const bool is_direct_page_addressing =
-          (this->opcode_entry.am_index == to_index(AM::ZER) ||
-           this->opcode_entry.am_index == to_index(AM::ZPX) ||
-           this->opcode_entry.am_index == to_index(AM::ZPY));
-
-        const bool use_zero_bank = is_direct_page_addressing && !this->in_emulation_mode();
+          (this->opcode_entry.am_index <= to_index(AM::ZPI));
         
         // Dispatch to template variant - compiler optimizes away all banking checks
-        if (use_zero_bank) {
+        if (is_direct_page_addressing) {
+          // Direct Page always uses Bank 0 (ZBR) in both emulation and native modes
           return this->rmw_operation_helper_impl<Bank::ZBR>(pins, operation_func);
         } else {
+          // Other addressing modes use Data Bank Register (DBR)
           return this->rmw_operation_helper_impl<Bank::DBR>(pins, operation_func);
         }
       } else {
