@@ -631,16 +631,18 @@ bus_state_t am_dpx(bus_state_t pins) {
 
     case 2:
       // PHI2: Direct Page penalty cycle
-      pins = this->bus_setup_dummy<Addr::AB>(pins);
+      // CRITICAL: Use Bank::ZBR to ensure bank 0 (Direct Page is always in bank 0)
+      pins = this->bus_setup_dummy<Addr::AB, Bank::ZBR>(pins);
       return pins;
     case 3:
       // PHI1: Direct Page penalty cycle
       this->half_cycle++;
       return pins;
 
-    case 4: 
+    case 4:
       // PHI2: Dummy read from Direct Page address while adding X
-      pins = this->bus_setup_dummy<Addr::AB>(pins);
+      // CRITICAL: Use Bank::ZBR to ensure bank 0 (Direct Page is always in bank 0)
+      pins = this->bus_setup_dummy<Addr::AB, Bank::ZBR>(pins);
       return pins;
     case 5: {
       // PHI1: Add X register to Direct Page address (wraps within bank $00)
@@ -688,7 +690,8 @@ bus_state_t am_dpy(bus_state_t pins) {
 
     case 2:
       // PHI2: Direct Page penalty cycle
-      pins = this->bus_setup_dummy<Addr::AB>(pins);
+      // CRITICAL: Use Bank::ZBR to ensure bank 0 (Direct Page is always in bank 0)
+      pins = this->bus_setup_dummy<Addr::AB, Bank::ZBR>(pins);
       return pins;
     case 3:
       // PHI1: Direct Page penalty cycle
@@ -697,7 +700,8 @@ bus_state_t am_dpy(bus_state_t pins) {
 
     case 4:
       // PHI2: Dummy read from Direct Page address while adding Y
-      pins = this->bus_setup_dummy<Addr::AB>(pins);
+      // CRITICAL: Use Bank::ZBR to ensure bank 0 (Direct Page is always in bank 0)
+      pins = this->bus_setup_dummy<Addr::AB, Bank::ZBR>(pins);
       return pins;
     case 5: {
       // PHI1: Add Y register to Direct Page address (wraps within bank $00)
@@ -745,7 +749,8 @@ bus_state_t am_dpi(bus_state_t pins) {
 
     case 2:
       // PHI2: Direct Page penalty cycle
-      pins = this->bus_setup_dummy<Addr::AB>(pins);
+      // CRITICAL: Use Bank::ZBR to ensure bank 0 (Direct Page is always in bank 0)
+      pins = this->bus_setup_dummy<Addr::AB, Bank::ZBR>(pins);
       return pins;
     case 3:
       // PHI1: Direct Page penalty cycle
