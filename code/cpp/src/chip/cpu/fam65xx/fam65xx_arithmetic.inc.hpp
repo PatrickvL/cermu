@@ -215,6 +215,6 @@ inline void perform_sbc(uint8_t operand) {
 inline void perform_compare(uint8_t reg_value, uint8_t operand) {
   // Update flags using branchless calculations
   // Use REG_MEM template parameter to force 8-bit comparison
-  this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                       calc_nzc_flags<REG_MEM>(reg_value, operand));
+  uint8_t new_flags = calc_nzc_flags<REG_MEM>(reg_value, operand);
+  this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_C)) | new_flags);
 }
