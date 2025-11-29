@@ -426,6 +426,10 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
    * For immediate mode: reads from PC (operand follows opcode)
    * For memory modes: reads from AB (effective address calculated)
    *
+   * For 65C816: Zero-page/Direct-page modes always use Bank 0 (ZBR)
+   * regardless of what's stored in REG_ABH, to prevent corruption of
+   * banking information by operand high bytes in 16-bit operations.
+   *
    * This is a runtime check and cannot be avoided because immediate and
    * memory addressing modes are fundamentally different operations at the
    * hardware level (operand in instruction stream vs operand at address).
@@ -435,7 +439,22 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     if (this->opcode_entry.am_index == to_index(AM::IMM)) {
       return this->bus_setup_read<Addr::PC>(pins);
     }
-    // Memory modes: operand is at effective address (AB)
+    
+    // For 65C816: Check if using zero-page/direct-page addressing
+    if constexpr (has_wide_registers()) {
+      // Zero-page/Direct-page modes always use bank 0
+      const bool is_zero_page_mode =
+        (this->opcode_entry.am_index == to_index(AM::ZER) ||
+         this->opcode_entry.am_index == to_index(AM::ZPX) ||
+         this->opcode_entry.am_index == to_index(AM::ZPY));
+      
+      if (is_zero_page_mode) {
+        // Use Bank 0 for zero-page addressing
+        return this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
+      }
+    }
+    
+    // Memory modes: operand is at effective address (AB) with default banking (DBR)
     return this->bus_setup_read<Addr::AB>(pins);
   }
 
