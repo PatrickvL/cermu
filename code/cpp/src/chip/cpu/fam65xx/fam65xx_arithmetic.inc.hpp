@@ -208,9 +208,13 @@ inline void perform_sbc(uint8_t operand) {
 /**
  * Compare operation (CMP/CPX/CPY)
  * Optimized implementation with branchless flag calculation
+ *
+ * CRITICAL: Always use explicit 8-bit comparison (REG_MEM forces 8-bit)
+ * even in 65C816 emulation mode where accumulator may be stored as 16-bit
  */
 inline void perform_compare(uint8_t reg_value, uint8_t operand) {
   // Update flags using branchless calculations
+  // Use REG_MEM template parameter to force 8-bit comparison
   this->set(REG_P, (this->get(REG_P) & ~(FLAG_N | FLAG_Z | FLAG_C)) |
-                       calc_nzc_flags(reg_value, operand));
+                       calc_nzc_flags<REG_MEM>(reg_value, operand));
 }
