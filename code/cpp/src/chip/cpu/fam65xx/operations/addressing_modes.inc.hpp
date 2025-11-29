@@ -286,7 +286,7 @@ bus_state_t am_ind(bus_state_t pins) {
     return pins;
   case 5:
     /* PHI1: Load low byte and save to TMP, then increment pointer address */
-    this->bus_load_reg(REG_AH, pins);  // Save low byte to AH (temporary storage)
+    this->bus_load_reg(REG_DL, pins);  // Save low byte to DL (temporary storage)
     /* NMOS 6502 bug: JMP ($xxFF) reads high byte from $xx00 instead of $xy00
      * CMOS 65C02 fix: Properly increment full 16-bit address */
     if constexpr (has_cmos()) {
@@ -344,7 +344,7 @@ bus_state_t am_inx(bus_state_t pins) {
     return pins;
   case 5:
     /* PHI1: Load low byte and save to TMP */
-    this->bus_load_reg(REG_AH, pins);  // Save low byte to AH (unused on 6502)
+    this->bus_load_reg(REG_DL, pins);  // Save low byte to DL (temporary storage)
     this->set(REG_ABL, this->get(REG_ABL) + 1);
     this->half_cycle++;
     return pins;
@@ -385,7 +385,7 @@ bus_state_t am_iny(bus_state_t pins) {
     return pins;
   case 3:
     /* PHI1: Load low byte and save to TMP */
-    this->bus_load_reg(REG_AH, pins);  // Save low byte to AH (unused on 6502)
+    this->bus_load_reg(REG_DL, pins);  // Save low byte to DL (temporary storage)
     this->set(REG_ABL, this->get(REG_ABL) + 1); // Increment zero page pointer
     this->half_cycle++;
     return pins;
@@ -480,8 +480,8 @@ bus_state_t am_zpi(bus_state_t pins) {
     pins = this->bus_setup_read<Addr::AB>(pins);
     return pins;
   case 3:
-    /* PHI1: Load low byte and save to AH (temporary storage) */
-    this->bus_load_reg(REG_AH, pins);  // Save low byte to AH
+    /* PHI1: Load low byte and save to DL (temporary storage) */
+    this->bus_load_reg(REG_DL, pins);  // Save low byte to DL
     this->set(REG_ABL, this->get(REG_ABL) + 1);  // Increment ZP pointer
     this->half_cycle++;
     return pins;
@@ -766,8 +766,8 @@ bus_state_t am_dpi(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
       return pins;
     case 5:
-      /* PHI1: Load low byte and save to AH (temporary storage) */
-      this->bus_load_reg(REG_AH, pins);
+      /* PHI1: Load low byte and save to DL (temporary storage) */
+      this->bus_load_reg(REG_DL, pins);
       this->inc(REG_ABL);  // Increment within Direct Page
       this->half_cycle++;
       return pins;
