@@ -79,7 +79,24 @@ bus_state_t op_sep(bus_state_t pins) {
         // In emulation mode, cannot set M or X flags (bits 5 and 4)
         mask &= ~(FLAG_M | FLAG_X);
       }
-      this->set(REG_P, this->get(REG_P) | mask);
+      
+      uint8_t old_p = this->get(REG_P);
+      this->set(REG_P, old_p | mask);
+      
+      // When switching from 16-bit to 8-bit mode, clear high bytes
+      // M flag (bit 5): Controls accumulator width
+      if ((mask & FLAG_M) && !(old_p & FLAG_M)) {
+        // Switching accumulator from 16-bit to 8-bit: clear B register (AH)
+        this->set(REG_AH, 0x00);
+      }
+      
+      // X flag (bit 4): Controls index register width
+      if ((mask & FLAG_X) && !(old_p & FLAG_X)) {
+        // Switching index registers from 16-bit to 8-bit: clear XH and YH
+        this->set(REG_XH, 0x00);
+        this->set(REG_YH, 0x00);
+      }
+      
       this->transition_to_fetch();
       return pins;
     }
