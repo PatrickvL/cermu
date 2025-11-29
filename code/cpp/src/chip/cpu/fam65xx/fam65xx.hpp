@@ -1285,7 +1285,12 @@ public:
    */
   inline void set_emulation_mode(bool mode) {
     if constexpr (has_wide_registers()) {
-      this->update_flag(FLAG_E, mode);
+      // Use REG_P_16 to handle FLAG_E (bit 8) directly
+      if (mode) {
+        this->set(REG_P_16, this->get(REG_P_16) | FLAG_E);
+      } else {
+        this->set(REG_P_16, this->get(REG_P_16) & ~FLAG_E);
+      }
     }
     // Non-65C816 processors: no-op (always in emulation mode)
   }
