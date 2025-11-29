@@ -615,13 +615,13 @@ bus_state_t am_dpx(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
     case 1: {
-      /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_ABL, pins);
+      /* PHI1: Load Direct Page offset from bus */
+      uint8_t dp_offset = this->bus_get_data(pins);
       this->inc(REG_PC);
-      uint16_t dp_addr = this->get(REG_D) + this->get(REG_DL);
+      uint16_t dp_addr = this->get(REG_D) + dp_offset;
       this->set(REG_ABL, dp_addr & 0xFF);
       this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
-      if ((this->get(REG_D) & 0xFF) != 0x00) {
+      if (this->get(REG_DPL) != 0x00) {
         this->half_cycle++;
       } else {
         this->half_cycle = 4; // Skip penalty cycle
@@ -674,10 +674,10 @@ bus_state_t am_dpy(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
     case 1: {
-      /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_ABL, pins);
+      /* PHI1: Load Direct Page offset from bus */
+      uint8_t dp_offset = this->bus_get_data(pins);
       this->inc(REG_PC);
-      uint16_t dp_addr = this->get(REG_D) + this->get(REG_DL);
+      uint16_t dp_addr = this->get(REG_D) + dp_offset;
       this->set(REG_ABL, dp_addr & 0xFF);
       this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
       if ((this->get(REG_D) & 0xFF) != 0x00) {
@@ -734,9 +734,9 @@ bus_state_t am_dpi(bus_state_t pins) {
       return pins;
     case 1: {
       /* PHI1: Calculate Direct Page address */
-      this->bus_load_reg(REG_ABL, pins);
+      uint8_t dp_offset = this->bus_get_data(pins);
       this->inc(REG_PC);
-      uint16_t dp_addr = this->get(REG_D) + this->get(REG_DL);
+      uint16_t dp_addr = this->get(REG_D) + dp_offset;
       this->set(REG_ABL, dp_addr & 0xFF);
       this->set(REG_ABH, (dp_addr >> 8) & 0xFF);
       if ((this->get(REG_D) & 0xFF) != 0x00) {
