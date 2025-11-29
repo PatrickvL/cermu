@@ -484,8 +484,10 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       this->inc(REG_PC);
     } else if constexpr (has_wide_registers()) {
       // Memory modes for 65C816: increment address for next byte
-      // Direct Page modes (ZER, ZPX, ZPY, ZPI) in native mode: increment only ABL
-      if (am <= to_index(AM::ZPI) && !this->in_emulation_mode()) {
+      // Direct Page modes (ZER, ZPX, ZPY, ZPI): Always increment only ABL
+      // This is correct in BOTH emulation and native modes because Direct Page
+      // is always confined to bank 0 (incrementing full AB would corrupt bank)
+      if (am <= to_index(AM::ZPI)) {
         this->inc(REG_ABL);
       } else {
         this->inc(REG_AB);
