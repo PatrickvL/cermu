@@ -590,7 +590,8 @@ bus_state_t am_dp(bus_state_t pins) {
 
     case 2:
       // PHI2: Direct Page penalty cycle
-      pins = this->bus_setup_dummy<Addr::AB>(pins);
+      // CRITICAL: Use Bank::ZBR to ensure bank 0 (Direct Page is always in bank 0)
+      pins = this->bus_setup_dummy<Addr::AB, Bank::ZBR>(pins);
       return pins;
     case 3:
       this->transition_to_operation();
