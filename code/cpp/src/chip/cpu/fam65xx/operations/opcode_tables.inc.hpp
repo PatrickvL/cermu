@@ -647,10 +647,69 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
     table[0x42] = {OP::WDM, AM::IMM,
                    OF::NONE}; // WDM - WDM Reserved Instruction
 
-    // Note: 65C816-specific addressing modes (ABL, ABLX, DPIL, DPILY, SR, SRIY)
-    // will be used by existing operations (LDA, STA, etc.) based on opcode
-    // mapping These are handled by the standard operation table entries with
-    // different addressing modes
+    // ========================================================================
+    // 65C816-specific addressing mode variants for existing operations
+    // ========================================================================
+    
+    // Direct Page Indirect Long [dp] addressing mode
+    table[0x07] = {OP::ORA, AM::DPIL, OF::NONE}; // ORA [dp]
+    table[0x27] = {OP::AND, AM::DPIL, OF::NONE}; // AND [dp]
+    table[0x47] = {OP::EOR, AM::DPIL, OF::NONE}; // EOR [dp]
+    table[0x67] = {OP::ADC, AM::DPIL, OF::NONE}; // ADC [dp]
+    table[0x87] = {OP::STA, AM::DPIL, OF::NONE}; // STA [dp]
+    table[0xA7] = {OP::LDA, AM::DPIL, OF::NONE}; // LDA [dp]
+    table[0xC7] = {OP::CMP, AM::DPIL, OF::NONE}; // CMP [dp]
+    table[0xE7] = {OP::SBC, AM::DPIL, OF::NONE}; // SBC [dp]
+    
+    // Direct Page Indirect Long Indexed [dp],Y addressing mode
+    table[0x17] = {OP::ORA, AM::DPILY, OF::NONE}; // ORA [dp],Y
+    table[0x37] = {OP::AND, AM::DPILY, OF::NONE}; // AND [dp],Y
+    table[0x57] = {OP::EOR, AM::DPILY, OF::NONE}; // EOR [dp],Y
+    table[0x77] = {OP::ADC, AM::DPILY, OF::NONE}; // ADC [dp],Y
+    table[0x97] = {OP::STA, AM::DPILY, OF::NONE}; // STA [dp],Y
+    table[0xB7] = {OP::LDA, AM::DPILY, OF::NONE}; // LDA [dp],Y
+    table[0xD7] = {OP::CMP, AM::DPILY, OF::NONE}; // CMP [dp],Y
+    table[0xF7] = {OP::SBC, AM::DPILY, OF::NONE}; // SBC [dp],Y
+    
+    // Absolute Long $nnnnnn addressing mode
+    table[0x0F] = {OP::ORA, AM::ABL, OF::NONE}; // ORA $nnnnnn
+    table[0x2F] = {OP::AND, AM::ABL, OF::NONE}; // AND $nnnnnn
+    table[0x4F] = {OP::EOR, AM::ABL, OF::NONE}; // EOR $nnnnnn
+    table[0x6F] = {OP::ADC, AM::ABL, OF::NONE}; // ADC $nnnnnn
+    table[0x8F] = {OP::STA, AM::ABL, OF::NONE}; // STA $nnnnnn
+    table[0xAF] = {OP::LDA, AM::ABL, OF::NONE}; // LDA $nnnnnn
+    table[0xCF] = {OP::CMP, AM::ABL, OF::NONE}; // CMP $nnnnnn
+    table[0xEF] = {OP::SBC, AM::ABL, OF::NONE}; // SBC $nnnnnn
+    
+    // Absolute Long Indexed $nnnnnn,X addressing mode
+    table[0x1F] = {OP::ORA, AM::ABLX, OF::NONE}; // ORA $nnnnnn,X
+    table[0x3F] = {OP::AND, AM::ABLX, OF::NONE}; // AND $nnnnnn,X
+    table[0x5F] = {OP::EOR, AM::ABLX, OF::NONE}; // EOR $nnnnnn,X
+    table[0x7F] = {OP::ADC, AM::ABLX, OF::NONE}; // ADC $nnnnnn,X
+    table[0x9F] = {OP::STA, AM::ABLX, OF::NONE}; // STA $nnnnnn,X
+    table[0xBF] = {OP::LDA, AM::ABLX, OF::NONE}; // LDA $nnnnnn,X
+    table[0xDF] = {OP::CMP, AM::ABLX, OF::NONE}; // CMP $nnnnnn,X
+    table[0xFF] = {OP::SBC, AM::ABLX, OF::NONE}; // SBC $nnnnnn,X
+    
+    // Stack Relative n,S addressing mode
+    table[0x03] = {OP::ORA, AM::SR, OF::NONE}; // ORA n,S
+    table[0x23] = {OP::AND, AM::SR, OF::NONE}; // AND n,S
+    table[0x43] = {OP::EOR, AM::SR, OF::NONE}; // EOR n,S
+    table[0x63] = {OP::ADC, AM::SR, OF::NONE}; // ADC n,S
+    table[0x83] = {OP::STA, AM::SR, OF::NONE}; // STA n,S
+    table[0xA3] = {OP::LDA, AM::SR, OF::NONE}; // LDA n,S
+    table[0xC3] = {OP::CMP, AM::SR, OF::NONE}; // CMP n,S
+    table[0xE3] = {OP::SBC, AM::SR, OF::NONE}; // SBC n,S
+    
+    // Stack Relative Indirect Indexed (n,S),Y addressing mode
+    table[0x13] = {OP::ORA, AM::SRI, OF::NONE}; // ORA (n,S),Y
+    table[0x33] = {OP::AND, AM::SRI, OF::NONE}; // AND (n,S),Y
+    table[0x53] = {OP::EOR, AM::SRI, OF::NONE}; // EOR (n,S),Y
+    table[0x73] = {OP::ADC, AM::SRI, OF::NONE}; // ADC (n,S),Y
+    table[0x93] = {OP::STA, AM::SRI, OF::NONE}; // STA (n,S),Y
+    table[0xB3] = {OP::LDA, AM::SRI, OF::NONE}; // LDA (n,S),Y
+    table[0xD3] = {OP::CMP, AM::SRI, OF::NONE}; // CMP (n,S),Y
+    table[0xF3] = {OP::SBC, AM::SRI, OF::NONE}; // SBC (n,S),Y
   }
 
   return table;
