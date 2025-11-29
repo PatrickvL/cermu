@@ -178,23 +178,28 @@ inline constexpr auto FAM65XX_INT_RESET = InterruptType::RESET;
 
 enum class AddressingMode : uint8_t {
   // ========================================================================
-  // Core addressing modes (0-19) - fits in 5-bit am_index
+  // Core addressing modes (0-19) - OPTIMIZED LAYOUT FOR EFFICIENT CHECKS
+  // ========================================================================
+  // NON and IMM first (no address calculation needed)
+  // Zero-page modes grouped after IMM for single-comparison check
   // ========================================================================
 
   // Universal modes - supported by all 65xx family processors
-  NON = 0, /* No addressing handler (Implicit/Accumulator/Relative/Special) -
-              All CPUs */
+  NON = 0, /* No addressing handler (Implicit/Accumulator/Relative/Special) */
   IMM,     /* Immediate - operand is next byte - All CPUs */
+  
+  // Zero-page modes grouped together for efficient range check (am <= ZPY)
+  ZER, /* Zero Page (6502/6510/65C02) / Direct Page (65C816) - All CPUs */
+  ZPX, /* Zero Page,X (6502/6510/65C02) / Direct Page,X (65C816) - All CPUs */
+  ZPY, /* Zero Page,Y (6502/6510/65C02) / Direct Page,Y (65C816) - All CPUs */
 
+  // Other memory addressing modes
   ABS, /* Absolute - operand at $nnnn - All CPUs */
   ABX, /* Absolute,X - operand at $nnnn + X - All CPUs */
   ABY, /* Absolute,Y - operand at $nnnn + Y - All CPUs */
   IND, /* Indirect (abs) - JMP only - 6502/6510/65C02/65C816 */
   INX, /* Indexed Indirect (zp,X) - 6502/6510 / (dp,X) - 65C02/65C816 */
   INY, /* Indirect Indexed (zp),Y - 6502/6510 / (dp),Y - 65C02/65C816 */
-  ZER, /* Zero Page (6502/6510/65C02) / Direct Page (65C816) - All CPUs */
-  ZPX, /* Zero Page,X (6502/6510/65C02) / Direct Page,X (65C816) - All CPUs */
-  ZPY, /* Zero Page,Y (6502/6510/65C02) / Direct Page,Y (65C816) - All CPUs */
 
   // CMOS enhancements - 65C02 and 65C816 only
   ZPR, /* Zero Page Relative zp,rel - BBR/BBS - Rockwell 65C02 only */
