@@ -338,21 +338,19 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
   template <bool IsWrite, bool IsDummy, Addr addr_arg,
             Bank bank_arg = Bank::DBR>
   bus_state_t bus_setup(bus_state_t pins, uint8_t data = 0) {
-    // Get address from the specified address register
-    constexpr reg16_t addr_reg = static_cast<reg16_t>(addr_arg);
-    uint32_t addr;
-    
+    uint16_t addr;
     // Special handling for stack pointer - use get_sp() for correct behavior
     if constexpr (addr_arg == Addr::SP) {
       addr = this->get_sp();
     } else {
+      // Get address from the specified address register
+      constexpr reg16_t addr_reg = static_cast<reg16_t>(addr_arg);
       // Non-SP addresses: Use register directly
       addr = this->get(addr_reg);
     }
 
-    // 65C816 banking: OR bank into high bits (optimizer eliminates for non-wide
-    // CPUs)
-    addr |= static_cast<uint32_t>(get_address_bank<addr_arg>(bank_arg)) << 16;
+    // For 8/16-bit CPUs: use address field
+    pins = FAM65XX_SET_ADDR(pins, addr & Traits.address_mask());
 
     // Update bus lines - always enabled for external bus-based memory access
     // For 65816: Split 24-bit address into 16-bit address + 8-bit bank
@@ -360,11 +358,11 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       // 65C816: Always set both address (16-bit) and bank (8-bit) fields
       // In emulation mode, PC uses PBR while data/stack use bank 0
       // In native mode, all addresses use their respective bank registers
-      pins = FAM65XX_SET_ADDR(pins, addr & 0xFFFF);
-      pins = FAM65XX_SET_BANK(pins, (addr >> 16) & 0xFF);
-    } else {
-      // For 8/16-bit CPUs: use address field only (zero overhead)
-      pins = FAM65XX_SET_ADDR(pins, addr & Traits.address_mask());
+      // 65C816 banking: OR bank into high bits (optimizer eliminates for non-wide CPUs)
+      // For Direct Page (Bank::ZBR): address wraps within bank 0 (0x000000-0x00FFFF)
+      const uint8_t bank = get_address_bank<addr_arg>(bank_arg);
+
+      pins = FAM65XX_SET_BANK(pins, bank);
     }
 
     // Set R/W signal
