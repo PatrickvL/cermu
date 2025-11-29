@@ -435,26 +435,22 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
    * hardware level (operand in instruction stream vs operand at address).
    */
   inline bus_state_t bus_setup_read_operand(bus_state_t pins) {
-    // Immediate mode: operand is at PC (instruction stream)
-    if (this->opcode_entry.am_index == to_index(AM::IMM)) {
+    const uint8_t am = this->opcode_entry.am_index;
+    
+    // Immediate mode: operand at PC
+    if (am == to_index(AM::IMM)) {
       return this->bus_setup_read<Addr::PC>(pins);
     }
     
-    // For 65C816: Check if using zero-page/direct-page addressing
+    // For 65C816: Zero-page modes (ZER=2, ZPX=3, ZPY=4) use bank 0
+    // Optimized: single comparison since they're grouped after IMM
     if constexpr (has_wide_registers()) {
-      // Zero-page/Direct-page modes always use bank 0
-      const bool is_zero_page_mode =
-        (this->opcode_entry.am_index == to_index(AM::ZER) ||
-         this->opcode_entry.am_index == to_index(AM::ZPX) ||
-         this->opcode_entry.am_index == to_index(AM::ZPY));
-      
-      if (is_zero_page_mode) {
-        // Use Bank 0 for zero-page addressing
+      if (am <= to_index(AM::ZPY)) {
         return this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
       }
     }
     
-    // Memory modes: operand is at effective address (AB) with default banking (DBR)
+    // All other memory modes use default banking
     return this->bus_setup_read<Addr::AB>(pins);
   }
 
@@ -483,20 +479,23 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
    * Unified helper for immediate mode operand handling
    */
   inline void bus_load_operand(reg8_t data_reg, bus_state_t pins) {
-    if (this->opcode_entry.am_index == to_index(AM::IMM)) {
-      // Increment PC for immediate mode (operand was at PC)
+    const uint8_t am = this->opcode_entry.am_index;
+    
+    // Immediate mode: increment PC
+    if (am == to_index(AM::IMM)) {
       this->inc(REG_PC);
-    } else {
-      // Otherwise, increment AB for memory mode (operand was at AB)
-      // but only for wide CPUs (65C816), since 8 bit CPUs (like 6502)
-      // never perform a second bus_load_operand anyway
-      if constexpr (has_wide_registers()) {
+    } else if constexpr (has_wide_registers()) {
+      // Memory modes for 65C816: increment address for next byte
+      // Zero-page modes (ZER=2, ZPX=3, ZPY=4) in native mode: increment only ABL
+      // Optimized: single comparison since they're grouped after IMM
+      if (am <= to_index(AM::ZPY) && !this->in_emulation_mode()) {
+        this->inc(REG_ABL);
+      } else {
         this->inc(REG_AB);
       }
     }
-    // Only AFTER the increment, load data from bus into register, so that
-    // even when the destination register is PC or AB, it still gets the
-    // correct value
+    
+    // Load data from bus into register
     this->bus_load_reg(data_reg, pins);
   }
 
