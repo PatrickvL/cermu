@@ -260,10 +260,13 @@ inline uint8_t calc_nzc_flags(data_t minuend, data_t subtrahend) {
            ((result & 0xFFFF) == 0 ? FLAG_Z : 0) |
            (minuend >= subtrahend ? FLAG_C : 0);
   } else {
-    // 8-bit comparison
-    data_t result = minuend - subtrahend;
+    // 8-bit comparison - mask inputs to 8-bit for proper comparison semantics
+    // This is critical for 65C816 where data_t is uint16_t but comparison must use 8-bit values
+    uint8_t min8 = static_cast<uint8_t>(minuend & 0xFF);
+    uint8_t sub8 = static_cast<uint8_t>(subtrahend & 0xFF);
+    uint8_t result = min8 - sub8;
     return calc_n_flag<reg_type>(result) | calc_z_flag<reg_type>(result) |
-           (minuend >= subtrahend ? FLAG_C : 0);
+           (min8 >= sub8 ? FLAG_C : 0);
   }
 }
 
