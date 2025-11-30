@@ -46,6 +46,26 @@ inline void inc(reg8_t reg) { reg8[reg]++; }
 
 inline void dec(reg8_t reg) { reg8[reg]--; }
 
+// === Stack pointer increment helper ===
+// Encapsulates wide-specific inc(REG_SP) vs 8-bit inc(REG_S)
+inline void inc_stack() {
+  if constexpr (has_wide_registers()) {
+    this->inc(REG_SP);  // 65C816: Use 16-bit for proper carry handling
+  } else {
+    this->inc(REG_S);   // 8-bit CPUs: SP always in page 1
+  }
+}
+
+// === Stack pointer decrement helper ===
+// Encapsulates wide-specific dec(REG_SP) vs 8-bit dec(REG_S)
+inline void dec_stack() {
+  if constexpr (has_wide_registers()) {
+    this->dec(REG_SP);  // 65C816: Use 16-bit for proper borrow handling
+  } else {
+    this->dec(REG_S);   // 8-bit CPUs: SP always in page 1
+  }
+}
+
 // === Type-safe 16-bit register accessors ===
 inline uint16_t get(reg16_t reg_pair) const { return reg16[reg_pair]; }
 

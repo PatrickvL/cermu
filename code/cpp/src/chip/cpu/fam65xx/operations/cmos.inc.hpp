@@ -197,11 +197,7 @@ bus_state_t op_phx(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Decrement SP and transition */
-      if constexpr (has_wide_registers()) {
-        this->dec(REG_SP);  // 65C816: Use 16-bit for proper borrow handling
-      } else {
-        this->dec(REG_S);   // 65C02: SP always in page 1
-      }
+      this->dec_stack();
       this->transition_to_fetch();
       return pins;
     }
@@ -229,11 +225,7 @@ bus_state_t op_phy(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Decrement SP and transition */
-      if constexpr (has_wide_registers()) {
-        this->dec(REG_SP);  // 65C816: Use 16-bit for proper borrow handling
-      } else {
-        this->dec(REG_S);   // 65C02: SP always in page 1
-      }
+      this->dec_stack();
       this->transition_to_fetch();
       return pins;
     }
@@ -261,11 +253,7 @@ bus_state_t op_plx(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Increment stack pointer */
-      if constexpr (has_wide_registers()) {
-        this->inc(REG_SP);  // 65C816: Use 16-bit for proper carry handling
-      } else {
-        this->inc(REG_S);   // 65C02: SP always in page 1
-      }
+      this->inc_stack();
       this->half_cycle++;
       return pins;
 
@@ -304,11 +292,7 @@ bus_state_t op_ply(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Increment stack pointer */
-      if constexpr (has_wide_registers()) {
-        this->inc(REG_SP);  // 65C816: Use 16-bit for proper carry handling
-      } else {
-        this->inc(REG_S);   // 65C02: SP always in page 1
-      }
+      this->inc_stack();
       this->half_cycle++;
       return pins;
 
