@@ -47,7 +47,7 @@ bus_state_t rockwell65c02_reset(rockwell65c02_t *cpu, bus_state_t pins) {
 }
 
 bus_state_t rockwell65c02_tick(rockwell65c02_t *cpu, bus_state_t pins) {
-  return CPU_CAST(cpu)->tick(pins);
+  return CPU_CAST(cpu)->tick<rockwell65c02_cpu_t::Phase::PHI2>(pins);
 }
 
 bool rockwell65c02_opdone(rockwell65c02_t *cpu) {

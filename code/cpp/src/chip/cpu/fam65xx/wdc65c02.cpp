@@ -42,7 +42,7 @@ bus_state_t wdc65c02_reset(wdc65c02_t *cpu, bus_state_t pins) {
 }
 
 bus_state_t wdc65c02_tick(wdc65c02_t *cpu, bus_state_t pins) {
-  return CPU_CAST(cpu)->tick(pins);
+  return CPU_CAST(cpu)->tick<wdc65c02_cpu_t::Phase::PHI2>(pins);
 }
 
 bool wdc65c02_opdone(wdc65c02_t *cpu) { return CPU_CAST(cpu)->opdone(); }
