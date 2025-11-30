@@ -436,7 +436,7 @@ bus_state_t op_rti(bus_state_t pins) {
     /* PHI2: Pull P from stack (clear B, set U) */
     pins = this->bus_setup_read<Addr::SP>(pins);
     return pins;
-  case 5:
+  case 5: {
     /* PHI1: Load processor status from stack
      * 6502/65C02: Bit 5 (U) always 1, bit 4 (B) is NOT a real flag - mask it off
      * 65C816 emulation: Set both bits 4 and 5 (B and U flags always 1)
@@ -466,6 +466,7 @@ bus_state_t op_rti(bus_state_t pins) {
     this->inc_stack();
     this->half_cycle++;
     return pins;
+  }
 
   case 6:
     /* PHI2: Pull PCL from stack */
