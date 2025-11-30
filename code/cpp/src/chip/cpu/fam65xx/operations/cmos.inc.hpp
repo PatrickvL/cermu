@@ -23,7 +23,7 @@ bus_state_t op_bra(bus_state_t pins) {
       // PHI2: Setup read from PC
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
-    case 1:
+    case 1: {
       // PHI1: Load data and increment PC
       int8_t offset = static_cast<int8_t>(this->bus_get_data(pins)); // Signed offset
       this->inc(REG_PC);
@@ -31,6 +31,7 @@ bus_state_t op_bra(bus_state_t pins) {
       this->set(REG_PC, this->get(REG_PC) + offset);
       this->transition_to_fetch();
       return pins;
+    }
     }
   }
   return pins;

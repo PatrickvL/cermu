@@ -26,8 +26,7 @@ bus_state_t op_lax(bus_state_t pins) {
         // PHI2: Setup read from PC
         pins = this->bus_setup_read<Addr::PC>(pins);
         return pins;
-
-      case 1: 
+      case 1: {
         // PHI1: Load data, increment PC, and perform operation
         uint8_t operand = this->bus_get_data(pins);
         this->inc(REG_PC);
@@ -49,7 +48,6 @@ bus_state_t op_lax(bus_state_t pins) {
         // PHI2: Setup read from AB
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
-
       case 1: {
         // PHI1: Load data and perform operation
         uint8_t operand = this->bus_get_data(pins);
@@ -424,7 +422,7 @@ bus_state_t op_xaa(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
 
-    case 1:
+    case 1: {
       // PHI1: Load data, increment PC, and perform operation
       uint8_t operand = this->bus_get_data(pins);
       this->inc(REG_PC);
@@ -434,6 +432,7 @@ bus_state_t op_xaa(bus_state_t pins) {
       this->update_nz_flags<REG_A>(this->get(REG_A));
       this->transition_to_fetch();
       return pins;
+    }
     }
   }
 
@@ -450,7 +449,7 @@ bus_state_t op_sbx(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
 
-    case 1:
+    case 1: {
       // PHI1: Load data, increment PC, and perform operation
       uint8_t operand = this->bus_get_data(pins);
       this->inc(REG_PC);
@@ -466,6 +465,7 @@ bus_state_t op_sbx(bus_state_t pins) {
       this->transition_to_fetch();
       return pins;
     }
+    }
   }
 
   return pins;
@@ -476,9 +476,8 @@ bus_state_t op_sha(bus_state_t pins) {
   if constexpr (has_illegal_opcodes()) {
     // SHA - Store A & X & (H+1) with address corruption on page cross - PHI2/PHI1 split
     switch (this->half_cycle) {
-    case 0: // PHI2
-      {
-        // Calculate value: A & X & (intermediate_high + 1)
+    case 0: {
+      // PHI2: Calculate value: A & X & (intermediate_high + 1)
         uint8_t data_value =
             this->get(REG_A) & this->get(REG_X) & (this->get(REG_DL) + 1);
 
@@ -588,7 +587,7 @@ bus_state_t op_las(bus_state_t pins) {
       // PHI2: Setup read from AB
       pins = this->bus_setup_read<Addr::AB>(pins);
       return pins;
-    case 1:
+    case 1: {
       // PHI1: Load data and perform operation
       uint8_t operand = this->bus_get_data(pins);
       uint8_t result = operand & this->get(REG_S);
@@ -598,6 +597,7 @@ bus_state_t op_las(bus_state_t pins) {
       this->update_nz_flags<REG_A>(result);
       this->transition_to_fetch();
       return pins;
+    }
     }
   }
 
