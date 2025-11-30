@@ -188,11 +188,10 @@ enum class AddressingMode : uint8_t {
   NON = 0, /* No addressing handler (Implicit/Accumulator/Relative/Special) */
   IMM,     /* Immediate - operand is next byte - All CPUs */
   
-  // Zero-page/Direct Page modes grouped together for efficient range check (am <= ZPI)
+  // Zero-page/Direct Page modes grouped together for efficient range check (am <= ZPY)
   ZER, /* Zero Page (6502/6510/65C02) / Direct Page (65C816) - All CPUs */
   ZPX, /* Zero Page,X (6502/6510/65C02) / Direct Page,X (65C816) - All CPUs */
   ZPY, /* Zero Page,Y (6502/6510/65C02) / Direct Page,Y (65C816) - All CPUs */
-  ZPI, /* Zero Page Indirect (dp) - 65C02/65C816 only */
 
   // Other memory addressing modes
   ABS, /* Absolute - operand at $nnnn - All CPUs */
@@ -204,6 +203,7 @@ enum class AddressingMode : uint8_t {
 
   // CMOS enhancements - 65C02 and 65C816 only
   ZPR, /* Zero Page Relative zp,rel - BBR/BBS - Rockwell 65C02 only */
+  ZPI, /* Zero Page Indirect (dp) - 65C02/65C816 only */
 
   // 65C816 exclusive addressing modes
   ABI,   /* Absolute Indexed Indirect (abs,X) - JMP/JSR - 65C816 only */
