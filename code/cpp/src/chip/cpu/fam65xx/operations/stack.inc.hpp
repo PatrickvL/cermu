@@ -36,7 +36,7 @@ bus_state_t op_pha(bus_state_t pins) {
         pins = this->bus_setup_write<Addr::SP>(pins, REG_AH);
         return pins;
       case 3:
-        this->dec(REG_S);
+        this->dec(REG_SP);  // Always use 16-bit for 65C816
         this->half_cycle++;
         return pins;
 
@@ -45,7 +45,7 @@ bus_state_t op_pha(bus_state_t pins) {
         pins = this->bus_setup_write<Addr::SP>(pins, REG_AL);
         return pins;
       case 5:
-        this->dec(REG_S);
+        this->dec(REG_SP);  // Always use 16-bit for 65C816
         this->transition_to_fetch();
         return pins;
       }
@@ -70,7 +70,11 @@ bus_state_t op_pha(bus_state_t pins) {
     return pins;
   case 3:
     /* PHI1: Decrement SP and transition */
-    this->dec(REG_S);
+    if constexpr (has_wide_registers()) {
+      this->dec(REG_SP);  // 65C816: Use 16-bit for proper borrow handling
+    } else {
+      this->dec(REG_S);   // 8-bit CPUs: SP always in page 1
+    }
     this->transition_to_fetch();
     return pins;
   }
@@ -97,7 +101,11 @@ bus_state_t op_php(bus_state_t pins) {
     return pins;
   case 3:
     /* PHI1: Decrement SP and transition */
-    this->dec(REG_S);
+    if constexpr (has_wide_registers()) {
+      this->dec(REG_SP);  // 65C816: Use 16-bit for proper borrow handling
+    } else {
+      this->dec(REG_S);   // 8-bit CPUs: SP always in page 1
+    }
     this->transition_to_fetch();
     return pins;
   }
@@ -128,7 +136,7 @@ bus_state_t op_pla(bus_state_t pins) {
         return pins;
       case 3:
         /* PHI1: Increment stack pointer */
-        this->inc(REG_S);
+        this->inc(REG_SP);  // Always use 16-bit for 65C816
         this->half_cycle++;
         return pins;
 
@@ -139,7 +147,7 @@ bus_state_t op_pla(bus_state_t pins) {
       case 5:
         /* PHI1: Load low byte from bus and increment SP */
         this->bus_load_reg(REG_AL, pins);
-        this->inc(REG_S);
+        this->inc(REG_SP);  // Always use 16-bit for 65C816
         this->half_cycle++;
         return pins;
 
@@ -177,7 +185,13 @@ bus_state_t op_pla(bus_state_t pins) {
     return pins;
   case 3:
     /* PHI1: Increment stack pointer */
-    this->inc(REG_S);
+    if constexpr (has_wide_registers()) {
+      // 65C816: Use 16-bit increment for proper carry handling
+      this->inc(REG_SP);
+    } else {
+      // 8-bit CPUs: SP is always in page 1, only increment low byte
+      this->inc(REG_S);
+    }
     this->half_cycle++;
     return pins;
 
@@ -214,7 +228,13 @@ bus_state_t op_plp(bus_state_t pins) {
     return pins;
   case 3:
     /* PHI1: Increment stack pointer */
-    this->inc(REG_S);
+    if constexpr (has_wide_registers()) {
+      // 65C816: Use 16-bit increment for proper carry handling
+      this->inc(REG_SP);
+    } else {
+      // 8-bit CPUs: SP is always in page 1, only increment low byte
+      this->inc(REG_S);
+    }
     this->half_cycle++;
     return pins;
 

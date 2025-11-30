@@ -81,7 +81,11 @@ bus_state_t op_jsr(bus_state_t pins) {
     return pins;
   case 5:
     /* PHI1: Decrement SP */
-    this->dec(REG_S);
+    if constexpr (has_wide_registers()) {
+      this->dec(REG_SP);  // 65C816: Use 16-bit for proper borrow handling
+    } else {
+      this->dec(REG_S);   // 8-bit CPUs: SP always in page 1
+    }
     this->half_cycle++;
     return pins;
 
@@ -91,7 +95,11 @@ bus_state_t op_jsr(bus_state_t pins) {
     return pins;
   case 7:
     /* PHI1: Decrement SP */
-    this->dec(REG_S);
+    if constexpr (has_wide_registers()) {
+      this->dec(REG_SP);  // 65C816: Use 16-bit for proper borrow handling
+    } else {
+      this->dec(REG_S);   // 8-bit CPUs: SP always in page 1
+    }
     this->half_cycle++;
     return pins;
 
@@ -118,7 +126,11 @@ bus_state_t op_rts(bus_state_t pins) {
     return pins;
   case 1:
     /* PHI1: Increment SP */
-    this->inc(REG_S);
+    if constexpr (has_wide_registers()) {
+      this->inc(REG_SP);  // 65C816: Use 16-bit for proper carry handling
+    } else {
+      this->inc(REG_S);   // 8-bit CPUs: SP always in page 1
+    }
     this->half_cycle++;
     return pins;
 
@@ -129,7 +141,11 @@ bus_state_t op_rts(bus_state_t pins) {
   case 3:
     /* PHI1: Load PCL and increment SP */
     this->bus_load_reg(REG_PCL, pins);
-    this->inc(REG_S);
+    if constexpr (has_wide_registers()) {
+      this->inc(REG_SP);  // 65C816: Use 16-bit for proper carry handling
+    } else {
+      this->inc(REG_S);   // 8-bit CPUs: SP always in page 1
+    }
     this->half_cycle++;
     return pins;
 
@@ -346,7 +362,11 @@ bus_state_t op_brk(bus_state_t pins) {
     return pins;
   case 5:
     /* PHI1: Decrement SP */
-    this->dec(REG_S);
+    if constexpr (has_wide_registers()) {
+      this->dec(REG_SP);  // 65C816: Use 16-bit for proper borrow handling
+    } else {
+      this->dec(REG_S);   // 8-bit CPUs: SP always in page 1
+    }
     this->half_cycle++;
     return pins;
 
@@ -356,7 +376,11 @@ bus_state_t op_brk(bus_state_t pins) {
     return pins;
   case 7:
     /* PHI1: Decrement SP */
-    this->dec(REG_S);
+    if constexpr (has_wide_registers()) {
+      this->dec(REG_SP);  // 65C816: Use 16-bit for proper borrow handling
+    } else {
+      this->dec(REG_S);   // 8-bit CPUs: SP always in page 1
+    }
     this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
     this->half_cycle++;
     return pins;
@@ -367,7 +391,11 @@ bus_state_t op_brk(bus_state_t pins) {
     return pins;
   case 9:
     /* PHI1: Decrement SP, set interrupt flags, get vector address */
-    this->dec(REG_S);
+    if constexpr (has_wide_registers()) {
+      this->dec(REG_SP);  // 65C816: Use 16-bit for proper borrow handling
+    } else {
+      this->dec(REG_S);   // 8-bit CPUs: SP always in page 1
+    }
     /* Set interrupt disable flag - processor specific behavior */
     if constexpr (has_nmos_bugs()) {
       /* NMOS 6502 always sets I flag on BRK */
@@ -428,7 +456,11 @@ bus_state_t op_rti(bus_state_t pins) {
     return pins;
   case 3:
     /* PHI1: Increment SP */
-    this->inc(REG_S);
+    if constexpr (has_wide_registers()) {
+      this->inc(REG_SP);  // 65C816: Use 16-bit for proper carry handling
+    } else {
+      this->inc(REG_S);   // 8-bit CPUs: SP always in page 1
+    }
     this->half_cycle++;
     return pins;
 
@@ -464,7 +496,11 @@ bus_state_t op_rti(bus_state_t pins) {
       // 6502/6510/65C02: Mask off bit 4 (B is phantom), set bit 5 (U always 1)
       this->set(REG_P, (this->get(REG_DL) & ~FLAG_B) | FLAG_U);
     }
-    this->inc(REG_S);
+    if constexpr (has_wide_registers()) {
+      this->inc(REG_SP);  // 65C816: Use 16-bit for proper carry handling
+    } else {
+      this->inc(REG_S);   // 8-bit CPUs: SP always in page 1
+    }
     this->half_cycle++;
     return pins;
 
@@ -475,7 +511,11 @@ bus_state_t op_rti(bus_state_t pins) {
   case 7:
     /* PHI1: Load PCL and increment SP */
     this->bus_load_reg(REG_PCL, pins);
-    this->inc(REG_S);
+    if constexpr (has_wide_registers()) {
+      this->inc(REG_SP);  // 65C816: Use 16-bit for proper carry handling
+    } else {
+      this->inc(REG_S);   // 8-bit CPUs: SP always in page 1
+    }
     this->half_cycle++;
     return pins;
 
