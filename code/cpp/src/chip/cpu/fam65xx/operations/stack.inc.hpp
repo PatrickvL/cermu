@@ -235,7 +235,16 @@ bus_state_t op_plp(bus_state_t pins) {
         this->set(REG_P, this->get(REG_DL) | FLAG_B | FLAG_U);
       } else {
         // Native mode: load value as-is (B becomes X flag, U becomes M flag)
-        this->set(REG_P, this->get(REG_DL));
+        uint8_t old_p = this->get(REG_P);
+        uint8_t new_p = this->get(REG_DL);
+        this->set(REG_P, new_p);
+        
+        // X flag (bit 4): When switching from 16-bit to 8-bit index mode, clear high bytes
+        if ((new_p & FLAG_X) && !(old_p & FLAG_X)) {
+          // Switching index registers from 16-bit to 8-bit: clear XH and YH
+          this->set(REG_XH, 0x00);
+          this->set(REG_YH, 0x00);
+        }
       }
     } else {
       // 6502/6510/65C02: Mask off bit 4 (B is phantom), set bit 5 (U always 1)
