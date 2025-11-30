@@ -440,15 +440,17 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       return this->bus_setup_read<Addr::PC>(pins);
     }
     
-    // For 65C816: Direct Page modes always use bank 0 (ZBR)
-    // Includes: ZER(2), ZPX(3), ZPY(4), ZPI(5) - contiguous range
+    // For 65C816: Direct Page modes use bank 0 (ZBR)
+    // But ONLY for non-indirect modes: ZER(2), ZPX(3), ZPY(4)
+    // ZPI(5) is indirect - the pointer is in DP but target address uses DBR!
     if constexpr (has_wide_registers()) {
-      if (am <= to_index(AM::ZPI)) {
+      if (am >= to_index(AM::ZER) && am <= to_index(AM::ZPY)) {
         return this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
       }
     }
     
-    // All other memory modes use default banking
+    // All other memory modes use default banking (DBR)
+    // This includes ZPI(5) and all absolute/indexed modes
     return this->bus_setup_read<Addr::AB>(pins);
   }
 
@@ -484,10 +486,10 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       this->inc(REG_PC);
     } else if constexpr (has_wide_registers()) {
       // Memory modes for 65C816: increment address for next byte
-      // Direct Page modes (ZER, ZPX, ZPY, ZPI): Always increment only ABL
-      // This is correct in BOTH emulation and native modes because Direct Page
-      // is always confined to bank 0 (incrementing full AB would corrupt bank)
-      if (am <= to_index(AM::ZPI)) {
+      // Direct Page modes (ZER, ZPX, ZPY): Always increment only ABL
+      // These read from Direct Page which is always in bank 0
+      // ZPI is NOT included - it's indirect so target can be anywhere
+      if (am >= to_index(AM::ZER) && am <= to_index(AM::ZPY)) {
         this->inc(REG_ABL);
       } else {
         this->inc(REG_AB);
