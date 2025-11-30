@@ -475,7 +475,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
   }
 
   /**
-   * Load register from bus and increment PC if immediate mode (PHI1 phase)
+   * Get data from bus and increment PC if immediate mode (PHI1 phase)
    * Unified helper for immediate mode operand handling
    */
   inline void bus_get_operand(bus_state_t pins) {
@@ -489,7 +489,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       // Direct Page modes (ZER, ZPX, ZPY): Always increment only ABL
       // These read from Direct Page which is always in bank 0
       // ZPI is NOT included - it's indirect so target can be anywhere
-      if (am >= to_index(AM::ZER) && am <= to_index(AM::ZPY)) {
+      if (am <= to_index(AM::ZPY)) {
         this->inc(REG_ABL);
       } else {
         this->inc(REG_AB);
