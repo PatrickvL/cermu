@@ -224,7 +224,7 @@ bus_state_t op_plp(bus_state_t pins) {
     return pins;
   case 5:
     /* PHI1: Load status byte from bus into P
-     * 6502/65C02: Set bit 5 (U flag always 1), but NOT bit 4 (B comes from stack)
+     * 6502/65C02: Bit 5 (U) always 1, bit 4 (B) is NOT a real flag - mask it off
      * 65C816 emulation: Set both bits 4 and 5 (B and U flags always 1)
      * 65C816 native: Load all bits as-is (bits 4 and 5 have different meanings: X and M)
      */
@@ -238,8 +238,8 @@ bus_state_t op_plp(bus_state_t pins) {
         this->set(REG_P, this->get(REG_DL));
       }
     } else {
-      // 6502/6510/65C02: Set FLAG_U (bit 5) but let B (bit 4) come from stack
-      this->set(REG_P, this->get(REG_DL) | FLAG_U);
+      // 6502/6510/65C02: Mask off bit 4 (B is phantom), set bit 5 (U always 1)
+      this->set(REG_P, (this->get(REG_DL) & ~FLAG_B) | FLAG_U);
     }
     this->transition_to_fetch();
     return pins;
