@@ -162,88 +162,48 @@ bus_state_t op_ldy(bus_state_t pins) {
 // ============================================================================
 
 bus_state_t op_sta(bus_state_t pins) {
-  trace_operation(__func__);
-  // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native
-  // code
-  if constexpr (has_wide_registers()) {
-    if (this->is_accumulator_16bit()) {
-      // 65C816 native mode, 16-bit accumulator - perform 16-bit STA
-      switch (this->half_cycle) {
-      case 0:
-        // Store low byte of accumulator
-        pins = this->bus_setup_write<Addr::AB>(pins, REG_AL);
-        return pins;
-      case 1:
-        // For 65C816 native mode, increment address bus with bank handling
+  switch (this->half_cycle) {
+    case 0:
+      pins = this->bus_setup_write<Addr::AB>(pins, REG_AL);
+      return pins;
+    case 1:
+      if (this->is_accumulator_16bit()) {
         this->inc(REG_AB);
-        return pins;
-
-      case 2:
-        // Store high byte of accumulator
-        pins = this->bus_setup_write<Addr::AB>(pins, REG_AH);
-        return pins;
-      case 3:
+      } else {
         this->transition_to_fetch();
-        return pins;
       }
       return pins;
-    }
-  }
 
-  // Standard 8-bit STA operation (emulation mode and non-wide CPUs)
-  switch (this->half_cycle) {
-  case 0: // PHI2 - Write accumulator to address
-    pins = this->bus_setup_write<Addr::AB>(pins, REG_A);
-    return pins;
-  case 1: // PHI1 - Complete and transition
-    this->transition_to_fetch();
-    return pins;
+    case 2:
+      pins = this->bus_setup_write<Addr::AB>(pins, REG_AH);
+      return pins;
+    case 3:
+      this->transition_to_fetch();
+      return pins;
   }
   return pins;
 }
 
-// ============================================================================
-// STORE X REGISTER (STX)
-// ============================================================================
-
+// Minimal STX: store X at resolved address
 bus_state_t op_stx(bus_state_t pins) {
-  trace_operation(__func__);
-  // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
-  // native code
-  if constexpr (has_wide_registers()) {
-    if (this->is_index_16bit()) {
-      // 65C816 native mode, 16-bit X register - perform 16-bit STX
-      switch (this->half_cycle) {
-      case 0:
-        // Store low byte of X register
-        pins = this->bus_setup_write<Addr::AB>(pins, REG_XL);
-        return pins;
-      case 1:
-        // For 65C816 native mode, increment address bus with bank handling
-        this->inc(REG_AB);
-        return pins;
-
-      case 2:
-        // Store high byte of X register
-        pins = this->bus_setup_write<Addr::AB>(pins, REG_XH);
-        return pins;
-      case 3:
-        this->transition_to_fetch();
-        return pins;
-      }
-      return pins;
-    }
-  }
-
-  // Standard 8-bit STX operation (emulation mode and non-wide CPUs)
   switch (this->half_cycle) {
-  case 0: // PHI2 - Write X register to address
-    pins = this->bus_setup_write<Addr::AB>(pins, REG_X);
-    return pins;
+    case 0:
+      pins = this->bus_setup_write<Addr::AB>(pins, REG_XL);
+      return pins;
+    case 1:
+     if (this->is_index_16bit()) {
+        this->inc(REG_AB);
+     } else {
+        this->transition_to_fetch();
+     }
+     return pins;
 
-  case 1: // PHI1 - Complete and transition
-    this->transition_to_fetch();
-    return pins;
+    case 2:
+      pins = this->bus_setup_write<Addr::AB>(pins, REG_XH);
+      return pins;
+    case 3:
+      this->transition_to_fetch();
+      return pins;
   }
   return pins;
 }
@@ -252,45 +212,27 @@ bus_state_t op_stx(bus_state_t pins) {
 // STORE Y REGISTER (STY)
 // ============================================================================
 
+// Minimal STY: store Y at resolved address
 bus_state_t op_sty(bus_state_t pins) {
-  trace_operation(__func__);
-  // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
-  // native code
-  if constexpr (has_wide_registers()) {
-    if (this->is_index_16bit()) {
-      // 65C816 native mode, 16-bit Y register - perform 16-bit STY
-      switch (this->half_cycle) {
-      case 0:
-        // Store low byte of Y register
-        pins = this->bus_setup_write<Addr::AB>(pins, REG_YL);
-        return pins;
-      case 1:
-        // For 65C816 native mode, increment address bus with bank handling
-        this->inc(REG_AB);
-        return pins;
-
-      case 2:
-        // Store high byte of Y register
-        pins = this->bus_setup_write<Addr::AB>(pins, REG_YH);
-        return pins;
-      case 3:
-        this->transition_to_fetch();
-        return pins;
-      }
-      return pins;
+    switch (this->half_cycle) {
+        case 0:
+            pins = this->bus_setup_write<Addr::AB>(pins, REG_YL);
+            return pins;
+        case 1:
+            if (this->is_index_16bit()) {
+              this->inc(REG_AB);
+            } else {
+                this->transition_to_fetch();
+            }
+            return pins;
+        case 2:
+            pins = this->bus_setup_write<Addr::AB>(pins, REG_YH);
+            return pins;
+        case 3:
+            this->transition_to_fetch();
+            return pins;
     }
-  }
-
-  // Standard 8-bit STY operation (emulation mode and non-wide CPUs)
-  switch (this->half_cycle) {
-  case 0: // PHI2 - Write Y register to address
-    pins = this->bus_setup_write<Addr::AB>(pins, REG_Y);
     return pins;
-  case 1: // PHI1 - Complete and transition
-    this->transition_to_fetch();
-    return pins;
-  }
-  return pins;
 }
 
 // ============================================================================
@@ -504,7 +446,7 @@ bus_state_t op_bit(bus_state_t pins) {
     pins = this->bus_setup_read_operand(pins);
     return pins;
   case 1: { // PHI1
-    uint8_t operand = this->bus_get_operand(pins
+    uint8_t operand = this->bus_get_operand(pins);
     uint8_t result = this->get(REG_A) & operand;
     // BIT immediate (65C02) only affects Z flag - N and V are NOT affected
     // BIT memory affects N, V, and Z flags normally
