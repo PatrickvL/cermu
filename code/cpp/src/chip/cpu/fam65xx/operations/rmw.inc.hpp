@@ -50,21 +50,19 @@ bus_state_t op_lsr(bus_state_t pins) {
     const bool is_16bit_acc = !is_memory_rmw && this->is_accumulator_16bit();
     const bool is_16bit_mem = is_memory_rmw && this->is_memory_16bit();
 
+    this->update_flag(FLAG_C, (value & FLAG_C) != 0);
     if (is_16bit_acc || is_16bit_mem) {
       // 16-bit operation (accumulator or memory)
-      const uint16_t carry_out = value & FLAG_C;
-      value = (value >> 1) & 0x7FFF;
+      value = (value >> 1) & 0xFFFF;
 
       if (is_16bit_acc) {
         this->update_nz_flags<REG_A>(value);
       } else {
         this->update_nz_flags_16bit(static_cast<uint16_t>(value));
       }
-      this->update_flag(FLAG_C, carry_out != 0);
     } else {
       // 8-bit operation (memory or 8-bit accumulator)
       uint8_t val8 = static_cast<uint8_t>(value & 0xFF);
-      const uint8_t carry_out = val8 & FLAG_C;
       val8 >>= 1;
       value = static_cast<data_t>(val8);
 
@@ -73,7 +71,6 @@ bus_state_t op_lsr(bus_state_t pins) {
       } else {
         this->update_nz_flags<REG_A>(val8);
       }
-      this->update_flag(FLAG_C, carry_out != 0);
     }
   });
 }
