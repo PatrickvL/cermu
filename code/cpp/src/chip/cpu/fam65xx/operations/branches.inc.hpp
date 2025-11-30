@@ -33,7 +33,7 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     }
 
     /* Branch taken: calculate correct target address */
-    this->set(REG_AB, this->get(REG_PC) + (int8_t)this->get(REG_ABL));  // Use REG_ABL (was REG_DL)
+    this->set(REG_AB, this->get(REG_PC) + (int8_t)this->get(REG_ABL));
     this->half_cycle++;
     return pins;
   }
@@ -55,13 +55,12 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     /* Page cross detected: need penalty cycle with intermediate address */
     /* Hardware behavior: Add signed offset to PC low byte only, ignore carry */
     /* The intermediate address = (PC & 0xFF00) | ((PCL + signed_offset) & 0xFF) */
-    uint8_t pc_low = this->get(REG_PC) & 0xFF;
-    int8_t signed_offset = (int8_t)this->get(REG_ABL);  // Use REG_ABL (was REG_DL)
+    uint8_t pc_low = this->get(REG_PCL);
+    int8_t signed_offset = (int8_t)this->get(REG_ABL);
     uint8_t new_low = (uint8_t)(pc_low + signed_offset); // Let it wrap naturally
-    uint16_t intermediate_addr = (this->get(REG_PC) & 0xFF00) | new_low;
 
     /* Store intermediate address in PC for penalty cycle read */
-    this->set(REG_PC, intermediate_addr);
+    this->set(REG_PCL, new_low);
     /* REG_AB still contains the correct final target from case 1 */
     this->half_cycle++;
     return pins;
