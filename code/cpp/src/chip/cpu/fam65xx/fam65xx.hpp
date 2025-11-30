@@ -478,7 +478,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
    * Get data from bus and increment PC if immediate mode (PHI1 phase)
    * Unified helper for immediate mode operand handling
    */
-  inline void bus_get_operand(bus_state_t pins) {
+  inline uint8_t bus_get_operand(bus_state_t pins) {
     const uint8_t am = this->opcode_entry.am_index;
     
     // Immediate mode: increment PC
