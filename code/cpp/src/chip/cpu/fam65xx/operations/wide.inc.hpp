@@ -191,7 +191,7 @@ bus_state_t op_pea(bus_state_t pins) {
       pins = this->bus_setup_write<Addr::SP>(pins, REG_ABH);
       return pins;
     case 5:
-      this->dec(REG_SP);  // 65C816: Always use 16-bit SP
+      this->dec_stack();
       this->half_cycle++;
       return pins;
 
@@ -200,7 +200,7 @@ bus_state_t op_pea(bus_state_t pins) {
       pins = this->bus_setup_write<Addr::SP>(pins, REG_ABL);
       return pins;
     case 7:
-      this->dec(REG_SP);  // 65C816: Always use 16-bit SP
+      this->dec_stack();
       this->transition_to_fetch();
       return pins;
     }
@@ -221,7 +221,7 @@ bus_state_t op_phb(bus_state_t pins) {
       pins = this->bus_setup_write<Addr::SP>(pins, REG_DBR);
       return pins;
     case 1:
-      this->dec(REG_SP);  // 65C816: Always use 16-bit SP
+      this->dec_stack();
       this->transition_to_fetch();
       return pins;
     }
@@ -242,7 +242,7 @@ bus_state_t op_phd(bus_state_t pins) {
       pins = this->bus_setup_write<Addr::SP>(pins, REG_DPH);
       return pins;
     case 1:
-      this->dec(REG_SP);  // 65C816: Always use 16-bit SP
+      this->dec_stack();
       this->half_cycle++;
       return pins;
 
@@ -251,7 +251,7 @@ bus_state_t op_phd(bus_state_t pins) {
       pins = this->bus_setup_write<Addr::SP>(pins, REG_DPL);
       return pins;
     case 3:
-      this->dec(REG_SP);  // 65C816: Always use 16-bit SP
+      this->dec_stack();
       this->transition_to_fetch();
       return pins;
     }
@@ -280,7 +280,7 @@ bus_state_t op_phk(bus_state_t pins) {
       pins = this->bus_setup_write<Addr::SP>(pins, REG_PBR);
       return pins;
     case 3:
-      this->dec(REG_SP);  // 65C816: Always use 16-bit SP
+      this->dec_stack();
       this->transition_to_fetch();
       return pins;
     }
@@ -310,7 +310,7 @@ bus_state_t op_plb(bus_state_t pins) {
       pins = this->bus_setup_dummy<Addr::SP>(pins);
       return pins;
     case 3:
-      this->inc(REG_SP);  // 65C816: Always use 16-bit SP
+      this->inc_stack();
       this->half_cycle++;
       return pins;
 
@@ -342,7 +342,7 @@ bus_state_t op_pld(bus_state_t pins) {
       pins = this->bus_setup_dummy<Addr::SP>(pins);
       return pins;
     case 1:
-      this->inc(REG_SP);  // 65C816: Always use 16-bit SP
+      this->inc_stack();
       this->half_cycle++;
       return pins;
 
@@ -353,7 +353,7 @@ bus_state_t op_pld(bus_state_t pins) {
     case 3:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DPL, pins);
-      this->inc(REG_SP);  // 65C816: Always use 16-bit SP
+      this->inc_stack();
       this->half_cycle++;
       return pins;
 
@@ -425,7 +425,7 @@ bus_state_t op_jsl(bus_state_t pins) {
       return pins;
     case 7:
       // Push PC high byte (return address - 1)
-      this->dec(REG_SP);  // 65C816: Always use 16-bit SP
+      this->dec_stack();
       this->half_cycle++;
       return pins;
 
@@ -436,7 +436,7 @@ bus_state_t op_jsl(bus_state_t pins) {
       return pins;
 
     case 9:
-      this->dec(REG_SP);  // 65C816: Always use 16-bit SP
+      this->dec_stack();
       this->half_cycle++;
       return pins;
 
@@ -470,7 +470,7 @@ bus_state_t op_rtl(bus_state_t pins) {
       pins = this->bus_setup_dummy<Addr::SP>(pins);
       return pins;
     case 1:
-      this->inc(REG_SP);  // 65C816: Always use 16-bit SP
+      this->inc_stack();
       this->half_cycle++;
       return pins;
 
@@ -481,7 +481,7 @@ bus_state_t op_rtl(bus_state_t pins) {
     case 3:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_PCL, pins);
-      this->inc(REG_SP);  // 65C816: Always use 16-bit SP
+      this->inc_stack();
       this->half_cycle++;
       return pins;
 
@@ -491,7 +491,7 @@ bus_state_t op_rtl(bus_state_t pins) {
       return pins;
     case 5:
       this->bus_load_reg(REG_PCH, pins);
-      this->inc(REG_SP);  // 65C816: Always use 16-bit SP
+      this->inc_stack();
       this->half_cycle++;
       return pins;
 
@@ -556,7 +556,7 @@ bus_state_t op_per(bus_state_t pins) {
       pins = this->bus_setup_write<Addr::SP>(pins, REG_ABH);
       return pins;
     case 5:
-      this->dec(REG_SP);  // 65C816: Always use 16-bit SP
+      this->dec_stack();
       this->half_cycle++;
       return pins;
 
@@ -565,7 +565,7 @@ bus_state_t op_per(bus_state_t pins) {
       pins = this->bus_setup_write<Addr::SP>(pins, REG_ABL);
       return pins;
     case 7:
-      this->dec(REG_SP);  // 65C816: Always use 16-bit SP
+      this->dec_stack();
       this->transition_to_fetch();
       return pins;
     }
@@ -621,7 +621,7 @@ bus_state_t op_pei(bus_state_t pins) {
       pins = this->bus_setup_write<Addr::SP>(pins, REG_ABH);
       return pins;
     case 7:
-      this->dec(REG_SP);  // 65C816: Always use 16-bit SP
+      this->dec_stack();
       this->half_cycle++;
       return pins;
 
@@ -630,7 +630,7 @@ bus_state_t op_pei(bus_state_t pins) {
       pins = this->bus_setup_write<Addr::SP>(pins, REG_ABL);
       return pins;
     case 9:
-      this->dec(REG_SP);  // 65C816: Always use 16-bit SP
+      this->dec_stack();
       this->transition_to_fetch();
       return pins;
     }
