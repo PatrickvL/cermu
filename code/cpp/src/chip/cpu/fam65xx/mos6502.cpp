@@ -73,7 +73,7 @@ bus_state_t mos6502_reset(mos6502_t *cpu, bus_state_t pins) {
 }
 
 bus_state_t mos6502_tick(mos6502_t *cpu, bus_state_t pins) {
-  return CPU_CAST(mos6502_cpu_t, cpu)->tick(pins);
+  return CPU_CAST(mos6502_cpu_t, cpu)->tick<mos6502_cpu_t::Phase::PHI2>(pins);
 }
 
 bool mos6502_opdone(mos6502_t *cpu) {

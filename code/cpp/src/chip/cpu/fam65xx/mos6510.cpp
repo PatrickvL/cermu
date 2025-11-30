@@ -59,7 +59,7 @@ bus_state_t mos6510_reset(mos6510_t *cpu, bus_state_t pins) {
 }
 
 bus_state_t mos6510_tick(mos6510_t *cpu, bus_state_t pins) {
-  return CPU_CAST(cpu)->tick(pins);
+  return CPU_CAST(cpu)->tick<mos6510_cpu_t::Phase::PHI2>(pins);
 }
 
 bool mos6510_opdone(mos6510_t *cpu) { return CPU_CAST(cpu)->opdone(); }
