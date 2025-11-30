@@ -318,11 +318,12 @@ bus_state_t op_plb(bus_state_t pins) {
       // PHI2: Pull DBR from stack
       pins = this->bus_setup_read<Addr::SP>(pins);
       return pins;
-    case 5:
-      /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
-      this->update_nz_flags(this->get(REG_DBR));
+    case 5: {
+      uint8_t operand = this->bus_get_data(pins);
+      this->set(REG_DBR, operand);
+      this->update_nz_flags(operand);
       this->transition_to_fetch();
+    }
     }
     return pins;
   }
@@ -588,9 +589,9 @@ bus_state_t op_pei(bus_state_t pins) {
       return pins;
     case 1: {
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_DL, pins);
+      uint8_t zp_addr = this->bus_get_data(pins);
       this->inc(REG_PC);
-      uint16_t dp_addr = this->get(REG_D_16) + this->get(REG_DL);
+      uint16_t dp_addr = this->get(REG_D_16) + zp_addr;
       this->set(REG_AB, dp_addr);
       this->half_cycle++;
       return pins;
