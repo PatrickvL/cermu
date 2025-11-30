@@ -384,7 +384,7 @@ bus_state_t op_alr(bus_state_t pins) {
 
     case 1: {
       // PHI1: Load data, increment PC, and perform operation
-      uint8_t operand = bus_read_data(pins);
+      uint8_t operand = bus_get_data(pins);
       this->inc(REG_PC);
       // Perform AND with accumulator
       uint8_t a = this->get(REG_A);
