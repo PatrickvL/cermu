@@ -442,15 +442,14 @@ bus_state_t op_rti(bus_state_t pins) {
      * 65C816 emulation: Set both bits 4 and 5 (B and U flags always 1)
      * 65C816 native: Load all bits as-is (bits 4 and 5 have different meanings: X and M)
      */
-    this->bus_load_reg(REG_DL, pins);
+    uint8_t new_p = this->bus_get_data(pins);
     if constexpr (has_wide_registers()) {
       if (this->in_emulation_mode()) {
         // 65C816 emulation mode: set both FLAG_B (bit 4) and FLAG_U (bit 5)
-        this->set(REG_P, this->get(REG_DL) | FLAG_B | FLAG_U);
+        this->set(REG_P, new_p | FLAG_B | FLAG_U);
       } else {
         // Native mode: load value as-is (B becomes X flag, U becomes M flag)
         uint8_t old_p = this->get(REG_P);
-        uint8_t new_p = this->get(REG_DL);
         this->set(REG_P, new_p);
         
         // X flag (bit 4): When switching from 16-bit to 8-bit index mode, clear high bytes
@@ -462,7 +461,7 @@ bus_state_t op_rti(bus_state_t pins) {
       }
     } else {
       // 6502/6510/65C02: Mask off bit 4 (B is phantom), set bit 5 (U always 1)
-      this->set(REG_P, (this->get(REG_DL) & ~FLAG_B) | FLAG_U);
+      this->set(REG_P, (new_p & ~FLAG_B) | FLAG_U);
     }
     this->inc_stack();
     this->half_cycle++;

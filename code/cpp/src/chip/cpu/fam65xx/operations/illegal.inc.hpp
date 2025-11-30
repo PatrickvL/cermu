@@ -27,19 +27,20 @@ bus_state_t op_lax(bus_state_t pins) {
         pins = this->bus_setup_read<Addr::PC>(pins);
         return pins;
 
-      case 1:
+      case 1: 
         // PHI1: Load data, increment PC, and perform operation
-        this->bus_load_reg(REG_DL, pins);
+        uint8_t operand = this->bus_get_data(pins);
         this->inc(REG_PC);
         // Hardware quirk: LAX immediate uses unstable internal state
         // Result is (A | 0xEE) & operand
-        uint8_t result = (this->get(REG_A) | 0xEE) & this->get(REG_DL);
+        uint8_t result = (this->get(REG_A) | 0xEE) & operand;
         this->set(REG_A, result);
         this->set(REG_X, result);
 
         this->update_nz_flags<REG_A>(result);
         this->transition_to_fetch();
         return pins;
+      }
       }
     } else {
       // LAX memory modes - normal behavior
@@ -49,15 +50,15 @@ bus_state_t op_lax(bus_state_t pins) {
         pins = this->bus_setup_read<Addr::AB>(pins);
         return pins;
 
-      case 1:
+      case 1: {
         // PHI1: Load data and perform operation
-        this->bus_load_reg(REG_DL, pins);
-        this->set(REG_A, this->get(REG_DL));
-        this->set(REG_X, this->get(REG_DL));
-
+        uint8_t operand = this->bus_get_data(pins);
+        this->set(REG_A, operand);
+        this->set(REG_X, operand);
         this->update_nz_flags<REG_A>(this->get(REG_A));
         this->transition_to_fetch();
         return pins;
+      }
       }
     }
   }
@@ -256,12 +257,12 @@ bus_state_t op_anc(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
 
-    case 1:
+    case 1: {
       // PHI1: Load data, increment PC, and perform operation
-      this->bus_load_reg(REG_DL, pins);
+      uint8_t operand = this->bus_get_data(pins);
       this->inc(REG_PC);
       // Perform AND with accumulator
-      this->set(REG_A, this->get(REG_A) & this->get(REG_DL));
+      this->set(REG_A, this->get(REG_A) & operand);
 
       // Update N and Z flags
       this->update_nz_flags<REG_A>(this->get(REG_A));
@@ -270,6 +271,7 @@ bus_state_t op_anc(bus_state_t pins) {
       this->update_flag(FLAG_C, this->get(REG_P) & FLAG_N);
       this->transition_to_fetch();
       return pins;
+    }
     }
   }
 
@@ -287,12 +289,11 @@ bus_state_t op_arr(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
 
-    case 1:
+    case 1: {
       // PHI1: Load data, increment PC, and perform operation
-      this->bus_load_reg(REG_DL, pins);
+      uint8_t operand = this->bus_get_data(pins);
       this->inc(REG_PC);
 
-      uint8_t operand = this->get(REG_DL);
       bool carry_in = (this->get(REG_P) & FLAG_C) != 0;
 
       // Step 1: AND A with operand - save original for BCD checks
@@ -367,6 +368,7 @@ bus_state_t op_arr(bus_state_t pins) {
       this->transition_to_fetch();
       return pins;
     }
+    }
   }
 
   return pins;
@@ -424,11 +426,11 @@ bus_state_t op_xaa(bus_state_t pins) {
 
     case 1:
       // PHI1: Load data, increment PC, and perform operation
-      this->bus_load_reg(REG_DL, pins);
+      uint8_t operand = this->bus_get_data(pins);
       this->inc(REG_PC);
       // Hardware behavior: (A | 0xEE) & X & operand
       this->set(REG_A, (this->get(REG_A) | 0xEE) & this->get(REG_X) &
-                           this->get(REG_DL));
+                           operand);
       this->update_nz_flags<REG_A>(this->get(REG_A));
       this->transition_to_fetch();
       return pins;
@@ -450,15 +452,15 @@ bus_state_t op_sbx(bus_state_t pins) {
 
     case 1:
       // PHI1: Load data, increment PC, and perform operation
-      this->bus_load_reg(REG_DL, pins);
+      uint8_t operand = this->bus_get_data(pins);
       this->inc(REG_PC);
       uint8_t temp = this->get(REG_A) & this->get(REG_X);
-      uint8_t result = temp - this->get(REG_DL);
+      uint8_t result = temp - operand;
       // Update X with result
       this->set(REG_X, result);
 
       // Set carry flag using standard subtraction semantics (carry = no borrow)
-      this->update_flag(FLAG_C, temp >= this->get(REG_DL));
+      this->update_flag(FLAG_C, temp >= operand);
 
       this->update_nz_flags<REG_X>(result);
       this->transition_to_fetch();
@@ -592,8 +594,8 @@ bus_state_t op_las(bus_state_t pins) {
       return pins;
     case 1:
       // PHI1: Load data and perform operation
-      this->bus_load_reg(REG_DL, pins);
-      uint8_t result = this->get(REG_DL) & this->get(REG_S);
+      uint8_t operand = this->bus_get_data(pins);
+      uint8_t result = operand & this->get(REG_S);
       this->set(REG_A, result);
       this->set(REG_X, result);
       this->set(REG_S, result);

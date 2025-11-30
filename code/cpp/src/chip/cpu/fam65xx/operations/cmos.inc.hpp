@@ -25,10 +25,9 @@ bus_state_t op_bra(bus_state_t pins) {
       return pins;
     case 1:
       // PHI1: Load data and increment PC
-      this->bus_load_reg(REG_DL, pins);
+      int8_t offset = static_cast<int8_t>(this->bus_get_data(pins)); // Signed offset
       this->inc(REG_PC);
       // Apply branch offset
-      int8_t offset = static_cast<int8_t>(this->get(REG_DL));
       this->set(REG_PC, this->get(REG_PC) + offset);
       this->transition_to_fetch();
       return pins;
