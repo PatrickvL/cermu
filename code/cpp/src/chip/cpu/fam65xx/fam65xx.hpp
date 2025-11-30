@@ -444,7 +444,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     // But ONLY for non-indirect modes: ZER(2), ZPX(3), ZPY(4)
     // ZPI(5) is indirect - the pointer is in DP but target address uses DBR!
     if constexpr (has_wide_registers()) {
-      if (am >= to_index(AM::ZER) && am <= to_index(AM::ZPY)) {
+      if (am <= to_index(AM::ZPY)) {
         return this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
       }
     }
@@ -753,9 +753,11 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       constexpr bool can_use_direct_page = has_wide_registers();
       if constexpr (can_use_direct_page) {
         // Check if this is a Direct Page addressing mode
-        // Direct Page modes: ZER(2), ZPX(3), ZPY(4), ZPI(5)
+        // Direct Page modes: ZER(2), ZPX(3), ZPY(4) - these access Bank 0 directly
+        // ZPI is EXCLUDED - it's indirect, so RMW happens at target (uses DBR)
+        const uint8_t am = this->opcode_entry.am_index;
         const bool is_direct_page_addressing =
-          (this->opcode_entry.am_index <= to_index(AM::ZPI));
+          (am >= to_index(AM::ZER) && am <= to_index(AM::ZPY));
         
         // Dispatch to template variant - compiler optimizes away all banking checks
         if (is_direct_page_addressing) {
