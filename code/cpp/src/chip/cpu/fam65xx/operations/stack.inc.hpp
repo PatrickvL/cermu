@@ -224,21 +224,22 @@ bus_state_t op_plp(bus_state_t pins) {
     return pins;
   case 5:
     /* PHI1: Load status byte from bus into P
-     * On 6502/emulation: Set bits 4 and 5 (B and U flags always 1)
-     * On 65C816 native: Load all bits as-is (bits 4 and 5 have different meanings: X and M)
+     * 6502/65C02: Set bit 5 (U flag always 1), but NOT bit 4 (B comes from stack)
+     * 65C816 emulation: Set both bits 4 and 5 (B and U flags always 1)
+     * 65C816 native: Load all bits as-is (bits 4 and 5 have different meanings: X and M)
      */
     this->bus_load_reg(REG_DL, pins);
     if constexpr (has_wide_registers()) {
       if (this->in_emulation_mode()) {
-        // Emulation mode: set both FLAG_B (bit 4) and FLAG_U (bit 5)
+        // 65C816 emulation mode: set both FLAG_B (bit 4) and FLAG_U (bit 5)
         this->set(REG_P, this->get(REG_DL) | FLAG_B | FLAG_U);
       } else {
         // Native mode: load value as-is (B becomes X flag, U becomes M flag)
         this->set(REG_P, this->get(REG_DL));
       }
     } else {
-      // 6502/6510/65C02: Set both FLAG_B (bit 4) and FLAG_U (bit 5)
-      this->set(REG_P, this->get(REG_DL) | FLAG_B | FLAG_U);
+      // 6502/6510/65C02: Set FLAG_U (bit 5) but let B (bit 4) come from stack
+      this->set(REG_P, this->get(REG_DL) | FLAG_U);
     }
     this->transition_to_fetch();
     return pins;
