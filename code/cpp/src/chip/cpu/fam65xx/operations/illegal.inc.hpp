@@ -488,9 +488,7 @@ bus_state_t op_sha(bus_state_t pins) {
         }
 
         // Set data to write
-        this->set(REG_DL, data_value);
-
-        pins = this->bus_setup_write<Addr::AB>(pins, REG_DL);
+        pins = this->bus_setup_write<Addr::AB>(pins, data_value);
         return pins;
       }
     case 1: // PHI1
@@ -516,11 +514,9 @@ bus_state_t op_shs(bus_state_t pins) {
       if (this->get(REG_DL) != this->get(REG_ABH)) {
         this->set(REG_ABH, data_value);
       }
-      // Set data to write
-      this->set(REG_DL, data_value);
       // Set stack pointer to A & X (unique to SHS)
       this->set(REG_S, ax);
-      pins = this->bus_setup_write<Addr::AB>(pins, REG_DL);
+      pins = this->bus_setup_write<Addr::AB>(pins, data_value);
       return pins;
     }
     case 1: // PHI1

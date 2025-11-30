@@ -478,7 +478,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
    * Load register from bus and increment PC if immediate mode (PHI1 phase)
    * Unified helper for immediate mode operand handling
    */
-  inline void bus_load_operand(reg8_t data_reg, bus_state_t pins) {
+  inline void bus_get_operand(bus_state_t pins) {
     const uint8_t am = this->opcode_entry.am_index;
     
     // Immediate mode: increment PC
@@ -495,9 +495,17 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         this->inc(REG_AB);
       }
     }
-    
+    return this->bus_get_data(pins);
+  }
+
+  /**
+   * Load register from bus and increment PC if immediate mode (PHI1 phase)
+   * Unified helper for immediate mode operand handling
+   */
+  inline void bus_load_operand(reg8_t data_reg, bus_state_t pins) {
+    const uint8_t operand = this->bus_get_operand(pins);
     // Load data from bus into register
-    this->bus_load_reg(data_reg, pins);
+    this->set(data_reg, operand);
   }
 
   // ========================================================================

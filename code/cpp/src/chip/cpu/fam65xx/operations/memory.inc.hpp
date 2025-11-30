@@ -339,12 +339,13 @@ bus_state_t op_and(bus_state_t pins) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;
-  case 1: // PHI1
-    this->bus_load_operand(REG_DL, pins);
-    this->set(REG_A, this->get(REG_A) & this->get(REG_DL));
+  case 1: { // PHI1
+    uint8_t operand = this->bus_get_operand(pins);
+    this->set(REG_A, this->get(REG_A) & operand);
     this->update_nz_flags(this->get(REG_A));
     this->transition_to_fetch();
     return pins;
+  }
   }
   return pins;
 }
@@ -391,12 +392,13 @@ bus_state_t op_ora(bus_state_t pins) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;
-  case 1: // PHI1
-    this->bus_load_operand(REG_DL, pins);
-    this->set(REG_A, this->get(REG_A) | this->get(REG_DL));
+  case 1: { // PHI1
+    uint8_t operand = this->bus_get_operand(pins);
+    this->set(REG_A, this->get(REG_A) | operand);
     this->update_nz_flags(this->get(REG_A));
     this->transition_to_fetch();
     return pins;
+  }
   }
   return pins;
 }
@@ -442,12 +444,13 @@ bus_state_t op_eor(bus_state_t pins) {
   case 0: // PHI2
     pins = this->bus_setup_read_operand(pins);
     return pins;
-  case 1: // PHI1
-    this->bus_load_operand(REG_DL, pins);
-    this->set(REG_A, this->get(REG_A) ^ this->get(REG_DL));
+  case 1: { // PHI1
+    uint8_t operand = this->bus_get_operand(pins);
+    this->set(REG_A, this->get(REG_A) ^ operand);
     this->update_nz_flags(this->get(REG_A));
     this->transition_to_fetch();
     return pins;
+  }
   }
   return pins;
 }
@@ -501,8 +504,7 @@ bus_state_t op_bit(bus_state_t pins) {
     pins = this->bus_setup_read_operand(pins);
     return pins;
   case 1: { // PHI1
-    this->bus_load_operand(REG_DL, pins);
-    uint8_t operand = this->get(REG_DL);
+    uint8_t operand = this->bus_get_operand(pins
     uint8_t result = this->get(REG_A) & operand;
     // BIT immediate (65C02) only affects Z flag - N and V are NOT affected
     // BIT memory affects N, V, and Z flags normally
