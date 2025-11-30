@@ -382,21 +382,22 @@ bus_state_t op_alr(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::PC>(pins);
       return pins;
 
-    case 1:
+    case 1: {
       // PHI1: Load data, increment PC, and perform operation
-      this->bus_load_reg(REG_DL, pins);
+      uint8_t operand = bus_read_data(pins);
       this->inc(REG_PC);
       // Perform AND with accumulator
-      this->set(REG_A, this->get(REG_A) & this->get(REG_DL));
-
+      uint8_t a = this->get(REG_A);
+      a &= operand;
+      this->update_flag(FLAG_C, a & 0x01);      
       // Perform LSR on accumulator
-      this->update_flag(FLAG_C, this->get(REG_A) & 0x01);
-      this->set(REG_A, this->get(REG_A) >> 1);
-
+      a >>= 1;
+      this->set(REG_A, a);
       // Update N and Z flags
-      this->update_nz_flags<REG_A>(this->get(REG_A));
+      this->update_nz_flags<REG_A>(a);
       this->transition_to_fetch();
       return pins;
+    }
     }
   }
 
