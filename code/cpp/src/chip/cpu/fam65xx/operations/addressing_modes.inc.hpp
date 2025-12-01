@@ -394,7 +394,7 @@ bus_state_t am_iny(bus_state_t pins) {
     // 65C816: Use Direct Page register; 6502: Direct Page is always 0x0000
     if constexpr (has_wide_registers()) {
       uint16_t dp_addr = this->get(REG_D) + dp_offset;
-      this->set(REG_AB);
+      this->set(REG_AB, dp_addr);
     } else {
       this->set(REG_AB, dp_offset); // High byte is always 0 for zero page on 6502
     }
