@@ -294,7 +294,11 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     }
 
     // For data addresses (Addr::AB):
-    // In emulation mode: DBR is used for absolute addressing (bank_arg specifies which)
+    // In emulation mode: Bank is always 0 (DBR is ignored)
+    if (this->in_emulation_mode()) {
+      return 0;
+    }
+
     // In native mode: Use the provided bank register (DBR or ZBR)
     return this->get(static_cast<reg8_t>(bank_arg));
   }
