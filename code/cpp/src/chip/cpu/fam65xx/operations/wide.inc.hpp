@@ -443,10 +443,10 @@ bus_state_t op_jsl(bus_state_t pins) {
 
     case 10:
       pins = this->bus_setup_write<Addr::SP>(pins, REG_PCL);
-      this->half_cycle++;
       return pins;
     case 11:
-      // Set new program counter and bank
+      // Final write completes, set new PC and bank
+      this->dec_stack();
       this->set(REG_PC,
                 this->get(REG_AB)); // addr_high:addr_low from cases 0-1
       this->set(REG_PBR, this->get(REG_DL)); // bank from case 2
