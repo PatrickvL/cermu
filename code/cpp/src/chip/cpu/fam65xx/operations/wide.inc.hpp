@@ -613,7 +613,7 @@ bus_state_t op_pei(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::AB>(pins);
       return pins;
     case 5:
-      this->bus_load_reg(REG_ABL, pins);
+      this->bus_load_reg(REG_ABH, pins);
       this->half_cycle++;
       return pins;
 
