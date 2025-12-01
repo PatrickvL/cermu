@@ -623,7 +623,7 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
                    OF::NONE}; // PEA - Push Effective Absolute Address
 
     // Long Addressing Operations
-    table[0x22] = {OP::JSL, AM::ABL,
+    table[0x22] = {OP::JSL, AM::NON,
                    OF::NONE}; // JSL - Jump to Subroutine Long (24-bit)
     table[0x5C] = {OP::JML, AM::ABL,
                    OF::NONE}; // JML - Jump Long (24-bit absolute)
