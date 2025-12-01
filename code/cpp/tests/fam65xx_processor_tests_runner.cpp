@@ -515,38 +515,17 @@ public:
             full_addr = (static_cast<uint32_t>(bank) << 16) | addr;
         }
         
-        // Apply address mask for processor type
-        uint32_t masked_addr = full_addr & address_mask;
-        
         // Check if this is a read cycle (RW bit set)
         if (bus_pins & FAM65XX_RW) {
-            // READ CYCLE: Load data from memory into pins
-            uint8_t value;
-            if (masked_addr < 65536) {
-                value = memory[masked_addr];
-            } else {
-                auto it = extended_memory.find(masked_addr);
-                value = (it != extended_memory.end()) ? it->second : 0;
-            }
+            // READ CYCLE: Use mem_read callback (applies address mask and records bus cycle)
+            uint8_t value = mem_read(this, full_addr, 0);
             
             // Inject data into pins (macro returns new pins value)
             bus_pins = FAM65XX_SET_DATA(bus_pins, value);
-            
-            // Record bus cycle
-            record_bus_cycle(masked_addr, value, false);
         } else {
-            // WRITE CYCLE: Store data from pins into memory
+            // WRITE CYCLE: Use mem_write callback (applies address mask and records bus cycle)
             uint8_t data = FAM65XX_GET_DATA(bus_pins);
-            
-            // Write to memory
-            if (masked_addr < 65536) {
-                memory[masked_addr] = data;
-            } else {
-                extended_memory[masked_addr] = data;
-            }
-            
-            // Record bus cycle
-            record_bus_cycle(masked_addr, data, true);
+            mem_write(this, full_addr, data);
         }
         
         return bus_pins;
