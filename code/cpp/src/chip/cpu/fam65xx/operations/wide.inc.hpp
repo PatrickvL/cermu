@@ -415,7 +415,7 @@ bus_state_t op_jsl(bus_state_t pins) {
     case 5:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);
-      this->inc(REG_PC);
+      // JSL pushes PC-1 (address of last byte of instruction)
       this->half_cycle++;
       return pins;
 
@@ -425,7 +425,7 @@ bus_state_t op_jsl(bus_state_t pins) {
       pins = this->bus_setup_write<Addr::SP>(pins, REG_PBR);
       return pins;
     case 7:
-      // Push PC high byte (return address - 1)
+      // Push PC high byte
       this->dec_stack();
       this->half_cycle++;
       return pins;
