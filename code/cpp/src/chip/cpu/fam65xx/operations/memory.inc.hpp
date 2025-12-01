@@ -16,46 +16,37 @@
 
 bus_state_t op_lda(bus_state_t pins) {
   trace_operation(__func__);
-  // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native
-  // code
-  if constexpr (has_wide_registers()) {
-    if (this->is_accumulator_16bit()) {
-      // 65C816 native mode, 16-bit accumulator - perform 16-bit LDA
-      switch (this->half_cycle) {
-      case 0: // PHI2 - Read low byte
-        pins = this->bus_setup_read_operand(pins);
-        return pins;
-      case 1: // PHI1 - Load and increment
-        this->bus_load_operand(REG_AL, pins);
-        this->half_cycle++;
-        return pins;
-
-      case 2: // PHI2 - Read high byte
-        pins = this->bus_setup_read_operand(pins);
-        return pins;
-      case 3: // PHI1 - Load and update flags
-        this->bus_load_operand(REG_AH, pins);
-        uint16_t value = this->get(REG_A_16);
-        this->update_flag(FLAG_Z, value == 0);
-        this->update_flag(FLAG_N, (value & 0x8000) != 0);
-        this->transition_to_fetch();
-        return pins;
-      }
-      return pins;
-    }
-  }
-
-  // Standard 8-bit LDA operation (emulation mode and non-wide CPUs)
   switch (this->half_cycle) {
-  case 0: // PHI2
+  case 0: // PHI2 - Read low byte
     pins = this->bus_setup_read_operand(pins);
     return pins;
-  case 1: // PHI1
-    this->bus_load_operand(REG_A, pins);
+  case 1: // PHI1 - Load and increment
+    // Check for 65C816 native mode with 16-bit accumulator (M=0) - nested native
+    // code
+    this->bus_load_operand(REG_AL, pins);
+    if constexpr (has_wide_registers()) {
+      if (this->is_accumulator_16bit()) {
+          this->half_cycle++;
+          return pins;
+      }
+    }
+    // Standard 8-bit LDA operation (emulation mode and non-wide CPUs)
     this->update_nz_flags(this->get(REG_A));
     this->transition_to_fetch();
     return pins;
+
+  case 2: // PHI2 - Read high byte
+    pins = this->bus_setup_read_operand(pins);
+    return pins;
+  case 3: // PHI1 - Load and update flags
+    this->bus_load_operand(REG_AH, pins);
+    uint16_t value = this->get(REG_A_16);
+    this->update_flag(FLAG_Z, value == 0);
+    this->update_flag(FLAG_N, (value & 0x8000) != 0);
+    this->transition_to_fetch();
+    return pins;
   }
+
   return pins;
 }
 
@@ -65,43 +56,34 @@ bus_state_t op_lda(bus_state_t pins) {
 
 bus_state_t op_ldx(bus_state_t pins) {
   trace_operation(__func__);
-  // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
-  // native code
-  if constexpr (has_wide_registers()) {
-    if (this->is_index_16bit()) {
-      // 65C816 native mode, 16-bit X register - perform 16-bit LDX
-      switch (this->half_cycle) {
-      case 0: // PHI2 - Read low byte
-        pins = this->bus_setup_read_operand(pins);
-        return pins;
-      case 1: // PHI1 - Load and increment
-        this->bus_load_operand(REG_XL, pins);
-        this->half_cycle++;
-        return pins;
-
-      case 2: // PHI2 - Read high byte
-        pins = this->bus_setup_read_operand(pins);
-        return pins;
-      case 3: // PHI1 - Load and update flags
-        this->bus_load_operand(REG_XH, pins);
-        uint16_t value = this->get(REG_X_16);
-        this->update_flag(FLAG_Z, value == 0);
-        this->update_flag(FLAG_N, (value & 0x8000) != 0);
-        this->transition_to_fetch();
-        return pins;
-      }
-      return pins;
-    }
-  }
-
-  // Standard 8-bit LDX operation (emulation mode and non-wide CPUs)
   switch (this->half_cycle) {
-  case 0: // PHI2
+  case 0: // PHI2 - Read low byte
     pins = this->bus_setup_read_operand(pins);
     return pins;
-  case 1: // PHI1
-    this->bus_load_operand(REG_X, pins);
+  case 1: // PHI1 - Load and increment
+    this->bus_load_operand(REG_XL, pins);
+    // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
+    // native code
+    if constexpr (has_wide_registers()) {
+      if (this->is_index_16bit()) {
+        // 65C816 native mode, 16-bit X register - perform 16-bit LDX
+        this->half_cycle++;
+        return pins;
+      }
+    }
+    // Standard 8-bit LDX operation (emulation mode and non-wide CPUs)
     this->update_nz_flags(this->get(REG_X));
+    this->transition_to_fetch();
+    return pins;
+
+  case 2: // PHI2 - Read high byte
+    pins = this->bus_setup_read_operand(pins);
+    return pins;
+  case 3: // PHI1 - Load and update flags
+    this->bus_load_operand(REG_XH, pins);
+    uint16_t value = this->get(REG_X_16);
+    this->update_flag(FLAG_Z, value == 0);
+    this->update_flag(FLAG_N, (value & 0x8000) != 0);
     this->transition_to_fetch();
     return pins;
   }
@@ -114,43 +96,34 @@ bus_state_t op_ldx(bus_state_t pins) {
 
 bus_state_t op_ldy(bus_state_t pins) {
   trace_operation(__func__);
-  // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
-  // native code
-  if constexpr (has_wide_registers()) {
-    if (this->is_index_16bit()) {
-      // 65C816 native mode, 16-bit Y register - perform 16-bit LDY
-      switch (this->half_cycle) {
-      case 0: // PHI2 - Read low byte
-        pins = this->bus_setup_read_operand(pins);
-        return pins;
-      case 1: // PHI1 - Load and increment
-        this->bus_load_operand(REG_YL, pins);
-        this->half_cycle++;
-        return pins;
-
-      case 2: // PHI2 - Read high byte
-        pins = this->bus_setup_read_operand(pins);
-        return pins;
-      case 3: // PHI1 - Load and update flags
-        this->bus_load_operand(REG_YH, pins);
-        uint16_t value = this->get(REG_Y_16);
-        this->update_flag(FLAG_Z, value == 0);
-        this->update_flag(FLAG_N, (value & 0x8000) != 0);
-        this->transition_to_fetch();
-        return pins;
-      }
-      return pins;
-    }
-  }
-
-  // Standard 8-bit LDY operation (emulation mode and non-wide CPUs)
   switch (this->half_cycle) {
-  case 0: // PHI2
+  case 0: // PHI2 - Read low byte
     pins = this->bus_setup_read_operand(pins);
     return pins;
-  case 1: // PHI1
-    this->bus_load_operand(REG_Y, pins);
+  case 1: // PHI1 - Load and increment
+    this->bus_load_operand(REG_YL, pins);
+    // Check for 65C816 native mode with 16-bit index registers (X=0) - nested
+    // native code
+    if constexpr (has_wide_registers()) {
+      if (this->is_index_16bit()) {
+        // 65C816 native mode, 16-bit Y register - perform 16-bit LDY
+        this->half_cycle++;
+        return pins;
+      }
+    }
+    // Standard 8-bit LDY operation (emulation mode and non-wide CPUs)
     this->update_nz_flags(this->get(REG_Y));
+    this->transition_to_fetch();
+    return pins;
+
+  case 2: // PHI2 - Read high byte
+    pins = this->bus_setup_read_operand(pins);
+    return pins;
+  case 3: // PHI1 - Load and update flags
+    this->bus_load_operand(REG_YH, pins);
+    uint16_t value = this->get(REG_Y_16);
+    this->update_flag(FLAG_Z, value == 0);
+    this->update_flag(FLAG_N, (value & 0x8000) != 0);
     this->transition_to_fetch();
     return pins;
   }
