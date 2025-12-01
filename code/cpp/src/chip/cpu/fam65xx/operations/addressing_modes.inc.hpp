@@ -319,44 +319,60 @@ bus_state_t am_inx(bus_state_t pins) {
     /* Read pointer from PC */
     pins = this->bus_setup_read<Addr::PC>(pins);
     return pins;
-  case 1:
-    /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_ABL, pins);
+  case 1: {
+    /* PHI1: Load data and calculate pointer address */
+    uint8_t dp_offset = this->bus_get_data(pins);
     this->inc(REG_PC);
-    this->set(REG_ABH, 0x00); // High byte is always 0 for zero page
+    // 65C816: Use Direct Page register; 6502: Direct Page is always 0x0000
+    if constexpr (has_wide_registers()) {
+      uint16_t dp_addr = this->get(REG_D) + dp_offset;
+      this->set(REG_AB, dp_addr);
+    } else {
+      this->set(REG_AB, dp_offset); // High byte is always 0 for zero page on 6502
+    }
     this->half_cycle++;
     return pins;
+  }
 
   case 2:
     /* Dummy read from AB (before adding X) */
-    pins = this->bus_setup_read<Addr::AB>(pins);
+    pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
-  case 3:
-    /* PHI1: Load data and perform operations */
+  case 3: {
+    /* PHI1: Add X to pointer address (wraps within bank 0) */
     this->bus_load_reg(REG_DL, pins);
-    this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_X));
+    if constexpr (has_wide_registers()) {
+      uint16_t ptr_addr = this->get(REG_AB);
+      uint16_t x_val = this->get_x_register();
+      ptr_addr = (ptr_addr + x_val) & 0xFFFF; // Wrap within bank 0
+      this->set(REG_AB, ptr_addr);
+    } else {
+      this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_X));
+    }
     this->half_cycle++;
     return pins;
+  }
 
   case 4:
-    /* PHI2: Read low byte of target from AB+X */
-    pins = this->bus_setup_read<Addr::AB>(pins);
+    /* PHI2: Read low byte of target from (dp+X) */
+    pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
   case 5:
     /* PHI1: Load low byte and save to TMP */
     this->bus_load_reg(REG_DL, pins);  // Save low byte to DL (temporary storage)
-    this->inc(REG_ABL);
+    this->inc(REG_ABL); // Increment within bank 0
     this->half_cycle++;
     return pins;
 
   case 6:
-    /* PHI2: Read high byte of target from AB+X+1 */
-    pins = this->bus_setup_read<Addr::AB>(pins);
+    /* PHI2: Read high byte of target from (dp+X+1) */
+    pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
   case 7:
     /* PHI1: Assemble final address from TMP (low) and bus data (high) */
     this->bus_load_reg(REG_ABH, pins);  // High byte to ABH
     this->set(REG_ABL, this->get(REG_DL)); // Low byte from DL to ABL
+    // Note: DBR (Data Bank Register) is applied by the memory system for final access
     this->transition_to_operation();
     return pins;
   }
@@ -371,41 +387,49 @@ bus_state_t am_iny(bus_state_t pins) {
     /* Read pointer from PC */
     pins = this->bus_setup_read<Addr::PC>(pins);
     return pins;
-  case 1:
-    /* PHI1: Load data and perform operations */
-    this->bus_load_reg(REG_ABL, pins);
+  case 1: {
+    /* PHI1: Load data and calculate pointer address */
+    uint8_t dp_offset = this->bus_get_data(pins);
     this->inc(REG_PC);
-    this->set(REG_ABH, 0x00); // High byte is always 0 for zero page
+    // 65C816: Use Direct Page register; 6502: Direct Page is always 0x0000
+    if constexpr (has_wide_registers()) {
+      uint16_t dp_addr = this->get(REG_D) + dp_offset;
+      this->set(REG_AB);
+    } else {
+      this->set(REG_AB, dp_offset); // High byte is always 0 for zero page on 6502
+    }
     this->half_cycle++;
     return pins;
+  }
 
   case 2:
-    /* PHI2: Read low byte of target from ZP */
-    pins = this->bus_setup_read<Addr::AB>(pins);
+    /* PHI2: Read low byte of target from Direct Page/ZP */
+    pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
   case 3:
     /* PHI1: Load low byte and save to TMP */
     this->bus_load_reg(REG_DL, pins);  // Save low byte to DL (temporary storage)
-    this->inc(REG_ABL); // Increment zero page pointer
+    this->inc(REG_ABL); // Increment pointer (wraps within bank 0)
     this->half_cycle++;
     return pins;
 
   case 4:
-    /* PHI2: Read high byte of target from ZP+1 */
-    pins = this->bus_setup_read<Addr::AB>(pins);
+    /* PHI2: Read high byte of target from Direct Page/ZP+1 */
+    pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
   case 5: {
     /* PHI1: Load high byte and assemble base address */
     this->bus_load_reg(REG_ABH, pins);  // High byte to ABH
     this->set(REG_ABL, this->get(REG_DL)); // Low byte from DL to ABL
     uint16_t base_addr = this->get(REG_AB);
-    uint16_t final_addr = base_addr + this->get(REG_Y);
+    uint16_t y_val = this->get_y_register();
+    uint16_t final_addr = base_addr + y_val;
     /* Store intermediate high byte in DL for illegal opcodes AFTER setting up
      * AB */
     this->set(REG_DL, this->get(REG_ABH));
     /* Add index to low byte only (creates intermediate "wrong" address for
      * page cross) */
-    this->set(REG_ABL, this->get(REG_ABL) + this->get(REG_Y));
+    this->set(REG_ABL, this->get(REG_ABL) + (y_val & 0xFF));
     /* Check if penalty cycle is needed */
     bool needs_penalty =
         this->page_crossed(base_addr, final_addr) ||  // Page crossing
@@ -420,6 +444,7 @@ bus_state_t am_iny(bus_state_t pins) {
       /* No page cross, not RMW, and not illegal store - can skip penalty, set
        * correct address */
       this->set(REG_AB, final_addr);
+      // Note: DBR (Data Bank Register) is applied by the memory system for final access
       this->transition_to_operation();
     }
     return pins;
@@ -429,19 +454,19 @@ bus_state_t am_iny(bus_state_t pins) {
     /* PHI2: Page cross penalty - dummy read from wrong address */
     pins = this->bus_setup_dummy<Addr::AB>(pins);
     return pins;
-  case 7:
+  case 7: {
     /* PHI1: Correct final address calculation */
     /* DL contains intermediate high byte from case 5 */
     /* Current AB has intermediate address: orig_high:(base_low + Y) */
     /* We need: (orig_high:(base_low)) + Y */
     this->set(REG_ABH, this->get(REG_DL)); /* Restore original high byte */
-    this->set(REG_ABL, this->get(REG_ABL) -
-                           this->get(REG_Y)); /* Recover original base low */
-    this->set(REG_AB,
-              this->get(REG_AB) +
-                  this->get(REG_Y)); /* Calculate correct final with carry */
+    uint16_t y_val = this->get_y_register();
+    this->set(REG_ABL, this->get(REG_ABL) - (y_val & 0xFF)); /* Recover original base low */
+    this->set(REG_AB, this->get(REG_AB) + y_val); /* Calculate correct final with carry */
+    // Note: DBR (Data Bank Register) is applied by the memory system for final access
     this->transition_to_operation();
     return pins;
+  }
   }
   return pins;
 }
