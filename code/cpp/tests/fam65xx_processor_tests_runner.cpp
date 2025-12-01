@@ -541,7 +541,7 @@ public:
             pins |= FAM65XX_RES;  // Keep RESET line high (inactive)
             pins |= FAM65XX_RDY;  // Keep RDY high (no DMA)
             
-            uint32_t max_cycles = 10; // Safety limit
+            uint32_t max_cycles = 20; // Safety limit (increased for 65816 long operations)
             uint32_t cycle_in_instruction = 0;
             
             do {
