@@ -355,8 +355,8 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                                 
                                 chip_description_t read_desc = {.base = 0, .size = 0, .label = nullptr};
                                 chip_description_t write_desc = {.base = 0, .size = 0, .label = nullptr};
-                                c64_bus_get_chip_description(&c64->bus, page_read_chip, &read_desc);
-                                c64_bus_get_chip_description(&c64->bus, page_write_chip, &write_desc);
+                                c64_chips_get_description(&c64->bus, page_read_chip, &read_desc);
+                                c64_chips_get_description(&c64->bus, page_write_chip, &write_desc);
                                 uint16_t read_offset = (read_desc.base <= page_start) ? (page_start - read_desc.base) : 0;
                                 uint16_t write_offset = (write_desc.base <= page_start) ? (page_start - write_desc.base) : 0;
     
@@ -405,8 +405,8 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                             // Regular bank - chip mapping depends on PLA mode
                             chip_description_t read_desc = {.base = 0, .size = 0, .label = nullptr};
                             chip_description_t write_desc = {.base = 0, .size = 0, .label = nullptr};
-                            c64_bus_get_chip_description(&c64->bus, read_chip, &read_desc);
-                            c64_bus_get_chip_description(&c64->bus, write_chip, &write_desc);
+                            c64_chips_get_description(&c64->bus, read_chip, &read_desc);
+                            c64_chips_get_description(&c64->bus, write_chip, &write_desc);
                             
                             // Calculate offsets - these can vary based on chip remapping
                             uint16_t read_offset = (read_desc.base <= bank_start) ? (bank_start - read_desc.base) : 0;
@@ -427,9 +427,9 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                             ImGui::TableSetColumnIndex(2);
                             ImGui::Text("%02X", encoded);
                             ImGui::TableSetColumnIndex(3);
-                            ImGui::Text("%s", c64_bus_chip_to_title(read_chip));
+                            ImGui::Text("%s", c64_chips_to_title(read_chip));
                             ImGui::TableSetColumnIndex(4);
-                            ImGui::Text("%s", c64_bus_chip_to_title(write_chip));
+                            ImGui::Text("%s", c64_chips_to_title(write_chip));
                             ImGui::TableSetColumnIndex(5);
                             ImGui::Text("$%04X", read_offset);
                             ImGui::TableSetColumnIndex(6);
@@ -440,12 +440,12 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                             // Add context about what's actually mapped based on PLA mode
                             if (read_chip != write_chip) {
                                 ImGui::Text("%s (R:%s/W:%s)", base_notes,
-                                           c64_bus_chip_to_title(read_chip),
-                                           c64_bus_chip_to_title(write_chip));
+                                           c64_chips_to_title(read_chip),
+                                           c64_chips_to_title(write_chip));
                             } else if (read_chip == CHIP_UNMAPPED) {
                                 ImGui::Text("%s (unmapped)", base_notes);
                             } else {
-                                ImGui::Text("%s (%s)", base_notes, c64_bus_chip_to_title(read_chip));
+                                ImGui::Text("%s (%s)", base_notes, c64_chips_to_title(read_chip));
                             }
                         }
                     }
@@ -503,7 +503,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         ImGui::Text("%02d", read_chip);
                         ImGui::TableSetColumnIndex(3);
                         // Show what chip VIC-II actually sees at this address in this PLA mode
-                        const char* chip_title = c64_bus_chip_to_title(read_chip);
+                        const char* chip_title = c64_chips_to_title(read_chip);
                         if (read_chip == CHIP_CHARROM && pla_debug_selected_mode != current_mode) {
                             ImGui::Text("%s (mode-dep)", chip_title); // Character ROM visibility depends on PLA mode
                         } else if (read_chip == CHIP_RAM && bank >= 0xA && bank <= 0xF) {
@@ -514,7 +514,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         ImGui::TableSetColumnIndex(4);
 
                         chip_description_t read_desc = {.base = 0, .size = 0, .label = nullptr};
-                        c64_bus_get_chip_description(&c64->bus, read_chip, &read_desc);
+                        c64_chips_get_description(&c64->bus, read_chip, &read_desc);
                         uint16_t read_offset = (read_desc.base <= bank_start) ? (bank_start - read_desc.base) : 0;
 
                         ImGui::Text("$%04X", read_offset);
@@ -558,21 +558,21 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                 ImGui::TableSetColumnIndex(1);
 
                 chip_description_t desc = {.base = 0, .size = 0, .label = nullptr};
-                bool has_desc = c64_bus_get_chip_description(&c64->bus, chip, &desc);
+                bool has_desc = c64_chips_get_description(&c64->bus, chip, &desc);
                 if (has_desc && desc.size > 0) {
                     ImGui::Text("$%04X-$%04X", desc.base, (uint16_t)(desc.base + desc.size - 1));
                 } else {
                     ImGui::Text("-");
                 }
                 ImGui::TableSetColumnIndex(2);
-                ImGui::Text("%s", c64_bus_size_to_str(desc.size));
+                ImGui::Text("%s", c64_chips_size_to_str(desc.size));
                 ImGui::TableSetColumnIndex(3);
-                ImGui::Text("%s", (chip == CHIP_UNMAPPED) ? "Unmapped" : c64_bus_chip_to_title(chip));
+                ImGui::Text("%s", (chip == CHIP_UNMAPPED) ? "Unmapped" : c64_chips_to_title(chip));
                 ImGui::TableSetColumnIndex(4);
                 if (has_desc) {
                     ImGui::Text("%s", desc.label);
                 } else {
-                    ImGui::Text("%s", c64_bus_chip_to_title(chip));
+                    ImGui::Text("%s", c64_chips_to_title(chip));
                 }
             }
             ImGui::EndTable();
