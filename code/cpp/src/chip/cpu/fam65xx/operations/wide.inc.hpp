@@ -599,7 +599,7 @@ bus_state_t op_pei(bus_state_t pins) {
 
     case 2:
       // Read low byte of indirect address
-      pins = this->bus_setup_read<Addr::AB>(pins);
+      pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
       return pins;
     case 3:
       /* PHI1: Load data and perform operations */
@@ -610,7 +610,7 @@ bus_state_t op_pei(bus_state_t pins) {
 
     case 4:
       // Read high byte of indirect address
-      pins = this->bus_setup_read<Addr::AB>(pins);
+      pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
       return pins;
     case 5:
       this->bus_load_reg(REG_SBR, pins);  // Save high byte to SBR (temp storage)
