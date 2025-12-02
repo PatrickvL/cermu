@@ -59,14 +59,6 @@ void c64_system_destroy(c64_t* c64);
 
 // CPU execution functions
 void c64_cpu_cycle(c64_t* c64);     // Execute one CPU cycle (C++ core)
-bus_state_t c64_cpu_tick(c64_t* c64, bus_state_t bus_state); // Single cycle tick (C++ core)
-
-// PHI2/PHI1 two-phase cycle functions
-bus_state_t c64_cpu_phi2_tick(c64_t* c64, bus_state_t bus_state);  // PHI2 phase: CPU drives bus
-bus_state_t c64_cpu_phi1_tick(c64_t* c64, bus_state_t bus_state);  // PHI1 phase: CPU internal ops
-void c64_cpu_cycle_phi2_phi1(c64_t* c64);                           // Complete PHI2->Memory->PHI1 cycle
-
-/* Dual-CPU APIs removed */
 
 // Ticks all non-CPU chips once to complete a cycle.
 void c64_non_cpu_cycle(void* c64_ptr);
