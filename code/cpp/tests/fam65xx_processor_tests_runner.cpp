@@ -844,7 +844,14 @@ public:
     }
     
     void set_status(uint8_t p) override {
-        cpu->set(REG_P, p);
+        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+            // 65C816: Preserve the E flag (bit 8) when setting P
+            uint16_t p16 = cpu->get(REG_P_16);
+            p16 = (p16 & 0xFF00) | p;  // Keep high byte (E flag), set low byte
+            cpu->set(REG_P_16, p16);
+        } else {
+            cpu->set(REG_P, p);
+        }
     }
     
     // 65816-specific methods - only compile for 65816
