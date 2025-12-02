@@ -153,9 +153,13 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
             uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
             BUS_SET_DATA(bus_state, c64_bus->unified_memory_buffer[unified_addr]);
         } else if (chip == CHIP_IO) {
-            // I/O region: set pending flag for chips to handle in their tick functions
-            bus_set_io_pending(&bus_state);
-            // Leave bus data unchanged (floating bus behavior)
+            // OPTIMIZED IO PAGE HANDLING: Direct dispatch using pre-initialized handlers
+            // Calculate IO page number from address (0-15 for $D000-$DFFF)
+            uint8_t io_page = (address >> 8) & 0x0F; // Extract page number from $Dx00 addresses
+
+            // Straight call to the appropriate handler - no conditionals needed
+            bus_state = c64_bus->io_handlers[io_page].read_handler(
+                c64_bus->io_handlers[io_page].chip_instance, bus_state);
         } else {
             // CHIP_UNMAPPED and others: floating bus behavior
             // Leave BUS_GET_DATA(bus_state) unchanged (floating bus state)
@@ -177,8 +181,13 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
                 uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
                 c64_bus->unified_memory_buffer[unified_addr] = BUS_GET_DATA(bus_state);
             } else if (chip == CHIP_IO) {
-                // I/O region: set pending flag for chips to handle in their tick functions
-                bus_set_io_pending(&bus_state);
+                // OPTIMIZED IO PAGE HANDLING: Direct dispatch using pre-initialized handlers
+                // Calculate IO page number from address (0-15 for $D000-$DFFF)
+                uint8_t io_page = (address >> 8) & 0x0F; // Extract page number from $Dx00 addresses
+
+                // Straight call to the appropriate handler - no conditionals needed
+                bus_state = c64_bus->io_handlers[io_page].write_handler(
+                    c64_bus->io_handlers[io_page].chip_instance, bus_state);
             } else {
                 // Writes to UNMAPPED and ROM areas are ignored (no action needed)
                 // ROM chips (BASIC, KERNAL, CHARROM, ROML, ROMH) are read-only in hardware
@@ -218,11 +227,14 @@ void* c64_bus_system_create(chip_descriptor_t* desc) {
 
 void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64) {
     c64_bus->c64 = c64;  // Store as opaque pointer
-    
+
     // Initialize ROM/RAM pointers and allocate unified buffer with default configuration
     c64_config_t default_config;
     c64_config_init_defaults(&default_config);
     c64_bus_init_unified_pointers(c64_bus, c64, &default_config);
+
+    // Initialize compact IO page handlers for efficient I/O access
+    c64_bus_init_io_handlers(c64_bus);
 }
 
 chip_descriptor_t c64_bus_descriptor = {
@@ -767,4 +779,55 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
            (100 * 1024 - required_size) / 1024,
            config->roml_present ? "yes" : "no",
            config->romh_present ? "yes" : "no");
+}
+
+// ============================================================================
+// CHIP CALLBACK FUNCTIONS - Optimized chip-specific operations for hybrid approach
+// ============================================================================
+
+/**
+ * Initialize IO page handlers for optimized I/O access.
+ * Sets up direct chip callbacks that eliminate wrapper functions and provide
+ * efficient targeted access to IO chips, indexed by IO page number.
+ */
+void c64_bus_init_io_handlers(c64_bus_t* c64_bus) {
+    c64_t* c64 = (c64_t*)c64_bus->c64;
+
+    // Set up direct callbacks and chip instances for each IO page (0-15 for $D000-$DFFF)
+    // Each page gets the appropriate chip register function and chip instance directly
+
+    // Pages 0-3 ($D000-$D3FF): VIC-II
+    for (int page = 0; page <= 3; page++) {
+        c64_bus->io_handlers[page].read_handler = vicii_registers_read;
+        c64_bus->io_handlers[page].write_handler = vicii_registers_write;
+        c64_bus->io_handlers[page].chip_instance = c64->vicii;
+    }
+
+    // Pages 4-7 ($D400-$D7FF): SID
+    for (int page = 4; page <= 7; page++) {
+        c64_bus->io_handlers[page].read_handler = mos6581_registers_read;
+        c64_bus->io_handlers[page].write_handler = mos6581_registers_write;
+        c64_bus->io_handlers[page].chip_instance = c64->sid;
+    }
+
+    // Pages 8-11 ($D800-$DBFF): Color RAM
+    for (int page = 8; page <= 11; page++) {
+        c64_bus->io_handlers[page].read_handler = mos2114_read;
+        c64_bus->io_handlers[page].write_handler = mos2114_write;
+        c64_bus->io_handlers[page].chip_instance = c64->colorram;
+    }
+
+    // Pages 12-13 ($DC00-$DCFF): CIA1
+    for (int page = 12; page <= 13; page++) {
+        c64_bus->io_handlers[page].read_handler = mos6526_registers_read;
+        c64_bus->io_handlers[page].write_handler = mos6526_registers_write;
+        c64_bus->io_handlers[page].chip_instance = c64->cia1;
+    }
+
+    // Pages 14-15 ($DD00-$DDFF): CIA2
+    for (int page = 14; page <= 15; page++) {
+        c64_bus->io_handlers[page].read_handler = mos6526_registers_read;
+        c64_bus->io_handlers[page].write_handler = mos6526_registers_write;
+        c64_bus->io_handlers[page].chip_instance = c64->cia2;
+    }
 }

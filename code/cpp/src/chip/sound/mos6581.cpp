@@ -1261,22 +1261,11 @@ void* mos6581_system_create(chip_descriptor_t* desc) {
  */
 bus_state_t mos6581_tick(void* chip, bus_state_t bus_state) {
     mos6581_t* sid = (mos6581_t*)chip;
-    
-    // Check for I/O register access when I/O pending
-    if (unlikely(bus_is_io_pending(&bus_state))) {
-        // Check if address is within SID range ($D400-$D7FF)
-        if ((BUS_GET_ADDR(bus_state) & 0x0C00) == 0x0400) {
-            bus_clear_io_pending(&bus_state);
-            // Handle register access directly
-            bool is_read = BUS_GET_LINES(bus_state) & BUS_MASK_RW;
-            if (is_read) {
-                bus_state = mos6581_registers_read(sid, bus_state);
-            } else {
-                bus_state = mos6581_registers_write(sid, bus_state);
-            }
-        }
-    }
-    
+
+    // HYBRID APPROACH: SID no longer needs to check for IO pending
+    // I/O access is now handled directly by the bus memory tick function
+    // through chip callback arrays, eliminating the need for this check
+
     // Delegate to the existing advance cycle function
     // In the future, this can be expanded to include additional tick-specific logic
     return mos6581_advance_cycle(sid, bus_state);

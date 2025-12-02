@@ -472,27 +472,10 @@ bus_state_t mos6526_advance_cycle(mos6526_t* cia, bus_state_t bus_state) {
  */
 bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
     mos6526_t* cia = (mos6526_t*)chip;
-    
-    // Handle I/O memory access if pending
-    if (unlikely(bus_is_io_pending(&bus_state))) {
-        // Use interrupt line to determine CIA address range:
-        // CIA1 (IRQ=0x01): $DC00-$DCFF, CIA2 (NMI=0x02): $DD00-$DDFF
-        // Optimal bit-hack: Check if address matches this CIA's page
-        uint16_t addr_page = BUS_GET_ADDR(bus_state) & 0xFF00;
-        uint16_t expected_page = 0xDC00 + ((cia->interrupt_line & BUS_MASK_NMI) << 7);
-        
-        if (addr_page == expected_page) {
-            bus_clear_io_pending(&bus_state);
-            
-            // Handle register access directly in the tick function
-            bool is_read = BUS_GET_LINES(bus_state) & BUS_MASK_RW;
-            if (is_read) {
-                bus_state = mos6526_registers_read(cia, bus_state);
-            } else {
-                bus_state = mos6526_registers_write(cia, bus_state);
-            }
-        }
-    }
+
+    // HYBRID APPROACH: CIA no longer needs to check for IO pending
+    // I/O access is now handled directly by the bus memory tick function
+    // through chip callback arrays, eliminating the need for this check
 
     // Delegate to the existing advance cycle function
     return mos6526_advance_cycle(cia, bus_state);

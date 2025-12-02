@@ -1232,21 +1232,10 @@ bus_state_t vicii_advance_cycle(vicii_t* vicii, bus_state_t bus_state) {
 bus_state_t vicii_tick(void* chip, bus_state_t bus_state) {
     vicii_t* vicii = (vicii_t*)chip;
 
-    // Check for I/O register access when I/O pending
-    if (unlikely(bus_is_io_pending(&bus_state))) {
-        // Check if address is within VIC-II range ($D000-$D3FF)
-        if (BUS_GET_ADDR(bus_state) <= 0xD3FF) {
-            bus_clear_io_pending(&bus_state);
-            // Handle register access directly
-            bool is_read = BUS_GET_LINES(bus_state) & BUS_MASK_RW;
-            if (is_read) {
-                bus_state = vicii_registers_read(vicii, bus_state);
-            } else {
-                bus_state = vicii_registers_write(vicii, bus_state);
-            }
-        }
-    }
-    
+    // HYBRID APPROACH: VIC-II no longer needs to check for IO pending
+    // I/O access is now handled directly by the bus memory tick function
+    // through chip callback arrays, eliminating the need for this check
+
     // Monitor CIA2 writes to $DD00 for VIC-II bank changes
     // VIC-II watches CIA2 writes directly without callbacks or io_pending flags
     if (BUS_GET_ADDR(bus_state) == 0xDD00 && !(BUS_GET_LINES(bus_state) & BUS_MASK_RW)) {
@@ -1255,7 +1244,7 @@ bus_state_t vicii_tick(void* chip, bus_state_t bus_state) {
         uint8_t vic_bank = 3 - (BUS_GET_DATA(bus_state) & 0x03);
         vicii_bank_change(vicii, vic_bank);
     }
-    
+
     // Delegate to the existing advance cycle function
     // In the future, this can be expanded to include additional tick-specific logic
     return vicii_advance_cycle(vicii, bus_state);

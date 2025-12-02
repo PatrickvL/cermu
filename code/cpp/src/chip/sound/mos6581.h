@@ -270,6 +270,10 @@ bus_state_t mos6581_tick(void* chip, bus_state_t bus_state);
 // Voice output
 void mos6581_generate_samples(mos6581_t* sid, float* output, uint32_t sample_count);
 
+// Register I/O functions
+bus_state_t mos6581_registers_read(void* context, bus_state_t bus_state);
+bus_state_t mos6581_registers_write(void* context, bus_state_t bus_state);
+
 // Utility functions
 void mos6581_set_revision(mos6581_t* sid, sid_revision_t revision);
 void mos6581_set_timing(mos6581_t* sid, bool pal_timing);
