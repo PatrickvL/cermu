@@ -56,6 +56,16 @@ typedef struct c64_bus_s {
     // VIC-II uses direct CHIP values, not encoded, since it only does read accesses
     alignas(64) uint8_t vicii_chip_per_bank_per_mode[32][16]; // VIC-II direct CHIP per mode
 
+    // COMPACT I/O PAGE MAPPING - Efficient approach using IO page numbers
+    // Maps IO page numbers (0-15 for $D000-$DFFF) directly to chip handlers
+    // This is more efficient than the previous callback array approach
+    typedef struct {
+        bus_state_t (*read_handler)(void* context, bus_state_t bus_state);  // Direct chip register function signature
+        void* chip_instance;  // Direct pointer to the chip instance for this IO page
+        bus_state_t (*write_handler)(void* context, bus_state_t bus_state); // Direct chip register function signature
+    } io_page_handlers_t;
+    io_page_handlers_t io_handlers[16]; // One handler per IO page (0-15)
+
     // Integrated adapter interfaces - can be passed out as pointers
     bus_cycle_ops_t bus_adapter;
     control_lines_interface_t control_lines_adapter;
@@ -121,6 +131,9 @@ void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* 
 
 // Generate all 32 memory modes using PLA
 void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla);
+
+// COMPACT I/O PAGE MAPPING FUNCTIONS - Efficient IO page-based dispatch
+void c64_bus_init_io_handlers(c64_bus_t* c64_bus);
 
 extern chip_descriptor_t c64_bus_descriptor;
 

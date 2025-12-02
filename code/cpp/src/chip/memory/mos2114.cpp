@@ -97,31 +97,14 @@ bus_state_t mos2114_write(void* context, bus_state_t bus_state) {
  */
 bus_state_t REGISTER_CALL mos2114_tick(void* context, bus_state_t bus_state) {
     if (unlikely(!context)) return bus_state;
-    
-    // Check for pending I/O memory access in Color RAM range ($D800-$DBFF)
-    if (unlikely(bus_is_io_pending(&bus_state))) {
-        // Color RAM occupies $D800-$DBFF (1024 bytes)
-        // Since we're already in I/O bank, check lower 12 bits and ensure it's in $800-$BFF range
-        if ((BUS_GET_ADDR(bus_state) & 0x0C00) == 0x0800) {  // $D800-$DBFF range (1024 bytes)
-            // Determine if this is a read or write operation
-            bool is_read = BUS_GET_LINES(bus_state) & BUS_MASK_RW;
-            
-            if (is_read) {
-                // Handle Color RAM read
-                bus_state = mos2114_read(context, bus_state);
-            } else {
-                // Handle Color RAM write
-                bus_state = mos2114_write(context, bus_state);
-            }
-            
-            // Clear the I/O pending flag since we handled the access
-            bus_clear_io_pending(&bus_state);
-        }
-    }
-    
+
+    // HYBRID APPROACH: Color RAM no longer needs to check for IO pending
+    // I/O access is now handled directly by the bus memory tick function
+    // through chip callback arrays, eliminating the need for this check
+
     // Color RAM doesn't need cycle-by-cycle emulation like VIC-II or SID
     // It's a static memory device, so no additional processing needed
-    
+
     return bus_state;
 }
 
