@@ -148,8 +148,7 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
         } else {
             // CHIP_UNMAPPED and others: floating bus behavior
             // Leave BUS_GET_DATA(bus_state) unchanged (floating bus state)
-        }
-        
+        }        
     } else {
         // === WRITE OPERATION ===
         uint8_t chip = decode_write_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
