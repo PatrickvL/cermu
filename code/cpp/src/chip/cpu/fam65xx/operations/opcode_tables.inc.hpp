@@ -616,7 +616,7 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
                    OF::NONE}; // PER - Push Effective Relative Address
     table[0x8B] = {OP::PHB, AM::NON, OF::NONE}; // PHB - Push Data Bank Register
     table[0xAB] = {OP::PLB, AM::NON, OF::NONE}; // PLB - Pull Data Bank Register
-    table[0xD4] = {OP::PEI, AM::DPI,
+    table[0xD4] = {OP::PEI, AM::NON,
                    OF::NONE}; // PEI - Push Effective Indirect Address (Direct
                               // Page Indirect)
     table[0xF4] = {OP::PEA, AM::ABS,
