@@ -130,10 +130,21 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
     // NOTE: I/O port addresses (0-1) are now handled by mos6510_tick() early in the CPU tick
     // This prevents the memory system from overwriting I/O port read data with RAM data
     
+    // Check if this is VIC-II cycle-stealing (RDY low) or CPU access (RDY high)
+    bool is_vicii_cycle_stealing = !(BUS_GET_LINES(bus_state) & BUS_MASK_RDY);
+
     if (is_read) {
         // === READ OPERATION ===
-        uint8_t chip = decode_read_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
-        
+        uint8_t chip;
+
+        if (is_vicii_cycle_stealing) {
+            // VIC-II cycle-stealing: use VIC-II memory mapping
+            chip = c64_bus->vicii_chip_per_bank[cpu_bank];
+        } else {
+            // Normal CPU access: use CPU memory mapping
+            chip = decode_read_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
+        }
+
         // ENHANCED FAST PATH: Direct unified buffer access for all memory chips
         // Fast path handles: CHIP_ROML, CHIP_ROMH, CHIP_KERNAL, CHIP_BASIC, CHIP_CHARROM, CHIP_RAM
         if (likely(chip <= CHIP_RAM)) {
@@ -148,23 +159,30 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
         } else {
             // CHIP_UNMAPPED and others: floating bus behavior
             // Leave BUS_GET_DATA(bus_state) unchanged (floating bus state)
-        }        
+        }
     } else {
         // === WRITE OPERATION ===
-        uint8_t chip = decode_write_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
-        
-        // ENHANCED FAST PATH: Handle all writable unified buffer regions
-        if (likely(chip == CHIP_RAM)) {
-            // Direct unified buffer write for RAM (most common writable case)
-            // RAM is at offset 0x7000 in the strategic layout
-            uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
-            c64_bus->unified_memory_buffer[unified_addr] = BUS_GET_DATA(bus_state);
-        } else if (chip == CHIP_IO) {
-            // I/O region: set pending flag for chips to handle in their tick functions
-            bus_set_io_pending(&bus_state);
+        // Write operations are only performed by CPU, not during VIC-II cycle-stealing
+        // VIC-II can only read memory, never write
+        if (is_vicii_cycle_stealing) {
+            // During VIC-II cycle-stealing, writes are ignored (VIC-II is reading)
+            // Leave bus state unchanged
         } else {
-            // Writes to UNMAPPED and ROM areas are ignored (no action needed)
-            // ROM chips (BASIC, KERNAL, CHARROM, ROML, ROMH) are read-only in hardware
+            uint8_t chip = decode_write_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
+
+            // ENHANCED FAST PATH: Handle all writable unified buffer regions
+            if (likely(chip == CHIP_RAM)) {
+                // Direct unified buffer write for RAM (most common writable case)
+                // RAM is at offset 0x7000 in the strategic layout
+                uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
+                c64_bus->unified_memory_buffer[unified_addr] = BUS_GET_DATA(bus_state);
+            } else if (chip == CHIP_IO) {
+                // I/O region: set pending flag for chips to handle in their tick functions
+                bus_set_io_pending(&bus_state);
+            } else {
+                // Writes to UNMAPPED and ROM areas are ignored (no action needed)
+                // ROM chips (BASIC, KERNAL, CHARROM, ROML, ROMH) are read-only in hardware
+            }
         }
     }
     
