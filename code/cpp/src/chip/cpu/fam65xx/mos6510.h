@@ -49,7 +49,6 @@ void mos6510_destroy(mos6510_t *cpu);
 
 bus_state_t mos6510_init(mos6510_t *cpu, const mos6510_desc_t *desc);
 bus_state_t mos6510_reset(mos6510_t *cpu, bus_state_t pins);
-bus_state_t mos6510_tick(mos6510_t *cpu, bus_state_t pins);
 bool mos6510_opdone(mos6510_t *cpu);
 
 // Register access (same as 6502)
@@ -77,4 +76,5 @@ void mos6510_set_io_input(mos6510_t *cpu, uint8_t value);
 extern chip_descriptor_t mos6510_descriptor;
 
 // Chip-compatible tick function
-bus_state_t mos6510_tick_chip(void *cpu, bus_state_t pins);
+bus_state_t mos6510_tick_phi2(void *cpu, bus_state_t pins);
+bus_state_t mos6510_tick_phi1(void *cpu, bus_state_t pins);

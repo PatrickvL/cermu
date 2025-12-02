@@ -58,10 +58,6 @@ bus_state_t mos6510_reset(mos6510_t *cpu, bus_state_t pins) {
   return CPU_CAST(cpu)->reset(pins);
 }
 
-bus_state_t mos6510_tick(mos6510_t *cpu, bus_state_t pins) {
-  return CPU_CAST(cpu)->tick<mos6510_cpu_t::Phase::PHI2>(pins);
-}
-
 bool mos6510_opdone(mos6510_t *cpu) { return CPU_CAST(cpu)->opdone(); }
 
 // Register getters
@@ -124,8 +120,12 @@ void mos6510_set_io_input(mos6510_t *cpu, uint8_t value) {
 // ============================================================================
 
 // Chip-compatible tick function
-bus_state_t mos6510_tick_chip(void *cpu, bus_state_t pins) {
-  return mos6510_tick(reinterpret_cast<mos6510_t *>(cpu), pins);
+bus_state_t mos6510_tick_phi2(void *cpu, bus_state_t pins) {
+  return CPU_CAST(reinterpret_cast<mos6510_t *>(cpu))->tick<mos6510_cpu_t::Phase::PHI2>(pins);
+}
+
+bus_state_t mos6510_tick_phi1(void *cpu, bus_state_t pins) {
+  return CPU_CAST(reinterpret_cast<mos6510_t *>(cpu))->tick<mos6510_cpu_t::Phase::PHI1>(pins);
 }
 
 // Chip descriptor for system registration
