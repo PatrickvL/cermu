@@ -355,7 +355,7 @@ void c64_cpu_cycle(c64_t* c64) {
     if (!c64) return;
     // CPU tick -> memory service -> system tick
     bus_state_t s = c64->bus.state;
-    s = mos6510_tick_chip(c64->mos6510, s);
+    s = mos6510_tick_phi2(c64->mos6510, s);
     s = c64_memory_tick(&c64->bus, s);
     c64->bus.state = s;
     // Advance the rest of the system to complete the cycle
@@ -365,9 +365,121 @@ void c64_cpu_cycle(c64_t* c64) {
 // Execute one CPU tick with bus state (used by cycle-accurate core)
 bus_state_t c64_cpu_tick(c64_t* c64, bus_state_t bus_state) {
     if (!c64) return bus_state;
-    bus_state = mos6510_tick_chip(c64->mos6510, bus_state);
+    bus_state = mos6510_tick_phi2(c64->mos6510, bus_state);
     bus_state = c64_memory_tick(&c64->bus, bus_state);
+    bus_state = mos6510_tick_phi1(c64->mos6510, bus_state);
     return bus_state;
 }
+
+// ============================================================================
+// PHI2/PHI1 Two-Phase Cycle Implementation
+// ============================================================================
+//
+// This implements the accurate 6502 two-phase clock model:
+// - PHI2 (even cycles): CPU drives address/data lines, sets up bus signals
+// - Memory access: Happens between PHI2 and PHI1
+// - PHI1 (odd cycles): CPU performs internal operations, ALU work, register updates
+//
+// This matches real hardware behavior and enables proper:
+// - VIC-II cycle stealing (via RDY signal)
+// - Accurate timing for memory operations
+// - Proper separation of bus operations and CPU internal logic
+//
+
+// PHI2 Phase: CPU drives the bus (address, R/W, data for writes)
+// This is the "even cycle" where the CPU sets up signals for memory access
+bus_state_t c64_cpu_phi2_tick(c64_t* c64, bus_state_t bus_state) {
+    if (!c64) return bus_state;
+    
+    // Store current bus state in C64 structure
+    c64->bus.state = bus_state;
+    
+    // CPU performs PHI2 operations: drives address/data lines
+    // This sets up bus.address, bus.rw, and bus.data (for writes)
+    bus_state = mos6510_tick_phi2(c64->mos6510, bus_state);
+    
+    // Update bus state after CPU PHI2 phase
+    c64->bus.state = bus_state;
+    
+    return bus_state;
+}
+
+// PHI1 Phase: CPU performs internal operations after memory access
+// This is the "odd cycle" where CPU reads data and performs ALU/register operations
+bus_state_t c64_cpu_phi1_tick(c64_t* c64, bus_state_t bus_state) {
+    if (!c64) return bus_state;
+    
+    // Store current bus state (includes data from memory access)
+    c64->bus.state = bus_state;
+    
+    // CPU performs PHI1 operations: internal logic, register updates
+    // For reads: CPU samples bus.data into registers
+    // Internal: ALU operations, flag updates, PC changes
+    bus_state = mos6510_tick_phi1(c64->mos6510, bus_state);
+    
+    // Update bus state after CPU PHI1 phase
+    c64->bus.state = bus_state;
+    
+    return bus_state;
+}
+
+// ============================================================================
+// Complete PHI2/PHI1 Cycle with Memory Access
+// ============================================================================
+//
+// Example usage showing proper two-phase cycle execution:
+//
+//   bus_state_t state = c64->bus.state;
+//
+//   // PHI2: CPU drives address/data lines
+//   state = c64_cpu_phi2_tick(c64, state);
+//
+//   // Memory Access: Between PHI2 and PHI1
+//   state = c64_memory_tick(&c64->bus, state);
+//
+//   // PHI1: CPU internal operations
+//   state = c64_cpu_phi1_tick(c64, state);
+//
+//   // Advance other system chips
+//   c64_non_cpu_cycle(c64);
+//
+// This pattern ensures:
+// - Proper timing alignment with hardware
+// - VIC-II can steal cycles via RDY signal
+// - Memory operations happen at correct phase
+// - CPU internal logic is separate from bus operations
+
+// Complete two-phase cycle: PHI2 -> Memory -> PHI1
+void c64_cpu_cycle_phi2_phi1(c64_t* c64) {
+    if (!c64) return;
+    
+    bus_state_t state = c64->bus.state;
+    
+    // PHI2 Phase: CPU drives address/data lines
+    state = c64_cpu_phi2_tick(c64, state);
+    
+    // Memory Access: Happens between PHI2 and PHI1
+    // This is where:
+    // - Memory reads put data on the bus
+    // - Memory writes complete
+    // - VIC-II can steal cycles
+    // - Color RAM nibble merging occurs
+    state = c64_memory_tick(&c64->bus, state);
+    
+    // PHI1 Phase: CPU performs internal operations
+    // - For reads: CPU samples bus.data
+    // - ALU operations
+    // - Register updates
+    // - Flag changes
+    // - PC modifications
+    state = c64_cpu_phi1_tick(c64, state);
+    
+    // Update bus state
+    c64->bus.state = state;
+    
+    // Advance the rest of the system to complete the cycle
+    c64_non_cpu_cycle(c64);
+}
+
 // Step the CPU using the dual CPU system
 /* Dual-CPU utility functions removed */
