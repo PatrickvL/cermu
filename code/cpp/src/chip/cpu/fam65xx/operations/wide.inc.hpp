@@ -603,7 +603,7 @@ bus_state_t op_pei(bus_state_t pins) {
       return pins;
     case 3:
       /* PHI1: Load data and perform operations */
-      this->bus_load_reg(REG_ABL, pins);
+      this->bus_load_reg(REG_DL, pins);  // Save low byte to DL (temp storage)
       this->inc(REG_AB);
       this->half_cycle++;
       return pins;
@@ -613,13 +613,13 @@ bus_state_t op_pei(bus_state_t pins) {
       pins = this->bus_setup_read<Addr::AB>(pins);
       return pins;
     case 5:
-      this->bus_load_reg(REG_ABH, pins);
+      this->bus_load_reg(REG_SBR, pins);  // Save high byte to SBR (temp storage)
       this->half_cycle++;
       return pins;
 
     case 6:
       // Push high byte of effective address
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_ABH);
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_SBR);
       return pins;
     case 7:
       this->dec_stack();
@@ -628,7 +628,7 @@ bus_state_t op_pei(bus_state_t pins) {
 
     case 8:
       // Push low byte of effective address
-      pins = this->bus_setup_write<Addr::SP>(pins, REG_ABL);
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_DL);
       return pins;
     case 9:
       this->dec_stack();
