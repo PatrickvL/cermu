@@ -604,7 +604,7 @@ bus_state_t op_pei(bus_state_t pins) {
     case 3:
       /* PHI1: Load data and perform operations */
       this->bus_load_reg(REG_DL, pins);  // Save low byte to DL (temp storage)
-      this->inc(REG_AB);
+      this->inc(REG_AB);  // Increment full 16-bit address (crosses pages)
       this->half_cycle++;
       return pins;
 
