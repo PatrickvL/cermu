@@ -833,10 +833,15 @@ public:
         // For 65C816 in native mode, set full 16-bit stack pointer
         // For other processors, only use low byte (high byte forced to 0x01 by hardware)
         if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
-            // 65C816: Use REG_SP for full 16-bit stack pointer access
-            // In native mode, SP can be anywhere in bank 0 (full 16-bit value)
-            // In emulation mode, hardware forces high byte to 0x01, but we set the full value
-            cpu->set(REG_SP, sp);
+            // 65C816: Check emulation mode
+            if (cpu->in_emulation_mode()) {
+                // Emulation mode: Force SPH to 0x01, use low byte from test data
+                // This mimics hardware constraint of emulation mode
+                cpu->set(REG_SP, 0x0100 | (sp & 0xFF));
+            } else {
+                // Native mode: Use full 16-bit value from test data
+                cpu->set(REG_SP, sp);
+            }
         } else {
             // 8-bit processors: Only low byte matters (hardware forces page 1)
             cpu->set(REG_S, static_cast<uint8_t>(sp & 0xFF));
