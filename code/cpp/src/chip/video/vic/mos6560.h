@@ -1,0 +1,29 @@
+#pragma once
+
+#include <stdint.h>
+#include <stdbool.h>
+#include "../../core/bus_cycle_interface.h"
+#include "../../core/chip.h"
+#include "vic_common.h"
+
+// VIC-6560/6561 chip structure (inherits from base)
+typedef struct {
+    vic_base_t base; // Base VIC structure
+
+    // VIC-6560 specific fields (none currently, all in base)
+} mos6560_t;
+
+// Chip descriptor
+extern chip_descriptor_t mos6560_descriptor;
+
+// Function prototypes
+void* mos6560_create(chip_descriptor_t* desc);
+void mos6560_destroy(void* chip);
+bus_state_t mos6560_tick(void* chip, bus_state_t bus_state);
+void mos6560_bus_attach(void* chip, void* bus);
+void mos6560_set_framebuffer(mos6560_t* vic, uint32_t* framebuffer, int width, int height);
+void mos6560_reset(mos6560_t* vic);
+
+// Register access functions
+uint8_t mos6560_read_register(mos6560_t* vic, uint8_t reg);
+void mos6560_write_register(mos6560_t* vic, uint8_t reg, uint8_t value);
