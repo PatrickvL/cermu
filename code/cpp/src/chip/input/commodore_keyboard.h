@@ -46,6 +46,7 @@
 #define KEY_SHIFT_LEFT  0x1A
 #define KEY_SHIFT_RIGHT 0x1B
 #define KEY_SPACE       0x1C
+#define KEY_POUND       0x1D
 
 typedef struct {
     uint8_t row;
