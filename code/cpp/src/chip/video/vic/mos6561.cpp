@@ -1,4 +1,5 @@
 #include "mos6561.h"
+#include "vic_common.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -12,21 +13,31 @@ chip_descriptor_t mos6561_descriptor = {
     .bank_change = NULL
 };
 
+// VIC-6561 chip configuration
+static const vic_chip_config_t vic_config_pal = {
+    .cycles_per_line = VIC_PAL_CYCLES_PER_LINE,
+    .total_lines = VIC_PAL_TOTAL_LINES,
+    .clock_frequency = 886723,
+    .chip_name = "MOS6561 PAL",
+    .is_pal = true
+};
+
 void* mos6561_create(chip_descriptor_t* desc) {
     mos6561_t* vic = (mos6561_t*)calloc(1, sizeof(mos6561_t));
     if (!vic) return NULL;
 
-    vic->desc = desc;
-    vic->is_pal = true; // Default to PAL
-    vic->clock_frequency = 886723; // PAL clock frequency
+    vic->base.desc = desc;
+    vic->base.is_pal = true;
+    vic->base.clock_frequency = 886723; // PAL clock frequency
+    vic->base.config = &vic_config_pal;
 
     // Initialize registers
-    memset(vic->registers, 0, sizeof(vic->registers));
-    memset(vic->color_ram, 0, sizeof(vic->color_ram));
+    memset(vic->base.registers, 0, sizeof(vic->base.registers));
+    memset(vic->base.color_ram, 0, sizeof(vic->base.color_ram));
 
     // Default timing for PAL
-    vic->cycles_per_line = 63;
-    vic->total_lines = 312;
+    vic->base.cycles_per_line = VIC_PAL_CYCLES_PER_LINE;
+    vic->base.total_lines = VIC_PAL_TOTAL_LINES;
 
     // Enable enhanced features
     vic->extended_color_mode = true;
@@ -34,6 +45,9 @@ void* mos6561_create(chip_descriptor_t* desc) {
     vic->extended_colors[1] = 0xFF; // White
     vic->extended_colors[2] = 0x88; // Gray 1
     vic->extended_colors[3] = 0xAA; // Gray 2
+
+    // Reset video generation state
+    vic_system_reset(&vic->base);
 
     return vic;
 }
@@ -45,56 +59,18 @@ void mos6561_destroy(void* chip) {
 }
 
 void mos6561_bus_attach(void* chip, void* bus) {
-    if (!chip) return;
-    mos6561_t* vic = (mos6561_t*)chip;
-    vic->bus = bus;
-}
-
-void mos6561_reset(mos6561_t* vic) {
-    if (!vic) return;
-
-    // Reset registers to default values
-    memset(vic->registers, 0, sizeof(vic->registers));
-    vic->raster_counter = 0;
-    vic->current_cycle = 0;
-
-    // Default register values for MOS6561
-    vic->registers[0] = 0x0F; // Control register
-    vic->registers[1] = 0x00; // Raster counter
-    vic->registers[2] = 0x00; // Light pen X
-    vic->registers[3] = 0x00; // Light pen Y
-    vic->registers[4] = 0x1B; // Enable register
-
-    // Reset extended features
-    vic->extended_color_mode = true;
+    vic_bus_attach(chip, bus);
 }
 
 void mos6561_set_framebuffer(mos6561_t* vic, uint32_t* framebuffer, int width, int height) {
-    if (!vic) return;
-    vic->framebuffer = framebuffer;
-    vic->framebuffer_width = width;
-    vic->framebuffer_height = height;
+    vic_set_framebuffer(&vic->base, framebuffer, width, height);
 }
 
-bus_state_t mos6561_tick(void* chip, bus_state_t bus_state) {
-    mos6561_t* vic = (mos6561_t*)chip;
-    if (!vic) return bus_state;
+void mos6561_reset(mos6561_t* vic) {
+    vic_system_reset(&vic->base);
 
-    // Advance raster counter
-    vic->current_cycle++;
-    if (vic->current_cycle >= vic->cycles_per_line) {
-        vic->current_cycle = 0;
-        vic->raster_counter++;
-
-        if (vic->raster_counter >= vic->total_lines) {
-            vic->raster_counter = 0;
-        }
-    }
-
-    // Enhanced VIC-6561 emulation with extended color support
-    // TODO: Implement full VIC-6561 video generation with extended colors
-
-    return bus_state;
+    // Reset extended features
+    vic->extended_color_mode = true;
 }
 
 // Enhanced register access functions
@@ -107,7 +83,7 @@ uint8_t mos6561_read_register(mos6561_t* vic, uint8_t reg) {
         return vic->extended_colors[reg - 12];
     }
 
-    return vic->registers[reg];
+    return vic_read_register(&vic->base, reg);
 }
 
 void mos6561_write_register(mos6561_t* vic, uint8_t reg, uint8_t value) {
@@ -119,13 +95,18 @@ void mos6561_write_register(mos6561_t* vic, uint8_t reg, uint8_t value) {
         return;
     }
 
-    vic->registers[reg] = value;
+    vic_write_register(&vic->base, reg, value);
 
     // Handle special registers
     switch (reg) {
-        case 0x04: // Enable register
+        case VIC_REG_ENABLE:
             vic->extended_color_mode = (value & 0x80) != 0;
             break;
         // Other registers handled normally
     }
+}
+
+// Main tick function
+bus_state_t mos6561_tick(void* chip, bus_state_t bus_state) {
+    return vic_tick(chip, bus_state);
 }
