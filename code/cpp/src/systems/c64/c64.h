@@ -62,6 +62,9 @@ void c64_cpu_cycle(c64_t* c64);     // Execute one CPU cycle (C++ core)
 
 // Ticks all non-CPU chips once to complete a cycle.
 void c64_non_cpu_cycle(void* c64_ptr);
+
+// Parent tick function that coordinates all chip ticks with proper timing order
+void c64_chips_tick_all(c64_t* c64, c64_bus_t* bus);
 bool c64_pla_maps_generate(c64_t* c64);  // PLA memory mapping generation
 void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config);
 bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config);

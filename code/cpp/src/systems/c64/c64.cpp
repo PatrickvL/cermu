@@ -27,14 +27,14 @@ void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
     if (!rom_config) {
         rom_config = system_config_get_default_roms();
     }
-    
+
     // Discover ROM root path for C64 system
     char rom_root_path[1024];
     bool rom_root_found = system_config_discover_rom_root("c64", rom_root_path, sizeof(rom_root_path));
-    
+
     for (int i = 0; i < system->chip_count; i++) {
         chip_entry_t* dev = &system->chips[i];
-        
+
         // Initialize RAM
         if (dev->desc == &ram_descriptor) {
             ram_t* ram = (ram_t*)dev->chip;
@@ -46,7 +46,7 @@ void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
             // Initialize RAM to zero - no need for separate initial_ram array
             memset(ram->memory, 0, 65536);
         }
-        
+
         // Initialize ROM chips by loading from files
         else if (dev->desc == &rom_descriptor) {
             rom_t* rom = (rom_t*)dev->chip;
@@ -54,21 +54,21 @@ void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
                 printf("Warning: ROM chip has no allocated memory\n");
                 continue;
             }
-            
+
             bool rom_loaded = false;
               // Only attempt to load ROMs if we found the ROM root directory
             if (rom_root_found) {
                 // Determine ROM type based on memory address and size
                 if (dev->base_address == 0xA000 && dev->size == 8192) {
                     // BASIC ROM
-                    rom_loaded = rom_loader_load_from_root(rom_root_path, (const char**)rom_config->basic_rom_filenames, 8192, 
+                    rom_loaded = rom_loader_load_from_root(rom_root_path, (const char**)rom_config->basic_rom_filenames, 8192,
                                                          rom->memory, dev->size);
                     if (!rom_loaded) {
                         printf("Warning: Failed to load BASIC ROM\n");
                     }
                 }
                 else if (dev->base_address == 0xE000 && dev->size == 8192) {
-                    // KERNAL ROM  
+                    // KERNAL ROM
                     rom_loaded = rom_loader_load_from_root(rom_root_path, (const char**)rom_config->kernal_rom_filenames, 8192,
                                                          rom->memory, dev->size);
                     if (!rom_loaded) {
@@ -86,7 +86,7 @@ void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
             } else {
                 printf("Warning: ROM root not found, skipping ROM loading\n");
             }
-            
+
             // If ROM loading failed, fill with default pattern (0xFF for unloaded ROM)
             if (!rom_loaded) {
                 memset(rom->memory, 0xFF, dev->size);
@@ -97,18 +97,18 @@ void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
 
 bool c64_pla_maps_generate(c64_t* c64) {
     c64_bus_t* bus = &(c64->bus);
-    
+
     // Create a temporary PLA instance for generating memory maps
     pla_906114_01_t* pla = pla_906114_01_create();
     if (!pla)
         return false;
-    
+
     // Generate all 32 memory modes using PLA
     c64_bus_generate_all_pla_modes(bus, (struct pla_906114_01_s*)pla);
-    
+
     // Clean up PLA instance
     pla_906114_01_destroy(pla);
-    
+
     // Set initial bank mapping to a mode known to enable Kernal ROM using proper mode switch
     c64_bus_mode_switch(bus, 0);
     return true;
@@ -122,6 +122,36 @@ bool c64_pla_maps_generate(c64_t* c64) {
 // Usually NULL during normal emulation, only set for testing/debugging
 void (*bus_cycle_callback)(void) = NULL;
 
+// Parent tick function that coordinates all chip ticks with proper timing order
+void c64_chips_tick_all(c64_t* c64, c64_bus_t* bus) {
+    if (unlikely(!c64 || !bus)) {
+        return;
+    }
+
+    // Phase 1: VIC-II tick first - it drives the video timing and memory access patterns
+    // This must happen before other chips to ensure proper bus contention handling
+    bus->state = vicii_tick(c64->vicii, bus->state);
+
+    // Phase 2: CIA chips - they handle I/O and timing functions
+    // CIA2 must be ticked before CIA1 because CIA2 controls VIC-II bank switching
+    bus->state = mos6526_tick(c64->cia2, bus->state);
+    bus->state = mos6526_tick(c64->cia1, bus->state);
+
+    // Phase 3: SID - sound generation
+    bus->state = mos6581_tick(c64->sid, bus->state);
+
+    // Phase 4: Color RAM - this must happen after VIC-II to handle the floating bus effect
+    // When CPU reads only lower data lines from color RAM, VIC-II can see floating data
+    bus->state = mos2114_tick(c64->colorram, bus->state);
+
+    // Update RDY line based on BA (hardware accurate)
+    if (BUS_GET_LINES(bus->state) & BUS_MASK_BA) {
+        BUS_SET_LINES(bus->state, BUS_GET_LINES(bus->state) | BUS_MASK_RDY);
+    } else {
+        BUS_SET_LINES(bus->state, BUS_GET_LINES(bus->state) & ~BUS_MASK_RDY);
+    }
+}
+
 // Ticks all non-CPU chips once to complete a cycle.
 void c64_non_cpu_cycle(void* c64_ptr) {
     c64_t* c64 = (c64_t*)c64_ptr;  // Cast from opaque pointer
@@ -129,7 +159,7 @@ void c64_non_cpu_cycle(void* c64_ptr) {
     // Optimized null check with unlikely hint - callback rarely set during normal emulation
     if (unlikely(bus_cycle_callback != NULL)) {
         bus_cycle_callback();
-    }    
+    }
 
     // Safety checks
     if (unlikely(!c64)) {
@@ -148,83 +178,50 @@ void c64_non_cpu_cycle(void* c64_ptr) {
         fflush(stdout);
         return;
     }
-    
+
     if (unlikely(!c64->cia2)) {
         printf("ERROR: c64->cia2 is NULL at cycle %llu\n", (unsigned long long)c64->total_cycles);
         fflush(stdout);
         return;
     }
-    
+
     if (unlikely(!c64->sid)) {
         printf("ERROR: c64->sid is NULL at cycle %llu\n", (unsigned long long)c64->total_cycles);
         fflush(stdout);
         return;
     }
-    
+
     // Debug output every 2000000 cycles to track progress
     if (c64->total_cycles % 2000000 == 0) {
         printf("c64_non_cpu_cycle: cycle #%llu\n", (unsigned long long)c64->total_cycles);
         fflush(stdout);
     }
-    
+
     c64->total_cycles++;
-    
-    c64_bus_t* bus = &(c64->bus);  // Access bus state
 
-    // VIC-II tick handles both phi1 and phi2 phases internally with I/O coordination
-    bus->state = vicii_tick(c64->vicii, bus->state);
-    // Other chips tick once per complete cycle with I/O coordination
-    bus->state = mos6581_tick(c64->sid, bus->state);
-    // Color RAM tick for I/O coordination (no complex emulation needed)
-    bus->state = mos2114_tick(c64->colorram, bus->state);
-    bus->state = mos6526_tick(c64->cia1, bus->state);
-    bus->state = mos6526_tick(c64->cia2, bus->state);
+    c64_bus_t* bus = &(c64->bus);
 
-    //        c64_update_interrupt_lines(c64, bus);
-//void c64_update_interrupt_lines(c64_t* c64, c64_bus_t* bus) {
-/*
-    bus->irq_line = false;
-    bus->nmi_line = false;
-    
-    // VIC-II IRQ
-    if (c64->vicii.irq_status & c64->vicii.irq_mask) {
-        bus->irq_line = true;
-    }
-    
-    // CIA interrupts
-    if (c64->cia1.interrupt_control & c64->cia1.interrupt_mask) {
-        bus->irq_line = true;
-    }
-    if (c64->cia2.interrupt_control & c64->cia2.interrupt_mask) {
-        bus->nmi_line = true;
-    }
-*/
-    // Update RDY line based on BA (hardware accurate)
-    if (BUS_GET_LINES(c64->bus.state) & BUS_MASK_BA) {
-        BUS_SET_LINES(c64->bus.state, BUS_GET_LINES(c64->bus.state) | BUS_MASK_RDY);
-    } else {
-        BUS_SET_LINES(c64->bus.state, BUS_GET_LINES(c64->bus.state) & ~BUS_MASK_RDY);
-    }
-//}
+    // Call the new parent tick function that handles proper timing order
+    c64_chips_tick_all(c64, bus);
 }
 
 // Compact chip creation helper - creates and registers a chip
 static inline void* create_and_register_chip(c64_t* c64, chip_descriptor_t* desc, uint16_t addr, unsigned int size) {
     void* chip;
-    
+
     // Special handling for ROM - allocate memory based on requested size before registration
     if (desc == &rom_descriptor) {
         chip = rom_system_create_with_size(desc, size);
     } else {
         chip = desc->create(desc);
     }
-    
+
     if (!chip) {
         printf("ERROR: Failed to create chip: %s\n", desc->description);
         fflush(stdout);
         return NULL;
     }
-    
+
     uint8_t chip_id = system_chip_register(&c64->system, chip, desc, addr, size);
     if (chip_id == 0xFF) {
         printf("ERROR: Failed to register chip: %s\n", desc->description);
@@ -286,21 +283,21 @@ c64_t* c64_system_create(const c64_config_t* config) {
     if (!(c64->cia1 = static_cast<mos6526_t*>(create_and_register_chip(c64, &mos6526_descriptor, 0xDC00, 256)))) { c64_system_destroy(c64); return NULL; }
     if (!(c64->cia2 = static_cast<mos6526_t*>(create_and_register_chip(c64, &mos6526_descriptor, 0xDD00, 256)))) { c64_system_destroy(c64); return NULL; }
     if (!(c64->kernal = static_cast<rom_t*>(create_and_register_chip(c64, &rom_descriptor, 0xE000, 8192)))) { c64_system_destroy(c64); return NULL; }
-    
+
     // Initialize placeholders for missing components
     c64->io1 = NULL; // No cartridge I/O by default
     c64->io2 = NULL; // No cartridge I/O by default
-    
+
     // Register PLA for GUI debugging (special case - chip is the C64 system itself)
     uint8_t pla_chip_id = system_chip_register(&c64->system, c64, &pla_descriptor, 0x0000, 0);
     if (pla_chip_id == 0xFF) { c64_system_destroy(c64); return NULL; }
-    
+
     // Now having a registry of all chips, the PLA maps can be generated
     if (!c64_pla_maps_generate(c64)) { c64_system_destroy(c64); return NULL; }
-    
+
     // Attach bus to C64 system first to initialize unified memory pointers
     c64_bus_system_attach(&(c64->bus), c64);
-    
+
     // Set default memory contents and load ROMs from configured paths
     const rom_config_t* rom_config = config->rom_config ? config->rom_config : system_config_get_default_roms();
     c64_memory_init(&c64->system, rom_config);
@@ -312,40 +309,39 @@ c64_t* c64_system_create(const c64_config_t* config) {
             chip->desc->bus_attach(chip->chip, &(c64->bus));
         }
     }
-    
-    
+
     // Hardware: CIA2 Data Port A bits 0-1 control VIC-II memory bank selection
     // Note: VIC-II will monitor CIA2 writes at $DD00 directly in its tick function
     // This eliminates the need for callbacks and global state
-    
+
     // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
     ((mos6526_t*)c64->cia2)->interrupt_line = BUS_MASK_NMI;
-    
+
     // Reset the CPU to initialize proper startup state
     printf("C64 System: Resetting CPU to initialize startup state\n");
     bus_state_t reset_state = BUS_BIT(BUS_RES_BIT);  // Set reset line inactive (high for active-low)
     mos6510_reset((mos6510_t*)c64->mos6510, reset_state);
-    
+
     return c64;
 }
 
 // Set the framebuffer for VIC-II pixel output
 void c64_set_framebuffer(c64_t* c64, uint32_t* framebuffer, int width, int height) {
     if (!c64 || !c64->vicii || !framebuffer) return;
-    
+
     // Set the framebuffer on the VIC-II chip
     vicii_set_framebuffer(c64->vicii, framebuffer, width, height);
-    
+
 }
 
 bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config) {
     if (!c64 || !rom_config) {
         return false;
     }
-    
+
     // Reload ROMs using the memory initialization function
     c64_memory_init(&c64->system, rom_config);
-    
+
     printf("ROMs reloaded successfully\n");
     return true;
 }
