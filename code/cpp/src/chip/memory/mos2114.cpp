@@ -83,31 +83,6 @@ bus_state_t mos2114_write(void* context, bus_state_t bus_state) {
     return bus_state;
 }
 
-/**
- * Consolidated tick function for MOS2114 Color RAM with I/O coordination.
- * Handles both I/O memory access detection and normal operation.
- *
- * Color RAM is mapped at $D800-$DBFF in the I/O region.
- * Unlike other chips, Color RAM doesn't need complex cycle emulation,
- * so this function primarily handles I/O coordination.
- *
- * @param context Pointer to mos2114_t structure
- * @param bus_state Current bus state (passed by value for register optimization)
- * @return Updated bus state
- */
-bus_state_t REGISTER_CALL mos2114_tick(void* context, bus_state_t bus_state) {
-    if (unlikely(!context)) return bus_state;
-
-    // HYBRID APPROACH: Color RAM no longer needs to check for IO pending
-    // I/O access is now handled directly by the bus memory tick function
-    // through chip callback arrays, eliminating the need for this check
-
-    // Color RAM doesn't need cycle-by-cycle emulation like VIC-II or SID
-    // It's a static memory device, so no additional processing needed
-
-    return bus_state;
-}
-
 chip_descriptor_t mos2114_descriptor = {
     .description = "MOS2114 Color RAM (1K x 4-bit)",
     .create = mos2114_create,
