@@ -204,9 +204,6 @@ void c64_system_tick(c64_t* c64) {
     // SID - sound generation
     s = mos6581_tick(c64->sid, s);
 
-    // Color RAM - this must happen after VIC-II to handle the floating bus effect
-    s = mos2114_tick(c64->colorram, s);
-
     // Update RDY line based on BA (hardware accurate)
     if (BUS_GET_LINES(s) & BUS_MASK_BA) {
         BUS_SET_LINES(s, BUS_GET_LINES(s) | BUS_MASK_RDY);
