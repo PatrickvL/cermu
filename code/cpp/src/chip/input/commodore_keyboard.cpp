@@ -5,56 +5,58 @@
 
 // Keyboard matrix definition (C64/VIC-20 layout)
 // Unshifted keys - using ASCII-compatible values
+// Note: This matches the C# version exactly for compatibility
 const char keyboard_matrix_unshifted[KEYBOARD_ROWS][KEYBOARD_COLS] = {
-    {'1',   0x7F, '+',   '9',   '7',   '5',   '3',   0x1B},  // ROW0 (DEL, ARROW_LEFT)
-    {'2',   0x0C, '-', '0',   '8',   '6',   '4',   0x01},  // ROW1 (HOME, F7)
-    {'3',   0x18, '$', 'P',   'I',   'Y',   'R',   0x02},  // ROW2 (RUN/STOP, F1)
-    {'4',   0x19, '*', 'L',   'J',   'G',   'D',   0x03},  // ROW3 (CURSOR_DOWN, F3)
-    {0x20, 0x1A, '.', 'M',   'B',   'C',   'Z',   0x04},  // ROW4 (SPACE, SHIFT_RIGHT, F5)
-    {'[', '=', ':', 'K',   'H',   'F',   'S',   0x05},  // ROW5 (F2)
-    {'Q',   0x1C, '@', 'O',   'U',   'T',   'E',   0x06},  // ROW6 (ARROW_UP, F4)
-    {'W',   0x1D, '\\', 'A',   ';',   'X',   0x0D, 0x07}   // ROW7 (CTRL, RETURN, F6)
+    {KEY_RUN_STOP, '/', ',', 'N', 'V', 'X', KEY_SHIFT_LEFT, KEY_CURSOR_DOWN}, // row 7
+    {'Q', KEY_ARROW_UP, '@', 'O', 'U', 'T', 'E', KEY_F5}, // row 6
+    {KEY_COMMODORE, '=', ':', 'K', 'H', 'F', 'S', KEY_F3}, // row 5
+    {KEY_SPACE, KEY_SHIFT_RIGHT, '.', 'M', 'B', 'C', 'Z', KEY_F1}, // row 4
+    {'2', KEY_HOME, '-', '0', '8', '6', '4', KEY_F7}, // row 3
+    {KEY_CTRL, ';', 'L', 'J', 'G', 'D', 'A', KEY_CURSOR_LEFT}, // row 2
+    {KEY_ARROW_LEFT, '*', 'P', 'I', 'Y', 'R', 'W', KEY_RETURN}, // row 1
+    {'1', KEY_POUND, '+', '9', '7', '5', '3', KEY_DEL}, // row 0
 };
 
 // Shifted keys - using ASCII-compatible values
+// Note: This matches the C# version exactly for compatibility
 const char keyboard_matrix_shifted[KEYBOARD_ROWS][KEYBOARD_COLS] = {
-    {'!',   0x12, '$', ')', '\'', '%', '#',   0x1E},  // ROW0 (INST, PI)
-    {'"',   0x12, '~', '0',   '8',   '6',   '4',   0x08},  // ROW1 (CLR, F8)
-    {'#',   0x01, '$', 'P',   'I',   'Y',   'R',   0x02},  // ROW2 (F1)
-    {'$',   0x1F, '*', 'L',   'J',   'G',   'D',   0x03},  // ROW3 (CURSOR_RIGHT, F3)
-    {0x01, 0x01, '>', 'M',   'B',   'C',   'Z',   0x05},  // ROW4 (F2)
-    {']', '+', '[', 'K',   'H',   'F',   'S',   0x06},  // ROW5 (F4)
-    {'Q',   0x1E, '$', 'O',   'U',   'T',   'E',   0x07},  // ROW6 (PI, F6)
-    {'W',   0x01, '|', 'A',   ':',   'X',   0x01, 0x07}   // ROW7 (F6)
+    {KEY_SAME, '?', '<', 'n', 'v', 'x', KEY_SAME, KEY_CURSOR_UP}, // row 7
+    {'q', KEY_PI, KEY_SAME, 'o', 'u', 't', 'e', KEY_F6}, // row 6
+    {KEY_SAME, KEY_SAME, '[', 'k', 'h', 'f', 's', KEY_F4}, // row 5
+    {KEY_SAME, KEY_SAME, '>', 'm', 'b', 'c', 'z', KEY_F2}, // row 4
+    {'"', KEY_CLR, KEY_SAME, KEY_SAME, '(', '&', '$', KEY_F8}, // row 3
+    {KEY_SAME, ']', 'l', 'j', 'g', 'd', 'a', KEY_CURSOR_RIGHT}, // row 2
+    {KEY_SAME, KEY_SAME, 'p', 'i', 'y', 'r', 'w', KEY_SAME}, // row 1
+    {'!', KEY_SAME, KEY_SAME, ')', '\'', '%', '#', KEY_INST}, // row 0
 };
 
 // Special key mappings - ASCII-compatible
 static const char special_key_mapping[][2] = {
-    {0x7F, 0x7F},  // DEL
-    {0x0C, 0x0C},  // HOME
-    {0x18, 0x18},  // RUN/STOP
-    {0x19, 0x19},  // CURSOR DOWN
-    {0x1A, 0x1A},  // SHIFT RIGHT
-    {0x02, 0x02},  // F1
-    {0x03, 0x03},  // F3
-    {0x04, 0x04},  // F5
-    {0x01, 0x01},  // F7
-    {0x05, 0x05},  // F2
-    {0x06, 0x06},  // F4
-    {0x07, 0x07},  // F6
-    {0x08, 0x08},  // F8
-    {0x12, 0x12},  // CLR/INST
-    {0x1E, 0x1E},  // PI
-    {0x1B, 0x1B},  // ARROW LEFT
-    {0x1C, 0x1C},  // ARROW UP
-    {0x1F, 0x1F},  // CURSOR RIGHT
-    {0x1D, 0x1D},  // CTRL
-    {0x0D, 0x0D},  // RETURN
-    {0x20, 0x20},  // SPACE
-    {0x10, 0x10},  // SHIFT LEFT
-    {0x11, 0x11},  // COMMODORE
-    {0x13, 0x13},  // RESTORE
-    {0x1C, 0x1C},  // CURSOR UP
+    {KEY_DEL, KEY_DEL},  // DEL
+    {KEY_HOME, KEY_HOME},  // HOME
+    {KEY_RUN_STOP, KEY_RUN_STOP},  // RUN/STOP
+    {KEY_CURSOR_DOWN, KEY_CURSOR_DOWN},  // CURSOR DOWN
+    {KEY_SHIFT_RIGHT, KEY_SHIFT_RIGHT},  // SHIFT RIGHT
+    {KEY_F1, KEY_F1},  // F1
+    {KEY_F3, KEY_F3},  // F3
+    {KEY_F5, KEY_F5},  // F5
+    {KEY_F7, KEY_F7},  // F7
+    {KEY_F2, KEY_F2},  // F2
+    {KEY_F4, KEY_F4},  // F4
+    {KEY_F6, KEY_F6},  // F6
+    {KEY_F8, KEY_F8},  // F8
+    {KEY_CLR, KEY_CLR},  // CLR/INST
+    {KEY_PI, KEY_PI},  // PI
+    {KEY_ARROW_LEFT, KEY_ARROW_LEFT},  // ARROW LEFT
+    {KEY_ARROW_UP, KEY_ARROW_UP},  // ARROW UP
+    {KEY_CURSOR_RIGHT, KEY_CURSOR_RIGHT},  // CURSOR RIGHT
+    {KEY_CTRL, KEY_CTRL},  // CTRL
+    {KEY_RETURN, KEY_RETURN},  // RETURN
+    {KEY_SPACE, KEY_SPACE},  // SPACE
+    {KEY_SHIFT_LEFT, KEY_SHIFT_LEFT},  // SHIFT LEFT
+    {KEY_COMMODORE, KEY_COMMODORE},  // COMMODORE
+    {KEY_RESTORE, KEY_RESTORE},  // RESTORE
+    {KEY_CURSOR_UP, KEY_CURSOR_UP},  // CURSOR UP
     {0, 0}         // Terminator
 };
 
@@ -175,13 +177,13 @@ void commodore_keyboard_key_down(commodore_keyboard_t* keyboard, char key_char) 
     if (!keyboard) return;
 
     // Handle RESTORE key (special case - connects to NMI)
-    if (key_char == 0x13) { // RESTORE
+    if (key_char == KEY_RESTORE) { // RESTORE
         keyboard->restore_key_pressed = true;
         return;
     }
 
     // Handle CAPS LOCK
-    if (key_char == 0x11) { // COMMODORE key toggles CAPS LOCK
+    if (key_char == KEY_COMMODORE) { // COMMODORE key toggles CAPS LOCK
         keyboard->caps_lock_active = !keyboard->caps_lock_active;
         return;
     }
@@ -209,7 +211,7 @@ void commodore_keyboard_key_up(commodore_keyboard_t* keyboard, char key_char) {
     if (!keyboard) return;
 
     // Handle RESTORE key
-    if (key_char == 0x13) { // RESTORE
+    if (key_char == KEY_RESTORE) { // RESTORE
         keyboard->restore_key_pressed = false;
         return;
     }
