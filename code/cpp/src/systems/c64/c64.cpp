@@ -170,44 +170,41 @@ void c64_system_tick(c64_t* c64) {
     c64_bus_t* bus = &(c64->bus);
 
     // =========================================================================
-    // PHASE 1: CPU TICKING (PHI2 phase)
+    // PHASE 1: VIC-II TICKING - moved to first position as requested
     // =========================================================================
+    // VIC-II drives the video timing and memory access patterns, so it makes sense
+    // to tick it first to establish the current video state before CPU operations
     bus_state_t s = c64->bus.state;
+    s = vicii_tick(c64->vicii, s);
+
+    // =========================================================================
+    // PHASE 2: CPU TICKING (PHI2 phase)
+    // =========================================================================
     s = mos6510_tick_phi2(c64->mos6510, s);
 
     // =========================================================================
-    // PHASE 2: MEMORY SERVICE
+    // PHASE 3: MEMORY SERVICE
     // =========================================================================
     s = c64_memory_tick(&c64->bus, s);
 
     // =========================================================================
-    // PHASE 3: CPU TICKING (PHI1 phase)
+    // PHASE 4: CPU TICKING (PHI1 phase)
     // =========================================================================
     s = mos6510_tick_phi1(c64->mos6510, s);
     c64->bus.state = s;
 
     // =========================================================================
-    // PHASE 4: BUS READY WAITING AND CHIP TICKING
+    // PHASE 5: OTHER CHIP TICKING
     // =========================================================================
-
-    // =========================================================================
-    // PHASE 4: CHIP TICKING - All non-CPU chips ticked in proper timing order
-    // =========================================================================
-    // RDY wait is handled inside mos6510_tick_phi2, so no need for is_read distinction
-
-    // Use local bus_state_t variable for all chip ticks to avoid repeated memory accesses
-    // Phase 1: VIC-II tick first - it drives the video timing and memory access patterns
-    s = vicii_tick(c64->vicii, s);
-
-    // Phase 2: CIA chips - they handle I/O and timing functions
+    // CIA chips - they handle I/O and timing functions
     // CIA2 must be ticked before CIA1 because CIA2 controls VIC-II bank switching
     s = mos6526_tick(c64->cia2, s);
     s = mos6526_tick(c64->cia1, s);
 
-    // Phase 3: SID - sound generation
+    // SID - sound generation
     s = mos6581_tick(c64->sid, s);
 
-    // Phase 4: Color RAM - this must happen after VIC-II to handle the floating bus effect
+    // Color RAM - this must happen after VIC-II to handle the floating bus effect
     s = mos2114_tick(c64->colorram, s);
 
     // Update RDY line based on BA (hardware accurate)
