@@ -11,8 +11,8 @@
 #include "../../chip/sound/mos6581.h"
 #include "../../chip/io/mos6526.h"
 #include "../../chip/video/vic_ii/vicii_common.h"
-#include "../../chip/video/vic_ii/mos6567.h"
 #include "../../chip/video/vic_ii/mos6569.h"
+#include "../../chip/video/vic_ii/mos6567.h"
 #include "c64_bus.h"  // Include the bus header to get c64_bus_t definition
 #include "c64_config.h"
 
@@ -57,14 +57,9 @@ using c64_s = C64System;  // For GUI interface compatibility
 c64_t* c64_system_create(const c64_config_t* config);
 void c64_system_destroy(c64_t* c64);
 
-// CPU execution functions
-void c64_cpu_cycle(c64_t* c64);     // Execute one CPU cycle (C++ core)
+// Single unified system tick function - the one place where the entire system is ticked
+void c64_system_tick(c64_t* c64);
 
-// Ticks all non-CPU chips once to complete a cycle.
-void c64_non_cpu_cycle(void* c64_ptr);
-
-// Parent tick function that coordinates all chip ticks with proper timing order
-void c64_chips_tick_all(c64_t* c64, c64_bus_t* bus);
 bool c64_pla_maps_generate(c64_t* c64);  // PLA memory mapping generation
 void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config);
 bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config);

@@ -2,7 +2,7 @@
 .vscode/settings.json
 
 # Build directories
-build/bin/**
+build/**
 code/cpp/build/
 code/cpp/build_gui/
 code/cpp/bin/
@@ -113,3 +113,5 @@ code/cpp/tests/fam65xx_processor_tests_runner
 code/csharp/aiemu/obj/*
 code/cpp/tests/CTestTestfile.cmake
 code/cpp/.cache/*
+code/cpp/tests/fam65xx_klaus_test_runner
+code/cpp/tests/fam65xx_lorenz_test_harness

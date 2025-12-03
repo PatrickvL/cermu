@@ -66,8 +66,7 @@ typedef struct c64_bus_s {
     } io_page_handlers_t;
     io_page_handlers_t io_handlers[16]; // One handler per IO page (0-15)
 
-    // Integrated adapter interfaces - can be passed out as pointers
-    bus_cycle_ops_t bus_adapter;
+    // Control lines adapter interface
     control_lines_interface_t control_lines_adapter;
 } c64_bus_t;
 
@@ -105,10 +104,6 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
  */
 void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c64_config_t* config);
 
-// Bus cycle functions
-uint8_t c64_bus_read_cycle(c64_bus_t *bus, uint16_t addr);
-void c64_bus_write_cycle(c64_bus_t* bus, uint16_t addr, uint8_t value);
-
 // System functions
 void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64);  // c64_t*
 
@@ -138,28 +133,17 @@ void c64_bus_init_io_handlers(c64_bus_t* c64_bus);
 extern chip_descriptor_t c64_bus_descriptor;
 
 // ============================================================================
-// ADAPTER INTERFACES - Integrated adapter access
+// ADAPTER INTERFACES - Control lines adapter access
 // ============================================================================
 
 /**
  * Initialize the integrated adapter interfaces in the C64 bus.
- * This sets up the adapter interfaces so they can be passed out as pointers.
+ * This sets up the control lines adapter interface.
  * Should be called during bus initialization.
  *
  * @param c64_bus Pointer to the C64 bus implementation
  */
 void c64_bus_init_adapters(c64_bus_t* c64_bus);
-
-/**
- * Get a pointer to the bus cycle adapter interface.
- * This allows the C64 bus to work with the refactored MOS6510 CPU.
- *
- * @param c64_bus Pointer to the existing C64 bus implementation
- * @return Pointer to the bus interface structure configured for the C64 bus
- */
-static inline bus_cycle_ops_t* c64_bus_get_adapter(c64_bus_t* c64_bus) {
-    return &c64_bus->bus_adapter;
-}
 
 /**
  * Get a pointer to the control lines adapter interface.
@@ -171,4 +155,3 @@ static inline bus_cycle_ops_t* c64_bus_get_adapter(c64_bus_t* c64_bus) {
 static inline control_lines_interface_t* c64_control_lines_get_adapter(c64_bus_t* c64_bus) {
     return &c64_bus->control_lines_adapter;
 }
-
