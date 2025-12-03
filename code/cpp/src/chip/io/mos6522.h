@@ -21,6 +21,9 @@ typedef struct {
     uint8_t port_a_ddr;
     uint8_t port_b_ddr;
 
+    // Keyboard integration
+    void* keyboard_reference;  // Pointer to connected keyboard
+
     // Timers
     uint16_t timer1_latch;
     uint16_t timer1_counter;
@@ -112,6 +115,10 @@ void mos6522_bus_attach(void* chip, void* bus);
 bus_state_t mos6522_tick(void* chip, bus_state_t bus_state);
 bus_state_t mos6522_registers_read(void* chip, bus_state_t bus_state);
 bus_state_t mos6522_registers_write(void* chip, bus_state_t bus_state);
+
+// Keyboard integration functions
+void mos6522_connect_keyboard(void* chip, void* keyboard);
+void mos6522_update_keyboard_matrix(void* chip);
 
 // Chip descriptor
 extern chip_descriptor_t mos6522_descriptor;

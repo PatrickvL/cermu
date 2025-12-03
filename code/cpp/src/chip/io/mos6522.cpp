@@ -1,4 +1,5 @@
 #include "mos6522.h"
+#include "../input/commodore_keyboard.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -58,6 +59,72 @@ void mos6522_destroy(void* chip) {
     free(via);
 }
 
+void mos6522_connect_keyboard(void* chip, void* keyboard) {
+    if (!chip) return;
+    mos6522_t* via = (mos6522_t*)chip;
+    via->keyboard_reference = keyboard;
+
+    // Connect keyboard ports to VIA ports
+    if (keyboard) {
+        commodore_keyboard_connect_ports((commodore_keyboard_t*)keyboard, &via->port_a_data, &via->port_b_data);
+    }
+}
+
+void mos6522_update_keyboard_matrix(void* chip) {
+    if (!chip) return;
+    mos6522_t* via = (mos6522_t*)chip;
+
+    if (via->keyboard_reference) {
+        commodore_keyboard_t* keyboard = (commodore_keyboard_t*)via->keyboard_reference;
+
+        // Update keyboard matrix based on current port states
+        commodore_keyboard_update_matrix(keyboard);
+
+        // Synchronize keyboard contacts with VIA port data
+        // Port A (columns) - update based on keyboard column contacts
+        uint8_t keyboard_cols = 0xFF; // Default: all columns open
+
+        for (int col = 0; col < 8; col++) {
+            bool col_closed = false;
+            for (int row = 0; row < 8; row++) {
+                if (commodore_keyboard_is_col_closed(keyboard, row, col)) {
+                    col_closed = true;
+                    break;
+                }
+            }
+            if (col_closed) {
+                keyboard_cols &= ~(1 << col);
+            }
+        }
+
+        // Port B (rows) - update based on keyboard row contacts
+        uint8_t keyboard_rows = 0xFF; // Default: all rows open
+
+        for (int row = 0; row < 8; row++) {
+            bool row_closed = false;
+            for (int col = 0; col < 8; col++) {
+                if (commodore_keyboard_is_row_closed(keyboard, row, col)) {
+                    row_closed = true;
+                    break;
+                }
+            }
+            if (row_closed) {
+                keyboard_rows &= ~(1 << row);
+            }
+        }
+
+        // Update VIA port data based on keyboard state
+        // Only update if ports are configured as input
+        if ((via->port_a_ddr & 0xFF) == 0x00) { // Port A as input
+            via->port_a_data = keyboard_cols;
+        }
+
+        if ((via->port_b_ddr & 0xFF) == 0x00) { // Port B as input
+            via->port_b_data = keyboard_rows;
+        }
+    }
+}
+
 void mos6522_reset(mos6522_t* via) {
     if (!via) return;
 
@@ -106,10 +173,60 @@ bus_state_t mos6522_registers_read(void* chip, bus_state_t bus_state) {
 
     switch (reg) {
         case MOS6522_PORTB:
-            BUS_SET_DATA(bus_state, via->port_b_data);
+            // Port B read - check if keyboard is connected
+            if (via->keyboard_reference) {
+                // Keyboard matrix integration for Port B (rows)
+                // Bits represent row states based on keyboard contacts
+                uint8_t keyboard_rows = 0xFF; // Default: all rows open
+
+                // Check each row for closed contacts
+                for (int row = 0; row < 8; row++) {
+                    bool row_closed = false;
+                    // Check if any column in this row has a closed contact
+                    for (int col = 0; col < 8; col++) {
+                        if (commodore_keyboard_is_row_closed((commodore_keyboard_t*)via->keyboard_reference, row, col)) {
+                            row_closed = true;
+                            break;
+                        }
+                    }
+                    if (row_closed) {
+                        keyboard_rows &= ~(1 << row);
+                    }
+                }
+
+                // Combine with actual port data
+                BUS_SET_DATA(bus_state, via->port_b_data & keyboard_rows);
+            } else {
+                BUS_SET_DATA(bus_state, via->port_b_data);
+            }
             break;
         case MOS6522_PORTA:
-            BUS_SET_DATA(bus_state, via->port_a_data);
+            // Port A read - check if keyboard is connected
+            if (via->keyboard_reference) {
+                // Keyboard matrix integration for Port A (columns)
+                // Bits represent column states based on keyboard contacts
+                uint8_t keyboard_cols = 0xFF; // Default: all columns open
+
+                // Check each column for closed contacts
+                for (int col = 0; col < 8; col++) {
+                    bool col_closed = false;
+                    // Check if any row in this column has a closed contact
+                    for (int row = 0; row < 8; row++) {
+                        if (commodore_keyboard_is_col_closed((commodore_keyboard_t*)via->keyboard_reference, row, col)) {
+                            col_closed = true;
+                            break;
+                        }
+                    }
+                    if (col_closed) {
+                        keyboard_cols &= ~(1 << col);
+                    }
+                }
+
+                // Combine with actual port data
+                BUS_SET_DATA(bus_state, via->port_a_data & keyboard_cols);
+            } else {
+                BUS_SET_DATA(bus_state, via->port_a_data);
+            }
             break;
         case MOS6522_DDRB:
             BUS_SET_DATA(bus_state, via->port_b_ddr);
@@ -276,6 +393,9 @@ bus_state_t mos6522_tick(void* chip, bus_state_t bus_state) {
             BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | via->interrupt_line);
         }
     }
+
+    // Keyboard matrix update (called every tick for responsive keyboard scanning)
+    mos6522_update_keyboard_matrix(via);
 
     return bus_state;
 }
