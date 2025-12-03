@@ -33,7 +33,7 @@ int main() {
         constexpr std::uint64_t cycles = 5000;
         
         for (std::uint64_t i = 0; i < cycles; ++i) {
-            c64_cpu_cycle(c64);
+            c64_system_tick(c64);
         }
         
         std::cout << "Completed " << cycles << " cycles." << std::endl;
