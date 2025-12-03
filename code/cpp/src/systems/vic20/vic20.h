@@ -10,6 +10,7 @@
 #include "../../chip/memory/mos2114.h"
 #include "../../chip/sound/mos6581.h"
 #include "../../chip/io/mos6526.h"
+#include "../../chip/io/mos6522.h"
 #include "../../chip/video/vic_ii/vicii_common.h"
 #include "../../chip/video/vic_ii/mos6560.h"
 #include "../../chip/video/vic_ii/mos6561.h"
@@ -31,6 +32,7 @@ struct VIC20System {
     mos6581_t* sid;             // MOS6581 SID sound chip (optional)
     mos2114_t* colorram;        // Color RAM (1KB at $9400-$97FF)
     mos6526_t* cia1;            // MOS6526 CIA 1 (BUS_MASK_IRQ) ($9110-$911F, 16 bytes)
+    mos6522_t* via1;            // MOS6522 VIA 1 ($9120-$912F, 16 bytes)
     rom_t* kernal;              // Kernal ROM $E000-$FFFF (8KB)
 
     std::uint64_t total_cycles; // Total cycles executed by the system
