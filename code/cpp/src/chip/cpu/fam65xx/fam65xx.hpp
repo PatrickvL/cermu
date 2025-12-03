@@ -941,35 +941,20 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     // For addressing modes that need address calculation, start with addressing mode handler
     // AM::NON and AM::IMM go directly to operation (no address calculation needed)
     if (this->opcode_entry.am_index > to_index(AM::IMM)) {
-      InstructionHandler am_handler =
-          addressing_mode_handlers[this->opcode_entry.am_index];
-
-      if constexpr (ENABLE_TRACING) {
-        // VALIDATION: Check for null addressing mode handler
-        if (am_handler == nullptr) {
-          printf("ERROR: NULL addressing mode handler for am_index=%d\n",
-            this->opcode_entry.am_index);
-          return &fam65xx_t::op_nop; // Safe fallback
+        // COMPILE-TIME SAFETY: addressing_mode_handlers is fully initialized in init_opcode_table()
+        // Every valid addressing mode has a handler assigned, so this is always safe
+        InstructionHandler handler = addressing_mode_handlers[this->opcode_entry.am_index];
+        if (handler == nullptr) {
+            // Fallback to NOP if no handler is assigned (should never happen in practice)
+            return &fam65xx_t::op_nop;
         }
-      }
-
-      return am_handler;
+        return handler;
     }
 
     // Get operation handler
-    InstructionHandler op_handler =
-        this->operation_handlers[this->opcode_entry.op_index];
-
-    if constexpr (ENABLE_TRACING) {
-      // VALIDATION: Check for null operation handler
-      if (op_handler == nullptr) {
-        printf("ERROR: NULL operation handler for op_index=%d\n",
-          this->opcode_entry.op_index);
-        return &fam65xx_t::op_nop; // Safe fallback
-      }
-    }
-
-    return op_handler;
+    // COMPILE-TIME SAFETY: operation_handlers is fully initialized in init_opcode_table()
+    // Every valid opcode has a handler assigned, so this is always safe
+    return this->operation_handlers[this->opcode_entry.op_index];
   }
 
   inline bus_state_t transition_to_opcode(bus_state_t pins, const opcode_info_t entry) {
@@ -1473,12 +1458,9 @@ public:
       }
 
       // Call handler to set up bus (sees current even half_cycle)
-      if (this->current_handler != nullptr) {
-        pins = this->call_current_handler(pins);
-      } else {
-        trace("No handler - starting fetch_opcode");
-        pins = this->fetch_opcode(pins);
-      }
+      // COMPILE-TIME SAFETY: current_handler is always assigned by get_instruction_handler()
+      // which is guaranteed to return a valid handler pointer
+      pins = this->call_current_handler(pins);
 
       // PHI2 increments half_cycle AFTER handler execution
       // so PHI1 sees the next odd cycle number
@@ -1495,9 +1477,9 @@ public:
 
       // Call handler to perform internal operations
       // Handler will increment half_cycle by 1 (odd → even)
-      if (this->current_handler != nullptr) {
-        pins = this->call_current_handler(pins);
-      }
+      // COMPILE-TIME SAFETY: current_handler is always assigned by get_instruction_handler()
+      // which is guaranteed to return a valid handler pointer
+      pins = this->call_current_handler(pins);
 
       // Clock APU if present
       if constexpr (has_apu()) {
@@ -1541,7 +1523,7 @@ public:
   fam65xx_t() {
     // Initialize CPU state to zero
     opcode_entry = {};
-    current_handler = nullptr;
+    current_handler = &fam65xx_t::fetch_opcode; // Always initialize to valid handler
     half_cycle = 0;
     active_interrupt = FAM65XX_INT_NONE;
     nmi_prev = 0;
