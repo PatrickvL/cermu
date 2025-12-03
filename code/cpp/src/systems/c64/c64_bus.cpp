@@ -267,57 +267,58 @@ static void c64_bus_update_pla_mode(c64_bus_t* c64_bus) {
     c64_bus_mode_switch(c64_bus, pla_mode);
 }
 
-// Waits for the bus to be ready, ticking non-CPU chips.
-void c64_wait_for_bus_ready(c64_bus_t *c64_bus, bool is_read_cycle) {
-    c64_t* c64 = static_cast<c64_t*>(c64_bus->c64);
+// OBSOLETE FUNCTION - This functionality has been merged into c64_system_tick
+// void c64_wait_for_bus_ready(c64_bus_t *c64_bus, bool is_read_cycle) {
+//     c64_t* c64 = static_cast<c64_t*>(c64_bus->c64);
+//
+//     if (is_read_cycle) {
+//         // A CPU read must wait for VIC to release the bus (AEC high) AND
+//         // for the BA/RDY line to be high.
+//         uint8_t lines = BUS_GET_LINES(c64_bus->state);
+//         while (!(lines & BUS_MASK_AEC) || !(lines & BUS_MASK_BA)) {
+//             c64_non_cpu_cycle(c64);
+//             lines = BUS_GET_LINES(c64_bus->state);
+//         }
+//     } else {
+//         // A CPU write only needs to wait for VIC to release the address bus.
+//         // It is NOT affected by the BA/RDY line.
+//         uint8_t lines = BUS_GET_LINES(c64_bus->state);
+//         while (!(lines & BUS_MASK_AEC)) {
+//             c64_non_cpu_cycle(c64);
+//             lines = BUS_GET_LINES(c64_bus->state);
+//         }
+//     }
+// }
 
-    if (is_read_cycle) {
-        // A CPU read must wait for VIC to release the bus (AEC high) AND
-        // for the BA/RDY line to be high.
-        uint8_t lines = BUS_GET_LINES(c64_bus->state);
-        while (!(lines & BUS_MASK_AEC) || !(lines & BUS_MASK_BA)) {
-            c64_non_cpu_cycle(c64);
-            lines = BUS_GET_LINES(c64_bus->state);
-        }
-    } else {
-        // A CPU write only needs to wait for VIC to release the address bus.
-        // It is NOT affected by the BA/RDY line.
-        uint8_t lines = BUS_GET_LINES(c64_bus->state);
-        while (!(lines & BUS_MASK_AEC)) {
-            c64_non_cpu_cycle(c64);
-            lines = BUS_GET_LINES(c64_bus->state);
-        }
-    }
-}
+// OBSOLETE FUNCTIONS - These have been replaced by the unified tick function
+// uint8_t c64_bus_read_cycle(c64_bus_t *c64_bus, uint16_t addr) {
+//     // The core cycle function handles all bus contention (waiting) and performs
+//     // the final tick for all non-CPU chips. This happens concurrently with the
+//     // CPU's memory access.
+//     c64_wait_for_bus_ready(c64_bus, true);
+//     // The bus is now guaranteed to be ready for the CPU.
+//     bus_state_t bus_state = c64_bus->state;
+//     BUS_SET_ADDR(bus_state, addr);
+//     BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_RW); // Set read mode
+//     c64_bus->state = c64_memory_tick(c64_bus, bus_state);
+//     // Tick system through complete cycle
+//     c64_non_cpu_cycle(c64_bus->c64);
+//     return BUS_GET_DATA(c64_bus->state);
+// }
 
-uint8_t c64_bus_read_cycle(c64_bus_t *c64_bus, uint16_t addr) {
-    // The core cycle function handles all bus contention (waiting) and performs
-    // the final tick for all non-CPU chips. This happens concurrently with the
-    // CPU's memory access.
-    c64_wait_for_bus_ready(c64_bus, true);
-    // The bus is now guaranteed to be ready for the CPU.
-    bus_state_t bus_state = c64_bus->state;
-    BUS_SET_ADDR(bus_state, addr);
-    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_RW); // Set read mode
-    c64_bus->state = c64_memory_tick(c64_bus, bus_state);
-    // Tick system through complete cycle
-    c64_non_cpu_cycle(c64_bus->c64);
-    return BUS_GET_DATA(c64_bus->state);
-}
-
-void c64_bus_write_cycle(c64_bus_t* c64_bus, uint16_t addr, uint8_t value) {
-    // The core cycle function handles all bus contention (waiting) and performs
-    // the final tick for all non-CPU chips.
-    c64_wait_for_bus_ready(c64_bus, false);
-    // The bus is now guaranteed to be ready for the CPU.
-    bus_state_t bus_state = c64_bus->state;
-    BUS_SET_ADDR(bus_state, addr);
-    BUS_SET_DATA(bus_state, value);
-    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) & ~BUS_MASK_RW); // Clear read/write bit for write mode
-    c64_bus->state = c64_memory_tick(c64_bus, bus_state);
-    // Advance system
-    c64_non_cpu_cycle(c64_bus->c64);
-}
+// void c64_bus_write_cycle(c64_bus_t* c64_bus, uint16_t addr, uint8_t value) {
+//     // The core cycle function handles all bus contention (waiting) and performs
+//     // the final tick for all non-CPU chips.
+//     c64_wait_for_bus_ready(c64_bus, false);
+//     // The bus is now guaranteed to be ready for the CPU.
+//     bus_state_t bus_state = c64_bus->state;
+//     BUS_SET_ADDR(bus_state, addr);
+//     BUS_SET_DATA(bus_state, value);
+//     BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) & ~BUS_MASK_RW); // Clear read/write bit for write mode
+//     c64_bus->state = c64_memory_tick(c64_bus, bus_state);
+//     // Advance system
+//     c64_non_cpu_cycle(c64_bus->c64);
+// }
 
 // ============================================================================
 // PLA integration functions
@@ -467,17 +468,6 @@ uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits) {
 // ADAPTER INTERFACES - Integrated adapter initialization
 // ============================================================================
 
-// Adapter function implementations for C64 bus
-static uint8_t c64_bus_adapter_bus_read_cycle(void* context, uint16_t address) {
-    c64_bus_t* c64_bus = (c64_bus_t*)context;
-    return c64_bus_read_cycle(c64_bus, address);
-}
-
-static void c64_bus_adapter_bus_write_cycle(void* context, uint16_t address, uint8_t value) {
-    c64_bus_t* c64_bus = (c64_bus_t*)context;
-    c64_bus_write_cycle(c64_bus, address, value);
-}
-
 // Control lines adapter functions
 static uint32_t c64_control_lines_get(void* context) {
     c64_bus_t* c64_bus = (c64_bus_t*)context;
@@ -492,11 +482,6 @@ static void c64_control_lines_set(void* context, uint32_t lines) {
 }
 
 void c64_bus_init_adapters(c64_bus_t* c64_bus) {
-    // Initialize bus cycle adapter
-    c64_bus->bus_adapter.context = c64_bus;
-    c64_bus->bus_adapter.bus_read_cycle = c64_bus_adapter_bus_read_cycle;
-    c64_bus->bus_adapter.bus_write_cycle = c64_bus_adapter_bus_write_cycle;
-    
     // Initialize control lines adapter
     c64_bus->control_lines_adapter.get_lines = c64_control_lines_get;
     c64_bus->control_lines_adapter.set_lines = c64_control_lines_set;

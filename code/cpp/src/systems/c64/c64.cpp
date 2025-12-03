@@ -115,46 +115,20 @@ bool c64_pla_maps_generate(c64_t* c64) {
 }
 
 // ============================================================================
-// OPTIMIZED BUS CYCLE - Safe chip lifecycle management and callback dispatch
+// SINGLE UNIFIED SYSTEM TICK FUNCTION
 // ============================================================================
 
 // Callback for each bus cycle (can be set by test harness)
 // Usually NULL during normal emulation, only set for testing/debugging
 void (*bus_cycle_callback)(void) = NULL;
 
-// Parent tick function that coordinates all chip ticks with proper timing order
-void c64_chips_tick_all(c64_t* c64, c64_bus_t* bus) {
-    if (unlikely(!c64 || !bus)) {
+// Single unified system tick function - the one place where the entire system is ticked
+void c64_system_tick(c64_t* c64) {
+    if (unlikely(!c64)) {
+        printf("ERROR: c64_system_tick called with NULL c64\n");
+        fflush(stdout);
         return;
     }
-
-    // Phase 1: VIC-II tick first - it drives the video timing and memory access patterns
-    // This must happen before other chips to ensure proper bus contention handling
-    bus->state = vicii_tick(c64->vicii, bus->state);
-
-    // Phase 2: CIA chips - they handle I/O and timing functions
-    // CIA2 must be ticked before CIA1 because CIA2 controls VIC-II bank switching
-    bus->state = mos6526_tick(c64->cia2, bus->state);
-    bus->state = mos6526_tick(c64->cia1, bus->state);
-
-    // Phase 3: SID - sound generation
-    bus->state = mos6581_tick(c64->sid, bus->state);
-
-    // Phase 4: Color RAM - this must happen after VIC-II to handle the floating bus effect
-    // When CPU reads only lower data lines from color RAM, VIC-II can see floating data
-    bus->state = mos2114_tick(c64->colorram, bus->state);
-
-    // Update RDY line based on BA (hardware accurate)
-    if (BUS_GET_LINES(bus->state) & BUS_MASK_BA) {
-        BUS_SET_LINES(bus->state, BUS_GET_LINES(bus->state) | BUS_MASK_RDY);
-    } else {
-        BUS_SET_LINES(bus->state, BUS_GET_LINES(bus->state) & ~BUS_MASK_RDY);
-    }
-}
-
-// Ticks all non-CPU chips once to complete a cycle.
-void c64_non_cpu_cycle(void* c64_ptr) {
-    c64_t* c64 = (c64_t*)c64_ptr;  // Cast from opaque pointer
 
     // Optimized null check with unlikely hint - callback rarely set during normal emulation
     if (unlikely(bus_cycle_callback != NULL)) {
@@ -162,11 +136,6 @@ void c64_non_cpu_cycle(void* c64_ptr) {
     }
 
     // Safety checks
-    if (unlikely(!c64)) {
-        printf("ERROR: c64_non_cpu_cycle called with NULL c64_ptr\n");
-        fflush(stdout);
-        return;
-    }
     if (unlikely(!c64->vicii)) {
         printf("ERROR: c64->vicii is NULL at cycle %llu\n", (unsigned long long)c64->total_cycles);
         fflush(stdout);
@@ -193,16 +162,118 @@ void c64_non_cpu_cycle(void* c64_ptr) {
 
     // Debug output every 2000000 cycles to track progress
     if (c64->total_cycles % 2000000 == 0) {
-        printf("c64_non_cpu_cycle: cycle #%llu\n", (unsigned long long)c64->total_cycles);
+        printf("c64_system_tick: cycle #%llu\n", (unsigned long long)c64->total_cycles);
         fflush(stdout);
     }
 
     c64->total_cycles++;
-
     c64_bus_t* bus = &(c64->bus);
 
-    // Call the new parent tick function that handles proper timing order
-    c64_chips_tick_all(c64, bus);
+    // =========================================================================
+    // PHASE 1: CPU TICKING (PHI2 phase)
+    // =========================================================================
+    bus_state_t s = c64->bus.state;
+    s = mos6510_tick_phi2(c64->mos6510, s);
+
+    // =========================================================================
+    // PHASE 2: MEMORY SERVICE
+    // =========================================================================
+    s = c64_memory_tick(&c64->bus, s);
+
+    // =========================================================================
+    // PHASE 3: CPU TICKING (PHI1 phase)
+    // =========================================================================
+    s = mos6510_tick_phi1(c64->mos6510, s);
+    c64->bus.state = s;
+
+    // =========================================================================
+    // PHASE 4: BUS READY WAITING AND CHIP TICKING
+    // =========================================================================
+
+    // Check if this is a read or write operation
+    bool is_read = BUS_GET_LINES(s) & BUS_MASK_RW;
+
+    if (is_read) {
+        // A CPU read must wait for VIC to release the bus (AEC high) AND
+        // for the BA/RDY line to be high.
+        uint8_t lines = BUS_GET_LINES(bus->state);
+        while (!(lines & BUS_MASK_AEC) || !(lines & BUS_MASK_BA)) {
+            // Tick all non-CPU chips while waiting for bus to be ready
+            // Phase 1: VIC-II tick first - it drives the video timing and memory access patterns
+            bus->state = vicii_tick(c64->vicii, bus->state);
+
+            // Phase 2: CIA chips - they handle I/O and timing functions
+            // CIA2 must be ticked before CIA1 because CIA2 controls VIC-II bank switching
+            bus->state = mos6526_tick(c64->cia2, bus->state);
+            bus->state = mos6526_tick(c64->cia1, bus->state);
+
+            // Phase 3: SID - sound generation
+            bus->state = mos6581_tick(c64->sid, bus->state);
+
+            // Phase 4: Color RAM - this must happen after VIC-II to handle the floating bus effect
+            bus->state = mos2114_tick(c64->colorram, bus->state);
+
+            // Update RDY line based on BA (hardware accurate)
+            if (BUS_GET_LINES(bus->state) & BUS_MASK_BA) {
+                BUS_SET_LINES(bus->state, BUS_GET_LINES(bus->state) | BUS_MASK_RDY);
+            } else {
+                BUS_SET_LINES(bus->state, BUS_GET_LINES(bus->state) & ~BUS_MASK_RDY);
+            }
+
+            lines = BUS_GET_LINES(bus->state);
+        }
+    } else {
+        // A CPU write only needs to wait for VIC to release the address bus.
+        // It is NOT affected by the BA/RDY line.
+        uint8_t lines = BUS_GET_LINES(bus->state);
+        while (!(lines & BUS_MASK_AEC)) {
+            // Tick all non-CPU chips while waiting for bus to be ready
+            // Phase 1: VIC-II tick first - it drives the video timing and memory access patterns
+            bus->state = vicii_tick(c64->vicii, bus->state);
+
+            // Phase 2: CIA chips - they handle I/O and timing functions
+            // CIA2 must be ticked before CIA1 because CIA2 controls VIC-II bank switching
+            bus->state = mos6526_tick(c64->cia2, bus->state);
+            bus->state = mos6526_tick(c64->cia1, bus->state);
+
+            // Phase 3: SID - sound generation
+            bus->state = mos6581_tick(c64->sid, bus->state);
+
+            // Phase 4: Color RAM - this must happen after VIC-II to handle the floating bus effect
+            bus->state = mos2114_tick(c64->colorram, bus->state);
+
+            // Update RDY line based on BA (hardware accurate)
+            if (BUS_GET_LINES(bus->state) & BUS_MASK_BA) {
+                BUS_SET_LINES(bus->state, BUS_GET_LINES(bus->state) | BUS_MASK_RDY);
+            } else {
+                BUS_SET_LINES(bus->state, BUS_GET_LINES(bus->state) & ~BUS_MASK_RDY);
+            }
+
+            lines = BUS_GET_LINES(bus->state);
+        }
+    }
+
+    // Final chip tick to complete the cycle with proper timing order
+    // Phase 1: VIC-II tick first - it drives the video timing and memory access patterns
+    bus->state = vicii_tick(c64->vicii, bus->state);
+
+    // Phase 2: CIA chips - they handle I/O and timing functions
+    // CIA2 must be ticked before CIA1 because CIA2 controls VIC-II bank switching
+    bus->state = mos6526_tick(c64->cia2, bus->state);
+    bus->state = mos6526_tick(c64->cia1, bus->state);
+
+    // Phase 3: SID - sound generation
+    bus->state = mos6581_tick(c64->sid, bus->state);
+
+    // Phase 4: Color RAM - this must happen after VIC-II to handle the floating bus effect
+    bus->state = mos2114_tick(c64->colorram, bus->state);
+
+    // Update RDY line based on BA (hardware accurate)
+    if (BUS_GET_LINES(bus->state) & BUS_MASK_BA) {
+        BUS_SET_LINES(bus->state, BUS_GET_LINES(bus->state) | BUS_MASK_RDY);
+    } else {
+        BUS_SET_LINES(bus->state, BUS_GET_LINES(bus->state) & ~BUS_MASK_RDY);
+    }
 }
 
 // Compact chip creation helper - creates and registers a chip
@@ -344,17 +415,4 @@ bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config) {
 
     printf("ROMs reloaded successfully\n");
     return true;
-}
-
-// Execute one CPU cycle based on current mode
-void c64_cpu_cycle(c64_t* c64) {
-    if (!c64) return;
-    // CPU tick -> memory service -> system tick
-    bus_state_t s = c64->bus.state;
-    s = mos6510_tick_phi2(c64->mos6510, s);
-    s = c64_memory_tick(&c64->bus, s);
-    s = mos6510_tick_phi1(c64->mos6510, s);
-    c64->bus.state = s;
-    // Advance the rest of the system to complete the cycle
-    c64_non_cpu_cycle(c64);
 }
