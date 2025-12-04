@@ -104,6 +104,100 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
  */
 void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c64_config_t* config);
 
+/**
+ * Ultra-optimized unified address calculation function for memory access.
+ * Pure branchless arithmetic using strategic CHIP_* numbering for maximum performance.
+ * CHIP values are chosen so that (chip << 12) directly maps to buffer offsets.
+ *
+ * CRITICAL DEPENDENCY: This function relies on the specific CHIP_* enum values
+ * in c64_bus.h. The calculation uses chip << 12 (chip * 4096) for base offsets:
+ *
+ * - CHIP_ROML     = 0  -> base_offset = 0x0000 (0 << 12 = 0x0000)
+ * - CHIP_ROMH     = 2  -> base_offset = 0x2000 (2 << 12 = 0x2000)
+ * - CHIP_KERNAL   = 4  -> base_offset = 0x4000 (4 << 12 = 0x4000)
+ * - CHIP_BASIC    = 6  -> base_offset = 0x6000 (6 << 12 = 0x6000)
+ * - CHIP_CHARROM  = 8  -> base_offset = 0x8000 (8 << 12 = 0x8000)
+ * - CHIP_RAM      = 9  -> base_offset = 0x9000 (9 << 12 = 0x9000)
+ *
+ * WARNING: Changing these CHIP_* values will break address calculation!
+ *
+ * OPTIMIZATION: Single shift + mask operation, completely branchless.
+ * Total buffer size: 0x9000 + 64KB RAM = 100KB (36KB + 64KB)
+ *
+ * @param chip The target chip ID (must be 0-9 for unified buffer chips)
+ * @param addr The 16-bit address to access
+ * @return The calculated offset into the unified memory buffer
+ */
+static inline uint32_t c64_bus_unified_address_calc(uint8_t chip, uint16_t addr) {
+    // Ultra-branchless calculation using strategic numbering
+    uint32_t base = (uint32_t)chip << 12;  // Direct offset calculation via strategic numbering
+    
+    // CRITICAL: addr contains original C64 memory map addresses (e.g. KERNAL 0xE000-0xFFFF)
+    // Mask strips base address to get chip-relative offset (e.g. 0xE000 & 0x1FFF = 0x0000)
+    // RAM uses full 0xFFFF, ROMs use 0x1FFF to prevent buffer overflow
+    // CHARROM (4KB) is safe with 0x1FFF mask: max 0xDFFF & 0x1FFF = 0x0FFF stays within 4KB buffer
+    return base + (addr & (0x1FFF | -(chip == CHIP_RAM)));
+}
+
+/**
+ * Helper function to write a byte to unified buffer using chip-based addressing.
+ * This is used for direct unified buffer writes during memory operations.
+ * Uses c64_bus_unified_address_calc for correct buffer offset calculation.
+ *
+ * @param bus Pointer to the C64 bus controller
+ * @param chip The target chip ID (typically CHIP_RAM for write operations)
+ * @param address 16-bit address in the chip's address range
+ * @param value The byte value to write
+ */
+static inline void c64_bus_write_chip_byte(c64_bus_t* bus, uint8_t chip, uint16_t address, uint8_t value) {
+    // Use the unified address calculation function with the specified chip
+    uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
+    bus->unified_memory_buffer[unified_addr] = value;
+}
+
+/**
+ * Helper function to write a byte to RAM using direct unified buffer access.
+ * This is a specialized convenience function for RAM writes (the most common write case).
+ * Uses c64_bus_write_chip_byte with CHIP_RAM.
+ *
+ * @param bus Pointer to the C64 bus controller
+ * @param address 16-bit address in RAM range ($0000-$FFFF)
+ * @param value The byte value to write
+ */
+static inline void c64_bus_write_ram_byte(c64_bus_t* bus, uint16_t address, uint8_t value) {
+    c64_bus_write_chip_byte(bus, CHIP_RAM, address, value);
+}
+
+/**
+ * Helper function to read a byte from unified buffer using chip-based addressing.
+ * This is the general-purpose read function for all unified buffer chips.
+ * Uses c64_bus_unified_address_calc for correct buffer offset calculation.
+ *
+ * @param bus Pointer to the C64 bus controller
+ * @param chip The target chip ID (CHIP_ROML, CHIP_ROMH, CHIP_KERNAL, CHIP_BASIC, CHIP_CHARROM, CHIP_RAM)
+ * @param address 16-bit address in the chip's address range
+ * @return The byte value at the specified address
+ */
+static inline uint8_t c64_bus_read_chip_byte(c64_bus_t* bus, uint8_t chip, uint16_t address) {
+    // Use the unified address calculation function with the specified chip
+    uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
+    return bus->unified_memory_buffer[unified_addr];
+}
+
+/**
+ * Helper function to read a byte from KERNAL ROM using direct unified buffer access.
+ * This is used for reading the reset vector at $FFFC-$FFFD.
+ * Uses c64_bus_read_chip_byte with CHIP_KERNAL.
+ *
+ * @param bus Pointer to the C64 bus controller
+ * @param address 16-bit address in KERNAL ROM range ($E000-$FFFF)
+ * @return The byte value at the specified address
+ */
+static inline uint8_t c64_bus_read_kernal_byte(c64_bus_t* bus, uint16_t address) {
+    // Use the general unified buffer read function with CHIP_KERNAL
+    return c64_bus_read_chip_byte(bus, CHIP_KERNAL, address);
+}
+
 // System functions
 void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64);  // c64_t*
 

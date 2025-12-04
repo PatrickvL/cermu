@@ -40,44 +40,6 @@ static inline int8_t c64_bus_get_bank(uint16_t address) {
     return address >> 12;  // Extract 4KB bank (0-15)
 }
 
-// ============================================================================
-// UNIFIED ADDRESS CALCULATION FUNCTION - Shared address calculation for performance
-// ============================================================================
-
-/**
- * Ultra-optimized unified address calculation function for memory access.
- * Pure branchless arithmetic using strategic CHIP_* numbering for maximum performance.
- * CHIP values are chosen so that (chip << 12) directly maps to buffer offsets.
- *
- * CRITICAL DEPENDENCY: This function relies on the specific CHIP_* enum values
- * in c64_bus.h. The calculation uses chip << 12 (chip * 4096) for base offsets:
- *
- * - CHIP_ROML     = 0  -> base_offset = 0x0000 (0 << 12 = 0x0000)
- * - CHIP_ROMH     = 2  -> base_offset = 0x2000 (2 << 12 = 0x2000)
- * - CHIP_KERNAL   = 4  -> base_offset = 0x4000 (4 << 12 = 0x4000)
- * - CHIP_BASIC    = 6  -> base_offset = 0x6000 (6 << 12 = 0x6000)
- * - CHIP_CHARROM  = 8  -> base_offset = 0x8000 (8 << 12 = 0x8000)
- * - CHIP_RAM      = 9  -> base_offset = 0x9000 (9 << 12 = 0x9000)
- *
- * WARNING: Changing these CHIP_* values will break address calculation!
- *
- * OPTIMIZATION: Single shift + mask operation, completely branchless.
- * Total buffer size: 0x9000 + 64KB RAM = 100KB (36KB + 64KB)
- *
- * @param chip The target chip ID (must be 0-9 for unified buffer chips)
- * @param addr The 16-bit address to access
- * @return The calculated offset into the unified memory buffer
- */
-static inline uint32_t c64_bus_unified_address_calc(uint8_t chip, uint16_t addr) {
-    // Ultra-branchless calculation using strategic numbering
-    uint32_t base = (uint32_t)chip << 12;  // Direct offset calculation via strategic numbering
-    
-    // CRITICAL: addr contains original C64 memory map addresses (e.g. KERNAL 0xE000-0xFFFF)
-    // Mask strips base address to get chip-relative offset (e.g. 0xE000 & 0x1FFF = 0x0000)
-    // RAM uses full 0xFFFF, ROMs use 0x1FFF to prevent buffer overflow
-    // CHARROM (4KB) is safe with 0x1FFF mask: max 0xDFFF & 0x1FFF = 0x0FFF stays within 4KB buffer
-    return base + (addr & (0x1FFF | -(chip == CHIP_RAM)));
-}
 
 // ULTRA-OPTIMIZED VIC-II MEMORY READ - Better performance than CPU version
 // VIC-II uses pre-selected active array (indexed by CHIP), can only read, never write
@@ -148,10 +110,8 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
         // ENHANCED FAST PATH: Direct unified buffer access for all memory chips
         // Fast path handles: CHIP_ROML, CHIP_ROMH, CHIP_KERNAL, CHIP_BASIC, CHIP_CHARROM, CHIP_RAM
         if (likely(chip <= CHIP_RAM)) {
-            // Unified address calculation using shared function - covers all ROM/RAM types
-            // Address calculation depends on CHIP_* enum ordering (see function documentation)
-            uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
-            BUS_SET_DATA(bus_state, c64_bus->unified_memory_buffer[unified_addr]);
+            // Use unified buffer read helper for all ROM/RAM types
+            BUS_SET_DATA(bus_state, c64_bus_read_chip_byte(c64_bus, chip, address));
         } else if (chip == CHIP_IO) {
             // OPTIMIZED IO PAGE HANDLING: Direct dispatch using pre-initialized handlers
             // Calculate IO page number from address (0-15 for $D000-$DFFF)
@@ -177,9 +137,7 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
             // ENHANCED FAST PATH: Handle all writable unified buffer regions
             if (likely(chip == CHIP_RAM)) {
                 // Direct unified buffer write for RAM (most common writable case)
-                // RAM is at offset 0x7000 in the strategic layout
-                uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
-                c64_bus->unified_memory_buffer[unified_addr] = BUS_GET_DATA(bus_state);
+                c64_bus_write_ram_byte(c64_bus, address, BUS_GET_DATA(bus_state));
             } else if (chip == CHIP_IO) {
                 // OPTIMIZED IO PAGE HANDLING: Direct dispatch using pre-initialized handlers
                 // Calculate IO page number from address (0-15 for $D000-$DFFF)
@@ -687,7 +645,45 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
     c64_bus->roml_present = config->roml_present;
     c64_bus->romh_present = config->romh_present;
     
-    // Clean up any existing allocation
+    // If buffer already exists, just update the ROM pointers to preserve loaded data
+    if (c64_bus->allocated_buffer) {
+        c64_t* c64 = (c64_t*)c64_system;
+        uint8_t* buffer = c64_bus->unified_memory_buffer;
+        
+        // Update ROM chip pointers but preserve existing data by copying it
+#define DO(c64_device, offset, size, present_flag) \
+    if (c64_device && present_flag) { \
+        /* Preserve existing ROM data if it was already loaded */ \
+        if (c64_device->memory && c64_device->memory != buffer + offset) { \
+            /* Copy existing ROM data to unified buffer */ \
+            memcpy(buffer + offset, c64_device->memory, size); \
+            /* Free the old separate allocation */ \
+            free(c64_device->memory); \
+        } \
+        /* Point to unified buffer location */ \
+        c64_device->memory = buffer + offset; \
+    } else if (c64_device) { \
+        /* ROM not present - set to NULL and free existing if needed */ \
+        if (c64_device->memory) { \
+            free(c64_device->memory); \
+            c64_device->memory = NULL; \
+        } \
+    }
+
+        // Update ROM pointers to preserve loaded data
+        DO(c64->cartridge_roml, 0x0000, 8*1024, c64_bus->roml_present);
+        DO(c64->cartridge_romh, 0x2000, 8*1024, c64_bus->romh_present);
+        DO(c64->kernal, 0x4000, 8*1024, true);
+        DO(c64->basic, 0x6000, 8*1024, true);
+        DO(c64->charrom, 0x8000, 4*1024, true);
+        DO(c64->ram, 0x9000, 64*1024, true);
+#undef DO
+        
+        printf("c64_bus: Updated ROM pointers in existing unified buffer\n");
+        return;
+    }
+    
+    // Clean up any existing allocation (shouldn't happen, but be safe)
     if (c64_bus->allocated_buffer) {
         aiemuc_aligned_free(c64_bus->allocated_buffer);
         c64_bus->allocated_buffer = NULL;
