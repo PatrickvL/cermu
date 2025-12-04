@@ -168,13 +168,13 @@ void c64_system_tick(c64_t* c64) {
 
     c64->total_cycles++;
     c64_bus_t* bus = &(c64->bus);
+    bus_state_t s = c64->bus.state;
 
     // =========================================================================
     // PHASE 1: VIC-II TICKING - moved to first position as requested
     // =========================================================================
     // VIC-II drives the video timing and memory access patterns, so it makes sense
     // to tick it first to establish the current video state before CPU operations
-    bus_state_t s = c64->bus.state;
     s = vicii_tick(c64->vicii, s);
 
     // =========================================================================
@@ -191,7 +191,6 @@ void c64_system_tick(c64_t* c64) {
     // PHASE 4: CPU TICKING (PHI1 phase)
     // =========================================================================
     s = mos6510_tick_phi1(c64->mos6510, s);
-    c64->bus.state = s;
 
     // =========================================================================
     // PHASE 5: OTHER CHIP TICKING
