@@ -1475,6 +1475,26 @@ public:
       trace_enter("tick<PHI1>");
       trace_registers("before PHI1");
 
+      // Handle I/O port and APU memory accesses BEFORE calling handler
+      // These functions intercept memory operations for internal CPU features
+      const uint32_t addr = this->get_address_from_pins(pins);
+      const bool is_write = !(pins & FAM65XX_RW);
+      
+      if (is_write) {
+        const uint8_t data = FAM65XX_GET_DATA(pins);
+        // Handle I/O port writes (6510 only)
+        if (!this->handle_io_port_write(addr, data)) {
+          // Handle APU writes (NES 6502 only)
+          this->handle_apu_write(addr, data);
+        }
+      } else {
+        // Handle I/O port reads (6510 only)
+        if (!this->handle_io_port_read(pins, addr)) {
+          // Handle APU reads (NES 6502 only)
+          this->handle_apu_read(pins, addr);
+        }
+      }
+
       // Call handler to perform internal operations
       // Handler will increment half_cycle by 1 (odd → even)
       // COMPILE-TIME SAFETY: current_handler is always assigned by get_instruction_handler()
