@@ -109,8 +109,17 @@ bool c64_pla_maps_generate(c64_t* c64) {
     // Clean up PLA instance
     pla_906114_01_destroy(pla);
 
-    // Set initial bank mapping to a mode known to enable Kernal ROM using proper mode switch
-    c64_bus_mode_switch(bus, 0);
+    // Set initial banking mode based on MOS6510 I/O port state (default: $37)
+    // The MOS6510 init_io_port() sets io_port.data = 0x37 (LORAM=1, HIRAM=1, CHAREN=1)
+    // This maps ALL RAM during boot for the KERNAL RAM test to work correctly
+    // After RAM test completes, KERNAL will switch ROM back in via I/O port writes
+    uint8_t cpu_port_data = mos6510_get_io_data((mos6510_t*)c64->mos6510);
+    uint8_t banking_bits = cpu_port_data & 0x07;  // Extract LORAM, HIRAM, CHAREN (bits 0-2)
+    c64_bus_on_banking_change(bus, banking_bits);
+    
+    printf("C64 initial banking: CPU port=$%02X, banking bits=$%02X\n",
+           cpu_port_data, banking_bits);
+    
     return true;
 }
 
