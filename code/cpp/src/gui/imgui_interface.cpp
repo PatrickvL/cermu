@@ -606,14 +606,6 @@ void gui_render_memory_viewer(c64_t *c64, gui_state_t *gui_state) {
   ImGui::End();
 }
 
-// Helper function to read reset vector from KERNAL ROM
-static inline uint16_t c64_read_reset_vector(c64_t *c64) {
-  if (!c64) return 0x0000;
-  uint8_t reset_low = c64_bus_read_kernal_byte(&c64->bus, 0xFFFC);
-  uint8_t reset_high = c64_bus_read_kernal_byte(&c64->bus, 0xFFFD);
-  return (reset_high << 8) | reset_low;
-}
-
 void gui_render_debugger(c64_t *c64, gui_state_t *gui_state,
                          gui_emulation_context_t *emu_context) {
   if (!ImGui::Begin("Debugger", &gui_state->show_debugger, 0)) {
@@ -645,7 +637,7 @@ void gui_render_debugger(c64_t *c64, gui_state_t *gui_state,
       ImGui::Text("RAM: %s", c64->ram ? "Available" : "NOT AVAILABLE");
       // Check reset vector
       if (c64) {
-        uint16_t reset_vector = c64_read_reset_vector(c64);
+        uint16_t reset_vector = c64_read_kernal_reset_vector(&c64->bus);
         ImGui::Text("Reset Vector: $%04X %s", reset_vector,
                     reset_vector == 0x0000 ? "(NO ROM)" : "(ROM LOADED)");
       } else {
@@ -1607,7 +1599,7 @@ static int gui_emulation_thread_main(void *data) {
       }
 
       // Check if system has ROM loaded by examining reset vector
-      uint16_t reset_vector = c64_read_reset_vector(context->c64);
+      uint16_t reset_vector = c64_read_kernal_reset_vector(&context->c64->bus);
       printf("Emulation thread: Reset vector = $%04X\n", reset_vector);
       if (reset_vector == 0x0000) {
         printf("Emulation thread: WARNING - No ROM loaded, reset vector is "
