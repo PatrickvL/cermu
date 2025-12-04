@@ -310,6 +310,9 @@ c64_t* c64_system_create(const c64_config_t* config) {
     // Set default memory contents and load ROMs from configured paths
     const rom_config_t* rom_config = config->rom_config ? config->rom_config : system_config_get_default_roms();
     c64_memory_init(&c64->system, rom_config);
+    
+    // Re-initialize unified pointers after ROM loading to copy loaded ROM data into unified buffer
+    c64_bus_init_unified_pointers(&c64->bus, c64, config);
 
     // Attach all other chips with bus_attach callbacks
     for (int i = 0; i < c64->system.chip_count; i++) {

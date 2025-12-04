@@ -606,6 +606,14 @@ void gui_render_memory_viewer(c64_t *c64, gui_state_t *gui_state) {
   ImGui::End();
 }
 
+// Helper function to read reset vector from KERNAL ROM
+static inline uint16_t c64_read_reset_vector(c64_t *c64) {
+  if (!c64) return 0x0000;
+  uint8_t reset_low = c64_bus_read_kernal_byte(&c64->bus, 0xFFFC);
+  uint8_t reset_high = c64_bus_read_kernal_byte(&c64->bus, 0xFFFD);
+  return (reset_high << 8) | reset_low;
+}
+
 void gui_render_debugger(c64_t *c64, gui_state_t *gui_state,
                          gui_emulation_context_t *emu_context) {
   if (!ImGui::Begin("Debugger", &gui_state->show_debugger, 0)) {
@@ -637,11 +645,7 @@ void gui_render_debugger(c64_t *c64, gui_state_t *gui_state,
       ImGui::Text("RAM: %s", c64->ram ? "Available" : "NOT AVAILABLE");
       // Check reset vector
       if (c64) {
-        // Read reset vector through proper memory mapping (ROM or RAM depending
-        // on banking)
-        uint8_t reset_low = c64->bus.unified_memory_buffer[0xFFFC];
-        uint8_t reset_high = c64->bus.unified_memory_buffer[0xFFFD];
-        uint16_t reset_vector = (reset_high << 8) | reset_low;
+        uint16_t reset_vector = c64_read_reset_vector(c64);
         ImGui::Text("Reset Vector: $%04X %s", reset_vector,
                     reset_vector == 0x0000 ? "(NO ROM)" : "(ROM LOADED)");
       } else {
@@ -1603,18 +1607,7 @@ static int gui_emulation_thread_main(void *data) {
       }
 
       // Check if system has ROM loaded by examining reset vector
-      uint8_t reset_low = 0;
-      uint8_t reset_high = 0;
-      // Try to read reset vector through the bus system
-      // Bus is embedded, always available
-      if (true) {
-        // Read reset vector through proper memory mapping (ROM or RAM depending
-        // on banking)
-        reset_low = context->c64->bus.unified_memory_buffer[0xFFFC];
-        reset_high = context->c64->bus.unified_memory_buffer[0xFFFD];
-      }
-
-      uint16_t reset_vector = (reset_high << 8) | reset_low;
+      uint16_t reset_vector = c64_read_reset_vector(context->c64);
       printf("Emulation thread: Reset vector = $%04X\n", reset_vector);
       if (reset_vector == 0x0000) {
         printf("Emulation thread: WARNING - No ROM loaded, reset vector is "
@@ -1622,14 +1615,13 @@ static int gui_emulation_thread_main(void *data) {
         printf("Emulation thread: Using simulation mode instead of real CPU "
                "execution\n");
 
-        // Simulation mode - execute instructions in a controlled manner
+        // Simulation mode - execute instructions continuously (no cycle limit)
         uint64_t sim_cycles = 0;
-        const uint64_t MAX_SIM_CYCLES = 100000;
         uint32_t last_sim_log_time = SDL_GetTicks();
         const uint32_t sim_log_interval_ms =
             10000; // Log every 10 seconds for simulation
         while (context->current_state == EMU_STATE_RUNNING &&
-               context->thread_running && sim_cycles < MAX_SIM_CYCLES) {
+               context->thread_running) {
           // Simulate CPU step - this executes one instruction safely
           // Use unified system tick function
           c64_system_tick(context->c64);
@@ -1657,11 +1649,8 @@ static int gui_emulation_thread_main(void *data) {
             }
           }
         }
-        if (sim_cycles >= MAX_SIM_CYCLES) {
-          printf("Emulation thread: Simulation reached cycle limit (%llu "
-                 "cycles)\n",
-                 (unsigned long long)sim_cycles);
-        }
+        printf("Emulation thread: Simulation mode ended after %llu cycles\n",
+               (unsigned long long)sim_cycles);
       } else {
         // Real execution mode with proper ROM
         printf("Emulation thread: Starting real CPU execution with continuous "
