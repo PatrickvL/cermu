@@ -734,12 +734,16 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
     c64_t* c64 = (c64_t*)c64_system;
     uint8_t* buffer = c64_bus->unified_memory_buffer;
     
-#define DO(c64_device, offset, present_flag) \
+#define DO(c64_device, offset, size, present_flag) \
     if (c64_device && present_flag) { \
-        /* Free existing memory if it was dynamically allocated */ \
+        /* Preserve existing ROM data if it was already loaded */ \
         if (c64_device->memory && c64_device->memory != buffer + offset) { \
+            /* Copy existing ROM data to unified buffer */ \
+            memcpy(buffer + offset, c64_device->memory, size); \
+            /* Free the old separate allocation */ \
             free(c64_device->memory); \
         } \
+        /* Point to unified buffer location */ \
         c64_device->memory = buffer + offset; \
     } else if (c64_device) { \
         /* ROM not present - set to NULL and free existing if needed */ \
@@ -751,13 +755,13 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
 
     // Point the following devices to their respective unified buffer offset
     // Strategic layout: ROML=0x0000, ROMH=0x2000, KERNAL=0x4000, BASIC=0x6000, CHARROM=0x8000, RAM=0x9000
-    DO(c64->cartridge_roml, 0x0000, c64_bus->roml_present); // CHIP_ROML = 0 -> 0x0000 - optional
-    DO(c64->cartridge_romh, 0x2000, c64_bus->romh_present); // CHIP_ROMH = 2 -> 0x2000 - optional
-    DO(c64->kernal, 0x4000, true);                          // CHIP_KERNAL = 4 -> 0x4000 - always present
-    DO(c64->basic, 0x6000, true);                           // CHIP_BASIC = 6 -> 0x6000 - always present
-    DO(c64->charrom, 0x8000, true);                         // CHIP_CHARROM = 8 -> 0x8000 - always present
-    DO(c64->ram, 0x9000, true);                             // CHIP_RAM = 9 -> 0x9000 - always present
-#undef DO    
+    DO(c64->cartridge_roml, 0x0000, 8*1024, c64_bus->roml_present); // CHIP_ROML = 0 -> 0x0000 - optional
+    DO(c64->cartridge_romh, 0x2000, 8*1024, c64_bus->romh_present); // CHIP_ROMH = 2 -> 0x2000 - optional
+    DO(c64->kernal, 0x4000, 8*1024, true);                          // CHIP_KERNAL = 4 -> 0x4000 - always present
+    DO(c64->basic, 0x6000, 8*1024, true);                           // CHIP_BASIC = 6 -> 0x6000 - always present
+    DO(c64->charrom, 0x8000, 4*1024, true);                         // CHIP_CHARROM = 8 -> 0x8000 - always present
+    DO(c64->ram, 0x9000, 64*1024, true);                            // CHIP_RAM = 9 -> 0x9000 - always present
+#undef DO
     
     printf("c64_bus: Allocated %zu KB unified buffer (saved %zu KB), ROML:%s ROMH:%s\n",
            required_size / 1024,
