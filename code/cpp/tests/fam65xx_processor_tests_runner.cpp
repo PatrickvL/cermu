@@ -708,9 +708,9 @@ public:
         // Initialize CPU
         cpu->init(&desc);
         
-        // Enable processor tests mode for ALL processors during testing
-        // This disables interrupt hijacking to allow clean instruction testing
-        cpu->set_processor_tests_mode(true);
+        // Processor tests mode is now handled via PROCESSOR_TESTS compile-time define
+        // No runtime configuration needed - interrupt hijacking and memory-mapped I/O
+        // are automatically disabled when built with -DPROCESSOR_TESTS
     }
     
     ~ProcessorWrapper() {

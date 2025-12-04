@@ -519,12 +519,17 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
    */
   inline bool handle_io_port_read(bus_state_t &pins, uint32_t addr) {
     if constexpr (Traits.has_io_port()) {
-      if (addr <= 0x0001) {
-        const uint8_t io_data =
-            (addr == 0x0000) ? this->read_io_port() : this->io_port.direction;
-        pins = FAM65XX_SET_DATA(pins, io_data);
-        return true;
-      }
+      // PROCESSOR_TESTS mode: Skip I/O port interception (compile-time check for zero overhead)
+      #ifdef PROCESSOR_TESTS
+        return false; // Not handled - allow normal memory access for test harness
+      #else
+        if (addr <= 0x0001) {
+          const uint8_t io_data =
+              (addr == 0x0000) ? this->read_io_port() : this->io_port.direction;
+          pins = FAM65XX_SET_DATA(pins, io_data);
+          return true;
+        }
+      #endif
     }
     return false;
   }
@@ -535,14 +540,19 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
    */
   inline bool handle_io_port_write(uint32_t addr, uint8_t data) {
     if constexpr (Traits.has_io_port()) {
-      if (addr <= 0x0001) {
-        if (addr == 0x0000) {
-          this->write_io_ddr(data);
-        } else {
-          this->write_io_data(data);
+      // PROCESSOR_TESTS mode: Skip I/O port interception (compile-time check for zero overhead)
+      #ifdef PROCESSOR_TESTS
+        return false; // Not handled - allow normal memory access for test harness
+      #else
+        if (addr <= 0x0001) {
+          if (addr == 0x0000) {
+            this->write_io_ddr(data);
+          } else {
+            this->write_io_data(data);
+          }
+          return true;
         }
-        return true;
-      }
+      #endif
     }
     return false;
   }
@@ -554,11 +564,16 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
    */
   inline bool handle_apu_read(bus_state_t &pins, uint32_t addr) {
     if constexpr (Traits.has_apu()) {
-      uint8_t apu_data;
-      if (this->read_apu_register(addr, apu_data)) {
-        pins = FAM65XX_SET_DATA(pins, apu_data);
-        return true;
-      }
+      // PROCESSOR_TESTS mode: Skip APU interception (compile-time check for zero overhead)
+      #ifdef PROCESSOR_TESTS
+        return false; // Not handled - allow normal memory access for test harness
+      #else
+        uint8_t apu_data;
+        if (this->read_apu_register(addr, apu_data)) {
+          pins = FAM65XX_SET_DATA(pins, apu_data);
+          return true;
+        }
+      #endif
     }
     return false;
   }
@@ -569,7 +584,12 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
    */
   inline bool handle_apu_write(uint32_t addr, uint8_t data) {
     if constexpr (Traits.has_apu()) {
-      return this->write_apu_register(addr, data);
+      // PROCESSOR_TESTS mode: Skip APU interception (compile-time check for zero overhead)
+      #ifdef PROCESSOR_TESTS
+        return false; // Not handled - allow normal memory access for test harness
+      #else
+        return this->write_apu_register(addr, data);
+      #endif
     }
     return false;
   }
@@ -1269,13 +1289,6 @@ public:
   // EMULATION MODE AND REGISTER WIDTH DETECTION (moved from mixins)
   // ========================================================================
 
-  /**
-   * Enable/disable processor tests mode
-   * When enabled, disables interrupt hijacking for clean instruction testing
-   */
-  inline void set_processor_tests_mode(bool mode) {
-    this->processor_tests_mode = mode;
-  }
   
   /**
    * Set emulation mode (65C816 specific)
@@ -1428,15 +1441,10 @@ public:
       trace_registers("before PHI2");
 
       // Hardware-accurate interrupt detection
-      // OPTIMIZATION: Use compile-time check when PROCESSOR_TESTS is defined globally
-      // This eliminates runtime overhead in production emulation builds
-      #ifdef PROCESSOR_TESTS
-        constexpr bool allow_interrupt_hijacking = false;
-      #else
-        const bool allow_interrupt_hijacking = !this->processor_tests_mode;
-      #endif
-      
-      if (allow_interrupt_hijacking && this->process_interrupt_detection(pins)) {
+      // PROCESSOR_TESTS mode: Disable interrupt hijacking for clean instruction testing
+      // Production mode: Always allow interrupt hijacking for accurate emulation
+      #ifndef PROCESSOR_TESTS
+      if (this->process_interrupt_detection(pins)) {
         if (this->active_interrupt == FAM65XX_INT_RESET) {
           return reset(pins);
         } else if (this->current_handler == &fam65xx_t::fetch_opcode &&
@@ -1447,6 +1455,7 @@ public:
           this->current_handler = &fam65xx_t::op_brk;
         }
       }
+      #endif
 
       // Check RDY signal - CENTRALIZED CHECK (KEEP THIS!)
       if (!FAM65XX_GET_RDY(pins)) {
@@ -1477,6 +1486,8 @@ public:
 
       // Handle I/O port and APU memory accesses BEFORE calling handler
       // These functions intercept memory operations for internal CPU features
+      // Note: When PROCESSOR_TESTS is defined, these handlers return false immediately
+      // for zero runtime overhead (compile-time optimization)
       const uint32_t addr = this->get_address_from_pins(pins);
       const bool is_write = !(pins & FAM65XX_RW);
       
@@ -1589,9 +1600,6 @@ public:
   /* 65C02 extended state */
   bool wait_for_interrupt; /* WAI instruction state */
   bool stopped;            /* STP instruction state */
-  
-  /* Test mode flag - disables interrupt hijacking for ProcessorTests compatibility */
-  bool processor_tests_mode = false;
 };
 
 // ============================================================================
