@@ -1653,16 +1653,9 @@ static int gui_emulation_thread_main(void *data) {
                (unsigned long long)sim_cycles);
       } else {
         // Real execution mode with proper ROM
-        printf("Emulation thread: Starting real CPU execution with continuous "
-               "execution\n");
+        printf("Emulation thread: Starting real CPU execution (reset will happen during normal ticking)\n");
 
-        // Reset CPU to proper initial state and load reset vector into PC
-        // Reset functionality simplified - use system reset
-        printf("Emulation thread: System reset requested\n");
-        printf(
-            "Emulation thread: CPU reset completed, PC set to reset vector\n");
-
-        // Use continuous execution with mos6510_execute()
+        // Use continuous execution with cycle-based ticking
         // This will run until intercept is triggered (for pause/stop)
         uint32_t last_log_time = SDL_GetTicks();
         const uint32_t log_interval_ms = 5000; // Log every 5 seconds
