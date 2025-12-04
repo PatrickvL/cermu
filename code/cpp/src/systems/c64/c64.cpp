@@ -322,6 +322,12 @@ c64_t* c64_system_create(const c64_config_t* config) {
     
     // Re-initialize unified pointers after ROM loading to copy loaded ROM data into unified buffer
     c64_bus_init_unified_pointers(&c64->bus, c64, config);
+    
+    // After ROMs are loaded, read the reset vector and set CPU PC
+    uint16_t reset_vector = c64_read_kernal_reset_vector(&c64->bus);
+    mos6510_set_pc((mos6510_t*)c64->mos6510, reset_vector);
+    
+    printf("C64 System: Loaded reset vector $%04X from KERNAL ROM, set CPU PC\n", reset_vector);
 
     // Attach all other chips with bus_attach callbacks
     for (int i = 0; i < c64->system.chip_count; i++) {
@@ -338,10 +344,8 @@ c64_t* c64_system_create(const c64_config_t* config) {
     // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
     ((mos6526_t*)c64->cia2)->interrupt_line = BUS_MASK_NMI;
 
-    // Reset the CPU to initialize proper startup state
-    printf("C64 System: Resetting CPU to initialize startup state\n");
-    bus_state_t reset_state = BUS_BIT(BUS_RES_BIT);  // Set reset line inactive (high for active-low)
-    mos6510_reset((mos6510_t*)c64->mos6510, reset_state);
+    // Initialize bus state with reset released (HIGH = inactive for active-low reset)
+    printf("C64 System: Reset complete, ready to run\n");
 
     return c64;
 }

@@ -198,6 +198,20 @@ static inline uint8_t c64_bus_read_kernal_byte(c64_bus_t* bus, uint16_t address)
     return c64_bus_read_chip_byte(bus, CHIP_KERNAL, address);
 }
 
+/**
+ * Helper function to read the reset vector from KERNAL ROM.
+ * The reset vector is located at $FFFC-$FFFD and points to the
+ * KERNAL reset routine (typically $FCE2 on C64).
+ *
+ * @param bus Pointer to the C64 bus controller
+ * @return The 16-bit reset vector address
+ */
+static inline uint16_t c64_read_kernal_reset_vector(c64_bus_t* bus) {
+    uint8_t reset_low = c64_bus_read_kernal_byte(bus, 0xFFFC);
+    uint8_t reset_high = c64_bus_read_kernal_byte(bus, 0xFFFD);
+    return (reset_high << 8) | reset_low;
+}
+
 // System functions
 void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64);  // c64_t*
 
