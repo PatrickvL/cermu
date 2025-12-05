@@ -49,6 +49,7 @@ void mos6510_destroy(mos6510_t *cpu);
 
 bus_state_t mos6510_init(mos6510_t *cpu, const mos6510_desc_t *desc);
 bus_state_t mos6510_reset(mos6510_t *cpu, bus_state_t pins);
+bus_state_t mos6510_bootstrap(mos6510_t *cpu, bus_state_t pins);
 bool mos6510_opdone(mos6510_t *cpu);
 
 // Register access (same as 6502)

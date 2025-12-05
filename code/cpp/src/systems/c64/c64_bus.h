@@ -76,7 +76,7 @@ void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode);
 uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits);
 
 // Memory functions
-void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address);
+bus_state_t c64_bus_vic_read(c64_bus_t* c64_bus, bus_state_t bus_state, uint16_t address);
 
 /**
  * New cycle-accurate memory tick function for the refactored architecture.
@@ -180,7 +180,7 @@ static inline void c64_bus_write_ram_byte(c64_bus_t* bus, uint16_t address, uint
  */
 static inline uint8_t c64_bus_read_chip_byte(c64_bus_t* bus, uint8_t chip, uint16_t address) {
     // Use the unified address calculation function with the specified chip
-    uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
+    const uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
     return bus->unified_memory_buffer[unified_addr];
 }
 

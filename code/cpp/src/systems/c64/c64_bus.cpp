@@ -1,6 +1,7 @@
 #include "c64_bus.h"
 #include "c64.h"
 #include "../../chip/io/mos6526.h"
+#include "../../chip/cpu/fam65xx/mos6510.h"
 #include "../../core/aiemuc.h"
 #include <stdlib.h>
 #include <string.h>
@@ -40,26 +41,26 @@ static inline int8_t c64_bus_get_bank(uint16_t address) {
     return address >> 12;  // Extract 4KB bank (0-15)
 }
 
-
 // ULTRA-OPTIMIZED VIC-II MEMORY READ - Better performance than CPU version
 // VIC-II uses pre-selected active array (indexed by CHIP), can only read, never write
 // Uses unified memory buffer for branchless access to ROM and RAM
-void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address) {
-    BUS_SET_ADDR(c64_bus->state, address); // Perhaps this is no longer needed
+bus_state_t c64_bus_vic_read(c64_bus_t* c64_bus, bus_state_t bus_state, uint16_t address) {
+    BUS_SET_ADDR(bus_state, address); // Perhaps this is no longer needed
     // Extract 4KB bank from address (0-15 for VIC-II's 64KB addressable space)
-    uint8_t vicii_bank = c64_bus_get_bank(address);
+    const uint8_t vicii_bank = c64_bus_get_bank(address);
     // Get raw CHIP directly from pre-selected active array (no mode indexing)
-    uint8_t chip = c64_bus->vicii_chip_per_bank[vicii_bank];
-    
+    const uint8_t chip = c64_bus->vicii_chip_per_bank[vicii_bank];
+
     // Early return for unmapped regions - use whatever is on the bus
-    if (chip == CHIP_UNMAPPED) {
-        return; // Leave bus data unchanged (floating bus state)
+    if (unlikely(chip == CHIP_UNMAPPED)) {        
+        // Leave bus data unchanged (floating bus state)
+        return bus_state;
     }
     
-    // BRANCHLESS unified address calculation using shared function
-    // Address calculation depends on CHIP_* enum ordering (see function documentation)
-    uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
-    BUS_SET_DATA(c64_bus->state, c64_bus->unified_memory_buffer[unified_addr]);
+    const uint8_t data = c64_bus_read_chip_byte(c64_bus, chip, address);
+
+    BUS_SET_DATA(bus_state, data);
+    return bus_state;
 }
 
 /**
@@ -83,6 +84,69 @@ void c64_bus_vic_read(c64_bus_t* c64_bus, uint16_t address) {
  */
 bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_state) {
     if (unlikely(!c64_bus)) return bus_state;
+    
+    // DEBUG: Detailed boot sequence tracing
+    static uint64_t memory_tick_count = 0;
+    static uint16_t last_pc = 0;
+    static uint64_t last_pc_change_cycle = 0;
+    static bool boot_trace_active = true;
+    
+    if (memory_tick_count < 10) {
+        printf("[DEBUG] c64_memory_tick called #%llu\n", (unsigned long long)memory_tick_count);
+    }
+    
+    // Track PC changes to detect infinite loops and key boot milestones
+    if (boot_trace_active && c64_bus->c64) {
+        c64_t* c64 = (c64_t*)c64_bus->c64;
+        if (c64->mos6510) {
+            uint16_t current_pc = mos6510_get_pc((mos6510_t*)c64->mos6510);
+            
+            // Log PC changes to trace execution flow
+            if (current_pc != last_pc) {
+                // Log important KERNAL routines
+                if (current_pc == 0xFCE2) {
+                    printf("[BOOT] *** RESET VECTOR EXECUTED at cycle %llu ***\n",
+                           (unsigned long long)memory_tick_count);
+                } else if (current_pc == 0xFD50) {
+                    printf("[BOOT] *** RAM TEST START at cycle %llu ***\n",
+                           (unsigned long long)memory_tick_count);
+                } else if (current_pc == 0xE518) {
+                    printf("[BOOT] *** SCREEN INIT at cycle %llu ***\n",
+                           (unsigned long long)memory_tick_count);
+                } else if (current_pc == 0xEDEF) {
+                    printf("[BOOT] !!! UNTALK/SERIAL BUS ROUTINE at cycle %llu !!!\n",
+                           (unsigned long long)memory_tick_count);
+                    printf("[BOOT] WARNING: This should NOT be called during normal boot!\n");
+                } else if (current_pc == 0xE5A0) {
+                    printf("[BOOT] *** PRINT STARTUP MESSAGE at cycle %llu ***\n",
+                           (unsigned long long)memory_tick_count);
+                } else if (current_pc == 0xE3BF) {
+                    printf("[BOOT] *** BASIC READY at cycle %llu ***\n",
+                           (unsigned long long)memory_tick_count);
+                    boot_trace_active = false;  // Stop tracing once we reach READY
+                }
+                
+                // Log every PC change for first 100K cycles
+                if (memory_tick_count < 100000 && (memory_tick_count % 1000) == 0) {
+                    printf("[PC_FLOW] Cycle %llu: $%04X -> $%04X\n",
+                           (unsigned long long)memory_tick_count, last_pc, current_pc);
+                }
+                
+                last_pc = current_pc;
+                last_pc_change_cycle = memory_tick_count;
+            }
+            
+            // Detect infinite loop (PC unchanged for 50K cycles)
+            if ((memory_tick_count - last_pc_change_cycle) > 50000) {
+                if ((memory_tick_count % 50000) == 0) {
+                    printf("[BOOT] ERROR: PC stuck at $%04X for %llu cycles!\n",
+                           last_pc, (unsigned long long)(memory_tick_count - last_pc_change_cycle));
+                }
+            }
+        }
+    }
+    
+    memory_tick_count++;
     
     // Determine if this is a read or write operation
     bool is_read = BUS_GET_LINES(bus_state) & BUS_MASK_RW;
@@ -136,8 +200,39 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
 
             // ENHANCED FAST PATH: Handle all writable unified buffer regions
             if (likely(chip == CHIP_RAM)) {
+                uint8_t data = BUS_GET_DATA(bus_state);
+                
+                // Log writes to screen memory ($0400-$07E7) to trace boot text
+                static uint64_t screen_write_count = 0;
+                if (address >= 0x0400 && address < 0x07E8) {
+                    if (screen_write_count == 0) {
+                        printf("[BOOT] *** FIRST SCREEN WRITE DETECTED! ***\n");
+                    }
+                    
+                    if (screen_write_count < 50) {
+                        uint16_t current_pc = 0;
+                        if (c64_bus->c64) {
+                            c64_t* c64 = (c64_t*)c64_bus->c64;
+                            if (c64->mos6510) {
+                                current_pc = mos6510_get_pc((mos6510_t*)c64->mos6510);
+                            }
+                        }
+                        
+                        // Convert PETSCII/screen code to ASCII for logging
+                        char ascii_char = (data >= 1 && data <= 26) ? ('A' + data - 1) :  // A-Z
+                                         (data == 0) ? '@' :                               // @
+                                         (data == 32) ? ' ' :                              // space
+                                         (data >= 48 && data <= 57) ? ('0' + data - 48) : // 0-9
+                                         '.';                                              // other
+                        
+                        printf("[BOOT] PC=$%04X: [SCREEN $%04X] = $%02X '%c'\n",
+                               current_pc, address, data, ascii_char);
+                    }
+                    screen_write_count++;
+                }
+                
                 // Direct unified buffer write for RAM (most common writable case)
-                c64_bus_write_ram_byte(c64_bus, address, BUS_GET_DATA(bus_state));
+                c64_bus_write_ram_byte(c64_bus, address, data);
             } else if (chip == CHIP_IO) {
                 // OPTIMIZED IO PAGE HANDLING: Direct dispatch using pre-initialized handlers
                 // Calculate IO page number from address (0-15 for $D000-$DFFF)

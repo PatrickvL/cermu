@@ -58,6 +58,10 @@ bus_state_t mos6510_reset(mos6510_t *cpu, bus_state_t pins) {
   return CPU_CAST(cpu)->reset(pins);
 }
 
+bus_state_t mos6510_bootstrap(mos6510_t *cpu, bus_state_t pins) {
+  return CPU_CAST(cpu)->bootstrap(pins);
+}
+
 bool mos6510_opdone(mos6510_t *cpu) { return CPU_CAST(cpu)->opdone(); }
 
 // Register getters

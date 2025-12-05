@@ -1385,10 +1385,10 @@ public:
     this->opcode_entry = get_opcode_info(0x00); // = {OP_BRK, AM_NON, OF_NONE};
     this->current_handler = &fam65xx_t::op_brk;
     
-    // Jump to vector loading phase - emulation mode uses cycle 8, native would use cycle 10
-    // but reset always uses emulation-style entry (no PBR push)
-    this->half_cycle = 8;
-    this->set(REG_AB, this->get_vector_addr()); // Same memory setup as preceding cycle
+    // Start at cycle 10 (vector loading phase) for emulation mode reset
+    // The BRK handler will execute cycles 10-13 to load the vector and set PC
+    this->half_cycle = 10;
+    this->set(REG_AB, this->get_vector_addr());
 
     return pins;
   }
@@ -1439,6 +1439,14 @@ public:
       // PHI2: Bus setup phase
       trace_enter("tick<PHI2>");
       trace_registers("before PHI2");
+      
+      // DEBUG: Print cycle info for first 20 cycles
+      static int debug_counter = 0;
+      if (debug_counter < 20) {
+        printf("[TICK_DEBUG] PHI2 cycle %d, PC=$%04X, active_int=%d\n",
+               this->half_cycle, this->get(REG_PC), static_cast<int>(this->active_interrupt));
+        debug_counter++;
+      }
 
       // Hardware-accurate interrupt detection
       // PROCESSOR_TESTS mode: Disable interrupt hijacking for clean instruction testing

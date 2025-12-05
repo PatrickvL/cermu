@@ -464,13 +464,13 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                        
                 // VIC-II specific information
                 // Get current VIC-II bank from CIA2 Port A bits 0-1 (would need CIA2 access)
-                uint8_t current_vic_bank = 0; // Default bank 0 for now
-                uint16_t current_vic_bank_address = current_vic_bank * 0x4000;
-                ImGui::Text("Configuration: %s", get_pla_mode_vicii_description(pla_debug_selected_mode, current_vic_bank_address));
+                uint8_t current_vicii_bank = 0; // Default bank 0 for now
+                uint16_t current_vicii_bank_address = current_vicii_bank * 0x4000;
+                ImGui::Text("Configuration: %s", get_pla_mode_vicii_description(pla_debug_selected_mode, current_vicii_bank_address));
                 
                 ImGui::Separator();
                 ImGui::Text("VIC-II Bank Control:");
-                ImGui::Text("CIA2 Port A bits 0-1: %d (Bank %d active)", 0, current_vic_bank); // Simplified for now
+                ImGui::Text("CIA2 Port A bits 0-1: %d (Bank %d active)", 0, current_vicii_bank); // Simplified for now
                 
                 ImGui::Separator();
                 
@@ -520,7 +520,7 @@ void pla_render_debug_window(void* chip, bool* show_window) {
                         ImGui::Text("$%04X", read_offset);
                         ImGui::TableSetColumnIndex(5);
                         // Status: highlight if this 4KB bank is in the active VIC-II 16KB bank
-                        bool is_active_bank = ((bank_start / 0x4000) == current_vic_bank);
+                        bool is_active_bank = ((bank_start / 0x4000) == current_vicii_bank);
                         if (is_active_bank && pla_debug_selected_mode == current_mode) {
                             ImGui::Text("ACTIVE");
                         } else if (is_active_bank) {

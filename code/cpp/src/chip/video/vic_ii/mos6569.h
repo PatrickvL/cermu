@@ -13,15 +13,10 @@ typedef vicii_t mos6569_t;
 
 // Lifecycle and bus attachment
 void* mos6569_system_create(chip_descriptor_t* desc);
-void  mos6569_system_destroy(void* chip);
-void  mos6569_bus_attach(void* chip, void* bus);
 
 // Register I/O
 bus_state_t mos6569_registers_read(void* chip, bus_state_t bus_state);
 bus_state_t mos6569_registers_write(void* chip, bus_state_t bus_state);
-
-// Bank change callback
-void mos6569_bank_change(void* chip, uint8_t bank);
 
 // External descriptor instance
 extern chip_descriptor_t mos6569_descriptor;

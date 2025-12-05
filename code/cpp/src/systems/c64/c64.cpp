@@ -133,6 +133,13 @@ void (*bus_cycle_callback)(void) = NULL;
 
 // Single unified system tick function - the one place where the entire system is ticked
 void c64_system_tick(c64_t* c64) {
+    static int entry_count = 0;
+    if (entry_count < 5) {
+        printf("[ENTRY_DEBUG] c64_system_tick called, entry #%d\n", entry_count);
+        fflush(stdout);
+        entry_count++;
+    }
+    
     if (unlikely(!c64)) {
         printf("ERROR: c64_system_tick called with NULL c64\n");
         fflush(stdout);
@@ -178,31 +185,48 @@ void c64_system_tick(c64_t* c64) {
     c64->total_cycles++;
     c64_bus_t* bus = &(c64->bus);
     bus_state_t s = c64->bus.state;
+    
+    // Debug: Check initial BA state
+    static int ba_debug_count = 0;
+    if (ba_debug_count < 20) {
+        bool ba_initial = (BUS_GET_LINES(s) & BUS_MASK_BA) != 0;
+        printf("[BA_DEBUG] Cycle %llu START: BA=%d\n", (unsigned long long)c64->total_cycles, ba_initial ? 1 : 0);
+        fflush(stdout);
+    }
 
     // =========================================================================
-    // PHASE 1: VIC-II TICKING - moved to first position as requested
+    // UNIFIED TIMING MODEL
     // =========================================================================
-    // VIC-II drives the video timing and memory access patterns, so it makes sense
-    // to tick it first to establish the current video state before CPU operations
+    // PHASE 1: VIC-II TICKING
+    // VIC-II reads data from previous cycle, processes it, and sets up next memory access
     s = vicii_tick(c64->vicii, s);
 
     // =========================================================================
-    // PHASE 2: CPU TICKING (PHI2 phase)
-    // =========================================================================
-    s = mos6510_tick_phi2(c64->mos6510, s);
-
-    // =========================================================================
-    // PHASE 3: MEMORY SERVICE
+    // PHASE 2: MEMORY SERVICE PHASE (with VIC-II banking)
+    // This services the memory access setup by VIC-II
     // =========================================================================
     s = c64_memory_tick(&c64->bus, s);
 
     // =========================================================================
-    // PHASE 4: CPU TICKING (PHI1 phase)
+    // PHASE 3: CPU TICKING (PHI2 phase)
+    // CPU executes in PHI2 phase
+    // =========================================================================
+    s = mos6510_tick_phi2(c64->mos6510, s);
+
+    // =========================================================================
+    // PHASE 4: MEMORY SERVICE PHASE (with CPU banking)
+    // This services the memory access setup by CPU
+    // =========================================================================
+    s = c64_memory_tick(&c64->bus, s);
+
+    // =========================================================================
+    // PHASE 5: CPU TICKING (PHI1 phase)
+    // CPU prepares next instruction fetch in PHI1 phase
     // =========================================================================
     s = mos6510_tick_phi1(c64->mos6510, s);
 
     // =========================================================================
-    // PHASE 5: OTHER CHIP TICKING
+    // PHASE 6: OTHER CHIP TICKING
     // =========================================================================
     // CIA chips - they handle I/O and timing functions
     // CIA2 must be ticked before CIA1 because CIA2 controls VIC-II bank switching
@@ -213,6 +237,13 @@ void c64_system_tick(c64_t* c64) {
     s = mos6581_tick(c64->sid, s);
 
     // Update RDY line based on BA (hardware accurate)
+    bool ba_before_rdy_update = (BUS_GET_LINES(s) & BUS_MASK_BA) != 0;
+    if (ba_debug_count < 20) {
+        printf("[BA_DEBUG] Cycle %llu BEFORE RDY update: BA=%d\n", (unsigned long long)c64->total_cycles, ba_before_rdy_update ? 1 : 0);
+        fflush(stdout);
+        ba_debug_count++;
+    }
+    
     if (BUS_GET_LINES(s) & BUS_MASK_BA) {
         BUS_SET_LINES(s, BUS_GET_LINES(s) | BUS_MASK_RDY);
     } else {
@@ -323,11 +354,18 @@ c64_t* c64_system_create(const c64_config_t* config) {
     // Re-initialize unified pointers after ROM loading to copy loaded ROM data into unified buffer
     c64_bus_init_unified_pointers(&c64->bus, c64, config);
     
-    // After ROMs are loaded, read the reset vector and set CPU PC
+    // Hardware: CIA2 Data Port A bits 0-1 control VIC-II memory bank selection
+    // Note: VIC-II will monitor CIA2 writes at $DD00 directly in its tick function
+    // This eliminates the need for callbacks and global state
+
+    // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
+    ((mos6526_t*)c64->cia2)->interrupt_line = BUS_MASK_NMI;
+
+    // After ROMs are loaded, read the reset vector and set CPU PC directly
     uint16_t reset_vector = c64_read_kernal_reset_vector(&c64->bus);
     mos6510_set_pc((mos6510_t*)c64->mos6510, reset_vector);
-    
-    printf("C64 System: Loaded reset vector $%04X from KERNAL ROM, set CPU PC\n", reset_vector);
+
+    printf("C64 System: Loaded reset vector $%04X from KERNAL ROM and set CPU PC directly\n", reset_vector);
 
     // Attach all other chips with bus_attach callbacks
     for (int i = 0; i < c64->system.chip_count; i++) {
@@ -336,13 +374,6 @@ c64_t* c64_system_create(const c64_config_t* config) {
             chip->desc->bus_attach(chip->chip, &(c64->bus));
         }
     }
-
-    // Hardware: CIA2 Data Port A bits 0-1 control VIC-II memory bank selection
-    // Note: VIC-II will monitor CIA2 writes at $DD00 directly in its tick function
-    // This eliminates the need for callbacks and global state
-
-    // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
-    ((mos6526_t*)c64->cia2)->interrupt_line = BUS_MASK_NMI;
 
     // Initialize bus state with reset released (HIGH = inactive for active-low reset)
     printf("C64 System: Reset complete, ready to run\n");

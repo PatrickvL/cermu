@@ -44,6 +44,12 @@ static inline void vicii_bus_control_ba_high(vicii_t* vicii) {
 
 static inline void vicii_bus_control_ba_low(vicii_t* vicii) {
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
+    static int debug_count = 0;
+    if (debug_count < 20) {
+        printf("[VIC-II DEBUG] BA set LOW at raster=%d, x_cycle=%d\n",
+               vicii->timing.raster_counter, vicii->timing.x_cycle);
+        debug_count++;
+    }
     BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) & ~BUS_MASK_BA);
 }
 
@@ -136,108 +142,15 @@ static inline void vicii_memory_update_mapping(vicii_memory_unit_t* memory, uint
     memory->cb_base = ((uint16_t)mp_reg & 0x0E) << 10; // CB11-CB13 bits * 0x800 -> << 10
 }
 
-static inline void vicii_memory_read(vicii_t* vicii, uint16_t address) {
-    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
+static inline bus_state_t vicii_bus_memory_setup(vicii_t* vicii, bus_state_t bus_state, uint16_t address) {
     // Bank base offset applied here to keep operations in most appropriate place
     uint16_t final_address = vicii->memory.bank_base | address;
-    
-    c64_bus_vic_read(c64_bus, final_address);
-}
 
-void vicii_memory_access(vicii_t* vicii, uint8_t access_type, int access_param) {
-    if (!vicii->bus.bus) return;
-    
-    uint16_t address;
-    c64_bus_t* bus = (c64_bus_t*)vicii->bus.bus;
-    
-    switch (access_type) {
-        case VIC_ACCESS_P:
-            address = vicii->memory.vm_base + 0x3F8 + (uint16_t)access_param;
-            vicii_memory_read(vicii, address);
-            vicii->sprites.sprites[access_param].data_pointer = BUS_GET_DATA(bus->state);
-            break;            
-
-        case VIC_ACCESS_S: {
-            vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[access_param];
-            if (sprite->mc_counter < 3) {
-                address = sprite->data_pointer * 64 + sprite->mc_counter;
-                vicii_memory_read(vicii, address);
-                sprite->data_buffer[sprite->mc_counter] = BUS_GET_DATA(bus->state);
-                sprite->mc_counter++;
-            } else {
-                // "Whatever appears on the VIC-II internal bus during the fetch cycles
-                // is displayed. That is both loads and stores to the VIC-II, or $ff if
-                // no access occurs."
-            }
-            break;
-        }            
-        case VIC_ACCESS_C: {
-            // Color RAM access (pins D8-D11)
-            // Note, that mos2114_read masks the address to 0x03FF
-            // so for that there's no need to use base 0xD800, but
-            // since the same adress is used for both C and G accesses,
-            // we still calculate the absolute address
-            // TODO : Should this incorporate vicii_bank_base too? 
-            address = 0xD800 + vicii->video_logic.vc;
-            bus_state_t color_bus_state = BUS_STATE(address, 0 , 0);
-            color_bus_state = mos2114_read(vicii->colorram, color_bus_state);
-            uint8_t color_data = BUS_GET_DATA(color_bus_state);
-            vicii->video_data.video_color_line[vicii->video_logic.vmli] = static_cast<vicii_color_t>(color_data & 0x0F);
-            
-            // Video matrix access  
-            address = vicii->memory.vm_base + vicii->video_logic.vc;
-            vicii_memory_read(vicii, address);
-            vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = BUS_GET_DATA(bus->state);
-            
-            // Increment VC and VMLI after c-access in display state
-            if (vicii->video_logic.display_state) {
-                vicii->video_logic.vc++;
-                vicii->video_logic.vmli++;
-            }
-            FALLTHROUGH; // to g-acess            
-        }
-        case VIC_ACCESS_G: {
-            // Get character code from the video matrix line (real chip behavior)
-            uint8_t char_code = vicii->video_data.video_matrix_line[vicii->video_logic.vmli];
-            
-            if (vicii->video_logic.display_state) {
-                if (vicii->registers.data[VICII_C1] & VICII_C1_BMM) {
-                    // Bitmap mode
-                    address = vicii->memory.cb_base | 
-                            ((vicii->video_logic.vc & 0x3FF) << 3) | 
-                            (vicii->video_logic.rc & 0x07);
-                } else {
-                    // Text mode
-                    // "When changing from RAM to (char)ROM fetches, the LSB of the fetch address
-                    // is latched using the mode from the previous cycle, and the upper bits come
-                    // from the current mode. This glitch happens on 6569, but not on 8565."
-                    address = vicii->memory.cb_base | 
-                            (char_code << 3) | 
-                            (vicii->video_logic.rc & 0x07);
-                }
-            } else {
-                // Idle state
-                address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
-            }
-            
-            vicii_memory_read(vicii, address);
-            vicii_graphics_sequencer(vicii, BUS_GET_DATA(bus->state));
-            break;
-        }    
-        case VIC_ACCESS_REFRESH:
-            if (vicii->enable_hardware_accurate_reads) {
-                address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
-                vicii_memory_read(vicii, address);
-            }
-            vicii->video_logic.refresh_counter--;
-            break;
-            
-        default: // VIC_ACCESS_IDLE
-            if (vicii->enable_hardware_accurate_reads) {
-                vicii_memory_read(vicii, 0x3FFF);
-            }
-            break;
-    }
+    // Set up the address on the bus for the memory service phase to handle
+    // This follows the same pattern as the CPU's bus_setup_read()
+    BUS_SET_ADDR(bus_state, final_address);
+    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_RW); // Set read mode
+    return bus_state;
 }
 
 // ========================================================================================
@@ -819,7 +732,9 @@ static uint8_t vicii_cycle_idle(vicii_t* vicii, int param) {
 
 static uint8_t vicii_cycle_sprite_p_access(vicii_t* vicii, int sprite_num) {
     vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[sprite_num];
-    if (sprite->enabled) {
+    // Only perform memory access if DEN is enabled
+    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    if (sprite->enabled && den_enabled) {
         vicii_bus_control_ba_low(vicii);
         vicii_bus_control_aec_low(vicii);
         return VIC_ACCESS_P;
@@ -832,7 +747,9 @@ static uint8_t vicii_cycle_sprite_p_access(vicii_t* vicii, int sprite_num) {
 
 static uint8_t vicii_cycle_sprite_s_access(vicii_t* vicii, int sprite_num) {
     vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[sprite_num];
-    if (sprite->enabled) {
+    // Only perform memory access if DEN is enabled
+    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    if (sprite->enabled && den_enabled) {
         vicii_bus_control_ba_low(vicii);
         vicii_bus_control_aec_low(vicii);
         return VIC_ACCESS_S;
@@ -844,17 +761,28 @@ static uint8_t vicii_cycle_sprite_s_access(vicii_t* vicii, int sprite_num) {
 }
 
 static uint8_t vicii_cycle_refresh(vicii_t* vicii, int param) {
-    vicii_bus_control_ba_high(vicii);
-    vicii_bus_control_aec_high(vicii);
-    return VIC_ACCESS_REFRESH;
+    // Only perform memory access if DEN is enabled
+    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    if (den_enabled) {
+        vicii_bus_control_ba_high(vicii);
+        vicii_bus_control_aec_high(vicii);
+        return VIC_ACCESS_REFRESH;
+    } else {
+        vicii_bus_control_ba_high(vicii);
+        vicii_bus_control_aec_high(vicii);
+        return VIC_ACCESS_IDLE; // Return IDLE when DEN is disabled to prevent memory accesses
+    }
 }
 
 static uint8_t vicii_cycle_badline_setup(vicii_t* vicii, int param) {
-    if (vicii->video_logic.is_bad_line) {
+    // Only perform memory access if DEN is enabled
+    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    if (vicii->video_logic.is_bad_line && den_enabled) {
         vicii_bus_control_ba_low(vicii);
         vicii->video_logic.display_state = true;
     } else {
         vicii_bus_control_ba_high(vicii);
+        vicii->video_logic.display_state = false; // Ensure display state is false when DEN is disabled
     }
     vicii_bus_control_aec_high(vicii);
     return VIC_ACCESS_IDLE;
@@ -863,26 +791,32 @@ static uint8_t vicii_cycle_badline_setup(vicii_t* vicii, int param) {
 static uint8_t vicii_cycle_vc_load(vicii_t* vicii, int param) {
     vicii->video_logic.vc = vicii->video_logic.vcbase;
     vicii->video_logic.vmli = 0;
-    if (vicii->video_logic.is_bad_line) {
+    // Only perform memory access if DEN is enabled
+    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    if (vicii->video_logic.is_bad_line && den_enabled) {
         vicii_bus_control_ba_low(vicii);
         vicii->video_logic.display_state = true;
         vicii->video_logic.rc = 0;
     } else {
         vicii_bus_control_ba_high(vicii);
+        vicii->video_logic.display_state = false; // Ensure display state is false when DEN is disabled
     }
     vicii_bus_control_aec_high(vicii);
     return VIC_ACCESS_IDLE;
 }
 
 static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int char_index) {
-    if (vicii->video_logic.is_bad_line) {
+    // Only perform memory access if DEN is enabled
+    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    if (vicii->video_logic.is_bad_line && den_enabled) {
         vicii_bus_control_ba_low(vicii);
         vicii_bus_control_aec_low(vicii);
         return VIC_ACCESS_C;
     } else {
         vicii_bus_control_ba_high(vicii);
         vicii_bus_control_aec_high(vicii);
-        return VIC_ACCESS_G;
+        vicii->video_logic.display_state = false; // Ensure display state is false when DEN is disabled
+        return VIC_ACCESS_IDLE; // Return IDLE when DEN is disabled to prevent memory accesses
     }
 }
 
@@ -1192,62 +1126,207 @@ static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border,
     }
 }
 
-bus_state_t vicii_advance_cycle(vicii_t* vicii, bus_state_t bus_state) {
-    // Bus pointer is managed externally; do not update from bus_state
-    // Get current cycle entry (derived from x_coordinate)
-    const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[vicii->timing.x_cycle];
-    // Call cycle function to get access type
-    uint8_t access_type = entry->func(vicii, entry->param);
-    // Perform unified memory access
-    vicii_memory_access(vicii, access_type, entry->param);
-    // Update border flip-flops FIRST to establish display window state
-    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
-    // Perform unified pixel sequencing (8 pixels per cycle)
-    if (vicii->pixel.framebuffer && vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
-        vicii_unified_pixel_sequencer(vicii);
-    }
-    // Update border flip-flops AFTER pixel generation using hardware-accurate coordinates
-    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
-    // Advance x_coordinate (primary counter) and update derived values
-    vicii_timing_advance(vicii);
-    vicii_update_badline_condition(vicii);
-    // Flush pixel line if end of line
-    if (vicii->timing.x_coordinate == 0 && vicii->pixel.framebuffer) {
-        uint16_t flush_line = (vicii->timing.raster_counter == 0) ? (vicii->timing.total_lines - 1) : (vicii->timing.raster_counter - 1);
-        vicii_pixel_flush_line(vicii, vicii_get_default_palette(), flush_line);
-    }
-    // Return the bus state for threaded cycle chaining
-    return bus_state;
-}
+// Main tick function
+bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
+    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
 
-/**
- * Consolidated VIC-II tick function - main entry point for VIC-II cycle processing.
- * Combines advance cycle functionality with I/O bus coordination.
- * This replaces direct calls to vicii_advance_cycle() in the new architecture.
- *
- * @param chip Pointer to VIC-II chip instance
- * @param bus_state Current bus state
- * @return Updated bus state
- */
-bus_state_t vicii_tick(void* chip, bus_state_t bus_state) {
-    vicii_t* vicii = (vicii_t*)chip;
-
-    // HYBRID APPROACH: VIC-II no longer needs to check for IO pending
-    // I/O access is now handled directly by the bus memory tick function
-    // through chip callback arrays, eliminating the need for this check
+    // STEP 1: Read data from bus (from PREVIOUS cycle's PHI2 memory setup)
+    uint8_t bus_data = BUS_GET_DATA(c64_bus->state);
 
     // Monitor CIA2 writes to $DD00 for VIC-II bank changes
     // VIC-II watches CIA2 writes directly without callbacks or io_pending flags
     if (BUS_GET_ADDR(bus_state) == 0xDD00 && !(BUS_GET_LINES(bus_state) & BUS_MASK_RW)) {
         // CIA2 Data Port A write detected - extract VIC-II bank bits (0-1)
         // Hardware mapping: 00→Bank 3, 01→Bank 2, 10→Bank 1, 11→Bank 0
-        uint8_t vic_bank = 3 - (BUS_GET_DATA(bus_state) & 0x03);
+        uint8_t vic_bank = 3 - (bus_data & 0x03);
         vicii_bank_change(vicii, vic_bank);
     }
 
-    // Delegate to the existing advance cycle function
-    // In the future, this can be expanded to include additional tick-specific logic
-    return vicii_advance_cycle(vicii, bus_state);
+    // Handle the read data based on the pending access type
+    // This handles C/P/S accesses that were set up at the end of the previous cycle
+    switch (vicii->bus.pending_phi2_access_type) {
+        case VIC_ACCESS_C:
+            // Increment VC and VMLI after c-access in display state
+            if (vicii->video_logic.display_state) {
+                vicii->video_logic.vc++;
+                vicii->video_logic.vmli++;
+            }
+
+            // C-access: Store video matrix data
+            if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
+                vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = bus_data;
+            }
+            break;
+            
+        case VIC_ACCESS_P:
+            // P-access: Store sprite pointer
+            if (vicii->bus.pending_phi2_access_param >= 0 && vicii->bus.pending_phi2_access_param < VICII_NUM_SPRITES) {
+                vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[vicii->bus.pending_phi2_access_param];
+                sprite->data_pointer = bus_data;
+            }
+            break;
+            
+        case VIC_ACCESS_S:
+            // S-access: Store sprite data
+            if (vicii->bus.pending_phi2_access_param >= 0 && vicii->bus.pending_phi2_access_param < VICII_NUM_SPRITES) {
+                vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[vicii->bus.pending_phi2_access_param];
+                int mc = sprite->mc_counter - 1; // mc_counter was incremented in vicii_memory_access
+                if (mc >= 0 && mc < 3) {
+                    sprite->shift_reg |= ((uint32_t)bus_data << (16 - mc * 8));
+                }
+            }
+            break;
+            
+        default:
+            break;
+    }
+    
+    // Clear pending access
+    vicii->bus.pending_phi2_access_type = VIC_ACCESS_IDLE;
+    vicii->bus.pending_phi2_access_param = 0;
+
+    // STEP 2: Get current cycle entry and call cycle function
+    const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[vicii->timing.x_cycle];
+
+    const int access_param = entry->param;
+    const uint8_t access_type = entry->func(vicii, access_param);
+
+    uint16_t address = 0;
+    bool perform_phi1_read = true;
+
+    // STEP 3: Perform PHI1 memory accesses (G/REFRESH/IDLE) via direct read
+    // These happen during the first phase when VIC-II normally has the bus
+    switch (access_type) {
+        // STEP 2b: Handle C-access Color RAM read during PHI1
+        // Color RAM is accessed immediately during PHI1 (not deferred like video matrix)
+        case VIC_ACCESS_C: {
+            // Read Color RAM directly (PHI1 access)
+            BUS_SET_ADDR(bus_state, 0xD800 + vicii->video_logic.vc);
+            bus_state = mos2114_read(vicii->colorram, bus_state);
+            const uint8_t color_data = BUS_GET_DATA(bus_state);
+            
+            if (vicii->video_logic.vmli < 40) {
+                vicii->video_data.video_color_line[vicii->video_logic.vmli] = static_cast<vicii_color_t>(color_data & 0x0F);
+            }
+            FALLTHROUGH;
+        }
+        case VIC_ACCESS_G: {
+            // Get character code from the video matrix line
+            const uint8_t char_code = vicii->video_data.video_matrix_line[vicii->video_logic.vmli];
+            
+            if (vicii->video_logic.display_state) {
+                if (vicii->registers.data[VICII_C1] & VICII_C1_BMM) {
+                    // Bitmap mode c64_
+                    address = vicii->memory.cb_base |
+                            ((vicii->video_logic.vc & 0x3FF) << 3) |
+                            (vicii->video_logic.rc & 0x07);
+                } else {
+                    // Text mode
+                    address = vicii->memory.cb_base |
+                            (char_code << 3) |
+                            (vicii->video_logic.rc & 0x07);
+                }
+            } else {
+                // Idle state
+                address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
+            }
+            break;
+        }
+        
+        case VIC_ACCESS_REFRESH:
+            if (vicii->enable_hardware_accurate_reads) {
+                address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
+            } else {
+                perform_phi1_read = false;
+            }
+            vicii->video_logic.refresh_counter--;
+            break;
+            
+        case VIC_ACCESS_IDLE: {
+            bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+            if (vicii->enable_hardware_accurate_reads && den_enabled) {
+                address = 0x3FFF;
+            } else {
+                perform_phi1_read = false;
+            }
+            break;
+        }
+        
+        default:
+            perform_phi1_read = false;
+            break;
+    }
+    
+    // Perform memory read if needed (common path for all PHI1 accesses)
+    if (perform_phi1_read) {
+        // Apply CIA2 originating vic-ii bank base (set in vicii_bank_change)
+        address = vicii->memory.bank_base | address;
+        BUS_SET_ADDR(bus_state, address);
+        // TODO : Make sure RW line is always set (clear before and
+        // set after CPU writes) so that we don't need to set it here
+        BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_RW);
+        bus_state = c64_bus_vic_read(c64_bus, bus_state, address);
+        
+        // Handle read data based on access type
+        if (access_type == VIC_ACCESS_G) {
+            uint8_t graphics_data = BUS_GET_DATA(bus_state);
+            vicii_graphics_sequencer(vicii, graphics_data);
+        }
+    }
+
+    // STEP 4: Update border flip-flops to establish display window state
+    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
+    
+    // STEP 5: Perform unified pixel sequencing (8 pixels per cycle)
+    if (vicii->pixel.framebuffer && vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
+        vicii_unified_pixel_sequencer(vicii);
+    }
+    
+    // STEP 6: Update border flip-flops AFTER pixel generation
+    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
+    
+    // STEP 7: Advance x_coordinate (primary counter) and update derived values
+    vicii_timing_advance(vicii);
+    vicii_update_badline_condition(vicii);
+    
+    // STEP 8: Flush pixel line if end of line
+    if (vicii->timing.x_coordinate == 0 && vicii->pixel.framebuffer) {
+        const uint16_t flush_line = (vicii->timing.raster_counter == 0) ? (vicii->timing.total_lines - 1) : (vicii->timing.raster_counter - 1);
+        vicii_pixel_flush_line(vicii, vicii_get_default_palette(), flush_line);
+    }
+
+    // Store pending access type and parameter for next cycle
+    vicii->bus.pending_phi2_access_type = access_type;
+    vicii->bus.pending_phi2_access_param = access_param;
+
+    // STEP 9: Set up PHI2 memory access on the bus (C/P/S accesses only)
+    // These will be serviced externally and read at the start of the next cycle
+    switch (access_type) {
+        case VIC_ACCESS_P:
+            address = vicii->memory.vm_base + 0x3F8 + (uint16_t)access_param;
+            break;
+        case VIC_ACCESS_S: {
+            vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[access_param];
+
+            if (sprite->mc_counter >= 3)
+                return bus_state; // TODO : Does hardware indeed skip memory access for 4th byte?
+
+            address = sprite->data_pointer * 64 + sprite->mc_counter;
+            sprite->mc_counter++;
+            break;
+        }
+        case VIC_ACCESS_C:
+            // PHI2 access: Set up video matrix read (Color RAM will be read in-place during PHI1)
+            address = vicii->memory.vm_base + vicii->video_logic.vc;
+            break;
+        default:
+            // PHI1 accesses (G/REFRESH/IDLE) are handled inline, not here
+            return bus_state;
+    }
+
+    // Return the bus state for threaded cycle chaining
+    return vicii_bus_memory_setup(vicii, bus_state, address);
+    // Data will be read from bus during memory service phase and handled in next cycle
 }
 
 // ========================================================================================
@@ -1267,9 +1346,11 @@ static inline void vicii_initialize(vicii_t* vicii) {
     memset(&vicii->pixel, 0, sizeof(vicii_pixel_unit_t));
     memset(&vicii->bus, 0, sizeof(vicii_bus_unit_t));
     
-    // Set default register values
-    vicii->registers.data[VICII_C1] = VICII_C1_RST8 | VICII_C1_DEN | VICII_C1_RSEL |
-                            (VICII_C1_YSCROLL & 3); // 155:Display ENable,25-row  
+    // Set default register values - DISABLE DEN during early boot to prevent bus contention
+    // DEN will be enabled by KERNAL after RAM test completes
+    // Explicitly clear DEN bit (bit 4) to prevent VIC-II from pulling BA low during boot
+    vicii->registers.data[VICII_C1] = VICII_C1_RST8 | VICII_C1_RSEL |
+                            (VICII_C1_YSCROLL & 3); // DEN=0, YSCROLL=3, RSEL=1, RST8=1
     vicii->registers.data[VICII_MXE] = 0;  // All sprites disabled
     vicii->registers.data[VICII_C2] = VICII_C2_CSEL; // 8: XSCROLL:0, no MultiColorMode, 40-column display, no RESET
     vicii->registers.data[VICII_MP] = VICII_MP_CB12 | VICII_MP_VM10; // 0x14: "address of Character Dot-Data area to 4096 ($1000)"
@@ -1319,9 +1400,9 @@ static inline void vicii_initialize(vicii_t* vicii) {
     // Initialize refresh counter (Documentation section 3.13)
     vicii->video_logic.refresh_counter = 0xFF;
     
-    // Initialize bad line detection - since DEN is set during initialization,
-    // we need to set this flag to true so bad lines can be detected immediately
-    vicii->video_logic.was_den_set_during_raster_30 = true;
+    // Initialize bad line detection - DEN is disabled during boot,
+    // so bad lines will not be detected until DEN is enabled by KERNAL
+    vicii->video_logic.was_den_set_during_raster_30 = false;
     
     // Allocate pixel buffers - size will be set by timing initialization
     // This is just a placeholder allocation
