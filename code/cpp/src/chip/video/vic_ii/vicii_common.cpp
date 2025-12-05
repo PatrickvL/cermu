@@ -1146,12 +1146,6 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // This handles C/P/S accesses that were set up at the end of the previous cycle
     switch (vicii->bus.pending_phi2_access_type) {
         case VIC_ACCESS_C:
-            // Increment VC and VMLI after c-access in display state
-            if (vicii->video_logic.display_state) {
-                vicii->video_logic.vc++;
-                vicii->video_logic.vmli++;
-            }
-
             // C-access: Store video matrix data
             if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
                 vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = bus_data;
@@ -1191,8 +1185,8 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     const int access_param = entry->param;
     const uint8_t access_type = entry->func(vicii, access_param);
 
-    uint16_t address = 0;
-    bool perform_phi1_read = true;
+    // By default, start with idle state address
+    uint16_t address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
 
     // STEP 3: Perform PHI1 memory accesses (G/REFRESH/IDLE) via direct read
     // These happen during the first phase when VIC-II normally has the bus
@@ -1226,52 +1220,34 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
                             (char_code << 3) |
                             (vicii->video_logic.rc & 0x07);
                 }
-            } else {
-                // Idle state
-                address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
             }
             break;
         }
         
         case VIC_ACCESS_REFRESH:
-            if (vicii->enable_hardware_accurate_reads) {
-                address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
-            } else {
-                perform_phi1_read = false;
-            }
+            address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
             vicii->video_logic.refresh_counter--;
             break;
             
-        case VIC_ACCESS_IDLE: {
-            bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-            if (vicii->enable_hardware_accurate_reads && den_enabled) {
-                address = 0x3FFF;
-            } else {
-                perform_phi1_read = false;
-            }
-            break;
-        }
-        
-        default:
-            perform_phi1_read = false;
+        // TODO : Can VIC_ACCESS_P happen during PHI1?
+        // TODO : Handle PHI1 VIC_ACCESS_S when it happens, how?
+        default: // VIC_ACCESS_IDLE:
             break;
     }
     
-    // Perform memory read if needed (common path for all PHI1 accesses)
-    if (perform_phi1_read) {
-        // Apply CIA2 originating vic-ii bank base (set in vicii_bank_change)
-        address = vicii->memory.bank_base | address;
-        BUS_SET_ADDR(bus_state, address);
-        // TODO : Make sure RW line is always set (clear before and
-        // set after CPU writes) so that we don't need to set it here
-        BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_RW);
-        bus_state = c64_bus_vic_read(c64_bus, bus_state, address);
-        
-        // Handle read data based on access type
-        if (access_type == VIC_ACCESS_G) {
-            uint8_t graphics_data = BUS_GET_DATA(bus_state);
-            vicii_graphics_sequencer(vicii, graphics_data);
-        }
+    // Perform PHI1 memory read (common path for all PHI1 accesses)
+    // Apply CIA2 originating vic-ii bank base (set in vicii_bank_change)
+    address = vicii->memory.bank_base | address;
+    BUS_SET_ADDR(bus_state, address);
+    // TODO : Make sure RW line is always set (clear before and
+    // set after CPU writes) so that we don't need to set it here
+    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_RW);
+    bus_state = c64_bus_vic_read(c64_bus, bus_state, address);
+    
+    // Handle read data based on access type
+    if (access_type == VIC_ACCESS_G) {
+        uint8_t graphics_data = BUS_GET_DATA(bus_state);
+        vicii_graphics_sequencer(vicii, graphics_data);
     }
 
     // STEP 4: Update border flip-flops to establish display window state
@@ -1318,6 +1294,11 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         case VIC_ACCESS_C:
             // PHI2 access: Set up video matrix read (Color RAM will be read in-place during PHI1)
             address = vicii->memory.vm_base + vicii->video_logic.vc;
+            // Increment VC and VMLI after c-access in display state
+            if (vicii->video_logic.display_state) {
+                vicii->video_logic.vc++;
+                vicii->video_logic.vmli++;
+            }
             break;
         default:
             // PHI1 accesses (G/REFRESH/IDLE) are handled inline, not here

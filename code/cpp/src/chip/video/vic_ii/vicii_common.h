@@ -231,12 +231,13 @@ using vicii_pixel_t = vicii_pixel_s;
 #define VICII_BORDER_RIGHT_CSEL1     344
 
 // VIC-II access types (Documentation section 3.6.2)
-#define VIC_ACCESS_IDLE         0  // i-access - idle access to $3fff
-#define VIC_ACCESS_REFRESH      1  // r-access - DRAM refresh
-#define VIC_ACCESS_P            2  // p-access - sprite data pointers
-#define VIC_ACCESS_S            3  // s-access - sprite data
-#define VIC_ACCESS_C            4  // c-access - video matrix and Color RAM
-#define VIC_ACCESS_G            5  // g-access - character generator or bitmap
+// PHI1 = PHI2 high
+#define VIC_ACCESS_IDLE         0  // PHI1     : i-access - idle access to $3fff
+#define VIC_ACCESS_REFRESH      1  // PHI1     : r-access - DRAM refresh
+#define VIC_ACCESS_P            2  // PHI1     : p-access - sprite data pointers
+#define VIC_ACCESS_S            3  // PHI1/PHI2: s-access - sprite data (PHI2 when sprite active)
+#define VIC_ACCESS_C            4  //      PHI2: c-access - video matrix and Color RAM (in bad lines)
+#define VIC_ACCESS_G            5  // PHI1     : g-access - character generator or bitmap
 
 // Interrupt mask
 #define VICII_INTERRUPTS_MASK (VICII_IR_ILP | VICII_IR_IMMC | VICII_IR_IMBC | VICII_IR_IRST)
@@ -468,9 +469,6 @@ typedef struct {
 struct vicii_s {
     chip_descriptor_t* desc;
     mos2114_t* colorram;
-
-    // Feature toggles
-    bool enable_hardware_accurate_reads;  // Enable VIC idle/refresh memory reads for $DE00 data bus tricks and cycle accuracy (default: false for performance)
 
     // Chip configuration (set at initialization)
     const vicii_chip_config_t* config;
