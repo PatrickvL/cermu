@@ -820,7 +820,7 @@ static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int char_index) {
     }
 }
 
-static uint8_t vicii_cycle_sprite_p_expansion_check(vicii_t* vicii, int sprite_num) {
+static void vicii_cycle_16_expansion_check(vicii_t* vicii) {
     // "7. In the first phase of cycle 16, it is checked if the expansion flip flop
     // is set. If so, MCBASE load from MC (MC->MCBASE), unless the CPU cleared
     // the Y expansion bit in $d017 in the second phase of cycle 15, in which case
@@ -851,7 +851,11 @@ static uint8_t vicii_cycle_sprite_p_expansion_check(vicii_t* vicii, int sprite_n
             }
         }
     }
-    return vicii_cycle_sprite_p_access(vicii, sprite_num);
+}
+
+static uint8_t vicii_cycle_char_color_access_expansion_check(vicii_t* vicii, int param) {
+    vicii_cycle_16_expansion_check(vicii);
+    return vicii_cycle_char_color_access(vicii, param);
 }
 
 static uint8_t vicii_cycle_sprite_s_rc_check(vicii_t* vicii, int sprite_num) {
@@ -893,7 +897,7 @@ static uint8_t vicii_cycle_sprite_s_border_check(vicii_t* vicii, int param) {
 // CYCLE TABLES
 // ========================================================================================
 
-// Cycle callback table - PAL timing (63 cycles per line) (Documentation section 3.6.3)
+// Cycle callback table - PAL timing (6569 : 63 cycles per line) (Documentation section 3.6.3)
 static const vicii_cycle_entry_t vicii_cycle_table_pal[63] = {
     // 1=VIC-II PHI1, 2=VIC-II PHI2, C=CPU PHI2       12C 12C
     //                                                BAD NBD
@@ -912,7 +916,7 @@ static const vicii_cycle_entry_t vicii_cycle_table_pal[63] = {
     {vicii_cycle_badline_setup, 0},             // 13 r_X r_x
     {vicii_cycle_badline_setup, 0},             // 14 r_X r_x
     {vicii_cycle_vc_load, 0},                   // 15 rc_ r_x
-    {vicii_cycle_char_color_access, 0},         // 16 gc_ g_x
+    {vicii_cycle_char_color_access_expansion_check, 0}, // 16 gc_ g_x
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
     {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
@@ -954,7 +958,7 @@ static const vicii_cycle_entry_t vicii_cycle_table_pal[63] = {
     {vicii_cycle_char_color_access, 39},        // 55 g_x g_x
     {vicii_cycle_idle, 0},                      // 56 i_x i_x
     {vicii_cycle_idle, 0},                      // 57 i_x i_x
-    {vicii_cycle_sprite_p_expansion_check, 0},  // 58 0_x 0_x
+    {vicii_cycle_sprite_p_access, 0},           // 58 0_x 0_x
     {vicii_cycle_sprite_s_rc_check, 0},         // 59 i_x i_x
     {vicii_cycle_sprite_p_access, 1},           // 60 1_x 1_x
     {vicii_cycle_sprite_s_access, 1},           // 61 i_x i_x
@@ -962,7 +966,77 @@ static const vicii_cycle_entry_t vicii_cycle_table_pal[63] = {
     {vicii_cycle_sprite_s_border_check, 2}      // 63 i_x i_x
 };
 
-// Cycle callback table - NTSC timing (65 cycles per line)
+// Cycle callback table - NTSC timing (6567R56A : 64 cycles per line)
+static const vicii_cycle_entry_t vicii_cycle_table_ntsc2[64] = {
+    // 1=VIC-II PHI1, 2=VIC-II PHI2, C=CPU PHI2       12C 12C
+    //                                                BAD NBD
+    {vicii_cycle_sprite_p_access, 3},           // 1  3_x 3_x
+    {vicii_cycle_sprite_s_access, 3},           // 2  i_x i_x
+    {vicii_cycle_sprite_p_access, 4},           // 3  4_x 4_x
+    {vicii_cycle_sprite_s_access, 4},           // 4  i_x i_x
+    {vicii_cycle_sprite_p_access, 5},           // 5  5_x 5_x
+    {vicii_cycle_sprite_s_access, 5},           // 6  i_x i_x
+    {vicii_cycle_sprite_p_access, 6},           // 7  6_x 6_x
+    {vicii_cycle_sprite_s_access, 6},           // 8  i_x i_x
+    {vicii_cycle_sprite_p_access, 7},           // 9  7_x 7_x
+    {vicii_cycle_sprite_s_access, 7},           // 10 i_x i_x
+    {vicii_cycle_refresh, 0},                   // 11 r_x r_x
+    {vicii_cycle_refresh, 0},                   // 12 r_X r_x
+    {vicii_cycle_badline_setup, 0},             // 13 r_X r_x
+    {vicii_cycle_badline_setup, 0},             // 14 r_X r_x
+    {vicii_cycle_vc_load, 0},                   // 15 rc_ r_x
+    {vicii_cycle_char_color_access_expansion_check, 0}, // 16 gc_ g_x
+    {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
+    {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
+    {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
+    {vicii_cycle_char_color_access, 4},         // 20 gc_ g_x
+    {vicii_cycle_char_color_access, 5},         // 21 gc_ g_x
+    {vicii_cycle_char_color_access, 6},         // 22 gc_ g_x
+    {vicii_cycle_char_color_access, 7},         // 23 gc_ g_x
+    {vicii_cycle_char_color_access, 8},         // 24 gc_ g_x
+    {vicii_cycle_char_color_access, 9},         // 25 gc_ g_x
+    {vicii_cycle_char_color_access, 10},        // 26 gc_ g_x
+    {vicii_cycle_char_color_access, 11},        // 27 gc_ g_x
+    {vicii_cycle_char_color_access, 12},        // 28 gc_ g_x
+    {vicii_cycle_char_color_access, 13},        // 29 gc_ g_x
+    {vicii_cycle_char_color_access, 14},        // 30 gc_ g_x
+    {vicii_cycle_char_color_access, 15},        // 31 gc_ g_x
+    {vicii_cycle_char_color_access, 16},        // 32 gc_ g_x
+    {vicii_cycle_char_color_access, 17},        // 33 gc_ g_x
+    {vicii_cycle_char_color_access, 18},        // 34 gc_ g_x
+    {vicii_cycle_char_color_access, 19},        // 35 gc_ g_x
+    {vicii_cycle_char_color_access, 20},        // 36 gc_ g_x
+    {vicii_cycle_char_color_access, 21},        // 37 gc_ g_x
+    {vicii_cycle_char_color_access, 22},        // 38 gc_ g_x
+    {vicii_cycle_char_color_access, 23},        // 39 gc_ g_x
+    {vicii_cycle_char_color_access, 24},        // 40 gc_ g_x
+    {vicii_cycle_char_color_access, 25},        // 41 gc_ g_x
+    {vicii_cycle_char_color_access, 26},        // 42 gc_ g_x
+    {vicii_cycle_char_color_access, 27},        // 43 gc_ g_x
+    {vicii_cycle_char_color_access, 28},        // 44 gc_ g_x
+    {vicii_cycle_char_color_access, 29},        // 45 gc_ g_x
+    {vicii_cycle_char_color_access, 30},        // 46 gc_ g_x
+    {vicii_cycle_char_color_access, 31},        // 47 gc_ g_x
+    {vicii_cycle_char_color_access, 32},        // 48 gc_ g_x
+    {vicii_cycle_char_color_access, 33},        // 49 gc_ g_x
+    {vicii_cycle_char_color_access, 34},        // 50 gc_ g_x
+    {vicii_cycle_char_color_access, 35},        // 51 gc_ g_x
+    {vicii_cycle_char_color_access, 36},        // 52 gc_ g_x
+    {vicii_cycle_char_color_access, 37},        // 53 gc_ g_x
+    {vicii_cycle_char_color_access, 38},        // 54 gc_ g_x
+    {vicii_cycle_char_color_access, 39},        // 55 g_x g_x
+    {vicii_cycle_idle, 0},                      // 56 i_x i_x
+    {vicii_cycle_idle, 0},                      // 57 i_x i_x
+    {vicii_cycle_idle, 0},                      // 58 i_x i_x
+    {vicii_cycle_sprite_p_access, 0},     // 59 0_x 0_x
+    {vicii_cycle_sprite_s_rc_check, 0},         // 60 i_x i_x
+    {vicii_cycle_sprite_p_access, 1},           // 61 1_x 1_x
+    {vicii_cycle_sprite_s_access, 1},           // 62 i_x i_x
+    {vicii_cycle_sprite_p_access, 2},           // 63 2_x 2_x
+    {vicii_cycle_sprite_s_border_check, 2}      // 64 i_x i_x
+};
+
+// Cycle callback table - NTSC timing (6567R8 : 65 cycles per line)
 static const vicii_cycle_entry_t vicii_cycle_table_ntsc[65] = {
     // 1=VIC-II PHI1, 2=VIC-II PHI2, C=CPU PHI2       12C 12C
     //                                                BAD NBD
@@ -981,7 +1055,7 @@ static const vicii_cycle_entry_t vicii_cycle_table_ntsc[65] = {
     {vicii_cycle_badline_setup, 0},             // 13 r_X r_x
     {vicii_cycle_badline_setup, 0},             // 14 r_X r_x
     {vicii_cycle_vc_load, 0},                   // 15 rc_ r_x
-    {vicii_cycle_char_color_access, 0},         // 16 gc_ g_x
+    {vicii_cycle_char_color_access_expansion_check, 0}, // 16 gc_ g_x
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
     {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
@@ -1025,7 +1099,7 @@ static const vicii_cycle_entry_t vicii_cycle_table_ntsc[65] = {
     {vicii_cycle_idle, 0},                      // 57 i_x i_x
     {vicii_cycle_idle, 0},                      // 58 i_x i_x
     {vicii_cycle_idle, 0},                      // 59 i_x i_x
-    {vicii_cycle_sprite_p_expansion_check, 0},  // 60 0_x 0_x
+    {vicii_cycle_sprite_p_access, 0},           // 60 0_x 0_x
     {vicii_cycle_sprite_s_rc_check, 0},         // 61 i_x i_x
     {vicii_cycle_sprite_p_access, 1},           // 62 1_x 1_x
     {vicii_cycle_sprite_s_access, 1},           // 63 i_x i_x
@@ -1169,13 +1243,14 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             if (vicii->bus.pending_phi2_access_param >= 0 && vicii->bus.pending_phi2_access_param < VICII_NUM_SPRITES) {
                 vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[vicii->bus.pending_phi2_access_param];
                 int mc = sprite->mc_counter - 1; // mc_counter was incremented in vicii_memory_access
+
                 if (mc >= 0 && mc < 3) {
                     sprite->shift_reg |= ((uint32_t)bus_data << (16 - mc * 8));
                 }
             }
             break;
-            
-        default:
+        // TODO: Handle PHI2 VIC_ACCESS_G when it happens, how?
+        default: // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH
             break;
     }
     
@@ -1413,9 +1488,11 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
     vicii->pixel.framebuffer_end_x = config->framebuffer_end_x;
     
     // Select cycle table based on timing characteristics
-    if (config->cycles_per_line == VICII_PAL_CYCLES_PER_LINE) {
+    if (config->cycles_per_line == VICII_PAL_CYCLES_PER_LINE) { // 63
         vicii->timing.cycle_table = vicii_cycle_table_pal;
-    } else if (config->cycles_per_line == VICII_NTSC_CYCLES_PER_LINE) {
+    } else if (config->cycles_per_line == 64) {
+        vicii->timing.cycle_table = vicii_cycle_table_ntsc2;
+    } else if (config->cycles_per_line == VICII_NTSC_CYCLES_PER_LINE) { // 65
         vicii->timing.cycle_table = vicii_cycle_table_ntsc;
     } else {
         // Default to PAL if unknown
