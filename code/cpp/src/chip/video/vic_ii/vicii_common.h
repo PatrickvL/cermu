@@ -231,7 +231,7 @@ using vicii_pixel_t = vicii_pixel_s;
 #define VICII_BORDER_RIGHT_CSEL1     344
 
 // VIC-II access types (Documentation section 3.6.2)
-// PHI1 = PHI2 high
+// PHI1 = PHI2 low
 #define VIC_ACCESS_IDLE         0  // PHI1     : i-access - idle access to $3fff
 #define VIC_ACCESS_REFRESH      1  // PHI1     : r-access - DRAM refresh
 #define VIC_ACCESS_P            2  // PHI1     : p-access - sprite data pointers

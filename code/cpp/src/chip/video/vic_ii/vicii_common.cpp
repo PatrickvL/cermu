@@ -811,7 +811,7 @@ static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int char_index) {
     if (vicii->video_logic.is_bad_line && den_enabled) {
         vicii_bus_control_ba_low(vicii);
         vicii_bus_control_aec_low(vicii);
-        return VIC_ACCESS_C;
+        return VIC_ACCESS_C; // Will fall-through to VIC_ACCESS_G as well
     } else {
         vicii_bus_control_ba_high(vicii);
         vicii_bus_control_aec_high(vicii);
@@ -895,138 +895,142 @@ static uint8_t vicii_cycle_sprite_s_border_check(vicii_t* vicii, int param) {
 
 // Cycle callback table - PAL timing (63 cycles per line) (Documentation section 3.6.3)
 static const vicii_cycle_entry_t vicii_cycle_table_pal[63] = {
-    {vicii_cycle_idle, 0},                              // 1
-    {vicii_cycle_sprite_p_access, 0},                   // 2
-    {vicii_cycle_sprite_s_access, 0},                   // 3
-    {vicii_cycle_sprite_p_access, 1},                   // 4
-    {vicii_cycle_sprite_s_access, 1},                   // 5
-    {vicii_cycle_sprite_p_access, 2},                   // 6
-    {vicii_cycle_sprite_s_access, 2},                   // 7
-    {vicii_cycle_sprite_p_access, 3},                   // 8
-    {vicii_cycle_sprite_s_access, 3},                   // 9
-    {vicii_cycle_refresh, 0},                           // 10
-    {vicii_cycle_idle, 0},                              // 11
-    {vicii_cycle_idle, 0},                              // 12
-    {vicii_cycle_badline_setup, 0},                     // 13
-    {vicii_cycle_badline_setup, 0},                     // 14
-    {vicii_cycle_vc_load, 0},                           // 15
-    {vicii_cycle_char_color_access, 0},                 // 16
-    {vicii_cycle_char_color_access, 1},                 // 17
-    {vicii_cycle_char_color_access, 2},                 // 18
-    {vicii_cycle_char_color_access, 3},                 // 19
-    {vicii_cycle_char_color_access, 4},                 // 20
-    {vicii_cycle_char_color_access, 5},                 // 21
-    {vicii_cycle_char_color_access, 6},                 // 22
-    {vicii_cycle_char_color_access, 7},                 // 23
-    {vicii_cycle_char_color_access, 8},                 // 24
-    {vicii_cycle_char_color_access, 9},                 // 25
-    {vicii_cycle_char_color_access, 10},                // 26
-    {vicii_cycle_char_color_access, 11},                // 27
-    {vicii_cycle_char_color_access, 12},                // 28
-    {vicii_cycle_char_color_access, 13},                // 29
-    {vicii_cycle_char_color_access, 14},                // 30
-    {vicii_cycle_char_color_access, 15},                // 31
-    {vicii_cycle_char_color_access, 16},                // 32
-    {vicii_cycle_char_color_access, 17},                // 33
-    {vicii_cycle_char_color_access, 18},                // 34
-    {vicii_cycle_char_color_access, 19},                // 35
-    {vicii_cycle_char_color_access, 20},                // 36
-    {vicii_cycle_char_color_access, 21},                // 37
-    {vicii_cycle_char_color_access, 22},                // 38
-    {vicii_cycle_char_color_access, 23},                // 39
-    {vicii_cycle_char_color_access, 24},                // 40
-    {vicii_cycle_char_color_access, 25},                // 41
-    {vicii_cycle_char_color_access, 26},                // 42
-    {vicii_cycle_char_color_access, 27},                // 43
-    {vicii_cycle_char_color_access, 28},                // 44
-    {vicii_cycle_char_color_access, 29},                // 45
-    {vicii_cycle_char_color_access, 30},                // 46
-    {vicii_cycle_char_color_access, 31},                // 47
-    {vicii_cycle_char_color_access, 32},                // 48
-    {vicii_cycle_char_color_access, 33},                // 49
-    {vicii_cycle_char_color_access, 34},                // 50
-    {vicii_cycle_char_color_access, 35},                // 51
-    {vicii_cycle_char_color_access, 36},                // 52
-    {vicii_cycle_char_color_access, 37},                // 53
-    {vicii_cycle_char_color_access, 38},                // 54
-    {vicii_cycle_char_color_access, 39},                // 55
-    {vicii_cycle_sprite_p_expansion_check, 4},          // 56
-    {vicii_cycle_sprite_s_access, 4},                   // 57
-    {vicii_cycle_sprite_p_access, 5},                   // 58
-    {vicii_cycle_sprite_s_rc_check, 5},                 // 59
-    {vicii_cycle_sprite_p_access, 6},                   // 60
-    {vicii_cycle_sprite_s_access, 6},                   // 61
-    {vicii_cycle_sprite_p_access, 7},                   // 62
-    {vicii_cycle_sprite_s_border_check, 7}              // 63
+    // 1=VIC-II PHI1, 2=VIC-II PHI2, C=CPU PHI2       12C 12C
+    //                                                BAD NBD
+    {vicii_cycle_sprite_p_access, 3},           // 1  3_x 3_x
+    {vicii_cycle_sprite_s_access, 3},           // 2  i_x i_x
+    {vicii_cycle_sprite_p_access, 4},           // 3  4_x 4_x
+    {vicii_cycle_sprite_s_access, 4},           // 4  i_x i_x
+    {vicii_cycle_sprite_p_access, 5},           // 5  5_x 5_x
+    {vicii_cycle_sprite_s_access, 5},           // 6  i_x i_x
+    {vicii_cycle_sprite_p_access, 6},           // 7  6_x 6_x
+    {vicii_cycle_sprite_s_access, 6},           // 8  i_x i_x
+    {vicii_cycle_sprite_p_access, 7},           // 9  7_x 7_x
+    {vicii_cycle_sprite_s_access, 7},           // 10 i_x i_x
+    {vicii_cycle_refresh, 0},                   // 11 r_x r_x
+    {vicii_cycle_refresh, 0},                   // 12 r_X r_x
+    {vicii_cycle_badline_setup, 0},             // 13 r_X r_x
+    {vicii_cycle_badline_setup, 0},             // 14 r_X r_x
+    {vicii_cycle_vc_load, 0},                   // 15 rc_ r_x
+    {vicii_cycle_char_color_access, 0},         // 16 gc_ g_x
+    {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
+    {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
+    {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
+    {vicii_cycle_char_color_access, 4},         // 20 gc_ g_x
+    {vicii_cycle_char_color_access, 5},         // 21 gc_ g_x
+    {vicii_cycle_char_color_access, 6},         // 22 gc_ g_x
+    {vicii_cycle_char_color_access, 7},         // 23 gc_ g_x
+    {vicii_cycle_char_color_access, 8},         // 24 gc_ g_x
+    {vicii_cycle_char_color_access, 9},         // 25 gc_ g_x
+    {vicii_cycle_char_color_access, 10},        // 26 gc_ g_x
+    {vicii_cycle_char_color_access, 11},        // 27 gc_ g_x
+    {vicii_cycle_char_color_access, 12},        // 28 gc_ g_x
+    {vicii_cycle_char_color_access, 13},        // 29 gc_ g_x
+    {vicii_cycle_char_color_access, 14},        // 30 gc_ g_x
+    {vicii_cycle_char_color_access, 15},        // 31 gc_ g_x
+    {vicii_cycle_char_color_access, 16},        // 32 gc_ g_x
+    {vicii_cycle_char_color_access, 17},        // 33 gc_ g_x
+    {vicii_cycle_char_color_access, 18},        // 34 gc_ g_x
+    {vicii_cycle_char_color_access, 19},        // 35 gc_ g_x
+    {vicii_cycle_char_color_access, 20},        // 36 gc_ g_x
+    {vicii_cycle_char_color_access, 21},        // 37 gc_ g_x
+    {vicii_cycle_char_color_access, 22},        // 38 gc_ g_x
+    {vicii_cycle_char_color_access, 23},        // 39 gc_ g_x
+    {vicii_cycle_char_color_access, 24},        // 40 gc_ g_x
+    {vicii_cycle_char_color_access, 25},        // 41 gc_ g_x
+    {vicii_cycle_char_color_access, 26},        // 42 gc_ g_x
+    {vicii_cycle_char_color_access, 27},        // 43 gc_ g_x
+    {vicii_cycle_char_color_access, 28},        // 44 gc_ g_x
+    {vicii_cycle_char_color_access, 29},        // 45 gc_ g_x
+    {vicii_cycle_char_color_access, 30},        // 46 gc_ g_x
+    {vicii_cycle_char_color_access, 31},        // 47 gc_ g_x
+    {vicii_cycle_char_color_access, 32},        // 48 gc_ g_x
+    {vicii_cycle_char_color_access, 33},        // 49 gc_ g_x
+    {vicii_cycle_char_color_access, 34},        // 50 gc_ g_x
+    {vicii_cycle_char_color_access, 35},        // 51 gc_ g_x
+    {vicii_cycle_char_color_access, 36},        // 52 gc_ g_x
+    {vicii_cycle_char_color_access, 37},        // 53 gc_ g_x
+    {vicii_cycle_char_color_access, 38},        // 54 gc_ g_x
+    {vicii_cycle_char_color_access, 39},        // 55 g_x g_x
+    {vicii_cycle_idle, 0},                      // 56 i_x i_x
+    {vicii_cycle_idle, 0},                      // 57 i_x i_x
+    {vicii_cycle_sprite_p_expansion_check, 0},  // 58 0_x 0_x
+    {vicii_cycle_sprite_s_rc_check, 0},         // 59 i_x i_x
+    {vicii_cycle_sprite_p_access, 1},           // 60 1_x 1_x
+    {vicii_cycle_sprite_s_access, 1},           // 61 i_x i_x
+    {vicii_cycle_sprite_p_access, 2},           // 62 2_x 2_x
+    {vicii_cycle_sprite_s_border_check, 2}      // 63 i_x i_x
 };
 
 // Cycle callback table - NTSC timing (65 cycles per line)
 static const vicii_cycle_entry_t vicii_cycle_table_ntsc[65] = {
-    {vicii_cycle_idle, 0},                              // 1
-    {vicii_cycle_sprite_p_access, 0},                   // 2
-    {vicii_cycle_sprite_s_access, 0},                   // 3
-    {vicii_cycle_sprite_p_access, 1},                   // 4
-    {vicii_cycle_sprite_s_access, 1},                   // 5
-    {vicii_cycle_sprite_p_access, 2},                   // 6
-    {vicii_cycle_sprite_s_access, 2},                   // 7
-    {vicii_cycle_sprite_p_access, 3},                   // 8
-    {vicii_cycle_sprite_s_access, 3},                   // 9
-    {vicii_cycle_refresh, 0},                           // 10
-    {vicii_cycle_idle, 0},                              // 11
-    {vicii_cycle_idle, 0},                              // 12
-    {vicii_cycle_badline_setup, 0},                     // 13
-    {vicii_cycle_badline_setup, 0},                     // 14
-    {vicii_cycle_vc_load, 0},                           // 15
-    {vicii_cycle_char_color_access, 0},                 // 16
-    {vicii_cycle_char_color_access, 1},                 // 17
-    {vicii_cycle_char_color_access, 2},                 // 18
-    {vicii_cycle_char_color_access, 3},                 // 19
-    {vicii_cycle_char_color_access, 4},                 // 20
-    {vicii_cycle_char_color_access, 5},                 // 21
-    {vicii_cycle_char_color_access, 6},                 // 22
-    {vicii_cycle_char_color_access, 7},                 // 23
-    {vicii_cycle_char_color_access, 8},                 // 24
-    {vicii_cycle_char_color_access, 9},                 // 25
-    {vicii_cycle_char_color_access, 10},                // 26
-    {vicii_cycle_char_color_access, 11},                // 27
-    {vicii_cycle_char_color_access, 12},                // 28
-    {vicii_cycle_char_color_access, 13},                // 29
-    {vicii_cycle_char_color_access, 14},                // 30
-    {vicii_cycle_char_color_access, 15},                // 31
-    {vicii_cycle_char_color_access, 16},                // 32
-    {vicii_cycle_char_color_access, 17},                // 33
-    {vicii_cycle_char_color_access, 18},                // 34
-    {vicii_cycle_char_color_access, 19},                // 35
-    {vicii_cycle_char_color_access, 20},                // 36
-    {vicii_cycle_char_color_access, 21},                // 37
-    {vicii_cycle_char_color_access, 22},                // 38
-    {vicii_cycle_char_color_access, 23},                // 39
-    {vicii_cycle_char_color_access, 24},                // 40
-    {vicii_cycle_char_color_access, 25},                // 41
-    {vicii_cycle_char_color_access, 26},                // 42
-    {vicii_cycle_char_color_access, 27},                // 43
-    {vicii_cycle_char_color_access, 28},                // 44
-    {vicii_cycle_char_color_access, 29},                // 45
-    {vicii_cycle_char_color_access, 30},                // 46
-    {vicii_cycle_char_color_access, 31},                // 47
-    {vicii_cycle_char_color_access, 32},                // 48
-    {vicii_cycle_char_color_access, 33},                // 49
-    {vicii_cycle_char_color_access, 34},                // 50
-    {vicii_cycle_char_color_access, 35},                // 51
-    {vicii_cycle_char_color_access, 36},                // 52
-    {vicii_cycle_char_color_access, 37},                // 53
-    {vicii_cycle_char_color_access, 38},                // 54
-    {vicii_cycle_char_color_access, 39},                // 55
-    {vicii_cycle_sprite_p_expansion_check, 4},          // 56
-    {vicii_cycle_sprite_s_access, 4},                   // 57
-    {vicii_cycle_sprite_p_access, 5},                   // 58
-    {vicii_cycle_sprite_s_rc_check, 5},                 // 59
-    {vicii_cycle_sprite_p_access, 6},                   // 60
-    {vicii_cycle_sprite_s_access, 6},                   // 61
-    {vicii_cycle_sprite_p_access, 7},                   // 62
-    {vicii_cycle_sprite_s_border_check, 7},             // 63
-    {vicii_cycle_idle, 0},                              // 64
-    {vicii_cycle_idle, 0}                               // 65
+    // 1=VIC-II PHI1, 2=VIC-II PHI2, C=CPU PHI2       12C 12C
+    //                                                BAD NBD
+    {vicii_cycle_sprite_p_access, 3},           // 1  3_x 3_x
+    {vicii_cycle_sprite_s_access, 3},           // 2  i_x i_x
+    {vicii_cycle_sprite_p_access, 4},           // 3  4_x 4_x
+    {vicii_cycle_sprite_s_access, 4},           // 4  i_x i_x
+    {vicii_cycle_sprite_p_access, 5},           // 5  5_x 5_x
+    {vicii_cycle_sprite_s_access, 5},           // 6  i_x i_x
+    {vicii_cycle_sprite_p_access, 6},           // 7  6_x 6_x
+    {vicii_cycle_sprite_s_access, 6},           // 8  i_x i_x
+    {vicii_cycle_sprite_p_access, 7},           // 9  7_x 7_x
+    {vicii_cycle_sprite_s_access, 7},           // 10 i_x i_x
+    {vicii_cycle_refresh, 0},                   // 11 r_x r_x
+    {vicii_cycle_refresh, 0},                   // 12 r_X r_x
+    {vicii_cycle_badline_setup, 0},             // 13 r_X r_x
+    {vicii_cycle_badline_setup, 0},             // 14 r_X r_x
+    {vicii_cycle_vc_load, 0},                   // 15 rc_ r_x
+    {vicii_cycle_char_color_access, 0},         // 16 gc_ g_x
+    {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
+    {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
+    {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
+    {vicii_cycle_char_color_access, 4},         // 20 gc_ g_x
+    {vicii_cycle_char_color_access, 5},         // 21 gc_ g_x
+    {vicii_cycle_char_color_access, 6},         // 22 gc_ g_x
+    {vicii_cycle_char_color_access, 7},         // 23 gc_ g_x
+    {vicii_cycle_char_color_access, 8},         // 24 gc_ g_x
+    {vicii_cycle_char_color_access, 9},         // 25 gc_ g_x
+    {vicii_cycle_char_color_access, 10},        // 26 gc_ g_x
+    {vicii_cycle_char_color_access, 11},        // 27 gc_ g_x
+    {vicii_cycle_char_color_access, 12},        // 28 gc_ g_x
+    {vicii_cycle_char_color_access, 13},        // 29 gc_ g_x
+    {vicii_cycle_char_color_access, 14},        // 30 gc_ g_x
+    {vicii_cycle_char_color_access, 15},        // 31 gc_ g_x
+    {vicii_cycle_char_color_access, 16},        // 32 gc_ g_x
+    {vicii_cycle_char_color_access, 17},        // 33 gc_ g_x
+    {vicii_cycle_char_color_access, 18},        // 34 gc_ g_x
+    {vicii_cycle_char_color_access, 19},        // 35 gc_ g_x
+    {vicii_cycle_char_color_access, 20},        // 36 gc_ g_x
+    {vicii_cycle_char_color_access, 21},        // 37 gc_ g_x
+    {vicii_cycle_char_color_access, 22},        // 38 gc_ g_x
+    {vicii_cycle_char_color_access, 23},        // 39 gc_ g_x
+    {vicii_cycle_char_color_access, 24},        // 40 gc_ g_x
+    {vicii_cycle_char_color_access, 25},        // 41 gc_ g_x
+    {vicii_cycle_char_color_access, 26},        // 42 gc_ g_x
+    {vicii_cycle_char_color_access, 27},        // 43 gc_ g_x
+    {vicii_cycle_char_color_access, 28},        // 44 gc_ g_x
+    {vicii_cycle_char_color_access, 29},        // 45 gc_ g_x
+    {vicii_cycle_char_color_access, 30},        // 46 gc_ g_x
+    {vicii_cycle_char_color_access, 31},        // 47 gc_ g_x
+    {vicii_cycle_char_color_access, 32},        // 48 gc_ g_x
+    {vicii_cycle_char_color_access, 33},        // 49 gc_ g_x
+    {vicii_cycle_char_color_access, 34},        // 50 gc_ g_x
+    {vicii_cycle_char_color_access, 35},        // 51 gc_ g_x
+    {vicii_cycle_char_color_access, 36},        // 52 gc_ g_x
+    {vicii_cycle_char_color_access, 37},        // 53 gc_ g_x
+    {vicii_cycle_char_color_access, 38},        // 54 gc_ g_x
+    {vicii_cycle_char_color_access, 39},        // 55 g_x g_x
+    {vicii_cycle_idle, 0},                      // 56 i_x i_x
+    {vicii_cycle_idle, 0},                      // 57 i_x i_x
+    {vicii_cycle_idle, 0},                      // 58 i_x i_x
+    {vicii_cycle_idle, 0},                      // 59 i_x i_x
+    {vicii_cycle_sprite_p_expansion_check, 0},  // 60 0_x 0_x
+    {vicii_cycle_sprite_s_rc_check, 0},         // 61 i_x i_x
+    {vicii_cycle_sprite_p_access, 1},           // 62 1_x 1_x
+    {vicii_cycle_sprite_s_access, 1},           // 63 i_x i_x
+    {vicii_cycle_sprite_p_access, 2},           // 64 2_x 2_x
+    {vicii_cycle_sprite_s_border_check, 2}      // 65 i_x i_x
 };
 
 // ========================================================================================
@@ -1089,7 +1093,7 @@ static const vicii_chip_config_t vicii_config_ntsc = {
 
 // Border flip-flop logic (Documentation section 3.9) - X coordinate rules only
 static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border, vicii_timing_unit_t* timing, 
-                                                  uint8_t c1_reg) {
+                                          uint8_t c1_reg) {
     uint16_t raster = timing->raster_counter;
     uint16_t x_coord = timing->x_coordinate;  // Use actual hardware X coordinate (not delayed display coordinate)
     bool den_set = (c1_reg & VICII_C1_DEN) != 0;
@@ -1195,7 +1199,9 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         // Color RAM is accessed immediately during PHI1 (not deferred like video matrix)
         case VIC_ACCESS_C: {
             // Read Color RAM directly (PHI1 access)
-            BUS_SET_ADDR(bus_state, 0xD800 + vicii->video_logic.vc);
+            // Note : No need to or-in 0xD800 as mos2114_read masks address to 11 bits
+            // and the fall-through G-access will replace the bus address anyway
+            BUS_SET_ADDR(bus_state, vicii->memory.vm_base | vicii->video_logic.vc);
             bus_state = mos2114_read(vicii->colorram, bus_state);
             const uint8_t color_data = BUS_GET_DATA(bus_state);
             
@@ -1229,7 +1235,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             vicii->video_logic.refresh_counter--;
             break;
             
-        // TODO : Can VIC_ACCESS_P happen during PHI1?
+        // TODO : Assert that VIC_ACCESS_P can never happen during PHI1
         // TODO : Handle PHI1 VIC_ACCESS_S when it happens, how?
         default: // VIC_ACCESS_IDLE:
             break;
@@ -1279,7 +1285,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // These will be serviced externally and read at the start of the next cycle
     switch (access_type) {
         case VIC_ACCESS_P:
-            address = vicii->memory.vm_base + 0x3F8 + (uint16_t)access_param;
+            address = vicii->memory.vm_base | (0x3F8 + (uint16_t)access_param);
             break;
         case VIC_ACCESS_S: {
             vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[access_param];
@@ -1293,7 +1299,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         }
         case VIC_ACCESS_C:
             // PHI2 access: Set up video matrix read (Color RAM will be read in-place during PHI1)
-            address = vicii->memory.vm_base + vicii->video_logic.vc;
+            address = vicii->memory.vm_base | vicii->video_logic.vc;
             // Increment VC and VMLI after c-access in display state
             if (vicii->video_logic.display_state) {
                 vicii->video_logic.vc++;
