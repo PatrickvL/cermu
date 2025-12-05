@@ -460,6 +460,8 @@ typedef struct {
     void* bus;
     void (*bank_change)(void* context, uint8_t bank);
     bool lp_edge_detected;
+    uint8_t pending_phi2_access_type;  // Track which PHI2 access type was set up in previous cycle
+    int pending_phi2_access_param;     // Track parameter for pending PHI2 access
 } vicii_bus_unit_t;
 
 // Main VIC-II structure composed of units
@@ -492,13 +494,8 @@ struct vicii_s {
 
 // Only externally-visible (non-static/non-inline) functions need declarations
 
-// Main cycle function with unified bus state threading
-bus_state_t vicii_advance_cycle(vicii_t* vicii, bus_state_t bus_state);
-
 // Consolidated VIC-II tick function - main entry point for cycle processing
-bus_state_t vicii_tick(void* chip, bus_state_t bus_state);
-
-// Removed duplicate vicii_read/vicii_write functions - use vicii_registers_read/write instead
+bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state);
 
 // Factory and lifecycle
 vicii_t* vicii_system_create(chip_descriptor_t* desc, const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t));
