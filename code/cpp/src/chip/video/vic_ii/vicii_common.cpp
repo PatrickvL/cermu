@@ -724,12 +724,6 @@ void vicii_timing_advance(vicii_t* vicii) {
 // CYCLE FUNCTIONS
 // ========================================================================================
 
-static uint8_t vicii_cycle_idle(vicii_t* vicii, int param) {
-    vicii_bus_control_ba_high(vicii);
-    vicii_bus_control_aec_high(vicii);
-    return VIC_ACCESS_IDLE;
-}
-
 static uint8_t vicii_cycle_sprite_p_access(vicii_t* vicii, int sprite_num) {
     vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[sprite_num];
     // Only perform memory access if DEN is enabled
@@ -820,45 +814,126 @@ static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int char_index) {
     }
 }
 
-static void vicii_cycle_16_expansion_check(vicii_t* vicii) {
-    // "7. In the first phase of cycle 16, it is checked if the expansion flip flop
-    // is set. If so, MCBASE load from MC (MC->MCBASE), unless the CPU cleared
-    // the Y expansion bit in $d017 in the second phase of cycle 15, in which case
-    // MCBASE is set to X = (101010 & (MCBASE & MC)) | (010101 & (MCBASE | MC)).
-    // After the MCBASE update, the VIC checks if MCBASE is equal to 63 and turns
-    // off the DMA of the sprite if it is."
+// Cycle 15: MCBASE increment when expansion flip-flop is set (Rule 7)
+static inline void vicii_cycle_15_mcbase_expansion(vicii_t* vicii) {
+    // "7. In the first phase of cycle 15, it is checked if the expansion flip flop
+    // is set. If so, MCBASE is incremented by 2."
+    for (int i = 0; i < VICII_NUM_SPRITES; i++) {
+        vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
+        if (sprite->expansion_flip_flop) {
+            sprite->mcbase += 2;
+        }
+    }
+}
+
+// Cycle 16: Expansion flip-flop inversion and MCBASE increment (Rule 8)
+static inline void vicii_cycle_16_expansion_check(vicii_t* vicii) {
+    // "8. In the first phase of cycle 16, it is checked if the expansion flip flop
+    // is set. If so, MCBASE is incremented by 1. After that, the VIC checks if
+    // MCBASE is equal to 63 and turns off the DMA and the display of the sprite
+    // if it is."
+    //
+    // Note: The documentation also mentions sprite crunch logic where if CPU cleared
+    // the Y expansion bit in $d017 during cycle 15 PHI2, a different formula is used:
+    // MCBASE = (0xAA & (MCBASE & MC)) | (0x55 & (MCBASE | MC))
     
     uint8_t mxye_reg = vicii->registers.data[VICII_MXYE];
     for (int i = 0; i < VICII_NUM_SPRITES; i++) {
+        vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
+        
+        // First: If MxYE bit is set, invert the expansion flip-flop
         if (mxye_reg & (1 << i)) {
-            vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
             sprite->expansion_flip_flop = !sprite->expansion_flip_flop;
-            
-            // Handle sprite crunch logic for MCBASE update
-            if (sprite->expansion_flip_flop) {
-                // Check if CPU cleared Y expansion bit in previous cycle (sprite crunch)
-                // This is a simplified implementation - full crunch detection would require
-                // tracking register writes within specific cycle phases
-                // VIC-II Addendum sprite crunch logic:
-                // MCBASE = (0xAA & (MCBASE & MC)) | (0x55 & (MCBASE | MC))
-                uint8_t old_mcbase = sprite->mcbase;
-                sprite->mcbase = (0xAA & (old_mcbase & sprite->mc)) | (0x55 & (old_mcbase | sprite->mc));
-                // "After the MCBASE update, the VIC checks if MCBASE is equal to 63 and turns
-                // off the DMA of the sprite if it is."
-                if (sprite->mcbase == 63) {
-                    sprite->dma_enabled = false;
+        }
+        
+        // Second: If expansion flip-flop is set, increment MCBASE by 1
+        if (sprite->expansion_flip_flop) {
+            sprite->mcbase += 1;
+        }
+        
+        // Third: Check if MCBASE == 63 and disable DMA if so
+        if (sprite->mcbase == 63) {
+            sprite->dma_enabled = false;
+            sprite->display_state = false;
+        }
+    }
+}
+
+// Wrapper for cycle 15: VC load + MCBASE expansion check
+static uint8_t vicii_cycle_vc_load_mcbase(vicii_t* vicii, int param) {
+    vicii_cycle_15_mcbase_expansion(vicii);
+    return vicii_cycle_vc_load(vicii, param);
+}
+
+// Wrapper for cycle 16: c/g access + expansion flip-flop check
+static uint8_t vicii_cycle_char_color_expansion_check(vicii_t* vicii, int param) {
+    vicii_cycle_16_expansion_check(vicii);
+    return vicii_cycle_char_color_access(vicii, param);
+}
+
+static uint8_t vicii_cycle_idle(vicii_t* vicii, int param) {
+    vicii_bus_control_ba_high(vicii);
+    vicii_bus_control_aec_high(vicii);
+    return VIC_ACCESS_IDLE;
+}
+
+// Helper: Sprite Y-coordinate matching (shared by cycles 55 and 56)
+static void vicii_sprite_y_coordinate_check(vicii_t* vicii, bool is_cycle_55) {
+    // "2. If the MxYE bit is set in the first phase of cycle 55, the expansion
+    // flip flop is inverted."
+    // "3. In the first phases of cycle 55 and 56, the VIC checks for every sprite
+    // if the corresponding MxE bit in register $d015 is set and the Y coordinate
+    // of the sprite (odd registers $d001-$d00f) match the lower 8 bits of RASTER.
+    // If this is the case and the DMA for the sprite is still off, the DMA is
+    // switched on, MCBASE is cleared, and if the MxYE bit is set the expansion
+    // flip flip is reset."
+    
+    uint8_t mxe_reg = vicii->registers.data[VICII_MXE];
+    uint8_t mxye_reg = vicii->registers.data[VICII_MXYE];
+    uint16_t raster = vicii->timing.raster_counter;
+    
+    for (int i = 0; i < VICII_NUM_SPRITES; i++) {
+        vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
+        
+        // Cycle 55 only: Invert expansion flip-flop if MxYE bit is set
+        if (is_cycle_55 && (mxye_reg & (1 << i))) {
+            sprite->expansion_flip_flop = !sprite->expansion_flip_flop;
+        }
+        
+        // Both cycles 55 and 56: Check Y-coordinate match
+        if ((mxe_reg & (1 << i)) && !sprite->dma_enabled) {
+            uint8_t sprite_y = vicii->registers.data[VICII_M0Y + i * 2];
+            if ((raster & 0xFF) == sprite_y) {
+                // Enable DMA, clear MCBASE, reset expansion flip-flop if MxYE set
+                sprite->dma_enabled = true;
+                sprite->mcbase = 0;
+                if (mxye_reg & (1 << i)) {
+                    sprite->expansion_flip_flop = false;
                 }
             }
         }
     }
 }
 
-static uint8_t vicii_cycle_char_color_access_expansion_check(vicii_t* vicii, int param) {
-    vicii_cycle_16_expansion_check(vicii);
+// Cycle 55: Sprite Y-match + c/g access
+static uint8_t vicii_cycle_char_color_y_match(vicii_t* vicii, int param) {
+    vicii_sprite_y_coordinate_check(vicii, true);
     return vicii_cycle_char_color_access(vicii, param);
 }
 
-static uint8_t vicii_cycle_sprite_s_rc_check(vicii_t* vicii, int sprite_num) {
+// Cycle 56: Sprite Y-match + idle access
+static uint8_t vicii_cycle_idle_y_match(vicii_t* vicii, int param) {
+    vicii_sprite_y_coordinate_check(vicii, false);
+    return vicii_cycle_idle(vicii, param);
+}
+
+// Cycle 58: RC check and VCBASE update (Rule 5 from Section 3.7.2)
+static inline void vicii_cycle_58_rc_check(vicii_t* vicii) {
+    // "In the first phase of cycle 58, the VIC checks if RC=7. If so, the video
+    // logic goes to idle state and VCBASE is loaded from VC (VC->VCBASE). If
+    // the video logic is in display state afterwards (this is always the case
+    // if there is a Bad Line Condition), RC is incremented."
+    
     if (vicii->video_logic.rc == 7) {
         vicii->video_logic.display_state = false;
         vicii->video_logic.vcbase = vicii->video_logic.vc;
@@ -867,13 +942,40 @@ static uint8_t vicii_cycle_sprite_s_rc_check(vicii_t* vicii, int sprite_num) {
     if (vicii->video_logic.display_state) {
         vicii->video_logic.rc++;
     }
+
+    // Rule 4: "In the first phase of cycle 58, the MC of every sprite is loaded from
+    // its belonging MCBASE (MCBASE->MC) and it is checked if the DMA for the
+    // sprite is turned on and the Y coordinate of the sprite matches the lower
+    // 8 bits of RASTER. If this is the case, the display of the sprite is
+    // turned on."
     
-    return vicii_cycle_sprite_s_access(vicii, sprite_num);
+    for (int i = 0; i < VICII_NUM_SPRITES; i++) {
+        vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
+        
+        // Load MC from MCBASE
+        sprite->mc = sprite->mcbase;
+        
+        // Check if we should turn on sprite display
+        if (sprite->dma_enabled) {
+            uint8_t sprite_y = vicii->registers.data[VICII_M0Y + i * 2];
+            if ((vicii->timing.raster_counter & 0xFF) == sprite_y) {
+                sprite->display_state = true;
+            }
+        }
+    }
+    
+}
+
+// Cycle 58: RC check and VCBASE update, then sprite S access with MC load
+// Combines Rule 5 (Section 3.7.2) and Rule 4 (Section 3.8.1)
+static uint8_t vicii_cycle_sprite_p_rc_mc_load(vicii_t* vicii, int sprite_num) {
+    vicii_cycle_58_rc_check(vicii);
+    return vicii_cycle_sprite_p_access(vicii, sprite_num);
 }
 
 // Border Rules 2 & 3: Y coordinate checks in cycle 63 (1-based numbering)
 // Combined with sprite S access for cycle efficiency
-static uint8_t vicii_cycle_sprite_s_border_check(vicii_t* vicii, int param) {
+static inline void vicii_cycle_63_border_check(vicii_t* vicii) {
     uint16_t raster = vicii->timing.raster_counter;
     bool den_set = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
                 
@@ -887,8 +989,11 @@ static uint8_t vicii_cycle_sprite_s_border_check(vicii_t* vicii, int param) {
     // the DEN bit in register $d011 is set, the vertical border flip flop is reset."
     else if (raster == vicii->border.border_top && den_set) {
         vicii->border.vertical_border_flip_flop = false;
-    }
-    
+    }    
+}
+
+static uint8_t vicii_cycle_sprite_s_border_check(vicii_t* vicii, int param) {
+    vicii_cycle_63_border_check(vicii);
     // Perform the sprite S access for this cycle
     return vicii_cycle_sprite_s_access(vicii, param);
 }
@@ -915,8 +1020,8 @@ static const vicii_cycle_entry_t vicii_cycle_table_pal[63] = {
     {vicii_cycle_refresh, 0},                   // 12 r_X r_x
     {vicii_cycle_badline_setup, 0},             // 13 r_X r_x
     {vicii_cycle_badline_setup, 0},             // 14 r_X r_x
-    {vicii_cycle_vc_load, 0},                   // 15 rc_ r_x
-    {vicii_cycle_char_color_access_expansion_check, 0}, // 16 gc_ g_x
+    {vicii_cycle_vc_load_mcbase, 0},            // 15 rc_ r_x (+ MCBASE expansion check)
+    {vicii_cycle_char_color_expansion_check, 0},// 16 gc_ g_x (+ expansion flip-flop check)
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
     {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
@@ -955,15 +1060,15 @@ static const vicii_cycle_entry_t vicii_cycle_table_pal[63] = {
     {vicii_cycle_char_color_access, 36},        // 52 gc_ g_x
     {vicii_cycle_char_color_access, 37},        // 53 gc_ g_x
     {vicii_cycle_char_color_access, 38},        // 54 gc_ g_x
-    {vicii_cycle_char_color_access, 39},        // 55 g_x g_x
-    {vicii_cycle_idle, 0},                      // 56 i_x i_x
+    {vicii_cycle_char_color_y_match, 39},       // 55 g_x g_x (+ sprite Y match)
+    {vicii_cycle_idle_y_match, 0},              // 56 i_x i_x (+ sprite Y match)
     {vicii_cycle_idle, 0},                      // 57 i_x i_x
-    {vicii_cycle_sprite_p_access, 0},           // 58 0_x 0_x
-    {vicii_cycle_sprite_s_rc_check, 0},         // 59 i_x i_x
-    {vicii_cycle_sprite_p_access, 1},           // 60 1_x 1_x
-    {vicii_cycle_sprite_s_access, 1},           // 61 i_x i_x
-    {vicii_cycle_sprite_p_access, 2},           // 62 2_x 2_x
-    {vicii_cycle_sprite_s_border_check, 2}      // 63 i_x i_x
+    {vicii_cycle_sprite_p_rc_mc_load, 0},       // 58 0_x 0_x : Sprite 0 P-access + RC/VCBASE + MC load (Rules 5 & 4)
+    {vicii_cycle_sprite_s_access, 0},           // 59 i_x i_x : Sprite 0 S-access
+    {vicii_cycle_sprite_p_access, 1},           // 60 1_x 1_x : Sprite 1 P-access
+    {vicii_cycle_sprite_s_access, 1},           // 61 i_x i_x : Sprite 1 S-access
+    {vicii_cycle_sprite_p_access, 2},           // 62 2_x 2_x : Sprite 2 P-access
+    {vicii_cycle_sprite_s_border_check, 2}      // 63 i_x i_x : Sprite 2 S-access + border check
 };
 
 // Cycle callback table - NTSC timing (6567R56A : 64 cycles per line)
@@ -984,8 +1089,8 @@ static const vicii_cycle_entry_t vicii_cycle_table_ntsc2[64] = {
     {vicii_cycle_refresh, 0},                   // 12 r_X r_x
     {vicii_cycle_badline_setup, 0},             // 13 r_X r_x
     {vicii_cycle_badline_setup, 0},             // 14 r_X r_x
-    {vicii_cycle_vc_load, 0},                   // 15 rc_ r_x
-    {vicii_cycle_char_color_access_expansion_check, 0}, // 16 gc_ g_x
+    {vicii_cycle_vc_load_mcbase, 0},            // 15 rc_ r_x (+ MCBASE expansion check)
+    {vicii_cycle_char_color_expansion_check, 0},// 16 gc_ g_x (+ expansion flip-flop check)
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
     {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
@@ -1024,16 +1129,16 @@ static const vicii_cycle_entry_t vicii_cycle_table_ntsc2[64] = {
     {vicii_cycle_char_color_access, 36},        // 52 gc_ g_x
     {vicii_cycle_char_color_access, 37},        // 53 gc_ g_x
     {vicii_cycle_char_color_access, 38},        // 54 gc_ g_x
-    {vicii_cycle_char_color_access, 39},        // 55 g_x g_x
-    {vicii_cycle_idle, 0},                      // 56 i_x i_x
+    {vicii_cycle_char_color_y_match, 39},       // 55 g_x g_x (+ sprite Y match)
+    {vicii_cycle_idle_y_match, 0},              // 56 i_x i_x (+ sprite Y match)
     {vicii_cycle_idle, 0},                      // 57 i_x i_x
     {vicii_cycle_idle, 0},                      // 58 i_x i_x
-    {vicii_cycle_sprite_p_access, 0},     // 59 0_x 0_x
-    {vicii_cycle_sprite_s_rc_check, 0},         // 60 i_x i_x
-    {vicii_cycle_sprite_p_access, 1},           // 61 1_x 1_x
-    {vicii_cycle_sprite_s_access, 1},           // 62 i_x i_x
-    {vicii_cycle_sprite_p_access, 2},           // 63 2_x 2_x
-    {vicii_cycle_sprite_s_border_check, 2}      // 64 i_x i_x
+    {vicii_cycle_sprite_p_rc_mc_load, 0},       // 59 0_x 0_x : Sprite 0 P-access + RC/VCBASE + MC load (Rules 5 & 4)
+    {vicii_cycle_sprite_s_access, 0},           // 60 i_x i_x : Sprite 0 S-access
+    {vicii_cycle_sprite_p_access, 1},           // 61 1_x 1_x : Sprite 1 P-access
+    {vicii_cycle_sprite_s_access, 1},           // 62 i_x i_x : Sprite 1 S-access
+    {vicii_cycle_sprite_p_access, 2},           // 63 2_x 2_x : Sprite 2 P-access
+    {vicii_cycle_sprite_s_border_check, 2}      // 64 i_x i_x : Sprite 2 S-access + border check
 };
 
 // Cycle callback table - NTSC timing (6567R8 : 65 cycles per line)
@@ -1054,8 +1159,8 @@ static const vicii_cycle_entry_t vicii_cycle_table_ntsc[65] = {
     {vicii_cycle_refresh, 0},                   // 12 r_X r_x
     {vicii_cycle_badline_setup, 0},             // 13 r_X r_x
     {vicii_cycle_badline_setup, 0},             // 14 r_X r_x
-    {vicii_cycle_vc_load, 0},                   // 15 rc_ r_x
-    {vicii_cycle_char_color_access_expansion_check, 0}, // 16 gc_ g_x
+    {vicii_cycle_vc_load_mcbase, 0},            // 15 rc_ r_x (+ MCBASE expansion check)
+    {vicii_cycle_char_color_expansion_check, 0},// 16 gc_ g_x (+ expansion flip-flop check)
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
     {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
@@ -1094,17 +1199,17 @@ static const vicii_cycle_entry_t vicii_cycle_table_ntsc[65] = {
     {vicii_cycle_char_color_access, 36},        // 52 gc_ g_x
     {vicii_cycle_char_color_access, 37},        // 53 gc_ g_x
     {vicii_cycle_char_color_access, 38},        // 54 gc_ g_x
-    {vicii_cycle_char_color_access, 39},        // 55 g_x g_x
-    {vicii_cycle_idle, 0},                      // 56 i_x i_x
+    {vicii_cycle_char_color_y_match, 39},       // 55 g_x g_x (+ sprite Y match)
+    {vicii_cycle_idle_y_match, 0},              // 56 i_x i_x (+ sprite Y match)
     {vicii_cycle_idle, 0},                      // 57 i_x i_x
     {vicii_cycle_idle, 0},                      // 58 i_x i_x
     {vicii_cycle_idle, 0},                      // 59 i_x i_x
-    {vicii_cycle_sprite_p_access, 0},           // 60 0_x 0_x
-    {vicii_cycle_sprite_s_rc_check, 0},         // 61 i_x i_x
-    {vicii_cycle_sprite_p_access, 1},           // 62 1_x 1_x
-    {vicii_cycle_sprite_s_access, 1},           // 63 i_x i_x
-    {vicii_cycle_sprite_p_access, 2},           // 64 2_x 2_x
-    {vicii_cycle_sprite_s_border_check, 2}      // 65 i_x i_x
+    {vicii_cycle_sprite_p_rc_mc_load, 0},       // 60 0_x 0_x : Sprite 0 P-access + RC/VCBASE + MC load (Rules 5 & 4)
+    {vicii_cycle_sprite_s_access, 0},           // 61 i_x i_x : Sprite 0 S-access
+    {vicii_cycle_sprite_p_access, 1},           // 62 1_x 1_x : Sprite 1 P-access
+    {vicii_cycle_sprite_s_access, 1},           // 63 i_x i_x : Sprite 1 S-access
+    {vicii_cycle_sprite_p_access, 2},           // 64 2_x 2_x : Sprite 2 P-access
+    {vicii_cycle_sprite_s_border_check, 2}      // 65 i_x i_x : Sprite 2 S-access + border check
 };
 
 // ========================================================================================
