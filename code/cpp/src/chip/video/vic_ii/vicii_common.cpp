@@ -26,7 +26,51 @@ uint32_t* vicii_get_default_palette(void) {
 // INLINE UTILITY FUNCTIONS
 // ========================================================================================
 
-// Bus control helpers
+// ========================================================================================
+// BUS CONTROL HELPERS - Hardware Connection Details
+// ========================================================================================
+//
+// According to VIC-II documentation (Section 2.4.3, lines 212-230, 406-433):
+//
+// BA (Bus Available) → 6510 RDY (Ready):
+// - VIC-II BA output is connected to 6510 RDY input
+// - Normally HIGH: Bus is available to CPU during PHI2
+// - Goes LOW 3 cycles BEFORE VIC will need PHI2 access (warning signal)
+// - When RDY goes LOW, CPU halts on the NEXT READ cycle (writes can still complete)
+// - Returns HIGH when VIC no longer needs PHI2 access
+//
+// AEC (Address Enable Control) → 6510 AEC (Address Enable Control):
+// - VIC-II AEC output is connected to 6510 AEC input
+// - Normally LOW during PHI1 (VIC accesses), HIGH during PHI2 (CPU accesses)
+// - When BA goes low, AEC continues to follow φ2 for 3 cycles normally
+// - After 3 cycles, AEC STAYS LOW during PHI2 (VIC controls address/data lines)
+// - When AEC is LOW, the 6510's address bus is tri-stated (disconnected)
+// - Returns HIGH when VIC releases the bus
+//
+// The 3-Cycle Dance (from documentation timing diagram, lines 971-992):
+// 1. Cycle N:   BA goes LOW (RDY→LOW, CPU starts halting on reads), AEC still follows φ2
+// 2. Cycle N+1: BA is LOW (RDY LOW), AEC still follows φ2, CPU can complete writes
+// 3. Cycle N+2: BA is LOW (RDY LOW), AEC still follows φ2, CPU can complete writes
+// 4. Cycle N+3: BA is LOW (RDY LOW), AEC now STAYS LOW → VIC has full bus control
+//
+// Timing sequence (Documentation Section 2.4.3, lines 406-410):
+// "BA will then go low 3 cycles before the VIC takes over the bus completely
+//  (3 cycles is the maximum number of successive write accesses of the 6510).
+//  After 3 cycles, AEC stays low during the second clock phase so that the
+//  VIC can output its addresses."
+//
+// Why 3 cycles? (Documentation lines 217-222):
+// "BA is connected to the RDY line of the processor... but this line is ignored
+//  on write accesses (the CPU can only be interrupted on reads), and the 6510
+//  never does more than three writes in sequence."
+//
+// BA goes LOW 3 cycles in advance for:
+// 1. Bad Line c-accesses (BA low in cycles 12-14, c-accesses in cycles 15-54)
+// 2. Sprite p-accesses (sprite data pointer reads)
+// 3. Sprite s-accesses (sprite data reads)
+//
+// BA returns HIGH when VIC no longer needs PHI2 access.
+
 static inline void vicii_bus_control_aec_high(vicii_t* vicii) {
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
     BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) | BUS_MASK_AEC);
@@ -38,19 +82,35 @@ static inline void vicii_bus_control_aec_low(vicii_t* vicii) {
 }
 
 static inline void vicii_bus_control_ba_high(vicii_t* vicii) {
+    // BA HIGH: Bus is available to CPU during PHI2
+    // This is the normal/default state
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
     BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) | BUS_MASK_BA);
 }
 
 static inline void vicii_bus_control_ba_low(vicii_t* vicii) {
+    // BA LOW: VIC will need PHI2 bus access (prevents CPU from accessing bus)
+    // This happens during:
+    // - Bad Line c-accesses (character pointer reads)
+    // - Sprite p-accesses (sprite data pointer reads)
+    // - Sprite s-accesses (sprite data reads)
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
-    static int debug_count = 0;
-    if (debug_count < 20) {
-        printf("[VIC-II DEBUG] BA set LOW at raster=%d, x_cycle=%d\n",
-               vicii->timing.raster_counter, vicii->timing.x_cycle);
-        debug_count++;
-    }
     BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) & ~BUS_MASK_BA);
+}
+
+// Helper function: Set BA/AEC for VIC PHI2 access (c-access, p-access, s-access)
+static inline void vicii_bus_control_vic_phi2_access(vicii_t* vicii) {
+    // VIC needs PHI2 access: BA and AEC both LOW
+    vicii_bus_control_ba_low(vicii);
+    vicii_bus_control_aec_low(vicii);
+}
+
+// Helper function: Set BA/AEC for CPU access (normal state, g-access, refresh, idle)
+static inline void vicii_bus_control_cpu_access(vicii_t* vicii) {
+    // CPU can access bus: BA HIGH, AEC HIGH (during PHI2)
+    // VIC accesses during PHI1 with AEC LOW
+    vicii_bus_control_ba_high(vicii);
+    vicii_bus_control_aec_high(vicii);
 }
 
 // ========================================================================================
@@ -721,96 +781,147 @@ void vicii_timing_advance(vicii_t* vicii) {
 }
 
 // ========================================================================================
+// CENTRALIZED BUS CONTROL LOGIC
+// ========================================================================================
+
+// Check if a specific cycle needs PHI2 bus access (c/p/s access)
+// Uses cycle number ranges and cycle table param field for sprite accesses
+static inline bool vicii_cycle_needs_phi2_access(vicii_t* vicii, uint8_t cycle) {
+    if (cycle >= vicii->timing.cycles_per_line) {
+        return false;
+    }
+    
+    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    if (!den_enabled) {
+        return false;
+    }
+    
+    // Check bad line c-access range (cycles 15-54 for PAL, similar for NTSC)
+    if (cycle >= 15 && cycle <= 54) {
+        return vicii->video_logic.is_bad_line;
+    }
+    
+    // Check sprite access cycles - use cycle table param field for sprite number
+    // Cycles: 1(p3), 2(s3), 3(p4), 4(s4), 5(p5), 6(s5), 7(p6), 8(s6), 9(p7), 10(s7)
+    // Cycles: 58-63 (varies by chip - PAL has 58(p0), 59(s0), 60(p1), 61(s1), 62(p2), 63(s2))
+    if ((cycle >= 1 && cycle <= 10) || (cycle >= 58 && cycle <= 63)) {
+        // Get sprite number from cycle table param field
+        const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[cycle];
+        int sprite_num = entry->param;
+        
+        if (sprite_num >= 0 && sprite_num < VICII_NUM_SPRITES) {
+            return vicii->sprites.sprites[sprite_num].enabled;
+        }
+    }
+    
+    return false;
+}
+
+// Centralized function to set BA/AEC based on current and future cycle needs
+// This should be called once per cycle in vicii_tick
+static inline void vicii_update_ba_aec_signals(vicii_t* vicii, uint8_t access_type) {
+    uint8_t current_cycle = vicii->timing.x_cycle;
+    uint8_t future_cycle = (current_cycle + 3) % vicii->timing.cycles_per_line;
+    
+    // Check if we need PHI2 access NOW (current cycle)
+    bool needs_phi2_now = (access_type == VIC_ACCESS_C ||
+                           access_type == VIC_ACCESS_P ||
+                           access_type == VIC_ACCESS_S);
+    
+    // Check if we'll need PHI2 access in 3 cycles
+    bool needs_phi2_future = vicii_cycle_needs_phi2_access(vicii, future_cycle);
+    
+    if (needs_phi2_now) {
+        // Current cycle needs PHI2 access: BA LOW, AEC LOW
+        vicii_bus_control_ba_low(vicii);
+        vicii_bus_control_aec_low(vicii);
+    } else if (needs_phi2_future) {
+        // Future cycle needs PHI2 access: BA LOW (warning), AEC HIGH
+        vicii_bus_control_ba_low(vicii);
+        vicii_bus_control_aec_high(vicii);
+    } else {
+        // No PHI2 access needed: BA HIGH, AEC HIGH (CPU has bus)
+        vicii_bus_control_ba_high(vicii);
+        vicii_bus_control_aec_high(vicii);
+    }
+}
+
+// ========================================================================================
 // CYCLE FUNCTIONS
 // ========================================================================================
 
 static uint8_t vicii_cycle_sprite_p_access(vicii_t* vicii, int sprite_num) {
     vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[sprite_num];
-    // Only perform memory access if DEN is enabled
     bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    
+    // BA/AEC will be set centrally in vicii_tick based on access type
     if (sprite->enabled && den_enabled) {
-        vicii_bus_control_ba_low(vicii);
-        vicii_bus_control_aec_low(vicii);
         return VIC_ACCESS_P;
     } else {
-        vicii_bus_control_ba_high(vicii);
-        vicii_bus_control_aec_high(vicii);
         return VIC_ACCESS_IDLE;
     }
 }
 
 static uint8_t vicii_cycle_sprite_s_access(vicii_t* vicii, int sprite_num) {
     vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[sprite_num];
-    // Only perform memory access if DEN is enabled
     bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    
+    // BA/AEC will be set centrally in vicii_tick based on access type
     if (sprite->enabled && den_enabled) {
-        vicii_bus_control_ba_low(vicii);
-        vicii_bus_control_aec_low(vicii);
         return VIC_ACCESS_S;
     } else {
-        vicii_bus_control_ba_high(vicii);
-        vicii_bus_control_aec_high(vicii);
         return VIC_ACCESS_IDLE;
     }
 }
 
 static uint8_t vicii_cycle_refresh(vicii_t* vicii, int param) {
-    // Only perform memory access if DEN is enabled
     bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    
+    // BA/AEC will be set centrally in vicii_tick based on access type
     if (den_enabled) {
-        vicii_bus_control_ba_high(vicii);
-        vicii_bus_control_aec_high(vicii);
         return VIC_ACCESS_REFRESH;
     } else {
-        vicii_bus_control_ba_high(vicii);
-        vicii_bus_control_aec_high(vicii);
-        return VIC_ACCESS_IDLE; // Return IDLE when DEN is disabled to prevent memory accesses
+        return VIC_ACCESS_IDLE;
     }
 }
 
 static uint8_t vicii_cycle_badline_setup(vicii_t* vicii, int param) {
-    // Only perform memory access if DEN is enabled
     bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    
+    // BA/AEC will be set centrally in vicii_tick based on look-ahead
+    // Set display_state based on current bad line status
     if (vicii->video_logic.is_bad_line && den_enabled) {
-        vicii_bus_control_ba_low(vicii);
         vicii->video_logic.display_state = true;
     } else {
-        vicii_bus_control_ba_high(vicii);
-        vicii->video_logic.display_state = false; // Ensure display state is false when DEN is disabled
+        vicii->video_logic.display_state = false;
     }
-    vicii_bus_control_aec_high(vicii);
     return VIC_ACCESS_IDLE;
 }
 
 static uint8_t vicii_cycle_vc_load(vicii_t* vicii, int param) {
     vicii->video_logic.vc = vicii->video_logic.vcbase;
     vicii->video_logic.vmli = 0;
-    // Only perform memory access if DEN is enabled
     bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    
+    // BA/AEC will be set centrally in vicii_tick based on access type
     if (vicii->video_logic.is_bad_line && den_enabled) {
-        vicii_bus_control_ba_low(vicii);
         vicii->video_logic.display_state = true;
         vicii->video_logic.rc = 0;
     } else {
-        vicii_bus_control_ba_high(vicii);
-        vicii->video_logic.display_state = false; // Ensure display state is false when DEN is disabled
+        vicii->video_logic.display_state = false;
     }
-    vicii_bus_control_aec_high(vicii);
     return VIC_ACCESS_IDLE;
 }
 
 static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int char_index) {
-    // Only perform memory access if DEN is enabled
     bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    
+    // BA/AEC will be set centrally in vicii_tick based on access type
     if (vicii->video_logic.is_bad_line && den_enabled) {
-        vicii_bus_control_ba_low(vicii);
-        vicii_bus_control_aec_low(vicii);
-        return VIC_ACCESS_C; // Will fall-through to VIC_ACCESS_G as well
+        return VIC_ACCESS_C;
     } else {
-        vicii_bus_control_ba_high(vicii);
-        vicii_bus_control_aec_high(vicii);
-        vicii->video_logic.display_state = false; // Ensure display state is false when DEN is disabled
-        return VIC_ACCESS_IDLE; // Return IDLE when DEN is disabled to prevent memory accesses
+        vicii->video_logic.display_state = false;
+        return VIC_ACCESS_IDLE;
     }
 }
 
@@ -872,8 +983,8 @@ static uint8_t vicii_cycle_char_color_expansion_check(vicii_t* vicii, int param)
 }
 
 static uint8_t vicii_cycle_idle(vicii_t* vicii, int param) {
-    vicii_bus_control_ba_high(vicii);
-    vicii_bus_control_aec_high(vicii);
+    // Idle cycle: VIC accesses during PHI1, CPU can use PHI2
+    // BA/AEC will be set centrally in vicii_tick based on look-ahead
     return VIC_ACCESS_IDLE;
 }
 
@@ -1016,11 +1127,11 @@ static const vicii_cycle_entry_t vicii_cycle_table_pal[63] = {
     {vicii_cycle_sprite_s_access, 6},           // 8  i_x i_x
     {vicii_cycle_sprite_p_access, 7},           // 9  7_x 7_x
     {vicii_cycle_sprite_s_access, 7},           // 10 i_x i_x
-    {vicii_cycle_refresh, 0},                   // 11 r_x r_x
-    {vicii_cycle_refresh, 0},                   // 12 r_X r_x
-    {vicii_cycle_badline_setup, 0},             // 13 r_X r_x
-    {vicii_cycle_badline_setup, 0},             // 14 r_X r_x
-    {vicii_cycle_vc_load_mcbase, 0},            // 15 rc_ r_x (+ MCBASE expansion check)
+    {vicii_cycle_refresh, -1},                  // 11 r_x r_x
+    {vicii_cycle_refresh, -1},                  // 12 r_X r_x
+    {vicii_cycle_badline_setup, -1},            // 13 r_X r_x
+    {vicii_cycle_badline_setup, -1},            // 14 r_X r_x
+    {vicii_cycle_vc_load_mcbase, -1},           // 15 rc_ r_x (+ MCBASE expansion check)
     {vicii_cycle_char_color_expansion_check, 0},// 16 gc_ g_x (+ expansion flip-flop check)
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
@@ -1061,8 +1172,8 @@ static const vicii_cycle_entry_t vicii_cycle_table_pal[63] = {
     {vicii_cycle_char_color_access, 37},        // 53 gc_ g_x
     {vicii_cycle_char_color_access, 38},        // 54 gc_ g_x
     {vicii_cycle_char_color_y_match, 39},       // 55 g_x g_x (+ sprite Y match)
-    {vicii_cycle_idle_y_match, 0},              // 56 i_x i_x (+ sprite Y match)
-    {vicii_cycle_idle, 0},                      // 57 i_x i_x
+    {vicii_cycle_idle_y_match, -1},             // 56 i_x i_x (+ sprite Y match)
+    {vicii_cycle_idle, -1},                     // 57 i_x i_x
     {vicii_cycle_sprite_p_rc_mc_load, 0},       // 58 0_x 0_x : Sprite 0 P-access + RC/VCBASE + MC load (Rules 5 & 4)
     {vicii_cycle_sprite_s_access, 0},           // 59 i_x i_x : Sprite 0 S-access
     {vicii_cycle_sprite_p_access, 1},           // 60 1_x 1_x : Sprite 1 P-access
@@ -1085,11 +1196,11 @@ static const vicii_cycle_entry_t vicii_cycle_table_ntsc2[64] = {
     {vicii_cycle_sprite_s_access, 6},           // 8  i_x i_x
     {vicii_cycle_sprite_p_access, 7},           // 9  7_x 7_x
     {vicii_cycle_sprite_s_access, 7},           // 10 i_x i_x
-    {vicii_cycle_refresh, 0},                   // 11 r_x r_x
-    {vicii_cycle_refresh, 0},                   // 12 r_X r_x
-    {vicii_cycle_badline_setup, 0},             // 13 r_X r_x
-    {vicii_cycle_badline_setup, 0},             // 14 r_X r_x
-    {vicii_cycle_vc_load_mcbase, 0},            // 15 rc_ r_x (+ MCBASE expansion check)
+    {vicii_cycle_refresh, -1},                  // 11 r_x r_x
+    {vicii_cycle_refresh, -1},                  // 12 r_X r_x
+    {vicii_cycle_badline_setup, -1},            // 13 r_X r_x
+    {vicii_cycle_badline_setup, -1},            // 14 r_X r_x
+    {vicii_cycle_vc_load_mcbase, -1},           // 15 rc_ r_x (+ MCBASE expansion check)
     {vicii_cycle_char_color_expansion_check, 0},// 16 gc_ g_x (+ expansion flip-flop check)
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
@@ -1130,9 +1241,9 @@ static const vicii_cycle_entry_t vicii_cycle_table_ntsc2[64] = {
     {vicii_cycle_char_color_access, 37},        // 53 gc_ g_x
     {vicii_cycle_char_color_access, 38},        // 54 gc_ g_x
     {vicii_cycle_char_color_y_match, 39},       // 55 g_x g_x (+ sprite Y match)
-    {vicii_cycle_idle_y_match, 0},              // 56 i_x i_x (+ sprite Y match)
-    {vicii_cycle_idle, 0},                      // 57 i_x i_x
-    {vicii_cycle_idle, 0},                      // 58 i_x i_x
+    {vicii_cycle_idle_y_match, -1},             // 56 i_x i_x (+ sprite Y match)
+    {vicii_cycle_idle, -1},                     // 57 i_x i_x
+    {vicii_cycle_idle, -1},                     // 58 i_x i_x
     {vicii_cycle_sprite_p_rc_mc_load, 0},       // 59 0_x 0_x : Sprite 0 P-access + RC/VCBASE + MC load (Rules 5 & 4)
     {vicii_cycle_sprite_s_access, 0},           // 60 i_x i_x : Sprite 0 S-access
     {vicii_cycle_sprite_p_access, 1},           // 61 1_x 1_x : Sprite 1 P-access
@@ -1155,11 +1266,11 @@ static const vicii_cycle_entry_t vicii_cycle_table_ntsc[65] = {
     {vicii_cycle_sprite_s_access, 6},           // 8  i_x i_x
     {vicii_cycle_sprite_p_access, 7},           // 9  7_x 7_x
     {vicii_cycle_sprite_s_access, 7},           // 10 i_x i_x
-    {vicii_cycle_refresh, 0},                   // 11 r_x r_x
-    {vicii_cycle_refresh, 0},                   // 12 r_X r_x
-    {vicii_cycle_badline_setup, 0},             // 13 r_X r_x
-    {vicii_cycle_badline_setup, 0},             // 14 r_X r_x
-    {vicii_cycle_vc_load_mcbase, 0},            // 15 rc_ r_x (+ MCBASE expansion check)
+    {vicii_cycle_refresh, -1},                   // 11 r_x r_x
+    {vicii_cycle_refresh, -1},                   // 12 r_X r_x
+    {vicii_cycle_badline_setup, -1},             // 13 r_X r_x
+    {vicii_cycle_badline_setup, -1},             // 14 r_X r_x
+    {vicii_cycle_vc_load_mcbase, -1},            // 15 rc_ r_x (+ MCBASE expansion check)
     {vicii_cycle_char_color_expansion_check, 0},// 16 gc_ g_x (+ expansion flip-flop check)
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
@@ -1200,10 +1311,10 @@ static const vicii_cycle_entry_t vicii_cycle_table_ntsc[65] = {
     {vicii_cycle_char_color_access, 37},        // 53 gc_ g_x
     {vicii_cycle_char_color_access, 38},        // 54 gc_ g_x
     {vicii_cycle_char_color_y_match, 39},       // 55 g_x g_x (+ sprite Y match)
-    {vicii_cycle_idle_y_match, 0},              // 56 i_x i_x (+ sprite Y match)
-    {vicii_cycle_idle, 0},                      // 57 i_x i_x
-    {vicii_cycle_idle, 0},                      // 58 i_x i_x
-    {vicii_cycle_idle, 0},                      // 59 i_x i_x
+    {vicii_cycle_idle_y_match, -1},             // 56 i_x i_x (+ sprite Y match)
+    {vicii_cycle_idle, -1},                     // 57 i_x i_x
+    {vicii_cycle_idle, -1},                     // 58 i_x i_x
+    {vicii_cycle_idle, -1},                     // 59 i_x i_x
     {vicii_cycle_sprite_p_rc_mc_load, 0},       // 60 0_x 0_x : Sprite 0 P-access + RC/VCBASE + MC load (Rules 5 & 4)
     {vicii_cycle_sprite_s_access, 0},           // 61 i_x i_x : Sprite 0 S-access
     {vicii_cycle_sprite_p_access, 1},           // 62 1_x 1_x : Sprite 1 P-access
@@ -1369,6 +1480,10 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     const int access_param = entry->param;
     const uint8_t access_type = entry->func(vicii, access_param);
 
+    // STEP 2b: Update BA/AEC signals based on current and future (3 cycles ahead) bus needs
+    // This centralized control ensures proper 3-cycle look-ahead for BA signal
+    vicii_update_ba_aec_signals(vicii, access_type);
+
     // By default, start with idle state address
     uint16_t address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
 
@@ -1491,9 +1606,27 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             return bus_state;
     }
 
+    bus_state = vicii_bus_memory_setup(vicii, bus_state, address);
+    
+    // FINAL STEP: Ensure BA and AEC reflect their final states for this cycle
+    // The cycle functions have already set BA/AEC appropriately during execution.
+    // BA/AEC states set during cycle function execution represent what the CPU
+    // will see in the NEXT PHI2 phase (which is part of THIS cycle).
+    //
+    // According to VIC-II documentation (section 2.4.3):
+    // - VIC accesses during PHI1 (�2 low)
+    // - CPU accesses during PHI2 (�2 high)
+    // - AEC is normally low during PHI1, high during PHI2
+    // - When VIC needs PHI2 access, AEC stays low
+    // - BA goes low 3 cycles before VIC takes over PHI2
+    //
+    // The cycle functions set BA/AEC during their execution (PHI1 phase).
+    // These settings take effect immediately and control what happens in PHI2.
+    // No additional adjustment is needed here - the cycle functions have
+    // already established the correct BA/AEC states.
+    
     // Return the bus state for threaded cycle chaining
-    return vicii_bus_memory_setup(vicii, bus_state, address);
-    // Data will be read from bus during memory service phase and handled in next cycle
+    return bus_state;
 }
 
 // ========================================================================================
@@ -1570,6 +1703,7 @@ static inline void vicii_initialize(vicii_t* vicii) {
     // Initialize bad line detection - DEN is disabled during boot,
     // so bad lines will not be detected until DEN is enabled by KERNAL
     vicii->video_logic.was_den_set_during_raster_30 = false;
+    vicii->video_logic.ba_low_for_bad_line = false;
     
     // Allocate pixel buffers - size will be set by timing initialization
     // This is just a placeholder allocation
