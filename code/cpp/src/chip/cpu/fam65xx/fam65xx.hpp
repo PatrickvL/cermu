@@ -136,7 +136,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
   // ========================================================================
 
   /* Debug tracing state */
-  static constexpr bool ENABLE_TRACING = true; /* Compile-time tracing flag - ENABLED FOR DEBUGGING */
+  static constexpr bool ENABLE_TRACING = false; /* Compile-time tracing flag - DISABLED FOR PERFORMANCE */
   mutable int trace_indent = 0; /* Current tracing indentation level */
 
   // ========================================================================
@@ -1435,16 +1435,12 @@ public:
   template <Phase phase> bus_state_t tick(bus_state_t pins) {
     if constexpr (phase == Phase::PHI2) {
       // PHI2: Bus setup phase
-      trace_enter("tick<PHI2>");
-      trace_registers("before PHI2");
-      
-      // DEBUG: Print cycle info for first 20 cycles
-      static int debug_counter = 0;
-      if (debug_counter < 20) {
-        printf("[TICK_DEBUG] PHI2 cycle %d, PC=$%04X, active_int=%d\n",
-               this->half_cycle, this->get(REG_PC), static_cast<int>(this->active_interrupt));
-        debug_counter++;
+      if constexpr (ENABLE_TRACING) {
+        trace_enter("tick<PHI2>");
+        trace_registers("before PHI2");
       }
+      
+      // DEBUG output disabled for performance
 
       // Hardware-accurate interrupt detection
       // PROCESSOR_TESTS mode: Disable interrupt hijacking for clean instruction testing
@@ -1467,8 +1463,10 @@ public:
       if (!FAM65XX_GET_RDY(pins)) {
         // RDY low - external DMA active
         // DO NOT call handler, DO NOT increment
-        trace("RDY low - DMA active, skipping handler");
-        trace_exit("tick<PHI2>");
+        if constexpr (ENABLE_TRACING) {
+          trace("RDY low - DMA active, skipping handler");
+          trace_exit("tick<PHI2>");
+        }
         return pins;
       }
 
@@ -1482,13 +1480,17 @@ public:
       // This allows PHI2 (even) and PHI1 (odd) to execute different code
       half_cycle++;
 
-      trace_registers("after PHI2");
-      trace_exit("tick<PHI2>");
+      if constexpr (ENABLE_TRACING) {
+        trace_registers("after PHI2");
+        trace_exit("tick<PHI2>");
+      }
 
     } else { // Phase::PHI1
       // PHI1: Internal operation phase
-      trace_enter("tick<PHI1>");
-      trace_registers("before PHI1");
+      if constexpr (ENABLE_TRACING) {
+        trace_enter("tick<PHI1>");
+        trace_registers("before PHI1");
+      }
 
       // Handle I/O port and APU memory accesses BEFORE calling handler
       // These functions intercept memory operations for internal CPU features
@@ -1524,10 +1526,11 @@ public:
       }
 
       // Print instruction trace for debugging
-      this->print_instruction_trace();
-
-      trace_registers("after PHI1");
-      trace_exit("tick<PHI1>");
+      if constexpr (ENABLE_TRACING) {
+        this->print_instruction_trace();
+        trace_registers("after PHI1");
+        trace_exit("tick<PHI1>");
+      }
     }
 
     return pins;

@@ -161,6 +161,7 @@ void gui_init_state(gui_state_t *gui_state) {
   gui_state->show_screen = true; // Show screen by default
   gui_state->target_fps = 50;    // PAL C64 refresh rate
   gui_state->emulation_speed = 1.0f;
+  gui_state->emulation_running = true; // Auto-start emulation
   gui_state->memory_columns = 16;
   gui_state->memory_address = 0x0000;
   gui_state->show_chip_visualization_config =

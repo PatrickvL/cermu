@@ -59,7 +59,10 @@ int main(int argc, char** argv) {
         return 1;
     }
     
+    // Automatically start emulation since gui_state.emulation_running is true by default
     printf("C64 Emulator started with threaded execution\n");
+    printf("Auto-starting emulation...\n");
+    gui_emulation_start(&emu_context);
     
     // Track previous GUI state for signal generation
     bool prev_emulation_running = false;
