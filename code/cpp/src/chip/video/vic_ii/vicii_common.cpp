@@ -780,6 +780,21 @@ static uint8_t vicii_cycle_vc_load(vicii_t* vicii, int param) {
 static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int char_index) {
     bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
     
+    // DEBUG: Print bad line status - only when is_bad_line changes or on specific rasters
+    static int badline_debug = 0;
+    static bool last_is_bad_line = false;
+    if (vicii->timing.x_cycle == 16 && badline_debug < 50 &&
+        (vicii->video_logic.is_bad_line != last_is_bad_line ||
+         (vicii->timing.raster_counter >= 48 && vicii->timing.raster_counter <= 56))) {
+        printf("Bad line check: cycle=%d raster=%d is_bad_line=%d den=%d yscroll=%d was_den_set_raster30=%d\n",
+               vicii->timing.x_cycle, vicii->timing.raster_counter,
+               vicii->video_logic.is_bad_line, den_enabled,
+               vicii->registers.data[VICII_C1] & VICII_C1_YSCROLL,
+               vicii->video_logic.was_den_set_during_raster_30);
+        last_is_bad_line = vicii->video_logic.is_bad_line;
+        badline_debug++;
+    }
+    
     // BA/AEC will be set centrally in vicii_tick based on access type
     if (vicii->video_logic.is_bad_line && den_enabled) {
         return VIC_ACCESS_C;
@@ -1103,7 +1118,35 @@ static inline bool vicii_future_cycle_needs_phi2_access(vicii_t* vicii, uint8_t 
     
     // Check bad line c-access range (cycles 15-54 for PAL, same for NTSC)
     if (cycle >= 15 && cycle <= 54) {
-        return vicii->video_logic.is_bad_line;
+        // CRITICAL FIX: Can't rely on is_bad_line for future cycles because it might not be updated yet
+        // Instead, manually check if the CURRENT raster + any wrap to next line will be a bad line
+        // Bad lines occur when: raster >= 0x30 && raster <= 0xF7 && (raster & 0x07) == YSCROLL
+        uint16_t check_raster = vicii->timing.raster_counter;
+        
+        // If checking a cycle that's earlier than current cycle, we're looking at next line
+        if (cycle < vicii->timing.x_cycle) {
+            check_raster = (check_raster + 1) % vicii->timing.total_lines;
+        }
+        
+        // DEBUG: Print bad line check details
+        static int badline_check_debug = 0;
+        if (vicii->timing.x_cycle >= 12 && vicii->timing.x_cycle <= 14 && badline_check_debug < 30) {
+            uint8_t yscroll = vicii->registers.data[VICII_C1] & VICII_C1_YSCROLL;
+            bool was_den_set = vicii->video_logic.was_den_set_during_raster_30;
+            bool in_range = (check_raster - 48) < 200;
+            bool is_badline = was_den_set && ((check_raster & 0x07) == yscroll);
+            printf("Future check: current_cycle=%d future_cycle=%d raster=%d check_raster=%d yscroll=%d was_den_set=%d in_range=%d is_badline=%d\n",
+                   vicii->timing.x_cycle, cycle, vicii->timing.raster_counter, check_raster, yscroll, was_den_set, in_range, is_badline);
+            badline_check_debug++;
+        }
+        
+        // Check bad line condition for the target raster
+        if ((check_raster - 48) < 200) {  // Equivalent to: check_raster >= 48 && check_raster < 248
+            uint8_t yscroll = vicii->registers.data[VICII_C1] & VICII_C1_YSCROLL;
+            bool was_den_set = vicii->video_logic.was_den_set_during_raster_30;
+            return was_den_set && ((check_raster & 0x07) == yscroll);
+        }
+        return false;
     }
     
     // Get sprite number from cycle table param field
@@ -1126,6 +1169,14 @@ static inline void vicii_update_ba_aec_signals(vicii_t* vicii, uint8_t access_ty
     bool needs_phi2_now = (access_type == VIC_ACCESS_C ||
                            access_type == VIC_ACCESS_P ||
                            access_type == VIC_ACCESS_S);
+    
+    // DEBUG: Print BA/AEC decisions during bad lines
+    static int ba_update_debug = 0;
+    if (current_cycle >= 15 && current_cycle <= 25 && ba_update_debug < 20) {
+        printf("BA/AEC update: cycle=%d access_type=%d needs_phi2_now=%d\n",
+               current_cycle, access_type, needs_phi2_now);
+        ba_update_debug++;
+    }
     
     if (needs_phi2_now) {
         // Current cycle needs PHI2 access: BA LOW, AEC LOW
@@ -1196,18 +1247,18 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
                 vicii->bus.active_sprite = NULL;
             }
             break;
-                case VIC_ACCESS_C: // VIC_ACCESS_G
-                    // C-access: Store video matrix data that arrived from PREVIOUS cycle's PHI2 setup
-                    // Store at current VMLI, then increment VMLI so next cycle stores at next position
-                    if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
-                        vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = bus_data;
-                        
-                        // DEBUG: Print first line's c-access data
-                        if (vicii->timing.raster_counter == 51 && vicii->video_logic.vmli < 10) {
-                            printf("C-access: cycle=%d vmli=%d vc=%d data=0x%02x (expect 0x%02x)\n",
-                                   vicii->timing.x_cycle, vicii->video_logic.vmli, vicii->video_logic.vc,
-                                   bus_data, vicii->video_logic.vmli);
-                        }
+                                case VIC_ACCESS_C: // VIC_ACCESS_G
+                                    // C-access: Store video matrix data that arrived from PREVIOUS cycle's PHI2 setup
+                                    // Store at current VMLI, then increment VMLI so next cycle stores at next position
+                                    if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
+                                        vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = bus_data;
+                                        
+                                        // DEBUG: Print first line's c-access data with ACTUAL raster when data is stored
+                                        if (vicii->timing.raster_counter >= 50 && vicii->timing.raster_counter <= 52 && vicii->video_logic.vmli < 10) {
+                                            printf("C-access STORE: raster=%d cycle=%d vmli=%d vc=%d data=0x%02x (expect 0x%02x) is_bad_line=%d\n",
+                                                   vicii->timing.raster_counter, vicii->timing.x_cycle, vicii->video_logic.vmli, vicii->video_logic.vc,
+                                                   bus_data, vicii->video_logic.vmli, vicii->video_logic.is_bad_line);
+                                        }
                         
                         // Increment VC and VMLI after storing c-access data
                         vicii->video_logic.vc++;
@@ -1218,15 +1269,19 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             break;
     }
     
-    // Clear pending access
-    vicii->bus.pending_phi2_access_type = VIC_ACCESS_IDLE;
-
-    // STEP 2: Get current cycle entry and parameter
-    const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[vicii->timing.x_cycle];
-    const int access_param = entry->param;
-    // Call cycle function to determine current access type, returning either
-    // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH, VIC_ACCESS_P, VIC_ACCESS_S, or VIC_ACCESS_C
-    const uint8_t access_type = entry->func(vicii, access_param);
+        // Clear pending access
+        vicii->bus.pending_phi2_access_type = VIC_ACCESS_IDLE;
+    
+        // CRITICAL: Update bad line condition BEFORE calling cycle function
+        // The cycle function needs current bad line status to return correct access type
+        vicii_update_badline_condition(vicii);
+    
+        // STEP 2: Get current cycle entry and parameter
+        const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[vicii->timing.x_cycle];
+        const int access_param = entry->param;
+        // Call cycle function to determine current access type, returning either
+        // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH, VIC_ACCESS_P, VIC_ACCESS_S, or VIC_ACCESS_C
+        const uint8_t access_type = entry->func(vicii, access_param);
 
     // STEP 3: Perform PHI1 memory accesses via direct read
     // G-access happens EVERY cycle, other accesses are special cases
@@ -1289,10 +1344,18 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             break;
     }
     
-    // Perform PHI1 memory read (common path for all PHI1 accesses)
-    // Apply CIA2 originating vic-ii bank base (set in vicii_bank_change)
-    address = vicii->memory.bank_base | address;
-    bus_state = c64_bus_vic_read(c64_bus, bus_state, address);
+        // Perform PHI1 memory read (common path for all PHI1 accesses)
+        // Apply CIA2 originating vic-ii bank base (set in vicii_bank_change)
+        address = vicii->memory.bank_base | address;
+        
+        // DEBUG: Print PHI1 read address
+        static int phi1_debug_count = 0;
+        if (address >= 0x0400 && address < 0x0500 && phi1_debug_count < 20) {
+            printf("VIC PHI1 read: addr=0x%04X bank_base=0x%04X\n", address, vicii->memory.bank_base);
+            phi1_debug_count++;
+        }
+        
+        bus_state = c64_bus_vic_read(c64_bus, bus_state, address);
     
     // G-access happens EVERY cycle during PHI1 (the address calculation above always runs)
     // The graphics sequencer will use the data when in display_state
@@ -1358,19 +1421,20 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             sprite->mc_counter++;
             break;
         }
-                        case VIC_ACCESS_C:
-                            // PHI2 access: Set up video matrix read (Color RAM will be read in-place during PHI1)
-                            // Data will arrive in the NEXT cycle and be stored at the current VMLI position
-                            // Use current VC BEFORE increment (increment happens after g-access)
-                            address = vicii->memory.vm_base | vicii->video_logic.vc;
-                            
-                            // DEBUG: Print address being read
-                            if (vicii->timing.raster_counter == 51 && vicii->video_logic.vc < 10) {
-                                printf("C-access PHI2 setup: vc=%d vm_base=0x%04X bank_base=0x%04X final_addr=0x%04X\n",
-                                       vicii->video_logic.vc, vicii->memory.vm_base, vicii->memory.bank_base,
-                                       vicii->memory.bank_base | address);
-                            }
-                            break;
+                                                                        case VIC_ACCESS_C:
+                                                                            // PHI2 access: Set up video matrix read (Color RAM will be read in-place during PHI1)
+                                                                            // Data will arrive in the NEXT cycle and be stored at the current VMLI position
+                                                                            // Use current VC BEFORE increment (increment happens after g-access)
+                                                                            address = vicii->memory.vm_base | vicii->video_logic.vc;
+                                                                            
+                                                                            // DEBUG: Print address being read
+                                                                            if (vicii->video_logic.vc < 10 && (vicii->timing.raster_counter == 50 || vicii->timing.raster_counter == 51)) {
+                                                                                printf("C-access PHI2 setup: raster=%d cycle=%d vc=%d vm_base=0x%04X bank_base=0x%04X final_addr=0x%04X BA=%d\n",
+                                                                                       vicii->timing.raster_counter, vicii->timing.x_cycle, vicii->video_logic.vc, vicii->memory.vm_base, vicii->memory.bank_base,
+                                                                                       vicii->memory.bank_base | address,
+                                                                                       (BUS_GET_LINES(((c64_bus_t*)vicii->bus.bus)->state) & BUS_MASK_BA) ? 1 : 0);
+                                                                            }
+                                                                            break;
         default:
             // PHI1 accesses (G/REFRESH/IDLE) are handled inline, not here
             return bus_state;
