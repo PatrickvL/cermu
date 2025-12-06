@@ -1562,9 +1562,11 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         case VIC_ACCESS_S: {
             vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[access_param];
 
-            if (sprite->mc_counter >= 3)
-                return bus_state; // TODO : Does hardware indeed skip memory access for 4th byte?
-
+            // Sprites are 24 pixels wide, requiring exactly 3 bytes of data per line.
+            // The VIC-II performs 3 S-accesses per sprite per raster line (mc_counter 0, 1, 2).
+            // S-accesses only occur when the sprite sequencer calls this function,
+            // which happens exactly 3 times per enabled sprite per raster line.
+            // Therefor, there is no need to check for mc_counter overflow here.
             address = sprite->data_pointer * 64 + sprite->mc_counter;
             sprite->mc_counter++;
             break;
