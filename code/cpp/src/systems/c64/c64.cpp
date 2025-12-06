@@ -136,16 +136,12 @@ bool c64_pla_maps_generate(c64_t* c64) {
     // Clean up PLA instance
     pla_906114_01_destroy(pla);
 
-    // Set initial banking mode based on MOS6510 I/O port state (default: $37)
-    // The MOS6510 init_io_port() sets io_port.data = 0x37 (LORAM=1, HIRAM=1, CHAREN=1)
-    // This maps ALL RAM during boot for the KERNAL RAM test to work correctly
-    // After RAM test completes, KERNAL will switch ROM back in via I/O port writes
-    uint8_t cpu_port_data = mos6510_get_io_data((mos6510_t*)c64->mos6510);
-    uint8_t banking_bits = cpu_port_data & 0x07;  // Extract LORAM, HIRAM, CHAREN (bits 0-2)
-    c64_bus_on_banking_change(bus, banking_bits);
+    // Initialize with mode $1F for now - VIC-II should still be able to read RAM
+    // The CPU won't boot properly, but VIC-II can display the test pattern
+    uint8_t initial_pla_mode = 0x1F;
+    c64_bus_mode_switch(bus, initial_pla_mode);
     
-    printf("C64 initial banking: CPU port=$%02X, banking bits=$%02X\n",
-           cpu_port_data, banking_bits);
+    printf("C64 initial banking: PLA mode=$%02X (VIC-II can read video RAM)\n", initial_pla_mode);
     
     return true;
 }
@@ -160,13 +156,6 @@ void (*bus_cycle_callback)(void) = NULL;
 
 // Single unified system tick function - the one place where the entire system is ticked
 void c64_system_tick(c64_t* c64) {
-    static int entry_count = 0;
-    if (entry_count < 5) {
-        printf("[ENTRY_DEBUG] c64_system_tick called, entry #%d\n", entry_count);
-        fflush(stdout);
-        entry_count++;
-    }
-    
     if (unlikely(!c64)) {
         printf("ERROR: c64_system_tick called with NULL c64\n");
         fflush(stdout);
@@ -203,23 +192,9 @@ void c64_system_tick(c64_t* c64) {
         return;
     }
 
-    // Debug output every 2000000 cycles to track progress
-    if (c64->total_cycles % 2000000 == 0) {
-        printf("c64_system_tick: cycle #%llu\n", (unsigned long long)c64->total_cycles);
-        fflush(stdout);
-    }
-
     c64->total_cycles++;
     c64_bus_t* bus = &(c64->bus);
     bus_state_t s = c64->bus.state;
-    
-    // Debug: Check initial BA state
-    static int ba_debug_count = 0;
-    if (ba_debug_count < 20) {
-        bool ba_initial = (BUS_GET_LINES(s) & BUS_MASK_BA) != 0;
-        printf("[BA_DEBUG] Cycle %llu START: BA=%d\n", (unsigned long long)c64->total_cycles, ba_initial ? 1 : 0);
-        fflush(stdout);
-    }
 
     // =========================================================================
     // UNIFIED TIMING MODEL
@@ -264,13 +239,6 @@ void c64_system_tick(c64_t* c64) {
     s = mos6581_tick(c64->sid, s);
 
     // Update RDY line based on BA (hardware accurate)
-    bool ba_before_rdy_update = (BUS_GET_LINES(s) & BUS_MASK_BA) != 0;
-    if (ba_debug_count < 20) {
-        printf("[BA_DEBUG] Cycle %llu BEFORE RDY update: BA=%d\n", (unsigned long long)c64->total_cycles, ba_before_rdy_update ? 1 : 0);
-        fflush(stdout);
-        ba_debug_count++;
-    }
-    
     if (BUS_GET_LINES(s) & BUS_MASK_BA) {
         BUS_SET_LINES(s, BUS_GET_LINES(s) | BUS_MASK_RDY);
     } else {

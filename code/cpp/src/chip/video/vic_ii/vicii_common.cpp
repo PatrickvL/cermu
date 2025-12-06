@@ -1695,8 +1695,6 @@ static inline void vicii_initialize(vicii_t* vicii) {
 }
 
 static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_config_t* config) {
-    printf("DEBUG: vicii_initialize_timing chip=%s\n", config->chip_name);
-    
     // Copy timing parameters from config
     vicii->timing.cycles_per_line = config->cycles_per_line;
     vicii->timing.total_lines = config->total_lines;
@@ -1720,7 +1718,6 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
     } else {
         // Default to PAL if unknown
         vicii->timing.cycle_table = vicii_cycle_table_pal;
-        printf("WARNING: Unknown cycles_per_line %d, defaulting to PAL\n", config->cycles_per_line);
     }
     
     // Allocate pixel buffers based on config
@@ -1738,9 +1735,6 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
             vicii->pixel.pixel_line_color[i] = VICII_COLOR_LIGHT_BLUE;
         }
     }
-    
-    printf("DEBUG: timing initialized: cycles_per_line=%d pixels_per_line=%d\n", 
-           vicii->timing.cycles_per_line, vicii->timing.pixels_per_line);
     
     vicii->timing.x_cycle = 0;
     vicii->timing.raster_counter = 0;
