@@ -5,6 +5,7 @@
 typedef struct rom_s {
     chip_descriptor_t* desc;
     uint8_t* memory;
+    bool owns_memory;  // True if this chip owns the memory and should free it on destruction
 } rom_t;
 
 // ROM access functions - bus state interface

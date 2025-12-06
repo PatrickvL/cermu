@@ -130,13 +130,14 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
  */
 static inline uint32_t c64_bus_unified_address_calc(uint8_t chip, uint16_t addr) {
     // Ultra-branchless calculation using strategic numbering
-    uint32_t base = (uint32_t)chip << 12;  // Direct offset calculation via strategic numbering
+    const uint32_t base = (uint32_t)chip << 12;  // Direct offset calculation via strategic numbering
     
     // CRITICAL: addr contains original C64 memory map addresses (e.g. KERNAL 0xE000-0xFFFF)
-    // Mask strips base address to get chip-relative offset (e.g. 0xE000 & 0x1FFF = 0x0000)
-    // RAM uses full 0xFFFF, ROMs use 0x1FFF to prevent buffer overflow
-    // CHARROM (4KB) is safe with 0x1FFF mask: max 0xDFFF & 0x1FFF = 0x0FFF stays within 4KB buffer
-    return base + (addr & (0x1FFF | -(chip == CHIP_RAM)));
+    // Mask strips bank/base address to get chip-relative offset
+    // For CPU access: 0xE000 & 0x0FFF = 0x0000 (KERNAL base stripped)
+    // For VIC access: 0x1008 & 0x0FFF = 0x0008 (bank 1 base stripped)
+    // RAM uses full 0xFFFF for 64KB, ROMs use 0x0FFF for 4KB banks
+    return base + (addr & (0x0FFF | -(chip == CHIP_RAM)));
 }
 
 /**
@@ -151,7 +152,7 @@ static inline uint32_t c64_bus_unified_address_calc(uint8_t chip, uint16_t addr)
  */
 static inline void c64_bus_write_chip_byte(c64_bus_t* bus, uint8_t chip, uint16_t address, uint8_t value) {
     // Use the unified address calculation function with the specified chip
-    uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
+    const uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
     bus->unified_memory_buffer[unified_addr] = value;
 }
 

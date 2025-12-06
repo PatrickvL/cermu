@@ -48,17 +48,6 @@ bus_state_t c64_bus_vic_read(c64_bus_t* c64_bus, bus_state_t bus_state, uint16_t
     // Get raw CHIP directly from pre-selected active array (no mode indexing)
     const uint8_t chip = c64_bus->vicii_chip_per_bank[vicii_bank];
 
-        // DEBUG: Print VIC-II reads to screen memory area
-        static int debug_count = 0;
-        if (address >= 0x0400 && address < 0x0500 && debug_count < 20) {
-            printf("VIC read: addr=0x%04X bank=%d chip=%d (should be 9=RAM for bank 0)\n",
-                   address, vicii_bank, chip);
-            printf("  vicii_chip_per_bank[0]=%d [1]=%d [2]=%d [3]=%d\n",
-                   c64_bus->vicii_chip_per_bank[0], c64_bus->vicii_chip_per_bank[1],
-                   c64_bus->vicii_chip_per_bank[2], c64_bus->vicii_chip_per_bank[3]);
-            debug_count++;
-        }
-
     // Early return for unmapped regions - use whatever is on the bus
     if (unlikely(chip == CHIP_UNMAPPED)) {
         // Leave bus data unchanged (floating bus state)
@@ -104,17 +93,17 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
     // Check if this is VIC-II cycle-stealing (RDY low) or CPU access (RDY high)
     bool is_vicii_cycle_stealing = !(BUS_GET_LINES(bus_state) & BUS_MASK_RDY);
     
-    // DEBUG: Print when accessing screen memory during raster 51 cycles 16-25
-    if (address >= 0x0400 && address < 0x0410 && is_read) {
-        c64_t* c64 = (c64_t*)c64_bus->c64;
-        if (c64 && c64->vicii && c64->vicii->timing.raster_counter == 51 &&
-            c64->vicii->timing.x_cycle >= 16 && c64->vicii->timing.x_cycle <= 25) {
-            printf("c64_memory_tick: addr=0x%04X cycle=%d RDY=%d BA=%d is_vicii_steal=%d bank=%d\n",
-                   address, c64->vicii->timing.x_cycle,
-                   (BUS_GET_LINES(bus_state) & BUS_MASK_RDY) ? 1 : 0,
-                   (BUS_GET_LINES(bus_state) & BUS_MASK_BA) ? 1 : 0,
-                   is_vicii_cycle_stealing, cpu_bank);
-        }
+    // DEBUG: Print EVERY call during raster 51 cycles 16-25
+    static int memory_tick_debug = 0;
+    c64_t* c64 = (c64_t*)c64_bus->c64;
+    if (memory_tick_debug < 50 && c64 && c64->vicii && c64->vicii->timing.raster_counter == 51 &&
+        c64->vicii->timing.x_cycle >= 16 && c64->vicii->timing.x_cycle <= 25) {
+        printf("c64_memory_tick CALLED: addr=0x%04X cycle=%d is_read=%d RDY=%d BA=%d is_vicii_steal=%d bank=%d\n",
+               address, c64->vicii->timing.x_cycle, is_read,
+               (BUS_GET_LINES(bus_state) & BUS_MASK_RDY) ? 1 : 0,
+               (BUS_GET_LINES(bus_state) & BUS_MASK_BA) ? 1 : 0,
+               is_vicii_cycle_stealing, cpu_bank);
+        memory_tick_debug++;
     }
 
         if (is_read) {
@@ -694,17 +683,21 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
         if (c64_device->memory && c64_device->memory != buffer + offset) { \
             /* Copy existing ROM data to unified buffer */ \
             memcpy(buffer + offset, c64_device->memory, size); \
-            /* Free the old separate allocation */ \
-            free(c64_device->memory); \
+            /* Free the old separate allocation only if we owned it */ \
+            if (c64_device->owns_memory) { \
+                free(c64_device->memory); \
+            } \
         } \
-        /* Point to unified buffer location */ \
+        /* Point to unified buffer location and mark as not owned */ \
         c64_device->memory = buffer + offset; \
+        c64_device->owns_memory = false; \
     } else if (c64_device) { \
         /* ROM not present - set to NULL and free existing if needed */ \
-        if (c64_device->memory) { \
+        if (c64_device->memory && c64_device->owns_memory) { \
             free(c64_device->memory); \
-            c64_device->memory = NULL; \
         } \
+        c64_device->memory = NULL; \
+        c64_device->owns_memory = false; \
     }
 
         // Update ROM pointers to preserve loaded data
@@ -773,17 +766,21 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
         if (c64_device->memory && c64_device->memory != buffer + offset) { \
             /* Copy existing ROM data to unified buffer */ \
             memcpy(buffer + offset, c64_device->memory, size); \
-            /* Free the old separate allocation */ \
-            free(c64_device->memory); \
+            /* Free the old separate allocation only if we owned it */ \
+            if (c64_device->owns_memory) { \
+                free(c64_device->memory); \
+            } \
         } \
-        /* Point to unified buffer location */ \
+        /* Point to unified buffer location and mark as not owned */ \
         c64_device->memory = buffer + offset; \
+        c64_device->owns_memory = false; \
     } else if (c64_device) { \
         /* ROM not present - set to NULL and free existing if needed */ \
-        if (c64_device->memory) { \
+        if (c64_device->memory && c64_device->owns_memory) { \
             free(c64_device->memory); \
-            c64_device->memory = NULL; \
         } \
+        c64_device->memory = NULL; \
+        c64_device->owns_memory = false; \
     }
 
     // Point the following devices to their respective unified buffer offset

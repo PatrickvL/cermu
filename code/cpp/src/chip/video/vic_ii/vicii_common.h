@@ -237,7 +237,7 @@ using vicii_pixel_t = vicii_pixel_s;
 #define VIC_ACCESS_P            2  // PHI1     : p-access - sprite data pointers
 #define VIC_ACCESS_S            3  // PHI1/PHI2: s-access - sprite data (PHI2 when sprite active)
 #define VIC_ACCESS_C            4  //      PHI2: c-access - video matrix and Color RAM (in bad lines)
-#define VIC_ACCESS_G            5  // PHI1     : g-access - character generator or bitmap (always with c-access, never alone)
+//#define VIC_ACCESS_G            5  // PHI1     : g-access - character generator or bitmap (always with c-access, never alone)
 
 // Interrupt mask
 #define VICII_INTERRUPTS_MASK (VICII_IR_ILP | VICII_IR_IMMC | VICII_IR_IMBC | VICII_IR_IRST)
@@ -406,7 +406,6 @@ typedef struct {
     uint16_t bank_base;         // Base address of current 16KB VIC bank
     uint16_t vm_base;           // VM10-VM13 bits - Video Matrix base within VIC bank
     uint16_t cb_base;           // CB11-CB13 bits - Character Base within VIC bank
-    uint8_t bank;              // Current bank (0-3)
 } vicii_memory_unit_t;
 
 // Sprite Unit - Single sprite state (Documentation section 3.8 + VIC-Addendum)
@@ -511,7 +510,7 @@ bus_state_t vicii_registers_read(void* context, bus_state_t bus_state);
 bus_state_t vicii_registers_write(void* context, bus_state_t bus_state);
 
 // Bank change callback
-void vicii_bank_change(void* chip, uint8_t bank);
+void vicii_memory_bank_change(void* chip, uint8_t bank);
 
 // Utility functions
 void vicii_set_framebuffer(vicii_t* vicii, uint32_t* framebuffer, int width, int height);

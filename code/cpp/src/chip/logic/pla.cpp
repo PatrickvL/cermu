@@ -120,7 +120,7 @@ void pla_906114_01_set_vicii_address_bank(pla_906114_01_t* pla, uint8_t high_nyb
     // Note that the VIC-II itself only has 14 address lines,
     // which can only address 16KB of memory. However, VIC-II
     // memory accesses use the upper 2 bits (VA14, VA15) from CIA2,
-    // as set via vicii_bank_change().
+    // as set via vicii_memory_bank_change().
     // Here, we don't care since we're only initializing the
     // VIC-II bank mapping using the PLA logic.   
 

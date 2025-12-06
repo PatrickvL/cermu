@@ -8,7 +8,7 @@
  */
 void* mos6569_system_create(chip_descriptor_t* desc) {
     const vicii_chip_config_t* config = vicii_get_default_config(true); // PAL = true
-    vicii_t* vicii = vicii_system_create(desc, config, vicii_bank_change);
+    vicii_t* vicii = vicii_system_create(desc, config, vicii_memory_bank_change);
     return vicii;
 }
 
@@ -20,7 +20,7 @@ chip_descriptor_t mos6569_descriptor = {
     .create      = mos6569_system_create,
     .destroy     = vicii_system_destroy,
     .bus_attach  = vicii_bus_attach,
-    .bank_change = vicii_bank_change,
+    .bank_change = vicii_memory_bank_change,
 #ifdef IMGUI_VERSION
     .render_debug_window = mos6569_render_debug_window,
     .render_settings_window = mos6569_render_settings_window
