@@ -98,21 +98,6 @@ static inline void vicii_bus_control_ba_low(vicii_t* vicii) {
     BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) & ~BUS_MASK_BA);
 }
 
-// Helper function: Set BA/AEC for VIC PHI2 access (c-access, p-access, s-access)
-static inline void vicii_bus_control_vic_phi2_access(vicii_t* vicii) {
-    // VIC needs PHI2 access: BA and AEC both LOW
-    vicii_bus_control_ba_low(vicii);
-    vicii_bus_control_aec_low(vicii);
-}
-
-// Helper function: Set BA/AEC for CPU access (normal state, g-access, refresh, idle)
-static inline void vicii_bus_control_cpu_access(vicii_t* vicii) {
-    // CPU can access bus: BA HIGH, AEC HIGH (during PHI2)
-    // VIC accesses during PHI1 with AEC LOW
-    vicii_bus_control_ba_high(vicii);
-    vicii_bus_control_aec_high(vicii);
-}
-
 // ========================================================================================
 // BORDER LOGIC
 // ========================================================================================
@@ -800,22 +785,17 @@ static inline bool vicii_cycle_needs_phi2_access(vicii_t* vicii, uint8_t cycle) 
         return false;
     }
     
-    // Check bad line c-access range (cycles 15-54 for PAL, similar for NTSC)
+    // Check bad line c-access range (cycles 15-54 for PAL, same for NTSC)
     if (cycle >= 15 && cycle <= 54) {
         return vicii->video_logic.is_bad_line;
     }
     
-    // Check sprite access cycles - use cycle table param field for sprite number
-    // Cycles: 1(p3), 2(s3), 3(p4), 4(s4), 5(p5), 6(s5), 7(p6), 8(s6), 9(p7), 10(s7)
-    // Cycles: 58-63 (varies by chip - PAL has 58(p0), 59(s0), 60(p1), 61(s1), 62(p2), 63(s2))
-    if ((cycle >= 1 && cycle <= 10) || (cycle >= 58 && cycle < vicii->timing.cycles_per_line)) {
-        // Get sprite number from cycle table param field
-        const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[cycle];
-        int sprite_num = entry->param;
-        
-        if (sprite_num >= 0 && sprite_num < VICII_NUM_SPRITES) {
-            return vicii->sprites.sprites[sprite_num].enabled;
-        }
+    // Get sprite number from cycle table param field
+    const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[cycle];
+    int sprite_num = entry->param; // -1 for non-sprite accesses
+    
+    if (sprite_num >= 0 && sprite_num < VICII_NUM_SPRITES) {
+        return vicii->sprites.sprites[sprite_num].enabled;
     }
     
     return false;
@@ -1442,13 +1422,6 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // Handle the read data based on the pending access type
     // This handles C/P/S accesses that were set up at the end of the previous cycle
     switch (vicii->bus.pending_phi2_access_type) {
-        case VIC_ACCESS_C:
-            // C-access: Store video matrix data
-            if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
-                vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = bus_data;
-            }
-            break;
-            
         case VIC_ACCESS_P:
             // P-access: Store sprite pointer
             if (vicii->bus.pending_phi2_access_param >= 0 && vicii->bus.pending_phi2_access_param < VICII_NUM_SPRITES) {
@@ -1456,7 +1429,6 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
                 sprite->data_pointer = bus_data;
             }
             break;
-            
         case VIC_ACCESS_S:
             // S-access: Store sprite data
             if (vicii->bus.pending_phi2_access_param >= 0 && vicii->bus.pending_phi2_access_param < VICII_NUM_SPRITES) {
@@ -1468,7 +1440,12 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
                 }
             }
             break;
-        // TODO: Handle PHI2 VIC_ACCESS_G when it happens, how?
+        case VIC_ACCESS_C:
+            // C-access: Store video matrix data
+            if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
+                vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = bus_data;
+            }
+            break;           
         default: // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH
             break;
     }
@@ -1491,49 +1468,50 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // G-access happens EVERY cycle, other accesses are special cases
     uint16_t address;
     
-    // First, handle special C-access color RAM read (bad lines only)
-    if (access_type == VIC_ACCESS_C) {
-        // C-access: Read Color RAM during PHI1 (happens on bad lines only)
-        BUS_SET_ADDR(bus_state, vicii->memory.vm_base | vicii->video_logic.vc);
-        bus_state = mos2114_read(vicii->colorram, bus_state);
-        const uint8_t color_data = BUS_GET_DATA(bus_state);
-        
-        if (vicii->video_logic.vmli < 40) {
-            vicii->video_data.video_color_line[vicii->video_logic.vmli] = static_cast<vicii_color_t>(color_data & 0x0F);
-        }
-        // After color RAM read, fall through to g-access calculation below
-    }
-    
     // Now calculate address for PHI1 read based on cycle type
-    if (access_type == VIC_ACCESS_REFRESH) {
-        // Refresh cycles use special address
-        address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
-        vicii->video_logic.refresh_counter--;
-    } else if (access_type == VIC_ACCESS_IDLE || access_type == VIC_ACCESS_P || access_type == VIC_ACCESS_S) {
-        // Idle, p-access, s-access: Use idle address
-        address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
-    } else {
-        // G-ACCESS or C-ACCESS: Calculate character/bitmap address
-        // This happens on ALL non-refresh, non-idle cycles (including bad line c-access cycles)
-        if (vicii->video_logic.display_state) {
-            // In display state, use video matrix data to fetch character bitmap
-            const uint8_t char_code = vicii->video_data.video_matrix_line[vicii->video_logic.vmli];
+    switch (access_type) {
+        case VIC_ACCESS_REFRESH:
+            // Refresh cycles use special address
+            address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
+            vicii->video_logic.refresh_counter--;
+            break;
+        case VIC_ACCESS_C:
+            // Handle special C-access color RAM read (bad lines only)
+            // C-access: Read Color RAM during PHI1 (happens on bad lines only)
+            BUS_SET_ADDR(bus_state, vicii->memory.vm_base | vicii->video_logic.vc);
+            bus_state = mos2114_read(vicii->colorram, bus_state);
+            if (vicii->video_logic.vmli < 40) {
+                const uint8_t color_data = BUS_GET_DATA(bus_state);
             
-            if (vicii->registers.data[VICII_C1] & VICII_C1_BMM) {
-                // Bitmap mode
-                address = vicii->memory.cb_base |
-                        ((vicii->video_logic.vc & 0x3FF) << 3) |
-                        (vicii->video_logic.rc & 0x07);
-            } else {
-                // Text mode
-                address = vicii->memory.cb_base |
-                        (char_code << 3) |
-                        (vicii->video_logic.rc & 0x07);
+                vicii->video_data.video_color_line[vicii->video_logic.vmli] = static_cast<vicii_color_t>(color_data & 0x0F);
             }
-        } else {
-            // In idle state, use idle address
+            
+            // After color RAM read, continue with character/bitmap address
+            // VIC_ACCESS_G: g-access calculation below
+            // This happens on ALL non-refresh, non-idle cycles (including bad line c-access cycles)
+            if (vicii->video_logic.display_state) {
+                // In display state, use video matrix data to fetch character bitmap
+                const uint8_t char_code = vicii->video_data.video_matrix_line[vicii->video_logic.vmli];
+                
+                if (vicii->registers.data[VICII_C1] & VICII_C1_BMM) {
+                    // Bitmap mode
+                    address = vicii->memory.cb_base |
+                            ((vicii->video_logic.vc & 0x3FF) << 3) |
+                            (vicii->video_logic.rc & 0x07);
+                } else {
+                    // Text mode
+                    address = vicii->memory.cb_base |
+                            (char_code << 3) |
+                            (vicii->video_logic.rc & 0x07);
+                }
+                break;
+            } else {
+                FALLTHROUGH;
+            }
+        default: // VIC_ACCESS_IDLE, VIC_ACCESS_P, VIC_ACCESS_S
+            // Idle, p-access, s-access: Use idle address
             address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
-        }
+            break;
     }
     
     // Perform PHI1 memory read (common path for all PHI1 accesses)
