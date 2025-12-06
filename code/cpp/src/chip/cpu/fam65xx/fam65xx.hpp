@@ -1433,6 +1433,16 @@ public:
    * @return Updated bus state
    */
   template <Phase phase> bus_state_t tick(bus_state_t pins) {
+    // Check RDY signal - CENTRALIZED CHECK (KEEP THIS!)
+    if (!FAM65XX_GET_RDY(pins)) {
+      // RDY low - external DMA active
+      // DO NOT call handler, DO NOT increment
+      if constexpr (ENABLE_TRACING) {
+        trace("RDY low - DMA active, skipping handler");
+      }
+      return pins;
+    }
+
     if constexpr (phase == Phase::PHI2) {
       // PHI2: Bus setup phase
       if constexpr (ENABLE_TRACING) {
@@ -1458,17 +1468,6 @@ public:
         }
       }
       #endif
-
-      // Check RDY signal - CENTRALIZED CHECK (KEEP THIS!)
-      if (!FAM65XX_GET_RDY(pins)) {
-        // RDY low - external DMA active
-        // DO NOT call handler, DO NOT increment
-        if constexpr (ENABLE_TRACING) {
-          trace("RDY low - DMA active, skipping handler");
-          trace_exit("tick<PHI2>");
-        }
-        return pins;
-      }
 
       // Call handler to set up bus (sees current even half_cycle)
       // COMPILE-TIME SAFETY: current_handler is always assigned by get_instruction_handler()
