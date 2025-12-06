@@ -237,7 +237,7 @@ using vicii_pixel_t = vicii_pixel_s;
 #define VIC_ACCESS_P            2  // PHI1     : p-access - sprite data pointers
 #define VIC_ACCESS_S            3  // PHI1/PHI2: s-access - sprite data (PHI2 when sprite active)
 #define VIC_ACCESS_C            4  //      PHI2: c-access - video matrix and Color RAM (in bad lines)
-//#define VIC_ACCESS_G          5  // PHI1     : g-access - character generator or bitmap (always with c-access, never alone)
+#define VIC_ACCESS_G            5  // PHI1     : g-access - character generator or bitmap (always with c-access, never alone)
 
 // Interrupt mask
 #define VICII_INTERRUPTS_MASK (VICII_IR_ILP | VICII_IR_IMMC | VICII_IR_IMBC | VICII_IR_IRST)

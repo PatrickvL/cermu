@@ -43,22 +43,31 @@ void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
                 printf("ERROR: RAM memory pointer is NULL! Skipping RAM initialization.\n");
                 continue;
             }
-            // Initialize RAM to zero - no need for separate initial_ram array
-            memset(ram->memory, 0, 65536);
+            // Initialize RAM: $0000-$01FF cleared, $0200-$FFFF filled with random data
+            memset(ram->memory, 0, 0x0200);  // Clear zero page and stack
             
-            // Add test pattern to all 4 VIC-II video banks for debugging
+            // Fill remaining RAM with random bytes for realistic uninitialized memory behavior
+            for (uint32_t addr = 0x0200; addr < 0x10000; addr++) {
+                ram->memory[addr] = (uint8_t)rand();
+            }
+            
+            // Add test pattern to video matrix at $0400 in all VIC-II banks for debugging
             // Each bank is 16KB, video matrix is typically at offset $0400 (1KB)
-            // Bank 0: $0000-$3FFF, video at $0400
-            // Bank 1: $4000-$7FFF, video at $4400
-            // Bank 2: $8000-$BFFF, video at $8400
-            // Bank 3: $C000-$FFFF, video at $C400
             for (int bank = 0; bank < 4; bank++) {
                 uint16_t base = bank * 0x4000 + 0x0400;
                 // Fill 1000 bytes (40 columns x 25 rows) with test pattern
                 for (int i = 0; i < 1000; i++) {
-                    // Use screen codes: 0-25 = letters A-Z, repeatedly
-                    ram->memory[base + i] = (uint8_t)((i % 26) + 1);  // Screen codes 1-26 = A-Z
+                    // Use a simple repeating pattern: 0x00, 0x01, 0x02, ..., 0x27 (40 chars), repeat
+                    // This makes it easy to see if we're reading the right character at the right position
+                    ram->memory[base + i] = (uint8_t)(i % 40);
                 }
+                printf("Bank %d: Filled screen memory at $%04X with pattern 0-39 repeating\n", bank, base);
+                // DEBUG: Print first 10 bytes to verify
+                printf("  First 10 bytes: ");
+                for (int j = 0; j < 10; j++) {
+                    printf("0x%02X ", ram->memory[base + j]);
+                }
+                printf("\n");
             }
         }
         
@@ -136,9 +145,11 @@ bool c64_pla_maps_generate(c64_t* c64) {
     // Clean up PLA instance
     pla_906114_01_destroy(pla);
 
-    // Initialize with mode $1F for now - VIC-II should still be able to read RAM
-    // The CPU won't boot properly, but VIC-II can display the test pattern
-    uint8_t initial_pla_mode = 0x1F;
+    // Initialize with mode $07 (standard C64 configuration)
+    // Mode $07 = LORAM=1, HIRAM=1, CHAREN=1, EXROM=0, GAME=0
+    // This enables VIC-II access to Character ROM at bank 1 ($1000-$1FFF)
+    // CRITICAL: Mode $1F has n_game=false which blocks Character ROM for VIC-II!
+    uint8_t initial_pla_mode = 0x07;
     c64_bus_mode_switch(bus, initial_pla_mode);
     
     printf("C64 initial banking: PLA mode=$%02X (VIC-II can read video RAM)\n", initial_pla_mode);
@@ -204,20 +215,15 @@ void c64_system_tick(c64_t* c64) {
     s = vicii_tick(c64->vicii, s);
 
     // =========================================================================
-    // PHASE 2: MEMORY SERVICE PHASE (with VIC-II banking)
-    // This services the memory access setup by VIC-II
-    // =========================================================================
-    s = c64_memory_tick(&c64->bus, s);
-
-    // =========================================================================
-    // PHASE 3: CPU TICKING (PHI2 phase)
+    // PHASE 2: CPU TICKING (PHI2 phase)
     // CPU executes in PHI2 phase
     // =========================================================================
     s = mos6510_tick_phi2(c64->mos6510, s);
 
     // =========================================================================
-    // PHASE 4: MEMORY SERVICE PHASE (with CPU banking)
-    // This services the memory access setup by CPU
+    // PHASE 3: MEMORY SERVICE PHASE
+    // Services memory access from either CPU (when RDY active) or VIC-II (when cycle stealing)
+    // The c64_memory_tick function checks RDY line to determine which chip set up the access
     // =========================================================================
     s = c64_memory_tick(&c64->bus, s);
 
@@ -228,7 +234,7 @@ void c64_system_tick(c64_t* c64) {
     s = mos6510_tick_phi1(c64->mos6510, s);
 
     // =========================================================================
-    // PHASE 6: OTHER CHIP TICKING
+    // PHASE 4: OTHER CHIP TICKING
     // =========================================================================
     // CIA chips - they handle I/O and timing functions
     // CIA2 must be ticked before CIA1 because CIA2 controls VIC-II bank switching
@@ -338,6 +344,15 @@ c64_t* c64_system_create(const c64_config_t* config) {
 
     // Now having a registry of all chips, the PLA maps can be generated
     if (!c64_pla_maps_generate(c64)) { c64_system_destroy(c64); return NULL; }
+    
+    // DEBUG: Print VIC-II memory mapping for bank 0 (addresses 0x0000-0x0FFF)
+    printf("VIC-II memory mapping for mode 0x07:\n");
+    for (int bank = 0; bank < 16; bank++) {
+        uint8_t chip = c64->bus.vicii_chip_per_bank[bank];
+        printf("  Bank %d (0x%04X-0x%04X): CHIP=%d (%s)\n",
+               bank, bank * 0x1000, (bank + 1) * 0x1000 - 1,
+               chip, c64_chips_to_title(chip));
+    }
 
     // Attach bus to C64 system first to initialize unified memory pointers
     c64_bus_system_attach(&(c64->bus), c64);

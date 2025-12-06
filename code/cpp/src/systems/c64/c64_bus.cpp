@@ -48,8 +48,16 @@ bus_state_t c64_bus_vic_read(c64_bus_t* c64_bus, bus_state_t bus_state, uint16_t
     // Get raw CHIP directly from pre-selected active array (no mode indexing)
     const uint8_t chip = c64_bus->vicii_chip_per_bank[vicii_bank];
 
+    // DEBUG: Print VIC-II reads to screen memory area
+    static int debug_count = 0;
+    if (address >= 0x0400 && address <= 0x040A && debug_count < 20) {
+        printf("VIC read: addr=0x%04X bank=%d chip=%d data will be from chip\n",
+               address, vicii_bank, chip);
+        debug_count++;
+    }
+
     // Early return for unmapped regions - use whatever is on the bus
-    if (unlikely(chip == CHIP_UNMAPPED)) {        
+    if (unlikely(chip == CHIP_UNMAPPED)) {
         // Leave bus data unchanged (floating bus state)
         return bus_state;
     }
