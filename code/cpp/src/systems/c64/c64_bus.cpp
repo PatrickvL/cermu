@@ -85,69 +85,6 @@ bus_state_t c64_bus_vic_read(c64_bus_t* c64_bus, bus_state_t bus_state, uint16_t
 bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_state) {
     if (unlikely(!c64_bus)) return bus_state;
     
-    // DEBUG: Detailed boot sequence tracing
-    static uint64_t memory_tick_count = 0;
-    static uint16_t last_pc = 0;
-    static uint64_t last_pc_change_cycle = 0;
-    static bool boot_trace_active = true;
-    
-    if (memory_tick_count < 10) {
-        printf("[DEBUG] c64_memory_tick called #%llu\n", (unsigned long long)memory_tick_count);
-    }
-    
-    // Track PC changes to detect infinite loops and key boot milestones
-    if (boot_trace_active && c64_bus->c64) {
-        c64_t* c64 = (c64_t*)c64_bus->c64;
-        if (c64->mos6510) {
-            uint16_t current_pc = mos6510_get_pc((mos6510_t*)c64->mos6510);
-            
-            // Log PC changes to trace execution flow
-            if (current_pc != last_pc) {
-                // Log important KERNAL routines
-                if (current_pc == 0xFCE2) {
-                    printf("[BOOT] *** RESET VECTOR EXECUTED at cycle %llu ***\n",
-                           (unsigned long long)memory_tick_count);
-                } else if (current_pc == 0xFD50) {
-                    printf("[BOOT] *** RAM TEST START at cycle %llu ***\n",
-                           (unsigned long long)memory_tick_count);
-                } else if (current_pc == 0xE518) {
-                    printf("[BOOT] *** SCREEN INIT at cycle %llu ***\n",
-                           (unsigned long long)memory_tick_count);
-                } else if (current_pc == 0xEDEF) {
-                    printf("[BOOT] !!! UNTALK/SERIAL BUS ROUTINE at cycle %llu !!!\n",
-                           (unsigned long long)memory_tick_count);
-                    printf("[BOOT] WARNING: This should NOT be called during normal boot!\n");
-                } else if (current_pc == 0xE5A0) {
-                    printf("[BOOT] *** PRINT STARTUP MESSAGE at cycle %llu ***\n",
-                           (unsigned long long)memory_tick_count);
-                } else if (current_pc == 0xE3BF) {
-                    printf("[BOOT] *** BASIC READY at cycle %llu ***\n",
-                           (unsigned long long)memory_tick_count);
-                    boot_trace_active = false;  // Stop tracing once we reach READY
-                }
-                
-                // Log every PC change for first 100K cycles
-                if (memory_tick_count < 100000 && (memory_tick_count % 1000) == 0) {
-                    printf("[PC_FLOW] Cycle %llu: $%04X -> $%04X\n",
-                           (unsigned long long)memory_tick_count, last_pc, current_pc);
-                }
-                
-                last_pc = current_pc;
-                last_pc_change_cycle = memory_tick_count;
-            }
-            
-            // Detect infinite loop (PC unchanged for 50K cycles)
-            if ((memory_tick_count - last_pc_change_cycle) > 50000) {
-                if ((memory_tick_count % 50000) == 0) {
-                    printf("[BOOT] ERROR: PC stuck at $%04X for %llu cycles!\n",
-                           last_pc, (unsigned long long)(memory_tick_count - last_pc_change_cycle));
-                }
-            }
-        }
-    }
-    
-    memory_tick_count++;
-    
     // Determine if this is a read or write operation
     bool is_read = BUS_GET_LINES(bus_state) & BUS_MASK_RW;
     uint16_t address = BUS_GET_ADDR(bus_state);
@@ -201,37 +138,6 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
             // ENHANCED FAST PATH: Handle all writable unified buffer regions
             if (likely(chip == CHIP_RAM)) {
                 uint8_t data = BUS_GET_DATA(bus_state);
-                
-                // Log writes to screen memory ($0400-$07E7) to trace boot text
-                static uint64_t screen_write_count = 0;
-                if (address >= 0x0400 && address < 0x07E8) {
-                    if (screen_write_count == 0) {
-                        printf("[BOOT] *** FIRST SCREEN WRITE DETECTED! ***\n");
-                    }
-                    
-                    if (screen_write_count < 50) {
-                        uint16_t current_pc = 0;
-                        if (c64_bus->c64) {
-                            c64_t* c64 = (c64_t*)c64_bus->c64;
-                            if (c64->mos6510) {
-                                current_pc = mos6510_get_pc((mos6510_t*)c64->mos6510);
-                            }
-                        }
-                        
-                        // Convert PETSCII/screen code to ASCII for logging
-                        char ascii_char = (data >= 1 && data <= 26) ? ('A' + data - 1) :  // A-Z
-                                         (data == 0) ? '@' :                               // @
-                                         (data == 32) ? ' ' :                              // space
-                                         (data >= 48 && data <= 57) ? ('0' + data - 48) : // 0-9
-                                         '.';                                              // other
-                        
-                        printf("[BOOT] PC=$%04X: [SCREEN $%04X] = $%02X '%c'\n",
-                               current_pc, address, data, ascii_char);
-                    }
-                    screen_write_count++;
-                }
-                
-                // Direct unified buffer write for RAM (most common writable case)
                 c64_bus_write_ram_byte(c64_bus, address, data);
             } else if (chip == CHIP_IO) {
                 // OPTIMIZED IO PAGE HANDLING: Direct dispatch using pre-initialized handlers
@@ -412,6 +318,16 @@ void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pl
     pla->inputs.n_aec = false;   // CPU has bus control (AEC high (#EAC low) = CPU access)
     pla->inputs.ba = true;       // Bus available (BA high = no DMA)
     pla->inputs.n_cas = false;   // CAS active (CAS low = enable RAM access for CPU)
+    
+    // Debug: Print PLA control inputs for this mode
+    static int debug_mode_count = 0;
+    if (debug_mode_count < 2) {
+        printf("[PLA_DEBUG] Mode generation: n_loram=%d n_hiram=%d n_charen=%d n_exrom=%d n_game=%d\n",
+               pla->inputs.n_loram, pla->inputs.n_hiram, pla->inputs.n_charen,
+               pla->inputs.n_exrom, pla->inputs.n_game);
+        debug_mode_count++;
+    }
+    
     // Map memory regions based on PLA outputs
     for (uint32_t bank = 0; bank < 16; bank++) {
         // Configure PLA for READ mode
@@ -420,15 +336,13 @@ void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pl
         pla_906114_01_set_cpu_address_bank((pla_906114_01_t*)pla, (uint8_t)bank);
         // Determine read CHIP based on PLA outputs for read mode
         uint8_t read_chip = pla_906114_01_outputs_to_chip((pla_906114_01_t*)pla);
-        // I/O port handling now done by MOS6510 bus interface callbacks - use regular RAM
 
         // Configure PLA for WRITE mode
         pla->inputs.r_w = false;  // Write mode
         pla_906114_01_update_outputs((pla_906114_01_t*)pla);
         uint8_t write_chip = pla_906114_01_outputs_to_chip((pla_906114_01_t*)pla);
-        // I/O port handling now done by MOS6510 bus interface callbacks - use regular RAM
 
-        // Note: ROM areas (BASIC, KERNAL, Character ROM, Cartridge) are not writable, 
+        // Note: ROM areas (BASIC, KERNAL, Character ROM, Cartridge) are not writable,
         // so write_chip remains CHIP_UNMAPPED for those regions
 
         // Encode both read and write CHIPs into the mapping
@@ -499,19 +413,25 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
 
 uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits) {
     printf("c64_bus_generate_pla_mode.cpu_port_bits: %02X\n", cpu_port_bits);
-    // The PLA expects a 5-bit mode value with the following bit mapping:
-    // Bit 0: !LORAM (from CPU port bit 0)
-    // Bit 1: !HIRAM (from CPU port bit 1) 
-    // Bit 2: !CHAREN (from CPU port bit 2)
-    // Bit 3: !EXROM (from cartridge signal)
-    // Bit 4: !GAME (from cartridge signal)
+    // The mode value is used as an index into the pre-generated PLA mode tables.
+    // The c64_bus_generate_all_pla_modes() function generates these tables with inverted logic:
+    //   mode bit 0 set → n_loram = false (LORAM enabled)
+    //   mode bit 0 clear → n_loram = true (LORAM disabled)
+    //
+    // CPU port bits are active-high: 1 = enable ROM/CHAR
+    // Mode bits should also be active-high to match the table generation
+    // When CPU port = $37 (bits 0-2 = 111), mode should = $07 to enable all ROMs
+    //
+    // NO INVERSION NEEDED - direct mapping from CPU port bits to mode bits
     
     // Extract CPU I/O port control bits (bits 0-2 of $0001)
-    uint8_t pla_mode = (~cpu_port_bits) & 0x07; // LORAM (bit 0) | HIRAM (bit 1) | CHAREN (bit 2)
+    uint8_t pla_mode = cpu_port_bits & 0x07;
     
     // Add cartridge control signals from system lines
-    pla_mode |= ((c64_bus->system_lines & SYS_MASK_EXROM) ? 0 : 0x08); // EXROM (bit 3)
-    pla_mode |= ((c64_bus->system_lines & SYS_MASK_GAME) ? 0 : 0x10);  // GAME (bit 4)
+    // System lines are active-high: bit set = signal inactive
+    // Mode bits should also be active-high: bit set = signal inactive
+    pla_mode |= ((c64_bus->system_lines & SYS_MASK_EXROM) ? 0x08 : 0); // EXROM (bit 3)
+    pla_mode |= ((c64_bus->system_lines & SYS_MASK_GAME) ? 0x10 : 0);  // GAME (bit 4)
     printf("c64_bus_generate_pla_mode.pla_mode: %02X\n", pla_mode);
 
     return pla_mode;

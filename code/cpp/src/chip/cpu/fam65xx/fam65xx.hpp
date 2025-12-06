@@ -136,7 +136,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
   // ========================================================================
 
   /* Debug tracing state */
-  static constexpr bool ENABLE_TRACING = false; /* Compile-time tracing flag - DISABLED FOR PRODUCTION */
+  static constexpr bool ENABLE_TRACING = true; /* Compile-time tracing flag - ENABLED FOR DEBUGGING */
   mutable int trace_indent = 0; /* Current tracing indentation level */
 
   // ========================================================================
@@ -1378,17 +1378,15 @@ public:
     // Reset processor-specific features
     this->init_conditional_features();
 
-    // Use unified interrupt handler for vector loading
-    this->active_interrupt = FAM65XX_INT_RESET;
+    // Clear any active interrupt
+    this->active_interrupt = FAM65XX_INT_NONE;
 
-    // Set up opcode_entry for BRK (opcode $00) so tracing shows correct instruction
-    this->opcode_entry = get_opcode_info(0x00); // = {OP_BRK, AM_NON, OF_NONE};
-    this->current_handler = &fam65xx_t::op_brk;
+    // NOTE: PC must be set externally after reset by reading the reset vector
+    // This matches the C64 boot sequence where PC is set directly from KERNAL ROM
+    // See c64.cpp lines 364-368 for the direct PC initialization
     
-    // Start at cycle 10 (vector loading phase) for emulation mode reset
-    // The BRK handler will execute cycles 10-13 to load the vector and set PC
-    this->half_cycle = 10;
-    this->set(REG_AB, this->get_vector_addr());
+    // Set up for instruction fetch - CPU ready to execute from the reset vector
+    this->transition_to_fetch();
 
     return pins;
   }
