@@ -463,7 +463,7 @@ typedef struct {
     void (*bank_change)(void* context, uint8_t bank);
     bool lp_edge_detected;
     uint8_t pending_phi2_access_type;  // Track which PHI2 access type was set up in previous cycle
-    int pending_phi2_access_param;     // Track parameter for pending PHI2 access
+    vicii_sprite_unit_t* active_sprite;  // Active sprite pointer for P/S accesses (NULL if none)
 } vicii_bus_unit_t;
 
 // Main VIC-II structure composed of units
