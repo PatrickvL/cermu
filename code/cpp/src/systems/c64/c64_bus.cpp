@@ -25,9 +25,6 @@ void c64_bus_on_banking_change(void* bus_ptr, uint8_t banking_state) {
     
     // Switch to new memory mapping mode
     c64_bus_mode_switch(bus, pla_mode);
-    
-    printf("Banking change: MOS6510 state=0x%02X, PLA mode=0x%02X\n", 
-           banking_state, pla_mode);
 }
 
 // Chip accessor functions - these use the chip descriptor's read/write callbacks using bus_state_t pattern
@@ -209,7 +206,6 @@ chip_descriptor_t c64_bus_descriptor = {
 };
 
 void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
-    printf("c64_bus_mode_switch: %02X\n", mode);
     // Update the optimized banking for the current mode
     c64_bus->pla_banking_mode = mode & 0x1F;
     
@@ -219,9 +215,7 @@ void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
 }
 
 static void c64_bus_update_pla_mode(c64_bus_t* c64_bus) {
-
     uint8_t cpu_port_bits = c64_bus->pla_banking_mode & 0x07;
-    printf("c64_bus_update_pla_mode.cpu_port_bits: %02X\n", cpu_port_bits);
     uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, cpu_port_bits);
     c64_bus_mode_switch(c64_bus, pla_mode);
 }
@@ -319,15 +313,6 @@ void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pl
     pla->inputs.ba = true;       // Bus available (BA high = no DMA)
     pla->inputs.n_cas = false;   // CAS active (CAS low = enable RAM access for CPU)
     
-    // Debug: Print PLA control inputs for this mode
-    static int debug_mode_count = 0;
-    if (debug_mode_count < 2) {
-        printf("[PLA_DEBUG] Mode generation: n_loram=%d n_hiram=%d n_charen=%d n_exrom=%d n_game=%d\n",
-               pla->inputs.n_loram, pla->inputs.n_hiram, pla->inputs.n_charen,
-               pla->inputs.n_exrom, pla->inputs.n_game);
-        debug_mode_count++;
-    }
-    
     // Map memory regions based on PLA outputs
     for (uint32_t bank = 0; bank < 16; bank++) {
         // Configure PLA for READ mode
@@ -412,7 +397,6 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
 // ============================================================================
 
 uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits) {
-    printf("c64_bus_generate_pla_mode.cpu_port_bits: %02X\n", cpu_port_bits);
     // The mode value is used as an index into the pre-generated PLA mode tables.
     // The c64_bus_generate_all_pla_modes() function generates these tables with inverted logic:
     //   mode bit 0 set → n_loram = false (LORAM enabled)
@@ -432,7 +416,6 @@ uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits) {
     // Mode bits should also be active-high: bit set = signal inactive
     pla_mode |= ((c64_bus->system_lines & SYS_MASK_EXROM) ? 0x08 : 0); // EXROM (bit 3)
     pla_mode |= ((c64_bus->system_lines & SYS_MASK_GAME) ? 0x10 : 0);  // GAME (bit 4)
-    printf("c64_bus_generate_pla_mode.pla_mode: %02X\n", pla_mode);
 
     return pla_mode;
 }
