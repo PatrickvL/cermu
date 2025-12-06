@@ -18,84 +18,13 @@ static const uint32_t c64_palette[16] = {
     0xFF6C6C6C, 0xFF84D29A, 0xFFB55E6C, 0xFF959595
 };
 
-uint32_t* vicii_get_default_palette(void) {
-    return (uint32_t*)c64_palette;
-}
-
 // ========================================================================================
 // INLINE UTILITY FUNCTIONS
 // ========================================================================================
 
-// ========================================================================================
-// BUS CONTROL HELPERS - Hardware Connection Details
-// ========================================================================================
-//
-// According to VIC-II documentation (Section 2.4.3, lines 212-230, 406-433):
-//
-// BA (Bus Available) → 6510 RDY (Ready):
-// - VIC-II BA output is connected to 6510 RDY input
-// - Normally HIGH: Bus is available to CPU during PHI2
-// - Goes LOW 3 cycles BEFORE VIC will need PHI2 access (warning signal)
-// - When RDY goes LOW, CPU halts on the NEXT READ cycle (writes can still complete)
-// - Returns HIGH when VIC no longer needs PHI2 access
-//
-// AEC (Address Enable Control) → 6510 AEC (Address Enable Control):
-// - VIC-II AEC output is connected to 6510 AEC input
-// - Normally LOW during PHI1 (VIC accesses), HIGH during PHI2 (CPU accesses)
-// - When BA goes low, AEC continues to follow φ2 for 3 cycles normally
-// - After 3 cycles, AEC STAYS LOW during PHI2 (VIC controls address/data lines)
-// - When AEC is LOW, the 6510's address bus is tri-stated (disconnected)
-// - Returns HIGH when VIC releases the bus
-//
-// The 3-Cycle Dance (from documentation timing diagram, lines 971-992):
-// 1. Cycle N:   BA goes LOW (RDY→LOW, CPU starts halting on reads), AEC still follows φ2
-// 2. Cycle N+1: BA is LOW (RDY LOW), AEC still follows φ2, CPU can complete writes
-// 3. Cycle N+2: BA is LOW (RDY LOW), AEC still follows φ2, CPU can complete writes
-// 4. Cycle N+3: BA is LOW (RDY LOW), AEC now STAYS LOW → VIC has full bus control
-//
-// Timing sequence (Documentation Section 2.4.3, lines 406-410):
-// "BA will then go low 3 cycles before the VIC takes over the bus completely
-//  (3 cycles is the maximum number of successive write accesses of the 6510).
-//  After 3 cycles, AEC stays low during the second clock phase so that the
-//  VIC can output its addresses."
-//
-// Why 3 cycles? (Documentation lines 217-222):
-// "BA is connected to the RDY line of the processor... but this line is ignored
-//  on write accesses (the CPU can only be interrupted on reads), and the 6510
-//  never does more than three writes in sequence."
-//
-// BA goes LOW 3 cycles in advance for:
-// 1. Bad Line c-accesses (BA low in cycles 12-14, c-accesses in cycles 15-54)
-// 2. Sprite p-accesses (sprite data pointer reads)
-// 3. Sprite s-accesses (sprite data reads)
-//
-// BA returns HIGH when VIC no longer needs PHI2 access.
-
-static inline void vicii_bus_control_aec_high(vicii_t* vicii) {
-    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
-    BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) | BUS_MASK_AEC);
-}
-
-static inline void vicii_bus_control_aec_low(vicii_t* vicii) {
-    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
-    BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) & ~BUS_MASK_AEC);
-}
-
-static inline void vicii_bus_control_ba_high(vicii_t* vicii) {
-    // BA HIGH: Bus is available to CPU during PHI2
-    // This is the normal/default state
-    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
-    BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) | BUS_MASK_BA);
-}
-
-static inline void vicii_bus_control_ba_low(vicii_t* vicii) {
-    // BA LOW: VIC will need PHI2 bus access (prevents CPU from accessing bus)
-    // This happens during:
-    // - Bad Line c-accesses (character pointer reads)
-    // - Sprite p-accesses (sprite data pointer reads)
-    // - Sprite s-accesses (sprite data reads)
-    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
-    BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) & ~BUS_MASK_BA);
+// Get default palette
+const uint32_t* vicii_get_default_palette(void) {
+    return (uint32_t*)c64_palette;
 }
 
 // ========================================================================================
@@ -172,30 +101,6 @@ void vicii_graphics_sequencer(vicii_t* vicii, uint8_t graphics_data) {
         uint16_t display_pixel_x = x_coord - vicii->pixel.display_start_x;
         seq->char_index = (uint8_t)(display_pixel_x >> 3); // Character position
     }
-}
-
-// ========================================================================================
-// MEMORY ACCESS
-// ========================================================================================
-
-// Update memory mapping (Documentation section 2.4.2)
-static inline void vicii_memory_update_mapping(vicii_memory_unit_t* memory, uint8_t mp_reg) {
-    // Update addresses with bit operations
-    // "VM10-VM13 (register $d018) that specify one of four 1KB blocks within the 16KB address space"
-    memory->vm_base = ((uint16_t)mp_reg & 0xF0) << 6;  // VM10-VM13 bits * 0x400 -> << 6
-    // "CB11-CB13 (register $d018) that specify one of eight 2KB blocks within the 16KB address space"
-    memory->cb_base = ((uint16_t)mp_reg & 0x0E) << 10; // CB11-CB13 bits * 0x800 -> << 10
-}
-
-static inline bus_state_t vicii_bus_memory_setup(vicii_t* vicii, bus_state_t bus_state, uint16_t address) {
-    // Bank base offset applied here to keep operations in most appropriate place
-    uint16_t final_address = vicii->memory.bank_base | address;
-
-    // Set up the address on the bus for the memory service phase to handle
-    // This follows the same pattern as the CPU's bus_setup_read()
-    BUS_SET_ADDR(bus_state, final_address);
-    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_RW); // Set read mode
-    return bus_state;
 }
 
 // ========================================================================================
@@ -432,7 +337,7 @@ static void vicii_unified_pixel_sequencer(vicii_t* vicii) {
     vicii_sprite_sequencer(vicii);
 }
 
-void vicii_pixel_flush_line(vicii_t* vicii, uint32_t* palette, int y) {
+void vicii_pixel_flush_line(vicii_t* vicii, const uint32_t* palette, int y) {
     if (!vicii->pixel.framebuffer || !palette || y >= vicii->pixel.framebuffer_height) return;
     
     vicii_pixel_unit_t* pixel = &vicii->pixel;
@@ -463,6 +368,30 @@ static inline void vicii_pixel_set_framebuffer(vicii_pixel_unit_t* pixel, uint32
     pixel->framebuffer = framebuffer;
     pixel->framebuffer_width = width;
     pixel->framebuffer_height = height;
+}
+
+// ========================================================================================
+// MEMORY ACCESS
+// ========================================================================================
+
+// Update memory mapping (Documentation section 2.4.2)
+static inline void vicii_memory_update_mapping(vicii_memory_unit_t* memory, uint8_t mp_reg) {
+    // Update addresses with bit operations
+    // "VM10-VM13 (register $d018) that specify one of four 1KB blocks within the 16KB address space"
+    memory->vm_base = ((uint16_t)mp_reg & 0xF0) << 6;  // VM10-VM13 bits * 0x400 -> << 6
+    // "CB11-CB13 (register $d018) that specify one of eight 2KB blocks within the 16KB address space"
+    memory->cb_base = ((uint16_t)mp_reg & 0x0E) << 10; // CB11-CB13 bits * 0x800 -> << 10
+}
+
+static inline bus_state_t vicii_bus_memory_setup(vicii_t* vicii, bus_state_t bus_state, uint16_t address) {
+    // Bank base offset applied here to keep operations in most appropriate place
+    uint16_t final_address = vicii->memory.bank_base | address;
+
+    // Set up the address on the bus for the memory service phase to handle
+    // This follows the same pattern as the CPU's bus_setup_read()
+    BUS_SET_ADDR(bus_state, final_address);
+    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_RW); // Set read mode
+    return bus_state;
 }
 
 // ========================================================================================
@@ -770,67 +699,6 @@ void vicii_timing_advance(vicii_t* vicii) {
 }
 
 // ========================================================================================
-// CENTRALIZED BUS CONTROL LOGIC
-// ========================================================================================
-
-// Check if a specific cycle needs PHI2 bus access (c/p/s access)
-// Uses cycle number ranges and cycle table param field for sprite accesses
-static inline bool vicii_cycle_needs_phi2_access(vicii_t* vicii, uint8_t cycle) {
-    if (cycle >= vicii->timing.cycles_per_line) {
-        return false;
-    }
-    
-    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-    if (!den_enabled) {
-        return false;
-    }
-    
-    // Check bad line c-access range (cycles 15-54 for PAL, same for NTSC)
-    if (cycle >= 15 && cycle <= 54) {
-        return vicii->video_logic.is_bad_line;
-    }
-    
-    // Get sprite number from cycle table param field
-    const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[cycle];
-    int sprite_num = entry->param; // -1 for non-sprite accesses
-    
-    if (sprite_num >= 0 && sprite_num < VICII_NUM_SPRITES) {
-        return vicii->sprites.sprites[sprite_num].enabled;
-    }
-    
-    return false;
-}
-
-// Centralized function to set BA/AEC based on current and future cycle needs
-// This should be called once per cycle in vicii_tick
-static inline void vicii_update_ba_aec_signals(vicii_t* vicii, uint8_t access_type) {
-    uint8_t current_cycle = vicii->timing.x_cycle;
-    uint8_t future_cycle = (current_cycle + 3) % vicii->timing.cycles_per_line;
-    
-    // Check if we need PHI2 access NOW (current cycle)
-    bool needs_phi2_now = (access_type == VIC_ACCESS_C ||
-                           access_type == VIC_ACCESS_P ||
-                           access_type == VIC_ACCESS_S);
-    
-    // Check if we'll need PHI2 access in 3 cycles
-    bool needs_phi2_future = vicii_cycle_needs_phi2_access(vicii, future_cycle);
-    
-    if (needs_phi2_now) {
-        // Current cycle needs PHI2 access: BA LOW, AEC LOW
-        vicii_bus_control_ba_low(vicii);
-        vicii_bus_control_aec_low(vicii);
-    } else if (needs_phi2_future) {
-        // Future cycle needs PHI2 access: BA LOW (warning), AEC HIGH
-        vicii_bus_control_ba_low(vicii);
-        vicii_bus_control_aec_high(vicii);
-    } else {
-        // No PHI2 access needed: BA HIGH, AEC HIGH (CPU has bus)
-        vicii_bus_control_ba_high(vicii);
-        vicii_bus_control_aec_high(vicii);
-    }
-}
-
-// ========================================================================================
 // CYCLE FUNCTIONS
 // ========================================================================================
 
@@ -899,6 +767,12 @@ static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int char_index) {
     }
 }
 
+static uint8_t vicii_cycle_idle(vicii_t* vicii, int param) {
+    // Idle cycle: VIC accesses during PHI1, CPU can use PHI2
+    // BA/AEC will be set centrally in vicii_tick based on look-ahead
+    return VIC_ACCESS_IDLE;
+}
+
 // Cycle 15: MCBASE increment when expansion flip-flop is set (Rule 7)
 static inline void vicii_cycle_15_mcbase_expansion(vicii_t* vicii) {
     // "7. In the first phase of cycle 15, it is checked if the expansion flip flop
@@ -954,12 +828,6 @@ static uint8_t vicii_cycle_vc_load_mcbase(vicii_t* vicii, int param) {
 static uint8_t vicii_cycle_char_color_expansion_check(vicii_t* vicii, int param) {
     vicii_cycle_16_expansion_check(vicii);
     return vicii_cycle_char_color_access(vicii, param);
-}
-
-static uint8_t vicii_cycle_idle(vicii_t* vicii, int param) {
-    // Idle cycle: VIC accesses during PHI1, CPU can use PHI2
-    // BA/AEC will be set centrally in vicii_tick based on look-ahead
-    return VIC_ACCESS_IDLE;
 }
 
 // Helper: Sprite Y-coordinate matching (shared by cycles 55 and 56)
@@ -1090,6 +958,390 @@ static uint8_t vicii_cycle_sprite_s_border_check(vicii_t* vicii, int param) {
     vicii_cycle_63_border_check(vicii);
     // Perform the sprite S access for this cycle
     return vicii_cycle_sprite_s_access(vicii, param);
+}
+
+// Border flip-flop logic (Documentation section 3.9) - X coordinate rules only
+static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border, vicii_timing_unit_t* timing, 
+                                          uint8_t c1_reg) {
+    uint16_t raster = timing->raster_counter;
+    uint16_t x_coord = timing->x_coordinate;  // Use actual hardware X coordinate (not delayed display coordinate)
+    bool den_set = (c1_reg & VICII_C1_DEN) != 0;
+    
+    // Check each pixel in this cycle (8 pixels) against border boundaries
+    for (int pixel = 0; pixel < 8; pixel++) {
+        uint16_t pixel_x = (x_coord + (uint16_t)pixel) % timing->pixels_per_line;
+        
+        // Rule 1: "If the X coordinate reaches the right comparison value, the main border flip flop is set."
+        if (pixel_x == border->border_right) {
+            border->main_border_flip_flop = true;
+        }
+        
+        // Rules 4, 5, 6: Handle left coordinate checks only  
+        if (pixel_x == border->border_left) {
+            // Rule 4: "If the X coordinate reaches the left comparison value and the Y
+            // coordinate reaches the bottom one, the vertical border flip flop is set."
+            if (raster == border->border_bottom) {
+                border->vertical_border_flip_flop = true;
+            }
+            // Rule 5: "If the X coordinate reaches the left comparison value and the Y
+            // coordinate reaches the top one and the DEN bit in register $d011 is set,
+            // the vertical border flip flop is reset."
+            else if (raster == border->border_top && den_set) {
+                border->vertical_border_flip_flop = false;
+            }
+            
+            // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
+            // border flip flop is not set, the main flip flop is reset."
+            if (!border->vertical_border_flip_flop) {
+                border->main_border_flip_flop = false;
+            }
+        }
+    }
+}
+
+// ========================================================================================
+// BUS CONTROL HELPERS - Hardware Connection Details
+// ========================================================================================
+//
+// According to VIC-II documentation (Section 2.4.3, lines 212-230, 406-433):
+//
+// BA (Bus Available) → 6510 RDY (Ready):
+// - VIC-II BA output is connected to 6510 RDY input
+// - Normally HIGH: Bus is available to CPU during PHI2
+// - Goes LOW 3 cycles BEFORE VIC will need PHI2 access (warning signal)
+// - When RDY goes LOW, CPU halts on the NEXT READ cycle (writes can still complete)
+// - Returns HIGH when VIC no longer needs PHI2 access
+//
+// AEC (Address Enable Control) → 6510 AEC (Address Enable Control):
+// - VIC-II AEC output is connected to 6510 AEC input
+// - Normally LOW during PHI1 (VIC accesses), HIGH during PHI2 (CPU accesses)
+// - When BA goes low, AEC continues to follow φ2 for 3 cycles normally
+// - After 3 cycles, AEC STAYS LOW during PHI2 (VIC controls address/data lines)
+// - When AEC is LOW, the 6510's address bus is tri-stated (disconnected)
+// - Returns HIGH when VIC releases the bus
+//
+// The 3-Cycle Dance (from documentation timing diagram, lines 971-992):
+// 1. Cycle N:   BA goes LOW (RDY→LOW, CPU starts halting on reads), AEC still follows φ2
+// 2. Cycle N+1: BA is LOW (RDY LOW), AEC still follows φ2, CPU can complete writes
+// 3. Cycle N+2: BA is LOW (RDY LOW), AEC still follows φ2, CPU can complete writes
+// 4. Cycle N+3: BA is LOW (RDY LOW), AEC now STAYS LOW → VIC has full bus control
+//
+// Timing sequence (Documentation Section 2.4.3, lines 406-410):
+// "BA will then go low 3 cycles before the VIC takes over the bus completely
+//  (3 cycles is the maximum number of successive write accesses of the 6510).
+//  After 3 cycles, AEC stays low during the second clock phase so that the
+//  VIC can output its addresses."
+//
+// Why 3 cycles? (Documentation lines 217-222):
+// "BA is connected to the RDY line of the processor... but this line is ignored
+//  on write accesses (the CPU can only be interrupted on reads), and the 6510
+//  never does more than three writes in sequence."
+//
+// BA goes LOW 3 cycles in advance for:
+// 1. Bad Line c-accesses (BA low in cycles 12-14, c-accesses in cycles 15-54)
+// 2. Sprite p-accesses (sprite data pointer reads)
+// 3. Sprite s-accesses (sprite data reads)
+//
+// BA returns HIGH when VIC no longer needs PHI2 access.
+
+static inline void vicii_bus_control_aec_high(vicii_t* vicii) {
+    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
+    BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) | BUS_MASK_AEC);
+}
+
+static inline void vicii_bus_control_aec_low(vicii_t* vicii) {
+    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
+    BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) & ~BUS_MASK_AEC);
+}
+
+static inline void vicii_bus_control_ba_high(vicii_t* vicii) {
+    // BA HIGH: Bus is available to CPU during PHI2
+    // This is the normal/default state
+    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
+    BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) | BUS_MASK_BA);
+}
+
+static inline void vicii_bus_control_ba_low(vicii_t* vicii) {
+    // BA LOW: VIC will need PHI2 bus access (prevents CPU from accessing bus)
+    // This happens during:
+    // - Bad Line c-accesses (character pointer reads)
+    // - Sprite p-accesses (sprite data pointer reads)
+    // - Sprite s-accesses (sprite data reads)
+    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
+    BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) & ~BUS_MASK_BA);
+}
+
+// ========================================================================================
+// CENTRALIZED BUS CONTROL LOGIC
+// ========================================================================================
+
+// Check if a specific cycle needs PHI2 bus access (c/p/s access)
+// Uses cycle number ranges and cycle table param field for sprite accesses
+static inline bool vicii_future_cycle_needs_phi2_access(vicii_t* vicii, uint8_t cycle) {
+    if (cycle >= vicii->timing.cycles_per_line) {
+        return false;
+    }
+    
+    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    if (!den_enabled) {
+        return false;
+    }
+    
+    // Check bad line c-access range (cycles 15-54 for PAL, same for NTSC)
+    if (cycle >= 15 && cycle <= 54) {
+        return vicii->video_logic.is_bad_line;
+    }
+    
+    // Get sprite number from cycle table param field
+    const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[cycle];
+    int sprite_num = entry->param; // -1 for non-sprite accesses
+    
+    if (sprite_num >= 0 && sprite_num < VICII_NUM_SPRITES) {
+        return vicii->sprites.sprites[sprite_num].enabled;
+    }
+    
+    return false;
+}
+
+// Centralized function to set BA/AEC based on current and future cycle needs
+// This should be called once per cycle in vicii_tick
+static inline void vicii_update_ba_aec_signals(vicii_t* vicii, uint8_t access_type) {
+    uint8_t current_cycle = vicii->timing.x_cycle;
+    
+    // Check if we need PHI2 access NOW (current cycle)
+    bool needs_phi2_now = (access_type == VIC_ACCESS_C ||
+                           access_type == VIC_ACCESS_P ||
+                           access_type == VIC_ACCESS_S);
+    
+    if (needs_phi2_now) {
+        // Current cycle needs PHI2 access: BA LOW, AEC LOW
+        vicii_bus_control_ba_low(vicii);
+        vicii_bus_control_aec_low(vicii);
+        return;
+    }
+    
+    // Check if we'll need PHI2 access in 3 cycles
+    uint8_t future_cycle = (current_cycle + 3) % vicii->timing.cycles_per_line;
+    bool needs_phi2_future = vicii_future_cycle_needs_phi2_access(vicii, future_cycle);
+    
+    if (needs_phi2_future) {
+        // Future cycle needs PHI2 access: BA LOW (warning), AEC HIGH
+        vicii_bus_control_ba_low(vicii);
+        vicii_bus_control_aec_high(vicii);
+    } else {
+        // No PHI2 access needed: BA HIGH, AEC HIGH (CPU has bus)
+        vicii_bus_control_ba_high(vicii);
+        vicii_bus_control_aec_high(vicii);
+    }
+}
+
+// ========================================================================================
+// MAIN CYCLE FUNCTION
+// ========================================================================================
+
+// Main tick function
+bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
+    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
+
+    // STEP 1: Read data from bus (from PREVIOUS cycle's PHI2 memory setup)
+    uint8_t bus_data = BUS_GET_DATA(c64_bus->state);
+
+    // Monitor CIA2 writes to $DD00 for VIC-II bank changes
+    // VIC-II watches CIA2 writes directly without callbacks or io_pending flags
+    if (BUS_GET_ADDR(bus_state) == 0xDD00 && !(BUS_GET_LINES(bus_state) & BUS_MASK_RW)) {
+        // CIA2 Data Port A write detected - extract VIC-II bank bits (0-1)
+        // Hardware mapping: 00→Bank 3, 01→Bank 2, 10→Bank 1, 11→Bank 0
+        uint8_t vic_bank = 3 - (bus_data & 0x03);
+        vicii_bank_change(vicii, vic_bank);
+    }
+
+    // Handle the read data based on the pending access type
+    // This handles C/P/S accesses that were set up at the end of the previous cycle
+    switch (vicii->bus.pending_phi2_access_type) {
+        case VIC_ACCESS_P:
+            // P-access: Store sprite pointer
+            if (vicii->bus.pending_phi2_access_param >= 0 && vicii->bus.pending_phi2_access_param < VICII_NUM_SPRITES) {
+                vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[vicii->bus.pending_phi2_access_param];
+                sprite->data_pointer = bus_data;
+            }
+            break;
+        case VIC_ACCESS_S:
+            // S-access: Store sprite data
+            if (vicii->bus.pending_phi2_access_param >= 0 && vicii->bus.pending_phi2_access_param < VICII_NUM_SPRITES) {
+                vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[vicii->bus.pending_phi2_access_param];
+                int mc = sprite->mc_counter - 1; // mc_counter was incremented in vicii_memory_access
+
+                if (mc >= 0 && mc < 3) {
+                    sprite->shift_reg |= ((uint32_t)bus_data << (16 - mc * 8));
+                }
+            }
+            break;
+        case VIC_ACCESS_C:
+            // C-access: Store video matrix data
+            if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
+                vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = bus_data;
+            }
+            break;           
+        default: // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH
+            break;
+    }
+    
+    // Clear pending access
+    vicii->bus.pending_phi2_access_type = VIC_ACCESS_IDLE;
+    vicii->bus.pending_phi2_access_param = 0;
+
+    // STEP 2: Get current cycle entry and call cycle function
+    const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[vicii->timing.x_cycle];
+
+    const int access_param = entry->param;
+    const uint8_t access_type = entry->func(vicii, access_param);
+
+    // STEP 2b: Update BA/AEC signals based on current and future (3 cycles ahead) bus needs
+    // This centralized control ensures proper 3-cycle look-ahead for BA signal
+    vicii_update_ba_aec_signals(vicii, access_type);
+    
+    // STEP 3: Perform PHI1 memory accesses via direct read
+    // G-access happens EVERY cycle, other accesses are special cases
+    uint16_t address;
+    
+    // Now calculate address for PHI1 read based on cycle type
+    switch (access_type) {
+        case VIC_ACCESS_REFRESH:
+            // Refresh cycles use special address
+            address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
+            vicii->video_logic.refresh_counter--;
+            break;
+        case VIC_ACCESS_C:
+            // Handle special C-access color RAM read (bad lines only)
+            // C-access: Read Color RAM during PHI1 (happens on bad lines only)
+            BUS_SET_ADDR(bus_state, vicii->memory.vm_base | vicii->video_logic.vc);
+            bus_state = mos2114_read(vicii->colorram, bus_state);
+            if (vicii->video_logic.vmli < 40) {
+                const uint8_t color_data = BUS_GET_DATA(bus_state);
+            
+                vicii->video_data.video_color_line[vicii->video_logic.vmli] = static_cast<vicii_color_t>(color_data & 0x0F);
+            }
+            
+            // After color RAM read, continue with character/bitmap address
+            // VIC_ACCESS_G: g-access calculation below
+            // This happens on ALL non-refresh, non-idle cycles (including bad line c-access cycles)
+            if (vicii->video_logic.display_state) {
+                // In display state, use video matrix data to fetch character bitmap
+                const uint8_t char_code = vicii->video_data.video_matrix_line[vicii->video_logic.vmli];
+                
+                if (vicii->registers.data[VICII_C1] & VICII_C1_BMM) {
+                    // Bitmap mode
+                    address = vicii->memory.cb_base |
+                            ((vicii->video_logic.vc & 0x3FF) << 3) |
+                            (vicii->video_logic.rc & 0x07);
+                } else {
+                    // Text mode
+                    address = vicii->memory.cb_base |
+                            (char_code << 3) |
+                            (vicii->video_logic.rc & 0x07);
+                }
+                break;
+            } else {
+                FALLTHROUGH;
+            }
+        default: // VIC_ACCESS_IDLE, VIC_ACCESS_P, VIC_ACCESS_S
+            // Idle, p-access, s-access: Use idle address
+            address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
+            break;
+    }
+    
+    // Perform PHI1 memory read (common path for all PHI1 accesses)
+    // Apply CIA2 originating vic-ii bank base (set in vicii_bank_change)
+    address = vicii->memory.bank_base | address;
+    BUS_SET_ADDR(bus_state, address);
+    // TODO : Make sure RW line is always set (clear before and
+    // set after CPU writes) so that we don't need to set it here
+    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_RW);
+    bus_state = c64_bus_vic_read(c64_bus, bus_state, address);
+    
+    // G-access happens EVERY cycle during PHI1 (the address calculation above always runs)
+    // The graphics sequencer will use the data when in display_state
+    uint8_t graphics_data = BUS_GET_DATA(bus_state);
+    vicii_graphics_sequencer(vicii, graphics_data);
+
+    // STEP 4: Update border flip-flops to establish display window state
+    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
+    
+    // STEP 5: Perform unified pixel sequencing (8 pixels per cycle)
+    if (vicii->pixel.framebuffer && vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
+        vicii_unified_pixel_sequencer(vicii);
+    }
+    
+    // STEP 6: Update border flip-flops AFTER pixel generation
+    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
+    
+    // STEP 7: Advance x_coordinate (primary counter) and update derived values
+    vicii_timing_advance(vicii);
+    vicii_update_badline_condition(vicii);
+    
+    // STEP 8: Flush pixel line if end of line
+    if (vicii->timing.x_coordinate == 0 && vicii->pixel.framebuffer) {
+        const uint16_t flush_line = (vicii->timing.raster_counter == 0) ? (vicii->timing.total_lines - 1) : (vicii->timing.raster_counter - 1);
+        vicii_pixel_flush_line(vicii, vicii_get_default_palette(), flush_line);
+    }
+
+    // Store pending access type and parameter for next cycle
+    vicii->bus.pending_phi2_access_type = access_type;
+    vicii->bus.pending_phi2_access_param = access_param;
+
+    // STEP 9: Set up PHI2 memory access on the bus (C/P/S accesses only)
+    // These will be serviced externally and read at the start of the next cycle
+    switch (access_type) {
+        case VIC_ACCESS_P:
+            address = vicii->memory.vm_base | (0x3F8 + (uint16_t)access_param);
+            break;
+        case VIC_ACCESS_S: {
+            vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[access_param];
+
+            // Sprites are 24 pixels wide, requiring exactly 3 bytes of data per line.
+            // The VIC-II performs 3 S-accesses per sprite per raster line (mc_counter 0, 1, 2).
+            // S-accesses only occur when the sprite sequencer calls this function,
+            // which happens exactly 3 times per enabled sprite per raster line.
+            // Therefor, there is no need to check for mc_counter overflow here.
+            address = sprite->data_pointer * 64 + sprite->mc_counter;
+            sprite->mc_counter++;
+            break;
+        }
+        case VIC_ACCESS_C:
+            // PHI2 access: Set up video matrix read (Color RAM will be read in-place during PHI1)
+            address = vicii->memory.vm_base | vicii->video_logic.vc;
+            // Increment VC and VMLI after c-access in display state
+            if (vicii->video_logic.display_state) {
+                vicii->video_logic.vc++;
+                vicii->video_logic.vmli++;
+            }
+            break;
+        default:
+            // PHI1 accesses (G/REFRESH/IDLE) are handled inline, not here
+            return bus_state;
+    }
+
+    bus_state = vicii_bus_memory_setup(vicii, bus_state, address);
+    
+    // FINAL STEP: Ensure BA and AEC reflect their final states for this cycle
+    // The cycle functions have already set BA/AEC appropriately during execution.
+    // BA/AEC states set during cycle function execution represent what the CPU
+    // will see in the NEXT PHI2 phase (which is part of THIS cycle).
+    //
+    // According to VIC-II documentation (section 2.4.3):
+    // - VIC accesses during PHI1 (�2 low)
+    // - CPU accesses during PHI2 (�2 high)
+    // - AEC is normally low during PHI1, high during PHI2
+    // - When VIC needs PHI2 access, AEC stays low
+    // - BA goes low 3 cycles before VIC takes over PHI2
+    //
+    // The cycle functions set BA/AEC during their execution (PHI1 phase).
+    // These settings take effect immediately and control what happens in PHI2.
+    // No additional adjustment is needed here - the cycle functions have
+    // already established the correct BA/AEC states.
+    
+    // Return the bus state for threaded cycle chaining
+    return bus_state;
 }
 
 // ========================================================================================
@@ -1359,254 +1611,6 @@ static const vicii_chip_config_t vicii_config_ntsc = {
     
     .chip_name = "MOS6567 NTSC"
 };
-
-// ========================================================================================
-// MAIN CYCLE FUNCTION
-// ========================================================================================
-
-// Border flip-flop logic (Documentation section 3.9) - X coordinate rules only
-static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border, vicii_timing_unit_t* timing, 
-                                          uint8_t c1_reg) {
-    uint16_t raster = timing->raster_counter;
-    uint16_t x_coord = timing->x_coordinate;  // Use actual hardware X coordinate (not delayed display coordinate)
-    bool den_set = (c1_reg & VICII_C1_DEN) != 0;
-    
-    // Check each pixel in this cycle (8 pixels) against border boundaries
-    for (int pixel = 0; pixel < 8; pixel++) {
-        uint16_t pixel_x = (x_coord + (uint16_t)pixel) % timing->pixels_per_line;
-        
-        // Rule 1: "If the X coordinate reaches the right comparison value, the main border flip flop is set."
-        if (pixel_x == border->border_right) {
-            border->main_border_flip_flop = true;
-        }
-        
-        // Rules 4, 5, 6: Handle left coordinate checks only  
-        if (pixel_x == border->border_left) {
-            // Rule 4: "If the X coordinate reaches the left comparison value and the Y
-            // coordinate reaches the bottom one, the vertical border flip flop is set."
-            if (raster == border->border_bottom) {
-                border->vertical_border_flip_flop = true;
-            }
-            // Rule 5: "If the X coordinate reaches the left comparison value and the Y
-            // coordinate reaches the top one and the DEN bit in register $d011 is set,
-            // the vertical border flip flop is reset."
-            else if (raster == border->border_top && den_set) {
-                border->vertical_border_flip_flop = false;
-            }
-            
-            // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
-            // border flip flop is not set, the main flip flop is reset."
-            if (!border->vertical_border_flip_flop) {
-                border->main_border_flip_flop = false;
-            }
-        }
-    }
-}
-
-// Main tick function
-bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
-    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
-
-    // STEP 1: Read data from bus (from PREVIOUS cycle's PHI2 memory setup)
-    uint8_t bus_data = BUS_GET_DATA(c64_bus->state);
-
-    // Monitor CIA2 writes to $DD00 for VIC-II bank changes
-    // VIC-II watches CIA2 writes directly without callbacks or io_pending flags
-    if (BUS_GET_ADDR(bus_state) == 0xDD00 && !(BUS_GET_LINES(bus_state) & BUS_MASK_RW)) {
-        // CIA2 Data Port A write detected - extract VIC-II bank bits (0-1)
-        // Hardware mapping: 00→Bank 3, 01→Bank 2, 10→Bank 1, 11→Bank 0
-        uint8_t vic_bank = 3 - (bus_data & 0x03);
-        vicii_bank_change(vicii, vic_bank);
-    }
-
-    // Handle the read data based on the pending access type
-    // This handles C/P/S accesses that were set up at the end of the previous cycle
-    switch (vicii->bus.pending_phi2_access_type) {
-        case VIC_ACCESS_P:
-            // P-access: Store sprite pointer
-            if (vicii->bus.pending_phi2_access_param >= 0 && vicii->bus.pending_phi2_access_param < VICII_NUM_SPRITES) {
-                vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[vicii->bus.pending_phi2_access_param];
-                sprite->data_pointer = bus_data;
-            }
-            break;
-        case VIC_ACCESS_S:
-            // S-access: Store sprite data
-            if (vicii->bus.pending_phi2_access_param >= 0 && vicii->bus.pending_phi2_access_param < VICII_NUM_SPRITES) {
-                vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[vicii->bus.pending_phi2_access_param];
-                int mc = sprite->mc_counter - 1; // mc_counter was incremented in vicii_memory_access
-
-                if (mc >= 0 && mc < 3) {
-                    sprite->shift_reg |= ((uint32_t)bus_data << (16 - mc * 8));
-                }
-            }
-            break;
-        case VIC_ACCESS_C:
-            // C-access: Store video matrix data
-            if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
-                vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = bus_data;
-            }
-            break;           
-        default: // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH
-            break;
-    }
-    
-    // Clear pending access
-    vicii->bus.pending_phi2_access_type = VIC_ACCESS_IDLE;
-    vicii->bus.pending_phi2_access_param = 0;
-
-    // STEP 2: Get current cycle entry and call cycle function
-    const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[vicii->timing.x_cycle];
-
-    const int access_param = entry->param;
-    const uint8_t access_type = entry->func(vicii, access_param);
-
-    // STEP 2b: Update BA/AEC signals based on current and future (3 cycles ahead) bus needs
-    // This centralized control ensures proper 3-cycle look-ahead for BA signal
-    vicii_update_ba_aec_signals(vicii, access_type);
-    
-    // STEP 3: Perform PHI1 memory accesses via direct read
-    // G-access happens EVERY cycle, other accesses are special cases
-    uint16_t address;
-    
-    // Now calculate address for PHI1 read based on cycle type
-    switch (access_type) {
-        case VIC_ACCESS_REFRESH:
-            // Refresh cycles use special address
-            address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
-            vicii->video_logic.refresh_counter--;
-            break;
-        case VIC_ACCESS_C:
-            // Handle special C-access color RAM read (bad lines only)
-            // C-access: Read Color RAM during PHI1 (happens on bad lines only)
-            BUS_SET_ADDR(bus_state, vicii->memory.vm_base | vicii->video_logic.vc);
-            bus_state = mos2114_read(vicii->colorram, bus_state);
-            if (vicii->video_logic.vmli < 40) {
-                const uint8_t color_data = BUS_GET_DATA(bus_state);
-            
-                vicii->video_data.video_color_line[vicii->video_logic.vmli] = static_cast<vicii_color_t>(color_data & 0x0F);
-            }
-            
-            // After color RAM read, continue with character/bitmap address
-            // VIC_ACCESS_G: g-access calculation below
-            // This happens on ALL non-refresh, non-idle cycles (including bad line c-access cycles)
-            if (vicii->video_logic.display_state) {
-                // In display state, use video matrix data to fetch character bitmap
-                const uint8_t char_code = vicii->video_data.video_matrix_line[vicii->video_logic.vmli];
-                
-                if (vicii->registers.data[VICII_C1] & VICII_C1_BMM) {
-                    // Bitmap mode
-                    address = vicii->memory.cb_base |
-                            ((vicii->video_logic.vc & 0x3FF) << 3) |
-                            (vicii->video_logic.rc & 0x07);
-                } else {
-                    // Text mode
-                    address = vicii->memory.cb_base |
-                            (char_code << 3) |
-                            (vicii->video_logic.rc & 0x07);
-                }
-                break;
-            } else {
-                FALLTHROUGH;
-            }
-        default: // VIC_ACCESS_IDLE, VIC_ACCESS_P, VIC_ACCESS_S
-            // Idle, p-access, s-access: Use idle address
-            address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
-            break;
-    }
-    
-    // Perform PHI1 memory read (common path for all PHI1 accesses)
-    // Apply CIA2 originating vic-ii bank base (set in vicii_bank_change)
-    address = vicii->memory.bank_base | address;
-    BUS_SET_ADDR(bus_state, address);
-    // TODO : Make sure RW line is always set (clear before and
-    // set after CPU writes) so that we don't need to set it here
-    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_RW);
-    bus_state = c64_bus_vic_read(c64_bus, bus_state, address);
-    
-    // G-access happens EVERY cycle during PHI1 (the address calculation above always runs)
-    // The graphics sequencer will use the data when in display_state
-    uint8_t graphics_data = BUS_GET_DATA(bus_state);
-    vicii_graphics_sequencer(vicii, graphics_data);
-
-    // STEP 4: Update border flip-flops to establish display window state
-    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
-    
-    // STEP 5: Perform unified pixel sequencing (8 pixels per cycle)
-    if (vicii->pixel.framebuffer && vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
-        vicii_unified_pixel_sequencer(vicii);
-    }
-    
-    // STEP 6: Update border flip-flops AFTER pixel generation
-    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
-    
-    // STEP 7: Advance x_coordinate (primary counter) and update derived values
-    vicii_timing_advance(vicii);
-    vicii_update_badline_condition(vicii);
-    
-    // STEP 8: Flush pixel line if end of line
-    if (vicii->timing.x_coordinate == 0 && vicii->pixel.framebuffer) {
-        const uint16_t flush_line = (vicii->timing.raster_counter == 0) ? (vicii->timing.total_lines - 1) : (vicii->timing.raster_counter - 1);
-        vicii_pixel_flush_line(vicii, vicii_get_default_palette(), flush_line);
-    }
-
-    // Store pending access type and parameter for next cycle
-    vicii->bus.pending_phi2_access_type = access_type;
-    vicii->bus.pending_phi2_access_param = access_param;
-
-    // STEP 9: Set up PHI2 memory access on the bus (C/P/S accesses only)
-    // These will be serviced externally and read at the start of the next cycle
-    switch (access_type) {
-        case VIC_ACCESS_P:
-            address = vicii->memory.vm_base | (0x3F8 + (uint16_t)access_param);
-            break;
-        case VIC_ACCESS_S: {
-            vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[access_param];
-
-            // Sprites are 24 pixels wide, requiring exactly 3 bytes of data per line.
-            // The VIC-II performs 3 S-accesses per sprite per raster line (mc_counter 0, 1, 2).
-            // S-accesses only occur when the sprite sequencer calls this function,
-            // which happens exactly 3 times per enabled sprite per raster line.
-            // Therefor, there is no need to check for mc_counter overflow here.
-            address = sprite->data_pointer * 64 + sprite->mc_counter;
-            sprite->mc_counter++;
-            break;
-        }
-        case VIC_ACCESS_C:
-            // PHI2 access: Set up video matrix read (Color RAM will be read in-place during PHI1)
-            address = vicii->memory.vm_base | vicii->video_logic.vc;
-            // Increment VC and VMLI after c-access in display state
-            if (vicii->video_logic.display_state) {
-                vicii->video_logic.vc++;
-                vicii->video_logic.vmli++;
-            }
-            break;
-        default:
-            // PHI1 accesses (G/REFRESH/IDLE) are handled inline, not here
-            return bus_state;
-    }
-
-    bus_state = vicii_bus_memory_setup(vicii, bus_state, address);
-    
-    // FINAL STEP: Ensure BA and AEC reflect their final states for this cycle
-    // The cycle functions have already set BA/AEC appropriately during execution.
-    // BA/AEC states set during cycle function execution represent what the CPU
-    // will see in the NEXT PHI2 phase (which is part of THIS cycle).
-    //
-    // According to VIC-II documentation (section 2.4.3):
-    // - VIC accesses during PHI1 (�2 low)
-    // - CPU accesses during PHI2 (�2 high)
-    // - AEC is normally low during PHI1, high during PHI2
-    // - When VIC needs PHI2 access, AEC stays low
-    // - BA goes low 3 cycles before VIC takes over PHI2
-    //
-    // The cycle functions set BA/AEC during their execution (PHI1 phase).
-    // These settings take effect immediately and control what happens in PHI2.
-    // No additional adjustment is needed here - the cycle functions have
-    // already established the correct BA/AEC states.
-    
-    // Return the bus state for threaded cycle chaining
-    return bus_state;
-}
 
 // ========================================================================================
 // INITIALIZATION
