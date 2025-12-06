@@ -57,11 +57,11 @@ void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
                 uint16_t base = bank * 0x4000 + 0x0400;
                 // Fill 1000 bytes (40 columns x 25 rows) with test pattern
                 for (int i = 0; i < 1000; i++) {
-                    // Use a simple repeating pattern: 0x00, 0x01, 0x02, ..., 0x27 (40 chars), repeat
-                    // This makes it easy to see if we're reading the right character at the right position
-                    ram->memory[base + i] = (uint8_t)(i % 40);
+                    // Use the least significant 8 bits of the address as the character code
+                    // This creates a unique pattern where each position shows its address & 0xFF
+                    ram->memory[base + i] = (uint8_t)((base + i) & 0xFF);
                 }
-                printf("Bank %d: Filled screen memory at $%04X with pattern 0-39 repeating\n", bank, base);
+                printf("Bank %d: Filled screen memory at $%04X with address-based pattern (addr & 0xFF)\n", bank, base);
                 // DEBUG: Print first 10 bytes to verify
                 printf("  First 10 bytes: ");
                 for (int j = 0; j < 10; j++) {

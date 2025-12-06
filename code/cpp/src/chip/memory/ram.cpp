@@ -8,11 +8,18 @@ void* ram_system_create(chip_descriptor_t* desc) {
     ram->desc = desc;
     // Note: memory pointer will be set later to point into unified buffer
     ram->memory = NULL;
+    ram->owns_memory = false;  // Memory will be owned by unified buffer
     return ram;
 }
 
 void ram_system_destroy(void* context) {
-    free(context);
+    ram_t* ram = (ram_t*)context;
+    if (!ram) return;
+    // Only free memory if we own it (not pointing into unified buffer)
+    if (ram->owns_memory && ram->memory) {
+        free(ram->memory);
+    }
+    free(ram);
 }
 
 chip_descriptor_t ram_descriptor = {

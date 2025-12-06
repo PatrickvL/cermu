@@ -16,13 +16,17 @@ void* rom_system_create_with_size(chip_descriptor_t* desc, unsigned int size) {
     // Note: memory pointer will be set later to point into unified buffer
     // No allocation needed here anymore
     rom->memory = NULL;
+    rom->owns_memory = false;  // Memory will be owned by unified buffer
     return rom;
 }
 
 void rom_system_destroy(void* context) {
     rom_t* rom = (rom_t*)context;
     if (!rom) return;
-    // Don't free memory pointer since it points into unified buffer
+    // Only free memory if we own it (not pointing into unified buffer)
+    if (rom->owns_memory && rom->memory) {
+        free(rom->memory);
+    }
     free(rom);
 }
 

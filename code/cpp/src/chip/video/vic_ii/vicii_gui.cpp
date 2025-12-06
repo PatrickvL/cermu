@@ -211,7 +211,7 @@ void vicii_gui_render_debug_window(void* chip, bool* show_window, const char* wi
             ImGui::Text("Video Standard: %s", get_video_standard(vicii));
             ImGui::Text("Cycles per Line: %d", vicii->timing.cycles_per_line);
             ImGui::Text("Total Lines: %d", vicii->timing.total_lines);
-            ImGui::Text("Current Bank: %d", vicii->memory.bank);
+            ImGui::Text("Current Bank: %d", vicii->memory.bank_base / 0x4000);
         }
         
         // Raster information
