@@ -475,22 +475,21 @@ static inline void vicii_sequencer_update_mode(vicii_sequencer_unit_t* sequencer
 void vicii_update_badline_condition(vicii_t* vicii) {
     uint16_t raster = vicii->timing.raster_counter;
     
-    // "A Bad Line Condition is given at any arbitrary clock cycle, if at the
-    // negative edge of ø0 at the beginning of the cycle RASTER >= $30 and RASTER
-    // <= $f7 and the lower three bits of RASTER are equal to YSCROLL and if the
-    // DEN bit was set during an arbitrary cycle of raster line $30."
-    
-    // Check if raster line $30 to capture DEN state
-    if (raster == 0x30) {
-        if (!vicii->video_logic.was_den_set_during_raster_30) {
-            vicii->video_logic.was_den_set_during_raster_30 =
-                (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-        }
-    }
-    
     // Bad lines only occur in range $30-$F7 (48-247)
     // Single range check instead of two comparisons
     if ((raster - 48) < 200) {  // Equivalent to raster >= 48 && raster < 248
+        // "A Bad Line Condition is given at any arbitrary clock cycle, if at the
+        // negative edge of ø0 at the beginning of the cycle RASTER >= $30 and RASTER
+        // <= $f7 and the lower three bits of RASTER are equal to YSCROLL and if the
+        // DEN bit was set during an arbitrary cycle of raster line $30."
+        
+        // Check if raster line $30 to capture DEN state
+        if (raster == 0x30) {
+            if (!vicii->video_logic.was_den_set_during_raster_30) {
+                vicii->video_logic.was_den_set_during_raster_30 =
+                    (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+            }
+        }    
         vicii->video_logic.is_bad_line = vicii->video_logic.was_den_set_during_raster_30 &&
                                  ((raster & 0x07) == (vicii->registers.data[VICII_C1] & VICII_C1_YSCROLL));
     } else {
@@ -828,12 +827,10 @@ static inline void vicii_cycle_16_expansion_check(vicii_t* vicii) {
         if (mxye_reg & (1 << i)) {
             sprite->expansion_flip_flop = !sprite->expansion_flip_flop;
         }
-        
         // Second: If expansion flip-flop is set, increment MCBASE by 1
         if (sprite->expansion_flip_flop) {
             sprite->mcbase += 1;
         }
-        
         // Third: Check if MCBASE == 63 and disable DMA if so
         if (sprite->mcbase == 63) {
             sprite->dma_enabled = false;
@@ -867,16 +864,14 @@ static void vicii_sprite_y_coordinate_check(vicii_t* vicii, bool is_cycle_55) {
     
     uint8_t mxe_reg = vicii->registers.data[VICII_MXE];
     uint8_t mxye_reg = vicii->registers.data[VICII_MXYE];
-    uint16_t raster = vicii->timing.raster_counter;
-    
+    uint16_t raster = vicii->timing.raster_counter;    
     for (int i = 0; i < VICII_NUM_SPRITES; i++) {
         vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
         
         // Cycle 55 only: Invert expansion flip-flop if MxYE bit is set
         if (is_cycle_55 && (mxye_reg & (1 << i))) {
             sprite->expansion_flip_flop = !sprite->expansion_flip_flop;
-        }
-        
+        }        
         // Both cycles 55 and 56: Check Y-coordinate match
         if ((mxe_reg & (1 << i)) && !sprite->dma_enabled) {
             uint8_t sprite_y = vicii->registers.data[VICII_M0Y + i * 2];
@@ -923,8 +918,7 @@ static inline void vicii_cycle_58_rc_check(vicii_t* vicii) {
             vicii->video_logic.vcbase = vicii->video_logic.vc;
             should_increment_rc = false; // Override: don't increment when going to idle
         }
-    }
-            
+    }            
     // Increment RC if we determined we should
     if (should_increment_rc) {
         vicii->video_logic.rc = (vicii->video_logic.rc + 1) & 0x07;
@@ -934,17 +928,16 @@ static inline void vicii_cycle_58_rc_check(vicii_t* vicii) {
     // its belonging MCBASE (MCBASE->MC) and it is checked if the DMA for the
     // sprite is turned on and the Y coordinate of the sprite matches the lower
     // 8 bits of RASTER. If this is the case, the display of the sprite is
-    // turned on."
-    
+    // turned on."    
     for (int i = 0; i < VICII_NUM_SPRITES; i++) {
         vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
         
         // Load MC from MCBASE
-        sprite->mc = sprite->mcbase;
-        
+        sprite->mc = sprite->mcbase;        
         // Check if we should turn on sprite display
-        if (sprite->dma_enabled) {
+        if (sprite->dma_enabled && !sprite->display_state) {
             uint8_t sprite_y = vicii->registers.data[VICII_M0Y + i * 2];
+
             if ((vicii->timing.raster_counter & 0xFF) == sprite_y) {
                 sprite->display_state = true;
             }
@@ -985,12 +978,11 @@ static uint8_t vicii_cycle_sprite_s_border_check(vicii_t* vicii, int param) {
 }
 
 // Border flip-flop logic (Documentation section 3.9) - X coordinate rules only
-static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border, vicii_timing_unit_t* timing, 
-                                          uint8_t c1_reg) {
+static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border,
+        vicii_timing_unit_t* timing, uint8_t c1_reg) {
     uint16_t raster = timing->raster_counter;
     uint16_t x_coord = timing->x_coordinate;  // Use actual hardware X coordinate (not delayed display coordinate)
-    bool den_set = (c1_reg & VICII_C1_DEN) != 0;
-    
+    bool den_set = (c1_reg & VICII_C1_DEN) != 0;    
     // Check each pixel in this cycle (8 pixels) against border boundaries
     for (int pixel = 0; pixel < 8; pixel++) {
         uint16_t pixel_x = (x_coord + (uint16_t)pixel) % timing->pixels_per_line;
@@ -998,8 +990,7 @@ static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border,
         // Rule 1: "If the X coordinate reaches the right comparison value, the main border flip flop is set."
         if (pixel_x == border->border_right) {
             border->main_border_flip_flop = true;
-        }
-        
+        }        
         // Rules 4, 5, 6: Handle left coordinate checks only  
         if (pixel_x == border->border_left) {
             // Rule 4: "If the X coordinate reaches the left comparison value and the Y
@@ -1013,7 +1004,6 @@ static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border,
             else if (raster == border->border_top && den_set) {
                 border->vertical_border_flip_flop = false;
             }
-            
             // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
             // border flip flop is not set, the main flip flop is reset."
             if (!border->vertical_border_flip_flop) {
@@ -1166,7 +1156,6 @@ static inline void vicii_update_ba_aec_signals(vicii_t* vicii, uint8_t access_ty
 // Main tick function
 bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
-
     // STEP 1: Read data from bus (from PREVIOUS cycle's PHI2 memory setup)
     uint8_t bus_data = BUS_GET_DATA(c64_bus->state);
 
@@ -1176,6 +1165,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         // CIA2 Data Port A write detected - extract VIC-II bank bits (0-1)
         // Hardware mapping: 00→Bank 3, 01→Bank 2, 10→Bank 1, 11→Bank 0
         uint8_t vic_bank = 3 - (bus_data & 0x03);
+
         vicii_bank_change(vicii, vic_bank);
     }
 
@@ -1224,9 +1214,8 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // Clear pending access
     vicii->bus.pending_phi2_access_type = VIC_ACCESS_IDLE;
 
-    // STEP 2: Get current cycle entry and call cycle function
+    // STEP 2: Get current cycle entry and parameter
     const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[vicii->timing.x_cycle];
-
     const int access_param = entry->param;
     // Call cycle function to determine current access type, returning either
     // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH, VIC_ACCESS_P, VIC_ACCESS_S, or VIC_ACCESS_C
@@ -1243,7 +1232,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
             vicii->video_logic.refresh_counter--;
             break;
-        case VIC_ACCESS_C:
+        case VIC_ACCESS_C: // Also VIC_ACCESS_G
             // Handle special C-access color RAM read (bad lines only)
             // C-access: Read Color RAM during PHI1 (happens on bad lines only)
             BUS_SET_ADDR(bus_state, vicii->memory.vm_base | vicii->video_logic.vc);
@@ -1325,6 +1314,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // STEP 8: Flush pixel line if end of line
     if (vicii->timing.x_coordinate == 0 && vicii->pixel.framebuffer) {
         const uint16_t flush_line = (vicii->timing.raster_counter == 0) ? (vicii->timing.total_lines - 1) : (vicii->timing.raster_counter - 1);
+
         vicii_pixel_flush_line(vicii, vicii_get_default_palette(), flush_line);
     }
 
