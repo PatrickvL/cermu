@@ -489,7 +489,7 @@ void vicii_update_badline_condition(vicii_t* vicii) {
                 vicii->video_logic.was_den_set_during_raster_30 =
                     (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
             }
-        }    
+        }
         vicii->video_logic.is_bad_line = vicii->video_logic.was_den_set_during_raster_30 &&
                                  ((raster & 0x07) == (vicii->registers.data[VICII_C1] & VICII_C1_YSCROLL));
     } else {
@@ -1196,17 +1196,24 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
                 vicii->bus.active_sprite = NULL;
             }
             break;
-        case VIC_ACCESS_C: // VIC_ACCESS_G
-            // C-access: Store video matrix data at current vmli position
-            if (vicii->video_logic.display_state) {
-                if (vicii->video_logic.vmli < 40) {
-                    vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = bus_data;
-                }
-                // Increment VC and VMLI after storing the data
-                vicii->video_logic.vc++;
-                vicii->video_logic.vmli++;
-            }
-            break;
+                case VIC_ACCESS_C: // VIC_ACCESS_G
+                    // C-access: Store video matrix data that arrived from PREVIOUS cycle's PHI2 setup
+                    // Store at current VMLI, then increment VMLI so next cycle stores at next position
+                    if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
+                        vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = bus_data;
+                        
+                        // DEBUG: Print first line's c-access data
+                        if (vicii->timing.raster_counter == 51 && vicii->video_logic.vmli < 10) {
+                            printf("C-access: cycle=%d vmli=%d vc=%d data=0x%02x (expect 0x%02x)\n",
+                                   vicii->timing.x_cycle, vicii->video_logic.vmli, vicii->video_logic.vc,
+                                   bus_data, vicii->video_logic.vmli);
+                        }
+                        
+                        // Increment VC and VMLI after storing c-access data
+                        vicii->video_logic.vc++;
+                        vicii->video_logic.vmli++;
+                    }
+                    break;
         default: // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH
             break;
     }
@@ -1242,28 +1249,40 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
                 const uint8_t color_data = BUS_GET_DATA(bus_state);
 
                 vicii->video_data.video_color_line[vicii->video_logic.vmli] = static_cast<vicii_color_t>(color_data & 0x0F);
-                // After color RAM read, continue with character/bitmap address
-                // VIC_ACCESS_G: g-access calculation below
-                // Use current vmli to read the character code that was just stored
-                const uint8_t char_code = vicii->video_data.video_matrix_line[vicii->video_logic.vmli];
-                
-                if (vicii->registers.data[VICII_C1] & VICII_C1_BMM) {
-                    // Bitmap mode
-                    address = vicii->memory.cb_base |
-                            ((vicii->video_logic.vc & 0x3FF) << 3) |
-                            (vicii->video_logic.rc & 0x07);
-                } else {
-                    // Text mode
-                    address = vicii->memory.cb_base |
-                            (char_code << 3) |
-                            (vicii->video_logic.rc & 0x07);
-                }
-                break;
-            } else {
-                // vmli==0 means we're in cycle 15 (first bad line cycle) - use idle address
-                // OR display_state is false - also use idle address
-                FALLTHROUGH;
             }
+            FALLTHROUGH;
+                case VIC_ACCESS_G:
+                    // G-access: Read character generator data using video matrix data
+                    // Use data at CURRENT vmli-1 position (the data that was just stored in c-access of this cycle)
+                    if ((access_type == VIC_ACCESS_C || access_type == VIC_ACCESS_G) &&
+                        vicii->video_logic.display_state && vicii->video_logic.vmli > 0 && vicii->video_logic.vmli <= 40) {
+                        // Use data from current c-access (stored at vmli-1, since vmli was incremented after storing)
+                        const uint8_t char_code = vicii->video_data.video_matrix_line[vicii->video_logic.vmli - 1];
+                        
+                        // DEBUG: Print first line's g-access
+                        if (vicii->timing.raster_counter == 51 && vicii->video_logic.vmli <= 10) {
+                            const uint8_t color_data = vicii->video_data.video_color_line[vicii->video_logic.vmli - 1];
+                            printf("G-access: cycle=%d vmli=%d char=0x%02x (from vmli-1=%d, expect 0x%02x) color=0x%x\n",
+                                   vicii->timing.x_cycle, vicii->video_logic.vmli, char_code,
+                                   vicii->video_logic.vmli - 1, (vicii->video_logic.vmli - 1), color_data & 0x0F);
+                        }
+                        
+                        if (vicii->registers.data[VICII_C1] & VICII_C1_BMM) {
+                            // Bitmap mode - use VC-1 since VC was already incremented
+                            address = vicii->memory.cb_base |
+                                    (((vicii->video_logic.vc - 1) & 0x3FF) << 3) |
+                                    (vicii->video_logic.rc & 0x07);
+                        } else {
+                            // Text mode
+                            address = vicii->memory.cb_base |
+                                    (char_code << 3) |
+                                    (vicii->video_logic.rc & 0x07);
+                        }
+                        break;
+                    } else {
+                        // display_state is false - use idle address
+                        FALLTHROUGH;
+                    }
         default: // VIC_ACCESS_IDLE, VIC_ACCESS_P, VIC_ACCESS_S
             // Idle, p-access, s-access: Use idle address
             address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
@@ -1339,11 +1358,19 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             sprite->mc_counter++;
             break;
         }
-        case VIC_ACCESS_C:
-            // PHI2 access: Set up video matrix read (Color RAM will be read in-place during PHI1)
-            // VC and VMLI are incremented when data is received (in PHI2 data handling above)
-            address = vicii->memory.vm_base | vicii->video_logic.vc;
-            break;
+                        case VIC_ACCESS_C:
+                            // PHI2 access: Set up video matrix read (Color RAM will be read in-place during PHI1)
+                            // Data will arrive in the NEXT cycle and be stored at the current VMLI position
+                            // Use current VC BEFORE increment (increment happens after g-access)
+                            address = vicii->memory.vm_base | vicii->video_logic.vc;
+                            
+                            // DEBUG: Print address being read
+                            if (vicii->timing.raster_counter == 51 && vicii->video_logic.vc < 10) {
+                                printf("C-access PHI2 setup: vc=%d vm_base=0x%04X bank_base=0x%04X final_addr=0x%04X\n",
+                                       vicii->video_logic.vc, vicii->memory.vm_base, vicii->memory.bank_base,
+                                       vicii->memory.bank_base | address);
+                            }
+                            break;
         default:
             // PHI1 accesses (G/REFRESH/IDLE) are handled inline, not here
             return bus_state;
@@ -1795,6 +1822,8 @@ void vicii_bank_change(void* chip, uint8_t bank) {
     bank = 3 - (bank & 0x03);  // Invert bank
     vicii->memory.bank = bank;
     vicii->memory.bank_base = bank * 0x4000;
+    
+    printf("VIC-II bank changed to %d (base=0x%04X)\n", bank, vicii->memory.bank_base);
 }
 
 void vicii_set_framebuffer(vicii_t* vicii, uint32_t* framebuffer, int width, int height) {
