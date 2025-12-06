@@ -329,6 +329,7 @@ typedef struct {
     bool display_state;
     bool is_bad_line;
     bool was_den_set_during_raster_30;
+    bool ba_low_for_bad_line;  // BA warning signal for upcoming bad line (3 cycles ahead)
     uint16_t vcbase;     // VCBASE - Video Counter Base (10 bits) (Documentation section 3.7.2)
     uint16_t vc;         // VC - Video Counter (10 bits) (Documentation section 3.7.2)
     uint8_t rc;          // RC - Row Counter (3 bits) (Documentation section 3.7.2)
