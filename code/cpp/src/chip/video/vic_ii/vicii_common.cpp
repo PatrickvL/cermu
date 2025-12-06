@@ -1073,31 +1073,43 @@ static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border,
 //
 // BA returns HIGH when VIC no longer needs PHI2 access.
 
-static inline void vicii_bus_control_aec_high(vicii_t* vicii) {
+static inline bus_state_t vicii_bus_control_aec_high(vicii_t* vicii, bus_state_t bus_state) {
+    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_AEC);
+    // Also update global state for compatibility
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
     BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) | BUS_MASK_AEC);
+    return bus_state;
 }
 
-static inline void vicii_bus_control_aec_low(vicii_t* vicii) {
+static inline bus_state_t vicii_bus_control_aec_low(vicii_t* vicii, bus_state_t bus_state) {
+    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) & ~BUS_MASK_AEC);
+    // Also update global state for compatibility
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
     BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) & ~BUS_MASK_AEC);
+    return bus_state;
 }
 
-static inline void vicii_bus_control_ba_high(vicii_t* vicii) {
+static inline bus_state_t vicii_bus_control_ba_high(vicii_t* vicii, bus_state_t bus_state) {
     // BA HIGH: Bus is available to CPU during PHI2
     // This is the normal/default state
+    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_BA);
+    // Also update global state for compatibility
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
     BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) | BUS_MASK_BA);
+    return bus_state;
 }
 
-static inline void vicii_bus_control_ba_low(vicii_t* vicii) {
+static inline bus_state_t vicii_bus_control_ba_low(vicii_t* vicii, bus_state_t bus_state) {
     // BA LOW: VIC will need PHI2 bus access (prevents CPU from accessing bus)
     // This happens during:
     // - Bad Line c-accesses (character pointer reads)
     // - Sprite p-accesses (sprite data pointer reads)
     // - Sprite s-accesses (sprite data reads)
+    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) & ~BUS_MASK_BA);
+    // Also update global state for compatibility
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
     BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) & ~BUS_MASK_BA);
+    return bus_state;
 }
 
 // ========================================================================================
@@ -1162,7 +1174,7 @@ static inline bool vicii_future_cycle_needs_phi2_access(vicii_t* vicii, uint8_t 
 
 // Centralized function to set BA/AEC based on current and future cycle needs
 // This should be called once per cycle in vicii_tick
-static inline void vicii_update_ba_aec_signals(vicii_t* vicii, uint8_t access_type) {
+static inline bus_state_t vicii_update_ba_aec_signals(vicii_t* vicii, bus_state_t bus_state, uint8_t access_type) {
     uint8_t current_cycle = vicii->timing.x_cycle;
     
     // Check if we need PHI2 access NOW (current cycle)
@@ -1180,9 +1192,9 @@ static inline void vicii_update_ba_aec_signals(vicii_t* vicii, uint8_t access_ty
     
     if (needs_phi2_now) {
         // Current cycle needs PHI2 access: BA LOW, AEC LOW
-        vicii_bus_control_ba_low(vicii);
-        vicii_bus_control_aec_low(vicii);
-        return;
+        bus_state = vicii_bus_control_ba_low(vicii, bus_state);
+        bus_state = vicii_bus_control_aec_low(vicii, bus_state);
+        return bus_state;
     }
     
     // Check if we'll need PHI2 access in 3 cycles
@@ -1191,13 +1203,15 @@ static inline void vicii_update_ba_aec_signals(vicii_t* vicii, uint8_t access_ty
     
     if (needs_phi2_future) {
         // Future cycle needs PHI2 access: BA LOW (warning), AEC HIGH
-        vicii_bus_control_ba_low(vicii);
-        vicii_bus_control_aec_high(vicii);
+        bus_state = vicii_bus_control_ba_low(vicii, bus_state);
+        bus_state = vicii_bus_control_aec_high(vicii, bus_state);
     } else {
         // No PHI2 access needed: BA HIGH, AEC HIGH (CPU has bus)
-        vicii_bus_control_ba_high(vicii);
-        vicii_bus_control_aec_high(vicii);
+        bus_state = vicii_bus_control_ba_high(vicii, bus_state);
+        bus_state = vicii_bus_control_aec_high(vicii, bus_state);
     }
+    
+    return bus_state;
 }
 
 // ========================================================================================
@@ -1387,7 +1401,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     //
     // Update BA/AEC signals based on current and future (3 cycles ahead) bus needs
     // This centralized control ensures proper 3-cycle look-ahead for BA signal
-    vicii_update_ba_aec_signals(vicii, access_type);    
+    bus_state = vicii_update_ba_aec_signals(vicii, bus_state, access_type);
     
     // STEP 7: Advance x_coordinate (primary counter) and update derived values
     vicii_timing_advance(vicii);
