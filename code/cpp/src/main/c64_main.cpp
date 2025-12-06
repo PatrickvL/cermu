@@ -28,11 +28,15 @@ int main() {
             return 1;
         }
 
-        // Simple run loop on the C++ 6510 core
-        std::cout << "C64 emulator initialized. Running 5000 cycles..." << std::endl;
-        constexpr std::uint64_t cycles = 5000;
-        
+        // Simple run loop on the C++ 6510 core - run enough cycles to complete boot sequence
+        std::cout << "C64 emulator initialized. Running 1000000 cycles to complete boot sequence..." << std::endl;
+        constexpr std::uint64_t cycles = 1000000;
+   
+        // Add detailed per-cycle logging to debug why PC is not incrementing
         for (std::uint64_t i = 0; i < cycles; ++i) {
+            if (i < 50 || i % 10000 == 0) { // Log first 50 cycles and every 10K cycles
+                std::cout << "[CYCLE " << i << "] ";
+            }
             c64_system_tick(c64);
         }
         

@@ -305,7 +305,7 @@ static void vicii_unified_pixel_sequencer(vicii_t* vicii) {
     // Determine if we're in border or display area
     // VIC-II border flip-flop logic: graphics are displayed when main_border_flip_flop is FALSE
     // Border is displayed when main_border_flip_flop is TRUE
-    bool in_main_display = !vicii->border.main_border_flip_flop && 
+    bool in_main_display = !vicii->border.main_border_flip_flop &&
                           !vicii->border.vertical_border_flip_flop;
     
     if (in_main_display && vicii->video_logic.display_state) {
@@ -346,8 +346,8 @@ static void vicii_unified_pixel_sequencer(vicii_t* vicii) {
             switch (seq->graphics_mode) {
                 case VICII_GM_STANDARD_TEXT:
                     pixel_bits = (seq->shift_reg >> 7) & 1;
-                    color_index = pixel_bits ? 
-                        (vicii->video_data.video_color_line[seq->char_index] & 0x0F) : 
+                    color_index = pixel_bits ?
+                        (vicii->video_data.video_color_line[seq->char_index] & 0x0F) :
                         vicii->registers.data[VICII_B0C];
                     is_background = (pixel_bits == 0);
                     seq->shift_reg <<= 1;
@@ -369,8 +369,8 @@ static void vicii_unified_pixel_sequencer(vicii_t* vicii) {
                     } else {
                         // Standard character in multicolor mode
                         pixel_bits = (seq->shift_reg >> 7) & 1;
-                        color_index = pixel_bits ? 
-                            (vicii->video_data.video_color_line[seq->char_index] & 0x0F) : 
+                        color_index = pixel_bits ?
+                            (vicii->video_data.video_color_line[seq->char_index] & 0x0F) :
                             vicii->registers.data[VICII_B0C];
                         is_background = (pixel_bits == 0);
                         seq->shift_reg <<= 1;
@@ -551,14 +551,18 @@ void vicii_update_badline_condition(vicii_t* vicii) {
     // negative edge of ø0 at the beginning of the cycle RASTER >= $30 and RASTER
     // <= $f7 and the lower three bits of RASTER are equal to YSCROLL and if the
     // DEN bit was set during an arbitrary cycle of raster line $30."
+    
+    // Check if raster line $30 to capture DEN state
+    if (raster == 0x30) {
+        if (!vicii->video_logic.was_den_set_during_raster_30) {
+            vicii->video_logic.was_den_set_during_raster_30 =
+                (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+        }
+    }
+    
+    // Bad lines only occur in range $30-$F7 (48-247)
     // Single range check instead of two comparisons
     if ((raster - 48) < 200) {  // Equivalent to raster >= 48 && raster < 248
-        if (raster == 0x30) {
-            if (!vicii->video_logic.was_den_set_during_raster_30) {
-                vicii->video_logic.was_den_set_during_raster_30 = 
-                    (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-            }
-        }
         vicii->video_logic.is_bad_line = vicii->video_logic.was_den_set_during_raster_30 &&
                                  ((raster & 0x07) == (vicii->registers.data[VICII_C1] & VICII_C1_YSCROLL));
     } else {
@@ -804,7 +808,7 @@ static inline bool vicii_cycle_needs_phi2_access(vicii_t* vicii, uint8_t cycle) 
     // Check sprite access cycles - use cycle table param field for sprite number
     // Cycles: 1(p3), 2(s3), 3(p4), 4(s4), 5(p5), 6(s5), 7(p6), 8(s6), 9(p7), 10(s7)
     // Cycles: 58-63 (varies by chip - PAL has 58(p0), 59(s0), 60(p1), 61(s1), 62(p2), 63(s2))
-    if ((cycle >= 1 && cycle <= 10) || (cycle >= 58 && cycle <= 63)) {
+    if ((cycle >= 1 && cycle <= 10) || (cycle >= 58 && cycle < vicii->timing.cycles_per_line)) {
         // Get sprite number from cycle table param field
         const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[cycle];
         int sprite_num = entry->param;
@@ -885,31 +889,20 @@ static uint8_t vicii_cycle_refresh(vicii_t* vicii, int param) {
     }
 }
 
-static uint8_t vicii_cycle_badline_setup(vicii_t* vicii, int param) {
-    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-    
-    // BA/AEC will be set centrally in vicii_tick based on look-ahead
-    // Set display_state based on current bad line status
-    if (vicii->video_logic.is_bad_line && den_enabled) {
-        vicii->video_logic.display_state = true;
-    } else {
-        vicii->video_logic.display_state = false;
-    }
-    return VIC_ACCESS_IDLE;
-}
-
 static uint8_t vicii_cycle_vc_load(vicii_t* vicii, int param) {
     vicii->video_logic.vc = vicii->video_logic.vcbase;
     vicii->video_logic.vmli = 0;
     bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
     
     // BA/AEC will be set centrally in vicii_tick based on access type
+    // On bad lines: set display_state = true and reset RC to 0
+    // On non-bad lines: DO NOT change display_state (it's managed by cycle 58)
     if (vicii->video_logic.is_bad_line && den_enabled) {
         vicii->video_logic.display_state = true;
         vicii->video_logic.rc = 0;
-    } else {
-        vicii->video_logic.display_state = false;
     }
+
+    // Note: display_state is NOT set to false here - that only happens in cycle 58 when RC==7
     return VIC_ACCESS_IDLE;
 }
 
@@ -920,7 +913,8 @@ static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int char_index) {
     if (vicii->video_logic.is_bad_line && den_enabled) {
         return VIC_ACCESS_C;
     } else {
-        vicii->video_logic.display_state = false;
+        // DO NOT change display_state here - it's managed by cycle 15 (bad lines set it true)
+        // and cycle 58 (RC==7 check sets it false when going to idle)
         return VIC_ACCESS_IDLE;
     }
 }
@@ -1042,16 +1036,26 @@ static uint8_t vicii_cycle_idle_y_match(vicii_t* vicii, int param) {
 static inline void vicii_cycle_58_rc_check(vicii_t* vicii) {
     // "In the first phase of cycle 58, the VIC checks if RC=7. If so, the video
     // logic goes to idle state and VCBASE is loaded from VC (VC->VCBASE). If
-    // the video logic is in display state afterwards (this is always the case
+    // "If the video logic is in display state afterwards (this is always the case
     // if there is a Bad Line Condition), RC is incremented."
     
-    if (vicii->video_logic.rc == 7) {
-        vicii->video_logic.display_state = false;
-        vicii->video_logic.vcbase = vicii->video_logic.vc;
-    }
+    // "If the video logic is in display state... RC is incremented."
+    // Check display_state BEFORE potentially changing it
+    bool should_increment_rc = vicii->video_logic.display_state;
     
-    if (vicii->video_logic.display_state) {
-        vicii->video_logic.rc++;
+    if (vicii->video_logic.rc == 7) {
+        // "The transition from display to idle state occurs in cycle 58 of a line
+        // if the RC contains the value 7 and there is no Bad Line Condition."
+        if (!vicii->video_logic.is_bad_line) {
+            vicii->video_logic.display_state = false;
+            vicii->video_logic.vcbase = vicii->video_logic.vc;
+            should_increment_rc = false; // Override: don't increment when going to idle
+        }
+    }
+            
+    // Increment RC if we determined we should
+    if (should_increment_rc) {
+        vicii->video_logic.rc = (vicii->video_logic.rc + 1) & 0x07;
     }
 
     // Rule 4: "In the first phase of cycle 58, the MC of every sprite is loaded from
@@ -1074,7 +1078,6 @@ static inline void vicii_cycle_58_rc_check(vicii_t* vicii) {
             }
         }
     }
-    
 }
 
 // Cycle 58: RC check and VCBASE update, then sprite S access with MC load
@@ -1129,8 +1132,8 @@ static const vicii_cycle_entry_t vicii_cycle_table_pal[63] = {
     {vicii_cycle_sprite_s_access, 7},           // 10 i_x i_x
     {vicii_cycle_refresh, -1},                  // 11 r_x r_x
     {vicii_cycle_refresh, -1},                  // 12 r_X r_x
-    {vicii_cycle_badline_setup, -1},            // 13 r_X r_x
-    {vicii_cycle_badline_setup, -1},            // 14 r_X r_x
+    {vicii_cycle_refresh, -1},                  // 13 r_X r_x
+    {vicii_cycle_refresh, -1},                  // 14 r_X r_x
     {vicii_cycle_vc_load_mcbase, -1},           // 15 rc_ r_x (+ MCBASE expansion check)
     {vicii_cycle_char_color_expansion_check, 0},// 16 gc_ g_x (+ expansion flip-flop check)
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
@@ -1198,8 +1201,8 @@ static const vicii_cycle_entry_t vicii_cycle_table_ntsc2[64] = {
     {vicii_cycle_sprite_s_access, 7},           // 10 i_x i_x
     {vicii_cycle_refresh, -1},                  // 11 r_x r_x
     {vicii_cycle_refresh, -1},                  // 12 r_X r_x
-    {vicii_cycle_badline_setup, -1},            // 13 r_X r_x
-    {vicii_cycle_badline_setup, -1},            // 14 r_X r_x
+    {vicii_cycle_refresh, -1},                  // 13 r_X r_x
+    {vicii_cycle_refresh, -1},                  // 14 r_X r_x
     {vicii_cycle_vc_load_mcbase, -1},           // 15 rc_ r_x (+ MCBASE expansion check)
     {vicii_cycle_char_color_expansion_check, 0},// 16 gc_ g_x (+ expansion flip-flop check)
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
@@ -1266,11 +1269,11 @@ static const vicii_cycle_entry_t vicii_cycle_table_ntsc[65] = {
     {vicii_cycle_sprite_s_access, 6},           // 8  i_x i_x
     {vicii_cycle_sprite_p_access, 7},           // 9  7_x 7_x
     {vicii_cycle_sprite_s_access, 7},           // 10 i_x i_x
-    {vicii_cycle_refresh, -1},                   // 11 r_x r_x
-    {vicii_cycle_refresh, -1},                   // 12 r_X r_x
-    {vicii_cycle_badline_setup, -1},             // 13 r_X r_x
-    {vicii_cycle_badline_setup, -1},             // 14 r_X r_x
-    {vicii_cycle_vc_load_mcbase, -1},            // 15 rc_ r_x (+ MCBASE expansion check)
+    {vicii_cycle_refresh, -1},                  // 11 r_x r_x
+    {vicii_cycle_refresh, -1},                  // 12 r_X r_x
+    {vicii_cycle_refresh, -1},                  // 13 r_X r_x
+    {vicii_cycle_refresh, -1},                  // 14 r_X r_x
+    {vicii_cycle_vc_load_mcbase, -1},           // 15 rc_ r_x (+ MCBASE expansion check)
     {vicii_cycle_char_color_expansion_check, 0},// 16 gc_ g_x (+ expansion flip-flop check)
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
@@ -1483,57 +1486,54 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // STEP 2b: Update BA/AEC signals based on current and future (3 cycles ahead) bus needs
     // This centralized control ensures proper 3-cycle look-ahead for BA signal
     vicii_update_ba_aec_signals(vicii, access_type);
-
-    // By default, start with idle state address
-    uint16_t address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
-
-    // STEP 3: Perform PHI1 memory accesses (G/REFRESH/IDLE) via direct read
-    // These happen during the first phase when VIC-II normally has the bus
-    switch (access_type) {
-        // STEP 2b: Handle C-access Color RAM read during PHI1
-        // Color RAM is accessed immediately during PHI1 (not deferred like video matrix)
-        case VIC_ACCESS_C: {
-            // Read Color RAM directly (PHI1 access)
-            // Note : No need to or-in 0xD800 as mos2114_read masks address to 11 bits
-            // and the fall-through G-access will replace the bus address anyway
-            BUS_SET_ADDR(bus_state, vicii->memory.vm_base | vicii->video_logic.vc);
-            bus_state = mos2114_read(vicii->colorram, bus_state);
-            const uint8_t color_data = BUS_GET_DATA(bus_state);
-            
-            if (vicii->video_logic.vmli < 40) {
-                vicii->video_data.video_color_line[vicii->video_logic.vmli] = static_cast<vicii_color_t>(color_data & 0x0F);
-            }
-            FALLTHROUGH;
+    
+    // STEP 3: Perform PHI1 memory accesses via direct read
+    // G-access happens EVERY cycle, other accesses are special cases
+    uint16_t address;
+    
+    // First, handle special C-access color RAM read (bad lines only)
+    if (access_type == VIC_ACCESS_C) {
+        // C-access: Read Color RAM during PHI1 (happens on bad lines only)
+        BUS_SET_ADDR(bus_state, vicii->memory.vm_base | vicii->video_logic.vc);
+        bus_state = mos2114_read(vicii->colorram, bus_state);
+        const uint8_t color_data = BUS_GET_DATA(bus_state);
+        
+        if (vicii->video_logic.vmli < 40) {
+            vicii->video_data.video_color_line[vicii->video_logic.vmli] = static_cast<vicii_color_t>(color_data & 0x0F);
         }
-        case VIC_ACCESS_G: {
-            // Get character code from the video matrix line
+        // After color RAM read, fall through to g-access calculation below
+    }
+    
+    // Now calculate address for PHI1 read based on cycle type
+    if (access_type == VIC_ACCESS_REFRESH) {
+        // Refresh cycles use special address
+        address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
+        vicii->video_logic.refresh_counter--;
+    } else if (access_type == VIC_ACCESS_IDLE || access_type == VIC_ACCESS_P || access_type == VIC_ACCESS_S) {
+        // Idle, p-access, s-access: Use idle address
+        address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
+    } else {
+        // G-ACCESS or C-ACCESS: Calculate character/bitmap address
+        // This happens on ALL non-refresh, non-idle cycles (including bad line c-access cycles)
+        if (vicii->video_logic.display_state) {
+            // In display state, use video matrix data to fetch character bitmap
             const uint8_t char_code = vicii->video_data.video_matrix_line[vicii->video_logic.vmli];
             
-            if (vicii->video_logic.display_state) {
-                if (vicii->registers.data[VICII_C1] & VICII_C1_BMM) {
-                    // Bitmap mode c64_
-                    address = vicii->memory.cb_base |
-                            ((vicii->video_logic.vc & 0x3FF) << 3) |
-                            (vicii->video_logic.rc & 0x07);
-                } else {
-                    // Text mode
-                    address = vicii->memory.cb_base |
-                            (char_code << 3) |
-                            (vicii->video_logic.rc & 0x07);
-                }
+            if (vicii->registers.data[VICII_C1] & VICII_C1_BMM) {
+                // Bitmap mode
+                address = vicii->memory.cb_base |
+                        ((vicii->video_logic.vc & 0x3FF) << 3) |
+                        (vicii->video_logic.rc & 0x07);
+            } else {
+                // Text mode
+                address = vicii->memory.cb_base |
+                        (char_code << 3) |
+                        (vicii->video_logic.rc & 0x07);
             }
-            break;
+        } else {
+            // In idle state, use idle address
+            address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
         }
-        
-        case VIC_ACCESS_REFRESH:
-            address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
-            vicii->video_logic.refresh_counter--;
-            break;
-            
-        // TODO : Assert that VIC_ACCESS_P can never happen during PHI1
-        // TODO : Handle PHI1 VIC_ACCESS_S when it happens, how?
-        default: // VIC_ACCESS_IDLE:
-            break;
     }
     
     // Perform PHI1 memory read (common path for all PHI1 accesses)
@@ -1545,11 +1545,10 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_RW);
     bus_state = c64_bus_vic_read(c64_bus, bus_state, address);
     
-    // Handle read data based on access type
-    if (access_type == VIC_ACCESS_G) {
-        uint8_t graphics_data = BUS_GET_DATA(bus_state);
-        vicii_graphics_sequencer(vicii, graphics_data);
-    }
+    // G-access happens EVERY cycle during PHI1 (the address calculation above always runs)
+    // The graphics sequencer will use the data when in display_state
+    uint8_t graphics_data = BUS_GET_DATA(bus_state);
+    vicii_graphics_sequencer(vicii, graphics_data);
 
     // STEP 4: Update border flip-flops to establish display window state
     vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
@@ -1646,11 +1645,10 @@ static inline void vicii_initialize(vicii_t* vicii) {
     memset(&vicii->pixel, 0, sizeof(vicii_pixel_unit_t));
     memset(&vicii->bus, 0, sizeof(vicii_bus_unit_t));
     
-    // Set default register values - DISABLE DEN during early boot to prevent bus contention
-    // DEN will be enabled by KERNAL after RAM test completes
-    // Explicitly clear DEN bit (bit 4) to prevent VIC-II from pulling BA low during boot
-    vicii->registers.data[VICII_C1] = VICII_C1_RST8 | VICII_C1_RSEL |
-                            (VICII_C1_YSCROLL & 3); // DEN=0, YSCROLL=3, RSEL=1, RST8=1
+    // Set default register values - Enable DEN to match real hardware behavior
+    // The VIC-II starts with display enabled, allowing immediate character data display
+    vicii->registers.data[VICII_C1] = VICII_C1_RST8 | VICII_C1_DEN | VICII_C1_RSEL |
+                            (VICII_C1_YSCROLL & 3); // DEN=1, YSCROLL=3, RSEL=1, RST8=1
     vicii->registers.data[VICII_MXE] = 0;  // All sprites disabled
     vicii->registers.data[VICII_C2] = VICII_C2_CSEL; // 8: XSCROLL:0, no MultiColorMode, 40-column display, no RESET
     vicii->registers.data[VICII_MP] = VICII_MP_CB12 | VICII_MP_VM10; // 0x14: "address of Character Dot-Data area to 4096 ($1000)"
@@ -1700,9 +1698,11 @@ static inline void vicii_initialize(vicii_t* vicii) {
     // Initialize refresh counter (Documentation section 3.13)
     vicii->video_logic.refresh_counter = 0xFF;
     
-    // Initialize bad line detection - DEN is disabled during boot,
-    // so bad lines will not be detected until DEN is enabled by KERNAL
-    vicii->video_logic.was_den_set_during_raster_30 = false;
+    // Initialize bad line detection
+    // Since DEN is enabled at startup (line 1716), we must set was_den_set_during_raster_30
+    // to true so that bad lines can occur immediately. Without this, the first frame would
+    // have no bad lines and therefore no character data display.
+    vicii->video_logic.was_den_set_during_raster_30 = true;
     vicii->video_logic.ba_low_for_bad_line = false;
     
     // Allocate pixel buffers - size will be set by timing initialization
@@ -1821,10 +1821,3 @@ void vicii_set_framebuffer(vicii_t* vicii, uint32_t* framebuffer, int width, int
         }
     }
 }
-
-// ========================================================================================
-// BUS STATE FUNCTIONS - Required by c64_bus.c
-// ========================================================================================
-
-// Removed duplicate vicii_read/vicii_write functions
-// Functionality consolidated into vicii_registers_read/vicii_registers_write

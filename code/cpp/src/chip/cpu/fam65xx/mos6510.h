@@ -66,6 +66,7 @@ void mos6510_set_y(mos6510_t *cpu, uint8_t value);
 void mos6510_set_s(mos6510_t *cpu, uint8_t value);
 void mos6510_set_p(mos6510_t *cpu, uint8_t value);
 void mos6510_set_pc(mos6510_t *cpu, uint16_t value);
+void mos6510_set_ab(mos6510_t *cpu, uint16_t value);
 
 // I/O Port access (6510-specific)
 uint8_t mos6510_get_io_ddr(mos6510_t *cpu);

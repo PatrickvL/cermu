@@ -48,7 +48,15 @@ template <const CPUTraits &Traits> struct io_port_mixin_t {
   void write_io_ddr(uint8_t value) { io_port.direction = value; }
 
   // Write to Port data register ($01)
-  void write_io_data(uint8_t value) { io_port.data = value; }
+  void write_io_data(uint8_t value) {
+    // DEBUG: Log I/O port writes to track banking changes
+    static int write_count = 0;
+    if (write_count < 10) {
+      printf("[MOS6510] I/O port write: $01 = $%02X (write #%d)\n", value, write_count);
+      write_count++;
+    }
+    io_port.data = value;
+  }
 
   // Read from Port (combines output and input based on direction)
   uint8_t read_io_port() const {

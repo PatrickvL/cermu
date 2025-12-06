@@ -45,6 +45,33 @@ void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
             }
             // Initialize RAM to zero - no need for separate initial_ram array
             memset(ram->memory, 0, 65536);
+            
+            // Add test pattern to all 4 VIC-II video banks for debugging
+            // Each bank is 16KB, video matrix is typically at offset $0400 (1KB)
+            // Bank 0: $0000-$3FFF, video at $0400
+            // Bank 1: $4000-$7FFF, video at $4400
+            // Bank 2: $8000-$BFFF, video at $8400
+            // Bank 3: $C000-$FFFF, video at $C400
+            for (int bank = 0; bank < 4; bank++) {
+                uint16_t base = bank * 0x4000 + 0x0400;
+                // Fill 1000 bytes (40 columns x 25 rows) with test pattern
+                for (int i = 0; i < 1000; i++) {
+                    // Use screen codes: 0-25 = letters A-Z, repeatedly
+                    ram->memory[base + i] = (uint8_t)((i % 26) + 1);  // Screen codes 1-26 = A-Z
+                }
+            }
+        }
+        
+        // Initialize Color RAM chip with randomized colors for debugging
+        else if (dev->desc == &mos2114_descriptor) {
+            mos2114_t* colorram = (mos2114_t*)dev->chip;
+            if (colorram->memory) {
+                // Randomize all 1024 color RAM locations (4-bit values 0-15)
+                for (int i = 0; i < 1024; i++) {
+                    colorram->memory[i] = (uint8_t)(rand() & 0x0F);
+                }
+                printf("Color RAM initialized with random colors for debugging\n");
+            }
         }
 
         // Initialize ROM chips by loading from files
@@ -361,11 +388,16 @@ c64_t* c64_system_create(const c64_config_t* config) {
     // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
     ((mos6526_t*)c64->cia2)->interrupt_line = BUS_MASK_NMI;
 
-    // After ROMs are loaded, read the reset vector and set CPU PC directly
+    // After ROMs are loaded, read the reset vector and initialize CPU for immediate execution
     uint16_t reset_vector = c64_read_kernal_reset_vector(&c64->bus);
     mos6510_set_pc((mos6510_t*)c64->mos6510, reset_vector);
+    
+    // CRITICAL: Also set the address bus register to match PC
+    // Without this, the first instruction fetch reads from address $0000 instead of the reset vector
+    // The CPU's AB register must match PC for the first fetch to work correctly
+    mos6510_set_ab((mos6510_t*)c64->mos6510, reset_vector);
 
-    printf("C64 System: Loaded reset vector $%04X from KERNAL ROM and set CPU PC directly\n", reset_vector);
+    printf("C64 System: Loaded reset vector $%04X from KERNAL ROM and initialized CPU PC and AB\n", reset_vector);
 
     // Attach all other chips with bus_attach callbacks
     for (int i = 0; i < c64->system.chip_count; i++) {
