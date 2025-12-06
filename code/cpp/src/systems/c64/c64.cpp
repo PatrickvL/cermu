@@ -214,24 +214,34 @@ void c64_system_tick(c64_t* c64) {
     // VIC-II reads data from previous cycle, processes it, and sets up next memory access
     s = vicii_tick(c64->vicii, s);
 
-    // =========================================================================
-    // PHASE 2: CPU TICKING (PHI2 phase)
-    // CPU executes in PHI2 phase
-    // =========================================================================
-    s = mos6510_tick_phi2(c64->mos6510, s);
-
-    // =========================================================================
-    // PHASE 3: MEMORY SERVICE PHASE
-    // Services memory access from either CPU (when RDY active) or VIC-II (when cycle stealing)
-    // The c64_memory_tick function checks RDY line to determine which chip set up the access
-    // =========================================================================
-    s = c64_memory_tick(&c64->bus, s);
-
-    // =========================================================================
-    // PHASE 5: CPU TICKING (PHI1 phase)
-    // CPU prepares next instruction fetch in PHI1 phase
-    // =========================================================================
-    s = mos6510_tick_phi1(c64->mos6510, s);
+            // =========================================================================
+            // CRITICAL: Update RDY line based on BA BEFORE memory tick
+            // The c64_memory_tick function checks RDY to determine CPU vs VIC-II access
+            // =========================================================================
+            if (BUS_GET_LINES(s) & BUS_MASK_BA) {
+                BUS_SET_LINES(s, BUS_GET_LINES(s) | BUS_MASK_RDY);
+            } else {
+                BUS_SET_LINES(s, BUS_GET_LINES(s) & ~BUS_MASK_RDY);
+            }
+        
+            // =========================================================================
+            // PHASE 2: CPU TICKING (PHI2 phase)
+            // CPU executes in PHI2 phase
+            // =========================================================================
+            s = mos6510_tick_phi2(c64->mos6510, s);
+        
+            // =========================================================================
+            // PHASE 3: MEMORY SERVICE PHASE
+            // Services memory access from either CPU (when RDY active) or VIC-II (when cycle stealing)
+            // The c64_memory_tick function checks RDY line to determine which chip set up the access
+            // =========================================================================
+            s = c64_memory_tick(&c64->bus, s);
+        
+            // =========================================================================
+            // PHASE 5: CPU TICKING (PHI1 phase)
+            // CPU prepares next instruction fetch in PHI1 phase
+            // =========================================================================
+            s = mos6510_tick_phi1(c64->mos6510, s);
 
     // =========================================================================
     // PHASE 4: OTHER CHIP TICKING
@@ -243,13 +253,6 @@ void c64_system_tick(c64_t* c64) {
 
     // SID - sound generation
     s = mos6581_tick(c64->sid, s);
-
-    // Update RDY line based on BA (hardware accurate)
-    if (BUS_GET_LINES(s) & BUS_MASK_BA) {
-        BUS_SET_LINES(s, BUS_GET_LINES(s) | BUS_MASK_RDY);
-    } else {
-        BUS_SET_LINES(s, BUS_GET_LINES(s) & ~BUS_MASK_RDY);
-    }
 
     // Update the bus state with the final result
     bus->state = s;
