@@ -1257,9 +1257,8 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             }
             break;
         case VIC_ACCESS_C:
-        case VIC_ACCESS_G:
             // C-access: Store video matrix data that arrived from PREVIOUS cycle's PHI2 setup
-            // Store at current VMLI, then increment VMLI so next cycle stores at next position
+            // ONLY happens on bad lines
             if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
                 vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = bus_data;
                 // Increment VC and VMLI after storing c-access data
@@ -1267,7 +1266,9 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
                 vicii->video_logic.vmli++;
             }
             break;
-        default: // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH
+        default: // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH, VIC_ACCESS_G
+            // G-access: No video matrix storage, just graphics data read
+            // This happens on non-bad lines during display_state
             break;
     }
     
