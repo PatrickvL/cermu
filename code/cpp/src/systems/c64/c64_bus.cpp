@@ -83,25 +83,23 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
     if (unlikely(!c64_bus)) return bus_state;
     
     // Determine if this is a read or write operation
-    bool is_read = BUS_GET_LINES(bus_state) & BUS_MASK_RW;
-    uint16_t address = BUS_GET_ADDR(bus_state);
-    uint8_t address_bank = c64_get_address_bank(address);     // Extract 4KB bank (0-15)
+    const bool is_read = BUS_GET_LINES(bus_state) & BUS_MASK_RW;
+    const uint16_t address = BUS_GET_ADDR(bus_state);
+    const uint8_t address_bank = c64_get_address_bank(address);  // Extract 4KB bank (0-15)
     
     // NOTE: I/O port addresses (0-1) are now handled by mos6510_tick() early in the CPU tick
-    // This prevents the memory system from overwriting I/O port read data with RAM data
-    
-    // CRITICAL: Check AEC line to determine if VIC-II has bus control
-    // BA (RDY) is an early warning signal (3 cycles ahead)
-    // AEC is the actual bus control signal - VIC-II has the bus when AEC is LOW
-    // When AEC is low, use VIC-II memory mapping; when high, use CPU memory mapping
-    bool is_vicii_cycle_stealing = !(BUS_GET_LINES(bus_state) & BUS_MASK_AEC);
-
+    // This prevents the memory system from overwriting I/O port read data with RAM data    
     if (is_read) {
         // === READ OPERATION ===
-        // AEC low = VIC-II has bus control and uses its memory mapping
+        // CRITICAL: Check AEC line to determine if VIC-II has bus control
+        // BA (RDY) is an early warning signal (3 cycles ahead)
+        // AEC is the actual bus control signal - VIC-II has the bus when AEC is LOW
+        // When AEC is low, use VIC-II memory mapping; when high, use CPU memory mapping
+        const bool is_vicii_cycle_stealing = !(BUS_GET_LINES(bus_state) & BUS_MASK_AEC);
         uint8_t chip;
-
+        
         if (is_vicii_cycle_stealing) {
+            // AEC low = VIC-II has bus control and uses its memory mapping
             // VIC-II cycle-stealing: use VIC-II memory mapping
             chip = c64_bus->vicii_chip_per_bank[address_bank];
         } else {
@@ -113,12 +111,12 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
         // Fast path handles: CHIP_ROML, CHIP_ROMH, CHIP_KERNAL, CHIP_BASIC, CHIP_CHARROM, CHIP_RAM
         if (likely(chip <= CHIP_RAM)) {
             // Use unified buffer read helper for all ROM/RAM types
-            uint8_t data = c64_bus_read_chip_byte(c64_bus, chip, address);
+            const uint8_t data = c64_bus_read_chip_byte(c64_bus, chip, address);
             BUS_SET_DATA(bus_state, data);
         } else if (chip == CHIP_IO) {
             // OPTIMIZED IO PAGE HANDLING: Direct dispatch using pre-initialized handlers
             // Calculate IO page number from address (0-15 for $D000-$DFFF)
-            uint8_t io_page = (address >> 8) & 0x0F; // Extract page number from $Dx00 addresses
+            const uint8_t io_page = (address >> 8) & 0x0F; // Extract page number from $Dx00 addresses
 
             // Straight call to the appropriate handler - no conditionals needed
             bus_state = c64_bus->io_handlers[io_page].read_handler(
@@ -133,17 +131,17 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
         // The CPU can complete writes even when BA/RDY is low (early warning from VIC-II)
         // BA goes low 3 cycles early to allow the CPU to complete up to 3
         // consecutive write operations before halting on the first read access.
-        
-        uint8_t chip = decode_write_chip(c64_bus->cpu_encoded_chip_per_bank[address_bank]);
+        const uint8_t chip = decode_write_chip(c64_bus->cpu_encoded_chip_per_bank[address_bank]);
 
         // ENHANCED FAST PATH: Handle all writable unified buffer regions
         if (likely(chip == CHIP_RAM)) {
-            uint8_t data = BUS_GET_DATA(bus_state);
+            const uint8_t data = BUS_GET_DATA(bus_state);
+
             c64_bus_write_ram_byte(c64_bus, address, data);
         } else if (chip == CHIP_IO) {
             // OPTIMIZED IO PAGE HANDLING: Direct dispatch using pre-initialized handlers
             // Calculate IO page number from address (0-15 for $D000-$DFFF)
-            uint8_t io_page = (address >> 8) & 0x0F; // Extract page number from $Dx00 addresses
+            const uint8_t io_page = (address >> 8) & 0x0F; // Extract page number from $Dx00 addresses
 
             // Straight call to the appropriate handler - no conditionals needed
             bus_state = c64_bus->io_handlers[io_page].write_handler(
