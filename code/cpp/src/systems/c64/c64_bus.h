@@ -134,10 +134,10 @@ static inline uint32_t c64_bus_unified_address_calc(uint8_t chip, uint16_t addr)
     
     // CRITICAL: addr contains original C64 memory map addresses (e.g. KERNAL 0xE000-0xFFFF)
     // Mask strips bank/base address to get chip-relative offset
-    // RAM uses full 0xFFFF for 64KB, 8KB ROMs use 0x1FFF, CHARROM uses 0x0FFF for 4KB
-    const uint32_t mask = (chip == CHIP_RAM) ? 0xFFFF :
-                         (chip == CHIP_CHARROM) ? 0x0FFF : 0x1FFF;
-    return base + (addr & mask);
+    // RAM uses full 0xFFFF for 64KB, all ROMs use 0x1FFF for 8KB banks
+    // Note: CHARROM is 4KB but uses 0x1FFF mask because it never appears in multiple
+    // banks simultaneously in C64 memory map, so the larger mask is safe and branchless
+    return base + (addr & (0x1FFF | -(chip == CHIP_RAM)));
 }
 
 /**
