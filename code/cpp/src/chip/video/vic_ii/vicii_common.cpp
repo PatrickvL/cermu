@@ -1218,17 +1218,9 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
     // STEP 1: Read data from bus (from PREVIOUS cycle's PHI2 memory setup)
     uint8_t bus_data = BUS_GET_DATA(c64_bus->state);
-
-    // Monitor CIA2 writes to $DD00 for VIC-II bank changes
-    // VIC-II watches CIA2 writes directly without callbacks or io_pending flags
-    if (BUS_GET_ADDR(bus_state) == 0xDD00 && !(BUS_GET_LINES(bus_state) & BUS_MASK_RW)) {
-        // CIA2 Data Port A write detected - extract VIC-II bank bits (0-1)
-        // Hardware mapping: 00→Bank 3, 01→Bank 2, 10→Bank 1, 11→Bank 0
-        uint8_t vic_bank = 3 - (bus_data & 0x03);
-
-        vicii_memory_bank_change(vicii, vic_bank);
-    }
-
+    // VIC-II bank switching is now handled via a callback registered with CIA2
+    // The callback is set up during C64 system initialization in c64.cpp
+    // This keeps VIC-II and CIA implementations decoupled
     // Handle the read data based on the pending access type
     // This handles C/P/S accesses that were set up at the end of the previous cycle
     switch (vicii->bus.pending_phi2_access_type) {
