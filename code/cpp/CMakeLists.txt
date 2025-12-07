@@ -151,6 +151,21 @@ if(BUILD_GUI)
     endif()
 endif()
 
+# Add NFD (Native File Dialog Extended) library if building GUI
+if(BUILD_GUI)
+    # Check if NFD directory exists (in project root external directory)
+    set(NFD_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../external/nfd")
+    if(EXISTS "${NFD_ROOT}/CMakeLists.txt")
+        # Use NFD's own CMakeLists.txt as a subdirectory
+        add_subdirectory(${NFD_ROOT} ${CMAKE_CURRENT_BINARY_DIR}/nfd EXCLUDE_FROM_ALL)
+        set(NFD_FOUND TRUE)
+        message(STATUS "NFD (Native File Dialog) library configured at ${NFD_ROOT}")
+    else()
+        message(WARNING "NFD not found at ${NFD_ROOT} - file dialogs will not be available")
+        set(NFD_FOUND FALSE)
+    endif()
+endif()
+
 # Core library sources
 set(CORE_SOURCES
     src/core/system.cpp
@@ -268,13 +283,17 @@ if(BUILD_GUI)
         ${CORE_UTIL_SOURCES}
         ${GUI_SOURCES}
     )
-    
-    # Add SDL2 and ImGui include directories to the GUI target
+    # Add SDL2, ImGui, and NFD include directories to the GUI target
     target_include_directories(c64emu_gui PRIVATE
         ${SDL2_INCLUDE_DIRS}
         ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui
         ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends
     )
+    
+    # Add NFD include if available
+    if(NFD_FOUND)
+        target_include_directories(c64emu_gui PRIVATE ${NFD_ROOT}/src/include)
+    endif()
     
     # Define IMGUI_VERSION macro for GUI build to enable chip GUI functions
     target_compile_definitions(c64emu_gui PRIVATE IMGUI_VERSION="1.92.1")
@@ -287,13 +306,20 @@ if(BUILD_GUI)
     endif()
 
     # Link libraries for GUI version
-    target_link_libraries(c64emu_gui
+    set(GUI_LINK_LIBS
         imgui  # Native Dear ImGui C++ static library
         fam65xx_decoder  # FAM65XX instruction decoder
         ${SDL2_LIBRARIES}
         ${OPENGL_LIBRARIES}
         ${CMAKE_DL_LIBS}
     )
+    
+    # Add NFD library if available
+    if(NFD_FOUND)
+        list(APPEND GUI_LINK_LIBS nfd)
+    endif()
+    
+    target_link_libraries(c64emu_gui ${GUI_LINK_LIBS})
     
     # Add platform-specific libraries for GUI
     if(WIN32)
