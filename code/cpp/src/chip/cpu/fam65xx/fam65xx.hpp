@@ -1010,15 +1010,17 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
   bus_state_t fetch_opcode(bus_state_t pins) {
     switch (this->half_cycle) {
     case 0:
-      // PHI2: Set up bus for opcode read from PC
+      // PHI2: Set up bus for opcode read from PC - ZERO SIDE EFFECTS
       pins = this->bus_setup_read<Addr::PC>(pins);
-      this->set(REG_AB, this->get(REG_PC));
-      this->inc(REG_PC);
       // Set SYNC signal for opcode fetch (hardware-accurate timing)
       pins |= FAM65XX_SYNC;
       return pins;
     case 1: {
-      // PHI1: Sample opcode from bus and decode
+      // PHI1: ALL side effects happen here (safe from RDY retry)
+      // Copy PC to AB and increment PC
+      this->set(REG_AB, this->get(REG_PC));
+      this->inc(REG_PC);
+      // Sample opcode from bus and decode
       uint8_t opcode = this->bus_get_data(pins);
       this->set(REG_IR, opcode);
       // Clear SYNC signal after opcode fetch completes (hardware-accurate timing)
@@ -1433,25 +1435,27 @@ public:
    * @return Updated bus state
    */
   template <Phase phase> bus_state_t tick(bus_state_t pins) {
-    // Check RDY signal - CENTRALIZED CHECK (KEEP THIS!)
-    if (!FAM65XX_GET_RDY(pins)) {
-      // RDY low - external DMA active
-      // DO NOT call handler, DO NOT increment
+    // Check AEC signal FIRST - before ANY phase processing
+    // Hardware signal that overrides everything (both PHI2 and PHI1)
+    // When AEC is LOW, VIC-II owns the bus completely
+    // CPU's address bus is tri-stated - cannot access memory at all
+    if (!FAM65XX_GET_AEC(pins)) {
+      // AEC low - VIC owns bus, CPU completely frozen
+      // Do NOT execute ANY phase, do NOT increment half_cycle
+      // Return immediately - retry this same phase on next tick
       if constexpr (ENABLE_TRACING) {
-        trace("RDY low - DMA active, skipping handler");
+        trace("AEC low - VIC owns bus, CPU completely frozen");
       }
       return pins;
     }
-
+ 
     if constexpr (phase == Phase::PHI2) {
       // PHI2: Bus setup phase
       if constexpr (ENABLE_TRACING) {
         trace_enter("tick<PHI2>");
         trace_registers("before PHI2");
       }
-      
-      // DEBUG output disabled for performance
-
+       
       // Hardware-accurate interrupt detection
       // PROCESSOR_TESTS mode: Disable interrupt hijacking for clean instruction testing
       // Production mode: Always allow interrupt hijacking for accurate emulation
@@ -1472,9 +1476,39 @@ public:
       // Call handler to set up bus (sees current even half_cycle)
       // COMPILE-TIME SAFETY: current_handler is always assigned by get_instruction_handler()
       // which is guaranteed to return a valid handler pointer
+      // CRITICAL: PHI2 handlers must have ZERO side effects - only bus setup!
       pins = this->call_current_handler(pins);
 
-      // PHI2 increments half_cycle AFTER handler execution
+      // Call handler to set up bus (sees current even half_cycle)
+      // COMPILE-TIME SAFETY: current_handler is always assigned by get_instruction_handler()
+      // which is guaranteed to return a valid handler pointer
+      // CRITICAL: PHI2 handlers must have ZERO side effects - only bus setup!
+      pins = this->call_current_handler(pins);
+
+      // Check RDY signal AFTER bus setup (now we know if it's read or write)
+      // Per MOS 6510 datasheet: "RDY is ignored during write accesses"
+      if (!FAM65XX_GET_RDY(pins)) {
+        // RDY low - external DMA active (VIC-II needs bus)
+        const bool is_read = (pins & FAM65XX_RW) != 0;
+        
+        if (is_read) {
+          // READ cycle with RDY low: HALT the CPU
+          // Do NOT increment half_cycle - retry this PHI2 setup next tick
+          if constexpr (ENABLE_TRACING) {
+            trace("RDY low during READ - CPU halted, will retry PHI2 setup");
+          }
+          return pins;
+        }
+        
+        // WRITE cycle with RDY low: CONTINUE execution
+        // The 6510 ignores RDY during writes (up to 3 consecutive writes allowed)
+        if constexpr (ENABLE_TRACING) {
+          trace("RDY low during WRITE - CPU continues (RDY ignored on writes)");
+        }
+        // Fall through to increment half_cycle
+      }
+
+      // PHI2 increments half_cycle AFTER handler execution (and RDY check)
       // so PHI1 sees the next odd cycle number
       // This allows PHI2 (even) and PHI1 (odd) to execute different code
       half_cycle++;
