@@ -72,6 +72,7 @@ code/cpp/CTestTestfile.cmake
 data/**/*.rom
 data/**/*.bin
 data/**/*.crt
+data/**/*.c64
 data/**/*.d64
 data/**/*.d71
 data/**/*.d81
@@ -81,6 +82,12 @@ data/**/*.prg
 data/**/*.p00
 data/**/*.img
 data/**/*.adf
+data/**/*.s
+data/**/*.pdf
+data/**/*.png
+data/**/*.jpg
+data/**/*.txt
+data/**/*.cmd
 !data/**/README.md
 
 # External test suites and ROM files - keep setup documentation
@@ -115,3 +122,4 @@ code/cpp/tests/CTestTestfile.cmake
 code/cpp/.cache/*
 code/cpp/tests/fam65xx_klaus_test_runner
 code/cpp/tests/fam65xx_lorenz_test_harness
+code/cpp/src/main/c64_main_gui.cpp
