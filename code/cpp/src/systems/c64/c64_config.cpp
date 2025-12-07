@@ -4,26 +4,25 @@
 const rom_config_t* system_config_get_default_roms(void) {
     static const rom_config_t default_roms = {
         /* basic_rom_filenames */ {
+            "C64 - 901226-01 - Commodore (F833D117) Basic.rom",
             "basic.901226-01.bin",
-            "basic.rom",
             "901226-01.bin",
-            NULL,
+            "basic.rom",
             NULL
         },
         /* kernal_rom_filenames */ {
+            "C64 - 901227-03 - Commodore (DBE3E7C7) Kernal.rom",
             "kernal.901227-03.bin",
-            "kernal.rom",
             "901227-03.bin",
-            NULL,
+            "kernal.rom",
             NULL
         },
         /* chargen_rom_filenames */ {
+            "C64 - 901225-01 - Commodore (EC4272EE) Characters.rom",
             "characters.901225-01.bin",
-            "char.rom",
+            "901225-01.bin"
             "chargen.rom",
-            "901225-01.bin",
-            NULL,
-            NULL
+            "char.rom"
         }
     };
     return &default_roms;
@@ -35,6 +34,10 @@ void c64_config_init_defaults(c64_config_t* config) {
     // System configuration defaults
     config->vicii_standard = VIC_PAL;     // Default to PAL timing
     config->rom_config = NULL;            // Use default ROM paths
+    
+    // Test mode defaults - normal boot (like real C64)
+    config->test_mode = C64_TEST_MODE_NORMAL;
+    config->test_binary_config = NULL;
     
     // Initialize with no cartridge ROMs by default (saves memory)
     config->roml_present = false;
@@ -49,6 +52,14 @@ void c64_config_init_defaults(c64_config_t* config) {
 
 bool c64_config_validate(const c64_config_t* config) {
     if (!config) return false;
+    
+    // Validate test mode configuration
+    if (config->test_mode == C64_TEST_MODE_PRG_FILE || config->test_mode == C64_TEST_MODE_BIN_FILE) {
+        // These modes require test binary configuration
+        if (!config->test_binary_config || !config->test_binary_config->filename) {
+            return false;
+        }
+    }
     
     // If ROM is present, filename must be provided
     if (config->roml_present && !config->roml_filename) {

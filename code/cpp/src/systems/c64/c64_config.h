@@ -11,6 +11,28 @@ typedef enum {
 } vicii_standard_t;
 
 /**
+ * C64 test initialization modes.
+ * Determines how RAM is initialized at system startup.
+ */
+typedef enum {
+    C64_TEST_MODE_NORMAL,          // Normal boot with Kernal ROM (standard operation)
+    C64_TEST_MODE_DEBUG_PATTERNS,  // Fill RAM with test patterns (current behavior)
+    C64_TEST_MODE_PRG_FILE,        // Load a PRG file (2-byte load address + data)
+    C64_TEST_MODE_BIN_FILE         // Load a BIN file at specific address
+} c64_test_mode_t;
+
+/**
+ * Test binary configuration.
+ * Used for PRG and BIN file loading modes.
+ */
+typedef struct {
+    const char* filename;          // Path to test binary file
+    uint16_t load_address;         // Load address (only used for BIN files, PRG has embedded address)
+    bool auto_start;               // Whether to jump to loaded code (vs normal Kernal boot)
+    uint16_t start_address;        // Address to jump to if auto_start is true (0 = use PRG's SYS address)
+} c64_test_binary_config_t;
+
+/**
  * ROM file configuration structure.
  * Holds paths to required ROM files with multiple alternatives per ROM type.
  */
@@ -29,6 +51,10 @@ typedef struct {
     // System configuration
     vicii_standard_t vicii_standard;
     rom_config_t* rom_config;    // Optional ROM configuration (NULL = use defaults)
+    
+    // Test/initialization mode
+    c64_test_mode_t test_mode;   // How to initialize RAM at startup
+    c64_test_binary_config_t* test_binary_config;  // Test binary config (NULL if not used)
     
     // Cartridge ROM configuration
     bool roml_present;           // Whether ROML ROM should be included ($8000-$9FFF)
