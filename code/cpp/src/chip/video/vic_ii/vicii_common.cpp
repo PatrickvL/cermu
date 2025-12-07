@@ -1336,6 +1336,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
 
     // Apply CIA2 originating vic-ii bank base (set in vicii_memory_bank_change)
     address |= vicii->memory.bank_base;
+
     // Perform PHI1 memory read (common path for all PHI1 accesses)
     bus_state = c64_bus_vic_read(c64_bus, bus_state, address);
 

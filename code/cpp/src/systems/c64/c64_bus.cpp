@@ -92,53 +92,26 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
     
     // Check if this is VIC-II cycle-stealing (RDY low) or CPU access (RDY high)
     bool is_vicii_cycle_stealing = !(BUS_GET_LINES(bus_state) & BUS_MASK_RDY);
-    
-    // DEBUG: Print EVERY call during raster 51 cycles 16-25
-    static int memory_tick_debug = 0;
-    c64_t* c64 = (c64_t*)c64_bus->c64;
-    if (memory_tick_debug < 50 && c64 && c64->vicii && c64->vicii->timing.raster_counter == 51 &&
-        c64->vicii->timing.x_cycle >= 16 && c64->vicii->timing.x_cycle <= 25) {
-        printf("c64_memory_tick CALLED: addr=0x%04X cycle=%d is_read=%d RDY=%d BA=%d is_vicii_steal=%d bank=%d\n",
-               address, c64->vicii->timing.x_cycle, is_read,
-               (BUS_GET_LINES(bus_state) & BUS_MASK_RDY) ? 1 : 0,
-               (BUS_GET_LINES(bus_state) & BUS_MASK_BA) ? 1 : 0,
-               is_vicii_cycle_stealing, cpu_bank);
-        memory_tick_debug++;
-    }
 
-        if (is_read) {
-            // === READ OPERATION ===
-            uint8_t chip;
-    
-            if (is_vicii_cycle_stealing) {
-                // VIC-II cycle-stealing: use VIC-II memory mapping
-                chip = c64_bus->vicii_chip_per_bank[cpu_bank];
-                
-                // DEBUG: Print VIC-II cycle-stealing reads
-                c64_t* c64 = (c64_t*)c64_bus->c64;
-                if (address >= 0x0400 && address <= 0x040A && c64 && c64->vicii && c64->vicii->timing.raster_counter == 51 &&
-                    c64->vicii->timing.x_cycle >= 16 && c64->vicii->timing.x_cycle <= 25) {
-                    printf("  -> VIC cycle-stealing: addr=0x%04X bank=%d chip=%d (should be 9=RAM)\n",
-                           address, cpu_bank, chip);
-                }
-            } else {
-                // Normal CPU access: use CPU memory mapping
-                chip = decode_read_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
-            }
-    
-            // ENHANCED FAST PATH: Direct unified buffer access for all memory chips
-            // Fast path handles: CHIP_ROML, CHIP_ROMH, CHIP_KERNAL, CHIP_BASIC, CHIP_CHARROM, CHIP_RAM
-            if (likely(chip <= CHIP_RAM)) {
-                // Use unified buffer read helper for all ROM/RAM types
-                uint8_t data = c64_bus_read_chip_byte(c64_bus, chip, address);
-                BUS_SET_DATA(bus_state, data);
-                // DEBUG: Print data being read
-                c64_t* c64 = (c64_t*)c64_bus->c64;
-                if (address >= 0x0400 && address <= 0x040A && c64 && c64->vicii && c64->vicii->timing.raster_counter == 51 &&
-                    c64->vicii->timing.x_cycle >= 16 && c64->vicii->timing.x_cycle <= 25) {
-                    printf("  -> Read data=0x%02X from chip=%d (%s)\n", data, chip, c64_chips_to_title(chip));
-                }
-            } else if (chip == CHIP_IO) {
+    if (is_read) {
+        // === READ OPERATION ===
+        uint8_t chip;
+
+        if (is_vicii_cycle_stealing) {
+            // VIC-II cycle-stealing: use VIC-II memory mapping
+            chip = c64_bus->vicii_chip_per_bank[cpu_bank];
+        } else {
+            // Normal CPU access: use CPU memory mapping
+            chip = decode_read_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
+        }
+
+        // ENHANCED FAST PATH: Direct unified buffer access for all memory chips
+        // Fast path handles: CHIP_ROML, CHIP_ROMH, CHIP_KERNAL, CHIP_BASIC, CHIP_CHARROM, CHIP_RAM
+        if (likely(chip <= CHIP_RAM)) {
+            // Use unified buffer read helper for all ROM/RAM types
+            uint8_t data = c64_bus_read_chip_byte(c64_bus, chip, address);
+            BUS_SET_DATA(bus_state, data);
+        } else if (chip == CHIP_IO) {
             // OPTIMIZED IO PAGE HANDLING: Direct dispatch using pre-initialized handlers
             // Calculate IO page number from address (0-15 for $D000-$DFFF)
             uint8_t io_page = (address >> 8) & 0x0F; // Extract page number from $Dx00 addresses
