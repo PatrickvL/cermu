@@ -327,11 +327,8 @@ static void vicii_unified_pixel_sequencer(vicii_t* vicii) {
             vicii_pixel_emit_at_x(vicii, &pixel_data, pixel_x);
             
             // Increment pixel position within character (for standard modes)
-            if (seq->graphics_mode == VICII_GM_STANDARD_TEXT ||
-                seq->graphics_mode == VICII_GM_STANDARD_BITMAP ||
-                seq->graphics_mode == VICII_GM_ECM_TEXT ||
-                (seq->graphics_mode == VICII_GM_MULTICOLOR_TEXT &&
-                 !(vicii->video_data.video_color_line[safe_char_index] & 0x08))) {
+            if (((seq->graphics_mode & VICII_BITMAP_MODE_MASK) == 0) &&
+                 !(vicii->video_data.video_color_line[safe_char_index] & 0x08)) {
                 seq->pixel_in_char = (seq->pixel_in_char + 1) & 7;
             }
         }
@@ -1277,10 +1274,14 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
                 // After C-access, G-access (VIC_ACCESS_G) address calculation
                 
                 // Bitmap mode (BMM bit set)?
-                if (vicii->sequencer.graphics_mode & 0x2) {  // VICII_C1_BMM >> 4 = 0x2
-                    // Bitmap mode: address uses VC instead of character code
-                    address = vicii->memory.cb_base |
-                            (((vicii->video_logic.vc - 1) & 0x3FF) << 3);
+                if (vicii->sequencer.graphics_mode & VICII_BITMAP_MODE_MASK) {
+                    const uint8_t vc_index = vicii->video_logic.vc - 1;
+                    // Bitmap mode: CB13 provides bit 13, VC provides bits 3-12, RC provides bits 0-2
+                    // Documentation section 3.7.3.3, line 1394: |CB13| VC9| VC8| VC7| VC6| VC5| VC4| VC3| VC2| VC1| VC0| RC2| RC1| RC0|
+                    // C# reference line 673: address = (u16)((Reg[MP] & MP_CB13) << 10) | (VC << 3);
+                    const uint16_t cb13_bit = vicii->memory.cb_base & (1 << 13);
+
+                    address = cb13_bit | ((vc_index & 0x3FF) << 3);
                 } else {
                     // Text mode: address uses character code
                     // CRITICAL: vmli was incremented during C-access data storage, so we need to use vmli-1
@@ -1290,7 +1291,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
 
                     address = vicii->memory.cb_base | (char_code << 3);
                 }                
-                address |= vicii->video_logic.rc & 0x07;
+                address |= vicii->video_logic.rc; // Note RC is 3 bit, so needs no "& 0x07" mask
                 break;
             }
             // Fall through to idle if display_state is false
@@ -1302,7 +1303,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     }
 
     // If Extended Color Mode (ECM) bit is set, hold address lines 9 and 10 low
-    if (vicii->sequencer.graphics_mode & 0x4) {  // VICII_C1_ECM >> 4 = 0x4
+    if (vicii->sequencer.graphics_mode & VICII_EXTENDED_COLOR_MODE_MASK) {
         address &= ~(0x03 << 9);
     }
 
