@@ -25,6 +25,7 @@
 #define FAM65XX_IRQ BUS_BIT(BUS_IRQ_BIT)
 #define FAM65XX_NMI BUS_BIT(BUS_NMI_BIT)
 #define FAM65XX_RDY BUS_BIT(BUS_RDY_BIT)
+#define FAM65XX_AEC BUS_BIT(BUS_AEC_BIT)
 #define FAM65XX_RES BUS_BIT(BUS_RES_BIT)
 
 // Macros for FAM65XX bus access
@@ -40,6 +41,7 @@
 
 // CPU pin access using project definitions
 #define FAM65XX_GET_RDY(pins) ((pins)&FAM65XX_RDY)
+#define FAM65XX_GET_AEC(pins) ((pins)&FAM65XX_AEC)
 #define FAM65XX_SET_SYNC(pins, v)                                              \
   ((pins) = ((v) ? ((pins) | FAM65XX_SYNC) : ((pins) & ~FAM65XX_SYNC)))
 #define FAM65XX_GET_SYNC(pins) ((pins)&FAM65XX_SYNC)

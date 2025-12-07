@@ -215,14 +215,34 @@ void c64_system_tick(c64_t* c64) {
     s = vicii_tick(c64->vicii, s);
 
     // =========================================================================
-    // CRITICAL: Map AEC (not BA) to RDY line
-    // Per VIC-II documentation section 2.2:
-    // - AEC tri-states the CPU address/data lines during VIC access
-    // - RDY is connected to AEC, not BA
-    // - BA going LOW signals upcoming VIC access (3 cycles early warning)
-    // - AEC going LOW actually halts the CPU by tri-stating its bus drivers
+    // HARDWARE WIRING ANALYSIS - BA and AEC signals to CPU
+    //
+    // From VIC-II documentation (section 2.2 and 2.3):
+    //
+    // 6510 has TWO input pins from VIC-II:
+    //   1. RDY pin - Connected to VIC's BA (Bus Available) output
+    //   2. AEC pin - Connected to VIC's AEC (Address Enable Control) output
+    //
+    // BA Signal (VIC → CPU RDY pin):
+    //   - Goes LOW 3 cycles BEFORE VIC needs PHI2 bus access
+    //   - Provides "early warning" to CPU
+    //   - CPU halts on NEXT READ when RDY is LOW
+    //   - CPU can complete up to 3 writes while BA/RDY is LOW
+    //
+    // AEC Signal (VIC → CPU AEC pin):
+    //   - Controls actual bus takeover timing
+    //   - Stays LOW during PHI2 when VIC accesses bus
+    //   - Tri-states CPU address/data bus drivers
+    //
+    // CRITICAL QUESTION: Which signal should we map to the unified RDY line?
+    //
+    // The documentation says "BA is connected to the RDY line" (line 219),
+    // BUT BA goes low 3 cycles EARLY as a warning. The actual blocking
+    // happens when AEC stays low during PHI2.
+    //
+    // For now, mapping BA to RDY (as documentation states):
     // =========================================================================
-    if (BUS_GET_LINES(s) & BUS_MASK_AEC) {
+    if (BUS_GET_LINES(s) & BUS_MASK_BA) {
         BUS_SET_LINES(s, BUS_GET_LINES(s) | BUS_MASK_RDY);
     } else {
         BUS_SET_LINES(s, BUS_GET_LINES(s) & ~BUS_MASK_RDY);
