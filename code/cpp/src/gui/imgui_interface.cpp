@@ -11,6 +11,7 @@
 #include "../systems/c64/c64_bus.h"
 #include "../systems/c64/c64_config.h"
 #include "../chip/cpu/fam65xx/mos6510.h"
+#include "../chip/cpu/fam65xx/fam65xx.hpp"
 #include "../chip/cpu/fam65xx/fam65xx_gui.h"
 #include "../chip/video/vic_ii/vicii_common.h"
 #include "../utils/rom_loader.h"
@@ -51,14 +52,53 @@ static void gui_render_persistent_storage(gui_state_t* gui_state) {
     
     ImGui::End();
 }
-
-// Dummy functions for compatibility (ImGui handles persistence automatically)
+// Settings persistence implementation using a simple text file
 static void gui_load_persistent_settings(gui_state_t* gui_state) {
-    // ImGui will automatically load values from .ini file
+    FILE* file = fopen("c64emu_settings.txt", "r");
+    if (!file) {
+        return; // No settings file yet
+    }
+    
+    char line[1024];
+    while (fgets(line, sizeof(line), file)) {
+        // Remove newline
+        line[strcspn(line, "\r\n")] = 0;
+        
+        if (strncmp(line, "test_binary_path=", 17) == 0) {
+            strncpy(gui_state->test_binary_path, line + 17, sizeof(gui_state->test_binary_path) - 1);
+        } else if (strncmp(line, "last_test_binary_dir=", 21) == 0) {
+            strncpy(gui_state->last_test_binary_dir, line + 21, sizeof(gui_state->last_test_binary_dir) - 1);
+        } else if (strncmp(line, "last_rom_dir=", 13) == 0) {
+            strncpy(gui_state->last_rom_dir, line + 13, sizeof(gui_state->last_rom_dir) - 1);
+        }
+    }
+    
+    fclose(file);
+    printf("Loaded persistent settings from c64emu_settings.txt\n");
+    if (gui_state->test_binary_path[0] != '\0') {
+        printf("  Restored test_binary_path: %s\n", gui_state->test_binary_path);
+    }
 }
 
 static void gui_save_persistent_settings(const gui_state_t* gui_state) {
-    // ImGui will automatically save values to .ini file
+    FILE* file = fopen("c64emu_settings.txt", "w");
+    if (!file) {
+        printf("Failed to save persistent settings\n");
+        return;
+    }
+    
+    if (gui_state->test_binary_path[0] != '\0') {
+        fprintf(file, "test_binary_path=%s\n", gui_state->test_binary_path);
+    }
+    if (gui_state->last_test_binary_dir[0] != '\0') {
+        fprintf(file, "last_test_binary_dir=%s\n", gui_state->last_test_binary_dir);
+    }
+    if (gui_state->last_rom_dir[0] != '\0') {
+        fprintf(file, "last_rom_dir=%s\n", gui_state->last_rom_dir);
+    }
+    
+    fclose(file);
+    printf("Saved persistent settings to c64emu_settings.txt\n");
 }
 
 bool gui_init(const char *window_title, int width, int height) {
@@ -1411,7 +1451,6 @@ void gui_render_test_binary_dialog(c64_t* c64, gui_state_t* gui_state, gui_emula
 }
 
 // Load a test binary and reinitialize the C64 system
-// Load a test binary and reinitialize the C64 system
 bool gui_load_test_binary(gui_emulation_context_t* emu_context, gui_state_t* gui_state, const char* filepath) {
     if (!emu_context || !emu_context->c64 || !filepath || filepath[0] == '\0') {
         printf("Invalid parameters for test binary loading\n");
@@ -1427,44 +1466,51 @@ bool gui_load_test_binary(gui_emulation_context_t* emu_context, gui_state_t* gui
     
     // Determine file type based on extension
     const char* ext = strrchr(filepath, '.');
-    c64_test_mode_t test_mode = C64_TEST_MODE_PRG_FILE;
-    if (ext && (strcmp(ext, ".bin") == 0 || strcmp(ext, ".BIN") == 0)) {
-        test_mode = C64_TEST_MODE_BIN_FILE;
+    bool is_prg = (ext && (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0));
+    bool is_bin = (ext && (strcmp(ext, ".bin") == 0 || strcmp(ext, ".BIN") == 0));
+    
+    if (!is_prg && !is_bin) {
+        printf("ERROR: Unknown file type (expected .prg or .bin): %s\n", filepath);
+        return false;
     }
-    
-    // Create test binary configuration
-    c64_test_binary_config_t test_config = {
-        .filename = filepath,
-        .load_address = 0x0801,  // Default BASIC start for BIN files
-        .auto_start = true,
-        .start_address = 0       // 0 = auto-detect from PRG
-    };
-    
-    // Create new C64 configuration with test mode
-    c64_config_t config = {
-        .vicii_standard = VIC_PAL,
-        .rom_config = NULL,  // Use defaults
-        .test_mode = test_mode,
-        .test_binary_config = &test_config,
-        .roml_present = false,
-        .romh_present = false,
-        .roml_filename = nullptr,
-        .romh_filename = nullptr,
-        .initial_exrom_state = true,
-        .initial_game_state = true
-    };
     
     printf("==== LOADING TEST BINARY ====\n");
     printf("File: %s\n", filepath);
-    printf("Type: %s\n", test_mode == C64_TEST_MODE_PRG_FILE ? "PRG" : "BIN");
+    printf("Type: %s\n", is_prg ? "PRG" : "BIN");
     
-    // Reinitialize memory with the test binary
-    printf("Reinitializing C64 memory with test binary...\n");
-    c64_memory_init(&c64->system, &config);
+    // Load the file into RAM using the test loader
+    uint16_t load_address = 0;
+    uint16_t sys_address = 0;
+    bool load_success = false;
     
-    // Full system reset
-    printf("Performing full system reset...\n");
+    if (is_prg) {
+        load_success = c64_test_load_prg_file(filepath, c64->ram, &load_address, &sys_address);
+    } else {
+        load_address = 0x0801; // Default BASIC start for BIN files
+        load_success = c64_test_load_bin_file(filepath, c64->ram, load_address);
+        sys_address = load_address; // For BIN files, assume execution starts at load address
+    }
+    
+    if (!load_success) {
+        printf("ERROR: Failed to load test binary\n");
+        printf("============================\n");
+        return false;
+    }
+    
+    // Set PC to the execution address
+    if (sys_address != 0) {
+        printf("Setting PC to SYS address: $%04X\n", sys_address);
+        mos6510_set_pc((mos6510_t*)c64->mos6510, sys_address);
+    } else if (load_address != 0) {
+        printf("No SYS address found, setting PC to load address: $%04X\n", load_address);
+        mos6510_set_pc((mos6510_t*)c64->mos6510, load_address);
+    }
+    
+    // Full system reset (but preserve RAM content and PC)
+    printf("Performing CPU reset (preserving loaded program)...\n");
+    uint16_t saved_pc = mos6510_get_pc((mos6510_t*)c64->mos6510);
     mos6510_reset((mos6510_t*)c64->mos6510, 0);
+    mos6510_set_pc((mos6510_t*)c64->mos6510, saved_pc); // Restore PC after reset
     
     // Reset cycle counters
     c64->total_cycles = 0;
@@ -1472,8 +1518,11 @@ bool gui_load_test_binary(gui_emulation_context_t* emu_context, gui_state_t* gui
     emu_context->frames_rendered = 0;
     emu_context->current_state = EMU_STATE_STOPPED;
     
-    printf("Test binary loaded and system reset complete.\n");
+    printf("Test binary loaded and system prepared.\n");
     printf("Starting emulation automatically...\n");
+    
+    // Save the path for persistence
+    gui_save_persistent_settings(gui_state);
     
     // Always start emulation after loading a test binary
     gui_state->emulation_running = true;
