@@ -189,6 +189,10 @@ void gui_init_state(gui_state_t *gui_state) {
   strcpy(gui_state->rom_path_basic, "data/c64/roms/basic.901226-01.bin");
   strcpy(gui_state->rom_path_kernal, "data/c64/roms/kernal.901227-03.bin");
   strcpy(gui_state->rom_path_chargen, "data/c64/roms/characters.901225-01.bin");
+  
+  // Test binary path (empty by default)
+  gui_state->test_binary_path[0] = '\0';
+  gui_state->show_test_binary_dialog = false;
 }
 
 void gui_render_frame(c64_t *c64, gui_state_t *gui_state,
@@ -224,6 +228,9 @@ void gui_render_frame(c64_t *c64, gui_state_t *gui_state,
   }
   if (gui_state->show_about) {
     gui_render_about(gui_state);
+  }
+  if (gui_state->show_test_binary_dialog) {
+    gui_render_test_binary_dialog(c64, gui_state, emu_context);
   }
 
   // Render global chip visualization configuration dialog
@@ -270,6 +277,10 @@ void gui_render_menu_bar(c64_t *c64, gui_state_t *gui_state,
                          gui_emulation_context_t *emu_context) {
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu("File")) {
+      if (ImGui::MenuItem("Load Test Binary...")) {
+        gui_state->show_test_binary_dialog = true;
+      }
+      ImGui::Separator();
       if (ImGui::MenuItem("Load ROM...")) {
         // TODO: Open file dialog
       }
@@ -1223,6 +1234,124 @@ void gui_calculate_display_dimensions(gui_state_t *gui_state,
   *out_display_height = display_height * gui_state->host_dpi_scale;
   *out_pos_x = pos_x * gui_state->host_dpi_scale;
   *out_pos_y = pos_y * gui_state->host_dpi_scale;
+}
+
+// ============================================================================
+// TEST BINARY LOADING IMPLEMENTATION
+// ============================================================================
+
+#include "../systems/c64/c64_test_loader.h"
+
+// Render dialog for loading test binaries
+void gui_render_test_binary_dialog(c64_t* c64, gui_state_t* gui_state, gui_emulation_context_t* emu_context) {
+    if (!ImGui::Begin("Load Test Binary", &gui_state->show_test_binary_dialog, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::End();
+        return;
+    }
+    
+    ImGui::Text("Load a C64 test binary (PRG or BIN file)");
+    ImGui::Separator();
+    
+    // File path input
+    ImGui::InputText("File Path", gui_state->test_binary_path, sizeof(gui_state->test_binary_path));
+    ImGui::SameLine();
+    if (ImGui::Button("Browse...")) {
+        // TODO: Native file dialog (for now, user can type path)
+        ImGui::SetKeyboardFocusHere(-1); // Focus on the input field
+    }
+    
+    ImGui::Separator();
+    
+    // Load button
+    if (ImGui::Button("Load PRG", ImVec2(120, 0))) {
+        if (gui_state->test_binary_path[0] != '\0') {
+            if (gui_load_test_binary(emu_context, gui_state, gui_state->test_binary_path)) {
+                printf("Test binary loaded successfully: %s\n", gui_state->test_binary_path);
+                gui_state->show_test_binary_dialog = false;
+            } else {
+                printf("Failed to load test binary: %s\n", gui_state->test_binary_path);
+            }
+        }
+    }
+    
+    ImGui::SameLine();
+    if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+        gui_state->show_test_binary_dialog = false;
+    }
+    
+    ImGui::Separator();
+    ImGui::TextWrapped("Note: PRG files include a 2-byte load address. "
+                      "The system will parse BASIC SYS commands to find the start address.");
+    
+    ImGui::End();
+}
+
+// Load a test binary and reinitialize the C64 system
+bool gui_load_test_binary(gui_emulation_context_t* emu_context, gui_state_t* gui_state, const char* filepath) {
+    if (!emu_context || !emu_context->c64 || !filepath || filepath[0] == '\0') {
+        printf("Invalid parameters for test binary loading\n");
+        return false;
+    }
+    
+    c64_t* c64 = emu_context->c64;
+    
+    // Pause emulation
+    bool was_running = (emu_context->current_state == EMU_STATE_RUNNING);
+    if (was_running) {
+        gui_emulation_pause(emu_context);
+        SDL_Delay(100); // Give thread time to pause
+    }
+    
+    // Determine file type based on extension
+    const char* ext = strrchr(filepath, '.');
+    c64_test_mode_t test_mode = C64_TEST_MODE_PRG_FILE;
+    if (ext && (strcmp(ext, ".bin") == 0 || strcmp(ext, ".BIN") == 0)) {
+        test_mode = C64_TEST_MODE_BIN_FILE;
+    }
+    
+    // Create test binary configuration
+    c64_test_binary_config_t test_config = {
+        .filename = filepath,
+        .load_address = 0x0801,  // Default BASIC start for BIN files
+        .auto_start = true,
+        .start_address = 0       // 0 = auto-detect from PRG
+    };
+    
+    // Create new C64 configuration with test mode
+    c64_config_t config = {
+        .vicii_standard = VIC_PAL,
+        .rom_config = NULL,  // Use defaults
+        .test_mode = test_mode,
+        .test_binary_config = &test_config,
+        .roml_present = false,
+        .romh_present = false,
+        .roml_filename = nullptr,
+        .romh_filename = nullptr,
+        .initial_exrom_state = true,
+        .initial_game_state = true
+    };
+    
+    // Reinitialize memory with the test binary
+    printf("Reinitializing C64 memory with test binary: %s\n", filepath);
+    c64_memory_init(&c64->system, &config);
+    
+    // Reset the CPU to the loaded program's start address
+    // The memory init should have set PC appropriately
+    mos6510_reset((mos6510_t*)c64->mos6510, 0);
+    
+    // Reset cycle counters
+    c64->total_cycles = 0;
+    emu_context->total_cycles_executed = 0;
+    emu_context->frames_rendered = 0;
+    
+    printf("Test binary loaded and system reset. PC set appropriately.\n");
+    
+    // Resume emulation if it was running
+    if (was_running) {
+        gui_emulation_start(emu_context);
+    }
+    
+    return true;
 }
 
 // ============================================================================
