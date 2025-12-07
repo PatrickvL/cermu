@@ -1242,19 +1242,23 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             break;
     }
     
-        // Clear pending access
-        vicii->bus.pending_phi2_access_type = VIC_ACCESS_IDLE;
-    
-        // CRITICAL: Update bad line condition BEFORE calling cycle function
-        // The cycle function needs current bad line status to return correct access type
-        vicii_update_badline_condition(vicii);
-    
-        // STEP 2: Get current cycle entry and parameter
-        const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[vicii->timing.x_cycle];
-        const int access_param = entry->param;
-        // Call cycle function to determine current access type, returning either
-        // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH, VIC_ACCESS_P, VIC_ACCESS_S, or VIC_ACCESS_C
-        const uint8_t access_type = entry->func(vicii, access_param);
+    // Clear pending access
+    vicii->bus.pending_phi2_access_type = VIC_ACCESS_IDLE;
+
+    // CRITICAL: Update bad line condition BEFORE calling cycle function
+    // The cycle function needs current bad line status to return correct access type
+    vicii_update_badline_condition(vicii);
+
+    // STEP 2: Get current cycle entry and parameter
+    const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[vicii->timing.x_cycle];
+    const int access_param = entry->param;
+
+    // Call cycle function to determine current access type, returning either
+    // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH, VIC_ACCESS_P, VIC_ACCESS_S, or VIC_ACCESS_C
+    const uint8_t access_type = entry->func(vicii, access_param);
+
+    // Calculate which column a G-access belongs to
+    const uint8_t column_index = access_param;
 
     // STEP 3: Perform PHI1 memory accesses via direct read
     // G-access happens EVERY cycle, other accesses are special cases
@@ -1282,9 +1286,6 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             // G-access: Read graphics data (character ROM or bitmap data)
             // Happens on ALL cycles 16-54 during display state (both bad lines and non-bad lines)
             if (vicii->video_logic.display_state) {
-                // Calculate which column this G-access belongs to
-                const uint8_t column_index = access_param;
-
                 // Bitmap mode (BMM bit set)?
                 if (vicii->sequencer.graphics_mode & VICII_BITMAP_MODE_MASK) {
                     // Bitmap mode: CB13 provides bit 13, VC provides bits 3-12, RC provides bits 0-2
@@ -1318,36 +1319,23 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
 
     // Apply CIA2 originating vic-ii bank base (set in vicii_memory_bank_change)
     address |= vicii->memory.bank_base;
-    
     // Perform PHI1 memory read (common path for all PHI1 accesses)
     bus_state = c64_bus_vic_read(c64_bus, bus_state, address);
-    
-    // G-access happens EVERY cycle during PHI1 (the address calculation above always runs)
-    // The graphics sequencer will use the data when in display_state
-    uint8_t graphics_data = BUS_GET_DATA(bus_state);
-    
-    // DEBUG: Print G-access data for first few characters on raster 51
-    static int g_access_debug = 0;
-    if (g_access_debug < 10 && vicii->timing.raster_counter == 51 &&
-        vicii->timing.x_cycle >= 16 && vicii->timing.x_cycle <= 25 && vicii->video_logic.display_state) {
-        printf("G-access: cycle=%d addr=0x%04X data=0x%02X char_index=%d RC=%d\n",
-               vicii->timing.x_cycle, address, graphics_data,
-               vicii->timing.x_cycle - 16, vicii->video_logic.rc);
-        g_access_debug++;
-    }
-    
+
     // STEP 4: Load graphics data into line buffer during cycles 16-54
     // During display_state, we need graphics data for every raster line (not just bad lines)
     // to show different rows of each character
     if (vicii->video_logic.display_state && vicii->timing.x_cycle >= 16 && vicii->timing.x_cycle <= 54) {
-        // Calculate which character this graphics data belongs to
-        uint8_t column_index = vicii->timing.x_cycle - 16;
+        // G-access happens EVERY cycle during PHI1 (the address calculation above always runs)
+        // The graphics sequencer will use the data when in display_state
+        const uint8_t graphics_data = BUS_GET_DATA(bus_state);
+
         vicii_graphics_sequencer(vicii, graphics_data, column_index);
     }
     
     // STEP 5: Update border flip-flops to establish display window state
     vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
-    
+
     // STEP 6: Perform unified pixel sequencing (8 pixels per cycle)
     // This uses the graphics data that was JUST loaded above
     if (vicii->pixel.framebuffer && vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
@@ -1379,7 +1367,9 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     
     // STEP 8: Flush pixel line if end of line
     if (vicii->timing.x_coordinate == 0 && vicii->pixel.framebuffer) {
-        const uint16_t flush_line = (vicii->timing.raster_counter == 0) ? (vicii->timing.total_lines - 1) : (vicii->timing.raster_counter - 1);
+        const uint16_t flush_line = (vicii->timing.raster_counter == 0)
+            ? (vicii->timing.total_lines - 1)
+            : (vicii->timing.raster_counter - 1);
 
         vicii_pixel_flush_line(vicii, vicii_get_default_palette(), flush_line);
     }
