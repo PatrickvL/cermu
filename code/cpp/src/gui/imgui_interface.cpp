@@ -1394,13 +1394,25 @@ void gui_render_test_binary_dialog(c64_t* c64, gui_state_t* gui_state, gui_emula
         // Open native file dialog for PRG/BIN files
         char selected_path[512] = {0};
         
-        // Use the full current file path as default if available, otherwise use last directory
+        // NFD expects a directory path, not a full file path
+        // Extract directory from the stored full path if available
         const char* default_path = nullptr;
+        char dir_path[512] = {0};
+        
         if (gui_state->test_binary_path[0] != '\0') {
-            // If we have a full path stored, use it (NFD will navigate to that file)
-            default_path = gui_state->test_binary_path;
+            // Extract directory from full file path
+            const char* last_sep = strrchr(gui_state->test_binary_path, '/');
+            if (!last_sep) last_sep = strrchr(gui_state->test_binary_path, '\\');
+            if (last_sep) {
+                size_t dir_len = last_sep - gui_state->test_binary_path;
+                if (dir_len < sizeof(dir_path)) {
+                    strncpy(dir_path, gui_state->test_binary_path, dir_len);
+                    dir_path[dir_len] = '\0';
+                    default_path = dir_path;
+                }
+            }
         } else if (gui_state->last_test_binary_dir[0] != '\0') {
-            // Otherwise use just the directory
+            // Use last directory if no file path is stored
             default_path = gui_state->last_test_binary_dir;
         }
         
