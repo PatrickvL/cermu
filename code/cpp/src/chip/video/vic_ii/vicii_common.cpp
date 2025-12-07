@@ -88,15 +88,17 @@ static inline void vicii_pixel_emit_at_x(vicii_t* vicii, const vicii_pixel_t* pi
     vicii->pixel.pixel_line_color[pixel_x] = pixel_data->color;
 }
 
-// Graphics sequencer (called from G-access) - ONLY loads shift register, does NOT emit pixels
-void vicii_graphics_sequencer(vicii_t* vicii, uint8_t graphics_data) {
+// Graphics sequencer (called from G-access) - Stores graphics data in line buffer AND shift register
+void vicii_graphics_sequencer(vicii_t* vicii, uint8_t graphics_data, uint8_t char_index) {
     vicii_sequencer_unit_t* seq = &vicii->sequencer;
     
-    // Simply load the graphics data into the shift register
-    // The unified pixel sequencer will handle the actual pixel emission
-    seq->shift_reg = graphics_data;
+    // Store graphics data in the line buffer at the specified character index
+    if (char_index < 40) {
+        seq->graphics_line[char_index] = graphics_data;
+    }
     
-    // Note: char_index will be updated by the pixel sequencer based on x coordinate
+    // ALSO set shift_reg directly for immediate use (TEMPORARY FIX to restore display)
+    seq->shift_reg = graphics_data;
 }
 
 // ========================================================================================
@@ -215,6 +217,12 @@ static void vicii_unified_pixel_sequencer(vicii_t* vicii) {
         // Clamp char_index to valid range (0-39) to prevent out-of-bounds access
         if (seq->char_index >= 40) {
             seq->char_index = 39;
+        }
+        
+        // Load shift register from graphics line buffer at current character position
+        // NOTE: shift_reg is ALSO loaded by graphics_sequencer for now
+        if (seq->char_index < 40) {
+            // seq->shift_reg = seq->graphics_line[seq->char_index];  // DISABLED for now
         }
         
         // Sequence exactly 8 pixels from shift register
@@ -1312,19 +1320,40 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // The graphics sequencer will use the data when in display_state
     uint8_t graphics_data = BUS_GET_DATA(bus_state);
     
-    // STEP 4: Update border flip-flops to establish display window state
-    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
-    
-    // STEP 5: Perform unified pixel sequencing (8 pixels per cycle)
-    if (vicii->pixel.framebuffer && vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
-        vicii_unified_pixel_sequencer(vicii);
-    }
-    
-    // STEP 6: Load graphics data into shift register when display is active
+    // STEP 4: Load graphics data into line buffer during cycles 16-55
     // During display_state, we need graphics data for every raster line (not just bad lines)
     // to show different rows of each character
     if (vicii->video_logic.display_state && vicii->timing.x_cycle >= 16 && vicii->timing.x_cycle <= 54) {
-        vicii_graphics_sequencer(vicii, graphics_data);
+        // Calculate which character this graphics data belongs to
+        uint8_t g_char_index = vicii->timing.x_cycle - 16;
+        
+        // DEBUG
+        static int store_idx_count = 0;
+        if (vicii->timing.raster_counter == 51 && g_char_index < 3 && store_idx_count < 3) {
+            fprintf(stderr, "STORE_IDX: cycle=%d g_char_index=%d data=$%02X buffer_before=$%02X\n",
+                    vicii->timing.x_cycle, g_char_index, graphics_data,
+                    vicii->sequencer.graphics_line[g_char_index]);
+            store_idx_count++;
+        }
+        
+        vicii_graphics_sequencer(vicii, graphics_data, g_char_index);
+        
+        // DEBUG
+        static int store_after_count = 0;
+        if (vicii->timing.raster_counter == 51 && g_char_index < 3 && store_after_count < 3) {
+            fprintf(stderr, "STORE_AFTER: g_char_index=%d buffer_after=$%02X\n",
+                    g_char_index, vicii->sequencer.graphics_line[g_char_index]);
+            store_after_count++;
+        }
+    }
+    
+    // STEP 5: Update border flip-flops to establish display window state
+    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
+    
+    // STEP 6: Perform unified pixel sequencing (8 pixels per cycle)
+    // This uses the graphics data that was JUST loaded above
+    if (vicii->pixel.framebuffer && vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
+        vicii_unified_pixel_sequencer(vicii);
     }
     
     // STEP 6: Update border flip-flops AFTER pixel generation

@@ -348,6 +348,7 @@ typedef struct {
     uint8_t graphics_mode;    // Current graphics mode
     uint8_t last_mode;        // Last graphics mode for change detection
     uint8_t shift_reg;        // Graphics shift register
+    uint8_t graphics_line[40]; // Graphics data buffer for current scanline (40 characters)
     uint8_t xscroll_counter;  // XSCROLL delay counter
     uint8_t char_index;       // Current character index (0-39)
     uint8_t pixel_in_char;    // Current pixel within character (0-7)
