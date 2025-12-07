@@ -717,15 +717,27 @@ void vicii_timing_advance(vicii_t* vicii) {
         vicii->pixel.pixel_line_index = 0;
         vicii->timing.x_coordinate = 0;
         
+        // CRITICAL: Check if we're about to enter raster 0x30 (first display raster)
+        // If so, reset VCBASE, VC, and display_state BEFORE advancing the raster counter
+        // This prevents cycle 58 on the previous line from corrupting VCBASE/VC
+        // and ensures display_state starts FALSE (will be set TRUE by first bad line)
+        if (vicii->timing.raster_counter == 0x2F) {
+            vicii->video_logic.vcbase = 0;
+            vicii->video_logic.vc = 0;
+            vicii->video_logic.display_state = false;
+        }
+        
         if (++vicii->timing.raster_counter >= vicii->timing.total_lines) {
             vicii->timing.raster_counter = 0;
             vicii->video_logic.was_den_set_during_raster_30 = false;
             vicii->video_logic.is_bad_line = false;
             vicii->video_logic.vcbase = 0;
+            vicii->video_logic.vc = 0;
         }
         
         if (vicii->timing.raster_counter < 0x30 || vicii->timing.raster_counter > 0xf7) {
             vicii->video_logic.vcbase = 0;
+            vicii->video_logic.vc = 0;
         }
         
         if (vicii->timing.raster_counter == 0) {
@@ -948,7 +960,7 @@ static inline void vicii_cycle_58_rc_check(vicii_t* vicii) {
             vicii->video_logic.vcbase = vicii->video_logic.vc;
             should_increment_rc = false; // Override: don't increment when going to idle
         }
-    }            
+    }
     // Increment RC if we determined we should
     if (should_increment_rc) {
         vicii->video_logic.rc = (vicii->video_logic.rc + 1) & 0x07;
@@ -1249,7 +1261,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             // C-access: Store video matrix data that arrived from PREVIOUS cycle's PHI2 setup
             // Store at current VMLI, then increment VMLI so next cycle stores at next position
             if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
-                vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = bus_data;                
+                vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = bus_data;
                 // Increment VC and VMLI after storing c-access data
                 vicii->video_logic.vc++;
                 vicii->video_logic.vmli++;
