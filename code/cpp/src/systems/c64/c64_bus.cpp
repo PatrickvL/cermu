@@ -34,7 +34,7 @@ void c64_bus_on_banking_change(void* bus_ptr, uint8_t banking_state) {
 // TODO: Re-implement when cartridge support is added
 
 // Simple 4KB bank calculation for optimized system (0-15)
-static inline int8_t c64_bus_get_bank(uint16_t address) {
+static inline int8_t c64_get_address_bank(uint16_t address) {
     return address >> 12;  // Extract 4KB bank (0-15)
 }
 
@@ -44,7 +44,7 @@ static inline int8_t c64_bus_get_bank(uint16_t address) {
 bus_state_t c64_bus_vic_read(c64_bus_t* c64_bus, bus_state_t bus_state, uint16_t address) {
     BUS_SET_ADDR(bus_state, address); // Perhaps this is no longer needed
     // Extract 4KB bank from address (0-15 for VIC-II's 64KB addressable space)
-    const uint8_t vicii_bank = c64_bus_get_bank(address);
+    const uint8_t vicii_bank = c64_get_address_bank(address);
     // Get raw CHIP directly from pre-selected active array (no mode indexing)
     const uint8_t chip = c64_bus->vicii_chip_per_bank[vicii_bank];
 
@@ -85,29 +85,28 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
     // Determine if this is a read or write operation
     bool is_read = BUS_GET_LINES(bus_state) & BUS_MASK_RW;
     uint16_t address = BUS_GET_ADDR(bus_state);
-    uint8_t cpu_bank = c64_bus_get_bank(address);     // Extract 4KB bank (0-15)
+    uint8_t address_bank = c64_get_address_bank(address);     // Extract 4KB bank (0-15)
     
     // NOTE: I/O port addresses (0-1) are now handled by mos6510_tick() early in the CPU tick
     // This prevents the memory system from overwriting I/O port read data with RAM data
     
-    // Check if VIC-II is cycle-stealing (RDY low = BA low)
-    // CRITICAL: RDY only affects READ operations, NOT writes!
-    // From vic-ii.txt lines 150-156:
-    // "RDY: If this line is low during a read access, the processor stops...
-    //  It is ignored during write accesses."
-    bool is_vicii_cycle_stealing = !(BUS_GET_LINES(bus_state) & BUS_MASK_RDY);
+    // CRITICAL: Check AEC line to determine if VIC-II has bus control
+    // BA (RDY) is an early warning signal (3 cycles ahead)
+    // AEC is the actual bus control signal - VIC-II has the bus when AEC is LOW
+    // When AEC is low, use VIC-II memory mapping; when high, use CPU memory mapping
+    bool is_vicii_cycle_stealing = !(BUS_GET_LINES(bus_state) & BUS_MASK_AEC);
 
     if (is_read) {
         // === READ OPERATION ===
-        // RDY affects reads: CPU halts when RDY is low (BA is low)
+        // AEC low = VIC-II has bus control and uses its memory mapping
         uint8_t chip;
 
         if (is_vicii_cycle_stealing) {
             // VIC-II cycle-stealing: use VIC-II memory mapping
-            chip = c64_bus->vicii_chip_per_bank[cpu_bank];
+            chip = c64_bus->vicii_chip_per_bank[address_bank];
         } else {
             // Normal CPU access: use CPU memory mapping
-            chip = decode_read_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
+            chip = decode_read_chip(c64_bus->cpu_encoded_chip_per_bank[address_bank]);
         }
 
         // ENHANCED FAST PATH: Direct unified buffer access for all memory chips
@@ -130,17 +129,12 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
         }
     } else {
         // === WRITE OPERATION ===
-        // CRITICAL FIX: Writes are NOT affected by RDY!
-        // The CPU can complete writes even when BA/RDY is low (VIC-II cycle-stealing)
-        // This is documented in vic-ii.txt lines 150-156 and lines 217-222:
-        // "BA is connected to the RDY line... but this line is ignored on write accesses
-        //  (the CPU can only be interrupted on reads), and the 6510 never does more than
-        //  three writes in sequence."
-        //
-        // The VIC-II sets BA low 3 cycles early to allow the CPU to complete up to 3
+        // Writes always use CPU memory mapping regardless of AEC state
+        // The CPU can complete writes even when BA/RDY is low (early warning from VIC-II)
+        // BA goes low 3 cycles early to allow the CPU to complete up to 3
         // consecutive write operations before halting on the first read access.
         
-        uint8_t chip = decode_write_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
+        uint8_t chip = decode_write_chip(c64_bus->cpu_encoded_chip_per_bank[address_bank]);
 
         // ENHANCED FAST PATH: Handle all writable unified buffer regions
         if (likely(chip == CHIP_RAM)) {
@@ -786,9 +780,34 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
 // ============================================================================
 
 /**
+ * Floating bus behavior for unmapped IO regions.
+ * Returns bus state unchanged (floating bus), writes are ignored.
+ */
+static bus_state_t c64_bus_unmapped_read(void* chip, bus_state_t bus_state) {
+    (void)chip; // Unused - floating bus has no chip instance
+    // Leave bus data unchanged - floating bus behavior
+    return bus_state;
+}
+
+static bus_state_t c64_bus_unmapped_write(void* chip, bus_state_t bus_state) {
+    (void)chip; // Unused - floating bus has no chip instance
+    // Write is ignored - no operation
+    return bus_state;
+}
+
+/**
  * Initialize IO page handlers for optimized I/O access.
  * Sets up direct chip callbacks that eliminate wrapper functions and provide
  * efficient targeted access to IO chips, indexed by IO page number.
+ *
+ * C64 IO Memory Map ($D000-$DFFF):
+ * $D000-$D3FF (pages 0-3):   VIC-II (64 bytes mirrored)
+ * $D400-$D7FF (pages 4-7):   SID (32 bytes mirrored)
+ * $D800-$DBFF (pages 8-11):  Color RAM (1KB)
+ * $DC00-$DCFF (page 12):     CIA1 (16 bytes mirrored)
+ * $DD00-$DDFF (page 13):     CIA2 (16 bytes mirrored)
+ * $DE00-$DEFF (page 14):     I/O1 expansion (unmapped by default)
+ * $DF00-$DFFF (page 15):     I/O2 expansion (unmapped by default)
  */
 void c64_bus_init_io_handlers(c64_bus_t* c64_bus) {
     c64_t* c64 = (c64_t*)c64_bus->c64;
@@ -796,38 +815,44 @@ void c64_bus_init_io_handlers(c64_bus_t* c64_bus) {
     // Set up direct callbacks and chip instances for each IO page (0-15 for $D000-$DFFF)
     // Each page gets the appropriate chip register function and chip instance directly
 
-    // Pages 0-3 ($D000-$D3FF): VIC-II
+    // Pages 0-3 ($D000-$D3FF): VIC-II (64 bytes mirrored across 1KB)
     for (int page = 0; page <= 3; page++) {
         c64_bus->io_handlers[page].read_handler = vicii_registers_read;
         c64_bus->io_handlers[page].write_handler = vicii_registers_write;
         c64_bus->io_handlers[page].chip_instance = c64->vicii;
     }
 
-    // Pages 4-7 ($D400-$D7FF): SID
+    // Pages 4-7 ($D400-$D7FF): SID (32 bytes mirrored across 1KB)
     for (int page = 4; page <= 7; page++) {
         c64_bus->io_handlers[page].read_handler = mos6581_registers_read;
         c64_bus->io_handlers[page].write_handler = mos6581_registers_write;
         c64_bus->io_handlers[page].chip_instance = c64->sid;
     }
 
-    // Pages 8-11 ($D800-$DBFF): Color RAM
+    // Pages 8-11 ($D800-$DBFF): Color RAM (1KB, 1024 bytes)
     for (int page = 8; page <= 11; page++) {
         c64_bus->io_handlers[page].read_handler = mos2114_read;
         c64_bus->io_handlers[page].write_handler = mos2114_write;
         c64_bus->io_handlers[page].chip_instance = c64->colorram;
     }
 
-    // Pages 12-13 ($DC00-$DCFF): CIA1
-    for (int page = 12; page <= 13; page++) {
-        c64_bus->io_handlers[page].read_handler = mos6526_registers_read;
-        c64_bus->io_handlers[page].write_handler = mos6526_registers_write;
-        c64_bus->io_handlers[page].chip_instance = c64->cia1;
-    }
+    // Page 12 ($DC00-$DCFF): CIA1 (16 bytes mirrored across 256 bytes)
+    c64_bus->io_handlers[12].read_handler = mos6526_registers_read;
+    c64_bus->io_handlers[12].write_handler = mos6526_registers_write;
+    c64_bus->io_handlers[12].chip_instance = c64->cia1;
 
-    // Pages 14-15 ($DD00-$DDFF): CIA2
-    for (int page = 14; page <= 15; page++) {
-        c64_bus->io_handlers[page].read_handler = mos6526_registers_read;
-        c64_bus->io_handlers[page].write_handler = mos6526_registers_write;
-        c64_bus->io_handlers[page].chip_instance = c64->cia2;
-    }
+    // Page 13 ($DD00-$DDFF): CIA2 (16 bytes mirrored across 256 bytes)
+    c64_bus->io_handlers[13].read_handler = mos6526_registers_read;
+    c64_bus->io_handlers[13].write_handler = mos6526_registers_write;
+    c64_bus->io_handlers[13].chip_instance = c64->cia2;
+
+    // Page 14 ($DE00-$DEFF): I/O1 expansion port (unmapped by default - floating bus)
+    c64_bus->io_handlers[14].read_handler = c64_bus_unmapped_read;
+    c64_bus->io_handlers[14].write_handler = c64_bus_unmapped_write;
+    c64_bus->io_handlers[14].chip_instance = NULL;
+
+    // Page 15 ($DF00-$DFFF): I/O2 expansion port (unmapped by default - floating bus)
+    c64_bus->io_handlers[15].read_handler = c64_bus_unmapped_read;
+    c64_bus->io_handlers[15].write_handler = c64_bus_unmapped_write;
+    c64_bus->io_handlers[15].chip_instance = NULL;
 }
