@@ -379,7 +379,24 @@ static inline void* create_and_register_chip(c64_t* c64, chip_descriptor_t* desc
     return chip;
 }
 
-//
+// Callback function for CIA2 Port A changes - updates VIC-II bank
+// Called whenever CIA2 Port A output changes (considering DDR masking)
+static void c64_cia2_port_a_callback(void* context, uint8_t port_a_output) {
+    c64_t* c64 = (c64_t*)context;
+    
+    // Extract VIC-II bank bits (bits 0-1 of CIA2 Port A)
+    uint8_t vic_bank_bits = port_a_output & 0x03;
+    
+    // VIC-II bank mapping is INVERTED:
+    // Port A bits 0-1: 00 → Bank 3, 01 → Bank 2, 10 → Bank 1, 11 → Bank 0
+    uint8_t vic_bank = 3 - vic_bank_bits;
+    
+    printf("CIA2 Port A changed: $%02X → VIC-II Bank %d (bits=%d)\n",
+           port_a_output, vic_bank, vic_bank_bits);
+    
+    // Update VIC-II memory bank
+    vicii_memory_bank_change(c64->vicii, vic_bank);
+}
 
 void c64_system_destroy(c64_t* c64) {
     if (!c64) return;
@@ -462,8 +479,15 @@ c64_t* c64_system_create(const c64_config_t* config) {
     c64_bus_init_unified_pointers(&c64->bus, c64, config);
     
     // Hardware: CIA2 Data Port A bits 0-1 control VIC-II memory bank selection
-    // Note: VIC-II will monitor CIA2 writes at $DD00 directly in its tick function
-    // This eliminates the need for callbacks and global state
+    // Register callback with CIA2 to receive Port A change notifications
+    // This callback will update VIC-II bank when CIA2 Port A output changes
+    c64->cia2->port_a_change_callback = c64_cia2_port_a_callback;
+    c64->cia2->port_a_callback_context = c64;
+    printf("C64 System: Registered CIA2 Port A callback for VIC-II bank switching\n");
+    
+    // Manually invoke callback with current CIA2 Port A value to set initial VIC-II bank
+    // (callback wasn't available during mos6526_reset, so we call it now)
+    c64_cia2_port_a_callback(c64, c64->cia2->port_a_value);
 
     // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
     ((mos6526_t*)c64->cia2)->interrupt_line = BUS_MASK_NMI;

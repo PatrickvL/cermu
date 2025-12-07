@@ -61,6 +61,11 @@ void mos6526_reset(mos6526_t* cia) {
     cia->is_running_tod = false;
     cia->tod_cycles = 0;
     cia->interrupt_mask = 0;
+    
+    // Call port A change callback with initial value (all high due to pull-ups)
+    if (cia->port_a_change_callback) {
+        cia->port_a_change_callback(cia->port_a_callback_context, cia->port_a_value);
+    }
 }
 
 // The CIA 1 registers are repeated each 16 bytes in the area $dc00-$dcff
@@ -155,6 +160,7 @@ bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state) {
             break;
         case DDRA:
             mos6526_write_data_direction_port(cia, A, value);
+            // After changing DDR, update port output - this may trigger callback if output changed
             mos6526_update_output_port(cia, A, cia->reg[PRA]);
             break;
         case DDRB:
@@ -279,7 +285,13 @@ void mos6526_update_output_port(mos6526_t* cia, uint32_t p, uint8_t v) { // p:A 
     uint8_t* port = (p == A) ? &cia->port_a_value : &cia->port_b_value;
     uint8_t mask = cia->reg[(p == A) ? DDRA : IDDRB_OFFSET];
     // Note : For port B, IDDRB is DDRB but with PBON taken into account - see UpdateInternalDataDirectionPortB()
+    uint8_t old_value = *port;
     *port = (*port & ~mask) | (v & mask);
+    
+    // Call port A change callback if port A changed and callback is registered
+    if (p == A && old_value != *port && cia->port_a_change_callback) {
+        cia->port_a_change_callback(cia->port_a_callback_context, *port);
+    }
 }
 
 uint8_t mos6526_read_port_data(mos6526_t* cia, uint32_t p) { // p:A or B

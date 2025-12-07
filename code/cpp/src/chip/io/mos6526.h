@@ -69,6 +69,10 @@ typedef struct mos6526_s {
     uint8_t interrupt_mask;
     
     bus_cycle_ops_t bus_interface;
+    
+    // Callback for port A output changes (used by CIA2 for VIC-II bank switching)
+    void (*port_a_change_callback)(void* context, uint8_t port_a_output);
+    void* port_a_callback_context;
 } mos6526_t;
 
 // MOS6526 CIA Register Definitions
