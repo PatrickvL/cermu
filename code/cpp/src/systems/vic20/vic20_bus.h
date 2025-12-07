@@ -9,17 +9,13 @@
 typedef struct {
     chip_descriptor_t* desc;
     void* vic20; // Pointer to VIC-20 system
-
     bus_state_t state;
-    uint8_t system_lines;
-
     // Memory mapping state
-    uint8_t current_bank;
     uint16_t bank_base;
-
     // I/O state
-    bool io_access_pending;
     uint16_t io_address;
+    bool io_access_pending;
+    uint8_t system_lines;
 } vic20_bus_t;
 
 // Chip descriptor for VIC-20 bus
