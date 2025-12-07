@@ -291,12 +291,19 @@ uint8_t pla_906114_01_outputs_to_chip(pla_906114_01_t* pla) {
     } else if (!pla->outputs.n_kernal) {
         // KERNAL ROM (read-only)
         return CHIP_KERNAL;
-    } else if (!pla->outputs.n_charrom) {
-        // Character ROM (read-only)
-        return CHIP_CHARROM;
     } else if (!pla->outputs.n_io) {
         // I/O region - includes VIC-II, SID, Color RAM, CIA1, CIA2 (read/write)
+        // CRITICAL: Check IO before CHARROM because during write mode when CHAREN=1,
+        // the PLA activates BOTH n_io and n_charrom outputs simultaneously.
+        // IO must take priority for writes to reach the hardware registers.
+        // This matches C64 hardware behavior: writes to $D000-$DFFF always go to IO,
+        // while reads may see Character ROM depending on CHAREN state.
         return CHIP_IO;
+    } else if (!pla->outputs.n_charrom) {
+        // Character ROM (read-only)
+        // Only reached when IO is not active, ensuring Character ROM is only
+        // selected for reads when CHAREN=1 but not for writes.
+        return CHIP_CHARROM;
     } else if (!pla->outputs.n_roml) {
         // Cartridge ROM Low (read-only)
         return CHIP_ROML;
@@ -330,8 +337,11 @@ void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pl
         pla_906114_01_update_outputs((pla_906114_01_t*)pla);
         uint8_t write_chip = pla_906114_01_outputs_to_chip((pla_906114_01_t*)pla);
 
-        // Note: ROM areas (BASIC, KERNAL, Character ROM, Cartridge) are not writable,
-        // so write_chip remains CHIP_UNMAPPED for those regions
+        // Note: The PLA naturally handles the case where CHAREN=1 causes both
+        // n_io and n_charrom outputs to be active during write mode. The check order
+        // in pla_906114_01_outputs_to_chip() gives IO priority, ensuring writes to
+        // $D000-$DFFF reach IO registers even when Character ROM is mapped for reads.
+        // This matches C64 hardware behavior without requiring special overrides.
 
         // Encode both read and write CHIPs into the mapping
         bus->cpu_encoded_chip_per_bank[bank] = encode_chip_rw(read_chip, write_chip);
