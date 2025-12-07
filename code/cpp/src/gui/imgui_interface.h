@@ -77,6 +77,8 @@ typedef struct {
     char rom_path_chargen[512];
     char cartridge_path[512];
     char disk_image_path[512];
+    char test_binary_path[512];        // Path to test binary (PRG/BIN file)
+    bool show_test_binary_dialog;      // Show test binary load dialog
 } gui_state_t;
 
 // Emulation thread signals
@@ -163,6 +165,10 @@ void gui_load_rom_file(const char* filepath, const char* type, gui_state_t* gui_
 void gui_load_disk_image(const char* filepath);
 bool gui_reload_roms_from_state(c64_s* c64, const gui_state_t* gui_state);
 bool gui_apply_rom_changes(gui_emulation_context_t* emu_context, gui_state_t* gui_state);
+
+// Test binary loading
+bool gui_load_test_binary(gui_emulation_context_t* emu_context, gui_state_t* gui_state, const char* filepath);
+void gui_render_test_binary_dialog(c64_s* c64, gui_state_t* gui_state, gui_emulation_context_t* emu_context);
 
 // Emulation thread functions (SDL-based implementation)
 bool gui_emulation_thread_init(gui_emulation_context_t* context, c64_s* c64);

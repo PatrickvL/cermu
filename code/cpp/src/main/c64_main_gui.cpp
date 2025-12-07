@@ -18,6 +18,8 @@ int main(int argc, char** argv) {
     c64_config_t config = {
         .vicii_standard = VIC_PAL,
         .rom_config = NULL,  // Use default ROM paths, can be overridden by GUI later
+        .test_mode = C64_TEST_MODE_NORMAL,  // Normal boot mode
+        .test_binary_config = NULL,         // No test binary
         .roml_present = false,
         .romh_present = false,
         .roml_filename = nullptr,
