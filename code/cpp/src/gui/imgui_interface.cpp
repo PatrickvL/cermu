@@ -30,6 +30,37 @@ static SDL_Window *g_window = NULL;
 static SDL_GLContext g_gl_context = NULL;
 static bool g_should_quit = false;
 
+// Render hidden window for persistent storage in ImGui .ini file
+static void gui_render_persistent_storage(gui_state_t* gui_state) {
+    // Create a completely invisible window positioned off-screen
+    ImGui::SetNextWindowPos(ImVec2(-1000, -1000), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(1, 1), ImGuiCond_Always);
+    ImGui::Begin("C64EmuPersistentPaths", nullptr,
+                 ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoResize |
+                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground |
+                 ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoFocusOnAppearing |
+                 ImGuiWindowFlags_NoBringToFrontOnFocus);
+    
+    // Store paths as input text widgets (ImGui will persist their values in .ini)
+    ImGui::InputText("##test_binary_path", gui_state->test_binary_path,
+                     sizeof(gui_state->test_binary_path));
+    ImGui::InputText("##last_test_binary_dir", gui_state->last_test_binary_dir,
+                     sizeof(gui_state->last_test_binary_dir));
+    ImGui::InputText("##last_rom_dir", gui_state->last_rom_dir,
+                     sizeof(gui_state->last_rom_dir));
+    
+    ImGui::End();
+}
+
+// Dummy functions for compatibility (ImGui handles persistence automatically)
+static void gui_load_persistent_settings(gui_state_t* gui_state) {
+    // ImGui will automatically load values from .ini file
+}
+
+static void gui_save_persistent_settings(const gui_state_t* gui_state) {
+    // ImGui will automatically save values to .ini file
+}
+
 bool gui_init(const char *window_title, int width, int height) {
   // Initialize SDL subsystems
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS) < 0) {
@@ -73,6 +104,9 @@ bool gui_init(const char *window_title, int width, int height) {
       ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
   io.ConfigFlags |=
       ImGuiConfigFlags_NavEnableGamepad; // Enable Gamepad Controls
+  
+  // Set ImGui .ini filename for persistent settings
+  io.IniFilename = "c64emu.ini";
 
   // Setup Dear ImGui style
   ImGui::StyleColorsDark();
@@ -111,6 +145,8 @@ void gui_cleanup(void) {
 
 void gui_cleanup_state(gui_state_t *gui_state) {
   if (gui_state) {
+    // Save persistent settings before cleanup
+    gui_save_persistent_settings(gui_state);
     gui_cleanup_screen_display(gui_state);
   }
 }
@@ -190,13 +226,16 @@ void gui_init_state(gui_state_t *gui_state) {
   strcpy(gui_state->rom_path_kernal, "data/c64/roms/kernal.901227-03.bin");
   strcpy(gui_state->rom_path_chargen, "data/c64/roms/characters.901225-01.bin");
   
-  // Test binary path (empty by default)
+  // Test binary path (empty by default, will be loaded from .ini if available)
   gui_state->test_binary_path[0] = '\0';
   gui_state->show_test_binary_dialog = false;
   
-  // Initialize last used directories (empty by default, will be populated on first use)
+  // Initialize last used directories (empty by default, will be loaded from .ini if available)
   gui_state->last_test_binary_dir[0] = '\0';
   gui_state->last_rom_dir[0] = '\0';
+  
+  // Load persistent settings from custom file
+  gui_load_persistent_settings(gui_state);
 }
 
 void gui_render_frame(c64_t *c64, gui_state_t *gui_state,
@@ -220,6 +259,9 @@ void gui_render_frame(c64_t *c64, gui_state_t *gui_state,
   // Render main menu bar with emulation context
   gui_render_menu_bar(c64, gui_state, emu_context);
 
+  // Render persistent storage window (hidden but stores data in imgui.ini)
+  gui_render_persistent_storage(gui_state);
+  
   // Render windows based on gui_state (but not the screen window)
   if (gui_state->show_memory_viewer) {
     gui_render_memory_viewer(c64, gui_state);
@@ -1295,6 +1337,7 @@ void gui_calculate_display_dimensions(gui_state_t *gui_state,
 #include "../systems/c64/c64_test_loader.h"
 
 // Render dialog for loading test binaries
+// Render dialog for loading test binaries
 void gui_render_test_binary_dialog(c64_t* c64, gui_state_t* gui_state, gui_emulation_context_t* emu_context) {
     if (!ImGui::Begin("Load Test Binary", &gui_state->show_test_binary_dialog, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::End();
@@ -1304,14 +1347,24 @@ void gui_render_test_binary_dialog(c64_t* c64, gui_state_t* gui_state, gui_emula
     ImGui::Text("Load a C64 test binary (PRG or BIN file)");
     ImGui::Separator();
     
-    // File path input
+    // File path input - show full restored path
     ImGui::InputText("File Path", gui_state->test_binary_path, sizeof(gui_state->test_binary_path));
     ImGui::SameLine();
     if (ImGui::Button("Browse...")) {
         // Open native file dialog for PRG/BIN files
         char selected_path[512] = {0};
-        const char* default_dir = gui_state->last_test_binary_dir[0] != '\0' ? gui_state->last_test_binary_dir : NULL;
-        if (gui_open_file_dialog("prg,bin", default_dir, selected_path, sizeof(selected_path))) {
+        
+        // Use the full current file path as default if available, otherwise use last directory
+        const char* default_path = nullptr;
+        if (gui_state->test_binary_path[0] != '\0') {
+            // If we have a full path stored, use it (NFD will navigate to that file)
+            default_path = gui_state->test_binary_path;
+        } else if (gui_state->last_test_binary_dir[0] != '\0') {
+            // Otherwise use just the directory
+            default_path = gui_state->last_test_binary_dir;
+        }
+        
+        if (gui_open_file_dialog("prg,bin", default_path, selected_path, sizeof(selected_path))) {
             strncpy(gui_state->test_binary_path, selected_path, sizeof(gui_state->test_binary_path) - 1);
             gui_state->test_binary_path[sizeof(gui_state->test_binary_path) - 1] = '\0';
             
@@ -1327,18 +1380,21 @@ void gui_render_test_binary_dialog(c64_t* c64, gui_state_t* gui_state, gui_emula
             }
         }
     }
-    
     ImGui::Separator();
     
     // Load button
     if (ImGui::Button("Load PRG", ImVec2(120, 0))) {
         if (gui_state->test_binary_path[0] != '\0') {
+            printf("User clicked Load PRG button for: %s\n", gui_state->test_binary_path);
             if (gui_load_test_binary(emu_context, gui_state, gui_state->test_binary_path)) {
                 printf("Test binary loaded successfully: %s\n", gui_state->test_binary_path);
-                gui_state->show_test_binary_dialog = false;
+                // Keep dialog open to show the loaded path
+                // User can click Cancel to close it
             } else {
                 printf("Failed to load test binary: %s\n", gui_state->test_binary_path);
             }
+        } else {
+            printf("No file path specified\n");
         }
     }
     
@@ -1355,6 +1411,7 @@ void gui_render_test_binary_dialog(c64_t* c64, gui_state_t* gui_state, gui_emula
 }
 
 // Load a test binary and reinitialize the C64 system
+// Load a test binary and reinitialize the C64 system
 bool gui_load_test_binary(gui_emulation_context_t* emu_context, gui_state_t* gui_state, const char* filepath) {
     if (!emu_context || !emu_context->c64 || !filepath || filepath[0] == '\0') {
         printf("Invalid parameters for test binary loading\n");
@@ -1363,12 +1420,10 @@ bool gui_load_test_binary(gui_emulation_context_t* emu_context, gui_state_t* gui
     
     c64_t* c64 = emu_context->c64;
     
-    // Pause emulation
+    // Stop emulation completely before reset
     bool was_running = (emu_context->current_state == EMU_STATE_RUNNING);
-    if (was_running) {
-        gui_emulation_pause(emu_context);
-        SDL_Delay(100); // Give thread time to pause
-    }
+    gui_emulation_pause(emu_context);
+    SDL_Delay(150); // Give thread time to fully pause
     
     // Determine file type based on extension
     const char* ext = strrchr(filepath, '.');
@@ -1399,29 +1454,35 @@ bool gui_load_test_binary(gui_emulation_context_t* emu_context, gui_state_t* gui
         .initial_game_state = true
     };
     
+    printf("==== LOADING TEST BINARY ====\n");
+    printf("File: %s\n", filepath);
+    printf("Type: %s\n", test_mode == C64_TEST_MODE_PRG_FILE ? "PRG" : "BIN");
+    
     // Reinitialize memory with the test binary
-    printf("Reinitializing C64 memory with test binary: %s\n", filepath);
+    printf("Reinitializing C64 memory with test binary...\n");
     c64_memory_init(&c64->system, &config);
     
-    // Reset the CPU to the loaded program's start address
-    // The memory init should have set PC appropriately
+    // Full system reset
+    printf("Performing full system reset...\n");
     mos6510_reset((mos6510_t*)c64->mos6510, 0);
     
     // Reset cycle counters
     c64->total_cycles = 0;
     emu_context->total_cycles_executed = 0;
     emu_context->frames_rendered = 0;
+    emu_context->current_state = EMU_STATE_STOPPED;
     
-    printf("Test binary loaded and system reset. PC set appropriately.\n");
+    printf("Test binary loaded and system reset complete.\n");
+    printf("Starting emulation automatically...\n");
     
-    // Resume emulation if it was running
-    if (was_running) {
-        gui_emulation_start(emu_context);
-    }
+    // Always start emulation after loading a test binary
+    gui_state->emulation_running = true;
+    gui_emulation_start(emu_context);
+    
+    printf("============================\n");
     
     return true;
 }
-
 // ============================================================================
 // ROM LOADING IMPLEMENTATION
 // ============================================================================
