@@ -326,8 +326,8 @@ void c64_system_tick(c64_t* c64) {
 
     // =========================================================================
     // PHASE 3: MEMORY SERVICE PHASE
-    // Services memory access from either CPU (when RDY active) or VIC-II (when cycle stealing)
-    // The c64_memory_tick function checks RDY line to determine which chip set up the access
+    // Services memory access from either CPU or VIC-II
+    // The c64_memory_tick function checks AEC line to determine which chip has bus control
     // CRITICAL: This must happen AFTER vicii_tick sets up PHI2 access and AFTER CPU tick
     // =========================================================================
     s = c64_memory_tick(&c64->bus, s);
