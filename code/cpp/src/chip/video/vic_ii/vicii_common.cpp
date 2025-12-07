@@ -180,9 +180,9 @@ void vicii_sprite_sequencer(vicii_t* vicii) {
     }
 }
 
-// Unified pixel sequencer - sequences exactly 8 pixels per cycle
+// Pixel sequencer - sequences exactly 8 pixels per cycle
 // This is the ONLY function that emits pixels to the framebuffer
-static void vicii_unified_pixel_sequencer(vicii_t* vicii) {
+static void vicii_pixel_sequencer(vicii_t* vicii) {
     uint16_t x_coord = vicii->timing.display_x_coordinate;
     
     // Check if we're in the visible display area
@@ -198,12 +198,26 @@ static void vicii_unified_pixel_sequencer(vicii_t* vicii) {
         // We're in display area - sequence 8 pixels from shift register
         vicii_sequencer_unit_t* seq = &vicii->sequencer;
         
-        // Initialize sequencer on line start only
-        uint16_t display_pixel_x = x_coord - vicii->pixel.display_start_x;
+        // Calculate which character column we're currently displaying
+        // The G-access cycles are 15-54 (0-indexed), loading columns 0-39
+        // The pixel sequencer displays with a 3-cycle delay:
+        // - Cycle 15 loads column 0 → displayed at cycle 18
+        // - Cycle 16 loads column 1 → displayed at cycle 19
+        // So char_index = cycle - 18 (for cycles >= 18)
+        const uint8_t current_cycle = vicii->timing.x_cycle;
+        if (current_cycle >= 18 && current_cycle <= 57) {
+            seq->char_index = current_cycle - 18;
+        } else if (current_cycle < 18) {
+            seq->char_index = 0;
+        } else {
+            seq->char_index = 39;
+        }
+        
+        // Initialize xscroll on first display cycle
+        const uint16_t display_pixel_x = x_coord - vicii->pixel.display_start_x;
         if (display_pixel_x == 0) {
             seq->xscroll_counter = vicii->registers.data[VICII_C2] & VICII_C2_XSCROLL;
             seq->pixel_in_char = 0;
-            seq->char_index = 0;
         }
 
         // Reset shift register on mode change (but not x-scroll)
@@ -225,7 +239,7 @@ static void vicii_unified_pixel_sequencer(vicii_t* vicii) {
         
         // Sequence exactly 8 pixels from shift register
         for (int pixel = 0; pixel < 8; pixel++) {
-            uint16_t pixel_x = x_coord + (uint16_t)pixel;
+            const uint16_t pixel_x = x_coord + (uint16_t)pixel;
             vicii_pixel_t pixel_data;
             
             // XSCROLL handling - delay pixel output by XSCROLL pixels
@@ -242,7 +256,7 @@ static void vicii_unified_pixel_sequencer(vicii_t* vicii) {
             bool is_background = false;
             
             // char_index is now guaranteed to be in range 0-39 due to clamping above
-            uint8_t safe_char_index = seq->char_index;
+            const uint8_t safe_char_index = seq->char_index;
             
             switch (seq->graphics_mode) {
                 case VICII_GM_STANDARD_TEXT:
@@ -308,7 +322,8 @@ static void vicii_unified_pixel_sequencer(vicii_t* vicii) {
                     if (pixel_bits) {
                         color_index = vicii->video_data.video_color_line[safe_char_index] & 0x0F;
                     } else {
-                        uint8_t bg_select = (vicii->video_data.video_matrix_line[safe_char_index] >> 6) & 3;
+                        const uint8_t bg_select = (vicii->video_data.video_matrix_line[safe_char_index] >> 6) & 3;
+
                         color_index = vicii->registers.data[VICII_B0C + bg_select];
                     }
                     is_background = (pixel_bits == 0);
@@ -342,7 +357,8 @@ static void vicii_unified_pixel_sequencer(vicii_t* vicii) {
     } else {
         // We're in border area - sequence exactly 8 border pixels
         for (int pixel = 0; pixel < 8; pixel++) {
-            uint16_t pixel_x = x_coord + (uint16_t)pixel;
+            const uint16_t pixel_x = x_coord + (uint16_t)pixel;
+
             vicii_pixel_emit_at_x(vicii, &vicii->border.border_pixel, pixel_x);
         }
     }
@@ -357,7 +373,7 @@ void vicii_pixel_flush_line(vicii_t* vicii, const uint32_t* palette, int y) {
     
     vicii_pixel_unit_t* pixel = &vicii->pixel;
     uint32_t* row_ptr = &pixel->framebuffer[y * pixel->framebuffer_width];
-    uint32_t border_color = palette[vicii->registers.data[VICII_EC]];
+    const uint32_t border_color = palette[vicii->registers.data[VICII_EC]];
     
     // Fill entire line with border color first
     for (int x = 0; x < pixel->framebuffer_width; x++) {
@@ -366,12 +382,13 @@ void vicii_pixel_flush_line(vicii_t* vicii, const uint32_t* palette, int y) {
     
     // Copy the entire VIC-II line buffer (pixel_line_color contains the full line)
     if (pixel->pixel_line_color) {
-        int offset_x = (pixel->framebuffer_width - pixel->visible_pixels_per_line) >> 1;
+        const int offset_x = (pixel->framebuffer_width - pixel->visible_pixels_per_line) >> 1;
         
         for (int x = 0; x < pixel->visible_pixels_per_line; x++) {
-            int fb_x = offset_x + x;
+            const int fb_x = offset_x + x;
             if (fb_x >= 0 && fb_x < pixel->framebuffer_width) {
-                uint8_t color_index = pixel->pixel_line_color[x] & 0x0F;
+                const uint8_t color_index = pixel->pixel_line_color[x] & 0x0F;
+
                 row_ptr[fb_x] = palette[color_index];
             }
         }
@@ -1322,10 +1339,10 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // Perform PHI1 memory read (common path for all PHI1 accesses)
     bus_state = c64_bus_vic_read(c64_bus, bus_state, address);
 
-    // STEP 4: Load graphics data into line buffer during cycles 16-54
+    // STEP 4: Load graphics data into line buffer during cycles 15-54 (0-indexed)
     // During display_state, we need graphics data for every raster line (not just bad lines)
     // to show different rows of each character
-    if (vicii->video_logic.display_state && vicii->timing.x_cycle >= 16 && vicii->timing.x_cycle <= 54) {
+    if (vicii->video_logic.display_state && vicii->timing.x_cycle >= 15 && vicii->timing.x_cycle <= 54) {
         // G-access happens EVERY cycle during PHI1 (the address calculation above always runs)
         // The graphics sequencer will use the data when in display_state
         const uint8_t graphics_data = BUS_GET_DATA(bus_state);
@@ -1339,7 +1356,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // STEP 6: Perform unified pixel sequencing (8 pixels per cycle)
     // This uses the graphics data that was JUST loaded above
     if (vicii->pixel.framebuffer && vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
-        vicii_unified_pixel_sequencer(vicii);
+        vicii_pixel_sequencer(vicii);
     }
     
     // STEP 6: Update border flip-flops AFTER pixel generation
