@@ -134,10 +134,8 @@ static inline uint32_t c64_bus_unified_address_calc(uint8_t chip, uint16_t addr)
     
     // CRITICAL: addr contains original C64 memory map addresses (e.g. KERNAL 0xE000-0xFFFF)
     // Mask strips bank/base address to get chip-relative offset
-    // For CPU access: 0xE000 & 0x0FFF = 0x0000 (KERNAL base stripped)
-    // For VIC access: 0x1008 & 0x0FFF = 0x0008 (bank 1 base stripped)
-    // RAM uses full 0xFFFF for 64KB, ROMs use 0x0FFF for 4KB banks
-    return base + (addr & (0x0FFF | -(chip == CHIP_RAM)));
+    // RAM uses full 0xFFFF for 64KB, ROMs use 0x1FFF for 8KB banks
+    return base + (addr & (0x1FFF | -(chip == CHIP_RAM)));
 }
 
 /**

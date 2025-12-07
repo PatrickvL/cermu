@@ -88,17 +88,15 @@ static inline void vicii_pixel_emit_at_x(vicii_t* vicii, const vicii_pixel_t* pi
     vicii->pixel.pixel_line_color[pixel_x] = pixel_data->color;
 }
 
-// Graphics sequencer (called from G-access) - Stores graphics data in line buffer AND shift register
+// Graphics sequencer (called from G-access) - Stores graphics data in line buffer ONLY
 void vicii_graphics_sequencer(vicii_t* vicii, uint8_t graphics_data, uint8_t char_index) {
     vicii_sequencer_unit_t* seq = &vicii->sequencer;
     
     // Store graphics data in the line buffer at the specified character index
+    // The pixel sequencer will load from this buffer when rendering
     if (char_index < 40) {
         seq->graphics_line[char_index] = graphics_data;
     }
-    
-    // ALSO set shift_reg directly for immediate use (TEMPORARY FIX to restore display)
-    seq->shift_reg = graphics_data;
 }
 
 // ========================================================================================
@@ -220,9 +218,9 @@ static void vicii_unified_pixel_sequencer(vicii_t* vicii) {
         }
         
         // Load shift register from graphics line buffer at current character position
-        // NOTE: shift_reg is ALSO loaded by graphics_sequencer for now
+        // This decouples graphics loading from pixel rendering
         if (seq->char_index < 40) {
-            // seq->shift_reg = seq->graphics_line[seq->char_index];  // DISABLED for now
+            seq->shift_reg = seq->graphics_line[seq->char_index];
         }
         
         // Sequence exactly 8 pixels from shift register
@@ -1072,42 +1070,30 @@ static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border,
 //
 // BA returns HIGH when VIC no longer needs PHI2 access.
 
-static inline bus_state_t vicii_bus_control_aec_high(vicii_t* vicii, bus_state_t bus_state) {
+static inline bus_state_t vicii_bus_control_aec_high(bus_state_t bus_state) {
     BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_AEC);
-    // Also update global state for compatibility
-    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
-    BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) | BUS_MASK_AEC);
     return bus_state;
 }
 
-static inline bus_state_t vicii_bus_control_aec_low(vicii_t* vicii, bus_state_t bus_state) {
+static inline bus_state_t vicii_bus_control_aec_low(bus_state_t bus_state) {
     BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) & ~BUS_MASK_AEC);
-    // Also update global state for compatibility
-    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
-    BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) & ~BUS_MASK_AEC);
     return bus_state;
 }
 
-static inline bus_state_t vicii_bus_control_ba_high(vicii_t* vicii, bus_state_t bus_state) {
+static inline bus_state_t vicii_bus_control_ba_high(bus_state_t bus_state) {
     // BA HIGH: Bus is available to CPU during PHI2
     // This is the normal/default state
     BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_BA);
-    // Also update global state for compatibility
-    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
-    BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) | BUS_MASK_BA);
     return bus_state;
 }
 
-static inline bus_state_t vicii_bus_control_ba_low(vicii_t* vicii, bus_state_t bus_state) {
+static inline bus_state_t vicii_bus_control_ba_low(bus_state_t bus_state) {
     // BA LOW: VIC will need PHI2 bus access (prevents CPU from accessing bus)
     // This happens during:
     // - Bad Line c-accesses (character pointer reads)
     // - Sprite p-accesses (sprite data pointer reads)
     // - Sprite s-accesses (sprite data reads)
     BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) & ~BUS_MASK_BA);
-    // Also update global state for compatibility
-    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
-    BUS_SET_LINES(c64_bus->state, BUS_GET_LINES(c64_bus->state) & ~BUS_MASK_BA);
     return bus_state;
 }
 
@@ -1171,8 +1157,8 @@ static inline bus_state_t vicii_update_ba_aec_signals(vicii_t* vicii, bus_state_
     
     if (needs_phi2_now) {
         // Current cycle needs PHI2 access: BA LOW, AEC LOW
-        bus_state = vicii_bus_control_ba_low(vicii, bus_state);
-        bus_state = vicii_bus_control_aec_low(vicii, bus_state);
+        bus_state = vicii_bus_control_ba_low(bus_state);
+        bus_state = vicii_bus_control_aec_low(bus_state);
         return bus_state;
     }
     
@@ -1182,12 +1168,12 @@ static inline bus_state_t vicii_update_ba_aec_signals(vicii_t* vicii, bus_state_
     
     if (needs_phi2_future) {
         // Future cycle needs PHI2 access: BA LOW (warning), AEC HIGH
-        bus_state = vicii_bus_control_ba_low(vicii, bus_state);
-        bus_state = vicii_bus_control_aec_high(vicii, bus_state);
+        bus_state = vicii_bus_control_ba_low(bus_state);
+        bus_state = vicii_bus_control_aec_high(bus_state);
     } else {
         // No PHI2 access needed: BA HIGH, AEC HIGH (CPU has bus)
-        bus_state = vicii_bus_control_ba_high(vicii, bus_state);
-        bus_state = vicii_bus_control_aec_high(vicii, bus_state);
+        bus_state = vicii_bus_control_ba_high(bus_state);
+        bus_state = vicii_bus_control_aec_high(bus_state);
     }
     
     return bus_state;
@@ -1320,31 +1306,13 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // The graphics sequencer will use the data when in display_state
     uint8_t graphics_data = BUS_GET_DATA(bus_state);
     
-    // STEP 4: Load graphics data into line buffer during cycles 16-55
+    // STEP 4: Load graphics data into line buffer during cycles 16-54
     // During display_state, we need graphics data for every raster line (not just bad lines)
     // to show different rows of each character
     if (vicii->video_logic.display_state && vicii->timing.x_cycle >= 16 && vicii->timing.x_cycle <= 54) {
         // Calculate which character this graphics data belongs to
         uint8_t g_char_index = vicii->timing.x_cycle - 16;
-        
-        // DEBUG
-        static int store_idx_count = 0;
-        if (vicii->timing.raster_counter == 51 && g_char_index < 3 && store_idx_count < 3) {
-            fprintf(stderr, "STORE_IDX: cycle=%d g_char_index=%d data=$%02X buffer_before=$%02X\n",
-                    vicii->timing.x_cycle, g_char_index, graphics_data,
-                    vicii->sequencer.graphics_line[g_char_index]);
-            store_idx_count++;
-        }
-        
         vicii_graphics_sequencer(vicii, graphics_data, g_char_index);
-        
-        // DEBUG
-        static int store_after_count = 0;
-        if (vicii->timing.raster_counter == 51 && g_char_index < 3 && store_after_count < 3) {
-            fprintf(stderr, "STORE_AFTER: g_char_index=%d buffer_after=$%02X\n",
-                    g_char_index, vicii->sequencer.graphics_line[g_char_index]);
-            store_after_count++;
-        }
     }
     
     // STEP 5: Update border flip-flops to establish display window state
