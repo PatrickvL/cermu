@@ -1271,31 +1271,41 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             bus_state = mos2114_read(vicii->colorram, bus_state);
             // Store at current vmli position
             if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
-                const uint8_t color_data = BUS_GET_DATA(bus_state);
-                vicii->video_data.video_color_line[vicii->video_logic.vmli] = static_cast<vicii_color_t>(color_data & 0x0F);
+                const uint8_t color_data = BUS_GET_DATA(bus_state) & 0x0F;
+
+                vicii->video_data.video_color_line[vicii->video_logic.vmli] = static_cast<vicii_color_t>(color_data);
                 // After C-access, G-access (VIC_ACCESS_G) address calculation
-                // CRITICAL: vmli was incremented during C-access data storage, so we need to use vmli-1
-                // to get the character code for the CURRENT character being rendered
-                const uint8_t g_access_index = (vicii->video_logic.vmli > 0) ? (vicii->video_logic.vmli - 1) : 0;
-                const uint8_t char_code = vicii->video_data.video_matrix_line[g_access_index];
                 
-                if (vicii->registers.data[VICII_C1] & VICII_C1_BMM) {
+                // Bitmap mode (BMM bit set)?
+                if (vicii->sequencer.graphics_mode & 0x2) {  // VICII_C1_BMM >> 4 = 0x2
+                    // Bitmap mode: address uses VC instead of character code
                     address = vicii->memory.cb_base |
-                            (((vicii->video_logic.vc - 1) & 0x3FF) << 3) |
-                            (vicii->video_logic.rc & 0x07);
+                            (((vicii->video_logic.vc - 1) & 0x3FF) << 3);
                 } else {
-                    address = vicii->memory.cb_base | (char_code << 3) | (vicii->video_logic.rc & 0x07);
-                }
+                    // Text mode: address uses character code
+                    // CRITICAL: vmli was incremented during C-access data storage, so we need to use vmli-1
+                    // to get the character code for the CURRENT character being rendered
+                    const uint8_t g_access_index = (vicii->video_logic.vmli > 0) ? (vicii->video_logic.vmli - 1) : 0;
+                    const uint8_t char_code = vicii->video_data.video_matrix_line[g_access_index];
+
+                    address = vicii->memory.cb_base | (char_code << 3);
+                }                
+                address |= vicii->video_logic.rc & 0x07;
                 break;
             }
             // Fall through to idle if display_state is false
             FALLTHROUGH;
         default: // VIC_ACCESS_IDLE, VIC_ACCESS_P, VIC_ACCESS_S
             // Idle, p-access, s-access OR display_state==false: Use idle address
-            address = (vicii->registers.data[VICII_C1] & VICII_C1_ECM) ? 0x39ff : 0x3fff;
+            address = 0x3fff;
             break;
     }
-    
+
+    // If Extended Color Mode (ECM) bit is set, hold address lines 9 and 10 low
+    if (vicii->sequencer.graphics_mode & 0x4) {  // VICII_C1_ECM >> 4 = 0x4
+        address &= ~(0x03 << 9);
+    }
+
     // Perform PHI1 memory read (common path for all PHI1 accesses)
     // Apply CIA2 originating vic-ii bank base (set in vicii_memory_bank_change)
     address = vicii->memory.bank_base | address;
