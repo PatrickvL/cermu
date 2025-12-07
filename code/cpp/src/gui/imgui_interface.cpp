@@ -193,6 +193,10 @@ void gui_init_state(gui_state_t *gui_state) {
   // Test binary path (empty by default)
   gui_state->test_binary_path[0] = '\0';
   gui_state->show_test_binary_dialog = false;
+  
+  // Initialize last used directories (empty by default, will be populated on first use)
+  gui_state->last_test_binary_dir[0] = '\0';
+  gui_state->last_rom_dir[0] = '\0';
 }
 
 void gui_render_frame(c64_t *c64, gui_state_t *gui_state,
@@ -753,21 +757,69 @@ void gui_render_settings(c64_t *c64, gui_state_t *gui_state) {
                    sizeof(gui_state->rom_path_basic), 0, NULL, NULL);
   ImGui::SameLine(0, -1.0f);
   if (ImGui::Button("Browse##basic", ImVec2(0, 0))) {
-    // TODO: File dialog
+    char selected_path[512] = {0};
+    const char* default_dir = gui_state->last_rom_dir[0] != '\0' ? gui_state->last_rom_dir : NULL;
+    if (gui_open_file_dialog("bin,rom", default_dir, selected_path, sizeof(selected_path))) {
+      strncpy(gui_state->rom_path_basic, selected_path, sizeof(gui_state->rom_path_basic) - 1);
+      gui_state->rom_path_basic[sizeof(gui_state->rom_path_basic) - 1] = '\0';
+      
+      // Extract and save directory for future use
+      const char* last_sep = strrchr(selected_path, '/');
+      if (!last_sep) last_sep = strrchr(selected_path, '\\');
+      if (last_sep) {
+        size_t dir_len = last_sep - selected_path;
+        if (dir_len < sizeof(gui_state->last_rom_dir)) {
+          strncpy(gui_state->last_rom_dir, selected_path, dir_len);
+          gui_state->last_rom_dir[dir_len] = '\0';
+        }
+      }
+    }
   }
 
   ImGui::InputText("KERNAL ROM", gui_state->rom_path_kernal,
                    sizeof(gui_state->rom_path_kernal), 0, NULL, NULL);
   ImGui::SameLine(0, -1.0f);
   if (ImGui::Button("Browse##kernal", ImVec2(0, 0))) {
-    // TODO: File dialog
+    char selected_path[512] = {0};
+    const char* default_dir = gui_state->last_rom_dir[0] != '\0' ? gui_state->last_rom_dir : NULL;
+    if (gui_open_file_dialog("bin,rom", default_dir, selected_path, sizeof(selected_path))) {
+      strncpy(gui_state->rom_path_kernal, selected_path, sizeof(gui_state->rom_path_kernal) - 1);
+      gui_state->rom_path_kernal[sizeof(gui_state->rom_path_kernal) - 1] = '\0';
+      
+      // Extract and save directory for future use
+      const char* last_sep = strrchr(selected_path, '/');
+      if (!last_sep) last_sep = strrchr(selected_path, '\\');
+      if (last_sep) {
+        size_t dir_len = last_sep - selected_path;
+        if (dir_len < sizeof(gui_state->last_rom_dir)) {
+          strncpy(gui_state->last_rom_dir, selected_path, dir_len);
+          gui_state->last_rom_dir[dir_len] = '\0';
+        }
+      }
+    }
   }
 
   ImGui::InputText("Character ROM", gui_state->rom_path_chargen,
                    sizeof(gui_state->rom_path_chargen), 0, NULL, NULL);
   ImGui::SameLine(0, -1.0f);
   if (ImGui::Button("Browse##chargen", ImVec2(0, 0))) {
-    // TODO: File dialog
+    char selected_path[512] = {0};
+    const char* default_dir = gui_state->last_rom_dir[0] != '\0' ? gui_state->last_rom_dir : NULL;
+    if (gui_open_file_dialog("bin,rom", default_dir, selected_path, sizeof(selected_path))) {
+      strncpy(gui_state->rom_path_chargen, selected_path, sizeof(gui_state->rom_path_chargen) - 1);
+      gui_state->rom_path_chargen[sizeof(gui_state->rom_path_chargen) - 1] = '\0';
+      
+      // Extract and save directory for future use
+      const char* last_sep = strrchr(selected_path, '/');
+      if (!last_sep) last_sep = strrchr(selected_path, '\\');
+      if (last_sep) {
+        size_t dir_len = last_sep - selected_path;
+        if (dir_len < sizeof(gui_state->last_rom_dir)) {
+          strncpy(gui_state->last_rom_dir, selected_path, dir_len);
+          gui_state->last_rom_dir[dir_len] = '\0';
+        }
+      }
+    }
   }
   ImGui::Separator();
 
@@ -1256,8 +1308,24 @@ void gui_render_test_binary_dialog(c64_t* c64, gui_state_t* gui_state, gui_emula
     ImGui::InputText("File Path", gui_state->test_binary_path, sizeof(gui_state->test_binary_path));
     ImGui::SameLine();
     if (ImGui::Button("Browse...")) {
-        // TODO: Native file dialog (for now, user can type path)
-        ImGui::SetKeyboardFocusHere(-1); // Focus on the input field
+        // Open native file dialog for PRG/BIN files
+        char selected_path[512] = {0};
+        const char* default_dir = gui_state->last_test_binary_dir[0] != '\0' ? gui_state->last_test_binary_dir : NULL;
+        if (gui_open_file_dialog("prg,bin", default_dir, selected_path, sizeof(selected_path))) {
+            strncpy(gui_state->test_binary_path, selected_path, sizeof(gui_state->test_binary_path) - 1);
+            gui_state->test_binary_path[sizeof(gui_state->test_binary_path) - 1] = '\0';
+            
+            // Extract and save directory for future use
+            const char* last_sep = strrchr(selected_path, '/');
+            if (!last_sep) last_sep = strrchr(selected_path, '\\');
+            if (last_sep) {
+                size_t dir_len = last_sep - selected_path;
+                if (dir_len < sizeof(gui_state->last_test_binary_dir)) {
+                    strncpy(gui_state->last_test_binary_dir, selected_path, dir_len);
+                    gui_state->last_test_binary_dir[dir_len] = '\0';
+                }
+            }
+        }
     }
     
     ImGui::Separator();
@@ -1473,6 +1541,124 @@ bool gui_reload_roms_from_state(c64_t *c64, const gui_state_t *gui_state) {
 
   // Reload ROMs using the new configuration
   return c64_reload_roms(c64, &custom_rom_config);
+}
+
+// ============================================================================
+// FILE DIALOG IMPLEMENTATION (NFD - Native File Dialog Extended)
+// ============================================================================
+
+#include <nfd.h>
+
+// Open file dialog - returns true if user selected a file
+bool gui_open_file_dialog(const char* filter_list, const char* default_path,
+                          char* out_path, size_t out_path_size) {
+    if (!out_path || out_path_size == 0) {
+        return false;
+    }
+    
+    // Initialize NFD
+    NFD_Init();
+    
+    nfdchar_t* outPath = NULL;
+    nfdfilteritem_t filters[1];
+    
+    // Parse filter list (e.g., "prg,bin")
+    if (filter_list && filter_list[0] != '\0') {
+        filters[0].name = "Supported Files";
+        filters[0].spec = filter_list;
+        
+        nfdresult_t result = NFD_OpenDialog(&outPath, filters, 1, default_path);
+        
+        if (result == NFD_OKAY) {
+            // Copy the selected path to output buffer
+            strncpy(out_path, outPath, out_path_size - 1);
+            out_path[out_path_size - 1] = '\0';
+            NFD_FreePath(outPath);
+            NFD_Quit();
+            return true;
+        } else if (result == NFD_CANCEL) {
+            // User cancelled
+            NFD_Quit();
+            return false;
+        } else {
+            // Error
+            printf("NFD Error: %s\n", NFD_GetError());
+            NFD_Quit();
+            return false;
+        }
+    } else {
+        // No filter - open any file
+        nfdresult_t result = NFD_OpenDialog(&outPath, NULL, 0, default_path);
+        
+        if (result == NFD_OKAY) {
+            strncpy(out_path, outPath, out_path_size - 1);
+            out_path[out_path_size - 1] = '\0';
+            NFD_FreePath(outPath);
+            NFD_Quit();
+            return true;
+        } else if (result == NFD_CANCEL) {
+            NFD_Quit();
+            return false;
+        } else {
+            printf("NFD Error: %s\n", NFD_GetError());
+            NFD_Quit();
+            return false;
+        }
+    }
+}
+
+// Save file dialog - returns true if user specified a save path
+bool gui_save_file_dialog(const char* filter_list, const char* default_path,
+                          char* out_path, size_t out_path_size) {
+    if (!out_path || out_path_size == 0) {
+        return false;
+    }
+    
+    // Initialize NFD
+    NFD_Init();
+    
+    nfdchar_t* outPath = NULL;
+    nfdfilteritem_t filters[1];
+    
+    // Parse filter list
+    if (filter_list && filter_list[0] != '\0') {
+        filters[0].name = "Supported Files";
+        filters[0].spec = filter_list;
+        
+        nfdresult_t result = NFD_SaveDialog(&outPath, filters, 1, default_path, NULL);
+        
+        if (result == NFD_OKAY) {
+            strncpy(out_path, outPath, out_path_size - 1);
+            out_path[out_path_size - 1] = '\0';
+            NFD_FreePath(outPath);
+            NFD_Quit();
+            return true;
+        } else if (result == NFD_CANCEL) {
+            NFD_Quit();
+            return false;
+        } else {
+            printf("NFD Error: %s\n", NFD_GetError());
+            NFD_Quit();
+            return false;
+        }
+    } else {
+        nfdresult_t result = NFD_SaveDialog(&outPath, NULL, 0, default_path, NULL);
+        
+        if (result == NFD_OKAY) {
+            strncpy(out_path, outPath, out_path_size - 1);
+            out_path[out_path_size - 1] = '\0';
+            NFD_FreePath(outPath);
+            NFD_Quit();
+            return true;
+        } else if (result == NFD_CANCEL) {
+            NFD_Quit();
+            return false;
+        } else {
+            printf("NFD Error: %s\n", NFD_GetError());
+            NFD_Quit();
+            return false;
+        }
+    }
 }
 
 // ============================================================================

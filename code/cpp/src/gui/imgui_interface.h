@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 // Forward declarations
 struct C64System;
@@ -79,6 +80,10 @@ typedef struct {
     char disk_image_path[512];
     char test_binary_path[512];        // Path to test binary (PRG/BIN file)
     bool show_test_binary_dialog;      // Show test binary load dialog
+    
+    // Last used directories for file dialogs (persisted across sessions)
+    char last_test_binary_dir[512];
+    char last_rom_dir[512];
 } gui_state_t;
 
 // Emulation thread signals
@@ -165,6 +170,10 @@ void gui_load_rom_file(const char* filepath, const char* type, gui_state_t* gui_
 void gui_load_disk_image(const char* filepath);
 bool gui_reload_roms_from_state(c64_s* c64, const gui_state_t* gui_state);
 bool gui_apply_rom_changes(gui_emulation_context_t* emu_context, gui_state_t* gui_state);
+
+// File dialog functions (using NFD - Native File Dialog Extended)
+bool gui_open_file_dialog(const char* filter_list, const char* default_path, char* out_path, size_t out_path_size);
+bool gui_save_file_dialog(const char* filter_list, const char* default_path, char* out_path, size_t out_path_size);
 
 // Test binary loading
 bool gui_load_test_binary(gui_emulation_context_t* emu_context, gui_state_t* gui_state, const char* filepath);
