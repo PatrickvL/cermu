@@ -207,6 +207,7 @@ set(SYSTEM_SOURCES
     src/systems/c64/c64_bus.cpp
     src/systems/c64/c64_chips.cpp
     src/systems/c64/c64_config.cpp
+    src/systems/c64/c64_test_loader.cpp
 )
 
 

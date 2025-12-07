@@ -8,6 +8,7 @@
 #include "c64.h"
 #include "c64_bus.h"
 #include "c64_config.h"
+#include "c64_test_loader.h" // Test binary loading
 /* dual CPU include removed */
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
@@ -22,11 +23,53 @@
 #include "../../chip/memory/mos2114.h" // Color RAM
 #include "../../chip/logic/pla.h" // PLA for memory mapping
 
-void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
-    // Use default ROM configuration if none provided
-    if (!rom_config) {
-        rom_config = system_config_get_default_roms();
+// Helper function: Initialize RAM with debug test patterns
+static void c64_memory_init_debug_patterns(ram_t* ram) {
+    if (!ram || !ram->memory) {
+        printf("ERROR: RAM pointer invalid for debug pattern initialization\n");
+        return;
     }
+
+    printf("Initializing RAM with debug test patterns...\n");
+
+    // Clear zero page and stack
+    memset(ram->memory, 0, 0x0200);
+    
+    // Fill remaining RAM with random bytes for realistic uninitialized memory behavior
+    for (uint32_t addr = 0x0200; addr < 0x10000; addr++) {
+        ram->memory[addr] = (uint8_t)rand();
+    }
+    
+    // Add test pattern to video matrix at $0400 in all VIC-II banks
+    for (int bank = 0; bank < 4; bank++) {
+        uint16_t base = bank * 0x4000 + 0x0400;
+        for (int i = 0; i < 1000; i++) {
+            ram->memory[base + i] = (uint8_t)((base + i) & 0xFF);
+        }
+        printf("  Bank %d: Screen memory at $%04X filled with address pattern\n", bank, base);
+    }
+}
+
+// Helper function: Initialize Color RAM with debug patterns
+static void c64_colorram_init_debug(mos2114_t* colorram) {
+    if (!colorram || !colorram->memory) {
+        printf("ERROR: Color RAM pointer invalid for debug initialization\n");
+        return;
+    }
+
+    // Randomize all 1024 color RAM locations (4-bit values 0-15)
+    for (int i = 0; i < 1024; i++) {
+        colorram->memory[i] = (uint8_t)(rand() & 0x0F);
+    }
+    printf("Color RAM initialized with random colors\n");
+}
+
+// Main memory initialization function with test mode support
+void c64_memory_init(system_8bit_t* system, const c64_config_t* config) {
+    // Use default ROM configuration if none provided
+    const rom_config_t* rom_config = config && config->rom_config ?
+                                      config->rom_config :
+                                      system_config_get_default_roms();
 
     // Discover ROM root path for C64 system
     char rom_root_path[1024];
@@ -35,51 +78,78 @@ void c64_memory_init(system_8bit_t* system, const rom_config_t* rom_config) {
     for (int i = 0; i < system->chip_count; i++) {
         chip_entry_t* dev = &system->chips[i];
 
-        // Initialize RAM
+        // Find and initialize RAM
         if (dev->desc == &ram_descriptor) {
             ram_t* ram = (ram_t*)dev->chip;
-            // Safety check: ensure RAM memory pointer is valid
             if (!ram->memory) {
-                printf("ERROR: RAM memory pointer is NULL! Skipping RAM initialization.\n");
+                printf("ERROR: RAM memory pointer is NULL!\n");
                 continue;
             }
-            // Initialize RAM: $0000-$01FF cleared, $0200-$FFFF filled with random data
-            memset(ram->memory, 0, 0x0200);  // Clear zero page and stack
+            // Initialize based on test mode
+            c64_test_mode_t test_mode = config ? config->test_mode : C64_TEST_MODE_NORMAL;
             
-            // Fill remaining RAM with random bytes for realistic uninitialized memory behavior
-            for (uint32_t addr = 0x0200; addr < 0x10000; addr++) {
-                ram->memory[addr] = (uint8_t)rand();
-            }
-            
-            // Add test pattern to video matrix at $0400 in all VIC-II banks for debugging
-            // Each bank is 16KB, video matrix is typically at offset $0400 (1KB)
-            for (int bank = 0; bank < 4; bank++) {
-                uint16_t base = bank * 0x4000 + 0x0400;
-                // Fill 1000 bytes (40 columns x 25 rows) with test pattern
-                for (int i = 0; i < 1000; i++) {
-                    // Use the least significant 8 bits of the address as the character code
-                    // This creates a unique pattern where each position shows its address & 0xFF
-                    ram->memory[base + i] = (uint8_t)((base + i) & 0xFF);
-                }
-                printf("Bank %d: Filled screen memory at $%04X with address-based pattern (addr & 0xFF)\n", bank, base);
-                // DEBUG: Print first 10 bytes to verify
-                printf("  First 10 bytes: ");
-                for (int j = 0; j < 10; j++) {
-                    printf("0x%02X ", ram->memory[base + j]);
-                }
-                printf("\n");
+            switch (test_mode) {
+                case C64_TEST_MODE_NORMAL:
+                    printf("Normal boot mode: RAM cleared\n");
+                    memset(ram->memory, 0, 0x10000);
+                    break;
+
+                case C64_TEST_MODE_DEBUG_PATTERNS:
+                    c64_memory_init_debug_patterns(ram);
+                    break;
+
+                case C64_TEST_MODE_PRG_FILE:
+                    if (config && config->test_binary_config && config->test_binary_config->filename) {
+                        printf("Loading PRG file: %s\n", config->test_binary_config->filename);
+                        memset(ram->memory, 0, 0x10000);  // Clear RAM first
+                        uint16_t load_addr = 0, sys_addr = 0;
+                        if (!c64_test_load_prg_file(config->test_binary_config->filename,
+                                                     ram, &load_addr, &sys_addr)) {
+                            printf("ERROR: Failed to load PRG file, falling back to normal init\n");
+                            memset(ram->memory, 0, 0x10000);
+                        }
+                    } else {
+                        printf("ERROR: PRG mode selected but no filename provided\n");
+                        memset(ram->memory, 0, 0x10000);
+                    }
+                    break;
+
+                case C64_TEST_MODE_BIN_FILE:
+                    if (config && config->test_binary_config && config->test_binary_config->filename) {
+                        printf("Loading BIN file: %s at $%04X\n",
+                               config->test_binary_config->filename,
+                               config->test_binary_config->load_address);
+                        memset(ram->memory, 0, 0x10000);  // Clear RAM first
+                        if (!c64_test_load_bin_file(config->test_binary_config->filename,
+                                                     ram, config->test_binary_config->load_address)) {
+                            printf("ERROR: Failed to load BIN file, falling back to normal init\n");
+                            memset(ram->memory, 0, 0x10000);
+                        }
+                    } else {
+                        printf("ERROR: BIN mode selected but no filename provided\n");
+                        memset(ram->memory, 0, 0x10000);
+                    }
+                    break;
+
+                default:
+                    printf("WARNING: Unknown test mode, using normal init\n");
+                    memset(ram->memory, 0, 0x10000);
+                    break;
             }
         }
         
-        // Initialize Color RAM chip with randomized colors for debugging
+        // Find and initialize Color RAM
         else if (dev->desc == &mos2114_descriptor) {
             mos2114_t* colorram = (mos2114_t*)dev->chip;
             if (colorram->memory) {
-                // Randomize all 1024 color RAM locations (4-bit values 0-15)
-                for (int i = 0; i < 1024; i++) {
-                    colorram->memory[i] = (uint8_t)(rand() & 0x0F);
+                // Initialize Color RAM based on test mode
+                c64_test_mode_t test_mode = config ? config->test_mode : C64_TEST_MODE_NORMAL;
+                if (test_mode == C64_TEST_MODE_DEBUG_PATTERNS) {
+                    c64_colorram_init_debug(colorram);
+                } else {
+                    // Normal mode: clear Color RAM
+                    memset(colorram->memory, 0, 1024);
                 }
-                printf("Color RAM initialized with random colors for debugging\n");
             }
         }
 
@@ -386,8 +456,7 @@ c64_t* c64_system_create(const c64_config_t* config) {
     c64_bus_system_attach(&(c64->bus), c64);
 
     // Set default memory contents and load ROMs from configured paths
-    const rom_config_t* rom_config = config->rom_config ? config->rom_config : system_config_get_default_roms();
-    c64_memory_init(&c64->system, rom_config);
+    c64_memory_init(&c64->system, config);
     
     // Re-initialize unified pointers after ROM loading to copy loaded ROM data into unified buffer
     c64_bus_init_unified_pointers(&c64->bus, c64, config);
@@ -438,8 +507,14 @@ bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config) {
         return false;
     }
 
+    // Create a temporary config with just the ROM config for reloading
+    c64_config_t reload_config;
+    c64_config_init_defaults(&reload_config);
+    reload_config.rom_config = (rom_config_t*)rom_config;
+    reload_config.test_mode = C64_TEST_MODE_NORMAL;  // Always use normal mode for ROM reload
+
     // Reload ROMs using the memory initialization function
-    c64_memory_init(&c64->system, rom_config);
+    c64_memory_init(&c64->system, &reload_config);
 
     printf("ROMs reloaded successfully\n");
     return true;
