@@ -33,7 +33,7 @@ typedef struct c64_bus_s {
 
     // UNIFIED MEMORY BUFFER FOR OPTIMIZED OPCODE FETCH - STRATEGIC LAYOUT
     // Layout optimized for branchless calculation: ROML + ROMH + KERNAL + BASIC + CHARROM + RAM
-    // Offsets: ROML=0x0000, ROMH=0x2000, KERNAL=0x4000, BASIC=0x6000, CHARROM=0x8000, RAM=0x9000
+    // Offsets: ROML=0x0000, ROMH=0x2000, KERNAL=0x4000, BASIC=0x6000, CHARROM=0x7000, RAM=0x9000
     // Total: Up to 100KB unified buffer (36KB ROM space + 64KB RAM) for branchless memory access
     // Strategic CHIP numbering enables pure arithmetic: offset = chip << 12 (chip * 4096)
     // Dynamic allocation skips unused cartridge ROMs at buffer start to save memory
@@ -110,16 +110,63 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
  * CHIP values are chosen so that (chip << 12) directly maps to buffer offsets.
  *
  * CRITICAL DEPENDENCY: This function relies on the specific CHIP_* enum values
- * in c64_bus.h. The calculation uses chip << 12 (chip * 4096) for base offsets:
+ * in c64_chips.h. The calculation uses chip << 12 (chip * 4096) for base offsets:
  *
  * - CHIP_ROML     = 0  -> base_offset = 0x0000 (0 << 12 = 0x0000)
  * - CHIP_ROMH     = 2  -> base_offset = 0x2000 (2 << 12 = 0x2000)
  * - CHIP_KERNAL   = 4  -> base_offset = 0x4000 (4 << 12 = 0x4000)
  * - CHIP_BASIC    = 6  -> base_offset = 0x6000 (6 << 12 = 0x6000)
- * - CHIP_CHARROM  = 8  -> base_offset = 0x8000 (8 << 12 = 0x8000)
+ * - CHIP_CHARROM  = 7  -> base_offset = 0x7000 (7 << 12 = 0x7000)
  * - CHIP_RAM      = 9  -> base_offset = 0x9000 (9 << 12 = 0x9000)
  *
  * WARNING: Changing these CHIP_* values will break address calculation!
+ *
+ * CHARROM ADDRESSING EXPLANATION (4KB chip at buffer offset 0x7000):
+ * The 0x1FFF mask works correctly for CHARROM despite being 4KB because:
+ *
+ * Example 1 - VIC-II reads CHARROM at 0x1000:
+ *   base   = 7 << 12        = 0x7000  (CHARROM buffer offset)
+ *   offset = 0x1000 & 0x1FFF = 0x1000  (address within range)
+ *   result = 0x7000 + 0x1000 = 0x8000  ✓ Correct buffer position
+ *
+ * Example 2 - VIC-II reads CHARROM at 0x9000:
+ *   base   = 7 << 12        = 0x7000  (CHARROM buffer offset)
+ *   offset = 0x9000 & 0x1FFF = 0x1000  (wraps to 0x1000 due to 13-bit mask)
+ *   result = 0x7000 + 0x1000 = 0x8000  ✓ Same buffer position as 0x1000
+ *
+ * Example 3 - CPU reads at 0xD000:
+ *   base   = 7 << 12        = 0x7000  (CHARROM buffer offset)
+ *   offset = 0xD000 & 0x1FFF = 0x1000  (wraps to 0x1000 due to 13-bit mask)
+ *   result = 0x7000 + 0x1000 = 0x8000  ✓ Same buffer position
+ *
+ * PROOF OF NO OVERLAP BETWEEN BASIC ROM AND CHARROM:
+ * BASIC ROM occupies buffer range 0x6000-0x7FFF (8KB at CHIP_BASIC=6)
+ * CHARROM occupies buffer range 0x8000-0x8FFF (4KB starting at base 0x7000)
+ *
+ * BASIC ROM address calculation (8KB at addresses 0xA000-0xBFFF):
+ *   base   = 6 << 12        = 0x6000  (BASIC buffer offset)
+ *   offset = 0xA000 & 0x1FFF = 0x0000  (wraps to start)
+ *   result = 0x6000 + 0x0000 = 0x6000  (buffer start)
+ *
+ *   offset = 0xBFFF & 0x1FFF = 0x1FFF  (8KB-1 offset)
+ *   result = 0x6000 + 0x1FFF = 0x7FFF  (buffer end)
+ *
+ * CHARROM address calculation (4KB, but accessed via specific addresses):
+ *   Minimum result = 0x7000 + (0x1000 & 0x1FFF) = 0x8000
+ *   Maximum result = 0x7000 + (0x1FFF & 0x1FFF) = 0x8FFF
+ *
+ * CRITICAL INSIGHT: CHARROM is NEVER accessed with addresses in range 0x0000-0x0FFF!
+ * - CPU accesses CHARROM at 0xD000-0xDFFF (masks to 0x1000-0x1FFF)
+ * - VIC-II accesses CHARROM at 0x1000-0x1FFF or 0x9000-0x9FFF (both mask to 0x1000-0x1FFF)
+ *
+ * Therefore, CHARROM calculations always produce: 0x7000 + [0x1000 to 0x1FFF] = 0x8000-0x8FFF
+ * While BASIC ROM calculations produce: 0x6000 + [0x0000 to 0x1FFF] = 0x6000-0x7FFF
+ *
+ * Result: BASIC ends at 0x7FFF, CHARROM starts at 0x8000 → NO OVERLAP! ✓
+ *
+ * This strategic placement at 0x7000 means all CHARROM addresses (0x1000, 0x9000, 0xD000)
+ * mask to the same offset range (0x1000-0x1FFF) and map to buffer range 0x8000-0x8FFF,
+ * which is safely above BASIC ROM's range. This enables unified 0x1FFF mask for all ROMs.
  *
  * OPTIMIZATION: Single shift + mask operation, completely branchless.
  * Total buffer size: 0x9000 + 64KB RAM = 100KB (36KB + 64KB)
@@ -134,10 +181,10 @@ static inline uint32_t c64_bus_unified_address_calc(uint8_t chip, uint16_t addr)
     
     // CRITICAL: addr contains original C64 memory map addresses (e.g. KERNAL 0xE000-0xFFFF)
     // Mask strips bank/base address to get chip-relative offset
-    // RAM uses full 0xFFFF for 64KB, all ROMs use 0x1FFF for 8KB banks
-    // Note: CHARROM is 4KB but uses 0x1FFF mask because it never appears in multiple
-    // banks simultaneously in C64 memory map, so the larger mask is safe and branchless
-    return base + (addr & (0x1FFF | -(chip == CHIP_RAM)));
+    // Unified 0x1FFF mask works for all ROMs (8KB and 4KB) due to strategic CHARROM placement
+    // RAM uses special mask 0xFFFF for full 64KB address space
+    const uint32_t mask = 0x1FFF | -(chip == CHIP_RAM);  // Branchless: 0x1FFF for ROMs, 0xFFFF for RAM
+    return base + (addr & mask);
 }
 
 /**

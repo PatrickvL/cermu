@@ -18,13 +18,33 @@ typedef struct c64_bus_s c64_bus_t;
 // CHIP IDs strategically numbered for branchless unified memory buffer address calculation
 typedef enum {
     // Strategic numbering with 4KB step size: offset = chip << 12 (chip * 4096)
-    // 8KB regions take 2 steps each: ROML(0), ROMH(2), KERNAL(4), BASIC(6), CHARROM(8), RAM(9)
-    // Buffer: ROML(0x0000) + ROMH(0x2000) + KERNAL(0x4000) + BASIC(0x6000) + CHARROM(0x8000) + RAM(0x9000)
+    // 8KB regions take 2 steps each: ROML(0), ROMH(2), KERNAL(4), BASIC(6), CHARROM(7), RAM(9)
+    // Buffer: ROML(0x0000) + ROMH(0x2000) + KERNAL(0x4000) + BASIC(0x6000) + CHARROM(0x7000) + RAM(0x9000)
+    //
+    // WHY CHIP_CHARROM = 7 (not 8)?
+    // CHARROM is only 4KB but uses the same 0x1FFF mask as 8KB ROMs for branchless calculation.
+    // The key insight: CHARROM is NEVER accessed with addresses 0x0000-0x0FFF!
+    //
+    // Hardware only accesses CHARROM at these addresses:
+    //   - CPU:    0xD000-0xDFFF (masks to 0x1000-0x1FFF with 0x1FFF)
+    //   - VIC-II: 0x1000-0x1FFF (masks to 0x1000-0x1FFF with 0x1FFF)
+    //   - VIC-II: 0x9000-0x9FFF (masks to 0x1000-0x1FFF with 0x1FFF)
+    //
+    // All CHARROM accesses mask to offset range 0x1000-0x1FFF, which when added to
+    // base 0x7000 produces 0x8000-0x8FFF. This creates a natural 4KB gap:
+    //   - BASIC ROM ends at:   0x6000 + 0x1FFF = 0x7FFF
+    //   - CHARROM starts at:   0x7000 + 0x1000 = 0x8000
+    //   - Gap: NO OVERLAP despite CHARROM base at 0x7000!
+    //
+    // If we used CHIP_CHARROM = 8 (base 0x8000):
+    //   - Would need special 0x0FFF mask (adds branch to address calculation)
+    //   - VIC-II address 0x1000 & 0x1FFF = 0x1000, 0x8000 + 0x1000 = 0x9000 (maps to RAM, wrong!)
+    //
     CHIP_ROML         = 0,   // 8KB ROM Low (cartridge) - maps to offset 0x0000 (0 << 12 = 0x0000)
     CHIP_ROMH         = 2,   // 8KB ROM High (cartridge) - maps to offset 0x2000 (2 << 12 = 0x2000)
     CHIP_KERNAL       = 4,   // 8KB KERNAL ROM - maps to offset 0x4000 (4 << 12 = 0x4000)
     CHIP_BASIC        = 6,   // 8KB BASIC ROM - maps to offset 0x6000 (6 << 12 = 0x6000)
-    CHIP_CHARROM      = 8,   // 4KB Character ROM - maps to offset 0x8000 (8 << 12 = 0x8000)
+    CHIP_CHARROM      = 7,   // 4KB Character ROM - maps to offset 0x7000 (7 << 12 = 0x7000) - See explanation above!
     CHIP_RAM          = 9,   // 64KB RAM - maps to offset 0x9000 (9 << 12 = 0x9000)
 
     // Non-offset values (not used in address calculation)
