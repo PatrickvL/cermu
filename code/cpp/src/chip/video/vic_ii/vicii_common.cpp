@@ -790,13 +790,17 @@ static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int char_index) {
     bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
     
     // BA/AEC will be set centrally in vicii_tick based on access type
-    if (vicii->video_logic.is_bad_line && den_enabled) {
-        return VIC_ACCESS_C;
-    } else {
-        // DO NOT change display_state here - it's managed by cycle 15 (bad lines set it true)
-        // and cycle 58 (RC==7 check sets it false when going to idle)
-        return VIC_ACCESS_IDLE;
+    if (den_enabled) {
+        if (vicii->video_logic.is_bad_line) {
+            return VIC_ACCESS_C;
+        } else if (vicii->video_logic.display_state) {
+            // On non-bad lines during display state, still need G-access for graphics data
+            // DO NOT change display_state here - it's managed by cycle 15 (bad lines set it true)
+            // and cycle 58 (RC==7 check sets it false when going to idle)
+            return VIC_ACCESS_G;
+        }
     }
+    return VIC_ACCESS_IDLE;
 }
 
 static uint8_t vicii_cycle_idle(vicii_t* vicii, int param) {
@@ -1223,7 +1227,8 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
                 vicii->bus.active_sprite = NULL;
             }
             break;
-        case VIC_ACCESS_C: // VIC_ACCESS_G
+        case VIC_ACCESS_C:
+        case VIC_ACCESS_G:
             // C-access: Store video matrix data that arrived from PREVIOUS cycle's PHI2 setup
             // Store at current VMLI, then increment VMLI so next cycle stores at next position
             if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
@@ -1262,36 +1267,40 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
             vicii->video_logic.refresh_counter--;
             break;
-        case VIC_ACCESS_C: // VIC_ACCESS_G
+        case VIC_ACCESS_C:
             // C-access: Read Color RAM during PHI1 (happens on bad lines only)
             BUS_SET_ADDR(bus_state, vicii->memory.vm_base | vicii->video_logic.vc);
             bus_state = mos2114_read(vicii->colorram, bus_state);
             // Store at current vmli position
             if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
                 const uint8_t color_data = BUS_GET_DATA(bus_state) & 0x0F;
-
                 vicii->video_data.video_color_line[vicii->video_logic.vmli] = static_cast<vicii_color_t>(color_data);
-                // After C-access, G-access (VIC_ACCESS_G) address calculation
-                
+            }
+            // Fall through to G-access
+            FALLTHROUGH;
+        case VIC_ACCESS_G:
+            // G-access: Read graphics data (character ROM or bitmap data)
+            // Happens on ALL cycles 16-54 during display state (both bad lines and non-bad lines)
+            if (vicii->video_logic.display_state) {
+                // Calculate which column this G-access belongs to
+                const uint8_t column_index = access_param;
+
                 // Bitmap mode (BMM bit set)?
                 if (vicii->sequencer.graphics_mode & VICII_BITMAP_MODE_MASK) {
-                    const uint8_t vc_index = vicii->video_logic.vc - 1;
                     // Bitmap mode: CB13 provides bit 13, VC provides bits 3-12, RC provides bits 0-2
                     // Documentation section 3.7.3.3, line 1394: |CB13| VC9| VC8| VC7| VC6| VC5| VC4| VC3| VC2| VC1| VC0| RC2| RC1| RC0|
-                    // C# reference line 673: address = (u16)((Reg[MP] & MP_CB13) << 10) | (VC << 3);
+                    // Use VCBASE + column_index to get the VC value for this column position
+                    const uint16_t vc_for_column = (vicii->video_logic.vcbase + column_index) & 0x3FF;
                     const uint16_t cb13_bit = vicii->memory.cb_base & (1 << 13);
 
-                    address = cb13_bit | ((vc_index & 0x3FF) << 3);
+                    address = cb13_bit | (vc_for_column << 3);
                 } else {
-                    // Text mode: address uses character code
-                    // CRITICAL: vmli was incremented during C-access data storage, so we need to use vmli-1
-                    // to get the character code for the CURRENT character being rendered
-                    const uint8_t g_access_index = (vicii->video_logic.vmli > 0) ? (vicii->video_logic.vmli - 1) : 0;
-                    const uint8_t char_code = vicii->video_data.video_matrix_line[g_access_index];
+                    // Text mode: address uses character code from video matrix
+                    const uint8_t char_code = vicii->video_data.video_matrix_line[column_index];
 
                     address = vicii->memory.cb_base | (char_code << 3);
-                }                
-                address |= vicii->video_logic.rc; // Note RC is 3 bit, so needs no "& 0x07" mask
+                }
+                address |= vicii->video_logic.rc; // Add row counter (3 bits)
                 break;
             }
             // Fall through to idle if display_state is false
@@ -1307,23 +1316,33 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         address &= ~(0x03 << 9);
     }
 
-    // Perform PHI1 memory read (common path for all PHI1 accesses)
     // Apply CIA2 originating vic-ii bank base (set in vicii_memory_bank_change)
-    address = vicii->memory.bank_base | address;
+    address |= vicii->memory.bank_base;
     
+    // Perform PHI1 memory read (common path for all PHI1 accesses)
     bus_state = c64_bus_vic_read(c64_bus, bus_state, address);
     
     // G-access happens EVERY cycle during PHI1 (the address calculation above always runs)
     // The graphics sequencer will use the data when in display_state
     uint8_t graphics_data = BUS_GET_DATA(bus_state);
     
+    // DEBUG: Print G-access data for first few characters on raster 51
+    static int g_access_debug = 0;
+    if (g_access_debug < 10 && vicii->timing.raster_counter == 51 &&
+        vicii->timing.x_cycle >= 16 && vicii->timing.x_cycle <= 25 && vicii->video_logic.display_state) {
+        printf("G-access: cycle=%d addr=0x%04X data=0x%02X char_index=%d RC=%d\n",
+               vicii->timing.x_cycle, address, graphics_data,
+               vicii->timing.x_cycle - 16, vicii->video_logic.rc);
+        g_access_debug++;
+    }
+    
     // STEP 4: Load graphics data into line buffer during cycles 16-54
     // During display_state, we need graphics data for every raster line (not just bad lines)
     // to show different rows of each character
     if (vicii->video_logic.display_state && vicii->timing.x_cycle >= 16 && vicii->timing.x_cycle <= 54) {
         // Calculate which character this graphics data belongs to
-        uint8_t g_char_index = vicii->timing.x_cycle - 16;
-        vicii_graphics_sequencer(vicii, graphics_data, g_char_index);
+        uint8_t column_index = vicii->timing.x_cycle - 16;
+        vicii_graphics_sequencer(vicii, graphics_data, column_index);
     }
     
     // STEP 5: Update border flip-flops to establish display window state
