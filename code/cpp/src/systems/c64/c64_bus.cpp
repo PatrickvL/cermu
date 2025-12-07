@@ -90,11 +90,16 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
     // NOTE: I/O port addresses (0-1) are now handled by mos6510_tick() early in the CPU tick
     // This prevents the memory system from overwriting I/O port read data with RAM data
     
-    // Check if this is VIC-II cycle-stealing (RDY low) or CPU access (RDY high)
+    // Check if VIC-II is cycle-stealing (RDY low = BA low)
+    // CRITICAL: RDY only affects READ operations, NOT writes!
+    // From vic-ii.txt lines 150-156:
+    // "RDY: If this line is low during a read access, the processor stops...
+    //  It is ignored during write accesses."
     bool is_vicii_cycle_stealing = !(BUS_GET_LINES(bus_state) & BUS_MASK_RDY);
 
     if (is_read) {
         // === READ OPERATION ===
+        // RDY affects reads: CPU halts when RDY is low (BA is low)
         uint8_t chip;
 
         if (is_vicii_cycle_stealing) {
@@ -125,30 +130,33 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
         }
     } else {
         // === WRITE OPERATION ===
-        // Write operations are only performed by CPU, not during VIC-II cycle-stealing
-        // VIC-II can only read memory, never write
-        if (is_vicii_cycle_stealing) {
-            // During VIC-II cycle-stealing, writes are ignored (VIC-II is reading)
-            // Leave bus state unchanged
+        // CRITICAL FIX: Writes are NOT affected by RDY!
+        // The CPU can complete writes even when BA/RDY is low (VIC-II cycle-stealing)
+        // This is documented in vic-ii.txt lines 150-156 and lines 217-222:
+        // "BA is connected to the RDY line... but this line is ignored on write accesses
+        //  (the CPU can only be interrupted on reads), and the 6510 never does more than
+        //  three writes in sequence."
+        //
+        // The VIC-II sets BA low 3 cycles early to allow the CPU to complete up to 3
+        // consecutive write operations before halting on the first read access.
+        
+        uint8_t chip = decode_write_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
+
+        // ENHANCED FAST PATH: Handle all writable unified buffer regions
+        if (likely(chip == CHIP_RAM)) {
+            uint8_t data = BUS_GET_DATA(bus_state);
+            c64_bus_write_ram_byte(c64_bus, address, data);
+        } else if (chip == CHIP_IO) {
+            // OPTIMIZED IO PAGE HANDLING: Direct dispatch using pre-initialized handlers
+            // Calculate IO page number from address (0-15 for $D000-$DFFF)
+            uint8_t io_page = (address >> 8) & 0x0F; // Extract page number from $Dx00 addresses
+
+            // Straight call to the appropriate handler - no conditionals needed
+            bus_state = c64_bus->io_handlers[io_page].write_handler(
+                c64_bus->io_handlers[io_page].chip_instance, bus_state);
         } else {
-            uint8_t chip = decode_write_chip(c64_bus->cpu_encoded_chip_per_bank[cpu_bank]);
-
-            // ENHANCED FAST PATH: Handle all writable unified buffer regions
-            if (likely(chip == CHIP_RAM)) {
-                uint8_t data = BUS_GET_DATA(bus_state);
-                c64_bus_write_ram_byte(c64_bus, address, data);
-            } else if (chip == CHIP_IO) {
-                // OPTIMIZED IO PAGE HANDLING: Direct dispatch using pre-initialized handlers
-                // Calculate IO page number from address (0-15 for $D000-$DFFF)
-                uint8_t io_page = (address >> 8) & 0x0F; // Extract page number from $Dx00 addresses
-
-                // Straight call to the appropriate handler - no conditionals needed
-                bus_state = c64_bus->io_handlers[io_page].write_handler(
-                    c64_bus->io_handlers[io_page].chip_instance, bus_state);
-            } else {
-                // Writes to UNMAPPED and ROM areas are ignored (no action needed)
-                // ROM chips (BASIC, KERNAL, CHARROM, ROML, ROMH) are read-only in hardware
-            }
+            // Writes to UNMAPPED and ROM areas are ignored (no action needed)
+            // ROM chips (BASIC, KERNAL, CHARROM, ROML, ROMH) are read-only in hardware
         }
     }
     
