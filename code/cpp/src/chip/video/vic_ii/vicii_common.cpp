@@ -76,14 +76,12 @@ static inline void vicii_border_update_limits(vicii_border_unit_t* border, const
 
 // X-coordinate driven pixel emission for precise positioning
 static inline void vicii_pixel_emit_at_x(vicii_t* vicii, const vicii_pixel_t* pixel_data, uint16_t x_coord) {
-    // Check if x_coord is within framebuffer bounds
-    if (x_coord < vicii->pixel.framebuffer_start_x || x_coord >= vicii->pixel.framebuffer_end_x) return;
+    // The display_x_coordinate already has pipeline delay subtracted (wraps 0-503 for PAL)
+    // We need to modulo by visible_pixels_per_line (403) to map into line buffer
+    // This makes wraparound pixels (end of line) appear at start of buffer
+    uint16_t pixel_x = x_coord % vicii->pixel.visible_pixels_per_line;
     
-    // Calculate pixel position in line buffer
-    uint16_t pixel_x = x_coord - vicii->pixel.framebuffer_start_x;
-    if (pixel_x >= vicii->pixel.visible_pixels_per_line) return;
-    
-    // Store pixel data
+    // Store pixel data in line buffer
     vicii->pixel.pixel_line_priority[pixel_x] = pixel_data->priority;
     vicii->pixel.pixel_line_color[pixel_x] = pixel_data->color;
 }
@@ -183,10 +181,13 @@ void vicii_sprite_sequencer(vicii_t* vicii) {
 // Pixel sequencer - sequences exactly 8 pixels per cycle
 // This is the ONLY function that emits pixels to the framebuffer
 static void vicii_pixel_sequencer(vicii_t* vicii) {
+    // Use display_x_coordinate for pixel emission (with pipeline delay)
     uint16_t x_coord = vicii->timing.display_x_coordinate;
     
-    // Check if we're in the visible display area
-    if (x_coord < vicii->pixel.display_start_x || x_coord >= vicii->pixel.display_end_x) return;
+    // Check if we're in the visible scanline area (0-402 for PAL)
+    // Don't use display_start_x/display_end_x here - those are for determining display vs border
+    // We need to emit ALL pixels in the visible area
+    if (x_coord >= vicii->pixel.visible_pixels_per_line && x_coord < (vicii->timing.pixels_per_line - 12)) return;
     
     // Determine if we're in border or display area
     // VIC-II border flip-flop logic: graphics are displayed when main_border_flip_flop is FALSE
@@ -380,16 +381,17 @@ void vicii_pixel_flush_line(vicii_t* vicii, const uint32_t* palette, int y) {
         row_ptr[x] = border_color;
     }
     
-    // Copy the entire VIC-II line buffer (pixel_line_color contains the full line)
+    // Copy line buffer to framebuffer with 24-pixel left offset for centering
+    // This widens the left border and centers the display
+    const int left_offset = 24;
+    
     if (pixel->pixel_line_color) {
-        const int offset_x = (pixel->framebuffer_width - pixel->visible_pixels_per_line) >> 1;
-        
-        for (int x = 0; x < pixel->visible_pixels_per_line; x++) {
-            const int fb_x = offset_x + x;
-            if (fb_x >= 0 && fb_x < pixel->framebuffer_width) {
-                const uint8_t color_index = pixel->pixel_line_color[x] & 0x0F;
-
-                row_ptr[fb_x] = palette[color_index];
+        // Copy pixels from line buffer to framebuffer with offset
+        for (int src_x = 0; src_x < pixel->visible_pixels_per_line; src_x++) {
+            int dst_x = src_x + left_offset;
+            if (dst_x < pixel->framebuffer_width) {
+                const uint8_t color_index = pixel->pixel_line_color[src_x] & 0x0F;
+                row_ptr[dst_x] = palette[color_index];
             }
         }
     }
@@ -417,8 +419,8 @@ static inline void vicii_memory_update_mapping(vicii_memory_unit_t* memory, uint
 
 void vicii_memory_bank_change(void* chip, uint8_t bank) {
     vicii_t* vicii = (vicii_t*)chip;
-    bank = 3 - (bank & 0x03);  // Invert bank
-    vicii->memory.bank_base = bank * 0x4000;
+    uint8_t inverted_bank = 3 - (bank & 0x03);  // Invert bank
+    vicii->memory.bank_base = inverted_bank * 0x4000;
 }
 
 static inline bus_state_t vicii_bus_memory_setup(vicii_t* vicii, bus_state_t bus_state, uint16_t address) {
@@ -1673,7 +1675,7 @@ static const vicii_chip_config_t vicii_config_pal = {
     .display_start_x = 24,
     .display_end_x = 344,
     .framebuffer_start_x = 0,
-    .framebuffer_end_x = 403,
+    .framebuffer_end_x = 504,  // Allow full scanline width to accommodate pipeline delay wrap-around
     
     .chip_name = "MOS6569 PAL"
 };
@@ -1698,7 +1700,7 @@ static const vicii_chip_config_t vicii_config_ntsc = {
     .display_start_x = 24,
     .display_end_x = 344,
     .framebuffer_start_x = 0,
-    .framebuffer_end_x = 411,
+    .framebuffer_end_x = 520,  // Allow full scanline width to accommodate pipeline delay wrap-around
     
     .chip_name = "MOS6567 NTSC"
 };

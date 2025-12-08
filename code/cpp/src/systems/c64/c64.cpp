@@ -387,15 +387,10 @@ static void c64_cia2_port_a_callback(void* context, uint8_t port_a_output) {
     // Extract VIC-II bank bits (bits 0-1 of CIA2 Port A)
     uint8_t vic_bank_bits = port_a_output & 0x03;
     
+    // Pass raw bank bits to VIC-II - it will handle the inversion
     // VIC-II bank mapping is INVERTED:
     // Port A bits 0-1: 00 → Bank 3, 01 → Bank 2, 10 → Bank 1, 11 → Bank 0
-    uint8_t vic_bank = 3 - vic_bank_bits;
-    
-    printf("CIA2 Port A changed: $%02X → VIC-II Bank %d (bits=%d)\n",
-           port_a_output, vic_bank, vic_bank_bits);
-    
-    // Update VIC-II memory bank
-    vicii_memory_bank_change(c64->vicii, vic_bank);
+    vicii_memory_bank_change(c64->vicii, vic_bank_bits);
 }
 
 void c64_system_destroy(c64_t* c64) {
