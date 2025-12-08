@@ -19,6 +19,10 @@ inline ChipLayout create_ram_layout() {
     // Start with DIP-18 base layout
     ChipLayout layout = create_dip18_layout();
     
+    // Clear default pins from create_dip18_layout() and add hardware-accurate RAM pins
+    layout.left_pins.clear();
+    layout.right_pins.clear();
+    
     // Update package info for RAM
     layout.markings = {
         "SRAM",                      // part_number

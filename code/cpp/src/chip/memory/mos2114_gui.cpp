@@ -18,7 +18,7 @@
 // ============================================================================
 
 inline ChipLayout create_mos2114_layout() {
-    // Start with DIP-18 base layout
+    // Start with DIP-18 base layout (provides package dimensions only)
     ChipLayout layout = create_dip18_layout();
     
     // Update package info for MOS2114
@@ -34,15 +34,19 @@ inline ChipLayout create_mos2114_layout() {
         true,                        // show_package_variant
         false                        // show_date_code
     };
-    
+
+    // Clear default pins from create_dip18_layout() and add hardware-accurate MOS2114 pins
+    layout.left_pins.clear();
+    layout.right_pins.clear();
+
     // Hardware-accurate MOS2114 pinout (18-pin DIP) from datasheet
     // Pin layout exactly as specified in the datasheet:
     // Pins 1-7: A6-A0 (Address bits 6 to 0)
     // Pin 8: /CS (Chip Select)
     // Pin 9: GND (Ground)
     // Pin 10: /WE (Write Enable)
-    // Pins 11-14: D4-D1 (Data bits 4 to 1) 
-    // Pins 15-17: A9-A7 (Address bits 9 to 7)
+    // Pins 11-14: D1-D4 (Data bits 1 to 4)
+    // Pins 15-17: A7-A9 (Address bits 7 to 9)
     // Pin 18: Vcc (Supply voltage)
     //
     // Right-hand pins (10-18) are numbered bottom-up as per DIP standard
