@@ -370,11 +370,14 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
     // Generate all 32 CPU memory modes (5-bit combinations of LORAM, HIRAM, CHAREN, EXROM, GAME)
     for (int mode = 0; mode < 32; mode++) {
         // Set PLA inputs based on mode
-        pla->inputs.n_loram = (mode & 0x01) == 0;    // LORAM (inverted)
-        pla->inputs.n_hiram = (mode & 0x02) == 0;    // HIRAM (inverted)
-        pla->inputs.n_charen = (mode & 0x04) == 0;   // CHAREN (inverted)
-        pla->inputs.n_exrom = (mode & 0x08) == 0;    // EXROM (inverted)
-        pla->inputs.n_game = (mode & 0x10) == 0;     // GAME (inverted)
+        // Mode bits directly represent the CPU port bits and cartridge signals
+        // The n_ prefix in the PLA signals indicates they are the actual signal values,
+        // NOT that we need to invert them here. When CPU port bit = 1, n_signal = true.
+        pla->inputs.n_loram = (mode & 0x01) != 0;    // LORAM: bit set = enabled
+        pla->inputs.n_hiram = (mode & 0x02) != 0;    // HIRAM: bit set = enabled
+        pla->inputs.n_charen = (mode & 0x04) != 0;   // CHAREN: bit set = enabled
+        pla->inputs.n_exrom = (mode & 0x08) != 0;    // EXROM: bit set = enabled
+        pla->inputs.n_game = (mode & 0x10) != 0;     // GAME: bit set = enabled
         // CPU address bits will be set during populate_pla_mapping for each bank
         // Populate mapping for this mode
         c64_bus_populate_cpu_pla_mapping(bus, pla);
