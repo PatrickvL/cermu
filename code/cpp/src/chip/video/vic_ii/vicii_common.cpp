@@ -87,13 +87,13 @@ static inline void vicii_pixel_emit_at_x(vicii_t* vicii, const vicii_pixel_t* pi
 }
 
 // Graphics sequencer (called from G-access) - Stores graphics data in line buffer ONLY
-void vicii_graphics_sequencer(vicii_t* vicii, uint8_t graphics_data, uint8_t char_index) {
+void vicii_graphics_sequencer(vicii_t* vicii, uint8_t graphics_data, uint8_t column_index) {
     vicii_sequencer_unit_t* seq = &vicii->sequencer;
     
     // Store graphics data in the line buffer at the specified character index
     // The pixel sequencer will load from this buffer when rendering
-    if (char_index < 40) {
-        seq->graphics_line[char_index] = graphics_data;
+    if (column_index < 40) {
+        seq->graphics_line[column_index] = graphics_data;
     }
 }
 
@@ -187,7 +187,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
     // Check if we're in the visible scanline area (0-402 for PAL)
     // Don't use display_start_x/display_end_x here - those are for determining display vs border
     // We need to emit ALL pixels in the visible area
-    if (x_coord >= vicii->pixel.visible_pixels_per_line && x_coord < (vicii->timing.pixels_per_line - 12)) return;
+//    if (x_coord >= vicii->pixel.visible_pixels_per_line && x_coord < (vicii->timing.pixels_per_line - 12)) return;
     
     // Determine if we're in border or display area
     // VIC-II border flip-flop logic: graphics are displayed when main_border_flip_flop is FALSE
@@ -204,14 +204,14 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         // The pixel sequencer displays with a 3-cycle delay:
         // - Cycle 15 loads column 0 → displayed at cycle 18
         // - Cycle 16 loads column 1 → displayed at cycle 19
-        // So char_index = cycle - 18 (for cycles >= 18)
+        // So column_index = cycle - 18 (for cycles >= 18)
         const uint8_t current_cycle = vicii->timing.x_cycle;
         if (current_cycle >= 18 && current_cycle <= 57) {
-            seq->char_index = current_cycle - 18;
+            seq->column_index = current_cycle - 18;
         } else if (current_cycle < 18) {
-            seq->char_index = 0;
+            seq->column_index = 0;
         } else {
-            seq->char_index = 39;
+            seq->column_index = 39;
         }
         
         // Initialize xscroll on first display cycle
@@ -227,15 +227,15 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             seq->shift_reg = 0;
         }
         
-        // Clamp char_index to valid range (0-39) to prevent out-of-bounds access
-        if (seq->char_index >= 40) {
-            seq->char_index = 39;
+        // Clamp column_index to valid range (0-39) to prevent out-of-bounds access
+        if (seq->column_index >= 40) {
+            seq->column_index = 39;
         }
         
         // Load shift register from graphics line buffer at current character position
         // This decouples graphics loading from pixel rendering
-        if (seq->char_index < 40) {
-            seq->shift_reg = seq->graphics_line[seq->char_index];
+        if (seq->column_index < 40) {
+            seq->shift_reg = seq->graphics_line[seq->column_index];
         }
         
         // Sequence exactly 8 pixels from shift register
@@ -256,28 +256,28 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             uint8_t pixel_bits = 0;
             bool is_background = false;
             
-            // char_index is now guaranteed to be in range 0-39 due to clamping above
-            const uint8_t safe_char_index = seq->char_index;
+            // column_index is now guaranteed to be in range 0-39 due to clamping above
+            const uint8_t column_index = seq->column_index;
             
             switch (seq->graphics_mode) {
                 case VICII_GM_STANDARD_TEXT:
                     pixel_bits = (seq->shift_reg >> 7) & 1;
                     color_index = pixel_bits ?
-                        (vicii->video_data.video_color_line[safe_char_index] & 0x0F) :
+                        vicii->video_data.video_color_line[column_index] :
                         vicii->registers.data[VICII_B0C];
                     is_background = (pixel_bits == 0);
                     seq->shift_reg <<= 1;
                     break;
                     
                 case VICII_GM_MULTICOLOR_TEXT:
-                    if (vicii->video_data.video_color_line[safe_char_index] & 0x08) {
+                    if (vicii->video_data.video_color_line[column_index] & 0x08) {
                         // Multicolor character - 2 bits per pixel
                         pixel_bits = (seq->shift_reg >> 6) & 3;
                         switch (pixel_bits) {
                             case 0: color_index = vicii->registers.data[VICII_B0C]; break;
                             case 1: color_index = vicii->registers.data[VICII_B1C]; break;
                             case 2: color_index = vicii->registers.data[VICII_B2C]; break;
-                            case 3: color_index = vicii->video_data.video_color_line[safe_char_index] & 0x0F; break;
+                            case 3: color_index = vicii->video_data.video_color_line[column_index]; break;
                         }
                         is_background = (pixel_bits == 0);
                         seq->shift_reg <<= 2;
@@ -286,7 +286,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                         // Standard character in multicolor mode
                         pixel_bits = (seq->shift_reg >> 7) & 1;
                         color_index = pixel_bits ?
-                            (vicii->video_data.video_color_line[safe_char_index] & 0x0F) :
+                            vicii->video_data.video_color_line[column_index] :
                             vicii->registers.data[VICII_B0C];
                         is_background = (pixel_bits == 0);
                         seq->shift_reg <<= 1;
@@ -297,9 +297,9 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                 case VICII_GM_STANDARD_BITMAP:
                     pixel_bits = (seq->shift_reg >> 7) & 1;
                     if (pixel_bits) {
-                        color_index = (vicii->video_data.video_matrix_line[safe_char_index] >> 4) & 0x0F;
+                        color_index = vicii->video_data.video_matrix_line[column_index] >> 4;
                     } else {
-                        color_index = vicii->video_data.video_matrix_line[safe_char_index] & 0x0F;
+                        color_index = vicii->video_data.video_matrix_line[column_index] & 0x0F;
                     }
                     is_background = (pixel_bits == 0);
                     seq->shift_reg <<= 1;
@@ -309,9 +309,9 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                     pixel_bits = (seq->shift_reg >> 6) & 3;
                     switch (pixel_bits) {
                         case 0: color_index = vicii->registers.data[VICII_B0C]; break;
-                        case 1: color_index = (vicii->video_data.video_matrix_line[safe_char_index] >> 4) & 0x0F; break;
-                        case 2: color_index = vicii->video_data.video_matrix_line[safe_char_index] & 0x0F; break;
-                        case 3: color_index = vicii->video_data.video_color_line[safe_char_index] & 0x0F; break;
+                        case 1: color_index = vicii->video_data.video_matrix_line[column_index] >> 4; break;
+                        case 2: color_index = vicii->video_data.video_matrix_line[column_index] & 0x0F; break;
+                        case 3: color_index = vicii->video_data.video_color_line[column_index]; break;
                     }
                     is_background = (pixel_bits == 0);
                     seq->shift_reg <<= 2;
@@ -321,9 +321,9 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                 case VICII_GM_ECM_TEXT:
                     pixel_bits = (seq->shift_reg >> 7) & 1;
                     if (pixel_bits) {
-                        color_index = vicii->video_data.video_color_line[safe_char_index] & 0x0F;
+                        color_index = vicii->video_data.video_color_line[column_index];
                     } else {
-                        const uint8_t bg_select = (vicii->video_data.video_matrix_line[safe_char_index] >> 6) & 3;
+                        const uint8_t bg_select = (vicii->video_data.video_matrix_line[column_index] >> 6) & 3;
 
                         color_index = vicii->registers.data[VICII_B0C + bg_select];
                     }
@@ -344,16 +344,16 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             
             // Increment pixel position within character (for standard modes)
             if (((seq->graphics_mode & VICII_BITMAP_MODE_MASK) == 0) &&
-                 !(vicii->video_data.video_color_line[safe_char_index] & 0x08)) {
+                 !(vicii->video_data.video_color_line[column_index] & 0x08)) {
                 seq->pixel_in_char = (seq->pixel_in_char + 1) & 7;
             }
         }
         
         // After sequencing all 8 pixels, advance to next character
-        // char_index tracks position 0-39 across the scanline
+        // column_index tracks position 0-39 across the scanline
         // Clamp to prevent exceeding valid range
-        if (seq->char_index < 39) {
-            seq->char_index++;
+        if (seq->column_index < 39) {
+            seq->column_index++;
         }
     } else {
         // We're in border area - sequence exactly 8 border pixels
@@ -817,7 +817,7 @@ static uint8_t vicii_cycle_vc_load(vicii_t* vicii, int param) {
     return VIC_ACCESS_IDLE;
 }
 
-static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int char_index) {
+static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int column_index) {
     bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
     
     // BA/AEC will be set centrally in vicii_tick based on access type
