@@ -53,6 +53,10 @@ inline ChipLayout create_vicii_layout() {
     // Start with DIP-40 base layout
     ChipLayout layout = create_dip40_layout();
     
+    // Clear default pins from create_dip40_layout() and add hardware-accurate VIC-II pins
+    layout.left_pins.clear();
+    layout.right_pins.clear();
+    
     // Update package info for VIC-II
     layout.markings = {
         "MOS6567/6569",              // part_number

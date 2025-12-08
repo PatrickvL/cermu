@@ -24,6 +24,10 @@ inline ChipLayout create_mos6526_layout() {
     // Start with DIP-40 base layout
     ChipLayout layout = create_dip40_layout();
     
+    // Clear default pins from create_dip40_layout() and add hardware-accurate MOS6526 pins
+    layout.left_pins.clear();
+    layout.right_pins.clear();
+    
     // Update package info for MOS6526 CIA
     layout.markings = {
         "MOS6526",                   // part_number

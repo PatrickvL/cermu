@@ -86,6 +86,10 @@ inline ChipLayout create_mos6581_layout() {
     // Start with DIP-28 base layout
     ChipLayout layout = create_dip28_layout();
     
+    // Clear default pins from create_dip28_layout() and add hardware-accurate MOS6581 pins
+    layout.left_pins.clear();
+    layout.right_pins.clear();
+    
     // Update package info for MOS6581 SID
     layout.markings = {
         "MOS6581",                   // part_number

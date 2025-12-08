@@ -101,6 +101,10 @@ inline ChipLayout create_pla_layout() {
     // Start with DIP-28 base layout
     ChipLayout layout = create_dip28_layout();
     
+    // Clear default pins from create_dip28_layout() and add hardware-accurate C64 PLA pins
+    layout.left_pins.clear();
+    layout.right_pins.clear();
+    
     // Update package info for C64 PLA
     layout.markings = {
         "906114-01",                 // part_number
