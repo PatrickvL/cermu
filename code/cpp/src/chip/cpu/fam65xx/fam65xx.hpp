@@ -131,6 +131,11 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     return Traits.has(CPUCoreFlags::ROCKWELL_BITS);
   }
 
+  // AEC pin detection: Only MOS6510 has the AEC pin (for VIC-II bus arbitration in C64)
+  static constexpr bool has_aec_pin() {
+    return Traits == MOS6510;
+  }
+
   // ========================================================================
   // DEBUG TRACING STATE (must be declared before use in member functions)
   // ========================================================================
@@ -1435,18 +1440,20 @@ public:
    * @return Updated bus state
    */
   template <Phase phase> bus_state_t tick(bus_state_t pins) {
-    // Check AEC signal FIRST - before ANY phase processing
+    // Check AEC signal FIRST - before ANY phase processing (6510 only)
     // Hardware signal that overrides everything (both PHI2 and PHI1)
     // When AEC is LOW, VIC-II owns the bus completely
     // CPU's address bus is tri-stated - cannot access memory at all
-    if (!FAM65XX_GET_AEC(pins)) {
-      // AEC low - VIC owns bus, CPU completely frozen
-      // Do NOT execute ANY phase, do NOT increment half_cycle
-      // Return immediately - retry this same phase on next tick
-      if constexpr (ENABLE_TRACING) {
-        trace("AEC low - VIC owns bus, CPU completely frozen");
+    // NOTE: AEC pin only exists on MOS 6510 (C64), not on standard 6502 or other variants
+    if constexpr (has_aec_pin()) {
+      if (!FAM65XX_GET_AEC(pins)) {
+        // AEC low - VIC owns bus, CPU completely frozen
+        // Do NOT increment half_cycle - retry this same phase on next tick
+        if constexpr (ENABLE_TRACING) {
+          trace("AEC low - VIC owns bus, CPU completely frozen");
+        }
+        return pins;
       }
-      return pins;
     }
  
     if constexpr (phase == Phase::PHI2) {
@@ -1457,9 +1464,9 @@ public:
       }
        
       // Hardware-accurate interrupt detection
+#ifndef PROCESSOR_TESTS
       // PROCESSOR_TESTS mode: Disable interrupt hijacking for clean instruction testing
       // Production mode: Always allow interrupt hijacking for accurate emulation
-      #ifndef PROCESSOR_TESTS
       if (this->process_interrupt_detection(pins)) {
         if (this->active_interrupt == FAM65XX_INT_RESET) {
           return reset(pins);
@@ -1471,13 +1478,7 @@ public:
           this->current_handler = &fam65xx_t::op_brk;
         }
       }
-      #endif
-
-      // Call handler to set up bus (sees current even half_cycle)
-      // COMPILE-TIME SAFETY: current_handler is always assigned by get_instruction_handler()
-      // which is guaranteed to return a valid handler pointer
-      // CRITICAL: PHI2 handlers must have ZERO side effects - only bus setup!
-      pins = this->call_current_handler(pins);
+#endif
 
       // Call handler to set up bus (sees current even half_cycle)
       // COMPILE-TIME SAFETY: current_handler is always assigned by get_instruction_handler()
