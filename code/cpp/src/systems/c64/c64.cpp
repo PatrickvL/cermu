@@ -417,7 +417,6 @@ c64_t* c64_system_create(const c64_config_t* config) {
 
     chip_descriptor_t* vicii_descriptor = (config->vicii_standard == VIC_PAL ? &mos6569_descriptor : &mos6567_descriptor);
 
-    // One line per chip - create, register, assign memory address/size, and assign to C64 field
     // Initialize bus as embedded struct - no need to create separately
     c64->bus.desc = &c64_bus_descriptor;
     c64->bus.c64 = c64;
@@ -430,6 +429,8 @@ c64_t* c64_system_create(const c64_config_t* config) {
     c64->bus.system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;
     // Initialize the integrated adapter interfaces
     c64_bus_init_adapters(&c64->bus);
+
+    // One line per chip - create, register, assign memory address/size, and assign to C64 field
     if (!(c64->ram = static_cast<ram_t*>(create_and_register_chip(c64, &ram_descriptor, 0x0000, 65536)))) { c64_system_destroy(c64); return NULL; }
     if (!(c64->mos6510 = create_and_register_chip(c64, &mos6510_descriptor, 0x0000, 4096))) { c64_system_destroy(c64); return NULL; }
     if (!(c64->cartridge_roml = static_cast<rom_t*>(create_and_register_chip(c64, &rom_descriptor, 0x8000, 8192)))) { c64_system_destroy(c64); return NULL; }
