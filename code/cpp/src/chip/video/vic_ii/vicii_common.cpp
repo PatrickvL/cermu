@@ -1281,6 +1281,14 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH, VIC_ACCESS_P, VIC_ACCESS_S, or VIC_ACCESS_C
     const uint8_t access_type = entry->func(vicii, access_param);
 
+    // CRITICAL FIX: Update BA/AEC signals at the START of the cycle (PHI1 phase)
+    // This must happen BEFORE the CPU's PHI2 tick so the CPU sees the correct BA state.
+    // BA must go low 3 cycles BEFORE VIC needs PHI2 access, and this look-ahead
+    // must be calculated at the cycle boundary, not at the end of the cycle.
+    // Moving this here from the end of vicii_tick() fixes the half-cycle timing error
+    // that was causing screen corruption during bad lines and sprite DMA.
+    bus_state = vicii_update_ba_aec_signals(vicii, bus_state, access_type);
+
     // Calculate which column a G-access belongs to
     const uint8_t column_index = access_param;
 
@@ -1369,22 +1377,6 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     
     // STEP 6: Update border flip-flops AFTER pixel generation
     vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
-    
-    // FINAL STEP: Ensure BA and AEC reflect their final states for this cycle
-    // The cycle functions have already set BA/AEC appropriately during execution.
-    // BA/AEC states set during cycle function execution represent what the CPU
-    // will see in the NEXT PHI2 phase (which is part of THIS cycle).
-    //
-    // According to VIC-II documentation (section 2.4.3):
-    // - VIC accesses during PHI1 (�2 low)
-    // - CPU accesses during PHI2 (�2 high)
-    // - AEC is normally low during PHI1, high during PHI2
-    // - When VIC needs PHI2 access, AEC stays low
-    // - BA goes low 3 cycles before VIC takes over PHI2
-    //
-    // Update BA/AEC signals based on current and future (3 cycles ahead) bus needs
-    // This centralized control ensures proper 3-cycle look-ahead for BA signal
-    bus_state = vicii_update_ba_aec_signals(vicii, bus_state, access_type);
     
     // STEP 7: Advance x_coordinate (primary counter) and update derived values
     vicii_timing_advance(vicii);
