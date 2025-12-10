@@ -24,9 +24,9 @@ static const char* get_vicii_type_name(vicii_t* vicii) {
 }
 
 static const char* get_video_standard(vicii_t* vicii) {
-    if (vicii->timing.cycles_per_line == 65 && vicii->timing.total_lines == 262) {
+    if (vicii->config->cycles_per_line == 65 && vicii->config->total_lines == 262) {
         return "NTSC 60Hz";
-    } else if (vicii->timing.cycles_per_line == 63 && vicii->timing.total_lines == 312) {
+    } else if (vicii->config->cycles_per_line == 63 && vicii->config->total_lines == 312) {
         return "PAL 50Hz";
     }
     return "Unknown";
@@ -213,8 +213,8 @@ void vicii_gui_render_debug_window(void* chip, bool* show_window, const char* wi
         // Basic chip information
         if (ImGui::CollapsingHeader("Chip Information", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Text("Video Standard: %s", get_video_standard(vicii));
-            ImGui::Text("Cycles per Line: %d", vicii->timing.cycles_per_line);
-            ImGui::Text("Total Lines: %d", vicii->timing.total_lines);
+            ImGui::Text("Cycles per Line: %d", vicii->config->cycles_per_line);
+            ImGui::Text("Total Lines: %d", vicii->config->total_lines);
             ImGui::Text("Current Bank: %d", vicii->memory.bank_base / 0x4000);
         }
         
@@ -226,7 +226,7 @@ void vicii_gui_render_debug_window(void* chip, bool* show_window, const char* wi
             ImGui::Text("X Coordinate: %d", vicii->timing.x_coordinate);
             
             // Progress bar for raster position
-            float raster_progress = (float)vicii->timing.raster_counter / (float)vicii->timing.total_lines;
+            float raster_progress = (float)vicii->timing.raster_counter / (float)vicii->config->total_lines;
             ImGui::ProgressBar(raster_progress, ImVec2(-1, 0), NULL);
             ImGui::Text("Raster Progress: %.1f%%", raster_progress * 100.0f);
         }
@@ -287,7 +287,7 @@ void vicii_gui_render_settings_window(void* chip, bool* show_window, const char*
     
     ImGui::Text("Chip Type: %s", get_vicii_type_name(vicii));
     ImGui::Text("Video Standard: %s", get_video_standard(vicii));
-    ImGui::Text("Timing: %d cycles/line, %d lines/frame", vicii->timing.cycles_per_line, vicii->timing.total_lines);
+    ImGui::Text("Timing: %d cycles/line, %d lines/frame", vicii->config->cycles_per_line, vicii->config->total_lines);
     
     ImGui::Separator();
     

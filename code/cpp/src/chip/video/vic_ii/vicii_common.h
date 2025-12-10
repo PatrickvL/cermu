@@ -274,9 +274,7 @@ struct vicii_chip_config_t {
     uint16_t border_left_csel1;
     uint16_t border_right_csel1;
     
-    // Display area bounds
-    uint16_t display_start_x;
-    uint16_t display_end_x;
+    // Framebuffer area bounds
     uint16_t framebuffer_start_x;
     uint16_t framebuffer_end_x;
     
@@ -307,21 +305,14 @@ struct vicii_registers_unit_t {
 
 // Timing Unit - All timing-related state
 struct vicii_timing_unit_t {
-    // Primary counter is x_coordinate (pixel-level precision)
-    uint16_t x_coordinate;               // Primary counter: 0-511 (9-bit, wraps)
-    uint16_t display_x_coordinate;       // Display coordinate with 12-pixel pipeline delay
-
-    // Derived counters
-    uint8_t x_cycle;                     // Derived from x_coordinate (x_coordinate / 8)
-    uint16_t raster_counter;             // Current raster line (0-total_lines)
+    // Hardware counters matching VIC-II documentation
+    uint8_t x_cycle;                     // Horizontal cycle counter (0 to cycles_per_line-1)
+    uint16_t x_coordinate;               // X position in sprite coordinate system (0-503 PAL)
+    uint16_t raster_counter;             // Vertical raster counter (0 to total_lines-1)
     uint32_t frame_count;                // Frame counter
 
     // Precalculated timing parameters
     const vicii_cycle_entry_t* cycle_table; // Precalculated cycle table pointer
-    uint16_t base_offset;                // Precalculated x_coordinate base offset
-    uint16_t pixels_per_line;            // Total pixels per line (504 PAL, 520 NTSC)
-    uint8_t cycles_per_line;             // Cycles per line (63 PAL, 65 NTSC)
-    uint16_t total_lines;                // Total lines per frame
 };
 
 // Video Logic Unit - Display state and bad line logic (Documentation section 3.7)
@@ -350,7 +341,6 @@ typedef struct {
     uint8_t shift_reg;        // Graphics shift register
     uint8_t xscroll_counter;  // XSCROLL delay counter
     uint8_t graphics_line[40]; // Graphics data buffer for current scanline (40 characters)
-    uint8_t column_index;     // Current character index (0-39)
     uint8_t pixel_in_char;    // Current pixel within character (0-7)
     vicii_pixel_t colors[5];  // Color palette for current mode
 } vicii_sequencer_unit_t;
@@ -441,16 +431,11 @@ typedef struct {
 
 // Pixel Output Unit - Pixel line generation and framebuffer
 typedef struct {
+    // Single line buffers for pixel generation
     vicii_priority_t* pixel_line_priority;
     uint32_t* pixel_line_color;
-    uint16_t pixel_line_index;
-    uint16_t visible_pixels_per_line;
     
-    // X-coordinate driven rendering support
-    uint16_t display_start_x;            // Start of display area
-    uint16_t display_end_x;              // End of display area
-    uint16_t framebuffer_start_x;        // Start of framebuffer area  
-    uint16_t framebuffer_end_x;          // End of framebuffer area
+    uint16_t pixel_line_index;
     
     uint32_t* framebuffer;
     int framebuffer_width;
