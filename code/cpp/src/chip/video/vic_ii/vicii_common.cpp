@@ -76,14 +76,14 @@ static inline void vicii_border_update_limits(vicii_border_unit_t* border, const
 
 // X-coordinate driven pixel emission for precise positioning
 static inline void vicii_pixel_emit_at_x(vicii_t* vicii, const vicii_pixel_t* pixel_data, uint16_t x_coord) {
-    // The display_x_coordinate already has pipeline delay subtracted (wraps 0-503 for PAL)
-    // We need to modulo by visible_pixels_per_line (403) to map into line buffer
-    // This makes wraparound pixels (end of line) appear at start of buffer
-    uint16_t pixel_x = x_coord % vicii->pixel.visible_pixels_per_line;
-    
-    // Store pixel data in line buffer
-    vicii->pixel.pixel_line_priority[pixel_x] = pixel_data->priority;
-    vicii->pixel.pixel_line_color[pixel_x] = pixel_data->color;
+    // Store pixels in line buffer at actual x_coordinate (not pipeline-delayed)
+    // Only store pixels that fit within the visible line buffer (0-402 for PAL)
+    // Pixels beyond this range are clipped (not visible on screen)
+    // The 12-pixel pipeline delay is handled by the 24-pixel framebuffer offset in vicii_pixel_flush_line()
+    if (x_coord < vicii->pixel.visible_pixels_per_line) {
+        vicii->pixel.pixel_line_priority[x_coord] = pixel_data->priority;
+        vicii->pixel.pixel_line_color[x_coord] = pixel_data->color;
+    }
 }
 
 // Graphics sequencer (called from G-access) - Stores graphics data in line buffer ONLY
@@ -109,7 +109,7 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int sprite_index) {
     uint16_t sprite_x = (vicii->registers.data[VICII_M0X + sprite_index * 2]) |
                        ((vicii->registers.data[VICII_MX8] & (1 << sprite_index)) ? 0x100 : 0);
     
-    uint16_t current_x = vicii->timing.display_x_coordinate;
+    uint16_t current_x = vicii->timing.x_coordinate;
     
     if (current_x < sprite_x || current_x >= (sprite_x + 24)) return;
     
@@ -181,8 +181,10 @@ void vicii_sprite_sequencer(vicii_t* vicii) {
 // Pixel sequencer - sequences exactly 8 pixels per cycle
 // This is the ONLY function that emits pixels to the framebuffer
 static void vicii_pixel_sequencer(vicii_t* vicii) {
-    // Use display_x_coordinate for pixel emission (with pipeline delay)
-    uint16_t x_coord = vicii->timing.display_x_coordinate;
+    // Use actual x_coordinate for line buffer indexing (NOT delayed coordinate)
+    // The 12-pixel pipeline delay is a visual artifact handled by framebuffer offset,
+    // not by writing to wrong positions in the line buffer
+    uint16_t x_coord = vicii->timing.x_coordinate;
     
     // Check if we're in the visible scanline area (0-402 for PAL)
     // Don't use display_start_x/display_end_x here - those are for determining display vs border
@@ -382,7 +384,8 @@ void vicii_pixel_flush_line(vicii_t* vicii, const uint32_t* palette, int y) {
     }
     
     // Copy line buffer to framebuffer with 24-pixel left offset for centering
-    // This widens the left border and centers the display
+    // This centers the 403-pixel visible area in the framebuffer and prevents
+    // wraparound artifacts from the pipeline delay
     const int left_offset = 24;
     
     if (pixel->pixel_line_color) {
@@ -1374,9 +1377,6 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     if (vicii->pixel.framebuffer && vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
         vicii_pixel_sequencer(vicii);
     }
-    
-    // STEP 6: Update border flip-flops AFTER pixel generation
-    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
     
     // STEP 7: Advance x_coordinate (primary counter) and update derived values
     vicii_timing_advance(vicii);
