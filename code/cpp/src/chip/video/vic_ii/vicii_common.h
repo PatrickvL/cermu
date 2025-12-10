@@ -435,8 +435,6 @@ typedef struct {
     vicii_priority_t* pixel_line_priority;
     uint32_t* pixel_line_color;
     
-    uint16_t pixel_line_index;
-    
     uint32_t* framebuffer;
     int framebuffer_width;
     int framebuffer_height;
