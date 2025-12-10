@@ -59,22 +59,35 @@ static inline void vicii_border_update_limits(vicii_border_unit_t* border, const
 // 3. Each cycle produces exactly 8 pixels, regardless of graphics mode
 // 4. Multicolor modes consume 2 bits per pixel, standard modes consume 1 bit per pixel
 
+// Convert x_coordinate (sprite/lightpen coordinate system) to framebuffer x position
+// The inverse of: x_coordinate = (first_x_coord + x_cycle * 8) % pixels_per_line
+// Formula: framebuffer_x = (pixels_per_line + x_coordinate - first_x_coord) % pixels_per_line
+static inline uint16_t vicii_x_coordinate_to_framebuffer_x(const vicii_t* vicii, uint16_t x_coordinate) {
+    const uint16_t pixels_per_line = vicii->config->cycles_per_line * 8;
+    const uint16_t first_x_coord = vicii->config->first_x_coord;
+    return (pixels_per_line + x_coordinate - first_x_coord) % pixels_per_line;
+}
+
 // X-coordinate driven pixel emission for precise positioning
 static inline void vicii_pixel_emit_at_x(vicii_t* vicii, const vicii_pixel_t* pixel_data, uint16_t x_coord) {
     // Pipeline delay: Data is displayed 12 pixels AFTER it's fetched
     // When we're at coordinate X processing pixels, those pixels were fetched 12 pixels ago
     // So we write them to buffer position (X - 12) to account for the delay
     // Documentation: "there is a delay of 12 pixels" (vic-ii.txt:876)
-    if (x_coord < VICII_PIPELINE_DELAY_PIXELS) {
+    
+    // Convert x_coordinate to framebuffer position
+    const uint16_t framebuffer_x = vicii_x_coordinate_to_framebuffer_x(vicii, x_coord);
+    
+    if (framebuffer_x < VICII_PIPELINE_DELAY_PIXELS) {
         // Too early in scanline - data hasn't been fetched yet
         return;
     }
     
-    const uint16_t display_x = x_coord - VICII_PIPELINE_DELAY_PIXELS;
+    const uint16_t pixel_line_x = framebuffer_x - VICII_PIPELINE_DELAY_PIXELS;
     
-    if (display_x < vicii->config->visible_pixels_per_line) {
-        vicii->pixel.pixel_line_priority[display_x] = pixel_data->priority;
-        vicii->pixel.pixel_line_color[display_x] = pixel_data->color;
+    if (pixel_line_x < vicii->config->visible_pixels_per_line) {
+        vicii->pixel.pixel_line_priority[pixel_line_x] = pixel_data->priority;
+        vicii->pixel.pixel_line_color[pixel_line_x] = pixel_data->color;
     }
 }
 
@@ -125,13 +138,16 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
     
     // Calculate pixel position in line buffer with pipeline delay
     // Sprites also have the same 12-pixel pipeline delay as background graphics
-    if (current_x < VICII_PIPELINE_DELAY_PIXELS) {
+    // Convert sprite x_coordinate to framebuffer position first
+    const uint16_t framebuffer_x = vicii_x_coordinate_to_framebuffer_x(vicii, current_x);
+    
+    if (framebuffer_x < VICII_PIPELINE_DELAY_PIXELS) {
         return;  // Too early - sprite data not yet in pipeline
     }
-    const uint16_t display_x = current_x - VICII_PIPELINE_DELAY_PIXELS;
-    if (display_x >= vicii->config->visible_pixels_per_line) return;
+    const uint16_t pixel_line_x = framebuffer_x - VICII_PIPELINE_DELAY_PIXELS;
+    if (pixel_line_x >= vicii->config->visible_pixels_per_line) return;
     
-    vicii_priority_t current_priority = vicii->pixel.pixel_line_priority[display_x];
+    vicii_priority_t current_priority = vicii->pixel.pixel_line_priority[pixel_line_x];
     
     // Collision detection
     if (current_priority == VICII_PRIORITY_SPRITE_IN_FRONT ||
@@ -169,8 +185,8 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
     }
 
     if (sprite_wins) {
-        vicii->pixel.pixel_line_priority[display_x] = sprite->priority;
-        vicii->pixel.pixel_line_color[display_x] = sprite_color;
+        vicii->pixel.pixel_line_priority[pixel_line_x] = sprite->priority;
+        vicii->pixel.pixel_line_color[pixel_line_x] = sprite_color;
     }
 }
 
@@ -699,7 +715,8 @@ void vicii_set_x_cycle(vicii_t* vicii, uint8_t value) {
     // - Cycle 13 start: x_coordinate = 0x1F4 (500)
     // - Cycle 14 start: x_coordinate = 0x004 (4)
     // - This requires: (base_offset + cycle*8) mod pixels_per_line
-    vicii->timing.x_coordinate = (vicii->config->base_offset + (vicii->timing.x_cycle * 8)) % vicii->config->pixels_per_line;
+    const uint16_t pixels_per_line = vicii->config->cycles_per_line * 8;
+    vicii->timing.x_coordinate = (vicii->config->first_x_coord + (vicii->timing.x_cycle * 8)) % pixels_per_line;
 }
 
 void vicii_timing_advance(vicii_t* vicii) {
@@ -1432,7 +1449,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
 // ========================================================================================
 
 // Cycle callback table - PAL timing (6569 : 63 cycles per line) (Documentation section 3.6.3)
-static const vicii_cycle_entry_t vicii_cycle_table_pal[63] = {
+static const vicii_cycle_entry_t vicii_cycle_table_6569[63] = {
     // 1=VIC-II PHI1, 2=VIC-II PHI2, C=CPU PHI2       12C 12C
     //                                                BAD NBD
     {vicii_cycle_sprite_p_access, 3},           // 1  3_x 3_x
@@ -1501,7 +1518,7 @@ static const vicii_cycle_entry_t vicii_cycle_table_pal[63] = {
 };
 
 // Cycle callback table - NTSC timing (6567R56A : 64 cycles per line)
-static const vicii_cycle_entry_t vicii_cycle_table_ntsc2[64] = {
+static const vicii_cycle_entry_t vicii_cycle_table_6567R56A[64] = {
     // 1=VIC-II PHI1, 2=VIC-II PHI2, C=CPU PHI2       12C 12C
     //                                                BAD NBD
     {vicii_cycle_sprite_p_access, 3},           // 1  3_x 3_x
@@ -1571,7 +1588,7 @@ static const vicii_cycle_entry_t vicii_cycle_table_ntsc2[64] = {
 };
 
 // Cycle callback table - NTSC timing (6567R8 : 65 cycles per line)
-static const vicii_cycle_entry_t vicii_cycle_table_ntsc[65] = {
+static const vicii_cycle_entry_t vicii_cycle_table_6567R8[65] = {
     // 1=VIC-II PHI1, 2=VIC-II PHI2, C=CPU PHI2       12C 12C
     //                                                BAD NBD
     {vicii_cycle_sprite_p_access, 3},           // 1  3_x 3_x
@@ -1645,50 +1662,85 @@ static const vicii_cycle_entry_t vicii_cycle_table_ntsc[65] = {
 // CHIP CONFIGURATION DEFINITIONS
 // ========================================================================================
 
-// MOS6569 PAL VIC-II Configuration
-static const vicii_chip_config_t vicii_config_pal = {
-    .cycles_per_line = VICII_PAL_CYCLES_PER_LINE,
-    .total_lines = VICII_PAL_TOTAL_LINES,
-    .pixels_per_line = 504, // 63 cycles * 8 pixels per cycle
-    .visible_pixels_per_line = VICII_PAL_VISIBLE_PIXELS,
-    .base_offset = 404,
+// MOS6567(R56A) NTSC VIC-II Configuration
+static const vicii_chip_config_t MOS6567R56A_config = {
+    .total_lines = 262,
+    .visible_lines = 234,
+    .cycles_per_line = 64,
+    .visible_pixels_per_line = 411,
+    .first_vblank_line = 13,
+    .last_vblank_line = 40,
+    .first_x_coord = 412,
+    .first_visible_x_coord = 488,
+    .last_visible_x_coord = 388,
     
-    .border_top_rsel0 = VICII_BORDER_TOP_RSEL0,
-    .border_bottom_rsel0 = VICII_BORDER_BOTTOM_RSEL0,
-    .border_top_rsel1 = VICII_BORDER_TOP_RSEL1,
-    .border_bottom_rsel1 = VICII_BORDER_BOTTOM_RSEL1,
-    .border_left_csel0 = VICII_BORDER_LEFT_CSEL0,
-    .border_right_csel0 = VICII_BORDER_RIGHT_CSEL0,
-    .border_left_csel1 = VICII_BORDER_LEFT_CSEL1,
-    .border_right_csel1 = VICII_BORDER_RIGHT_CSEL1,
+    .border_top_rsel0 = 55,
+    .border_bottom_rsel0 = 247,
+    .border_top_rsel1 = 51,
+    .border_bottom_rsel1 = 251,
+    .border_left_csel0 = 31,
+    .border_right_csel0 = 335,
+    .border_left_csel1 = 24,
+    .border_right_csel1 = 344,
+
+    .framebuffer_start_x = 0,
+    .framebuffer_end_x = 520,  // Allow full scanline width to accommodate pipeline delay wrap-around
+    
+    .chip_name = "MOS6567(R56A) NTSC"
+};
+
+// MOS6567(R8) NTSC VIC-II Configuration
+static const vicii_chip_config_t MOS6567R8_config = {
+    .total_lines = 262,
+    .visible_lines = 235,
+    .cycles_per_line = 65,
+    .visible_pixels_per_line = 411,
+    .first_vblank_line = 13,
+    .last_vblank_line = 40,
+    .first_x_coord = 412,
+    .first_visible_x_coord = 489,
+    .last_visible_x_coord = 396,
+    
+    .border_top_rsel0 = 55,
+    .border_bottom_rsel0 = 247,
+    .border_top_rsel1 = 51,
+    .border_bottom_rsel1 = 251,
+    .border_left_csel0 = 31,
+    .border_right_csel0 = 335,
+    .border_left_csel1 = 24,
+    .border_right_csel1 = 344,
+
+    .framebuffer_start_x = 0,
+    .framebuffer_end_x = 520,  // Allow full scanline width to accommodate pipeline delay wrap-around
+    
+    .chip_name = "MOS6567(R8) NTSC"
+};
+
+// MOS6569 PAL VIC-II Configuration
+static const vicii_chip_config_t MOS6569_config = {
+    .total_lines = 312,
+    .visible_lines = 284,
+    .cycles_per_line = 63,
+    .visible_pixels_per_line = 403,
+    .first_vblank_line = 300,
+    .last_vblank_line = 15,
+    .first_x_coord = 404,
+    .first_visible_x_coord = 480,
+    .last_visible_x_coord = 380,
+    
+    .border_top_rsel0 = 55,
+    .border_bottom_rsel0 = 247,
+    .border_top_rsel1 = 51,
+    .border_bottom_rsel1 = 251,
+    .border_left_csel0 = 31,
+    .border_right_csel0 = 335,
+    .border_left_csel1 = 24,
+    .border_right_csel1 = 344,
 
     .framebuffer_start_x = 0,
     .framebuffer_end_x = 504,  // Allow full scanline width to accommodate pipeline delay wrap-around
     
     .chip_name = "MOS6569 PAL"
-};
-
-// MOS6567 NTSC VIC-II Configuration
-static const vicii_chip_config_t vicii_config_ntsc = {
-    .cycles_per_line = VICII_NTSC_CYCLES_PER_LINE,
-    .total_lines = VICII_NTSC_TOTAL_LINES,
-    .pixels_per_line = 520, // 65 cycles * 8 pixels per cycle
-    .visible_pixels_per_line = VICII_NTSC_VISIBLE_PIXELS,
-    .base_offset = 412,
-    
-    .border_top_rsel0 = VICII_BORDER_TOP_RSEL0,
-    .border_bottom_rsel0 = VICII_BORDER_BOTTOM_RSEL0,
-    .border_top_rsel1 = VICII_BORDER_TOP_RSEL1,
-    .border_bottom_rsel1 = VICII_BORDER_BOTTOM_RSEL1,
-    .border_left_csel0 = VICII_BORDER_LEFT_CSEL0,
-    .border_right_csel0 = VICII_BORDER_RIGHT_CSEL0,
-    .border_left_csel1 = VICII_BORDER_LEFT_CSEL1,
-    .border_right_csel1 = VICII_BORDER_RIGHT_CSEL1,
-
-    .framebuffer_start_x = 0,
-    .framebuffer_end_x = 520,  // Allow full scanline width to accommodate pipeline delay wrap-around
-    
-    .chip_name = "MOS6567 NTSC"
 };
 
 // ========================================================================================
@@ -1773,15 +1825,15 @@ static inline void vicii_initialize(vicii_t* vicii) {
 
 static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_config_t* config) {
     // Select cycle table based on timing characteristics
-    if (config->cycles_per_line == VICII_PAL_CYCLES_PER_LINE) { // 63
-        vicii->timing.cycle_table = vicii_cycle_table_pal;
-    } else if (config->cycles_per_line == 64) {
-        vicii->timing.cycle_table = vicii_cycle_table_ntsc2;
-    } else if (config->cycles_per_line == VICII_NTSC_CYCLES_PER_LINE) { // 65
-        vicii->timing.cycle_table = vicii_cycle_table_ntsc;
+    if (config->cycles_per_line == 63) { // PAL
+        vicii->timing.cycle_table = vicii_cycle_table_6569;
+    } else if (config->cycles_per_line == 64) { // NTSC
+        vicii->timing.cycle_table = vicii_cycle_table_6567R56A;
+    } else if (config->cycles_per_line == 65) { // NTSC
+        vicii->timing.cycle_table = vicii_cycle_table_6567R8;
     } else {
         // Default to PAL if unknown
-        vicii->timing.cycle_table = vicii_cycle_table_pal;
+        vicii->timing.cycle_table = vicii_cycle_table_6569;
     }
     
     // Allocate pixel buffers based on config
@@ -1842,7 +1894,7 @@ void vicii_bus_attach(void* chip, void* bus) {
 
 // Configuration helper function
 const vicii_chip_config_t* vicii_get_default_config(bool is_pal) {
-    return is_pal ? &vicii_config_pal : &vicii_config_ntsc;
+    return is_pal ? &MOS6569_config : &MOS6567R8_config;
 }
 
 void vicii_set_framebuffer(vicii_t* vicii, uint32_t* framebuffer, int width, int height) {
