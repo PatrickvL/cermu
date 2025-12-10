@@ -208,6 +208,16 @@ struct vicii_pixel_s {
 };
 using vicii_pixel_t = vicii_pixel_s;
 
+// VIC-II border coordinates (identical across all chip variants)
+// From vic-ii.txt lines 751-759
+constexpr uint16_t VICII_BORDER_TOP_RSEL1 = 51;
+constexpr uint16_t VICII_BORDER_TOP_RSEL0 = 55;
+constexpr uint16_t VICII_BORDER_BOTTOM_RSEL0 = 247;
+constexpr uint16_t VICII_BORDER_BOTTOM_RSEL1 = 251;
+constexpr uint16_t VICII_BORDER_LEFT_CSEL1 = 24;
+constexpr uint16_t VICII_BORDER_LEFT_CSEL0 = 31;
+constexpr uint16_t VICII_BORDER_RIGHT_CSEL0 = 335;
+constexpr uint16_t VICII_BORDER_RIGHT_CSEL1 = 344;
 
 // VIC-II access types (Documentation section 3.6.2)
 // PHI1 = PHI2 low
@@ -240,22 +250,6 @@ struct vicii_chip_config_t {
     uint16_t first_x_coord;
     uint16_t first_visible_x_coord;
     uint16_t last_visible_x_coord;
-    
-    // Border coordinates for RSEL=0 (24-row mode)
-    uint16_t border_top_rsel0;
-    uint16_t border_bottom_rsel0;
-    
-    // Border coordinates for RSEL=1 (25-row mode)
-    uint16_t border_top_rsel1;
-    uint16_t border_bottom_rsel1;
-    
-    // Border coordinates for CSEL=0 (38-column mode)
-    uint16_t border_left_csel0;
-    uint16_t border_right_csel0;
-    
-    // Border coordinates for CSEL=1 (40-column mode)
-    uint16_t border_left_csel1;
-    uint16_t border_right_csel1;
     
     // Framebuffer area bounds
     uint16_t framebuffer_start_x;
