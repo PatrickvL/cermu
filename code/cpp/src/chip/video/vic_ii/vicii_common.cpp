@@ -38,15 +38,15 @@ const uint32_t* vicii_get_default_palette(void) {
 // BORDER LOGIC
 // ========================================================================================
 
-static inline void vicii_border_update_limits(vicii_border_unit_t* border, const vicii_chip_config_t* config, uint8_t c1_reg, uint8_t c2_reg) {
-    border->border_top = (c1_reg & VICII_C1_RSEL) ? 
-        config->border_top_rsel1 : config->border_top_rsel0;
-    border->border_bottom = (c1_reg & VICII_C1_RSEL) ? 
-        config->border_bottom_rsel1 : config->border_bottom_rsel0;
-    border->border_left = (c2_reg & VICII_C2_CSEL) ? 
-        config->border_left_csel1 : config->border_left_csel0;
-    border->border_right = (c2_reg & VICII_C2_CSEL) ? 
-        config->border_right_csel1 : config->border_right_csel0;
+static inline void vicii_border_update_limits(vicii_border_unit_t* border, uint8_t c1_reg, uint8_t c2_reg) {
+    border->border_top = (c1_reg & VICII_C1_RSEL) ?
+        VICII_BORDER_TOP_RSEL1 : VICII_BORDER_TOP_RSEL0;
+    border->border_bottom = (c1_reg & VICII_C1_RSEL) ?
+        VICII_BORDER_BOTTOM_RSEL1 : VICII_BORDER_BOTTOM_RSEL0;
+    border->border_left = (c2_reg & VICII_C2_CSEL) ?
+        VICII_BORDER_LEFT_CSEL1 : VICII_BORDER_LEFT_CSEL0;
+    border->border_right = (c2_reg & VICII_C2_CSEL) ?
+        VICII_BORDER_RIGHT_CSEL1 : VICII_BORDER_RIGHT_CSEL0;
 }
 
 // ========================================================================================
@@ -590,7 +590,7 @@ bus_state_t vicii_registers_write(void* context, bus_state_t bus_state) {
             FALLTHROUGH; // to C2 case
         case VICII_C2: // $d016 Control register 2
             vicii_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
-            vicii_border_update_limits(&vicii->border, vicii->config, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
+            vicii_border_update_limits(&vicii->border, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
             break;
         case VICII_MXE: // $d015 Sprite enabled x
             // Update sprite enabled state
@@ -1674,15 +1674,6 @@ static const vicii_chip_config_t MOS6567R56A_config = {
     .first_visible_x_coord = 488,
     .last_visible_x_coord = 388,
     
-    .border_top_rsel0 = 55,
-    .border_bottom_rsel0 = 247,
-    .border_top_rsel1 = 51,
-    .border_bottom_rsel1 = 251,
-    .border_left_csel0 = 31,
-    .border_right_csel0 = 335,
-    .border_left_csel1 = 24,
-    .border_right_csel1 = 344,
-
     .framebuffer_start_x = 0,
     .framebuffer_end_x = 520,  // Allow full scanline width to accommodate pipeline delay wrap-around
     
@@ -1701,15 +1692,6 @@ static const vicii_chip_config_t MOS6567R8_config = {
     .first_visible_x_coord = 489,
     .last_visible_x_coord = 396,
     
-    .border_top_rsel0 = 55,
-    .border_bottom_rsel0 = 247,
-    .border_top_rsel1 = 51,
-    .border_bottom_rsel1 = 251,
-    .border_left_csel0 = 31,
-    .border_right_csel0 = 335,
-    .border_left_csel1 = 24,
-    .border_right_csel1 = 344,
-
     .framebuffer_start_x = 0,
     .framebuffer_end_x = 520,  // Allow full scanline width to accommodate pipeline delay wrap-around
     
@@ -1728,15 +1710,6 @@ static const vicii_chip_config_t MOS6569_config = {
     .first_visible_x_coord = 480,
     .last_visible_x_coord = 380,
     
-    .border_top_rsel0 = 55,
-    .border_bottom_rsel0 = 247,
-    .border_top_rsel1 = 51,
-    .border_bottom_rsel1 = 251,
-    .border_left_csel0 = 31,
-    .border_right_csel0 = 335,
-    .border_left_csel1 = 24,
-    .border_right_csel1 = 344,
-
     .framebuffer_start_x = 0,
     .framebuffer_end_x = 504,  // Allow full scanline width to accommodate pipeline delay wrap-around
     
@@ -1800,7 +1773,7 @@ static inline void vicii_initialize(vicii_t* vicii) {
     
     // Update units based on register values
     vicii_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
-    vicii_border_update_limits(&vicii->border, vicii->config, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
+    vicii_border_update_limits(&vicii->border, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
     
     // Initialize border priority once (color will be updated by register writes)
     vicii->border.border_pixel.priority = VICII_PRIORITY_BORDER;
