@@ -38,28 +38,6 @@ const uint32_t* vicii_get_default_palette(void) {
 // BORDER LOGIC
 // ========================================================================================
 
-// Pixel emission helper
-static inline void vicii_pixel_emit_single(vicii_t* vicii, const vicii_pixel_t* pixel_data) {
-    vicii_pixel_unit_t* pixel = &vicii->pixel;
-    if (pixel->pixel_line_index < vicii->config->visible_pixels_per_line) {
-        uint16_t idx = pixel->pixel_line_index++;
-
-        pixel->pixel_line_priority[idx] = pixel_data->priority;
-        pixel->pixel_line_color[idx] = pixel_data->color;
-    }
-}
-
-static inline void vicii_border_emit_pixels(vicii_t* vicii) {
-    vicii_pixel_emit_single(vicii, &vicii->border.border_pixel);
-}
-
-static inline void vicii_border_pixel_sequencer(vicii_t* vicii) {
-    // Sequence 8 border pixels per cycle
-    for (int i = 0; i < 8; i++) {
-        vicii_border_emit_pixels(vicii);
-    }
-}
-
 static inline void vicii_border_update_limits(vicii_border_unit_t* border, const vicii_chip_config_t* config, uint8_t c1_reg, uint8_t c2_reg) {
     border->border_top = (c1_reg & VICII_C1_RSEL) ? 
         config->border_top_rsel1 : config->border_top_rsel0;
@@ -215,17 +193,20 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
     // pixels being OUTPUT at that moment, not pixels being LOADED into the pipeline.
     const uint16_t x_coord = vicii->timing.x_coordinate;
     
-    // Early return if we're beyond the visible line buffer range
-    // x_coordinate goes 0-503 per scanline, but visible buffer is only 0-402
-    if (x_coord >= vicii->config->visible_pixels_per_line) return;
-    
     // Determine if we're in border or display area
     // VIC-II border flip-flop logic: graphics are displayed when main_border_flip_flop is FALSE
     // Border is displayed when main_border_flip_flop is TRUE
     const bool in_main_display = !vicii->border.main_border_flip_flop
                               && !vicii->border.vertical_border_flip_flop;
     
-    if (in_main_display && vicii->video_logic.display_state) {
+    if (!(in_main_display && vicii->video_logic.display_state)) {
+        // We're in border area - sequence exactly 8 border pixels
+        for (int pixel = 0; pixel < 8; pixel++) {
+            const uint16_t pixel_x = x_coord + (uint16_t)pixel;
+            
+            vicii_pixel_emit_at_x(vicii, &vicii->border.border_pixel, pixel_x);
+        }
+    } else {
         // We're in display area - sequence 8 pixels from shift register
         vicii_sequencer_unit_t* seq = &vicii->sequencer;
         
@@ -370,13 +351,6 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                  !(vicii->video_data.video_color_line[vmli] & 0x08)) {
                 seq->pixel_in_char = (seq->pixel_in_char + 1) & 7;
             }
-        }
-    } else {
-        // We're in border area - sequence exactly 8 border pixels
-        for (int pixel = 0; pixel < 8; pixel++) {
-            const uint16_t pixel_x = x_coord + (uint16_t)pixel;
-            
-            vicii_pixel_emit_at_x(vicii, &vicii->border.border_pixel, pixel_x);
         }
     }
     
@@ -744,7 +718,6 @@ void vicii_timing_advance(vicii_t* vicii) {
         }
         
         vicii_set_x_cycle(vicii, 0);
-        vicii->pixel.pixel_line_index = 0;
         
         // CRITICAL: Check if we're about to enter raster 0x30 (first display raster)
         // If so, reset VCBASE, VC, and display_state BEFORE advancing the raster counter
