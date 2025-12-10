@@ -208,27 +208,6 @@ struct vicii_pixel_s {
 };
 using vicii_pixel_t = vicii_pixel_s;
 
-// MOS6569 PAL VIC-II timing constants 
-#define VICII_PAL_CYCLES_PER_LINE    63 // aka MOS6569_CYCLES_PER_LINE
-#define VICII_PAL_TOTAL_LINES        312 // aka MOS6569_TOTAL_LINES / VIC_LINES_PER_FRAME 
-#define VICII_PAL_VISIBLE_PIXELS     403
-
-// MOS6567 NTSC VIC-II timing constants 
-#define VICII_NTSC_CYCLES_PER_LINE   65 // aka MOS6567_CYCLES_PER_LINE
-#define VICII_NTSC_TOTAL_LINES       262 // aka MOS6567_TOTAL_LINES
-#define VICII_NTSC_VISIBLE_PIXELS    411
-
-// #define VIC_CYCLES_PER_FRAME (VIC_CYCLES_PER_LINE * VIC_LINES_PER_FRAME)
-
-// Border limits
-#define VICII_BORDER_TOP_RSEL1       51
-#define VICII_BORDER_TOP_RSEL0       55
-#define VICII_BORDER_BOTTOM_RSEL0    247
-#define VICII_BORDER_BOTTOM_RSEL1    251
-#define VICII_BORDER_LEFT_CSEL1      24
-#define VICII_BORDER_LEFT_CSEL0      31
-#define VICII_BORDER_RIGHT_CSEL0     335
-#define VICII_BORDER_RIGHT_CSEL1     344
 
 // VIC-II access types (Documentation section 3.6.2)
 // PHI1 = PHI2 low
@@ -252,11 +231,15 @@ using vicii_pixel_t = vicii_pixel_s;
 // Configuration struct for different MOS 656x chip variants
 struct vicii_chip_config_t {
     // Timing parameters
-    uint8_t cycles_per_line;
     uint16_t total_lines;
-    uint16_t pixels_per_line;
+    uint16_t visible_lines;
+    uint8_t cycles_per_line;
     uint16_t visible_pixels_per_line;
-    uint16_t base_offset;
+    uint16_t first_vblank_line;
+    uint16_t last_vblank_line;
+    uint16_t first_x_coord;
+    uint16_t first_visible_x_coord;
+    uint16_t last_visible_x_coord;
     
     // Border coordinates for RSEL=0 (24-row mode)
     uint16_t border_top_rsel0;
