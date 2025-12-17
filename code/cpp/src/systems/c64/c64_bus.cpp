@@ -43,7 +43,9 @@ static inline int8_t c64_get_address_bank(uint16_t address) {
 // Uses unified memory buffer for branchless access to ROM and RAM
 bus_state_t c64_bus_vic_read(c64_bus_t* c64_bus, bus_state_t bus_state, uint16_t address) {
     BUS_SET_ADDR(bus_state, address); // Perhaps this is no longer needed
-    // Extract 4KB bank from address (0-15 for VIC-II's 64KB addressable space)
+    // CRITICAL: The address passed here already has the VIC-II bank_base applied from vicii_tick()
+    // We need to use the FULL address (including bank offset) to determine the correct chip
+    // Extract 4KB bank from the full address (0-15 for each 16KB VIC-II bank)
     const uint8_t vicii_bank = c64_get_address_bank(address);
     // Get raw CHIP directly from pre-selected active array (no mode indexing)
     const uint8_t chip = c64_bus->vicii_chip_per_bank[vicii_bank];

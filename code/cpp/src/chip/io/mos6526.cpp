@@ -160,8 +160,18 @@ bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state) {
             break;
         case DDRA:
             mos6526_write_data_direction_port(cia, A, value);
-            // After changing DDR, update port output - this may trigger callback if output changed
-            mos6526_update_output_port(cia, A, cia->reg[PRA]);
+            // After changing DDR, update port output - this will trigger callback
+            // Note: mos6526_update_output_port checks if port value changed and calls callback
+            // But for DDRA changes, we need to ALWAYS call it even if value didn't change
+            {
+                uint8_t old_port = cia->port_a_value;
+                mos6526_update_output_port(cia, A, cia->reg[PRA]);
+                // CRITICAL: If port didn't change but DDR did, still trigger callback
+                // This handles the case where bits change from output→input and were already high
+                if (old_port == cia->port_a_value && cia->port_a_change_callback) {
+                    cia->port_a_change_callback(cia->port_a_callback_context, cia->port_a_value);
+                }
+            }
             break;
         case DDRB:
             mos6526_write_data_direction_port(cia, B, value);
