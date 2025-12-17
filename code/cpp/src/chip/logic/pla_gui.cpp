@@ -121,20 +121,20 @@ inline ChipLayout create_pla_layout() {
     
     // Hardware-accurate C64 PLA pinout (28-pin DIP) - Official Specifications
     // Right-hand pins (15-28) are numbered bottom-up, not top-down
-    PIN_LR(layout,  1, NC,       VCC, 28);          // FE/NC (Programming)    / +5V Power
+    PIN_LR(layout,  1, NC,       VCC, 28);          // FE/NC (Programming)   / +5V Power
     PIN_LR(layout,  2, A13,      A12, 27);          // I7 (A13)              / I8 (A12)
-    PIN_LR(layout,  3, A14,      AEC, 26);          // I6 (A14)              / I10 (#AEC)
-    PIN_LR(layout,  4, A15,      RW, 25);           // I5 (A15)              / I11 (R/#W)
-    PIN_LR(layout,  5, UNKNOWN,  EXROM, 24);        // I4 (#VA14)            / I12 (#EXROM)
-    PIN_LR(layout,  6, CHAREN,   GAME, 23);         // I3 (#CHAREN)          / I13 (#GAME)
-    PIN_LR(layout,  7, HIRAM,    UNKNOWN, 22);      // I2 (#HIRAM)           / I14 (VA13)
-    PIN_LR(layout,  8, LORAM,    UNKNOWN, 21);      // I1 (#LORAM)           / I15 (VA12)
-    PIN_LR(layout,  9, CAS,      CS, 20);           // I0 (#CAS)             / #CE (Chip Enable)
-    PIN_LR(layout, 10, ROMH,     CASRAM, 19);       // F7 (#ROMH)            / F0 (#CASRAM)
-    PIN_LR(layout, 11, ROML,     BASIC, 18);        // F6 (#ROML)            / F1 (#BASIC)
-    PIN_LR(layout, 12, IO,       KERNAL, 17);       // F5 (#I/O)             / F2 (#KERNAL)
-    PIN_LR(layout, 13, GRW,      CHAROM, 16);       // F4 (GR/#W)            / F3 (#CHAROM)
-    PIN_LR(layout, 14, VSS,      CASRAM_PLA, 15);   // VSS (Ground)          / F0 (#CASRAM)
+    PIN_LR(layout,  3, A14,      BA, 26);           // I6 (A14)              / I9 (BA)
+    PIN_LR(layout,  4, A15,      AEC, 25);          // I5 (A15)              / I10 (#AEC)
+    PIN_LR(layout,  5, VA14,     RW, 24);           // I4 (#VA14)            / I11 (R/#W)
+    PIN_LR(layout,  6, CHAREN,   EXROM, 23);        // I3 (#CHAREN)          / I12 (#EXROM)
+    PIN_LR(layout,  7, HIRAM,    GAME, 22);         // I2 (#HIRAM)           / I13 (#GAME)
+    PIN_LR(layout,  8, LORAM,    VA13, 21);         // I1 (#LORAM)           / I14 (VA13)
+    PIN_LR(layout,  9, CAS,      VA12, 20);         // I0 (#CAS)             / I15 (VA12)
+    PIN_LR(layout, 10, ROMH,     CS, 19);           // F7 (#ROMH)            / #CE (Chip Enable)
+    PIN_LR(layout, 11, ROML,     CASRAM_PLA, 18);   // F6 (#ROML)            / F0 (#CASRAM)
+    PIN_LR(layout, 12, IO,       BASIC, 17);        // F5 (#I/O)             / F1 (#BASIC)
+    PIN_LR(layout, 13, GRW,      KERNAL, 16);       // F4 (GR/#W)            / F2 (#KERNAL)
+    PIN_LR(layout, 14, VSS,      CHAROM, 15);       // VSS (Ground)          / F3 (#CHAROM)
     
     return layout;
 }
@@ -178,16 +178,16 @@ static std::vector<PinSignalState> get_pla_pin_states(c64_t* c64, const ChipLayo
     pin_states[27].high_impedance = false;
     
     // Control signal pins based on current banking mode
-    pin_states[9].signal_level = (current_mode & 0x04) != 0;   // CHAREN (pin 10)
-    pin_states[9].high_impedance = false;
-    pin_states[10].signal_level = (current_mode & 0x02) != 0;  // HIRAM (pin 11)
-    pin_states[10].high_impedance = false;
-    pin_states[11].signal_level = (current_mode & 0x01) != 0;  // LORAM (pin 12)
-    pin_states[11].high_impedance = false;
-    pin_states[22].signal_level = (current_mode & 0x10) != 0;  // GAME (pin 23)
+    pin_states[5].signal_level = (current_mode & 0x04) != 0;   // CHAREN (pin 6)
+    pin_states[5].high_impedance = false;
+    pin_states[6].signal_level = (current_mode & 0x02) != 0;  // HIRAM (pin 7)
+    pin_states[6].high_impedance = false;
+    pin_states[7].signal_level = (current_mode & 0x01) != 0;  // LORAM (pin 8)
+    pin_states[7].high_impedance = false;
+    pin_states[21].signal_level = (current_mode & 0x10) != 0;  // GAME (pin 22)
+    pin_states[21].high_impedance = false;
+    pin_states[22].signal_level = (current_mode & 0x08) != 0;  // EXROM (pin 23)
     pin_states[22].high_impedance = false;
-    pin_states[23].signal_level = (current_mode & 0x08) != 0;  // EXROM (pin 24)
-    pin_states[23].high_impedance = false;
     
     return pin_states;
 }
