@@ -114,9 +114,9 @@ void pla_906114_01_set_vicii_address_bank(pla_906114_01_t* pla, uint8_t high_nyb
     pla->inputs.va12 = (high_nybble & 0x01) != 0;
     pla->inputs.va13 = (high_nybble & 0x02) != 0;
     // Handle VA14 line for different configurations
-    // For banks 0-3: VA14 = 0, For banks 4-7: VA14 = 0
-    // For banks 8-11: VA14 = 1, For banks 12-15: VA14 = 1
-    pla->inputs.n_va14 = (high_nybble & 0x04) == 0; // VA14 is inverted in the PLA
+    // For banks 0-7: VA14 = 0, For banks 8-15: VA14 = 1
+    // VA14 is bit 3 of the 4-bit bank number (high_nybble)
+    pla->inputs.n_va14 = (high_nybble & 0x08) == 0; // VA14 is inverted in the PLA
     // Note that the VIC-II itself only has 14 address lines,
     // which can only address 16KB of memory. However, VIC-II
     // memory accesses use the upper 2 bits (VA14, VA15) from CIA2,

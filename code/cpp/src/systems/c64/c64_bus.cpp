@@ -44,9 +44,8 @@ static inline int8_t c64_get_address_bank(uint16_t address) {
 bus_state_t c64_bus_vic_read(c64_bus_t* c64_bus, bus_state_t bus_state, uint16_t address) {
     BUS_SET_ADDR(bus_state, address); // Perhaps this is no longer needed
     // CRITICAL: The address passed here already has the VIC-II bank_base applied from vicii_tick()
-    // We need to mask off the bank_base to get the VIC-II's local address within its 16KB bank
-    // The vicii_chip_per_bank array is indexed 0-15 for addresses $0000-$FFFF (full address space)
-    // So we use the full address including bank_base to index into the global chip mapping
+    // The vicii_chip_per_bank array is indexed 0-15 for the full 64KB address space
+    // Extract the 4KB bank number (0-15) from the full address (which includes bank_base)
     const uint8_t vicii_bank = c64_get_address_bank(address);
     // Get raw CHIP directly from pre-selected active array (no mode indexing)
     const uint8_t chip = c64_bus->vicii_chip_per_bank[vicii_bank];
