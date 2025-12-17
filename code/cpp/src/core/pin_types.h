@@ -162,6 +162,7 @@ enum class PinLabel {
     CHAREN,       // Character ROM enable
     LORAM,        // Low RAM
     HIRAM,        // High RAM
+    VA12, VA13, VA14, // Video address lines
     
     // Logic chip pins
     Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7,         // Outputs
