@@ -381,15 +381,19 @@ static inline void* create_and_register_chip(c64_t* c64, chip_descriptor_t* desc
 
 // Callback function for CIA2 Port A changes - updates VIC-II bank
 // Called whenever CIA2 Port A output changes (considering DDR masking)
-static void c64_cia2_port_a_callback(void* context, uint8_t port_a_output) {
+static void c64_cia2_port_a_callback(void* context, uint8_t port_a_value) {
     c64_t* c64 = (c64_t*)context;
     
-    // Extract VIC-II bank bits (bits 0-1 of CIA2 Port A)
-    uint8_t vic_bank_bits = port_a_output & 0x03;
+    // The VIC-II bank is determined by CIA2 Port A bits 0-1
+    // These bits are INVERTED: 0b11 = Bank 0, 0b00 = Bank 3
+    //
+    // CRITICAL: The VIC sees the actual PORT VALUE (physical pins), not PRA register
+    // - For OUTPUT bits (DDR=1): pin value = PRA bit value
+    // - For INPUT bits (DDR=0): pin value = pulled high = 1
+    //
+    // The port_a_value parameter already represents the correct physical pin state
+    uint8_t vic_bank_bits = port_a_value & 0x03;
     
-    // Pass raw bank bits to VIC-II - it will handle the inversion
-    // VIC-II bank mapping is INVERTED:
-    // Port A bits 0-1: 00 → Bank 3, 01 → Bank 2, 10 → Bank 1, 11 → Bank 0
     vicii_memory_bank_change(c64->vicii, vic_bank_bits);
 }
 
