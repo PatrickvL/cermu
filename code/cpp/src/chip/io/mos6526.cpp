@@ -160,11 +160,9 @@ bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state) {
             break;
         case DDRA:
             mos6526_write_data_direction_port(cia, A, value);
-            // After changing DDR, update port output
-            mos6526_update_output_port(cia, A, cia->reg[PRA]);
-            // CRITICAL: ALWAYS trigger callback when DDRA changes, even if port value didn't change
-            // This handles cases where bits change from output→input but pin value stays the same
-            // (e.g., PRA=$03, changing DDR from $03→$00 keeps pins at $03 due to pull-ups)
+            // CRITICAL: ALWAYS trigger callback when DDRA changes
+            // mos6526_write_data_direction_port() already updated port_a_value correctly
+            // Don't call mos6526_update_output_port() as it would overwrite the value!
             if (cia->port_a_change_callback) {
                 cia->port_a_change_callback(cia->port_a_callback_context, cia->port_a_value);
             }
@@ -243,17 +241,26 @@ void mos6526_write_data_direction_port(mos6526_t* cia, uint32_t p, uint8_t v) { 
     // (so it can be compared) and then store the new value.
     uint8_t old_outputs = cia->reg[i]; // DDRA / DDRB
     cia->reg[i] = v; // DDRA / DDRB
+    
+    uint8_t* port = (p == A) ? &cia->port_a_value : &cia->port_b_value;
+    uint8_t pra_value = cia->reg[PRA + p];
+    
     // Determine which port bit lines have changed from output to input.
-    uint8_t new_inputs = old_outputs & ~v; // TODO : Verify
+    uint8_t new_inputs = old_outputs & ~v;
     if (new_inputs > 0) {
-        // Access the port-specific output pins
-        uint8_t* port = (p == A) ? &cia->port_a_value : &cia->port_b_value;
         // 'Pull up' all port bit lines that changed from output to input.
         *port |= new_inputs;
-        // Note : Above pull'ed up bits can only be lowered by
-        // connected control devices (keyboard, joystick, mouse)
-        // when that happens AFTER the CIA cycle update!
     }
+    
+    // Determine which port bit lines have changed from input to output.
+    uint8_t new_outputs = ~old_outputs & v;
+    if (new_outputs > 0) {
+        // Drive PRA/PRB value onto bits that changed from input to output
+        *port = (*port & ~new_outputs) | (pra_value & new_outputs);
+    }
+    
+    // Note : Pull-up bits can be lowered by connected devices (keyboard, joystick, mouse)
+    // when that happens AFTER the CIA cycle update!
 }
 
 void mos6526_update_output_port_b(mos6526_t* cia, uint8_t v) {
@@ -291,11 +298,12 @@ void mos6526_update_output_port(mos6526_t* cia, uint32_t p, uint8_t v) { // p:A 
     uint8_t* port = (p == A) ? &cia->port_a_value : &cia->port_b_value;
     uint8_t mask = cia->reg[(p == A) ? DDRA : IDDRB_OFFSET];
     // Note : For port B, IDDRB is DDRB but with PBON taken into account - see UpdateInternalDataDirectionPortB()
-    uint8_t old_value = *port;
     *port = (*port & ~mask) | (v & mask);
     
-    // Call port A change callback if port A changed and callback is registered
-    if (p == A && old_value != *port && cia->port_a_change_callback) {
+    // Call port A change callback if port A and callback is registered
+    // Note: Always call for Port A writes (even if value unchanged) because VIC-II
+    // banking needs to be notified on every PRA write for correct operation
+    if (p == A && cia->port_a_change_callback) {
         cia->port_a_change_callback(cia->port_a_callback_context, *port);
     }
 }
