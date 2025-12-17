@@ -1,20 +1,28 @@
 #include "../systems/c64/c64.h"
 #include "../systems/c64/c64_config.h"
+#include "../systems/c64/c64_test_loader.h"
 #include "../gui/imgui_interface.h"
 #include <stdio.h>
+#include <string.h>
 
 // ============================================================================
 // MAIN FUNCTION - Threaded C64 Emulator with GUI
 // ============================================================================
 int main(int argc, char** argv) {
-    (void)argc;
-    (void)argv;
+    const char* prg_file = NULL;
+    
+    // Parse command-line arguments
+    if (argc > 1) {
+        prg_file = argv[1];
+        printf("Loading PRG file: %s\n", prg_file);
+    }
     
     // Initialize GUI
     if (!gui_init("C64 Emulator", 1200, 800)) {
         return 1;
     }
-      // Initialize the C64 system
+    
+    // Initialize the C64 system
     c64_config_t config = {
         .vicii_standard = VIC_PAL,
         .rom_config = NULL,  // Use default ROM paths, can be overridden by GUI later
@@ -31,6 +39,24 @@ int main(int argc, char** argv) {
     if (!c64) {
         gui_cleanup();
         return 1;
+    }
+    
+    // Load PRG file if provided on command line
+    if (prg_file != NULL) {
+        uint16_t load_address = 0;
+        uint16_t sys_address = 0;
+        if (!c64_test_load_prg_file(prg_file, c64->ram, &load_address, &sys_address)) {
+            printf("Failed to load PRG file: %s\n", prg_file);
+            // Continue anyway - user can load via GUI
+        } else {
+            printf("Successfully loaded PRG file: %s\n", prg_file);
+            printf("  Load address: $%04X\n", load_address);
+            if (sys_address != 0) {
+                printf("  SYS address: $%04X (auto-starting...)\n", sys_address);
+                // TODO: Set PC to sys_address for auto-run
+                // For now, user can manually type SYS command or we auto-start BASIC
+            }
+        }
     }
     
     // Set up framebuffer for VIC-II
@@ -70,8 +96,10 @@ int main(int argc, char** argv) {
     bool prev_emulation_running = false;
     bool prev_emulation_paused = true;
     emulation_state_t prev_emu_state = EMU_STATE_STOPPED;
-      // Main GUI loop (runs at ~60 FPS)
-    while (!gui_should_quit()) {        // Handle events and input (with emulation context for proper shutdown)
+    
+    // Main GUI loop (runs at ~60 FPS)
+    while (!gui_should_quit()) {
+        // Handle events and input (with emulation context for proper shutdown)
         gui_handle_events(&emu_context);
         
         // Update GUI state with current emulation status
@@ -111,7 +139,8 @@ int main(int argc, char** argv) {
         
         // Update FPS counter
         gui_emulation_update_fps(&emu_context);
-          // Render GUI frame with emulation context for control buttons
+        
+        // Render GUI frame with emulation context for control buttons
         gui_render_frame(c64, &gui_state, &emu_context);
         
         // GUI frame rate limiting (60 FPS)
