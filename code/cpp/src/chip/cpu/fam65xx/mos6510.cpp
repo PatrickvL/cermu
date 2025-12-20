@@ -47,8 +47,10 @@ bus_state_t mos6510_init(mos6510_t *cpu, const mos6510_desc_t *desc) {
     // Initialize I/O port with default C64 state
     cpu_impl->init_io_port();
 
-    // Note: I/O port callbacks are handled at a higher level (system
-    // integration) The mixin provides the basic I/O port register functionality
+    // Set descriptor and chip instance for bank_change callback
+    // The mixin will call descriptor->bank_change() when banking bits change
+    cpu_impl->descriptor = &mos6510_descriptor;
+    cpu_impl->chip_instance = cpu;
   }
 
   return pins;
@@ -144,7 +146,7 @@ chip_descriptor_t mos6510_descriptor = {
     .destroy =
         [](void *cpu) { mos6510_destroy(reinterpret_cast<mos6510_t *>(cpu)); },
     .bus_attach = nullptr,
-    .bank_change = nullptr, // MOS 6510 doesn't have banking
+    .bank_change = nullptr, // Will be set by the system (e.g., C64) if banking callbacks are needed
 #ifdef IMGUI_VERSION
     .render_debug_window = fam65xx_render_debug_window,
     .render_settings_window = fam65xx_render_settings_window

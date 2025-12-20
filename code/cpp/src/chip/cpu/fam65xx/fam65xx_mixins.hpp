@@ -11,6 +11,7 @@
 #include "fam65xx_types.h" // For bus_state_t
 #include "nes6502.h"       // For nes6502_apu::APU class
 #include <cstdint>
+#include <cstdio>          // For printf in debug output
 #include <type_traits>
 
 namespace fam65xx {
@@ -37,6 +38,10 @@ template <const CPUTraits &Traits> struct io_port_mixin_t {
     uint8_t _padding;  // Align to 4 bytes
   } io_port;
 
+  // Chip descriptor pointer - needed to call bank_change callback
+  chip_descriptor_t* descriptor = nullptr;
+  void* chip_instance = nullptr;
+
   // Initialize I/O port to C64 defaults
   void init_io_port() {
     io_port.direction = 0x2F; // C64 default: bits 0,1,2,3,5 output
@@ -45,17 +50,25 @@ template <const CPUTraits &Traits> struct io_port_mixin_t {
   }
 
   // Write to Data Direction Register ($00)
-  void write_io_ddr(uint8_t value) { io_port.direction = value; }
+  void write_io_ddr(uint8_t value) {
+    uint8_t old_direction = io_port.direction;
+    io_port.direction = value;
+    // If DDR changes affect banking bits (0-2), notify via descriptor's bank_change
+    if (((old_direction ^ value) & 0x07) && descriptor && descriptor->bank_change) {
+      uint8_t banking_bits = io_port.data & io_port.direction & 0x07;
+      descriptor->bank_change(chip_instance, banking_bits);
+    }
+  }
 
   // Write to Port data register ($01)
   void write_io_data(uint8_t value) {
-    // DEBUG: Log I/O port writes to track banking changes
-    static int write_count = 0;
-    if (write_count < 10) {
-      printf("[MOS6510] I/O port write: $01 = $%02X (write #%d)\n", value, write_count);
-      write_count++;
-    }
+    uint8_t old_data = io_port.data;
     io_port.data = value;
+    // If banking bits (0-2) changed, notify via descriptor's bank_change
+    if (((old_data ^ value) & 0x07) && descriptor && descriptor->bank_change) {
+      uint8_t banking_bits = value & io_port.direction & 0x07;
+      descriptor->bank_change(chip_instance, banking_bits);
+    }
   }
 
   // Read from Port (combines output and input based on direction)
