@@ -397,6 +397,18 @@ static void c64_cia2_port_a_callback(void* context, uint8_t port_a_value) {
     vicii_memory_bank_change(c64->vicii, vic_bank_bits);
 }
 
+// Callback function for MOS6510 I/O port changes - updates memory banking
+// Called whenever CPU writes to I/O port $01 (banking bits)
+// Must be extern "C" so it can be called from mos6510.cpp
+extern "C" void c64_cpu_banking_callback(void* context, uint8_t banking_state) {
+    c64_t* c64 = (c64_t*)context;
+    
+    // The banking_state contains bits 0-2: LORAM, HIRAM, CHAREN
+    // These are already masked by the I/O port direction register
+    // Call the existing banking change handler
+    c64_bus_on_banking_change(&c64->bus, banking_state);
+}
+
 void c64_system_destroy(c64_t* c64) {
     if (!c64) return;
 
@@ -445,6 +457,12 @@ c64_t* c64_system_create(const c64_config_t* config) {
     if (!(c64->sid = static_cast<mos6581_t*>(create_and_register_chip(c64, &mos6581_descriptor, 0xD400, 1024)))) { c64_system_destroy(c64); return NULL; }
     if (!(c64->colorram = static_cast<mos2114_t*>(create_and_register_chip(c64, &mos2114_descriptor, 0xD800, 1024)))) { c64_system_destroy(c64); return NULL; }
     c64->vicii->colorram = c64->colorram; // Also assign to VIC-II for compatibility
+    
+    // VIC-II bank selection is handled internally via bank_base offset
+    // No bus callback needed - PLA pre-calculation covers all #VA14 states
+    c64->vicii->bus.bus = &c64->bus;
+    c64->vicii->bus.bank_change = NULL;
+    
     if (!(c64->cia1 = static_cast<mos6526_t*>(create_and_register_chip(c64, &mos6526_descriptor, 0xDC00, 256)))) { c64_system_destroy(c64); return NULL; }
     if (!(c64->cia2 = static_cast<mos6526_t*>(create_and_register_chip(c64, &mos6526_descriptor, 0xDD00, 256)))) { c64_system_destroy(c64); return NULL; }
     if (!(c64->kernal = static_cast<rom_t*>(create_and_register_chip(c64, &rom_descriptor, 0xE000, 8192)))) { c64_system_destroy(c64); return NULL; }
@@ -488,6 +506,18 @@ c64_t* c64_system_create(const c64_config_t* config) {
     // Manually invoke callback with current CIA2 Port A value to set initial VIC-II bank
     // (callback wasn't available during mos6526_reset, so we call it now)
     c64_cia2_port_a_callback(c64, c64->cia2->port_a_value);
+    
+    // Hardware: CPU I/O port bits 0-2 control memory banking (LORAM, HIRAM, CHAREN)
+    // Assign the C64 banking callback directly to the MOS6510 descriptor
+    // This is where both the descriptor and the callback are in scope
+    mos6510_descriptor.bank_change = c64_cpu_banking_callback;
+    printf("C64 System: Assigned MOS6510 descriptor bank_change callback\n");
+    
+    // Set initial banking mode based on current I/O port state
+    uint8_t io_data = mos6510_get_io_data((mos6510_t*)c64->mos6510);
+    uint8_t io_ddr = mos6510_get_io_ddr((mos6510_t*)c64->mos6510);
+    uint8_t initial_banking = io_data & io_ddr & 0x07;
+    c64_cpu_banking_callback(c64, initial_banking);
 
     // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
     ((mos6526_t*)c64->cia2)->interrupt_line = BUS_MASK_NMI;

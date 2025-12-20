@@ -113,18 +113,11 @@ void pla_906114_01_set_cpu_address_bank(pla_906114_01_t* pla, uint8_t high_nybbl
 void pla_906114_01_set_vicii_address_bank(pla_906114_01_t* pla, uint8_t high_nybble) {
     pla->inputs.va12 = (high_nybble & 0x01) != 0;
     pla->inputs.va13 = (high_nybble & 0x02) != 0;
-    // Handle VA14 line for different configurations
-    // For banks 0-7: VA14 = 0, For banks 8-15: VA14 = 1
-    // VA14 is bit 3 of the 4-bit bank number (high_nybble)
-    pla->inputs.n_va14 = (high_nybble & 0x08) == 0; // VA14 is inverted in the PLA
-    // Note that the VIC-II itself only has 14 address lines,
-    // which can only address 16KB of memory. However, VIC-II
-    // memory accesses use the upper 2 bits (VA14, VA15) from CIA2,
-    // as set via vicii_memory_bank_change().
-    // Here, we don't care since we're only initializing the
-    // VIC-II bank mapping using the PLA logic.   
-
-    // Also apply the same bank bits to the a12-a15 :
+    // #VA14 reflects the corresponding address bit (bit 2 of high_nybble = bit 14 of address)
+    // Note: The signal is active-low (#VA14), so it's inverted from the address bit
+    pla->inputs.n_va14 = (high_nybble & 0x04) == 0;
+    
+    // Also apply the same bank bits to the a12-a15 for address decoding:
     pla_906114_01_set_cpu_address_bank(pla, high_nybble);
 }
 
