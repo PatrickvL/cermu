@@ -238,18 +238,28 @@ uint8_t pla_906114_01_outputs_to_chip(pla_906114_01_t* pla) {
     } else if (!pla->outputs.n_kernal) {
         // KERNAL ROM (read-only)
         return CHIP_KERNAL;
+    } else if (!pla->outputs.n_charrom && !pla->outputs.n_io) {
+        // CRITICAL: Both Character ROM and I/O are active simultaneously
+        // This happens at $D000-$DFFF when CHAREN=0 (Character ROM enabled)
+        // Priority depends on R/W signal:
+        // - READ (R/W=1): Character ROM takes priority (CPU reads from CHARROM)
+        // - WRITE (R/W=0): I/O takes priority (CPU writes go to hardware)
+        // This matches C64 hardware behavior where reads from $D000-$DFFF can see
+        // Character ROM when CHAREN=0, but writes always go to I/O registers.
+        if (pla->inputs.r_w) {
+            // Read mode: Character ROM visible
+            return CHIP_CHARROM;
+        } else {
+            // Write mode: I/O registers accessible
+            return CHIP_IO;
+        }
     } else if (!pla->outputs.n_io) {
-        // I/O region - includes VIC-II, SID, Color RAM, CIA1, CIA2 (read/write)
-        // CRITICAL: Check IO before CHARROM because during write mode when CHAREN=1,
-        // the PLA activates BOTH n_io and n_charrom outputs simultaneously.
-        // IO must take priority for writes to reach the hardware registers.
-        // This matches C64 hardware behavior: writes to $D000-$DFFF always go to IO,
-        // while reads may see Character ROM depending on CHAREN state.
+        // I/O region alone (when CHARROM not active)
+        // This happens when CHAREN=1 (Character ROM disabled)
         return CHIP_IO;
     } else if (!pla->outputs.n_charrom) {
-        // Character ROM (read-only)
-        // Only reached when IO is not active, ensuring Character ROM is only
-        // selected for reads when CHAREN=1 but not for writes.
+        // Character ROM alone (when IO not active)
+        // This theoretically shouldn't happen based on PLA logic, but included for completeness
         return CHIP_CHARROM;
     } else if (!pla->outputs.n_roml) {
         // Cartridge ROM Low (read-only)
@@ -319,14 +329,16 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
     // Generate all 32 CPU memory modes (5-bit combinations of LORAM, HIRAM, CHAREN, EXROM, GAME)
     for (int mode = 0; mode < 32; mode++) {
         // Set PLA inputs based on mode
-        // Mode bits directly represent the CPU port bits and cartridge signals
-        // The n_ prefix in the PLA signals indicates they are the actual signal values,
-        // NOT that we need to invert them here. When CPU port bit = 1, n_signal = true.
-        pla->inputs.n_loram = (mode & 0x01) != 0;    // LORAM: bit set = enabled
-        pla->inputs.n_hiram = (mode & 0x02) != 0;    // HIRAM: bit set = enabled
-        pla->inputs.n_charen = (mode & 0x04) != 0;   // CHAREN: bit set = enabled
-        pla->inputs.n_exrom = (mode & 0x08) != 0;    // EXROM: bit set = enabled
-        pla->inputs.n_game = (mode & 0x10) != 0;     // GAME: bit set = enabled
+        // CRITICAL: The PLA inputs are active-LOW (n_ prefix means inverted/negated)
+        // CPU port bits are active-HIGH (1 = enable ROM/CHAR)
+        // Therefore we must INVERT the CPU port bits when setting PLA inputs:
+        // - CPU port bit = 1 (enable) → PLA n_input = false (active-low signal asserted)
+        // - CPU port bit = 0 (disable) → PLA n_input = true (active-low signal de-asserted)
+        pla->inputs.n_loram = (mode & 0x01) == 0;    // INVERT: CPU bit 0 → PLA n_loram
+        pla->inputs.n_hiram = (mode & 0x02) == 0;    // INVERT: CPU bit 1 → PLA n_hiram
+        pla->inputs.n_charen = (mode & 0x04) == 0;   // INVERT: CPU bit 2 → PLA n_charen
+        pla->inputs.n_exrom = (mode & 0x08) == 0;    // INVERT: cartridge EXROM
+        pla->inputs.n_game = (mode & 0x10) == 0;     // INVERT: cartridge GAME
         // CPU address bits will be set during populate_pla_mapping for each bank
         // Populate mapping for this mode
         c64_bus_populate_cpu_pla_mapping(bus, pla);
@@ -340,8 +352,9 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
     // We'll repeat these 4 configs across all 32 modes for easy indexing
     for (int cpu_mode = 0; cpu_mode < 32; cpu_mode++) {
         // Extract relevant bits for VIC-II: #GAME, #EXROM from CPU mode
-        bool n_game = (cpu_mode & 0x10) == 0;     // GAME (inverted)
-        bool n_exrom = (cpu_mode & 0x08) == 0;    // EXROM (inverted)
+        // These are already inverted in the mode bits from the CPU mode generation above
+        bool n_game = (cpu_mode & 0x10) == 0;     // INVERT: cartridge GAME signal
+        bool n_exrom = (cpu_mode & 0x08) == 0;    // INVERT: cartridge EXROM signal
         
         // Set PLA inputs for VIC-II (only the relevant ones)
         pla->inputs.n_game = n_game;
