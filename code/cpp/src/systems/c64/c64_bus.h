@@ -261,6 +261,8 @@ static inline uint16_t c64_read_kernal_reset_vector(c64_bus_t* bus) {
 }
 
 // System functions
+void* c64_bus_system_create(chip_descriptor_t* desc);
+void c64_bus_system_destroy(void* chip);
 void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64);  // c64_t*
 
 // Cartridge interface functions for controlling EXROM and GAME signals
