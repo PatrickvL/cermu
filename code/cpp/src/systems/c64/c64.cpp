@@ -381,6 +381,21 @@ static inline void* create_and_register_chip(c64_t* c64, chip_descriptor_t* desc
 
 // Callback function for CIA2 Port A changes - updates VIC-II bank
 // Called whenever CIA2 Port A output changes (considering DDR masking)
+//
+// CIA2 Port A bits 0-1 are the VIC-II bank select lines:
+//   Bit 0: ~VA14 (inverted VA14) - Video Address line 14
+//   Bit 1: ~VA15 (inverted VA15) - Video Address line 15
+//
+// These bits select which 16K bank the VIC-II can access:
+//   Bits 1-0:  Bank:  Address Range:
+//   --------   ----   --------------
+//      11        0    $0000-$3FFF
+//      10        1    $4000-$7FFF
+//      01        2    $8000-$BFFF
+//      00        3    $C000-$FFFF
+//
+// Note: The VIC-II address lines VA14 and VA15 are INVERTED versions of these bits
+// (active-low logic). When the port bits are HIGH, the corresponding VA lines are LOW.
 static void c64_cia2_port_a_callback(void* context, uint8_t port_a_value) {
     c64_t* c64 = (c64_t*)context;
     

@@ -168,6 +168,7 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
     return bus_state;
 }
 
+// Made non-static for banking verification utility
 void c64_bus_system_destroy(void* chip) {
     c64_bus_t* c64_bus = (c64_bus_t*)chip;
     if (c64_bus && c64_bus->allocated_buffer) {
@@ -176,6 +177,7 @@ void c64_bus_system_destroy(void* chip) {
     free(chip);
 }
 
+// Made non-static for banking verification utility
 void* c64_bus_system_create(chip_descriptor_t* desc) {
     c64_bus_t* c64_bus = (c64_bus_t*)calloc(1, sizeof(c64_bus_t));
     if (!c64_bus) return NULL;
