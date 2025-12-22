@@ -320,16 +320,15 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
     // Generate all 32 CPU memory modes (5-bit combinations of LORAM, HIRAM, CHAREN, EXROM, GAME)
     for (int mode = 0; mode < 32; mode++) {
         // Set PLA inputs based on mode
-        // CRITICAL: PLA inputs are active-LOW (n_ prefix = NOT/negated)
-        // CPU port bits are active-HIGH semantics (1 = enable ROM/CHAR)
-        // Mode bits come directly from CPU port, so we must INVERT to match PLA polarity:
-        // - CPU port bit 1 (enable) → mode bit 1 → PLA n_input FALSE (active-low asserted)
-        // - CPU port bit 0 (disable) → mode bit 0 → PLA n_input TRUE (active-low de-asserted)
-        pla->inputs.n_loram = (mode & 0x01) == 0;    // INVERT: CPU port → PLA active-low
-        pla->inputs.n_hiram = (mode & 0x02) == 0;    // INVERT: CPU port → PLA active-low
-        pla->inputs.n_charen = (mode & 0x04) == 0;   // INVERT: CPU port → PLA active-low
-        pla->inputs.n_exrom = (mode & 0x08) != 0;    // DIRECT: cartridge signal (already active-low encoding)
-        pla->inputs.n_game = (mode & 0x10) != 0;     // DIRECT: cartridge signal (already active-low encoding)
+        // CRITICAL FIX: Mode bits represent SIGNAL LEVELS, not functional states!
+        // Mode bit = 1 means SIGNAL is HIGH (e.g., #LORAM signal = HIGH)
+        // NO INVERSION - direct mapping from mode bits to PLA signal level variables
+        // The PLA product terms handle the active-low interpretation internally
+        pla->inputs.n_loram = (mode & 0x01) != 0;    // Direct: mode bit → PLA signal level
+        pla->inputs.n_hiram = (mode & 0x02) != 0;    // Direct: mode bit → PLA signal level
+        pla->inputs.n_charen = (mode & 0x04) != 0;   // Direct: mode bit → PLA signal level
+        pla->inputs.n_exrom = (mode & 0x08) != 0;    // Direct: mode bit → PLA signal level
+        pla->inputs.n_game = (mode & 0x10) != 0;     // Direct: mode bit → PLA signal level
         // CPU address bits will be set during populate_pla_mapping for each bank
         // Populate mapping for this mode
         c64_bus_populate_cpu_pla_mapping(bus, pla);
@@ -341,13 +340,10 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
     // VIC-II uses: #GAME, #EXROM (both from CPU mode)
     // #VA14 is now automatically set from the address bit in pla_906114_01_set_vicii_address_bank()
     for (int cpu_mode = 0; cpu_mode < 32; cpu_mode++) {
-        // Extract relevant bits for VIC-II: #GAME, #EXROM from CPU mode
-        bool n_game = (cpu_mode & 0x10) == 0;     // GAME (inverted)
-        bool n_exrom = (cpu_mode & 0x08) == 0;    // EXROM (inverted)
-        
-        // Set PLA inputs for VIC-II (only the relevant ones)
-        pla->inputs.n_game = n_game;
-        pla->inputs.n_exrom = n_exrom;
+        // Extract mode bits as signal levels (no inversion)
+        // Mode bits represent signal levels directly
+        pla->inputs.n_game = (cpu_mode & 0x10) != 0;     // Direct: mode bit → PLA signal level
+        pla->inputs.n_exrom = (cpu_mode & 0x08) != 0;    // Direct: mode bit → PLA signal level
         
         // Populate VIC-II mapping for this mode (stores direct CHIPs)
         // #VA14 will be automatically set from address bit 14 during population

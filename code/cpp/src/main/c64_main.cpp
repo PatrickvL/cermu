@@ -3,11 +3,51 @@
 #include <iostream>
 #include <memory>
 #include <cstdint>
+#include <cstring>
+
+// Forward declarations for banking verification
+extern void verify_c64_banking_modes();
+extern void verify_c64_banking_by_table();
 
 // ============================================================================
 // MAIN FUNCTION - Modern C++ test harness
 // ============================================================================
-int main() {
+int main(int argc, char** argv) {
+    // Parse command-line arguments for banking verification
+    bool run_banking_verify = false;
+    bool banking_verify_all = false;
+    
+    for (int i = 1; i < argc; i++) {
+        if (std::strcmp(argv[i], "--verify-banking") == 0) {
+            run_banking_verify = true;
+        } else if (std::strcmp(argv[i], "--verify-banking-all") == 0) {
+            run_banking_verify = true;
+            banking_verify_all = true;
+        }
+    }
+    
+    // Run banking verification if requested (standalone mode)
+    if (run_banking_verify) {
+        std::cout << "\n";
+        std::cout << "═══════════════════════════════════════════════════════════════════\n";
+        std::cout << "  C64 Banking Mode Verification (Standalone)\n";
+        std::cout << "═══════════════════════════════════════════════════════════════════\n";
+        std::cout.flush();
+        
+        if (banking_verify_all) {
+            std::cout << "Running verify_c64_banking_modes()...\n";
+            std::cout.flush();
+            verify_c64_banking_modes();
+        } else {
+            std::cout << "Running verify_c64_banking_by_table()...\n";
+            std::cout.flush();
+            verify_c64_banking_by_table();
+        }
+        std::cout << "\nVerification complete.\n";
+        std::cout.flush();
+        return 0;  // Exit after verification (no emulator run)
+    }
+    
     try {
         // Create system configuration (PAL by default) using C++ initialization
         c64_config_t config{
