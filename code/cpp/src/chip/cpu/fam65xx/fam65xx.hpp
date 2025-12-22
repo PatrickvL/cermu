@@ -356,7 +356,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     }
 
     // For 8/16-bit CPUs: use address field
-    pins = FAM65XX_SET_ADDR(pins, addr & Traits.address_mask());
+    FAM65XX_SET_ADDR(pins, addr & Traits.address_mask());
 
     // Update bus lines - always enabled for external bus-based memory access
     // For 65816: Split 24-bit address into 16-bit address + 8-bit bank
@@ -368,13 +368,13 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       // For Direct Page (Bank::ZBR): address wraps within bank 0 (0x000000-0x00FFFF)
       const uint8_t bank = get_address_bank<addr_arg>(bank_arg);
 
-      pins = FAM65XX_SET_BANK(pins, bank);
+      FAM65XX_SET_BANK(pins, bank);
     }
 
     // Set R/W signal
     if constexpr (IsWrite) {
       pins &= ~FAM65XX_RW;                 // Clear RW for write
-      pins = FAM65XX_SET_DATA(pins, data); // Output data for write
+      FAM65XX_SET_DATA(pins, data); // Output data for write
     } else {
       pins |= FAM65XX_RW; // Set RW for read
       // External code will put data on bus during memory access
@@ -531,7 +531,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         if (addr <= 0x0001) {
           const uint8_t io_data =
               (addr == 0x0000) ? this->read_io_port() : this->io_port.direction;
-          pins = FAM65XX_SET_DATA(pins, io_data);
+          FAM65XX_SET_DATA(pins, io_data);
           return true;
         }
       #endif
@@ -575,7 +575,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       #else
         uint8_t apu_data;
         if (this->read_apu_register(addr, apu_data)) {
-          pins = FAM65XX_SET_DATA(pins, apu_data);
+          FAM65XX_SET_DATA(pins, apu_data);
           return true;
         }
       #endif
