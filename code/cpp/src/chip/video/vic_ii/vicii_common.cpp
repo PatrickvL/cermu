@@ -59,35 +59,38 @@ static inline void vicii_border_update_limits(vicii_border_unit_t* border, uint8
 // 3. Each cycle produces exactly 8 pixels, regardless of graphics mode
 // 4. Multicolor modes consume 2 bits per pixel, standard modes consume 1 bit per pixel
 
-// Convert x_coordinate (sprite/lightpen coordinate system) to framebuffer x position
-// The inverse of: x_coordinate = (first_x_coord + x_cycle * 8) % pixels_per_line
-// Formula: framebuffer_x = (pixels_per_line + x_coordinate - first_x_coord) % pixels_per_line
-static inline uint16_t vicii_x_coordinate_to_framebuffer_x(const vicii_t* vicii, uint16_t x_coordinate) {
-    const uint16_t pixels_per_line = vicii->config->cycles_per_line * 8;
-    const uint16_t first_x_coord = vicii->config->first_x_coord;
-    return (pixels_per_line + x_coordinate - first_x_coord) % pixels_per_line;
-}
-
 // X-coordinate driven pixel emission for precise positioning
+// The line buffer contains pixels in display order (0-402 for PAL visible area).
+// x_coordinate values wrap around (0-503 for PAL), so we must map them correctly.
 static inline void vicii_pixel_emit_at_x(vicii_t* vicii, const vicii_pixel_t* pixel_data, uint16_t x_coord) {
-    // Pipeline delay: Data is displayed 12 pixels AFTER it's fetched
-    // When we're at coordinate X processing pixels, those pixels were fetched 12 pixels ago
-    // So we write them to buffer position (X - 12) to account for the delay
-    // Documentation: "there is a delay of 12 pixels" (vic-ii.txt:876)
+    // The x_coord parameter is the DISPLAY position where this pixel should appear.
+    // The 12-pixel pipeline delay is already accounted for in the caller (pixel sequencer).
+    // We just need to map this x_coordinate to the correct line buffer position.
+    const uint16_t pixels_per_line = vicii->config->cycles_per_line * 8;
+    const uint16_t display_x_coord = x_coord;
     
-    // Convert x_coordinate to framebuffer position
-    const uint16_t framebuffer_x = vicii_x_coordinate_to_framebuffer_x(vicii, x_coord);
+    // Check if this coordinate is in the visible range
+    // For PAL: first_visible_x_coord = 480, visible_pixels = 403
+    // Visible range wraps: 480-503 (24 pixels), then 0-378 (379 pixels) = 403 total
+    const uint16_t first_visible = vicii->config->first_visible_x_coord;
+    const uint16_t visible_pixels = vicii->config->visible_pixels_per_line;
     
-    if (framebuffer_x < VICII_PIPELINE_DELAY_PIXELS) {
-        // Too early in scanline - data hasn't been fetched yet
+    // Calculate position in line buffer (0-402)
+    uint16_t buffer_pos;
+    if (display_x_coord >= first_visible) {
+        // First part of visible range (480-503 for PAL)
+        buffer_pos = display_x_coord - first_visible;
+    } else if (display_x_coord < (first_visible + visible_pixels) % pixels_per_line) {
+        // Second part of visible range after wrap (0-378 for PAL)
+        buffer_pos = (pixels_per_line - first_visible) + display_x_coord;
+    } else {
+        // Not in visible range
         return;
     }
     
-    const uint16_t pixel_line_x = framebuffer_x - VICII_PIPELINE_DELAY_PIXELS;
-    
-    if (pixel_line_x < vicii->config->visible_pixels_per_line) {
-        vicii->pixel.pixel_line_priority[pixel_line_x] = pixel_data->priority;
-        vicii->pixel.pixel_line_color[pixel_line_x] = pixel_data->color;
+    if (buffer_pos < visible_pixels) {
+        vicii->pixel.pixel_line_priority[buffer_pos] = pixel_data->priority;
+        vicii->pixel.pixel_line_color[buffer_pos] = pixel_data->color;
     }
 }
 
@@ -136,16 +139,25 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
     
     if (!sprite_pixel) return;
     
-    // Calculate pixel position in line buffer with pipeline delay
-    // Sprites also have the same 12-pixel pipeline delay as background graphics
-    // Convert sprite x_coordinate to framebuffer position first
-    const uint16_t framebuffer_x = vicii_x_coordinate_to_framebuffer_x(vicii, current_x);
+    // Calculate pixel position in line buffer
+    // Apply same coordinate mapping as background graphics
+    const uint16_t pixels_per_line = vicii->config->cycles_per_line * 8;
+    const uint16_t display_x_coord = current_x;
     
-    if (framebuffer_x < VICII_PIPELINE_DELAY_PIXELS) {
-        return;  // Too early - sprite data not yet in pipeline
+    // Check if in visible range and calculate buffer position
+    const uint16_t first_visible = vicii->config->first_visible_x_coord;
+    const uint16_t visible_pixels = vicii->config->visible_pixels_per_line;
+    
+    uint16_t pixel_line_x;
+    if (display_x_coord >= first_visible) {
+        pixel_line_x = display_x_coord - first_visible;
+    } else if (display_x_coord < (first_visible + visible_pixels) % pixels_per_line) {
+        pixel_line_x = (pixels_per_line - first_visible) + display_x_coord;
+    } else {
+        return;  // Not in visible range
     }
-    const uint16_t pixel_line_x = framebuffer_x - VICII_PIPELINE_DELAY_PIXELS;
-    if (pixel_line_x >= vicii->config->visible_pixels_per_line) return;
+    
+    if (pixel_line_x >= visible_pixels) return;
     
     vicii_priority_t current_priority = vicii->pixel.pixel_line_priority[pixel_line_x];
     
@@ -208,6 +220,9 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
     // This ensures CPU register writes (like border/background color changes) affect
     // pixels being OUTPUT at that moment, not pixels being LOADED into the pipeline.
     const uint16_t x_coord = vicii->timing.x_coordinate;
+    // if (x_coord < vicii->config->first_visible_x_coord) {
+    //     return;
+    // }
     
     // Determine if we're in border or display area
     // VIC-II border flip-flop logic: graphics are displayed when main_border_flip_flop is FALSE
@@ -216,12 +231,14 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                               && !vicii->border.vertical_border_flip_flop;
     
     if (!(in_main_display && vicii->video_logic.display_state)) {
-        // We're in border area - sequence exactly 8 border pixels
-        for (int pixel = 0; pixel < 8; pixel++) {
-            const uint16_t pixel_x = x_coord + (uint16_t)pixel;
-            
-            vicii_pixel_emit_at_x(vicii, &vicii->border.border_pixel, pixel_x);
-        }
+            // We're in border area - sequence exactly 8 border pixels
+            for (int pixel = 0; pixel < 8; pixel++) {
+                const uint16_t pixel_x = x_coord + (uint16_t)pixel;
+                if (pixel_x < vicii->config->first_visible_x_coord)
+                    continue;
+    
+                vicii_pixel_emit_at_x(vicii, &vicii->border.border_pixel, pixel_x);
+            }
     } else {
         // We're in display area - sequence 8 pixels from shift register
         vicii_sequencer_unit_t* seq = &vicii->sequencer;
@@ -231,9 +248,19 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         // The 12-pixel pipeline delay (applied in vicii_pixel_emit_at_x) handles the timing
         // between data fetch and screen display
         
-        // Initialize xscroll on first display cycle
-        const uint16_t display_pixel_x = x_coord - vicii->border.border_left;
-        if (display_pixel_x == 0) {
+        // Initialize xscroll on first display cycle of each line
+        // Convert x_coordinate to display coordinate to check if we're at the first display pixel
+        const uint16_t pixels_per_line = vicii->config->cycles_per_line * 8;
+        const uint16_t first_visible = vicii->config->first_visible_x_coord;
+        uint16_t display_x;
+        if (x_coord >= first_visible) {
+            display_x = x_coord - first_visible;
+        } else {
+            display_x = (pixels_per_line - first_visible) + x_coord;
+        }
+        
+        // Initialize xscroll when we reach the left border edge (start of display area)
+        if (display_x == vicii->border.border_left) {
             seq->xscroll_counter = vicii->registers.data[VICII_C2] & VICII_C2_XSCROLL;
             seq->pixel_in_char = 0;
         }
@@ -243,13 +270,17 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             seq->last_mode = seq->graphics_mode;
             seq->shift_reg = 0;
         }
-        
         // Use VMLI (Video Matrix Line Index) to determine which graphics data to sequence
         // According to vic-ii.txt documentation (lines 1161-1164), VMLI is a 6-bit counter
         // that tracks position within the internal 40×12 bit video matrix/color line.
         // The hardware increments VMLI after each g-access (line 1184), and the pixel
         // sequencer reads from the buffer position specified by VMLI.
-        const uint8_t vmli = vicii->video_logic.vmli;
+        //
+        // CRITICAL: We must use the vmli value from BEFORE the increment (stored in
+        // current_vmli_for_display) because the graphics data was stored at that position,
+        // and then vmli was incremented. The pixel sequencer needs to read from the position
+        // that was just written.
+        const uint8_t vmli = seq->current_vmli_for_display;
         
         // Load shift register from graphics line buffer at current VMLI position
         // Clamp to valid range (0-39) to prevent out-of-bounds access
@@ -283,7 +314,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                 case VICII_GM_STANDARD_TEXT:
                     pixel_bits = (seq->shift_reg >> 7) & 1;
                     color_index = pixel_bits ?
-                        vicii->video_data.video_color_line[vmli] :
+                        (uint8_t)vicii->video_data.video_color_line[vmli] :
                         vicii->registers.data[VICII_B0C];
                     is_background = (pixel_bits == 0);
                     seq->shift_reg <<= 1;
@@ -306,7 +337,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                         // Standard character in multicolor mode
                         pixel_bits = (seq->shift_reg >> 7) & 1;
                         color_index = pixel_bits ?
-                            vicii->video_data.video_color_line[vmli] :
+                            (uint8_t)vicii->video_data.video_color_line[vmli] :
                             vicii->registers.data[VICII_B0C];
                         is_background = (pixel_bits == 0);
                         seq->shift_reg <<= 1;
@@ -380,26 +411,23 @@ void vicii_pixel_flush_line(vicii_t* vicii, const uint32_t* palette, int y) {
     
     vicii_pixel_unit_t* pixel = &vicii->pixel;
     uint32_t* row_ptr = &pixel->framebuffer[y * pixel->framebuffer_width];
-    const uint32_t border_color = palette[vicii->registers.data[VICII_EC]];
+    const uint8_t border_color_index = vicii->registers.data[VICII_EC] & 0x0F;
+    const uint32_t border_color = palette[border_color_index];
     
     // Fill entire line with border color first
     for (int x = 0; x < pixel->framebuffer_width; x++) {
         row_ptr[x] = border_color;
     }
     
-    // Copy line buffer to framebuffer with left offset
-    // The visible area is 403 pixels (0-402), position it in framebuffer
-    // The pipeline delay is already accounted for in pixel emission
-    const int left_offset = 0;
-    
+    // VIC-II writes directly to its framebuffer without any offset.
+    // The GUI layer handles centering by copying vicii_buffer (403x284)
+    // to the centered position in screen_buffer (512x384).
+    // VIC-II framebuffer_width should match visible_pixels_per_line (403 for PAL).
     if (pixel->pixel_line_color) {
-        // Copy pixels from line buffer to framebuffer with offset
-        for (int src_x = 0; src_x < vicii->config->visible_pixels_per_line; src_x++) {
-            int dst_x = src_x + left_offset;
-            if (dst_x < pixel->framebuffer_width) {
-                const uint8_t color_index = pixel->pixel_line_color[src_x] & 0x0F;
-                row_ptr[dst_x] = palette[color_index];
-            }
+        // Copy pixels from line buffer directly to framebuffer (no offset)
+        for (int x = 0; x < vicii->config->visible_pixels_per_line && x < pixel->framebuffer_width; x++) {
+            const uint8_t color_index = pixel->pixel_line_color[x] & 0x0F;
+            row_ptr[x] = palette[color_index];
         }
     }
 }
@@ -427,6 +455,14 @@ static inline void vicii_memory_update_mapping(vicii_memory_unit_t* memory, uint
 void vicii_memory_bank_change(void* chip, uint8_t bank) {
     vicii_t* vicii = (vicii_t*)chip;
     uint8_t inverted_bank = 3 - (bank & 0x03);  // Invert bank
+    
+    // Set the bank base offset (0x0000, 0x4000, 0x8000, or 0xC000)
+    // This offset is applied to all VIC-II addresses, automatically selecting
+    // the correct pre-calculated PLA banks with the proper #VA14 state baked in.
+    //
+    // When VIC-II reads address 0x1000 with bank_base=0x4000, it reads from
+    // bus address 0x5000, which uses the pre-calculated mapping for bank 5
+    // (with #VA14=1, showing RAM instead of CHARROM).
     vicii->memory.bank_base = inverted_bank * 0x4000;
 }
 
@@ -764,11 +800,11 @@ void vicii_timing_advance(vicii_t* vicii) {
         }
         
         // Clear line buffer for the NEW scanline (which is now raster_counter)
+        // Initialize with current border color from EC register
         if (vicii->pixel.pixel_line_color && vicii->config->visible_pixels_per_line > 0) {
+            const uint8_t border_color = vicii->registers.data[VICII_EC] & 0x0F;
             memset(vicii->pixel.pixel_line_priority, VICII_PRIORITY_BORDER, vicii->config->visible_pixels_per_line);
-            for (int i = 0; i < vicii->config->visible_pixels_per_line; i++) {
-                vicii->pixel.pixel_line_color[i] = VICII_COLOR_LIGHT_BLUE;
-            }
+            memset(vicii->pixel.pixel_line_color, border_color, vicii->config->visible_pixels_per_line);
         }
     }
 }
@@ -1042,36 +1078,57 @@ static uint8_t vicii_cycle_sprite_s_border_check(vicii_t* vicii, int param_sprit
     // Perform the sprite S access for this cycle
     return vicii_cycle_sprite_s_access(vicii, param_sprite_num);
 }
-
 // Border flip-flop logic (Documentation section 3.9) - X coordinate rules only
+// Border limits work in a simple linear coordinate system starting from first visible pixel
 static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border,
-        vicii_timing_unit_t* timing, uint8_t c1_reg) {
+        vicii_timing_unit_t* timing, uint8_t c1_reg, const vicii_chip_config_t* config) {
     const uint16_t raster = timing->raster_counter;
-    const uint16_t x_coord = timing->x_coordinate;  // Use actual hardware X coordinate
+    const uint16_t x_coord = timing->x_coordinate;
     const bool den_set = (c1_reg & VICII_C1_DEN) != 0;
-    // Check each pixel in this cycle (8 pixels) against border boundaries
+    
+    // Convert x_coordinate to simple linear display coordinate (0-402 for PAL)
+    // This matches how vicii_pixel_emit_at_x() maps coordinates to the line buffer
+    const uint16_t pixels_per_line = config->cycles_per_line * 8;
+    const uint16_t first_visible = config->first_visible_x_coord;
+    
+    // Check each pixel in this cycle (8 pixels)
     for (int pixel = 0; pixel < 8; pixel++) {
-        const uint16_t pixel_x = x_coord + (uint16_t)pixel;
+        const uint16_t pixel_x_coord = (x_coord + (uint16_t)pixel) % pixels_per_line;
+        
+        // Convert to display coordinate (0-402)
+        uint16_t display_x;
+        if (pixel_x_coord >= first_visible) {
+            display_x = pixel_x_coord - first_visible;
+        } else {
+            display_x = (pixels_per_line - first_visible) + pixel_x_coord;
+        }
+        
+        // Skip if outside visible range
+        if (display_x >= config->visible_pixels_per_line) {
+            continue;
+        }
         
         // Rule 1: "If the X coordinate reaches the right comparison value, the main border flip flop is set."
-        if (pixel_x == border->border_right) {
+        if (display_x == border->border_right) {
             border->main_border_flip_flop = true;
-        }        
-        // Rules 4, 5, 6: Handle left coordinate checks only  
-        if (pixel_x == border->border_left) {
-            // Rule 4: "If the X coordinate reaches the left comparison value and the Y
-            // coordinate reaches the bottom one, the vertical border flip flop is set."
+        }
+        
+        // Rules 4, 5: Handle vertical flip-flop at border_left
+        if (display_x == border->border_left) {
+            // Rule 4: Set vertical flip-flop if at bottom border
             if (raster == border->border_bottom) {
                 border->vertical_border_flip_flop = true;
             }
-            // Rule 5: "If the X coordinate reaches the left comparison value and the Y
-            // coordinate reaches the top one and the DEN bit in register $d011 is set,
-            // the vertical border flip flop is reset."
+            // Rule 5: Clear vertical flip-flop if at top border with DEN set
             else if (raster == border->border_top && den_set) {
                 border->vertical_border_flip_flop = false;
             }
-            // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
-            // border flip flop is not set, the main flip flop is reset."
+        }
+        
+        // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
+        // border flip flop is not set, the main flip flop is reset."
+        // Clear main flip-flop AT border_left when vertical flip-flop is clear
+        if (display_x == border->border_left) {
             if (!border->vertical_border_flip_flop) {
                 border->main_border_flip_flop = false;
             }
@@ -1378,7 +1435,6 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
 
     // Perform PHI1 memory read (common path for all PHI1 accesses)
     bus_state = c64_bus_vic_read(c64_bus, bus_state, address);
-
     // STEP 4: Load graphics data into line buffer during cycles 15-54 (0-indexed)
     // During display_state, we need graphics data for every raster line (not just bad lines)
     // to show different rows of each character
@@ -1390,10 +1446,30 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         const uint8_t vmli = vicii->video_logic.vmli;
 
         vicii_graphics_sequencer(vicii, graphics_data, vmli);
+        
+        // Documentation (vic-ii.txt line 1184): "VC and VMLI are incremented after each g-access in display state."
+        // CRITICAL DISTINCTION:
+        // - On bad lines: VC and VMLI both increment during C-access (line 1342-1343)
+        // - On non-bad lines: ONLY VMLI increments during G-access, VC stays at VCBASE
+        //
+        // Why? VC (Video Counter) points to the video matrix position and should only
+        // advance on bad lines when new character codes are fetched. VMLI (Video Matrix
+        // Line Index) is the column counter within the 40-character line buffer and must
+        // increment on ALL lines to sequence through the 40 characters.
+        //
+        // CRITICAL BUG FIX: The pixel sequencer needs to read from the graphics_line position
+        // that was JUST written (using the vmli value BEFORE increment). Store this value
+        // so the pixel sequencer can use it.
+        vicii->sequencer.current_vmli_for_display = vmli;
+        
+        if (!vicii->video_logic.is_bad_line) {
+            // On non-bad lines: increment ONLY VMLI, not VC
+            vicii->video_logic.vmli++;
+        }
     }
     
     // STEP 5: Update border flip-flops to establish display window state
-    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1]);
+    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1], vicii->config);
 
     // STEP 6: Perform unified pixel sequencing (8 pixels per cycle)
     // This uses the graphics data that was JUST loaded above
@@ -1670,9 +1746,9 @@ static const vicii_chip_config_t MOS6567R56A_config = {
     .visible_pixels_per_line = 411,
     .first_vblank_line = 13,
     .last_vblank_line = 40,
-    .first_x_coord = 412,
-    .first_visible_x_coord = 488,
-    .last_visible_x_coord = 388,
+    .first_x_coord = 412, // ($19c)
+    .first_visible_x_coord = 488, // ($1e8)
+    .last_visible_x_coord = 388, // ($184)
     
     .framebuffer_start_x = 0,
     .framebuffer_end_x = 520,  // Allow full scanline width to accommodate pipeline delay wrap-around
@@ -1688,9 +1764,9 @@ static const vicii_chip_config_t MOS6567R8_config = {
     .visible_pixels_per_line = 411,
     .first_vblank_line = 13,
     .last_vblank_line = 40,
-    .first_x_coord = 412,
-    .first_visible_x_coord = 489,
-    .last_visible_x_coord = 396,
+    .first_x_coord = 412, // ($19c)
+    .first_visible_x_coord = 489, // ($1e9)
+    .last_visible_x_coord = 396, // ($18c)
     
     .framebuffer_start_x = 0,
     .framebuffer_end_x = 520,  // Allow full scanline width to accommodate pipeline delay wrap-around
@@ -1706,9 +1782,9 @@ static const vicii_chip_config_t MOS6569_config = {
     .visible_pixels_per_line = 403,
     .first_vblank_line = 300,
     .last_vblank_line = 15,
-    .first_x_coord = 404,
-    .first_visible_x_coord = 480,
-    .last_visible_x_coord = 380,
+    .first_x_coord = 404, // ($194)
+    .first_visible_x_coord = 480, // ($1e0)
+    .last_visible_x_coord = 380, // ($17c)
     
     .framebuffer_start_x = 0,
     .framebuffer_end_x = 504,  // Allow full scanline width to accommodate pipeline delay wrap-around
@@ -1775,7 +1851,7 @@ static inline void vicii_initialize(vicii_t* vicii) {
     vicii_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
     vicii_border_update_limits(&vicii->border, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
     
-    // Initialize border priority once (color will be updated by register writes)
+    // Initialize border pixel from register value (EC was set to LIGHT_BLUE at line 1815)
     vicii->border.border_pixel.priority = VICII_PRIORITY_BORDER;
     vicii->border.border_pixel.color = static_cast<vicii_color_t>(vicii->registers.data[VICII_EC]);
     // Initialize border flip-flops (Documentation section 3.9)
@@ -1815,15 +1891,14 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
         free(vicii->pixel.pixel_line_priority);
         free(vicii->pixel.pixel_line_color);
         
-        // Allocate single line buffers
-        vicii->pixel.pixel_line_priority = static_cast<vicii_priority_t*>(malloc(config->visible_pixels_per_line * sizeof(vicii_priority_t)));
-        vicii->pixel.pixel_line_color = static_cast<uint32_t*>(malloc(config->visible_pixels_per_line * sizeof(uint32_t)));
-        
-        // Initialize buffer
-        memset(vicii->pixel.pixel_line_priority, VICII_PRIORITY_BORDER, config->visible_pixels_per_line);
-        for (int i = 0; i < config->visible_pixels_per_line; i++) {
-            vicii->pixel.pixel_line_color[i] = VICII_COLOR_LIGHT_BLUE;
-        }
+                // Allocate single line buffers
+                vicii->pixel.pixel_line_priority = static_cast<vicii_priority_t*>(malloc(config->visible_pixels_per_line * sizeof(vicii_priority_t)));
+                vicii->pixel.pixel_line_color = static_cast<uint8_t*>(malloc(config->visible_pixels_per_line * sizeof(uint8_t)));
+                
+                // Initialize buffer with current border color
+                const uint8_t border_color = vicii->registers.data[VICII_EC] & 0x0F;
+                memset(vicii->pixel.pixel_line_priority, VICII_PRIORITY_BORDER, config->visible_pixels_per_line);
+                memset(vicii->pixel.pixel_line_color, border_color, config->visible_pixels_per_line);
     }
     
     vicii_set_x_cycle(vicii, 0);
@@ -1872,13 +1947,13 @@ const vicii_chip_config_t* vicii_get_default_config(bool is_pal) {
 
 void vicii_set_framebuffer(vicii_t* vicii, uint32_t* framebuffer, int width, int height) {
     vicii_pixel_set_framebuffer(&vicii->pixel, framebuffer, width, height);
+    // Border color should come from register, not hardcoded
     vicii->border.border_pixel.priority = VICII_PRIORITY_BORDER;
-    vicii->border.border_pixel.color = VICII_COLOR_LIGHT_BLUE;
-    if (vicii->pixel.pixel_line_color && vicii->config->visible_pixels_per_line > 0) {
-        // Initialize buffer
-        memset(vicii->pixel.pixel_line_priority, VICII_PRIORITY_BORDER, vicii->config->visible_pixels_per_line);
-        for (int i = 0; i < vicii->config->visible_pixels_per_line; i++) {
-            vicii->pixel.pixel_line_color[i] = VICII_COLOR_LIGHT_BLUE;
+    vicii->border.border_pixel.color = static_cast<vicii_color_t>(vicii->registers.data[VICII_EC]);
+        if (vicii->pixel.pixel_line_color && vicii->config->visible_pixels_per_line > 0) {
+            // Initialize buffer with current border color
+            const uint8_t border_color = vicii->registers.data[VICII_EC] & 0x0F;
+            memset(vicii->pixel.pixel_line_priority, VICII_PRIORITY_BORDER, vicii->config->visible_pixels_per_line);
+            memset(vicii->pixel.pixel_line_color, border_color, vicii->config->visible_pixels_per_line);
         }
-    }
 }
