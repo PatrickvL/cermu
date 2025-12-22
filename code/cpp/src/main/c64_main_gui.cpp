@@ -5,16 +5,51 @@
 #include <stdio.h>
 #include <string.h>
 
+// Forward declarations for banking verification
+extern void verify_c64_banking_modes();
+extern void verify_c64_banking_by_table();
+
 // ============================================================================
 // MAIN FUNCTION - Threaded C64 Emulator with GUI
 // ============================================================================
 int main(int argc, char** argv) {
     const char* prg_file = NULL;
+    bool run_banking_verify = false;
+    bool banking_verify_all = false;
     
     // Parse command-line arguments
-    if (argc > 1) {
-        prg_file = argv[1];
-        printf("Loading PRG file: %s\n", prg_file);
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--verify-banking") == 0) {
+            run_banking_verify = true;
+        } else if (strcmp(argv[i], "--verify-banking-all") == 0) {
+            run_banking_verify = true;
+            banking_verify_all = true;
+        } else if (prg_file == NULL) {
+            prg_file = argv[i];
+            printf("Loading PRG file: %s\n", prg_file);
+        }
+    }
+    
+    // Run banking verification if requested (standalone mode without GUI)
+    if (run_banking_verify) {
+        printf("\n");
+        printf("═══════════════════════════════════════════════════════════════════\n");
+        printf("  C64 Banking Mode Verification (Standalone)\n");
+        printf("═══════════════════════════════════════════════════════════════════\n");
+        fflush(stdout);
+        
+        if (banking_verify_all) {
+            printf("Running verify_c64_banking_modes()...\n");
+            fflush(stdout);
+            verify_c64_banking_modes();
+        } else {
+            printf("Running verify_c64_banking_by_table()...\n");
+            fflush(stdout);
+            verify_c64_banking_by_table();
+        }
+        printf("\nVerification complete.\n");
+        fflush(stdout);
+        return 0;  // Exit after verification (no GUI)
     }
     
     // Initialize GUI

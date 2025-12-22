@@ -3,6 +3,7 @@
 #include "../../core/system_lines.h"
 #include <string.h>
 #include <stdlib.h>
+#include <cstdio>
 
 void* mos6526_system_create(chip_descriptor_t* desc) {
     mos6526_t* cia = (mos6526_t*)calloc(1, sizeof(mos6526_t));
