@@ -319,6 +319,7 @@ typedef struct {
     uint8_t xscroll_counter;  // XSCROLL delay counter
     uint8_t graphics_line[40]; // Graphics data buffer for current scanline (40 characters)
     uint8_t pixel_in_char;    // Current pixel within character (0-7)
+    uint8_t current_vmli_for_display; // VMLI value for pixel sequencer (before increment)
     vicii_pixel_t colors[5];  // Color palette for current mode
 } vicii_sequencer_unit_t;
 
@@ -410,7 +411,7 @@ typedef struct {
 typedef struct {
     // Single line buffers for pixel generation
     vicii_priority_t* pixel_line_priority;
-    uint32_t* pixel_line_color;
+    uint8_t* pixel_line_color;  // Stores color INDICES (0-15), not RGB values
     
     uint32_t* framebuffer;
     int framebuffer_width;
