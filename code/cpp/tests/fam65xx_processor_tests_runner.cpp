@@ -521,7 +521,7 @@ public:
             uint8_t value = mem_read(this, full_addr, 0);
             
             // Inject data into pins (macro returns new pins value)
-            bus_pins = FAM65XX_SET_DATA(bus_pins, value);
+            FAM65XX_SET_DATA(bus_pins, value);
         } else {
             // WRITE CYCLE: Use mem_write callback (applies address mask and records bus cycle)
             uint8_t data = FAM65XX_GET_DATA(bus_pins);

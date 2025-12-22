@@ -37,7 +37,7 @@
 // Bank byte handling for 65C816 (uses upper 8 bits of 32-bit bus state)
 #define FAM65XX_GET_BANK(p) (((p) >> 24) & 0xFF)
 #define FAM65XX_SET_BANK(p, bank)                                              \
-  (((p) & ~0xFF000000ULL) | (((uint64_t)(bank)&0xFF) << 24))
+  ((p) = ((p) & ~0xFF000000ULL) | (((uint64_t)(bank)&0xFF) << 24))
 
 // CPU pin access using project definitions
 #define FAM65XX_GET_RDY(pins) ((pins)&FAM65XX_RDY)
