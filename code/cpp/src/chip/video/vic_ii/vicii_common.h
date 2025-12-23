@@ -285,6 +285,7 @@ struct vicii_registers_unit_t {
 
 // Timing Unit - All timing-related state
 struct vicii_timing_unit_t {
+    uint16_t prev_raster_compare;        // Previous raster compare value for edge detection
     // Hardware counters matching VIC-II documentation
     uint8_t x_cycle;                     // Horizontal cycle counter (0 to cycles_per_line-1)
     uint16_t x_coordinate;               // X position in sprite coordinate system (0-503 PAL)

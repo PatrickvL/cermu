@@ -566,6 +566,13 @@ void vicii_update_badline_condition(vicii_t* vicii) {
     }
 }
 
+// Helper function: Get 9-bit raster compare value from registers
+// Bits 0-7 from $d012, bit 8 from $d011 bit 7
+static inline uint16_t vicii_get_raster_compare(const vicii_t* vicii) {
+    return (vicii->registers.data[VICII_RASTER] & 0xFF) |
+           ((vicii->registers.data[VICII_C1] & VICII_C1_RST8) ? 0x100 : 0);
+}
+
 static inline void vicii_registers_write_interrupt(vicii_registers_unit_t* regs, uint8_t value) {
     // Only consider the 4 actually supported interrupt bits (IRST/IMBC/IMMC/ILP)
     value &= VICII_INTERRUPTS_MASK;
@@ -621,10 +628,16 @@ bus_state_t vicii_registers_write(void* context, bus_state_t bus_state) {
         case VICII_C1: // $d011 Control register 1
             // Update bad line condition when C1 changes (YSCROLL or DEN bit changes)
             vicii_update_badline_condition(vicii);
+            // Update prev_raster_compare for edge detection (bit 8 changed)
+            vicii->timing.prev_raster_compare = vicii_get_raster_compare(vicii);
             FALLTHROUGH; // to C2 case
         case VICII_C2: // $d016 Control register 2
             vicii_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
             vicii_border_update_limits(&vicii->border, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
+            break;
+        case VICII_RASTER: // $d012 Raster compare (bits 0-7)
+            // Update prev_raster_compare for edge detection
+            vicii->timing.prev_raster_compare = vicii_get_raster_compare(vicii);
             break;
         case VICII_MXE: // $d015 Sprite enabled x
             // Update sprite enabled state
@@ -760,6 +773,40 @@ static inline void vicii_reset_vcbase_vc(vicii_t* vicii) {
     vicii->video_logic.vc = 0;
 }
 
+// Helper function: Trigger raster interrupt (edge-triggered)
+// Documentation (vic-ii.txt lines 2262-2269):
+// "Raster comparison is edge-triggered, not level-triggered. If $d012 is
+// continuously updated to follow the raster counter, it will never trigger
+// an IRQ condition. This edge-triggered behavior is documented in patent US4572506."
+static inline void vicii_check_raster_interrupt(vicii_t* vicii) {
+    // Get current raster compare value
+    const uint16_t current_compare = vicii_get_raster_compare(vicii);
+    
+    // Edge detection: Only trigger if compare value CHANGED and now matches raster
+    // This prevents continuous triggering when $d012 is updated every cycle
+    const bool compare_changed = (current_compare != vicii->timing.prev_raster_compare);
+    const bool compare_matches = (current_compare == vicii->timing.raster_counter);
+    
+    if (compare_changed && compare_matches) {
+        // Check if raster interrupt is enabled
+        if (vicii->registers.data[VICII_IE] & VICII_IE_ERST) {
+            // Set IRST bit in interrupt latch
+            vicii->registers.data[VICII_IR] |= VICII_IR_IRST;
+            
+            // Set IRQ flag if any enabled interrupt is latched
+            const uint8_t latched_interrupts = vicii->registers.data[VICII_IR] & VICII_INTERRUPTS_MASK;
+            const uint8_t enabled_interrupts = vicii->registers.data[VICII_IE] & VICII_INTERRUPTS_MASK;
+            
+            if (latched_interrupts & enabled_interrupts) {
+                vicii->registers.data[VICII_IR] |= VICII_IR_IRQ;
+            }
+        }
+    }
+    
+    // Update previous compare value for next edge detection
+    vicii->timing.prev_raster_compare = current_compare;
+}
+
 // Helper function: Perform line 0 raster/IRQ operations
 // Documentation (vic-ii.txt lines 1006-1010, 1012-1014):
 // "Raster line 0 is, however, an exception: In this line, IRQ and incrementing
@@ -778,7 +825,8 @@ static inline void vicii_perform_line0_raster_irq_operations(vicii_t* vicii) {
     // Reset VCBASE/VC (shared with timing advance logic)
     vicii_reset_vcbase_vc(vicii);
     
-    // TODO: Trigger raster IRQ here if enabled and raster compare == 0
+    // Check raster interrupt (edge-triggered)
+    vicii_check_raster_interrupt(vicii);
 }
 
 void vicii_timing_advance(vicii_t* vicii) {
