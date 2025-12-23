@@ -566,11 +566,40 @@ void vicii_update_badline_condition(vicii_t* vicii) {
     }
 }
 
+// ========================================================================================
+// INTERRUPT HANDLING
+// ========================================================================================
+
 // Helper function: Get 9-bit raster compare value from registers
 // Bits 0-7 from $d012, bit 8 from $d011 bit 7
 static inline uint16_t vicii_get_raster_compare(const vicii_t* vicii) {
     return (vicii->registers.data[VICII_RASTER] & 0xFF) |
            ((vicii->registers.data[VICII_C1] & VICII_C1_RST8) ? 0x100 : 0);
+}
+
+// Helper function: Set an interrupt and update IRQ flag
+// This is used by all three interrupt sources:
+// - VICII_IR_IRST (0x01): Raster interrupt
+// - VICII_IR_IMBC (0x02): Sprite-sprite collision interrupt
+// - VICII_IR_IMMC (0x04): Sprite-data collision interrupt
+// - VICII_IR_ILP  (0x08): Light pen interrupt
+//
+// Documentation (vic-ii.txt lines 2244-2285):
+// "If at least one latch bit and the belonging bit in the enable register is
+// set, the IRQ line is held low and so the interrupt is triggered in the
+// processor."
+static inline void vicii_set_interrupt(vicii_t* vicii, uint8_t interrupt_mask) {
+    // Set the interrupt latch bit(s)
+    vicii->registers.data[VICII_IR] |= interrupt_mask;
+    
+    // Check if this interrupt is enabled and update IRQ flag
+    const uint8_t latched_interrupts = vicii->registers.data[VICII_IR] & VICII_INTERRUPTS_MASK;
+    const uint8_t enabled_interrupts = vicii->registers.data[VICII_IE] & VICII_INTERRUPTS_MASK;
+    
+    // Set IRQ flag if any enabled interrupt is latched
+    if (latched_interrupts & enabled_interrupts) {
+        vicii->registers.data[VICII_IR] |= VICII_IR_IRQ;
+    }
 }
 
 static inline void vicii_registers_write_interrupt(vicii_registers_unit_t* regs, uint8_t value) {
@@ -773,7 +802,7 @@ static inline void vicii_reset_vcbase_vc(vicii_t* vicii) {
     vicii->video_logic.vc = 0;
 }
 
-// Helper function: Trigger raster interrupt (edge-triggered)
+// Helper function: Check and trigger raster interrupt (edge-triggered)
 // Documentation (vic-ii.txt lines 2262-2269):
 // "Raster comparison is edge-triggered, not level-triggered. If $d012 is
 // continuously updated to follow the raster counter, it will never trigger
@@ -788,18 +817,9 @@ static inline void vicii_check_raster_interrupt(vicii_t* vicii) {
     const bool compare_matches = (current_compare == vicii->timing.raster_counter);
     
     if (compare_changed && compare_matches) {
-        // Check if raster interrupt is enabled
+        // Check if raster interrupt is enabled before setting it
         if (vicii->registers.data[VICII_IE] & VICII_IE_ERST) {
-            // Set IRST bit in interrupt latch
-            vicii->registers.data[VICII_IR] |= VICII_IR_IRST;
-            
-            // Set IRQ flag if any enabled interrupt is latched
-            const uint8_t latched_interrupts = vicii->registers.data[VICII_IR] & VICII_INTERRUPTS_MASK;
-            const uint8_t enabled_interrupts = vicii->registers.data[VICII_IE] & VICII_INTERRUPTS_MASK;
-            
-            if (latched_interrupts & enabled_interrupts) {
-                vicii->registers.data[VICII_IR] |= VICII_IR_IRQ;
-            }
+            vicii_set_interrupt(vicii, VICII_IR_IRST);
         }
     }
     
