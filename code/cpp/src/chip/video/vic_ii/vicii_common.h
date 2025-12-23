@@ -131,8 +131,10 @@ namespace vicii_regs {
 #define VICII_C2_CSEL     0x08  // Select 38/40 Column Text Display
 #define VICII_C2_MCM      0x10  // Multi-Color Mode
 #define VICII_C2_RES      0x20  // Reserved (always 0)
+#define VICII_C2_UNUSED   0xC0  // Unused bits - always high
 
 // Memory pointers ($d018) bit masks
+#define VICII_MP_UNUSED   0x01  // Unused bits - always high
 #define VICII_MP_CB11     0x02  // Character Dot-Data Base Address
 #define VICII_MP_CB12     0x04
 #define VICII_MP_CB13     0x08
@@ -154,6 +156,7 @@ namespace vicii_regs {
 #define VICII_IE_EMBC     0x02  // Sprite-data collision interrupt enabled
 #define VICII_IE_EMMC     0x04  // Sprite-sprite collision interrupt enabled
 #define VICII_IE_ELP      0x08  // Light pen interrupt enabled
+#define VICII_IE_UNUSED   0xF0  // Unused bits - always high
 
 // Graphics modes
 #define VICII_GM_STANDARD_TEXT      0  // ECM/BMM/MCM=0/0/0
