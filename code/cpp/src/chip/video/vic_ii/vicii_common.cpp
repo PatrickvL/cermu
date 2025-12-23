@@ -110,6 +110,35 @@ void vicii_graphics_sequencer(vicii_t* vicii, uint8_t graphics_data, uint8_t vml
 }
 
 // ========================================================================================
+// INTERRUPT HANDLING
+// ========================================================================================
+
+// Helper function: Set an interrupt and update IRQ flag
+// This is used by all three interrupt sources:
+// - VICII_IR_IRST (0x01): Raster interrupt
+// - VICII_IR_IMBC (0x02): Sprite-sprite collision interrupt
+// - VICII_IR_IMMC (0x04): Sprite-data collision interrupt
+// - VICII_IR_ILP  (0x08): Light pen interrupt
+//
+// Documentation (vic-ii.txt lines 2244-2285):
+// "If at least one latch bit and the belonging bit in the enable register is
+// set, the IRQ line is held low and so the interrupt is triggered in the
+// processor."
+static inline void vicii_set_interrupt(vicii_t* vicii, uint8_t interrupt_mask) {
+    // Set the interrupt latch bit(s)
+    vicii->registers.data[VICII_IR] |= interrupt_mask;
+    
+    // Check if this interrupt is enabled and update IRQ flag
+    const uint8_t latched_interrupts = vicii->registers.data[VICII_IR] & VICII_INTERRUPTS_MASK;
+    const uint8_t enabled_interrupts = vicii->registers.data[VICII_IE] & VICII_INTERRUPTS_MASK;
+    
+    // Set IRQ flag if any enabled interrupt is latched
+    if (latched_interrupts & enabled_interrupts) {
+        vicii->registers.data[VICII_IR] |= VICII_IR_IRQ;
+    }
+}
+
+// ========================================================================================
 // SPRITE HANDLING
 // ========================================================================================
 
@@ -164,11 +193,25 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
     // Collision detection
     if (current_priority == VICII_PRIORITY_SPRITE_IN_FRONT ||
         current_priority == VICII_PRIORITY_SPRITE_BEHIND) {
+        // Sprite-sprite collision (MMC interrupt)
+        // Documentation (vic-ii.txt lines 2278-2282):
+        // "For the MBC and MMC interrupts, only the first collision will trigger an
+        // interrupt (i.e. if the collision registers $d01e resp. $d01f contained the
+        // value zero before the collision)."
+        const bool first_collision = (vicii->registers.data[VICII_MXM_2] == 0);
         vicii->registers.data[VICII_MXM_2] |= (1 << param_sprite_num);
+        if (first_collision && (vicii->registers.data[VICII_IE] & VICII_IE_EMMC)) {
+            vicii_set_interrupt(vicii, VICII_IR_IMMC);
+        }
     }
     
     if (current_priority == VICII_PRIORITY_FOREGROUND) {
+        // Sprite-data collision (MBC interrupt)
+        const bool first_collision = (vicii->registers.data[VICII_MXD_2] == 0);
         vicii->registers.data[VICII_MXD_2] |= (1 << param_sprite_num);
+        if (first_collision && (vicii->registers.data[VICII_IE] & VICII_IE_EMBC)) {
+            vicii_set_interrupt(vicii, VICII_IR_IMBC);
+        }
     }
     
     // Color determination
@@ -566,40 +609,11 @@ void vicii_update_badline_condition(vicii_t* vicii) {
     }
 }
 
-// ========================================================================================
-// INTERRUPT HANDLING
-// ========================================================================================
-
 // Helper function: Get 9-bit raster compare value from registers
 // Bits 0-7 from $d012, bit 8 from $d011 bit 7
 static inline uint16_t vicii_get_raster_compare(const vicii_t* vicii) {
     return (vicii->registers.data[VICII_RASTER] & 0xFF) |
            ((vicii->registers.data[VICII_C1] & VICII_C1_RST8) ? 0x100 : 0);
-}
-
-// Helper function: Set an interrupt and update IRQ flag
-// This is used by all three interrupt sources:
-// - VICII_IR_IRST (0x01): Raster interrupt
-// - VICII_IR_IMBC (0x02): Sprite-sprite collision interrupt
-// - VICII_IR_IMMC (0x04): Sprite-data collision interrupt
-// - VICII_IR_ILP  (0x08): Light pen interrupt
-//
-// Documentation (vic-ii.txt lines 2244-2285):
-// "If at least one latch bit and the belonging bit in the enable register is
-// set, the IRQ line is held low and so the interrupt is triggered in the
-// processor."
-static inline void vicii_set_interrupt(vicii_t* vicii, uint8_t interrupt_mask) {
-    // Set the interrupt latch bit(s)
-    vicii->registers.data[VICII_IR] |= interrupt_mask;
-    
-    // Check if this interrupt is enabled and update IRQ flag
-    const uint8_t latched_interrupts = vicii->registers.data[VICII_IR] & VICII_INTERRUPTS_MASK;
-    const uint8_t enabled_interrupts = vicii->registers.data[VICII_IE] & VICII_INTERRUPTS_MASK;
-    
-    // Set IRQ flag if any enabled interrupt is latched
-    if (latched_interrupts & enabled_interrupts) {
-        vicii->registers.data[VICII_IR] |= VICII_IR_IRQ;
-    }
 }
 
 static inline void vicii_registers_write_interrupt(vicii_registers_unit_t* regs, uint8_t value) {
