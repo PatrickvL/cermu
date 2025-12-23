@@ -877,10 +877,19 @@ void vicii_timing_advance(vicii_t* vicii) {
         }
         
         // Normal line transition: update raster_counter
+        // Documentation (vic-ii.txt lines 1012-1014):
+        // "Note: After the end of raster line 311 in the 6569, the start of frame
+        // (line 0) occurs one cycle late. Line timing wraps normally at cycle 63,
+        // but the transition from line 311 to line 0 introduces this one-cycle delay."
+        //
+        // FRAME WRAP HANDLING:
+        // When raster_counter would wrap (311→0 for PAL, 261→0 for NTSC), we DON'T
+        // immediately reset to 0 here. Instead, we keep it at total_lines-1, and the
+        // cycle wrappers handle the actual transition in the next cycle:
+        // - PAL (6569): Cycle 1 wrapper executes line 0 ops (one-cycle delay)
+        // - NTSC (6567): Cycle 0 wrapper executes line 0 ops (immediate)
         if (++vicii->timing.raster_counter >= vicii->config->total_lines) {
-            // Line wrap happens here, but line 0 operations are handled by cycle wrappers
-            // (PAL: cycle 1, NTSC: cycle 0) which reset raster_counter, per-frame state, etc.
-            // Just wrap the counter here - the cycle wrappers will handle the rest
+            // Hold at last line; cycle wrappers will reset to 0 at proper timing
             vicii->timing.raster_counter = vicii->config->total_lines - 1;
         }
         
@@ -988,9 +997,25 @@ static uint8_t vicii_cycle_idle(vicii_t* vicii, int unused_param) {
 }
 
 // PAL Cycle 1 wrapper: Execute line 0 operations here (delayed from cycle 0)
-// Documentation (vic-ii.txt lines 1006-1010): "Raster line 0 is, however, an exception:
-// In this line, IRQ and incrementing (resp. resetting) of RASTER are performed one cycle
-// later than in the other lines." On PAL, cycle 0 just does sprite P-access (no operations).
+//
+// Documentation (vic-ii.txt lines 1006-1015):
+// "Raster line 0 is, however, an exception: In this line, IRQ and incrementing
+// (resp. resetting) of RASTER are performed one cycle later than in the other lines.
+// But for simplicity we assume equal line lengths and define the beginning of raster
+// line 0 to be one cycle before the occurrence of the IRQ."
+//
+// "Note: After the end of raster line 311 in the 6569, the start of frame (line 0)
+// occurs one cycle late. Line timing wraps normally at cycle 63, but the transition
+// from line 311 to line 0 introduces this one-cycle delay."
+//
+// IMPLEMENTATION: This function naturally implements BOTH timing anomalies:
+// 1. Line 0 operations delayed by one cycle (executed in cycle 1 instead of cycle 0)
+// 2. Frame wrap delay (311→0 transition delayed by one cycle)
+//
+// The same mechanism handles both cases: By executing line 0 operations in cycle 1
+// (instead of cycle 0 as NTSC does), the PAL VIC-II automatically introduces the
+// documented one-cycle delay for both the line 0 IRQ/raster operations AND the
+// frame boundary transition.
 static uint8_t vicii_cycle_sprite_s_1_pal(vicii_t* vicii, int param) {
     // IMPORTANT: Cycle functions execute BEFORE vicii_timing_advance(), so raster_counter
     // still contains the PREVIOUS line number. When we're on the last line (311 for PAL),
@@ -999,20 +1024,30 @@ static uint8_t vicii_cycle_sprite_s_1_pal(vicii_t* vicii, int param) {
     
     if (transitioning_to_line0) {
         // Execute line 0 raster/IRQ operations (delayed by one cycle on PAL)
+        // This handles both:
+        // - Line 0 IRQ timing anomaly (IRQ occurs in cycle 1, not cycle 0)
+        // - Frame wrap delay (311→0 transition delayed by one cycle)
         vicii_perform_line0_raster_irq_operations(vicii);
     }
     
     // Call underlying cycle function (sprite 3 S-access for PAL)
     return vicii_cycle_sprite_s_access(vicii, param);
 }
-
 // NTSC Cycle 0 wrapper: Execute raster/IRQ operations immediately (no delay)
+//
+// Documentation: Unlike PAL (6569), NTSC VIC-II chips (6567) do NOT have the
+// one-cycle delay for line 0 operations. The frame wrap (last_line→0 transition)
+// happens immediately in cycle 0.
+//
+// IMPLEMENTATION: This function executes line 0 operations in cycle 0, providing
+// immediate frame wrap without the one-cycle delay present in PAL chips.
 static uint8_t vicii_cycle_sprite_p_0_ntsc(vicii_t* vicii, int param) {
     // Check if we're transitioning into line 0
     const bool transitioning_to_line0 = (vicii->timing.raster_counter == vicii->config->total_lines - 1);
     
     if (transitioning_to_line0) {
-        // NTSC: Execute immediately, no delay
+        // NTSC: Execute immediately in cycle 0 (no delay, unlike PAL)
+        // This handles the frame wrap (last_line→0) without delay
         vicii_perform_line0_raster_irq_operations(vicii);
     }
     
