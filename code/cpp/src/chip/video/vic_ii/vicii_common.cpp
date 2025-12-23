@@ -300,10 +300,14 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         } else {
             display_x = (pixels_per_line - first_visible) + x_coord;
         }
+        // Initialize xscroll when we reach the left border edge MINUS the pipeline delay
+        // This ensures the sequencer state is ready when pixels actually appear on screen
+        // The 12-pixel pipeline delay means we need to initialize 12 pixels BEFORE border_left
+        const uint16_t xscroll_init_position = (vicii->border.border_left >= VICII_PIPELINE_DELAY_PIXELS)
+            ? (vicii->border.border_left - VICII_PIPELINE_DELAY_PIXELS)
+            : (vicii->config->visible_pixels_per_line + vicii->border.border_left - VICII_PIPELINE_DELAY_PIXELS);
         
-        // Initialize xscroll when we reach the left border edge at the FETCH position
-        // The pixels will be output 12 pixels later, but the sequencer state needs to be ready NOW
-        if (display_x == vicii->border.border_left) {
+        if (display_x == xscroll_init_position) {
             seq->xscroll_counter = vicii->registers.data[VICII_C2] & VICII_C2_XSCROLL;
             seq->pixel_in_char = 0;
         }
@@ -1933,10 +1937,10 @@ static const vicii_chip_config_t MOS6567R56A_config = {
 
 // MOS6567(R8) NTSC VIC-II Configuration
 static const vicii_chip_config_t MOS6567R8_config = {
-    .total_lines = 262,
+    .total_lines = 263,  // Documentation: 263 lines for R8 variant
     .visible_lines = 235,
     .cycles_per_line = 65,
-    .visible_pixels_per_line = 411,
+    .visible_pixels_per_line = 418,  // Documentation: 418 pixels for R8 variant
     .first_vblank_line = 13,
     .last_vblank_line = 40,
     .first_x_coord = 412, // ($19c)
@@ -1958,8 +1962,8 @@ static const vicii_chip_config_t MOS6569_config = {
     .first_vblank_line = 300,
     .last_vblank_line = 15,
     .first_x_coord = 404, // ($194)
-    .first_visible_x_coord = 480, // ($1e0)
-    .last_visible_x_coord = 380, // ($17c)
+    .first_visible_x_coord = 480, // ($1e0) - Documentation value, NOT shifted
+    .last_visible_x_coord = 380, // ($17c) - Documentation value, NOT shifted
     
     .framebuffer_start_x = 0,
     .framebuffer_end_x = 504,  // Allow full scanline width to accommodate pipeline delay wrap-around
