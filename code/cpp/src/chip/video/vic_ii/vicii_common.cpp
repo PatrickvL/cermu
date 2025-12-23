@@ -63,11 +63,11 @@ static inline void vicii_border_update_limits(vicii_border_unit_t* border, uint8
 // The line buffer contains pixels in display order (0-402 for PAL visible area).
 // x_coordinate values wrap around (0-503 for PAL), so we must map them correctly.
 static inline void vicii_pixel_emit_at_x(vicii_t* vicii, const vicii_pixel_t* pixel_data, uint16_t x_coord) {
-    // The x_coord parameter is the DISPLAY position where this pixel should appear.
-    // The 12-pixel pipeline delay is already accounted for in the caller (pixel sequencer).
-    // We just need to map this x_coordinate to the correct line buffer position.
+    // The x_coord parameter is the FETCH position (where VIC-II reads the data).
+    // Due to the 12-pixel pipeline delay, pixels are displayed 12 pixels LATER.
+    // We need to SUBTRACT the delay to get the correct framebuffer write position.
     const uint16_t pixels_per_line = vicii->config->cycles_per_line * 8;
-    const uint16_t display_x_coord = x_coord;
+    const uint16_t display_x_coord = (x_coord + pixels_per_line - VICII_PIPELINE_DELAY_PIXELS) % pixels_per_line;
     
     // Check if this coordinate is in the visible range
     // For PAL: first_visible_x_coord = 480, visible_pixels = 403
@@ -168,12 +168,11 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
     
     if (!sprite_pixel) return;
     
-    // Apply 12-pixel pipeline delay: sprite rendered at current_x is displayed 12 pixels later
-    // Use the same vicii_pixel_emit_at_x coordinate mapping as background graphics
-    const uint16_t display_x_coord = current_x + VICII_PIPELINE_DELAY_PIXELS;
-    
-    // Calculate pixel position in line buffer using same mapping as background
+    // Sprites use the same pipeline delay handling as background graphics
+    // Pass fetch position to vicii_pixel_emit_at_x which handles the delay internally
+    // But we need direct buffer access for collision detection, so calculate position here
     const uint16_t pixels_per_line = vicii->config->cycles_per_line * 8;
+    const uint16_t display_x_coord = (current_x + pixels_per_line - VICII_PIPELINE_DELAY_PIXELS) % pixels_per_line;
     const uint16_t first_visible = vicii->config->first_visible_x_coord;
     const uint16_t visible_pixels = vicii->config->visible_pixels_per_line;
     
@@ -273,8 +272,8 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
     if (!(in_main_display && vicii->video_logic.display_state)) {
             // We're in border area - sequence exactly 8 border pixels
             for (int pixel = 0; pixel < 8; pixel++) {
-                // Apply 12-pixel pipeline delay: border rendered at x_coord is displayed 12 pixels later
-                const uint16_t pixel_x = x_coord + (uint16_t)pixel + VICII_PIPELINE_DELAY_PIXELS;
+                // Pass fetch position directly - vicii_pixel_emit_at_x handles the pipeline delay
+                const uint16_t pixel_x = x_coord + (uint16_t)pixel;
     
                 vicii_pixel_emit_at_x(vicii, &vicii->border.border_pixel, pixel_x);
             }
@@ -300,14 +299,9 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         } else {
             display_x = (pixels_per_line - first_visible) + x_coord;
         }
-        // Initialize xscroll when we reach the left border edge MINUS the pipeline delay
-        // This ensures the sequencer state is ready when pixels actually appear on screen
-        // The 12-pixel pipeline delay means we need to initialize 12 pixels BEFORE border_left
-        const uint16_t xscroll_init_position = (vicii->border.border_left >= VICII_PIPELINE_DELAY_PIXELS)
-            ? (vicii->border.border_left - VICII_PIPELINE_DELAY_PIXELS)
-            : (vicii->config->visible_pixels_per_line + vicii->border.border_left - VICII_PIPELINE_DELAY_PIXELS);
-        
-        if (display_x == xscroll_init_position) {
+        // Initialize xscroll when we reach the left border edge at the FETCH position
+        // vicii_pixel_emit_at_x will handle the pipeline delay when writing to buffer
+        if (display_x == vicii->border.border_left) {
             seq->xscroll_counter = vicii->registers.data[VICII_C2] & VICII_C2_XSCROLL;
             seq->pixel_in_char = 0;
         }
@@ -337,8 +331,8 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         
         // Sequence exactly 8 pixels from shift register
         for (int pixel = 0; pixel < 8; pixel++) {
-            // Apply 12-pixel pipeline delay: data fetched at x_coord is displayed 12 pixels later
-            const uint16_t pixel_x = x_coord + (uint16_t)pixel + VICII_PIPELINE_DELAY_PIXELS;
+            // Pass fetch position directly - vicii_pixel_emit_at_x handles the pipeline delay
+            const uint16_t pixel_x = x_coord + (uint16_t)pixel;
             
             vicii_pixel_t pixel_data;
             
@@ -1261,52 +1255,34 @@ static uint8_t vicii_cycle_sprite_s_border_check(vicii_t* vicii, int param_sprit
     return vicii_cycle_sprite_s_access(vicii, param_sprite_num);
 }
 // Border flip-flop logic (Documentation section 3.9) - X coordinate rules only
-// Border limits work in a simple linear coordinate system starting from first visible pixel
 static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border,
         vicii_timing_unit_t* timing, uint8_t c1_reg, const vicii_chip_config_t* config) {
     const uint16_t raster = timing->raster_counter;
-    const uint16_t x_coord = timing->x_coordinate;
+    const uint16_t x_coord = timing->x_coordinate;  // Use actual hardware X coordinate
     const bool den_set = (c1_reg & VICII_C1_DEN) != 0;
-    
-    // Convert x_coordinate to simple linear display coordinate (0-402 for PAL)
-    // This matches how vicii_pixel_emit_at_x() maps coordinates to the line buffer
-    const uint16_t pixels_per_line = config->cycles_per_line * 8;
-    const uint16_t first_visible = config->first_visible_x_coord;
-    
-    // Check each pixel in this cycle (8 pixels)
+    // Check each pixel in this cycle (8 pixels) against border boundaries
     for (int pixel = 0; pixel < 8; pixel++) {
-        const uint16_t pixel_x_coord = (x_coord + (uint16_t)pixel) % pixels_per_line;
-        
-        // Convert to display coordinate (0-402)
-        uint16_t display_x;
-        if (pixel_x_coord >= first_visible) {
-            display_x = pixel_x_coord - first_visible;
-        } else {
-            display_x = (pixels_per_line - first_visible) + pixel_x_coord;
-        }
-        
-        // Skip if outside visible range
-        if (display_x >= config->visible_pixels_per_line) {
-            continue;
-        }
+        const uint16_t pixel_x = x_coord + (uint16_t)pixel;
         
         // Rule 1: "If the X coordinate reaches the right comparison value, the main border flip flop is set."
-        if (display_x == border->border_right) {
+        if (pixel_x == border->border_right) {
             border->main_border_flip_flop = true;
         }
-        
-        // Rules 4, 5, 6: Handle both flip-flops at border_left
-        if (display_x == border->border_left) {
-            // Rule 4: Set vertical flip-flop if at bottom border
+        // Rules 4, 5, 6: Handle left coordinate checks only
+        if (pixel_x == border->border_left) {
+            // Rule 4: "If the X coordinate reaches the left comparison value and the Y
+            // coordinate reaches the bottom one, the vertical border flip flop is set."
             if (raster == border->border_bottom) {
                 border->vertical_border_flip_flop = true;
             }
-            // Rule 5: Clear vertical flip-flop if at top border with DEN set
+            // Rule 5: "If the X coordinate reaches the left comparison value and the Y
+            // coordinate reaches the top one and the DEN bit in register $d011 is set,
+            // the vertical border flip flop is reset."
             else if (raster == border->border_top && den_set) {
                 border->vertical_border_flip_flop = false;
             }
-            
-            // Rule 6: Clear main flip-flop when vertical flip-flop is clear
+            // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
+            // border flip flop is not set, the main flip flop is reset."
             if (!border->vertical_border_flip_flop) {
                 border->main_border_flip_flop = false;
             }
