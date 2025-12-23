@@ -139,12 +139,12 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
     
     if (!sprite_pixel) return;
     
-    // Calculate pixel position in line buffer
-    // Apply same coordinate mapping as background graphics
-    const uint16_t pixels_per_line = vicii->config->cycles_per_line * 8;
-    const uint16_t display_x_coord = current_x;
+    // Apply 12-pixel pipeline delay: sprite rendered at current_x is displayed 12 pixels later
+    // Use the same vicii_pixel_emit_at_x coordinate mapping as background graphics
+    const uint16_t display_x_coord = current_x + VICII_PIPELINE_DELAY_PIXELS;
     
-    // Check if in visible range and calculate buffer position
+    // Calculate pixel position in line buffer using same mapping as background
+    const uint16_t pixels_per_line = vicii->config->cycles_per_line * 8;
     const uint16_t first_visible = vicii->config->first_visible_x_coord;
     const uint16_t visible_pixels = vicii->config->visible_pixels_per_line;
     
@@ -220,9 +220,6 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
     // This ensures CPU register writes (like border/background color changes) affect
     // pixels being OUTPUT at that moment, not pixels being LOADED into the pipeline.
     const uint16_t x_coord = vicii->timing.x_coordinate;
-    // if (x_coord < vicii->config->first_visible_x_coord) {
-    //     return;
-    // }
     
     // Determine if we're in border or display area
     // VIC-II border flip-flop logic: graphics are displayed when main_border_flip_flop is FALSE
@@ -233,9 +230,8 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
     if (!(in_main_display && vicii->video_logic.display_state)) {
             // We're in border area - sequence exactly 8 border pixels
             for (int pixel = 0; pixel < 8; pixel++) {
-                const uint16_t pixel_x = x_coord + (uint16_t)pixel;
-                if (pixel_x < vicii->config->first_visible_x_coord)
-                    continue;
+                // Apply 12-pixel pipeline delay: border rendered at x_coord is displayed 12 pixels later
+                const uint16_t pixel_x = x_coord + (uint16_t)pixel + VICII_PIPELINE_DELAY_PIXELS;
     
                 vicii_pixel_emit_at_x(vicii, &vicii->border.border_pixel, pixel_x);
             }
@@ -249,9 +245,12 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         // between data fetch and screen display
         
         // Initialize xscroll on first display cycle of each line
-        // Convert x_coordinate to display coordinate to check if we're at the first display pixel
+        // This must happen at the FETCH position (x_coord), not the output position
+        // because we're setting up state for the pixel sequencer to use
         const uint16_t pixels_per_line = vicii->config->cycles_per_line * 8;
         const uint16_t first_visible = vicii->config->first_visible_x_coord;
+        
+        // Calculate current display coordinate (where we're fetching from)
         uint16_t display_x;
         if (x_coord >= first_visible) {
             display_x = x_coord - first_visible;
@@ -259,7 +258,8 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             display_x = (pixels_per_line - first_visible) + x_coord;
         }
         
-        // Initialize xscroll when we reach the left border edge (start of display area)
+        // Initialize xscroll when we reach the left border edge at the FETCH position
+        // The pixels will be output 12 pixels later, but the sequencer state needs to be ready NOW
         if (display_x == vicii->border.border_left) {
             seq->xscroll_counter = vicii->registers.data[VICII_C2] & VICII_C2_XSCROLL;
             seq->pixel_in_char = 0;
@@ -290,10 +290,8 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         
         // Sequence exactly 8 pixels from shift register
         for (int pixel = 0; pixel < 8; pixel++) {
-            const uint16_t pixel_x = x_coord + (uint16_t)pixel;
-            
-            // Stop if we've reached the end of the line buffer
-            if (pixel_x >= vicii->config->visible_pixels_per_line) break;
+            // Apply 12-pixel pipeline delay: data fetched at x_coord is displayed 12 pixels later
+            const uint16_t pixel_x = x_coord + (uint16_t)pixel + VICII_PIPELINE_DELAY_PIXELS;
             
             vicii_pixel_t pixel_data;
             
@@ -704,16 +702,16 @@ bus_state_t vicii_registers_read(void* context, bus_state_t bus_state) {
             data = vicii->timing.raster_counter & 0xFF;               //    18 $d012 Reflects raster_counter bits 0..7
             break;
         case VICII_C2:
-            data = vicii->registers.data[VICII_C2] | (data & 0xC0); //    22 $d016 |  - |  - | RES| MCM|CSEL|    XSCROLL   | Control register 2
+            data = vicii->registers.data[VICII_C2] | (data & VICII_C2_UNUSED); //    22 $d016 |  - |  - | RES| MCM|CSEL|    XSCROLL   | Control register 2
             break;
         case VICII_MP:
-            data = vicii->registers.data[VICII_MP] | (data & 0x01); //    24 $d018 |VM13|VM12|VM11|VM10|CB13|CB12|CB11|  - | Memory pointers
+            data = vicii->registers.data[VICII_MP] | (data & VICII_MP_UNUSED); //    24 $d018 |VM13|VM12|VM11|VM10|CB13|CB12|CB11|  - | Memory pointers
             break;
         case VICII_IR:
-            data = vicii->registers.data[VICII_IR] | (data & 0x70); //    25 $d019 | IRQ|  - |  - |  - | ILP|IMMC|IMBC|IRST| Interrupt register
+            data = vicii->registers.data[VICII_IR] | (data & VICII_IR_UNUSED); //    25 $d019 | IRQ|  - |  - |  - | ILP|IMMC|IMBC|IRST| Interrupt register
             break;
         case VICII_IE:
-            data = vicii->registers.data[VICII_IE] | (data & 0xF0); //    26 $d01a |  - |  - |  - |  - | ELP|EMMC|EMBC|ERST| Interrupt Enabled
+            data = vicii->registers.data[VICII_IE] | (data & VICII_IE_UNUSED); //    26 $d01a |  - |  - |  - |  - | ELP|EMMC|EMBC|ERST| Interrupt Enabled
             break;
         case VICII_MXM:
             data = vicii_read_clear(&vicii->registers, VICII_MXM_2);  //    30 $d01e Sprite-sprite collision is cleared on read
@@ -755,6 +753,34 @@ void vicii_set_x_cycle(vicii_t* vicii, uint8_t value) {
     vicii->timing.x_coordinate = (vicii->config->first_x_coord + (vicii->timing.x_cycle * 8)) % pixels_per_line;
 }
 
+// Helper function: Reset VCBASE/VC when outside display area
+// Called both when entering line 0 and throughout lines outside $30-$F7
+static inline void vicii_reset_vcbase_vc(vicii_t* vicii) {
+    vicii->video_logic.vcbase = 0;
+    vicii->video_logic.vc = 0;
+}
+
+// Helper function: Perform line 0 raster/IRQ operations
+// Documentation (vic-ii.txt lines 1006-1010, 1012-1014):
+// "Raster line 0 is, however, an exception: In this line, IRQ and incrementing
+// (resp. resetting) of RASTER are performed one cycle later than in the other lines."
+//
+// This function handles both immediate (NTSC) and delayed (PAL) execution
+static inline void vicii_perform_line0_raster_irq_operations(vicii_t* vicii) {
+    // Reset raster counter to 0
+    vicii->timing.raster_counter = 0;
+    
+    // Reset per-frame state
+    vicii->video_logic.was_den_set_during_raster_30 = false;
+    vicii->video_logic.is_bad_line = false;
+    vicii->video_logic.refresh_counter = 0xFF;
+    
+    // Reset VCBASE/VC (shared with timing advance logic)
+    vicii_reset_vcbase_vc(vicii);
+    
+    // TODO: Trigger raster IRQ here if enabled and raster compare == 0
+}
+
 void vicii_timing_advance(vicii_t* vicii) {
     const bool end_of_line = vicii->timing.x_cycle == vicii->config->cycles_per_line - 1;
 
@@ -782,24 +808,19 @@ void vicii_timing_advance(vicii_t* vicii) {
             vicii->video_logic.display_state = false;
         }
         
+        // Normal line transition: update raster_counter
         if (++vicii->timing.raster_counter >= vicii->config->total_lines) {
-            vicii->timing.raster_counter = 0;
-            vicii->video_logic.was_den_set_during_raster_30 = false;
-            vicii->video_logic.is_bad_line = false;
-            vicii->video_logic.vcbase = 0;
-            vicii->video_logic.vc = 0;
+            // Line wrap happens here, but line 0 operations are handled by cycle wrappers
+            // (PAL: cycle 1, NTSC: cycle 0) which reset raster_counter, per-frame state, etc.
+            // Just wrap the counter here - the cycle wrappers will handle the rest
+            vicii->timing.raster_counter = vicii->config->total_lines - 1;
         }
         
+        // Reset VCBASE/VC when outside display area ($30-$F7)
         if (vicii->timing.raster_counter < 0x30 || vicii->timing.raster_counter > 0xf7) {
-            vicii->video_logic.vcbase = 0;
-            vicii->video_logic.vc = 0;
+            vicii_reset_vcbase_vc(vicii);
         }
         
-        if (vicii->timing.raster_counter == 0) {
-            vicii->video_logic.refresh_counter = 0xFF;
-        }
-        
-        // Clear line buffer for the NEW scanline (which is now raster_counter)
         // Initialize with current border color from EC register
         if (vicii->pixel.pixel_line_color && vicii->config->visible_pixels_per_line > 0) {
             const uint8_t border_color = vicii->registers.data[VICII_EC] & 0x0F;
@@ -896,6 +917,39 @@ static uint8_t vicii_cycle_idle(vicii_t* vicii, int unused_param) {
     // Idle cycle: VIC accesses during PHI1, CPU can use PHI2
     // BA/AEC will be set centrally in vicii_tick based on look-ahead
     return VIC_ACCESS_IDLE;
+}
+
+// PAL Cycle 1 wrapper: Execute line 0 operations here (delayed from cycle 0)
+// Documentation (vic-ii.txt lines 1006-1010): "Raster line 0 is, however, an exception:
+// In this line, IRQ and incrementing (resp. resetting) of RASTER are performed one cycle
+// later than in the other lines." On PAL, cycle 0 just does sprite P-access (no operations).
+static uint8_t vicii_cycle_sprite_s_1_pal(vicii_t* vicii, int param) {
+    // IMPORTANT: Cycle functions execute BEFORE vicii_timing_advance(), so raster_counter
+    // still contains the PREVIOUS line number. When we're on the last line (311 for PAL),
+    // we know the NEXT line will be line 0, so we perform the line 0 operations here.
+    const bool transitioning_to_line0 = (vicii->timing.raster_counter == vicii->config->total_lines - 1);
+    
+    if (transitioning_to_line0) {
+        // Execute line 0 raster/IRQ operations (delayed by one cycle on PAL)
+        vicii_perform_line0_raster_irq_operations(vicii);
+    }
+    
+    // Call underlying cycle function (sprite 3 S-access for PAL)
+    return vicii_cycle_sprite_s_access(vicii, param);
+}
+
+// NTSC Cycle 0 wrapper: Execute raster/IRQ operations immediately (no delay)
+static uint8_t vicii_cycle_sprite_p_0_ntsc(vicii_t* vicii, int param) {
+    // Check if we're transitioning into line 0
+    const bool transitioning_to_line0 = (vicii->timing.raster_counter == vicii->config->total_lines - 1);
+    
+    if (transitioning_to_line0) {
+        // NTSC: Execute immediately, no delay
+        vicii_perform_line0_raster_irq_operations(vicii);
+    }
+    
+    // Call underlying cycle function (sprite 3 P-access for NTSC)
+    return vicii_cycle_sprite_p_access(vicii, param);
 }
 
 // Cycle 15: MCBASE increment when expansion flip-flop is set (Rule 7)
@@ -1113,7 +1167,7 @@ static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border,
             border->main_border_flip_flop = true;
         }
         
-        // Rules 4, 5: Handle vertical flip-flop at border_left
+        // Rules 4, 5, 6: Handle both flip-flops at border_left
         if (display_x == border->border_left) {
             // Rule 4: Set vertical flip-flop if at bottom border
             if (raster == border->border_bottom) {
@@ -1123,12 +1177,8 @@ static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border,
             else if (raster == border->border_top && den_set) {
                 border->vertical_border_flip_flop = false;
             }
-        }
-        
-        // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
-        // border flip flop is not set, the main flip flop is reset."
-        // Clear main flip-flop AT border_left when vertical flip-flop is clear
-        if (display_x == border->border_left) {
+            
+            // Rule 6: Clear main flip-flop when vertical flip-flop is clear
             if (!border->vertical_border_flip_flop) {
                 border->main_border_flip_flop = false;
             }
@@ -1469,10 +1519,11 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     }
     
     // STEP 5: Update border flip-flops to establish display window state
+    // CRITICAL: This must happen BEFORE pixel sequencing so the sequencer sees the correct flip-flop state
     vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1], vicii->config);
 
     // STEP 6: Perform unified pixel sequencing (8 pixels per cycle)
-    // This uses the graphics data that was JUST loaded above
+    // This uses the graphics data that was JUST loaded above AND the border flip-flop state updated above
     if (vicii->pixel.framebuffer && vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
         vicii_pixel_sequencer(vicii);
     }
@@ -1528,8 +1579,8 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
 static const vicii_cycle_entry_t vicii_cycle_table_6569[63] = {
     // 1=VIC-II PHI1, 2=VIC-II PHI2, C=CPU PHI2       12C 12C
     //                                                BAD NBD
-    {vicii_cycle_sprite_p_access, 3},           // 1  3_x 3_x
-    {vicii_cycle_sprite_s_access, 3},           // 2  i_x i_x
+    {vicii_cycle_sprite_p_access, 3},           // 1  3_x 3_x (PAL: sprite P-access only, line 0 ops postponed to next cycle)
+    {vicii_cycle_sprite_s_1_pal, 3},            // 2  i_x i_x (PAL: executes postponed line 0 raster/IRQ operations)
     {vicii_cycle_sprite_p_access, 4},           // 3  4_x 4_x
     {vicii_cycle_sprite_s_access, 4},           // 4  i_x i_x
     {vicii_cycle_sprite_p_access, 5},           // 5  5_x 5_x
@@ -1597,7 +1648,7 @@ static const vicii_cycle_entry_t vicii_cycle_table_6569[63] = {
 static const vicii_cycle_entry_t vicii_cycle_table_6567R56A[64] = {
     // 1=VIC-II PHI1, 2=VIC-II PHI2, C=CPU PHI2       12C 12C
     //                                                BAD NBD
-    {vicii_cycle_sprite_p_access, 3},           // 1  3_x 3_x
+    {vicii_cycle_sprite_p_0_ntsc, 3},           // 1  3_x 3_x (NTSC: executes line 0 raster/IRQ immediately)
     {vicii_cycle_sprite_s_access, 3},           // 2  i_x i_x
     {vicii_cycle_sprite_p_access, 4},           // 3  4_x 4_x
     {vicii_cycle_sprite_s_access, 4},           // 4  i_x i_x
@@ -1667,7 +1718,7 @@ static const vicii_cycle_entry_t vicii_cycle_table_6567R56A[64] = {
 static const vicii_cycle_entry_t vicii_cycle_table_6567R8[65] = {
     // 1=VIC-II PHI1, 2=VIC-II PHI2, C=CPU PHI2       12C 12C
     //                                                BAD NBD
-    {vicii_cycle_sprite_p_access, 3},           // 1  3_x 3_x
+    {vicii_cycle_sprite_p_0_ntsc, 3},           // 1  3_x 3_x (NTSC: executes line 0 raster/IRQ immediately)
     {vicii_cycle_sprite_s_access, 3},           // 2  i_x i_x
     {vicii_cycle_sprite_p_access, 4},           // 3  4_x 4_x
     {vicii_cycle_sprite_s_access, 4},           // 4  i_x i_x
