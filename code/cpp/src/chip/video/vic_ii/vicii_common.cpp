@@ -1067,16 +1067,22 @@ static inline void vicii_cycle_15_mcbase_expansion(vicii_t* vicii) {
     }
 }
 
-// Cycle 16: Expansion flip-flop inversion and MCBASE increment (Rule 8)
+// Cycle 16: Expansion flip-flop inversion and MCBASE increment (Rule 7 from Section 3.8.1)
 static inline void vicii_cycle_16_expansion_check(vicii_t* vicii) {
-    // "8. In the first phase of cycle 16, it is checked if the expansion flip flop
-    // is set. If so, MCBASE is incremented by 1. After that, the VIC checks if
-    // MCBASE is equal to 63 and turns off the DMA and the display of the sprite
-    // if it is."
+    // Documentation (vic-ii.txt lines 1927-1936, VICE correction):
+    // "7. In the first phase of cycle 16, it is checked if the expansion flip flop
+    // is set. If so, MCBASE is loaded from MC (MC->MCBASE), unless the CPU cleared
+    // the Y expansion bit in $d017 in the second phase of cycle 15, in which case
+    // MCBASE is set to X = (101010 & (MCBASE & MC)) | (010101 & (MCBASE | MC)).
+    // After the MCBASE update, the VIC checks if MCBASE is equal to 63 and turns
+    // off the DMA of the sprite if it is."
     //
-    // Note: The documentation also mentions sprite crunch logic where if CPU cleared
-    // the Y expansion bit in $d017 during cycle 15 PHI2, a different formula is used:
-    // MCBASE = (0xAA & (MCBASE & MC)) | (0x55 & (MCBASE | MC))
+    // CRITICAL CORRECTION: The original documentation incorrectly stated that
+    // sprite DISPLAY is turned off when MCBASE==63. The corrected documentation
+    // (from VICE project research) clarifies that only DMA is disabled here.
+    // Display state continues until cycle 58 check (see vicii_cycle_58_rc_check).
+    //
+    // This affects sprite crunch techniques and vertical sprite positioning.
     
     uint8_t mxye_reg = vicii->registers.data[VICII_MXYE];
     for (int i = 0; i < VICII_NUM_SPRITES; i++) {
@@ -1090,10 +1096,11 @@ static inline void vicii_cycle_16_expansion_check(vicii_t* vicii) {
         if (sprite->expansion_flip_flop) {
             sprite->mcbase += 1;
         }
-        // Third: Check if MCBASE == 63 and disable DMA if so
+        // Third: Check if MCBASE == 63 and disable DMA (but NOT display_state)
+        // Display will be disabled later in cycle 58 based on DMA state
         if (sprite->mcbase == 63) {
             sprite->dma_enabled = false;
-            sprite->display_state = false;
+            // DO NOT disable display_state here - it continues until cycle 58
         }
     }
 }
