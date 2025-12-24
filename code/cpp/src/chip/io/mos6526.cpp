@@ -131,12 +131,20 @@ bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state) {
             BUS_SET_DATA(bus_state, icr_value);
             break;
         }
-        case CRA:
-            BUS_SET_DATA(bus_state, cia->reg[CRA]);
+        case CRA: {
+            uint8_t cra_value = cia->reg[CRA];
+            // Mask out LOAD bit - it always reads as 0
+            cra_value &= ~CRA_LOAD;
+            BUS_SET_DATA(bus_state, cra_value);
             break;
-        case CRB:
-            BUS_SET_DATA(bus_state, cia->reg[CRB]);
+        }
+        case CRB: {
+            uint8_t crb_value = cia->reg[CRB];
+            // Mask out LOAD bit - it always reads as 0
+            crb_value &= ~CRB_LOAD;
+            BUS_SET_DATA(bus_state, crb_value);
             break;
+        }
         default:
             // Unused registers return the last value on the bus (already in BUS_GET_DATA(bus_state))
             // No action needed - BUS_GET_DATA(bus_state) already contains what was on the bus
