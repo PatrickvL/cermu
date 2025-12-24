@@ -45,7 +45,7 @@ template <const CPUTraits &Traits> struct io_port_mixin_t {
   // Initialize I/O port to C64 defaults
   void init_io_port() {
     io_port.direction = 0x2F; // C64 default: bits 0,1,2,3,5 output
-    io_port.data = 0x37;      // C64 default: HIRAM/LORAM/CHAREN config
+    io_port.data = 0x17;      // C64 default: LORAM=1, HIRAM=1, CHAREN=1 (mode $17 for BASIC/KERNAL + I/O)
     io_port.input = 0x17;     // Default input state (cassette sense)
   }
 

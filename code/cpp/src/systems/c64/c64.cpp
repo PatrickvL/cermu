@@ -288,6 +288,18 @@ void c64_system_tick(c64_t* c64) {
     s = vicii_tick(c64->vicii, s);
 
     // =========================================================================
+    // PHASE 1.5: CIA TICKING (BEFORE CPU PHI2)
+    // =========================================================================
+    // CRITICAL FIX: CIA chips must tick BEFORE CPU PHI2 so interrupt lines are set
+    // when the CPU samples them. The CPU samples IRQ/NMI during PHI2, so CIA must
+    // update these lines beforehand.
+    //
+    // CIA chips handle I/O and timing functions including interrupt generation.
+    // CIA2 must be ticked before CIA1 because CIA2 controls VIC-II bank switching.
+    s = mos6526_tick(c64->cia2, s);
+    s = mos6526_tick(c64->cia1, s);
+
+    // =========================================================================
     // HARDWARE WIRING ANALYSIS - BA and AEC signals to CPU
     //
     // From VIC-II documentation (section 2.2 and 2.3):
@@ -324,6 +336,7 @@ void c64_system_tick(c64_t* c64) {
     // =========================================================================
     // PHASE 2: CPU TICKING (PHI2 phase)
     // CPU executes in PHI2 phase and may set up memory access
+    // CPU samples IRQ/NMI lines during this phase (after CIA has set them above)
     // =========================================================================
     s = mos6510_tick_phi2(c64->mos6510, s);
 
@@ -342,13 +355,8 @@ void c64_system_tick(c64_t* c64) {
     s = mos6510_tick_phi1(c64->mos6510, s);
 
     // =========================================================================
-    // PHASE 4: OTHER CHIP TICKING
+    // PHASE 5: SID TICKING
     // =========================================================================
-    // CIA chips - they handle I/O and timing functions
-    // CIA2 must be ticked before CIA1 because CIA2 controls VIC-II bank switching
-    s = mos6526_tick(c64->cia2, s);
-    s = mos6526_tick(c64->cia1, s);
-
     // SID - sound generation
     s = mos6581_tick(c64->sid, s);
 
