@@ -1632,6 +1632,27 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         vicii_pixel_sequencer(vicii);
     }
     
+    // STEP 6.5: Handle VIC-II IRQ signaling to CPU
+    // The VIC-II can generate interrupts from 4 sources (raster, sprite collision, etc.)
+    // When any enabled interrupt is triggered, bit 7 (VICII_IR_IRQ) of register $D019 is set
+    // and the VIC-II must assert the IRQ line to notify the CPU
+    //
+    // IRQ line behavior (Documentation vic-ii.txt lines 2244-2285):
+    // "If at least one latch bit and the belonging bit in the enable register is
+    // set, the IRQ line is held low and so the interrupt is triggered in the processor."
+    //
+    // Implementation follows CIA pattern (mos6526.cpp lines 474-489):
+    // - IRQ is active-LOW at BUS_IRQ_BIT (bit 33)
+    // - When IRQ flag is set: clear bit 33 (assert IRQ)
+    // - When IRQ flag is cleared: set bit 33 (release IRQ)
+    if (vicii->registers.data[VICII_IR] & VICII_IR_IRQ) {
+        // IRQ flag is set - assert IRQ line (active-low, clear bit)
+        bus_state &= ~BUS_BIT(BUS_IRQ_BIT);
+    } else {
+        // IRQ flag is cleared - release IRQ line (active-low, set bit)
+        bus_state |= BUS_BIT(BUS_IRQ_BIT);
+    }
+    
     // STEP 7: Advance x_coordinate (primary counter) and update derived values
     // Note: vicii_timing_advance() now handles flushing and buffer clearing when wrapping to next line
     vicii_timing_advance(vicii);
