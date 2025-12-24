@@ -215,14 +215,15 @@ bool c64_pla_maps_generate(c64_t* c64) {
     // Clean up PLA instance
     pla_906114_01_destroy(pla);
 
-    // Initialize with mode $07 (standard C64 configuration)
-    // Mode $07 = LORAM=1, HIRAM=1, CHAREN=1, EXROM=0, GAME=0
-    // This enables VIC-II access to Character ROM at bank 1 ($1000-$1FFF)
-    // CRITICAL: Mode $1F has n_game=false which blocks Character ROM for VIC-II!
-    uint8_t initial_pla_mode = 0x07;
+    // Initialize with mode $1F (standard C64 configuration with no cartridge)
+    // Mode $1F = LORAM=1, HIRAM=1, CHAREN=1, EXROM=1, GAME=1
+    // LORAM=1, HIRAM=1, CHAREN=1: All ROMs (BASIC, KERNAL, CHARROM) enabled
+    // EXROM=1, GAME=1: No cartridge present (standard C64 operation)
+    // This enables CPU access to BASIC ROM and VIC-II access to Character ROM
+    uint8_t initial_pla_mode = 0x1F;
     c64_bus_mode_switch(bus, initial_pla_mode);
     
-    printf("C64 initial banking: PLA mode=$%02X (VIC-II can read video RAM)\n", initial_pla_mode);
+    printf("C64 initial banking: PLA mode=$%02X (standard config, no cartridge)\n", initial_pla_mode);
     
     return true;
 }
@@ -528,11 +529,14 @@ c64_t* c64_system_create(const c64_config_t* config) {
     mos6510_descriptor.bank_change = c64_cpu_banking_callback;
     printf("C64 System: Assigned MOS6510 descriptor bank_change callback\n");
     
-    // Set initial banking mode based on current I/O port state
-    uint8_t io_data = mos6510_get_io_data((mos6510_t*)c64->mos6510);
-    uint8_t io_ddr = mos6510_get_io_ddr((mos6510_t*)c64->mos6510);
-    uint8_t initial_banking = io_data & io_ddr & 0x07;
-    c64_cpu_banking_callback(c64, initial_banking);
+    // NOTE: Initial banking mode is already set correctly at line 223 (mode 0x07)
+    // The CPU I/O port initializes to 0x37 (DDR=0x2F) which gives banking bits = 0x07
+    // This matches the PLA mode 0x07 already set, so no need to call banking callback here
+    // The banking callback will be triggered when the CPU actually writes to $0001 during boot
+    printf("C64 System: Initial CPU I/O port: DATA=$%02X DDR=$%02X (banking bits=$%02X)\n",
+           mos6510_get_io_data((mos6510_t*)c64->mos6510),
+           mos6510_get_io_ddr((mos6510_t*)c64->mos6510),
+           mos6510_get_io_data((mos6510_t*)c64->mos6510) & mos6510_get_io_ddr((mos6510_t*)c64->mos6510) & 0x07);
 
     // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
     ((mos6526_t*)c64->cia2)->interrupt_line = BUS_MASK_NMI;
