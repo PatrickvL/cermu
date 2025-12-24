@@ -875,16 +875,16 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     constexpr uint8_t IRQ_OFFSET = BUS_IRQ_BIT - BUS_RES_BIT; // 1
     constexpr uint8_t NMI_OFFSET = BUS_NMI_BIT - BUS_RES_BIT; // 2
 
-    // Sample IRQ (extracted bit 1 -> shift_reg bit 0) - only if IRQ line exists
+    // Sample IRQ (extracted bit 1 -> shift_reg bit 4) - only if IRQ line exists
     if constexpr (has_irq_line()) {
-      shift_reg |= (int_pins >> IRQ_OFFSET) & (1 << INT_IRQ_START_BIT);
+      shift_reg |= ((int_pins >> IRQ_OFFSET) & 0x1) << INT_IRQ_START_BIT;
     }
 
     // NMI edge detection (extracted bit 2) - only if NMI line exists
     if constexpr (has_nmi_line()) {
       uint8_t nmi_current = (int_pins >> NMI_OFFSET) & 0x1;
       shift_reg |=
-          (-(this->nmi_prev & !nmi_current)) & (1 << INT_NMI_START_BIT);
+          ((-(this->nmi_prev & !nmi_current)) & 0x1) << INT_NMI_START_BIT;
       this->nmi_prev = nmi_current;
     }
 
