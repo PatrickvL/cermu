@@ -802,7 +802,8 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
     if ((v & (CRA_START | CRB_START)) > 0)
         // this implies it must not have started before this
         if ((old_crx & (CRA_START | CRB_START)) == 0) {
-            v |= (CRA_OUTMODE | CRB_OUTMODE);
+            // Set OUTMODE bit for the correct timer (CRA_OUTMODE for Timer A, CRB_OUTMODE for Timer B)
+            v |= (c == A) ? CRA_OUTMODE : CRB_OUTMODE;
             // Also: "the frequency counter is being reset to 0 when the clock was stopped and is
             // restarted (->hzsync0.prg, hzsync1.prg)"
             cia->tod_cycles = 0;
