@@ -725,10 +725,14 @@ void mos6526_check_interrupt_mask(mos6526_t* cia) {
         // the /IRQ pin low."
         // Note : "the CIA6526 will raise an interrupt with a delay of one ø2 clock"
         // hence the actual _IRQ is raised at the begin of the next ClockCycle()
+        // CRITICAL: Only set delayed_irq if ICR_IRQ wasn't already set
+        // This prevents re-asserting the interrupt on every cycle until acknowledged
         if ((cia->reg[ICR] & ICR_IRQ) == 0) {
             cia->reg[ICR] |= ICR_IRQ;
             cia->delayed_irq = true;
         }
+        // If ICR_IRQ is already set, delayed_irq should remain in its current state
+        // (either true if not yet delivered, or false if already delivered this cycle)
     }
 }
 
