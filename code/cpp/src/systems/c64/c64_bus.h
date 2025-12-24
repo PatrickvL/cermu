@@ -17,8 +17,8 @@
 // =============================
 
 // System line masks for cartridge signals (moved out of control lines to separate field)
-#define SYS_MASK_EXROM 0   // EXROM signal
-#define SYS_MASK_GAME  1  // GAME signal
+#define SYS_MASK_EXROM (1 << 0)   // EXROM signal (bit 0)
+#define SYS_MASK_GAME  (1 << 1)   // GAME signal (bit 1)
 
 // C64 bus controller structure
 typedef struct c64_bus_s {
