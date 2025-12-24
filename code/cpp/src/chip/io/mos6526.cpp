@@ -75,6 +75,8 @@ bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state) {
     mos6526_t* cia = (mos6526_t*)context;
     uint8_t reg = BUS_GET_ADDR(bus_state) & CIA_REGS_MASK;
     
+    // CIA register read logging disabled for now
+    
     switch (reg) {
         // Read ports
         case PRA:
@@ -124,9 +126,11 @@ bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state) {
         case SDR:
             BUS_SET_DATA(bus_state, cia->reg[SDR]);
             break;
-        case ICR:
-            BUS_SET_DATA(bus_state, mos6526_read_and_clear_interrupt_control_register(cia));
+        case ICR: {
+            uint8_t icr_value = mos6526_read_and_clear_interrupt_control_register(cia);
+            BUS_SET_DATA(bus_state, icr_value);
             break;
+        }
         case CRA:
             BUS_SET_DATA(bus_state, cia->reg[CRA]);
             break;
@@ -145,6 +149,8 @@ bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state) {
     mos6526_t* cia = (mos6526_t*)context;
     uint8_t reg = BUS_GET_ADDR(bus_state) & CIA_REGS_MASK;
     uint8_t value = BUS_GET_DATA(bus_state);
+    
+    // CIA register write logging disabled for now
     
     switch (reg) {
         // Write ports
@@ -391,7 +397,7 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
         return;
     }
 
-    // timer == 0
+    // timer == 0 (underflow)
     cia->reg[ICR] |= (uint8_t)(ICR_TA + t); // Underflow Timer, t=B:ICR_TB
     mos6526_reload_timer(cia, t);
     // "In one-shot mode, the timer will count down from
