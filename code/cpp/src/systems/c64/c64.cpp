@@ -215,12 +215,14 @@ bool c64_pla_maps_generate(c64_t* c64) {
     // Clean up PLA instance
     pla_906114_01_destroy(pla);
 
-    // Initialize with mode $1F (standard C64 configuration with no cartridge)
-    // Mode $1F = LORAM=1, HIRAM=1, CHAREN=1, EXROM=1, GAME=1
-    // LORAM=1, HIRAM=1, CHAREN=1: All ROMs (BASIC, KERNAL, CHARROM) enabled
+    // Initialize with mode $17 (standard C64 configuration with no cartridge, I/O enabled)
+    // Mode $17 = LORAM=1, HIRAM=1, CHAREN=0, EXROM=1, GAME=1
+    // LORAM=1: BASIC ROM enabled at $A000-$BFFF
+    // HIRAM=1: KERNAL ROM enabled at $E000-$FFFF
+    // CHAREN=0: I/O devices enabled at $D000-$DFFF (not Character ROM)
     // EXROM=1, GAME=1: No cartridge present (standard C64 operation)
-    // This enables CPU access to BASIC ROM and VIC-II access to Character ROM
-    uint8_t initial_pla_mode = 0x1F;
+    // This is the standard boot configuration - I/O accessible, BASIC/KERNAL enabled
+    uint8_t initial_pla_mode = 0x17;
     c64_bus_mode_switch(bus, initial_pla_mode);
     
     printf("C64 initial banking: PLA mode=$%02X (standard config, no cartridge)\n", initial_pla_mode);
