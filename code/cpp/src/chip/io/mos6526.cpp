@@ -150,6 +150,9 @@ bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state) {
             // No action needed - BUS_GET_DATA(bus_state) already contains what was on the bus
             break;
     }
+    
+    // Logging disabled for performance
+    
     return bus_state;
 }
 
@@ -158,7 +161,7 @@ bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state) {
     uint8_t reg = BUS_GET_ADDR(bus_state) & CIA_REGS_MASK;
     uint8_t value = BUS_GET_DATA(bus_state);
     
-    // CIA register write logging disabled for now
+    // CIA register write logging - disabled for performance
     
     switch (reg) {
         // Write ports
@@ -414,9 +417,10 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
     // the timer will count from latched value to zero,
     // generate interrupt, reload the latched value and
     // repeat the procedure continuously."
-    if ((cia->reg[CRA + t] & (CRA_RUNMODE | CRB_RUNMODE)) > 0)
-        // Stop timer (Clear START control bit)
+    if ((cia->reg[CRA + t] & (CRA_RUNMODE | CRB_RUNMODE)) > 0) {
+        // Stop timer (Clear START control bit) - one-shot mode only
         cia->reg[CRA + t] &= ~CRA_START;
+    }
     // else TODO : Must this be treated as a re-start
     // which sets the CRA_OUTMODE Toggle output high?
 }
@@ -432,8 +436,26 @@ bus_state_t mos6526_advance_cycle(mos6526_t* cia, bus_state_t bus_state) {
     
     // "The CIA6526 will raise an interrupt with a delay of one ø2 clock"
     if (cia->delayed_irq) {
-        BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | cia->interrupt_line);
+        // CRITICAL FIX: Directly manipulate the IRQ bit in bus_state, not through legacy LINES
+        // IRQ is active-LOW at BUS_IRQ_BIT (bit 33), NMI is active-LOW at BUS_NMI_BIT (bit 34)
+        // When CIA asserts IRQ (interrupt_line = BUS_MASK_IRQ = 0x01), clear bit 33
+        // When CIA asserts NMI (interrupt_line = BUS_MASK_NMI = 0x02), clear bit 34
+        if (cia->interrupt_line == BUS_MASK_IRQ) {
+            bus_state &= ~BUS_BIT(BUS_IRQ_BIT);  // Clear IRQ bit (assert IRQ, active-low)
+        } else if (cia->interrupt_line == BUS_MASK_NMI) {
+            bus_state &= ~BUS_BIT(BUS_NMI_BIT);  // Clear NMI bit (assert NMI, active-low)
+        }
         cia->delayed_irq = false;
+    } else {
+        // CRITICAL FIX: Release the IRQ/NMI line when there's no pending interrupt
+        // If ICR_IRQ bit is NOT set, the interrupt line should be released (set to 1, inactive-high)
+        if ((cia->reg[ICR] & ICR_IRQ) == 0) {
+            if (cia->interrupt_line == BUS_MASK_IRQ) {
+                bus_state |= BUS_BIT(BUS_IRQ_BIT);  // Set IRQ bit (release IRQ, active-low)
+            } else if (cia->interrupt_line == BUS_MASK_NMI) {
+                bus_state |= BUS_BIT(BUS_NMI_BIT);  // Set NMI bit (release NMI, active-low)
+            }
+        }
     }
 
     // When PB6 and PB7 should pulse, clear them (the chance for a read was in previous cycle)
@@ -687,8 +709,12 @@ uint8_t mos6526_read_and_clear_interrupt_control_register(mos6526_t* cia) {
     // "The interrupt DATA register is cleared" (the /IRQ line
     // does NOT return high following a read of the DATA register!)
     uint8_t v = cia->reg[ICR];
+    
     // "interrupt can be prevented by reading the ICR at the time of the underflow."
     cia->reg[ICR] = 0;
+    // CRITICAL: Also clear the delayed IRQ flag to release the IRQ line
+    // Without this, the IRQ will be re-asserted on the next cycle, causing an infinite loop
+    cia->delayed_irq = false;
     return v;
 }
 
@@ -740,6 +766,8 @@ void mos6526_check_interrupt_mask(mos6526_t* cia) {
 
 void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // c:A or B
     uint8_t old_crx = cia->reg[CRA + c]; // c=B:CRB
+    
+    // CRA write logging disabled for performance
 
     if (c == A) {
         // TODO : Should toggling 50/60Hz reset the cycle counter?
