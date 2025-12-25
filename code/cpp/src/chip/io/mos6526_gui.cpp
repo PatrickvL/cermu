@@ -392,22 +392,13 @@ void mos6526_render_settings_window(void* chip, bool* show_window) {
 #endif
 }
 
-// Helper function to determine CIA type based on system context
+// Helper function to determine CIA type based on interrupt line
 static const char* mos6526_get_cia_name(mos6526_t* cia) {
-    if (!cia->bus_interface.context) return "CIA"; // Generic CIA if no bus context
-    
-    // For C64 system: CIA1 is at 0xDC00, CIA2 is at 0xDD00
-    // Access the C64 structure through the bus to determine which CIA this is
-    c64_bus_t* bus = (c64_bus_t*)cia->bus_interface.context;
-    
-    // The C64 bus should have a reference back to the C64 system
-    c64_t* c64 = (c64_t*)bus->c64;
-    if (!c64) return "CIA"; // Generic CIA if no c64 context
-    
-    // Now we can directly compare pointers to determine which CIA this is
-    if (cia == c64->cia1) {
+    // Determine CIA type based on which interrupt line it raises
+    // CIA1 raises IRQ (BUS_MASK_IRQ), CIA2 raises NMI (BUS_MASK_NMI)
+    if (cia->interrupt_line == BUS_MASK_IRQ) {
         return "CIA1 ($DC00)";
-    } else if (cia == c64->cia2) {
+    } else if (cia->interrupt_line == BUS_MASK_NMI) {
         return "CIA2 ($DD00)";
     } else {
         return "CIA"; // Generic fallback for other systems
