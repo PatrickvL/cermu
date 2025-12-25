@@ -25,31 +25,31 @@ typedef uint64_t bus_state_t;
 #define BUS_BANK_MASK       0x00000000FF000000ULL
 
 /* Core pin bit indices */
-#define BUS_RES_BIT     32
-#define BUS_IRQ_BIT     33
-#define BUS_NMI_BIT     34
-#define BUS_RDY_BIT     35
-#define BUS_SO_BIT      36
-#define BUS_AEC_BIT     37
-#define BUS_BE_BIT      38
-#define BUS_ABORT_BIT   39
+#define BUS_RES_BIT     32  // Reset (active low)
+#define BUS_IRQ_BIT     33  // IRQ (active low) 
+#define BUS_NMI_BIT     34  // NMI (active low)
+#define BUS_RDY_BIT     35  // Ready
+#define BUS_SO_BIT      36  // Set Overflow (active low)
+#define BUS_AEC_BIT     37  // Address Enable Control
+#define BUS_BE_BIT      38  // Bus Enable
+#define BUS_ABORT_BIT   39  // Abort (active low)
 #define BUS_VPB_BIT     40  // Vector Pull Bar (65C816)
 #define BUS_E_BIT       41  // Enable (65C816) 
 #define BUS_MX_BIT      42  // Memory/Index size (65C816)
 #define BUS_VDA_BIT     43  // Valid Data Address (65C816)
 #define BUS_PHI0_BIT    44  // φ0 clock input
 #define BUS_PHI1_BIT    45  // φ1 clock output
-/* Reserve bit for internal I/O pending flag (no external pin) */
-#define BUS_IO_PENDING_BIT 46
+/* 46-47 reserved */
 
 /* Output pins */
-#define BUS_RW_BIT      48  /* 1 = Read, 0 = Write */
-#define BUS_SYNC_BIT    49
+#define BUS_RW_BIT      48  // 1 = Read, 0 = Write
+#define BUS_SYNC_BIT    49  // Synchronize
 #define BUS_PHI2_BIT    50  // φ2 clock output
 /* 51 reserved */
-#define BUS_BA_BIT      52
-#define BUS_VP_BIT      53
-#define BUS_ML_BIT      54
+#define BUS_BA_BIT      52  // Bus available
+#define BUS_VP_BIT      53  // Vector Pull
+#define BUS_ML_BIT      54  // Memory Lock
+/* 55-63 reserved */
 
 /* Helpers */
 #define BUS_BIT(bit)            (1ULL << (bit))
@@ -71,7 +71,6 @@ typedef uint64_t bus_state_t;
 #define BUS_LINE_BA     3 // Bus available line (1 = available)
 #define BUS_LINE_AEC    4 // Address enable control line (1 = CPU drives address bus)
 #define BUS_LINE_RDY    5 // Ready line (1 = ready)
-#define BUS_LINE_IO_MEM_ACCESS_PENDING 6 // I/O memory access pending (internal coordination)
 
 /* Legacy bit masks (on the synthetic 8-bit lines value) */
 #define BUS_MASK_IRQ        (1 << BUS_LINE_IRQ)
@@ -80,7 +79,6 @@ typedef uint64_t bus_state_t;
 #define BUS_MASK_BA         (1 << BUS_LINE_BA)
 #define BUS_MASK_AEC        (1 << BUS_LINE_AEC)
 #define BUS_MASK_RDY        (1 << BUS_LINE_RDY)
-#define BUS_MASK_IO_MEM_ACCESS_PENDING (1 << BUS_LINE_IO_MEM_ACCESS_PENDING)
 
 /* Internal mapping between legacy 8-bit LINES and 64-bit pin layout */
 static inline uint8_t bus_lines_extract(bus_state_t s) {
@@ -96,9 +94,6 @@ static inline uint8_t bus_lines_extract(bus_state_t s) {
     if (s & BUS_BIT(BUS_AEC_BIT)) lines |= BUS_MASK_AEC;
     if (s & BUS_BIT(BUS_RDY_BIT)) lines |= BUS_MASK_RDY;
 
-    /* Internal flag */
-    if (s & BUS_BIT(BUS_IO_PENDING_BIT)) lines |= BUS_MASK_IO_MEM_ACCESS_PENDING;
-
     return lines;
 }
 
@@ -113,10 +108,6 @@ static inline bus_state_t bus_lines_apply(bus_state_t s, uint8_t lines) {
     if (lines & BUS_MASK_BA)   s |=  BUS_BIT(BUS_BA_BIT);  else s &= ~BUS_BIT(BUS_BA_BIT);
     if (lines & BUS_MASK_AEC)  s |=  BUS_BIT(BUS_AEC_BIT); else s &= ~BUS_BIT(BUS_AEC_BIT);
     if (lines & BUS_MASK_RDY)  s |=  BUS_BIT(BUS_RDY_BIT); else s &= ~BUS_BIT(BUS_RDY_BIT);
-
-    /* Internal flag */
-    if (lines & BUS_MASK_IO_MEM_ACCESS_PENDING) s |=  BUS_BIT(BUS_IO_PENDING_BIT);
-    else                                         s &= ~BUS_BIT(BUS_IO_PENDING_BIT);
 
     return s;
 }
@@ -135,18 +126,3 @@ static inline bus_state_t bus_state_make(uint16_t addr, uint8_t data, uint8_t li
     return s;
 }
 #define BUS_STATE(addr, data, lines) (bus_state_make((uint16_t)(addr), (uint8_t)(data), (uint8_t)(lines)))
-
-/* Helper functions for I/O access coordination - mapped to internal bit */
-static inline void bus_set_io_pending(bus_state_t* state) {
-    *state |= BUS_BIT(BUS_IO_PENDING_BIT);
-}
-
-static inline void bus_clear_io_pending(bus_state_t* state) {
-    *state &= ~BUS_BIT(BUS_IO_PENDING_BIT);
-}
-
-static inline bool bus_is_io_pending(const bus_state_t* state) {
-    return ((*state & BUS_BIT(BUS_IO_PENDING_BIT)) != 0);
-}
-
-

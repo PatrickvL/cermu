@@ -457,17 +457,14 @@ c64_t* c64_system_create(const c64_config_t* config) {
 
     chip_descriptor_t* vicii_descriptor = (config->vicii_standard == VIC_PAL ? &mos6569_descriptor : &mos6567_descriptor);
 
-    // Initialize bus as embedded struct - no need to create separately
+    // Initialize bus as embedded struct
+    // NOTE: The bus is embedded in c64_t (not allocated separately), so we initialize it here
+    // rather than calling c64_bus_system_create(). This is the ONLY initialization point.
     c64->bus.desc = &c64_bus_descriptor;
     c64->bus.c64 = c64;
     
-    // Initialize default_state with pull-up resistors HIGH
-    // NOTE: In legacy semantics, IRQ/NMI bit=1 means ASSERTED (active), bit=0 means INACTIVE (pull-up HIGH)
-    // For inactive pull-ups, we want IRQ=0 and NMI=0 in the legacy lines byte
-    // BA, AEC, RDY are active-high, so bit=1 means available/ready
-    c64->bus.default_state = BUS_STATE(0, 0, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY) | BUS_BIT(BUS_RES_BIT);
-    
-    // Initialize current state to match default state
+    // Initialize bus state with pull-up resistors (centralized definition in c64_bus.h)
+    c64->bus.default_state = C64_BUS_DEFAULT_STATE();
     c64->bus.state = c64->bus.default_state;
     
     // Initialize system lines with default cartridge signals (no cartridge)
