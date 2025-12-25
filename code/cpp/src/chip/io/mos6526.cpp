@@ -417,7 +417,8 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
     // the timer will count from latched value to zero,
     // generate interrupt, reload the latched value and
     // repeat the procedure continuously."
-    if ((cia->reg[CRA + t] & (CRA_RUNMODE | CRB_RUNMODE)) > 0) {
+    // RUNMODE: 0 = one-shot (stop after underflow), 1 = continuous (keep running)
+    if ((cia->reg[CRA + t] & (CRA_RUNMODE | CRB_RUNMODE)) == 0) {
         // Stop timer (Clear START control bit) - one-shot mode only
         cia->reg[CRA + t] &= ~CRA_START;
     }
