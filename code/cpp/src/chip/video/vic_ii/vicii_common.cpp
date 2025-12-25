@@ -1368,7 +1368,7 @@ static inline bus_state_t vicii_bus_control_ba_low(bus_state_t bus_state) {
 
 // Check if a specific cycle needs PHI2 bus access (c/p/s access)
 // Uses cycle number ranges and cycle table param field for sprite accesses
-static inline bool vicii_future_cycle_needs_phi2_access(vicii_t* vicii, uint8_t cycle) {
+static inline bool vicii_cycle_needs_phi2_access(vicii_t* vicii, uint8_t cycle) {
     if (cycle >= vicii->config->cycles_per_line) {
         return false;
     }
@@ -1380,23 +1380,8 @@ static inline bool vicii_future_cycle_needs_phi2_access(vicii_t* vicii, uint8_t 
     
     // Check bad line c-access range (cycles 15-54 for PAL, same for NTSC)
     if (cycle >= 15 && cycle <= 54) {
-        // CRITICAL FIX: Can't rely on is_bad_line for future cycles because it might not be updated yet
-        // Instead, manually check if the CURRENT raster + any wrap to next line will be a bad line
-        // Bad lines occur when: raster >= 0x30 && raster <= 0xF7 && (raster & 0x07) == YSCROLL
-        uint16_t check_raster = vicii->timing.raster_counter;
-        
-        // If checking a cycle that's earlier than current cycle, we're looking at next line
-        if (cycle < vicii->timing.x_cycle) {
-            check_raster = (check_raster + 1) % vicii->config->total_lines;
-        }
-        
-        // Check bad line condition for the target raster
-        if ((check_raster - 48) < 200) {  // Equivalent to: check_raster >= 48 && check_raster < 248
-            uint8_t yscroll = vicii->registers.data[VICII_C1] & VICII_C1_YSCROLL;
-            bool was_den_set = vicii->video_logic.was_den_set_during_raster_30;
-            return was_den_set && ((check_raster & 0x07) == yscroll);
-        }
-        return false;
+        // Check if current line is a bad line (is_bad_line is always current)
+        return vicii->video_logic.is_bad_line;
     }
     
     // Get sprite number from cycle table param field
@@ -1410,11 +1395,9 @@ static inline bool vicii_future_cycle_needs_phi2_access(vicii_t* vicii, uint8_t 
     return false;
 }
 
-// Centralized function to set BA/AEC based on current and future cycle needs
+// Centralized function to set BA/AEC based on shift register tracking
 // This should be called once per cycle in vicii_tick
 static inline bus_state_t vicii_update_ba_aec_signals(vicii_t* vicii, bus_state_t bus_state, uint8_t access_type) {
-    uint8_t current_cycle = vicii->timing.x_cycle;
-    
     // Check if we need PHI2 access NOW (current cycle)
     bool needs_phi2_now = (access_type == VIC_ACCESS_C ||
                            access_type == VIC_ACCESS_P ||
@@ -1427,12 +1410,10 @@ static inline bus_state_t vicii_update_ba_aec_signals(vicii_t* vicii, bus_state_
         return bus_state;
     }
     
-    // Check if we'll need PHI2 access in 3 cycles (BA goes low 3 cycles before VIC needs bus)
-    uint8_t future_cycle = (current_cycle + 3) % vicii->config->cycles_per_line;
-    bool needs_phi2_future = vicii_future_cycle_needs_phi2_access(vicii, future_cycle);
-    
-    if (needs_phi2_future) {
-        // Future cycle needs PHI2 access: BA LOW (warning), AEC HIGH
+    // Check shift register: if ANY bit is set, BA should be low
+    // Bit 0 = next cycle, bit 1 = cycle+2, bit 2 = cycle+3
+    if (vicii->bus.ba_prediction_shift_reg & 0x07) {
+        // Future cycle(s) need PHI2 access: BA LOW (warning), AEC HIGH
         bus_state = vicii_bus_control_ba_low(bus_state);
         bus_state = vicii_bus_control_aec_high(bus_state);
     } else {
@@ -1514,12 +1495,22 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH, VIC_ACCESS_P, VIC_ACCESS_S, or VIC_ACCESS_C
     const uint8_t access_type = entry->func(vicii, access_param);
 
+    // CRITICAL: Shift register update BEFORE setting BA/AEC
+    // Shift left: bit0 becomes what was bit1, bit1 becomes what was bit2, etc.
+    vicii->bus.ba_prediction_shift_reg <<= 1;
+    
+    // Check if cycle+3 needs PHI2 access and set bit 2
+    uint8_t cycle_plus_3 = (vicii->timing.x_cycle + 3) % vicii->config->cycles_per_line;
+    if (vicii_cycle_needs_phi2_access(vicii, cycle_plus_3)) {
+        vicii->bus.ba_prediction_shift_reg |= 0x04;  // Set bit 2
+    }
+    
+    // Mask to 3 bits
+    vicii->bus.ba_prediction_shift_reg &= 0x07;
+    
     // CRITICAL FIX: Update BA/AEC signals at the START of the cycle (PHI1 phase)
     // This must happen BEFORE the CPU's PHI2 tick so the CPU sees the correct BA state.
-    // BA must go low 3 cycles BEFORE VIC needs PHI2 access, and this look-ahead
-    // must be calculated at the cycle boundary, not at the end of the cycle.
-    // Moving this here from the end of vicii_tick() fixes the half-cycle timing error
-    // that was causing screen corruption during bad lines and sprite DMA.
+    // BA goes low when ANY of the next 3 cycles need PHI2 access (shift register != 0)
     bus_state = vicii_update_ba_aec_signals(vicii, bus_state, access_type);
 
     // STEP 3: Perform PHI1 memory accesses via direct read

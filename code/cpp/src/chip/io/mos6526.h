@@ -60,7 +60,7 @@ typedef struct mos6526_s {
     uint8_t port_b_value;
     int cycles_tod[2]; // Assigned once in constructor
     uint8_t reg[CIA_REGS_SIZE + 4 + 4 + 4 + 1 + 1]; // Registers, plus TIMER, CLOCK, ALARM, SDR and DDRB latches
-    bool delayed_irq;
+    // NOTE: delayed_irq removed - using pull-up resistor model instead
     uint32_t read_tod_delta;
     uint32_t write_tod_delta;
     bool is_running_tod;

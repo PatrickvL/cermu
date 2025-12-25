@@ -367,7 +367,6 @@ void mos6526_render_settings_window(void* chip, bool* show_window) {
     
     ImGui::Text("ICR: $%02X", cia->reg[ICR]);
     ImGui::Text("Interrupt Mask: $%02X", cia->interrupt_mask);
-    ImGui::Text("Delayed IRQ: %s", cia->delayed_irq ? "YES" : "NO");
     ImGui::Text("IRQ Active: %s", (cia->reg[ICR] & ICR_IRQ) ? "YES" : "NO");
     ImGui::Text("Timer A IRQ: %s", (cia->reg[ICR] & ICR_TA) ? "YES" : "NO");
     ImGui::Text("Timer B IRQ: %s", (cia->reg[ICR] & ICR_TB) ? "YES" : "NO");
