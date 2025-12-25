@@ -42,9 +42,9 @@ void c64_bus_on_banking_change(void* bus_ptr, uint8_t banking_state) {
 
 // Chip accessor functions - these use the chip descriptor's read/write callbacks using bus_state_t pattern
 
-// Cartridge expansion port IO functions removed (io1_read, io1_write, io2_read, io2_write)
-// These were unused and producing compiler warnings
-// TODO: Re-implement when cartridge support is added
+// NOTE: Cartridge expansion port IO functions (io1_read, io1_write, io2_read, io2_write)
+// will be implemented when cartridge support is added. For now, I/O1 and I/O2 regions
+// ($DE00-$DEFF and $DF00-$DFFF) use floating bus behavior (see c64_bus_init_io_handlers).
 
 // Simple 4KB bank calculation for optimized system (0-15)
 static inline int8_t c64_get_address_bank(uint16_t address) {

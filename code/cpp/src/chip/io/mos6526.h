@@ -74,8 +74,6 @@ typedef struct mos6526_s {
     // Implements the required 1-cycle delay for interrupt assertion
     bus_state_t pending_bus_lines;  // Lines to assert in NEXT cycle
     
-    bus_cycle_ops_t bus_interface;
-    
     // Callback for port A output changes (used by CIA2 for VIC-II bank switching)
     void (*port_a_change_callback)(void* context, uint8_t port_a_output);
     void* port_a_callback_context;
@@ -136,47 +134,12 @@ using namespace MOS6526;
 // Function declarations
 void mos6526_reset(mos6526_t* cia);
 
-// Main cycle function with unified bus state threading
-bus_state_t mos6526_advance_cycle(mos6526_t* cia, bus_state_t bus_state);
-
-// Consolidated CIA tick function - main entry point for cycle processing
-bus_state_t mos6526_tick(void* chip, bus_state_t bus_state);
-
 // Register I/O functions (used directly in chip descriptor)
 bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state);
 bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state);
 
-// PORT/PERIPHERAL DATA / DATA DIRECTION handling
-void mos6526_write_data_direction_port(mos6526_t* cia, uint32_t p, uint8_t v);
-void mos6526_update_output_port_b(mos6526_t* cia, uint8_t v);
-void mos6526_update_output_port(mos6526_t* cia, uint32_t p, uint8_t v);
-uint8_t mos6526_read_port_data(mos6526_t* cia, uint32_t p);
-void mos6526_update_internal_data_direction_port_b(mos6526_t* cia, uint8_t port_b_output_mask);
-
-// TIMER A/B handling
-void mos6526_check_reload_timer(mos6526_t* cia, uint32_t t);
-void mos6526_reload_timer(mos6526_t* cia, uint32_t t);
-void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edge, int in_mode);
-
-// TIME OF DAY (TOD) handling
-uint8_t mos6526_latch_read_tod_hr(mos6526_t* cia);
-uint8_t mos6526_unlatch_read_tod_10ths(mos6526_t* cia);
-uint8_t mos6526_write_tod_hr(mos6526_t* cia, uint8_t v);
-void mos6526_check_alarm_interrupt(mos6526_t* cia);
-void mos6526_increase_tod_and_check_alarm(mos6526_t* cia);
-
-// SERIAL DATA REGISTER (SDR) handling
-void mos6526_write_serial_data_register(mos6526_t* cia, uint8_t v);
-void mos6526_serial_output(mos6526_t* cia);
-void mos6526_serial_input(mos6526_t* cia);
-
-// INTERRUPT CONTROL REGISTER (ICR) handling
-uint8_t mos6526_read_and_clear_interrupt_control_register(mos6526_t* cia);
-void mos6526_write_interrupt_control_register(mos6526_t* cia, uint32_t v);
-void mos6526_check_interrupt_mask(mos6526_t* cia);
-
-// CONTROL REGISTER (CRA/CRB) handling
-void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v);
+// Main CIA tick function - entry point for cycle processing
+bus_state_t mos6526_tick(void* chip, bus_state_t bus_state);
 
 #ifdef IMGUI_VERSION
 // GUI function declarations
