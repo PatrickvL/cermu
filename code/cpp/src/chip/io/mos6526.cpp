@@ -712,9 +712,9 @@ uint8_t mos6526_read_and_clear_interrupt_control_register(mos6526_t* cia) {
     
     // "interrupt can be prevented by reading the ICR at the time of the underflow."
     cia->reg[ICR] = 0;
-    // CRITICAL: Also clear the delayed IRQ flag to release the IRQ line
-    // Without this, the IRQ will be re-asserted on the next cycle, causing an infinite loop
-    cia->delayed_irq = false;
+    // NOTE: Do NOT clear delayed_irq here! The IRQ line will be released
+    // in the next mos6526_advance_cycle() when it sees ICR_IRQ is clear.
+    // Clearing delayed_irq here would prevent the IRQ from being properly acknowledged.
     return v;
 }
 
