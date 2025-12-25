@@ -1445,22 +1445,24 @@ public:
    * @return Updated bus state
    */
   template <Phase phase> bus_state_t tick(bus_state_t pins) {
-    // Check AEC signal FIRST - before ANY phase processing (6510 only)
-    // Hardware signal that overrides everything (both PHI2 and PHI1)
-    // When AEC is LOW, VIC-II owns the bus completely
-    // CPU's address bus is tri-stated - cannot access memory at all
-    // NOTE: AEC pin only exists on MOS 6510 (C64), not on standard 6502 or other variants
+    // Check bus availability signals FIRST - applies to BOTH PHI2 and PHI1
+    // When CPU is halted by VIC-II, it stays halted for the complete clock cycle
+    // Two signals control bus access (6510 only):
+    // 1. AEC: When LOW, VIC-II owns bus completely - CPU fully tri-stated
+    // 2. RDY (connected to BA): Stops CPU on READS, ignored on WRITES (up to 3)
+    
     if constexpr (has_aec_pin()) {
+      // Check AEC first - when LOW, bus is completely unavailable
       if (!FAM65XX_GET_AEC(pins)) {
-        // AEC low - VIC owns bus, CPU completely frozen
-        // Do NOT increment half_cycle - retry this same phase on next tick
+        // AEC low - VIC-II owns bus, CPU address lines tri-stated
+        // CPU must halt for BOTH PHI2 and PHI1 phases
         if constexpr (ENABLE_TRACING) {
-          trace("AEC low - VIC owns bus, CPU completely frozen");
+          trace("AEC low - VIC-II owns bus, CPU tri-stated and halted");
         }
-        return pins;
+        return pins; // Don't proceed with either phase - complete halt
       }
     }
- 
+    
     if constexpr (phase == Phase::PHI2) {
       // PHI2: Bus setup phase
       if constexpr (ENABLE_TRACING) {
@@ -1492,13 +1494,14 @@ public:
       pins = this->call_current_handler(pins);
 
       // Check RDY signal AFTER bus setup (now we know if it's read or write)
+      // AEC was already checked above (applies to both phases)
       // Per MOS 6510 datasheet: "RDY is ignored during write accesses"
       if (!FAM65XX_GET_RDY(pins)) {
-        // RDY low - external DMA active (VIC-II needs bus)
+        // RDY low (BA low) - VIC-II will need bus in 3 cycles
         const bool is_read = (pins & FAM65XX_RW) != 0;
         
         if (is_read) {
-          // READ cycle with RDY low: HALT the CPU
+          // READ cycle with RDY low: HALT the CPU immediately
           // Do NOT increment half_cycle - retry this PHI2 setup next tick
           if constexpr (ENABLE_TRACING) {
             trace("RDY low during READ - CPU halted, will retry PHI2 setup");
