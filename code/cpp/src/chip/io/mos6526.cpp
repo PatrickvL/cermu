@@ -73,7 +73,8 @@ void mos6526_reset(mos6526_t* cia) {
 // The CIA 2 registers are repeated each 16 bytes in the area $dd00-$ddff
 bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state) {
     mos6526_t* cia = (mos6526_t*)context;
-    uint8_t reg = BUS_GET_ADDR(bus_state) & CIA_REGS_MASK;
+    uint16_t full_addr = BUS_GET_ADDR(bus_state);
+    uint8_t reg = full_addr & CIA_REGS_MASK;
     
     // CIA register read logging disabled for now
     
@@ -792,6 +793,12 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
         //                    always read back a zero and writing a zero has no effect)."
         v &= ~CRA_LOAD; // same as CRB_LOAD
     }
+    
+    // NOTE: Do NOT clear ICR bits when manually stopping a timer.
+    // Per CIA6526.txt: "Only reading the ICR will clear it."
+    // The ICR bits represent interrupt conditions that occurred and must persist
+    // until software explicitly reads the ICR register to acknowledge them.
+    // Manually stopping a timer (clearing START bit) does not clear pending interrupts.
 
     // "The Toggle output is set high whenever the timer is started"
     // Note: This refers to the PB6/PB7 output pin state in toggle mode, NOT the OUTMODE control bit!
