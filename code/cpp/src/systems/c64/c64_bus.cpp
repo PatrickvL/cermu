@@ -101,24 +101,24 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
     const uint8_t address_bank = c64_get_address_bank(address);  // Extract 4KB bank (0-15)
     
     // NOTE: I/O port addresses (0-1) are now handled by mos6510_tick() early in the CPU tick
-    // This prevents the memory system from overwriting I/O port read data with RAM data    
+    // This prevents the memory system from overwriting I/O port read data with RAM data
     if (is_read) {
         // === READ OPERATION ===
-        // CRITICAL: Check AEC line to determine if VIC-II has bus control
-        // BA (RDY) is an early warning signal (3 cycles ahead)
-        // AEC is the actual bus control signal - VIC-II has the bus when AEC is LOW
-        // When AEC is low, use VIC-II memory mapping; when high, use CPU memory mapping
-        const bool is_vicii_cycle_stealing = !(BUS_GET_LINES(bus_state) & BUS_MASK_AEC);
-        uint8_t chip;
-        
-        if (is_vicii_cycle_stealing) {
-            // AEC low = VIC-II has bus control and uses its memory mapping
-            // VIC-II cycle-stealing: use VIC-II memory mapping
-            chip = c64_bus->vicii_chip_per_bank[address_bank];
-        } else {
-            // Normal CPU access: use CPU memory mapping
-            chip = decode_read_chip(c64_bus->cpu_encoded_chip_per_bank[address_bank]);
-        }
+        // CRITICAL: Determine which chip has bus control by checking AEC line
+        // According to VIC-II documentation section 2.4.3 "Memory access of the 6510 and VIC":
+        // - AEC HIGH (during PHI2): CPU has bus control → use CPU memory mapping
+        // - AEC LOW (during PHI1): VIC-II has bus control → use VIC-II memory mapping
+        //
+        // The VIC-II has its own separate memory map (section 2.4.2) where:
+        // - Character ROM appears at $1000-$1FFF in banks 0 and 2 (not at $D000 like CPU sees it)
+        // - VIC-II uses its own chip lookup array: vicii_chip_per_bank
+        //
+        // When VIC-II owns the bus (AEC low), we must use VIC-II's chip lookup array
+        // to correctly access Character ROM and other memory regions as VIC-II sees them.
+        const bool cpu_has_bus = (BUS_GET_LINES(bus_state) & BUS_MASK_AEC) != 0;
+        const uint8_t chip = cpu_has_bus ?
+            decode_read_chip(c64_bus->cpu_encoded_chip_per_bank[address_bank]) :
+            c64_bus->vicii_chip_per_bank[address_bank];
 
         // ENHANCED FAST PATH: Direct unified buffer access for all memory chips
         // Fast path handles: CHIP_ROML, CHIP_ROMH, CHIP_KERNAL, CHIP_BASIC, CHIP_CHARROM, CHIP_RAM
