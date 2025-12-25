@@ -451,6 +451,8 @@ bus_state_t mos6526_advance_cycle(mos6526_t* cia, bus_state_t bus_state) {
     // Implementation: Apply pending_bus_lines from PREVIOUS cycle at START of this cycle
     // IRQ/NMI are active-LOW: bit=1 means inactive, bit=0 means asserted
     // pending_bus_lines contains bits to CLEAR (assert) on the bus
+    
+    // Apply pending_bus_lines from PREVIOUS cycle
     bus_state &= ~cia->pending_bus_lines;
 
     // When PB6 and PB7 should pulse, clear them (the chance for a read was in previous cycle)
@@ -510,7 +512,7 @@ bus_state_t mos6526_advance_cycle(mos6526_t* cia, bus_state_t bus_state) {
     // (timer underflows, etc.)
     mos6526_check_interrupt_mask(cia);
     
-    // THEN update pending_bus_lines for NEXT cycle based on the updated ICR_IRQ state
+    // Update pending_bus_lines for NEXT cycle based on the updated ICR_IRQ state
     // This implements the required 1-cycle delay for interrupt assertion
     if (cia->reg[ICR] & ICR_IRQ) {
         // Interrupt pending - assert line in NEXT cycle
