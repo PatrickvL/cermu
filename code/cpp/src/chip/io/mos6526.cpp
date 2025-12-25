@@ -506,8 +506,12 @@ bus_state_t mos6526_advance_cycle(mos6526_t* cia, bus_state_t bus_state) {
         cia->reg[ICR] |= ICR_FLG; // TODO: Verify
     }
 
-    // Update pending_bus_lines for NEXT cycle based on current ICR_IRQ state
-    // This implements the required 1-cycle delay
+    // Check interrupt mask FIRST to update ICR_IRQ based on current cycle's events
+    // (timer underflows, etc.)
+    mos6526_check_interrupt_mask(cia);
+    
+    // THEN update pending_bus_lines for NEXT cycle based on the updated ICR_IRQ state
+    // This implements the required 1-cycle delay for interrupt assertion
     if (cia->reg[ICR] & ICR_IRQ) {
         // Interrupt pending - assert line in NEXT cycle
         cia->pending_bus_lines = cia->interrupt_line;
@@ -516,7 +520,6 @@ bus_state_t mos6526_advance_cycle(mos6526_t* cia, bus_state_t bus_state) {
         cia->pending_bus_lines = 0;
     }
     
-    mos6526_check_interrupt_mask(cia);
     return bus_state;
 }
 

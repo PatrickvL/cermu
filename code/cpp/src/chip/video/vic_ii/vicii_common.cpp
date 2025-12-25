@@ -1368,6 +1368,7 @@ static inline bus_state_t vicii_bus_control_ba_low(bus_state_t bus_state) {
 
 // Check if a specific cycle needs PHI2 bus access (c/p/s access)
 // Uses cycle number ranges and cycle table param field for sprite accesses
+// IMPORTANT: This function must work correctly for BOTH current cycle AND future cycles (cycle+3)
 static inline bool vicii_cycle_needs_phi2_access(vicii_t* vicii, uint8_t cycle) {
     if (cycle >= vicii->config->cycles_per_line) {
         return false;
@@ -1380,7 +1381,11 @@ static inline bool vicii_cycle_needs_phi2_access(vicii_t* vicii, uint8_t cycle) 
     
     // Check bad line c-access range (cycles 15-54 for PAL, same for NTSC)
     if (cycle >= 15 && cycle <= 54) {
-        // Check if current line is a bad line (is_bad_line is always current)
+        // CRITICAL: For future cycle prediction, we can safely use current is_bad_line
+        // because bad line condition is established at cycle 15 and remains constant
+        // throughout the entire line. The condition is checked/updated at cycle boundaries
+        // but doesn't change mid-line, so current is_bad_line is valid for all cycles
+        // on the current raster line.
         return vicii->video_logic.is_bad_line;
     }
     
@@ -1639,10 +1644,11 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     if (vicii->registers.data[VICII_IR] & VICII_IR_IRQ) {
         // IRQ flag is set - assert IRQ line (active-low, clear bit)
         bus_state &= ~BUS_BIT(BUS_IRQ_BIT);
-    } else {
-        // IRQ flag is cleared - release IRQ line (active-low, set bit)
-        bus_state |= BUS_BIT(BUS_IRQ_BIT);
     }
+    // CRITICAL FIX: Do NOT set IRQ high in else clause!
+    // The pull-up resistor model (c64.cpp:301) already sets IRQ high at start of each cycle.
+    // If we set it here, we would overwrite any IRQ assertion by CIA or other chips.
+    // VIC-II should ONLY assert (clear bit) when it has an interrupt, never release.
     
     // STEP 7: Advance x_coordinate (primary counter) and update derived values
     // Note: vicii_timing_advance() now handles flushing and buffer clearing when wrapping to next line
