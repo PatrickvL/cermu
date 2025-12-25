@@ -300,6 +300,7 @@ void c64_system_tick(c64_t* c64) {
     // =========================================================================
     // PHASE 1: VIC-II TICKING
     // VIC-II reads data from previous cycle, processes it, and sets up next memory access
+    
     s = vicii_tick(c64->vicii, s);
 
     // =========================================================================
@@ -311,6 +312,7 @@ void c64_system_tick(c64_t* c64) {
     //
     // CIA chips handle I/O and timing functions including interrupt generation.
     // CIA2 must be ticked before CIA1 because CIA2 controls VIC-II bank switching.
+    
     s = mos6526_tick(c64->cia2, s);
     s = mos6526_tick(c64->cia1, s);
 
@@ -459,8 +461,11 @@ c64_t* c64_system_create(const c64_config_t* config) {
     c64->bus.desc = &c64_bus_descriptor;
     c64->bus.c64 = c64;
     
-    // Initialize default_state with pull-up resistors HIGH (IRQ, NMI, BA, AEC, RDY)
-    c64->bus.default_state = BUS_STATE(0, 0, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY | BUS_MASK_IRQ | BUS_MASK_NMI) | BUS_BIT(BUS_RES_BIT);
+    // Initialize default_state with pull-up resistors HIGH
+    // NOTE: In legacy semantics, IRQ/NMI bit=1 means ASSERTED (active), bit=0 means INACTIVE (pull-up HIGH)
+    // For inactive pull-ups, we want IRQ=0 and NMI=0 in the legacy lines byte
+    // BA, AEC, RDY are active-high, so bit=1 means available/ready
+    c64->bus.default_state = BUS_STATE(0, 0, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY) | BUS_BIT(BUS_RES_BIT);
     
     // Initialize current state to match default state
     c64->bus.state = c64->bus.default_state;

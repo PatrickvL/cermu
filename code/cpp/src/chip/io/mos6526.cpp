@@ -772,6 +772,13 @@ void mos6526_check_interrupt_mask(mos6526_t* cia) {
         // The next mos6526_advance_cycle() will see this and assert the interrupt line.
         // No need for delayed_irq flag - the interrupt persists until ICR is read.
         cia->reg[ICR] |= ICR_IRQ;
+    } else {
+        // CRITICAL FIX: Clear ICR_IRQ when no masked interrupts are pending
+        // This handles the case where the interrupt mask is cleared while ICR_TA/TB bits are still set
+        // Without this, ICR_IRQ would stay set forever after mask is cleared
+        if (was_irq_set) {
+            cia->reg[ICR] &= ~ICR_IRQ;
+        }
     }
 }
 
@@ -809,6 +816,15 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
         // "  4    LOAD   1 = FORCE LOAD (this is a STROBE input, there is no data storage, bit 4 will
         //                    always read back a zero and writing a zero has no effect)."
         v &= ~CRA_LOAD; // same as CRB_LOAD
+        
+        // CRITICAL FIX: Clear the interrupt flag when manually reloading the timer
+        // This prevents spurious interrupts when restarting a timer that had previously underflowed
+        // The KERNAL uses this pattern: timer underflows → disable mask → reload timer → re-enable mask
+        // Without clearing the flag here, the old ICR_TA bit causes immediate re-interrupt
+        uint8_t timer_flag = (c == A) ? ICR_TA : ICR_TB;
+        if (cia->reg[ICR] & timer_flag) {
+            cia->reg[ICR] &= ~timer_flag;
+        }
     }
     
     // NOTE: Do NOT clear ICR bits when manually stopping a timer.
