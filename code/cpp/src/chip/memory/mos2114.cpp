@@ -68,14 +68,6 @@ bus_state_t mos2114_write(void* context, bus_state_t bus_state) {
     // - CPU is reading, not writing
     // - Address is outside Color RAM range ($D800-$DBFF)
     // - Other PLA conditions prevent I/O access
-    //
-    // CURRENT IMPLEMENTATION:
-    // Our bus system routes I/O region access through chip ticks,
-    // attended to this via BUS_MASK_IO_MEM_ACCESS_PENDING,
-    // which means this write function is only called when the PLA has
-    // already determined that I/O region access is allowed. This provides
-    // equivalent behavior to the _GRW signal gating without explicit
-    // PLA signal checking in the Color RAM chip itself.
     
     // MOS2114 is 4-bit wide, so only store lower 4 bits
     uint16_t offset = BUS_GET_ADDR(bus_state) & 0x3FF;  // Mask to 1K boundary

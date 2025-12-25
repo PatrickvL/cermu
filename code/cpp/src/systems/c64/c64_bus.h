@@ -20,6 +20,18 @@
 #define SYS_MASK_EXROM (1 << 0)   // EXROM signal (bit 0)
 #define SYS_MASK_GAME  (1 << 1)   // GAME signal (bit 1)
 
+// C64 default bus state with pull-up resistors
+// This represents the hardware state at the start of each cycle before any chip asserts lines:
+// - Data bus: 0xFF (pull-ups on all 8 data lines)
+// - IRQ, NMI: HIGH via pull-ups (inactive, active-low signals)
+// - RDY: HIGH via pull-up (CPU ready)
+// - BA: HIGH via pull-up (bus available, VIC-II pulls LOW during badlines)
+// - AEC: HIGH via pull-up (CPU controls address bus, VIC-II pulls LOW to take control)
+// - RW: HIGH (READ mode, pull-up on R/W line defaults to read)
+// - RES: HIGH (not in reset, active-low signal)
+#define C64_BUS_DEFAULT_STATE() \
+    (BUS_STATE(0, 0xFF, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY | BUS_MASK_RW | BUS_MASK_IRQ | BUS_MASK_NMI) | BUS_BIT(BUS_RES_BIT))
+
 // C64 bus controller structure
 typedef struct c64_bus_s {
     chip_descriptor_t* desc;

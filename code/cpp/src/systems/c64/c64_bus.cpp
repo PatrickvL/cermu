@@ -183,15 +183,9 @@ void* c64_bus_system_create(chip_descriptor_t* desc) {
     if (!c64_bus) return NULL;
     c64_bus->desc = desc;
     
-    // Initialize default_state with pull-up resistors HIGH (IRQ, NMI, BA, AEC, RDY)
-    // This is the state each tick starts with before any chip asserts lines
-    c64_bus->default_state = BUS_STATE(0, 0, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY | BUS_MASK_IRQ | BUS_MASK_NMI) | BUS_BIT(BUS_RES_BIT);
-    
-    // Initialize current state to match default state
-    c64_bus->state = c64_bus->default_state;
-    
-    // Initialize system lines with default cartridge signals (no cartridge)
-    c64_bus->system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;  // Both high = no cartridge
+    // NOTE: default_state, state, and system_lines initialization is done in c64_system_create()
+    // since the bus is embedded in c64_t and never allocated via this function in actual use.
+    // This function exists for potential future standalone bus usage but currently isn't called.
     
     // Note: pla_banking_mode will be initialized by c64_bus_mode_switch()
     // after PLA mapping data is set up in c64_pla_maps_generate()
