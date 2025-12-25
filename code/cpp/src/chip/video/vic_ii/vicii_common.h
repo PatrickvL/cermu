@@ -429,6 +429,8 @@ typedef struct {
     bool lp_edge_detected;
     uint8_t pending_phi2_access_type;  // Track which PHI2 access type was set up in previous cycle
     vicii_sprite_unit_t* active_sprite;  // Active sprite pointer for P/S accesses (NULL if none)
+    uint8_t ba_prediction_shift_reg;     // 3-bit shift register: bit0=cycle+1, bit1=cycle+2, bit2=cycle+3
+    bus_state_t bus_line_mask;           // Bitmask for bus lines to pull low (BA, AEC, etc.)
 } vicii_bus_unit_t;
 
 // Main VIC-II structure composed of units

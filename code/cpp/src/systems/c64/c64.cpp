@@ -278,7 +278,27 @@ void c64_system_tick(c64_t* c64) {
 
     c64->total_cycles++;
     c64_bus_t* bus = &(c64->bus);
-    bus_state_t s = c64->bus.state;
+    
+    // =========================================================================
+    // PULL-UP RESISTOR MODEL
+    // =========================================================================
+    // Create a fresh bus state for this cycle by:
+    // 1. Starting from the previous cycle's final state (for address/data continuity)
+    // 2. Applying pull-up resistors to all open-collector/open-drain control lines
+    //
+    // This matches hardware behavior where:
+    // - Address/data buses retain their state from previous cycle
+    // - Control lines are pulled HIGH by resistors at the start of each cycle
+    // - Each chip can then assert (pull LOW) the lines it needs
+    //
+    // Pull-up lines (set to 1 = inactive/available):
+    //   - IRQ (active-LOW): bit HIGH = not asserted
+    //   - NMI (active-LOW): bit HIGH = not asserted
+    //   - BA (active-HIGH): bit HIGH = bus available
+    //   - AEC (active-HIGH): bit HIGH = CPU can drive bus
+    //   - RDY (active-HIGH): bit HIGH = ready
+    bus_state_t s = c64->bus.state;  // Start from previous cycle's final state
+    s |= BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_BA_BIT) | BUS_BIT(BUS_AEC_BIT) | BUS_BIT(BUS_RDY_BIT);
 
     // =========================================================================
     // UNIFIED TIMING MODEL
@@ -300,33 +320,14 @@ void c64_system_tick(c64_t* c64) {
     s = mos6526_tick(c64->cia1, s);
 
     // =========================================================================
-    // HARDWARE WIRING ANALYSIS - BA and AEC signals to CPU
-    //
-    // From VIC-II documentation (section 2.2 and 2.3):
-    //
-    // 6510 has TWO input pins from VIC-II:
-    //   1. RDY pin - Connected to VIC's BA (Bus Available) output
-    //   2. AEC pin - Connected to VIC's AEC (Address Enable Control) output
-    //
-    // BA Signal (VIC → CPU RDY pin):
-    //   - Goes LOW 3 cycles BEFORE VIC needs PHI2 bus access
-    //   - Provides "early warning" to CPU
-    //   - CPU halts on NEXT READ when RDY is LOW
-    //   - CPU can complete up to 3 writes while BA/RDY is LOW
-    //
-    // AEC Signal (VIC → CPU AEC pin):
-    //   - Controls actual bus takeover timing
-    //   - Stays LOW during PHI2 when VIC accesses bus
-    //   - Tri-states CPU address/data bus drivers
-    //
-    // CRITICAL QUESTION: Which signal should we map to the unified RDY line?
-    //
-    // The documentation says "BA is connected to the RDY line" (line 219),
-    // BUT BA goes low 3 cycles EARLY as a warning. The actual blocking
-    // happens when AEC stays low during PHI2.
-    //
-    // For now, mapping BA to RDY (as documentation states):
+    // HARDWARE WIRING - BA signal to CPU RDY pin
     // =========================================================================
+    // The VIC-II's BA (Bus Available) output is connected to the CPU's RDY input.
+    // BA goes LOW 3 cycles before VIC needs the bus, giving the CPU time to finish writes.
+    // The CPU checks RDY and halts on READ operations when RDY is LOW.
+    //
+    // With the pull-up resistor model, VIC-II sets BA state, and we copy it to RDY here.
+    // This happens after VIC-II tick but before CPU tick, so CPU sees the correct RDY state.
     if (BUS_GET_LINES(s) & BUS_MASK_BA) {
         BUS_SET_LINES(s, BUS_GET_LINES(s) | BUS_MASK_RDY);
     } else {

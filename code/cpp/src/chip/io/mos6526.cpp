@@ -56,7 +56,7 @@ void mos6526_reset(mos6526_t* cia) {
     cia->reg[TIMER_OFFSET + TB_LO] = 0xFF;
     cia->reg[TIMER_OFFSET + TB_HI] = 0xFF;
     // Also reset implementation-related variables
-    cia->delayed_irq = false;
+    // NOTE: delayed_irq removed - using pull-up resistor model instead
     cia->read_tod_delta = 0;
     cia->write_tod_delta = 0;
     cia->is_running_tod = false;
@@ -434,29 +434,26 @@ bus_state_t mos6526_advance_cycle(mos6526_t* cia, bus_state_t bus_state) {
     // "A low on the /RES pin resets all internal registers."
     // Note: Reset handling would be done externally in C implementation
     
-    // "The CIA6526 will raise an interrupt with a delay of one ø2 clock"
-    if (cia->delayed_irq) {
-        // CRITICAL FIX: Directly manipulate the IRQ bit in bus_state, not through legacy LINES
-        // IRQ is active-LOW at BUS_IRQ_BIT (bit 33), NMI is active-LOW at BUS_NMI_BIT (bit 34)
-        // When CIA asserts IRQ (interrupt_line = BUS_MASK_IRQ = 0x01), clear bit 33
-        // When CIA asserts NMI (interrupt_line = BUS_MASK_NMI = 0x02), clear bit 34
+    // =========================================================================
+    // PULL-UP RESISTOR MODEL FOR INTERRUPT LINES
+    // =========================================================================
+    // With the new pull-up resistor model, we no longer need the delayed_irq flag.
+    // Instead, we persistently assert the interrupt line whenever ICR_IRQ is set.
+    // The system tick resets all pull-up lines to HIGH (inactive) at the start of each cycle,
+    // and each chip then asserts (pulls LOW) the lines it needs.
+    //
+    // IRQ/NMI are active-LOW: bit=1 means inactive, bit=0 means asserted
+    // When ICR_IRQ is set, we clear the corresponding bit to assert the interrupt
+    if (cia->reg[ICR] & ICR_IRQ) {
+        // Assert interrupt line by clearing the bit (active-low)
         if (cia->interrupt_line == BUS_MASK_IRQ) {
-            bus_state &= ~BUS_BIT(BUS_IRQ_BIT);  // Clear IRQ bit (assert IRQ, active-low)
+            bus_state &= ~BUS_BIT(BUS_IRQ_BIT);  // Clear IRQ bit (assert IRQ)
         } else if (cia->interrupt_line == BUS_MASK_NMI) {
-            bus_state &= ~BUS_BIT(BUS_NMI_BIT);  // Clear NMI bit (assert NMI, active-low)
-        }
-        cia->delayed_irq = false;
-    } else {
-        // CRITICAL FIX: Release the IRQ/NMI line when there's no pending interrupt
-        // If ICR_IRQ bit is NOT set, the interrupt line should be released (set to 1, inactive-high)
-        if ((cia->reg[ICR] & ICR_IRQ) == 0) {
-            if (cia->interrupt_line == BUS_MASK_IRQ) {
-                bus_state |= BUS_BIT(BUS_IRQ_BIT);  // Set IRQ bit (release IRQ, active-low)
-            } else if (cia->interrupt_line == BUS_MASK_NMI) {
-                bus_state |= BUS_BIT(BUS_NMI_BIT);  // Set NMI bit (release NMI, active-low)
-            }
+            bus_state &= ~BUS_BIT(BUS_NMI_BIT);  // Clear NMI bit (assert NMI)
         }
     }
+    // If ICR_IRQ is not set, the pull-up resistor keeps the line HIGH (inactive)
+    // No need to explicitly set it, as the system tick already did that
 
     // When PB6 and PB7 should pulse, clear them (the chance for a read was in previous cycle)
     uint8_t port_b_pulse_clear_mask = 0xFF; // Keep all bits initially
@@ -712,9 +709,11 @@ uint8_t mos6526_read_and_clear_interrupt_control_register(mos6526_t* cia) {
     
     // "interrupt can be prevented by reading the ICR at the time of the underflow."
     cia->reg[ICR] = 0;
-    // NOTE: Do NOT clear delayed_irq here! The IRQ line will be released
-    // in the next mos6526_advance_cycle() when it sees ICR_IRQ is clear.
-    // Clearing delayed_irq here would prevent the IRQ from being properly acknowledged.
+    
+    // NOTE: With the new pull-up resistor model, we don't need to manage delayed_irq.
+    // The interrupt line will be released automatically in the next cycle when
+    // mos6526_advance_cycle() sees that ICR_IRQ is clear and doesn't assert the line.
+    // The system tick will pull the line HIGH via pull-up resistors.
     return v;
 }
 
@@ -749,16 +748,11 @@ void mos6526_check_interrupt_mask(mos6526_t* cia) {
         // "Any interrupt which is enabled by the MASK register will
         // set the IR bit (MSB) of the DATA register and bring
         // the /IRQ pin low."
-        // Note : "the CIA6526 will raise an interrupt with a delay of one ø2 clock"
-        // hence the actual _IRQ is raised at the begin of the next ClockCycle()
-        // CRITICAL: Only set delayed_irq if ICR_IRQ wasn't already set
-        // This prevents re-asserting the interrupt on every cycle until acknowledged
-        if ((cia->reg[ICR] & ICR_IRQ) == 0) {
-            cia->reg[ICR] |= ICR_IRQ;
-            cia->delayed_irq = true;
-        }
-        // If ICR_IRQ is already set, delayed_irq should remain in its current state
-        // (either true if not yet delivered, or false if already delivered this cycle)
+        //
+        // With the new pull-up resistor model, we simply set ICR_IRQ.
+        // The next mos6526_advance_cycle() will see this and assert the interrupt line.
+        // No need for delayed_irq flag - the interrupt persists until ICR is read.
+        cia->reg[ICR] |= ICR_IRQ;
     }
 }
 
@@ -799,12 +793,14 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
     }
 
     // "The Toggle output is set high whenever the timer is started"
+    // Note: This refers to the PB6/PB7 output pin state in toggle mode, NOT the OUTMODE control bit!
+    // The OUTMODE bit (CRA bit 2 / CRB bit 2) is a configuration bit that should not be modified here.
+    // TODO: If toggle mode is enabled (OUTMODE=1), set the output pin high when timer starts
+    
+    // Reset TOD cycle counter when timer transitions from stopped to started
     if ((v & (CRA_START | CRB_START)) > 0)
-        // this implies it must not have started before this
         if ((old_crx & (CRA_START | CRB_START)) == 0) {
-            // Set OUTMODE bit for the correct timer (CRA_OUTMODE for Timer A, CRB_OUTMODE for Timer B)
-            v |= (c == A) ? CRA_OUTMODE : CRB_OUTMODE;
-            // Also: "the frequency counter is being reset to 0 when the clock was stopped and is
+            // "the frequency counter is being reset to 0 when the clock was stopped and is
             // restarted (->hzsync0.prg, hzsync1.prg)"
             cia->tod_cycles = 0;
         }
