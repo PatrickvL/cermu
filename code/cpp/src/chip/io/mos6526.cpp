@@ -56,12 +56,12 @@ void mos6526_reset(mos6526_t* cia) {
     cia->reg[TIMER_OFFSET + TB_LO] = 0xFF;
     cia->reg[TIMER_OFFSET + TB_HI] = 0xFF;
     // Also reset implementation-related variables
-    // NOTE: delayed_irq removed - using pull-up resistor model instead
     cia->read_tod_delta = 0;
     cia->write_tod_delta = 0;
     cia->is_running_tod = false;
     cia->tod_cycles = 0;
     cia->interrupt_mask = 0;
+    cia->pending_bus_lines = 0;  // No pending interrupt assertions
     
     // Call port A change callback with initial value (all high due to pull-ups)
     if (cia->port_a_change_callback) {
@@ -422,6 +422,12 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
     if ((cia->reg[CRA + t] & (CRA_RUNMODE | CRB_RUNMODE)) == 0) {
         // Stop timer (Clear START control bit) - one-shot mode only
         cia->reg[CRA + t] &= ~CRA_START;
+        
+        // IMPORTANT: Do NOT clear ICR bit here!
+        // Per CIA6526.txt documentation: "Only reading the ICR will clear it."
+        // The ICR_TA/ICR_TB bit represents the interrupt condition and must persist
+        // until software reads the ICR register to acknowledge the interrupt.
+        
     }
     // else TODO : Must this be treated as a re-start
     // which sets the CRA_OUTMODE Toggle output high?
@@ -437,25 +443,15 @@ bus_state_t mos6526_advance_cycle(mos6526_t* cia, bus_state_t bus_state) {
     // Note: Reset handling would be done externally in C implementation
     
     // =========================================================================
-    // PULL-UP RESISTOR MODEL FOR INTERRUPT LINES
+    // 1-CYCLE DELAYED INTERRUPT ASSERTION (CIA6526.txt lines 119-120)
     // =========================================================================
-    // With the new pull-up resistor model, we no longer need the delayed_irq flag.
-    // Instead, we persistently assert the interrupt line whenever ICR_IRQ is set.
-    // The system tick resets all pull-up lines to HIGH (inactive) at the start of each cycle,
-    // and each chip then asserts (pulls LOW) the lines it needs.
+    // "When the bit in the Interrupt Mask Register (IMR) is also set, the CIA6526
+    // will raise an interrupt with a delay of one ø2 clock."
     //
+    // Implementation: Apply pending_bus_lines from PREVIOUS cycle at START of this cycle
     // IRQ/NMI are active-LOW: bit=1 means inactive, bit=0 means asserted
-    // When ICR_IRQ is set, we clear the corresponding bit to assert the interrupt
-    if (cia->reg[ICR] & ICR_IRQ) {
-        // Assert interrupt line by clearing the bit (active-low)
-        if (cia->interrupt_line == BUS_MASK_IRQ) {
-            bus_state &= ~BUS_BIT(BUS_IRQ_BIT);  // Clear IRQ bit (assert IRQ)
-        } else if (cia->interrupt_line == BUS_MASK_NMI) {
-            bus_state &= ~BUS_BIT(BUS_NMI_BIT);  // Clear NMI bit (assert NMI)
-        }
-    }
-    // If ICR_IRQ is not set, the pull-up resistor keeps the line HIGH (inactive)
-    // No need to explicitly set it, as the system tick already did that
+    // pending_bus_lines contains bits to CLEAR (assert) on the bus
+    bus_state &= ~cia->pending_bus_lines;
 
     // When PB6 and PB7 should pulse, clear them (the chance for a read was in previous cycle)
     uint8_t port_b_pulse_clear_mask = 0xFF; // Keep all bits initially
@@ -510,6 +506,16 @@ bus_state_t mos6526_advance_cycle(mos6526_t* cia, bus_state_t bus_state) {
         cia->reg[ICR] |= ICR_FLG; // TODO: Verify
     }
 
+    // Update pending_bus_lines for NEXT cycle based on current ICR_IRQ state
+    // This implements the required 1-cycle delay
+    if (cia->reg[ICR] & ICR_IRQ) {
+        // Interrupt pending - assert line in NEXT cycle
+        cia->pending_bus_lines = cia->interrupt_line;
+    } else {
+        // No interrupt - clear pending for next cycle
+        cia->pending_bus_lines = 0;
+    }
+    
     mos6526_check_interrupt_mask(cia);
     return bus_state;
 }
@@ -746,7 +752,13 @@ void mos6526_check_interrupt_mask(mos6526_t* cia) {
     // "In order for an interrupt flag to set IR
     // and generate an Interrupt Request, the
     // corresponding MASK bit must be set."
-    if ((cia->reg[ICR] & cia->interrupt_mask) > 0) {
+    uint8_t masked_interrupts = cia->reg[ICR] & cia->interrupt_mask;
+    
+    // Debug logging for interrupt mask checking
+    static int mask_check_log_count = 0;
+    bool was_irq_set = (cia->reg[ICR] & ICR_IRQ) != 0;
+    
+    if (masked_interrupts > 0) {
         // "Any interrupt which is enabled by the MASK register will
         // set the IR bit (MSB) of the DATA register and bring
         // the /IRQ pin low."

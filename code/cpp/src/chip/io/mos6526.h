@@ -60,13 +60,18 @@ typedef struct mos6526_s {
     uint8_t port_b_value;
     int cycles_tod[2]; // Assigned once in constructor
     uint8_t reg[CIA_REGS_SIZE + 4 + 4 + 4 + 1 + 1]; // Registers, plus TIMER, CLOCK, ALARM, SDR and DDRB latches
-    // NOTE: delayed_irq removed - using pull-up resistor model instead
     uint32_t read_tod_delta;
     uint32_t write_tod_delta;
     bool is_running_tod;
     int tod_cycles;
     int serial_shift;
     uint8_t interrupt_mask;
+    
+    // Bus line control for interrupt delay implementation
+    // This mask is applied at the START of each tick to pull lines LOW (assert)
+    // Updated at the END of the tick based on pending interrupts
+    // Implements the required 1-cycle delay for interrupt assertion
+    bus_state_t pending_bus_lines;  // Lines to assert in NEXT cycle
     
     bus_cycle_ops_t bus_interface;
     
