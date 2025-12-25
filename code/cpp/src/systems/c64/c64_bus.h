@@ -24,7 +24,8 @@
 typedef struct c64_bus_s {
     chip_descriptor_t* desc;
     void* c64;  // c64_t* - opaque pointer to avoid circular dependency
-    bus_state_t state; // Unified bus state (data, address, control lines)
+    bus_state_t default_state; // Default bus state with pull-up resistors (start of each tick)
+    bus_state_t state;         // Current bus state (after all chip ticks)
     // System lines for control signals (includes EXROM and GAME)
     uint8_t system_lines;  // System-wide control lines including cartridge signals
 

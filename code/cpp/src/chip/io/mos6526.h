@@ -55,6 +55,7 @@ typedef enum {
 typedef struct mos6526_s {
     chip_descriptor_t* desc;
     int interrupt_line; // BUS_MASK_IRQ for CIA1, BUS_MASK_NMI for CIA2
+    
     // CIA ports, timers, alarm, registers, latches, interrupt and other status variables.
     uint8_t port_a_value;
     uint8_t port_b_value;

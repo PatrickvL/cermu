@@ -280,25 +280,20 @@ void c64_system_tick(c64_t* c64) {
     c64_bus_t* bus = &(c64->bus);
     
     // =========================================================================
-    // PULL-UP RESISTOR MODEL
+    // PULL-UP RESISTOR MODEL - DUAL STATE ARCHITECTURE
     // =========================================================================
-    // Create a fresh bus state for this cycle by:
-    // 1. Starting from the previous cycle's final state (for address/data continuity)
-    // 2. Applying pull-up resistors to all open-collector/open-drain control lines
+    // Start each cycle with default_state (pull-up resistors HIGH)
+    // - default_state contains: IRQ=1, NMI=1, BA=1, AEC=1, RDY=1 (all inactive/HIGH)
+    // - Address/data from previous cycle is preserved in bus.state
+    // - Copy address/data from previous state, control lines from default_state
     //
-    // This matches hardware behavior where:
-    // - Address/data buses retain their state from previous cycle
-    // - Control lines are pulled HIGH by resistors at the start of each cycle
-    // - Each chip can then assert (pull LOW) the lines it needs
-    //
-    // Pull-up lines (set to 1 = inactive/available):
-    //   - IRQ (active-LOW): bit HIGH = not asserted
-    //   - NMI (active-LOW): bit HIGH = not asserted
-    //   - BA (active-HIGH): bit HIGH = bus available
-    //   - AEC (active-HIGH): bit HIGH = CPU can drive bus
-    //   - RDY (active-HIGH): bit HIGH = ready
-    bus_state_t s = c64->bus.state;  // Start from previous cycle's final state
-    s |= BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_BA_BIT) | BUS_BIT(BUS_AEC_BIT) | BUS_BIT(BUS_RDY_BIT);
+    // This ensures each cycle starts fresh with pull-ups HIGH, preventing chips
+    // from overwriting each other's signal assertions.
+    bus_state_t s = c64->bus.default_state;  // Start with pull-up resistors HIGH
+    
+    // Preserve address and data from previous cycle for continuity
+    BUS_SET_ADDR(s, BUS_GET_ADDR(c64->bus.state));
+    BUS_SET_DATA(s, BUS_GET_DATA(c64->bus.state));
 
     // =========================================================================
     // UNIFIED TIMING MODEL
@@ -463,11 +458,13 @@ c64_t* c64_system_create(const c64_config_t* config) {
     // Initialize bus as embedded struct - no need to create separately
     c64->bus.desc = &c64_bus_descriptor;
     c64->bus.c64 = c64;
-    // Initialize bus state with reset line inactive (active-low, so set bit high)
-    BUS_SET_ADDR(c64->bus.state, 0);
-    BUS_SET_DATA(c64->bus.state, 0);
-    BUS_SET_LINES(c64->bus.state, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY);
-    c64->bus.state |= BUS_BIT(BUS_RES_BIT);  // Set reset line inactive
+    
+    // Initialize default_state with pull-up resistors HIGH (IRQ, NMI, BA, AEC, RDY)
+    c64->bus.default_state = BUS_STATE(0, 0, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY | BUS_MASK_IRQ | BUS_MASK_NMI) | BUS_BIT(BUS_RES_BIT);
+    
+    // Initialize current state to match default state
+    c64->bus.state = c64->bus.default_state;
+    
     // Initialize system lines with default cartridge signals (no cartridge)
     c64->bus.system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;
     // Initialize the integrated adapter interfaces
