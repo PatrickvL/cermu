@@ -763,6 +763,10 @@ bus_state_t vicii_registers_read(void* context, bus_state_t bus_state) {
             break;
         case VICII_IR:
             data = vicii->registers.data[VICII_IR] | (data & VICII_IR_UNUSED); //    25 $d019 | IRQ|  - |  - |  - | ILP|IMMC|IMBC|IRST| Interrupt register
+            // CRITICAL: Reading IR register clears ALL interrupt latches (but NOT the IRQ flag)
+            // Documentation (vic-ii.txt lines 2244-2260): "The interrupt register is a latch
+            // register. Reading will clear all interrupt latches and also the interrupt flag."
+            vicii->registers.data[VICII_IR] = VICII_IR_UNUSED;  // Clear all latches, keep unused bits high
             break;
         case VICII_IE:
             data = vicii->registers.data[VICII_IE] | (data & VICII_IE_UNUSED); //    26 $d01a |  - |  - |  - |  - | ELP|EMMC|EMBC|ERST| Interrupt Enabled
