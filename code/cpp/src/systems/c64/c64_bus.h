@@ -8,7 +8,6 @@
 #include "../../core/system.h"
 #include "../../core/system_lines.h"
 #include "../../core/bus_cycle_interface.h"
-#include "../../core/control_lines_interface.h"
 #include "c64_config.h"
 #include "c64_chips.h"
 
@@ -78,9 +77,6 @@ typedef struct c64_bus_s {
         bus_state_t (*write_handler)(void* context, bus_state_t bus_state); // Direct chip register function signature
     } io_page_handlers_t;
     io_page_handlers_t io_handlers[16]; // One handler per IO page (0-15)
-
-    // Control lines adapter interface
-    control_lines_interface_t control_lines_adapter;
 } c64_bus_t;
 
 void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode);
@@ -302,27 +298,3 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
 void c64_bus_init_io_handlers(c64_bus_t* c64_bus);
 
 extern chip_descriptor_t c64_bus_descriptor;
-
-// ============================================================================
-// ADAPTER INTERFACES - Control lines adapter access
-// ============================================================================
-
-/**
- * Initialize the integrated adapter interfaces in the C64 bus.
- * This sets up the control lines adapter interface.
- * Should be called during bus initialization.
- *
- * @param c64_bus Pointer to the C64 bus implementation
- */
-void c64_bus_init_adapters(c64_bus_t* c64_bus);
-
-/**
- * Get a pointer to the control lines adapter interface.
- * This allows any chip to access the shared control lines.
- *
- * @param c64_bus Pointer to the existing C64 bus implementation
- * @return Pointer to the control lines interface structure configured for the C64 bus
- */
-static inline control_lines_interface_t* c64_control_lines_get_adapter(c64_bus_t* c64_bus) {
-    return &c64_bus->control_lines_adapter;
-}

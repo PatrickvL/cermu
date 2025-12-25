@@ -469,8 +469,6 @@ c64_t* c64_system_create(const c64_config_t* config) {
     
     // Initialize system lines with default cartridge signals (no cartridge)
     c64->bus.system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;
-    // Initialize the integrated adapter interfaces
-    c64_bus_init_adapters(&c64->bus);
 
     // One line per chip - create, register, assign memory address/size, and assign to C64 field
     if (!(c64->ram = static_cast<ram_t*>(create_and_register_chip(c64, &ram_descriptor, 0x0000, 65536)))) { c64_system_destroy(c64); return NULL; }

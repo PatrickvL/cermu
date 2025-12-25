@@ -191,9 +191,6 @@ void* c64_bus_system_create(chip_descriptor_t* desc) {
     // after PLA mapping data is set up in c64_pla_maps_generate()
     // Note: calloc already zeroed *chip_per_bank* arrays
     
-    // Initialize the integrated adapter interfaces
-    c64_bus_init_adapters(c64_bus);
-    
     return c64_bus;
 }
 
@@ -379,30 +376,6 @@ uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits) {
     pla_mode |= ((c64_bus->system_lines & SYS_MASK_GAME) ? 0x10 : 0);  // GAME (bit 4)
 
     return pla_mode;
-}
-
-// ============================================================================
-// ADAPTER INTERFACES - Integrated adapter initialization
-// ============================================================================
-
-// Control lines adapter functions
-static uint32_t c64_control_lines_get(void* context) {
-    c64_bus_t* c64_bus = (c64_bus_t*)context;
-    // Convert the C64's bus state to the new uint32_t format
-    return (uint32_t)BUS_GET_LINES(c64_bus->state);
-}
-
-static void c64_control_lines_set(void* context, uint32_t lines) {
-    c64_bus_t* c64_bus = (c64_bus_t*)context;
-    // Convert back to the C64's bus state format
-    BUS_SET_LINES(c64_bus->state, (uint8_t)(lines & 0xFF));
-}
-
-void c64_bus_init_adapters(c64_bus_t* c64_bus) {
-    // Initialize control lines adapter
-    c64_bus->control_lines_adapter.get_lines = c64_control_lines_get;
-    c64_bus->control_lines_adapter.set_lines = c64_control_lines_set;
-    c64_bus->control_lines_adapter.context = c64_bus;
 }
 
 // ============================================================================
