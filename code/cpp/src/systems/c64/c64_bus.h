@@ -28,8 +28,11 @@
 // - AEC: HIGH via pull-up (CPU controls address bus, VIC-II pulls LOW to take control)
 // - RW: HIGH (READ mode, pull-up on R/W line defaults to read)
 // - RES: HIGH (not in reset, active-low signal)
+//
+// CRITICAL FIX: IRQ/NMI/RES are at bits 32-34, NOT in the 8-bit lines field!
+// Must use BUS_BIT() to set them directly, not BUS_MASK_* which are for the legacy lines field.
 #define C64_BUS_DEFAULT_STATE() \
-    (BUS_STATE(0, 0xFF, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY | BUS_MASK_RW | BUS_MASK_IRQ | BUS_MASK_NMI) | BUS_BIT(BUS_RES_BIT))
+    (BUS_STATE(0, 0xFF, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY | BUS_MASK_RW) | BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT))
 
 // C64 bus controller structure
 typedef struct c64_bus_s {

@@ -787,6 +787,8 @@ bus_state_t vicii_registers_read(void* context, bus_state_t bus_state) {
             // The floating bits (VICII_IR_UNUSED) are handled in the read operation above,
             // so we just clear the register to zero.
             vicii->registers.data[VICII_IR] = 0;
+            // NOTE: IRQ line will be updated in vicii_tick() based on register state
+            
             break;
         case VICII_IE:
             data = vicii->registers.data[VICII_IE] | (data & VICII_IE_UNUSED); //    26 $d01a |  - |  - |  - |  - | ELP|EMMC|EMBC|ERST| Interrupt Enabled
@@ -1671,14 +1673,16 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // - IRQ is active-LOW at BUS_IRQ_BIT (bit 33)
     // - When IRQ flag is set: clear bit 33 (assert IRQ)
     // - When IRQ flag is cleared: set bit 33 (release IRQ)
+    //
+    // CORRECT BEHAVIOR: VIC-II should ONLY assert (clear bit) when it has an interrupt.
+    // The pull-up resistor model (C64_BUS_DEFAULT_STATE in c64_bus.h:32) already sets
+    // IRQ high at the start of each cycle. If we set it here, we would overwrite any IRQ
+    // assertion by CIA or other chips. VIC-II should ONLY assert, never explicitly release.
     if (vicii->registers.data[VICII_IR] & VICII_IR_IRQ) {
         // IRQ flag is set - assert IRQ line (active-low, clear bit)
         bus_state &= ~BUS_BIT(BUS_IRQ_BIT);
     }
-    // CRITICAL FIX: Do NOT set IRQ high in else clause!
-    // The pull-up resistor model (c64.cpp:301) already sets IRQ high at start of each cycle.
-    // If we set it here, we would overwrite any IRQ assertion by CIA or other chips.
-    // VIC-II should ONLY assert (clear bit) when it has an interrupt, never release.
+    // Do NOT set IRQ high in else clause - pull-up resistor handles that
     
     // STEP 7: Advance x_coordinate (primary counter) and update derived values
     // Note: vicii_timing_advance() now handles flushing and buffer clearing when wrapping to next line
