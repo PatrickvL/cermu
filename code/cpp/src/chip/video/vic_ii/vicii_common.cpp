@@ -136,6 +136,9 @@ static inline void vicii_set_interrupt(vicii_t* vicii, uint8_t interrupt_mask) {
     if (latched_interrupts & enabled_interrupts) {
         vicii->registers.data[VICII_IR] |= VICII_IR_IRQ;
     }
+    
+    // NOTE: IRQ line will be updated in vicii_tick() based on register state
+    // We don't update it here to avoid side-effects on bus_state
 }
 
 // ========================================================================================
@@ -619,14 +622,29 @@ static inline void vicii_registers_write_interrupt(vicii_registers_unit_t* regs,
     value &= VICII_INTERRUPTS_MASK;
     // Fetch the current Interrupt Register value
     uint8_t ir = regs->data[VICII_IR];
-    // Clear all '1' bits in the Interrupt Register
+    // Clear all '1' bits in the Interrupt Register that were written as '1'
+    // Writing 1 to an interrupt bit acknowledges (clears) that interrupt
     ir &= ~value;
-    // Always set the not-connected bits high
-    ir |= VICII_IR_UNUSED;
-    // Store the resulting bits
+    
+    // CRITICAL FIX: Recalculate IRQ flag (bit 7) after clearing interrupt latches
+    // Documentation (vic-ii.txt lines 2284-2285):
+    // "The bit 7 in the latch $d019 reflects the inverted state of the IRQ output of the VIC."
+    // The IRQ line is held low when ANY enabled interrupt is latched.
+    const uint8_t latched_interrupts = ir & VICII_INTERRUPTS_MASK;
+    const uint8_t enabled_interrupts = regs->data[VICII_IE] & VICII_INTERRUPTS_MASK;
+    
+    // Set IRQ flag if any enabled interrupt remains latched
+    if (latched_interrupts & enabled_interrupts) {
+        ir |= VICII_IR_IRQ;
+    } else {
+        ir &= ~VICII_IR_IRQ;  // Clear IRQ flag - all interrupts acknowledged
+    }
+    
+    // Store the resulting bits (no need to set unused bits - they're only for reads)
     regs->data[VICII_IR] = ir;
-    // Note/TODO : Here, it's assumed that when all interrupt bits are cleared, the
-    // IR_IRQ flag is untouched - it'll be cleared later, in vicii_handle_raster_interrupt()
+    
+    // NOTE: IRQ line will be updated in vicii_tick() based on register state
+    // We don't update it here to avoid side-effects on bus_state
 }
 
 // Register write function (uses all the above handlers)
@@ -763,10 +781,12 @@ bus_state_t vicii_registers_read(void* context, bus_state_t bus_state) {
             break;
         case VICII_IR:
             data = vicii->registers.data[VICII_IR] | (data & VICII_IR_UNUSED); //    25 $d019 | IRQ|  - |  - |  - | ILP|IMMC|IMBC|IRST| Interrupt register
-            // CRITICAL: Reading IR register clears ALL interrupt latches (but NOT the IRQ flag)
+            // CRITICAL: Reading IR register clears ALL interrupt latches and IRQ flag
             // Documentation (vic-ii.txt lines 2244-2260): "The interrupt register is a latch
             // register. Reading will clear all interrupt latches and also the interrupt flag."
-            vicii->registers.data[VICII_IR] = VICII_IR_UNUSED;  // Clear all latches, keep unused bits high
+            // The floating bits (VICII_IR_UNUSED) are handled in the read operation above,
+            // so we just clear the register to zero.
+            vicii->registers.data[VICII_IR] = 0;
             break;
         case VICII_IE:
             data = vicii->registers.data[VICII_IE] | (data & VICII_IE_UNUSED); //    26 $d01a |  - |  - |  - |  - | ELP|EMMC|EMBC|ERST| Interrupt Enabled
@@ -784,6 +804,12 @@ bus_state_t vicii_registers_read(void* context, bus_state_t bus_state) {
                 data = vicii->registers.data[reg] | (data & 0xF0);  // 32-46 $d020-$d02e use bits 0..3 (bits 4..7 are not connected)
             } else {
                 data = data;                                        // 47-63 $d02f-$d03f unattached registers (many docs say: give $ff on reading)
+            }
+            // Log other VIC-II reads during boot
+            static int other_reads = 0;
+            if (other_reads < 20 && reg != VICII_RASTER) {  // Skip raster reads (too many)
+                printf("[VIC-READ] $D0%02X = $%02X\n", reg, data);
+                other_reads++;
             }
             break;
     }
@@ -1993,7 +2019,7 @@ static inline void vicii_initialize(vicii_t* vicii) {
     vicii->registers.data[VICII_MXE] = 0;  // All sprites disabled
     vicii->registers.data[VICII_C2] = VICII_C2_CSEL; // 8: XSCROLL:0, no MultiColorMode, 40-column display, no RESET
     vicii->registers.data[VICII_MP] = VICII_MP_CB12 | VICII_MP_VM10; // 0x14: "address of Character Dot-Data area to 4096 ($1000)"
-    vicii->registers.data[VICII_IR] = VICII_IR_UNUSED; // See BusWrite; Always set the unused bits high
+    vicii->registers.data[VICII_IR] = 0; // No interrupts latched at startup
     
     // Set default colors
     vicii->registers.data[VICII_EC] = VICII_COLOR_LIGHT_BLUE; // 14: Border Color

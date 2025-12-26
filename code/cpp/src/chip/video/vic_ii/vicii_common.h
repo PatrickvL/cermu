@@ -148,7 +148,7 @@ namespace vicii_regs {
 #define VICII_IR_IMBC     0x02  // Sprite-data Collision occurred
 #define VICII_IR_IMMC     0x04  // Sprite to Sprite Collision occurred
 #define VICII_IR_ILP      0x08  // Light-Pen occurred
-#define VICII_IR_UNUSED   0x70  // Unused bits - always high
+#define VICII_IR_UNUSED   0x70  // Unused bits - floating, mostly set high
 #define VICII_IR_IRQ      0x80  // Set on Any Enabled VIC IRQ Condition
 
 // Interrupt Enabled ($d01a) bit masks
