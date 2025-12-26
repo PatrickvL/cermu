@@ -9,7 +9,6 @@
 #include "c64_bus.h"
 #include "c64_config.h"
 #include "c64_test_loader.h" // Test binary loading
-/* dual CPU include removed */
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
 #include "../../chip/cpu/fam65xx/mos6510.h" // Direct C++ core
@@ -215,14 +214,16 @@ bool c64_pla_maps_generate(c64_t* c64) {
     // Clean up PLA instance
     pla_906114_01_destroy(pla);
 
-    // Initialize with mode $17 (standard C64 configuration with no cartridge, I/O enabled)
-    // Mode $17 = LORAM=1, HIRAM=1, CHAREN=0, EXROM=1, GAME=1
+    // Calculate initial PLA mode from system_lines (EXROM/GAME) and default CPU port value
+    // CPU I/O port initializes to $17 (bits 0-2 = 0b111 = LORAM=1, HIRAM=1, CHAREN=1)
+    // Combined with system_lines (EXROM=1, GAME=1) this gives mode $1F
+    // Mode $1F = LORAM=1, HIRAM=1, CHAREN=1, EXROM=1, GAME=1
     // LORAM=1: BASIC ROM enabled at $A000-$BFFF
     // HIRAM=1: KERNAL ROM enabled at $E000-$FFFF
-    // CHAREN=0: I/O devices enabled at $D000-$DFFF (not Character ROM)
+    // CHAREN=1: I/O devices enabled at $D000-$DFFF (not Character ROM)
     // EXROM=1, GAME=1: No cartridge present (standard C64 operation)
-    // This is the standard boot configuration - I/O accessible, BASIC/KERNAL enabled
-    uint8_t initial_pla_mode = 0x17;
+    uint8_t cpu_port_bits = 0x07;  // Default from init_io_port(): $17 & $07 = $07
+    uint8_t initial_pla_mode = c64_bus_generate_pla_mode(bus, cpu_port_bits);
     c64_bus_mode_switch(bus, initial_pla_mode);
     
     printf("C64 initial banking: PLA mode=$%02X (standard config, no cartridge)\n", initial_pla_mode);

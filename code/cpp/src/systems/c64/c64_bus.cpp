@@ -1,7 +1,7 @@
 #include "c64_bus.h"
 #include "c64.h"
 #include "../../chip/io/mos6526.h"
-#include "../../chip/cpu/fam65xx/mos6510.h"
+//#include "../../chip/cpu/fam65xx/mos6510.h"
 #include "../../chip/logic/pla.h"
 #include "../../core/aiemuc.h"
 #include <stdlib.h>
@@ -270,7 +270,7 @@ uint8_t pla_906114_01_outputs_to_chip(pla_906114_01_t* pla) {
 
 void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla) {
     // Set other inputs for normal CPU operation (not VIC-II access)
-    pla->inputs.n_aec = false;   // CPU has bus control (AEC high (#EAC low) = CPU access)
+    pla->inputs.n_aec = false;   // CPU has bus control (AEC high = !n_aec in product terms)
     pla->inputs.ba = true;       // Bus available (BA high = no DMA)
     pla->inputs.n_cas = false;   // CAS active (CAS low = enable RAM access for CPU)
     
@@ -295,9 +295,9 @@ void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pl
 
 void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla) {
     // Set other inputs for VIC-II access (not normal CPU operation)
-    pla->inputs.n_aec = true;   // VIC-II has bus control (AEC low (#EAC high) = VIC-II access)
-    pla->inputs.ba = false;     // Bus available (BA low = DMA)
-    pla->inputs.n_cas = false;  // CAS active for VIC-II regular memory access (not refresh)
+    pla->inputs.n_aec = true;    // VIC-II has bus control (AEC low = n_aec in product terms)
+    pla->inputs.ba = false;      // Bus available (BA low = DMA)
+    pla->inputs.n_cas = false;   // CAS active for VIC-II regular memory access (not refresh)
     // Configure PLA for READ mode (VIC-II can only read, never write)
     pla->inputs.r_w = true;     // Read mode
 

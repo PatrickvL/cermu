@@ -2,7 +2,7 @@
 
 #include "pla.h"
 #include "../../core/chip.h"
-#include "../../systems/c64/c64_bus.h"
+//#include "../../systems/c64/c64_bus.h"
 #ifdef DEBUG_PLA_BANKING
 #include <stdio.h>
 #endif

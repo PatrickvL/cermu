@@ -1,5 +1,5 @@
 #include "mos6526.h" // cia
-#include "../../systems/c64/c64_bus.h" // for BUS_MASK_IRQ
+//#include "../../systems/c64/c64_bus.h" // for BUS_MASK_IRQ
 #include "../../core/system_lines.h"
 #include <string.h>
 #include <stdlib.h>
