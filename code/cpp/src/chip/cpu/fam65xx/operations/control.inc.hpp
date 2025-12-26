@@ -394,6 +394,14 @@ bus_state_t op_brk(bus_state_t pins) {
       set_flag(FLAG_I);
       clear_flag(FLAG_D);
     }
+    
+    // CRITICAL FIX: Clear interrupt shift register immediately after setting I flag
+    // This prevents the shift register from accumulating more interrupt samples
+    // while we're reading the vector (cycles 10-13). Without this, IRQs sampled
+    // during vector read will trigger immediately after BRK completes.
+    this->interrupt_shift_register = 0;
+    this->nmi_prev = (pins & FAM65XX_NMI) ? 1 : 0; // Reset NMI edge detection
+    
     this->set(REG_AB, this->get_vector_addr());
     this->half_cycle++;
     return pins;
@@ -420,8 +428,17 @@ bus_state_t op_brk(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
       this->set(REG_PBR, 0);
     }
-    // DON'T clear active_interrupt here - keep it set so nested interrupts are blocked
-    // It will be cleared by RTI when the interrupt handler completes
+    
+    // CRITICAL FIX: Clear active_interrupt NOW, before starting the handler!
+    // This allows the interrupt handler to:
+    // 1. Execute BRK instructions (used by BASIC ROM for error handling)
+    // 2. Be interrupted by higher-priority interrupts (NMI)
+    // 3. Properly nest interrupt handling
+    // The I flag (set at cycle 9) blocks new IRQs, but not NMI or software BRK.
+    this->active_interrupt = FAM65XX_INT_NONE;
+    
+    // NOTE: Shift register was already cleared at cycle 9 after setting I flag
+    
     this->transition_to_fetch();
     return pins;
   }

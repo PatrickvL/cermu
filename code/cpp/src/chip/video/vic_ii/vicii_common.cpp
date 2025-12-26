@@ -2025,6 +2025,9 @@ static inline void vicii_initialize(vicii_t* vicii) {
     vicii->registers.data[VICII_MP] = VICII_MP_CB12 | VICII_MP_VM10; // 0x14: "address of Character Dot-Data area to 4096 ($1000)"
     vicii->registers.data[VICII_RASTER] = 0; // Raster compare bits 0-7
     vicii->registers.data[VICII_IR] = 0; // No interrupts latched at startup
+    // CRITICAL FIX: Disable VIC-II interrupts at startup to prevent boot disruption
+    // The KERNAL will enable raster interrupts after initialization is complete
+    // Starting with interrupts enabled causes repeated CINT calls that corrupt zero-page
     vicii->registers.data[VICII_IE] = 0; // No interrupts enabled at startup
     
     // Set default colors
