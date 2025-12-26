@@ -1481,6 +1481,15 @@ public:
           // CRITICAL: When hijacking, BRK should still use the interrupt's vector
           // So we keep active_interrupt as-is (IRQ/NMI/etc) and let BRK handle it
           this->current_handler = &fam65xx_t::op_brk;
+          
+          // CRITICAL FIX: Clear interrupt shift register to prevent immediate re-triggering
+          // When an interrupt is acknowledged by hijacking fetch, we must clear the shift
+          // register. Otherwise, the IRQ bits remain set and trigger another interrupt
+          // immediately on the next cycle, before the I flag can be set by BRK.
+          // This matches hardware behavior: once an interrupt is acknowledged, the CPU
+          // stops sampling that interrupt line until the I flag is set and then cleared.
+          this->interrupt_shift_register = 0;
+          this->nmi_prev = (pins & FAM65XX_NMI) ? 1 : 0; // Reset NMI edge detection
         }
       }
 #endif
