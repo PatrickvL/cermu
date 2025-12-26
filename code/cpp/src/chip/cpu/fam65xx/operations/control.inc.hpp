@@ -354,12 +354,25 @@ bus_state_t op_brk(bus_state_t pins) {
     /* PHI2: Push PCL to stack */
     pins = this->bus_setup_write<Addr::SP>(pins, REG_PCL);
     return pins;
-  case 7:
-    /* PHI1: Decrement SP */
+  case 7: {
+    /* PHI1: Decrement SP and prepare status register for stack push */
     this->dec_stack();
-    this->set(REG_DL, this->get(REG_P) | FLAG_B | FLAG_U);
+    /* CRITICAL FIX: B flag distinguishes BRK from hardware interrupts
+     * - BRK instruction (software): B flag SET (active_interrupt == FAM65XX_INT_BRK)
+     * - Hardware IRQ/NMI: B flag CLEAR (active_interrupt == FAM65XX_INT_IRQ/NMI)
+     * The KERNAL ROM tests this flag to route to correct handler vector:
+     * - B flag SET: JMP ($0316) - BRK handler
+     * - B flag CLEAR: JMP ($0314) - IRQ handler
+     */
+    uint8_t status_flags = this->get(REG_P) | FLAG_U;  // U flag always set
+    if (this->active_interrupt == FAM65XX_INT_BRK) {
+      status_flags |= FLAG_B;  // Set B flag only for actual BRK instruction
+    }
+    // For hardware IRQ/NMI: B flag remains clear (not set)
+    this->set(REG_DL, status_flags);
     this->half_cycle++;
     return pins;
+  }
 
   case 8:
     /* PHI2: Push P|B|U to stack (B flag set for BRK) */
