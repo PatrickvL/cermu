@@ -39,7 +39,8 @@ typedef uint64_t bus_state_t;
 #define BUS_VDA_BIT     43  // Valid Data Address (65C816)
 #define BUS_PHI0_BIT    44  // φ0 clock input
 #define BUS_PHI1_BIT    45  // φ1 clock output
-/* 46-47 reserved */
+#define BUS_CNT_BIT     46  // CIA CNT pin (Counter input)
+#define BUS_FLAG_BIT    47  // CIA FLAG pin (Interrupt input)
 
 /* Output pins */
 #define BUS_RW_BIT      48  // 1 = Read, 0 = Write

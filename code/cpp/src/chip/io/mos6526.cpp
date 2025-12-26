@@ -39,6 +39,10 @@ void mos6526_reset(mos6526_t* cia) {
     cia->interrupt_mask = 0;
     cia->pending_bus_lines = 0;  // No pending interrupt assertions
     
+    // Initialize previous bus state for edge detection
+    // CNT and FLAG pins have internal pull-ups, so they start HIGH
+    cia->prev_bus_state = BUS_BIT(BUS_CNT_BIT) | BUS_BIT(BUS_FLAG_BIT);
+    
     // Call port A change callback with initial value (all high due to pull-ups)
     if (cia->port_a_change_callback) {
         cia->port_a_change_callback(cia->port_a_callback_context, cia->port_a_value);
@@ -61,6 +65,10 @@ void* mos6526_system_create(chip_descriptor_t* desc) {
     cia->port_a_read_context = NULL;
     cia->port_b_read_callback = NULL;
     cia->port_b_read_context = NULL;
+    
+    // Initialize port change callback to NULL
+    cia->port_a_change_callback = NULL;
+    cia->port_a_callback_context = NULL;
     
     mos6526_reset(cia);
     return cia;
@@ -788,10 +796,27 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
     if (port_b_pulse_clear_mask != 0xFF)
         cia->port_b_value &= port_b_pulse_clear_mask;
 
-    // Fetch CNT transition only once (since it relies on an update
-    // in internal state and is used potentially multiple times below).
-    // Note: In C implementation, we'll simulate this as false for now
-    bool cnt_is_positive_edge = false; // TODO: Implement proper pin transition detection
+    // =========================================================================
+    // PIN STATE AND EDGE DETECTION (using bus state pattern)
+    // =========================================================================
+    // Sample current pin states from bus (with internal pull-ups, pins are HIGH unless externally pulled LOW)
+    // In a real C64, these pins connect to external devices:
+    // - CNT: Connected to cassette port, serial bus, user port
+    // - FLAG: Connected to cassette port (CIA1), RS-232 (CIA2)
+    // For now, simulate as pulled HIGH (no external devices pulling them LOW)
+    bool cnt_pin = BUS_GET_BIT(bus_state, BUS_CNT_BIT);
+    bool flag_pin = BUS_GET_BIT(bus_state, BUS_FLAG_BIT);
+    
+    // Detect edge transitions by comparing current bus state with previous bus state
+    bool prev_cnt = BUS_GET_BIT(cia->prev_bus_state, BUS_CNT_BIT);
+    bool prev_flag = BUS_GET_BIT(cia->prev_bus_state, BUS_FLAG_BIT);
+    
+    bool cnt_is_positive_edge = (cnt_pin && !prev_cnt);    // LOW->HIGH transition
+    bool cnt_is_negative_edge = (!cnt_pin && prev_cnt);    // HIGH->LOW transition
+    bool flag_is_negative_edge = (!flag_pin && prev_flag); // HIGH->LOW transition
+    
+    // Store current bus state for edge detection in next cycle (standard chip pattern)
+    cia->prev_bus_state = bus_state;
 
     if ((cia->reg[CRA] & CRA_START) > 0) // Is timer A running?
         mos6526_decrease_timer(cia, A, cnt_is_positive_edge, cia->reg[CRA] & CRA_INMODE);
@@ -805,12 +830,9 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
     // "CRA:
     //  6   SPMODE  1 = SERIAL PORT output (CNT sources shift clock).
     //              0 = SERIAL PORT input (external shift clock required)."
-    // "Data shifted out
-    // becomes valid on the falling edge on CNT and
+    // "Data shifted out becomes valid on the falling edge on CNT and
     // remains valid until the next falling edge."
-    // Note: Simulating negative edge as false for now
-    bool cnt_negative_edge = false; // TODO: Implement proper pin transition detection
-    if (cnt_negative_edge) {
+    if (cnt_is_negative_edge) {
         if ((cia->reg[CRA] & CRA_SPMODE) > 0)
             mos6526_serial_output(cia);
         else
@@ -818,13 +840,11 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
     }
 
     // "/FLAG is negative edge sensitive input"
-    // Note: Simulating FLAG transition as false for now
-    bool flag_negative_edge = false; // TODO: Implement proper pin transition detection
-    if (flag_negative_edge) {
-        // CIA 1 : IRQ Signal occurred at FLAG-pin (cassette port Data input, serial bus SRQ IN)
-        // CIA 2 : NMI Signal occurred at FLAG-pin (RS-232 data received)
-        // "Any negative transition on /FLAG will set the /FLAG interrupt bit."
-        cia->reg[ICR] |= ICR_FLG; // TODO: Verify
+    // CIA 1 : IRQ Signal occurred at FLAG-pin (cassette port Data input, serial bus SRQ IN)
+    // CIA 2 : NMI Signal occurred at FLAG-pin (RS-232 data received)
+    // "Any negative transition on /FLAG will set the /FLAG interrupt bit."
+    if (flag_is_negative_edge) {
+        cia->reg[ICR] |= ICR_FLG;
     }
 
     // Check interrupt mask FIRST to update ICR_IRQ based on current cycle's events
