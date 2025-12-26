@@ -433,8 +433,63 @@ extern "C" void c64_cpu_banking_callback(void* context, uint8_t banking_state) {
     c64_bus_on_banking_change(&c64->bus, banking_state);
 }
 
+// Keyboard matrix scanning callbacks for CIA1
+// CIA1 Port A is used to select keyboard columns (active LOW - writing 0 selects column)
+// CIA1 Port B is used to read keyboard rows (reading 0 means key pressed in that row)
+//
+// Hardware: The C64 keyboard is an 8x8 matrix where:
+// - CIA1 Port A outputs select columns (bits driven LOW select those columns)
+// - CIA1 Port B inputs read rows (bits read as LOW indicate keys pressed in selected columns)
+//
+// When a key is pressed, it connects a row line to a column line.
+// The CIA drives Port A lines LOW to select columns, and reads Port B to see which rows
+// are pulled LOW by pressed keys in those columns.
+
+static uint8_t c64_cia1_port_a_read_callback(void* context, uint8_t port_a_output) {
+    c64_t* c64 = (c64_t*)context;
+    // Port A is output-only for keyboard scanning, so just return the output value
+    // No external device pulls these lines
+    return port_a_output;
+}
+
+static uint8_t c64_cia1_port_b_read_callback(void* context, uint8_t port_b_output) {
+    c64_t* c64 = (c64_t*)context;
+    
+    if (!c64 || !c64->keyboard || !c64->cia1) {
+        // No keyboard connected - return pull-up value (all HIGH = no keys pressed)
+        return 0xFF;
+    }
+    
+    // Get the column selection from CIA1 Port A
+    // Columns are selected by driving Port A lines LOW (active-low logic)
+    // IMPORTANT: Read port_a_value safely - it's already set by the CIA before calling this callback
+    uint8_t port_a_value = c64->cia1->port_a_value;
+    uint8_t column_select = ~port_a_value;  // Invert to get active columns
+    
+    // Start with all rows HIGH (no keys pressed)
+    uint8_t row_state = 0xFF;
+    
+    // For each selected column, check if any keys are pressed
+    for (int col = 0; col < 8; col++) {
+        if (column_select & (1 << col)) {
+            // This column is selected - check for pressed keys
+            // Pull down the row lines for any pressed keys in this column
+            row_state &= c64->keyboard->row_open_contacts[col];
+        }
+    }
+    
+    // Return the row state (0 = key pressed, 1 = no key)
+    return row_state;
+}
+
 void c64_system_destroy(c64_t* c64) {
     if (!c64) return;
+
+    // Destroy keyboard if allocated
+    if (c64->keyboard) {
+        commodore_keyboard_destroy(c64->keyboard);
+        c64->keyboard = NULL;
+    }
 
     system_chips_destroy(&c64->system);
     free(c64);
@@ -489,6 +544,16 @@ c64_t* c64_system_create(const c64_config_t* config) {
     
     if (!(c64->cia1 = static_cast<mos6526_t*>(create_and_register_chip(c64, &mos6526_descriptor, 0xDC00, 256)))) { c64_system_destroy(c64); return NULL; }
     if (!(c64->cia2 = static_cast<mos6526_t*>(create_and_register_chip(c64, &mos6526_descriptor, 0xDD00, 256)))) { c64_system_destroy(c64); return NULL; }
+    
+    // Create keyboard and initialize with no keys pressed
+    c64->keyboard = commodore_keyboard_create();
+    if (!c64->keyboard) {
+        printf("ERROR: Failed to create keyboard\n");
+        c64_system_destroy(c64);
+        return NULL;
+    }
+    commodore_keyboard_reset(c64->keyboard);
+    printf("C64 System: Keyboard matrix initialized (all keys released)\n");
     if (!(c64->kernal = static_cast<rom_t*>(create_and_register_chip(c64, &rom_descriptor, 0xE000, 8192)))) { c64_system_destroy(c64); return NULL; }
 
     // Initialize placeholders for missing components
@@ -519,6 +584,14 @@ c64_t* c64_system_create(const c64_config_t* config) {
     
     // Re-initialize unified pointers after ROM loading to copy loaded ROM data into unified buffer
     c64_bus_init_unified_pointers(&c64->bus, c64, config);
+    
+    // Hardware: CIA1 Port A/B are used for keyboard matrix scanning
+    // Register read callbacks with CIA1 for keyboard input
+    c64->cia1->port_a_read_callback = c64_cia1_port_a_read_callback;
+    c64->cia1->port_a_read_context = c64;
+    c64->cia1->port_b_read_callback = c64_cia1_port_b_read_callback;
+    c64->cia1->port_b_read_context = c64;
+    printf("C64 System: Registered CIA1 Port A/B callbacks for keyboard matrix scanning\n");
     
     // Hardware: CIA2 Data Port A bits 0-1 control VIC-II memory bank selection
     // Register callback with CIA2 to receive Port A change notifications

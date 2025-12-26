@@ -196,6 +196,9 @@ set(CHIP_SOURCES
 )
 # Always include other chip sources
 list(APPEND CHIP_SOURCES
+    # Input
+    src/chip/input/commodore_keyboard.cpp
+
     # I/O
     src/chip/io/mos6526.cpp
 

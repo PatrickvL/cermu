@@ -56,6 +56,12 @@ void* mos6526_system_create(chip_descriptor_t* desc) {
     // Used when CRA_TODIN = 1 (50 Hz TOD pin input pulses)
     cia->cycles_tod[1] = 1000000 / 50;
     
+    // Initialize port read callbacks to NULL
+    cia->port_a_read_callback = NULL;
+    cia->port_a_read_context = NULL;
+    cia->port_b_read_callback = NULL;
+    cia->port_b_read_context = NULL;
+    
     mos6526_reset(cia);
     return cia;
 }
@@ -208,11 +214,22 @@ void mos6526_update_output_port_b(mos6526_t* cia, uint8_t v) {
 }
 
 uint8_t mos6526_read_port_data(mos6526_t* cia, uint32_t p) { // p:A or B
-    // Combine the port pins that are set to input with those that are set to output
+    // Start with current port value (pull-ups HIGH, or driven by output pins)
     uint8_t port_value = (p == A) ? cia->port_a_value : cia->port_b_value;
     uint8_t output_mask = cia->reg[DDRA + p]; //p=B:DDRB (not IDDRB), to read whatever is written to the port (including PB6/7 overrides)
+    
+    // For input pins, call the read callback to get external device state
+    // External devices (keyboard, joystick) can pull lines LOW
+    if (p == A && cia->port_a_read_callback) {
+        // Callback receives current port output and returns modified value
+        // It can pull any input lines LOW (0) that are pressed
+        port_value = cia->port_a_read_callback(cia->port_a_read_context, port_value);
+    } else if (p == B && cia->port_b_read_callback) {
+        port_value = cia->port_b_read_callback(cia->port_b_read_context, port_value);
+    }
+    
+    // Return combination: input bits from port_value, output bits from register
     return (port_value & ~output_mask) | (cia->reg[PRA + p] & output_mask);
-    // Using the mask of bits that are set to output
 }
 
 void mos6526_update_internal_data_direction_port_b(mos6526_t* cia, uint8_t port_b_output_mask) {
