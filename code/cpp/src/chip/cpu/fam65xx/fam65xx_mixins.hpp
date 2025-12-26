@@ -65,9 +65,11 @@ template <const CPUTraits &Traits> struct io_port_mixin_t {
     uint8_t old_data = io_port.data;
     io_port.data = value;
     // If banking bits (0-2) changed, notify via descriptor's bank_change
-    if (((old_data ^ value) & 0x07) && descriptor && descriptor->bank_change) {
+    if ((old_data ^ value) & 0x07) {
       uint8_t banking_bits = value & io_port.direction & 0x07;
-      descriptor->bank_change(chip_instance, banking_bits);
+      if (descriptor && descriptor->bank_change) {
+        descriptor->bank_change(chip_instance, banking_bits);
+      }
     }
   }
 

@@ -537,14 +537,16 @@ c64_t* c64_system_create(const c64_config_t* config) {
     mos6510_descriptor.bank_change = c64_cpu_banking_callback;
     printf("C64 System: Assigned MOS6510 descriptor bank_change callback\n");
     
-    // NOTE: Initial banking mode is already set correctly at line 223 (mode 0x07)
-    // The CPU I/O port initializes to 0x37 (DDR=0x2F) which gives banking bits = 0x07
-    // This matches the PLA mode 0x07 already set, so no need to call banking callback here
-    // The banking callback will be triggered when the CPU actually writes to $0001 during boot
-    printf("C64 System: Initial CPU I/O port: DATA=$%02X DDR=$%02X (banking bits=$%02X)\n",
+    // NOTE: Initial banking mode is already set correctly at line 226 (mode $17: I/O enabled)
+    // The CPU I/O port initializes to $37 (DDR=$2F) which gives banking bits = $07
+    // This matches the PLA mode $17 already set (with EXROM=1, GAME=1 from system_lines)
+    // The banking callback will be triggered when the CPU writes to $0001 during boot
+    uint8_t initial_banking_bits = mos6510_get_io_data((mos6510_t*)c64->mos6510) &
+                                    mos6510_get_io_ddr((mos6510_t*)c64->mos6510) & 0x07;
+    printf("C64 System: Initial CPU I/O port: DATA=$%02X DDR=$%02X (banking bits=$%02X) → mode=$17\n",
            mos6510_get_io_data((mos6510_t*)c64->mos6510),
            mos6510_get_io_ddr((mos6510_t*)c64->mos6510),
-           mos6510_get_io_data((mos6510_t*)c64->mos6510) & mos6510_get_io_ddr((mos6510_t*)c64->mos6510) & 0x07);
+           initial_banking_bits);
 
     // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
     ((mos6526_t*)c64->cia2)->interrupt_line = BUS_MASK_NMI;
