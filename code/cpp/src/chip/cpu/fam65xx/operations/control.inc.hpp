@@ -307,7 +307,8 @@ bus_state_t op_brk(bus_state_t pins) {
       case 13:
         this->bus_load_reg(REG_PCH, pins);
         this->set(REG_PBR, 0); // Clear PBR for interrupt vectors
-        this->active_interrupt = FAM65XX_INT_NONE;
+        // DON'T clear active_interrupt here - keep it set so nested interrupts are blocked
+        // It will be cleared by RTI when the interrupt handler completes
         this->transition_to_fetch();
         return pins;
       }
@@ -419,7 +420,8 @@ bus_state_t op_brk(bus_state_t pins) {
     if constexpr (has_wide_registers()) {
       this->set(REG_PBR, 0);
     }
-    this->active_interrupt = FAM65XX_INT_NONE;
+    // DON'T clear active_interrupt here - keep it set so nested interrupts are blocked
+    // It will be cleared by RTI when the interrupt handler completes
     this->transition_to_fetch();
     return pins;
   }
@@ -500,8 +502,10 @@ bus_state_t op_rti(bus_state_t pins) {
     pins = this->bus_setup_read<Addr::SP>(pins);
     return pins;
   case 9:
-    /* PHI1: Load PCH and transition */
+    /* PHI1: Load PCH, clear active_interrupt, and transition */
     this->bus_load_reg(REG_PCH, pins);
+    // Clear active_interrupt when RTI completes - this re-enables interrupt detection
+    this->active_interrupt = FAM65XX_INT_NONE;
     this->transition_to_fetch();
     return pins;
   }
