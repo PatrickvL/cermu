@@ -119,13 +119,16 @@ void commodore_keyboard_reset(commodore_keyboard_t* keyboard) {
         };
     }
 
-    // Build key lookup table
+    // Build key lookup table - only for keys within bounds
+    // Note: SDL keycodes can be very large (e.g., SDLK_F1 = 0x4000003A)
+    // so we skip the lookup table for now and will use linear search
     for (int row = 0; row < KEYBOARD_ROWS; row++) {
         for (int col = 0; col < KEYBOARD_COLS; col++) {
             uint32_t unshifted_key = keyboard_matrix_unshifted[row][col];
             uint32_t shifted_key = keyboard_matrix_shifted[row][col];
 
-            if (unshifted_key != C64Keys::SAME && unshifted_key != 0) {
+            // Only add to lookup table if within bounds (ASCII range)
+            if (unshifted_key != C64Keys::SAME && unshifted_key != 0 && unshifted_key < MAX_KEY_LOOKUP) {
                 keyboard->key_lookup[unshifted_key] = (key_matrix_info_t){
                     .row = (uint8_t)row,
                     .col = (uint8_t)col,
@@ -134,7 +137,7 @@ void commodore_keyboard_reset(commodore_keyboard_t* keyboard) {
                 };
             }
 
-            if (shifted_key != C64Keys::SAME && shifted_key != 0 && shifted_key != unshifted_key) {
+            if (shifted_key != C64Keys::SAME && shifted_key != 0 && shifted_key != unshifted_key && shifted_key < MAX_KEY_LOOKUP) {
                 keyboard->key_lookup[shifted_key] = (key_matrix_info_t){
                     .row = (uint8_t)row,
                     .col = (uint8_t)col,
