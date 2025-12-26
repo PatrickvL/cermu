@@ -2,8 +2,8 @@
 
 #include <cstdint>
 #include <cstddef>
-#include <memory>
-#include "../../core/aiemuc.h"
+//#include <memory>
+//#include "../../core/aiemuc.h"
 #include "../../core/system.h"
 #include "../../chip/memory/ram.h"
 #include "../../chip/memory/rom.h"
@@ -11,8 +11,8 @@
 #include "../../chip/sound/mos6581.h"
 #include "../../chip/io/mos6526.h"
 #include "../../chip/video/vic_ii/vicii_common.h"
-#include "../../chip/video/vic_ii/mos6569.h"
-#include "../../chip/video/vic_ii/mos6567.h"
+//#include "../../chip/video/vic_ii/mos6569.h"
+//#include "../../chip/video/vic_ii/mos6567.h"
 #include "../../chip/input/commodore_keyboard.h"
 #include "c64_bus.h"  // Include the bus header to get c64_bus_t definition
 #include "c64_config.h"

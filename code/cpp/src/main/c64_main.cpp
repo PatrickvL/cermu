@@ -1,7 +1,7 @@
 #include "../systems/c64/c64.h"
 #include "../systems/c64/c64_config.h"
 #include <iostream>
-#include <memory>
+//#include <memory>
 #include <cstdint>
 #include <cstring>
 

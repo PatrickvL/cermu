@@ -46,7 +46,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <type_traits>
+//#include <type_traits>
 
 // Include instruction decoder for disassembly
 extern "C" {
