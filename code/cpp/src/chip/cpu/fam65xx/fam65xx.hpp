@@ -1472,24 +1472,43 @@ public:
 #ifndef PROCESSOR_TESTS
       // PROCESSOR_TESTS mode: Disable interrupt hijacking for clean instruction testing
       // Production mode: Always allow interrupt hijacking for accurate emulation
+      
+      // CRITICAL: Save active_interrupt state BEFORE process_interrupt_detection()
+      // because that function will SET active_interrupt when it detects an IRQ.
+      // We need to know if an interrupt was ALREADY active before detection.
+      interrupt_t interrupt_before_detection = this->active_interrupt;
+      
       if (this->process_interrupt_detection(pins)) {
         if (this->active_interrupt == FAM65XX_INT_RESET) {
           return reset(pins);
         } else if (this->current_handler == &fam65xx_t::fetch_opcode &&
                    this->half_cycle == 0) {
-          // Hijack fetch and force BRK execution
-          // CRITICAL: When hijacking, BRK should still use the interrupt's vector
-          // So we keep active_interrupt as-is (IRQ/NMI/etc) and let BRK handle it
-          this->current_handler = &fam65xx_t::op_brk;
-          
-          // CRITICAL FIX: Clear interrupt shift register to prevent immediate re-triggering
-          // When an interrupt is acknowledged by hijacking fetch, we must clear the shift
-          // register. Otherwise, the IRQ bits remain set and trigger another interrupt
-          // immediately on the next cycle, before the I flag can be set by BRK.
-          // This matches hardware behavior: once an interrupt is acknowledged, the CPU
-          // stops sampling that interrupt line until the I flag is set and then cleared.
-          this->interrupt_shift_register = 0;
-          this->nmi_prev = (pins & FAM65XX_NMI) ? 1 : 0; // Reset NMI edge detection
+          // CRITICAL: Don't hijack if an interrupt was ALREADY being processed!
+          // Check the saved state from BEFORE detection, not the current state.
+          // active_interrupt is set by process_interrupt_detection() when IRQ is detected,
+          // and cleared by RTI when interrupt handling completes.
+          // While an interrupt is active, we must not accept new interrupts even if detected,
+          // because the I flag may not be set yet (it's set during BRK execution, not before).
+          if (interrupt_before_detection != FAM65XX_INT_NONE) {
+            // Interrupt was already being handled before this detection - don't hijack
+            // Revert active_interrupt to prevent accepting this new interrupt
+            this->active_interrupt = interrupt_before_detection;
+          } else {
+            // No interrupt was active before detection - safe to hijack
+            // Hijack fetch and force BRK execution
+            // CRITICAL: When hijacking, BRK should still use the interrupt's vector
+            // So we keep active_interrupt as-is (IRQ/NMI/etc) and let BRK handle it
+            this->current_handler = &fam65xx_t::op_brk;
+            
+            // CRITICAL FIX: Clear interrupt shift register to prevent immediate re-triggering
+            // When an interrupt is acknowledged by hijacking fetch, we must clear the shift
+            // register. Otherwise, the IRQ bits remain set and trigger another interrupt
+            // immediately on the next cycle, before the I flag can be set by BRK.
+            // This matches hardware behavior: once an interrupt is acknowledged, the CPU
+            // stops sampling that interrupt line until the I flag is set and then cleared.
+            this->interrupt_shift_register = 0;
+            this->nmi_prev = (pins & FAM65XX_NMI) ? 1 : 0; // Reset NMI edge detection
+          }
         }
       }
 #endif
