@@ -77,6 +77,14 @@ typedef struct mos6526_s {
     // Callback for port A output changes (used by CIA2 for VIC-II bank switching)
     void (*port_a_change_callback)(void* context, uint8_t port_a_output);
     void* port_a_callback_context;
+    
+    // Callbacks for port input reads (used by CIA1 for keyboard matrix scanning)
+    // These callbacks allow external devices (keyboard, joystick) to pull port lines LOW
+    // Called when CIA reads from port to get external device state
+    uint8_t (*port_a_read_callback)(void* context, uint8_t port_a_output);
+    void* port_a_read_context;
+    uint8_t (*port_b_read_callback)(void* context, uint8_t port_b_output);
+    void* port_b_read_context;
 } mos6526_t;
 
 // MOS6526 CIA Register Definitions

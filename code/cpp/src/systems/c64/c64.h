@@ -13,6 +13,7 @@
 #include "../../chip/video/vic_ii/vicii_common.h"
 #include "../../chip/video/vic_ii/mos6569.h"
 #include "../../chip/video/vic_ii/mos6567.h"
+#include "../../chip/input/commodore_keyboard.h"
 #include "c64_bus.h"  // Include the bus header to get c64_bus_t definition
 #include "c64_config.h"
 
@@ -34,6 +35,7 @@ struct C64System {
     mos2114_t* colorram;        // Color RAM (1KB at $D800-$DBFF)
     mos6526_t* cia1;            // MOS6526 CIA 1 (BUS_MASK_IRQ) ($DC00-$DDFF, 256 bytes)
     mos6526_t* cia2;            // MOS6526 CIA 2 (BUS_MASK_NMI) ($DD00-$DFFF, 256 bytes)
+    commodore_keyboard_t* keyboard; // Keyboard matrix (connected to CIA1)
     // Additional members for ROM slots
     void* io1;                  // Cartridge I/O 1 ($DE00-$DEFF)
     void* io2;                  // Cartridge I/O 2 ($DF00-$DFFF)
