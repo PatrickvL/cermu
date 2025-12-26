@@ -2023,7 +2023,9 @@ static inline void vicii_initialize(vicii_t* vicii) {
     vicii->registers.data[VICII_MXE] = 0;  // All sprites disabled
     vicii->registers.data[VICII_C2] = VICII_C2_CSEL; // 8: XSCROLL:0, no MultiColorMode, 40-column display, no RESET
     vicii->registers.data[VICII_MP] = VICII_MP_CB12 | VICII_MP_VM10; // 0x14: "address of Character Dot-Data area to 4096 ($1000)"
+    vicii->registers.data[VICII_RASTER] = 0; // Raster compare bits 0-7
     vicii->registers.data[VICII_IR] = 0; // No interrupts latched at startup
+    vicii->registers.data[VICII_IE] = 0; // No interrupts enabled at startup
     
     // Set default colors
     vicii->registers.data[VICII_EC] = VICII_COLOR_LIGHT_BLUE; // 14: Border Color
@@ -2110,6 +2112,9 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
     
     vicii_set_x_cycle(vicii, 0);
     vicii->timing.raster_counter = 0;
+    
+    // Initialize prev_raster_compare to current value to prevent spurious edge detection
+    vicii->timing.prev_raster_compare = vicii_get_raster_compare(vicii);
     
     // Initialize border flip-flops to show border initially
     vicii->border.main_border_flip_flop = true;
