@@ -1,4 +1,105 @@
-# AGENTS.md - Agent Behavioral Instructions
+# AGENTS.md - AI Agent Instructions for C64 Emulator Project
+
+## Rule #1: Binary Location (CRITICAL - READ FIRST)
+
+**ALL binaries output to ONE location ONLY:**
+```
+code/cpp/build/bin/
+```
+
+**Executables:**
+- `code/cpp/build/bin/c64emu` - Console emulator
+- `code/cpp/build/bin/c64emu_gui` - GUI emulator (if SDL2/OpenGL available)
+
+**Run commands (from code/cpp directory):**
+```bash
+./build/bin/c64emu      # Console version
+./build/bin/c64emu_gui  # GUI version
+```
+
+❌ **NEVER use these paths (they don't exist):**
+- `./bin/c64emu`
+- `code/cpp/bin/c64emu`
+- `build/bin/c64emu` (from root)
+
+## Rule #2: Build System
+
+**Primary method: CMake from code/cpp directory**
+
+```bash
+# Standard build:
+cd code/cpp
+cmake -B build
+cmake --build build --target c64emu -j$(nproc)
+
+# Clean rebuild:
+rm -rf build/
+cmake -B build
+cmake --build build --target c64emu -j$(nproc)
+
+# Build both targets:
+cmake --build build -j$(nproc)
+```
+
+**CMakeLists.txt enforces unified output location:**
+```cmake
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/bin")
+```
+
+## Rule #3: ROM Files Required
+
+**Location:** `data/c64/roms/` (relative to project root)
+
+**Required files:**
+- `kernal.901227-03.bin` - KERNAL ROM
+- `basic.901226-01.bin` - BASIC ROM
+- `characters.901225-01.bin` - Character ROM
+
+**Alternative patterns auto-detected:**
+- `C64 - 901226-01 - Commodore (*) Basic.rom`
+- `C64 - 901227-03 - Commodore (*) Kernal.rom`
+- `C64 - 901225-01 - Commodore (*) Characters.rom`
+
+## Rule #4: Testing & Verification
+
+**Expected behavior:**
+```bash
+cd code/cpp
+./build/bin/c64emu
+```
+- ROMs load successfully
+- System boots through KERNAL initialization
+- Runs ~1,000,000 cycles
+- KERNAL READY prompt displays (GUI version)
+- No BRK loops or fatal errors
+
+**Troubleshooting checklist:**
+1. Verify binary exists: `ls -la ./build/bin/c64emu`
+2. Check binary timestamp is recent
+3. Verify ROMs exist: `ls -la ../data/c64/roms/`
+4. Clean rebuild if stale: `rm -rf build/ && cmake -B build && cmake --build build`
+
+## Rule #5: Project Structure
+
+```
+aiemu/
+├── code/cpp/
+│   ├── build/bin/           # ← ALL BINARIES HERE
+│   ├── src/                 # Source code
+│   │   ├── chip/           # Chip implementations
+│   │   ├── systems/        # System implementations (C64, VIC20, etc.)
+│   │   ├── core/           # Core emulation framework
+│   │   └── main/           # Main entry points
+│   ├── tests/              # Test suites
+│   ├── CMakeLists.txt      # Build configuration
+│   └── AGENTS.md           # This file
+├── data/c64/roms/          # C64 ROM files
+└── docs/                   # Documentation
+```
+
+---
+
+# Development Guidelines
 
 ## Core Development Principles
 
@@ -105,3 +206,9 @@ When you encounter any of the following, **REMOVE IMMEDIATELY**:
 - **Template-based feature composition** for processor variants
 
 This document defines **behavioral instructions** for AI agents working on this project. Every implementation decision must prioritize **hardware fidelity**, **template-driven optimization**, and **comprehensive verification**.
+
+---
+
+**Last Updated:** 2025-12-27
+**Build System Version:** CMake 3.16+
+**Unified Output Since:** 2025-12-27

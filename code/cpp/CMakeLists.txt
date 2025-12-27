@@ -7,6 +7,12 @@ project(aiemuc
     LANGUAGES CXX
 )
 
+# CRITICAL: Force all binaries to output to a single consistent location
+# This prevents confusion from multiple binary locations across different build methods
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/bin")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_SOURCE_DIR}/build/bin")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_SOURCE_DIR}/build/bin")
+
 # Set C++ standard for the entire project
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -255,11 +261,8 @@ if(NOT WIN32 AND NOT MSVC)
     target_link_libraries(c64emu m)  # Add math library for tanhf (Unix only)
 endif()
 
-# Set output directory for console executable
-set_target_properties(c64emu
-    PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
+# Output directory already set globally at top of CMakeLists.txt
+# No need to set it per-target
 
 # GUI executable (ImGui version) - only if SDL2 and OpenGL are available
 if(BUILD_GUI)
@@ -335,10 +338,10 @@ if(BUILD_GUI)
         target_link_libraries(c64emu_gui m)  # Add math library for tanhf (Unix only)
     endif()
 
-    # Set output directory for GUI executable (keep as console app for now)
+    # Output directory already set globally at top of CMakeLists.txt
+    # Keep as console app for debugging
     set_target_properties(c64emu_gui
         PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
         WIN32_EXECUTABLE FALSE
     )
     
@@ -383,12 +386,7 @@ endif()
 
 
 # Link math library for test executable too
-
-# Set output directory
-set_target_properties(c64emu
-    PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-)
+# Output directory already set globally at top of CMakeLists.txt
 
 
 # Installation
