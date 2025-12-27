@@ -1001,14 +1001,14 @@ static uint8_t vicii_cycle_refresh(vicii_t* vicii, int unused_param) {
 }
 
 static uint8_t vicii_cycle_vc_load(vicii_t* vicii, int unused_param) {
-    vicii->video_logic.vc = vicii->video_logic.vcbase;
-    vicii->video_logic.vmli = 0;
     bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
     
     // BA/AEC will be set centrally in vicii_tick based on access type
-    // On bad lines: set display_state = true and reset RC to 0
-    // On non-bad lines: DO NOT change display_state (it's managed by cycle 58)
+    // On bad lines: load VC from VCBASE, set display_state = true, and reset RC to 0
+    // On non-bad lines: DO NOT change VC or display_state (managed by cycle 58)
     if (vicii->video_logic.is_bad_line && den_enabled) {
+        vicii->video_logic.vc = vicii->video_logic.vcbase;
+        vicii->video_logic.vmli = 0;
         vicii->video_logic.display_state = true;
         vicii->video_logic.rc = 0;
     }
@@ -1561,10 +1561,14 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
             vicii->video_logic.refresh_counter--;
             break;
-        case VIC_ACCESS_C:
+        case VIC_ACCESS_C: {
             // C-access: Read Color RAM during PHI1 (happens on bad lines only)
-            BUS_SET_ADDR(bus_state, vicii->memory.vm_base | vicii->video_logic.vc);
+            // Documentation section 3.7.3.1, line 1312: |VM13|VM12|VM11|VM10| VC9| VC8| VC7| VC6| VC5| VC4| VC3| VC2| VC1| VC0|
+            const uint16_t c_access_addr = vicii->memory.vm_base | vicii->video_logic.vc;
+            
+            BUS_SET_ADDR(bus_state, c_access_addr);
             bus_state = mos2114_read(vicii->colorram, bus_state);
+            
             // Store at current vmli position
             if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
                 const uint8_t color_data = BUS_GET_DATA(bus_state) & 0x0F;
@@ -1572,6 +1576,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             }
             // Fall through to G-access
             FALLTHROUGH;
+        }
         case VIC_ACCESS_G:
             // G-access: Read graphics data (character ROM or bitmap data)
             // Happens on ALL cycles 16-54 during display state (both bad lines and non-bad lines)
@@ -1584,7 +1589,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
                 // Bitmap mode (BMM bit set)?
                 if (vicii->sequencer.graphics_mode & VICII_BITMAP_MODE_MASK) {
                     // Bitmap mode: CB13 provides bit 13, VC provides bits 3-12, RC provides bits 0-2
-                    // Documentation section 3.7.3.3, line 1394: |CB13| VC9| VC8| VC7| VC6| VC5| VC4| VC3| VC2| VC1| VC0| RC2| RC1| RC0|
+                    // Documentation section 3.7.3.3, line 1455: |CB13| VC9| VC8| VC7| VC6| VC5| VC4| VC3| VC2| VC1| VC0| RC2| RC1| RC0|
                     // Use VCBASE + VMLI to get the VC value for this column position
                     const uint16_t vc_for_column = (vicii->video_logic.vcbase + vmli) & 0x3FF;
                     const uint16_t cb13_bit = vicii->memory.cb_base & (1 << 13);
@@ -1592,6 +1597,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
                     address = cb13_bit | (vc_for_column << 3);
                 } else {
                     // Text mode: address uses character code from video matrix
+                    // Documentation section 3.7.3.1, line 1334: |CB13|CB12|CB11| D7 | D6 | D5 | D4 | D3 | D2 | D1 | D0 | RC2| RC1| RC0|
                     const uint8_t char_code = vicii->video_data.video_matrix_line[vmli];
 
                     address = vicii->memory.cb_base | (char_code << 3);
