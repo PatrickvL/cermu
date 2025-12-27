@@ -1002,13 +1002,13 @@ static uint8_t vicii_cycle_refresh(vicii_t* vicii, int unused_param) {
 
 static uint8_t vicii_cycle_vc_load(vicii_t* vicii, int unused_param) {
     bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    vicii->video_logic.vmli = 0;
     
     // BA/AEC will be set centrally in vicii_tick based on access type
     // On bad lines: load VC from VCBASE, set display_state = true, and reset RC to 0
     // On non-bad lines: DO NOT change VC or display_state (managed by cycle 58)
     if (vicii->video_logic.is_bad_line && den_enabled) {
         vicii->video_logic.vc = vicii->video_logic.vcbase;
-        vicii->video_logic.vmli = 0;
         vicii->video_logic.display_state = true;
         vicii->video_logic.rc = 0;
     }
