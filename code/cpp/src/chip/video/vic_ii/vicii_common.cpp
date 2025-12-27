@@ -1028,7 +1028,7 @@ static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int unused_param_vm
     // BA/AEC will be set centrally in vicii_tick based on access type
     if (den_enabled) {
         if (vicii->video_logic.is_bad_line) {
-            return VIC_ACCESS_C;
+            return VIC_ACCESS_C; // Will FALLTHROUGH in vicii_tick PHI1 phase to VIC_ACCESS_G as well
         } else if (vicii->video_logic.display_state) {
             // On non-bad lines during display state, still need G-access for graphics data
             // DO NOT change display_state here - it's managed by cycle 15 (bad lines set it true)
@@ -1082,6 +1082,7 @@ static uint8_t vicii_cycle_sprite_s_1_pal(vicii_t* vicii, int param) {
     // Call underlying cycle function (sprite 3 S-access for PAL)
     return vicii_cycle_sprite_s_access(vicii, param);
 }
+
 // NTSC Cycle 0 wrapper: Execute raster/IRQ operations immediately (no delay)
 //
 // Documentation: Unlike PAL (6569), NTSC VIC-II chips (6567) do NOT have the
@@ -1514,20 +1515,11 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             }
             break;
         case VIC_ACCESS_C: {
-            // C-access: Store video matrix data that arrived from PREVIOUS cycle's PHI2 setup
-            // CRITICAL TIMING ISSUE: Pipeline delay creates off-by-one in VMLI
-            //
-            // Actual hardware sequence (spec lines 1236-1246):
-            // Cycle 14: VMLI cleared to 0
-            // Cycle 15: C-access for position 0 (PHI2), G-access (PHI1), VMLI→1 (after g-access)
-            // Cycle 16: Data for position 0 arrives, but VMLI is now 1
-            //
-            // Solution: Use vmli - 1 for storage to compensate for the increment that happened
-            // after the g-access but before this data arrival.
+            // C-access: Store video matrix data
+            // Use current VMLI value directly - it corresponds to the position we're fetching
             const uint8_t vmli = vicii->video_logic.vmli;
-            if (vicii->video_logic.display_state && vmli > 0 && vmli <= 40) {
-                const uint8_t storage_index = vmli - 1;  // Compensate for pipeline delay
-                vicii->video_data.video_matrix_line[storage_index] = bus_data;
+            if (vicii->video_logic.display_state && vmli < 40) {
+                vicii->video_data.video_matrix_line[vmli] = bus_data;
             }
             break;
         }
