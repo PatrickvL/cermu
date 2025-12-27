@@ -939,8 +939,10 @@ void vicii_timing_advance(vicii_t* vicii) {
             vicii->timing.raster_counter = vicii->config->total_lines - 1;
         }
         
-        // Reset VCBASE/VC when outside display area ($30-$F7)
-        if (vicii->timing.raster_counter < 0x30 || vicii->timing.raster_counter > 0xf7) {
+        // Spec (line 1229): "Once somewhere outside of the range of raster lines $30-$f7,
+        // VCBASE is reset to zero. This is presumably done in raster line 0."
+        // Reset once when entering non-display area, not continuously
+        if (vicii->timing.raster_counter == 0) {
             vicii_reset_vcbase_vc(vicii);
         }
         
@@ -1004,18 +1006,19 @@ static uint8_t vicii_cycle_refresh(vicii_t* vicii, int unused_param) {
 
 static uint8_t vicii_cycle_vc_load(vicii_t* vicii, int unused_param) {
     bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    
+    // Spec (line 1236): "In the first phase of cycle 14 of each line, VC is loaded from VCBASE
+    // (VCBASE->VC) and VMLI is cleared."
     vicii->video_logic.vmli = 0;
     
     // BA/AEC will be set centrally in vicii_tick based on access type
-    // On bad lines: load VC from VCBASE, set display_state = true, and reset RC to 0
-    // On non-bad lines: DO NOT change VC or display_state (managed by cycle 58)
+    // On bad lines: load VC from VCBASE
+    // Display state is controlled by cycle 58, not here (spec lines 1196-1203)
+    // RC is managed entirely by cycle 58, NOT here
     if (vicii->video_logic.is_bad_line && den_enabled) {
         vicii->video_logic.vc = vicii->video_logic.vcbase;
-        vicii->video_logic.display_state = true;
-        vicii->video_logic.rc = 0;
     }
 
-    // Note: display_state is NOT set to false here - that only happens in cycle 58 when RC==7
     return VIC_ACCESS_IDLE;
 }
 
@@ -1211,28 +1214,35 @@ static uint8_t vicii_cycle_idle_y_match(vicii_t* vicii, int unused_param) {
     return vicii_cycle_idle(vicii, unused_param);
 }
 
-// Cycle 58: RC check and VCBASE update (Rule 5 from Section 3.7.2)
+// Cycle 58: RC check, VCBASE update, and display state control (Rule 5 from Section 3.7.2)
 static inline void vicii_cycle_58_rc_check(vicii_t* vicii) {
-    // "In the first phase of cycle 58, the VIC checks if RC=7. If so, the video
-    // logic goes to idle state and VCBASE is loaded from VC (VC->VCBASE). If
-    // "If the video logic is in display state afterwards (this is always the case
+    // Spec (lines 1248-1251): "In the first phase of cycle 58, the VIC checks if RC=7.
+    // If so, the video logic goes to idle state and VCBASE is loaded from VC (VC->VCBASE).
+    // If the video logic is in display state afterwards (this is always the case
     // if there is a Bad Line Condition), RC is incremented."
+    //
+    // Spec (lines 1196-1203): Cycle 58 controls display state flip-flop:
+    // - Rule 1: "If the Bad Line Condition is false in cycle 58, display state is cleared"
+    // - Rule 2: "If the Bad Line Condition is true in cycle 58, display state is set"
     
-    // "If the video logic is in display state... RC is incremented."
-    // Check display_state BEFORE potentially changing it
-    bool should_increment_rc = vicii->video_logic.display_state;
-    
-    if (vicii->video_logic.rc == 7) {
-        // "The transition from display to idle state occurs in cycle 58 of a line
-        // if the RC contains the value 7 and there is no Bad Line Condition."
-        if (!vicii->video_logic.is_bad_line) {
-            vicii->video_logic.display_state = false;
-            vicii->video_logic.vcbase = vicii->video_logic.vc;
-            should_increment_rc = false; // Override: don't increment when going to idle
-        }
+    // First: Handle RC==7 transition - update VCBASE
+    bool rc_was_7 = (vicii->video_logic.rc == 7);
+    if (rc_was_7) {
+        vicii->video_logic.vcbase = vicii->video_logic.vc;
     }
-    // Increment RC if we determined we should
-    if (should_increment_rc) {
+    
+    // Second: Update display state based on bad line condition (spec lines 1196-1203)
+    // This must happen BEFORE the RC increment check
+    if (vicii->video_logic.is_bad_line) {
+        vicii->video_logic.display_state = true;
+    } else if (rc_was_7) {
+        // Only clear display state when RC==7 AND no bad line
+        vicii->video_logic.display_state = false;
+    }
+    
+    // Third: Increment RC if in display state (checked AFTER display state rules applied)
+    // Spec: "If the video logic is in display state afterwards, RC is incremented"
+    if (vicii->video_logic.display_state) {
         vicii->video_logic.rc = (vicii->video_logic.rc + 1) & 0x07;
     }
 
@@ -1506,11 +1516,9 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         case VIC_ACCESS_C:
             // C-access: Store video matrix data that arrived from PREVIOUS cycle's PHI2 setup
             // ONLY happens on bad lines
+            // NOTE: VC/VMLI increment happens AFTER g-access, not here (spec line 1246)
             if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
                 vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = bus_data;
-                // Increment VC and VMLI after storing c-access data
-                vicii->video_logic.vc++;
-                vicii->video_logic.vmli++;
             }
             break;
         default: // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH, VIC_ACCESS_G
@@ -1637,24 +1645,19 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
 
         vicii_graphics_sequencer(vicii, graphics_data, vmli);
         
-        // Documentation (vic-ii.txt line 1184): "VC and VMLI are incremented after each g-access in display state."
-        // CRITICAL DISTINCTION:
-        // - On bad lines: VC and VMLI both increment during C-access (line 1342-1343)
-        // - On non-bad lines: ONLY VMLI increments during G-access, VC stays at VCBASE
+        // Spec (line 1246): "VC and VMLI are incremented after each g-access in display state."
+        // CRITICAL: This happens AFTER g-access on BOTH bad lines and non-bad lines
         //
-        // Why? VC (Video Counter) points to the video matrix position and should only
-        // advance on bad lines when new character codes are fetched. VMLI (Video Matrix
-        // Line Index) is the column counter within the 40-character line buffer and must
-        // increment on ALL lines to sequence through the 40 characters.
+        // On bad lines: VC and VMLI both increment (advancing through video matrix)
+        // On non-bad lines: Only VMLI increments (VC stays at VCBASE to reuse same characters)
         //
-        // CRITICAL BUG FIX: The pixel sequencer needs to read from the graphics_line position
-        // that was JUST written (using the vmli value BEFORE increment). Store this value
-        // so the pixel sequencer can use it.
+        // Store vmli value BEFORE increment so pixel sequencer can read from correct position
         vicii->sequencer.current_vmli_for_display = vmli;
         
-        if (!vicii->video_logic.is_bad_line) {
-            // On non-bad lines: increment ONLY VMLI, not VC
-            vicii->video_logic.vmli++;
+        // Increment after g-access (not during c-access!)
+        vicii->video_logic.vmli++;
+        if (vicii->video_logic.is_bad_line) {
+            vicii->video_logic.vc++;
         }
     }
     
