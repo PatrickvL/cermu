@@ -1657,8 +1657,9 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         vicii->sequencer.current_vmli_for_display = vmli;
         
         // Increment after g-access (not during c-access!)
+        // Spec line 1246: "VC and VMLI are incremented after each g-access in display state"
         vicii->video_logic.vmli++;
-        if (vicii->video_logic.is_bad_line) {
+        if (vicii->video_logic.display_state) {
             vicii->video_logic.vc++;
         }
     }
