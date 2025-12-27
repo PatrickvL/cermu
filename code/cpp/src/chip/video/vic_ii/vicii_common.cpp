@@ -1513,17 +1513,24 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
                 vicii->bus.active_sprite = NULL;
             }
             break;
-        case VIC_ACCESS_C:
+        case VIC_ACCESS_C: {
             // C-access: Store video matrix data that arrived from PREVIOUS cycle's PHI2 setup
-            // ONLY happens on bad lines
-            // CRITICAL: The data was fetched for the PREVIOUS vmli position, but vmli was
-            // already incremented at the end of the previous cycle (spec line 1246).
-            // Therefore, we must store at vmli-1 to put the data in the correct position.
-            // This prevents the off-by-one error where position 0 data goes to position 1.
-            if (vicii->video_logic.display_state && vicii->video_logic.vmli > 0 && vicii->video_logic.vmli <= 40) {
-                vicii->video_data.video_matrix_line[vicii->video_logic.vmli - 1] = bus_data;
+            // CRITICAL TIMING ISSUE: Pipeline delay creates off-by-one in VMLI
+            //
+            // Actual hardware sequence (spec lines 1236-1246):
+            // Cycle 14: VMLI cleared to 0
+            // Cycle 15: C-access for position 0 (PHI2), G-access (PHI1), VMLI→1 (after g-access)
+            // Cycle 16: Data for position 0 arrives, but VMLI is now 1
+            //
+            // Solution: Use vmli - 1 for storage to compensate for the increment that happened
+            // after the g-access but before this data arrival.
+            const uint8_t vmli = vicii->video_logic.vmli;
+            if (vicii->video_logic.display_state && vmli > 0 && vmli <= 40) {
+                const uint8_t storage_index = vmli - 1;  // Compensate for pipeline delay
+                vicii->video_data.video_matrix_line[storage_index] = bus_data;
             }
             break;
+        }
         default: // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH, VIC_ACCESS_G
             // G-access: No video matrix storage, just graphics data read
             // This happens on non-bad lines during display_state
