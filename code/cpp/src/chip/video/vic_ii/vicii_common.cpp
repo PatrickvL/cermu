@@ -588,9 +588,11 @@ static inline void vicii_sequencer_update_mode(vicii_sequencer_unit_t* sequencer
 void vicii_update_badline_condition(vicii_t* vicii) {
     uint16_t raster = vicii->timing.raster_counter;
     
-    // Bad lines only occur in range $30-$F7 (48-247)
-    // Single range check instead of two comparisons
-    if ((raster - 48) < 200) {  // Equivalent to raster >= 48 && raster < 248
+    // Bad lines only occur in range $30-$F7 (48-247) INCLUSIVE
+    // Optimized single comparison using intentional unsigned underflow:
+    // When raster < 48, (raster - 48) underflows to large positive, making comparison false
+    // When raster >= 48 && raster <= 247, (raster - 48) is in range [0, 199]
+    if ((raster - 48) <= 199) {  // Equivalent to raster >= 48 && raster <= 247
         // "A Bad Line Condition is given at any arbitrary clock cycle, if at the
         // negative edge of ø0 at the beginning of the cycle RASTER >= $30 and RASTER
         // <= $f7 and the lower three bits of RASTER are equal to YSCROLL and if the
