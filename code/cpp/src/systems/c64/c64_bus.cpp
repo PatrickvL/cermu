@@ -629,7 +629,7 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
         DO(c64->cartridge_romh, 0x2000, 8*1024, c64_bus->romh_present);
         DO(c64->kernal, 0x4000, 8*1024, true);
         DO(c64->basic, 0x6000, 8*1024, true);
-        DO(c64->charrom, 0x8000, 4*1024, true);
+        DO(c64->charrom, 0x8000, 4*1024, true);  // FIXED: 0x8000 not 0x7000 to avoid overlap with BASIC
         DO(c64->ram, 0x9000, 64*1024, true);
 #undef DO
         
@@ -644,7 +644,7 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
     }
     
     // Calculate required memory size for strategic layout (4KB step size)
-    // Strategic layout: ROML(0x0000) + ROMH(0x2000) + KERNAL(0x4000) + BASIC(0x6000) + CHARROM(0x7000) + RAM(0x9000)
+    // Strategic layout: ROML(0x0000) + ROMH(0x2000) + KERNAL(0x4000) + BASIC(0x6000) + CHARROM(0x8000) + RAM(0x9000)
     // Total: 0x9000 (36KB) + RAM(64KB) = 100KB maximum
     size_t required_size = 100 * 1024; // Base size: 36KB + 64KB RAM
     size_t offset = 0;                  // No offset needed for strategic layout
@@ -708,12 +708,12 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
     }
 
     // Point the following devices to their respective unified buffer offset
-    // Strategic layout: ROML=0x0000, ROMH=0x2000, KERNAL=0x4000, BASIC=0x6000, CHARROM=0x7000, RAM=0x9000
+    // Strategic layout: ROML=0x0000, ROMH=0x2000, KERNAL=0x4000, BASIC=0x6000, CHARROM=0x8000, RAM=0x9000
     DO(c64->cartridge_roml, 0x0000, 8*1024, c64_bus->roml_present); // CHIP_ROML = 0 -> 0x0000 - optional
     DO(c64->cartridge_romh, 0x2000, 8*1024, c64_bus->romh_present); // CHIP_ROMH = 2 -> 0x2000 - optional
     DO(c64->kernal, 0x4000, 8*1024, true);                          // CHIP_KERNAL = 4 -> 0x4000 - always present
     DO(c64->basic, 0x6000, 8*1024, true);                           // CHIP_BASIC = 6 -> 0x6000 - always present
-    DO(c64->charrom, 0x7000, 4*1024, true);                         // CHIP_CHARROM = 7 -> 0x7000 - always present
+    DO(c64->charrom, 0x8000, 4*1024, true);                         // CHIP_CHARROM = 7 -> 0x8000 - FIXED to avoid overlap with BASIC
     DO(c64->ram, 0x9000, 64*1024, true);                            // CHIP_RAM = 9 -> 0x9000 - always present
 #undef DO
     
