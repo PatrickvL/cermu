@@ -2,6 +2,7 @@
 .vscode/settings.json
 
 # Build directories
+# IMPORTANT: All binaries now output to code/cpp/build/bin/ regardless of build system
 build/**
 code/cpp/build/
 code/cpp/build_gui/
