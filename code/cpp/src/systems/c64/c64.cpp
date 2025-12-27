@@ -156,9 +156,12 @@ void c64_memory_init(system_8bit_t* system, const c64_config_t* config) {
         else if (dev->desc == &rom_descriptor) {
             rom_t* rom = (rom_t*)dev->chip;
             if (!rom->memory) {
-                printf("Warning: ROM chip has no allocated memory\n");
+                printf("Warning: ROM chip has no allocated memory (base=$%04X size=%u)\n",
+                       dev->base_address, dev->size);
                 continue;
             }
+            printf("[ROM-INIT] Processing ROM at base=$%04X size=%u memory=%p\n",
+                   dev->base_address, dev->size, (void*)rom->memory);
 
             bool rom_loaded = false;
               // Only attempt to load ROMs if we found the ROM root directory
