@@ -102,8 +102,7 @@ static inline void vicii_pixel_emit_at_x(vicii_t* vicii, const vicii_pixel_t* pi
 void vicii_graphics_sequencer(vicii_t* vicii, uint8_t graphics_data, uint8_t vmli) {
     vicii_sequencer_unit_t* seq = &vicii->sequencer;
     
-    // Store graphics data in the line buffer at the specified character index
-    // The pixel sequencer will load from this buffer using VMLI when rendering
+    // Store graphics data at the correct position in the line buffer
     if (vmli < 40) {
         seq->graphics_line[vmli] = graphics_data;
     }
@@ -1516,10 +1515,12 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             break;
         case VIC_ACCESS_C: {
             // C-access: Store video matrix data
-            // Use current VMLI value directly - it corresponds to the position we're fetching
+            // CRITICAL: VMLI was incremented at the end of the PREVIOUS cycle (after g-access)
+            // so we need to use (VMLI-1) to store at the correct position
+            // Example: Cycle 15 increments VMLI from 0→1, cycle 16 receives data for position 0
             const uint8_t vmli = vicii->video_logic.vmli;
-            if (vicii->video_logic.display_state && vmli < 40) {
-                vicii->video_data.video_matrix_line[vmli] = bus_data;
+            if (vicii->video_logic.display_state && vmli > 0 && vmli <= 40) {
+                vicii->video_data.video_matrix_line[vmli - 1] = bus_data;
             }
             break;
         }
@@ -1581,7 +1582,9 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             BUS_SET_ADDR(bus_state, c_access_addr);
             bus_state = mos2114_read(vicii->colorram, bus_state);
             
-            // Store at current vmli position
+            // Store color at current VMLI position (not decremented - this is immediate PHI1 read)
+            // Unlike the character code which arrives in the NEXT cycle via PHI2,
+            // color data is read immediately during PHI1 of the CURRENT cycle
             if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
                 const uint8_t color_data = BUS_GET_DATA(bus_state) & 0x0F;
                 vicii->video_data.video_color_line[vicii->video_logic.vmli] = static_cast<vicii_color_t>(color_data);
@@ -1638,6 +1641,8 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // STEP 4: Load graphics data into line buffer during cycles 15-54 (0-indexed)
     // During display_state, we need graphics data for every raster line (not just bad lines)
     // to show different rows of each character
+    uint16_t vc_for_c_access = vicii->video_logic.vc;  // Capture VC before increment for C-access
+    
     if (vicii->video_logic.display_state && vicii->timing.x_cycle >= 15 && vicii->timing.x_cycle <= 54) {
         // G-access happens EVERY cycle during PHI1 (the address calculation above always runs)
         // The graphics sequencer will use the data when in display_state
@@ -1653,7 +1658,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         // On bad lines: VC and VMLI both increment (advancing through video matrix)
         // On non-bad lines: Only VMLI increments (VC stays at VCBASE to reuse same characters)
         //
-        // Store vmli value BEFORE increment so pixel sequencer can read from correct position
+        // Store vmli value BEFORE increment for pixel sequencer
         vicii->sequencer.current_vmli_for_display = vmli;
         
         // Increment after g-access (not during c-access!)
@@ -1726,9 +1731,9 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         }
         case VIC_ACCESS_C:
             // PHI2 access: Set up video matrix read (Color RAM will be read in-place during PHI1)
-            // Data will arrive in the NEXT cycle and be stored at the current VMLI position
-            // Use current VC BEFORE increment (increment happens after g-access)
-            address = vicii->memory.vm_base | vicii->video_logic.vc;
+            // Data will arrive in the NEXT cycle and be stored at (VMLI-1)
+            // Use VC value from BEFORE the g-access increment (captured at top of STEP 4)
+            address = vicii->memory.vm_base | vc_for_c_access;
             break;
         default:
             // PHI1 accesses (G/REFRESH/IDLE) are handled inline, not here
