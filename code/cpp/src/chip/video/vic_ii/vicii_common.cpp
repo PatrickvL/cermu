@@ -12,10 +12,11 @@
 // ========================================================================================
 
 // VIC-II pipeline delay: Data fetched at position X is displayed 12 pixels later
-// Documentation (vic-ii.txt line 875-876): "the read graphics data is not
+// Documentation (vic-ii.txt line 905-906): "the read graphics data is not
 // immediately displayed on the screen (there is a delay of 12 pixels)"
-// This means we need to SUBTRACT the delay when writing to the line buffer
 constexpr int16_t VICII_PIPELINE_DELAY_PIXELS = 12;
+constexpr int16_t VICII_X_CENTERING_PIXELS = -14;
+
 
 // C64 color palette - RGBA format
 static const uint32_t c64_palette[16] = {
@@ -59,15 +60,13 @@ static inline void vicii_border_update_limits(vicii_border_unit_t* border, uint8
 // 3. Each cycle produces exactly 8 pixels, regardless of graphics mode
 // 4. Multicolor modes consume 2 bits per pixel, standard modes consume 1 bit per pixel
 
-// X-coordinate driven pixel emission for precise positioning
-// The line buffer contains pixels in display order (0-402 for PAL visible area).
-// x_coordinate values wrap around (0-503 for PAL), so we must map them correctly.
-static inline void vicii_pixel_emit_at_x(vicii_t* vicii, const vicii_pixel_t* pixel_data, uint16_t x_coord) {
-    // The x_coord parameter is the FETCH position (where VIC-II reads the data).
-    // Due to the 12-pixel pipeline delay, pixels are displayed 12 pixels LATER.
-    // We need to SUBTRACT the delay to get the correct framebuffer write position.
+// Helper function: Convert fetch X coordinate to display buffer position
+// Applies hardware pipeline delay (12px) and visual centering adjustment
+// Returns buffer position (0-402 for PAL) or -1 if not in visible range
+static inline int16_t vicii_fetch_x_to_buffer_pos(const vicii_t* vicii, uint16_t fetch_x_coord) {
+    // Apply hardware pipeline delay and visual centering adjustment
     const uint16_t pixels_per_line = vicii->config->cycles_per_line * 8;
-    const uint16_t display_x_coord = (x_coord + pixels_per_line - VICII_PIPELINE_DELAY_PIXELS) % pixels_per_line;
+    const uint16_t display_x_coord = (fetch_x_coord + pixels_per_line + VICII_PIPELINE_DELAY_PIXELS + VICII_X_CENTERING_PIXELS) % pixels_per_line;
     
     // Check if this coordinate is in the visible range
     // For PAL: first_visible_x_coord = 480, visible_pixels = 403
@@ -85,12 +84,25 @@ static inline void vicii_pixel_emit_at_x(vicii_t* vicii, const vicii_pixel_t* pi
         buffer_pos = (pixels_per_line - first_visible) + display_x_coord;
     } else {
         // Not in visible range
-        return;
+        return -1;
     }
     
     if (buffer_pos < visible_pixels) {
-        vicii->pixel.pixel_line_priority[buffer_pos] = pixel_data->priority;
-        vicii->pixel.pixel_line_color[buffer_pos] = pixel_data->color;
+        return buffer_pos;
+    }
+    return -1;
+}
+
+// X-coordinate driven pixel emission for precise positioning
+// The line buffer contains pixels in display order (0-402 for PAL visible area).
+// x_coordinate values wrap around (0-503 for PAL), so we must map them correctly.
+static inline void vicii_pixel_emit_at_x(vicii_t* vicii, const vicii_pixel_t* pixel_data, uint16_t x_coord) {
+    // Convert fetch position to buffer position (handles pipeline delay and centering)
+    const int16_t pixel_line_x = vicii_fetch_x_to_buffer_pos(vicii, x_coord);
+    
+    if (pixel_line_x >= 0) {
+        vicii->pixel.pixel_line_priority[pixel_line_x] = pixel_data->priority;
+        vicii->pixel.pixel_line_color[pixel_line_x] = pixel_data->color;
     }
 }
 
@@ -144,14 +156,21 @@ static inline void vicii_set_interrupt(vicii_t* vicii, uint8_t interrupt_mask) {
 // SPRITE HANDLING
 // ========================================================================================
 
+// Get sprite X coordinate (9-bit value from registers)
+// Maximally optimized: single calculation, no branching
+static inline uint16_t vicii_sprite_get_x(const vicii_t* vicii, int sprite_num) {
+    // Combine 8-bit base register with 9th bit from MX8 register
+    // Uses bitwise operations for maximum performance
+    return vicii->registers.data[VICII_M0X + sprite_num * 2] |
+         ((vicii->registers.data[VICII_MX8] & (1 << sprite_num)) << (8 - sprite_num));
+}
+
 static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num) {
     vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[param_sprite_num];
     
     if (!sprite->enabled || !sprite->display_state) return;
     
-    const uint16_t sprite_x =
-         (vicii->registers.data[VICII_M0X + param_sprite_num * 2]) |
-        ((vicii->registers.data[VICII_MX8] & (1 << param_sprite_num)) ? 0x100 : 0);
+    const uint16_t sprite_x = vicii_sprite_get_x(vicii, param_sprite_num);
     
     // Use x_coordinate for sprite positioning (matches sprite coordinate system)
     // Sprites are positioned relative to x_coordinate, not x_cycle
@@ -170,27 +189,13 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
     
     if (!sprite_pixel) return;
     
-    // Sprites use the same pipeline delay handling as background graphics
-    // Pass fetch position to vicii_pixel_emit_at_x which handles the delay internally
-    // But we need direct buffer access for collision detection, so calculate position here
-    const uint16_t pixels_per_line = vicii->config->cycles_per_line * 8;
-    const uint16_t display_x_coord = (current_x + pixels_per_line - VICII_PIPELINE_DELAY_PIXELS) % pixels_per_line;
-    const uint16_t first_visible = vicii->config->first_visible_x_coord;
-    const uint16_t visible_pixels = vicii->config->visible_pixels_per_line;
+    // Convert sprite fetch position to buffer position (handles pipeline delay and centering)
+    // Direct buffer access needed here for collision detection
+    const int16_t pixel_line_x = vicii_fetch_x_to_buffer_pos(vicii, current_x);
     
-    uint16_t pixel_line_x;
-    if (display_x_coord >= first_visible) {
-        pixel_line_x = display_x_coord - first_visible;
-    } else if (display_x_coord < (first_visible + visible_pixels) % pixels_per_line) {
-        pixel_line_x = (pixels_per_line - first_visible) + display_x_coord;
-    } else {
-        return;  // Not in visible range
-    }
-    
-    if (pixel_line_x >= visible_pixels) return;
+    if (pixel_line_x < 0) return;  // Not in visible range
     
     vicii_priority_t current_priority = vicii->pixel.pixel_line_priority[pixel_line_x];
-    
     // Collision detection
     // Documentation (vic-ii.txt lines 2109-2111):
     // "If the vertical border flip flop is set (normally within the upper/lower
@@ -267,7 +272,8 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
     // Use x_coordinate directly from the timing unit.
     // The VIC-II fetches graphics data at x_coordinate, but those pixels are displayed
     // 12 pixels later due to the pipeline delay. The vicii_pixel_emit_at_x() function
-    // handles this delay by adding 12 pixels when writing to the line buffer.
+    // handles this delay by adding the hardware pipeline delay (12px) plus visual
+    // centering adjustment when writing to the line buffer.
     //
     // This ensures CPU register writes (like border/background color changes) affect
     // pixels being OUTPUT at that moment, not pixels being LOADED into the pipeline.
@@ -293,8 +299,8 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         
         // Column index is managed by the g-access cycle functions and stored in graphics_line buffer
         // The pixel sequencer reads from the buffer position corresponding to the current column
-        // The 12-pixel pipeline delay (applied in vicii_pixel_emit_at_x) handles the timing
-        // between data fetch and screen display
+        // Hardware pipeline delay (12px) plus visual centering (applied in vicii_pixel_emit_at_x)
+        // handles the timing between data fetch and screen display
         
         // Initialize xscroll on first display cycle of each line
         // This must happen at the FETCH position (x_coord), not the output position
@@ -310,7 +316,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             display_x = (pixels_per_line - first_visible) + x_coord;
         }
         // Initialize xscroll when we reach the left border edge at the FETCH position
-        // vicii_pixel_emit_at_x will handle the pipeline delay when writing to buffer
+        // vicii_pixel_emit_at_x will handle pipeline delay and centering when writing to buffer
         if (display_x == vicii->border.border_left) {
             seq->xscroll_counter = vicii->registers.data[VICII_C2] & VICII_C2_XSCROLL;
             seq->pixel_in_char = 0;
