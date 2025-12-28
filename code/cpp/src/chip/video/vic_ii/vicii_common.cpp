@@ -192,26 +192,34 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
     vicii_priority_t current_priority = vicii->pixel.pixel_line_priority[pixel_line_x];
     
     // Collision detection
-    if (current_priority == VICII_PRIORITY_SPRITE_IN_FRONT ||
-        current_priority == VICII_PRIORITY_SPRITE_BEHIND) {
-        // Sprite-sprite collision (MMC interrupt)
-        // Documentation (vic-ii.txt lines 2278-2282):
-        // "For the MBC and MMC interrupts, only the first collision will trigger an
-        // interrupt (i.e. if the collision registers $d01e resp. $d01f contained the
-        // value zero before the collision)."
-        const bool first_collision = (vicii->registers.data[VICII_MXM_2] == 0);
-        vicii->registers.data[VICII_MXM_2] |= (1 << param_sprite_num);
-        if (first_collision && (vicii->registers.data[VICII_IE] & VICII_IE_EMMC)) {
-            vicii_set_interrupt(vicii, VICII_IR_IMMC);
+    // Documentation (vic-ii.txt lines 2109-2111):
+    // "If the vertical border flip flop is set (normally within the upper/lower
+    // border, see next section), the output of the graphics data sequencer is
+    // turned off and there are no collisions."
+    if (!vicii->border.vertical_border_flip_flop) {
+        // Collision detection only when NOT in border areas
+        
+        if (current_priority == VICII_PRIORITY_SPRITE_IN_FRONT ||
+            current_priority == VICII_PRIORITY_SPRITE_BEHIND) {
+            // Sprite-sprite collision (MMC interrupt)
+            // Documentation (vic-ii.txt lines 2278-2282):
+            // "For the MBC and MMC interrupts, only the first collision will trigger an
+            // interrupt (i.e. if the collision registers $d01e resp. $d01f contained the
+            // value zero before the collision)."
+            const bool first_collision = (vicii->registers.data[VICII_MXM_2] == 0);
+            vicii->registers.data[VICII_MXM_2] |= (1 << param_sprite_num);
+            if (first_collision && (vicii->registers.data[VICII_IE] & VICII_IE_EMMC)) {
+                vicii_set_interrupt(vicii, VICII_IR_IMMC);
+            }
         }
-    }
-    
-    if (current_priority == VICII_PRIORITY_FOREGROUND) {
-        // Sprite-data collision (MBC interrupt)
-        const bool first_collision = (vicii->registers.data[VICII_MXD_2] == 0);
-        vicii->registers.data[VICII_MXD_2] |= (1 << param_sprite_num);
-        if (first_collision && (vicii->registers.data[VICII_IE] & VICII_IE_EMBC)) {
-            vicii_set_interrupt(vicii, VICII_IR_IMBC);
+        
+        if (current_priority == VICII_PRIORITY_FOREGROUND) {
+            // Sprite-data collision (MBC interrupt)
+            const bool first_collision = (vicii->registers.data[VICII_MXD_2] == 0);
+            vicii->registers.data[VICII_MXD_2] |= (1 << param_sprite_num);
+            if (first_collision && (vicii->registers.data[VICII_IE] & VICII_IE_EMBC)) {
+                vicii_set_interrupt(vicii, VICII_IR_IMBC);
+            }
         }
     }
     
