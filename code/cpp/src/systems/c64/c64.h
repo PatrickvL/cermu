@@ -70,4 +70,16 @@ bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config);
 void c64_set_framebuffer(c64_t* c64, uint32_t* framebuffer, int width, int height);
 
 // Screenshot functionality
+// Crop parameters for precise screenshot alignment
+struct c64_screenshot_crop_t {
+    int crop_x;      // Left offset in framebuffer
+    int crop_y;      // Top offset in framebuffer
+    int crop_width;  // Width to extract
+    int crop_height; // Height to extract
+};
+
+// Save screenshot with automatic cropping (matches VICE reference dimensions)
 bool c64_save_screenshot(c64_t* c64, const char* filename);
+
+// Save screenshot with custom crop parameters (for exact reference matching)
+bool c64_save_screenshot_custom(c64_t* c64, const char* filename, const c64_screenshot_crop_t* crop);
