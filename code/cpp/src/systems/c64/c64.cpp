@@ -22,6 +22,10 @@
 #include "../../chip/memory/mos2114.h" // Color RAM
 #include "../../chip/logic/pla.h" // PLA for memory mapping
 
+// Screenshot support
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "../../../../external/stb_image_write.h"
+
 // Helper function: Initialize RAM with debug test patterns
 static void c64_memory_init_debug_patterns(ram_t* ram) {
     if (!ram || !ram->memory) {
@@ -659,7 +663,34 @@ void c64_set_framebuffer(c64_t* c64, uint32_t* framebuffer, int width, int heigh
 
     // Set the framebuffer on the VIC-II chip
     vicii_set_framebuffer(c64->vicii, framebuffer, width, height);
+}
 
+// Save screenshot of current VIC-II framebuffer to PNG file
+bool c64_save_screenshot(c64_t* c64, const char* filename) {
+    if (!c64 || !c64->vicii || !filename) {
+        fprintf(stderr, "ERROR: Invalid parameters for screenshot\n");
+        return false;
+    }
+    
+    // Get framebuffer from VIC-II
+    uint32_t* framebuffer = c64->vicii->pixel.framebuffer;
+    int width = c64->vicii->pixel.framebuffer_width;
+    int height = c64->vicii->pixel.framebuffer_height;
+    
+    if (!framebuffer || width <= 0 || height <= 0) {
+        fprintf(stderr, "ERROR: VIC-II framebuffer not initialized\n");
+        return false;
+    }
+    
+    // Save as PNG (stb_image_write expects RGBA data)
+    int result = stbi_write_png(filename, width, height, 4, framebuffer, width * 4);
+    
+    if (!result) {
+        fprintf(stderr, "ERROR: Failed to write PNG: %s\n", filename);
+        return false;
+    }
+    
+    return true;
 }
 
 bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config) {
