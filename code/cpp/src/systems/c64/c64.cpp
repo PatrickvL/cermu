@@ -674,16 +674,113 @@ bool c64_save_screenshot(c64_t* c64, const char* filename) {
     
     // Get framebuffer from VIC-II
     uint32_t* framebuffer = c64->vicii->pixel.framebuffer;
-    int width = c64->vicii->pixel.framebuffer_width;
-    int height = c64->vicii->pixel.framebuffer_height;
+    int fb_width = c64->vicii->pixel.framebuffer_width;
+    int fb_height = c64->vicii->pixel.framebuffer_height;
     
-    if (!framebuffer || width <= 0 || height <= 0) {
+    if (!framebuffer || fb_width <= 0 || fb_height <= 0) {
         fprintf(stderr, "ERROR: VIC-II framebuffer not initialized\n");
         return false;
     }
     
-    // Save as PNG (stb_image_write expects RGBA data)
-    int result = stbi_write_png(filename, width, height, 4, framebuffer, width * 4);
+    // Determine visible screen dimensions based on video standard
+    // VICE test images use the visible screen area, not the full framebuffer
+    int visible_width, visible_height;
+    int offset_x, offset_y;
+    
+    if (fb_width == 403 && fb_height == 284) {
+        // PAL: 403x284 framebuffer, 384x272 visible
+        visible_width = 384;
+        visible_height = 272;
+        offset_x = (403 - 384) / 2;  // Center horizontally
+        offset_y = (284 - 272) / 2;  // Center vertically
+    } else if (fb_width == 418 && fb_height == 235) {
+        // NTSC: 418x235 framebuffer, 400x234 visible (approximate)
+        visible_width = 400;
+        visible_height = 234;
+        offset_x = (418 - 400) / 2;
+        offset_y = (235 - 234) / 2;
+    } else {
+        // Unknown dimensions - save full framebuffer
+        visible_width = fb_width;
+        visible_height = fb_height;
+        offset_x = 0;
+        offset_y = 0;
+    }
+    
+    // Crop to visible area
+    uint32_t* cropped = new uint32_t[visible_width * visible_height];
+    if (!cropped) {
+        fprintf(stderr, "ERROR: Failed to allocate cropped framebuffer\n");
+        return false;
+    }
+    
+    // Copy visible rows from framebuffer
+    for (int y = 0; y < visible_height; y++) {
+        uint32_t* src_row = framebuffer + (y + offset_y) * fb_width + offset_x;
+        uint32_t* dst_row = cropped + y * visible_width;
+        memcpy(dst_row, src_row, visible_width * sizeof(uint32_t));
+    }
+    
+    // Save cropped image as PNG (stb_image_write expects RGBA data)
+    int result = stbi_write_png(filename, visible_width, visible_height, 4, cropped, visible_width * 4);
+    
+    delete[] cropped;
+    
+    if (!result) {
+        fprintf(stderr, "ERROR: Failed to write PNG: %s\n", filename);
+        return false;
+    }
+    
+    return true;
+}
+
+// Save screenshot with custom crop parameters
+bool c64_save_screenshot_custom(c64_t* c64, const char* filename, const c64_screenshot_crop_t* crop) {
+    if (!c64 || !c64->vicii || !filename || !crop) {
+        fprintf(stderr, "ERROR: Invalid parameters for custom screenshot\n");
+        return false;
+    }
+    
+    // Get framebuffer from VIC-II
+    uint32_t* framebuffer = c64->vicii->pixel.framebuffer;
+    int fb_width = c64->vicii->pixel.framebuffer_width;
+    int fb_height = c64->vicii->pixel.framebuffer_height;
+    
+    if (!framebuffer || fb_width <= 0 || fb_height <= 0) {
+        fprintf(stderr, "ERROR: VIC-II framebuffer not initialized\n");
+        return false;
+    }
+    
+    // Validate crop parameters
+    if (crop->crop_x < 0 || crop->crop_y < 0 ||
+        crop->crop_width <= 0 || crop->crop_height <= 0 ||
+        crop->crop_x + crop->crop_width > fb_width ||
+        crop->crop_y + crop->crop_height > fb_height) {
+        fprintf(stderr, "ERROR: Invalid crop parameters (fb: %dx%d, crop: %d,%d %dx%d)\n",
+                fb_width, fb_height, crop->crop_x, crop->crop_y,
+                crop->crop_width, crop->crop_height);
+        return false;
+    }
+    
+    // Allocate crop buffer
+    uint32_t* cropped = new uint32_t[crop->crop_width * crop->crop_height];
+    if (!cropped) {
+        fprintf(stderr, "ERROR: Failed to allocate cropped framebuffer\n");
+        return false;
+    }
+    
+    // Copy cropped region
+    for (int y = 0; y < crop->crop_height; y++) {
+        uint32_t* src_row = framebuffer + (y + crop->crop_y) * fb_width + crop->crop_x;
+        uint32_t* dst_row = cropped + y * crop->crop_width;
+        memcpy(dst_row, src_row, crop->crop_width * sizeof(uint32_t));
+    }
+    
+    // Save as PNG
+    int result = stbi_write_png(filename, crop->crop_width, crop->crop_height, 4,
+                                cropped, crop->crop_width * 4);
+    
+    delete[] cropped;
     
     if (!result) {
         fprintf(stderr, "ERROR: Failed to write PNG: %s\n", filename);
