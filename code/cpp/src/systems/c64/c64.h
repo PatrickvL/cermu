@@ -68,3 +68,6 @@ bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config);
 
 // Set the framebuffer for VIC-II pixel output
 void c64_set_framebuffer(c64_t* c64, uint32_t* framebuffer, int width, int height);
+
+// Screenshot functionality
+bool c64_save_screenshot(c64_t* c64, const char* filename);
