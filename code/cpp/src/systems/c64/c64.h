@@ -59,6 +59,9 @@ using c64_s = C64System;  // For GUI interface compatibility
 c64_t* c64_system_create(const c64_config_t* config);
 void c64_system_destroy(c64_t* c64);
 
+// System-wide reset function - resets all chips in correct order
+void c64_system_reset(c64_t* c64);
+
 // Single unified system tick function - the one place where the entire system is ticked
 void c64_system_tick(c64_t* c64);
 

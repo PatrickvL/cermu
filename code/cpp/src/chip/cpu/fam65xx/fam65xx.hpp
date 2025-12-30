@@ -929,7 +929,7 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
       bool i_flag_clear = !(this->get(REG_P) & FLAG_I);
       
       if (irq_detected && i_flag_clear) {
-        // IRQ accepted - logging disabled for performance
+        // IRQ accepted
         this->active_interrupt = FAM65XX_INT_IRQ;
         return true;
       }
