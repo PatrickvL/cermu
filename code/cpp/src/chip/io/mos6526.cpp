@@ -53,7 +53,7 @@ void* mos6526_system_create(chip_descriptor_t* desc) {
     mos6526_t* cia = (mos6526_t*)calloc(1, sizeof(mos6526_t));
     if (!cia) return NULL;
     cia->desc = desc;
-    cia->interrupt_line = BUS_MASK_IRQ; // Default to IRQ; caller must set to NMI for CIA2
+    cia->interrupt_line = BUS_BIT(BUS_IRQ_BIT); // Default to IRQ; caller must set to NMI for CIA2
     // Constructor equivalent - set up cycles for TOD
     // Used when CRA_TODIN = 0 (60 Hz TOD pin input pulses)
     cia->cycles_tod[0] = 1000000 / 60; // Assuming 1MHz CPU clock
@@ -307,6 +307,7 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
 
     uint32_t i = t * 2; // Turn A or B into TA_LO / TB_LO offsets
     uint32_t timer = (cia->reg[TA_HI + i] << 8) | cia->reg[TA_LO + i];
+    
     timer--;
     if (timer > 0) {
         cia->reg[TA_LO + i] = (uint8_t)(timer & 0xFF);
@@ -818,10 +819,13 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
     // Store current bus state for edge detection in next cycle (standard chip pattern)
     cia->prev_bus_state = bus_state;
 
-    if ((cia->reg[CRA] & CRA_START) > 0) // Is timer A running?
+    bool timer_a_running = (cia->reg[CRA] & CRA_START) > 0;
+    bool timer_b_running = (cia->reg[CRB] & CRB_START) > 0;
+    
+    if (timer_a_running)
         mos6526_decrease_timer(cia, A, cnt_is_positive_edge, cia->reg[CRA] & CRA_INMODE);
 
-    if ((cia->reg[CRB] & CRB_START) > 0) // Is timer B running?
+    if (timer_b_running)
         mos6526_decrease_timer(cia, B, cnt_is_positive_edge, cia->reg[CRB] & CRB_INMODE);
 
     if (cia->is_running_tod)

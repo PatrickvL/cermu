@@ -11,7 +11,7 @@
 #include "c64_test_loader.h" // Test binary loading
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
-#include "../../chip/cpu/fam65xx/mos6510.h" // Direct C++ core
+#include "../../chip/cpu/fam65xx/mos6510.h" // MOS6510 CPU with mos6510_init
 #include "../../chip/io/mos6526.h" // cia
 #include "../../chip/sound/mos6581.h" // sid
 #include "../../chip/video/vic_ii/mos6569.h" // vicii PAL
@@ -490,6 +490,51 @@ static uint8_t c64_cia1_port_b_read_callback(void* context, uint8_t port_b_outpu
     return row_state;
 }
 
+// System-wide reset function - resets all chips in correct order
+// This is the proper way to reset the C64, ensuring all chips are initialized correctly
+void c64_system_reset(c64_t* c64) {
+    if (!c64) return;
+    
+    printf("C64 System: Performing system-wide reset...\n");
+    
+    // Reset CIA chips first (they control interrupts and I/O)
+    if (c64->cia1) {
+        mos6526_reset(c64->cia1);
+        printf("  CIA1 reset complete\n");
+    }
+    if (c64->cia2) {
+        mos6526_reset(c64->cia2);
+        printf("  CIA2 reset complete\n");
+    }
+    
+    // Note: VIC-II and SID don't have explicit reset functions
+    // They are initialized during creation and work correctly without reset
+    
+    // Reset CPU last (so it can read the reset vector after other chips are ready)
+    if (c64->mos6510) {
+        mos6510_desc_t cpu_desc = {};
+        mos6510_init((mos6510_t*)c64->mos6510, &cpu_desc);
+        
+        // Read reset vector from KERNAL ROM
+        uint16_t reset_vector = c64_read_kernal_reset_vector(&c64->bus);
+        mos6510_set_pc((mos6510_t*)c64->mos6510, reset_vector);
+        mos6510_set_ab((mos6510_t*)c64->mos6510, reset_vector);
+        
+        printf("  CPU reset complete (PC=$%04X)\n", reset_vector);
+    }
+    
+    // Reset keyboard
+    if (c64->keyboard) {
+        commodore_keyboard_reset(c64->keyboard);
+        printf("  Keyboard reset complete\n");
+    }
+    
+    // Reset cycle counter
+    c64->total_cycles = 0;
+    
+    printf("C64 System: Reset complete\n");
+}
+
 void c64_system_destroy(c64_t* c64) {
     if (!c64) return;
 
@@ -630,8 +675,13 @@ c64_t* c64_system_create(const c64_config_t* config) {
            initial_banking_bits);
 
     // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
-    ((mos6526_t*)c64->cia2)->interrupt_line = BUS_MASK_NMI;
+    ((mos6526_t*)c64->cia2)->interrupt_line = BUS_BIT(BUS_NMI_BIT);
 
+    // Initialize the CPU - this sets up internal state machine for execution
+    // The init() call is CRITICAL - without it, the CPU won't execute instructions
+    mos6510_desc_t cpu_desc = {};  // Empty descriptor for now
+    mos6510_init((mos6510_t*)c64->mos6510, &cpu_desc);
+    
     // After ROMs are loaded, read the reset vector and initialize CPU for immediate execution
     uint16_t reset_vector = c64_read_kernal_reset_vector(&c64->bus);
     mos6510_set_pc((mos6510_t*)c64->mos6510, reset_vector);
@@ -641,7 +691,7 @@ c64_t* c64_system_create(const c64_config_t* config) {
     // The CPU's AB register must match PC for the first fetch to work correctly
     mos6510_set_ab((mos6510_t*)c64->mos6510, reset_vector);
 
-    printf("C64 System: Loaded reset vector $%04X from KERNAL ROM and initialized CPU PC and AB\n", reset_vector);
+    printf("C64 System: CPU initialized and loaded reset vector $%04X from KERNAL ROM (PC and AB set)\n", reset_vector);
 
     // Attach all other chips with bus_attach callbacks
     for (int i = 0; i < c64->system.chip_count; i++) {
