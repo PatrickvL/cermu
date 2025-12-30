@@ -675,7 +675,7 @@ c64_t* c64_system_create(const c64_config_t* config) {
            initial_banking_bits);
 
     // Set CIA2 interrupt line to NMI (CIA1 defaults to IRQ in constructor)
-    ((mos6526_t*)c64->cia2)->interrupt_line = BUS_BIT(BUS_NMI_BIT);
+    ((mos6526_t*)c64->cia2)->configured_interrupt_bit = BUS_NMI_BIT;
 
     // Initialize the CPU - this sets up internal state machine for execution
     // The init() call is CRITICAL - without it, the CPU won't execute instructions
