@@ -26,7 +26,7 @@ typedef uint64_t bus_state_t;
 
 /* Core pin bit indices */
 #define BUS_RES_BIT     32  // Reset (active low)
-#define BUS_IRQ_BIT     33  // IRQ (active low) 
+#define BUS_IRQ_BIT     33  // IRQ (active low)
 #define BUS_NMI_BIT     34  // NMI (active low)
 #define BUS_RDY_BIT     35  // Ready
 #define BUS_SO_BIT      36  // Set Overflow (active low)
@@ -34,7 +34,7 @@ typedef uint64_t bus_state_t;
 #define BUS_BE_BIT      38  // Bus Enable
 #define BUS_ABORT_BIT   39  // Abort (active low)
 #define BUS_VPB_BIT     40  // Vector Pull Bar (65C816)
-#define BUS_E_BIT       41  // Enable (65C816) 
+#define BUS_E_BIT       41  // Enable (65C816)
 #define BUS_MX_BIT      42  // Memory/Index size (65C816)
 #define BUS_VDA_BIT     43  // Valid Data Address (65C816)
 #define BUS_PHI0_BIT    44  // φ0 clock input

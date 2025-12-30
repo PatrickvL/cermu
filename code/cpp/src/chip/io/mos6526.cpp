@@ -53,7 +53,7 @@ void* mos6526_system_create(chip_descriptor_t* desc) {
     mos6526_t* cia = (mos6526_t*)calloc(1, sizeof(mos6526_t));
     if (!cia) return NULL;
     cia->desc = desc;
-    cia->interrupt_line = BUS_BIT(BUS_IRQ_BIT); // Default to IRQ; caller must set to NMI for CIA2
+    cia->configured_interrupt_bit = BUS_IRQ_BIT; // Default to IRQ; caller must set to NMI for CIA2
     // Constructor equivalent - set up cycles for TOD
     // Used when CRA_TODIN = 0 (60 Hz TOD pin input pulses)
     cia->cycles_tod[0] = 1000000 / 60; // Assuming 1MHz CPU clock
@@ -859,7 +859,7 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
     // This implements the required 1-cycle delay for interrupt assertion
     if (cia->reg[ICR] & ICR_IRQ) {
         // Interrupt pending - assert line in NEXT cycle
-        cia->pending_bus_lines = cia->interrupt_line;
+        cia->pending_bus_lines = BUS_BIT(cia->configured_interrupt_bit);
     } else {
         // No interrupt - clear pending for next cycle
         cia->pending_bus_lines = 0;

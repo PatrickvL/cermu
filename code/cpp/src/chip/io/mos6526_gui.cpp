@@ -396,9 +396,9 @@ void mos6526_render_settings_window(void* chip, bool* show_window) {
 static const char* mos6526_get_cia_name(mos6526_t* cia) {
     // Determine CIA type based on which interrupt line it raises
     // CIA1 raises IRQ (BUS_MASK_IRQ), CIA2 raises NMI (BUS_MASK_NMI)
-    if (cia->interrupt_line == BUS_MASK_IRQ) {
+    if (cia->configured_interrupt_bit == BUS_IRQ_BIT) {
         return "CIA1 ($DC00)";
-    } else if (cia->interrupt_line == BUS_MASK_NMI) {
+    } else if (cia->configured_interrupt_bit == BUS_NMI_BIT) {
         return "CIA2 ($DD00)";
     } else {
         return "CIA"; // Generic fallback for other systems
