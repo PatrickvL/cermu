@@ -172,6 +172,42 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
     return bus_state;
 }
 
+// ============================================================================
+// MEMORY UTILITY FUNCTIONS - For debugging and testing
+// ============================================================================
+
+/**
+ * Read a byte from C64 system memory.
+ * This is a convenience function for debugging and test programs.
+ *
+ * @param bus Pointer to c64_bus_t
+ * @param addr Address to read from
+ * @return Byte value at the specified address
+ */
+uint8_t c64_read_memory(c64_bus_t* bus, uint16_t addr) {
+    bus_state_t read_state = bus->state;
+    BUS_SET_ADDR(read_state, addr);
+    BUS_SET_LINES(read_state, BUS_GET_LINES(read_state) | BUS_MASK_RW);
+    read_state = c64_memory_tick(bus, read_state);
+    return BUS_GET_DATA(read_state);
+}
+
+/**
+ * Write a byte to C64 system memory.
+ * This is a convenience function for debugging and test programs.
+ *
+ * @param bus Pointer to c64_bus_t
+ * @param addr Address to write to
+ * @param value Byte value to write
+ */
+void c64_write_memory(c64_bus_t* bus, uint16_t addr, uint8_t value) {
+    bus_state_t write_state = bus->state;
+    BUS_SET_ADDR(write_state, addr);
+    BUS_SET_DATA(write_state, value);
+    BUS_SET_LINES(write_state, BUS_GET_LINES(write_state) & ~BUS_MASK_RW);
+    c64_memory_tick(bus, write_state);
+}
+
 // Made non-static for banking verification utility
 void c64_bus_system_destroy(void* chip) {
     c64_bus_t* c64_bus = (c64_bus_t*)chip;

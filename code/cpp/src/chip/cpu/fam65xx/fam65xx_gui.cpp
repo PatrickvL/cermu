@@ -49,15 +49,6 @@ template <const CPUTraits &Traits> const char *get_processor_name() {
   return processor_name_buffer;
 }
 
-// Helper function to get addressing mode name (uses decoder)
-static const char *get_addressing_mode_name(uint8_t am_index) {
-  return fam65xx_get_addressing_mode_name(am_index);
-}
-
-// Helper function to get opcode name from operation enumeration
-static const char *get_opcode_name(uint8_t op_index) {
-  return fam65xx_get_opcode_name(op_index);
-}
 
 // Helper function to format processor flags (unchanged from original)
 static void format_processor_flags(uint8_t flags, char *buffer,
@@ -184,24 +175,32 @@ void render_internal_state(fam65xx_t<Traits> *cpu) {
 
     ImGui::Separator();
 
-    // Current opcode information
+    // Current opcode information with full disassembly
     ImGui::Text("Current Opcode Info:");
     ImGui::Indent(16.0f);
 
-    // Show current addressing mode and opcode information if available
+    // Show disassembled instruction if available
     if (cpu) {
-      const char *am_name =
-          get_addressing_mode_name(cpu->opcode_entry.am_index);
-      const char *op_name = get_opcode_name(cpu->opcode_entry.op_index);
-      ImGui::Text("Current Opcode:      $%02X", cpu->get(REG_IR));
-      ImGui::Text("Addressing Mode:     %s", am_name);
-      ImGui::Text("Instruction:         %s", op_name);
+      uint16_t pc = cpu->get(REG_PC);
+      uint8_t opcode = cpu->get(REG_IR);
+      
+      // Get operand bytes (note: these might not be valid if instruction hasn't fully fetched yet)
+      // For now we'll use placeholder values - in a real implementation you'd read from memory
+      uint8_t operand1 = 0x00;
+      uint8_t operand2 = 0x00;
+      
+      // Disassemble the instruction
+      char disasm_buffer[64];
+      fam65xx_disassemble_instruction(pc, cpu->opcode_entry, operand1, operand2,
+                                      disasm_buffer, sizeof(disasm_buffer));
+
       ImGui::Text("Instruction Cycle:   %d", cpu->half_cycle);
+      ImGui::Text("Program Counter:     $%04X", pc);
+      ImGui::Text("Opcode Byte:         $%02X", opcode);
+      ImGui::Text("Current Instruction: %s", disasm_buffer);
       ImGui::Text("Opcode Done:         %s", cpu->opdone() ? "Yes" : "No");
     } else {
-      ImGui::Text("Current Opcode:      N/A (CPU not available)");
-      ImGui::Text("Addressing Mode:     N/A");
-      ImGui::Text("Instruction:         N/A");
+      ImGui::Text("Current Instruction: N/A (CPU not available)");
     }
 
     // Show processor-specific execution features
