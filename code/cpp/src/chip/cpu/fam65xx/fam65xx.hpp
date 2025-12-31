@@ -48,10 +48,8 @@
 #include <cstring>
 //#include <type_traits>
 
-// Include instruction decoder for disassembly
-extern "C" {
+// Include instruction decoder for disassembly (outside extern "C" to avoid template linkage issues)
 #include "fam65xx_decoder.h"
-}
 
 #include "fam65xx_mixins.hpp"
 #include "fam65xx_processor_traits.hpp"

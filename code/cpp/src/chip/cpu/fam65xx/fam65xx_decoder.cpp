@@ -143,3 +143,141 @@ const char *fam65xx_get_addressing_mode_name(uint8_t am_index) {
   }
   return "Unknown";
 }
+
+// ============================================================================
+// COMPACT DISASSEMBLER IMPLEMENTATION
+// Based on opcode_entry structure - uses switch on am_index for clarity
+// ============================================================================
+
+int fam65xx_disassemble_instruction(uint16_t pc, opcode_info_t entry, uint8_t operand1, uint8_t operand2, char* buffer, size_t buffer_size) {
+    if (!buffer || buffer_size < 32) {
+        return 0;
+    }
+    
+    uint8_t op_index = entry.op_index;
+    uint8_t am_index = entry.am_index;
+    const char* mnemonic = fam65xx_get_opcode_name(op_index);
+    
+    // Start with mnemonic
+    int pos = snprintf(buffer, buffer_size, "%s", mnemonic);
+    
+    // Format operand based on addressing mode
+    
+    switch (am_index) {
+        case 0: // NON - Implicit/Accumulator/Relative
+            // Check if it's an accumulator operation
+            if (op_index == 14 || op_index == 15 || op_index == 16 || op_index == 17) {
+                // ASL, LSR, ROL, ROR in accumulator mode
+                pos += snprintf(buffer + pos, buffer_size - pos, " A");
+            }
+            // Check if it's a branch instruction
+            else if (op_index >= 34 && op_index <= 41) {
+                // Branch instruction - relative addressing
+                int8_t offset = (int8_t)operand1;
+                uint16_t target = pc + 2 + offset;
+                pos += snprintf(buffer + pos, buffer_size - pos, " $%04X", target);
+            }
+            break;
+            
+        case 1: // IMM - Immediate
+            pos += snprintf(buffer + pos, buffer_size - pos, " #$%02X", operand1);
+            break;
+            
+        case 2: // ZER - Zero Page
+            pos += snprintf(buffer + pos, buffer_size - pos, " $%02X", operand1);
+            break;
+            
+        case 3: // ZPX - Zero Page,X
+            pos += snprintf(buffer + pos, buffer_size - pos, " $%02X,X", operand1);
+            break;
+            
+        case 4: // ZPY - Zero Page,Y
+            pos += snprintf(buffer + pos, buffer_size - pos, " $%02X,Y", operand1);
+            break;
+            
+        case 5: // ABS - Absolute
+            {
+                uint16_t addr = operand1 | (operand2 << 8);
+                pos += snprintf(buffer + pos, buffer_size - pos, " $%04X", addr);
+            }
+            break;
+            
+        case 6: // ABX - Absolute,X
+            {
+                uint16_t addr = operand1 | (operand2 << 8);
+                pos += snprintf(buffer + pos, buffer_size - pos, " $%04X,X", addr);
+            }
+            break;
+            
+        case 7: // ABY - Absolute,Y
+            {
+                uint16_t addr = operand1 | (operand2 << 8);
+                pos += snprintf(buffer + pos, buffer_size - pos, " $%04X,Y", addr);
+            }
+            break;
+            
+        case 8: // IND - Indirect
+            {
+                uint16_t addr = operand1 | (operand2 << 8);
+                pos += snprintf(buffer + pos, buffer_size - pos, " ($%04X)", addr);
+            }
+            break;
+            
+        case 9: // INX - Indexed Indirect (zp,X)
+            pos += snprintf(buffer + pos, buffer_size - pos, " ($%02X,X)", operand1);
+            break;
+            
+        case 10: // INY - Indirect Indexed (zp),Y
+            pos += snprintf(buffer + pos, buffer_size - pos, " ($%02X),Y", operand1);
+            break;
+            
+        case 11: // ZPR - Zero Page Relative (Rockwell 65C02)
+            {
+                uint16_t addr = operand1 | (operand2 << 8);
+                pos += snprintf(buffer + pos, buffer_size - pos, " $%02X,$%04X", operand1, addr);
+            }
+            break;
+            
+        case 12: // ZPI - Zero Page Indirect (65C02)
+            pos += snprintf(buffer + pos, buffer_size - pos, " ($%02X)", operand1);
+            break;
+            
+        default:
+            // Unknown addressing mode
+            pos += snprintf(buffer + pos, buffer_size - pos, " ???");
+            break;
+    }
+    
+    // Return number of characters written (like snprintf)
+    return pos;
+}
+
+int fam65xx_disassemble_vice_format(uint16_t pc, opcode_info_t entry, uint8_t opcode, uint8_t operand1, uint8_t operand2, char* buffer, size_t buffer_size) {
+    if (!buffer || buffer_size < 64) {
+        return 0;
+    }
+    
+    // Get instruction length
+    uint8_t length = instruction_lengths[opcode];
+    
+    // Disassemble instruction
+    char disasm[32];
+    fam65xx_disassemble_instruction(pc, entry, operand1, operand2, disasm, sizeof(disasm));
+    
+    // Format as VICE: ".,ADDR BYTES DISASM"
+    int pos = snprintf(buffer, buffer_size, ".,");
+    pos += snprintf(buffer + pos, buffer_size - pos, "%04X ", pc);
+    
+    // Print hex bytes (padded to 9 chars for alignment)
+    if (length == 1) {
+        pos += snprintf(buffer + pos, buffer_size - pos, "%02X       ", opcode);
+    } else if (length == 2) {
+        pos += snprintf(buffer + pos, buffer_size - pos, "%02X %02X    ", opcode, operand1);
+    } else {
+        pos += snprintf(buffer + pos, buffer_size - pos, "%02X %02X %02X ", opcode, operand1, operand2);
+    }
+    
+    pos += snprintf(buffer + pos, buffer_size - pos, "%s", disasm);
+    
+    return pos;
+}
