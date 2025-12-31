@@ -79,6 +79,17 @@ uint8_t mos6510_get_p(mos6510_t *cpu) { return CPU_CAST(cpu)->get(REG_P); }
 
 uint16_t mos6510_get_pc(mos6510_t *cpu) { return CPU_CAST(cpu)->get(REG_PC); }
 
+// Get current opcode entry (for disassembly)
+opcode_info_t mos6510_get_opcode_entry(mos6510_t *cpu) {
+  return CPU_CAST(cpu)->opcode_entry;
+}
+
+// Look up opcode entry from opcode table
+opcode_info_t mos6510_lookup_opcode(uint8_t opcode) {
+  static const auto table = fam65xx::generate_opcode_table<MOS6510>();
+  return table[opcode];
+}
+
 // Register setters
 void mos6510_set_a(mos6510_t *cpu, uint8_t value) {
   CPU_CAST(cpu)->set(REG_A, value);

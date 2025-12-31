@@ -60,6 +60,13 @@ uint8_t mos6510_get_s(mos6510_t *cpu);
 uint8_t mos6510_get_p(mos6510_t *cpu);
 uint16_t mos6510_get_pc(mos6510_t *cpu);
 
+// Get current opcode entry (for disassembly)
+#ifdef __cplusplus
+#include "fam65xx_types.h"
+opcode_info_t mos6510_get_opcode_entry(mos6510_t *cpu);
+opcode_info_t mos6510_lookup_opcode(uint8_t opcode);
+#endif
+
 void mos6510_set_a(mos6510_t *cpu, uint8_t value);
 void mos6510_set_x(mos6510_t *cpu, uint8_t value);
 void mos6510_set_y(mos6510_t *cpu, uint8_t value);
