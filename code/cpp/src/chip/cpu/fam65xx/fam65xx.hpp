@@ -156,14 +156,17 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         uint16_t ab = this->get(REG_AB); // Get address bus from register
         uint8_t ir = this->get(REG_IR);  // Get instruction register
 
-        // Use the current opcode_entry which is properly set during reset to
-        // BRK This shows the logical instruction being executed (BRK during
-        // reset) rather than whatever random data is in the IR register
-        const char *opcode_name =
-            fam65xx_get_opcode_name(this->opcode_entry.op_index);
+        // NOTE: This trace uses placeholder operand values (0x00, 0x00)
+        // For accurate operand display, tracing should be done at the system level
+        // where memory can be accessed. See tools/test_disasm_trace.cpp for example
+        // of proper implementation using c64_read_memory() helper.
+        // TODO: Move tracing to system level or add memory callback parameter
+        char disasm_buffer[32];
+        fam65xx_disassemble_instruction(pc, this->opcode_entry, 0x00, 0x00,
+                                       disasm_buffer, sizeof(disasm_buffer));
 
         printf("[%03d] PC=$%04X AB=$%04X IR=$%02X (%s) ", instruction_count, pc,
-               ab, ir, opcode_name);
+               ab, ir, disasm_buffer);
 
         // Get instruction info if opcode is valid
         printf("A=$%02X X=$%02X Y=$%02X S=$%02X P=$%02X\n", this->get(REG_A),

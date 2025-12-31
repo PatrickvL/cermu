@@ -31,21 +31,6 @@ typedef struct opcode_info_t opcode_info_t;
 // ============================================================================
 
 /**
- * Get the name of an operation based on its operation index
- * @param op_index Operation index from the opcode entry
- * @return String name of the operation (e.g., "LDA", "STA", etc.)
- */
-const char *fam65xx_get_opcode_name(uint8_t op_index);
-
-/**
- * Get the name of an addressing mode based on its addressing mode index
- * @param am_index Addressing mode index from the opcode entry
- * @return String name of the addressing mode (e.g., "Immediate", "Absolute",
- * etc.)
- */
-const char *fam65xx_get_addressing_mode_name(uint8_t am_index);
-
-/**
  * Disassemble a single instruction using opcode entry and operands
  * @param pc Program counter (address to disassemble)
  * @param entry Opcode table entry containing op_index and am_index

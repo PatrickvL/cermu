@@ -11,6 +11,10 @@
 #include "c64_config.h"
 #include "c64_chips.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // =============================
 // Bus Types & Macros
 // =============================
@@ -276,6 +280,10 @@ static inline uint16_t c64_read_kernal_reset_vector(c64_bus_t* bus) {
     return (reset_high << 8) | reset_low;
 }
 
+// Memory utility functions for debugging and testing
+uint8_t c64_read_memory(c64_bus_t* bus, uint16_t addr);
+void c64_write_memory(c64_bus_t* bus, uint16_t addr, uint8_t value);
+
 // System functions
 void* c64_bus_system_create(chip_descriptor_t* desc);
 void c64_bus_system_destroy(void* chip);
@@ -305,3 +313,7 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
 void c64_bus_init_io_handlers(c64_bus_t* c64_bus);
 
 extern chip_descriptor_t c64_bus_descriptor;
+
+#ifdef __cplusplus
+}
+#endif
