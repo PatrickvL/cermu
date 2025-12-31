@@ -605,7 +605,13 @@ void vicii_update_badline_condition(vicii_t* vicii) {
     // Optimized single comparison using intentional unsigned underflow:
     // When raster < 48, (raster - 48) underflows to large positive, making comparison false
     // When raster >= 48 && raster <= 247, (raster - 48) is in range [0, 199]
-    if ((raster - 48) <= 199) {  // Equivalent to raster >= 48 && raster <= 247
+    //
+    // CRITICAL FIX: Extract to variable to ensure correct evaluation
+    // Direct inline comparison had subtle issues with compiler optimization
+    uint16_t range_check = raster - 48;
+    bool in_range = (range_check <= 199);
+    
+    if (in_range) {  // Equivalent to raster >= 48 && raster <= 247
         // "A Bad Line Condition is given at any arbitrary clock cycle, if at the
         // negative edge of ø0 at the beginning of the cycle RASTER >= $30 and RASTER
         // <= $f7 and the lower three bits of RASTER are equal to YSCROLL and if the

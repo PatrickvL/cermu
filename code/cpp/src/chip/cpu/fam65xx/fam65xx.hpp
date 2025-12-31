@@ -1436,6 +1436,36 @@ public:
   enum class Phase { PHI2, PHI1 };
 
   /**
+   * Inline helper for RDY signal checking - optimized to avoid code duplication
+   * Returns true if CPU should halt due to RDY low during read cycle
+   *
+   * Per MOS 6510 datasheet: "RDY is ignored during write accesses"
+   * - READ + RDY low = HALT (return true)
+   * - WRITE + RDY low = CONTINUE (return false, RDY ignored)
+   * - RDY high = CONTINUE (return false)
+   */
+  inline bool should_halt_for_rdy(bus_state_t pins) const {
+    if (!FAM65XX_GET_RDY(pins)) {
+      // RDY low (BA low) - VIC-II will need bus in 3 cycles
+      const bool is_read = (pins & FAM65XX_RW) != 0;
+      
+      if (is_read) {
+        // READ cycle with RDY low: CPU must HALT
+        if constexpr (ENABLE_TRACING) {
+          trace("RDY low during READ - CPU halted");
+        }
+        return true;
+      }
+      
+      // WRITE cycle: RDY ignored (up to 3 consecutive writes allowed)
+      if constexpr (ENABLE_TRACING) {
+        trace("RDY low during WRITE - CPU continues (RDY ignored on writes)");
+      }
+    }
+    return false;
+  }
+
+  /**
    * Template tick function - compile-time phase selection
    *
    * @tparam phase PHI2 for bus setup, PHI1 for internal operations
@@ -1521,26 +1551,9 @@ public:
 
       // Check RDY signal AFTER bus setup (now we know if it's read or write)
       // AEC was already checked above (applies to both phases)
-      // Per MOS 6510 datasheet: "RDY is ignored during write accesses"
-      if (!FAM65XX_GET_RDY(pins)) {
-        // RDY low (BA low) - VIC-II will need bus in 3 cycles
-        const bool is_read = (pins & FAM65XX_RW) != 0;
-        
-        if (is_read) {
-          // READ cycle with RDY low: HALT the CPU immediately
-          // Do NOT increment half_cycle - retry this PHI2 setup next tick
-          if constexpr (ENABLE_TRACING) {
-            trace("RDY low during READ - CPU halted, will retry PHI2 setup");
-          }
-          return pins;
-        }
-        
-        // WRITE cycle with RDY low: CONTINUE execution
-        // The 6510 ignores RDY during writes (up to 3 consecutive writes allowed)
-        if constexpr (ENABLE_TRACING) {
-          trace("RDY low during WRITE - CPU continues (RDY ignored on writes)");
-        }
-        // Fall through to increment half_cycle
+      if (this->should_halt_for_rdy(pins)) {
+        // HALT: Do NOT increment half_cycle - retry this PHI2 setup next tick
+        return pins;
       }
 
       // PHI2 increments half_cycle AFTER handler execution (and RDY check)
@@ -1558,6 +1571,18 @@ public:
       if constexpr (ENABLE_TRACING) {
         trace_enter("tick<PHI1>");
         trace_registers("before PHI1");
+      }
+
+      // Check RDY signal at START of PHI1 as well
+      // The RDY check must happen in BOTH PHI2 and PHI1 because:
+      // - PHI2 sets up the bus and checks RDY, halting if needed
+      // - Memory tick happens unconditionally (external to CPU)
+      // - PHI1 must re-check RDY using the bus state from PHI2
+      // Without this check, CPU would incorrectly proceed with PHI1 internal
+      // operations even when it was halted in the preceding PHI2 tick
+      if (this->should_halt_for_rdy(pins)) {
+        // HALT: Do NOT proceed with PHI1 - return without calling handler
+        return pins;
       }
 
       // Handle I/O port and APU memory accesses BEFORE calling handler

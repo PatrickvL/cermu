@@ -104,17 +104,21 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
     // This prevents the memory system from overwriting I/O port read data with RAM data
     if (is_read) {
         // === READ OPERATION ===
-        // CRITICAL: Determine which chip has bus control by checking AEC line
-        // According to VIC-II documentation section 2.4.3 "Memory access of the 6510 and VIC":
-        // - AEC HIGH (during PHI2): CPU has bus control → use CPU memory mapping
-        // - AEC LOW (during PHI1): VIC-II has bus control → use VIC-II memory mapping
+        // CRITICAL: Determine memory mapping based on AEC line (bus ownership)
         //
-        // The VIC-II has its own separate memory map (section 2.4.2) where:
-        // - Character ROM appears at $1000-$1FFF in banks 0 and 2 (not at $D000 like CPU sees it)
-        // - VIC-II uses its own chip lookup array: vicii_chip_per_bank
+        // The AEC line indicates who owns the bus:
+        // - AEC HIGH: CPU owns bus → use CPU memory mapping
+        // - AEC LOW: VIC-II owns bus → use VIC-II memory mapping
         //
-        // When VIC-II owns the bus (AEC low), we must use VIC-II's chip lookup array
-        // to correctly access Character ROM and other memory regions as VIC-II sees them.
+        // From VIC-II documentation (lines 228-234):
+        // "AEC reflects the state of the data and address line drivers of the VIC.
+        //  If AEC is high, they are in tri-state. AEC is normally low during the
+        //  first clock phase (Φ2 low) and high during the second phase so that the
+        //  VIC can access the bus during the first phase and the 6510 during the
+        //  second phase. If the VIC also needs the bus in the second phase, AEC remains low."
+        //
+        // The VIC-II has its own memory map where Character ROM appears at $1000-$1FFF
+        // in banks 0 and 2 (not at $D000 like the CPU sees it).
         const bool cpu_has_bus = (BUS_GET_LINES(bus_state) & BUS_MASK_AEC) != 0;
         const uint8_t chip = cpu_has_bus ?
             decode_read_chip(c64_bus->cpu_encoded_chip_per_bank[address_bank]) :

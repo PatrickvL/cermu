@@ -18,14 +18,15 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
                           bool flag_value) {
   switch (this->half_cycle) {
   case 0:
+    /* PHI2: Set up operand read from PC (don't modify PC - RDY retry safety) */
     pins = this->bus_setup_read<Addr::PC>(pins);
     return pins;
   case 1: {
-    /* PHI1: Load data and perform operations */
+    /* PHI1: Load operand, increment PC, and check branch condition */
     this->bus_load_reg(REG_ABL, pins);
     this->inc(REG_PC);
-    /* PHI1: Check branch condition */
     bool branch_taken = ((this->get(REG_P) & flag_mask) != 0) == flag_value;
+    
     if (!branch_taken) {
       /* Branch not taken: instruction completes after 2 cycles */
       this->transition_to_fetch();
@@ -33,7 +34,10 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     }
 
     /* Branch taken: calculate correct target address */
-    this->set(REG_AB, this->get(REG_PC) + (int8_t)this->get(REG_ABL));
+    /* Branch offset is relative to PC after incrementing past the offset byte */
+    /* PC was already incremented on line 26, so it now points past the 2-byte instruction */
+    uint16_t branch_base = this->get(REG_PC);
+    this->set(REG_AB, branch_base + (int8_t)this->get(REG_ABL));
     this->half_cycle++;
     return pins;
   }
