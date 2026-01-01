@@ -14,6 +14,7 @@
 #include "../chip/cpu/fam65xx/fam65xx.hpp"
 #include "../chip/cpu/fam65xx/fam65xx_gui.h"
 #include "../chip/video/vic_ii/vicii_common.h"
+#include "../chip/input/commodore_keyboard.h"
 #include "../utils/rom_loader.h"
 #include "global_chip_style.h"
 
@@ -197,6 +198,24 @@ void gui_handle_events(gui_emulation_context_t *emu_context) {
   SDL_Event event;
   while (SDL_PollEvent(&event)) {
     ImGui_ImplSDL2_ProcessEvent(&event);
+    
+    // Handle keyboard events for C64 keyboard matrix
+    // Only process keyboard when ImGui doesn't want to capture it
+    ImGuiIO& io = ImGui::GetIO();
+    if (!io.WantCaptureKeyboard && emu_context && emu_context->c64 && emu_context->c64->keyboard) {
+      if (event.type == SDL_KEYDOWN) {
+        // Key pressed - update C64 keyboard matrix
+        SDL_Keycode key = event.key.keysym.sym;
+        bool shift_pressed = (SDL_GetModState() & (KMOD_LSHIFT | KMOD_RSHIFT)) != 0;
+        commodore_keyboard_key_down(emu_context->c64->keyboard, key, shift_pressed);
+      } else if (event.type == SDL_KEYUP) {
+        // Key released - update C64 keyboard matrix
+        SDL_Keycode key = event.key.keysym.sym;
+        bool shift_pressed = (SDL_GetModState() & (KMOD_LSHIFT | KMOD_RSHIFT)) != 0;
+        commodore_keyboard_key_up(emu_context->c64->keyboard, key, shift_pressed);
+      }
+    }
+    
     if (event.type == SDL_QUIT) {
       g_should_quit = true;
       // Stop emulation when window is closed
