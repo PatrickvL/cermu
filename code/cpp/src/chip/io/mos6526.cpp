@@ -404,7 +404,6 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
     // Note: This refers to the PB6/PB7 output pin state in toggle mode, NOT the OUTMODE control bit!
     // The OUTMODE bit (CRA bit 2 / CRB bit 2) is a configuration bit that should not be modified here.
     // TODO: If toggle mode is enabled (OUTMODE=1), set the output pin high when timer starts
-    
     // Reset TOD cycle counter when timer transitions from stopped to started
     // Use generic START bit that works for both timers
     if ((v & CR_START) > 0)
@@ -412,14 +411,6 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
             // "the frequency counter is being reset to 0 when the clock was stopped and is
             // restarted (->hzsync0.prg, hzsync1.prg)"
             cia->tod_cycles = 0;
-            
-            // CRITICAL FIX: When starting a stopped timer, reload counter from latch
-            // This ensures the timer starts counting from the latch value, not from
-            // whatever value it had when it was stopped (e.g., $FFFF at reset).
-            // This is essential for tests that write a latch value and immediately start the timer.
-            // Without this, writing to LO latch only (without touching HI) would leave the
-            // counter at its old value ($FFFF at reset) instead of using the new latch value.
-            mos6526_reload_timer(cia, c);
         }
 
     cia->reg[CRA + c] = v;
@@ -721,6 +712,12 @@ bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state) {
         // Write timer latches
         case TA_LO:
             cia->reg[TIMER_OFFSET + TA_LO] = value;
+            // CRITICAL FIX: When writing to timer latch while stopped, also update counter
+            // This ensures tests that write latch values and immediately start the timer
+            // will count from the written value, not from the old counter value (e.g., $FFFF at reset)
+            if ((cia->reg[CRA] & CR_START) == 0) {
+                cia->reg[TA_LO] = value;
+            }
             break;
         case TA_HI:
             cia->reg[TIMER_OFFSET + TA_HI] = value;
@@ -728,6 +725,10 @@ bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state) {
             break;
         case TB_LO:
             cia->reg[TIMER_OFFSET + TB_LO] = value;
+            // CRITICAL FIX: When writing to timer latch while stopped, also update counter
+            if ((cia->reg[CRB] & CR_START) == 0) {
+                cia->reg[TB_LO] = value;
+            }
             break;
         case TB_HI:
             cia->reg[TIMER_OFFSET + TB_HI] = value;
