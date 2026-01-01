@@ -446,8 +446,8 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
     mos6510_set_p(cpu, status);
     
     // Execute KERNAL initialization
-    // KERNAL cold start typically takes about 30,000-50,000 cycles
-    const uint32_t MAX_KERNAL_BOOT_CYCLES = 100000;
+    // KERNAL cold start takes about 150,000 cycles before jumping to BASIC
+    const uint32_t MAX_KERNAL_BOOT_CYCLES = 200000;
     uint32_t boot_cycles = 0;
     
     while (boot_cycles < MAX_KERNAL_BOOT_CYCLES) {
@@ -487,7 +487,8 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
     // Continue execution through BASIC initialization
     // BASIC cold start entry is at $E394, which jumps to BASIC at $A000
     // BASIC initialization ends at the main loop at $A7AE (READY prompt)
-    const uint32_t MAX_BASIC_BOOT_CYCLES = 200000;
+    // Full KERNAL+BASIC boot takes approximately 2.2 million cycles
+    const uint32_t MAX_BASIC_BOOT_CYCLES = 2500000;
     uint32_t boot_cycles = 0;
     
     while (boot_cycles < MAX_BASIC_BOOT_CYCLES) {

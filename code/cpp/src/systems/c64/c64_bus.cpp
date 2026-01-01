@@ -100,8 +100,6 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
     const uint16_t address = BUS_GET_ADDR(bus_state);
     const uint8_t address_bank = c64_get_address_bank(address);  // Extract 4KB bank (0-15)
     
-    // NOTE: I/O port addresses (0-1) are now handled by mos6510_tick() early in the CPU tick
-    // This prevents the memory system from overwriting I/O port read data with RAM data
     if (is_read) {
         // === READ OPERATION ===
         // CRITICAL: Determine memory mapping based on AEC line (bus ownership)
