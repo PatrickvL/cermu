@@ -34,9 +34,10 @@ bool c64_test_load_bin_file(const char* filename, ram_t* ram, uint16_t load_addr
 /**
  * Parse a BASIC program in RAM to extract the SYS address.
  * Looks for the first SYS command in the BASIC program.
- * 
+ *
  * @param ram Pointer to RAM chip containing the BASIC program
  * @param start_address Starting address of the BASIC program (typically $0801)
+ * @param load_address Load address of the program (used for PEEK expression evaluation)
  * @return SYS address if found, 0 if not found
  */
-uint16_t c64_test_parse_sys_address(ram_t* ram, uint16_t start_address);
+uint16_t c64_test_parse_sys_address(ram_t* ram, uint16_t start_address, uint16_t load_address);
