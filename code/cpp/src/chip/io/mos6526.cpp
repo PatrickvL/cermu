@@ -315,36 +315,38 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
     uint32_t i = t * 2; // Turn A or B into TA_LO / TB_LO offsets
     uint32_t timer = (cia->reg[TA_HI + i] << 8) | cia->reg[TA_LO + i];
     
-    timer--;
-    if (timer > 0) {
+    // CRITICAL FIX: Check for underflow BEFORE decrementing
+    // When timer reaches $0000, it underflows on the NEXT count
+    // The check must happen before decrement to catch the $0000 state
+    if (timer == 0) {
+        // Timer underflow - set ICR flag and reload from latch
+        cia->reg[ICR] |= (uint8_t)(ICR_TA + t); // t=A:ICR_TA, t=B:ICR_TB
+        mos6526_reload_timer(cia, t);
+        
+        // "In one-shot mode, the timer will count down from
+        // latched value to zero, generate the interrupt, reload
+        // the latched value, then stop. In continuous mode,
+        // the timer will count from latched value to zero,
+        // generate interrupt, reload the latched value and
+        // repeat the procedure continuously."
+        // RUNMODE: 0 = continuous (keep running), 1 = one-shot (stop after underflow)
+        if ((cia->reg[CRA + t] & CR_RUNMODE) != 0) {
+            // Stop timer (Clear START control bit) - one-shot mode only
+            cia->reg[CRA + t] &= ~CR_START;
+            
+            // IMPORTANT: Do NOT clear ICR bit here!
+            // Per CIA6526.txt documentation: "Only reading the ICR will clear it."
+            // The ICR_TA/ICR_TB bit represents the interrupt condition and must persist
+            // until software reads the ICR register to acknowledge the interrupt.
+        }
+        // else: Continuous mode - timer keeps running with reloaded value
+        // TODO: Must this be treated as a re-start which sets the CRA_OUTMODE Toggle output high?
+    } else {
+        // Normal countdown - decrement timer
+        timer--;
         cia->reg[TA_LO + i] = (uint8_t)(timer & 0xFF);
         cia->reg[TA_HI + i] = (uint8_t)(timer >> 8);
-        return;
     }
-
-    // timer == 0 (underflow)
-    cia->reg[ICR] |= (uint8_t)(ICR_TA + t); // Underflow Timer, t=B:ICR_TB
-    mos6526_reload_timer(cia, t);
-    // "In one-shot mode, the timer will count down from
-    // latched value to zero, generate the interrupt, reload
-    // the latched value, then stop. In continuous mode,
-    // the timer will count from latched value to zero,
-    // generate interrupt, reload the latched value and
-    // repeat the procedure continuously."
-    // RUNMODE: 0 = continuous (keep running), 1 = one-shot (stop after underflow)
-    // Use generic bits that work for both timers
-    if ((cia->reg[CRA + t] & CR_RUNMODE) != 0) {
-        // Stop timer (Clear START control bit) - one-shot mode only
-        cia->reg[CRA + t] &= ~CR_START;
-        
-        // IMPORTANT: Do NOT clear ICR bit here!
-        // Per CIA6526.txt documentation: "Only reading the ICR will clear it."
-        // The ICR_TA/ICR_TB bit represents the interrupt condition and must persist
-        // until software reads the ICR register to acknowledge the interrupt.
-        
-    }
-    // else TODO : Must this be treated as a re-start
-    // which sets the CRA_OUTMODE Toggle output high?
 }
 
 // CONTROL REGISTER (CRA/CRB) handling
