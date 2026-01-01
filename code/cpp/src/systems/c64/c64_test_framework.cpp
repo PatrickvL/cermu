@@ -809,15 +809,43 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
     uint16_t last_pc = start_pc;
     uint32_t pc_stable_cycles = 0;
     uint16_t stable_pc = 0;
-    
-    // Initialize debug register
-    c64->ram->memory[DEBUG_REGISTER] = 0x42;
+    // Track last known debug register value
+    uint8_t last_debug_value = 0x42;
     
     // Main execution loop
     while (cycles < max_cycles) {
         c64_system_tick(c64);
         cycles++;
         
+        // After each tick, check if the bus state indicates a write to $D7FF
+        // Writes to $D7FF go to SID chip, so we need to intercept them via bus state
+        bus_state_t current_bus = c64->bus.state;
+        uint16_t bus_addr = BUS_GET_ADDR(current_bus);
+        uint8_t bus_data = BUS_GET_DATA(current_bus);
+        uint8_t bus_lines = BUS_GET_LINES(current_bus);
+        
+        // Check if this is a write (R/W line low) to $D7FF
+        if (bus_addr == DEBUG_REGISTER && !(bus_lines & BUS_MASK_RW)) {
+            // This is a write to $D7FF - capture the value
+            last_debug_value = bus_data;
+            
+            // Check for pass/fail immediately
+            if (bus_data == 0x00) {
+                result.status = TestStatus::PASSED;
+                result.message = "Test passed ($D7FF = $00)";
+                if (verbose_) {
+                    printf("\n  ✓ Test passed at cycle %u\n", cycles);
+                }
+                break;
+            } else if (bus_data == 0xFF) {
+                result.status = TestStatus::FAILED;
+                result.message = "Test failed ($D7FF = $FF)";
+                if (verbose_) {
+                    printf("\n  ✗ Test failed at cycle %u\n", cycles);
+                }
+                break;
+            }
+        }
         
         if (cycles % 1000 == 0) {
             uint16_t current_pc = mos6510_get_pc(cpu);
@@ -888,25 +916,6 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
                     pc_stable_cycles = 0;
                 }
             }
-            
-            // Check debug register for all protocols
-            uint8_t debug_value = c64->ram->memory[DEBUG_REGISTER];
-            if (debug_value == 0x00) {
-                result.status = TestStatus::PASSED;
-                result.message = "Test passed ($D7FF = $00)";
-                if (verbose_) {
-                    printf("\n  ✓ Test passed at cycle %u\n", cycles);
-                }
-                break;
-            } else if (debug_value == 0xFF) {
-                result.status = TestStatus::FAILED;
-                result.message = "Test failed ($D7FF = $FF)";
-                if (verbose_) {
-                    printf("\n  ✗ Test failed at cycle %u\n", cycles);
-                }
-                break;
-            }
-            
             last_pc = current_pc;
         }
         
