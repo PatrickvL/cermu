@@ -79,6 +79,8 @@ uint8_t mos6510_get_p(mos6510_t *cpu) { return CPU_CAST(cpu)->get(REG_P); }
 
 uint16_t mos6510_get_pc(mos6510_t *cpu) { return CPU_CAST(cpu)->get(REG_PC); }
 
+uint8_t mos6510_get_ir(mos6510_t *cpu) { return CPU_CAST(cpu)->get(REG_IR); }
+
 // Get current opcode entry (for disassembly)
 opcode_info_t mos6510_get_opcode_entry(mos6510_t *cpu) {
   return CPU_CAST(cpu)->opcode_entry;
