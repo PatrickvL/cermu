@@ -412,6 +412,14 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
             // "the frequency counter is being reset to 0 when the clock was stopped and is
             // restarted (->hzsync0.prg, hzsync1.prg)"
             cia->tod_cycles = 0;
+            
+            // CRITICAL FIX: When starting a stopped timer, reload counter from latch
+            // This ensures the timer starts counting from the latch value, not from
+            // whatever value it had when it was stopped (e.g., $FFFF at reset).
+            // This is essential for tests that write a latch value and immediately start the timer.
+            // Without this, writing to LO latch only (without touching HI) would leave the
+            // counter at its old value ($FFFF at reset) instead of using the new latch value.
+            mos6526_reload_timer(cia, c);
         }
 
     cia->reg[CRA + c] = v;
@@ -830,8 +838,8 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
     // Store current bus state for edge detection in next cycle (standard chip pattern)
     cia->prev_bus_state = bus_state;
 
-    bool timer_a_running = (cia->reg[CRA] & CR_START) > 0;
-    bool timer_b_running = (cia->reg[CRB] & CR_START) > 0;
+    bool timer_a_running = (cia->reg[CRA] & CRA_START) > 0;
+    bool timer_b_running = (cia->reg[CRB] & CRB_START) > 0;
     
     if (timer_a_running)
         mos6526_decrease_timer(cia, A, cnt_is_positive_edge, cia->reg[CRA] & CRA_INMODE);
