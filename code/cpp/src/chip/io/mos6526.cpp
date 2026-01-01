@@ -411,12 +411,6 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
             // "the frequency counter is being reset to 0 when the clock was stopped and is
             // restarted (->hzsync0.prg, hzsync1.prg)"
             cia->tod_cycles = 0;
-            
-            // CRITICAL FIX: When starting a stopped timer, reload counter from latch
-            // This is essential for tests that write latch values and immediately start the timer
-            // Without this, the timer would start counting from its old value ($FFFF at reset)
-            // instead of from the newly written latch value
-            mos6526_reload_timer(cia, c);
         }
 
     cia->reg[CRA + c] = v;
