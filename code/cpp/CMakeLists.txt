@@ -233,6 +233,8 @@ set(SYSTEM_SOURCES
     src/systems/c64/c64_config.cpp
     src/systems/c64/c64_test_loader.cpp
     src/systems/c64/c64_banking_verify.cpp
+    src/systems/c64/c64_test_framework.cpp
+    src/systems/c64/c64_screenshot.cpp
 )
 
 
@@ -406,12 +408,25 @@ enable_testing()
 # Add tests subdirectory for comprehensive MOS6510 testing
 add_subdirectory(tests)
 
-# Add tests (currently disabled due to API compatibility issues)
-# add_test(NAME minimal_test COMMAND minimal_test)
-# add_test(NAME cpu_test COMMAND cpu_test)
-# add_test(NAME klaus_test COMMAND klaus_test)
+# Test runner tool
+add_executable(c64_test_runner
+    tools/c64_test_runner.cpp
+    ${CORE_SOURCES}
+    ${CHIP_SOURCES}
+    ${SYSTEM_SOURCES}
+    ${CORE_UTIL_SOURCES}
+)
 
-# Add basic MOS6510 test
+# Link required libraries for test runner
+target_link_libraries(c64_test_runner
+    fam65xx_decoder
+)
+
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(c64_test_runner m)
+endif()
+
+message(STATUS "Test runner c64_test_runner will be built")
 
 # Print configuration summary
 message(STATUS "")
