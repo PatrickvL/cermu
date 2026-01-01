@@ -122,26 +122,44 @@ namespace MOS6526 {
     constexpr uint8_t ICR_TB = 0x02;       // $dc0d Interrupt Control Register Bit 1: 1 = Underflow Timer B
     constexpr uint8_t ICR_TA = 0x01;       // $dc0d Interrupt Control Register Bit 0: 1 = Underflow Timer A
     constexpr uint8_t CRA = 14;            // $dc0e Control Register A
-    constexpr uint8_t CRA_TODIN = 0x80;    // $dc0e Control Register A : Bit 7: Real Time Clock, 0 = 60 Hz, 1 = 50 Hz "Clock required 1:50Hz/0:60Hz on TOD pin for accurate time"
-    constexpr uint8_t CRA_SPMODE = 0x40;   // $dc0e Control Register A : Serial Port Bit 6: Direction of the serial shift register, 0 = SP-pin is input (read), 1 = SP-pin is output (write)
-    constexpr uint8_t CRA_INMODE = 0x20;   // $dc0e Control Register A : Timer A Bit 5: 0 = Timer counts system cycles, 1 = Timer counts positive slope at CNT-pin
-    constexpr uint8_t CRA_LOAD = 0x10;     // $dc0e Control Register A : Timer A Bit 4: 1 = Load latch into the timer once.
-    constexpr uint8_t CRA_RUNMODE = 0x08;  // $dc0e Control Register A : Timer A Bit 3: 0 = Timer-restart after underflow (latch will be reloaded), 1 = Timer stops after underflow.
-    constexpr uint8_t CRA_OUTMODE = 0x04;  // $dc0e Control Register A : Timer A Bit 2: 0 = Through a timer underflow, bit 6 of port B will get high for one cycle , 1 = Through a timer underflow, bit 6 of port B will be inverted
-    constexpr uint8_t CRA_PBON = 0x02;     // $dc0e Control Register A : Timer A Bit 1: 1 = Indicates a timer underflow at port B in bit 6.
-    constexpr uint8_t CRA_START = 0x01;    // $dc0e Control Register A : Timer A Bit 0: 0 = Stop timer; 1 = Start timer
     constexpr uint8_t CRB = 15;            // $dc0f Control Register B
-    constexpr uint8_t CRB_ALARM = 0x80;    // $dc0f Control Register B : Bit 7: 0 = Writing into the TOD registers sets the clock time, 1 = Writing into the TOD registers sets the alarm time.
-    constexpr uint8_t CRB_INMODE = 0x60;   // $dc0f Control Register B : Timer B Bit 5..6: Counts 00:phi pulses/01:+CNT transitions/10:TimerA underflows/11:10 while CNT is high
-    constexpr uint8_t CRB_LOAD = 0x10;     // $dc0f Control Register B : Timer B Bit 4: 1 = Load latch into the timer once.
-    constexpr uint8_t CRB_RUNMODE = 0x08;  // $dc0f Control Register B : Timer B Bit 3: 0 = Timer-restart after underflow (latch will be reloaded), 1 = Timer stops after underflow.
-    constexpr uint8_t CRB_OUTMODE = 0x04;  // $dc0f Control Register B : Timer B Bit 2: 0 = Through a timer underflow, bit 7 of port B will get high for one cycle , 1 = Through a timer underflow, bit 7 of port B will be inverted
-    constexpr uint8_t CRB_PBON = 0x02;     // $dc0f Control Register B : Timer B Bit 1: 1 = Indicates a timer underflow at port B in bit 7.
-    constexpr uint8_t CRB_START = 0x01;    // $dc0f Control Register B : Timer B Bit 0: 0 = Stop timer; 1 = Start timer
+    
+    // Generic Control Register bit definitions (shared between CRA and CRB)
+    constexpr uint8_t CR_LOAD = 0x10;      // Bit 4: 1 = Load latch into the timer once (strobe)
+    constexpr uint8_t CR_RUNMODE = 0x08;   // Bit 3: 0 = continuous mode, 1 = one-shot mode (stop after underflow)
+    constexpr uint8_t CR_OUTMODE = 0x04;   // Bit 2: 0 = pulse mode (high for one cycle), 1 = toggle mode (invert on underflow)
+    constexpr uint8_t CR_PBON = 0x02;      // Bit 1: 1 = Timer output appears on PB6/PB7
+    constexpr uint8_t CR_START = 0x01;     // Bit 0: 0 = Stop timer, 1 = Start timer
+    
+    // Control Register A specific bits
+    constexpr uint8_t CRA_TODIN = 0x80;    // Bit 7: TOD frequency, 0 = 60 Hz, 1 = 50 Hz
+    constexpr uint8_t CRA_SPMODE = 0x40;   // Bit 6: Serial port direction, 0 = input, 1 = output
+    constexpr uint8_t CRA_INMODE = 0x20;   // Bit 5: Timer A input, 0 = PHI2, 1 = CNT pin
+    constexpr uint8_t CRA_LOAD = CR_LOAD;  // Bit 4: Load latch (alias to generic)
+    constexpr uint8_t CRA_RUNMODE = CR_RUNMODE;  // Bit 3: Run mode (alias to generic)
+    constexpr uint8_t CRA_OUTMODE = CR_OUTMODE;  // Bit 2: Output mode (alias to generic)
+    constexpr uint8_t CRA_PBON = CR_PBON;  // Bit 1: PB6 output enable (alias to generic)
+    constexpr uint8_t CRA_START = CR_START;  // Bit 0: Start/stop (alias to generic)
+    
+    // Control Register B specific bits
+    constexpr uint8_t CRB_ALARM = 0x80;    // Bit 7: TOD mode, 0 = set time, 1 = set alarm
+    constexpr uint8_t CRB_INMODE = 0x60;   // Bit 5-6: Timer B input mode (00=PHI2, 01=CNT, 10=Timer A, 11=Timer A+CNT)
+    constexpr uint8_t CRB_LOAD = CR_LOAD;  // Bit 4: Load latch (alias to generic)
+    constexpr uint8_t CRB_RUNMODE = CR_RUNMODE;  // Bit 3: Run mode (alias to generic)
+    constexpr uint8_t CRB_OUTMODE = CR_OUTMODE;  // Bit 2: Output mode (alias to generic)
+    constexpr uint8_t CRB_PBON = CR_PBON;  // Bit 1: PB7 output enable (alias to generic)
+    constexpr uint8_t CRB_START = CR_START;  // Bit 0: Start/stop (alias to generic)
 }
 
 // Using declarations to maintain compatibility in MOS6526 implementation files
 using namespace MOS6526;
+
+// Export generic control register bits to global scope for convenience
+using MOS6526::CR_START;
+using MOS6526::CR_LOAD;
+using MOS6526::CR_RUNMODE;
+using MOS6526::CR_OUTMODE;
+using MOS6526::CR_PBON;
 
 // Function declarations
 void mos6526_reset(mos6526_t* cia);

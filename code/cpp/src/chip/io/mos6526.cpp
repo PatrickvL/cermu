@@ -26,11 +26,17 @@ void mos6526_reset(mos6526_t* cia) {
     // So below writes result in VICBase to become $C000
     cia->port_a_value = 0xFF;
     cia->port_b_value = 0xFF;
-    // Timer latch all ones
+    // Timer latches all ones
     cia->reg[TIMER_OFFSET + TA_LO] = 0xFF;
     cia->reg[TIMER_OFFSET + TA_HI] = 0xFF;
     cia->reg[TIMER_OFFSET + TB_LO] = 0xFF;
     cia->reg[TIMER_OFFSET + TB_HI] = 0xFF;
+    // Timer counters are also set to all ones after reset
+    // (loaded from latches since control registers are 0 = stopped)
+    cia->reg[TA_LO] = 0xFF;
+    cia->reg[TA_HI] = 0xFF;
+    cia->reg[TB_LO] = 0xFF;
+    cia->reg[TB_HI] = 0xFF;
     // Also reset implementation-related variables
     cia->read_tod_delta = 0;
     cia->write_tod_delta = 0;
@@ -273,7 +279,8 @@ void mos6526_check_reload_timer(mos6526_t* cia, uint32_t t) { // t:A or B
     // stopped. If the timer is running, a write to the high
     // byte will load the timer latch, but not reload the
     // counter."
-    if ((cia->reg[CRA + t] & (CRA_START | CRB_START)) == 0)
+    // Check only the specific timer's START bit (generic bit works for both timers)
+    if ((cia->reg[CRA + t] & CR_START) == 0)
         mos6526_reload_timer(cia, t);
 }
 
@@ -324,10 +331,11 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
     // the timer will count from latched value to zero,
     // generate interrupt, reload the latched value and
     // repeat the procedure continuously."
-    // RUNMODE: 0 = one-shot (stop after underflow), 1 = continuous (keep running)
-    if ((cia->reg[CRA + t] & (CRA_RUNMODE | CRB_RUNMODE)) == 0) {
+    // RUNMODE: 0 = continuous (keep running), 1 = one-shot (stop after underflow)
+    // Use generic bits that work for both timers
+    if ((cia->reg[CRA + t] & CR_RUNMODE) != 0) {
         // Stop timer (Clear START control bit) - one-shot mode only
-        cia->reg[CRA + t] &= ~CRA_START;
+        cia->reg[CRA + t] &= ~CR_START;
         
         // IMPORTANT: Do NOT clear ICR bit here!
         // Per CIA6526.txt documentation: "Only reading the ICR will clear it."
@@ -364,7 +372,7 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
         cia->write_tod_delta = ((v & CRB_ALARM) > 0) ? ALARM_OFFSET : 0;
     }
 
-    if ((v & (CRA_LOAD | CRB_LOAD)) > 0) {
+    if ((v & CR_LOAD) > 0) {
         // "Force Load
         //  A strobe bit allows the timer latch to be loaded
         // into the timer counter at any time, whether the timer
@@ -372,7 +380,7 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
         mos6526_reload_timer(cia, c);
         // "  4    LOAD   1 = FORCE LOAD (this is a STROBE input, there is no data storage, bit 4 will
         //                    always read back a zero and writing a zero has no effect)."
-        v &= ~CRA_LOAD; // same as CRB_LOAD
+        v &= ~CR_LOAD; // Clear the LOAD strobe bit
         
         // CRITICAL FIX: Clear the interrupt flag when manually reloading the timer
         // This prevents spurious interrupts when restarting a timer that had previously underflowed
@@ -396,8 +404,9 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
     // TODO: If toggle mode is enabled (OUTMODE=1), set the output pin high when timer starts
     
     // Reset TOD cycle counter when timer transitions from stopped to started
-    if ((v & (CRA_START | CRB_START)) > 0)
-        if ((old_crx & (CRA_START | CRB_START)) == 0) {
+    // Use generic START bit that works for both timers
+    if ((v & CR_START) > 0)
+        if ((old_crx & CR_START) == 0) {
             // "the frequency counter is being reset to 0 when the clock was stopped and is
             // restarted (->hzsync0.prg, hzsync1.prg)"
             cia->tod_cycles = 0;
@@ -405,8 +414,8 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
 
     cia->reg[CRA + c] = v;
 
-    int old_pbon = old_crx & CRA_PBON; // c:B=CRB_PBON
-    int new_pbon = v & CRA_PBON;
+    int old_pbon = old_crx & CR_PBON; // Generic bit works for both timers
+    int new_pbon = v & CR_PBON;
     // Detect PBON bit change from high to low:
     if (old_pbon > new_pbon) {
         // Re-initialize this port B bit to 1. This solves $"{VICE_testprogs}CIA/pb6pb7/main.prg",
@@ -642,15 +651,15 @@ bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state) {
         }
         case CRA: {
             uint8_t cra_value = cia->reg[CRA];
-            // Mask out LOAD bit - it always reads as 0
-            cra_value &= ~CRA_LOAD;
+            // Mask out LOAD bit - it always reads as 0 (strobe bit)
+            cra_value &= ~CR_LOAD;
             BUS_SET_DATA(bus_state, cra_value);
             break;
         }
         case CRB: {
             uint8_t crb_value = cia->reg[CRB];
-            // Mask out LOAD bit - it always reads as 0
-            crb_value &= ~CRB_LOAD;
+            // Mask out LOAD bit - it always reads as 0 (strobe bit)
+            crb_value &= ~CR_LOAD;
             BUS_SET_DATA(bus_state, crb_value);
             break;
         }
@@ -819,8 +828,8 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
     // Store current bus state for edge detection in next cycle (standard chip pattern)
     cia->prev_bus_state = bus_state;
 
-    bool timer_a_running = (cia->reg[CRA] & CRA_START) > 0;
-    bool timer_b_running = (cia->reg[CRB] & CRB_START) > 0;
+    bool timer_a_running = (cia->reg[CRA] & CR_START) > 0;
+    bool timer_b_running = (cia->reg[CRB] & CR_START) > 0;
     
     if (timer_a_running)
         mos6526_decrease_timer(cia, A, cnt_is_positive_edge, cia->reg[CRA] & CRA_INMODE);
