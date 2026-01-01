@@ -78,6 +78,12 @@ typedef struct mos6526_s {
     // This is the standard pattern all chips should use for edge detection
     bus_state_t prev_bus_state;
     
+    // Multi-cycle delay line for cycle-accurate timing
+    // Single uint64_t shift register that propagates signals across multiple cycles
+    // Each bit field represents a different delayed signal (LOAD, START, etc.)
+    // Shifted right by 1 each cycle to advance all delays in parallel
+    uint64_t delay_line;
+    
     // Callback for port A output changes (used by CIA2 for VIC-II bank switching)
     void (*port_a_change_callback)(void* context, uint8_t port_a_output);
     void* port_a_callback_context;
@@ -149,6 +155,19 @@ namespace MOS6526 {
     constexpr uint8_t CRB_OUTMODE = CR_OUTMODE;  // Bit 2: Output mode (alias to generic)
     constexpr uint8_t CRB_PBON = CR_PBON;  // Bit 1: PB7 output enable (alias to generic)
     constexpr uint8_t CRB_START = CR_START;  // Bit 0: Start/stop (alias to generic)
+    
+    // Delay Line Bit Masks - for multi-cycle signal propagation
+    // Uses shift register approach: inject signal at high bit, check at bit 0 after N cycles
+    
+    // Timer A LOAD signal delay (3 cycles: inject at bit 2, check at bit 0)
+    constexpr uint64_t DELAY_TA_LOAD_MASK    = 0x0000000000000007ULL;  // Bits 0-2
+    constexpr uint64_t DELAY_TA_LOAD_INJECT  = 0x0000000000000004ULL;  // Inject at bit 2
+    constexpr uint64_t DELAY_TA_LOAD_CHECK   = 0x0000000000000001ULL;  // Check bit 0
+    
+    // Timer B LOAD signal delay (3 cycles: inject at bit 5, check at bit 3)
+    constexpr uint64_t DELAY_TB_LOAD_MASK    = 0x0000000000000038ULL;  // Bits 3-5
+    constexpr uint64_t DELAY_TB_LOAD_INJECT  = 0x0000000000000020ULL;  // Inject at bit 5
+    constexpr uint64_t DELAY_TB_LOAD_CHECK   = 0x0000000000000008ULL;  // Check bit 3
 }
 
 // Using declarations to maintain compatibility in MOS6526 implementation files
