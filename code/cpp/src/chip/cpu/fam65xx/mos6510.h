@@ -59,6 +59,7 @@ uint8_t mos6510_get_y(mos6510_t *cpu);
 uint8_t mos6510_get_s(mos6510_t *cpu);
 uint8_t mos6510_get_p(mos6510_t *cpu);
 uint16_t mos6510_get_pc(mos6510_t *cpu);
+uint8_t mos6510_get_ir(mos6510_t *cpu);
 
 // Get current opcode entry (for disassembly)
 #ifdef __cplusplus
