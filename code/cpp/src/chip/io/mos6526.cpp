@@ -382,15 +382,7 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
         //  A strobe bit allows the timer latch to be loaded
         // into the timer counter at any time, whether the timer
         // is running or not."
-        
-        // MULTI-CYCLE DELAY: Inject LOAD signal into delay line (3-cycle propagation)
-        // This matches VICE's behavior: CR_FLOAD → LOAD1 (1 cycle) → LOAD (1 cycle) → reload (1 cycle)
-        if (c == A) {
-            cia->delay_line |= DELAY_TA_LOAD_INJECT;
-        } else {
-            cia->delay_line |= DELAY_TB_LOAD_INJECT;
-        }
-        
+        mos6526_reload_timer(cia, c);
         // "  4    LOAD   1 = FORCE LOAD (this is a STROBE input, there is no data storage, bit 4 will
         //                    always read back a zero and writing a zero has no effect)."
         v &= ~CR_LOAD; // Clear the LOAD strobe bit
@@ -845,24 +837,6 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
     // Store current bus state for edge detection in next cycle (standard chip pattern)
     cia->prev_bus_state = bus_state;
 
-    // =========================================================================
-    // MULTI-CYCLE DELAY LINE (Shift Register Approach)
-    // =========================================================================
-    // Shift all delayed signals right by 1 bit to propagate them through the delay line
-    // This advances all pending operations toward their execution point
-    cia->delay_line >>= 1;
-    
-    // Check for Timer A LOAD signal that has propagated through the delay line
-    if (cia->delay_line & DELAY_TA_LOAD_CHECK) {
-        mos6526_reload_timer(cia, A);
-        cia->delay_line &= ~DELAY_TA_LOAD_CHECK;  // Clear after processing
-    }
-    
-    // Check for Timer B LOAD signal that has propagated through the delay line
-    if (cia->delay_line & DELAY_TB_LOAD_CHECK) {
-        mos6526_reload_timer(cia, B);
-        cia->delay_line &= ~DELAY_TB_LOAD_CHECK;  // Clear after processing
-    }
 
     // =========================================================================
     // TIMER COUNTDOWN
