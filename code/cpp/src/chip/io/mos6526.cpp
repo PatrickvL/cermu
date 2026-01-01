@@ -411,6 +411,12 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
             // "the frequency counter is being reset to 0 when the clock was stopped and is
             // restarted (->hzsync0.prg, hzsync1.prg)"
             cia->tod_cycles = 0;
+            
+            // CRITICAL FIX: When starting a stopped timer, reload counter from latch
+            // This is essential for tests that write latch values and immediately start the timer
+            // Without this, the timer would start counting from its old value ($FFFF at reset)
+            // instead of from the newly written latch value
+            mos6526_reload_timer(cia, c);
         }
 
     cia->reg[CRA + c] = v;
@@ -712,26 +718,21 @@ bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state) {
         // Write timer latches
         case TA_LO:
             cia->reg[TIMER_OFFSET + TA_LO] = value;
-            // CRITICAL FIX: When writing to timer latch while stopped, also update counter
-            // This ensures tests that write latch values and immediately start the timer
-            // will count from the written value, not from the old counter value (e.g., $FFFF at reset)
-            if ((cia->reg[CRA] & CR_START) == 0) {
-                cia->reg[TA_LO] = value;
-            }
+            // Per CIA6526 datasheet: Writing to timer registers updates LATCH only
+            // Counter is only updated on: underflow, LOAD bit, or HI byte write while stopped
             break;
         case TA_HI:
             cia->reg[TIMER_OFFSET + TA_HI] = value;
+            // Writing to HI byte while stopped triggers reload (latch → counter)
             mos6526_check_reload_timer(cia, A);
             break;
         case TB_LO:
             cia->reg[TIMER_OFFSET + TB_LO] = value;
-            // CRITICAL FIX: When writing to timer latch while stopped, also update counter
-            if ((cia->reg[CRB] & CR_START) == 0) {
-                cia->reg[TB_LO] = value;
-            }
+            // Per CIA6526 datasheet: Writing to timer registers updates LATCH only
             break;
         case TB_HI:
             cia->reg[TIMER_OFFSET + TB_HI] = value;
+            // Writing to HI byte while stopped triggers reload (latch → counter)
             mos6526_check_reload_timer(cia, B);
             break;
         // Write TOD registers / ALARM latches
