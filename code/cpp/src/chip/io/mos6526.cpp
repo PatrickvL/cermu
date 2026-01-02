@@ -316,13 +316,16 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
         return;
 
     uint32_t i = t * 2; // Turn A or B into TA_LO / TB_LO offsets
-    uint32_t timer = (cia->reg[TA_HI + i] << 8) | cia->reg[TA_LO + i];
+    uint16_t timer = (cia->reg[TA_HI + i] << 8) | cia->reg[TA_LO + i];
     
-    // CRITICAL FIX: Check for underflow BEFORE decrementing
-    // When timer reaches $0000, it underflows on the NEXT count
-    // The check must happen before decrement to catch the $0000 state
-    if (timer == 0) {
-        // Timer underflow - set ICR flag and reload from latch
+    // Decrement timer (automatically wraps at 16 bits: $0000 - 1 = $FFFF)
+    timer--;
+    
+    // Check for underflow AFTER decrementing (timer wraps to $FFFF)
+    // CIA timers underflow when they decrement from $0000, wrapping to $FFFF
+    if (timer == 0xFFFF) {
+        // Timer underflowed - reload from latch
+        // Set ICR flag
         cia->reg[ICR] |= (uint8_t)(ICR_TA + t); // t=A:ICR_TA, t=B:ICR_TB
         mos6526_reload_timer(cia, t);
         
@@ -334,7 +337,7 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
         // repeat the procedure continuously."
         // RUNMODE: 0 = continuous (keep running), 1 = one-shot (stop after underflow)
         if ((cia->reg[CRA + t] & CR_RUNMODE) != 0) {
-            // Stop timer (Clear START control bit) - one-shot mode only
+            // Stop timer (Clear START bit) - one-shot mode only
             cia->reg[CRA + t] &= ~CR_START;
             
             // IMPORTANT: Do NOT clear ICR bit here!
@@ -345,8 +348,7 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
         // else: Continuous mode - timer keeps running with reloaded value
         // TODO: Must this be treated as a re-start which sets the CRA_OUTMODE Toggle output high?
     } else {
-        // Normal countdown - decrement timer
-        timer--;
+        // Store decremented value
         cia->reg[TA_LO + i] = (uint8_t)(timer & 0xFF);
         cia->reg[TA_HI + i] = (uint8_t)(timer >> 8);
     }
@@ -411,6 +413,11 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
     // Use generic START bit that works for both timers
     if ((v & CR_START) > 0)
         if ((old_crx & CR_START) == 0) {
+            // Timer transitions from stopped to started
+            // Reload timer from latch so it starts with the programmed value
+            // This is critical for tests that set up a specific count period
+            mos6526_reload_timer(cia, c);
+            
             // "the frequency counter is being reset to 0 when the clock was stopped and is
             // restarted (->hzsync0.prg, hzsync1.prg)"
             cia->tod_cycles = 0;
@@ -614,7 +621,7 @@ bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state) {
             // Note : Assume this always excludes the optional PBON output mask? (If not, use IDDRB!)
             BUS_SET_DATA(bus_state, cia->reg[DDRB]);
             break;
-        // Read timers
+        // Read timers - return current counter value
         case TA_LO:
             BUS_SET_DATA(bus_state, cia->reg[TA_LO]);
             break;
