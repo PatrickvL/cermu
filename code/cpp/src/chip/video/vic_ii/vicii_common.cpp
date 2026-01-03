@@ -282,10 +282,10 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
     // Determine if we're in border or display area
     // VIC-II border flip-flop logic: graphics are displayed when main_border_flip_flop is FALSE
     // Border is displayed when main_border_flip_flop is TRUE
-    const bool in_main_display = !vicii->border.main_border_flip_flop
-                              && !vicii->border.vertical_border_flip_flop;
+    const bool in_border = vicii->border.main_border_flip_flop
+                        || vicii->border.vertical_border_flip_flop;
     
-    if (!(in_main_display && vicii->video_logic.display_state)) {
+    if (in_border || !vicii->video_logic.display_state) {
             // We're in border area - sequence exactly 8 border pixels
             for (int pixel = 0; pixel < 8; pixel++) {
                 // Pass fetch position directly - vicii_pixel_emit_at_x handles the pipeline delay
@@ -1319,37 +1319,32 @@ static uint8_t vicii_cycle_sprite_s_border_check(vicii_t* vicii, int param_sprit
     return vicii_cycle_sprite_s_access(vicii, param_sprite_num);
 }
 // Border flip-flop logic (Documentation section 3.9) - X coordinate rules only
-static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border,
-        vicii_timing_unit_t* timing, uint8_t c1_reg, const vicii_chip_config_t* config) {
-    const uint16_t raster = timing->raster_counter;
-    const uint16_t x_coord = timing->x_coordinate;  // Use actual hardware X coordinate
+static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border, uint16_t x_coordinate, uint16_t raster, uint8_t c1_reg) {
     const bool den_set = (c1_reg & VICII_C1_DEN) != 0;
-    // Check each pixel in this cycle (8 pixels) against border boundaries
-    for (int pixel = 0; pixel < 8; pixel++) {
-        const uint16_t pixel_x = x_coord + (uint16_t)pixel;
-        
-        // Rule 1: "If the X coordinate reaches the right comparison value, the main border flip flop is set."
-        if (pixel_x == border->border_right) {
-            border->main_border_flip_flop = true;
+    
+    // Rule 1: "If the X coordinate reaches the right comparison value, the main border flip flop is set."
+    if (x_coordinate == border->border_right) {
+        border->main_border_flip_flop = true;
+    }
+    
+    // Rules 4, 5, 6: Handle left coordinate checks
+    if (x_coordinate == border->border_left) {
+        // Rule 4: "If the X coordinate reaches the left comparison value and the Y
+        // coordinate reaches the bottom one, the vertical border flip flop is set."
+        if (raster == border->border_bottom) {
+            border->vertical_border_flip_flop = true;
         }
-        // Rules 4, 5, 6: Handle left coordinate checks only
-        if (pixel_x == border->border_left) {
-            // Rule 4: "If the X coordinate reaches the left comparison value and the Y
-            // coordinate reaches the bottom one, the vertical border flip flop is set."
-            if (raster == border->border_bottom) {
-                border->vertical_border_flip_flop = true;
-            }
-            // Rule 5: "If the X coordinate reaches the left comparison value and the Y
-            // coordinate reaches the top one and the DEN bit in register $d011 is set,
-            // the vertical border flip flop is reset."
-            else if (raster == border->border_top && den_set) {
-                border->vertical_border_flip_flop = false;
-            }
-            // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
-            // border flip flop is not set, the main flip flop is reset."
-            if (!border->vertical_border_flip_flop) {
-                border->main_border_flip_flop = false;
-            }
+        // Rule 5: "If the X coordinate reaches the left comparison value and the Y
+        // coordinate reaches the top one and the DEN bit in register $d011 is set,
+        // the vertical border flip flop is reset."
+        else if (raster == border->border_top && den_set) {
+            border->vertical_border_flip_flop = false;
+        }
+        
+        // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
+        // border flip flop is not set, the main flip flop is reset."
+        if (!border->vertical_border_flip_flop) {
+            border->main_border_flip_flop = false;
         }
     }
 }
@@ -1691,7 +1686,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     
     // STEP 5: Update border flip-flops to establish display window state
     // CRITICAL: This must happen BEFORE pixel sequencing so the sequencer sees the correct flip-flop state
-    vicii_border_update_flip_flops_x(&vicii->border, &vicii->timing, vicii->registers.data[VICII_C1], vicii->config);
+    vicii_border_update_flip_flops_x(&vicii->border, vicii->timing.x_coordinate, vicii->timing.raster_counter, vicii->registers.data[VICII_C1]);
 
     // STEP 6: Perform unified pixel sequencing (8 pixels per cycle)
     // This uses the graphics data that was JUST loaded above AND the border flip-flop state updated above

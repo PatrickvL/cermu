@@ -217,10 +217,10 @@ constexpr uint16_t VICII_BORDER_TOP_RSEL1 = 51;
 constexpr uint16_t VICII_BORDER_TOP_RSEL0 = 55;
 constexpr uint16_t VICII_BORDER_BOTTOM_RSEL0 = 247;
 constexpr uint16_t VICII_BORDER_BOTTOM_RSEL1 = 251;
-constexpr uint16_t VICII_BORDER_LEFT_CSEL1 = 24;
-constexpr uint16_t VICII_BORDER_LEFT_CSEL0 = 31;
-constexpr uint16_t VICII_BORDER_RIGHT_CSEL0 = 335;
-constexpr uint16_t VICII_BORDER_RIGHT_CSEL1 = 344;
+constexpr uint16_t VICII_BORDER_LEFT_CSEL1 = 24; // 0x18
+constexpr uint16_t VICII_BORDER_LEFT_CSEL0 = 31; // 0x1F (7 pixels later)
+constexpr uint16_t VICII_BORDER_RIGHT_CSEL0 = 335; // 0x14F (9 pixels earlier)
+constexpr uint16_t VICII_BORDER_RIGHT_CSEL1 = 344; // 0x158
 
 // VIC-II access types (Documentation section 3.6.2)
 // PHI1 = PHI2 low
@@ -365,11 +365,12 @@ typedef struct {
     //bool VSW24; //   55   247    55   247   Enables 24 row screen window
     //bool VRESET; //   261   n/a   312?  n/a   Resets vertical count to zero [See NrOfLines]
 
-    // Border limits (updated based on RSEL/CSEL)
+    // Border limits in hardware coordinate space (VIC-II X coordinates 0-503)
     uint16_t border_top;
     uint16_t border_bottom;
     uint16_t border_left;
     uint16_t border_right;
+    
     bool main_border_flip_flop;      // Main border flip flop (Documentation section 3.9)
     bool vertical_border_flip_flop;  // Vertical border flip flop (Documentation section 3.9)
 } vicii_border_unit_t;
