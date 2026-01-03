@@ -106,20 +106,6 @@ static inline void vicii_pixel_emit_at_x(vicii_t* vicii, const vicii_pixel_t* pi
     }
 }
 
-// Graphics sequencer (called from G-access) - Stores graphics data in line buffer ONLY
-// The vmli parameter comes from the cycle table's param field (0-39 for cycles 15-54)
-// and is used to store graphics data at the correct position in the line buffer.
-// According to vic-ii.txt documentation, the hardware uses VMLI (Video Matrix Line Index)
-// to track position within the internal 40×12 bit video matrix/color line buffer.
-void vicii_graphics_sequencer(vicii_t* vicii, uint8_t graphics_data, uint8_t vmli) {
-    vicii_sequencer_unit_t* seq = &vicii->sequencer;
-    
-    // Store graphics data at the correct position in the line buffer
-    if (vmli < 40) {
-        seq->graphics_line[vmli] = graphics_data;
-    }
-}
-
 // ========================================================================================
 // INTERRUPT HANDLING
 // ========================================================================================
@@ -1684,7 +1670,10 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         const uint8_t graphics_data = BUS_GET_DATA(bus_state);
         const uint8_t vmli = vicii->video_logic.vmli;
 
-        vicii_graphics_sequencer(vicii, graphics_data, vmli);
+        // Store graphics data at the correct position in the line buffer (inlined)
+        if (vmli < 40) {
+            vicii->sequencer.graphics_line[vmli] = graphics_data;
+        }
         
         // Spec (line 1246): "VC and VMLI are incremented after each g-access in display state."
         // CRITICAL: This happens AFTER g-access on BOTH bad lines and non-bad lines
