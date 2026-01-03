@@ -278,24 +278,66 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
     // This ensures CPU register writes (like border/background color changes) affect
     // pixels being OUTPUT at that moment, not pixels being LOADED into the pipeline.
     const uint16_t x_coord = vicii->timing.x_coordinate;
+    const uint16_t raster = vicii->timing.raster_counter;
+    const uint8_t c1_reg = vicii->registers.data[VICII_C1];
+    const bool den_set = (c1_reg & VICII_C1_DEN) != 0;
     
-    // Determine if we're in border or display area
-    // VIC-II border flip-flop logic: graphics are displayed when main_border_flip_flop is FALSE
-    // Border is displayed when main_border_flip_flop is TRUE
-    const bool in_border = vicii->border.main_border_flip_flop
-                        || vicii->border.vertical_border_flip_flop;
+    // Border limits for per-pixel comparison
+    const uint16_t border_left = vicii->border.border_left;
+    const uint16_t border_right = vicii->border.border_right;
+    const uint16_t border_top = vicii->border.border_top;
+    const uint16_t border_bottom = vicii->border.border_bottom;
     
-    if (in_border || !vicii->video_logic.display_state) {
-            // We're in border area - sequence exactly 8 border pixels
-            for (int pixel = 0; pixel < 8; pixel++) {
-                // Pass fetch position directly - vicii_pixel_emit_at_x handles the pipeline delay
-                const uint16_t pixel_x = x_coord + (uint16_t)pixel;
-    
-                vicii_pixel_emit_at_x(vicii, &vicii->border.border_pixel, pixel_x);
+    // Sequence exactly 8 pixels, checking border flip-flops at EACH pixel position
+    for (int pixel = 0; pixel < 8; pixel++) {
+        const uint16_t pixel_x = x_coord + (uint16_t)pixel;
+        
+        // CRITICAL: Check border flip-flops at exact pixel position
+        // This implements the instantaneous transition described in the documentation
+        
+        // Rule 1: "If the X coordinate reaches the right comparison value, the main border flip flop is set."
+        if (pixel_x == border_right) {
+            vicii->border.main_border_flip_flop = true;
+        }
+        
+        // Rules 4, 5, 6: Handle left coordinate checks
+        if (pixel_x == border_left) {
+            // Rule 4: "If the X coordinate reaches the left comparison value and the Y
+            // coordinate reaches the bottom one, the vertical border flip flop is set."
+            if (raster == border_bottom) {
+                vicii->border.vertical_border_flip_flop = true;
             }
-    } else {
-        // We're in display area - sequence 8 pixels from shift register
-        vicii_sequencer_unit_t* seq = &vicii->sequencer;
+            // Rule 5: "If the X coordinate reaches the left comparison value and the Y
+            // coordinate reaches the top one and the DEN bit in register $d011 is set,
+            // the vertical border flip flop is reset."
+            else if (raster == border_top && den_set) {
+                vicii->border.vertical_border_flip_flop = false;
+            }
+            
+            // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
+            // border flip flop is not set, the main flip flop is reset."
+            if (!vicii->border.vertical_border_flip_flop) {
+                vicii->border.main_border_flip_flop = false;
+            }
+        }
+        
+        // Now determine if THIS specific pixel is border or display
+        const bool in_border = vicii->border.main_border_flip_flop
+                            || vicii->border.vertical_border_flip_flop;
+        
+        if (in_border || !vicii->video_logic.display_state) {
+            // This pixel is in border area
+            vicii_pixel_emit_at_x(vicii, &vicii->border.border_pixel, pixel_x);
+        }
+        // Display pixels will be handled in the second loop below
+    }
+    
+    // Now handle display area pixel sequencing
+    // This section processes pixels that are NOT in border
+    vicii_sequencer_unit_t* seq = &vicii->sequencer;
+    
+    // Only process display logic if we're in display state
+    if (vicii->video_logic.display_state) {
         
         // Column index is managed by the g-access cycle functions and stored in graphics_line buffer
         // The pixel sequencer reads from the buffer position corresponding to the current column
@@ -347,8 +389,16 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         
         // Sequence exactly 8 pixels from shift register
         for (int pixel = 0; pixel < 8; pixel++) {
-            // Pass fetch position directly - vicii_pixel_emit_at_x handles the pipeline delay
             const uint16_t pixel_x = x_coord + (uint16_t)pixel;
+            
+            // Re-check border state for this pixel (it may have changed during the first loop)
+            const bool pixel_in_border = vicii->border.main_border_flip_flop
+                                      || vicii->border.vertical_border_flip_flop;
+            
+            // Skip if this pixel is in border (already handled in first loop)
+            if (pixel_in_border) {
+                continue;
+            }
             
             vicii_pixel_t pixel_data;
             
@@ -1318,37 +1368,6 @@ static uint8_t vicii_cycle_sprite_s_border_check(vicii_t* vicii, int param_sprit
     // Perform the sprite S access for this cycle
     return vicii_cycle_sprite_s_access(vicii, param_sprite_num);
 }
-// Border flip-flop logic (Documentation section 3.9) - X coordinate rules only
-static inline void vicii_border_update_flip_flops_x(vicii_border_unit_t* border, uint16_t x_coordinate, uint16_t raster, uint8_t c1_reg) {
-    const bool den_set = (c1_reg & VICII_C1_DEN) != 0;
-    
-    // Rule 1: "If the X coordinate reaches the right comparison value, the main border flip flop is set."
-    if (x_coordinate == border->border_right) {
-        border->main_border_flip_flop = true;
-    }
-    
-    // Rules 4, 5, 6: Handle left coordinate checks
-    if (x_coordinate == border->border_left) {
-        // Rule 4: "If the X coordinate reaches the left comparison value and the Y
-        // coordinate reaches the bottom one, the vertical border flip flop is set."
-        if (raster == border->border_bottom) {
-            border->vertical_border_flip_flop = true;
-        }
-        // Rule 5: "If the X coordinate reaches the left comparison value and the Y
-        // coordinate reaches the top one and the DEN bit in register $d011 is set,
-        // the vertical border flip flop is reset."
-        else if (raster == border->border_top && den_set) {
-            border->vertical_border_flip_flop = false;
-        }
-        
-        // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
-        // border flip flop is not set, the main flip flop is reset."
-        if (!border->vertical_border_flip_flop) {
-            border->main_border_flip_flop = false;
-        }
-    }
-}
-
 // ========================================================================================
 // BUS CONTROL HELPERS - Hardware Connection Details
 // ========================================================================================
@@ -1684,11 +1703,8 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         }
     }
     
-    // STEP 5: Update border flip-flops to establish display window state
-    // CRITICAL: This must happen BEFORE pixel sequencing so the sequencer sees the correct flip-flop state
-    vicii_border_update_flip_flops_x(&vicii->border, vicii->timing.x_coordinate, vicii->timing.raster_counter, vicii->registers.data[VICII_C1]);
-
-    // STEP 6: Perform unified pixel sequencing (8 pixels per cycle)
+    // STEP 5: Perform unified pixel sequencing (8 pixels per cycle)
+    // Border flip-flops are now updated per-pixel WITHIN the pixel sequencer
     // This uses the graphics data that was JUST loaded above AND the border flip-flop state updated above
     if (vicii->pixel.framebuffer && vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
         vicii_pixel_sequencer(vicii);
