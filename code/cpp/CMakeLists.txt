@@ -116,43 +116,44 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui
 )
 
-# Add GUI-specific includes only if building GUI
-if(BUILD_GUI)
-    include_directories(
-        ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui
-        ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends
-        ${SDL2_INCLUDE_DIRS}
-    )
-endif()
+# GUI include directories will be set later after detecting ImGui location
 
 # Create ImGui library if building GUI
 if(BUILD_GUI)
-    # Check if imgui directory exists
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/imgui.h")
+    # Check if imgui directory exists (try project root external first, then code/cpp/external)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../external/imgui/imgui.h")
+        set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../external/imgui")
+    elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/imgui.h")
+        set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui")
+    else()
+        set(IMGUI_DIR "")
+    endif()
+    
+    if(IMGUI_DIR)
         # Create ImGui static library
         add_library(imgui STATIC
-            external/imgui/imgui.cpp
-            external/imgui/imgui_demo.cpp
-            external/imgui/imgui_draw.cpp
-            external/imgui/imgui_tables.cpp
-            external/imgui/imgui_widgets.cpp
-            external/imgui/backends/imgui_impl_sdl2.cpp
-            external/imgui/backends/imgui_impl_opengl3.cpp
+            ${IMGUI_DIR}/imgui.cpp
+            ${IMGUI_DIR}/imgui_demo.cpp
+            ${IMGUI_DIR}/imgui_draw.cpp
+            ${IMGUI_DIR}/imgui_tables.cpp
+            ${IMGUI_DIR}/imgui_widgets.cpp
+            ${IMGUI_DIR}/backends/imgui_impl_sdl2.cpp
+            ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
         )
         
         # Set ImGui include directories
         target_include_directories(imgui PUBLIC
-            ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui
-            ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends
+            ${IMGUI_DIR}
+            ${IMGUI_DIR}/backends
             ${SDL2_INCLUDE_DIRS}
         )
         
         # Link ImGui with OpenGL and SDL2
         target_link_libraries(imgui ${SDL2_LIBRARIES} ${OPENGL_LIBRARIES})
         
-        message(STATUS "Using native Dear ImGui C++")
+        message(STATUS "Using native Dear ImGui C++ from ${IMGUI_DIR}")
     else()
-        message(WARNING "Dear ImGui not found at ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui - disabling GUI build")
+        message(WARNING "Dear ImGui not found - disabling GUI build")
         set(BUILD_GUI FALSE)
     endif()
 endif()
@@ -295,8 +296,8 @@ if(BUILD_GUI)
     # Add SDL2, ImGui, and NFD include directories to the GUI target
     target_include_directories(c64emu_gui PRIVATE
         ${SDL2_INCLUDE_DIRS}
-        ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui
-        ${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/backends
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
     )
     
     # Add NFD include if available
