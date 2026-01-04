@@ -1566,17 +1566,35 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     const uint8_t access_type = entry->func(vicii, access_param);
 
     // CRITICAL: Shift register update BEFORE setting BA/AEC
-    // Shift left: bit0 becomes what was bit1, bit1 becomes what was bit2, etc.
-    vicii->bus.ba_prediction_shift_reg <<= 1;
+    //
+    // The 3-bit shift register implements the 3-cycle advance warning for BA signal:
+    // - Bit 0: next cycle (cycle+1) needs PHI2 access
+    // - Bit 1: cycle+2 needs PHI2 access
+    // - Bit 2: cycle+3 needs PHI2 access
+    //
+    // Hardware requirement: BA must go LOW 3 cycles BEFORE VIC needs PHI2 bus access.
+    // This gives CPU time to finish up to 3 consecutive write operations.
+    //
+    // CORRECT OPERATION (shift-right pipeline):
+    // Each cycle we:
+    // 1. Shift right: predictions move one step closer to "now"
+    // 2. Check if cycle+3 needs PHI2 access
+    // 3. Set bit 2 if cycle+3 needs access (furthest future slot)
+    //
+    // Example: Cycle 15 needs c-access (bad line)
+    // - Cycle 12: Check cycle 15 → set bit 2 → BA goes LOW (3 cycles early)
+    // - Cycle 13: Shift right → bit 2→bit 1 → BA still LOW (2 cycles early)
+    // - Cycle 14: Shift right → bit 1→bit 0 → BA still LOW (1 cycle early)
+    // - Cycle 15: Shift right → bit 0→(gone), check current access_type → VIC takes bus (AEC LOW)
     
-    // Check if cycle+3 needs PHI2 access and set bit 2
+    // Shift right: bit2→bit1, bit1→bit0, bit0→(discarded)
+    vicii->bus.ba_prediction_shift_reg >>= 1;
+    
+    // Check if cycle+3 needs PHI2 access and set bit 2 (furthest future position)
     uint8_t cycle_plus_3 = (vicii->timing.x_cycle + 3) % vicii->config->cycles_per_line;
     if (vicii_cycle_needs_phi2_access(vicii, cycle_plus_3)) {
         vicii->bus.ba_prediction_shift_reg |= 0x04;  // Set bit 2
     }
-    
-    // Mask to 3 bits
-    vicii->bus.ba_prediction_shift_reg &= 0x07;
     
     // CRITICAL FIX: Update BA/AEC signals at the START of the cycle (PHI1 phase)
     // This must happen BEFORE the CPU's PHI2 tick so the CPU sees the correct BA state.
