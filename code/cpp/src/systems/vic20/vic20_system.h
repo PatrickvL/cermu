@@ -104,6 +104,9 @@ private:
     void cpu_cycle();
     void non_cpu_cycle();
     
+    // ROM loading
+    bool load_roms();
+    
     // Memory access callbacks for CPU
     static uint8_t cpu_read(void* user_data, uint32_t addr, uint8_t bus_state);
     static void cpu_write(void* user_data, uint32_t addr, uint8_t data);

@@ -12,6 +12,9 @@
 #include "../../chip/video/vic/mos6561.h"
 #include "../../chip/io/mos6522.h"
 
+// Include ROM loader
+#include "../../core/storage/rom_loader.h"
+
 // ============================================================================
 // Hardware Traits Definition
 // ============================================================================
@@ -242,11 +245,15 @@ bool VIC20System::initialize() {
     memset(expansion_ram_, 0, sizeof(expansion_ram_));
     memset(color_ram_simple_, 0, sizeof(color_ram_simple_));
     
-    // TODO: Load ROMs (would use ROM loader from core)
-    // For now, just zero them
-    memset(kernal_rom_, 0, sizeof(kernal_rom_));
-    memset(basic_rom_, 0, sizeof(basic_rom_));
-    memset(char_rom_, 0, sizeof(char_rom_));
+    // Load ROMs using common ROM loader
+    bool roms_loaded = load_roms();
+    if (!roms_loaded) {
+        printf("VIC20: Warning - ROMs not loaded, system may not function correctly\n");
+        // Zero ROMs as fallback
+        memset(kernal_rom_, 0, sizeof(kernal_rom_));
+        memset(basic_rom_, 0, sizeof(basic_rom_));
+        memset(char_rom_, 0, sizeof(char_rom_));
+    }
     
     // Create CPU (MOS6502) with memory callbacks
     cpu_ = mos6502_create();
@@ -527,14 +534,77 @@ void VIC20System::non_cpu_cycle() {
         mos6522_tick(via2_, 0);
     }
 }
+bool VIC20System::load_roms() {
+    // Try to load VIC-20 ROMs from standard locations
+    // These paths should be configurable via system configuration
+    
+    const char* rom_root = "data/vic20/roms";  // Default ROM path
+    
+    // Load KERNAL ROM (8KB at $E000-$FFFF)
+    const char* kernal_files[] = {
+        "kernal.901486-07.bin",
+        "kernal.rom",
+        "901486-07.bin",
+        nullptr
+    };
+    
+    bool kernal_ok = rom_loader_load_from_root(
+        rom_root, kernal_files,
+        sizeof(kernal_rom_), kernal_rom_, sizeof(kernal_rom_)
+    );
+    
+    if (!kernal_ok) {
+        printf("VIC20: Failed to load KERNAL ROM\n");
+    }
+    
+    // Load BASIC ROM (8KB at $C000-$DFFF)
+    const char* basic_files[] = {
+        "basic.901486-01.bin",
+        "basic.rom",
+        "901486-01.bin",
+        nullptr
+    };
+    
+    bool basic_ok = rom_loader_load_from_root(
+        rom_root, basic_files,
+        sizeof(basic_rom_), basic_rom_, sizeof(basic_rom_)
+    );
+    
+    if (!basic_ok) {
+        printf("VIC20: Failed to load BASIC ROM\n");
+    }
+    
+    // Load Character ROM (4KB)
+    const char* char_files[] = {
+        "characters.901460-03.bin",
+        "chargen.rom",
+        "901460-03.bin",
+        nullptr
+    };
+    
+    bool char_ok = rom_loader_load_from_root(
+        rom_root, char_files,
+        sizeof(char_rom_), char_rom_, sizeof(char_rom_)
+    );
+    
+    if (!char_ok) {
+        printf("VIC20: Failed to load Character ROM\n");
+    }
+    
+    return (kernal_ok && basic_ok && char_ok);
+}
 
 void VIC20System::memory_init(const rom_config_t* rom_config) {
-    // TODO: Implement memory initialization
+    // Reload ROMs if configuration provided
+    if (rom_config) {
+        reload_roms(rom_config);
+    }
 }
 
 bool VIC20System::reload_roms(const rom_config_t* rom_config) {
-    // TODO: Implement ROM reloading
-    return false;
+    // Reload ROMs using provided configuration
+    (void)rom_config;  // TODO: Use rom_config paths if provided
+    return load_roms();
 }
 
 // ============================================================================
