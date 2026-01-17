@@ -211,6 +211,7 @@ list(APPEND CHIP_SOURCES
 
     # I/O
     src/chip/io/mos6526.cpp
+    src/chip/io/mos6522.cpp
 
     # Logic
     src/chip/logic/pla.cpp
@@ -223,10 +224,15 @@ list(APPEND CHIP_SOURCES
     # Sound
     src/chip/sound/mos6581.cpp
 
-    # Video
+    # Video - VIC-II (C64)
     src/chip/video/vic_ii/mos6569.cpp
     src/chip/video/vic_ii/mos6567.cpp
     src/chip/video/vic_ii/vicii_common.cpp
+    
+    # Video - VIC (VIC-20)
+    src/chip/video/vic/mos6560.cpp
+    src/chip/video/vic/mos6561.cpp
+    src/chip/video/vic/vic_common.cpp
 )
 # System sources
 set(SYSTEM_SOURCES
@@ -243,6 +249,9 @@ set(SYSTEM_SOURCES
     
     # CHIP-8 system
     src/systems/chip8/chip8_system.cpp
+    
+    # VIC-20 system (clean CHIP-8-style implementation)
+    src/systems/vic20/vic20_system.cpp
 )
 
 

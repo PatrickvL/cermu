@@ -1,0 +1,546 @@
+#include "vic20_system.h"
+#include <cstring>
+#include <cstdio>
+
+#ifdef IMGUI_VERSION
+#include "imgui.h"
+#endif
+
+// Include chip headers
+#include "../../chip/cpu/fam65xx/mos6502.h"
+#include "../../chip/video/vic/mos6560.h"
+#include "../../chip/video/vic/mos6561.h"
+#include "../../chip/io/mos6522.h"
+
+// ============================================================================
+// Hardware Traits Definition
+// ============================================================================
+
+static HardwareTraits create_vic20_hardware_traits() {
+    HardwareTraits traits = {};
+    
+    // Display traits - VIC-20 uses MOS6560/6561 (VIC)
+    traits.display.native_width = 176;      // 22 columns * 8 pixels
+    traits.display.native_height = 184;     // 23 rows * 8 pixels (PAL)
+    traits.display.visible_width = 176;
+    traits.display.visible_height = 184;
+    traits.display.format = FramebufferFormat::RGBA8888;
+    traits.display.palette_size = 16;       // 16 colors
+    traits.display.pixel_aspect_ratio = 1.0f;
+    traits.display.has_overscan = true;
+    
+    // VIC-20 default palette (16 colors)
+    const uint32_t vic20_colors[16] = {
+        0x000000, 0xFFFFFF, 0x782922, 0x87D6DD,
+        0xAA5FB6, 0x55A049, 0x40318D, 0xBFCE72,
+        0xAA7449, 0xEAB489, 0xB86962, 0xC7FFFF,
+        0xEA9FF6, 0x94E089, 0x8071CC, 0xFFE7B2
+    };
+    
+    for (int i = 0; i < 16; i++) {
+        uint32_t c = vic20_colors[i];
+        traits.display.default_palette.push_back(
+            PaletteColor((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF, 255)
+        );
+    }
+    
+    // Audio traits - VIC-20 has simple sound from VIC chip
+    traits.audio.format = AudioFormat::MONO_8BIT;
+    traits.audio.sample_rate_hz = 22050;
+    traits.audio.channels = 1;
+    traits.audio.chip_name = "VIC 6560/6561";
+    
+    // Timing - PAL version (NTSC differs)
+    traits.timing.cpu_frequency_hz = 1108405;   // ~1.1 MHz (PAL)
+    traits.timing.video_frequency_hz = 1108405; // Same as CPU
+    traits.timing.audio_sample_rate_hz = 22050;
+    traits.timing.target_fps = 50;              // PAL
+    traits.timing.cycles_per_frame = 22168;     // 1108405 / 50
+    traits.timing.region = VideoRegion::PAL;
+    
+    // Memory options
+    traits.memory_options.push_back({
+        "Unexpanded (5KB RAM)",
+        5120,   // 5KB RAM
+        0,
+        true
+    });
+    traits.memory_options.push_back({
+        "8KB Expansion",
+        13312,  // 5KB + 8KB
+        0,
+        false
+    });
+    traits.memory_options.push_back({
+        "16KB Expansion",
+        21504,  // 5KB + 16KB
+        0,
+        false
+    });
+    traits.memory_options.push_back({
+        "32KB Expansion",
+        37888,  // 5KB + 32KB
+        0,
+        false
+    });
+    
+    // Region options
+    traits.region_options.push_back({
+        "PAL",
+        VideoRegion::PAL,
+        traits.timing,
+        true
+    });
+    
+    SystemTiming ntsc_timing = traits.timing;
+    ntsc_timing.cpu_frequency_hz = 1022727;     // ~1.0 MHz (NTSC)
+    ntsc_timing.video_frequency_hz = 1022727;
+    ntsc_timing.target_fps = 60;
+    ntsc_timing.cycles_per_frame = 17045;       // 1022727 / 60
+    ntsc_timing.region = VideoRegion::NTSC;
+    
+    traits.region_options.push_back({
+        "NTSC",
+        VideoRegion::NTSC,
+        ntsc_timing,
+        false
+    });
+    
+    return traits;
+}
+
+// File detection callback
+static float vic20_can_load_file(const char* filepath, const uint8_t* data, size_t size) {
+    const char* ext = strrchr(filepath, '.');
+    if (ext) {
+        if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0) {
+            // PRG files with VIC-20 load address (0x1001)
+            if (size >= 2) {
+                uint16_t load_addr = data[0] | (data[1] << 8);
+                if (load_addr == 0x1001) {
+                    return 0.85f;  // High confidence for VIC-20 PRG
+                }
+                // Generic PRG file - moderate confidence
+                return 0.5f;
+            }
+        }
+        if (strcmp(ext, ".tap") == 0 || strcmp(ext, ".TAP") == 0) {
+            return 0.7f;  // TAP files
+        }
+        if (strcmp(ext, ".d64") == 0 || strcmp(ext, ".D64") == 0) {
+            return 0.6f;  // Disk images
+        }
+    }
+    return 0.0f;
+}
+
+static const char* vic20_extensions[] = {".prg", ".tap", ".d64", nullptr};
+
+static SystemDescriptor vic20_descriptor = {
+    "Commodore VIC-20",
+    "VIC20",
+    "Commodore VIC-20 (1980) - 5KB RAM, 22-column display",
+    vic20_extensions,
+    create_vic20_hardware_traits(),
+    vic20_can_load_file
+};
+
+// ============================================================================
+// Constructor / Destructor
+// ============================================================================
+VIC20System::VIC20System()
+    : EmulatedSystem()
+    , cpu_(nullptr)
+    , ram_(nullptr)
+    , vic_(nullptr)
+    , via1_(nullptr)
+    , via2_(nullptr)
+    , colorram_(nullptr)
+    , basic_(nullptr)
+    , charrom_(nullptr)
+    , kernal_(nullptr)
+    , cycles_per_frame_(22168)
+    , expansion_size_(0)
+{
+    hardware_traits_ = create_vic20_hardware_traits();
+    current_palette_ = hardware_traits_.display.default_palette;
+    
+    // Initialize legacy system (commented out until fully integrated)
+    // system_8bit_init(&system_);
+    
+    // Create bus (commented out until bus integration complete)
+    // bus_.desc = &vic20_bus_descriptor;
+    // bus_.vic20 = reinterpret_cast<vic20_t*>(this);
+    // vic20_bus_init_adapters(&bus_);
+}
+
+VIC20System::~VIC20System() {
+    // Destroy CPU
+    if (cpu_) {
+        mos6502_destroy(cpu_);
+        cpu_ = nullptr;
+    }
+    
+    // Destroy VIC chip
+    if (vic_) {
+        mos6560_destroy(vic_);  // Works for both 6560 and 6561
+        vic_ = nullptr;
+    }
+    
+    // Destroy VIA chips
+    if (via1_) {
+        mos6522_destroy(via1_);
+        via1_ = nullptr;
+    }
+    
+    if (via2_) {
+        mos6522_destroy(via2_);
+        via2_ = nullptr;
+    }
+    
+    // Destroy system
+    // TODO: Uncomment when system_chips_destroy is available
+    // system_chips_destroy(&system_);
+}
+
+// ============================================================================
+// System Identification
+// ============================================================================
+
+const SystemDescriptor& VIC20System::get_descriptor() const {
+    return vic20_descriptor;
+}
+
+// ============================================================================
+// Configuration Management
+// ============================================================================
+
+bool VIC20System::set_configuration(const SystemConfiguration& config) {
+    config_ = config;
+    return true;
+}
+
+bool VIC20System::apply_configuration() {
+    // Apply region settings
+    if (config_.region_option_index >= 0 &&
+        config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
+        const RegionOption& region = hardware_traits_.region_options[config_.region_option_index];
+        cycles_per_frame_ = region.timing.cycles_per_frame;
+    }
+    
+    return true;
+}
+
+// ============================================================================
+// System Lifecycle
+// ============================================================================
+bool VIC20System::initialize() {
+    printf("VIC20: Initializing system\n");
+    
+    // Initialize memory arrays
+    memset(ram_simple_, 0, sizeof(ram_simple_));
+    memset(expansion_ram_, 0, sizeof(expansion_ram_));
+    memset(color_ram_simple_, 0, sizeof(color_ram_simple_));
+    
+    // TODO: Load ROMs (would use ROM loader from core)
+    // For now, just zero them
+    memset(kernal_rom_, 0, sizeof(kernal_rom_));
+    memset(basic_rom_, 0, sizeof(basic_rom_));
+    memset(char_rom_, 0, sizeof(char_rom_));
+    
+    // Create CPU (MOS6502) with memory callbacks
+    cpu_ = mos6502_create();
+    if (!cpu_) {
+        printf("VIC20: Failed to create MOS6502 CPU\n");
+        return false;
+    }
+    
+    // Create enhanced descriptor with memory callbacks
+    fam65xx_chip_descriptor_t* cpu_desc = mos6502_create_descriptor(
+        cpu_read,
+        cpu_write,
+        this  // user_data points to this VIC20System instance
+    );
+    
+    if (cpu_desc) {
+        mos6502_init_enhanced(cpu_, cpu_desc);
+        mos6502_destroy_descriptor(cpu_desc);
+    }
+    
+    // Reset CPU to initialize state
+    mos6502_reset(cpu_, 0);
+    
+    // Create VIC chip (MOS6560 PAL - default, TODO: support NTSC 6561)
+    vic_ = (mos6560_t*)mos6560_create(&mos6560_descriptor);
+    if (!vic_) {
+        printf("VIC20: Failed to create VIC chip\n");
+        return false;
+    }
+    
+    // Create VIA chips (MOS6522)
+    via1_ = (mos6522_t*)mos6522_create(&mos6522_descriptor);
+    if (via1_) {
+        via1_->interrupt_line = BUS_MASK_IRQ;
+    } else {
+        printf("VIC20: Failed to create VIA1\n");
+    }
+    
+    via2_ = (mos6522_t*)mos6522_create(&mos6522_descriptor);
+    if (!via2_) {
+        printf("VIC20: Warning: VIA2 not created (optional)\n");
+    }
+    
+    return true;
+}
+
+void VIC20System::shutdown() {
+    printf("VIC20: Shutting down system\n");
+}
+
+void VIC20System::reset() {
+    printf("VIC20: Resetting system\n");
+    if (cpu_) {
+        mos6502_reset(cpu_, 0);
+    }
+    total_cycles_ = 0;
+}
+
+// ============================================================================
+// Execution
+// ============================================================================
+
+void VIC20System::tick() {
+    tick_cpu();
+    tick_vic();
+    total_cycles_++;
+}
+
+void VIC20System::run_frame() {
+    uint32_t adjusted_cycles = static_cast<uint32_t>(cycles_per_frame_ * speed_multiplier_);
+    for (uint32_t i = 0; i < adjusted_cycles; i++) {
+        tick();
+    }
+}
+
+// ============================================================================
+// File Loading
+// ============================================================================
+
+bool VIC20System::load_file(const char* filepath) {
+    printf("VIC20: Loading file: %s\n", filepath);
+    
+    // Determine file type
+    const char* ext = strrchr(filepath, '.');
+    if (!ext) {
+        printf("VIC20: Unknown file type (no extension)\n");
+        return false;
+    }
+    
+    if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0) {
+        // TODO: Implement PRG loading
+        printf("VIC20: PRG file loading not yet implemented\n");
+        return false;
+    }
+    
+    printf("VIC20: Unsupported file type: %s\n", ext);
+    return false;
+}
+
+// ============================================================================
+// Display
+// ============================================================================
+
+uint32_t* VIC20System::get_framebuffer() {
+    return rgba_framebuffer_;
+}
+
+void VIC20System::get_display_dimensions(int* width, int* height) const {
+    *width = 176;
+    *height = 184;
+}
+
+void VIC20System::set_framebuffer(uint32_t* buffer, int width, int height) {
+    rgba_framebuffer_ = buffer;
+    rgba_width_ = width;
+    rgba_height_ = height;
+}
+
+// ============================================================================
+// Input
+// ============================================================================
+
+void VIC20System::handle_keyboard_event(int key, bool pressed) {
+    // TODO: Implement keyboard matrix
+    (void)key;
+    (void)pressed;
+}
+
+// ============================================================================
+// GUI Integration
+// ============================================================================
+
+void VIC20System::render_system_menu_items() {
+#ifdef IMGUI_VERSION
+    if (ImGui::MenuItem("Reset VIC-20")) {
+        reset();
+    }
+#endif
+}
+
+void VIC20System::render_configuration_ui() {
+#ifdef IMGUI_VERSION
+    ImGui::Text("VIC-20 Configuration");
+    ImGui::Separator();
+    
+    // Memory configuration
+    ImGui::Text("Memory Expansion:");
+    for (size_t i = 0; i < hardware_traits_.memory_options.size(); i++) {
+        bool selected = (config_.memory_option_index == static_cast<int>(i));
+        if (ImGui::RadioButton(hardware_traits_.memory_options[i].name, selected)) {
+            SystemConfiguration new_config = config_;
+            new_config.memory_option_index = static_cast<int>(i);
+            set_configuration(new_config);
+            apply_configuration();
+        }
+    }
+    
+    ImGui::Separator();
+    
+    // Region configuration
+    ImGui::Text("Video Region:");
+    for (size_t i = 0; i < hardware_traits_.region_options.size(); i++) {
+        bool selected = (config_.region_option_index == static_cast<int>(i));
+        if (ImGui::RadioButton(hardware_traits_.region_options[i].name, selected)) {
+            SystemConfiguration new_config = config_;
+            new_config.region_option_index = static_cast<int>(i);
+            set_configuration(new_config);
+            apply_configuration();
+        }
+    }
+#endif
+}
+
+// ============================================================================
+// State
+// ============================================================================
+
+uint32_t VIC20System::get_target_fps() const {
+    if (config_.region_option_index >= 0 &&
+        config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
+        return hardware_traits_.region_options[config_.region_option_index].timing.target_fps;
+    }
+    return 50;  // Default PAL
+}
+
+// ============================================================================
+// Emulation Control
+// ============================================================================
+
+void VIC20System::set_speed_multiplier(float multiplier) {
+    speed_multiplier_ = multiplier;
+}
+
+// ============================================================================
+// Private Helper Methods
+// ============================================================================
+
+// Memory access callbacks for CPU
+uint8_t VIC20System::cpu_read(void* user_data, uint32_t addr, uint8_t bus_state) {
+    VIC20System* sys = static_cast<VIC20System*>(user_data);
+    
+    // Simplified memory mapping for now
+    // TODO: Implement proper VIC-20 memory mapping with PLA
+    
+    uint16_t addr16 = addr & 0xFFFF;
+    
+    // RAM (0x0000-0x13FF = 5KB)
+    if (addr16 < 0x1400) {
+        return sys->ram_simple_[addr16];
+    }
+    // Expansion RAM would go here
+    // ...
+    
+    // BASIC ROM (0xC000-0xDFFF = 8KB)
+    if (addr16 >= 0xC000 && addr16 < 0xE000) {
+        return sys->basic_rom_[addr16 - 0xC000];
+    }
+    
+    // KERNAL ROM (0xE000-0xFFFF = 8KB)
+    if (addr16 >= 0xE000) {
+        return sys->kernal_rom_[addr16 - 0xE000];
+    }
+    
+    return 0xFF;  // Unmapped memory
+}
+
+void VIC20System::cpu_write(void* user_data, uint32_t addr, uint8_t data) {
+    VIC20System* sys = static_cast<VIC20System*>(user_data);
+    
+    uint16_t addr16 = addr & 0xFFFF;
+    
+    // RAM (0x0000-0x13FF = 5KB)
+    if (addr16 < 0x1400) {
+        sys->ram_simple_[addr16] = data;
+    }
+    // Expansion RAM would go here
+    // ...
+    
+    // ROM areas are read-only, writes are ignored
+}
+
+void VIC20System::tick_cpu() {
+    if (cpu_) {
+        // Tick the CPU (this handles one cycle of execution)
+        mos6502_tick(cpu_, 0);  // bus_state would come from memory system
+    }
+    
+    // Tick the VIA chips
+    if (via1_) {
+        mos6522_tick(via1_, 0);
+    }
+    if (via2_) {
+        mos6522_tick(via2_, 0);
+    }
+}
+
+void VIC20System::tick_vic() {
+    if (vic_) {
+        // Tick the VIC chip (handles video generation and sound)
+        mos6560_tick(vic_, 0);  // bus_state would come from memory system
+    }
+}
+
+void VIC20System::cpu_cycle() {
+    // Legacy CPU cycle implementation
+    tick_cpu();
+}
+
+void VIC20System::non_cpu_cycle() {
+    // Tick video and I/O chips
+    tick_vic();
+    
+    // Tick the VIA chips
+    if (via1_) {
+        mos6522_tick(via1_, 0);
+    }
+    if (via2_) {
+        mos6522_tick(via2_, 0);
+    }
+}
+
+void VIC20System::memory_init(const rom_config_t* rom_config) {
+    // TODO: Implement memory initialization
+}
+
+bool VIC20System::reload_roms(const rom_config_t* rom_config) {
+    // TODO: Implement ROM reloading
+    return false;
+}
+
+// ============================================================================
+// System Registration
+// ============================================================================
+
+REGISTER_SYSTEM(vic20_descriptor, []() {
+    return std::make_unique<VIC20System>();
+})

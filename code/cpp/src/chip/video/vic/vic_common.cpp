@@ -3,6 +3,9 @@
 #include <string.h>
 #include <stdio.h>
 
+// Forward declaration
+static void vic_emit_pixel(vic_base_t* vic, uint8_t color);
+
 // VIC color palette (16 colors) - VIC-20 specific colors
 static const uint32_t vic_palette[16] = {
     0xFF000000, 0xFFFFFFFF, 0xFF68372B, 0xFF70A4B2,
