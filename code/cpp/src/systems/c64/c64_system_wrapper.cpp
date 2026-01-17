@@ -113,6 +113,7 @@ C64SystemWrapper::C64SystemWrapper()
     : EmulatedSystem()  // Call base class constructor
     , c64_(nullptr)
     , cycles_per_frame_(19705)  // PAL: 985248 Hz / 50 fps
+    , gui_state_(nullptr)
 {
     // Initialize C64-specific config with defaults
     c64_config_.vicii_standard = VIC_PAL;
@@ -129,10 +130,19 @@ C64SystemWrapper::C64SystemWrapper()
     // Initialize base class members
     hardware_traits_ = c64_descriptor.hardware_traits;
     speed_multiplier_ = 1.0f;
+    
+    // Create persistent GUI state for menu handling
+    gui_state_ = gui_create_state();
 }
 
 C64SystemWrapper::~C64SystemWrapper() {
     shutdown();
+    
+    // Destroy persistent GUI state
+    if (gui_state_) {
+        gui_destroy_state(static_cast<gui_state_t*>(gui_state_));
+        gui_state_ = nullptr;
+    }
 }
 
 const SystemDescriptor& C64SystemWrapper::get_descriptor() const {
@@ -269,33 +279,30 @@ void C64SystemWrapper::render_system_menu_items() {
     // This allows C64-specific menus (Load Test Binary, Chip Debug Windows, etc.)
     // to appear in the multi_emu interface
     
-    // Note: gui_state is created/managed by the old GUI code
-    // We allocate it here temporarily for menu rendering
-    gui_state_t* gui_state = gui_create_state();
-    
-    // Call the C64-specific menu rendering function from the old GUI
-    gui_render_c64_system_menu_items(c64_, gui_state);
-    
-    // Clean up temporary state
-    gui_destroy_state(gui_state);
+    if (gui_state_ && c64_) {
+        // Call the C64-specific menu rendering function from the old GUI
+        // Using persistent gui_state_ so menu clicks persist
+        gui_render_c64_system_menu_items(c64_, static_cast<gui_state_t*>(gui_state_));
+    }
 }
 
 void C64SystemWrapper::render_debug_windows(void* gui_state) {
     // Forward debug window rendering to the old C64 GUI code
-    // The gui_state pointer is cast to gui_state_t* to access the debug window flags
+    // Use the persistent gui_state_ for rendering C64-specific dialogs
     
-    if (gui_state && c64_) {
-        gui_state_t* state = static_cast<gui_state_t*>(gui_state);
+    if (gui_state_ && c64_) {
+        gui_state_t* state = static_cast<gui_state_t*>(gui_state_);
         
-        // The old GUI code has functions for rendering individual chip debug windows
-        // They check state->show_chip_debug[chip_id] flags and render accordingly
-        // This functionality is already built into the chip system's debug rendering
+        // Render test binary dialog if needed
+        if (state->show_test_binary_dialog) {
+            // TODO: Need emu_context for test binary loading
+            // For now, just render the dialog without loading functionality
+            gui_render_test_binary_dialog(c64_, state, nullptr);
+        }
         
-        // For now, we rely on the chip system's own debug rendering
-        // which is triggered by the gui_state flags
-        // The actual rendering happens in the chip's render_debug_window() methods
-        
-        // NOTE: In the future unified C64System class, this will be more direct
+        // NOTE: Chip debug windows are handled by the old GUI's render_frame function
+        // which iterates through the chip system and calls render_debug_window callbacks.
+        // In the future unified C64System class, this will be integrated more directly.
     }
 }
 

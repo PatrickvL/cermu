@@ -119,6 +119,7 @@ private:
     c64_t* c64_;
     uint32_t cycles_per_frame_;
     c64_config_t c64_config_;  // Renamed to avoid conflict with base class config_
+    void* gui_state_;  // Opaque pointer to gui_state_t (persistent GUI state)
     
     // Note: hardware_traits_, config_ (SystemConfiguration), speed_multiplier_,
     // total_cycles_ are now stored in EmulatedSystem base class
