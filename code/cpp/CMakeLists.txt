@@ -252,6 +252,9 @@ set(SYSTEM_SOURCES
     
     # VIC-20 system (clean CHIP-8-style implementation)
     src/systems/vic20/vic20_system.cpp
+    
+    # NES system (clean EmulatedSystem implementation)
+    src/systems/nes/nes_system.cpp
 )
 
 

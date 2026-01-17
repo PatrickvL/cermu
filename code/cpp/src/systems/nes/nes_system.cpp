@@ -12,6 +12,11 @@
 #include <algorithm>
 #include <cstring>
 
+#ifdef IMGUI_VERSION
+#include "imgui.h"
+#include <SDL.h>
+#endif
+
 namespace nes_system {
 
 // NES color palette (RGB values)
@@ -837,105 +842,427 @@ void MemoryBus::clock() {
 // MAIN NES SYSTEM IMPLEMENTATION
 // ============================================================================
 
-NESSystem::NESSystem(bool pal) : is_pal(pal) {
-    // Create CPU with integrated APU
-    cpu = nes6502_create();
-    if (!cpu) {
-        throw std::runtime_error("Failed to create NES CPU");
+// Hardware traits definition
+static HardwareTraits create_nes_hardware_traits() {
+    HardwareTraits traits = {};
+    
+    // Display traits - NES PPU
+    traits.display.native_width = 256;
+    traits.display.native_height = 240;
+    traits.display.visible_width = 256;
+    traits.display.visible_height = 240;
+    traits.display.format = FramebufferFormat::RGBA8888;
+    traits.display.palette_size = 64;       // 64 colors
+    traits.display.pixel_aspect_ratio = 8.0f / 7.0f;  // NTSC pixel aspect
+    traits.display.has_overscan = true;
+    
+    // NES palette (simplified - first 16 colors)
+    const uint32_t nes_colors[16] = {
+        0x7C7C7C, 0x0000FC, 0x0000BC, 0x4428BC,
+        0x940084, 0xA80020, 0xA81000, 0x881400,
+        0x503000, 0x007800, 0x006800, 0x005800,
+        0x004058, 0x000000, 0x000000, 0x000000
+    };
+    
+    for (int i = 0; i < 16; i++) {
+        uint32_t c = nes_colors[i];
+        traits.display.default_palette.push_back(
+            PaletteColor((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF, 255)
+        );
     }
     
-    // Set APU region
-    nes6502_set_apu_region(cpu, is_pal);
+    // Audio traits - NES APU (2A03)
+    traits.audio.format = AudioFormat::MONO_16BIT;
+    traits.audio.sample_rate_hz = 44100;
+    traits.audio.channels = 1;
+    traits.audio.chip_name = "RP2A03 APU";
     
-    // Create PPU
-    ppu = std::make_shared<PPU>(is_pal);
+    // Timing - NTSC version
+    traits.timing.cpu_frequency_hz = 1789773;   // ~1.79 MHz
+    traits.timing.video_frequency_hz = 5369318; // PPU is 3x CPU
+    traits.timing.audio_sample_rate_hz = 44100;
+    traits.timing.target_fps = 60;
+    traits.timing.cycles_per_frame = 29829;     // 1789773 / 60
+    traits.timing.region = VideoRegion::NTSC;
     
-    // Create memory bus
-    bus = std::make_shared<MemoryBus>();
-    bus->connect_ppu(ppu);
+    // Memory options (NES has fixed 2KB RAM)
+    traits.memory_options.push_back({
+        "2KB RAM (Standard)",
+        2048,
+        0,
+        true
+    });
     
-    setup_audio_timing();
-    reset();
+    // Region options
+    traits.region_options.push_back({
+        "NTSC",
+        VideoRegion::NTSC,
+        traits.timing,
+        true
+    });
+    
+    SystemTiming pal_timing = traits.timing;
+    pal_timing.cpu_frequency_hz = 1662607;      // ~1.66 MHz (PAL)
+    pal_timing.video_frequency_hz = 4987821;    // PPU is 3x CPU
+    pal_timing.target_fps = 50;
+    pal_timing.cycles_per_frame = 33252;        // 1662607 / 50
+    pal_timing.region = VideoRegion::PAL;
+    
+    traits.region_options.push_back({
+        "PAL",
+        VideoRegion::PAL,
+        pal_timing,
+        false
+    });
+    
+    return traits;
+}
+
+// File detection callback
+static float nes_can_load_file(const char* filepath, const uint8_t* data, size_t size) {
+    const char* ext = strrchr(filepath, '.');
+    if (ext) {
+        if (strcmp(ext, ".nes") == 0 || strcmp(ext, ".NES") == 0) {
+            // Check for iNES header
+            if (size >= 16 && data[0] == 'N' && data[1] == 'E' &&
+                data[2] == 'S' && data[3] == 0x1A) {
+                return 1.0f;  // Perfect match
+            }
+            return 0.9f;  // .nes extension but no header
+        }
+    }
+    
+    // Check for iNES header without extension
+    if (size >= 16 && data[0] == 'N' && data[1] == 'E' &&
+        data[2] == 'S' && data[3] == 0x1A) {
+        return 0.95f;
+    }
+    
+    return 0.0f;
+}
+
+static const char* nes_extensions[] = {".nes", nullptr};
+
+static SystemDescriptor nes_descriptor = {
+    "Nintendo Entertainment System",
+    "NES",
+    "Nintendo Entertainment System / Famicom (1983)",
+    nes_extensions,
+    create_nes_hardware_traits(),
+    nes_can_load_file
+};
+
+NESSystem::NESSystem()
+    : EmulatedSystem()
+    , cpu_(nullptr)
+    , is_pal_(false)
+    , system_ready_(false)
+    , cycles_per_frame_(29829)
+    , initialized_(false)
+    , audio_sample_rate_(44100)
+    , audio_sample_counter_(0)
+    , residual_time_(0.0)
+{
+    hardware_traits_ = create_nes_hardware_traits();
+    current_palette_ = hardware_traits_.display.default_palette;
 }
 
 NESSystem::~NESSystem() {
-    if (cpu) {
-        nes6502_destroy(cpu);
+    shutdown();
+}
+
+const SystemDescriptor& NESSystem::get_descriptor() const {
+    return nes_descriptor;
+}
+
+bool NESSystem::set_configuration(const SystemConfiguration& config) {
+    config_ = config;
+    
+    // Check if region changed
+    if (config_.region_option_index >= 0 &&
+        config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
+        bool new_is_pal = (hardware_traits_.region_options[config_.region_option_index].region == VideoRegion::PAL);
+        if (new_is_pal != is_pal_) {
+            is_pal_ = new_is_pal;
+            // Need to recreate system with new region
+            if (initialized_) {
+                shutdown();
+                initialize();
+            }
+        }
+    }
+    
+    return true;
+}
+
+bool NESSystem::apply_configuration() {
+    // Apply region settings
+    if (config_.region_option_index >= 0 &&
+        config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
+        const RegionOption& region = hardware_traits_.region_options[config_.region_option_index];
+        cycles_per_frame_ = region.timing.cycles_per_frame;
+    }
+    
+    return true;
+}
+
+bool NESSystem::initialize() {
+    if (initialized_) {
+        return true;
+    }
+    
+    printf("NES: Initializing system (%s)\n", is_pal_ ? "PAL" : "NTSC");
+    
+    // Create CPU with integrated APU
+    cpu_ = nes6502_create();
+    if (!cpu_) {
+        printf("NES: Failed to create CPU\n");
+        return false;
+    }
+    
+    // Set APU region
+    nes6502_set_apu_region(cpu_, is_pal_);
+    
+    // Create PPU
+    ppu_ = std::make_shared<PPU>(is_pal_);
+    
+    // Create memory bus
+    bus_ = std::make_shared<MemoryBus>();
+    bus_->connect_ppu(ppu_);
+    
+    setup_audio_timing();
+    initialized_ = true;
+    
+    return true;
+}
+
+void NESSystem::shutdown() {
+    if (cpu_) {
+        printf("NES: Shutting down system\n");
+        nes6502_destroy(cpu_);
+        cpu_ = nullptr;
+    }
+    initialized_ = false;
+    system_ready_ = false;
+}
+
+void NESSystem::reset() {
+    if (!cpu_) return;
+    
+    printf("NES: Resetting system\n");
+    
+    bus_state_t pins = create_bus_state(0, 0, 1);
+    nes6502_reset(cpu_, pins);
+    
+    if (ppu_) {
+        ppu_->reset();
+    }
+    
+    if (bus_) {
+        bus_->reset();
+    }
+    
+    if (cartridge_) {
+        cartridge_->reset();
+    }
+    
+    total_cycles_ = 0;
+    residual_time_ = 0.0;
+    audio_sample_counter_ = 0;
+}
+
+void NESSystem::tick() {
+    if (!cpu_) return;
+    
+    clock();
+    // total_cycles_ is updated in clock()
+}
+
+void NESSystem::run_frame() {
+    if (!system_ready_ || !ppu_) return;
+    
+    ppu_->frame_complete = false;
+    while (!ppu_->frame_complete) {
+        clock();
     }
 }
 
-void NESSystem::setup_audio_timing() {
-    uint32_t cpu_freq = is_pal ? nes_constants::CPU_FREQ_PAL : nes_constants::CPU_FREQ_NTSC;
-    audio_samples_per_frame = (audio_sample_rate * (is_pal ? 50 : 60)) / (is_pal ? 50 : 60);
-}
-
-bool NESSystem::load_cartridge(const std::string& filename) {
+bool NESSystem::load_file(const char* filepath) {
+    if (!cpu_) {
+        if (!initialize()) {
+            return false;
+        }
+    }
+    
+    printf("NES: Loading cartridge: %s\n", filepath);
+    
     try {
-        cartridge = std::make_shared<Cartridge>(filename);
-        bus->connect_cartridge(cartridge);
-        ppu->connect_cartridge(cartridge);
+        cartridge_ = std::make_shared<Cartridge>(filepath);
+        bus_->connect_cartridge(cartridge_);
+        ppu_->connect_cartridge(cartridge_);
         
         // Reset system with new cartridge
         reset();
-        system_ready = true;
+        system_ready_ = true;
         
+        printf("NES: Cartridge loaded successfully\n");
         return true;
     } catch (const std::exception& e) {
-        std::cerr << "Failed to load cartridge: " << e.what() << std::endl;
+        printf("NES: Failed to load cartridge: %s\n", e.what());
         return false;
     }
 }
 
+uint32_t* NESSystem::get_framebuffer() {
+    if (!ppu_ || !rgba_framebuffer_) return rgba_framebuffer_;
+    
+    // Get NES screen buffer and copy to our framebuffer
+    const std::vector<uint32_t>& nes_screen = ppu_->get_screen();
+    if (!nes_screen.empty() && rgba_framebuffer_) {
+        // NES screen is 256x240, copy directly
+        memcpy(rgba_framebuffer_, nes_screen.data(), 256 * 240 * sizeof(uint32_t));
+    }
+    
+    return rgba_framebuffer_;
+}
+
+void NESSystem::get_display_dimensions(int* width, int* height) const {
+    *width = 256;
+    *height = 240;
+}
+
+void NESSystem::set_framebuffer(uint32_t* buffer, int width, int height) {
+    rgba_framebuffer_ = buffer;
+    rgba_width_ = width;
+    rgba_height_ = height;
+}
+
+void NESSystem::handle_keyboard_event(int key, bool pressed) {
+#ifdef IMGUI_VERSION
+    if (!cpu_) return;
+    
+    // Map keyboard to NES controller buttons
+    uint8_t button = 0;
+    bool mapped = true;
+    
+    switch (key) {
+        case SDLK_z:      button = 0x40; break;  // B
+        case SDLK_x:      button = 0x80; break;  // A
+        case SDLK_RETURN: button = 0x10; break;  // Start
+        case SDLK_RSHIFT: button = 0x20; break;  // Select
+        case SDLK_UP:     button = 0x08; break;  // Up
+        case SDLK_DOWN:   button = 0x04; break;  // Down
+        case SDLK_LEFT:   button = 0x02; break;  // Left
+        case SDLK_RIGHT:  button = 0x01; break;  // Right
+        default: mapped = false; break;
+    }
+    
+    if (mapped) {
+        if (pressed) {
+            press_button(0, static_cast<Controller::Button>(button));
+        } else {
+            release_button(0, static_cast<Controller::Button>(button));
+        }
+    }
+#else
+    (void)key;
+    (void)pressed;
+#endif
+}
+
+void NESSystem::handle_controller_event(int controller, int button, bool pressed) {
+    if (!bus_) return;
+    
+    if (pressed) {
+        press_button(controller, static_cast<Controller::Button>(button));
+    } else {
+        release_button(controller, static_cast<Controller::Button>(button));
+    }
+}
+
+void NESSystem::render_system_menu_items() {
+#ifdef IMGUI_VERSION
+    if (ImGui::MenuItem("Reset NES")) {
+        reset();
+    }
+    
+    if (ImGui::MenuItem("Eject Cartridge", nullptr, false, is_cartridge_loaded())) {
+        eject_cartridge();
+    }
+#endif
+}
+
+void NESSystem::render_configuration_ui() {
+#ifdef IMGUI_VERSION
+    ImGui::Text("NES Configuration");
+    ImGui::Separator();
+    
+    // Region configuration
+    ImGui::Text("Video Region:");
+    for (size_t i = 0; i < hardware_traits_.region_options.size(); i++) {
+        bool selected = (config_.region_option_index == static_cast<int>(i));
+        if (ImGui::RadioButton(hardware_traits_.region_options[i].name, selected)) {
+            SystemConfiguration new_config = config_;
+            new_config.region_option_index = static_cast<int>(i);
+            set_configuration(new_config);
+            apply_configuration();
+        }
+    }
+    
+    ImGui::Separator();
+    
+    // Cartridge info
+    if (is_cartridge_loaded()) {
+        ImGui::Text("Cartridge: Loaded");
+    } else {
+        ImGui::TextDisabled("Cartridge: None");
+    }
+#endif
+}
+
+uint32_t NESSystem::get_target_fps() const {
+    if (config_.region_option_index >= 0 &&
+        config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
+        return hardware_traits_.region_options[config_.region_option_index].timing.target_fps;
+    }
+    return 60;  // Default NTSC
+}
+
+void NESSystem::set_speed_multiplier(float multiplier) {
+    speed_multiplier_ = multiplier;
+}
+
+void NESSystem::setup_audio_timing() {
+    uint32_t cpu_freq = is_pal_ ? nes_constants::CPU_FREQ_PAL : nes_constants::CPU_FREQ_NTSC;
+    audio_samples_per_frame_ = (audio_sample_rate_ * (is_pal_ ? 50 : 60)) / (is_pal_ ? 50 : 60);
+}
+
 void NESSystem::eject_cartridge() {
-    cartridge.reset();
-    bus->connect_cartridge(nullptr);
-    ppu->connect_cartridge(nullptr);
-    system_ready = false;
-}
-
-void NESSystem::reset() {
-    if (cpu) {
-        bus_state_t pins = create_bus_state(0, 0, 1);
-        nes6502_reset(cpu, pins);
+    cartridge_.reset();
+    if (bus_) {
+        bus_->connect_cartridge(nullptr);
     }
-    
-    if (ppu) {
-        ppu->reset();
+    if (ppu_) {
+        ppu_->connect_cartridge(nullptr);
     }
-    
-    if (bus) {
-        bus->reset();
-    }
-    
-    if (cartridge) {
-        cartridge->reset();
-    }
-    
-    total_cycles = 0;
-    residual_time = 0.0;
-    audio_sample_counter = 0;
-}
-
-void NESSystem::power_cycle() {
-    eject_cartridge();
-    reset();
+    system_ready_ = false;
 }
 
 void NESSystem::clock() {
     // Clock the memory bus (which clocks PPU 3 times)
-    bus->clock();
+    bus_->clock();
     
     // Clock CPU every 3 PPU cycles
-    if (bus->system_clock_counter % 3 == 0) {
+    if (bus_->system_clock_counter % 3 == 0) {
         // Handle DMA stall
-        if (bus->dma_transfer) {
+        if (bus_->dma_transfer) {
             // CPU is stalled during DMA
         } else {
             // Create bus state for CPU
             bus_state_t pins = create_bus_state(0, 0, 1);
             
             // Tick CPU (handles APU internally)
-            pins = nes6502_tick(cpu, pins);
+            pins = nes6502_tick(cpu_, pins);
             
             // Handle CPU memory requests
             uint16_t addr = BUS_GET_ADDR(pins);
@@ -943,74 +1270,63 @@ void NESSystem::clock() {
             
             if (is_write) {
                 uint8_t data = BUS_GET_DATA(pins);
-                bus->cpu_write(addr, data);
+                bus_->cpu_write(addr, data);
             } else {
-                uint8_t data = bus->cpu_read(addr);
+                uint8_t data = bus_->cpu_read(addr);
                 BUS_SET_DATA(pins, data);
             }
             
             // Handle NMI from PPU
-            if (ppu->get_nmi()) {
+            if (ppu_->get_nmi()) {
                 // Set NMI line low (NMI is active low)
                 pins &= ~BUS_MASK_NMI;
             }
         }
         
         // Generate audio sample
-        if (audio_sample_counter == 0) {
-            float sample = nes6502_generate_audio_sample(cpu);
-            audio_buffer.push_back(sample);
+        if (audio_sample_counter_ == 0) {
+            float sample = nes6502_generate_audio_sample(cpu_);
+            audio_buffer_.push_back(sample);
         }
-        audio_sample_counter = (audio_sample_counter + 1) % (is_pal ? 33 : 37);
+        audio_sample_counter_ = (audio_sample_counter_ + 1) % (is_pal_ ? 33 : 37);
     }
     
-    total_cycles++;
-}
-
-void NESSystem::run_frame() {
-    if (!system_ready) return;
-    
-    ppu->frame_complete = false;
-    while (!ppu->frame_complete) {
-        clock();
-    }
+    total_cycles_++;
 }
 
 void NESSystem::set_controller_state(int controller, uint8_t state) {
-    if (controller >= 0 && controller < 2) {
-        // Set individual buttons based on state
-        for (int i = 0; i < 8; i++) {
-            bool pressed = (state >> i) & 1;
-            Controller::Button button = static_cast<Controller::Button>(1 << i);
-            bus->controllers[controller].set_button_state(button, pressed);
-        }
+    if (!bus_ || controller < 0 || controller >= 2) return;
+    
+    // Set individual buttons based on state
+    for (int i = 0; i < 8; i++) {
+        bool pressed = (state >> i) & 1;
+        Controller::Button button = static_cast<Controller::Button>(1 << i);
+        bus_->controllers[controller].set_button_state(button, pressed);
     }
 }
 
 void NESSystem::press_button(int controller, Controller::Button button) {
-    if (controller >= 0 && controller < 2) {
-        bus->controllers[controller].set_button_state(button, true);
-    }
+    if (!bus_ || controller < 0 || controller >= 2) return;
+    bus_->controllers[controller].set_button_state(button, true);
 }
 
 void NESSystem::release_button(int controller, Controller::Button button) {
-    if (controller >= 0 && controller < 2) {
-        bus->controllers[controller].set_button_state(button, false);
-    }
+    if (!bus_ || controller < 0 || controller >= 2) return;
+    bus_->controllers[controller].set_button_state(button, false);
 }
 
 const std::vector<uint32_t>& NESSystem::get_screen() const {
     static std::vector<uint32_t> empty_screen;
-    return ppu ? ppu->get_screen() : empty_screen;
+    return ppu_ ? ppu_->get_screen() : empty_screen;
 }
 
 const std::vector<uint32_t>& NESSystem::get_pattern_table(int table, uint8_t palette) const {
     static std::vector<uint32_t> empty_table;
-    return ppu ? ppu->get_pattern_table(table, palette) : empty_table;
+    return ppu_ ? ppu_->get_pattern_table(table, palette) : empty_table;
 }
 
 void NESSystem::set_audio_sample_rate(uint32_t rate) {
-    audio_sample_rate = rate;
+    audio_sample_rate_ = rate;
     setup_audio_timing();
 }
 
@@ -1018,7 +1334,9 @@ bus_state_t NESSystem::create_bus_state(uint16_t addr, uint8_t data, bool rw) {
     bus_state_t state = 0;
     BUS_SET_ADDR(state, addr);
     BUS_SET_DATA(state, data);
-    BUS_SET_RW(state, rw ? 1 : 0);
+    if (rw) {
+        state |= BUS_MASK_RW;
+    }
     return state;
 }
 
@@ -1032,132 +1350,17 @@ bool NESSystem::load_state(const std::string& filename) {
     return false;
 }
 
+void NESSystem::power_cycle() {
+    eject_cartridge();
+    reset();
+}
+
 } // namespace nes_system
 
 // ============================================================================
-// C INTERFACE IMPLEMENTATION
+// SYSTEM REGISTRATION
 // ============================================================================
 
-extern "C" {
-
-struct nes_system_t {
-    nes_system::NESSystem* system;
-};
-
-nes_system_t* nes_system_create(bool is_pal) {
-    try {
-        nes_system_t* handle = new nes_system_t;
-        handle->system = new nes_system::NESSystem(is_pal);
-        return handle;
-    } catch (...) {
-        return nullptr;
-    }
-}
-
-void nes_system_destroy(nes_system_t* system) {
-    if (system) {
-        delete system->system;
-        delete system;
-    }
-}
-
-bool nes_system_load_cartridge(nes_system_t* system, const char* filename) {
-    return system && system->system ? 
-           system->system->load_cartridge(std::string(filename)) : false;
-}
-
-void nes_system_eject_cartridge(nes_system_t* system) {
-    if (system && system->system) {
-        system->system->eject_cartridge();
-    }
-}
-
-void nes_system_reset(nes_system_t* system) {
-    if (system && system->system) {
-        system->system->reset();
-    }
-}
-
-void nes_system_power_cycle(nes_system_t* system) {
-    if (system && system->system) {
-        system->system->power_cycle();
-    }
-}
-
-void nes_system_clock(nes_system_t* system) {
-    if (system && system->system) {
-        system->system->clock();
-    }
-}
-
-void nes_system_run_frame(nes_system_t* system) {
-    if (system && system->system) {
-        system->system->run_frame();
-    }
-}
-
-void nes_system_set_controller_state(nes_system_t* system, int controller, uint8_t state) {
-    if (system && system->system) {
-        system->system->set_controller_state(controller, state);
-    }
-}
-
-void nes_system_press_button(nes_system_t* system, int controller, uint8_t button) {
-    if (system && system->system) {
-        system->system->press_button(controller, static_cast<nes_system::Controller::Button>(button));
-    }
-}
-
-void nes_system_release_button(nes_system_t* system, int controller, uint8_t button) {
-    if (system && system->system) {
-        system->system->release_button(controller, static_cast<nes_system::Controller::Button>(button));
-    }
-}
-
-const uint32_t* nes_system_get_screen(nes_system_t* system) {
-    return system && system->system ? 
-           system->system->get_screen().data() : nullptr;
-}
-
-const float* nes_system_get_audio_buffer(nes_system_t* system, uint32_t* sample_count) {
-    if (system && system->system) {
-        const auto& buffer = system->system->get_audio_buffer();
-        if (sample_count) {
-            *sample_count = static_cast<uint32_t>(buffer.size());
-        }
-        return buffer.data();
-    }
-    if (sample_count) {
-        *sample_count = 0;
-    }
-    return nullptr;
-}
-
-void nes_system_clear_audio_buffer(nes_system_t* system) {
-    if (system && system->system) {
-        system->system->clear_audio_buffer();
-    }
-}
-
-void nes_system_set_audio_sample_rate(nes_system_t* system, uint32_t rate) {
-    if (system && system->system) {
-        system->system->set_audio_sample_rate(rate);
-    }
-}
-
-bool nes_system_is_cartridge_loaded(nes_system_t* system) {
-    return system && system->system ? 
-           system->system->is_cartridge_loaded() : false;
-}
-
-uint64_t nes_system_get_total_cycles(nes_system_t* system) {
-    return system && system->system ? 
-           system->system->get_total_cycles() : 0;
-}
-
-bool nes_system_is_ready(nes_system_t* system) {
-    return system && system->system ? 
-           system->system->is_system_ready() : false;
-}
-
-} // extern "C"
+REGISTER_SYSTEM(nes_system::nes_descriptor, []() {
+    return std::make_unique<nes_system::NESSystem>();
+})
