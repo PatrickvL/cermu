@@ -184,6 +184,7 @@ set(CORE_SOURCES
     src/core/emulated_system.cpp
     src/core/system_registry.cpp
     src/core/framebuffer_renderer.cpp
+    src/core/text_terminal.cpp
 )
 
 # FAM65XX Decoder - standalone library for instruction decoding
@@ -212,6 +213,7 @@ list(APPEND CHIP_SOURCES
     # I/O
     src/chip/io/mos6526.cpp
     src/chip/io/mos6522.cpp
+    src/chip/io/pia6820.cpp
 
     # Logic
     src/chip/logic/pla.cpp
@@ -258,6 +260,9 @@ set(SYSTEM_SOURCES
     
     # C16/Plus4 system (clean EmulatedSystem implementation with stubs)
     src/systems/c16/c16_system.cpp
+    
+    # Apple 1 system (clean EmulatedSystem implementation)
+    src/systems/apple1/apple1_system.cpp
 )
 
 
