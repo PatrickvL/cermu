@@ -126,6 +126,10 @@ typedef struct gui_emulation_context_s {
     uint32_t actual_fps;
 } gui_emulation_context_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // GUI initialization and cleanup
 bool gui_init(const char* window_title, int width, int height);
 void gui_cleanup(void);
@@ -140,6 +144,9 @@ void gui_handle_events(gui_emulation_context_t* emu_context);
 
 // Window rendering functions
 void gui_render_menu_bar(c64_s* c64, gui_state_t* gui_state, gui_emulation_context_t* emu_context);
+void gui_render_c64_system_menu_items(c64_s* c64, gui_state_t* gui_state);  // C64-specific menu items for new GUI
+gui_state_t* gui_create_state();  // Allocate and initialize GUI state
+void gui_destroy_state(gui_state_t* state);  // Destroy GUI state
 void gui_render_memory_viewer(c64_s* c64, gui_state_t* gui_state);
 void gui_render_debugger(c64_s* c64, gui_state_t* gui_state, gui_emulation_context_t* emu_context);
 void gui_render_settings(c64_s* c64, gui_state_t* gui_state);
@@ -202,5 +209,9 @@ void gui_emulation_start(gui_emulation_context_t* emu_context);
 void gui_emulation_pause(gui_emulation_context_t* emu_context);
 void gui_emulation_step(gui_emulation_context_t* emu_context);
 void gui_emulation_reset(gui_emulation_context_t* emu_context);
+
+#ifdef __cplusplus
+}
+#endif
 
 
