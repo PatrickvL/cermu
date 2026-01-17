@@ -311,8 +311,9 @@ bool Chip8System::load_file(const char* filepath) {
 // ============================================================================
 
 uint32_t* Chip8System::get_framebuffer() {
-    if (display_dirty_ && rgba_framebuffer_) {
-        // Convert native 1-bit to RGBA8888 using generic renderer
+    if (rgba_framebuffer_) {
+        // Always convert native 1-bit to RGBA8888 using generic renderer
+        // This ensures the display stays up-to-date when polled every frame
         FramebufferRenderer::convert_monochrome_1bit(
             native_display_,
             64, 32,
@@ -322,7 +323,6 @@ uint32_t* Chip8System::get_framebuffer() {
             rgba_width_,
             rgba_height_
         );
-        display_dirty_ = false;
     }
     
     return rgba_framebuffer_;

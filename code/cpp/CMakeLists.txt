@@ -266,6 +266,12 @@ if(BUILD_GUI)
         src/chip/memory/mos2114_gui.cpp
         src/chip/sound/mos6581_gui.cpp
     )
+    
+    # Generic GUI sources for multi-system support
+    set(GENERIC_GUI_SOURCES
+        src/gui/generic_gui.cpp
+        src/gui/simple_system_gui.cpp
+    )
 endif()
 
 # Main executable (console version)
@@ -305,6 +311,7 @@ if(BUILD_GUI)
         ${SYSTEM_SOURCES}
         ${CORE_UTIL_SOURCES}
         ${GUI_SOURCES}
+        ${GENERIC_GUI_SOURCES}
     )
     
     # Add include directories
