@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "../../core/system_lines.h"
 
 // VIC Register indices
 #define VIC_REG_CONTROL1 0x00
