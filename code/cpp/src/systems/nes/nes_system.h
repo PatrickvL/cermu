@@ -26,6 +26,7 @@
 #include "../../chip/cpu/fam65xx/nes6502.h"
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
+#include "../../core/emulated_system.h"
 
 // Forward declarations
 namespace nes_system {
@@ -383,105 +384,91 @@ public:
 // MAIN NES SYSTEM
 // ============================================================================
 
-class NESSystem {
+class NESSystem : public EmulatedSystem {
 private:
     // Core components
-    nes6502_t* cpu = nullptr;
-    std::shared_ptr<PPU> ppu;
-    std::shared_ptr<Cartridge> cartridge;
-    std::shared_ptr<MemoryBus> bus;
+    nes6502_t* cpu_;
+    std::shared_ptr<PPU> ppu_;
+    std::shared_ptr<Cartridge> cartridge_;
+    std::shared_ptr<MemoryBus> bus_;
     
     // System state
-    bool is_pal = false;
-    bool system_ready = false;
-    uint64_t total_cycles = 0;
+    bool is_pal_;
+    bool system_ready_;
+    uint32_t cycles_per_frame_;
+    bool initialized_;
     
     // Audio buffer
-    std::vector<float> audio_buffer;
-    uint32_t audio_sample_rate = 44100;
-    uint32_t audio_samples_per_frame;
-    uint32_t audio_sample_counter = 0;
+    std::vector<float> audio_buffer_;
+    uint32_t audio_sample_rate_;
+    uint32_t audio_samples_per_frame_;
+    uint32_t audio_sample_counter_;
     
     // Timing
-    double residual_time = 0.0;
+    double residual_time_;
     
 public:
-    NESSystem(bool pal = false);
-    ~NESSystem();
+    NESSystem();
+    ~NESSystem() override;
     
-    // Cartridge loading
-    bool load_cartridge(const std::string& filename);
+    // EmulatedSystem interface - System identification
+    const SystemDescriptor& get_descriptor() const override;
+    
+    // EmulatedSystem interface - Configuration management
+    bool set_configuration(const SystemConfiguration& config) override;
+    bool apply_configuration() override;
+    
+    // EmulatedSystem interface - System lifecycle
+    bool initialize() override;
+    void shutdown() override;
+    void reset() override;
+    
+    // EmulatedSystem interface - Execution
+    void tick() override;
+    void run_frame() override;
+    
+    // EmulatedSystem interface - File loading
+    bool load_file(const char* filepath) override;
+    
+    // EmulatedSystem interface - Display
+    uint32_t* get_framebuffer() override;
+    void get_display_dimensions(int* width, int* height) const override;
+    void set_framebuffer(uint32_t* buffer, int width, int height) override;
+    
+    // EmulatedSystem interface - Input
+    void handle_keyboard_event(int key, bool pressed) override;
+    void handle_controller_event(int controller, int button, bool pressed) override;
+    
+    // EmulatedSystem interface - GUI integration
+    void render_system_menu_items() override;
+    void render_configuration_ui() override;
+    
+    // EmulatedSystem interface - State
+    uint32_t get_target_fps() const override;
+    
+    // EmulatedSystem interface - Emulation control
+    void set_speed_multiplier(float multiplier) override;
+    
+    // NES-specific public methods
     void eject_cartridge();
-    
-    // System control
-    void reset();
     void power_cycle();
-    
-    // Main emulation step
-    void clock();
-    void run_frame();
-    
-    // Input
     void set_controller_state(int controller, uint8_t state);
     void press_button(int controller, Controller::Button button);
     void release_button(int controller, Controller::Button button);
-    
-    // Output
     const std::vector<uint32_t>& get_screen() const;
-    const std::vector<float>& get_audio_buffer() const { return audio_buffer; }
-    void clear_audio_buffer() { audio_buffer.clear(); audio_sample_counter = 0; }
-    
-    // Debug/Development
+    const std::vector<float>& get_audio_buffer() const { return audio_buffer_; }
+    void clear_audio_buffer() { audio_buffer_.clear(); audio_sample_counter_ = 0; }
     const std::vector<uint32_t>& get_pattern_table(int table, uint8_t palette) const;
     void set_audio_sample_rate(uint32_t rate);
-    
-    // Save states
     bool save_state(const std::string& filename) const;
     bool load_state(const std::string& filename);
-    
-    // System info
-    bool is_cartridge_loaded() const { return cartridge != nullptr; }
-    uint64_t get_total_cycles() const { return total_cycles; }
-    bool is_system_ready() const { return system_ready; }
+    bool is_cartridge_loaded() const { return cartridge_ != nullptr; }
+    bool is_system_ready() const { return system_ready_; }
     
 private:
     void setup_audio_timing();
+    void clock();
     bus_state_t create_bus_state(uint16_t addr, uint8_t data, bool rw);
 };
 
 } // namespace nes_system
-
-// Opaque handle
-typedef struct nes_system_t nes_system_t;
-
-// System creation/destruction
-nes_system_t* nes_system_create(bool is_pal);
-void nes_system_destroy(nes_system_t* system);
-
-// Cartridge management
-bool nes_system_load_cartridge(nes_system_t* system, const char* filename);
-void nes_system_eject_cartridge(nes_system_t* system);
-
-// System control
-void nes_system_reset(nes_system_t* system);
-void nes_system_power_cycle(nes_system_t* system);
-void nes_system_clock(nes_system_t* system);
-void nes_system_run_frame(nes_system_t* system);
-
-// Input
-void nes_system_set_controller_state(nes_system_t* system, int controller, uint8_t state);
-void nes_system_press_button(nes_system_t* system, int controller, uint8_t button);
-void nes_system_release_button(nes_system_t* system, int controller, uint8_t button);
-
-// Output
-const uint32_t* nes_system_get_screen(nes_system_t* system);
-const float* nes_system_get_audio_buffer(nes_system_t* system, uint32_t* sample_count);
-void nes_system_clear_audio_buffer(nes_system_t* system);
-
-// Configuration
-void nes_system_set_audio_sample_rate(nes_system_t* system, uint32_t rate);
-
-// System info
-bool nes_system_is_cartridge_loaded(nes_system_t* system);
-uint64_t nes_system_get_total_cycles(nes_system_t* system);
-bool nes_system_is_ready(nes_system_t* system);
