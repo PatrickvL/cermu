@@ -1,4 +1,4 @@
-    #pragma once
+#pragma once
 
 #include "../../core/emulated_system.h"
 #include "c64.h"
@@ -6,14 +6,14 @@
 
 /**
  * C64 System Wrapper
- * Adapts the existing C64 system to the IEmulatedSystem interface
+ * Adapts the existing C64 system to the EmulatedSystem interface
  */
-class C64SystemWrapper : public IEmulatedSystem {
+class C64SystemWrapper : public EmulatedSystem {
 public:
     C64SystemWrapper();
     ~C64SystemWrapper() override;
     
-    // IEmulatedSystem interface
+    // EmulatedSystem interface - system-specific overrides
     const SystemDescriptor& get_descriptor() const override;
     bool initialize() override;
     void shutdown() override;
@@ -28,33 +28,31 @@ public:
     void handle_controller_event(int controller, int button, bool pressed) override;
     void render_system_menu_items() override;
     void render_debug_windows(void* gui_state) override;
-    uint64_t get_total_cycles() const override;
     uint32_t get_target_fps() const override;
     void set_speed_multiplier(float multiplier) override;
-    float get_speed_multiplier() const override;
-    
-    // Hardware traits interface
-    const HardwareTraits& get_hardware_traits() const override;
-    const SystemTiming& get_current_timing() const override;
-    const DisplayTraits& get_display_traits() const override;
-    const AudioTraits& get_audio_traits() const override;
     
     // Configuration interface
-    const SystemConfiguration& get_configuration() const override;
     bool set_configuration(const SystemConfiguration& config) override;
     bool apply_configuration() override;
     void render_configuration_ui() override;
+    
+    // Note: The following methods are now provided by EmulatedSystem base class:
+    // - get_configuration() - returns config_
+    // - get_hardware_traits() - returns hardware_traits_
+    // - get_current_timing() - returns hardware_traits_.timing
+    // - get_display_traits() - returns hardware_traits_.display
+    // - get_audio_traits() - returns hardware_traits_.audio
+    // - get_total_cycles() - returns total_cycles_
+    // - get_speed_multiplier() - returns speed_multiplier_
     
     // Get the underlying C64 system (for compatibility with existing GUI code)
     c64_t* get_c64_system() { return c64_; }
     
 private:
     c64_t* c64_;
-    float speed_multiplier_;
     uint32_t cycles_per_frame_;
-    c64_config_t config_;
+    c64_config_t c64_config_;  // Renamed to avoid conflict with base class config_
     
-    // Hardware traits (initialized in constructor)
-    HardwareTraits hardware_traits_;
-    SystemConfiguration system_config_;
+    // Note: hardware_traits_, config_ (SystemConfiguration), speed_multiplier_,
+    // total_cycles_ are now stored in EmulatedSystem base class
 };
