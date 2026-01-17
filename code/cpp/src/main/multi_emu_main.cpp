@@ -25,8 +25,24 @@ int main(int argc, char** argv) {
     if (file_path == nullptr) {
         printf("Usage: %s <file>\n", argv[0]);
         printf("Supported formats:\n");
-        printf("  - CHIP-8: .ch8, .c8\n");
-        printf("  - C64: .prg, .crt, .d64, .t64\n");
+        
+        // Print supported formats from registry
+        const auto& systems = SystemRegistry::instance().get_systems();
+        for (const auto& [descriptor, factory] : systems) {
+            printf("  - %s (%s): ", descriptor.name, descriptor.short_name);
+            
+            // Print supported extensions
+            if (descriptor.supported_extensions) {
+                bool first = true;
+                for (const char** ext = descriptor.supported_extensions; *ext != nullptr; ext++) {
+                    if (!first) printf(", ");
+                    printf("%s", *ext);
+                    first = false;
+                }
+            }
+            printf("\n");
+        }
+        
         return 1;
     }
     
