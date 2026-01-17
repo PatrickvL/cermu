@@ -1,5 +1,4 @@
 #include "c16_system.h"
-#include "../../chip/io/mos6526.h"
 #include "../../core/storage/rom_loader.h"
 #include <cstring>
 #include <cstdio>
@@ -497,5 +496,4 @@ void C16System::cpu_write_callback(void* user_data, uint32_t addr, uint8_t data)
 
 REGISTER_SYSTEM(C16System::c16_descriptor, []() {
     return std::make_unique<C16System>();
-})
 })
