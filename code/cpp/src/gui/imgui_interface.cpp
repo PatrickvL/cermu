@@ -680,6 +680,75 @@ void gui_render_menu_bar(c64_t *c64, gui_state_t *gui_state,
   }
 }
 
+// Helper functions for C64SystemWrapper to avoid typedef conflicts
+gui_state_t* gui_create_state() {
+    gui_state_t* state = (gui_state_t*)calloc(1, sizeof(gui_state_t));
+    if (state) {
+        gui_init_state(state);
+    }
+    return state;
+}
+
+void gui_destroy_state(gui_state_t* state) {
+    if (state) {
+        free(state);
+    }
+}
+
+// Render C64-specific menu items for the new generic GUI system
+// This function extracts the C64-specific menus from gui_render_menu_bar
+// so they can be called from C64SystemWrapper::render_system_menu_items()
+void gui_render_c64_system_menu_items(c64_t* c64, gui_state_t* gui_state) {
+    if (!c64 || !gui_state) return;
+    
+    // Test binary loading
+    ImGui::Separator();
+    if (ImGui::MenuItem("Load Test Binary...")) {
+        gui_state->show_test_binary_dialog = true;
+    }
+    
+    // CPU mode display (simplified - no dual CPU mode)
+    ImGui::Separator();
+    ImGui::Text("CPU Mode: Modern C++ Core");
+    ImGui::Text("Status: Active");
+    
+    // Chip debug windows submenu
+    ImGui::Separator();
+    if (c64->system.chip_count > 0) {
+        if (ImGui::BeginMenu("Chip Debug Windows")) {
+            for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
+                chip_entry_t* entry = &c64->system.chips[chip_id];
+                if (entry->desc && entry->desc->render_debug_window) {
+                    ImGui::PushID(chip_id);
+                    char menu_label[64];
+                    const char* desc = entry->desc->description;
+                    snprintf(menu_label, sizeof(menu_label), "%s Debug",
+                            desc ? desc : "Unknown Chip");
+                    ImGui::MenuItem(menu_label, NULL, &gui_state->show_chip_debug[chip_id]);
+                    ImGui::PopID();
+                }
+            }
+            ImGui::EndMenu();
+        }
+        
+        if (ImGui::BeginMenu("Chip Settings Windows")) {
+            for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
+                chip_entry_t* entry = &c64->system.chips[chip_id];
+                if (entry->desc && entry->desc->render_settings_window) {
+                    ImGui::PushID(chip_id);
+                    char menu_label[64];
+                    const char* desc = entry->desc->description;
+                    snprintf(menu_label, sizeof(menu_label), "%s Settings",
+                            desc ? desc : "Unknown Chip");
+                    ImGui::MenuItem(menu_label, NULL, &gui_state->show_chip_settings[chip_id]);
+                    ImGui::PopID();
+                }
+            }
+            ImGui::EndMenu();
+        }
+    }
+}
+
 void gui_render_memory_viewer(c64_t *c64, gui_state_t *gui_state) {
   if (!ImGui::Begin("Memory Viewer", &gui_state->show_memory_viewer, 0)) {
     ImGui::End();

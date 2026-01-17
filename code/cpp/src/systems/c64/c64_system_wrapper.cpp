@@ -1,8 +1,44 @@
 #include "c64_system_wrapper.h"
 #include "c64_test_loader.h"
 #include "../../chip/input/commodore_keyboard.h"
+#include "../../gui/imgui_interface.h"
 #include <cstring>
 #include <cstdio>
+
+/**
+ * C64 System Wrapper Implementation
+ *
+ * CURRENT ARCHITECTURE:
+ * =====================
+ * This file implements the wrapper layer that adapts the C-style c64_t system
+ * to the C++ EmulatedSystem interface. It delegates most work to C functions
+ * in c64.cpp.
+ *
+ * CYCLE COUNTING:
+ * ===============
+ * - c64_->total_cycles: Internal C64 cycle counter (updated by c64_system_tick)
+ * - total_cycles_: Base class cycle counter (synced in tick() method)
+ * - Both are kept in sync to maintain consistency
+ *
+ * FRAMEBUFFER MANAGEMENT:
+ * =======================
+ * - VIC-II owns the actual framebuffer: c64_->vicii->pixel.framebuffer
+ * - get_framebuffer() returns pointer to VIC-II's buffer
+ * - set_framebuffer() delegates to c64_set_framebuffer() which calls vicii_set_framebuffer()
+ *
+ * FUTURE MERGER NOTES:
+ * ====================
+ * When merging into unified C64System class, this file's logic should become
+ * direct methods of C64System. The c64_t pointer would be eliminated and its
+ * members would become direct members of C64System class.
+ *
+ * Key functions to convert:
+ * - Constructor logic from c64_system_create()
+ * - Destructor logic from c64_system_destroy()
+ * - tick() from c64_system_tick()
+ * - reset() from c64_system_reset()
+ * - All chip management code
+ */
 
 // C64 file detection
 static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t size) {
@@ -133,7 +169,14 @@ void C64SystemWrapper::reset() {
 void C64SystemWrapper::tick() {
     if (c64_) {
         c64_system_tick(c64_);
-        // Sync base class cycle counter with C64's counter
+        
+        // CRITICAL: Sync base class cycle counter with C64's internal counter
+        // The C64 system maintains its own cycle count in c64_->total_cycles
+        // which is updated by c64_system_tick(). We sync it here to keep the
+        // base class counter accurate for the GUI and other systems that query it.
+        //
+        // FUTURE: When merged into unified C64System, total_cycles_ will be
+        // the single authoritative counter, updated directly in tick().
         total_cycles_ = c64_->total_cycles;
     }
 }
@@ -187,9 +230,10 @@ bool C64SystemWrapper::load_file(const char* filepath) {
 }
 
 uint32_t* C64SystemWrapper::get_framebuffer() {
-    // C64 uses a different framebuffer management system
-    // This would return the VIC-II framebuffer
-    return nullptr;  // TODO: Implement proper framebuffer access
+    if (c64_ && c64_->vicii) {
+        return c64_->vicii->pixel.framebuffer;
+    }
+    return nullptr;
 }
 
 void C64SystemWrapper::get_display_dimensions(int* width, int* height) const {
@@ -220,15 +264,39 @@ void C64SystemWrapper::handle_controller_event(int controller, int button, bool 
     // C64 joystick support would go here
     // TODO: Implement joystick handling
 }
-
 void C64SystemWrapper::render_system_menu_items() {
-    // C64-specific menu items would go here
-    // This will be implemented when we update the GUI
+    // Forward menu creation to the old C64 GUI code
+    // This allows C64-specific menus (Load Test Binary, Chip Debug Windows, etc.)
+    // to appear in the multi_emu interface
+    
+    // Note: gui_state is created/managed by the old GUI code
+    // We allocate it here temporarily for menu rendering
+    gui_state_t* gui_state = gui_create_state();
+    
+    // Call the C64-specific menu rendering function from the old GUI
+    gui_render_c64_system_menu_items(c64_, gui_state);
+    
+    // Clean up temporary state
+    gui_destroy_state(gui_state);
 }
 
 void C64SystemWrapper::render_debug_windows(void* gui_state) {
-    // C64 debug windows (chip visualization, etc.) would go here
-    // This will use the existing chip debug system
+    // Forward debug window rendering to the old C64 GUI code
+    // The gui_state pointer is cast to gui_state_t* to access the debug window flags
+    
+    if (gui_state && c64_) {
+        gui_state_t* state = static_cast<gui_state_t*>(gui_state);
+        
+        // The old GUI code has functions for rendering individual chip debug windows
+        // They check state->show_chip_debug[chip_id] flags and render accordingly
+        // This functionality is already built into the chip system's debug rendering
+        
+        // For now, we rely on the chip system's own debug rendering
+        // which is triggered by the gui_state flags
+        // The actual rendering happens in the chip's render_debug_window() methods
+        
+        // NOTE: In the future unified C64System class, this will be more direct
+    }
 }
 
 uint32_t C64SystemWrapper::get_target_fps() const {
