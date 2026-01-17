@@ -255,6 +255,9 @@ set(SYSTEM_SOURCES
     
     # NES system (clean EmulatedSystem implementation)
     src/systems/nes/nes_system.cpp
+    
+    # C16/Plus4 system (clean EmulatedSystem implementation with stubs)
+    src/systems/c16/c16_system.cpp
 )
 
 
