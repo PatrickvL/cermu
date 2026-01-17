@@ -1,0 +1,98 @@
+#pragma once
+
+#include "../../core/emulated_system.h"
+#include "../../core/system.h"
+#include "../../core/text_terminal.h"
+#include "../../chip/cpu/fam65xx/mos6502.h"
+#include "../../chip/io/pia6820.h"
+#include <cstdint>
+#include <memory>
+
+/**
+ * Apple 1 System Implementation
+ * Clean implementation using the new EmulatedSystem architecture (VIC-20 pattern)
+ *
+ * The Apple 1 was Steve Wozniak's first computer design (1976)
+ * Features:
+ * - MOS 6502 CPU @ 1 MHz
+ * - 4KB-8KB RAM (typically 8KB)
+ * - 40x24 character display (via terminal/video card)
+ * - Woz Monitor ROM (256 bytes at $FF00-$FFFF)
+ * - Optional BASIC ROM
+ */
+class Apple1System : public EmulatedSystem {
+public:
+    Apple1System();
+    ~Apple1System() override;
+    
+    // System identification
+    const SystemDescriptor& get_descriptor() const override;
+    
+    // Configuration management
+    bool set_configuration(const SystemConfiguration& config) override;
+    bool apply_configuration() override;
+    
+    // System lifecycle
+    bool initialize() override;
+    void shutdown() override;
+    void reset() override;
+    
+    // Execution
+    void tick() override;
+    void run_frame() override;
+    
+    // File loading
+    bool load_file(const char* filepath) override;
+    
+    // Display
+    uint32_t* get_framebuffer() override;
+    void get_display_dimensions(int* width, int* height) const override;
+    void set_framebuffer(uint32_t* buffer, int width, int height) override;
+    
+    // Input
+    void handle_keyboard_event(int key, bool pressed) override;
+    
+    // GUI integration
+    void render_system_menu_items() override;
+    void render_configuration_ui() override;
+    
+    // State
+    uint32_t get_target_fps() const override;
+    
+    // Emulation control
+    void set_speed_multiplier(float multiplier) override;
+
+private:
+    // Chip instances
+    mos6502_t* cpu_;                 // MOS6502 CPU instance @ 1 MHz
+    pia6820_t pia_;                  // PIA 6820 for keyboard and display I/O
+    TextTerminal* terminal_;         // Text terminal (40x24)
+    
+    // Apple 1 Memory (simple arrays)
+    uint8_t ram_simple_[65536];      // Up to 64KB RAM (typically 8KB at $0000-$1FFF)
+    uint8_t monitor_rom_[256];       // Woz Monitor ROM at $FF00-$FFFF
+    uint8_t basic_rom_[4096];        // Optional Apple 1 BASIC (4KB at various addresses)
+    
+    // System state
+    uint32_t cycles_per_frame_;
+    uint32_t ram_size_;              // Configured RAM size (4KB or 8KB)
+    bool has_basic_;                 // Whether BASIC ROM is loaded
+    int cursor_col_;                 // Terminal cursor position
+    int cursor_row_;
+    
+    // Helper methods
+    void tick_cpu();
+    
+    // ROM loading
+    bool load_roms();
+    
+    // Memory access callbacks for CPU
+    static uint8_t cpu_read(void* user_data, uint32_t addr, uint8_t bus_state);
+    static void cpu_write(void* user_data, uint32_t addr, uint8_t data);
+    
+    // PIA callbacks
+    static void pia_display_write(void* user_data, uint8_t data);
+    
+    // Display helpers
+    void display_char(uint8_t ch);
+};
