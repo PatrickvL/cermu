@@ -5,9 +5,6 @@
 #include <cstdint>
 #include <memory>
 
-// Forward declaration for CIA chip
-struct mos6526_t;
-
 /**
  * C16 System - Commodore 16 / Plus/4 Emulator
  *
@@ -69,7 +66,7 @@ private:
     // Chip instances (TODO: Implement MOS7501 CPU and TED 7360 chips)
     void* mos7501_;              // MOS7501 CPU (TODO: Create proper chip type)
     void* ted_;                  // TED 7360 ($FD00-$FEFF, 4KB) - TODO: Create proper chip type
-    mos6526_t* cia_;             // MOS6526 CIA ($FD30-$FD3F, 16 bytes) - TODO: Verify if C16 actually has CIA
+    void* cia_;                  // MOS6526 CIA ($FD30-$FD3F, 16 bytes) - TODO: Verify if C16 actually has CIA
     
     // Memory arrays (simplified storage like VIC-20)
     uint8_t ram_simple_[65536];  // Up to 64KB RAM (C16 uses 16KB, Plus/4 uses 64KB)
