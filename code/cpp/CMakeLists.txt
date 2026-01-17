@@ -181,6 +181,8 @@ set(CORE_SOURCES
     src/core/chip_layout.cpp
     src/core/pin_labels.cpp
     src/core/emulation_context.cpp
+    src/core/emulated_system.cpp
+    src/core/framebuffer_renderer.cpp
 )
 
 # FAM65XX Decoder - standalone library for instruction decoding
@@ -225,9 +227,9 @@ list(APPEND CHIP_SOURCES
     src/chip/video/vic_ii/mos6567.cpp
     src/chip/video/vic_ii/vicii_common.cpp
 )
-
 # System sources
 set(SYSTEM_SOURCES
+    # C64 system
     src/systems/c64/c64.cpp
     src/systems/c64/c64_bus.cpp
     src/systems/c64/c64_chips.cpp
@@ -236,6 +238,10 @@ set(SYSTEM_SOURCES
     src/systems/c64/c64_banking_verify.cpp
     src/systems/c64/c64_test_framework.cpp
     src/systems/c64/c64_screenshot.cpp
+    src/systems/c64/c64_system_wrapper.cpp
+    
+    # CHIP-8 system
+    src/systems/chip8/chip8_system.cpp
 )
 
 
@@ -244,6 +250,23 @@ set(CORE_UTIL_SOURCES
     src/core/storage/rom_loader.cpp
     src/core/config/path_discovery.cpp
 )
+# GUI sources (defined here so both c64emu_gui and multi_emu can use it)
+if(BUILD_GUI)
+    set(GUI_SOURCES
+        src/gui/imgui_interface.cpp
+        src/gui/chip_visualization.cpp
+        src/gui/global_chip_style.cpp
+        src/chip/video/vic_ii/vicii_gui.cpp
+        src/chip/video/vic_ii/mos6567_gui.cpp
+        src/chip/video/vic_ii/mos6569_gui.cpp
+        src/chip/logic/pla_gui.cpp
+        src/chip/cpu/fam65xx/fam65xx_gui.cpp
+        src/chip/io/mos6526_gui.cpp
+        src/chip/memory/ram_gui.cpp
+        src/chip/memory/mos2114_gui.cpp
+        src/chip/sound/mos6581_gui.cpp
+    )
+endif()
 
 # Main executable (console version)
 add_executable(c64emu
@@ -253,6 +276,95 @@ add_executable(c64emu
     ${SYSTEM_SOURCES}
     ${CORE_UTIL_SOURCES}
 )
+
+# Multi-system console test (no GUI dependencies)
+add_executable(multi_emu_console
+    src/main/multi_emu_console.cpp
+    ${CORE_SOURCES}
+    ${CHIP_SOURCES}
+    ${SYSTEM_SOURCES}
+    ${CORE_UTIL_SOURCES}
+)
+
+target_link_libraries(multi_emu_console
+    fam65xx_decoder
+)
+
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(multi_emu_console m)
+endif()
+
+message(STATUS "Console test executable multi_emu_console will be built")
+
+# Multi-system GUI executable
+if(BUILD_GUI)
+    add_executable(multi_emu
+        src/main/multi_emu_main.cpp
+        ${CORE_SOURCES}
+        ${CHIP_SOURCES}
+        ${SYSTEM_SOURCES}
+        ${CORE_UTIL_SOURCES}
+        ${GUI_SOURCES}
+    )
+    
+    # Add include directories
+    target_include_directories(multi_emu PRIVATE
+        ${SDL2_INCLUDE_DIRS}
+        ${IMGUI_DIR}
+        ${IMGUI_DIR}/backends
+    )
+    
+    # Add NFD include if available
+    if(NFD_FOUND)
+        target_include_directories(multi_emu PRIVATE ${NFD_ROOT}/src/include)
+    endif()
+    
+    # Define IMGUI_VERSION macro
+    target_compile_definitions(multi_emu PRIVATE IMGUI_VERSION="1.92.1")
+    
+    # Disable warnings
+    if(MSVC)
+        target_compile_options(multi_emu PRIVATE /WX- /wd4201 /wd4996 /wd4244 /wd4189 /wd4100 /wd5287 /wd4702 /wd4005)
+    else()
+        target_compile_options(multi_emu PRIVATE -Wno-pedantic)
+    endif()
+    
+    # Link libraries
+    set(MULTI_EMU_LINK_LIBS
+        imgui
+        fam65xx_decoder
+        ${SDL2_LIBRARIES}
+        ${OPENGL_LIBRARIES}
+        ${CMAKE_DL_LIBS}
+    )
+    
+    if(NFD_FOUND)
+        list(APPEND MULTI_EMU_LINK_LIBS nfd)
+    endif()
+    
+    target_link_libraries(multi_emu ${MULTI_EMU_LINK_LIBS})
+    
+    # Platform-specific libraries
+    if(WIN32)
+        target_link_libraries(multi_emu imm32)
+    endif()
+    
+    if(NOT WIN32 AND NOT MSVC)
+        target_link_libraries(multi_emu m)
+    endif()
+    
+    # Copy SDL2.dll on Windows
+    if(WIN32)
+        add_custom_command(TARGET multi_emu POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/deps/sdl2/SDL2-2.30.10/lib/x64/SDL2.dll"
+            "$<TARGET_FILE_DIR:multi_emu>/SDL2.dll"
+            COMMENT "Copying SDL2.dll for multi_emu"
+        )
+    endif()
+    
+    message(STATUS "Multi-system GUI executable multi_emu will be built")
+endif()
 
 # Link required libraries
 # Link required libraries
@@ -269,22 +381,6 @@ endif()
 
 # GUI executable (ImGui version) - only if SDL2 and OpenGL are available
 if(BUILD_GUI)
-    # GUI sources (native Dear ImGui C++)
-    set(GUI_SOURCES
-            src/gui/imgui_interface.cpp
-            src/gui/chip_visualization.cpp
-            src/gui/global_chip_style.cpp
-            src/chip/video/vic_ii/vicii_gui.cpp
-            src/chip/video/vic_ii/mos6567_gui.cpp
-            src/chip/video/vic_ii/mos6569_gui.cpp
-            src/chip/logic/pla_gui.cpp
-            src/chip/cpu/fam65xx/fam65xx_gui.cpp
-            src/chip/io/mos6526_gui.cpp
-            src/chip/memory/ram_gui.cpp
-            src/chip/memory/mos2114_gui.cpp
-            src/chip/sound/mos6581_gui.cpp
-        )
-
     add_executable(c64emu_gui
         src/main/c64_main_gui.cpp
         ${CORE_SOURCES}

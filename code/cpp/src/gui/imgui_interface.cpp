@@ -194,6 +194,8 @@ void gui_cleanup_state(gui_state_t *gui_state) {
 
 bool gui_should_quit(void) { return g_should_quit; }
 
+void* gui_get_window(void) { return g_window; }
+
 void gui_handle_events(gui_emulation_context_t *emu_context) {
   SDL_Event event;
   while (SDL_PollEvent(&event)) {
