@@ -127,18 +127,16 @@ static SystemDescriptor chip8_descriptor = {
 // ============================================================================
 // Constructor / Destructor
 // ============================================================================
-
 Chip8System::Chip8System()
-    : rgba_framebuffer_(nullptr)
-    , rgba_width_(0)
-    , rgba_height_(0)
-    , total_cycles_(0)
-    , speed_multiplier_(1.0f)
+    : EmulatedSystem()  // Call base class constructor
     , cycles_per_frame_(10)
     , display_dirty_(false)
     , shift_quirk_(false)
     , load_store_quirk_(false)
 {
+    // Base class already initializes: rgba_framebuffer_, rgba_width_, rgba_height_,
+    // total_cycles_, speed_multiplier_, hardware_traits_, config_, current_palette_
+    
     hardware_traits_ = create_chip8_hardware_traits();
     current_palette_ = hardware_traits_.display.default_palette;
     reset();
@@ -156,9 +154,7 @@ const SystemDescriptor& Chip8System::get_descriptor() const {
 // Configuration Management
 // ============================================================================
 
-const SystemConfiguration& Chip8System::get_configuration() const {
-    return config_;
-}
+// Note: get_configuration() now provided by base class
 
 bool Chip8System::set_configuration(const SystemConfiguration& config) {
     config_ = config;
@@ -200,43 +196,10 @@ bool Chip8System::apply_configuration() {
     
     return true;
 }
+// Note: Hardware trait queries (get_hardware_traits, get_current_timing,
+// get_display_traits, get_audio_traits) now provided by base class
 
-// ============================================================================
-// Hardware Trait Queries
-// ============================================================================
-
-const HardwareTraits& Chip8System::get_hardware_traits() const {
-    return hardware_traits_;
-}
-
-const SystemTiming& Chip8System::get_current_timing() const {
-    int idx = config_.region_option_index;
-    if (idx >= 0 && idx < static_cast<int>(hardware_traits_.region_options.size())) {
-        return hardware_traits_.region_options[idx].timing;
-    }
-    return hardware_traits_.timing;
-}
-
-const DisplayTraits& Chip8System::get_display_traits() const {
-    return hardware_traits_.display;
-}
-
-const AudioTraits& Chip8System::get_audio_traits() const {
-    return hardware_traits_.audio;
-}
-
-// ============================================================================
-// System Lifecycle
-// ============================================================================
-
-bool Chip8System::initialize() {
-    reset();
-    return true;
-}
-
-void Chip8System::shutdown() {
-    // Nothing to clean up
-}
+// Note: initialize() and shutdown() now provided by base class with default implementations
 
 void Chip8System::reset() {
     memset(memory_, 0, sizeof(memory_));
@@ -333,17 +296,6 @@ void Chip8System::get_display_dimensions(int* width, int* height) const {
     *height = 32;
 }
 
-void Chip8System::set_framebuffer(uint32_t* buffer, int width, int height) {
-    rgba_framebuffer_ = buffer;
-    rgba_width_ = width;
-    rgba_height_ = height;
-    display_dirty_ = true;
-}
-
-// ============================================================================
-// Input
-// ============================================================================
-
 void Chip8System::handle_keyboard_event(int key, bool pressed) {
     int chip8_key = map_sdl_key_to_chip8(key);
     if (chip8_key >= 0 && chip8_key < 16) {
@@ -351,13 +303,7 @@ void Chip8System::handle_keyboard_event(int key, bool pressed) {
     }
 }
 
-void Chip8System::handle_controller_event(int controller, int button, bool pressed) {
-    // CHIP-8 doesn't use controllers
-    (void)controller;
-    (void)button;
-    (void)pressed;
-}
-
+// Note: handle_controller_event() now provided by base class (empty default implementation)
 // ============================================================================
 // GUI Integration
 // ============================================================================
@@ -370,11 +316,7 @@ void Chip8System::render_system_menu_items() {
 #endif
 }
 
-void Chip8System::render_debug_windows(void* gui_state) {
-    (void)gui_state;
-    // TODO: Add debug windows
-}
-
+// Note: render_debug_windows() now provided by base class (empty default implementation)
 void Chip8System::render_configuration_ui() {
 #ifdef IMGUI_VERSION
     ImGui::Text("CHIP-8 Display Configuration");
@@ -443,9 +385,7 @@ void Chip8System::render_configuration_ui() {
 // State
 // ============================================================================
 
-uint64_t Chip8System::get_total_cycles() const {
-    return total_cycles_;
-}
+// Note: get_total_cycles() now provided by base class
 
 uint32_t Chip8System::get_target_fps() const {
     return 60;
@@ -460,9 +400,7 @@ void Chip8System::set_speed_multiplier(float multiplier) {
     cycles_per_frame_ = static_cast<uint32_t>(10 * multiplier);
 }
 
-float Chip8System::get_speed_multiplier() const {
-    return speed_multiplier_;
-}
+// Note: get_speed_multiplier() now provided by base class
 
 // ============================================================================
 // Private Helper Functions

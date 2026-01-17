@@ -190,67 +190,73 @@ struct SystemDescriptor {
 };
 
 /**
- * Base interface for all emulated systems
- * Systems implement this interface and register themselves with the SystemRegistry
+ * Abstract base class for all emulated systems
+ * Provides common infrastructure while requiring system-specific implementations
+ *
+ * This class combines interface definition with shared implementation to reduce
+ * boilerplate code across system implementations (~150 lines saved per system).
  */
-class IEmulatedSystem {
+class EmulatedSystem {
+protected:
+    // Configuration (all systems need these)
+    HardwareTraits hardware_traits_;
+    SystemConfiguration config_;
+    std::vector<PaletteColor> current_palette_;
+    
+    // Framebuffer (provided by GUI)
+    uint32_t* rgba_framebuffer_;
+    int rgba_width_;
+    int rgba_height_;
+    
+    // Emulation state
+    uint64_t total_cycles_;
+    float speed_multiplier_;
+    
 public:
-    virtual ~IEmulatedSystem() = default;
+    EmulatedSystem();
+    virtual ~EmulatedSystem() = default;
     
-    // System identification
+    // Non-virtual implementations (identical for all systems - cannot override)
+    const SystemConfiguration& get_configuration() const;
+    const HardwareTraits& get_hardware_traits() const;
+    const SystemTiming& get_current_timing() const;
+    const DisplayTraits& get_display_traits() const;
+    const AudioTraits& get_audio_traits() const;
+    uint64_t get_total_cycles() const;
+    float get_speed_multiplier() const;
+    
+    // Default implementations (can be overridden if needed)
+    virtual void set_framebuffer(uint32_t* buffer, int width, int height);
+    virtual bool initialize();
+    virtual void shutdown();
+    virtual void handle_controller_event(int controller, int button, bool pressed);
+    virtual void render_debug_windows(void* gui_state);
+    
+    // Pure virtual (must implement in derived classes)
     virtual const SystemDescriptor& get_descriptor() const = 0;
-    
-    // Configuration management
-    virtual const SystemConfiguration& get_configuration() const = 0;
     virtual bool set_configuration(const SystemConfiguration& config) = 0;
-    virtual bool apply_configuration() = 0;  // Apply current configuration (may require reset)
-    
-    // Hardware trait queries
-    virtual const HardwareTraits& get_hardware_traits() const = 0;
-    virtual const SystemTiming& get_current_timing() const = 0;  // Get timing for current region
-    virtual const DisplayTraits& get_display_traits() const = 0;
-    virtual const AudioTraits& get_audio_traits() const = 0;
-    
-    // System lifecycle
-    virtual bool initialize() = 0;
-    virtual void shutdown() = 0;
+    virtual bool apply_configuration() = 0;
     virtual void reset() = 0;
-    
-    // Execution
-    virtual void tick() = 0;       // Execute one system cycle
-    virtual void run_frame() = 0;  // Execute one complete frame
-    
-    // File loading
+    virtual void tick() = 0;
+    virtual void run_frame() = 0;
     virtual bool load_file(const char* filepath) = 0;
-    
-    // Display
     virtual uint32_t* get_framebuffer() = 0;
     virtual void get_display_dimensions(int* width, int* height) const = 0;
-    virtual void set_framebuffer(uint32_t* buffer, int width, int height) = 0;
-    
-    // Input
     virtual void handle_keyboard_event(int key, bool pressed) = 0;
-    virtual void handle_controller_event(int controller, int button, bool pressed) = 0;
-    
-    // GUI integration
-    virtual void render_system_menu_items() = 0;        // Render system-specific menu items in "System" menu
-    virtual void render_debug_windows(void* gui_state) = 0;  // Render system-specific debug windows (gui_state_t*)
-    virtual void render_configuration_ui() = 0;         // Render configuration UI in settings panel
-    
-    // State
-    virtual uint64_t get_total_cycles() const = 0;
+    virtual void render_system_menu_items() = 0;
+    virtual void render_configuration_ui() = 0;
     virtual uint32_t get_target_fps() const = 0;
-    
-    // Emulation control
     virtual void set_speed_multiplier(float multiplier) = 0;
-    virtual float get_speed_multiplier() const = 0;
 };
+
+// Backwards compatibility alias (will be removed after migration)
+using IEmulatedSystem = EmulatedSystem;
 
 /**
  * System factory function type
  * Each system provides a factory function to create instances
  */
-using SystemFactory = std::function<std::unique_ptr<IEmulatedSystem>()>;
+using SystemFactory = std::function<std::unique_ptr<EmulatedSystem>()>;
 
 /**
  * System registry - maintains list of available emulated systems
@@ -269,10 +275,10 @@ public:
     }
     
     // Find best system for a file (returns nullptr if no suitable system found)
-    std::unique_ptr<IEmulatedSystem> create_system_for_file(const char* filepath);
+    std::unique_ptr<EmulatedSystem> create_system_for_file(const char* filepath);
     
     // Create a specific system by short name (e.g., "C64", "CHIP8")
-    std::unique_ptr<IEmulatedSystem> create_system_by_name(const char* short_name);
+    std::unique_ptr<EmulatedSystem> create_system_by_name(const char* short_name);
     
 private:
     SystemRegistry() = default;

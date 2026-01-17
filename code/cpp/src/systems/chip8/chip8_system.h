@@ -12,28 +12,19 @@
  * Uses native 1-bit monochrome display with configurable palette
  * Memory efficient: 256 bytes for native display vs 8192 bytes for RGBA
  */
-class Chip8System : public IEmulatedSystem {
+class Chip8System : public EmulatedSystem {
 public:
     Chip8System();
     ~Chip8System() override = default;
     
-    // IEmulatedSystem interface
+    // EmulatedSystem interface - only implement what's required
     const SystemDescriptor& get_descriptor() const override;
     
     // Configuration management
-    const SystemConfiguration& get_configuration() const override;
     bool set_configuration(const SystemConfiguration& config) override;
     bool apply_configuration() override;
     
-    // Hardware trait queries
-    const HardwareTraits& get_hardware_traits() const override;
-    const SystemTiming& get_current_timing() const override;
-    const DisplayTraits& get_display_traits() const override;
-    const AudioTraits& get_audio_traits() const override;
-    
     // System lifecycle
-    bool initialize() override;
-    void shutdown() override;
     void reset() override;
     
     // Execution
@@ -46,24 +37,19 @@ public:
     // Display
     uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
-    void set_framebuffer(uint32_t* buffer, int width, int height) override;
     
     // Input
     void handle_keyboard_event(int key, bool pressed) override;
-    void handle_controller_event(int controller, int button, bool pressed) override;
     
     // GUI integration
     void render_system_menu_items() override;
-    void render_debug_windows(void* gui_state) override;
     void render_configuration_ui() override;
     
     // State
-    uint64_t get_total_cycles() const override;
     uint32_t get_target_fps() const override;
     
     // Emulation control
     void set_speed_multiplier(float multiplier) override;
-    float get_speed_multiplier() const override;
     
 private:
     // CHIP-8 hardware state
@@ -83,21 +69,14 @@ private:
     
     uint8_t keys_[16];               // 16-key keypad state
     
-    // RGBA conversion buffer (provided by GUI, not owned)
-    uint32_t* rgba_framebuffer_;
-    int rgba_width_;
-    int rgba_height_;
+    // Note: rgba_framebuffer_, rgba_width_, rgba_height_ now in base class
+    // Note: total_cycles_, speed_multiplier_ now in base class
     
-    // Emulation state
-    uint64_t total_cycles_;
-    float speed_multiplier_;
+    // CHIP-8 specific state
     uint32_t cycles_per_frame_;
     bool display_dirty_;             // True when display needs RGBA conversion
     
-    // Configuration
-    HardwareTraits hardware_traits_;
-    SystemConfiguration config_;
-    std::vector<PaletteColor> current_palette_;
+    // Note: hardware_traits_, config_, current_palette_ now in base class
     
     // Quirks/settings
     bool shift_quirk_;               // Original CHIP-8 shift behavior
