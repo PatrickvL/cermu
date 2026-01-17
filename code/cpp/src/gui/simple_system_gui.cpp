@@ -1,0 +1,384 @@
+#include "simple_system_gui.h"
+#include "imgui.h"
+#include "imgui_impl_sdl2.h"
+#include "imgui_impl_opengl3.h"
+#include <stdio.h>
+#include <cstring>
+
+// ============================================================================
+// Constructor / Destructor
+// ============================================================================
+
+SimpleSystemGUI::SimpleSystemGUI(std::unique_ptr<IEmulatedSystem> system)
+    : GenericEmulatorGUI()
+    , system_(std::move(system))
+    , framebuffer_(nullptr)
+    , fb_width_(0)
+    , fb_height_(0)
+    , emulation_running_(true)
+    , emulation_paused_(false)
+    , speed_multiplier_(1.0f)
+    , total_frames_(0)
+    , actual_fps_(0)
+    , last_fps_time_(0)
+    , fps_counter_(0)
+{
+    if (!system_) {
+        printf("ERROR: SimpleSystemGUI created with null system\n");
+        return;
+    }
+    
+    // Note: System should already be initialized and loaded before passing to GUI
+    // Framebuffer allocation happens after init() when OpenGL context exists
+    
+    printf("SimpleSystemGUI created for system: %s\n",
+           system_->get_descriptor().name);
+}
+SimpleSystemGUI::~SimpleSystemGUI() {
+    if (system_) {
+        system_->shutdown();
+    }
+    free_framebuffer();
+}
+
+// ============================================================================
+// Initialization Override
+// ============================================================================
+
+bool SimpleSystemGUI::init(const char* window_title, int width, int height) {
+    // Call base class init to create OpenGL context
+    if (!GenericEmulatorGUI::init(window_title, width, height)) {
+        return false;
+    }
+    
+    // Now that OpenGL context exists, allocate framebuffer and create texture
+    allocate_framebuffer();
+    
+    return true;
+}
+
+// ============================================================================
+// Virtual Hook Implementations
+// ============================================================================
+
+void SimpleSystemGUI::handle_events() {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        ImGui_ImplSDL2_ProcessEvent(&event);
+        
+        // Handle quit events
+        if (event.type == SDL_QUIT ||
+            (event.type == SDL_WINDOWEVENT &&
+             event.window.event == SDL_WINDOWEVENT_CLOSE &&
+             event.window.windowID == SDL_GetWindowID(get_window()))) {
+            should_quit_ = true;
+        }
+        
+        // Forward keyboard events to system (if ImGui doesn't want them)
+        if (system_ && !ImGui::GetIO().WantCaptureKeyboard) {
+            if (event.type == SDL_KEYDOWN) {
+                system_->handle_keyboard_event(event.key.keysym.sym, true);
+            } else if (event.type == SDL_KEYUP) {
+                system_->handle_keyboard_event(event.key.keysym.sym, false);
+            }
+        }
+    }
+}
+
+void SimpleSystemGUI::update_frame() {
+    if (!system_ || !emulation_running_ || emulation_paused_) {
+        return;
+    }
+    
+    // Run one frame of emulation
+    system_->run_frame();
+    total_frames_++;
+    
+    // Update FPS counter
+    update_fps();
+}
+
+void SimpleSystemGUI::render_frame() {
+    begin_frame();
+    
+    // Render screen (full-screen background)
+    if (show_screen_) {
+        render_screen();
+    }
+    
+    // Render menu bar (on top of screen)
+    render_menu_bar();
+    
+    // Render optional windows
+    if (show_memory_viewer_) {
+        render_memory_viewer();
+    }
+    if (show_settings_) {
+        render_settings();
+    }
+    if (show_about_) {
+        render_about();
+    }
+    
+    // Let system render its debug windows
+    if (system_) {
+        system_->render_debug_windows(nullptr);
+    }
+    
+    end_frame();
+}
+
+void SimpleSystemGUI::render_menu_bar() {
+    if (!ImGui::BeginMainMenuBar()) {
+        return;
+    }
+    
+    // File menu
+    if (ImGui::BeginMenu("File")) {
+        render_file_menu_generic();
+        ImGui::EndMenu();
+    }
+    
+    // System menu
+    if (ImGui::BeginMenu("System")) {
+        // Generic system controls
+        if (ImGui::MenuItem("Reset")) {
+            reset_emulation();
+        }
+        
+        bool is_running = emulation_running_ && !emulation_paused_;
+        if (ImGui::MenuItem(is_running ? "Pause" : "Resume")) {
+            if (is_running) {
+                pause_emulation();
+            } else {
+                start_emulation();
+            }
+        }
+        
+        if (ImGui::MenuItem("Single Step", nullptr, false, emulation_paused_)) {
+            step_emulation();
+        }
+        
+        ImGui::Separator();
+        
+        // Speed control
+        if (ImGui::SliderFloat("Speed", &speed_multiplier_, 0.1f, 5.0f, "%.1fx")) {
+            system_->set_speed_multiplier(speed_multiplier_);
+        }
+        
+        ImGui::Separator();
+        
+        // System-specific menu items
+        if (system_) {
+            system_->render_system_menu_items();
+        }
+        
+        ImGui::EndMenu();
+    }
+    
+    // View menu
+    if (ImGui::BeginMenu("View")) {
+        render_view_menu_generic();
+        ImGui::EndMenu();
+    }
+    
+    // Settings menu
+    if (ImGui::BeginMenu("Settings")) {
+        if (ImGui::MenuItem("System Configuration")) {
+            show_settings_ = true;
+        }
+        ImGui::EndMenu();
+    }
+    
+    // Help menu
+    if (ImGui::BeginMenu("Help")) {
+        render_help_menu_generic();
+        ImGui::EndMenu();
+    }
+    
+    // Status bar on the right
+    if (system_) {
+        ImGui::SameLine(ImGui::GetWindowWidth() - 350);
+        ImGui::Text("Cycles: %llu", (unsigned long long)system_->get_total_cycles());
+        ImGui::SameLine();
+        ImGui::Text("FPS: %u", actual_fps_);
+        ImGui::SameLine();
+        ImGui::Text("%s", emulation_paused_ ? "Paused" : 
+                         emulation_running_ ? "Running" : "Stopped");
+    }
+    
+    ImGui::EndMainMenuBar();
+}
+
+void SimpleSystemGUI::render_screen() {
+    if (!system_) return;
+    
+    // Get viewport for fullscreen rendering
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->Pos);
+    ImGui::SetNextWindowSize(viewport->Size);
+    
+    // Fullscreen window flags
+    ImGuiWindowFlags flags =
+        ImGuiWindowFlags_NoDecoration |
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoSavedSettings |
+        ImGuiWindowFlags_NoBringToFrontOnFocus |
+        ImGuiWindowFlags_NoBackground;
+    
+    ImGui::Begin("##Screen", nullptr, flags);
+    
+    // Get system framebuffer
+    uint32_t* fb = system_->get_framebuffer();
+    if (fb && screen_texture_id_) {
+        // Update texture
+        update_screen_texture(screen_texture_id_, fb_width_, fb_height_, fb);
+        
+        // Calculate display dimensions with integer scaling
+        int display_w, display_h, pos_x, pos_y;
+        calculate_integer_scaled_dimensions(
+            (int)viewport->Size.x, (int)viewport->Size.y,
+            fb_width_, fb_height_,
+            &display_w, &display_h, &pos_x, &pos_y);
+        
+        // Center and render
+        ImGui::SetCursorPos(ImVec2((float)pos_x, (float)pos_y));
+        ImGui::Image((void*)(intptr_t)screen_texture_id_,
+                    ImVec2((float)display_w, (float)display_h));
+    }
+    
+    ImGui::End();
+}
+
+void SimpleSystemGUI::render_memory_viewer() {
+    if (!ImGui::Begin("Memory Viewer", &show_memory_viewer_)) {
+        ImGui::End();
+        return;
+    }
+    
+    ImGui::Text("Memory viewer not yet implemented for generic systems");
+    ImGui::Text("System-specific memory viewers can be added via system callbacks");
+    
+    ImGui::End();
+}
+
+void SimpleSystemGUI::render_settings() {
+    if (!ImGui::Begin("Settings", &show_settings_, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::End();
+        return;
+    }
+    
+    if (system_) {
+        ImGui::Text("System: %s", system_->get_descriptor().name);
+        ImGui::Text("Description: %s", system_->get_descriptor().description);
+        ImGui::Separator();
+        
+        // Hardware information
+        const auto& traits = system_->get_hardware_traits();
+        ImGui::Text("Display: %dx%d", 
+                   traits.display.visible_width,
+                   traits.display.visible_height);
+        ImGui::Text("Format: %s",
+                   traits.display.format == FramebufferFormat::MONOCHROME_1 ? "1-bit Monochrome" :
+                   traits.display.format == FramebufferFormat::PALETTE_INDEXED_8 ? "8-bit Indexed" :
+                   traits.display.format == FramebufferFormat::RGBA8888 ? "RGBA8888" : "Unknown");
+        ImGui::Text("Palette Size: %d colors", (int)traits.display.palette_size);
+        ImGui::Separator();
+        
+        // System-specific configuration UI
+        ImGui::Text("System Configuration:");
+        system_->render_configuration_ui();
+    }
+    
+    ImGui::End();
+}
+
+void SimpleSystemGUI::render_about() {
+    render_about_dialog_generic();
+}
+
+// ============================================================================
+// System Control
+// ============================================================================
+
+void SimpleSystemGUI::start_emulation() {
+    emulation_running_ = true;
+    emulation_paused_ = false;
+    printf("Emulation started\n");
+}
+
+void SimpleSystemGUI::pause_emulation() {
+    emulation_paused_ = true;
+    printf("Emulation paused\n");
+}
+
+void SimpleSystemGUI::reset_emulation() {
+    if (system_) {
+        system_->reset();
+        total_frames_ = 0;
+        printf("System reset\n");
+    }
+}
+
+void SimpleSystemGUI::step_emulation() {
+    if (system_ && emulation_paused_) {
+        system_->tick();
+        printf("Single step executed\n");
+    }
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+void SimpleSystemGUI::update_fps() {
+    fps_counter_++;
+    
+    uint32_t current_time = SDL_GetTicks();
+    if (last_fps_time_ == 0) {
+        last_fps_time_ = current_time;
+    }
+    
+    if (current_time - last_fps_time_ >= 1000) {
+        actual_fps_ = fps_counter_;
+        fps_counter_ = 0;
+        last_fps_time_ = current_time;
+    }
+}
+
+void SimpleSystemGUI::allocate_framebuffer() {
+    if (!system_) return;
+    
+    // Get display dimensions from system
+    const auto& traits = system_->get_hardware_traits();
+    fb_width_ = traits.display.visible_width;
+    fb_height_ = traits.display.visible_height;
+    
+    // Allocate framebuffer
+    framebuffer_ = new uint32_t[fb_width_ * fb_height_];
+    memset(framebuffer_, 0, fb_width_ * fb_height_ * sizeof(uint32_t));
+    
+    // Give it to the system
+    system_->set_framebuffer(framebuffer_, fb_width_, fb_height_);
+    
+    // Create OpenGL texture (must be called after OpenGL context is created)
+    if (window_) {  // Check if init() was called
+        screen_texture_id_ = create_screen_texture(fb_width_, fb_height_);
+        printf("Allocated %dx%d framebuffer with texture %u\n", fb_width_, fb_height_, screen_texture_id_);
+    } else {
+        printf("Allocated %dx%d framebuffer (texture creation deferred until init)\n", fb_width_, fb_height_);
+    }
+}
+
+void SimpleSystemGUI::free_framebuffer() {
+    if (framebuffer_) {
+        delete[] framebuffer_;
+        framebuffer_ = nullptr;
+    }
+    
+    if (screen_texture_id_) {
+        glDeleteTextures(1, &screen_texture_id_);
+        screen_texture_id_ = 0;
+    }
+}
