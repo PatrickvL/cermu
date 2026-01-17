@@ -74,24 +74,25 @@ static SystemDescriptor c64_descriptor = {
 };
 
 C64SystemWrapper::C64SystemWrapper()
-    : c64_(nullptr)
-    , speed_multiplier_(1.0f)
+    : EmulatedSystem()  // Call base class constructor
+    , c64_(nullptr)
     , cycles_per_frame_(19705)  // PAL: 985248 Hz / 50 fps
 {
-    // Initialize config with defaults
-    config_.vicii_standard = VIC_PAL;
-    config_.rom_config = nullptr;
-    config_.test_mode = C64_TEST_MODE_NORMAL;
-    config_.test_binary_config = nullptr;
-    config_.roml_present = false;
-    config_.romh_present = false;
-    config_.roml_filename = nullptr;
-    config_.romh_filename = nullptr;
-    config_.initial_exrom_state = true;
-    config_.initial_game_state = true;
+    // Initialize C64-specific config with defaults
+    c64_config_.vicii_standard = VIC_PAL;
+    c64_config_.rom_config = nullptr;
+    c64_config_.test_mode = C64_TEST_MODE_NORMAL;
+    c64_config_.test_binary_config = nullptr;
+    c64_config_.roml_present = false;
+    c64_config_.romh_present = false;
+    c64_config_.roml_filename = nullptr;
+    c64_config_.romh_filename = nullptr;
+    c64_config_.initial_exrom_state = true;
+    c64_config_.initial_game_state = true;
     
-    // Get hardware traits from descriptor
+    // Initialize base class members
     hardware_traits_ = c64_descriptor.hardware_traits;
+    speed_multiplier_ = 1.0f;
 }
 
 C64SystemWrapper::~C64SystemWrapper() {
@@ -101,13 +102,12 @@ C64SystemWrapper::~C64SystemWrapper() {
 const SystemDescriptor& C64SystemWrapper::get_descriptor() const {
     return c64_descriptor;
 }
-
 bool C64SystemWrapper::initialize() {
     if (c64_) {
         return true;  // Already initialized
     }
     
-    c64_ = c64_system_create(&config_);
+    c64_ = c64_system_create(&c64_config_);
     if (!c64_) {
         printf("C64: Failed to create system\n");
         return false;
@@ -133,6 +133,8 @@ void C64SystemWrapper::reset() {
 void C64SystemWrapper::tick() {
     if (c64_) {
         c64_system_tick(c64_);
+        // Sync base class cycle counter with C64's counter
+        total_cycles_ = c64_->total_cycles;
     }
 }
 
@@ -229,10 +231,6 @@ void C64SystemWrapper::render_debug_windows(void* gui_state) {
     // This will use the existing chip debug system
 }
 
-uint64_t C64SystemWrapper::get_total_cycles() const {
-    return c64_ ? c64_->total_cycles : 0;
-}
-
 uint32_t C64SystemWrapper::get_target_fps() const {
     return 50;  // PAL
 }
@@ -242,34 +240,19 @@ void C64SystemWrapper::set_speed_multiplier(float multiplier) {
     cycles_per_frame_ = static_cast<uint32_t>(19705 * multiplier);
 }
 
-float C64SystemWrapper::get_speed_multiplier() const {
-    return speed_multiplier_;
-}
+// Note: get_total_cycles() now provided by base class (returns total_cycles_)
+// However, C64 has its own cycle counter, so we need to sync it
+// For now, we'll update total_cycles_ in tick() method
 
-// Hardware traits interface
-const HardwareTraits& C64SystemWrapper::get_hardware_traits() const {
-    return hardware_traits_;
-}
+// Note: get_speed_multiplier() now provided by base class (returns speed_multiplier_)
 
-const SystemTiming& C64SystemWrapper::get_current_timing() const {
-    return hardware_traits_.timing;
-}
-
-const DisplayTraits& C64SystemWrapper::get_display_traits() const {
-    return hardware_traits_.display;
-}
-
-const AudioTraits& C64SystemWrapper::get_audio_traits() const {
-    return hardware_traits_.audio;
-}
-
-// Configuration interface
-const SystemConfiguration& C64SystemWrapper::get_configuration() const {
-    return system_config_;
-}
+// Note: Hardware trait queries (get_hardware_traits, get_current_timing,
+// get_display_traits, get_audio_traits) now provided by base class
+// Note: get_configuration() now provided by base class (returns config_)
 
 bool C64SystemWrapper::set_configuration(const SystemConfiguration& config) {
-    system_config_ = config;
+    config_ = config;  // Update base class SystemConfiguration
+    // TODO: Map SystemConfiguration changes to c64_config_ when needed
     return true;
 }
 
