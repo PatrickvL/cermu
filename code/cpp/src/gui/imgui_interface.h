@@ -131,6 +131,7 @@ bool gui_init(const char* window_title, int width, int height);
 void gui_cleanup(void);
 void gui_cleanup_state(gui_state_t* gui_state);
 void gui_delay(uint32_t ms);
+void* gui_get_window(void);  // Get SDL_Window pointer
 
 // Main GUI functions
 void gui_render_frame(c64_s* c64, gui_state_t* gui_state, gui_emulation_context_t* emu_context);
