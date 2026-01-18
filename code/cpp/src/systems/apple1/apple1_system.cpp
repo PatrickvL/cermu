@@ -180,6 +180,7 @@ bool Apple1System::initialize() {
     memset(ram_simple_, 0, sizeof(ram_simple_));
     memset(monitor_rom_, 0, sizeof(monitor_rom_));
     memset(basic_rom_, 0, sizeof(basic_rom_));
+    memset(char_rom_, 0, sizeof(char_rom_));
     
     // Create terminal (40 cols x 24 rows, 8x8 characters)
     terminal_ = new TextTerminal(40, 24, 8, 8);
@@ -497,6 +498,31 @@ bool Apple1System::load_roms() {
         printf("Apple1: Failed to load Monitor ROM\n");
     }
     
+    // Load Signetics 2513 Character ROM (512 bytes)
+    const char* char_files[] = {
+        "2513.rom",
+        "signetics2513.bin",
+        "chargen.rom",
+        "342-0036-00.c1",
+        nullptr
+    };
+    
+    bool char_ok = rom_loader_load_from_root(
+        rom_root, char_files,
+        sizeof(char_rom_), char_rom_, sizeof(char_rom_)
+    );
+    
+    if (char_ok && terminal_) {
+        printf("Apple1: Signetics 2513 character ROM loaded\n");
+        // Convert 2513 ROM format to 8x8 font for TextTerminal
+        uint8_t font_8x8[256 * 8];
+        memset(font_8x8, 0, sizeof(font_8x8));
+        convert_2513_to_8x8_font(char_rom_, font_8x8);
+        terminal_->set_font(font_8x8);
+    } else {
+        printf("Apple1: Character ROM not found, using built-in font\n");
+    }
+    
     // Optional: Load Apple 1 BASIC ROM (4KB)
     const char* basic_files[] = {
         "apple1basic.rom",
@@ -518,6 +544,38 @@ bool Apple1System::load_roms() {
     }
     
     return monitor_ok;  // Only monitor ROM is required
+}
+
+// Convert Signetics 2513 character ROM (5x7 in 8 bytes) to 8x8 font
+void Apple1System::convert_2513_to_8x8_font(const uint8_t* char_rom, uint8_t* font_8x8) {
+    // The 2513 ROM contains 64 characters (uppercase ASCII 0x20-0x5F)
+    // Each character is 8 bytes, with 5x7 pixel data in the upper bits
+    
+    for (int ch = 0; ch < 64; ch++) {
+        int src_offset = ch * 8;
+        int dst_offset = (0x20 + ch) * 8;  // Map to ASCII 0x20-0x5F
+        
+        // Copy and shift the 5-bit wide characters to left-align in 8-bit bytes
+        for (int row = 0; row < 7; row++) {
+            // 2513 stores 5-bit data in upper 5 bits, shift left by 1 for better centering
+            font_8x8[dst_offset + row] = (char_rom[src_offset + row] >> 1) & 0xF8;
+        }
+        font_8x8[dst_offset + 7] = 0x00;  // Bottom row blank
+    }
+    
+    // Fill in control characters (0x00-0x1F) with blanks or simple patterns
+    for (int ch = 0; ch < 0x20; ch++) {
+        for (int row = 0; row < 8; row++) {
+            font_8x8[ch * 8 + row] = 0x00;
+        }
+    }
+    
+    // Fill in extended ASCII (0x60-0xFF) by duplicating or leaving blank
+    for (int ch = 0x60; ch < 256; ch++) {
+        for (int row = 0; row < 8; row++) {
+            font_8x8[ch * 8 + row] = 0x00;
+        }
+    }
 }
 
 // ============================================================================
