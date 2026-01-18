@@ -296,7 +296,11 @@ void c64_system_tick(c64_t* c64) {
     // - Copy address/data from previous state, control lines from default_state
     //
     // This ensures each cycle starts fresh with pull-ups HIGH, preventing chips
-    // from overwriting each other's signal assertions.
+    // from overwriting each other's signal assertions. Each chip that needs to assert
+    // a control line (pull it LOW) must do so on EVERY cycle where the condition holds.
+    //
+    // For example: CIA asserts IRQ/NMI lines every cycle while ICR_IRQ is set
+    //             VIC-II asserts BA line every cycle during badlines
     bus_state_t s = c64->bus.default_state;  // Start with pull-up resistors HIGH
     
     // Preserve address and data from previous cycle for continuity

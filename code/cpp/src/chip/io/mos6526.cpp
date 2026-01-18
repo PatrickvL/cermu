@@ -796,17 +796,29 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
     mos6526_t* cia = (mos6526_t*)chip;
     
     // =========================================================================
-    // 1-CYCLE DELAYED INTERRUPT ASSERTION (CIA6526.txt lines 119-120)
+    // CONTINUOUS INTERRUPT LINE ASSERTION MODEL
     // =========================================================================
-    // "When the bit in the Interrupt Mask Register (IMR) is also set, the CIA6526
-    // will raise an interrupt with a delay of one ø2 clock."
+    // Real CIA hardware continuously asserts (pulls LOW) the IRQ/NMI line via an
+    // open-collector output as long as ICR_IRQ is set. This happens on EVERY cycle,
+    // not just once.
     //
-    // Implementation: Apply pending_bus_lines from PREVIOUS cycle at START of this cycle
-    // IRQ/NMI are active-LOW: bit=1 means inactive, bit=0 means asserted
-    // pending_bus_lines contains bits to CLEAR (assert) on the bus
+    // The 1-cycle delay (CIA6526.txt lines 119-120) is handled by the fact that
+    // ICR_IRQ is set at the END of cycle N (in mos6526_check_interrupt_mask),
+    // and then this assertion happens at the START of cycle N+1.
+    //
+    // IRQ/NMI are active-LOW: bit=1 means inactive (HIGH), bit=0 means asserted (LOW)
+    //
+    // CRITICAL: The CIA must assert the interrupt line on EVERY cycle where ICR_IRQ
+    // is set, because the system tick function resets the bus state to default_state
+    // at the start of each cycle. Without continuous assertion, the interrupt line
+    // would only be LOW for one cycle and then return HIGH.
     
-    // Apply pending_bus_lines from PREVIOUS cycle
-    bus_state &= ~cia->pending_bus_lines;
+    // Check if there was a pending interrupt from previous cycle and apply it now
+    // This implements the 1-cycle delay: interrupt events from cycle N-1 are
+    // asserted on the bus starting in cycle N
+    if (cia->pending_bus_lines) {
+        bus_state &= ~cia->pending_bus_lines;
+    }
 
     // When PB6 and PB7 should pulse, clear them (the chance for a read was in previous cycle)
     uint8_t port_b_pulse_clear_mask = 0xFF; // Keep all bits initially
