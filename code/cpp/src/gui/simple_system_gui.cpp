@@ -6,9 +6,9 @@
 #include <cstring>
 
 #ifdef __has_include
-#if __has_include("nfd.h")
-#include "nfd.h"
-#define HAS_NFD 1
+#if __has_include("ImGuiFileDialog.h")
+#include "ImGuiFileDialog.h"
+#define HAS_IMGUIFILEDIALOG 1
 #endif
 #endif
 
@@ -124,6 +124,44 @@ void SimpleSystemGUI::render_frame() {
             system_selection_dialog_.reset();
         }
     }
+    
+#ifdef HAS_IMGUIFILEDIALOG
+    // Display file dialog and handle results
+    if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey")) {
+        if (ImGuiFileDialog::Instance()->IsOk()) {
+            std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
+            printf("User selected file: %s\n", filePathName.c_str());
+            
+            // Save the last selected file path for next time
+            last_file_path_ = filePathName;
+            
+            // Pause emulation while loading
+            bool was_running = emulation_running_ && !emulation_paused_;
+            if (was_running) {
+                pause_emulation();
+            }
+            
+            // Load the file
+            if (system_ && system_->load_file(filePathName.c_str())) {
+                printf("File loaded successfully: %s\n", filePathName.c_str());
+            } else {
+                printf("Failed to load file: %s\n", filePathName.c_str());
+            }
+            
+            // Resume if it was running
+            if (was_running) {
+                start_emulation();
+            }
+        } else {
+            // User canceled - save the current path they were browsing
+            std::string currentPath = ImGuiFileDialog::Instance()->GetCurrentPath();
+            if (!currentPath.empty()) {
+                last_file_path_ = currentPath;
+            }
+        }
+        ImGuiFileDialog::Instance()->Close();
+    }
+#endif
     
     // Render screen (full-screen background)
     if (show_screen_ && system_) {
@@ -524,10 +562,7 @@ void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, 
 void SimpleSystemGUI::load_file_dialog() {
     if (!system_) return;
     
-#ifdef HAS_NFD
-    // Initialize NFD
-    NFD_Init();
-    
+#ifdef HAS_IMGUIFILEDIALOG
     // Build filter from system descriptor
     const auto& desc = system_->get_descriptor();
     std::string filter_str;
@@ -537,44 +572,32 @@ void SimpleSystemGUI::load_file_dialog() {
             // Remove leading dot if present
             const char* ext = desc.supported_extensions[i];
             if (ext[0] == '.') ext++;
+            filter_str += ".";
             filter_str += ext;
         }
-    }
-    
-    nfdchar_t* outPath = nullptr;
-    nfdfilteritem_t filter[1] = {{ desc.short_name, filter_str.c_str() }};
-    nfdresult_t result = NFD_OpenDialog(&outPath, filter, 1, nullptr);
-    
-    if (result == NFD_OKAY) {
-        printf("User selected file: %s\n", outPath);
-        
-        // Pause emulation while loading
-        bool was_running = emulation_running_ && !emulation_paused_;
-        if (was_running) {
-            pause_emulation();
-        }
-        
-        // Load the file
-        if (system_->load_file(outPath)) {
-            printf("File loaded successfully: %s\n", outPath);
-        } else {
-            printf("Failed to load file: %s\n", outPath);
-        }
-        
-        // Resume if it was running
-        if (was_running) {
-            start_emulation();
-        }
-        
-        NFD_FreePath(outPath);
-    } else if (result == NFD_CANCEL) {
-        printf("User cancelled file selection\n");
     } else {
-        printf("NFD Error: %s\n", NFD_GetError());
+        filter_str = ".*"; // All files if no extensions specified
     }
     
-    NFD_Quit();
+    // Extract directory and filename from last selected path
+    std::string default_path = ".";
+    std::string default_filename;
+    
+    if (!last_file_path_.empty()) {
+        // Find the last path separator
+        size_t last_sep = last_file_path_.find_last_of("/\\");
+        if (last_sep != std::string::npos) {
+            default_path = last_file_path_.substr(0, last_sep);
+            default_filename = last_file_path_.substr(last_sep + 1);
+        }
+    }
+    
+    // Open the dialog with default config pointing to last location
+    IGFD::FileDialogConfig config;
+    config.path = default_path;
+    config.fileName = default_filename;
+    ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose File", filter_str.c_str(), config);
 #else
-    printf("NFD (Native File Dialog) not available - file loading disabled\n");
+    printf("ImGuiFileDialog not available - file loading disabled\n");
 #endif
 }

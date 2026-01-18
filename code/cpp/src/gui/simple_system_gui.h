@@ -32,6 +32,9 @@ private:
     // System selection dialog
     SystemSelectionDialog system_selection_dialog_;
     
+    // Last selected file path for file dialog
+    std::string last_file_path_;
+    
 public:
     /**
      * Constructor - takes ownership of the system (can be nullptr to show selection dialog)

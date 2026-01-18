@@ -1756,121 +1756,31 @@ bool gui_reload_roms_from_state(c64_t *c64, const gui_state_t *gui_state) {
 }
 
 // ============================================================================
-// FILE DIALOG IMPLEMENTATION (NFD - Native File Dialog Extended)
+// FILE DIALOG IMPLEMENTATION (ImGuiFileDialog)
+// ============================================================================
+// NOTE: The old gui_open_file_dialog and gui_save_file_dialog functions
+// are deprecated because ImGuiFileDialog works asynchronously.
+// Use ImGuiFileDialog::Instance()->OpenDialog() to open dialogs and check
+// results in Display() as shown in simple_system_gui.cpp
+// These stub functions are provided for backward compatibility only.
 // ============================================================================
 
-#include <nfd.h>
-
-// Open file dialog - returns true if user selected a file
+// Open file dialog - returns false (deprecated)
 bool gui_open_file_dialog(const char* filter_list, const char* default_path,
                           char* out_path, size_t out_path_size) {
-    if (!out_path || out_path_size == 0) {
-        return false;
-    }
-    
-    // Initialize NFD
-    NFD_Init();
-    
-    nfdchar_t* outPath = NULL;
-    nfdfilteritem_t filters[1];
-    
-    // Parse filter list (e.g., "prg,bin")
-    if (filter_list && filter_list[0] != '\0') {
-        filters[0].name = "Supported Files";
-        filters[0].spec = filter_list;
-        
-        nfdresult_t result = NFD_OpenDialog(&outPath, filters, 1, default_path);
-        
-        if (result == NFD_OKAY) {
-            // Copy the selected path to output buffer
-            strncpy(out_path, outPath, out_path_size - 1);
-            out_path[out_path_size - 1] = '\0';
-            NFD_FreePath(outPath);
-            NFD_Quit();
-            return true;
-        } else if (result == NFD_CANCEL) {
-            // User cancelled
-            NFD_Quit();
-            return false;
-        } else {
-            // Error
-            printf("NFD Error: %s\n", NFD_GetError());
-            NFD_Quit();
-            return false;
-        }
-    } else {
-        // No filter - open any file
-        nfdresult_t result = NFD_OpenDialog(&outPath, NULL, 0, default_path);
-        
-        if (result == NFD_OKAY) {
-            strncpy(out_path, outPath, out_path_size - 1);
-            out_path[out_path_size - 1] = '\0';
-            NFD_FreePath(outPath);
-            NFD_Quit();
-            return true;
-        } else if (result == NFD_CANCEL) {
-            NFD_Quit();
-            return false;
-        } else {
-            printf("NFD Error: %s\n", NFD_GetError());
-            NFD_Quit();
-            return false;
-        }
-    }
+    // NOTE: ImGuiFileDialog is asynchronous and doesn't support synchronous blocking calls.
+    // This function is deprecated. Use ImGuiFileDialog::Instance()->OpenDialog() instead.
+    printf("WARNING: gui_open_file_dialog is deprecated. Use ImGuiFileDialog::Instance()->OpenDialog() instead.\n");
+    return false;
 }
 
-// Save file dialog - returns true if user specified a save path
+// Save file dialog - returns false (deprecated)
 bool gui_save_file_dialog(const char* filter_list, const char* default_path,
                           char* out_path, size_t out_path_size) {
-    if (!out_path || out_path_size == 0) {
-        return false;
-    }
-    
-    // Initialize NFD
-    NFD_Init();
-    
-    nfdchar_t* outPath = NULL;
-    nfdfilteritem_t filters[1];
-    
-    // Parse filter list
-    if (filter_list && filter_list[0] != '\0') {
-        filters[0].name = "Supported Files";
-        filters[0].spec = filter_list;
-        
-        nfdresult_t result = NFD_SaveDialog(&outPath, filters, 1, default_path, NULL);
-        
-        if (result == NFD_OKAY) {
-            strncpy(out_path, outPath, out_path_size - 1);
-            out_path[out_path_size - 1] = '\0';
-            NFD_FreePath(outPath);
-            NFD_Quit();
-            return true;
-        } else if (result == NFD_CANCEL) {
-            NFD_Quit();
-            return false;
-        } else {
-            printf("NFD Error: %s\n", NFD_GetError());
-            NFD_Quit();
-            return false;
-        }
-    } else {
-        nfdresult_t result = NFD_SaveDialog(&outPath, NULL, 0, default_path, NULL);
-        
-        if (result == NFD_OKAY) {
-            strncpy(out_path, outPath, out_path_size - 1);
-            out_path[out_path_size - 1] = '\0';
-            NFD_FreePath(outPath);
-            NFD_Quit();
-            return true;
-        } else if (result == NFD_CANCEL) {
-            NFD_Quit();
-            return false;
-        } else {
-            printf("NFD Error: %s\n", NFD_GetError());
-            NFD_Quit();
-            return false;
-        }
-    }
+    // NOTE: ImGuiFileDialog is asynchronous and doesn't support synchronous blocking calls.
+    // This function is deprecated. Use ImGuiFileDialog::Instance()->OpenDialog() instead.
+    printf("WARNING: gui_save_file_dialog is deprecated. Use ImGuiFileDialog::Instance()->OpenDialog() instead.\n");
+    return false;
 }
 
 // ============================================================================
