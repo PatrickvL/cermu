@@ -13,6 +13,7 @@ SystemSelectionDialog::SystemSelectionDialog()
     , selected_region_option_(-1)
     , selected_system_name_(nullptr)
     , selection_confirmed_(false)
+    , search_descriptions_(false)  // By default, only search names
     , region_filter_(0)  // 0 = All Regions
 {
     search_filter_[0] = '\0';
@@ -26,6 +27,7 @@ void SystemSelectionDialog::open() {
     selected_system_name_ = nullptr;
     selection_confirmed_ = false;
     search_filter_[0] = '\0';
+    search_descriptions_ = false;  // Reset to name-only search
     region_filter_ = 0;  // Reset to All Regions
 }
 
@@ -69,15 +71,15 @@ void SystemSelectionDialog::render(bool allow_cancel) {
     
     // Center the dialog
     ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + viewport->Size.x * 0.5f, 
+    ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + viewport->Size.x * 0.5f,
                                      viewport->Pos.y + viewport->Size.y * 0.5f),
                              ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowSize(ImVec2(600, 400), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSize(ImVec2(800, 600), ImGuiCond_Appearing);
+    ImGui::SetNextWindowSizeConstraints(ImVec2(600, 400), ImVec2(FLT_MAX, FLT_MAX));
     
-    // Create modal dialog
+    // Create modal dialog (resizable)
     bool dialog_open = true;
-    if (ImGui::BeginPopupModal("Select System to Emulate", &dialog_open, 
-                               ImGuiWindowFlags_NoResize)) {
+    if (ImGui::BeginPopupModal("Select System to Emulate", &dialog_open, 0)) {
         
         ImGui::Text("Choose a system configuration to emulate:");
         ImGui::Separator();
@@ -87,6 +89,9 @@ void SystemSelectionDialog::render(bool allow_cancel) {
         ImGui::PushItemWidth(300);
         ImGui::InputTextWithHint("##SearchFilter", "Search systems...", search_filter_, sizeof(search_filter_));
         ImGui::PopItemWidth();
+        
+        ImGui::SameLine();
+        ImGui::Checkbox("Search descriptions", &search_descriptions_);
         
         ImGui::SameLine();
         ImGui::PushItemWidth(150);
@@ -115,15 +120,22 @@ void SystemSelectionDialog::render(bool allow_cancel) {
                 
                 // Convert to lowercase for comparison
                 snprintf(name_lower, sizeof(name_lower), "%s", descriptor.name);
-                snprintf(desc_lower, sizeof(desc_lower), "%s", descriptor.description);
                 snprintf(filter_lower, sizeof(filter_lower), "%s", search_filter_);
                 
                 for (char* p = name_lower; *p; p++) *p = tolower(*p);
-                for (char* p = desc_lower; *p; p++) *p = tolower(*p);
                 for (char* p = filter_lower; *p; p++) *p = tolower(*p);
                 
-                if (strstr(name_lower, filter_lower) == nullptr &&
-                    strstr(desc_lower, filter_lower) == nullptr) {
+                bool name_matches = strstr(name_lower, filter_lower) != nullptr;
+                bool desc_matches = false;
+                
+                // Only search descriptions if checkbox is enabled
+                if (search_descriptions_) {
+                    snprintf(desc_lower, sizeof(desc_lower), "%s", descriptor.description);
+                    for (char* p = desc_lower; *p; p++) *p = tolower(*p);
+                    desc_matches = strstr(desc_lower, filter_lower) != nullptr;
+                }
+                
+                if (!name_matches && !desc_matches) {
                     passes_filter = false;
                 }
             }

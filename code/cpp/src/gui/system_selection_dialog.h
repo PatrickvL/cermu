@@ -19,6 +19,7 @@ private:
     
     // Filtering options
     char search_filter_[256];
+    bool search_descriptions_;  // Whether to also search in descriptions
     int region_filter_;  // 0 = all, 1 = NTSC, 2 = PAL, etc.
     
 public:
