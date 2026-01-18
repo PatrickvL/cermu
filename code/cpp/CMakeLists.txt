@@ -7,6 +7,15 @@ project(aiemuc
     LANGUAGES CXX
 )
 
+# Add toml++ library using FetchContent
+include(FetchContent)
+FetchContent_Declare(
+    tomlplusplus
+    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+    GIT_TAG v3.4.0
+)
+FetchContent_MakeAvailable(tomlplusplus)
+
 # CRITICAL: Force all binaries to output to a single consistent location
 # This prevents confusion from multiple binary locations across different build methods
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/bin")
@@ -553,6 +562,11 @@ if(NOT WIN32 AND NOT MSVC)
 endif()
 
 message(STATUS "Test runner c64_test_runner will be built")
+
+# Link toml++ library
+target_link_libraries(toml_test
+    tomlplusplus::tomlplusplus
+)
 
 # Print configuration summary
 message(STATUS "")
