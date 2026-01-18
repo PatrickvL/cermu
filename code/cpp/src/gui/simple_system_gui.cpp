@@ -79,10 +79,10 @@ void SimpleSystemGUI::handle_events() {
             should_quit_ = true;
         }
         
-        // Forward keyboard events to system
-        // NOTE: We forward all keyboard events to the system, not just when ImGui doesn't want them
-        // This is because CHIP-8/games need keyboard input even when menu is visible
-        if (system_) {
+        // Forward keyboard events to system only when ImGui doesn't want input
+        // This prevents conflicts with ImGui dialogs (like file browser) that need keyboard input
+        ImGuiIO& io = ImGui::GetIO();
+        if (system_ && !io.WantCaptureKeyboard) {
             if (event.type == SDL_KEYDOWN) {
                 system_->handle_keyboard_event(event.key.keysym.sym, true);
             } else if (event.type == SDL_KEYUP) {
