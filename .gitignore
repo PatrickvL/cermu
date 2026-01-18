@@ -8,6 +8,7 @@ code/cpp/build/
 code/cpp/build_gui/
 code/cpp/bin/
 code/cpp/tests/build/
+code/cpp/_deps/
 code/csharp/bin/
 code/csharp/obj/
 
