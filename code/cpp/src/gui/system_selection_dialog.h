@@ -12,8 +12,14 @@ class SystemSelectionDialog {
 private:
     bool is_open_;
     int selected_system_index_;
+    int selected_memory_option_;
+    int selected_region_option_;
     const char* selected_system_name_;
     bool selection_confirmed_;
+    
+    // Filtering options
+    char search_filter_[256];
+    int region_filter_;  // 0 = all, 1 = NTSC, 2 = PAL, etc.
     
 public:
     SystemSelectionDialog();
@@ -49,6 +55,16 @@ public:
      * Returns nullptr if no selection was made
      */
     const char* get_selected_system() const { return selected_system_name_; }
+    
+    /**
+     * Get the selected memory option index (-1 if none or not applicable)
+     */
+    int get_selected_memory_option() const { return selected_memory_option_; }
+    
+    /**
+     * Get the selected region option index (-1 if none or not applicable)
+     */
+    int get_selected_region_option() const { return selected_region_option_; }
     
     /**
      * Reset the selection state

@@ -107,8 +107,10 @@ void SimpleSystemGUI::render_frame() {
     // Check if dialog selection was confirmed
     if (system_selection_dialog_.selection_confirmed()) {
         const char* selected = system_selection_dialog_.get_selected_system();
+        int memory_opt = system_selection_dialog_.get_selected_memory_option();
+        int region_opt = system_selection_dialog_.get_selected_region_option();
         if (selected) {
-            switch_system(selected);
+            switch_system(selected, memory_opt, region_opt);
         }
         system_selection_dialog_.reset();
     }
@@ -432,13 +434,13 @@ void SimpleSystemGUI::teardown_current_system() {
     actual_fps_ = 0;
 }
 
-void SimpleSystemGUI::switch_system(const char* system_name) {
+void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, int region_option) {
     if (!system_name) {
         printf("ERROR: switch_system called with null system name\n");
         return;
     }
     
-    printf("Switching to system: %s\n", system_name);
+    printf("Switching to system: %s (memory=%d, region=%d)\n", system_name, memory_option, region_option);
     
     // Teardown current system
     teardown_current_system();
@@ -451,13 +453,31 @@ void SimpleSystemGUI::switch_system(const char* system_name) {
         return;
     }
     
-    printf("Created system: %s (%s)\n", 
+    printf("Created system: %s (%s)\n",
            system_->get_descriptor().name,
            system_->get_descriptor().short_name);
     
+    // Apply configuration if provided
+    if (memory_option >= 0 || region_option >= 0) {
+        SystemConfiguration config;
+        config.memory_option_index = memory_option >= 0 ? memory_option : 0;
+        config.region_option_index = region_option >= 0 ? region_option : 0;
+        
+        if (!system_->set_configuration(config)) {
+            printf("WARNING: Failed to set configuration\n");
+        } else {
+            printf("Applied configuration: memory option %d, region option %d\n",
+                   config.memory_option_index, config.region_option_index);
+        }
+        
+        if (!system_->apply_configuration()) {
+            printf("WARNING: Failed to apply configuration\n");
+        }
+    }
+    
     // Initialize the system
     if (!system_->initialize()) {
-        printf("ERROR: Failed to initialize %s system\n", 
+        printf("ERROR: Failed to initialize %s system\n",
                system_->get_descriptor().name);
         system_.reset();
         return;
