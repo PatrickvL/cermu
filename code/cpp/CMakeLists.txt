@@ -256,8 +256,7 @@ set(SYSTEM_SOURCES
     src/systems/vic20/vic20_system.cpp
     
     # NES system (clean EmulatedSystem implementation)
-    # NOTE: Disabled due to missing PPU::get_pattern_table() implementation
-    # src/systems/nes/nes_system.cpp
+    src/systems/nes/nes_system.cpp
     
     # C16/Plus4 system (clean EmulatedSystem implementation with stubs)
     src/systems/c16/c16_system.cpp

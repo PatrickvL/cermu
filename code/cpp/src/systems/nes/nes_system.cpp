@@ -573,9 +573,59 @@ void PPU::load_sprite_shifters() {
         internal.sprite_shifter_pattern_hi[i] = sprite_pattern_bits_hi;
     }
 }
-
 void PPU::connect_cartridge(std::shared_ptr<Cartridge> cartridge) {
     cart = cartridge;
+}
+
+const std::vector<uint32_t>& PPU::get_pattern_table(int i, uint8_t palette) const {
+    // Pattern tables are used for debugging - they visualize the CHR ROM/RAM tiles
+    // Each pattern table is 128x128 pixels (16x16 tiles of 8x8 pixels each)
+    
+    // Return the appropriate pattern table buffer
+    if (i < 0 || i > 1) {
+        i = 0;  // Default to pattern table 0
+    }
+    
+    // We need to render the pattern table - but this is const, so we need to
+    // cast away constness for the pattern_table member. This is safe because
+    // we're only updating a cache that doesn't affect the logical state.
+    auto* non_const_this = const_cast<PPU*>(this);
+    
+    // Render the pattern table to the buffer
+    for (uint16_t tile_y = 0; tile_y < 16; tile_y++) {
+        for (uint16_t tile_x = 0; tile_x < 16; tile_x++) {
+            uint16_t tile_offset = tile_y * 256 + tile_x * 16;
+            
+            // Each tile is 8x8 pixels
+            for (uint16_t row = 0; row < 8; row++) {
+                // Read the low and high bitplanes for this row
+                uint16_t addr = (i * 0x1000) + tile_offset + row;
+                uint8_t tile_lsb = non_const_this->ppu_read(addr, true);
+                uint8_t tile_msb = non_const_this->ppu_read(addr + 8, true);
+                
+                // Render each pixel in the row
+                for (uint16_t col = 0; col < 8; col++) {
+                    // Get the 2-bit pixel value
+                    uint8_t pixel = ((tile_lsb & 0x01) | ((tile_msb & 0x01) << 1));
+                    tile_lsb >>= 1;
+                    tile_msb >>= 1;
+                    
+                    // Get the color from the selected palette using the static palette array
+                    uint8_t palette_index = non_const_this->ppu_read(0x3F00 + (palette << 2) + pixel, true) & 0x3F;
+                    uint32_t color = nes_palette[palette_index];
+                    
+                    // Calculate screen position
+                    uint16_t x = tile_x * 8 + (7 - col);
+                    uint16_t y = tile_y * 8 + row;
+                    
+                    // Write to pattern table buffer
+                    non_const_this->pattern_table[i][y * 128 + x] = color;
+                }
+            }
+        }
+    }
+    
+    return pattern_table[i];
 }
 
 // ============================================================================
