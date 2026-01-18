@@ -287,23 +287,32 @@ void C64SystemWrapper::render_system_menu_items() {
 }
 
 void C64SystemWrapper::render_debug_windows(void* gui_state) {
-    // Forward debug window rendering to the old C64 GUI code
-    // Use the persistent gui_state_ for rendering C64-specific dialogs
+    if (!gui_state_ || !c64_) return;
     
-    if (gui_state_ && c64_) {
-        gui_state_t* state = static_cast<gui_state_t*>(gui_state_);
-        
-        // Render test binary dialog if needed
-        if (state->show_test_binary_dialog) {
-            // TODO: Need emu_context for test binary loading
-            // For now, just render the dialog without loading functionality
-            gui_render_test_binary_dialog(c64_, state, nullptr);
-        }
-        
-        // NOTE: Chip debug windows are handled by the old GUI's render_frame function
-        // which iterates through the chip system and calls render_debug_window callbacks.
-        // In the future unified C64System class, this will be integrated more directly.
+    gui_state_t* state = static_cast<gui_state_t*>(gui_state_);
+    
+    // Render test binary dialog if needed
+    if (state->show_test_binary_dialog) {
+        gui_render_test_binary_dialog(c64_, state, nullptr);
     }
+    
+#ifdef IMGUI_VERSION
+    // Iterate through all chips and render their debug windows
+    system_8bit_t* sys = &c64_->system;
+    for (uint8_t chip_id = 0; chip_id < sys->chip_count; chip_id++) {
+        chip_entry_t* entry = &sys->chips[chip_id];
+        
+        if (state->show_chip_debug[chip_id] &&
+            entry->desc &&
+            entry->desc->render_debug_window) {
+            
+            entry->desc->render_debug_window(
+                entry->chip,
+                &state->show_chip_debug[chip_id]
+            );
+        }
+    }
+#endif
 }
 
 uint32_t C64SystemWrapper::get_target_fps() const {
