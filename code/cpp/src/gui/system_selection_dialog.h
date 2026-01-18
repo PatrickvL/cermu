@@ -1,9 +1,12 @@
 #ifndef SYSTEM_SELECTION_DIALOG_H
 #define SYSTEM_SELECTION_DIALOG_H
 
+#include <map>
+#include <string>
+
 /**
  * SystemSelectionDialog - Modal dialog for selecting emulated systems
- * 
+ *
  * This dialog displays all registered systems from the SystemRegistry and
  * allows the user to select one. It's designed to be used within an existing
  * ImGui context (e.g., in SimpleSystemGUI).
@@ -16,6 +19,9 @@ private:
     int selected_region_option_;
     const char* selected_system_name_;
     bool selection_confirmed_;
+    
+    // Selected peripherals (map of peripheral ID -> enabled state)
+    std::map<std::string, bool> selected_peripherals_;
     
     // Filtering options
     char search_filter_[256];
@@ -66,6 +72,11 @@ public:
      * Get the selected region option index (-1 if none or not applicable)
      */
     int get_selected_region_option() const { return selected_region_option_; }
+    
+    /**
+     * Get the selected peripherals map (peripheral ID -> enabled state)
+     */
+    const std::map<std::string, bool>& get_selected_peripherals() const { return selected_peripherals_; }
     
     /**
      * Reset the selection state

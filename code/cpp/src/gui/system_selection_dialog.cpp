@@ -29,6 +29,7 @@ void SystemSelectionDialog::open() {
     search_filter_[0] = '\0';
     search_descriptions_ = false;  // Reset to name-only search
     region_filter_ = 0;  // Reset to All Regions
+    selected_peripherals_.clear();  // Clear peripheral selections
 }
 
 void SystemSelectionDialog::close() {
@@ -41,6 +42,7 @@ void SystemSelectionDialog::reset() {
     selected_region_option_ = -1;
     selected_system_name_ = nullptr;
     selection_confirmed_ = false;
+    selected_peripherals_.clear();  // Clear peripheral selections
 }
 
 void SystemSelectionDialog::render(bool allow_cancel) {
@@ -172,6 +174,37 @@ void SystemSelectionDialog::render(bool allow_cancel) {
                 // System with configurations - use tree node
                 ImGuiTreeNodeFlags node_flags = ImGuiTreeNodeFlags_SpanAvailWidth;
                 bool node_open = ImGui::TreeNodeEx(descriptor.name, node_flags);
+                // Clicking the tree node header itself selects the system with defaults
+                if (ImGui::IsItemClicked() && !node_open) {
+                    selected_system_index_ = (int)i;
+                    selected_system_name_ = descriptor.short_name;
+                    // Set default configurations
+                    if (has_memory_options) {
+                        for (size_t m = 0; m < hardware_traits.memory_options.size(); m++) {
+                            if (hardware_traits.memory_options[m].is_default) {
+                                selected_memory_option_ = (int)m;
+                                break;
+                            }
+                        }
+                    } else {
+                        selected_memory_option_ = -1;
+                    }
+                    if (has_region_options) {
+                        for (size_t r = 0; r < hardware_traits.region_options.size(); r++) {
+                            if (hardware_traits.region_options[r].is_default) {
+                                selected_region_option_ = (int)r;
+                                break;
+                            }
+                        }
+                    } else {
+                        selected_region_option_ = -1;
+                    }
+                    // Initialize peripheral map with defaults
+                    selected_peripherals_.clear();
+                    for (const auto& periph_opt : hardware_traits.peripheral_options) {
+                        selected_peripherals_[periph_opt.id] = periph_opt.enabled_by_default;
+                    }
+                }
                 
                 // Show description as tooltip on system name
                 if (ImGui::IsItemHovered()) {
@@ -260,6 +293,66 @@ void SystemSelectionDialog::render(bool allow_cancel) {
                                 selection_confirmed_ = true;
                                 close();
                                 ImGui::CloseCurrentPopup();
+                            }
+                        }
+                        ImGui::Unindent();
+                    }
+                    
+                    // Show peripheral options if available
+                    bool has_peripheral_options = !hardware_traits.peripheral_options.empty();
+                    if (has_peripheral_options) {
+                        if (has_memory_options || has_region_options) ImGui::Spacing();
+                        ImGui::TextDisabled("Peripherals:");
+                        ImGui::Indent();
+                        
+                        // Initialize peripheral map if this system is being selected for the first time
+                        if (selected_system_index_ == (int)i && selected_peripherals_.empty()) {
+                            for (const auto& periph_opt : hardware_traits.peripheral_options) {
+                                selected_peripherals_[periph_opt.id] = periph_opt.enabled_by_default;
+                            }
+                        }
+                        
+                        for (size_t periph_idx = 0; periph_idx < hardware_traits.peripheral_options.size(); periph_idx++) {
+                            const auto& periph_opt = hardware_traits.peripheral_options[periph_idx];
+                            
+                            // Get current checkbox state
+                            bool is_enabled = selected_peripherals_[periph_opt.id];
+                            
+                            char label[256];
+                            snprintf(label, sizeof(label), "%s##periph_%zu", periph_opt.name, periph_idx);
+                            
+                            if (ImGui::Checkbox(label, &is_enabled)) {
+                                // Ensure system is selected when toggling peripherals
+                                if (selected_system_index_ != (int)i) {
+                                    selected_system_index_ = (int)i;
+                                    selected_system_name_ = descriptor.short_name;
+                                    // Set default memory and region if not selected
+                                    if (selected_memory_option_ < 0 && has_memory_options) {
+                                        for (size_t m = 0; m < hardware_traits.memory_options.size(); m++) {
+                                            if (hardware_traits.memory_options[m].is_default) {
+                                                selected_memory_option_ = (int)m;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if (selected_region_option_ < 0 && has_region_options) {
+                                        for (size_t r = 0; r < hardware_traits.region_options.size(); r++) {
+                                            if (hardware_traits.region_options[r].is_default) {
+                                                selected_region_option_ = (int)r;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                // Update peripheral state
+                                selected_peripherals_[periph_opt.id] = is_enabled;
+                            }
+                            
+                            // Show description as tooltip
+                            if (ImGui::IsItemHovered() && periph_opt.description) {
+                                ImGui::BeginTooltip();
+                                ImGui::Text("%s", periph_opt.description);
+                                ImGui::EndTooltip();
                             }
                         }
                         ImGui::Unindent();
