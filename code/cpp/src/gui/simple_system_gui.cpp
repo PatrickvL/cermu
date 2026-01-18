@@ -110,8 +110,9 @@ void SimpleSystemGUI::render_frame() {
             const char* selected = system_selection_dialog_.get_selected_system();
             int memory_opt = system_selection_dialog_.get_selected_memory_option();
             int region_opt = system_selection_dialog_.get_selected_region_option();
+            const auto& peripherals = system_selection_dialog_.get_selected_peripherals();
             if (selected) {
-                switch_system(selected, memory_opt, region_opt);
+                switch_system(selected, memory_opt, region_opt, &peripherals);
             }
             system_selection_dialog_.reset();
         }
@@ -435,8 +436,7 @@ void SimpleSystemGUI::teardown_current_system() {
     total_frames_ = 0;
     actual_fps_ = 0;
 }
-
-void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, int region_option) {
+void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, int region_option, const std::map<std::string, bool>* peripherals) {
     if (!system_name) {
         printf("ERROR: switch_system called with null system name\n");
         return;
@@ -460,10 +460,16 @@ void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, 
            system_->get_descriptor().short_name);
     
     // Apply configuration if provided
-    if (memory_option >= 0 || region_option >= 0) {
+    if (memory_option >= 0 || region_option >= 0 || peripherals) {
         SystemConfiguration config;
         config.memory_option_index = memory_option >= 0 ? memory_option : 0;
         config.region_option_index = region_option >= 0 ? region_option : 0;
+        
+        // Apply peripheral selections if provided
+        if (peripherals) {
+            config.enabled_peripherals = *peripherals;
+            printf("Applied %zu peripheral selections\n", peripherals->size());
+        }
         
         if (!system_->set_configuration(config)) {
             printf("WARNING: Failed to set configuration\n");
@@ -475,6 +481,7 @@ void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, 
         if (!system_->apply_configuration()) {
             printf("WARNING: Failed to apply configuration\n");
         }
+    }
     }
     
     // Initialize the system

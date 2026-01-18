@@ -61,7 +61,7 @@ public:
     void step_emulation();
     
     // System switching
-    void switch_system(const char* system_name, int memory_option = -1, int region_option = -1);
+    void switch_system(const char* system_name, int memory_option = -1, int region_option = -1, const std::map<std::string, bool>* peripherals = nullptr);
     
 private:
     // Helper functions
