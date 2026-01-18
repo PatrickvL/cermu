@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
         }
     }
     
-    std::unique_ptr<IEmulatedSystem> system;
+    std::unique_ptr<EmulatedSystem> system;
     
     // If file was specified, try to auto-detect system
     if (file_path != nullptr) {
