@@ -7,15 +7,15 @@
 #include <memory>
 
 /**
- * SimpleSystemGUI - Generic GUI for any IEmulatedSystem
- * 
+ * SimpleSystemGUI - Generic GUI for any EmulatedSystem
+ *
  * This class provides a simple GUI that works with any system implementing
- * the IEmulatedSystem interface. It handles display scaling, keyboard input,
+ * the EmulatedSystem interface. It handles display scaling, keyboard input,
  * and basic menus. Systems can extend menus via their callback methods.
  */
 class SimpleSystemGUI : public GenericEmulatorGUI {
 private:
-    std::unique_ptr<IEmulatedSystem> system_;
+    std::unique_ptr<EmulatedSystem> system_;
     uint32_t* framebuffer_;
     int fb_width_;
     int fb_height_;
@@ -36,7 +36,7 @@ public:
     /**
      * Constructor - takes ownership of the system (can be nullptr to show selection dialog)
      */
-    explicit SimpleSystemGUI(std::unique_ptr<IEmulatedSystem> system);
+    explicit SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system);
     virtual ~SimpleSystemGUI();
     
     // Override init to allocate framebuffer after OpenGL context is created
@@ -62,6 +62,9 @@ public:
     
     // System switching
     void switch_system(const char* system_name, int memory_option = -1, int region_option = -1, const std::map<std::string, bool>* peripherals = nullptr);
+    
+    // File loading
+    void load_file_dialog();
     
 private:
     // Helper functions

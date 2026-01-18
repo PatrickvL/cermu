@@ -249,8 +249,5 @@ public:
     virtual void set_speed_multiplier(float multiplier) = 0;
 };
 
-// Backwards compatibility alias (will be removed after migration)
-using IEmulatedSystem = EmulatedSystem;
-
 // Include SystemRegistry (moved to separate file)
 #include "system_registry.h"

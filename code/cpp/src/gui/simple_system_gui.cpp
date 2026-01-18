@@ -5,11 +5,18 @@
 #include <stdio.h>
 #include <cstring>
 
+#ifdef __has_include
+#if __has_include("nfd.h")
+#include "nfd.h"
+#define HAS_NFD 1
+#endif
+#endif
+
 // ============================================================================
 // Constructor / Destructor
 // ============================================================================
 
-SimpleSystemGUI::SimpleSystemGUI(std::unique_ptr<IEmulatedSystem> system)
+SimpleSystemGUI::SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system)
     : GenericEmulatorGUI()
     , system_(std::move(system))
     , framebuffer_(nullptr)
@@ -158,6 +165,15 @@ void SimpleSystemGUI::render_menu_bar() {
         }
         
         ImGui::Separator();
+        // Load File option (only if system is loaded)
+        ImGui::BeginDisabled(!system_);
+        if (ImGui::MenuItem("Load File...")) {
+            load_file_dialog();
+        }
+        ImGui::EndDisabled();
+        
+        ImGui::Separator();
+        
         render_file_menu_generic();
         ImGui::EndMenu();
     }
@@ -499,4 +515,66 @@ void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, 
     emulation_paused_ = false;
     
     printf("Successfully switched to %s\n", system_->get_descriptor().name);
+}
+
+// ============================================================================
+// File Loading
+// ============================================================================
+
+void SimpleSystemGUI::load_file_dialog() {
+    if (!system_) return;
+    
+#ifdef HAS_NFD
+    // Initialize NFD
+    NFD_Init();
+    
+    // Build filter from system descriptor
+    const auto& desc = system_->get_descriptor();
+    std::string filter_str;
+    if (desc.supported_extensions && desc.supported_extensions[0]) {
+        for (int i = 0; desc.supported_extensions[i] != nullptr; i++) {
+            if (i > 0) filter_str += ",";
+            // Remove leading dot if present
+            const char* ext = desc.supported_extensions[i];
+            if (ext[0] == '.') ext++;
+            filter_str += ext;
+        }
+    }
+    
+    nfdchar_t* outPath = nullptr;
+    nfdfilteritem_t filter[1] = {{ desc.short_name, filter_str.c_str() }};
+    nfdresult_t result = NFD_OpenDialog(&outPath, filter, 1, nullptr);
+    
+    if (result == NFD_OKAY) {
+        printf("User selected file: %s\n", outPath);
+        
+        // Pause emulation while loading
+        bool was_running = emulation_running_ && !emulation_paused_;
+        if (was_running) {
+            pause_emulation();
+        }
+        
+        // Load the file
+        if (system_->load_file(outPath)) {
+            printf("File loaded successfully: %s\n", outPath);
+        } else {
+            printf("Failed to load file: %s\n", outPath);
+        }
+        
+        // Resume if it was running
+        if (was_running) {
+            start_emulation();
+        }
+        
+        NFD_FreePath(outPath);
+    } else if (result == NFD_CANCEL) {
+        printf("User cancelled file selection\n");
+    } else {
+        printf("NFD Error: %s\n", NFD_GetError());
+    }
+    
+    NFD_Quit();
+#else
+    printf("NFD (Native File Dialog) not available - file loading disabled\n");
+#endif
 }
