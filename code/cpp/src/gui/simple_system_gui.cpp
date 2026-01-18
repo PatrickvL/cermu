@@ -141,16 +141,26 @@ void SimpleSystemGUI::render_frame() {
                 pause_emulation();
             }
             
+            // Reset system before loading file for clean state
+            if (system_) {
+                system_->reset();
+            }
+            
             // Load the file
             if (system_ && system_->load_file(filePathName.c_str())) {
                 printf("File loaded successfully: %s\n", filePathName.c_str());
+                
+                // Ensure emulation is running after successful file load
+                if (!emulation_running_ || emulation_paused_) {
+                    start_emulation();
+                }
             } else {
                 printf("Failed to load file: %s\n", filePathName.c_str());
-            }
-            
-            // Resume if it was running
-            if (was_running) {
-                start_emulation();
+                
+                // Resume previous state if load failed
+                if (was_running) {
+                    start_emulation();
+                }
             }
         } else {
             // User canceled - save the current path they were browsing

@@ -1,6 +1,7 @@
 #include "c64_system_wrapper.h"
 #include "c64_test_loader.h"
 #include "../../chip/input/commodore_keyboard.h"
+#include "../../chip/cpu/fam65xx/mos6510.h"
 #include "../../gui/imgui_interface.h"
 #include <cstring>
 #include <cstdio>
@@ -222,13 +223,15 @@ bool C64SystemWrapper::load_file(const char* filepath) {
             printf("C64: Failed to load PRG file: %s\n", filepath);
             return false;
         }
-        
         printf("C64: Loaded PRG file: %s\n", filepath);
         printf("  Load address: $%04X\n", load_address);
         if (sys_address != 0) {
             printf("  SYS address: $%04X\n", sys_address);
-            // Set PC to sys address if available
-            // This requires access to the CPU, which we'll need to add
+            // Set PC to sys address to auto-run the program
+            if (c64_->mos6510) {
+                mos6510_set_pc((mos6510_t*)c64_->mos6510, sys_address);
+                printf("  PC set to $%04X - program will auto-run\n", sys_address);
+            }
         }
         
         return true;
