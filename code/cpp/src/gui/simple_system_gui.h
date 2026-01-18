@@ -2,6 +2,7 @@
 #define SIMPLE_SYSTEM_GUI_H
 
 #include "generic_gui.h"
+#include "system_selection_dialog.h"
 #include "../core/emulated_system.h"
 #include <memory>
 
@@ -28,9 +29,12 @@ private:
     uint32_t last_fps_time_;
     uint32_t fps_counter_;
     
+    // System selection dialog
+    SystemSelectionDialog system_selection_dialog_;
+    
 public:
     /**
-     * Constructor - takes ownership of the system
+     * Constructor - takes ownership of the system (can be nullptr to show selection dialog)
      */
     explicit SimpleSystemGUI(std::unique_ptr<IEmulatedSystem> system);
     virtual ~SimpleSystemGUI();
@@ -56,11 +60,15 @@ public:
     void reset_emulation();
     void step_emulation();
     
+    // System switching
+    void switch_system(const char* system_name);
+    
 private:
     // Helper functions
     void update_fps();
     void allocate_framebuffer();
     void free_framebuffer();
+    void teardown_current_system();
 };
 
 #endif // SIMPLE_SYSTEM_GUI_H

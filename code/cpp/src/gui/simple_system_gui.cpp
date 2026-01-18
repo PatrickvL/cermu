@@ -15,30 +15,28 @@ SimpleSystemGUI::SimpleSystemGUI(std::unique_ptr<IEmulatedSystem> system)
     , framebuffer_(nullptr)
     , fb_width_(0)
     , fb_height_(0)
-    , emulation_running_(true)
+    , emulation_running_(system_ != nullptr)  // Only run if we have a system
     , emulation_paused_(false)
     , speed_multiplier_(1.0f)
     , total_frames_(0)
     , actual_fps_(0)
     , last_fps_time_(0)
     , fps_counter_(0)
+    , system_selection_dialog_()
 {
-    if (!system_) {
-        printf("ERROR: SimpleSystemGUI created with null system\n");
-        return;
-    }
-    
-    // Note: System should already be initialized and loaded before passing to GUI
-    // Framebuffer allocation happens after init() when OpenGL context exists
-    
-    printf("SimpleSystemGUI created for system: %s\n",
-           system_->get_descriptor().name);
-}
-SimpleSystemGUI::~SimpleSystemGUI() {
     if (system_) {
-        system_->shutdown();
+        // Note: System should already be initialized and loaded before passing to GUI
+        // Framebuffer allocation happens after init() when OpenGL context exists
+        printf("SimpleSystemGUI created for system: %s\n",
+               system_->get_descriptor().name);
+    } else {
+        printf("SimpleSystemGUI created without system - selection dialog will be shown\n");
+        system_selection_dialog_.open();  // Open dialog if no system provided
     }
-    free_framebuffer();
+}
+
+SimpleSystemGUI::~SimpleSystemGUI() {
+    teardown_current_system();
 }
 
 // ============================================================================
@@ -103,8 +101,20 @@ void SimpleSystemGUI::update_frame() {
 void SimpleSystemGUI::render_frame() {
     begin_frame();
     
+    // Render system selection dialog if needed (modal, blocks everything else)
+    system_selection_dialog_.render(!system_);  // Don't allow cancel if no system loaded
+    
+    // Check if dialog selection was confirmed
+    if (system_selection_dialog_.selection_confirmed()) {
+        const char* selected = system_selection_dialog_.get_selected_system();
+        if (selected) {
+            switch_system(selected);
+        }
+        system_selection_dialog_.reset();
+    }
+    
     // Render screen (full-screen background)
-    if (show_screen_) {
+    if (show_screen_ && system_) {
         render_screen();
     }
     
@@ -137,13 +147,21 @@ void SimpleSystemGUI::render_menu_bar() {
     
     // File menu
     if (ImGui::BeginMenu("File")) {
+        // Switch System option
+        if (ImGui::MenuItem("Switch System...")) {
+            system_selection_dialog_.open();
+        }
+        
+        ImGui::Separator();
         render_file_menu_generic();
         ImGui::EndMenu();
     }
     
     // System menu
     if (ImGui::BeginMenu("System")) {
-        // Generic system controls
+        // Generic system controls (only if system is loaded)
+        ImGui::BeginDisabled(!system_);
+        
         if (ImGui::MenuItem("Reset")) {
             reset_emulation();
         }
@@ -165,13 +183,16 @@ void SimpleSystemGUI::render_menu_bar() {
         
         // Speed control
         if (ImGui::SliderFloat("Speed", &speed_multiplier_, 0.1f, 5.0f, "%.1fx")) {
-            system_->set_speed_multiplier(speed_multiplier_);
+            if (system_) {
+                system_->set_speed_multiplier(speed_multiplier_);
+            }
         }
         
-        ImGui::Separator();
+        ImGui::EndDisabled();
         
-        // System-specific menu items
+        // System-specific menu items (if system is loaded)
         if (system_) {
+            ImGui::Separator();
             system_->render_system_menu_items();
         }
         
@@ -200,13 +221,18 @@ void SimpleSystemGUI::render_menu_bar() {
     
     // Status bar on the right
     if (system_) {
-        ImGui::SameLine(ImGui::GetWindowWidth() - 350);
+        ImGui::SameLine(ImGui::GetWindowWidth() - 450);
+        ImGui::Text("%s", system_->get_descriptor().short_name);
+        ImGui::SameLine();
         ImGui::Text("Cycles: %llu", (unsigned long long)system_->get_total_cycles());
         ImGui::SameLine();
         ImGui::Text("FPS: %u", actual_fps_);
         ImGui::SameLine();
         ImGui::Text("%s", emulation_paused_ ? "Paused" : 
                          emulation_running_ ? "Running" : "Stopped");
+    } else {
+        ImGui::SameLine(ImGui::GetWindowWidth() - 200);
+        ImGui::Text("No system loaded");
     }
     
     ImGui::EndMainMenuBar();
@@ -383,4 +409,66 @@ void SimpleSystemGUI::free_framebuffer() {
         glDeleteTextures(1, &screen_texture_id_);
         screen_texture_id_ = 0;
     }
+}
+
+// ============================================================================
+// System Switching
+// ============================================================================
+
+void SimpleSystemGUI::teardown_current_system() {
+    if (system_) {
+        printf("Tearing down current system: %s\n", system_->get_descriptor().name);
+        system_->shutdown();
+        system_.reset();
+    }
+    
+    // Free framebuffer
+    free_framebuffer();
+    
+    // Reset emulation state
+    emulation_running_ = false;
+    emulation_paused_ = false;
+    total_frames_ = 0;
+    actual_fps_ = 0;
+}
+
+void SimpleSystemGUI::switch_system(const char* system_name) {
+    if (!system_name) {
+        printf("ERROR: switch_system called with null system name\n");
+        return;
+    }
+    
+    printf("Switching to system: %s\n", system_name);
+    
+    // Teardown current system
+    teardown_current_system();
+    
+    // Create new system
+    system_ = SystemRegistry::instance().create_system_by_name(system_name);
+    
+    if (!system_) {
+        printf("ERROR: Failed to create system: %s\n", system_name);
+        return;
+    }
+    
+    printf("Created system: %s (%s)\n", 
+           system_->get_descriptor().name,
+           system_->get_descriptor().short_name);
+    
+    // Initialize the system
+    if (!system_->initialize()) {
+        printf("ERROR: Failed to initialize %s system\n", 
+               system_->get_descriptor().name);
+        system_.reset();
+        return;
+    }
+    
+    // Allocate framebuffer for new system
+    allocate_framebuffer();
+    
+    // Start emulation
+    emulation_running_ = true;
+    emulation_paused_ = false;
+    
+    printf("Successfully switched to %s\n", system_->get_descriptor().name);
 }
