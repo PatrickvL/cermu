@@ -87,3 +87,11 @@ std::unique_ptr<EmulatedSystem> SystemRegistry::create_system_by_name(const char
     
     return nullptr;
 }
+
+std::vector<SystemDescriptor> SystemRegistry::get_all_descriptors() const {
+    std::vector<SystemDescriptor> descriptors;
+    for (const auto& pair : systems_) {
+        descriptors.push_back(pair.first);
+    }
+    return descriptors;
+}
