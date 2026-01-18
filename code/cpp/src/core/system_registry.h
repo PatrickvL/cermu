@@ -31,11 +31,19 @@ public:
         return systems_;
     }
     
+    // Get all system descriptors (for listing available systems)
+    std::vector<SystemDescriptor> get_all_descriptors() const;
+    
     // Find best system for a file (returns nullptr if no suitable system found)
     std::unique_ptr<EmulatedSystem> create_system_for_file(const char* filepath);
     
     // Create a specific system by short name (e.g., "C64", "CHIP8")
     std::unique_ptr<EmulatedSystem> create_system_by_name(const char* short_name);
+    
+    // Alias for consistency
+    std::unique_ptr<EmulatedSystem> create_system(const char* short_name) {
+        return create_system_by_name(short_name);
+    }
     
 private:
     SystemRegistry() = default;
