@@ -72,6 +72,7 @@ private:
     uint8_t ram_simple_[65536];      // Up to 64KB RAM (typically 8KB at $0000-$1FFF)
     uint8_t monitor_rom_[256];       // Woz Monitor ROM at $FF00-$FFFF
     uint8_t basic_rom_[4096];        // Optional Apple 1 BASIC (4KB at various addresses)
+    uint8_t char_rom_[512];          // Signetics 2513 character ROM (64 chars x 8 bytes)
     
     // System state
     uint32_t cycles_per_frame_;
@@ -95,4 +96,5 @@ private:
     
     // Display helpers
     void display_char(uint8_t ch);
+    void convert_2513_to_8x8_font(const uint8_t* char_rom, uint8_t* font_8x8);
 };
