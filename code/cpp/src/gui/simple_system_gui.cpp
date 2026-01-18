@@ -482,7 +482,6 @@ void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, 
             printf("WARNING: Failed to apply configuration\n");
         }
     }
-    }
     
     // Initialize the system
     if (!system_->initialize()) {
