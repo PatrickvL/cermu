@@ -122,10 +122,15 @@ Apple1System::Apple1System()
     hardware_traits_ = create_apple1_hardware_traits();
     current_palette_ = hardware_traits_.display.default_palette;
     
-    // Initialize PIA
+    // Initialize PIA with callbacks
     pia6820_init(&pia_);
     pia_.user_data = this;
-    pia_.on_port_b_write = pia_display_write;
+    pia_.on_port_a_read = pia_keyboard_read;  // Port A: keyboard input
+    pia_.on_port_b_write = pia_display_write; // Port B: display output
+    
+    // Configure PIA direction: Port A = input, Port B = output (Apple 1 convention)
+    pia_.port_a_direction = 0x00;  // All inputs (keyboard)
+    pia_.port_b_direction = 0xFF;  // All outputs (display)
 }
 
 Apple1System::~Apple1System() {
@@ -216,10 +221,13 @@ bool Apple1System::initialize() {
     // Reset CPU to initialize state
     mos6502_reset(cpu_, 0);
     
-    // Reset PIA
+    // Reset PIA with callbacks
     pia6820_init(&pia_);
     pia_.user_data = this;
+    pia_.on_port_a_read = pia_keyboard_read;
     pia_.on_port_b_write = pia_display_write;
+    pia_.port_a_direction = 0x00;  // Port A = input (keyboard)
+    pia_.port_b_direction = 0xFF;  // Port B = output (display)
     
     printf("Apple1: System initialized (RAM: %dKB)\n", ram_size_ / 1024);
     return true;
@@ -314,13 +322,13 @@ void Apple1System::handle_keyboard_event(int key, bool pressed) {
     
     // Apple 1 uses 7-bit ASCII
     if (key >= 0x20 && key < 0x7F) {
-        pia6820_set_keyboard_data(&pia_, key & 0x7F);
+        set_keyboard_data(key & 0x7F);
     } else if (key == '\r' || key == '\n') {
-        pia6820_set_keyboard_data(&pia_, 0x0D);  // Carriage return
+        set_keyboard_data(0x0D);  // Carriage return
     } else if (key == '\b' || key == 127) {
-        pia6820_set_keyboard_data(&pia_, 0x08);  // Backspace
+        set_keyboard_data(0x08);  // Backspace
     } else if (key == 27) {
-        pia6820_set_keyboard_data(&pia_, 0x1B);  // Escape
+        set_keyboard_data(0x1B);  // Escape
     }
 }
 
@@ -430,7 +438,22 @@ void Apple1System::tick_cpu() {
     }
 }
 
-// PIA display write callback
+// PIA keyboard read callback (Port A)
+uint8_t Apple1System::pia_keyboard_read(void* user_data) {
+    Apple1System* sys = static_cast<Apple1System*>(user_data);
+    
+    // Return current keyboard state
+    // Note: The Apple 1 keyboard hardware clears bit 7 (strobe) when Port A is read
+    // This is NOT PIA behavior - it's the external keyboard circuit's behavior
+    uint8_t data = sys->pia_.port_a_data;
+    
+    // Simulate Apple 1 keyboard circuit: clear strobe on read
+    sys->clear_keyboard_strobe();
+    
+    return data;
+}
+
+// PIA display write callback (Port B)
 void Apple1System::pia_display_write(void* user_data, uint8_t data) {
     Apple1System* sys = static_cast<Apple1System*>(user_data);
     sys->display_char(data & 0x7F);  // 7-bit ASCII
@@ -475,6 +498,27 @@ void Apple1System::display_char(uint8_t ch) {
     
     // Update cursor position
     terminal_->set_cursor(cursor_col_, cursor_row_);
+}
+
+// Apple 1 keyboard helpers (system-specific PIA Port A usage)
+void Apple1System::set_keyboard_data(uint8_t key_code) {
+    // Apple 1 convention: Set bit 7 (strobe) and key code in bits 0-6
+    pia6820_set_port_a_input(&pia_, 0x80 | (key_code & 0x7F));
+    
+    // Trigger CA1 to signal key press (for interrupt-driven input)
+    pia6820_set_ca1(&pia_, true);
+}
+
+bool Apple1System::keyboard_ready() const {
+    // Check if bit 7 is set (keyboard data available)
+    return (pia_.port_a_data & 0x80) != 0;
+}
+
+void Apple1System::clear_keyboard_strobe() {
+    // Apple 1 keyboard hardware behavior: The keyboard circuit clears bit 7 (strobe)
+    // when the CPU reads Port A. This is NOT PIA behavior - it's the external
+    // keyboard hardware responding to the PIA's read signal.
+    pia_.port_a_data &= 0x7F;
 }
 
 bool Apple1System::load_roms() {

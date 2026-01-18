@@ -92,7 +92,13 @@ private:
     static void cpu_write(void* user_data, uint32_t addr, uint8_t data);
     
     // PIA callbacks
-    static void pia_display_write(void* user_data, uint8_t data);
+    static uint8_t pia_keyboard_read(void* user_data);  // Port A read (keyboard)
+    static void pia_display_write(void* user_data, uint8_t data);  // Port B write (display)
+    
+    // Apple 1 keyboard helpers (PIA Port A specific)
+    void set_keyboard_data(uint8_t key_code);   // Sets bit 7 strobe + ASCII in bits 0-6
+    bool keyboard_ready() const;                 // Checks if bit 7 is set
+    void clear_keyboard_strobe();                // Clears bit 7 (called after read)
     
     // Display helpers
     void display_char(uint8_t ch);
