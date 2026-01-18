@@ -1,9 +1,9 @@
 [submodule "code/c/external/cimgui"]
 	path = code/c/external/cimgui
 	url = https://github.com/cimgui/cimgui.git
-[submodule "external/nfd"]
-	path = external/nfd
-	url = https://github.com/btzy/nativefiledialog-extended.git
+[submodule "external/ImGuiFileDialog"]
+	path = external/ImGuiFileDialog
+	url = https://github.com/aiekick/ImGuiFileDialog.git
 [submodule "external/tomlplusplus"]
 	path = external/tomlplusplus
 	url = https://github.com/marzer/tomlplusplus.git

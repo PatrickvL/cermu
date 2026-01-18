@@ -167,18 +167,30 @@ if(BUILD_GUI)
     endif()
 endif()
 
-# Add NFD (Native File Dialog Extended) library if building GUI
+# Add ImGuiFileDialog library if building GUI
 if(BUILD_GUI)
-    # Check if NFD directory exists (in project root external directory)
-    set(NFD_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../external/nfd")
-    if(EXISTS "${NFD_ROOT}/CMakeLists.txt")
-        # Use NFD's own CMakeLists.txt as a subdirectory
-        add_subdirectory(${NFD_ROOT} ${CMAKE_CURRENT_BINARY_DIR}/nfd EXCLUDE_FROM_ALL)
-        set(NFD_FOUND TRUE)
-        message(STATUS "NFD (Native File Dialog) library configured at ${NFD_ROOT}")
+    # Check if ImGuiFileDialog directory exists (in project root external directory)
+    set(IMGUIFILEDIALOG_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../external/ImGuiFileDialog")
+    if(EXISTS "${IMGUIFILEDIALOG_ROOT}/ImGuiFileDialog.h")
+        # Create ImGuiFileDialog static library
+        add_library(ImGuiFileDialog STATIC
+            ${IMGUIFILEDIALOG_ROOT}/ImGuiFileDialog.cpp
+        )
+        
+        # Set ImGuiFileDialog include directories
+        target_include_directories(ImGuiFileDialog PUBLIC
+            ${IMGUIFILEDIALOG_ROOT}
+            ${IMGUI_DIR}
+        )
+        
+        # Link ImGuiFileDialog with ImGui
+        target_link_libraries(ImGuiFileDialog imgui)
+        
+        set(IMGUIFILEDIALOG_FOUND TRUE)
+        message(STATUS "ImGuiFileDialog library configured at ${IMGUIFILEDIALOG_ROOT}")
     else()
-        message(WARNING "NFD not found at ${NFD_ROOT} - file dialogs will not be available")
-        set(NFD_FOUND FALSE)
+        message(WARNING "ImGuiFileDialog not found at ${IMGUIFILEDIALOG_ROOT} - file dialogs will not be available")
+        set(IMGUIFILEDIALOG_FOUND FALSE)
     endif()
 endif()
 
@@ -352,9 +364,9 @@ if(BUILD_GUI)
         ${IMGUI_DIR}/backends
     )
     
-    # Add NFD include if available
-    if(NFD_FOUND)
-        target_include_directories(multi_emu PRIVATE ${NFD_ROOT}/src/include)
+    # Add ImGuiFileDialog include if available
+    if(IMGUIFILEDIALOG_FOUND)
+        target_include_directories(multi_emu PRIVATE ${IMGUIFILEDIALOG_ROOT})
     endif()
     
     # Define IMGUI_VERSION macro
@@ -376,8 +388,8 @@ if(BUILD_GUI)
         ${CMAKE_DL_LIBS}
     )
     
-    if(NFD_FOUND)
-        list(APPEND MULTI_EMU_LINK_LIBS nfd)
+    if(IMGUIFILEDIALOG_FOUND)
+        list(APPEND MULTI_EMU_LINK_LIBS ImGuiFileDialog)
     endif()
     
     target_link_libraries(multi_emu ${MULTI_EMU_LINK_LIBS})
@@ -434,9 +446,9 @@ if(BUILD_GUI)
         ${IMGUI_DIR}/backends
     )
     
-    # Add NFD include if available
-    if(NFD_FOUND)
-        target_include_directories(c64emu_gui PRIVATE ${NFD_ROOT}/src/include)
+    # Add ImGuiFileDialog include if available
+    if(IMGUIFILEDIALOG_FOUND)
+        target_include_directories(c64emu_gui PRIVATE ${IMGUIFILEDIALOG_ROOT})
     endif()
     
     # Define IMGUI_VERSION macro for GUI build to enable chip GUI functions
@@ -458,9 +470,9 @@ if(BUILD_GUI)
         ${CMAKE_DL_LIBS}
     )
     
-    # Add NFD library if available
-    if(NFD_FOUND)
-        list(APPEND GUI_LINK_LIBS nfd)
+    # Add ImGuiFileDialog library if available
+    if(IMGUIFILEDIALOG_FOUND)
+        list(APPEND GUI_LINK_LIBS ImGuiFileDialog)
     endif()
     
     target_link_libraries(c64emu_gui ${GUI_LINK_LIBS})
