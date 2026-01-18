@@ -149,6 +149,7 @@ C64SystemWrapper::~C64SystemWrapper() {
 const SystemDescriptor& C64SystemWrapper::get_descriptor() const {
     return c64_descriptor;
 }
+
 bool C64SystemWrapper::initialize() {
     if (c64_) {
         return true;  // Already initialized
@@ -199,6 +200,9 @@ void C64SystemWrapper::run_frame() {
     for (uint32_t i = 0; i < cycles_per_frame_; i++) {
         c64_system_tick(c64_);
     }
+    
+    // Sync base class cycle counter with C64's internal counter
+    total_cycles_ = c64_->total_cycles;
 }
 
 bool C64SystemWrapper::load_file(const char* filepath) {
@@ -277,6 +281,7 @@ void C64SystemWrapper::handle_controller_event(int controller, int button, bool 
     // C64 joystick support would go here
     // TODO: Implement joystick handling
 }
+
 void C64SystemWrapper::render_system_menu_items() {
     // Forward menu creation to the old C64 GUI code
     // This allows C64-specific menus (Load Test Binary, Chip Debug Windows, etc.)
