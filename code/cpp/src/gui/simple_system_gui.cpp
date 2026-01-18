@@ -101,18 +101,20 @@ void SimpleSystemGUI::update_frame() {
 void SimpleSystemGUI::render_frame() {
     begin_frame();
     
-    // Render system selection dialog if needed (modal, blocks everything else)
-    system_selection_dialog_.render(!system_);  // Don't allow cancel if no system loaded
-    
-    // Check if dialog selection was confirmed
-    if (system_selection_dialog_.selection_confirmed()) {
-        const char* selected = system_selection_dialog_.get_selected_system();
-        int memory_opt = system_selection_dialog_.get_selected_memory_option();
-        int region_opt = system_selection_dialog_.get_selected_region_option();
-        if (selected) {
-            switch_system(selected, memory_opt, region_opt);
+    // Only render dialog if it's actually open
+    if (system_selection_dialog_.is_open()) {
+        system_selection_dialog_.render(!system_);  // Don't allow cancel if no system loaded
+        
+        // Check if dialog selection was confirmed
+        if (system_selection_dialog_.selection_confirmed()) {
+            const char* selected = system_selection_dialog_.get_selected_system();
+            int memory_opt = system_selection_dialog_.get_selected_memory_option();
+            int region_opt = system_selection_dialog_.get_selected_region_option();
+            if (selected) {
+                switch_system(selected, memory_opt, region_opt);
+            }
+            system_selection_dialog_.reset();
         }
-        system_selection_dialog_.reset();
     }
     
     // Render screen (full-screen background)
