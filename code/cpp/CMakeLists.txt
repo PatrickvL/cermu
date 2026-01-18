@@ -563,10 +563,10 @@ endif()
 
 message(STATUS "Test runner c64_test_runner will be built")
 
-# Link toml++ library
-target_link_libraries(toml_test
-    tomlplusplus::tomlplusplus
-)
+# Link toml++ library (commented out - toml_test target not defined)
+# target_link_libraries(toml_test
+#     tomlplusplus::tomlplusplus
+# )
 
 # Print configuration summary
 message(STATUS "")
