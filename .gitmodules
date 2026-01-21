@@ -10,3 +10,6 @@
 [submodule "external/toonplusplus"]
 	path = external/toonplusplus
 	url = https://github.com/patrickvl/toonplusplus.git
+[submodule "external/LJON"]
+	path = external/LJON
+	url = https://github.com/PatrickvL/LJON
