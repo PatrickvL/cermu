@@ -7,3 +7,6 @@
 [submodule "external/tomlplusplus"]
 	path = external/tomlplusplus
 	url = https://github.com/marzer/tomlplusplus.git
+[submodule "external/toonplusplus"]
+	path = external/toonplusplus
+	url = https://github.com/patrickvl/toonplusplus.git
