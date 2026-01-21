@@ -337,10 +337,15 @@ void c64_system_tick(c64_t* c64) {
     //
     // With the pull-up resistor model, VIC-II sets BA state, and we copy it to RDY here.
     // This happens after VIC-II tick but before CPU tick, so CPU sees the correct RDY state.
+    //
+    // CRITICAL FIX: Use direct bit manipulation instead of BUS_SET_LINES() to preserve
+    // IRQ/NMI lines that CIA chips just asserted. BUS_SET_LINES() calls bus_lines_apply()
+    // which REPLACES all 6 control lines (IRQ, NMI, RW, BA, AEC, RDY), wiping out the
+    // IRQ/NMI assertions from CIA ticks. Direct bit operations only touch RDY bit.
     if (BUS_GET_LINES(s) & BUS_MASK_BA) {
-        BUS_SET_LINES(s, BUS_GET_LINES(s) | BUS_MASK_RDY);
+        s |= BUS_BIT(BUS_RDY_BIT);   // Set RDY HIGH without touching other bits
     } else {
-        BUS_SET_LINES(s, BUS_GET_LINES(s) & ~BUS_MASK_RDY);
+        s &= ~BUS_BIT(BUS_RDY_BIT);  // Clear RDY LOW without touching other bits
     }
 
     // =========================================================================
