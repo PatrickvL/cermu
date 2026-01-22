@@ -65,7 +65,8 @@ typedef struct mos6526_s {
     bool is_running_tod;
     int tod_cycles;
     int serial_shift;
-    uint8_t interrupt_mask;
+    uint8_t interrupt_mask;         // Current interrupt mask (takes effect this cycle)
+    uint8_t interrupt_mask_delayed; // Next cycle's mask (written by ICR writes)
     
     // Bus line control for interrupt delay implementation
     // This mask is applied at the START of each tick to pull lines LOW (assert)
