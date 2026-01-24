@@ -43,7 +43,6 @@ void mos6526_reset(mos6526_t* cia) {
     cia->is_running_tod = false;
     cia->tod_cycles = 0;
     cia->interrupt_mask = 0;
-    cia->interrupt_mask_delayed = 0;  // Matches chips emulator imr1
     cia->pending_bus_lines = 0;  // No pending interrupt assertions
     
     // Initialize delay line (multi-cycle signal propagation)
@@ -142,19 +141,15 @@ void mos6526_write_interrupt_control_register(mos6526_t* cia, uint32_t v) {
     // any mask bit written with a one will be set, while those
     // mask bits written with a zero will be unaffected."
     // "Bit 7: Source bit.
-    
-    // Apply mask changes with hardware-accurate 1-cycle delay
-    // Real CIA6526 applies interrupt mask changes in the next cycle
-    // This is critical for KERNAL boot sequence to work correctly
     if ((v & ICR_S_C) == 0)
-        cia->interrupt_mask_delayed &= ~bits;
+        // 0 = set bits 0..4 are clearing the according mask bit.
+        cia->interrupt_mask &= ~bits;
     else
-        cia->interrupt_mask_delayed |= bits;
+        // 1 = set bits 0..4 are setting the according mask bit."
+        cia->interrupt_mask |= bits;
 
     // "When a condition in the ICR is true, setting the corresponding bit in the IMR must also set the interrupt."
     // "Clearing the bit in the IMR may not clear the interrupt."
-    // NOTE: This check uses the CURRENT mask, not the delayed one
-    // The delayed mask takes effect in next cycle via mos6526_tick()
     mos6526_check_interrupt_mask(cia);
     // "Once the interrupt flip-flop has been set, changing the condition in the IMR has no effect."
 }
@@ -332,12 +327,6 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
         // Timer underflowed - reload from latch
         // Set ICR flag
         cia->reg[ICR] |= (uint8_t)(ICR_TA + t); // t=A:ICR_TA, t=B:ICR_TB
-        
-        // CRITICAL: Call check_interrupt_mask to set ICR_IRQ if this interrupt is masked in
-        // This matches chips emulator behavior where pipeline checks icr & imr (lines 550-553)
-        // Without this, ICR_IRQ (bit 7) never gets set even though ICR_TA/TB is set
-        mos6526_check_interrupt_mask(cia);
-        
         mos6526_reload_timer(cia, t);
         
         // "In one-shot mode, the timer will count down from
@@ -400,15 +389,14 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
         //                    always read back a zero and writing a zero has no effect)."
         v &= ~CR_LOAD; // Clear the LOAD strobe bit
         
-        // REFERENCE: chips emulator (Flooh) does NOT clear ICR flag on LOAD
-        // See: ../chips/chips/m6526.h lines 506-509
-        // They only clear the LOAD strobe bit from CR, nothing else
-        //
-        // Per CIA6526.txt: "Only reading the ICR will clear it."
-        // Per WLorenz Test Suite readme:
-        //   "Only reading the ICR may clear the interrupt."
-        //
-        // Therefore: Do NOT clear ICR interrupt flags when LOAD bit is written.
+        // CRITICAL FIX: Clear the interrupt flag when manually reloading the timer
+        // This prevents spurious interrupts when restarting a timer that had previously underflowed
+        // The KERNAL uses this pattern: timer underflows → disable mask → reload timer → re-enable mask
+        // Without clearing the flag here, the old ICR_TA bit causes immediate re-interrupt
+        uint8_t timer_flag = (c == A) ? ICR_TA : ICR_TB;
+        if (cia->reg[ICR] & timer_flag) {
+            cia->reg[ICR] &= ~timer_flag;
+        }
     }
     
     // NOTE: Do NOT clear ICR bits when manually stopping a timer.
@@ -903,11 +891,6 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
     if (flag_is_negative_edge) {
         cia->reg[ICR] |= ICR_FLG;
     }
-
-    // CRITICAL: Implement 1-cycle delay for interrupt mask changes
-    // Matches chips emulator behavior (m6526.h line 554: c->intr.imr = c->intr.imr1)
-    // Mask changes written in previous cycle now take effect
-    cia->interrupt_mask = cia->interrupt_mask_delayed;
 
     // Check interrupt mask FIRST to update ICR_IRQ based on current cycle's events
     // (timer underflows, etc.)
