@@ -48,6 +48,9 @@ void mos6526_reset(mos6526_t* cia) {
     // Initialize delay line (multi-cycle signal propagation)
     cia->delay_line = 0;
     
+    // Initialize PB6/PB7 toggle flip-flops (cleared on reset per CIA6526.txt line 107)
+    cia->pb67_toggle = 0;
+    
     // Initialize previous bus state for edge detection
     // CNT and FLAG pins have internal pull-ups, so they start HIGH
     cia->prev_bus_state = BUS_BIT(BUS_CNT_BIT) | BUS_BIT(BUS_FLAG_BIT);
@@ -287,7 +290,15 @@ void mos6526_check_reload_timer(mos6526_t* cia, uint32_t t) { // t:A or B
         mos6526_reload_timer(cia, t);
 }
 
-void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edge, int in_mode) { // t:A or B
+void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edge, int in_mode, bool cnt_pin) { // t:A or B
+    // Phase 3: Check delay line for countdown signal (4-cycle delay from input to actual decrement)
+    // Per CIA6526.txt lines 13-63: Timer countdown uses 4-cycle delay pipeline
+    uint64_t count_check = (t == A) ? DELAY_CHECK(PIPELINE_TA_COUNT) : DELAY_CHECK(PIPELINE_TB_COUNT);
+    
+    // Only decrement timer if the countdown signal has propagated through the delay line
+    if ((cia->delay_line & count_check) == 0)
+        return;  // Countdown signal not ready yet
+    
     // Note : CRA 5 INMODE mask is 1 bit (will only ever hit cases 0 and 1)
     // "CRB 5,6 INMODE
     // Bits CRB5 and CRB6 select one of four input modes for TIMER B as:
@@ -296,20 +307,21 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
         // 0 = TIMER A counts phi2 pulses
         // 0 0 TIMER B counts phi2 pulses
         case (0x00 << 5):  // 0b00 = 0x00
-            count_timer = true;
+            count_timer = true;  // Always count in PHI2 mode (already injected in control register)
             break;
         // 1 = TIMER A counts positive CNT transitions.
         // 0 1 TIMER B counts positive CNT transitions.
         case (0x01 << 5):  // 0b01 = 0x01
-            count_timer = cnt_is_positive_edge; // TODO: Verify
+            count_timer = cnt_is_positive_edge;
             break;
         // 1 0 TIMER B counts TIMER A underflow pulses.
         case (0x02 << 5):  // 0b10 = 0x02
             count_timer = (cia->reg[ICR] & ICR_TA) > 0;
             break;
-        // 1 1 TIMER B counts TIMER A underflow pulses while CNT is high."
+        // 1 1 TIMER B counts TIMER A underflow pulses while CNT is high.
+        // Phase 6: Check CNT pin state for mode 0x60
         default:
-            count_timer = (cia->reg[ICR] & ICR_TA) > 0; // && CNT.IsHigh // TODO: Verify
+            count_timer = ((cia->reg[ICR] & ICR_TA) > 0) && cnt_pin;
             break;
     }
     if (!count_timer)
@@ -329,6 +341,12 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
         cia->reg[ICR] |= (uint8_t)(ICR_TA + t); // t=A:ICR_TA, t=B:ICR_TB
         mos6526_reload_timer(cia, t);
         
+        // Phase 5: Toggle PB6/PB7 flip-flop on timer underflow
+        // Per CIA6526.txt lines 104-110: Each underflow toggles the flip-flop
+        // Only affects output when PBON=1 and OUTMODE=1 (toggle mode)
+        uint8_t toggle_bit = (t == A) ? 0x40 : 0x80;  // PB6 for Timer A, PB7 for Timer B
+        cia->pb67_toggle ^= toggle_bit;  // XOR to toggle
+        
         // "In one-shot mode, the timer will count down from
         // latched value to zero, generate the interrupt, reload
         // the latched value, then stop. In continuous mode,
@@ -346,7 +364,6 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
             // until software reads the ICR register to acknowledge the interrupt.
         }
         // else: Continuous mode - timer keeps running with reloaded value
-        // TODO: Must this be treated as a re-start which sets the CRA_OUTMODE Toggle output high?
     } else {
         // Store decremented value
         cia->reg[TA_LO + i] = (uint8_t)(timer & 0xFF);
@@ -372,11 +389,70 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
             cia->reg[SHIFT_OFFSET] = 0;
             // TODO : What to do with SerialShift?
         }
+        
+        // Phase 7: Detect INMODE change (Timer A: PHI2 ↔ CNT switching)
+        // Per CIA6526.txt lines 210-215: 2-cycle delay when switching timer input
+        if ((old_crx & CRA_INMODE) != (v & CRA_INMODE)) {
+            // Timer A input mode changed - inject switching delay
+            cia->delay_line |= DELAY_INJECT(PIPELINE_CNT_SWITCH_A);
+        }
     } else { // c == B
         // "CRB
         //   7   TODIN   1 = writing to TOD registers sets ALARM.
         //               0 = writing to TOD registers sets TOD clock."
         cia->write_tod_delta = ((v & CRB_ALARM) > 0) ? ALARM_OFFSET : 0;
+        
+        // Phase 7: Detect INMODE change (Timer B: PHI2/CNT/Timer A mode switching)
+        // Per CIA6526.txt lines 210-215: 2-cycle delay when switching timer input
+        if ((old_crx & CRB_INMODE) != (v & CRB_INMODE)) {
+            // Timer B input mode changed - inject switching delay
+            cia->delay_line |= DELAY_INJECT(PIPELINE_CNT_SWITCH_B);
+        }
+    }
+    // Set up delay pipeline signals based on timer mode and control bits
+    // Per CIA6526.txt: Timer operations use multi-cycle delay pipelines
+    // Use PIPELINE_* macros directly with DELAY_ helper macros
+    uint64_t count_inject, count_check, count_mask, load_inject, oneshot_check;
+    if (c == A) {
+        count_inject = DELAY_INJECT(PIPELINE_TA_COUNT);
+        count_check = DELAY_CHECK(PIPELINE_TA_COUNT);
+        count_mask = DELAY_MASK(PIPELINE_TA_COUNT);
+        load_inject = DELAY_INJECT(PIPELINE_TA_LOAD);
+        oneshot_check = DELAY_CHECK(PIPELINE_ONESHOT_A);
+    } else {
+        count_inject = DELAY_INJECT(PIPELINE_TB_COUNT);
+        count_check = DELAY_CHECK(PIPELINE_TB_COUNT);
+        count_mask = DELAY_MASK(PIPELINE_TB_COUNT);
+        load_inject = DELAY_INJECT(PIPELINE_TB_LOAD);
+        oneshot_check = DELAY_CHECK(PIPELINE_ONESHOT_B);
+    }
+    
+    // Set clock in PHI2 mode (START=1, appropriate INMODE bits=0)
+    // Per CIA6526.cpp lines 394-400: Inject countdown signal into both delay and feed
+    bool running_phi2_mode = false;
+    if (c == A) {
+        // Timer A: INMODE is single bit (0x20), 0=PHI2, 1=CNT
+        running_phi2_mode = ((v & (CRA_START | CRA_INMODE)) == CRA_START);
+    } else {
+        // Timer B: INMODE is 2 bits (0x60), 0=PHI2, 1=CNT, 2=Timer A, 3=Timer A+CNT
+        running_phi2_mode = ((v & (CRB_START | CRB_INMODE)) == CRB_START);
+    }
+    
+    if (running_phi2_mode) {
+        // Timer is running and counting PHI2 cycles
+        // Inject countdown signal, will propagate through pipeline after 4 cycles
+        cia->delay_line |= count_inject | count_check;  // Set inject bit and feed bit
+    } else {
+        // Timer stopped or using external clock - clear countdown signals
+        cia->delay_line &= ~count_mask;  // Clear entire countdown pipeline
+    }
+    
+    // Set one-shot mode feed signal
+    // Per CIA6526.cpp lines 402-407: RUNMODE bit affects one-shot delay feed
+    if ((v & CR_RUNMODE) != 0) {
+        cia->delay_line |= oneshot_check;  // Enable one-shot mode
+    } else {
+        cia->delay_line &= ~oneshot_check;  // Disable one-shot mode
     }
 
     if ((v & CR_LOAD) > 0) {
@@ -384,7 +460,10 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
         //  A strobe bit allows the timer latch to be loaded
         // into the timer counter at any time, whether the timer
         // is running or not."
-        mos6526_reload_timer(cia, c);
+        // Per CIA6526.cpp lines 410-412: Inject LOAD signal into delay pipeline
+        cia->delay_line |= load_inject;
+        // Note: Actual reload happens 2 cycles later when LoadA1/LoadB1 is set
+        
         // "  4    LOAD   1 = FORCE LOAD (this is a STROBE input, there is no data storage, bit 4 will
         //                    always read back a zero and writing a zero has no effect)."
         v &= ~CR_LOAD; // Clear the LOAD strobe bit
@@ -405,23 +484,22 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
     // until software explicitly reads the ICR register to acknowledge them.
     // Manually stopping a timer (clearing START bit) does not clear pending interrupts.
 
-    // "The Toggle output is set high whenever the timer is started"
-    // Note: This refers to the PB6/PB7 output pin state in toggle mode, NOT the OUTMODE control bit!
-    // The OUTMODE bit (CRA bit 2 / CRB bit 2) is a configuration bit that should not be modified here.
-    // TODO: If toggle mode is enabled (OUTMODE=1), set the output pin high when timer starts
-    // Reset TOD cycle counter when timer transitions from stopped to started
-    // Use generic START bit that works for both timers
-    if ((v & CR_START) > 0)
-        if ((old_crx & CR_START) == 0) {
-            // Timer transitions from stopped to started
-            // Reload timer from latch so it starts with the programmed value
-            // This is critical for tests that set up a specific count period
-            mos6526_reload_timer(cia, c);
-            
-            // "the frequency counter is being reset to 0 when the clock was stopped and is
-            // restarted (->hzsync0.prg, hzsync1.prg)"
-            cia->tod_cycles = 0;
-        }
+    // Set toggle flip-flop HIGH on rising edge of START bit
+    // Per CIA6526.txt lines 104-110 and CIA6526.cpp lines 415-420
+    if ((v & CR_START) != 0 && (old_crx & CR_START) == 0) {
+        // Timer transitions from stopped to started
+        uint8_t toggle_bit = (c == A) ? 0x40 : 0x80;  // PB6 or PB7
+        cia->pb67_toggle |= toggle_bit;
+        
+        // Reload timer from latch so it starts with the programmed value
+        // This is critical for tests that set up a specific count period
+        // Per CIA6526.cpp lines 278-282: Inject LOAD signal into delay pipeline
+        cia->delay_line |= load_inject;
+        
+        // "the frequency counter is being reset to 0 when the clock was stopped and is
+        // restarted (->hzsync0.prg, hzsync1.prg)"
+        cia->tod_cycles = 0;
+    }
 
     cia->reg[CRA + c] = v;
 
@@ -858,16 +936,51 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
 
 
     // =========================================================================
+    // PHASE 4: DELAY LINE SHIFTING (Multi-cycle signal propagation)
+    // =========================================================================
+    // Per CIA6526.txt lines 13-84: Timer operations use delay pipelines
+    // Each cycle, shift the delay line left by 1 to advance all signals
+    // Preserve feed bits for continuous signals (PHI2 countdown, one-shot mode)
+    // Reference: CIA6526.cpp line 737: dwNewDelay = (dwDelay << 1) & DelayMask | dwFeed
+    
+    uint64_t delay_shifted = cia->delay_line << 1;  // Shift all pipelines by 1 cycle
+    uint64_t delay_feed = 0;  // Feed bits that should persist across shifts
+    
+    // Timer A: Preserve countdown feed bit if running in PHI2 mode
+    if ((cia->reg[CRA] & CRA_START) && ((cia->reg[CRA] & CRA_INMODE) == 0)) {
+        // Timer A running in PHI2 mode - keep injecting countdown signals
+        delay_feed |= DELAY_CHECK(PIPELINE_TA_COUNT);
+    }
+    
+    // Timer B: Preserve countdown feed bit if running in PHI2 mode
+    if ((cia->reg[CRB] & CRB_START) && ((cia->reg[CRB] & CRB_INMODE) == 0)) {
+        // Timer B running in PHI2 mode (00) - keep injecting countdown signals
+        delay_feed |= DELAY_CHECK(PIPELINE_TB_COUNT);
+    }
+    
+    // Preserve one-shot mode feed bits
+    if (cia->reg[CRA] & CR_RUNMODE) {
+        delay_feed |= DELAY_CHECK(PIPELINE_ONESHOT_A);
+    }
+    if (cia->reg[CRB] & CR_RUNMODE) {
+        delay_feed |= DELAY_CHECK(PIPELINE_ONESHOT_B);
+    }
+    
+    // Apply shifted delay with feed bits
+    // Mask to preserve only the active pipeline bits (avoid overflow into unused bits)
+    cia->delay_line = (delay_shifted & DELAY_LINE_MASK) | delay_feed;
+
+    // =========================================================================
     // TIMER COUNTDOWN
     // =========================================================================
     bool timer_a_running = (cia->reg[CRA] & CRA_START) > 0;
     bool timer_b_running = (cia->reg[CRB] & CRB_START) > 0;
     
     if (timer_a_running)
-        mos6526_decrease_timer(cia, A, cnt_is_positive_edge, cia->reg[CRA] & CRA_INMODE);
+        mos6526_decrease_timer(cia, A, cnt_is_positive_edge, cia->reg[CRA] & CRA_INMODE, cnt_pin);
 
     if (timer_b_running)
-        mos6526_decrease_timer(cia, B, cnt_is_positive_edge, cia->reg[CRB] & CRB_INMODE);
+        mos6526_decrease_timer(cia, B, cnt_is_positive_edge, cia->reg[CRB] & CRB_INMODE, cnt_pin);
 
     if (cia->is_running_tod)
         mos6526_increase_tod_and_check_alarm(cia);
