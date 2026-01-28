@@ -925,16 +925,14 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     // COP is triggered by software, not hardware pins - handled elsewhere
 
     // Check IRQ (fifth priority, maskable by I flag)
-    // CRITICAL: IRQ detection (sampling) happens regardless of I flag
-    // The shift register continues to sample IRQ line every cycle
-    // BUT: IRQ SERVICING is blocked when I flag is set
-    // This matches hardware: I flag masks IRQ servicing, not IRQ detection
+    // CRITICAL: IRQ detection (sampling) happens regardless of I flag state
+    // The shift register continuously samples IRQ line every cycle for glitch rejection
+    // The I flag check happens LATER at hijacking time (instruction boundary)
+    // This matches hardware: shift register samples continuously, I flag only controls servicing
     if constexpr (has_irq_line()) {
-      bool irq_detected = (shift_reg & INT_IRQ_MASK) == INT_IRQ_MASK;
-      bool i_flag_clear = !(this->get(REG_P) & FLAG_I);
-      
-      if (irq_detected && i_flag_clear) {
-        // IRQ accepted - both shift register full AND I flag permits servicing
+      if ((shift_reg & INT_IRQ_MASK) == INT_IRQ_MASK) {
+        // IRQ pattern detected - shift register full
+        // I flag will be checked at hijacking time (instruction fetch boundary)
         this->active_interrupt = FAM65XX_INT_IRQ;
         return true;
       }
@@ -1512,14 +1510,24 @@ public:
           return reset(pins);
         } else if (this->current_handler == &fam65xx_t::fetch_opcode &&
                    this->half_cycle == 0) {
-          // Hijack fetch and force BRK execution
-          // CRITICAL: When hijacking, BRK should still use the interrupt's vector
-          // So we keep active_interrupt as-is (IRQ/NMI/etc) and let BRK handle it
-          // Note: IRQ was already validated by process_interrupt_detection()
-          // which checks both shift register AND I flag
-          this->current_handler = &fam65xx_t::op_brk;
+          // Hijack instruction fetch at boundary - check if interrupt can be serviced
+          // This is where the I flag check happens for maskable IRQ
+          // Non-maskable interrupts (NMI, RESET) bypass this check
           
-          // CRITICAL FIX: DO NOT clear shift register here at hijack time!
+          if (this->active_interrupt == FAM65XX_INT_IRQ) {
+            // IRQ is maskable - check I flag at hijack time (instruction boundary)
+            if (!(this->get(REG_P) & FLAG_I)) {
+              // I flag clear - IRQ servicing allowed, hijack to BRK
+              this->current_handler = &fam65xx_t::op_brk;
+              // Note: Don't clear shift register here - see comment at line 1522
+            }
+            // else: I flag set - don't hijack, IRQ stays pending in shift register
+          } else {
+            // Non-maskable interrupt (NMI, RESET, etc) - always hijack
+            this->current_handler = &fam65xx_t::op_brk;
+          }
+          
+          // CRITICAL: DO NOT clear shift register here at hijack time!
           // The shift register must remain active until AFTER the I flag is set by BRK.
           // If we clear it here, the IRQ line (still LOW because CIA ICR not read yet)
           // will immediately fill the shift register again during BRK execution (cycles 0-9),
