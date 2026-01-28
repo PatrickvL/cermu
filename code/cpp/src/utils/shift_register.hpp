@@ -86,24 +86,19 @@ public:
         storage_ &= ~spacing_mask_;
     }
     
-    // Inject boolean - BRANCHLESS using multiplication trick
-    [[gnu::always_inline]]
-    constexpr void Inject(uint8_t pipe_id, bool value) noexcept {
-        const StorageT mask = pipes_[pipe_id].lsb_mask;
-        storage_ = (storage_ & ~mask) | (static_cast<StorageT>(value) * mask);
-    }
-    
     // Inject single bit (set to 1) - for when you know you want to set
     [[gnu::always_inline]]
     constexpr void Inject(uint8_t pipe_id) noexcept {
         storage_ |= pipes_[pipe_id].lsb_mask;
     }
     
-    // Inject multi-bit value at LSB
+    // Inject multi-bit value at LSB (template to avoid ambiguity)
+    template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
     [[gnu::always_inline]]
-    constexpr void Inject(uint8_t pipe_id, StorageT value) noexcept {
+    constexpr void Inject(uint8_t pipe_id, T value) noexcept {
         const Pipe& p = pipes_[pipe_id];
-        storage_ = (storage_ & ~p.data_mask) | ((value << p.start) & p.data_mask);
+        const StorageT val = static_cast<StorageT>(value);
+        storage_ = (storage_ & ~p.data_mask) | ((val << p.start) & p.data_mask);
     }
     
     // Check MSB (bit about to shift out)
@@ -255,75 +250,70 @@ class StaticShiftRegister {
     StorageT storage_ = 0;
 
 public:
-    // Zero-overhead pipe handle
+    // Zero-overhead pipe handle - stateless tag type (zero storage)
     template<uint8_t PipeIndex>
     class Pipe {
         static_assert(PipeIndex < PipeCount, "Pipe index out of bounds");
-        
-        StaticShiftRegister& parent_;
         using P = PipeDesc<PipeIndex>;
         
     public:
-        explicit constexpr Pipe(StaticShiftRegister& sr) noexcept : parent_(sr) {}
-        
-        // Branchless boolean injection
-        [[gnu::always_inline]]
-        constexpr void Inject(bool value) noexcept {
-            parent_.storage_ = (parent_.storage_ & ~P::LsbMask) | 
-                               (static_cast<StorageT>(value) * P::LsbMask);
-        }
+        // Default constructor - stateless
+        constexpr Pipe() noexcept = default;
+        explicit constexpr Pipe(StaticShiftRegister&) noexcept {}  // Compatibility constructor (ignored)
         
         // Set to 1
         [[gnu::always_inline]]
-        constexpr void Inject() noexcept {
-            parent_.storage_ |= P::LsbMask;
+        constexpr void Inject(StaticShiftRegister& sr) noexcept {
+            sr.storage_ |= P::LsbMask;
         }
         
-        // Multi-bit value
+        // Multi-bit value (template to avoid ambiguity with bool)
+        template<typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
         [[gnu::always_inline]]
-        constexpr void Inject(StorageT value) noexcept {
+        constexpr void Inject(StaticShiftRegister& sr, T value) noexcept {
+            const StorageT val = static_cast<StorageT>(value);
             if constexpr (P::Width >= StorageBits) {
-                parent_.storage_ = value;
+                sr.storage_ = val;
             } else {
-                parent_.storage_ = (parent_.storage_ & ~P::DataMask) | 
-                                   ((value << P::Start) & P::DataMask);
+                sr.storage_ = (sr.storage_ & ~P::DataMask) |
+                              ((val << P::Start) & P::DataMask);
             }
         }
         
         // Check MSB (bit about to exit)
         [[gnu::always_inline, nodiscard]]
-        constexpr bool Check() const noexcept {
-            return (parent_.storage_ & P::MsbMask) != 0;
+        constexpr bool Check(const StaticShiftRegister& sr) const noexcept {
+            return (sr.storage_ & P::MsbMask) != 0;
         }
         
         // Read full pipe value
         [[gnu::always_inline, nodiscard]]
-        constexpr StorageT Read() const noexcept {
+        constexpr StorageT Read(const StaticShiftRegister& sr) const noexcept {
             if constexpr (P::Start == 0) {
-                return parent_.storage_ & P::WidthMask;
+                return sr.storage_ & P::WidthMask;
             } else {
-                return (parent_.storage_ >> P::Start) & P::WidthMask;
+                return (sr.storage_ >> P::Start) & P::WidthMask;
             }
         }
         
         // Extract: read and clear atomically
         [[gnu::always_inline, nodiscard]]
-        constexpr StorageT Extract() noexcept {
-            const StorageT val = Read();
-            parent_.storage_ &= ~P::DataMask;
+        constexpr StorageT Extract(StaticShiftRegister& sr) noexcept {
+            const StorageT val = Read(sr);
+            sr.storage_ &= ~P::DataMask;
             return val;
         }
         
         // Clear this pipe
         [[gnu::always_inline]]
-        constexpr void Clear() noexcept {
-            parent_.storage_ &= ~P::DataMask;
+        constexpr void Clear(StaticShiftRegister& sr) noexcept {
+            sr.storage_ &= ~P::DataMask;
         }
         
         // Check if pipe has any data
         [[gnu::always_inline, nodiscard]]
-        constexpr bool Any() const noexcept {
-            return (parent_.storage_ & P::DataMask) != 0;
+        constexpr bool Any(const StaticShiftRegister& sr) const noexcept {
+            return (sr.storage_ & P::DataMask) != 0;
         }
         
         [[nodiscard]] static constexpr StorageT Mask() noexcept { return P::DataMask; }
@@ -331,11 +321,6 @@ public:
         [[nodiscard]] static constexpr uint8_t Start() noexcept { return P::Start; }
         [[nodiscard]] static constexpr uint8_t End() noexcept { return P::End; }
     };
-    
-    template<uint8_t Index>
-    [[nodiscard]] constexpr auto MakePipe() noexcept -> Pipe<Index> {
-        return Pipe<Index>{*this};
-    }
     
     // Shift all pipes left by one
     [[gnu::always_inline, gnu::hot]]
