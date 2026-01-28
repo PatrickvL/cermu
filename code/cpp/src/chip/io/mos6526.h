@@ -92,16 +92,6 @@ typedef struct mos6526_s {
     using DelayLine = StaticShiftRegister<uint64_t, 4, 4, 2, 2, 2, 2, 2, 2>;
     DelayLine delay_line;
     
-    // Pipe handles for type-safe access (zero storage - empty stateless types)
-    typename DelayLine::template Pipe<0> ta_count_pipe;
-    typename DelayLine::template Pipe<1> tb_count_pipe;
-    typename DelayLine::template Pipe<2> ta_load_pipe;
-    typename DelayLine::template Pipe<3> tb_load_pipe;
-    typename DelayLine::template Pipe<4> oneshot_a_pipe;
-    typename DelayLine::template Pipe<5> oneshot_b_pipe;
-    typename DelayLine::template Pipe<6> cnt_switch_a_pipe;
-    typename DelayLine::template Pipe<7> cnt_switch_b_pipe;
-    
     // Callback for port A output changes (used by CIA2 for VIC-II bank switching)
     void (*port_a_change_callback)(void* context, uint8_t port_a_output);
     void* port_a_callback_context;
