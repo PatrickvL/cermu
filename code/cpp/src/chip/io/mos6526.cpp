@@ -46,7 +46,7 @@ void mos6526_reset(mos6526_t* cia) {
     cia->pending_bus_lines = 0;  // No pending interrupt assertions
     
     // Initialize delay line (multi-cycle signal propagation)
-    cia->delay_line = 0;
+    cia->delay_line.Clear();
     
     // Initialize PB6/PB7 toggle flip-flops (cleared on reset per CIA6526.txt line 107)
     cia->pb67_toggle = 0;
@@ -293,10 +293,10 @@ void mos6526_check_reload_timer(mos6526_t* cia, uint32_t t) { // t:A or B
 void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edge, int in_mode, bool cnt_pin) { // t:A or B
     // Phase 3: Check delay line for countdown signal (4-cycle delay from input to actual decrement)
     // Per CIA6526.txt lines 13-63: Timer countdown uses 4-cycle delay pipeline
-    uint64_t count_check = (t == A) ? DELAY_CHECK(PIPELINE_TA_COUNT) : DELAY_CHECK(PIPELINE_TB_COUNT);
+    bool count_ready = (t == A) ? cia->delay_line.Check(cia->ta_count_pipe) : cia->delay_line.Check(cia->tb_count_pipe);
     
     // Only decrement timer if the countdown signal has propagated through the delay line
-    if ((cia->delay_line & count_check) == 0)
+    if (!count_ready)
         return;  // Countdown signal not ready yet
     
     // Note : CRA 5 INMODE mask is 1 bit (will only ever hit cases 0 and 1)
@@ -391,10 +391,11 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
         }
         
         // Phase 7: Detect INMODE change (Timer A: PHI2 ↔ CNT switching)
+        // Phase 7: Detect INMODE change (Timer A: PHI2 ↔ CNT switching)
         // Per CIA6526.txt lines 210-215: 2-cycle delay when switching timer input
         if ((old_crx & CRA_INMODE) != (v & CRA_INMODE)) {
             // Timer A input mode changed - inject switching delay
-            cia->delay_line |= DELAY_INJECT(PIPELINE_CNT_SWITCH_A);
+            cia->delay_line.Inject(cia->cnt_switch_a_pipe);
         }
     } else { // c == B
         // "CRB
@@ -406,77 +407,76 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
         // Per CIA6526.txt lines 210-215: 2-cycle delay when switching timer input
         if ((old_crx & CRB_INMODE) != (v & CRB_INMODE)) {
             // Timer B input mode changed - inject switching delay
-            cia->delay_line |= DELAY_INJECT(PIPELINE_CNT_SWITCH_B);
+            cia->delay_line.Inject(cia->cnt_switch_b_pipe);
         }
-    }
-    // Set up delay pipeline signals based on timer mode and control bits
-    // Per CIA6526.txt: Timer operations use multi-cycle delay pipelines
-    // Use PIPELINE_* macros directly with DELAY_ helper macros
-    uint64_t count_inject, count_check, count_mask, load_inject, oneshot_check;
-    if (c == A) {
-        count_inject = DELAY_INJECT(PIPELINE_TA_COUNT);
-        count_check = DELAY_CHECK(PIPELINE_TA_COUNT);
-        count_mask = DELAY_MASK(PIPELINE_TA_COUNT);
-        load_inject = DELAY_INJECT(PIPELINE_TA_LOAD);
-        oneshot_check = DELAY_CHECK(PIPELINE_ONESHOT_A);
-    } else {
-        count_inject = DELAY_INJECT(PIPELINE_TB_COUNT);
-        count_check = DELAY_CHECK(PIPELINE_TB_COUNT);
-        count_mask = DELAY_MASK(PIPELINE_TB_COUNT);
-        load_inject = DELAY_INJECT(PIPELINE_TB_LOAD);
-        oneshot_check = DELAY_CHECK(PIPELINE_ONESHOT_B);
     }
     
     // Set clock in PHI2 mode (START=1, appropriate INMODE bits=0)
-    // Per CIA6526.cpp lines 394-400: Inject countdown signal into both delay and feed
     bool running_phi2_mode = false;
     if (c == A) {
         // Timer A: INMODE is single bit (0x20), 0=PHI2, 1=CNT
         running_phi2_mode = ((v & (CRA_START | CRA_INMODE)) == CRA_START);
-    } else {
+        
+        if (running_phi2_mode) {
+            // Timer is running and counting PHI2 cycles
+            cia->delay_line.Inject(cia->ta_count_pipe);
+        } else {
+            // Timer stopped or using external clock - clear countdown signals
+            cia->delay_line.Clear(cia->ta_count_pipe);
+        }
+        
+        // Set one-shot mode state
+        if ((v & CR_RUNMODE) != 0) {
+            cia->delay_line.Inject(cia->oneshot_a_pipe);
+        } else {
+            cia->delay_line.Clear(cia->oneshot_a_pipe);
+        }
+    } else { // c == B
         // Timer B: INMODE is 2 bits (0x60), 0=PHI2, 1=CNT, 2=Timer A, 3=Timer A+CNT
         running_phi2_mode = ((v & (CRB_START | CRB_INMODE)) == CRB_START);
-    }
-    
-    if (running_phi2_mode) {
-        // Timer is running and counting PHI2 cycles
-        // Inject countdown signal, will propagate through pipeline after 4 cycles
-        cia->delay_line |= count_inject | count_check;  // Set inject bit and feed bit
-    } else {
-        // Timer stopped or using external clock - clear countdown signals
-        cia->delay_line &= ~count_mask;  // Clear entire countdown pipeline
-    }
-    
-    // Set one-shot mode feed signal
-    // Per CIA6526.cpp lines 402-407: RUNMODE bit affects one-shot delay feed
-    if ((v & CR_RUNMODE) != 0) {
-        cia->delay_line |= oneshot_check;  // Enable one-shot mode
-    } else {
-        cia->delay_line &= ~oneshot_check;  // Disable one-shot mode
+        
+        if (running_phi2_mode) {
+            // Timer is running and counting PHI2 cycles
+            cia->delay_line.Inject(cia->tb_count_pipe);
+        } else {
+            // Timer stopped or using external clock - clear countdown signals
+            cia->delay_line.Clear(cia->tb_count_pipe);
+        }
+        
+        // Set one-shot mode state
+        if ((v & CR_RUNMODE) != 0) {
+            cia->delay_line.Inject(cia->oneshot_b_pipe);
+        } else {
+            cia->delay_line.Clear(cia->oneshot_b_pipe);
+        }
     }
 
     if ((v & CR_LOAD) > 0) {
-        // "Force Load
-        //  A strobe bit allows the timer latch to be loaded
-        // into the timer counter at any time, whether the timer
-        // is running or not."
-        // Per CIA6526.cpp lines 410-412: Inject LOAD signal into delay pipeline
-        cia->delay_line |= load_inject;
-        // Note: Actual reload happens 2 cycles later when LoadA1/LoadB1 is set
-        
-        // "  4    LOAD   1 = FORCE LOAD (this is a STROBE input, there is no data storage, bit 4 will
-        //                    always read back a zero and writing a zero has no effect)."
-        v &= ~CR_LOAD; // Clear the LOAD strobe bit
-        
-        // CRITICAL FIX: Clear the interrupt flag when manually reloading the timer
-        // This prevents spurious interrupts when restarting a timer that had previously underflowed
-        // The KERNAL uses this pattern: timer underflows → disable mask → reload timer → re-enable mask
-        // Without clearing the flag here, the old ICR_TA bit causes immediate re-interrupt
-        uint8_t timer_flag = (c == A) ? ICR_TA : ICR_TB;
-        if (cia->reg[ICR] & timer_flag) {
-            cia->reg[ICR] &= ~timer_flag;
+            // "Force Load
+            //  A strobe bit allows the timer latch to be loaded
+            // into the timer counter at any time, whether the timer
+            // is running or not."
+            // Per CIA6526.cpp lines 410-412: Inject LOAD signal into delay pipeline
+            if (c == A) {
+                cia->delay_line.Inject(cia->ta_load_pipe);
+            } else {
+                cia->delay_line.Inject(cia->tb_load_pipe);
+            }
+            // Note: Actual reload happens 2 cycles later when signal reaches MSB
+            
+            // "  4    LOAD   1 = FORCE LOAD (this is a STROBE input, there is no data storage, bit 4 will
+            //                    always read back a zero and writing a zero has no effect)."
+            v &= ~CR_LOAD; // Clear the LOAD strobe bit
+            
+            // CRITICAL FIX: Clear the interrupt flag when manually reloading the timer
+            // This prevents spurious interrupts when restarting a timer that had previously underflowed
+            // The KERNAL uses this pattern: timer underflows → disable mask → reload timer → re-enable mask
+            // Without clearing the flag here, the old ICR_TA bit causes immediate re-interrupt
+            uint8_t timer_flag = (c == A) ? ICR_TA : ICR_TB;
+            if (cia->reg[ICR] & timer_flag) {
+                cia->reg[ICR] &= ~timer_flag;
+            }
         }
-    }
     
     // NOTE: Do NOT clear ICR bits when manually stopping a timer.
     // Per CIA6526.txt: "Only reading the ICR will clear it."
@@ -494,7 +494,11 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
         // Reload timer from latch so it starts with the programmed value
         // This is critical for tests that set up a specific count period
         // Per CIA6526.cpp lines 278-282: Inject LOAD signal into delay pipeline
-        cia->delay_line |= load_inject;
+        if (c == A) {
+            cia->delay_line.Inject(cia->ta_load_pipe);
+        } else {
+            cia->delay_line.Inject(cia->tb_load_pipe);
+        }
         
         // "the frequency counter is being reset to 0 when the clock was stopped and is
         // restarted (->hzsync0.prg, hzsync1.prg)"
@@ -940,35 +944,31 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
     // =========================================================================
     // Per CIA6526.txt lines 13-84: Timer operations use delay pipelines
     // Each cycle, shift the delay line left by 1 to advance all signals
-    // Preserve feed bits for continuous signals (PHI2 countdown, one-shot mode)
-    // Reference: CIA6526.cpp line 737: dwNewDelay = (dwDelay << 1) & DelayMask | dwFeed
+    // Continuous signals (PHI2 countdown, one-shot mode) are preserved by re-injecting
+    // each cycle when the condition is true
     
-    uint64_t delay_shifted = cia->delay_line << 1;  // Shift all pipelines by 1 cycle
-    uint64_t delay_feed = 0;  // Feed bits that should persist across shifts
+    // Shift all pipelines by 1 cycle
+    cia->delay_line.Shift();
     
-    // Timer A: Preserve countdown feed bit if running in PHI2 mode
+    // Timer A: Re-inject countdown signal if running in PHI2 mode
     if ((cia->reg[CRA] & CRA_START) && ((cia->reg[CRA] & CRA_INMODE) == 0)) {
         // Timer A running in PHI2 mode - keep injecting countdown signals
-        delay_feed |= DELAY_CHECK(PIPELINE_TA_COUNT);
+        cia->delay_line.Inject(cia->ta_count_pipe);
     }
     
-    // Timer B: Preserve countdown feed bit if running in PHI2 mode
+    // Timer B: Re-inject countdown signal if running in PHI2 mode
     if ((cia->reg[CRB] & CRB_START) && ((cia->reg[CRB] & CRB_INMODE) == 0)) {
         // Timer B running in PHI2 mode (00) - keep injecting countdown signals
-        delay_feed |= DELAY_CHECK(PIPELINE_TB_COUNT);
+        cia->delay_line.Inject(cia->tb_count_pipe);
     }
     
-    // Preserve one-shot mode feed bits
+    // Re-inject one-shot mode state each cycle (continuous state signals)
     if (cia->reg[CRA] & CR_RUNMODE) {
-        delay_feed |= DELAY_CHECK(PIPELINE_ONESHOT_A);
+        cia->delay_line.Inject(cia->oneshot_a_pipe);
     }
     if (cia->reg[CRB] & CR_RUNMODE) {
-        delay_feed |= DELAY_CHECK(PIPELINE_ONESHOT_B);
+        cia->delay_line.Inject(cia->oneshot_b_pipe);
     }
-    
-    // Apply shifted delay with feed bits
-    // Mask to preserve only the active pipeline bits (avoid overflow into unused bits)
-    cia->delay_line = (delay_shifted & DELAY_LINE_MASK) | delay_feed;
 
     // =========================================================================
     // TIMER COUNTDOWN

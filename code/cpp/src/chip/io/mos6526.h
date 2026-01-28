@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdbool.h>
+#include "../../utils/shift_register.hpp" // For delay line implementation
 
 // CIA MOS 6526 DIP has 40 pins; Pinout :
 typedef enum {
@@ -83,11 +84,23 @@ typedef struct mos6526_s {
     // This is the standard pattern all chips should use for edge detection
     bus_state_t prev_bus_state;
     
-    // Multi-cycle delay line for cycle-accurate timing
-    // Single uint64_t shift register that propagates signals across multiple cycles
-    // Each bit field represents a different delayed signal (LOAD, START, etc.)
-    // Shifted right by 1 each cycle to advance all delays in parallel
-    uint64_t delay_line;
+    // Multi-cycle delay line using StaticShiftRegister for cycle-accurate timing
+    // Configuration: TA_COUNT(4), TB_COUNT(4), TA_LOAD(2), TB_LOAD(2),
+    //                ONESHOT_A(2), ONESHOT_B(2), CNT_SWITCH_A(2), CNT_SWITCH_B(2)
+    // Pipe indices: 0=TA_COUNT, 1=TB_COUNT, 2=TA_LOAD, 3=TB_LOAD,
+    //               4=ONESHOT_A, 5=ONESHOT_B, 6=CNT_SWITCH_A, 7=CNT_SWITCH_B
+    using DelayLine = StaticShiftRegister<uint64_t, 4, 4, 2, 2, 2, 2, 2, 2>;
+    DelayLine delay_line;
+    
+    // Pipe handles for type-safe access (zero storage - empty stateless types)
+    typename DelayLine::template Pipe<0> ta_count_pipe;
+    typename DelayLine::template Pipe<1> tb_count_pipe;
+    typename DelayLine::template Pipe<2> ta_load_pipe;
+    typename DelayLine::template Pipe<3> tb_load_pipe;
+    typename DelayLine::template Pipe<4> oneshot_a_pipe;
+    typename DelayLine::template Pipe<5> oneshot_b_pipe;
+    typename DelayLine::template Pipe<6> cnt_switch_a_pipe;
+    typename DelayLine::template Pipe<7> cnt_switch_b_pipe;
     
     // Callback for port A output changes (used by CIA2 for VIC-II bank switching)
     void (*port_a_change_callback)(void* context, uint8_t port_a_output);
@@ -160,69 +173,6 @@ namespace MOS6526 {
     constexpr uint8_t CRB_OUTMODE = CR_OUTMODE;  // Bit 2: Output mode (alias to generic)
     constexpr uint8_t CRB_PBON = CR_PBON;  // Bit 1: PB7 output enable (alias to generic)
     constexpr uint8_t CRB_START = CR_START;  // Bit 0: Start/stop (alias to generic)
-
-    // Delay Line Pipeline Definitions - for multi-cycle signal propagation
-    // Uses shift register approach: inject signal at high bit, check at low bit after N cycles
-    // Based on CIA6526.cpp dwDelay mechanism (lines 65-86)
-    //
-    // Format: Each pipeline defined using ternary operator syntax `offset : length`
-    // The `:` is the ternary operator's separator between true and false values
-    // Example: PIPELINE_TA_COUNT (0 : 4) means bits 0-3 with 4-cycle delay
-    //   - INJECT at bit 3 (offset + length - 1)
-    //   - CHECK at bit 0 (offset)
-    //   - MASK covers bits 0-3
-    //
-    // Usage in code:
-    //   DELAY_INJECT(PIPELINE_TA_COUNT)  expands to  (1ULL << 3)
-    //   DELAY_CHECK(PIPELINE_TA_COUNT)   expands to  (1ULL << 0)
-    //   DELAY_MASK(PIPELINE_TA_COUNT)    expands to  (0xFULL << 0)
-    
-    // Helper macros for extracting offset and length from ternary expression
-    #define PIPELINE_OFFSET(pipeline) (true ? pipeline)   // Extracts offset (left side of :)
-    #define PIPELINE_LENGTH(pipeline) (false ? pipeline)  // Extracts length (right side of :)
-    
-    // Helper macros for delay pipeline operations
-    #define DELAY_INJECT(pipeline) (1ULL << (PIPELINE_OFFSET(pipeline) + PIPELINE_LENGTH(pipeline) - 1))
-    #define DELAY_CHECK(pipeline)  (1ULL << PIPELINE_OFFSET(pipeline))
-    #define DELAY_MASK(pipeline)   (((1ULL << PIPELINE_LENGTH(pipeline)) - 1) << PIPELINE_OFFSET(pipeline))
-    
-    // NOTE: Pipelines must have 1-bit gaps to prevent overflow during left shift
-    
-    // Timer A countdown signal delay (4 cycles: bits 0-3, gap at bit 4)
-    #define PIPELINE_TA_COUNT 0 : 4
-    // Timer B countdown signal delay (4 cycles: bits 5-8, gap at bit 9)
-    #define PIPELINE_TB_COUNT 5 : 4
-    // Timer A LOAD signal delay (2 cycles: bits 10-11, gap at bit 12)
-    #define PIPELINE_TA_LOAD 10 : 2
-    // Timer B LOAD signal delay (2 cycles: bits 13-14, gap at bit 15)
-    #define PIPELINE_TB_LOAD 13 : 2
-    // PB6 pulse clear delay (2 cycles: bits 16-17, gap at bit 18)
-    #define PIPELINE_PB6_LOW 16 : 2
-    // PB7 pulse clear delay (2 cycles: bits 19-20, gap at bit 21)
-    #define PIPELINE_PB7_LOW 19 : 2
-    // Interrupt signal delay (2 cycles: bits 22-23, gap at bit 24)
-    #define PIPELINE_INTERRUPT 22 : 2
-    // One-shot A delay (1 cycle: bit 25, gap at bit 26)
-    #define PIPELINE_ONESHOT_A 25 : 1
-    // One-shot B delay (1 cycle: bit 27, gap at bit 28)
-    #define PIPELINE_ONESHOT_B 27 : 1
-    // CNT input mode switch delay for Timer A (2 cycles: bits 29-30, gap at bit 31)
-    #define PIPELINE_CNT_SWITCH_A 29 : 2
-    // CNT input mode switch delay for Timer B (2 cycles: bits 32-33, gap at bit 34)
-    #define PIPELINE_CNT_SWITCH_B 32 : 2
-    
-    // Combined delay mask for all active pipelines (used in shifting operation)
-    #define DELAY_LINE_MASK (DELAY_MASK(PIPELINE_TA_COUNT) | \
-                             DELAY_MASK(PIPELINE_TB_COUNT) | \
-                             DELAY_MASK(PIPELINE_TA_LOAD) | \
-                             DELAY_MASK(PIPELINE_TB_LOAD) | \
-                             DELAY_MASK(PIPELINE_PB6_LOW) | \
-                             DELAY_MASK(PIPELINE_PB7_LOW) | \
-                             DELAY_MASK(PIPELINE_INTERRUPT) | \
-                             DELAY_MASK(PIPELINE_ONESHOT_A) | \
-                             DELAY_MASK(PIPELINE_ONESHOT_B) | \
-                             DELAY_MASK(PIPELINE_CNT_SWITCH_A) | \
-                             DELAY_MASK(PIPELINE_CNT_SWITCH_B))
 }
 
 // Using declarations to maintain compatibility in MOS6526 implementation files
