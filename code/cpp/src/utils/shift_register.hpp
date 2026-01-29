@@ -314,6 +314,15 @@ public:
         storage_ &= ~PipeDesc<PipeIndex>::DataMask;
     }
     
+    // Fill entire pipeline with 1s for continuous signals
+    // This ensures Check() returns true immediately and after every shift
+    // Matches old behavior: set entire pipeline mask as feed
+    template<uint8_t PipeIndex>
+    [[gnu::always_inline]]
+    constexpr void Feed(Pipe<PipeIndex>) noexcept {
+        storage_ |= PipeDesc<PipeIndex>::DataMask;
+    }
+    
     template<uint8_t PipeIndex>
     [[gnu::always_inline, nodiscard]]
     constexpr bool Any(Pipe<PipeIndex>) const noexcept {

@@ -429,15 +429,19 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
         running_phi2_mode = ((v & (CRA_START | CRA_INMODE)) == CRA_START);
         if (running_phi2_mode) {
             // Timer is running and counting PHI2 cycles
-            cia->delay_line.Inject(ta_count_pipe);
+            // Use Feed() to set both LSB (inject) and MSB (feed/check) bits
+            // This matches old behavior: cia->delay_line |= count_inject | count_check
+            cia->delay_line.Feed(ta_count_pipe);
         } else {
             // Timer stopped or using external clock - clear countdown signals
             cia->delay_line.Clear(ta_count_pipe);
         }
         
-        // Set one-shot mode state
+        // Set one-shot mode state (continuous signal that persists until timer stops)
         if ((v & CR_RUNMODE) != 0) {
-            cia->delay_line.Inject(oneshot_a_pipe);
+            // One-shot mode - set the check/feed bit (MSB)
+            // Matches old behavior: cia->delay_line |= oneshot_check
+            cia->delay_line.Feed(oneshot_a_pipe);
         } else {
             cia->delay_line.Clear(oneshot_a_pipe);
         }
@@ -447,15 +451,17 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
         
         if (running_phi2_mode) {
             // Timer is running and counting PHI2 cycles
-            cia->delay_line.Inject(tb_count_pipe);
+            // Use Feed() to set both LSB (inject) and MSB (feed/check) bits
+            cia->delay_line.Feed(tb_count_pipe);
         } else {
             // Timer stopped or using external clock - clear countdown signals
             cia->delay_line.Clear(tb_count_pipe);
         }
         
-        // Set one-shot mode state
+        // Set one-shot mode state (continuous signal that persists until timer stops)
         if ((v & CR_RUNMODE) != 0) {
-            cia->delay_line.Inject(oneshot_b_pipe);
+            // One-shot mode - set the check/feed bit (MSB)
+            cia->delay_line.Feed(oneshot_b_pipe);
         } else {
             cia->delay_line.Clear(oneshot_b_pipe);
         }
@@ -963,21 +969,24 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
     // Timer A: Re-inject countdown signal if running in PHI2 mode
     if ((cia->reg[CRA] & CRA_START) && ((cia->reg[CRA] & CRA_INMODE) == 0)) {
         // Timer A running in PHI2 mode - keep injecting countdown signals
-        cia->delay_line.Inject(ta_count_pipe);
+        // Use Feed() to maintain both LSB and MSB (emulates feed behavior)
+        cia->delay_line.Feed(ta_count_pipe);
     }
     
     // Timer B: Re-inject countdown signal if running in PHI2 mode
     if ((cia->reg[CRB] & CRB_START) && ((cia->reg[CRB] & CRB_INMODE) == 0)) {
         // Timer B running in PHI2 mode (00) - keep injecting countdown signals
-        cia->delay_line.Inject(tb_count_pipe);
+        // Use Feed() to maintain both LSB and MSB (emulates feed behavior)
+        cia->delay_line.Feed(tb_count_pipe);
     }
     
     // Re-inject one-shot mode state each cycle (continuous state signals)
-    if (cia->reg[CRA] & CR_RUNMODE) {
-        cia->delay_line.Inject(oneshot_a_pipe);
+    // CRITICAL: Only if timer is still running! Once stopped, don't re-inject
+    if ((cia->reg[CRA] & (CR_START | CR_RUNMODE)) == (CR_START | CR_RUNMODE)) {
+        cia->delay_line.Feed(oneshot_a_pipe);
     }
-    if (cia->reg[CRB] & CR_RUNMODE) {
-        cia->delay_line.Inject(oneshot_b_pipe);
+    if ((cia->reg[CRB] & (CR_START | CR_RUNMODE)) == (CR_START | CR_RUNMODE)) {
+        cia->delay_line.Feed(oneshot_b_pipe);
     }
 
     // =========================================================================
