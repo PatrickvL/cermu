@@ -204,7 +204,10 @@ void mos6526_update_output_port(mos6526_t* cia, uint32_t p, uint8_t v) { // p:A 
 }
 
 void mos6526_update_output_port_b(mos6526_t* cia, uint8_t v) {
-    // Handle PBON bits
+    // Compute physical pin output with timer overrides (if PBON enabled)
+    // Note: Port B register (cia->reg[PRB]) is already set by the write handler
+    
+    // Handle PBON bits - these override the pin output, NOT the register value
     // "PBON   1 = TIMER A output appears on PB6.
     //         0 = PB6 normal operation."
     if ((cia->reg[CRA] & CRA_PBON) > 0) { // PB6 output mode:Timer
@@ -218,7 +221,7 @@ void mos6526_update_output_port_b(mos6526_t* cia, uint8_t v) {
             // Flip-flop toggles on each underflow and is set HIGH on START
             v = (v & ~PB6_MASK) | (cia->pb67_toggle & PB6_MASK);
         }
-    } // else PB6 output mode:Port (return port output bit unmodified)
+    } // else PB6 output mode:Port (use port register bit)
 
     // "CRB[..]1 controls the output of TIMER B on PB7"
     if ((cia->reg[CRB] & CRB_PBON) > 0) { // PB7 output mode:Timer
@@ -232,15 +235,19 @@ void mos6526_update_output_port_b(mos6526_t* cia, uint8_t v) {
             // Flip-flop toggles on each underflow and is set HIGH on START
             v = (v & ~PB7_MASK) | (cia->pb67_toggle & PB7_MASK);
         }
-    } // else PB7 output mode:Port (return port output bit unmodified)
+    } // else PB7 output mode:Port (use port register bit)
 
+    // Drive physical pins with timer overrides applied
+    // CRITICAL: This affects what external devices see, but NOT what reads return
     mos6526_update_output_port(cia, B, v);
 }
 
 uint8_t mos6526_read_port_data(mos6526_t* cia, uint32_t p) { // p:A or B
     // Start with current port value (pull-ups HIGH, or driven by output pins)
     uint8_t port_value = (p == A) ? cia->port_a_value : cia->port_b_value;
-    uint8_t output_mask = cia->reg[DDRA + p]; //p=B:DDRB (not IDDRB), to read whatever is written to the port (including PB6/7 overrides)
+    // For Port B, use IDDRB which includes PBON-forced outputs
+    // For Port A, use regular DDRA
+    uint8_t output_mask = (p == A) ? cia->reg[DDRA] : cia->reg[IDDRB_OFFSET];
     
     // For input pins, call the read callback to get external device state
     // External devices (keyboard, joystick) can pull lines LOW
