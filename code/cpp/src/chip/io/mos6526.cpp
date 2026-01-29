@@ -208,25 +208,29 @@ void mos6526_update_output_port_b(mos6526_t* cia, uint8_t v) {
     // "PBON   1 = TIMER A output appears on PB6.
     //         0 = PB6 normal operation."
     if ((cia->reg[CRA] & CRA_PBON) > 0) { // PB6 output mode:Timer
-        uint8_t timer_a_output = ((cia->reg[ICR] & ICR_TA) << 6);
-        if ((cia->reg[CRA] & CRA_OUTMODE) == 0) { // PB6 timer mode:Pulse; will be cleared in next ClockPulse()
-            v = (v & ~PB6_MASK) | timer_a_output; // TODO: Verify
-        } else { // PB6 timer mode:Toggle
-            if (timer_a_output > 0) { // TODO: Verify
-                v ^= PB6_MASK; // TODO: Verify
-            }
+        if ((cia->reg[CRA] & CRA_OUTMODE) == 0) {
+            // Pulse mode: Output HIGH for one cycle on underflow (ICR_TA set)
+            // Will be cleared in next cycle by the pulse clear logic in mos6526_tick()
+            uint8_t timer_a_output = ((cia->reg[ICR] & ICR_TA) << 6);
+            v = (v & ~PB6_MASK) | timer_a_output;
+        } else {
+            // Toggle mode: Output the flip-flop state
+            // Flip-flop toggles on each underflow and is set HIGH on START
+            v = (v & ~PB6_MASK) | (cia->pb67_toggle & PB6_MASK);
         }
     } // else PB6 output mode:Port (return port output bit unmodified)
 
     // "CRB[..]1 controls the output of TIMER B on PB7"
     if ((cia->reg[CRB] & CRB_PBON) > 0) { // PB7 output mode:Timer
-        uint8_t timer_b_output = ((cia->reg[ICR] & ICR_TB) << 6);
-        if ((cia->reg[CRB] & CRB_OUTMODE) == 0) { // PB7 timer mode:Pulse; Will be cleared in next ClockPulse()
+        if ((cia->reg[CRB] & CRB_OUTMODE) == 0) {
+            // Pulse mode: Output HIGH for one cycle on underflow (ICR_TB set)
+            // Will be cleared in next cycle by the pulse clear logic in mos6526_tick()
+            uint8_t timer_b_output = ((cia->reg[ICR] & ICR_TB) << 6);
             v = (v & ~PB7_MASK) | timer_b_output;
-        } else { // PB7 timer mode:Toggle
-            if (timer_b_output > 0) { // TODO: Verify
-                v ^= PB7_MASK; // TODO: Verify
-            }
+        } else {
+            // Toggle mode: Output the flip-flop state
+            // Flip-flop toggles on each underflow and is set HIGH on START
+            v = (v & ~PB7_MASK) | (cia->pb67_toggle & PB7_MASK);
         }
     } // else PB7 output mode:Port (return port output bit unmodified)
 
@@ -344,7 +348,7 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
         // Phase 5: Toggle PB6/PB7 flip-flop on timer underflow
         // Per CIA6526.txt lines 104-110: Each underflow toggles the flip-flop
         // Only affects output when PBON=1 and OUTMODE=1 (toggle mode)
-        uint8_t toggle_bit = (t == A) ? 0x40 : 0x80;  // PB6 for Timer A, PB7 for Timer B
+        uint8_t toggle_bit = (t == A) ? PB6_MASK : PB7_MASK;
         cia->pb67_toggle ^= toggle_bit;  // XOR to toggle
         
         // "In one-shot mode, the timer will count down from
@@ -487,7 +491,7 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
     // Per CIA6526.txt lines 104-110 and CIA6526.cpp lines 415-420
     if ((v & CR_START) != 0 && (old_crx & CR_START) == 0) {
         // Timer transitions from stopped to started
-        uint8_t toggle_bit = (c == A) ? 0x40 : 0x80;  // PB6 or PB7
+        uint8_t toggle_bit = (c == A) ? PB6_MASK : PB7_MASK;
         cia->pb67_toggle |= toggle_bit;
         
         // Reload timer from latch so it starts with the programmed value
