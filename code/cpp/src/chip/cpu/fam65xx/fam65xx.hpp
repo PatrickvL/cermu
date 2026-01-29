@@ -1505,34 +1505,58 @@ public:
 #ifndef PROCESSOR_TESTS
       // PROCESSOR_TESTS mode: Disable interrupt hijacking for clean instruction testing
       // Production mode: Always allow interrupt hijacking for accurate emulation
+      
+      // CRITICAL: Save active_interrupt state BEFORE process_interrupt_detection()
+      // because that function will SET active_interrupt when it detects an IRQ.
+      // We need to know if an interrupt was ALREADY active before detection.
+      interrupt_t interrupt_before_detection = this->active_interrupt;
+      
       if (this->process_interrupt_detection(pins)) {
         if (this->active_interrupt == FAM65XX_INT_RESET) {
           return reset(pins);
         } else if (this->current_handler == &fam65xx_t::fetch_opcode &&
                    this->half_cycle == 0) {
-          // Hijack instruction fetch at boundary - check if interrupt can be serviced
-          // This is where the I flag check happens for maskable IRQ
-          // Non-maskable interrupts (NMI, RESET) bypass this check
-          
-          if (this->active_interrupt == FAM65XX_INT_IRQ) {
-            // IRQ is maskable - check I flag at hijack time (instruction boundary)
-            if (!(this->get(REG_P) & FLAG_I)) {
-              // I flag clear - IRQ servicing allowed, hijack to BRK
-              this->current_handler = &fam65xx_t::op_brk;
-              // Note: Don't clear shift register here - see comment at line 1522
-            }
-            // else: I flag set - don't hijack, IRQ stays pending in shift register
+          // CRITICAL: Don't hijack if an interrupt was ALREADY being processed!
+          // Check the saved state from BEFORE detection, not the current state.
+          // active_interrupt is set by process_interrupt_detection() when IRQ is detected,
+          // and cleared by RTI when interrupt handling completes.
+          // While an interrupt is active, we must not accept new interrupts even if detected,
+          // because allowing nesting causes KERNAL IRQ handler corruption.
+          if (interrupt_before_detection != FAM65XX_INT_NONE) {
+            // Interrupt was already being handled before this detection - don't hijack
+            // Revert active_interrupt to prevent accepting this new interrupt
+            this->active_interrupt = interrupt_before_detection;
           } else {
-            // Non-maskable interrupt (NMI, RESET, etc) - always hijack
-            this->current_handler = &fam65xx_t::op_brk;
+            // No interrupt was active before detection - safe to hijack
+            // Hijack instruction fetch at boundary - check if interrupt can be serviced
+            // This is where the I flag check happens for maskable IRQ
+            // Non-maskable interrupts (NMI, RESET) bypass this check
+            
+            if (this->active_interrupt == FAM65XX_INT_IRQ) {
+              // IRQ is maskable - check I flag at hijack time (instruction boundary)
+              if (!(this->get(REG_P) & FLAG_I)) {
+                // I flag clear - IRQ servicing allowed, hijack to BRK
+                this->current_handler = &fam65xx_t::op_brk;
+                
+                // CRITICAL FIX: Clear interrupt shift register to prevent immediate re-triggering
+                // When an interrupt is acknowledged by hijacking fetch, we must clear the shift
+                // register. Otherwise, the IRQ bits remain set and trigger another interrupt
+                // immediately on the next cycle, before the I flag can be set by BRK.
+                // This matches hardware behavior: once an interrupt is acknowledged, the CPU
+                // stops sampling that interrupt line until the I flag is set and then cleared.
+                this->interrupt_shift_register = 0;
+                this->nmi_prev = (pins & FAM65XX_NMI) ? 1 : 0; // Reset NMI edge detection
+              }
+              // else: I flag set - don't hijack, IRQ stays pending in shift register
+            } else {
+              // Non-maskable interrupt (NMI, RESET, etc) - always hijack
+              this->current_handler = &fam65xx_t::op_brk;
+              
+              // Clear shift register for non-maskable interrupts too
+              this->interrupt_shift_register = 0;
+              this->nmi_prev = (pins & FAM65XX_NMI) ? 1 : 0; // Reset NMI edge detection
+            }
           }
-          
-          // CRITICAL: DO NOT clear shift register here at hijack time!
-          // The shift register must remain active until AFTER the I flag is set by BRK.
-          // If we clear it here, the IRQ line (still LOW because CIA ICR not read yet)
-          // will immediately fill the shift register again during BRK execution (cycles 0-9),
-          // causing an IRQ storm. The shift register is correctly cleared by BRK at cycle 9
-          // AFTER the I flag is set, which prevents new IRQ sampling.
         }
       }
 #endif
