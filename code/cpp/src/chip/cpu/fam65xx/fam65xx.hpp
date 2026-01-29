@@ -945,6 +945,40 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     return false;
   }
 
+  // ========================================================================
+  // INTERRUPT HIJACKING HELPER FUNCTIONS
+  // ========================================================================
+
+  /**
+   * Check if interrupt can be hijacked at current execution point
+   * Returns true only if at fetch boundary AND no interrupt already active
+   */
+  inline bool can_hijack_for_interrupt() const {
+    // Must be at fetch boundary (start of instruction)
+    if (this->current_handler != &fam65xx_t::fetch_opcode || this->half_cycle != 0) {
+      return false;
+    }
+    
+    // Prevent nesting: don't hijack if interrupt already active
+    // This prevents KERNAL IRQ handler corruption from nested interrupts
+    return (this->active_interrupt == FAM65XX_INT_NONE);
+  }
+
+  /**
+   * Check if detected interrupt should be serviced
+   * Non-maskable interrupts (NMI, RESET) always serviced
+   * Maskable IRQ only serviced if I flag is clear
+   */
+  inline bool should_service_interrupt(interrupt_t detected_int) const {
+    // Non-maskable interrupts always serviced
+    if (detected_int != FAM65XX_INT_IRQ) {
+      return true;
+    }
+    
+    // IRQ: only service if I flag is clear (interrupts enabled)
+    return !(this->get(REG_P) & FLAG_I);
+  }
+
   // Template-dependent function pointer type
   using InstructionHandler = bus_state_t (fam65xx_t<Traits>::*)(bus_state_t);
 
@@ -1506,57 +1540,32 @@ public:
       // PROCESSOR_TESTS mode: Disable interrupt hijacking for clean instruction testing
       // Production mode: Always allow interrupt hijacking for accurate emulation
       
-      // CRITICAL: Save active_interrupt state BEFORE process_interrupt_detection()
-      // because that function will SET active_interrupt when it detects an IRQ.
-      // We need to know if an interrupt was ALREADY active before detection.
-      interrupt_t interrupt_before_detection = this->active_interrupt;
-      
       if (this->process_interrupt_detection(pins)) {
+        // RESET is special - immediate return
         if (this->active_interrupt == FAM65XX_INT_RESET) {
           return reset(pins);
-        } else if (this->current_handler == &fam65xx_t::fetch_opcode &&
-                   this->half_cycle == 0) {
-          // CRITICAL: Don't hijack if an interrupt was ALREADY being processed!
-          // Check the saved state from BEFORE detection, not the current state.
-          // active_interrupt is set by process_interrupt_detection() when IRQ is detected,
-          // and cleared by RTI when interrupt handling completes.
-          // While an interrupt is active, we must not accept new interrupts even if detected,
-          // because allowing nesting causes KERNAL IRQ handler corruption.
-          if (interrupt_before_detection != FAM65XX_INT_NONE) {
-            // Interrupt was already being handled before this detection - don't hijack
-            // Revert active_interrupt to prevent accepting this new interrupt
-            this->active_interrupt = interrupt_before_detection;
-          } else {
-            // No interrupt was active before detection - safe to hijack
-            // Hijack instruction fetch at boundary - check if interrupt can be serviced
-            // This is where the I flag check happens for maskable IRQ
-            // Non-maskable interrupts (NMI, RESET) bypass this check
+        }
+        
+        // Can we hijack at this point? (fetch boundary + not nested)
+        if (this->can_hijack_for_interrupt()) {
+          // Should we service this specific interrupt? (I flag check for IRQ)
+          if (this->should_service_interrupt(this->active_interrupt)) {
+            // Hijack to BRK handler
+            this->current_handler = &fam65xx_t::op_brk;
             
-            if (this->active_interrupt == FAM65XX_INT_IRQ) {
-              // IRQ is maskable - check I flag at hijack time (instruction boundary)
-              if (!(this->get(REG_P) & FLAG_I)) {
-                // I flag clear - IRQ servicing allowed, hijack to BRK
-                this->current_handler = &fam65xx_t::op_brk;
-                
-                // CRITICAL FIX: Clear interrupt shift register to prevent immediate re-triggering
-                // When an interrupt is acknowledged by hijacking fetch, we must clear the shift
-                // register. Otherwise, the IRQ bits remain set and trigger another interrupt
-                // immediately on the next cycle, before the I flag can be set by BRK.
-                // This matches hardware behavior: once an interrupt is acknowledged, the CPU
-                // stops sampling that interrupt line until the I flag is set and then cleared.
-                this->interrupt_shift_register = 0;
-                this->nmi_prev = (pins & FAM65XX_NMI) ? 1 : 0; // Reset NMI edge detection
-              }
-              // else: I flag set - don't hijack, IRQ stays pending in shift register
-            } else {
-              // Non-maskable interrupt (NMI, RESET, etc) - always hijack
-              this->current_handler = &fam65xx_t::op_brk;
-              
-              // Clear shift register for non-maskable interrupts too
-              this->interrupt_shift_register = 0;
-              this->nmi_prev = (pins & FAM65XX_NMI) ? 1 : 0; // Reset NMI edge detection
-            }
+            // Clear shift register to prevent immediate re-trigger
+            // Once interrupt acknowledged, stop sampling until I flag is set then cleared
+            this->interrupt_shift_register = 0;
+            this->nmi_prev = (pins & FAM65XX_NMI) ? 1 : 0; // Reset NMI edge detection
+          } else {
+            // I flag set - don't service IRQ, keep it pending in shift register
+            // Revert active_interrupt since we're not servicing it yet
+            this->active_interrupt = FAM65XX_INT_NONE;
           }
+        } else {
+          // Can't hijack (nested interrupt) - revert detection
+          // Keep interrupt pending in shift register for later
+          this->active_interrupt = FAM65XX_INT_NONE;
         }
       }
 #endif
