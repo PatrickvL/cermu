@@ -5,17 +5,6 @@
 #include <stdlib.h>
 #include <cstdio>
 
-// Zero-storage pipe type-tags for delay line access (compile-time only)
-// These are passed to Inject/Check/Clear methods for type-safe pipe access
-constexpr mos6526_t::DelayLine::Pipe<0> ta_count_pipe;
-constexpr mos6526_t::DelayLine::Pipe<1> tb_count_pipe;
-constexpr mos6526_t::DelayLine::Pipe<2> ta_load_pipe;
-constexpr mos6526_t::DelayLine::Pipe<3> tb_load_pipe;
-constexpr mos6526_t::DelayLine::Pipe<4> oneshot_a_pipe;
-constexpr mos6526_t::DelayLine::Pipe<5> oneshot_b_pipe;
-constexpr mos6526_t::DelayLine::Pipe<6> cnt_switch_a_pipe;
-constexpr mos6526_t::DelayLine::Pipe<7> cnt_switch_b_pipe;
-
 void mos6526_reset(mos6526_t* cia) {
     // "Hardware RESET resets all I/O lines to inputs, and
     // thanks to the CIA's internal pull-up resistors,
@@ -427,7 +416,6 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
     if (c == A) {
         // Timer A: INMODE is single bit (0x20), 0=PHI2, 1=CNT
         running_phi2_mode = ((v & (CRA_START | CRA_INMODE)) == CRA_START);
-        
         if (running_phi2_mode) {
             // Timer is running and counting PHI2 cycles
             cia->delay_line.Inject(ta_count_pipe);

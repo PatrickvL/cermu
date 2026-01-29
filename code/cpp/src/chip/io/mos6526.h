@@ -84,14 +84,6 @@ typedef struct mos6526_s {
     // This is the standard pattern all chips should use for edge detection
     bus_state_t prev_bus_state;
     
-    // Multi-cycle delay line using StaticShiftRegister for cycle-accurate timing
-    // Configuration: TA_COUNT(4), TB_COUNT(4), TA_LOAD(2), TB_LOAD(2),
-    //                ONESHOT_A(2), ONESHOT_B(2), CNT_SWITCH_A(2), CNT_SWITCH_B(2)
-    // Pipe indices: 0=TA_COUNT, 1=TB_COUNT, 2=TA_LOAD, 3=TB_LOAD,
-    //               4=ONESHOT_A, 5=ONESHOT_B, 6=CNT_SWITCH_A, 7=CNT_SWITCH_B
-    using DelayLine = StaticShiftRegister<uint64_t, 4, 4, 2, 2, 2, 2, 2, 2>;
-    DelayLine delay_line;
-    
     // Callback for port A output changes (used by CIA2 for VIC-II bank switching)
     void (*port_a_change_callback)(void* context, uint8_t port_a_output);
     void* port_a_callback_context;
@@ -103,10 +95,30 @@ typedef struct mos6526_s {
     void* port_a_read_context;
     uint8_t (*port_b_read_callback)(void* context, uint8_t port_b_output);
     void* port_b_read_context;
+
+    // Multi-cycle delay line using StaticShiftRegister for cycle-accurate timing
+    // Configuration: TA_COUNT(4), TB_COUNT(4), TA_LOAD(2), TB_LOAD(2),
+    //                ONESHOT_A(2), ONESHOT_B(2), CNT_SWITCH_A(2), CNT_SWITCH_B(2)
+    // Pipe indices: 0=TA_COUNT, 1=TB_COUNT, 2=TA_LOAD, 3=TB_LOAD,
+    //               4=ONESHOT_A, 5=ONESHOT_B, 6=CNT_SWITCH_A, 7=CNT_SWITCH_B
+    using DelayLine = StaticShiftRegister<uint64_t, 4, 4, 2, 2, 2, 2, 2, 2>;
+    DelayLine delay_line;
 } mos6526_t;
 
-// MOS6526 CIA Register Definitions
 namespace MOS6526 {
+    // Zero-storage pipe type-tags for delay line access (compile-time only)
+    // These are passed to Inject/Check/Clear methods for type-safe pipe access
+    inline constexpr mos6526_t::DelayLine::Pipe<0> ta_count_pipe;
+    inline constexpr mos6526_t::DelayLine::Pipe<1> tb_count_pipe;
+    inline constexpr mos6526_t::DelayLine::Pipe<2> ta_load_pipe;
+    inline constexpr mos6526_t::DelayLine::Pipe<3> tb_load_pipe;
+    inline constexpr mos6526_t::DelayLine::Pipe<4> oneshot_a_pipe;
+    inline constexpr mos6526_t::DelayLine::Pipe<5> oneshot_b_pipe;
+    inline constexpr mos6526_t::DelayLine::Pipe<6> cnt_switch_a_pipe;
+    inline constexpr mos6526_t::DelayLine::Pipe<7> cnt_switch_b_pipe;
+
+    // MOS6526 CIA Register Definitions
+    
     // Technical register indices (in decimal) and masks (in hexadecimal)
     constexpr uint8_t PRA = 0;             // $dc00 Peripheral Data Reg A Monitoring/control of the 8 data lines of Port A.
     constexpr uint8_t PRB = 1;             // $dc01 Peripheral Data Reg B Monitoring/control of the 8 data lines of Port B.
