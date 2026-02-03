@@ -44,6 +44,7 @@ void mos6526_reset(mos6526_t* cia) {
     cia->tod_cycles = 0;
     cia->interrupt_mask = 0;
     cia->pending_bus_lines = 0;  // No pending interrupt assertions
+    cia->prev_alarm_state = false;  // No alarm initially
     
     // Initialize delay line (multi-cycle signal propagation)
     cia->delay_line.Clear();
@@ -570,11 +571,23 @@ void mos6526_check_alarm_interrupt(mos6526_t* cia) {
     // Are time of day and alarm time equal?
     // Note, this must be checked BEFORE increasing any TOD register, so that
     // a preceding TOD reset to zero will hit such an alarm (as it should)
-    if (cia->reg[TOD_10THS] == cia->reg[ALARM_OFFSET + TOD_10THS] &&
+
+    // Per chips_mos6526.hpp lines 503-512: Only trigger interrupt on RISING EDGE
+    // This prevents retriggering the alarm interrupt every cycle when alarm condition stays true
+    bool alarm_active = (
+        cia->reg[TOD_10THS] == cia->reg[ALARM_OFFSET + TOD_10THS] &&
         cia->reg[TOD_SEC] == cia->reg[ALARM_OFFSET + TOD_SEC] &&
         cia->reg[TOD_MIN] == cia->reg[ALARM_OFFSET + TOD_MIN] &&
-        cia->reg[TOD_HR] == cia->reg[ALARM_OFFSET + TOD_HR])
+        cia->reg[TOD_HR] == cia->reg[ALARM_OFFSET + TOD_HR]
+    );
+
+    // Only set interrupt flag on rising edge (alarm goes from false to true)
+    if (alarm_active && !cia->prev_alarm_state) {
         cia->reg[ICR] |= ICR_ALRM;
+    }
+
+    // Store current alarm state for next cycle's edge detection
+    cia->prev_alarm_state = alarm_active;
 }
 
 static uint8_t bcd_inc(mos6526_t* cia, uint32_t r) { // r:TOD_SEC,TOD_MIN or TOD_HR
