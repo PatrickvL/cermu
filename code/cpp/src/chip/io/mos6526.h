@@ -68,6 +68,10 @@ typedef struct mos6526_s {
     int serial_shift;
     uint8_t interrupt_mask;
     
+    // TOD alarm state for edge detection (prevents retriggering alarm every cycle)
+    // Per chips_mos6526.hpp: Only trigger alarm interrupt on rising edge
+    bool prev_alarm_state;
+    
     // PB6/PB7 toggle flip-flops (per CIA6526.txt lines 104-110)
     // Set HIGH on rising edge of START bit, toggle on each underflow
     // Used when PBON=1 and OUTMODE=1 (toggle mode)
