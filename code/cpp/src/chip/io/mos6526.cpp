@@ -43,8 +43,10 @@ void mos6526_reset(mos6526_t* cia) {
     cia->is_running_tod = false;
     cia->tod_cycles = 0;
     cia->interrupt_mask = 0;
+    cia->interrupt_mask_delayed = 0;  // IMR delay (chips imr1)
     cia->pending_bus_lines = 0;  // No pending interrupt assertions
     cia->prev_alarm_state = false;  // No alarm initially
+    cia->icr_read_this_cycle = false;  // Timer B Bug state
     
     // Initialize delay line (multi-cycle signal propagation)
     cia->delay_line.Clear();
@@ -101,6 +103,10 @@ uint8_t mos6526_read_and_clear_interrupt_control_register(mos6526_t* cia) {
     // "interrupt can be prevented by reading the ICR at the time of the underflow."
     cia->reg[ICR] = 0;
     
+    // Timer B Bug: Remember ICR reads to block Timer B interrupts this cycle
+    // Per chips_mos6526.hpp lines 476-477: Set flag that will be checked in interrupt handling
+    cia->icr_read_this_cycle = true;
+    
     // NOTE: With the new pull-up resistor model, we don't need to manage delayed_irq.
     // The interrupt line will be released automatically in the next cycle when
     // mos6526_tick() sees that ICR_IRQ is clear and doesn't assert the line.
@@ -145,16 +151,27 @@ void mos6526_write_interrupt_control_register(mos6526_t* cia, uint32_t v) {
     // any mask bit written with a one will be set, while those
     // mask bits written with a zero will be unaffected."
     // "Bit 7: Source bit.
+    
+    // Per chips_mos6526.hpp lines 443-455: Update interrupt_mask_delayed
+    // This creates a 1-cycle delay before the mask takes effect
     if ((v & ICR_S_C) == 0)
         // 0 = set bits 0..4 are clearing the according mask bit.
-        cia->interrupt_mask &= ~bits;
+        cia->interrupt_mask_delayed &= ~bits;
     else
         // 1 = set bits 0..4 are setting the according mask bit."
-        cia->interrupt_mask |= bits;
+        cia->interrupt_mask_delayed |= bits;
 
     // "When a condition in the ICR is true, setting the corresponding bit in the IMR must also set the interrupt."
     // "Clearing the bit in the IMR may not clear the interrupt."
+    // IMPORTANT: We still need to call mos6526_check_interrupt_mask() because it handles
+    // both setting ICR_IRQ when masked interrupts exist AND clearing it when they don't.
+    // The chips version uses immediate check with delayed mask (lines 461-463), but we
+    // need the full clearing logic that our check_interrupt_mask provides.
+    // However, we temporarily copy delayed mask to active mask for this check.
+    uint8_t saved_mask = cia->interrupt_mask;
+    cia->interrupt_mask = cia->interrupt_mask_delayed;  // Temporarily use delayed mask
     mos6526_check_interrupt_mask(cia);
+    cia->interrupt_mask = saved_mask;  // Restore for end-of-cycle update
     // "Once the interrupt flip-flop has been set, changing the condition in the IMR has no effect."
 }
 
@@ -349,8 +366,12 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
     // CIA timers underflow when they decrement from $0000, wrapping to $FFFF
     if (timer == 0xFFFF) {
         // Timer underflowed - reload from latch
-        // Set ICR flag
-        cia->reg[ICR] |= (uint8_t)(ICR_TA + t); // t=A:ICR_TA, t=B:ICR_TB
+        // Set ICR flag, but for Timer B check the "Timer B Bug" first
+        // Per chips_mos6526.hpp lines 488-493: ICR reads block Timer B interrupts
+        if (t == A || !cia->icr_read_this_cycle) {
+            cia->reg[ICR] |= (uint8_t)(ICR_TA + t); // t=A:ICR_TA, t=B:ICR_TB
+        }
+        // Note: Timer A always sets ICR_TA, Timer B only if ICR wasn't read this cycle
         mos6526_reload_timer(cia, t);
         
         // Phase 5: Toggle PB6/PB7 flip-flop on timer underflow
@@ -1050,6 +1071,14 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
         // No interrupt - clear pending for next cycle
         cia->pending_bus_lines = 0;
     }
+    
+    // Per chips_mos6526.hpp line 615: Transfer delayed mask to active mask at end of cycle
+    // This implements the 1-cycle delay for interrupt mask updates
+    cia->interrupt_mask = cia->interrupt_mask_delayed;
+    
+    // Clear Timer B Bug flag for next cycle
+    // Per chips_mos6526.hpp: ICR read blocking only affects the same cycle
+    cia->icr_read_this_cycle = false;
     
     return bus_state;
 }

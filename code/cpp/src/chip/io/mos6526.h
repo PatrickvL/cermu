@@ -67,10 +67,15 @@ typedef struct mos6526_s {
     int tod_cycles;
     int serial_shift;
     uint8_t interrupt_mask;
+    uint8_t interrupt_mask_delayed;  // 1-cycle delay for interrupt mask updates (IMR → IMR1)
     
     // TOD alarm state for edge detection (prevents retriggering alarm every cycle)
     // Per chips_mos6526.hpp: Only trigger alarm interrupt on rising edge
     bool prev_alarm_state;
+    
+    // Timer B Bug: Track ICR reads to block Timer B interrupt generation
+    // Per chips_mos6526.hpp lines 476-477: "Timer B Bug" implementation
+    bool icr_read_this_cycle;
     
     // PB6/PB7 toggle flip-flops (per CIA6526.txt lines 104-110)
     // Set HIGH on rising edge of START bit, toggle on each underflow
