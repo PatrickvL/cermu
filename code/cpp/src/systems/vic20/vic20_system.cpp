@@ -578,13 +578,24 @@ uint8_t VIC20System::vic_mem_read(void* user_data, uint16_t addr) {
             return sys->char_rom_[rom_addr];
         }
     } else {
-        // RAM access - unified 5KB RAM (includes screen at $1000)
-        if (addr < 0x1400) {
-            return sys->ram_simple_[addr];
+        // RAM access - VIC can only address 16KB (14-bit address space: 0x0000-0x3FFF)
+        // Unexpanded VIC-20: 5KB at $0000-$13FF
+        // With 3K expansion: adds $1E00-$1FFF (screen) + other blocks
+        // Addresses wrap/mirror within 16KB space
+        uint16_t ram_addr = addr & 0x3FFF;  // Limit to 16KB address space
+        
+        if (ram_addr < 0x1400) {
+            // Main 5KB RAM
+            return sys->ram_simple_[ram_addr];
         }
-        // Expansion RAM (0x1400-0x1FFF)
-        else if (addr < 0x2000) {
-            return sys->expansion_ram_[addr - 0x1400];
+        else if (ram_addr < 0x2000) {
+            // First expansion block (0x1400-0x1FFF)
+            return sys->expansion_ram_[ram_addr - 0x1400];
+        }
+        else if (ram_addr >= 0x2000 && ram_addr < 0x4000) {
+            // Additional expansion RAM (0x2000-0x3FFF) - map to expansion_ram with wrapping
+            // expansion_ram is 3KB (0xC00 bytes), so wrap addresses
+            return sys->expansion_ram_[(ram_addr - 0x1400) % sizeof(sys->expansion_ram_)];
         }
     }
     
