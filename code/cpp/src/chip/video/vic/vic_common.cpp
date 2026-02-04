@@ -221,9 +221,14 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
                 vic->matrix_video_byte = vic->mem_read(vic->mem_user_data, base_video | (vic->matrix_index / 8));
                 vic->matrix_color_byte = vic->color_read(vic->color_user_data, vic->matrix_index / 8);
                 
-                // Calculate character ROM address and fetch: base_char | (video_byte << 3) | (raster_line & 7) | 0x8000
+                // Calculate character line: should be relative to screen origin, not absolute raster
+                const uint16_t screen_origin_y = vic->registers[VIC_REG_CONTROL2] << 1;
+                const uint8_t char_line = (vic->raster_counter - screen_origin_y) & 7;
+                
+                // Calculate character ROM address and fetch: base_char | (video_byte << 3) | char_line ^ 0x8000
+                // NOTE: XOR (^) not OR (|) for bit 15 - this inverts the bit to access character ROM
                 vic->matrix_char_data = vic->mem_read(vic->mem_user_data,
-                    (base_char | ((uint16_t)vic->matrix_video_byte << 3) | (vic->raster_counter & 7)) | 0x8000);
+                    (base_char | ((uint16_t)vic->matrix_video_byte << 3) | char_line) ^ 0x8000);
             } else {
                 // No memory access available - emit blank
                 vic->matrix_char_data = 0;
