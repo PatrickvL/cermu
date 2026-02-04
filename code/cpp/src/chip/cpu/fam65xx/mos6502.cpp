@@ -76,6 +76,14 @@ bus_state_t mos6502_tick(mos6502_t *cpu, bus_state_t pins) {
   return CPU_CAST(mos6502_cpu_t, cpu)->tick<mos6502_cpu_t::Phase::PHI2>(pins);
 }
 
+bus_state_t mos6502_tick_phi2(mos6502_t *cpu, bus_state_t pins) {
+  return CPU_CAST(mos6502_cpu_t, cpu)->tick<mos6502_cpu_t::Phase::PHI2>(pins);
+}
+
+bus_state_t mos6502_tick_phi1(mos6502_t *cpu, bus_state_t pins) {
+  return CPU_CAST(mos6502_cpu_t, cpu)->tick<mos6502_cpu_t::Phase::PHI1>(pins);
+}
+
 bool mos6502_opdone(mos6502_t *cpu) {
   return CPU_CAST(mos6502_cpu_t, cpu)->opdone();
 }
