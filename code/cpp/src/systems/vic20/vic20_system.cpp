@@ -13,6 +13,9 @@
 #include "../../chip/video/vic/vic_common.h"  // For VIC_COLOR_* constants
 #include "../../chip/io/mos6522.h"
 
+// Include bus interface
+#include "../../core/bus_cycle_interface.h"
+
 // Include ROM loader
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
@@ -261,12 +264,8 @@ bool VIC20System::initialize() {
     memset(expansion_ram_, 0, sizeof(expansion_ram_));
     memset(color_ram_simple_, 0, sizeof(color_ram_simple_));  // Color RAM: black at power-on (hardware default)
     
-    // Initialize screen RAM with test pattern  
-    // Default screen RAM is at $1000 (4KB RAM, not expansion RAM)
-    // 22 columns × 23 rows = 506 bytes
-    for (int i = 0; i < 506; i++) {
-        ram_simple_[0x1000 + i] = 0x20 + (i % 64);  // ASCII pattern
-    }
+    // Screen RAM at $1000 is already zeroed by memset above
+    // The KERNAL will clear the screen during boot sequence
     
     // Load ROMs using common ROM loader
     bool roms_loaded = load_roms();
@@ -559,8 +558,11 @@ uint8_t VIC20System::cpu_read(void* user_data, uint32_t addr, uint8_t bus_state)
     // VIA1 registers (0x9110-0x911F = 16 registers) - keyboard, joystick
     if (addr16 >= 0x9110 && addr16 < 0x9120) {
         if (sys->via1_) {
-            // TODO: Implement VIA register read
-            return 0xFF;
+            uint8_t reg = addr16 & 0x0F;
+            bus_state_t bus_state = 0;
+            BUS_SET_ADDR(bus_state, reg);
+            bus_state = mos6522_registers_read(sys->via1_, bus_state);
+            return BUS_GET_DATA(bus_state);
         }
         return 0xFF;
     }
@@ -568,8 +570,11 @@ uint8_t VIC20System::cpu_read(void* user_data, uint32_t addr, uint8_t bus_state)
     // VIA2 registers (0x9120-0x912F = 16 registers) - user port, serial
     if (addr16 >= 0x9120 && addr16 < 0x9130) {
         if (sys->via2_) {
-            // TODO: Implement VIA register read
-            return 0xFF;
+            uint8_t reg = addr16 & 0x0F;
+            bus_state_t bus_state = 0;
+            BUS_SET_ADDR(bus_state, reg);
+            bus_state = mos6522_registers_read(sys->via2_, bus_state);
+            return BUS_GET_DATA(bus_state);
         }
         return 0xFF;
     }
@@ -626,7 +631,11 @@ void VIC20System::cpu_write(void* user_data, uint32_t addr, uint8_t data) {
     // VIA1 registers (0x9110-0x911F = 16 registers) - keyboard, joystick
     if (addr16 >= 0x9110 && addr16 < 0x9120) {
         if (sys->via1_) {
-            // TODO: Implement VIA register write
+            uint8_t reg = addr16 & 0x0F;
+            bus_state_t bus_state = 0;
+            BUS_SET_ADDR(bus_state, reg);
+            BUS_SET_DATA(bus_state, data);
+            mos6522_registers_write(sys->via1_, bus_state);
         }
         return;
     }
@@ -634,7 +643,11 @@ void VIC20System::cpu_write(void* user_data, uint32_t addr, uint8_t data) {
     // VIA2 registers (0x9120-0x912F = 16 registers) - user port, serial
     if (addr16 >= 0x9120 && addr16 < 0x9130) {
         if (sys->via2_) {
-            // TODO: Implement VIA register write
+            uint8_t reg = addr16 & 0x0F;
+            bus_state_t bus_state = 0;
+            BUS_SET_ADDR(bus_state, reg);
+            BUS_SET_DATA(bus_state, data);
+            mos6522_registers_write(sys->via2_, bus_state);
         }
         return;
     }

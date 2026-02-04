@@ -57,7 +57,7 @@ void vic_system_reset(vic_base_t* vic) {
     vic->registers[VIC_REG_VIDEO_MATRIX] = 150;  // $9002: CR2 usual value=150 (22 columns, video matrix bit 9)
     vic->registers[VIC_REG_ROWS] = 174;  // $9003: CR3 usual value=174 (23 rows doubled, 8x8 chars)
     vic->registers[VIC_REG_RASTER] = 0;  // $9004: CR4 (TV raster counter, read-only)
-    vic->registers[VIC_REG_CHAR_BASE] = 240;  // $9005: CR5 usual value=240 (char memory config)
+    vic->registers[VIC_REG_CHAR_BASE] = 0x40;  // $9005: CR5 (bits 7-4: video at $1000, bits 3-0: char at $8000)
     vic->registers[VIC_REG_LIGHTPEN_X] = 0;  // $9006: CR6 usual value=0 (Light pen X)
     vic->registers[VIC_REG_LIGHTPEN_Y] = 1;  // $9007: CR7 usual value=1 (Light pen Y)
     vic->registers[VIC_REG_PADDLE_X] = 255;  // $9008: CR8 usual value=255 (Paddle 1)
@@ -68,13 +68,7 @@ void vic_system_reset(vic_base_t* vic) {
     vic->registers[VIC_REG_OSC4_FREQ] = 0;  // $900D: CRD usual value=0 (Noise off)
     vic->registers[VIC_REG_AUX_COLOR] = 0;  // $900E: CRE usual value=0 (Volume=0, Aux color=black)
     // $900F: CRF usual value=27 (Border=Cyan(3), Reverse=ON, Background=White(1))
-    uint8_t reg_900F = VIC_COLOR_CYAN | VIC_BG_REVERSE | (VIC_COLOR_WHITE << VIC_BG_BACKGROUND_SHIFT);
-    printf("VIC: Initializing $900F with value 0x%02X (Border=%d, Reverse=%d, BG=%d)\n",
-           reg_900F,
-           reg_900F & VIC_BG_BORDER_MASK,
-           (reg_900F & VIC_BG_REVERSE) ? 1 : 0,
-           (reg_900F & VIC_BG_BACKGROUND_MASK) >> VIC_BG_BACKGROUND_SHIFT);
-    vic->registers[VIC_REG_BACKGROUND] = reg_900F;
+    vic->registers[VIC_REG_BACKGROUND] = VIC_COLOR_CYAN | VIC_BG_REVERSE | (VIC_COLOR_WHITE << VIC_BG_BACKGROUND_SHIFT);
 
     // Reset video generation state
     vic->in_display_area = false;
@@ -203,13 +197,15 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
         vic->in_char_area = false;
     }
 
+    const uint8_t reg_background = vic->registers[VIC_REG_BACKGROUND];
+    const uint8_t border_color = reg_background & VIC_BG_BORDER_MASK;
+    
     // Emit 4 pixels per cycle
     // Emit 4 pixels per cycle
     // Emit 4 pixels per cycle
     if (vic->in_display_area && vic->in_char_area) {
         // Extract frequently accessed register values
         const uint8_t reg_char_base = vic->registers[VIC_REG_CHAR_BASE];
-        const uint8_t reg_background = vic->registers[VIC_REG_BACKGROUND];
         
         // Extract base addresses and colors (used for pixel rendering)
         const uint16_t base_video = ((vic->registers[VIC_REG_VIDEO_MATRIX] & VIC_VM_BASE_VIDEO_BIT9) << 2) |
@@ -227,7 +223,7 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
                 
                 // Calculate character ROM address and fetch: base_char | (video_byte << 3) | (raster_line & 7) | 0x8000
                 vic->matrix_char_data = vic->mem_read(vic->mem_user_data,
-                    (base_char | ((uint16_t)vic->matrix_video_byte << 3) | (vic->raster_counter & 7)) ^ 0x8000);
+                    (base_char | ((uint16_t)vic->matrix_video_byte << 3) | (vic->raster_counter & 7)) | 0x8000);
             } else {
                 // No memory access available - emit blank
                 vic->matrix_char_data = 0;
@@ -241,8 +237,8 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
             vic->matrix_char_data <<= 4;
         }
 
-        const uint8_t foreground_color = vic->matrix_color_byte & VIC_COLOR_FOREGROUND_MASK;
         const uint8_t background_color = (reg_background & VIC_BG_BACKGROUND_MASK) >> VIC_BG_BACKGROUND_SHIFT;
+        const uint8_t foreground_color = vic->matrix_color_byte & VIC_COLOR_FOREGROUND_MASK;
 
         // Emit high nyble (4 pixels)
         if (vic->matrix_color_byte & VIC_COLOR_MULTICOLOR) {  // Multicolor mode
@@ -281,11 +277,10 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
     }
     else {
         // Emit 4 border pixels
-        const uint8_t border = vic->registers[VIC_REG_BACKGROUND] & VIC_BG_BORDER_MASK;
-        vic_emit_pixel(vic, border);
-        vic_emit_pixel(vic, border);
-        vic_emit_pixel(vic, border);
-        vic_emit_pixel(vic, border);
+        vic_emit_pixel(vic, border_color);
+        vic_emit_pixel(vic, border_color);
+        vic_emit_pixel(vic, border_color);
+        vic_emit_pixel(vic, border_color);
     }
 
     return bus_state;
