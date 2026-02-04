@@ -96,14 +96,6 @@ void mos6561_write_register(mos6561_t* vic, uint8_t reg, uint8_t value) {
     }
 
     vic_write_register(&vic->base, reg, value);
-
-    // Handle special registers
-    switch (reg) {
-        case VIC_REG_ENABLE:
-            vic->extended_color_mode = (value & 0x80) != 0;
-            break;
-        // Other registers handled normally
-    }
 }
 
 // Main tick function
