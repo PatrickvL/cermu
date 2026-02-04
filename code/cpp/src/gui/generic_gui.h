@@ -9,6 +9,30 @@
 // Forward declarations
 struct ImGuiIO;
 
+// ============================================================================
+// Display Configuration Enums
+// ============================================================================
+
+// Aspect ratio configuration modes
+typedef enum {
+    ASPECT_RATIO_ORIGINAL = 0,    // Use original guest aspect ratio
+    ASPECT_RATIO_4_3,             // Force 4:3 aspect ratio
+    ASPECT_RATIO_16_10,           // Force 16:10 aspect ratio
+    ASPECT_RATIO_16_9,            // Force 16:9 aspect ratio
+    ASPECT_RATIO_CUSTOM,          // Use custom aspect ratio
+    ASPECT_RATIO_PIXEL_PERFECT,   // 1:1 pixel aspect ratio
+    ASPECT_RATIO_COUNT
+} aspect_ratio_mode_t;
+
+// Scaling mode configuration
+typedef enum {
+    SCALING_MODE_FIT = 0,         // Fit display within window (may add black bars)
+    SCALING_MODE_FILL,            // Fill entire window (may crop)
+    SCALING_MODE_STRETCH,         // Stretch to fill window (may distort)
+    SCALING_MODE_INTEGER,         // Use integer scaling only
+    SCALING_MODE_COUNT
+} scaling_mode_t;
+
 /**
  * GenericEmulatorGUI - Base class for all emulator GUIs
  * 
@@ -29,6 +53,16 @@ protected:
     float screen_scale_;
     bool screen_filter_;
     bool screen_scanlines_;
+    
+    // Aspect ratio and scaling configuration
+    aspect_ratio_mode_t aspect_ratio_mode_;
+    scaling_mode_t scaling_mode_;
+    float custom_aspect_ratio_;       // For ASPECT_RATIO_CUSTOM mode
+    bool maintain_pixel_aspect_;      // Maintain square pixels
+    bool show_overscan_;              // Include overscan/border area
+    bool center_display_;             // Center display in available space
+    bool show_invisible_area_;        // Show non-visible area around display output
+    float host_dpi_scale_;            // Host DPI scaling factor
     
     // Window visibility flags
     bool show_screen_;
@@ -164,6 +198,29 @@ protected:
         int content_width, int content_height,
         int* out_display_width, int* out_display_height,
         int* out_pos_x, int* out_pos_y) const;
+    
+    /**
+     * Calculate display dimensions with aspect ratio and scaling support
+     * This replaces the simpler integer scaling with full letterboxing/zoom control
+     */
+    void calculate_display_dimensions(
+        float viewport_width, float viewport_height,
+        float guest_width, float guest_height,
+        bool is_pal, bool use_pixel_aspect,
+        float* out_display_width, float* out_display_height,
+        float* out_pos_x, float* out_pos_y) const;
+    
+    /**
+     * Get target aspect ratio based on current configuration
+     */
+    float get_target_aspect_ratio(float guest_width, float guest_height,
+                                   bool is_pal, bool use_pixel_aspect) const;
+    
+    /**
+     * Render Screen menu with display controls
+     * Can be called from derived class's render_menu_bar()
+     */
+    void render_screen_menu_generic();
 
 private:
     // Prevent copying
