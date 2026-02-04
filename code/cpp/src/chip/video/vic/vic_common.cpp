@@ -54,10 +54,10 @@ void vic_system_reset(vic_base_t* vic) {
     // Based on VIC-I (6560/6561) hardware specifications (usual values from datasheet)
     vic->registers[VIC_REG_CONTROL1] = 12;   // $9000: CR0 usual value=12 (Horizontal centering, PAL: 12, NTSC: 5)
     vic->registers[VIC_REG_CONTROL2] = 38;   // $9001: CR1 usual value=38 (Vertical centering)
-    vic->registers[VIC_REG_VIDEO_MATRIX] = 150;  // $9002: CR2 usual value=150 (22 columns, video matrix bit 9)
+    vic->registers[VIC_REG_VIDEO_MATRIX] = 22;  // $9002: CR2 (bits 6-0: 22 columns, bit 7: video matrix bit 9 = 0 for $1000)
     vic->registers[VIC_REG_ROWS] = 174;  // $9003: CR3 usual value=174 (23 rows doubled, 8x8 chars)
     vic->registers[VIC_REG_RASTER] = 0;  // $9004: CR4 (TV raster counter, read-only)
-    vic->registers[VIC_REG_CHAR_BASE] = 0x40;  // $9005: CR5 (bits 7-4: video at $1000, bits 3-0: char at $8000)
+    vic->registers[VIC_REG_CHAR_BASE] = 0x40;  // $9005: CR5 (bits 7-4: video matrix base = 0x40 -> $1000, bits 3-0 unused)
     vic->registers[VIC_REG_LIGHTPEN_X] = 0;  // $9006: CR6 usual value=0 (Light pen X)
     vic->registers[VIC_REG_LIGHTPEN_Y] = 1;  // $9007: CR7 usual value=1 (Light pen Y)
     vic->registers[VIC_REG_PADDLE_X] = 255;  // $9008: CR8 usual value=255 (Paddle 1)
@@ -67,8 +67,8 @@ void vic_system_reset(vic_base_t* vic) {
     vic->registers[VIC_REG_OSC3_FREQ] = 0;  // $900C: CRC usual value=0 (Speaker 3 off)
     vic->registers[VIC_REG_OSC4_FREQ] = 0;  // $900D: CRD usual value=0 (Noise off)
     vic->registers[VIC_REG_AUX_COLOR] = 0;  // $900E: CRE usual value=0 (Volume=0, Aux color=black)
-    // $900F: CRF usual value=27 (Border=Cyan(3), Reverse=ON, Background=White(1))
-    vic->registers[VIC_REG_BACKGROUND] = VIC_COLOR_CYAN | VIC_BG_REVERSE | (VIC_COLOR_WHITE << VIC_BG_BACKGROUND_SHIFT);
+    // $900F: CRF power-on default (Border=Cyan(3), Reverse=OFF, Background=White(1))
+    vic->registers[VIC_REG_BACKGROUND] = VIC_COLOR_CYAN | (VIC_COLOR_WHITE << VIC_BG_BACKGROUND_SHIFT);
 
     // Reset video generation state
     vic->in_display_area = false;
@@ -186,6 +186,16 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
         else if (vic->raster_counter == screen_origin_y + (((vic->registers[VIC_REG_ROWS] & VIC_ROWS_ROWS_MASK) >> VIC_ROWS_ROWS_SHIFT) << 3)) {
             vic->in_display_area = false;
         }
+        // Reset matrix_index at the start of EVERY scanline to the appropriate character row
+        // Each character is 8 scanlines tall, so scanlines 0-7 use row 0, 8-15 use row 1, etc.
+        if (vic->in_display_area) {
+            // Calculate which character row we're on (0, 1, 2, ...) based on scanline within display
+            uint16_t scanline_in_display = vic->raster_counter - screen_origin_y;
+            uint16_t char_row = scanline_in_display >> 3;  // Divide by 8 to get character row
+            // Set matrix_index to the start of this character row
+            uint16_t columns = vic->registers[VIC_REG_VIDEO_MATRIX] & VIC_VM_COLUMNS_MASK;
+            vic->matrix_index = char_row * columns;
+        }
     }
 
     // Check character area boundaries
@@ -215,20 +225,27 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
         const bool is_char_fetch_cycle = ((vic->current_cycle - screen_origin_x) & 1) == 0;
         
         // TODO: Handle double height
+        // TODO: Handle double height
         if (is_char_fetch_cycle) {
             // Fetch character data from memory
             if (vic->mem_read && vic->color_read) {
-                vic->matrix_video_byte = vic->mem_read(vic->mem_user_data, base_video | (vic->matrix_index / 8));
-                vic->matrix_color_byte = vic->color_read(vic->color_user_data, vic->matrix_index / 8);
+                // matrix_index increments once per fetch cycle
+                // Since we only increment in fetch cycles, matrix_index IS the character index
+                uint16_t char_index = vic->matrix_index;
+                uint16_t screen_addr = base_video | char_index;
+                vic->matrix_video_byte = vic->mem_read(vic->mem_user_data, screen_addr);
+                vic->matrix_color_byte = vic->color_read(vic->color_user_data, char_index);
                 
                 // Calculate character line: should be relative to screen origin, not absolute raster
                 const uint16_t screen_origin_y = vic->registers[VIC_REG_CONTROL2] << 1;
                 const uint8_t char_line = (vic->raster_counter - screen_origin_y) & 7;
                 
-                // Calculate character ROM address and fetch: base_char | (video_byte << 3) | char_line ^ 0x8000
-                // NOTE: XOR (^) not OR (|) for bit 15 - this inverts the bit to access character ROM
-                vic->matrix_char_data = vic->mem_read(vic->mem_user_data,
-                    (base_char | ((uint16_t)vic->matrix_video_byte << 3) | char_line) ^ 0x8000);
+                // Calculate character ROM address: character_code * 8 + line_within_char
+                // VIC-I always uses 4KB character ROM starting at $8000 (bit 15 = 1)
+                // Address calculation: (screen_code << 3) | char_line, then set bit 15
+                uint16_t char_rom_addr = ((uint16_t)vic->matrix_video_byte << 3) | char_line | 0x8000;
+                vic->matrix_char_data = vic->mem_read(vic->mem_user_data, char_rom_addr);
+                
             } else {
                 // No memory access available - emit blank
                 vic->matrix_char_data = 0;
