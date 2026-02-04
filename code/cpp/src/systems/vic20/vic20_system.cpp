@@ -40,30 +40,18 @@ static HardwareTraits create_vic20_hardware_traits() {
     traits.display.has_overscan = true;
     
     // VIC-20 PAL palette (16 colors) - Hardware accurate colors
-    // Based on measurements from real VIC-20 hardware
-    const uint32_t vic20_colors[16] = {
-        0x000000, // 0: Black
-        0xFFFFFF, // 1: White
-        0x813338, // 2: Red
-        0x75CEC8, // 3: Cyan
-        0x8E3C97, // 4: Purple/Magenta
-        0x56AC4D, // 5: Green
-        0x2B338D, // 6: Blue
-        0xEDF171, // 7: Yellow
-        0xC46C71, // 8: Orange/Brown
-        0xFFD4A1, // 9: Light Orange/Tan
-        0x9A6759, // 10: Light Red/Pink
-        0x9FFFFF, // 11: Light Cyan
-        0xC9ADFF, // 12: Light Purple/Lavender
-        0x9AE29B, // 13: Light Green
-        0x7873C4, // 14: Light Blue
-        0xFFFFB0  // 15: Light Yellow
-    };
+    // Get from VIC chip (ABGR format) and convert to RGB for hardware traits
+    // This ensures palette consistency between VIC chip rendering and system traits
+    uint32_t* vic_palette_abgr = vic_get_default_palette();
     
     for (int i = 0; i < 16; i++) {
-        uint32_t c = vic20_colors[i];
+        uint32_t abgr = vic_palette_abgr[i];
+        // Convert from ABGR (0xAABBGGRR) to RGB components
+        uint8_t r = abgr & 0xFF;
+        uint8_t g = (abgr >> 8) & 0xFF;
+        uint8_t b = (abgr >> 16) & 0xFF;
         traits.display.default_palette.push_back(
-            PaletteColor((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF, 255)
+            PaletteColor(r, g, b, 255)
         );
     }
     

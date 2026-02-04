@@ -157,7 +157,8 @@ void vic_system_reset(vic_base_t* vic);
 bus_state_t vic_tick(void* chip, bus_state_t bus_state);
 void vic_bus_attach(void* chip, void* bus);
 void vic_set_framebuffer(vic_base_t* vic, uint32_t* framebuffer, int width, int height);
-void vic_set_memory_callbacks(vic_base_t* vic, vic_mem_read_fn_t mem_read, void* mem_user_data, 
+void vic_set_memory_callbacks(vic_base_t* vic, vic_mem_read_fn_t mem_read, void* mem_user_data,
                               vic_mem_read_fn_t color_read, void* color_user_data);
 uint8_t vic_read_register(vic_base_t* vic, uint8_t reg);
 void vic_write_register(vic_base_t* vic, uint8_t reg, uint8_t value);
+uint32_t* vic_get_default_palette(void);
