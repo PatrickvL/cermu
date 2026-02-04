@@ -10,6 +10,7 @@ typedef struct {
     chip_descriptor_t* desc;
     void* vic20; // Pointer to VIC-20 system
     bus_state_t state;
+    bus_state_t default_state;  // Pull-up resistor state (control lines HIGH)
     // Memory mapping state
     uint16_t bank_base;
     // I/O state

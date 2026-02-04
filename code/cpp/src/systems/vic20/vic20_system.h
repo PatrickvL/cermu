@@ -98,12 +98,6 @@ private:
     uint32_t cycles_per_frame_;
     uint32_t expansion_size_;        // Size of expansion RAM
     
-    // Helper methods
-    void tick_cpu();
-    void tick_vic();
-    void cpu_cycle();
-    void non_cpu_cycle();
-    
     // ROM loading
     bool load_roms();
     

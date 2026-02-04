@@ -188,6 +188,12 @@ VIC20System::VIC20System()
     hardware_traits_ = create_vic20_hardware_traits();
     current_palette_ = hardware_traits_.display.default_palette;
     
+    // Initialize bus state with pull-up resistors (all control lines HIGH = inactive)
+    // VIC-20 uses same pull-up model as C64: IRQ, NMI, RES, BA, RDY, RW all pulled HIGH
+    bus_.default_state = BUS_STATE(0, 0xFF, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY | BUS_MASK_RW) | 
+                         BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT);
+    bus_.state = bus_.default_state;
+    
     // Initialize legacy system (commented out until fully integrated)
     // system_8bit_init(&system_);
     
@@ -299,6 +305,17 @@ bool VIC20System::initialize() {
     // Reset CPU to initialize state
     mos6502_reset(cpu_, 0);
     
+    // Manually load the reset vector since automatic reset doesn't work with callback-only CPU
+    // KERNAL is at $E000-$FFFF (8KB), reset vector is at $FFFC-$FFFD
+    uint16_t reset_vector = kernal_rom_[0xFFFC - 0xE000] | (kernal_rom_[0xFFFD - 0xE000] << 8);
+    mos6502_set_pc(cpu_, reset_vector);
+    
+    printf("VIC20: CPU reset complete - PC = $%04X\n", mos6502_get_pc(cpu_));
+    printf("VIC20: First instruction: $%02X $%02X $%02X (LDX #$FF, SEI)\n",
+           cpu_read(this, reset_vector, 0),
+           cpu_read(this, reset_vector + 1, 0),
+           cpu_read(this, reset_vector + 2, 0));
+    
     // Create VIC chip (MOS6560 PAL - default, TODO: support NTSC 6561)
     vic_ = (mos6560_t*)mos6560_create(&mos6560_descriptor);
     if (!vic_) {
@@ -349,8 +366,66 @@ void VIC20System::reset() {
 // ============================================================================
 
 void VIC20System::tick() {
-    tick_cpu();
-    tick_vic();
+    // Proper timing following C64 pattern adapted for 6502
+    // VIC-20 has simpler fixed memory mapping without PLA
+    // 6502 doesn't have separate PHI1/PHI2 like 6510, but memory service
+    // still happens mid-cycle between instruction setup and completion
+    
+    // Start with clean bus state (pull-up resistors)
+    bus_state_t s = bus_.default_state;
+    
+    // Preserve address and data from previous cycle
+    BUS_SET_ADDR(s, BUS_GET_ADDR(bus_.state));
+    BUS_SET_DATA(s, BUS_GET_DATA(bus_.state));
+    
+    // =========================================================================
+    // PHASE 1: VIC CHIP TICKING
+    // VIC-20's VIC chip runs continuously, generating video and handling DMA
+    // =========================================================================
+    if (vic_) {
+        s = mos6560_tick(vic_, s);
+    }
+    
+    // =========================================================================
+    // PHASE 2: VIA CHIPS TICKING (BEFORE CPU)
+    // VIA chips handle I/O and timing, must tick before CPU to set interrupt lines
+    // =========================================================================
+    if (via1_) {
+        s = mos6522_tick(via1_, s);
+    }
+    if (via2_) {
+        s = mos6522_tick(via2_, s);
+    }
+    
+    // =========================================================================
+    // PHASE 3: CPU TICKING (first half - sets up memory access)
+    // CPU begins cycle and puts address/control on bus
+    // =========================================================================
+    if (cpu_) {
+        s = mos6502_tick(cpu_, s);
+    }
+    
+    // =========================================================================
+    // PHASE 4: MEMORY SERVICE PHASE
+    // Service memory access set up by CPU
+    // This is CRITICAL - memory access happens mid-cycle so data is ready
+    // for CPU to complete the cycle
+    // =========================================================================
+    uint16_t addr = BUS_GET_ADDR(s);
+    bool is_write = (BUS_GET_LINES(s) & BUS_MASK_RW) == 0;
+    
+    if (is_write) {
+        // Write operation
+        uint8_t data = BUS_GET_DATA(s);
+        cpu_write(this, addr, data);
+    } else {
+        // Read operation
+        uint8_t data = cpu_read(this, addr, 0);
+        BUS_SET_DATA(s, data);
+    }
+    
+    // Update bus state
+    bus_.state = s;
     total_cycles_++;
 }
 
@@ -531,10 +606,6 @@ uint8_t VIC20System::vic_color_read(void* user_data, uint16_t addr) {
 // Memory access callbacks for CPU
 uint8_t VIC20System::cpu_read(void* user_data, uint32_t addr, uint8_t bus_state) {
     VIC20System* sys = static_cast<VIC20System*>(user_data);
-    
-    // Simplified memory mapping for now
-    // TODO: Implement proper VIC-20 memory mapping with PLA
-    
     uint16_t addr16 = addr & 0xFFFF;
     
     // RAM (0x0000-0x13FF = 5KB, includes screen at $1000)
@@ -618,12 +689,7 @@ void VIC20System::cpu_write(void* user_data, uint32_t addr, uint8_t data) {
     // VIC chip registers (0x9000-0x900F = 16 registers)
     if (addr16 >= 0x9000 && addr16 < 0x9010) {
         if (sys->vic_) {
-            uint8_t reg = addr16 & 0x0F;
-            if (sys->total_cycles_ < 100000) {  // Only log first 100K cycles
-                printf("VIC20: Write VIC reg $%X = $%02X at cycle %llu\n", reg, data,
-                       (unsigned long long)sys->total_cycles_);
-            }
-            mos6560_write_register(sys->vic_, reg, data);
+            mos6560_write_register(sys->vic_, addr16 & 0x0F, data);
         }
         return;
     }
@@ -662,45 +728,6 @@ void VIC20System::cpu_write(void* user_data, uint32_t addr, uint8_t data) {
     // ROM areas are read-only, writes are ignored
 }
 
-void VIC20System::tick_cpu() {
-    if (cpu_) {
-        // Tick the CPU (this handles one cycle of execution)
-        mos6502_tick(cpu_, 0);  // bus_state would come from memory system
-    }
-    
-    // Tick the VIA chips
-    if (via1_) {
-        mos6522_tick(via1_, 0);
-    }
-    if (via2_) {
-        mos6522_tick(via2_, 0);
-    }
-}
-
-void VIC20System::tick_vic() {
-    if (vic_) {
-        // Tick the VIC chip (handles video generation and sound)
-        mos6560_tick(vic_, 0);  // bus_state would come from memory system
-    }
-}
-
-void VIC20System::cpu_cycle() {
-    // Legacy CPU cycle implementation
-    tick_cpu();
-}
-
-void VIC20System::non_cpu_cycle() {
-    // Tick video and I/O chips
-    tick_vic();
-    
-    // Tick the VIA chips
-    if (via1_) {
-        mos6522_tick(via1_, 0);
-    }
-    if (via2_) {
-        mos6522_tick(via2_, 0);
-    }
-}
 bool VIC20System::load_roms() {
     // Discover ROM root path for VIC-20 system
     char rom_root[1024];
