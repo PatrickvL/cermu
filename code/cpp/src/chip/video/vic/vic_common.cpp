@@ -3,12 +3,26 @@
 #include <string.h>
 #include <stdio.h>
 
-// VIC color palette (16 colors) - VIC-20 specific colors
+// VIC color palette (16 colors) - Hardware accurate VIC-20 colors
+// Must match the palette defined in vic20_system.cpp for correct color rendering
+// Format: 0xAARRGGBB (Alpha=0xFF, Red, Green, Blue) - Same format as C64 palette
 static const uint32_t vic_palette[16] = {
-    0xFF000000, 0xFFFFFFFF, 0xFF68372B, 0xFF70A4B2,
-    0xFF6F3D86, 0xFF588D43, 0xFF352879, 0xFFB8C76F,
-    0xFF6F4F25, 0xFF433900, 0xFF9A6759, 0xFF444444,
-    0xFF6C6C6C, 0xFF9AD284, 0xFF6C5EB5, 0xFF959595
+    0xFF000000, // 0: Black
+    0xFFFFFFFF, // 1: White
+    0xFF813338, // 2: Red
+    0xFF75CEC8, // 3: Cyan
+    0xFF8E3C97, // 4: Purple/Magenta
+    0xFF56AC4D, // 5: Green
+    0xFF2B338D, // 6: Blue
+    0xFFEDF171, // 7: Yellow
+    0xFFC46C71, // 8: Orange/Brown
+    0xFFFFD4A1, // 9: Light Orange/Tan
+    0xFF9A6759, // 10: Light Red/Pink
+    0xFF9FFFFF, // 11: Light Cyan
+    0xFFC9ADFF, // 12: Light Purple/Lavender
+    0xFF9AE29B, // 13: Light Green
+    0xFF7873C4, // 14: Light Blue
+    0xFFFFFFB0  // 15: Light Yellow
 };
 
 // Get default VIC palette
@@ -35,30 +49,31 @@ void vic_system_reset(vic_base_t* vic) {
     vic->raster_counter = 0;
     vic->current_cycle = 0;
 
-    // Default register values from C# Initialize()
-    vic->registers[VIC_REG_CONTROL1] = 0x0C;  // Control1: ScreenOriginX = 12
-    vic->registers[VIC_REG_CONTROL2] = 0x26;  // Control2: ScreenOriginY = 38 << 1 = 76
-    vic->registers[VIC_REG_VIDEO_MATRIX] = 0x16;  // Video matrix columns
-    vic->registers[VIC_REG_ROWS] = 0x2E;  // Video matrix rows
-    vic->registers[VIC_REG_RASTER] = 0x00;  // Raster value
-    vic->registers[VIC_REG_CHAR_BASE] = 0xF0;  // Character base = 240
-    vic->registers[VIC_REG_LIGHTPEN_X] = 0x00;  // Light pen X
-    vic->registers[VIC_REG_LIGHTPEN_Y] = 0x00;  // Light pen Y
-    vic->registers[VIC_REG_PADDLE_X] = 0xFF;  // Paddle X
-    vic->registers[VIC_REG_PADDLE_Y] = 0xFF;  // Paddle Y
-    vic->registers[VIC_REG_OSC1_FREQ] = 0x00; // Oscillator 1
-    vic->registers[VIC_REG_OSC2_FREQ] = 0x00; // Oscillator 2
-    vic->registers[VIC_REG_OSC3_FREQ] = 0x00; // Oscillator 3
-    vic->registers[VIC_REG_OSC4_FREQ] = 0x00; // Oscillator 4
-    vic->registers[VIC_REG_AUX_COLOR] = 0x00; // Auxiliary color + Volume
-    vic->registers[VIC_REG_BACKGROUND] = 0x1B; // Background + Border = 27
+    // Default register values for VIC-20 PAL (hardware power-on defaults)
+    // Based on VIC-I (6560/6561) hardware specifications
+    vic->registers[VIC_REG_CONTROL1] = 0x0C;  // $9000: Horizontal centering (PAL: $0C, NTSC: $05)
+    vic->registers[VIC_REG_CONTROL2] = 0x26;  // $9001: Vertical centering (38 rows)
+    vic->registers[VIC_REG_VIDEO_MATRIX] = 0x96;  // $9002: Columns: 22, Video matrix at $1000
+    vic->registers[VIC_REG_ROWS] = 0x2E;  // $9003: Rows: 23 (×2 = 46 rows), char size 8×16
+    vic->registers[VIC_REG_RASTER] = 0x00;  // $9004: TV raster value (read-only)
+    vic->registers[VIC_REG_CHAR_BASE] = 0xF0;  // $9005: Character memory at $1000, screen origin
+    vic->registers[VIC_REG_LIGHTPEN_X] = 0x00;  // $9006: Light pen horizontal
+    vic->registers[VIC_REG_LIGHTPEN_Y] = 0x00;  // $9007: Light pen vertical
+    vic->registers[VIC_REG_PADDLE_X] = 0x00;  // $9008: Paddle X
+    vic->registers[VIC_REG_PADDLE_Y] = 0x00;  // $9009: Paddle Y
+    vic->registers[VIC_REG_OSC1_FREQ] = 0x00; // $900A: Bass switch/frequency
+    vic->registers[VIC_REG_OSC2_FREQ] = 0x00; // $900B: Alto frequency
+    vic->registers[VIC_REG_OSC3_FREQ] = 0x00; // $900C: Soprano frequency
+    vic->registers[VIC_REG_OSC4_FREQ] = 0x00; // $900D: Noise frequency
+    vic->registers[VIC_REG_AUX_COLOR] = 0x00; // $900E: Auxiliary color, volume = 0 (muted)
+    vic->registers[VIC_REG_BACKGROUND] = 0x1B; // $900F: Screen colors: Border=Cyan(3), BG=White(1), Reverse=ON(0)
 
     // Reset video generation state
     vic->in_display_area = false;
     vic->in_char_area = false;
     vic->matrix_index = 0;
     vic->matrix_video_byte = 0;
-    vic->foreground_color = 0;
+    vic->matrix_color_byte = 0;
     vic->matrix_char_data = 0;
     vic->pixel_line_index = 0;
     
@@ -182,6 +197,7 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
 
     // Emit 4 pixels per cycle
     // Emit 4 pixels per cycle
+    // Emit 4 pixels per cycle
     if (vic->in_display_area && vic->in_char_area) {
         // Extract frequently accessed register values
         const uint8_t reg_char_base = vic->registers[VIC_REG_CHAR_BASE];
@@ -191,11 +207,6 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
         const uint16_t base_video = ((vic->registers[VIC_REG_VIDEO_MATRIX] & VIC_VM_BASE_VIDEO_BIT9) << 2) |
                                    ((reg_char_base & VIC_CB_BASE_VIDEO_MASK) << VIC_CB_BASE_VIDEO_SHIFT);
         const uint16_t base_char = (reg_char_base & VIC_CB_BASE_CHAR_MASK) << VIC_CB_BASE_CHAR_SHIFT;
-        const uint8_t auxiliary_color = (vic->registers[VIC_REG_AUX_COLOR] & VIC_AUX_COLOR_MASK) >> VIC_AUX_COLOR_SHIFT;
-        const uint8_t background_color = (reg_background & VIC_BG_BACKGROUND_MASK) >> VIC_BG_BACKGROUND_SHIFT;
-        const uint8_t border_color = reg_background & VIC_BG_BORDER_MASK;
-        const bool reversed = (reg_background & VIC_BG_REVERSED) != 0;
-        
         // Derive is_char_fetch_cycle from cycle position: even cycles relative to screen_origin_x are fetch cycles
         const bool is_char_fetch_cycle = ((vic->current_cycle - screen_origin_x) & 1) == 0;
         
@@ -204,7 +215,7 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
             // Fetch character data from memory
             if (vic->mem_read && vic->color_read) {
                 vic->matrix_video_byte = vic->mem_read(vic->mem_user_data, base_video | (vic->matrix_index / 8));
-                vic->foreground_color = vic->color_read(vic->color_user_data, vic->matrix_index / 8);
+                vic->matrix_color_byte = vic->color_read(vic->color_user_data, vic->matrix_index / 8);
                 
                 // Calculate character ROM address and fetch: base_char | (video_byte << 3) | (raster_line & 7) | 0x8000
                 vic->matrix_char_data = vic->mem_read(vic->mem_user_data,
@@ -212,7 +223,7 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
             } else {
                 // No memory access available - emit blank
                 vic->matrix_char_data = 0;
-                vic->foreground_color = 0;
+                vic->matrix_color_byte = 0;
             }
             
             vic->matrix_index++;
@@ -222,14 +233,19 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
             vic->matrix_char_data <<= 4;
         }
 
+        const uint8_t foreground_color = vic->matrix_color_byte & VIC_COLOR_FOREGROUND_MASK;
+        const uint8_t background_color = (reg_background & VIC_BG_BACKGROUND_MASK) >> VIC_BG_BACKGROUND_SHIFT;
+
         // Emit high nyble (4 pixels)
-        if (vic->foreground_color & VIC_COLOR_MULTICOLOR) {  // Multicolor mode
+        if (vic->matrix_color_byte & VIC_COLOR_MULTICOLOR) {  // Multicolor mode
+            const uint8_t border_color = reg_background & VIC_BG_BORDER_MASK;
+            const uint8_t auxiliary_color = (vic->registers[VIC_REG_AUX_COLOR] & VIC_AUX_COLOR_MASK) >> VIC_AUX_COLOR_SHIFT;
             // Emit 2 pixels for bits 7-6
             uint8_t color = 0;
             switch ((vic->matrix_char_data >> 6) & 3) {
                 case 0b00: color = background_color; break;
                 case 0b01: color = border_color; break;
-                case 0b10: color = vic->foreground_color & VIC_COLOR_FOREGROUND_MASK; break;
+                case 0b10: color = foreground_color; break;
                 case 0b11: color = auxiliary_color; break;
             }
             vic_emit_pixel(vic, color);
@@ -239,18 +255,19 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
             switch ((vic->matrix_char_data >> 4) & 3) {
                 case 0b00: color = background_color; break;
                 case 0b01: color = border_color; break;
-                case 0b10: color = vic->foreground_color & VIC_COLOR_FOREGROUND_MASK; break;
+                case 0b10: color = foreground_color; break;
                 case 0b11: color = auxiliary_color; break;
             }
             vic_emit_pixel(vic, color);
             vic_emit_pixel(vic, color);
         }
         else {  // Hires mode
-            const uint8_t foreground = vic->foreground_color & VIC_COLOR_FOREGROUND_MASK;
-            vic_emit_pixel(vic, (vic->matrix_char_data & 0x80) == (reversed ? 0 : 0x80) ? foreground : background_color);
-            vic_emit_pixel(vic, (vic->matrix_char_data & 0x40) == (reversed ? 0 : 0x40) ? foreground : background_color);
-            vic_emit_pixel(vic, (vic->matrix_char_data & 0x20) == (reversed ? 0 : 0x20) ? foreground : background_color);
-            vic_emit_pixel(vic, (vic->matrix_char_data & 0x10) == (reversed ? 0 : 0x10) ? foreground : background_color);
+            const bool reversed = (reg_background & VIC_BG_REVERSED) != 0;
+            const uint8_t char_data = reversed ? ~vic->matrix_char_data : vic->matrix_char_data;
+            vic_emit_pixel(vic, (char_data & 0x80) ? foreground_color : background_color);
+            vic_emit_pixel(vic, (char_data & 0x40) ? foreground_color : background_color);
+            vic_emit_pixel(vic, (char_data & 0x20) ? foreground_color : background_color);
+            vic_emit_pixel(vic, (char_data & 0x10) ? foreground_color : background_color);       
         }
     }
     else {

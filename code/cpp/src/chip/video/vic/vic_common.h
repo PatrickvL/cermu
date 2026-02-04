@@ -143,7 +143,7 @@ typedef struct {
     bool in_char_area;
     uint16_t matrix_index;
     uint8_t matrix_video_byte;
-    uint8_t foreground_color;
+    uint8_t matrix_color_byte;
     uint8_t matrix_char_data;
 } vic_base_t;
 

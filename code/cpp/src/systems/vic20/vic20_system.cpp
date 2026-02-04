@@ -10,10 +10,12 @@
 #include "../../chip/cpu/fam65xx/mos6502.h"
 #include "../../chip/video/vic/mos6560.h"
 #include "../../chip/video/vic/mos6561.h"
+#include "../../chip/video/vic/vic_common.h"  // For VIC_COLOR_* constants
 #include "../../chip/io/mos6522.h"
 
 // Include ROM loader
 #include "../../core/storage/rom_loader.h"
+#include "../../core/config/path_discovery.h"
 
 // ============================================================================
 // Hardware Traits Definition
@@ -23,21 +25,36 @@ static HardwareTraits create_vic20_hardware_traits() {
     HardwareTraits traits = {};
     
     // Display traits - VIC-20 uses MOS6560/6561 (VIC)
-    traits.display.native_width = 176;      // 22 columns * 8 pixels
-    traits.display.native_height = 184;     // 23 rows * 8 pixels (PAL)
-    traits.display.visible_width = 176;
-    traits.display.visible_height = 184;
+    // Full VIC output including borders: 63 cycles × 4 pixels = 252 pixels wide
+    // Visible raster lines including borders: ~284 lines (PAL)
+    traits.display.native_width = 252;       // Full VIC horizontal output
+    traits.display.native_height = 284;      // Full VIC vertical output
+    traits.display.visible_width = 252;
+    traits.display.visible_height = 284;
     traits.display.format = FramebufferFormat::RGBA8888;
-    traits.display.palette_size = 16;       // 16 colors
+    traits.display.palette_size = 16;        // 16 colors
     traits.display.pixel_aspect_ratio = 1.0f;
     traits.display.has_overscan = true;
     
-    // VIC-20 default palette (16 colors)
+    // VIC-20 PAL palette (16 colors) - Hardware accurate colors
+    // Based on measurements from real VIC-20 hardware
     const uint32_t vic20_colors[16] = {
-        0x000000, 0xFFFFFF, 0x782922, 0x87D6DD,
-        0xAA5FB6, 0x55A049, 0x40318D, 0xBFCE72,
-        0xAA7449, 0xEAB489, 0xB86962, 0xC7FFFF,
-        0xEA9FF6, 0x94E089, 0x8071CC, 0xFFE7B2
+        0x000000, // 0: Black
+        0xFFFFFF, // 1: White
+        0x813338, // 2: Red
+        0x75CEC8, // 3: Cyan
+        0x8E3C97, // 4: Purple/Magenta
+        0x56AC4D, // 5: Green
+        0x2B338D, // 6: Blue
+        0xEDF171, // 7: Yellow
+        0xC46C71, // 8: Orange/Brown
+        0xFFD4A1, // 9: Light Orange/Tan
+        0x9A6759, // 10: Light Red/Pink
+        0x9FFFFF, // 11: Light Cyan
+        0xC9ADFF, // 12: Light Purple/Lavender
+        0x9AE29B, // 13: Light Green
+        0x7873C4, // 14: Light Blue
+        0xFFFFB0  // 15: Light Yellow
     };
     
     for (int i = 0; i < 16; i++) {
@@ -239,11 +256,17 @@ bool VIC20System::apply_configuration() {
 // ============================================================================
 bool VIC20System::initialize() {
     printf("VIC20: Initializing system\n");
-    
     // Initialize memory arrays
     memset(ram_simple_, 0, sizeof(ram_simple_));
     memset(expansion_ram_, 0, sizeof(expansion_ram_));
-    memset(color_ram_simple_, 0, sizeof(color_ram_simple_));
+    memset(color_ram_simple_, 0, sizeof(color_ram_simple_));  // Color RAM: black at power-on (hardware default)
+    
+    // Initialize screen RAM with test pattern  
+    // Default screen RAM is at $1000 (4KB RAM, not expansion RAM)
+    // 22 columns × 23 rows = 506 bytes
+    for (int i = 0; i < 506; i++) {
+        ram_simple_[0x1000 + i] = 0x20 + (i % 64);  // ASCII pattern
+    }
     
     // Load ROMs using common ROM loader
     bool roms_loaded = load_roms();
@@ -285,16 +308,14 @@ bool VIC20System::initialize() {
     }
     
     // Set up VIC memory callbacks for accessing video and character memory
-    vic_set_memory_callbacks(&vic_->base, 
+    vic_set_memory_callbacks(&vic_->base,
         VIC20System::vic_mem_read,      // Memory read callback
         this,                            // User data (VIC20System instance)
         VIC20System::vic_color_read,    // Color RAM read callback
         this);                           // User data for color RAM
     
-    // Set up framebuffer if available
-    if (rgba_framebuffer_) {
-        mos6560_set_framebuffer(vic_, rgba_framebuffer_, rgba_width_, rgba_height_);
-    }
+    // NOTE: Framebuffer is set later via set_framebuffer() call from GUI
+    // Don't set it here as rgba_framebuffer_ is still nullptr during initialize()
     
     // Create VIA chips (MOS6522)
     via1_ = (mos6522_t*)mos6522_create(&mos6522_descriptor);
@@ -374,14 +395,22 @@ uint32_t* VIC20System::get_framebuffer() {
 }
 
 void VIC20System::get_display_dimensions(int* width, int* height) const {
-    *width = 176;
-    *height = 184;
+    *width = 252;   // Full VIC horizontal output (63 cycles × 4 pixels)
+    *height = 284;  // Full VIC vertical output including borders
 }
 
 void VIC20System::set_framebuffer(uint32_t* buffer, int width, int height) {
     rgba_framebuffer_ = buffer;
     rgba_width_ = width;
     rgba_height_ = height;
+    
+    // Update VIC chip with new framebuffer (critical for display!)
+    if (vic_ && buffer) {
+        printf("VIC20: Setting framebuffer on VIC chip: %dx%d buffer=%p\n", width, height, (void*)buffer);
+        mos6560_set_framebuffer(vic_, buffer, width, height);
+    } else {
+        printf("VIC20: Warning - cannot set framebuffer (vic_=%p buffer=%p)\n", (void*)vic_, (void*)buffer);
+    }
 }
 
 // ============================================================================
@@ -476,9 +505,13 @@ uint8_t VIC20System::vic_mem_read(void* user_data, uint16_t addr) {
             return sys->char_rom_[rom_addr];
         }
     } else {
-        // RAM access (video matrix and expansion RAM)
+        // RAM access - unified 5KB RAM (includes screen at $1000)
         if (addr < 0x1400) {
             return sys->ram_simple_[addr];
+        }
+        // Expansion RAM (0x1400-0x1FFF)
+        else if (addr < 0x2000) {
+            return sys->expansion_ram_[addr - 0x1400];
         }
     }
     
@@ -505,16 +538,46 @@ uint8_t VIC20System::cpu_read(void* user_data, uint32_t addr, uint8_t bus_state)
     
     uint16_t addr16 = addr & 0xFFFF;
     
-    // RAM (0x0000-0x13FF = 5KB)
+    // RAM (0x0000-0x13FF = 5KB, includes screen at $1000)
     if (addr16 < 0x1400) {
         return sys->ram_simple_[addr16];
     }
-    // Expansion RAM would go here
-    // ...
     
-    // Color RAM (0x9400-0x97FF)
+    // Expansion RAM (0x1400-0x1FFF)
+    if (addr16 >= 0x1400 && addr16 < 0x2000) {
+        return sys->expansion_ram_[addr16 - 0x1400];
+    }
+    
+    // VIC chip registers (0x9000-0x900F = 16 registers)
+    if (addr16 >= 0x9000 && addr16 < 0x9010) {
+        if (sys->vic_) {
+            return mos6560_read_register(sys->vic_, addr16 & 0x0F);
+        }
+        return 0xFF;
+    }
+    
+    // VIA1 registers (0x9110-0x911F = 16 registers) - keyboard, joystick
+    if (addr16 >= 0x9110 && addr16 < 0x9120) {
+        if (sys->via1_) {
+            // TODO: Implement VIA register read
+            return 0xFF;
+        }
+        return 0xFF;
+    }
+    
+    // VIA2 registers (0x9120-0x912F = 16 registers) - user port, serial
+    if (addr16 >= 0x9120 && addr16 < 0x9130) {
+        if (sys->via2_) {
+            // TODO: Implement VIA register read
+            return 0xFF;
+        }
+        return 0xFF;
+    }
+    
+    // Color RAM (0x9600-0x97FF, mirrored from 0x9400)
+    // Actual hardware has 512 bytes at $9600, but mirrored at $9400
     if (addr16 >= 0x9400 && addr16 < 0x9800) {
-        return sys->color_ram_simple_[addr16 - 0x9400];
+        return sys->color_ram_simple_[(addr16 - 0x9400) & 0x1FF];  // 512 bytes, mirrored
     }
     
     // BASIC ROM (0xC000-0xDFFF = 8KB)
@@ -535,12 +598,53 @@ void VIC20System::cpu_write(void* user_data, uint32_t addr, uint8_t data) {
     
     uint16_t addr16 = addr & 0xFFFF;
     
-    // RAM (0x0000-0x13FF = 5KB)
+    // RAM (0x0000-0x13FF = 5KB, includes screen at $1000)
     if (addr16 < 0x1400) {
         sys->ram_simple_[addr16] = data;
+        return;
     }
-    // Expansion RAM would go here
-    // ...
+    
+    // Expansion RAM (0x1400-0x1FFF)
+    if (addr16 >= 0x1400 && addr16 < 0x2000) {
+        sys->expansion_ram_[addr16 - 0x1400] = data;
+        return;
+    }
+    
+    // VIC chip registers (0x9000-0x900F = 16 registers)
+    if (addr16 >= 0x9000 && addr16 < 0x9010) {
+        if (sys->vic_) {
+            uint8_t reg = addr16 & 0x0F;
+            if (sys->total_cycles_ < 100000) {  // Only log first 100K cycles
+                printf("VIC20: Write VIC reg $%X = $%02X at cycle %llu\n", reg, data,
+                       (unsigned long long)sys->total_cycles_);
+            }
+            mos6560_write_register(sys->vic_, reg, data);
+        }
+        return;
+    }
+    
+    // VIA1 registers (0x9110-0x911F = 16 registers) - keyboard, joystick
+    if (addr16 >= 0x9110 && addr16 < 0x9120) {
+        if (sys->via1_) {
+            // TODO: Implement VIA register write
+        }
+        return;
+    }
+    
+    // VIA2 registers (0x9120-0x912F = 16 registers) - user port, serial
+    if (addr16 >= 0x9120 && addr16 < 0x9130) {
+        if (sys->via2_) {
+            // TODO: Implement VIA register write
+        }
+        return;
+    }
+    
+    // Color RAM (0x9600-0x97FF, mirrored from 0x9400) - writable
+    // Actual hardware has 512 bytes at $9600, but mirrored at $9400
+    if (addr16 >= 0x9400 && addr16 < 0x9800) {
+        sys->color_ram_simple_[(addr16 - 0x9400) & 0x1FF] = data & 0x0F;  // Only 4 bits used, 512 bytes mirrored
+        return;
+    }
     
     // ROM areas are read-only, writes are ignored
 }
@@ -585,10 +689,16 @@ void VIC20System::non_cpu_cycle() {
     }
 }
 bool VIC20System::load_roms() {
-    // Try to load VIC-20 ROMs from standard locations
-    // These paths should be configurable via system configuration
+    // Discover ROM root path for VIC-20 system
+    char rom_root[1024];
+    bool rom_root_found = system_config_discover_rom_root("vic20", rom_root, sizeof(rom_root));
     
-    const char* rom_root = "data/vic20/roms";  // Default ROM path
+    if (!rom_root_found) {
+        printf("VIC20: ROM root directory not found\n");
+        return false;
+    }
+    
+    printf("VIC20: ROM root discovered: %s\n", rom_root);
     
     // Load KERNAL ROM (8KB at $E000-$FFFF)
     const char* kernal_files[] = {
