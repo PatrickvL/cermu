@@ -111,6 +111,10 @@ private:
     static uint8_t cpu_read(void* user_data, uint32_t addr, uint8_t bus_state);
     static void cpu_write(void* user_data, uint32_t addr, uint8_t data);
     
+    // Memory access callbacks for VIC chip
+    static uint8_t vic_mem_read(void* user_data, uint16_t addr);
+    static uint8_t vic_color_read(void* user_data, uint16_t addr);
+    
     // Legacy integration methods
     void memory_init(const rom_config_t* rom_config);
     bool reload_roms(const rom_config_t* rom_config);

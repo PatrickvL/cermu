@@ -284,6 +284,18 @@ bool VIC20System::initialize() {
         return false;
     }
     
+    // Set up VIC memory callbacks for accessing video and character memory
+    vic_set_memory_callbacks(&vic_->base, 
+        VIC20System::vic_mem_read,      // Memory read callback
+        this,                            // User data (VIC20System instance)
+        VIC20System::vic_color_read,    // Color RAM read callback
+        this);                           // User data for color RAM
+    
+    // Set up framebuffer if available
+    if (rgba_framebuffer_) {
+        mos6560_set_framebuffer(vic_, rgba_framebuffer_, rgba_width_, rgba_height_);
+    }
+    
     // Create VIA chips (MOS6522)
     via1_ = (mos6522_t*)mos6522_create(&mos6522_descriptor);
     if (via1_) {
@@ -451,6 +463,39 @@ void VIC20System::set_speed_multiplier(float multiplier) {
 // Private Helper Methods
 // ============================================================================
 
+// Memory access callbacks for VIC chip
+uint8_t VIC20System::vic_mem_read(void* user_data, uint16_t addr) {
+    VIC20System* sys = static_cast<VIC20System*>(user_data);
+    
+    // VIC can access RAM and character ROM
+    // Address bit 15 selects between RAM (0) and character ROM (1)
+    if (addr & 0x8000) {
+        // Character ROM access (0x8000-0x8FFF -> 0x0000-0x0FFF in char ROM)
+        uint16_t rom_addr = addr & 0x0FFF;
+        if (rom_addr < sizeof(sys->char_rom_)) {
+            return sys->char_rom_[rom_addr];
+        }
+    } else {
+        // RAM access (video matrix and expansion RAM)
+        if (addr < 0x1400) {
+            return sys->ram_simple_[addr];
+        }
+    }
+    
+    return 0xFF;
+}
+
+uint8_t VIC20System::vic_color_read(void* user_data, uint16_t addr) {
+    VIC20System* sys = static_cast<VIC20System*>(user_data);
+    
+    // Color RAM is at $9400-$97FF (1KB), but VIC addresses it differently
+    if (addr < 1024) {
+        return sys->color_ram_simple_[addr];
+    }
+    
+    return 0x0F;  // Default color
+}
+
 // Memory access callbacks for CPU
 uint8_t VIC20System::cpu_read(void* user_data, uint32_t addr, uint8_t bus_state) {
     VIC20System* sys = static_cast<VIC20System*>(user_data);
@@ -466,6 +511,11 @@ uint8_t VIC20System::cpu_read(void* user_data, uint32_t addr, uint8_t bus_state)
     }
     // Expansion RAM would go here
     // ...
+    
+    // Color RAM (0x9400-0x97FF)
+    if (addr16 >= 0x9400 && addr16 < 0x9800) {
+        return sys->color_ram_simple_[addr16 - 0x9400];
+    }
     
     // BASIC ROM (0xC000-0xDFFF = 8KB)
     if (addr16 >= 0xC000 && addr16 < 0xE000) {
