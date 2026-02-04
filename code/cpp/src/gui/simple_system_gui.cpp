@@ -274,6 +274,12 @@ void SimpleSystemGUI::render_menu_bar() {
         ImGui::EndMenu();
     }
     
+    // Screen menu
+    if (ImGui::BeginMenu("Screen")) {
+        render_screen_menu_generic();
+        ImGui::EndMenu();
+    }
+    
     // Settings menu
     if (ImGui::BeginMenu("Settings")) {
         if (ImGui::MenuItem("System Configuration")) {
@@ -315,6 +321,14 @@ void SimpleSystemGUI::render_screen() {
     ImGui::SetNextWindowPos(viewport->Pos);
     ImGui::SetNextWindowSize(viewport->Size);
     
+    // Detect and update host DPI scale if needed
+    ImGuiIO& io = ImGui::GetIO();
+    if (host_dpi_scale_ <= 0.0f) {
+        host_dpi_scale_ = io.DisplayFramebufferScale.x > 0.0f
+                            ? io.DisplayFramebufferScale.x
+                            : 1.0f;
+    }
+    
     // Fullscreen window flags
     ImGuiWindowFlags flags =
         ImGuiWindowFlags_NoDecoration |
@@ -332,17 +346,23 @@ void SimpleSystemGUI::render_screen() {
         // Update texture
         update_screen_texture(screen_texture_id_, fb_width_, fb_height_, fb);
         
-        // Calculate display dimensions with integer scaling
-        int display_w, display_h, pos_x, pos_y;
-        calculate_integer_scaled_dimensions(
-            (int)viewport->Size.x, (int)viewport->Size.y,
-            fb_width_, fb_height_,
+        // Get hardware traits to determine PAL/NTSC (default to PAL for most systems)
+        const auto& traits = system_->get_hardware_traits();
+        bool is_pal = true;  // Default to PAL, systems can override via traits
+        bool use_pixel_aspect = true;  // Use pixel aspect correction by default
+        
+        // Calculate display dimensions with full aspect ratio support
+        float display_w, display_h, pos_x, pos_y;
+        calculate_display_dimensions(
+            viewport->Size.x, viewport->Size.y,
+            (float)fb_width_, (float)fb_height_,
+            is_pal, use_pixel_aspect,
             &display_w, &display_h, &pos_x, &pos_y);
         
-        // Center and render
-        ImGui::SetCursorPos(ImVec2((float)pos_x, (float)pos_y));
+        // Set cursor position and render
+        ImGui::SetCursorPos(ImVec2(pos_x, pos_y));
         ImGui::Image((void*)(intptr_t)screen_texture_id_,
-                    ImVec2((float)display_w, (float)display_h));
+                    ImVec2(display_w, display_h));
     }
     
     ImGui::End();

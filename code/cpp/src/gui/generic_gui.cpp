@@ -24,6 +24,15 @@ GenericEmulatorGUI::GenericEmulatorGUI()
     , show_about_(false)
     , window_width_(1200)
     , window_height_(800)
+    // Aspect ratio configuration defaults
+    , aspect_ratio_mode_(ASPECT_RATIO_ORIGINAL)
+    , scaling_mode_(SCALING_MODE_FIT)
+    , custom_aspect_ratio_(4.0f / 3.0f)  // 4:3 default
+    , maintain_pixel_aspect_(true)
+    , show_overscan_(true)
+    , center_display_(true)
+    , show_invisible_area_(false)
+    , host_dpi_scale_(1.0f)  // Will be detected at runtime
 {
 }
 
@@ -279,4 +288,199 @@ void GenericEmulatorGUI::calculate_integer_scaled_dimensions(
     // Center in window
     *out_pos_x = (window_width - *out_display_width) / 2;
     *out_pos_y = (window_height - *out_display_height) / 2;
+}
+
+// ============================================================================
+// Advanced Aspect Ratio and Scaling System
+// ============================================================================
+
+// Get target aspect ratio based on configuration
+float GenericEmulatorGUI::get_target_aspect_ratio(float guest_width, float guest_height,
+                                                   bool is_pal, bool use_pixel_aspect) const {
+    switch (aspect_ratio_mode_) {
+    case ASPECT_RATIO_4_3:
+        return 4.0f / 3.0f;
+    
+    case ASPECT_RATIO_16_10:
+        return 16.0f / 10.0f;
+    
+    case ASPECT_RATIO_16_9:
+        return 16.0f / 9.0f;
+    
+    case ASPECT_RATIO_CUSTOM:
+        return custom_aspect_ratio_;
+    
+    case ASPECT_RATIO_PIXEL_PERFECT:
+        return 1.0f;  // Square pixels
+    
+    case ASPECT_RATIO_ORIGINAL:
+    default: {
+        // Calculate original aspect ratio
+        // Pixels are not always square - different aspect ratios for PAL vs NTSC
+        float pixel_aspect = is_pal ? (312.0f / 50.0f) / (263.0f / 60.0f) : 1.0f;
+        
+        if (use_pixel_aspect && maintain_pixel_aspect_) {
+            return (guest_width / guest_height) * pixel_aspect;
+        } else {
+            return guest_width / guest_height;
+        }
+    }
+    }
+}
+
+// Calculate display dimensions with full aspect ratio and scaling support
+void GenericEmulatorGUI::calculate_display_dimensions(
+    float viewport_width, float viewport_height,
+    float guest_width, float guest_height,
+    bool is_pal, bool use_pixel_aspect,
+    float* out_display_width, float* out_display_height,
+    float* out_pos_x, float* out_pos_y) const {
+    
+    // Apply host DPI scaling
+    float effective_viewport_width = viewport_width / host_dpi_scale_;
+    float effective_viewport_height = viewport_height / host_dpi_scale_;
+    
+    // Get target aspect ratio
+    float target_aspect = get_target_aspect_ratio(guest_width, guest_height, is_pal, use_pixel_aspect);
+    float viewport_aspect = effective_viewport_width / effective_viewport_height;
+    
+    float display_width, display_height;
+    
+    switch (scaling_mode_) {
+    case SCALING_MODE_FILL:
+        // Fill entire viewport (may crop guest content)
+        display_width = effective_viewport_width;
+        display_height = effective_viewport_height;
+        break;
+    
+    case SCALING_MODE_STRETCH:
+        // Stretch to fill viewport (may distort aspect ratio)
+        display_width = effective_viewport_width;
+        display_height = effective_viewport_height;
+        break;
+    
+    case SCALING_MODE_INTEGER: {
+        // Use integer scaling only
+        float max_scale_x = effective_viewport_width / guest_width;
+        float max_scale_y = effective_viewport_height / guest_height;
+        float integer_scale = floorf(fminf(max_scale_x, max_scale_y));
+        
+        if (integer_scale < 1.0f)
+            integer_scale = 1.0f;
+        
+        display_width = guest_width * integer_scale;
+        display_height = guest_height * integer_scale;
+        break;
+    }
+    
+    case SCALING_MODE_FIT:
+    default: {
+        // Fit within viewport maintaining aspect ratio (may add black bars/letterboxing)
+        if (viewport_aspect > target_aspect) {
+            // Viewport is wider - fit to height, add side bars
+            display_height = effective_viewport_height;
+            display_width = display_height * target_aspect;
+        } else {
+            // Viewport is taller - fit to width, add top/bottom bars
+            display_width = effective_viewport_width;
+            display_height = display_width / target_aspect;
+        }
+        break;
+    }
+    }
+    
+    // Apply user scaling
+    display_width *= screen_scale_;
+    display_height *= screen_scale_;
+    
+    // Clamp to viewport size if needed
+    if (display_width > effective_viewport_width) {
+        float scale_factor = effective_viewport_width / display_width;
+        display_width = effective_viewport_width;
+        display_height *= scale_factor;
+    }
+    if (display_height > effective_viewport_height) {
+        float scale_factor = effective_viewport_height / display_height;
+        display_height = effective_viewport_height;
+        display_width *= scale_factor;
+    }
+    
+    // Calculate position (center by default)
+    float pos_x = 0.0f;
+    float pos_y = 0.0f;
+    
+    if (center_display_) {
+        pos_x = (effective_viewport_width - display_width) * 0.5f;
+        pos_y = (effective_viewport_height - display_height) * 0.5f;
+    }
+    
+    // Apply DPI scaling back to final values
+    *out_display_width = display_width * host_dpi_scale_;
+    *out_display_height = display_height * host_dpi_scale_;
+    *out_pos_x = pos_x * host_dpi_scale_;
+    *out_pos_y = pos_y * host_dpi_scale_;
+}
+
+// ============================================================================
+// Screen Menu with Display Controls
+// ============================================================================
+
+void GenericEmulatorGUI::render_screen_menu_generic() {
+    ImGui::Text("Display Controls");
+    ImGui::Separator();
+    
+    ImGui::SliderFloat("Scale", &screen_scale_, 0.5f, 4.0f, "%.1fx");
+    ImGui::Checkbox("Filter", &screen_filter_);
+    ImGui::Checkbox("Scanlines", &screen_scanlines_);
+    
+    // Update texture filtering based on user preference
+    if (screen_texture_id_ != 0) {
+        glBindTexture(GL_TEXTURE_2D, screen_texture_id_);
+        if (screen_filter_) {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        } else {
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        }
+    }
+    
+    ImGui::Separator();
+    ImGui::Text("Aspect Ratio & Scaling");
+    
+    // Aspect ratio mode selection
+    const char* aspect_ratio_items[] = {
+        "Original", "4:3", "16:10", "16:9", "Custom", "Pixel Perfect"
+    };
+    int current_aspect = (int)aspect_ratio_mode_;
+    if (ImGui::Combo("Aspect Ratio", &current_aspect, aspect_ratio_items,
+                     ASPECT_RATIO_COUNT)) {
+        aspect_ratio_mode_ = (aspect_ratio_mode_t)current_aspect;
+    }
+    
+    // Custom aspect ratio input (only shown when Custom is selected)
+    if (aspect_ratio_mode_ == ASPECT_RATIO_CUSTOM) {
+        ImGui::SliderFloat("Custom Ratio", &custom_aspect_ratio_,
+                          0.5f, 3.0f, "%.2f");
+    }
+    
+    // Scaling mode selection
+    const char* scaling_mode_items[] = {
+        "Fit (Black Bars)", "Fill (Crop)", "Stretch", "Integer Scale"
+    };
+    int current_scaling = (int)scaling_mode_;
+    if (ImGui::Combo("Scaling Mode", &current_scaling, scaling_mode_items,
+                     SCALING_MODE_COUNT)) {
+        scaling_mode_ = (scaling_mode_t)current_scaling;
+    }
+    
+    // Additional options
+    ImGui::Checkbox("Maintain Pixel Aspect", &maintain_pixel_aspect_);
+    ImGui::Checkbox("Show Overscan/Border", &show_overscan_);
+    ImGui::Checkbox("Center Display", &center_display_);
+    ImGui::Checkbox("Show Invisible Area", &show_invisible_area_);
+    
+    // Host DPI information
+    ImGui::Separator();
+    ImGui::Text("Host DPI Scale: %.2f", host_dpi_scale_);
 }
