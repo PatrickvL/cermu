@@ -54,11 +54,16 @@
 #define VIC_AUX_COLOR_SHIFT 4
 #define VIC_AUX_VOLUME_MASK 0x0F
 
-// Background register bit masks
+// Background register bit masks ($900F) per MOS 6561 VIC documentation
+// 900F XXXXYZZZ
+// Bits 0-2 (Z): Border colour (8 colors: 0-7)
+// Bit 3 (Y): Reverse field control bit
+// Bits 4-7 (X): Screen/background colour (16 colors: 0-15)
+#define VIC_BG_BORDER_MASK 0x07
+#define VIC_BG_BORDER_SHIFT 0
+#define VIC_BG_REVERSE 0x08
 #define VIC_BG_BACKGROUND_MASK 0xF0
 #define VIC_BG_BACKGROUND_SHIFT 4
-#define VIC_BG_REVERSED 0x08
-#define VIC_BG_BORDER_MASK 0x07
 
 // Color register bit masks (for color RAM reads)
 #define VIC_COLOR_MULTICOLOR 0x08

@@ -4,25 +4,26 @@
 #include <stdio.h>
 
 // VIC color palette (16 colors) - Hardware accurate VIC-20 colors
-// Must match the palette defined in vic20_system.cpp for correct color rendering
-// Format: 0xAARRGGBB (Alpha=0xFF, Red, Green, Blue) - Same format as C64 palette
+// Format: 0xAABBGGRR (ABGR byte order for little-endian OpenGL GL_RGBA texture format)
+// On little-endian systems, memory layout is [R][G][B][A] which GL_RGBA reads correctly
+// Based on Colodore measurements of real VIC-20 hardware
 static const uint32_t vic_palette[16] = {
     0xFF000000, // 0: Black
     0xFFFFFFFF, // 1: White
-    0xFF813338, // 2: Red
-    0xFF75CEC8, // 3: Cyan
-    0xFF8E3C97, // 4: Purple/Magenta
-    0xFF56AC4D, // 5: Green
-    0xFF2B338D, // 6: Blue
-    0xFFEDF171, // 7: Yellow
-    0xFFC46C71, // 8: Orange/Brown
-    0xFFFFD4A1, // 9: Light Orange/Tan
-    0xFF9A6759, // 10: Light Red/Pink
-    0xFFC7FFFF, // 11: Light Cyan (Colodore standard)
-    0xFFC9ADFF, // 12: Light Purple/Lavender
-    0xFF9AE29B, // 13: Light Green
-    0xFF7873C4, // 14: Light Blue
-    0xFFFFFFB0  // 15: Light Yellow
+    0xFF383381, // 2: Red
+    0xFFC8CE75, // 3: Cyan
+    0xFF973C8E, // 4: Purple/Magenta
+    0xFF4DAC56, // 5: Green
+    0xFF8D332B, // 6: Blue
+    0xFF71F1ED, // 7: Yellow
+    0xFF716CC4, // 8: Orange/Brown
+    0xFFA1D4FF, // 9: Light Orange/Tan
+    0xFF59679A, // 10: Light Red/Pink
+    0xFFFFFFC7, // 11: Light Cyan
+    0xFFFFADC9, // 12: Light Purple/Lavender
+    0xFF9BE29A, // 13: Light Green
+    0xFFC47378, // 14: Light Blue
+    0xFFB0FFFF  // 15: Light Yellow
 };
 
 // Get default VIC palette
@@ -50,23 +51,30 @@ void vic_system_reset(vic_base_t* vic) {
     vic->current_cycle = 0;
 
     // Default register values for VIC-20 PAL (hardware power-on defaults)
-    // Based on VIC-I (6560/6561) hardware specifications
-    vic->registers[VIC_REG_CONTROL1] = 0x0C;  // $9000: Horizontal centering (PAL: $0C, NTSC: $05)
-    vic->registers[VIC_REG_CONTROL2] = 0x26;  // $9001: Vertical centering (38 rows)
-    vic->registers[VIC_REG_VIDEO_MATRIX] = 0x96;  // $9002: Columns: 22, Video matrix at $1000
-    vic->registers[VIC_REG_ROWS] = 0x2E;  // $9003: Rows: 23 (×2 = 46 rows), char size 8×16
-    vic->registers[VIC_REG_RASTER] = 0x00;  // $9004: TV raster value (read-only)
-    vic->registers[VIC_REG_CHAR_BASE] = 0xF0;  // $9005: Character memory at $1000, screen origin
-    vic->registers[VIC_REG_LIGHTPEN_X] = 0x00;  // $9006: Light pen horizontal
-    vic->registers[VIC_REG_LIGHTPEN_Y] = 0x00;  // $9007: Light pen vertical
-    vic->registers[VIC_REG_PADDLE_X] = 0x00;  // $9008: Paddle X
-    vic->registers[VIC_REG_PADDLE_Y] = 0x00;  // $9009: Paddle Y
-    vic->registers[VIC_REG_OSC1_FREQ] = 0x00; // $900A: Bass switch/frequency
-    vic->registers[VIC_REG_OSC2_FREQ] = 0x00; // $900B: Alto frequency
-    vic->registers[VIC_REG_OSC3_FREQ] = 0x00; // $900C: Soprano frequency
-    vic->registers[VIC_REG_OSC4_FREQ] = 0x00; // $900D: Noise frequency
-    vic->registers[VIC_REG_AUX_COLOR] = 0x00; // $900E: Auxiliary color, volume = 0 (muted)
-    vic->registers[VIC_REG_BACKGROUND] = 0x1B; // $900F: Screen colors: Border=Cyan(3), BG=White(1), Reverse=ON(0)
+    // Based on VIC-I (6560/6561) hardware specifications (usual values from datasheet)
+    vic->registers[VIC_REG_CONTROL1] = 12;   // $9000: CR0 usual value=12 (Horizontal centering, PAL: 12, NTSC: 5)
+    vic->registers[VIC_REG_CONTROL2] = 38;   // $9001: CR1 usual value=38 (Vertical centering)
+    vic->registers[VIC_REG_VIDEO_MATRIX] = 150;  // $9002: CR2 usual value=150 (22 columns, video matrix bit 9)
+    vic->registers[VIC_REG_ROWS] = 174;  // $9003: CR3 usual value=174 (23 rows doubled, 8x8 chars)
+    vic->registers[VIC_REG_RASTER] = 0;  // $9004: CR4 (TV raster counter, read-only)
+    vic->registers[VIC_REG_CHAR_BASE] = 240;  // $9005: CR5 usual value=240 (char memory config)
+    vic->registers[VIC_REG_LIGHTPEN_X] = 0;  // $9006: CR6 usual value=0 (Light pen X)
+    vic->registers[VIC_REG_LIGHTPEN_Y] = 1;  // $9007: CR7 usual value=1 (Light pen Y)
+    vic->registers[VIC_REG_PADDLE_X] = 255;  // $9008: CR8 usual value=255 (Paddle 1)
+    vic->registers[VIC_REG_PADDLE_Y] = 255;  // $9009: CR9 usual value=255 (Paddle 2)
+    vic->registers[VIC_REG_OSC1_FREQ] = 0;  // $900A: CRA usual value=0 (Speaker 1 off)
+    vic->registers[VIC_REG_OSC2_FREQ] = 0;  // $900B: CRB usual value=0 (Speaker 2 off)
+    vic->registers[VIC_REG_OSC3_FREQ] = 0;  // $900C: CRC usual value=0 (Speaker 3 off)
+    vic->registers[VIC_REG_OSC4_FREQ] = 0;  // $900D: CRD usual value=0 (Noise off)
+    vic->registers[VIC_REG_AUX_COLOR] = 0;  // $900E: CRE usual value=0 (Volume=0, Aux color=black)
+    // $900F: CRF usual value=27 (Border=Cyan(3), Reverse=ON, Background=White(1))
+    uint8_t reg_900F = VIC_COLOR_CYAN | VIC_BG_REVERSE | (VIC_COLOR_WHITE << VIC_BG_BACKGROUND_SHIFT);
+    printf("VIC: Initializing $900F with value 0x%02X (Border=%d, Reverse=%d, BG=%d)\n",
+           reg_900F,
+           reg_900F & VIC_BG_BORDER_MASK,
+           (reg_900F & VIC_BG_REVERSE) ? 1 : 0,
+           (reg_900F & VIC_BG_BACKGROUND_MASK) >> VIC_BG_BACKGROUND_SHIFT);
+    vic->registers[VIC_REG_BACKGROUND] = reg_900F;
 
     // Reset video generation state
     vic->in_display_area = false;
@@ -262,12 +270,13 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
             vic_emit_pixel(vic, color);
         }
         else {  // Hires mode
-            const bool reversed = (reg_background & VIC_BG_REVERSED) != 0;
+            // Reverse mode: bit 3 of $900F reverses the whole display
+            const bool reversed = (reg_background & VIC_BG_REVERSE) != 0;
             const uint8_t char_data = reversed ? ~vic->matrix_char_data : vic->matrix_char_data;
             vic_emit_pixel(vic, (char_data & 0x80) ? foreground_color : background_color);
             vic_emit_pixel(vic, (char_data & 0x40) ? foreground_color : background_color);
             vic_emit_pixel(vic, (char_data & 0x20) ? foreground_color : background_color);
-            vic_emit_pixel(vic, (char_data & 0x10) ? foreground_color : background_color);       
+            vic_emit_pixel(vic, (char_data & 0x10) ? foreground_color : background_color);
         }
     }
     else {
