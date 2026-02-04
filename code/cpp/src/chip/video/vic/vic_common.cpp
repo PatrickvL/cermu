@@ -52,12 +52,13 @@ void vic_system_reset(vic_base_t* vic) {
 
     // Default register values for VIC-20 PAL (hardware power-on defaults)
     // Based on VIC-I (6560/6561) hardware specifications (usual values from datasheet)
+    // Unexpanded VIC-20 uses screen at $1000 (in 5KB RAM)
     vic->registers[VIC_REG_CONTROL1] = 12;   // $9000: CR0 usual value=12 (Horizontal centering, PAL: 12, NTSC: 5)
     vic->registers[VIC_REG_CONTROL2] = 38;   // $9001: CR1 usual value=38 (Vertical centering)
     vic->registers[VIC_REG_VIDEO_MATRIX] = 22;  // $9002: CR2 (bits 6-0: 22 columns, bit 7: video matrix bit 9 = 0 for $1000)
-    vic->registers[VIC_REG_ROWS] = 174;  // $9003: CR3 usual value=174 (23 rows doubled, 8x8 chars)
+    vic->registers[VIC_REG_ROWS] = 46;  // $9003: CR3 usual value=46 (23 rows, 8x8 chars)
     vic->registers[VIC_REG_RASTER] = 0;  // $9004: CR4 (TV raster counter, read-only)
-    vic->registers[VIC_REG_CHAR_BASE] = 0x40;  // $9005: CR5 (bits 7-4: video matrix base = 0x40 -> $1000, bits 3-0 unused)
+    vic->registers[VIC_REG_CHAR_BASE] = 0x4F;  // $9005: CR5 (bits 7-4: $4 for screen at $1000, bits 3-0: $F for char ROM at $8000)
     vic->registers[VIC_REG_LIGHTPEN_X] = 0;  // $9006: CR6 usual value=0 (Light pen X)
     vic->registers[VIC_REG_LIGHTPEN_Y] = 1;  // $9007: CR7 usual value=1 (Light pen Y)
     vic->registers[VIC_REG_PADDLE_X] = 255;  // $9008: CR8 usual value=255 (Paddle 1)
@@ -200,10 +201,12 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
 
     // Check character area boundaries
     const uint16_t screen_origin_x = vic->registers[VIC_REG_CONTROL1] & VIC_C1_SCREEN_ORIGIN_X_MASK;
+    const uint16_t columns = vic->registers[VIC_REG_VIDEO_MATRIX] & VIC_VM_COLUMNS_MASK;
+    const uint16_t char_area_end = screen_origin_x + (columns << 1);
     if (vic->current_cycle == screen_origin_x) {
         vic->in_char_area = true;
     }
-    else if (vic->current_cycle == screen_origin_x + ((vic->registers[VIC_REG_VIDEO_MATRIX] & VIC_VM_COLUMNS_MASK) << 1)) {
+    else if (vic->current_cycle == char_area_end) {
         vic->in_char_area = false;
     }
 
@@ -232,7 +235,7 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
                 // matrix_index increments once per fetch cycle
                 // Since we only increment in fetch cycles, matrix_index IS the character index
                 uint16_t char_index = vic->matrix_index;
-                uint16_t screen_addr = base_video | char_index;
+                uint16_t screen_addr = base_video + char_index;
                 vic->matrix_video_byte = vic->mem_read(vic->mem_user_data, screen_addr);
                 vic->matrix_color_byte = vic->color_read(vic->color_user_data, char_index);
                 
@@ -245,7 +248,6 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
                 // Address calculation: (screen_code << 3) | char_line, then set bit 15
                 uint16_t char_rom_addr = ((uint16_t)vic->matrix_video_byte << 3) | char_line | 0x8000;
                 vic->matrix_char_data = vic->mem_read(vic->mem_user_data, char_rom_addr);
-                
             } else {
                 // No memory access available - emit blank
                 vic->matrix_char_data = 0;
