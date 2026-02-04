@@ -18,7 +18,7 @@ static const uint32_t vic_palette[16] = {
     0xFFC46C71, // 8: Orange/Brown
     0xFFFFD4A1, // 9: Light Orange/Tan
     0xFF9A6759, // 10: Light Red/Pink
-    0xFF9FFFFF, // 11: Light Cyan
+    0xFFC7FFFF, // 11: Light Cyan (Colodore standard)
     0xFFC9ADFF, // 12: Light Purple/Lavender
     0xFF9AE29B, // 13: Light Green
     0xFF7873C4, // 14: Light Blue
