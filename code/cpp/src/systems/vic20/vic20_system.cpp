@@ -365,6 +365,22 @@ void VIC20System::reset() {
 // Execution
 // ============================================================================
 
+bus_state_t VIC20System::mem_tick(bus_state_t s) {
+    uint16_t addr = BUS_GET_ADDR(s);
+    bool is_write = (BUS_GET_LINES(s) & BUS_MASK_RW) == 0;
+    
+    if (is_write) {
+        // Write operation
+        uint8_t data = BUS_GET_DATA(s);
+        cpu_write(this, addr, data);
+    } else {
+        // Read operation
+        uint8_t data = cpu_read(this, addr, 0);
+        BUS_SET_DATA(s, data);
+    }
+    return s;
+}
+
 void VIC20System::tick() {
     // Proper PHI1/PHI2 timing following C64 pattern
     // VIC-20 has simpler fixed memory mapping without PLA
@@ -409,18 +425,7 @@ void VIC20System::tick() {
     // This is CRITICAL - memory access happens BETWEEN PHI2 and PHI1
     // so data is ready for CPU to complete the cycle
     // =========================================================================
-    uint16_t addr = BUS_GET_ADDR(s);
-    bool is_write = (BUS_GET_LINES(s) & BUS_MASK_RW) == 0;
-    
-    if (is_write) {
-        // Write operation
-        uint8_t data = BUS_GET_DATA(s);
-        cpu_write(this, addr, data);
-    } else {
-        // Read operation
-        uint8_t data = cpu_read(this, addr, 0);
-        BUS_SET_DATA(s, data);
-    }
+    s = mem_tick(s);
     
     // =========================================================================
     // PHASE 5: CPU TICKING (PHI1 phase - completes cycle)
