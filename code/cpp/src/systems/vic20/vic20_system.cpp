@@ -258,8 +258,9 @@ bool VIC20System::initialize() {
     memset(expansion_ram_, 0, sizeof(expansion_ram_));
     memset(color_ram_simple_, 0, sizeof(color_ram_simple_));  // Color RAM: black at power-on (hardware default)
     
-    // Screen RAM at $1000 is already zeroed by memset above
-    // The KERNAL will clear the screen during boot sequence
+    // Initialize screen RAM at $1000 with spaces ($20 = screen code for space) like real VIC-20
+    // On real hardware, RAM doesn't always power up as $00, and KERNAL expects/fills with spaces
+    memset(&ram_simple_[0x1000], 0x20, 22 * 23);  // 22 columns × 23 rows
     
     // Load ROMs using common ROM loader
     bool roms_loaded = load_roms();
@@ -593,9 +594,15 @@ uint8_t VIC20System::vic_mem_read(void* user_data, uint16_t addr) {
             return sys->expansion_ram_[ram_addr - 0x1400];
         }
         else if (ram_addr >= 0x2000 && ram_addr < 0x4000) {
-            // Additional expansion RAM (0x2000-0x3FFF) - map to expansion_ram with wrapping
-            // expansion_ram is 3KB (0xC00 bytes), so wrap addresses
-            return sys->expansion_ram_[(ram_addr - 0x1400) % sizeof(sys->expansion_ram_)];
+            // VIC-20 address decoding mirrors/wraps the 3KB expansion block
+            // Addresses $2000-$3FFF mirror back to $0000-$1FFF due to incomplete decoding
+            // So $3E00-$3FFF mirrors to $1E00-$1FFF (the screen RAM location)
+            uint16_t mirrored_addr = ram_addr & 0x1FFF;  // Mirror within 8KB
+            if (mirrored_addr < 0x1400) {
+                return sys->ram_simple_[mirrored_addr];
+            } else {
+                return sys->expansion_ram_[mirrored_addr - 0x1400];
+            }
         }
     }
     
