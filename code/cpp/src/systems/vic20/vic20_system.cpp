@@ -366,10 +366,8 @@ void VIC20System::reset() {
 // ============================================================================
 
 void VIC20System::tick() {
-    // Proper timing following C64 pattern adapted for 6502
+    // Proper PHI1/PHI2 timing following C64 pattern
     // VIC-20 has simpler fixed memory mapping without PLA
-    // 6502 doesn't have separate PHI1/PHI2 like 6510, but memory service
-    // still happens mid-cycle between instruction setup and completion
     
     // Start with clean bus state (pull-up resistors)
     bus_state_t s = bus_.default_state;
@@ -387,7 +385,7 @@ void VIC20System::tick() {
     }
     
     // =========================================================================
-    // PHASE 2: VIA CHIPS TICKING (BEFORE CPU)
+    // PHASE 2: VIA CHIPS TICKING (BEFORE CPU PHI2)
     // VIA chips handle I/O and timing, must tick before CPU to set interrupt lines
     // =========================================================================
     if (via1_) {
@@ -398,18 +396,18 @@ void VIC20System::tick() {
     }
     
     // =========================================================================
-    // PHASE 3: CPU TICKING (first half - sets up memory access)
-    // CPU begins cycle and puts address/control on bus
+    // PHASE 3: CPU TICKING (PHI2 phase - sets up memory access)
+    // CPU executes instruction and puts address/control on bus
     // =========================================================================
     if (cpu_) {
-        s = mos6502_tick(cpu_, s);
+        s = mos6502_tick_phi2(cpu_, s);
     }
     
     // =========================================================================
     // PHASE 4: MEMORY SERVICE PHASE
-    // Service memory access set up by CPU
-    // This is CRITICAL - memory access happens mid-cycle so data is ready
-    // for CPU to complete the cycle
+    // Service memory access set up by CPU during PHI2
+    // This is CRITICAL - memory access happens BETWEEN PHI2 and PHI1
+    // so data is ready for CPU to complete the cycle
     // =========================================================================
     uint16_t addr = BUS_GET_ADDR(s);
     bool is_write = (BUS_GET_LINES(s) & BUS_MASK_RW) == 0;
@@ -422,6 +420,14 @@ void VIC20System::tick() {
         // Read operation
         uint8_t data = cpu_read(this, addr, 0);
         BUS_SET_DATA(s, data);
+    }
+    
+    // =========================================================================
+    // PHASE 5: CPU TICKING (PHI1 phase - completes cycle)
+    // CPU prepares next instruction fetch
+    // =========================================================================
+    if (cpu_) {
+        s = mos6502_tick_phi1(cpu_, s);
     }
     
     // Update bus state
