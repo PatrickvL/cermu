@@ -58,7 +58,7 @@ void vic_system_reset(vic_base_t* vic) {
     vic->registers[VIC_REG_VIDEO_MATRIX] = 22;  // $9002: CR2 (bits 6-0: 22 columns, bit 7: video matrix bit 9 = 0 for $1000)
     vic->registers[VIC_REG_ROWS] = 46;  // $9003: CR3 usual value=46 (23 rows, 8x8 chars)
     vic->registers[VIC_REG_RASTER] = 0;  // $9004: CR4 (TV raster counter, read-only)
-    vic->registers[VIC_REG_CHAR_BASE] = 0x4F;  // $9005: CR5 (bits 7-4: $4 for screen at $1000, bits 3-0: $F for char ROM at $8000)
+    vic->registers[VIC_REG_CHAR_BASE] = 0x40;  // $9005: CR5 (bits 7-4: $4 for screen at $1000, bits 3-0: $0 for char ROM base 0)
     vic->registers[VIC_REG_LIGHTPEN_X] = 0;  // $9006: CR6 usual value=0 (Light pen X)
     vic->registers[VIC_REG_LIGHTPEN_Y] = 1;  // $9007: CR7 usual value=1 (Light pen Y)
     vic->registers[VIC_REG_PADDLE_X] = 255;  // $9008: CR8 usual value=255 (Paddle 1)
@@ -68,12 +68,12 @@ void vic_system_reset(vic_base_t* vic) {
     vic->registers[VIC_REG_OSC3_FREQ] = 0;  // $900C: CRC usual value=0 (Speaker 3 off)
     vic->registers[VIC_REG_OSC4_FREQ] = 0;  // $900D: CRD usual value=0 (Noise off)
     vic->registers[VIC_REG_AUX_COLOR] = 0;  // $900E: CRE usual value=0 (Volume=0, Aux color=black)
-    // $900F: CRF power-on default (Border=Cyan(3), Reverse=OFF, Background=White(1))
-    vic->registers[VIC_REG_BACKGROUND] = VIC_COLOR_CYAN | (VIC_COLOR_WHITE << VIC_BG_BACKGROUND_SHIFT);
+    // $900F: CRF power-on default (Border=Cyan(3), Reverse=OFF, Background=Blue(6))
+    // VIC-20 powers up with blue background, KERNAL will configure as needed
+    vic->registers[VIC_REG_BACKGROUND] = VIC_COLOR_CYAN | (VIC_COLOR_BLUE << VIC_BG_BACKGROUND_SHIFT);
 
     // Reset video generation state
     vic->in_display_area = false;
-    vic->in_char_area = false;
     vic->matrix_index = 0;
     vic->matrix_video_byte = 0;
     vic->matrix_color_byte = 0;
@@ -109,7 +109,7 @@ uint8_t vic_read_register(vic_base_t* vic, uint8_t reg) {
     // Handle special registers that require computed values from tick state
     switch (reg) {
         case VIC_REG_ROWS: // RasterLine bit 0 | NoOfVideoMatrixRows | DoubleHeight
-            return ((vic->raster_counter & 1) << 7) | (vic->registers[reg] & 0x7F);
+            return ((vic->raster_counter << 7) & VIC_ROWS_RASTER_BIT0) | (vic->registers[reg] & 0x7F);
         case VIC_REG_RASTER: // RasterLine bits 8-1
             return (uint8_t)(vic->raster_counter >> 1);
         default:
@@ -164,6 +164,9 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
     vic_base_t* vic = (vic_base_t*)chip;
     if (!vic) return bus_state;
 
+    const uint8_t reg_video_matrix = vic->registers[VIC_REG_VIDEO_MATRIX];
+    uint16_t columns = reg_video_matrix & VIC_VM_COLUMNS_MASK;
+
     // Increment cycle counter
     vic->current_cycle++;
     if (vic->current_cycle >= vic->cycles_per_line) {
@@ -178,13 +181,14 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
             vic->raster_counter = 0;
         }
 
+        const uint8_t reg_rows = vic->registers[VIC_REG_ROWS];
         // Check if entering/leaving display area
         const uint16_t screen_origin_y = vic->registers[VIC_REG_CONTROL2] << 1;
         if (vic->raster_counter == screen_origin_y) {
             vic->in_display_area = true;
             vic->matrix_index = 0;
         }
-        else if (vic->raster_counter == screen_origin_y + (((vic->registers[VIC_REG_ROWS] & VIC_ROWS_ROWS_MASK) >> VIC_ROWS_ROWS_SHIFT) << 3)) {
+        else if (vic->raster_counter == screen_origin_y + (((reg_rows & VIC_ROWS_ROWS_MASK) >> VIC_ROWS_ROWS_SHIFT) << 3)) {
             vic->in_display_area = false;
         }
         // Reset matrix_index at the start of EVERY scanline to the appropriate character row
@@ -194,41 +198,32 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
             uint16_t scanline_in_display = vic->raster_counter - screen_origin_y;
             uint16_t char_row = scanline_in_display >> 3;  // Divide by 8 to get character row
             // Set matrix_index to the start of this character row
-            uint16_t columns = vic->registers[VIC_REG_VIDEO_MATRIX] & VIC_VM_COLUMNS_MASK;
             vic->matrix_index = char_row * columns;
         }
     }
 
-    // Check character area boundaries
+    // Derive character area status from current cycle position
     const uint16_t screen_origin_x = vic->registers[VIC_REG_CONTROL1] & VIC_C1_SCREEN_ORIGIN_X_MASK;
-    const uint16_t columns = vic->registers[VIC_REG_VIDEO_MATRIX] & VIC_VM_COLUMNS_MASK;
     const uint16_t char_area_end = screen_origin_x + (columns << 1);
-    if (vic->current_cycle == screen_origin_x) {
-        vic->in_char_area = true;
-    }
-    else if (vic->current_cycle == char_area_end) {
-        vic->in_char_area = false;
-    }
+    const bool in_char_area = (vic->current_cycle >= screen_origin_x) && (vic->current_cycle < char_area_end);
 
     const uint8_t reg_background = vic->registers[VIC_REG_BACKGROUND];
     const uint8_t border_color = reg_background & VIC_BG_BORDER_MASK;
     
     // Emit 4 pixels per cycle
-    // Emit 4 pixels per cycle
-    // Emit 4 pixels per cycle
-    if (vic->in_display_area && vic->in_char_area) {
+
+    if (vic->in_display_area && in_char_area) {
         // Extract frequently accessed register values
         const uint8_t reg_char_base = vic->registers[VIC_REG_CHAR_BASE];
         
         // Extract base addresses and colors (used for pixel rendering)
-        const uint16_t base_video = ((vic->registers[VIC_REG_VIDEO_MATRIX] & VIC_VM_BASE_VIDEO_BIT9) << 2) |
+        const uint16_t base_video = ((reg_video_matrix & VIC_VM_BASE_VIDEO_BIT9) << 2) |
                                    ((reg_char_base & VIC_CB_BASE_VIDEO_MASK) << VIC_CB_BASE_VIDEO_SHIFT);
         const uint16_t base_char = (reg_char_base & VIC_CB_BASE_CHAR_MASK) << VIC_CB_BASE_CHAR_SHIFT;
         // Derive is_char_fetch_cycle from cycle position: even cycles relative to screen_origin_x are fetch cycles
         const bool is_char_fetch_cycle = ((vic->current_cycle - screen_origin_x) & 1) == 0;
         
-        // TODO: Handle double height
-        // TODO: Handle double height
+        // TODO: Handle reg_rows & VIC_ROWS_DOUBLE_HEIGHT
         if (is_char_fetch_cycle) {
             // Fetch character data from memory
             if (vic->mem_read && vic->color_read) {
@@ -243,10 +238,9 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
                 const uint16_t screen_origin_y = vic->registers[VIC_REG_CONTROL2] << 1;
                 const uint8_t char_line = (vic->raster_counter - screen_origin_y) & 7;
                 
-                // Calculate character ROM address: character_code * 8 + line_within_char
-                // VIC-I always uses 4KB character ROM starting at $8000 (bit 15 = 1)
-                // Address calculation: (screen_code << 3) | char_line, then set bit 15
-                uint16_t char_rom_addr = ((uint16_t)vic->matrix_video_byte << 3) | char_line | 0x8000;
+                // Calculate character ROM address and fetch:
+                // base_char | (video_byte << 3) | char_line | 0x8000 to set bit 15 for char ROM access
+                uint16_t char_rom_addr = base_char | ((uint16_t)vic->matrix_video_byte << 3) | char_line | 0x8000;
                 vic->matrix_char_data = vic->mem_read(vic->mem_user_data, char_rom_addr);
             } else {
                 // No memory access available - emit blank
@@ -266,7 +260,6 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
 
         // Emit high nyble (4 pixels)
         if (vic->matrix_color_byte & VIC_COLOR_MULTICOLOR) {  // Multicolor mode
-            const uint8_t border_color = reg_background & VIC_BG_BORDER_MASK;
             const uint8_t auxiliary_color = (vic->registers[VIC_REG_AUX_COLOR] & VIC_AUX_COLOR_MASK) >> VIC_AUX_COLOR_SHIFT;
             // Emit 2 pixels for bits 7-6
             uint8_t color = 0;
