@@ -145,7 +145,6 @@ typedef struct {
 
     // Video generation state (updated every tick, not just register copies)
     bool in_display_area;
-    bool in_char_area;
     uint16_t matrix_index;
     uint8_t matrix_video_byte;
     uint8_t matrix_color_byte;

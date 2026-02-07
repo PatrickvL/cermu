@@ -245,6 +245,15 @@ bool VIC20System::apply_configuration() {
         cycles_per_frame_ = region.timing.cycles_per_frame;
     }
     
+    // Apply memory configuration
+    if (config_.memory_option_index >= 0 &&
+        config_.memory_option_index < static_cast<int>(hardware_traits_.memory_options.size())) {
+        const MemoryOption& memopt = hardware_traits_.memory_options[config_.memory_option_index];
+        // Calculate expansion size: total RAM - 5KB base = expansion RAM
+        expansion_size_ = (memopt.ram_size > 5120) ? (memopt.ram_size - 5120) : 0;
+        printf("VIC20: Expansion RAM configured: %d bytes\n", expansion_size_);
+    }
+    
     return true;
 }
 
@@ -253,14 +262,13 @@ bool VIC20System::apply_configuration() {
 // ============================================================================
 bool VIC20System::initialize() {
     printf("VIC20: Initializing system\n");
-    // Initialize memory arrays
+    // Initialize memory arrays - hardware accurate: all RAM starts as zeros
+    // On real VIC-20, RAM powers up with undefined values, but zeros is a reasonable approximation
+    // Character 0 = '@' symbol, which should be visible until KERNAL clears screen with spaces
     memset(ram_simple_, 0, sizeof(ram_simple_));
     memset(expansion_ram_, 0, sizeof(expansion_ram_));
-    memset(color_ram_simple_, 0, sizeof(color_ram_simple_));  // Color RAM: black at power-on (hardware default)
-    
-    // Initialize screen RAM at $1000 with spaces ($20 = screen code for space) like real VIC-20
-    // On real hardware, RAM doesn't always power up as $00, and KERNAL expects/fills with spaces
-    memset(&ram_simple_[0x1000], 0x20, 22 * 23);  // 22 columns × 23 rows
+    // Color RAM: initialize to white (color 1) for proper text visibility on blue background
+    memset(color_ram_simple_, VIC_COLOR_WHITE, sizeof(color_ram_simple_));
     
     // Load ROMs using common ROM loader
     bool roms_loaded = load_roms();
@@ -578,31 +586,42 @@ uint8_t VIC20System::vic_mem_read(void* user_data, uint16_t addr) {
         if (rom_addr < sizeof(sys->char_rom_)) {
             return sys->char_rom_[rom_addr];
         }
-    } else {
-        // RAM access - VIC can only address 16KB (14-bit address space: 0x0000-0x3FFF)
-        // Unexpanded VIC-20: 5KB at $0000-$13FF
-        // With 3K expansion: adds $1E00-$1FFF (screen) + other blocks
-        // Addresses wrap/mirror within 16KB space
-        uint16_t ram_addr = addr & 0x3FFF;  // Limit to 16KB address space
-        
-        if (ram_addr < 0x1400) {
-            // Main 5KB RAM
-            return sys->ram_simple_[ram_addr];
-        }
-        else if (ram_addr < 0x2000) {
-            // First expansion block (0x1400-0x1FFF)
+        // ROM address out of bounds - return $FF
+        return 0xFF;
+    }
+    
+    // RAM access - VIC can only address 16KB (14-bit address space: 0x0000-0x3FFF)
+    // Unexpanded VIC-20: 5KB at $0000-$13FF
+    // With 3K expansion: adds $1400-$1FFF
+    // Addresses wrap/mirror within 16KB space
+    uint16_t ram_addr = addr & 0x3FFF;  // Limit to 16KB address space
+    
+    if (ram_addr < 0x1400) {
+        // Main 5KB RAM - always present
+        return sys->ram_simple_[ram_addr];
+    }
+    else if (ram_addr >= 0x1400 && ram_addr < 0x2000) {
+        // First expansion block (0x1400-0x1FFF) - 3KB expansion adds RAM here
+        // For unexpanded VIC-20, this reads as unmapped (returns $FF)
+        if (sys->expansion_size_ >= 3072) {
             return sys->expansion_ram_[ram_addr - 0x1400];
         }
-        else if (ram_addr >= 0x2000 && ram_addr < 0x4000) {
-            // VIC-20 address decoding mirrors/wraps the 3KB expansion block
-            // Addresses $2000-$3FFF mirror back to $0000-$1FFF due to incomplete decoding
-            // So $3E00-$3FFF mirrors to $1E00-$1FFF (the screen RAM location)
-            uint16_t mirrored_addr = ram_addr & 0x1FFF;  // Mirror within 8KB
-            if (mirrored_addr < 0x1400) {
-                return sys->ram_simple_[mirrored_addr];
-            } else {
+        // Unmapped - return $FF (typical for floating bus reads)
+        return 0xFF;
+    }
+    else if (ram_addr >= 0x2000 && ram_addr < 0x4000) {
+        // VIC-20 address decoding mirrors/wraps within 8KB
+        // Addresses $2000-$3FFF mirror back to $0000-$1FFF
+        uint16_t mirrored_addr = ram_addr & 0x1FFF;  // Mirror within 8KB
+        if (mirrored_addr < 0x1400) {
+            // Base RAM mirror (always present)
+            return sys->ram_simple_[mirrored_addr];
+        } else if (mirrored_addr < 0x2000) {
+            // Expansion RAM mirror (conditional)
+            if (sys->expansion_size_ >= 3072) {
                 return sys->expansion_ram_[mirrored_addr - 0x1400];
             }
+            return 0xFF;  // Unmapped
         }
     }
     
@@ -630,9 +649,13 @@ uint8_t VIC20System::cpu_read(void* user_data, uint32_t addr, uint8_t bus_state)
         return sys->ram_simple_[addr16];
     }
     
-    // Expansion RAM (0x1400-0x1FFF)
+    // Expansion RAM (0x1400-0x1FFF) - 3KB expansion adds RAM here
     if (addr16 >= 0x1400 && addr16 < 0x2000) {
-        return sys->expansion_ram_[addr16 - 0x1400];
+        if (sys->expansion_size_ >= 3072) {
+            return sys->expansion_ram_[addr16 - 0x1400];
+        }
+        // Unmapped memory for unexpanded VIC-20 - return $FF
+        return 0xFF;
     }
     
     // VIC chip registers (0x9000-0x900F = 16 registers)
@@ -697,9 +720,12 @@ void VIC20System::cpu_write(void* user_data, uint32_t addr, uint8_t data) {
         return;
     }
     
-    // Expansion RAM (0x1400-0x1FFF)
+    // Expansion RAM (0x1400-0x1FFF) - 3KB expansion adds RAM here
     if (addr16 >= 0x1400 && addr16 < 0x2000) {
-        sys->expansion_ram_[addr16 - 0x1400] = data;
+        if (sys->expansion_size_ >= 3072) {
+            sys->expansion_ram_[addr16 - 0x1400] = data;
+        }
+        // Ignore writes to unmapped memory for unexpanded VIC-20
         return;
     }
     
