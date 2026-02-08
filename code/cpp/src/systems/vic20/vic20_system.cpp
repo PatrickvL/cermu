@@ -1,4 +1,6 @@
 #include "vic20_system.h"
+#include "vic20_memory.h"
+#include "vic20_chips.h"
 #include <cstring>
 #include <cstdio>
 
@@ -77,19 +79,31 @@ static HardwareTraits create_vic20_hardware_traits() {
         true
     });
     traits.memory_options.push_back({
-        "8KB Expansion",
+        "3KB Expansion (8KB total)",
+        8192,   // 5KB + 3KB
+        0,
+        false
+    });
+    traits.memory_options.push_back({
+        "8KB Expansion (13KB total)",
         13312,  // 5KB + 8KB
         0,
         false
     });
     traits.memory_options.push_back({
-        "16KB Expansion",
+        "16KB Expansion (21KB total)",
         21504,  // 5KB + 16KB
         0,
         false
     });
     traits.memory_options.push_back({
-        "32KB Expansion",
+        "24KB Expansion (29KB total)",
+        29696,  // 5KB + 24KB
+        0,
+        false
+    });
+    traits.memory_options.push_back({
+        "Full Expansion (32KB total)",
         37888,  // 5KB + 32KB
         0,
         false
@@ -161,17 +175,13 @@ static SystemDescriptor vic20_descriptor = {
 // ============================================================================
 VIC20System::VIC20System()
     : EmulatedSystem()
+    , memory_(nullptr)
     , cpu_(nullptr)
-    , ram_(nullptr)
     , vic_(nullptr)
     , via1_(nullptr)
     , via2_(nullptr)
-    , colorram_(nullptr)
-    , basic_(nullptr)
-    , charrom_(nullptr)
-    , kernal_(nullptr)
     , cycles_per_frame_(22168)
-    , expansion_size_(0)
+    , expansion_flags_(VIC20_EXP_NONE)
 {
     hardware_traits_ = create_vic20_hardware_traits();
     current_palette_ = hardware_traits_.display.default_palette;
@@ -181,14 +191,6 @@ VIC20System::VIC20System()
     bus_.default_state = BUS_STATE(0, 0xFF, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY | BUS_MASK_RW) | 
                          BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT);
     bus_.state = bus_.default_state;
-    
-    // Initialize legacy system (commented out until fully integrated)
-    // system_8bit_init(&system_);
-    
-    // Create bus (commented out until bus integration complete)
-    // bus_.desc = &vic20_bus_descriptor;
-    // bus_.vic20 = reinterpret_cast<vic20_t*>(this);
-    // vic20_bus_init_adapters(&bus_);
 }
 
 VIC20System::~VIC20System() {
@@ -215,9 +217,11 @@ VIC20System::~VIC20System() {
         via2_ = nullptr;
     }
     
-    // Destroy system
-    // TODO: Uncomment when system_chips_destroy is available
-    // system_chips_destroy(&system_);
+    // Destroy memory system
+    if (memory_) {
+        vic20_memory_destroy(memory_);
+        memory_ = nullptr;
+    }
 }
 
 // ============================================================================
@@ -248,10 +252,38 @@ bool VIC20System::apply_configuration() {
     // Apply memory configuration
     if (config_.memory_option_index >= 0 &&
         config_.memory_option_index < static_cast<int>(hardware_traits_.memory_options.size())) {
-        const MemoryOption& memopt = hardware_traits_.memory_options[config_.memory_option_index];
-        // Calculate expansion size: total RAM - 5KB base = expansion RAM
-        expansion_size_ = (memopt.ram_size > 5120) ? (memopt.ram_size - 5120) : 0;
-        printf("VIC20: Expansion RAM configured: %d bytes\n", expansion_size_);
+        
+        // Map memory option index to expansion flags
+        switch (config_.memory_option_index) {
+            case 0:  // Unexpanded
+                expansion_flags_ = VIC20_EXP_NONE;
+                break;
+            case 1:  // 3KB expansion
+                expansion_flags_ = VIC20_EXP_3K;
+                break;
+            case 2:  // 8KB expansion
+                expansion_flags_ = VIC20_EXP_8K;
+                break;
+            case 3:  // 16KB expansion
+                expansion_flags_ = VIC20_EXP_16K;
+                break;
+            case 4:  // 24KB expansion
+                expansion_flags_ = VIC20_EXP_24K;
+                break;
+            case 5:  // Full expansion
+                expansion_flags_ = VIC20_EXP_FULL;
+                break;
+            default:
+                expansion_flags_ = VIC20_EXP_NONE;
+                break;
+        }
+        
+        // Update memory system if already created
+        if (memory_) {
+            vic20_memory_set_expansion(memory_, expansion_flags_);
+        }
+        
+        printf("VIC20: Expansion configuration: $%02X\n", expansion_flags_);
     }
     
     return true;
@@ -262,22 +294,27 @@ bool VIC20System::apply_configuration() {
 // ============================================================================
 bool VIC20System::initialize() {
     printf("VIC20: Initializing system\n");
-    // Initialize memory arrays - hardware accurate: all RAM starts as zeros
-    // On real VIC-20, RAM powers up with undefined values, but zeros is a reasonable approximation
-    // Character 0 = '@' symbol, which should be visible until KERNAL clears screen with spaces
-    memset(ram_simple_, 0, sizeof(ram_simple_));
-    memset(expansion_ram_, 0, sizeof(expansion_ram_));
-    // Color RAM: initialize to white (color 1) for proper text visibility on blue background
-    memset(color_ram_simple_, VIC_COLOR_WHITE, sizeof(color_ram_simple_));
     
-    // Load ROMs using common ROM loader
+    // Create the memory banking system
+    memory_ = vic20_memory_create(expansion_flags_, false);  // No cartridge by default
+    if (!memory_) {
+        printf("VIC20: Failed to create memory system\n");
+        return false;
+    }
+    
+    // Attach system to memory
+    vic20_memory_attach_system(memory_, this);
+    
+    // Initialize Color RAM to white (color 1) for proper text visibility
+    uint8_t* colorram = vic20_memory_get_colorram_ptr(memory_);
+    if (colorram) {
+        memset(colorram, VIC_COLOR_WHITE, 1024);
+    }
+    
+    // Load ROMs into memory system
     bool roms_loaded = load_roms();
     if (!roms_loaded) {
         printf("VIC20: Warning - ROMs not loaded, system may not function correctly\n");
-        // Zero ROMs as fallback
-        memset(kernal_rom_, 0, sizeof(kernal_rom_));
-        memset(basic_rom_, 0, sizeof(basic_rom_));
-        memset(char_rom_, 0, sizeof(char_rom_));
     }
     
     // Create CPU (MOS6502) with memory callbacks
@@ -304,14 +341,12 @@ bool VIC20System::initialize() {
     
     // Manually load the reset vector since automatic reset doesn't work with callback-only CPU
     // KERNAL is at $E000-$FFFF (8KB), reset vector is at $FFFC-$FFFD
-    uint16_t reset_vector = kernal_rom_[0xFFFC - 0xE000] | (kernal_rom_[0xFFFD - 0xE000] << 8);
-    mos6502_set_pc(cpu_, reset_vector);
-    
-    printf("VIC20: CPU reset complete - PC = $%04X\n", mos6502_get_pc(cpu_));
-    printf("VIC20: First instruction: $%02X $%02X $%02X (LDX #$FF, SEI)\n",
-           cpu_read(this, reset_vector, 0),
-           cpu_read(this, reset_vector + 1, 0),
-           cpu_read(this, reset_vector + 2, 0));
+    uint8_t* kernal_ptr = vic20_memory_get_rom_ptr(memory_, VIC20_BASE_KERNAL);
+    if (kernal_ptr) {
+        uint16_t reset_vector = kernal_ptr[0xFFFC - 0xE000] | (kernal_ptr[0xFFFD - 0xE000] << 8);
+        mos6502_set_pc(cpu_, reset_vector);
+        printf("VIC20: CPU reset complete - PC = $%04X\n", mos6502_get_pc(cpu_));
+    }
     
     // Create VIC chip (MOS6560 PAL - default, TODO: support NTSC 6561)
     vic_ = (mos6560_t*)mos6560_create(&mos6560_descriptor);
@@ -320,6 +355,9 @@ bool VIC20System::initialize() {
         return false;
     }
     
+    // Store VIC chip pointer in memory system for I/O handling
+    memory_->vic_chip = vic_;
+    
     // Set up VIC memory callbacks for accessing video and character memory
     vic_set_memory_callbacks(&vic_->base,
         VIC20System::vic_mem_read,      // Memory read callback
@@ -327,21 +365,24 @@ bool VIC20System::initialize() {
         VIC20System::vic_color_read,    // Color RAM read callback
         this);                           // User data for color RAM
     
-    // NOTE: Framebuffer is set later via set_framebuffer() call from GUI
-    // Don't set it here as rgba_framebuffer_ is still nullptr during initialize()
-    
     // Create VIA chips (MOS6522)
     via1_ = (mos6522_t*)mos6522_create(&mos6522_descriptor);
     if (via1_) {
         via1_->interrupt_line = BUS_MASK_IRQ;
+        memory_->via1_chip = via1_;
     } else {
         printf("VIC20: Failed to create VIA1\n");
     }
     
     via2_ = (mos6522_t*)mos6522_create(&mos6522_descriptor);
-    if (!via2_) {
+    if (via2_) {
+        memory_->via2_chip = via2_;
+    } else {
         printf("VIC20: Warning: VIA2 not created (optional)\n");
     }
+    
+    // Initialize I/O handlers now that all chips are created
+    vic20_memory_init_io_handlers(memory_);
     
     return true;
 }
@@ -354,6 +395,13 @@ void VIC20System::reset() {
     printf("VIC20: Resetting system\n");
     if (cpu_) {
         mos6502_reset(cpu_, 0);
+        
+        // Reload reset vector
+        uint8_t* kernal_ptr = vic20_memory_get_rom_ptr(memory_, VIC20_BASE_KERNAL);
+        if (kernal_ptr) {
+            uint16_t reset_vector = kernal_ptr[0xFFFC - 0xE000] | (kernal_ptr[0xFFFD - 0xE000] << 8);
+            mos6502_set_pc(cpu_, reset_vector);
+        }
     }
     total_cycles_ = 0;
 }
@@ -363,19 +411,8 @@ void VIC20System::reset() {
 // ============================================================================
 
 bus_state_t VIC20System::mem_tick(bus_state_t s) {
-    uint16_t addr = BUS_GET_ADDR(s);
-    bool is_write = (BUS_GET_LINES(s) & BUS_MASK_RW) == 0;
-    
-    if (is_write) {
-        // Write operation
-        uint8_t data = BUS_GET_DATA(s);
-        cpu_write(this, addr, data);
-    } else {
-        // Read operation
-        uint8_t data = cpu_read(this, addr, 0);
-        BUS_SET_DATA(s, data);
-    }
-    return s;
+    // Use the new memory banking system
+    return vic20_memory_cpu_tick(memory_, s);
 }
 
 void VIC20System::tick() {
@@ -571,207 +608,56 @@ void VIC20System::set_speed_multiplier(float multiplier) {
 }
 
 // ============================================================================
-// Private Helper Methods
+// Private Helper Methods - CPU Memory Callbacks
 // ============================================================================
 
-// Memory access callbacks for VIC chip
-uint8_t VIC20System::vic_mem_read(void* user_data, uint16_t addr) {
+uint8_t VIC20System::cpu_read(void* user_data, uint32_t addr, uint8_t bus_state_param) {
     VIC20System* sys = static_cast<VIC20System*>(user_data);
+    (void)bus_state_param;
     
-    // VIC can access RAM and character ROM
-    // Address bit 15 selects between RAM (0) and character ROM (1)
-    if (addr & 0x8000) {
-        // Character ROM access (0x8000-0x8FFF -> 0x0000-0x0FFF in char ROM)
-        uint16_t rom_addr = addr & 0x0FFF;
-        if (rom_addr < sizeof(sys->char_rom_)) {
-            return sys->char_rom_[rom_addr];
-        }
-        // ROM address out of bounds - return $FF
-        return 0xFF;
-    }
+    if (!sys || !sys->memory_) return 0xFF;
     
-    // RAM access - VIC can only address 16KB (14-bit address space: 0x0000-0x3FFF)
-    // Unexpanded VIC-20: 5KB at $0000-$13FF
-    // With 3K expansion: adds $1400-$1FFF
-    // Addresses wrap/mirror within 16KB space
-    uint16_t ram_addr = addr & 0x3FFF;  // Limit to 16KB address space
-    
-    if (ram_addr < 0x1400) {
-        // Main 5KB RAM - always present
-        return sys->ram_simple_[ram_addr];
-    }
-    else if (ram_addr >= 0x1400 && ram_addr < 0x2000) {
-        // First expansion block (0x1400-0x1FFF) - 3KB expansion adds RAM here
-        // For unexpanded VIC-20, this reads as unmapped (returns $FF)
-        if (sys->expansion_size_ >= 3072) {
-            return sys->expansion_ram_[ram_addr - 0x1400];
-        }
-        // Unmapped - return $FF (typical for floating bus reads)
-        return 0xFF;
-    }
-    else if (ram_addr >= 0x2000 && ram_addr < 0x4000) {
-        // VIC-20 address decoding mirrors/wraps within 8KB
-        // Addresses $2000-$3FFF mirror back to $0000-$1FFF
-        uint16_t mirrored_addr = ram_addr & 0x1FFF;  // Mirror within 8KB
-        if (mirrored_addr < 0x1400) {
-            // Base RAM mirror (always present)
-            return sys->ram_simple_[mirrored_addr];
-        } else if (mirrored_addr < 0x2000) {
-            // Expansion RAM mirror (conditional)
-            if (sys->expansion_size_ >= 3072) {
-                return sys->expansion_ram_[mirrored_addr - 0x1400];
-            }
-            return 0xFF;  // Unmapped
-        }
-    }
-    
-    return 0xFF;
-}
-
-uint8_t VIC20System::vic_color_read(void* user_data, uint16_t addr) {
-    VIC20System* sys = static_cast<VIC20System*>(user_data);
-    
-    // Color RAM is at $9400-$97FF (1KB), but VIC addresses it differently
-    if (addr < 1024) {
-        return sys->color_ram_simple_[addr];
-    }
-    
-    return 0x0F;  // Default color
-}
-
-// Memory access callbacks for CPU
-uint8_t VIC20System::cpu_read(void* user_data, uint32_t addr, uint8_t bus_state) {
-    VIC20System* sys = static_cast<VIC20System*>(user_data);
-    uint16_t addr16 = addr & 0xFFFF;
-    
-    // RAM (0x0000-0x13FF = 5KB, includes screen at $1000)
-    if (addr16 < 0x1400) {
-        return sys->ram_simple_[addr16];
-    }
-    
-    // Expansion RAM (0x1400-0x1FFF) - 3KB expansion adds RAM here
-    if (addr16 >= 0x1400 && addr16 < 0x2000) {
-        if (sys->expansion_size_ >= 3072) {
-            return sys->expansion_ram_[addr16 - 0x1400];
-        }
-        // Unmapped memory for unexpanded VIC-20 - return $FF
-        return 0xFF;
-    }
-    
-    // VIC chip registers (0x9000-0x900F = 16 registers)
-    if (addr16 >= 0x9000 && addr16 < 0x9010) {
-        if (sys->vic_) {
-            return mos6560_read_register(sys->vic_, addr16 & 0x0F);
-        }
-        return 0xFF;
-    }
-    
-    // VIA1 registers (0x9110-0x911F = 16 registers) - keyboard, joystick
-    if (addr16 >= 0x9110 && addr16 < 0x9120) {
-        if (sys->via1_) {
-            uint8_t reg = addr16 & 0x0F;
-            bus_state_t bus_state = 0;
-            BUS_SET_ADDR(bus_state, reg);
-            bus_state = mos6522_registers_read(sys->via1_, bus_state);
-            return BUS_GET_DATA(bus_state);
-        }
-        return 0xFF;
-    }
-    
-    // VIA2 registers (0x9120-0x912F = 16 registers) - user port, serial
-    if (addr16 >= 0x9120 && addr16 < 0x9130) {
-        if (sys->via2_) {
-            uint8_t reg = addr16 & 0x0F;
-            bus_state_t bus_state = 0;
-            BUS_SET_ADDR(bus_state, reg);
-            bus_state = mos6522_registers_read(sys->via2_, bus_state);
-            return BUS_GET_DATA(bus_state);
-        }
-        return 0xFF;
-    }
-    
-    // Color RAM (0x9600-0x97FF, mirrored from 0x9400)
-    // Actual hardware has 512 bytes at $9600, but mirrored at $9400
-    if (addr16 >= 0x9400 && addr16 < 0x9800) {
-        return sys->color_ram_simple_[(addr16 - 0x9400) & 0x1FF];  // 512 bytes, mirrored
-    }
-    
-    // BASIC ROM (0xC000-0xDFFF = 8KB)
-    if (addr16 >= 0xC000 && addr16 < 0xE000) {
-        return sys->basic_rom_[addr16 - 0xC000];
-    }
-    
-    // KERNAL ROM (0xE000-0xFFFF = 8KB)
-    if (addr16 >= 0xE000) {
-        return sys->kernal_rom_[addr16 - 0xE000];
-    }
-    
-    return 0xFF;  // Unmapped memory
+    return vic20_memory_read_byte(sys->memory_, addr & 0xFFFF);
 }
 
 void VIC20System::cpu_write(void* user_data, uint32_t addr, uint8_t data) {
     VIC20System* sys = static_cast<VIC20System*>(user_data);
     
-    uint16_t addr16 = addr & 0xFFFF;
+    if (!sys || !sys->memory_) return;
     
-    // RAM (0x0000-0x13FF = 5KB, includes screen at $1000)
-    if (addr16 < 0x1400) {
-        sys->ram_simple_[addr16] = data;
-        return;
-    }
-    
-    // Expansion RAM (0x1400-0x1FFF) - 3KB expansion adds RAM here
-    if (addr16 >= 0x1400 && addr16 < 0x2000) {
-        if (sys->expansion_size_ >= 3072) {
-            sys->expansion_ram_[addr16 - 0x1400] = data;
-        }
-        // Ignore writes to unmapped memory for unexpanded VIC-20
-        return;
-    }
-    
-    // VIC chip registers (0x9000-0x900F = 16 registers)
-    if (addr16 >= 0x9000 && addr16 < 0x9010) {
-        if (sys->vic_) {
-            mos6560_write_register(sys->vic_, addr16 & 0x0F, data);
-        }
-        return;
-    }
-    
-    // VIA1 registers (0x9110-0x911F = 16 registers) - keyboard, joystick
-    if (addr16 >= 0x9110 && addr16 < 0x9120) {
-        if (sys->via1_) {
-            uint8_t reg = addr16 & 0x0F;
-            bus_state_t bus_state = 0;
-            BUS_SET_ADDR(bus_state, reg);
-            BUS_SET_DATA(bus_state, data);
-            mos6522_registers_write(sys->via1_, bus_state);
-        }
-        return;
-    }
-    
-    // VIA2 registers (0x9120-0x912F = 16 registers) - user port, serial
-    if (addr16 >= 0x9120 && addr16 < 0x9130) {
-        if (sys->via2_) {
-            uint8_t reg = addr16 & 0x0F;
-            bus_state_t bus_state = 0;
-            BUS_SET_ADDR(bus_state, reg);
-            BUS_SET_DATA(bus_state, data);
-            mos6522_registers_write(sys->via2_, bus_state);
-        }
-        return;
-    }
-    
-    // Color RAM (0x9600-0x97FF, mirrored from 0x9400) - writable
-    // Actual hardware has 512 bytes at $9600, but mirrored at $9400
-    if (addr16 >= 0x9400 && addr16 < 0x9800) {
-        sys->color_ram_simple_[(addr16 - 0x9400) & 0x1FF] = data & 0x0F;  // Only 4 bits used, 512 bytes mirrored
-        return;
-    }
-    
-    // ROM areas are read-only, writes are ignored
+    vic20_memory_write_byte(sys->memory_, addr & 0xFFFF, data);
 }
 
+// ============================================================================
+// Private Helper Methods - VIC Memory Callbacks
+// ============================================================================
+
+uint8_t VIC20System::vic_mem_read(void* user_data, uint16_t addr) {
+    VIC20System* sys = static_cast<VIC20System*>(user_data);
+    
+    if (!sys || !sys->memory_) return 0xFF;
+    
+    return vic20_memory_vic_read(sys->memory_, addr);
+}
+
+uint8_t VIC20System::vic_color_read(void* user_data, uint16_t addr) {
+    VIC20System* sys = static_cast<VIC20System*>(user_data);
+    
+    if (!sys || !sys->memory_) return 0x0F;
+    
+    return vic20_memory_color_read(sys->memory_, addr);
+}
+
+// ============================================================================
+// ROM Loading
+// ============================================================================
+
 bool VIC20System::load_roms() {
+    if (!memory_) {
+        printf("VIC20: Cannot load ROMs - memory system not initialized\n");
+        return false;
+    }
+    
     // Discover ROM root path for VIC-20 system
     char rom_root[1024];
     bool rom_root_found = system_config_discover_rom_root("vic20", rom_root, sizeof(rom_root));
@@ -783,21 +669,28 @@ bool VIC20System::load_roms() {
     
     printf("VIC20: ROM root discovered: %s\n", rom_root);
     
-    // Load KERNAL ROM (8KB at $E000-$FFFF)
-    const char* kernal_files[] = {
-        "kernal.901486-07.bin",
-        "kernal.rom",
-        "901486-07.bin",
+    // Temporary buffers for ROM loading
+    uint8_t char_buf[4096];
+    uint8_t basic_buf[8192];
+    uint8_t kernal_buf[8192];
+    
+    // Load Character ROM (4KB at $8000-$8FFF)
+    const char* char_files[] = {
+        "characters.901460-03.bin",
+        "chargen.rom",
+        "901460-03.bin",
         nullptr
     };
     
-    bool kernal_ok = rom_loader_load_from_root(
-        rom_root, kernal_files,
-        sizeof(kernal_rom_), kernal_rom_, sizeof(kernal_rom_)
+    bool char_ok = rom_loader_load_from_root(
+        rom_root, char_files,
+        sizeof(char_buf), char_buf, sizeof(char_buf)
     );
     
-    if (!kernal_ok) {
-        printf("VIC20: Failed to load KERNAL ROM\n");
+    if (char_ok) {
+        vic20_memory_load_rom(memory_, VIC20_BASE_CHARROM, char_buf, sizeof(char_buf));
+    } else {
+        printf("VIC20: Failed to load Character ROM\n");
     }
     
     // Load BASIC ROM (8KB at $C000-$DFFF)
@@ -810,28 +703,32 @@ bool VIC20System::load_roms() {
     
     bool basic_ok = rom_loader_load_from_root(
         rom_root, basic_files,
-        sizeof(basic_rom_), basic_rom_, sizeof(basic_rom_)
+        sizeof(basic_buf), basic_buf, sizeof(basic_buf)
     );
     
-    if (!basic_ok) {
+    if (basic_ok) {
+        vic20_memory_load_rom(memory_, VIC20_BASE_BASIC, basic_buf, sizeof(basic_buf));
+    } else {
         printf("VIC20: Failed to load BASIC ROM\n");
     }
     
-    // Load Character ROM (4KB)
-    const char* char_files[] = {
-        "characters.901460-03.bin",
-        "chargen.rom",
-        "901460-03.bin",
+    // Load KERNAL ROM (8KB at $E000-$FFFF)
+    const char* kernal_files[] = {
+        "kernal.901486-07.bin",
+        "kernal.rom",
+        "901486-07.bin",
         nullptr
     };
     
-    bool char_ok = rom_loader_load_from_root(
-        rom_root, char_files,
-        sizeof(char_rom_), char_rom_, sizeof(char_rom_)
+    bool kernal_ok = rom_loader_load_from_root(
+        rom_root, kernal_files,
+        sizeof(kernal_buf), kernal_buf, sizeof(kernal_buf)
     );
     
-    if (!char_ok) {
-        printf("VIC20: Failed to load Character ROM\n");
+    if (kernal_ok) {
+        vic20_memory_load_rom(memory_, VIC20_BASE_KERNAL, kernal_buf, sizeof(kernal_buf));
+    } else {
+        printf("VIC20: Failed to load KERNAL ROM\n");
     }
     
     return (kernal_ok && basic_ok && char_ok);
