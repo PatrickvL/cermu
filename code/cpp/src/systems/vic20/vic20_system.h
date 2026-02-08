@@ -11,6 +11,8 @@
 #include "../../chip/video/vic/mos6561.h"
 #include "vic20_bus.h"
 #include "vic20_config.h"
+#include "vic20_memory.h"
+#include "vic20_chips.h"
 #include <cstdint>
 #include <memory>
 
@@ -25,6 +27,25 @@
  * - 22x23 character display with 16 colors
  * - VIC (6560/6561) video chip
  * - 3 channel + noise sound
+ * 
+ * Memory Map (stock unexpanded VIC-20):
+ * $0000–$03FF  1 KB   RAM 0 (zero page, stack, system variables)
+ * $0400–$0FFF  3 KB   Unmapped (expansion RAM block 0)
+ * $1000–$1FFF  4 KB   RAM 1 (main user BASIC RAM)
+ * $2000–$3FFF  8 KB   Unmapped (expansion RAM block 2)
+ * $4000–$5FFF  8 KB   Unmapped (expansion RAM block 3)
+ * $6000–$7FFF  8 KB   Unmapped (expansion RAM block 5)
+ * $8000–$8FFF  4 KB   Character ROM
+ * $9000–$900F  16 B   VIC chip registers (mirrored in $9000-$93FF)
+ * $9010–$901F  16 B   VIA #1 (mirrored in $9000-$93FF)
+ * $9020–$902F  16 B   VIA #2 (mirrored in $9000-$93FF)
+ * $9030–$93FF  ~1 KB  I/O mirrors
+ * $9400–$97FF  1 KB   Color RAM (4-bit wide)
+ * $9800–$9BFF  1 KB   Unmapped (I/O expansion block 2)
+ * $9C00–$9FFF  1 KB   Unmapped (I/O expansion block 3)
+ * $A000–$BFFF  8 KB   Unmapped (expansion ROM / cartridge)
+ * $C000–$DFFF  8 KB   BASIC ROM
+ * $E000–$FFFF  8 KB   KERNAL ROM
  */
 class VIC20System : public EmulatedSystem {
 public:
@@ -73,30 +94,18 @@ private:
     system_8bit_t system_;           // Legacy system wrapper
     vic20_bus_t bus_;
     
+    // New memory banking system
+    vic20_memory_t* memory_;         // Unified memory banking system
+    
     // Chip instances (properly typed)
     mos6502_t* cpu_;                 // MOS6502 CPU instance
-    ram_t* ram_;                     // RAM memory $0000-$FFFF (35KB)
-    mos6560_t* vic_;                 // VIC 6560 (PAL) or 6561 (NTSC) video & sound chip ($9000-$9FFF, 4KB)
-    mos6522_t* via1_;                // MOS6522 VIA 1 ($9120-$912F, 16 bytes) - keyboard, joystick
-    mos6522_t* via2_;                // MOS6522 VIA 2 ($9140-$914F, 16 bytes) - user port, serial (optional)
-    mos2114_t* colorram_;            // Color RAM (1KB at $9400-$97FF)
-    rom_t* basic_;                   // BASIC ROM $A000-$BFFF (8KB)
-    rom_t* charrom_;                 // Character ROM $D000-$DFFF (4KB)
-    rom_t* kernal_;                  // Kernal ROM $E000-$FFFF (8KB)
-
-    // VIC-20 Memory (simplified arrays for now)
-    uint8_t ram_simple_[5120];       // 5KB base RAM
-    uint8_t expansion_ram_[32768];   // Optional expansion RAM
-    uint8_t color_ram_simple_[1024]; // Color RAM
-    
-    // ROMs (buffers for ROM loading)
-    uint8_t basic_rom_[8192];        // BASIC ROM
-    uint8_t char_rom_[4096];         // Character ROM
-    uint8_t kernal_rom_[8192];       // KERNAL ROM
+    mos6560_t* vic_;                 // VIC 6560 (PAL) or 6561 (NTSC) video & sound chip
+    mos6522_t* via1_;                // MOS6522 VIA 1 - keyboard, joystick
+    mos6522_t* via2_;                // MOS6522 VIA 2 - user port, serial
     
     // System state
     uint32_t cycles_per_frame_;
-    uint32_t expansion_size_;        // Size of expansion RAM
+    uint8_t expansion_flags_;        // Expansion RAM configuration
     
     // ROM loading
     bool load_roms();
@@ -110,7 +119,7 @@ private:
     static uint8_t vic_mem_read(void* user_data, uint16_t addr);
     static uint8_t vic_color_read(void* user_data, uint16_t addr);
     
-    // Legacy integration methods
+    // Legacy integration methods (deprecated, kept for compatibility)
     void memory_init(const rom_config_t* rom_config);
     bool reload_roms(const rom_config_t* rom_config);
 };
