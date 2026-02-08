@@ -239,9 +239,10 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
                 const uint8_t char_line = (vic->raster_counter - screen_origin_y) & 7;
                 
                 // Calculate character ROM address and fetch:
-                // On VIC-20 hardware, Character ROM appears at $1000-$1FFF in VIC's 14-bit address space
-                // The memory system handles the mapping from VIC addresses to physical memory
-                uint16_t char_rom_addr = base_char | ((uint16_t)vic->matrix_video_byte << 3) | char_line;
+                // Set bit 15 as a flag to tell memory system this is a Character ROM fetch.
+                // Memory system will redirect to Character ROM ($8000 in buffer).
+                // This distinguishes char fetches from screen RAM fetches in the same address range.
+                uint16_t char_rom_addr = 0x8000 | base_char | ((uint16_t)vic->matrix_video_byte << 3) | char_line;
                 vic->matrix_char_data = vic->mem_read(vic->mem_user_data, char_rom_addr);
             } else {
                 // No memory access available - emit blank
