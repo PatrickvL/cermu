@@ -119,12 +119,12 @@ void vic20_bank_map_init_vic(vic20_bank_map_t* map, uint8_t expansion_flags) {
         vic20_set_bank_ram(map, 3);
     }
     
-    // Banks 4-7 ($1000-$1FFF): VIC sees Character ROM here (hardware wiring)
-    // This maps VIC address $1xxx to buffer address $8xxx (Character ROM)
-    vic20_set_bank_charrom(map, 4);
-    vic20_set_bank_charrom(map, 5);
-    vic20_set_bank_charrom(map, 6);
-    vic20_set_bank_charrom(map, 7);
+    // Banks 4-7 ($1000-$1FFF): RAM for screen data
+    // Character ROM access is signaled by bit 15 set by VIC chip during char fetches
+    vic20_set_bank_ram(map, 4);
+    vic20_set_bank_ram(map, 5);
+    vic20_set_bank_ram(map, 6);
+    vic20_set_bank_ram(map, 7);
     
     // Banks 8-15 ($2000-$3FFF): Expansion RAM or UNMAPPED
     if (expansion_flags & VIC20_EXP_BLOCK2) {
@@ -422,27 +422,30 @@ bus_state_t REGISTER_CALL vic20_memory_cpu_tick(vic20_memory_t* mem, bus_state_t
 
 /**
  * VIC memory read function - handles memory reads from VIC chip.
- * VIC has a 14-bit address space (16KB). Hardware wires Character ROM
- * to appear at $1000-$1FFF in this space (banks 4-7 in VIC bank map).
+ * VIC has a 14-bit address space (16KB). Character ROM access is signaled
+ * by the VIC chip setting bit 15 during character bitmap fetches.
  * 
  * @param mem Pointer to memory system
- * @param addr 14-bit address from VIC
+ * @param addr Address from VIC (bit 15 set = Character ROM fetch)
  * @return Data byte at the specified address
  */
 uint8_t vic20_memory_vic_read(vic20_memory_t* mem, uint16_t addr) {
     if (unlikely(!mem)) return 0xFF;
     
-    // VIC has 14-bit address space (16KB)
+    // Check bit 15 for Character ROM access flag (set by VIC chip during char fetch)
+    if (addr & 0x8000) {
+        // Character ROM access - use lower 12 bits for 4KB ROM
+        return mem->buffer[VIC20_BASE_CHARROM + (addr & 0x0FFF)];
+    }
+    
+    // Regular memory access - use 14-bit address space
     addr &= 0x3FFF;
     const uint8_t bank = addr >> 10;
     
     // Get read type from VIC bank map
     const uint8_t read_type = vic20_decode_read_type(mem->vic_bank_map.bank_type[bank]);
     
-    if (read_type == VIC20_TYPE_CHARROM) {
-        // Character ROM: VIC address $1xxx maps to buffer $8xxx
-        return mem->buffer[VIC20_BASE_CHARROM + (addr & 0x0FFF)];
-    } else if (likely(read_type >= VIC20_TYPE_ROM)) {
+    if (likely(read_type >= VIC20_TYPE_ROM)) {
         // RAM or ROM - direct buffer access
         return mem->buffer[addr];
     }
