@@ -103,33 +103,40 @@ void vic20_bank_map_init(vic20_bank_map_t* map, uint8_t expansion_flags, bool ca
 }
 
 void vic20_bank_map_init_vic(vic20_bank_map_t* map, uint8_t expansion_flags) {
-    // VIC chip has a 14-bit address space (16KB window)
-    // Only uses banks 0-15 (16 banks × 1KB = 16KB)
-    // Hardware wires Character ROM to appear at $1000-$1FFF in VIC's address space
-    // Clear the map (all banks set to UNMAPPED)
-    memset(map->bank_type, VIC20_BANK_TYPE_UNMAPPED, 64);
+    // VIC chip has a 14-bit address space (16KB window = 16 banks).
+    // We repeat the 16-bank pattern 4 times across all 64 entries so that
+    // vic20_memory_vic_read can use (addr >> 10) directly without masking.
+    //
+    // VA13 (bit 13) hardware-selects Character ROM:
+    //   - VA13=0 ($0000-$1FFF, banks 0-7): Character ROM (4KB mirrored)
+    //   - VA13=1 ($2000-$3FFF, banks 8-15): RAM (VIC sees CPU $0000-$1FFF)
     
-    // Bank 0 ($0000-$03FF): Base RAM 0
-    vic20_set_bank_ram(map, 0);
-    
-    // Banks 1-3 ($0400-$0FFF): Expansion block 0 or UNMAPPED
-    if (expansion_flags & VIC20_EXP_BLOCK0) {
-        vic20_set_bank_ram(map, 1);
-        vic20_set_bank_ram(map, 2);
-        vic20_set_bank_ram(map, 3);
-    }
-    
-    // Banks 4-7 ($1000-$1FFF): RAM for screen data
-    // Character ROM access is signaled by bit 15 set by VIC chip during char fetches
-    vic20_set_bank_ram(map, 4);
-    vic20_set_bank_ram(map, 5);
-    vic20_set_bank_ram(map, 6);
-    vic20_set_bank_ram(map, 7);
-    
-    // Banks 8-15 ($2000-$3FFF): Expansion RAM or UNMAPPED
-    if (expansion_flags & VIC20_EXP_BLOCK2) {
+    // Initialize all 4 copies of the 16-bank pattern
+    for (int copy = 0; copy < 4; copy++) {
+        const int base = copy * 16;
+        
+        // Banks 0-7 (VIC $0000-$1FFF): Character ROM (4KB mirrored to 8KB)
         for (int i = 0; i < 8; i++) {
-            vic20_set_bank_ram(map, 8 + i);
+            vic20_set_bank_charrom(map, base + i);
+        }
+        
+        // Bank 8 (VIC $2000-$23FF -> CPU $0000-$03FF): Base RAM 0 - always present
+        vic20_set_bank_ram(map, base + 8);
+        
+        // Banks 9-11 (VIC $2400-$2FFF -> CPU $0400-$0FFF): Expansion block 0 or UNMAPPED
+        if (expansion_flags & VIC20_EXP_BLOCK0) {
+            vic20_set_bank_ram(map, base + 9);
+            vic20_set_bank_ram(map, base + 10);
+            vic20_set_bank_ram(map, base + 11);
+        } else {
+            map->bank_type[base + 9] = VIC20_BANK_TYPE_UNMAPPED;
+            map->bank_type[base + 10] = VIC20_BANK_TYPE_UNMAPPED;
+            map->bank_type[base + 11] = VIC20_BANK_TYPE_UNMAPPED;
+        }
+        
+        // Banks 12-15 (VIC $3000-$3FFF -> CPU $1000-$1FFF): Base RAM 1 - always present
+        for (int i = 0; i < 4; i++) {
+            vic20_set_bank_ram(map, base + 12 + i);
         }
     }
 }
@@ -189,8 +196,9 @@ vic20_memory_t* vic20_memory_create(uint8_t expansion_flags, bool cartridge_pres
     memset(mem->buffer, 0, mem->buffer_size);
     
     // Initialize Color RAM to default color (at $9400 in unified buffer)
-    // Color RAM is 4-bit wide, initialize to white (color 1)
-    memset(mem->buffer + VIC20_BASE_COLOR_RAM, VIC_COLOR_WHITE, 1024);
+    // Color RAM is 4-bit wide, initialize to cyan (3) - standard VIC-20 text color
+    // KERNAL will set proper colors during boot, but cyan on blue background is visible
+    memset(mem->buffer + VIC20_BASE_COLOR_RAM, VIC_COLOR_CYAN, 1024);
     
     // Initialize bank maps
     vic20_bank_map_init(&mem->cpu_bank_map, expansion_flags, cartridge_present);
@@ -422,35 +430,36 @@ bus_state_t REGISTER_CALL vic20_memory_cpu_tick(vic20_memory_t* mem, bus_state_t
 
 /**
  * VIC memory read function - handles memory reads from VIC chip.
- * VIC has a 14-bit address space (16KB). Character ROM access is signaled
- * by the VIC chip setting bit 15 during character bitmap fetches.
+ * 
+ * The VIC has a 14-bit address bus (VA0-VA13) giving a 16KB window.
+ * The 16-bank pattern is repeated 4x in the 64-entry bank map, so we can
+ * use (addr >> 10) directly without masking - any 6-bit result is valid.
+ *   - Banks 0-7 ($0000-$1FFF): CHARROM → buffer[$8000 + (addr & 0x0FFF)]
+ *   - Banks 8-15 ($2000-$3FFF): RAM → buffer[addr & 0x1FFF]
  * 
  * @param mem Pointer to memory system
- * @param addr Address from VIC (bit 15 set = Character ROM fetch)
+ * @param addr 14-bit address from VIC
  * @return Data byte at the specified address
  */
 uint8_t vic20_memory_vic_read(vic20_memory_t* mem, uint16_t addr) {
     if (unlikely(!mem)) return 0xFF;
-    
-    // Check bit 15 for Character ROM access flag (set by VIC chip during char fetch)
-    if (addr & 0x8000) {
-        // Character ROM access - use lower 12 bits for 4KB ROM
-        return mem->buffer[VIC20_BASE_CHARROM + (addr & 0x0FFF)];
-    }
-    
-    // Regular memory access - use 14-bit address space
-    addr &= 0x3FFF;
+
+    // Direct bank lookup - bank map repeated 4x so no masking needed
     const uint8_t bank = addr >> 10;
-    
-    // Get read type from VIC bank map
     const uint8_t read_type = vic20_decode_read_type(mem->vic_bank_map.bank_type[bank]);
-    
+
+    // Single branch for all valid memory (CHARROM, ROM, RAM)
+    // CHARROM=4, ROM=2, RAM=3, so all are >= VIC20_TYPE_ROM
     if (likely(read_type >= VIC20_TYPE_ROM)) {
-        // RAM or ROM - direct buffer access
-        return mem->buffer[addr];
+        // CHARROM: base=$8000, mask=0x0FFF (4KB mirrored to 8KB)
+        // RAM:     base=0,     mask=0x1FFF (maps to CPU $0000-$1FFF)
+        const bool is_charrom = (read_type == VIC20_TYPE_CHARROM);
+        const uint16_t base = is_charrom ? VIC20_BASE_CHARROM : 0;
+        const uint16_t mask = is_charrom ? 0x0FFF : 0x1FFF;
+        return mem->buffer[base + (addr & mask)];
     }
-    
-    // UNMAPPED
+
+    // Unmapped (expansion block 0 at $0400-$0FFF when not expanded)
     return 0xFF;
 }
 
@@ -458,8 +467,9 @@ uint8_t vic20_memory_color_read(vic20_memory_t* mem, uint16_t addr) {
     if (!mem) return 0x0F;
     
     // Color RAM is at $9400 in unified buffer, 1KB size
-    addr &= 0x03FF;
-    return mem->buffer[VIC20_BASE_COLOR_RAM + addr] & 0x0F;
+    const uint16_t offset = addr & 0x03FF;
+
+    return mem->buffer[VIC20_BASE_COLOR_RAM + offset] & 0x0F;
 }
 
 uint8_t vic20_memory_read_byte(vic20_memory_t* mem, uint16_t addr) {
@@ -499,6 +509,9 @@ bool vic20_memory_load_rom(vic20_memory_t* mem, uint16_t addr, const uint8_t* da
     
     // Direct copy to unified buffer (bypass write protection)
     memcpy(mem->buffer + addr, data, size);
+    
+    // Note: We do NOT mirror Character ROM to $9000 because that would
+    // overwrite Color RAM at $9400-$97FF and I/O registers at $9000-$93FF.
     
     printf("VIC20 Memory: Loaded %zuKB ROM at $%04X\n", size / 1024, addr);
     return true;

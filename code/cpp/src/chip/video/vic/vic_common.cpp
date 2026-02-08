@@ -52,13 +52,14 @@ void vic_system_reset(vic_base_t* vic) {
 
     // Default register values for VIC-20 PAL (hardware power-on defaults)
     // Based on VIC-I (6560/6561) hardware specifications (usual values from datasheet)
-    // Unexpanded VIC-20 uses screen at $1000 (in 5KB RAM)
+    // Standard VIC-20 screen setup: screen at CPU $1E00 = VIC $3E00
+    // Default $9005 = $F0 puts screen at VIC $3C00-$3DFF, char ROM at VIC $0000
     vic->registers[VIC_REG_CONTROL1] = 12;   // $9000: CR0 usual value=12 (Horizontal centering, PAL: 12, NTSC: 5)
     vic->registers[VIC_REG_CONTROL2] = 38;   // $9001: CR1 usual value=38 (Vertical centering)
-    vic->registers[VIC_REG_VIDEO_MATRIX] = 22;  // $9002: CR2 (bits 6-0: 22 columns, bit 7: video matrix bit 9 = 0 for $1000)
+    vic->registers[VIC_REG_VIDEO_MATRIX] = 0x96;  // $9002: CR2 (bits 6-0: 22 columns, bit 7: video matrix bit 9 = 1 for $3E00)
     vic->registers[VIC_REG_ROWS] = 46;  // $9003: CR3 usual value=46 (23 rows, 8x8 chars)
     vic->registers[VIC_REG_RASTER] = 0;  // $9004: CR4 (TV raster counter, read-only)
-    vic->registers[VIC_REG_CHAR_BASE] = 0x40;  // $9005: CR5 (bits 7-4: $4 for screen at $1000, bits 3-0: $0 for char ROM base 0)
+    vic->registers[VIC_REG_CHAR_BASE] = 0xF0;  // $9005: CR5 (bits 7-4: $F for screen at VIC $3C00, bits 3-0: $0 for char ROM)
     vic->registers[VIC_REG_LIGHTPEN_X] = 0;  // $9006: CR6 usual value=0 (Light pen X)
     vic->registers[VIC_REG_LIGHTPEN_Y] = 1;  // $9007: CR7 usual value=1 (Light pen Y)
     vic->registers[VIC_REG_PADDLE_X] = 255;  // $9008: CR8 usual value=255 (Paddle 1)
@@ -232,17 +233,19 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
                 uint16_t char_index = vic->matrix_index;
                 uint16_t screen_addr = base_video + char_index;
                 vic->matrix_video_byte = vic->mem_read(vic->mem_user_data, screen_addr);
-                vic->matrix_color_byte = vic->color_read(vic->color_user_data, char_index);
+                // Color RAM is paired with screen RAM: Color RAM offset = (base_video & 0x3FF) + char_index
+                // This ensures Color RAM at $9400 + offset matches screen position
+                uint16_t color_offset = (base_video & 0x3FF) + char_index;
+                vic->matrix_color_byte = vic->color_read(vic->color_user_data, color_offset);
                 
                 // Calculate character line: should be relative to screen origin, not absolute raster
                 const uint16_t screen_origin_y = vic->registers[VIC_REG_CONTROL2] << 1;
                 const uint8_t char_line = (vic->raster_counter - screen_origin_y) & 7;
                 
-                // Calculate character ROM address and fetch:
-                // Set bit 15 as a flag to tell memory system this is a Character ROM fetch.
-                // Memory system will redirect to Character ROM ($8000 in buffer).
-                // This distinguishes char fetches from screen RAM fetches in the same address range.
-                uint16_t char_rom_addr = 0x8000 | base_char | ((uint16_t)vic->matrix_video_byte << 3) | char_line;
+                // Calculate character ROM address and fetch.
+                // VA13=0 addresses ($0000-$1FFF) select Character ROM in hardware.
+                // base_char from register $9005 bits 3-0 selects 1KB blocks within this range.
+                uint16_t char_rom_addr = base_char | ((uint16_t)vic->matrix_video_byte << 3) | char_line;
                 vic->matrix_char_data = vic->mem_read(vic->mem_user_data, char_rom_addr);
             } else {
                 // No memory access available - emit blank
@@ -285,13 +288,16 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
             vic_emit_pixel(vic, color);
         }
         else {  // Hires mode
-            // Reverse mode: bit 3 of $900F reverses the whole display
-            const bool reversed = (reg_background & VIC_BG_REVERSE) != 0;
-            const uint8_t char_data = reversed ? ~vic->matrix_char_data : vic->matrix_char_data;
-            vic_emit_pixel(vic, (char_data & 0x80) ? foreground_color : background_color);
-            vic_emit_pixel(vic, (char_data & 0x40) ? foreground_color : background_color);
-            vic_emit_pixel(vic, (char_data & 0x20) ? foreground_color : background_color);
-            vic_emit_pixel(vic, (char_data & 0x10) ? foreground_color : background_color);
+            // Reverse mode: bit 3 of $900F controls screen inversion
+            // When reverse=1 (normal): set pixels use foreground, clear pixels use background
+            // When reverse=0 (inverted): set pixels use background, clear pixels use foreground
+            const bool reversed = (reg_background & VIC_BG_REVERSE) == 0;  // Note: 0 means reversed!
+            const uint8_t fg = reversed ? background_color : foreground_color;
+            const uint8_t bg = reversed ? foreground_color : background_color;
+            vic_emit_pixel(vic, (vic->matrix_char_data & 0x80) ? fg : bg);
+            vic_emit_pixel(vic, (vic->matrix_char_data & 0x40) ? fg : bg);
+            vic_emit_pixel(vic, (vic->matrix_char_data & 0x20) ? fg : bg);
+            vic_emit_pixel(vic, (vic->matrix_char_data & 0x10) ? fg : bg);
         }
     }
     else {

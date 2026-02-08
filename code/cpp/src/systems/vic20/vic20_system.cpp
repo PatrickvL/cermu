@@ -305,10 +305,11 @@ bool VIC20System::initialize() {
     // Attach system to memory
     vic20_memory_attach_system(memory_, this);
     
-    // Initialize Color RAM to white (color 1) for proper text visibility
+    // Initialize Color RAM to cyan (color 3) for proper text visibility
+    // This matches the VIC-20 boot screen: cyan text on blue background
     uint8_t* colorram = vic20_memory_get_colorram_ptr(memory_);
     if (colorram) {
-        memset(colorram, VIC_COLOR_WHITE, 1024);
+        memset(colorram, VIC_COLOR_CYAN, 1024);
     }
     
     // Load ROMs into memory system
