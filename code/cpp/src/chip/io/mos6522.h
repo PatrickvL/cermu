@@ -118,7 +118,6 @@ bus_state_t mos6522_registers_write(void* chip, bus_state_t bus_state);
 
 // Keyboard integration functions
 void mos6522_connect_keyboard(void* chip, void* keyboard);
-void mos6522_update_keyboard_matrix(void* chip);
 
 // Chip descriptor
 extern chip_descriptor_t mos6522_descriptor;

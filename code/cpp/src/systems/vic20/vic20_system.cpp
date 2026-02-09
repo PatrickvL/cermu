@@ -1,6 +1,7 @@
 #include "vic20_system.h"
 #include "vic20_memory.h"
 #include "vic20_chips.h"
+#include "../../chip/input/commodore_keyboard.h"
 #include <cstring>
 #include <cstdio>
 
@@ -180,6 +181,7 @@ VIC20System::VIC20System()
     , vic_(nullptr)
     , via1_(nullptr)
     , via2_(nullptr)
+    , keyboard_(nullptr)
     , cycles_per_frame_(22168)
     , expansion_flags_(VIC20_EXP_NONE)
 {
@@ -215,6 +217,12 @@ VIC20System::~VIC20System() {
     if (via2_) {
         mos6522_destroy(via2_);
         via2_ = nullptr;
+    }
+    
+    // Destroy keyboard
+    if (keyboard_) {
+        commodore_keyboard_destroy(keyboard_);
+        keyboard_ = nullptr;
     }
     
     // Destroy memory system
@@ -385,6 +393,23 @@ bool VIC20System::initialize() {
         printf("VIC20: Warning: VIA2 not created (optional)\n");
     }
     
+    // Create keyboard matrix and connect to VIA2
+    // VIC-20 keyboard: VIA2 Port B selects columns, VIA2 Port A reads rows
+    keyboard_ = commodore_keyboard_create();
+    if (keyboard_) {
+        // VIC-20 has different matrix wiring than C64 - switch to VIC-20 layout
+        commodore_keyboard_set_vic20_mode(keyboard_);
+
+        if (via2_) {
+            mos6522_connect_keyboard(via2_, keyboard_);
+            printf("VIC20: Keyboard connected to VIA2\n");
+        } else {
+            printf("VIC20: Warning: Could not connect keyboard to VIA2\n");
+        }
+    } else {
+        printf("VIC20: Warning: Could not create keyboard\n");
+    }
+    
     // Initialize I/O handlers now that all chips are created
     vic20_memory_init_io_handlers(memory_);
     
@@ -541,9 +566,14 @@ void VIC20System::set_framebuffer(uint32_t* buffer, int width, int height) {
 // ============================================================================
 
 void VIC20System::handle_keyboard_event(int key, bool pressed) {
-    // TODO: Implement keyboard matrix
-    (void)key;
-    (void)pressed;
+    if (keyboard_) {
+        bool shift_pressed = false;  // Shift is its own matrix key, handled via the matrix
+        if (pressed) {
+            commodore_keyboard_key_down(keyboard_, (uint32_t)key, shift_pressed);
+        } else {
+            commodore_keyboard_key_up(keyboard_, (uint32_t)key, shift_pressed);
+        }
+    }
 }
 
 // ============================================================================

@@ -7,6 +7,7 @@
 #include "../../chip/memory/rom.h"
 #include "../../chip/memory/mos2114.h"
 #include "../../chip/io/mos6522.h"
+#include "../../chip/input/commodore_keyboard.h"
 #include "../../chip/video/vic/mos6560.h"
 #include "../../chip/video/vic/mos6561.h"
 #include "vic20_bus.h"
@@ -102,6 +103,7 @@ private:
     mos6560_t* vic_;                 // VIC 6560 (PAL) or 6561 (NTSC) video & sound chip
     mos6522_t* via1_;                // MOS6522 VIA 1 - keyboard, joystick
     mos6522_t* via2_;                // MOS6522 VIA 2 - user port, serial
+    commodore_keyboard_t* keyboard_; // Keyboard matrix (shared with C64)
     
     // System state
     uint32_t cycles_per_frame_;

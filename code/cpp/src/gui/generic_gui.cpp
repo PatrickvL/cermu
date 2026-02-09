@@ -98,7 +98,10 @@ bool GenericEmulatorGUI::init(const char* window_title, int width, int height) {
     // Setup Dear ImGui context
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    // NOTE: Do NOT enable ImGuiConfigFlags_NavEnableKeyboard here.
+    // It causes io.WantCaptureKeyboard to be true whenever any ImGui window
+    // is present (including the always-visible menu bar), which blocks ALL
+    // keyboard events from reaching the emulated systems.
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     
     // Setup ImGui style
