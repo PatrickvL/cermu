@@ -884,8 +884,10 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     // NMI edge detection (extracted bit 2) - only if NMI line exists
     if constexpr (has_nmi_line()) {
       uint8_t nmi_current = (int_pins >> NMI_OFFSET) & 0x1;
+      // Detect FALLING edge on physical pin: 0→1 transition in inverted domain
+      // (was inactive/0, now asserted/1)
       shift_reg |=
-          ((-(this->nmi_prev & !nmi_current)) & 0x1) << INT_NMI_START_BIT;
+          ((-((!this->nmi_prev) & nmi_current)) & 0x1) << INT_NMI_START_BIT;
       this->nmi_prev = nmi_current;
     }
 
@@ -955,13 +957,11 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
    */
   inline bool can_hijack_for_interrupt() const {
     // Must be at fetch boundary (start of instruction)
-    if (this->current_handler != &fam65xx_t::fetch_opcode || this->half_cycle != 0) {
-      return false;
-    }
-    
-    // Prevent nesting: don't hijack if interrupt already active
-    // This prevents KERNAL IRQ handler corruption from nested interrupts
-    return (this->active_interrupt == FAM65XX_INT_NONE);
+    // This is sufficient anti-nesting protection: during interrupt servicing
+    // the CPU runs op_brk (not fetch_opcode), so this naturally returns false.
+    // NOTE: Do NOT check active_interrupt here - process_interrupt_detection()
+    // has already set it, so checking == NONE would always fail.
+    return (this->current_handler == &fam65xx_t::fetch_opcode && this->half_cycle == 0);
   }
 
   /**
@@ -1455,7 +1455,7 @@ public:
     /* CRITICAL: Reset interrupt shift register to prevent false triggers */
     this->interrupt_shift_register =
         0x00000000;     /* No interrupt activity detected yet */
-    this->nmi_prev = 1; /* NMI line starts high (inactive) for edge detection */
+    this->nmi_prev = 0; /* NMI line inactive (inverted convention: 0=pin HIGH) */
 
     /* Set up for instruction fetch - CPU ready to execute next instruction */
     this->transition_to_fetch();
@@ -1540,6 +1540,11 @@ public:
       // PROCESSOR_TESTS mode: Disable interrupt hijacking for clean instruction testing
       // Production mode: Always allow interrupt hijacking for accurate emulation
       
+      // Save active_interrupt before detection - process_interrupt_detection may
+      // overwrite it even when we're mid-instruction (e.g., during op_brk execution).
+      // We must restore it if we can't actually hijack.
+      InterruptType prev_interrupt = this->active_interrupt;
+      
       if (this->process_interrupt_detection(pins)) {
         // RESET is special - immediate return
         if (this->active_interrupt == FAM65XX_INT_RESET) {
@@ -1556,16 +1561,18 @@ public:
             // Clear shift register to prevent immediate re-trigger
             // Once interrupt acknowledged, stop sampling until I flag is set then cleared
             this->interrupt_shift_register = 0;
-            this->nmi_prev = (pins & FAM65XX_NMI) ? 1 : 0; // Reset NMI edge detection
+            // Reset NMI edge detection using INVERTED convention:
+            // Pin HIGH (inactive) → inverted = 0, Pin LOW (asserted) → inverted = 1
+            this->nmi_prev = (pins & FAM65XX_NMI) ? 0 : 1;
           } else {
             // I flag set - don't service IRQ, keep it pending in shift register
-            // Revert active_interrupt since we're not servicing it yet
-            this->active_interrupt = FAM65XX_INT_NONE;
+            // Restore active_interrupt to what it was before detection
+            this->active_interrupt = prev_interrupt;
           }
         } else {
-          // Can't hijack (nested interrupt) - revert detection
+          // Can't hijack (mid-instruction) - restore active_interrupt
           // Keep interrupt pending in shift register for later
-          this->active_interrupt = FAM65XX_INT_NONE;
+          this->active_interrupt = prev_interrupt;
         }
       }
 #endif
