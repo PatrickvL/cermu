@@ -236,6 +236,11 @@ bus_state_t mos6522_registers_read(void* chip, bus_state_t bus_state) {
             break;
         case MOS6522_T1CL:
             BUS_SET_DATA(bus_state, (uint8_t)(via->timer1_counter & 0xFF));
+            // Reading T1CL clears Timer 1 interrupt flag (per 6522 datasheet)
+            via->ifr &= ~MOS6522_IFR_T1;
+            if (!(via->ifr & via->ier & 0x7F)) {
+                via->ifr &= ~MOS6522_IFR_IRQ;
+            }
             break;
         case MOS6522_T1CH:
             BUS_SET_DATA(bus_state, (uint8_t)(via->timer1_counter >> 8));
@@ -248,6 +253,11 @@ bus_state_t mos6522_registers_read(void* chip, bus_state_t bus_state) {
             break;
         case MOS6522_T2CL:
             BUS_SET_DATA(bus_state, (uint8_t)(via->timer2_counter & 0xFF));
+            // Reading T2CL clears Timer 2 interrupt flag (per 6522 datasheet)
+            via->ifr &= ~MOS6522_IFR_T2;
+            if (!(via->ifr & via->ier & 0x7F)) {
+                via->ifr &= ~MOS6522_IFR_IRQ;
+            }
             break;
         case MOS6522_T2CH:
             BUS_SET_DATA(bus_state, (uint8_t)(via->timer2_counter >> 8));
@@ -262,12 +272,13 @@ bus_state_t mos6522_registers_read(void* chip, bus_state_t bus_state) {
             BUS_SET_DATA(bus_state, via->pcr);
             break;
         case MOS6522_IFR:
+            // Reading IFR returns current flags - does NOT clear them
+            // (Flags are cleared by reading T1CL/T2CL or writing to IFR)
             BUS_SET_DATA(bus_state, via->ifr);
-            // Reading IFR clears interrupt flags
-            via->ifr = 0;
             break;
         case MOS6522_IER:
-            BUS_SET_DATA(bus_state, via->ier);
+            // Reading IER returns enable bits with bit 7 always set (per 6522 datasheet)
+            BUS_SET_DATA(bus_state, via->ier | 0x80);
             break;
         case MOS6522_PORTA_NH:
             BUS_SET_DATA(bus_state, via->port_a_data);
@@ -301,23 +312,47 @@ bus_state_t mos6522_registers_write(void* chip, bus_state_t bus_state) {
             via->port_a_ddr = value;
             break;
         case MOS6522_T1LL:
+            // Write to T1 Low Latch only (does not affect counter or start timer)
             via->timer1_latch = (via->timer1_latch & 0xFF00) | value;
             break;
-        case MOS6522_T1LH:
+        case MOS6522_T1CH:
+            // Write to T1 Counter High (register 0x05):
+            // 1. Load latch high byte
+            // 2. Transfer latch to counter
+            // 3. START the timer (this is the key missing piece!)
+            // 4. Clear T1 interrupt flag
             via->timer1_latch = (via->timer1_latch & 0x00FF) | (value << 8);
-            // If timer is not running, load counter
-            if (!via->timer1_running) {
-                via->timer1_counter = via->timer1_latch;
+            via->timer1_counter = via->timer1_latch;
+            via->timer1_running = true;
+            via->ifr &= ~MOS6522_IFR_T1;  // Clear T1 interrupt flag
+            // If IRQ master bit was only set due to T1, clear it
+            if (!(via->ifr & via->ier & 0x7F)) {
+                via->ifr &= ~MOS6522_IFR_IRQ;
             }
             break;
-        case 0x08: // T2LL
+        case MOS6522_T1LH:
+            // Write to T1 Latch High only (does not start timer)
+            via->timer1_latch = (via->timer1_latch & 0x00FF) | (value << 8);
+            // NOTE: Unlike T1CH, writing T1LH does NOT load counter or start timer
+            // It only updates the latch for the next reload
+            break;
+        case MOS6522_T2CL: // 0x08 - T2 Low Latch (write) / Counter Low (read)
+            // Write to T2 Low Latch only
             via->timer2_latch = (via->timer2_latch & 0xFF00) | value;
             break;
-        case 0x09: // T2LH
+        case MOS6522_T2CH: // 0x09 - T2 Counter High (write starts timer)
+            // Write to T2 Counter High:
+            // 1. Load latch high byte (low byte was already loaded)
+            // 2. Transfer latch to counter
+            // 3. START the timer
+            // 4. Clear T2 interrupt flag
             via->timer2_latch = (via->timer2_latch & 0x00FF) | (value << 8);
-            // If timer is not running, load counter
-            if (!via->timer2_running) {
-                via->timer2_counter = via->timer2_latch;
+            via->timer2_counter = via->timer2_latch;
+            via->timer2_running = true;
+            via->ifr &= ~MOS6522_IFR_T2;  // Clear T2 interrupt flag
+            // If IRQ master bit was only set due to T2, clear it
+            if (!(via->ifr & via->ier & 0x7F)) {
+                via->ifr &= ~MOS6522_IFR_IRQ;
             }
             break;
         case MOS6522_SR:
@@ -330,11 +365,26 @@ bus_state_t mos6522_registers_write(void* chip, bus_state_t bus_state) {
             via->pcr = value;
             break;
         case MOS6522_IFR:
-            // Writing to IFR clears interrupt flags
-            via->ifr = 0;
+            // Writing to IFR: bit 7 is set/clear control for lower 7 bits
+            // Writing with bit 7=0: clear the specified bits in lower 7
+            // (Bit 7 of IFR cannot be directly set/cleared - it's computed)
+            via->ifr &= ~(value & 0x7F);
+            // Recalculate master IRQ bit (bit 7)
+            if (via->ifr & via->ier & 0x7F) {
+                via->ifr |= MOS6522_IFR_IRQ;
+            } else {
+                via->ifr &= ~MOS6522_IFR_IRQ;
+            }
             break;
         case MOS6522_IER:
-            via->ier = value;
+            // IER bit 7 is set/clear control:
+            // Bit 7=1: SET the specified lower 7 bits (enable interrupts)
+            // Bit 7=0: CLEAR the specified lower 7 bits (disable interrupts)
+            if (value & 0x80) {
+                via->ier |= (value & 0x7F);   // Set specified bits
+            } else {
+                via->ier &= ~(value & 0x7F);  // Clear specified bits
+            }
             break;
         case MOS6522_PORTA_NH:
             via->port_a_data = value;
@@ -351,47 +401,67 @@ bus_state_t mos6522_tick(void* chip, bus_state_t bus_state) {
     mos6522_t* via = (mos6522_t*)chip;
     if (!via) return bus_state;
 
+    // Read timer modes from ACR (Auxiliary Control Register)
+    // ACR bit 6: Timer 1 control - 0=one-shot, 1=continuous (free-running)
+    // ACR bit 5: Timer 2 control - 0=timed interrupt, 1=count pulses on PB6
+    bool timer1_continuous = (via->acr & MOS6522_ACR_T1_CONT) != 0;
+    bool timer2_pulse_count_mode = (via->acr & MOS6522_ACR_T2_CONT) != 0;  // T2 in pulse counting mode, not used here
+
     // Timer 1 processing
     if (via->timer1_running) {
+        // Decrement counter first
+        uint16_t old_counter = via->timer1_counter;
         via->timer1_counter--;
-        if (via->timer1_counter == 0) {
-            // Timer 1 underflow
+        
+        // Check for underflow: counter wrapped from 0x0000 to 0xFFFF
+        // This happens when old_counter was 0
+        if (old_counter == 0) {
+            // Timer 1 underflow - set interrupt flag
             via->ifr |= MOS6522_IFR_T1;
 
-            if (via->timer1_continuous) {
-                // Reload timer in continuous mode
+            if (timer1_continuous) {
+                // Free-running mode (ACR bit 6 = 1): Reload from latch and keep running
                 via->timer1_counter = via->timer1_latch;
             } else {
-                // Stop timer in one-shot mode
-                via->timer1_running = false;
+                // One-shot mode (ACR bit 6 = 0): Keep counting down (wraps to 0xFFFF)
+                // Timer keeps running but only generates one interrupt per T1CH write
+                // The timer doesn't stop - it just doesn't reload from latch
             }
         }
     }
 
-    // Timer 2 processing
-    if (via->timer2_running) {
+    // Timer 2 processing (always one-shot mode in timed interrupt mode)
+    if (via->timer2_running && !timer2_pulse_count_mode) {
+        // Decrement counter first
+        uint16_t old_counter = via->timer2_counter;
         via->timer2_counter--;
-        if (via->timer2_counter == 0) {
-            // Timer 2 underflow
+        
+        // Check for underflow: counter wrapped from 0x0000 to 0xFFFF
+        if (old_counter == 0) {
+            // Timer 2 underflow - set interrupt flag
             via->ifr |= MOS6522_IFR_T2;
-
-            if (via->timer2_continuous) {
-                // Reload timer in continuous mode
-                via->timer2_counter = via->timer2_latch;
-            } else {
-                // Stop timer in one-shot mode
-                via->timer2_running = false;
-            }
+            
+            // Timer 2 is always one-shot: stop after underflow
+            via->timer2_running = false;
         }
     }
 
-    // Interrupt processing
-    if ((via->ifr & via->ier) && !(via->ifr & MOS6522_IFR_IRQ)) {
+    // Interrupt processing - CONTINUOUS ASSERTION
+    // The VIA continuously asserts IRQ as long as any enabled interrupt flag is set
+    // Check if any enabled interrupt is active (bits 0-6 of IFR AND IER)
+    if (via->ifr & via->ier & 0x7F) {
+        // Set the master IRQ bit in IFR
         via->ifr |= MOS6522_IFR_IRQ;
-        // Set interrupt line if configured
+        
+        // Assert interrupt line (active-low, so we set the legacy mask bit)
+        // This must happen EVERY tick, not just once, because the bus state is
+        // reset to default at the start of each cycle
         if (via->interrupt_line > 0) {
             BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | via->interrupt_line);
         }
+    } else {
+        // Clear the master IRQ bit if no enabled interrupts are active
+        via->ifr &= ~MOS6522_IFR_IRQ;
     }
 
     // Keyboard matrix update (called every tick for responsive keyboard scanning)

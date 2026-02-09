@@ -241,12 +241,15 @@ bus_state_t op_brk(bus_state_t pins) {
         pins = this->bus_setup_dummy<Addr::PC>(pins);
         return pins;
       case 1:
-        this->inc(REG_PC);
         /* CRITICAL: Only set interrupt type to BRK if NO interrupt is active
          * When hardware IRQ/NMI hijacks BRK execution, keep the original interrupt type
+         * Only increment PC for software BRK (skip signature byte)
+         * Hardware IRQ/NMI must NOT advance PC - the interrupted instruction
+         * must re-execute after RTI
          */
         if (this->active_interrupt == FAM65XX_INT_NONE) {
           this->active_interrupt = FAM65XX_INT_BRK;
+          this->inc(REG_PC); // BRK only: skip signature byte
         }
         this->half_cycle++;
         return pins;
@@ -323,14 +326,16 @@ bus_state_t op_brk(bus_state_t pins) {
     pins = this->bus_setup_dummy<Addr::PC>(pins);
     return pins;
   case 1:
-    /* PHI1: Increment PC and set interrupt type */
-    this->inc(REG_PC);
+    /* PHI1: Set interrupt type and optionally increment PC */
     /* CRITICAL: Only set interrupt type to BRK if NO interrupt is active
      * When hardware IRQ/NMI hijacks BRK execution, keep the original interrupt type
-     * This allows the B flag logic to correctly distinguish hardware vs software interrupts
+     * Only increment PC for software BRK (skip signature byte)
+     * Hardware IRQ/NMI must NOT advance PC - the interrupted instruction
+     * must re-execute after RTI
      */
     if (this->active_interrupt == FAM65XX_INT_NONE) {
       this->active_interrupt = FAM65XX_INT_BRK;
+      this->inc(REG_PC); // BRK only: skip signature byte
     }
     /* Higher priority interrupts (NMI, RESET, IRQ) should NOT be overridden */
     this->half_cycle++;
@@ -400,7 +405,9 @@ bus_state_t op_brk(bus_state_t pins) {
     // while we're reading the vector (cycles 10-13). Without this, IRQs sampled
     // during vector read will trigger immediately after BRK completes.
     this->interrupt_shift_register = 0;
-    this->nmi_prev = (pins & FAM65XX_NMI) ? 1 : 0; // Reset NMI edge detection
+    // Reset NMI edge detection using INVERTED convention:
+    // Pin HIGH (inactive) → inverted = 0, Pin LOW (asserted) → inverted = 1
+    this->nmi_prev = (pins & FAM65XX_NMI) ? 0 : 1;
     
     this->set(REG_AB, this->get_vector_addr());
     this->half_cycle++;
