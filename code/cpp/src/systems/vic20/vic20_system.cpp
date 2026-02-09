@@ -367,9 +367,11 @@ bool VIC20System::initialize() {
         this);                           // User data for color RAM
     
     // Create VIA chips (MOS6522)
+    // VIC-20 hardware: VIA1 ($9110) → NMI line, VIA2 ($9120) → IRQ line
+    // VIA2 Timer 1 is the system heartbeat (jiffy clock, keyboard scan, cursor blink)
     via1_ = (mos6522_t*)mos6522_create(&mos6522_descriptor);
     if (via1_) {
-        via1_->interrupt_line = BUS_MASK_IRQ;
+        via1_->interrupt_line = BUS_MASK_NMI;
         memory_->via1_chip = via1_;
     } else {
         printf("VIC20: Failed to create VIA1\n");
@@ -377,6 +379,7 @@ bool VIC20System::initialize() {
     
     via2_ = (mos6522_t*)mos6522_create(&mos6522_descriptor);
     if (via2_) {
+        via2_->interrupt_line = BUS_MASK_IRQ;
         memory_->via2_chip = via2_;
     } else {
         printf("VIC20: Warning: VIA2 not created (optional)\n");
