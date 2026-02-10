@@ -71,6 +71,16 @@ void SimpleSystemGUI::handle_events() {
     while (SDL_PollEvent(&event)) {
         ImGui_ImplSDL2_ProcessEvent(&event);
         
+        // Handle F11 for fullscreen toggle (before other processing)
+        if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_F11) {
+            Uint32 flags = SDL_GetWindowFlags(get_window());
+            if (flags & SDL_WINDOW_FULLSCREEN_DESKTOP) {
+                SDL_SetWindowFullscreen(get_window(), 0);
+            } else {
+                SDL_SetWindowFullscreen(get_window(), SDL_WINDOW_FULLSCREEN_DESKTOP);
+            }
+        }
+        
         // Handle quit events
         if (event.type == SDL_QUIT ||
             (event.type == SDL_WINDOWEVENT &&
@@ -178,8 +188,11 @@ void SimpleSystemGUI::render_frame() {
         render_screen();
     }
     
-    // Render menu bar (on top of screen)
-    render_menu_bar();
+    // Render menu bar (on top of screen) - only if not in fullscreen mode
+    Uint32 window_flags = SDL_GetWindowFlags(get_window());
+    if (!(window_flags & SDL_WINDOW_FULLSCREEN_DESKTOP)) {
+        render_menu_bar();
+    }
     
     // Render optional windows
     if (show_memory_viewer_) {

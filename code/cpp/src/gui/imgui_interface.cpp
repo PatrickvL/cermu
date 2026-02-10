@@ -201,6 +201,16 @@ void gui_handle_events(gui_emulation_context_t *emu_context) {
   while (SDL_PollEvent(&event)) {
     ImGui_ImplSDL2_ProcessEvent(&event);
     
+    // Handle F11 for fullscreen toggle (before ImGui processing)
+    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_F11) {
+      Uint32 flags = SDL_GetWindowFlags(g_window);
+      if (flags & SDL_WINDOW_FULLSCREEN_DESKTOP) {
+        SDL_SetWindowFullscreen(g_window, 0);
+      } else {
+        SDL_SetWindowFullscreen(g_window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+      }
+    }
+    
     // Handle keyboard events for C64 keyboard matrix
     // Only process keyboard when ImGui doesn't want to capture it
     ImGuiIO& io = ImGui::GetIO();
@@ -317,8 +327,11 @@ void gui_render_frame(c64_t *c64, gui_state_t *gui_state,
   // Render C64 screen as background (fullscreen)
   gui_render_screen(c64, gui_state);
 
-  // Render main menu bar with emulation context
-  gui_render_menu_bar(c64, gui_state, emu_context);
+  // Render main menu bar with emulation context (only if not in fullscreen mode)
+  Uint32 window_flags = SDL_GetWindowFlags(g_window);
+  if (!(window_flags & SDL_WINDOW_FULLSCREEN_DESKTOP)) {
+    gui_render_menu_bar(c64, gui_state, emu_context);
+  }
 
   // Render persistent storage window (hidden but stores data in imgui.ini)
   gui_render_persistent_storage(gui_state);
