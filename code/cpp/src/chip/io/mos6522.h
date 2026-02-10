@@ -21,8 +21,13 @@ typedef struct {
     uint8_t port_a_ddr;
     uint8_t port_b_ddr;
 
-    // Keyboard integration
-    void* keyboard_reference;  // Pointer to connected keyboard
+    // Callbacks for port input reads (used for keyboard matrix scanning)
+    // These callbacks allow external devices (keyboard, joystick) to pull port lines LOW
+    // Called when VIA reads from port to get external device state
+    uint8_t (*port_a_read_callback)(void* context, uint8_t port_a_output);
+    void* port_a_read_context;
+    uint8_t (*port_b_read_callback)(void* context, uint8_t port_b_output);
+    void* port_b_read_context;
 
     // Timers
     uint16_t timer1_latch;
@@ -116,8 +121,9 @@ bus_state_t mos6522_tick(void* chip, bus_state_t bus_state);
 bus_state_t mos6522_registers_read(void* chip, bus_state_t bus_state);
 bus_state_t mos6522_registers_write(void* chip, bus_state_t bus_state);
 
-// Keyboard integration functions
-void mos6522_connect_keyboard(void* chip, void* keyboard);
+// Port read callback registration (used for keyboard matrix scanning, joystick, etc.)
+void mos6522_set_port_a_read_callback(mos6522_t* via, uint8_t (*callback)(void*, uint8_t), void* context);
+void mos6522_set_port_b_read_callback(mos6522_t* via, uint8_t (*callback)(void*, uint8_t), void* context);
 
 // Chip descriptor
 extern chip_descriptor_t mos6522_descriptor;

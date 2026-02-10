@@ -1,5 +1,4 @@
 #include "mos6522.h"
-#include "../input/commodore_keyboard.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -59,15 +58,16 @@ void mos6522_destroy(void* chip) {
     free(via);
 }
 
-void mos6522_connect_keyboard(void* chip, void* keyboard) {
-    if (!chip) return;
-    mos6522_t* via = (mos6522_t*)chip;
-    via->keyboard_reference = keyboard;
+void mos6522_set_port_a_read_callback(mos6522_t* via, uint8_t (*callback)(void*, uint8_t), void* context) {
+    if (!via) return;
+    via->port_a_read_callback = callback;
+    via->port_a_read_context = context;
+}
 
-    // Connect keyboard ports to VIA ports
-    if (keyboard) {
-        commodore_keyboard_connect_ports((commodore_keyboard_t*)keyboard, &via->port_a_data, &via->port_b_data);
-    }
+void mos6522_set_port_b_read_callback(mos6522_t* via, uint8_t (*callback)(void*, uint8_t), void* context) {
+    if (!via) return;
+    via->port_b_read_callback = callback;
+    via->port_b_read_context = context;
 }
 
 
@@ -118,54 +118,26 @@ bus_state_t mos6522_registers_read(void* chip, bus_state_t bus_state) {
     uint8_t reg = BUS_GET_ADDR(bus_state) & 0x0F; // 16 registers
 
     switch (reg) {
-        case MOS6522_PORTB:
-            // Port B read - check if keyboard is connected
-            if (via->keyboard_reference) {
-                commodore_keyboard_t* keyboard = (commodore_keyboard_t*)via->keyboard_reference;
-                // VIC-20 keyboard scanning: Port B = column select (output), Port A = row read (input)
-                // But we also support reverse scanning: Port A = row select, Port B = column read
-                // When reading Port B, check which rows are selected via Port A output
-                uint8_t port_a_output = via->port_a_data & via->port_a_ddr;
-                uint8_t row_select = ~port_a_output;  // Active-LOW: 0 = selected
-                
-                uint8_t col_state = 0xFF;  // Default: all columns open (no keys pressed)
-                for (int row = 0; row < 8; row++) {
-                    if (row_select & (1 << row)) {
-                        // This row is selected - check column contacts
-                        col_state &= keyboard->col_open_contacts[row];
-                    }
-                }
-                // 6522 Port B read: output pins (DDR=1) return ORA, input pins (DDR=0) return pin state
-                BUS_SET_DATA(bus_state, (via->port_b_data & via->port_b_ddr) | (col_state & ~via->port_b_ddr));
-            } else {
-                BUS_SET_DATA(bus_state, via->port_b_data);
-            }
-            break;
-        case MOS6522_PORTA:
-            // Port A read - check if keyboard is connected
-            if (via->keyboard_reference) {
-                commodore_keyboard_t* keyboard = (commodore_keyboard_t*)via->keyboard_reference;
-                // VIC-20 keyboard scanning: Port B = column select (output), Port A = row read (input)
-                // Software writes column select to Port B, reads row result from Port A
-                // Get which columns are being driven LOW (selected) by Port B output
+        case MOS6522_PORTB: {
+            // 6522 Port B read: output pins (DDR=1) return ORA, input pins (DDR=0) return pin state
+            uint8_t pb_pin_state = 0xFF;  // Default: all pins pulled HIGH (no external device)
+            if (via->port_b_read_callback) {
                 uint8_t port_b_output = via->port_b_data & via->port_b_ddr;
-                uint8_t column_select = ~port_b_output;  // Active-LOW: 0 = selected
-                
-                uint8_t row_state = 0xFF;  // Default: all rows open (no keys pressed)
-                for (int col = 0; col < 8; col++) {
-                    if (column_select & (1 << col)) {
-                        // This column is selected - check row contacts
-                        row_state &= keyboard->row_open_contacts[col];
-                    }
-                }
-                // 6522 Port A read: output pins (DDR=1) return ORA, input pins (DDR=0) return pin state
-                // Without DDR masking, writes to Port A (e.g., KERNAL serial ATN on PA7) corrupt
-                // keyboard input bits, causing ghost keys (e.g., SHIFT+4="$" instead of cursor-left)
-                BUS_SET_DATA(bus_state, (via->port_a_data & via->port_a_ddr) | (row_state & ~via->port_a_ddr));
-            } else {
-                BUS_SET_DATA(bus_state, via->port_a_data);
+                pb_pin_state = via->port_b_read_callback(via->port_b_read_context, port_b_output);
             }
+            BUS_SET_DATA(bus_state, (via->port_b_data & via->port_b_ddr) | (pb_pin_state & ~via->port_b_ddr));
             break;
+        }
+        case MOS6522_PORTA: {
+            // 6522 Port A read: output pins (DDR=1) return ORA, input pins (DDR=0) return pin state
+            uint8_t pa_pin_state = 0xFF;  // Default: all pins pulled HIGH (no external device)
+            if (via->port_a_read_callback) {
+                uint8_t port_a_output = via->port_a_data & via->port_a_ddr;
+                pa_pin_state = via->port_a_read_callback(via->port_a_read_context, port_a_output);
+            }
+            BUS_SET_DATA(bus_state, (via->port_a_data & via->port_a_ddr) | (pa_pin_state & ~via->port_a_ddr));
+            break;
+        }
         case MOS6522_DDRB:
             BUS_SET_DATA(bus_state, via->port_b_ddr);
             break;
@@ -218,25 +190,16 @@ bus_state_t mos6522_registers_read(void* chip, bus_state_t bus_state) {
             // Reading IER returns enable bits with bit 7 always set (per 6522 datasheet)
             BUS_SET_DATA(bus_state, via->ier | 0x80);
             break;
-        case MOS6522_PORTA_NH:
-            // Port A read without handshake - same keyboard scanning as MOS6522_PORTA
-            if (via->keyboard_reference) {
-                commodore_keyboard_t* keyboard = (commodore_keyboard_t*)via->keyboard_reference;
-                uint8_t port_b_out_nh = via->port_b_data & via->port_b_ddr;
-                uint8_t col_sel_nh = ~port_b_out_nh;
-                
-                uint8_t row_state_nh = 0xFF;
-                for (int col = 0; col < 8; col++) {
-                    if (col_sel_nh & (1 << col)) {
-                        row_state_nh &= keyboard->row_open_contacts[col];
-                    }
-                }
-                // 6522 Port A read (no handshake): same DDR-aware formula
-                BUS_SET_DATA(bus_state, (via->port_a_data & via->port_a_ddr) | (row_state_nh & ~via->port_a_ddr));
-            } else {
-                BUS_SET_DATA(bus_state, via->port_a_data);
+        case MOS6522_PORTA_NH: {
+            // Port A read without handshake - same logic as MOS6522_PORTA
+            uint8_t pa_nh_pin_state = 0xFF;  // Default: all pins pulled HIGH
+            if (via->port_a_read_callback) {
+                uint8_t port_a_output = via->port_a_data & via->port_a_ddr;
+                pa_nh_pin_state = via->port_a_read_callback(via->port_a_read_context, port_a_output);
             }
+            BUS_SET_DATA(bus_state, (via->port_a_data & via->port_a_ddr) | (pa_nh_pin_state & ~via->port_a_ddr));
             break;
+        }
         default:
             // Unknown register - return last bus data
             break;

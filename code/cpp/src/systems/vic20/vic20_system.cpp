@@ -401,8 +401,11 @@ bool VIC20System::initialize() {
         commodore_keyboard_set_vic20_mode(keyboard_);
 
         if (via2_) {
-            mos6522_connect_keyboard(via2_, keyboard_);
-            printf("VIC20: Keyboard connected to VIA2\n");
+            // Register port read callbacks for keyboard matrix scanning
+            // Port A reads rows, Port B reads columns (reverse scanning)
+            mos6522_set_port_a_read_callback(via2_, vic20_via2_port_a_read, this);
+            mos6522_set_port_b_read_callback(via2_, vic20_via2_port_b_read, this);
+            printf("VIC20: Keyboard connected to VIA2 via callbacks\n");
         } else {
             printf("VIC20: Warning: Could not connect keyboard to VIA2\n");
         }
@@ -639,6 +642,55 @@ uint32_t VIC20System::get_target_fps() const {
 
 void VIC20System::set_speed_multiplier(float multiplier) {
     speed_multiplier_ = multiplier;
+}
+
+// ============================================================================
+// VIA2 Port Read Callbacks - Keyboard Matrix Scanning
+// ============================================================================
+// VIC-20 keyboard wiring:
+//   VIA2 Port B = column select (output, active LOW)
+//   VIA2 Port A = row read (input, LOW = key pressed)
+//
+// When software writes to Port B to select columns, then reads Port A to get
+// which rows have pressed keys in those columns. Reverse scanning also works:
+// write Port A to select rows, read Port B to get columns.
+
+uint8_t VIC20System::vic20_via2_port_a_read(void* context, uint8_t port_a_output) {
+    VIC20System* sys = static_cast<VIC20System*>(context);
+    if (!sys || !sys->keyboard_ || !sys->via2_) return 0xFF;
+
+    // Port A reads rows based on which columns are selected via Port B
+    // Get Port B output (column select) - only bits with DDR=1 are driven
+    uint8_t port_b_output = sys->via2_->port_b_data & sys->via2_->port_b_ddr;
+    uint8_t column_select = ~port_b_output;  // Active-LOW: 0 = selected
+
+    uint8_t row_state = 0xFF;  // Default: all rows open (no keys pressed)
+    for (int col = 0; col < 8; col++) {
+        if (column_select & (1 << col)) {
+            // This column is selected - AND in the row contacts
+            row_state &= sys->keyboard_->row_open_contacts[col];
+        }
+    }
+    return row_state;
+}
+
+uint8_t VIC20System::vic20_via2_port_b_read(void* context, uint8_t port_b_output) {
+    VIC20System* sys = static_cast<VIC20System*>(context);
+    if (!sys || !sys->keyboard_ || !sys->via2_) return 0xFF;
+
+    // Port B reads columns based on which rows are selected via Port A
+    // (Reverse scanning direction)
+    uint8_t port_a_output = sys->via2_->port_a_data & sys->via2_->port_a_ddr;
+    uint8_t row_select = ~port_a_output;  // Active-LOW: 0 = selected
+
+    uint8_t col_state = 0xFF;  // Default: all columns open (no keys pressed)
+    for (int row = 0; row < 8; row++) {
+        if (row_select & (1 << row)) {
+            // This row is selected - AND in the column contacts
+            col_state &= sys->keyboard_->col_open_contacts[row];
+        }
+    }
+    return col_state;
 }
 
 // ============================================================================
