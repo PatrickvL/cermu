@@ -5,6 +5,9 @@
 
 // Keyboard matrix definition (C64 layout)
 // Unshifted keys - using SDL keycodes
+// Array convention: array[7-PB_bit][7-PA_bit]
+//   Row index 0 = PB7, Row index 7 = PB0
+//   Col index 0 = PA7, Col index 7 = PA0
 // Note: CRSR→/← key position stores CURSOR_RIGHT (unshifted function)
 //       CRSR↓/↑ key position stores CURSOR_DOWN (unshifted function)
 //       Host LEFT/UP arrows are handled via auto-shift in key_down/key_up.
@@ -302,13 +305,19 @@ void commodore_keyboard_key_down(commodore_keyboard_t* keyboard, uint32_t key_co
 
     if (found) {
         // Convert from array indices to hardware CIA/VIA bit numbers.
-        // The matrix array is stored as array[7-PA_bit][7-PB_bit], so:
-        //   PA bit (column select) = 7 - array_row
-        //   PB bit (row read)      = 7 - array_col
+        // C64 matrix: array[7-PB_bit][7-PA_bit], so:
+        //   pa_bit = 7 - row  (actually the PB/row-read bit for C64)
+        //   pb_bit = 7 - col  (actually the PA/column-select bit for C64)
+        // VIC-20 matrix: array[7-PB_col][7-PA_row] — same variable mapping.
+        // The naming is kept for compatibility; the CIA/VIA callbacks use
+        // the correct contacts array (col_open_contacts for forward scan,
+        // row_open_contacts for reverse scan).
         uint8_t pa_bit = 7 - row;
         uint8_t pb_bit = 7 - col;
 
         // Close the contact (key pressed)
+        // row_open_contacts[pa_bit] stores pb_bit flags
+        // col_open_contacts[pb_bit] stores pa_bit flags (transpose)
         keyboard->row_open_contacts[pa_bit] &= ~(1 << pb_bit);
         keyboard->col_open_contacts[pb_bit] &= ~(1 << pa_bit);
     }
@@ -372,9 +381,7 @@ void commodore_keyboard_key_up(commodore_keyboard_t* keyboard, uint32_t key_code
 
     if (found) {
         // Convert from array indices to hardware CIA/VIA bit numbers.
-        // The matrix array is stored as array[7-PA_bit][7-PB_bit], so:
-        //   PA bit (column select) = 7 - array_row
-        //   PB bit (row read)      = 7 - array_col
+        // See key_down for the full explanation of the transposed mapping.
         uint8_t pa_bit = 7 - row;
         uint8_t pb_bit = 7 - col;
 

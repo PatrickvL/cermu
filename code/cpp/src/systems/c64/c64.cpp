@@ -464,9 +464,21 @@ extern "C" void c64_cpu_banking_callback(void* context, uint8_t banking_state) {
 
 static uint8_t c64_cia1_port_a_read_callback(void* context, uint8_t port_a_output) {
     c64_t* c64 = (c64_t*)context;
-    // Port A is output-only for keyboard scanning, so just return the output value
-    // No external device pulls these lines
-    return port_a_output;
+    if (!c64 || !c64->keyboard || !c64->cia1) return port_a_output;
+
+    // Reverse scanning: software can write to Port B (row select) and read Port A
+    // to detect which columns have pressed keys in those rows.
+    // row_open_contacts is indexed by PB (row) and contains PA (column) bit flags.
+    uint8_t port_b_output = c64->cia1->port_b_value;
+    uint8_t row_select = ~port_b_output;  // Active-LOW: 0 = selected
+
+    uint8_t col_state = 0xFF;
+    for (int row = 0; row < 8; row++) {
+        if (row_select & (1 << row)) {
+            col_state &= c64->keyboard->row_open_contacts[row];
+        }
+    }
+    return col_state;
 }
 
 static uint8_t c64_cia1_port_b_read_callback(void* context, uint8_t port_b_output) {
@@ -479,19 +491,19 @@ static uint8_t c64_cia1_port_b_read_callback(void* context, uint8_t port_b_outpu
     
     // Get the column selection from CIA1 Port A
     // Columns are selected by driving Port A lines LOW (active-low logic)
-    // IMPORTANT: Read port_a_value safely - it's already set by the CIA before calling this callback
     uint8_t port_a_value = c64->cia1->port_a_value;
     uint8_t column_select = ~port_a_value;  // Invert to get active columns
     
     // Start with all rows HIGH (no keys pressed)
     uint8_t row_state = 0xFF;
     
-    // For each selected column, check if any keys are pressed
+    // Forward scanning: Port A selects columns (PA bits), Port B reads rows (PB bits).
+    // col_open_contacts is indexed by PA bit and contains PB bit flags — exactly
+    // what's needed here. (row_open_contacts has the transposed mapping: indexed
+    // by PB, containing PA flags — used for reverse scanning in Port A callback.)
     for (int col = 0; col < 8; col++) {
         if (column_select & (1 << col)) {
-            // This column is selected - check for pressed keys
-            // Pull down the row lines for any pressed keys in this column
-            row_state &= c64->keyboard->row_open_contacts[col];
+            row_state &= c64->keyboard->col_open_contacts[col];
         }
     }
     
