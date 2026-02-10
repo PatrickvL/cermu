@@ -135,7 +135,8 @@ bus_state_t mos6522_registers_read(void* chip, bus_state_t bus_state) {
                         col_state &= keyboard->col_open_contacts[row];
                     }
                 }
-                BUS_SET_DATA(bus_state, via->port_b_data & col_state);
+                // 6522 Port B read: output pins (DDR=1) return ORA, input pins (DDR=0) return pin state
+                BUS_SET_DATA(bus_state, (via->port_b_data & via->port_b_ddr) | (col_state & ~via->port_b_ddr));
             } else {
                 BUS_SET_DATA(bus_state, via->port_b_data);
             }
@@ -157,7 +158,10 @@ bus_state_t mos6522_registers_read(void* chip, bus_state_t bus_state) {
                         row_state &= keyboard->row_open_contacts[col];
                     }
                 }
-                BUS_SET_DATA(bus_state, via->port_a_data & row_state);
+                // 6522 Port A read: output pins (DDR=1) return ORA, input pins (DDR=0) return pin state
+                // Without DDR masking, writes to Port A (e.g., KERNAL serial ATN on PA7) corrupt
+                // keyboard input bits, causing ghost keys (e.g., SHIFT+4="$" instead of cursor-left)
+                BUS_SET_DATA(bus_state, (via->port_a_data & via->port_a_ddr) | (row_state & ~via->port_a_ddr));
             } else {
                 BUS_SET_DATA(bus_state, via->port_a_data);
             }
@@ -227,7 +231,8 @@ bus_state_t mos6522_registers_read(void* chip, bus_state_t bus_state) {
                         row_state_nh &= keyboard->row_open_contacts[col];
                     }
                 }
-                BUS_SET_DATA(bus_state, via->port_a_data & row_state_nh);
+                // 6522 Port A read (no handshake): same DDR-aware formula
+                BUS_SET_DATA(bus_state, (via->port_a_data & via->port_a_ddr) | (row_state_nh & ~via->port_a_ddr));
             } else {
                 BUS_SET_DATA(bus_state, via->port_a_data);
             }
