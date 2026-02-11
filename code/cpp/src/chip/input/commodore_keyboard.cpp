@@ -248,18 +248,22 @@ void commodore_keyboard_key_down(commodore_keyboard_t* keyboard, uint32_t key_co
         return;
     }
 
-    // Handle cursor LEFT: on real hardware this is SHIFT + CRSR→
-    // Auto-press SHIFT and redirect to the CRSR→ key (SDLK_RIGHT)
-    if (key_code == SDLK_LEFT) {
+    // Handle cursor LEFT: on C64/VIC-20 this is SHIFT + CRSR→ (no dedicated key).
+    // Plus/4 and C128 have real CRSR← keys in the matrix — handle normally.
+    if (key_code == SDLK_LEFT &&
+        keyboard->model != KEYBOARD_MODEL_PLUS4_C16 &&
+        keyboard->model != KEYBOARD_MODEL_C128) {
         keyboard->auto_shift_left_active = true;
         commodore_keyboard_key_down(keyboard, CbmKeys::SHIFT_LEFT, false);
         commodore_keyboard_key_down(keyboard, SDLK_RIGHT, false);
         return;
     }
 
-    // Handle cursor UP: on real hardware this is SHIFT + CRSR↓
-    // Auto-press SHIFT and redirect to the CRSR↓ key (SDLK_DOWN)
-    if (key_code == SDLK_UP) {
+    // Handle cursor UP: on C64/VIC-20 this is SHIFT + CRSR↓ (no dedicated key).
+    // Plus/4 and C128 have real CRSR↑ keys in the matrix — handle normally.
+    if (key_code == SDLK_UP &&
+        keyboard->model != KEYBOARD_MODEL_PLUS4_C16 &&
+        keyboard->model != KEYBOARD_MODEL_C128) {
         keyboard->auto_shift_up_active = true;
         commodore_keyboard_key_down(keyboard, CbmKeys::SHIFT_LEFT, false);
         commodore_keyboard_key_down(keyboard, SDLK_DOWN, false);
@@ -314,7 +318,10 @@ void commodore_keyboard_key_up(commodore_keyboard_t* keyboard, uint32_t key_code
     }
 
     // Handle cursor LEFT release: release CRSR→ and auto-release SHIFT
-    if (key_code == SDLK_LEFT) {
+    // Only for models without dedicated CRSR← keys (C64/VIC-20).
+    if (key_code == SDLK_LEFT &&
+        keyboard->model != KEYBOARD_MODEL_PLUS4_C16 &&
+        keyboard->model != KEYBOARD_MODEL_C128) {
         commodore_keyboard_key_up(keyboard, SDLK_RIGHT, false);
         if (keyboard->auto_shift_left_active) {
             keyboard->auto_shift_left_active = false;
@@ -327,7 +334,10 @@ void commodore_keyboard_key_up(commodore_keyboard_t* keyboard, uint32_t key_code
     }
 
     // Handle cursor UP release: release CRSR↓ and auto-release SHIFT
-    if (key_code == SDLK_UP) {
+    // Only for models without dedicated CRSR↑ keys (C64/VIC-20).
+    if (key_code == SDLK_UP &&
+        keyboard->model != KEYBOARD_MODEL_PLUS4_C16 &&
+        keyboard->model != KEYBOARD_MODEL_C128) {
         commodore_keyboard_key_up(keyboard, SDLK_DOWN, false);
         if (keyboard->auto_shift_up_active) {
             keyboard->auto_shift_up_active = false;

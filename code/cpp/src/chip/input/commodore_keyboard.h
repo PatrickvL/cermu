@@ -46,6 +46,8 @@ namespace CbmKeys {
     const uint32_t COMMODORE = SDLK_LGUI;         // Commodore key (Windows/Command)
     const uint32_t CTRL = SDLK_LCTRL;             // Control key
     const uint32_t CURSOR_DOWN = SDLK_DOWN;       // CRSR↓ key (physical key)
+    const uint32_t CURSOR_UP = SDLK_UP;             // CRSR↑ key (Plus/4, C128 — dedicated physical key)
+    const uint32_t CURSOR_LEFT = SDLK_LEFT;         // CRSR← key (Plus/4, C128 — dedicated physical key)
     const uint32_t CURSOR_RIGHT = SDLK_RIGHT;     // CRSR→ key (physical key)
     const uint32_t DEL = SDLK_BACKSPACE;          // Delete/Backspace
     const uint32_t F1 = SDLK_F1;                  // Function keys
