@@ -84,8 +84,8 @@ void KeyboardMapper::build_character_map_from_matrix(const keyboard_matrix_confi
     // KERNAL would produce a graphics character instead of a letter.
     //
     // Commodore-specific characters are handled automatically:
-    //   £ ($5C) → petscii_to_host_char → '|' → char_map_['|'] = KEYMOD_NONE
-    //   ↑ ($5E) → petscii_to_host_char → '^' → char_map_['^'] = KEYMOD_NONE
+    //   £ ($5C) → petscii_to_host_char → '^' → char_map_['^'] = KEYMOD_NONE
+    //   ↑ ($5E) → petscii_to_host_char → '|' → char_map_['|'] = KEYMOD_NONE
     //   ← ($5F) → petscii_to_host_char → '\\' → char_map_['\\'] = KEYMOD_NONE
     //   π ($DE) → petscii_to_host_char → '~' → char_map_['~'] = KEYMOD_SHIFT
 
@@ -131,6 +131,20 @@ void KeyboardMapper::build_character_map_from_matrix(const keyboard_matrix_confi
         if (char_map_['A' + i].valid) {
             char_map_['a' + i] = char_map_['A' + i];
         }
+    }
+
+    // Underscore fixup: host '_' (Shift+minus) → PETSCII $A4 (▁).
+    //
+    // The Commodore graphics character $A4 (LOWER ONE EIGHTH BLOCK) is the
+    // closest visual match to an underscore.  It's produced by C= + @, i.e.
+    // the '@' key position with KEYMOD_CBM.  Since $A4 lives in the $A0–$BF
+    // graphics range, it doesn't appear in the standard KEYMOD_NONE/SHIFT
+    // decode tables and can't be picked up by the loop above.
+    //
+    // We derive the position from char_map_['@'] (already populated by the
+    // unshifted decode table) and override the modifier to KEYMOD_CBM.
+    if (!char_map_['_'].valid && char_map_['@'].valid) {
+        char_map_['_'] = GuestKeyAction(char_map_['@'].row, char_map_['@'].col, KEYMOD_CBM);
     }
 
     // Cache modifier key positions using the keys[] table
@@ -551,12 +565,13 @@ bool KeyboardMapper::process_text_input(const char* text) {
                 continue;
             }
 
-            // 2. Shifted-bracket family: { and } don't exist on Commodore
-            //    keyboards, but [ and ] do (as shifted : and ;).
-            //    Map them so the user's keystrokes aren't silently lost.
+            // 2. Curly-brace family: { and } don't exist on Commodore
+            //    keyboards.  Map to ( and ) — the visual pairing is
+            //    closer than [ ], and using the shifted variant signals
+            //    that the host Shift key was involved.
             char bracket_alt = 0;
-            if (c == '{') bracket_alt = '[';
-            else if (c == '}') bracket_alt = ']';
+            if (c == '{') bracket_alt = '(';
+            else if (c == '}') bracket_alt = ')';
 
             if (bracket_alt && char_map_[(unsigned char)bracket_alt].valid) {
                 SDL_Scancode sc = has_pending_key_ ? pending_key_.scancode : SDL_SCANCODE_UNKNOWN;

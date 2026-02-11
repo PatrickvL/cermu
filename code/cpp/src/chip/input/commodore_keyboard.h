@@ -80,15 +80,23 @@ typedef uint8_t petscii_t;
 // ASCII character the host user types via SDL_TEXTINPUT).
 //
 // Divergence points from ASCII that we map:
-//   PETSCII $5C → '|'   (host pipe → guest £ key)
-//   PETSCII $5E → '^'   (host caret → guest ↑ key)
+//   PETSCII $5C → '^'   (host caret → guest £ key)
+//   PETSCII $5E → '|'   (host pipe → guest ↑ key)
 //   PETSCII $5F → '\\'  (host backslash → guest ← key)
 //   PETSCII $C1–$DA → 'a'–'z'  (PETSCII lowercase = $C1+, not $61+)
 //   PETSCII $DE → '~'   (host tilde → guest π, shifted ↑ key)
 //   PETSCII $FF → '~'   (alternate: π as its own code)
 //
-// The host character choices for £/↑/← are deliberate: they're the closest
-// visual or positional matches on a US keyboard layout.
+// The host character choices for £/↑/← are deliberate:
+//   £ → '^' : Shift+6 on the host — both are currency/symbol characters
+//   ↑ → '|' : Shift+backslash on the host, so the \\ key pair covers both arrows
+//   ← → '\\': Unshifted backslash, positional match on US keyboards
+//
+// Note: host '_' (Shift+minus) is mapped separately to PETSCII $A4 (▁),
+// the Commodore graphics character that most closely resembles an underscore.
+// This mapping is done as a post-loop fixup in build_character_map_from_matrix
+// because $A4 is a C= key combination (KEYMOD_CBM) not in the standard
+// KEYMOD_NONE/KEYMOD_SHIFT decode tables.
 
 static inline char petscii_to_host_char(petscii_t p) {
     // PETSCII control codes ($01–$1F, $80–$9F) → no host character
@@ -116,8 +124,8 @@ static inline char petscii_to_host_char(petscii_t p) {
 
     // PETSCII divergence points from ASCII in the $20–$5F range
     switch (p) {
-        case 0x5C: return '|';   // £ (pound sign) → host pipe
-        case 0x5E: return '^';   // ↑ (up arrow) → host caret
+        case 0x5C: return '^';   // £ (pound sign) → host caret
+        case 0x5E: return '|';   // ↑ (up arrow) → host pipe
         case 0x5F: return '\\';  // ← (left arrow) → host backslash
         default:   break;
     }
