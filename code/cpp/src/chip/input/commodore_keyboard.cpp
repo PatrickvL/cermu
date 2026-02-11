@@ -3,71 +3,8 @@
 #include <string.h>
 #include <stdlib.h>
 
-// Keyboard matrix definition (C64 layout)
-// Unshifted keys - using SDL keycodes
-// Array convention: array[7-PB_bit][7-PA_bit]
-//   Row index 0 = PB7, Row index 7 = PB0
-//   Col index 0 = PA7, Col index 7 = PA0
-// Note: CRSR→/← key position stores CURSOR_RIGHT (unshifted function)
-//       CRSR↓/↑ key position stores CURSOR_DOWN (unshifted function)
-//       Host LEFT/UP arrows are handled via auto-shift in key_down/key_up.
-const uint32_t keyboard_matrix_unshifted[KEYBOARD_ROWS][KEYBOARD_COLS] = {
-    {CbmKeys::RUN_STOP, '/', ',', 'N', 'V', 'X', CbmKeys::SHIFT_LEFT, CbmKeys::CURSOR_DOWN}, // row 7 (CRSR↓ key)
-    {'Q', CbmKeys::ARROW_UP, '@', 'O', 'U', 'T', 'E', CbmKeys::F5}, // row 6 (↑ char)
-    {CbmKeys::COMMODORE, '=', ':', 'K', 'H', 'F', 'S', CbmKeys::F3}, // row 5
-    {CbmKeys::SPACE, CbmKeys::SHIFT_RIGHT, '.', 'M', 'B', 'C', 'Z', CbmKeys::F1}, // row 4
-    {'2', CbmKeys::HOME, '-', '0', '8', '6', '4', CbmKeys::F7}, // row 3
-    {CbmKeys::CTRL, ';', 'L', 'J', 'G', 'D', 'A', CbmKeys::CURSOR_RIGHT}, // row 2 (CRSR→ key)
-    {CbmKeys::ARROW_LEFT, '*', 'P', 'I', 'Y', 'R', 'W', CbmKeys::RETURN}, // row 1 (← char)
-    {'1', CbmKeys::POUND, '+', '9', '7', '5', '3', CbmKeys::DEL}, // row 0
-};
-
-// Shifted keys (C64 layout) - using SDL keycodes
-// Note: Cursor/HOME shifted functions are handled by KERNAL when SHIFT is held.
-//       SAME is used for cursor positions since auto-shift handles host LEFT/UP.
-const uint32_t keyboard_matrix_shifted[KEYBOARD_ROWS][KEYBOARD_COLS] = {
-    {CbmKeys::SAME, '?', '<', 'n', 'v', 'x', CbmKeys::SAME, CbmKeys::SAME}, // row 7 (CRSR↓ shifted=cursor up, handled by auto-shift)
-    {'q', CbmKeys::PI, CbmKeys::SAME, 'o', 'u', 't', 'e', CbmKeys::F6}, // row 6
-    {CbmKeys::SAME, CbmKeys::SAME, '[', 'k', 'h', 'f', 's', CbmKeys::F4}, // row 5
-    {CbmKeys::SAME, CbmKeys::SAME, '>', 'm', 'b', 'c', 'z', CbmKeys::F2}, // row 4
-    {'"', CbmKeys::SAME, CbmKeys::SAME, CbmKeys::SAME, '(', '&', '$', CbmKeys::F8}, // row 3 (HOME shifted=CLR, KERNAL handles it)
-    {CbmKeys::SAME, ']', 'l', 'j', 'g', 'd', 'a', CbmKeys::SAME}, // row 2 (CRSR→ shifted=cursor left, handled by auto-shift)
-    {CbmKeys::SAME, CbmKeys::SAME, 'p', 'i', 'y', 'r', 'w', CbmKeys::SAME}, // row 1
-    {'!', CbmKeys::SAME, CbmKeys::SAME, ')', '\'', '%', '#', CbmKeys::INST}, // row 0
-};
-
-// ============================================================================
-// VIC-20 Keyboard Matrix
-// ============================================================================
-// VIC-20 has different matrix wiring than C64:
-//   VIA Port B ($9120) = column select (output)
-//   VIA Port A ($9121) = row read (input)
-// Array convention: array[7-PB_col][7-PA_row]
-// Transform from C64: swap array rows 0↔4, swap columns 0↔7 within each row.
-
-// Unshifted keys (VIC-20 layout)
-const uint32_t keyboard_matrix_unshifted_vic20[KEYBOARD_ROWS][KEYBOARD_COLS] = {
-    {CbmKeys::F7, CbmKeys::HOME, '-', '0', '8', '6', '4', '2'},             // PB7
-    {CbmKeys::F5, CbmKeys::ARROW_UP, '@', 'O', 'U', 'T', 'E', 'Q'},        // PB6 (↑ char)
-    {CbmKeys::F3, '=', ':', 'K', 'H', 'F', 'S', CbmKeys::COMMODORE},       // PB5
-    {CbmKeys::F1, CbmKeys::SHIFT_RIGHT, '.', 'M', 'B', 'C', 'Z', CbmKeys::SPACE}, // PB4
-    {CbmKeys::CURSOR_DOWN, '/', ',', 'N', 'V', 'X', CbmKeys::SHIFT_LEFT, CbmKeys::RUN_STOP}, // PB3 (CRSR↓ key)
-    {CbmKeys::CURSOR_RIGHT, ';', 'L', 'J', 'G', 'D', 'A', CbmKeys::CTRL},  // PB2 (CRSR→ key)
-    {CbmKeys::RETURN, '*', 'P', 'I', 'Y', 'R', 'W', CbmKeys::ARROW_LEFT},  // PB1 (← char)
-    {CbmKeys::DEL, CbmKeys::POUND, '+', '9', '7', '5', '3', '1'},           // PB0
-};
-
-// Shifted keys (VIC-20 layout)
-const uint32_t keyboard_matrix_shifted_vic20[KEYBOARD_ROWS][KEYBOARD_COLS] = {
-    {CbmKeys::F8, CbmKeys::SAME, CbmKeys::SAME, CbmKeys::SAME, '(', '&', '$', '"'},  // PB7 (HOME shifted=CLR, KERNAL handles it)
-    {CbmKeys::F6, CbmKeys::PI, CbmKeys::SAME, 'o', 'u', 't', 'e', 'q'},             // PB6
-    {CbmKeys::F4, CbmKeys::SAME, '[', 'k', 'h', 'f', 's', CbmKeys::SAME},           // PB5
-    {CbmKeys::F2, CbmKeys::SAME, '>', 'm', 'b', 'c', 'z', CbmKeys::SAME},           // PB4
-    {CbmKeys::SAME, '?', '<', 'n', 'v', 'x', CbmKeys::SAME, CbmKeys::SAME},         // PB3 (CRSR↓ shifted=cursor up, handled by auto-shift)
-    {CbmKeys::SAME, ']', 'l', 'j', 'g', 'd', 'a', CbmKeys::SAME},                   // PB2 (CRSR→ shifted=cursor left, handled by auto-shift)
-    {CbmKeys::SAME, CbmKeys::SAME, 'p', 'i', 'y', 'r', 'w', CbmKeys::SAME},         // PB1
-    {CbmKeys::INST, CbmKeys::SAME, CbmKeys::SAME, ')', '\'', '%', '#', '!'},         // PB0
-};
+// Keyboard matrix data is provided by the system layer at creation time.
+// See: systems/c64/c64_keyboard_matrix.cpp, systems/vic20/vic20_keyboard_matrix.cpp
 
 // Special key mappings - SDL keycode compatible
 static const uint32_t special_key_mapping[][2] = {
@@ -94,22 +31,26 @@ static const uint32_t special_key_mapping[][2] = {
     {0, 0}         // Terminator
 };
 
-commodore_keyboard_t* commodore_keyboard_create() {
+commodore_keyboard_t* commodore_keyboard_create(
+        const uint32_t (*unshifted)[KEYBOARD_COLS],
+        const uint32_t (*shifted)[KEYBOARD_COLS]) {
+    if (!unshifted || !shifted) return NULL;
+
     commodore_keyboard_t* keyboard = (commodore_keyboard_t*)malloc(sizeof(commodore_keyboard_t));
     if (!keyboard) return NULL;
 
     // Initialize chip descriptor
     keyboard->descriptor = (chip_descriptor_t){
-        .description = "C64/VIC-20 Keyboard Matrix Emulation",
+        .description = "Commodore Keyboard Matrix Emulation",
         .create = NULL,
         .destroy = NULL,
         .bus_attach = NULL,
         .bank_change = NULL
     };
 
-    // Default to C64 matrix (must be set before reset builds lookup table)
-    keyboard->active_unshifted = keyboard_matrix_unshifted;
-    keyboard->active_shifted = keyboard_matrix_shifted;
+    // Use caller-supplied matrix
+    keyboard->active_unshifted = unshifted;
+    keyboard->active_shifted = shifted;
 
     // Initialize keyboard state
     commodore_keyboard_reset(keyboard);
@@ -135,11 +76,10 @@ void commodore_keyboard_reset(commodore_keyboard_t* keyboard) {
         keyboard->col_open_contacts[row] = 0xFF; // All columns open
     }
 
-    // Preserve active matrix selection (set by create or set_vic20_mode)
-    // If somehow unset, default to C64
+    // Active matrix must have been set by create()
     if (!keyboard->active_unshifted) {
-        keyboard->active_unshifted = keyboard_matrix_unshifted;
-        keyboard->active_shifted = keyboard_matrix_shifted;
+        printf("ERROR: commodore_keyboard_reset called with no active matrix set!\n");
+        return;
     }
 
     // Initialize matrix lookup using active matrix
@@ -200,20 +140,6 @@ void commodore_keyboard_reset(commodore_keyboard_t* keyboard) {
     keyboard->auto_shift_up_active = false;
     keyboard->cia_port_a_reference = NULL;
     keyboard->cia_port_b_reference = NULL;
-}
-
-void commodore_keyboard_set_vic20_mode(commodore_keyboard_t* keyboard) {
-    if (!keyboard) return;
-
-    // Switch to VIC-20 keyboard matrix
-    // VIC-20 has different matrix wiring than C64
-    keyboard->active_unshifted = keyboard_matrix_unshifted_vic20;
-    keyboard->active_shifted = keyboard_matrix_shifted_vic20;
-
-    // Rebuild the lookup table and key_matrix with the VIC-20 matrix
-    commodore_keyboard_reset(keyboard);
-
-    printf("Keyboard: Switched to VIC-20 matrix mode\n");
 }
 
 uint32_t commodore_keyboard_map_host_key(uint32_t host_key, bool shifted) {

@@ -21,6 +21,7 @@
 #include "../../chip/memory/rom.h"
 #include "../../chip/memory/mos2114.h" // Color RAM
 #include "../../chip/logic/pla.h" // PLA for memory mapping
+#include "c64_keyboard_matrix.h" // C64 keyboard matrix data
 
 // Screenshot support
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -620,7 +621,8 @@ c64_t* c64_system_create(const c64_config_t* config) {
     if (!(c64->cia2 = static_cast<mos6526_t*>(create_and_register_chip(c64, &mos6526_descriptor, 0xDD00, 256)))) { c64_system_destroy(c64); return NULL; }
     
     // Create keyboard and initialize with no keys pressed
-    c64->keyboard = commodore_keyboard_create();
+    c64->keyboard = commodore_keyboard_create(keyboard_matrix_unshifted_c64,
+                                                keyboard_matrix_shifted_c64);
     if (!c64->keyboard) {
         printf("ERROR: Failed to create keyboard\n");
         c64_system_destroy(c64);
