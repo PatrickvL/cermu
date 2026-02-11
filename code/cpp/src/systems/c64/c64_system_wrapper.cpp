@@ -4,6 +4,7 @@
 #include "../../chip/input/emu_key_sdl_map.h"
 #include "../../chip/cpu/fam65xx/mos6510.h"
 #include "../../gui/imgui_interface.h"
+#include "../../core/storage/commodore_file_loader.h"
 #include <cstring>
 #include <cstdio>
 
@@ -48,16 +49,35 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
     const char* ext = strrchr(filepath, '.');
     if (ext) {
         if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0) {
-            // PRG files - check for valid load address
             if (size >= 2) {
-                return 0.95f;  // Very high confidence for .prg files
+                uint16_t load_addr = data[0] | (data[1] << 8);
+                // C64 BASIC start address gives highest confidence
+                if (load_addr == 0x0801) return 0.95f;
+                // Common C64 ML addresses
+                if (load_addr == 0xC000 || load_addr == 0x0800 || load_addr == 0x4000) return 0.85f;
+                // VIC-20/C16 address — lower confidence
+                if (load_addr == 0x1001) return 0.6f;
+                return 0.7f;  // Generic PRG — C64 is the most common Commodore system
             }
         }
         if (strcmp(ext, ".d64") == 0 || strcmp(ext, ".D64") == 0) {
-            // D64 disk images - exactly 174848 bytes
-            if (size == 174848) {
+            // D64 disk images — check standard sizes
+            if (size == D64_STANDARD_SIZE || size == D64_STANDARD_SIZE_ERR ||
+                size == D64_EXTENDED_SIZE || size == D64_EXTENDED_SIZE_ERR) {
                 return 0.95f;
             }
+            return 0.7f;  // Non-standard size but .d64 extension
+        }
+        if (strcmp(ext, ".t64") == 0 || strcmp(ext, ".T64") == 0) {
+            // T64 tape archives are C64-centric
+            return 0.85f;
+        }
+        if (strcmp(ext, ".tap") == 0 || strcmp(ext, ".TAP") == 0) {
+            // Check TAP header to see if this is specifically a C64 tape
+            int platform = commodore_tap_identify_platform(filepath);
+            if (platform == 0) return 0.95f;  // C64 TAP
+            if (platform == 1) return 0.3f;   // VIC-20 TAP
+            return 0.6f;  // Unknown or error — C64 is most common
         }
         if (strcmp(ext, ".crt") == 0 || strcmp(ext, ".CRT") == 0) {
             // CRT cartridge files
@@ -211,45 +231,138 @@ void C64SystemWrapper::run_frame() {
     total_cycles_ = c64_->total_cycles;
 }
 
+/** Memory read callback for BASIC SYS parsing — reads from C64 RAM */
+static uint8_t c64_mem_read_for_basic(void* ctx, uint16_t addr) {
+    ram_t* ram = static_cast<ram_t*>(ctx);
+    return ram->memory[addr];
+}
+
 bool C64SystemWrapper::load_file(const char* filepath) {
     if (!c64_) {
         printf("C64: System not initialized\n");
         return false;
     }
     
-    // Check file extension to determine type
-    const char* ext = strrchr(filepath, '.');
-    if (!ext) {
-        printf("C64: No file extension found\n");
+    printf("C64: Loading file: %s\n", filepath);
+
+    // Use shared Commodore file loader for format detection and parsing
+    commodore_load_result_t result = {};
+    if (!commodore_load_file(filepath, &result)) {
+        printf("C64: Failed to load file: %s\n", result.error_msg);
+        commodore_load_result_free(&result);
         return false;
     }
-    
-    if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0) {
-        // Load PRG file
-        uint16_t load_address = 0;
-        uint16_t sys_address = 0;
-        
-        if (!c64_test_load_prg_file(filepath, c64_->ram, &load_address, &sys_address)) {
-            printf("C64: Failed to load PRG file: %s\n", filepath);
-            return false;
-        }
-        printf("C64: Loaded PRG file: %s\n", filepath);
-        printf("  Load address: $%04X\n", load_address);
-        if (sys_address != 0) {
-            printf("  SYS address: $%04X\n", sys_address);
-            // Set PC to sys address to auto-run the program
-            if (c64_->mos6510) {
-                mos6510_set_pc((mos6510_t*)c64_->mos6510, sys_address);
-                printf("  PC set to $%04X - program will auto-run\n", sys_address);
+
+    bool success = false;
+
+    switch (result.type) {
+        case COMMODORE_LOAD_PRG:
+        case COMMODORE_LOAD_D64:
+        case COMMODORE_LOAD_T64: {
+            // All three produce a PRG in result.prg — copy data into C64 RAM
+            const commodore_prg_t* prg = &result.prg;
+            
+            printf("C64: Loading %s: $%04X-$%04X (%zu bytes)\n",
+                   commodore_load_type_name(result.type),
+                   prg->load_addr, prg->end_addr, prg->data_size);
+
+            // Validate address range
+            if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
+                printf("C64: Invalid PRG address range: $%04X-$%04X\n",
+                       prg->load_addr, prg->end_addr);
+                break;
             }
+
+            // Write program data into C64 RAM
+            memcpy(&c64_->ram->memory[prg->load_addr], prg->data, prg->data_size);
+
+            // Try to find a SYS address in BASIC for auto-run
+            uint16_t run_addr = 0;
+
+            if (prg->load_addr == 0x0801) {
+                // Standard C64 BASIC start — parse for SYS statement
+                commodore_basic_sys_t sys_result = {};
+                if (commodore_basic_parse_sys(c64_mem_read_for_basic, c64_->ram,
+                                              prg->load_addr,
+                                              &COMMODORE_BASIC_C64,
+                                              10, &sys_result)) {
+                    run_addr = sys_result.sys_address;
+                    printf("C64: Found SYS %u on BASIC line %u\n",
+                           run_addr, sys_result.line_number);
+                }
+
+                // Update BASIC pointers so LIST and RUN work correctly
+                // TXTTAB ($2B/$2C) = start of BASIC text
+                c64_->ram->memory[0x2B] = (uint8_t)(prg->load_addr & 0xFF);
+                c64_->ram->memory[0x2C] = (uint8_t)(prg->load_addr >> 8);
+                // VARTAB ($2D/$2E) = end of BASIC text
+                c64_->ram->memory[0x2D] = (uint8_t)(prg->end_addr & 0xFF);
+                c64_->ram->memory[0x2E] = (uint8_t)(prg->end_addr >> 8);
+                // ARYTAB ($2F/$30) = start of arrays
+                c64_->ram->memory[0x2F] = (uint8_t)(prg->end_addr & 0xFF);
+                c64_->ram->memory[0x30] = (uint8_t)(prg->end_addr >> 8);
+                // STREND ($31/$32) = end of arrays
+                c64_->ram->memory[0x31] = (uint8_t)(prg->end_addr & 0xFF);
+                c64_->ram->memory[0x32] = (uint8_t)(prg->end_addr >> 8);
+            }
+
+            if (run_addr != 0) {
+                printf("C64: Auto-running from $%04X\n", run_addr);
+                if (c64_->mos6510) {
+                    mos6510_set_pc((mos6510_t*)c64_->mos6510, run_addr);
+                }
+            } else {
+                printf("C64: No SYS found — program loaded, use RUN to start\n");
+            }
+
+            success = true;
+            break;
         }
-        
-        return true;
+
+        case COMMODORE_LOAD_TAP: {
+            printf("C64: TAP file detected (platform=%u, version=%u)\n",
+                   result.tap_header.platform, result.tap_header.version);
+            printf("C64: TAP tape emulation not yet implemented (requires cycle-accurate datasette)\n");
+            success = false;
+            break;
+        }
+
+        case COMMODORE_LOAD_CRT: {
+            printf("C64: CRT cartridge: \"%s\" (hw_type=%u, exrom=%u, game=%u)\n",
+                   result.crt_header.name, result.crt_header.hardware_type,
+                   result.crt_header.exrom, result.crt_header.game);
+            printf("C64: CRT cartridge loading not yet fully implemented\n");
+            // TODO: Parse CHIP packets and map into address space
+            // For now, just identify the cartridge
+            success = false;
+            break;
+        }
+
+        case COMMODORE_LOAD_BIN: {
+            // Raw binary — load at $C000 (common ML area) by default
+            const uint16_t default_addr = 0xC000;
+            const commodore_prg_t* prg = &result.prg;
+            
+            printf("C64: Loading BIN at default $%04X (%zu bytes)\n",
+                   default_addr, prg->data_size);
+
+            if (default_addr + prg->data_size > 0x10000) {
+                printf("C64: BIN too large for address space\n");
+                break;
+            }
+
+            memcpy(&c64_->ram->memory[default_addr], prg->data, prg->data_size);
+            success = true;
+            break;
+        }
+
+        default:
+            printf("C64: Unsupported load result type: %d\n", result.type);
+            break;
     }
-    
-    // Other file types (D64, CRT, etc.) would be handled here
-    printf("C64: Unsupported file type: %s\n", ext);
-    return false;
+
+    commodore_load_result_free(&result);
+    return success;
 }
 
 uint32_t* C64SystemWrapper::get_framebuffer() {

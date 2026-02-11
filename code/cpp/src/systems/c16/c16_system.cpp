@@ -2,6 +2,7 @@
 #include "c16_keyboard_matrix.h"
 #include "../../chip/input/emu_key_sdl_map.h"
 #include "../../core/storage/rom_loader.h"
+#include "../../core/storage/commodore_file_loader.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -110,16 +111,23 @@ float C16System::can_load_file_static(const char* filepath, const uint8_t* data,
             }
         }
         if (strcmp(ext, ".tap") == 0 || strcmp(ext, ".TAP") == 0) {
-            return 0.5f;
+            // Check TAP header to see if this is specifically a C16/Plus4 tape
+            int platform = commodore_tap_identify_platform(filepath);
+            if (platform == 2) return 0.95f;  // C16 TAP
+            if (platform == 0) return 0.2f;   // C64 TAP (low for C16)
+            return 0.4f;
         }
         if (strcmp(ext, ".d64") == 0 || strcmp(ext, ".D64") == 0) {
             return 0.4f;
+        }
+        if (strcmp(ext, ".t64") == 0 || strcmp(ext, ".T64") == 0) {
+            return 0.4f;  // T64 archives are usually C64, but can contain C16
         }
     }
     return 0.0f;
 }
 
-static const char* c16_extensions[] = {".prg", ".tap", ".d64", nullptr};
+static const char* c16_extensions[] = {".prg", ".tap", ".d64", ".t64", nullptr};
 
 const SystemDescriptor C16System::c16_descriptor = {
     "Commodore 16 / Plus/4",
@@ -287,30 +295,139 @@ void C16System::run_frame() {
 // File Loading
 // ============================================================================
 
+// ============================================================================
+// File Loading
+// ============================================================================
+
+/** Memory read callback for BASIC SYS parsing — reads from C16 RAM array */
+static uint8_t c16_mem_read_for_basic(void* ctx, uint16_t addr) {
+    return static_cast<uint8_t*>(ctx)[addr];
+}
+
 bool C16System::load_file(const char* filepath) {
     if (!initialized_) {
+        printf("C16: System not initialized, initializing now...\n");
         if (!initialize()) {
+            printf("C16: Failed to initialize system for file loading\n");
             return false;
         }
     }
     
     printf("C16: Loading file: %s\n", filepath);
-    
-    // Determine file type
-    const char* ext = strrchr(filepath, '.');
-    if (!ext) {
-        printf("C16: Unknown file type (no extension)\n");
+
+    // Use shared Commodore file loader for format detection and parsing
+    commodore_load_result_t result = {};
+    if (!commodore_load_file(filepath, &result)) {
+        printf("C16: Failed to load file: %s\n", result.error_msg);
+        commodore_load_result_free(&result);
         return false;
     }
-    
-    if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0) {
-        // TODO: Implement PRG loading
-        printf("C16: PRG file loading not yet implemented\n");
-        return false;
+
+    bool success = false;
+
+    switch (result.type) {
+        case COMMODORE_LOAD_PRG:
+        case COMMODORE_LOAD_D64:
+        case COMMODORE_LOAD_T64: {
+            // All three produce a PRG in result.prg — copy data into C16 RAM
+            const commodore_prg_t* prg = &result.prg;
+            
+            printf("C16: Loading %s: $%04X-$%04X (%zu bytes)\n",
+                   commodore_load_type_name(result.type),
+                   prg->load_addr, prg->end_addr, prg->data_size);
+
+            // Validate address range
+            if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
+                printf("C16: Invalid PRG address range: $%04X-$%04X\n",
+                       prg->load_addr, prg->end_addr);
+                break;
+            }
+
+            // Write program data into C16 RAM
+            memcpy(&ram_simple_[prg->load_addr], prg->data, prg->data_size);
+
+            // Try to find a SYS address in BASIC for auto-run
+            uint16_t run_addr = 0;
+
+            if (prg->load_addr == 0x1001) {
+                // Standard C16/Plus4 BASIC start — parse for SYS statement
+                commodore_basic_sys_t sys_result = {};
+                if (commodore_basic_parse_sys(c16_mem_read_for_basic, ram_simple_,
+                                              prg->load_addr,
+                                              &COMMODORE_BASIC_C16,
+                                              10, &sys_result)) {
+                    run_addr = sys_result.sys_address;
+                    printf("C16: Found SYS %u on BASIC line %u\n",
+                           run_addr, sys_result.line_number);
+                }
+
+                // Update BASIC pointers so LIST and RUN work correctly
+                // TXTTAB ($2B/$2C) = start of BASIC text
+                ram_simple_[0x2B] = (uint8_t)(prg->load_addr & 0xFF);
+                ram_simple_[0x2C] = (uint8_t)(prg->load_addr >> 8);
+                // VARTAB ($2D/$2E) = end of BASIC text
+                ram_simple_[0x2D] = (uint8_t)(prg->end_addr & 0xFF);
+                ram_simple_[0x2E] = (uint8_t)(prg->end_addr >> 8);
+                // ARYTAB ($2F/$30) = start of arrays
+                ram_simple_[0x2F] = (uint8_t)(prg->end_addr & 0xFF);
+                ram_simple_[0x30] = (uint8_t)(prg->end_addr >> 8);
+                // STREND ($31/$32) = end of arrays
+                ram_simple_[0x31] = (uint8_t)(prg->end_addr & 0xFF);
+                ram_simple_[0x32] = (uint8_t)(prg->end_addr >> 8);
+            }
+
+            if (run_addr != 0) {
+                printf("C16: Auto-run address: $%04X\n", run_addr);
+                // TODO: Set MOS7501 CPU PC when CPU chip is implemented
+                // mos7501_set_pc(mos7501_, run_addr);
+                printf("C16: Auto-run not available (MOS7501 CPU not yet implemented)\n");
+            } else {
+                printf("C16: No SYS found — program loaded, use RUN to start\n");
+            }
+
+            success = true;
+            break;
+        }
+
+        case COMMODORE_LOAD_TAP: {
+            printf("C16: TAP file detected (platform=%u, version=%u)\n",
+                   result.tap_header.platform, result.tap_header.version);
+            printf("C16: TAP tape emulation not yet implemented\n");
+            success = false;
+            break;
+        }
+
+        case COMMODORE_LOAD_CRT: {
+            printf("C16: CRT format is not applicable to C16/Plus4\n");
+            success = false;
+            break;
+        }
+
+        case COMMODORE_LOAD_BIN: {
+            // Raw binary — load at $4000 by default for C16
+            const uint16_t default_addr = 0x4000;
+            const commodore_prg_t* prg = &result.prg;
+            
+            printf("C16: Loading BIN at default $%04X (%zu bytes)\n",
+                   default_addr, prg->data_size);
+
+            if (default_addr + prg->data_size > 0x10000) {
+                printf("C16: BIN too large for address space\n");
+                break;
+            }
+
+            memcpy(&ram_simple_[default_addr], prg->data, prg->data_size);
+            success = true;
+            break;
+        }
+
+        default:
+            printf("C16: Unsupported load result type: %d\n", result.type);
+            break;
     }
-    
-    printf("C16: Unsupported file type: %s\n", ext);
-    return false;
+
+    commodore_load_result_free(&result);
+    return success;
 }
 
 // ============================================================================
