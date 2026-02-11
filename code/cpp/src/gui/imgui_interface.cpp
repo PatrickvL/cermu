@@ -1482,9 +1482,8 @@ void gui_calculate_display_dimensions(gui_state_t *gui_state,
 // TEST BINARY LOADING IMPLEMENTATION
 // ============================================================================
 
-#include "../systems/c64/c64_test_loader.h"
+#include "../core/storage/commodore_file_loader.h"
 
-// Render dialog for loading test binaries
 // Render dialog for loading test binaries
 void gui_render_test_binary_dialog(c64_t* c64, gui_state_t* gui_state, gui_emulation_context_t* emu_context) {
     if (!ImGui::Begin("Load Test Binary", &gui_state->show_test_binary_dialog, ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -1492,7 +1491,7 @@ void gui_render_test_binary_dialog(c64_t* c64, gui_state_t* gui_state, gui_emula
         return;
     }
     
-    ImGui::Text("Load a C64 test binary (PRG or BIN file)");
+    ImGui::Text("Load a C64 program (PRG, D64, T64, TAP, CRT, BIN)");
     ImGui::Separator();
     
     // File path input - show full restored path
@@ -1524,7 +1523,7 @@ void gui_render_test_binary_dialog(c64_t* c64, gui_state_t* gui_state, gui_emula
             default_path = gui_state->last_test_binary_dir;
         }
         
-        if (gui_open_file_dialog("prg,bin", default_path, selected_path, sizeof(selected_path))) {
+        if (gui_open_file_dialog("prg,d64,t64,tap,crt,bin", default_path, selected_path, sizeof(selected_path))) {
             strncpy(gui_state->test_binary_path, selected_path, sizeof(gui_state->test_binary_path) - 1);
             gui_state->test_binary_path[sizeof(gui_state->test_binary_path) - 1] = '\0';
             
@@ -1543,9 +1542,9 @@ void gui_render_test_binary_dialog(c64_t* c64, gui_state_t* gui_state, gui_emula
     ImGui::Separator();
     
     // Load button
-    if (ImGui::Button("Load PRG", ImVec2(120, 0))) {
+    if (ImGui::Button("Load File", ImVec2(120, 0))) {
         if (gui_state->test_binary_path[0] != '\0') {
-            printf("User clicked Load PRG button for: %s\n", gui_state->test_binary_path);
+            printf("User clicked Load File button for: %s\n", gui_state->test_binary_path);
             if (gui_load_test_binary(emu_context, gui_state, gui_state->test_binary_path)) {
                 printf("Test binary loaded successfully: %s\n", gui_state->test_binary_path);
                 // Keep dialog open to show the loaded path
@@ -1564,13 +1563,20 @@ void gui_render_test_binary_dialog(c64_t* c64, gui_state_t* gui_state, gui_emula
     }
     
     ImGui::Separator();
-    ImGui::TextWrapped("Note: PRG files include a 2-byte load address. "
-                      "The system will parse BASIC SYS commands to find the start address.");
+    ImGui::TextWrapped("Supported formats: PRG (program), D64 (disk image), T64 (tape archive), "
+                      "TAP (raw tape), CRT (cartridge), BIN (raw binary). "
+                      "PRG/D64/T64 will auto-detect SYS addresses for program auto-start.");
     
     ImGui::End();
 }
 
 // Load a test binary and reinitialize the C64 system
+/** Memory read callback for BASIC SYS parsing in legacy C64 GUI — reads from C64 RAM */
+static uint8_t gui_c64_mem_read_for_basic(void* ctx, uint16_t addr) {
+    ram_t* ram = static_cast<ram_t*>(ctx);
+    return ram->memory[addr];
+}
+
 bool gui_load_test_binary(gui_emulation_context_t* emu_context, gui_state_t* gui_state, const char* filepath) {
     if (!emu_context || !emu_context->c64 || !filepath || filepath[0] == '\0') {
         printf("Invalid parameters for test binary loading\n");
@@ -1584,38 +1590,84 @@ bool gui_load_test_binary(gui_emulation_context_t* emu_context, gui_state_t* gui
     gui_emulation_pause(emu_context);
     SDL_Delay(150); // Give thread time to fully pause
     
-    // Determine file type based on extension
-    const char* ext = strrchr(filepath, '.');
-    bool is_prg = (ext && (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0));
-    bool is_bin = (ext && (strcmp(ext, ".bin") == 0 || strcmp(ext, ".BIN") == 0));
-    
-    if (!is_prg && !is_bin) {
-        printf("ERROR: Unknown file type (expected .prg or .bin): %s\n", filepath);
-        return false;
-    }
-    
     printf("==== LOADING TEST BINARY ====\n");
     printf("File: %s\n", filepath);
-    printf("Type: %s\n", is_prg ? "PRG" : "BIN");
     
-    // Load the file into RAM using the test loader
-    uint16_t load_address = 0;
-    uint16_t sys_address = 0;
-    bool load_success = false;
-    
-    if (is_prg) {
-        load_success = c64_test_load_prg_file(filepath, c64->ram, &load_address, &sys_address);
-    } else {
-        load_address = 0x0801; // Default BASIC start for BIN files
-        load_success = c64_test_load_bin_file(filepath, c64->ram, load_address);
-        sys_address = load_address; // For BIN files, assume execution starts at load address
-    }
-    
-    if (!load_success) {
-        printf("ERROR: Failed to load test binary\n");
+    // Use shared Commodore file loader for format detection and parsing
+    commodore_load_result_t result = {};
+    if (!commodore_load_file(filepath, &result)) {
+        printf("ERROR: Failed to load file: %s\n", result.error_msg);
+        commodore_load_result_free(&result);
         printf("============================\n");
         return false;
     }
+    
+    uint16_t load_address = 0;
+    uint16_t sys_address = 0;
+    
+    switch (result.type) {
+        case COMMODORE_LOAD_PRG:
+        case COMMODORE_LOAD_D64:
+        case COMMODORE_LOAD_T64: {
+            const commodore_prg_t* prg = &result.prg;
+            load_address = prg->load_addr;
+            
+            printf("Type: %s\n", commodore_load_type_name(result.type));
+            printf("Loading %s: $%04X-$%04X (%zu bytes)\n",
+                   commodore_load_type_name(result.type),
+                   prg->load_addr, prg->end_addr, prg->data_size);
+            
+            if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
+                printf("ERROR: Invalid address range\n");
+                commodore_load_result_free(&result);
+                printf("============================\n");
+                return false;
+            }
+            
+            // Copy data into C64 RAM
+            memcpy(&c64->ram->memory[prg->load_addr], prg->data, prg->data_size);
+            
+            // Parse BASIC SYS address if loaded at standard BASIC start
+            if (prg->load_addr == 0x0801) {
+                commodore_basic_sys_t sys_result = {};
+                if (commodore_basic_parse_sys(gui_c64_mem_read_for_basic, c64->ram,
+                                              prg->load_addr,
+                                              &COMMODORE_BASIC_C64,
+                                              10, &sys_result)) {
+                    sys_address = sys_result.sys_address;
+                    printf("Found SYS %u on BASIC line %u\n", sys_address, sys_result.line_number);
+                }
+                // Update BASIC pointers
+                c64->ram->memory[0x2B] = (uint8_t)(prg->load_addr & 0xFF);
+                c64->ram->memory[0x2C] = (uint8_t)(prg->load_addr >> 8);
+                c64->ram->memory[0x2D] = (uint8_t)(prg->end_addr & 0xFF);
+                c64->ram->memory[0x2E] = (uint8_t)(prg->end_addr >> 8);
+                c64->ram->memory[0x2F] = (uint8_t)(prg->end_addr & 0xFF);
+                c64->ram->memory[0x30] = (uint8_t)(prg->end_addr >> 8);
+                c64->ram->memory[0x31] = (uint8_t)(prg->end_addr & 0xFF);
+                c64->ram->memory[0x32] = (uint8_t)(prg->end_addr >> 8);
+            }
+            break;
+        }
+        case COMMODORE_LOAD_BIN: {
+            load_address = 0x0801;
+            const commodore_prg_t* prg = &result.prg;
+            printf("Type: BIN (raw binary)\n");
+            if (prg->data_size > 0 && load_address + prg->data_size <= 0x10000) {
+                memcpy(&c64->ram->memory[load_address], prg->data, prg->data_size);
+            }
+            sys_address = load_address;
+            break;
+        }
+        default:
+            printf("ERROR: Unsupported file type for test binary loading: %s\n",
+                   commodore_load_type_name(result.type));
+            commodore_load_result_free(&result);
+            printf("============================\n");
+            return false;
+    }
+    
+    commodore_load_result_free(&result);
     
     // Set PC to the execution address
     if (sys_address != 0) {

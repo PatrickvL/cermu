@@ -1,6 +1,6 @@
 #include "../systems/c64/c64.h"
 #include "../systems/c64/c64_config.h"
-#include "../systems/c64/c64_test_loader.h"
+#include "../core/storage/commodore_file_loader.h"
 #include "../gui/imgui_interface.h"
 #include <stdio.h>
 #include <string.h>
@@ -78,19 +78,16 @@ int main(int argc, char** argv) {
     
     // Load PRG file if provided on command line
     if (prg_file != NULL) {
-        uint16_t load_address = 0;
-        uint16_t sys_address = 0;
-        if (!c64_test_load_prg_file(prg_file, c64->ram, &load_address, &sys_address)) {
+        commodore_prg_t prg = {};
+        if (!commodore_prg_load(prg_file, &prg)) {
             printf("Failed to load PRG file: %s\n", prg_file);
             // Continue anyway - user can load via GUI
         } else {
+            memcpy(&c64->ram->memory[prg.load_addr], prg.data, prg.data_size);
             printf("Successfully loaded PRG file: %s\n", prg_file);
-            printf("  Load address: $%04X\n", load_address);
-            if (sys_address != 0) {
-                printf("  SYS address: $%04X (auto-starting...)\n", sys_address);
-                // TODO: Set PC to sys_address for auto-run
-                // For now, user can manually type SYS command or we auto-start BASIC
-            }
+            printf("  Load address: $%04X\n", prg.load_addr);
+            printf("  Size: %zu bytes\n", prg.data_size);
+            commodore_prg_free(&prg);
         }
     }
     
