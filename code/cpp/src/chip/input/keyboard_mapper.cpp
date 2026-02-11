@@ -1,0 +1,778 @@
+#include "keyboard_mapper.h"
+#include <SDL2/SDL.h>
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+// ============================================================================
+// KeyboardMapper implementation
+// ============================================================================
+
+KeyboardMapper::KeyboardMapper()
+    : keyboard_(nullptr)
+    , model_(KEYBOARD_MODEL_UNKNOWN)
+    , emu_modifier_key_(SDLK_RALT)
+    , emu_modifier_held_(false)
+    , host_shift_held_(false)
+    , host_ctrl_held_(false)
+    , text_input_enabled_(true)
+    , has_pending_key_(false)
+    , matrix_rows_(0)
+    , matrix_cols_(0)
+{
+    // Clear character map
+    for (int i = 0; i < 128; i++) {
+        char_map_[i] = GuestKeyAction();
+    }
+
+    pending_key_ = {};
+}
+
+KeyboardMapper::~KeyboardMapper() {
+    // We don't own the keyboard pointer
+}
+
+// ============================================================================
+// Configuration
+// ============================================================================
+
+void KeyboardMapper::set_guest_keyboard(commodore_keyboard_t* keyboard) {
+    keyboard_ = keyboard;
+    if (keyboard) {
+        model_ = keyboard->model;
+        matrix_rows_ = keyboard->matrix_rows;
+        matrix_cols_ = keyboard->matrix_cols;
+    }
+}
+
+void KeyboardMapper::build_character_map_from_matrix(const keyboard_matrix_config_t* config) {
+    if (!config || !config->unshifted || !config->shifted) return;
+
+    model_ = config->model;
+    matrix_rows_ = config->rows;
+    matrix_cols_ = config->cols;
+
+    // Clear existing character map
+    for (int i = 0; i < 128; i++) {
+        char_map_[i] = GuestKeyAction();
+    }
+
+    uint8_t rows = config->rows;
+    uint8_t cols = config->cols;
+
+    // Phase 1: Map unshifted characters
+    // These are characters produced by pressing a key WITHOUT shift on the guest
+    for (int row = 0; row < rows; row++) {
+        for (int col = 0; col < cols; col++) {
+            uint32_t key = config->unshifted[row * cols + col];
+
+            // Skip non-character entries (special keys, zero)
+            if (key == 0 || key == CbmKeys::SAME) continue;
+            if (key >= 128) continue;  // Not a printable ASCII character
+
+            // On the C64/VIC-20, unshifted letters in the matrix are uppercase (A-Z).
+            // SDL_TEXTINPUT will send lowercase for unshifted and uppercase for shifted.
+            // Map both cases: uppercase 'A' and lowercase 'a' → same matrix position.
+            char c = (char)key;
+
+            // For uppercase letters in the matrix: the unshifted guest key
+            if (c >= 'A' && c <= 'Z') {
+                // Uppercase letter: on C64, this is the UNSHIFTED output
+                // Host will send uppercase via TEXTINPUT when shift is held
+                // Map uppercase to unshifted (the user typed shift+a to get 'A',
+                // and on C64 unshifted 'A' key produces uppercase)
+                if (!char_map_[(int)c].valid) {
+                    char_map_[(int)c] = GuestKeyAction(row, col, false, true);
+                    // requires_unshift=true because host is pressing shift but guest needs no shift
+                }
+                // Also map lowercase to the same position (for when user types without shift)
+                char lower = c + 32;
+                if (!char_map_[(int)lower].valid) {
+                    char_map_[(int)lower] = GuestKeyAction(row, col, false, false);
+                }
+            } else if (c >= 'a' && c <= 'z') {
+                // Lowercase letter in unshifted position (unusual, but C16 uses this in shifted table)
+                if (!char_map_[(int)c].valid) {
+                    char_map_[(int)c] = GuestKeyAction(row, col, false, false);
+                }
+            } else {
+                // Non-letter character (digit, punctuation)
+                // requires_unshift=true: if the host produced this character via
+                // a shifted key (e.g. US Shift+; → ':'), we must suppress the
+                // guest shift contact, because the guest key is unshifted.
+                // When the host doesn't have shift held this flag is harmless.
+                if (!char_map_[(int)c].valid) {
+                    char_map_[(int)c] = GuestKeyAction(row, col, false, true);
+                }
+            }
+        }
+    }
+
+    // Phase 2: Map shifted characters
+    // These are characters produced by pressing a key WITH shift on the guest
+    for (int row = 0; row < rows; row++) {
+        for (int col = 0; col < cols; col++) {
+            uint32_t key = config->shifted[row * cols + col];
+
+            // Skip non-character entries
+            if (key == 0 || key == CbmKeys::SAME) continue;
+            if (key >= 128) continue;
+
+            char c = (char)key;
+
+            // Shifted characters need shift pressed on the guest
+            if (c >= 'a' && c <= 'z') {
+                // Lowercase letter in shifted position (C64: shifted = lowercase/graphics)
+                // Don't override if we already have a mapping from unshifted
+                // On C64, shifted letters produce lowercase - the user typing lowercase
+                // should just get unshifted key (mapped in phase 1). We don't want to
+                // override that with a shifted mapping.
+                // Skip: lowercase 'a' should map to unshifted key, not shifted key.
+            } else if (c >= 'A' && c <= 'Z') {
+                // Uppercase letter in shifted position — unusual but possible
+                if (!char_map_[(int)c].valid) {
+                    char_map_[(int)c] = GuestKeyAction(row, col, true, false);
+                }
+            } else {
+                // Shifted symbol (e.g., '"' on C64 is Shift+2, '!' is Shift+1)
+                // These are important — user types the symbol and we map to guest shift+key
+                if (!char_map_[(int)c].valid) {
+                    char_map_[(int)c] = GuestKeyAction(row, col, true, false);
+                }
+            }
+        }
+    }
+
+    // Cache shift key positions
+    shift_left_pos_ = GuestKeyAction();
+    shift_right_pos_ = GuestKeyAction();
+
+    for (int row = 0; row < rows; row++) {
+        for (int col = 0; col < cols; col++) {
+            uint32_t key = config->unshifted[row * cols + col];
+            if (key == CbmKeys::SHIFT_LEFT) {
+                shift_left_pos_ = GuestKeyAction(row, col, false);
+            }
+            if (key == CbmKeys::SHIFT_RIGHT) {
+                shift_right_pos_ = GuestKeyAction(row, col, false);
+            }
+        }
+    }
+
+    printf("KeyboardMapper: Built character map for %s (%d×%d matrix)\n",
+           config->description ? config->description : "unknown",
+           rows, cols);
+
+    // Count valid mappings for debug
+    int count = 0;
+    for (int i = 0; i < 128; i++) {
+        if (char_map_[i].valid) count++;
+    }
+    printf("KeyboardMapper: %d character mappings active\n", count);
+}
+
+void KeyboardMapper::set_emulator_modifier(SDL_Keycode key) {
+    emu_modifier_key_ = key;
+}
+
+void KeyboardMapper::add_synthetic_mapping(SDL_Keycode trigger, GuestKeyAction action, const char* description) {
+    SyntheticKeyMapping mapping;
+    mapping.trigger_key = trigger;
+    mapping.action = action;
+    mapping.description = description;
+
+    synthetic_map_[trigger] = mapping;
+    synthetic_mappings_.push_back(mapping);
+}
+
+void KeyboardMapper::add_direct_mapping(SDL_Keycode host_key, GuestKeyAction action) {
+    direct_map_[host_key] = action;
+}
+
+void KeyboardMapper::add_char_mapping(char c, GuestKeyAction action) {
+    unsigned char uc = (unsigned char)c;
+    if (uc < 128) {
+        char_map_[uc] = action;
+    }
+}
+
+void KeyboardMapper::register_default_synthetic_mappings() {
+    if (!keyboard_) return;
+
+    // Find matrix positions for guest-specific keys by scanning the matrix
+    auto find_in_matrix = [this](uint32_t target_key) -> GuestKeyAction {
+        if (!keyboard_) return GuestKeyAction();
+        for (int row = 0; row < matrix_rows_; row++) {
+            for (int col = 0; col < matrix_cols_; col++) {
+                uint32_t idx = row * matrix_cols_ + col;
+                if (keyboard_->active_unshifted[idx] == target_key) {
+                    return GuestKeyAction(row, col, false);
+                }
+            }
+        }
+        return GuestKeyAction();
+    };
+
+    // Common Commodore synthetic mappings
+    // Emulator modifier (Right Alt) + key → guest-specific key
+
+    // RUN/STOP — Escape is intuitive (Escape → stop)
+    // But Escape is already used for C128 ESC key, so we also provide
+    // the synthetic mapping for systems where Tab = RUN/STOP
+    GuestKeyAction run_stop = find_in_matrix(CbmKeys::RUN_STOP);
+    if (run_stop.valid) {
+        add_synthetic_mapping(SDLK_ESCAPE, run_stop, "RUN/STOP");
+    }
+
+    // RESTORE — mapped to backtick in CbmKeys, also available as emu+R
+    GuestKeyAction restore_action;
+    restore_action.valid = true;
+    restore_action.row = 0; restore_action.col = 0;
+    restore_action.requires_shift = false;
+    restore_action.requires_unshift = false;
+    // RESTORE is special — it's not in the matrix, it triggers NMI
+    // We handle it through the existing keyboard->restore_key_pressed flag
+    add_synthetic_mapping(SDLK_r, restore_action, "RESTORE (NMI)");
+
+    // Commodore key (C= key)
+    GuestKeyAction c_key = find_in_matrix(CbmKeys::COMMODORE);
+    if (c_key.valid) {
+        add_synthetic_mapping(SDLK_c, c_key, "Commodore (C=) key");
+    }
+
+    // CTRL key (in its C64 role — color selection etc.)
+    GuestKeyAction ctrl = find_in_matrix(CbmKeys::CTRL);
+    if (ctrl.valid) {
+        add_synthetic_mapping(SDLK_x, ctrl, "CTRL (C64)");
+    }
+
+    // CLR/HOME
+    GuestKeyAction home = find_in_matrix(CbmKeys::HOME);
+    if (home.valid) {
+        add_synthetic_mapping(SDLK_h, home, "CLR/HOME");
+    }
+
+    // INST/DEL
+    GuestKeyAction del = find_in_matrix(CbmKeys::DEL);
+    if (del.valid) {
+        add_synthetic_mapping(SDLK_d, del, "INST/DEL");
+    }
+
+    printf("KeyboardMapper: Registered %zu synthetic mappings (modifier: %s)\n",
+           synthetic_mappings_.size(),
+           SDL_GetKeyName(emu_modifier_key_));
+}
+
+// ============================================================================
+// Event processing
+// ============================================================================
+
+bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
+                                       uint16_t mod, bool repeat) {
+    if (!keyboard_) return false;
+
+    // Ignore key repeats — the matrix contact is already closed
+    if (repeat) return true;
+
+    // Track host modifier state
+    if (sym == SDLK_LSHIFT || sym == SDLK_RSHIFT) {
+        host_shift_held_ = true;
+    }
+    if (sym == SDLK_LCTRL || sym == SDLK_RCTRL) {
+        host_ctrl_held_ = true;
+    }
+
+    // Check if this is the emulator modifier key itself
+    if (sym == emu_modifier_key_) {
+        emu_modifier_held_ = true;
+        return true;  // Consume — don't pass to guest
+    }
+
+    // ====================================================================
+    // Layer 3: Emulator modifier combos
+    // ====================================================================
+    if (emu_modifier_held_) {
+        auto it = synthetic_map_.find(sym);
+        if (it != synthetic_map_.end()) {
+            const SyntheticKeyMapping& mapping = it->second;
+
+            // Special case: RESTORE is not a matrix key
+            if (strcmp(mapping.description, "RESTORE (NMI)") == 0) {
+                keyboard_->restore_key_pressed = true;
+                ActiveInjection inj;
+                inj.action = mapping.action;
+                inj.host_scancode = scancode;
+                inj.from_text_input = false;
+                active_injections_[scancode] = inj;
+                return true;
+            }
+
+            inject_press(mapping.action, scancode, false);
+            return true;
+        }
+        return false;  // Unrecognized combo — let it through
+    }
+
+    // ====================================================================
+    // Layer 2: Direct key mapping (non-printable keys, modifiers)
+    // ====================================================================
+
+    // Check explicit direct mapping overrides first
+    auto direct_it = direct_map_.find(sym);
+    if (direct_it != direct_map_.end()) {
+        inject_press(direct_it->second, scancode, false);
+        return true;
+    }
+
+    // Modifier keys — pass through to the existing commodore_keyboard handler
+    // since they correspond to matrix positions (Shift, Ctrl, C= key)
+    if (is_modifier_key(sym)) {
+        commodore_keyboard_key_down(keyboard_, sym, false);
+        return true;
+    }
+
+    // Non-printable keys — use existing commodore_keyboard direct mapping
+    if (!is_printable_key(sym)) {
+        // Special case: backtick with shift → treat as printable so TEXTINPUT "~"
+        // can be mapped (e.g., to π on C64/VIC-20). Without shift, backtick
+        // falls through to commodore_keyboard_key_down which handles RESTORE.
+        if (sym == SDLK_BACKQUOTE && (mod & (KMOD_LSHIFT | KMOD_RSHIFT))) {
+            // Fall through to the printable key / text input path below
+        } else {
+            commodore_keyboard_key_down(keyboard_, sym, false);
+            return true;
+        }
+    }
+
+    // ====================================================================
+    // Layer 1: Printable keys — use character-based mapping via TEXTINPUT
+    // ====================================================================
+    if (text_input_enabled_) {
+        // Record this as a pending key — we'll map it when TEXTINPUT arrives.
+        // If TEXTINPUT doesn't arrive (e.g., text input disabled by OS),
+        // the key won't be mapped. This is intentional — the TEXTINPUT path
+        // gives us the correct character for the host layout.
+        pending_key_.sym = sym;
+        pending_key_.scancode = scancode;
+        pending_key_.mod = mod;
+        has_pending_key_ = true;
+        return true;
+    }
+
+    // Fallback: text input disabled, use direct SDL keycode mapping
+    commodore_keyboard_key_down(keyboard_, sym, false);
+    return true;
+}
+
+bool KeyboardMapper::process_key_up(SDL_Keycode sym, SDL_Scancode scancode, uint16_t mod) {
+    if (!keyboard_) return false;
+
+    // Track host modifier state
+    if (sym == SDLK_LSHIFT || sym == SDLK_RSHIFT) {
+        host_shift_held_ = (mod & (KMOD_LSHIFT | KMOD_RSHIFT)) != 0;
+    }
+    if (sym == SDLK_LCTRL || sym == SDLK_RCTRL) {
+        host_ctrl_held_ = (mod & (KMOD_LCTRL | KMOD_RCTRL)) != 0;
+    }
+
+    // Emulator modifier release
+    if (sym == emu_modifier_key_) {
+        emu_modifier_held_ = false;
+        return true;
+    }
+
+    // Check if we have an active injection for this scancode
+    auto it = active_injections_.find(scancode);
+    if (it != active_injections_.end()) {
+        // Special case: RESTORE
+        if (it->second.action.row == 0 && it->second.action.col == 0 &&
+            !it->second.action.valid) {
+            // This was a RESTORE injection via synthetic mapping
+        }
+        // Check if this was a RESTORE synthetic (we stored the injection)
+        // RESTORE is handled through keyboard_->restore_key_pressed
+        bool is_restore = false;
+        if (emu_modifier_held_ || it->second.from_text_input == false) {
+            // Check synthetic map
+            auto syn_it = synthetic_map_.find(sym);
+            if (syn_it != synthetic_map_.end() &&
+                strcmp(syn_it->second.description, "RESTORE (NMI)") == 0) {
+                keyboard_->restore_key_pressed = false;
+                is_restore = true;
+            }
+        }
+
+        if (!is_restore) {
+            release_injection(it->second);
+        }
+        active_injections_.erase(it);
+        return true;
+    }
+
+    // Clear pending key if it matches
+    if (has_pending_key_ && pending_key_.scancode == scancode) {
+        has_pending_key_ = false;
+    }
+
+    // Modifier keys — pass through
+    if (is_modifier_key(sym)) {
+        commodore_keyboard_key_up(keyboard_, sym, false);
+        return true;
+    }
+
+    // Non-printable keys — pass through
+    if (!is_printable_key(sym)) {
+        commodore_keyboard_key_up(keyboard_, sym, false);
+        return true;
+    }
+
+    // Fallback: direct release if text input is disabled
+    if (!text_input_enabled_) {
+        commodore_keyboard_key_up(keyboard_, sym, false);
+    }
+
+    return true;
+}
+
+bool KeyboardMapper::process_text_input(const char* text) {
+    if (!keyboard_ || !text || !text_input_enabled_) return false;
+
+    // Only process text input if we have a pending printable key from a
+    // preceding SDL_KEYDOWN that was identified as printable by is_printable_key().
+    // This guards against spurious SDL_TEXTINPUT events that some Linux
+    // input method frameworks may generate for non-printable keys (cursor keys,
+    // function keys, etc.). Without this guard, such events would inject matrix
+    // contacts with SDL_SCANCODE_UNKNOWN that are never tracked and never
+    // released — causing stuck keys.
+    if (!has_pending_key_) return false;
+
+    // Process each character in the text input
+    // Usually just one character, but SDL can batch them
+    for (int i = 0; text[i] != '\0'; i++) {
+        char c = text[i];
+
+        // Only handle printable ASCII for now
+        unsigned char uc = (unsigned char)c;
+        if (uc >= 128) continue;
+
+        const GuestKeyAction& action = char_map_[uc];
+        if (!action.valid) {
+            // No mapping for this character — try uppercase/lowercase variant
+            char alt = 0;
+            if (c >= 'a' && c <= 'z') alt = c - 32;  // try uppercase
+            else if (c >= 'A' && c <= 'Z') alt = c + 32;  // try lowercase
+
+            if (alt > 0 && char_map_[(unsigned char)alt].valid) {
+                // Use the alternative mapping
+                SDL_Scancode sc = has_pending_key_ ? pending_key_.scancode : SDL_SCANCODE_UNKNOWN;
+                inject_press(char_map_[(unsigned char)alt], sc, true);
+                has_pending_key_ = false;
+                continue;
+            }
+
+            // No mapping at all — drop the character
+            has_pending_key_ = false;
+            continue;
+        }
+
+        // Inject the guest key action
+        SDL_Scancode sc = has_pending_key_ ? pending_key_.scancode : SDL_SCANCODE_UNKNOWN;
+        inject_press(action, sc, true);
+        has_pending_key_ = false;
+    }
+
+    return true;
+}
+
+// ============================================================================
+// State management
+// ============================================================================
+
+void KeyboardMapper::release_all() {
+    if (!keyboard_) return;
+
+    // Release all active injections
+    for (auto& pair : active_injections_) {
+        release_injection(pair.second);
+    }
+    active_injections_.clear();
+
+    // Release RESTORE if active
+    keyboard_->restore_key_pressed = false;
+
+    // Clear modifier tracking
+    emu_modifier_held_ = false;
+    host_shift_held_ = false;
+    host_ctrl_held_ = false;
+    has_pending_key_ = false;
+}
+
+void KeyboardMapper::reset_state() {
+    release_all();
+    // Reset the underlying keyboard matrix
+    commodore_keyboard_reset(keyboard_);
+}
+
+// ============================================================================
+// Queries
+// ============================================================================
+
+GuestKeyAction KeyboardMapper::lookup_character(char c) const {
+    unsigned char uc = (unsigned char)c;
+    if (uc < 128) {
+        return char_map_[uc];
+    }
+    return GuestKeyAction();
+}
+
+// ============================================================================
+// Internal helpers
+// ============================================================================
+
+void KeyboardMapper::inject_press(const GuestKeyAction& action, SDL_Scancode host_scancode, bool from_text) {
+    if (!keyboard_ || !action.valid) return;
+
+    ActiveInjection inj;
+    inj.action = action;
+    inj.host_scancode = host_scancode;
+    inj.from_text_input = from_text;
+    inj.shift_was_forced = false;
+    inj.shift_was_suppressed = false;
+
+    // Handle shift state manipulation
+    if (action.requires_shift) {
+        // Guest needs shift — press it if not already held on host
+        if (!host_shift_held_) {
+            close_contact(shift_left_pos_.row, shift_left_pos_.col);
+            inj.shift_was_forced = true;
+        }
+        // If host shift IS held, the shift contact is already closed
+        // from the host Shift key press — we don't need to do anything extra
+    }
+
+    if (action.requires_unshift && host_shift_held_) {
+        // Guest needs NO shift, but host has shift held — temporarily release it.
+        // We open the shift contact; it will be re-closed when we release this injection.
+        if (shift_left_pos_.valid) {
+            open_contact(shift_left_pos_.row, shift_left_pos_.col);
+        }
+        if (shift_right_pos_.valid) {
+            open_contact(shift_right_pos_.row, shift_right_pos_.col);
+        }
+        inj.shift_was_suppressed = true;
+    }
+
+    // Close the main key contact
+    close_contact(action.row, action.col);
+
+    // Track this injection
+    if (host_scancode != SDL_SCANCODE_UNKNOWN) {
+        active_injections_[host_scancode] = inj;
+    }
+}
+
+void KeyboardMapper::release_injection(const ActiveInjection& injection) {
+    if (!keyboard_) return;
+
+    // Open the main key contact
+    open_contact(injection.action.row, injection.action.col);
+
+    // Restore shift state
+    if (injection.shift_was_forced) {
+        // We pressed shift for this injection — release it
+        open_contact(shift_left_pos_.row, shift_left_pos_.col);
+    }
+
+    if (injection.shift_was_suppressed) {
+        // We suppressed shift for this injection — re-close it if host shift still held
+        if (host_shift_held_) {
+            if (shift_left_pos_.valid) {
+                close_contact(shift_left_pos_.row, shift_left_pos_.col);
+            }
+        }
+    }
+}
+
+GuestKeyAction KeyboardMapper::find_shift_key_position() const {
+    return shift_left_pos_;
+}
+
+void KeyboardMapper::close_contact(uint8_t row, uint8_t col) {
+    if (!keyboard_) return;
+    if (row >= matrix_rows_ || col >= matrix_cols_) return;
+
+    // Convert from array indices to hardware port bit numbers
+    // Same convention as commodore_keyboard_key_down:
+    //   row_bit = (matrix_rows - 1) - row
+    //   col_bit = (matrix_cols - 1) - col
+    uint8_t row_bit = (matrix_rows_ - 1) - row;
+    uint8_t col_bit = (matrix_cols_ - 1) - col;
+
+    keyboard_->row_open_contacts[row_bit] &= ~(1 << col_bit);
+    keyboard_->col_open_contacts[col_bit] &= ~(1 << row_bit);
+}
+
+void KeyboardMapper::open_contact(uint8_t row, uint8_t col) {
+    if (!keyboard_) return;
+    if (row >= matrix_rows_ || col >= matrix_cols_) return;
+
+    uint8_t row_bit = (matrix_rows_ - 1) - row;
+    uint8_t col_bit = (matrix_cols_ - 1) - col;
+
+    keyboard_->row_open_contacts[row_bit] |= (1 << col_bit);
+    keyboard_->col_open_contacts[col_bit] |= (1 << row_bit);
+}
+
+bool KeyboardMapper::is_printable_key(SDL_Keycode sym) const {
+    // A key is "printable" if pressing it (possibly with shift) produces a visible character.
+    // These are the keys that should go through the character-based TEXTINPUT path.
+
+    // ASCII letters
+    if (sym >= SDLK_a && sym <= SDLK_z) return true;
+
+    // Digits
+    if (sym >= SDLK_0 && sym <= SDLK_9) return true;
+
+    // Common punctuation/symbols
+    switch (sym) {
+        case SDLK_SPACE:
+        case SDLK_EXCLAIM:
+        case SDLK_QUOTEDBL:
+        case SDLK_HASH:
+        case SDLK_DOLLAR:
+        case SDLK_PERCENT:
+        case SDLK_AMPERSAND:
+        case SDLK_QUOTE:
+        case SDLK_LEFTPAREN:
+        case SDLK_RIGHTPAREN:
+        case SDLK_ASTERISK:
+        case SDLK_PLUS:
+        case SDLK_COMMA:
+        case SDLK_MINUS:
+        case SDLK_PERIOD:
+        case SDLK_SLASH:
+        case SDLK_COLON:
+        case SDLK_SEMICOLON:
+        case SDLK_LESS:
+        case SDLK_EQUALS:
+        case SDLK_GREATER:
+        case SDLK_QUESTION:
+        case SDLK_AT:
+        case SDLK_LEFTBRACKET:
+        case SDLK_BACKSLASH:
+        case SDLK_RIGHTBRACKET:
+        case SDLK_CARET:
+        case SDLK_UNDERSCORE:
+            // Note: SDLK_BACKQUOTE intentionally excluded — it maps to RESTORE (NMI)
+            // on Commodore systems, which is not a matrix key.
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool KeyboardMapper::is_modifier_key(SDL_Keycode sym) const {
+    switch (sym) {
+        case SDLK_LSHIFT:
+        case SDLK_RSHIFT:
+        case SDLK_LCTRL:
+        case SDLK_RCTRL:
+        case SDLK_LGUI:   // Commodore key
+        case SDLK_RGUI:
+        case SDLK_LALT:
+        case SDLK_CAPSLOCK:
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool KeyboardMapper::has_direct_mapping(SDL_Keycode sym) const {
+    return direct_map_.find(sym) != direct_map_.end();
+}
+
+// ============================================================================
+// Factory functions
+// ============================================================================
+
+// Forward declarations — matrix configs are in system-specific files
+extern const keyboard_matrix_config_t c64_keyboard_config;
+extern const keyboard_matrix_config_t vic20_keyboard_config;
+extern const keyboard_matrix_config_t c16_keyboard_config;
+
+KeyboardMapper* create_c64_keyboard_mapper(commodore_keyboard_t* keyboard) {
+    KeyboardMapper* mapper = new KeyboardMapper();
+    mapper->set_guest_keyboard(keyboard);
+    mapper->build_character_map_from_matrix(&c64_keyboard_config);
+
+    // Register default emulator modifier mappings
+    mapper->register_default_synthetic_mappings();
+
+    // Add manual character mappings for host characters that correspond to
+    // Commodore-specific keys with value 0 in the matrix tables (ARROW_LEFT,
+    // ARROW_UP, POUND).  These aren't discovered by build_character_map_from_matrix
+    // because their SDL keycode constants are 0.
+    //
+    // C64 matrix positions:
+    //   ARROW_LEFT (← char): row 6, col 0 (unshifted)
+    //   ARROW_UP   (↑ char): row 1, col 1 (unshifted)
+    //   POUND      (£ char): row 7, col 1 (unshifted)
+    //   PI         (π char): row 1, col 1 + shift  (shifted ↑)
+    GuestKeyAction arrow_left(6, 0, false, true);   // ← : unshifted, suppress host shift
+    GuestKeyAction arrow_up(1, 1, false, true);     // ↑ : unshifted, suppress host shift
+    GuestKeyAction pound(7, 1, false, true);        // £ : unshifted, suppress host shift
+    GuestKeyAction pi(1, 1, true, false);           // π : shifted ↑
+
+    mapper->add_char_mapping('\\', arrow_left);     // host \ → guest ←
+    mapper->add_char_mapping('^',  arrow_up);       // host ^ → guest ↑
+    mapper->add_char_mapping('|',  pound);          // host | → guest £
+    mapper->add_char_mapping('~',  pi);             // host ~ → guest π
+
+    return mapper;
+}
+
+KeyboardMapper* create_vic20_keyboard_mapper(commodore_keyboard_t* keyboard) {
+    KeyboardMapper* mapper = new KeyboardMapper();
+    mapper->set_guest_keyboard(keyboard);
+    mapper->build_character_map_from_matrix(&vic20_keyboard_config);
+
+    mapper->register_default_synthetic_mappings();
+
+    // Manual character mappings for Commodore-specific keys (value 0 in matrix).
+    //
+    // VIC-20 matrix positions:
+    //   ARROW_LEFT (← char): row 6, col 7 (unshifted)
+    //   ARROW_UP   (↑ char): row 1, col 1 (unshifted)
+    //   POUND      (£ char): row 7, col 1 (unshifted)
+    //   PI         (π char): row 1, col 1 + shift  (shifted ↑)
+    GuestKeyAction arrow_left(6, 7, false, true);
+    GuestKeyAction arrow_up(1, 1, false, true);
+    GuestKeyAction pound(7, 1, false, true);
+    GuestKeyAction pi(1, 1, true, false);
+
+    mapper->add_char_mapping('\\', arrow_left);     // host \ → guest ←
+    mapper->add_char_mapping('^',  arrow_up);       // host ^ → guest ↑
+    mapper->add_char_mapping('|',  pound);          // host | → guest £
+    mapper->add_char_mapping('~',  pi);             // host ~ → guest π
+
+    return mapper;
+}
+
+KeyboardMapper* create_c16_keyboard_mapper(commodore_keyboard_t* keyboard) {
+    KeyboardMapper* mapper = new KeyboardMapper();
+    mapper->set_guest_keyboard(keyboard);
+    mapper->build_character_map_from_matrix(&c16_keyboard_config);
+
+    mapper->register_default_synthetic_mappings();
+
+    // Manual character mappings for Commodore-specific keys (value 0 in matrix).
+    //
+    // C16/Plus4 matrix positions:
+    //   POUND (£ char): row 0, col 2 (unshifted)
+    //   No ARROW_LEFT or ARROW_UP on C16/Plus4 keyboard.
+    GuestKeyAction pound(0, 2, false, true);
+
+    mapper->add_char_mapping('|', pound);           // host | → guest £
+
+    return mapper;
+}

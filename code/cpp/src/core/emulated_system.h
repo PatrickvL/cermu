@@ -247,6 +247,23 @@ public:
     virtual void render_configuration_ui() = 0;
     virtual uint32_t get_target_fps() const = 0;
     virtual void set_speed_multiplier(float multiplier) = 0;
+
+    // Extended keyboard event handler with full SDL event information.
+    // Receives keycode, scancode, modifier state, and repeat flag.
+    // Systems that implement the KeyboardMapper should override this.
+    // Default implementation falls back to handle_keyboard_event(key, pressed).
+    virtual void handle_keyboard_event_ex(int key, int scancode, uint16_t mod, bool pressed, bool repeat);
+
+    // Text input handler — receives characters from SDL_TEXTINPUT.
+    // For character-based keyboard mapping: the character produced by
+    // the host keyboard layout, independent of which physical key was pressed.
+    // Systems using KeyboardMapper should override this.
+    // Default implementation does nothing.
+    virtual void handle_text_input(const char* text);
+
+    // Release all keyboard input (e.g., on window focus loss).
+    // Systems using KeyboardMapper should override this.
+    virtual void release_all_keys();
 };
 
 // Include SystemRegistry (moved to separate file)

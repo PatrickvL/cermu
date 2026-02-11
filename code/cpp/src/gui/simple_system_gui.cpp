@@ -89,14 +89,33 @@ void SimpleSystemGUI::handle_events() {
             should_quit_ = true;
         }
         
+        // Release all keys on window focus loss to prevent stuck keys
+        if (event.type == SDL_WINDOWEVENT &&
+            event.window.event == SDL_WINDOWEVENT_FOCUS_LOST &&
+            system_) {
+            system_->release_all_keys();
+        }
+        
         // Forward keyboard events to system only when ImGui doesn't want input
         // This prevents conflicts with ImGui dialogs (like file browser) that need keyboard input
         ImGuiIO& io = ImGui::GetIO();
         if (system_ && !io.WantCaptureKeyboard) {
             if (event.type == SDL_KEYDOWN) {
-                system_->handle_keyboard_event(event.key.keysym.sym, true);
+                system_->handle_keyboard_event_ex(
+                    event.key.keysym.sym,
+                    event.key.keysym.scancode,
+                    event.key.keysym.mod,
+                    true,
+                    event.key.repeat != 0);
             } else if (event.type == SDL_KEYUP) {
-                system_->handle_keyboard_event(event.key.keysym.sym, false);
+                system_->handle_keyboard_event_ex(
+                    event.key.keysym.sym,
+                    event.key.keysym.scancode,
+                    event.key.keysym.mod,
+                    false,
+                    false);
+            } else if (event.type == SDL_TEXTINPUT) {
+                system_->handle_text_input(event.text.text);
             }
         }
     }

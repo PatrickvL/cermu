@@ -1,8 +1,10 @@
 #pragma once
 
 #include "../../core/emulated_system.h"
+#include "../../chip/input/keyboard_mapper.h"
 #include "c64.h"
 #include "c64_config.h"
+#include <memory>
 
 /**
  * C64 System Wrapper
@@ -89,6 +91,9 @@ public:
     void get_display_dimensions(int* width, int* height) const override;
     void set_framebuffer(uint32_t* buffer, int width, int height) override;
     void handle_keyboard_event(int key, bool pressed) override;
+    void handle_keyboard_event_ex(int key, int scancode, uint16_t mod, bool pressed, bool repeat) override;
+    void handle_text_input(const char* text) override;
+    void release_all_keys() override;
     void handle_controller_event(int controller, int button, bool pressed) override;
     
     // GUI forwarding methods - delegate to old C64 GUI code (imgui_interface.cpp)
@@ -120,6 +125,7 @@ private:
     uint32_t cycles_per_frame_;
     c64_config_t c64_config_;  // Renamed to avoid conflict with base class config_
     void* gui_state_;  // Opaque pointer to gui_state_t (persistent GUI state)
+    std::unique_ptr<KeyboardMapper> keyboard_mapper_;  // Layered keyboard mapping engine
     
     // Note: hardware_traits_, config_ (SystemConfiguration), speed_multiplier_,
     // total_cycles_ are now stored in EmulatedSystem base class

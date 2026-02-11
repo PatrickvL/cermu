@@ -3,6 +3,7 @@
 
 #include "../../core/emulated_system.h"
 #include "../../chip/input/commodore_keyboard.h"
+#include "../../chip/input/keyboard_mapper.h"
 #include <cstdint>
 #include <memory>
 
@@ -47,6 +48,9 @@ public:
     
     // Input
     void handle_keyboard_event(int key, bool pressed) override;
+    void handle_keyboard_event_ex(int key, int scancode, uint16_t mod, bool pressed, bool repeat) override;
+    void handle_text_input(const char* text) override;
+    void release_all_keys() override;
     
     // GUI integration
     void render_system_menu_items() override;
@@ -68,6 +72,7 @@ private:
     void* mos7501_;              // MOS7501 CPU (TODO: Create proper chip type)
     void* ted_;                  // TED 7360 ($FD00-$FEFF, 4KB) - TODO: Create proper chip type
     commodore_keyboard_t* keyboard_;  // Keyboard matrix (8×8, scanned via TED)
+    std::unique_ptr<KeyboardMapper> keyboard_mapper_; // Layered keyboard mapping engine
     
     // Memory arrays (simplified storage like VIC-20)
     uint8_t ram_simple_[65536];  // Up to 64KB RAM (C16 uses 16KB, Plus/4 uses 64KB)

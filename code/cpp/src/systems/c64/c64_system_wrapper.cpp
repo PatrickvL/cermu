@@ -161,6 +161,11 @@ bool C64SystemWrapper::initialize() {
         return false;
     }
     
+    // Create the layered keyboard mapper for character-based input
+    if (c64_->keyboard) {
+        keyboard_mapper_.reset(create_c64_keyboard_mapper(c64_->keyboard));
+    }
+    
     printf("C64: System initialized successfully\n");
     return true;
 }
@@ -266,14 +271,53 @@ void C64SystemWrapper::set_framebuffer(uint32_t* buffer, int width, int height) 
 }
 
 void C64SystemWrapper::handle_keyboard_event(int key, bool pressed) {
-    if (c64_ && c64_->keyboard) {
-        // SDL provides Shift modifier state separately
-        bool shift_pressed = false;  // TODO: Get actual shift state from SDL
+    // Legacy path — still used when handle_keyboard_event_ex is not called
+    // (e.g., from the old C64-only GUI, test harness, or non-SDL input)
+    if (keyboard_mapper_) {
+        // Route through the mapper with minimal info
         if (pressed) {
-            commodore_keyboard_key_down(c64_->keyboard, key, shift_pressed);
+            keyboard_mapper_->process_key_down(
+                (SDL_Keycode)key, SDL_SCANCODE_UNKNOWN, 0, false);
         } else {
-            commodore_keyboard_key_up(c64_->keyboard, key, shift_pressed);
+            keyboard_mapper_->process_key_up(
+                (SDL_Keycode)key, SDL_SCANCODE_UNKNOWN, 0);
         }
+    } else if (c64_ && c64_->keyboard) {
+        // No mapper — direct passthrough (fallback)
+        if (pressed) {
+            commodore_keyboard_key_down(c64_->keyboard, key, false);
+        } else {
+            commodore_keyboard_key_up(c64_->keyboard, key, false);
+        }
+    }
+}
+
+void C64SystemWrapper::handle_keyboard_event_ex(int key, int scancode, uint16_t mod, bool pressed, bool repeat) {
+    if (keyboard_mapper_) {
+        if (pressed) {
+            keyboard_mapper_->process_key_down(
+                (SDL_Keycode)key, (SDL_Scancode)scancode, mod, repeat);
+        } else {
+            keyboard_mapper_->process_key_up(
+                (SDL_Keycode)key, (SDL_Scancode)scancode, mod);
+        }
+    } else {
+        // Fallback to legacy handler
+        if (!repeat) {
+            handle_keyboard_event(key, pressed);
+        }
+    }
+}
+
+void C64SystemWrapper::handle_text_input(const char* text) {
+    if (keyboard_mapper_) {
+        keyboard_mapper_->process_text_input(text);
+    }
+}
+
+void C64SystemWrapper::release_all_keys() {
+    if (keyboard_mapper_) {
+        keyboard_mapper_->release_all();
     }
 }
 
