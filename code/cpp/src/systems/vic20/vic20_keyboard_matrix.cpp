@@ -7,7 +7,7 @@
 // VIA Port A ($9121) = row read (input)
 // Array convention: array[7-PB_col][7-PA_row]
 //
-// keys[] stores EmuKey values.  shifted_chars[] stores shifted output.
+// keys[] stores EmuKey values.  Shifted characters stored in decode tables.
 // Unshifted characters derived from emu_key_to_char(key).
 
 // Key positions note:
@@ -36,23 +36,32 @@ static const emu_key_t vic20_keys[VIC20_KEYBOARD_ROWS * VIC20_KEYBOARD_COLS] = {
     EMUKEY_BACKSPACE,  EMUKEY_CBM_POUND,  EMUKEY_BACKSLASH,  EMUKEY_9,  EMUKEY_7,  EMUKEY_5,  EMUKEY_3,  EMUKEY_1,
 };
 
-static const uint32_t vic20_shifted_chars[VIC20_KEYBOARD_ROWS * VIC20_KEYBOARD_COLS] = {
-    // PB7: F8, SAME(CLR), SAME(-), SAME(0), (, &, $, "
-    EMUKEY_F8, EMUKEY_SAME, EMUKEY_SAME, EMUKEY_SAME, '(', '&', '$', '"',
-    // PB6: F6, π, SAME(@), o, u, t, e, q
-    EMUKEY_F6, EMUKEY_CBM_PI, EMUKEY_SAME, 'o', 'u', 't', 'e', 'q',
-    // PB5: F4, SAME(=), [, k, h, f, s, SAME(C=)
-    EMUKEY_F4, EMUKEY_SAME, '[', 'k', 'h', 'f', 's', EMUKEY_SAME,
-    // PB4: F2, SAME(RSHIFT), >, m, b, c, z, SAME(SPACE)
-    EMUKEY_F2, EMUKEY_SAME, '>', 'm', 'b', 'c', 'z', EMUKEY_SAME,
-    // PB3: SAME(CRSR↓→up), ?, <, n, v, x, SAME(LSHIFT), SAME(RUN/STOP)
-    EMUKEY_SAME, '?', '<', 'n', 'v', 'x', EMUKEY_SAME, EMUKEY_SAME,
-    // PB2: SAME(CRSR→→left), ], l, j, g, d, a, SAME(CTRL)
-    EMUKEY_SAME, ']', 'l', 'j', 'g', 'd', 'a', EMUKEY_SAME,
-    // PB1: SAME(RETURN), SAME(*), p, i, y, r, w, SAME(←)
-    EMUKEY_SAME, EMUKEY_SAME, 'p', 'i', 'y', 'r', 'w', EMUKEY_SAME,
-    // PB0: INST, SAME(£), SAME(+), ), ', %, #, !
-    EMUKEY_INSERT, EMUKEY_SAME, EMUKEY_SAME, ')', '\'', '%', '#', '!',
+// Shifted character decode table — ASCII characters per matrix position.
+// Mirrors the VIC-20 KERNAL's shifted decode table at $EC9F.
+// 0 = no distinct character (modifier key, function key, cursor key,
+//     or same character as unshifted — handled by KERNAL ROM at runtime).
+static const uint8_t vic20_shifted_chars[VIC20_KEYBOARD_ROWS * VIC20_KEYBOARD_COLS] = {
+    // PB7: (F8), (CLR), (-), (0), (, &, $, "
+    0, 0, 0, 0, '(', '&', '$', '"',
+    // PB6: (F6), (π), (@), O, U, T, E, Q
+    0, 0, 0, 'O', 'U', 'T', 'E', 'Q',
+    // PB5: (F4), (=), [, K, H, F, S, (C=)
+    0, 0, '[', 'K', 'H', 'F', 'S', 0,
+    // PB4: (F2), (RSHIFT), >, M, B, C, Z, (SPACE)
+    0, 0, '>', 'M', 'B', 'C', 'Z', 0,
+    // PB3: (CRSR↑), ?, <, N, V, X, (LSHIFT), (RUN/STOP)
+    0, '?', '<', 'N', 'V', 'X', 0, 0,
+    // PB2: (CRSR←), ], L, J, G, D, A, (CTRL)
+    0, ']', 'L', 'J', 'G', 'D', 'A', 0,
+    // PB1: (RETURN), (*), P, I, Y, R, W, (←)
+    0, 0, 'P', 'I', 'Y', 'R', 'W', 0,
+    // PB0: (INST), (£), (+), ), ', %, #, !
+    0, 0, 0, ')', '\'', '%', '#', '!',
+};
+
+static const keyboard_decode_table_t vic20_decode_tables[] = {
+    { KEYMOD_SHIFT, vic20_shifted_chars },
+    // Future: { KEYMOD_CBM,  vic20_cbm_chars },
 };
 
 const keyboard_matrix_config_t vic20_keyboard_config = {
@@ -62,5 +71,6 @@ const keyboard_matrix_config_t vic20_keyboard_config = {
     .cols = VIC20_KEYBOARD_COLS,
     .description = "VIC-20 8x8 keyboard matrix",
     .keys = vic20_keys,
-    .shifted_chars = vic20_shifted_chars,
+    .num_decode_tables = sizeof(vic20_decode_tables) / sizeof(vic20_decode_tables[0]),
+    .decode_tables = vic20_decode_tables,
 };

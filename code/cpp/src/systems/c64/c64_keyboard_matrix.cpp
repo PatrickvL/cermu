@@ -8,8 +8,9 @@
 // Array convention: array[7-PB_bit][7-PA_bit]
 //
 // The keys[] table stores EmuKey values identifying each physical key.
-// The shifted_chars[] table stores the ASCII character produced when
-// the key is pressed with SHIFT, or EMUKEY_SAME if the KERNAL handles it.
+// The decode tables store the ASCII character produced when the key is
+// pressed with a specific modifier (SHIFT, C=, CTRL), or 0 if no
+// distinct character is produced (the KERNAL ROM handles it at runtime).
 //
 // Unshifted characters are derived from emu_key_to_char(key).
 // NOTE on cursor keys: CRSR→ and CRSR↓ are the only physical cursor keys.
@@ -34,24 +35,33 @@ static const emu_key_t c64_keys[C64_KEYBOARD_ROWS * C64_KEYBOARD_COLS] = {
     EMUKEY_1,  EMUKEY_CBM_POUND,  EMUKEY_BACKSLASH,  EMUKEY_9,  EMUKEY_7,  EMUKEY_5,  EMUKEY_3,  EMUKEY_BACKSPACE,
 };
 
-// Shifted character output — ASCII characters or markers
-static const uint32_t c64_shifted_chars[C64_KEYBOARD_ROWS * C64_KEYBOARD_COLS] = {
-    // row 7: SAME, ?, <, n, v, x, SAME, SAME(cursor up via auto-shift)
-    EMUKEY_SAME, '?', '<', 'n', 'v', 'x', EMUKEY_SAME, EMUKEY_SAME,
-    // row 6: q, π, SAME(@), o, u, t, e, F6
-    'q', EMUKEY_CBM_PI, EMUKEY_SAME, 'o', 'u', 't', 'e', EMUKEY_F6,
-    // row 5: SAME(C=), SAME(=), [, k, h, f, s, F4
-    EMUKEY_SAME, EMUKEY_SAME, '[', 'k', 'h', 'f', 's', EMUKEY_F4,
-    // row 4: SAME(SPACE), SAME(RSHIFT), >, m, b, c, z, F2
-    EMUKEY_SAME, EMUKEY_SAME, '>', 'm', 'b', 'c', 'z', EMUKEY_F2,
-    // row 3: ", SAME(CLR), SAME(-), SAME(0), (, &, $, F8
-    '"', EMUKEY_SAME, EMUKEY_SAME, EMUKEY_SAME, '(', '&', '$', EMUKEY_F8,
-    // row 2: SAME(CTRL), ], l, j, g, d, a, SAME(cursor left via auto-shift)
-    EMUKEY_SAME, ']', 'l', 'j', 'g', 'd', 'a', EMUKEY_SAME,
-    // row 1: SAME(←), SAME(*), p, i, y, r, w, SAME(RETURN)
-    EMUKEY_SAME, EMUKEY_SAME, 'p', 'i', 'y', 'r', 'w', EMUKEY_SAME,
-    // row 0: !, SAME(£), SAME(+), ), ', %, #, INST
-    '!', EMUKEY_SAME, EMUKEY_SAME, ')', '\'', '%', '#', EMUKEY_INSERT,
+// Shifted character decode table — ASCII characters per matrix position.
+// Mirrors the C64 KERNAL's shifted decode table at $EBC2.
+// 0 = no distinct character (modifier key, function key, cursor key,
+//     or same character as unshifted — handled by KERNAL ROM at runtime).
+static const uint8_t c64_shifted_chars[C64_KEYBOARD_ROWS * C64_KEYBOARD_COLS] = {
+    // row 7: (RUN/STOP), ?, <, N, V, X, (LSHIFT), (CRSR↑ via auto-shift)
+    0, '?', '<', 'N', 'V', 'X', 0, 0,
+    // row 6: Q, (π), (@), O, U, T, E, (F6)
+    'Q', 0, 0, 'O', 'U', 'T', 'E', 0,
+    // row 5: (C=), (=), [, K, H, F, S, (F4)
+    0, 0, '[', 'K', 'H', 'F', 'S', 0,
+    // row 4: (SPACE), (RSHIFT), >, M, B, C, Z, (F2)
+    0, 0, '>', 'M', 'B', 'C', 'Z', 0,
+    // row 3: ", (CLR), (-), (0), (, &, $, (F8)
+    '"', 0, 0, 0, '(', '&', '$', 0,
+    // row 2: (CTRL), ], L, J, G, D, A, (CRSR← via auto-shift)
+    0, ']', 'L', 'J', 'G', 'D', 'A', 0,
+    // row 1: (←), (*), P, I, Y, R, W, (RETURN)
+    0, 0, 'P', 'I', 'Y', 'R', 'W', 0,
+    // row 0: !, (£), (+), ), ', %, #, (INST)
+    '!', 0, 0, ')', '\'', '%', '#', 0,
+};
+
+static const keyboard_decode_table_t c64_decode_tables[] = {
+    { KEYMOD_SHIFT, c64_shifted_chars },
+    // Future: { KEYMOD_CBM,  c64_cbm_chars },   — C= key character decode
+    // Future: { KEYMOD_CTRL, c64_ctrl_chars },  — CTRL key character decode
 };
 
 const keyboard_matrix_config_t c64_keyboard_config = {
@@ -61,5 +71,6 @@ const keyboard_matrix_config_t c64_keyboard_config = {
     .cols = C64_KEYBOARD_COLS,
     .description = "C64 8x8 keyboard matrix",
     .keys = c64_keys,
-    .shifted_chars = c64_shifted_chars,
+    .num_decode_tables = sizeof(c64_decode_tables) / sizeof(c64_decode_tables[0]),
+    .decode_tables = c64_decode_tables,
 };

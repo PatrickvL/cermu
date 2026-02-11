@@ -56,15 +56,15 @@
 struct GuestKeyAction {
     uint8_t row;               // Matrix row (array index, not hardware bit)
     uint8_t col;               // Matrix column (array index, not hardware bit)
-    bool requires_shift;       // Must also close the shift contact
-    bool requires_unshift;     // Must ensure shift is NOT pressed (release temporarily)
+    uint8_t modifiers;         // Required modifier bitmask (KEYMOD_SHIFT, KEYMOD_CBM, etc.)
+                               // 0 = no modifiers needed
     bool valid;                // Whether this is a valid mapping
 
     GuestKeyAction()
-        : row(0), col(0), requires_shift(false), requires_unshift(false), valid(false) {}
+        : row(0), col(0), modifiers(KEYMOD_NONE), valid(false) {}
 
-    GuestKeyAction(uint8_t r, uint8_t c, bool shift, bool unshift = false)
-        : row(r), col(c), requires_shift(shift), requires_unshift(unshift), valid(true) {}
+    GuestKeyAction(uint8_t r, uint8_t c, uint8_t mods)
+        : row(r), col(c), modifiers(mods), valid(true) {}
 };
 
 // ============================================================================
@@ -73,13 +73,13 @@ struct GuestKeyAction {
 
 struct ActiveInjection {
     GuestKeyAction action;         // What we injected
-    bool shift_was_forced;         // We pressed shift that wasn't physically held
-    bool shift_was_suppressed;     // We released shift that was physically held
+    uint8_t forced_modifiers;      // Modifiers we pressed that weren't physically held
+    uint8_t suppressed_modifiers;  // Modifiers we released that were physically held
     SDL_Scancode host_scancode;    // The physical host key that triggered this
     bool from_text_input;          // Was this triggered by SDL_TEXTINPUT?
 
     ActiveInjection()
-        : shift_was_forced(false), shift_was_suppressed(false),
+        : forced_modifiers(0), suppressed_modifiers(0),
           host_scancode(SDL_SCANCODE_UNKNOWN), from_text_input(false) {}
 };
 
@@ -240,10 +240,13 @@ private:
     // Physical host modifier tracking
     bool host_shift_held_;                     // Is any host shift key physically held?
     bool host_ctrl_held_;                      // Is host ctrl physically held?
+    bool host_cbm_held_;                       // Is host Commodore (LGUI) key physically held?
 
-    // Shift key guest matrix position (cached at init)
+    // Modifier key guest matrix positions (cached at init)
     GuestKeyAction shift_left_pos_;
     GuestKeyAction shift_right_pos_;
+    GuestKeyAction cbm_key_pos_;               // Commodore (C=) key matrix position
+    GuestKeyAction ctrl_key_pos_;              // CTRL key matrix position
 
     // Text input enabled (character-based mapping active)
     bool text_input_enabled_;

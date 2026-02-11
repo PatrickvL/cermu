@@ -203,8 +203,8 @@ typedef uint32_t emu_key_t;
 // state on a Commodore keyboard (uppercase letters, digits, symbols).
 // Returns 0 for non-character keys (modifiers, function keys, cursor keys).
 //
-// System-specific shifted characters are NOT handled here; they come from
-// the per-system shifted_chars[] table in the matrix config.
+// System-specific modified characters are NOT handled here; they come from
+// the per-system decode tables in the matrix config.
 
 static inline char emu_key_to_char(emu_key_t key) {
     // Letters → uppercase (Commodore unshifted = uppercase)

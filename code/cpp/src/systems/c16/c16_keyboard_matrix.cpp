@@ -42,23 +42,31 @@ static const emu_key_t c16_keys[C16_KEYBOARD_ROWS * C16_KEYBOARD_COLS] = {
     EMUKEY_1,  EMUKEY_HOME,  EMUKEY_LCTRL,  EMUKEY_2,  EMUKEY_SPACE,  EMUKEY_LGUI,  EMUKEY_Q,  EMUKEY_TAB,
 };
 
-static const uint32_t c16_shifted_chars[C16_KEYBOARD_ROWS * C16_KEYBOARD_COLS] = {
-    // Row 0: INST(shift+DEL), SAME, SAME(£), HELP(shift+F7), F4, F5, F6, SAME(@)
-    EMUKEY_INSERT, EMUKEY_SAME, EMUKEY_SAME, EMUKEY_F9, EMUKEY_F4, EMUKEY_F5, EMUKEY_F6, EMUKEY_SAME,
-    // Row 1: #, w, a, $, z, s, e, SAME(shift key)
-    '#', 'w', 'a', '$', 'z', 's', 'e', EMUKEY_SAME,
-    // Row 2: %, r, d, &, c, f, t, x
-    '%', 'r', 'd', '&', 'c', 'f', 't', 'x',
-    // Row 3: ', y, g, (, b, h, u, v
-    '\'', 'y', 'g', '(', 'b', 'h', 'u', 'v',
-    // Row 4: ), i, j, SAME(0→↑ via KERNAL), m, k, o, n
-    ')', 'i', 'j', EMUKEY_SAME, 'm', 'k', 'o', 'n',
-    // Row 5: SAME(CRSR↓), p, l, SAME(CRSR↑), >, [, SAME(-), <
-    EMUKEY_SAME, 'p', 'l', EMUKEY_SAME, '>', '[', EMUKEY_SAME, '<',
-    // Row 6: SAME(CRSR←), SAME(*), ], SAME(CRSR→), SAME(ESC), SAME(=→π via KERNAL), SAME(+), ?
-    EMUKEY_SAME, EMUKEY_SAME, ']', EMUKEY_SAME, EMUKEY_SAME, EMUKEY_SAME, EMUKEY_SAME, '?',
-    // Row 7: !, SAME(CLR), SAME(CTRL), ", SAME(SPACE), SAME(C=), q, SAME(RUN/STOP)
-    '!', EMUKEY_SAME, EMUKEY_SAME, '"', EMUKEY_SAME, EMUKEY_SAME, 'q', EMUKEY_SAME,
+// Shifted character decode table — ASCII characters per matrix position.
+// 0 = no distinct character (modifier key, function key, cursor key,
+//     or same character as unshifted — handled by KERNAL/TED at runtime).
+static const uint8_t c16_shifted_chars[C16_KEYBOARD_ROWS * C16_KEYBOARD_COLS] = {
+    // Row 0: (INST), (RETURN), (£), (HELP), (F4), (F5), (F6), (@)
+    0, 0, 0, 0, 0, 0, 0, 0,
+    // Row 1: #, W, A, $, Z, S, E, (SHIFT)
+    '#', 'W', 'A', '$', 'Z', 'S', 'E', 0,
+    // Row 2: %, R, D, &, C, F, T, X
+    '%', 'R', 'D', '&', 'C', 'F', 'T', 'X',
+    // Row 3: ', Y, G, (, B, H, U, V
+    '\'', 'Y', 'G', '(', 'B', 'H', 'U', 'V',
+    // Row 4: ), I, J, (0), M, K, O, N
+    ')', 'I', 'J', 0, 'M', 'K', 'O', 'N',
+    // Row 5: (CRSR↓), P, L, (CRSR↑), >, [, (-), <
+    0, 'P', 'L', 0, '>', '[', 0, '<',
+    // Row 6: (CRSR←), (*), ], (CRSR→), (ESC), (=), (+), ?
+    0, 0, ']', 0, 0, 0, 0, '?',
+    // Row 7: !, (CLR), (CTRL), ", (SPACE), (C=), Q, (RUN/STOP)
+    '!', 0, 0, '"', 0, 0, 'Q', 0,
+};
+
+static const keyboard_decode_table_t c16_decode_tables[] = {
+    { KEYMOD_SHIFT, c16_shifted_chars },
+    // Future: { KEYMOD_CBM,  c16_cbm_chars },
 };
 
 const keyboard_matrix_config_t c16_keyboard_config = {
@@ -68,5 +76,6 @@ const keyboard_matrix_config_t c16_keyboard_config = {
     .cols = C16_KEYBOARD_COLS,
     .description = "C16/Plus4 8x8 keyboard matrix (TED 7360)",
     .keys = c16_keys,
-    .shifted_chars = c16_shifted_chars,
+    .num_decode_tables = sizeof(c16_decode_tables) / sizeof(c16_decode_tables[0]),
+    .decode_tables = c16_decode_tables,
 };
