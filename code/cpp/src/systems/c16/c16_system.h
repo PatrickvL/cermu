@@ -2,6 +2,7 @@
 #define C16_SYSTEM_H
 
 #include "../../core/emulated_system.h"
+#include "../../chip/input/commodore_keyboard.h"
 #include <cstdint>
 #include <memory>
 
@@ -66,7 +67,7 @@ private:
     // Chip instances (TODO: Implement MOS7501 CPU and TED 7360 chips)
     void* mos7501_;              // MOS7501 CPU (TODO: Create proper chip type)
     void* ted_;                  // TED 7360 ($FD00-$FEFF, 4KB) - TODO: Create proper chip type
-    void* cia_;                  // MOS6526 CIA ($FD30-$FD3F, 16 bytes) - TODO: Verify if C16 actually has CIA
+    commodore_keyboard_t* keyboard_;  // Keyboard matrix (8×8, scanned via TED)
     
     // Memory arrays (simplified storage like VIC-20)
     uint8_t ram_simple_[65536];  // Up to 64KB RAM (C16 uses 16KB, Plus/4 uses 64KB)

@@ -1,4 +1,5 @@
 #include "c16_system.h"
+#include "c16_keyboard_matrix.h"
 #include "../../core/storage/rom_loader.h"
 #include <cstring>
 #include <cstdio>
@@ -135,7 +136,7 @@ C16System::C16System()
     : EmulatedSystem()
     , mos7501_(nullptr)
     , ted_(nullptr)
-    , cia_(nullptr)
+    , keyboard_(nullptr)
     , cycles_per_frame_(17734)
     , initialized_(false)
 {
@@ -203,8 +204,14 @@ bool C16System::initialize() {
     // TODO: Initialize TED 7360 when implemented
     ted_ = nullptr;
     
-    // TODO: Initialize CIA when implemented (Note: C16 may not have CIA)
-    cia_ = nullptr;
+    // Create keyboard matrix (8×8, scanned by TED)
+    keyboard_ = commodore_keyboard_create(&c16_keyboard_config);
+    if (!keyboard_) {
+        printf("C16: Warning - keyboard matrix creation failed\n");
+    }
+    // NOTE: TED keyboard scanning callbacks will be connected once the TED
+    // chip is implemented. The keyboard contact arrays are updated immediately
+    // by key_down/key_up and will be ready for TED readback.
     
     initialized_ = true;
     return true;
@@ -219,8 +226,11 @@ void C16System::shutdown() {
     // TODO: Destroy TED when implemented
     ted_ = nullptr;
     
-    // TODO: Destroy CIA when implemented
-    cia_ = nullptr;
+    // Destroy keyboard
+    if (keyboard_) {
+        commodore_keyboard_destroy(keyboard_);
+        keyboard_ = nullptr;
+    }
     
     initialized_ = false;
 }
@@ -230,7 +240,11 @@ void C16System::reset() {
     
     // TODO: Reset MOS7501 CPU when implemented
     // TODO: Reset TED when implemented
-    // TODO: Reset CIA when implemented
+    
+    // Reset keyboard matrix
+    if (keyboard_) {
+        commodore_keyboard_reset(keyboard_);
+    }
     
     total_cycles_ = 0;
 }
@@ -321,9 +335,14 @@ void C16System::set_framebuffer(uint32_t* buffer, int width, int height) {
 // ============================================================================
 
 void C16System::handle_keyboard_event(int key, bool pressed) {
-    // TODO: Implement keyboard matrix
-    (void)key;
-    (void)pressed;
+    if (keyboard_) {
+        bool shift_pressed = false;  // Shift is its own matrix key, handled via the matrix
+        if (pressed) {
+            commodore_keyboard_key_down(keyboard_, (uint32_t)key, shift_pressed);
+        } else {
+            commodore_keyboard_key_up(keyboard_, (uint32_t)key, shift_pressed);
+        }
+    }
 }
 
 // ============================================================================
