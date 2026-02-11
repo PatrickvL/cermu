@@ -25,6 +25,9 @@
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
 
+// Shared Commodore file format loader (PRG, D64, T64, TAP, CRT, BIN)
+#include "../../core/storage/commodore_file_loader.h"
+
 // ============================================================================
 // Hardware Traits Definition
 // ============================================================================
@@ -148,21 +151,33 @@ static float vic20_can_load_file(const char* filepath, const uint8_t* data, size
                 if (load_addr == 0x1001) {
                     return 0.85f;  // High confidence for VIC-20 PRG
                 }
+                // Other common VIC-20 addresses (expansion RAM, cartridge areas)
+                if (load_addr == 0x0401 || load_addr == 0x1201 || load_addr == 0x2000 ||
+                    load_addr == 0x4000 || load_addr == 0x6000 || load_addr == 0xA000) {
+                    return 0.7f;
+                }
                 // Generic PRG file - moderate confidence
                 return 0.5f;
             }
         }
         if (strcmp(ext, ".tap") == 0 || strcmp(ext, ".TAP") == 0) {
-            return 0.7f;  // TAP files
+            // Check TAP header to see if this is specifically a VIC-20 tape
+            int platform = commodore_tap_identify_platform(filepath);
+            if (platform == 1) return 0.95f;  // VIC-20 TAP
+            if (platform == 0) return 0.3f;   // C64 TAP (low for VIC-20)
+            return 0.5f;  // Unknown or error
         }
         if (strcmp(ext, ".d64") == 0 || strcmp(ext, ".D64") == 0) {
-            return 0.6f;  // Disk images
+            return 0.6f;  // Disk images (could be any Commodore system)
+        }
+        if (strcmp(ext, ".t64") == 0 || strcmp(ext, ".T64") == 0) {
+            return 0.5f;  // T64 tape archives (usually C64 but can contain VIC-20)
         }
     }
     return 0.0f;
 }
 
-static const char* vic20_extensions[] = {".prg", ".tap", ".d64", nullptr};
+static const char* vic20_extensions[] = {".prg", ".tap", ".d64", ".t64", nullptr};
 
 static SystemDescriptor vic20_descriptor = {
     "Commodore VIC-20",
@@ -519,24 +534,148 @@ void VIC20System::run_frame() {
 // File Loading
 // ============================================================================
 
+/** Memory read callback for BASIC SYS parsing — reads from VIC-20 memory system */
+static uint8_t vic20_mem_read_for_basic(void* ctx, uint16_t addr) {
+    return vic20_memory_read_byte(static_cast<vic20_memory_t*>(ctx), addr);
+}
+
 bool VIC20System::load_file(const char* filepath) {
+    if (!memory_ || !cpu_) {
+        printf("VIC20: System not initialized, initializing now...\n");
+        if (!initialize()) {
+            printf("VIC20: Failed to initialize system for file loading\n");
+            return false;
+        }
+    }
+
     printf("VIC20: Loading file: %s\n", filepath);
-    
-    // Determine file type
-    const char* ext = strrchr(filepath, '.');
-    if (!ext) {
-        printf("VIC20: Unknown file type (no extension)\n");
+
+    // Use shared Commodore file loader for format detection and parsing
+    commodore_load_result_t result = {};
+    if (!commodore_load_file(filepath, &result)) {
+        printf("VIC20: Failed to load file: %s\n", result.error_msg);
+        commodore_load_result_free(&result);
         return false;
     }
-    
-    if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0) {
-        // TODO: Implement PRG loading
-        printf("VIC20: PRG file loading not yet implemented\n");
-        return false;
+
+    bool success = false;
+
+    switch (result.type) {
+        case COMMODORE_LOAD_PRG:
+        case COMMODORE_LOAD_D64:
+        case COMMODORE_LOAD_T64: {
+            // All three produce a PRG in result.prg — copy data into VIC-20 memory
+            const commodore_prg_t* prg = &result.prg;
+            
+            printf("VIC20: Loading %s: $%04X-$%04X (%zu bytes)\n",
+                   commodore_load_type_name(result.type),
+                   prg->load_addr, prg->end_addr, prg->data_size);
+
+            // Validate address range (VIC-20 has 64KB address space)
+            if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
+                printf("VIC20: Invalid PRG address range: $%04X-$%04X\n",
+                       prg->load_addr, prg->end_addr);
+                break;
+            }
+
+            // Write program data into VIC-20 memory
+            for (size_t i = 0; i < prg->data_size; i++) {
+                vic20_memory_write_byte(memory_,
+                                        (uint16_t)(prg->load_addr + i),
+                                        prg->data[i]);
+            }
+
+            // Try to find a SYS address in BASIC for auto-run
+            uint16_t run_addr = 0;
+            
+            if (prg->load_addr == 0x1001) {
+                // Standard BASIC start — parse for SYS statement
+                commodore_basic_sys_t sys_result = {};
+                if (commodore_basic_parse_sys(vic20_mem_read_for_basic, memory_,
+                                              prg->load_addr,
+                                              &COMMODORE_BASIC_VIC20,
+                                              10, &sys_result)) {
+                    run_addr = sys_result.sys_address;
+                    printf("VIC20: Found SYS %u on BASIC line %u\n",
+                           run_addr, sys_result.line_number);
+                }
+                
+                // Update BASIC pointers so LIST and RUN work correctly
+                // TXTTAB ($2B/$2C) = start of BASIC text
+                vic20_memory_write_byte(memory_, 0x2B, (uint8_t)(prg->load_addr & 0xFF));
+                vic20_memory_write_byte(memory_, 0x2C, (uint8_t)(prg->load_addr >> 8));
+                // VARTAB ($2D/$2E) = end of BASIC text (start of variables)
+                vic20_memory_write_byte(memory_, 0x2D, (uint8_t)(prg->end_addr & 0xFF));
+                vic20_memory_write_byte(memory_, 0x2E, (uint8_t)(prg->end_addr >> 8));
+                // ARYTAB ($2F/$30) = start of arrays
+                vic20_memory_write_byte(memory_, 0x2F, (uint8_t)(prg->end_addr & 0xFF));
+                vic20_memory_write_byte(memory_, 0x30, (uint8_t)(prg->end_addr >> 8));
+                // STREND ($31/$32) = end of arrays
+                vic20_memory_write_byte(memory_, 0x31, (uint8_t)(prg->end_addr & 0xFF));
+                vic20_memory_write_byte(memory_, 0x32, (uint8_t)(prg->end_addr >> 8));
+            }
+
+            if (run_addr != 0) {
+                // Auto-run: set CPU program counter to SYS address
+                printf("VIC20: Auto-running from $%04X\n", run_addr);
+                mos6502_set_pc(cpu_, run_addr);
+            } else {
+                printf("VIC20: No SYS found — program loaded, use RUN to start\n");
+            }
+
+            success = true;
+            break;
+        }
+
+        case COMMODORE_LOAD_TAP: {
+            printf("VIC20: TAP file detected (platform=%u, version=%u)\n",
+                   result.tap_header.platform, result.tap_header.version);
+            printf("VIC20: TAP tape emulation not yet implemented (requires cycle-accurate datasette)\n");
+            // TAP loading requires a cycle-accurate datasette emulation
+            // which feeds pulse data into VIA CA1. Not implemented yet.
+            success = false;
+            break;
+        }
+
+        case COMMODORE_LOAD_CRT: {
+            printf("VIC20: CRT cartridge: \"%s\" (type=%u)\n",
+                   result.crt_header.name, result.crt_header.hardware_type);
+            printf("VIC20: CRT cartridge loading not yet implemented\n");
+            // VIC-20 cartridges use a different header format than C64 CRT
+            // but the C64 CRT reader can identify the file.
+            success = false;
+            break;
+        }
+
+        case COMMODORE_LOAD_BIN: {
+            // Raw binary — load at $A000 (cartridge area) by default
+            const uint16_t default_addr = 0xA000;
+            const commodore_prg_t* prg = &result.prg;
+            
+            printf("VIC20: Loading BIN at default $%04X (%zu bytes)\n",
+                   default_addr, prg->data_size);
+
+            if (default_addr + prg->data_size > 0x10000) {
+                printf("VIC20: BIN too large for address space\n");
+                break;
+            }
+
+            for (size_t i = 0; i < prg->data_size; i++) {
+                vic20_memory_write_byte(memory_,
+                                        (uint16_t)(default_addr + i),
+                                        prg->data[i]);
+            }
+            success = true;
+            break;
+        }
+
+        default:
+            printf("VIC20: Unsupported load result type: %d\n", result.type);
+            break;
     }
-    
-    printf("VIC20: Unsupported file type: %s\n", ext);
-    return false;
+
+    commodore_load_result_free(&result);
+    return success;
 }
 
 // ============================================================================
