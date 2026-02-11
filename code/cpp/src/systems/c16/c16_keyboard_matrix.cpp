@@ -1,85 +1,72 @@
 #include "c16_keyboard_matrix.h"
 
 // ============================================================================
-// C16 / Plus/4 Keyboard Matrix — 8×8 (TED 7360)
+// C16 / Plus/4 Keyboard Matrix — 8×8 (EmuKey-based)
 // ============================================================================
 // TED PIO2 ($FD30) selects which row(s) to scan (active-low output).
 // TED register $FF08 reads the column result (active-low input).
-// Joystick 1 and 2 signals are also mixed into the TED scan lines.
 //
 // Matrix layout verified against VICE emulator (data/PLUS4/gtk3_pos.vkm)
 // and Commodore 264 Hardware Specification.
 //
 // Key differences from C64:
 //   - Dedicated cursor keys: UP (5,3), DOWN (5,0), LEFT (6,0), RIGHT (6,3)
-//   - ESC key at (6,4) — no equivalent on C64
+//   - ESC key at (6,4)
 //   - Both SHIFT keys wired to same position (1,7)
 //   - Function keys: F1/F4 (0,4), F2/F5 (0,5), F3/F6 (0,6), HELP/F7 (0,3)
-//   - No separate RESTORE key in matrix (wired directly to NMI like C64)
+//   - No separate RESTORE key in matrix (wired directly to NMI)
 
-// Unshifted keys — using SDL keycodes and CbmKeys constants
-//
-//         Col 0           Col 1        Col 2     Col 3           Col 4     Col 5     Col 6     Col 7
-//       +-----------+----------+----------+-----------+---------+---------+---------+-----------+
-// Row 0 | INST/DEL  | RETURN   | POUND    | HELP/F7   | F1/F4   | F2/F5   | F3/F6   | @         |
-// Row 1 | 3 #       | W        | A        | 4 $       | Z       | S       | E       | SHIFT     |
-// Row 2 | 5 %       | R        | D        | 6 &       | C       | F       | T       | X         |
-// Row 3 | 7 '       | Y        | G        | 8 (       | B       | H       | U       | V         |
-// Row 4 | 9 )       | I        | J        | 0 ^       | M       | K       | O       | N         |
-// Row 5 | DOWN      | P        | L        | UP        | . >     | : [     | -       | , <       |
-// Row 6 | LEFT      | *        | ; ]      | RIGHT     | ESC     | =       | +       | / ?       |
-// Row 7 | 1 !       | CLR/HOME | CTRL     | 2 "       | SPACE   | CBM     | Q       | RUN/STOP  |
-//       +-----------+----------+----------+-----------+---------+---------+---------+-----------+
-const uint32_t keyboard_matrix_unshifted_c16[C16_KEYBOARD_ROWS][C16_KEYBOARD_COLS] = {
-    // Row 0: DEL, RETURN, POUND, HELP, F1, F2, F3, @
-    {CbmKeys::DEL, CbmKeys::RETURN, CbmKeys::POUND, CbmKeys::F7, CbmKeys::F1, CbmKeys::F2, CbmKeys::F3, '@'},
+// Key positions note (same Commodore physical layout conventions):
+//   '@' key → EMUKEY_LEFTBRACKET
+//   '*' key → EMUKEY_RIGHTBRACKET
+//   ':' key → EMUKEY_SEMICOLON
+//   ';' key → EMUKEY_APOSTROPHE
+//   '+' key → EMUKEY_BACKSLASH
+
+static const emu_key_t c16_keys[C16_KEYBOARD_ROWS * C16_KEYBOARD_COLS] = {
+    // Row 0: DEL, RETURN, POUND, HELP(F7), F1, F2, F3, @
+    EMUKEY_BACKSPACE,  EMUKEY_RETURN,  EMUKEY_CBM_POUND,  EMUKEY_F7,  EMUKEY_F1,  EMUKEY_F2,  EMUKEY_F3,  EMUKEY_LEFTBRACKET,
     // Row 1: 3, W, A, 4, Z, S, E, SHIFT (both L/R share this position)
-    {'3', 'W', 'A', '4', 'Z', 'S', 'E', CbmKeys::SHIFT_LEFT},
+    EMUKEY_3,  EMUKEY_W,  EMUKEY_A,  EMUKEY_4,  EMUKEY_Z,  EMUKEY_S,  EMUKEY_E,  EMUKEY_LSHIFT,
     // Row 2: 5, R, D, 6, C, F, T, X
-    {'5', 'R', 'D', '6', 'C', 'F', 'T', 'X'},
+    EMUKEY_5,  EMUKEY_R,  EMUKEY_D,  EMUKEY_6,  EMUKEY_C,  EMUKEY_F,  EMUKEY_T,  EMUKEY_X,
     // Row 3: 7, Y, G, 8, B, H, U, V
-    {'7', 'Y', 'G', '8', 'B', 'H', 'U', 'V'},
+    EMUKEY_7,  EMUKEY_Y,  EMUKEY_G,  EMUKEY_8,  EMUKEY_B,  EMUKEY_H,  EMUKEY_U,  EMUKEY_V,
     // Row 4: 9, I, J, 0, M, K, O, N
-    {'9', 'I', 'J', '0', 'M', 'K', 'O', 'N'},
+    EMUKEY_9,  EMUKEY_I,  EMUKEY_J,  EMUKEY_0,  EMUKEY_M,  EMUKEY_K,  EMUKEY_O,  EMUKEY_N,
     // Row 5: CRSR↓, P, L, CRSR↑, ., :, -, ,
-    {CbmKeys::CURSOR_DOWN, 'P', 'L', CbmKeys::CURSOR_UP, '.', ':', '-', ','},
+    EMUKEY_DOWN,  EMUKEY_P,  EMUKEY_L,  EMUKEY_UP,  EMUKEY_PERIOD,  EMUKEY_SEMICOLON,  EMUKEY_MINUS,  EMUKEY_COMMA,
     // Row 6: CRSR←, *, ;, CRSR→, ESC, =, +, /
-    {CbmKeys::CURSOR_LEFT, '*', ';', CbmKeys::CURSOR_RIGHT, CbmKeys::ESC, '=', '+', '/'},
+    EMUKEY_LEFT,  EMUKEY_RIGHTBRACKET,  EMUKEY_APOSTROPHE,  EMUKEY_RIGHT,  EMUKEY_ESCAPE,  EMUKEY_EQUALS,  EMUKEY_BACKSLASH,  EMUKEY_SLASH,
     // Row 7: 1, HOME, CTRL, 2, SPACE, COMMODORE, Q, RUN/STOP
-    {'1', CbmKeys::HOME, CbmKeys::CTRL, '2', CbmKeys::SPACE, CbmKeys::COMMODORE, 'Q', CbmKeys::RUN_STOP},
+    EMUKEY_1,  EMUKEY_HOME,  EMUKEY_LCTRL,  EMUKEY_2,  EMUKEY_SPACE,  EMUKEY_LGUI,  EMUKEY_Q,  EMUKEY_TAB,
 };
 
-// Shifted keys — using SDL keycodes and CbmKeys constants
-// SAME means the shifted version is handled by the KERNAL (same matrix position + SHIFT).
-// Lowercase letters in shifted array allow host lowercase SDL keycodes to find
-// their matrix position (SDL always sends SDLK_a='a' regardless of shift state).
-// Function keys: shifted F-key variants (F4, F5, F6, HELP) auto-press SHIFT.
-const uint32_t keyboard_matrix_shifted_c16[C16_KEYBOARD_ROWS][C16_KEYBOARD_COLS] = {
-    // Row 0: INST(shift+DEL), SAME, SAME, HELP(shift+F7), F4(shift+F1), F5(shift+F2), F6(shift+F3), SAME
-    {CbmKeys::INST, CbmKeys::SAME, CbmKeys::SAME, CbmKeys::HELP, CbmKeys::F4, CbmKeys::F5, CbmKeys::F6, CbmKeys::SAME},
-    // Row 1: #, w, a, $, z, s, e, SAME (shift key itself)
-    {'#', 'w', 'a', '$', 'z', 's', 'e', CbmKeys::SAME},
+static const uint32_t c16_shifted_chars[C16_KEYBOARD_ROWS * C16_KEYBOARD_COLS] = {
+    // Row 0: INST(shift+DEL), SAME, SAME(£), HELP(shift+F7), F4, F5, F6, SAME(@)
+    EMUKEY_INSERT, EMUKEY_SAME, EMUKEY_SAME, EMUKEY_F9, EMUKEY_F4, EMUKEY_F5, EMUKEY_F6, EMUKEY_SAME,
+    // Row 1: #, w, a, $, z, s, e, SAME(shift key)
+    '#', 'w', 'a', '$', 'z', 's', 'e', EMUKEY_SAME,
     // Row 2: %, r, d, &, c, f, t, x
-    {'%', 'r', 'd', '&', 'c', 'f', 't', 'x'},
+    '%', 'r', 'd', '&', 'c', 'f', 't', 'x',
     // Row 3: ', y, g, (, b, h, u, v
-    {'\'', 'y', 'g', '(', 'b', 'h', 'u', 'v'},
-    // Row 4: ), i, j, SAME(^/↑ via KERNAL), m, k, o, n
-    {')', 'i', 'j', CbmKeys::SAME, 'm', 'k', 'o', 'n'},
-    // Row 5: SAME, p, l, SAME, >, [, SAME, <
-    {CbmKeys::SAME, 'p', 'l', CbmKeys::SAME, '>', '[', CbmKeys::SAME, '<'},
-    // Row 6: SAME, SAME, ], SAME, SAME, SAME(←/π via KERNAL), SAME, ?
-    {CbmKeys::SAME, CbmKeys::SAME, ']', CbmKeys::SAME, CbmKeys::SAME, CbmKeys::SAME, CbmKeys::SAME, '?'},
-    // Row 7: !, SAME(CLR via KERNAL), SAME, ", SAME, SAME, q, SAME
-    {'!', CbmKeys::SAME, CbmKeys::SAME, '"', CbmKeys::SAME, CbmKeys::SAME, 'q', CbmKeys::SAME},
+    '\'', 'y', 'g', '(', 'b', 'h', 'u', 'v',
+    // Row 4: ), i, j, SAME(0→↑ via KERNAL), m, k, o, n
+    ')', 'i', 'j', EMUKEY_SAME, 'm', 'k', 'o', 'n',
+    // Row 5: SAME(CRSR↓), p, l, SAME(CRSR↑), >, [, SAME(-), <
+    EMUKEY_SAME, 'p', 'l', EMUKEY_SAME, '>', '[', EMUKEY_SAME, '<',
+    // Row 6: SAME(CRSR←), SAME(*), ], SAME(CRSR→), SAME(ESC), SAME(=→π via KERNAL), SAME(+), ?
+    EMUKEY_SAME, EMUKEY_SAME, ']', EMUKEY_SAME, EMUKEY_SAME, EMUKEY_SAME, EMUKEY_SAME, '?',
+    // Row 7: !, SAME(CLR), SAME(CTRL), ", SAME(SPACE), SAME(C=), q, SAME(RUN/STOP)
+    '!', EMUKEY_SAME, EMUKEY_SAME, '"', EMUKEY_SAME, EMUKEY_SAME, 'q', EMUKEY_SAME,
 };
 
-// Pre-built configuration for commodore_keyboard_create()
 const keyboard_matrix_config_t c16_keyboard_config = {
     .model = KEYBOARD_MODEL_PLUS4_C16,
     .scan_chip = KEYBOARD_SCAN_TED,
     .rows = C16_KEYBOARD_ROWS,
     .cols = C16_KEYBOARD_COLS,
     .description = "C16/Plus4 8x8 keyboard matrix (TED 7360)",
-    .unshifted = (const uint32_t*)keyboard_matrix_unshifted_c16,
-    .shifted = (const uint32_t*)keyboard_matrix_shifted_c16,
+    .keys = c16_keys,
+    .shifted_chars = c16_shifted_chars,
 };
