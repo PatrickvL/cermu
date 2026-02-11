@@ -296,7 +296,7 @@ void Chip8System::get_display_dimensions(int* width, int* height) const {
     *height = 32;
 }
 
-void Chip8System::handle_keyboard_event(int key, bool pressed) {
+void Chip8System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     int chip8_key = map_sdl_key_to_chip8(key);
     if (chip8_key >= 0 && chip8_key < 16) {
         keys_[chip8_key] = pressed ? 1 : 0;

@@ -338,15 +338,15 @@ void C16System::set_framebuffer(uint32_t* buffer, int width, int height) {
 // Input
 // ============================================================================
 
-void C16System::handle_keyboard_event(int key, bool pressed) {
+void C16System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     if (keyboard_mapper_) {
         if (pressed) {
-            keyboard_mapper_->process_key_down((SDL_Keycode)key, SDL_SCANCODE_UNKNOWN, 0, false);
+            keyboard_mapper_->process_key_down(key, SDL_SCANCODE_UNKNOWN, 0, false);
         } else {
-            keyboard_mapper_->process_key_up((SDL_Keycode)key, SDL_SCANCODE_UNKNOWN, 0);
+            keyboard_mapper_->process_key_up(key, SDL_SCANCODE_UNKNOWN, 0);
         }
     } else if (keyboard_) {
-        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key((SDL_Keycode)key);
+        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(key);
         if (ek != EMUKEY_NONE) {
             if (pressed) {
                 commodore_keyboard_key_down(keyboard_, ek, false);
@@ -357,12 +357,12 @@ void C16System::handle_keyboard_event(int key, bool pressed) {
     }
 }
 
-void C16System::handle_keyboard_event_ex(int key, int scancode, uint16_t mod, bool pressed, bool repeat) {
+void C16System::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) {
     if (keyboard_mapper_) {
         if (pressed) {
-            keyboard_mapper_->process_key_down((SDL_Keycode)key, (SDL_Scancode)scancode, mod, repeat);
+            keyboard_mapper_->process_key_down(key, scancode, mod, repeat);
         } else {
-            keyboard_mapper_->process_key_up((SDL_Keycode)key, (SDL_Scancode)scancode, mod);
+            keyboard_mapper_->process_key_up(key, scancode, mod);
         }
     } else if (!repeat) {
         handle_keyboard_event(key, pressed);

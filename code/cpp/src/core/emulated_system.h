@@ -6,6 +6,7 @@
 #include <memory>
 #include <functional>
 #include <map>
+#include <SDL2/SDL_keycode.h>
 
 // ============================================================================
 // SYSTEM HARDWARE TRAITS
@@ -242,7 +243,7 @@ public:
     virtual bool load_file(const char* filepath) = 0;
     virtual uint32_t* get_framebuffer() = 0;
     virtual void get_display_dimensions(int* width, int* height) const = 0;
-    virtual void handle_keyboard_event(int key, bool pressed) = 0;
+    virtual void handle_keyboard_event(SDL_Keycode key, bool pressed) = 0;
     virtual void render_system_menu_items() = 0;
     virtual void render_configuration_ui() = 0;
     virtual uint32_t get_target_fps() const = 0;
@@ -252,7 +253,7 @@ public:
     // Receives keycode, scancode, modifier state, and repeat flag.
     // Systems that implement the KeyboardMapper should override this.
     // Default implementation falls back to handle_keyboard_event(key, pressed).
-    virtual void handle_keyboard_event_ex(int key, int scancode, uint16_t mod, bool pressed, bool repeat);
+    virtual void handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat);
 
     // Text input handler — receives characters from SDL_TEXTINPUT.
     // For character-based keyboard mapping: the character produced by
