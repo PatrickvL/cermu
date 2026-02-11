@@ -76,3 +76,22 @@ void EmulatedSystem::render_debug_windows(void* gui_state) {
     // Default: no debug windows
     (void)gui_state;
 }
+
+void EmulatedSystem::handle_keyboard_event_ex(int key, int scancode, uint16_t mod, bool pressed, bool repeat) {
+    // Default: fall back to the simple handle_keyboard_event (ignoring extra info)
+    (void)scancode;
+    (void)mod;
+    (void)repeat;
+    if (!repeat) {
+        handle_keyboard_event(key, pressed);
+    }
+}
+
+void EmulatedSystem::handle_text_input(const char* text) {
+    // Default: no text input handling (systems using KeyboardMapper override this)
+    (void)text;
+}
+
+void EmulatedSystem::release_all_keys() {
+    // Default: nothing to release
+}

@@ -8,6 +8,7 @@
 #include "../../chip/memory/mos2114.h"
 #include "../../chip/io/mos6522.h"
 #include "../../chip/input/commodore_keyboard.h"
+#include "../../chip/input/keyboard_mapper.h"
 #include "../../chip/video/vic/mos6560.h"
 #include "../../chip/video/vic/mos6561.h"
 #include "vic20_bus.h"
@@ -79,6 +80,9 @@ public:
     
     // Input
     void handle_keyboard_event(int key, bool pressed) override;
+    void handle_keyboard_event_ex(int key, int scancode, uint16_t mod, bool pressed, bool repeat) override;
+    void handle_text_input(const char* text) override;
+    void release_all_keys() override;
     
     // GUI integration
     void render_system_menu_items() override;
@@ -104,6 +108,7 @@ private:
     mos6522_t* via1_;                // MOS6522 VIA 1 - keyboard, joystick
     mos6522_t* via2_;                // MOS6522 VIA 2 - user port, serial
     commodore_keyboard_t* keyboard_; // Keyboard matrix (shared with C64)
+    std::unique_ptr<KeyboardMapper> keyboard_mapper_; // Layered keyboard mapping engine
     
     // System state
     uint32_t cycles_per_frame_;

@@ -206,7 +206,10 @@ bool C16System::initialize() {
     
     // Create keyboard matrix (8×8, scanned by TED)
     keyboard_ = commodore_keyboard_create(&c16_keyboard_config);
-    if (!keyboard_) {
+    if (keyboard_) {
+        // Create the layered keyboard mapper for character-based input
+        keyboard_mapper_.reset(create_c16_keyboard_mapper(keyboard_));
+    } else {
         printf("C16: Warning - keyboard matrix creation failed\n");
     }
     // NOTE: TED keyboard scanning callbacks will be connected once the TED
@@ -335,13 +338,42 @@ void C16System::set_framebuffer(uint32_t* buffer, int width, int height) {
 // ============================================================================
 
 void C16System::handle_keyboard_event(int key, bool pressed) {
-    if (keyboard_) {
-        bool shift_pressed = false;  // Shift is its own matrix key, handled via the matrix
+    if (keyboard_mapper_) {
         if (pressed) {
-            commodore_keyboard_key_down(keyboard_, (uint32_t)key, shift_pressed);
+            keyboard_mapper_->process_key_down((SDL_Keycode)key, SDL_SCANCODE_UNKNOWN, 0, false);
         } else {
-            commodore_keyboard_key_up(keyboard_, (uint32_t)key, shift_pressed);
+            keyboard_mapper_->process_key_up((SDL_Keycode)key, SDL_SCANCODE_UNKNOWN, 0);
         }
+    } else if (keyboard_) {
+        if (pressed) {
+            commodore_keyboard_key_down(keyboard_, (uint32_t)key, false);
+        } else {
+            commodore_keyboard_key_up(keyboard_, (uint32_t)key, false);
+        }
+    }
+}
+
+void C16System::handle_keyboard_event_ex(int key, int scancode, uint16_t mod, bool pressed, bool repeat) {
+    if (keyboard_mapper_) {
+        if (pressed) {
+            keyboard_mapper_->process_key_down((SDL_Keycode)key, (SDL_Scancode)scancode, mod, repeat);
+        } else {
+            keyboard_mapper_->process_key_up((SDL_Keycode)key, (SDL_Scancode)scancode, mod);
+        }
+    } else if (!repeat) {
+        handle_keyboard_event(key, pressed);
+    }
+}
+
+void C16System::handle_text_input(const char* text) {
+    if (keyboard_mapper_) {
+        keyboard_mapper_->process_text_input(text);
+    }
+}
+
+void C16System::release_all_keys() {
+    if (keyboard_mapper_) {
+        keyboard_mapper_->release_all();
     }
 }
 

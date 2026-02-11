@@ -398,6 +398,9 @@ bool VIC20System::initialize() {
     // VIC-20 keyboard: VIA2 Port B selects columns, VIA2 Port A reads rows
     keyboard_ = commodore_keyboard_create(&vic20_keyboard_config);
     if (keyboard_) {
+        // Create the layered keyboard mapper for character-based input
+        keyboard_mapper_.reset(create_vic20_keyboard_mapper(keyboard_));
+        
         if (via2_) {
             // Register port read callbacks for keyboard matrix scanning
             // Port A reads rows, Port B reads columns (reverse scanning)
@@ -567,13 +570,42 @@ void VIC20System::set_framebuffer(uint32_t* buffer, int width, int height) {
 // ============================================================================
 
 void VIC20System::handle_keyboard_event(int key, bool pressed) {
-    if (keyboard_) {
-        bool shift_pressed = false;  // Shift is its own matrix key, handled via the matrix
+    if (keyboard_mapper_) {
         if (pressed) {
-            commodore_keyboard_key_down(keyboard_, (uint32_t)key, shift_pressed);
+            keyboard_mapper_->process_key_down((SDL_Keycode)key, SDL_SCANCODE_UNKNOWN, 0, false);
         } else {
-            commodore_keyboard_key_up(keyboard_, (uint32_t)key, shift_pressed);
+            keyboard_mapper_->process_key_up((SDL_Keycode)key, SDL_SCANCODE_UNKNOWN, 0);
         }
+    } else if (keyboard_) {
+        if (pressed) {
+            commodore_keyboard_key_down(keyboard_, (uint32_t)key, false);
+        } else {
+            commodore_keyboard_key_up(keyboard_, (uint32_t)key, false);
+        }
+    }
+}
+
+void VIC20System::handle_keyboard_event_ex(int key, int scancode, uint16_t mod, bool pressed, bool repeat) {
+    if (keyboard_mapper_) {
+        if (pressed) {
+            keyboard_mapper_->process_key_down((SDL_Keycode)key, (SDL_Scancode)scancode, mod, repeat);
+        } else {
+            keyboard_mapper_->process_key_up((SDL_Keycode)key, (SDL_Scancode)scancode, mod);
+        }
+    } else if (!repeat) {
+        handle_keyboard_event(key, pressed);
+    }
+}
+
+void VIC20System::handle_text_input(const char* text) {
+    if (keyboard_mapper_) {
+        keyboard_mapper_->process_text_input(text);
+    }
+}
+
+void VIC20System::release_all_keys() {
+    if (keyboard_mapper_) {
+        keyboard_mapper_->release_all();
     }
 }
 
