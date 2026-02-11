@@ -85,27 +85,19 @@ typedef struct {
 
 } commodore_keyboard_t;
 
-// Keyboard matrix definition - C64 layout
-// Using SDL keycodes for all keys
-extern const uint32_t keyboard_matrix_unshifted[KEYBOARD_ROWS][KEYBOARD_COLS];
-extern const uint32_t keyboard_matrix_shifted[KEYBOARD_ROWS][KEYBOARD_COLS];
-
-// Keyboard matrix definition - VIC-20 layout
-// VIC-20 has different matrix wiring: rows 0↔7 swapped and columns 3↔7 swapped vs C64
-extern const uint32_t keyboard_matrix_unshifted_vic20[KEYBOARD_ROWS][KEYBOARD_COLS];
-extern const uint32_t keyboard_matrix_shifted_vic20[KEYBOARD_ROWS][KEYBOARD_COLS];
+// System-specific keyboard matrices are provided by the system layer at creation time.
+// The keyboard itself is completely matrix-agnostic.
 
 // Function declarations
-commodore_keyboard_t* commodore_keyboard_create();
+commodore_keyboard_t* commodore_keyboard_create(
+    const uint32_t (*unshifted)[KEYBOARD_COLS],
+    const uint32_t (*shifted)[KEYBOARD_COLS]);
 void commodore_keyboard_destroy(commodore_keyboard_t* keyboard);
 void commodore_keyboard_reset(commodore_keyboard_t* keyboard);
 
 // SDL-based keyboard input handling
 void commodore_keyboard_key_down(commodore_keyboard_t* keyboard, uint32_t key_code, bool shifted);
 void commodore_keyboard_key_up(commodore_keyboard_t* keyboard, uint32_t key_code, bool shifted);
-
-// Set keyboard matrix mode (VIC-20 has different wiring than C64)
-void commodore_keyboard_set_vic20_mode(commodore_keyboard_t* keyboard);
 
 // SDL keycode to Commodore key mapping
 uint32_t commodore_keyboard_map_host_key(uint32_t sdl_key, bool shifted);

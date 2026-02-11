@@ -2,6 +2,7 @@
 #include "vic20_memory.h"
 #include "vic20_chips.h"
 #include "../../chip/input/commodore_keyboard.h"
+#include "vic20_keyboard_matrix.h" // VIC-20 keyboard matrix data
 #include <cstring>
 #include <cstdio>
 
@@ -395,11 +396,9 @@ bool VIC20System::initialize() {
     
     // Create keyboard matrix and connect to VIA2
     // VIC-20 keyboard: VIA2 Port B selects columns, VIA2 Port A reads rows
-    keyboard_ = commodore_keyboard_create();
+    keyboard_ = commodore_keyboard_create(keyboard_matrix_unshifted_vic20,
+                                           keyboard_matrix_shifted_vic20);
     if (keyboard_) {
-        // VIC-20 has different matrix wiring than C64 - switch to VIC-20 layout
-        commodore_keyboard_set_vic20_mode(keyboard_);
-
         if (via2_) {
             // Register port read callbacks for keyboard matrix scanning
             // Port A reads rows, Port B reads columns (reverse scanning)
