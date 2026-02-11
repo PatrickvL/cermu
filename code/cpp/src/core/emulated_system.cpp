@@ -77,7 +77,7 @@ void EmulatedSystem::render_debug_windows(void* gui_state) {
     (void)gui_state;
 }
 
-void EmulatedSystem::handle_keyboard_event_ex(int key, int scancode, uint16_t mod, bool pressed, bool repeat) {
+void EmulatedSystem::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) {
     // Default: fall back to the simple handle_keyboard_event (ignoring extra info)
     (void)scancode;
     (void)mod;

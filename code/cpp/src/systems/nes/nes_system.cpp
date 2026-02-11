@@ -1187,7 +1187,7 @@ void NESSystem::set_framebuffer(uint32_t* buffer, int width, int height) {
     rgba_height_ = height;
 }
 
-void NESSystem::handle_keyboard_event(int key, bool pressed) {
+void NESSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 #ifdef IMGUI_VERSION
     if (!cpu_) return;
     

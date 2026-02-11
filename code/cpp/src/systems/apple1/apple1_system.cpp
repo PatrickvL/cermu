@@ -312,7 +312,7 @@ void Apple1System::set_framebuffer(uint32_t* buffer, int width, int height) {
 // Input
 // ============================================================================
 
-void Apple1System::handle_keyboard_event(int key, bool pressed) {
+void Apple1System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     if (!pressed) return;  // Only handle key press, not release
     
     // Convert to uppercase (Apple 1 was uppercase only)

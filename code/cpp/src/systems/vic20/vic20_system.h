@@ -79,8 +79,8 @@ public:
     void set_framebuffer(uint32_t* buffer, int width, int height) override;
     
     // Input
-    void handle_keyboard_event(int key, bool pressed) override;
-    void handle_keyboard_event_ex(int key, int scancode, uint16_t mod, bool pressed, bool repeat) override;
+    void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
+    void handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) override;
     void handle_text_input(const char* text) override;
     void release_all_keys() override;
     

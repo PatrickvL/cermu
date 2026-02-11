@@ -436,7 +436,7 @@ public:
     void set_framebuffer(uint32_t* buffer, int width, int height) override;
     
     // EmulatedSystem interface - Input
-    void handle_keyboard_event(int key, bool pressed) override;
+    void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
     void handle_controller_event(int controller, int button, bool pressed) override;
     
     // EmulatedSystem interface - GUI integration

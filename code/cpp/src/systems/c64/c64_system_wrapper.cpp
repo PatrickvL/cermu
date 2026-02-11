@@ -271,21 +271,21 @@ void C64SystemWrapper::set_framebuffer(uint32_t* buffer, int width, int height) 
     }
 }
 
-void C64SystemWrapper::handle_keyboard_event(int key, bool pressed) {
+void C64SystemWrapper::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // Legacy path — still used when handle_keyboard_event_ex is not called
     // (e.g., from the old C64-only GUI, test harness, or non-SDL input)
     if (keyboard_mapper_) {
         // Route through the mapper with minimal info
         if (pressed) {
             keyboard_mapper_->process_key_down(
-                (SDL_Keycode)key, SDL_SCANCODE_UNKNOWN, 0, false);
+                key, SDL_SCANCODE_UNKNOWN, 0, false);
         } else {
             keyboard_mapper_->process_key_up(
-                (SDL_Keycode)key, SDL_SCANCODE_UNKNOWN, 0);
+                key, SDL_SCANCODE_UNKNOWN, 0);
         }
     } else if (c64_ && c64_->keyboard) {
         // No mapper — convert SDL keycode to EmuKey and pass through
-        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key((SDL_Keycode)key);
+        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(key);
         if (ek != EMUKEY_NONE) {
             if (pressed) {
                 commodore_keyboard_key_down(c64_->keyboard, ek, false);
@@ -296,14 +296,12 @@ void C64SystemWrapper::handle_keyboard_event(int key, bool pressed) {
     }
 }
 
-void C64SystemWrapper::handle_keyboard_event_ex(int key, int scancode, uint16_t mod, bool pressed, bool repeat) {
+void C64SystemWrapper::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) {
     if (keyboard_mapper_) {
         if (pressed) {
-            keyboard_mapper_->process_key_down(
-                (SDL_Keycode)key, (SDL_Scancode)scancode, mod, repeat);
+            keyboard_mapper_->process_key_down(key, scancode, mod, repeat);
         } else {
-            keyboard_mapper_->process_key_up(
-                (SDL_Keycode)key, (SDL_Scancode)scancode, mod);
+            keyboard_mapper_->process_key_up(key, scancode, mod);
         }
     } else {
         // Fallback to legacy handler
