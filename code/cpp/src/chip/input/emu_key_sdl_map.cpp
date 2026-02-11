@@ -79,6 +79,15 @@ EmuKeySDLMap::EmuKeySDLMap() {
     ascii_to_scancode_['.']  = SDL_SCANCODE_PERIOD;
     ascii_to_scancode_['/']  = SDL_SCANCODE_SLASH;
 
+    // Non-printable keys whose SDL keycodes are bare ASCII values
+    // (no SDLK_SCANCODE_MASK).  Without these, sdl_keycode_to_emu_key
+    // returns EMUKEY_NONE and the keys are silently consumed.
+    ascii_to_scancode_['\r'] = SDL_SCANCODE_RETURN;     // SDLK_RETURN = 13
+    ascii_to_scancode_['\b'] = SDL_SCANCODE_BACKSPACE;  // SDLK_BACKSPACE = 8
+    ascii_to_scancode_['\t'] = SDL_SCANCODE_TAB;        // SDLK_TAB = 9
+    ascii_to_scancode_[0x1B] = SDL_SCANCODE_ESCAPE;     // SDLK_ESCAPE = 27
+    ascii_to_scancode_[0x7F] = SDL_SCANCODE_DELETE;     // SDLK_DELETE = 127
+
     // ========================================================================
     // Step 3: Register default non-identity mappings.
     // Emulator-specific keys that should respond to a default host key.

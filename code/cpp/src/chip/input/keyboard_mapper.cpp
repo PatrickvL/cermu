@@ -14,7 +14,8 @@ KeyboardMapper::KeyboardMapper()
     , model_(KEYBOARD_MODEL_UNKNOWN)
     , emu_modifier_key_(SDLK_RALT)
     , emu_modifier_held_(false)
-    , host_shift_held_(false)
+    , host_lshift_held_(false)
+    , host_rshift_held_(false)
     , host_ctrl_held_(false)
     , host_cbm_held_(false)
     , text_input_enabled_(true)
@@ -62,73 +63,73 @@ void KeyboardMapper::build_character_map_from_matrix(const keyboard_matrix_confi
     uint8_t rows = config->rows;
     uint8_t cols = config->cols;
 
-    // Phase 1: Map unshifted characters
-    // Derive the unshifted character from the EmuKey value using emu_key_to_char().
-    for (int row = 0; row < rows; row++) {
-        for (int col = 0; col < cols; col++) {
-            emu_key_t key = config->keys[row * cols + col];
+    // Build the character map from PETSCII decode tables.
+    //
+    // Each decode table maps every matrix position to a PETSCII code for
+    // a specific modifier combination (KEYMOD_NONE, KEYMOD_SHIFT, etc.).
+    // We convert each PETSCII code to a host character via
+    // petscii_to_host_char(), then store the reverse mapping:
+    //   char_map_[host_char] = { row, col, table.modifiers }
+    //
+    // Tables are processed in order.  First-write-wins: the first table
+    // that maps a host character claims that char_map_ slot.  This means
+    // the KEYMOD_NONE (unshifted) table should come first, followed by
+    // KEYMOD_SHIFT, then KEYMOD_CBM, etc.
+    //
+    // After the decode table loop, a position-accurate letter fixup copies
+    // the unshifted 'A'-'Z' mappings to 'a'-'z'.  This is necessary
+    // because the Commodore default character set shows UPPERCASE for
+    // unshifted keys.  Without the fixup, typing 'a' would force SHIFT
+    // (from the PETSCII $C1 shifted-table entry), and the VIC-20/C64
+    // KERNAL would produce a graphics character instead of a letter.
+    //
+    // Commodore-specific characters are handled automatically:
+    //   £ ($5C) → petscii_to_host_char → '|' → char_map_['|'] = KEYMOD_NONE
+    //   ↑ ($5E) → petscii_to_host_char → '^' → char_map_['^'] = KEYMOD_NONE
+    //   ← ($5F) → petscii_to_host_char → '\\' → char_map_['\\'] = KEYMOD_NONE
+    //   π ($DE) → petscii_to_host_char → '~' → char_map_['~'] = KEYMOD_SHIFT
 
-            // Get the ASCII character this key produces unshifted
-            char c = emu_key_to_char(key);
-            if (c == 0) continue;  // Non-character key (modifier, function key, etc.)
+    for (int t = 0; t < config->num_decode_tables; t++) {
+        const keyboard_decode_table_t& table = config->decode_tables[t];
+        if (!table.petscii) continue;
 
-            // On the C64/VIC-20, unshifted letters in the matrix are uppercase (A-Z).
-            // SDL_TEXTINPUT will send lowercase for unshifted and uppercase for shifted.
-            // Map both cases: uppercase 'A' and lowercase 'a' → same matrix position.
-            if (c >= 'A' && c <= 'Z') {
-                // Uppercase letter: on C64, this is the UNSHIFTED output
-                if (!char_map_[(int)c].valid) {
-                    char_map_[(int)c] = GuestKeyAction(row, col, KEYMOD_NONE);
-                }
-                // Also map lowercase to the same position
-                char lower = c + 32;
-                if (!char_map_[(int)lower].valid) {
-                    char_map_[(int)lower] = GuestKeyAction(row, col, KEYMOD_NONE);
-                }
-            } else if (c >= 'a' && c <= 'z') {
-                if (!char_map_[(int)c].valid) {
-                    char_map_[(int)c] = GuestKeyAction(row, col, KEYMOD_NONE);
-                }
-            } else {
-                // Non-letter character (digit, punctuation)
-                if (!char_map_[(int)c].valid) {
-                    char_map_[(int)c] = GuestKeyAction(row, col, KEYMOD_NONE);
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
+                petscii_t p = table.petscii[row * cols + col];
+                if (p == 0) continue;
+
+                char host_char = petscii_to_host_char(p);
+                if (host_char == 0) continue;
+
+                unsigned char uc = (unsigned char)host_char;
+                if (uc >= 128) continue;
+
+                // First-write-wins: don't overwrite existing mappings
+                if (!char_map_[uc].valid) {
+                    char_map_[uc] = GuestKeyAction(row, col, table.modifiers);
                 }
             }
         }
     }
 
-    // Phase 2: Map characters from decode tables (shifted, CBM, ctrl, etc.)
-    // Each decode table maps a modifier combination to character outputs.
-    for (int t = 0; t < config->num_decode_tables; t++) {
-        const keyboard_decode_table_t& table = config->decode_tables[t];
-        if (!table.characters) continue;
-
-        for (int row = 0; row < rows; row++) {
-            for (int col = 0; col < cols; col++) {
-                uint8_t ch = table.characters[row * cols + col];
-
-                // 0 = no character for this position with these modifiers
-                if (ch == 0) continue;
-                // Only handle printable ASCII for now
-                if (ch >= 128) continue;
-
-                char c = (char)ch;
-
-                if (c >= 'a' && c <= 'z') {
-                    // Lowercase letter in a modified position (e.g., C64 shifted = lowercase)
-                    // Skip: lowercase should map to unshifted key (mapped in phase 1).
-                } else if (c >= 'A' && c <= 'Z') {
-                    if (!char_map_[(int)c].valid) {
-                        char_map_[(int)c] = GuestKeyAction(row, col, table.modifiers);
-                    }
-                } else {
-                    // Modified symbol (e.g., '"' on C64 is Shift+2, '!' is Shift+1)
-                    if (!char_map_[(int)c].valid) {
-                        char_map_[(int)c] = GuestKeyAction(row, col, table.modifiers);
-                    }
-                }
-            }
+    // Position-accurate letter fixup: map both 'a' and 'A' to KEYMOD_NONE.
+    //
+    // The Commodore default character set (uppercase/graphics) shows uppercase
+    // letters for unshifted keypresses.  Shift+letter produces a graphics
+    // character, NOT a lowercase letter.  Lowercase letters only appear after
+    // toggling to the alternate charset via C=+SHIFT.
+    //
+    // The decode table loop above creates:
+    //   char_map_['A'] = { A-pos, KEYMOD_NONE }   ← from unshifted table ($41)
+    //   char_map_['a'] = { A-pos, KEYMOD_SHIFT }   ← from shifted table ($C1)
+    //
+    // The 'a' → KEYMOD_SHIFT mapping is character-accurate PETSCII but causes
+    // inject_press to FORCE SHIFT for every unshifted host letter, producing
+    // graphics characters instead of letters.  Override 'a'-'z' with the
+    // position-accurate KEYMOD_NONE mapping from 'A'-'Z':
+    for (int i = 0; i < 26; i++) {
+        if (char_map_['A' + i].valid) {
+            char_map_['a' + i] = char_map_['A' + i];
         }
     }
 
@@ -267,14 +268,44 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
     if (repeat) return true;
 
     // Track host modifier state
-    if (sym == SDLK_LSHIFT || sym == SDLK_RSHIFT) {
-        host_shift_held_ = true;
-    }
+    if (sym == SDLK_LSHIFT) host_lshift_held_ = true;
+    if (sym == SDLK_RSHIFT) host_rshift_held_ = true;
     if (sym == SDLK_LCTRL || sym == SDLK_RCTRL) {
         host_ctrl_held_ = true;
     }
     if (sym == SDLK_LGUI) {
         host_cbm_held_ = true;
+    }
+
+    // ====================================================================
+    // Modifier reconciliation: detect "stuck" modifiers from lost key-up
+    // ====================================================================
+    // The SDL `mod` field contains the modifier state BEFORE this key event.
+    // If our tracking variable says a modifier is held but SDL disagrees,
+    // the key-up was lost (e.g., Linux WM intercepted LGUI / Super).
+    // Open the stuck matrix contact and reset tracking — but only when the
+    // current key is NOT the modifier itself (its own key-down legitimately
+    // sets tracking before we get here, and `mod` doesn't include it yet).
+    if (host_cbm_held_ && !(mod & KMOD_LGUI) && sym != SDLK_LGUI) {
+        host_cbm_held_ = false;
+        if (cbm_key_pos_.valid) {
+            open_contact(cbm_key_pos_.row, cbm_key_pos_.col);
+        }
+    }
+    if (host_ctrl_held_ && !(mod & (KMOD_LCTRL | KMOD_RCTRL))
+        && sym != SDLK_LCTRL && sym != SDLK_RCTRL) {
+        host_ctrl_held_ = false;
+        if (ctrl_key_pos_.valid) {
+            open_contact(ctrl_key_pos_.row, ctrl_key_pos_.col);
+        }
+    }
+    if (host_lshift_held_ && !(mod & KMOD_LSHIFT) && sym != SDLK_LSHIFT) {
+        host_lshift_held_ = false;
+        if (shift_left_pos_.valid) open_contact(shift_left_pos_.row, shift_left_pos_.col);
+    }
+    if (host_rshift_held_ && !(mod & KMOD_RSHIFT) && sym != SDLK_RSHIFT) {
+        host_rshift_held_ = false;
+        if (shift_right_pos_.valid) open_contact(shift_right_pos_.row, shift_right_pos_.col);
     }
 
     // Check if this is the emulator modifier key itself
@@ -345,6 +376,38 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
     }
 
     // ====================================================================
+    // Guest modifier pass-through: CBM + key or CTRL + key
+    // ====================================================================
+    // When the host user holds LGUI (→ Commodore key) or LCTRL (→ CTRL)
+    // and presses a printable key, we bypass the TEXTINPUT path entirely.
+    // The modifier contact is already closed in the matrix from its own
+    // key_down event.  We just close the printable key's contact and let
+    // the guest KERNAL see the combined modifier + key state.
+    //
+    // This enables graphics characters (C= + letter), colour codes
+    // (CTRL + digit), and other modifier-specific outputs that have no
+    // host TEXTINPUT equivalent.
+    //
+    // The inject_press call uses a modifier bitmask built from the ACTUAL
+    // host modifier state, so it won't force or suppress anything — the
+    // modifiers are already down.
+    if ((host_cbm_held_ || host_ctrl_held_) && is_printable_key(sym)) {
+        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
+        if (ek != EMUKEY_NONE) {
+            uint8_t row, col;
+            if (commodore_keyboard_find_key(keyboard_, ek, &row, &col)) {
+                // Build modifier mask from actual host state — no forcing/suppressing
+                uint8_t mods = KEYMOD_NONE;
+                if (host_cbm_held_)   mods |= KEYMOD_CBM;
+                if (host_ctrl_held_)  mods |= KEYMOD_CTRL;
+                if (host_shift_held()) mods |= KEYMOD_SHIFT;
+                inject_press(GuestKeyAction(row, col, mods), scancode, false);
+                return true;
+            }
+        }
+    }
+
+    // ====================================================================
     // Layer 1: Printable keys — use character-based mapping via TEXTINPUT
     // ====================================================================
     if (text_input_enabled_) {
@@ -371,8 +434,11 @@ bool KeyboardMapper::process_key_up(SDL_Keycode sym, SDL_Scancode scancode, uint
     if (!keyboard_) return false;
 
     // Track host modifier state
-    if (sym == SDLK_LSHIFT || sym == SDLK_RSHIFT) {
-        host_shift_held_ = (mod & (KMOD_LSHIFT | KMOD_RSHIFT)) != 0;
+    if (sym == SDLK_LSHIFT) {
+        host_lshift_held_ = (mod & KMOD_LSHIFT) != 0;
+    }
+    if (sym == SDLK_RSHIFT) {
+        host_rshift_held_ = (mod & KMOD_RSHIFT) != 0;
     }
     if (sym == SDLK_LCTRL || sym == SDLK_RCTRL) {
         host_ctrl_held_ = (mod & (KMOD_LCTRL | KMOD_RCTRL)) != 0;
@@ -472,15 +538,29 @@ bool KeyboardMapper::process_text_input(const char* text) {
 
         const GuestKeyAction& action = char_map_[uc];
         if (!action.valid) {
-            // No mapping for this character — try uppercase/lowercase variant
+            // No mapping for this character — try fallback alternatives.
+            // 1. Uppercase/lowercase variant (host layouts vary)
             char alt = 0;
             if (c >= 'a' && c <= 'z') alt = c - 32;  // try uppercase
             else if (c >= 'A' && c <= 'Z') alt = c + 32;  // try lowercase
 
             if (alt > 0 && char_map_[(unsigned char)alt].valid) {
-                // Use the alternative mapping
                 SDL_Scancode sc = has_pending_key_ ? pending_key_.scancode : SDL_SCANCODE_UNKNOWN;
                 inject_press(char_map_[(unsigned char)alt], sc, true);
+                has_pending_key_ = false;
+                continue;
+            }
+
+            // 2. Shifted-bracket family: { and } don't exist on Commodore
+            //    keyboards, but [ and ] do (as shifted : and ;).
+            //    Map them so the user's keystrokes aren't silently lost.
+            char bracket_alt = 0;
+            if (c == '{') bracket_alt = '[';
+            else if (c == '}') bracket_alt = ']';
+
+            if (bracket_alt && char_map_[(unsigned char)bracket_alt].valid) {
+                SDL_Scancode sc = has_pending_key_ ? pending_key_.scancode : SDL_SCANCODE_UNKNOWN;
+                inject_press(char_map_[(unsigned char)bracket_alt], sc, true);
                 has_pending_key_ = false;
                 continue;
             }
@@ -515,9 +595,17 @@ void KeyboardMapper::release_all() {
     // Release RESTORE if active
     keyboard_->restore_key_pressed = false;
 
+    // Open modifier matrix contacts — these may have been closed via
+    // commodore_keyboard_key_down (Layer 2) and won't be in active_injections_.
+    if (shift_left_pos_.valid) open_contact(shift_left_pos_.row, shift_left_pos_.col);
+    if (shift_right_pos_.valid) open_contact(shift_right_pos_.row, shift_right_pos_.col);
+    if (cbm_key_pos_.valid) open_contact(cbm_key_pos_.row, cbm_key_pos_.col);
+    if (ctrl_key_pos_.valid) open_contact(ctrl_key_pos_.row, ctrl_key_pos_.col);
+
     // Clear modifier tracking
     emu_modifier_held_ = false;
-    host_shift_held_ = false;
+    host_lshift_held_ = false;
+    host_rshift_held_ = false;
     host_ctrl_held_ = false;
     host_cbm_held_ = false;
     has_pending_key_ = false;
@@ -563,15 +651,20 @@ void KeyboardMapper::inject_press(const GuestKeyAction& action, SDL_Scancode hos
     // SHIFT modifier
     if (action.modifiers & KEYMOD_SHIFT) {
         // Guest needs shift — press it if not already held on host
-        if (!host_shift_held_) {
+        if (!host_shift_held()) {
             close_contact(shift_left_pos_.row, shift_left_pos_.col);
             inj.forced_modifiers |= KEYMOD_SHIFT;
         }
     } else {
-        // Guest needs NO shift — suppress if host has it held
-        if (host_shift_held_) {
-            if (shift_left_pos_.valid) open_contact(shift_left_pos_.row, shift_left_pos_.col);
-            if (shift_right_pos_.valid) open_contact(shift_right_pos_.row, shift_right_pos_.col);
+        // Guest needs NO shift — suppress only the shift(s) actually held.
+        // Opening only the held contact(s) ensures release_injection can
+        // re-close the correct one(s) without creating stuck contacts.
+        if (host_lshift_held_ && shift_left_pos_.valid) {
+            open_contact(shift_left_pos_.row, shift_left_pos_.col);
+            inj.suppressed_modifiers |= KEYMOD_SHIFT;
+        }
+        if (host_rshift_held_ && shift_right_pos_.valid) {
+            open_contact(shift_right_pos_.row, shift_right_pos_.col);
             inj.suppressed_modifiers |= KEYMOD_SHIFT;
         }
     }
@@ -630,8 +723,11 @@ void KeyboardMapper::release_injection(const ActiveInjection& injection) {
 
     // Restore suppressed modifiers — re-close them if the host key is still physically held
     if (injection.suppressed_modifiers & KEYMOD_SHIFT) {
-        if (host_shift_held_ && shift_left_pos_.valid) {
+        if (host_lshift_held_ && shift_left_pos_.valid) {
             close_contact(shift_left_pos_.row, shift_left_pos_.col);
+        }
+        if (host_rshift_held_ && shift_right_pos_.valid) {
+            close_contact(shift_right_pos_.row, shift_right_pos_.col);
         }
     }
     if (injection.suppressed_modifiers & KEYMOD_CBM) {
@@ -761,26 +857,9 @@ KeyboardMapper* create_c64_keyboard_mapper(commodore_keyboard_t* keyboard) {
     // Register default emulator modifier mappings
     mapper->register_default_synthetic_mappings();
 
-    // Add manual character mappings for host characters that correspond to
-    // Commodore-specific keys (EmuKey values >= 512) which emu_key_to_char()
-    // returns 0 for — so build_character_map_from_matrix can't discover them.
-    //
-    // Use commodore_keyboard_find_key to look up the matrix positions.
-    uint8_t row, col;
-
-    // ARROW_LEFT (← char)
-    if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_ARROW_LEFT, &row, &col)) {
-        mapper->add_char_mapping('\\', GuestKeyAction(row, col, KEYMOD_NONE));  // host \ → guest ←
-    }
-    // ARROW_UP (↑ char)
-    if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_ARROW_UP, &row, &col)) {
-        mapper->add_char_mapping('^', GuestKeyAction(row, col, KEYMOD_NONE));   // host ^ → guest ↑
-        mapper->add_char_mapping('~', GuestKeyAction(row, col, KEYMOD_SHIFT));  // host ~ → guest π (shifted ↑)
-    }
-    // POUND (£ char)
-    if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_POUND, &row, &col)) {
-        mapper->add_char_mapping('|', GuestKeyAction(row, col, KEYMOD_NONE));   // host | → guest £
-    }
+    // Commodore-specific character mappings (£, ↑, ←, π) are now handled
+    // automatically by the PETSCII decode tables + petscii_to_host_char().
+    // No manual add_char_mapping calls needed.
 
     return mapper;
 }
@@ -792,19 +871,8 @@ KeyboardMapper* create_vic20_keyboard_mapper(commodore_keyboard_t* keyboard) {
 
     mapper->register_default_synthetic_mappings();
 
-    // Manual character mappings for Commodore-specific keys (emu_key_to_char() returns 0).
-    uint8_t row, col;
-
-    if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_ARROW_LEFT, &row, &col)) {
-        mapper->add_char_mapping('\\', GuestKeyAction(row, col, KEYMOD_NONE));
-    }
-    if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_ARROW_UP, &row, &col)) {
-        mapper->add_char_mapping('^', GuestKeyAction(row, col, KEYMOD_NONE));
-        mapper->add_char_mapping('~', GuestKeyAction(row, col, KEYMOD_SHIFT));  // π
-    }
-    if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_POUND, &row, &col)) {
-        mapper->add_char_mapping('|', GuestKeyAction(row, col, KEYMOD_NONE));
-    }
+    // Commodore-specific character mappings (£, ↑, ←, π) are now handled
+    // automatically by the PETSCII decode tables + petscii_to_host_char().
 
     return mapper;
 }
@@ -816,13 +884,8 @@ KeyboardMapper* create_c16_keyboard_mapper(commodore_keyboard_t* keyboard) {
 
     mapper->register_default_synthetic_mappings();
 
-    // Manual character mappings for Commodore-specific keys.
-    // C16/Plus4 has POUND but no ARROW_LEFT or ARROW_UP.
-    uint8_t row, col;
-
-    if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_POUND, &row, &col)) {
-        mapper->add_char_mapping('|', GuestKeyAction(row, col, KEYMOD_NONE));
-    }
+    // Commodore-specific character mappings are now handled automatically
+    // by the PETSCII decode tables + petscii_to_host_char().
 
     return mapper;
 }
