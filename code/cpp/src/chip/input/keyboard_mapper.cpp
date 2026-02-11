@@ -16,6 +16,7 @@ KeyboardMapper::KeyboardMapper()
     , emu_modifier_held_(false)
     , host_shift_held_(false)
     , host_ctrl_held_(false)
+    , host_cbm_held_(false)
     , text_input_enabled_(true)
     , has_pending_key_(false)
     , matrix_rows_(0)
@@ -47,7 +48,7 @@ void KeyboardMapper::set_guest_keyboard(commodore_keyboard_t* keyboard) {
 }
 
 void KeyboardMapper::build_character_map_from_matrix(const keyboard_matrix_config_t* config) {
-    if (!config || !config->keys || !config->shifted_chars) return;
+    if (!config || !config->keys || !config->decode_tables || config->num_decode_tables == 0) return;
 
     model_ = config->model;
     matrix_rows_ = config->rows;
@@ -77,68 +78,80 @@ void KeyboardMapper::build_character_map_from_matrix(const keyboard_matrix_confi
             if (c >= 'A' && c <= 'Z') {
                 // Uppercase letter: on C64, this is the UNSHIFTED output
                 if (!char_map_[(int)c].valid) {
-                    char_map_[(int)c] = GuestKeyAction(row, col, false, true);
-                    // requires_unshift=true because host is pressing shift but guest needs no shift
+                    char_map_[(int)c] = GuestKeyAction(row, col, KEYMOD_NONE);
                 }
                 // Also map lowercase to the same position
                 char lower = c + 32;
                 if (!char_map_[(int)lower].valid) {
-                    char_map_[(int)lower] = GuestKeyAction(row, col, false, false);
+                    char_map_[(int)lower] = GuestKeyAction(row, col, KEYMOD_NONE);
                 }
             } else if (c >= 'a' && c <= 'z') {
                 if (!char_map_[(int)c].valid) {
-                    char_map_[(int)c] = GuestKeyAction(row, col, false, false);
+                    char_map_[(int)c] = GuestKeyAction(row, col, KEYMOD_NONE);
                 }
             } else {
                 // Non-letter character (digit, punctuation)
-                // requires_unshift=true: if the host produced this via a shifted key,
-                // we must suppress the guest shift contact.
                 if (!char_map_[(int)c].valid) {
-                    char_map_[(int)c] = GuestKeyAction(row, col, false, true);
+                    char_map_[(int)c] = GuestKeyAction(row, col, KEYMOD_NONE);
                 }
             }
         }
     }
 
-    // Phase 2: Map shifted characters from shifted_chars[] table
-    for (int row = 0; row < rows; row++) {
-        for (int col = 0; col < cols; col++) {
-            uint32_t key = config->shifted_chars[row * cols + col];
+    // Phase 2: Map characters from decode tables (shifted, CBM, ctrl, etc.)
+    // Each decode table maps a modifier combination to character outputs.
+    for (int t = 0; t < config->num_decode_tables; t++) {
+        const keyboard_decode_table_t& table = config->decode_tables[t];
+        if (!table.characters) continue;
 
-            // Skip non-character entries (markers, EmuKey values >= 128)
-            if (key == 0 || key == EMUKEY_SAME) continue;
-            if (key >= 128) continue;
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < cols; col++) {
+                uint8_t ch = table.characters[row * cols + col];
 
-            char c = (char)key;
+                // 0 = no character for this position with these modifiers
+                if (ch == 0) continue;
+                // Only handle printable ASCII for now
+                if (ch >= 128) continue;
 
-            if (c >= 'a' && c <= 'z') {
-                // Lowercase letter in shifted position (C64: shifted = lowercase/graphics)
-                // Skip: lowercase should map to unshifted key (mapped in phase 1).
-            } else if (c >= 'A' && c <= 'Z') {
-                if (!char_map_[(int)c].valid) {
-                    char_map_[(int)c] = GuestKeyAction(row, col, true, false);
-                }
-            } else {
-                // Shifted symbol (e.g., '"' on C64 is Shift+2, '!' is Shift+1)
-                if (!char_map_[(int)c].valid) {
-                    char_map_[(int)c] = GuestKeyAction(row, col, true, false);
+                char c = (char)ch;
+
+                if (c >= 'a' && c <= 'z') {
+                    // Lowercase letter in a modified position (e.g., C64 shifted = lowercase)
+                    // Skip: lowercase should map to unshifted key (mapped in phase 1).
+                } else if (c >= 'A' && c <= 'Z') {
+                    if (!char_map_[(int)c].valid) {
+                        char_map_[(int)c] = GuestKeyAction(row, col, table.modifiers);
+                    }
+                } else {
+                    // Modified symbol (e.g., '"' on C64 is Shift+2, '!' is Shift+1)
+                    if (!char_map_[(int)c].valid) {
+                        char_map_[(int)c] = GuestKeyAction(row, col, table.modifiers);
+                    }
                 }
             }
         }
     }
 
-    // Cache shift key positions using the optimised lookup
+    // Cache modifier key positions using the keys[] table
     shift_left_pos_ = GuestKeyAction();
     shift_right_pos_ = GuestKeyAction();
+    cbm_key_pos_ = GuestKeyAction();
+    ctrl_key_pos_ = GuestKeyAction();
 
     for (int row = 0; row < rows; row++) {
         for (int col = 0; col < cols; col++) {
             emu_key_t key = config->keys[row * cols + col];
             if (key == EMUKEY_LSHIFT) {
-                shift_left_pos_ = GuestKeyAction(row, col, false);
+                shift_left_pos_ = GuestKeyAction(row, col, KEYMOD_NONE);
             }
             if (key == EMUKEY_RSHIFT) {
-                shift_right_pos_ = GuestKeyAction(row, col, false);
+                shift_right_pos_ = GuestKeyAction(row, col, KEYMOD_NONE);
+            }
+            if (key == EMUKEY_LGUI) {
+                cbm_key_pos_ = GuestKeyAction(row, col, KEYMOD_NONE);
+            }
+            if (key == EMUKEY_LCTRL) {
+                ctrl_key_pos_ = GuestKeyAction(row, col, KEYMOD_NONE);
             }
         }
     }
@@ -188,7 +201,7 @@ void KeyboardMapper::register_default_synthetic_mappings() {
         if (!keyboard_) return GuestKeyAction();
         uint8_t row, col;
         if (commodore_keyboard_find_key(keyboard_, target_key, &row, &col)) {
-            return GuestKeyAction(row, col, false);
+            return GuestKeyAction(row, col, KEYMOD_NONE);
         }
         return GuestKeyAction();
     };
@@ -208,8 +221,7 @@ void KeyboardMapper::register_default_synthetic_mappings() {
     GuestKeyAction restore_action;
     restore_action.valid = true;
     restore_action.row = 0; restore_action.col = 0;
-    restore_action.requires_shift = false;
-    restore_action.requires_unshift = false;
+    restore_action.modifiers = KEYMOD_NONE;
     // RESTORE is special — it's not in the matrix, it triggers NMI
     // We handle it through the existing keyboard->restore_key_pressed flag
     add_synthetic_mapping(SDLK_r, restore_action, "RESTORE (NMI)");
@@ -260,6 +272,9 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
     }
     if (sym == SDLK_LCTRL || sym == SDLK_RCTRL) {
         host_ctrl_held_ = true;
+    }
+    if (sym == SDLK_LGUI) {
+        host_cbm_held_ = true;
     }
 
     // Check if this is the emulator modifier key itself
@@ -361,6 +376,9 @@ bool KeyboardMapper::process_key_up(SDL_Keycode sym, SDL_Scancode scancode, uint
     }
     if (sym == SDLK_LCTRL || sym == SDLK_RCTRL) {
         host_ctrl_held_ = (mod & (KMOD_LCTRL | KMOD_RCTRL)) != 0;
+    }
+    if (sym == SDLK_LGUI) {
+        host_cbm_held_ = (mod & KMOD_LGUI) != 0;
     }
 
     // Emulator modifier release
@@ -501,6 +519,7 @@ void KeyboardMapper::release_all() {
     emu_modifier_held_ = false;
     host_shift_held_ = false;
     host_ctrl_held_ = false;
+    host_cbm_held_ = false;
     has_pending_key_ = false;
 }
 
@@ -533,30 +552,54 @@ void KeyboardMapper::inject_press(const GuestKeyAction& action, SDL_Scancode hos
     inj.action = action;
     inj.host_scancode = host_scancode;
     inj.from_text_input = from_text;
-    inj.shift_was_forced = false;
-    inj.shift_was_suppressed = false;
+    inj.forced_modifiers = 0;
+    inj.suppressed_modifiers = 0;
 
-    // Handle shift state manipulation
-    if (action.requires_shift) {
+    // Handle modifier state manipulation for each modifier type.
+    // For each modifier bit in action.modifiers:
+    //   - If the action REQUIRES it and host doesn't have it held → force it (press)
+    //   - If the action does NOT require it and host DOES have it held → suppress it (release)
+
+    // SHIFT modifier
+    if (action.modifiers & KEYMOD_SHIFT) {
         // Guest needs shift — press it if not already held on host
         if (!host_shift_held_) {
             close_contact(shift_left_pos_.row, shift_left_pos_.col);
-            inj.shift_was_forced = true;
+            inj.forced_modifiers |= KEYMOD_SHIFT;
         }
-        // If host shift IS held, the shift contact is already closed
-        // from the host Shift key press — we don't need to do anything extra
+    } else {
+        // Guest needs NO shift — suppress if host has it held
+        if (host_shift_held_) {
+            if (shift_left_pos_.valid) open_contact(shift_left_pos_.row, shift_left_pos_.col);
+            if (shift_right_pos_.valid) open_contact(shift_right_pos_.row, shift_right_pos_.col);
+            inj.suppressed_modifiers |= KEYMOD_SHIFT;
+        }
     }
 
-    if (action.requires_unshift && host_shift_held_) {
-        // Guest needs NO shift, but host has shift held — temporarily release it.
-        // We open the shift contact; it will be re-closed when we release this injection.
-        if (shift_left_pos_.valid) {
-            open_contact(shift_left_pos_.row, shift_left_pos_.col);
+    // CBM modifier (Commodore key)
+    if (action.modifiers & KEYMOD_CBM) {
+        if (!host_cbm_held_ && cbm_key_pos_.valid) {
+            close_contact(cbm_key_pos_.row, cbm_key_pos_.col);
+            inj.forced_modifiers |= KEYMOD_CBM;
         }
-        if (shift_right_pos_.valid) {
-            open_contact(shift_right_pos_.row, shift_right_pos_.col);
+    } else {
+        if (host_cbm_held_ && cbm_key_pos_.valid) {
+            open_contact(cbm_key_pos_.row, cbm_key_pos_.col);
+            inj.suppressed_modifiers |= KEYMOD_CBM;
         }
-        inj.shift_was_suppressed = true;
+    }
+
+    // CTRL modifier
+    if (action.modifiers & KEYMOD_CTRL) {
+        if (!host_ctrl_held_ && ctrl_key_pos_.valid) {
+            close_contact(ctrl_key_pos_.row, ctrl_key_pos_.col);
+            inj.forced_modifiers |= KEYMOD_CTRL;
+        }
+    } else {
+        if (host_ctrl_held_ && ctrl_key_pos_.valid) {
+            open_contact(ctrl_key_pos_.row, ctrl_key_pos_.col);
+            inj.suppressed_modifiers |= KEYMOD_CTRL;
+        }
     }
 
     // Close the main key contact
@@ -574,18 +617,31 @@ void KeyboardMapper::release_injection(const ActiveInjection& injection) {
     // Open the main key contact
     open_contact(injection.action.row, injection.action.col);
 
-    // Restore shift state
-    if (injection.shift_was_forced) {
-        // We pressed shift for this injection — release it
+    // Restore forced modifiers — we pressed these for the injection, now release them
+    if (injection.forced_modifiers & KEYMOD_SHIFT) {
         open_contact(shift_left_pos_.row, shift_left_pos_.col);
     }
+    if (injection.forced_modifiers & KEYMOD_CBM) {
+        if (cbm_key_pos_.valid) open_contact(cbm_key_pos_.row, cbm_key_pos_.col);
+    }
+    if (injection.forced_modifiers & KEYMOD_CTRL) {
+        if (ctrl_key_pos_.valid) open_contact(ctrl_key_pos_.row, ctrl_key_pos_.col);
+    }
 
-    if (injection.shift_was_suppressed) {
-        // We suppressed shift for this injection — re-close it if host shift still held
-        if (host_shift_held_) {
-            if (shift_left_pos_.valid) {
-                close_contact(shift_left_pos_.row, shift_left_pos_.col);
-            }
+    // Restore suppressed modifiers — re-close them if the host key is still physically held
+    if (injection.suppressed_modifiers & KEYMOD_SHIFT) {
+        if (host_shift_held_ && shift_left_pos_.valid) {
+            close_contact(shift_left_pos_.row, shift_left_pos_.col);
+        }
+    }
+    if (injection.suppressed_modifiers & KEYMOD_CBM) {
+        if (host_cbm_held_ && cbm_key_pos_.valid) {
+            close_contact(cbm_key_pos_.row, cbm_key_pos_.col);
+        }
+    }
+    if (injection.suppressed_modifiers & KEYMOD_CTRL) {
+        if (host_ctrl_held_ && ctrl_key_pos_.valid) {
+            close_contact(ctrl_key_pos_.row, ctrl_key_pos_.col);
         }
     }
 }
@@ -714,16 +770,16 @@ KeyboardMapper* create_c64_keyboard_mapper(commodore_keyboard_t* keyboard) {
 
     // ARROW_LEFT (← char)
     if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_ARROW_LEFT, &row, &col)) {
-        mapper->add_char_mapping('\\', GuestKeyAction(row, col, false, true));  // host \ → guest ←
+        mapper->add_char_mapping('\\', GuestKeyAction(row, col, KEYMOD_NONE));  // host \ → guest ←
     }
     // ARROW_UP (↑ char)
     if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_ARROW_UP, &row, &col)) {
-        mapper->add_char_mapping('^', GuestKeyAction(row, col, false, true));   // host ^ → guest ↑
-        mapper->add_char_mapping('~', GuestKeyAction(row, col, true, false));   // host ~ → guest π (shifted ↑)
+        mapper->add_char_mapping('^', GuestKeyAction(row, col, KEYMOD_NONE));   // host ^ → guest ↑
+        mapper->add_char_mapping('~', GuestKeyAction(row, col, KEYMOD_SHIFT));  // host ~ → guest π (shifted ↑)
     }
     // POUND (£ char)
     if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_POUND, &row, &col)) {
-        mapper->add_char_mapping('|', GuestKeyAction(row, col, false, true));   // host | → guest £
+        mapper->add_char_mapping('|', GuestKeyAction(row, col, KEYMOD_NONE));   // host | → guest £
     }
 
     return mapper;
@@ -740,14 +796,14 @@ KeyboardMapper* create_vic20_keyboard_mapper(commodore_keyboard_t* keyboard) {
     uint8_t row, col;
 
     if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_ARROW_LEFT, &row, &col)) {
-        mapper->add_char_mapping('\\', GuestKeyAction(row, col, false, true));
+        mapper->add_char_mapping('\\', GuestKeyAction(row, col, KEYMOD_NONE));
     }
     if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_ARROW_UP, &row, &col)) {
-        mapper->add_char_mapping('^', GuestKeyAction(row, col, false, true));
-        mapper->add_char_mapping('~', GuestKeyAction(row, col, true, false));  // π
+        mapper->add_char_mapping('^', GuestKeyAction(row, col, KEYMOD_NONE));
+        mapper->add_char_mapping('~', GuestKeyAction(row, col, KEYMOD_SHIFT));  // π
     }
     if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_POUND, &row, &col)) {
-        mapper->add_char_mapping('|', GuestKeyAction(row, col, false, true));
+        mapper->add_char_mapping('|', GuestKeyAction(row, col, KEYMOD_NONE));
     }
 
     return mapper;
@@ -765,7 +821,7 @@ KeyboardMapper* create_c16_keyboard_mapper(commodore_keyboard_t* keyboard) {
     uint8_t row, col;
 
     if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_POUND, &row, &col)) {
-        mapper->add_char_mapping('|', GuestKeyAction(row, col, false, true));
+        mapper->add_char_mapping('|', GuestKeyAction(row, col, KEYMOD_NONE));
     }
 
     return mapper;

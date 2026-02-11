@@ -31,6 +31,47 @@
 // by EmuKeySDLMap (emu_key_sdl_map.h).
 
 // ============================================================================
+// Keyboard modifier flags
+// ============================================================================
+// Bitmask flags for keyboard modifier keys used in decode tables and
+// GuestKeyAction.  These mirror the modifier key positions in the
+// physical keyboard matrix.
+//
+// On real Commodore hardware, the KERNAL ROM selects a character decode
+// table based on which modifier key contacts are closed in the matrix.
+// These flags identify which modifier combination a decode table (or a
+// GuestKeyAction) corresponds to.
+
+#define KEYMOD_NONE      0x00    // No modifier — base key output
+#define KEYMOD_SHIFT     0x01    // Shift key (left or right)
+#define KEYMOD_CBM       0x02    // Commodore (C=) key
+#define KEYMOD_CTRL      0x04    // Control key
+
+// ============================================================================
+// Keyboard character decode table
+// ============================================================================
+// Maps each matrix position to the character it produces when a specific
+// modifier combination is active.
+//
+// On real Commodore hardware, the KERNAL ROM contains byte tables that
+// map each matrix position to a PETSCII code, indexed by modifier state:
+//
+//   C64 KERNAL:  $EB81 (normal), $EBC2 (shift), $EC03 (C=), $EC78 (ctrl)
+//   VIC-20:      $EC5E (normal), $EC9F (shift), $ECE0 (C=)
+//   C16/Plus4:   TED handles scanning; similar decode structure in KERNAL
+//
+// This structure mirrors that design.  Each entry is a character code:
+//   0       = no character output (modifier key, function key, cursor key,
+//             or same as unmodified — the KERNAL handles it at runtime)
+//   1-127   = ASCII character produced by this position + modifier
+//   128-255 = PETSCII extended characters (graphics, colour codes, etc.)
+
+typedef struct {
+    uint8_t modifiers;               // Modifier bitmask (KEYMOD_SHIFT, etc.)
+    const uint8_t* characters;       // Character codes, rows × cols entries
+} keyboard_decode_table_t;
+
+// ============================================================================
 // Legacy CbmKeys namespace — compatibility shim
 // ============================================================================
 // Maps old CbmKeys::* names to the new EmuKey constants.
@@ -139,13 +180,20 @@ typedef struct {
     // Values are emu_key_t constants (EmuKey codes from emu_keys.h).
     const emu_key_t* keys;
 
-    // Shifted character/key output table — row-major flat array [rows * cols].
-    // Stores information about the shifted output for each matrix position:
-    //   1–127       = ASCII character produced when shifted
-    //   EMUKEY_SAME = shifted output is same as unshifted (handled by KERNAL)
-    //   >= 512      = EmuKey of shifted function key (F2, INST, etc.) — informational
-    //   0           = no entry / not applicable
-    const uint32_t* shifted_chars;
+    // Character decode tables — one per modifier combination.
+    // Each table maps every matrix position to the character it produces
+    // when that modifier combination is active.  Mirrors the KERNAL ROM's
+    // decode table structure.
+    //
+    // The tables are searched in order when building the keyboard mapper's
+    // character map.  Typically:
+    //   [0] = KEYMOD_SHIFT (shifted characters)
+    //   [1] = KEYMOD_CBM   (Commodore key characters)  — optional
+    //   [2] = KEYMOD_CTRL  (control key characters)    — optional
+    //
+    // Unshifted characters are derived from emu_key_to_char(keys[pos]).
+    int num_decode_tables;
+    const keyboard_decode_table_t* decode_tables;
 } keyboard_matrix_config_t;
 
 // ============================================================================
@@ -191,8 +239,9 @@ typedef struct {
 
     // Active matrix pointer — keys[] table from the config
     const emu_key_t* active_keys;
-    // Shifted character table pointer from config
-    const uint32_t* active_shifted_chars;
+    // Decode tables from config (for mapper / runtime use)
+    int num_decode_tables;
+    const keyboard_decode_table_t* decode_tables;
 
     // Auto-shift tracking: cursor left/up require SHIFT + physical cursor key
     bool auto_shift_left_active;

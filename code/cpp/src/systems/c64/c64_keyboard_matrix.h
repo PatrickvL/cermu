@@ -14,7 +14,7 @@
 #define C64_KEYBOARD_COLS 8
 
 // Pre-built configuration struct for commodore_keyboard_create()
-// Contains keys[] (EmuKey values) and shifted_chars[] tables.
+// Contains keys[] (EmuKey values) and decode tables.
 extern const keyboard_matrix_config_t c64_keyboard_config;
 
 #endif // C64_KEYBOARD_MATRIX_H

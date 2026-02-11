@@ -32,7 +32,7 @@ static const char* keyboard_scan_chip_names[] = {
 // ============================================================================
 
 commodore_keyboard_t* commodore_keyboard_create(const keyboard_matrix_config_t* config) {
-    if (!config || !config->keys || !config->shifted_chars) return NULL;
+    if (!config || !config->keys || !config->decode_tables || config->num_decode_tables == 0) return NULL;
     if (config->rows == 0 || config->cols == 0) return NULL;
     if (config->rows > MAX_KEYBOARD_ROWS || config->cols > MAX_KEYBOARD_COLS) {
         printf("ERROR: Keyboard matrix %dx%d exceeds maximum %dx%d\n",
@@ -62,7 +62,8 @@ commodore_keyboard_t* commodore_keyboard_create(const keyboard_matrix_config_t* 
 
     // Store active matrix pointers
     keyboard->active_keys = config->keys;
-    keyboard->active_shifted_chars = config->shifted_chars;
+    keyboard->num_decode_tables = config->num_decode_tables;
+    keyboard->decode_tables = config->decode_tables;
 
     // Initialize keyboard state
     commodore_keyboard_reset(keyboard);
