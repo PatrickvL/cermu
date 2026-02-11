@@ -3,7 +3,8 @@
 #include <string.h>
 #include <stdlib.h>
 
-// Keyboard matrix data is provided by the system layer at creation time.
+// Keyboard matrix data is provided by the system layer at creation time
+// via the keyboard_matrix_config_t struct.
 // See: systems/c64/c64_keyboard_matrix.cpp, systems/vic20/vic20_keyboard_matrix.cpp
 
 // Special key mappings - SDL keycode compatible
@@ -28,13 +29,44 @@ static const uint32_t special_key_mapping[][2] = {
     {CbmKeys::SHIFT_LEFT, CbmKeys::SHIFT_LEFT},  // SHIFT LEFT
     {CbmKeys::COMMODORE, CbmKeys::COMMODORE},  // COMMODORE
     {CbmKeys::RESTORE, CbmKeys::RESTORE},  // RESTORE
+    // C128-specific special keys
+    {CbmKeys::HELP, CbmKeys::HELP},  // HELP
+    {CbmKeys::ALT, CbmKeys::ALT},  // ALT
+    {CbmKeys::ESC, CbmKeys::ESC},  // ESC
+    {CbmKeys::CAPS_LOCK, CbmKeys::CAPS_LOCK},  // CAPS LOCK
+    {CbmKeys::LINE_FEED, CbmKeys::LINE_FEED},  // LINE FEED
     {0, 0}         // Terminator
 };
 
-commodore_keyboard_t* commodore_keyboard_create(
-        const uint32_t (*unshifted)[KEYBOARD_COLS],
-        const uint32_t (*shifted)[KEYBOARD_COLS]) {
-    if (!unshifted || !shifted) return NULL;
+// Human-readable model names for debug output
+static const char* keyboard_model_names[] = {
+    "Unknown",
+    "C64",
+    "VIC-20",
+    "C128",
+    "Plus/4 / C16",
+    "PET/CBM",
+    "CBM-II",
+};
+
+// Human-readable scan chip names for debug output
+static const char* keyboard_scan_chip_names[] = {
+    "Unknown",
+    "CIA (MOS 6526)",
+    "VIA (MOS 6522)",
+    "TED (MOS 7360)",
+    "PIA (MOS 6520)",
+    "TPI (MOS 6525)",
+};
+
+commodore_keyboard_t* commodore_keyboard_create(const keyboard_matrix_config_t* config) {
+    if (!config || !config->unshifted || !config->shifted) return NULL;
+    if (config->rows == 0 || config->cols == 0) return NULL;
+    if (config->rows > MAX_KEYBOARD_ROWS || config->cols > MAX_KEYBOARD_COLS) {
+        printf("ERROR: Keyboard matrix %dx%d exceeds maximum %dx%d\n",
+               config->rows, config->cols, MAX_KEYBOARD_ROWS, MAX_KEYBOARD_COLS);
+        return NULL;
+    }
 
     commodore_keyboard_t* keyboard = (commodore_keyboard_t*)malloc(sizeof(commodore_keyboard_t));
     if (!keyboard) return NULL;
@@ -48,12 +80,23 @@ commodore_keyboard_t* commodore_keyboard_create(
         .bank_change = NULL
     };
 
-    // Use caller-supplied matrix
-    keyboard->active_unshifted = unshifted;
-    keyboard->active_shifted = shifted;
+    // Store model and matrix configuration
+    keyboard->model = config->model;
+    keyboard->scan_chip = config->scan_chip;
+    keyboard->matrix_rows = config->rows;
+    keyboard->matrix_cols = config->cols;
+
+    // Use caller-supplied matrix (flat row-major layout)
+    keyboard->active_unshifted = config->unshifted;
+    keyboard->active_shifted = config->shifted;
 
     // Initialize keyboard state
     commodore_keyboard_reset(keyboard);
+
+    printf("Keyboard: Created %s %dx%d matrix (scan: %s)\n",
+           config->description ? config->description : keyboard_model_names[config->model],
+           config->rows, config->cols,
+           keyboard_scan_chip_names[config->scan_chip]);
 
     return keyboard;
 }
@@ -67,13 +110,18 @@ void commodore_keyboard_destroy(commodore_keyboard_t* keyboard) {
 void commodore_keyboard_reset(commodore_keyboard_t* keyboard) {
     if (!keyboard) return;
 
+    uint8_t rows = keyboard->matrix_rows;
+    uint8_t cols = keyboard->matrix_cols;
+
     // Initialize all contacts as open (no keys pressed)
-    for (int col = 0; col < KEYBOARD_COLS; col++) {
-        keyboard->row_open_contacts[col] = 0xFF; // All rows open
+    // row_open_contacts: indexed by row bit, each byte = col bitmask (all cols open)
+    for (int r = 0; r < MAX_KEYBOARD_ROWS; r++) {
+        keyboard->row_open_contacts[r] = (r < rows) ? (uint8_t)((1 << cols) - 1) : 0x00;
     }
 
-    for (int row = 0; row < KEYBOARD_ROWS; row++) {
-        keyboard->col_open_contacts[row] = 0xFF; // All columns open
+    // col_open_contacts: indexed by col bit, each uint16 = row bitmask (all rows open)
+    for (int c = 0; c < MAX_KEYBOARD_COLS; c++) {
+        keyboard->col_open_contacts[c] = (c < cols) ? (uint16_t)((1 << rows) - 1) : 0x0000;
     }
 
     // Active matrix must have been set by create()
@@ -82,15 +130,23 @@ void commodore_keyboard_reset(commodore_keyboard_t* keyboard) {
         return;
     }
 
-    // Initialize matrix lookup using active matrix
-    for (int row = 0; row < KEYBOARD_ROWS; row++) {
-        for (int col = 0; col < KEYBOARD_COLS; col++) {
+    // Initialize matrix lookup using active matrix (flat row-major access)
+    for (int row = 0; row < rows; row++) {
+        for (int col = 0; col < cols; col++) {
             keyboard->key_matrix[row][col] = (key_matrix_info_t){
                 .row = (uint8_t)row,
                 .col = (uint8_t)col,
                 .shifted = false,
-                .key_code = keyboard->active_unshifted[row][col]
+                .key_code = keyboard->active_unshifted[row * cols + col]
             };
+        }
+    }
+    // Clear any unused matrix positions
+    for (int row = 0; row < MAX_KEYBOARD_ROWS; row++) {
+        for (int col = 0; col < MAX_KEYBOARD_COLS; col++) {
+            if (row >= rows || col >= cols) {
+                keyboard->key_matrix[row][col] = (key_matrix_info_t){0, 0, false, 0};
+            }
         }
     }
 
@@ -107,10 +163,10 @@ void commodore_keyboard_reset(commodore_keyboard_t* keyboard) {
     // Build key lookup table from active matrix
     // Note: SDL keycodes can be very large (e.g., SDLK_F1 = 0x4000003A)
     // so we only add keys within bounds and use linear search for the rest
-    for (int row = 0; row < KEYBOARD_ROWS; row++) {
-        for (int col = 0; col < KEYBOARD_COLS; col++) {
-            uint32_t unshifted_key = keyboard->active_unshifted[row][col];
-            uint32_t shifted_key = keyboard->active_shifted[row][col];
+    for (int row = 0; row < rows; row++) {
+        for (int col = 0; col < cols; col++) {
+            uint32_t unshifted_key = keyboard->active_unshifted[row * cols + col];
+            uint32_t shifted_key = keyboard->active_shifted[row * cols + col];
 
             // Only add to lookup table if within bounds (ASCII range)
             if (unshifted_key != CbmKeys::SAME && unshifted_key != 0 && unshifted_key < MAX_KEY_LOOKUP) {
@@ -138,8 +194,8 @@ void commodore_keyboard_reset(commodore_keyboard_t* keyboard) {
     keyboard->caps_lock_active = false;
     keyboard->auto_shift_left_active = false;
     keyboard->auto_shift_up_active = false;
-    keyboard->cia_port_a_reference = NULL;
-    keyboard->cia_port_b_reference = NULL;
+    keyboard->scan_port_a_reference = NULL;
+    keyboard->scan_port_b_reference = NULL;
 }
 
 uint32_t commodore_keyboard_map_host_key(uint32_t host_key, bool shifted) {
@@ -165,13 +221,15 @@ bool commodore_keyboard_is_special_key(uint32_t key_code) {
 
 // Helper: find key position by linear search through the active keyboard matrix
 // Used for keys with SDL keycodes >= MAX_KEY_LOOKUP (special keys like Shift, F-keys, cursors)
-static bool find_key_in_matrix(const uint32_t (*unshifted)[KEYBOARD_COLS],
-                               const uint32_t (*shifted)[KEYBOARD_COLS],
+static bool find_key_in_matrix(const commodore_keyboard_t* keyboard,
                                uint32_t key_code, uint8_t* out_row, uint8_t* out_col) {
-    for (int row = 0; row < KEYBOARD_ROWS; row++) {
-        for (int col = 0; col < KEYBOARD_COLS; col++) {
-            if (unshifted[row][col] == key_code ||
-                shifted[row][col] == key_code) {
+    uint8_t rows = keyboard->matrix_rows;
+    uint8_t cols = keyboard->matrix_cols;
+    for (int row = 0; row < rows; row++) {
+        for (int col = 0; col < cols; col++) {
+            uint32_t idx = row * cols + col;
+            if (keyboard->active_unshifted[idx] == key_code ||
+                keyboard->active_shifted[idx] == key_code) {
                 *out_row = (uint8_t)row;
                 *out_col = (uint8_t)col;
                 return true;
@@ -225,27 +283,24 @@ void commodore_keyboard_key_down(commodore_keyboard_t* keyboard, uint32_t key_co
     }
 
     if (!found) {
-        found = find_key_in_matrix(keyboard->active_unshifted, keyboard->active_shifted,
-                                   commodore_key, &row, &col);
+        found = find_key_in_matrix(keyboard, commodore_key, &row, &col);
     }
 
     if (found) {
-        // Convert from array indices to hardware CIA/VIA bit numbers.
-        // C64 matrix: array[7-PB_bit][7-PA_bit], so:
-        //   pa_bit = 7 - row  (actually the PB/row-read bit for C64)
-        //   pb_bit = 7 - col  (actually the PA/column-select bit for C64)
-        // VIC-20 matrix: array[7-PB_col][7-PA_row] — same variable mapping.
-        // The naming is kept for compatibility; the CIA/VIA callbacks use
-        // the correct contacts array (col_open_contacts for forward scan,
-        // row_open_contacts for reverse scan).
-        uint8_t pa_bit = 7 - row;
-        uint8_t pb_bit = 7 - col;
+        // Convert from array indices to hardware port bit numbers.
+        // Array convention: array[max_bit - port_bit], so:
+        //   row_bit = (matrix_rows - 1) - row
+        //   col_bit = (matrix_cols - 1) - col
+        // For 8×8 matrices this reduces to the familiar 7-row / 7-col.
+        // For wider matrices (C128 11×8, PET 10×8) the row_bit range extends.
+        uint8_t row_bit = (keyboard->matrix_rows - 1) - row;
+        uint8_t col_bit = (keyboard->matrix_cols - 1) - col;
 
         // Close the contact (key pressed)
-        // row_open_contacts[pa_bit] stores pb_bit flags
-        // col_open_contacts[pb_bit] stores pa_bit flags (transpose)
-        keyboard->row_open_contacts[pa_bit] &= ~(1 << pb_bit);
-        keyboard->col_open_contacts[pb_bit] &= ~(1 << pa_bit);
+        // row_open_contacts[row_bit] stores col bit flags (uint8_t, cols ≤ 8)
+        // col_open_contacts[col_bit] stores row bit flags (uint16_t, rows can exceed 8)
+        keyboard->row_open_contacts[row_bit] &= ~(1 << col_bit);
+        keyboard->col_open_contacts[col_bit] &= ~(1 << row_bit);
     }
 }
 
@@ -301,29 +356,31 @@ void commodore_keyboard_key_up(commodore_keyboard_t* keyboard, uint32_t key_code
     }
 
     if (!found) {
-        found = find_key_in_matrix(keyboard->active_unshifted, keyboard->active_shifted,
-                                   commodore_key, &row, &col);
+        found = find_key_in_matrix(keyboard, commodore_key, &row, &col);
     }
 
     if (found) {
-        // Convert from array indices to hardware CIA/VIA bit numbers.
-        // See key_down for the full explanation of the transposed mapping.
-        uint8_t pa_bit = 7 - row;
-        uint8_t pb_bit = 7 - col;
+        // Convert from array indices to hardware port bit numbers.
+        // See key_down for the full explanation of the mapping.
+        uint8_t row_bit = (keyboard->matrix_rows - 1) - row;
+        uint8_t col_bit = (keyboard->matrix_cols - 1) - col;
 
         // Open the contact (key released)
-        keyboard->row_open_contacts[pa_bit] |= (1 << pb_bit);
-        keyboard->col_open_contacts[pb_bit] |= (1 << pa_bit);
+        keyboard->row_open_contacts[row_bit] |= (1 << col_bit);
+        keyboard->col_open_contacts[col_bit] |= (1 << row_bit);
     }
 }
 
 void commodore_keyboard_update_matrix(commodore_keyboard_t* keyboard) {
     if (!keyboard) return;
 
+    uint8_t rows = keyboard->matrix_rows;
+    uint8_t cols = keyboard->matrix_cols;
+
     // Update matrix based on current contact states
-    // This would be called during CIA/VIA scanning cycles
-    for (int row = 0; row < KEYBOARD_ROWS; row++) {
-        for (int col = 0; col < KEYBOARD_COLS; col++) {
+    // This would be called during CIA/VIA/TED scanning cycles
+    for (int row = 0; row < rows; row++) {
+        for (int col = 0; col < cols; col++) {
             uint8_t row_mask = 1 << row;
             uint8_t col_mask = 1 << col;
 
@@ -335,7 +392,7 @@ void commodore_keyboard_update_matrix(commodore_keyboard_t* keyboard) {
 
             // Update matrix info
             keyboard->key_matrix[row][col].shifted = contact_closed &&
-                (keyboard->active_shifted[row][col] != CbmKeys::SAME);
+                (keyboard->active_shifted[row * cols + col] != CbmKeys::SAME);
         }
     }
 }
@@ -344,8 +401,8 @@ void commodore_keyboard_connect_ports(commodore_keyboard_t* keyboard,
                                     void* port_a, void* port_b) {
     if (!keyboard) return;
 
-    keyboard->cia_port_a_reference = port_a;
-    keyboard->cia_port_b_reference = port_b;
+    keyboard->scan_port_a_reference = port_a;
+    keyboard->scan_port_b_reference = port_b;
 
     // If ports are provided, update the keyboard matrix based on current port states
     if (port_a && port_b) {
@@ -378,22 +435,34 @@ bool commodore_keyboard_is_col_closed(commodore_keyboard_t* keyboard, uint8_t ro
 void commodore_keyboard_print_matrix(commodore_keyboard_t* keyboard) {
     if (!keyboard) return;
 
-    printf("Commodore Keyboard Matrix State:\n");
-    printf("Row/Col | 0  1  2  3  4  5  6  7\n");
-    printf("--------------------------------\n");
+    uint8_t rows = keyboard->matrix_rows;
+    uint8_t cols = keyboard->matrix_cols;
 
-    for (int row = 0; row < KEYBOARD_ROWS; row++) {
-        printf("   %d    |", row);
-        for (int col = 0; col < KEYBOARD_COLS; col++) {
+    printf("Commodore Keyboard Matrix State (%s, %dx%d):\n",
+           keyboard_model_names[keyboard->model], rows, cols);
+    printf("Row/Col |");
+    for (int col = 0; col < cols; col++) printf(" %d ", col);
+    printf("\n");
+    printf("--------+");
+    for (int col = 0; col < cols; col++) printf("---");
+    printf("\n");
+
+    for (int row = 0; row < rows; row++) {
+        printf("  %2d    |", row);
+        for (int col = 0; col < cols; col++) {
             bool contact_closed = !(keyboard->row_open_contacts[col] & (1 << row));
             printf(" %c ", contact_closed ? 'X' : 'O');
         }
         printf("\n");
     }
 
-    printf("\nContact States:\n");
-    for (int col = 0; col < KEYBOARD_COLS; col++) {
-        printf("Col %d: 0x%02X ", col, keyboard->row_open_contacts[col]);
+    printf("\nRow Contact States:\n");
+    for (int r = 0; r < rows; r++) {
+        printf("Row %2d: 0x%02X ", r, keyboard->row_open_contacts[r]);
+    }
+    printf("\nCol Contact States:\n");
+    for (int c = 0; c < cols; c++) {
+        printf("Col %2d: 0x%04X ", c, keyboard->col_open_contacts[c]);
     }
     printf("\n");
 }
@@ -401,9 +470,12 @@ void commodore_keyboard_print_matrix(commodore_keyboard_t* keyboard) {
 void commodore_keyboard_print_state(commodore_keyboard_t* keyboard) {
     if (!keyboard) return;
 
-    printf("Keyboard State:\n");
+    printf("Keyboard State (%s %dx%d, scan: %s):\n",
+           keyboard_model_names[keyboard->model],
+           keyboard->matrix_rows, keyboard->matrix_cols,
+           keyboard_scan_chip_names[keyboard->scan_chip]);
     printf("  RESTORE Key: %s\n", keyboard->restore_key_pressed ? "PRESSED" : "RELEASED");
     printf("  CAPS LOCK: %s\n", keyboard->caps_lock_active ? "ACTIVE" : "INACTIVE");
-    printf("  CIA Port A: %p\n", keyboard->cia_port_a_reference);
-    printf("  CIA Port B: %p\n", keyboard->cia_port_b_reference);
+    printf("  Scan Port A: %p\n", keyboard->scan_port_a_reference);
+    printf("  Scan Port B: %p\n", keyboard->scan_port_b_reference);
 }

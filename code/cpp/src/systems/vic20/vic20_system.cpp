@@ -396,8 +396,7 @@ bool VIC20System::initialize() {
     
     // Create keyboard matrix and connect to VIA2
     // VIC-20 keyboard: VIA2 Port B selects columns, VIA2 Port A reads rows
-    keyboard_ = commodore_keyboard_create(keyboard_matrix_unshifted_vic20,
-                                           keyboard_matrix_shifted_vic20);
+    keyboard_ = commodore_keyboard_create(&vic20_keyboard_config);
     if (keyboard_) {
         if (via2_) {
             // Register port read callbacks for keyboard matrix scanning
@@ -686,7 +685,9 @@ uint8_t VIC20System::vic20_via2_port_b_read(void* context, uint8_t port_b_output
     for (int row = 0; row < 8; row++) {
         if (row_select & (1 << row)) {
             // This row is selected - AND in the column contacts
-            col_state &= sys->keyboard_->col_open_contacts[row];
+            // Note: col_open_contacts is uint16_t to support >8 row matrices,
+            // but for the VIC-20's 8×8 matrix only the lower 8 bits are meaningful.
+            col_state &= (uint8_t)sys->keyboard_->col_open_contacts[row];
         }
     }
     return col_state;

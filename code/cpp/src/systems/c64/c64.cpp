@@ -502,9 +502,11 @@ static uint8_t c64_cia1_port_b_read_callback(void* context, uint8_t port_b_outpu
     // col_open_contacts is indexed by PA bit and contains PB bit flags — exactly
     // what's needed here. (row_open_contacts has the transposed mapping: indexed
     // by PB, containing PA flags — used for reverse scanning in Port A callback.)
+    // Note: col_open_contacts is uint16_t to support >8 row matrices (e.g., C128),
+    // but for the C64's 8×8 matrix only the lower 8 bits are meaningful.
     for (int col = 0; col < 8; col++) {
         if (column_select & (1 << col)) {
-            row_state &= c64->keyboard->col_open_contacts[col];
+            row_state &= (uint8_t)c64->keyboard->col_open_contacts[col];
         }
     }
     
@@ -621,8 +623,7 @@ c64_t* c64_system_create(const c64_config_t* config) {
     if (!(c64->cia2 = static_cast<mos6526_t*>(create_and_register_chip(c64, &mos6526_descriptor, 0xDD00, 256)))) { c64_system_destroy(c64); return NULL; }
     
     // Create keyboard and initialize with no keys pressed
-    c64->keyboard = commodore_keyboard_create(keyboard_matrix_unshifted_c64,
-                                                keyboard_matrix_shifted_c64);
+    c64->keyboard = commodore_keyboard_create(&c64_keyboard_config);
     if (!c64->keyboard) {
         printf("ERROR: Failed to create keyboard\n");
         c64_system_destroy(c64);
