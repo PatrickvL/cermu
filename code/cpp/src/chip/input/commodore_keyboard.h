@@ -161,65 +161,6 @@ typedef struct {
 } keyboard_decode_table_t;
 
 // ============================================================================
-// Legacy CbmKeys namespace — compatibility shim
-// ============================================================================
-// Maps old CbmKeys::* names to the new EmuKey constants.
-// Allows existing code that hasn't been fully ported to keep compiling.
-namespace CbmKeys {
-    constexpr uint32_t SAME          = EMUKEY_SAME;
-    constexpr uint32_t ARROW_LEFT    = EMUKEY_CBM_ARROW_LEFT;
-    constexpr uint32_t ARROW_UP      = EMUKEY_CBM_ARROW_UP;
-    constexpr uint32_t COMMODORE     = EMUKEY_LGUI;
-    constexpr uint32_t CTRL          = EMUKEY_LCTRL;
-    constexpr uint32_t CURSOR_DOWN   = EMUKEY_DOWN;
-    constexpr uint32_t CURSOR_UP     = EMUKEY_UP;
-    constexpr uint32_t CURSOR_LEFT   = EMUKEY_LEFT;
-    constexpr uint32_t CURSOR_RIGHT  = EMUKEY_RIGHT;
-    constexpr uint32_t DEL           = EMUKEY_BACKSPACE;
-    constexpr uint32_t F1            = EMUKEY_F1;
-    constexpr uint32_t F2            = EMUKEY_F2;
-    constexpr uint32_t F3            = EMUKEY_F3;
-    constexpr uint32_t F4            = EMUKEY_F4;
-    constexpr uint32_t F5            = EMUKEY_F5;
-    constexpr uint32_t F6            = EMUKEY_F6;
-    constexpr uint32_t F7            = EMUKEY_F7;
-    constexpr uint32_t F8            = EMUKEY_F8;
-    constexpr uint32_t HOME          = EMUKEY_HOME;
-    constexpr uint32_t INST          = EMUKEY_INSERT;
-    constexpr uint32_t PI            = EMUKEY_CBM_PI;
-    constexpr uint32_t POUND         = EMUKEY_CBM_POUND;
-    constexpr uint32_t RESTORE       = EMUKEY_CBM_RESTORE;
-    constexpr uint32_t RETURN        = EMUKEY_RETURN;
-    constexpr uint32_t RUN_STOP      = EMUKEY_TAB;
-    constexpr uint32_t SHIFT_LEFT    = EMUKEY_LSHIFT;
-    constexpr uint32_t SHIFT_RIGHT   = EMUKEY_RSHIFT;
-    constexpr uint32_t SPACE         = EMUKEY_SPACE;
-    // C128-specific
-    constexpr uint32_t HELP          = EMUKEY_F9;
-    constexpr uint32_t ALT           = EMUKEY_RALT;
-    constexpr uint32_t ESC           = EMUKEY_ESCAPE;
-    constexpr uint32_t TAB           = EMUKEY_TAB;
-    constexpr uint32_t CAPS_LOCK     = EMUKEY_CAPSLOCK;
-    constexpr uint32_t FORTY_EIGHTY  = EMUKEY_F10;
-    constexpr uint32_t LINE_FEED     = EMUKEY_KP_ENTER;
-    // Keypad (C128)
-    constexpr uint32_t KP_0          = EMUKEY_KP_0;
-    constexpr uint32_t KP_1          = EMUKEY_KP_1;
-    constexpr uint32_t KP_2          = EMUKEY_KP_2;
-    constexpr uint32_t KP_3          = EMUKEY_KP_3;
-    constexpr uint32_t KP_4          = EMUKEY_KP_4;
-    constexpr uint32_t KP_5          = EMUKEY_KP_5;
-    constexpr uint32_t KP_6          = EMUKEY_KP_6;
-    constexpr uint32_t KP_7          = EMUKEY_KP_7;
-    constexpr uint32_t KP_8          = EMUKEY_KP_8;
-    constexpr uint32_t KP_9          = EMUKEY_KP_9;
-    constexpr uint32_t KP_PLUS       = EMUKEY_KP_PLUS;
-    constexpr uint32_t KP_MINUS      = EMUKEY_KP_MINUS;
-    constexpr uint32_t KP_PERIOD     = EMUKEY_KP_PERIOD;
-    constexpr uint32_t KP_ENTER      = EMUKEY_KP_ENTER;
-}
-
-// ============================================================================
 // Matrix dimension limits
 // ============================================================================
 #define MAX_KEYBOARD_ROWS 16   // Generous max (C128 needs 11, PET/CBM-II need 10)

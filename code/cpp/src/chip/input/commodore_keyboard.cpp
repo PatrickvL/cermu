@@ -184,7 +184,7 @@ void commodore_keyboard_key_down(commodore_keyboard_t* keyboard, emu_key_t key, 
     if (!keyboard) return;
 
     // Handle RESTORE key (special case — connects to NMI, not in matrix)
-    if (key == CbmKeys::RESTORE) {
+    if (key == EMUKEY_CBM_RESTORE) {
         keyboard->restore_key_pressed = true;
         return;
     }
@@ -195,7 +195,7 @@ void commodore_keyboard_key_down(commodore_keyboard_t* keyboard, emu_key_t key, 
         keyboard->model != KEYBOARD_MODEL_PLUS4_C16 &&
         keyboard->model != KEYBOARD_MODEL_C128) {
         keyboard->auto_shift_left_active = true;
-        commodore_keyboard_key_down(keyboard, CbmKeys::SHIFT_LEFT, false);
+        commodore_keyboard_key_down(keyboard, EMUKEY_LSHIFT, false);
         commodore_keyboard_key_down(keyboard, EMUKEY_RIGHT, false);
         return;
     }
@@ -205,7 +205,7 @@ void commodore_keyboard_key_down(commodore_keyboard_t* keyboard, emu_key_t key, 
         keyboard->model != KEYBOARD_MODEL_PLUS4_C16 &&
         keyboard->model != KEYBOARD_MODEL_C128) {
         keyboard->auto_shift_up_active = true;
-        commodore_keyboard_key_down(keyboard, CbmKeys::SHIFT_LEFT, false);
+        commodore_keyboard_key_down(keyboard, EMUKEY_LSHIFT, false);
         commodore_keyboard_key_down(keyboard, EMUKEY_DOWN, false);
         return;
     }
@@ -226,7 +226,7 @@ void commodore_keyboard_key_up(commodore_keyboard_t* keyboard, emu_key_t key, bo
     if (!keyboard) return;
 
     // Handle RESTORE key
-    if (key == CbmKeys::RESTORE) {
+    if (key == EMUKEY_CBM_RESTORE) {
         keyboard->restore_key_pressed = false;
         return;
     }
@@ -239,7 +239,7 @@ void commodore_keyboard_key_up(commodore_keyboard_t* keyboard, emu_key_t key, bo
         if (keyboard->auto_shift_left_active) {
             keyboard->auto_shift_left_active = false;
             if (!keyboard->auto_shift_up_active) {
-                commodore_keyboard_key_up(keyboard, CbmKeys::SHIFT_LEFT, false);
+                commodore_keyboard_key_up(keyboard, EMUKEY_LSHIFT, false);
             }
         }
         return;
@@ -253,7 +253,7 @@ void commodore_keyboard_key_up(commodore_keyboard_t* keyboard, emu_key_t key, bo
         if (keyboard->auto_shift_up_active) {
             keyboard->auto_shift_up_active = false;
             if (!keyboard->auto_shift_left_active) {
-                commodore_keyboard_key_up(keyboard, CbmKeys::SHIFT_LEFT, false);
+                commodore_keyboard_key_up(keyboard, EMUKEY_LSHIFT, false);
             }
         }
         return;
@@ -277,25 +277,25 @@ void commodore_keyboard_key_up(commodore_keyboard_t* keyboard, emu_key_t key, bo
 
 bool commodore_keyboard_is_special_key(emu_key_t key) {
     switch (key) {
-        case CbmKeys::DEL:
-        case CbmKeys::HOME:
-        case CbmKeys::RUN_STOP:
-        case CbmKeys::CURSOR_DOWN:
-        case CbmKeys::CURSOR_RIGHT:
-        case CbmKeys::SHIFT_LEFT:
-        case CbmKeys::SHIFT_RIGHT:
-        case CbmKeys::CTRL:
-        case CbmKeys::RETURN:
-        case CbmKeys::SPACE:
-        case CbmKeys::COMMODORE:
-        case CbmKeys::RESTORE:
-        case CbmKeys::F1: case CbmKeys::F2: case CbmKeys::F3: case CbmKeys::F4:
-        case CbmKeys::F5: case CbmKeys::F6: case CbmKeys::F7: case CbmKeys::F8:
-        case CbmKeys::HELP:
-        case CbmKeys::ALT:
-        case CbmKeys::ESC:
-        case CbmKeys::CAPS_LOCK:
-        case CbmKeys::LINE_FEED:
+        case EMUKEY_CBM_DEL:
+        case EMUKEY_HOME:
+        case EMUKEY_CBM_RUN_STOP:
+        case EMUKEY_DOWN:
+        case EMUKEY_RIGHT:
+        case EMUKEY_LSHIFT:
+        case EMUKEY_RSHIFT:
+        case EMUKEY_LCTRL:
+        case EMUKEY_RETURN:
+        case EMUKEY_SPACE:
+        case EMUKEY_CBM_COMMODORE:
+        case EMUKEY_CBM_RESTORE:
+        case EMUKEY_F1: case EMUKEY_F2: case EMUKEY_F3: case EMUKEY_F4:
+        case EMUKEY_F5: case EMUKEY_F6: case EMUKEY_F7: case EMUKEY_F8:
+        case EMUKEY_F9:            // HELP (C128)
+        case EMUKEY_RALT:          // ALT (C128)
+        case EMUKEY_ESCAPE:        // ESC (C128)
+        case EMUKEY_CAPSLOCK:
+        case EMUKEY_KP_ENTER:      // LINE FEED (C128)
             return true;
         default:
             return false;

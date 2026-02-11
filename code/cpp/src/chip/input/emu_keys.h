@@ -187,7 +187,12 @@ typedef uint32_t emu_key_t;
 #define EMUKEY_CBM_RESTORE       515   // RESTORE (NMI trigger, not in matrix)
 #define EMUKEY_CBM_PI            516   // π (shifted ↑ on C64/VIC-20) — character marker
 
-// Future: EMUKEY_CBM_RUN_STOP etc. if they need to be decoupled from TAB
+// Commodore-specific aliases for identity-mapped keys.
+// These share the same numeric value as their host equivalent but give
+// Commodore-meaningful names for use in Commodore-context code.
+#define EMUKEY_CBM_RUN_STOP      EMUKEY_TAB        // RUN/STOP key (VIC-20/C64 — same position as host TAB)
+#define EMUKEY_CBM_COMMODORE     EMUKEY_LGUI       // C= key (host: Super/Windows/Command)
+#define EMUKEY_CBM_DEL           EMUKEY_BACKSPACE   // INST/DEL key
 
 // --- Reserved for NES/Famicom (576–639) ---
 // #define EMUKEY_NES_SELECT      576
@@ -241,76 +246,6 @@ static inline char emu_key_to_char(emu_key_t key) {
 
         default: return 0;  // Non-character key
     }
-}
-
-// ============================================================================
-// Commodore key aliases — readable names for matrix table use
-// ============================================================================
-// These are just aliases for EmuKey constants, giving Commodore-specific
-// names to keys that appear in the keyboard matrix tables.  They exist
-// so that matrix initialisation code reads naturally without sacrificing
-// the SDL-scancode identity optimisation for standard keys.
-
-namespace CbmKey {
-    // Standard keys — identity-mapped, just renamed for readability
-    constexpr emu_key_t SHIFT_LEFT    = EMUKEY_LSHIFT;
-    constexpr emu_key_t SHIFT_RIGHT   = EMUKEY_RSHIFT;
-    constexpr emu_key_t CTRL          = EMUKEY_LCTRL;
-    constexpr emu_key_t COMMODORE     = EMUKEY_LGUI;     // C= key (host: Super/Windows/Command)
-    constexpr emu_key_t RETURN        = EMUKEY_RETURN;
-    constexpr emu_key_t SPACE         = EMUKEY_SPACE;
-    constexpr emu_key_t DEL           = EMUKEY_BACKSPACE;
-    constexpr emu_key_t HOME          = EMUKEY_HOME;
-    constexpr emu_key_t INSERT        = EMUKEY_INSERT;
-    constexpr emu_key_t RUN_STOP      = EMUKEY_TAB;      // RUN/STOP maps to host TAB position
-    constexpr emu_key_t CURSOR_DOWN   = EMUKEY_DOWN;
-    constexpr emu_key_t CURSOR_UP     = EMUKEY_UP;
-    constexpr emu_key_t CURSOR_LEFT   = EMUKEY_LEFT;
-    constexpr emu_key_t CURSOR_RIGHT  = EMUKEY_RIGHT;
-    constexpr emu_key_t F1            = EMUKEY_F1;
-    constexpr emu_key_t F2            = EMUKEY_F2;
-    constexpr emu_key_t F3            = EMUKEY_F3;
-    constexpr emu_key_t F4            = EMUKEY_F4;
-    constexpr emu_key_t F5            = EMUKEY_F5;
-    constexpr emu_key_t F6            = EMUKEY_F6;
-    constexpr emu_key_t F7            = EMUKEY_F7;
-    constexpr emu_key_t F8            = EMUKEY_F8;
-
-    // C128-specific keys
-    constexpr emu_key_t HELP          = EMUKEY_F9;
-    constexpr emu_key_t ALT           = EMUKEY_RALT;
-    constexpr emu_key_t ESC           = EMUKEY_ESCAPE;
-    constexpr emu_key_t TAB           = EMUKEY_TAB;
-    constexpr emu_key_t CAPS_LOCK     = EMUKEY_CAPSLOCK;
-    constexpr emu_key_t FORTY_EIGHTY  = EMUKEY_F10;
-    constexpr emu_key_t LINE_FEED     = EMUKEY_KP_ENTER;
-
-    // Numeric keypad (C128)
-    constexpr emu_key_t KP_0          = EMUKEY_KP_0;
-    constexpr emu_key_t KP_1          = EMUKEY_KP_1;
-    constexpr emu_key_t KP_2          = EMUKEY_KP_2;
-    constexpr emu_key_t KP_3          = EMUKEY_KP_3;
-    constexpr emu_key_t KP_4          = EMUKEY_KP_4;
-    constexpr emu_key_t KP_5          = EMUKEY_KP_5;
-    constexpr emu_key_t KP_6          = EMUKEY_KP_6;
-    constexpr emu_key_t KP_7          = EMUKEY_KP_7;
-    constexpr emu_key_t KP_8          = EMUKEY_KP_8;
-    constexpr emu_key_t KP_9          = EMUKEY_KP_9;
-    constexpr emu_key_t KP_PLUS       = EMUKEY_KP_PLUS;
-    constexpr emu_key_t KP_MINUS      = EMUKEY_KP_MINUS;
-    constexpr emu_key_t KP_PERIOD     = EMUKEY_KP_PERIOD;
-    constexpr emu_key_t KP_ENTER      = EMUKEY_KP_ENTER;
-
-    // Commodore-specific keys — no host equivalent
-    constexpr emu_key_t ARROW_LEFT    = EMUKEY_CBM_ARROW_LEFT;
-    constexpr emu_key_t ARROW_UP      = EMUKEY_CBM_ARROW_UP;
-    constexpr emu_key_t POUND         = EMUKEY_CBM_POUND;
-    constexpr emu_key_t RESTORE       = EMUKEY_CBM_RESTORE;
-    constexpr emu_key_t PI            = EMUKEY_CBM_PI;
-
-    // Markers
-    constexpr emu_key_t SAME          = EMUKEY_SAME;
-    constexpr emu_key_t NONE          = EMUKEY_NONE;
 }
 
 // ============================================================================

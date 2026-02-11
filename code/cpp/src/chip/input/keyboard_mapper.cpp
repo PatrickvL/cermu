@@ -227,12 +227,12 @@ void KeyboardMapper::register_default_synthetic_mappings() {
     // RUN/STOP — Escape is intuitive (Escape → stop)
     // But Escape is already used for C128 ESC key, so we also provide
     // the synthetic mapping for systems where Tab = RUN/STOP
-    GuestKeyAction run_stop = find_in_matrix(CbmKeys::RUN_STOP);
+    GuestKeyAction run_stop = find_in_matrix(EMUKEY_CBM_RUN_STOP);
     if (run_stop.valid) {
         add_synthetic_mapping(SDLK_ESCAPE, run_stop, "RUN/STOP");
     }
 
-    // RESTORE — mapped to backtick in CbmKeys, also available as emu+R
+    // RESTORE — also available as emu+R
     GuestKeyAction restore_action;
     restore_action.valid = true;
     restore_action.row = 0; restore_action.col = 0;
@@ -242,25 +242,25 @@ void KeyboardMapper::register_default_synthetic_mappings() {
     add_synthetic_mapping(SDLK_r, restore_action, "RESTORE (NMI)");
 
     // Commodore key (C= key)
-    GuestKeyAction c_key = find_in_matrix(CbmKeys::COMMODORE);
+    GuestKeyAction c_key = find_in_matrix(EMUKEY_CBM_COMMODORE);
     if (c_key.valid) {
         add_synthetic_mapping(SDLK_c, c_key, "Commodore (C=) key");
     }
 
     // CTRL key (in its C64 role — color selection etc.)
-    GuestKeyAction ctrl = find_in_matrix(CbmKeys::CTRL);
+    GuestKeyAction ctrl = find_in_matrix(EMUKEY_LCTRL);
     if (ctrl.valid) {
         add_synthetic_mapping(SDLK_x, ctrl, "CTRL (C64)");
     }
 
     // CLR/HOME
-    GuestKeyAction home = find_in_matrix(CbmKeys::HOME);
+    GuestKeyAction home = find_in_matrix(EMUKEY_HOME);
     if (home.valid) {
         add_synthetic_mapping(SDLK_h, home, "CLR/HOME");
     }
 
     // INST/DEL
-    GuestKeyAction del = find_in_matrix(CbmKeys::DEL);
+    GuestKeyAction del = find_in_matrix(EMUKEY_CBM_DEL);
     if (del.valid) {
         add_synthetic_mapping(SDLK_d, del, "INST/DEL");
     }
