@@ -8,7 +8,7 @@
 #include "c64.h"
 #include "c64_bus.h"
 #include "c64_config.h"
-#include "c64_test_loader.h" // Test binary loading
+#include "../../core/storage/commodore_file_loader.h" // Shared Commodore file format loading
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
 #include "../../chip/cpu/fam65xx/mos6510.h" // MOS6510 CPU with mos6510_init
@@ -106,9 +106,13 @@ void c64_memory_init(system_8bit_t* system, const c64_config_t* config) {
                     if (config && config->test_binary_config && config->test_binary_config->filename) {
                         printf("Loading PRG file: %s\n", config->test_binary_config->filename);
                         memset(ram->memory, 0, 0x10000);  // Clear RAM first
-                        uint16_t load_addr = 0, sys_addr = 0;
-                        if (!c64_test_load_prg_file(config->test_binary_config->filename,
-                                                     ram, &load_addr, &sys_addr)) {
+                        commodore_prg_t prg = {};
+                        if (commodore_prg_load(config->test_binary_config->filename, &prg)) {
+                            memcpy(&ram->memory[prg.load_addr], prg.data, prg.data_size);
+                            printf("  Loaded $%04X-$%04X (%zu bytes)\n",
+                                   prg.load_addr, prg.end_addr, prg.data_size);
+                            commodore_prg_free(&prg);
+                        } else {
                             printf("ERROR: Failed to load PRG file, falling back to normal init\n");
                             memset(ram->memory, 0, 0x10000);
                         }
@@ -124,8 +128,17 @@ void c64_memory_init(system_8bit_t* system, const c64_config_t* config) {
                                config->test_binary_config->filename,
                                config->test_binary_config->load_address);
                         memset(ram->memory, 0, 0x10000);  // Clear RAM first
-                        if (!c64_test_load_bin_file(config->test_binary_config->filename,
-                                                     ram, config->test_binary_config->load_address)) {
+                        uint8_t* bin_data = NULL;
+                        size_t bin_size = 0;
+                        if (commodore_bin_load(config->test_binary_config->filename,
+                                              &bin_data, &bin_size)) {
+                            uint16_t addr = config->test_binary_config->load_address;
+                            if (addr + bin_size <= 0x10000) {
+                                memcpy(&ram->memory[addr], bin_data, bin_size);
+                                printf("  Loaded %zu bytes at $%04X\n", bin_size, addr);
+                            }
+                            free(bin_data);
+                        } else {
                             printf("ERROR: Failed to load BIN file, falling back to normal init\n");
                             memset(ram->memory, 0, 0x10000);
                         }

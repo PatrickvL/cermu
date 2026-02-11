@@ -1,5 +1,4 @@
 #include "c64_system_wrapper.h"
-#include "c64_test_loader.h"
 #include "../../chip/input/commodore_keyboard.h"
 #include "../../chip/input/emu_key_sdl_map.h"
 #include "../../chip/cpu/fam65xx/mos6510.h"
