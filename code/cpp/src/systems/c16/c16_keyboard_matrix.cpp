@@ -42,29 +42,53 @@ static const emu_key_t c16_keys[C16_KEYBOARD_ROWS * C16_KEYBOARD_COLS] = {
     EMUKEY_1,  EMUKEY_HOME,  EMUKEY_LCTRL,  EMUKEY_2,  EMUKEY_SPACE,  EMUKEY_LGUI,  EMUKEY_Q,  EMUKEY_TAB,
 };
 
-// Shifted character decode table — ASCII characters per matrix position.
+// Unshifted character decode table — PETSCII codes per matrix position.
+// 0 = non-character key (modifier, function key, cursor key, RETURN, DEL).
+// C16/Plus4: £ = $5C.  No ← or ↑ dedicated keys in the matrix.
+static const petscii_t c16_unshifted_chars[C16_KEYBOARD_ROWS * C16_KEYBOARD_COLS] = {
+    // Row 0: (DEL), (RETURN), £($5C), (HELP/F7), (F1), (F2), (F3), @
+    0, 0, 0x5C, 0, 0, 0, 0, '@',
+    // Row 1: 3, W, A, 4, Z, S, E, (SHIFT)
+    '3', 'W', 'A', '4', 'Z', 'S', 'E', 0,
+    // Row 2: 5, R, D, 6, C, F, T, X
+    '5', 'R', 'D', '6', 'C', 'F', 'T', 'X',
+    // Row 3: 7, Y, G, 8, B, H, U, V
+    '7', 'Y', 'G', '8', 'B', 'H', 'U', 'V',
+    // Row 4: 9, I, J, 0, M, K, O, N
+    '9', 'I', 'J', '0', 'M', 'K', 'O', 'N',
+    // Row 5: (CRSR↓), P, L, (CRSR↑), ., :, -, ,
+    0, 'P', 'L', 0, '.', ':', '-', ',',
+    // Row 6: (CRSR←), *, ;, (CRSR→), (ESC), =, +, /
+    0, '*', ';', 0, 0, '=', '+', '/',
+    // Row 7: 1, (HOME), (CTRL), 2, SPACE, (C=), Q, (RUN/STOP)
+    '1', 0, 0, '2', ' ', 0, 'Q', 0,
+};
+
+// Shifted character decode table — PETSCII codes per matrix position.
+// Letters use PETSCII lowercase ($C1–$DA) for character-accurate mapping.
 // 0 = no distinct character (modifier key, function key, cursor key,
 //     or same character as unshifted — handled by KERNAL/TED at runtime).
-static const uint8_t c16_shifted_chars[C16_KEYBOARD_ROWS * C16_KEYBOARD_COLS] = {
+static const petscii_t c16_shifted_chars[C16_KEYBOARD_ROWS * C16_KEYBOARD_COLS] = {
     // Row 0: (INST), (RETURN), (£), (HELP), (F4), (F5), (F6), (@)
     0, 0, 0, 0, 0, 0, 0, 0,
-    // Row 1: #, W, A, $, Z, S, E, (SHIFT)
-    '#', 'W', 'A', '$', 'Z', 'S', 'E', 0,
-    // Row 2: %, R, D, &, C, F, T, X
-    '%', 'R', 'D', '&', 'C', 'F', 'T', 'X',
-    // Row 3: ', Y, G, (, B, H, U, V
-    '\'', 'Y', 'G', '(', 'B', 'H', 'U', 'V',
-    // Row 4: ), I, J, (0), M, K, O, N
-    ')', 'I', 'J', 0, 'M', 'K', 'O', 'N',
-    // Row 5: (CRSR↓), P, L, (CRSR↑), >, [, (-), <
-    0, 'P', 'L', 0, '>', '[', 0, '<',
+    // Row 1: #, w($D7), a($C1), $, z($DA), s($D3), e($C5), (SHIFT)
+    '#', 0xD7, 0xC1, '$', 0xDA, 0xD3, 0xC5, 0,
+    // Row 2: %, r($D2), d($C4), &, c($C3), f($C6), t($D4), x($D8)
+    '%', 0xD2, 0xC4, '&', 0xC3, 0xC6, 0xD4, 0xD8,
+    // Row 3: ', y($D9), g($C7), (, b($C2), h($C8), u($D5), v($D6)
+    '\'', 0xD9, 0xC7, '(', 0xC2, 0xC8, 0xD5, 0xD6,
+    // Row 4: ), i($C9), j($CA), (0), m($CD), k($CB), o($CF), n($CE)
+    ')', 0xC9, 0xCA, 0, 0xCD, 0xCB, 0xCF, 0xCE,
+    // Row 5: (CRSR↓), p($D0), l($CC), (CRSR↑), >, [, (-), <
+    0, 0xD0, 0xCC, 0, '>', '[', 0, '<',
     // Row 6: (CRSR←), (*), ], (CRSR→), (ESC), (=), (+), ?
     0, 0, ']', 0, 0, 0, 0, '?',
-    // Row 7: !, (CLR), (CTRL), ", (SPACE), (C=), Q, (RUN/STOP)
-    '!', 0, 0, '"', 0, 0, 'Q', 0,
+    // Row 7: !, (CLR), (CTRL), ", (SPACE), (C=), q($D1), (RUN/STOP)
+    '!', 0, 0, '"', 0, 0, 0xD1, 0,
 };
 
 static const keyboard_decode_table_t c16_decode_tables[] = {
+    { KEYMOD_NONE,  c16_unshifted_chars },
     { KEYMOD_SHIFT, c16_shifted_chars },
     // Future: { KEYMOD_CBM,  c16_cbm_chars },
 };

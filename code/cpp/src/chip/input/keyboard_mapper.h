@@ -109,9 +109,11 @@ public:
     // Set the guest keyboard this mapper controls
     void set_guest_keyboard(commodore_keyboard_t* keyboard);
 
-    // Build character map from the system's keyboard matrix tables.
-    // Scans both unshifted and shifted tables to build the reverse lookup:
-    //   character → { row, col, shift_required }
+    // Build character map from the system's PETSCII decode tables.
+    // Iterates each decode table (KEYMOD_NONE, KEYMOD_SHIFT, etc.),
+    // converts PETSCII codes to host characters via petscii_to_host_char(),
+    // and builds the reverse lookup:
+    //   host_character → { row, col, modifier_bitmask }
     void build_character_map_from_matrix(const keyboard_matrix_config_t* config);
 
     // Set the emulator modifier key (default: Right Alt)
@@ -238,9 +240,13 @@ private:
     std::unordered_map<int, ActiveInjection> active_injections_;
 
     // Physical host modifier tracking
-    bool host_shift_held_;                     // Is any host shift key physically held?
+    bool host_lshift_held_;                    // Is host LEFT shift physically held?
+    bool host_rshift_held_;                    // Is host RIGHT shift physically held?
     bool host_ctrl_held_;                      // Is host ctrl physically held?
     bool host_cbm_held_;                       // Is host Commodore (LGUI) key physically held?
+
+    // Convenience: true if either host shift is held
+    bool host_shift_held() const { return host_lshift_held_ || host_rshift_held_; }
 
     // Modifier key guest matrix positions (cached at init)
     GuestKeyAction shift_left_pos_;

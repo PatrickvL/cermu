@@ -48,6 +48,87 @@
 #define KEYMOD_CTRL      0x04    // Control key
 
 // ============================================================================
+// PETSCII type alias
+// ============================================================================
+// PETSCII (PET Standard Code of Information Interchange) is the character
+// encoding used by all Commodore 8-bit computers.  It diverges from ASCII
+// at several points:
+//
+//   PETSCII   ASCII     Glyph
+//   ───────   ─────     ─────
+//   $5C       $5C       £  (not backslash)
+//   $5E       $5E       ↑  (not caret)
+//   $5F       $5F       ←  (not underscore)
+//   $C1–$DA   $61–$7A   a–z (lowercase letters live here, not at $61)
+//   $FF       n/a       π  (pi)
+//   $A0–$BF   n/a       Graphics characters (C= key combinations)
+//   $60–$7F   n/a       Graphics characters (shifted)
+//
+// The decode tables below store PETSCII codes, not ASCII.  Use
+// petscii_to_host_char() to convert for the mapper's character map.
+typedef uint8_t petscii_t;
+
+// ============================================================================
+// PETSCII → host character conversion
+// ============================================================================
+// Returns the ASCII character on the host keyboard that best matches a
+// PETSCII code, or 0 if no host equivalent exists (graphics chars, control
+// codes, etc.).
+//
+// This is the bridge between the KERNAL ROM's decode tables (which produce
+// PETSCII codes) and the mapper's char_map_[] (which is indexed by the
+// ASCII character the host user types via SDL_TEXTINPUT).
+//
+// Divergence points from ASCII that we map:
+//   PETSCII $5C → '|'   (host pipe → guest £ key)
+//   PETSCII $5E → '^'   (host caret → guest ↑ key)
+//   PETSCII $5F → '\\'  (host backslash → guest ← key)
+//   PETSCII $C1–$DA → 'a'–'z'  (PETSCII lowercase = $C1+, not $61+)
+//   PETSCII $DE → '~'   (host tilde → guest π, shifted ↑ key)
+//   PETSCII $FF → '~'   (alternate: π as its own code)
+//
+// The host character choices for £/↑/← are deliberate: they're the closest
+// visual or positional matches on a US keyboard layout.
+
+static inline char petscii_to_host_char(petscii_t p) {
+    // PETSCII control codes ($01–$1F, $80–$9F) → no host character
+    if (p == 0) return 0;
+    if (p < 0x20 && p != 0x0D) return 0;  // $0D = RETURN
+    if (p >= 0x80 && p <= 0x9F) return 0;  // Control codes (colours, cursor, etc.)
+
+    // PETSCII graphics characters ($60–$7F, $A0–$BF) → no host equivalent
+    if (p >= 0x60 && p <= 0x7F) return 0;
+    if (p >= 0xA0 && p <= 0xBF) return 0;
+
+    // PETSCII $C0 = shifted graphics (no character) → skip
+    if (p == 0xC0) return 0;
+
+    // PETSCII lowercase letters: $C1–$DA → 'a'–'z'
+    if (p >= 0xC1 && p <= 0xDA) return (char)('a' + (p - 0xC1));
+
+    // PETSCII $DB–$FE = shifted graphics → no host character
+    // Exception: $DE = π (produced by Shift+↑ in KERNAL decode table)
+    if (p == 0xDE) return '~';
+    if (p >= 0xDB && p <= 0xFE) return 0;
+
+    // PETSCII $FF = π
+    if (p == 0xFF) return '~';
+
+    // PETSCII divergence points from ASCII in the $20–$5F range
+    switch (p) {
+        case 0x5C: return '|';   // £ (pound sign) → host pipe
+        case 0x5E: return '^';   // ↑ (up arrow) → host caret
+        case 0x5F: return '\\';  // ← (left arrow) → host backslash
+        default:   break;
+    }
+
+    // Everything else in $20–$5B, $5D matches ASCII
+    if (p >= 0x20 && p <= 0x5D) return (char)p;
+
+    return 0;  // Unmapped
+}
+
+// ============================================================================
 // Keyboard character decode table
 // ============================================================================
 // Maps each matrix position to the character it produces when a specific
@@ -60,15 +141,15 @@
 //   VIC-20:      $EC5E (normal), $EC9F (shift), $ECE0 (C=)
 //   C16/Plus4:   TED handles scanning; similar decode structure in KERNAL
 //
-// This structure mirrors that design.  Each entry is a character code:
+// This structure mirrors that design.  Each entry is a PETSCII code:
 //   0       = no character output (modifier key, function key, cursor key,
 //             or same as unmodified — the KERNAL handles it at runtime)
-//   1-127   = ASCII character produced by this position + modifier
+//   1-127   = PETSCII printable character (mostly ASCII-compatible)
 //   128-255 = PETSCII extended characters (graphics, colour codes, etc.)
 
 typedef struct {
     uint8_t modifiers;               // Modifier bitmask (KEYMOD_SHIFT, etc.)
-    const uint8_t* characters;       // Character codes, rows × cols entries
+    const petscii_t* petscii;        // PETSCII codes, rows × cols entries
 } keyboard_decode_table_t;
 
 // ============================================================================
@@ -181,17 +262,19 @@ typedef struct {
     const emu_key_t* keys;
 
     // Character decode tables — one per modifier combination.
-    // Each table maps every matrix position to the character it produces
-    // when that modifier combination is active.  Mirrors the KERNAL ROM's
-    // decode table structure.
+    // Each table maps every matrix position to the PETSCII code it
+    // produces when that modifier combination is active.  Mirrors the
+    // KERNAL ROM's decode table structure.
     //
     // The tables are searched in order when building the keyboard mapper's
-    // character map.  Typically:
-    //   [0] = KEYMOD_SHIFT (shifted characters)
-    //   [1] = KEYMOD_CBM   (Commodore key characters)  — optional
-    //   [2] = KEYMOD_CTRL  (control key characters)    — optional
+    // character map.  First-write-wins: the first table that maps a
+    // PETSCII code to a host character claims that char_map_ entry.
     //
-    // Unshifted characters are derived from emu_key_to_char(keys[pos]).
+    // Ordering:
+    //   [0] = KEYMOD_NONE  (unshifted characters — from KERNAL $EB81 etc.)
+    //   [1] = KEYMOD_SHIFT (shifted characters   — from KERNAL $EBC2 etc.)
+    //   [2] = KEYMOD_CBM   (Commodore key chars)  — optional
+    //   [3] = KEYMOD_CTRL  (control key chars)    — optional
     int num_decode_tables;
     const keyboard_decode_table_t* decode_tables;
 } keyboard_matrix_config_t;
