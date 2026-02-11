@@ -1,4 +1,5 @@
 #include "keyboard_mapper.h"
+#include "emu_key_sdl_map.h"
 #include <SDL2/SDL.h>
 #include <stdio.h>
 #include <string.h>
@@ -46,7 +47,7 @@ void KeyboardMapper::set_guest_keyboard(commodore_keyboard_t* keyboard) {
 }
 
 void KeyboardMapper::build_character_map_from_matrix(const keyboard_matrix_config_t* config) {
-    if (!config || !config->unshifted || !config->shifted) return;
+    if (!config || !config->keys || !config->shifted_chars) return;
 
     model_ = config->model;
     matrix_rows_ = config->rows;
@@ -61,46 +62,37 @@ void KeyboardMapper::build_character_map_from_matrix(const keyboard_matrix_confi
     uint8_t cols = config->cols;
 
     // Phase 1: Map unshifted characters
-    // These are characters produced by pressing a key WITHOUT shift on the guest
+    // Derive the unshifted character from the EmuKey value using emu_key_to_char().
     for (int row = 0; row < rows; row++) {
         for (int col = 0; col < cols; col++) {
-            uint32_t key = config->unshifted[row * cols + col];
+            emu_key_t key = config->keys[row * cols + col];
 
-            // Skip non-character entries (special keys, zero)
-            if (key == 0 || key == CbmKeys::SAME) continue;
-            if (key >= 128) continue;  // Not a printable ASCII character
+            // Get the ASCII character this key produces unshifted
+            char c = emu_key_to_char(key);
+            if (c == 0) continue;  // Non-character key (modifier, function key, etc.)
 
             // On the C64/VIC-20, unshifted letters in the matrix are uppercase (A-Z).
             // SDL_TEXTINPUT will send lowercase for unshifted and uppercase for shifted.
             // Map both cases: uppercase 'A' and lowercase 'a' → same matrix position.
-            char c = (char)key;
-
-            // For uppercase letters in the matrix: the unshifted guest key
             if (c >= 'A' && c <= 'Z') {
                 // Uppercase letter: on C64, this is the UNSHIFTED output
-                // Host will send uppercase via TEXTINPUT when shift is held
-                // Map uppercase to unshifted (the user typed shift+a to get 'A',
-                // and on C64 unshifted 'A' key produces uppercase)
                 if (!char_map_[(int)c].valid) {
                     char_map_[(int)c] = GuestKeyAction(row, col, false, true);
                     // requires_unshift=true because host is pressing shift but guest needs no shift
                 }
-                // Also map lowercase to the same position (for when user types without shift)
+                // Also map lowercase to the same position
                 char lower = c + 32;
                 if (!char_map_[(int)lower].valid) {
                     char_map_[(int)lower] = GuestKeyAction(row, col, false, false);
                 }
             } else if (c >= 'a' && c <= 'z') {
-                // Lowercase letter in unshifted position (unusual, but C16 uses this in shifted table)
                 if (!char_map_[(int)c].valid) {
                     char_map_[(int)c] = GuestKeyAction(row, col, false, false);
                 }
             } else {
                 // Non-letter character (digit, punctuation)
-                // requires_unshift=true: if the host produced this character via
-                // a shifted key (e.g. US Shift+; → ':'), we must suppress the
-                // guest shift contact, because the guest key is unshifted.
-                // When the host doesn't have shift held this flag is harmless.
+                // requires_unshift=true: if the host produced this via a shifted key,
+                // we must suppress the guest shift contact.
                 if (!char_map_[(int)c].valid) {
                     char_map_[(int)c] = GuestKeyAction(row, col, false, true);
                 }
@@ -108,34 +100,26 @@ void KeyboardMapper::build_character_map_from_matrix(const keyboard_matrix_confi
         }
     }
 
-    // Phase 2: Map shifted characters
-    // These are characters produced by pressing a key WITH shift on the guest
+    // Phase 2: Map shifted characters from shifted_chars[] table
     for (int row = 0; row < rows; row++) {
         for (int col = 0; col < cols; col++) {
-            uint32_t key = config->shifted[row * cols + col];
+            uint32_t key = config->shifted_chars[row * cols + col];
 
-            // Skip non-character entries
-            if (key == 0 || key == CbmKeys::SAME) continue;
+            // Skip non-character entries (markers, EmuKey values >= 128)
+            if (key == 0 || key == EMUKEY_SAME) continue;
             if (key >= 128) continue;
 
             char c = (char)key;
 
-            // Shifted characters need shift pressed on the guest
             if (c >= 'a' && c <= 'z') {
                 // Lowercase letter in shifted position (C64: shifted = lowercase/graphics)
-                // Don't override if we already have a mapping from unshifted
-                // On C64, shifted letters produce lowercase - the user typing lowercase
-                // should just get unshifted key (mapped in phase 1). We don't want to
-                // override that with a shifted mapping.
-                // Skip: lowercase 'a' should map to unshifted key, not shifted key.
+                // Skip: lowercase should map to unshifted key (mapped in phase 1).
             } else if (c >= 'A' && c <= 'Z') {
-                // Uppercase letter in shifted position — unusual but possible
                 if (!char_map_[(int)c].valid) {
                     char_map_[(int)c] = GuestKeyAction(row, col, true, false);
                 }
             } else {
                 // Shifted symbol (e.g., '"' on C64 is Shift+2, '!' is Shift+1)
-                // These are important — user types the symbol and we map to guest shift+key
                 if (!char_map_[(int)c].valid) {
                     char_map_[(int)c] = GuestKeyAction(row, col, true, false);
                 }
@@ -143,17 +127,17 @@ void KeyboardMapper::build_character_map_from_matrix(const keyboard_matrix_confi
         }
     }
 
-    // Cache shift key positions
+    // Cache shift key positions using the optimised lookup
     shift_left_pos_ = GuestKeyAction();
     shift_right_pos_ = GuestKeyAction();
 
     for (int row = 0; row < rows; row++) {
         for (int col = 0; col < cols; col++) {
-            uint32_t key = config->unshifted[row * cols + col];
-            if (key == CbmKeys::SHIFT_LEFT) {
+            emu_key_t key = config->keys[row * cols + col];
+            if (key == EMUKEY_LSHIFT) {
                 shift_left_pos_ = GuestKeyAction(row, col, false);
             }
-            if (key == CbmKeys::SHIFT_RIGHT) {
+            if (key == EMUKEY_RSHIFT) {
                 shift_right_pos_ = GuestKeyAction(row, col, false);
             }
         }
@@ -199,16 +183,12 @@ void KeyboardMapper::add_char_mapping(char c, GuestKeyAction action) {
 void KeyboardMapper::register_default_synthetic_mappings() {
     if (!keyboard_) return;
 
-    // Find matrix positions for guest-specific keys by scanning the matrix
-    auto find_in_matrix = [this](uint32_t target_key) -> GuestKeyAction {
+    // Use the optimised lookup to find matrix positions for guest-specific keys
+    auto find_in_matrix = [this](emu_key_t target_key) -> GuestKeyAction {
         if (!keyboard_) return GuestKeyAction();
-        for (int row = 0; row < matrix_rows_; row++) {
-            for (int col = 0; col < matrix_cols_; col++) {
-                uint32_t idx = row * matrix_cols_ + col;
-                if (keyboard_->active_unshifted[idx] == target_key) {
-                    return GuestKeyAction(row, col, false);
-                }
-            }
+        uint8_t row, col;
+        if (commodore_keyboard_find_key(keyboard_, target_key, &row, &col)) {
+            return GuestKeyAction(row, col, false);
         }
         return GuestKeyAction();
     };
@@ -324,14 +304,16 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
         return true;
     }
 
-    // Modifier keys — pass through to the existing commodore_keyboard handler
-    // since they correspond to matrix positions (Shift, Ctrl, C= key)
+    // Modifier keys — convert to EmuKey and pass to commodore_keyboard
     if (is_modifier_key(sym)) {
-        commodore_keyboard_key_down(keyboard_, sym, false);
+        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
+        if (ek != EMUKEY_NONE) {
+            commodore_keyboard_key_down(keyboard_, ek, false);
+        }
         return true;
     }
 
-    // Non-printable keys — use existing commodore_keyboard direct mapping
+    // Non-printable keys — convert to EmuKey and pass through
     if (!is_printable_key(sym)) {
         // Special case: backtick with shift → treat as printable so TEXTINPUT "~"
         // can be mapped (e.g., to π on C64/VIC-20). Without shift, backtick
@@ -339,7 +321,10 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
         if (sym == SDLK_BACKQUOTE && (mod & (KMOD_LSHIFT | KMOD_RSHIFT))) {
             // Fall through to the printable key / text input path below
         } else {
-            commodore_keyboard_key_down(keyboard_, sym, false);
+            emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
+            if (ek != EMUKEY_NONE) {
+                commodore_keyboard_key_down(keyboard_, ek, false);
+            }
             return true;
         }
     }
@@ -359,8 +344,11 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
         return true;
     }
 
-    // Fallback: text input disabled, use direct SDL keycode mapping
-    commodore_keyboard_key_down(keyboard_, sym, false);
+    // Fallback: text input disabled, use direct SDL keycode → EmuKey mapping
+    emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
+    if (ek != EMUKEY_NONE) {
+        commodore_keyboard_key_down(keyboard_, ek, false);
+    }
     return true;
 }
 
@@ -414,21 +402,30 @@ bool KeyboardMapper::process_key_up(SDL_Keycode sym, SDL_Scancode scancode, uint
         has_pending_key_ = false;
     }
 
-    // Modifier keys — pass through
+    // Modifier keys — convert to EmuKey and pass through
     if (is_modifier_key(sym)) {
-        commodore_keyboard_key_up(keyboard_, sym, false);
+        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
+        if (ek != EMUKEY_NONE) {
+            commodore_keyboard_key_up(keyboard_, ek, false);
+        }
         return true;
     }
 
-    // Non-printable keys — pass through
+    // Non-printable keys — convert to EmuKey and pass through
     if (!is_printable_key(sym)) {
-        commodore_keyboard_key_up(keyboard_, sym, false);
+        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
+        if (ek != EMUKEY_NONE) {
+            commodore_keyboard_key_up(keyboard_, ek, false);
+        }
         return true;
     }
 
     // Fallback: direct release if text input is disabled
     if (!text_input_enabled_) {
-        commodore_keyboard_key_up(keyboard_, sym, false);
+        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
+        if (ek != EMUKEY_NONE) {
+            commodore_keyboard_key_up(keyboard_, ek, false);
+        }
     }
 
     return true;
@@ -709,24 +706,25 @@ KeyboardMapper* create_c64_keyboard_mapper(commodore_keyboard_t* keyboard) {
     mapper->register_default_synthetic_mappings();
 
     // Add manual character mappings for host characters that correspond to
-    // Commodore-specific keys with value 0 in the matrix tables (ARROW_LEFT,
-    // ARROW_UP, POUND).  These aren't discovered by build_character_map_from_matrix
-    // because their SDL keycode constants are 0.
+    // Commodore-specific keys (EmuKey values >= 512) which emu_key_to_char()
+    // returns 0 for — so build_character_map_from_matrix can't discover them.
     //
-    // C64 matrix positions:
-    //   ARROW_LEFT (← char): row 6, col 0 (unshifted)
-    //   ARROW_UP   (↑ char): row 1, col 1 (unshifted)
-    //   POUND      (£ char): row 7, col 1 (unshifted)
-    //   PI         (π char): row 1, col 1 + shift  (shifted ↑)
-    GuestKeyAction arrow_left(6, 0, false, true);   // ← : unshifted, suppress host shift
-    GuestKeyAction arrow_up(1, 1, false, true);     // ↑ : unshifted, suppress host shift
-    GuestKeyAction pound(7, 1, false, true);        // £ : unshifted, suppress host shift
-    GuestKeyAction pi(1, 1, true, false);           // π : shifted ↑
+    // Use commodore_keyboard_find_key to look up the matrix positions.
+    uint8_t row, col;
 
-    mapper->add_char_mapping('\\', arrow_left);     // host \ → guest ←
-    mapper->add_char_mapping('^',  arrow_up);       // host ^ → guest ↑
-    mapper->add_char_mapping('|',  pound);          // host | → guest £
-    mapper->add_char_mapping('~',  pi);             // host ~ → guest π
+    // ARROW_LEFT (← char)
+    if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_ARROW_LEFT, &row, &col)) {
+        mapper->add_char_mapping('\\', GuestKeyAction(row, col, false, true));  // host \ → guest ←
+    }
+    // ARROW_UP (↑ char)
+    if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_ARROW_UP, &row, &col)) {
+        mapper->add_char_mapping('^', GuestKeyAction(row, col, false, true));   // host ^ → guest ↑
+        mapper->add_char_mapping('~', GuestKeyAction(row, col, true, false));   // host ~ → guest π (shifted ↑)
+    }
+    // POUND (£ char)
+    if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_POUND, &row, &col)) {
+        mapper->add_char_mapping('|', GuestKeyAction(row, col, false, true));   // host | → guest £
+    }
 
     return mapper;
 }
@@ -738,22 +736,19 @@ KeyboardMapper* create_vic20_keyboard_mapper(commodore_keyboard_t* keyboard) {
 
     mapper->register_default_synthetic_mappings();
 
-    // Manual character mappings for Commodore-specific keys (value 0 in matrix).
-    //
-    // VIC-20 matrix positions:
-    //   ARROW_LEFT (← char): row 6, col 7 (unshifted)
-    //   ARROW_UP   (↑ char): row 1, col 1 (unshifted)
-    //   POUND      (£ char): row 7, col 1 (unshifted)
-    //   PI         (π char): row 1, col 1 + shift  (shifted ↑)
-    GuestKeyAction arrow_left(6, 7, false, true);
-    GuestKeyAction arrow_up(1, 1, false, true);
-    GuestKeyAction pound(7, 1, false, true);
-    GuestKeyAction pi(1, 1, true, false);
+    // Manual character mappings for Commodore-specific keys (emu_key_to_char() returns 0).
+    uint8_t row, col;
 
-    mapper->add_char_mapping('\\', arrow_left);     // host \ → guest ←
-    mapper->add_char_mapping('^',  arrow_up);       // host ^ → guest ↑
-    mapper->add_char_mapping('|',  pound);          // host | → guest £
-    mapper->add_char_mapping('~',  pi);             // host ~ → guest π
+    if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_ARROW_LEFT, &row, &col)) {
+        mapper->add_char_mapping('\\', GuestKeyAction(row, col, false, true));
+    }
+    if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_ARROW_UP, &row, &col)) {
+        mapper->add_char_mapping('^', GuestKeyAction(row, col, false, true));
+        mapper->add_char_mapping('~', GuestKeyAction(row, col, true, false));  // π
+    }
+    if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_POUND, &row, &col)) {
+        mapper->add_char_mapping('|', GuestKeyAction(row, col, false, true));
+    }
 
     return mapper;
 }
@@ -765,14 +760,13 @@ KeyboardMapper* create_c16_keyboard_mapper(commodore_keyboard_t* keyboard) {
 
     mapper->register_default_synthetic_mappings();
 
-    // Manual character mappings for Commodore-specific keys (value 0 in matrix).
-    //
-    // C16/Plus4 matrix positions:
-    //   POUND (£ char): row 0, col 2 (unshifted)
-    //   No ARROW_LEFT or ARROW_UP on C16/Plus4 keyboard.
-    GuestKeyAction pound(0, 2, false, true);
+    // Manual character mappings for Commodore-specific keys.
+    // C16/Plus4 has POUND but no ARROW_LEFT or ARROW_UP.
+    uint8_t row, col;
 
-    mapper->add_char_mapping('|', pound);           // host | → guest £
+    if (commodore_keyboard_find_key(keyboard, EMUKEY_CBM_POUND, &row, &col)) {
+        mapper->add_char_mapping('|', GuestKeyAction(row, col, false, true));
+    }
 
     return mapper;
 }

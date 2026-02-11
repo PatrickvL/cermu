@@ -15,6 +15,7 @@
 #include "../chip/cpu/fam65xx/fam65xx_gui.h"
 #include "../chip/video/vic_ii/vicii_common.h"
 #include "../chip/input/commodore_keyboard.h"
+#include "../chip/input/emu_key_sdl_map.h"
 #include "../utils/rom_loader.h"
 #include "global_chip_style.h"
 
@@ -216,15 +217,19 @@ void gui_handle_events(gui_emulation_context_t *emu_context) {
     ImGuiIO& io = ImGui::GetIO();
     if (!io.WantCaptureKeyboard && emu_context && emu_context->c64 && emu_context->c64->keyboard) {
       if (event.type == SDL_KEYDOWN) {
-        // Key pressed - update C64 keyboard matrix
-        SDL_Keycode key = event.key.keysym.sym;
-        bool shift_pressed = (SDL_GetModState() & (KMOD_LSHIFT | KMOD_RSHIFT)) != 0;
-        commodore_keyboard_key_down(emu_context->c64->keyboard, key, shift_pressed);
+        // Key pressed - convert SDL keycode to EmuKey and update matrix
+        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(event.key.keysym.sym);
+        if (ek != EMUKEY_NONE) {
+          bool shift_pressed = (SDL_GetModState() & (KMOD_LSHIFT | KMOD_RSHIFT)) != 0;
+          commodore_keyboard_key_down(emu_context->c64->keyboard, ek, shift_pressed);
+        }
       } else if (event.type == SDL_KEYUP) {
-        // Key released - update C64 keyboard matrix
-        SDL_Keycode key = event.key.keysym.sym;
-        bool shift_pressed = (SDL_GetModState() & (KMOD_LSHIFT | KMOD_RSHIFT)) != 0;
-        commodore_keyboard_key_up(emu_context->c64->keyboard, key, shift_pressed);
+        // Key released - convert SDL keycode to EmuKey and update matrix
+        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(event.key.keysym.sym);
+        if (ek != EMUKEY_NONE) {
+          bool shift_pressed = (SDL_GetModState() & (KMOD_LSHIFT | KMOD_RSHIFT)) != 0;
+          commodore_keyboard_key_up(emu_context->c64->keyboard, ek, shift_pressed);
+        }
       }
     }
     

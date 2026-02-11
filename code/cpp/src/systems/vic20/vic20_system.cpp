@@ -2,6 +2,7 @@
 #include "vic20_memory.h"
 #include "vic20_chips.h"
 #include "../../chip/input/commodore_keyboard.h"
+#include "../../chip/input/emu_key_sdl_map.h"
 #include "vic20_keyboard_matrix.h" // VIC-20 keyboard matrix data
 #include <cstring>
 #include <cstdio>
@@ -577,10 +578,13 @@ void VIC20System::handle_keyboard_event(int key, bool pressed) {
             keyboard_mapper_->process_key_up((SDL_Keycode)key, SDL_SCANCODE_UNKNOWN, 0);
         }
     } else if (keyboard_) {
-        if (pressed) {
-            commodore_keyboard_key_down(keyboard_, (uint32_t)key, false);
-        } else {
-            commodore_keyboard_key_up(keyboard_, (uint32_t)key, false);
+        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key((SDL_Keycode)key);
+        if (ek != EMUKEY_NONE) {
+            if (pressed) {
+                commodore_keyboard_key_down(keyboard_, ek, false);
+            } else {
+                commodore_keyboard_key_up(keyboard_, ek, false);
+            }
         }
     }
 }

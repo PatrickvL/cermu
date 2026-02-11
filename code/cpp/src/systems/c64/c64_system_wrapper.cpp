@@ -1,6 +1,7 @@
 #include "c64_system_wrapper.h"
 #include "c64_test_loader.h"
 #include "../../chip/input/commodore_keyboard.h"
+#include "../../chip/input/emu_key_sdl_map.h"
 #include "../../chip/cpu/fam65xx/mos6510.h"
 #include "../../gui/imgui_interface.h"
 #include <cstring>
@@ -283,11 +284,14 @@ void C64SystemWrapper::handle_keyboard_event(int key, bool pressed) {
                 (SDL_Keycode)key, SDL_SCANCODE_UNKNOWN, 0);
         }
     } else if (c64_ && c64_->keyboard) {
-        // No mapper — direct passthrough (fallback)
-        if (pressed) {
-            commodore_keyboard_key_down(c64_->keyboard, key, false);
-        } else {
-            commodore_keyboard_key_up(c64_->keyboard, key, false);
+        // No mapper — convert SDL keycode to EmuKey and pass through
+        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key((SDL_Keycode)key);
+        if (ek != EMUKEY_NONE) {
+            if (pressed) {
+                commodore_keyboard_key_down(c64_->keyboard, ek, false);
+            } else {
+                commodore_keyboard_key_up(c64_->keyboard, ek, false);
+            }
         }
     }
 }

@@ -1,5 +1,6 @@
 #include "c16_system.h"
 #include "c16_keyboard_matrix.h"
+#include "../../chip/input/emu_key_sdl_map.h"
 #include "../../core/storage/rom_loader.h"
 #include <cstring>
 #include <cstdio>
@@ -345,10 +346,13 @@ void C16System::handle_keyboard_event(int key, bool pressed) {
             keyboard_mapper_->process_key_up((SDL_Keycode)key, SDL_SCANCODE_UNKNOWN, 0);
         }
     } else if (keyboard_) {
-        if (pressed) {
-            commodore_keyboard_key_down(keyboard_, (uint32_t)key, false);
-        } else {
-            commodore_keyboard_key_up(keyboard_, (uint32_t)key, false);
+        emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key((SDL_Keycode)key);
+        if (ek != EMUKEY_NONE) {
+            if (pressed) {
+                commodore_keyboard_key_down(keyboard_, ek, false);
+            } else {
+                commodore_keyboard_key_up(keyboard_, ek, false);
+            }
         }
     }
 }

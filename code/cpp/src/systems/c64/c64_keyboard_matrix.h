@@ -13,10 +13,8 @@
 #define C64_KEYBOARD_ROWS 8
 #define C64_KEYBOARD_COLS 8
 
-extern const uint32_t keyboard_matrix_unshifted_c64[C64_KEYBOARD_ROWS][C64_KEYBOARD_COLS];
-extern const uint32_t keyboard_matrix_shifted_c64[C64_KEYBOARD_ROWS][C64_KEYBOARD_COLS];
-
 // Pre-built configuration struct for commodore_keyboard_create()
+// Contains keys[] (EmuKey values) and shifted_chars[] tables.
 extern const keyboard_matrix_config_t c64_keyboard_config;
 
 #endif // C64_KEYBOARD_MATRIX_H
