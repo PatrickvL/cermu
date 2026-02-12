@@ -49,6 +49,9 @@ void* mos6561_create(chip_descriptor_t* desc) {
     // Reset video generation state
     vic_system_reset(&vic->base);
 
+    // Initialise audio with PAL clock and default sample rate
+    vic_audio_reset(&vic->base, vic_config_pal.clock_frequency, 22050);
+
     return vic;
 }
 
