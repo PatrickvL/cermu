@@ -625,18 +625,26 @@ void SimpleSystemGUI::load_file_dialog() {
     if (!system_) return;
     
 #ifdef HAS_IMGUIFILEDIALOG
-    // Build filter from system descriptor
+    // Build filter from system descriptor using ImGuiFileDialog collection syntax
+    // Collection format: "Title{.ext1,.ext2,...}" shows ALL matching files at once
+    // Individual filters separated by commas create separate dropdown entries
     const auto& desc = system_->get_descriptor();
     std::string filter_str;
     if (desc.supported_extensions && desc.supported_extensions[0]) {
+        // Build a combined collection filter so all supported files show together
+        // e.g. "VIC-20 Files{.prg,.tap,.d64,.t64}"
+        std::string short_name = desc.short_name ? desc.short_name : "System";
+        filter_str = std::string(short_name) + " Files{";
         for (int i = 0; desc.supported_extensions[i] != nullptr; i++) {
             if (i > 0) filter_str += ",";
-            // Remove leading dot if present
             const char* ext = desc.supported_extensions[i];
             if (ext[0] == '.') ext++;
             filter_str += ".";
             filter_str += ext;
         }
+        filter_str += "}";
+        // Also add an "All Files" option
+        filter_str += ",.*";
     } else {
         filter_str = ".*"; // All files if no extensions specified
     }
@@ -654,10 +662,11 @@ void SimpleSystemGUI::load_file_dialog() {
         }
     }
     
-    // Open the dialog with default config pointing to last location
+    // Open the dialog with case-insensitive extension filtering
     IGFD::FileDialogConfig config;
     config.path = default_path;
     config.fileName = default_filename;
+    config.flags = ImGuiFileDialogFlags_CaseInsensitiveExtentionFiltering;
     ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose File", filter_str.c_str(), config);
 #else
     printf("ImGuiFileDialog not available - file loading disabled\n");
