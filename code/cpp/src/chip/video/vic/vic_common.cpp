@@ -64,11 +64,11 @@ void vic_system_reset(vic_base_t* vic) {
     vic->registers[VIC_REG_LIGHTPEN_Y] = 1;  // $9007: CR7 usual value=1 (Light pen Y)
     vic->registers[VIC_REG_PADDLE_X] = 255;  // $9008: CR8 usual value=255 (Paddle 1)
     vic->registers[VIC_REG_PADDLE_Y] = 255;  // $9009: CR9 usual value=255 (Paddle 2)
-    vic->registers[VIC_REG_OSC1_FREQ] = 0;  // $900A: CRA usual value=0 (Speaker 1 off)
-    vic->registers[VIC_REG_OSC2_FREQ] = 0;  // $900B: CRB usual value=0 (Speaker 2 off)
-    vic->registers[VIC_REG_OSC3_FREQ] = 0;  // $900C: CRC usual value=0 (Speaker 3 off)
-    vic->registers[VIC_REG_OSC4_FREQ] = 0;  // $900D: CRD usual value=0 (Noise off)
-    vic->registers[VIC_REG_AUX_COLOR] = 0;  // $900E: CRE usual value=0 (Volume=0, Aux color=black)
+    vic->registers[VIC_REG_BASS_FREQ] = 0;     // $900A: Voice 1 bass (off)
+    vic->registers[VIC_REG_ALTO_FREQ] = 0;     // $900B: Voice 2 alto (off)
+    vic->registers[VIC_REG_SOPRANO_FREQ] = 0;  // $900C: Voice 3 soprano (off)
+    vic->registers[VIC_REG_NOISE_FREQ] = 0;    // $900D: Noise generator (off)
+    vic->registers[VIC_REG_AUX_COLOR] = 0;     // $900E: Volume=0, Aux color=black
     // $900F: CRF power-on default (Border=Cyan(3), Reverse=OFF, Background=Blue(6))
     // VIC-20 powers up with blue background, KERNAL will configure as needed
     vic->registers[VIC_REG_BACKGROUND] = VIC_COLOR_CYAN | (VIC_COLOR_BLUE << VIC_BG_BACKGROUND_SHIFT);
@@ -80,7 +80,21 @@ void vic_system_reset(vic_base_t* vic) {
     vic->matrix_color_byte = 0;
     vic->matrix_char_data = 0;
     vic->pixel_line_index = 0;
-    
+
+    // Reset audio state (preserves cycles_per_sample_fp set by vic_audio_reset)
+    for (int i = 0; i < VIC_NUM_VOICES; i++) {
+        vic->audio.prescaler[i] = 0;
+        vic->audio.counter[i] = 0;
+        vic->audio.output[i] = 0;
+    }
+    vic->audio.noise_lfsr = VIC_NOISE_LFSR_INIT;
+    vic->audio.sample_accum = 0;
+    vic->audio.sample_tick_count = 0;
+    vic->audio.sample_frac = 0;
+    vic->audio.write_pos = 0;
+    vic->audio.read_pos = 0;
+    memset(vic->audio.buffer, 128, sizeof(vic->audio.buffer)); // silence = centre
+
     // Initialize memory callbacks to NULL (system must set them)
     vic->mem_read = NULL;
     vic->mem_user_data = NULL;
@@ -159,11 +173,155 @@ static void vic_flush_pixel_line(vic_base_t* vic, int raster_line) {
     vic->pixel_line_index = 0;
 }
 
-// Main tick function (main video generation) - based on C# ClockCycle()
+// ============================================================================
+// Audio generation
+// ============================================================================
+
+// Voice clock divisors (chip cycles per prescaler tick)
+static const uint32_t vic_voice_divisor[VIC_NUM_VOICES] = {
+    VIC_BASS_DIVISOR,       // Voice 0: Bass    — ÷128
+    VIC_ALTO_DIVISOR,       // Voice 1: Alto    — ÷64
+    VIC_SOPRANO_DIVISOR,    // Voice 2: Soprano — ÷32
+    VIC_NOISE_DIVISOR       // Voice 3: Noise   — ÷32
+};
+
+// Register offsets for each voice's frequency register
+static const uint8_t vic_voice_reg[VIC_NUM_VOICES] = {
+    VIC_REG_BASS_FREQ,
+    VIC_REG_ALTO_FREQ,
+    VIC_REG_SOPRANO_FREQ,
+    VIC_REG_NOISE_FREQ
+};
+
+void vic_audio_reset(vic_base_t* vic, uint32_t chip_clock_hz, uint32_t sample_rate_hz) {
+    if (!vic || sample_rate_hz == 0) return;
+
+    // Compute fixed-point (16.16) cycles-per-sample ratio
+    // This controls the downsampling from chip clock to audio output rate
+    vic->audio.cycles_per_sample_fp =
+        (uint32_t)(((uint64_t)chip_clock_hz << 16) / sample_rate_hz);
+
+    // Zero all runtime state
+    for (int i = 0; i < VIC_NUM_VOICES; i++) {
+        vic->audio.prescaler[i] = vic_voice_divisor[i];
+        vic->audio.counter[i] = 0;
+        vic->audio.output[i] = 0;
+    }
+    vic->audio.noise_lfsr = VIC_NOISE_LFSR_INIT;
+    vic->audio.sample_accum = 0;
+    vic->audio.sample_tick_count = 0;
+    vic->audio.sample_frac = 0;
+    vic->audio.write_pos = 0;
+    vic->audio.read_pos = 0;
+    memset(vic->audio.buffer, 128, sizeof(vic->audio.buffer));
+}
+
+// Called once per chip cycle from vic_tick()
+void vic_audio_tick(vic_base_t* vic) {
+    vic_audio_state_t* a = &vic->audio;
+
+    // --- Step each voice's prescaler; on expiry clock the voice counter ---
+    for (int v = 0; v < VIC_NUM_VOICES; v++) {
+        if (--a->prescaler[v] == 0) {
+            a->prescaler[v] = vic_voice_divisor[v]; // reload prescaler
+
+            uint8_t reg_val = vic->registers[vic_voice_reg[v]];
+            bool enabled = (reg_val & VIC_VOICE_ENABLE) != 0;
+
+            if (enabled) {
+                if (a->counter[v] == 0) {
+                    // Reload period from register (128 - freq_value)
+                    uint8_t freq = reg_val & VIC_VOICE_FREQ_MASK;
+                    a->counter[v] = 128 - freq;
+
+                    if (v < VIC_NUM_TONE_VOICES) {
+                        // Tone voice: toggle square-wave output
+                        a->output[v] ^= 1;
+                    } else {
+                        // Noise voice: shift LFSR and take output from bit 0
+                        uint16_t lfsr = a->noise_lfsr;
+                        uint16_t feedback = lfsr & 1;
+                        lfsr >>= 1;
+                        if (feedback) lfsr ^= VIC_NOISE_LFSR_POLY;
+                        a->noise_lfsr = lfsr;
+                        a->output[v] = lfsr & 1;
+                    }
+                } else {
+                    a->counter[v]--;
+                }
+            } else {
+                // Voice disabled — output silent
+                a->output[v] = 0;
+                a->counter[v] = 0;
+            }
+        }
+    }
+
+    // --- Mix enabled voices (0-4 range, one bit each) ---
+    uint8_t mix = a->output[0] + a->output[1] + a->output[2] + a->output[3];
+
+    // Apply 4-bit master volume (0-15)
+    uint8_t volume = vic->registers[VIC_REG_AUX_COLOR] & VIC_AUX_VOLUME_MASK;
+    // mix * volume => 0..60, scale to unsigned 8-bit centred at 128
+    // 60 * 4 = 240 → fits in uint8; adding 8 keeps it centred when silent
+    uint32_t sample_val = (uint32_t)mix * volume;
+
+    // Accumulate for downsampling
+    a->sample_accum += sample_val;
+    a->sample_tick_count++;
+
+    // --- Downsample: emit one output sample when enough cycles have elapsed ---
+    a->sample_frac += (1u << 16); // one cycle in 16.16 fixed point
+    if (a->sample_frac >= a->cycles_per_sample_fp) {
+        a->sample_frac -= a->cycles_per_sample_fp;
+
+        // Average the accumulated value over the ticks in this sample window
+        uint32_t avg = 0;
+        if (a->sample_tick_count > 0) {
+            avg = a->sample_accum / a->sample_tick_count;
+        }
+        // Scale 0-60 into roughly centred unsigned 8-bit (128 ± 60·2)
+        uint8_t out = (uint8_t)(128 + (avg * 2));
+
+        // Write to ring buffer (drop sample if full)
+        uint32_t next_write = (a->write_pos + 1) % VIC_AUDIO_BUFFER_SIZE;
+        if (next_write != a->read_pos) {
+            a->buffer[a->write_pos] = out;
+            a->write_pos = next_write;
+        }
+
+        a->sample_accum = 0;
+        a->sample_tick_count = 0;
+    }
+}
+
+uint32_t vic_audio_available(const vic_base_t* vic) {
+    if (!vic) return 0;
+    const vic_audio_state_t* a = &vic->audio;
+    return (a->write_pos + VIC_AUDIO_BUFFER_SIZE - a->read_pos) % VIC_AUDIO_BUFFER_SIZE;
+}
+
+uint32_t vic_audio_read(vic_base_t* vic, uint8_t* dest, uint32_t max_samples) {
+    if (!vic || !dest || max_samples == 0) return 0;
+    vic_audio_state_t* a = &vic->audio;
+    uint32_t count = 0;
+    while (count < max_samples && a->read_pos != a->write_pos) {
+        dest[count++] = a->buffer[a->read_pos];
+        a->read_pos = (a->read_pos + 1) % VIC_AUDIO_BUFFER_SIZE;
+    }
+    return count;
+}
+
+
 // Main tick function (main video generation) - based on C# ClockCycle()
 bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
     vic_base_t* vic = (vic_base_t*)chip;
     if (!vic) return bus_state;
+
+    // Advance audio oscillators / noise LFSR and downsample
+    if (vic->audio.cycles_per_sample_fp != 0) {
+        vic_audio_tick(vic);
+    }
 
     const uint8_t reg_video_matrix = vic->registers[VIC_REG_VIDEO_MATRIX];
     uint16_t columns = reg_video_matrix & VIC_VM_COLUMNS_MASK;
