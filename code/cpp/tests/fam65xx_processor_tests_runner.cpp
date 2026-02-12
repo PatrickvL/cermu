@@ -922,6 +922,7 @@ public:
         cpu->active_interrupt = FAM65XX_INT_NONE;
         cpu->interrupt_shift_register = 0;
         cpu->nmi_prev = 1;  // NMI starts high (inactive)
+        cpu->nmi_edge_latch = 0;
     }
     
     // Get address mask from CPUTraits
