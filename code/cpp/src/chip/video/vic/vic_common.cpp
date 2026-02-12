@@ -85,9 +85,11 @@ void vic_system_reset(vic_base_t* vic) {
     for (int i = 0; i < VIC_NUM_VOICES; i++) {
         vic->audio.prescaler[i] = 0;
         vic->audio.counter[i] = 0;
+        vic->audio.shift_reg[i] = 0;
         vic->audio.output[i] = 0;
     }
     vic->audio.noise_lfsr = VIC_NOISE_LFSR_INIT;
+    vic->audio.noise_lfsr0_old = 0;
     vic->audio.sample_accum = 0;
     vic->audio.sample_tick_count = 0;
     vic->audio.sample_frac = 0;
@@ -215,19 +217,12 @@ static const uint16_t vic_mix_table[5][16] = {
 };
 
 // Voice clock divisors (chip cycles per prescaler tick)
+// These match VICE's chspeed model: 1<<4, 1<<3, 1<<2, 1<<1
 static const uint32_t vic_voice_divisor[VIC_NUM_VOICES] = {
-    VIC_BASS_DIVISOR,       // Voice 0: Bass    — ÷128
-    VIC_ALTO_DIVISOR,       // Voice 1: Alto    — ÷64
-    VIC_SOPRANO_DIVISOR,    // Voice 2: Soprano — ÷32
-    VIC_NOISE_DIVISOR       // Voice 3: Noise   — ÷32
-};
-
-// Register offsets for each voice's frequency register
-static const uint8_t vic_voice_reg[VIC_NUM_VOICES] = {
-    VIC_REG_BASS_FREQ,
-    VIC_REG_ALTO_FREQ,
-    VIC_REG_SOPRANO_FREQ,
-    VIC_REG_NOISE_FREQ
+    VIC_BASS_DIVISOR,       // Voice 0: Bass    — ÷16
+    VIC_ALTO_DIVISOR,       // Voice 1: Alto    — ÷8
+    VIC_SOPRANO_DIVISOR,    // Voice 2: Soprano — ÷4
+    VIC_NOISE_DIVISOR       // Voice 3: Noise   — ÷2
 };
 
 void vic_audio_reset(vic_base_t* vic, uint32_t chip_clock_hz, uint32_t sample_rate_hz) {
@@ -258,9 +253,11 @@ void vic_audio_reset(vic_base_t* vic, uint32_t chip_clock_hz, uint32_t sample_ra
     for (int i = 0; i < VIC_NUM_VOICES; i++) {
         vic->audio.prescaler[i] = vic_voice_divisor[i];
         vic->audio.counter[i] = 0;
+        vic->audio.shift_reg[i] = 0;
         vic->audio.output[i] = 0;
     }
     vic->audio.noise_lfsr = VIC_NOISE_LFSR_INIT;
+    vic->audio.noise_lfsr0_old = 0;
     vic->audio.sample_accum = 0;
     vic->audio.sample_tick_count = 0;
     vic->audio.sample_frac = 0;
@@ -280,34 +277,72 @@ void vic_audio_tick(vic_base_t* vic) {
         if (--a->prescaler[v] == 0) {
             a->prescaler[v] = vic_voice_divisor[v]; // reload prescaler
 
-            uint8_t reg_val = vic->registers[vic_voice_reg[v]];
-            bool enabled = (reg_val & VIC_VOICE_ENABLE) != 0;
+            uint8_t reg_val = vic->registers[VIC_REG_BASS_FREQ + v];
+            uint8_t enabled = (reg_val & VIC_VOICE_ENABLE) >> 7;  // 0 or 1
 
-            if (enabled) {
-                if (a->counter[v] == 0) {
-                    // Reload period from register (128 - freq_value)
-                    uint8_t freq = reg_val & VIC_VOICE_FREQ_MASK;
-                    a->counter[v] = 128 - freq;
+            a->counter[v]--;
+            if (a->counter[v] <= 0) {
+                // Reload counter: period = (~reg) & 127, or 128 if zero
+                // This matches VICE's formula exactly.
+                int16_t period = (~reg_val) & VIC_VOICE_FREQ_MASK;
+                if (period == 0) period = 128;
+                a->counter[v] += period;  // += preserves phase accuracy
 
-                    if (v < VIC_NUM_TONE_VOICES) {
-                        // Tone voice: toggle square-wave output
-                        a->output[v] ^= 1;
-                    } else {
-                        // Noise voice: shift LFSR and take output from bit 0
-                        uint16_t lfsr = a->noise_lfsr;
-                        uint16_t feedback = lfsr & 1;
-                        lfsr >>= 1;
-                        if (feedback) lfsr ^= VIC_NOISE_LFSR_POLY;
-                        a->noise_lfsr = lfsr;
-                        a->output[v] = lfsr & 1;
-                    }
+                if (v < VIC_NUM_TONE_VOICES) {
+                    // ------ Tone voice: 8-bit shift register ------
+                    // Shift left; the complement of the outgoing MSB re-enters
+                    // at bit 0, gated by the enable bit.  When enabled, this
+                    // naturally produces a 50% duty cycle square wave (period
+                    // = 16 shifts).  When disabled, zeros are shifted in,
+                    // gradually silencing the register.
+                    //
+                    // Custom waveforms ("viznut waveforms") are created by
+                    // toggling the enable bit with cycle-exact timing while
+                    // the frequency is set to maximum shift rate, injecting
+                    // arbitrary bit patterns.  Once loaded, the pattern
+                    // rotates indefinitely at the playback frequency.
+                    uint8_t shift = a->shift_reg[v];
+                    uint8_t msb = (shift >> 7) & 1;
+                    shift = (shift << 1) | (((msb ^ 1)) & enabled);
+                    a->shift_reg[v] = shift;
+                    a->output[v] = shift & 1;
                 } else {
-                    a->counter[v]--;
+                    // ------ Noise voice: Fibonacci LFSR + shift register ------
+                    // The noise channel uses a 16-bit Fibonacci LFSR (left-
+                    // shifting) with taps at bits 3, 12, 14, 15.  The shift
+                    // register is only clocked on a *rising edge* of the
+                    // LFSR output (bit 0 going from 0 to 1), which gives
+                    // the VIC-20's characteristic noise texture.
+                    //
+                    // LFSR feedback (matching VICE decapped-die analysis):
+                    //   gate1 = bit3 ^ bit12
+                    //   gate2 = bit14 ^ bit15
+                    //   gate3 = ~(gate1 ^ gate2)
+                    //   gate4 = ~(gate3 & enabled)
+                    //   LFSR  = (LFSR << 1) | gate4
+                    uint16_t lfsr = a->noise_lfsr;
+                    int bit3  = (lfsr >> 3) & 1;
+                    int bit12 = (lfsr >> 12) & 1;
+                    int bit14 = (lfsr >> 14) & 1;
+                    int bit15 = (lfsr >> 15) & 1;
+                    int gate1 = bit3 ^ bit12;
+                    int gate2 = bit14 ^ bit15;
+                    int gate3 = (gate1 ^ gate2) ^ 1;
+                    int gate4 = (gate3 & enabled) ^ 1;
+                    uint8_t lfsr0_old = a->noise_lfsr0_old;
+                    a->noise_lfsr0_old = lfsr & 1;
+                    a->noise_lfsr = (lfsr << 1) | gate4;
+
+                    // Edge-triggered shift: only shift on rising edge of LFSR[0]
+                    int edge_trigger = (lfsr & 1) & (!lfsr0_old);
+                    if (edge_trigger) {
+                        uint8_t shift = a->shift_reg[v];
+                        uint8_t msb = (shift >> 7) & 1;
+                        shift = (shift << 1) | (((msb ^ 1)) & enabled);
+                        a->shift_reg[v] = shift;
+                    }
+                    a->output[v] = a->shift_reg[v] & enabled;
                 }
-            } else {
-                // Voice disabled — output silent
-                a->output[v] = 0;
-                a->counter[v] = 0;
             }
         }
     }

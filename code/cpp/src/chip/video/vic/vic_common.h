@@ -68,19 +68,32 @@
 #define VIC_OSC_ENABLE       VIC_VOICE_ENABLE
 #define VIC_OSC_FREQ_MASK    VIC_VOICE_FREQ_MASK
 
-// Per-voice clock divisors (chip cycles per half-period unit)
-// The counter for each voice decrements every N chip cycles.
-// When the counter reaches zero it reloads from (128 - freq) and
-// the voice output toggles (tone) or shifts (noise LFSR).
-#define VIC_BASS_DIVISOR     128
-#define VIC_ALTO_DIVISOR     64
-#define VIC_SOPRANO_DIVISOR  32
-#define VIC_NOISE_DIVISOR    32
+// Per-voice clock divisors (chip cycles per prescaler tick)
+// The internal oscillator uses an 8-bit shift register, NOT a simple
+// flip-flop toggle.  Each counter underflow rotates the shift register
+// once.  The default waveform is 8 ones followed by 8 zeros (50% duty
+// cycle, 16 shifts per period), which sounds identical to a square wave.
+//
+// BUT the enable bit (bit 7 of the voice register) actively pushes a 1
+// or 0 into the shift register on each shift event.  By toggling enable
+// with cycle-exact timing at maximum shift rate, software can inject
+// arbitrary bit patterns into the register to produce 15+ distinct
+// timbres.  This is the "viznut waveform" technique discovered by
+// Ville-Matias Heikkilä (Viznut) of PWP, first used in "Robotic
+// Liberation" (Assembly 2003).
+//
+// Divisors match VICE's chspeed model (1 << chspeed):
+//   Bass=16, Alto=8, Soprano=4, Noise=2
+#define VIC_BASS_DIVISOR     16
+#define VIC_ALTO_DIVISOR     8
+#define VIC_SOPRANO_DIVISOR  4
+#define VIC_NOISE_DIVISOR    2
 
-// Noise LFSR polynomial (Galois form, 16-bit)
-// Tap bits 0 and 3 (x^16 + x^3 + 1) match the real VIC shift register
-#define VIC_NOISE_LFSR_POLY  0xD008
-#define VIC_NOISE_LFSR_INIT  0x0001
+// Noise LFSR — Fibonacci form, 16-bit, left-shifting
+// Taps at bits 3, 12, 14, 15 (matching VICE's decapped-die analysis)
+// The noise voice shift register is edge-triggered: it only shifts on
+// a rising edge of the LFSR output (bit 0), not on every counter tick.
+#define VIC_NOISE_LFSR_INIT  0x0000
 
 // Auxiliary color register bit masks
 #define VIC_AUX_COLOR_MASK 0xF0
@@ -156,15 +169,23 @@ typedef struct {
     // Prescaler counters: count down chip cycles per voice-specific divisor
     uint32_t prescaler[VIC_NUM_VOICES];
 
-    // Period counters: count down from (128 - freq_reg); on underflow the
-    // voice output toggles (tones) or the LFSR shifts (noise)
-    uint16_t counter[VIC_NUM_VOICES];
+    // Period counters (signed, matching VICE's ctr model)
+    // On underflow (ctr <= 0) the counter reloads and the voice's
+    // 8-bit shift register rotates one position.
+    int16_t  counter[VIC_NUM_VOICES];
 
-    // Current digital output for each voice (0 or 1 for tones, LFSR bit 0 for noise)
+    // 8-bit shift registers — the actual waveform generators.
+    // Default pattern: 0xFF→0xFE→…→0x00→0x01→…→0xFF (50% duty cycle).
+    // Custom patterns ("viznut waveforms") are created by toggling the
+    // enable bit with cycle-exact timing at maximum shift rate.
+    uint8_t  shift_reg[VIC_NUM_VOICES];
+
+    // Current digital output for each voice (bit 0 of shift register)
     uint8_t  output[VIC_NUM_VOICES];
 
-    // Noise LFSR (16-bit linear feedback shift register)
+    // Noise LFSR (Fibonacci, 16-bit, left-shifting)
     uint16_t noise_lfsr;
+    uint8_t  noise_lfsr0_old;          // Previous bit 0 for edge detection
 
     // Downsampling accumulator ----------------------------------------
     // Accumulates non-linear mix table values between output-sample boundaries
