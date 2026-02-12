@@ -334,7 +334,6 @@ SystemConfiguration VIC20System::detect_optimal_configuration(
     uint16_t load_addr = 0;
     uint32_t end_addr  = 0;
     bool     have_prg  = false;
-    bool     is_container = false;  // D64/T64 multi-file containers
 
     const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
     bool is_prg = ext && (strcasecmp(ext, ".prg") == 0);
@@ -349,18 +348,9 @@ SystemConfiguration VIC20System::detect_optimal_configuration(
         commodore_load_result_t result = {};
         if (commodore_load_file(filepath, &result)) {
             if ((result.type == COMMODORE_LOAD_D64 ||
-                 result.type == COMMODORE_LOAD_T64) &&
+                 result.type == COMMODORE_LOAD_T64 ||
+                 result.type == COMMODORE_LOAD_PRG) &&
                 result.prg.data_size > 0) {
-                // D64/T64 are multi-file containers — the boot loader is just the
-                // first file; additional files are loaded at runtime into memory
-                // regions we can't statically determine.  Default to full expansion
-                // since there's no downside and games like Doom need all RAM.
-                load_addr = result.prg.load_addr;
-                end_addr  = (uint32_t)load_addr + (uint32_t)result.prg.data_size;
-                have_prg  = true;
-                is_container = true;
-            } else if (result.type == COMMODORE_LOAD_PRG &&
-                       result.prg.data_size > 0) {
                 load_addr = result.prg.load_addr;
                 end_addr  = (uint32_t)load_addr + (uint32_t)result.prg.data_size;
                 have_prg  = true;
@@ -381,12 +371,7 @@ SystemConfiguration VIC20System::detect_optimal_configuration(
     //   5 = Full 32KB         (all blocks, 37KB total)
     int mem_index = 0;
 
-    if (is_container) {
-        // D64/T64: multi-file containers load additional data at runtime
-        // into regions we can't statically determine.  Default to full
-        // expansion — there's no downside, and many games need it.
-        mem_index = 5;
-    } else if (load_addr == 0x0401) {
+    if (load_addr == 0x0401) {
         // 3KB-expanded BASIC start address
         mem_index = 1;
         if (end_addr > 0x1FFF) mem_index = 2;
@@ -771,8 +756,16 @@ bool VIC20System::load_file_into_memory(const char* filepath) {
                                         prg->data[i]);
             }
 
-            // Set BASIC pointers and inject RUN command for BASIC programs
-            if (prg->load_addr == 0x1001) {
+            // Set BASIC pointers and inject RUN command for BASIC programs.
+            // VIC-20 BASIC start addresses vary by memory expansion:
+            //   $0401 = 3KB expansion
+            //   $1001 = unexpanded (5KB)
+            //   $1201 = 8KB+ expansion
+            bool is_basic = (prg->load_addr == 0x0401 ||
+                             prg->load_addr == 0x1001 ||
+                             prg->load_addr == 0x1201);
+
+            if (is_basic) {
                 uint16_t end_addr = prg->end_addr;
                 // TXTTAB ($2B/$2C) = start of BASIC text
                 vic20_memory_write_byte(memory_, 0x2B, (uint8_t)(prg->load_addr & 0xFF));
@@ -795,6 +788,35 @@ bool VIC20System::load_file_into_memory(const char* filepath) {
                 }
                 vic20_memory_write_byte(memory_, 0x00C6, (uint8_t)len);
                 printf("VIC20: Set BASIC pointers and injected RUN command\n");
+            } else {
+                // Machine language program — try to extract SYS address
+                // from the filename (e.g. "rl-test_SYS4352.prg" → SYS4352)
+                const char* basename = filepath;
+                const char* sep = strrchr(filepath, '/');
+                if (sep) basename = sep + 1;
+
+                int sys_addr = -1;
+                for (const char* p = basename; *p; p++) {
+                    if ((p[0] == 'S' || p[0] == 's') &&
+                        (p[1] == 'Y' || p[1] == 'y') &&
+                        (p[2] == 'S' || p[2] == 's') &&
+                        p[3] >= '0' && p[3] <= '9') {
+                        sys_addr = atoi(p + 3);
+                        break;
+                    }
+                }
+
+                if (sys_addr >= 0 && sys_addr <= 65535) {
+                    char cmd[16];
+                    int len = snprintf(cmd, sizeof(cmd), "SYS%d\r", sys_addr);
+                    if (len > 0 && len <= 10) {  // VIC-20 keyboard buffer = 10 bytes
+                        for (int i = 0; i < len; i++) {
+                            vic20_memory_write_byte(memory_, 0x0277 + i, (uint8_t)cmd[i]);
+                        }
+                        vic20_memory_write_byte(memory_, 0x00C6, (uint8_t)len);
+                        printf("VIC20: Injected auto-start: SYS%d\n", sys_addr);
+                    }
+                }
             }
 
             success = true;
