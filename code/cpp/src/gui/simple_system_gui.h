@@ -29,6 +29,10 @@ private:
     uint32_t last_fps_time_;
     uint32_t fps_counter_;
     
+    // Frame pacing (time accumulator for correct emulation speed)
+    uint64_t frame_pace_counter_;       // SDL_GetPerformanceCounter value
+    double frame_time_accumulator_;     // Accumulated real time in seconds
+    
     // System selection dialog
     SystemSelectionDialog system_selection_dialog_;
     
@@ -69,9 +73,13 @@ public:
     // File loading
     void load_file_dialog();
     
+    // Override frame delay - VSync handles display pacing, accumulator handles emulation
+    uint32_t get_frame_delay_ms() const override { return 0; }
+    
 private:
     // Helper functions
     void update_fps();
+    void reset_frame_pacing();
     void allocate_framebuffer();
     void free_framebuffer();
     void teardown_current_system();

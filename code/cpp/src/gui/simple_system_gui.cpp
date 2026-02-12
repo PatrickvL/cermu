@@ -29,6 +29,8 @@ SimpleSystemGUI::SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system)
     , actual_fps_(0)
     , last_fps_time_(0)
     , fps_counter_(0)
+    , frame_pace_counter_(0)
+    , frame_time_accumulator_(0.0)
     , system_selection_dialog_()
 {
     if (system_) {
@@ -123,12 +125,47 @@ void SimpleSystemGUI::handle_events() {
 
 void SimpleSystemGUI::update_frame() {
     if (!system_ || !emulation_running_ || emulation_paused_) {
+        // Reset pacing when not running so we don't accumulate stale time
+        frame_pace_counter_ = 0;
+        frame_time_accumulator_ = 0.0;
         return;
     }
     
-    // Run one frame of emulation
-    system_->run_frame();
-    total_frames_++;
+    // High-resolution timing for frame pacing
+    uint64_t now = SDL_GetPerformanceCounter();
+    
+    // First frame: initialize counter and run one frame
+    if (frame_pace_counter_ == 0) {
+        frame_pace_counter_ = now;
+        system_->run_frame();
+        total_frames_++;
+        update_fps();
+        return;
+    }
+    
+    // Calculate elapsed real time since last update
+    double freq = static_cast<double>(SDL_GetPerformanceFrequency());
+    double elapsed = static_cast<double>(now - frame_pace_counter_) / freq;
+    frame_pace_counter_ = now;
+    
+    // Accumulate real time
+    frame_time_accumulator_ += elapsed;
+    
+    // Target time per emulation frame based on system's target FPS (PAL=50, NTSC=60)
+    double target_frame_time = 1.0 / system_->get_target_fps();
+    
+    // Cap accumulator to prevent death spiral after lag spikes (max 3 frames catch-up)
+    double max_accumulator = target_frame_time * 3.0;
+    if (frame_time_accumulator_ > max_accumulator) {
+        frame_time_accumulator_ = max_accumulator;
+    }
+    
+    // Run emulation frames as needed to keep in sync with real time
+    while (frame_time_accumulator_ >= target_frame_time) {
+        system_->run_frame();
+        total_frames_++;
+        frame_time_accumulator_ -= target_frame_time;
+    }
     
     // Update FPS counter
     update_fps();
@@ -454,6 +491,7 @@ void SimpleSystemGUI::render_about() {
 void SimpleSystemGUI::start_emulation() {
     emulation_running_ = true;
     emulation_paused_ = false;
+    reset_frame_pacing();
     printf("Emulation started\n");
 }
 
@@ -466,6 +504,7 @@ void SimpleSystemGUI::reset_emulation() {
     if (system_) {
         system_->reset();
         total_frames_ = 0;
+        reset_frame_pacing();
         printf("System reset\n");
     }
 }
@@ -494,6 +533,11 @@ void SimpleSystemGUI::update_fps() {
         fps_counter_ = 0;
         last_fps_time_ = current_time;
     }
+}
+
+void SimpleSystemGUI::reset_frame_pacing() {
+    frame_pace_counter_ = 0;
+    frame_time_accumulator_ = 0.0;
 }
 
 void SimpleSystemGUI::allocate_framebuffer() {
@@ -551,6 +595,7 @@ void SimpleSystemGUI::teardown_current_system() {
     emulation_paused_ = false;
     total_frames_ = 0;
     actual_fps_ = 0;
+    reset_frame_pacing();
 }
 void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, int region_option, const std::map<std::string, bool>* peripherals) {
     if (!system_name) {
