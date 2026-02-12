@@ -902,6 +902,31 @@ void VIC20System::set_speed_multiplier(float multiplier) {
     speed_multiplier_ = multiplier;
 }
 
+uint32_t VIC20System::get_audio_samples(float* buffer, uint32_t max_samples) {
+    if (!vic_ || max_samples == 0 || !buffer) return 0;
+
+    // Read unsigned-8-bit samples from VIC ring buffer and convert to float
+    uint32_t avail = vic_audio_available(&vic_->base);
+    uint32_t to_read = avail < max_samples ? avail : max_samples;
+    if (to_read == 0) return 0;
+
+    // Stack-local scratch to avoid heap allocation on the audio thread
+    uint8_t tmp[512];
+    uint32_t written = 0;
+    while (written < to_read) {
+        uint32_t chunk = to_read - written;
+        if (chunk > sizeof(tmp)) chunk = sizeof(tmp);
+        uint32_t n = vic_audio_read(&vic_->base, tmp, chunk);
+        if (n == 0) break;
+        for (uint32_t i = 0; i < n; i++) {
+            // 128 = silence  →  0.0f ;  0 = -1.0f ;  255 = ~+1.0f
+            buffer[written + i] = (tmp[i] - 128) / 128.0f;
+        }
+        written += n;
+    }
+    return written;
+}
+
 // ============================================================================
 // VIA2 Port Read Callbacks - Keyboard Matrix Scanning
 // ============================================================================

@@ -98,6 +98,9 @@ public:
     SystemConfiguration detect_optimal_configuration(
         const char* filepath, const uint8_t* data, size_t size) override;
 
+    // Audio output — drains VIC chip audio ring buffer
+    uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
+
 private:
     // Legacy system integration
     system_8bit_t system_;           // Legacy system wrapper

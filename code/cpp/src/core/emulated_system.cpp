@@ -124,3 +124,7 @@ SystemConfiguration EmulatedSystem::detect_optimal_configuration(
 
     return config;
 }
+
+uint32_t EmulatedSystem::get_audio_samples(float* /*buffer*/, uint32_t /*max_samples*/) {
+    return 0; // No audio by default
+}
