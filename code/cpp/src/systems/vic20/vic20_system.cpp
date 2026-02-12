@@ -619,11 +619,6 @@ void VIC20System::run_frame() {
 // File Loading
 // ============================================================================
 
-/** Memory read callback for BASIC SYS parsing — reads from VIC-20 memory system */
-static uint8_t vic20_mem_read_for_basic(void* ctx, uint16_t addr) {
-    return vic20_memory_read_byte(static_cast<vic20_memory_t*>(ctx), addr);
-}
-
 bool VIC20System::load_file(const char* filepath) {
     if (!memory_ || !cpu_) {
         printf("VIC20: System not initialized, initializing now...\n");
@@ -670,21 +665,7 @@ bool VIC20System::load_file(const char* filepath) {
                                         prg->data[i]);
             }
 
-            // Try to find a SYS address in BASIC for auto-run
-            uint16_t run_addr = 0;
-            
             if (prg->load_addr == 0x1001) {
-                // Standard BASIC start — parse for SYS statement
-                commodore_basic_sys_t sys_result = {};
-                if (commodore_basic_parse_sys(vic20_mem_read_for_basic, memory_,
-                                              prg->load_addr,
-                                              &COMMODORE_BASIC_VIC20,
-                                              10, &sys_result)) {
-                    run_addr = sys_result.sys_address;
-                    printf("VIC20: Found SYS %u on BASIC line %u\n",
-                           run_addr, sys_result.line_number);
-                }
-                
                 // Update BASIC pointers so LIST and RUN work correctly
                 // TXTTAB ($2B/$2C) = start of BASIC text
                 vic20_memory_write_byte(memory_, 0x2B, (uint8_t)(prg->load_addr & 0xFF));
@@ -698,14 +679,21 @@ bool VIC20System::load_file(const char* filepath) {
                 // STREND ($31/$32) = end of arrays
                 vic20_memory_write_byte(memory_, 0x31, (uint8_t)(prg->end_addr & 0xFF));
                 vic20_memory_write_byte(memory_, 0x32, (uint8_t)(prg->end_addr >> 8));
-            }
 
-            if (run_addr != 0) {
-                // Auto-run: set CPU program counter to SYS address
-                printf("VIC20: Auto-running from $%04X\n", run_addr);
-                mos6502_set_pc(cpu_, run_addr);
-            } else {
-                printf("VIC20: No SYS found — program loaded, use RUN to start\n");
+                // Auto-run: stuff "RUN\r" into the KERNAL keyboard buffer.
+                // This lets BASIC handle the entire execution flow — parsing
+                // the SYS expression (which may contain PEEK, arithmetic, etc.),
+                // setting up proper KERNAL/BASIC context (stack, IRQ vectors,
+                // variable space), and calling the program entry point through
+                // the normal SYS dispatch.  Much more robust than trying to
+                // parse the SYS address ourselves and jumping with set_pc().
+                // Keyboard buffer: $0277-$0280 (10 chars max), count at $00C6.
+                const char* run_cmd = "RUN\r";
+                for (int i = 0; run_cmd[i]; i++) {
+                    vic20_memory_write_byte(memory_, 0x0277 + i, (uint8_t)run_cmd[i]);
+                }
+                vic20_memory_write_byte(memory_, 0x00C6, 4);  // 4 chars in buffer
+                printf("VIC20: Injected RUN command into keyboard buffer\n");
             }
 
             success = true;
