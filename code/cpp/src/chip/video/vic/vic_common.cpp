@@ -41,6 +41,15 @@ void vic_set_memory_callbacks(vic_base_t* vic, vic_mem_read_fn_t mem_read, void*
     vic->color_user_data = color_user_data;
 }
 
+// Voice clock divisors (chip cycles per prescaler tick)
+// These match VICE's chspeed model: 1<<4, 1<<3, 1<<2, 1<<1
+static const uint32_t vic_voice_divisor[VIC_NUM_VOICES] = {
+    VIC_BASS_DIVISOR,       // Voice 0: Bass    — ÷16
+    VIC_ALTO_DIVISOR,       // Voice 1: Alto    — ÷8
+    VIC_SOPRANO_DIVISOR,    // Voice 2: Soprano — ÷4
+    VIC_NOISE_DIVISOR       // Voice 3: Noise   — ÷2
+};
+
 // System reset function
 void vic_system_reset(vic_base_t* vic) {
     if (!vic) return;
@@ -83,7 +92,7 @@ void vic_system_reset(vic_base_t* vic) {
 
     // Reset audio state (preserves cycles_per_sample_fp set by vic_audio_reset)
     for (int i = 0; i < VIC_NUM_VOICES; i++) {
-        vic->audio.prescaler[i] = 0;
+        vic->audio.prescaler[i] = vic_voice_divisor[i]; // Must match vic_audio_reset!
         vic->audio.counter[i] = 0;
         vic->audio.shift_reg[i] = 0;
         vic->audio.output[i] = 0;
@@ -214,15 +223,6 @@ static const uint16_t vic_mix_table[5][16] = {
     {   0,   31,  107,  223,  375,  560,  777, 1026, 1304, 1613, 1949, 2315, 2706, 3123, 3572, 4042 },
     // 4 voices (×1.00)
     {   0,   31,  109,  226,  380,  567,  787, 1039, 1321, 1634, 1974, 2345, 2742, 3165, 3618, 4095 }
-};
-
-// Voice clock divisors (chip cycles per prescaler tick)
-// These match VICE's chspeed model: 1<<4, 1<<3, 1<<2, 1<<1
-static const uint32_t vic_voice_divisor[VIC_NUM_VOICES] = {
-    VIC_BASS_DIVISOR,       // Voice 0: Bass    — ÷16
-    VIC_ALTO_DIVISOR,       // Voice 1: Alto    — ÷8
-    VIC_SOPRANO_DIVISOR,    // Voice 2: Soprano — ÷4
-    VIC_NOISE_DIVISOR       // Voice 3: Noise   — ÷2
 };
 
 void vic_audio_reset(vic_base_t* vic, uint32_t chip_clock_hz, uint32_t sample_rate_hz) {

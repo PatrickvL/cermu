@@ -533,16 +533,23 @@ void VIC20System::reset() {
     // Reset VIC chip (clears registers, video state, audio state)
     if (vic_) {
         mos6560_reset(vic_);
+        // Re-establish memory callbacks (vic_system_reset clears them)
+        vic_set_memory_callbacks(&vic_->base,
+            VIC20System::vic_mem_read, this,
+            VIC20System::vic_color_read, this);
+        // Re-establish framebuffer pointer
+        if (rgba_framebuffer_) {
+            mos6560_set_framebuffer(vic_, rgba_framebuffer_, rgba_width_, rgba_height_);
+        }
     }
     
     // Reset VIA chips (clears timers, interrupt flags, port registers)
+    // interrupt_line is preserved by mos6522_reset — it's hardware wiring, not state
     if (via1_) {
         mos6522_reset(via1_);
-        via1_->interrupt_line = BUS_MASK_NMI;   // VIA1 drives NMI
     }
     if (via2_) {
         mos6522_reset(via2_);
-        via2_->interrupt_line = BUS_MASK_IRQ;   // VIA2 drives IRQ
     }
     
     // Clear RAM (zero page, stack, main RAM $0000-$7FFF) but preserve ROMs
