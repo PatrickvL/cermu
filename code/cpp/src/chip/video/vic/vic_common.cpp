@@ -91,6 +91,8 @@ void vic_system_reset(vic_base_t* vic) {
     vic->audio.sample_accum = 0;
     vic->audio.sample_tick_count = 0;
     vic->audio.sample_frac = 0;
+    vic->audio.lowpass_buf = 0.0f;
+    vic->audio.highpass_buf = 0.0f;
     vic->audio.write_pos = 0;
     vic->audio.read_pos = 0;
     memset(vic->audio.buffer, 128, sizeof(vic->audio.buffer)); // silence = centre
@@ -177,6 +179,41 @@ static void vic_flush_pixel_line(vic_base_t* vic, int raster_line) {
 // Audio generation
 // ============================================================================
 
+// ---------------------------------------------------------------------------
+// Non-linear amplitude table: vic_mix_table[active_voices][volume]
+// ---------------------------------------------------------------------------
+// Models two hardware characteristics of the MOS 6560/6561 DAC:
+//
+//   1. Volume curve (4-bit resistor ladder)
+//      Measured VIC hardware shows a roughly power-law response.
+//      Approximated here as  vol_curve(v) = (v / 15)^1.8
+//
+//   2. Voice summation compression
+//      Multiple voices sharing the output node saturate due to limited
+//      supply current.  Derived from VICE's measured voltage function:
+//        0 voices → 0.00   (baseline)
+//        1 voice  → 0.54   (first voice takes >50% of headroom)
+//        2 voices → 0.94   (second voice adds most of the rest)
+//        3 voices → 0.99   (diminishing returns)
+//        4 voices → 1.00   (full scale)
+//
+// Entry = round(voice_compress[v] × vol_curve[vol] × 4095)
+// Range: 0-4095 (12-bit unsigned).  DC component is removed by the
+// highpass filter in the output stage, so no explicit centering here.
+// ---------------------------------------------------------------------------
+static const uint16_t vic_mix_table[5][16] = {
+    // 0 voices active — no signal regardless of volume
+    {   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0 },
+    // 1 voice  (×0.54)
+    {   0,   17,   59,  122,  205,  306,  425,  561,  714,  883, 1066, 1266, 1480, 1709, 1954, 2211 },
+    // 2 voices (×0.94)
+    {   0,   29,  102,  212,  356,  532,  738,  975, 1240, 1533, 1852, 2200, 2572, 2969, 3395, 3841 },
+    // 3 voices (×0.99)
+    {   0,   31,  107,  223,  375,  560,  777, 1026, 1304, 1613, 1949, 2315, 2706, 3123, 3572, 4042 },
+    // 4 voices (×1.00)
+    {   0,   31,  109,  226,  380,  567,  787, 1039, 1321, 1634, 1974, 2345, 2742, 3165, 3618, 4095 }
+};
+
 // Voice clock divisors (chip cycles per prescaler tick)
 static const uint32_t vic_voice_divisor[VIC_NUM_VOICES] = {
     VIC_BASS_DIVISOR,       // Voice 0: Bass    — ÷128
@@ -201,6 +238,22 @@ void vic_audio_reset(vic_base_t* vic, uint32_t chip_clock_hz, uint32_t sample_ra
     vic->audio.cycles_per_sample_fp =
         (uint32_t)(((uint64_t)chip_clock_hz << 16) / sample_rate_hz);
 
+    // --- Compute first-order IIR filter coefficients ---
+    // Models the VIC-20 output stage (see schematic in VICE vic20sound.c):
+    //   Lowpass:  R=1kΩ, C=100nF → RC = 1e-4 s → f_c ≈ 1592 Hz
+    //   Highpass: R=1kΩ, C=1µF   → RC = 1e-3 s → f_c ≈  159 Hz
+    // alpha = dt / (dt + RC), where dt = 1 / sample_rate
+    float dt = 1.0f / (float)sample_rate_hz;
+    vic->audio.lowpass_alpha  = dt / (dt + 1.0e-4f);
+    vic->audio.highpass_alpha = dt / (dt + 1.0e-3f);
+
+    // Output gain: maps table-scale values through the filter into uint8 range.
+    // A single voice at max volume swings ~0 to 2211 (table units).
+    // After highpass DC removal, the AC component is roughly ±1100.
+    // We want that to map to about ±70 in the uint8 output (128 ± 70 = 58–198),
+    // leaving headroom for multi-voice peaks (which compress naturally via the table).
+    vic->audio.output_gain = 70.0f / (float)(vic_mix_table[1][15] / 2);
+
     // Zero all runtime state
     for (int i = 0; i < VIC_NUM_VOICES; i++) {
         vic->audio.prescaler[i] = vic_voice_divisor[i];
@@ -211,6 +264,8 @@ void vic_audio_reset(vic_base_t* vic, uint32_t chip_clock_hz, uint32_t sample_ra
     vic->audio.sample_accum = 0;
     vic->audio.sample_tick_count = 0;
     vic->audio.sample_frac = 0;
+    vic->audio.lowpass_buf = 0.0f;
+    vic->audio.highpass_buf = 0.0f;
     vic->audio.write_pos = 0;
     vic->audio.read_pos = 0;
     memset(vic->audio.buffer, 128, sizeof(vic->audio.buffer));
@@ -257,17 +312,12 @@ void vic_audio_tick(vic_base_t* vic) {
         }
     }
 
-    // --- Mix enabled voices (0-4 range, one bit each) ---
-    uint8_t mix = a->output[0] + a->output[1] + a->output[2] + a->output[3];
-
-    // Apply 4-bit master volume (0-15)
+    // --- Accumulate non-linear mix for this cycle ---
+    // Count active voices (0-4), look up the combined non-linear amplitude
+    // that models the VIC's DAC compression + volume ladder in one step.
+    uint8_t voices_active = a->output[0] + a->output[1] + a->output[2] + a->output[3];
     uint8_t volume = vic->registers[VIC_REG_AUX_COLOR] & VIC_AUX_VOLUME_MASK;
-    // mix * volume => 0..60, scale to unsigned 8-bit centred at 128
-    // 60 * 4 = 240 → fits in uint8; adding 8 keeps it centred when silent
-    uint32_t sample_val = (uint32_t)mix * volume;
-
-    // Accumulate for downsampling
-    a->sample_accum += sample_val;
+    a->sample_accum += vic_mix_table[voices_active][volume];
     a->sample_tick_count++;
 
     // --- Downsample: emit one output sample when enough cycles have elapsed ---
@@ -275,18 +325,30 @@ void vic_audio_tick(vic_base_t* vic) {
     if (a->sample_frac >= a->cycles_per_sample_fp) {
         a->sample_frac -= a->cycles_per_sample_fp;
 
-        // Average the accumulated value over the ticks in this sample window
-        uint32_t avg = 0;
+        // Average the accumulated DAC values over this sample window
+        float raw = 0.0f;
         if (a->sample_tick_count > 0) {
-            avg = a->sample_accum / a->sample_tick_count;
+            raw = (float)a->sample_accum / (float)a->sample_tick_count;
         }
-        // Scale 0-60 into roughly centred unsigned 8-bit (128 ± 60·2)
-        uint8_t out = (uint8_t)(128 + (avg * 2));
+
+        // Lowpass filter: smooths the square-wave steps (models 1kΩ + 100nF)
+        a->lowpass_buf += a->lowpass_alpha * (raw - a->lowpass_buf);
+
+        // Highpass filter: removes DC offset (models 1µF coupling capacitor)
+        // The AC component is the difference between lowpass output and the
+        // slowly-tracking highpass buffer.
+        float ac = a->lowpass_buf - a->highpass_buf;
+        a->highpass_buf += a->highpass_alpha * (a->lowpass_buf - a->highpass_buf);
+
+        // Scale to unsigned 8-bit centered at 128
+        int32_t out = 128 + (int32_t)(ac * a->output_gain);
+        if (out < 0) out = 0;
+        if (out > 255) out = 255;
 
         // Write to ring buffer (drop sample if full)
         uint32_t next_write = (a->write_pos + 1) % VIC_AUDIO_BUFFER_SIZE;
         if (next_write != a->read_pos) {
-            a->buffer[a->write_pos] = out;
+            a->buffer[a->write_pos] = (uint8_t)out;
             a->write_pos = next_write;
         }
 

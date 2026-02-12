@@ -87,6 +87,10 @@
 #define VIC_AUX_COLOR_SHIFT 4
 #define VIC_AUX_VOLUME_MASK 0x0F
 
+// Audio non-linear mix table scale (12-bit)
+// Derived from VIC hardware: quadratic volume DAC + compressed voice summing
+#define VIC_MIX_TABLE_MAX    4095
+
 // Background register bit masks ($900F) per MOS 6561 VIC documentation
 // 900F XXXXYZZZ
 // Bits 0-2 (Z): Border colour (8 colors: 0-7)
@@ -163,8 +167,8 @@ typedef struct {
     uint16_t noise_lfsr;
 
     // Downsampling accumulator ----------------------------------------
-    // Accumulates mixed sample values between output-sample boundaries
-    uint32_t sample_accum;           // Sum of per-cycle mixed values
+    // Accumulates non-linear mix table values between output-sample boundaries
+    uint32_t sample_accum;           // Sum of per-cycle table lookups (unsigned)
     uint32_t sample_tick_count;      // Cycles accumulated so far
 
     // Fixed-point step: how many chip cycles per output sample (16.16)
@@ -172,6 +176,16 @@ typedef struct {
 
     // Fractional cycle accumulator for sample timing (16.16 fixed point)
     uint32_t sample_frac;
+
+    // Analog output stage filter state (first-order IIR, per output sample)
+    // Models the VIC-20 hardware RC output circuit:
+    //   Lowpass:  1kΩ series + 100nF to ground  → fc ≈ 1592 Hz
+    //   Highpass: 1µF coupling capacitor + 1kΩ  → fc ≈  159 Hz
+    float lowpass_buf;               // Lowpass filter accumulator
+    float highpass_buf;              // Highpass filter accumulator
+    float lowpass_alpha;             // Lowpass coefficient  = dt / (dt + RC)
+    float highpass_alpha;            // Highpass coefficient = dt / (dt + RC)
+    float output_gain;               // Maps filter output to uint8 range
 
     // Output ring buffer (mono, unsigned 8-bit, centre = 128) ----------
     uint8_t  buffer[VIC_AUDIO_BUFFER_SIZE];
