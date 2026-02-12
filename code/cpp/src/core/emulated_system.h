@@ -275,6 +275,11 @@ public:
     virtual SystemConfiguration detect_optimal_configuration(
         const char* filepath, const uint8_t* data, size_t size);
 
+    // Convenience: read a file, detect optimal configuration, merge with
+    // the current config (never downgrading memory), and apply.
+    // Safe to call both before and after initialize().
+    void apply_file_configuration(const char* filepath);
+
     // ---- Audio output --------------------------------------------------
     // Fill \p buffer with up to \p max_samples mono float samples in the
     // range -1.0 .. +1.0 and return the number actually written.

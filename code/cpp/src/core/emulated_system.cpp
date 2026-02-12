@@ -1,7 +1,9 @@
 #include "emulated_system.h"
 #include <cstring>
 #include <algorithm>
-#include <fstream>
+#include <cstdio>
+#include <cstdint>
+#include <vector>
 
 // ============================================================================
 // EmulatedSystem Base Class Implementation
@@ -123,6 +125,36 @@ SystemConfiguration EmulatedSystem::detect_optimal_configuration(
     }
 
     return config;
+}
+
+void EmulatedSystem::apply_file_configuration(const char* filepath) {
+    if (!filepath) return;
+
+    FILE* f = fopen(filepath, "rb");
+    if (!f) return;
+
+    fseek(f, 0, SEEK_END);
+    long fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    size_t read_size = fsize < 65536 ? (size_t)fsize : 65536;
+    std::vector<uint8_t> buf(read_size);
+    fread(buf.data(), 1, read_size, f);
+    fclose(f);
+
+    SystemConfiguration detected =
+        detect_optimal_configuration(filepath, buf.data(), (size_t)fsize);
+
+    // Merge: never downgrade memory, keep detected region
+    SystemConfiguration merged = config_;
+    if (detected.memory_option_index > merged.memory_option_index) {
+        merged.memory_option_index = detected.memory_option_index;
+    }
+    if (detected.region_option_index >= 0) {
+        merged.region_option_index = detected.region_option_index;
+    }
+
+    set_configuration(merged);
+    apply_configuration();
 }
 
 uint32_t EmulatedSystem::get_audio_samples(float* /*buffer*/, uint32_t /*max_samples*/) {
