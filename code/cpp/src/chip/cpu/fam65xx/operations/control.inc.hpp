@@ -405,6 +405,8 @@ bus_state_t op_brk(bus_state_t pins) {
     // while we're reading the vector (cycles 10-13). Without this, IRQs sampled
     // during vector read will trigger immediately after BRK completes.
     this->interrupt_shift_register = 0;
+    // Clear NMI edge latch when NMI is serviced — allows future NMI edges to trigger
+    this->nmi_edge_latch = 0;
     // Reset NMI edge detection using INVERTED convention:
     // Pin HIGH (inactive) → inverted = 0, Pin LOW (asserted) → inverted = 1
     this->nmi_prev = (pins & FAM65XX_NMI) ? 0 : 1;
