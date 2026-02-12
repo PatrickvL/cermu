@@ -882,13 +882,21 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
     }
 
     // NMI edge detection (extracted bit 2) - only if NMI line exists
+    // The 6502 uses an internal edge-detect flip-flop for NMI:
+    // - Set on the falling edge of the NMI pin (HIGH→LOW)
+    // - Stays latched until the NMI is actually serviced
+    // - The latched output is fed into the shift register like a level signal
+    // This ensures the 3-bit shift register fills up properly for NMI detection.
     if constexpr (has_nmi_line()) {
       uint8_t nmi_current = (int_pins >> NMI_OFFSET) & 0x1;
       // Detect FALLING edge on physical pin: 0→1 transition in inverted domain
-      // (was inactive/0, now asserted/1)
-      shift_reg |=
-          ((-((!this->nmi_prev) & nmi_current)) & 0x1) << INT_NMI_START_BIT;
+      // (was inactive/0, now asserted/1) — sets the latch
+      if ((!this->nmi_prev) & nmi_current) {
+        this->nmi_edge_latch = 1;
+      }
       this->nmi_prev = nmi_current;
+      // Feed the latched edge into the shift register (acts like a level signal)
+      shift_reg |= ((uint32_t)this->nmi_edge_latch) << INT_NMI_START_BIT;
     }
 
     // Sample RESET (extracted bit 0 -> shift_reg bit 8)
@@ -1416,6 +1424,7 @@ public:
 
     // Reset interrupt state
     this->nmi_prev = 0;
+    this->nmi_edge_latch = 0;
     this->interrupt_shift_register = 0;
 
     // Reset 65C02 extended state
@@ -1456,6 +1465,7 @@ public:
     this->interrupt_shift_register =
         0x00000000;     /* No interrupt activity detected yet */
     this->nmi_prev = 0; /* NMI line inactive (inverted convention: 0=pin HIGH) */
+    this->nmi_edge_latch = 0;
 
     /* Set up for instruction fetch - CPU ready to execute next instruction */
     this->transition_to_fetch();
@@ -1694,6 +1704,7 @@ public:
     half_cycle = 0;
     active_interrupt = FAM65XX_INT_NONE;
     nmi_prev = 0;
+    nmi_edge_latch = 0;
     interrupt_shift_register = 0;
     wait_for_interrupt = false;
     stopped = false;
@@ -1730,6 +1741,7 @@ public:
   interrupt_t active_interrupt; /* Currently active interrupt (enum serves as
                                    vector index) */
   uint8_t nmi_prev;             /* Previous NMI line state for edge detection */
+  uint8_t nmi_edge_latch;       /* Latched NMI edge: set on falling edge, cleared when serviced */
   uint32_t interrupt_shift_register; /* Combined shift register for all
                                         interrupt types */
 
