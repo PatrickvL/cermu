@@ -101,7 +101,7 @@ void mos6522_reset(mos6522_t* via) {
     via->timer1_continuous = false;
     via->timer2_continuous = false;
 
-    // Reset interrupt state
+    // Reset interrupt state (preserves interrupt_line — that's hardware wiring config)
     via->interrupt_active = false;
 }
 
