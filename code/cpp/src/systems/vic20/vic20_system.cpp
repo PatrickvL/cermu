@@ -201,6 +201,7 @@ VIC20System::VIC20System()
     , keyboard_(nullptr)
     , cycles_per_frame_(22168)
     , expansion_flags_(VIC20_EXP_NONE)
+    , autostart_delay_frames_(0)
 {
     hardware_traits_ = create_vic20_hardware_traits();
     current_palette_ = hardware_traits_.display.default_palette;
@@ -247,6 +248,7 @@ VIC20System::~VIC20System() {
         vic20_memory_destroy(memory_);
         memory_ = nullptr;
     }
+    
 }
 
 // ============================================================================
@@ -538,6 +540,9 @@ void VIC20System::reset() {
         }
     }
     total_cycles_ = 0;
+    autostart_delay_frames_ = 0;
+    // Don't clear pending_filepath_ here — reset() is called by the GUI
+    // *before* load_file(), so clearing would lose the deferred load.
 }
 
 // ============================================================================
@@ -609,6 +614,19 @@ void VIC20System::tick() {
 }
 
 void VIC20System::run_frame() {
+    // Deferred autostart: load file into memory and inject RUN command
+    // after the KERNAL boot sequence completes and BASIC is at READY.
+    if (autostart_delay_frames_ > 0) {
+        if (--autostart_delay_frames_ == 0 && !pending_filepath_.empty()) {
+            if (load_file_into_memory(pending_filepath_.c_str())) {
+                printf("VIC20: Deferred load complete\n");
+            } else {
+                printf("VIC20: Deferred load FAILED for: %s\n", pending_filepath_.c_str());
+            }
+            pending_filepath_.clear();
+        }
+    }
+
     uint32_t adjusted_cycles = static_cast<uint32_t>(cycles_per_frame_ * speed_multiplier_);
     for (uint32_t i = 0; i < adjusted_cycles; i++) {
         tick();
@@ -628,9 +646,22 @@ bool VIC20System::load_file(const char* filepath) {
         }
     }
 
-    printf("VIC20: Loading file: %s\n", filepath);
+    printf("VIC20: Scheduling deferred load: %s\n", filepath);
 
-    // Use shared Commodore file loader for format detection and parsing
+    // Store the filepath for deferred loading.  We cannot load into
+    // system memory immediately because the KERNAL boot sequence
+    // ($FD22) clears zero-page — wiping BASIC pointers ($2B-$32) and
+    // keyboard buffer count ($C6) — and BASIC init reinitializes the
+    // program area.  Instead, run_frame() calls load_file_into_memory()
+    // after enough frames for boot to reach the READY prompt.
+    pending_filepath_ = filepath;
+    autostart_delay_frames_ = 120;  // ~2 seconds at 60fps
+    return true;
+}
+
+bool VIC20System::load_file_into_memory(const char* filepath) {
+    printf("VIC20: Loading file into memory: %s\n", filepath);
+
     commodore_load_result_t result = {};
     if (!commodore_load_file(filepath, &result)) {
         printf("VIC20: Failed to load file: %s\n", result.error_msg);
@@ -644,56 +675,49 @@ bool VIC20System::load_file(const char* filepath) {
         case COMMODORE_LOAD_PRG:
         case COMMODORE_LOAD_D64:
         case COMMODORE_LOAD_T64: {
-            // All three produce a PRG in result.prg — copy data into VIC-20 memory
             const commodore_prg_t* prg = &result.prg;
-            
+
             printf("VIC20: Loading %s: $%04X-$%04X (%zu bytes)\n",
                    commodore_load_type_name(result.type),
                    prg->load_addr, prg->end_addr, prg->data_size);
 
-            // Validate address range (VIC-20 has 64KB address space)
             if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
                 printf("VIC20: Invalid PRG address range: $%04X-$%04X\n",
                        prg->load_addr, prg->end_addr);
                 break;
             }
 
-            // Write program data into VIC-20 memory
+            // Write program data directly into VIC-20 memory
             for (size_t i = 0; i < prg->data_size; i++) {
                 vic20_memory_write_byte(memory_,
                                         (uint16_t)(prg->load_addr + i),
                                         prg->data[i]);
             }
 
+            // Set BASIC pointers and inject RUN command for BASIC programs
             if (prg->load_addr == 0x1001) {
-                // Update BASIC pointers so LIST and RUN work correctly
+                uint16_t end_addr = prg->end_addr;
                 // TXTTAB ($2B/$2C) = start of BASIC text
                 vic20_memory_write_byte(memory_, 0x2B, (uint8_t)(prg->load_addr & 0xFF));
                 vic20_memory_write_byte(memory_, 0x2C, (uint8_t)(prg->load_addr >> 8));
                 // VARTAB ($2D/$2E) = end of BASIC text (start of variables)
-                vic20_memory_write_byte(memory_, 0x2D, (uint8_t)(prg->end_addr & 0xFF));
-                vic20_memory_write_byte(memory_, 0x2E, (uint8_t)(prg->end_addr >> 8));
+                vic20_memory_write_byte(memory_, 0x2D, (uint8_t)(end_addr & 0xFF));
+                vic20_memory_write_byte(memory_, 0x2E, (uint8_t)(end_addr >> 8));
                 // ARYTAB ($2F/$30) = start of arrays
-                vic20_memory_write_byte(memory_, 0x2F, (uint8_t)(prg->end_addr & 0xFF));
-                vic20_memory_write_byte(memory_, 0x30, (uint8_t)(prg->end_addr >> 8));
+                vic20_memory_write_byte(memory_, 0x2F, (uint8_t)(end_addr & 0xFF));
+                vic20_memory_write_byte(memory_, 0x30, (uint8_t)(end_addr >> 8));
                 // STREND ($31/$32) = end of arrays
-                vic20_memory_write_byte(memory_, 0x31, (uint8_t)(prg->end_addr & 0xFF));
-                vic20_memory_write_byte(memory_, 0x32, (uint8_t)(prg->end_addr >> 8));
+                vic20_memory_write_byte(memory_, 0x31, (uint8_t)(end_addr & 0xFF));
+                vic20_memory_write_byte(memory_, 0x32, (uint8_t)(end_addr >> 8));
 
-                // Auto-run: stuff "RUN\r" into the KERNAL keyboard buffer.
-                // This lets BASIC handle the entire execution flow — parsing
-                // the SYS expression (which may contain PEEK, arithmetic, etc.),
-                // setting up proper KERNAL/BASIC context (stack, IRQ vectors,
-                // variable space), and calling the program entry point through
-                // the normal SYS dispatch.  Much more robust than trying to
-                // parse the SYS address ourselves and jumping with set_pc().
-                // Keyboard buffer: $0277-$0280 (10 chars max), count at $00C6.
+                // Inject "RUN\r" into the KERNAL keyboard buffer
                 const char* run_cmd = "RUN\r";
-                for (int i = 0; run_cmd[i]; i++) {
+                int len = (int)strlen(run_cmd);
+                for (int i = 0; i < len; i++) {
                     vic20_memory_write_byte(memory_, 0x0277 + i, (uint8_t)run_cmd[i]);
                 }
-                vic20_memory_write_byte(memory_, 0x00C6, 4);  // 4 chars in buffer
-                printf("VIC20: Injected RUN command into keyboard buffer\n");
+                vic20_memory_write_byte(memory_, 0x00C6, (uint8_t)len);
+                printf("VIC20: Set BASIC pointers and injected RUN command\n");
             }
 
             success = true;
@@ -703,9 +727,7 @@ bool VIC20System::load_file(const char* filepath) {
         case COMMODORE_LOAD_TAP: {
             printf("VIC20: TAP file detected (platform=%u, version=%u)\n",
                    result.tap_header.platform, result.tap_header.version);
-            printf("VIC20: TAP tape emulation not yet implemented (requires cycle-accurate datasette)\n");
-            // TAP loading requires a cycle-accurate datasette emulation
-            // which feeds pulse data into VIA CA1. Not implemented yet.
+            printf("VIC20: TAP tape emulation not yet implemented\n");
             success = false;
             break;
         }
@@ -714,14 +736,11 @@ bool VIC20System::load_file(const char* filepath) {
             printf("VIC20: CRT cartridge: \"%s\" (type=%u)\n",
                    result.crt_header.name, result.crt_header.hardware_type);
             printf("VIC20: CRT cartridge loading not yet implemented\n");
-            // VIC-20 cartridges use a different header format than C64 CRT
-            // but the C64 CRT reader can identify the file.
             success = false;
             break;
         }
 
         case COMMODORE_LOAD_BIN: {
-            // Raw binary — load at $A000 (cartridge area) by default
             const uint16_t default_addr = 0xA000;
             const commodore_prg_t* prg = &result.prg;
             

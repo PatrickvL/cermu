@@ -17,6 +17,7 @@
 #include "vic20_chips.h"
 #include <cstdint>
 #include <memory>
+#include <string>
 
 /**
  * VIC-20 System Implementation
@@ -120,6 +121,17 @@ private:
     // System state
     uint32_t cycles_per_frame_;
     uint8_t expansion_flags_;        // Expansion RAM configuration
+
+    // Deferred autostart — file loading and keyboard buffer injection
+    // must wait until the KERNAL boot sequence completes, because boot
+    // clears zero-page ($2B-$32 BASIC pointers, $C6 keyboard count)
+    // and initializes RAM.  We store the filepath and load directly
+    // into system memory from run_frame() after boot reaches READY.
+    std::string pending_filepath_;       // File to load after boot (empty = none)
+    int  autostart_delay_frames_;        // Frames remaining before deferred load
+    
+    // Internal: load file directly into system memory (called after boot)
+    bool load_file_into_memory(const char* filepath);
     
     // ROM loading
     bool load_roms();
