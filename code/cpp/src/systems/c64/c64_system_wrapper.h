@@ -107,6 +107,10 @@ public:
     bool set_configuration(const SystemConfiguration& config) override;
     bool apply_configuration() override;
     void render_configuration_ui() override;
+
+    // Auto-detect region (PAL/NTSC) from file contents
+    SystemConfiguration detect_optimal_configuration(
+        const char* filepath, const uint8_t* data, size_t size) override;
     
     // Note: The following methods are now provided by EmulatedSystem base class:
     // - get_configuration() - returns config_

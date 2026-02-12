@@ -1056,6 +1056,55 @@ bool NESSystem::apply_configuration() {
     return true;
 }
 
+// ============================================================================
+// Auto-detect optimal configuration from iNES header
+// ============================================================================
+SystemConfiguration NESSystem::detect_optimal_configuration(
+    const char* filepath, const uint8_t* data, size_t size) {
+
+    SystemConfiguration config = EmulatedSystem::detect_optimal_configuration(filepath, data, size);
+
+    if (!data || size < 16) return config;
+
+    // Verify iNES header magic: "NES\x1A"
+    if (data[0] != 'N' || data[1] != 'E' || data[2] != 'S' || data[3] != 0x1A)
+        return config;
+
+    // Check for iNES 2.0 format (bits 2-3 of byte 7 == 0b10)
+    bool is_ines2 = ((data[7] & 0x0C) == 0x08);
+
+    bool detected_pal = false;
+
+    if (is_ines2) {
+        // iNES 2.0: byte 12, bits 0-1 encode the CPU/PPU timing mode
+        //   0 = NTSC, 1 = PAL, 2 = Multi-region, 3 = Dendy
+        uint8_t timing = data[12] & 0x03;
+        if (timing == 1) {
+            detected_pal = true;
+            printf("NES: iNES 2.0 header indicates PAL timing\n");
+        } else {
+            printf("NES: iNES 2.0 header indicates %s timing\n",
+                   timing == 0 ? "NTSC" : (timing == 2 ? "Multi-region" : "Dendy"));
+        }
+    } else {
+        // iNES 1.0: byte 9, bit 0 — unofficial but widely used
+        //   0 = NTSC, 1 = PAL
+        if (data[9] & 0x01) {
+            detected_pal = true;
+            printf("NES: iNES 1.0 header byte 9 indicates PAL\n");
+        }
+    }
+
+    if (detected_pal) {
+        // PAL is region option index 1 in create_nes_hardware_traits()
+        if (hardware_traits_.region_options.size() > 1) {
+            config.region_option_index = 1;
+        }
+    }
+
+    return config;
+}
+
 bool NESSystem::initialize() {
     if (initialized_) {
         return true;

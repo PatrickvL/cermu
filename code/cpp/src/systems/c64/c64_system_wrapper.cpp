@@ -6,6 +6,7 @@
 #include "../../core/storage/commodore_file_loader.h"
 #include <cstring>
 #include <cstdio>
+#include <cctype>
 
 /**
  * C64 System Wrapper Implementation
@@ -117,7 +118,29 @@ static HardwareTraits create_c64_hardware_traits() {
     traits.timing.target_fps = 50;
     traits.timing.cycles_per_frame = 19705;
     traits.timing.region = VideoRegion::PAL;
-    
+
+    // Region options
+    traits.region_options.push_back({
+        "PAL",
+        VideoRegion::PAL,
+        traits.timing,
+        true
+    });
+
+    SystemTiming ntsc_timing = traits.timing;
+    ntsc_timing.cpu_frequency_hz = 1022727;
+    ntsc_timing.video_frequency_hz = 1022727;
+    ntsc_timing.target_fps = 60;
+    ntsc_timing.cycles_per_frame = 17045;   // 1022727 / 60
+    ntsc_timing.region = VideoRegion::NTSC;
+
+    traits.region_options.push_back({
+        "NTSC",
+        VideoRegion::NTSC,
+        ntsc_timing,
+        false
+    });
+
     return traits;
 }
 
@@ -507,9 +530,64 @@ bool C64SystemWrapper::set_configuration(const SystemConfiguration& config) {
 }
 
 bool C64SystemWrapper::apply_configuration() {
-    // TODO: Apply configuration changes to C64 system
-    // This would involve updating memory, region, peripherals, etc.
+    // Apply region settings
+    if (config_.region_option_index >= 0 &&
+        config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
+        const RegionOption& region = hardware_traits_.region_options[config_.region_option_index];
+        cycles_per_frame_ = region.timing.cycles_per_frame;
+
+        // Map to legacy c64_config_t
+        c64_config_.vicii_standard =
+            (region.region == VideoRegion::NTSC) ? VIC_NTSC : VIC_PAL;
+    }
+
     return true;
+}
+
+// ============================================================================
+// Auto-detect optimal configuration from file contents
+// ============================================================================
+SystemConfiguration C64SystemWrapper::detect_optimal_configuration(
+    const char* filepath, const uint8_t* data, size_t size) {
+
+    SystemConfiguration config = EmulatedSystem::detect_optimal_configuration(filepath, data, size);
+
+    const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
+
+    // --- CRT cartridge: byte 8 of the header specifies hardware type ---
+    // Byte 0x08-0x09 = hardware type.  Region cannot be derived directly,
+    // but certain cartridges are NTSC-only.  For now, leave at PAL default.
+
+    // --- PRG heuristic: filenames containing "ntsc" suggest NTSC ---
+    if (filepath) {
+        // Case-insensitive substring search in the filename
+        const char* name = strrchr(filepath, '/');
+        if (!name) name = strrchr(filepath, '\\');
+        if (!name) name = filepath; else name++;
+
+        // Simple case-insensitive search for "ntsc" in the filename
+        std::string lower_name(name);
+        for (auto& c : lower_name) c = static_cast<char>(tolower(c));
+
+        if (lower_name.find("ntsc") != std::string::npos) {
+            // Select NTSC region (index 1)
+            if (hardware_traits_.region_options.size() > 1) {
+                config.region_option_index = 1;
+                printf("C64: Filename contains 'ntsc' — selecting NTSC region\n");
+            }
+        }
+    }
+
+    // --- TAP file: header byte 0x0C indicates platform/standard ---
+    if (ext && (strcmp(ext, ".tap") == 0 || strcmp(ext, ".TAP") == 0)) {
+        // TAP v1 header: byte 0x0C = platform (0 = C64, 1 = VIC-20)
+        // The TAP spec doesn't directly encode PAL/NTSC, so we keep default.
+    }
+
+    // --- D64 disk image: some SID tunes store region in metadata ---
+    // Not enough reliable data in D64 to determine region automatically.
+
+    return config;
 }
 
 void C64SystemWrapper::render_configuration_ui() {

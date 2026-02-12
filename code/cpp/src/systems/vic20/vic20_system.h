@@ -94,6 +94,10 @@ public:
     // Emulation control
     void set_speed_multiplier(float multiplier) override;
 
+    // Auto-detect memory expansion and region from file contents
+    SystemConfiguration detect_optimal_configuration(
+        const char* filepath, const uint8_t* data, size_t size) override;
+
 private:
     // Legacy system integration
     system_8bit_t system_;           // Legacy system wrapper

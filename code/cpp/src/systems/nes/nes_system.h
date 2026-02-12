@@ -448,7 +448,11 @@ public:
     
     // EmulatedSystem interface - Emulation control
     void set_speed_multiplier(float multiplier) override;
-    
+
+    // Auto-detect PAL/NTSC from iNES header
+    SystemConfiguration detect_optimal_configuration(
+        const char* filepath, const uint8_t* data, size_t size) override;
+
     // NES-specific public methods
     void eject_cartridge();
     void power_cycle();

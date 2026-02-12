@@ -196,6 +196,28 @@ bool Chip8System::apply_configuration() {
     
     return true;
 }
+
+// ============================================================================
+// Auto-detect optimal configuration from ROM contents
+// ============================================================================
+SystemConfiguration Chip8System::detect_optimal_configuration(
+    const char* filepath, const uint8_t* data, size_t size) {
+
+    SystemConfiguration config = EmulatedSystem::detect_optimal_configuration(filepath, data, size);
+
+    // Larger CHIP-8 ROMs (>2KB) tend to be more complex programs that benefit
+    // from the faster 1200 Hz execution speed (region option index 1).
+    if (size > 2048) {
+        // Check that the fast option exists
+        if (hardware_traits_.region_options.size() > 1) {
+            config.region_option_index = 1;
+            printf("CHIP8: Large ROM (%zu bytes) — selecting fast speed profile\n", size);
+        }
+    }
+
+    return config;
+}
+
 // Note: Hardware trait queries (get_hardware_traits, get_current_timing,
 // get_display_traits, get_audio_traits) now provided by base class
 
