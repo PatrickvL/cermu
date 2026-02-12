@@ -213,6 +213,12 @@ void SimpleSystemGUI::render_frame() {
                 pause_emulation();
             }
             
+            // Auto-detect optimal configuration (e.g. memory expansion) from file.
+            // Never downgrades from the user's current selection — only increases.
+            if (system_) {
+                system_->apply_file_configuration(filePathName.c_str());
+            }
+
             // Reset system before loading file for clean state
             if (system_) {
                 system_->reset();

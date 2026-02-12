@@ -62,6 +62,12 @@ int main(int argc, char** argv) {
                system->get_descriptor().name,
                system->get_descriptor().short_name);
         
+        // If a file was specified, auto-detect optimal configuration
+        // (e.g. memory expansion) before initializing
+        if (file_path != nullptr) {
+            system->apply_file_configuration(file_path);
+        }
+
         // Initialize the system
         if (!system->initialize()) {
             printf("ERROR: Failed to initialize %s system\n", 
