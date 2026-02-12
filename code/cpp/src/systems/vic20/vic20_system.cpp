@@ -529,6 +529,35 @@ void VIC20System::shutdown() {
 
 void VIC20System::reset() {
     printf("VIC20: Resetting system\n");
+    
+    // Reset VIC chip (clears registers, video state, audio state)
+    if (vic_) {
+        mos6560_reset(vic_);
+    }
+    
+    // Reset VIA chips (clears timers, interrupt flags, port registers)
+    if (via1_) {
+        mos6522_reset(via1_);
+        via1_->interrupt_line = BUS_MASK_NMI;   // VIA1 drives NMI
+    }
+    if (via2_) {
+        mos6522_reset(via2_);
+        via2_->interrupt_line = BUS_MASK_IRQ;   // VIA2 drives IRQ
+    }
+    
+    // Clear RAM (zero page, stack, main RAM $0000-$7FFF) but preserve ROMs
+    if (memory_ && memory_->buffer) {
+        memset(memory_->buffer, 0, 0x8000);           // $0000-$7FFF: all RAM
+        // Reinitialize Color RAM to default cyan
+        memset(memory_->buffer + VIC20_BASE_COLOR_RAM, VIC_COLOR_CYAN, 1024);
+    }
+    
+    // Clear the framebuffer to black
+    if (rgba_framebuffer_ && rgba_width_ > 0 && rgba_height_ > 0) {
+        memset(rgba_framebuffer_, 0, (size_t)rgba_width_ * rgba_height_ * sizeof(uint32_t));
+    }
+    
+    // Reset CPU last (so it picks up clean bus state)
     if (cpu_) {
         mos6502_reset(cpu_, 0);
         
@@ -539,6 +568,10 @@ void VIC20System::reset() {
             mos6502_set_pc(cpu_, reset_vector);
         }
     }
+    
+    // Reset bus state
+    bus_.state = bus_.default_state;
+    
     total_cycles_ = 0;
     autostart_delay_frames_ = 0;
     // Don't clear pending_filepath_ here — reset() is called by the GUI
