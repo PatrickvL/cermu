@@ -438,22 +438,22 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
         }
 
         const uint8_t reg_rows = vic->registers[VIC_REG_ROWS];
+        const uint8_t char_height = (reg_rows & VIC_ROWS_DOUBLE_HEIGHT) ? 16 : 8;
         // Check if entering/leaving display area
         const uint16_t screen_origin_y = vic->registers[VIC_REG_CONTROL2] << 1;
+        const uint16_t num_rows = (reg_rows & VIC_ROWS_ROWS_MASK) >> VIC_ROWS_ROWS_SHIFT;
         if (vic->raster_counter == screen_origin_y) {
             vic->in_display_area = true;
             vic->matrix_index = 0;
         }
-        else if (vic->raster_counter == screen_origin_y + (((reg_rows & VIC_ROWS_ROWS_MASK) >> VIC_ROWS_ROWS_SHIFT) << 3)) {
+        else if (vic->raster_counter == screen_origin_y + num_rows * char_height) {
             vic->in_display_area = false;
         }
         // Reset matrix_index at the start of EVERY scanline to the appropriate character row
-        // Each character is 8 scanlines tall, so scanlines 0-7 use row 0, 8-15 use row 1, etc.
+        // Character height is 8 (normal) or 16 (double-height, bit 0 of $9003).
         if (vic->in_display_area) {
-            // Calculate which character row we're on (0, 1, 2, ...) based on scanline within display
             uint16_t scanline_in_display = vic->raster_counter - screen_origin_y;
-            uint16_t char_row = scanline_in_display >> 3;  // Divide by 8 to get character row
-            // Set matrix_index to the start of this character row
+            uint16_t char_row = scanline_in_display / char_height;
             vic->matrix_index = char_row * columns;
         }
     }
@@ -479,28 +479,29 @@ bus_state_t vic_tick(void* chip, bus_state_t bus_state) {
         // Derive is_char_fetch_cycle from cycle position: even cycles relative to screen_origin_x are fetch cycles
         const bool is_char_fetch_cycle = ((vic->current_cycle - screen_origin_x) & 1) == 0;
         
-        // TODO: Handle reg_rows & VIC_ROWS_DOUBLE_HEIGHT
+        // Double-height: bit 0 of $9003 selects 8 or 16 pixel tall characters.
+        // VICE formula: addr = base_char + (code * char_height + (ycounter & ((char_height >> 1) | 7)))
+        const uint8_t reg_rows = vic->registers[VIC_REG_ROWS];
+        const uint8_t char_height = (reg_rows & VIC_ROWS_DOUBLE_HEIGHT) ? 16 : 8;
+
         if (is_char_fetch_cycle) {
             // Fetch character data from memory
             if (vic->mem_read && vic->color_read) {
-                // matrix_index increments once per fetch cycle
-                // Since we only increment in fetch cycles, matrix_index IS the character index
                 uint16_t char_index = vic->matrix_index;
                 uint16_t screen_addr = base_video + char_index;
                 vic->matrix_video_byte = vic->mem_read(vic->mem_user_data, screen_addr);
-                // Color RAM is paired with screen RAM: Color RAM offset = (base_video & 0x3FF) + char_index
-                // This ensures Color RAM at $9400 + offset matches screen position
                 uint16_t color_offset = (base_video & 0x3FF) + char_index;
                 vic->matrix_color_byte = vic->color_read(vic->color_user_data, color_offset);
                 
-                // Calculate character line: should be relative to screen origin, not absolute raster
+                // Character line within the cell, relative to screen origin.
+                // For 8px: (ycounter & 7)  → rows 0-7
+                // For 16px: (ycounter & 15) → rows 0-15
                 const uint16_t screen_origin_y = vic->registers[VIC_REG_CONTROL2] << 1;
-                const uint8_t char_line = (vic->raster_counter - screen_origin_y) & 7;
+                const uint8_t char_line = (vic->raster_counter - screen_origin_y) & ((char_height >> 1) | 7);
                 
-                // Calculate character ROM address and fetch.
-                // VA13=0 addresses ($0000-$1FFF) select Character ROM in hardware.
-                // base_char from register $9005 bits 3-0 selects 1KB blocks within this range.
-                uint16_t char_rom_addr = base_char | ((uint16_t)vic->matrix_video_byte << 3) | char_line;
+                // Character ROM/RAM address (matches VICE):
+                //   base_char + (char_code * char_height + char_line)
+                uint16_t char_rom_addr = base_char + ((uint16_t)vic->matrix_video_byte * char_height + char_line);
                 vic->matrix_char_data = vic->mem_read(vic->mem_user_data, char_rom_addr);
             } else {
                 // No memory access available - emit blank
