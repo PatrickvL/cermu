@@ -38,6 +38,10 @@ private:
     
     // Last selected file path for file dialog
     std::string last_file_path_;
+
+    // SDL audio output
+    SDL_AudioDeviceID audio_device_;
+    int audio_sample_rate_;           // Actual sample rate obtained from SDL
     
 public:
     /**
@@ -83,6 +87,11 @@ private:
     void allocate_framebuffer();
     void free_framebuffer();
     void teardown_current_system();
+
+    // Audio helpers
+    void open_audio_device();
+    void close_audio_device();
+    static void sdl_audio_callback(void* userdata, uint8_t* stream, int len);
 };
 
 #endif // SIMPLE_SYSTEM_GUI_H

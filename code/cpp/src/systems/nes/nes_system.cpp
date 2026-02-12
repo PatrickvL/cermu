@@ -1331,6 +1331,20 @@ void NESSystem::set_speed_multiplier(float multiplier) {
     speed_multiplier_ = multiplier;
 }
 
+uint32_t NESSystem::get_audio_samples(float* buffer, uint32_t max_samples) {
+    if (!buffer || max_samples == 0) return 0;
+
+    uint32_t avail = static_cast<uint32_t>(audio_buffer_.size());
+    uint32_t to_copy = avail < max_samples ? avail : max_samples;
+    if (to_copy > 0) {
+        memcpy(buffer, audio_buffer_.data(), to_copy * sizeof(float));
+        // Remove consumed samples (shift remainder to front)
+        audio_buffer_.erase(audio_buffer_.begin(),
+                            audio_buffer_.begin() + to_copy);
+    }
+    return to_copy;
+}
+
 void NESSystem::setup_audio_timing() {
     uint32_t cpu_freq = is_pal_ ? nes_constants::CPU_FREQ_PAL : nes_constants::CPU_FREQ_NTSC;
     audio_samples_per_frame_ = (audio_sample_rate_ * (is_pal_ ? 50 : 60)) / (is_pal_ ? 50 : 60);

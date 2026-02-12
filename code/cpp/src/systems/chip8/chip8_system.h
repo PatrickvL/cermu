@@ -55,6 +55,9 @@ public:
     SystemConfiguration detect_optimal_configuration(
         const char* filepath, const uint8_t* data, size_t size) override;
 
+    // Audio output — simple square-wave beeper when sound_timer > 0
+    uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
+
 private:
     // CHIP-8 hardware state
     uint8_t memory_[4096];           // 4KB RAM
@@ -85,6 +88,9 @@ private:
     // Quirks/settings
     bool shift_quirk_;               // Original CHIP-8 shift behavior
     bool load_store_quirk_;          // Original CHIP-8 I register behavior
+
+    // Audio beeper state (440 Hz square wave when sound_timer > 0)
+    uint32_t beeper_phase_;          // Phase accumulator for square wave
     
     // Execution
     void execute_instruction(uint16_t opcode);

@@ -111,6 +111,9 @@ public:
     // Auto-detect region (PAL/NTSC) from file contents
     SystemConfiguration detect_optimal_configuration(
         const char* filepath, const uint8_t* data, size_t size) override;
+
+    // Audio output — drains SID ring buffer
+    uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
     
     // Note: The following methods are now provided by EmulatedSystem base class:
     // - get_configuration() - returns config_

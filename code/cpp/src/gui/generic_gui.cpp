@@ -49,7 +49,7 @@ bool GenericEmulatorGUI::init(const char* window_title, int width, int height) {
     window_height_ = height;
     
     // Initialize SDL
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_EVENTS) < 0) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_TIMER | SDL_INIT_EVENTS) < 0) {
         printf("Failed to initialize SDL: %s\n", SDL_GetError());
         return false;
     }

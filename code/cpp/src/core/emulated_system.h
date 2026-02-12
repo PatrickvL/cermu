@@ -274,6 +274,14 @@ public:
     // default option.
     virtual SystemConfiguration detect_optimal_configuration(
         const char* filepath, const uint8_t* data, size_t size);
+
+    // ---- Audio output --------------------------------------------------
+    // Fill \p buffer with up to \p max_samples mono float samples in the
+    // range -1.0 .. +1.0 and return the number actually written.
+    // Called from the SDL audio callback at the rate advertised by
+    // get_audio_traits().sample_rate_hz.
+    // Default implementation returns 0 (silence).
+    virtual uint32_t get_audio_samples(float* buffer, uint32_t max_samples);
 };
 
 // Include SystemRegistry (moved to separate file)

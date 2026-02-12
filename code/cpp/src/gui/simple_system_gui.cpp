@@ -32,6 +32,8 @@ SimpleSystemGUI::SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system)
     , frame_pace_counter_(0)
     , frame_time_accumulator_(0.0)
     , system_selection_dialog_()
+    , audio_device_(0)
+    , audio_sample_rate_(0)
 {
     if (system_) {
         // Note: System should already be initialized and loaded before passing to GUI
@@ -45,6 +47,7 @@ SimpleSystemGUI::SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system)
 }
 
 SimpleSystemGUI::~SimpleSystemGUI() {
+    close_audio_device();
     teardown_current_system();
 }
 
@@ -60,7 +63,10 @@ bool SimpleSystemGUI::init(const char* window_title, int width, int height) {
     
     // Now that OpenGL context exists, allocate framebuffer and create texture
     allocate_framebuffer();
-    
+
+    // Open SDL audio for the current system (if it has audio)
+    open_audio_device();
+
     return true;
 }
 
@@ -581,6 +587,9 @@ void SimpleSystemGUI::free_framebuffer() {
 // ============================================================================
 
 void SimpleSystemGUI::teardown_current_system() {
+    // Stop audio before destroying the system (callback references system_)
+    close_audio_device();
+
     if (system_) {
         printf("Tearing down current system: %s\n", system_->get_descriptor().name);
         system_->shutdown();
@@ -654,11 +663,14 @@ void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, 
     
     // Allocate framebuffer for new system
     allocate_framebuffer();
-    
+
+    // Open audio for the new system
+    open_audio_device();
+
     // Start emulation
     emulation_running_ = true;
     emulation_paused_ = false;
-    
+
     printf("Successfully switched to %s\n", system_->get_descriptor().name);
 }
 
@@ -716,4 +728,67 @@ void SimpleSystemGUI::load_file_dialog() {
 #else
     printf("ImGuiFileDialog not available - file loading disabled\n");
 #endif
+}
+
+// ============================================================================
+// Audio Output
+// ============================================================================
+
+void SimpleSystemGUI::sdl_audio_callback(void* userdata, uint8_t* stream, int len) {
+    SimpleSystemGUI* gui = static_cast<SimpleSystemGUI*>(userdata);
+    int sample_count = len / static_cast<int>(sizeof(float));
+    float* out = reinterpret_cast<float*>(stream);
+
+    uint32_t written = 0;
+    if (gui->system_ && gui->emulation_running_ && !gui->emulation_paused_) {
+        written = gui->system_->get_audio_samples(out, static_cast<uint32_t>(sample_count));
+    }
+    // Fill remainder with silence
+    for (uint32_t i = written; i < static_cast<uint32_t>(sample_count); i++) {
+        out[i] = 0.0f;
+    }
+}
+
+void SimpleSystemGUI::open_audio_device() {
+    close_audio_device();
+
+    if (!system_) return;
+
+    const AudioTraits& traits = system_->get_audio_traits();
+    if (traits.format == AudioFormat::NONE || traits.sample_rate_hz == 0) {
+        printf("Audio: system reports no audio\n");
+        return;
+    }
+
+    SDL_AudioSpec want = {};
+    want.freq = traits.sample_rate_hz;
+    want.format = AUDIO_F32SYS;   // always request float; conversion happens in get_audio_samples
+    want.channels = 1;            // mono — systems mix down to mono
+    want.samples = 1024;          // ~23 ms at 44100 Hz
+    want.callback = sdl_audio_callback;
+    want.userdata = this;
+
+    SDL_AudioSpec have = {};
+    audio_device_ = SDL_OpenAudioDevice(nullptr, 0, &want, &have,
+                                         SDL_AUDIO_ALLOW_FREQUENCY_CHANGE);
+    if (audio_device_ == 0) {
+        printf("Audio: SDL_OpenAudioDevice failed: %s\n", SDL_GetError());
+        return;
+    }
+
+    audio_sample_rate_ = have.freq;
+    printf("Audio: opened device — requested %d Hz, got %d Hz (buffer %d samples)\n",
+           want.freq, have.freq, have.samples);
+
+    // Unpause — SDL audio devices start paused
+    SDL_PauseAudioDevice(audio_device_, 0);
+}
+
+void SimpleSystemGUI::close_audio_device() {
+    if (audio_device_ != 0) {
+        SDL_CloseAudioDevice(audio_device_);
+        audio_device_ = 0;
+        audio_sample_rate_ = 0;
+        printf("Audio: device closed\n");
+    }
 }

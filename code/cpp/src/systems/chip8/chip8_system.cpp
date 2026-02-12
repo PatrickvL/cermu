@@ -133,6 +133,7 @@ Chip8System::Chip8System()
     , display_dirty_(false)
     , shift_quirk_(false)
     , load_store_quirk_(false)
+    , beeper_phase_(0)
 {
     // Base class already initializes: rgba_framebuffer_, rgba_width_, rgba_height_,
     // total_cycles_, speed_multiplier_, hardware_traits_, config_, current_palette_
@@ -216,6 +217,27 @@ SystemConfiguration Chip8System::detect_optimal_configuration(
     }
 
     return config;
+}
+
+uint32_t Chip8System::get_audio_samples(float* buffer, uint32_t max_samples) {
+    if (!buffer || max_samples == 0) return 0;
+
+    // CHIP-8 beeper: 440 Hz square wave while sound_timer_ > 0
+    // Audio sample rate from traits is 4000 Hz
+    // Half-period in samples: 4000 / (440 * 2) ≈ 4.5 → use integer 5
+    const uint32_t half_period = 5;
+    const float amplitude = 0.3f; // Keep volume modest
+
+    for (uint32_t i = 0; i < max_samples; i++) {
+        if (sound_timer_ > 0) {
+            buffer[i] = (beeper_phase_ < half_period) ? amplitude : -amplitude;
+            beeper_phase_ = (beeper_phase_ + 1) % (half_period * 2);
+        } else {
+            buffer[i] = 0.0f;
+            beeper_phase_ = 0;
+        }
+    }
+    return max_samples;
 }
 
 // Note: Hardware trait queries (get_hardware_traits, get_current_timing,

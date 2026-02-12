@@ -595,6 +595,12 @@ void C64SystemWrapper::render_configuration_ui() {
     // This will be implemented when we update the GUI
 }
 
+uint32_t C64SystemWrapper::get_audio_samples(float* buffer, uint32_t max_samples) {
+    if (!c64_ || !c64_->sid || !buffer || max_samples == 0) return 0;
+    mos6581_generate_samples(c64_->sid, buffer, max_samples);
+    return max_samples;
+}
+
 // Register C64 system with the registry
 REGISTER_SYSTEM(c64_descriptor, []() {
     return std::make_unique<C64SystemWrapper>();
