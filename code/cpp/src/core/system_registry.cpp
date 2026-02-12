@@ -68,7 +68,16 @@ std::unique_ptr<EmulatedSystem> SystemRegistry::create_system_for_file(const cha
     
     // Require at least 50% confidence
     if (best_confidence >= 0.5f && best_factory) {
-        return best_factory();
+        auto system = best_factory();
+
+        // Let the system analyse the file and choose the best configuration
+        // (memory expansion, region, etc.) before the caller initialises it.
+        SystemConfiguration config =
+            system->detect_optimal_configuration(filepath, data.data(), file_size);
+        system->set_configuration(config);
+        system->apply_configuration();
+
+        return system;
     }
     
     return nullptr;

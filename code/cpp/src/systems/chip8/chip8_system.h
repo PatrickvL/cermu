@@ -50,7 +50,11 @@ public:
     
     // Emulation control
     void set_speed_multiplier(float multiplier) override;
-    
+
+    // Auto-detect speed profile from ROM size
+    SystemConfiguration detect_optimal_configuration(
+        const char* filepath, const uint8_t* data, size_t size) override;
+
 private:
     // CHIP-8 hardware state
     uint8_t memory_[4096];           // 4KB RAM

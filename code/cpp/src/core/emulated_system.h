@@ -265,6 +265,15 @@ public:
     // Release all keyboard input (e.g., on window focus loss).
     // Systems using KeyboardMapper should override this.
     virtual void release_all_keys();
+
+    // Analyze a file and return the optimal SystemConfiguration for it.
+    // Called by create_system_for_file() after the system is created but
+    // before initialize().  The returned configuration is applied via
+    // set_configuration() + apply_configuration().
+    // Default implementation returns a configuration using each trait's
+    // default option.
+    virtual SystemConfiguration detect_optimal_configuration(
+        const char* filepath, const uint8_t* data, size_t size);
 };
 
 // Include SystemRegistry (moved to separate file)

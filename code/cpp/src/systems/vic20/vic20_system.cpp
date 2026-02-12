@@ -315,6 +315,91 @@ bool VIC20System::apply_configuration() {
 }
 
 // ============================================================================
+// Auto-detect optimal configuration from file contents
+// ============================================================================
+SystemConfiguration VIC20System::detect_optimal_configuration(
+    const char* filepath, const uint8_t* data, size_t size) {
+
+    // Start from the base-class defaults
+    SystemConfiguration config = EmulatedSystem::detect_optimal_configuration(filepath, data, size);
+
+    if (!data || size < 2) return config;
+
+    const char* ext = strrchr(filepath, '.');
+    bool is_prg = ext && (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0);
+
+    // TAP files: check header for VIC-20 platform but no extra config to derive
+    // D64/T64: no reliable way to know expansion requirements from container alone
+
+    if (is_prg) {
+        uint16_t load_addr = data[0] | (data[1] << 8);
+        uint16_t data_size = static_cast<uint16_t>(size - 2);
+        uint32_t end_addr  = static_cast<uint32_t>(load_addr) + data_size;
+
+        // ---- Determine minimum memory configuration ----
+        // Memory option indices (from create_vic20_hardware_traits):
+        //   0 = Unexpanded 5KB    ($1000-$1FFF user RAM)
+        //   1 = +3KB              ($0400-$0FFF added)
+        //   2 = +8KB              ($4000-$5FFF added, 13KB total)
+        //   3 = +16KB             ($2000-$3FFF + $4000-$5FFF, 21KB total)
+        //   4 = +24KB             (above + $6000-$7FFF, 29KB total)
+        //   5 = Full 32KB         (all blocks, 37KB total)
+        int mem_index = 0;
+
+        if (load_addr == 0x0401) {
+            // 3KB-expanded BASIC start address
+            mem_index = 1;
+            if (end_addr > 0x1FFF) mem_index = 2;
+            if (end_addr > 0x5FFF) mem_index = 3;
+            if (end_addr > 0x7FFF) mem_index = 5;
+        } else if (load_addr == 0x1201) {
+            // 8KB+ expanded BASIC start address
+            mem_index = 2;
+            if (end_addr > 0x5FFF) mem_index = 3;
+            if (end_addr > 0x7FFF) mem_index = 5;
+        } else if (load_addr == 0x1001) {
+            // Standard unexpanded BASIC
+            mem_index = 0;
+            // If the program overflows the 4KB user area, enable expansion
+            if (end_addr > 0x1FFF) mem_index = 2;
+            if (end_addr > 0x5FFF) mem_index = 3;
+            if (end_addr > 0x7FFF) mem_index = 5;
+        } else {
+            // Machine-language program — check which expansion blocks are needed
+            if (load_addr >= 0x0400 && load_addr < 0x1000) {
+                // Block 0 ($0400-$0FFF) — needs at least 3KB expansion
+                mem_index = 1;
+            }
+            if (load_addr >= 0x2000 && load_addr < 0x4000) {
+                // Block 2 ($2000-$3FFF) — needs 16KB config (includes block 2)
+                mem_index = 3;
+            }
+            if ((load_addr >= 0x4000 && load_addr < 0x6000) ||
+                (end_addr > 0x4000 && end_addr <= 0x6000)) {
+                // Block 3 ($4000-$5FFF) — needs at least 8KB config
+                if (mem_index < 2) mem_index = 2;
+            }
+            if ((load_addr >= 0x6000 && load_addr < 0x8000) ||
+                (end_addr > 0x6000 && end_addr <= 0x8000)) {
+                // Block 5 ($6000-$7FFF) — needs 24KB config
+                if (mem_index < 4) mem_index = 4;
+            }
+            // If data spans multiple blocks, pick the highest needed
+            if (end_addr > 0x6000 && load_addr < 0x6000) {
+                if (mem_index < 4) mem_index = 4;
+            }
+        }
+
+        config.memory_option_index = mem_index;
+        printf("VIC20: Auto-detected memory config: %s (load=$%04X end=$%04X)\n",
+               hardware_traits_.memory_options[mem_index].name,
+               load_addr, (uint16_t)(end_addr & 0xFFFF));
+    }
+
+    return config;
+}
+
+// ============================================================================
 // System Lifecycle
 // ============================================================================
 bool VIC20System::initialize() {

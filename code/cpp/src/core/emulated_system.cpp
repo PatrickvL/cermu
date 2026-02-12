@@ -95,3 +95,32 @@ void EmulatedSystem::handle_text_input(const char* text) {
 void EmulatedSystem::release_all_keys() {
     // Default: nothing to release
 }
+
+SystemConfiguration EmulatedSystem::detect_optimal_configuration(
+    const char* /*filepath*/, const uint8_t* /*data*/, size_t /*size*/) {
+    // Default: walk hardware traits and select the default option for each axis
+    SystemConfiguration config;
+
+    // Memory: find the default option
+    for (size_t i = 0; i < hardware_traits_.memory_options.size(); i++) {
+        if (hardware_traits_.memory_options[i].is_default) {
+            config.memory_option_index = static_cast<int>(i);
+            break;
+        }
+    }
+
+    // Region: find the default option
+    for (size_t i = 0; i < hardware_traits_.region_options.size(); i++) {
+        if (hardware_traits_.region_options[i].is_default) {
+            config.region_option_index = static_cast<int>(i);
+            break;
+        }
+    }
+
+    // Peripherals: apply defaults
+    for (const auto& p : hardware_traits_.peripheral_options) {
+        config.enabled_peripherals[p.id] = p.enabled_by_default;
+    }
+
+    return config;
+}
