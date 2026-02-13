@@ -54,9 +54,8 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
     // Check extensions
     const char* ext = strrchr(filepath, '.');
     if (ext) {
-        // PRG and LNX files — check load address
-        if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0 ||
-            strcmp(ext, ".lnx") == 0 || strcmp(ext, ".LNX") == 0) {
+        // PRG files — check load address
+        if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0) {
             if (size >= 2) {
                 uint16_t load_addr = data[0] | (data[1] << 8);
                 // C64 BASIC start address gives highest confidence
@@ -67,6 +66,29 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
                 if (load_addr == 0x1001) return 0.6f;
                 return 0.7f;  // Generic PRG — C64 is the most common Commodore system
             }
+        }
+        // LNX files — Lynx archive; parse to inspect contained files' load addresses
+        if (strcmp(ext, ".lnx") == 0 || strcmp(ext, ".LNX") == 0) {
+            commodore_lynx_t lynx;
+            if (commodore_lynx_open(filepath, &lynx)) {
+                commodore_lynx_directory_t dir;
+                if (commodore_lynx_read_directory(&lynx, &dir)) {
+                    // Check first PRG entry's load address
+                    for (unsigned i = 0; i < dir.file_count; i++) {
+                        if (dir.entries[i].file_type == 'P' && dir.entries[i].data_length >= 2) {
+                            size_t off = dir.entries[i].data_offset;
+                            if (off + 1 < lynx.data_size) {
+                                uint16_t addr = lynx.data[off] | ((uint16_t)lynx.data[off+1] << 8);
+                                commodore_lynx_close(&lynx);
+                                if (is_c64_load_address(addr)) return 0.95f;
+                                return 0.5f;  // Not a C64 address
+                            }
+                        }
+                    }
+                }
+                commodore_lynx_close(&lynx);
+            }
+            return 0.6f;  // Could not inspect — C64 is most common
         }
         if (strcmp(ext, ".d64") == 0 || strcmp(ext, ".D64") == 0) {
             // D64 disk images — inspect first PRG's load address to distinguish systems
@@ -395,6 +417,51 @@ bool C64SystemWrapper::load_file(const char* filepath) {
 
             memcpy(&c64_->ram->memory[default_addr], prg->data, prg->data_size);
             success = true;
+            break;
+        }
+
+        case COMMODORE_LOAD_LNX: {
+            // Lynx archive — load ALL extracted PRG files into C64 RAM
+            printf("C64: Loading LNX archive with %d files\n", result.lynx_file_count);
+
+            bool any_basic = false;
+            uint16_t basic_end_addr = 0;
+
+            for (int f = 0; f < result.lynx_file_count; f++) {
+                const commodore_prg_t* prg = &result.lynx_files[f];
+
+                if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
+                    printf("C64: LNX file %d: Invalid address range $%04X-$%04X, skipping\n",
+                           f, prg->load_addr, prg->end_addr);
+                    continue;
+                }
+
+                printf("C64: LNX file %d: $%04X-$%04X (%zu bytes)\n",
+                       f, prg->load_addr, prg->end_addr, prg->data_size);
+
+                memcpy(&c64_->ram->memory[prg->load_addr], prg->data, prg->data_size);
+
+                if (prg->load_addr == 0x0801) {
+                    any_basic = true;
+                    basic_end_addr = prg->end_addr;
+                }
+            }
+
+            if (any_basic) {
+                // Update BASIC end pointer and inject RUN
+                c64_->ram->memory[0x2D] = (uint8_t)(basic_end_addr & 0xFF);
+                c64_->ram->memory[0x2E] = (uint8_t)(basic_end_addr >> 8);
+
+                const char* run_cmd = "RUN\r";
+                int len = (int)strlen(run_cmd);
+                for (int i = 0; i < len; i++) {
+                    c64_->ram->memory[0x0277 + i] = (uint8_t)run_cmd[i];
+                }
+                c64_->ram->memory[0x00C6] = (uint8_t)len;
+                printf("C64: LNX: Set BASIC end=$%04X and injected RUN\n", basic_end_addr);
+            }
+
+            success = result.lynx_file_count > 0;
             break;
         }
 

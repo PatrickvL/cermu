@@ -150,9 +150,8 @@ static bool is_vic20_load_address(uint16_t addr) {
 static float vic20_can_load_file(const char* filepath, const uint8_t* data, size_t size) {
     const char* ext = strrchr(filepath, '.');
     if (ext) {
-        // PRG and LNX files — check load address
-        if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0 ||
-            strcmp(ext, ".lnx") == 0 || strcmp(ext, ".LNX") == 0) {
+        // PRG files — check load address
+        if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0) {
             if (size >= 2) {
                 uint16_t load_addr = data[0] | (data[1] << 8);
                 if (load_addr == 0x1001) {
@@ -166,6 +165,29 @@ static float vic20_can_load_file(const char* filepath, const uint8_t* data, size
                 // Generic PRG file - moderate confidence
                 return 0.5f;
             }
+        }
+        // LNX files — Lynx archive; parse to inspect contained files' load addresses
+        if (strcmp(ext, ".lnx") == 0 || strcmp(ext, ".LNX") == 0) {
+            commodore_lynx_t lynx;
+            if (commodore_lynx_open(filepath, &lynx)) {
+                commodore_lynx_directory_t dir;
+                if (commodore_lynx_read_directory(&lynx, &dir)) {
+                    // Check first PRG entry's load address
+                    for (unsigned i = 0; i < dir.file_count; i++) {
+                        if (dir.entries[i].file_type == 'P' && dir.entries[i].data_length >= 2) {
+                            size_t off = dir.entries[i].data_offset;
+                            if (off + 1 < lynx.data_size) {
+                                uint16_t addr = lynx.data[off] | ((uint16_t)lynx.data[off+1] << 8);
+                                commodore_lynx_close(&lynx);
+                                if (is_vic20_load_address(addr)) return 0.90f;
+                                return 0.4f;
+                            }
+                        }
+                    }
+                }
+                commodore_lynx_close(&lynx);
+            }
+            return 0.5f;  // Could not inspect
         }
         if (strcmp(ext, ".tap") == 0 || strcmp(ext, ".TAP") == 0) {
             // Check TAP header to see if this is specifically a VIC-20 tape
@@ -356,10 +378,49 @@ SystemConfiguration VIC20System::detect_optimal_configuration(
 
     const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
 #ifdef _MSC_VER
-    bool is_prg = ext && (_stricmp(ext, ".prg") == 0 || _stricmp(ext, ".lnx") == 0);
+    bool is_prg = ext && (_stricmp(ext, ".prg") == 0);
+    bool is_lnx = ext && (_stricmp(ext, ".lnx") == 0);
 #else
-    bool is_prg = ext && (strcasecmp(ext, ".prg") == 0 || strcasecmp(ext, ".lnx") == 0);
+    bool is_prg = ext && (strcasecmp(ext, ".prg") == 0);
+    bool is_lnx = ext && (strcasecmp(ext, ".lnx") == 0);
 #endif
+
+    // LNX archives need special handling: inspect ALL contained files
+    // to determine the maximum memory expansion needed.
+    if (is_lnx) {
+        commodore_load_result_t result = {};
+        if (commodore_load_file(filepath, &result) && result.type == COMMODORE_LOAD_LNX) {
+            int mem_index = 0;
+            for (int f = 0; f < result.lynx_file_count; f++) {
+                const commodore_prg_t* prg = &result.lynx_files[f];
+                uint16_t la = prg->load_addr;
+                uint32_t ea = (uint32_t)la + (uint32_t)prg->data_size;
+
+                // Determine minimum expansion for this file
+                if (la >= 0x0400 && la < 0x1000) { if (mem_index < 1) mem_index = 1; }
+                if (la >= 0x2000 && la < 0x4000) { if (mem_index < 3) mem_index = 3; }
+                if ((la >= 0x4000 && la < 0x6000) || (ea > 0x4000 && ea <= 0x6000))
+                    { if (mem_index < 2) mem_index = 2; }
+                if ((la >= 0x6000 && la < 0x8000) || (ea > 0x6000 && ea <= 0x8000))
+                    { if (mem_index < 4) mem_index = 4; }
+                if (la == 0x0401) { if (mem_index < 1) mem_index = 1; }
+                if (la == 0x1201) { if (mem_index < 2) mem_index = 2; }
+                // If any file writes above $6000, need 24KB+
+                if (ea > 0x6000 && la < 0x6000) { if (mem_index < 4) mem_index = 4; }
+            }
+            // For safety, if multiple files span wide address ranges, use full expansion
+            if (result.lynx_file_count > 3 && mem_index >= 2) {
+                mem_index = 5;  // Full 32KB expansion
+            }
+            config.memory_option_index = mem_index;
+            printf("VIC20: LNX auto-detected memory config: %s (%d files)\n",
+                   hardware_traits_.memory_options[mem_index].name, result.lynx_file_count);
+            commodore_load_result_free(&result);
+            return config;
+        }
+        commodore_load_result_free(&result);
+        return config;
+    }
 
     if (is_prg && data && size >= 2) {
         // Fast path: raw PRG — load address is first two bytes
@@ -880,6 +941,66 @@ bool VIC20System::load_file_into_memory(const char* filepath) {
                                         prg->data[i]);
             }
             success = true;
+            break;
+        }
+
+        case COMMODORE_LOAD_LNX: {
+            // Lynx archive — load ALL extracted PRG files into memory
+            printf("VIC20: Loading LNX archive with %d files\n", result.lynx_file_count);
+
+            bool any_basic = false;
+            uint16_t basic_load_addr = 0;
+            uint16_t basic_end_addr = 0;
+
+            for (int f = 0; f < result.lynx_file_count; f++) {
+                const commodore_prg_t* prg = &result.lynx_files[f];
+
+                if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
+                    printf("VIC20: LNX file %d: Invalid address range $%04X-$%04X, skipping\n",
+                           f, prg->load_addr, prg->end_addr);
+                    continue;
+                }
+
+                printf("VIC20: LNX file %d: $%04X-$%04X (%zu bytes)\n",
+                       f, prg->load_addr, prg->end_addr, prg->data_size);
+
+                for (size_t i = 0; i < prg->data_size; i++) {
+                    vic20_memory_write_byte(memory_,
+                                            (uint16_t)(prg->load_addr + i),
+                                            prg->data[i]);
+                }
+
+                // Track if any file is a BASIC program (for auto-run)
+                if (prg->load_addr == 0x0401 || prg->load_addr == 0x1001 ||
+                    prg->load_addr == 0x1201) {
+                    any_basic = true;
+                    basic_load_addr = prg->load_addr;
+                    basic_end_addr = prg->end_addr;
+                }
+            }
+
+            if (any_basic) {
+                // Set BASIC pointers for the BASIC program
+                vic20_memory_write_byte(memory_, 0x2B, (uint8_t)(basic_load_addr & 0xFF));
+                vic20_memory_write_byte(memory_, 0x2C, (uint8_t)(basic_load_addr >> 8));
+                vic20_memory_write_byte(memory_, 0x2D, (uint8_t)(basic_end_addr & 0xFF));
+                vic20_memory_write_byte(memory_, 0x2E, (uint8_t)(basic_end_addr >> 8));
+                vic20_memory_write_byte(memory_, 0x2F, (uint8_t)(basic_end_addr & 0xFF));
+                vic20_memory_write_byte(memory_, 0x30, (uint8_t)(basic_end_addr >> 8));
+                vic20_memory_write_byte(memory_, 0x31, (uint8_t)(basic_end_addr & 0xFF));
+                vic20_memory_write_byte(memory_, 0x32, (uint8_t)(basic_end_addr >> 8));
+
+                const char* run_cmd = "RUN\r";
+                int len = (int)strlen(run_cmd);
+                for (int i = 0; i < len; i++) {
+                    vic20_memory_write_byte(memory_, 0x0277 + i, (uint8_t)run_cmd[i]);
+                }
+                vic20_memory_write_byte(memory_, 0x00C6, (uint8_t)len);
+                printf("VIC20: LNX: Set BASIC pointers ($%04X-$%04X) and injected RUN\n",
+                       basic_load_addr, basic_end_addr);
+            }
+
+            success = result.lynx_file_count > 0;
             break;
         }
 
