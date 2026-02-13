@@ -25,8 +25,15 @@
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
 
-// Shared Commodore file format loader (PRG, D64, T64, TAP, CRT, BIN)
-#include "../../core/storage/commodore_file_loader.h"
+// File format handlers and registry
+#include "../../core/formats/format_registry.h"
+#include "../../core/formats/prg_format.h"
+#include "../../core/formats/d64_format.h"
+#include "../../core/formats/t64_format.h"
+#include "../../core/formats/tap_format.h"
+#include "../../core/formats/crt_format.h"
+#include "../../core/formats/lnx_format.h"
+#include "../../core/analysis/basic_parser.h"
 
 // ============================================================================
 // Hardware Traits Definition
@@ -225,13 +232,18 @@ static float vic20_can_load_file(const char* filepath, const uint8_t* data, size
     return 0.0f;
 }
 
-static const char* vic20_extensions[] = {".prg", ".tap", ".d64", ".t64", ".lnx", nullptr};
+/** Formats the VIC-20 can load — used by SystemDescriptor and file dialogs. */
+static const format_descriptor_t* const vic20_formats[] = {
+    &PRG_FORMAT_DESCRIPTOR, &TAP_FORMAT_DESCRIPTOR, &D64_FORMAT_DESCRIPTOR,
+    &T64_FORMAT_DESCRIPTOR, &LNX_FORMAT_DESCRIPTOR, &BIN_FORMAT_DESCRIPTOR,
+    nullptr
+};
 
 static SystemDescriptor vic20_descriptor = {
     "Commodore VIC-20",
     "VIC20",
     "Commodore VIC-20 (1980) - 5KB RAM, 22-column display",
-    vic20_extensions,
+    vic20_formats,
     create_vic20_hardware_traits(),
     vic20_can_load_file
 };
@@ -395,11 +407,11 @@ SystemConfiguration VIC20System::detect_optimal_configuration(
     // LNX archives need special handling: inspect ALL contained files
     // to determine the maximum memory expansion needed.
     if (is_lnx) {
-        commodore_load_result_t result = {};
-        if (commodore_load_file(filepath, &result) && result.type == COMMODORE_LOAD_LNX) {
+        format_load_result_t result = {};
+        if (format_load_file(filepath, &result) && result.type == FORMAT_LOAD_ARCHIVE) {
             int mem_index = 0;
-            for (int f = 0; f < result.lynx_file_count; f++) {
-                const commodore_prg_t* prg = &result.lynx_files[f];
+            for (int f = 0; f < result.file_count; f++) {
+                const program_data_t* prg = &result.files[f];
                 uint16_t la = prg->load_addr;
                 uint32_t ea = (uint32_t)la + (uint32_t)prg->data_size;
 
@@ -416,16 +428,16 @@ SystemConfiguration VIC20System::detect_optimal_configuration(
                 if (ea > 0x6000 && la < 0x6000) { if (mem_index < 4) mem_index = 4; }
             }
             // For safety, if multiple files span wide address ranges, use full expansion
-            if (result.lynx_file_count > 3 && mem_index >= 2) {
+            if (result.file_count > 3 && mem_index >= 2) {
                 mem_index = 5;  // Full 32KB expansion
             }
             config.memory_option_index = mem_index;
             printf("VIC20: LNX auto-detected memory config: %s (%d files)\n",
-                   hardware_traits_.memory_options[mem_index].name, result.lynx_file_count);
-            commodore_load_result_free(&result);
+                   hardware_traits_.memory_options[mem_index].name, result.file_count);
+            format_load_result_free(&result);
             return config;
         }
-        commodore_load_result_free(&result);
+        format_load_result_free(&result);
         return config;
     }
 
@@ -436,17 +448,15 @@ SystemConfiguration VIC20System::detect_optimal_configuration(
         have_prg  = true;
     } else {
         // Container formats (D64, T64, etc.) — extract first PRG via loader
-        commodore_load_result_t result = {};
-        if (commodore_load_file(filepath, &result)) {
-            if ((result.type == COMMODORE_LOAD_D64 ||
-                 result.type == COMMODORE_LOAD_T64 ||
-                 result.type == COMMODORE_LOAD_PRG) &&
-                result.prg.data_size > 0) {
-                load_addr = result.prg.load_addr;
-                end_addr  = (uint32_t)load_addr + (uint32_t)result.prg.data_size;
+        format_load_result_t result = {};
+        if (format_load_file(filepath, &result)) {
+            if (result.type == FORMAT_LOAD_PROGRAM &&
+                result.program.data_size > 0) {
+                load_addr = result.program.load_addr;
+                end_addr  = (uint32_t)load_addr + (uint32_t)result.program.data_size;
                 have_prg  = true;
             }
-            commodore_load_result_free(&result);
+            format_load_result_free(&result);
         }
     }
 
@@ -815,23 +825,21 @@ bool VIC20System::load_file(const char* filepath) {
 bool VIC20System::load_file_into_memory(const char* filepath) {
     printf("VIC20: Loading file into memory: %s\n", filepath);
 
-    commodore_load_result_t result = {};
-    if (!commodore_load_file(filepath, &result)) {
+    format_load_result_t result = {};
+    if (!format_load_file(filepath, &result)) {
         printf("VIC20: Failed to load file: %s\n", result.error_msg);
-        commodore_load_result_free(&result);
+        format_load_result_free(&result);
         return false;
     }
 
     bool success = false;
 
     switch (result.type) {
-        case COMMODORE_LOAD_PRG:
-        case COMMODORE_LOAD_D64:
-        case COMMODORE_LOAD_T64: {
-            const commodore_prg_t* prg = &result.prg;
+        case FORMAT_LOAD_PROGRAM: {
+            const program_data_t* prg = &result.program;
 
             printf("VIC20: Loading %s: $%04X-$%04X (%zu bytes)\n",
-                   commodore_load_type_name(result.type),
+                   format_load_type_name(result.type),
                    prg->load_addr, prg->end_addr, prg->data_size);
 
             if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
@@ -914,25 +922,29 @@ bool VIC20System::load_file_into_memory(const char* filepath) {
             break;
         }
 
-        case COMMODORE_LOAD_TAP: {
-            printf("VIC20: TAP file detected (platform=%u, version=%u)\n",
-                   result.tap_header.platform, result.tap_header.version);
-            printf("VIC20: TAP tape emulation not yet implemented\n");
+        case FORMAT_LOAD_METADATA: {
+            // TAP or CRT — distinguished by format descriptor name
+            if (result.format && strcmp(result.format->name, "TAP") == 0) {
+                const commodore_tap_header_t* hdr = (const commodore_tap_header_t*)result.metadata;
+                printf("VIC20: TAP file detected (platform=%u, version=%u)\n",
+                       hdr->platform, hdr->version);
+                printf("VIC20: TAP tape emulation not yet implemented\n");
+            } else if (result.format && strcmp(result.format->name, "CRT") == 0) {
+                const commodore_crt_header_t* hdr = (const commodore_crt_header_t*)result.metadata;
+                printf("VIC20: CRT cartridge: \"%s\" (type=%u)\n",
+                       hdr->name, hdr->hardware_type);
+                printf("VIC20: CRT cartridge loading not yet implemented\n");
+            } else {
+                printf("VIC20: Unknown metadata format: %s\n",
+                       result.format ? result.format->name : "(null)");
+            }
             success = false;
             break;
         }
 
-        case COMMODORE_LOAD_CRT: {
-            printf("VIC20: CRT cartridge: \"%s\" (type=%u)\n",
-                   result.crt_header.name, result.crt_header.hardware_type);
-            printf("VIC20: CRT cartridge loading not yet implemented\n");
-            success = false;
-            break;
-        }
-
-        case COMMODORE_LOAD_BIN: {
+        case FORMAT_LOAD_RAW: {
             const uint16_t default_addr = 0xA000;
-            const commodore_prg_t* prg = &result.prg;
+            const program_data_t* prg = &result.program;
             
             printf("VIC20: Loading BIN at default $%04X (%zu bytes)\n",
                    default_addr, prg->data_size);
@@ -951,24 +963,24 @@ bool VIC20System::load_file_into_memory(const char* filepath) {
             break;
         }
 
-        case COMMODORE_LOAD_LNX: {
-            // Lynx archive — load ALL extracted PRG files into memory
-            printf("VIC20: Loading LNX archive with %d files\n", result.lynx_file_count);
+        case FORMAT_LOAD_ARCHIVE: {
+            // Archive — load ALL extracted PRG files into memory
+            printf("VIC20: Loading archive with %d files\n", result.file_count);
 
             bool any_basic = false;
             uint16_t basic_load_addr = 0;
             uint16_t basic_end_addr = 0;
 
-            for (int f = 0; f < result.lynx_file_count; f++) {
-                const commodore_prg_t* prg = &result.lynx_files[f];
+            for (int f = 0; f < result.file_count; f++) {
+                const program_data_t* prg = &result.files[f];
 
                 if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
-                    printf("VIC20: LNX file %d: Invalid address range $%04X-$%04X, skipping\n",
+                    printf("VIC20: Archive file %d: Invalid address range $%04X-$%04X, skipping\n",
                            f, prg->load_addr, prg->end_addr);
                     continue;
                 }
 
-                printf("VIC20: LNX file %d: $%04X-$%04X (%zu bytes)\n",
+                printf("VIC20: Archive file %d: $%04X-$%04X (%zu bytes)\n",
                        f, prg->load_addr, prg->end_addr, prg->data_size);
 
                 for (size_t i = 0; i < prg->data_size; i++) {
@@ -1003,11 +1015,11 @@ bool VIC20System::load_file_into_memory(const char* filepath) {
                     vic20_memory_write_byte(memory_, 0x0277 + i, (uint8_t)run_cmd[i]);
                 }
                 vic20_memory_write_byte(memory_, 0x00C6, (uint8_t)len);
-                printf("VIC20: LNX: Set BASIC pointers ($%04X-$%04X) and injected RUN\n",
+                printf("VIC20: Archive: Set BASIC pointers ($%04X-$%04X) and injected RUN\n",
                        basic_load_addr, basic_end_addr);
             }
 
-            success = result.lynx_file_count > 0;
+            success = result.file_count > 0;
             break;
         }
 
@@ -1016,7 +1028,7 @@ bool VIC20System::load_file_into_memory(const char* filepath) {
             break;
     }
 
-    commodore_load_result_free(&result);
+    format_load_result_free(&result);
     return success;
 }
 

@@ -1482,7 +1482,9 @@ void gui_calculate_display_dimensions(gui_state_t *gui_state,
 // TEST BINARY LOADING IMPLEMENTATION
 // ============================================================================
 
-#include "../core/storage/commodore_file_loader.h"
+#include "../core/formats/format_registry.h"
+#include "../core/formats/prg_format.h"
+#include "../core/analysis/basic_parser.h"
 
 // Render dialog for loading test binaries
 void gui_render_test_binary_dialog(c64_t* c64, gui_state_t* gui_state, gui_emulation_context_t* emu_context) {
@@ -1593,11 +1595,11 @@ bool gui_load_test_binary(gui_emulation_context_t* emu_context, gui_state_t* gui
     printf("==== LOADING TEST BINARY ====\n");
     printf("File: %s\n", filepath);
     
-    // Use shared Commodore file loader for format detection and parsing
-    commodore_load_result_t result = {};
-    if (!commodore_load_file(filepath, &result)) {
+    // Use format registry for format detection and parsing
+    format_load_result_t result = {};
+    if (!format_load_file(filepath, &result)) {
         printf("ERROR: Failed to load file: %s\n", result.error_msg);
-        commodore_load_result_free(&result);
+        format_load_result_free(&result);
         printf("============================\n");
         return false;
     }
@@ -1606,20 +1608,18 @@ bool gui_load_test_binary(gui_emulation_context_t* emu_context, gui_state_t* gui
     uint16_t sys_address = 0;
     
     switch (result.type) {
-        case COMMODORE_LOAD_PRG:
-        case COMMODORE_LOAD_D64:
-        case COMMODORE_LOAD_T64: {
-            const commodore_prg_t* prg = &result.prg;
+        case FORMAT_LOAD_PROGRAM: {
+            const program_data_t* prg = &result.program;
             load_address = prg->load_addr;
             
-            printf("Type: %s\n", commodore_load_type_name(result.type));
+            printf("Type: %s\n", format_load_type_name(result.type));
             printf("Loading %s: $%04X-$%04X (%zu bytes)\n",
-                   commodore_load_type_name(result.type),
+                   format_load_type_name(result.type),
                    prg->load_addr, prg->end_addr, prg->data_size);
             
             if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
                 printf("ERROR: Invalid address range\n");
-                commodore_load_result_free(&result);
+                format_load_result_free(&result);
                 printf("============================\n");
                 return false;
             }
@@ -1649,9 +1649,9 @@ bool gui_load_test_binary(gui_emulation_context_t* emu_context, gui_state_t* gui
             }
             break;
         }
-        case COMMODORE_LOAD_BIN: {
+        case FORMAT_LOAD_RAW: {
             load_address = 0x0801;
-            const commodore_prg_t* prg = &result.prg;
+            const program_data_t* prg = &result.program;
             printf("Type: BIN (raw binary)\n");
             if (prg->data_size > 0 && load_address + prg->data_size <= 0x10000) {
                 memcpy(&c64->ram->memory[load_address], prg->data, prg->data_size);
@@ -1661,13 +1661,13 @@ bool gui_load_test_binary(gui_emulation_context_t* emu_context, gui_state_t* gui
         }
         default:
             printf("ERROR: Unsupported file type for test binary loading: %s\n",
-                   commodore_load_type_name(result.type));
-            commodore_load_result_free(&result);
+                   format_load_type_name(result.type));
+            format_load_result_free(&result);
             printf("============================\n");
             return false;
     }
     
-    commodore_load_result_free(&result);
+    format_load_result_free(&result);
     
     // Set PC to the execution address
     if (sys_address != 0) {

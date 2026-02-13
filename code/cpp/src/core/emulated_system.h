@@ -8,6 +8,10 @@
 #include <map>
 #include <SDL_keycode.h>
 
+// Forward-declare format descriptor so SystemDescriptor can reference it
+struct format_descriptor_s;
+typedef struct format_descriptor_s format_descriptor_t;
+
 // ============================================================================
 // SYSTEM HARDWARE TRAITS
 // ============================================================================
@@ -181,8 +185,16 @@ struct SystemDescriptor {
     const char* name;                    // E.g., "Commodore 64"
     const char* short_name;              // E.g., "C64"
     const char* description;             // Brief description
-    const char** supported_extensions;   // NULL-terminated array of file extensions (e.g., {".prg", ".d64", NULL})
-    
+
+    /**
+     * NULL-terminated array of pointers to format descriptors that
+     * this system can load.  The GUI uses these to build file-dialog
+     * filters and tooltips without any system-specific knowledge.
+     *
+     * Example:  { &PRG_FORMAT_DESCRIPTOR, &D64_FORMAT_DESCRIPTOR, nullptr }
+     */
+    const format_descriptor_t* const* supported_formats;
+
     // Hardware traits (fixed characteristics)
     HardwareTraits hardware_traits;
     

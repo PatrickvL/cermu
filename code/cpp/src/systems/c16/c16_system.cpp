@@ -2,7 +2,14 @@
 #include "c16_keyboard_matrix.h"
 #include "../../chip/input/emu_key_sdl_map.h"
 #include "../../core/storage/rom_loader.h"
-#include "../../core/storage/commodore_file_loader.h"
+#include "../../core/formats/format_registry.h"
+#include "../../core/formats/prg_format.h"
+#include "../../core/formats/d64_format.h"
+#include "../../core/formats/t64_format.h"
+#include "../../core/formats/tap_format.h"
+#include "../../core/formats/crt_format.h"
+#include "../../core/formats/lnx_format.h"
+#include "../../core/analysis/basic_parser.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -127,13 +134,18 @@ float C16System::can_load_file_static(const char* filepath, const uint8_t* data,
     return 0.0f;
 }
 
-static const char* c16_extensions[] = {".prg", ".tap", ".d64", ".t64", nullptr};
+/** Formats the C16/Plus4 can load — used by SystemDescriptor and file dialogs. */
+static const format_descriptor_t* const c16_formats[] = {
+    &PRG_FORMAT_DESCRIPTOR, &TAP_FORMAT_DESCRIPTOR, &D64_FORMAT_DESCRIPTOR,
+    &T64_FORMAT_DESCRIPTOR, &LNX_FORMAT_DESCRIPTOR, &BIN_FORMAT_DESCRIPTOR,
+    nullptr
+};
 
 const SystemDescriptor C16System::c16_descriptor = {
     "Commodore 16 / Plus/4",
     "C16",
     "Commodore 16 and Plus/4 (1984) - 16KB/64KB RAM, TED graphics",
-    c16_extensions,
+    c16_formats,
     C16System::create_hardware_traits(),
     C16System::can_load_file_static
 };
@@ -315,25 +327,23 @@ bool C16System::load_file(const char* filepath) {
     
     printf("C16: Loading file: %s\n", filepath);
 
-    // Use shared Commodore file loader for format detection and parsing
-    commodore_load_result_t result = {};
-    if (!commodore_load_file(filepath, &result)) {
+    // Use format registry for format detection and parsing
+    format_load_result_t result = {};
+    if (!format_load_file(filepath, &result)) {
         printf("C16: Failed to load file: %s\n", result.error_msg);
-        commodore_load_result_free(&result);
+        format_load_result_free(&result);
         return false;
     }
 
     bool success = false;
 
     switch (result.type) {
-        case COMMODORE_LOAD_PRG:
-        case COMMODORE_LOAD_D64:
-        case COMMODORE_LOAD_T64: {
-            // All three produce a PRG in result.prg — copy data into C16 RAM
-            const commodore_prg_t* prg = &result.prg;
+        case FORMAT_LOAD_PROGRAM: {
+            // PRG/D64/T64 all produce a single program — copy into C16 RAM
+            const program_data_t* prg = &result.program;
             
             printf("C16: Loading %s: $%04X-$%04X (%zu bytes)\n",
-                   commodore_load_type_name(result.type),
+                   format_load_type_name(result.type),
                    prg->load_addr, prg->end_addr, prg->data_size);
 
             // Validate address range
@@ -389,24 +399,27 @@ bool C16System::load_file(const char* filepath) {
             break;
         }
 
-        case COMMODORE_LOAD_TAP: {
-            printf("C16: TAP file detected (platform=%u, version=%u)\n",
-                   result.tap_header.platform, result.tap_header.version);
-            printf("C16: TAP tape emulation not yet implemented\n");
+        case FORMAT_LOAD_METADATA: {
+            // TAP or CRT — distinguished by format descriptor name
+            if (result.format && strcmp(result.format->name, "TAP") == 0) {
+                const commodore_tap_header_t* hdr = (const commodore_tap_header_t*)result.metadata;
+                printf("C16: TAP file detected (platform=%u, version=%u)\n",
+                       hdr->platform, hdr->version);
+                printf("C16: TAP tape emulation not yet implemented\n");
+            } else if (result.format && strcmp(result.format->name, "CRT") == 0) {
+                printf("C16: CRT format is not applicable to C16/Plus4\n");
+            } else {
+                printf("C16: Unknown metadata format: %s\n",
+                       result.format ? result.format->name : "(null)");
+            }
             success = false;
             break;
         }
 
-        case COMMODORE_LOAD_CRT: {
-            printf("C16: CRT format is not applicable to C16/Plus4\n");
-            success = false;
-            break;
-        }
-
-        case COMMODORE_LOAD_BIN: {
+        case FORMAT_LOAD_RAW: {
             // Raw binary — load at $4000 by default for C16
             const uint16_t default_addr = 0x4000;
-            const commodore_prg_t* prg = &result.prg;
+            const program_data_t* prg = &result.program;
             
             printf("C16: Loading BIN at default $%04X (%zu bytes)\n",
                    default_addr, prg->data_size);
@@ -421,12 +434,50 @@ bool C16System::load_file(const char* filepath) {
             break;
         }
 
+        case FORMAT_LOAD_ARCHIVE: {
+            // LNX archive — load ALL extracted PRG files into C16 RAM
+            printf("C16: Loading archive with %d files\n", result.file_count);
+
+            bool any_basic = false;
+            uint16_t basic_end_addr = 0;
+
+            for (int f = 0; f < result.file_count; f++) {
+                const program_data_t* prg = &result.files[f];
+
+                if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
+                    printf("C16: Archive file %d: Invalid address range $%04X-$%04X, skipping\n",
+                           f, prg->load_addr, prg->end_addr);
+                    continue;
+                }
+
+                printf("C16: Archive file %d: $%04X-$%04X (%zu bytes)\n",
+                       f, prg->load_addr, prg->end_addr, prg->data_size);
+
+                memcpy(&ram_simple_[prg->load_addr], prg->data, prg->data_size);
+
+                if (prg->load_addr == 0x1001) {
+                    any_basic = true;
+                    basic_end_addr = prg->end_addr;
+                }
+            }
+
+            if (any_basic) {
+                // Update BASIC end pointer
+                ram_simple_[0x2D] = (uint8_t)(basic_end_addr & 0xFF);
+                ram_simple_[0x2E] = (uint8_t)(basic_end_addr >> 8);
+                printf("C16: Archive: Set BASIC end=$%04X\n", basic_end_addr);
+            }
+
+            success = result.file_count > 0;
+            break;
+        }
+
         default:
             printf("C16: Unsupported load result type: %d\n", result.type);
             break;
     }
 
-    commodore_load_result_free(&result);
+    format_load_result_free(&result);
     return success;
 }
 

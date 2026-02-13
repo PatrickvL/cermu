@@ -1,0 +1,55 @@
+#pragma once
+
+/**
+ * TAP Format Handler — Raw Tape Pulse Data
+ *
+ * Parses TAP file headers for identification and metadata.
+ * TAP files contain raw pulse-width data; full decoding requires
+ * cycle-accurate tape emulation (not handled here).
+ */
+
+#include "format_handler.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// ============================================================================
+// TAP Types
+// ============================================================================
+
+/** TAP file header (first 20 bytes) */
+typedef struct {
+    char     signature[12];         /**< "C64-TAPE-RAW" or "C16-TAPE-RAW" */
+    uint8_t  version;               /**< 0 or 1 */
+    uint8_t  platform;              /**< 0=C64, 1=VIC-20, 2=C16 */
+    uint8_t  video_standard;        /**< 0=PAL, 1=NTSC */
+    uint8_t  reserved;
+    uint32_t data_size;             /**< Size of pulse data */
+} commodore_tap_header_t;
+
+// ============================================================================
+// TAP Format API
+// ============================================================================
+
+/**
+ * Read TAP file header without loading full pulse data.
+ * Useful for file type detection and metadata display.
+ */
+bool commodore_tap_read_header(const char* filepath, commodore_tap_header_t* out_header);
+
+/**
+ * Identify the platform of a TAP file from its signature.
+ * @return 0=C64, 1=VIC-20, 2=C16, -1=unknown/error
+ */
+int commodore_tap_identify_platform(const char* filepath);
+
+// ============================================================================
+// Format Descriptor
+// ============================================================================
+
+extern const format_descriptor_t TAP_FORMAT_DESCRIPTOR;
+
+#ifdef __cplusplus
+}
+#endif
