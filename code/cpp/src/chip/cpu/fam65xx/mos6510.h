@@ -76,6 +76,10 @@ void mos6510_set_p(mos6510_t *cpu, uint8_t value);
 void mos6510_set_pc(mos6510_t *cpu, uint16_t value);
 void mos6510_set_ab(mos6510_t *cpu, uint16_t value);
 
+// Reset CPU instruction pipeline to fetch state
+// MUST be called after externally setting PC to ensure clean instruction fetch
+void mos6510_transition_to_fetch(mos6510_t *cpu);
+
 // I/O Port access (6510-specific)
 uint8_t mos6510_get_io_ddr(mos6510_t *cpu);
 uint8_t mos6510_get_io_data(mos6510_t *cpu);

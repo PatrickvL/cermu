@@ -94,7 +94,7 @@ struct TestDescriptor {
         : type(TestType::EXITCODE)
         , protocol(TestProtocol::AUTO_DETECT)
         , environment(TestEnvironment::AUTO_DETECT)
-        , timeout_cycles(10000000)
+        , timeout_cycles(50000000)
         , required_hw(HardwareConfig::NONE)
         , excluded_hw(HardwareConfig::NONE)
         , success_pc(0)

@@ -120,6 +120,10 @@ void mos6510_set_ab(mos6510_t *cpu, uint16_t value) {
   CPU_CAST(cpu)->set(REG_AB, value);
 }
 
+void mos6510_transition_to_fetch(mos6510_t *cpu) {
+  CPU_CAST(cpu)->transition_to_fetch();
+}
+
 // I/O Port access (6510-specific)
 uint8_t mos6510_get_io_ddr(mos6510_t *cpu) {
   return CPU_CAST(cpu)->io_port.direction;

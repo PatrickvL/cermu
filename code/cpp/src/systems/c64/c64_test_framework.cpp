@@ -280,7 +280,7 @@ TestDescriptor TestFramework::parse_test_from_file(const std::string& prg_path, 
     test.name = prg_path.substr(prg_path.find_last_of("/\\") + 1);
     test.category = category;
     test.type = TestType::EXITCODE;  // Default
-    test.timeout_cycles = 10000000;  // 10 million cycles default
+    test.timeout_cycles = 50000000;  // 50 million cycles default (official tests need up to 200M)
     
     // Check for reference image
     check_for_reference_image(prg_path, test);
@@ -595,15 +595,29 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
     // After boot, set PC to target address (simulating SYS command)
     mos6510_set_pc(cpu, sys_addr);
     
-    // Set up stack as BASIC would (SYS pushes return address)
-    // Stack starts at $01FF and grows down
-    uint8_t sp = 0xF0;  // Leave some room on stack
-    mos6510_set_s(cpu, sp);
+    // CRITICAL: Reset CPU pipeline state machine to fetch mode.
+    // Without this, the CPU's current_handler and half_cycle are still
+    // mid-instruction from the KERNAL keyboard loop, causing the CPU to
+    // finish that stale instruction instead of fetching from the new PC.
+    mos6510_transition_to_fetch(cpu);
     
-    // Push a return address to stack for RTS instruction
-    // Use a safe address that won't cause issues if test returns
-    c64->ram->memory[0x0100 + sp + 1] = 0x00;  // Low byte
-    c64->ram->memory[0x0100 + sp + 2] = 0x08;  // High byte ($0800)
+    // Sync address bus register with new PC (needed for first fetch)
+    mos6510_set_ab(cpu, sys_addr);
+    
+    // Set up stack for SYS command context.
+    // Real BASIC SYS uses JSR internally: it pushes the return address - 1
+    // (6502 convention: JSR pushes addr of last byte of JSR instruction,
+    //  RTS pops and adds 1 to get the next instruction address).
+    // Use the current stack pointer from BASIC boot (don't clobber it).
+    // Push return address pointing to BASIC warm start ($A7AE) so if the
+    // test does RTS, it returns to BASIC safely.
+    uint8_t sp = mos6510_get_s(cpu);
+    uint16_t return_addr = 0xA7AE - 1;  // BASIC warm start, adjusted for RTS convention
+    c64->ram->memory[0x0100 + sp] = (return_addr >> 8) & 0xFF;  // High byte
+    sp--;
+    c64->ram->memory[0x0100 + sp] = return_addr & 0xFF;          // Low byte
+    sp--;
+    mos6510_set_s(cpu, sp);
     
     return true;
 }
@@ -612,8 +626,7 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
     std::string full_path = vice_testprogs_path_ + "/" + test.path;
     
     // Reset C64 system (reset all components)
-    // TODO: Implement proper system reset function if not available
-    c64->total_cycles = 0;
+    c64_system_reset(c64);
     
     // Load PRG file
     uint16_t load_addr, sys_addr;
@@ -666,6 +679,8 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
                 // After KERNAL boot, set PC to test entry point
                 uint16_t start_addr = (sys_addr != 0) ? sys_addr : load_addr;
                 mos6510_set_pc(cpu, start_addr);
+                mos6510_transition_to_fetch(cpu);
+                mos6510_set_ab(cpu, start_addr);
                 if (verbose_) {
                     printf("  Set PC to test entry: $%04X\n", start_addr);
                 }
@@ -684,7 +699,8 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
             uint16_t start_addr = (sys_addr != 0) ? sys_addr : load_addr;
             mos6510_set_pc(cpu, start_addr);
             
-            // CRITICAL: Also set AB register to match PC for first fetch
+            // CRITICAL: Reset CPU pipeline and sync AB register for first fetch
+            mos6510_transition_to_fetch(cpu);
             mos6510_set_ab(cpu, start_addr);
             
             // IMPORTANT: Leave interrupts ENABLED for direct execution
@@ -856,39 +872,33 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
         return result;
     }
     
+    // Clear debug register intercept before test execution
+    c64->debug_reg_written = false;
+    c64->debug_reg_value = 0;
+    
     // Track PC for infinite-loop detection
     uint16_t last_pc = start_pc;
-    uint32_t pc_stable_cycles = 0;
+    uint32_t pc_stable_count = 0;
     uint16_t stable_pc = 0;
-    // Track last known debug register value
-    uint8_t last_debug_value = 0x42;
     
     // Main execution loop
     while (cycles < max_cycles) {
         c64_system_tick(c64);
         cycles++;
         
-        // After each tick, check if the bus state indicates a write to $D7FF
-        // Writes to $D7FF go to SID chip, so we need to intercept them via bus state
-        bus_state_t current_bus = c64->bus.state;
-        uint16_t bus_addr = BUS_GET_ADDR(current_bus);
-        uint8_t bus_data = BUS_GET_DATA(current_bus);
-        uint8_t bus_lines = BUS_GET_LINES(current_bus);
-        
-        // Check if this is a write (R/W line low) to $D7FF
-        if (bus_addr == DEBUG_REGISTER && !(bus_lines & BUS_MASK_RW)) {
-            // This is a write to $D7FF - capture the value
-            last_debug_value = bus_data;
+        // Check debug register intercept (set by c64_memory_tick on write to $D7FF)
+        if (c64->debug_reg_written) {
+            uint8_t value = c64->debug_reg_value;
+            c64->debug_reg_written = false;  // Acknowledge
             
-            // Check for pass/fail immediately
-            if (bus_data == 0x00) {
+            if (value == 0x00) {
                 result.status = TestStatus::PASSED;
                 result.message = "Test passed ($D7FF = $00)";
                 if (verbose_) {
                     printf("\n  ✓ Test passed at cycle %u\n", cycles);
                 }
                 break;
-            } else if (bus_data == 0xFF) {
+            } else if (value == 0xFF) {
                 result.status = TestStatus::FAILED;
                 result.message = "Test failed ($D7FF = $FF)";
                 if (verbose_) {
@@ -896,29 +906,39 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
                 }
                 break;
             }
+            // Other values (e.g. subtest numbers) - continue running
+            if (verbose_) {
+                printf("\n  $D7FF = $%02X at cycle %u (subtest indicator)\n", value, cycles);
+            }
         }
         
-        if (cycles % 1000 == 0) {
+        // Periodic checks every 256 cycles (fast modulo via bitmask)
+        if ((cycles & 0xFF) == 0) {
             uint16_t current_pc = mos6510_get_pc(cpu);
             
-            // Check for infinite loop (PC stable)
-            if (protocol == TestProtocol::INFINITE_LOOP || protocol == TestProtocol::AUTO_DETECT) {
-                if (current_pc == last_pc) {
-                    if (pc_stable_cycles == 0) {
-                        stable_pc = current_pc;
-                    }
-                    pc_stable_cycles++;
+            // Check for infinite loop: JMP * ($4C xx yy where xxyy == PC)
+            // or BNE/BEQ/JMP to self. Also detect PC stability.
+            if (current_pc == last_pc) {
+                if (pc_stable_count == 0) {
+                    stable_pc = current_pc;
+                }
+                pc_stable_count++;
+                
+                // PC stable for ~512 cycles (2 checks) = likely infinite loop
+                if (pc_stable_count >= 2) {
+                    // Verify it's a real JMP * by checking opcode
+                    uint8_t opcode = c64->ram->memory[current_pc];
+                    bool is_jmp_self = false;
                     
-                    // If PC stable for 10,000 cycles, test completed
-                    if (pc_stable_cycles >= 10) {
+                    if (opcode == 0x4C) { // JMP abs
+                        uint16_t target = c64->ram->memory[(current_pc + 1) & 0xFFFF] |
+                                         (c64->ram->memory[(current_pc + 2) & 0xFFFF] << 8);
+                        is_jmp_self = (target == current_pc);
+                    }
+                    
+                    if (is_jmp_self || pc_stable_count >= 8) {
                         // Get border color for pass/fail indication
                         uint8_t border_color = get_border_color(c64);
-                        
-                        // Common border color conventions in C64 tests:
-                        // GREEN (5) = PASS
-                        // RED (2) = FAIL
-                        // BLACK (0) = typically PASS or neutral
-                        // Other colors may indicate specific test states
                         
                         bool has_explicit_result = false;
                         
@@ -933,7 +953,21 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
                             has_explicit_result = true;
                         }
                         
-                        // If no explicit PC match, use border color
+                        // If no explicit PC match, check debug register value first
+                        if (!has_explicit_result && c64->debug_reg_value != 0) {
+                            // A value was written to $D7FF before the infinite loop
+                            if (c64->debug_reg_value == 0x00) {
+                                result.status = TestStatus::PASSED;
+                                result.message = "Test passed ($D7FF = $00, then loop)";
+                                has_explicit_result = true;
+                            } else if (c64->debug_reg_value == 0xFF) {
+                                result.status = TestStatus::FAILED;
+                                result.message = "Test failed ($D7FF = $FF, then loop)";
+                                has_explicit_result = true;
+                            }
+                        }
+                        
+                        // Fall back to border color
                         if (!has_explicit_result) {
                             if (border_color == VICII_COLOR_GREEN) {
                                 result.status = TestStatus::PASSED;
@@ -941,15 +975,11 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
                             } else if (border_color == VICII_COLOR_RED) {
                                 result.status = TestStatus::FAILED;
                                 result.message = "Test failed (border=RED)";
-                            } else if (border_color == VICII_COLOR_BLACK) {
-                                // BLACK can mean pass for some tests
-                                result.status = TestStatus::PASSED;
-                                result.message = "Test completed (border=BLACK, assumed pass)";
                             } else {
-                                // Unknown border color - report as pass with note
+                                // Use border color as-is
                                 result.status = TestStatus::PASSED;
                                 char buf[128];
-                                snprintf(buf, sizeof(buf), "Test completed (border=color %u)", border_color);
+                                snprintf(buf, sizeof(buf), "Test completed (loop at $%04X, border=%u)", stable_pc, border_color);
                                 result.message = buf;
                             }
                         }
@@ -963,9 +993,9 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
                         }
                         break;
                     }
-                } else {
-                    pc_stable_cycles = 0;
                 }
+            } else {
+                pc_stable_count = 0;
             }
             last_pc = current_pc;
         }
