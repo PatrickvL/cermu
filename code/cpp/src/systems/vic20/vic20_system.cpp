@@ -1,4 +1,4 @@
-#include "vic20_system.h"
+﻿#include "vic20_system.h"
 #include "vic20_memory.h"
 #include "vic20_chips.h"
 #include "../../chip/input/commodore_keyboard.h"
@@ -33,7 +33,7 @@
 #include "../../core/formats/tap_format.h"
 #include "../../core/formats/crt_format.h"
 #include "../../core/formats/lnx_format.h"
-#include "../../core/analysis/basic_parser.h"
+#include "../../core/formats/commodore_load_helpers.h"
 
 // ============================================================================
 // Hardware Traits Definition
@@ -822,6 +822,20 @@ bool VIC20System::load_file(const char* filepath) {
     return true;
 }
 
+// ============================================================================
+// Commodore Load Helper Callbacks -- VIC-20 specific
+// ============================================================================
+
+static uint8_t vic20_mem_read_for_load(void* ctx, uint16_t addr) {
+    vic20_memory_t* mem = static_cast<vic20_memory_t*>(ctx);
+    return vic20_memory_read_byte(mem, addr);
+}
+
+static void vic20_mem_write_byte_cb(void* ctx, uint16_t addr, uint8_t val) {
+    vic20_memory_t* mem = static_cast<vic20_memory_t*>(ctx);
+    vic20_memory_write_byte(mem, addr, val);
+}
+
 bool VIC20System::load_file_into_memory(const char* filepath) {
     printf("VIC20: Loading file into memory: %s\n", filepath);
 
@@ -832,201 +846,21 @@ bool VIC20System::load_file_into_memory(const char* filepath) {
         return false;
     }
 
-    bool success = false;
+    commodore_load_context_t ctx = {};
+    ctx.system_name     = "VIC20";
+    ctx.write_byte      = vic20_mem_write_byte_cb;
+    ctx.write_block     = nullptr;  // VIC-20 uses banked memory, no memcpy
+    ctx.mem_read        = vic20_mem_read_for_load;
+    ctx.mem_ctx         = memory_;
+    ctx.basic_params    = &COMMODORE_BASIC_VIC20;
+    ctx.basic_start_addrs[0] = 0x0401;  // 3KB expansion
+    ctx.basic_start_addrs[1] = 0x1001;  // unexpanded
+    ctx.basic_start_addrs[2] = 0x1201;  // 8KB+ expansion
+    ctx.default_raw_addr = 0xA000;
+    ctx.set_pc          = nullptr;  // VIC-20 uses keyboard buffer injection
+    ctx.try_sys_from_filename = true;
 
-    switch (result.type) {
-        case FORMAT_LOAD_PROGRAM: {
-            const program_data_t* prg = &result.program;
-
-            printf("VIC20: Loading %s: $%04X-$%04X (%zu bytes)\n",
-                   format_load_type_name(result.type),
-                   prg->load_addr, prg->end_addr, prg->data_size);
-
-            if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
-                printf("VIC20: Invalid PRG address range: $%04X-$%04X\n",
-                       prg->load_addr, prg->end_addr);
-                break;
-            }
-
-            // Write program data directly into VIC-20 memory
-            for (size_t i = 0; i < prg->data_size; i++) {
-                vic20_memory_write_byte(memory_,
-                                        (uint16_t)(prg->load_addr + i),
-                                        prg->data[i]);
-            }
-
-            // Set BASIC pointers and inject RUN command for BASIC programs.
-            // VIC-20 BASIC start addresses vary by memory expansion:
-            //   $0401 = 3KB expansion
-            //   $1001 = unexpanded (5KB)
-            //   $1201 = 8KB+ expansion
-            bool is_basic = (prg->load_addr == 0x0401 ||
-                             prg->load_addr == 0x1001 ||
-                             prg->load_addr == 0x1201);
-
-            if (is_basic) {
-                uint16_t end_addr = prg->end_addr;
-                // TXTTAB ($2B/$2C) = start of BASIC text
-                vic20_memory_write_byte(memory_, 0x2B, (uint8_t)(prg->load_addr & 0xFF));
-                vic20_memory_write_byte(memory_, 0x2C, (uint8_t)(prg->load_addr >> 8));
-                // VARTAB ($2D/$2E) = end of BASIC text (start of variables)
-                vic20_memory_write_byte(memory_, 0x2D, (uint8_t)(end_addr & 0xFF));
-                vic20_memory_write_byte(memory_, 0x2E, (uint8_t)(end_addr >> 8));
-                // ARYTAB ($2F/$30) = start of arrays
-                vic20_memory_write_byte(memory_, 0x2F, (uint8_t)(end_addr & 0xFF));
-                vic20_memory_write_byte(memory_, 0x30, (uint8_t)(end_addr >> 8));
-                // STREND ($31/$32) = end of arrays
-                vic20_memory_write_byte(memory_, 0x31, (uint8_t)(end_addr & 0xFF));
-                vic20_memory_write_byte(memory_, 0x32, (uint8_t)(end_addr >> 8));
-
-                // Inject "RUN\r" into the KERNAL keyboard buffer
-                const char* run_cmd = "RUN\r";
-                int len = (int)strlen(run_cmd);
-                for (int i = 0; i < len; i++) {
-                    vic20_memory_write_byte(memory_, 0x0277 + i, (uint8_t)run_cmd[i]);
-                }
-                vic20_memory_write_byte(memory_, 0x00C6, (uint8_t)len);
-                printf("VIC20: Set BASIC pointers and injected RUN command\n");
-            } else {
-                // Machine language program — try to extract SYS address
-                // from the filename (e.g. "rl-test_SYS4352.prg" → SYS4352)
-                const char* basename = filepath;
-                const char* sep = strrchr(filepath, '/');
-                if (sep) basename = sep + 1;
-
-                int sys_addr = -1;
-                for (const char* p = basename; *p; p++) {
-                    if ((p[0] == 'S' || p[0] == 's') &&
-                        (p[1] == 'Y' || p[1] == 'y') &&
-                        (p[2] == 'S' || p[2] == 's') &&
-                        p[3] >= '0' && p[3] <= '9') {
-                        sys_addr = atoi(p + 3);
-                        break;
-                    }
-                }
-
-                if (sys_addr >= 0 && sys_addr <= 65535) {
-                    char cmd[16];
-                    int len = snprintf(cmd, sizeof(cmd), "SYS%d\r", sys_addr);
-                    if (len > 0 && len <= 10) {  // VIC-20 keyboard buffer = 10 bytes
-                        for (int i = 0; i < len; i++) {
-                            vic20_memory_write_byte(memory_, 0x0277 + i, (uint8_t)cmd[i]);
-                        }
-                        vic20_memory_write_byte(memory_, 0x00C6, (uint8_t)len);
-                        printf("VIC20: Injected auto-start: SYS%d\n", sys_addr);
-                    }
-                }
-            }
-
-            success = true;
-            break;
-        }
-
-        case FORMAT_LOAD_METADATA: {
-            // TAP or CRT — distinguished by format descriptor name
-            if (result.format && strcmp(result.format->name, "TAP") == 0) {
-                const commodore_tap_header_t* hdr = (const commodore_tap_header_t*)result.metadata;
-                printf("VIC20: TAP file detected (platform=%u, version=%u)\n",
-                       hdr->platform, hdr->version);
-                printf("VIC20: TAP tape emulation not yet implemented\n");
-            } else if (result.format && strcmp(result.format->name, "CRT") == 0) {
-                const commodore_crt_header_t* hdr = (const commodore_crt_header_t*)result.metadata;
-                printf("VIC20: CRT cartridge: \"%s\" (type=%u)\n",
-                       hdr->name, hdr->hardware_type);
-                printf("VIC20: CRT cartridge loading not yet implemented\n");
-            } else {
-                printf("VIC20: Unknown metadata format: %s\n",
-                       result.format ? result.format->name : "(null)");
-            }
-            success = false;
-            break;
-        }
-
-        case FORMAT_LOAD_RAW: {
-            const uint16_t default_addr = 0xA000;
-            const program_data_t* prg = &result.program;
-            
-            printf("VIC20: Loading BIN at default $%04X (%zu bytes)\n",
-                   default_addr, prg->data_size);
-
-            if (default_addr + prg->data_size > 0x10000) {
-                printf("VIC20: BIN too large for address space\n");
-                break;
-            }
-
-            for (size_t i = 0; i < prg->data_size; i++) {
-                vic20_memory_write_byte(memory_,
-                                        (uint16_t)(default_addr + i),
-                                        prg->data[i]);
-            }
-            success = true;
-            break;
-        }
-
-        case FORMAT_LOAD_ARCHIVE: {
-            // Archive — load ALL extracted PRG files into memory
-            printf("VIC20: Loading archive with %d files\n", result.file_count);
-
-            bool any_basic = false;
-            uint16_t basic_load_addr = 0;
-            uint16_t basic_end_addr = 0;
-
-            for (int f = 0; f < result.file_count; f++) {
-                const program_data_t* prg = &result.files[f];
-
-                if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
-                    printf("VIC20: Archive file %d: Invalid address range $%04X-$%04X, skipping\n",
-                           f, prg->load_addr, prg->end_addr);
-                    continue;
-                }
-
-                printf("VIC20: Archive file %d: $%04X-$%04X (%zu bytes)\n",
-                       f, prg->load_addr, prg->end_addr, prg->data_size);
-
-                for (size_t i = 0; i < prg->data_size; i++) {
-                    vic20_memory_write_byte(memory_,
-                                            (uint16_t)(prg->load_addr + i),
-                                            prg->data[i]);
-                }
-
-                // Track if any file is a BASIC program (for auto-run)
-                if (prg->load_addr == 0x0401 || prg->load_addr == 0x1001 ||
-                    prg->load_addr == 0x1201) {
-                    any_basic = true;
-                    basic_load_addr = prg->load_addr;
-                    basic_end_addr = prg->end_addr;
-                }
-            }
-
-            if (any_basic) {
-                // Set BASIC pointers for the BASIC program
-                vic20_memory_write_byte(memory_, 0x2B, (uint8_t)(basic_load_addr & 0xFF));
-                vic20_memory_write_byte(memory_, 0x2C, (uint8_t)(basic_load_addr >> 8));
-                vic20_memory_write_byte(memory_, 0x2D, (uint8_t)(basic_end_addr & 0xFF));
-                vic20_memory_write_byte(memory_, 0x2E, (uint8_t)(basic_end_addr >> 8));
-                vic20_memory_write_byte(memory_, 0x2F, (uint8_t)(basic_end_addr & 0xFF));
-                vic20_memory_write_byte(memory_, 0x30, (uint8_t)(basic_end_addr >> 8));
-                vic20_memory_write_byte(memory_, 0x31, (uint8_t)(basic_end_addr & 0xFF));
-                vic20_memory_write_byte(memory_, 0x32, (uint8_t)(basic_end_addr >> 8));
-
-                const char* run_cmd = "RUN\r";
-                int len = (int)strlen(run_cmd);
-                for (int i = 0; i < len; i++) {
-                    vic20_memory_write_byte(memory_, 0x0277 + i, (uint8_t)run_cmd[i]);
-                }
-                vic20_memory_write_byte(memory_, 0x00C6, (uint8_t)len);
-                printf("VIC20: Archive: Set BASIC pointers ($%04X-$%04X) and injected RUN\n",
-                       basic_load_addr, basic_end_addr);
-            }
-
-            success = result.file_count > 0;
-            break;
-        }
-
-        default:
-            printf("VIC20: Unsupported load result type: %d\n", result.type);
-            break;
-    }
+    bool success = commodore_apply_load_result(&ctx, &result, filepath);
 
     format_load_result_free(&result);
     return success;

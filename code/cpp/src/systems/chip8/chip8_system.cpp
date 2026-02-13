@@ -113,13 +113,11 @@ static float chip8_can_load_file(const char* filepath, const uint8_t* data, size
     return 0.0f;
 }
 
-static const char* chip8_extensions[] = {".ch8", ".c8", nullptr};
-
 static SystemDescriptor chip8_descriptor = {
     "CHIP-8 Interpreter",
     "CHIP8",
     "Simple interpreted system for games and demos (1970s)",
-    chip8_extensions,
+    nullptr,  // supported_formats: CHIP-8 does not use format handler system
     create_chip8_hardware_traits(),
     chip8_can_load_file
 };

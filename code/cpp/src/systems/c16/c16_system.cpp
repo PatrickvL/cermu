@@ -1,4 +1,4 @@
-#include "c16_system.h"
+﻿#include "c16_system.h"
 #include "c16_keyboard_matrix.h"
 #include "../../chip/input/emu_key_sdl_map.h"
 #include "../../core/storage/rom_loader.h"
@@ -9,7 +9,7 @@
 #include "../../core/formats/tap_format.h"
 #include "../../core/formats/crt_format.h"
 #include "../../core/formats/lnx_format.h"
-#include "../../core/analysis/basic_parser.h"
+#include "../../core/formats/commodore_load_helpers.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -311,9 +311,21 @@ void C16System::run_frame() {
 // File Loading
 // ============================================================================
 
-/** Memory read callback for BASIC SYS parsing — reads from C16 RAM array */
-static uint8_t c16_mem_read_for_basic(void* ctx, uint16_t addr) {
+// ============================================================================
+// Commodore Load Helper Callbacks -- C16-specific
+// ============================================================================
+
+static uint8_t c16_mem_read(void* ctx, uint16_t addr) {
     return static_cast<uint8_t*>(ctx)[addr];
+}
+
+static void c16_mem_write_byte(void* ctx, uint16_t addr, uint8_t val) {
+    static_cast<uint8_t*>(ctx)[addr] = val;
+}
+
+static void c16_mem_write_block(void* ctx, uint16_t addr,
+                                const uint8_t* data, size_t len) {
+    memcpy(&static_cast<uint8_t*>(ctx)[addr], data, len);
 }
 
 bool C16System::load_file(const char* filepath) {
@@ -327,7 +339,6 @@ bool C16System::load_file(const char* filepath) {
     
     printf("C16: Loading file: %s\n", filepath);
 
-    // Use format registry for format detection and parsing
     format_load_result_t result = {};
     if (!format_load_file(filepath, &result)) {
         printf("C16: Failed to load file: %s\n", result.error_msg);
@@ -335,147 +346,18 @@ bool C16System::load_file(const char* filepath) {
         return false;
     }
 
-    bool success = false;
+    commodore_load_context_t ctx = {};
+    ctx.system_name     = "C16";
+    ctx.write_byte      = c16_mem_write_byte;
+    ctx.write_block     = c16_mem_write_block;
+    ctx.mem_read        = c16_mem_read;
+    ctx.mem_ctx         = ram_simple_;
+    ctx.basic_params    = &COMMODORE_BASIC_C16;
+    ctx.basic_start_addrs[0] = 0x1001;
+    ctx.default_raw_addr = 0x4000;
+    ctx.set_pc          = nullptr;  // MOS7501 CPU not yet implemented
 
-    switch (result.type) {
-        case FORMAT_LOAD_PROGRAM: {
-            // PRG/D64/T64 all produce a single program — copy into C16 RAM
-            const program_data_t* prg = &result.program;
-            
-            printf("C16: Loading %s: $%04X-$%04X (%zu bytes)\n",
-                   format_load_type_name(result.type),
-                   prg->load_addr, prg->end_addr, prg->data_size);
-
-            // Validate address range
-            if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
-                printf("C16: Invalid PRG address range: $%04X-$%04X\n",
-                       prg->load_addr, prg->end_addr);
-                break;
-            }
-
-            // Write program data into C16 RAM
-            memcpy(&ram_simple_[prg->load_addr], prg->data, prg->data_size);
-
-            // Try to find a SYS address in BASIC for auto-run
-            uint16_t run_addr = 0;
-
-            if (prg->load_addr == 0x1001) {
-                // Standard C16/Plus4 BASIC start — parse for SYS statement
-                commodore_basic_sys_t sys_result = {};
-                if (commodore_basic_parse_sys(c16_mem_read_for_basic, ram_simple_,
-                                              prg->load_addr,
-                                              &COMMODORE_BASIC_C16,
-                                              10, &sys_result)) {
-                    run_addr = sys_result.sys_address;
-                    printf("C16: Found SYS %u on BASIC line %u\n",
-                           run_addr, sys_result.line_number);
-                }
-
-                // Update BASIC pointers so LIST and RUN work correctly
-                // TXTTAB ($2B/$2C) = start of BASIC text
-                ram_simple_[0x2B] = (uint8_t)(prg->load_addr & 0xFF);
-                ram_simple_[0x2C] = (uint8_t)(prg->load_addr >> 8);
-                // VARTAB ($2D/$2E) = end of BASIC text
-                ram_simple_[0x2D] = (uint8_t)(prg->end_addr & 0xFF);
-                ram_simple_[0x2E] = (uint8_t)(prg->end_addr >> 8);
-                // ARYTAB ($2F/$30) = start of arrays
-                ram_simple_[0x2F] = (uint8_t)(prg->end_addr & 0xFF);
-                ram_simple_[0x30] = (uint8_t)(prg->end_addr >> 8);
-                // STREND ($31/$32) = end of arrays
-                ram_simple_[0x31] = (uint8_t)(prg->end_addr & 0xFF);
-                ram_simple_[0x32] = (uint8_t)(prg->end_addr >> 8);
-            }
-
-            if (run_addr != 0) {
-                printf("C16: Auto-run address: $%04X\n", run_addr);
-                // TODO: Set MOS7501 CPU PC when CPU chip is implemented
-                // mos7501_set_pc(mos7501_, run_addr);
-                printf("C16: Auto-run not available (MOS7501 CPU not yet implemented)\n");
-            } else {
-                printf("C16: No SYS found — program loaded, use RUN to start\n");
-            }
-
-            success = true;
-            break;
-        }
-
-        case FORMAT_LOAD_METADATA: {
-            // TAP or CRT — distinguished by format descriptor name
-            if (result.format && strcmp(result.format->name, "TAP") == 0) {
-                const commodore_tap_header_t* hdr = (const commodore_tap_header_t*)result.metadata;
-                printf("C16: TAP file detected (platform=%u, version=%u)\n",
-                       hdr->platform, hdr->version);
-                printf("C16: TAP tape emulation not yet implemented\n");
-            } else if (result.format && strcmp(result.format->name, "CRT") == 0) {
-                printf("C16: CRT format is not applicable to C16/Plus4\n");
-            } else {
-                printf("C16: Unknown metadata format: %s\n",
-                       result.format ? result.format->name : "(null)");
-            }
-            success = false;
-            break;
-        }
-
-        case FORMAT_LOAD_RAW: {
-            // Raw binary — load at $4000 by default for C16
-            const uint16_t default_addr = 0x4000;
-            const program_data_t* prg = &result.program;
-            
-            printf("C16: Loading BIN at default $%04X (%zu bytes)\n",
-                   default_addr, prg->data_size);
-
-            if (default_addr + prg->data_size > 0x10000) {
-                printf("C16: BIN too large for address space\n");
-                break;
-            }
-
-            memcpy(&ram_simple_[default_addr], prg->data, prg->data_size);
-            success = true;
-            break;
-        }
-
-        case FORMAT_LOAD_ARCHIVE: {
-            // LNX archive — load ALL extracted PRG files into C16 RAM
-            printf("C16: Loading archive with %d files\n", result.file_count);
-
-            bool any_basic = false;
-            uint16_t basic_end_addr = 0;
-
-            for (int f = 0; f < result.file_count; f++) {
-                const program_data_t* prg = &result.files[f];
-
-                if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
-                    printf("C16: Archive file %d: Invalid address range $%04X-$%04X, skipping\n",
-                           f, prg->load_addr, prg->end_addr);
-                    continue;
-                }
-
-                printf("C16: Archive file %d: $%04X-$%04X (%zu bytes)\n",
-                       f, prg->load_addr, prg->end_addr, prg->data_size);
-
-                memcpy(&ram_simple_[prg->load_addr], prg->data, prg->data_size);
-
-                if (prg->load_addr == 0x1001) {
-                    any_basic = true;
-                    basic_end_addr = prg->end_addr;
-                }
-            }
-
-            if (any_basic) {
-                // Update BASIC end pointer
-                ram_simple_[0x2D] = (uint8_t)(basic_end_addr & 0xFF);
-                ram_simple_[0x2E] = (uint8_t)(basic_end_addr >> 8);
-                printf("C16: Archive: Set BASIC end=$%04X\n", basic_end_addr);
-            }
-
-            success = result.file_count > 0;
-            break;
-        }
-
-        default:
-            printf("C16: Unsupported load result type: %d\n", result.type);
-            break;
-    }
+    bool success = commodore_apply_load_result(&ctx, &result, filepath);
 
     format_load_result_free(&result);
     return success;

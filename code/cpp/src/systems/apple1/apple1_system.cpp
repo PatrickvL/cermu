@@ -95,13 +95,11 @@ static float apple1_can_load_file(const char* filepath, const uint8_t* data, siz
     return 0.0f;
 }
 
-static const char* apple1_extensions[] = {".bin", ".hex", ".txt", nullptr};
-
 static SystemDescriptor apple1_descriptor = {
     "Apple 1",
     "APPLE1",
     "Apple 1 (1976) - Woz's first computer, 8KB RAM, terminal display",
-    apple1_extensions,
+    nullptr,  // supported_formats: Apple 1 does not use format handler system
     create_apple1_hardware_traits(),
     apple1_can_load_file
 };

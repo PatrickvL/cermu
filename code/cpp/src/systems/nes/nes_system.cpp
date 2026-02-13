@@ -991,13 +991,11 @@ static float nes_can_load_file(const char* filepath, const uint8_t* data, size_t
     return 0.0f;
 }
 
-static const char* nes_extensions[] = {".nes", nullptr};
-
 static SystemDescriptor nes_descriptor = {
     "Nintendo Entertainment System",
     "NES",
     "Nintendo Entertainment System / Famicom (1983)",
-    nes_extensions,
+    nullptr,  // supported_formats: NES does not use format handler system yet
     create_nes_hardware_traits(),
     nes_can_load_file
 };

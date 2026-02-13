@@ -1,6 +1,7 @@
 #include "system_selection_dialog.h"
 #include "../core/emulated_system.h"
 #include "../core/system_registry.h"
+#include "../core/formats/format_handler.h"
 #include "imgui.h"
 #include <stdio.h>
 #include <cstring>
@@ -210,11 +211,11 @@ void SystemSelectionDialog::render(bool allow_cancel) {
                 if (ImGui::IsItemHovered()) {
                     ImGui::BeginTooltip();
                     ImGui::Text("%s", descriptor.description);
-                    if (descriptor.supported_extensions) {
+                    if (descriptor.supported_formats) {
                         ImGui::Separator();
-                        ImGui::Text("Supported files:");
-                        for (const char** ext = descriptor.supported_extensions; *ext != nullptr; ext++) {
-                            ImGui::BulletText("%s", *ext);
+                        ImGui::Text("Supported formats:");
+                        for (const format_descriptor_t* const* fmt = descriptor.supported_formats; *fmt != nullptr; fmt++) {
+                            ImGui::BulletText("%s (%s)", (*fmt)->name, (*fmt)->description);
                         }
                     }
                     ImGui::EndTooltip();
@@ -382,11 +383,11 @@ void SystemSelectionDialog::render(bool allow_cancel) {
                 if (ImGui::IsItemHovered()) {
                     ImGui::BeginTooltip();
                     ImGui::Text("%s", descriptor.description);
-                    if (descriptor.supported_extensions) {
+                    if (descriptor.supported_formats) {
                         ImGui::Separator();
-                        ImGui::Text("Supported files:");
-                        for (const char** ext = descriptor.supported_extensions; *ext != nullptr; ext++) {
-                            ImGui::BulletText("%s", *ext);
+                        ImGui::Text("Supported formats:");
+                        for (const format_descriptor_t* const* fmt = descriptor.supported_formats; *fmt != nullptr; fmt++) {
+                            ImGui::BulletText("%s (%s)", (*fmt)->name, (*fmt)->description);
                         }
                     }
                     ImGui::EndTooltip();
