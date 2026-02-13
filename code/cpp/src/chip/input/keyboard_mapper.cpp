@@ -1,6 +1,6 @@
 #include "keyboard_mapper.h"
 #include "emu_key_sdl_map.h"
-#include <SDL2/SDL.h>
+#include <SDL.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>

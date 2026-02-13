@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <SDL2/SDL_keycode.h>
+#include <SDL_keycode.h>
 #include <unordered_map>
 #include <vector>
 #include <string>

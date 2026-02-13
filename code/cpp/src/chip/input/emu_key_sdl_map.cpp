@@ -1,6 +1,6 @@
 #include "emu_key_sdl_map.h"
-#include <SDL2/SDL_scancode.h>
-#include <SDL2/SDL_keycode.h>
+#include <SDL_scancode.h>
+#include <SDL_keycode.h>
 #include <string.h>
 #include <stdio.h>
 

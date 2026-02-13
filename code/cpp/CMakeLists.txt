@@ -78,7 +78,7 @@ endif()
 find_package(OpenGL QUIET)
 
 # Check for local SDL2 installation
-set(SDL2_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/sdl2/SDL2-2.30.10")
+set(SDL2_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../external/SDL2/SDL2-2.30.10")
 if(EXISTS "${SDL2_DIR}/include/SDL.h")
     set(SDL2_FOUND TRUE)
     set(SDL2_INCLUDE_DIRS "${SDL2_DIR}/include")
@@ -112,9 +112,12 @@ else()
 endif()
 
 # Include directories
+# SDL2 include dirs added project-wide because core headers (emulated_system.h,
+# keyboard_mapper.h) reference SDL_Keycode types unconditionally.
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/fam65xx
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/input
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/io
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/logic
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/memory
@@ -123,15 +126,18 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/systems/c64
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui
+    ${SDL2_INCLUDE_DIRS}
 )
 
 # GUI include directories will be set later after detecting ImGui location
 
 # Create ImGui library if building GUI
 if(BUILD_GUI)
-    # Check if imgui directory exists (try project root external first, then code/cpp/external)
+    # Check if imgui directory exists (try project root external paths, then code/cpp/external)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../external/imgui/imgui.h")
         set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../external/imgui")
+    elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../external/cimgui/imgui/imgui.h")
+        set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../external/cimgui/imgui")
     elseif(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui/imgui.h")
         set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui")
     else()
@@ -230,6 +236,8 @@ set(CHIP_SOURCES
 list(APPEND CHIP_SOURCES
     # Input
     src/chip/input/commodore_keyboard.cpp
+    src/chip/input/keyboard_mapper.cpp
+    src/chip/input/emu_key_sdl_map.cpp
 
     # I/O
     src/chip/io/mos6526.cpp
@@ -269,18 +277,22 @@ set(SYSTEM_SOURCES
     src/systems/c64/c64_test_framework.cpp
     src/systems/c64/c64_screenshot.cpp
     src/systems/c64/c64_system_wrapper.cpp
+    src/systems/c64/c64_keyboard_matrix.cpp
     
     # CHIP-8 system
     src/systems/chip8/chip8_system.cpp
     
     # VIC-20 system (clean CHIP-8-style implementation)
     src/systems/vic20/vic20_system.cpp
+    src/systems/vic20/vic20_keyboard_matrix.cpp
+    src/systems/vic20/vic20_memory.cpp
     
     # NES system (clean EmulatedSystem implementation)
     src/systems/nes/nes_system.cpp
     
     # C16/Plus4 system (clean EmulatedSystem implementation with stubs)
     src/systems/c16/c16_system.cpp
+    src/systems/c16/c16_keyboard_matrix.cpp
     
     # Apple 1 system (clean EmulatedSystem implementation)
     src/systems/apple1/apple1_system.cpp
@@ -290,6 +302,7 @@ set(SYSTEM_SOURCES
 # Core utility sources (generic functionality)
 set(CORE_UTIL_SOURCES
     src/core/storage/rom_loader.cpp
+    src/core/storage/commodore_file_loader.cpp
     src/core/config/path_discovery.cpp
 )
 # GUI sources (defined here so both c64emu_gui and multi_emu can use it)
@@ -407,7 +420,7 @@ if(BUILD_GUI)
     if(WIN32)
         add_custom_command(TARGET multi_emu POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/deps/sdl2/SDL2-2.30.10/lib/x64/SDL2.dll"
+            "${SDL2_DLLS}"
             "$<TARGET_FILE_DIR:multi_emu>/SDL2.dll"
             COMMENT "Copying SDL2.dll for multi_emu"
         )
@@ -498,7 +511,7 @@ if(BUILD_GUI)
     if(WIN32)
         add_custom_command(TARGET c64emu_gui POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${CMAKE_CURRENT_SOURCE_DIR}/deps/sdl2/SDL2-2.30.10/lib/x64/SDL2.dll"
+            "${SDL2_DLLS}"
             "$<TARGET_FILE_DIR:c64emu_gui>/SDL2.dll"
             COMMENT "Copying SDL2.dll to output directory"
         )

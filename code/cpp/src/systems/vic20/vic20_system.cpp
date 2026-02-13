@@ -336,7 +336,11 @@ SystemConfiguration VIC20System::detect_optimal_configuration(
     bool     have_prg  = false;
 
     const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
+#ifdef _MSC_VER
+    bool is_prg = ext && (_stricmp(ext, ".prg") == 0);
+#else
     bool is_prg = ext && (strcasecmp(ext, ".prg") == 0);
+#endif
 
     if (is_prg && data && size >= 2) {
         // Fast path: raw PRG — load address is first two bytes

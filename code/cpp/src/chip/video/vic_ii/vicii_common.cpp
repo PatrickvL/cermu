@@ -1564,7 +1564,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         case VIC_ACCESS_S:
             // S-access: Store sprite data
             if (vicii->bus.active_sprite) {
-                uint mc = vicii->bus.active_sprite->mc_counter;
+                uint8_t mc = vicii->bus.active_sprite->mc_counter;
 
                 if (mc < 3) {
                     // Store data in shift register at appropriate position

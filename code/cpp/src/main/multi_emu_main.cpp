@@ -1,3 +1,4 @@
+#define SDL_MAIN_HANDLED
 #include "../core/emulated_system.h"
 #include "../gui/simple_system_gui.h"
 #include <stdio.h>
