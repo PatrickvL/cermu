@@ -24,17 +24,17 @@ void c64_bus_on_banking_change(void* bus_ptr, uint8_t banking_state) {
     // Construct full PLA mode: GAME | EXROM | CHAREN | HIRAM | LORAM
     uint8_t pla_mode = (game << 4) | (exrom << 3) | (banking_state & 0x07);
     
-    // Debug output for banking changes
-    printf("[BANKING] CPU port=$%02X → mode=$%02X (GAME=%d EXROM=%d CHAREN=%d HIRAM=%d LORAM=%d)\n",
-           banking_state, pla_mode, game, exrom,
-           (banking_state & 0x04) ? 1 : 0,
-           (banking_state & 0x02) ? 1 : 0,
-           (banking_state & 0x01) ? 1 : 0);
+    // Debug output for banking changes (disabled for performance - uncomment when debugging banking)
+    //printf("[BANKING] CPU port=$%02X → mode=$%02X (GAME=%d EXROM=%d CHAREN=%d HIRAM=%d LORAM=%d)\n",
+    //       banking_state, pla_mode, game, exrom,
+    //       (banking_state & 0x04) ? 1 : 0,
+    //       (banking_state & 0x02) ? 1 : 0,
+    //       (banking_state & 0x01) ? 1 : 0);
     
     // Also print what bank 13 ($D000-$DFFF) will be after the switch
-    uint8_t bank13_chip_read = decode_read_chip(bus->cpu_encoded_chip_per_bank_per_mode[pla_mode][13]);
-    uint8_t bank13_chip_write = decode_write_chip(bus->cpu_encoded_chip_per_bank_per_mode[pla_mode][13]);
-    printf("[BANKING] Bank 13 ($D000-$DFFF): READ=CHIP_%d WRITE=CHIP_%d\n", bank13_chip_read, bank13_chip_write);
+    //uint8_t bank13_chip_read = decode_read_chip(bus->cpu_encoded_chip_per_bank_per_mode[pla_mode][13]);
+    //uint8_t bank13_chip_write = decode_write_chip(bus->cpu_encoded_chip_per_bank_per_mode[pla_mode][13]);
+    //printf("[BANKING] Bank 13 ($D000-$DFFF): READ=CHIP_%d WRITE=CHIP_%d\n", bank13_chip_read, bank13_chip_write);
     
     // Switch to new memory mapping mode
     c64_bus_mode_switch(bus, pla_mode);

@@ -158,6 +158,7 @@ public:
     
     // Test execution with automatic hardware reconfiguration
     TestResult run_test(const TestDescriptor& test, C64System* c64);
+    TestResult run_test_safe(const TestDescriptor& test, C64System* c64);  // SEH-protected on Windows
     std::vector<TestResult> run_tests(const std::vector<TestDescriptor>& tests, C64System* c64);
     std::vector<TestResult> run_all_tests(C64System* c64, const TestFilter& filter);
     

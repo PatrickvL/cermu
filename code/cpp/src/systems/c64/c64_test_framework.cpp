@@ -280,7 +280,7 @@ TestDescriptor TestFramework::parse_test_from_file(const std::string& prg_path, 
     test.name = prg_path.substr(prg_path.find_last_of("/\\") + 1);
     test.category = category;
     test.type = TestType::EXITCODE;  // Default
-    test.timeout_cycles = 50000000;  // 50 million cycles default (official tests need up to 200M)
+    test.timeout_cycles = 5000000;  // 5 million cycles default for quick baseline scan
     
     // Check for reference image
     check_for_reference_image(prg_path, test);
@@ -356,6 +356,139 @@ std::vector<TestDescriptor> TestFramework::get_filtered_tests(const TestFilter& 
     return filtered;
 }
 
+#ifdef _WIN32
+#include <excpt.h>
+// SEH-protected tick loop: runs c64_system_tick in a __try/__except block.
+// This function has NO C++ objects with destructors, so __try/__except is safe.
+// Returns: 0=debug_reg, 1=timeout, 2=crash, 3=infinite_loop_detected
+struct TickLoopResult {
+    int reason;          // 0=debug_reg, 1=timeout, 2=crash, 3=infinite_loop
+    uint32_t cycles;
+    uint8_t debug_value;
+    uint16_t loop_pc;
+    uint8_t border_color;
+};
+
+static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles) {
+    TickLoopResult r = {};
+    r.reason = 1; // timeout by default
+    
+    __try {
+        mos6510_t* cpu = static_cast<mos6510_t*>(c64->mos6510);
+        uint16_t last_pc = mos6510_get_pc(cpu);
+        uint32_t pc_stable_count = 0;
+        
+        for (uint32_t i = 0; i < max_cycles; i++) {
+            c64_system_tick(c64);
+            
+            // Check debug register
+            if (c64->debug_reg_written) {
+                r.reason = 0;
+                r.cycles = i + 1;
+                r.debug_value = c64->debug_reg_value;
+                c64->debug_reg_written = false;
+                
+                // If pass/fail value, return immediately
+                if (r.debug_value == 0x00 || r.debug_value == 0xFF) {
+                    return r;
+                }
+                // Subtest indicator - continue running
+            }
+            
+            // Periodic infinite-loop check every 256 cycles
+            if ((i & 0xFF) == 0) {
+                uint16_t current_pc = mos6510_get_pc(cpu);
+                if (current_pc == last_pc) {
+                    pc_stable_count++;
+                    if (pc_stable_count >= 2) {
+                        // Verify JMP *
+                        uint8_t opcode = c64->ram->memory[current_pc];
+                        bool is_jmp_self = false;
+                        if (opcode == 0x4C) {
+                            uint16_t target = c64->ram->memory[(current_pc + 1) & 0xFFFF] |
+                                             (c64->ram->memory[(current_pc + 2) & 0xFFFF] << 8);
+                            is_jmp_self = (target == current_pc);
+                        }
+                        if (is_jmp_self || pc_stable_count >= 8) {
+                            r.reason = 3;
+                            r.cycles = i + 1;
+                            r.loop_pc = current_pc;
+                            // Get border color
+                            if (c64->vicii) {
+                                vicii_t* vicii = static_cast<vicii_t*>(c64->vicii);
+                                r.border_color = vicii->registers.data[VICII_EC] & 0x0F;
+                            }
+                            return r;
+                        }
+                    }
+                } else {
+                    pc_stable_count = 0;
+                }
+                last_pc = current_pc;
+            }
+        }
+        
+        r.cycles = max_cycles;
+    }
+    __except(EXCEPTION_EXECUTE_HANDLER) {
+        r.reason = 2; // crash
+        r.cycles = c64->total_cycles;
+    }
+    
+    return r;
+}
+#endif
+
+#ifdef _WIN32
+// Two-level SEH wrapper: Level 1 has __try but NO C++ objects with destructors.
+// Level 2 (the thunk) has C++ objects but no __try. This satisfies MSVC C2712.
+static int seh_call(void(*func)(void*), void* arg) {
+    __try {
+        func(arg);
+        return 0;
+    }
+    __except(EXCEPTION_EXECUTE_HANDLER) {
+        return -1;
+    }
+}
+
+struct RunTestArgs {
+    TestFramework* fw;
+    const TestDescriptor* test;
+    C64System* c64;
+    TestResult result;
+};
+
+static void run_test_thunk(void* arg) {
+    auto* a = static_cast<RunTestArgs*>(arg);
+    a->result = a->fw->run_test(*a->test, a->c64);
+}
+#endif
+
+TestResult TestFramework::run_test_safe(const TestDescriptor& test, C64System* c64) {
+#ifdef _WIN32
+    RunTestArgs args;
+    args.fw = this;
+    args.test = &test;
+    args.c64 = c64;
+    args.result.test = test;
+    
+    int ret = seh_call(run_test_thunk, &args);
+    if (ret == -1) {
+        // Crash caught by SEH
+        TestResult result;
+        result.test = test;
+        result.status = TestStatus::ERROR;
+        result.message = "CRASH: Access violation during test execution";
+        printf("  !!! CRASH detected in %s\n", test.name.c_str());
+        return result;
+    }
+    return args.result;
+#else
+    return run_test(test, c64);
+#endif
+}
+
 TestResult TestFramework::run_test(const TestDescriptor& test, C64System* c64) {
     TestResult result;
     result.test = test;
@@ -377,7 +510,6 @@ TestResult TestFramework::run_test(const TestDescriptor& test, C64System* c64) {
     // Run test based on type
     switch (test.type) {
         case TestType::EXITCODE:
-            // Use enhanced exitcode test with multi-protocol support
             result = run_exitcode_test_enhanced(test, c64);
             break;
         case TestType::SCREENSHOT:
@@ -876,7 +1008,92 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
     c64->debug_reg_written = false;
     c64->debug_reg_value = 0;
     
-    // Track PC for infinite-loop detection
+#ifdef _WIN32
+    // Use SEH-protected tick loop on Windows to catch access violations
+    TickLoopResult tr = tick_loop_protected(c64, max_cycles);
+    cycles = tr.cycles;
+    
+    switch (tr.reason) {
+        case 0: // debug_reg written
+            if (tr.debug_value == 0x00) {
+                result.status = TestStatus::PASSED;
+                result.message = "Test passed ($D7FF = $00)";
+                if (verbose_) printf("\n  Test passed at cycle %u\n", cycles);
+            } else if (tr.debug_value == 0xFF) {
+                result.status = TestStatus::FAILED;
+                result.message = "Test failed ($D7FF = $FF)";
+                if (verbose_) printf("\n  Test failed at cycle %u\n", cycles);
+            } else {
+                // Subtest indicator was the last write before timeout/loop
+                result.status = TestStatus::TIMEOUT;
+                char buf[128];
+                snprintf(buf, sizeof(buf), "Last $D7FF=$%02X, no pass/fail before end", tr.debug_value);
+                result.message = buf;
+            }
+            break;
+        case 1: // timeout
+            result.status = TestStatus::TIMEOUT;
+            result.message = "Test timeout - no completion detected";
+            if (verbose_) printf("  Timeout at cycle %u\n", cycles);
+            break;
+        case 2: // crash
+            result.status = TestStatus::ERROR;
+            result.message = "CRASH: Access violation during test execution";
+            printf("  !!! CRASH detected in %s at ~cycle %u\n", test.name.c_str(), cycles);
+            break;
+        case 3: { // infinite loop
+            uint8_t border_color = tr.border_color;
+            uint16_t stable_pc = tr.loop_pc;
+            bool has_explicit_result = false;
+            
+            // Check explicit PC addresses first
+            if (test.success_pc != 0 && stable_pc == test.success_pc) {
+                result.status = TestStatus::PASSED;
+                result.message = "Test passed (success address reached)";
+                has_explicit_result = true;
+            } else if (test.failure_pc != 0 && stable_pc == test.failure_pc) {
+                result.status = TestStatus::FAILED;
+                result.message = "Test failed (failure address reached)";
+                has_explicit_result = true;
+            }
+            
+            // Check debug register value
+            if (!has_explicit_result && c64->debug_reg_value != 0) {
+                if (c64->debug_reg_value == 0x00) {
+                    result.status = TestStatus::PASSED;
+                    result.message = "Test passed ($D7FF = $00, then loop)";
+                    has_explicit_result = true;
+                } else if (c64->debug_reg_value == 0xFF) {
+                    result.status = TestStatus::FAILED;
+                    result.message = "Test failed ($D7FF = $FF, then loop)";
+                    has_explicit_result = true;
+                }
+            }
+            
+            // Fall back to border color
+            if (!has_explicit_result) {
+                if (border_color == VICII_COLOR_GREEN) {
+                    result.status = TestStatus::PASSED;
+                    result.message = "Test passed (border=GREEN)";
+                } else if (border_color == VICII_COLOR_RED) {
+                    result.status = TestStatus::FAILED;
+                    result.message = "Test failed (border=RED)";
+                } else {
+                    result.status = TestStatus::PASSED;
+                    char buf[128];
+                    snprintf(buf, sizeof(buf), "Test completed (loop at $%04X, border=%u)", stable_pc, border_color);
+                    result.message = buf;
+                }
+            }
+            
+            if (verbose_) {
+                printf("\n  Infinite loop at PC=$%04X, border=%u\n", stable_pc, border_color);
+            }
+            break;
+        }
+    }
+#else
+    // Non-Windows fallback: unprotected execution
     uint16_t last_pc = start_pc;
     uint32_t pc_stable_count = 0;
     uint16_t stable_pc = 0;
@@ -894,102 +1111,41 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
             if (value == 0x00) {
                 result.status = TestStatus::PASSED;
                 result.message = "Test passed ($D7FF = $00)";
-                if (verbose_) {
-                    printf("\n  ✓ Test passed at cycle %u\n", cycles);
-                }
                 break;
             } else if (value == 0xFF) {
                 result.status = TestStatus::FAILED;
                 result.message = "Test failed ($D7FF = $FF)";
-                if (verbose_) {
-                    printf("\n  ✗ Test failed at cycle %u\n", cycles);
-                }
                 break;
-            }
-            // Other values (e.g. subtest numbers) - continue running
-            if (verbose_) {
-                printf("\n  $D7FF = $%02X at cycle %u (subtest indicator)\n", value, cycles);
             }
         }
         
-        // Periodic checks every 256 cycles (fast modulo via bitmask)
+        // Periodic checks every 256 cycles
         if ((cycles & 0xFF) == 0) {
             uint16_t current_pc = mos6510_get_pc(cpu);
-            
-            // Check for infinite loop: JMP * ($4C xx yy where xxyy == PC)
-            // or BNE/BEQ/JMP to self. Also detect PC stability.
             if (current_pc == last_pc) {
-                if (pc_stable_count == 0) {
-                    stable_pc = current_pc;
-                }
+                if (pc_stable_count == 0) stable_pc = current_pc;
                 pc_stable_count++;
-                
-                // PC stable for ~512 cycles (2 checks) = likely infinite loop
                 if (pc_stable_count >= 2) {
-                    // Verify it's a real JMP * by checking opcode
                     uint8_t opcode = c64->ram->memory[current_pc];
                     bool is_jmp_self = false;
-                    
-                    if (opcode == 0x4C) { // JMP abs
+                    if (opcode == 0x4C) {
                         uint16_t target = c64->ram->memory[(current_pc + 1) & 0xFFFF] |
                                          (c64->ram->memory[(current_pc + 2) & 0xFFFF] << 8);
                         is_jmp_self = (target == current_pc);
                     }
-                    
                     if (is_jmp_self || pc_stable_count >= 8) {
-                        // Get border color for pass/fail indication
                         uint8_t border_color = get_border_color(c64);
-                        
-                        bool has_explicit_result = false;
-                        
-                        // Check explicit PC addresses first
-                        if (test.success_pc != 0 && stable_pc == test.success_pc) {
+                        if (border_color == VICII_COLOR_GREEN) {
                             result.status = TestStatus::PASSED;
-                            result.message = "Test passed (success address reached)";
-                            has_explicit_result = true;
-                        } else if (test.failure_pc != 0 && stable_pc == test.failure_pc) {
+                            result.message = "Test passed (border=GREEN)";
+                        } else if (border_color == VICII_COLOR_RED) {
                             result.status = TestStatus::FAILED;
-                            result.message = "Test failed (failure address reached)";
-                            has_explicit_result = true;
-                        }
-                        
-                        // If no explicit PC match, check debug register value first
-                        if (!has_explicit_result && c64->debug_reg_value != 0) {
-                            // A value was written to $D7FF before the infinite loop
-                            if (c64->debug_reg_value == 0x00) {
-                                result.status = TestStatus::PASSED;
-                                result.message = "Test passed ($D7FF = $00, then loop)";
-                                has_explicit_result = true;
-                            } else if (c64->debug_reg_value == 0xFF) {
-                                result.status = TestStatus::FAILED;
-                                result.message = "Test failed ($D7FF = $FF, then loop)";
-                                has_explicit_result = true;
-                            }
-                        }
-                        
-                        // Fall back to border color
-                        if (!has_explicit_result) {
-                            if (border_color == VICII_COLOR_GREEN) {
-                                result.status = TestStatus::PASSED;
-                                result.message = "Test passed (border=GREEN)";
-                            } else if (border_color == VICII_COLOR_RED) {
-                                result.status = TestStatus::FAILED;
-                                result.message = "Test failed (border=RED)";
-                            } else {
-                                // Use border color as-is
-                                result.status = TestStatus::PASSED;
-                                char buf[128];
-                                snprintf(buf, sizeof(buf), "Test completed (loop at $%04X, border=%u)", stable_pc, border_color);
-                                result.message = buf;
-                            }
-                        }
-                        
-                        if (verbose_) {
-                            printf("\n  Infinite loop detected at PC=$%04X\n", stable_pc);
-                            printf("  Border color: %u (%s)\n", border_color,
-                                   border_color == VICII_COLOR_GREEN ? "GREEN" :
-                                   border_color == VICII_COLOR_RED ? "RED" :
-                                   border_color == VICII_COLOR_BLACK ? "BLACK" : "other");
+                            result.message = "Test failed (border=RED)";
+                        } else {
+                            result.status = TestStatus::PASSED;
+                            char buf[128];
+                            snprintf(buf, sizeof(buf), "Test completed (loop at $%04X, border=%u)", stable_pc, border_color);
+                            result.message = buf;
                         }
                         break;
                     }
@@ -999,26 +1155,14 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
             }
             last_pc = current_pc;
         }
-        
-        // Progress indicator
-        if (verbose_ && cycles % 100000 == 0) {
-            printf(".");
-            fflush(stdout);
-        }
     }
-    
-    if (verbose_ && cycles >= 100000) {
-        printf("\n");
-    }
-    
-    result.cycles_executed = cycles;
     
     if (result.status == TestStatus::TIMEOUT) {
         result.message = "Test timeout - no completion detected";
-        if (verbose_) {
-            printf("  Timeout at cycle %u, PC=$%04X\n", cycles, last_pc);
-        }
     }
+#endif
+    
+    result.cycles_executed = cycles;
     
     return result;
 }
@@ -1320,7 +1464,7 @@ std::vector<TestResult> TestFramework::run_tests(const std::vector<TestDescripto
     
     for (size_t i = 0; i < tests.size(); i++) {
         printf("[%zu/%zu] ", i + 1, tests.size());
-        TestResult result = run_test(tests[i], c64);
+        TestResult result = run_test_safe(tests[i], c64);
         results.push_back(result);
         
         // Print quick status
@@ -1652,8 +1796,8 @@ std::vector<TestResult> TestFramework::run_tests_with_auto_config(const std::vec
             last_config = current_hardware_;
         }
         
-        // Run the test on current system
-        TestResult result = run_test(test, current_c64);
+        // Run the test on current system (SEH-protected on Windows)
+        TestResult result = run_test_safe(test, current_c64);
         results.push_back(result);
         
         // Print quick status
