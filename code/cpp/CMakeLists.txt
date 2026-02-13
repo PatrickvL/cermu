@@ -302,8 +302,18 @@ set(SYSTEM_SOURCES
 # Core utility sources (generic functionality)
 set(CORE_UTIL_SOURCES
     src/core/storage/rom_loader.cpp
-    src/core/storage/commodore_file_loader.cpp
     src/core/config/path_discovery.cpp
+    src/core/formats/format_handler.cpp
+    src/core/formats/format_registry.cpp
+    src/core/formats/prg_format.cpp
+    src/core/formats/d64_format.cpp
+    src/core/formats/t64_format.cpp
+    src/core/formats/tap_format.cpp
+    src/core/formats/crt_format.cpp
+    src/core/formats/lnx_format.cpp
+    src/core/formats/commodore_load_helpers.cpp
+    src/core/encoding/petscii.cpp
+    src/core/analysis/basic_parser.cpp
 )
 # GUI sources (defined here so both c64emu_gui and multi_emu can use it)
 if(BUILD_GUI)

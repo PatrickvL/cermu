@@ -1,4 +1,5 @@
 #include "../core/emulated_system.h"
+#include "../core/formats/format_handler.h"
 #include <stdio.h>
 #include <string.h>
 #include <memory>
@@ -17,9 +18,11 @@ int main(int argc, char** argv) {
     for (const auto& [desc, factory] : systems) {
         printf("  - %s (%s)\n", desc.name, desc.short_name);
         printf("    Description: %s\n", desc.description);
-        printf("    Extensions: ");
-        for (const char** ext = desc.supported_extensions; *ext != nullptr; ext++) {
-            printf("%s ", *ext);
+        printf("    Formats: ");
+        if (desc.supported_formats) {
+            for (const format_descriptor_t* const* fmt = desc.supported_formats; *fmt != nullptr; fmt++) {
+                printf("%s ", (*fmt)->name);
+            }
         }
         printf("\n\n");
     }
@@ -100,11 +103,13 @@ int main(int argc, char** argv) {
     } else {
         printf("Usage: %s <file>\n", argv[0]);
         printf("  Provide a ROM/disk/binary file to test system detection\n");
-        printf("  Supported extensions:\n");
+        printf("  Supported formats:\n");
         for (const auto& [desc, factory] : systems) {
             printf("    %s: ", desc.short_name);
-            for (const char** ext = desc.supported_extensions; *ext != nullptr; ext++) {
-                printf("%s ", *ext);
+            if (desc.supported_formats) {
+                for (const format_descriptor_t* const* fmt = desc.supported_formats; *fmt != nullptr; fmt++) {
+                    printf("%s ", (*fmt)->name);
+                }
             }
             printf("\n");
         }
