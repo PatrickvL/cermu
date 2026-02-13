@@ -36,6 +36,14 @@ void print_usage(const char* prog_name) {
 }
 
 int main(int argc, char** argv) {
+    // Disable stdout buffering for crash diagnostics
+    setvbuf(stdout, NULL, _IONBF, 0);
+    
+#ifdef _WIN32
+    // Disable CRT error popups and Windows Error Reporting to let SEH handle crashes
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+#endif
+    
     // Parse command line arguments
     const char* testprogs_path = nullptr;
     const char* output_file = "test_results.txt";
