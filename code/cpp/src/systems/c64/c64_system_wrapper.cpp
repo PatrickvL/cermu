@@ -43,12 +43,20 @@
  * - All chip management code
  */
 
+/** Check if load address is a typical C64 address */
+static bool is_c64_load_address(uint16_t addr) {
+    return addr == 0x0801 || addr == 0xC000 || addr == 0x0800 ||
+           addr == 0x4000 || addr == 0x8000 || addr == 0xE000;
+}
+
 // C64 file detection
 static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t size) {
     // Check extensions
     const char* ext = strrchr(filepath, '.');
     if (ext) {
-        if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0) {
+        // PRG and LNX files — check load address
+        if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0 ||
+            strcmp(ext, ".lnx") == 0 || strcmp(ext, ".LNX") == 0) {
             if (size >= 2) {
                 uint16_t load_addr = data[0] | (data[1] << 8);
                 // C64 BASIC start address gives highest confidence
@@ -61,12 +69,24 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
             }
         }
         if (strcmp(ext, ".d64") == 0 || strcmp(ext, ".D64") == 0) {
-            // D64 disk images — check standard sizes
+            // D64 disk images — inspect first PRG's load address to distinguish systems
+            commodore_d64_t d64;
+            if (commodore_d64_open(filepath, &d64)) {
+                commodore_prg_t prg = {};
+                if (commodore_d64_extract_first_prg(&d64, &prg)) {
+                    float score = is_c64_load_address(prg.load_addr) ? 0.95f : 0.6f;
+                    commodore_prg_free(&prg);
+                    commodore_d64_close(&d64);
+                    return score;
+                }
+                commodore_d64_close(&d64);
+            }
+            // Could not inspect — still likely C64 (most common system)
             if (size == D64_STANDARD_SIZE || size == D64_STANDARD_SIZE_ERR ||
                 size == D64_EXTENDED_SIZE || size == D64_EXTENDED_SIZE_ERR) {
-                return 0.95f;
+                return 0.7f;
             }
-            return 0.7f;  // Non-standard size but .d64 extension
+            return 0.6f;  // Non-standard size but .d64 extension
         }
         if (strcmp(ext, ".t64") == 0 || strcmp(ext, ".T64") == 0) {
             // T64 tape archives are C64-centric
@@ -90,7 +110,7 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
     return 0.0f;
 }
 
-static const char* c64_extensions[] = {".prg", ".d64", ".crt", ".t64", ".tap", nullptr};
+static const char* c64_extensions[] = {".prg", ".d64", ".crt", ".t64", ".tap", ".lnx", nullptr};
 
 static HardwareTraits create_c64_hardware_traits() {
     HardwareTraits traits;

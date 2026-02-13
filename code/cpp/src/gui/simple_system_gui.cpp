@@ -2,6 +2,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
+#include "../core/config/path_discovery.h"
 #include <stdio.h>
 #include <cstring>
 
@@ -16,7 +17,7 @@
 // Constructor / Destructor
 // ============================================================================
 
-SimpleSystemGUI::SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system)
+SimpleSystemGUI::SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system, const char* pending_file)
     : GenericEmulatorGUI()
     , system_(std::move(system))
     , framebuffer_(nullptr)
@@ -32,6 +33,7 @@ SimpleSystemGUI::SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system)
     , frame_pace_counter_(0)
     , frame_time_accumulator_(0.0)
     , system_selection_dialog_()
+    , pending_file_path_(pending_file ? pending_file : "")
     , audio_device_(0)
     , audio_sample_rate_(0)
 {
@@ -191,7 +193,10 @@ void SimpleSystemGUI::render_frame() {
             int region_opt = system_selection_dialog_.get_selected_region_option();
             const auto& peripherals = system_selection_dialog_.get_selected_peripherals();
             if (selected) {
-                switch_system(selected, memory_opt, region_opt, &peripherals);
+                // Pass pending file so switch_system applies config before init
+                const char* pf = pending_file_path_.empty() ? nullptr : pending_file_path_.c_str();
+                switch_system(selected, memory_opt, region_opt, &peripherals, pf);
+                pending_file_path_.clear();
             }
             system_selection_dialog_.reset();
         }
@@ -612,7 +617,7 @@ void SimpleSystemGUI::teardown_current_system() {
     actual_fps_ = 0;
     reset_frame_pacing();
 }
-void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, int region_option, const std::map<std::string, bool>* peripherals) {
+void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, int region_option, const std::map<std::string, bool>* peripherals, const char* pending_file) {
     if (!system_name) {
         printf("ERROR: switch_system called with null system name\n");
         return;
@@ -659,6 +664,12 @@ void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, 
         }
     }
     
+    // If a pending file was provided, apply its configuration BEFORE init
+    // so memory expansion / region are set up correctly
+    if (pending_file) {
+        system_->apply_file_configuration(pending_file);
+    }
+    
     // Initialize the system
     if (!system_->initialize()) {
         printf("ERROR: Failed to initialize %s system\n",
@@ -672,6 +683,17 @@ void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, 
 
     // Open audio for the new system
     open_audio_device();
+
+    // Load pending file after system is fully initialized
+    if (pending_file) {
+        printf("Loading pending file into %s: %s\n",
+               system_->get_descriptor().short_name, pending_file);
+        if (system_->load_file(pending_file)) {
+            printf("Pending file loaded successfully\n");
+        } else {
+            printf("Failed to load pending file: %s\n", pending_file);
+        }
+    }
 
     // Start emulation
     emulation_running_ = true;
@@ -722,6 +744,20 @@ void SimpleSystemGUI::load_file_dialog() {
         if (last_sep != std::string::npos) {
             default_path = last_file_path_.substr(0, last_sep);
             default_filename = last_file_path_.substr(last_sep + 1);
+        }
+    } else if (system_) {
+        // Default to the system-specific data folder (where ROMs live)
+        const char* short_name = system_->get_descriptor().short_name;
+        if (short_name) {
+            // Convert to lowercase for data folder lookup (e.g. "VIC20" -> "vic20")
+            std::string sys_lower;
+            for (const char* p = short_name; *p; ++p)
+                sys_lower += (char)tolower((unsigned char)*p);
+            char data_root[1024];
+            if (system_config_discover_data_root(sys_lower.c_str(), data_root, sizeof(data_root))) {
+                default_path = data_root;
+                printf("File dialog defaulting to data folder: %s\n", data_root);
+            }
         }
     }
     

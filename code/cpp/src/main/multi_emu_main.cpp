@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
             printf("WARNING: Could not detect system for file: %s\n", file_path);
             printf("No emulator supports this file format.\n");
             printf("System selection dialog will be shown...\n\n");
-            file_path = nullptr;  // Clear file path so we show dialog
+            // Keep file_path so the GUI can load it after user picks a system
         } else {
             printf("Detected system: %s (%s)\n", 
                    system->get_descriptor().name,
@@ -121,7 +121,8 @@ int main(int argc, char** argv) {
     
     // Create GUI (with or without a system)
     // If no system, nullptr will cause GUI to show system selection dialog
-    SimpleSystemGUI gui(std::move(system));
+    // Pass any pending file path so it can be loaded after system selection
+    SimpleSystemGUI gui(std::move(system), file_path);
     
     // Initialize GUI with window title
     const char* window_title = "Multi-System Emulator";

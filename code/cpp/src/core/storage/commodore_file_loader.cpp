@@ -887,12 +887,12 @@ bool commodore_load_file(const char* filepath, commodore_load_result_t* out) {
         return false;
     }
 
-    // === PRG ===
-    if (ext_match(ext, ".prg")) {
+    // === PRG / LNX (Lynx archives are PRG files with a self-extracting loader) ===
+    if (ext_match(ext, ".prg") || ext_match(ext, ".lnx")) {
         if (commodore_prg_load(filepath, &out->prg)) {
             out->type = COMMODORE_LOAD_PRG;
-            printf("CommodoreLoader: Loaded PRG: $%04X–$%04X (%zu bytes)\n",
-                   out->prg.load_addr, out->prg.end_addr, out->prg.data_size);
+            printf("CommodoreLoader: Loaded %s as PRG: $%04X-$%04X (%zu bytes)\n",
+                   ext, out->prg.load_addr, out->prg.end_addr, out->prg.data_size);
             return true;
         }
         snprintf(out->error_msg, sizeof(out->error_msg), "Failed to load PRG: %s", filepath);
