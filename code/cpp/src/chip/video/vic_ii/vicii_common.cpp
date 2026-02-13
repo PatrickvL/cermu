@@ -156,91 +156,113 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
     
     if (!sprite->enabled || !sprite->display_state) return;
     
+    const uint8_t sprite_bit = (1 << param_sprite_num);
     const uint16_t sprite_x = vicii_sprite_get_x(vicii, param_sprite_num);
-    
-    // Use x_coordinate for sprite positioning (matches sprite coordinate system)
-    // Sprites are positioned relative to x_coordinate, not x_cycle
     const uint16_t current_x = vicii->timing.x_coordinate;
     
-    if (current_x < sprite_x || current_x >= (sprite_x + 24)) return;
+    // Sprite width: 24 pixels standard, 48 pixels when X-expanded
+    const bool x_expanded = (vicii->registers.data[VICII_MXXE] & sprite_bit) != 0;
+    const uint16_t sprite_width = x_expanded ? 48 : 24;
     
-    uint8_t sprite_pixel_x = (uint8_t)(current_x - sprite_x);
+    if (current_x < sprite_x || current_x >= (sprite_x + sprite_width)) return;
     
-    if (vicii->registers.data[VICII_MXXE] & (1 << param_sprite_num)) {
-        sprite_pixel_x >>= 1;
+    // Screen pixel offset within sprite, then map to shift register data index
+    const uint8_t screen_pixel_x = (uint8_t)(current_x - sprite_x);
+    const uint8_t data_pixel_x = x_expanded ? (screen_pixel_x >> 1) : screen_pixel_x;
+    
+    // Extract raw pixel data from shift register to determine transparency.
+    // Transparency check is separated from color determination: we bail out
+    // before the heavier pixel_line_x conversion and color register reads.
+    const bool is_multicolor = (vicii->registers.data[VICII_MXMC] & sprite_bit) != 0;
+    uint8_t sprite_pixel_data;
+    
+    if (is_multicolor) {
+        // Each 2-bit pair covers 2 adjacent data pixels (4 screen pixels when X-expanded)
+        const uint8_t pair_index = data_pixel_x >> 1;  // 0-11
+        sprite_pixel_data = (sprite->shift_reg >> (22 - pair_index * 2)) & 3;
+    } else {
+        // Single color: 1 bit per data pixel
+        sprite_pixel_data = (sprite->shift_reg >> (23 - data_pixel_x)) & 1;
     }
     
-    const uint32_t pixel_mask = 0x800000 >> sprite_pixel_x;
-    const bool sprite_pixel = (sprite->shift_reg & pixel_mask) != 0;
+    if (sprite_pixel_data == 0) return;  // transparent in both modes
     
-    if (!sprite_pixel) return;
-    
-    // Convert sprite fetch position to buffer position (handles pipeline delay and centering)
-    // Direct buffer access needed here for collision detection
+    // Convert to line buffer position (handles hardware pipeline delay and centering).
+    // Done AFTER transparency but BEFORE color determination: avoids color register
+    // reads and collision buffer work for pixels that fall outside the visible area.
     const int16_t pixel_line_x = vicii_fetch_x_to_buffer_pos(vicii, current_x);
+    if (pixel_line_x < 0 || pixel_line_x >= (int16_t)vicii->config->visible_pixels_per_line) return;
     
-    if (pixel_line_x < 0) return;  // Not in visible range
-    
-    vicii_priority_t current_priority = vicii->pixel.pixel_line_priority[pixel_line_x];
-    // Collision detection
-    // Documentation (vic-ii.txt lines 2109-2111):
-    // "If the vertical border flip flop is set (normally within the upper/lower
-    // border, see next section), the output of the graphics data sequencer is
-    // turned off and there are no collisions."
+    // ---- Collision detection (independent of display priority) ----
+    // Documentation (VIC-II-Updated2025.txt section 3.8.2):
+    //   MxM: "two or more sprite data sequencers output a non-transparent pixel"
+    //   MxD: "one or more sprite data sequencers output a non-transparent pixel
+    //         and the graphics data sequencer outputs a foreground pixel"
+    // Collision is based on raw sequencer output, NOT on what is displayed.
+    // Collision does not need sprite_color — only sprite_bit and buffer indices.
+    // Disabled when vertical border flip flop is set (section 3.9).
     if (!vicii->border.vertical_border_flip_flop) {
-        // Collision detection only when NOT in border areas
+        const uint8_t existing_sprites = vicii->pixel.sprite_collision_line[pixel_line_x];
         
-        if (current_priority == VICII_PRIORITY_SPRITE_IN_FRONT ||
-            current_priority == VICII_PRIORITY_SPRITE_BEHIND) {
-            // Sprite-sprite collision (MMC interrupt)
-            // Documentation (vic-ii.txt lines 2278-2282):
-            // "For the MBC and MMC interrupts, only the first collision will trigger an
-            // interrupt (i.e. if the collision registers $d01e resp. $d01f contained the
-            // value zero before the collision)."
-            const bool first_collision = (vicii->registers.data[VICII_MXM_2] == 0);
-            vicii->registers.data[VICII_MXM_2] |= (1 << param_sprite_num);
-            if (first_collision && (vicii->registers.data[VICII_IE] & VICII_IE_EMMC)) {
+        // Sprite-sprite collision (MMC): any two sprites non-transparent at same position
+        if (existing_sprites != 0) {
+            // Set bits for ALL sprites involved in the collision (current + all existing)
+            const uint8_t collision_mask = existing_sprites | sprite_bit;
+            // Documentation (section 3.12): "only the first collision will trigger
+            // an interrupt (i.e. if the collision register contained zero before the
+            // collision)". The latch bit is always set; the IE register only gates IRQ.
+            const bool was_zero = (vicii->registers.data[VICII_MXM_2] == 0);
+            vicii->registers.data[VICII_MXM_2] |= collision_mask;
+            if (was_zero) {
                 vicii_set_interrupt(vicii, VICII_IR_IMMC);
             }
         }
         
-        if (current_priority == VICII_PRIORITY_FOREGROUND) {
-            // Sprite-data collision (MBC interrupt)
-            const bool first_collision = (vicii->registers.data[VICII_MXD_2] == 0);
-            vicii->registers.data[VICII_MXD_2] |= (1 << param_sprite_num);
-            if (first_collision && (vicii->registers.data[VICII_IE] & VICII_IE_EMBC)) {
+        // Sprite-data collision (MBC): sprite non-transparent AND graphics foreground
+        // Uses separate graphics_fg_line buffer that tracks raw graphics sequencer output,
+        // independent of any sprite overwrites in the display priority buffer.
+        if (vicii->pixel.graphics_fg_line[pixel_line_x]) {
+            const bool was_zero = (vicii->registers.data[VICII_MXD_2] == 0);
+            vicii->registers.data[VICII_MXD_2] |= sprite_bit;
+            if (was_zero) {
                 vicii_set_interrupt(vicii, VICII_IR_IMBC);
             }
         }
+        
+        // Record this sprite's presence at this pixel for future collision checks
+        vicii->pixel.sprite_collision_line[pixel_line_x] |= sprite_bit;
     }
     
-    // Color determination
-    uint8_t sprite_color;
-    const bool is_multicolor = (vicii->registers.data[VICII_MXMC] & (1 << param_sprite_num)) != 0;
+    // ---- Display priority (separate from collision detection) ----
+    // Documentation (VIC-II-Updated2025.txt section 3.8.2):
+    //   MxDP=0: sprite displays in front of foreground graphics
+    //   MxDP=1: sprite displays behind foreground graphics
+    // Between sprites: lower-numbered sprite ALWAYS has higher display priority.
+    // Processing order 7→0 ensures lower-numbered sprites overwrite higher-numbered ones.
+    const vicii_priority_t current_display_priority = vicii->pixel.pixel_line_priority[pixel_line_x];
+    const vicii_priority_t sprite_priority = sprite->priority;
+    // Sprite always overwrites a previous sprite (odd priority values: 1, 3)
+    // due to 7→0 processing order. Otherwise, sprite wins if its priority
+    // is strictly higher than the current pixel's.
+    const bool sprite_wins_display =
+        (current_display_priority & 1) | (sprite_priority > current_display_priority);
     
-    if (is_multicolor) {
-        const uint8_t bit_pair = (sprite->shift_reg >> (22 - sprite_pixel_x)) & 3;
-        switch (bit_pair) {
-            default: //  avoids a compiler warning
-            case 0: return;
-            case 1: sprite_color = vicii->registers.data[VICII_MM0]; break;
-            case 2: sprite_color = vicii->registers.data[VICII_M0C + param_sprite_num]; break;
-            case 3: sprite_color = vicii->registers.data[VICII_MM1]; break;
+    if (sprite_wins_display) {
+        vicii->pixel.pixel_line_priority[pixel_line_x] = sprite_priority;
+        // Determine sprite color only when the pixel will actually be displayed.
+        // Deferred past collision detection and priority check to avoid color
+        // register reads when the sprite pixel is occluded.
+        uint8_t sprite_color;
+        if (is_multicolor) {
+            switch (sprite_pixel_data) {
+                case 1:  sprite_color = vicii->registers.data[VICII_MM0]; break;
+                case 2:  sprite_color = vicii->registers.data[VICII_M0C + param_sprite_num]; break;
+                default: sprite_color = vicii->registers.data[VICII_MM1]; break;  // case 3
+            }
+        } else {
+            sprite_color = vicii->registers.data[VICII_M0C + param_sprite_num];
         }
-    } else {
-        sprite_color = vicii->registers.data[VICII_M0C + param_sprite_num];
-    }
-    
-    // Priority check
-    bool sprite_wins = false;
-    if (sprite->priority == VICII_PRIORITY_SPRITE_IN_FRONT) {
-        sprite_wins = true;
-    } else if (sprite->priority == VICII_PRIORITY_SPRITE_BEHIND) {
-        sprite_wins = (current_priority <= VICII_PRIORITY_BACKGROUND);
-    }
-
-    if (sprite_wins) {
-        vicii->pixel.pixel_line_priority[pixel_line_x] = sprite->priority;
+        
         vicii->pixel.pixel_line_color[pixel_line_x] = sprite_color;
     }
 }
@@ -421,7 +443,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                             case 2: color_index = vicii->registers.data[VICII_B2C]; break;
                             case 3: color_index = vicii->video_data.video_color_line[vmli]; break;
                         }
-                        is_background = (pixel_bits == 0);
+                        is_background = (pixel_bits <= 1);  // MCM=1: "00","01" = background
                         seq->shift_reg <<= 2;
                         seq->pixel_in_char = (seq->pixel_in_char + 2) & 7;
                     } else {
@@ -455,7 +477,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                         case 2: color_index = vicii->video_data.video_matrix_line[vmli] & 0x0F; break;
                         case 3: color_index = vicii->video_data.video_color_line[vmli]; break;
                     }
-                    is_background = (pixel_bits == 0);
+                    is_background = (pixel_bits <= 1);  // MCM=1: "00","01" = background
                     seq->shift_reg <<= 2;
                     seq->pixel_in_char = (seq->pixel_in_char + 2) & 7;
                     break;
@@ -483,6 +505,21 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             pixel_data.color = static_cast<vicii_color_t>(color_index);
             pixel_data.priority = is_background ? VICII_PRIORITY_BACKGROUND : VICII_PRIORITY_FOREGROUND;
             vicii_pixel_emit_at_x(vicii, &pixel_data, pixel_x);
+            
+            // Track raw graphics foreground output for sprite-data collision detection.
+            // This is independent of the display priority buffer - collisions are based
+            // on the graphics data sequencer's raw output, not what's displayed.
+            // TODO: The graphics sequencer continues to run during left/right border
+            // (main_border_flip_flop set, vertical not set), but currently the pixel
+            // sequencer skips display processing for border pixels. This means MxD
+            // collisions in the left/right border area are missed. A future refactor
+            // should clock the shift register even during main border for full accuracy.
+            if (!is_background) {
+                const int16_t gfx_buf_pos = vicii_fetch_x_to_buffer_pos(vicii, pixel_x);
+                if (gfx_buf_pos >= 0 && gfx_buf_pos < (int16_t)vicii->config->visible_pixels_per_line) {
+                    vicii->pixel.graphics_fg_line[gfx_buf_pos] = true;
+                }
+            }
             
             // Increment pixel position within character (for standard modes)
             if (((seq->graphics_mode & VICII_BITMAP_MODE_MASK) == 0) &&
@@ -589,8 +626,10 @@ static inline void vicii_sequencer_update_colors(vicii_t* vicii) {
             sequencer->colors[0].color = static_cast<vicii_color_t>(regs->data[VICII_B0C]);
             sequencer->colors[1].color = static_cast<vicii_color_t>(regs->data[VICII_B1C]);
             sequencer->colors[2].color = static_cast<vicii_color_t>(regs->data[VICII_B2C]);
+            // Documentation (VIC-II-Updated2025.txt section 3.8.2):
+            // MCM=1: "00" and "01" are background, "10" and "11" are foreground
             sequencer->colors[0].priority = VICII_PRIORITY_BACKGROUND;
-            sequencer->colors[1].priority = VICII_PRIORITY_FOREGROUND;
+            sequencer->colors[1].priority = VICII_PRIORITY_BACKGROUND;
             sequencer->colors[2].priority = VICII_PRIORITY_FOREGROUND;
             sequencer->colors[3].priority = VICII_PRIORITY_FOREGROUND;
             break;
@@ -600,8 +639,10 @@ static inline void vicii_sequencer_update_colors(vicii_t* vicii) {
             break;
         case VICII_GM_MULTICOLOR_BITMAP:
             sequencer->colors[0].color = static_cast<vicii_color_t>(regs->data[VICII_B0C]);
+            // Documentation (VIC-II-Updated2025.txt section 3.8.2):
+            // MCM=1: "00" and "01" are background, "10" and "11" are foreground
             sequencer->colors[0].priority = VICII_PRIORITY_BACKGROUND;
-            sequencer->colors[1].priority = VICII_PRIORITY_FOREGROUND;
+            sequencer->colors[1].priority = VICII_PRIORITY_BACKGROUND;
             sequencer->colors[2].priority = VICII_PRIORITY_FOREGROUND;
             sequencer->colors[3].priority = VICII_PRIORITY_FOREGROUND;
             break;
@@ -1006,6 +1047,9 @@ void vicii_timing_advance(vicii_t* vicii) {
             const uint8_t border_color = vicii->registers.data[VICII_EC] & 0x0F;
             memset(vicii->pixel.pixel_line_priority, VICII_PRIORITY_BORDER, vicii->config->visible_pixels_per_line);
             memset(vicii->pixel.pixel_line_color, border_color, vicii->config->visible_pixels_per_line);
+            // Clear collision detection buffers for the new line
+            memset(vicii->pixel.sprite_collision_line, 0, vicii->config->visible_pixels_per_line);
+            memset(vicii->pixel.graphics_fg_line, 0, vicii->config->visible_pixels_per_line * sizeof(bool));
         }
     }
 }
@@ -2159,10 +2203,15 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
         // Free any existing buffers
         free(vicii->pixel.pixel_line_priority);
         free(vicii->pixel.pixel_line_color);
+        free(vicii->pixel.sprite_collision_line);
+        free(vicii->pixel.graphics_fg_line);
         
                 // Allocate single line buffers
                 vicii->pixel.pixel_line_priority = static_cast<vicii_priority_t*>(malloc(config->visible_pixels_per_line * sizeof(vicii_priority_t)));
                 vicii->pixel.pixel_line_color = static_cast<uint8_t*>(malloc(config->visible_pixels_per_line * sizeof(uint8_t)));
+                // Collision detection buffers (independent of display)
+                vicii->pixel.sprite_collision_line = static_cast<uint8_t*>(calloc(config->visible_pixels_per_line, sizeof(uint8_t)));
+                vicii->pixel.graphics_fg_line = static_cast<bool*>(calloc(config->visible_pixels_per_line, sizeof(bool)));
                 
                 // Initialize buffer with current border color
                 const uint8_t border_color = vicii->registers.data[VICII_EC] & 0x0F;
@@ -2204,6 +2253,8 @@ void vicii_system_destroy(void* chip) {
         // Free buffers
         free(vicii->pixel.pixel_line_priority);
         free(vicii->pixel.pixel_line_color);
+        free(vicii->pixel.sprite_collision_line);
+        free(vicii->pixel.graphics_fg_line);
         free(vicii);
     }
 }
