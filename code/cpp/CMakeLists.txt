@@ -54,6 +54,12 @@ if(MSVC)
         /wd4244                 # Disable data conversion warnings
         /wd4702                 # Disable unreachable code warnings (template instantiation)
         /wd4005                 # Disable macro redefinition warnings (ImGui)
+        /wd5030                 # Disable unrecognized attribute warnings (GNU attributes for GCC/Clang)
+        /wd4267                 # Disable size_t to int conversion warnings
+        /wd4477                 # Disable printf format mismatch warnings
+        /wd4099                 # Disable struct/class type mismatch warnings
+        /wd4458                 # Disable declaration hides class member warnings
+        /wd4457                 # Disable declaration hides function parameter warnings
     )
     # Define to silence C++17 deprecation warnings
     add_compile_definitions(_SILENCE_CXX17_C_HEADER_DEPRECATION_WARNING)
@@ -349,6 +355,11 @@ add_executable(c64emu
     ${CORE_UTIL_SOURCES}
 )
 
+target_link_libraries(c64emu
+    fam65xx_decoder
+    ${SDL2_LIBRARIES}
+)
+
 # Multi-system console test (no GUI dependencies)
 add_executable(multi_emu_console
     src/main/multi_emu_console.cpp
@@ -360,6 +371,7 @@ add_executable(multi_emu_console
 
 target_link_libraries(multi_emu_console
     fam65xx_decoder
+    ${SDL2_LIBRARIES}
 )
 
 if(NOT WIN32 AND NOT MSVC)
@@ -396,9 +408,7 @@ if(BUILD_GUI)
     target_compile_definitions(multi_emu PRIVATE IMGUI_VERSION="1.92.1")
     
     # Disable warnings
-    if(MSVC)
-        target_compile_options(multi_emu PRIVATE /WX- /wd4201 /wd4996 /wd4244 /wd4189 /wd4100 /wd5287 /wd4702 /wd4005)
-    else()
+    if(NOT MSVC)
         target_compile_options(multi_emu PRIVATE -Wno-pedantic)
     endif()
     
@@ -478,9 +488,7 @@ if(BUILD_GUI)
     target_compile_definitions(c64emu_gui PRIVATE IMGUI_VERSION="1.92.1")
     
     # Disable some warnings for GUI build to work around ImGui header issues
-    if(MSVC)
-        target_compile_options(c64emu_gui PRIVATE /WX- /wd4201 /wd4996 /wd4244 /wd4189 /wd4100 /wd5287 /wd4702 /wd4005)
-    else()
+    if(NOT MSVC)
         target_compile_options(c64emu_gui PRIVATE -Wno-pedantic)
     endif()
 
@@ -590,6 +598,7 @@ add_executable(c64_test_runner
 # Link required libraries for test runner
 target_link_libraries(c64_test_runner
     fam65xx_decoder
+    ${SDL2_LIBRARIES}
 )
 
 if(NOT WIN32 AND NOT MSVC)
