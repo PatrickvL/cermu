@@ -73,18 +73,25 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
             if (commodore_lynx_open(filepath, &lynx)) {
                 commodore_lynx_directory_t dir;
                 if (commodore_lynx_read_directory(&lynx, &dir)) {
-                    // Check first PRG entry's load address
+                    // Check ALL PRG entries' load addresses for C64 addresses
+                    bool found_c64 = false;
+                    bool found_any = false;
                     for (unsigned i = 0; i < dir.file_count; i++) {
                         if (dir.entries[i].file_type == 'P' && dir.entries[i].data_length >= 2) {
                             size_t off = dir.entries[i].data_offset;
                             if (off + 1 < lynx.data_size) {
                                 uint16_t addr = lynx.data[off] | ((uint16_t)lynx.data[off+1] << 8);
-                                commodore_lynx_close(&lynx);
-                                if (is_c64_load_address(addr)) return 0.95f;
-                                return 0.5f;  // Not a C64 address
+                                found_any = true;
+                                if (is_c64_load_address(addr)) {
+                                    found_c64 = true;
+                                    break;
+                                }
                             }
                         }
                     }
+                    commodore_lynx_close(&lynx);
+                    if (found_c64) return 0.95f;
+                    if (found_any) return 0.5f;
                 }
                 commodore_lynx_close(&lynx);
             }
