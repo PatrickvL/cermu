@@ -8,7 +8,7 @@
 #include "c64.h"
 #include "c64_bus.h"
 #include "c64_config.h"
-#include "../../core/storage/commodore_file_loader.h" // Shared Commodore file format loading
+#include "../../core/formats/prg_format.h" // PRG/BIN format loading
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
 #include "../../chip/cpu/fam65xx/mos6510.h" // MOS6510 CPU with mos6510_init

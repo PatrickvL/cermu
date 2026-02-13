@@ -1,6 +1,6 @@
 #include "../systems/c64/c64.h"
 #include "../systems/c64/c64_config.h"
-#include "../core/storage/commodore_file_loader.h"
+#include "../core/formats/prg_format.h"
 #include "../gui/imgui_interface.h"
 #include <stdio.h>
 #include <string.h>

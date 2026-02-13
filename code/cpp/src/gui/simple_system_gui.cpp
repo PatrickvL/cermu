@@ -3,6 +3,7 @@
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
 #include "../core/config/path_discovery.h"
+#include "../core/formats/format_handler.h"
 #include <stdio.h>
 #include <cstring>
 
@@ -715,23 +716,12 @@ void SimpleSystemGUI::load_file_dialog() {
     // Individual filters separated by commas create separate dropdown entries
     const auto& desc = system_->get_descriptor();
     std::string filter_str;
-    if (desc.supported_extensions && desc.supported_extensions[0]) {
-        // Build a combined collection filter so all supported files show together
-        // e.g. "VIC-20 Files{.prg,.tap,.d64,.t64}"
-        std::string short_name = desc.short_name ? desc.short_name : "System";
-        filter_str = std::string(short_name) + " Files{";
-        for (int i = 0; desc.supported_extensions[i] != nullptr; i++) {
-            if (i > 0) filter_str += ",";
-            const char* ext = desc.supported_extensions[i];
-            if (ext[0] == '.') ext++;
-            filter_str += ".";
-            filter_str += ext;
-        }
-        filter_str += "}";
-        // Also add an "All Files" option
-        filter_str += ",.*";
+    if (desc.supported_formats && desc.supported_formats[0]) {
+        // Build filter from format descriptors using format_list_dialog_filter()
+        filter_str = format_list_dialog_filter(desc.supported_formats,
+                                               desc.short_name ? desc.short_name : "System");
     } else {
-        filter_str = ".*"; // All files if no extensions specified
+        filter_str = ".*"; // All files if no formats specified
     }
     
     // Extract directory and filename from last selected path

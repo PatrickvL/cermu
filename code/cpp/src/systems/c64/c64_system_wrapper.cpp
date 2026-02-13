@@ -1,9 +1,16 @@
-#include "c64_system_wrapper.h"
+﻿#include "c64_system_wrapper.h"
 #include "../../chip/input/commodore_keyboard.h"
 #include "../../chip/input/emu_key_sdl_map.h"
 #include "../../chip/cpu/fam65xx/mos6510.h"
 #include "../../gui/imgui_interface.h"
-#include "../../core/storage/commodore_file_loader.h"
+#include "../../core/formats/format_registry.h"
+#include "../../core/formats/prg_format.h"
+#include "../../core/formats/d64_format.h"
+#include "../../core/formats/t64_format.h"
+#include "../../core/formats/tap_format.h"
+#include "../../core/formats/crt_format.h"
+#include "../../core/formats/lnx_format.h"
+#include "../../core/analysis/basic_parser.h"
 #include <cstring>
 #include <cstdio>
 #include <cctype>
@@ -54,7 +61,7 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
     // Check extensions
     const char* ext = strrchr(filepath, '.');
     if (ext) {
-        // PRG files — check load address
+        // PRG files â€” check load address
         if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0) {
             if (size >= 2) {
                 uint16_t load_addr = data[0] | (data[1] << 8);
@@ -62,12 +69,12 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
                 if (load_addr == 0x0801) return 0.95f;
                 // Common C64 ML addresses
                 if (load_addr == 0xC000 || load_addr == 0x0800 || load_addr == 0x4000) return 0.85f;
-                // VIC-20/C16 address — lower confidence
+                // VIC-20/C16 address â€” lower confidence
                 if (load_addr == 0x1001) return 0.6f;
-                return 0.7f;  // Generic PRG — C64 is the most common Commodore system
+                return 0.7f;  // Generic PRG â€” C64 is the most common Commodore system
             }
         }
-        // LNX files — Lynx archive; parse to inspect contained files' load addresses
+        // LNX files â€” Lynx archive; parse to inspect contained files' load addresses
         if (strcmp(ext, ".lnx") == 0 || strcmp(ext, ".LNX") == 0) {
             commodore_lynx_t lynx;
             if (commodore_lynx_open(filepath, &lynx)) {
@@ -95,10 +102,10 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
                 }
                 commodore_lynx_close(&lynx);
             }
-            return 0.6f;  // Could not inspect — C64 is most common
+            return 0.6f;  // Could not inspect â€” C64 is most common
         }
         if (strcmp(ext, ".d64") == 0 || strcmp(ext, ".D64") == 0) {
-            // D64 disk images — inspect first PRG's load address to distinguish systems
+            // D64 disk images â€” inspect first PRG's load address to distinguish systems
             commodore_d64_t d64;
             if (commodore_d64_open(filepath, &d64)) {
                 commodore_prg_t prg = {};
@@ -110,7 +117,7 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
                 }
                 commodore_d64_close(&d64);
             }
-            // Could not inspect — still likely C64 (most common system)
+            // Could not inspect â€” still likely C64 (most common system)
             if (size == D64_STANDARD_SIZE || size == D64_STANDARD_SIZE_ERR ||
                 size == D64_EXTENDED_SIZE || size == D64_EXTENDED_SIZE_ERR) {
                 return 0.7f;
@@ -126,7 +133,7 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
             int platform = commodore_tap_identify_platform(filepath);
             if (platform == 0) return 0.95f;  // C64 TAP
             if (platform == 1) return 0.3f;   // VIC-20 TAP
-            return 0.6f;  // Unknown or error — C64 is most common
+            return 0.6f;  // Unknown or error â€” C64 is most common
         }
         if (strcmp(ext, ".crt") == 0 || strcmp(ext, ".CRT") == 0) {
             // CRT cartridge files
@@ -139,7 +146,12 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
     return 0.0f;
 }
 
-static const char* c64_extensions[] = {".prg", ".d64", ".crt", ".t64", ".tap", ".lnx", nullptr};
+/** Formats the C64 can load — used by SystemDescriptor and file dialogs. */
+static const format_descriptor_t* const c64_formats[] = {
+    &PRG_FORMAT_DESCRIPTOR, &D64_FORMAT_DESCRIPTOR, &CRT_FORMAT_DESCRIPTOR,
+    &T64_FORMAT_DESCRIPTOR, &TAP_FORMAT_DESCRIPTOR, &LNX_FORMAT_DESCRIPTOR,
+    &BIN_FORMAT_DESCRIPTOR, nullptr
+};
 
 static HardwareTraits create_c64_hardware_traits() {
     HardwareTraits traits;
@@ -197,7 +209,7 @@ static SystemDescriptor c64_descriptor = {
     "Commodore 64",
     "C64",
     "8-bit home computer with VIC-II graphics and SID sound chip (1982)",
-    c64_extensions,
+    c64_formats,
     create_c64_hardware_traits(),
     c64_can_load_file
 };
@@ -302,7 +314,7 @@ void C64SystemWrapper::run_frame() {
     total_cycles_ = c64_->total_cycles;
 }
 
-/** Memory read callback for BASIC SYS parsing — reads from C64 RAM */
+/** Memory read callback for BASIC SYS parsing â€” reads from C64 RAM */
 static uint8_t c64_mem_read_for_basic(void* ctx, uint16_t addr) {
     ram_t* ram = static_cast<ram_t*>(ctx);
     return ram->memory[addr];
@@ -317,24 +329,22 @@ bool C64SystemWrapper::load_file(const char* filepath) {
     printf("C64: Loading file: %s\n", filepath);
 
     // Use shared Commodore file loader for format detection and parsing
-    commodore_load_result_t result = {};
-    if (!commodore_load_file(filepath, &result)) {
+    format_load_result_t result = {};
+    if (!format_load_file(filepath, &result)) {
         printf("C64: Failed to load file: %s\n", result.error_msg);
-        commodore_load_result_free(&result);
+        format_load_result_free(&result);
         return false;
     }
 
     bool success = false;
 
     switch (result.type) {
-        case COMMODORE_LOAD_PRG:
-        case COMMODORE_LOAD_D64:
-        case COMMODORE_LOAD_T64: {
-            // All three produce a PRG in result.prg — copy data into C64 RAM
-            const commodore_prg_t* prg = &result.prg;
+        case FORMAT_LOAD_PROGRAM: {
+            // PRG/D64/T64 all produce a single program — copy into C64 RAM
+            const program_data_t* prg = &result.program;
             
             printf("C64: Loading %s: $%04X-$%04X (%zu bytes)\n",
-                   commodore_load_type_name(result.type),
+                   format_load_type_name(result.type),
                    prg->load_addr, prg->end_addr, prg->data_size);
 
             // Validate address range
@@ -351,7 +361,7 @@ bool C64SystemWrapper::load_file(const char* filepath) {
             uint16_t run_addr = 0;
 
             if (prg->load_addr == 0x0801) {
-                // Standard C64 BASIC start — parse for SYS statement
+                // Standard C64 BASIC start â€” parse for SYS statement
                 commodore_basic_sys_t sys_result = {};
                 if (commodore_basic_parse_sys(c64_mem_read_for_basic, c64_->ram,
                                               prg->load_addr,
@@ -383,36 +393,38 @@ bool C64SystemWrapper::load_file(const char* filepath) {
                     mos6510_set_pc((mos6510_t*)c64_->mos6510, run_addr);
                 }
             } else {
-                printf("C64: No SYS found — program loaded, use RUN to start\n");
+                printf("C64: No SYS found â€” program loaded, use RUN to start\n");
             }
 
             success = true;
             break;
         }
 
-        case COMMODORE_LOAD_TAP: {
-            printf("C64: TAP file detected (platform=%u, version=%u)\n",
-                   result.tap_header.platform, result.tap_header.version);
-            printf("C64: TAP tape emulation not yet implemented (requires cycle-accurate datasette)\n");
+        case FORMAT_LOAD_METADATA: {
+            // TAP or CRT — distinguished by format descriptor name
+            if (result.format && strcmp(result.format->name, "TAP") == 0) {
+                const commodore_tap_header_t* hdr = (const commodore_tap_header_t*)result.metadata;
+                printf("C64: TAP file detected (platform=%u, version=%u)\n",
+                       hdr->platform, hdr->version);
+                printf("C64: TAP tape emulation not yet implemented (requires cycle-accurate datasette)\n");
+            } else if (result.format && strcmp(result.format->name, "CRT") == 0) {
+                const commodore_crt_header_t* hdr = (const commodore_crt_header_t*)result.metadata;
+                printf("C64: CRT cartridge: \"%s\" (hw_type=%u, exrom=%u, game=%u)\n",
+                       hdr->name, hdr->hardware_type, hdr->exrom, hdr->game);
+                printf("C64: CRT cartridge loading not yet fully implemented\n");
+                // TODO: Parse CHIP packets and map into address space
+            } else {
+                printf("C64: Unknown metadata format: %s\n",
+                       result.format ? result.format->name : "(null)");
+            }
             success = false;
             break;
         }
 
-        case COMMODORE_LOAD_CRT: {
-            printf("C64: CRT cartridge: \"%s\" (hw_type=%u, exrom=%u, game=%u)\n",
-                   result.crt_header.name, result.crt_header.hardware_type,
-                   result.crt_header.exrom, result.crt_header.game);
-            printf("C64: CRT cartridge loading not yet fully implemented\n");
-            // TODO: Parse CHIP packets and map into address space
-            // For now, just identify the cartridge
-            success = false;
-            break;
-        }
-
-        case COMMODORE_LOAD_BIN: {
+        case FORMAT_LOAD_RAW: {
             // Raw binary — load at $C000 (common ML area) by default
             const uint16_t default_addr = 0xC000;
-            const commodore_prg_t* prg = &result.prg;
+            const program_data_t* prg = &result.program;
             
             printf("C64: Loading BIN at default $%04X (%zu bytes)\n",
                    default_addr, prg->data_size);
@@ -427,15 +439,15 @@ bool C64SystemWrapper::load_file(const char* filepath) {
             break;
         }
 
-        case COMMODORE_LOAD_LNX: {
-            // Lynx archive — load ALL extracted PRG files into C64 RAM
-            printf("C64: Loading LNX archive with %d files\n", result.lynx_file_count);
+        case FORMAT_LOAD_ARCHIVE: {
+            // Archive (LNX etc.) — load ALL extracted PRG files into C64 RAM
+            printf("C64: Loading archive with %d files\n", result.file_count);
 
             bool any_basic = false;
             uint16_t basic_end_addr = 0;
 
-            for (int f = 0; f < result.lynx_file_count; f++) {
-                const commodore_prg_t* prg = &result.lynx_files[f];
+            for (int f = 0; f < result.file_count; f++) {
+                const program_data_t* prg = &result.files[f];
 
                 if (prg->data_size == 0 || (uint32_t)prg->load_addr + prg->data_size > 0x10000) {
                     printf("C64: LNX file %d: Invalid address range $%04X-$%04X, skipping\n",
@@ -468,7 +480,7 @@ bool C64SystemWrapper::load_file(const char* filepath) {
                 printf("C64: LNX: Set BASIC end=$%04X and injected RUN\n", basic_end_addr);
             }
 
-            success = result.lynx_file_count > 0;
+            success = result.file_count > 0;
             break;
         }
 
@@ -477,7 +489,7 @@ bool C64SystemWrapper::load_file(const char* filepath) {
             break;
     }
 
-    commodore_load_result_free(&result);
+    format_load_result_free(&result);
     return success;
 }
 
@@ -501,7 +513,7 @@ void C64SystemWrapper::set_framebuffer(uint32_t* buffer, int width, int height) 
 }
 
 void C64SystemWrapper::handle_keyboard_event(SDL_Keycode key, bool pressed) {
-    // Legacy path — still used when handle_keyboard_event_ex is not called
+    // Legacy path â€” still used when handle_keyboard_event_ex is not called
     // (e.g., from the old C64-only GUI, test harness, or non-SDL input)
     if (keyboard_mapper_) {
         // Route through the mapper with minimal info
@@ -513,7 +525,7 @@ void C64SystemWrapper::handle_keyboard_event(SDL_Keycode key, bool pressed) {
                 key, SDL_SCANCODE_UNKNOWN, 0);
         }
     } else if (c64_ && c64_->keyboard) {
-        // No mapper — convert SDL keycode to EmuKey and pass through
+        // No mapper â€” convert SDL keycode to EmuKey and pass through
         emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(key);
         if (ek != EMUKEY_NONE) {
             if (pressed) {
@@ -667,7 +679,7 @@ SystemConfiguration C64SystemWrapper::detect_optimal_configuration(
             // Select NTSC region (index 1)
             if (hardware_traits_.region_options.size() > 1) {
                 config.region_option_index = 1;
-                printf("C64: Filename contains 'ntsc' — selecting NTSC region\n");
+                printf("C64: Filename contains 'ntsc' â€” selecting NTSC region\n");
             }
         }
     }
