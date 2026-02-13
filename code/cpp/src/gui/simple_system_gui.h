@@ -38,6 +38,9 @@ private:
     
     // Last selected file path for file dialog
     std::string last_file_path_;
+    
+    // Pending file to load after system selection (from command line)
+    std::string pending_file_path_;
 
     // SDL audio output
     SDL_AudioDeviceID audio_device_;
@@ -47,7 +50,7 @@ public:
     /**
      * Constructor - takes ownership of the system (can be nullptr to show selection dialog)
      */
-    explicit SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system);
+    explicit SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system, const char* pending_file = nullptr);
     virtual ~SimpleSystemGUI();
     
     // Override init to allocate framebuffer after OpenGL context is created
@@ -72,7 +75,7 @@ public:
     void step_emulation();
     
     // System switching
-    void switch_system(const char* system_name, int memory_option = -1, int region_option = -1, const std::map<std::string, bool>* peripherals = nullptr);
+    void switch_system(const char* system_name, int memory_option = -1, int region_option = -1, const std::map<std::string, bool>* peripherals = nullptr, const char* pending_file = nullptr);
     
     // File loading
     void load_file_dialog();

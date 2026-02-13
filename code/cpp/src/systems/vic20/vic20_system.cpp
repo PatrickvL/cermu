@@ -140,12 +140,19 @@ static HardwareTraits create_vic20_hardware_traits() {
     return traits;
 }
 
+/** Check if load address is a VIC-20 address */
+static bool is_vic20_load_address(uint16_t addr) {
+    return addr == 0x1001 || addr == 0x0401 || addr == 0x1201 ||
+           addr == 0x2000 || addr == 0x4000 || addr == 0x6000 || addr == 0xA000;
+}
+
 // File detection callback
 static float vic20_can_load_file(const char* filepath, const uint8_t* data, size_t size) {
     const char* ext = strrchr(filepath, '.');
     if (ext) {
-        if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0) {
-            // PRG files with VIC-20 load address (0x1001)
+        // PRG and LNX files — check load address
+        if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0 ||
+            strcmp(ext, ".lnx") == 0 || strcmp(ext, ".LNX") == 0) {
             if (size >= 2) {
                 uint16_t load_addr = data[0] | (data[1] << 8);
                 if (load_addr == 0x1001) {
@@ -168,7 +175,19 @@ static float vic20_can_load_file(const char* filepath, const uint8_t* data, size
             return 0.5f;  // Unknown or error
         }
         if (strcmp(ext, ".d64") == 0 || strcmp(ext, ".D64") == 0) {
-            return 0.6f;  // Disk images (could be any Commodore system)
+            // Inspect first PRG's load address to distinguish VIC-20 from C64 disks
+            commodore_d64_t d64;
+            if (commodore_d64_open(filepath, &d64)) {
+                commodore_prg_t prg = {};
+                if (commodore_d64_extract_first_prg(&d64, &prg)) {
+                    float score = is_vic20_load_address(prg.load_addr) ? 0.90f : 0.4f;
+                    commodore_prg_free(&prg);
+                    commodore_d64_close(&d64);
+                    return score;
+                }
+                commodore_d64_close(&d64);
+            }
+            return 0.5f;  // Could not inspect — moderate confidence
         }
         if (strcmp(ext, ".t64") == 0 || strcmp(ext, ".T64") == 0) {
             return 0.5f;  // T64 tape archives (usually C64 but can contain VIC-20)
@@ -177,7 +196,7 @@ static float vic20_can_load_file(const char* filepath, const uint8_t* data, size
     return 0.0f;
 }
 
-static const char* vic20_extensions[] = {".prg", ".tap", ".d64", ".t64", nullptr};
+static const char* vic20_extensions[] = {".prg", ".tap", ".d64", ".t64", ".lnx", nullptr};
 
 static SystemDescriptor vic20_descriptor = {
     "Commodore VIC-20",
@@ -337,9 +356,9 @@ SystemConfiguration VIC20System::detect_optimal_configuration(
 
     const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
 #ifdef _MSC_VER
-    bool is_prg = ext && (_stricmp(ext, ".prg") == 0);
+    bool is_prg = ext && (_stricmp(ext, ".prg") == 0 || _stricmp(ext, ".lnx") == 0);
 #else
-    bool is_prg = ext && (strcasecmp(ext, ".prg") == 0);
+    bool is_prg = ext && (strcasecmp(ext, ".prg") == 0 || strcasecmp(ext, ".lnx") == 0);
 #endif
 
     if (is_prg && data && size >= 2) {
