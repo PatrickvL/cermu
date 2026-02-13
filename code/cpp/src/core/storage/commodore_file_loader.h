@@ -391,6 +391,85 @@ typedef struct {
 bool commodore_crt_read_header(const char* filepath, commodore_crt_header_t* out_header);
 
 // ============================================================================
+// LNX Format — Lynx Archive (Multi-file CBM container)
+// ============================================================================
+
+/** Maximum files in a Lynx archive */
+#define LNX_MAX_FILES           256
+/** Maximum length of the BASIC dissolve header to scan */
+#define LNX_MAX_BASIC_LENGTH    1024
+
+/** Lynx archive file entry */
+typedef struct {
+    char     filename[17];          /**< PETSCII filename, null-terminated */
+    char     file_type;             /**< 'P'=PRG, 'S'=SEQ, 'U'=USR, 'R'=REL, 'D'=DEL */
+    unsigned blocks;                /**< Number of 254-byte data blocks */
+    unsigned last_block_len;        /**< Bytes used in last block (or record len for REL) */
+    size_t   data_offset;           /**< Byte offset of file data within the archive */
+    size_t   data_length;           /**< Actual file data length in bytes */
+} commodore_lynx_entry_t;
+
+/** Lynx archive directory */
+typedef struct {
+    unsigned header_blocks;         /**< Blocks occupied by header+directory */
+    unsigned file_count;            /**< Number of files in archive */
+    commodore_lynx_entry_t entries[LNX_MAX_FILES];
+} commodore_lynx_directory_t;
+
+/** Lynx archive handle */
+typedef struct {
+    uint8_t* data;                  /**< Raw archive data */
+    size_t   data_size;             /**< Size of archive */
+    bool     owns_data;             /**< Whether we allocated data */
+} commodore_lynx_t;
+
+/**
+ * Open a Lynx archive from file.
+ * @param filepath  Path to the .lnx file
+ * @param out_lynx  Output archive handle
+ * @return true on success. Caller must call commodore_lynx_close().
+ */
+bool commodore_lynx_open(const char* filepath, commodore_lynx_t* out_lynx);
+
+/**
+ * Read the directory of a Lynx archive.
+ * Parses the header, skips the BASIC dissolve stub, and reads all file entries.
+ * @param lynx     Opened archive
+ * @param out_dir  Output directory listing
+ * @return true on success
+ */
+bool commodore_lynx_read_directory(const commodore_lynx_t* lynx, commodore_lynx_directory_t* out_dir);
+
+/**
+ * Extract a file from a Lynx archive by index as a PRG.
+ * @param lynx      Opened archive
+ * @param dir       Previously-read directory
+ * @param entry_idx Directory entry index (0-based)
+ * @param out_prg   Output PRG structure (data heap-allocated, caller frees)
+ * @return true on success
+ */
+bool commodore_lynx_extract_file(const commodore_lynx_t* lynx,
+                                 const commodore_lynx_directory_t* dir,
+                                 int entry_idx, commodore_prg_t* out_prg);
+
+/**
+ * Extract ALL PRG files from a Lynx archive.
+ * @param lynx       Opened archive
+ * @param out_prgs   Output array of PRG structures (caller allocates, max LNX_MAX_FILES)
+ * @param max_prgs   Size of out_prgs array
+ * @param out_count  Number of PRGs actually extracted
+ * @return true if at least one PRG was extracted
+ */
+bool commodore_lynx_extract_all_prgs(const commodore_lynx_t* lynx,
+                                     commodore_prg_t* out_prgs, int max_prgs,
+                                     int* out_count);
+
+/**
+ * Close a Lynx archive and free resources.
+ */
+void commodore_lynx_close(commodore_lynx_t* lynx);
+
+// ============================================================================
 // High-Level Convenience — Unified Load Function
 // ============================================================================
 
@@ -403,8 +482,12 @@ typedef enum {
     COMMODORE_LOAD_TAP,             /**< TAP identified (check tap_header field) */
     COMMODORE_LOAD_CRT,             /**< CRT identified (check crt_header field) */
     COMMODORE_LOAD_BIN,             /**< Raw binary loaded (check prg field, load_addr = 0) */
+    COMMODORE_LOAD_LNX,             /**< Lynx archive: all PRGs extracted (check lynx_files) */
     COMMODORE_LOAD_ERROR            /**< Load failed */
 } commodore_load_type_t;
+
+/** Maximum PRG files returned from a Lynx archive load */
+#define COMMODORE_LOAD_MAX_LNX_FILES  64
 
 /** Unified load result */
 typedef struct {
@@ -412,6 +495,8 @@ typedef struct {
     commodore_prg_t       prg;          /**< Valid for PRG/D64/T64/BIN results */
     commodore_tap_header_t tap_header;  /**< Valid for TAP results */
     commodore_crt_header_t crt_header;  /**< Valid for CRT results */
+    commodore_prg_t       lynx_files[COMMODORE_LOAD_MAX_LNX_FILES]; /**< Valid for LNX results */
+    int                   lynx_file_count;  /**< Number of files in lynx_files[] */
     char error_msg[256];                /**< Error message if type == ERROR */
 } commodore_load_result_t;
 
