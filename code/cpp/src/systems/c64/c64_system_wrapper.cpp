@@ -237,17 +237,23 @@ C64SystemWrapper::C64SystemWrapper()
     speed_multiplier_ = 1.0f;
     
     // Create persistent GUI state for menu handling
+#ifdef IMGUI_VERSION
     gui_state_ = gui_create_state();
+#else
+    gui_state_ = nullptr;
+#endif
 }
 
 C64SystemWrapper::~C64SystemWrapper() {
     shutdown();
     
     // Destroy persistent GUI state
+#ifdef IMGUI_VERSION
     if (gui_state_) {
         gui_destroy_state(static_cast<gui_state_t*>(gui_state_));
         gui_state_ = nullptr;
     }
+#endif
 }
 
 const SystemDescriptor& C64SystemWrapper::get_descriptor() const {
@@ -447,14 +453,17 @@ void C64SystemWrapper::render_system_menu_items() {
     // This allows C64-specific menus (Load Test Binary, Chip Debug Windows, etc.)
     // to appear in the multi_emu interface
     
+#ifdef IMGUI_VERSION
     if (gui_state_ && c64_) {
         // Call the C64-specific menu rendering function from the old GUI
         // Using persistent gui_state_ so menu clicks persist
         gui_render_c64_system_menu_items(c64_, static_cast<gui_state_t*>(gui_state_));
     }
+#endif
 }
 
 void C64SystemWrapper::render_debug_windows(void* gui_state) {
+#ifdef IMGUI_VERSION
     if (!gui_state_ || !c64_) return;
     
     gui_state_t* state = static_cast<gui_state_t*>(gui_state_);
@@ -463,8 +472,6 @@ void C64SystemWrapper::render_debug_windows(void* gui_state) {
     if (state->show_test_binary_dialog) {
         gui_render_test_binary_dialog(c64_, state, nullptr);
     }
-    
-#ifdef IMGUI_VERSION
     // Iterate through all chips and render their debug windows
     system_8bit_t* sys = &c64_->system;
     for (uint8_t chip_id = 0; chip_id < sys->chip_count; chip_id++) {
