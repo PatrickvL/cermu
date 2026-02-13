@@ -6,7 +6,7 @@
 #include <memory>
 #include <functional>
 #include <map>
-#include <SDL2/SDL_keycode.h>
+#include <SDL_keycode.h>
 
 // ============================================================================
 // SYSTEM HARDWARE TRAITS

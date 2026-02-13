@@ -88,7 +88,7 @@ opcode_info_t mos6510_get_opcode_entry(mos6510_t *cpu) {
 
 // Look up opcode entry from opcode table
 opcode_info_t mos6510_lookup_opcode(uint8_t opcode) {
-  static const auto table = fam65xx::generate_opcode_table<MOS6510>();
+  static const auto table = fam65xx::generate_opcode_table_for_traits(MOS6510);
   return table[opcode];
 }
 

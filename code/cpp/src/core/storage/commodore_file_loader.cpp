@@ -10,6 +10,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#ifdef _MSC_VER
+#define strncasecmp _strnicmp
+#endif
 
 // ============================================================================
 // Internal Helpers

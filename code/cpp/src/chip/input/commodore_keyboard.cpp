@@ -46,13 +46,12 @@ commodore_keyboard_t* commodore_keyboard_create(const keyboard_matrix_config_t* 
     commodore_keyboard_t* keyboard = new (mem) commodore_keyboard_t();
 
     // Initialize chip descriptor
-    keyboard->descriptor = (chip_descriptor_t){
-        .description = "Commodore Keyboard Matrix Emulation",
-        .create = NULL,
-        .destroy = NULL,
-        .bus_attach = NULL,
-        .bank_change = NULL
-    };
+    keyboard->descriptor = chip_descriptor_t{};
+    keyboard->descriptor.description = "Commodore Keyboard Matrix Emulation";
+    keyboard->descriptor.create = NULL;
+    keyboard->descriptor.destroy = NULL;
+    keyboard->descriptor.bus_attach = NULL;
+    keyboard->descriptor.bank_change = NULL;
 
     // Store model and matrix configuration
     keyboard->model = config->model;

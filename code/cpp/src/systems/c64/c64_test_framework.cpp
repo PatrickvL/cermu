@@ -8,7 +8,19 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#ifdef _MSC_VER
+#include <filesystem>
+namespace fs = std::filesystem;
+// POSIX compat macros for MSVC
+#ifndef S_ISREG
+#define S_ISREG(m) (((m) & _S_IFMT) == _S_IFREG)
+#endif
+#ifndef S_ISDIR
+#define S_ISDIR(m) (((m) & _S_IFMT) == _S_IFDIR)
+#endif
+#else
 #include <dirent.h>
+#endif
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -167,6 +179,47 @@ bool TestFramework::scan_tests() {
 }
 
 bool TestFramework::discover_tests_in_directory(const std::string& category_path, const std::string& category) {
+#ifdef _MSC_VER
+    // C++17 filesystem implementation for MSVC (no dirent.h)
+    if (!fs::is_directory(category_path)) {
+        if (verbose_) {
+            printf("  Category not found: %s\n", category.c_str());
+        }
+        return false;
+    }
+    
+    TestSuite suite;
+    suite.name = category;
+    
+    for (auto& entry : fs::recursive_directory_iterator(category_path)) {
+        if (!entry.is_regular_file()) continue;
+        auto ext = entry.path().extension().string();
+        if (ext != ".prg") continue;
+        
+        std::string full_path = entry.path().string();
+        // Convert backslashes to forward slashes for consistency
+        std::replace(full_path.begin(), full_path.end(), '\\', '/');
+        
+        // Compute relative path from category_path
+        std::string relative = fs::relative(entry.path(), category_path).string();
+        std::replace(relative.begin(), relative.end(), '\\', '/');
+        
+        TestDescriptor test = parse_test_from_file(full_path, category);
+        test.path = category + "/" + relative;
+        suite.tests.push_back(test);
+        test_registry_[test.path] = test;
+    }
+    
+    if (!suite.tests.empty()) {
+        test_suites_.push_back(suite);
+        if (verbose_) {
+            printf("  %s: %zu tests\n", category.c_str(), suite.tests.size());
+        }
+    }
+    
+    return !suite.tests.empty();
+#else
+    // POSIX implementation using dirent.h
     DIR* dir = opendir(category_path.c_str());
     if (!dir) {
         if (verbose_) {
@@ -178,7 +231,6 @@ bool TestFramework::discover_tests_in_directory(const std::string& category_path
     TestSuite suite;
     suite.name = category;
     
-    // Recursively scan for .prg files
     std::function<void(const std::string&, const std::string&)> scan_recursive;
     scan_recursive = [&](const std::string& dir_path, const std::string& rel_path) {
         DIR* d = opendir(dir_path.c_str());
@@ -195,10 +247,8 @@ bool TestFramework::discover_tests_in_directory(const std::string& category_path
             if (stat(full_path.c_str(), &st) != 0) continue;
             
             if (S_ISDIR(st.st_mode)) {
-                // Recurse into subdirectory
                 scan_recursive(full_path, relative);
             } else if (S_ISREG(st.st_mode)) {
-                // Check if it's a .prg file
                 size_t len = strlen(entry->d_name);
                 if (len > 4 && strcmp(entry->d_name + len - 4, ".prg") == 0) {
                     TestDescriptor test = parse_test_from_file(full_path, category);
@@ -221,7 +271,8 @@ bool TestFramework::discover_tests_in_directory(const std::string& category_path
         }
     }
     
-    return true;
+    return !suite.tests.empty();
+#endif
 }
 
 TestDescriptor TestFramework::parse_test_from_file(const std::string& prg_path, const std::string& category) {

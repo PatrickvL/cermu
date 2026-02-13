@@ -442,7 +442,7 @@ void SimpleSystemGUI::render_screen() {
         
         // Set cursor position and render
         ImGui::SetCursorPos(ImVec2(pos_x, pos_y));
-        ImGui::Image((void*)(intptr_t)screen_texture_id_,
+        ImGui::Image((ImTextureID)(intptr_t)screen_texture_id_,
                     ImVec2(display_w, display_h));
     }
     
