@@ -184,7 +184,7 @@ void SimpleSystemGUI::render_frame() {
     
     // Only render dialog if it's actually open
     if (system_selection_dialog_.is_open()) {
-        system_selection_dialog_.render(!system_);  // Don't allow cancel if no system loaded
+        system_selection_dialog_.render(system_ != nullptr);  // Allow cancel/close only when a system is already active
         
         // Check if dialog selection was confirmed
         if (system_selection_dialog_.selection_confirmed()) {
