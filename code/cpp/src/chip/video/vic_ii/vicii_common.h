@@ -418,6 +418,15 @@ typedef struct {
     vicii_priority_t* pixel_line_priority;
     uint8_t* pixel_line_color;  // Stores color INDICES (0-15), not RGB values
     
+    // Collision detection buffers (independent of display priority)
+    // The VIC-II detects collisions based on raw sequencer output, not display.
+    // Documentation (VIC-II-Updated2025.txt section 3.8.2):
+    //   MxM: "two or more sprite data sequencers output a non-transparent pixel"
+    //   MxD: "sprite non-transparent AND graphics data sequencer outputs foreground"
+    // These are parallel, independent circuits from the display priority multiplexer.
+    uint8_t* sprite_collision_line;  // Per-pixel bitmask: which sprites have non-transparent pixels
+    bool* graphics_fg_line;          // Per-pixel: whether graphics sequencer output foreground
+    
     uint32_t* framebuffer;
     int framebuffer_width;
     int framebuffer_height;
