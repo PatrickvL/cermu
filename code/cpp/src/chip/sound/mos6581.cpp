@@ -832,29 +832,35 @@ void voice_clock_cycle(voice_t* voice) {
 bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) {
     if (!sid) return bus_state;
 
-    // Update at SID frequency (PAL: every 18 cycles, NTSC: every 17 cycles)
-    uint32_t divisor = sid->pal_timing ? 18 : 17;
+    // Clock all three voices every CPU cycle (like real hardware)
+    for (int i = 0; i < 3; i++) {
+        voice_clock_cycle(sid->voices[i]);
+    }
 
-    if (sid->cycle_count % divisor == 0) {
-        // Update all voices
-        for (int i = 0; i < 3; i++) {
-            voice_clock_cycle(sid->voices[i]);
+    // Use fractional accumulator to generate output samples at the target
+    // sample rate (e.g. 44100 Hz) from the CPU clock rate (e.g. 985248 Hz).
+    // Each CPU cycle advances the accumulator by (sample_rate / cpu_clock).
+    // When it passes 1.0 we emit a sample.
+    if (sid->cpu_clock > 0.0f) {
+        sid->sample_accumulator += (double)sid->sample_rate / (double)sid->cpu_clock;
+
+        if (sid->sample_accumulator >= 1.0) {
+            sid->sample_accumulator -= 1.0;
+
+            // Mix voices and generate output
+            uint32_t mixed_sample = mos6581_mix_voices(sid);
+
+            // Convert to float and store in ring buffer
+            float sample = ((float)mixed_sample - 32768.0f) / 32767.0f;
+            ring_buffer_write(&sid->sample_buffer, sample);
+
+            sid->samples_generated++;
         }
-
-        // Mix voices and generate output
-        uint32_t mixed_sample = mos6581_mix_voices(sid);
-
-        // Convert to float and store in ring buffer
-        float sample = ((float)mixed_sample - 32768.0f) / 32767.0f;
-        ring_buffer_write(&sid->sample_buffer, sample);
-
-        sid->samples_generated++;
     }
 
     sid->cycle_count++;
     sid->total_cycles++;
 
-    // Return possibly updated bus state (for future expansion)
     return bus_state;
 }
 
@@ -890,7 +896,7 @@ void mos6581_set_timing(mos6581_t* sid, bool pal_timing) {
     if (!sid) return;
     
     sid->pal_timing = pal_timing;
-    sid->sid_rate = sid->voice1.cpu_clock / (pal_timing ? 18.0f : 17.0f);
+    sid->sid_rate = sid->cpu_clock / (pal_timing ? 18.0f : 17.0f);
     mos6581_filter_update_cutoff(sid);
 }
 
@@ -898,6 +904,18 @@ void mos6581_set_sample_rate(mos6581_t* sid, float sample_rate) {
     if (!sid) return;
     
     sid->sample_rate = sample_rate;
+}
+
+void mos6581_set_cpu_clock(mos6581_t* sid, float clock_hz) {
+    if (!sid) return;
+    
+    sid->cpu_clock = clock_hz;
+    for (int i = 0; i < 3; i++) {
+        sid->voices[i]->cpu_clock = clock_hz;
+    }
+    // Update derived timing values
+    sid->sid_rate = clock_hz / (sid->pal_timing ? 18.0f : 17.0f);
+    mos6581_filter_update_cutoff(sid);
 }
 
 int voice_cycles_per_millisecond(voice_t* voice) {
@@ -1168,6 +1186,7 @@ void mos6581_reset(mos6581_t* sid) {
     // Reset timing
     sid->cycle_count = 0;
     sid->subcycle_count = 0;
+    sid->sample_accumulator = 0.0;
     
     // Reset volume bug state
     sid->volume_change_click = false;
@@ -1217,13 +1236,15 @@ void* mos6581_system_create(chip_descriptor_t* desc) {
     for (int i = 0; i < 3; i++) {
         sid->voices[i]->voice_index = i;
         sid->voices[i]->sid = sid;
-        sid->voices[i]->cpu_clock = 1000000.0f; // Default 1MHz
+        sid->voices[i]->cpu_clock = 985248.0f; // PAL C64 default
     }
     
     // Initialize default settings
     sid->revision = SID_REVISION_6581_R2;
     sid->pal_timing = true;
     sid->sample_rate = 44100.0f;
+    sid->cpu_clock = 985248.0f;   // PAL C64 default
+    sid->sample_accumulator = 0.0;
     sid->enable_filter = true;
     sid->enable_distortion = true;
     sid->enable_digiboost = true;

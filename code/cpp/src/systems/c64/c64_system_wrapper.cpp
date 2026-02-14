@@ -1,7 +1,6 @@
 ﻿#include "c64_system_wrapper.h"
 #include "../../chip/input/commodore_keyboard.h"
 #include "../../chip/input/emu_key_sdl_map.h"
-#include "../../chip/cpu/fam65xx/mos6510.h"
 #include "../../gui/imgui_interface.h"
 #include "../../core/formats/format_registry.h"
 #include "../../core/formats/prg_format.h"
@@ -281,6 +280,11 @@ bool C64SystemWrapper::initialize() {
 }
 
 void C64SystemWrapper::shutdown() {
+    // Free any pending load that was never applied
+    if (pending_load_.active) {
+        format_load_result_free(&pending_load_.result);
+        pending_load_.active = false;
+    }
     if (c64_) {
         c64_system_destroy(c64_);
         c64_ = nullptr;
@@ -288,6 +292,12 @@ void C64SystemWrapper::shutdown() {
 }
 
 void C64SystemWrapper::reset() {
+    // Clear any pending deferred load (will be re-set by the next load_file call)
+    if (pending_load_.active) {
+        format_load_result_free(&pending_load_.result);
+        pending_load_.active = false;
+    }
+    boot_completed_ = false;
     if (c64_) {
         c64_system_reset(c64_);
     }
@@ -298,13 +308,12 @@ void C64SystemWrapper::tick() {
         c64_system_tick(c64_);
         
         // CRITICAL: Sync base class cycle counter with C64's internal counter
-        // The C64 system maintains its own cycle count in c64_->total_cycles
-        // which is updated by c64_system_tick(). We sync it here to keep the
-        // base class counter accurate for the GUI and other systems that query it.
-        //
-        // FUTURE: When merged into unified C64System, total_cycles_ will be
-        // the single authoritative counter, updated directly in tick().
         total_cycles_ = c64_->total_cycles;
+
+        // Check if a deferred file load is waiting for BASIC to reach READY
+        if (pending_load_.active && is_basic_ready()) {
+            apply_pending_load();
+        }
     }
 }
 
@@ -335,24 +344,83 @@ static void c64_mem_write_block(void* ctx, uint16_t addr,
     memcpy(&ram->memory[addr], data, len);
 }
 
-static void c64_set_pc_callback(void* ctx, uint16_t addr) {
-    mos6510_set_pc(static_cast<mos6510_t*>(ctx), addr);
-}
-
 bool C64SystemWrapper::load_file(const char* filepath) {
     if (!c64_) {
         printf("C64: System not initialized\n");
         return false;
     }
-    
+
     printf("C64: Loading file: %s\n", filepath);
 
+    // Clear any previous pending load
+    if (pending_load_.active) {
+        format_load_result_free(&pending_load_.result);
+        pending_load_.active = false;
+    }
+
+    // Parse the file into a format result
     format_load_result_t result = {};
     if (!format_load_file(filepath, &result)) {
         printf("C64: Failed to load file: %s\n", result.error_msg);
         format_load_result_free(&result);
         return false;
     }
+
+    // Defer loading until KERNAL/BASIC boot completes.
+    // The CPU starts at $FCE2 (KERNAL reset vector) and must complete its
+    // full boot sequence — IOINIT, RAMTAS, RESTOR, screen init, BASIC cold
+    // start — before we write program data to RAM. This prevents BASIC's
+    // NEW routine from zeroing $0801/$0802 and corrupting the loaded program.
+    //
+    // FUTURE OPTIMIZATION: Programs that load outside the BASIC area (e.g.
+    // raw ML at $C000+) and don't rely on BASIC pointers or KERNAL-
+    // initialized hardware could be loaded immediately, saving ~1.5M cycles
+    // of emulated boot time. Combined with KERNAL memory-test/clear loop
+    // patching, this could enable near-instant startup for many programs.
+    pending_load_.result = result;  // Transfer ownership (don't free yet)
+    pending_load_.filepath = filepath;
+    pending_load_.active = true;
+
+    printf("C64: File parsed — deferred until BASIC READY\n");
+    return true;
+}
+
+bool C64SystemWrapper::is_basic_ready() const {
+    if (!c64_ || !c64_->ram) return false;
+
+    const uint8_t* ram = c64_->ram->memory;
+
+    // The BASIC warm-start vector at $0302/$0303 is set to $A483 by the
+    // very first subroutine of the cold-start sequence (JSR $E453, which
+    // copies the vector table to $0300-$030B).  However, BASIC's NEW
+    // routine — which zeros $0801/$0802 — doesn't run until the THIRD
+    // subroutine (JSR $E422 → JMP $A644).  If we inject program data
+    // after the vector is set but BEFORE NEW runs, NEW will overwrite
+    // our first two bytes at $0801/$0802 with $00, making BASIC think
+    // no program exists.
+    //
+    // To avoid this, we also check VARTAB ($2D).  During cold boot,
+    // RAMTAS clears all of zero page ($2D = $00).  The BASIC cold-start
+    // code at $E3BF does NOT touch $2D.  Only NEW (at $A651) sets it to
+    // TXTTAB+2 = $03.  So $2D != $00 guarantees NEW has already run.
+    //
+    // After the first boot completes, we skip the VARTAB check because
+    // a program could legitimately set VARTAB to an address whose low
+    // byte is $00 (e.g. $1000).
+    if (ram[0x0302] != 0x83 || ram[0x0303] != 0xA4)
+        return false;
+    if (ram[0x00C6] != 0)
+        return false;
+    if (!boot_completed_ && ram[0x002D] == 0)
+        return false;
+
+    return true;
+}
+
+void C64SystemWrapper::apply_pending_load() {
+    if (!pending_load_.active || !c64_) return;
+
+    printf("C64: BASIC READY — applying deferred load\n");
 
     commodore_load_context_t ctx = {};
     ctx.system_name     = "C64";
@@ -363,13 +431,17 @@ bool C64SystemWrapper::load_file(const char* filepath) {
     ctx.basic_params    = &COMMODORE_BASIC_C64;
     ctx.basic_start_addrs[0] = 0x0801;
     ctx.default_raw_addr = 0xC000;
-    ctx.set_pc          = c64_->mos6510 ? c64_set_pc_callback : nullptr;
-    ctx.pc_ctx          = c64_->mos6510;
+    // No set_pc for deferred loads — BASIC programs use RUN injection,
+    // and even ML programs benefit from full KERNAL init already done.
+    ctx.set_pc          = nullptr;
+    ctx.pc_ctx          = nullptr;
 
-    bool success = commodore_apply_load_result(&ctx, &result, filepath);
+    commodore_apply_load_result(&ctx, &pending_load_.result,
+                                pending_load_.filepath.c_str());
 
-    format_load_result_free(&result);
-    return success;
+    format_load_result_free(&pending_load_.result);
+    pending_load_.active = false;
+    boot_completed_ = true;
 }
 
 uint32_t* C64SystemWrapper::get_framebuffer() {
