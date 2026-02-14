@@ -383,6 +383,9 @@ void mos6526_render_settings_window(void* chip, bool* show_window) {
     ImGui::Text("SDR: $%02X", cia->reg[SDR]);
     ImGui::Text("Shift Register: $%02X", cia->reg[SHIFT_OFFSET]);
     ImGui::Text("Serial Shift: %d", cia->serial_shift);
+    ImGui::Text("CNT Output: %s", cia->cnt_output_state ? "HIGH" : "LOW");
+    ImGui::Text("SP Output: %d", cia->sp_output_bit ? 1 : 0);
+    ImGui::Text("SPMODE: %s", (cia->reg[CRA] & CRA_SPMODE) ? "Output" : "Input");
     
     // Reset to single column at the end
     ImGui::Columns(1, NULL, false);
