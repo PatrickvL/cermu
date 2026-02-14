@@ -813,7 +813,7 @@ bus_state_t vicii_registers_write(void* context, bus_state_t bus_state) {
                 sprite->expansion_flip_flop = !(value & (1 << i));
             }
             break;
-        case VICII_MP: // AI $d018 Memory pointers
+        case VICII_MP: // $d018 Memory pointers
             vicii_memory_update_mapping(&vicii->memory, value);
             break;
         case VICII_MXDP: // $d01b Sprite data priority
@@ -847,74 +847,36 @@ bus_state_t vicii_registers_write(void* context, bus_state_t bus_state) {
     return bus_state;
 }
 
-// Register read helper (used by register read)
-static inline uint8_t vicii_read_clear(vicii_registers_unit_t* regs, uint8_t reg) {
-    uint8_t val = regs->data[reg];
-    regs->data[reg] = 0;
-    return val;
-}
+// Compile-time bitmask of registers needing special handling
+#define VICII_SPECIAL_REGS ( \
+    (1ULL << VICII_C1)  | (1ULL << VICII_RASTER) | \
+    (1ULL << VICII_MXM) | (1ULL << VICII_MXD)    | \
+    (1ULL << VICII_C2)  | (1ULL << VICII_MP)     | \
+    (1ULL << VICII_IR)  | (1ULL << VICII_IE)       \
+)
 
-// Register read function (uses the above helper)
 bus_state_t vicii_registers_read(void* context, bus_state_t bus_state) {
     vicii_t* vicii = (vicii_t*)context;
-    uint16_t address = BUS_GET_ADDR(bus_state);
-    uint8_t reg = address & VICII_REGS_MASK;
-    // Used for "floating" bus state for subsequent unattached reads
-    uint8_t data = BUS_GET_DATA(bus_state);
-    
-    // Fast path for most common registers
-    switch (reg) {
-        case VICII_C1:
-            data = (vicii->registers.data[VICII_C1] & 0x7F) |       //    17 $d011 Control register 1
-                   ((vicii->timing.raster_counter >> 1) & VICII_C1_RST8); //         bit 7 (RST8) reflects raster_counter bit 8
-            break;
-        case VICII_RASTER:
-            data = vicii->timing.raster_counter & 0xFF;               //    18 $d012 Reflects raster_counter bits 0..7
-            break;
-        case VICII_C2:
-            data = vicii->registers.data[VICII_C2] | (data & VICII_C2_UNUSED); //    22 $d016 |  - |  - | RES| MCM|CSEL|    XSCROLL   | Control register 2
-            break;
-        case VICII_MP:
-            data = vicii->registers.data[VICII_MP] | (data & VICII_MP_UNUSED); //    24 $d018 |VM13|VM12|VM11|VM10|CB13|CB12|CB11|  - | Memory pointers
-            break;
-        case VICII_IR:
-            data = vicii->registers.data[VICII_IR] | (data & VICII_IR_UNUSED); //    25 $d019 | IRQ|  - |  - |  - | ILP|IMMC|IMBC|IRST| Interrupt register
-            // CRITICAL: Reading IR register clears ALL interrupt latches and IRQ flag
-            // Documentation (vic-ii.txt lines 2244-2260): "The interrupt register is a latch
-            // register. Reading will clear all interrupt latches and also the interrupt flag."
-            // The floating bits (VICII_IR_UNUSED) are handled in the read operation above,
-            // so we just clear the register to zero.
-            vicii->registers.data[VICII_IR] = 0;
-            // NOTE: IRQ line will be updated in vicii_tick() based on register state
-            
-            break;
-        case VICII_IE:
-            data = vicii->registers.data[VICII_IE] | (data & VICII_IE_UNUSED); //    26 $d01a |  - |  - |  - |  - | ELP|EMMC|EMBC|ERST| Interrupt Enabled
-            break;
-        case VICII_MXM:
-            data = vicii_read_clear(&vicii->registers, VICII_MXM_2);  //    30 $d01e Sprite-sprite collision is cleared on read
-            break;
-        case VICII_MXD:
-            data = vicii_read_clear(&vicii->registers, VICII_MXD_2);  //    31 $d01f Sprite-data collision is cleared on read
-            break;
-        default:
-            if (reg <= 29) {
-                data = vicii->registers.data[reg];                  //  0-29 $d000-$d01f (except 22,24,25,26) use all 8 bits
-            } else if (reg <= 46) {
-                data = vicii->registers.data[reg] | (data & 0xF0);  // 32-46 $d020-$d02e use bits 0..3 (bits 4..7 are not connected)
-            } else {
-                data = data;                                        // 47-63 $d02f-$d03f unattached registers (many docs say: give $ff on reading)
-            }
-            // Log other VIC-II reads during boot
-            static int other_reads = 0;
-            if (other_reads < 20 && reg != VICII_RASTER) {  // Skip raster reads (too many)
-                printf("[VIC-READ] $D0%02X = $%02X\n", reg, data);
-                other_reads++;
-            }
-            break;
+    uint8_t reg = BUS_GET_ADDR(bus_state) & VICII_REGS_MASK;
+    uint8_t bus_data = BUS_GET_DATA(bus_state);
+    uint8_t reg_val = vicii->registers.data[reg];
+
+    // Single test — one branch, predicted not-taken
+    if (__builtin_expect((VICII_SPECIAL_REGS >> reg) & 1, 0)) {
+        switch (reg) {
+            case VICII_C1:     reg_val = (reg_val & 0x7F) | ((vicii->timing.raster_counter >> 1) & VICII_C1_RST8); break;
+            case VICII_RASTER: reg_val = vicii->timing.raster_counter & 0xFF; break;
+            case VICII_MXM:    vicii->registers.data[reg] = 0; break;
+            case VICII_MXD:    vicii->registers.data[reg] = 0; break;
+            case VICII_C2:     reg_val = (reg_val & ~VICII_C2_UNUSED) | (bus_data & VICII_C2_UNUSED); break;
+            case VICII_MP:     reg_val = (reg_val & ~VICII_MP_UNUSED) | (bus_data & VICII_MP_UNUSED); break;
+            case VICII_IR:     reg_val = (reg_val & ~VICII_IR_UNUSED) | (bus_data & VICII_IR_UNUSED); break;
+            case VICII_IE:     reg_val = (reg_val & ~VICII_IE_UNUSED) | (bus_data & VICII_IE_UNUSED); break;
+        }
     }
 
-    BUS_SET_DATA(bus_state, data);
+    uint8_t mask = (reg < 47) * 0x0F | (reg < 32) * 0xF0;
+    BUS_SET_DATA(bus_state, (reg_val & mask) | (bus_data & ~mask));
     return bus_state;
 }
 

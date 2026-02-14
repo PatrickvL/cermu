@@ -86,6 +86,11 @@ uint8_t mos6510_get_io_data(mos6510_t *cpu);
 uint8_t mos6510_get_io_input(mos6510_t *cpu);
 void mos6510_set_io_input(mos6510_t *cpu, uint8_t value);
 
+// Set the context pointer passed to the bank_change callback.
+// By default, chip_instance points to the MOS6510 itself. Use this to override
+// it with a system pointer (e.g., c64_t*) so callbacks receive the correct context.
+void mos6510_set_bank_change_context(mos6510_t *cpu, void* context);
+
 // Global descriptor for chip registration
 extern chip_descriptor_t mos6510_descriptor;
 

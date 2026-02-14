@@ -560,6 +560,9 @@ void c64_system_reset(c64_t* c64) {
         mos6510_desc_t cpu_desc = {};
         mos6510_init((mos6510_t*)c64->mos6510, &cpu_desc);
         
+        // Re-set banking context after init (init resets chip_instance to CPU pointer)
+        mos6510_set_bank_change_context((mos6510_t*)c64->mos6510, c64);
+        
         // Read reset vector from KERNAL ROM
         uint16_t reset_vector = c64_read_kernal_reset_vector(&c64->bus);
         mos6510_set_pc((mos6510_t*)c64->mos6510, reset_vector);
@@ -735,6 +738,11 @@ c64_t* c64_system_create(const c64_config_t* config) {
     // The init() call is CRITICAL - without it, the CPU won't execute instructions
     mos6510_desc_t cpu_desc = {};  // Empty descriptor for now
     mos6510_init((mos6510_t*)c64->mos6510, &cpu_desc);
+    
+    // CRITICAL: Override chip_instance so banking callback receives c64_t*, not mos6510_t*
+    // mos6510_init sets chip_instance to the CPU pointer, but c64_cpu_banking_callback
+    // needs the C64 system pointer to access the bus for PLA mode switching.
+    mos6510_set_bank_change_context((mos6510_t*)c64->mos6510, c64);
     
     // After ROMs are loaded, read the reset vector and initialize CPU for immediate execution
     uint16_t reset_vector = c64_read_kernal_reset_vector(&c64->bus);
