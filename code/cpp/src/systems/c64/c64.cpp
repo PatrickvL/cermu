@@ -577,10 +577,6 @@ void c64_system_reset(c64_t* c64) {
     // Reset cycle counter
     c64->total_cycles = 0;
     
-    // Clear debug register intercept fields
-    c64->debug_reg_written = false;
-    c64->debug_reg_value = 0;
-    
     printf("C64 System: Reset complete\n");
 }
 

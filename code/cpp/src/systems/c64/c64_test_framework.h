@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <stdint.h>
+#include "../../core/system_lines.h"  // bus_state_t, BUS_GET_ADDR, BUS_GET_DATA
 
 // Forward declarations
 typedef struct ram_s ram_t;
@@ -144,6 +145,27 @@ struct TestFilter {
     bool matches(const TestDescriptor& test) const;
 };
 
+// =============================================================================
+// IO Write Intercept - wraps a chip write callback to capture specific writes
+// =============================================================================
+// This allows the test framework to monitor writes to specific IO addresses
+// (e.g., $D7FF debug register) WITHOUT adding any overhead to the normal
+// emulator hot path. The interceptor is installed by patching the io_handlers
+// array on the bus, and removed when testing completes.
+//
+// Usage pattern for other addresses: create additional io_write_intercept_t
+// instances and install them on the appropriate IO page(s).
+struct io_write_intercept_t {
+    bus_state_t (*original_write_handler)(void* context, bus_state_t bus_state);
+    void* original_chip_instance;
+    uint16_t watch_address;       // Full 16-bit address to intercept (e.g., 0xD7FF)
+    volatile bool written;        // Set true when watch_address is written
+    uint8_t value;                // Value that was written to watch_address
+};
+
+// Generic interceptor: checks address, captures value, passes through to original
+bus_state_t io_write_intercept_handler(void* context, bus_state_t bus_state);
+
 // Test framework class
 class TestFramework {
 public:
@@ -242,9 +264,15 @@ private:
     TestResult run_screenshot_test(const TestDescriptor& test, C64System* c64);
     bool compare_screenshots(const std::string& generated, const std::string& reference, double& similarity);
     
-    // Debug register monitoring
+    // Debug register monitoring via IO write intercept (zero-cost to main emulator)
     static constexpr uint16_t DEBUG_REGISTER = 0xD7FF;
-    bool check_debug_register(C64System* c64, uint8_t& value);
+    static constexpr uint8_t  DEBUG_REGISTER_IO_PAGE = 7; // IO page for $D700-$D7FF
+    io_write_intercept_t debug_intercept_;  // Intercept state for $D7FF
+    bool debug_intercept_installed_;        // Whether intercept is currently active
+
+    // Install/uninstall the $D7FF write interceptor on the bus io_handlers
+    void install_debug_intercept(C64System* c64);
+    void uninstall_debug_intercept(C64System* c64);
 };
 
 // Utility functions

@@ -28,6 +28,47 @@ namespace fs = std::filesystem;
 
 namespace c64_test {
 
+// =============================================================================
+// IO Write Intercept - generic handler for intercepting chip writes
+// =============================================================================
+bus_state_t io_write_intercept_handler(void* context, bus_state_t bus_state) {
+    io_write_intercept_t* intercept = (io_write_intercept_t*)context;
+    uint16_t address = BUS_GET_ADDR(bus_state);
+    if (address == intercept->watch_address) {
+        intercept->value = BUS_GET_DATA(bus_state);
+        intercept->written = true;
+    }
+    // Always pass through to the original chip handler
+    return intercept->original_write_handler(intercept->original_chip_instance, bus_state);
+}
+
+// Install the $D7FF debug register interceptor on SID IO page 7
+void TestFramework::install_debug_intercept(C64System* c64) {
+    if (debug_intercept_installed_) return;
+
+    auto& page = c64->bus.io_handlers[DEBUG_REGISTER_IO_PAGE];
+    debug_intercept_.original_write_handler = page.write_handler;
+    debug_intercept_.original_chip_instance = page.chip_instance;
+    debug_intercept_.watch_address = DEBUG_REGISTER;
+    debug_intercept_.written = false;
+    debug_intercept_.value = 0;
+
+    // Patch the io_handlers entry to route through the interceptor
+    page.write_handler = io_write_intercept_handler;
+    page.chip_instance = &debug_intercept_;
+    debug_intercept_installed_ = true;
+}
+
+// Uninstall the interceptor — restore original chip handler
+void TestFramework::uninstall_debug_intercept(C64System* c64) {
+    if (!debug_intercept_installed_) return;
+
+    auto& page = c64->bus.io_handlers[DEBUG_REGISTER_IO_PAGE];
+    page.write_handler = debug_intercept_.original_write_handler;
+    page.chip_instance = debug_intercept_.original_chip_instance;
+    debug_intercept_installed_ = false;
+}
+
 // Utility function implementations
 std::string test_status_to_string(TestStatus status) {
     switch (status) {
@@ -152,6 +193,8 @@ TestFramework::TestFramework(const std::string& vice_testprogs_path)
     , current_hardware_(HardwareConfig::NONE)
     , is_pal_system_(true)
     , is_ntsc_system_(false)
+    , debug_intercept_{}
+    , debug_intercept_installed_(false)
 {
 }
 
@@ -369,7 +412,7 @@ struct TickLoopResult {
     uint8_t border_color;
 };
 
-static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles) {
+static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles, io_write_intercept_t* intercept) {
     TickLoopResult r = {};
     r.reason = 1; // timeout by default
     
@@ -381,12 +424,12 @@ static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles) {
         for (uint32_t i = 0; i < max_cycles; i++) {
             c64_system_tick(c64);
             
-            // Check debug register
-            if (c64->debug_reg_written) {
+            // Check debug register via IO write intercept
+            if (intercept->written) {
                 r.reason = 0;
                 r.cycles = i + 1;
-                r.debug_value = c64->debug_reg_value;
-                c64->debug_reg_written = false;
+                r.debug_value = intercept->value;
+                intercept->written = false;
                 
                 // If pass/fail value, return immediately
                 if (r.debug_value == 0x00 || r.debug_value == 0xFF) {
@@ -1005,12 +1048,13 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
     }
     
     // Clear debug register intercept before test execution
-    c64->debug_reg_written = false;
-    c64->debug_reg_value = 0;
+    install_debug_intercept(c64);
+    debug_intercept_.written = false;
+    debug_intercept_.value = 0;
     
 #ifdef _WIN32
     // Use SEH-protected tick loop on Windows to catch access violations
-    TickLoopResult tr = tick_loop_protected(c64, max_cycles);
+    TickLoopResult tr = tick_loop_protected(c64, max_cycles, &debug_intercept_);
     cycles = tr.cycles;
     
     switch (tr.reason) {
@@ -1058,12 +1102,12 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
             }
             
             // Check debug register value
-            if (!has_explicit_result && c64->debug_reg_value != 0) {
-                if (c64->debug_reg_value == 0x00) {
+            if (!has_explicit_result && debug_intercept_.value != 0) {
+                if (debug_intercept_.value == 0x00) {
                     result.status = TestStatus::PASSED;
                     result.message = "Test passed ($D7FF = $00, then loop)";
                     has_explicit_result = true;
-                } else if (c64->debug_reg_value == 0xFF) {
+                } else if (debug_intercept_.value == 0xFF) {
                     result.status = TestStatus::FAILED;
                     result.message = "Test failed ($D7FF = $FF, then loop)";
                     has_explicit_result = true;
@@ -1103,10 +1147,10 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
         c64_system_tick(c64);
         cycles++;
         
-        // Check debug register intercept (set by c64_memory_tick on write to $D7FF)
-        if (c64->debug_reg_written) {
-            uint8_t value = c64->debug_reg_value;
-            c64->debug_reg_written = false;  // Acknowledge
+        // Check debug register intercept (set by io_write_intercept on write to $D7FF)
+        if (debug_intercept_.written) {
+            uint8_t value = debug_intercept_.value;
+            debug_intercept_.written = false;  // Acknowledge
             
             if (value == 0x00) {
                 result.status = TestStatus::PASSED;
@@ -1120,27 +1164,41 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
                 // ERRBUF ($5F00) stores color per subtest: 5=pass (green), 10=fail (red)
                 if (verbose_) {
                     printf("\n  ERRBUF ($5F00): ");
-                    for (int di = 0; di < 20; di++) {
+                    for (int di = 0; di < 24; di++) {
                         printf("%02X ", c64->ram->memory[0x5F00 + di]);
                     }
                     printf("\n");
-                    // Find first failing subtest and dump its TMP vs DATA
-                    for (int st = 0; st < 20; st++) {
+                    
+                    // Detect TMP/DATA base addresses by scanning common locations
+                    // cia1-3,5: TMP=$8000 DATA=$9000; cia4,6+: TMP=$6000 DATA=$8000
+                    uint16_t tmp_base = 0x8000;
+                    uint16_t dat_base = 0x9000;
+                    uint16_t sub_size = 0x100;
+                    // Heuristic: if $6000-$60FF has non-zero data, use $6000/$8000
+                    bool has_6000_data = false;
+                    for (int di = 0; di < 64; di++) {
+                        if (c64->ram->memory[0x6000 + di] != 0) { has_6000_data = true; break; }
+                    }
+                    if (has_6000_data) { tmp_base = 0x6000; dat_base = 0x8000; }
+                    
+                    // Dump up to 3 failing subtests
+                    int shown = 0;
+                    for (int st = 0; st < 24 && shown < 3; st++) {
                         if (c64->ram->memory[0x5F00 + st] == 0x0A) {
-                            uint16_t tmp_addr = 0x8000 + st * 0x100;
-                            uint16_t dat_addr = 0x9000 + st * 0x100;
-                            printf("  First fail: subtest %d (TMP=$%04X DATA=$%04X)\n", st, tmp_addr, dat_addr);
+                            uint16_t tmp_addr = tmp_base + st * sub_size;
+                            uint16_t data_addr = dat_base + st * sub_size;
+                            printf("  Fail subtest %d (TMP=$%04X DATA=$%04X)\n", st, tmp_addr, data_addr);
                             printf("  TMP (actual):    ");
                             for (int di = 0; di < 48; di++) printf("%02X ", c64->ram->memory[tmp_addr + di]);
                             printf("\n  DATA (expected): ");
-                            for (int di = 0; di < 48; di++) printf("%02X ", c64->ram->memory[dat_addr + di]);
+                            for (int di = 0; di < 48; di++) printf("%02X ", c64->ram->memory[data_addr + di]);
                             printf("\n  Differences:     ");
                             for (int di = 0; di < 48; di++) {
-                                if (c64->ram->memory[tmp_addr + di] != c64->ram->memory[dat_addr + di])
+                                if (c64->ram->memory[tmp_addr + di] != c64->ram->memory[data_addr + di])
                                     printf("^^ "); else printf("   ");
                             }
                             printf("\n");
-                            break;
+                            shown++;
                         }
                     }
                 }
@@ -1191,6 +1249,7 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
     }
 #endif
     
+    uninstall_debug_intercept(c64);
     result.cycles_executed = cycles;
     
     return result;
@@ -1205,8 +1264,10 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
     uint32_t cycles = 0;
     uint8_t debug_value = 0xFF;
     
-    // Initialize debug register to a known value (not 0x00 or 0xFF)
-    c64->ram->memory[DEBUG_REGISTER] = 0x42;
+    // Install IO write intercept for $D7FF debug register
+    install_debug_intercept(c64);
+    debug_intercept_.written = false;
+    debug_intercept_.value = 0;
     
     // Get initial PC for diagnostics
     mos6510_t* cpu = static_cast<mos6510_t*>(c64->mos6510);
@@ -1228,6 +1289,35 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
         c64_system_tick(c64);
         cycles++;
         
+        // Check IO write intercept for $D7FF writes (every cycle - it's just a bool check)
+        if (debug_intercept_.written) {
+            debug_value = debug_intercept_.value;
+            debug_intercept_.written = false;
+            
+            if (debug_value == 0x00) {
+                result.status = TestStatus::PASSED;
+                result.exit_code = 0x00;
+                result.message = "Test passed";
+                if (verbose_) {
+                    printf("\n  ✓ Test passed - $D7FF = $00 at cycle %u\n", cycles);
+                }
+                break;
+            } else if (debug_value == 0xFF) {
+                result.status = TestStatus::FAILED;
+                result.exit_code = 0xFF;
+                result.message = "Test failed";
+                if (verbose_) {
+                    printf("\n  ✗ Test failed - $D7FF = $FF at cycle %u\n", cycles);
+                }
+                break;
+            } else if (cycles <= 1000) {
+                // Debug register changed to a non-pass/fail value early on
+                if (verbose_) {
+                    printf("\n  ℹ️  $D7FF changed to $%02X at cycle ≤1000 (test is using debug register)\n", debug_value);
+                }
+            }
+        }
+        
         // Check PC every 1000 cycles for diagnostic
         if (cycles % 1000 == 0) {
             uint16_t current_pc = mos6510_get_pc(cpu);
@@ -1245,31 +1335,6 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
                 }
                 
                 last_pc = current_pc;
-            }
-            
-            // Check debug register
-            debug_value = c64->ram->memory[DEBUG_REGISTER];
-            if (debug_value == 0x00) {
-                result.status = TestStatus::PASSED;
-                result.exit_code = 0x00;
-                result.message = "Test passed";
-                if (verbose_) {
-                    printf("\n  ✓ Test passed - $D7FF = $00 at cycle %u\n", cycles);
-                }
-                break;
-            } else if (debug_value == 0xFF) {
-                result.status = TestStatus::FAILED;
-                result.exit_code = 0xFF;
-                result.message = "Test failed";
-                if (verbose_) {
-                    printf("\n  ✗ Test failed - $D7FF = $FF at cycle %u\n", cycles);
-                }
-                break;
-            } else if (debug_value != 0x42 && cycles == 1000) {
-                // Debug register changed from initial value - test is writing to it
-                if (verbose_) {
-                    printf("\n  ℹ️  $D7FF changed to $%02X at cycle ≤1000 (test is using debug register)\n", debug_value);
-                }
             }
         }
         
@@ -1305,18 +1370,19 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
         } else {
             if (verbose_) {
                 printf("  PC changed %u times, last PC=$%04X\n", pc_change_count, last_pc);
-                printf("  Final $D7FF value: $%02X (initial was $42)\n", debug_value);
+                printf("  Final $D7FF value: $%02X\n", debug_value);
                 if (entered_kernal) {
                     printf("  ⚠️  Test entered KERNAL code at cycle %u\n", kernal_entry_cycle);
                     printf("  ⚠️  This suggests: interrupt occurred, JSR to KERNAL, or memory banking issue\n");
-                } else if (debug_value == 0x42) {
-                    printf("  ⚠️  $D7FF never changed - test may not use this debug register\n");
+                } else if (debug_value == 0xFF) {
+                    printf("  ⚠️  $D7FF never changed from initial - test may not use this debug register\n");
                     printf("  ⚠️  Test might be waiting for VIC-II timing or other hardware\n");
                 }
             }
         }
     }
     
+    uninstall_debug_intercept(c64);
     return result;
 }
 

@@ -42,11 +42,6 @@ struct C64System {
     rom_t* kernal;              // Kernal ROM $E000-$FFFF (8KB)
 
     std::uint64_t total_cycles; // Total cycles executed by the system
-
-    // Debug register for test framework ($D7FF intercept)
-    // Written by c64_memory_tick when CPU writes to $D7FF (SID mirror area)
-    volatile bool debug_reg_written;  // Set true on any write to $D7FF
-    uint8_t debug_reg_value;          // Value written to $D7FF
 };
 
 // Legacy typedefs for compatibility during transition
