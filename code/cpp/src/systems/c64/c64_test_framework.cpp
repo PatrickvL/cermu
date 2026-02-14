@@ -1115,6 +1115,35 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
             } else if (value == 0xFF) {
                 result.status = TestStatus::FAILED;
                 result.message = "Test failed ($D7FF = $FF)";
+                
+                // Diagnostic dump for CIA tests: show first subtest error buffer
+                // ERRBUF ($5F00) stores color per subtest: 5=pass (green), 10=fail (red)
+                if (verbose_) {
+                    printf("\n  ERRBUF ($5F00): ");
+                    for (int di = 0; di < 20; di++) {
+                        printf("%02X ", c64->ram->memory[0x5F00 + di]);
+                    }
+                    printf("\n");
+                    // Find first failing subtest and dump its TMP vs DATA
+                    for (int st = 0; st < 20; st++) {
+                        if (c64->ram->memory[0x5F00 + st] == 0x0A) {
+                            uint16_t tmp_addr = 0x8000 + st * 0x100;
+                            uint16_t dat_addr = 0x9000 + st * 0x100;
+                            printf("  First fail: subtest %d (TMP=$%04X DATA=$%04X)\n", st, tmp_addr, dat_addr);
+                            printf("  TMP (actual):    ");
+                            for (int di = 0; di < 48; di++) printf("%02X ", c64->ram->memory[tmp_addr + di]);
+                            printf("\n  DATA (expected): ");
+                            for (int di = 0; di < 48; di++) printf("%02X ", c64->ram->memory[dat_addr + di]);
+                            printf("\n  Differences:     ");
+                            for (int di = 0; di < 48; di++) {
+                                if (c64->ram->memory[tmp_addr + di] != c64->ram->memory[dat_addr + di])
+                                    printf("^^ "); else printf("   ");
+                            }
+                            printf("\n");
+                            break;
+                        }
+                    }
+                }
                 break;
             }
         }

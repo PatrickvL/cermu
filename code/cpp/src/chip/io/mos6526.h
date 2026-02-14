@@ -77,6 +77,11 @@ typedef struct mos6526_s {
     // Per chips_mos6526.hpp lines 476-477: "Timer B Bug" implementation
     bool icr_read_this_cycle;
     
+    // Timer underflow event tracking (one-cycle pulse, NOT the persistent ICR flag)
+    // Used for Timer B cascade mode (counts Timer A underflows) and PB6/PB7 pulse output.
+    // Set TRUE during the late tick when underflow occurs, cleared at start of next late tick.
+    uint8_t timer_underflowed;
+    
     // PB6/PB7 toggle flip-flops (per CIA6526.txt lines 104-110)
     // Set HIGH on rising edge of START bit, toggle on each underflow
     // Used when PBON=1 and OUTMODE=1 (toggle mode)
@@ -106,11 +111,12 @@ typedef struct mos6526_s {
     void* port_b_read_context;
 
     // Multi-cycle delay line using StaticShiftRegister for cycle-accurate timing
-    // Configuration: TA_COUNT(4), TB_COUNT(4), TA_LOAD(2), TB_LOAD(2),
+    // Configuration: TA_COUNT(3), TB_COUNT(3), TA_LOAD(2), TB_LOAD(2),
     //                ONESHOT_A(2), ONESHOT_B(2), CNT_SWITCH_A(2), CNT_SWITCH_B(2)
+    // Count pipes use 3 bits (matching chips_mos6526.hpp reference: 2-cycle delay).
     // Pipe indices: 0=TA_COUNT, 1=TB_COUNT, 2=TA_LOAD, 3=TB_LOAD,
     //               4=ONESHOT_A, 5=ONESHOT_B, 6=CNT_SWITCH_A, 7=CNT_SWITCH_B
-    using DelayLine = StaticShiftRegister<uint64_t, 4, 4, 2, 2, 2, 2, 2, 2>;
+    using DelayLine = StaticShiftRegister<uint64_t, 3, 3, 2, 2, 2, 2, 2, 2>;
     DelayLine delay_line;
 } mos6526_t;
 
@@ -203,7 +209,14 @@ void mos6526_reset(mos6526_t* cia);
 bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state);
 bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state);
 
-// Main CIA tick function - entry point for cycle processing
+// Split CIA tick into two phases for cycle-accurate timer reads:
+// - tick_phi2: Apply pending interrupts (before CPU samples IRQ/NMI)
+// - tick_phi1: Timer counting, interrupt generation (after CPU register reads)
+// This ensures CPU reads see the pre-decrement timer value (matching real hardware).
+bus_state_t mos6526_tick_phi2(void* chip, bus_state_t bus_state);
+bus_state_t mos6526_tick_phi1(void* chip, bus_state_t bus_state);
+
+// Legacy single-phase tick (calls early+late in sequence, for non-C64 systems)
 bus_state_t mos6526_tick(void* chip, bus_state_t bus_state);
 
 #ifdef IMGUI_VERSION
