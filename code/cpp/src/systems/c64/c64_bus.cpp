@@ -158,18 +158,6 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
             // Calculate IO page number from address (0-15 for $D000-$DFFF)
             const uint8_t io_page = (address >> 8) & 0x0F; // Extract page number from $Dx00 addresses
 
-            // DEBUG REGISTER INTERCEPT: Capture writes to $D7FF for test framework
-            // $D7FF is in the SID mirror area (pages 4-7). Tests write $00=pass, $FF=fail.
-            // We intercept here because the bus state is overwritten by later tick phases,
-            // making post-tick bus monitoring unreliable.
-            if (unlikely(address == 0xD7FF)) {
-                c64_t* c64 = (c64_t*)c64_bus->c64;
-                if (c64) {
-                    c64->debug_reg_value = BUS_GET_DATA(bus_state);
-                    c64->debug_reg_written = true;
-                }
-            }
-
             // Straight call to the appropriate handler - no conditionals needed
             bus_state = c64_bus->io_handlers[io_page].write_handler(
                 c64_bus->io_handlers[io_page].chip_instance, bus_state);
