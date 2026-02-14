@@ -141,6 +141,10 @@ void mos6510_set_io_input(mos6510_t *cpu, uint8_t value) {
   CPU_CAST(cpu)->io_port.input = value;
 }
 
+void mos6510_set_bank_change_context(mos6510_t *cpu, void* context) {
+  CPU_CAST(cpu)->chip_instance = context;
+}
+
 // ============================================================================
 // CHIP DESCRIPTOR AND INTERFACE
 // ============================================================================
