@@ -330,17 +330,14 @@ void c64_system_tick(c64_t* c64) {
     s = vicii_tick(c64->vicii, s);
 
     // =========================================================================
-    // PHASE 1.5: CIA TICKING (BEFORE CPU PHI2)
+    // PHASE 1.5: CIA PHI2 TICK (BEFORE CPU PHI2)
     // =========================================================================
-    // CRITICAL FIX: CIA chips must tick BEFORE CPU PHI2 so interrupt lines are set
-    // when the CPU samples them. The CPU samples IRQ/NMI during PHI2, so CIA must
-    // update these lines beforehand.
-    //
-    // CIA chips handle I/O and timing functions including interrupt generation.
-    // CIA2 must be ticked before CIA1 because CIA2 controls VIC-II bank switching.
+    // Apply pending interrupt lines so the CPU sees correct IRQ/NMI state.
+    // Timer counting is deferred to the phi1 tick (after memory service) so that
+    // CPU register reads see the pre-decrement timer value (matching real hardware).
     
-    s = mos6526_tick(c64->cia2, s);
-    s = mos6526_tick(c64->cia1, s);
+    s = mos6526_tick_phi2(c64->cia2, s);
+    s = mos6526_tick_phi2(c64->cia1, s);
 
     // =========================================================================
     // HARDWARE WIRING - BA signal to CPU RDY pin
@@ -376,6 +373,17 @@ void c64_system_tick(c64_t* c64) {
     // CRITICAL: This must happen AFTER vicii_tick sets up PHI2 access and AFTER CPU tick
     // =========================================================================
     s = c64_memory_tick(&c64->bus, s);
+
+    // =========================================================================
+    // PHASE 3.5: CIA PHI1 TICK (AFTER MEMORY SERVICE)
+    // =========================================================================
+    // Timer counting, TOD, serial I/O, and interrupt generation happen AFTER the
+    // memory service phase. This ensures CPU register reads (in the memory tick)
+    // see the pre-decrement timer values, matching real CIA hardware behavior.
+    // Interrupt events generated here are applied in the NEXT cycle's phi2 tick.
+    
+    s = mos6526_tick_phi1(c64->cia2, s);
+    s = mos6526_tick_phi1(c64->cia1, s);
 
     // =========================================================================
     // PHASE 4: CPU TICKING (PHI1 phase)
