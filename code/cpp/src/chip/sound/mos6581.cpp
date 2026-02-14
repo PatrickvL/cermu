@@ -155,20 +155,24 @@ void mos6581_filter_update_cutoff(mos6581_t* sid) {
     
     filter_state_t* f = &sid->filter_state;
     
-    // Calculate cutoff frequency from register value
+    // Calculate cutoff frequency in Hz from the 11-bit register (0-2047).
     float fc = (float)sid->filter_cutoff_frequency;
+    float normalized = fc / FILTER_CUTOFF_MAX;  // 0.0 .. 1.0
+    float cutoff_hz;
     
-    // Different formulas for different chip revisions
     if (sid->revision <= SID_REVISION_6581_R4AR) {
-        // 6581 formula (nonlinear)
-        f->cutoff_frequency = 5.5f * fc / FILTER_CUTOFF_MAX;
+        // 6581: roughly 220 Hz to ~12 kHz (non-linear / quadratic)
+        cutoff_hz = 220.0f + normalized * normalized * 11780.0f;
     } else {
-        // 8580 formula (more linear)
-        f->cutoff_frequency = 12.5f * fc / FILTER_CUTOFF_MAX;
+        // 8580: roughly 30 Hz to ~12.5 kHz (more linear)
+        cutoff_hz = 30.0f + normalized * 12470.0f;
     }
     
-    // Calculate filter coefficient
-    f->w0 = (float)(2.0f * M_PI * f->cutoff_frequency / sid->sid_rate);
+    f->cutoff_frequency = cutoff_hz;
+    
+    // Digital filter coefficient.  The filter runs once per audio sample
+    // (at sample_rate Hz), so w0 uses the audio sample rate.
+    f->w0 = (float)(2.0f * M_PI * cutoff_hz / sid->sample_rate);
     
     // Clamp to prevent instability
     if (f->w0 > 1.0f) f->w0 = 1.0f;
@@ -265,7 +269,8 @@ void mos6581_filter_set_model(mos6581_t* sid, bool use_nonlinear_model) {
 float mos6581_filter_get_cutoff_hz(mos6581_t* sid) {
     if (!sid) return 0.0f;
     
-    return (float)(sid->filter_state.cutoff_frequency * sid->sid_rate / (2.0f * M_PI));
+    // cutoff_frequency is now stored directly as Hz
+    return sid->filter_state.cutoff_frequency;
 }
 
 float mos6581_filter_get_resonance_q(mos6581_t* sid) {
@@ -317,10 +322,16 @@ uint32_t mos6581_mix_voices(mos6581_t* sid) {
     voice_apply_sync(&sid->voice2, &sid->voice1);
     voice_apply_sync(&sid->voice3, &sid->voice2);
     
-    // Apply ring modulation
+    // Apply ring modulation (affects oscillator output, before envelope)
     uint32_t voice1_output = voice_apply_ring_modulation(&sid->voice1, &sid->voice3);
     uint32_t voice2_output = voice_apply_ring_modulation(&sid->voice2, &sid->voice1);
     uint32_t voice3_output = voice_apply_ring_modulation(&sid->voice3, &sid->voice2);
+    
+    // Apply envelope to post-ring-modulated waveform (real SID path:
+    // Oscillator → Ring Mod → × Envelope → Mixer/Filter).
+    voice1_output = (voice1_output * sid->voice1.envelope_amplitude) >> 16;
+    voice2_output = (voice2_output * sid->voice2.envelope_amplitude) >> 16;
+    voice3_output = (voice3_output * sid->voice3.envelope_amplitude) >> 16;
     
     // Mix voices
     if (!sid->filter_voice1) {
@@ -423,9 +434,17 @@ void ring_buffer_destroy(ring_buffer_t* rb) {
 
 void ring_buffer_write(ring_buffer_t* rb, float sample) {
     if (!rb || !rb->buffer) return;
-    
+
+    // Check for overflow: if the next write position would equal read_pos,
+    // the buffer is full.  Drop the oldest sample by advancing read_pos
+    // so the buffer never appears spuriously empty (write_pos == read_pos).
+    uint32_t next = (rb->write_pos + 1) & rb->mask;
+    if (next == rb->read_pos) {
+        rb->read_pos = (rb->read_pos + 1) & rb->mask;
+    }
+
     rb->buffer[rb->write_pos] = sample;
-    rb->write_pos = (rb->write_pos + 1) & rb->mask;
+    rb->write_pos = next;
 }
 
 bool ring_buffer_empty(ring_buffer_t* rb) {
@@ -1187,6 +1206,11 @@ void mos6581_reset(mos6581_t* sid) {
     sid->cycle_count = 0;
     sid->subcycle_count = 0;
     sid->sample_accumulator = 0.0;
+
+    // Flush the sample ring buffer so the audio callback doesn't replay
+    // stale data from the previous session.
+    sid->sample_buffer.write_pos = 0;
+    sid->sample_buffer.read_pos = 0;
     
     // Reset volume bug state
     sid->volume_change_click = false;

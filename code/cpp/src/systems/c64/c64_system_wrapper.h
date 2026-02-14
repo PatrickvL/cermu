@@ -116,6 +116,9 @@ public:
 
     // Audio output — drains SID ring buffer
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
+
+    // Update SID sample rate to match actual audio device rate
+    void set_audio_sample_rate(int sample_rate_hz) override;
     
     // Note: The following methods are now provided by EmulatedSystem base class:
     // - get_configuration() - returns config_

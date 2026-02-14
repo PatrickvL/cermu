@@ -160,3 +160,7 @@ void EmulatedSystem::apply_file_configuration(const char* filepath) {
 uint32_t EmulatedSystem::get_audio_samples(float* /*buffer*/, uint32_t /*max_samples*/) {
     return 0; // No audio by default
 }
+
+void EmulatedSystem::set_audio_sample_rate(int /*sample_rate_hz*/) {
+    // No-op by default; systems with audio override this.
+}

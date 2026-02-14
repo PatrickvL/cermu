@@ -299,6 +299,13 @@ public:
     // get_audio_traits().sample_rate_hz.
     // Default implementation returns 0 (silence).
     virtual uint32_t get_audio_samples(float* buffer, uint32_t max_samples);
+
+    // Notify the system of the *actual* audio device sample rate.
+    // SDL may negotiate a rate different from the one advertised by
+    // get_audio_traits() (e.g. 48000 Hz instead of 44100 Hz on Linux).
+    // The system should adjust its audio generation to match.
+    // Default implementation does nothing.
+    virtual void set_audio_sample_rate(int sample_rate_hz);
 };
 
 // Include SystemRegistry (moved to separate file)

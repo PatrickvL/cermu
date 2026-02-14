@@ -330,8 +330,22 @@ void C64SystemWrapper::tick() {
 
 void C64SystemWrapper::run_frame() {
     uint32_t adjusted_cycles = static_cast<uint32_t>(cycles_per_frame_ * speed_multiplier_);
-    for (uint32_t i = 0; i < adjusted_cycles; i++) {
-        tick();
+
+    // Hot loop: call the C system tick directly to avoid per-cycle overhead
+    // from the wrapper tick() (which checks pending_load_ on every cycle).
+    // This cuts ~19,705 virtual dispatches + conditional checks per frame.
+    if (c64_) {
+        for (uint32_t i = 0; i < adjusted_cycles; i++) {
+            c64_system_tick(c64_);
+        }
+
+        // Sync cycle counter once per frame instead of per-cycle
+        total_cycles_ = c64_->total_cycles;
+
+        // Check deferred load once per frame (only active during boot)
+        if (pending_load_.active && is_basic_ready()) {
+            apply_pending_load();
+        }
     }
 }
 
@@ -574,12 +588,19 @@ void C64SystemWrapper::render_debug_windows(void* gui_state) {
 }
 
 uint32_t C64SystemWrapper::get_target_fps() const {
-    return 50;  // PAL
+    // Return target FPS from the currently-selected region (PAL=50, NTSC=60)
+    if (config_.region_option_index >= 0 &&
+        config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
+        return hardware_traits_.region_options[config_.region_option_index].timing.target_fps;
+    }
+    return 50;  // PAL default
 }
 
 void C64SystemWrapper::set_speed_multiplier(float multiplier) {
     speed_multiplier_ = multiplier;
-    cycles_per_frame_ = static_cast<uint32_t>(19705 * multiplier);
+    // Note: cycles_per_frame_ stays at the base value (region-dependent).
+    // The multiplier is applied in run_frame() via:
+    //   adjusted_cycles = cycles_per_frame_ * speed_multiplier_
 }
 
 // Note: get_total_cycles() now provided by base class (returns total_cycles_)
@@ -604,6 +625,7 @@ bool C64SystemWrapper::apply_configuration() {
         config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
         const RegionOption& region = hardware_traits_.region_options[config_.region_option_index];
         cycles_per_frame_ = region.timing.cycles_per_frame;
+        hardware_traits_.timing = region.timing;  // Keep active timing in sync
 
         // Map to legacy c64_config_t
         c64_config_.vicii_standard =
@@ -668,6 +690,14 @@ uint32_t C64SystemWrapper::get_audio_samples(float* buffer, uint32_t max_samples
     if (!c64_ || !c64_->sid || !buffer || max_samples == 0) return 0;
     mos6581_generate_samples(c64_->sid, buffer, max_samples);
     return max_samples;
+}
+
+void C64SystemWrapper::set_audio_sample_rate(int sample_rate_hz) {
+    if (c64_ && c64_->sid && sample_rate_hz > 0) {
+        printf("C64: Updating SID sample rate from %.0f to %d Hz\n",
+               c64_->sid->sample_rate, sample_rate_hz);
+        mos6581_set_sample_rate(c64_->sid, static_cast<float>(sample_rate_hz));
+    }
 }
 
 // Register C64 system with the registry
