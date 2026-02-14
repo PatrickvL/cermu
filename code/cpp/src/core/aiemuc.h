@@ -156,3 +156,17 @@
         return aiemuc_popcount((unsigned int)x) + aiemuc_popcount((unsigned int)(x >> 32));
     }
 #endif
+
+#include <cstdint>
+
+#if defined(__riscv) && __riscv_xlen >= 32 && defined(__riscv_zbt)
+static inline uint8_t bitmix(uint8_t a, uint8_t b, uint8_t mask) {
+    uint32_t r;
+    __asm__("cmix %0, %1, %2, %3" : "=r"(r) : "r"(mask), "r"(a), "r"(b));
+    return (uint8_t)r;
+}
+#else
+static inline uint8_t bitmix(uint8_t a, uint8_t b, uint8_t mask) {
+    return b ^ ((a ^ b) & mask);
+}
+#endif

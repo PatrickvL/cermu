@@ -868,15 +868,15 @@ bus_state_t vicii_registers_read(void* context, bus_state_t bus_state) {
             case VICII_RASTER: reg_val = vicii->timing.raster_counter & 0xFF; break;
             case VICII_MXM:    vicii->registers.data[reg] = 0; break;
             case VICII_MXD:    vicii->registers.data[reg] = 0; break;
-            case VICII_C2:     reg_val = (reg_val & ~VICII_C2_UNUSED) | (bus_data & VICII_C2_UNUSED); break;
-            case VICII_MP:     reg_val = (reg_val & ~VICII_MP_UNUSED) | (bus_data & VICII_MP_UNUSED); break;
-            case VICII_IR:     reg_val = (reg_val & ~VICII_IR_UNUSED) | (bus_data & VICII_IR_UNUSED); break;
-            case VICII_IE:     reg_val = (reg_val & ~VICII_IE_UNUSED) | (bus_data & VICII_IE_UNUSED); break;
+            case VICII_C2:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_C2_UNUSED); break;
+            case VICII_MP:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_MP_UNUSED); break;
+            case VICII_IR:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_IR_UNUSED); break;
+            case VICII_IE:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_IE_UNUSED); break;
         }
     }
 
     uint8_t mask = (reg < 47) * 0x0F | (reg < 32) * 0xF0;
-    BUS_SET_DATA(bus_state, (reg_val & mask) | (bus_data & ~mask));
+    BUS_SET_DATA(bus_state, bitmix(reg_val, bus_data, mask));
     return bus_state;
 }
 
