@@ -66,6 +66,8 @@ typedef struct mos6526_s {
     bool is_running_tod;
     int tod_cycles;
     int serial_shift;
+    bool cnt_output_state;  // CNT flip-flop for serial output mode (toggled by Timer A underflow)
+    bool sp_output_bit;     // Current SP output bit value (driven during serial output)
     uint8_t interrupt_mask;
     uint8_t interrupt_mask_delayed;  // 1-cycle delay for interrupt mask updates (IMR → IMR1)
     

@@ -46,7 +46,7 @@ typedef uint64_t bus_state_t;
 #define BUS_RW_BIT      48  // 1 = Read, 0 = Write
 #define BUS_SYNC_BIT    49  // Synchronize
 #define BUS_PHI2_BIT    50  // φ2 clock output
-/* 51 reserved */
+#define BUS_SP_BIT      51  // CIA SP pin (Serial Port data)
 #define BUS_BA_BIT      52  // Bus available
 #define BUS_VP_BIT      53  // Vector Pull
 #define BUS_ML_BIT      54  // Memory Lock
