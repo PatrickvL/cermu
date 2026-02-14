@@ -30,7 +30,7 @@ SimpleSystemGUI::SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system, const c
     , total_frames_(0)
     , actual_fps_(0)
     , last_fps_time_(0)
-    , fps_counter_(0)
+    , last_fps_frame_count_(0)
     , frame_pace_counter_(0)
     , frame_time_accumulator_(0.0)
     , system_selection_dialog_()
@@ -539,16 +539,18 @@ void SimpleSystemGUI::step_emulation() {
 // ============================================================================
 
 void SimpleSystemGUI::update_fps() {
-    fps_counter_++;
-    
+    // Count emulated frames completed this second (not main loop iterations).
+    // total_frames_ is incremented once per run_frame() call, so the delta
+    // over one second gives the true emulated FPS.
     uint32_t current_time = SDL_GetTicks();
     if (last_fps_time_ == 0) {
         last_fps_time_ = current_time;
+        last_fps_frame_count_ = total_frames_;
     }
     
     if (current_time - last_fps_time_ >= 1000) {
-        actual_fps_ = fps_counter_;
-        fps_counter_ = 0;
+        actual_fps_ = total_frames_ - last_fps_frame_count_;
+        last_fps_frame_count_ = total_frames_;
         last_fps_time_ = current_time;
     }
 }
@@ -811,6 +813,12 @@ void SimpleSystemGUI::open_audio_device() {
     audio_sample_rate_ = have.freq;
     printf("Audio: opened device — requested %d Hz, got %d Hz (buffer %d samples)\n",
            want.freq, have.freq, have.samples);
+
+    // If SDL negotiated a different sample rate (common on Linux with
+    // PipeWire/PulseAudio), update the system's audio generator to match.
+    if (have.freq != want.freq && system_) {
+        system_->set_audio_sample_rate(have.freq);
+    }
 
     // Unpause — SDL audio devices start paused
     SDL_PauseAudioDevice(audio_device_, 0);

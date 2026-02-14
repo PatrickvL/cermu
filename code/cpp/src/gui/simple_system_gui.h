@@ -27,7 +27,7 @@ private:
     uint64_t total_frames_;
     uint32_t actual_fps_;
     uint32_t last_fps_time_;
-    uint32_t fps_counter_;
+    uint64_t last_fps_frame_count_;  // total_frames_ snapshot for FPS delta
     
     // Frame pacing (time accumulator for correct emulation speed)
     uint64_t frame_pace_counter_;       // SDL_GetPerformanceCounter value

@@ -1844,7 +1844,6 @@ std::vector<TestResult> TestFramework::run_tests_with_auto_config(const std::vec
     
     C64System* current_c64 = nullptr;
     uint32_t* current_framebuffer = nullptr;  // Track framebuffer for cleanup
-    HardwareConfig last_config = HardwareConfig::NONE;
     
     for (size_t i = 0; i < tests.size(); i++) {
         const TestDescriptor& test = tests[i];
@@ -1887,8 +1886,6 @@ std::vector<TestResult> TestFramework::run_tests_with_auto_config(const std::vec
             if (current_c64->vicii && current_c64->vicii->pixel.framebuffer) {
                 current_framebuffer = current_c64->vicii->pixel.framebuffer;
             }
-            
-            last_config = current_hardware_;
         }
         
         // Run the test on current system (SEH-protected on Windows)

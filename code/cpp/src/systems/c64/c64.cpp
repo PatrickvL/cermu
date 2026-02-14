@@ -262,40 +262,24 @@ void (*bus_cycle_callback)(void) = NULL;
 
 // Single unified system tick function - the one place where the entire system is ticked
 void c64_system_tick(c64_t* c64) {
+    // Debug-only safety checks — these should never fire in a properly initialized system.
+    // In Release builds (NDEBUG defined), they compile to nothing.
+#ifndef NDEBUG
     if (unlikely(!c64)) {
         printf("ERROR: c64_system_tick called with NULL c64\n");
         fflush(stdout);
         return;
     }
+    if (unlikely(!c64->vicii || !c64->cia1 || !c64->cia2 || !c64->sid)) {
+        printf("ERROR: NULL chip pointer at cycle %llu\n", (unsigned long long)c64->total_cycles);
+        fflush(stdout);
+        return;
+    }
+#endif
 
-    // Optimized null check with unlikely hint - callback rarely set during normal emulation
+    // Test harness callback (rarely set during normal emulation)
     if (unlikely(bus_cycle_callback != NULL)) {
         bus_cycle_callback();
-    }
-
-    // Safety checks
-    if (unlikely(!c64->vicii)) {
-        printf("ERROR: c64->vicii is NULL at cycle %llu\n", (unsigned long long)c64->total_cycles);
-        fflush(stdout);
-        return;
-    }
-
-    if (unlikely(!c64->cia1)) {
-        printf("ERROR: c64->cia1 is NULL at cycle %llu\n", (unsigned long long)c64->total_cycles);
-        fflush(stdout);
-        return;
-    }
-
-    if (unlikely(!c64->cia2)) {
-        printf("ERROR: c64->cia2 is NULL at cycle %llu\n", (unsigned long long)c64->total_cycles);
-        fflush(stdout);
-        return;
-    }
-
-    if (unlikely(!c64->sid)) {
-        printf("ERROR: c64->sid is NULL at cycle %llu\n", (unsigned long long)c64->total_cycles);
-        fflush(stdout);
-        return;
     }
 
     c64->total_cycles++;
@@ -552,8 +536,15 @@ void c64_system_reset(c64_t* c64) {
         printf("  CIA2 reset complete\n");
     }
     
-    // Note: VIC-II and SID don't have explicit reset functions
-    // They are initialized during creation and work correctly without reset
+    // Note: VIC-II doesn't have an explicit reset function;
+    // it is initialized during creation and works correctly without reset.
+
+    // Reset SID — clears all registers, envelopes, and the sample ring buffer
+    // so a freshly-loaded program starts with silence rather than stale audio.
+    if (c64->sid) {
+        mos6581_reset(c64->sid);
+        printf("  SID reset complete\n");
+    }
     
     // Reset CPU last (so it can read the reset vector after other chips are ready)
     if (c64->mos6510) {
