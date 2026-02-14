@@ -300,6 +300,17 @@ void C64SystemWrapper::reset() {
     boot_completed_ = false;
     if (c64_) {
         c64_system_reset(c64_);
+
+        // Clear the memory locations that is_basic_ready() checks, so stale
+        // values from the previous session don't cause premature detection.
+        // KERNAL boot will set these properly: RAMTAS clears zero page
+        // (including $2D), $E453 copies the vector table ($0302/$0303),
+        // and NEW sets VARTAB ($2D) to TXTTAB+2.
+        if (c64_->ram) {
+            c64_->ram->memory[0x0302] = 0;
+            c64_->ram->memory[0x0303] = 0;
+            c64_->ram->memory[0x002D] = 0;
+        }
     }
 }
 
