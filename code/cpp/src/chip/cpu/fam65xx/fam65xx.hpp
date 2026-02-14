@@ -530,8 +530,10 @@ class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
         return false; // Not handled - allow normal memory access for test harness
       #else
         if (addr <= 0x0001) {
+          // $0000 = DDR (Data Direction Register)
+          // $0001 = Data Port (effective I/O value combining data, direction, and input)
           const uint8_t io_data =
-              (addr == 0x0000) ? this->read_io_port() : this->io_port.direction;
+              (addr == 0x0000) ? this->io_port.direction : this->read_io_port();
           FAM65XX_SET_DATA(pins, io_data);
           return true;
         }

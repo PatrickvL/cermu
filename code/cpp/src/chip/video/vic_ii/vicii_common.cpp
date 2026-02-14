@@ -435,7 +435,8 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                     
                 case VICII_GM_MULTICOLOR_TEXT:
                     if (vicii->video_data.video_color_line[vmli] & 0x08) {
-                        // Multicolor character - 2 bits per pixel
+                        // Multicolor character - 2 bits per pixel, displayed double-width
+                        // Each 2-bit pair spans 2 screen pixels. Only shift on odd pixels.
                         pixel_bits = (seq->shift_reg >> 6) & 3;
                         switch (pixel_bits) {
                             case 0: color_index = vicii->registers.data[VICII_B0C]; break;
@@ -444,8 +445,10 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                             case 3: color_index = vicii->video_data.video_color_line[vmli]; break;
                         }
                         is_background = (pixel_bits <= 1);  // MCM=1: "00","01" = background
-                        seq->shift_reg <<= 2;
-                        seq->pixel_in_char = (seq->pixel_in_char + 2) & 7;
+                        if (pixel & 1) {
+                            seq->shift_reg <<= 2;
+                        }
+                        seq->pixel_in_char = (seq->pixel_in_char + 1) & 7;
                     } else {
                         // Standard character in multicolor mode
                         pixel_bits = (seq->shift_reg >> 7) & 1;
@@ -470,6 +473,8 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                     break;
                     
                 case VICII_GM_MULTICOLOR_BITMAP:
+                    // Multicolor bitmap - 2 bits per pixel, displayed double-width
+                    // Each 2-bit pair spans 2 screen pixels. Only shift on odd pixels.
                     pixel_bits = (seq->shift_reg >> 6) & 3;
                     switch (pixel_bits) {
                         case 0: color_index = vicii->registers.data[VICII_B0C]; break;
@@ -478,8 +483,10 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                         case 3: color_index = vicii->video_data.video_color_line[vmli]; break;
                     }
                     is_background = (pixel_bits <= 1);  // MCM=1: "00","01" = background
-                    seq->shift_reg <<= 2;
-                    seq->pixel_in_char = (seq->pixel_in_char + 2) & 7;
+                    if (pixel & 1) {
+                        seq->shift_reg <<= 2;
+                    }
+                    seq->pixel_in_char = (seq->pixel_in_char + 1) & 7;
                     break;
                     
                 case VICII_GM_ECM_TEXT:
@@ -750,6 +757,7 @@ bus_state_t vicii_registers_write(void* context, bus_state_t bus_state) {
     vicii_t* vicii = (vicii_t*)context;
     uint8_t value = BUS_GET_DATA(bus_state);
     uint8_t reg = BUS_GET_ADDR(bus_state) & VICII_REGS_MASK; // The VIC registers are repeated each 64 bytes in the area $d000-$d3ff
+
     // Notes:
     // * Some not-connected bits (marked with '-') are written anyway here,
     //   because determing the mask for those would only be slower, for no benefit
