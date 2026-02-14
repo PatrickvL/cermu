@@ -949,24 +949,24 @@ static inline void vicii_reset_vcbase_vc(vicii_t* vicii) {
 // "Raster comparison is edge-triggered, not level-triggered. If $d012 is
 // continuously updated to follow the raster counter, it will never trigger
 // an IRQ condition. This edge-triggered behavior is documented in patent US4572506."
+//
+// This function is called ONCE at the start of each raster line (during line
+// transition in vicii_timing_advance).  Because the raster counter only changes
+// once per line, calling it at the transition point is inherently edge-triggered:
+// the interrupt fires once when the raster first reaches the compare value,
+// and won't fire again until the raster wraps around to that line in the next frame.
+//
+// CPU writes to $D012/$D011 that change the compare value to match the CURRENT
+// raster line will NOT trigger an interrupt until the next natural line transition
+// (patent US4572506 edge-triggered behavior).
 static inline void vicii_check_raster_interrupt(vicii_t* vicii) {
-    // Get current raster compare value
-    const uint16_t current_compare = vicii_get_raster_compare(vicii);
+    const uint16_t compare = vicii_get_raster_compare(vicii);
     
-    // Edge detection: Only trigger if compare value CHANGED and now matches raster
-    // This prevents continuous triggering when $d012 is updated every cycle
-    const bool compare_changed = (current_compare != vicii->timing.prev_raster_compare);
-    const bool compare_matches = (current_compare == vicii->timing.raster_counter);
-    
-    if (compare_changed && compare_matches) {
-        // Check if raster interrupt is enabled before setting it
-        if (vicii->registers.data[VICII_IE] & VICII_IE_ERST) {
-            vicii_set_interrupt(vicii, VICII_IR_IRST);
-        }
+    if (compare == vicii->timing.raster_counter) {
+        // Raster counter matches compare value — set the interrupt latch bit.
+        // vicii_set_interrupt only asserts IRQ if the ERST enable bit is also set.
+        vicii_set_interrupt(vicii, VICII_IR_IRST);
     }
-    
-    // Update previous compare value for next edge detection
-    vicii->timing.prev_raster_compare = current_compare;
 }
 
 // Helper function: Perform line 0 raster/IRQ operations
@@ -991,67 +991,77 @@ static inline void vicii_perform_line0_raster_irq_operations(vicii_t* vicii) {
     vicii_check_raster_interrupt(vicii);
 }
 
-void vicii_timing_advance(vicii_t* vicii) {
-    const bool end_of_line = vicii->timing.x_cycle == vicii->config->cycles_per_line - 1;
+// Helper: Reset line buffers for a new scanline
+// Initializes pixel/priority/collision buffers to default border state
+static inline void vicii_line_buffer_reset(vicii_t* vicii) {
+    if (!vicii->pixel.pixel_line_color) return;
+    
+    const uint16_t width = vicii->config->visible_pixels_per_line;
+    const uint8_t border_color = vicii->registers.data[VICII_EC] & 0x0F;
+    
+    memset(vicii->pixel.pixel_line_priority, VICII_PRIORITY_BORDER, width);
+    memset(vicii->pixel.pixel_line_color, border_color, width);
+    // Clear collision detection buffers for the new line
+    memset(vicii->pixel.sprite_collision_line, 0, width);
+    memset(vicii->pixel.graphics_fg_line, 0, width * sizeof(bool));
+}
 
-    if (!end_of_line) {
-        // Advance cycle counter
+void vicii_timing_advance(vicii_t* vicii) {
+    // Common case: advance within the current line
+    if (vicii->timing.x_cycle < vicii->config->cycles_per_line - 1) {
         vicii_set_x_cycle(vicii, vicii->timing.x_cycle + 1);
-    } else {
-        // CRITICAL: Flush the completed scanline BEFORE advancing to the next line
-        // This ensures pixels from the PREVIOUS raster line are written to the framebuffer
-        // at the correct Y position (which is still the OLD raster_counter value)
-        const uint16_t completed_raster = vicii->timing.raster_counter;
-        if (vicii->pixel.framebuffer && completed_raster < vicii->pixel.framebuffer_height) {
-            vicii_pixel_flush_line(vicii, vicii_get_default_palette(), completed_raster);
-        }
-        
-        vicii_set_x_cycle(vicii, 0);
-        
-        // CRITICAL: Check if we're about to enter raster 0x30 (first display raster)
-        // If so, reset VCBASE, VC, and display_state BEFORE advancing the raster counter
-        // This prevents cycle 58 on the previous line from corrupting VCBASE/VC
-        // and ensures display_state starts FALSE (will be set TRUE by first bad line)
-        if (vicii->timing.raster_counter == 0x2F) {
-            vicii->video_logic.vcbase = 0;
-            vicii->video_logic.vc = 0;
-            vicii->video_logic.display_state = false;
-        }
-        
-        // Normal line transition: update raster_counter
-        // Documentation (vic-ii.txt lines 1012-1014):
-        // "Note: After the end of raster line 311 in the 6569, the start of frame
-        // (line 0) occurs one cycle late. Line timing wraps normally at cycle 63,
-        // but the transition from line 311 to line 0 introduces this one-cycle delay."
-        //
-        // FRAME WRAP HANDLING:
-        // When raster_counter would wrap (311→0 for PAL, 261→0 for NTSC), we DON'T
-        // immediately reset to 0 here. Instead, we keep it at total_lines-1, and the
-        // cycle wrappers handle the actual transition in the next cycle:
-        // - PAL (6569): Cycle 1 wrapper executes line 0 ops (one-cycle delay)
-        // - NTSC (6567): Cycle 0 wrapper executes line 0 ops (immediate)
-        if (++vicii->timing.raster_counter >= vicii->config->total_lines) {
-            // Hold at last line; cycle wrappers will reset to 0 at proper timing
-            vicii->timing.raster_counter = vicii->config->total_lines - 1;
-        }
-        
-        // Spec (line 1229): "Once somewhere outside of the range of raster lines $30-$f7,
-        // VCBASE is reset to zero. This is presumably done in raster line 0."
-        // Reset once when entering non-display area, not continuously
-        if (vicii->timing.raster_counter == 0) {
-            vicii_reset_vcbase_vc(vicii);
-        }
-        
-        // Initialize with current border color from EC register
-        if (vicii->pixel.pixel_line_color && vicii->config->visible_pixels_per_line > 0) {
-            const uint8_t border_color = vicii->registers.data[VICII_EC] & 0x0F;
-            memset(vicii->pixel.pixel_line_priority, VICII_PRIORITY_BORDER, vicii->config->visible_pixels_per_line);
-            memset(vicii->pixel.pixel_line_color, border_color, vicii->config->visible_pixels_per_line);
-            // Clear collision detection buffers for the new line
-            memset(vicii->pixel.sprite_collision_line, 0, vicii->config->visible_pixels_per_line);
-            memset(vicii->pixel.graphics_fg_line, 0, vicii->config->visible_pixels_per_line * sizeof(bool));
-        }
+        return;
     }
+    
+    // --- End of line: flush scanline, advance raster, reset buffers ---
+    
+    // CRITICAL: Flush the completed scanline BEFORE advancing to the next line.
+    // This ensures pixels from the PREVIOUS raster line are written to the framebuffer
+    // at the correct Y position (which is still the OLD raster_counter value).
+    const uint16_t completed_raster = vicii->timing.raster_counter;
+    if (vicii->pixel.framebuffer && completed_raster < vicii->pixel.framebuffer_height) {
+        vicii_pixel_flush_line(vicii, vicii_get_default_palette(), completed_raster);
+    }
+    
+    vicii_set_x_cycle(vicii, 0);
+    
+    // CRITICAL: Pre-display area setup — reset video counters before entering raster $30
+    // (first display raster). This prevents cycle 58 on line $2F from corrupting
+    // VCBASE/VC and ensures display_state starts FALSE (set TRUE by first bad line).
+    if (completed_raster == 0x2F) {
+        vicii->video_logic.vcbase = 0;
+        vicii->video_logic.vc = 0;
+        vicii->video_logic.display_state = false;
+    }
+    
+    // Advance raster counter
+    // Documentation (vic-ii.txt lines 1012-1014):
+    // "Note: After the end of raster line 311 in the 6569, the start of frame
+    // (line 0) occurs one cycle late. Line timing wraps normally at cycle 63,
+    // but the transition from line 311 to line 0 introduces this one-cycle delay."
+    //
+    // FRAME WRAP HANDLING:
+    // When raster_counter would wrap (311→0 for PAL, 261→0 for NTSC), we DON'T
+    // immediately reset to 0 here. Instead, we clamp at total_lines-1, and the
+    // cycle wrappers handle the actual transition in the next cycle:
+    // - PAL (6569): Cycle 1 wrapper executes line 0 ops (one-cycle delay)
+    // - NTSC (6567): Cycle 0 wrapper executes line 0 ops (immediate)
+    const uint16_t new_raster = completed_raster + 1;
+    vicii->timing.raster_counter = (new_raster < vicii->config->total_lines)
+        ? new_raster
+        : vicii->config->total_lines - 1;  // Clamp; cycle wrappers reset to 0
+    
+    // Check raster interrupt on every line transition.
+    // Line 0 raster interrupt is handled separately in
+    // vicii_perform_line0_raster_irq_operations with proper PAL/NTSC delay timing.
+    // Guard: after the increment above, raster_counter is always in [1, total_lines-1],
+    // so this condition is always true — kept as a defensive invariant.
+    if (vicii->timing.raster_counter != 0) {
+        vicii_check_raster_interrupt(vicii);
+    }
+    
+    // Prepare line buffers for the next scanline
+    vicii_line_buffer_reset(vicii);
 }
 
 // ========================================================================================
