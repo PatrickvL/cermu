@@ -272,6 +272,42 @@ uint8_t mos6526_read_port_data(mos6526_t* cia, uint32_t p) { // p:A or B
         port_value = cia->port_b_read_callback(cia->port_b_read_context, port_value);
     }
     
+    // For Port B with PBON-forced output: timer output overrides register value.
+    // PBON makes PB6/PB7 show the timer output (pulse or toggle), not reg[PRB].
+    // Compute directly from current ICR/toggle state to avoid stale port_b_value.
+    if (p == B) {
+        uint8_t pbon_mask = 0;
+        uint8_t pbon_value = 0;
+        if (cia->reg[CRA] & CRA_PBON) {
+            pbon_mask |= PB6_MASK;
+            if ((cia->reg[CRA] & CRA_OUTMODE) == 0) {
+                // Pulse mode: PB6 HIGH for exactly one phi2 cycle on timer A underflow.
+                // Use timer_underflowed (one-cycle flag cleared each tick), not ICR
+                // (which persists until read).
+                if (cia->timer_underflowed & (1 << A))
+                    pbon_value |= PB6_MASK;
+            } else {
+                // Toggle mode: PB6 follows flip-flop
+                pbon_value |= (cia->pb67_toggle & PB6_MASK);
+            }
+        }
+        if (cia->reg[CRB] & CRB_PBON) {
+            pbon_mask |= PB7_MASK;
+            if ((cia->reg[CRB] & CRB_OUTMODE) == 0) {
+                // Pulse mode: PB7 HIGH for exactly one phi2 cycle on timer B underflow
+                if (cia->timer_underflowed & (1 << B))
+                    pbon_value |= PB7_MASK;
+            } else {
+                // Toggle mode: PB7 follows flip-flop
+                pbon_value |= (cia->pb67_toggle & PB7_MASK);
+            }
+        }
+        uint8_t normal_mask = output_mask & ~pbon_mask;  // Regular output bits
+        return (port_value & ~output_mask)         // Input bits (from pin/callback)
+             | (cia->reg[PRB] & normal_mask)       // Normal output bits (from register)
+             | (pbon_value & pbon_mask);            // PBON bits (timer output, live)
+    }
+    
     // Return combination: input bits from port_value, output bits from register
     return (port_value & ~output_mask) | (cia->reg[PRA + p] & output_mask);
 }
@@ -314,7 +350,7 @@ void mos6526_check_reload_timer(mos6526_t* cia, uint32_t t) { // t:A or B
         mos6526_reload_timer(cia, t);
 }
 
-void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edge, int in_mode, bool cnt_pin) { // t:A or B
+void mos6526_decrease_timer(mos6526_t* cia, uint32_t t) { // t:A or B
     uint32_t i = t * 2; // Turn A or B into TA_LO / TB_LO offsets
     uint16_t timer = (cia->reg[TA_HI + i] << 8) | cia->reg[TA_LO + i];
 
@@ -327,54 +363,20 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
     // This separation is critical: underflow fires when counter IS zero AND
     // counting is "becoming active" (pip[1]), even WITHOUT a decrement occurring.
     // This handles the case where counter starts at 0 or is loaded to 0.
+    //
+    // ALL input mode logic (PHI2, CNT, cascade) is handled in the pipeline
+    // injection section of tick_phi2 — this function just reads pipeline state.
     bool can_count = (t == A) ? cia->delay_line.Check(ta_count_pipe) : cia->delay_line.Check(tb_count_pipe);
     uint64_t pipe_bits = (t == A) ? cia->delay_line.Read(ta_count_pipe) : cia->delay_line.Read(tb_count_pipe);
     bool count_active = (pipe_bits >> 1) & 1;  // bit 1 = reference's pip[1]
 
     // =========================================================================
-    // Phase 1: Attempt to decrement counter
+    // Phase 1: Decrement counter if pipeline says so
     // =========================================================================
     if (can_count) {
-        // Note : CRA 5 INMODE mask is 1 bit (will only ever hit cases 0 and 1)
-        // "CRB 5,6 INMODE
-        // Bits CRB5 and CRB6 select one of four input modes for TIMER B as:
-        bool count_timer = false;
-        switch (in_mode) {
-            // 0 = TIMER A counts phi2 pulses
-            // 0 0 TIMER B counts phi2 pulses
-            case (0x00 << 5):  // 0b00 = 0x00
-                count_timer = true;  // Always count in PHI2 mode
-                break;
-            // 1 = TIMER A counts positive CNT transitions.
-            // 0 1 TIMER B counts positive CNT transitions.
-            case (0x01 << 5):  // 0b01 = 0x01
-                count_timer = cnt_is_positive_edge;
-                break;
-            // 1 0 TIMER B counts TIMER A underflow pulses.
-            case (0x02 << 5):  // 0b10 = 0x02
-                count_timer = (cia->timer_underflowed & (1 << A)) != 0;
-                break;
-            // 1 1 TIMER B counts TIMER A underflow pulses while CNT is high.
-            default:
-                count_timer = ((cia->timer_underflowed & (1 << A)) != 0) && cnt_pin;
-                break;
-        }
-
-        if (count_timer) {
-            timer--;
-            cia->reg[TA_LO + i] = (uint8_t)(timer & 0xFF);
-            cia->reg[TA_HI + i] = (uint8_t)(timer >> 8);
-        }
-    }
-
-    // For cascade/CNT modes, supplement count_active with direct event signals
-    // (since we don't inject cascade events into the count pipeline yet)
-    if (in_mode == (0x02 << 5) || in_mode == (0x03 << 5)) {
-        if (cia->timer_underflowed & (1 << A))
-            count_active = true;
-    } else if (in_mode == (0x01 << 5)) {
-        if (cnt_is_positive_edge)
-            count_active = true;
+        timer--;
+        cia->reg[TA_LO + i] = (uint8_t)(timer & 0xFF);
+        cia->reg[TA_HI + i] = (uint8_t)(timer >> 8);
     }
 
     // =========================================================================
@@ -395,19 +397,15 @@ void mos6526_decrease_timer(mos6526_t* cia, uint32_t t, bool cnt_is_positive_edg
         }
         mos6526_reload_timer(cia, t);
         
-        // Clear count pipeline to create 1-dead-cycle gap after reload.
+        // Clear ONLY bit 1 of count pipeline to create 1-dead-cycle gap after reload.
         // Per chips_mos6526.hpp: _M6526_PIP_CLR(t->pip, M6526_PIP_TIMER_COUNT, 1)
-        // With our 3-bit shift register (inject at LSB, shift left, check MSB):
-        //   After clear: pipe = 000
-        //   Pipeline tick (same cycle): Inject → 001, Shift → 010
-        //   Next timer: Check MSB = 0 → no decrement (dead cycle!)
-        //   But bit 1 = 1 → count_active true (if counter==0, underflow again)
-        //   Next pipeline: Inject → 011, Shift → 110
-        //   Next timer: Check MSB = 1 → decrement resumes
+        // Only clears the underflow-gate bit, leaving other pipeline bits intact.
+        // This ensures pipeline-driven cascade/CNT modes work correctly.
+        uint64_t bits = pipe_bits & ~(uint64_t(1) << 1);  // Clear bit 1 only
         if (t == A)
-            cia->delay_line.Clear(ta_count_pipe);
+            cia->delay_line.Inject(ta_count_pipe, bits);
         else
-            cia->delay_line.Clear(tb_count_pipe);
+            cia->delay_line.Inject(tb_count_pipe, bits);
         
         // Toggle PB6/PB7 flip-flop on timer underflow
         uint8_t toggle_bit = (t == A) ? PB6_MASK : PB7_MASK;
@@ -469,36 +467,38 @@ void mos6526_write_control_register(mos6526_t* cia, uint32_t c, uint8_t v) { // 
     // to prevent stale signals from causing phantom counts.
     if (c == A) {
         if (!(v & CRA_START)) {
-            // Timer stopped - clear countdown and oneshot signals
-            cia->delay_line.Clear(ta_count_pipe);
+            // Timer stopped - clear injection point of countdown pipeline
+            // and clear oneshot signals (matching reference: CLR at injection point)
+            cia->delay_line.Inject(ta_count_pipe, false);
             cia->delay_line.Clear(oneshot_a_pipe);
         }
     } else { // c == B
         if (!(v & CRB_START)) {
-            // Timer stopped - clear countdown and oneshot signals
-            cia->delay_line.Clear(tb_count_pipe);
+            // Timer stopped - clear injection point of countdown pipeline
+            // and clear oneshot signals
+            cia->delay_line.Inject(tb_count_pipe, false);
             cia->delay_line.Clear(oneshot_b_pipe);
         }
     }
 
     if ((v & CR_LOAD) > 0) {
-            // "Force Load
-            //  A strobe bit allows the timer latch to be loaded
-            // into the timer counter at any time, whether the timer
-            // is running or not."
-            // Per chips_mos6526.hpp reference: force load goes through LOAD pipeline
-            // with a 1-cycle delay (inject at bit 0, fires after next shift → MSB).
-            // When the LOAD fires, it also clears the count pipeline, creating a
-            // dead cycle that delays the first decrement by 1 cycle.
-            if (c == A)
-                cia->delay_line.Inject(ta_load_pipe);
-            else
-                cia->delay_line.Inject(tb_load_pipe);
-            
-            // "  4    LOAD   1 = FORCE LOAD (this is a STROBE input, there is no data storage, bit 4 will
-            //                    always read back a zero and writing a zero has no effect)."
-            v &= ~CR_LOAD; // Clear the LOAD strobe bit
-        }
+        // "Force Load
+        //  A strobe bit allows the timer latch to be loaded
+        // into the timer counter at any time, whether the timer
+        // is running or not."
+        // Per chips_mos6526.hpp reference: force load goes through LOAD pipeline
+        // with a 1-cycle delay (inject at bit 0, fires after next shift → MSB).
+        // When the LOAD fires, it also clears the count pipeline, creating a
+        // dead cycle that delays the first decrement by 1 cycle.
+        if (c == A)
+            cia->delay_line.Inject(ta_load_pipe);
+        else
+            cia->delay_line.Inject(tb_load_pipe);
+        
+        // "  4    LOAD   1 = FORCE LOAD (this is a STROBE input, there is no data storage, bit 4 will
+        //                    always read back a zero and writing a zero has no effect)."
+        v &= ~CR_LOAD; // Clear the LOAD strobe bit
+    }
     
     // NOTE: Do NOT clear ICR bits when manually stopping a timer.
     // Per CIA6526.txt: "Only reading the ICR will clear it."
@@ -973,15 +973,12 @@ bus_state_t mos6526_tick_phi2(void* chip, bus_state_t bus_state) {
     //   Cycle N+1: Pipeline injects+shifts (but timer already ran with old empty pip)
     //   Cycle N+2: Timer checks pip MSB → not yet set (signal at middle bit)
     //   Cycle N+3: Timer checks pip MSB → set! First decrement.
-    bool timer_a_running = (cia->reg[CRA] & CRA_START) > 0;
-    bool timer_b_running = (cia->reg[CRB] & CRB_START) > 0;
-    
-    // Timer A must be processed first so Timer B cascade mode can see the underflow
-    if (timer_a_running)
-        mos6526_decrease_timer(cia, A, cnt_is_positive_edge, cia->reg[CRA] & CRA_INMODE, cnt_pin);
-
-    if (timer_b_running)
-        mos6526_decrease_timer(cia, B, cnt_is_positive_edge, cia->reg[CRB] & CRB_INMODE, cnt_pin);
+    // Timer A must be processed first so Timer B cascade mode can see the underflow.
+    // ALWAYS process timers regardless of START state — the pipeline gates counting.
+    // In-flight pipeline bits must drain naturally after STOP, producing 1-2 more
+    // decrements (matching real hardware behavior tested by cia4).
+    mos6526_decrease_timer(cia, A);
+    mos6526_decrease_timer(cia, B);
 
     // =========================================================================
     // LOAD PIPELINE CHECK (from force load or HI byte write while stopped)
@@ -989,13 +986,18 @@ bus_state_t mos6526_tick_phi2(void* chip, bus_state_t bus_state) {
     // Per chips_mos6526.hpp: TIMER_LOAD[0] → counter = latch, CLR COUNT[1]
     // Runs regardless of timer state (force load works even when timer is stopped).
     // Must run AFTER decrease_timer so underflow reload happens first.
+    // Clear only bit 1 of count pipeline (matching reference), not all bits.
     if (cia->delay_line.Check(ta_load_pipe)) {
         mos6526_reload_timer(cia, A);
-        cia->delay_line.Clear(ta_count_pipe);
+        uint64_t bits = cia->delay_line.Read(ta_count_pipe);
+        bits &= ~(uint64_t(1) << 1);  // Clear bit 1 only
+        cia->delay_line.Inject(ta_count_pipe, bits);
     }
     if (cia->delay_line.Check(tb_load_pipe)) {
         mos6526_reload_timer(cia, B);
-        cia->delay_line.Clear(tb_count_pipe);
+        uint64_t bits = cia->delay_line.Read(tb_count_pipe);
+        bits &= ~(uint64_t(1) << 1);  // Clear bit 1 only
+        cia->delay_line.Inject(tb_count_pipe, bits);
     }
 
     if (cia->is_running_tod)
@@ -1029,20 +1031,50 @@ bus_state_t mos6526_tick_phi2(void* chip, bus_state_t bus_state) {
     // =========================================================================
     // DELAY LINE (Pipeline tick AFTER timer - matches reference order)
     // =========================================================================
-    // Timer A: Inject countdown signal if running in PHI2 mode
-    if ((cia->reg[CRA] & CRA_START) && ((cia->reg[CRA] & CRA_INMODE) == 0)) {
-        cia->delay_line.Inject(ta_count_pipe);
+    // Per chips_mos6526.hpp: _m6526_tick_pipeline
+    // Pipeline injection is INMODE-aware. The timer function itself is mode-
+    // agnostic — it just checks pipeline state for decrement/underflow.
+    // ALL counting mode logic lives HERE in the pipeline injection.
+    
+    // Timer A counter pipeline
+    // Timer A INMODE: bit 5 of CRA (0=PHI2, 1=CNT)
+    bool ta_active = false;
+    if ((cia->reg[CRA] & CRA_INMODE) == 0) {
+        ta_active = true;  // PHI2 mode: always active
+    } else {
+        ta_active = cnt_is_positive_edge;  // CNT mode: active on positive edge
     }
-    if (!timer_a_running) {
-        cia->delay_line.Clear(ta_count_pipe);
+    if (ta_active && (cia->reg[CRA] & CRA_START)) {
+        cia->delay_line.Inject(ta_count_pipe);
+    } else {
+        // Clear injection point only (LSB), matching reference CLR(pip, COUNT, 2)
+        // Lets in-flight pipeline bits drain naturally
+        cia->delay_line.Inject(ta_count_pipe, false);
     }
     
-    // Timer B: Inject countdown signal if running in PHI2 mode
-    if ((cia->reg[CRB] & CRB_START) && ((cia->reg[CRB] & CRB_INMODE) == 0)) {
-        cia->delay_line.Inject(tb_count_pipe);
+    // Timer B counter pipeline
+    // Timer B INMODE: bits 5-6 of CRB (00=PHI2, 01=CNT, 10=Timer A, 11=Timer A+CNT)
+    bool tb_active = false;
+    uint8_t crb_inmode = cia->reg[CRB] & CRB_INMODE;
+    switch (crb_inmode) {
+        case 0x00:  // PHI2
+            tb_active = true;
+            break;
+        case 0x20:  // CNT
+            tb_active = cnt_is_positive_edge;
+            break;
+        case 0x40:  // Timer A cascade
+            tb_active = (cia->timer_underflowed & (1 << A)) != 0;
+            break;
+        case 0x60:  // Timer A + CNT
+            tb_active = ((cia->timer_underflowed & (1 << A)) != 0) && cnt_pin;
+            break;
     }
-    if (!timer_b_running && !(cia->reg[CRB] & CRB_START)) {
-        cia->delay_line.Clear(tb_count_pipe);
+    if (tb_active && (cia->reg[CRB] & CRB_START)) {
+        cia->delay_line.Inject(tb_count_pipe);
+    } else {
+        // Clear injection point only (LSB), matching reference CLR(pip, COUNT, 2)
+        cia->delay_line.Inject(tb_count_pipe, false);
     }
     
     // Inject one-shot mode state each cycle (only while timer is running)
