@@ -632,6 +632,15 @@ c64_t* c64_system_create(const c64_config_t* config) {
     if (!(c64->charrom = static_cast<rom_t*>(create_and_register_chip(c64, &rom_descriptor, 0xD000, 4096)))) { c64_system_destroy(c64); return NULL; }
     if (!(c64->vicii = static_cast<vicii_t*>(create_and_register_chip(c64, vicii_descriptor, 0xD000, 1024)))) { c64_system_destroy(c64); return NULL; }
     if (!(c64->sid = static_cast<mos6581_t*>(create_and_register_chip(c64, &mos6581_descriptor, 0xD400, 1024)))) { c64_system_destroy(c64); return NULL; }
+    
+    // Configure SID timing to match the C64's actual CPU clock
+    {
+        bool is_pal = (config->vicii_standard == VIC_PAL);
+        float cpu_clock = is_pal ? 985248.0f : 1022727.0f;
+        mos6581_set_cpu_clock(c64->sid, cpu_clock);
+        mos6581_set_timing(c64->sid, is_pal);
+    }
+    
     if (!(c64->colorram = static_cast<mos2114_t*>(create_and_register_chip(c64, &mos2114_descriptor, 0xD800, 1024)))) { c64_system_destroy(c64); return NULL; }
     c64->vicii->colorram = c64->colorram; // Also assign to VIC-II for compatibility
     

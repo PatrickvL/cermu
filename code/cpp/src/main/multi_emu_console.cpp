@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <memory>
+#include <stdlib.h>
 
 // Simple console test for multi-system architecture
 int main(int argc, char** argv) {
@@ -71,29 +72,33 @@ int main(int argc, char** argv) {
         printf("Total Cycles: %llu\n", (unsigned long long)system->get_total_cycles());
         printf("Speed Multiplier: %.2f\n\n", system->get_speed_multiplier());
         
-        // Run a few frames
-        printf("Running 10 frames...\n");
-        for (int i = 0; i < 10; i++) {
+        // Allocate framebuffer for headless rendering
+        uint32_t* fb = (uint32_t*)calloc(width * height, sizeof(uint32_t));
+        if (fb) {
+            system->set_framebuffer(fb, width, height);
+            printf("Allocated %dx%d framebuffer for headless rendering\n\n", width, height);
+        }
+        
+        // Run enough frames for boot + program loading
+        int total_frames = 300;
+        printf("Running %d frames...\n", total_frames);
+        
+        // Drain audio periodically to prevent ring-buffer overflow
+        float drain_buf[8192];
+        for (int i = 0; i < total_frames; i++) {
             system->run_frame();
-            if (i % 5 == 4) {
-                printf("  Frame %d - Cycles: %llu\n", i + 1, 
-                       (unsigned long long)system->get_total_cycles());
+            if ((i + 1) % 50 == 0) {
+                uint32_t got = system->get_audio_samples(drain_buf, 8192);
+                printf("  Frame %d - Cycles: %llu, audio: %u samples\n", i + 1,
+                       (unsigned long long)system->get_total_cycles(), got);
             }
         }
         printf("\n");
         
-        // Test speed control
-        printf("Testing speed multiplier...\n");
-        system->set_speed_multiplier(2.0f);
-        printf("  Set to 2.0x: %.2f\n", system->get_speed_multiplier());
-        system->set_speed_multiplier(0.5f);
-        printf("  Set to 0.5x: %.2f\n", system->get_speed_multiplier());
-        system->set_speed_multiplier(1.0f);
-        printf("  Reset to 1.0x: %.2f\n\n", system->get_speed_multiplier());
-        
         // Shutdown
         printf("Shutting down %s...\n", desc.name);
         system->shutdown();
+        free(fb);
         printf("Shutdown complete\n\n");
         
         printf("=================================================\n");

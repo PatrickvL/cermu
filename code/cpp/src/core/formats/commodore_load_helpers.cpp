@@ -173,25 +173,35 @@ static bool handle_program(const commodore_load_context_t* ctx,
         /* Update BASIC pointers */
         set_basic_pointers(ctx, prg->load_addr, prg->end_addr);
 
-        /* Auto-run: prefer direct PC set (SYS address), else inject RUN */
-        if (run_addr != 0 && ctx->set_pc) {
-            printf("%s: Auto-running from $%04X\n", ctx->system_name, run_addr);
-            ctx->set_pc(ctx->pc_ctx, run_addr);
-        } else if (run_addr == 0) {
-            /* No SYS found — inject RUN into keyboard buffer */
-            default_inject_keys(ctx, "RUN\r");
-            printf("%s: Set BASIC pointers and injected RUN command\n",
-                   ctx->system_name);
-        } else {
-            /* SYS found but no PC setter — inject SYS command */
-            char cmd[16];
-            int len = snprintf(cmd, sizeof(cmd), "SYS%u\r", run_addr);
-            if (len > 0 && len <= 10) {
-                default_inject_keys(ctx, cmd);
-                printf("%s: Injected auto-start: SYS%u\n",
-                       ctx->system_name, run_addr);
-            }
+        /* Auto-run: inject RUN into the keyboard buffer.
+         *
+         * The system wrapper is responsible for deferring the call to this
+         * function until KERNAL/BASIC boot has completed (BASIC READY state).
+         * At that point:
+         *   - KERNAL has initialized all hardware (CIA, VIC-II, SID, IRQ vectors)
+         *   - BASIC has run its cold-start (including NEW, which zeroes $0801)
+         *   - The BASIC input loop is waiting for keyboard input
+         *
+         * Writing the program data NOW (after NEW) means it won't be corrupted.
+         * Injecting "RUN\r" into the keyboard buffer causes BASIC to execute
+         * the program normally — for SYS-stub programs, BASIC tokenizes RUN,
+         * finds the SYS statement, and jumps to the machine-language target.
+         *
+         * FUTURE OPTIMIZATION: Programs that load outside the BASIC area
+         * (e.g. raw ML at $C000+) and don't depend on KERNAL/BASIC-
+         * initialized state could be loaded before boot completes, reducing
+         * perceived startup latency.  Combined with KERNAL memory-test/clear
+         * loop patching, this could enable near-instant startup for such files.
+         * This is not yet implemented; the current approach prioritizes
+         * correctness over speed.
+         */
+        if (run_addr != 0) {
+            printf("%s: Auto-running from $%04X\n",
+                   ctx->system_name, run_addr);
         }
+        default_inject_keys(ctx, "RUN\r");
+        printf("%s: Set BASIC pointers and injected RUN command\n",
+               ctx->system_name);
     } else {
         /* Machine language program at non-BASIC address */
         uint16_t run_addr = 0;

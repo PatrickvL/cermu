@@ -2,9 +2,11 @@
 
 #include "../../core/emulated_system.h"
 #include "../../chip/input/keyboard_mapper.h"
+#include "../../core/formats/format_handler.h"
 #include "c64.h"
 #include "c64_config.h"
 #include <memory>
+#include <string>
 
 /**
  * C64 System Wrapper
@@ -133,7 +135,38 @@ private:
     c64_config_t c64_config_;  // Renamed to avoid conflict with base class config_
     void* gui_state_;  // Opaque pointer to gui_state_t (persistent GUI state)
     std::unique_ptr<KeyboardMapper> keyboard_mapper_;  // Layered keyboard mapping engine
-    
+
+    // =========================================================================
+    // DEFERRED LOADING
+    // =========================================================================
+    // File loading is deferred until KERNAL/BASIC boot completes. This avoids
+    // the problem where BASIC's cold-start NEW routine zeros $0801/$0802,
+    // corrupting program data loaded before boot. The wrapper stores the
+    // parsed format result and applies it only after BASIC reaches its READY
+    // state (warm-start vector set, keyboard buffer empty).
+    //
+    // FUTURE OPTIMIZATION: Some files (e.g. raw ML at $C000, or programs
+    // that never touch KERNAL/BASIC-initialized memory) could be loaded
+    // earlier — even before BASIC or KERNAL init completes. This would
+    // reduce the perceived startup latency. Combined with techniques like
+    // patching out KERNAL's memory test/clear loops, this could allow
+    // near-instant startup for many programs. Not yet implemented; the
+    // current approach prioritizes correctness over speed.
+    // =========================================================================
+    struct PendingLoad {
+        format_load_result_t result;  // Parsed file data (owns heap allocations)
+        std::string filepath;         // Original filepath for SYS-from-filename
+        bool active = false;          // Whether a deferred load is pending
+    };
+    PendingLoad pending_load_;
+    bool boot_completed_ = false;  // Set after first deferred load; skips VARTAB check
+
+    /** Check if BASIC has reached its READY state (safe to inject program). */
+    bool is_basic_ready() const;
+
+    /** Apply the pending load result to RAM and inject auto-run. */
+    void apply_pending_load();
+
     // Note: hardware_traits_, config_ (SystemConfiguration), speed_multiplier_,
     // total_cycles_ are now stored in EmulatedSystem base class
 };

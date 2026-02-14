@@ -252,6 +252,10 @@ typedef struct mos6581_s {
     uint8_t* combined_waveform_table; // Combined waveform lookup table
     bool combined_waveform_enabled;   // Combined waveform enable
     
+    // Fractional sample accumulator for cycle-accurate output
+    double sample_accumulator;        // Fractional accumulator for sample generation
+    float cpu_clock;                  // CPU clock frequency (e.g. 985248 for PAL)
+    
     // Statistics and debugging
     uint32_t total_cycles;            // Total cycles processed
     uint32_t samples_generated;       // Total samples generated
@@ -278,6 +282,7 @@ bus_state_t mos6581_registers_write(void* context, bus_state_t bus_state);
 void mos6581_set_revision(mos6581_t* sid, sid_revision_t revision);
 void mos6581_set_timing(mos6581_t* sid, bool pal_timing);
 void mos6581_set_sample_rate(mos6581_t* sid, float sample_rate);
+void mos6581_set_cpu_clock(mos6581_t* sid, float clock_hz);
 float mos6581_interpolate_sample(mos6581_t* sid, float position);
 
 // Chip descriptor
