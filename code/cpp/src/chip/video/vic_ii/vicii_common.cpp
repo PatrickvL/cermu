@@ -158,113 +158,119 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
     
     const uint8_t sprite_bit = (1 << param_sprite_num);
     const uint16_t sprite_x = vicii_sprite_get_x(vicii, param_sprite_num);
-    const uint16_t current_x = vicii->timing.x_coordinate;
+    const uint16_t base_x = vicii->timing.x_coordinate;
     
     // Sprite width: 24 pixels standard, 48 pixels when X-expanded
     const bool x_expanded = (vicii->registers.data[VICII_MXXE] & sprite_bit) != 0;
     const uint16_t sprite_width = x_expanded ? 48 : 24;
     
-    if (current_x < sprite_x || current_x >= (sprite_x + sprite_width)) return;
+    // Quick range check: do any of the 8 pixels in this cycle overlap the sprite?
+    if ((base_x + 7) < sprite_x || base_x >= (sprite_x + sprite_width)) return;
     
-    // Screen pixel offset within sprite, then map to shift register data index
-    const uint8_t screen_pixel_x = (uint8_t)(current_x - sprite_x);
-    const uint8_t data_pixel_x = x_expanded ? (screen_pixel_x >> 1) : screen_pixel_x;
-    
-    // Extract raw pixel data from shift register to determine transparency.
-    // Transparency check is separated from color determination: we bail out
-    // before the heavier pixel_line_x conversion and color register reads.
     const bool is_multicolor = (vicii->registers.data[VICII_MXMC] & sprite_bit) != 0;
-    uint8_t sprite_pixel_data;
     
-    if (is_multicolor) {
-        // Each 2-bit pair covers 2 adjacent data pixels (4 screen pixels when X-expanded)
-        const uint8_t pair_index = data_pixel_x >> 1;  // 0-11
-        sprite_pixel_data = (sprite->shift_reg >> (22 - pair_index * 2)) & 3;
-    } else {
-        // Single color: 1 bit per data pixel
-        sprite_pixel_data = (sprite->shift_reg >> (23 - data_pixel_x)) & 1;
-    }
-    
-    if (sprite_pixel_data == 0) return;  // transparent in both modes
-    
-    // Convert to line buffer position (handles hardware pipeline delay and centering).
-    // Done AFTER transparency but BEFORE color determination: avoids color register
-    // reads and collision buffer work for pixels that fall outside the visible area.
-    const int16_t pixel_line_x = vicii_fetch_x_to_buffer_pos(vicii, current_x);
-    if (pixel_line_x < 0 || pixel_line_x >= (int16_t)vicii->config->visible_pixels_per_line) return;
-    
-    // ---- Collision detection (independent of display priority) ----
-    // Documentation (VIC-II-Updated2025.txt section 3.8.2):
-    //   MxM: "two or more sprite data sequencers output a non-transparent pixel"
-    //   MxD: "one or more sprite data sequencers output a non-transparent pixel
-    //         and the graphics data sequencer outputs a foreground pixel"
-    // Collision is based on raw sequencer output, NOT on what is displayed.
-    // Collision does not need sprite_color — only sprite_bit and buffer indices.
-    // Disabled when vertical border flip flop is set (section 3.9).
-    if (!vicii->border.vertical_border_flip_flop) {
-        const uint8_t existing_sprites = vicii->pixel.sprite_collision_line[pixel_line_x];
+    // Process all 8 pixels in this cycle (matching the graphics sequencer)
+    for (int pixel = 0; pixel < 8; pixel++) {
+        const uint16_t current_x = base_x + (uint16_t)pixel;
         
-        // Sprite-sprite collision (MMC): any two sprites non-transparent at same position
-        if (existing_sprites != 0) {
-            // Set bits for ALL sprites involved in the collision (current + all existing)
-            const uint8_t collision_mask = existing_sprites | sprite_bit;
-            // Documentation (section 3.12): "only the first collision will trigger
-            // an interrupt (i.e. if the collision register contained zero before the
-            // collision)". The latch bit is always set; the IE register only gates IRQ.
-            const bool was_zero = (vicii->registers.data[VICII_MXM_2] == 0);
-            vicii->registers.data[VICII_MXM_2] |= collision_mask;
-            if (was_zero) {
-                vicii_set_interrupt(vicii, VICII_IR_IMMC);
-            }
-        }
+        // Per-pixel range check within the sprite
+        if (current_x < sprite_x || current_x >= (sprite_x + sprite_width)) continue;
         
-        // Sprite-data collision (MBC): sprite non-transparent AND graphics foreground
-        // Uses separate graphics_fg_line buffer that tracks raw graphics sequencer output,
-        // independent of any sprite overwrites in the display priority buffer.
-        if (vicii->pixel.graphics_fg_line[pixel_line_x]) {
-            const bool was_zero = (vicii->registers.data[VICII_MXD_2] == 0);
-            vicii->registers.data[VICII_MXD_2] |= sprite_bit;
-            if (was_zero) {
-                vicii_set_interrupt(vicii, VICII_IR_IMBC);
-            }
-        }
+        // Screen pixel offset within sprite, then map to shift register data index
+        const uint8_t screen_pixel_x = (uint8_t)(current_x - sprite_x);
+        const uint8_t data_pixel_x = x_expanded ? (screen_pixel_x >> 1) : screen_pixel_x;
         
-        // Record this sprite's presence at this pixel for future collision checks
-        vicii->pixel.sprite_collision_line[pixel_line_x] |= sprite_bit;
-    }
-    
-    // ---- Display priority (separate from collision detection) ----
-    // Documentation (VIC-II-Updated2025.txt section 3.8.2):
-    //   MxDP=0: sprite displays in front of foreground graphics
-    //   MxDP=1: sprite displays behind foreground graphics
-    // Between sprites: lower-numbered sprite ALWAYS has higher display priority.
-    // Processing order 7→0 ensures lower-numbered sprites overwrite higher-numbered ones.
-    const vicii_priority_t current_display_priority = vicii->pixel.pixel_line_priority[pixel_line_x];
-    const vicii_priority_t sprite_priority = sprite->priority;
-    // Sprite always overwrites a previous sprite (odd priority values: 1, 3)
-    // due to 7→0 processing order. Otherwise, sprite wins if its priority
-    // is strictly higher than the current pixel's.
-    const bool sprite_wins_display =
-        (current_display_priority & 1) | (sprite_priority > current_display_priority);
-    
-    if (sprite_wins_display) {
-        vicii->pixel.pixel_line_priority[pixel_line_x] = sprite_priority;
-        // Determine sprite color only when the pixel will actually be displayed.
-        // Deferred past collision detection and priority check to avoid color
-        // register reads when the sprite pixel is occluded.
-        uint8_t sprite_color;
+        // Extract raw pixel data from shift register to determine transparency.
+        uint8_t sprite_pixel_data;
+        
         if (is_multicolor) {
-            switch (sprite_pixel_data) {
-                case 1:  sprite_color = vicii->registers.data[VICII_MM0]; break;
-                case 2:  sprite_color = vicii->registers.data[VICII_M0C + param_sprite_num]; break;
-                default: sprite_color = vicii->registers.data[VICII_MM1]; break;  // case 3
-            }
+            // Each 2-bit pair covers 2 adjacent data pixels (4 screen pixels when X-expanded)
+            const uint8_t pair_index = data_pixel_x >> 1;  // 0-11
+            sprite_pixel_data = (sprite->shift_reg >> (22 - pair_index * 2)) & 3;
         } else {
-            sprite_color = vicii->registers.data[VICII_M0C + param_sprite_num];
+            // Single color: 1 bit per data pixel
+            sprite_pixel_data = (sprite->shift_reg >> (23 - data_pixel_x)) & 1;
         }
         
-        vicii->pixel.pixel_line_color[pixel_line_x] = sprite_color;
-    }
+        if (sprite_pixel_data == 0) continue;  // transparent in both modes
+        
+        // Convert to line buffer position (handles hardware pipeline delay and centering).
+        const int16_t pixel_line_x = vicii_fetch_x_to_buffer_pos(vicii, current_x);
+        if (pixel_line_x < 0 || pixel_line_x >= (int16_t)vicii->config->visible_pixels_per_line) continue;
+        
+        // ---- Collision detection (independent of display priority) ----
+        // Documentation (VIC-II-Updated2025.txt section 3.8.2):
+        //   MxM: "two or more sprite data sequencers output a non-transparent pixel"
+        //   MxD: "one or more sprite data sequencers output a non-transparent pixel
+        //         and the graphics data sequencer outputs a foreground pixel"
+        // Collision is based on raw sequencer output, NOT on what is displayed.
+        // Collision does not need sprite_color — only sprite_bit and buffer indices.
+        // Disabled when vertical border flip flop is set (section 3.9).
+        if (!vicii->border.vertical_border_flip_flop) {
+            const uint8_t existing_sprites = vicii->pixel.sprite_collision_line[pixel_line_x];
+            
+            // Sprite-sprite collision (MMC): any two sprites non-transparent at same position
+            if (existing_sprites != 0) {
+                // Set bits for ALL sprites involved in the collision (current + all existing)
+                const uint8_t collision_mask = existing_sprites | sprite_bit;
+                // Documentation (section 3.12): "only the first collision will trigger
+                // an interrupt (i.e. if the collision register contained zero before the
+                // collision)". The latch bit is always set; the IE register only gates IRQ.
+                const bool was_zero = (vicii->registers.data[VICII_MXM_2] == 0);
+                vicii->registers.data[VICII_MXM_2] |= collision_mask;
+                if (was_zero) {
+                    vicii_set_interrupt(vicii, VICII_IR_IMMC);
+                }
+            }
+            
+            // Sprite-data collision (MBC): sprite non-transparent AND graphics foreground
+            // Uses separate graphics_fg_line buffer that tracks raw graphics sequencer output,
+            // independent of any sprite overwrites in the display priority buffer.
+            if (vicii->pixel.graphics_fg_line[pixel_line_x]) {
+                const bool was_zero = (vicii->registers.data[VICII_MXD_2] == 0);
+                vicii->registers.data[VICII_MXD_2] |= sprite_bit;
+                if (was_zero) {
+                    vicii_set_interrupt(vicii, VICII_IR_IMBC);
+                }
+            }
+            
+            // Record this sprite's presence at this pixel for future collision checks
+            vicii->pixel.sprite_collision_line[pixel_line_x] |= sprite_bit;
+        }
+        
+        // ---- Display priority (separate from collision detection) ----
+        // Documentation (VIC-II-Updated2025.txt section 3.8.2):
+        //   MxDP=0: sprite displays in front of foreground graphics
+        //   MxDP=1: sprite displays behind foreground graphics
+        // Between sprites: lower-numbered sprite ALWAYS has higher display priority.
+        // Processing order 7→0 ensures lower-numbered sprites overwrite higher-numbered ones.
+        const vicii_priority_t current_display_priority = vicii->pixel.pixel_line_priority[pixel_line_x];
+        const vicii_priority_t sprite_priority = sprite->priority;
+        // Sprite always overwrites a previous sprite (odd priority values: 1, 3)
+        // due to 7→0 processing order. Otherwise, sprite wins if its priority
+        // is strictly higher than the current pixel's.
+        const bool sprite_wins_display =
+            (current_display_priority & 1) | (sprite_priority > current_display_priority);
+        
+        if (sprite_wins_display) {
+            vicii->pixel.pixel_line_priority[pixel_line_x] = sprite_priority;
+            // Determine sprite color only when the pixel will actually be displayed.
+            // Deferred past collision detection and priority check to avoid color
+            // register reads when the sprite pixel is occluded.
+            uint8_t sprite_color;
+            if (is_multicolor) {
+                switch (sprite_pixel_data) {
+                    case 1:  sprite_color = vicii->registers.data[VICII_MM0]; break;
+                    case 2:  sprite_color = vicii->registers.data[VICII_M0C + param_sprite_num]; break;
+                    default: sprite_color = vicii->registers.data[VICII_MM1]; break;  // case 3
+                }
+            } else {
+                sprite_color = vicii->registers.data[VICII_M0C + param_sprite_num];
+            }
+            
+            vicii->pixel.pixel_line_color[pixel_line_x] = sprite_color;
+        }
+    } // end 8-pixel loop
 }
 
 // Sprite sequencer 
@@ -1039,37 +1045,22 @@ void vicii_timing_advance(vicii_t* vicii) {
 // ========================================================================================
 
 static uint8_t vicii_cycle_sprite_p_access(vicii_t* vicii, int param_sprite_num) {
-    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-    
-    // BA/AEC will be set centrally in vicii_tick based on access type
-    if (den_enabled) {
-        vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[param_sprite_num];
-
-        if (sprite->enabled) { 
-            // Set sprite pointer for next cycle 
-            vicii->bus.active_sprite = sprite;
-            return VIC_ACCESS_P;
-        }
-    }
-    vicii->bus.active_sprite = NULL;
-    return VIC_ACCESS_IDLE;
+    // VICE reference: P-access (pointer fetch) is ALWAYS unconditional.
+    // The VIC-II always fetches the sprite pointer during PHI1, regardless of
+    // DEN, $D015 enable, or DMA state. This is confirmed by VICE viciisc/vicii-fetch.c
+    // vicii_fetch_sprite_pointer() which has no conditions whatsoever.
+    vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[param_sprite_num];
+    vicii->bus.active_sprite = sprite;
+    return VIC_ACCESS_P;
 }
 
 static uint8_t vicii_cycle_sprite_s_access(vicii_t* vicii, int param_sprite_num) {
-    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-    
-    // BA/AEC will be set centrally in vicii_tick based on access type
-    if (den_enabled) {
-        vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[param_sprite_num];
-
-        if (sprite->enabled) {
-            // Set sprite pointer for next cycle 
-            vicii->bus.active_sprite = sprite;
-            return VIC_ACCESS_S;
-        }
-    }
-    vicii->bus.active_sprite = NULL;
-    return VIC_ACCESS_IDLE;
+    // VICE reference: S-access always happens as a bus cycle (VIC-II always takes the bus).
+    // The actual data fetch is gated on sprite_dma (dma_enabled) in the bus read logic,
+    // but the bus cycle itself always occurs. Active_sprite is always set.
+    vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[param_sprite_num];
+    vicii->bus.active_sprite = sprite;
+    return VIC_ACCESS_S;
 }
 
 static uint8_t vicii_cycle_refresh(vicii_t* vicii, int unused_param) {
@@ -1084,6 +1075,8 @@ static uint8_t vicii_cycle_refresh(vicii_t* vicii, int unused_param) {
 }
 
 static uint8_t vicii_cycle_vc_load(vicii_t* vicii, int unused_param) {
+    // Cycle 15: VC load from VCBASE, VMLI clear
+
     bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
     
     // Spec (line 1236): "In the first phase of cycle 14 of each line, VC is loaded from VCBASE
@@ -1101,7 +1094,24 @@ static uint8_t vicii_cycle_vc_load(vicii_t* vicii, int unused_param) {
     return VIC_ACCESS_IDLE;
 }
 
+// VICE reference (viciisc/vicii-cycle.c): sprite_mcbase_update() at cycle 16 Phi2
+// MCBASE ← MC (if exp_flop set), DMA off if mcbase==63.
+// CRITICAL for sprite multiplexing: DMA turns off early (cycle 16) so cycles 55/56
+// can see !dma_enabled and re-trigger sprites on the same line.
+static inline void vicii_sprite_mcbase_update(vicii_t* vicii) {
+    for (int i = 0; i < VICII_NUM_SPRITES; i++) {
+        vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
+        if (sprite->expansion_flip_flop) {
+            sprite->mcbase = sprite->mc;  // MCBASE ← MC
+            if (sprite->mcbase == 63) {
+                sprite->dma_enabled = false;  // DMA off when all data consumed
+            }
+        }
+    }
+}
+
 static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int unused_param_vmli) {
+    // Char/color access for cycles 16-54 (cycle 16 wrapper adds MCBASE update before this)
     bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
     
     // BA/AEC will be set centrally in vicii_tick based on access type
@@ -1116,6 +1126,12 @@ static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int unused_param_vm
         }
     }
     return VIC_ACCESS_IDLE;
+}
+
+// Cycle 16: MCBASE update + first char/color access
+static uint8_t vicii_cycle_16_mcbase_char_color(vicii_t* vicii, int param_vmli) {
+    vicii_sprite_mcbase_update(vicii);
+    return vicii_cycle_char_color_access(vicii, param_vmli);
 }
 
 static uint8_t vicii_cycle_idle(vicii_t* vicii, int unused_param) {
@@ -1184,113 +1200,55 @@ static uint8_t vicii_cycle_sprite_p_0_ntsc(vicii_t* vicii, int param) {
     return vicii_cycle_sprite_p_access(vicii, param);
 }
 
-// Cycle 15: MCBASE increment when expansion flip-flop is set (Rule 7)
-static inline void vicii_cycle_15_mcbase_expansion(vicii_t* vicii) {
-    // "7. In the first phase of cycle 15, it is checked if the expansion flip flop
-    // is set. If so, MCBASE is incremented by 2."
-    for (int i = 0; i < VICII_NUM_SPRITES; i++) {
-        vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
-        if (sprite->expansion_flip_flop) {
-            sprite->mcbase += 2;
-        }
-    }
-}
-
-// Cycle 16: Expansion flip-flop inversion and MCBASE increment (Rule 7 from Section 3.8.1)
-static inline void vicii_cycle_16_expansion_check(vicii_t* vicii) {
-    // Documentation (vic-ii.txt lines 1927-1936, VICE correction):
-    // "7. In the first phase of cycle 16, it is checked if the expansion flip flop
-    // is set. If so, MCBASE is loaded from MC (MC->MCBASE), unless the CPU cleared
-    // the Y expansion bit in $d017 in the second phase of cycle 15, in which case
-    // MCBASE is set to X = (101010 & (MCBASE & MC)) | (010101 & (MCBASE | MC)).
-    // After the MCBASE update, the VIC checks if MCBASE is equal to 63 and turns
-    // off the DMA of the sprite if it is."
-    //
-    // CRITICAL CORRECTION: The original documentation incorrectly stated that
-    // sprite DISPLAY is turned off when MCBASE==63. The corrected documentation
-    // (from VICE project research) clarifies that only DMA is disabled here.
-    // Display state continues until cycle 58 check (see vicii_cycle_58_rc_check).
-    //
-    // This affects sprite crunch techniques and vertical sprite positioning.
-    
-    uint8_t mxye_reg = vicii->registers.data[VICII_MXYE];
-    for (int i = 0; i < VICII_NUM_SPRITES; i++) {
-        vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
-        
-        // First: If MxYE bit is set, invert the expansion flip-flop
-        if (mxye_reg & (1 << i)) {
-            sprite->expansion_flip_flop = !sprite->expansion_flip_flop;
-        }
-        // Second: If expansion flip-flop is set, increment MCBASE by 1
-        if (sprite->expansion_flip_flop) {
-            sprite->mcbase += 1;
-        }
-        // Third: Check if MCBASE == 63 and disable DMA (but NOT display_state)
-        // Display will be disabled later in cycle 58 based on DMA state
-        if (sprite->mcbase == 63) {
-            sprite->dma_enabled = false;
-            // DO NOT disable display_state here - it continues until cycle 58
-        }
-    }
-}
-
-// Wrapper for cycle 15: VC load + MCBASE expansion check
-static uint8_t vicii_cycle_vc_load_mcbase(vicii_t* vicii, int unused_param) {
-    vicii_cycle_15_mcbase_expansion(vicii);
-    return vicii_cycle_vc_load(vicii, unused_param);
-}
-
-// Wrapper for cycle 16: c/g access + expansion flip-flop check
-static uint8_t vicii_cycle_char_color_expansion_check(vicii_t* vicii, int unused_param_vmli) {
-    vicii_cycle_16_expansion_check(vicii);
-    return vicii_cycle_char_color_access(vicii, unused_param_vmli);
-}
-
 // Helper: Sprite Y-coordinate matching (shared by cycles 55 and 56)
-static void vicii_sprite_y_coordinate_check(vicii_t* vicii, bool is_cycle_55) {
-    // "2. If the MxYE bit is set in the first phase of cycle 55, the expansion
-    // flip flop is inverted."
-    // "3. In the first phases of cycle 55 and 56, the VIC checks for every sprite
-    // if the corresponding MxE bit in register $d015 is set and the Y coordinate
-    // of the sprite (odd registers $d001-$d00f) match the lower 8 bits of RASTER.
-    // If this is the case and the DMA for the sprite is still off, the DMA is
-    // switched on, MCBASE is cleared, and if the MxYE bit is set the expansion
-    // flip flip is reset."
-    
+// VICE reference (viciisc/vicii-cycle.c check_sprite_dma):
+//   For each sprite: if enabled($D015) AND Y matches AND !dma → turn on DMA
+//   turn_sprite_dma_on: sprite_dma |= bit, mcbase=0, exp_flop=1
+static void vicii_sprite_y_coordinate_check(vicii_t* vicii) {
     uint8_t mxe_reg = vicii->registers.data[VICII_MXE];
-    uint8_t mxye_reg = vicii->registers.data[VICII_MXYE];
     uint16_t raster = vicii->timing.raster_counter;
     for (int i = 0; i < VICII_NUM_SPRITES; i++) {
         vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
         
-        // Cycle 55 only: Invert expansion flip-flop if MxYE bit is set
-        if (is_cycle_55 && (mxye_reg & (1 << i))) {
-            sprite->expansion_flip_flop = !sprite->expansion_flip_flop;
-        }        
-        // Both cycles 55 and 56: Check Y-coordinate match
+        // Cycles 55 and 56: Check Y-coordinate match
         if ((mxe_reg & (1 << i)) && !sprite->dma_enabled) {
             uint8_t sprite_y = vicii->registers.data[VICII_M0Y + i * 2];
             if ((raster & 0xFF) == sprite_y) {
-                // Enable DMA, clear MCBASE, reset expansion flip-flop if MxYE set
+                // VICE: turn_sprite_dma_on() — DMA on, mcbase=0, exp_flop=1
+                // exp_flop is ALWAYS set to 1 (true), regardless of Y-expansion.
+                // The expansion toggle at cycle 56 will flip it if needed.
                 sprite->dma_enabled = true;
                 sprite->mcbase = 0;
-                if (mxye_reg & (1 << i)) {
-                    sprite->expansion_flip_flop = false;
-                }
+                sprite->expansion_flip_flop = true;
             }
+        }
+    }
+}
+
+// Helper: Expansion flip-flop toggle (cycle 56 Phi2)
+// VICE reference (viciisc/vicii-cycle.c check_exp):
+//   For each sprite: if DMA active AND Y-expanded → toggle exp_flop
+static void vicii_sprite_expansion_toggle(vicii_t* vicii) {
+    uint8_t mxye_reg = vicii->registers.data[VICII_MXYE];
+    for (int i = 0; i < VICII_NUM_SPRITES; i++) {
+        vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
+        if (sprite->dma_enabled && (mxye_reg & (1 << i))) {
+            sprite->expansion_flip_flop = !sprite->expansion_flip_flop;
         }
     }
 }
 
 // Cycle 55: Sprite Y-match + c/g access
 static uint8_t vicii_cycle_char_color_y_match(vicii_t* vicii, int unused_param_vmli) {
-    vicii_sprite_y_coordinate_check(vicii, true);
+    vicii_sprite_y_coordinate_check(vicii);
     return vicii_cycle_char_color_access(vicii, unused_param_vmli);
 }
 
-// Cycle 56: Sprite Y-match + idle access
+// Cycle 56: Sprite Y-match + expansion flip-flop toggle + idle access
+// VICE timing: ChkSprDma at Phi1(56), ChkSprExp at Phi2(56)
 static uint8_t vicii_cycle_idle_y_match(vicii_t* vicii, int unused_param) {
-    vicii_sprite_y_coordinate_check(vicii, false);
+    vicii_sprite_y_coordinate_check(vicii);
+    vicii_sprite_expansion_toggle(vicii);
     return vicii_cycle_idle(vicii, unused_param);
 }
 
@@ -1326,23 +1284,31 @@ static inline void vicii_cycle_58_rc_check(vicii_t* vicii) {
         vicii->video_logic.rc = (vicii->video_logic.rc + 1) & 0x07;
     }
 
-    // Rule 4: "In the first phase of cycle 58, the MC of every sprite is loaded from
-    // its belonging MCBASE (MCBASE->MC) and it is checked if the DMA for the
-    // sprite is turned on and the Y coordinate of the sprite matches the lower
-    // 8 bits of RASTER. If this is the case, the display of the sprite is
-    // turned on."    
+    // VICE-compatible sprite display state management (Rules 4 and 5)
+    // Reference: VICE viciisc/vicii-cycle.c check_sprite_display()
+    //
+    // MCBASE advancement and DMA termination now happen at cycle 16 (sprite_mcbase_update).
+    // Expansion flip-flop toggle happens at cycle 56 (check_exp).
+    // Cycle 58 only handles: MC ← MCBASE, display state on/off.
+    //
+    // Rule 4: "MC is loaded from MCBASE. If DMA is on and Y matches, display is turned on."
+    // Rule 5: "If DMA is off, display is turned off."
     for (int i = 0; i < VICII_NUM_SPRITES; i++) {
         vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
         
-        // Load MC from MCBASE
-        sprite->mc = sprite->mcbase;        
-        // Check if we should turn on sprite display
-        if (sprite->dma_enabled && !sprite->display_state) {
+        // Load MC from MCBASE (always, per VICE check_sprite_display)
+        sprite->mc = sprite->mcbase;
+        
+        if (sprite->dma_enabled) {
+            // Turn on display if DMA is on, sprite enabled, and Y matches
             uint8_t sprite_y = vicii->registers.data[VICII_M0Y + i * 2];
-
-            if ((vicii->timing.raster_counter & 0xFF) == sprite_y) {
+            if ((vicii->registers.data[VICII_MXE] & (1 << i)) &&
+                (vicii->timing.raster_counter & 0xFF) == sprite_y) {
                 sprite->display_state = true;
             }
+        } else {
+            // Rule 5: Turn off display if DMA is off
+            sprite->display_state = false;
         }
     }
 }
@@ -1462,13 +1428,11 @@ static inline bool vicii_cycle_needs_phi2_access(vicii_t* vicii, uint8_t cycle) 
         return false;
     }
     
-    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-    if (!den_enabled) {
-        return false;
-    }
-    
     // Check bad line c-access range (cycles 15-54 for PAL, same for NTSC)
+    // DEN only affects bad line detection, not sprite accesses
     if (cycle >= 15 && cycle <= 54) {
+        bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+        if (!den_enabled) return false;
         // CRITICAL: For future cycle prediction, we can safely use current is_bad_line
         // because bad line condition is established at cycle 15 and remains constant
         // throughout the entire line. The condition is checked/updated at cycle boundaries
@@ -1478,11 +1442,14 @@ static inline bool vicii_cycle_needs_phi2_access(vicii_t* vicii, uint8_t cycle) 
     }
     
     // Get sprite number from cycle table param field
+    // Sprite P/S accesses are independent of DEN (VICE confirmed)
     const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[cycle];
     int sprite_num = entry->param; // -1 for non-sprite accesses
     
     if (sprite_num >= 0 && sprite_num < VICII_NUM_SPRITES) {
-        return vicii->sprites.sprites[sprite_num].enabled;
+        // BA must go low for sprites with DMA active (not just $D015 enabled)
+        // VICE reference: vicii_check_sprite_ba checks sprite_dma bitmask
+        return vicii->sprites.sprites[sprite_num].dma_enabled;
     }
     
     return false;
@@ -1492,9 +1459,11 @@ static inline bool vicii_cycle_needs_phi2_access(vicii_t* vicii, uint8_t cycle) 
 // This should be called once per cycle in vicii_tick
 static inline bus_state_t vicii_update_ba_aec_signals(vicii_t* vicii, bus_state_t bus_state, uint8_t access_type) {
     // Check if we need PHI2 access NOW (current cycle)
-    bool needs_phi2_now = (access_type == VIC_ACCESS_C ||
-                           access_type == VIC_ACCESS_P ||
-                           access_type == VIC_ACCESS_S);
+    // C-access always needs PHI2; P/S only need PHI2 when sprite has DMA active
+    bool needs_phi2_now = (access_type == VIC_ACCESS_C);
+    if (!needs_phi2_now && (access_type == VIC_ACCESS_P || access_type == VIC_ACCESS_S)) {
+        needs_phi2_now = (vicii->bus.active_sprite && vicii->bus.active_sprite->dma_enabled);
+    }
     
     if (needs_phi2_now) {
         // Current cycle needs PHI2 access: BA LOW, AEC LOW
@@ -1534,28 +1503,21 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // This handles C/P/S accesses that were set up at the end of the previous cycle
     switch (vicii->bus.pending_phi2_access_type) {
         case VIC_ACCESS_P:
-            // P-access: Store sprite pointer
-            if (vicii->bus.active_sprite) {
-                vicii->bus.active_sprite->data_pointer = bus_data;
-                // Clear pending access
-                vicii->bus.active_sprite = NULL;
+            // P-access PHI2 delivered sprite data byte 0 (first data byte)
+            // The pointer was already read during P's PHI1 (STEP 3)
+            if (vicii->bus.active_sprite && vicii->bus.active_sprite->dma_enabled) {
+                vicii->bus.active_sprite->shift_reg = (uint32_t)bus_data << 16;
             }
+            // Keep active_sprite alive — the following S-access cycle needs it
             break;
         case VIC_ACCESS_S:
-            // S-access: Store sprite data
-            if (vicii->bus.active_sprite) {
-                uint8_t mc = vicii->bus.active_sprite->mc_counter;
-
-                if (mc < 3) {
-                    // Store data in shift register at appropriate position
-                    uint32_t shift_data = (uint32_t)bus_data << (16 - mc * 8);
-                    vicii->bus.active_sprite->shift_reg |= shift_data;
-                }
-                // Increment mc_counter after storing the data
-                vicii->bus.active_sprite->mc_counter++;
-                // Clear pending access
-                vicii->bus.active_sprite = NULL;
+            // S-access PHI2 delivered sprite data byte 2 (third/final data byte)
+            if (vicii->bus.active_sprite && vicii->bus.active_sprite->dma_enabled) {
+                vicii->bus.active_sprite->shift_reg |= (uint32_t)bus_data;
+                // Advance MC by 3 (all 3 bytes consumed across P+S cycle pair)
+                vicii->bus.active_sprite->mc = (vicii->bus.active_sprite->mc + 3) & 63;
             }
+            vicii->bus.active_sprite = NULL;
             break;
         case VIC_ACCESS_C: {
             // C-access: Store video matrix data
@@ -1631,6 +1593,26 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     
     // Now calculate address for PHI1 read based on cycle type
     switch (access_type) {
+        case VIC_ACCESS_S: {
+            // S-access PHI1: Read sprite data byte 1 (second byte)
+            if (vicii->bus.active_sprite && vicii->bus.active_sprite->dma_enabled) {
+                address = (uint16_t)vicii->bus.active_sprite->data_pointer * 64
+                        + vicii->bus.active_sprite->mc + 1;
+            } else {
+                address = 0x3fff;
+            }
+            break;
+        }
+        case VIC_ACCESS_P: {
+            // P-access PHI1: Read sprite pointer from video matrix area
+            if (vicii->bus.active_sprite) {
+                int sprite_idx = (int)(vicii->bus.active_sprite - &vicii->sprites.sprites[0]);
+                address = vicii->memory.vm_base | (0x3F8 + sprite_idx);
+            } else {
+                address = 0x3fff;
+            }
+            break;
+        }
         case VIC_ACCESS_REFRESH:
             // Refresh cycles use special address
             address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
@@ -1684,8 +1666,8 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             }
             // Fall through to idle if display_state is false
             FALLTHROUGH;
-        default: // VIC_ACCESS_IDLE, VIC_ACCESS_P, VIC_ACCESS_S
-            // Idle, p-access, s-access OR display_state==false: Use idle address
+        default: // VIC_ACCESS_IDLE or G with display_state==false
+            // Idle address
             address = 0x3fff;
             break;
     }
@@ -1700,6 +1682,17 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
 
     // Perform PHI1 memory read (common path for all PHI1 accesses)
     bus_state = c64_bus_vic_read(c64_bus, bus_state, address);
+
+    // Post-PHI1 read: Handle sprite pointer/data storage immediately
+    // P PHI1 reads the sprite pointer, S PHI1 reads data byte 1
+    if (access_type == VIC_ACCESS_P && vicii->bus.active_sprite) {
+        vicii->bus.active_sprite->data_pointer = BUS_GET_DATA(bus_state);
+        vicii->bus.active_sprite->shift_reg = 0;
+    } else if (access_type == VIC_ACCESS_S && vicii->bus.active_sprite
+               && vicii->bus.active_sprite->dma_enabled) {
+        vicii->bus.active_sprite->shift_reg |= (uint32_t)BUS_GET_DATA(bus_state) << 8;
+    }
+
     // STEP 4: Load graphics data into line buffer during cycles 15-54 (0-indexed)
     // During display_state, we need graphics data for every raster line (not just bad lines)
     // to show different rows of each character
@@ -1777,20 +1770,25 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
     // These will be serviced externally and read at the start of the next cycle
     switch (access_type) {
         case VIC_ACCESS_P:
-            address = vicii->memory.vm_base | (0x3F8 + (uint16_t)access_param);
+            // P PHI2: Set up read for sprite data byte 0 (first data byte)
+            // Pointer was already read and stored during PHI1 (STEP 3)
+            if (vicii->bus.active_sprite && vicii->bus.active_sprite->dma_enabled) {
+                address = (uint16_t)vicii->bus.active_sprite->data_pointer * 64
+                        + vicii->bus.active_sprite->mc;
+            } else {
+                // No DMA — no PHI2 data read needed
+                return bus_state;
+            }
             break;
-        case VIC_ACCESS_S: {
-            vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[access_param];
-
-            // Sprites are 24 pixels wide, requiring exactly 3 bytes of data per line.
-            // The VIC-II performs 3 S-accesses per sprite per raster line (mc_counter 0, 1, 2).
-            // S-accesses only occur when the sprite sequencer calls this function,
-            // which happens exactly 3 times per enabled sprite per raster line.
-            // Therefor, there is no need to check for mc_counter overflow here.
-            address = sprite->data_pointer * 64 + sprite->mc_counter;
-            sprite->mc_counter++;
+        case VIC_ACCESS_S:
+            // S PHI2: Set up read for sprite data byte 2 (third/final data byte)
+            if (vicii->bus.active_sprite && vicii->bus.active_sprite->dma_enabled) {
+                address = (uint16_t)vicii->bus.active_sprite->data_pointer * 64
+                        + vicii->bus.active_sprite->mc + 2;
+            } else {
+                return bus_state;
+            }
             break;
-        }
         case VIC_ACCESS_C:
             // PHI2 access: Set up video matrix read (Color RAM will be read in-place during PHI1)
             // Data will arrive in the NEXT cycle and be stored at (VMLI-1)
@@ -1830,8 +1828,8 @@ static const vicii_cycle_entry_t vicii_cycle_table_6569[63] = {
     {vicii_cycle_refresh, -1},                  // 12 r_X r_x
     {vicii_cycle_refresh, -1},                  // 13 r_X r_x
     {vicii_cycle_refresh, -1},                  // 14 r_X r_x
-    {vicii_cycle_vc_load_mcbase, -1},           // 15 rc_ r_x (+ MCBASE expansion check)
-    {vicii_cycle_char_color_expansion_check, 0},// 16 gc_ g_x (+ expansion flip-flop check)
+    {vicii_cycle_vc_load, -1},                  // 15 rc_ r_x
+    {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
     {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
@@ -1899,8 +1897,8 @@ static const vicii_cycle_entry_t vicii_cycle_table_6567R56A[64] = {
     {vicii_cycle_refresh, -1},                  // 12 r_X r_x
     {vicii_cycle_refresh, -1},                  // 13 r_X r_x
     {vicii_cycle_refresh, -1},                  // 14 r_X r_x
-    {vicii_cycle_vc_load_mcbase, -1},           // 15 rc_ r_x (+ MCBASE expansion check)
-    {vicii_cycle_char_color_expansion_check, 0},// 16 gc_ g_x (+ expansion flip-flop check)
+    {vicii_cycle_vc_load, -1},                  // 15 rc_ r_x
+    {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
     {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
@@ -1969,8 +1967,8 @@ static const vicii_cycle_entry_t vicii_cycle_table_6567R8[65] = {
     {vicii_cycle_refresh, -1},                  // 12 r_X r_x
     {vicii_cycle_refresh, -1},                  // 13 r_X r_x
     {vicii_cycle_refresh, -1},                  // 14 r_X r_x
-    {vicii_cycle_vc_load_mcbase, -1},           // 15 rc_ r_x (+ MCBASE expansion check)
-    {vicii_cycle_char_color_expansion_check, 0},// 16 gc_ g_x (+ expansion flip-flop check)
+    {vicii_cycle_vc_load, -1},                  // 15 rc_ r_x
+    {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
     {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
@@ -2155,6 +2153,14 @@ static inline void vicii_initialize(vicii_t* vicii) {
     // Initialize refresh counter (Documentation section 3.13)
     vicii->video_logic.refresh_counter = 0xFF;
     
+    // Initialize sprite expansion flip-flops
+    // Documentation (section 3.8.1, Rule 1): "The expansion flip flop is set as long
+    // as the bit in MxYE in register $d017 corresponding to the sprite is cleared."
+    // Since MxYE starts at 0 (all bits cleared), all flip-flops should be SET (true).
+    for (int i = 0; i < VICII_NUM_SPRITES; i++) {
+        vicii->sprites.sprites[i].expansion_flip_flop = true;
+    }
+    
     // Initialize bad line detection
     // Since DEN is enabled at startup (line 1716), we must set was_den_set_during_raster_30
     // to true so that bad lines can occur immediately. Without this, the first frame would
@@ -2237,6 +2243,35 @@ void vicii_system_destroy(void* chip) {
         free(vicii->pixel.graphics_fg_line);
         free(vicii);
     }
+}
+
+void vicii_reset(vicii_t* vicii) {
+    if (!vicii) return;
+
+    // Preserve externally-owned pointers and configuration that survive reset
+    const vicii_chip_config_t* config = vicii->config;
+    chip_descriptor_t* desc = vicii->desc;
+    void (*bank_change)(void*, uint8_t) = vicii->bus.bank_change;
+    void* bus = vicii->bus.bus;
+    uint32_t* framebuffer = vicii->pixel.framebuffer;
+    int fb_width = vicii->pixel.framebuffer_width;
+    int fb_height = vicii->pixel.framebuffer_height;
+    mos2114_t* colorram = vicii->colorram;
+
+    // Re-initialize all state (zeroes + defaults)
+    // vicii_initialize_timing will free/re-allocate pixel line buffers
+    vicii_initialize(vicii);
+    vicii_initialize_timing(vicii, config);
+
+    // Restore preserved pointers
+    vicii->config = config;
+    vicii->desc = desc;
+    vicii->bus.bank_change = bank_change;
+    vicii->bus.bus = bus;
+    vicii->pixel.framebuffer = framebuffer;
+    vicii->pixel.framebuffer_width = fb_width;
+    vicii->pixel.framebuffer_height = fb_height;
+    vicii->colorram = colorram;
 }
 
 void vicii_bus_attach(void* chip, void* bus) {

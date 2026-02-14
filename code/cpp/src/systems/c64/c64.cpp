@@ -536,8 +536,11 @@ void c64_system_reset(c64_t* c64) {
         printf("  CIA2 reset complete\n");
     }
     
-    // Note: VIC-II doesn't have an explicit reset function;
-    // it is initialized during creation and works correctly without reset.
+    // Reset VIC-II to clear sprite pipeline state (active_sprite, pending access, etc.)
+    if (c64->vicii) {
+        vicii_reset(c64->vicii);
+        printf("  VIC-II reset complete\n");
+    }
 
     // Reset SID — clears all registers, envelopes, and the sample ring buffer
     // so a freshly-loaded program starts with silence rather than stale audio.
