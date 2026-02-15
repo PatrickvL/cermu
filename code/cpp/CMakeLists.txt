@@ -304,6 +304,11 @@ set(SYSTEM_SOURCES
     src/systems/apple1/apple1_system.cpp
 )
 
+# Testing sources
+set(TESTING_SOURCES
+    src/testing/vicii_test_harness.cpp
+    src/testing/vicii_pixel_tests.cpp
+)
 
 # Core utility sources (generic functionality)
 set(CORE_UTIL_SOURCES
@@ -387,6 +392,7 @@ if(BUILD_GUI)
         ${CORE_SOURCES}
         ${CHIP_SOURCES}
         ${SYSTEM_SOURCES}
+        ${TESTING_SOURCES}
         ${CORE_UTIL_SOURCES}
         ${GUI_SOURCES}
         ${GENERIC_GUI_SOURCES}
