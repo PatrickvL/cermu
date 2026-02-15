@@ -716,6 +716,17 @@ void vicii_update_badline_condition(vicii_t* vicii) {
         }
         vicii->video_logic.is_bad_line = vicii->video_logic.was_den_set_during_raster_30 &&
                                  ((raster & 0x07) == (vicii->registers.data[VICII_C1] & VICII_C1_YSCROLL));
+        
+        // CRITICAL: The VIC-II latches display_state to true IMMEDIATELY when a bad line
+        // condition is detected, at ANY cycle — not just at cycle 58.
+        // Documentation: "The transition from idle to display state is triggered by the
+        // Bad Line Condition" (Christian Bauer's VIC-II article).
+        // VICE reference: viciisc/vicii-cycle.c check_badline() sets display_state=1
+        // as soon as the bad line condition becomes true.
+        // Cycle 58 only handles the reverse transition (display→idle when RC==7).
+        if (vicii->video_logic.is_bad_line) {
+            vicii->video_logic.display_state = true;
+        }
     } else {
         vicii->video_logic.is_bad_line = false;
     }
@@ -2125,6 +2136,15 @@ static inline void vicii_initialize(vicii_t* vicii) {
     vicii->registers.data[VICII_M5C] = VICII_COLOR_BLUE; // 6: Sprite Color 5
     vicii->registers.data[VICII_M6C] = VICII_COLOR_YELLOW; // 7: Sprite Color 6
     vicii->registers.data[VICII_M7C] = VICII_COLOR_MEDIUM_GREY; // 12: Sprite Color 7
+    
+    // Initialize sprite display priorities from default $D01B = 0 (all sprites in front)
+    // CRITICAL: memset zeroed sprite structs → priority=0 (BACKGROUND), which prevents
+    // sprites from ever winning the display priority check.  $D01B=0 means all sprites
+    // display in FRONT of graphics, so priority must be SPRITE_IN_FRONT (3).
+    for (int i = 0; i < VICII_NUM_SPRITES; i++) {
+        vicii->sprites.sprites[i].priority = VICII_PRIORITY_SPRITE_IN_FRONT;
+        vicii->sprites.sprites[i].expansion_flip_flop = true;  // starts set (not expanded)
+    }
     
     // Initialize color priorities
     vicii->sequencer.colors[0].priority = VICII_PRIORITY_BACKGROUND; // "00" / "0" Use in both MC modes
