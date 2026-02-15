@@ -367,14 +367,6 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
     // Only process display logic if we're in display state
     if (vicii->video_logic.display_state) {
         
-        // PRE-G-ACCESS GAP: Before the first g-access cycle (x_cycle < 16), the border
-        // has opened but no fresh character data is available. The shift register contains
-        // stale data from the previous raster's last column. On real hardware, this gap
-        // shows idle bus data. We emit border color for these pixels to avoid a visible
-        // gap between the border and the display area. This matches the visual appearance
-        // on real hardware where the gap is invisible due to CRT overscan.
-        const bool pre_g_access = (vicii->timing.x_cycle < 16);
-
         // Reset shift register on mode change (but not x-scroll)
         if (seq->graphics_mode != seq->last_mode) {
             seq->last_mode = seq->graphics_mode;
@@ -409,14 +401,19 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             const bool pixel_in_border = per_pixel_in_border[pixel];
             
             // Skip if this pixel is in border (already handled in first loop)
+            // On real hardware, the shift register clocks continuously even under
+            // the border, but the border unit overrides the output. We advance the
+            // shift register for border pixels to keep bit alignment correct.
             if (pixel_in_border) {
-                continue;
-            }
-            
-            // Before the first g-access cycle, no valid character data is available.
-            // Emit border color for these display pixels to avoid a visible gap.
-            if (pre_g_access) {
-                vicii_pixel_emit_at_x(vicii, &vicii->border.border_pixel, pixel_x);
+                const bool is_mcm = (seq->graphics_mode == VICII_GM_MULTICOLOR_TEXT &&
+                                     (vicii->video_data.video_color_line[vmli] & 0x08)) ||
+                                    seq->graphics_mode == VICII_GM_MULTICOLOR_BITMAP;
+                if (is_mcm) {
+                    if (pixel & 1) seq->shift_reg <<= 2;
+                } else {
+                    seq->shift_reg <<= 1;
+                }
+                seq->pixel_in_char = (seq->pixel_in_char + 1) & 7;
                 continue;
             }
             
@@ -1773,14 +1770,15 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         vicii->bus.active_sprite->shift_reg |= (uint32_t)BUS_GET_DATA(bus_state) << 8;
     }
 
-    // STEP 4: Load graphics data into line buffer during cycles 16-55
-    // Cycle 15 is the VC-load cycle (VIC_ACCESS_IDLE) — it clears VMLI and loads VC
-    // but does NOT perform a g-access. The 40 c/g-access cycles are 16-55.
+    // STEP 4: Load graphics data into line buffer during g-access cycles 15-54 (0-based)
+    // The VC-load cycle is at x_cycle=14 (spec "cycle 15") — it clears VMLI and loads VC
+    // but does NOT perform a g-access. The 40 c/g-access cycles are at x_cycle 15-54
+    // (spec cycles 16-55). Note: spec uses 1-based numbering, x_cycle is 0-based.
     // During display_state, we need graphics data for every raster line (not just bad lines)
     // to show different rows of each character
     uint16_t vc_for_c_access = vicii->video_logic.vc;  // Capture VC before increment for C-access
     
-    if (vicii->video_logic.display_state && vicii->timing.x_cycle >= 16 && vicii->timing.x_cycle <= 55) {
+    if (vicii->video_logic.display_state && vicii->timing.x_cycle >= 15 && vicii->timing.x_cycle <= 54) {
         // G-access happens EVERY cycle during PHI1 (the address calculation above always runs)
         // The graphics sequencer will use the data when in display_state
         // Use VMLI hardware register for column position (matches hardware behavior)
