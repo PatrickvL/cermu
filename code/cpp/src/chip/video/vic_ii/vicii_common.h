@@ -202,7 +202,7 @@ enum vicii_priority_e {
     VICII_PRIORITY_SPRITE_IN_FRONT = 3,
     VICII_PRIORITY_BORDER = 4
 };
-using vicii_priority_t = vicii_priority_e;
+using vicii_priority_t = uint8_t;  // Must be 1 byte for memset compatibility (values 0-4)
 
 // Pixel structure
 struct vicii_pixel_s {
