@@ -303,6 +303,10 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
     const uint16_t border_bottom = vicii->border.border_bottom;
     
     // Sequence exactly 8 pixels, checking border flip-flops at EACH pixel position
+    // Save per-pixel border state for use in the display loop below.
+    // The border flip-flop transitions mid-cycle (e.g., opens at border_left),
+    // so we must not use the final flip-flop state for pixels that were in the border.
+    bool per_pixel_in_border[8];
     for (int pixel = 0; pixel < 8; pixel++) {
         const uint16_t pixel_x = x_coord + (uint16_t)pixel;
         
@@ -338,6 +342,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         // Now determine if THIS specific pixel is border or display
         const bool in_border = vicii->border.main_border_flip_flop
                             || vicii->border.vertical_border_flip_flop;
+        per_pixel_in_border[pixel] = in_border;
         
         if (in_border || !vicii->video_logic.display_state) {
             // This pixel is in border area
@@ -405,9 +410,11 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         for (int pixel = 0; pixel < 8; pixel++) {
             const uint16_t pixel_x = x_coord + (uint16_t)pixel;
             
-            // Re-check border state for this pixel (it may have changed during the first loop)
-            const bool pixel_in_border = vicii->border.main_border_flip_flop
-                                      || vicii->border.vertical_border_flip_flop;
+            // Re-check border state for this pixel using saved per-pixel state
+            // from the first loop. We MUST NOT use the live flip-flop here because
+            // the first loop may have cleared it mid-cycle (e.g., at border_left),
+            // which would incorrectly make earlier pixels appear as display.
+            const bool pixel_in_border = per_pixel_in_border[pixel];
             
             // Skip if this pixel is in border (already handled in first loop)
             if (pixel_in_border) {
@@ -509,8 +516,15 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                     break;
                     
                 default:
-                    color_index = vicii->registers.data[VICII_B0C];
+                    // Invalid modes (ECM+BMM, ECM+MCM, ECM+BMM+MCM):
+                    // Documentation: "The VIC has 3 'invalid' text/bitmap modes that
+                    // display only black pixels." Color output is always 0 (black)
+                    // regardless of register settings. The shift register still runs
+                    // (for sprite-data collision detection) but display is forced black.
+                    color_index = 0;  // Always black
                     is_background = true;
+                    // Still advance shift register to maintain sync
+                    seq->shift_reg <<= 1;
                     break;
             }
             
@@ -828,14 +842,25 @@ bus_state_t vicii_registers_write(void* context, bus_state_t bus_state) {
                 sprite->enabled = (value & (1 << i)) != 0;
             }
             break;
-        case VICII_MXYE: // $d017 Sprite Y expansion x
-            // "Complex expansion flip flop logic per VIC-II documentation"
-            // Optimized: set flip-flop state directly based on bit value
+        case VICII_MXYE: // $d017 Sprite Y expansion
+            // VICE reference (viciisc/vicii-mem.c d017_store):
+            // Writing to MxYE does NOT directly set/clear the expansion flip-flop.
+            // The only interaction: if a bit is cleared (Y-expand off) AND the sprite's
+            // exp_flop is already 0, this triggers the "sprite crunch" effect and
+            // resets exp_flop to 1. The flip-flop is otherwise only controlled by:
+            //   - turn_sprite_dma_on: sets exp_flop = 1
+            //   - check_exp at cycle 56: toggles exp_flop when DMA && Y-expanded
             for (int i = 0; i < VICII_NUM_SPRITES; i++) {
                 vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
-                // Writing 0 sets flip-flop, writing 1 clears it (immediate effect)
-                // Note: cycle 55 inversion is handled separately in vicii_cycle()
-                sprite->expansion_flip_flop = !(value & (1 << i));
+                uint8_t bit = (1 << i);
+                if (!(value & bit) && !sprite->expansion_flip_flop) {
+                    // Record that this sprite needs crunch processing.
+                    // The MC/MCBASE corruption ("sprite crunch") is applied by the
+                    // cycle 15 callback wrapper, which checks pending_mxye_crunch
+                    // after the CPU PHI2 write completes.
+                    vicii->sprites.pending_mxye_crunch |= bit;
+                    sprite->expansion_flip_flop = true;
+                }
             }
             break;
         case VICII_MP: // $d018 Memory pointers
@@ -891,8 +916,10 @@ bus_state_t vicii_registers_read(void* context, bus_state_t bus_state) {
         switch (reg) {
             case VICII_C1:     reg_val = (reg_val & 0x7F) | ((vicii->timing.raster_counter >> 1) & VICII_C1_RST8); break;
             case VICII_RASTER: reg_val = vicii->timing.raster_counter & 0xFF; break;
-            case VICII_MXM:    vicii->registers.data[reg] = 0; break;
-            case VICII_MXD:    vicii->registers.data[reg] = 0; break;
+            case VICII_MXM:    reg_val = vicii->registers.data[VICII_MXM_2];
+                               vicii->registers.data[VICII_MXM_2] = 0; break;
+            case VICII_MXD:    reg_val = vicii->registers.data[VICII_MXD_2];
+                               vicii->registers.data[VICII_MXD_2] = 0; break;
             case VICII_C2:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_C2_UNUSED); break;
             case VICII_MP:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_MP_UNUSED); break;
             case VICII_IR:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_IR_UNUSED); break;
@@ -1092,17 +1119,58 @@ static uint8_t vicii_cycle_vc_load(vicii_t* vicii, int unused_param) {
     
     // Spec (line 1236): "In the first phase of cycle 14 of each line, VC is loaded from VCBASE
     // (VCBASE->VC) and VMLI is cleared."
+    // CRITICAL: VC load and VMLI clear are UNCONDITIONAL — they happen every line.
+    // This ensures each raster line within a character row re-reads from the same
+    // VCBASE position, with only RC differentiating which row of the character is shown.
+    // Without this, non-bad lines would continue incrementing VC past 40, reading wrong
+    // characters (garbled text) and wrong bitmap offsets (slanted/skewed bitmaps).
+    vicii->video_logic.vc = vicii->video_logic.vcbase;
     vicii->video_logic.vmli = 0;
     
-    // BA/AEC will be set centrally in vicii_tick based on access type
-    // On bad lines: load VC from VCBASE
+    // Only on bad lines: reset RC to zero (starts a new 8-row character block)
+    // Documentation (vic-ii.txt line 1236-1238): "If there is a Bad Line Condition
+    // in this phase, RC is also reset to zero."
     // Display state is controlled by cycle 58, not here (spec lines 1196-1203)
-    // RC is managed entirely by cycle 58, NOT here
     if (vicii->video_logic.is_bad_line && den_enabled) {
-        vicii->video_logic.vc = vicii->video_logic.vcbase;
+        vicii->video_logic.rc = 0;
     }
 
     return VIC_ACCESS_IDLE;
+}
+
+// Process pending sprite crunch effects from $D017 writes during cycle 15 PHI2.
+// VICE reference (viciisc/vicii-mem.c d017_store, viciisc/vicii-cycle.c):
+// When the CPU clears a Y-expansion bit in $D017 during the second phase of
+// cycle 15 while the expansion flip-flop is 0, the MC/MCBASE values are
+// corrupted via the "sprite crunch" formula.
+// This is processed here (in the cycle 15 callback, after PHI2) rather than
+// inline in the register write handler, keeping timing-dependent logic in the
+// cycle callbacks where it belongs.
+static inline void vicii_sprite_process_pending_crunch(vicii_t* vicii) {
+    uint8_t crunch_mask = vicii->sprites.pending_mxye_crunch;
+    if (!crunch_mask) return;
+    
+    for (int i = 0; i < VICII_NUM_SPRITES; i++) {
+        if (crunch_mask & (1 << i)) {
+            vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
+            uint8_t mc = sprite->mc;
+            uint8_t mcbase = sprite->mcbase;
+            // VICE: mc = (0x2a & (mcbase & mc)) | (0x15 & (mcbase | mc))
+            sprite->mc = (0x2A & (mcbase & mc)) | (0x15 & (mcbase | mc));
+            // mcbase is set from mc on the following cycle's mcbase_update
+        }
+    }
+    vicii->sprites.pending_mxye_crunch = 0;
+}
+
+// Cycle 15 wrapper: VC load + sprite crunch processing
+// The sprite crunch effect occurs when the CPU writes to $D017 during cycle 15
+// PHI2. The register write handler records which sprites need crunching in
+// pending_mxye_crunch, and this wrapper applies the effect.
+static uint8_t vicii_cycle_vc_load_sprite_crunch(vicii_t* vicii, int param) {
+    uint8_t result = vicii_cycle_vc_load(vicii, param);
+    vicii_sprite_process_pending_crunch(vicii);
+    return result;
 }
 
 // VICE reference (viciisc/vicii-cycle.c): sprite_mcbase_update() at cycle 16 Phi2
@@ -1302,8 +1370,14 @@ static inline void vicii_cycle_58_rc_check(vicii_t* vicii) {
     // Expansion flip-flop toggle happens at cycle 56 (check_exp).
     // Cycle 58 only handles: MC ← MCBASE, display state on/off.
     //
-    // Rule 4: "MC is loaded from MCBASE. If DMA is on and Y matches, display is turned on."
+    // Rule 4: "MC is loaded from MCBASE. If DMA is on, display is turned on."
     // Rule 5: "If DMA is off, display is turned off."
+    // CRITICAL FIX: Display state depends ONLY on DMA being active, NOT on Y-match.
+    // Y-match already happened at cycles 55/56 to enable DMA. On subsequent lines,
+    // DMA remains on (until mcbase==63 at cycle 16) but the raster counter no longer
+    // matches sprite Y — the old code only displayed the first line of each sprite.
+    // VICE reference: viciisc/vicii-cycle.c check_sprite_display() sets display=1
+    // unconditionally when DMA is active.
     for (int i = 0; i < VICII_NUM_SPRITES; i++) {
         vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
         
@@ -1311,12 +1385,8 @@ static inline void vicii_cycle_58_rc_check(vicii_t* vicii) {
         sprite->mc = sprite->mcbase;
         
         if (sprite->dma_enabled) {
-            // Turn on display if DMA is on, sprite enabled, and Y matches
-            uint8_t sprite_y = vicii->registers.data[VICII_M0Y + i * 2];
-            if ((vicii->registers.data[VICII_MXE] & (1 << i)) &&
-                (vicii->timing.raster_counter & 0xFF) == sprite_y) {
-                sprite->display_state = true;
-            }
+            // DMA on → display on, unconditionally
+            sprite->display_state = true;
         } else {
             // Rule 5: Turn off display if DMA is off
             sprite->display_state = false;
@@ -1534,7 +1604,7 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
             // C-access: Store video matrix data
             // CRITICAL: VMLI was incremented at the end of the PREVIOUS cycle (after g-access)
             // so we need to use (VMLI-1) to store at the correct position
-            // Example: Cycle 15 increments VMLI from 0→1, cycle 16 receives data for position 0
+            // Example: Cycle 16 increments VMLI from 0→1, cycle 17 receives data for position 0
             const uint8_t vmli = vicii->video_logic.vmli;
             if (vicii->video_logic.display_state && vmli > 0 && vmli <= 40) {
                 vicii->video_data.video_matrix_line[vmli - 1] = bus_data;
@@ -1704,12 +1774,14 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         vicii->bus.active_sprite->shift_reg |= (uint32_t)BUS_GET_DATA(bus_state) << 8;
     }
 
-    // STEP 4: Load graphics data into line buffer during cycles 15-54 (0-indexed)
+    // STEP 4: Load graphics data into line buffer during cycles 16-55
+    // Cycle 15 is the VC-load cycle (VIC_ACCESS_IDLE) — it clears VMLI and loads VC
+    // but does NOT perform a g-access. The 40 c/g-access cycles are 16-55.
     // During display_state, we need graphics data for every raster line (not just bad lines)
     // to show different rows of each character
     uint16_t vc_for_c_access = vicii->video_logic.vc;  // Capture VC before increment for C-access
     
-    if (vicii->video_logic.display_state && vicii->timing.x_cycle >= 15 && vicii->timing.x_cycle <= 54) {
+    if (vicii->video_logic.display_state && vicii->timing.x_cycle >= 16 && vicii->timing.x_cycle <= 55) {
         // G-access happens EVERY cycle during PHI1 (the address calculation above always runs)
         // The graphics sequencer will use the data when in display_state
         // Use VMLI hardware register for column position (matches hardware behavior)
@@ -1722,10 +1794,10 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
         }
         
         // Spec (line 1246): "VC and VMLI are incremented after each g-access in display state."
-        // CRITICAL: This happens AFTER g-access on BOTH bad lines and non-bad lines
-        //
-        // On bad lines: VC and VMLI both increment (advancing through video matrix)
-        // On non-bad lines: Only VMLI increments (VC stays at VCBASE to reuse same characters)
+        // CRITICAL: This happens AFTER g-access on BOTH bad lines and non-bad lines.
+        // VC is reloaded from VCBASE at cycle 14/15 each line, so both bad and non-bad
+        // lines start with VC=VCBASE and increment through the same 40 columns.
+        // VCBASE only advances when RC reaches 7 at cycle 58 (end of 8-row char block).
         //
         // Store vmli value BEFORE increment for pixel sequencer
         vicii->sequencer.current_vmli_for_display = vmli;
@@ -1839,7 +1911,7 @@ static const vicii_cycle_entry_t vicii_cycle_table_6569[63] = {
     {vicii_cycle_refresh, -1},                  // 12 r_X r_x
     {vicii_cycle_refresh, -1},                  // 13 r_X r_x
     {vicii_cycle_refresh, -1},                  // 14 r_X r_x
-    {vicii_cycle_vc_load, -1},                  // 15 rc_ r_x
+    {vicii_cycle_vc_load_sprite_crunch, -1},    // 15 rc_ r_x (+ sprite crunch from $D017 writes)
     {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
@@ -1908,7 +1980,7 @@ static const vicii_cycle_entry_t vicii_cycle_table_6567R56A[64] = {
     {vicii_cycle_refresh, -1},                  // 12 r_X r_x
     {vicii_cycle_refresh, -1},                  // 13 r_X r_x
     {vicii_cycle_refresh, -1},                  // 14 r_X r_x
-    {vicii_cycle_vc_load, -1},                  // 15 rc_ r_x
+    {vicii_cycle_vc_load_sprite_crunch, -1},    // 15 rc_ r_x (+ sprite crunch from $D017 writes)
     {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
@@ -1978,7 +2050,7 @@ static const vicii_cycle_entry_t vicii_cycle_table_6567R8[65] = {
     {vicii_cycle_refresh, -1},                  // 12 r_X r_x
     {vicii_cycle_refresh, -1},                  // 13 r_X r_x
     {vicii_cycle_refresh, -1},                  // 14 r_X r_x
-    {vicii_cycle_vc_load, -1},                  // 15 rc_ r_x
+    {vicii_cycle_vc_load_sprite_crunch, -1},    // 15 rc_ r_x (+ sprite crunch from $D017 writes)
     {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x

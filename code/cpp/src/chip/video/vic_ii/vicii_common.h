@@ -410,6 +410,7 @@ typedef struct {
 // Sprites System Unit - All sprite management
 typedef struct {
     vicii_sprite_unit_t sprites[VICII_NUM_SPRITES];
+    uint8_t pending_mxye_crunch;  // Bitmask of sprites needing crunch in cycle 15 PHI2
 } vicii_sprites_unit_t;
 
 // Pixel Output Unit - Pixel line generation and framebuffer
