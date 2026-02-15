@@ -56,15 +56,17 @@ static int vic_x_to_fb(int vic_x) {
     return (vic_x - 482 + 504) % 504;
 }
 
-// Character grid → framebuffer pixel (top-left of character cell)
-// Empirically calibrated: first char pixel at fb(42, 52) for CSEL=1, XSCROLL=0, YSCROLL=3
-// Character cell framebuffer coordinates:
-// X: Cycle 16 (first c/g access) emits column 0 at buffer position 50.
+// Character grid → framebuffer pixel (first pixel of character cell's shift register output)
+// Hardware-accurate calibration for CSEL=1, XSCROLL=0, YSCROLL=3:
+// X: First c/g-access at x_cycle=15 (spec cycle 16), x_coord=20, 8 pixels span x=20-27.
+//    Pipeline delay+centering: fb_pos = 24 + ((x_coord + 502) % 504).
+//    Column 0 starts at fb 42, but border_left=24 hides first 4 pixels (fb 42-45).
+//    First VISIBLE pixel of column 0 is at fb 46. Columns 1-39 fully visible (8px each).
 // Y: Although the bad line (RC=0) starts at raster 51+row*8, the g-access
 //    on bad lines uses stale video_matrix_line data from the previous bad line
 //    (c-access/g-access pipeline effect). For reliable testing, we point to
 //    the SECOND raster of each character row (RC=1) at raster 52+row*8.
-static int char_fb_x(int col)  { return 50 + col * 8; }
+static int char_fb_x(int col)  { return 42 + col * 8; }
 static int char_fb_y(int row)  { return 52 + row * 8; }
 
 // Sprite VIC-II coordinate → framebuffer pixel
@@ -154,12 +156,27 @@ static void reset_vic_state(c64_t* c64) {
 // Keeps screen at $0400. Defines char 0 = all $FF (filled), char 1 = all $00 (empty).
 // $D018 = (1 << 4) | (6 << 1) = 0x1C  → screen=$0400, charset=$3000
 static void setup_custom_charset(c64_t* c64) {
-    // Char 0: all pixels set (foreground)
+    // Char 0: all pixels set (solid fill - used by many tests)
     for (int i = 0; i < 8; i++)
         write_ram(c64, 0x3000 + i, 0xFF);
     // Char 1: all pixels clear (background)
     for (int i = 0; i < 8; i++)
         write_ram(c64, 0x3008 + i, 0x00);
+    // Char 2: diagnostic pattern for visual debugging
+    // Solid top line, solid left edge, solid diagonal (top-left to bottom-right),
+    // dotted right edge (alternating), dotted bottom line (alternating).
+    // Visual:     Hex:
+    //  ████████   $FF
+    //  ██.....█   $C1
+    //  █.█.....   $A0
+    //  █..█...█   $91
+    //  █...█...   $88
+    //  █....█.█   $85
+    //  █.....█.   $82
+    //  █.█.█.██   $AB
+    static const uint8_t diag_char[8] = { 0xFF, 0xC1, 0xA0, 0x91, 0x88, 0x85, 0x82, 0xAB };
+    for (int i = 0; i < 8; i++)
+        write_ram(c64, 0x3010 + i, diag_char[i]);
     // Point VIC-II to this charset
     // $D018: bits 4-7 = 1 (screen at 1*$400=$0400), bits 1-3 = 6 (charset at 6*$800=$3000)
     write_vic(c64, 0x18, (1 << 4) | (6 << 1)); // = 0x1C
@@ -268,25 +285,32 @@ static void test_text_character(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ct
 
     write_ram(c64, 0x0400, 0x00);  // char 0 (filled) at row 0, col 0
     write_colorram(c64, 0, 1);     // foreground = white
+    write_ram(c64, 0x0401, 0x00);  // char 0 (filled) at row 0, col 1
+    write_colorram(c64, 1, 1);     // foreground = white
 
     // Also write an empty char next to it for background reference
-    write_ram(c64, 0x0401, 0x01);  // char 1 (empty) at row 0, col 1
-    write_colorram(c64, 1, 1);
+    write_ram(c64, 0x0402, 0x01);  // char 1 (empty) at row 0, col 2
+    write_colorram(c64, 2, 1);
 
     run_frames(sys, 5);
 
+    // Column 0: first 4 pixels (fb offset 0-3) are behind the left border
+    // Only pixels at offset 4-7 are visible (hardware-accurate: CSEL=1, XSCROLL=0)
     int x0 = char_fb_x(0);
     int y0 = char_fb_y(0);
+    check_pixel(ctx, x0 + 4, y0,     1, "col0 first visible pixel (offset 4)");
+    check_pixel(ctx, x0 + 7, y0,     1, "col0 last pixel (offset 7)");
 
-    // Filled char 0: all 8x8 pixels should be foreground (white=1)
-    check_pixel(ctx, x0,     y0,     1, "filled block top-left");
-    check_pixel(ctx, x0 + 7, y0,     1, "filled block top-right");
-    check_pixel(ctx, x0 + 4, y0 + 4, 1, "filled block center");
-    check_pixel(ctx, x0 + 6, y0 + 6, 1, "filled block near-bottom-right");
-
-    // Empty char 1: all pixels should be background (black=0)
+    // Column 1: all 8 pixels visible — use for full character checks
     int x1 = char_fb_x(1);
-    check_pixel(ctx, x1 + 4, y0 + 4, 0, "empty char background");
+    check_pixel(ctx, x1,     y0,     1, "filled block top-left");
+    check_pixel(ctx, x1 + 7, y0,     1, "filled block top-right");
+    check_pixel(ctx, x1 + 4, y0 + 4, 1, "filled block center");
+    check_pixel(ctx, x1 + 6, y0 + 6, 1, "filled block near-bottom-right");
+
+    // Empty char 2: all pixels should be background (black=0)
+    int x2 = char_fb_x(2);
+    check_pixel(ctx, x2 + 4, y0 + 4, 0, "empty char background");
 }
 
 // P4: Multicolor text mode — 4-color characters
@@ -688,26 +712,29 @@ static void test_xscroll(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     setup_custom_charset(c64);
     write_vic(c64, 0x21, 0); // BG = black
 
-    // Place a filled block at (0,0) with white foreground
-    write_ram(c64, 0x0400, 0x00); // char 0 = filled in custom charset
+    // Place a filled block at (1,0) — col 1 has all 8 pixels visible (col 0 has 4 behind border)
+    write_ram(c64, 0x0400, 0x00); // char 0 = filled at col 0
+    write_ram(c64, 0x0401, 0x00); // char 0 = filled at col 1
     write_colorram(c64, 0, 1);
+    write_colorram(c64, 1, 1);
 
-    // XSCROLL=0: first char pixel at fb col char_fb_x(0)
+    // XSCROLL=0: first visible char pixel at col 0 offset +4 (border hides 0-3)
     write_vic(c64, 0x16, 0xC8); // CSEL=1, XSCROLL=0
     run_frames(sys, 3);
 
     int x0 = char_fb_x(0);
     int y0 = char_fb_y(0);
-    check_pixel(ctx, x0, y0, 1, "XSCROLL=0 first pixel is FG");
+    check_pixel(ctx, x0 + 4, y0, 1, "XSCROLL=0 first pixel is FG");
 
-    // XSCROLL=4: display shifts right by 4 pixels
+    // XSCROLL=4: delays 4 extra BG pixels after border opens.
+    // Col 0's visible 4 pixels (offset 4-7) become XSCROLL background.
+    // First FG pixel appears at col 1 start.
     write_vic(c64, 0x16, 0xCC); // CSEL=1, XSCROLL=4
     run_frames(sys, 3);
 
-    // The first FG pixel should now be 4 pixels to the right
-    check_pixel(ctx, x0 + 4, y0, 1, "XSCROLL=4 FG shifted right");
-    // The original position should now be background (scroll delay fills with BG)
-    check_pixel(ctx, x0, y0, 0, "XSCROLL=4 scroll delay at orig pos = BG");
+    int x1 = char_fb_x(1);
+    check_pixel(ctx, x0 + 4, y0, 0, "XSCROLL=4 col0 visible area now BG");
+    check_pixel(ctx, x1, y0, 1, "XSCROLL=4 FG shifted right");
 }
 
 // P15: YSCROLL — shifts display vertically
@@ -1335,28 +1362,29 @@ static void test_top_left_alignment(c64_t* c64, EmulatedSystem* sys, check_ctx_t
 
     run_frames(sys, 3);
 
-    // The top-left character pixel should be foreground (white)
+    // The top-left VISIBLE character pixel: col 0 offset +4 (first 4 pixels behind border)
+    // On real hardware with CSEL=1, XSCROLL=0, border_left=24 falls 4 pixels into
+    // the first g-access cycle, hiding the first 4 shift register outputs.
     int x0 = char_fb_x(0);
     int y0 = char_fb_y(0);
-    check_pixel(ctx, x0, y0, 1, "top-left char pixel = white FG");
+    int first_visible = x0 + 4;  // fb 46: first pixel after border opens
+    check_pixel(ctx, first_visible, y0, 1, "first visible char pixel = white FG");
 
-    // Verify the pixel just LEFT of the display is border, not background
-    // This confirms the border-to-display boundary is clean
-    if (x0 > 0) {
-        // The pixel immediately before the first character should be border color
-        // (or at least not character foreground)
-        uint32_t left_pixel = fb_pixel(ctx.fb, ctx.width, x0 - 1, y0);
+    // Verify the pixel just LEFT of the first visible character pixel is NOT foreground.
+    // This confirms the border-to-display boundary is clean.
+    {
+        uint32_t left_pixel = fb_pixel(ctx.fb, ctx.width, first_visible - 1, y0);
         if (left_pixel != PAL[1]) {
-            ctx.pass++;  // Not foreground — good (either border or BG)
+            ctx.pass++;  // Not foreground — good (border overrides character data here)
         } else {
             ctx.fail++;
             printf("  PIXEL FAIL [P29 %s] pixel at (%d,%d) should not be FG\n",
-                   ctx.group_name, x0 - 1, y0);
+                   ctx.group_name, first_visible - 1, y0);
         }
     }
 
     // Verify a pixel well inside the character
-    check_pixel(ctx, x0 + 4, y0 + 4, 1, "center of (0,0) char = white FG");
+    check_pixel(ctx, x0 + 5, y0 + 4, 1, "center of (0,0) char = white FG");
 }
 
 // =============================================================================
