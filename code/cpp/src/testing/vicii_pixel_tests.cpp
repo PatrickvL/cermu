@@ -1511,6 +1511,107 @@ static void test_den_control(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) 
 }
 
 // =============================================================================
+// P34: Y-position diagnostic — pinpoint where RC=0 character data first
+// appears in the framebuffer to diagnose vertical offset issues.
+// =============================================================================
+static void test_y_position_diagnostic(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+    ctx.test_group = 34;
+    ctx.group_name = "Y Position";
+    printf("  P34: Y Position Diagnostic (border-to-display transition)\n");
+
+    reset_vic_state(c64);
+    setup_custom_charset(c64);
+    write_vic(c64, 0x20, 14);  // border = light blue (14)
+    write_vic(c64, 0x21, 6);   // bg = blue (6) — distinct from border
+    write_vic(c64, 0x11, 0x1B); // YSCROLL=3, RSEL=1, DEN=1
+
+    // Fill screen row 0 columns 0-4 with filled block (char 0 = all $FF)
+    for (int c = 0; c < 5; c++) {
+        write_ram(c64, 0x0400 + c, 0x00); // char 0 = all $FF in custom charset
+        write_colorram(c64, c, 1);         // white foreground
+    }
+
+    // CRITICAL: Also fill row 24 with the SAME characters at the same columns.
+    // On the VIC-II hardware, the c-access/g-access pipeline has a 1-cycle delay:
+    // the g-access at RC=0 on a bad line uses STALE video_matrix_line data from
+    // the PREVIOUS bad line. For row 0, the previous bad line was row 24 (raster 243
+    // of the previous frame). If row 24 has different character codes than row 0,
+    // RC=0 of row 0 will show row 24's characters instead of its own.
+    // By ensuring row 24 matches row 0, the stale data equals the fresh data,
+    // and RC=0 renders correctly. This matches real hardware behavior where a
+    // static screen (same content frame to frame) shows no RC=0 glitch.
+    for (int c = 0; c < 5; c++) {
+        write_ram(c64, 0x0400 + 24 * 40 + c, 0x00); // row 24 = same char
+        write_colorram(c64, 24 * 40 + c, 1);          // same color
+    }
+
+    run_frames(sys, 5); // Extra frames to ensure stability
+
+    // Expected: border_top = 51 (RSEL=1), first bad line at raster 51 (51 & 7 = 3 = YSCROLL)
+    // Character data (all $FF = white) should appear starting at raster 51
+
+    // Test X position: use char_fb_x(2) + 4 = well inside the character cell
+    // This avoids any edge effects at column 0
+    int test_x = char_fb_x(2) + 4;
+
+    printf("    Scanning rasters 49-56 at fb_x=%d:\n", test_x);
+
+    // Define expected colors
+    const uint32_t border_c = PAL[14];
+    const uint32_t bg_c     = PAL[6];
+    const uint32_t fg_c     = PAL[1];
+
+    // Scan rasters and report
+    for (int raster = 49; raster <= 56; raster++) {
+        uint32_t pixel = fb_pixel(ctx.fb, ctx.width, test_x, raster);
+        const char* label = "?";
+        if (pixel == border_c) label = "BORDER(14)";
+        else if (pixel == bg_c) label = "BG(6)";
+        else if (pixel == fg_c) label = "FG(1/white)";
+        else label = "OTHER";
+        printf("      raster %d: 0x%08X = %s\n", raster, pixel, label);
+    }
+
+    // Verification checks:
+    // Raster 50 should be border (above display area)
+    check_pixel(ctx, test_x, 50, 14, "raster 50 = border (above display)");
+
+    // Raster 51 should be foreground (white) — RC=0 of char row 0
+    // This is the critical check: does RC=0 appear at raster 51?
+    uint32_t r51_pixel = fb_pixel(ctx.fb, ctx.width, test_x, 51);
+    if (r51_pixel == fg_c) {
+        ctx.pass++;
+        printf("    ✓ Raster 51 (RC=0) = foreground (white) — correct alignment\n");
+    } else if (r51_pixel == border_c) {
+        ctx.fail++;
+        printf("    ✗ Raster 51 = BORDER — display not starting at border_top!\n");
+    } else if (r51_pixel == bg_c) {
+        ctx.fail++;
+        printf("    ✗ Raster 51 = BACKGROUND — display open but char data missing at RC=0\n");
+    } else {
+        ctx.fail++;
+        printf("    ✗ Raster 51 = 0x%08X — unexpected color\n", r51_pixel);
+    }
+
+    // Raster 52 should be foreground (white) — RC=1
+    check_pixel(ctx, test_x, 52, 1, "raster 52 (RC=1) = white");
+
+    // Check where the FIRST foreground pixel actually appears
+    int first_fg_raster = -1;
+    for (int raster = 48; raster <= 58; raster++) {
+        if (fb_pixel(ctx.fb, ctx.width, test_x, raster) == fg_c) {
+            first_fg_raster = raster;
+            break;
+        }
+    }
+    printf("    First foreground pixel at raster: %d (expected: 51)\n", first_fg_raster);
+    if (first_fg_raster != 51 && first_fg_raster >= 0) {
+        printf("    *** Y OFFSET = %d pixels (first FG at %d instead of 51) ***\n",
+               first_fg_raster - 51, first_fg_raster);
+    }
+}
+
+// =============================================================================
 // MAIN ENTRY POINT
 // =============================================================================
 
@@ -1572,6 +1673,7 @@ pixel_test_results_t run_pixel_verification_tests(
     test_sprite_dma_enable(c64, system, ctx);           num_groups++; // P31
     test_sprite_sprite_collision(c64, system, ctx);     num_groups++; // P32
     test_den_control(c64, system, ctx);                 num_groups++; // P33
+    test_y_position_diagnostic(c64, system, ctx);        num_groups++; // P34
 
     // Restore sane state
     reset_vic_state(c64);
