@@ -706,8 +706,8 @@ static void test_xscroll(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
 
     // The first FG pixel should now be 4 pixels to the right
     check_pixel(ctx, x0 + 4, y0, 1, "XSCROLL=4 FG shifted right");
-    // The original position should now be border/bg
-    // (x0 is now in the left border extension due to scroll)
+    // The original position should now be background (scroll delay fills with BG)
+    check_pixel(ctx, x0, y0, 0, "XSCROLL=4 scroll delay at orig pos = BG");
 }
 
 // P15: YSCROLL — shifts display vertically
@@ -1305,6 +1305,211 @@ static void test_char_scanline_alignment(c64_t* c64, EmulatedSystem* sys, check_
     }
 }
 
+// P29: Top-left pixel alignment — verify that the first character pixel at
+// (row=0, col=0) with system-accurate YSCROLL=3, XSCROLL=0 (KERNAL defaults)
+// displays foreground color exactly at char_fb_x(0), char_fb_y(0).
+// Uses a reversed space (all pixels set) to ensure foreground is detectable.
+// This test catches:
+//   - Border-to-display alignment errors
+//   - XSCROLL initialization failures
+//   - RC=0/RC=1 data pipeline issues on bad lines
+static void test_top_left_alignment(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+    ctx.test_group = 29;
+    ctx.group_name = "TopLeft Align";
+    printf("  P29: Top-Left Pixel Alignment (KERNAL defaults)\n");
+
+    reset_vic_state(c64);
+    setup_custom_charset(c64);
+    write_vic(c64, 0x20, 0);  // border = black
+    write_vic(c64, 0x21, 0);  // bg = black
+
+    // Fill the top-left 2x2 character cells with filled blocks (char 0 = all $FF)
+    // Using 2x2 avoids relying on exact row/col alignment — at least one cell
+    // must cover char_fb_x(0), char_fb_y(0)
+    for (int r = 0; r < 2; r++) {
+        for (int c = 0; c < 2; c++) {
+            write_ram(c64, 0x0400 + r * 40 + c, 0x00);
+            write_colorram(c64, r * 40 + c, 1); // white
+        }
+    }
+
+    run_frames(sys, 3);
+
+    // The top-left character pixel should be foreground (white)
+    int x0 = char_fb_x(0);
+    int y0 = char_fb_y(0);
+    check_pixel(ctx, x0, y0, 1, "top-left char pixel = white FG");
+
+    // Verify the pixel just LEFT of the display is border, not background
+    // This confirms the border-to-display boundary is clean
+    if (x0 > 0) {
+        // The pixel immediately before the first character should be border color
+        // (or at least not character foreground)
+        uint32_t left_pixel = fb_pixel(ctx.fb, ctx.width, x0 - 1, y0);
+        if (left_pixel != PAL[1]) {
+            ctx.pass++;  // Not foreground — good (either border or BG)
+        } else {
+            ctx.fail++;
+            printf("  PIXEL FAIL [P29 %s] pixel at (%d,%d) should not be FG\n",
+                   ctx.group_name, x0 - 1, y0);
+        }
+    }
+
+    // Verify a pixel well inside the character
+    check_pixel(ctx, x0 + 4, y0 + 4, 1, "center of (0,0) char = white FG");
+}
+
+// =============================================================================
+// P30: Sprite Y position accuracy — verify sprites appear at the correct
+// raster line matching their Y coordinate register value.
+// =============================================================================
+static void test_sprite_y_position(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+    ctx.test_group = 30;
+    ctx.group_name = "Sprite Y Position";
+    printf("  P30: Sprite Y Position Accuracy\n");
+
+    reset_vic_state(c64);
+    write_vic(c64, 0x20, 0);  // border = black
+    write_vic(c64, 0x21, 0);  // bg = black
+
+    // Create a solid sprite: all bytes $FF
+    const uint16_t sprite_data = 0x2000;
+    for (int i = 0; i < 63; i++)
+        write_ram(c64, sprite_data + i, 0xFF);
+    write_ram(c64, sprite_data + 63, 0);
+
+    write_ram(c64, 0x07F8, sprite_data / 64);
+    write_vic(c64, 0x00, 100);  // X=100
+    write_vic(c64, 0x01, 100);  // Y=100
+    write_vic(c64, 0x10, 0);
+    write_vic(c64, 0x15, 1);    // Enable sprite 0
+    write_vic(c64, 0x27, 1);    // Sprite 0 color = white
+
+    run_frames(sys, 3);
+
+    int sx = sprite_fb_x(100) + 4;
+    // Sprite DMA turns on when Y matches, first visible row is Y+1 due to fetch timing
+    check_pixel(ctx, sx, 102, 1, "sprite at Y=100, raster 102 = white");
+    check_pixel(ctx, sx, 98, 0, "raster 98 (above sprite) = black");
+    check_pixel(ctx, sx, 122, 0, "raster 122 (below sprite) = black");
+}
+
+// =============================================================================
+// P31: Sprite DMA enable — verify sprite DMA turns on at the correct raster
+// =============================================================================
+static void test_sprite_dma_enable(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+    ctx.test_group = 31;
+    ctx.group_name = "Sprite DMA Enable";
+    printf("  P31: Sprite DMA Enable\n");
+
+    reset_vic_state(c64);
+    write_vic(c64, 0x20, 0);
+    write_vic(c64, 0x21, 0);
+
+    const uint16_t sprite_data = 0x2000;
+    for (int i = 0; i < 63; i++)
+        write_ram(c64, sprite_data + i, 0xFF);
+
+    // Sprite 0 at Y=60
+    write_ram(c64, 0x07F8, sprite_data / 64);
+    write_vic(c64, 0x00, 100);
+    write_vic(c64, 0x01, 60);
+    write_vic(c64, 0x10, 0);
+    write_vic(c64, 0x15, 1);
+    write_vic(c64, 0x27, 1);
+
+    // Sprite 1 at Y=120  
+    write_ram(c64, 0x07F9, sprite_data / 64);
+    write_vic(c64, 0x02, 120);
+    write_vic(c64, 0x03, 120);
+    write_vic(c64, 0x10, 0);
+    write_vic(c64, 0x15, 3);   // Enable sprites 0 and 1
+    write_vic(c64, 0x28, 2);   // Sprite 1 color = red
+
+    run_frames(sys, 3);
+
+    int sx = sprite_fb_x(100) + 4;
+    int sx1 = sprite_fb_x(120) + 4;
+    // Sprite 0 visible near Y=60
+    check_pixel(ctx, sx, 62, 1, "sprite 0 at Y=60, raster 62 = white");
+    // Sprite 1 visible near Y=120
+    check_pixel(ctx, sx1, 122, 2, "sprite 1 at Y=120, raster 122 = red");
+    // Between the two sprites: should be background
+    check_pixel(ctx, sx, 90, 0, "raster 90 (between sprites) = black");
+}
+
+// =============================================================================
+// P32: Sprite-Sprite Collision detection
+// =============================================================================
+static void test_sprite_sprite_collision(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+    ctx.test_group = 32;
+    ctx.group_name = "Sprite-Sprite Collision";
+    printf("  P32: Sprite-Sprite Collision\n");
+
+    reset_vic_state(c64);
+    write_vic(c64, 0x20, 0);
+    write_vic(c64, 0x21, 0);
+
+    const uint16_t sprite_data = 0x2000;
+    for (int i = 0; i < 63; i++)
+        write_ram(c64, sprite_data + i, 0xFF);
+
+    // Place two sprites overlapping
+    write_ram(c64, 0x07F8, sprite_data / 64);
+    write_ram(c64, 0x07F9, sprite_data / 64);
+    write_vic(c64, 0x00, 100);  // Sprite 0 X=100
+    write_vic(c64, 0x01, 100);  // Sprite 0 Y=100
+    write_vic(c64, 0x02, 110);  // Sprite 1 X=110 (overlaps)
+    write_vic(c64, 0x03, 100);  // Sprite 1 Y=100
+    write_vic(c64, 0x10, 0);
+    write_vic(c64, 0x15, 3);    // Enable sprites 0 and 1
+    write_vic(c64, 0x27, 1);    // Sprite 0 = white
+    write_vic(c64, 0x28, 2);    // Sprite 1 = red
+
+    // Clear collision register
+    (void)read_vic(c64, 0x1E);
+
+    run_frames(sys, 3);
+
+    // Check collision register: sprites 0 and 1 should have collided
+    uint8_t mxm = read_vic(c64, 0x1E);
+    if ((mxm & 0x03) == 0x03) {
+        ctx.pass++;
+    } else {
+        ctx.fail++;
+        printf("  PIXEL FAIL [P32 %s] MxM=$%02X, expected bits 0+1 set ($03)\n",
+               ctx.group_name, mxm);
+    }
+}
+
+// =============================================================================
+// P33: DEN control — verify DEN=0 blanks display, DEN=1 enables it
+// =============================================================================
+static void test_den_control(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+    ctx.test_group = 33;
+    ctx.group_name = "DEN Control";
+    printf("  P33: DEN Control (enable/disable display)\n");
+
+    reset_vic_state(c64);
+    setup_custom_charset(c64);
+    write_vic(c64, 0x20, 14);  // border = light blue
+    write_vic(c64, 0x21, 0);   // bg = black
+
+    // Place a character
+    write_ram(c64, 0x0400 + 5 * 40 + 5, 0x00);
+    write_colorram(c64, 5 * 40 + 5, 1);
+
+    // DEN=1 (normal): character should be visible
+    write_vic(c64, 0x11, 0x1B);
+    run_frames(sys, 3);
+    check_pixel(ctx, char_fb_x(5) + 4, char_fb_y(5) + 4, 1, "DEN=1 char visible");
+
+    // DEN=0: display should be border everywhere
+    write_vic(c64, 0x11, 0x0B);
+    run_frames(sys, 3);
+    check_pixel(ctx, char_fb_x(5) + 4, char_fb_y(5) + 4, 14, "DEN=0 display = border");
+}
+
 // =============================================================================
 // MAIN ENTRY POINT
 // =============================================================================
@@ -1362,6 +1567,11 @@ pixel_test_results_t run_pixel_verification_tests(
     test_char_row_consistency(c64, system, ctx);       num_groups++; // P26
     test_bitmap_row_consistency(c64, system, ctx);     num_groups++; // P27
     test_char_scanline_alignment(c64, system, ctx);    num_groups++; // P28
+    test_top_left_alignment(c64, system, ctx);         num_groups++; // P29
+    test_sprite_y_position(c64, system, ctx);          num_groups++; // P30
+    test_sprite_dma_enable(c64, system, ctx);           num_groups++; // P31
+    test_sprite_sprite_collision(c64, system, ctx);     num_groups++; // P32
+    test_den_control(c64, system, ctx);                 num_groups++; // P33
 
     // Restore sane state
     reset_vic_state(c64);
