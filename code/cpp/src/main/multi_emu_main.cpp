@@ -20,6 +20,7 @@ int main(int argc, char** argv) {
     const char* file_path = nullptr;
     const char* system_name = nullptr;
     bool vicii_test_mode = false;
+    bool vicii_dump_mode = false;
     
     // Parse command-line arguments
     for (int i = 1; i < argc; i++) {
@@ -35,6 +36,10 @@ int main(int argc, char** argv) {
             vicii_test_mode = true;
             system_name = "C64";  // Force C64 system
             printf("VIC-II test mode enabled\n");
+        } else if (strcmp(argv[i], "--vicii-dump") == 0) {
+            vicii_dump_mode = true;
+            system_name = "C64";
+            printf("VIC-II dump mode enabled\n");
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             printf("Usage: %s [options] [file]\n", argv[0]);
             printf("\nOptions:\n");
@@ -128,6 +133,185 @@ int main(int argc, char** argv) {
         }
     }
     
+    // =========================================================================
+    // VIC-II DUMP MODE — normal boot + framebuffer pixel dump
+    // =========================================================================
+    if (vicii_dump_mode && system) {
+        C64SystemWrapper* c64_wrapper = dynamic_cast<C64SystemWrapper*>(system.get());
+        if (!c64_wrapper) { printf("ERROR: --vicii-dump requires C64\n"); return 1; }
+        c64_t* c64 = c64_wrapper->get_c64_system();
+        if (!c64) { printf("ERROR: C64 not initialized\n"); return 1; }
+
+        // Allocate headless framebuffer (no GUI)
+        int fb_width, fb_height;
+        system->get_display_dimensions(&fb_width, &fb_height);
+        std::unique_ptr<uint32_t[]> fb(new uint32_t[fb_width * fb_height]());
+        system->set_framebuffer(fb.get(), fb_width, fb_height);
+
+        printf("VICII-DUMP: Normal boot, %dx%d framebuffer\n", fb_width, fb_height);
+
+        // Palette lookup
+        static const uint32_t PAL[16] = {
+            0xFF000000, 0xFFFFFFFF, 0xFF2B3768, 0xFFB2A470,
+            0xFF863D6F, 0xFF438D58, 0xFF792835, 0xFF6FC7B8,
+            0xFF254F6F, 0xFF003943, 0xFF59679A, 0xFF444444,
+            0xFF6C6C6C, 0xFF84D29A, 0xFFB55E6C, 0xFF959595
+        };
+        auto color_name = [&](uint32_t rgba) -> const char* {
+            for (int i = 0; i < 16; i++) {
+                if (PAL[i] == rgba) {
+                    static const char* n[16] = {"BLK","WHT","RED","CYN","PUR","GRN","BLU","YEL","ORN","BRN","LRD","DG1","DG2","LGN","LBL","LG3"};
+                    return n[i];
+                }
+            }
+            return "???";
+        };
+        auto fb_px = [&](int x, int y) -> uint32_t {
+            if (x < 0 || y < 0 || x >= fb_width || y >= fb_height) return 0xDEADBEEF;
+            return fb.get()[y * fb_width + x];
+        };
+
+        // Run frames and dump at key points
+        float drain[4096];
+        int frame_targets[] = { 5, 200 };
+        int frame_count = 0;
+        for (int t = 0; t < 2; t++) {
+            while (frame_count < frame_targets[t]) {
+                system->run_frame();
+                system->get_audio_samples(drain, 4096);
+                frame_count++;
+            }
+            printf("\n=== Frame %d ===\n", frame_count);
+            uint8_t d011 = c64->vicii->registers.data[0x11];
+            uint8_t d016 = c64->vicii->registers.data[0x16];
+            uint8_t d020 = c64->vicii->registers.data[0x20];
+            uint8_t d021 = c64->vicii->registers.data[0x21];
+            uint8_t yscroll = d011 & 0x07;
+            uint8_t xscroll = d016 & 0x07;
+            bool csel = (d016 & 0x08) != 0;
+            printf("$D011=$%02X $D016=$%02X $D020=$%02X $D021=$%02X YSCROLL=%d XSCROLL=%d CSEL=%d\n",
+                   d011, d016, d020, d021, yscroll, xscroll, csel?1:0);
+            
+            // Screen codes
+            printf("Screen[0..9]: ");
+            for (int i = 0; i < 10; i++) printf("$%02X ", c64->ram->memory[0x0400+i]);
+            printf("\n");
+            printf("Screen[$0400+40..49]: ");
+            for (int i = 40; i < 50; i++) printf("$%02X ", c64->ram->memory[0x0400+i]);
+            printf("\n");
+            
+            // Color RAM
+            printf("ColorRAM[0..9]: ");
+            for (int i = 0; i < 10; i++) printf("%d ", c64->ram->memory[0xD800+i] & 0x0F);
+            printf("\n");
+            
+            // Character ROM reference for screen code at position 5
+            uint8_t sc = c64->ram->memory[0x0400+5];
+            uint8_t sc_row1_5 = c64->ram->memory[0x0400+40+5];
+            printf("CharROM ref for sc=$%02X: ", sc);
+            // Read from character ROM chip (offset $D000 in VIC-II bank 0)
+            // The character ROM is at the chip labeled 'characters' 
+            // For a C64, the character ROM is mapped at $D000-$DFFF in VIC-II address space
+            if (c64->charrom && c64->charrom->memory) {
+                for (int row = 0; row < 8; row++) {
+                    printf("$%02X ", c64->charrom->memory[sc * 8 + row]);
+                }
+            }
+            printf("\n");
+            printf("CharROM ref for row1 sc=$%02X: ", sc_row1_5);
+            if (c64->charrom && c64->charrom->memory) {
+                for (int row = 0; row < 8; row++) {
+                    printf("$%02X ", c64->charrom->memory[sc_row1_5 * 8 + row]);
+                }
+            }
+            printf("\n");
+
+            // First bad line for YSCROLL=3 is raster 51
+            // Char row N starts at raster 51 + N*8
+            int first_raster = 48 + yscroll; // $30 + YSCROLL
+            printf("First bad line at raster %d\n", first_raster);
+            
+            // Dump char row 0 — full 8 rasters, showing pixel bits for col 5
+            printf("\nChar row 0 (rasters %d-%d), col5 fb_x 82-89:\n", first_raster, first_raster+7);
+            for (int fy = first_raster; fy <= first_raster+7; fy++) {
+                int rc_expected = fy - first_raster;
+                printf("  y=%3d (RC%d):", fy, rc_expected);
+                // Show 8 pixels from col 5
+                uint8_t bits = 0;
+                for (int px = 0; px < 8; px++) {
+                    uint32_t c = fb_px(82 + px, fy);
+                    const char* cn = color_name(c);
+                    // Check if foreground or background
+                    bool is_fg = (c != PAL[d021]); // not background
+                    bits |= (is_fg ? 1 : 0) << (7 - px);
+                    printf(" %s", cn);
+                }
+                printf(" = $%02X", bits);
+                // Compare with expected character ROM row
+                if (c64->charrom && c64->charrom->memory) {
+                    uint8_t expected = c64->charrom->memory[sc * 8 + rc_expected];
+                    printf(" (ROM row%d=$%02X %s)", rc_expected, expected, bits == expected ? "OK" : "MISMATCH!");
+                }
+                printf("\n");
+            }
+            
+            // Also dump char row 1
+            int r1_start = first_raster + 8;
+            printf("\nChar row 1 (rasters %d-%d), col5 fb_x 82-89:\n", r1_start, r1_start+7);
+            for (int fy = r1_start; fy <= r1_start+7; fy++) {
+                int rc_expected = fy - r1_start;
+                printf("  y=%3d (RC%d):", fy, rc_expected);
+                uint8_t bits = 0;
+                for (int px = 0; px < 8; px++) {
+                    uint32_t c = fb_px(82 + px, fy);
+                    const char* cn = color_name(c);
+                    bool is_fg = (c != PAL[d021]);
+                    bits |= (is_fg ? 1 : 0) << (7 - px);
+                    printf(" %s", cn);
+                }
+                printf(" = $%02X", bits);
+                if (c64->charrom && c64->charrom->memory) {
+                    uint8_t expected = c64->charrom->memory[sc_row1_5 * 8 + rc_expected];
+                    printf(" (ROM row%d=$%02X %s)", rc_expected, expected, bits == expected ? "OK" : "MISMATCH!");
+                }
+                printf("\n");
+            }
+            
+            // Dump char row 2 for good measure
+            int r2_start = first_raster + 16;
+            uint8_t sc_row2_5 = c64->ram->memory[0x0400+80+5];
+            printf("\nChar row 2 col5 sc=$%02X (rasters %d-%d):\n", sc_row2_5, r2_start, r2_start+7);
+            for (int fy = r2_start; fy <= r2_start+7; fy++) {
+                int rc_expected = fy - r2_start;
+                printf("  y=%3d (RC%d):", fy, rc_expected);
+                uint8_t bits = 0;
+                for (int px = 0; px < 8; px++) {
+                    uint32_t c = fb_px(82 + px, fy);
+                    const char* cn = color_name(c);
+                    bool is_fg = (c != PAL[d021]);
+                    bits |= (is_fg ? 1 : 0) << (7 - px);
+                    printf(" %s", cn);
+                }
+                printf(" = $%02X", bits);
+                if (c64->charrom && c64->charrom->memory) {
+                    uint8_t expected = c64->charrom->memory[sc_row2_5 * 8 + rc_expected];
+                    printf(" (ROM row%d=$%02X %s)", rc_expected, expected, bits == expected ? "OK" : "MISMATCH!");
+                }
+                printf("\n");
+            }
+        }
+        
+        // Save final framebuffer as PNG for visual inspection
+        printf("\nSaving framebuffer to /tmp/vicii_dump_f200.png...\n");
+        c64_set_framebuffer(c64, fb.get(), fb_width, fb_height);
+        // Use stbi_write_png via c64_save_screenshot  
+        c64_save_screenshot(c64, "/tmp/vicii_dump_f200.png");
+        printf("Done. Check /tmp/vicii_dump_f200.png\n");
+        
+        system->shutdown();
+        return 0;
+    }
+
     // =========================================================================
     // VIC-II TEST MODE — headless test suite
     // =========================================================================

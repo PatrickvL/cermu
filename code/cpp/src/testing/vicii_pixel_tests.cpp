@@ -53,19 +53,17 @@ static const uint32_t PAL[16] = {
 
 // Convert VIC-II X coordinate to framebuffer column
 static int vic_x_to_fb(int vic_x) {
-    return (vic_x - 482 + 504) % 504;
+    return (vic_x - 486 + 504) % 504;
 }
 
 // Character grid → framebuffer pixel (first pixel of character cell's shift register output)
 // Hardware-accurate calibration for CSEL=1, XSCROLL=0, YSCROLL=3:
-// X: First c/g-access at x_cycle=15 (spec cycle 16), x_coord=20, 8 pixels span x=20-27.
-//    Pipeline delay+centering: fb_pos = 24 + ((x_coord + 502) % 504).
-//    Column 0 starts at fb 42, but border_left=24 hides first 4 pixels (fb 42-45).
-//    First VISIBLE pixel of column 0 is at fb 46. Columns 1-39 fully visible (8px each).
-// Y: Although the bad line (RC=0) starts at raster 51+row*8, the g-access
-//    on bad lines uses stale video_matrix_line data from the previous bad line
-//    (c-access/g-access pipeline effect). For reliable testing, we point to
-//    the SECOND raster of each character row (RC=1) at raster 52+row*8.
+// X: First c/g-access at x_cycle=15 (spec cycle 16), x_coord=24 = border_left(CSEL=1).
+//    Column 0's shift register starts exactly at the border edge. All 8 pixels visible.
+//    Pipeline delay+centering maps x=24 to fb_pos=42.
+// Y: RC=0 is the first raster of each character row at raster 51+row*8.
+//    The c-access pipeline fix ensures RC=0 uses correct character codes.
+//    We test at RC=1 (raster 52+row*8) for additional safety margin.
 static int char_fb_x(int col)  { return 42 + col * 8; }
 static int char_fb_y(int row)  { return 52 + row * 8; }
 
@@ -718,23 +716,22 @@ static void test_xscroll(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     write_colorram(c64, 0, 1);
     write_colorram(c64, 1, 1);
 
-    // XSCROLL=0: first visible char pixel at col 0 offset +4 (border hides 0-3)
+    // XSCROLL=0: col 0 starts exactly at border_left, all 8 pixels visible
     write_vic(c64, 0x16, 0xC8); // CSEL=1, XSCROLL=0
     run_frames(sys, 3);
 
     int x0 = char_fb_x(0);
     int y0 = char_fb_y(0);
-    check_pixel(ctx, x0 + 4, y0, 1, "XSCROLL=0 first pixel is FG");
+    check_pixel(ctx, x0, y0, 1, "XSCROLL=0 first pixel is FG");
 
-    // XSCROLL=4: delays 4 extra BG pixels after border opens.
-    // Col 0's visible 4 pixels (offset 4-7) become XSCROLL background.
-    // First FG pixel appears at col 1 start.
+    // XSCROLL=4: inserts 4 BG pixels before shift register output.
+    // Col 0 fb 42-45 = BG (XSCROLL delay), fb 46-49 = col 0 bits 7-4 (FG).
+    // Col 1 starts at fb 50, showing bits 7-4 of col 1 (bits 3-0 eaten by XSCROLL carry-over).
     write_vic(c64, 0x16, 0xCC); // CSEL=1, XSCROLL=4
     run_frames(sys, 3);
 
-    int x1 = char_fb_x(1);
-    check_pixel(ctx, x0 + 4, y0, 0, "XSCROLL=4 col0 visible area now BG");
-    check_pixel(ctx, x1, y0, 1, "XSCROLL=4 FG shifted right");
+    check_pixel(ctx, x0, y0, 0, "XSCROLL=4 first pixel is BG (scroll delay)");
+    check_pixel(ctx, x0 + 4, y0, 1, "XSCROLL=4 col0 data starts after delay");
 }
 
 // P15: YSCROLL — shifts display vertically
@@ -1362,29 +1359,26 @@ static void test_top_left_alignment(c64_t* c64, EmulatedSystem* sys, check_ctx_t
 
     run_frames(sys, 3);
 
-    // The top-left VISIBLE character pixel: col 0 offset +4 (first 4 pixels behind border)
-    // On real hardware with CSEL=1, XSCROLL=0, border_left=24 falls 4 pixels into
-    // the first g-access cycle, hiding the first 4 shift register outputs.
+    // Column 0's first pixel aligns exactly with border_left(CSEL=1).
+    // All 8 pixels of column 0 are visible.
     int x0 = char_fb_x(0);
     int y0 = char_fb_y(0);
-    int first_visible = x0 + 4;  // fb 46: first pixel after border opens
-    check_pixel(ctx, first_visible, y0, 1, "first visible char pixel = white FG");
+    check_pixel(ctx, x0, y0, 1, "first char pixel = white FG (col 0 aligned with border)");
 
-    // Verify the pixel just LEFT of the first visible character pixel is NOT foreground.
-    // This confirms the border-to-display boundary is clean.
+    // Verify the pixel just LEFT of column 0 is NOT foreground (it's border).
     {
-        uint32_t left_pixel = fb_pixel(ctx.fb, ctx.width, first_visible - 1, y0);
+        uint32_t left_pixel = fb_pixel(ctx.fb, ctx.width, x0 - 1, y0);
         if (left_pixel != PAL[1]) {
-            ctx.pass++;  // Not foreground — good (border overrides character data here)
+            ctx.pass++;  // Not foreground — good (border pixel)
         } else {
             ctx.fail++;
             printf("  PIXEL FAIL [P29 %s] pixel at (%d,%d) should not be FG\n",
-                   ctx.group_name, first_visible - 1, y0);
+                   ctx.group_name, x0 - 1, y0);
         }
     }
 
     // Verify a pixel well inside the character
-    check_pixel(ctx, x0 + 5, y0 + 4, 1, "center of (0,0) char = white FG");
+    check_pixel(ctx, x0 + 4, y0 + 4, 1, "center of (0,0) char = white FG");
 }
 
 // =============================================================================
@@ -1640,6 +1634,151 @@ static void test_y_position_diagnostic(c64_t* c64, EmulatedSystem* sys, check_ct
 }
 
 // =============================================================================
+// DIAGNOSTIC: Framebuffer dump for visual debugging
+// =============================================================================
+static const char* color_name(uint32_t rgba) {
+    for (int i = 0; i < 16; i++) {
+        if (PAL[i] == rgba) {
+            static const char* names[16] = {
+                "BLK", "WHT", "RED", "CYN", "PUR", "GRN", "BLU", "YEL",
+                "ORN", "BRN", "LRD", "DG1", "DG2", "LGN", "LBL", "LG3"
+            };
+            return names[i];
+        }
+    }
+    return "???";
+}
+
+static void diagnostic_dump(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+    printf("\n=== DIAGNOSTIC: Character row 0, columns 0-2, all 8 scanlines ===\n");
+    printf("Default boot: '@' (screen code 0), ROM pattern: $3C,$66,$6E,$6E,$60,$62,$3C,$00\n");
+    printf("Expected: bg=BLU(6), border=LBL(14), fg=LBL(14)\n");
+    printf("char_fb_x(0)=%d, char_fb_y(0)=%d\n\n", char_fb_x(0), char_fb_y(0));
+    
+    // Boot normally (no custom charset), run frames to stabilize
+    reset_vic_state(c64);
+    // Restore KERNAL defaults: charset at $1000 (ROM), screen at $0400
+    write_vic(c64, 0x18, 0x14);
+    // Fill screen with '@' (screen code 0)
+    for (int i = 0; i < 1000; i++) write_ram(c64, 0x0400 + i, 0x00);
+    for (int i = 0; i < 1000; i++) write_colorram(c64, i, 0x0E); // light blue
+    run_frames(sys, 3);
+    
+    // Dump around the left border edge: fb_x 36..57 (covers border->column0->column1)
+    // for raster lines 51-58 (bad line + 7 subsequent lines = RC 0..7)
+    printf("fb_x:  ");
+    for (int fx = 36; fx <= 65; fx++) printf(" %3d", fx);
+    printf("\n");
+    printf("       ");
+    for (int fx = 36; fx <= 65; fx++) {
+        if (fx == 42) printf("  c0>");
+        else if (fx == 50) printf("  c1>");
+        else if (fx == 58) printf("  c2>");
+        else printf("    ");
+    }
+    printf("\n");
+    
+    for (int fy = 51; fy <= 58; fy++) {
+        int rc = fy - 51;
+        printf("y=%3d RC%d: ", fy, rc);
+        for (int fx = 36; fx <= 65; fx++) {
+            uint32_t pix = fb_pixel(ctx.fb, ctx.width, fx, fy);
+            printf(" %s", color_name(pix));
+        }
+        printf("\n");
+    }
+    
+    // Also dump one row from character row 1 (rasters 59-66) to check line-wrap across rows
+    printf("\nCharacter row 1 (rasters 59-66):\n");
+    for (int fy = 59; fy <= 66; fy++) {
+        int rc = fy - 59;
+        printf("y=%3d RC%d: ", fy, rc);
+        for (int fx = 36; fx <= 65; fx++) {
+            uint32_t pix = fb_pixel(ctx.fb, ctx.width, fx, fy);
+            printf(" %s", color_name(pix));
+        }
+        printf("\n");
+    }
+    
+    // Dump the expected '@' ROM data for reference
+    printf("\n'@' character ROM (screen code 0):\n");
+    // Read from char ROM. With $D018=0x14, charset is at $1000 (ROM).
+    // We can read the ROM pattern directly: $D000 banking, or just hardcode the known values.
+    static const uint8_t at_rom[8] = { 0x3C, 0x66, 0x6E, 0x6E, 0x60, 0x62, 0x3C, 0x00 };
+    for (int row = 0; row < 8; row++) {
+        printf("  Row %d ($%02X): ", row, at_rom[row]);
+        for (int bit = 7; bit >= 0; bit--) {
+            printf("%c", (at_rom[row] & (1 << bit)) ? '#' : '.');
+        }
+        // Show which bits are visible in col 0 (bits 3-0 if border eats bits 7-4)
+        printf("  col0_visible(bits3-0): ");
+        for (int bit = 3; bit >= 0; bit--) {
+            printf("%c", (at_rom[row] & (1 << bit)) ? '#' : '.');
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
+
+// Diagnostic dump after normal KERNAL boot (no reset_vic_state, just raw boot)
+static void diagnostic_dump_boot(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+    printf("\n=== DIAGNOSTIC: KERNAL boot screen (no state reset, 200 frames) ===\n");
+    printf("This captures what the user actually sees during normal C64 boot.\n\n");
+    
+    // Run 200 frames to let KERNAL boot complete and READY appear
+    run_frames(sys, 200);
+    
+    // Read VIC-II register state
+    uint8_t d011 = c64->vicii->registers.data[0x11];
+    uint8_t d016 = c64->vicii->registers.data[0x16];
+    uint8_t d018 = c64->vicii->registers.data[0x18];
+    uint8_t d020 = c64->vicii->registers.data[0x20];
+    uint8_t d021 = c64->vicii->registers.data[0x21];
+    printf("VIC regs: $D011=$%02X $D016=$%02X $D018=$%02X $D020=$%02X $D021=$%02X\n",
+           d011, d016, d018, d020, d021);
+    printf("YSCROLL=%d XSCROLL=%d CSEL=%d RSEL=%d DEN=%d\n",
+           d011 & 7, d016 & 7, (d016 >> 3) & 1, (d011 >> 3) & 1, (d011 >> 4) & 1);
+    
+    // Read first few screen bytes to see what characters are on screen
+    printf("Screen $0400-$0427 (first row): ");
+    for (int i = 0; i < 40; i++) {
+        uint8_t ch = c64->ram->memory[0x0400 + i];
+        printf("%02X ", ch);
+    }
+    printf("\n");
+    
+    // Dump character row 0 after boot
+    printf("\nBoot screen character row 0 (fb_x 36-65, rasters 51-58):\n");
+    printf("fb_x:  ");
+    for (int fx = 36; fx <= 65; fx++) printf(" %3d", fx);
+    printf("\n");
+    
+    for (int fy = 51; fy <= 58; fy++) {
+        int rc = fy - 51;
+        printf("y=%3d RC%d: ", fy, rc);
+        for (int fx = 36; fx <= 65; fx++) {
+            uint32_t pix = fb_pixel(ctx.fb, ctx.width, fx, fy);
+            printf(" %s", color_name(pix));
+        }
+        printf("\n");
+    }
+    
+    // Also check a few rows down where READY text might be (around row 6-7)
+    printf("\nBoot screen character rows 5-7 (rasters 91-114, cols 0-2):\n");
+    for (int fy = 91; fy <= 114; fy++) {
+        int row = (fy - 51) / 8;
+        int rc = (fy - 51) % 8;
+        printf("y=%3d r%d/RC%d: ", fy, row, rc);
+        for (int fx = 36; fx <= 65; fx++) {
+            uint32_t pix = fb_pixel(ctx.fb, ctx.width, fx, fy);
+            printf(" %s", color_name(pix));
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
+
+// =============================================================================
 // MAIN ENTRY POINT
 // =============================================================================
 
@@ -1666,6 +1805,10 @@ pixel_test_results_t run_pixel_verification_tests(
     ctx.group_name = "";
 
     int num_groups = 0;
+
+    // Diagnostic dumps (before tests modify state)
+    diagnostic_dump_boot(c64, system, ctx);  // Normal KERNAL boot
+    diagnostic_dump(c64, system, ctx);       // Controlled test setup
 
     // Run all pixel test groups
     test_border_color(c64, system, ctx);             num_groups++; // P1

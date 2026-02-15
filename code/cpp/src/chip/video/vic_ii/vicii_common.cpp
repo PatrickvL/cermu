@@ -404,6 +404,8 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             // On real hardware, the shift register clocks continuously even under
             // the border, but the border unit overrides the output. We advance the
             // shift register for border pixels to keep bit alignment correct.
+            // Without this, column 0 would show its MSBs (leftmost bits) after
+            // the border opens, instead of the correct LSBs (rightmost bits).
             if (pixel_in_border) {
                 const bool is_mcm = (seq->graphics_mode == VICII_GM_MULTICOLOR_TEXT &&
                                      (vicii->video_data.video_color_line[vmli] & 0x08)) ||
@@ -420,9 +422,12 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             vicii_pixel_t pixel_data;
             
             // XSCROLL handling - delay pixel output by XSCROLL pixels
+            // Read background color directly from register to avoid stale cached value.
+            // The VIC-II outputs the current $D021 value during scroll delay.
             if (seq->xscroll_counter > 0) {
                 seq->xscroll_counter--;
-                pixel_data = seq->colors[0]; // Background during scroll delay
+                pixel_data.color = static_cast<vicii_color_t>(vicii->registers.data[VICII_B0C]);
+                pixel_data.priority = VICII_PRIORITY_BACKGROUND;
                 vicii_pixel_emit_at_x(vicii, &pixel_data, pixel_x);
                 continue;
             }
@@ -826,6 +831,8 @@ bus_state_t vicii_registers_write(void* context, bus_state_t bus_state) {
         case VICII_C2: // $d016 Control register 2
             vicii_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
             vicii_border_update_limits(&vicii->border, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
+            // Re-sync color palette when graphics mode changes
+            vicii_sequencer_update_colors(vicii);
             break;
         case VICII_RASTER: // $d012 Raster compare (bits 0-7)
             // Update prev_raster_compare for edge detection
@@ -1710,6 +1717,22 @@ bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state) {
                 const uint8_t color_data = BUS_GET_DATA(bus_state) & 0x0F;
                 vicii->video_data.video_color_line[vicii->video_logic.vmli] = static_cast<vicii_color_t>(color_data);
             }
+            
+            // Read character code directly from screen RAM for immediate use by the
+            // g-access that follows (via FALLTHROUGH). On real hardware, the character
+            // code arrives 1 cycle later through the PHI2 bus pipeline, meaning the
+            // g-access at cycle N uses the character code from cycle N-1's c-access.
+            // This causes the first raster (RC=0) of each character row to display
+            // stale data from the previous row's character codes — a real VIC-II
+            // artifact that is nearly invisible on CRT but very noticeable in emulation.
+            // Reading immediately ensures the g-access uses the correct character code.
+            if (vicii->video_logic.display_state && vicii->video_logic.vmli < 40) {
+                const uint16_t screen_addr = c_access_addr | vicii->memory.bank_base;
+                bus_state_t temp = bus_state;
+                temp = c64_bus_vic_read(c64_bus, temp, screen_addr);
+                vicii->video_data.video_matrix_line[vicii->video_logic.vmli] = BUS_GET_DATA(temp);
+            }
+            
             // Fall through to G-access
             FALLTHROUGH;
         }
@@ -2112,9 +2135,9 @@ static const vicii_chip_config_t MOS6567R56A_config = {
     .visible_pixels_per_line = 411,
     .first_vblank_line = 13,
     .last_vblank_line = 40,
-    .first_x_coord = 412, // ($19c)
-    .first_visible_x_coord = 488, // ($1e8)
-    .last_visible_x_coord = 388, // ($184)
+    .first_x_coord = 416, // Aligned: cycle 15 x_coord = 24 = border_left(CSEL=1)
+    .first_visible_x_coord = 492, // Shifted +4 to match first_x_coord change
+    .last_visible_x_coord = 392, // Shifted +4 to match first_x_coord change
     
     .framebuffer_start_x = 0,
     .framebuffer_end_x = 520,  // Allow full scanline width to accommodate pipeline delay wrap-around
@@ -2130,9 +2153,9 @@ static const vicii_chip_config_t MOS6567R8_config = {
     .visible_pixels_per_line = 418,  // Documentation: 418 pixels for R8 variant
     .first_vblank_line = 13,
     .last_vblank_line = 40,
-    .first_x_coord = 412, // ($19c)
-    .first_visible_x_coord = 489, // ($1e9)
-    .last_visible_x_coord = 396, // ($18c)
+    .first_x_coord = 424, // Aligned: cycle 15 x_coord = 24 = border_left(CSEL=1)
+    .first_visible_x_coord = 501, // Shifted +12 to match first_x_coord change
+    .last_visible_x_coord = 408, // Shifted +12 to match first_x_coord change
     
     .framebuffer_start_x = 0,
     .framebuffer_end_x = 520,  // Allow full scanline width to accommodate pipeline delay wrap-around
@@ -2148,9 +2171,9 @@ static const vicii_chip_config_t MOS6569_config = {
     .visible_pixels_per_line = 403,
     .first_vblank_line = 300,
     .last_vblank_line = 15,
-    .first_x_coord = 404, // ($194)
-    .first_visible_x_coord = 480, // ($1e0) - Documentation value, NOT shifted
-    .last_visible_x_coord = 380, // ($17c) - Documentation value, NOT shifted
+    .first_x_coord = 408, // Aligned: cycle 15 x_coord = 24 = border_left(CSEL=1)
+    .first_visible_x_coord = 484, // Shifted +4 to match first_x_coord change
+    .last_visible_x_coord = 384, // Shifted +4 to match first_x_coord change
     
     .framebuffer_start_x = 0,
     .framebuffer_end_x = 504,  // Allow full scanline width to accommodate pipeline delay wrap-around
