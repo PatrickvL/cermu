@@ -301,6 +301,12 @@ struct vicii_timing_unit_t {
 typedef struct {
     bool display_state;
     bool is_bad_line;
+    bool bad_line_occurred;    // Latch: true if is_bad_line was true at ANY point on current raster line.
+                               // Once set, stays set until the raster counter advances.
+                               // The VIC-II's c-access state machine, once triggered by a bad line
+                               // condition, runs to completion regardless of subsequent D011 writes.
+                               // Used for BA prediction and c-access cycle functions instead of
+                               // is_bad_line, so CPU D011 writes can't cancel an in-progress steal.
     bool was_den_set_during_raster_30;
     bool ba_low_for_bad_line;  // BA warning signal for upcoming bad line (3 cycles ahead)
     uint16_t vcbase;     // VCBASE - Video Counter Base (10 bits) (Documentation section 3.7.2)
@@ -444,6 +450,7 @@ typedef struct {
     uint8_t pending_phi2_access_type;  // Track which PHI2 access type was set up for vicii_tick_phi2
     vicii_sprite_unit_t* active_sprite;  // Active sprite pointer for P/S accesses (NULL if none)
     uint8_t ba_prediction_shift_reg;     // 3-bit shift register: bit0=cycle+1, bit1=cycle+2, bit2=cycle+3
+    uint8_t ba_low_count;                // Consecutive cycles BA has been LOW (for AEC 3-cycle delay)
     bus_state_t bus_line_mask;           // Bitmask for bus lines to pull low (BA, AEC, etc.)
 } vicii_bus_unit_t;
 
