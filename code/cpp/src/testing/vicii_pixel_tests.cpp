@@ -42,31 +42,34 @@ static const uint32_t PAL[16] = {
 // fb_row = raster_counter (identity, no offset)
 // fb_col = (vic_x - 482 + 504) % 504   (pipeline delay 12, centering -14 = -2)
 //
-// EMPIRICAL: Due to cycle-boundary rendering (first_x_coord=404, border_left=24
-// falls at pixel 4 of an 8-pixel cycle), character pixels appear 4 pixels earlier
-// than the theoretical border edge.
-// Also, the first bad line fetches data that appears on the NEXT raster line (+1).
+// LATCH-BASED SR MODEL: The g-access fills a data latch, and the shift register
+// reloads from the latch when pixel_in_char wraps to 0.  With first_x_coord=404,
+// the border opens at x=24 (pixel 4 of cycle 15).  The pixel_in_char counter resets
+// at that point, triggering an immediate SR load with column 0 data.  Column 0's
+// full 8 pixels output at x=24-31 (spanning cycles 15-16).  Subsequent columns
+// reload every 8 display pixels, keeping all 40 columns × 8 pixels = 320 pixels
+// perfectly aligned within the display window (x=24 to x=343).
 //
 // Display area (CSEL=1, RSEL=1, YSCROLL=3, XSCROLL=0):
 //   Theoretical: VIC 24..343 → fb cols 46..365, rasters 51..250 → fb rows 51..250
-//   Actual:      Character starts at fb col 42, fb row 52
-//   Character(r,c): fb_x = 42 + c*8, fb_y = 52 + r*8
+//   Actual:      Character starts at fb col 46, fb row 52
+//   Character(r,c): fb_x = 46 + c*8, fb_y = 52 + r*8
 // =============================================================================
 
 // Convert VIC-II X coordinate to framebuffer column
 static int vic_x_to_fb(int vic_x) {
-    return (vic_x - 486 + 504) % 504;
+    return (vic_x - 482 + 504) % 504;
 }
 
 // Character grid → framebuffer pixel (first pixel of character cell's shift register output)
 // Hardware-accurate calibration for CSEL=1, XSCROLL=0, YSCROLL=3:
-// X: First c/g-access at x_cycle=15 (spec cycle 16), x_coord=24 = border_left(CSEL=1).
-//    Column 0's shift register starts exactly at the border edge. All 8 pixels visible.
-//    Pipeline delay+centering maps x=24 to fb_pos=42.
+// X: Border opens at x=24 (border_left for CSEL=1).  The latch-based SR model
+//    loads column 0 immediately at the border edge, so column 0's bit 7 appears
+//    at x=24.  Pipeline delay+centering maps x=24 to fb_pos=46.
 // Y: RC=0 is the first raster of each character row at raster 51+row*8.
 //    The c-access pipeline fix ensures RC=0 uses correct character codes.
 //    We test at RC=1 (raster 52+row*8) for additional safety margin.
-static int char_fb_x(int col)  { return 42 + col * 8; }
+static int char_fb_x(int col)  { return 46 + col * 8; }
 static int char_fb_y(int row)  { return 52 + row * 8; }
 
 // Sprite VIC-II coordinate → framebuffer pixel
@@ -294,12 +297,11 @@ static void test_text_character(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ct
 
     run_frames(sys, 5);
 
-    // Column 0: first 4 pixels (fb offset 0-3) are behind the left border
-    // Only pixels at offset 4-7 are visible (hardware-accurate: CSEL=1, XSCROLL=0)
+    // Column 0: all 8 pixels visible with latch-based SR model (CSEL=1, XSCROLL=0)
     int x0 = char_fb_x(0);
     int y0 = char_fb_y(0);
-    check_pixel(ctx, x0 + 4, y0,     1, "col0 first visible pixel (offset 4)");
-    check_pixel(ctx, x0 + 7, y0,     1, "col0 last pixel (offset 7)");
+    check_pixel(ctx, x0,     y0,     1, "col0 first pixel (bit 7)");
+    check_pixel(ctx, x0 + 7, y0,     1, "col0 last pixel (bit 0)");
 
     // Column 1: all 8 pixels visible — use for full character checks
     int x1 = char_fb_x(1);
@@ -718,22 +720,22 @@ static void test_xscroll(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     write_colorram(c64, 0, 1);
     write_colorram(c64, 1, 1);
 
-    // XSCROLL=0: col 0 starts exactly at border_left, all 8 pixels visible
+    // XSCROLL=0: col 0 starts at char_fb_x(0) with all 8 pixels visible.
+    // The latch-based SR model loads column 0 at the border edge (x=24).
     write_vic(c64, 0x16, 0xC8); // CSEL=1, XSCROLL=0
     run_frames(sys, 3);
 
     int x0 = char_fb_x(0);
     int y0 = char_fb_y(0);
-    check_pixel(ctx, x0, y0, 1, "XSCROLL=0 first pixel is FG");
+    check_pixel(ctx, x0, y0, 1, "XSCROLL=0 first display pixel is FG");
 
-    // XSCROLL=4: inserts 4 BG pixels before shift register output.
-    // Col 0 fb 42-45 = BG (XSCROLL delay), fb 46-49 = col 0 bits 7-4 (FG).
-    // Col 1 starts at fb 50, showing bits 7-4 of col 1 (bits 3-0 eaten by XSCROLL carry-over).
+    // XSCROLL=4: inserts 4 BG pixels of scroll delay after border opens.
+    // Col 0's first pixel shifts right by 4, appearing at char_fb_x(0)+4.
     write_vic(c64, 0x16, 0xCC); // CSEL=1, XSCROLL=4
     run_frames(sys, 3);
 
-    check_pixel(ctx, x0, y0, 0, "XSCROLL=4 first pixel is BG (scroll delay)");
-    check_pixel(ctx, x0 + 4, y0, 1, "XSCROLL=4 col0 data starts after delay");
+    check_pixel(ctx, x0, y0, 0, "XSCROLL=4 first display pixel is BG (scroll delay)");
+    check_pixel(ctx, x0 + 4, y0, 1, "XSCROLL=4 col0 data starts after scroll delay");
 }
 
 // P15: YSCROLL — shifts display vertically
@@ -787,14 +789,11 @@ static void test_csel(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
 
     run_frames(sys, 3);
 
-    // In 38-column mode, left border extends to VIC-II x=31 instead of 24
-    // The very first character column (x=24..31) should be covered by border
+    // In 38-column mode, left border extends to VIC-II x=31 instead of 24.
+    // With the latch-based SR model, column 0 starts at x=24 for CSEL=1, but
+    // the extended CSEL=0 border covers x=24-30, hiding the first 7 pixels.
     int x0 = char_fb_x(0);
-    // CSEL=0: border extends from x=24 to x=31 (instead of x=24 border opening).
-    // The display window opens at VIC-II x=31 for CSEL=0.
-    // Column 0's first pixel is at VIC-II x≈28 (cycle 16), so the first 3 pixels
-    // of column 0 (x=28,29,30) are covered by the CSEL=0 border.
-    // Check at x0+1 (VIC-II x=29) which is firmly inside the CSEL=0 border.
+    // Check at x0+1, which maps to VIC-II x=25, firmly inside the CSEL=0 border.
     check_pixel(ctx, x0 + 1, char_fb_y(0) + 4, 14, "CSEL=0 left border covers col 0");
 }
 
@@ -1361,20 +1360,20 @@ static void test_top_left_alignment(c64_t* c64, EmulatedSystem* sys, check_ctx_t
 
     run_frames(sys, 3);
 
-    // Column 0's first pixel aligns exactly with border_left(CSEL=1).
-    // All 8 pixels of column 0 are visible.
+    // With the latch-based SR model, column 0's first pixel is at char_fb_x(0),
+    // which is the exact border-to-display transition point.
     int x0 = char_fb_x(0);
     int y0 = char_fb_y(0);
-    check_pixel(ctx, x0, y0, 1, "first char pixel = white FG (col 0 aligned with border)");
+    check_pixel(ctx, x0, y0, 1, "first char pixel = white FG at border edge");
 
-    // Verify the pixel just LEFT of column 0 is NOT foreground (it's border).
+    // Verify the pixel one position before char_fb_x(0) is border (not FG)
     {
-        uint32_t left_pixel = fb_pixel(ctx.fb, ctx.width, x0 - 1, y0);
-        if (left_pixel != PAL[1]) {
-            ctx.pass++;  // Not foreground — good (border pixel)
+        uint32_t border_pixel = fb_pixel(ctx.fb, ctx.width, x0 - 1, y0);
+        if (border_pixel != PAL[1]) {
+            ctx.pass++;  // Not foreground — correct, it's border
         } else {
             ctx.fail++;
-            printf("  PIXEL FAIL [P29 %s] pixel at (%d,%d) should not be FG\n",
+            printf("  PIXEL FAIL [P29 %s] pixel at (%d,%d) should be border, not FG\n",
                    ctx.group_name, x0 - 1, y0);
         }
     }
