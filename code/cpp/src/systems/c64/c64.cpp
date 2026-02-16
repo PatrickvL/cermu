@@ -386,6 +386,16 @@ void c64_system_tick(c64_t* c64) {
     s = mos6510_tick_phi1(c64->mos6510, s);
 
     // =========================================================================
+    // RESTORE R/W LINE TO READ MODE
+    // =========================================================================
+    // The CPU may have cleared BUS_RW (write mode) during PHI2 bus setup.
+    // Both c64_memory_tick (PHASE 3) and CPU PHI1 (PHASE 4) have now consumed
+    // the write information, so we restore RW=1 (read mode) to maintain the
+    // invariant: BUS_MASK_RW is always set outside of the CPU write window.
+    // This means no other chip (VIC-II, SID, etc.) needs to set it explicitly.
+    s |= BUS_BIT(BUS_RW_BIT);
+
+    // =========================================================================
     // PHASE 5: SID TICKING
     // =========================================================================
     // SID - sound generation

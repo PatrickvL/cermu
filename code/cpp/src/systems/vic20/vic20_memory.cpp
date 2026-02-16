@@ -489,7 +489,7 @@ void vic20_memory_write_byte(vic20_memory_t* mem, uint16_t addr, uint8_t value) 
     bus_state_t bus_state = 0;
     BUS_SET_ADDR(bus_state, addr);
     BUS_SET_DATA(bus_state, value);
-    // RW line clear = write mode
+    // BUS_MASK_RW clear = write mode
     
     vic20_memory_cpu_tick(mem, bus_state);
 }
