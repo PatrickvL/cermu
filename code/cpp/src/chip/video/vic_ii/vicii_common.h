@@ -230,6 +230,7 @@ constexpr uint16_t VICII_BORDER_RIGHT_CSEL1 = 344; // 0x158
 #define VIC_ACCESS_S            3  // PHI1/PHI2: s-access - sprite data (PHI2 when sprite active)
 #define VIC_ACCESS_C            4  //      PHI2: c-access - video matrix and Color RAM (in bad lines)
 #define VIC_ACCESS_G            5  // PHI1     : g-access - character generator or bitmap (always with c-access, never alone)
+#define VIC_ACCESS_REFRESH_C    6  // PHI1: r-access, PHI2: c-access (spec cycle 15 only)
 
 // Interrupt mask
 #define VICII_INTERRUPTS_MASK (VICII_IR_ILP | VICII_IR_IMMC | VICII_IR_IMBC | VICII_IR_IRST)
