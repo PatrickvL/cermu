@@ -1115,48 +1115,54 @@ static uint8_t vicii_cycle_refresh(vicii_t* vicii, int unused_param) {
     }
 }
 
-static uint8_t vicii_cycle_vc_load(vicii_t* vicii, int unused_param) {
-    // Cycle 15: VC load from VCBASE, VMLI clear
-
-    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-    
-    // Spec (line 1236): "In the first phase of cycle 14 of each line, VC is loaded from VCBASE
-    // (VCBASE->VC) and VMLI is cleared."
-    // CRITICAL: VC load and VMLI clear are UNCONDITIONAL — they happen every line.
-    // This ensures each raster line within a character row re-reads from the same
-    // VCBASE position, with only RC differentiating which row of the character is shown.
-    // Without this, non-bad lines would continue incrementing VC past 40, reading wrong
-    // characters (garbled text) and wrong bitmap offsets (slanted/skewed bitmaps).
+// Spec cycle 14 (x_cycle 13): VC update — refresh PHI1, VC/VMLI/RC update
+//
+// VICE reference (vicii-chip-model.c): Cycle 14 Phi2 has UpdateVc flag.
+// Spec (vic-ii.txt line 1236): "In the first phase of cycle 14 of each line,
+// VC is loaded from VCBASE (VCBASE->VC) and VMLI is cleared. If there is a
+// Bad Line Condition in this phase, RC is also reset to zero."
+//
+// CRITICAL: VC load and VMLI clear are UNCONDITIONAL — they happen every line.
+// This ensures each raster line within a character row re-reads from the same
+// VCBASE position, with only RC differentiating which row of the character is shown.
+static uint8_t vicii_cycle_refresh_vc_update(vicii_t* vicii, int unused_param) {
     vicii->video_logic.vc = vicii->video_logic.vcbase;
     vicii->video_logic.vmli = 0;
     
     // Only on bad lines: reset RC to zero (starts a new 8-row character block)
     // Documentation (vic-ii.txt line 1236-1238): "If there is a Bad Line Condition
     // in this phase, RC is also reset to zero."
-    // Display state is controlled by cycle 58, not here (spec lines 1196-1203)
+    const bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
     if (vicii->video_logic.is_bad_line && den_enabled) {
         vicii->video_logic.rc = 0;
     }
 
-    // On bad lines, this cycle also performs a c-access during PHI2
-    // (reads screen RAM for column 0). Return VIC_ACCESS_C so that:
-    // - AEC goes LOW (VIC owns PHI2 bus)
-    // - STEP 8 sets up the screen RAM address
-    // - c64_memory_tick services the read
-    // - vicii_tick_phi2 stores the result at video_matrix_line[0]
-    // This matches VICE's dedicated c-access-only cycle 15 (spec numbering).
-    if (vicii->video_logic.is_bad_line && den_enabled) {
-        return VIC_ACCESS_C;
-    }
-    return VIC_ACCESS_IDLE;
+    return VIC_ACCESS_REFRESH;
 }
 
-// Process pending sprite crunch effects from $D017 writes during cycle 15 PHI2.
+// Spec cycle 15 (x_cycle 14): First c-access — refresh PHI1, c-access PHI2
+//
+// VICE reference (vicii-chip-model.c): Cycle 15 has PHI1=Refresh, PHI2=FetchC.
+// This is the first c-access (column 0). The VC update already happened in the
+// previous cycle (spec 14 / x_cycle 13), so vmli=0 and vc=vcbase are ready.
+//
+// Returns VIC_ACCESS_REFRESH_C on bad lines (refresh PHI1 + c-access PHI2),
+// or VIC_ACCESS_REFRESH on non-bad lines (refresh only).
+static uint8_t vicii_cycle_refresh_first_c_access(vicii_t* vicii, int unused_param) {
+    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    
+    if (vicii->video_logic.is_bad_line && den_enabled) {
+        return VIC_ACCESS_REFRESH_C;
+    }
+    return VIC_ACCESS_REFRESH;
+}
+
+// Process pending sprite crunch effects from $D017 writes during spec cycle 15 PHI2.
 // VICE reference (viciisc/vicii-mem.c d017_store, viciisc/vicii-cycle.c):
 // When the CPU clears a Y-expansion bit in $D017 during the second phase of
 // cycle 15 while the expansion flip-flop is 0, the MC/MCBASE values are
 // corrupted via the "sprite crunch" formula.
-// This is processed here (in the cycle 15 callback, after PHI2) rather than
+// This is processed here (in the cycle callback, after PHI2) rather than
 // inline in the register write handler, keeping timing-dependent logic in the
 // cycle callbacks where it belongs.
 static inline void vicii_sprite_process_pending_crunch(vicii_t* vicii) {
@@ -1176,12 +1182,10 @@ static inline void vicii_sprite_process_pending_crunch(vicii_t* vicii) {
     vicii->sprites.pending_mxye_crunch = 0;
 }
 
-// Cycle 15 wrapper: VC load + sprite crunch processing
-// The sprite crunch effect occurs when the CPU writes to $D017 during cycle 15
-// PHI2. The register write handler records which sprites need crunching in
-// pending_mxye_crunch, and this wrapper applies the effect.
-static uint8_t vicii_cycle_vc_load_sprite_crunch(vicii_t* vicii, int param) {
-    uint8_t result = vicii_cycle_vc_load(vicii, param);
+// Spec cycle 15 wrapper: First c-access + sprite crunch processing
+// VICE reference (vicii-chip-model.c): Cycle 15 Phi2 has ChkSprCrunch flag.
+static uint8_t vicii_cycle_refresh_first_c_access_sprite_crunch(vicii_t* vicii, int param) {
+    uint8_t result = vicii_cycle_refresh_first_c_access(vicii, param);
     vicii_sprite_process_pending_crunch(vicii);
     return result;
 }
@@ -1522,9 +1526,9 @@ static inline bool vicii_cycle_needs_phi2_access(vicii_t* vicii, uint8_t cycle) 
         return false;
     }
     
-    // Check bad line c-access range (cycles 14-54 for PAL, same for NTSC)
-    // Cycle 14 (VC-load) also performs a c-access for column 0 on bad lines,
-    // so BA must go LOW 3 cycles early (at cycle 11) to warn the CPU.
+    // Check bad line c-access range (x_cycle 14-54 / spec cycles 15-55)
+    // x_cycle 14 (spec 15) is the first c-access cycle (column 0, refresh+c),
+    // so BA must go LOW 3 cycles early (at x_cycle 11) to warn the CPU.
     // DEN only affects bad line detection, not sprite accesses
     if (cycle >= 14 && cycle <= 54) {
         bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
@@ -1555,8 +1559,9 @@ static inline bool vicii_cycle_needs_phi2_access(vicii_t* vicii, uint8_t cycle) 
 // This should be called once per cycle in vicii_tick
 static inline bus_state_t vicii_update_ba_aec_signals(vicii_t* vicii, bus_state_t bus_state, uint8_t access_type) {
     // Check if we need PHI2 access NOW (current cycle)
-    // C-access always needs PHI2; P/S only need PHI2 when sprite has DMA active
-    bool needs_phi2_now = (access_type == VIC_ACCESS_C);
+    // C-access (including refresh+c at spec cycle 15) always needs PHI2;
+    // P/S only need PHI2 when sprite has DMA active
+    bool needs_phi2_now = (access_type == VIC_ACCESS_C || access_type == VIC_ACCESS_REFRESH_C);
     if (!needs_phi2_now && (access_type == VIC_ACCESS_P || access_type == VIC_ACCESS_S)) {
         needs_phi2_now = (vicii->bus.active_sprite && vicii->bus.active_sprite->dma_enabled);
     }
@@ -1596,7 +1601,8 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
     const int access_param = entry->param;
 
     // Call cycle function to determine current access type, returning either
-    // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH, VIC_ACCESS_P, VIC_ACCESS_S, or VIC_ACCESS_C
+    // VIC_ACCESS_IDLE, VIC_ACCESS_REFRESH, VIC_ACCESS_P, VIC_ACCESS_S,
+    // VIC_ACCESS_C, or VIC_ACCESS_REFRESH_C
     const uint8_t access_type = entry->func(vicii, access_param);
 
     // CRITICAL: Shift register update BEFORE setting BA/AEC
@@ -1661,13 +1667,17 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
             }
             break;
         }
+        case VIC_ACCESS_REFRESH_C:
+            // Spec cycle 15 (x_cycle 14): PHI1 is a refresh, PHI2 is the first c-access.
+            // Fall through to handle the refresh address — c-access is handled in STEP 4/8.
+            FALLTHROUGH;
         case VIC_ACCESS_REFRESH:
             // Refresh cycles use special address
             address = vicii->memory.vm_base | 0x3F00 | vicii->video_logic.refresh_counter;
             vicii->video_logic.refresh_counter--;
             break;
         case VIC_ACCESS_C:
-            // C-access cycles also perform a g-access during PHI1.
+            // C-access cycles (spec 16-55) also perform a g-access during PHI1.
             // The c-access (screen RAM + color RAM reads) happens AFTER the
             // g-access and VMLI/VC increment — see STEP 4 below.
             FALLTHROUGH;
@@ -1729,11 +1739,11 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
     }
 
     // STEP 3: Load graphics data into line buffer during g-access cycles 15-54 (0-based)
-    // The VC-load cycle is at x_cycle=14 (spec "cycle 15") — it clears VMLI and loads VC
-    // but does NOT perform a g-access. The 40 c/g-access cycles are at x_cycle 15-54
-    // (spec cycles 16-55). Note: spec uses 1-based numbering, x_cycle is 0-based.
+    // x_cycle 14 (spec 15) does a refresh during PHI1, NOT a g-access.
+    // The 40 g/c-access cycles are at x_cycle 15-54 (spec cycles 16-55).
+    // Note: spec uses 1-based numbering, x_cycle is 0-based.
     // During display_state, we need graphics data for every raster line (not just bad lines)
-    // to show different rows of each character
+    // to show different rows of each character.
     //
     // c_access_screen_addr is set by STEP 4 and consumed by STEP 8 to place the
     // screen RAM address on the bus for c64_memory_tick.
@@ -1774,17 +1784,18 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
     // to c64_memory_tick via STEP 8). Color RAM has separate data lines (D8-D11) and is
     // read inline here.
     //
-    // At x_cycle 14 (VC-load): vc=vcbase, vmli=0 — fetches column 0.
-    // At x_cycle 15-54: vc and vmli are post-increment from STEP 3 — fetches columns 1-40.
+    // At x_cycle 14 (spec 15, REFRESH_C): vc=vcbase, vmli=0 — fetches column 0.
+    // At x_cycle 15-54 (spec 16-55, VIC_ACCESS_C): vc and vmli are post-increment
+    // from STEP 3 — fetches columns 1-40.
     // (Column 40 at x_cycle 54 is a valid bus access but vmli=40 is out of buffer range;
     // the data is discarded by bounds checks in both the color write and phi2 delivery.)
     //
-    // access_type == VIC_ACCESS_C guarantees is_bad_line (which forces display_state) and
-    // DEN enabled, so no additional guards are needed here.
+    // Both VIC_ACCESS_C and VIC_ACCESS_REFRESH_C guarantee is_bad_line + DEN enabled,
+    // so no additional guards are needed here.
     //
     // Reference: VICE viciisc/vicii-fetch.c vicii_fetch_matrix() reads at post-increment
     // vmli/vc, and vicii_fetch_graphics() reads vbuf[vmli] then increments.
-    if (access_type == VIC_ACCESS_C) {
+    if (access_type == VIC_ACCESS_C || access_type == VIC_ACCESS_REFRESH_C) {
         const uint16_t vc = vicii->video_logic.vc & 0x3FF;
         c_access_screen_addr = vicii->memory.vm_base | vc;
 
@@ -1836,9 +1847,12 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
     vicii_update_badline_condition(vicii);
 
     // Store pending access type for PHI2 phase
-    vicii->bus.pending_phi2_access_type = access_type;
+    // Map VIC_ACCESS_REFRESH_C → VIC_ACCESS_C for PHI2 delivery (vicii_tick_phi2 only
+    // needs to know it's a c-access, not which PHI1 access type was paired with it).
+    vicii->bus.pending_phi2_access_type =
+        (access_type == VIC_ACCESS_REFRESH_C) ? VIC_ACCESS_C : access_type;
 
-    // STEP 8: Set up PHI2 memory access on the bus (C/P/S accesses only)
+    // STEP 8: Set up PHI2 memory access on the bus (C/P/S/REFRESH_C accesses only)
     // These will be serviced by c64_memory_tick and read by vicii_tick_phi2
     switch (access_type) {
         case VIC_ACCESS_P:
@@ -1861,6 +1875,7 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
                 return bus_state;
             }
             break;
+        case VIC_ACCESS_REFRESH_C:
         case VIC_ACCESS_C:
             // C-access PHI2: Set up screen RAM read on the bus
             // c64_memory_tick will service this (AEC is LOW, reads VIC bank mapping).
@@ -1952,8 +1967,8 @@ static const vicii_cycle_entry_t vicii_cycle_table_6569[63] = {
     {vicii_cycle_refresh, -1},                  // 11 r_x r_x
     {vicii_cycle_refresh, -1},                  // 12 r_X r_x
     {vicii_cycle_refresh, -1},                  // 13 r_X r_x
-    {vicii_cycle_refresh, -1},                  // 14 r_X r_x
-    {vicii_cycle_vc_load_sprite_crunch, -1},    // 15 rc_ r_x (+ sprite crunch from $D017 writes)
+    {vicii_cycle_refresh_vc_update, -1},        // 14 r_X r_x (+ VC=VCBASE, VMLI=0, RC=0 on bad line)
+    {vicii_cycle_refresh_first_c_access_sprite_crunch, -1}, // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
     {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
@@ -2021,8 +2036,8 @@ static const vicii_cycle_entry_t vicii_cycle_table_6567R56A[64] = {
     {vicii_cycle_refresh, -1},                  // 11 r_x r_x
     {vicii_cycle_refresh, -1},                  // 12 r_X r_x
     {vicii_cycle_refresh, -1},                  // 13 r_X r_x
-    {vicii_cycle_refresh, -1},                  // 14 r_X r_x
-    {vicii_cycle_vc_load_sprite_crunch, -1},    // 15 rc_ r_x (+ sprite crunch from $D017 writes)
+    {vicii_cycle_refresh_vc_update, -1},        // 14 r_X r_x (+ VC=VCBASE, VMLI=0, RC=0 on bad line)
+    {vicii_cycle_refresh_first_c_access_sprite_crunch, -1}, // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
     {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
@@ -2091,8 +2106,8 @@ static const vicii_cycle_entry_t vicii_cycle_table_6567R8[65] = {
     {vicii_cycle_refresh, -1},                  // 11 r_x r_x
     {vicii_cycle_refresh, -1},                  // 12 r_X r_x
     {vicii_cycle_refresh, -1},                  // 13 r_X r_x
-    {vicii_cycle_refresh, -1},                  // 14 r_X r_x
-    {vicii_cycle_vc_load_sprite_crunch, -1},    // 15 rc_ r_x (+ sprite crunch from $D017 writes)
+    {vicii_cycle_refresh_vc_update, -1},        // 14 r_X r_x (+ VC=VCBASE, VMLI=0, RC=0 on bad line)
+    {vicii_cycle_refresh_first_c_access_sprite_crunch, -1}, // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
     {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
     {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
     {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
