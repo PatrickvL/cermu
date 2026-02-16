@@ -1141,9 +1141,9 @@ static uint8_t vicii_cycle_vc_load(vicii_t* vicii, int unused_param) {
     // On bad lines, this cycle also performs a c-access during PHI2
     // (reads screen RAM for column 0). Return VIC_ACCESS_C so that:
     // - AEC goes LOW (VIC owns PHI2 bus)
-    // - STEP 10 sets up the screen RAM address
+    // - STEP 8 sets up the screen RAM address
     // - c64_memory_tick services the read
-    // - Next cycle STEP 1 stores the result at video_matrix_line[0]
+    // - vicii_tick_phi2 stores the result at video_matrix_line[0]
     // This matches VICE's dedicated c-access-only cycle 15 (spec numbering).
     if (vicii->video_logic.is_bad_line && den_enabled) {
         return VIC_ACCESS_C;
@@ -1591,11 +1591,7 @@ static inline bus_state_t vicii_update_ba_aec_signals(vicii_t* vicii, bus_state_
 bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
     c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
 
-    // CRITICAL: Update bad line condition BEFORE calling cycle function
-    // The cycle function needs current bad line status to return correct access type
-    vicii_update_badline_condition(vicii);
-
-    // STEP 2: Get current cycle entry and parameter
+    // STEP 1: Get current cycle entry and parameter
     const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[vicii->timing.x_cycle];
     const int access_param = entry->param;
 
@@ -1639,7 +1635,7 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
     // BA goes low when ANY of the next 3 cycles need PHI2 access (shift register != 0)
     bus_state = vicii_update_ba_aec_signals(vicii, bus_state, access_type);
 
-    // STEP 3: Perform PHI1 memory accesses via direct read
+    // STEP 2: Perform PHI1 memory accesses via direct read
     // G-access happens EVERY cycle, other accesses are special cases
     uint16_t address;
     
@@ -1673,7 +1669,7 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
         case VIC_ACCESS_C:
             // C-access cycles also perform a g-access during PHI1.
             // The c-access (screen RAM + color RAM reads) happens AFTER the
-            // g-access and VMLI/VC increment — see STEP 4b below.
+            // g-access and VMLI/VC increment — see STEP 4 below.
             FALLTHROUGH;
         case VIC_ACCESS_G:
             // G-access: Read graphics data (character ROM or bitmap data)
@@ -1732,15 +1728,15 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
         vicii->bus.active_sprite->shift_reg |= (uint32_t)BUS_GET_DATA(bus_state) << 8;
     }
 
-    // STEP 4: Load graphics data into line buffer during g-access cycles 15-54 (0-based)
+    // STEP 3: Load graphics data into line buffer during g-access cycles 15-54 (0-based)
     // The VC-load cycle is at x_cycle=14 (spec "cycle 15") — it clears VMLI and loads VC
     // but does NOT perform a g-access. The 40 c/g-access cycles are at x_cycle 15-54
     // (spec cycles 16-55). Note: spec uses 1-based numbering, x_cycle is 0-based.
     // During display_state, we need graphics data for every raster line (not just bad lines)
     // to show different rows of each character
     //
-    // c_access_screen_addr and has_c_access are used by STEP 4b/4a to pass the
-    // screen RAM address to STEP 10, where it's placed on the bus for c64_memory_tick.
+    // c_access_screen_addr and has_c_access are used by STEP 4 to pass the
+    // screen RAM address to STEP 8, where it's placed on the bus for c64_memory_tick.
     uint16_t c_access_screen_addr = 0;
     bool has_c_access = false;
     if (vicii->video_logic.display_state && vicii->timing.x_cycle >= 15 && vicii->timing.x_cycle <= 54) {
@@ -1771,7 +1767,7 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
             vicii->video_logic.vc++;
         }
         
-        // STEP 4b: C-access preparation — record pending c-access for PHI2 pipeline
+        // STEP 4: C-access preparation — record pending c-access for PHI2 pipeline
         //
         // On real hardware (and in VICE's viciisc), the c-access happens during PHI2
         // AFTER the g-access and VMLI/VC increment. This means:
@@ -1780,7 +1776,7 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
         //   - c-access reads screen[vc_post] and color[vc_post], stores at video_matrix_line[vmli_post]
         //
         // The screen RAM read is delegated to c64_memory_tick via the PHI2 bus pipeline:
-        // STEP 10 puts the address on the bus, c64_memory_tick services it (AEC is LOW),
+        // STEP 8 puts the address on the bus, c64_memory_tick services it (AEC is LOW),
         // and vicii_tick_phi2 stores the result at video_matrix_line[vmli].
         //
         // Color RAM uses separate data lines (D8-D11) and is read inline here.
@@ -1793,17 +1789,11 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
             if (post_vmli < 40) {
                 c_access_screen_addr = vicii->memory.vm_base | post_vc;
                 has_c_access = true;
-                
-                // Color RAM read (separate data lines, not on main bus)
-                bus_state_t temp = bus_state;
-                BUS_SET_ADDR(temp, post_vc);
-                temp = mos2114_read(vicii->colorram, temp);
-                vicii->video_data.video_color_line[post_vmli] = static_cast<vicii_color_t>(BUS_GET_DATA(temp) & 0x0F);
             }
         }
     }
     
-    // STEP 4a: Position-0 c-access preparation on VC-load cycle (VICE-accurate pipeline)
+    // STEP 4 (position 0): C-access preparation on VC-load cycle (VICE-accurate pipeline)
     //
     // In VICE's PAL timing (viciisc), the c-access for column 0 happens at cycle 15
     // (spec numbering) — a dedicated cycle with PHI2=FetchC but NO PHI1=FetchG.
@@ -1811,7 +1801,7 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
     //
     // Our cycle table merges VICE's cycles 14-15 into a single x_cycle 14 (VC-load).
     // Without this step, video_matrix_line[0] would retain stale data because
-    // STEP 4b only writes at post-increment positions (1..39).
+    // STEP 4 only writes at post-increment positions (1..39).
     //
     // The screen RAM read is delegated to c64_memory_tick via the PHI2 bus pipeline,
     // just like for columns 1-39. Color RAM uses separate data lines and is read inline.
@@ -1823,12 +1813,17 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
         
         c_access_screen_addr = vicii->memory.vm_base | vc0;
         has_c_access = true;
-        
-        // Color RAM read (separate data lines, not on main bus)
+    }
+    
+    // Unified color RAM read for c-access (separate data lines D8-D11, not on main bus)
+    // This covers both STEP 4 position 0 (x_cycle 14) and STEP 4 columns 1-39 (x_cycle 15-54)
+    if (has_c_access) {
+        const uint16_t vc = c_access_screen_addr & 0x3FF;
         bus_state_t temp = bus_state;
-        BUS_SET_ADDR(temp, vc0);
+        BUS_SET_ADDR(temp, vc);
         temp = mos2114_read(vicii->colorram, temp);
-        vicii->video_data.video_color_line[0] = static_cast<vicii_color_t>(BUS_GET_DATA(temp) & 0x0F);
+        vicii->video_data.video_color_line[vicii->video_logic.vmli] =
+            static_cast<vicii_color_t>(BUS_GET_DATA(temp) & 0x0F);
     }
     
     // STEP 5: Perform unified pixel sequencing (8 pixels per cycle)
@@ -1838,7 +1833,7 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
         vicii_pixel_sequencer(vicii);
     }
     
-    // STEP 6.5: Handle VIC-II IRQ signaling to CPU
+    // STEP 6: Handle VIC-II IRQ signaling to CPU
     // The VIC-II can generate interrupts from 4 sources (raster, sprite collision, etc.)
     // When any enabled interrupt is triggered, bit 7 (VICII_IR_IRQ) of register $D019 is set
     // and the VIC-II must assert the IRQ line to notify the CPU
@@ -1870,12 +1865,12 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
     // Store pending access type for PHI2 phase
     vicii->bus.pending_phi2_access_type = access_type;
 
-    // STEP 10: Set up PHI2 memory access on the bus (C/P/S accesses only)
+    // STEP 8: Set up PHI2 memory access on the bus (C/P/S accesses only)
     // These will be serviced by c64_memory_tick and read by vicii_tick_phi2
     switch (access_type) {
         case VIC_ACCESS_P:
             // P PHI2: Set up read for sprite data byte 0 (first data byte)
-            // Pointer was already read and stored during PHI1 (STEP 3)
+            // Pointer was already read and stored during PHI1 (STEP 2)
             if (vicii->bus.active_sprite && vicii->bus.active_sprite->dma_enabled) {
                 address = (uint16_t)vicii->bus.active_sprite->data_pointer * 64
                         + vicii->bus.active_sprite->mc;
@@ -1918,10 +1913,10 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
 // PHI2 DELIVERY — process data returned by c64_memory_tick
 // ========================================================================================
 // Called after c64_memory_tick in the same cycle. The PHI1 phase (vicii_tick_phi1) set up
-// the bus address in STEP 10. c64_memory_tick serviced it (AEC LOW → VIC bank mapping).
+// the bus address in STEP 8. c64_memory_tick serviced it (AEC LOW → VIC bank mapping).
 // This function reads the result and stores it in the appropriate VIC-II register.
 //
-// Because this runs in the same cycle as PHI1, vmli is still valid from STEP 4/4a —
+// Because this runs in the same cycle as PHI1, vmli is still valid from STEP 3/4 —
 // no cross-cycle storage is needed for c-access column positions.
 
 void vicii_tick_phi2(vicii_t* vicii, bus_state_t bus_state) {
@@ -1946,7 +1941,7 @@ void vicii_tick_phi2(vicii_t* vicii, bus_state_t bus_state) {
             break;
         case VIC_ACCESS_C: {
             // C-access PHI2: screen RAM data — store at current vmli position
-            // vmli was set during PHI1 (STEP 4/4a) and is still valid here
+            // vmli was set during PHI1 (STEP 3/4) and is still valid here
             const uint8_t vmli = vicii->video_logic.vmli;
             if (vicii->video_logic.display_state && vmli < 40) {
                 vicii->video_data.video_matrix_line[vmli] = bus_data;
@@ -1958,6 +1953,13 @@ void vicii_tick_phi2(vicii_t* vicii, bus_state_t bus_state) {
     }
 
     vicii->bus.pending_phi2_access_type = VIC_ACCESS_IDLE;
+
+    // Update bad line condition at the end of PHI2.
+    // This catches any VIC register writes (e.g. YSCROLL from $D011) that the CPU
+    // performed during this cycle's memory_tick phase. No VIC register changes can
+    // occur between here and the next phi1 (CIA phi1 and CPU phi1 don't write VIC regs),
+    // so the cycle function at the start of the next phi1 sees the correct bad line state.
+    vicii_update_badline_condition(vicii);
 }
 
 // ========================================================================================
