@@ -1735,10 +1735,9 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
     // During display_state, we need graphics data for every raster line (not just bad lines)
     // to show different rows of each character
     //
-    // c_access_screen_addr and has_c_access are used by STEP 4 to pass the
-    // screen RAM address to STEP 8, where it's placed on the bus for c64_memory_tick.
+    // c_access_screen_addr is set by STEP 4 and consumed by STEP 8 to place the
+    // screen RAM address on the bus for c64_memory_tick.
     uint16_t c_access_screen_addr = 0;
-    bool has_c_access = false;
     if (vicii->video_logic.display_state && vicii->timing.x_cycle >= 15 && vicii->timing.x_cycle <= 54) {
         // G-access happens EVERY cycle during PHI1 (the address calculation above always runs)
         // The graphics sequencer will use the data when in display_state
@@ -1766,64 +1765,38 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
         if (vicii->video_logic.display_state) {
             vicii->video_logic.vc++;
         }
-        
-        // STEP 4: C-access preparation — record pending c-access for PHI2 pipeline
-        //
-        // On real hardware (and in VICE's viciisc), the c-access happens during PHI2
-        // AFTER the g-access and VMLI/VC increment. This means:
-        //   - g-access reads video_matrix_line[vmli_pre] (data from previous c-access)
-        //   - vmli++, vc++
-        //   - c-access reads screen[vc_post] and color[vc_post], stores at video_matrix_line[vmli_post]
-        //
-        // The screen RAM read is delegated to c64_memory_tick via the PHI2 bus pipeline:
-        // STEP 8 puts the address on the bus, c64_memory_tick services it (AEC is LOW),
-        // and vicii_tick_phi2 stores the result at video_matrix_line[vmli].
-        //
-        // Color RAM uses separate data lines (D8-D11) and is read inline here.
-        //
-        // Reference: VICE viciisc/vicii-fetch.c vicii_fetch_matrix() reads at post-increment
-        // vmli/vc, and vicii_fetch_graphics() reads vbuf[vmli] then increments.
-        if (access_type == VIC_ACCESS_C) {
-            const uint8_t post_vmli = vicii->video_logic.vmli;
-            const uint16_t post_vc = vicii->video_logic.vc & 0x3FF;
-            if (post_vmli < 40) {
-                c_access_screen_addr = vicii->memory.vm_base | post_vc;
-                has_c_access = true;
-            }
+    }
+    
+    // STEP 4: C-access preparation — screen RAM address + color RAM read
+    //
+    // On real hardware, the c-access happens during PHI2. Both screen RAM and color RAM
+    // are read at the current VC address. Screen RAM goes through the main bus (delegated
+    // to c64_memory_tick via STEP 8). Color RAM has separate data lines (D8-D11) and is
+    // read inline here.
+    //
+    // At x_cycle 14 (VC-load): vc=vcbase, vmli=0 — fetches column 0.
+    // At x_cycle 15-54: vc and vmli are post-increment from STEP 3 — fetches columns 1-40.
+    // (Column 40 at x_cycle 54 is a valid bus access but vmli=40 is out of buffer range;
+    // the data is discarded by bounds checks in both the color write and phi2 delivery.)
+    //
+    // access_type == VIC_ACCESS_C guarantees is_bad_line (which forces display_state) and
+    // DEN enabled, so no additional guards are needed here.
+    //
+    // Reference: VICE viciisc/vicii-fetch.c vicii_fetch_matrix() reads at post-increment
+    // vmli/vc, and vicii_fetch_graphics() reads vbuf[vmli] then increments.
+    if (access_type == VIC_ACCESS_C) {
+        const uint16_t vc = vicii->video_logic.vc & 0x3FF;
+        c_access_screen_addr = vicii->memory.vm_base | vc;
+
+        // Color RAM read (separate data lines D8-D11, not on main bus)
+        const uint8_t vmli = vicii->video_logic.vmli;
+        if (vmli < 40) {
+            bus_state_t temp = bus_state;
+            BUS_SET_ADDR(temp, vc);
+            temp = mos2114_read(vicii->colorram, temp);
+            vicii->video_data.video_color_line[vmli] =
+                static_cast<vicii_color_t>(BUS_GET_DATA(temp) & 0x0F);
         }
-    }
-    
-    // STEP 4 (position 0): C-access preparation on VC-load cycle (VICE-accurate pipeline)
-    //
-    // In VICE's PAL timing (viciisc), the c-access for column 0 happens at cycle 15
-    // (spec numbering) — a dedicated cycle with PHI2=FetchC but NO PHI1=FetchG.
-    // This populates vbuf[0] one full cycle BEFORE the first g-access at cycle 16.
-    //
-    // Our cycle table merges VICE's cycles 14-15 into a single x_cycle 14 (VC-load).
-    // Without this step, video_matrix_line[0] would retain stale data because
-    // STEP 4 only writes at post-increment positions (1..39).
-    //
-    // The screen RAM read is delegated to c64_memory_tick via the PHI2 bus pipeline,
-    // just like for columns 1-39. Color RAM uses separate data lines and is read inline.
-    if (vicii->timing.x_cycle == 14 && vicii->video_logic.is_bad_line &&
-        vicii->video_logic.display_state &&
-        (vicii->registers.data[VICII_C1] & VICII_C1_DEN)) {
-        // vmli=0, vc=vcbase (just set by vicii_cycle_vc_load)
-        const uint16_t vc0 = vicii->video_logic.vc & 0x3FF;
-        
-        c_access_screen_addr = vicii->memory.vm_base | vc0;
-        has_c_access = true;
-    }
-    
-    // Unified color RAM read for c-access (separate data lines D8-D11, not on main bus)
-    // This covers both STEP 4 position 0 (x_cycle 14) and STEP 4 columns 1-39 (x_cycle 15-54)
-    if (has_c_access) {
-        const uint16_t vc = c_access_screen_addr & 0x3FF;
-        bus_state_t temp = bus_state;
-        BUS_SET_ADDR(temp, vc);
-        temp = mos2114_read(vicii->colorram, temp);
-        vicii->video_data.video_color_line[vicii->video_logic.vmli] =
-            static_cast<vicii_color_t>(BUS_GET_DATA(temp) & 0x0F);
     }
     
     // STEP 5: Perform unified pixel sequencing (8 pixels per cycle)
@@ -1892,11 +1865,7 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
             // C-access PHI2: Set up screen RAM read on the bus
             // c64_memory_tick will service this (AEC is LOW, reads VIC bank mapping).
             // vicii_tick_phi2 reads the result and stores at video_matrix_line[vmli].
-            if (has_c_access) {
-                address = c_access_screen_addr;
-            } else {
-                return bus_state;
-            }
+            address = c_access_screen_addr;
             break;
         default:
             // PHI1 accesses (G/REFRESH/IDLE) are handled inline, not here
