@@ -343,6 +343,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                 if (vicii->border.main_border_flip_flop) {
                     seq->xscroll_counter = vicii->registers.data[VICII_C2] & VICII_C2_XSCROLL;
                     seq->pixel_in_char = 0;
+                    seq->display_vmli = 0;
                 }
                 vicii->border.main_border_flip_flop = false;
             }
@@ -372,23 +373,19 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             seq->last_mode = seq->graphics_mode;
             seq->shift_reg = 0;
         }
-        // Use VMLI (Video Matrix Line Index) to determine which graphics data to sequence
-        // According to vic-ii.txt documentation (lines 1161-1164), VMLI is a 6-bit counter
-        // that tracks position within the internal 40×12 bit video matrix/color line.
-        // The hardware increments VMLI after each g-access (line 1184), and the pixel
-        // sequencer reads from the buffer position specified by VMLI.
+        // LATCH-BASED SHIFT REGISTER MODEL
+        // On real VIC-II hardware, each g-access fills an internal data latch.
+        // The shift register reloads from the latch when the previous character's
+        // 8 pixels have been fully consumed (pixel_in_char wraps to 0).  This means
+        // character pixel output is NOT aligned to cycle boundaries — it spans
+        // across cycles.  With first_x_coord=404 (PAL), the border opens at pixel 4
+        // of cycle 15 (x=24).  Column 0's SR loads at that moment, outputting bits
+        // 7-0 across pixels 4-7 of cycle 15 and pixels 0-3 of cycle 16.  This gives
+        // all 40 columns exactly 8 visible pixels within the 320-pixel display window.
         //
-        // CRITICAL: We must use the vmli value from BEFORE the increment (stored in
-        // current_vmli_for_display) because the graphics data was stored at that position,
-        // and then vmli was incremented. The pixel sequencer needs to read from the position
-        // that was just written.
-        const uint8_t vmli = seq->current_vmli_for_display;
-        
-        // Load shift register from graphics line buffer at current VMLI position
-        // Clamp to valid range (0-39) to prevent out-of-bounds access
-        if (vmli < 40) {
-            seq->shift_reg = seq->graphics_line[vmli];
-        }
+        // The display_vmli counter tracks which column to load next (0-39),
+        // independent of the g-access vmli.  The SR reload happens inside the pixel
+        // loop when pixel_in_char == 0, driven by the display sequencer state.
         
         // Sequence exactly 8 pixels from shift register
         for (int pixel = 0; pixel < 8; pixel++) {
@@ -400,22 +397,11 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             // which would incorrectly make earlier pixels appear as display.
             const bool pixel_in_border = per_pixel_in_border[pixel];
             
-            // Skip if this pixel is in border (already handled in first loop)
-            // On real hardware, the shift register clocks continuously even under
-            // the border, but the border unit overrides the output. We advance the
-            // shift register for border pixels to keep bit alignment correct.
-            // Without this, column 0 would show its MSBs (leftmost bits) after
-            // the border opens, instead of the correct LSBs (rightmost bits).
+            // Skip if this pixel is in border (already handled in first loop).
+            // The shift register is not advanced during border because the border
+            // unit suppresses pixel output.  The SR will be loaded from the latch
+            // when the border opens and pixel_in_char == 0, starting from bit 7.
             if (pixel_in_border) {
-                const bool is_mcm = (seq->graphics_mode == VICII_GM_MULTICOLOR_TEXT &&
-                                     (vicii->video_data.video_color_line[vmli] & 0x08)) ||
-                                    seq->graphics_mode == VICII_GM_MULTICOLOR_BITMAP;
-                if (is_mcm) {
-                    if (pixel & 1) seq->shift_reg <<= 2;
-                } else {
-                    seq->shift_reg <<= 1;
-                }
-                seq->pixel_in_char = (seq->pixel_in_char + 1) & 7;
                 continue;
             }
             
@@ -431,6 +417,18 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                 vicii_pixel_emit_at_x(vicii, &pixel_data, pixel_x);
                 continue;
             }
+            
+            // Reload shift register when starting a new character.
+            // On real VIC-II, the g-access data latch transfers to the SR when
+            // the previous character's 8 pixels have been fully shifted out
+            // (pixel_in_char wraps to 0).  This decouples character pixel timing
+            // from cycle boundaries, allowing columns to span across cycles.
+            if (seq->pixel_in_char == 0 && seq->display_vmli < 40) {
+                seq->shift_reg = seq->graphics_line[seq->display_vmli];
+                seq->active_display_column = seq->display_vmli;
+                seq->display_vmli++;
+            }
+            const uint8_t vmli = seq->active_display_column;
             
             // Extract pixel from shift register based on graphics mode
             uint8_t color_index = 0;
@@ -450,7 +448,8 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                 case VICII_GM_MULTICOLOR_TEXT:
                     if (vicii->video_data.video_color_line[vmli] & 0x08) {
                         // Multicolor character - 2 bits per pixel, displayed double-width
-                        // Each 2-bit pair spans 2 screen pixels. Only shift on odd pixels.
+                        // Each 2-bit pair spans 2 screen pixels. Shift on odd pixel_in_char
+                        // to align MC pairs with the character pixel grid (not cycle position).
                         pixel_bits = (seq->shift_reg >> 6) & 3;
                         switch (pixel_bits) {
                             case 0: color_index = vicii->registers.data[VICII_B0C]; break;
@@ -459,10 +458,9 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                             case 3: color_index = vicii->video_data.video_color_line[vmli]; break;
                         }
                         is_background = (pixel_bits <= 1);  // MCM=1: "00","01" = background
-                        if (pixel & 1) {
+                        if (seq->pixel_in_char & 1) {
                             seq->shift_reg <<= 2;
                         }
-                        seq->pixel_in_char = (seq->pixel_in_char + 1) & 7;
                     } else {
                         // Standard character in multicolor mode
                         pixel_bits = (seq->shift_reg >> 7) & 1;
@@ -471,7 +469,6 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                             vicii->registers.data[VICII_B0C];
                         is_background = (pixel_bits == 0);
                         seq->shift_reg <<= 1;
-                        seq->pixel_in_char = (seq->pixel_in_char + 1) & 7;
                     }
                     break;
                     
@@ -488,7 +485,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                     
                 case VICII_GM_MULTICOLOR_BITMAP:
                     // Multicolor bitmap - 2 bits per pixel, displayed double-width
-                    // Each 2-bit pair spans 2 screen pixels. Only shift on odd pixels.
+                    // Each 2-bit pair spans 2 screen pixels. Shift on odd pixel_in_char.
                     pixel_bits = (seq->shift_reg >> 6) & 3;
                     switch (pixel_bits) {
                         case 0: color_index = vicii->registers.data[VICII_B0C]; break;
@@ -497,10 +494,9 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                         case 3: color_index = vicii->video_data.video_color_line[vmli]; break;
                     }
                     is_background = (pixel_bits <= 1);  // MCM=1: "00","01" = background
-                    if (pixel & 1) {
+                    if (seq->pixel_in_char & 1) {
                         seq->shift_reg <<= 2;
                     }
-                    seq->pixel_in_char = (seq->pixel_in_char + 1) & 7;
                     break;
                     
                 case VICII_GM_ECM_TEXT:
@@ -549,11 +545,10 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                 }
             }
             
-            // Increment pixel position within character (for standard modes)
-            if (((seq->graphics_mode & VICII_BITMAP_MODE_MASK) == 0) &&
-                 !(vicii->video_data.video_color_line[vmli] & 0x08)) {
-                seq->pixel_in_char = (seq->pixel_in_char + 1) & 7;
-            }
+            // Increment pixel position within character (ALL modes).
+            // This drives the SR reload timing: when pixel_in_char wraps to 0,
+            // the next column's data is loaded from the latch into the SR.
+            seq->pixel_in_char = (seq->pixel_in_char + 1) & 7;
         }
     }
     
@@ -2172,9 +2167,9 @@ static const vicii_chip_config_t MOS6567R56A_config = {
     .visible_pixels_per_line = 411,
     .first_vblank_line = 13,
     .last_vblank_line = 40,
-    .first_x_coord = 416, // Aligned: cycle 15 x_coord = 24 = border_left(CSEL=1)
-    .first_visible_x_coord = 492, // Shifted +4 to match first_x_coord change
-    .last_visible_x_coord = 392, // Shifted +4 to match first_x_coord change
+    .first_x_coord = 412, // ($19c) - Documentation value
+    .first_visible_x_coord = 488, // ($1e8) - Documentation value
+    .last_visible_x_coord = 388, // ($184) - Documentation value
     
     .framebuffer_start_x = 0,
     .framebuffer_end_x = 520,  // Allow full scanline width to accommodate pipeline delay wrap-around
@@ -2190,9 +2185,9 @@ static const vicii_chip_config_t MOS6567R8_config = {
     .visible_pixels_per_line = 418,  // Documentation: 418 pixels for R8 variant
     .first_vblank_line = 13,
     .last_vblank_line = 40,
-    .first_x_coord = 424, // Aligned: cycle 15 x_coord = 24 = border_left(CSEL=1)
-    .first_visible_x_coord = 501, // Shifted +12 to match first_x_coord change
-    .last_visible_x_coord = 408, // Shifted +12 to match first_x_coord change
+    .first_x_coord = 412, // ($19c) - Documentation value
+    .first_visible_x_coord = 489, // ($1e9) - Documentation value
+    .last_visible_x_coord = 396, // ($18c) - Documentation value
     
     .framebuffer_start_x = 0,
     .framebuffer_end_x = 520,  // Allow full scanline width to accommodate pipeline delay wrap-around
@@ -2208,9 +2203,9 @@ static const vicii_chip_config_t MOS6569_config = {
     .visible_pixels_per_line = 403,
     .first_vblank_line = 300,
     .last_vblank_line = 15,
-    .first_x_coord = 408, // Aligned: cycle 15 x_coord = 24 = border_left(CSEL=1)
-    .first_visible_x_coord = 484, // Shifted +4 to match first_x_coord change
-    .last_visible_x_coord = 384, // Shifted +4 to match first_x_coord change
+    .first_x_coord = 404, // ($194) - Documentation value
+    .first_visible_x_coord = 480, // ($1e0) - Documentation value
+    .last_visible_x_coord = 380, // ($17c) - Documentation value
     
     .framebuffer_start_x = 0,
     .framebuffer_end_x = 504,  // Allow full scanline width to accommodate pipeline delay wrap-around
