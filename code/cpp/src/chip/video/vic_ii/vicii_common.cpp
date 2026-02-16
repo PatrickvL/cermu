@@ -629,9 +629,9 @@ static inline bus_state_t vicii_bus_memory_setup(vicii_t* vicii, bus_state_t bus
     // Set up the address on the bus for the memory service phase to handle
     // This follows the same pattern as the CPU's bus_setup_read()
     BUS_SET_ADDR(bus_state, final_address);
-    // TODO : Make sure RW line is always set (clear before and
-    // set after CPU writes) so that we don't need to set it here
-    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_RW); // Set read mode
+    // RW line is guaranteed to be set (read mode) by the system tick:
+    // each cycle starts with default_state (RW=1) and RW is re-set after
+    // CPU PHI1 completes, so VIC-II never sees RW=0 here.
     return bus_state;
 }
 
