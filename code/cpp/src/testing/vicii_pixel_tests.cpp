@@ -2061,6 +2061,243 @@ static void test_fli_bug_width(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx
 }
 
 // =============================================================================
+// P37: FLI Diagnostic — Per-line D018 bank switching via bad line latching
+// =============================================================================
+// Tests the VIC-II's FLI technique with proper cycle-exact timing.
+//
+// FLI TIMING (indexed loop, D018 before D011, 23 cy/iter):
+//   Pre-set: YSCROLL=4. Raster 100 is a natural bad line.
+//   wait_raster(100) exits mid-raster-100. VIC steal freezes CPU at cycle 14.
+//   After release at cycle 55, CPU starts loop body for raster 101:
+//     LDA d018,X (4) + STA $D018 (4) + LDA d011,X (4) + STA $D011 (4)
+//     + INX (2) + CPX (2) + BNE (3) = 23 cycles
+//   D018 write lands at ~cycle 57-62 of raster N (BEFORE raster N+1's c-access).
+//   D011 write at ~cycle 2-7 of raster N+1 triggers the bad line (latched).
+//   VIC steal at cycle 14 of N+1 paces the next iteration.
+// =============================================================================
+
+static uint8_t fli_read_pattern(const check_ctx_t& ctx, int col, int raster) {
+    int x_base = char_fb_x(col);
+    uint8_t pattern = 0;
+    for (int bit = 0; bit < 8; bit++) {
+        uint32_t pix = fb_pixel(ctx.fb, ctx.width, x_base + bit, raster);
+        if (pix == PAL[1])
+            pattern |= (0x80 >> bit);
+    }
+    return pattern;
+}
+
+static void test_fli_diagnostic(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+    ctx.test_group = 37;
+    ctx.group_name = "FLI Diagnostic";
+    printf("  P37: FLI Diagnostic\n");
+
+    reset_vic_state(c64);
+
+    // Screen bank addresses MUST avoid the VIC character ROM shadow at $1000-$1FFF
+    // (VIC bank 0 maps character ROM there, not RAM).
+    // Layout in VIC bank 0 ($0000-$3FFF):
+    //   Banks 0-3: $0400, $0800, $0C00, $2000  (skip $1000-$1FFF)
+    //   Banks 4-7: $2400, $2800, $2C00, $3000
+    //   Charset:   $3800-$3FFF (CB=111)
+    static const uint16_t screen_base[8] = {
+        0x0400, 0x0800, 0x0C00, 0x2000,
+        0x2400, 0x2800, 0x2C00, 0x3000
+    };
+    // D018: VM bits (7-4) select 1KB screen block, CB bits (3-1) select charset.
+    // CB=111 → charset at $3800.   D018 = (VM << 4) | 0x0E
+    static const uint8_t d018_for_bank[8] = {
+        0x1E, 0x2E, 0x3E, 0x8E, 0x9E, 0xAE, 0xBE, 0xCE
+    };
+
+    for (int bank = 0; bank < 8; bank++) {
+        for (int i = 0; i < 1000; i++)
+            write_ram(c64, screen_base[bank] + i, (uint8_t)bank);
+    }
+    for (int ch = 0; ch < 8; ch++)
+        for (int row = 0; row < 8; row++)
+            write_ram(c64, 0x3800 + ch * 8 + row, (uint8_t)ch);
+    for (int row = 0; row < 8; row++)
+        write_ram(c64, 0x3800 + 0xFF * 8 + row, 0xAA);
+    for (int i = 0; i < 1000; i++)
+        write_colorram(c64, i, 0x01);
+
+    write_vic(c64, 0x20, 0x00);
+    write_vic(c64, 0x21, 0x00);
+    write_vic(c64, 0x16, 0xC8);
+
+    static const uint16_t D018_TABLE = 0x8100;
+    static const uint16_t D011_TABLE = 0x8120;
+    int diag_col = 10;
+
+    // ---- Helper lambda to build and run one FLI test ----
+    auto run_fli_test = [&](const char* label, int line_count, const int* banks) {
+        // Build tables: iteration i prepares raster (101+i), i=0..line_count-2
+        int loop_iters = line_count - 1;  // first line is pre-set
+        // Store tables in REVERSE order: X counts down from loop_iters-1 to 0.
+        // Index loop_iters-1 = first forced line (raster 101), index 0 = last.
+        // This allows DEX+BPL (5 cycles) instead of INX+CPX+BNE (7 cycles),
+        // saving 2 critical cycles so D011 write lands at x12 instead of x14.
+        // At x12, bad_line_occurred is set in time for shift register prediction
+        // at phi1 of x13, ensuring proper BA/AEC timing for every forced line.
+        for (int i = 0; i < loop_iters; i++) {
+            int raster = 101 + i;
+            int table_idx = loop_iters - 1 - i;
+            write_ram(c64, D011_TABLE + table_idx, 0x18 | (raster & 0x07));
+            write_ram(c64, D018_TABLE + table_idx, d018_for_bank[banks[i + 1]]);
+        }
+
+        uint8_t code[512];
+        asm6510 a(code, sizeof(code), 0x8000);
+        a.sei();
+        a.lda_imm(0x35);
+        a.sta_zp(0x01);
+
+        auto frame_loop = a.here();
+        // Pre-set: YSCROLL=4 → raster 100 natural bad line; D018=bank for line 0
+        a.store_imm(asm6510::VIC_D011, 0x1C);
+        a.store_imm(asm6510::VIC_D018, d018_for_bank[banks[0]]);
+
+        a.wait_raster(250);
+        // Sync directly to raster 100. The natural bad line freezes the CPU.
+        // After VIC release at cycle 55, CPU starts loop body.
+        a.wait_raster(100);
+
+        // DEX+BPL loop: 21 cycles/iter (LDA 4 + STA 4 + LDA 4 + STA 4 + DEX 2 + BPL 3)
+        // vs old INX+CPX+BNE: 23 cycles/iter. 2 cycles saved → D011 at x12 vs x14.
+        a.ldx_imm((uint8_t)(loop_iters - 1));
+        auto fli_loop = a.here();
+        // D018 first (before triggering bad line), then D011
+        a.lda_abs_x(D018_TABLE);
+        a.sta_abs(asm6510::VIC_D018);
+        a.lda_abs_x(D011_TABLE);
+        a.sta_abs(asm6510::VIC_D011);
+        a.dex();
+        a.bpl(fli_loop);
+
+        a.store_imm(asm6510::VIC_D011, 0x1C);
+        a.store_imm(asm6510::VIC_D018, d018_for_bank[banks[0]]);
+        a.jmp(frame_loop);
+
+        printf("    Injecting %zu bytes at $8000\n", a.pos);
+        for (size_t i = 0; i < a.pos; i++)
+            write_ram(c64, 0x8000 + (uint16_t)i, code[i]);
+        mos6510_set_pc((mos6510_t*)c64->mos6510, 0x8000);
+        mos6510_transition_to_fetch((mos6510_t*)c64->mos6510);
+        run_frames(sys, 5);
+    };
+
+    // =========================================================================
+    // SUB-TEST A: 8-line FLI (rasters 100-107), banks 0-7
+    // =========================================================================
+    printf("    Sub-test A: 8-line FLI, rasters 100-107, banks 0-7\n");
+    int banks_a[8] = {0, 1, 2, 3, 4, 5, 6, 7};
+    run_fli_test("A", 8, banks_a);
+
+    printf("    Sub-test A results (col %d, rasters 100-107):\n", diag_col);
+    for (int line = 0; line < 8; line++) {
+        int raster = 100 + line;
+        int expected_bank = banks_a[line];
+        uint8_t pattern = fli_read_pattern(ctx, diag_col, raster);
+        int actual_bank = pattern & 0x07;
+        printf("      Raster %d: pattern=$%02X expected=%d actual=%d %s\n",
+               raster, pattern, expected_bank, actual_bank,
+               (actual_bank == expected_bank) ? "OK" : "MISMATCH");
+    }
+    printf("    FLI bug zone (cols 0-3, raster 101): ");
+    for (int col = 0; col < 4; col++)
+        printf("col%d=$%02X ", col, fli_read_pattern(ctx, col, 101));
+    printf("\n");
+
+    for (int line = 0; line < 8; line++) {
+        int raster = 100 + line;
+        int expected_bank = banks_a[line];
+        for (int bit = 0; bit < 3; bit++) {
+            int px = char_fb_x(diag_col) + 5 + bit;
+            uint8_t expect_color = ((expected_bank >> (2 - bit)) & 1) ? 1 : 0;
+            char desc[80];
+            snprintf(desc, sizeof(desc), "A r%d col%d bit%d bank%d",
+                     raster, diag_col, 2 - bit, expected_bank);
+            check_pixel(ctx, px, raster, expect_color, desc);
+        }
+    }
+
+    // =========================================================================
+    // SUB-TEST B: 24-line FLI (rasters 100-123), 3 groups of 8
+    // =========================================================================
+    printf("    Sub-test B: 24-line FLI, rasters 100-123\n");
+    int banks_b[24];
+    for (int i = 0; i < 24; i++) banks_b[i] = i & 7;
+    run_fli_test("B", 24, banks_b);
+
+    printf("    Sub-test B results (col %d, rasters 100-123):\n", diag_col);
+    int group_mismatches[3] = {0, 0, 0};
+    for (int line = 0; line < 24; line++) {
+        int raster = 100 + line;
+        int expected_bank = banks_b[line];
+        int group = line / 8;
+        uint8_t pattern = fli_read_pattern(ctx, diag_col, raster);
+        int actual_bank = pattern & 0x07;
+        bool match = (actual_bank == expected_bank);
+        if (!match) group_mismatches[group]++;
+        printf("      Raster %3d [g%d l%d]: pat=$%02X exp=%d act=%d %s\n",
+               raster, group, line % 8, pattern, expected_bank, actual_bank,
+               match ? "OK" : "MISMATCH");
+    }
+    printf("    Mismatches per group: [0]=%d [1]=%d [2]=%d\n",
+           group_mismatches[0], group_mismatches[1], group_mismatches[2]);
+
+    for (int line = 0; line < 24; line++) {
+        int raster = 100 + line;
+        int expected_bank = banks_b[line];
+        int px7 = char_fb_x(diag_col) + 7;
+        uint8_t expect = (expected_bank & 1) ? 1 : 0;
+        char desc[80];
+        snprintf(desc, sizeof(desc), "B r%d col%d bit0 bank%d",
+                 raster, diag_col, expected_bank);
+        check_pixel(ctx, px7, raster, expect, desc);
+    }
+
+    // =========================================================================
+    // SUB-TEST C: Reversed banks 7-0
+    // =========================================================================
+    printf("    Sub-test C: Reversed banks 7-0\n");
+    int banks_c[8] = {7, 6, 5, 4, 3, 2, 1, 0};
+    run_fli_test("C", 8, banks_c);
+
+    printf("    Sub-test C results (col %d, rasters 100-107):\n", diag_col);
+    for (int line = 0; line < 8; line++) {
+        int raster = 100 + line;
+        int expected_bank = banks_c[line];
+        uint8_t pattern = fli_read_pattern(ctx, diag_col, raster);
+        int actual_bank = pattern & 0x07;
+        const char* bl_type = (line == 0) ? "NAT" : "frc";
+        printf("      Raster %d (%s): pat=$%02X exp=%d act=%d %s\n",
+               raster, bl_type, pattern, expected_bank, actual_bank,
+               (actual_bank == expected_bank) ? "OK" : "MISMATCH");
+    }
+
+    for (int line = 1; line < 8; line++) {
+        int raster = 100 + line;
+        int expected_bank = banks_c[line];
+        int px7 = char_fb_x(diag_col) + 7;
+        uint8_t expect = (expected_bank & 1) ? 1 : 0;
+        char desc[80];
+        snprintf(desc, sizeof(desc), "C r%d col%d bit0 bank%d",
+                 raster, diag_col, expected_bank);
+        check_pixel(ctx, px7, raster, expect, desc);
+    }
+
+    { uint8_t hcode[4]; asm6510 h(hcode, sizeof(hcode), 0x8000); h.jmp_self();
+      for (int i = 0; i < 3; i++) write_ram(c64, 0x8000 + i, hcode[i]); }
+    mos6510_set_pc((mos6510_t*)c64->mos6510, 0x8000);
+    mos6510_transition_to_fetch((mos6510_t*)c64->mos6510);
+
+    reset_vic_state(c64);
+    run_frames(sys, 2);
+}
+
+// =============================================================================
 // MAIN ENTRY POINT
 // =============================================================================
 
@@ -2129,6 +2366,7 @@ pixel_test_results_t run_pixel_verification_tests(
     test_y_position_diagnostic(c64, system, ctx);      num_groups++; // P34
     test_raster_bar_cpu(c64, system, ctx);             num_groups++; // P35
     test_fli_bug_width(c64, system, ctx);              num_groups++; // P36
+    test_fli_diagnostic(c64, system, ctx);             num_groups++; // P37
 
     // Restore sane state
     reset_vic_state(c64);

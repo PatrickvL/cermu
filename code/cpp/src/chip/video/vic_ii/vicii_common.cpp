@@ -736,6 +736,11 @@ void vicii_update_badline_condition(vicii_t* vicii) {
         // Cycle 58 only handles the reverse transition (display→idle when RC==7).
         if (vicii->video_logic.is_bad_line) {
             vicii->video_logic.display_state = true;
+            // Latch: once a bad line condition is detected on any cycle of this
+            // raster line, the c-access sequence will proceed to completion.
+            // This prevents a subsequent CPU D011 write from cancelling an
+            // already-committed steal sequence (required for FLI technique).
+            vicii->video_logic.bad_line_occurred = true;
         }
     } else {
         vicii->video_logic.is_bad_line = false;
@@ -994,6 +999,7 @@ static inline void vicii_perform_line0_raster_irq_operations(vicii_t* vicii) {
     // Reset per-frame state
     vicii->video_logic.was_den_set_during_raster_30 = false;
     vicii->video_logic.is_bad_line = false;
+    vicii->video_logic.bad_line_occurred = false;
     vicii->video_logic.refresh_counter = 0xFF;
     
     // Reset VCBASE/VC (shared with timing advance logic)
@@ -1036,6 +1042,12 @@ void vicii_timing_advance(vicii_t* vicii) {
     }
     
     vicii_set_x_cycle(vicii, 0);
+    
+    // Reset bad line latch at the start of each new raster line.
+    // The latch tracks whether a bad line condition was detected at ANY cycle
+    // during the current raster line. It must be cleared when the raster counter
+    // advances so the next line starts fresh.
+    vicii->video_logic.bad_line_occurred = false;
     
     // CRITICAL: Pre-display area setup — reset video counters before entering raster $30
     // (first display raster). This prevents cycle 58 on line $2F from corrupting
@@ -1127,8 +1139,9 @@ static uint8_t vicii_cycle_refresh_vc_update(vicii_t* vicii, int unused_param) {
     // Only on bad lines: reset RC to zero (starts a new 8-row character block)
     // Documentation (vic-ii.txt line 1236-1238): "If there is a Bad Line Condition
     // in this phase, RC is also reset to zero."
+    // Use bad_line_occurred latch to survive CPU D011 writes that clear is_bad_line.
     const bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-    if (vicii->video_logic.is_bad_line && den_enabled) {
+    if (vicii->video_logic.bad_line_occurred && den_enabled) {
         vicii->video_logic.rc = 0;
     }
 
@@ -1146,7 +1159,9 @@ static uint8_t vicii_cycle_refresh_vc_update(vicii_t* vicii, int unused_param) {
 static uint8_t vicii_cycle_refresh_first_c_access(vicii_t* vicii, int unused_param) {
     bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
     
-    if (vicii->video_logic.is_bad_line && den_enabled) {
+    // Use bad_line_occurred latch: once a bad line was detected this raster line,
+    // the c-access sequence proceeds regardless of subsequent D011 writes.
+    if (vicii->video_logic.bad_line_occurred && den_enabled) {
         return VIC_ACCESS_REFRESH_C;
     }
     return VIC_ACCESS_REFRESH;
@@ -1207,7 +1222,9 @@ static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int unused_param_vm
     
     // BA/AEC will be set centrally in vicii_tick based on access type
     if (den_enabled) {
-        if (vicii->video_logic.is_bad_line) {
+        // Use bad_line_occurred latch: once a bad line was detected at any point
+        // on this raster line, the c-access sequence proceeds to completion.
+        if (vicii->video_logic.bad_line_occurred) {
             return VIC_ACCESS_C; // Will FALLTHROUGH in vicii_tick PHI1 phase to VIC_ACCESS_G as well
         } else if (vicii->video_logic.display_state) {
             // On non-bad lines during display state, still need G-access for graphics data
@@ -1528,12 +1545,14 @@ static inline bool vicii_cycle_needs_phi2_access(vicii_t* vicii, uint8_t cycle) 
     if (cycle >= 14 && cycle <= 54) {
         bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
         if (!den_enabled) return false;
-        // CRITICAL: For future cycle prediction, we can safely use current is_bad_line
-        // because bad line condition is established at cycle 15 and remains constant
-        // throughout the entire line. The condition is checked/updated at cycle boundaries
-        // but doesn't change mid-line, so current is_bad_line is valid for all cycles
-        // on the current raster line.
-        return vicii->video_logic.is_bad_line;
+        // CRITICAL: Use bad_line_occurred (latch) instead of is_bad_line.
+        // In FLI mode, the CPU writes D011 to force a bad line (setting YSCROLL),
+        // then writes D011 again for the NEXT line, which clears is_bad_line.
+        // But the VIC-II's c-access state machine, once triggered, runs to
+        // completion — the c-access sequence cannot be cancelled mid-line.
+        // The latch captures "was there a bad line at ANY point this line?"
+        // and ensures BA prediction and c-access execution proceed correctly.
+        return vicii->video_logic.bad_line_occurred;
     }
     
     // Get sprite number from cycle table param field
@@ -1562,9 +1581,26 @@ static inline bus_state_t vicii_update_ba_aec_signals(vicii_t* vicii, bus_state_
     }
     
     if (needs_phi2_now) {
-        // Current cycle needs PHI2 access: BA LOW, AEC LOW
+        // Current cycle needs PHI2 access: BA always LOW
         bus_state = vicii_bus_control_ba_low(bus_state);
-        bus_state = vicii_bus_control_aec_low(bus_state);
+        
+        // AEC 3-cycle delay (documentation section 2.4.3):
+        // "AEC always follows Φ2 in the first three cycles after BA has been
+        // driven low. If BA is still low after the third cycle, AEC stays low
+        // during the Φ2 phase."
+        //
+        // ba_low_count reflects PREVIOUS cycle's count (updated after this call).
+        // For NATURAL bad lines, BA goes LOW 3 cycles early (prediction), so
+        // ba_low_count >= 3 by the first c-access → AEC LOW → VIC reads normally.
+        // For FORCED bad lines (FLI), BA goes LOW at the first c-access itself,
+        // so ba_low_count = 0 → AEC stays HIGH → CPU keeps the bus → VIC's
+        // internal data bus drivers are tri-stated (NMOS reads $FF) — the "FLI bug".
+        // Color D8-D11 come from CPU D0-D3 via analog switch U16 (active when AEC HIGH).
+        if (vicii->bus.ba_low_count >= 3) {
+            bus_state = vicii_bus_control_aec_low(bus_state);
+        } else {
+            bus_state = vicii_bus_control_aec_high(bus_state);
+        }
         return bus_state;
     }
     
@@ -1635,6 +1671,22 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
     // This must happen BEFORE the CPU's PHI2 tick so the CPU sees the correct BA state.
     // BA goes low when ANY of the next 3 cycles need PHI2 access (shift register != 0)
     bus_state = vicii_update_ba_aec_signals(vicii, bus_state, access_type);
+
+    // Track consecutive cycles BA has been LOW for AEC 3-cycle delay (FLI bug modeling).
+    // Documentation (Section 2.4.3): "After 3 cycles [of BA being LOW], AEC stays low
+    // during the second clock phase so that the VIC can output its addresses."
+    // During the first 3 cycles after BA drops, the VIC cannot read the main data bus
+    // during PHI2 because AEC still follows φ2. This causes the c-accesses to read $FF
+    // from the tri-stated data bus — the "FLI bug" that makes columns 0-2 show garbage
+    // in Flexible Line Interpretation (FLI) mode.
+    const bool ba_is_low = (BUS_GET_LINES(bus_state) & BUS_MASK_BA) == 0;
+    if (ba_is_low) {
+        if (vicii->bus.ba_low_count < 4) {
+            vicii->bus.ba_low_count++;
+        }
+    } else {
+        vicii->bus.ba_low_count = 0;
+    }
 
     // STEP 2: Perform PHI1 memory accesses via direct read
     // G-access happens EVERY cycle, other accesses are special cases
@@ -1795,6 +1847,12 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
         c_access_screen_addr = vicii->memory.vm_base | vc;
 
         // Color RAM read (separate data lines D8-D11, not on main bus)
+        // NOTE: When the FLI bug is active (ba_low_count <= 3), color RAM chip select
+        // is NOT active because AEC is HIGH → CPU is bus master. The 4-bit analog
+        // switch U16 connects CPU D0-D3 to VIC D8-D11 instead.
+        // The color value is overwritten with bus data in vicii_tick_phi2 for FLI bug
+        // cycles, so we still read color RAM here as normal (it gets overwritten later
+        // for FLI bug columns).
         const uint8_t vmli = vicii->video_logic.vmli;
         if (vmli < 40) {
             bus_state_t temp = bus_state;
@@ -1923,7 +1981,27 @@ void vicii_tick_phi2(vicii_t* vicii, bus_state_t bus_state) {
             // vmli was set during PHI1 (STEP 3/4) and is still valid here
             const uint8_t vmli = vicii->video_logic.vmli;
             if (vicii->video_logic.display_state && vmli < 40) {
-                vicii->video_data.video_matrix_line[vmli] = bus_data;
+                // FLI bug modeling (Documentation section 3.14.6):
+                // "In the first three cycles after BA went low, the VIC reads $ff as
+                // character pointers and as color information the lower 4 bits of the
+                // opcode after the access to $d011."
+                //
+                // When BA has been LOW for fewer than 3 cycles, AEC still follows φ2
+                // (HIGH during PHI2), so the VIC's D0-D7 data bus drivers are tri-stated.
+                // In NMOS technology, floating data lines read as $FF.
+                // D8-D11 (color) get the CPU's data bus D0-D3 via analog switch U16
+                // (which is active when AEC is HIGH).
+                if (vicii->bus.ba_low_count <= 3) {
+                    vicii->video_data.video_matrix_line[vmli] = 0xFF;
+                    // Color: lower 4 bits of whatever the CPU had on the bus.
+                    // bus_data here reflects the memory system response; on real hardware
+                    // it would be the CPU's opcode fetch value. Use bus_data as a
+                    // reasonable approximation.
+                    vicii->video_data.video_color_line[vmli] =
+                        static_cast<vicii_color_t>(bus_data & 0x0F);
+                } else {
+                    vicii->video_data.video_matrix_line[vmli] = bus_data;
+                }
             }
             break;
         }
