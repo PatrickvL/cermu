@@ -438,7 +438,7 @@ typedef struct {
     void* bus;
     void (*bank_change)(void* context, uint8_t bank);
     bool lp_edge_detected;
-    uint8_t pending_phi2_access_type;  // Track which PHI2 access type was set up in previous cycle
+    uint8_t pending_phi2_access_type;  // Track which PHI2 access type was set up for vicii_tick_phi2
     vicii_sprite_unit_t* active_sprite;  // Active sprite pointer for P/S accesses (NULL if none)
     uint8_t ba_prediction_shift_reg;     // 3-bit shift register: bit0=cycle+1, bit1=cycle+2, bit2=cycle+3
     bus_state_t bus_line_mask;           // Bitmask for bus lines to pull low (BA, AEC, etc.)
@@ -471,8 +471,11 @@ struct vicii_s {
 
 // Only externally-visible (non-static/non-inline) functions need declarations
 
-// Consolidated VIC-II tick function - main entry point for cycle processing
-bus_state_t vicii_tick(vicii_t* vicii, bus_state_t bus_state);
+// VIC-II PHI1 phase — cycle processing, PHI1 memory read, sets up PHI2 address
+bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state);
+
+// VIC-II PHI2 delivery — reads c64_memory_tick result, stores C/P/S data internally
+void vicii_tick_phi2(vicii_t* vicii, bus_state_t bus_state);
 
 // Factory and lifecycle
 vicii_t* vicii_system_create(chip_descriptor_t* desc, const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t));

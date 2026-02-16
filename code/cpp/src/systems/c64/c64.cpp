@@ -308,10 +308,10 @@ void c64_system_tick(c64_t* c64) {
     // =========================================================================
     // UNIFIED TIMING MODEL
     // =========================================================================
-    // PHASE 1: VIC-II TICKING
-    // VIC-II reads data from previous cycle, processes it, and sets up next memory access
+    // PHASE 1: VIC-II PHI1
+    // VIC-II PHI1: g-access read, pixel sequencing, sets up PHI2 address on bus
     
-    s = vicii_tick(c64->vicii, s);
+    s = vicii_tick_phi1(c64->vicii, s);
 
     // =========================================================================
     // PHASE 1.5: CIA PHI2 TICK (BEFORE CPU PHI2)
@@ -354,9 +354,19 @@ void c64_system_tick(c64_t* c64) {
     // PHASE 3: MEMORY SERVICE PHASE
     // Services memory access from either CPU or VIC-II
     // The c64_memory_tick function checks AEC line to determine which chip has bus control
-    // CRITICAL: This must happen AFTER vicii_tick sets up PHI2 access and AFTER CPU tick
+    // CRITICAL: This must happen AFTER vicii_tick_phi1 sets up PHI2 access and AFTER CPU tick
     // =========================================================================
     s = c64_memory_tick(&c64->bus, s);
+
+    // =========================================================================
+    // PHASE 3.1: VIC-II PHI2 DELIVERY
+    // =========================================================================
+    // VIC-II reads the data returned by c64_memory_tick and stores it internally.
+    // This handles c-access (screen RAM), p-access (sprite byte 0), and s-access
+    // (sprite byte 2) delivery. By calling phi2 here, vmli is still valid from
+    // phi1's STEP 4 — no cross-cycle storage needed.
+    
+    vicii_tick_phi2(c64->vicii, s);
 
     // =========================================================================
     // PHASE 3.5: CIA PHI1 TICK (AFTER MEMORY SERVICE)
