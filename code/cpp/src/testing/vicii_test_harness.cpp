@@ -80,55 +80,14 @@ void patch_kernal_for_test(c64_t* c64) {
 // The program uses a mini-assembler helper to generate correct 6502 machine code.
 // ============================================================================
 
-// Mini 6502 assembler
-struct asm6510 {
-    uint8_t* buf;
-    size_t   pos;
-    size_t   cap;
+// Mini 6502 assembler — shared definition in asm6510.h
+#include "asm6510.h"
 
-    void emit(uint8_t b) { if (pos < cap) buf[pos++] = b; }
-    void emit2(uint8_t op, uint8_t arg) { emit(op); emit(arg); }
-    void emit3(uint8_t op, uint8_t lo, uint8_t hi) { emit(op); emit(lo); emit(hi); }
-    uint16_t addr() const { return static_cast<uint16_t>(TEST_LOAD_ADDR + pos); }
-
-    // --- single-instruction helpers ---
-    void lda_imm(uint8_t v) { emit2(0xA9, v); }
-    void ldx_imm(uint8_t v) { emit2(0xA2, v); }
-    void ldy_imm(uint8_t v) { emit2(0xA0, v); }
-    void sta_zp(uint8_t a)  { emit2(0x85, a); }
-    void stx_zp(uint8_t a)  { emit2(0x86, a); }
-    void lda_zp(uint8_t a)  { emit2(0xA5, a); }
-    void sta_abs(uint16_t a){ emit3(0x8D, a & 0xFF, a >> 8); }
-    void lda_abs(uint16_t a){ emit3(0xAD, a & 0xFF, a >> 8); }
-    void cmp_imm(uint8_t v) { emit2(0xC9, v); }
-    void and_imm(uint8_t v) { emit2(0x29, v); }
-    void beq(int8_t off)    { emit2(0xF0, static_cast<uint8_t>(off)); }
-    void bne(int8_t off)    { emit2(0xD0, static_cast<uint8_t>(off)); }
-    void bpl(int8_t off)    { emit2(0x10, static_cast<uint8_t>(off)); }
-    void jmp(uint16_t a)    { emit3(0x4C, a & 0xFF, a >> 8); }
-    void jsr(uint16_t a)    { emit3(0x20, a & 0xFF, a >> 8); }
-    void sei()              { emit(0x78); }
-    void nop()              { emit(0xEA); }
-    void rts()              { emit(0x60); }
-    void tax()              { emit(0xAA); }
-    void txa()              { emit(0x8A); }
-    void tay()              { emit(0xA8); }
-    void tya()              { emit(0x98); }
-    void pha()              { emit(0x48); }
-    void pla()              { emit(0x68); }
-    void inx()              { emit(0xE8); }
-    void dex()              { emit(0xCA); }
-    void iny()              { emit(0xC8); }
-    void dey()              { emit(0x88); }
-    void clc()              { emit(0x18); }
-    void adc_imm(uint8_t v) { emit2(0x69, v); }
-    void inc_zp(uint8_t a)  { emit2(0xE6, a); }
-    void sta_ind_y(uint8_t zp) { emit2(0x91, zp); } // STA ($zp),Y
+// --- Harness-specific composite helpers (use vicii_test constants) ---
+struct asm6510_harness : asm6510 {
+    using asm6510::asm6510;  // inherit constructors
 
     // --- composite: write one result entry to the buffer ---
-    // Expects: test_num in A param, sub_test param, result param, expected param, actual param
-    // Writes 5 bytes at ($08),Y and advances pointer by 5.
-    // Clobbers A, Y.
     void write_result(uint8_t test_num, uint8_t sub_test, uint8_t result,
                       uint8_t expected, uint8_t actual) {
         ldy_imm(0);
@@ -141,85 +100,25 @@ struct asm6510 {
         lda_imm(expected);   sta_ind_y(ZP_RESULT_PTR_LO);
         iny();
         lda_imm(actual);     sta_ind_y(ZP_RESULT_PTR_LO);
-        // Advance pointer by 5
         advance_result_ptr();
     }
 
-    // Advance the 16-bit result pointer at $08/$09 by 5
+    // Advance the 16-bit result pointer at $08/$09 by RESULT_ENTRY_SIZE
     void advance_result_ptr() {
-        clc();
-        lda_zp(ZP_RESULT_PTR_LO);
-        adc_imm(RESULT_ENTRY_SIZE);
-        sta_zp(ZP_RESULT_PTR_LO);
-        lda_zp(ZP_RESULT_PTR_HI);
-        adc_imm(0);  // carry
-        sta_zp(ZP_RESULT_PTR_HI);
+        add_ptr(ZP_RESULT_PTR_LO, RESULT_ENTRY_SIZE);
     }
-
-    // Write result from runtime check: A=actual value to test, expected=compile-time constant
-    // test_num and sub_test are compile-time constants.
-    // If A == expected, writes PASS entry; else writes FAIL entry with actual value.
-    // Clobbers: A, X, Y. ~40 bytes.
-    void check_and_record(uint8_t test_num, uint8_t sub_test, uint8_t expected) {
-        // Save actual in X
-        tax();
-        cmp_imm(expected);
-
-        // BEQ +offset (skip fail, go to pass)
-        // fail path: ~18 bytes, pass path: ~18 bytes
-        // We use a forward branch to the pass path
-        beq(20);  // skip fail → go to pass path
-
-        // === FAIL PATH (A ≠ expected) ===
-        // Write: [test_num, sub_test, RESULT_FAIL, expected, actual(X)]
-        ldy_imm(0);
-        lda_imm(test_num);    sta_ind_y(ZP_RESULT_PTR_LO); // offset 0
-        iny();
-        lda_imm(sub_test);    sta_ind_y(ZP_RESULT_PTR_LO); // offset 1
-        iny();
-        lda_imm(RESULT_FAIL); sta_ind_y(ZP_RESULT_PTR_LO); // offset 2
-        iny();
-        lda_imm(expected);    sta_ind_y(ZP_RESULT_PTR_LO); // offset 3
-        // 20 bytes to here
-        uint16_t common_target = static_cast<uint16_t>(TEST_LOAD_ADDR + pos + 22);
-        // Jump over pass path to common pointer advance
-        jmp(common_target); // 3 bytes (total fail = 23 bytes... but beq offset was 20)
-        // Hmm, let me count more carefully...
-
-        // Actually this is getting complex with manual offset calcs. Let me use a simpler pattern:
-        // Just always write the result (pass or fail), deciding at runtime.
-        // This avoids branch offset calculation entirely.
-    }
-
-    // SIMPLER approach: emit a "test and record" subroutine call.
-    // The subroutine is at a known address, and we inline the comparison.
-    //
-    // Instead of trying to branch, we use a JSR to a "record_result" routine
-    // embedded at the end of the program. Before the JSR:
-    //   Zero-page $0A = test_num
-    //   Zero-page $0B = sub_test
-    //   Zero-page $0C = expected
-    //   A             = actual
-    //
-    // The subroutine compares A to $0C and writes the result entry.
 
     void setup_test(uint8_t test_num, uint8_t sub_test, uint8_t expected) {
         lda_imm(test_num);  sta_zp(0x0A);
         lda_imm(sub_test);  sta_zp(0x0B);
         lda_imm(expected);  sta_zp(0x0C);
     }
-
-    // After loading the actual value in A, call the record routine
-    // void call_record(uint16_t record_routine) { jsr(record_routine); }
 };
 
 
 // Build the 6510 program
 static size_t build_test_program(uint8_t* buffer, size_t buffer_size) {
-    asm6510 a;
-    a.buf = buffer;
-    a.pos = 0;
-    a.cap = buffer_size;
+    asm6510_harness a(buffer, buffer_size, TEST_LOAD_ADDR);
 
     // We'll place a "record_result" subroutine at a forward address.
     // First emit the main test body, then the subroutine.
@@ -320,11 +219,10 @@ static size_t build_test_program(uint8_t* buffer, size_t buffer_size) {
     // Set up sprite 0 data first (63 bytes of $FF at $2000)
     a.ldx_imm(62);
     a.lda_imm(0xFF);
-    uint16_t spr_loop = a.addr();
-    a.emit3(0x9D, 0x00, 0x20); // STA $2000,X
+    auto spr_loop = a.here();
+    a.sta_abs_x(0x2000);
     a.dex();
-    int8_t spr_bpl = static_cast<int8_t>(spr_loop - (a.addr() + 2));
-    a.bpl(spr_bpl);
+    a.bpl(spr_loop);
 
     // Set sprite 0 pointer
     a.lda_imm(0x80);
@@ -393,13 +291,13 @@ static size_t build_test_program(uint8_t* buffer, size_t buffer_size) {
 
     // Wait ~2 frames: outer=160, inner=256, ~200K cycles
     a.ldy_imm(160);
-    uint16_t w1_outer = a.addr();
+    auto w1_outer = a.here();
     a.ldx_imm(0);
-    uint16_t w1_inner = a.addr();
+    auto w1_inner = a.here();
     a.dex();
-    a.bne(static_cast<int8_t>(w1_inner - (a.addr() + 2)));
+    a.bne(w1_inner);
     a.dey();
-    a.bne(static_cast<int8_t>(w1_outer - (a.addr() + 2)));
+    a.bne(w1_outer);
 
     // Read sprite-bg collision bit 0
     a.lda_abs(0xD01F);
@@ -424,13 +322,13 @@ static size_t build_test_program(uint8_t* buffer, size_t buffer_size) {
 
     // Wait ~2 frames
     a.ldy_imm(160);
-    uint16_t w2_outer = a.addr();
+    auto w2_outer = a.here();
     a.ldx_imm(0);
-    uint16_t w2_inner = a.addr();
+    auto w2_inner = a.here();
     a.dex();
-    a.bne(static_cast<int8_t>(w2_inner - (a.addr() + 2)));
+    a.bne(w2_inner);
     a.dey();
-    a.bne(static_cast<int8_t>(w2_outer - (a.addr() + 2)));
+    a.bne(w2_outer);
 
     // Read sprite-sprite collision: bits 0+1 should be set
     a.lda_abs(0xD01E);
@@ -445,8 +343,7 @@ static size_t build_test_program(uint8_t* buffer, size_t buffer_size) {
     a.sta_zp(ZP_DONE_FLAG);
 
     // Infinite halt
-    uint16_t halt_addr = a.addr();
-    a.jmp(halt_addr);
+    a.jmp_self();
 
     // ==================================================================
     // RECORD RESULT SUBROUTINE
@@ -463,22 +360,25 @@ static size_t build_test_program(uint8_t* buffer, size_t buffer_size) {
     //   Advance pointer by 5
     //   RTS
     // ==================================================================
-    uint16_t record_subroutine = a.addr();
+    uint16_t record_subroutine = a.pc();
 
     // Compare actual (A) to expected ($0C)
-    // TAX first (saves actual in X, clobbers Z, but CMP below re-sets Z)
     a.tax();               // Save actual in X
-    a.emit2(0xC5, 0x0C);  // CMP $0C (zero-page) — sets Z flag properly
+    a.cmp_zp(0x0C);        // CMP $0C — sets Z flag
 
     // Branch to select result code:
-    //   BEQ +4  → skip LDA #FAIL + BNE, land on LDA #PASS
-    //   LDA #FAIL (2 bytes)
-    //   BNE +2  → skip LDA #PASS (always taken since A=$FF≠0)
-    //   LDA #PASS (2 bytes)
-    a.beq(4);
+    //   BEQ pass → land on LDA #PASS
+    //   LDA #FAIL
+    //   BNE done → skip LDA #PASS (always taken since A=$FF≠0)
+    // pass:
+    //   LDA #PASS
+    // done:
+    auto fix_pass = a.beq_fwd();
     a.lda_imm(RESULT_FAIL);  // A = $FF
-    a.bne(2);
+    auto fix_done = a.bne_fwd();
+    a.fixup(fix_pass);
     a.lda_imm(RESULT_PASS);  // A = $01
+    a.fixup(fix_done);
 
     // A = result code (PASS or FAIL), X = actual value
     a.sta_zp(0x0D);  // Save result in temp
@@ -496,13 +396,7 @@ static size_t build_test_program(uint8_t* buffer, size_t buffer_size) {
     a.txa();         a.sta_ind_y(ZP_RESULT_PTR_LO);  // [4] actual
 
     // Advance pointer by 5
-    a.clc();
-    a.lda_zp(ZP_RESULT_PTR_LO);
-    a.adc_imm(RESULT_ENTRY_SIZE);
-    a.sta_zp(ZP_RESULT_PTR_LO);
-    a.lda_zp(ZP_RESULT_PTR_HI);
-    a.adc_imm(0);
-    a.sta_zp(ZP_RESULT_PTR_HI);
+    a.add_ptr(ZP_RESULT_PTR_LO, RESULT_ENTRY_SIZE);
 
     a.rts();
 
@@ -632,7 +526,7 @@ void harness_summary(const vicii_test_state_t* state) {
     printf("║  Passed: %-5d                                   ║\n", state->total_pass);
     printf("║  Failed: %-5d                                   ║\n", state->total_fail);
     printf("║  Frames: %-5d                                   ║\n", state->frames_run);
-    printf("║  Status: %-40s ║\n",
+    printf("║  Status: %-40s║\n",
            state->all_done ? "ALL TESTS COMPLETED" :
            (state->frames_run >= state->max_frames ? "TIMED OUT" : "INCOMPLETE"));
     printf("╚══════════════════════════════════════════════════╝\n");

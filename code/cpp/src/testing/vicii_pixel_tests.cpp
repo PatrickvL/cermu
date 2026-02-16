@@ -10,7 +10,9 @@
 // =============================================================================
 
 #include "vicii_pixel_tests.h"
+#include "asm6510.h"
 #include "../chip/video/vic_ii/vicii_common.h"
+#include "../chip/cpu/fam65xx/mos6510.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -1779,6 +1781,287 @@ static void diagnostic_dump_boot(c64_t* c64, EmulatedSystem* sys, check_ctx_t& c
 }
 
 // =============================================================================
+// P35: CPU-Driven Raster Bar — Verify border color change at correct raster lines
+// =============================================================================
+// Injects 6510 code that polls $D012 (raster counter) and changes border color
+// ($D020) at specific raster lines. Verifies the color change appears on the
+// correct framebuffer rows.
+//
+// This tests:
+//   - Raster counter→framebuffer row synchronization
+//   - CPU execution timing during the frame
+//   - Border color pipeline delay
+//   - CPU $D012 polling behavior
+//
+// 6510 program at $8000:
+//   SEI; LDA #$35; STA $01           — All-RAM+I/O banking
+//   LDA #$0B; STA $D011             — DEN=0 (no display, no bad lines)
+//   LDA #$00; STA $D020             — Border = black initially
+//   loop:
+//     wait200: LDA $D012; CMP #200; BNE wait200  — Wait past the band (sync)
+//     wait100: LDA $D012; CMP #100; BNE wait100  — Wait for line 100
+//     LDA #$02; STA $D020                         — Border = RED
+//     wait120: LDA $D012; CMP #120; BNE wait120  — Wait for line 120
+//     LDA #$00; STA $D020                         — Border = BLACK
+//     JMP loop
+// =============================================================================
+static void test_raster_bar_cpu(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+    ctx.test_group = 35;
+    ctx.group_name = "CPU Raster Bar";
+    printf("  P35: CPU-Driven Raster Bar\n");
+
+    reset_vic_state(c64);
+
+    // Build 6510 raster-bar code at $8000 using named opcodes
+    uint8_t code[128];
+    asm6510 a(code, sizeof(code), 0x8000);
+
+    a.sei();
+    a.lda_imm(0x35);                  // All-RAM + I/O banking
+    a.sta_zp(0x01);
+    a.store_imm(asm6510::VIC_D011, 0x0B);  // DEN=0 (no display, no bad lines)
+    a.store_imm(asm6510::VIC_D020, 0x00);  // Border = BLACK
+
+    auto loop = a.here();
+    a.wait_raster(200);               // Frame sync: wait past visible area
+    a.wait_raster(100);               // Wait for line 100
+    a.store_imm(asm6510::VIC_D020, 0x02); // Border = RED
+    a.wait_raster(120);               // Wait for line 120
+    a.store_imm(asm6510::VIC_D020, 0x00); // Border = BLACK
+    a.jmp(loop);
+
+    printf("    Injecting %zu bytes of 6510 raster-bar code at $8000\n", a.pos);
+    for (size_t i = 0; i < a.pos; i++)
+        write_ram(c64, 0x8000 + (uint16_t)i, code[i]);
+
+    // Redirect CPU to $8000 and reset its pipeline
+    mos6510_set_pc((mos6510_t*)c64->mos6510, 0x8000);
+    mos6510_transition_to_fetch((mos6510_t*)c64->mos6510);
+
+    // Run enough frames for the effect to stabilize (3+ frames)
+    run_frames(sys, 5);
+
+    // Verify framebuffer pixels:
+    // With DEN=0, the entire visible area is border.
+    // Lines 100-119 should be RED (2), everything else BLACK (0).
+    //
+    // Note: The polling loop has up to ~8 cycles of jitter. The STA $D020 write
+    // has a 4-cycle pipeline delay to the pixel output. So the color change may
+    // appear up to ~12 pixels late on the raster line. We test the MAJORITY of
+    // the line (center of the line) to avoid edge effects.
+
+    int test_x = 200;  // Center of border (well away from any edges)
+
+    // Lines clearly BEFORE the red band (should be BLACK)
+    check_pixel(ctx, test_x, 90, 0, "raster 90: border should be black");
+    check_pixel(ctx, test_x, 95, 0, "raster 95: border should be black");
+    check_pixel(ctx, test_x, 99, 0, "raster 99: border should be black");
+
+    // Lines clearly WITHIN the red band (should be RED)
+    // We check from line 102 to avoid the first-line jitter
+    check_pixel(ctx, test_x, 102, 2, "raster 102: border should be red");
+    check_pixel(ctx, test_x, 105, 2, "raster 105: border should be red");
+    check_pixel(ctx, test_x, 110, 2, "raster 110: border should be red");
+    check_pixel(ctx, test_x, 115, 2, "raster 115: border should be red");
+    check_pixel(ctx, test_x, 118, 2, "raster 118: border should be red");
+
+    // Lines clearly AFTER the red band (should be BLACK)
+    check_pixel(ctx, test_x, 122, 0, "raster 122: border should be black");
+    check_pixel(ctx, test_x, 130, 0, "raster 130: border should be black");
+    check_pixel(ctx, test_x, 200, 0, "raster 200: border should be black");
+
+    // Also check that the red band doesn't wrap or appear elsewhere
+    check_pixel(ctx, test_x, 50, 0, "raster 50: border should be black");
+    check_pixel(ctx, test_x, 250, 0, "raster 250: border should be black");
+
+    // Restore: halt CPU with JMP * at $8000, then reset VIC
+    { asm6510 h(code, sizeof(code), 0x8000); h.jmp_self(); }
+    for (int i = 0; i < 3; i++) write_ram(c64, 0x8000 + i, code[i]);
+    mos6510_set_pc((mos6510_t*)c64->mos6510, 0x8000);
+    mos6510_transition_to_fetch((mos6510_t*)c64->mos6510);
+
+    reset_vic_state(c64);
+    run_frames(sys, 2);
+}
+
+// =============================================================================
+// P36: D018 Bad-Line Matrix Switch — verify screen memory pointer changes
+// =============================================================================
+// Tests that writing $D018 BEFORE a bad line correctly switches the screen
+// memory used by the VIC-II's c-accesses on that bad line.
+//
+// The CPU polls $D012 and writes $D018 on the raster line BEFORE each bad line
+// (when raster & 7 == 2, one line before the bad line at raster & 7 == 3).
+// This ensures vm_base is updated well before the c-access window.
+//
+// Sub-test A: Verify that $D018 changes take effect for bad line c-accesses.
+// Sub-test B: Diagnostic scan for FLI bug width (stale column 0 behavior).
+//
+// Setup:
+//   Screen A ($0400): all char $00 (solid fill, custom charset at $3000)
+//   Screen B ($0800): all char $01 (empty, custom charset at $3000)
+//   Custom charset $3000: char 0 = $FF×8, char 1 = $00×8
+//   Color RAM: all white (1), Background: black (0), Border: black (0)
+//
+// CPU code at $8000: Polls $D012. When (raster & 7)==2, writes $D018=$2C
+// (screen B). When (raster & 7)==4, writes $D018=$1C (screen A restore).
+// Other lines: no $D018 write (preserves current value).
+//
+// Expected result:
+//   Bad lines (RC=0): screen B chars → empty → black background
+//   Non-bad lines (RC=1-7): screen A chars → solid → white foreground
+// =============================================================================
+static void test_fli_bug_width(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+    ctx.test_group = 36;
+    ctx.group_name = "D018 Matrix Switch";
+    printf("  P36: D018 Bad-Line Matrix Switch\n");
+
+    reset_vic_state(c64);
+
+    // --- Set up screen data ---
+    // Screen A ($0400): all char $00 (solid in custom charset)
+    for (int i = 0; i < 1000; i++)
+        write_ram(c64, 0x0400 + i, 0x00);
+    // Screen B ($0800): all char $01 (empty in custom charset)
+    for (int i = 0; i < 1000; i++)
+        write_ram(c64, 0x0800 + i, 0x01);
+
+    // Custom charset at $3000
+    for (int i = 0; i < 8; i++) write_ram(c64, 0x3000 + i, 0xFF); // char 0: solid
+    for (int i = 0; i < 8; i++) write_ram(c64, 0x3008 + i, 0x00); // char 1: empty
+
+    // Color RAM: all white (1)
+    for (int i = 0; i < 1000; i++) write_colorram(c64, i, 0x01);
+
+    // BG=black, border=black, text mode, DEN=1, YSCROLL=3
+    write_vic(c64, 0x20, 0x00);
+    write_vic(c64, 0x21, 0x00);
+    write_vic(c64, 0x11, 0x1B);
+    write_vic(c64, 0x16, 0xC8);
+    write_vic(c64, 0x18, 0x1C);   // screen A ($0400), charset $3000
+
+    // --- Build 6510 code at $8000 ---
+    // Strategy: Write $D018 on the line BEFORE each bad line.
+    // When (raster & 7) == 2: set $D018 = $2C (screen B) — next line is bad line
+    // When (raster & 7) == 4: set $D018 = $1C (screen A) — bad line is over
+    //
+    // Poll loop (~14 cycles/iteration):
+    //   LDA $D012; AND #$07; CMP #$02; BEQ set_B; CMP #$04; BEQ set_A; JMP loop
+
+    uint8_t code[256];
+    asm6510 a(code, sizeof(code), 0x8000);
+
+    a.sei();
+    a.lda_imm(0x35);
+    a.sta_zp(0x01);                            // All-RAM + I/O
+    a.store_imm(asm6510::VIC_D018, 0x1C);      // Default: screen A
+
+    auto main_loop = a.here();
+    a.lda_abs(asm6510::VIC_D012);
+    a.and_imm(0x07);
+    a.cmp_imm(0x02);
+    auto fix_setB = a.beq_fwd();               // BEQ → set_B (patched below)
+    a.cmp_imm(0x04);
+    auto fix_setA = a.beq_fwd();               // BEQ → set_A (patched below)
+    a.jmp(main_loop);
+
+    // set_B: switch to screen B ($0800)
+    a.fixup(fix_setB);
+    a.store_imm(asm6510::VIC_D018, 0x2C);      // Screen B + charset $3000
+    a.jmp(main_loop);
+
+    // set_A: restore screen A ($0400)
+    a.fixup(fix_setA);
+    a.store_imm(asm6510::VIC_D018, 0x1C);      // Screen A + charset $3000
+    a.jmp(main_loop);
+
+    printf("    Injecting %zu bytes of D018 switch code at $8000\n", a.pos);
+    for (size_t i = 0; i < a.pos; i++) write_ram(c64, 0x8000 + (uint16_t)i, code[i]);
+
+    // Redirect CPU
+    mos6510_set_pc((mos6510_t*)c64->mos6510, 0x8000);
+    mos6510_transition_to_fetch((mos6510_t*)c64->mos6510);
+
+    // Run frames for effect to stabilize
+    run_frames(sys, 5);
+
+    // --- Verify pixels ---
+    // Bad line at raster 59 (row 1, RC=0): $D018 was set to $2C on line 58
+    // Non-bad line at raster 60 (row 1, RC=1): $D018 was set to $1C on line 60 (or stays $2C? No—
+    //   line 60 has (60 & 7) == 4, so CPU writes $D018=$1C. But does the CPU write happen
+    //   BEFORE the g-access for this line? On non-bad lines, the CPU runs freely (no BA/RDY halt)).
+    //   The g-access uses video_matrix_line[] from the LAST bad line. If the last bad line had
+    //   screen B, then RC=1 uses screen B chars (empty). BUT screen A chars are $00=solid and
+    //   screen B chars are $01=empty. The g-access for RC=1 uses video_matrix_line which was
+    //   filled during the RC=0 bad line with screen B data (char $01). The bitmap data for
+    //   char $01 is $00 (all background). So RC=1 line shows BLACK (background).
+    //
+    // Wait—this means ALL 8 raster lines of each character row show screen B data, because
+    // video_matrix_line is only refreshed on bad lines, and on bad lines we use screen B.
+    //
+    // To properly test: we need screen A to persist on non-bad lines.
+    // The trick: on non-bad lines, the VIC uses whatever video_matrix_line[] was set during
+    // the LAST bad line. If the last bad line used screen B, ALL lines show screen B chars.
+    //
+    // For a useful test, we should verify:
+    // 1. All display lines show screen B data (since bad lines always use screen B)
+    // 2. If we stop changing $D018 (leave at screen A), all lines show screen A
+
+    // Test 1: With D018 switching active, bad line rows should show screen B (empty=black)
+    int test_y_bad = 59;   // Bad line (row 1, RC=0)
+    int test_y_rc1 = 60;   // Non-bad (row 1, RC=1) — uses video_matrix_line from bad line
+    int col10_x = char_fb_x(10) + 4;
+
+    // On the bad line, c-accesses used screen B → char $01 → empty → black bg
+    check_pixel(ctx, col10_x, test_y_bad, 0,
+                "bad line col10 RC=0: screen B (empty/black)");
+
+    // On RC=1, g-access uses video_matrix_line from bad line = screen B data
+    // Char $01 has bitmap $00, so all pixels are background = black
+    check_pixel(ctx, col10_x, test_y_rc1, 0,
+                "RC=1 col10: screen B char (empty/black)");
+
+    // Diagnostic: scan columns on the bad line to check for stale data
+    printf("    Bad line %d column scan:\n", test_y_bad);
+    int fli_bug_width = 0;
+    for (int col = 0; col < 40; col++) {
+        uint32_t pix = fb_pixel(ctx.fb, ctx.width, char_fb_x(col) + 4, test_y_bad);
+        if (pix == PAL[1]) {  // WHITE = stale (screen A solid char)
+            fli_bug_width = col + 1;
+        } else if (pix == PAL[0]) {  // BLACK = correct (screen B empty char)
+            break;  // First non-stale column found
+        } else {
+            printf("      col%d: unexpected pixel $%08X\n", col, pix);
+            break;
+        }
+    }
+    printf("    FLI bug width: %d column(s) (%d pixels)\n", fli_bug_width, fli_bug_width * 8);
+
+    // Verify column 20 on bad line is screen B (must pass — deep into the line)
+    check_pixel(ctx, char_fb_x(20) + 4, test_y_bad, 0,
+                "bad line col20: must show screen B (empty/black)");
+
+    // Test 2: Stop CPU, set D018 to screen A, run frames → should show screen A
+    { asm6510 h(code, sizeof(code), 0x8000); h.jmp_self(); }
+    for (int i = 0; i < 3; i++) write_ram(c64, 0x8000 + i, code[i]);
+    mos6510_set_pc((mos6510_t*)c64->mos6510, 0x8000);
+    mos6510_transition_to_fetch((mos6510_t*)c64->mos6510);
+
+    write_vic(c64, 0x18, 0x1C);   // Restore screen A
+    run_frames(sys, 3);
+
+    // Now all lines should show screen A (char $00 = solid = white foreground)
+    check_pixel(ctx, col10_x, test_y_bad, 1,
+                "after restore col10 bad line: screen A (solid/white)");
+    check_pixel(ctx, col10_x, test_y_rc1, 1,
+                "after restore col10 RC=1: screen A (solid/white)");
+
+    // Restore
+    reset_vic_state(c64);
+    run_frames(sys, 2);
+}
+
+// =============================================================================
 // MAIN ENTRY POINT
 // =============================================================================
 
@@ -1793,7 +2076,7 @@ pixel_test_results_t run_pixel_verification_tests(
     printf("╔══════════════════════════════════════════════════╗\n");
     printf("║         VIC-II PIXEL VERIFICATION TESTS          ║\n");
     printf("╠══════════════════════════════════════════════════╣\n");
-    printf("║  Framebuffer: %dx%-4d                            ║\n", fb_width, fb_height);
+    printf("║  Framebuffer: %dx%-4d                           ║\n", fb_width, fb_height);
     printf("╚══════════════════════════════════════════════════╝\n\n");
 
     check_ctx_t ctx;
@@ -1811,8 +2094,8 @@ pixel_test_results_t run_pixel_verification_tests(
     diagnostic_dump(c64, system, ctx);       // Controlled test setup
 
     // Run all pixel test groups
-    test_border_color(c64, system, ctx);             num_groups++; // P1
-    test_background_color(c64, system, ctx);          num_groups++; // P2
+    test_border_color(c64, system, ctx);               num_groups++; // P1
+    test_background_color(c64, system, ctx);           num_groups++; // P2
     test_text_character(c64, system, ctx);             num_groups++; // P3
     test_multicolor_text(c64, system, ctx);            num_groups++; // P4
     test_ecm_mode(c64, system, ctx);                   num_groups++; // P5
@@ -1841,10 +2124,12 @@ pixel_test_results_t run_pixel_verification_tests(
     test_char_scanline_alignment(c64, system, ctx);    num_groups++; // P28
     test_top_left_alignment(c64, system, ctx);         num_groups++; // P29
     test_sprite_y_position(c64, system, ctx);          num_groups++; // P30
-    test_sprite_dma_enable(c64, system, ctx);           num_groups++; // P31
-    test_sprite_sprite_collision(c64, system, ctx);     num_groups++; // P32
-    test_den_control(c64, system, ctx);                 num_groups++; // P33
-    test_y_position_diagnostic(c64, system, ctx);        num_groups++; // P34
+    test_sprite_dma_enable(c64, system, ctx);          num_groups++; // P31
+    test_sprite_sprite_collision(c64, system, ctx);    num_groups++; // P32
+    test_den_control(c64, system, ctx);                num_groups++; // P33
+    test_y_position_diagnostic(c64, system, ctx);      num_groups++; // P34
+    test_raster_bar_cpu(c64, system, ctx);             num_groups++; // P35
+    test_fli_bug_width(c64, system, ctx);              num_groups++; // P36
 
     // Restore sane state
     reset_vic_state(c64);
@@ -1854,10 +2139,10 @@ pixel_test_results_t run_pixel_verification_tests(
     printf("╔══════════════════════════════════════════════════╗\n");
     printf("║       PIXEL VERIFICATION RESULTS                 ║\n");
     printf("╠══════════════════════════════════════════════════╣\n");
-    printf("║  Test Groups:  %-5d                              ║\n", num_groups);
-    printf("║  Pixel Checks: %-5d                              ║\n", ctx.pass + ctx.fail);
-    printf("║  Passed:       %-5d                              ║\n", ctx.pass);
-    printf("║  Failed:       %-5d                              ║\n", ctx.fail);
+    printf("║  Test Groups:  %-5d                             ║\n", num_groups);
+    printf("║  Pixel Checks: %-5d                             ║\n", ctx.pass + ctx.fail);
+    printf("║  Passed:       %-5d                             ║\n", ctx.pass);
+    printf("║  Failed:       %-5d                             ║\n", ctx.fail);
     printf("╚══════════════════════════════════════════════════╝\n");
 
     if (ctx.fail == 0) {
