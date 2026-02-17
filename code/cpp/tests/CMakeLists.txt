@@ -171,10 +171,64 @@ add_custom_target(run_all_tests
     COMMENT "Running all MOS6510 tests"
 )
 
+# =============================================================================
+# SID MOS6581/8580 Digital Verification Test Runner
+# =============================================================================
+
+set(SOUND_DIR ${SRC_DIR}/chip/sound)
+set(TESTING_DIR ${SRC_DIR}/testing)
+
+add_executable(sid_test_runner
+    sid_test_runner.cpp
+    ${TESTING_DIR}/sid_test_harness.cpp
+    ${SOUND_DIR}/mos6581.cpp
+    ${CORE_DIR}/chip.cpp
+    ${CORE_DIR}/ioport.cpp
+)
+target_include_directories(sid_test_runner PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/sound
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/testing
+)
+target_compile_definitions(sid_test_runner PRIVATE AIEMUC_IMPL)
+set_property(TARGET sid_test_runner PROPERTY CXX_STANDARD 20)
+set_property(TARGET sid_test_runner PROPERTY CXX_STANDARD_REQUIRED ON)
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(sid_test_runner m)
+endif()
+
+# SID test CTest integration
+add_test(NAME sid_digital_verification
+    COMMAND sid_test_runner
+)
+set_tests_properties(sid_digital_verification PROPERTIES
+    TIMEOUT 60
+)
+
+# Custom target for running SID tests
+add_custom_target(run_sid_tests
+    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -R sid --verbose
+    DEPENDS sid_test_runner
+    COMMENT "Running SID digital verification tests"
+)
+
+# Update run_all_tests to include SID tests
+add_custom_target(run_all_tests_full
+    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} --verbose
+    DEPENDS fam65xx_klaus_test_runner fam65xx_processor_tests_runner sid_test_runner
+    COMMENT "Running all tests (CPU + SID)"
+)
+
 # Install targets (optional)
 
 # Install fam65xx test runner
 install(TARGETS fam65xx_klaus_test_runner
+    RUNTIME DESTINATION bin
+)
+
+# Install SID test runner
+install(TARGETS sid_test_runner
     RUNTIME DESTINATION bin
 )
 
@@ -192,3 +246,4 @@ else()
 endif()
 message(STATUS "  fam65xx Klaus Test Runner: Built")
 message(STATUS "  fam65xx Lorenz Test Harness: Built")
+message(STATUS "  SID Test Runner: Built")
