@@ -203,13 +203,16 @@ void mos6581_filter_update_cutoff(mos6581_t* sid) {
     
     f->cutoff_frequency = cutoff_hz;
     
-    // Digital filter coefficient — w0 is based on the CPU clock rate since
-    // the filter state is updated every SID cycle (~1 MHz), not at the sample rate.
-    float clock = sid->cpu_clock > 0.0f ? sid->cpu_clock : 985248.0f;
-    f->w0 = (float)(2.0f * M_PI * cutoff_hz / clock);
+    // w0 is based on the sample rate since the filter is processed once
+    // per output sample (~44.1 kHz), not every CPU cycle.  This gives a
+    // ~22x performance improvement over per-cycle filter processing while
+    // maintaining good audio quality.
+    float rate = sid->sample_rate > 0.0f ? sid->sample_rate : 44100.0f;
+    f->w0 = (float)(2.0f * M_PI * cutoff_hz / rate);
     
-    // Clamp to Nyquist stability limit (pi/clock ≈ very small, so w0 is always safe)
-    // But cap at 0.45 to prevent SVF instability at high cutoff
+    // Clamp for SVF stability (must be well below 1.0 at sample rate).
+    // At 44.1 kHz, max cutoff ~12 kHz gives w0 ≈ 1.71 unclamped —
+    // we cap at 0.45 for safe operation with high resonance.
     if (f->w0 > 0.45f) f->w0 = 0.45f;
 }
 
@@ -372,19 +375,12 @@ uint32_t mos6581_mix_voices(mos6581_t* sid) {
     uint32_t voice2_output = voice_apply_ring_modulation(&sid->voice2, &sid->voice1);
     uint32_t voice3_output = voice_apply_ring_modulation(&sid->voice3, &sid->voice2);
     
-    // Apply envelope to post-ring-modulated waveform.
-    // With 8-bit envelope (0-255) and 12-bit waveform (0-4095),
-    // the product is 0 .. 1044225 (20 bits). Shift down by 8 to get ~12 bits.
-    voice1_output = (voice1_output * sid->voice1.envelope_amplitude) >> 8;
-    voice2_output = (voice2_output * sid->voice2.envelope_amplitude) >> 8;
-    voice3_output = (voice3_output * sid->voice3.envelope_amplitude) >> 8;
-    
-    // DC offset removal: center waveform around zero.
-    // Each voice output is now 0..0xFFF00 >> 8 = 0..0xFFF (approx).
-    // Subtract midpoint so that silence = 0.
-    float v1 = ((float)voice1_output - 2048.0f) / 4095.0f;
-    float v2 = ((float)voice2_output - 2048.0f) / 4095.0f;
-    float v3 = ((float)voice3_output - 2048.0f) / 4095.0f;
+    // Center waveform BEFORE envelope so silent voices produce zero.
+    // 12-bit waveform centered: -2048..+2047, × 8-bit envelope 0..255
+    const float inv_scale = 1.0f / 522240.0f;
+    float v1 = (float)(((int32_t)voice1_output - 2048) * (int32_t)sid->voice1.envelope_amplitude) * inv_scale;
+    float v2 = (float)(((int32_t)voice2_output - 2048) * (int32_t)sid->voice2.envelope_amplitude) * inv_scale;
+    float v3 = (float)(((int32_t)voice3_output - 2048) * (int32_t)sid->voice3.envelope_amplitude) * inv_scale;
     
     // Route Voice 1
     if (sid->filter_voice1) {
@@ -916,69 +912,83 @@ bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) {
         voice_clock_cycle(sid->voices[i]);
     }
 
-    // --- Per-cycle filter update ---
-    // The filter runs at the SID clock rate (~1 MHz).  We compute filtered and
-    // unfiltered sums each cycle and step the SVF so that w0 (based on
-    // cpu_clock) integrates correctly.
-    {
-        // Quick per-cycle voice output (post-envelope, with ring mod)
-        // Re-using the values already computed by voice_clock_cycle.
-        // The ring mod and sync were applied inside voice_clock_cycle via
-        // its result field.  We need the individual voice outputs here.
-        uint32_t v1_raw = sid->voice1.result;
-        uint32_t v2_raw = sid->voice2.result;
-        uint32_t v3_raw = sid->voice3.result;
+    // Apply oscillator sync (one-cycle-delayed, matching real hardware).
+    // Sync source's MSB transition was detected inside voice_clock_cycle;
+    // the accumulator reset takes effect next cycle.
+    voice_apply_sync(&sid->voice1, &sid->voice3);
+    voice_apply_sync(&sid->voice2, &sid->voice1);
+    voice_apply_sync(&sid->voice3, &sid->voice2);
 
-        // DC-center each voice
-        float v1 = ((float)v1_raw - 2048.0f) / 4095.0f;
-        float v2 = ((float)v2_raw - 2048.0f) / 4095.0f;
-        float v3 = ((float)v3_raw - 2048.0f) / 4095.0f;
-
-        float filtered_input = 0.0f;
-        float unfiltered_output = 0.0f;
-
-        // Route voices
-        if (sid->filter_voice1) filtered_input += v1; else unfiltered_output += v1;
-        if (sid->filter_voice2) filtered_input += v2; else unfiltered_output += v2;
-        if (sid->filter_voice3) filtered_input += v3;
-        else if (!sid->voice3_disabled) unfiltered_output += v3;
-        if (sid->filter_voice4) filtered_input += sid->external_input;
-        else unfiltered_output += sid->external_input;
-
-        // Step the SVF filter (every cycle)
-        float filtered_output = mos6581_filter_process(sid, filtered_input);
-
-        // Store the mixed output for sample grabbing
-        float mixed = (unfiltered_output + filtered_output) * ((float)sid->volume / 15.0f);
-
-        // Volume bug click
-        if (sid->volume_change_click && sid->volume_click_counter > 0) {
-            mixed += sid->volume_click_amplitude;
-            sid->volume_click_counter--;
-            if (sid->volume_click_counter == 0) sid->volume_change_click = false;
-        }
-        if (sid->enable_digiboost && sid->volume_change_click) mixed *= 4.0f;
-
-        // Clamp
-        if (mixed > 1.0f) mixed = 1.0f;
-        if (mixed < -1.0f) mixed = -1.0f;
-
-        // Store latest output for sample generation
-        sid->filter_state.previous_input = mixed;
-    }
-
-    // Use fractional accumulator to generate output samples at the target
-    // sample rate (e.g. 44100 Hz) from the CPU clock rate (e.g. 985248 Hz).
+    // Generate output samples at the target sample rate (~44.1 kHz).
+    // Voice mixing and SVF filter processing happen here — NOT every cycle.
+    // This is a ~22x reduction in filter work vs per-cycle processing,
+    // which is critical for maintaining 50 fps at ~1 MHz emulation speed.
     if (sid->cpu_clock > 0.0f) {
         sid->sample_accumulator += (double)sid->sample_rate / (double)sid->cpu_clock;
 
         if (sid->sample_accumulator >= 1.0) {
             sid->sample_accumulator -= 1.0;
 
-            // Grab the latest per-cycle output
-            float sample = sid->filter_state.previous_input;
-            ring_buffer_write(&sid->sample_buffer, sample);
+            // --- Voice mixing ---
+            // Apply ring modulation to get final waveform outputs
+            uint32_t v1_wave = voice_apply_ring_modulation(&sid->voice1, &sid->voice3);
+            uint32_t v2_wave = voice_apply_ring_modulation(&sid->voice2, &sid->voice1);
+            uint32_t v3_wave = voice_apply_ring_modulation(&sid->voice3, &sid->voice2);
 
+            // Center waveform BEFORE envelope so silent voices produce zero.
+            // 12-bit waveform centered: -2048..+2047
+            // × 8-bit envelope 0..255 → signed product -522240..+521985
+            // Normalise so full-scale ≈ ±1.
+            const float inv_scale = 1.0f / 522240.0f;
+            float v1 = (float)(((int32_t)v1_wave - 2048) * (int32_t)sid->voice1.envelope_amplitude) * inv_scale;
+            float v2 = (float)(((int32_t)v2_wave - 2048) * (int32_t)sid->voice2.envelope_amplitude) * inv_scale;
+            float v3 = (float)(((int32_t)v3_wave - 2048) * (int32_t)sid->voice3.envelope_amplitude) * inv_scale;
+
+            float filtered_input = 0.0f;
+            float unfiltered_output = 0.0f;
+
+            // Route voices to filter or direct output
+            if (sid->filter_voice1) filtered_input += v1; else unfiltered_output += v1;
+            if (sid->filter_voice2) filtered_input += v2; else unfiltered_output += v2;
+            if (sid->filter_voice3) filtered_input += v3;
+            else if (!sid->voice3_disabled) unfiltered_output += v3;
+            if (sid->filter_voice4) filtered_input += sid->external_input;
+            else unfiltered_output += sid->external_input;
+
+            // Apply SVF filter (at sample rate, not per-cycle)
+            float filtered_output = mos6581_filter_process(sid, filtered_input);
+
+            // Sum filtered + unfiltered
+            float mixed = unfiltered_output + filtered_output;
+
+            // 6581 digi support: add constant DC bias from the voice DACs.
+            // In real hardware, this residual bias is always present and
+            // gets modulated by volume register changes to produce 4-bit
+            // sample playback.  The bias is a fixed analog property —
+            // independent of waveform or envelope state.
+            if (sid->revision <= SID_REVISION_6581_R4AR) {
+                mixed += 0.38f;
+            }
+
+            // Apply master volume
+            mixed *= (float)sid->volume / 15.0f;
+
+            // DC blocker: removes the constant bias×volume product while
+            // preserving fast changes (digi samples).  ~20 Hz high-pass.
+            //   y[n] = x[n] - x[n-1] + α · y[n-1],  α = 0.997
+            {
+                float dc_out = mixed - sid->dc_blocker_prev_in
+                             + 0.997f * sid->dc_blocker_prev_out;
+                sid->dc_blocker_prev_in = mixed;
+                sid->dc_blocker_prev_out = dc_out;
+                mixed = dc_out;
+            }
+
+            // Clamp to [-1, 1]
+            if (mixed > 1.0f) mixed = 1.0f;
+            if (mixed < -1.0f) mixed = -1.0f;
+
+            ring_buffer_write(&sid->sample_buffer, mixed);
             sid->samples_generated++;
         }
     }
@@ -1029,6 +1039,8 @@ void mos6581_set_sample_rate(mos6581_t* sid, float sample_rate) {
     if (!sid) return;
     
     sid->sample_rate = sample_rate;
+    // Update filter coefficient since w0 depends on sample rate
+    mos6581_filter_update_cutoff(sid);
 }
 
 void mos6581_set_cpu_clock(mos6581_t* sid, float clock_hz) {
@@ -1331,6 +1343,10 @@ void mos6581_reset(mos6581_t* sid) {
     sid->volume_change_click = false;
     sid->volume_click_amplitude = 0.0f;
     sid->volume_click_counter = 0;
+    
+    // Reset DC blocker state
+    sid->dc_blocker_prev_in = 0.0f;
+    sid->dc_blocker_prev_out = 0.0f;
     
     // Reset POT values
     sid->pot_x_value = 0xFF;
