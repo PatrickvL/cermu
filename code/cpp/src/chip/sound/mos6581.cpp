@@ -481,34 +481,45 @@ void ring_buffer_destroy(ring_buffer_t* rb) {
 void ring_buffer_write(ring_buffer_t* rb, float sample) {
     if (!rb || !rb->buffer) return;
 
-    // Check for overflow: if the next write position would equal read_pos,
-    // the buffer is full.  Drop the oldest sample by advancing read_pos
-    // so the buffer never appears spuriously empty (write_pos == read_pos).
+    // SPSC safety: only the writer touches write_pos, only the reader touches read_pos.
+    // Read read_pos once into a local (volatile ensures we get the latest value).
     uint32_t next = (rb->write_pos + 1) & rb->mask;
-    if (next == rb->read_pos) {
-        rb->read_pos = (rb->read_pos + 1) & rb->mask;
+    uint32_t rp = rb->read_pos;  // snapshot reader's position
+    if (next == rp) {
+        // Buffer full — drop this sample rather than touching read_pos
+        // (read_pos belongs to the consumer thread).
+        return;
     }
 
     rb->buffer[rb->write_pos] = sample;
-    rb->write_pos = next;
+    rb->write_pos = next;  // publish (volatile store)
 }
 
 bool ring_buffer_empty(ring_buffer_t* rb) {
     if (!rb) return true;
+    // Volatile reads ensure we see the latest positions from both threads
     return rb->read_pos == rb->write_pos;
 }
 
 float ring_buffer_read(ring_buffer_t* rb) {
-    if (!rb || !rb->buffer || ring_buffer_empty(rb)) return 0.0f;
-    
-    float sample = rb->buffer[rb->read_pos];
-    rb->read_pos = (rb->read_pos + 1) & rb->mask;
+    if (!rb || !rb->buffer) return 0.0f;
+
+    // Snapshot write_pos once (volatile load) to avoid TOCTOU with ring_buffer_empty
+    uint32_t wp = rb->write_pos;
+    uint32_t rp = rb->read_pos;
+    if (rp == wp) return 0.0f;  // empty
+
+    float sample = rb->buffer[rp];
+    rb->read_pos = (rp + 1) & rb->mask;  // publish (volatile store)
     return sample;
 }
 
 uint32_t ring_buffer_available(ring_buffer_t* rb) {
     if (!rb) return 0;
-    return (rb->write_pos - rb->read_pos) & rb->mask;
+    // Snapshot both positions (volatile loads) for consistent calculation
+    uint32_t wp = rb->write_pos;
+    uint32_t rp = rb->read_pos;
+    return (wp - rp) & rb->mask;
 }
 
 // =============================================================================
@@ -850,39 +861,43 @@ void voice_clock_cycle(voice_t* voice) {
                       ((voice->waveform_accumulator & WAVEFORM_ACCUMULATOR_MSB) != 0);
     voice->sync_trigger = msb_rising;
     
-    // Generate waveforms
-    voice->triangle_output = voice_generate_triangle(voice);
-    voice->sawtooth_output = voice_generate_sawtooth(voice);
-    voice->pulse_output = voice_generate_pulse(voice);
-    voice->noise_output = voice_generate_noise(voice);
-    
-    // Select waveform output
+    // Generate ONLY the waveform(s) that are actually selected.
+    // This avoids ~3 redundant waveform computations per voice per cycle.
     uint32_t waveform_output = 0;
-    int waveform_count = aiemuc_popcount(voice->waveform);
+    uint8_t wf = voice->waveform;
     
-    if (waveform_count == 0) {
+    if (wf == 0) {
+        // No waveform selected
         waveform_output = 0;
-    } else if (waveform_count == 1) {
-        // Single waveform
-        switch (voice->waveform) {
-            case WAVEFORM_NONE:
-                voice->oscillator_waveform = 0;
-                break;
+    } else if ((wf & (wf - 1)) == 0) {
+        // Single waveform (power of 2) — generate only what's needed
+        switch (wf) {
             case WAVEFORM_TRIANGLE:
-                waveform_output = voice->triangle_output;
+                waveform_output = voice_generate_triangle(voice);
+                voice->triangle_output = waveform_output;
                 break;
             case WAVEFORM_SAWTOOTH:
-                waveform_output = voice->sawtooth_output;
+                waveform_output = voice_generate_sawtooth(voice);
+                voice->sawtooth_output = waveform_output;
                 break;
             case WAVEFORM_PULSE:
-                waveform_output = voice->pulse_output;
+                waveform_output = voice_generate_pulse(voice);
+                voice->pulse_output = waveform_output;
                 break;
             case WAVEFORM_NOISE:
-                waveform_output = voice->noise_output;
+                waveform_output = voice_generate_noise(voice);
+                voice->noise_output = waveform_output;
+                break;
+            default:
+                waveform_output = 0;
                 break;
         }
     } else {
-        // Combined waveform
+        // Combined waveform — generate all needed components
+        if (wf & WAVEFORM_TRIANGLE) voice->triangle_output = voice_generate_triangle(voice);
+        if (wf & WAVEFORM_SAWTOOTH) voice->sawtooth_output = voice_generate_sawtooth(voice);
+        if (wf & WAVEFORM_PULSE)    voice->pulse_output = voice_generate_pulse(voice);
+        if (wf & WAVEFORM_NOISE)    voice->noise_output = voice_generate_noise(voice);
         waveform_output = voice_generate_combined_waveform(voice);
     }
     

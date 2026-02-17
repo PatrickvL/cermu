@@ -27,6 +27,8 @@ SimpleSystemGUI::SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system, const c
     , emulation_running_(system_ != nullptr)  // Only run if we have a system
     , emulation_paused_(false)
     , speed_multiplier_(1.0f)
+    , screen_textures_{0, 0}
+    , texture_write_idx_(0)
     , total_frames_(0)
     , actual_fps_(0)
     , last_fps_time_(0)
@@ -429,9 +431,11 @@ void SimpleSystemGUI::render_screen() {
     
     // Get system framebuffer
     uint32_t* fb = system_->get_framebuffer();
-    if (fb && screen_texture_id_) {
-        // Update texture
-        update_screen_texture(screen_texture_id_, fb_width_, fb_height_, fb);
+    if (fb && screen_textures_[0]) {
+        // Double-buffered texture upload: write to the current write
+        // texture while the GPU may still be reading from the other one.
+        GLuint upload_tex = screen_textures_[texture_write_idx_];
+        update_screen_texture(upload_tex, fb_width_, fb_height_, fb);
         
         // Get hardware traits to determine PAL/NTSC (default to PAL for most systems)
         const auto& traits = system_->get_hardware_traits();
@@ -446,10 +450,15 @@ void SimpleSystemGUI::render_screen() {
             is_pal, use_pixel_aspect,
             &display_w, &display_h, &pos_x, &pos_y);
         
-        // Set cursor position and render
+        // Set cursor position and render from the just-uploaded texture
         ImGui::SetCursorPos(ImVec2(pos_x, pos_y));
-        ImGui::Image((ImTextureID)(intptr_t)screen_texture_id_,
+        ImGui::Image((ImTextureID)(intptr_t)upload_tex,
                     ImVec2(display_w, display_h));
+        
+        // Swap write index for next frame
+        texture_write_idx_ ^= 1;
+        // Keep base-class id in sync for filter-change code
+        screen_texture_id_ = screen_textures_[texture_write_idx_];
     }
     
     ImGui::End();
@@ -575,10 +584,18 @@ void SimpleSystemGUI::allocate_framebuffer() {
     // Give it to the system
     system_->set_framebuffer(framebuffer_, fb_width_, fb_height_);
     
-    // Create OpenGL texture (must be called after OpenGL context is created)
-    if (window_) {  // Check if init() was called
-        screen_texture_id_ = create_screen_texture(fb_width_, fb_height_);
-        printf("Allocated %dx%d framebuffer with texture %u\n", fb_width_, fb_height_, screen_texture_id_);
+    // Create double-buffered OpenGL textures.
+    // Two textures let us upload to one while the GPU may still be
+    // reading from the other for the previous frame's draw call,
+    // avoiding driver-level stalls or hidden copies.
+    if (window_) {
+        screen_textures_[0] = create_screen_texture(fb_width_, fb_height_);
+        screen_textures_[1] = create_screen_texture(fb_width_, fb_height_);
+        texture_write_idx_ = 0;
+        // Keep base-class id pointing at the first texture for legacy code
+        screen_texture_id_ = screen_textures_[0];
+        printf("Allocated %dx%d framebuffer with double-buffered textures %u/%u\n",
+               fb_width_, fb_height_, screen_textures_[0], screen_textures_[1]);
     } else {
         printf("Allocated %dx%d framebuffer (texture creation deferred until init)\n", fb_width_, fb_height_);
     }
@@ -590,10 +607,14 @@ void SimpleSystemGUI::free_framebuffer() {
         framebuffer_ = nullptr;
     }
     
-    if (screen_texture_id_) {
-        glDeleteTextures(1, &screen_texture_id_);
-        screen_texture_id_ = 0;
+    // Delete double-buffered textures
+    for (int i = 0; i < 2; i++) {
+        if (screen_textures_[i]) {
+            glDeleteTextures(1, &screen_textures_[i]);
+            screen_textures_[i] = 0;
+        }
     }
+    screen_texture_id_ = 0;
 }
 
 // ============================================================================

@@ -95,12 +95,15 @@ using mos6581_t = mos6581_s;
 using filter_state_t = filter_state_s;
 using ring_buffer_t = ring_buffer_s;
 
-// Ring buffer for sample output
+// Ring buffer for sample output (SPSC: emulation thread writes, audio thread reads).
+// write_pos and read_pos are volatile to prevent the compiler from caching them
+// in registers across function calls — essential for correct cross-thread visibility
+// in Release builds (-O2+).
 typedef struct ring_buffer_s {
     float* buffer;
     uint32_t size;
-    uint32_t write_pos;
-    uint32_t read_pos;
+    volatile uint32_t write_pos;
+    volatile uint32_t read_pos;
     uint32_t mask;
 } ring_buffer_t;
 
