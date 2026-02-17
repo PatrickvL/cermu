@@ -257,6 +257,11 @@ typedef struct mos6581_s {
     double sample_accumulator;        // Fractional accumulator for sample generation
     float cpu_clock;                  // CPU clock frequency (e.g. 985248 for PAL)
     
+    // DC blocker state for clean audio output (removes constant DC,
+    // preserves fast changes for volume-register digi playback)
+    float dc_blocker_prev_in;         // Previous input to DC blocker
+    float dc_blocker_prev_out;        // Previous output from DC blocker
+    
     // Statistics and debugging
     uint32_t total_cycles;            // Total cycles processed
     uint32_t samples_generated;       // Total samples generated
