@@ -56,7 +56,7 @@ static void render_voice_debug(voice_t* voice, int voice_num) {
         ImGui::Separator();
         
         // Outside readable variables (albeit after shifting)
-        ImGui::Text("Envelope Amplitude: $%04X (%d)", voice->envelope_amplitude, voice->envelope_amplitude);
+        ImGui::Text("Envelope Amplitude: $%02X (%d)", voice->envelope_amplitude, voice->envelope_amplitude);
         ImGui::Text("Oscillator Waveform: $%04X (%d)", voice->oscillator_waveform, voice->oscillator_waveform);
         ImGui::Text("Result: %d", voice->result);
         
@@ -66,8 +66,8 @@ static void render_voice_debug(voice_t* voice, int voice_num) {
         ImGui::Text("Waveform Accumulator: $%06X (%d)", voice->waveform_accumulator, voice->waveform_accumulator);
         const char* cycle_name = ((int)voice->envelope_cycle < 5) ? envelope_cycle_names[(int)voice->envelope_cycle] : "Unknown";
         ImGui::Text("Envelope Cycle: %s (%d)", cycle_name, (int)voice->envelope_cycle);
-        ImGui::Text("Envelope Next Level: %d", voice->envelope_next_level);
-        ImGui::Text("Sustain Level: %d", voice->sustain_level);
+        ImGui::Text("Exp Counter: %d / %d", voice->exponential_counter, voice->exponential_counter_period);
+        ImGui::Text("Sustain Level: 0x%02X (%d)", voice->sustain_level, voice->sustain_level);
         
         ImGui::Text("CPU Clock: %.0f Hz", voice->cpu_clock);
 

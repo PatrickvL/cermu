@@ -72,7 +72,7 @@ typedef enum {
 #define WAVEFORM_ACCUMULATOR_MAX 0xFFFFFF       // 24-bit accumulator
 #define WAVEFORM_ACCUMULATOR_MSB 0x800000       // Bit 23 (MSB)
 #define OSCILLATOR_MAX 0xFFF                    // 12-bit oscillator output
-#define ENVELOPE_MAX 0xFFFF                     // 16-bit envelope output
+#define ENVELOPE_MAX 0xFF                       // 8-bit envelope output (real SID)
 #define PULSE_WIDTH_MAX 0xFFF                   // 12-bit pulse width
 #define NOISE_LFSR_MASK 0x7FFFFF               // 23-bit LFSR mask
 #define SAMPLE_BUFFER_SIZE (8192)              // Reduced buffer size
@@ -139,7 +139,7 @@ typedef struct voice_s {
     bool test;                        // Test bit
     uint8_t attack_rate;              // Attack rate (ATDCY)
     uint8_t decay_rate;               // Decay rate (ATDCY)
-    uint16_t sustain_level;           // Sustain level (SUREL)
+    uint8_t sustain_level;            // Sustain level (SUREL) - 8-bit (nibble duplicated)
     uint8_t release_rate;             // Release rate (SUREL)
 
     // Read-only voice register values
@@ -150,14 +150,15 @@ typedef struct voice_s {
     uint32_t waveform_accumulator;    // 24-bit phase accumulator
     uint32_t envelope_accumulator;    // Envelope timing accumulator
     envelope_cycle_t envelope_cycle;  // Current envelope state
-    uint16_t envelope_amplitude;      // Current envelope amplitude
+    uint8_t envelope_amplitude;       // Current envelope amplitude (8-bit, like real SID)
     uint32_t oscillator_waveform;     // Current oscillator output
     
     // Envelope generation state
     uint32_t envelope_rate_counter;   // Rate counter for envelope timing
     uint32_t envelope_rate_period;    // Rate period for current cycle
-    bool envelope_hold_zero;          // Hold envelope at zero during attack
-    uint16_t envelope_next_level;     // Next level for envelope transitions
+    bool envelope_hold_zero;          // Hold envelope at zero (reSID hold_zero)
+    uint8_t exponential_counter;      // Exponential counter for decay/release
+    uint8_t exponential_counter_period; // Period for exponential counter
     
     // Noise generation state
     uint32_t noise_lfsr;              // 23-bit LFSR state

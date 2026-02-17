@@ -141,13 +141,18 @@ void write_reg(harness_t* h, uint8_t reg, uint8_t value) {
 
 uint8_t read_osc3(harness_t* h) {
     if (!h || !h->sid) return 0;
-    // Read OSC3 directly from voice 3 state (as the register read does)
-    return (uint8_t)(h->sid->voice3.oscillator_waveform >> 4);
+    // Read through the actual register path — tests what the CPU would see
+    bus_state_t bs = BUS_STATE(0xD400 + REG_OSC3, 0, 0);
+    bs = mos6581_registers_read(h->sid, bs);
+    return BUS_GET_DATA(bs);
 }
 
 uint8_t read_env3(harness_t* h) {
     if (!h || !h->sid) return 0;
-    return (uint8_t)(h->sid->voice3.envelope_amplitude >> 8);
+    // Read through the actual register path — tests what the CPU would see
+    bus_state_t bs = BUS_STATE(0xD400 + REG_ENV3, 0, 0);
+    bs = mos6581_registers_read(h->sid, bs);
+    return BUS_GET_DATA(bs);
 }
 
 void clock_cycles(harness_t* h, uint32_t n) {
@@ -309,6 +314,10 @@ bool parse_script(const char* text, test_script_t* script, const char* name) {
             cmd.type = cmd_type_t::LABEL;
             if (parts.size() < 2) return false;
             strncpy(cmd.label, trim(parts[1]).c_str(), sizeof(cmd.label) - 1);
+        }
+        else if (cmd_str == "end") {
+            // resid-test compatibility: end marker. Stop parsing here.
+            break;
         }
         else {
             // Unknown command — skip with warning
@@ -805,7 +814,7 @@ int test_pulse_waveform(harness_t* h) {
 // ─────────────────────────────────────────────────────────────────────────────
 // The noise LFSR is 23-bit with taps at bits 22 and 17.
 // It clocks when accumulator bit 19 transitions from 0→1.
-// After reset, LFSR = 0x7FFFF8.
+// After reset, LFSR = 0x7FFFFE (reSID reference).
 // The noise output extracts specific bits from the LFSR into a 12-bit value.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -819,20 +828,38 @@ int test_noise_waveform(harness_t* h) {
 
     // Use test bit to zero the accumulator, then set noise waveform.
     // LFSR clocks on bit 19 rising edge of accumulator.
-    // With freq = 0x0100, bit 19 rises every 0x80000/0x100 = 2048 cycles.
-    script_init_v3(&script, 0x0100, CTRL_NOISE);
+    // With freq = 0x1000, bit 19 rising edge occurs every
+    // 2^20 / 0x1000 = 256 cycles.
+    //
+    // The reSID-accurate noise output only uses LFSR bits {20,18,14,11,9,5,2,0}
+    // mapped to output bits {11..4}.  The initial LFSR (0x7FFFFE) has bit 0 = 0
+    // in bits 0-2.  It takes 3+ shifts for zeros to propagate to bit 5 (the
+    // lowest extracted bit), so we need several LFSR clocks to see a change.
+    script_init_v3(&script, 0x1000, CTRL_NOISE);
 
     // Record the initial noise output
     cmd_snapshot(&script);
 
-    // Clock the LFSR a few times and check it produces non-zero values
-    cmd_run(&script, 2048);  // First LFSR clock
+    // Clock the LFSR many times by running ~2048 cycles (≈8 LFSR clocks)
+    cmd_run(&script, 256);
     cmd_snapshot(&script);
 
-    cmd_run(&script, 2048);  // Second clock
+    cmd_run(&script, 256);
     cmd_snapshot(&script);
 
-    cmd_run(&script, 2048);  // Third clock
+    cmd_run(&script, 256);
+    cmd_snapshot(&script);
+
+    cmd_run(&script, 256);
+    cmd_snapshot(&script);
+
+    cmd_run(&script, 256);
+    cmd_snapshot(&script);
+
+    cmd_run(&script, 256);
+    cmd_snapshot(&script);
+
+    cmd_run(&script, 256);
     cmd_snapshot(&script);
 
     int failures = run_script(h, &script);
@@ -876,15 +903,15 @@ int test_noise_lfsr_sequence(harness_t* h) {
     cmd_label(&script, "lfsr_sequence");
 
     // Zero acc via test-bit, then run noise at high frequency.
-    // Note: test bit also resets LFSR to 0x7FFFF8.
+    // Note: test bit resets LFSR to 0x7FFFFF (all bits high).
     script_init_v3(&script, 0x8000, CTRL_NOISE);
 
-    // The LFSR should start at 0x7FFFF8 after reset
+    // The LFSR should start at 0x7FFFFF after test bit release
     // Each clock: feedback = (lfsr>>22 ^ lfsr>>17) & 1
     //             lfsr = ((lfsr << 1) | feedback) & 0x7FFFFF
 
     // Simulate the expected LFSR sequence independently
-    uint32_t ref_lfsr = 0x7FFFF8;
+    uint32_t ref_lfsr = 0x7FFFFF;
     bool prev_bit19 = false;
 
     // Run enough cycles to get several LFSR clocks and capture snapshots
@@ -953,17 +980,13 @@ int test_envelope_attack(harness_t* h) {
     // ENV3 should be 0 at start
     cmd_expect_env3(&script, 0x00);
 
-    // With attack rate 0 (period=9), envelope increments once per 9 cycles
-    // After 9 cycles: envelope should be 1 → ENV3 = 1>>8 = 0 (too small)
-    // After 9*256 = 2304 cycles: envelope should be 256 → ENV3 = 1
-    cmd_run(&script, 2304);
+    // With attack rate 0 (period=9), 8-bit envelope increments once per 9 cycles.
+    // After 9 cycles: envelope = 1 → ENV3 = 0x01
+    cmd_run(&script, 9);
     cmd_expect_env3(&script, 0x01);
 
-    // After 9*65535 ≈ 589815 cycles: envelope should be at max (0xFFFF)
-    // ENV3 = 0xFF. But that's a lot of cycles. Let's check a midpoint.
-    // After 9*32768 = 294912 cycles total (run 294912-2304=292608 more):
-    // envelope ≈ 32768 → ENV3 = 32768>>8 = 0x80
-    cmd_run(&script, 292608);
+    // After 9*128 = 1152 cycles: envelope = 128 → ENV3 = 0x80
+    cmd_run(&script, 1152 - 9);
     cmd_expect_env3(&script, 0x80);
 
     // Test with attack rate 2 (period=63)
@@ -976,8 +999,8 @@ int test_envelope_attack(harness_t* h) {
     cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH | CTRL_GATE);
     cmd_write(&script, REG_MODE_VOL, 0x0F);
 
-    // After 63*256 = 16128 cycles: envelope ≈ 256 → ENV3 = 0x01
-    cmd_run(&script, 16128);
+    // After 63 cycles: envelope = 1 → ENV3 = 0x01
+    cmd_run(&script, 63);
     cmd_expect_env3(&script, 0x01);
 
     int failures = run_script(h, &script);
@@ -998,7 +1021,7 @@ int test_envelope_decay_sustain(harness_t* h) {
     cmd_label(&script, "decay_to_sustain");
 
     // Attack=0 (fastest, period=9), Decay=0 (fastest, period=9), Sustain=8, Release=0
-    // Sustain level 8 → 0x8000 in 16-bit, ENV3 target = 0x80
+    // Sustain level 8 → 0x88 in 8-bit (nibble duplicated)
     cmd_write(&script, REG_V3_AD, 0x00);
     cmd_write(&script, REG_V3_SR, 0x80);  // Sustain=8, Release=0
 
@@ -1008,11 +1031,11 @@ int test_envelope_decay_sustain(harness_t* h) {
     cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH | CTRL_GATE);
     cmd_write(&script, REG_MODE_VOL, 0x0F);
 
-    // Attack to max: 9 cycles/step × 65535 steps ≈ 589,815 cycles
-    // Decay from max to sustain: exponential, takes considerably longer
-    // with the decay table's varying step sizes.
-    // Run 2M cycles to be safe — should comfortably reach sustain.
-    cmd_run(&script, 2000000);
+    // 8-bit attack to 0xFF: 9 cycles/step × 255 steps = 2295 cycles.
+    // Then exponential decay from 0xFF to sustain 0x88.
+    // With period=9 per rate tick and exponential counter slowing things down,
+    // the decay takes longer than attack.  Run 100K cycles to be safe.
+    cmd_run(&script, 100000);
     cmd_snapshot(&script);
 
     // Run a bit more — sustain should hold steady
@@ -1022,15 +1045,15 @@ int test_envelope_decay_sustain(harness_t* h) {
     int failures = run_script(h, &script);
     print_results(h, &script);
 
-    // Verify sustain is held — both snapshots should show approximately 0x80
+    // Verify sustain is held — both snapshots should show approximately 0x88
     if (h->snapshots.size() >= 2) {
         uint8_t env1 = h->snapshots[0].env3;
         uint8_t env2 = h->snapshots[1].env3;
         // Allow small tolerance for the nonlinear decay approach
-        if (env1 >= 0x78 && env1 <= 0x88) {
+        if (env1 >= 0x80 && env1 <= 0x90) {
             printf("  [PASS]  Envelope reached sustain region: ENV3=0x%02X\n", env1);
         } else {
-            printf("  [FAIL]  Envelope not at sustain: ENV3=0x%02X (expected ~0x80)\n", env1);
+            printf("  [FAIL]  Envelope not at sustain: ENV3=0x%02X (expected ~0x88)\n", env1);
             failures++;
         }
         if (env1 == env2) {
@@ -1066,13 +1089,13 @@ int test_envelope_release(harness_t* h) {
     cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH | CTRL_GATE);
     cmd_write(&script, REG_MODE_VOL, 0x0F);
 
-    // Let attack complete and reach sustain (sustain=F = max)
-    cmd_run(&script, 700000);
+    // Let attack complete: 9 * 255 = 2295 cycles to reach 0xFF sustain
+    cmd_run(&script, 5000);
     cmd_snapshot(&script); // Should be at max ~0xFF
 
     // Release: gate off
     cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH); // Gate off
-    cmd_run(&script, 1500000); // Exponential release with varying step sizes
+    cmd_run(&script, 200000); // Exponential release from 0xFF to 0
     cmd_snapshot(&script); // Should be 0 or near-0
 
     int failures = run_script(h, &script);
@@ -1337,7 +1360,7 @@ int test_test_bit(harness_t* h) {
     // Set test bit — should freeze LFSR
     cmd_write(&script, REG_V3_CONTROL, CTRL_NOISE | CTRL_TEST);
     cmd_run(&script, 100);
-    cmd_snapshot(&script); // LFSR should be reset to 0x7FFFF8
+    cmd_snapshot(&script); // LFSR should be reset to 0x7FFFFF
 
     int failures = run_script(h, &script);
     print_results(h, &script);
@@ -1347,7 +1370,7 @@ int test_test_bit(harness_t* h) {
                h->snapshots[0].acc[2], // Not the LFSR but we capture acc
                h->snapshots[1].acc[2]);
         // Check the actual LFSR via internal state
-        printf("  [INFO]  Voice 3 LFSR = 0x%06X (expected 0x7FFFF8 after test bit)\n",
+        printf("  [INFO]  Voice 3 LFSR = 0x%06X (expected 0x7FFFFF after test bit)\n",
                h->sid->voice3.noise_lfsr);
     }
 
@@ -1418,6 +1441,314 @@ int test_combined_waveforms(harness_t* h) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// reSID Conformance: 15-bit Rate Counter Wrapping
+// ─────────────────────────────────────────────────────────────────────────────
+// reSID's rate_counter is 15-bit and wraps at 0x8000. When you switch from
+// a slow rate to a fast rate and the counter has already exceeded the new
+// period, the counter must wrap around before the next tick occurs.
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_resid_rate_counter_15bit(harness_t* h) {
+    test_script_t script;
+    script.name = "reSID: 15-bit Rate Counter Wrap";
+    script.description = "Verify rate counter wraps at 0x8000 (ADSR delay bug)";
+
+    cmd_reset(&script);
+    cmd_label(&script, "rate_counter_wrap");
+
+    // Set slowest attack (rate 15, period=31251)
+    cmd_write(&script, REG_V3_AD, 0xF0);  // A=15, D=0
+    cmd_write(&script, REG_V3_SR, 0xF0);  // S=F, R=0
+
+    script_set_v3_freq(&script, 0x1000);
+    cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH | CTRL_TEST);
+    cmd_run(&script, 1);
+    cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH | CTRL_GATE);
+    cmd_write(&script, REG_MODE_VOL, 0x0F);
+
+    // Run 20000 cycles — rate counter advances to ~20000, no tick yet (period=31251)
+    cmd_run(&script, 20000);
+    cmd_expect_env3(&script, 0x00);  // No ticks yet
+
+    // Switch to fastest attack (rate 0, period=9)
+    cmd_write(&script, REG_V3_AD, 0x00);
+
+    // With proper 15-bit wrapping:
+    //   counter=20000, compare != 9, so keeps counting
+    //   wraps at 0x8000=32768, continues to 9 → delay = 32768-20000+9 = 12777
+    //   After 1000 cycles, envelope should still be 0
+    cmd_run(&script, 1000);
+    cmd_expect_env3(&script, 0x00);  // Must still be 0 (counter wrapping)
+
+    // After 12000 more cycles (total 13000 since rate change), first tick should
+    // have occurred and envelope starts incrementing at fast rate
+    cmd_run(&script, 12000);
+    cmd_snapshot(&script);
+
+    int failures = run_script(h, &script);
+    print_results(h, &script);
+
+    // After the wrap, each tick is 9 cycles. After ~13000 cycles past the rate
+    // change, the first tick happened at ~12777, leaving ~223 cycles ≈ 24 ticks.
+    // So envelope should be around 24.
+    if (h->snapshots.size() >= 1) {
+        uint8_t env = h->snapshots[0].env3;
+        if (env > 0 && env < 50) {
+            printf("  [PASS]  Post-wrap ENV3=%u (expected ~24 given wrap delay)\n", env);
+        } else if (env == 0) {
+            printf("  [FAIL]  ENV3=0, rate counter may have stalled\n");
+            failures++;
+        } else {
+            printf("  [FAIL]  ENV3=%u, too high — rate counter not wrapping (missing ADSR delay)\n", env);
+            failures++;
+        }
+    }
+
+    return failures;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// reSID Conformance: Sustain Level Change During Sustain
+// ─────────────────────────────────────────────────────────────────────────────
+// reSID has no separate SUSTAIN state. It stays in DECAY_SUSTAIN forever.
+// Each rate tick, it checks: if (counter != sustain) decrement.
+// So lowering sustain causes decay to resume.
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_resid_sustain_level_change(harness_t* h) {
+    test_script_t script;
+    script.name = "reSID: Sustain Level Change";
+    script.description = "Lowering sustain during sustain should resume decay";
+
+    cmd_reset(&script);
+    cmd_label(&script, "sustain_lower");
+
+    // Fast attack/decay, sustain=0xA (=0xAA), fast release
+    cmd_write(&script, REG_V3_AD, 0x00);
+    cmd_write(&script, REG_V3_SR, 0xA0);
+
+    script_set_v3_freq(&script, 0x1000);
+    cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH | CTRL_TEST);
+    cmd_run(&script, 1);
+    cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH | CTRL_GATE);
+    cmd_write(&script, REG_MODE_VOL, 0x0F);
+
+    // Wait for sustain at 0xAA
+    cmd_run(&script, 200000);
+    cmd_expect_env3(&script, 0xAA);
+
+    // Lower sustain to 0x5 (=0x55)
+    cmd_write(&script, REG_V3_SR, 0x50);
+    cmd_run(&script, 200000);
+    cmd_expect_env3(&script, 0x55);  // Should have decayed to new sustain
+
+    // Lower sustain to 0x0 (=0x00)
+    cmd_write(&script, REG_V3_SR, 0x00);
+    cmd_run(&script, 200000);
+    cmd_expect_env3(&script, 0x00);  // Should reach zero
+
+    int failures = run_script(h, &script);
+    print_results(h, &script);
+    return failures;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// reSID Conformance: LFSR Initial State After Reset
+// ─────────────────────────────────────────────────────────────────────────────
+// After chip reset, LFSR = 0x7FFFFE (reSID).
+// The noise output bit extraction produces OSC3 = 0xFE for this state.
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_resid_lfsr_reset_value(harness_t* h) {
+    test_script_t script;
+    script.name = "reSID: LFSR Reset Value";
+    script.description = "Verify LFSR = 0x7FFFFE after chip reset → OSC3 = 0xFE";
+
+    cmd_reset(&script);
+    cmd_label(&script, "lfsr_initial");
+
+    // Set noise on voice 3 with zero frequency (LFSR won't clock)
+    script_set_v3_freq(&script, 0x0000);
+    cmd_write(&script, REG_V3_CONTROL, CTRL_NOISE);
+    cmd_write(&script, REG_MODE_VOL, 0x0F);
+    cmd_run(&script, 1);
+
+    // With LFSR = 0x7FFFFE:
+    //   Bits {20,18,14,11,9,5,2,0} = {1,1,1,1,1,1,1,0}
+    //   Output = 0b1111_1110_0000 = 0xFE0
+    //   OSC3 = 0xFE
+    cmd_expect_osc3(&script, 0xFE);
+
+    int failures = run_script(h, &script);
+    print_results(h, &script);
+
+    // Also check internal state
+    uint32_t lfsr = h->sid->voice3.noise_lfsr;
+    if (lfsr == 0x7FFFFE) {
+        printf("  [PASS]  Internal LFSR = 0x%06X (matches reSID)\n", lfsr);
+    } else {
+        printf("  [FAIL]  Internal LFSR = 0x%06X (expected 0x7FFFFE)\n", lfsr);
+        failures++;
+    }
+
+    return failures;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// reSID Conformance: Exact Exponential Decay Timing
+// ─────────────────────────────────────────────────────────────────────────────
+// Verify the exponential counter thresholds produce exact envelope values
+// at precise cycle counts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_resid_exponential_decay_exact(harness_t* h) {
+    test_script_t script;
+    script.name = "reSID: Exponential Decay Exact";
+    script.description = "Verify exponential counter thresholds at exact cycles";
+
+    cmd_reset(&script);
+    cmd_label(&script, "exp_decay");
+
+    // Fastest attack, fastest decay, sustain=0
+    cmd_write(&script, REG_V3_AD, 0x00);
+    cmd_write(&script, REG_V3_SR, 0x00);
+
+    script_set_v3_freq(&script, 0x1000);
+    cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH | CTRL_TEST);
+    cmd_run(&script, 1);
+    cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH | CTRL_GATE);
+    cmd_write(&script, REG_MODE_VOL, 0x0F);
+
+    // Attack: 255 × 9 = 2295 cycles to reach 0xFF
+    cmd_run(&script, 2295);
+    cmd_expect_env3(&script, 0xFF);
+
+    // Decay with exp period 1: from 0xFF to 0x5E
+    // 161 rate ticks × 9 cycles = 1449 cycles
+    cmd_run(&script, 1449);
+    cmd_expect_env3(&script, 0x5E);
+
+    // One more tick to hit 0x5D (threshold → exp period becomes 2)
+    cmd_run(&script, 9);
+    cmd_expect_env3(&script, 0x5D);
+
+    // With exp period 2: one decrement per 2 rate ticks
+    // From 0x5D to 0x37 = 38 decrements × 2 ticks × 9 cycles = 684 cycles
+    cmd_run(&script, 684);
+    cmd_expect_env3(&script, 0x37);
+
+    // One more decrement (2 ticks × 9 = 18 cycles) → 0x36 (threshold → exp period 4)
+    cmd_run(&script, 18);
+    cmd_expect_env3(&script, 0x36);
+
+    int failures = run_script(h, &script);
+    print_results(h, &script);
+    return failures;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// reSID Conformance: Gate Retrigger Behavior
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_resid_gate_retrigger(harness_t* h) {
+    test_script_t script;
+    script.name = "reSID: Gate Retrigger";
+    script.description = "Verify attack resumes from current level on retrigger";
+
+    cmd_reset(&script);
+    cmd_label(&script, "retrigger");
+
+    // Fast attack/decay, sustain=F, release=0
+    cmd_write(&script, REG_V3_AD, 0x00);
+    cmd_write(&script, REG_V3_SR, 0xF0);
+
+    script_set_v3_freq(&script, 0x1000);
+    cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH | CTRL_TEST);
+    cmd_run(&script, 1);
+    cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH | CTRL_GATE);
+    cmd_write(&script, REG_MODE_VOL, 0x0F);
+
+    // Reach max
+    cmd_run(&script, 5000);
+    cmd_expect_env3(&script, 0xFF);
+
+    // Release and let decay partway
+    cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH);
+    cmd_run(&script, 500);
+    cmd_snapshot(&script);  // Capture mid-release level
+
+    // Retrigger gate — attack from current level
+    cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH | CTRL_GATE);
+    cmd_run(&script, 5000);
+    cmd_expect_env3(&script, 0xFF);  // Should reach max again
+
+    int failures = run_script(h, &script);
+    print_results(h, &script);
+
+    if (h->snapshots.size() >= 1) {
+        uint8_t mid = h->snapshots[0].env3;
+        printf("  [INFO]  Mid-release envelope: 0x%02X (retrigger resumes from here)\n", mid);
+        if (mid > 0 && mid < 0xFF) {
+            printf("  [PASS]  Release produced partial decay before retrigger\n");
+        } else {
+            printf("  [WARN]  Unexpected mid-release level\n");
+        }
+    }
+
+    return failures;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// reSID Conformance: Hold-Zero Freeze
+// ─────────────────────────────────────────────────────────────────────────────
+// When envelope decays to 0x00, hold_zero is set. The envelope should stay
+// frozen at 0 until gate is turned ON again (clears hold_zero).
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_resid_hold_zero(harness_t* h) {
+    test_script_t script;
+    script.name = "reSID: Hold-Zero Freeze";
+    script.description = "Verify envelope freezes at 0 and only restarts on gate";
+
+    cmd_reset(&script);
+    cmd_label(&script, "hold_zero");
+
+    // Fast everything, sustain=0 → decay goes to 0
+    cmd_write(&script, REG_V3_AD, 0x00);
+    cmd_write(&script, REG_V3_SR, 0x00);
+
+    script_set_v3_freq(&script, 0x1000);
+    cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH | CTRL_TEST);
+    cmd_run(&script, 1);
+    cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH | CTRL_GATE);
+    cmd_write(&script, REG_MODE_VOL, 0x0F);
+
+    // Wait for full decay to 0
+    cmd_run(&script, 50000);
+    cmd_expect_env3(&script, 0x00);
+
+    // Should stay frozen
+    cmd_run(&script, 50000);
+    cmd_expect_env3(&script, 0x00);
+
+    // Change sustain — should NOT unfreeze (hold_zero still set)
+    cmd_write(&script, REG_V3_SR, 0xF0);
+    cmd_run(&script, 50000);
+    cmd_expect_env3(&script, 0x00);  // Still frozen
+
+    // Gate off, then on → clears hold_zero, starts attack
+    cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH);
+    cmd_write(&script, REG_V3_CONTROL, CTRL_SAWTOOTH | CTRL_GATE);
+
+    cmd_run(&script, 2295);  // Full fastest attack duration
+    cmd_expect_env3(&script, 0xFF);
+
+    int failures = run_script(h, &script);
+    print_results(h, &script);
+    return failures;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Run all built-in tests
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1449,6 +1780,12 @@ int run_all_builtin_tests(harness_t* h, bool verbose) {
         {"Oscillator Sync",         test_oscillator_sync},
         {"Test Bit",                test_test_bit},
         {"Combined Waveforms",      test_combined_waveforms},
+        {"reSID: Rate Counter 15-bit", test_resid_rate_counter_15bit},
+        {"reSID: Sustain Change",      test_resid_sustain_level_change},
+        {"reSID: LFSR Reset Value",    test_resid_lfsr_reset_value},
+        {"reSID: Exp Decay Exact",     test_resid_exponential_decay_exact},
+        {"reSID: Gate Retrigger",      test_resid_gate_retrigger},
+        {"reSID: Hold-Zero Freeze",    test_resid_hold_zero},
     };
 
     int total_failures = 0;

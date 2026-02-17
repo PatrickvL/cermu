@@ -145,7 +145,7 @@ struct snapshot_t {
     uint8_t  osc3;          // OSC3 value
     uint8_t  env3;          // ENV3 value
     uint32_t acc[3];        // Voice accumulators
-    uint16_t env_amp[3];    // Envelope amplitudes
+    uint8_t env_amp[3];     // Envelope amplitudes (8-bit)
     char     label[32];     // Optional label
 };
 
@@ -309,5 +309,13 @@ int test_ring_modulation(harness_t* h);
 int test_oscillator_sync(harness_t* h);
 int test_test_bit(harness_t* h);
 int test_noise_lfsr_sequence(harness_t* h);
+
+// ── reSID behavioral conformance tests ──────────────────────────────────────
+int test_resid_rate_counter_15bit(harness_t* h);
+int test_resid_sustain_level_change(harness_t* h);
+int test_resid_lfsr_reset_value(harness_t* h);
+int test_resid_exponential_decay_exact(harness_t* h);
+int test_resid_gate_retrigger(harness_t* h);
+int test_resid_hold_zero(harness_t* h);
 
 } // namespace sid_test
