@@ -22,6 +22,11 @@ private:
     bool emulation_running_;
     bool emulation_paused_;
     float speed_multiplier_;
+
+    // Double-buffered GL textures — upload to one while the GPU
+    // may still be rendering the previous frame from the other.
+    GLuint screen_textures_[2];
+    int    texture_write_idx_;
     
     // Statistics
     uint64_t total_frames_;

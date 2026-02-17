@@ -90,7 +90,7 @@ bool GenericEmulatorGUI::init(const char* window_title, int width, int height) {
     }
     
     SDL_GL_MakeCurrent(window_, gl_context_);
-    SDL_GL_SetSwapInterval(1); // Enable vsync
+    SDL_GL_SetSwapInterval(0); // Disable vsync — frame pacing handled by accumulator
     
     // Show the window
     SDL_ShowWindow(window_);
@@ -438,14 +438,10 @@ void GenericEmulatorGUI::render_screen_menu_generic() {
     
     // Update texture filtering based on user preference
     if (screen_texture_id_ != 0) {
+        GLint filter = screen_filter_ ? GL_LINEAR : GL_NEAREST;
         glBindTexture(GL_TEXTURE_2D, screen_texture_id_);
-        if (screen_filter_) {
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        } else {
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        }
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
     }
     
     ImGui::Separator();
