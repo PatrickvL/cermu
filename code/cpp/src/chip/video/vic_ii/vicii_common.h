@@ -507,4 +507,3 @@ void vicii_memory_bank_change(void* chip, uint8_t bank);
 
 // Utility functions
 void vicii_set_framebuffer(vicii_t* vicii, uint32_t* framebuffer, int width, int height);
-

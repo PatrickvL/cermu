@@ -332,6 +332,8 @@ void C64SystemWrapper::reset() {
         pending_load_.active = false;
     }
     boot_completed_ = false;
+    sid_player_active_ = false;
+    active_sid_data_.clear();
     if (c64_) {
         c64_system_reset(c64_);
 
@@ -344,6 +346,10 @@ void C64SystemWrapper::reset() {
             c64_->ram->memory[0x0302] = 0;
             c64_->ram->memory[0x0303] = 0;
             c64_->ram->memory[0x002D] = 0;
+            // Clear the keyboard buffer count so is_basic_ready() doesn't
+            // get stuck waiting for a stale non-zero $C6 left by a
+            // previously running program.
+            c64_->ram->memory[0x00C6] = 0;
         }
     }
 }
@@ -416,6 +422,8 @@ bool C64SystemWrapper::load_file(const char* filepath) {
         format_load_result_free(&pending_load_.result);
         pending_load_.active = false;
     }
+    sid_player_active_ = false;
+    active_sid_data_.clear();
 
     // Parse the file into a format result
     format_load_result_t result = {};
@@ -486,7 +494,23 @@ void C64SystemWrapper::apply_pending_load() {
     // =========================================================================
     const sid_header_t* sid = sid_get_metadata(&pending_load_.result);
     if (sid) {
-        c64_apply_sid_load(c64_, sid, &pending_load_.result.program);
+        // Compute 0-based subtune index from the 1-based start_song
+        uint16_t subtune = sid->start_song;
+        if (subtune > 0) subtune--;
+
+        c64_apply_sid_load(c64_, sid, &pending_load_.result.program, subtune);
+
+        // Keep a copy of the SID header and payload for subtune switching
+        active_sid_header_ = *sid;
+        const auto& prog = pending_load_.result.program;
+        if (prog.data && prog.data_size > 0) {
+            active_sid_data_.assign(prog.data, prog.data + prog.data_size);
+        } else {
+            active_sid_data_.clear();
+        }
+        active_subtune_ = subtune;
+        sid_player_active_ = true;
+
         // Track the SID revision that was applied so the GUI stays in sync
         if (sid->version >= 2 && sid->sid_model != SID_MODEL_UNKNOWN) {
             pending_sid_revision_ = (sid->sid_model == SID_MODEL_8580)
@@ -659,6 +683,11 @@ void C64SystemWrapper::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 }
 
 void C64SystemWrapper::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) {
+    // SID player subtune selection — intercept before keyboard mapper
+    if (sid_player_active_ && pressed && !repeat) {
+        if (handle_sid_player_key(key)) return;
+    }
+
     if (keyboard_mapper_) {
         if (pressed) {
             keyboard_mapper_->process_key_down(key, scancode, mod, repeat);
@@ -688,6 +717,54 @@ void C64SystemWrapper::release_all_keys() {
 void C64SystemWrapper::handle_controller_event(int controller, int button, bool pressed) {
     // C64 joystick support would go here
     // TODO: Implement joystick handling
+}
+
+// =============================================================================
+// SID Player — Subtune selection via keyboard
+// =============================================================================
+//
+// Digits 1-9:  select subtune 1-9 directly (0-based index 0-8)
+// Digit 0:     select subtune 10 (0-based index 9)
+// Right arrow:  next subtune (wraps from last → first)
+// Left arrow:   previous subtune (wraps from first → last)
+// =============================================================================
+
+bool C64SystemWrapper::handle_sid_player_key(SDL_Keycode key) {
+    if (!c64_ || active_sid_header_.num_songs == 0) return false;
+
+    const uint16_t num_songs = active_sid_header_.num_songs;
+    int new_subtune = -1;
+
+    // Digit keys: 1→subtune 1, 2→subtune 2, ..., 9→subtune 9, 0→subtune 10
+    if (key >= SDLK_0 && key <= SDLK_9) {
+        int digit = (key == SDLK_0) ? 10 : (key - SDLK_0);
+        if (digit <= num_songs) {
+            new_subtune = digit - 1;  // Convert to 0-based
+        }
+    }
+    // Cursor right = next subtune (with wrapping)
+    else if (key == SDLK_RIGHT) {
+        new_subtune = (active_subtune_ + 1) % num_songs;
+    }
+    // Cursor left = previous subtune (with wrapping)
+    else if (key == SDLK_LEFT) {
+        new_subtune = (active_subtune_ == 0) ? (num_songs - 1)
+                                              : (active_subtune_ - 1);
+    }
+    // ESC = exit application while in SID player mode
+    else if (key == SDLK_ESCAPE) {
+        request_quit();
+        return true;
+    }
+
+    if (new_subtune < 0) return false;
+    if ((uint16_t)new_subtune == active_subtune_) return true;  // Already playing
+
+    active_subtune_ = (uint16_t)new_subtune;
+    c64_sid_switch_subtune(c64_, &active_sid_header_,
+                            active_sid_data_.data(), active_sid_data_.size(),
+                            active_subtune_);
+    return true;
 }
 
 void C64SystemWrapper::render_system_menu_items() {

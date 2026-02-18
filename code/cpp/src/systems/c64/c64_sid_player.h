@@ -54,12 +54,35 @@ void c64_write_sid_info_page(uint8_t* screen, uint8_t* color,
  *   4. Builds 6502 player stub at $0340 with CIA Timer A IRQ
  *   5. Sets CPU registers and PC to start the stub
  *
- * For PSID files with play_addr != 0: sets up Timer A IRQ to call play()
- * For PSID with play_addr == 0 or RSID: calls init() only (tune manages IRQ)
+ * Banking:
+ *   - PSID with play_addr != 0: sets $01=$35 (I/O visible, BASIC+KERNAL
+ *     banked out) with a self-contained IRQ handler at $FFFE/$FFFF in RAM.
+ *     This is essential for tunes loaded at $A000–$BFFF (BASIC ROM area).
+ *   - PSID with play_addr == 0: sets $01=$35 for init, then $01=$36 so the
+ *     KERNAL IRQ dispatcher at $FF48 is available for $0314/$0315 hooks.
+ *   - RSID: keeps $01=$37 (all ROMs visible as required by spec).
  *
- * @param c64   Initialized C64 system (RAM, SID, CPU must be valid)
- * @param sid   Parsed SID header with resolved addresses
- * @param prog  Program data from format_load_result_t (payload bytes)
+ * @param c64      Initialized C64 system (RAM, SID, CPU must be valid)
+ * @param sid      Parsed SID header with resolved addresses
+ * @param prog     Program data from format_load_result_t (payload bytes)
+ * @param subtune  0-based subtune index to play
  */
 void c64_apply_sid_load(c64_t* c64, const sid_header_t* sid,
-                        const program_data_t* prog);
+                        const program_data_t* prog, uint16_t subtune);
+
+/**
+ * Switch to a different subtune without a full reload.
+ *
+ * Silences the SID chip, re-copies the payload (in case the previous tune
+ * self-modified), updates the info page, re-injects the player stub, and
+ * resets the CPU to start playback of the new subtune.
+ *
+ * @param c64           Initialized C64 system
+ * @param sid           Parsed SID header
+ * @param payload       Original payload bytes (kept by caller for re-copy)
+ * @param payload_size  Size of the payload in bytes
+ * @param subtune       0-based subtune index to switch to
+ */
+void c64_sid_switch_subtune(c64_t* c64, const sid_header_t* sid,
+                             const uint8_t* payload, size_t payload_size,
+                             uint16_t subtune);

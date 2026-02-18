@@ -41,8 +41,10 @@ SimpleSystemGUI::SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system, const c
     , audio_sample_rate_(0)
 {
     if (system_) {
-        // Note: System should already be initialized and loaded before passing to GUI
-        // Framebuffer allocation happens after init() when OpenGL context exists
+        // System already initialised + file loaded before entering the GUI,
+        // so clear the pending file path — it must not survive into a later
+        // system switch (otherwise the new system would try to load it).
+        pending_file_path_.clear();
         printf("SimpleSystemGUI created for system: %s\n",
                system_->get_descriptor().name);
     } else {
@@ -131,6 +133,11 @@ void SimpleSystemGUI::handle_events() {
                 system_->handle_text_input(event.text.text);
             }
         }
+    }
+    
+    // Check if the system requested application exit (e.g. ESC in SID player)
+    if (system_ && system_->is_quit_requested()) {
+        should_quit_ = true;
     }
 }
 
@@ -533,6 +540,12 @@ void SimpleSystemGUI::reset_emulation() {
         system_->reset();
         total_frames_ = 0;
         reset_frame_pacing();
+        // Ensure emulation is running after reset — the user may have
+        // triggered reset while emulation was paused (e.g. after a failed
+        // file load or from the file-dialog flow that pauses first).
+        if (!emulation_running_ || emulation_paused_) {
+            start_emulation();
+        }
         printf("System reset\n");
     }
 }

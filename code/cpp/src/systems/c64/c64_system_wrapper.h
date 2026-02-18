@@ -9,6 +9,7 @@
 #include "c64_kernal_patches.h"
 #include <memory>
 #include <string>
+#include <vector>
 
 /**
  * C64 System Wrapper
@@ -185,6 +186,22 @@ private:
      * test is patched out for fast boot.
      */
     void ensure_compatible_for_sid(const sid_header_t* sid);
+
+    // =========================================================================
+    // SID PLAYER STATE
+    // =========================================================================
+    // When a SID file is loaded, we keep a copy of its header and payload
+    // so the user can switch subtunes interactively (digits 0-9 for direct
+    // selection, left/right cursor keys for prev/next with wrapping).
+    // =========================================================================
+    bool sid_player_active_ = false;            ///< True while a SID file is playing
+    sid_header_t active_sid_header_{};           ///< Copy of the loaded SID header
+    std::vector<uint8_t> active_sid_data_;       ///< Copy of original payload bytes
+    uint16_t active_subtune_ = 0;               ///< Current 0-based subtune index
+
+    /** Handle SID player keyboard shortcuts (subtune selection).
+     *  Returns true if the key was consumed (should not be forwarded to C64). */
+    bool handle_sid_player_key(SDL_Keycode key);
 
     // Note: hardware_traits_, config_ (SystemConfiguration), speed_multiplier_,
     // total_cycles_ are now stored in EmulatedSystem base class

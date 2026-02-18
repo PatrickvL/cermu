@@ -15,6 +15,7 @@ EmulatedSystem::EmulatedSystem()
     , rgba_height_(0)
     , total_cycles_(0)
     , speed_multiplier_(1.0f)
+    , quit_requested_(false)
 {
 }
 
