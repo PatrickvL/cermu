@@ -190,7 +190,10 @@ void mos6581_filter_update_cutoff(mos6581_t* sid) {
     // ZDF SVF: g = tan(π * fc / fs).
     // This is the topology-preserving integrator gain that ensures
     // unconditional stability at any cutoff/resonance combination.
-    float rate = sid->sample_rate > 0.0f ? sid->sample_rate : 44100.0f;
+    //
+    // The filter is clocked every CPU cycle (~985 kHz PAL), so we use the
+    // CPU clock as the effective sample rate for coefficient calculation.
+    float rate = sid->cpu_clock > 0.0f ? sid->cpu_clock : 985248.0f;
     
     // Clamp cutoff to just below Nyquist to avoid tan() blowing up
     float max_hz = rate * 0.499f;
@@ -215,10 +218,9 @@ float mos6581_filter_process(mos6581_t* sid, float input) {
     // (Andy Simper / Cytomic / Vadim Zavalishin).
     //
     // Unlike the naive SVF, this formulation is UNCONDITIONALLY STABLE
-    // at any cutoff frequency and resonance setting.  This is critical
-    // because we process the filter at ~44.1 kHz, not every CPU cycle
-    // at ~1 MHz like reSID — making the naive SVF unstable at high
-    // resonance (the root cause of the "diesel engine buzzing" bug).
+    // at any cutoff frequency and resonance setting.  The filter is
+    // clocked every CPU cycle (~985 kHz PAL), matching reSID's approach
+    // for accurate cutoff tracking during rapid filter sweeps.
     //
     // Coefficients a1, a2, a3 are precomputed when cutoff/resonance change.
     
@@ -445,7 +447,6 @@ void voice_reset(voice_t* voice) {
     voice->oscillator_output = 0;
     voice->envelope_output = 0;
     voice->result = 0;
-    voice->sample_acc = 0;
 }
 
 void voice_clock_cycle(voice_t* voice) {
@@ -569,64 +570,60 @@ inline bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) 
     voice_set_waveform_output(&sid->voice2, &sid->voice1);
     voice_set_waveform_output(&sid->voice3, &sid->voice2);
 
-    // Step 4.5: Accumulate per-voice (centered_waveform × envelope) for anti-aliasing.
-    // reSID runs the filter at ~1 MHz then resamples with a FIR; we average the
-    // voice output between sample points (box filter) as first-order anti-aliasing.
-    // Without this, point-sampling the waveform at 44.1 kHz creates aliasing artifacts
-    // from harmonics above Nyquist — audible as metallic tones or sweep artifacts.
-    for (int i = 0; i < 3; i++) {
-        voice_t* v = sid->voices[i];
-        v->sample_acc += (int64_t)((int32_t)v->oscillator_waveform - OSCILLATOR_CENTER)
-                       * (int64_t)v->envelope_amplitude;
+    // Step 4.5: Per-cycle voice mixing, filter processing, and output accumulation.
+    //
+    // Like reSID, we clock the filter EVERY CPU CYCLE (~985 kHz for PAL).
+    // This is critical because songs modulate the filter cutoff rapidly; sample-rate
+    // filter processing (44.1 kHz) creates audible stepping/wobbling artifacts.
+    //
+    // The accumulated post-filter output is averaged at sample time to produce
+    // band-limited 44.1 kHz samples (box-filter anti-aliasing).
+    {
+        // Compute instantaneous centred voice outputs (waveform × envelope).
+        // 12-bit waveform centred to [-2048, +2047] × 8-bit envelope [0, 255].
+        const float inv_scale = 1.0f / (3.0f * OSCILLATOR_CENTER * ENVELOPE_MAX);
+        float v1 = (float)((int32_t)sid->voice1.oscillator_waveform - OSCILLATOR_CENTER)
+                 * (float)sid->voice1.envelope_amplitude * inv_scale;
+        float v2 = (float)((int32_t)sid->voice2.oscillator_waveform - OSCILLATOR_CENTER)
+                 * (float)sid->voice2.envelope_amplitude * inv_scale;
+        float v3 = (float)((int32_t)sid->voice3.oscillator_waveform - OSCILLATOR_CENTER)
+                 * (float)sid->voice3.envelope_amplitude * inv_scale;
+
+        // Route voices to filtered / unfiltered paths (read register bits).
+        float filtered_input = 0.0f;
+        float unfiltered_output = 0.0f;
+        uint8_t reson = sid->regs[SID_REG_RESON];
+        uint8_t sigvol = sid->regs[SID_REG_SIGVOL];
+        if (reson & RESON_FILT1) filtered_input += v1; else unfiltered_output += v1;
+        if (reson & RESON_FILT2) filtered_input += v2; else unfiltered_output += v2;
+        if (reson & RESON_FILT3) filtered_input += v3;
+        else if (!(sigvol & SIGVOL_3OFF)) unfiltered_output += v3;
+        if (reson & RESON_FILTEX) filtered_input += sid->external_input;
+        else unfiltered_output += sid->external_input;
+
+        // Clock the ZDF SVF filter at CPU rate.
+        float filtered_output = mos6581_filter_process(sid, filtered_input);
+
+        // Accumulate post-filter mixed output for box-filter downsampling.
+        sid->output_acc += (double)(unfiltered_output + filtered_output);
     }
     sid->sample_cycle_count++;
 
     // Step 5: Generate output samples at the target sample rate (~44.1 kHz).
-    // Voice mixing and SVF filter processing happen here — NOT every cycle.
-    // This is a ~22x reduction in filter work vs per-cycle processing,
-    // which is critical for maintaining 50 fps at ~1 MHz emulation speed.
+    // Average the accumulated per-cycle output, apply master volume and DC blocker.
     if (sid->cpu_clock > 0.0f) {
         sid->sample_accumulator += (double)sid->sample_rate / (double)sid->cpu_clock;
 
         if (sid->sample_accumulator >= 1.0) {
             sid->sample_accumulator -= 1.0;
 
-            // --- Voice mixing (anti-aliased) ---
-            // Use averaged (centered_waveform × envelope) accumulated over all
-            // CPU cycles since the last sample point (~22 cycles at 985 kHz/44.1 kHz).
-            // This box-filter averaging provides first-order anti-aliasing,
-            // suppressing harmonics above Nyquist that would otherwise fold back
-            // into the audible range as metallic/sweep artifacts.
+            // Average the accumulated filter output over the sample period.
             const float cyc = (sid->sample_cycle_count > 0) ? (float)sid->sample_cycle_count : 1.0f;
-            const float inv_scale = 1.0f / (3.0f * OSCILLATOR_CENTER * ENVELOPE_MAX * cyc);
-            float v1 = (float)sid->voice1.sample_acc * inv_scale;
-            float v2 = (float)sid->voice2.sample_acc * inv_scale;
-            float v3 = (float)sid->voice3.sample_acc * inv_scale;
+            float mixed = (float)(sid->output_acc / (double)cyc);
 
             // Reset accumulators for next sample period
-            sid->voice1.sample_acc = 0;
-            sid->voice2.sample_acc = 0;
-            sid->voice3.sample_acc = 0;
+            sid->output_acc = 0.0;
             sid->sample_cycle_count = 0;
-
-            float filtered_input = 0.0f;
-            float unfiltered_output = 0.0f;
-
-            // Route voices to filter or direct output
-            uint8_t reson = sid->regs[SID_REG_RESON];
-            uint8_t sigvol = sid->regs[SID_REG_SIGVOL];
-            if (reson & RESON_FILT1) filtered_input += v1; else unfiltered_output += v1;
-            if (reson & RESON_FILT2) filtered_input += v2; else unfiltered_output += v2;
-            if (reson & RESON_FILT3) filtered_input += v3;
-            else if (!(sigvol & SIGVOL_3OFF)) unfiltered_output += v3;
-            if (reson & RESON_FILTEX) filtered_input += sid->external_input;
-            else unfiltered_output += sid->external_input;
-
-            // Apply SVF filter (at sample rate, not per-cycle)
-            float filtered_output = mos6581_filter_process(sid, filtered_input);
-
-            // Sum filtered + unfiltered
-            float mixed = unfiltered_output + filtered_output;
 
             // 6581 digi support: add constant DC bias from the voice DACs.
             if (sid->revision <= SID_REVISION_6581_R4AR) {
@@ -634,6 +631,7 @@ inline bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) 
             }
 
             // Apply master volume
+            uint8_t sigvol = sid->regs[SID_REG_SIGVOL];
             mixed *= (float)(sigvol & SIGVOL_VOL_MASK) / SIGVOL_VOL_MAX;
 
             // DC blocker: removes the constant bias×volume product while
@@ -951,6 +949,7 @@ void mos6581_reset(mos6581_t* sid) {
     sid->subcycle_count = 0;
     sid->sample_accumulator = 0.0;
     sid->sample_cycle_count = 0;
+    sid->output_acc = 0.0;
 
     // Flush the sample ring buffer so the audio callback doesn't replay
     // stale data from the previous session.
@@ -1017,6 +1016,7 @@ void* mos6581_system_create(chip_descriptor_t* desc) {
     sid->cpu_clock = 985248.0f;   // PAL C64 default
     sid->sample_accumulator = 0.0;
     sid->sample_cycle_count = 0;
+    sid->output_acc = 0.0;
     sid->enable_filter = true;
     sid->enable_distortion = true;
     sid->enable_digiboost = true;
