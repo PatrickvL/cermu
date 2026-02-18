@@ -65,26 +65,6 @@ void voice_apply_sync(voice_t* voice, voice_t* sync_source) {
     }
 }
 
-uint32_t voice_apply_ring_modulation(voice_t* voice, voice_t* ring_source) {
-    if (!voice) {
-        return 0;
-    }
-
-    if (ring_source && (voice->control_reg & VCREG_RING)) {
-    
-    // Ring modulation only affects triangle waveform
-        if ((voice->control_reg & VCREG_RING)
-              && (voice->control_reg & WAVEFORM_TRIANGLE)) {
-            bool ring_msb = (ring_source->waveform_accumulator & WAVEFORM_ACCUMULATOR_MSB) != 0;
-            if (ring_msb) {
-                return voice->triangle_output ^ 0xFFF;
-            }
-        }
-    }
-    
-    return voice->oscillator_waveform;
-}
-
 // =============================================================================
 // ENVELOPE GENERATION
 // =============================================================================
@@ -424,12 +404,9 @@ uint32_t ring_buffer_available(ring_buffer_t* rb) {
 // WAVEFORM GENERATION
 // =============================================================================
 
-uint32_t voice_generate_triangle(voice_t* voice) {
-    if (!voice) return 0;
-    
-    uint32_t accumulator = voice->waveform_accumulator;
-    
-    // Triangle wave: sawtooth XOR with MSB to flip second half
+uint32_t voice_generate_triangle(uint32_t accumulator) {
+    // Triangle wave: sawtooth XOR with MSB to flip second half.
+    // The accumulator passed in may have its MSB ring-mod-adjusted.
     if (accumulator & WAVEFORM_ACCUMULATOR_MSB) {
         return (accumulator ^ WAVEFORM_ACCUMULATOR_MAX) >> 11;
     } else {
@@ -553,18 +530,44 @@ void voice_clock_cycle(voice_t* voice) {
         voice->noise_clock_enable = clock_noise;
     }
     
-    // Generate waveform outputs.  Unselected waveforms output 0xFFF so their
-    // bits don't pull any DAC lines low in the combined AND — matching real
-    // hardware where unselected waveform switches are open.  This lets the
-    // AND below run unconditionally without per-waveform conditionals.
-    //
-    // noise_output is the always-valid latched LFSR value (updated only on
-    // LFSR shift, not every cycle).  We use 0xFFF in its AND slot when the
-    // noise waveform is not selected, without overwriting the latched field.
+    // Update envelope (rate counter + envelope clock)
+    voice_update_envelope(voice);
+    voice->envelope_output = voice->envelope_amplitude;
+}
+
+// Generate waveform outputs with ring modulation baked in (reSID-accurate).
+//
+// Ring modulation works by XORing the accumulator's MSB (bit 23) with the
+// INVERTED MSB of the ring source oscillator before computing the triangle
+// waveform.  This shifts the triangle fold-point, creating FM-like effects.
+//
+// reSID: ring_msb_mask = ((~control>>5) & (control>>2) & 1) << 23
+// → active when ring_mod=1 AND sawtooth=0.  Sawtooth's direct DAC path
+// overrides the triangle EOR mechanism on real hardware.
+//
+// The ring-modified accumulator only affects triangle generation.  Sawtooth,
+// pulse and noise use the original accumulator (pulse is a comparator and
+// sawtooth selection disables the ring MSB mask).
+void voice_set_waveform_output(voice_t* voice, voice_t* ring_source) {
+    if (!voice) return;
+    
     uint8_t wf = voice->control_reg;
     
+    // Compute ring modulation MSB mask (reSID: ring_msb_mask).
+    // Active only when ring_mod=1 AND sawtooth=0.
+    uint32_t ring_msb_mask = ((wf & VCREG_RING) && !(wf & WAVEFORM_SAWTOOTH))
+                           ? WAVEFORM_ACCUMULATOR_MSB : 0;
+    
+    // Ring-modified accumulator: XOR our MSB with ~source_MSB.
+    // reSID: accumulator ^ (~sync_source->accumulator & ring_msb_mask)
+    uint32_t ring_acc = voice->waveform_accumulator
+                      ^ (~ring_source->waveform_accumulator & ring_msb_mask);
+    
+    // Generate waveform outputs.  Unselected waveforms output 0xFFF so their
+    // bits don't pull any DAC lines low in the combined AND — matching real
+    // hardware where unselected waveform switches are open.
     voice->triangle_output = (wf & WAVEFORM_TRIANGLE)
-        ? voice_generate_triangle(voice) : 0xFFF;
+        ? voice_generate_triangle(ring_acc) : 0xFFF;
     voice->sawtooth_output = (wf & WAVEFORM_SAWTOOTH)
         ? voice_generate_sawtooth(voice) : 0xFFF;
     voice->pulse_output = (wf & WAVEFORM_PULSE)
@@ -587,14 +590,8 @@ void voice_clock_cycle(voice_t* voice) {
     voice->oscillator_waveform = waveform_output;
     voice->oscillator_output = (uint8_t)(waveform_output >> 4);
     
-    // Update envelope
-    voice_update_envelope(voice);
-    
-    // Apply envelope to waveform
+    // Apply envelope to waveform (voice->result includes ring mod)
     voice->result = (voice->oscillator_waveform * voice->envelope_amplitude) >> 8;
-    
-    // Update envelope output register (now 8-bit, direct)
-    voice->envelope_output = voice->envelope_amplitude;
 }
 
 // =============================================================================
@@ -605,19 +602,31 @@ void voice_clock_cycle(voice_t* voice) {
 bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) {
     if (!sid) return bus_state;
 
-    // Clock all three voices every CPU cycle (like real hardware)
+    // reSID per-cycle order:
+    //   1. Clock envelopes  (inside voice_clock_cycle)
+    //   2. Clock oscillators (accumulator + noise LFSR)
+    //   3. Synchronize oscillators (hard sync)
+    //   4. Generate waveform output (with ring mod baked in)
+    //   5. Clock filter → generate sample
+
+    // Steps 1-2: Clock accumulators, noise, and envelopes
     for (int i = 0; i < 3; i++) {
         voice_clock_cycle(sid->voices[i]);
     }
 
-    // Apply oscillator sync (one-cycle-delayed, matching real hardware).
-    // Sync source's MSB transition was detected inside voice_clock_cycle;
-    // the accumulator reset takes effect next cycle.
+    // Step 3: Apply oscillator sync.
+    // Sync source mapping: voice1←voice3, voice2←voice1, voice3←voice2
     voice_apply_sync(&sid->voice1, &sid->voice3);
     voice_apply_sync(&sid->voice2, &sid->voice1);
     voice_apply_sync(&sid->voice3, &sid->voice2);
 
-    // Generate output samples at the target sample rate (~44.1 kHz).
+    // Step 4: Generate waveform outputs with ring mod baked in.
+    // Ring source mapping matches sync: voice1←voice3, etc.
+    voice_set_waveform_output(&sid->voice1, &sid->voice3);
+    voice_set_waveform_output(&sid->voice2, &sid->voice1);
+    voice_set_waveform_output(&sid->voice3, &sid->voice2);
+
+    // Step 5: Generate output samples at the target sample rate (~44.1 kHz).
     // Voice mixing and SVF filter processing happen here — NOT every cycle.
     // This is a ~22x reduction in filter work vs per-cycle processing,
     // which is critical for maintaining 50 fps at ~1 MHz emulation speed.
@@ -628,20 +637,16 @@ bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) {
             sid->sample_accumulator -= 1.0;
 
             // --- Voice mixing ---
-            // Apply ring modulation to get final waveform outputs
-            uint32_t v1_wave = voice_apply_ring_modulation(&sid->voice1, &sid->voice3);
-            uint32_t v2_wave = voice_apply_ring_modulation(&sid->voice2, &sid->voice1);
-            uint32_t v3_wave = voice_apply_ring_modulation(&sid->voice3, &sid->voice2);
-
+            // oscillator_waveform already includes ring modulation (applied per-cycle).
             // Center waveform BEFORE envelope so silent voices produce zero.
             // 12-bit waveform centered: -2048..+2047
             // × 8-bit envelope 0..255 → signed product -522240..+521985
             // Scale so the SUM of all 3 voices at max ≈ ±1.0 to prevent
             // clipping (real SID mixer has headroom for all voices).
             const float inv_scale = 1.0f / (3.0f * 522240.0f);
-            float v1 = (float)(((int32_t)v1_wave - 2048) * (int32_t)sid->voice1.envelope_amplitude) * inv_scale;
-            float v2 = (float)(((int32_t)v2_wave - 2048) * (int32_t)sid->voice2.envelope_amplitude) * inv_scale;
-            float v3 = (float)(((int32_t)v3_wave - 2048) * (int32_t)sid->voice3.envelope_amplitude) * inv_scale;
+            float v1 = (float)(((int32_t)sid->voice1.oscillator_waveform - 2048) * (int32_t)sid->voice1.envelope_amplitude) * inv_scale;
+            float v2 = (float)(((int32_t)sid->voice2.oscillator_waveform - 2048) * (int32_t)sid->voice2.envelope_amplitude) * inv_scale;
+            float v3 = (float)(((int32_t)sid->voice3.oscillator_waveform - 2048) * (int32_t)sid->voice3.envelope_amplitude) * inv_scale;
 
             float filtered_input = 0.0f;
             float unfiltered_output = 0.0f;
