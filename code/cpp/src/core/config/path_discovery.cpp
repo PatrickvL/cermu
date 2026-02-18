@@ -15,75 +15,145 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #define PATH_SEPARATOR '/'
+#ifdef __APPLE__
+#include <mach-o/dyld.h>  // _NSGetExecutablePath
+#endif
 #endif
 
-bool system_config_discover_data_root(const char* system_name, char* out_path, size_t path_size) {
-    if (!system_name || !out_path || path_size < 256) {
-        return false;
-    }
-    
-    char current_path[1024];
-    char test_path[1024];
-    
-    // Get executable directory or current working directory
+// ---------------------------------------------------------------------------
+// get_executable_dir — resolve the directory containing the running executable
+//
+// Priority: executable path (reliable across CWD changes) → CWD fallback.
+// On Linux we read /proc/self/exe; on macOS _NSGetExecutablePath(); on Windows
+// GetModuleFileNameA().  CWD is only used when the platform call fails.
+// ---------------------------------------------------------------------------
+static bool get_executable_dir(char* out, size_t out_size) {
+    if (!out || out_size < 2) return false;
+
 #ifdef _WIN32
-    DWORD result = GetModuleFileNameA(NULL, current_path, sizeof(current_path));
-    if (result == 0) {
-        return false;
+    DWORD n = GetModuleFileNameA(NULL, out, (DWORD)out_size);
+    if (n == 0 || n >= out_size) return false;
+#elif defined(__APPLE__)
+    uint32_t bufsize = (uint32_t)out_size;
+    if (_NSGetExecutablePath(out, &bufsize) != 0) {
+        // Buffer too small or call failed — fall back to CWD
+        if (!getcwd(out, out_size)) return false;
+        return true;  // CWD has no filename to strip
     }
-    // Remove executable filename, keep directory
-    char* last_slash = strrchr(current_path, PATH_SEPARATOR);
-    if (last_slash) {
-        *last_slash = '\0';
+    // Resolve symlinks so we get the real directory
+    char resolved[1024];
+    if (realpath(out, resolved)) {
+        strncpy(out, resolved, out_size - 1);
+        out[out_size - 1] = '\0';
     }
-#else
-    if (!getcwd(current_path, sizeof(current_path))) {
-        return false;
+#else  // Linux / other POSIX
+    ssize_t len = readlink("/proc/self/exe", out, out_size - 1);
+    if (len > 0) {
+        out[len] = '\0';
+    } else {
+        // /proc not available — fall back to CWD
+        if (!getcwd(out, out_size)) return false;
+        return true;  // CWD has no filename to strip
     }
 #endif
-    
-    // Search upwards for data folder
+
+    // Strip the executable filename, keep just the directory
+    char* last_sep = strrchr(out, PATH_SEPARATOR);
+    if (last_sep && last_sep != out) {
+        *last_sep = '\0';
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// dir_exists — check if a path is an existing directory
+// ---------------------------------------------------------------------------
+static bool dir_exists(const char* path) {
+#ifdef _WIN32
+    DWORD attrs = GetFileAttributesA(path);
+    return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY);
+#else
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+#endif
+}
+
+// ---------------------------------------------------------------------------
+// search_upward_for_data — walk parent dirs looking for data/<system_name>
+// ---------------------------------------------------------------------------
+static bool search_upward_for_data(const char* start_dir, const char* system_name,
+                                   char* out_path, size_t path_size) {
     char search_path[1024];
-    strncpy(search_path, current_path, sizeof(search_path) - 1);
+    char test_path[1024];
+    strncpy(search_path, start_dir, sizeof(search_path) - 1);
     search_path[sizeof(search_path) - 1] = '\0';
-    
-    for (int depth = 0; depth < 10; depth++) {  // Limit search depth
-        // Construct test path: search_path/data/system_name
-        size_t search_len = strlen(search_path);
-        size_t system_len = strlen(system_name);
-        size_t needed_len = search_len + system_len + 8; // +8 for separators and "data"
-        if (needed_len >= sizeof(test_path)) {
-            continue; // Skip if path would be too long
-        }
+
+    for (int depth = 0; depth < 10; depth++) {
         int len = snprintf(test_path, sizeof(test_path), "%s%cdata%c%s",
-                             search_path, PATH_SEPARATOR, PATH_SEPARATOR, system_name);
-        if (len < 0 || (size_t)len >= sizeof(test_path)) {
-            continue; // Path was truncated, skip
-        }
-        
-        // Check if directory exists
-#ifdef _WIN32
-        DWORD attrs = GetFileAttributesA(test_path);
-        if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY)) {
-#else
-        struct stat st;
-        if (stat(test_path, &st) == 0 && S_ISDIR(st.st_mode)) {
-#endif
-            // Found the data directory
+                           search_path, PATH_SEPARATOR, PATH_SEPARATOR, system_name);
+        if (len < 0 || (size_t)len >= sizeof(test_path)) { /* truncated */ }
+        else if (dir_exists(test_path)) {
             strncpy(out_path, test_path, path_size - 1);
             out_path[path_size - 1] = '\0';
             printf("Data root discovered: %s\n", out_path);
             return true;
         }
-        
-        // Move up one directory level
-        char* last_separator = strrchr(search_path, PATH_SEPARATOR);
-        if (!last_separator || last_separator == search_path) {
-            break;  // Reached root
-        }
-        *last_separator = '\0';
+
+        char* last_sep = strrchr(search_path, PATH_SEPARATOR);
+        if (!last_sep || last_sep == search_path) break;
+        *last_sep = '\0';
     }
-    
+    return false;
+}
+
+// ---------------------------------------------------------------------------
+// search_upward_for_roms — walk parent dirs looking for data/<system>/roms
+// ---------------------------------------------------------------------------
+static bool search_upward_for_roms(const char* start_dir, const char* system_name,
+                                   char* out_path, size_t path_size) {
+    char search_path[1024];
+    char test_path[1024];
+    strncpy(search_path, start_dir, sizeof(search_path) - 1);
+    search_path[sizeof(search_path) - 1] = '\0';
+
+    for (int depth = 0; depth < 10; depth++) {
+        int len = snprintf(test_path, sizeof(test_path), "%s%cdata%c%s%croms",
+                           search_path, PATH_SEPARATOR, PATH_SEPARATOR,
+                           system_name, PATH_SEPARATOR);
+        if (len < 0 || (size_t)len >= sizeof(test_path)) { /* truncated */ }
+        else if (dir_exists(test_path)) {
+            strncpy(out_path, test_path, path_size - 1);
+            out_path[path_size - 1] = '\0';
+            printf("ROM root discovered: %s\n", out_path);
+            return true;
+        }
+
+        char* last_sep = strrchr(search_path, PATH_SEPARATOR);
+        if (!last_sep || last_sep == search_path) break;
+        *last_sep = '\0';
+    }
+    return false;
+}
+
+bool system_config_discover_data_root(const char* system_name, char* out_path, size_t path_size) {
+    if (!system_name || !out_path || path_size < 256) {
+        return false;
+    }
+
+    // 1) Search upward from executable directory (primary)
+    char exe_dir[1024];
+    if (get_executable_dir(exe_dir, sizeof(exe_dir))) {
+        if (search_upward_for_data(exe_dir, system_name, out_path, path_size))
+            return true;
+    }
+
+    // 2) Fallback: search upward from CWD (covers in-tree dev builds)
+    char cwd[1024];
+    if (getcwd(cwd, sizeof(cwd)) && strcmp(cwd, exe_dir) != 0) {
+        if (search_upward_for_data(cwd, system_name, out_path, path_size))
+            return true;
+    }
+
     printf("Warning: Could not find data root folder for system '%s'\n", system_name);
     return false;
 }
@@ -92,69 +162,21 @@ bool system_config_discover_rom_root(const char* system_name, char* out_path, si
     if (!system_name || !out_path || path_size < 256) {
         return false;
     }
-    
-    char current_path[1024];
-    char test_path[1024];
-    
-    // Get executable directory or current working directory
-#ifdef _WIN32
-    DWORD result = GetModuleFileNameA(NULL, current_path, sizeof(current_path));
-    if (result == 0) {
-        return false;
-    }
-    // Remove executable filename, keep directory
-    char* last_slash = strrchr(current_path, PATH_SEPARATOR);
-    if (last_slash) {
-        *last_slash = '\0';
-    }
-#else
-    if (!getcwd(current_path, sizeof(current_path))) {
-        return false;
-    }
-#endif
-    
-    // Search upwards for data folder
-    char search_path[1024];
-    strncpy(search_path, current_path, sizeof(search_path) - 1);
-    search_path[sizeof(search_path) - 1] = '\0';
-    
-    for (int depth = 0; depth < 10; depth++) {  // Limit search depth
-        // Construct test path: search_path/data/system_name/roms
-        size_t search_len = strlen(search_path);
-        size_t system_len = strlen(system_name);
-        size_t needed_len = search_len + system_len + 12; // +12 for separators, "data", and "roms"
-        if (needed_len >= sizeof(test_path)) {
-            continue; // Skip if path would be too long
-        }
-        int len = snprintf(test_path, sizeof(test_path), "%s%cdata%c%s%croms",
-                             search_path, PATH_SEPARATOR, PATH_SEPARATOR, system_name, PATH_SEPARATOR);
-        if (len < 0 || (size_t)len >= sizeof(test_path)) {
-            continue; // Path was truncated, skip
-        }
-        
-        // Check if directory exists
-#ifdef _WIN32
-        DWORD attrs = GetFileAttributesA(test_path);
-        if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY)) {
-#else
-        struct stat st;
-        if (stat(test_path, &st) == 0 && S_ISDIR(st.st_mode)) {
-#endif
-            // Found the ROM directory
-            strncpy(out_path, test_path, path_size - 1);
-            out_path[path_size - 1] = '\0';
-            printf("ROM root discovered: %s\n", out_path);
+
+    // 1) Search upward from executable directory (primary)
+    char exe_dir[1024];
+    if (get_executable_dir(exe_dir, sizeof(exe_dir))) {
+        if (search_upward_for_roms(exe_dir, system_name, out_path, path_size))
             return true;
-        }
-        
-        // Move up one directory level
-        char* last_separator = strrchr(search_path, PATH_SEPARATOR);
-        if (!last_separator || last_separator == search_path) {
-            break;  // Reached root
-        }
-        *last_separator = '\0';
     }
-    
+
+    // 2) Fallback: search upward from CWD (covers in-tree dev builds)
+    char cwd[1024];
+    if (getcwd(cwd, sizeof(cwd)) && strcmp(cwd, exe_dir) != 0) {
+        if (search_upward_for_roms(cwd, system_name, out_path, path_size))
+            return true;
+    }
+
     printf("Warning: Could not find ROM root folder for system '%s'\n", system_name);
     return false;
 }
