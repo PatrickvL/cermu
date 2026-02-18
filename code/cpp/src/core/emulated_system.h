@@ -236,6 +236,7 @@ protected:
     // Emulation state
     uint64_t total_cycles_;
     float speed_multiplier_;
+    bool quit_requested_;
     
 public:
     EmulatedSystem();
@@ -249,6 +250,8 @@ public:
     const AudioTraits& get_audio_traits() const;
     uint64_t get_total_cycles() const;
     float get_speed_multiplier() const;
+    bool is_quit_requested() const { return quit_requested_; }
+    void request_quit() { quit_requested_ = true; }
     
     // Default implementations (can be overridden if needed)
     virtual void set_framebuffer(uint32_t* buffer, int width, int height);

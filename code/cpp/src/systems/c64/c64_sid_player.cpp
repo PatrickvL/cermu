@@ -109,11 +109,183 @@ void c64_write_sid_info_page(uint8_t* screen, uint8_t* color,
 }
 
 // =============================================================================
+// 6502 Stub Builder — Helper functions
+// =============================================================================
+
+// Memory layout in the cassette buffer ($0340-$03FF):
+//   $0340-$038F  — Init/playback stub (executed once at startup)
+//   $0390-$03AF  — IRQ handler (called by hardware IRQ vector)
+static constexpr uint16_t STUB_BASE   = 0x0340;
+static constexpr uint16_t IRQ_HANDLER = 0x0390;
+
+/**
+ * Build a self-contained IRQ handler at IRQ_HANDLER ($0390).
+ *
+ * This handler is fully independent of KERNAL ROM — it saves/restores
+ * all CPU registers, ensures correct RAM banking, calls the SID play
+ * routine, acknowledges the CIA1 timer interrupt, and returns via RTI.
+ *
+ * The 6510 hardware IRQ pushes P and PC onto the stack, then fetches
+ * the handler address from $FFFE/$FFFF.  With KERNAL banked out ($01=$35),
+ * these bytes are read from RAM where we've written this handler's address.
+ */
+static void build_irq_handler(uint8_t* ram, uint16_t play_addr,
+                               uint8_t banking) {
+    uint16_t p = IRQ_HANDLER;
+
+    ram[p++] = 0x48;                      // PHA
+    ram[p++] = 0x8A;                      // TXA
+    ram[p++] = 0x48;                      // PHA
+    ram[p++] = 0x98;                      // TYA
+    ram[p++] = 0x48;                      // PHA
+
+    ram[p++] = 0xA9; ram[p++] = banking;  // LDA #banking
+    ram[p++] = 0x85; ram[p++] = 0x01;     // STA $01
+
+    ram[p++] = 0x20;                      // JSR play_addr
+    ram[p++] = (uint8_t)(play_addr & 0xFF);
+    ram[p++] = (uint8_t)(play_addr >> 8);
+
+    ram[p++] = 0xAD; ram[p++] = 0x0D;    // LDA $DC0D (acknowledge CIA1)
+    ram[p++] = 0xDC;
+
+    ram[p++] = 0x68;                      // PLA
+    ram[p++] = 0xA8;                      // TAY
+    ram[p++] = 0x68;                      // PLA
+    ram[p++] = 0xAA;                      // TAX
+    ram[p++] = 0x68;                      // PLA
+    ram[p++] = 0x40;                      // RTI
+}
+
+/**
+ * Build the init/playback stub at STUB_BASE ($0340).
+ *
+ * For PSID with play_addr != 0 (we manage the playback IRQ):
+ *   SEI
+ *   Set border/background colours
+ *   Disable ALL CIA interrupt sources + acknowledge pending
+ *   LDA #$35 / STA $01          — bank out BASIC+KERNAL, keep I/O
+ *   Write IRQ handler addr → $FFFE/$FFFF in RAM
+ *   LDA #subtune / JSR init     — init BEFORE starting timer
+ *   Set CIA1 Timer A + enable + start
+ *   CLI / JMP self
+ *
+ * For PSID play_addr==0 or RSID (tune manages its own IRQ):
+ *   SEI
+ *   Set border/background colours
+ *   Disable CIA interrupts + acknowledge
+ *   LDA #$35 / STA $01          — RAM visible for init (PSID)
+ *     or LDA #$37 / STA $01     — ROMs visible (RSID)
+ *   LDA #subtune / JSR init
+ *   LDA #$36 / STA $01          — KERNAL back for IRQ dispatch (PSID only)
+ *   CLI / JMP self
+ */
+static void build_init_stub(uint8_t* ram,
+                             const sid_header_t* sid,
+                             uint16_t subtune,
+                             uint16_t timer_period,
+                             bool needs_timer_irq) {
+    uint16_t p = STUB_BASE;
+
+    ram[p++] = 0x78;  // SEI
+
+    // Set VIC-II border ($D020) = dark blue, background ($D021) = black
+    ram[p++] = 0xA9; ram[p++] = 0x06;                    // LDA #$06
+    ram[p++] = 0x8D; ram[p++] = 0x20; ram[p++] = 0xD0;  // STA $D020
+    ram[p++] = 0xA9; ram[p++] = 0x00;                    // LDA #$00
+    ram[p++] = 0x8D; ram[p++] = 0x21; ram[p++] = 0xD0;  // STA $D021
+
+    // Disable ALL CIA interrupt sources and acknowledge any pending.
+    // This prevents leftover KERNAL timer/keyboard IRQs from firing
+    // before our handler is installed.
+    ram[p++] = 0xA9; ram[p++] = 0x7F;                    // LDA #$7F
+    ram[p++] = 0x8D; ram[p++] = 0x0D; ram[p++] = 0xDC;  // STA $DC0D
+    ram[p++] = 0x8D; ram[p++] = 0x0D; ram[p++] = 0xDD;  // STA $DD0D
+    ram[p++] = 0xAD; ram[p++] = 0x0D; ram[p++] = 0xDC;  // LDA $DC0D (ack)
+    ram[p++] = 0xAD; ram[p++] = 0x0D; ram[p++] = 0xDD;  // LDA $DD0D (ack)
+
+    if (needs_timer_irq) {
+        // ---- PSID with play_addr != 0: we manage the playback IRQ ----
+
+        // Bank out BASIC + KERNAL ROMs, keep I/O visible ($01=$35).
+        // This is essential for tunes loaded at $A000-$BFFF (BASIC ROM
+        // territory) or $E000-$FFFF (KERNAL ROM territory).  PSID tunes
+        // are self-contained and never need ROM routines.
+        ram[p++] = 0xA9; ram[p++] = 0x35;                // LDA #$35
+        ram[p++] = 0x85; ram[p++] = 0x01;                // STA $01
+
+        // Write our IRQ handler address to the hardware vector $FFFE/$FFFF.
+        // With KERNAL banked out, the 6510 reads these from RAM on IRQ.
+        ram[p++] = 0xA9;
+        ram[p++] = (uint8_t)(IRQ_HANDLER & 0xFF);        // LDA #<handler
+        ram[p++] = 0x8D; ram[p++] = 0xFE; ram[p++] = 0xFF;  // STA $FFFE
+        ram[p++] = 0xA9;
+        ram[p++] = (uint8_t)(IRQ_HANDLER >> 8);           // LDA #>handler
+        ram[p++] = 0x8D; ram[p++] = 0xFF; ram[p++] = 0xFF;  // STA $FFFF
+
+        // Call SID init routine BEFORE starting the timer.
+        // Some init routines reconfigure CIA timers, so we must not
+        // clobber their setup by writing timer values too early.
+        ram[p++] = 0xA9; ram[p++] = (uint8_t)subtune;    // LDA #subtune
+        ram[p++] = 0x20;                                   // JSR init_addr
+        ram[p++] = (uint8_t)(sid->init_addr & 0xFF);
+        ram[p++] = (uint8_t)(sid->init_addr >> 8);
+
+        // Set CIA1 Timer A period
+        ram[p++] = 0xA9;
+        ram[p++] = (uint8_t)(timer_period & 0xFF);        // LDA #<timer
+        ram[p++] = 0x8D; ram[p++] = 0x04; ram[p++] = 0xDC;  // STA $DC04
+        ram[p++] = 0xA9;
+        ram[p++] = (uint8_t)(timer_period >> 8);           // LDA #>timer
+        ram[p++] = 0x8D; ram[p++] = 0x05; ram[p++] = 0xDC;  // STA $DC05
+
+        // Enable CIA1 Timer A interrupt
+        ram[p++] = 0xA9; ram[p++] = 0x81;                // LDA #$81
+        ram[p++] = 0x8D; ram[p++] = 0x0D; ram[p++] = 0xDC;  // STA $DC0D
+
+        // Start Timer A in continuous mode
+        ram[p++] = 0xA9; ram[p++] = 0x11;                // LDA #$11
+        ram[p++] = 0x8D; ram[p++] = 0x0E; ram[p++] = 0xDC;  // STA $DC0E
+
+    } else {
+        // ---- PSID play_addr==0 or RSID: tune manages its own IRQ ----
+
+        // For PSID: bank out ROMs so init code in RAM is visible ($01=$35)
+        // For RSID: keep all ROMs visible as required by spec ($01=$37)
+        uint8_t init_banking = (sid->type == SID_TYPE_RSID) ? 0x37 : 0x35;
+        ram[p++] = 0xA9; ram[p++] = init_banking;        // LDA #banking
+        ram[p++] = 0x85; ram[p++] = 0x01;                // STA $01
+
+        // Call init — the tune installs its own interrupt handler
+        ram[p++] = 0xA9; ram[p++] = (uint8_t)subtune;    // LDA #subtune
+        ram[p++] = 0x20;                                   // JSR init_addr
+        ram[p++] = (uint8_t)(sid->init_addr & 0xFF);
+        ram[p++] = (uint8_t)(sid->init_addr >> 8);
+
+        // For PSID: after init, switch to $36 so the KERNAL IRQ dispatcher
+        // at $FF48 is visible.  Many PSID tunes hook $0314/$0315 (the
+        // KERNAL software IRQ vector) rather than writing $FFFE/$FFFF.
+        // $36 keeps I/O + KERNAL visible, BASIC ROM banked out.
+        if (sid->type != SID_TYPE_RSID) {
+            ram[p++] = 0xA9; ram[p++] = 0x36;            // LDA #$36
+            ram[p++] = 0x85; ram[p++] = 0x01;            // STA $01
+        }
+    }
+
+    // CLI + infinite idle loop
+    ram[p++] = 0x58;  // CLI
+    uint16_t loop_addr = p;
+    ram[p++] = 0x4C;  // JMP loop_addr
+    ram[p++] = (uint8_t)(loop_addr & 0xFF);
+    ram[p++] = (uint8_t)(loop_addr >> 8);
+}
+
+// =============================================================================
 // SID Loader — Payload injection + 6502 player stub
 // =============================================================================
 
 void c64_apply_sid_load(c64_t* c64, const sid_header_t* sid,
-                        const program_data_t* prog) {
+                        const program_data_t* prog, uint16_t subtune) {
     if (!sid || !c64 || !c64->ram) return;
 
     const char* type_str = (sid->type == SID_TYPE_RSID) ? "RSID" : "PSID";
@@ -126,7 +298,7 @@ void c64_apply_sid_load(c64_t* c64, const sid_header_t* sid,
     mos6510_t* cpu = (mos6510_t*)c64->mos6510;
 
     // ---- Step 1: Write tune payload to C64 RAM ----
-    if (prog->data && prog->data_size > 0) {
+    if (prog && prog->data && prog->data_size > 0) {
         memcpy(&ram[sid->load_addr], prog->data, prog->data_size);
         printf("C64: SID payload written: $%04X–$%04X (%zu bytes)\n",
                sid->load_addr,
@@ -145,9 +317,6 @@ void c64_apply_sid_load(c64_t* c64, const sid_header_t* sid,
     }
 
     // ---- Step 3: Determine playback timer period ----
-    uint16_t subtune = sid->start_song;
-    if (subtune > 0) subtune--;  // Convert 1-based to 0-based index
-
     bool use_cia_rate = false;
     if (subtune < 32) {
         use_cia_rate = (sid->speed_flags >> subtune) & 1;
@@ -166,92 +335,16 @@ void c64_apply_sid_load(c64_t* c64, const sid_header_t* sid,
         c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
     }
 
-    // ---- Step 5: Inject 6502 player stub at $0340 (cassette buffer) ----
-    const uint16_t STUB_BASE   = 0x0340;
-    const uint16_t IRQ_HANDLER = 0x0380;
-
+    // ---- Step 5: Inject 6502 player stub ----
     bool needs_timer_irq = (sid->type == SID_TYPE_PSID && sid->play_addr != 0);
 
     if (needs_timer_irq) {
-        // Build the IRQ handler first (at $0380)
-        uint16_t p = IRQ_HANDLER;
-        ram[p++] = 0x20;  // JSR play_addr
-        ram[p++] = (uint8_t)(sid->play_addr & 0xFF);
-        ram[p++] = (uint8_t)(sid->play_addr >> 8);
-        ram[p++] = 0xAD;  // LDA $DC0D (acknowledge CIA1 interrupt)
-        ram[p++] = 0x0D;
-        ram[p++] = 0xDC;
-        ram[p++] = 0x4C;  // JMP $EA81 (KERNAL IRQ exit)
-        ram[p++] = 0x81;
-        ram[p++] = 0xEA;
-
-        // Build the init stub (at $0340)
-        p = STUB_BASE;
-        ram[p++] = 0x78;  // SEI
-
-        // Set VIC-II border ($D020) = dark blue ($06), background ($D021) = black ($00)
-        ram[p++] = 0xA9; ram[p++] = 0x06;  // LDA #$06
-        ram[p++] = 0x8D; ram[p++] = 0x20; ram[p++] = 0xD0;  // STA $D020
-        ram[p++] = 0xA9; ram[p++] = 0x00;  // LDA #$00
-        ram[p++] = 0x8D; ram[p++] = 0x21; ram[p++] = 0xD0;  // STA $D021
-
-        // Hook IRQ vector $0314/$0315 → our handler
-        ram[p++] = 0xA9; ram[p++] = (uint8_t)(IRQ_HANDLER & 0xFF);  // LDA #<IRQ_HANDLER
-        ram[p++] = 0x8D; ram[p++] = 0x14; ram[p++] = 0x03;          // STA $0314
-        ram[p++] = 0xA9; ram[p++] = (uint8_t)(IRQ_HANDLER >> 8);    // LDA #>IRQ_HANDLER
-        ram[p++] = 0x8D; ram[p++] = 0x15; ram[p++] = 0x03;          // STA $0315
-
-        // Set CIA1 Timer A period
-        ram[p++] = 0xA9; ram[p++] = (uint8_t)(timer_period & 0xFF);  // LDA #<timer
-        ram[p++] = 0x8D; ram[p++] = 0x04; ram[p++] = 0xDC;           // STA $DC04
-        ram[p++] = 0xA9; ram[p++] = (uint8_t)(timer_period >> 8);    // LDA #>timer
-        ram[p++] = 0x8D; ram[p++] = 0x05; ram[p++] = 0xDC;           // STA $DC05
-
-        // Enable CIA1 Timer A interrupt
-        ram[p++] = 0xA9; ram[p++] = 0x81;  // LDA #$81
-        ram[p++] = 0x8D; ram[p++] = 0x0D; ram[p++] = 0xDC;  // STA $DC0D
-
-        // Start Timer A in continuous mode
-        ram[p++] = 0xA9; ram[p++] = 0x11;  // LDA #$11
-        ram[p++] = 0x8D; ram[p++] = 0x0E; ram[p++] = 0xDC;  // STA $DC0E
-
-        // Call init subroutine: LDA #subtune, JSR init_addr
-        ram[p++] = 0xA9; ram[p++] = (uint8_t)subtune;  // LDA #subtune
-        ram[p++] = 0x20;  // JSR init_addr
-        ram[p++] = (uint8_t)(sid->init_addr & 0xFF);
-        ram[p++] = (uint8_t)(sid->init_addr >> 8);
-
-        // CLI + infinite loop
-        ram[p++] = 0x58;  // CLI
-        uint16_t loop_addr = p;
-        ram[p++] = 0x4C;  // JMP loop_addr
-        ram[p++] = (uint8_t)(loop_addr & 0xFF);
-        ram[p++] = (uint8_t)(loop_addr >> 8);
-
-        printf("C64: Player stub at $%04X, IRQ handler at $%04X\n",
-               STUB_BASE, IRQ_HANDLER);
-    } else {
-        // PSID with play_addr==0, or RSID:
-        // Just call init with subtune — the tune sets up its own IRQ handler.
-        uint16_t p = STUB_BASE;
-
-        // Set VIC-II border and background colours
-        ram[p++] = 0xA9; ram[p++] = 0x06;  // LDA #$06
-        ram[p++] = 0x8D; ram[p++] = 0x20; ram[p++] = 0xD0;  // STA $D020
-        ram[p++] = 0xA9; ram[p++] = 0x00;  // LDA #$00
-        ram[p++] = 0x8D; ram[p++] = 0x21; ram[p++] = 0xD0;  // STA $D021
-
-        ram[p++] = 0xA9; ram[p++] = (uint8_t)subtune;  // LDA #subtune
-        ram[p++] = 0x20;  // JSR init_addr
-        ram[p++] = (uint8_t)(sid->init_addr & 0xFF);
-        ram[p++] = (uint8_t)(sid->init_addr >> 8);
-        uint16_t loop_addr = p;
-        ram[p++] = 0x4C;  // JMP loop_addr
-        ram[p++] = (uint8_t)(loop_addr & 0xFF);
-        ram[p++] = (uint8_t)(loop_addr >> 8);
-
-        printf("C64: Init-only stub at $%04X (tune manages own IRQ)\n", STUB_BASE);
+        build_irq_handler(ram, sid->play_addr, 0x35);
     }
+    build_init_stub(ram, sid, subtune, timer_period, needs_timer_irq);
+
+    printf("C64: Player stub at $%04X%s\n", STUB_BASE,
+           needs_timer_irq ? ", self-contained IRQ at $0390" : " (init-only)");
 
     // ---- Step 6: Set CPU to execute the stub ----
     mos6510_set_a(cpu, (uint8_t)subtune);
@@ -261,5 +354,60 @@ void c64_apply_sid_load(c64_t* c64, const sid_header_t* sid,
     mos6510_set_pc(cpu, STUB_BASE);
     mos6510_transition_to_fetch(cpu);  // Reset pipeline for clean fetch
 
-    printf("C64: PC set to $%04X — SID playback starting\n", STUB_BASE);
+    printf("C64: PC set to $%04X — subtune %u/%u starting\n",
+           STUB_BASE, subtune + 1, sid->num_songs);
+}
+
+// =============================================================================
+// Subtune Switch — Lightweight re-init without full reload
+// =============================================================================
+
+void c64_sid_switch_subtune(c64_t* c64, const sid_header_t* sid,
+                             const uint8_t* payload, size_t payload_size,
+                             uint16_t subtune) {
+    if (!sid || !c64 || !c64->ram) return;
+
+    uint8_t* ram = c64->ram->memory;
+    mos6510_t* cpu = (mos6510_t*)c64->mos6510;
+
+    // ---- Silence SID: reset all voice state ----
+    if (c64->sid) {
+        mos6581_reset(c64->sid);
+    }
+
+    // ---- Re-copy payload (in case the tune self-modified during play) ----
+    if (payload && payload_size > 0) {
+        memcpy(&ram[sid->load_addr], payload, payload_size);
+    }
+
+    // ---- Determine timer period ----
+    bool use_cia_rate = false;
+    if (subtune < 32) {
+        use_cia_rate = (sid->speed_flags >> subtune) & 1;
+    }
+    uint16_t timer_period = use_cia_rate ? 16421 : 19705;
+
+    // ---- Update info page ----
+    uint8_t* screen_ram = &ram[0x0400];
+    uint8_t* color_ram = c64->colorram ? c64->colorram->memory : nullptr;
+    if (color_ram) {
+        c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
+    }
+
+    // ---- Re-inject stub ----
+    bool needs_timer_irq = (sid->type == SID_TYPE_PSID && sid->play_addr != 0);
+    if (needs_timer_irq) {
+        build_irq_handler(ram, sid->play_addr, 0x35);
+    }
+    build_init_stub(ram, sid, subtune, timer_period, needs_timer_irq);
+
+    // ---- Reset CPU to start of stub ----
+    mos6510_set_a(cpu, (uint8_t)subtune);
+    mos6510_set_x(cpu, 0);
+    mos6510_set_y(cpu, 0);
+    mos6510_set_s(cpu, 0xFF);
+    mos6510_set_pc(cpu, STUB_BASE);
+    mos6510_transition_to_fetch(cpu);
+
+    printf("C64: Switched to subtune %u/%u\n", subtune + 1, sid->num_songs);
 }

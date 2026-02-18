@@ -208,20 +208,32 @@ int main(int argc, char** argv) {
             printf("\n=== Frame %d ===\n", frame_count);
             uint8_t d011 = c64->vicii->registers.data[0x11];
             uint8_t d016 = c64->vicii->registers.data[0x16];
+            uint8_t d018 = c64->vicii->registers.data[0x18];
             uint8_t d020 = c64->vicii->registers.data[0x20];
             uint8_t d021 = c64->vicii->registers.data[0x21];
             uint8_t yscroll = d011 & 0x07;
             uint8_t xscroll = d016 & 0x07;
             bool csel = (d016 & 0x08) != 0;
-            printf("$D011=$%02X $D016=$%02X $D020=$%02X $D021=$%02X YSCROLL=%d XSCROLL=%d CSEL=%d\n",
-                   d011, d016, d020, d021, yscroll, xscroll, csel?1:0);
+            uint16_t bank_base = c64->vicii->memory.bank_base;
+            uint16_t vm_base = c64->vicii->memory.vm_base;
+            uint16_t cb_base = c64->vicii->memory.cb_base;
+            printf("$D011=$%02X $D016=$%02X $D018=$%02X $D020=$%02X $D021=$%02X YSCROLL=%d XSCROLL=%d CSEL=%d\n",
+                   d011, d016, d018, d020, d021, yscroll, xscroll, csel?1:0);
+            printf("VIC bank=%d base=$%04X  VM=$%04X (abs=$%04X)  CB=$%04X (abs=$%04X)\n",
+                   bank_base / 0x4000, bank_base, vm_base, bank_base | vm_base, cb_base, bank_base | cb_base);
+            // Show what VIC-II actually reads for character data
+            // Check if CHARROM is active at cb_base (banks 1 and 9 have CHARROM)
+            uint16_t abs_cb = bank_base | cb_base;
+            bool charrom_at_cb = (abs_cb == 0x1000 || abs_cb == 0x9000);
+            printf("VIC reads from: %s at $%04X\n", charrom_at_cb ? "CHARROM" : "RAM", abs_cb);
             
-            // Screen codes
-            printf("Screen[0..9]: ");
-            for (int i = 0; i < 10; i++) printf("$%02X ", c64->ram->memory[0x0400+i]);
+            // Screen codes (from what VIC sees - vm_base in RAM)
+            uint16_t abs_vm = bank_base | vm_base;
+            printf("Screen at $%04X[0..9]: ", abs_vm);
+            for (int i = 0; i < 10; i++) printf("$%02X ", c64->ram->memory[abs_vm+i]);
             printf("\n");
-            printf("Screen[$0400+40..49]: ");
-            for (int i = 40; i < 50; i++) printf("$%02X ", c64->ram->memory[0x0400+i]);
+            printf("Screen at $%04X+40..49: ", abs_vm);
+            for (int i = 40; i < 50; i++) printf("$%02X ", c64->ram->memory[abs_vm+i]);
             printf("\n");
             
             // Color RAM
@@ -230,12 +242,9 @@ int main(int argc, char** argv) {
             printf("\n");
             
             // Character ROM reference for screen code at position 5
-            uint8_t sc = c64->ram->memory[0x0400+5];
-            uint8_t sc_row1_5 = c64->ram->memory[0x0400+40+5];
+            uint8_t sc = c64->ram->memory[abs_vm+5];
+            uint8_t sc_row1_5 = c64->ram->memory[abs_vm+40+5];
             printf("CharROM ref for sc=$%02X: ", sc);
-            // Read from character ROM chip (offset $D000 in VIC-II bank 0)
-            // The character ROM is at the chip labeled 'characters' 
-            // For a C64, the character ROM is mapped at $D000-$DFFF in VIC-II address space
             if (c64->charrom && c64->charrom->memory) {
                 for (int row = 0; row < 8; row++) {
                     printf("$%02X ", c64->charrom->memory[sc * 8 + row]);
@@ -246,6 +255,16 @@ int main(int argc, char** argv) {
             if (c64->charrom && c64->charrom->memory) {
                 for (int row = 0; row < 8; row++) {
                     printf("$%02X ", c64->charrom->memory[sc_row1_5 * 8 + row]);
+                }
+            }
+            printf("\n");
+            // What VIC-II actually reads: if CHARROM active, use charrom, else RAM
+            printf("VIC-II actual char data for sc=$%02X: ", sc_row1_5);
+            for (int row = 0; row < 8; row++) {
+                if (charrom_at_cb && c64->charrom && c64->charrom->memory) {
+                    printf("$%02X ", c64->charrom->memory[sc_row1_5 * 8 + row]);
+                } else {
+                    printf("$%02X ", c64->ram->memory[abs_cb + sc_row1_5 * 8 + row]);
                 }
             }
             printf("\n");
@@ -331,6 +350,26 @@ int main(int argc, char** argv) {
         // Use stbi_write_png via c64_save_screenshot  
         c64_save_screenshot(c64, "/tmp/vicii_dump_f200.png");
         printf("Done. Check /tmp/vicii_dump_f200.png\n");
+        
+        // Save full 64K RAM dump for offline analysis of decompressed demos
+        {
+            FILE* f = fopen("/tmp/c64_memdump.bin", "wb");
+            if (f) {
+                fwrite(c64->ram->memory, 1, 65536, f);
+                fclose(f);
+                printf("Saved 64K RAM dump to /tmp/c64_memdump.bin\n");
+            }
+            // Also dump IRQ vector and key zero-page/hardware state
+            uint16_t irq_lo = c64->ram->memory[0xFFFE] | (c64->ram->memory[0xFFFF] << 8);
+            uint16_t nmi_lo = c64->ram->memory[0xFFFA] | (c64->ram->memory[0xFFFB] << 8);
+            // Hardware IRQ vector (from KERNAL RAM copy at $0314/$0315)
+            uint16_t hw_irq = c64->ram->memory[0x0314] | (c64->ram->memory[0x0315] << 8);
+            printf("IRQ vector: $%04X, NMI vector: $%04X, HW IRQ ($0314): $%04X\n", 
+                   irq_lo, nmi_lo, hw_irq);
+            printf("CIA1 ICR mask: $%02X, VIC $D01A: $%02X\n",
+                   c64->vicii->registers.data[0x1A],
+                   c64->vicii->registers.data[0x1A]);
+        }
         
         system->shutdown();
         return 0;
