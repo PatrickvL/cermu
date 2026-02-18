@@ -2,10 +2,8 @@
 
 #include "../../core/chip.h"
 #include "../../core/bus_cycle_interface.h"
-#include <stdint.h>
 #include "../../core/system_lines.h" // For bus_state_t
 #include <stdint.h>
-#include <stdbool.h>
 #include <stdbool.h>
 #include <math.h>
 
@@ -78,21 +76,83 @@ typedef enum {
 #define VCREG_RING   0x04
 #define VCREG_TEST   0x08
 
-// SID constants
-#define WAVEFORM_ACCUMULATOR_MAX 0xFFFFFF       // 24-bit accumulator
-#define WAVEFORM_ACCUMULATOR_MSB 0x800000       // Bit 23 (MSB)
-#define OSCILLATOR_MAX 0xFFF                    // 12-bit oscillator output
-#define ENVELOPE_MAX 0xFF                       // 8-bit envelope output (real SID)
-#define PULSE_WIDTH_MAX 0xFFF                   // 12-bit pulse width
-#define NOISE_LFSR_MASK 0x7FFFFF               // 23-bit LFSR mask
-#define SAMPLE_BUFFER_SIZE (8192)              // Reduced buffer size
+// Per-voice register offsets within a voice block
+#define VOICE_FRELO  0  // Frequency low byte
+#define VOICE_FREHI  1  // Frequency high byte
+#define VOICE_PWLO   2  // Pulse width low byte
+#define VOICE_PWHI   3  // Pulse width high nibble
+#define VOICE_VCREG  4  // Voice control register
+#define VOICE_ATDCY  5  // Attack / Decay
+#define VOICE_SUREL  6  // Sustain / Release
+#define VOICE_REGS   7  // Number of registers per voice
 
-// Envelope rate table size (16 entries, 0-15)
-#define ENVELOPE_RATE_TABLE_SIZE 16
+// Global SID register addresses
+#define SID_REG_CUTLO   0x15  // Filter cutoff low 3 bits
+#define SID_REG_CUTHI   0x16  // Filter cutoff high 8 bits
+#define SID_REG_RESON   0x17  // Filter resonance / voice routing
+#define SID_REG_SIGVOL  0x18  // Filter mode select / master volume
+#define SID_REG_POTX    0x19  // Paddle X (read-only)
+#define SID_REG_POTY    0x1A  // Paddle Y (read-only)
+#define SID_REG_OSC3    0x1B  // Oscillator 3 output (read-only)
+#define SID_REG_ENV3    0x1C  // Envelope 3 output (read-only)
 
-// Filter constants
-#define FILTER_CUTOFF_MAX 2048.0f
-#define FILTER_RESONANCE_MAX 15.0f
+// RESON register (0x17) bit fields
+#define RESON_FILT1     0x01  // Route voice 1 through filter
+#define RESON_FILT2     0x02  // Route voice 2 through filter
+#define RESON_FILT3     0x04  // Route voice 3 through filter
+#define RESON_FILTEX    0x08  // Route external input through filter
+#define RESON_RES_MASK  0xF0  // Resonance nibble (bits 4-7)
+#define RESON_RES_SHIFT 4     // Shift to extract resonance value
+
+// SIGVOL register (0x18) bit fields
+#define SIGVOL_LP       0x10  // Low-pass filter enable
+#define SIGVOL_BP       0x20  // Band-pass filter enable
+#define SIGVOL_HP       0x40  // High-pass filter enable
+#define SIGVOL_3OFF     0x80  // Voice 3 disconnect from output
+#define SIGVOL_VOL_MASK 0x0F  // Master volume nibble (bits 0-3)
+
+// SID constants — accumulator
+#define WAVEFORM_ACCUMULATOR_MAX    0xFFFFFF   // 24-bit accumulator mask
+#define WAVEFORM_ACCUMULATOR_MSB    0x800000   // Bit 23 (MSB)
+#define ACC_POWERUP_VALUE           0x555555   // VICE: even bits high on power-up
+#define ACC_BIT19                   0x080000   // Bit 19: noise LFSR clock source
+
+// SID constants — oscillator output
+#define OSCILLATOR_MAX              0xFFF      // 12-bit oscillator DAC range
+#define OSCILLATOR_CENTER           2048       // Mid-point for signed centering
+#define OSCILLATOR_SHIFT_TRI        11         // 24-bit acc → 12-bit triangle
+#define OSCILLATOR_SHIFT_SAW        12         // 24-bit acc → 12-bit sawtooth
+
+// SID constants — envelope
+#define ENVELOPE_MAX                0xFF       // 8-bit envelope output
+#define ENVELOPE_RATE_TABLE_SIZE    16         // Rate lookup entries (0-15)
+#define ENVELOPE_RATE_OVERFLOW      0x8000     // 15-bit rate counter overflow
+
+// SID constants — pulse / noise
+#define PULSE_WIDTH_MAX             0xFFF      // 12-bit pulse width
+#define NOISE_LFSR_MASK             0x7FFFFF   // 23-bit LFSR mask
+#define NOISE_LFSR_RESET            0x7FFFFE   // LFSR value after chip reset
+#define NOISE_LFSR_TEST             0x7FFFFF   // LFSR value when test bit set
+
+// SID constants — sample buffer
+#define SAMPLE_BUFFER_SIZE          8192       // SPSC ring buffer size
+
+// SID constants — filter
+#define FILTER_CUTOFF_MAX           2048.0f
+#define FILTER_RESONANCE_MAX        15.0f
+
+// SID constants — audio output
+#define SID_6581_DIGI_BIAS          0.13f      // DC bias for 6581 digi playback
+#define DC_BLOCKER_ALPHA            0.997f     // ~20 Hz high-pass coefficient
+#define SIGVOL_VOL_MAX              15.0f      // Maximum master volume (4-bit)
+#define VOLUME_CLICK_DURATION       1000       // Volume-bug click duration (cycles)
+
+// Voice register addressing helpers
+#define SID_VOICE_REG_COUNT         (3 * VOICE_REGS) // Total voice registers (21)
+
+// Unused/padding register range (reads as 0xFF)
+#define SID_REG_UNUSED_START        0x1D
+#define SID_REG_UNUSED_END          0x1F
 
 // Combined waveform lookup table size
 // Forward declarations - Modern C++ style
@@ -177,10 +237,9 @@ typedef struct voice_s {
     uint32_t pulse_output;            // Pulse waveform output
     uint32_t combined_output;         // Combined waveform output
     
-    // Sync and ring modulation state
+    // Sync state
     uint32_t prev_accumulator;        // Previous accumulator for sync detection
     bool sync_trigger;                // Sync trigger flag
-    bool ring_msb;                    // Ring modulation MSB state
     
     // Voice result and timing
     uint32_t result;                  // Final voice output
@@ -212,8 +271,9 @@ typedef struct mos6581_s {
     // Filter state
     filter_state_t filter_state;
     uint16_t filter_cutoff_frequency; // Filter cutoff frequency (CUTLO/CUTHI)
-    // Decoded fields for RESON (0x17) and SIGVOL (0x18) are read from
-    // regs[0x17] / regs[0x18] at sample-rate; no pre-decoded copies needed.
+    // Decoded fields for RESON and SIGVOL registers are read from
+    // regs[SID_REG_RESON] / regs[SID_REG_SIGVOL] at sample-rate;
+    // no pre-decoded copies needed.
 
     // Timing and sample generation
     uint32_t cycle_count;             // Cycle counter
