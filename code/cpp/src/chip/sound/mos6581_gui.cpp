@@ -284,7 +284,23 @@ void mos6581_render_settings_window(void* chip, bool* show_window) {
     ImGui::Text("SID Configuration");
     ImGui::Separator();
     
-    ImGui::Text("Chip Type: MOS6581 SID");
+    // SID Revision selector
+    {
+        static const char* revision_labels[] = {
+            "MOS 6581 (R4AR)",   // SID_REVISION_6581_R4AR
+            "MOS 8580 (R5)",     // SID_REVISION_8580_R5
+        };
+        int current = (int)sid->revision;
+        if (current < 0 || current > 1) current = 0;
+        if (ImGui::Combo("SID Revision", &current, revision_labels, IM_ARRAYSIZE(revision_labels))) {
+            mos6581_set_revision(sid, (sid_revision_t)current);
+        }
+    }
+    
+    ImGui::Separator();
+    
+    ImGui::Text("Chip Type: %s",
+        sid->revision <= SID_REVISION_6581_R4AR ? "MOS 6581 SID" : "MOS 8580 SID");
     ImGui::Text("Base Address: $D400-$D7FF");
     ImGui::Text("Register Size: 32 bytes (repeated each 32 bytes)");
     ImGui::Text("Address Mask: $1F (31)");

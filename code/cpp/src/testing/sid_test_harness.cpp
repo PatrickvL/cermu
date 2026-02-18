@@ -370,7 +370,7 @@ void execute_command(harness_t* h, const command_t* cmd) {
             if (cmd->is_8580)
                 mos6581_set_revision(h->sid, SID_REVISION_8580_R5);
             else
-                mos6581_set_revision(h->sid, SID_REVISION_6581_R2);
+                mos6581_set_revision(h->sid, SID_REVISION_6581_R4AR);
             break;
 
         case cmd_type_t::WRITE:
