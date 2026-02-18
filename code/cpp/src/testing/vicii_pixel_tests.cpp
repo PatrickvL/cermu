@@ -10,7 +10,7 @@
 // =============================================================================
 
 #include "vicii_pixel_tests.h"
-#include "asm6510.h"
+#include "asm6510.h"  // src/core/asm6510.h (via include path)
 #include "../chip/video/vic_ii/vicii_common.h"
 #include "../chip/cpu/fam65xx/mos6510.h"
 #include <cstring>

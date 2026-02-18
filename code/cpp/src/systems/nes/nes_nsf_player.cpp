@@ -22,6 +22,7 @@
 #include "nes_screen_utils.h"
 #include "nes_system.h"
 #include "../../chip/cpu/fam65xx/nes6502.h"
+#include "asm6510.h"
 #include <cstdio>
 #include <cstring>
 
@@ -147,24 +148,22 @@ void nes_write_nsf_info_page(PPU* ppu,
 // ============================================================================
 
 static void build_nmi_handler(uint8_t* ram, uint16_t play_addr) {
-    uint16_t p = NMI_HANDLER;
+    asm6510 a(ram + NMI_HANDLER, 0x20, NMI_HANDLER);
 
-    ram[p++] = 0x48;                      // PHA
-    ram[p++] = 0x8A;                      // TXA
-    ram[p++] = 0x48;                      // PHA
-    ram[p++] = 0x98;                      // TYA
-    ram[p++] = 0x48;                      // PHA
+    a.pha();
+    a.txa();
+    a.pha();
+    a.tya();
+    a.pha();
 
-    ram[p++] = 0x20;                      // JSR play_addr
-    ram[p++] = static_cast<uint8_t>(play_addr & 0xFF);
-    ram[p++] = static_cast<uint8_t>(play_addr >> 8);
+    a.jsr(play_addr);             // JSR play_addr
 
-    ram[p++] = 0x68;                      // PLA
-    ram[p++] = 0xA8;                      // TAY
-    ram[p++] = 0x68;                      // PLA
-    ram[p++] = 0xAA;                      // TAX
-    ram[p++] = 0x68;                      // PLA
-    ram[p++] = 0x40;                      // RTI
+    a.pla();
+    a.tay();
+    a.pla();
+    a.tax();
+    a.pla();
+    a.rti();
 }
 
 // ============================================================================
@@ -172,7 +171,8 @@ static void build_nmi_handler(uint8_t* ram, uint16_t play_addr) {
 // ============================================================================
 
 static void build_irq_handler(uint8_t* ram) {
-    ram[IRQ_HANDLER] = 0x40;  // RTI
+    asm6510 a(ram + IRQ_HANDLER, 1, IRQ_HANDLER);
+    a.rti();
 }
 
 // ============================================================================
@@ -195,64 +195,50 @@ static void build_init_stub(uint8_t* ram,
                              const nsf_header_t* nsf,
                              uint16_t subtune,
                              bool is_pal) {
-    uint16_t p = STUB_BASE;
+    asm6510 a(ram + STUB_BASE, 0x50, STUB_BASE);
 
     // --- CPU initialisation ---
-    ram[p++] = 0x78;  // SEI
-    ram[p++] = 0xD8;  // CLD
-    ram[p++] = 0xA2; ram[p++] = 0xFF;  // LDX #$FF
-    ram[p++] = 0x9A;                    // TXS
+    a.sei();
+    a.cld();
+    a.ldx_imm(0xFF);
+    a.txs();
 
     // --- Disable PPU during init ---
-    ram[p++] = 0xA9; ram[p++] = 0x00;                    // LDA #$00
-    ram[p++] = 0x8D; ram[p++] = 0x00; ram[p++] = 0x20;  // STA $2000 (PPUCTRL)
-    ram[p++] = 0x8D; ram[p++] = 0x01; ram[p++] = 0x20;  // STA $2001 (PPUMASK)
+    a.lda_imm(0x00);
+    a.sta_abs(0x2000);            // STA $2000 (PPUCTRL)
+    a.sta_abs(0x2001);            // STA $2001 (PPUMASK)
 
     // --- Silence APU channels ---
-    ram[p++] = 0xA9; ram[p++] = 0x00;                    // LDA #$00
-    ram[p++] = 0x8D; ram[p++] = 0x15; ram[p++] = 0x40;  // STA $4015 (APU status = all off)
+    a.lda_imm(0x00);
+    a.sta_abs(0x4015);            // STA $4015 (APU status = all off)
 
     // --- Wait for PPU warm-up (two VBlanks) ---
-    // VBlank wait 1
-    uint16_t vbl1 = p;
-    ram[p++] = 0x2C; ram[p++] = 0x02; ram[p++] = 0x20;  // BIT $2002
-    ram[p++] = 0x10;                                      // BPL
-    ram[p] = static_cast<uint8_t>(vbl1 - (p + 1));        // branch offset (relative to after operand)
-    p++;
+    auto vbl1 = a.here();
+    a.bit_abs(0x2002);            // BIT $2002
+    a.bpl(vbl1);
 
-    // VBlank wait 2
-    uint16_t vbl2 = p;
-    ram[p++] = 0x2C; ram[p++] = 0x02; ram[p++] = 0x20;  // BIT $2002
-    ram[p++] = 0x10;                                      // BPL
-    ram[p] = static_cast<uint8_t>(vbl2 - (p + 1));        // branch offset (relative to after operand)
-    p++;
+    auto vbl2 = a.here();
+    a.bit_abs(0x2002);            // BIT $2002
+    a.bpl(vbl2);
 
     // --- Call NSF init routine ---
     // A = subtune number (0-based), X = PAL flag (0=NTSC, 1=PAL)
-    ram[p++] = 0xA9; ram[p++] = static_cast<uint8_t>(subtune);  // LDA #subtune
-    ram[p++] = 0xA2; ram[p++] = is_pal ? 0x01 : 0x00;           // LDX #pal_flag
-    ram[p++] = 0x20;                                              // JSR init_addr
-    ram[p++] = static_cast<uint8_t>(nsf->init_addr & 0xFF);
-    ram[p++] = static_cast<uint8_t>(nsf->init_addr >> 8);
+    a.lda_imm(static_cast<uint8_t>(subtune));
+    a.ldx_imm(is_pal ? 0x01 : 0x00);
+    a.jsr(nsf->init_addr);
 
     // --- Enable NMI for playback ---
-    // PPU CTRL: bit 7 = NMI enable, bit 4 = BG pattern table 0
-    ram[p++] = 0xA9; ram[p++] = 0x80;                    // LDA #$80
-    ram[p++] = 0x8D; ram[p++] = 0x00; ram[p++] = 0x20;  // STA $2000
+    // PPU CTRL: bit 7 = NMI enable
+    a.store_imm(0x2000, 0x80);
 
     // Enable background rendering so NMI fires
-    ram[p++] = 0xA9; ram[p++] = 0x0A;                    // LDA #$0A
-    ram[p++] = 0x8D; ram[p++] = 0x01; ram[p++] = 0x20;  // STA $2001
+    a.store_imm(0x2001, 0x0A);
 
     // Enable APU channels (all standard channels on)
-    ram[p++] = 0xA9; ram[p++] = 0x0F;                    // LDA #$0F
-    ram[p++] = 0x8D; ram[p++] = 0x15; ram[p++] = 0x40;  // STA $4015
+    a.store_imm(0x4015, 0x0F);
 
     // --- Idle loop (NMI will call play) ---
-    uint16_t idle = p;
-    ram[p++] = 0x4C;  // JMP idle
-    ram[p++] = static_cast<uint8_t>(idle & 0xFF);
-    ram[p++] = static_cast<uint8_t>(idle >> 8);
+    a.jmp_self();
 }
 
 // ============================================================================

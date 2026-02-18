@@ -1,12 +1,17 @@
 #pragma once
 // =============================================================================
-// asm6510 — Mini 6502/6510 assembler for test harness code generation
+// asm6510 — Mini 6502/6510 assembler for runtime code generation
 // =============================================================================
 // Emits raw machine code into a caller-provided buffer. Supports:
-//   - Named opcode emission (no literal hex bytes needed in test code)
+//   - Named opcode emission (no literal hex bytes needed)
 //   - Symbolic labels with deferred branch/jump fixup
 //   - Arbitrary origin address (set_origin)
 //   - Bulk copy to emulator RAM via a callback or manual loop
+//
+// Used throughout the emulator for:
+//   - Player stubs (SID, NSF — IRQ/NMI handlers, init routines)
+//   - Test harness code generation (VIC-II pixel tests)
+//   - Any system needing runtime 6502 code construction
 //
 // Usage:
 //   uint8_t buf[256];
@@ -18,7 +23,7 @@
 //   a.lda_abs(0xD012);
 //   a.cmp_imm(100);
 //   a.bne(loop);              // branch back to label
-//   a.jmp_to(loop);           // absolute jump to label
+//   a.jmp(loop);              // absolute jump to label
 //   printf("Generated %zu bytes at $%04X\n", a.pos, a.origin);
 // =============================================================================
 

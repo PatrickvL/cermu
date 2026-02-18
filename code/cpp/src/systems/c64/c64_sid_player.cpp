@@ -6,6 +6,7 @@
 #include "c64_screen_utils.h"
 #include "../../chip/cpu/fam65xx/mos6510.h"
 #include "../../chip/sound/mos6581.h"
+#include "asm6510.h"
 #include <cstdio>
 #include <cstring>
 
@@ -131,30 +132,27 @@ static constexpr uint16_t IRQ_HANDLER = 0x0390;
  */
 static void build_irq_handler(uint8_t* ram, uint16_t play_addr,
                                uint8_t banking) {
-    uint16_t p = IRQ_HANDLER;
+    asm6510 a(ram + IRQ_HANDLER, 0x20, IRQ_HANDLER);
 
-    ram[p++] = 0x48;                      // PHA
-    ram[p++] = 0x8A;                      // TXA
-    ram[p++] = 0x48;                      // PHA
-    ram[p++] = 0x98;                      // TYA
-    ram[p++] = 0x48;                      // PHA
+    a.pha();
+    a.txa();
+    a.pha();
+    a.tya();
+    a.pha();
 
-    ram[p++] = 0xA9; ram[p++] = banking;  // LDA #banking
-    ram[p++] = 0x85; ram[p++] = 0x01;     // STA $01
+    a.lda_imm(banking);           // LDA #banking
+    a.sta_zp(0x01);               // STA $01
 
-    ram[p++] = 0x20;                      // JSR play_addr
-    ram[p++] = (uint8_t)(play_addr & 0xFF);
-    ram[p++] = (uint8_t)(play_addr >> 8);
+    a.jsr(play_addr);             // JSR play_addr
 
-    ram[p++] = 0xAD; ram[p++] = 0x0D;    // LDA $DC0D (acknowledge CIA1)
-    ram[p++] = 0xDC;
+    a.lda_abs(0xDC0D);            // LDA $DC0D (acknowledge CIA1)
 
-    ram[p++] = 0x68;                      // PLA
-    ram[p++] = 0xA8;                      // TAY
-    ram[p++] = 0x68;                      // PLA
-    ram[p++] = 0xAA;                      // TAX
-    ram[p++] = 0x68;                      // PLA
-    ram[p++] = 0x40;                      // RTI
+    a.pla();
+    a.tay();
+    a.pla();
+    a.tax();
+    a.pla();
+    a.rti();
 }
 
 /**
@@ -185,67 +183,51 @@ static void build_init_stub(uint8_t* ram,
                              uint16_t subtune,
                              uint16_t timer_period,
                              bool needs_timer_irq) {
-    uint16_t p = STUB_BASE;
+    asm6510 a(ram + STUB_BASE, 0xC0, STUB_BASE);
 
-    ram[p++] = 0x78;  // SEI
+    a.sei();
 
     // Set VIC-II border ($D020) = dark blue, background ($D021) = black
-    ram[p++] = 0xA9; ram[p++] = 0x06;                    // LDA #$06
-    ram[p++] = 0x8D; ram[p++] = 0x20; ram[p++] = 0xD0;  // STA $D020
-    ram[p++] = 0xA9; ram[p++] = 0x00;                    // LDA #$00
-    ram[p++] = 0x8D; ram[p++] = 0x21; ram[p++] = 0xD0;  // STA $D021
+    a.store_imm(0xD020, 0x06);
+    a.store_imm(0xD021, 0x00);
 
     // Disable ALL CIA interrupt sources and acknowledge any pending.
     // This prevents leftover KERNAL timer/keyboard IRQs from firing
     // before our handler is installed.
-    ram[p++] = 0xA9; ram[p++] = 0x7F;                    // LDA #$7F
-    ram[p++] = 0x8D; ram[p++] = 0x0D; ram[p++] = 0xDC;  // STA $DC0D
-    ram[p++] = 0x8D; ram[p++] = 0x0D; ram[p++] = 0xDD;  // STA $DD0D
-    ram[p++] = 0xAD; ram[p++] = 0x0D; ram[p++] = 0xDC;  // LDA $DC0D (ack)
-    ram[p++] = 0xAD; ram[p++] = 0x0D; ram[p++] = 0xDD;  // LDA $DD0D (ack)
+    a.store_imm(0xDC0D, 0x7F);
+    a.store_imm(0xDD0D, 0x7F);
+    a.lda_abs(0xDC0D);            // ack CIA1
+    a.lda_abs(0xDD0D);            // ack CIA2
 
     if (needs_timer_irq) {
         // ---- PSID with play_addr != 0: we manage the playback IRQ ----
 
         // Bank out BASIC + KERNAL ROMs, keep I/O visible ($01=$35).
-        // This is essential for tunes loaded at $A000-$BFFF (BASIC ROM
-        // territory) or $E000-$FFFF (KERNAL ROM territory).  PSID tunes
-        // are self-contained and never need ROM routines.
-        ram[p++] = 0xA9; ram[p++] = 0x35;                // LDA #$35
-        ram[p++] = 0x85; ram[p++] = 0x01;                // STA $01
+        a.lda_imm(0x35);
+        a.sta_zp(0x01);
 
         // Write our IRQ handler address to the hardware vector $FFFE/$FFFF.
         // With KERNAL banked out, the 6510 reads these from RAM on IRQ.
-        ram[p++] = 0xA9;
-        ram[p++] = (uint8_t)(IRQ_HANDLER & 0xFF);        // LDA #<handler
-        ram[p++] = 0x8D; ram[p++] = 0xFE; ram[p++] = 0xFF;  // STA $FFFE
-        ram[p++] = 0xA9;
-        ram[p++] = (uint8_t)(IRQ_HANDLER >> 8);           // LDA #>handler
-        ram[p++] = 0x8D; ram[p++] = 0xFF; ram[p++] = 0xFF;  // STA $FFFF
+        a.lda_imm(IRQ_HANDLER & 0xFF);
+        a.sta_abs(0xFFFE);
+        a.lda_imm(IRQ_HANDLER >> 8);
+        a.sta_abs(0xFFFF);
 
         // Call SID init routine BEFORE starting the timer.
-        // Some init routines reconfigure CIA timers, so we must not
-        // clobber their setup by writing timer values too early.
-        ram[p++] = 0xA9; ram[p++] = (uint8_t)subtune;    // LDA #subtune
-        ram[p++] = 0x20;                                   // JSR init_addr
-        ram[p++] = (uint8_t)(sid->init_addr & 0xFF);
-        ram[p++] = (uint8_t)(sid->init_addr >> 8);
+        a.lda_imm(static_cast<uint8_t>(subtune));
+        a.jsr(sid->init_addr);
 
         // Set CIA1 Timer A period
-        ram[p++] = 0xA9;
-        ram[p++] = (uint8_t)(timer_period & 0xFF);        // LDA #<timer
-        ram[p++] = 0x8D; ram[p++] = 0x04; ram[p++] = 0xDC;  // STA $DC04
-        ram[p++] = 0xA9;
-        ram[p++] = (uint8_t)(timer_period >> 8);           // LDA #>timer
-        ram[p++] = 0x8D; ram[p++] = 0x05; ram[p++] = 0xDC;  // STA $DC05
+        a.lda_imm(static_cast<uint8_t>(timer_period & 0xFF));
+        a.sta_abs(0xDC04);
+        a.lda_imm(static_cast<uint8_t>(timer_period >> 8));
+        a.sta_abs(0xDC05);
 
         // Enable CIA1 Timer A interrupt
-        ram[p++] = 0xA9; ram[p++] = 0x81;                // LDA #$81
-        ram[p++] = 0x8D; ram[p++] = 0x0D; ram[p++] = 0xDC;  // STA $DC0D
+        a.store_imm(0xDC0D, 0x81);
 
         // Start Timer A in continuous mode
-        ram[p++] = 0xA9; ram[p++] = 0x11;                // LDA #$11
-        ram[p++] = 0x8D; ram[p++] = 0x0E; ram[p++] = 0xDC;  // STA $DC0E
+        a.store_imm(0xDC0E, 0x11);
 
     } else {
         // ---- PSID play_addr==0 or RSID: tune manages its own IRQ ----
@@ -253,31 +235,24 @@ static void build_init_stub(uint8_t* ram,
         // For PSID: bank out ROMs so init code in RAM is visible ($01=$35)
         // For RSID: keep all ROMs visible as required by spec ($01=$37)
         uint8_t init_banking = (sid->type == SID_TYPE_RSID) ? 0x37 : 0x35;
-        ram[p++] = 0xA9; ram[p++] = init_banking;        // LDA #banking
-        ram[p++] = 0x85; ram[p++] = 0x01;                // STA $01
+        a.lda_imm(init_banking);
+        a.sta_zp(0x01);
 
         // Call init — the tune installs its own interrupt handler
-        ram[p++] = 0xA9; ram[p++] = (uint8_t)subtune;    // LDA #subtune
-        ram[p++] = 0x20;                                   // JSR init_addr
-        ram[p++] = (uint8_t)(sid->init_addr & 0xFF);
-        ram[p++] = (uint8_t)(sid->init_addr >> 8);
+        a.lda_imm(static_cast<uint8_t>(subtune));
+        a.jsr(sid->init_addr);
 
         // For PSID: after init, switch to $36 so the KERNAL IRQ dispatcher
-        // at $FF48 is visible.  Many PSID tunes hook $0314/$0315 (the
-        // KERNAL software IRQ vector) rather than writing $FFFE/$FFFF.
-        // $36 keeps I/O + KERNAL visible, BASIC ROM banked out.
+        // at $FF48 is visible.  Many PSID tunes hook $0314/$0315.
         if (sid->type != SID_TYPE_RSID) {
-            ram[p++] = 0xA9; ram[p++] = 0x36;            // LDA #$36
-            ram[p++] = 0x85; ram[p++] = 0x01;            // STA $01
+            a.lda_imm(0x36);
+            a.sta_zp(0x01);
         }
     }
 
     // CLI + infinite idle loop
-    ram[p++] = 0x58;  // CLI
-    uint16_t loop_addr = p;
-    ram[p++] = 0x4C;  // JMP loop_addr
-    ram[p++] = (uint8_t)(loop_addr & 0xFF);
-    ram[p++] = (uint8_t)(loop_addr >> 8);
+    a.cli();
+    a.jmp_self();
 }
 
 // =============================================================================
