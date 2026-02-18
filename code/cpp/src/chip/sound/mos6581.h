@@ -61,14 +61,22 @@ typedef enum {
     CYCLE_RELEASE = 4  // Release cycle (4)
 } envelope_cycle_t;
 
-// Waveform types
+// Waveform bits — positioned at their VCREG bit locations (bits 4-7)
+// so hot-path tests use control_reg & WAVEFORM_xxx with no shift.
 typedef enum {
-    WAVEFORM_NONE = 0x0,     // No waveform
-    WAVEFORM_TRIANGLE = 0x1, // Triangle waveform
-    WAVEFORM_SAWTOOTH = 0x2, // Sawtooth waveform
-    WAVEFORM_PULSE = 0x4,    // Pulse waveform
-    WAVEFORM_NOISE = 0x8     // Noise waveform
+    WAVEFORM_NONE     = 0x00, // No waveform
+    WAVEFORM_TRIANGLE = 0x10, // Triangle waveform (VCREG bit 4)
+    WAVEFORM_SAWTOOTH = 0x20, // Sawtooth waveform (VCREG bit 5)
+    WAVEFORM_PULSE    = 0x40, // Pulse waveform    (VCREG bit 6)
+    WAVEFORM_NOISE    = 0x80, // Noise waveform    (VCREG bit 7)
+    WAVEFORM_MASK     = 0xF0  // All waveform bits
 } waveform_bits_t;
+
+// VCREG control bits (lower nibble)
+#define VCREG_GATE   0x01
+#define VCREG_SYNC   0x02
+#define VCREG_RING   0x04
+#define VCREG_TEST   0x08
 
 // SID constants
 #define WAVEFORM_ACCUMULATOR_MAX 0xFFFFFF       // 24-bit accumulator
@@ -137,15 +145,8 @@ typedef struct voice_s {
     // Write-only voice register values
     uint16_t frequency;               // Voice frequency control (FRELO/FREHI)
     uint16_t pulse_waveform_width;    // Pulse waveform width (PWLO/PWHI)
-    waveform_bits_t waveform;         // Waveform control register (VCREG)
-    bool gated;                       // Gate bit
-    bool synchronize;                 // Oscillator sync
-    bool ring_modulation;             // Ring modulation
-    bool test;                        // Test bit
-    uint8_t attack_rate;              // Attack rate (ATDCY)
-    uint8_t decay_rate;               // Decay rate (ATDCY)
+    uint8_t control_reg;              // Raw VCREG byte (gate/sync/ring/test + waveform bits)
     uint8_t sustain_level;            // Sustain level (SUREL) - 8-bit (nibble duplicated)
-    uint8_t release_rate;             // Release rate (SUREL)
 
     // Read-only voice register values
     uint8_t oscillator_output;        // Oscillator output (OSC3)
@@ -211,18 +212,8 @@ typedef struct mos6581_s {
     // Filter state
     filter_state_t filter_state;
     uint16_t filter_cutoff_frequency; // Filter cutoff frequency (CUTLO/CUTHI)
-    uint8_t filter_resonance;         // Filter resonance control
-    bool filter_voice1;               // Voice 1 filtered
-    bool filter_voice2;               // Voice 2 filtered  
-    bool filter_voice3;               // Voice 3 filtered
-    bool filter_voice4;               // External input filtered
-
-    // Volume and filter control
-    uint8_t volume;                   // Master volume control
-    bool low_pass_enabled;            // Low-pass filter enabled
-    bool band_pass_enabled;           // Band-pass filter enabled
-    bool high_pass_enabled;           // High-pass filter enabled
-    bool voice3_disabled;             // Voice 3 output disabled
+    // Decoded fields for RESON (0x17) and SIGVOL (0x18) are read from
+    // regs[0x17] / regs[0x18] at sample-rate; no pre-decoded copies needed.
 
     // Timing and sample generation
     uint32_t cycle_count;             // Cycle counter
