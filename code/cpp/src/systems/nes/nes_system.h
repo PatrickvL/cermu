@@ -27,6 +27,7 @@
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
 #include "../../core/emulated_system.h"
+#include "../../core/formats/nsf_format.h"
 
 // Forward declarations
 namespace nes_system {
@@ -34,6 +35,7 @@ namespace nes_system {
     class Cartridge;
     class Controller;
     class MemoryBus;
+    class NsfCartridge;
 }
 
 // ============================================================================
@@ -249,24 +251,27 @@ public:
     bool mirror_vertical = false;
     bool battery_backed = false;
     
+    /** Protected default constructor for subclasses (e.g. NsfCartridge). */
+    Cartridge() = default;
+    
 public:
-    Cartridge(const std::string& filename);
-    ~Cartridge() = default;
+    explicit Cartridge(const std::string& filename);
+    virtual ~Cartridge() = default;
     
-    // CPU memory access
-    bool cpu_read(uint16_t addr, uint8_t& data);
-    bool cpu_write(uint16_t addr, uint8_t data);
+    // CPU memory access (virtual for NsfCartridge override)
+    virtual bool cpu_read(uint16_t addr, uint8_t& data);
+    virtual bool cpu_write(uint16_t addr, uint8_t data);
     
-    // PPU memory access
-    bool ppu_read(uint16_t addr, uint8_t& data);
-    bool ppu_write(uint16_t addr, uint8_t data);
+    // PPU memory access (virtual for NsfCartridge override)
+    virtual bool ppu_read(uint16_t addr, uint8_t& data);
+    virtual bool ppu_write(uint16_t addr, uint8_t data);
     
     // Mirroring
     bool get_mirror_horizontal() const { return mirror_horizontal; }
     bool get_mirror_vertical() const { return mirror_vertical; }
     
     // Mapper interface
-    void reset();
+    virtual void reset();
     
 private:
     bool load_from_file(const std::string& filename);
@@ -342,8 +347,9 @@ public:
 // ============================================================================
 
 class MemoryBus {
-private:
-    std::vector<uint8_t> cpu_ram;  // 2KB CPU RAM
+public:
+    // CPU RAM (2KB) — public for NSF player stub injection and direct access
+    std::vector<uint8_t> cpu_ram;
     
 public:
     // Connected devices
@@ -437,6 +443,7 @@ public:
     
     // EmulatedSystem interface - Input
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
+    void handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) override;
     void handle_controller_event(int controller, int button, bool pressed) override;
     
     // EmulatedSystem interface - GUI integration
@@ -476,6 +483,23 @@ private:
     void setup_audio_timing();
     void clock();
     bus_state_t create_bus_state(uint16_t addr, uint8_t data, bool rw);
+
+    // =========================================================================
+    // NSF PLAYER STATE
+    // =========================================================================
+    // When an NSF file is loaded, we keep a copy of its header and payload
+    // so the user can switch subtunes interactively (digits 0-9 for direct
+    // selection, left/right cursor keys for prev/next with wrapping).
+    // =========================================================================
+    bool nsf_player_active_ = false;             ///< True while an NSF file is playing
+    nsf_header_t active_nsf_header_{};           ///< Copy of the loaded NSF header
+    std::vector<uint8_t> active_nsf_data_;       ///< Copy of original payload bytes
+    uint16_t active_nsf_subtune_ = 0;            ///< Current 0-based subtune index
+    std::shared_ptr<NsfCartridge> nsf_cartridge_; ///< NSF cartridge for bank/data management
+
+    /** Handle NSF player keyboard shortcuts (subtune selection).
+     *  Returns true if the key was consumed (should not be forwarded). */
+    bool handle_nsf_player_key(SDL_Keycode key);
 };
 
 } // namespace nes_system

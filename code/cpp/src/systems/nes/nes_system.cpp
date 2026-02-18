@@ -6,6 +6,10 @@
  */
 
 #include "nes_system.h"
+#include "nes_nsf_player.h"
+#include "nes_nsf_cartridge.h"
+#include "../../core/formats/nsf_format.h"
+#include "../../core/formats/format_registry.h"
 #include <fstream>
 #include <iostream>
 #include <cmath>
@@ -980,6 +984,14 @@ static float nes_can_load_file(const char* filepath, const uint8_t* data, size_t
             }
             return 0.9f;  // .nes extension but no header
         }
+        // NSF music files
+        if (strcmp(ext, ".nsf") == 0 || strcmp(ext, ".NSF") == 0) {
+            if (size >= 128 && data[0] == 'N' && data[1] == 'E' &&
+                data[2] == 'S' && data[3] == 'M' && data[4] == 0x1A) {
+                return 1.0f;  // Perfect NSF match
+            }
+            return 0.9f;  // .nsf extension but no header
+        }
     }
     
     // Check for iNES header without extension
@@ -987,15 +999,26 @@ static float nes_can_load_file(const char* filepath, const uint8_t* data, size_t
         data[2] == 'S' && data[3] == 0x1A) {
         return 0.95f;
     }
+
+    // Check for NSF header without extension
+    if (size >= 128 && data[0] == 'N' && data[1] == 'E' &&
+        data[2] == 'S' && data[3] == 'M' && data[4] == 0x1A) {
+        return 0.95f;
+    }
     
     return 0.0f;
 }
+
+/** Formats the NES can load — used by SystemDescriptor and file dialogs. */
+static const format_descriptor_t* const nes_formats[] = {
+    &NSF_FORMAT_DESCRIPTOR, nullptr
+};
 
 static SystemDescriptor nes_descriptor = {
     "Nintendo Entertainment System",
     "NES",
     "Nintendo Entertainment System / Famicom (1983)",
-    nullptr,  // supported_formats: NES does not use format handler system yet
+    nes_formats,
     create_nes_hardware_traits(),
     nes_can_load_file
 };
@@ -1191,7 +1214,85 @@ bool NESSystem::load_file(const char* filepath) {
         }
     }
     
-    printf("NES: Loading cartridge: %s\n", filepath);
+    printf("NES: Loading file: %s\n", filepath);
+
+    // =========================================================================
+    // NSF FILE — Use the format system to parse, then launch NSF player
+    // =========================================================================
+    const char* ext = strrchr(filepath, '.');
+    bool is_nsf = (ext && (strcmp(ext, ".nsf") == 0 || strcmp(ext, ".NSF") == 0));
+
+    // Also check by header magic for extensionless files
+    if (!is_nsf) {
+        std::ifstream probe(filepath, std::ios::binary);
+        uint8_t magic[5] = {};
+        if (probe.read(reinterpret_cast<char*>(magic), 5)) {
+            if (magic[0] == 'N' && magic[1] == 'E' && magic[2] == 'S' &&
+                magic[3] == 'M' && magic[4] == 0x1A) {
+                is_nsf = true;
+            }
+        }
+    }
+
+    if (is_nsf) {
+        // Read entire file
+        size_t file_size = 0;
+        uint8_t* file_data = format_read_entire_file(filepath, &file_size);
+        if (!file_data) {
+            printf("NES: Failed to read NSF file\n");
+            return false;
+        }
+
+        // Parse NSF header
+        nsf_header_t header;
+        if (!nsf_parse_header(file_data, file_size, &header)) {
+            printf("NES: Invalid NSF header\n");
+            free(file_data);
+            return false;
+        }
+
+        // Extract payload
+        const uint8_t* payload = file_data + 128;
+        size_t payload_size = file_size - 128;
+
+        program_data_t prog = {};
+        prog.data = const_cast<uint8_t*>(payload);  // Temporary, won't be freed
+        prog.data_size = payload_size;
+        prog.load_addr = header.load_addr;
+
+        // Compute 0-based subtune index from 1-based start_song
+        uint16_t subtune = header.start_song;
+        if (subtune > 0) subtune--;
+
+        // Launch NSF player
+        nsf_cartridge_ = nes_apply_nsf_load(
+            cpu_, ppu_.get(), bus_.get(),
+            &header, &prog, subtune, is_pal_);
+
+        if (!nsf_cartridge_) {
+            printf("NES: Failed to apply NSF load\n");
+            free(file_data);
+            return false;
+        }
+
+        // Save state for subtune switching
+        active_nsf_header_ = header;
+        active_nsf_data_.assign(payload, payload + payload_size);
+        active_nsf_subtune_ = subtune;
+        nsf_player_active_ = true;
+        system_ready_ = true;
+
+        printf("NES: NSF player active — \"%s\" by %s\n",
+               header.name, header.artist);
+        free(file_data);
+        return true;
+    }
+
+    // =========================================================================
+    // STANDARD PATH — iNES ROM cartridge
+    // =========================================================================
+    nsf_player_active_ = false;
+    nsf_cartridge_.reset();
     
     try {
         cartridge_ = std::make_shared<Cartridge>(filepath);
@@ -1275,6 +1376,73 @@ void NESSystem::handle_controller_event(int controller, int button, bool pressed
     } else {
         release_button(controller, static_cast<Controller::Button>(button));
     }
+}
+
+// =============================================================================
+// NSF Player — Extended keyboard handler with subtune selection
+// =============================================================================
+
+void NESSystem::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode,
+                                          uint16_t mod, bool pressed, bool repeat) {
+    // NSF player subtune selection — intercept before controller mapping
+    if (nsf_player_active_ && pressed && !repeat) {
+        if (handle_nsf_player_key(key)) return;
+    }
+
+    // Fall through to standard keyboard handling
+    if (!repeat) {
+        handle_keyboard_event(key, pressed);
+    }
+}
+
+// =============================================================================
+// NSF Player — Subtune selection via keyboard
+// =============================================================================
+//
+// Digits 1-9:  select subtune 1-9 directly (0-based index 0-8)
+// Digit 0:     select subtune 10 (0-based index 9)
+// Right arrow:  next subtune (wraps from last → first)
+// Left arrow:   previous subtune (wraps from first → last)
+// ESC:          exit application
+// =============================================================================
+
+bool NESSystem::handle_nsf_player_key(SDL_Keycode key) {
+    if (!cpu_ || active_nsf_header_.num_songs == 0) return false;
+
+    const uint16_t num_songs = active_nsf_header_.num_songs;
+    int new_subtune = -1;
+
+    // Digit keys: 1→subtune 1, ..., 9→subtune 9, 0→subtune 10
+    if (key >= SDLK_0 && key <= SDLK_9) {
+        int digit = (key == SDLK_0) ? 10 : (key - SDLK_0);
+        if (digit <= num_songs) {
+            new_subtune = digit - 1;  // Convert to 0-based
+        }
+    }
+    // Cursor right = next subtune (with wrapping)
+    else if (key == SDLK_RIGHT) {
+        new_subtune = (active_nsf_subtune_ + 1) % num_songs;
+    }
+    // Cursor left = previous subtune (with wrapping)
+    else if (key == SDLK_LEFT) {
+        new_subtune = (active_nsf_subtune_ == 0) ? (num_songs - 1)
+                                                   : (active_nsf_subtune_ - 1);
+    }
+    // ESC = exit application while in NSF player mode
+    else if (key == SDLK_ESCAPE) {
+        request_quit();
+        return true;
+    }
+
+    if (new_subtune < 0) return false;
+    if (static_cast<uint16_t>(new_subtune) == active_nsf_subtune_) return true;
+
+    active_nsf_subtune_ = static_cast<uint16_t>(new_subtune);
+    nes_nsf_switch_subtune(cpu_, ppu_.get(), bus_.get(),
+                            nsf_cartridge_.get(), &active_nsf_header_,
+                            active_nsf_data_.data(), active_nsf_data_.size(),
+                            active_nsf_subtune_, is_pal_);
+    return true;
 }
 
 void NESSystem::render_system_menu_items() {
