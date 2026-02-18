@@ -46,12 +46,13 @@ static void render_voice_debug(voice_t* voice, int voice_num) {
         ImGui::Text("Pulse Waveform Width: $%04X (%d)", voice->pulse_waveform_width, voice->pulse_waveform_width);
         
         // Values updated by WriteVoiceControlRegisterValue()
-        ImGui::Text("Gated: %s", voice->gated ? "Yes" : "No");
-        ImGui::Text("Synchronize: %s", voice->synchronize ? "Yes" : "No");
-        ImGui::Text("Ring Modulation: %s", voice->ring_modulation ? "Yes" : "No");
-        ImGui::Text("Test: %s", voice->test ? "Yes" : "No");
-        const char* waveform_name = ((int)voice->waveform < 9) ? waveform_names[(int)voice->waveform] : "Unknown";
-        ImGui::Text("Waveform: %s (%d)", waveform_name, (int)voice->waveform);
+        ImGui::Text("Gated: %s", (voice->control_reg & VCREG_GATE) ? "Yes" : "No");
+        ImGui::Text("Synchronize: %s", (voice->control_reg & VCREG_SYNC) ? "Yes" : "No");
+        ImGui::Text("Ring Modulation: %s", (voice->control_reg & VCREG_RING) ? "Yes" : "No");
+        ImGui::Text("Test: %s", (voice->control_reg & VCREG_TEST) ? "Yes" : "No");
+        int wf_index = (voice->control_reg >> 4) & 0x0F;
+        const char* waveform_name = (wf_index < 9) ? waveform_names[wf_index] : "Unknown";
+        ImGui::Text("Waveform: %s (%d)", waveform_name, wf_index);
         
         ImGui::Separator();
         
@@ -240,16 +241,18 @@ void mos6581_render_debug_window(void* chip, bool* show_window) {
             
             // Write-only register values :
             ImGui::Text("Filter Cutoff Frequency: $%03X (%d)", sid->filter_cutoff_frequency, sid->filter_cutoff_frequency);
-            ImGui::Text("Filter Voice 1: %s", sid->filter_voice1 ? "Yes" : "No");
-            ImGui::Text("Filter Voice 2: %s", sid->filter_voice2 ? "Yes" : "No");
-            ImGui::Text("Filter Voice 3: %s", sid->filter_voice3 ? "Yes" : "No");
-            ImGui::Text("Filter Voice 4 (External): %s", sid->filter_voice4 ? "Yes" : "No");
-            ImGui::Text("Filter Resonance: %d (0-15)", sid->filter_resonance);
-            ImGui::Text("Volume: %d (0-15)", sid->volume);
-            ImGui::Text("Low Pass Enabled: %s", sid->low_pass_enabled ? "Yes" : "No");
-            ImGui::Text("Band Pass Enabled: %s", sid->band_pass_enabled ? "Yes" : "No");
-            ImGui::Text("High Pass Enabled: %s", sid->high_pass_enabled ? "Yes" : "No");
-            ImGui::Text("Voice 3 Disabled: %s", sid->voice3_disabled ? "Yes" : "No");
+            uint8_t reson = sid->regs[0x17];
+            uint8_t sigvol = sid->regs[0x18];
+            ImGui::Text("Filter Voice 1: %s", (reson & 0x01) ? "Yes" : "No");
+            ImGui::Text("Filter Voice 2: %s", (reson & 0x02) ? "Yes" : "No");
+            ImGui::Text("Filter Voice 3: %s", (reson & 0x04) ? "Yes" : "No");
+            ImGui::Text("Filter Voice 4 (External): %s", (reson & 0x08) ? "Yes" : "No");
+            ImGui::Text("Filter Resonance: %d (0-15)", (reson >> 4) & 0x0F);
+            ImGui::Text("Volume: %d (0-15)", sigvol & 0x0F);
+            ImGui::Text("Low Pass Enabled: %s", (sigvol & 0x10) ? "Yes" : "No");
+            ImGui::Text("Band Pass Enabled: %s", (sigvol & 0x20) ? "Yes" : "No");
+            ImGui::Text("High Pass Enabled: %s", (sigvol & 0x40) ? "Yes" : "No");
+            ImGui::Text("Voice 3 Disabled: %s", (sigvol & 0x80) ? "Yes" : "No");
             
             ImGui::Separator();
             
