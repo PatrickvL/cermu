@@ -256,12 +256,18 @@ float mos6581_filter_process(mos6581_t* sid, float input) {
     f->integrator1 = bp;
     f->integrator2 = lp;
     
-    // Apply distortion for 6581
+    // Apply soft-clipping distortion for 6581 (models NMOS op-amp non-linearity).
+    // tanh(x*k)/k is a smooth saturator that approaches identity as k→0.
+    // Guard against k=0 (resonance=0) which would cause 0/0 = NaN.
     if (f->enable_distortion && sid->revision <= SID_REVISION_6581_R4AR) {
         float distortion_amount = f->resonance / FILTER_RESONANCE_MAX * 0.5f;
-        lp = tanhf(lp * distortion_amount) / distortion_amount;
-        bp = tanhf(bp * distortion_amount) / distortion_amount;
-        hp = tanhf(hp * distortion_amount) / distortion_amount;
+        if (distortion_amount > 1e-6f) {
+            float inv_k = 1.0f / distortion_amount;
+            lp = tanhf(lp * distortion_amount) * inv_k;
+            bp = tanhf(bp * distortion_amount) * inv_k;
+            hp = tanhf(hp * distortion_amount) * inv_k;
+        }
+        // else: distortion_amount ≈ 0 → no distortion (identity)
     }
     
     // Store outputs
@@ -353,95 +359,6 @@ void mos6581_write_volume_and_filter_select_register_value(mos6581_t* sid, uint8
     sid->band_pass_enabled = (value & 0x20) != 0;
     sid->high_pass_enabled = (value & 0x40) != 0;
     sid->voice3_disabled = (value & 0x80) != 0;
-}
-
-// =============================================================================
-// VOICE MIXING AND OUTPUT
-// =============================================================================
-
-uint32_t mos6581_mix_voices(mos6581_t* sid) {
-    if (!sid) return 0;
-    
-    float unfiltered_output = 0.0f;
-    float filtered_input = 0.0f;
-    
-    // Process sync and ring modulation
-    voice_apply_sync(&sid->voice1, &sid->voice3);
-    voice_apply_sync(&sid->voice2, &sid->voice1);
-    voice_apply_sync(&sid->voice3, &sid->voice2);
-    
-    // Apply ring modulation (affects oscillator output, before envelope)
-    uint32_t voice1_output = voice_apply_ring_modulation(&sid->voice1, &sid->voice3);
-    uint32_t voice2_output = voice_apply_ring_modulation(&sid->voice2, &sid->voice1);
-    uint32_t voice3_output = voice_apply_ring_modulation(&sid->voice3, &sid->voice2);
-    
-    // Center waveform BEFORE envelope so silent voices produce zero.
-    // 12-bit waveform centered: -2048..+2047, × 8-bit envelope 0..255
-    const float inv_scale = 1.0f / 522240.0f;
-    float v1 = (float)(((int32_t)voice1_output - 2048) * (int32_t)sid->voice1.envelope_amplitude) * inv_scale;
-    float v2 = (float)(((int32_t)voice2_output - 2048) * (int32_t)sid->voice2.envelope_amplitude) * inv_scale;
-    float v3 = (float)(((int32_t)voice3_output - 2048) * (int32_t)sid->voice3.envelope_amplitude) * inv_scale;
-    
-    // Route Voice 1
-    if (sid->filter_voice1) {
-        filtered_input += v1;
-    } else {
-        unfiltered_output += v1;
-    }
-    
-    // Route Voice 2
-    if (sid->filter_voice2) {
-        filtered_input += v2;
-    } else {
-        unfiltered_output += v2;
-    }
-    
-    // Route Voice 3
-    // Real SID: voice3_disabled suppresses Voice 3 from the UNFILTERED path only.
-    // If Voice 3 is routed through the filter, it always passes regardless of
-    // voice3_disabled.  If Voice 3 is NOT filtered AND voice3_disabled is set,
-    // it is completely muted.
-    if (sid->filter_voice3) {
-        filtered_input += v3;
-    } else if (!sid->voice3_disabled) {
-        unfiltered_output += v3;
-    }
-    
-    // Add external input
-    if (sid->filter_voice4) {
-        filtered_input += sid->external_input;
-    } else {
-        unfiltered_output += sid->external_input;
-    }
-    
-    // Apply filter to the summed filtered voices (no averaging!)
-    float filtered_output = mos6581_filter_process(sid, filtered_input);
-    
-    // Sum filtered + unfiltered
-    float mixed_output = unfiltered_output + filtered_output;
-    
-    // Apply volume
-    mixed_output *= (float)sid->volume / 15.0f;
-    
-    // Apply volume bug click (6581 only)
-    if (sid->volume_change_click && sid->volume_click_counter > 0) {
-        mixed_output += sid->volume_click_amplitude;
-        sid->volume_click_counter--;
-        if (sid->volume_click_counter == 0) {
-            sid->volume_change_click = false;
-        }
-    }
-    
-    // Digital boost for 4-bit sample playback
-    if (sid->enable_digiboost && sid->volume_change_click) {
-        mixed_output *= 4.0f;
-    }
-    
-    // Clamp output
-    if (mixed_output > 1.0f) mixed_output = 1.0f;
-    if (mixed_output < -1.0f) mixed_output = -1.0f;
-    
-    return (uint32_t)(mixed_output * 32767.0f + 32768.0f);
 }
 
 // =============================================================================
@@ -624,6 +541,20 @@ uint32_t voice_generate_pulse(voice_t* voice) {
     return (accumulator_12bit >= pulse_threshold) ? 0xFFF : 0;
 }
 
+// Extract noise DAC output from LFSR state.
+// LFSR bits {20,18,14,11,9,5,2,0} → DAC bits {11,10,9,8,7,6,5,4}.
+// Lower 4 DAC bits are grounded (always zero).
+static inline uint32_t noise_lfsr_to_output(uint32_t sr) {
+    return ((sr & 0x100000) >> 9)   // bit 20 → bit 11
+         | ((sr & 0x040000) >> 8)   // bit 18 → bit 10
+         | ((sr & 0x004000) >> 5)   // bit 14 → bit  9
+         | ((sr & 0x000800) >> 3)   // bit 11 → bit  8
+         | ((sr & 0x000200) >> 2)   // bit  9 → bit  7
+         | ((sr & 0x000020) << 1)   // bit  5 → bit  6
+         | ((sr & 0x000004) << 3)   // bit  2 → bit  5
+         | ((sr & 0x000001) << 4);  // bit  0 → bit  4
+}
+
 uint32_t voice_generate_noise(voice_t* voice) {
     if (!voice) return 0;
     
@@ -638,52 +569,12 @@ uint32_t voice_generate_noise(voice_t* voice) {
     
     voice->noise_clock_enable = clock_noise;
     
-    // Extract noise output from LFSR using reSID-accurate bit positions.
-    // LFSR bits {20,18,14,11,9,5,2,0} → output bits {11,10,9,8,7,6,5,4}.
-    // Lower 4 output bits are grounded (always zero).
-    uint32_t sr = voice->noise_lfsr;
-    uint32_t noise_output =
-        ((sr & 0x100000) >> 9)  |  // LFSR bit 20 → output bit 11
-        ((sr & 0x040000) >> 8)  |  // LFSR bit 18 → output bit 10
-        ((sr & 0x004000) >> 5)  |  // LFSR bit 14 → output bit  9
-        ((sr & 0x000800) >> 3)  |  // LFSR bit 11 → output bit  8
-        ((sr & 0x000200) >> 2)  |  // LFSR bit  9 → output bit  7
-        ((sr & 0x000020) << 1)  |  // LFSR bit  5 → output bit  6
-        ((sr & 0x000004) << 3)  |  // LFSR bit  2 → output bit  5
-        ((sr & 0x000001) << 4);    // LFSR bit  0 → output bit  4
-    
-    return noise_output;
+    return noise_lfsr_to_output(voice->noise_lfsr);
 }
 
-uint32_t voice_generate_combined_waveform(voice_t* voice) {
-    if (!voice || !voice->sid) return 0;
-    
-    // Combined waveforms use lookup table or simple AND operation
-    uint32_t waveform_bits = voice->waveform;
-    uint32_t output = 0xFFF; // Start with all bits set
-    
-    if (waveform_bits & WAVEFORM_TRIANGLE) {
-        output &= voice->triangle_output;
-    }
-    if (waveform_bits & WAVEFORM_SAWTOOTH) {
-        output &= voice->sawtooth_output;
-    }
-    if (waveform_bits & WAVEFORM_PULSE) {
-        output &= voice->pulse_output;
-    }
-    if (waveform_bits & WAVEFORM_NOISE) {
-        output &= voice->noise_output;
-    }
-    
-    // Apply combined waveform table if available
-    if (voice->sid->combined_waveform_enabled && voice->sid->combined_waveform_table) {
-        uint32_t table_index = (voice->waveform_accumulator >> 12) & (COMBINED_WAVEFORM_TABLE_SIZE - 1);
-        uint32_t table_value = voice->sid->combined_waveform_table[table_index];
-        output = (output * table_value) >> 8;
-    }
-    
-    return output;
-}
+// voice_generate_combined_waveform removed — inlined into voice_clock_cycle.
+// Disabled waveforms carry 0xFFF so the AND combines cleanly without
+// per-waveform conditional checks.
 
 // =============================================================================
 // NOISE WAVEFORM ANALYSIS HELPERS
@@ -816,16 +707,17 @@ void voice_reset(voice_t* voice) {
     voice->exponential_counter = 0;
     voice->exponential_counter_period = 1;
     
-    // Reset waveform outputs
+    // Reset waveform outputs — 0xFFF means "not driving any DAC lines low"
     voice->oscillator_waveform = 0;
-    voice->triangle_output = 0;
-    voice->sawtooth_output = 0;
-    voice->pulse_output = 0;
+    voice->triangle_output = 0xFFF;
+    voice->sawtooth_output = 0xFFF;
+    voice->pulse_output = 0xFFF;
     voice->combined_output = 0;
     
-    // Reset noise state — reSID: shift_register = 0x7FFFFE after reset
+    // Reset noise state — reSID: shift_register = 0x7FFFFE after reset.
+    // Latch noise_output immediately so it is valid before the first clock.
     voice->noise_lfsr = 0x7FFFFE; // reSID reference: reset value
-    voice->noise_output = 0;
+    voice->noise_output = noise_lfsr_to_output(voice->noise_lfsr);
     voice->noise_clock_enable = false;
     
     // Reset sync and ring modulation
@@ -854,6 +746,7 @@ void voice_clock_cycle(voice_t* voice) {
         // over ~35000 cycles (6581). We approximate this as instant.
         voice->waveform_accumulator = 0;
         voice->noise_lfsr = 0x7FFFFF;
+        voice->noise_output = noise_lfsr_to_output(voice->noise_lfsr);
     }
     
     // Detect MSB change for sync
@@ -861,44 +754,49 @@ void voice_clock_cycle(voice_t* voice) {
                       ((voice->waveform_accumulator & WAVEFORM_ACCUMULATOR_MSB) != 0);
     voice->sync_trigger = msb_rising;
     
-    // Generate ONLY the waveform(s) that are actually selected.
-    // This avoids ~3 redundant waveform computations per voice per cycle.
-    uint32_t waveform_output = 0;
+    // Always clock noise LFSR based on accumulator bit 19 — real hardware
+    // clocks it regardless of waveform selection (reSID does this in clock()).
+    // Latch noise_output immediately on shift so it is always valid and never
+    // needs recalculating on each cycle (LFSR shifts much less often).
+    {
+        bool clock_noise = (voice->waveform_accumulator & 0x080000) != 0;
+        if (clock_noise && !voice->noise_clock_enable) {
+            uint32_t feedback = ((voice->noise_lfsr >> 22) ^ (voice->noise_lfsr >> 17)) & 1;
+            voice->noise_lfsr = ((voice->noise_lfsr << 1) | feedback) & NOISE_LFSR_MASK;
+            voice->noise_output = noise_lfsr_to_output(voice->noise_lfsr);
+        }
+        voice->noise_clock_enable = clock_noise;
+    }
+    
+    // Generate waveform outputs.  Unselected waveforms output 0xFFF so their
+    // bits don't pull any DAC lines low in the combined AND — matching real
+    // hardware where unselected waveform switches are open.  This lets the
+    // AND below run unconditionally without per-waveform conditionals.
+    //
+    // noise_output is the always-valid latched LFSR value (updated only on
+    // LFSR shift, not every cycle).  We use 0xFFF in its AND slot when the
+    // noise waveform is not selected, without overwriting the latched field.
     uint8_t wf = voice->waveform;
     
+    voice->triangle_output = (wf & WAVEFORM_TRIANGLE)
+        ? voice_generate_triangle(voice) : 0xFFF;
+    voice->sawtooth_output = (wf & WAVEFORM_SAWTOOTH)
+        ? voice_generate_sawtooth(voice) : 0xFFF;
+    voice->pulse_output = (wf & WAVEFORM_PULSE)
+        ? voice_generate_pulse(voice) : 0xFFF;
+    
+    // Combined waveform output: AND of all waveform DAC lines.
+    // Disabled waveforms carry 0xFFF and pass through transparently.
+    // No waveform selected → floating DAC, simplified as zero.
+    uint32_t waveform_output;
     if (wf == 0) {
-        // No waveform selected
         waveform_output = 0;
-    } else if ((wf & (wf - 1)) == 0) {
-        // Single waveform (power of 2) — generate only what's needed
-        switch (wf) {
-            case WAVEFORM_TRIANGLE:
-                waveform_output = voice_generate_triangle(voice);
-                voice->triangle_output = waveform_output;
-                break;
-            case WAVEFORM_SAWTOOTH:
-                waveform_output = voice_generate_sawtooth(voice);
-                voice->sawtooth_output = waveform_output;
-                break;
-            case WAVEFORM_PULSE:
-                waveform_output = voice_generate_pulse(voice);
-                voice->pulse_output = waveform_output;
-                break;
-            case WAVEFORM_NOISE:
-                waveform_output = voice_generate_noise(voice);
-                voice->noise_output = waveform_output;
-                break;
-            default:
-                waveform_output = 0;
-                break;
-        }
     } else {
-        // Combined waveform — generate all needed components
-        if (wf & WAVEFORM_TRIANGLE) voice->triangle_output = voice_generate_triangle(voice);
-        if (wf & WAVEFORM_SAWTOOTH) voice->sawtooth_output = voice_generate_sawtooth(voice);
-        if (wf & WAVEFORM_PULSE)    voice->pulse_output = voice_generate_pulse(voice);
-        if (wf & WAVEFORM_NOISE)    voice->noise_output = voice_generate_noise(voice);
-        waveform_output = voice_generate_combined_waveform(voice);
+        uint32_t noise_and = (wf & WAVEFORM_NOISE) ? voice->noise_output : 0xFFF;
+        waveform_output = voice->triangle_output
+                        & voice->sawtooth_output
+                        & voice->pulse_output
+                        & noise_and;
     }
     
     voice->oscillator_waveform = waveform_output;
@@ -953,8 +851,9 @@ bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) {
             // Center waveform BEFORE envelope so silent voices produce zero.
             // 12-bit waveform centered: -2048..+2047
             // × 8-bit envelope 0..255 → signed product -522240..+521985
-            // Normalise so full-scale ≈ ±1.
-            const float inv_scale = 1.0f / 522240.0f;
+            // Scale so the SUM of all 3 voices at max ≈ ±1.0 to prevent
+            // clipping (real SID mixer has headroom for all voices).
+            const float inv_scale = 1.0f / (3.0f * 522240.0f);
             float v1 = (float)(((int32_t)v1_wave - 2048) * (int32_t)sid->voice1.envelope_amplitude) * inv_scale;
             float v2 = (float)(((int32_t)v2_wave - 2048) * (int32_t)sid->voice2.envelope_amplitude) * inv_scale;
             float v3 = (float)(((int32_t)v3_wave - 2048) * (int32_t)sid->voice3.envelope_amplitude) * inv_scale;
@@ -979,10 +878,9 @@ bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) {
             // 6581 digi support: add constant DC bias from the voice DACs.
             // In real hardware, this residual bias is always present and
             // gets modulated by volume register changes to produce 4-bit
-            // sample playback.  The bias is a fixed analog property —
-            // independent of waveform or envelope state.
+            // sample playback.  Scaled to match the 3-voice normalisation.
             if (sid->revision <= SID_REVISION_6581_R4AR) {
-                mixed += 0.38f;
+                mixed += 0.13f;
             }
 
             // Apply master volume
@@ -1410,7 +1308,7 @@ void* mos6581_system_create(chip_descriptor_t* desc) {
     }
     
     // Initialize default settings
-    sid->revision = SID_REVISION_6581_R2;
+    sid->revision = SID_REVISION_6581_R4AR;
     sid->pal_timing = true;
     sid->sample_rate = 44100.0f;
     sid->cpu_clock = 985248.0f;   // PAL C64 default

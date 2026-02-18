@@ -38,16 +38,18 @@ namespace sid_constants {
 #define SID_REGS_SIZE sid_constants::REGS_SIZE
 #define SID_REGS_MASK (SID_REGS_SIZE - 1) // 31
 
-// SID chip revisions
+// SID chip revisions — only revisions that produce different emulation
+// behaviour are active.  The rest are commented out until per-revision
+// differences (combined-waveform tables, filter curves, etc.) are modelled.
 typedef enum {
-    SID_REVISION_6581_R1,
-    SID_REVISION_6581_R2,
-    SID_REVISION_6581_R3,
-    SID_REVISION_6581_R4,
-    SID_REVISION_6581_R4AR,
-    SID_REVISION_8580_R5,
-    SID_REVISION_CSG_6581,
-    SID_REVISION_CSG_8580
+    // SID_REVISION_6581_R1,     // same behaviour as R4AR for now
+    // SID_REVISION_6581_R2,     // same behaviour as R4AR for now
+    // SID_REVISION_6581_R3,     // same behaviour as R4AR for now
+    // SID_REVISION_6581_R4,     // same behaviour as R4AR for now
+    SID_REVISION_6581_R4AR,      // MOS 6581 family (filter distortion, volume-click)
+    SID_REVISION_8580_R5,        // MOS 8580 family (clean filter, no volume-click)
+    // SID_REVISION_CSG_6581,    // same behaviour as R4AR for now
+    // SID_REVISION_CSG_8580     // same behaviour as 8580_R5 for now
 } sid_revision_t;
 
 // Voice envelope cycle states
