@@ -8,6 +8,7 @@
 // =============================================================================
 
 #include "vicii_test_harness.h"
+#include "../systems/c64/c64_kernal_patches.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -32,22 +33,9 @@ void patch_kernal_for_test(c64_t* c64) {
 
     uint8_t* rom = c64->kernal->memory;
 
-    // --- Patch A: Skip RAMTAS memory test ---
-    // $FD5F - $E000 = 0x1D5F
-    constexpr uint16_t RAMTAS_OFFSET = 0x1D5F;
-    if (rom[RAMTAS_OFFSET] == 0xA2 && rom[RAMTAS_OFFSET + 1] == 0x3C) {
-        static const uint8_t ramtas_patch[] = {
-            0xA0, 0x00,       // LDY #$00
-            0x85, 0xC1,       // STA $C1         (A is 0 from page clearing)
-            0xA9, 0xA0,       // LDA #$A0        (top page = $A0)
-            0x85, 0xC2,       // STA $C2
-            0x4C, 0x88, 0xFD, // JMP $FD88       (skip to SETTOP)
-        };
-        memcpy(&rom[RAMTAS_OFFSET], ramtas_patch, sizeof(ramtas_patch));
-        printf("VICII-TEST: Patched RAMTAS at $FD5F — memory test skipped\n");
-    } else {
-        printf("VICII-TEST: WARNING — RAMTAS bytes at $FD5F don't match ($%02X $%02X)\n",
-               rom[RAMTAS_OFFSET], rom[RAMTAS_OFFSET + 1]);
+    // --- Patch A: Skip RAMTAS memory test (shared implementation) ---
+    if (!c64_patch_skip_memtest(c64)) {
+        printf("VICII-TEST: WARNING — RAMTAS patch not applied (already patched or ROM mismatch)\n");
     }
 
     // --- Patch B: Redirect BASIC cold-start to test program ---

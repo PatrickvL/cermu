@@ -1,4 +1,6 @@
 ﻿#include "c64_system_wrapper.h"
+#include "c64_kernal_patches.h"
+#include "c64_sid_player.h"
 #include "../../chip/input/commodore_keyboard.h"
 #include "../../chip/input/emu_key_sdl_map.h"
 #include "../../gui/imgui_interface.h"
@@ -418,17 +420,19 @@ bool C64SystemWrapper::load_file(const char* filepath) {
         return false;
     }
 
+    // For SID files: ensure the C64 is configured with the correct region
+    // (PAL/NTSC) and SID revision, reset for clean state, and patch KERNAL
+    // to skip the RAMTAS memory test for near-instant boot.
+    const sid_header_t* sid_check = sid_get_metadata(&result);
+    if (sid_check) {
+        ensure_compatible_for_sid(sid_check);
+    }
+
     // Defer loading until KERNAL/BASIC boot completes.
     // The CPU starts at $FCE2 (KERNAL reset vector) and must complete its
     // full boot sequence — IOINIT, RAMTAS, RESTOR, screen init, BASIC cold
     // start — before we write program data to RAM. This prevents BASIC's
     // NEW routine from zeroing $0801/$0802 and corrupting the loaded program.
-    //
-    // FUTURE OPTIMIZATION: Programs that load outside the BASIC area (e.g.
-    // raw ML at $C000+) and don't rely on BASIC pointers or KERNAL-
-    // initialized hardware could be loaded immediately, saving ~1.5M cycles
-    // of emulated boot time. Combined with KERNAL memory-test/clear loop
-    // patching, this could enable near-instant startup for many programs.
     pending_load_.result = result;  // Transfer ownership (don't free yet)
     pending_load_.filepath = filepath;
     pending_load_.active = true;
@@ -477,7 +481,13 @@ void C64SystemWrapper::apply_pending_load() {
     // =========================================================================
     const sid_header_t* sid = sid_get_metadata(&pending_load_.result);
     if (sid) {
-        apply_sid_load(sid);
+        c64_apply_sid_load(c64_, sid, &pending_load_.result.program);
+        // Track the SID revision that was applied so the GUI stays in sync
+        if (sid->version >= 2 && sid->sid_model != SID_MODEL_UNKNOWN) {
+            pending_sid_revision_ = (sid->sid_model == SID_MODEL_8580)
+                                    ? SID_REVISION_8580_R5
+                                    : SID_REVISION_6581_R4AR;
+        }
         format_load_result_free(&pending_load_.result);
         pending_load_.active = false;
         boot_completed_ = true;
@@ -512,224 +522,90 @@ void C64SystemWrapper::apply_pending_load() {
 }
 
 // ============================================================================
-// SID Loader — Inject 6502 player stub for SID music playback
+// ensure_compatible_for_sid — Auto-configure the C64 for SID file requirements
 // ============================================================================
 //
-// For PSID files with play_addr != 0:
-//   1. Write tune data to load_addr
-//   2. Write a small 6502 player stub in $0340–$03FF (cassette buffer area)
-//   3. The stub: SEI, call init(subtune), hook CIA1 Timer A IRQ to call play,
-//      set timer period for correct playback rate, CLI, loop forever
-//
-// For PSID files with play_addr == 0 (tune provides own IRQ handler):
-//   1. Write tune data to load_addr
-//   2. Call init(subtune) — the tune sets up its own interrupt vectors
-//
-// For RSID files:
-//   1. Write tune data to load_addr
-//   2. Call init(subtune) — tune handles its own environment completely
-//
-// The KERNAL IRQ dispatcher at $FF48 does:
-//   PHA / TXA / PHA / TYA / PHA / JMP ($0314)
-// The default ($0314) = $EA31 (normal KERNAL IRQ handler).
-// $EA81 is the KERNAL IRQ exit: PLA / TAY / PLA / TAX / PLA / RTI.
-//
-// Our player stub hooks $0314/$0315 to point to a small routine that:
-//   JSR play_addr / LDA $DC0D (ack CIA1) / JMP $EA81 (KERNAL exit)
-//
-// Speed: The speed_flags word has one bit per subtune (0-based):
-//   bit=0 → vertical blank rate (~50Hz PAL, ~60Hz NTSC)
-//   bit=1 → CIA timer (default 60Hz)
-// PAL clock = 985248 Hz → 50Hz = 19705 cycles, 60Hz = 16421 cycles
+// Strategy:
+//   1. Determine the needed VIC-II standard (PAL/NTSC) from the SID header's
+//      video field.  If "UNKNOWN" or "BOTH", keep the current standard.
+//   2. Determine the needed SID chip revision from the SID header's model
+//      field.  If "UNKNOWN" or "BOTH", keep the current revision.
+//   3. If the region must change, we must fully recreate the C64 because the
+//      VIC-II chip is wired to a specific standard at creation time.
+//      shutdown() → update config → initialize() gives a fresh system.
+//   4. If the region is already correct, just reset() for a clean state.
+//   5. In both cases, apply the SID revision and patch the KERNAL to skip
+//      the RAMTAS memory test (fast boot for SID playback).
 // ============================================================================
 
-void C64SystemWrapper::apply_sid_load(const sid_header_t* sid) {
-    if (!sid || !c64_ || !c64_->ram) return;
+void C64SystemWrapper::ensure_compatible_for_sid(const sid_header_t* sid) {
+    if (!sid) return;
 
-    const char* type_str = (sid->type == SID_TYPE_RSID) ? "RSID" : "PSID";
-    printf("C64: %s loader — \"%s\" by %s\n", type_str, sid->name, sid->author);
-    printf("C64: load=$%04X init=$%04X play=$%04X songs=%u default=%u\n",
-           sid->load_addr, sid->init_addr, sid->play_addr,
-           sid->num_songs, sid->start_song);
+    // ---- Determine needed video standard ----
+    vicii_standard_t needed_standard = c64_config_.vicii_standard;  // default: keep
+    int needed_region_index = config_.region_option_index;
 
-    uint8_t* ram = c64_->ram->memory;
-    mos6510_t* cpu = (mos6510_t*)c64_->mos6510;
-
-    // ---- Step 1: Write tune payload to C64 RAM ----
-    const program_data_t* prog = &pending_load_.result.program;
-    if (prog->data && prog->data_size > 0) {
-        memcpy(&ram[sid->load_addr], prog->data, prog->data_size);
-        printf("C64: SID payload written: $%04X–$%04X (%zu bytes)\n",
-               sid->load_addr,
-               (unsigned)(sid->load_addr + prog->data_size - 1),
-               prog->data_size);
+    if (sid->video == SID_VIDEO_PAL) {
+        needed_standard = VIC_PAL;
+        needed_region_index = 0;
+    } else if (sid->video == SID_VIDEO_NTSC) {
+        needed_standard = VIC_NTSC;
+        needed_region_index = 1;
     }
+    // SID_VIDEO_UNKNOWN / SID_VIDEO_BOTH → keep current
 
-    // ---- Step 2: Set SID revision from metadata (v2+ flags) ----
-    if (sid->version >= 2 && sid->sid_model != SID_MODEL_UNKNOWN) {
-        sid_revision_t rev;
-        if (sid->sid_model == SID_MODEL_8580) {
-            rev = SID_REVISION_8580_R5;
-        } else {
-            // 6581 or "both" — prefer 6581 (most tunes are authored for it)
-            rev = SID_REVISION_6581_R4AR;
+    // ---- Determine needed SID revision ----
+    sid_revision_t needed_revision = pending_sid_revision_;  // default: keep
+    if (sid->version >= 2 && sid->sid_model == SID_MODEL_6581) {
+        needed_revision = SID_REVISION_6581_R4AR;
+    } else if (sid->version >= 2 && sid->sid_model == SID_MODEL_8580) {
+        needed_revision = SID_REVISION_8580_R5;
+    }
+    // SID_MODEL_UNKNOWN / SID_MODEL_BOTH → keep current
+
+    // ---- Apply region change (requires full recreation) ----
+    bool region_changed = (needed_standard != c64_config_.vicii_standard);
+
+    if (region_changed) {
+        printf("C64: SID requires %s — recreating system (was %s)\n",
+               needed_standard == VIC_NTSC ? "NTSC" : "PAL",
+               c64_config_.vicii_standard == VIC_NTSC ? "NTSC" : "PAL");
+
+        shutdown();
+
+        // Update the internal config before recreation
+        c64_config_.vicii_standard = needed_standard;
+        config_.region_option_index = needed_region_index;
+        pending_sid_revision_ = needed_revision;
+
+        // Sync cycles_per_frame_ and hardware_traits_ via apply_configuration
+        apply_configuration();
+
+        if (!initialize()) {
+            printf("C64: ERROR — failed to reinitialize after region change\n");
+            return;
         }
-        if (c64_->sid) {
-            mos6581_set_revision(c64_->sid, rev);
-            pending_sid_revision_ = rev;
-            printf("C64: SID revision set to %s (from SID file flags)\n",
-                   rev == SID_REVISION_8580_R5 ? "MOS 8580" : "MOS 6581");
-        }
-    }
-
-    // ---- Step 3: Determine playback timer period ----
-    // Check the speed flag for the default subtune
-    uint16_t subtune = sid->start_song;
-    if (subtune > 0) subtune--;  // Convert 1-based to 0-based index
-
-    bool use_cia_rate = false;
-    if (subtune < 32) {
-        use_cia_rate = (sid->speed_flags >> subtune) & 1;
-    }
-
-    // PAL 50Hz: 985248/50 = 19705 cycles
-    // CIA 60Hz: 985248/60 = 16421 cycles
-    uint16_t timer_period = use_cia_rate ? 16421 : 19705;
-    printf("C64: Speed flag for subtune %u: %s (timer=%u cycles)\n",
-           subtune + 1, use_cia_rate ? "CIA" : "VBI", timer_period);
-
-    // ---- Step 4: Inject 6502 player stub at $0340 (cassette buffer) ----
-    //
-    // The stub structure (PSID with play_addr != 0):
-    //
-    //   $0340: SEI                      ; Disable interrupts during setup
-    //   $0341: LDA #<play_addr
-    //   $0343: STA $0314               ; IRQ vector low → our handler
-    //   $0346: LDA #>play_addr
-    //   $0348: STA $0315               ; IRQ vector high
-    //   $034B: LDA #<timer_lo
-    //   $034D: STA $DC04               ; CIA1 Timer A low
-    //   $0350: LDA #>timer_hi
-    //   $0352: STA $DC05               ; CIA1 Timer A high
-    //   $0355: LDA #$81
-    //   $0357: STA $DC0D               ; Enable CIA1 Timer A IRQ
-    //   $035A: LDA #$11
-    //   $035C: STA $DC0E               ; Start Timer A, continuous mode
-    //   $035F: LDA #(subtune-1)
-    //   $0361: JSR init_addr           ; Call tune init
-    //   $0364: CLI                      ; Enable interrupts
-    //   $0365: JMP $0365               ; Infinite loop (IRQ handles play)
-    //
-    //   IRQ handler at $0380:
-    //   $0380: JSR play_addr           ; Call play routine
-    //   $0383: LDA $DC0D               ; Acknowledge CIA1 interrupt
-    //   $0386: JMP $EA81               ; KERNAL IRQ exit (restore regs + RTI)
-    //
-
-    const uint16_t STUB_BASE = 0x0340;
-    const uint16_t IRQ_HANDLER = 0x0380;
-
-    bool needs_timer_irq = (sid->type == SID_TYPE_PSID && sid->play_addr != 0);
-
-    if (needs_timer_irq) {
-        // Build the IRQ handler first (at $0380)
-        uint16_t p = IRQ_HANDLER;
-        ram[p++] = 0x20;  // JSR play_addr
-        ram[p++] = (uint8_t)(sid->play_addr & 0xFF);
-        ram[p++] = (uint8_t)(sid->play_addr >> 8);
-        ram[p++] = 0xAD;  // LDA $DC0D (acknowledge CIA1 interrupt)
-        ram[p++] = 0x0D;
-        ram[p++] = 0xDC;
-        ram[p++] = 0x4C;  // JMP $EA81 (KERNAL IRQ exit)
-        ram[p++] = 0x81;
-        ram[p++] = 0xEA;
-
-        // Build the init stub (at $0340)
-        p = STUB_BASE;
-        ram[p++] = 0x78;  // SEI
-
-        // Hook IRQ vector $0314/$0315 → our handler at IRQ_HANDLER
-        ram[p++] = 0xA9;  // LDA #<IRQ_HANDLER
-        ram[p++] = (uint8_t)(IRQ_HANDLER & 0xFF);
-        ram[p++] = 0x8D;  // STA $0314
-        ram[p++] = 0x14;
-        ram[p++] = 0x03;
-        ram[p++] = 0xA9;  // LDA #>IRQ_HANDLER
-        ram[p++] = (uint8_t)(IRQ_HANDLER >> 8);
-        ram[p++] = 0x8D;  // STA $0315
-        ram[p++] = 0x15;
-        ram[p++] = 0x03;
-
-        // Set CIA1 Timer A period
-        ram[p++] = 0xA9;  // LDA #<timer_period
-        ram[p++] = (uint8_t)(timer_period & 0xFF);
-        ram[p++] = 0x8D;  // STA $DC04
-        ram[p++] = 0x04;
-        ram[p++] = 0xDC;
-        ram[p++] = 0xA9;  // LDA #>timer_period
-        ram[p++] = (uint8_t)(timer_period >> 8);
-        ram[p++] = 0x8D;  // STA $DC05
-        ram[p++] = 0x05;
-        ram[p++] = 0xDC;
-
-        // Enable CIA1 Timer A interrupt
-        ram[p++] = 0xA9;  // LDA #$81
-        ram[p++] = 0x81;
-        ram[p++] = 0x8D;  // STA $DC0D
-        ram[p++] = 0x0D;
-        ram[p++] = 0xDC;
-
-        // Start Timer A in continuous mode
-        ram[p++] = 0xA9;  // LDA #$11
-        ram[p++] = 0x11;
-        ram[p++] = 0x8D;  // STA $DC0E
-        ram[p++] = 0x0E;
-        ram[p++] = 0xDC;
-
-        // Call init subroutine: LDA #subtune, JSR init_addr
-        ram[p++] = 0xA9;  // LDA #subtune (0-based)
-        ram[p++] = (uint8_t)subtune;
-        ram[p++] = 0x20;  // JSR init_addr
-        ram[p++] = (uint8_t)(sid->init_addr & 0xFF);
-        ram[p++] = (uint8_t)(sid->init_addr >> 8);
-
-        // CLI + infinite loop
-        ram[p++] = 0x58;  // CLI
-        uint16_t loop_addr = p;
-        ram[p++] = 0x4C;  // JMP loop_addr
-        ram[p++] = (uint8_t)(loop_addr & 0xFF);
-        ram[p++] = (uint8_t)(loop_addr >> 8);
-
-        printf("C64: Player stub at $%04X, IRQ handler at $%04X\n", STUB_BASE, IRQ_HANDLER);
     } else {
-        // PSID with play_addr==0, or RSID:
-        // Just call init with subtune in A register, then loop.
-        // The tune's init routine sets up its own IRQ handler.
-        uint16_t p = STUB_BASE;
-        ram[p++] = 0xA9;  // LDA #subtune (0-based)
-        ram[p++] = (uint8_t)subtune;
-        ram[p++] = 0x20;  // JSR init_addr
-        ram[p++] = (uint8_t)(sid->init_addr & 0xFF);
-        ram[p++] = (uint8_t)(sid->init_addr >> 8);
-        uint16_t loop_addr = p;
-        ram[p++] = 0x4C;  // JMP loop_addr
-        ram[p++] = (uint8_t)(loop_addr & 0xFF);
-        ram[p++] = (uint8_t)(loop_addr >> 8);
-
-        printf("C64: Init-only stub at $%04X (tune manages own IRQ)\n", STUB_BASE);
+        // Same region — just update SID revision in-place and reset
+        if (needed_revision != pending_sid_revision_) {
+            pending_sid_revision_ = needed_revision;
+            if (c64_ && c64_->sid) {
+                mos6581_set_revision(c64_->sid, needed_revision);
+                printf("C64: SID revision set to %s (from SID file flags)\n",
+                       needed_revision == SID_REVISION_8580_R5 ? "MOS 8580" : "MOS 6581");
+            }
+        }
+        reset();
     }
 
-    // ---- Step 5: Set CPU to execute the stub ----
-    mos6510_set_a(cpu, (uint8_t)subtune);
-    mos6510_set_x(cpu, 0);
-    mos6510_set_y(cpu, 0);
-    mos6510_set_s(cpu, 0xFF);    // Reset stack
-    mos6510_set_pc(cpu, STUB_BASE);
-    mos6510_transition_to_fetch(cpu);  // Reset pipeline for clean fetch
+    // ---- Patch KERNAL for fast SID boot ----
+    c64_patch_skip_memtest(c64_);
 
-    printf("C64: PC set to $%04X — SID playback starting\n", STUB_BASE);
+    // Reset boot-completed flag so the deferred load machinery works
+    boot_completed_ = false;
 }
 
+// ============================================================================
 uint32_t* C64SystemWrapper::get_framebuffer() {
     if (c64_ && c64_->vicii) {
         return c64_->vicii->pixel.framebuffer;
@@ -941,6 +817,26 @@ SystemConfiguration C64SystemWrapper::detect_optimal_configuration(
             if (hardware_traits_.region_options.size() > 1) {
                 config.region_option_index = 1;
                 printf("C64: Filename contains 'ntsc' â€” selecting NTSC region\n");
+            }
+        }
+    }
+
+    // --- SID file: v2+ flags encode video standard directly ---
+    if (ext && (strcmp(ext, ".sid") == 0 || strcmp(ext, ".SID") == 0)) {
+        if (data && size >= 4 &&
+            (memcmp(data, "PSID", 4) == 0 || memcmp(data, "RSID", 4) == 0)) {
+            sid_header_t sid_hdr;
+            if (sid_parse_header(data, size, &sid_hdr) && sid_hdr.version >= 2) {
+                if (sid_hdr.video == SID_VIDEO_NTSC) {
+                    if (hardware_traits_.region_options.size() > 1) {
+                        config.region_option_index = 1;  // NTSC
+                        printf("C64: SID flags specify NTSC — selecting NTSC region\n");
+                    }
+                } else if (sid_hdr.video == SID_VIDEO_PAL) {
+                    config.region_option_index = 0;  // PAL
+                    printf("C64: SID flags specify PAL — selecting PAL region\n");
+                }
+                // SID_VIDEO_BOTH or UNKNOWN: keep default (PAL)
             }
         }
     }

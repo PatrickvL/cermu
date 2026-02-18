@@ -286,6 +286,9 @@ set(SYSTEM_SOURCES
     src/systems/c64/c64_test_framework.cpp
     src/systems/c64/c64_screenshot.cpp
     src/systems/c64/c64_system_wrapper.cpp
+    src/systems/c64/c64_kernal_patches.cpp
+    src/systems/c64/c64_screen_utils.cpp
+    src/systems/c64/c64_sid_player.cpp
     src/systems/c64/c64_keyboard_matrix.cpp
     
     # CHIP-8 system

@@ -88,9 +88,17 @@ struct vicii_test_state_t {
 /// Patch the KERNAL ROM in-place to skip the RAMTAS memory test
 /// AND redirect the BASIC cold-start JMP to the test program.
 /// Must be called AFTER c64_bus_init_unified_pointers().
+///
+/// NOTE: The RAMTAS skip is now delegated to the shared c64_patch_skip_memtest()
+/// in c64_kernal_patches.h.  This function still owns Patch B (BASIC redirect).
 void patch_kernal_for_test(c64_t* c64);
-/* TODO: 
-patch_kernal_for_test should be split up with the RAMTAS skip being independent from the vicii_test_harness. This RAMTAS skip patch might even become part of a registry of patches that users can configure per system - if the only side-effect of the RAMTAS skip patch is to burn less cycles, then it would be good to enable it by default. Also, once the kernal boot is passed after the RAMTAS call, it would also be good to restore the original contents of the KERNAL ROM area that got patched, so client code can't even detect anymore it was there. An alternative would be to detect the CPU emulator PC entering the RAMTAS function and immediately jump past it. That way there would not even be a patch in ROM, at the cost of detecting PC hitting the RAMTAS ROM code... 
+/* TODO:
+Once the kernal boot is passed after the RAMTAS call, it would be good to
+restore the original contents of the KERNAL ROM area that got patched, so
+client code can't even detect anymore it was there.  An alternative would be
+to detect the CPU emulator PC entering the RAMTAS function and immediately
+jump past it.  That way there would not even be a patch in ROM, at the cost
+of detecting PC hitting the RAMTAS ROM code...
 */
 
 /// Inject the 6510 test program into RAM at TEST_LOAD_ADDR.

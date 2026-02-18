@@ -1,0 +1,50 @@
+// =============================================================================
+// C64 Screen Text Utilities — Implementation
+// =============================================================================
+
+#include "c64_screen_utils.h"
+
+uint8_t c64_ascii_to_screencode(char c) {
+    if (c >= 'A' && c <= 'Z') return (uint8_t)(c - 64);   // $01–$1A
+    if (c >= 'a' && c <= 'z') return (uint8_t)(c - 96);   // $01–$1A (same)
+    if (c >= ' ' && c <= '?') return (uint8_t)c;           // $20–$3F
+    if (c == '@') return 0x00;
+    return 0x2E;  // '.' for unmapped chars
+}
+
+void c64_write_screen_text(uint8_t* screen, uint8_t* color,
+                           int row, int col,
+                           const char* text, uint8_t color_val) {
+    int offset = row * 40 + col;
+    for (int i = 0; text[i] && col + i < 40; i++) {
+        screen[offset + i] = c64_ascii_to_screencode(text[i]);
+        color[offset + i] = color_val;
+    }
+}
+
+void c64_fill_screen_row(uint8_t* screen, uint8_t* color,
+                         int row, uint8_t sc, uint8_t col_val) {
+    int offset = row * 40;
+    for (int i = 0; i < 40; i++) {
+        screen[offset + i] = sc;
+        color[offset + i] = col_val;
+    }
+}
+
+int c64_write_hex16(uint8_t* screen, uint8_t* color,
+                    int row, int col, uint16_t val, uint8_t col_val) {
+    static const char hex[] = "0123456789ABCDEF";
+    char buf[6];
+    buf[0] = '$';
+    buf[1] = hex[(val >> 12) & 0xF];
+    buf[2] = hex[(val >> 8) & 0xF];
+    buf[3] = hex[(val >> 4) & 0xF];
+    buf[4] = hex[val & 0xF];
+    buf[5] = '\0';
+    int offset = row * 40 + col;
+    for (int i = 0; i < 5 && col + i < 40; i++) {
+        screen[offset + i] = c64_ascii_to_screencode(buf[i]);
+        color[offset + i] = col_val;
+    }
+    return 5;
+}
