@@ -56,9 +56,15 @@ static void voice_update_exponential_period(voice_t* voice) {
 // VOICE INTERACTION (SYNC AND RING MODULATION)
 // =============================================================================
 
-void voice_apply_sync(voice_t* voice, voice_t* sync_source) {
-    // Sync resets accumulator when sync source MSB rises
+void voice_apply_sync(voice_t* voice, voice_t* sync_source, voice_t* sync_source_source) {
+    // Sync resets accumulator when sync source MSB rises.
+    // reSID chain-sync protection: if the sync source was itself synced on
+    // the same cycle (its own source's MSB also rose), the destination is NOT
+    // synced. Verified by sampling OSC3 on real hardware.
     if ((voice->control_reg & VCREG_SYNC) && sync_source->sync_trigger) {
+        if ((sync_source->control_reg & VCREG_SYNC) && sync_source_source->sync_trigger) {
+            return; // chain-sync protection
+        }
         voice->waveform_accumulator = 0;
     }
 }
@@ -85,8 +91,12 @@ void voice_envelope_clock(voice_t* voice) {
             break;
             
         case CYCLE_ATTACK:
-            // Attack always increments (exponential counter not used)
+            // Attack always increments (exponential counter not used for gating).
+            // reSID: the first envelope step in attack also resets the exponential
+            // counter. This ensures decay starts with a fresh counter after attack
+            // completes. Verified by sampling ENV3 on real hardware.
             if (voice->envelope_hold_zero) break;
+            voice->exponential_counter = 0;
             voice->envelope_amplitude = (voice->envelope_amplitude + 1) & 0xFF;
             if (voice->envelope_amplitude == 0xFF) {
                 voice->envelope_cycle = CYCLE_DECAY;
@@ -100,8 +110,9 @@ void voice_envelope_clock(voice_t* voice) {
             // Each rate tick gated by the exponential counter, if envelope !=
             // sustain_level, decrement. Otherwise hold. If sustain is changed
             // while in this state, decay resumes automatically.
+            // reSID uses strict == for exponential counter comparison (not >=).
             if (voice->envelope_hold_zero) break;
-            if (++voice->exponential_counter >= voice->exponential_counter_period) {
+            if (++voice->exponential_counter == voice->exponential_counter_period) {
                 voice->exponential_counter = 0;
                 if (voice->envelope_amplitude != voice->sustain_level) {
                     voice->envelope_amplitude = (voice->envelope_amplitude - 1) & 0xFF;
@@ -124,7 +135,7 @@ void voice_envelope_clock(voice_t* voice) {
             
         case CYCLE_RELEASE:
             if (voice->envelope_hold_zero) break;
-            if (++voice->exponential_counter >= voice->exponential_counter_period) {
+            if (++voice->exponential_counter == voice->exponential_counter_period) {
                 voice->exponential_counter = 0;
                 voice->envelope_amplitude = (voice->envelope_amplitude - 1) & 0xFF;
             }
@@ -262,7 +273,7 @@ void mos6581_filter_reset(mos6581_t* sid) {
     f->band_pass_output = 0.0f;
     f->high_pass_output = 0.0f;
     f->g = 0.0f;
-    f->k = 1.7f;   // minimum resonance → maximum damping
+    f->k = 1.0f / 0.707f; // ~1.414 — Butterworth (no resonance)
     f->a1 = 0.0f;
     f->a2 = 0.0f;
     f->a3 = 0.0f;
@@ -283,11 +294,17 @@ void mos6581_write_resonance_control_register_value(mos6581_t* sid, uint8_t valu
     // Extract resonance nibble for the float computation.
     sid->filter_state.resonance = (float)((value >> RESON_RES_SHIFT) & 0x0F);
     
-    // Recompute k and derived SVF coefficients
+    // Recompute k and derived SVF coefficients.
+    // The 6581's resonance is controlled by a VCR (voltage-controlled resistor)
+    // whose nonlinear characteristics limit the effective Q factor to ~10-20.
+    // reSID models this through circuit-level simulation; we approximate with
+    // a direct Q mapping: Q_min ≈ 0.707 (Butterworth) to Q_max ≈ 15.
+    // Previous mapping (k = 1.7*(1-res/15), clamped to 0.01) gave Q_max = 100,
+    // which caused enormous resonant gain (+40 dB) on filter sweeps → "pieuw".
     filter_state_t* f = &sid->filter_state;
     float res_norm = f->resonance / FILTER_RESONANCE_MAX;
-    f->k = 1.7f * (1.0f - res_norm);
-    if (f->k < 0.01f) f->k = 0.01f;
+    float Q = 0.707f + res_norm * 14.3f;  // Q range [0.707, 15.0]
+    f->k = 1.0f / Q;
     
     float g = f->g;
     float k = f->k;
@@ -428,6 +445,7 @@ void voice_reset(voice_t* voice) {
     voice->oscillator_output = 0;
     voice->envelope_output = 0;
     voice->result = 0;
+    voice->sample_acc = 0;
 }
 
 void voice_clock_cycle(voice_t* voice) {
@@ -500,7 +518,7 @@ void voice_set_waveform_output(voice_t* voice, voice_t* ring_source) {
     // bits don't pull any DAC lines low in the combined AND — matching real
     // hardware where unselected waveform switches are open.
     voice->triangle_output = (wf & WAVEFORM_TRIANGLE)
-        ? voice_generate_triangle(ring_acc) : 0xFFF;
+        ? voice_generate_triangle(ring_acc) : OSCILLATOR_MAX;
     voice->sawtooth_output = (wf & WAVEFORM_SAWTOOTH)
         ? (voice->waveform_accumulator >> OSCILLATOR_SHIFT_SAW) : OSCILLATOR_MAX;
     voice->pulse_output = (wf & WAVEFORM_PULSE)
@@ -541,15 +559,27 @@ inline bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) 
 
     // Step 3: Apply oscillator sync.
     // Sync source mapping: voice1←voice3, voice2←voice1, voice3←voice2
-    voice_apply_sync(&sid->voice1, &sid->voice3);
-    voice_apply_sync(&sid->voice2, &sid->voice1);
-    voice_apply_sync(&sid->voice3, &sid->voice2);
+    voice_apply_sync(&sid->voice1, &sid->voice3, &sid->voice2);
+    voice_apply_sync(&sid->voice2, &sid->voice1, &sid->voice3);
+    voice_apply_sync(&sid->voice3, &sid->voice2, &sid->voice1);
 
     // Step 4: Generate waveform outputs with ring mod baked in.
     // Ring source mapping matches sync: voice1←voice3, etc.
     voice_set_waveform_output(&sid->voice1, &sid->voice3);
     voice_set_waveform_output(&sid->voice2, &sid->voice1);
     voice_set_waveform_output(&sid->voice3, &sid->voice2);
+
+    // Step 4.5: Accumulate per-voice (centered_waveform × envelope) for anti-aliasing.
+    // reSID runs the filter at ~1 MHz then resamples with a FIR; we average the
+    // voice output between sample points (box filter) as first-order anti-aliasing.
+    // Without this, point-sampling the waveform at 44.1 kHz creates aliasing artifacts
+    // from harmonics above Nyquist — audible as metallic tones or sweep artifacts.
+    for (int i = 0; i < 3; i++) {
+        voice_t* v = sid->voices[i];
+        v->sample_acc += (int64_t)((int32_t)v->oscillator_waveform - OSCILLATOR_CENTER)
+                       * (int64_t)v->envelope_amplitude;
+    }
+    sid->sample_cycle_count++;
 
     // Step 5: Generate output samples at the target sample rate (~44.1 kHz).
     // Voice mixing and SVF filter processing happen here — NOT every cycle.
@@ -561,17 +591,23 @@ inline bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) 
         if (sid->sample_accumulator >= 1.0) {
             sid->sample_accumulator -= 1.0;
 
-            // --- Voice mixing ---
-            // oscillator_waveform already includes ring modulation (applied per-cycle).
-            // Center waveform BEFORE envelope so silent voices produce zero.
-            // 12-bit waveform centered: -2048..+2047
-            // × 8-bit envelope 0…255 → signed product -522240..+521985
-            // Scale so the SUM of all 3 voices at max ≈ ±1.0 to prevent
-            // clipping (real SID mixer has headroom for all voices).
-            const float inv_scale = 1.0f / (3.0f * OSCILLATOR_CENTER * ENVELOPE_MAX);
-            float v1 = (float)(((int32_t)sid->voice1.oscillator_waveform - OSCILLATOR_CENTER) * (int32_t)sid->voice1.envelope_amplitude) * inv_scale;
-            float v2 = (float)(((int32_t)sid->voice2.oscillator_waveform - OSCILLATOR_CENTER) * (int32_t)sid->voice2.envelope_amplitude) * inv_scale;
-            float v3 = (float)(((int32_t)sid->voice3.oscillator_waveform - OSCILLATOR_CENTER) * (int32_t)sid->voice3.envelope_amplitude) * inv_scale;
+            // --- Voice mixing (anti-aliased) ---
+            // Use averaged (centered_waveform × envelope) accumulated over all
+            // CPU cycles since the last sample point (~22 cycles at 985 kHz/44.1 kHz).
+            // This box-filter averaging provides first-order anti-aliasing,
+            // suppressing harmonics above Nyquist that would otherwise fold back
+            // into the audible range as metallic/sweep artifacts.
+            const float cyc = (sid->sample_cycle_count > 0) ? (float)sid->sample_cycle_count : 1.0f;
+            const float inv_scale = 1.0f / (3.0f * OSCILLATOR_CENTER * ENVELOPE_MAX * cyc);
+            float v1 = (float)sid->voice1.sample_acc * inv_scale;
+            float v2 = (float)sid->voice2.sample_acc * inv_scale;
+            float v3 = (float)sid->voice3.sample_acc * inv_scale;
+
+            // Reset accumulators for next sample period
+            sid->voice1.sample_acc = 0;
+            sid->voice2.sample_acc = 0;
+            sid->voice3.sample_acc = 0;
+            sid->sample_cycle_count = 0;
 
             float filtered_input = 0.0f;
             float unfiltered_output = 0.0f;
@@ -914,6 +950,7 @@ void mos6581_reset(mos6581_t* sid) {
     sid->cycle_count = 0;
     sid->subcycle_count = 0;
     sid->sample_accumulator = 0.0;
+    sid->sample_cycle_count = 0;
 
     // Flush the sample ring buffer so the audio callback doesn't replay
     // stale data from the previous session.
@@ -979,6 +1016,7 @@ void* mos6581_system_create(chip_descriptor_t* desc) {
     sid->sample_rate = 44100.0f;
     sid->cpu_clock = 985248.0f;   // PAL C64 default
     sid->sample_accumulator = 0.0;
+    sid->sample_cycle_count = 0;
     sid->enable_filter = true;
     sid->enable_distortion = true;
     sid->enable_digiboost = true;
