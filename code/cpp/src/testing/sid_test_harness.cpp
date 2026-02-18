@@ -1187,9 +1187,11 @@ int test_envelope_adsr_bug(harness_t* h) {
 // Test: Ring Modulation
 // ─────────────────────────────────────────────────────────────────────────────
 // Voice 3 ring-modulates with voice 2's accumulator MSB.
-// When ring mod is active and triangle waveform is selected:
-//   If voice 2 acc MSB = 1: triangle output is XOR'd (inverted)
-//   If voice 2 acc MSB = 0: triangle output is normal
+// Ring modulation XORs the triangle's effective MSB with the complement of the
+// modulating voice's MSB (reSID: ring_acc = acc ^ (~source_acc & msb_mask)).
+// To observe this, the ring source must be at a DIFFERENT frequency from the
+// target voice so they're not phase-locked — otherwise the ring mod just
+// produces a constant MSB flip.
 // ─────────────────────────────────────────────────────────────────────────────
 
 int test_ring_modulation(harness_t* h) {
@@ -1200,14 +1202,15 @@ int test_ring_modulation(harness_t* h) {
     cmd_reset(&script);
     cmd_label(&script, "ring_mod");
 
-    // Zero voice 2 accumulator using test bit
+    // Voice 2 (ring source for voice 3): freq = 0x0200
+    // MSB flips at cycle 0x800000/0x0200 = 16384
     cmd_write(&script, REG_V2_FREQ_LO, 0x00);
-    cmd_write(&script, REG_V2_FREQ_HI, 0x01);  // freq = 0x0100
+    cmd_write(&script, REG_V2_FREQ_HI, 0x02);  // freq = 0x0200
     cmd_write(&script, REG_V2_CONTROL, CTRL_SAWTOOTH | CTRL_TEST);
     cmd_run(&script, 1);
     cmd_write(&script, REG_V2_CONTROL, CTRL_SAWTOOTH);
 
-    // Zero voice 3 and set triangle + ring mod
+    // Voice 3: freq = 0x0100 (different from voice 2 — NOT phase-locked)
     script_set_v3_freq(&script, 0x0100);
     cmd_write(&script, REG_V3_CONTROL, CTRL_TRIANGLE | CTRL_RING | CTRL_TEST);
     cmd_run(&script, 1);
@@ -1215,16 +1218,14 @@ int test_ring_modulation(harness_t* h) {
     cmd_write(&script, REG_MODE_VOL, 0x0F);
 
     // Phase 1: voice 2 acc MSB = 0 (first half of its cycle)
-    // Triangle output is normal
     cmd_run(&script, 128);
     cmd_snapshot(&script);
 
-    // Run until voice 2's acc MSB flips to 1
-    // voice 2 acc = 0x800000 at cycle 0x8000 = 32768
-    cmd_run(&script, 32640);
+    // Run until voice 2's MSB flips to 1 (at cycle 16384)
+    cmd_run(&script, 16256);
     cmd_snapshot(&script);
 
-    // Now voice 2's MSB is 1 — ring mod should invert triangle
+    // Voice 2's MSB is now 1 — ring mod should change triangle output
     cmd_run(&script, 128);
     cmd_snapshot(&script);
 
