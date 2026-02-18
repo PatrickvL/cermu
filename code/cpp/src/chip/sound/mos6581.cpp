@@ -57,10 +57,8 @@ static void voice_update_exponential_period(voice_t* voice) {
 // =============================================================================
 
 void voice_apply_sync(voice_t* voice, voice_t* sync_source) {
-    if (!voice || !sync_source || !(voice->control_reg & VCREG_SYNC)) return;
-    
     // Sync resets accumulator when sync source MSB rises
-    if (sync_source->sync_trigger) {
+    if ((voice->control_reg & VCREG_SYNC) && sync_source->sync_trigger) {
         voice->waveform_accumulator = 0;
     }
 }
@@ -69,16 +67,11 @@ void voice_apply_sync(voice_t* voice, voice_t* sync_source) {
 // ENVELOPE GENERATION
 // =============================================================================
 
-uint32_t voice_rate_to_period(voice_t* voice, int rate) {
-    if (!voice) return 0;
-    
-    // Convert rate (0-15) to period in cycles
+uint32_t voice_rate_to_period(int rate) {
     return envelope_rate_periods[rate & 0x0F];
 }
 
 void voice_envelope_clock(voice_t* voice) {
-    if (!voice) return;
-    
     // reSID-accurate 8-bit envelope generator.
     // Attack: envelope_counter increments by 1 each rate tick.
     //         Transitions to decay when reaching 0xFF.
@@ -97,9 +90,8 @@ void voice_envelope_clock(voice_t* voice) {
             voice->envelope_amplitude = (voice->envelope_amplitude + 1) & 0xFF;
             if (voice->envelope_amplitude == 0xFF) {
                 voice->envelope_cycle = CYCLE_DECAY;
-                // Extract decay_rate from regs[] (ATDCY low nibble)
-                uint8_t decay_rate = voice->sid->regs[voice->voice_index * 7 + 5] & 0x0F;
-                voice->envelope_rate_period = voice_rate_to_period(voice, decay_rate);
+                uint8_t decay_rate = voice->sid->regs[voice->voice_index * VOICE_REGS + VOICE_ATDCY] & 0x0F;
+                voice->envelope_rate_period = voice_rate_to_period(decay_rate);
             }
             break;
             
@@ -142,8 +134,6 @@ void voice_envelope_clock(voice_t* voice) {
 }
 
 void voice_update_envelope(voice_t* voice) {
-    if (!voice) return;
-    
     // reSID-accurate 15-bit rate counter.
     // The rate counter increments each cycle. When it matches the rate period,
     // the envelope is clocked. The counter is 15-bit and wraps at 0x8000.
@@ -153,7 +143,7 @@ void voice_update_envelope(voice_t* voice) {
     // reSID reference: envelope.h — rate_counter is 15-bit, uses != comparison.
     if (voice->envelope_rate_counter != voice->envelope_rate_period) {
         // Increment with 15-bit wrapping (counter skips 0 on wrap)
-        if (++voice->envelope_rate_counter & 0x8000) {
+        if (++voice->envelope_rate_counter & ENVELOPE_RATE_OVERFLOW) {
             voice->envelope_rate_counter = 1; // Wrap: 0x7FFF → 0x0001 (skip 0)
         }
         return;
@@ -169,8 +159,6 @@ void voice_update_envelope(voice_t* voice) {
 // =============================================================================
 
 void mos6581_filter_update_cutoff(mos6581_t* sid) {
-    if (!sid) return;
-    
     filter_state_t* f = &sid->filter_state;
     
     // Calculate cutoff frequency in Hz from the 11-bit register (0-2047).
@@ -208,7 +196,7 @@ void mos6581_filter_update_cutoff(mos6581_t* sid) {
 }
 
 float mos6581_filter_process(mos6581_t* sid, float input) {
-    if (!sid || !sid->enable_filter) return input;
+    if (!sid->enable_filter) return input;
     
     filter_state_t* f = &sid->filter_state;
     
@@ -255,19 +243,17 @@ float mos6581_filter_process(mos6581_t* sid, float input) {
     f->band_pass_output = bp;
     f->high_pass_output = hp;
     
-    // Mix filter outputs based on selected filter mode (from SIGVOL reg 0x18)
+    // Mix filter outputs based on selected filter mode
     float output = 0.0f;
-    uint8_t sigvol = sid->regs[0x18];
-    if (sigvol & 0x10) output += lp;
-    if (sigvol & 0x20) output += bp;
-    if (sigvol & 0x40) output += hp;
+    uint8_t sigvol = sid->regs[SID_REG_SIGVOL];
+    if (sigvol & SIGVOL_LP) output += lp;
+    if (sigvol & SIGVOL_BP) output += bp;
+    if (sigvol & SIGVOL_HP) output += hp;
     
     return output;
 }
 
 void mos6581_filter_reset(mos6581_t* sid) {
-    if (!sid) return;
-    
     filter_state_t* f = &sid->filter_state;
     
     f->cutoff_frequency = 0.0f;
@@ -286,8 +272,6 @@ void mos6581_filter_reset(mos6581_t* sid) {
 }
 
 void mos6581_filter_init(mos6581_t* sid) {
-    if (!sid) return;
-    
     mos6581_filter_reset(sid);
 }
 
@@ -296,11 +280,8 @@ void mos6581_filter_init(mos6581_t* sid) {
 // =============================================================================
 
 void mos6581_write_resonance_control_register_value(mos6581_t* sid, uint8_t value) {
-    if (!sid) return;
-    
-    // No decoded fields — regs[0x17] stores the raw byte.
     // Extract resonance nibble for the float computation.
-    sid->filter_state.resonance = (float)((value >> 4) & 0x0F);
+    sid->filter_state.resonance = (float)((value >> RESON_RES_SHIFT) & 0x0F);
     
     // Recompute k and derived SVF coefficients
     filter_state_t* f = &sid->filter_state;
@@ -315,20 +296,14 @@ void mos6581_write_resonance_control_register_value(mos6581_t* sid, uint8_t valu
     f->a3 = g * f->a2;
 }
 
-void mos6581_write_volume_and_filter_select_register_value(mos6581_t* sid, uint8_t value) {
-    if (!sid) return;
-    // No decoded fields — regs[0x18] stores the raw byte.
-    // All reads extract bits directly from regs[0x18].
-    (void)value;
-}
+// SIGVOL register (0x18): no decoded fields — regs[SID_REG_SIGVOL] stores
+// the raw byte. All reads extract bits directly at sample rate.
 
 // =============================================================================
 // RING BUFFER IMPLEMENTATION
 // =============================================================================
 
 void ring_buffer_init(ring_buffer_t* rb, uint32_t size) {
-    if (!rb) return;
-    
     // Round size up to next power of 2
     size--;
     size |= size >> 1;
@@ -346,8 +321,6 @@ void ring_buffer_init(ring_buffer_t* rb, uint32_t size) {
 }
 
 void ring_buffer_destroy(ring_buffer_t* rb) {
-    if (!rb) return;
-    
     free(rb->buffer);
     rb->buffer = NULL;
     rb->size = 0;
@@ -357,31 +330,20 @@ void ring_buffer_destroy(ring_buffer_t* rb) {
 }
 
 void ring_buffer_write(ring_buffer_t* rb, float sample) {
-    if (!rb || !rb->buffer) return;
-
     // SPSC safety: only the writer touches write_pos, only the reader touches read_pos.
     // Read read_pos once into a local (volatile ensures we get the latest value).
     uint32_t next = (rb->write_pos + 1) & rb->mask;
-    uint32_t rp = rb->read_pos;  // snapshot reader's position
-    if (next == rp) {
-        // Buffer full — drop this sample rather than touching read_pos
-        // (read_pos belongs to the consumer thread).
-        return;
-    }
+    if (next == rb->read_pos) return; // full — drop sample
 
     rb->buffer[rb->write_pos] = sample;
     rb->write_pos = next;  // publish (volatile store)
 }
 
 bool ring_buffer_empty(ring_buffer_t* rb) {
-    if (!rb) return true;
-    // Volatile reads ensure we see the latest positions from both threads
     return rb->read_pos == rb->write_pos;
 }
 
 float ring_buffer_read(ring_buffer_t* rb) {
-    if (!rb || !rb->buffer) return 0.0f;
-
     // Snapshot write_pos once (volatile load) to avoid TOCTOU with ring_buffer_empty
     uint32_t wp = rb->write_pos;
     uint32_t rp = rb->read_pos;
@@ -393,8 +355,6 @@ float ring_buffer_read(ring_buffer_t* rb) {
 }
 
 uint32_t ring_buffer_available(ring_buffer_t* rb) {
-    if (!rb) return 0;
-    // Snapshot both positions (volatile loads) for consistent calculation
     uint32_t wp = rb->write_pos;
     uint32_t rp = rb->read_pos;
     return (wp - rp) & rb->mask;
@@ -404,31 +364,11 @@ uint32_t ring_buffer_available(ring_buffer_t* rb) {
 // WAVEFORM GENERATION
 // =============================================================================
 
-uint32_t voice_generate_triangle(uint32_t accumulator) {
-    // Triangle wave: sawtooth XOR with MSB to flip second half.
-    // The accumulator passed in may have its MSB ring-mod-adjusted.
-    if (accumulator & WAVEFORM_ACCUMULATOR_MSB) {
-        return (accumulator ^ WAVEFORM_ACCUMULATOR_MAX) >> 11;
-    } else {
-        return accumulator >> 11;
-    }
-}
-
-uint32_t voice_generate_sawtooth(voice_t* voice) {
-    if (!voice) return 0;
-    
-    // Sawtooth wave: upper 12 bits of accumulator
-    return voice->waveform_accumulator >> 12;
-}
-
-uint32_t voice_generate_pulse(voice_t* voice) {
-    if (!voice) return 0;
-    
-    // Pulse wave: compare upper 12 bits with pulse width
-    uint32_t pulse_threshold = voice->pulse_waveform_width;
-    uint32_t accumulator_12bit = voice->waveform_accumulator >> 12;
-    
-    return (accumulator_12bit >= pulse_threshold) ? 0xFFF : 0;
+static inline uint32_t voice_generate_triangle(uint32_t accumulator) {
+    // Triangle wave: fold at MSB. XOR with max flips the ramp direction.
+    uint32_t folded = (accumulator & WAVEFORM_ACCUMULATOR_MSB)
+                    ? (accumulator ^ WAVEFORM_ACCUMULATOR_MAX) : accumulator;
+    return folded >> OSCILLATOR_SHIFT_TRI;
 }
 
 // Extract noise DAC output from LFSR state.
@@ -450,8 +390,6 @@ static inline uint32_t noise_lfsr_to_output(uint32_t sr) {
 // =============================================================================
 
 void voice_reset(voice_t* voice) {
-    if (!voice) return;
-    
     // Reset register values
     voice->frequency = 0;
     voice->pulse_waveform_width = 0;
@@ -459,7 +397,7 @@ void voice_reset(voice_t* voice) {
     voice->sustain_level = 0;
     
     // Reset internal state
-    voice->waveform_accumulator = 0x555555; // VICE: Even bits high on powerup
+    voice->waveform_accumulator = ACC_POWERUP_VALUE;
     voice->envelope_accumulator = 0;
     voice->envelope_cycle = CYCLE_OFF;
     voice->envelope_amplitude = 0;
@@ -471,21 +409,20 @@ void voice_reset(voice_t* voice) {
     
     // Reset waveform outputs — 0xFFF means "not driving any DAC lines low"
     voice->oscillator_waveform = 0;
-    voice->triangle_output = 0xFFF;
-    voice->sawtooth_output = 0xFFF;
-    voice->pulse_output = 0xFFF;
+    voice->triangle_output = OSCILLATOR_MAX;
+    voice->sawtooth_output = OSCILLATOR_MAX;
+    voice->pulse_output = OSCILLATOR_MAX;
     voice->combined_output = 0;
     
     // Reset noise state — reSID: shift_register = 0x7FFFFE after reset.
     // Latch noise_output immediately so it is valid before the first clock.
-    voice->noise_lfsr = 0x7FFFFE; // reSID reference: reset value
+    voice->noise_lfsr = NOISE_LFSR_RESET;
     voice->noise_output = noise_lfsr_to_output(voice->noise_lfsr);
     voice->noise_clock_enable = false;
     
-    // Reset sync and ring modulation
+    // Reset sync state
     voice->prev_accumulator = 0;
     voice->sync_trigger = false;
-    voice->ring_msb = false;
     
     // Reset outputs
     voice->oscillator_output = 0;
@@ -494,8 +431,6 @@ void voice_reset(voice_t* voice) {
 }
 
 void voice_clock_cycle(voice_t* voice) {
-    if (!voice) return;
-    
     // Store previous accumulator for sync detection
     voice->prev_accumulator = voice->waveform_accumulator;
     
@@ -507,7 +442,7 @@ void voice_clock_cycle(voice_t* voice) {
         // reSID: test bit gradually fades all LFSR bits to 1 (0x7FFFFF)
         // over ~35000 cycles (6581). We approximate this as instant.
         voice->waveform_accumulator = 0;
-        voice->noise_lfsr = 0x7FFFFF;
+        voice->noise_lfsr = NOISE_LFSR_TEST;
         voice->noise_output = noise_lfsr_to_output(voice->noise_lfsr);
     }
     
@@ -521,7 +456,7 @@ void voice_clock_cycle(voice_t* voice) {
     // Latch noise_output immediately on shift so it is always valid and never
     // needs recalculating on each cycle (LFSR shifts much less often).
     {
-        bool clock_noise = (voice->waveform_accumulator & 0x080000) != 0;
+        bool clock_noise = (voice->waveform_accumulator & ACC_BIT19) != 0;
         if (clock_noise && !voice->noise_clock_enable) {
             uint32_t feedback = ((voice->noise_lfsr >> 22) ^ (voice->noise_lfsr >> 17)) & 1;
             voice->noise_lfsr = ((voice->noise_lfsr << 1) | feedback) & NOISE_LFSR_MASK;
@@ -549,8 +484,6 @@ void voice_clock_cycle(voice_t* voice) {
 // pulse and noise use the original accumulator (pulse is a comparator and
 // sawtooth selection disables the ring MSB mask).
 void voice_set_waveform_output(voice_t* voice, voice_t* ring_source) {
-    if (!voice) return;
-    
     uint8_t wf = voice->control_reg;
     
     // Compute ring modulation MSB mask (reSID: ring_msb_mask).
@@ -569,23 +502,17 @@ void voice_set_waveform_output(voice_t* voice, voice_t* ring_source) {
     voice->triangle_output = (wf & WAVEFORM_TRIANGLE)
         ? voice_generate_triangle(ring_acc) : 0xFFF;
     voice->sawtooth_output = (wf & WAVEFORM_SAWTOOTH)
-        ? voice_generate_sawtooth(voice) : 0xFFF;
+        ? (voice->waveform_accumulator >> OSCILLATOR_SHIFT_SAW) : OSCILLATOR_MAX;
     voice->pulse_output = (wf & WAVEFORM_PULSE)
-        ? voice_generate_pulse(voice) : 0xFFF;
+        ? (((voice->waveform_accumulator >> OSCILLATOR_SHIFT_SAW) >= voice->pulse_waveform_width) ? OSCILLATOR_MAX : 0) : OSCILLATOR_MAX;
     
     // Combined waveform output: AND of all waveform DAC lines.
     // Disabled waveforms carry 0xFFF and pass through transparently.
     // No waveform selected → floating DAC, simplified as zero.
-    uint32_t waveform_output;
-    if (!(wf & WAVEFORM_MASK)) {
-        waveform_output = 0;
-    } else {
-        uint32_t noise_and = (wf & WAVEFORM_NOISE) ? voice->noise_output : 0xFFF;
-        waveform_output = voice->triangle_output
-                        & voice->sawtooth_output
-                        & voice->pulse_output
-                        & noise_and;
-    }
+    uint32_t noise_and = (wf & WAVEFORM_NOISE) ? voice->noise_output : OSCILLATOR_MAX;
+    uint32_t waveform_output = (wf & WAVEFORM_MASK)
+        ? (voice->triangle_output & voice->sawtooth_output & voice->pulse_output & noise_and)
+        : 0;
     
     voice->oscillator_waveform = waveform_output;
     voice->oscillator_output = (uint8_t)(waveform_output >> 4);
@@ -599,9 +526,7 @@ void voice_set_waveform_output(voice_t* voice, voice_t* ring_source) {
 // =============================================================================
 
 // Unified bus state threading main cycle function
-bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) {
-    if (!sid) return bus_state;
-
+inline bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) {
     // reSID per-cycle order:
     //   1. Clock envelopes  (inside voice_clock_cycle)
     //   2. Clock oscillators (accumulator + noise LFSR)
@@ -640,25 +565,25 @@ bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) {
             // oscillator_waveform already includes ring modulation (applied per-cycle).
             // Center waveform BEFORE envelope so silent voices produce zero.
             // 12-bit waveform centered: -2048..+2047
-            // × 8-bit envelope 0..255 → signed product -522240..+521985
+            // × 8-bit envelope 0…255 → signed product -522240..+521985
             // Scale so the SUM of all 3 voices at max ≈ ±1.0 to prevent
             // clipping (real SID mixer has headroom for all voices).
-            const float inv_scale = 1.0f / (3.0f * 522240.0f);
-            float v1 = (float)(((int32_t)sid->voice1.oscillator_waveform - 2048) * (int32_t)sid->voice1.envelope_amplitude) * inv_scale;
-            float v2 = (float)(((int32_t)sid->voice2.oscillator_waveform - 2048) * (int32_t)sid->voice2.envelope_amplitude) * inv_scale;
-            float v3 = (float)(((int32_t)sid->voice3.oscillator_waveform - 2048) * (int32_t)sid->voice3.envelope_amplitude) * inv_scale;
+            const float inv_scale = 1.0f / (3.0f * OSCILLATOR_CENTER * ENVELOPE_MAX);
+            float v1 = (float)(((int32_t)sid->voice1.oscillator_waveform - OSCILLATOR_CENTER) * (int32_t)sid->voice1.envelope_amplitude) * inv_scale;
+            float v2 = (float)(((int32_t)sid->voice2.oscillator_waveform - OSCILLATOR_CENTER) * (int32_t)sid->voice2.envelope_amplitude) * inv_scale;
+            float v3 = (float)(((int32_t)sid->voice3.oscillator_waveform - OSCILLATOR_CENTER) * (int32_t)sid->voice3.envelope_amplitude) * inv_scale;
 
             float filtered_input = 0.0f;
             float unfiltered_output = 0.0f;
 
-            // Route voices to filter or direct output (bits from RESON reg 0x17)
-            uint8_t reson = sid->regs[0x17];
-            uint8_t sigvol = sid->regs[0x18];
-            if (reson & 0x01) filtered_input += v1; else unfiltered_output += v1;
-            if (reson & 0x02) filtered_input += v2; else unfiltered_output += v2;
-            if (reson & 0x04) filtered_input += v3;
-            else if (!(sigvol & 0x80)) unfiltered_output += v3;
-            if (reson & 0x08) filtered_input += sid->external_input;
+            // Route voices to filter or direct output
+            uint8_t reson = sid->regs[SID_REG_RESON];
+            uint8_t sigvol = sid->regs[SID_REG_SIGVOL];
+            if (reson & RESON_FILT1) filtered_input += v1; else unfiltered_output += v1;
+            if (reson & RESON_FILT2) filtered_input += v2; else unfiltered_output += v2;
+            if (reson & RESON_FILT3) filtered_input += v3;
+            else if (!(sigvol & SIGVOL_3OFF)) unfiltered_output += v3;
+            if (reson & RESON_FILTEX) filtered_input += sid->external_input;
             else unfiltered_output += sid->external_input;
 
             // Apply SVF filter (at sample rate, not per-cycle)
@@ -668,22 +593,19 @@ bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) {
             float mixed = unfiltered_output + filtered_output;
 
             // 6581 digi support: add constant DC bias from the voice DACs.
-            // In real hardware, this residual bias is always present and
-            // gets modulated by volume register changes to produce 4-bit
-            // sample playback.  Scaled to match the 3-voice normalisation.
             if (sid->revision <= SID_REVISION_6581_R4AR) {
-                mixed += 0.13f;
+                mixed += SID_6581_DIGI_BIAS;
             }
 
-            // Apply master volume (from SIGVOL reg 0x18 low nibble)
-            mixed *= (float)(sigvol & 0x0F) / 15.0f;
+            // Apply master volume
+            mixed *= (float)(sigvol & SIGVOL_VOL_MASK) / SIGVOL_VOL_MAX;
 
             // DC blocker: removes the constant bias×volume product while
             // preserving fast changes (digi samples).  ~20 Hz high-pass.
             //   y[n] = x[n] - x[n-1] + α · y[n-1],  α = 0.997
             {
                 float dc_out = mixed - sid->dc_blocker_prev_in
-                             + 0.997f * sid->dc_blocker_prev_out;
+                             + DC_BLOCKER_ALPHA * sid->dc_blocker_prev_out;
                 sid->dc_blocker_prev_in = mixed;
                 sid->dc_blocker_prev_out = dc_out;
                 mixed = dc_out;
@@ -712,11 +634,7 @@ void mos6581_generate_samples(mos6581_t* sid, float* output, uint32_t sample_cou
     if (!sid || !output) return;
     
     for (uint32_t i = 0; i < sample_count; i++) {
-        if (!ring_buffer_empty(&sid->sample_buffer)) {
-            output[i] = ring_buffer_read(&sid->sample_buffer);
-        } else {
-            output[i] = 0.0f;
-        }
+        output[i] = ring_buffer_read(&sid->sample_buffer);
     }
 }
 
@@ -725,32 +643,24 @@ void mos6581_generate_samples(mos6581_t* sid, float* output, uint32_t sample_cou
 // =============================================================================
 
 void mos6581_set_revision(mos6581_t* sid, sid_revision_t revision) {
-    if (!sid) return;
-    
     sid->revision = revision;
     sid->enable_distortion = (revision <= SID_REVISION_6581_R4AR);
     mos6581_filter_reset(sid);
 }
 
 void mos6581_set_timing(mos6581_t* sid, bool pal_timing) {
-    if (!sid) return;
-    
     sid->pal_timing = pal_timing;
     sid->sid_rate = sid->cpu_clock / (pal_timing ? 18.0f : 17.0f);
     mos6581_filter_update_cutoff(sid);
 }
 
 void mos6581_set_sample_rate(mos6581_t* sid, float sample_rate) {
-    if (!sid) return;
-    
     sid->sample_rate = sample_rate;
     // Update filter coefficient since w0 depends on sample rate
     mos6581_filter_update_cutoff(sid);
 }
 
 void mos6581_set_cpu_clock(mos6581_t* sid, float clock_hz) {
-    if (!sid) return;
-    
     sid->cpu_clock = clock_hz;
     for (int i = 0; i < 3; i++) {
         sid->voices[i]->cpu_clock = clock_hz;
@@ -761,7 +671,6 @@ void mos6581_set_cpu_clock(mos6581_t* sid, float clock_hz) {
 }
 
 int voice_cycles_per_millisecond(voice_t* voice) {
-    if (!voice) return 0;
     return (int)(voice->cpu_clock / 1000.0f);
 }
 
@@ -770,9 +679,7 @@ int voice_cycles_per_millisecond(voice_t* voice) {
 // =============================================================================
 
 uint32_t mos6581_calculate_envelope_time_ms(voice_t* voice, envelope_cycle_t cycle, uint8_t rate) {
-    if (!voice) return 0;
-    
-    uint32_t period = voice_rate_to_period(voice, rate);
+    uint32_t period = voice_rate_to_period(rate);
     uint32_t cycles_per_ms = voice_cycles_per_millisecond(voice);
     
     switch (cycle) {
@@ -795,14 +702,10 @@ uint32_t mos6581_calculate_envelope_time_ms(voice_t* voice, envelope_cycle_t cyc
 // =============================================================================
 
 void voice_write_pulse_waveform_width(voice_t* voice, uint16_t value) {
-    if (!voice) return;
-    
     voice->pulse_waveform_width = value & PULSE_WIDTH_MAX;
 }
 
 void voice_write_voice_control_register_value(voice_t* voice, uint8_t value) {
-    if (!voice) return;
-    
     uint8_t prev = voice->control_reg;
     voice->control_reg = value;
     
@@ -812,7 +715,7 @@ void voice_write_voice_control_register_value(voice_t* voice, uint8_t value) {
     // reSID: test bit fades LFSR to 0x7FFFFF over ~35000 cycles; we do it instantly.
     if ((value & VCREG_TEST) && !(prev & VCREG_TEST)) {
         voice->waveform_accumulator = 0;
-        voice->noise_lfsr = 0x7FFFFF;
+        voice->noise_lfsr = NOISE_LFSR_TEST;
     }
     
     // Handle gate bit changes
@@ -822,33 +725,28 @@ void voice_write_voice_control_register_value(voice_t* voice, uint8_t value) {
     if ((value ^ prev) & VCREG_GATE) {
         if (value & VCREG_GATE) {
             voice->envelope_cycle = CYCLE_ATTACK;
-            uint8_t attack_rate = (voice->sid->regs[voice->voice_index * 7 + 5] >> 4) & 0x0F;
-            voice->envelope_rate_period = voice_rate_to_period(voice, attack_rate);
+            uint8_t attack_rate = (voice->sid->regs[voice->voice_index * VOICE_REGS + VOICE_ATDCY] >> 4) & 0x0F;
+            voice->envelope_rate_period = voice_rate_to_period(attack_rate);
             // Gate on clears hold_zero so the envelope can restart
             voice->envelope_hold_zero = false;
         } else {
             voice->envelope_cycle = CYCLE_RELEASE;
-            uint8_t release_rate = voice->sid->regs[voice->voice_index * 7 + 6] & 0x0F;
-            voice->envelope_rate_period = voice_rate_to_period(voice, release_rate);
+            uint8_t release_rate = voice->sid->regs[voice->voice_index * VOICE_REGS + VOICE_SUREL] & 0x0F;
+            voice->envelope_rate_period = voice_rate_to_period(release_rate);
         }
     }
 }
 
 void voice_write_attack_decay_register_value(voice_t* voice, uint8_t value) {
-    if (!voice) return;
-    
-    // No decoded fields — extract from value directly.
     // Update current rate period if in corresponding cycle.
     if (voice->envelope_cycle == CYCLE_ATTACK) {
-        voice->envelope_rate_period = voice_rate_to_period(voice, (value >> 4) & 0x0F);
+        voice->envelope_rate_period = voice_rate_to_period((value >> 4) & 0x0F);
     } else if (voice->envelope_cycle == CYCLE_DECAY) {
-        voice->envelope_rate_period = voice_rate_to_period(voice, value & 0x0F);
+        voice->envelope_rate_period = voice_rate_to_period(value & 0x0F);
     }
 }
 
 void voice_write_sustain_release_register_value(voice_t* voice, uint8_t value) {
-    if (!voice) return;
-    
     uint8_t sustain_nibble = (value >> 4) & 0x0F;
     
     // Convert 4-bit sustain to 8-bit by duplicating the nibble.
@@ -857,7 +755,7 @@ void voice_write_sustain_release_register_value(voice_t* voice, uint8_t value) {
     
     // Update current rate period if in release cycle
     if (voice->envelope_cycle == CYCLE_RELEASE) {
-        voice->envelope_rate_period = voice_rate_to_period(voice, value & 0x0F);
+        voice->envelope_rate_period = voice_rate_to_period(value & 0x0F);
     }
 }
 
@@ -873,75 +771,72 @@ bus_state_t mos6581_registers_write(void* context, bus_state_t bus_state) {
     uint8_t value = BUS_GET_DATA(bus_state);
     sid->bus_value = value; // Store for potential bus reads
     
-    if (r < 21) { // Voice registers (0x00-0x14)
-        voice_t* voice = sid->voices[r / 7];
+    if (r < SID_VOICE_REG_COUNT) { // Voice registers (0x00-0x14)
+        voice_t* voice = sid->voices[r / VOICE_REGS];
         
-        switch (r % 7) {
-            case 0: // FRELO - Voice frequency control (low byte)
+        switch (r % VOICE_REGS) {
+            case VOICE_FRELO:
                 voice->frequency = (voice->frequency & 0xFF00) | value;
                 break;
                 
-            case 1: // FREHI - Voice frequency control (high byte)
+            case VOICE_FREHI:
                 voice->frequency = (voice->frequency & 0x00FF) | (value << 8);
                 break;
                 
-            case 2: // PWLO - Voice pulse waveform width (low byte)
+            case VOICE_PWLO:
                 voice_write_pulse_waveform_width(voice, (voice->pulse_waveform_width & 0xFF00) | value);
                 break;
                 
-            case 3: // PWHI - Voice pulse waveform width (high nybble)
+            case VOICE_PWHI:
                 voice_write_pulse_waveform_width(voice, (voice->pulse_waveform_width & 0x00FF) | ((value & 0x0F) << 8));
                 break;
                 
-            case 4: // VCREG - Voice control register
+            case VOICE_VCREG:
                 voice_write_voice_control_register_value(voice, value);
                 break;
                 
-            case 5: // ATDCY - Voice attack/decay register
+            case VOICE_ATDCY:
                 voice_write_attack_decay_register_value(voice, value);
                 break;
                 
-            case 6: // SUREL - Voice sustain/release register
+            case VOICE_SUREL:
                 voice_write_sustain_release_register_value(voice, value);
                 break;
         }
     } else {
-        // Global registers (0x15-0x1F)
+        // Global registers
         switch (r) {
-            case 0x15: // CUTLO - Filter cutoff frequency (low 3 bits)
+            case SID_REG_CUTLO:
                 sid->filter_cutoff_frequency = (sid->filter_cutoff_frequency & 0x7F8) | (value & 0x07);
                 mos6581_filter_update_cutoff(sid);
                 break;
                 
-            case 0x16: // CUTHI - Filter cutoff frequency (high 8 bits)
+            case SID_REG_CUTHI:
                 sid->filter_cutoff_frequency = ((uint16_t)value << 3) | (sid->filter_cutoff_frequency & 0x07);
                 mos6581_filter_update_cutoff(sid);
                 break;
                 
-            case 0x17: // RESON - Filter resonance control register
+            case SID_REG_RESON:
                 mos6581_write_resonance_control_register_value(sid, value);
                 break;
                 
-            case 0x18: // SIGVOL - Volume and filter select register
+            case SID_REG_SIGVOL:
                 // Handle volume bug for 6581
-                if (sid->revision <= SID_REVISION_6581_R4AR && (sid->regs[0x18] & 0x0F) != (value & 0x0F)) {
+                if (sid->revision <= SID_REVISION_6581_R4AR && (sid->regs[SID_REG_SIGVOL] & SIGVOL_VOL_MASK) != (value & SIGVOL_VOL_MASK)) {
                     sid->volume_change_click = true;
-                    sid->volume_click_amplitude = (float)(value & 0x0F) / 15.0f * 0.1f;
-                    sid->volume_click_counter = 1000; // Duration in cycles
+                    sid->volume_click_amplitude = (float)(value & SIGVOL_VOL_MASK) / SIGVOL_VOL_MAX * 0.1f;
+                    sid->volume_click_counter = VOLUME_CLICK_DURATION;
                 }
-                mos6581_write_volume_and_filter_select_register_value(sid, value);
                 break;
                 
-            case 0x19: // POTX - Read-only
-            case 0x1A: // POTY - Read-only  
-            case 0x1B: // OSC3 - Read-only
-            case 0x1C: // ENV3 - Read-only
+            case SID_REG_POTX:
+            case SID_REG_POTY:
+            case SID_REG_OSC3:
+            case SID_REG_ENV3:
                 break; // Ignore writes to read-only registers
                 
-            case 0x1D: // Unused
-            case 0x1E: // Unused
-            case 0x1F: // Unused
-                break; // Ignore writes to unused registers
+            default:
+                break; // Unused registers
         }
     }
     
@@ -960,28 +855,27 @@ bus_state_t mos6581_registers_read(void* context, bus_state_t bus_state) {
     uint32_t r = BUS_GET_ADDR(bus_state) & SID_REGS_MASK;
     
     switch (r) {
-        case 0x19: // POTX - Game paddle 1 position
+        case SID_REG_POTX:
             BUS_SET_DATA(bus_state, sid->pot_x_value);
             break;
             
-        case 0x1A: // POTY - Game paddle 2 position
+        case SID_REG_POTY:
             BUS_SET_DATA(bus_state, sid->pot_y_value);
             break;
             
-        case 0x1B: // OSC3 - Oscillator 3 / Random number generator
+        case SID_REG_OSC3:
             BUS_SET_DATA(bus_state, (uint8_t)(sid->voice3.oscillator_waveform >> 4));
             break;
             
-        case 0x1C: // ENV3 - Envelope generator 3 output
+        case SID_REG_ENV3:
             // Real hardware: ENV3 always reflects current envelope amplitude,
             // regardless of gate state (the envelope continues during release).
-            // Envelope is now 8-bit, return directly.
             BUS_SET_DATA(bus_state, sid->voice3.envelope_amplitude);
             break;
             
-        case 0x1D: // Unused register
-        case 0x1E: // Unused register
-        case 0x1F: // Unused register
+        case SID_REG_UNUSED_START:
+        case SID_REG_UNUSED_START + 1:
+        case SID_REG_UNUSED_END:
             BUS_SET_DATA(bus_state, 0xFF);
             break;
             
@@ -1114,15 +1008,7 @@ void* mos6581_system_create(chip_descriptor_t* desc) {
  * @return Updated bus state
  */
 bus_state_t mos6581_tick(void* chip, bus_state_t bus_state) {
-    mos6581_t* sid = (mos6581_t*)chip;
-
-    // HYBRID APPROACH: SID no longer needs to check for IO pending
-    // I/O access is now handled directly by the bus memory tick function
-    // through chip callback arrays, eliminating the need for this check
-
-    // Delegate to the existing advance cycle function
-    // In the future, this can be expanded to include additional tick-specific logic
-    return mos6581_advance_cycle(sid, bus_state);
+    return mos6581_advance_cycle((mos6581_t*)chip, bus_state);
 }
 
 // =============================================================================
