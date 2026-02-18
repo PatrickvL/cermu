@@ -2,6 +2,7 @@
 #include "../../chip/input/commodore_keyboard.h"
 #include "../../chip/input/emu_key_sdl_map.h"
 #include "../../gui/imgui_interface.h"
+#include "imgui.h"
 #include "../../core/formats/format_registry.h"
 #include "../../core/formats/prg_format.h"
 #include "../../core/formats/d64_format.h"
@@ -201,6 +202,16 @@ static HardwareTraits create_c64_hardware_traits() {
         false
     });
 
+    // SID revision option
+    traits.custom_options.push_back({
+        "sid_revision",
+        "SID Revision",
+        "MOS 6581 has analog filter distortion and volume-click digi; "
+        "MOS 8580 has a cleaner filter with no distortion.",
+        { "MOS 6581", "MOS 8580" },
+        0  // 6581 default
+    });
+
     return traits;
 }
 
@@ -268,6 +279,13 @@ bool C64SystemWrapper::initialize() {
     if (!c64_) {
         printf("C64: Failed to create system\n");
         return false;
+    }
+    
+    // Apply SID revision from configuration (set before initialize)
+    if (c64_->sid) {
+        mos6581_set_revision(c64_->sid, pending_sid_revision_);
+        const char* rev_name = (pending_sid_revision_ == SID_REVISION_8580_R5) ? "MOS 8580" : "MOS 6581";
+        printf("C64: SID revision initialized as %s\n", rev_name);
     }
     
     // Create the layered keyboard mapper for character-based input
@@ -632,6 +650,21 @@ bool C64SystemWrapper::apply_configuration() {
             (region.region == VideoRegion::NTSC) ? VIC_NTSC : VIC_PAL;
     }
 
+    // Apply SID revision from custom settings
+    auto sid_it = config_.custom_settings.find("sid_revision");
+    if (sid_it != config_.custom_settings.end()) {
+        sid_revision_t rev = SID_REVISION_6581_R4AR;
+        if (sid_it->second == "MOS 8580") {
+            rev = SID_REVISION_8580_R5;
+        }
+        if (c64_ && c64_->sid) {
+            mos6581_set_revision(c64_->sid, rev);
+            printf("C64: SID revision set to %s\n", sid_it->second.c_str());
+        }
+        // Store for later (SID may not exist yet during initial config)
+        pending_sid_revision_ = rev;
+    }
+
     return true;
 }
 
@@ -682,8 +715,24 @@ SystemConfiguration C64SystemWrapper::detect_optimal_configuration(
 }
 
 void C64SystemWrapper::render_configuration_ui() {
-    // TODO: Render C64-specific configuration UI
-    // This will be implemented when we update the GUI
+#ifdef IMGUI_VERSION
+    if (!c64_ || !c64_->sid) return;
+
+    // SID revision selector
+    const char* sid_labels[] = { "MOS 6581", "MOS 8580" };
+    int current = (c64_->sid->revision == SID_REVISION_8580_R5) ? 1 : 0;
+    if (ImGui::Combo("SID Revision", &current, sid_labels, IM_ARRAYSIZE(sid_labels))) {
+        sid_revision_t rev = (current == 1) ? SID_REVISION_8580_R5 : SID_REVISION_6581_R4AR;
+        mos6581_set_revision(c64_->sid, rev);
+        pending_sid_revision_ = rev;
+        config_.custom_settings["sid_revision"] = sid_labels[current];
+        printf("C64: SID revision changed to %s\n", sid_labels[current]);
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("6581: analog filter distortion, volume-click digi\n"
+                          "8580: cleaner filter, no distortion");
+    }
+#endif
 }
 
 uint32_t C64SystemWrapper::get_audio_samples(float* buffer, uint32_t max_samples) {

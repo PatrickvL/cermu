@@ -31,6 +31,7 @@ void SystemSelectionDialog::open() {
     search_descriptions_ = false;  // Reset to name-only search
     region_filter_ = 0;  // Reset to All Regions
     selected_peripherals_.clear();  // Clear peripheral selections
+    selected_custom_settings_.clear();  // Clear custom option selections
 }
 
 void SystemSelectionDialog::close() {
@@ -44,6 +45,7 @@ void SystemSelectionDialog::reset() {
     selected_system_name_ = nullptr;
     selection_confirmed_ = false;
     selected_peripherals_.clear();  // Clear peripheral selections
+    selected_custom_settings_.clear();  // Clear custom option selections
 }
 
 void SystemSelectionDialog::render(bool allow_cancel) {
@@ -167,7 +169,8 @@ void SystemSelectionDialog::render(bool allow_cancel) {
             // Check if system has configuration options
             bool has_memory_options = !hardware_traits.memory_options.empty();
             bool has_region_options = !hardware_traits.region_options.empty();
-            bool has_configurations = has_memory_options || has_region_options;
+            bool has_custom_options_for_config = !hardware_traits.custom_options.empty();
+            bool has_configurations = has_memory_options || has_region_options || has_custom_options_for_config;
             
             ImGui::PushID((int)i);
             
@@ -204,6 +207,13 @@ void SystemSelectionDialog::render(bool allow_cancel) {
                     selected_peripherals_.clear();
                     for (const auto& periph_opt : hardware_traits.peripheral_options) {
                         selected_peripherals_[periph_opt.id] = periph_opt.enabled_by_default;
+                    }
+                    // Initialize custom settings with defaults
+                    selected_custom_settings_.clear();
+                    for (const auto& custom_opt : hardware_traits.custom_options) {
+                        if (custom_opt.default_index >= 0 && custom_opt.default_index < (int)custom_opt.choices.size()) {
+                            selected_custom_settings_[custom_opt.id] = custom_opt.choices[custom_opt.default_index];
+                        }
                     }
                 }
                 
@@ -357,6 +367,75 @@ void SystemSelectionDialog::render(bool allow_cancel) {
                             }
                         }
                         ImGui::Unindent();
+                    }
+                    
+                    // Show custom options if available
+                    bool has_custom_options = !hardware_traits.custom_options.empty();
+                    if (has_custom_options) {
+                        // Initialize custom settings map if this system is being selected for the first time
+                        if (selected_system_index_ == (int)i && selected_custom_settings_.empty()) {
+                            for (const auto& custom_opt : hardware_traits.custom_options) {
+                                if (custom_opt.default_index >= 0 && custom_opt.default_index < (int)custom_opt.choices.size()) {
+                                    selected_custom_settings_[custom_opt.id] = custom_opt.choices[custom_opt.default_index];
+                                }
+                            }
+                        }
+                        
+                        for (size_t cust_idx = 0; cust_idx < hardware_traits.custom_options.size(); cust_idx++) {
+                            const auto& custom_opt = hardware_traits.custom_options[cust_idx];
+                            if (has_memory_options || has_region_options || has_peripheral_options) ImGui::Spacing();
+                            ImGui::TextDisabled("%s:", custom_opt.name);
+                            ImGui::Indent();
+                            
+                            // Get current selection
+                            std::string current_value;
+                            auto it = selected_custom_settings_.find(custom_opt.id);
+                            if (it != selected_custom_settings_.end()) {
+                                current_value = it->second;
+                            } else if (custom_opt.default_index >= 0 && custom_opt.default_index < (int)custom_opt.choices.size()) {
+                                current_value = custom_opt.choices[custom_opt.default_index];
+                            }
+                            
+                            for (size_t choice_idx = 0; choice_idx < custom_opt.choices.size(); choice_idx++) {
+                                const char* choice = custom_opt.choices[choice_idx];
+                                bool is_selected = (selected_system_index_ == (int)i && current_value == choice);
+                                
+                                char label[256];
+                                snprintf(label, sizeof(label), "%s%s", choice,
+                                       ((int)choice_idx == custom_opt.default_index) ? " (default)" : "");
+                                
+                                if (ImGui::Selectable(label, is_selected)) {
+                                    selected_system_index_ = (int)i;
+                                    selected_system_name_ = descriptor.short_name;
+                                    selected_custom_settings_[custom_opt.id] = choice;
+                                    // Set default memory/region if not selected
+                                    if (selected_memory_option_ < 0 && has_memory_options) {
+                                        for (size_t m = 0; m < hardware_traits.memory_options.size(); m++) {
+                                            if (hardware_traits.memory_options[m].is_default) {
+                                                selected_memory_option_ = (int)m;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if (selected_region_option_ < 0 && has_region_options) {
+                                        for (size_t r = 0; r < hardware_traits.region_options.size(); r++) {
+                                            if (hardware_traits.region_options[r].is_default) {
+                                                selected_region_option_ = (int)r;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            ImGui::Unindent();
+                            
+                            // Show description as tooltip on the header
+                            if (custom_opt.description && ImGui::IsItemHovered()) {
+                                ImGui::BeginTooltip();
+                                ImGui::Text("%s", custom_opt.description);
+                                ImGui::EndTooltip();
+                            }
+                        }
                     }
                     
                     ImGui::TreePop();
