@@ -87,8 +87,6 @@ typedef enum {
 #define FILTER_RESONANCE_MAX 15.0f
 
 // Combined waveform lookup table size
-#define COMBINED_WAVEFORM_TABLE_SIZE 4096
-
 // Forward declarations - Modern C++ style
 struct mos6581_s;
 struct filter_state_s;
@@ -111,24 +109,26 @@ typedef struct ring_buffer_s {
 
 // Filter state structure
 typedef struct filter_state_s {
-    // Two-integrator-loop biquad filter state
+    // ZDF (zero-delay feedback) topology-preserving SVF state.
+    // Unlike the naive SVF, this formulation is unconditionally stable
+    // at any cutoff/resonance combination — critical because we process
+    // the filter at ~44.1 kHz (not every CPU cycle at ~1 MHz like reSID).
     float cutoff_frequency;
     float resonance;
     float low_pass_output;
     float band_pass_output;
     float high_pass_output;
-    float previous_input;
-    float previous_low_pass;
-    float previous_band_pass;
     
-    // Filter coefficients
-    float w0;           // Cutoff frequency coefficient
-    float q;            // Resonance coefficient
-    float integrator1;  // First integrator state
-    float integrator2;  // Second integrator state
+    // ZDF SVF coefficients (recomputed when cutoff or resonance changes)
+    float g;            // tan(π * fc / fs) — integrator gain
+    float k;            // 1/Q — damping (same as old 'q')
+    float a1;           // 1 / (1 + g*(g + k))
+    float a2;           // g * a1
+    float a3;           // g * a2
+    float ic1eq;        // First integrator state (band-pass)
+    float ic2eq;        // Second integrator state (low-pass)
     
     // Nonlinear distortion state (6581 specific)
-    float distortion_level;
     bool enable_distortion;
 } filter_state_t;
 
@@ -233,8 +233,6 @@ typedef struct mos6581_s {
     
     // Sample output
     ring_buffer_t sample_buffer;      // Ring buffer for samples
-    float* temp_buffer;               // Temporary buffer for processing
-    uint32_t temp_buffer_size;        // Size of temporary buffer
     
     // Chip revision and features
     sid_revision_t revision;          // SID chip revision
@@ -253,10 +251,6 @@ typedef struct mos6581_s {
     // POT interface
     uint8_t pot_x_value;              // POT X value
     uint8_t pot_y_value;              // POT Y value
-    
-    // Combined waveform lookup tables
-    uint8_t* combined_waveform_table; // Combined waveform lookup table
-    bool combined_waveform_enabled;   // Combined waveform enable
     
     // Fractional sample accumulator for cycle-accurate output
     double sample_accumulator;        // Fractional accumulator for sample generation
@@ -294,7 +288,6 @@ void mos6581_set_revision(mos6581_t* sid, sid_revision_t revision);
 void mos6581_set_timing(mos6581_t* sid, bool pal_timing);
 void mos6581_set_sample_rate(mos6581_t* sid, float sample_rate);
 void mos6581_set_cpu_clock(mos6581_t* sid, float clock_hz);
-float mos6581_interpolate_sample(mos6581_t* sid, float position);
 
 // Chip descriptor
 extern chip_descriptor_t mos6581_descriptor;

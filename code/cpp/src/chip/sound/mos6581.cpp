@@ -203,17 +203,23 @@ void mos6581_filter_update_cutoff(mos6581_t* sid) {
     
     f->cutoff_frequency = cutoff_hz;
     
-    // w0 is based on the sample rate since the filter is processed once
-    // per output sample (~44.1 kHz), not every CPU cycle.  This gives a
-    // ~22x performance improvement over per-cycle filter processing while
-    // maintaining good audio quality.
+    // ZDF SVF: g = tan(π * fc / fs).
+    // This is the topology-preserving integrator gain that ensures
+    // unconditional stability at any cutoff/resonance combination.
     float rate = sid->sample_rate > 0.0f ? sid->sample_rate : 44100.0f;
-    f->w0 = (float)(2.0f * M_PI * cutoff_hz / rate);
     
-    // Clamp for SVF stability (must be well below 1.0 at sample rate).
-    // At 44.1 kHz, max cutoff ~12 kHz gives w0 ≈ 1.71 unclamped —
-    // we cap at 0.45 for safe operation with high resonance.
-    if (f->w0 > 0.45f) f->w0 = 0.45f;
+    // Clamp cutoff to just below Nyquist to avoid tan() blowing up
+    float max_hz = rate * 0.499f;
+    if (cutoff_hz > max_hz) cutoff_hz = max_hz;
+    
+    f->g = tanf((float)M_PI * cutoff_hz / rate);
+    
+    // Recompute derived coefficients (depend on both g and k)
+    float g = f->g;
+    float k = f->k;
+    f->a1 = 1.0f / (1.0f + g * (g + k));
+    f->a2 = g * f->a1;
+    f->a3 = g * f->a2;
 }
 
 void mos6581_filter_update_resonance(mos6581_t* sid) {
@@ -221,21 +227,26 @@ void mos6581_filter_update_resonance(mos6581_t* sid) {
     
     filter_state_t* f = &sid->filter_state;
     
-    // Calculate resonance damping coefficient (1/Q) for the SVF.
-    // In the SVF the feedback term is: hp = input - bp*(1/Q) - lp
+    // Calculate resonance damping coefficient k = 1/Q for the ZDF SVF.
     // Higher resonance → lower damping → higher Q → more resonant peak.
     //
     // Real SID 6581: resonance ranges from minimal (res=0) to near
-    // self-oscillation (res=15).  We model 1/Q linearly from ~1.7 down to 0.
-    // (reSID uses measured per-chip curves, but this is a good approximation.)
+    // self-oscillation (res=15).  We model k linearly from ~1.7 down to ~0.
     f->resonance = (float)sid->filter_resonance;
     
-    // 1/Q: ranges from 1.7 at res=0 (low Q ≈ 0.59) to ~0.0 at res=15 (self-oscillation)
+    // k (1/Q): ranges from 1.7 at res=0 (low Q ≈ 0.59) to ~0.0 at res=15
     float res_norm = f->resonance / FILTER_RESONANCE_MAX; // 0..1
-    f->q = 1.7f * (1.0f - res_norm);  // This IS 1/Q (damping), not Q itself
+    f->k = 1.7f * (1.0f - res_norm);
     
-    // Ensure a tiny minimum to prevent NaN/explosion at max resonance
-    if (f->q < 0.01f) f->q = 0.01f;
+    // Ensure a tiny minimum to prevent self-oscillation at max resonance
+    if (f->k < 0.01f) f->k = 0.01f;
+    
+    // Recompute derived coefficients (depend on both g and k)
+    float g = f->g;
+    float k = f->k;
+    f->a1 = 1.0f / (1.0f + g * (g + k));
+    f->a2 = g * f->a1;
+    f->a3 = g * f->a2;
 }
 
 float mos6581_filter_process(mos6581_t* sid, float input) {
@@ -243,31 +254,42 @@ float mos6581_filter_process(mos6581_t* sid, float input) {
     
     filter_state_t* f = &sid->filter_state;
     
-    // Two-integrator-loop state variable filter (SVF)
-    //   hp = input - bp * (1/Q) - lp
-    //   bp += w0 * hp
-    //   lp += w0 * bp
-    // f->q already stores 1/Q (damping coefficient).
-    float hp = input - f->integrator1 * f->q - f->integrator2;
-    float bp = f->integrator1 + hp * f->w0;
-    float lp = f->integrator2 + f->integrator1 * f->w0;  // use OLD bp for lp update
+    // ZDF (zero-delay feedback) topology-preserving SVF
+    // (Andy Simper / Cytomic / Vadim Zavalishin).
+    //
+    // Unlike the naive SVF, this formulation is UNCONDITIONALLY STABLE
+    // at any cutoff frequency and resonance setting.  This is critical
+    // because we process the filter at ~44.1 kHz, not every CPU cycle
+    // at ~1 MHz like reSID — making the naive SVF unstable at high
+    // resonance (the root cause of the "diesel engine buzzing" bug).
+    //
+    // Coefficients a1, a2, a3 are precomputed when cutoff/resonance change.
     
-    // Update integrators
-    f->integrator1 = bp;
-    f->integrator2 = lp;
+    float v3 = input - f->ic2eq;
+    float v1 = f->a1 * f->ic1eq + f->a2 * v3;
+    float v2 = f->ic2eq + f->a2 * f->ic1eq + f->a3 * v3;
+    
+    // Update integrator states
+    f->ic1eq = 2.0f * v1 - f->ic1eq;
+    f->ic2eq = 2.0f * v2 - f->ic2eq;
+    
+    // Filter outputs
+    float lp = v2;
+    float bp = v1;
+    float hp = input - f->k * v1 - v2;
     
     // Apply soft-clipping distortion for 6581 (models NMOS op-amp non-linearity).
-    // tanh(x*k)/k is a smooth saturator that approaches identity as k→0.
-    // Guard against k=0 (resonance=0) which would cause 0/0 = NaN.
+    // Applied outside the feedback loop to preserve filter stability while
+    // still providing the characteristic 6581 "grit."
     if (f->enable_distortion && sid->revision <= SID_REVISION_6581_R4AR) {
-        float distortion_amount = f->resonance / FILTER_RESONANCE_MAX * 0.5f;
+        float res_norm = f->resonance / FILTER_RESONANCE_MAX;
+        float distortion_amount = res_norm * 0.5f;
         if (distortion_amount > 1e-6f) {
             float inv_k = 1.0f / distortion_amount;
             lp = tanhf(lp * distortion_amount) * inv_k;
             bp = tanhf(bp * distortion_amount) * inv_k;
             hp = tanhf(hp * distortion_amount) * inv_k;
         }
-        // else: distortion_amount ≈ 0 → no distortion (identity)
     }
     
     // Store outputs
@@ -275,7 +297,7 @@ float mos6581_filter_process(mos6581_t* sid, float input) {
     f->band_pass_output = bp;
     f->high_pass_output = hp;
     
-    // Mix filter outputs
+    // Mix filter outputs based on selected filter mode
     float output = 0.0f;
     if (sid->low_pass_enabled) output += lp;
     if (sid->band_pass_enabled) output += bp;
@@ -294,14 +316,13 @@ void mos6581_filter_reset(mos6581_t* sid) {
     f->low_pass_output = 0.0f;
     f->band_pass_output = 0.0f;
     f->high_pass_output = 0.0f;
-    f->previous_input = 0.0f;
-    f->previous_low_pass = 0.0f;
-    f->previous_band_pass = 0.0f;
-    f->w0 = 0.0f;
-    f->q = 0.0f;
-    f->integrator1 = 0.0f;
-    f->integrator2 = 0.0f;
-    f->distortion_level = 0.0f;
+    f->g = 0.0f;
+    f->k = 1.7f;   // minimum resonance → maximum damping
+    f->a1 = 0.0f;
+    f->a2 = 0.0f;
+    f->a3 = 0.0f;
+    f->ic1eq = 0.0f;
+    f->ic2eq = 0.0f;
     f->enable_distortion = (sid->revision <= SID_REVISION_6581_R4AR);
 }
 
@@ -309,30 +330,6 @@ void mos6581_filter_init(mos6581_t* sid) {
     if (!sid) return;
     
     mos6581_filter_reset(sid);
-}
-
-// =============================================================================
-// ADVANCED FILTER MODELING
-// =============================================================================
-
-void mos6581_filter_set_model(mos6581_t* sid, bool use_nonlinear_model) {
-    if (!sid) return;
-    
-    sid->filter_state.enable_distortion = use_nonlinear_model && 
-                                         (sid->revision <= SID_REVISION_6581_R4AR);
-}
-
-float mos6581_filter_get_cutoff_hz(mos6581_t* sid) {
-    if (!sid) return 0.0f;
-    
-    // cutoff_frequency is now stored directly as Hz
-    return sid->filter_state.cutoff_frequency;
-}
-
-float mos6581_filter_get_resonance_q(mos6581_t* sid) {
-    if (!sid) return 0.0f;
-    
-    return sid->filter_state.q;
 }
 
 // =============================================================================
@@ -440,74 +437,6 @@ uint32_t ring_buffer_available(ring_buffer_t* rb) {
 }
 
 // =============================================================================
-// COMBINED WAVEFORM INITIALIZATION
-// =============================================================================
-
-void mos6581_init_combined_waveforms(mos6581_t* sid) {
-    if (!sid) return;
-    
-    // Allocate combined waveform table
-    sid->combined_waveform_table = (uint8_t*)malloc(COMBINED_WAVEFORM_TABLE_SIZE);
-    if (!sid->combined_waveform_table) {
-        sid->combined_waveform_enabled = false;
-        return;
-    }
-    
-    // Initialize with simple AND behavior
-    for (uint32_t i = 0; i < COMBINED_WAVEFORM_TABLE_SIZE; i++) {
-        sid->combined_waveform_table[i] = 255; // Default to no attenuation
-    }
-    
-    sid->combined_waveform_enabled = true;
-}
-
-// =============================================================================
-// ADDITIONAL HELPER FUNCTIONS
-// =============================================================================
-
-float mos6581_interpolate_sample(mos6581_t* sid, float position) {
-    if (!sid) return 0.0f;
-    
-    // Linear interpolation between samples
-    uint32_t index = (uint32_t)position;
-    float fraction = position - (float)index;
-    
-    if (ring_buffer_available(&sid->sample_buffer) < 2) {
-        return 0.0f;
-    }
-    
-    // Get two consecutive samples
-    float sample1 = ring_buffer_read(&sid->sample_buffer);
-    float sample2 = ring_buffer_read(&sid->sample_buffer);
-    
-    // Put second sample back
-    ring_buffer_write(&sid->sample_buffer, sample2);
-    
-    return sample1 + fraction * (sample2 - sample1);
-}
-
-// =============================================================================
-// FREQUENCY CALCULATION HELPERS
-// =============================================================================
-
-uint16_t mos6581_frequency_to_sid_value(float frequency_hz, bool pal_timing) {
-    // Convert frequency in Hz to SID register value
-    float clock_freq = pal_timing ? 985248.0f : 1022727.0f;
-    float sid_value = frequency_hz * 16777216.0f / clock_freq;
-    
-    if (sid_value > 65535.0f) sid_value = 65535.0f;
-    if (sid_value < 0.0f) sid_value = 0.0f;
-    
-    return (uint16_t)sid_value;
-}
-
-float mos6581_sid_value_to_frequency(uint16_t sid_value, bool pal_timing) {
-    // Convert SID register value to frequency in Hz
-    float clock_freq = pal_timing ? 985248.0f : 1022727.0f;
-    return ((float)sid_value * clock_freq) / 16777216.0f;
-}
-
-// =============================================================================
 // WAVEFORM GENERATION
 // =============================================================================
 
@@ -553,127 +482,6 @@ static inline uint32_t noise_lfsr_to_output(uint32_t sr) {
          | ((sr & 0x000020) << 1)   // bit  5 → bit  6
          | ((sr & 0x000004) << 3)   // bit  2 → bit  5
          | ((sr & 0x000001) << 4);  // bit  0 → bit  4
-}
-
-uint32_t voice_generate_noise(voice_t* voice) {
-    if (!voice) return 0;
-    
-    // Clock noise LFSR based on accumulator bit 19
-    bool clock_noise = (voice->waveform_accumulator & 0x080000) != 0;
-    
-    if (clock_noise && !voice->noise_clock_enable) {
-        // 23-bit LFSR with feedback taps at bits 22 and 17
-        uint32_t feedback = ((voice->noise_lfsr >> 22) ^ (voice->noise_lfsr >> 17)) & 1;
-        voice->noise_lfsr = ((voice->noise_lfsr << 1) | feedback) & NOISE_LFSR_MASK;
-    }
-    
-    voice->noise_clock_enable = clock_noise;
-    
-    return noise_lfsr_to_output(voice->noise_lfsr);
-}
-
-// voice_generate_combined_waveform removed — inlined into voice_clock_cycle.
-// Disabled waveforms carry 0xFFF so the AND combines cleanly without
-// per-waveform conditional checks.
-
-// =============================================================================
-// NOISE WAVEFORM ANALYSIS HELPERS
-// =============================================================================
-
-void mos6581_analyze_noise_period(voice_t* voice, uint32_t* period_length, uint32_t* unique_values) {
-    if (!voice || !period_length || !unique_values) return;
-    
-    // Analyze noise waveform period and unique values
-    uint32_t initial_lfsr = voice->noise_lfsr;
-    uint32_t count = 0;
-    bool unique_found[8192] = {false}; // Track unique 13-bit values
-    uint32_t unique_count = 0;
-    
-    do {
-        // Generate noise sample
-        uint32_t noise_sample = voice_generate_noise(voice);
-        uint32_t noise_13bit = noise_sample & 0x1FFF;
-        
-        if (!unique_found[noise_13bit]) {
-            unique_found[noise_13bit] = true;
-            unique_count++;
-        }
-        
-        count++;
-        
-        // Prevent infinite loop
-        if (count > 8388607) break;
-        
-    } while (voice->noise_lfsr != initial_lfsr);
-    
-    *period_length = count;
-    *unique_values = unique_count;
-}
-
-// =============================================================================
-// VOICE INTERACTION HELPERS
-// =============================================================================
-
-void mos6581_setup_voice_routing(mos6581_t* sid) {
-    if (!sid) return;
-    
-    // Voice 1 syncs to Voice 3, ring mods with Voice 3
-    // Voice 2 syncs to Voice 1, ring mods with Voice 1  
-    // Voice 3 syncs to Voice 2, ring mods with Voice 2
-    
-    // This is handled in the cycle update function
-}
-
-bool mos6581_voice_is_audible(voice_t* voice) {
-    if (!voice) return false;
-    
-    return voice->gated && 
-           voice->envelope_amplitude > 0 && 
-           voice->waveform != WAVEFORM_NONE &&
-           !voice->test;
-}
-
-// =============================================================================
-// DEBUGGING AND ANALYSIS FUNCTIONS
-// =============================================================================
-
-void mos6581_get_voice_state(voice_t* voice, char* buffer, size_t buffer_size) {
-    if (!voice || !buffer) return;
-    
-    snprintf(buffer, buffer_size,
-        "Voice %d: Freq=%04X PW=%03X Wave=%02X Gate=%d Env=%04X Acc=%06X",
-        voice->voice_index,
-        voice->frequency,
-        voice->pulse_waveform_width,
-        voice->waveform,
-        voice->gated ? 1 : 0,
-        voice->envelope_amplitude,
-        voice->waveform_accumulator
-    );
-}
-
-void mos6581_get_filter_state(mos6581_t* sid, char* buffer, size_t buffer_size) {
-    if (!sid || !buffer) return;
-    
-    snprintf(buffer, buffer_size,
-        "Filter: Cutoff=%04X Res=%X LP=%d BP=%d HP=%d V1=%d V2=%d V3=%d",
-        sid->filter_cutoff_frequency,
-        sid->filter_resonance,
-        sid->low_pass_enabled ? 1 : 0,
-        sid->band_pass_enabled ? 1 : 0,
-        sid->high_pass_enabled ? 1 : 0,
-        sid->filter_voice1 ? 1 : 0,
-        sid->filter_voice2 ? 1 : 0,
-        sid->filter_voice3 ? 1 : 0
-    );
-}
-
-uint32_t mos6581_get_total_cycles(mos6581_t* sid) {
-    return sid ? sid->total_cycles : 0;
-}
-
-uint32_t mos6581_get_samples_generated(mos6581_t* sid) {
-    return sid ? sid->samples_generated : 0;
 }
 
 // =============================================================================
@@ -1277,8 +1085,6 @@ void mos6581_system_destroy(void* chip) {
     if (!sid) return;
     
     ring_buffer_destroy(&sid->sample_buffer);
-    free(sid->temp_buffer);
-    free(sid->combined_waveform_table);
     free(sid);
 }
 
@@ -1320,15 +1126,8 @@ void* mos6581_system_create(chip_descriptor_t* desc) {
     // Initialize ring buffer
     ring_buffer_init(&sid->sample_buffer, SAMPLE_BUFFER_SIZE);
     
-    // Initialize temporary buffer
-    sid->temp_buffer_size = 1024;
-    sid->temp_buffer = (float*)malloc(sid->temp_buffer_size * sizeof(float));
-    
     // Initialize filter
     mos6581_filter_init(sid);
-    
-    // Initialize combined waveform tables
-    mos6581_init_combined_waveforms(sid);
     
     mos6581_reset(sid);
     return sid;
@@ -1359,146 +1158,6 @@ bus_state_t mos6581_tick(void* chip, bus_state_t bus_state) {
     // In the future, this can be expanded to include additional tick-specific logic
     return mos6581_advance_cycle(sid, bus_state);
 }
-
-#if 0
-// =============================================================================
-// WAVEFORM CAPTURE AND ANALYSIS
-// =============================================================================
-
-void mos6581_capture_waveform(voice_t* voice, uint16_t* buffer, uint32_t buffer_size) {
-    if (!voice || !buffer) return;
-    
-    uint32_t original_accumulator = voice->waveform_accumulator;
-    uint32_t original_frequency = voice->frequency;
-    
-    // Set up for waveform capture
-    voice->frequency = 65535; // Maximum frequency for fast capture
-    voice->waveform_accumulator = 0;
-    
-    for (uint32_t i = 0; i < buffer_size; i++) {
-        voice_clock_cycle(voice);
-        buffer[i] = (uint16_t)voice->oscillator_waveform;
-    }
-    
-    // Restore original state
-    voice->waveform_accumulator = original_accumulator;
-    voice->frequency = original_frequency;
-}
-
-void mos6581_capture_envelope(voice_t* voice, uint16_t* buffer, uint32_t buffer_size) {
-    if (!voice || !buffer) return;
-    
-    envelope_cycle_t original_cycle = voice->envelope_cycle;
-    uint16_t original_amplitude = voice->envelope_amplitude;
-    
-    // Start envelope from beginning
-    voice->envelope_cycle = CYCLE_ATTACK;
-    voice->envelope_amplitude = 0;
-    voice->envelope_rate_counter = 0;
-    
-    for (uint32_t i = 0; i < buffer_size; i++) {
-        voice_update_envelope(voice);
-        buffer[i] = voice->envelope_amplitude;
-    }
-    
-    // Restore original state
-    voice->envelope_cycle = original_cycle;
-    voice->envelope_amplitude = original_amplitude;
-}
-
-// =============================================================================
-// PERFORMANCE MONITORING
-// =============================================================================
-
-typedef struct {
-    uint32_t voice_updates;
-    uint32_t filter_updates;
-    uint32_t envelope_updates;
-    uint32_t waveform_generations;
-    uint32_t buffer_overruns;
-    uint32_t buffer_underruns;
-} mos6581_performance_stats_t;
-
-static mos6581_performance_stats_t perf_stats = {0};
-
-void mos6581_get_performance_stats(mos6581_performance_stats_t* stats) {
-    if (stats) {
-        *stats = perf_stats;
-    }
-}
-
-void mos6581_reset_performance_stats(void) {
-    memset(&perf_stats, 0, sizeof(perf_stats));
-}
-
-// =============================================================================
-// PRESET MANAGEMENT
-// =============================================================================
-
-typedef struct {
-    char name[64];
-    uint8_t registers[SID_REGS_SIZE];
-    sid_revision_t revision;
-    bool pal_timing;
-} mos6581_preset_t;
-
-void mos6581_save_preset(mos6581_t* sid, mos6581_preset_t* preset, const char* name) {
-    if (!sid || !preset || !name) return;
-    
-    strncpy(preset->name, name, sizeof(preset->name) - 1);
-    preset->name[sizeof(preset->name) - 1] = '\0';
-    
-    memcpy(preset->registers, sid->regs, SID_REGS_SIZE);
-    preset->revision = sid->revision;
-    preset->pal_timing = sid->pal_timing;
-}
-
-void mos6581_load_preset(mos6581_t* sid, const mos6581_preset_t* preset) {
-    if (!sid || !preset) return;
-    
-    // Set revision and timing first
-    mos6581_set_revision(sid, preset->revision);
-    mos6581_set_timing(sid, preset->pal_timing);
-    
-    // Load all registers
-    for (uint32_t i = 0; i < SID_REGS_SIZE; i++) {
-        if (i < 0x19 || i > 0x1C) { // Skip read-only registers
-            bus_state_t preset_bus_state = BUS_STATE(0xD400 + i, preset->registers[i], 0);
-            mos6581_registers_write(sid, preset_bus_state);
-        }
-    }
-}
-
-// =============================================================================
-// MEMORY MANAGEMENT HELPERS
-// =============================================================================
-
-size_t mos6581_get_memory_usage(mos6581_t* sid) {
-    if (!sid) return 0;
-    
-    size_t total = sizeof(mos6581_t);
-    total += sid->sample_buffer.size * sizeof(float);
-    total += sid->temp_buffer_size * sizeof(float);
-    total += COMBINED_WAVEFORM_TABLE_SIZE;
-    
-    return total;
-}
-
-void mos6581_optimize_memory(mos6581_t* sid) {
-    if (!sid) return;
-    
-    // Optimize ring buffer size based on usage
-    uint32_t max_usage = ring_buffer_available(&sid->sample_buffer);
-    if (max_usage < sid->sample_buffer.size / 4) {
-        // Shrink buffer if underutilized
-        uint32_t new_size = max_usage * 2;
-        if (new_size < 1024) new_size = 1024;
-        
-        ring_buffer_destroy(&sid->sample_buffer);
-        ring_buffer_init(&sid->sample_buffer, new_size);
-    }
-}
-#endif
 
 // =============================================================================
 // CHIP DESCRIPTOR
