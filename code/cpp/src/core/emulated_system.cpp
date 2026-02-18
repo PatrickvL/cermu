@@ -152,6 +152,10 @@ void EmulatedSystem::apply_file_configuration(const char* filepath) {
     if (detected.region_option_index >= 0) {
         merged.region_option_index = detected.region_option_index;
     }
+    // Propagate file-detected custom settings (e.g. SID revision from header)
+    for (const auto& [key, value] : detected.custom_settings) {
+        merged.custom_settings[key] = value;
+    }
 
     set_configuration(merged);
     apply_configuration();

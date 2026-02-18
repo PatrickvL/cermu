@@ -12,6 +12,7 @@
 // We just need to ensure the system object files are linked
 #include "../systems/chip8/chip8_system.h"
 #include "../systems/c64/c64_system_wrapper.h"
+#include "../systems/c64/c64_kernal_patches.h"
 
 // ============================================================================
 // MAIN FUNCTION - Multi-System Emulator with Automatic Detection
@@ -21,6 +22,7 @@ int main(int argc, char** argv) {
     const char* system_name = nullptr;
     bool vicii_test_mode = false;
     bool vicii_dump_mode = false;
+    bool skip_memtest = false;
     
     // Parse command-line arguments
     for (int i = 1; i < argc; i++) {
@@ -40,11 +42,15 @@ int main(int argc, char** argv) {
             vicii_dump_mode = true;
             system_name = "C64";
             printf("VIC-II dump mode enabled\n");
+        } else if (strcmp(argv[i], "--skip-memtest") == 0) {
+            skip_memtest = true;
+            printf("KERNAL memory test skip enabled\n");
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             printf("Usage: %s [options] [file]\n", argv[0]);
             printf("\nOptions:\n");
             printf("  --system, -s <name>   Select system by short name (e.g., C64, CHIP8)\n");
             printf("  --vicii-test          Run VIC-II register test suite (headless)\n");
+            printf("  --skip-memtest        Patch C64 KERNAL to skip RAMTAS memory test\n");
             printf("  --help, -h            Show this help message\n");
             printf("\nAvailable systems:\n");
             for (const auto& desc : SystemRegistry::instance().get_all_descriptors()) {
@@ -133,6 +139,24 @@ int main(int argc, char** argv) {
         }
     }
     
+    // =========================================================================
+    // Apply --skip-memtest patch for C64 systems
+    // TODO: This should eventually be part of a configurable patch registry
+    // where users can enable/disable patches per system.  For now, only
+    // applies when explicitly requested via CLI.  Some whitelisted software
+    // (SID files) already applies this automatically via ensure_compatible_for_sid.
+    // =========================================================================
+    if (skip_memtest && system) {
+        auto* c64_wrapper = dynamic_cast<C64SystemWrapper*>(system.get());
+        if (c64_wrapper && c64_wrapper->get_c64_system()) {
+            c64_patch_skip_memtest(c64_wrapper->get_c64_system());
+        } else if (c64_wrapper) {
+            printf("WARNING: --skip-memtest specified but C64 not yet initialized\n");
+        } else {
+            printf("WARNING: --skip-memtest is only supported for C64 systems\n");
+        }
+    }
+
     // =========================================================================
     // VIC-II DUMP MODE — normal boot + framebuffer pixel dump
     // =========================================================================

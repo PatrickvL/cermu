@@ -291,6 +291,11 @@ bool C64SystemWrapper::initialize() {
         printf("C64: Failed to create system\n");
         return false;
     }
+
+    // Track the actual VIC-II standard this system was created with.
+    // apply_configuration() can desync c64_config_.vicii_standard from
+    // reality without recreating the chip; this field stays in sync.
+    created_vicii_standard_ = c64_config_.vicii_standard;
     
     // Apply SID revision from configuration (set before initialize)
     if (c64_->sid) {
@@ -564,7 +569,10 @@ void C64SystemWrapper::ensure_compatible_for_sid(const sid_header_t* sid) {
     // SID_MODEL_UNKNOWN / SID_MODEL_BOTH → keep current
 
     // ---- Apply region change (requires full recreation) ----
-    bool region_changed = (needed_standard != c64_config_.vicii_standard);
+    // Compare against the standard the VIC-II was actually created with,
+    // NOT c64_config_.vicii_standard which apply_configuration() may have
+    // updated without recreating the chip.
+    bool region_changed = (needed_standard != created_vicii_standard_);
 
     if (region_changed) {
         printf("C64: SID requires %s — recreating system (was %s)\n",
@@ -837,6 +845,16 @@ SystemConfiguration C64SystemWrapper::detect_optimal_configuration(
                     printf("C64: SID flags specify PAL — selecting PAL region\n");
                 }
                 // SID_VIDEO_BOTH or UNKNOWN: keep default (PAL)
+
+                // Propagate SID chip model so apply_configuration pre-selects it
+                if (sid_hdr.sid_model == SID_MODEL_8580) {
+                    config.custom_settings["sid_revision"] = "MOS 8580";
+                    printf("C64: SID flags specify 8580 chip\n");
+                } else if (sid_hdr.sid_model == SID_MODEL_6581) {
+                    config.custom_settings["sid_revision"] = "MOS 6581";
+                    printf("C64: SID flags specify 6581 chip\n");
+                }
+                // SID_MODEL_BOTH or UNKNOWN: keep user's current selection
             }
         }
     }
