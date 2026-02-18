@@ -246,6 +246,12 @@ typedef struct voice_s {
     float cpu_clock;                  // CPU clock frequency
     uint32_t voice_index;             // Voice index (0, 1, 2)
     
+    // Anti-aliasing: accumulate (centered_waveform × envelope) each CPU cycle.
+    // At sample time, divide by cycle count → box-filter anti-aliasing.
+    // reSID runs the filter at ~1 MHz and resamples with a FIR; we approximate
+    // by averaging the voice output between sample points.
+    int64_t sample_acc;               // Accumulated voice output between samples
+    
     // Reference to parent chip
     mos6581_t* sid;
 } voice_t;
@@ -306,6 +312,9 @@ typedef struct mos6581_s {
     // Fractional sample accumulator for cycle-accurate output
     double sample_accumulator;        // Fractional accumulator for sample generation
     float cpu_clock;                  // CPU clock frequency (e.g. 985248 for PAL)
+    
+    // Anti-aliasing: count CPU cycles between sample points for averaging
+    uint32_t sample_cycle_count;      // Cycles accumulated since last sample
     
     // DC blocker state for clean audio output (removes constant DC,
     // preserves fast changes for volume-register digi playback)

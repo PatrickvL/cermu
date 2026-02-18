@@ -27,14 +27,17 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Enable extra build types
-set(CMAKE_CONFIGURATION_TYPES "Debug;Release;RelWithDebInfo;MinSizeRel" CACHE STRING "" FORCE)
-
-# Set default build type if not specified
-if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+# Set default build type to Release BEFORE setting CMAKE_CONFIGURATION_TYPES.
+# This ensures that builds without an explicit -DCMAKE_BUILD_TYPE=... get
+# full optimization (-O3 -DNDEBUG) instead of an unoptimized debug build.
+if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build" FORCE)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "RelWithDebInfo" "MinSizeRel")
+    message(STATUS "No build type specified — defaulting to Release")
 endif()
+
+# Enable extra build types for multi-config generators (Visual Studio, Xcode)
+set(CMAKE_CONFIGURATION_TYPES "Debug;Release;RelWithDebInfo;MinSizeRel" CACHE STRING "" FORCE)
 
 # Compiler-specific settings and warning flags
 if(MSVC)
