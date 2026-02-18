@@ -325,6 +325,7 @@ set(CORE_UTIL_SOURCES
     src/core/formats/tap_format.cpp
     src/core/formats/crt_format.cpp
     src/core/formats/lnx_format.cpp
+    src/core/formats/sid_format.cpp
     src/core/formats/commodore_load_helpers.cpp
     src/core/encoding/petscii.cpp
     src/core/analysis/basic_parser.cpp

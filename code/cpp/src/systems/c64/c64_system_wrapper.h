@@ -3,6 +3,7 @@
 #include "../../core/emulated_system.h"
 #include "../../chip/input/keyboard_mapper.h"
 #include "../../core/formats/format_handler.h"
+#include "../../core/formats/sid_format.h"
 #include "c64.h"
 #include "c64_config.h"
 #include <memory>
@@ -170,6 +171,9 @@ private:
 
     /** Apply the pending load result to RAM and inject auto-run. */
     void apply_pending_load();
+
+    /** SID-specific loader: write payload + inject 6502 player stub. */
+    void apply_sid_load(const sid_header_t* sid);
 
     // Note: hardware_traits_, config_ (SystemConfiguration), speed_multiplier_,
     // total_cycles_ are now stored in EmulatedSystem base class
