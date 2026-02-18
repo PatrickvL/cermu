@@ -68,7 +68,7 @@ void patch_kernal_for_test(c64_t* c64) {
 // The program uses a mini-assembler helper to generate correct 6502 machine code.
 // ============================================================================
 
-// Mini 6502 assembler — shared definition in asm6510.h
+// Mini 6502 assembler — shared definition in src/core/asm6510.h
 #include "asm6510.h"
 
 // --- Harness-specific composite helpers (use vicii_test constants) ---
