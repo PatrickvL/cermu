@@ -4,6 +4,11 @@ cmake_minimum_required(VERSION 3.16)
 add_library(nes_system
     nes_system.cpp
     nes_system.h
+    nes_screen_utils.cpp
+    nes_screen_utils.h
+    nes_nsf_player.cpp
+    nes_nsf_player.h
+    nes_nsf_cartridge.h
 )
 
 target_include_directories(nes_system PUBLIC
