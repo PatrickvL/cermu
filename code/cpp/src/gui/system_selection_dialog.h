@@ -23,6 +23,9 @@ private:
     // Selected peripherals (map of peripheral ID -> enabled state)
     std::map<std::string, bool> selected_peripherals_;
     
+    // Selected custom options (map of option ID -> selected choice string)
+    std::map<std::string, std::string> selected_custom_settings_;
+    
     // Filtering options
     char search_filter_[256];
     bool search_descriptions_;  // Whether to also search in descriptions
@@ -77,6 +80,11 @@ public:
      * Get the selected peripherals map (peripheral ID -> enabled state)
      */
     const std::map<std::string, bool>& get_selected_peripherals() const { return selected_peripherals_; }
+    
+    /**
+     * Get the selected custom settings (option ID -> selected choice)
+     */
+    const std::map<std::string, std::string>& get_selected_custom_settings() const { return selected_custom_settings_; }
     
     /**
      * Reset the selection state

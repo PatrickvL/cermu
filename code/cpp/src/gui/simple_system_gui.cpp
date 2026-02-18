@@ -195,10 +195,11 @@ void SimpleSystemGUI::render_frame() {
             int memory_opt = system_selection_dialog_.get_selected_memory_option();
             int region_opt = system_selection_dialog_.get_selected_region_option();
             const auto& peripherals = system_selection_dialog_.get_selected_peripherals();
+            const auto& custom_settings = system_selection_dialog_.get_selected_custom_settings();
             if (selected) {
                 // Pass pending file so switch_system applies config before init
                 const char* pf = pending_file_path_.empty() ? nullptr : pending_file_path_.c_str();
-                switch_system(selected, memory_opt, region_opt, &peripherals, pf);
+                switch_system(selected, memory_opt, region_opt, &peripherals, pf, &custom_settings);
                 pending_file_path_.clear();
             }
             system_selection_dialog_.reset();
@@ -641,7 +642,7 @@ void SimpleSystemGUI::teardown_current_system() {
     actual_fps_ = 0;
     reset_frame_pacing();
 }
-void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, int region_option, const std::map<std::string, bool>* peripherals, const char* pending_file) {
+void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, int region_option, const std::map<std::string, bool>* peripherals, const char* pending_file, const std::map<std::string, std::string>* custom_settings) {
     if (!system_name) {
         printf("ERROR: switch_system called with null system name\n");
         return;
@@ -674,6 +675,14 @@ void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, 
         if (peripherals) {
             config.enabled_peripherals = *peripherals;
             printf("Applied %zu peripheral selections\n", peripherals->size());
+        }
+        
+        // Apply custom settings if provided
+        if (custom_settings) {
+            config.custom_settings = *custom_settings;
+            for (const auto& [key, value] : *custom_settings) {
+                printf("Custom setting: %s = %s\n", key.c_str(), value.c_str());
+            }
         }
         
         if (!system_->set_configuration(config)) {

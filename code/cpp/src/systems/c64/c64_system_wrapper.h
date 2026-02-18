@@ -136,6 +136,7 @@ private:
     c64_t* c64_;
     uint32_t cycles_per_frame_;
     c64_config_t c64_config_;  // Renamed to avoid conflict with base class config_
+    sid_revision_t pending_sid_revision_ = SID_REVISION_6581_R4AR;  // Applied after SID creation
     void* gui_state_;  // Opaque pointer to gui_state_t (persistent GUI state)
     std::unique_ptr<KeyboardMapper> keyboard_mapper_;  // Layered keyboard mapping engine
 

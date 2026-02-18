@@ -137,6 +137,17 @@ struct PeripheralOption {
 };
 
 /**
+ * Custom configuration option (system-specific dropdowns)
+ */
+struct CustomOption {
+    const char* id;                 // Key used in SystemConfiguration::custom_settings
+    const char* name;               // Display label (e.g., "SID Revision")
+    const char* description;        // Tooltip text (nullable)
+    std::vector<const char*> choices;  // Option values (display & storage)
+    int default_index;              // Index into choices for the default
+};
+
+/**
  * Complete hardware trait descriptor
  * Describes the fixed hardware characteristics of the system
  */
@@ -154,6 +165,7 @@ struct HardwareTraits {
     std::vector<MemoryOption> memory_options;
     std::vector<RegionOption> region_options;
     std::vector<PeripheralOption> peripheral_options;
+    std::vector<CustomOption> custom_options;
 };
 
 /**
