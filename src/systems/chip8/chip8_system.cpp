@@ -2,6 +2,8 @@
 #include <fstream>
 #include <cstring>
 #include <cstdio>
+#include <algorithm>
+#include <cmath>
 
 // SDL is only needed for keyboard mapping in GUI builds
 #ifdef IMGUI_VERSION
@@ -9,7 +11,11 @@
 #include "imgui.h"
 #endif
 
-// CHIP-8 font set (0-F, 5 bytes each)
+// ============================================================================
+// Font Data
+// ============================================================================
+
+// Standard CHIP-8 font — 5 bytes per glyph, 16 glyphs (0–F)
 static const uint8_t chip8_font[80] = {
     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
     0x20, 0x60, 0x20, 0x20, 0x70, // 1
@@ -29,6 +35,27 @@ static const uint8_t chip8_font[80] = {
     0xF0, 0x80, 0xF0, 0x80, 0x80  // F
 };
 
+// SCHIP hi-res font — 10 bytes per glyph, 16 glyphs (0–F)
+// Stored at offset 80 in memory (right after the standard font)
+static const uint8_t schip_font[160] = {
+    0xFF, 0xFF, 0xC3, 0xC3, 0xC3, 0xC3, 0xC3, 0xC3, 0xFF, 0xFF, // 0
+    0x18, 0x78, 0x78, 0x18, 0x18, 0x18, 0x18, 0x18, 0xFF, 0xFF, // 1
+    0xFF, 0xFF, 0x03, 0x03, 0xFF, 0xFF, 0xC0, 0xC0, 0xFF, 0xFF, // 2
+    0xFF, 0xFF, 0x03, 0x03, 0xFF, 0xFF, 0x03, 0x03, 0xFF, 0xFF, // 3
+    0xC3, 0xC3, 0xC3, 0xC3, 0xFF, 0xFF, 0x03, 0x03, 0x03, 0x03, // 4
+    0xFF, 0xFF, 0xC0, 0xC0, 0xFF, 0xFF, 0x03, 0x03, 0xFF, 0xFF, // 5
+    0xFF, 0xFF, 0xC0, 0xC0, 0xFF, 0xFF, 0xC3, 0xC3, 0xFF, 0xFF, // 6
+    0xFF, 0xFF, 0x03, 0x03, 0x06, 0x0C, 0x18, 0x18, 0x18, 0x18, // 7
+    0xFF, 0xFF, 0xC3, 0xC3, 0xFF, 0xFF, 0xC3, 0xC3, 0xFF, 0xFF, // 8
+    0xFF, 0xFF, 0xC3, 0xC3, 0xFF, 0xFF, 0x03, 0x03, 0xFF, 0xFF, // 9
+    0x7E, 0xFF, 0xC3, 0xC3, 0xC3, 0xFF, 0xFF, 0xC3, 0xC3, 0xC3, // A
+    0xFC, 0xFC, 0xC3, 0xC3, 0xFC, 0xFC, 0xC3, 0xC3, 0xFC, 0xFC, // B
+    0x3C, 0xFF, 0xC3, 0xC0, 0xC0, 0xC0, 0xC0, 0xC3, 0xFF, 0x3C, // C
+    0xFC, 0xFE, 0xC3, 0xC3, 0xC3, 0xC3, 0xC3, 0xC3, 0xFE, 0xFC, // D
+    0xFF, 0xFF, 0xC0, 0xC0, 0xFF, 0xFF, 0xC0, 0xC0, 0xFF, 0xFF, // E
+    0xFF, 0xFF, 0xC0, 0xC0, 0xFF, 0xFF, 0xC0, 0xC0, 0xC0, 0xC0  // F
+};
+
 // ============================================================================
 // Hardware Traits Definition
 // ============================================================================
@@ -36,108 +63,123 @@ static const uint8_t chip8_font[80] = {
 static HardwareTraits create_chip8_hardware_traits() {
     HardwareTraits traits = {};
     
-    // Display traits
-    traits.display.native_width = 64;
-    traits.display.native_height = 32;
-    traits.display.visible_width = 64;
-    traits.display.visible_height = 32;
-    traits.display.format = FramebufferFormat::MONOCHROME_1;  // 1-bit format
-    traits.display.palette_size = 2;  // 2 colors (off/on)
+    // Display traits — always 128×64 (lo-res is pixel-doubled)
+    traits.display.native_width = 128;
+    traits.display.native_height = 64;
+    traits.display.visible_width = 128;
+    traits.display.visible_height = 64;
+    traits.display.format = FramebufferFormat::PALETTE_INDEXED_2;  // 2-bit for XO-CHIP dual-plane
+    traits.display.palette_size = 4;  // 4 colors (XO-CHIP dual-plane)
     traits.display.pixel_aspect_ratio = 1.0f;
     traits.display.has_overscan = false;
     
-    // Original CHIP-8 display palette (green phosphor monitor)
-    traits.display.default_palette.push_back(
-        PaletteColor(0, 0, 0, 255)        // Color 0: Black (off)
-    );
-    traits.display.default_palette.push_back(
-        PaletteColor(0, 255, 0, 255)      // Color 1: Green (on)
-    );
+    // Default 4-color palette (supports all modes)
+    traits.display.default_palette.push_back(PaletteColor(0, 0, 0, 255));       // 0: Background
+    traits.display.default_palette.push_back(PaletteColor(0, 255, 0, 255));     // 1: Plane 1
+    traits.display.default_palette.push_back(PaletteColor(0, 0, 255, 255));     // 2: Plane 2
+    traits.display.default_palette.push_back(PaletteColor(255, 255, 255, 255)); // 3: Both planes
     
     // Audio traits
     traits.audio.format = AudioFormat::MONO_8BIT;
     traits.audio.sample_rate_hz = 4000;
     traits.audio.channels = 1;
-    traits.audio.chip_name = "Simple Beeper";
+    traits.audio.chip_name = "Beeper / XO-CHIP Audio";
     
     // Timing
-    traits.timing.cpu_frequency_hz = 600;  // ~600 Hz instruction rate
-    traits.timing.video_frequency_hz = 60;  // 60 Hz refresh
+    traits.timing.cpu_frequency_hz = 600;
+    traits.timing.video_frequency_hz = 60;
     traits.timing.audio_sample_rate_hz = 4000;
     traits.timing.target_fps = 60;
-    traits.timing.cycles_per_frame = 10;  // ~10 instructions per frame
-    traits.timing.region = VideoRegion::NTSC;  // No real region for CHIP-8
+    traits.timing.cycles_per_frame = 10;
+    traits.timing.region = VideoRegion::NTSC;
     
     // Memory options
-    traits.memory_options.push_back({
-        "4KB Standard",
-        4096,
-        0,
-        true
+    traits.memory_options.push_back({"4KB Standard", 4096, 0, true});
+    traits.memory_options.push_back({"64KB (XO-CHIP)", 65536, 0, false});
+    
+    // Speed presets
+    traits.region_options.push_back({
+        "Standard (600 Hz)", VideoRegion::NTSC, traits.timing, true
     });
     
-    // Region options (speed variants)
+    SystemTiming fast = traits.timing;
+    fast.cpu_frequency_hz = 1200;
+    fast.cycles_per_frame = 20;
     traits.region_options.push_back({
-        "Standard (600 Hz)",
-        VideoRegion::NTSC,
-        traits.timing,
-        true
+        "Fast (1200 Hz)", VideoRegion::CUSTOM, fast, false
     });
     
-    SystemTiming fast_timing = traits.timing;
-    fast_timing.cpu_frequency_hz = 1200;
-    fast_timing.cycles_per_frame = 20;
+    SystemTiming xo = traits.timing;
+    xo.cpu_frequency_hz = 1000;
+    xo.cycles_per_frame = 17;
     traits.region_options.push_back({
-        "Fast (1200 Hz)",
-        VideoRegion::CUSTOM,
-        fast_timing,
-        false
+        "XO-CHIP (1000 Hz)", VideoRegion::CUSTOM, xo, false
     });
+    
+    // Custom options — interpreter mode
+    CustomOption mode_opt;
+    mode_opt.id = "chip8_mode";
+    mode_opt.name = "Interpreter Mode";
+    mode_opt.description = "Select CHIP-8 variant (Auto detects from ROM)";
+    mode_opt.choices = {"Auto", "CHIP-8", "SCHIP 1.1", "XO-CHIP"};
+    mode_opt.default_index = 0;
+    traits.custom_options.push_back(mode_opt);
     
     return traits;
 }
 
-// System descriptor and file detection
+// System file detection
 static float chip8_can_load_file(const char* filepath, const uint8_t* data, size_t size) {
     const char* ext = strrchr(filepath, '.');
     if (ext) {
-        if (strcmp(ext, ".ch8") == 0 || strcmp(ext, ".c8") == 0) {
-            return 0.9f;
-        }
+        if (strcmp(ext, ".ch8") == 0 || strcmp(ext, ".c8") == 0) return 0.9f;
+        if (strcmp(ext, ".sc8") == 0) return 0.95f;  // SCHIP ROM
+        if (strcmp(ext, ".xo8") == 0) return 0.95f;  // XO-CHIP ROM
     }
     
-    if (size >= 10 && size <= 3584) {
-        return 0.6f;
+    // Heuristic: CHIP-8 ROMs are typically 200–65024 bytes
+    if (size >= 10 && size <= 65024) {
+        return 0.5f;
     }
     
     return 0.0f;
 }
 
 static SystemDescriptor chip8_descriptor = {
-    "CHIP-8 Interpreter",
+    "CHIP-8 / SCHIP / XO-CHIP",
     "CHIP8",
-    "Simple interpreted system for games and demos (1970s)",
-    nullptr,  // supported_formats: CHIP-8 does not use format handler system
+    "CHIP-8 interpreter with Super-CHIP and XO-CHIP extensions",
+    nullptr,
     create_chip8_hardware_traits(),
     chip8_can_load_file
 };
 
 // ============================================================================
-// Constructor / Destructor
+// Constructor
 // ============================================================================
 Chip8System::Chip8System()
-    : EmulatedSystem()  // Call base class constructor
+    : EmulatedSystem()
+    , mode_(Chip8Mode::CHIP8)
+    , memory_(4096, 0)
     , cycles_per_frame_(10)
     , display_dirty_(false)
+    , hires_(false)
+    , active_plane_mask_(1)
+    , wait_for_key_(false)
+    , wait_key_reg_(0)
     , shift_quirk_(false)
     , load_store_quirk_(false)
+    , jump_quirk_(false)
+    , clip_quirk_(true)
+    , vf_reset_quirk_(true)
     , beeper_phase_(0)
+    , pitch_register_(64)
+    , has_audio_pattern_(false)
 {
-    // Base class already initializes: rgba_framebuffer_, rgba_width_, rgba_height_,
-    // total_cycles_, speed_multiplier_, hardware_traits_, config_, current_palette_
-    
     hardware_traits_ = create_chip8_hardware_traits();
     current_palette_ = hardware_traits_.display.default_palette;
+    memset(rpl_flags_, 0, sizeof(rpl_flags_));
+    memset(audio_pattern_, 0, sizeof(audio_pattern_));
     reset();
 }
 
@@ -153,32 +195,54 @@ const SystemDescriptor& Chip8System::get_descriptor() const {
 // Configuration Management
 // ============================================================================
 
-// Note: get_configuration() now provided by base class
-
 bool Chip8System::set_configuration(const SystemConfiguration& config) {
     config_ = config;
     
     // Apply palette selection
     auto palette_it = config.custom_settings.find("display_palette");
     if (palette_it != config.custom_settings.end()) {
-        const std::string& palette_name = palette_it->second;
+        const std::string& pal = palette_it->second;
         
-        if (palette_name == "green") {
-            current_palette_[0] = PaletteColor(0, 0, 0, 255);
-            current_palette_[1] = PaletteColor(0, 255, 0, 255);
+        // Colors: [bg, plane1, plane2, both]
+        if (pal == "green") {
+            current_palette_ = {
+                PaletteColor(0, 0, 0, 255),
+                PaletteColor(0, 255, 0, 255),
+                PaletteColor(0, 128, 0, 255),
+                PaletteColor(128, 255, 128, 255)
+            };
+        } else if (pal == "amber") {
+            current_palette_ = {
+                PaletteColor(0, 0, 0, 255),
+                PaletteColor(255, 176, 0, 255),
+                PaletteColor(128, 88, 0, 255),
+                PaletteColor(255, 220, 128, 255)
+            };
+        } else if (pal == "white") {
+            current_palette_ = {
+                PaletteColor(0, 0, 0, 255),
+                PaletteColor(255, 255, 255, 255),
+                PaletteColor(128, 128, 128, 255),
+                PaletteColor(200, 200, 255, 255)
+            };
+        } else if (pal == "c64") {
+            current_palette_ = {
+                PaletteColor(0x40, 0x31, 0x8D, 255),
+                PaletteColor(0x7B, 0x70, 0xFC, 255),
+                PaletteColor(0x58, 0x4F, 0xC4, 255),
+                PaletteColor(0xA0, 0x98, 0xFF, 255)
+            };
         }
-        else if (palette_name == "amber") {
-            current_palette_[0] = PaletteColor(0, 0, 0, 255);
-            current_palette_[1] = PaletteColor(255, 176, 0, 255);
-        }
-        else if (palette_name == "white") {
-            current_palette_[0] = PaletteColor(0, 0, 0, 255);
-            current_palette_[1] = PaletteColor(255, 255, 255, 255);
-        }
-        else if (palette_name == "c64") {
-            current_palette_[0] = PaletteColor(0x40, 0x31, 0x8D, 255);
-            current_palette_[1] = PaletteColor(0x7B, 0x70, 0xFC, 255);
-        }
+    }
+    
+    // Apply mode selection
+    auto mode_it = config.custom_settings.find("chip8_mode");
+    if (mode_it != config.custom_settings.end()) {
+        const std::string& m = mode_it->second;
+        if (m == "CHIP-8")      mode_ = Chip8Mode::CHIP8;
+        else if (m == "SCHIP 1.1")  mode_ = Chip8Mode::SCHIP;
+        else if (m == "XO-CHIP")    mode_ = Chip8Mode::XOCHIP;
+        // "Auto" is handled by detect_optimal_configuration
     }
     
     display_dirty_ = true;
@@ -186,11 +250,41 @@ bool Chip8System::set_configuration(const SystemConfiguration& config) {
 }
 
 bool Chip8System::apply_configuration() {
-    // Apply speed settings
     if (config_.region_option_index >= 0 &&
         config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
-        const RegionOption& region = hardware_traits_.region_options[config_.region_option_index];
-        cycles_per_frame_ = region.timing.cycles_per_frame;
+        cycles_per_frame_ = hardware_traits_.region_options[config_.region_option_index]
+                                .timing.cycles_per_frame;
+    }
+    
+    // Resize memory for XO-CHIP
+    size_t needed = (mode_ == Chip8Mode::XOCHIP) ? 65536 : 4096;
+    if (memory_.size() < needed) {
+        memory_.resize(needed, 0);
+    }
+    
+    // Set default quirks per mode
+    switch (mode_) {
+        case Chip8Mode::CHIP8:
+            shift_quirk_ = false;
+            load_store_quirk_ = false;
+            jump_quirk_ = false;
+            clip_quirk_ = true;
+            vf_reset_quirk_ = true;
+            break;
+        case Chip8Mode::SCHIP:
+            shift_quirk_ = true;   // SCHIP uses Vx for shifts
+            load_store_quirk_ = false;
+            jump_quirk_ = true;    // BXNN jumps to XNN + Vx
+            clip_quirk_ = true;
+            vf_reset_quirk_ = false;
+            break;
+        case Chip8Mode::XOCHIP:
+            shift_quirk_ = false;
+            load_store_quirk_ = false;
+            jump_quirk_ = false;
+            clip_quirk_ = false;   // XO-CHIP wraps sprites
+            vf_reset_quirk_ = false;
+            break;
     }
     
     return true;
@@ -203,60 +297,165 @@ SystemConfiguration Chip8System::detect_optimal_configuration(
     const char* filepath, const uint8_t* data, size_t size) {
 
     SystemConfiguration config = EmulatedSystem::detect_optimal_configuration(filepath, data, size);
-
-    // Larger CHIP-8 ROMs (>2KB) tend to be more complex programs that benefit
-    // from the faster 1200 Hz execution speed (region option index 1).
-    if (size > 2048) {
-        // Check that the fast option exists
-        if (hardware_traits_.region_options.size() > 1) {
-            config.region_option_index = 1;
-            printf("CHIP8: Large ROM (%zu bytes) — selecting fast speed profile\n", size);
-        }
+    
+    // Detect mode from file extension first
+    const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
+    Chip8Mode detected = Chip8Mode::CHIP8;
+    
+    if (ext) {
+        if (strcmp(ext, ".sc8") == 0) detected = Chip8Mode::SCHIP;
+        else if (strcmp(ext, ".xo8") == 0) detected = Chip8Mode::XOCHIP;
     }
-
+    
+    // If no extension hint, scan ROM for extended instructions
+    if (detected == Chip8Mode::CHIP8 && data && size > 0) {
+        detected = detect_mode_from_rom(data, size);
+    }
+    
+    // Auto-extend memory for large ROMs
+    if (size > 3584) {
+        detected = Chip8Mode::XOCHIP;
+        config.memory_option_index = 1;  // 64KB
+        printf("CHIP8: ROM size %zu > 3584, selecting XO-CHIP mode with 64KB\n", size);
+    }
+    
+    switch (detected) {
+        case Chip8Mode::SCHIP:
+            config.custom_settings["chip8_mode"] = "SCHIP 1.1";
+            // Use fast speed for SCHIP
+            if (hardware_traits_.region_options.size() > 1)
+                config.region_option_index = 1;
+            printf("CHIP8: Detected SCHIP mode\n");
+            break;
+        case Chip8Mode::XOCHIP:
+            config.custom_settings["chip8_mode"] = "XO-CHIP";
+            config.memory_option_index = 1;  // 64KB
+            if (hardware_traits_.region_options.size() > 2)
+                config.region_option_index = 2;  // XO-CHIP speed
+            printf("CHIP8: Detected XO-CHIP mode\n");
+            break;
+        default:
+            config.custom_settings["chip8_mode"] = "CHIP-8";
+            if (size > 2048 && hardware_traits_.region_options.size() > 1)
+                config.region_option_index = 1;
+            break;
+    }
+    
     return config;
 }
+
+// ============================================================================
+// ROM analysis — scan for extended instructions to determine mode
+// ============================================================================
+Chip8Mode Chip8System::detect_mode_from_rom(const uint8_t* data, size_t size) {
+    bool uses_schip = false;
+    bool uses_xochip = false;
+    
+    for (size_t i = 0; i + 1 < size; i += 2) {
+        uint16_t op = (data[i] << 8) | data[i + 1];
+        
+        // SCHIP instructions
+        uint8_t hi = (op >> 12) & 0xF;
+        uint8_t lo = op & 0xFF;
+        
+        if ((op & 0xFFF0) == 0x00C0) uses_schip = true;   // 00Cn: scroll down
+        if (op == 0x00FB) uses_schip = true;                // scroll right
+        if (op == 0x00FC) uses_schip = true;                // scroll left
+        if (op == 0x00FD) uses_schip = true;                // EXIT
+        if (op == 0x00FE) uses_schip = true;                // lo-res
+        if (op == 0x00FF) uses_schip = true;                // hi-res
+        if (hi == 0xD && (op & 0xF) == 0) uses_schip = true; // DXY0: 16×16 sprite
+        if (hi == 0xF && lo == 0x30) uses_schip = true;      // FX30: hi-res font
+        if (hi == 0xF && (lo == 0x75 || lo == 0x85)) uses_schip = true; // RPL flags
+        
+        // XO-CHIP instructions
+        if ((op & 0xFFF0) == 0x00D0) uses_xochip = true;   // 00Dn: scroll up
+        if (op == 0xF000) uses_xochip = true;                // F000 NNNN: long I
+        if ((op & 0xFF00) == 0xF000 && lo == 0x02) uses_xochip = true; // F002: audio
+        if (hi == 0xF && lo == 0x3A) uses_xochip = true;     // F03A: pitch
+        if (hi == 0x5 && (op & 0xF) == 2) uses_xochip = true; // 5XY2: save range
+        if (hi == 0x5 && (op & 0xF) == 3) uses_xochip = true; // 5XY3: load range
+        if (hi == 0xF && lo == 0x01) uses_xochip = true;      // FN01: planes
+    }
+    
+    if (uses_xochip) return Chip8Mode::XOCHIP;
+    if (uses_schip)  return Chip8Mode::SCHIP;
+    return Chip8Mode::CHIP8;
+}
+
+// ============================================================================
+// Audio
+// ============================================================================
 
 uint32_t Chip8System::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
 
-    // CHIP-8 beeper: 440 Hz square wave while sound_timer_ > 0
-    // Audio sample rate from traits is 4000 Hz
-    // Half-period in samples: 4000 / (440 * 2) ≈ 4.5 → use integer 5
-    const uint32_t half_period = 5;
-    const float amplitude = 0.3f; // Keep volume modest
+    if (mode_ == Chip8Mode::XOCHIP && has_audio_pattern_) {
+        // XO-CHIP: play 16-byte (128-bit) pattern as a waveform
+        // Pitch formula: rate = 4000 * 2^((pitch - 64) / 48)
+        double rate = 4000.0 * pow(2.0, (pitch_register_ - 64.0) / 48.0);
+        double step = rate / 4000.0;  // samples per output sample
+        
+        for (uint32_t i = 0; i < max_samples; i++) {
+            if (sound_timer_ > 0) {
+                // 128-bit pattern: index into 16 bytes × 8 bits
+                int bit_pos = static_cast<int>(beeper_phase_) % 128;
+                int byte_idx = bit_pos / 8;
+                int bit_idx = 7 - (bit_pos % 8);
+                bool on = (audio_pattern_[byte_idx] >> bit_idx) & 1;
+                buffer[i] = on ? 0.3f : -0.3f;
+                beeper_phase_ += static_cast<uint32_t>(step);
+            } else {
+                buffer[i] = 0.0f;
+                beeper_phase_ = 0;
+            }
+        }
+    } else {
+        // Standard CHIP-8 / SCHIP: 440 Hz square wave
+        const uint32_t half_period = 5;  // 4000 / (440 * 2) ≈ 4.5
+        const float amplitude = 0.3f;
 
-    for (uint32_t i = 0; i < max_samples; i++) {
-        if (sound_timer_ > 0) {
-            buffer[i] = (beeper_phase_ < half_period) ? amplitude : -amplitude;
-            beeper_phase_ = (beeper_phase_ + 1) % (half_period * 2);
-        } else {
-            buffer[i] = 0.0f;
-            beeper_phase_ = 0;
+        for (uint32_t i = 0; i < max_samples; i++) {
+            if (sound_timer_ > 0) {
+                buffer[i] = (beeper_phase_ < half_period) ? amplitude : -amplitude;
+                beeper_phase_ = (beeper_phase_ + 1) % (half_period * 2);
+            } else {
+                buffer[i] = 0.0f;
+                beeper_phase_ = 0;
+            }
         }
     }
     return max_samples;
 }
 
-// Note: Hardware trait queries (get_hardware_traits, get_current_timing,
-// get_display_traits, get_audio_traits) now provided by base class
-
-// Note: initialize() and shutdown() now provided by base class with default implementations
+// ============================================================================
+// Reset
+// ============================================================================
 
 void Chip8System::reset() {
-    memset(memory_, 0, sizeof(memory_));
+    std::fill(memory_.begin(), memory_.end(), 0);
     memset(V_, 0, sizeof(V_));
     memset(stack_, 0, sizeof(stack_));
-    memset(native_display_, 0, sizeof(native_display_));
+    memset(planes_, 0, sizeof(planes_));
     memset(keys_, 0, sizeof(keys_));
+    memset(rpl_flags_, 0, sizeof(rpl_flags_));
+    memset(audio_pattern_, 0, sizeof(audio_pattern_));
     
-    memcpy(memory_, chip8_font, sizeof(chip8_font));
+    // Load fonts into lower memory
+    memcpy(memory_.data(), chip8_font, sizeof(chip8_font));
+    memcpy(memory_.data() + 80, schip_font, sizeof(schip_font));
     
     I_ = 0;
     PC_ = 0x200;
     SP_ = 0;
     delay_timer_ = 0;
     sound_timer_ = 0;
+    hires_ = false;
+    active_plane_mask_ = 1;
+    wait_for_key_ = false;
+    wait_key_reg_ = 0;
+    pitch_register_ = 64;
+    has_audio_pattern_ = false;
     
     total_cycles_ = 0;
     display_dirty_ = true;
@@ -267,6 +466,18 @@ void Chip8System::reset() {
 // ============================================================================
 
 void Chip8System::tick() {
+    if (wait_for_key_) {
+        // Blocked on FX0A — check if any key is pressed
+        for (int i = 0; i < 16; i++) {
+            if (keys_[i]) {
+                V_[wait_key_reg_] = i;
+                wait_for_key_ = false;
+                break;
+            }
+        }
+        if (wait_for_key_) return;  // Still waiting
+    }
+    
     uint16_t opcode = (memory_[PC_] << 8) | memory_[PC_ + 1];
     execute_instruction(opcode);
     total_cycles_++;
@@ -276,7 +487,6 @@ void Chip8System::run_frame() {
     for (uint32_t i = 0; i < cycles_per_frame_; i++) {
         tick();
     }
-    
     update_timers();
 }
 
@@ -294,19 +504,25 @@ bool Chip8System::load_file(const char* filepath) {
     size_t size = file.tellg();
     file.seekg(0, std::ios::beg);
     
-    if (size > 4096 - 512) {
-        printf("CHIP-8: File too large: %zu bytes (max 3584)\n", size);
-        return false;
+    // Auto-extend memory if ROM > 3584 bytes
+    size_t max_rom = memory_.size() - 512;
+    if (size > max_rom) {
+        if (size <= 65024) {
+            memory_.resize(65536, 0);
+            mode_ = Chip8Mode::XOCHIP;
+            printf("CHIP-8: ROM %zu bytes > 4KB, auto-extending to 64KB (XO-CHIP)\n", size);
+        } else {
+            printf("CHIP-8: File too large: %zu bytes (max 65024)\n", size);
+            return false;
+        }
     }
     
-    // Reset FIRST, then load ROM
     reset();
     
-    // Load ROM into memory starting at 0x200
-    file.read(reinterpret_cast<char*>(memory_ + 0x200), size);
-    printf("CHIP-8: Loaded %zu bytes from %s\n", size, filepath);
-    
-    // PC is already set to 0x200 by reset()
+    file.read(reinterpret_cast<char*>(memory_.data() + 0x200), size);
+    printf("CHIP-8: Loaded %zu bytes from %s (mode: %s)\n", size, filepath,
+           mode_ == Chip8Mode::XOCHIP ? "XO-CHIP" :
+           mode_ == Chip8Mode::SCHIP ? "SCHIP" : "CHIP-8");
     
     return true;
 }
@@ -316,26 +532,61 @@ bool Chip8System::load_file(const char* filepath) {
 // ============================================================================
 
 uint32_t* Chip8System::get_framebuffer() {
-    if (rgba_framebuffer_) {
-        // Always convert native 1-bit to RGBA8888 using generic renderer
-        // This ensures the display stays up-to-date when polled every frame
-        FramebufferRenderer::convert_monochrome_1bit(
-            native_display_,
-            64, 32,
-            current_palette_[0],
-            current_palette_[1],
-            rgba_framebuffer_,
-            rgba_width_,
-            rgba_height_
-        );
+    if (!rgba_framebuffer_) return nullptr;
+    
+    const int w = 128;
+    const int h = 64;
+    
+    if (hires_) {
+        // Hi-res: direct 128×64, combine planes
+        for (int y = 0; y < h && y < rgba_height_; y++) {
+            for (int x = 0; x < w && x < rgba_width_; x++) {
+                int byte_idx = y * (w / 8) + (x / 8);
+                int bit_idx = 7 - (x % 8);
+                
+                int color_idx = 0;
+                if ((planes_[0][byte_idx] >> bit_idx) & 1) color_idx |= 1;
+                if ((planes_[1][byte_idx] >> bit_idx) & 1) color_idx |= 2;
+                
+                // Ensure we have enough palette entries
+                if (color_idx < static_cast<int>(current_palette_.size()))
+                    rgba_framebuffer_[y * rgba_width_ + x] = current_palette_[color_idx].to_rgba32();
+            }
+        }
+    } else {
+        // Lo-res: 64×32 doubled to 128×64
+        for (int y = 0; y < 32; y++) {
+            for (int x = 0; x < 64; x++) {
+                int byte_idx = y * 8 + (x / 8);
+                int bit_idx = 7 - (x % 8);
+                
+                int color_idx = 0;
+                if ((planes_[0][byte_idx] >> bit_idx) & 1) color_idx |= 1;
+                if ((planes_[1][byte_idx] >> bit_idx) & 1) color_idx |= 2;
+                
+                uint32_t rgba = (color_idx < static_cast<int>(current_palette_.size()))
+                    ? current_palette_[color_idx].to_rgba32()
+                    : 0xFF000000;
+                
+                // Double each pixel: 2×2 block
+                int dx = x * 2, dy = y * 2;
+                if (dy + 1 < rgba_height_ && dx + 1 < rgba_width_) {
+                    rgba_framebuffer_[dy * rgba_width_ + dx] = rgba;
+                    rgba_framebuffer_[dy * rgba_width_ + dx + 1] = rgba;
+                    rgba_framebuffer_[(dy + 1) * rgba_width_ + dx] = rgba;
+                    rgba_framebuffer_[(dy + 1) * rgba_width_ + dx + 1] = rgba;
+                }
+            }
+        }
     }
     
     return rgba_framebuffer_;
 }
 
 void Chip8System::get_display_dimensions(int* width, int* height) const {
-    *width = 64;
-    *height = 32;
+    // Always report 128×64 — lo-res is pixel-doubled
+    *width = 128;
+    *height = 64;
 }
 
 void Chip8System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
@@ -345,7 +596,6 @@ void Chip8System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     }
 }
 
-// Note: handle_controller_event() now provided by base class (empty default implementation)
 // ============================================================================
 // GUI Integration
 // ============================================================================
@@ -358,33 +608,31 @@ void Chip8System::render_system_menu_items() {
 #endif
 }
 
-// Note: render_debug_windows() now provided by base class (empty default implementation)
 void Chip8System::render_configuration_ui() {
 #ifdef IMGUI_VERSION
-    ImGui::Text("CHIP-8 Display Configuration");
+    ImGui::Text("CHIP-8 Configuration");
+    ImGui::Separator();
+    
+    // Mode display
+    const char* mode_str = (mode_ == Chip8Mode::XOCHIP) ? "XO-CHIP" :
+                           (mode_ == Chip8Mode::SCHIP)  ? "SCHIP 1.1" : "CHIP-8";
+    ImGui::Text("Active Mode: %s", mode_str);
+    ImGui::Text("Resolution: %s", hires_ ? "128x64 (hi-res)" : "64x32 (lo-res)");
+    ImGui::Text("Memory: %zu bytes", memory_.size());
     ImGui::Separator();
     
     // Palette selection
     static const char* palette_names[] = {
-        "Green Phosphor (Original)",
-        "Amber Monitor",
-        "White on Black",
-        "C64 Colors"
+        "Green Phosphor", "Amber Monitor", "White on Black", "C64 Colors"
     };
-    static const char* palette_ids[] = {
-        "green", "amber", "white", "c64"
-    };
+    static const char* palette_ids[] = { "green", "amber", "white", "c64" };
     
     std::string current = config_.custom_settings.count("display_palette") > 0
-                        ? config_.custom_settings.at("display_palette")
-                        : "green";
+                        ? config_.custom_settings.at("display_palette") : "green";
     
     int selected = 0;
     for (int i = 0; i < 4; i++) {
-        if (current == palette_ids[i]) {
-            selected = i;
-            break;
-        }
+        if (current == palette_ids[i]) { selected = i; break; }
     }
     
     if (ImGui::Combo("Display Palette", &selected, palette_names, 4)) {
@@ -393,33 +641,41 @@ void Chip8System::render_configuration_ui() {
         set_configuration(new_config);
     }
     
-    // Show current colors
-    ImGui::Separator();
-    ImGui::Text("Current Palette:");
-    ImVec4 color0(current_palette_[0].r / 255.0f,
-                  current_palette_[0].g / 255.0f,
-                  current_palette_[0].b / 255.0f, 1.0f);
-    ImVec4 color1(current_palette_[1].r / 255.0f,
-                  current_palette_[1].g / 255.0f,
-                  current_palette_[1].b / 255.0f, 1.0f);
-    
-    ImGui::ColorButton("Off##color0", color0, 0, ImVec2(40, 40));
-    ImGui::SameLine();
-    ImGui::ColorButton("On##color1", color1, 0, ImVec2(40, 40));
+    // Show palette swatches
+    ImGui::Text("Palette:");
+    for (size_t i = 0; i < current_palette_.size() && i < 4; i++) {
+        ImVec4 c(current_palette_[i].r / 255.0f,
+                 current_palette_[i].g / 255.0f,
+                 current_palette_[i].b / 255.0f, 1.0f);
+        char label[32];
+        snprintf(label, sizeof(label), "Color %zu##c%zu", i, i);
+        ImGui::ColorButton(label, c, 0, ImVec2(30, 30));
+        if (i < 3) ImGui::SameLine();
+    }
     
     ImGui::Separator();
     
     // Speed configuration
     ImGui::Text("Execution Speed:");
     for (size_t i = 0; i < hardware_traits_.region_options.size(); i++) {
-        bool selected_region = (config_.region_option_index == static_cast<int>(i));
-        if (ImGui::RadioButton(hardware_traits_.region_options[i].name, selected_region)) {
+        bool sel = (config_.region_option_index == static_cast<int>(i));
+        if (ImGui::RadioButton(hardware_traits_.region_options[i].name, sel)) {
             SystemConfiguration new_config = config_;
             new_config.region_option_index = static_cast<int>(i);
             set_configuration(new_config);
             apply_configuration();
         }
     }
+    
+    ImGui::Separator();
+    
+    // Quirk toggles (for advanced users)
+    ImGui::Text("Quirks:");
+    ImGui::Checkbox("Shift uses Vy (COSMAC)", &shift_quirk_);
+    ImGui::Checkbox("FX55/65 increment I", &load_store_quirk_);
+    ImGui::Checkbox("BNNN uses Vx (SCHIP)", &jump_quirk_);
+    ImGui::Checkbox("Clip sprites at edge", &clip_quirk_);
+    ImGui::Checkbox("VF reset on 8XY1/2/3", &vf_reset_quirk_);
 #endif
 }
 
@@ -427,25 +683,174 @@ void Chip8System::render_configuration_ui() {
 // State
 // ============================================================================
 
-// Note: get_total_cycles() now provided by base class
-
 uint32_t Chip8System::get_target_fps() const {
     return 60;
 }
-
-// ============================================================================
-// Emulation Control
-// ============================================================================
 
 void Chip8System::set_speed_multiplier(float multiplier) {
     speed_multiplier_ = multiplier;
     cycles_per_frame_ = static_cast<uint32_t>(10 * multiplier);
 }
 
-// Note: get_speed_multiplier() now provided by base class
+// ============================================================================
+// Scroll Helpers
+// ============================================================================
+
+void Chip8System::scroll_down(int n) {
+    int w = display_width();
+    int bpr = w / 8;
+    int h = display_height();
+    
+    for (int p = 0; p < 2; p++) {
+        if (!((active_plane_mask_ >> p) & 1)) continue;
+        // Move rows down by n
+        for (int y = h - 1; y >= n; y--) {
+            memcpy(&planes_[p][y * bpr], &planes_[p][(y - n) * bpr], bpr);
+        }
+        // Clear top n rows
+        for (int y = 0; y < n; y++) {
+            memset(&planes_[p][y * bpr], 0, bpr);
+        }
+    }
+    display_dirty_ = true;
+}
+
+void Chip8System::scroll_up(int n) {
+    int w = display_width();
+    int bpr = w / 8;
+    int h = display_height();
+    
+    for (int p = 0; p < 2; p++) {
+        if (!((active_plane_mask_ >> p) & 1)) continue;
+        for (int y = 0; y < h - n; y++) {
+            memcpy(&planes_[p][y * bpr], &planes_[p][(y + n) * bpr], bpr);
+        }
+        for (int y = h - n; y < h; y++) {
+            memset(&planes_[p][y * bpr], 0, bpr);
+        }
+    }
+    display_dirty_ = true;
+}
+
+void Chip8System::scroll_right() {
+    int w = display_width();
+    int h = display_height();
+    int shift = hires_ ? 4 : 4;  // Always 4 pixels
+    
+    for (int p = 0; p < 2; p++) {
+        if (!((active_plane_mask_ >> p) & 1)) continue;
+        for (int y = 0; y < h; y++) {
+            // Shift row right by `shift` pixels
+            // Working with packed bits, MSB first
+            int bpr = w / 8;
+            // Start from rightmost byte
+            for (int bx = bpr - 1; bx >= 0; bx--) {
+                uint8_t curr = planes_[p][y * bpr + bx];
+                uint8_t prev = (bx > 0) ? planes_[p][y * bpr + bx - 1] : 0;
+                planes_[p][y * bpr + bx] = (curr >> shift) | (prev << (8 - shift));
+            }
+        }
+    }
+    display_dirty_ = true;
+}
+
+void Chip8System::scroll_left() {
+    int w = display_width();
+    int h = display_height();
+    int shift = hires_ ? 4 : 4;  // Always 4 pixels
+    
+    for (int p = 0; p < 2; p++) {
+        if (!((active_plane_mask_ >> p) & 1)) continue;
+        for (int y = 0; y < h; y++) {
+            int bpr = w / 8;
+            for (int bx = 0; bx < bpr; bx++) {
+                uint8_t curr = planes_[p][y * bpr + bx];
+                uint8_t next = (bx < bpr - 1) ? planes_[p][y * bpr + bx + 1] : 0;
+                planes_[p][y * bpr + bx] = (curr << shift) | (next >> (8 - shift));
+            }
+        }
+    }
+    display_dirty_ = true;
+}
 
 // ============================================================================
-// Private Helper Functions
+// Sprite Drawing
+// ============================================================================
+
+void Chip8System::draw_sprite(uint8_t vx, uint8_t vy, uint8_t n) {
+    int w = display_width();
+    int h = display_height();
+    int bpr = w / 8;
+    
+    int xpos = V_[vx] % w;
+    int ypos = V_[vy] % h;
+    V_[0xF] = 0;
+    
+    // Determine sprite dimensions
+    int sprite_width = 8;
+    int sprite_height = n;
+    int bytes_per_sprite_row = 1;
+    
+    if (n == 0 && (mode_ == Chip8Mode::SCHIP || mode_ == Chip8Mode::XOCHIP)) {
+        // SCHIP/XO-CHIP: DXY0 = 16×16 sprite
+        sprite_width = 16;
+        sprite_height = 16;
+        bytes_per_sprite_row = 2;
+    }
+    
+    for (int p = 0; p < 2; p++) {
+        if (!((active_plane_mask_ >> p) & 1)) continue;
+        
+        for (int row = 0; row < sprite_height; row++) {
+            int py = ypos + row;
+            if (clip_quirk_ && py >= h) break;
+            py %= h;
+            
+            // Read sprite data (1 or 2 bytes per row)
+            uint16_t sprite_data = 0;
+            for (int b = 0; b < bytes_per_sprite_row; b++) {
+                sprite_data |= static_cast<uint16_t>(
+                    memory_[I_ + row * bytes_per_sprite_row + b]
+                ) << (8 * (bytes_per_sprite_row - 1 - b));
+            }
+            
+            for (int col = 0; col < sprite_width; col++) {
+                int px = xpos + col;
+                if (clip_quirk_ && px >= w) break;
+                px %= w;
+                
+                bool sprite_bit = (sprite_data >> (sprite_width - 1 - col)) & 1;
+                if (!sprite_bit) continue;
+                
+                int byte_index = py * bpr + (px / 8);
+                int bit_index = 7 - (px % 8);
+                
+                if ((planes_[p][byte_index] >> bit_index) & 1) {
+                    V_[0xF] = 1;  // Collision
+                }
+                planes_[p][byte_index] ^= (1 << bit_index);
+            }
+        }
+        
+        // Advance I past sprite data for second plane (XO-CHIP)
+        // For multi-plane drawing, the second plane's data follows the first
+        if (active_plane_mask_ == 3 && p == 0) {
+            // I already points to start; plane 1 data is at I + sprite_height * bytes_per_sprite_row
+            // We handle this by offsetting I temporarily
+            I_ += sprite_height * bytes_per_sprite_row;
+        }
+    }
+    
+    // Restore I if we advanced it for dual-plane
+    if (active_plane_mask_ == 3) {
+        I_ -= sprite_height * (n == 0 ? 2 : 1);  // Undo the advance
+    }
+    
+    display_dirty_ = true;
+}
+
+// ============================================================================
+// Instruction Execution
 // ============================================================================
 
 void Chip8System::execute_instruction(uint16_t opcode) {
@@ -460,153 +865,251 @@ void Chip8System::execute_instruction(uint16_t opcode) {
     switch (opcode & 0xF000) {
         case 0x0000:
             if (opcode == 0x00E0) {
-                // CLS
-                memset(native_display_, 0, sizeof(native_display_));
+                // CLS — clear active planes
+                for (int p = 0; p < 2; p++) {
+                    if ((active_plane_mask_ >> p) & 1)
+                        memset(planes_[p], 0, sizeof(planes_[p]));
+                }
                 display_dirty_ = true;
             } else if (opcode == 0x00EE) {
                 // RET
-                SP_--;
-                PC_ = stack_[SP_];
+                if (SP_ > 0) { SP_--; PC_ = stack_[SP_]; }
+            } else if ((opcode & 0xFFF0) == 0x00C0) {
+                // 00Cn — Scroll down n pixels (SCHIP)
+                scroll_down(n);
+            } else if ((opcode & 0xFFF0) == 0x00D0) {
+                // 00Dn — Scroll up n pixels (XO-CHIP)
+                scroll_up(n);
+            } else if (opcode == 0x00FB) {
+                // Scroll right 4 pixels (SCHIP)
+                scroll_right();
+            } else if (opcode == 0x00FC) {
+                // Scroll left 4 pixels (SCHIP)
+                scroll_left();
+            } else if (opcode == 0x00FD) {
+                // EXIT (SCHIP)
+                quit_requested_ = true;
+            } else if (opcode == 0x00FE) {
+                // Lo-res mode (SCHIP)
+                hires_ = false;
+            } else if (opcode == 0x00FF) {
+                // Hi-res mode (SCHIP)
+                hires_ = true;
             }
             break;
             
-        case 0x1000: PC_ = nnn; break;  // JP
-        case 0x2000:  // CALL
-            stack_[SP_] = PC_;
-            SP_++;
+        case 0x1000: PC_ = nnn; break;  // JP addr
+        
+        case 0x2000:  // CALL addr
+            if (SP_ < 16) { stack_[SP_] = PC_; SP_++; }
             PC_ = nnn;
             break;
+        
         case 0x3000: if (V_[x] == kk) PC_ += 2; break;  // SE Vx, byte
         case 0x4000: if (V_[x] != kk) PC_ += 2; break;  // SNE Vx, byte
-        case 0x5000: if (V_[x] == V_[y]) PC_ += 2; break;  // SE Vx, Vy
+        
+        case 0x5000:
+            if (n == 0) {
+                // 5XY0 — SE Vx, Vy
+                if (V_[x] == V_[y]) PC_ += 2;
+            } else if (n == 2 && mode_ == Chip8Mode::XOCHIP) {
+                // 5XY2 — Save Vx..Vy to memory[I..] (XO-CHIP)
+                if (x <= y) {
+                    for (int i = x; i <= y; i++)
+                        memory_[(I_ + i - x) & 0xFFFF] = V_[i];
+                } else {
+                    for (int i = x; i >= y; i--)
+                        memory_[(I_ + x - i) & 0xFFFF] = V_[i];
+                }
+            } else if (n == 3 && mode_ == Chip8Mode::XOCHIP) {
+                // 5XY3 — Load Vx..Vy from memory[I..] (XO-CHIP)
+                if (x <= y) {
+                    for (int i = x; i <= y; i++)
+                        V_[i] = memory_[(I_ + i - x) & 0xFFFF];
+                } else {
+                    for (int i = x; i >= y; i--)
+                        V_[i] = memory_[(I_ + x - i) & 0xFFFF];
+                }
+            }
+            break;
+        
         case 0x6000: V_[x] = kk; break;  // LD Vx, byte
         case 0x7000: V_[x] += kk; break;  // ADD Vx, byte
             
         case 0x8000:
             switch (n) {
                 case 0x0: V_[x] = V_[y]; break;
-                case 0x1: V_[x] |= V_[y]; break;
-                case 0x2: V_[x] &= V_[y]; break;
-                case 0x3: V_[x] ^= V_[y]; break;
+                case 0x1:
+                    V_[x] |= V_[y];
+                    if (vf_reset_quirk_) V_[0xF] = 0;
+                    break;
+                case 0x2:
+                    V_[x] &= V_[y];
+                    if (vf_reset_quirk_) V_[0xF] = 0;
+                    break;
+                case 0x3:
+                    V_[x] ^= V_[y];
+                    if (vf_reset_quirk_) V_[0xF] = 0;
+                    break;
                 case 0x4: {
                     uint16_t sum = V_[x] + V_[y];
-                    V_[0xF] = (sum > 255) ? 1 : 0;
                     V_[x] = sum & 0xFF;
+                    V_[0xF] = (sum > 255) ? 1 : 0;
                     break;
                 }
-                case 0x5:
-                    V_[0xF] = (V_[x] > V_[y]) ? 1 : 0;
+                case 0x5: {
+                    bool no_borrow = V_[x] >= V_[y];
                     V_[x] -= V_[y];
+                    V_[0xF] = no_borrow ? 1 : 0;
                     break;
+                }
                 case 0x6:
-                    if (shift_quirk_) {
+                    if (!shift_quirk_) {
+                        // COSMAC: shift Vy into Vx
                         V_[0xF] = V_[y] & 0x1;
                         V_[x] = V_[y] >> 1;
                     } else {
+                        // SCHIP: shift Vx in-place
                         V_[0xF] = V_[x] & 0x1;
                         V_[x] >>= 1;
                     }
                     break;
-                case 0x7:
-                    V_[0xF] = (V_[y] > V_[x]) ? 1 : 0;
+                case 0x7: {
+                    bool no_borrow = V_[y] >= V_[x];
                     V_[x] = V_[y] - V_[x];
+                    V_[0xF] = no_borrow ? 1 : 0;
                     break;
+                }
                 case 0xE:
-                    if (shift_quirk_) {
-                        V_[0xF] = (V_[y] & 0x80) >> 7;
+                    if (!shift_quirk_) {
+                        V_[0xF] = (V_[y] >> 7) & 1;
                         V_[x] = V_[y] << 1;
                     } else {
-                        V_[0xF] = (V_[x] & 0x80) >> 7;
+                        V_[0xF] = (V_[x] >> 7) & 1;
                         V_[x] <<= 1;
                     }
                     break;
             }
             break;
             
-        case 0x9000: if (V_[x] != V_[y]) PC_ += 2; break;  // SNE Vx, Vy
-        case 0xA000: I_ = nnn; break;  // LD I, addr
-        case 0xB000: PC_ = nnn + V_[0]; break;  // JP V0, addr
-        case 0xC000: V_[x] = (rand() & 0xFF) & kk; break;  // RND Vx, byte
-            
-        case 0xD000: {
-            // DRW Vx, Vy, n - Draw sprite using native 1-bit buffer
-            uint8_t xpos = V_[x] % 64;
-            uint8_t ypos = V_[y] % 32;
-            V_[0xF] = 0;
-            
-            for (int row = 0; row < n; row++) {
-                uint8_t sprite_byte = memory_[I_ + row];
-                int py = (ypos + row) % 32;
-                
-                for (int col = 0; col < 8; col++) {
-                    int px = (xpos + col) % 64;
-                    
-                    // Calculate bit position in native buffer
-                    int byte_index = py * (64 / 8) + (px / 8);
-                    int bit_index = 7 - (px % 8);  // MSB first
-                    
-                    // Extract sprite bit
-                    bool sprite_bit = (sprite_byte & (0x80 >> col)) != 0;
-                    
-                    if (sprite_bit) {
-                        // Check for collision
-                        uint8_t old_value = (native_display_[byte_index] >> bit_index) & 1;
-                        if (old_value) {
-                            V_[0xF] = 1;
-                        }
-                        
-                        // XOR the bit
-                        native_display_[byte_index] ^= (1 << bit_index);
-                    }
-                }
+        case 0x9000:
+            if (n == 0) {
+                if (V_[x] != V_[y]) PC_ += 2;  // SNE Vx, Vy
             }
-            display_dirty_ = true;
             break;
-        }
+        
+        case 0xA000: I_ = nnn; break;  // LD I, addr
+        
+        case 0xB000:
+            if (jump_quirk_) {
+                PC_ = nnn + V_[x];  // SCHIP: BXNN jumps to XNN + Vx
+            } else {
+                PC_ = nnn + V_[0];  // CHIP-8: BNNN jumps to NNN + V0
+            }
+            break;
+        
+        case 0xC000:
+            V_[x] = (rand() & 0xFF) & kk;  // RND Vx, byte
+            break;
+            
+        case 0xD000:
+            // DRW Vx, Vy, n
+            draw_sprite(x, y, n);
+            break;
             
         case 0xE000:
             if (kk == 0x9E) {
-                if (keys_[V_[x] & 0xF]) PC_ += 2;
+                if (keys_[V_[x] & 0xF]) PC_ += 2;  // SKP Vx
             } else if (kk == 0xA1) {
-                if (!keys_[V_[x] & 0xF]) PC_ += 2;
+                if (!keys_[V_[x] & 0xF]) PC_ += 2;  // SKNP Vx
             }
             break;
             
         case 0xF000:
             switch (kk) {
-                case 0x07: V_[x] = delay_timer_; break;
-                case 0x0A: {
-                    bool key_pressed = false;
-                    for (int i = 0; i < 16; i++) {
-                        if (keys_[i]) {
-                            V_[x] = i;
-                            key_pressed = true;
-                            break;
+                case 0x00:
+                    if (mode_ == Chip8Mode::XOCHIP) {
+                        if (x == 0) {
+                            // F000 NNNN — Long I (XO-CHIP)
+                            I_ = (memory_[PC_] << 8) | memory_[PC_ + 1];
+                            PC_ += 2;
+                        } else {
+                            // FN01, FN02, FN03 — Plane selection (XO-CHIP)
+                            // Actually these are Fx01 where x is the plane mask
+                            // But the encoding is FX01 where X is the plane mask
                         }
                     }
-                    if (!key_pressed) PC_ -= 2;
                     break;
-                }
-                case 0x15: delay_timer_ = V_[x]; break;
-                case 0x18: sound_timer_ = V_[x]; break;
-                case 0x1E: I_ += V_[x]; break;
-                case 0x29: I_ = (V_[x] & 0xF) * 5; break;
+                case 0x01:
+                    if (mode_ == Chip8Mode::XOCHIP) {
+                        // FX01 — Select drawing plane(s) (XO-CHIP)
+                        active_plane_mask_ = x & 0x3;
+                        if (active_plane_mask_ == 0) active_plane_mask_ = 1; // fallback
+                    }
+                    break;
+                case 0x02:
+                    if (mode_ == Chip8Mode::XOCHIP) {
+                        // F002 — Load audio pattern from memory[I..I+15] (XO-CHIP)
+                        for (int i = 0; i < 16; i++) {
+                            audio_pattern_[i] = memory_[(I_ + i) & 0xFFFF];
+                        }
+                        has_audio_pattern_ = true;
+                    }
+                    break;
+                case 0x07: V_[x] = delay_timer_; break;  // LD Vx, DT
+                case 0x0A:
+                    // LD Vx, K — Wait for key press
+                    wait_for_key_ = true;
+                    wait_key_reg_ = x;
+                    break;
+                case 0x15: delay_timer_ = V_[x]; break;  // LD DT, Vx
+                case 0x18: sound_timer_ = V_[x]; break;  // LD ST, Vx
+                case 0x1E: I_ += V_[x]; break;            // ADD I, Vx
+                case 0x29:
+                    // LD F, Vx — Point I to lo-res font sprite
+                    I_ = (V_[x] & 0xF) * 5;
+                    break;
+                case 0x30:
+                    // LD HF, Vx — Point I to hi-res font sprite (SCHIP)
+                    I_ = 80 + (V_[x] & 0xF) * 10;
+                    break;
                 case 0x33:
+                    // LD B, Vx — BCD
                     memory_[I_] = V_[x] / 100;
                     memory_[I_ + 1] = (V_[x] / 10) % 10;
                     memory_[I_ + 2] = V_[x] % 10;
                     break;
+                case 0x3A:
+                    if (mode_ == Chip8Mode::XOCHIP) {
+                        // FX3A — Set pitch register (XO-CHIP)
+                        pitch_register_ = V_[x];
+                    }
+                    break;
                 case 0x55:
+                    // LD [I], Vx — Store V0..Vx
                     for (int i = 0; i <= x; i++) {
-                        memory_[I_ + i] = V_[i];
+                        memory_[(I_ + i) & 0xFFFF] = V_[i];
                     }
                     if (load_store_quirk_) I_ += x + 1;
                     break;
                 case 0x65:
+                    // LD Vx, [I] — Load V0..Vx
                     for (int i = 0; i <= x; i++) {
-                        V_[i] = memory_[I_ + i];
+                        V_[i] = memory_[(I_ + i) & 0xFFFF];
                     }
                     if (load_store_quirk_) I_ += x + 1;
+                    break;
+                case 0x75:
+                    // LD R, Vx — Store V0..Vx in RPL flags (SCHIP, max x=7)
+                    for (int i = 0; i <= std::min((int)x, 15); i++) {
+                        rpl_flags_[i] = V_[i];
+                    }
+                    break;
+                case 0x85:
+                    // LD Vx, R — Load V0..Vx from RPL flags (SCHIP)
+                    for (int i = 0; i <= std::min((int)x, 15); i++) {
+                        V_[i] = rpl_flags_[i];
+                    }
                     break;
             }
             break;
@@ -645,7 +1148,7 @@ int Chip8System::map_sdl_key_to_chip8(int sdl_key) {
 #endif
 }
 
-// Register CHIP-8 system with the registry
+// Register CHIP-8 system
 REGISTER_SYSTEM(chip8_descriptor, []() {
     return std::make_unique<Chip8System>();
 })
