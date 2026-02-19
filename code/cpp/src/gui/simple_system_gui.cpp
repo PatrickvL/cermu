@@ -474,13 +474,18 @@ void SimpleSystemGUI::render_screen() {
     }
     
     // Fullscreen window flags
+    // NoMouseInputs: the screen window is display-only; without this flag
+    // ImGui sets WantCaptureMouse=true when the mouse hovers the display,
+    // which blocks SDL mouse events from reaching peripheral devices
+    // (e.g. lightpen needs mouse position and button state).
     ImGuiWindowFlags flags =
         ImGuiWindowFlags_NoDecoration |
         ImGuiWindowFlags_NoMove |
         ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoSavedSettings |
         ImGuiWindowFlags_NoBringToFrontOnFocus |
-        ImGuiWindowFlags_NoBackground;
+        ImGuiWindowFlags_NoBackground |
+        ImGuiWindowFlags_NoMouseInputs;
     
     ImGui::Begin("##Screen", nullptr, flags);
     
