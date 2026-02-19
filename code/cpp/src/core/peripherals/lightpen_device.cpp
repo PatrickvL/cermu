@@ -12,24 +12,16 @@
 #endif
 
 LightpenDevice::LightpenDevice()
-    : state_(0xFFFFFFFF), pen_x_(0), pen_y_(0), triggered_(false)
+    : pen_x_(0), pen_y_(0), triggered_(false)
 {
     binding_.type = HostInputType::HOST_MOUSE;
     binding_.label = "Host Mouse";
 }
 
-void LightpenDevice::reset() {
-    state_ = 0xFFFFFFFF;
-    triggered_ = false;
-    if (port_) port_->notify_device_output_changed(state_);
-}
-
-uint32_t LightpenDevice::get_output_signals() const { return state_; }
-
 void LightpenDevice::set_host_input_binding(const HostInputBinding& binding) {
-    state_ = 0xFFFFFFFF;
+    release_all_signals();
     triggered_ = false;
-    if (port_) port_->notify_device_output_changed(state_);
+    notify_port();
     binding_ = binding;
     printf("Light Pen: Input source changed to %s\n", binding_.label.c_str());
 }
@@ -57,12 +49,7 @@ void LightpenDevice::set_triggered(bool active) {
     triggered_ = active;
     // The lightpen input on the C64 is directly connected to LP pin on VIC-II,
     // exposed at Control Port 1, pin 6 (active-low: pull LOW to trigger latch).
-    if (active) {
-        state_ &= ~(1u << ConnectorSignals::LIGHT_PEN);
-    } else {
-        state_ |= (1u << ConnectorSignals::LIGHT_PEN);
-    }
-    if (port_) port_->notify_device_output_changed(state_);
+    set_signal(ConnectorSignals::LIGHT_PEN, active);
 }
 
 // ============================================================================

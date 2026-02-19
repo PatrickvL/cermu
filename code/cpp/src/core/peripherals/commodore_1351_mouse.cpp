@@ -1,8 +1,8 @@
 /**
- * mouse_device.cpp - Proportional Mouse (1351) Implementation
+ * commodore_1351_mouse.cpp - Commodore 1351 Proportional Mouse Implementation
  */
 
-#include "mouse_device.h"
+#include "commodore_1351_mouse.h"
 #include "../device_registry.h"
 #include <cstdio>
 #include <SDL_events.h>
@@ -11,34 +11,19 @@
 #include "imgui.h"
 #endif
 
-MouseDevice::MouseDevice()
-    : state_(0xFFFFFFFF)
-    , pot_x_(128)
-    , pot_y_(128)
-{
+Commodore1351Mouse::Commodore1351Mouse() {
     binding_.type = HostInputType::HOST_MOUSE;
     binding_.label = "Host Mouse";
 }
 
-void MouseDevice::reset() {
-    state_ = 0xFFFFFFFF;
-    pot_x_ = 128;
-    pot_y_ = 128;
-    if (port_) port_->notify_device_output_changed(state_);
-}
-
-uint32_t MouseDevice::get_output_signals() const {
-    return state_;
-}
-
-void MouseDevice::set_host_input_binding(const HostInputBinding& binding) {
-    state_ = 0xFFFFFFFF;
-    if (port_) port_->notify_device_output_changed(state_);
+void Commodore1351Mouse::set_host_input_binding(const HostInputBinding& binding) {
+    release_all_signals();
+    notify_port();
     binding_ = binding;
-    printf("Mouse 1351: Input source changed to %s\n", binding_.label.c_str());
+    printf("1351 Mouse: Input source changed to %s\n", binding_.label.c_str());
 }
 
-bool MouseDevice::process_sdl_event(const SDL_Event& event) {
+bool Commodore1351Mouse::process_sdl_event(const SDL_Event& event) {
     if (binding_.type != HostInputType::HOST_MOUSE) return false;
 
     switch (event.type) {
@@ -63,27 +48,7 @@ bool MouseDevice::process_sdl_event(const SDL_Event& event) {
     return false;
 }
 
-void MouseDevice::set_left_button(bool pressed) {
-    // Left button maps to FIRE (same as joystick fire button)
-    if (pressed) {
-        state_ &= ~(1u << ConnectorSignals::JOY_FIRE);
-    } else {
-        state_ |= (1u << ConnectorSignals::JOY_FIRE);
-    }
-    if (port_) port_->notify_device_output_changed(state_);
-}
-
-void MouseDevice::set_right_button(bool pressed) {
-    // Right button maps to UP line on the control port
-    if (pressed) {
-        state_ &= ~(1u << ConnectorSignals::JOY_UP);
-    } else {
-        state_ |= (1u << ConnectorSignals::JOY_UP);
-    }
-    if (port_) port_->notify_device_output_changed(state_);
-}
-
-void MouseDevice::move(int dx, int dy) {
+void Commodore1351Mouse::move(int dx, int dy) {
     // The 1351 encodes movement in the low 6 bits of the SID POT registers.
     pot_x_ = static_cast<uint8_t>((pot_x_ + dx) & 0xFF);
     pot_y_ = static_cast<uint8_t>((pot_y_ + dy) & 0xFF);
@@ -94,9 +59,9 @@ void MouseDevice::move(int dx, int dy) {
 // ============================================================================
 
 #ifdef IMGUI_VERSION
-void MouseDevice::render_device_ui() {
-    bool lmb = !(state_ & (1u << ConnectorSignals::JOY_FIRE));
-    bool rmb = !(state_ & (1u << ConnectorSignals::JOY_UP));
+void Commodore1351Mouse::render_device_ui() {
+    bool lmb = is_signal_asserted(ConnectorSignals::JOY_FIRE);
+    bool rmb = is_signal_asserted(ConnectorSignals::JOY_UP);
 
     ImGui::Text("  POT X:%3d  Y:%3d  LMB:%s RMB:%s",
                 pot_x_, pot_y_, lmb ? "Y" : ".", rmb ? "Y" : ".");
@@ -107,14 +72,14 @@ void MouseDevice::render_device_ui() {
 // SELF-REGISTRATION
 // ============================================================================
 
-static const DeviceDescriptor mouse_descriptor = {
+static const DeviceDescriptor mouse_1351_descriptor = {
     "mouse_1351",
-    "Mouse (1351)",
+    "Commodore 1351 Mouse",
     "Commodore 1351 proportional mouse — uses SID POT inputs for position",
     ConnectorType::CONTROL_PORT_DB9,
     false
 };
 
-REGISTER_DEVICE(mouse_descriptor, []() {
-    return std::make_unique<MouseDevice>();
+REGISTER_DEVICE(mouse_1351_descriptor, []() {
+    return std::make_unique<Commodore1351Mouse>();
 })

@@ -224,8 +224,10 @@ set(CORE_SOURCES
     src/core/connector.cpp
     src/core/device_registry.cpp
     src/core/peripherals/joystick_device.cpp
-    src/core/peripherals/mouse_device.cpp
-    src/core/peripherals/paddle_device.cpp
+    src/core/peripherals/commodore_1351_mouse.cpp
+    src/core/peripherals/commodore_1312_paddles.cpp
+    src/core/peripherals/commodore_1350_mouse.cpp
+    src/core/peripherals/neos_mouse.cpp
     src/core/peripherals/lightpen_device.cpp
     src/core/peripherals/datasette_device.cpp
     src/core/peripherals/drive_1541.cpp
