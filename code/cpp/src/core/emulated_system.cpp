@@ -225,6 +225,9 @@ bool EmulatedSystem::attach_device_to_port(int port_index, const char* device_id
     owned_devices_.push_back(std::move(device));
     printf("System: Attached '%s' to %s\n", raw_ptr->get_name(), port->get_name());
     on_port_device_changed(port_index);
+
+    // Auto-bind host input to newly attached device (gamepad if available, etc.)
+    auto_bind_host_inputs();
     return true;
 }
 
@@ -728,6 +731,12 @@ float EmulatedSystem::render_connector_menu_bar_icons() {
                             if (ImGui::MenuItem(desc->name, nullptr, is_current)) {
                                 if (!is_current) {
                                     attach_device_to_port(vp.index, desc->id);
+                                    // Old 'attached' pointer is now dangling (device destroyed).
+                                    // Bail out immediately to avoid use-after-free.
+                                    ImGui::EndMenu();
+                                    ImGui::EndPopup();
+                                    ImGui::PopID();
+                                    return total_w;
                                 }
                             }
                             if (ImGui::IsItemHovered() && desc->description) {
