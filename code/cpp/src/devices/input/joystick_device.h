@@ -12,7 +12,7 @@
  *   - SDL GameController (physical gamepad/joystick via USB/BT)
  */
 
-#include "control_port_device.h"
+#include "../../core/peripherals/control_port_device.h"
 
 /**
  * Digital joystick device (Atari-compatible).

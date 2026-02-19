@@ -34,7 +34,7 @@
 #include "../../core/formats/crt_format.h"
 #include "../../core/formats/lnx_format.h"
 #include "../../core/formats/commodore_load_helpers.h"
-#include "../../core/peripherals/commodore_keyboard_device.h"
+#include "../../devices/keyboard/commodore_keyboard_device.h"
 
 // ============================================================================
 // Hardware Traits Definition

@@ -7,7 +7,7 @@
  */
 
 #include "commodore_1350_mouse.h"
-#include "../device_registry.h"
+#include "../../core/device_registry.h"
 #include <cstdio>
 #include <cmath>
 #include <SDL_events.h>

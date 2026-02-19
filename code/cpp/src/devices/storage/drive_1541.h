@@ -36,7 +36,7 @@
  * - Multiple drive units on the same IEC bus (device #8-11)
  */
 
-#include "../connector.h"
+#include "../../core/connector.h"
 #include <cstdint>
 #include <string>
 #include <vector>

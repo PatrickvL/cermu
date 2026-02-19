@@ -223,15 +223,18 @@ set(CORE_SOURCES
     src/core/text_terminal.cpp
     src/core/connector.cpp
     src/core/device_registry.cpp
-    src/core/peripherals/joystick_device.cpp
-    src/core/peripherals/commodore_1351_mouse.cpp
-    src/core/peripherals/commodore_1312_paddles.cpp
-    src/core/peripherals/commodore_1350_mouse.cpp
-    src/core/peripherals/neos_mouse.cpp
-    src/core/peripherals/lightpen_device.cpp
-    src/core/peripherals/datasette_device.cpp
-    src/core/peripherals/drive_1541.cpp
-    src/core/peripherals/commodore_keyboard_device.cpp
+    # Devices — input peripherals
+    src/devices/input/joystick_device.cpp
+    src/devices/input/commodore_1351_mouse.cpp
+    src/devices/input/commodore_1312_paddles.cpp
+    src/devices/input/commodore_1350_mouse.cpp
+    src/devices/input/neos_mouse.cpp
+    src/devices/input/lightpen_device.cpp
+    # Devices — storage
+    src/devices/storage/datasette_device.cpp
+    src/devices/storage/drive_1541.cpp
+    # Devices — keyboard
+    src/devices/keyboard/commodore_keyboard_device.cpp
 )
 
 # FAM65XX Decoder - standalone library for instruction decoding

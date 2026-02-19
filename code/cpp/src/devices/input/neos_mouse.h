@@ -32,7 +32,7 @@
  *   We expose a read_nibble(strobe_phase) API for the wrapper to call.
  */
 
-#include "control_port_device.h"
+#include "../../core/peripherals/control_port_device.h"
 
 class NEOSMouse : public ControlPortInputDevice {
 public:
