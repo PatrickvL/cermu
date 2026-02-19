@@ -10,6 +10,7 @@
 
 #ifdef IMGUI_VERSION
 #include <imgui.h>
+#include "../gui/connector_icons.h"
 #endif
 
 // ============================================================================
@@ -502,5 +503,223 @@ void EmulatedSystem::render_host_input_binding_ui(PeripheralDevice* device) {
     ImGui::PopID();
 #else
     (void)device;
+#endif
+}
+
+// ============================================================================
+// CONNECTOR MENU BAR ICONS — Right-aligned icon buttons with popup menus
+// ============================================================================
+
+float EmulatedSystem::render_connector_menu_bar_icons() {
+#ifdef IMGUI_VERSION
+    if (connector_ports_.empty()) return 0.0f;
+
+    auto& registry = DeviceRegistry::instance();
+
+    // --- 1. Collect visible (external) ports --------------------------------
+    struct VisiblePort {
+        int            index;
+        ConnectorPort* port;
+    };
+    std::vector<VisiblePort> visible;
+    for (int i = 0; i < static_cast<int>(connector_ports_.size()); i++) {
+        const auto& def = connector_ports_[i]->get_definition();
+        if (def.is_internal) continue;  // Skip keyboard etc.
+        visible.push_back({ i, connector_ports_[i].get() });
+    }
+    if (visible.empty()) return 0.0f;
+
+    // --- 2. Calculate total width -------------------------------------------
+    const float icon_sz  = static_cast<float>(ConnectorIcons::ICON_SIZE);
+    const float btn_pad  = 4.0f;   // padding inside ImageButton
+    const float spacing  = 2.0f;   // gap between buttons
+    const float btn_w    = icon_sz + btn_pad * 2.0f;
+    const float total_w  = visible.size() * btn_w +
+                           (visible.size() - 1) * spacing + 8.0f;
+
+    // --- 3. Render buttons --------------------------------------------------
+    for (size_t vi = 0; vi < visible.size(); vi++) {
+        auto& vp = visible[vi];
+        auto* port = vp.port;
+        const auto& def  = port->get_definition();
+        GLuint tex = ConnectorIcons::get_icon(def.type);
+        if (!tex) tex = ConnectorIcons::get_icon(ConnectorType::CUSTOM);
+        if (!tex) continue;
+
+        ImGui::PushID(vp.index);
+
+        // Tint: full brightness if device attached, dim gray if empty
+        bool has_device = (port->get_device_count() > 0);
+        ImVec4 tint = has_device ? ImVec4(1.0f, 1.0f, 1.0f, 1.0f)
+                                 : ImVec4(0.5f, 0.5f, 0.5f, 0.7f);
+
+        // Use plain Image + hover detection so it blends with menu bar
+        ImGui::SameLine(0, spacing);
+        ImVec2 cursor = ImGui::GetCursorScreenPos();
+
+        // Draw the icon image (ImageWithBg supports tint)
+        ImGui::ImageWithBg(ImTextureRef((ImTextureID)(intptr_t)tex),
+                     ImVec2(icon_sz, icon_sz), ImVec2(0, 0), ImVec2(1, 1),
+                     ImVec4(0, 0, 0, 0), tint);
+
+        // Hover highlight
+        if (ImGui::IsItemHovered()) {
+            ImGui::GetWindowDrawList()->AddRect(
+                ImVec2(cursor.x - 1, cursor.y - 1),
+                ImVec2(cursor.x + icon_sz + 1, cursor.y + icon_sz + 1),
+                IM_COL32(255, 255, 255, 120), 2.0f);
+        }
+
+        // Tooltip showing port name and attached device(s)
+        if (ImGui::IsItemHovered()) {
+            ImGui::BeginTooltip();
+            ImGui::Text("%s", def.name);
+            if (def.is_bus) {
+                int n = port->get_device_count();
+                if (n == 0) {
+                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(empty)");
+                } else {
+                    for (auto* d : port->get_attached_devices()) {
+                        ImGui::BulletText("%s", d->get_name());
+                    }
+                }
+            } else {
+                auto* dev = port->get_attached_device();
+                if (dev)
+                    ImGui::Text("  %s", dev->get_name());
+                else
+                    ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(empty)");
+            }
+            ImGui::EndTooltip();
+        }
+
+        // Click opens popup
+        char popup_id[64];
+        snprintf(popup_id, sizeof(popup_id), "##ConnPopup_%d", vp.index);
+        if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+            ImGui::OpenPopup(popup_id);
+        }
+
+        // --- 4. Popup menu --------------------------------------------------
+        if (ImGui::BeginPopup(popup_id)) {
+            // Header
+            ImGui::TextColored(ImVec4(1.0f, 0.9f, 0.6f, 1.0f), "%s", def.name);
+            ImGui::Separator();
+
+            auto compatible = registry.get_compatible_devices(port->get_type());
+
+            if (def.is_bus) {
+                // ============ BUS PORT (IEC) ============
+                const auto& devices = port->get_attached_devices();
+                if (devices.empty()) {
+                    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f),
+                                       "No devices attached");
+                } else {
+                    for (int d = 0; d < static_cast<int>(devices.size()); d++) {
+                        auto* dev = devices[d];
+                        ImGui::PushID(d);
+
+                        // Device name as a collapsible header
+                        bool dev_open = ImGui::TreeNodeEx(
+                            dev->get_name(), ImGuiTreeNodeFlags_DefaultOpen);
+
+                        if (dev_open) {
+                            // Detach button
+                            if (ImGui::MenuItem("Detach")) {
+                                detach_device_from_port(vp.index, dev);
+                                ImGui::TreePop();
+                                ImGui::PopID();
+                                ImGui::EndPopup();
+                                ImGui::PopID();
+                                return total_w;  // vector invalidated
+                            }
+
+                            // Device-specific UI
+                            dev->render_device_ui();
+
+                            // Host input binding
+                            if (dev->accepts_host_input()) {
+                                render_host_input_binding_ui(dev);
+                            }
+
+                            ImGui::TreePop();
+                        }
+                        ImGui::PopID();
+                    }
+                }
+
+                ImGui::Separator();
+
+                // "Add device" submenu
+                if (!compatible.empty() && ImGui::BeginMenu("Add Device...")) {
+                    for (const auto* desc : compatible) {
+                        if (ImGui::MenuItem(desc->name)) {
+                            attach_device_to_port(vp.index, desc->id);
+                        }
+                        if (ImGui::IsItemHovered() && desc->description) {
+                            ImGui::SetTooltip("%s", desc->description);
+                        }
+                    }
+                    ImGui::EndMenu();
+                }
+            } else {
+                // ============ POINT-TO-POINT PORT ============
+                auto* attached = port->get_attached_device();
+
+                if (attached) {
+                    ImGui::Text("Current: %s", attached->get_name());
+                    ImGui::Separator();
+
+                    // Detach
+                    if (ImGui::MenuItem("Detach")) {
+                        detach_device_from_port(vp.index);
+                        attached = nullptr;
+                    }
+
+                    // Device UI (inline in popup)
+                    if (attached) {
+                        ImGui::Separator();
+                        attached->render_device_ui();
+
+                        if (attached->accepts_host_input()) {
+                            ImGui::Separator();
+                            render_host_input_binding_ui(attached);
+                        }
+                    }
+                } else {
+                    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f),
+                                       "No device attached");
+                }
+
+                // Switch device submenu
+                if (!compatible.empty()) {
+                    ImGui::Separator();
+                    if (ImGui::BeginMenu("Attach Device...")) {
+                        for (const auto* desc : compatible) {
+                            bool is_current = (attached &&
+                                               strcmp(attached->get_id(), desc->id) == 0);
+                            if (ImGui::MenuItem(desc->name, nullptr, is_current)) {
+                                if (!is_current) {
+                                    attach_device_to_port(vp.index, desc->id);
+                                }
+                            }
+                            if (ImGui::IsItemHovered() && desc->description) {
+                                ImGui::SetTooltip("%s", desc->description);
+                            }
+                        }
+                        ImGui::EndMenu();
+                    }
+                }
+            }
+
+            ImGui::EndPopup();
+        }
+
+        ImGui::PopID();
+    }
+
+    return total_w;
+#else
+    return 0.0f;
 #endif
 }

@@ -308,6 +308,14 @@ public:
     /// Render the generic peripheral connector UI (called from GUI layer).
     void render_peripheral_connector_ui();
 
+    /// Render right-aligned connector icons in the ImGui main menu bar.
+    /// Each icon opens a popup menu for managing the attached peripheral
+    /// (detach, switch device, device settings).  Must be called between
+    /// BeginMainMenuBar() and EndMainMenuBar().
+    /// Returns the total width consumed so the caller can position the
+    /// status text accordingly.
+    float render_connector_menu_bar_icons();
+
     /// Render host input binding selector for a device (called from connector UI).
     void render_host_input_binding_ui(PeripheralDevice* device);
     
