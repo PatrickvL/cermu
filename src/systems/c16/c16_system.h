@@ -26,7 +26,10 @@
  */
 class C16System : public EmulatedSystem {
 public:
-    C16System(bool is_plus4 = false);
+    /// Variant identifier for the TED-based system family
+    enum class Variant { C16, C116, PLUS4 };
+    
+    C16System(Variant variant = Variant::C16);
     ~C16System() override;
     
     // System identification
@@ -70,13 +73,14 @@ public:
     void set_speed_multiplier(float multiplier) override;
 
     // Hardware traits
-    static HardwareTraits create_hardware_traits();
+    static HardwareTraits create_hardware_traits(bool is_plus4);
     static float can_load_file_static(const char* filepath, const uint8_t* data, size_t size);
 
 private:
-    // Variant flag — true for Plus/4, false for C16
+    // Variant flag
+    Variant variant_;
     bool is_plus4_;
-    const char* system_name_;   // "C16" or "Plus/4" — used for logging
+    const char* system_name_;   // "C16", "C116", or "Plus/4" — used for logging
     // Chip instances
     mos7501_t* cpu_;              // MOS 7501/8501 CPU
     ted7360_t* ted_;             // TED 7360 (video, sound, I/O, timers)

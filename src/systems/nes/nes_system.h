@@ -478,7 +478,7 @@ public:
     bool save_state(const std::string& filename) const;
     bool load_state(const std::string& filename);
     bool is_cartridge_loaded() const { return cartridge_ != nullptr; }
-    bool is_system_ready() const { return system_ready_; }
+    bool is_system_ready() const override { return system_ready_; }
     
 private:
     void setup_audio_timing();

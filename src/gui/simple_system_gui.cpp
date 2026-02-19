@@ -475,12 +475,16 @@ void SimpleSystemGUI::render_menu_bar() {
         ImGui::SameLine(bar_width - status_text_w);
         ImGui::Text("%s", system_->get_descriptor().short_name);
         ImGui::SameLine();
-        ImGui::Text("Cycles: %llu", (unsigned long long)system_->get_total_cycles());
-        ImGui::SameLine();
-        ImGui::Text("FPS: %u", actual_fps_);
-        ImGui::SameLine();
-        ImGui::Text("%s", emulation_paused_ ? "Paused" : 
-                         emulation_running_ ? "Running" : "Stopped");
+        if (system_->is_system_ready()) {
+            ImGui::Text("Cycles: %llu", (unsigned long long)system_->get_total_cycles());
+            ImGui::SameLine();
+            ImGui::Text("FPS: %u", actual_fps_);
+            ImGui::SameLine();
+            ImGui::Text("%s", emulation_paused_ ? "Paused" : 
+                             emulation_running_ ? "Running" : "Stopped");
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "No ROM loaded");
+        }
     } else {
         ImGui::SameLine(ImGui::GetWindowWidth() - 200);
         ImGui::Text("No system loaded");
