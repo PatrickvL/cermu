@@ -458,7 +458,7 @@ int main(int argc, char** argv) {
     SimpleSystemGUI gui(std::move(system), file_path);
     
     // Initialize GUI with window title
-    const char* window_title = "Multi-System Emulator";
+    const char* window_title = "cermu - Multi-System Emulator";
     if (!gui.init(window_title, 1200, 800)) {
         printf("ERROR: Failed to initialize GUI\n");
         return 1;

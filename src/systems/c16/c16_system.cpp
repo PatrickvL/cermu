@@ -167,8 +167,9 @@ C16System::C16System(bool is_plus4)
     : EmulatedSystem()
     , is_plus4_(is_plus4)
     , system_name_(is_plus4 ? "Plus/4" : "C16")
-    , mos7501_(nullptr)
+    , cpu_(nullptr)
     , ted_(nullptr)
+    , bus_state_(0)
     , keyboard_(nullptr)
     , cycles_per_frame_(17734)
     , initialized_(false)
@@ -235,8 +236,36 @@ bool C16System::initialize() {
         printf("%s: Warning - ROMs not loaded, system may not function correctly\n", system_name_);
     }
     
-    // TODO: Initialize MOS7501 CPU when implemented
-    mos7501_ = nullptr;
+    // Initialize MOS 7501 CPU
+    cpu_ = mos7501_create();
+    if (!cpu_) {
+        printf("%s: Failed to create MOS 7501 CPU\n", system_name_);
+        return false;
+    }
+    
+    // Set up CPU descriptor with I/O port callbacks
+    mos7501_desc_t cpu_desc = {};
+    cpu_desc.base.description = "MOS 7501 CPU";
+    cpu_desc.m7501_in_cb = io_port_in;
+    cpu_desc.m7501_out_cb = io_port_out;
+    cpu_desc.m7501_io_pullup = 0x5F;    // Pull-up on all used pins
+    cpu_desc.m7501_io_floating = 0x00;
+    cpu_desc.m7501_user_data = this;
+    mos7501_init(cpu_, &cpu_desc);
+    
+    // Set bank_change context to this system (for I/O port callbacks)
+    mos7501_set_bank_change_context(cpu_, this);
+    
+    // Read reset vector from KERNAL ROM and set CPU PC
+    if (roms_loaded) {
+        uint16_t reset_vector = kernal_rom_[0xFFFC - 0xC000] | (kernal_rom_[0xFFFD - 0xC000] << 8);
+        mos7501_set_pc(cpu_, reset_vector);
+        mos7501_set_ab(cpu_, reset_vector);
+        printf("%s: CPU reset vector = $%04X\n", system_name_, reset_vector);
+    }
+    
+    // Initialize bus state: RW HIGH (read mode), IRQ/NMI HIGH (inactive for active-low)
+    bus_state_ = BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_RDY_BIT);
     
     // TODO: Initialize TED 7360 when implemented
     ted_ = nullptr;
@@ -261,8 +290,11 @@ bool C16System::initialize() {
 void C16System::shutdown() {
     printf("%s: Shutting down system\n", system_name_);
     
-    // TODO: Destroy MOS7501 when implemented
-    mos7501_ = nullptr;
+    // Destroy MOS 7501 CPU
+    if (cpu_) {
+        mos7501_destroy(cpu_);
+        cpu_ = nullptr;
+    }
     
     // TODO: Destroy TED when implemented
     ted_ = nullptr;
@@ -279,8 +311,29 @@ void C16System::shutdown() {
 void C16System::reset() {
     printf("%s: Resetting system\n", system_name_);
     
-    // TODO: Reset MOS7501 CPU when implemented
+    // Reset MOS 7501 CPU
+    if (cpu_) {
+        mos7501_desc_t cpu_desc = {};
+        cpu_desc.base.description = "MOS 7501 CPU";
+        cpu_desc.m7501_in_cb = io_port_in;
+        cpu_desc.m7501_out_cb = io_port_out;
+        cpu_desc.m7501_io_pullup = 0x5F;
+        cpu_desc.m7501_io_floating = 0x00;
+        cpu_desc.m7501_user_data = this;
+        mos7501_init(cpu_, &cpu_desc);
+        mos7501_set_bank_change_context(cpu_, this);
+        
+        // Re-read reset vector from KERNAL ROM
+        uint16_t reset_vector = kernal_rom_[0xFFFC - 0xC000] | (kernal_rom_[0xFFFD - 0xC000] << 8);
+        mos7501_set_pc(cpu_, reset_vector);
+        mos7501_set_ab(cpu_, reset_vector);
+        printf("%s: CPU reset (PC=$%04X)\n", system_name_, reset_vector);
+    }
+    
     // TODO: Reset TED when implemented
+    
+    // Reset bus state
+    bus_state_ = BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_RDY_BIT);
     
     // Reset keyboard matrix
     if (keyboard_) {
@@ -295,21 +348,30 @@ void C16System::reset() {
 // ============================================================================
 
 void C16System::tick() {
-    // TODO: Execute one CPU cycle when MOS7501 is implemented
-    // if (mos7501_) {
-    //     mos7501_tick(mos7501_);
-    // }
+    bus_state_t s = bus_state_;
     
-    // TODO: Tick TED when implemented
+    // TODO: Tick TED when implemented (before CPU, sets IRQ lines)
     // if (ted_) {
-    //     ted_tick(ted_);
+    //     s = ted_tick(ted_, s);
     // }
     
-    // TODO: Tick CIA when implemented
-    // if (cia_) {
-    //     mos6526_tick(cia_);
-    // }
+    // CPU PHI2 — drives address bus, sets R/W
+    if (cpu_) {
+        s = mos7501_tick_phi2(cpu_, s);
+    }
     
+    // Memory service — between PHI2 and PHI1
+    s = mem_tick(s);
+    
+    // CPU PHI1 — completes cycle, reads/writes data
+    if (cpu_) {
+        s = mos7501_tick_phi1(cpu_, s);
+    }
+    
+    // Restore R/W line to read mode after CPU PHI1 has consumed write info
+    s |= BUS_BIT(BUS_RW_BIT);
+    
+    bus_state_ = s;
     total_cycles_++;
 }
 
@@ -375,7 +437,8 @@ bool C16System::load_file(const char* filepath) {
     ctx.basic_params    = &COMMODORE_BASIC_C16;
     ctx.basic_start_addrs[0] = 0x1001;
     ctx.default_raw_addr = 0x4000;
-    ctx.set_pc          = nullptr;  // MOS7501 CPU not yet implemented
+    ctx.set_pc          = set_cpu_pc;
+    ctx.pc_ctx          = this;
 
     bool success = commodore_apply_load_result(&ctx, &result, filepath);
 
@@ -615,6 +678,71 @@ uint8_t C16System::cpu_read_callback(void* user_data, uint32_t addr, uint8_t bus
 void C16System::cpu_write_callback(void* user_data, uint32_t addr, uint8_t data) {
     C16System* sys = static_cast<C16System*>(user_data);
     sys->cpu_write(addr, data);
+}
+
+// ============================================================================
+// BUS MEMORY SERVICE — services CPU bus state between PHI2 and PHI1
+// ============================================================================
+
+bus_state_t C16System::mem_tick(bus_state_t s) {
+    uint16_t addr = BUS_GET_ADDR(s);
+    
+    if (s & BUS_BIT(BUS_RW_BIT)) {
+        // Read cycle — put data on bus for CPU to consume in PHI1
+        uint8_t data = cpu_read(addr);
+        BUS_SET_DATA(s, data);
+    } else {
+        // Write cycle — CPU has put data on bus, write to memory
+        uint8_t data = BUS_GET_DATA(s);
+        cpu_write(addr, data);
+    }
+    
+    return s;
+}
+
+// ============================================================================
+// MOS 7501 I/O PORT CALLBACKS
+// ============================================================================
+// Port bit 0: Cassette motor control (output, active LOW)
+// Port bit 1: Serial bus SRQ IN (input)
+// Port bit 2: Serial bus data (I/O)
+// Port bit 3: Serial bus clock (I/O)
+// Port bit 4: Serial bus ATN (output)
+// Port bit 6: Cassette sense (input, LOW = button pressed)
+
+uint8_t C16System::io_port_in(void* user_data) {
+    // C16System* sys = static_cast<C16System*>(user_data);
+    (void)user_data;
+    
+    // Stub: all input lines HIGH (no external devices connected yet)
+    // Bit 1: SRQ IN = HIGH (no device requesting)
+    // Bit 2: Serial data = HIGH (idle)
+    // Bit 3: Serial clock = HIGH (idle)
+    // Bit 6: Cassette sense = HIGH (no button pressed)
+    return 0x5F;  // All available pins HIGH
+}
+
+void C16System::io_port_out(uint8_t data, void* user_data) {
+    // C16System* sys = static_cast<C16System*>(user_data);
+    (void)data;
+    (void)user_data;
+    
+    // Stub: ignore output for now
+    // TODO: Handle cassette motor (bit 0), serial bus signals (bits 2-4)
+}
+
+// ============================================================================
+// LOAD HELPER — set CPU PC for commodore_apply_load_result
+// ============================================================================
+
+void C16System::set_cpu_pc(void* user_data, uint16_t addr) {
+    C16System* sys = static_cast<C16System*>(user_data);
+    if (sys->cpu_) {
+        mos7501_set_pc(sys->cpu_, addr);
+        mos7501_set_ab(sys->cpu_, addr);
+        mos7501_transition_to_fetch(sys->cpu_);
+        printf("%s: PC set to $%04X\n", sys->system_name_, addr);
+    }
 }
 
 // ============================================================================
