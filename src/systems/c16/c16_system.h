@@ -4,6 +4,7 @@
 #include "../../core/emulated_system.h"
 #include "../../core/system_lines.h"
 #include "../../chip/cpu/fam65xx/mos7501.h"
+#include "../../chip/video/ted/ted7360.h"
 #include "../../chip/input/commodore_keyboard.h"
 #include "../../chip/input/keyboard_mapper.h"
 #include <cstdint>
@@ -78,7 +79,7 @@ private:
     const char* system_name_;   // "C16" or "Plus/4" — used for logging
     // Chip instances
     mos7501_t* cpu_;              // MOS 7501/8501 CPU
-    void* ted_;                  // TED 7360 ($FD00-$FEFF, 4KB) - TODO: Create proper chip type
+    ted7360_t* ted_;             // TED 7360 (video, sound, I/O, timers)
     bus_state_t bus_state_;       // Current bus state for CPU cycle
     commodore_keyboard_t* keyboard_;  // Keyboard matrix (8×8, scanned via TED)
     std::unique_ptr<KeyboardMapper> keyboard_mapper_; // Layered keyboard mapping engine
@@ -108,6 +109,9 @@ private:
     // MOS 7501 I/O port callbacks (cassette motor, serial bus, etc.)
     static uint8_t io_port_in(void* user_data);
     static void io_port_out(uint8_t data, void* user_data);
+    
+    // TED keyboard scan callback
+    static uint8_t ted_keyboard_scan(void* user_data, uint8_t column);
     
     // Commodore load helper: set CPU PC
     static void set_cpu_pc(void* user_data, uint16_t addr);

@@ -286,6 +286,9 @@ list(APPEND CHIP_SOURCES
     src/chip/video/vic/mos6560.cpp
     src/chip/video/vic/mos6561.cpp
     src/chip/video/vic/vic_common.cpp
+    
+    # Video - TED (C16/Plus4)
+    src/chip/video/ted/ted7360.cpp
 )
 # System sources
 set(SYSTEM_SOURCES
