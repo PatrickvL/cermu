@@ -23,7 +23,7 @@
  */
 
 #include "drive_1541.h"
-#include "../device_registry.h"
+#include "../../core/device_registry.h"
 #include <cstdio>
 #include <cstring>
 #include <algorithm>

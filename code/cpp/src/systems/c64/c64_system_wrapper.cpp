@@ -15,10 +15,10 @@
 #include "../../core/formats/sid_format.h"
 #include "../../core/formats/commodore_load_helpers.h"
 #include "../../chip/cpu/fam65xx/mos6510.h"
-#include "../../core/peripherals/joystick_device.h"
-#include "../../core/peripherals/drive_1541.h"
-#include "../../core/peripherals/datasette_device.h"
-#include "../../core/peripherals/commodore_keyboard_device.h"
+#include "../../devices/input/joystick_device.h"
+#include "../../devices/storage/drive_1541.h"
+#include "../../devices/storage/datasette_device.h"
+#include "../../devices/keyboard/commodore_keyboard_device.h"
 #include <cstring>
 #include <cstdio>
 #include <cctype>

@@ -3,7 +3,7 @@
  */
 
 #include "lightpen_device.h"
-#include "../device_registry.h"
+#include "../../core/device_registry.h"
 #include <cstdio>
 #include <SDL_events.h>
 

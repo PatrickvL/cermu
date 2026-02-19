@@ -7,7 +7,7 @@
  * at its position.
  */
 
-#include "control_port_device.h"
+#include "../../core/peripherals/control_port_device.h"
 
 class LightpenDevice : public ControlPortInputDevice {
 public:

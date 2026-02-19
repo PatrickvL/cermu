@@ -3,7 +3,7 @@
  */
 
 #include "commodore_1312_paddles.h"
-#include "../device_registry.h"
+#include "../../core/device_registry.h"
 #include <cstdio>
 #include <algorithm>
 #include <SDL_events.h>

@@ -7,7 +7,7 @@
  * according to the TAP format's cycle counts and presented on the READ line.
  */
 
-#include "../connector.h"
+#include "../../core/connector.h"
 #include <cstdint>
 #include <vector>
 #include <string>

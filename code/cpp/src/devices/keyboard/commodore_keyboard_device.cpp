@@ -3,7 +3,7 @@
  */
 
 #include "commodore_keyboard_device.h"
-#include "../device_registry.h"
+#include "../../core/device_registry.h"
 
 CommodoreKeyboardDevice::CommodoreKeyboardDevice(commodore_keyboard_t* keyboard)
     : keyboard_(keyboard)
