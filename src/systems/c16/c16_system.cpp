@@ -23,10 +23,10 @@
 // Hardware Traits Definition
 // ============================================================================
 
-HardwareTraits C16System::create_hardware_traits() {
+HardwareTraits C16System::create_hardware_traits(bool is_plus4) {
     HardwareTraits traits = {};
     
-    // Display traits - C16 uses MOS7360 (TED)
+    // Display traits - C16/Plus4 uses MOS7360 (TED)
     traits.display.native_width = 320;
     traits.display.native_height = 200;
     traits.display.visible_width = 320;
@@ -65,19 +65,22 @@ HardwareTraits C16System::create_hardware_traits() {
     traits.timing.cycles_per_frame = 17734;     // 886724 / 50
     traits.timing.region = VideoRegion::PAL;
     
-    // Memory options
-    traits.memory_options.push_back({
-        "16KB (C16)",
-        16384,
-        32768,  // 32KB ROM
-        false
-    });
-    traits.memory_options.push_back({
-        "64KB (Plus/4)",
-        65536,
-        32768,
-        true
-    });
+    // Memory options — variant-specific (real hardware was not configurable)
+    if (is_plus4) {
+        traits.memory_options.push_back({
+            "64KB RAM",
+            65536,
+            32768,  // 32KB ROM
+            true
+        });
+    } else {
+        traits.memory_options.push_back({
+            "16KB RAM",
+            16384,
+            32768,  // 32KB ROM
+            true
+        });
+    }
     
     // Region options
     traits.region_options.push_back({
@@ -142,12 +145,21 @@ static const format_descriptor_t* const c16_formats[] = {
     nullptr
 };
 
+static const SystemDescriptor c116_descriptor = {
+    "Commodore 116",
+    "C116",
+    "Commodore 116 (1984) - 16KB RAM, TED 7360, chiclet keyboard variant of C16",
+    c16_formats,
+    C16System::create_hardware_traits(false),
+    C16System::can_load_file_static
+};
+
 static const SystemDescriptor c16_descriptor = {
     "Commodore 16",
     "C16",
     "Commodore 16 (1984) - 16KB RAM, TED 7360 graphics and sound",
     c16_formats,
-    C16System::create_hardware_traits(),
+    C16System::create_hardware_traits(false),
     C16System::can_load_file_static
 };
 
@@ -156,17 +168,18 @@ static const SystemDescriptor plus4_descriptor = {
     "PLUS4",
     "Commodore Plus/4 (1984) - 64KB RAM, TED 7360, built-in 3-PLUS-1 software",
     c16_formats,
-    C16System::create_hardware_traits(),
+    C16System::create_hardware_traits(true),
     C16System::can_load_file_static
 };
 
 // ============================================================================
 // Constructor / Destructor
 // ============================================================================
-C16System::C16System(bool is_plus4)
+C16System::C16System(Variant variant)
     : EmulatedSystem()
-    , is_plus4_(is_plus4)
-    , system_name_(is_plus4 ? "Plus/4" : "C16")
+    , variant_(variant)
+    , is_plus4_(variant == Variant::PLUS4)
+    , system_name_(variant == Variant::PLUS4 ? "Plus/4" : (variant == Variant::C116 ? "C116" : "C16"))
     , cpu_(nullptr)
     , ted_(nullptr)
     , bus_state_(0)
@@ -174,12 +187,11 @@ C16System::C16System(bool is_plus4)
     , cycles_per_frame_(17734)
     , initialized_(false)
 {
-    hardware_traits_ = create_hardware_traits();
+    hardware_traits_ = create_hardware_traits(is_plus4_);
     current_palette_ = hardware_traits_.display.default_palette;
     
-    // Set default memory configuration based on variant
-    // C16 = 16KB (index 0), Plus/4 = 64KB (index 1)
-    config_.memory_option_index = is_plus4_ ? 1 : 0;
+    // Each variant has exactly one memory option (index 0)
+    config_.memory_option_index = 0;
     
     // Initialize memory arrays
     memset(ram_simple_, 0, sizeof(ram_simple_));
@@ -196,7 +208,11 @@ C16System::~C16System() {
 // ============================================================================
 
 const SystemDescriptor& C16System::get_descriptor() const {
-    return is_plus4_ ? plus4_descriptor : c16_descriptor;
+    switch (variant_) {
+        case Variant::PLUS4: return plus4_descriptor;
+        case Variant::C116:  return c116_descriptor;
+        default:             return c16_descriptor;
+    }
 }
 
 // ============================================================================
@@ -939,10 +955,14 @@ void C16System::setup_connector_ports() {
 // System Registration
 // ============================================================================
 
+REGISTER_SYSTEM(c116_descriptor, []() {
+    return std::make_unique<C16System>(C16System::Variant::C116);
+})
+
 REGISTER_SYSTEM(c16_descriptor, []() {
-    return std::make_unique<C16System>(false);
+    return std::make_unique<C16System>(C16System::Variant::C16);
 })
 
 REGISTER_SYSTEM(plus4_descriptor, []() {
-    return std::make_unique<C16System>(true);
+    return std::make_unique<C16System>(C16System::Variant::PLUS4);
 })

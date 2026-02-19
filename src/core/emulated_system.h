@@ -280,6 +280,10 @@ public:
     bool is_quit_requested() const { return quit_requested_; }
     void request_quit() { quit_requested_ = true; }
 
+    /// Whether the system is ready to execute (e.g. has ROM loaded).
+    /// Systems that require media (cartridge, disk) return false until loaded.
+    virtual bool is_system_ready() const { return true; }
+
     /// Update the screen rect where the emulated display is rendered (SDL window coords).
     void set_display_screen_rect(float x, float y, float w, float h) {
         display_screen_rect_ = {x, y, w, h};
