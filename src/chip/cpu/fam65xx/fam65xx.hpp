@@ -1760,6 +1760,7 @@ public:
 // MSVC has stricter requirements for non-type template parameters
 using mos6502_cpu_impl_t = fam65xx_t<MOS6502>;
 using mos6510_cpu_impl_t = fam65xx_t<MOS6510>;
+using csg7501_cpu_impl_t = fam65xx_t<CSG7501>;
 using nes6502_cpu_impl_t = fam65xx_t<RICOH_2A03>;
 using wdc65c02_cpu_impl_t = fam65xx_t<WDC_65C02_EARLY>;
 using rockwell65c02_cpu_impl_t = fam65xx_t<ROCKWELL_R65C02>;
@@ -1773,6 +1774,7 @@ using wdc65c816_cpu_impl_t = fam65xx_t<WDC_65C816>;
 // This ensures MSVC can properly resolve template parameters
 template class fam65xx_t<MOS6502>;
 template class fam65xx_t<MOS6510>;
+template class fam65xx_t<CSG7501>;
 template class fam65xx_t<RICOH_2A03>;
 template class fam65xx_t<SYNERTEK_65C02>;
 template class fam65xx_t<WDC_65C02_EARLY>;

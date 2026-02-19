@@ -707,6 +707,13 @@ void register_mos6510_for_gui(void *cpu) {
   }
 }
 
+void register_csg7501_for_gui(void *cpu) {
+  if (cpu) {
+    cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<fam65xx::CSG7501>>(
+        reinterpret_cast<fam65xx_t<fam65xx::CSG7501> *>(cpu));
+  }
+}
+
 void register_wdc65c816_for_gui(void *cpu) {
   if (cpu) {
     cpu_renderers[cpu] =
