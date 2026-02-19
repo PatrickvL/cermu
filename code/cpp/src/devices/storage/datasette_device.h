@@ -25,6 +25,8 @@ public:
     void on_signal_change(uint32_t signals) override;
     uint32_t get_output_signals() const override;
 
+    bool has_activity() const override { return playing_ && motor_on_; }
+
 #ifdef IMGUI_VERSION
     void render_device_ui() override;
 #endif

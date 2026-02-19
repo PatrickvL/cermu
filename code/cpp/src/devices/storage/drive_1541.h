@@ -102,6 +102,8 @@ public:
     void on_signal_change(uint32_t signal_state) override;
     uint32_t get_output_signals() const override;
 
+    bool has_activity() const override { return drive_led_; }
+
 #ifdef IMGUI_VERSION
     void render_device_ui() override;
 #endif
