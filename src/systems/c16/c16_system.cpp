@@ -142,10 +142,19 @@ static const format_descriptor_t* const c16_formats[] = {
     nullptr
 };
 
-const SystemDescriptor C16System::c16_descriptor = {
-    "Commodore 16 / Plus/4",
+static const SystemDescriptor c16_descriptor = {
+    "Commodore 16",
     "C16",
-    "Commodore 16 and Plus/4 (1984) - 16KB/64KB RAM, TED graphics",
+    "Commodore 16 (1984) - 16KB RAM, TED 7360 graphics and sound",
+    c16_formats,
+    C16System::create_hardware_traits(),
+    C16System::can_load_file_static
+};
+
+static const SystemDescriptor plus4_descriptor = {
+    "Commodore Plus/4",
+    "PLUS4",
+    "Commodore Plus/4 (1984) - 64KB RAM, TED 7360, built-in 3-PLUS-1 software",
     c16_formats,
     C16System::create_hardware_traits(),
     C16System::can_load_file_static
@@ -154,8 +163,10 @@ const SystemDescriptor C16System::c16_descriptor = {
 // ============================================================================
 // Constructor / Destructor
 // ============================================================================
-C16System::C16System()
+C16System::C16System(bool is_plus4)
     : EmulatedSystem()
+    , is_plus4_(is_plus4)
+    , system_name_(is_plus4 ? "Plus/4" : "C16")
     , mos7501_(nullptr)
     , ted_(nullptr)
     , keyboard_(nullptr)
@@ -164,6 +175,10 @@ C16System::C16System()
 {
     hardware_traits_ = create_hardware_traits();
     current_palette_ = hardware_traits_.display.default_palette;
+    
+    // Set default memory configuration based on variant
+    // C16 = 16KB (index 0), Plus/4 = 64KB (index 1)
+    config_.memory_option_index = is_plus4_ ? 1 : 0;
     
     // Initialize memory arrays
     memset(ram_simple_, 0, sizeof(ram_simple_));
@@ -180,7 +195,7 @@ C16System::~C16System() {
 // ============================================================================
 
 const SystemDescriptor& C16System::get_descriptor() const {
-    return c16_descriptor;
+    return is_plus4_ ? plus4_descriptor : c16_descriptor;
 }
 
 // ============================================================================
@@ -212,12 +227,12 @@ bool C16System::initialize() {
         return true;
     }
     
-    printf("C16: Initializing system\n");
+    printf("%s: Initializing system\n", system_name_);
     
     // Load ROMs using common ROM loader
     bool roms_loaded = load_roms();
     if (!roms_loaded) {
-        printf("C16: Warning - ROMs not loaded, system may not function correctly\n");
+        printf("%s: Warning - ROMs not loaded, system may not function correctly\n", system_name_);
     }
     
     // TODO: Initialize MOS7501 CPU when implemented
@@ -232,7 +247,7 @@ bool C16System::initialize() {
         // Create the layered keyboard mapper for character-based input
         keyboard_mapper_.reset(create_c16_keyboard_mapper(keyboard_));
     } else {
-        printf("C16: Warning - keyboard matrix creation failed\n");
+        printf("%s: Warning - keyboard matrix creation failed\n", system_name_);
     }
     // NOTE: TED keyboard scanning callbacks will be connected once the TED
     // chip is implemented. The keyboard contact arrays are updated immediately
@@ -244,7 +259,7 @@ bool C16System::initialize() {
 }
 
 void C16System::shutdown() {
-    printf("C16: Shutting down system\n");
+    printf("%s: Shutting down system\n", system_name_);
     
     // TODO: Destroy MOS7501 when implemented
     mos7501_ = nullptr;
@@ -262,7 +277,7 @@ void C16System::shutdown() {
 }
 
 void C16System::reset() {
-    printf("C16: Resetting system\n");
+    printf("%s: Resetting system\n", system_name_);
     
     // TODO: Reset MOS7501 CPU when implemented
     // TODO: Reset TED when implemented
@@ -335,24 +350,24 @@ static void c16_mem_write_block(void* ctx, uint16_t addr,
 
 bool C16System::load_file(const char* filepath) {
     if (!initialized_) {
-        printf("C16: System not initialized, initializing now...\n");
+        printf("%s: System not initialized, initializing now...\n", system_name_);
         if (!initialize()) {
-            printf("C16: Failed to initialize system for file loading\n");
+            printf("%s: Failed to initialize system for file loading\n", system_name_);
             return false;
         }
     }
     
-    printf("C16: Loading file: %s\n", filepath);
+    printf("%s: Loading file: %s\n", system_name_, filepath);
 
     format_load_result_t result = {};
     if (!format_load_file(filepath, &result)) {
-        printf("C16: Failed to load file: %s\n", result.error_msg);
+        printf("%s: Failed to load file: %s\n", system_name_, result.error_msg);
         format_load_result_free(&result);
         return false;
     }
 
     commodore_load_context_t ctx = {};
-    ctx.system_name     = "C16";
+    ctx.system_name     = system_name_;
     ctx.write_byte      = c16_mem_write_byte;
     ctx.write_block     = c16_mem_write_block;
     ctx.mem_read        = c16_mem_read;
@@ -442,7 +457,9 @@ void C16System::release_all_keys() {
 
 void C16System::render_system_menu_items() {
 #ifdef IMGUI_VERSION
-    if (ImGui::MenuItem("Reset C16")) {
+    char reset_label[32];
+    snprintf(reset_label, sizeof(reset_label), "Reset %s", system_name_);
+    if (ImGui::MenuItem(reset_label)) {
         reset();
     }
 #endif
@@ -450,7 +467,7 @@ void C16System::render_system_menu_items() {
 
 void C16System::render_configuration_ui() {
 #ifdef IMGUI_VERSION
-    ImGui::Text("C16/Plus4 Configuration");
+    ImGui::Text("%s Configuration", system_name_);
     ImGui::Separator();
     
     // Memory configuration
@@ -522,7 +539,7 @@ bool C16System::load_roms() {
     );
     
     if (!kernal_ok) {
-        printf("C16: Failed to load KERNAL ROM\n");
+        printf("%s: Failed to load KERNAL ROM\n", system_name_);
     }
     
     // Load BASIC ROM (16KB at $8000-$BFFF)
@@ -539,7 +556,7 @@ bool C16System::load_roms() {
     );
     
     if (!basic_ok) {
-        printf("C16: Failed to load BASIC ROM\n");
+        printf("%s: Failed to load BASIC ROM\n", system_name_);
     }
     
     return (kernal_ok && basic_ok);
@@ -643,7 +660,7 @@ static const ConnectorDefinition c16_cassette_def = {
     false, false
 };
 
-static const ConnectorDefinition c16_user_port_def = {
+static const ConnectorDefinition plus4_user_port_def = {
     ConnectorType::USER_PORT,
     "User Port",
     ConnectorSignals::USER_PORT_SIGNALS,
@@ -679,12 +696,14 @@ void C16System::setup_connector_ports() {
     add_connector_port(c16_cassette_def, 0);
 
     // Port 4 — User Port (Plus/4 only; directly connected to 6529 port chip)
-    add_connector_port(c16_user_port_def, 0);
+    if (is_plus4_) {
+        add_connector_port(plus4_user_port_def, 0);
+    }
 
     // Port 5 — Expansion Port (cartridge slot)
     add_connector_port(c16_expansion_def, 0);
 
-    // Port 6 — Internal Keyboard (always attached)
+    // Internal Keyboard (always attached)
     static const ConnectorDefinition c16_keyboard_def = {
         ConnectorType::CUSTOM, "Keyboard", nullptr, 0, true, false
     };
@@ -699,13 +718,18 @@ void C16System::setup_connector_ports() {
     // Default: attach joystick to Joystick Port 1
     attach_device_to_port(0, "joystick");
 
-    printf("C16: Created %zu connector ports\n", connector_ports_.size());
+    printf("%s: Created %zu connector ports\n",
+           system_name_, connector_ports_.size());
 }
 
 // ============================================================================
 // System Registration
 // ============================================================================
 
-REGISTER_SYSTEM(C16System::c16_descriptor, []() {
-    return std::make_unique<C16System>();
+REGISTER_SYSTEM(c16_descriptor, []() {
+    return std::make_unique<C16System>(false);
+})
+
+REGISTER_SYSTEM(plus4_descriptor, []() {
+    return std::make_unique<C16System>(true);
 })
