@@ -25,6 +25,10 @@
 #include <functional>
 #include <string>
 #include <vector>
+#include "host_input.h"
+
+// Forward-declare SDL_Event so device headers don't need full SDL includes.
+union SDL_Event;
 
 // ============================================================================
 // SIGNAL DIRECTION
@@ -89,6 +93,8 @@ struct ConnectorDefinition {
     const char*         name;           ///< E.g. "Control Port 1", "IEC Serial Bus"
     const SignalLine*   signals;        ///< Array of signal line descriptors
     uint8_t             signal_count;   ///< Number of entries in `signals`
+    bool                is_internal;    ///< True for internal connectors (keyboard, etc.)
+                                        ///< Internal devices cannot be detached via UI.
 };
 
 // ============================================================================
@@ -229,6 +235,27 @@ public:
      * Default: all lines released (no device or idle device).
      */
     virtual uint32_t get_output_signals() const { return 0xFFFFFFFF; }
+
+    // --- Host Input ----------------------------------------------------
+
+    /// Does this device accept real-time host input (joystick, mouse, etc.)?
+    virtual bool accepts_host_input() const { return false; }
+
+    /// Which host input types can drive this device?
+    virtual int get_supported_input_type_count() const { return 0; }
+    virtual HostInputType get_supported_input_type(int /*index*/) const { return HostInputType::NONE; }
+
+    /// Get/set the current host input binding.
+    virtual const HostInputBinding& get_host_input_binding() const {
+        static const HostInputBinding none{};
+        return none;
+    }
+    virtual void set_host_input_binding(const HostInputBinding& /*binding*/) {}
+
+    /// Process an SDL event according to the current binding.
+    /// Called by the GUI layer for every SDL event while emulation is running.
+    /// Returns true if the event was consumed by this device.
+    virtual bool process_sdl_event(const SDL_Event& /*event*/) { return false; }
 
     // --- GUI -----------------------------------------------------------
 

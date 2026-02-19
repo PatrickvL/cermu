@@ -18,6 +18,7 @@
 #include "../../core/peripherals/joystick_device.h"
 #include "../../core/peripherals/drive_1541.h"
 #include "../../core/peripherals/datasette_device.h"
+#include "../../core/peripherals/commodore_keyboard_device.h"
 #include <cstring>
 #include <cstdio>
 #include <cctype>
@@ -1006,35 +1007,40 @@ static const ConnectorDefinition c64_control_port_1_def = {
     ConnectorType::CONTROL_PORT_DB9,
     "Control Port 1",
     ConnectorSignals::CONTROL_PORT_SIGNALS,
-    ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT
+    ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT,
+    false
 };
 
 static const ConnectorDefinition c64_control_port_2_def = {
     ConnectorType::CONTROL_PORT_DB9,
     "Control Port 2",
     ConnectorSignals::CONTROL_PORT_SIGNALS,
-    ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT
+    ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT,
+    false
 };
 
 static const ConnectorDefinition c64_iec_serial_def = {
     ConnectorType::IEC_SERIAL,
     "IEC Serial Bus",
     ConnectorSignals::IEC_SERIAL_SIGNALS,
-    ConnectorSignals::IEC_SERIAL_SIGNAL_COUNT
+    ConnectorSignals::IEC_SERIAL_SIGNAL_COUNT,
+    false
 };
 
 static const ConnectorDefinition c64_cassette_def = {
     ConnectorType::CASSETTE_PORT,
     "Cassette Port",
     ConnectorSignals::CASSETTE_PORT_SIGNALS,
-    ConnectorSignals::CASSETTE_PORT_SIGNAL_COUNT
+    ConnectorSignals::CASSETTE_PORT_SIGNAL_COUNT,
+    false
 };
 
 static const ConnectorDefinition c64_user_port_def = {
     ConnectorType::USER_PORT,
     "User Port",
     ConnectorSignals::USER_PORT_SIGNALS,
-    ConnectorSignals::USER_PORT_SIGNAL_COUNT
+    ConnectorSignals::USER_PORT_SIGNAL_COUNT,
+    false
 };
 
 // Expansion port definition (minimal — cartridge insertion is handled separately)
@@ -1047,7 +1053,8 @@ static const ConnectorDefinition c64_expansion_def = {
     ConnectorType::EXPANSION_PORT,
     "Expansion Port",
     expansion_signals,
-    3
+    3,
+    false
 };
 
 // ============================================================================
@@ -1159,6 +1166,21 @@ void C64SystemWrapper::setup_connector_ports() {
 
     // PORT_EXPANSION = 5 — Expansion Port (cartridge slot)
     add_connector_port(c64_expansion_def, 0);
+
+    // PORT_KEYBOARD = 6 — Internal Keyboard (always attached)
+    static const ConnectorDefinition c64_keyboard_def = {
+        ConnectorType::CUSTOM, "Keyboard", nullptr, 0, true  // is_internal
+    };
+    int kb_port = add_connector_port(c64_keyboard_def, 0);
+
+    // Attach internal keyboard device
+    auto kb_device = std::make_unique<CommodoreKeyboardDevice>(c64_ ? c64_->keyboard : nullptr);
+    auto* kb_raw = kb_device.get();
+    connector_ports_[kb_port]->attach_device(kb_raw);
+    owned_devices_.push_back(std::move(kb_device));
+
+    // Default: attach joystick to Control Port 2 (most C64 games use port 2)
+    attach_device_to_port(1, "joystick");
 
     // Wire joystick-aware CIA1 callbacks (replace the defaults set by c64_system_create)
     if (c64_ && c64_->cia1) {

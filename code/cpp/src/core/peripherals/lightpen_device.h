@@ -20,6 +20,20 @@ public:
     void reset() override;
     uint32_t get_output_signals() const override;
 
+    // --- Host input support -------------------------------------------
+    bool accepts_host_input() const override { return true; }
+    int  get_supported_input_type_count() const override { return 1; }
+    HostInputType get_supported_input_type(int index) const override {
+        (void)index; return HostInputType::HOST_MOUSE;
+    }
+    const HostInputBinding& get_host_input_binding() const override { return binding_; }
+    void set_host_input_binding(const HostInputBinding& binding) override;
+    bool process_sdl_event(const SDL_Event& event) override;
+
+#ifdef IMGUI_VERSION
+    void render_device_ui() override;
+#endif
+
     /// Set pen X/Y coordinates (system display coordinates).
     void set_position(int x, int y) { pen_x_ = x; pen_y_ = y; }
 
@@ -35,4 +49,5 @@ private:
     int      pen_x_;
     int      pen_y_;
     bool     triggered_;
+    HostInputBinding binding_;
 };

@@ -4,12 +4,20 @@
 
 #include "mouse_device.h"
 #include "../device_registry.h"
+#include <cstdio>
+#include <SDL_events.h>
+
+#ifdef IMGUI_VERSION
+#include "imgui.h"
+#endif
 
 MouseDevice::MouseDevice()
     : state_(0xFFFFFFFF)
     , pot_x_(128)
     , pot_y_(128)
 {
+    binding_.type = HostInputType::HOST_MOUSE;
+    binding_.label = "Host Mouse";
 }
 
 void MouseDevice::reset() {
@@ -21,6 +29,38 @@ void MouseDevice::reset() {
 
 uint32_t MouseDevice::get_output_signals() const {
     return state_;
+}
+
+void MouseDevice::set_host_input_binding(const HostInputBinding& binding) {
+    state_ = 0xFFFFFFFF;
+    if (port_) port_->notify_device_output_changed(state_);
+    binding_ = binding;
+    printf("Mouse 1351: Input source changed to %s\n", binding_.label.c_str());
+}
+
+bool MouseDevice::process_sdl_event(const SDL_Event& event) {
+    if (binding_.type != HostInputType::HOST_MOUSE) return false;
+
+    switch (event.type) {
+        case SDL_MOUSEMOTION:
+            move(event.motion.xrel, event.motion.yrel);
+            return true;
+
+        case SDL_MOUSEBUTTONDOWN:
+        case SDL_MOUSEBUTTONUP: {
+            bool pressed = (event.type == SDL_MOUSEBUTTONDOWN);
+            if (event.button.button == SDL_BUTTON_LEFT) {
+                set_left_button(pressed);
+                return true;
+            }
+            if (event.button.button == SDL_BUTTON_RIGHT) {
+                set_right_button(pressed);
+                return true;
+            }
+            break;
+        }
+    }
+    return false;
 }
 
 void MouseDevice::set_left_button(bool pressed) {
@@ -45,13 +85,23 @@ void MouseDevice::set_right_button(bool pressed) {
 
 void MouseDevice::move(int dx, int dy) {
     // The 1351 encodes movement in the low 6 bits of the SID POT registers.
-    // Each movement delta changes the pot value proportionally.
-    // Here we accumulate into the pot_x_/pot_y_ counters (wrap at 0-255).
     pot_x_ = static_cast<uint8_t>((pot_x_ + dx) & 0xFF);
     pot_y_ = static_cast<uint8_t>((pot_y_ + dy) & 0xFF);
-    // POT values are communicated via the POTX/POTY analog lines;
-    // the system wrapper reads these via get_pot_x()/get_pot_y().
 }
+
+// ============================================================================
+// GUI
+// ============================================================================
+
+#ifdef IMGUI_VERSION
+void MouseDevice::render_device_ui() {
+    bool lmb = !(state_ & (1u << ConnectorSignals::JOY_FIRE));
+    bool rmb = !(state_ & (1u << ConnectorSignals::JOY_UP));
+
+    ImGui::Text("  POT X:%3d  Y:%3d  LMB:%s RMB:%s",
+                pot_x_, pot_y_, lmb ? "Y" : ".", rmb ? "Y" : ".");
+}
+#endif
 
 // ============================================================================
 // SELF-REGISTRATION

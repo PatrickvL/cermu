@@ -34,6 +34,7 @@
 #include "../../core/formats/crt_format.h"
 #include "../../core/formats/lnx_format.h"
 #include "../../core/formats/commodore_load_helpers.h"
+#include "../../core/peripherals/commodore_keyboard_device.h"
 
 // ============================================================================
 // Hardware Traits Definition
@@ -1101,28 +1102,32 @@ static const ConnectorDefinition vic20_control_port_def = {
     ConnectorType::CONTROL_PORT_DB9,
     "Control Port",
     ConnectorSignals::CONTROL_PORT_SIGNALS,
-    ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT
+    ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT,
+    false
 };
 
 static const ConnectorDefinition vic20_iec_serial_def = {
     ConnectorType::IEC_SERIAL,
     "IEC Serial Bus",
     ConnectorSignals::IEC_SERIAL_SIGNALS,
-    ConnectorSignals::IEC_SERIAL_SIGNAL_COUNT
+    ConnectorSignals::IEC_SERIAL_SIGNAL_COUNT,
+    false
 };
 
 static const ConnectorDefinition vic20_cassette_def = {
     ConnectorType::CASSETTE_PORT,
     "Cassette Port",
     ConnectorSignals::CASSETTE_PORT_SIGNALS,
-    ConnectorSignals::CASSETTE_PORT_SIGNAL_COUNT
+    ConnectorSignals::CASSETTE_PORT_SIGNAL_COUNT,
+    false
 };
 
 static const ConnectorDefinition vic20_user_port_def = {
     ConnectorType::USER_PORT,
     "User Port",
     ConnectorSignals::USER_PORT_SIGNALS,
-    ConnectorSignals::USER_PORT_SIGNAL_COUNT
+    ConnectorSignals::USER_PORT_SIGNAL_COUNT,
+    false
 };
 
 static const SignalLine vic20_expansion_signals[] = {
@@ -1132,7 +1137,8 @@ static const ConnectorDefinition vic20_expansion_def = {
     ConnectorType::EXPANSION_PORT,
     "Expansion Port",
     vic20_expansion_signals,
-    1
+    1,
+    false
 };
 
 void VIC20System::setup_connector_ports() {
@@ -1152,6 +1158,21 @@ void VIC20System::setup_connector_ports() {
 
     // Port 4 — Expansion Port (cartridge)
     add_connector_port(vic20_expansion_def, 0);
+
+    // Port 5 — Internal Keyboard (always attached)
+    static const ConnectorDefinition vic20_keyboard_def = {
+        ConnectorType::CUSTOM, "Keyboard", nullptr, 0, true
+    };
+    int kb_port = add_connector_port(vic20_keyboard_def, 0);
+
+    // Attach internal keyboard device
+    auto kb_device = std::make_unique<CommodoreKeyboardDevice>(keyboard_);
+    auto* kb_raw = kb_device.get();
+    connector_ports_[kb_port]->attach_device(kb_raw);
+    owned_devices_.push_back(std::move(kb_device));
+
+    // Default: attach joystick to Control Port
+    attach_device_to_port(0, "joystick");
 
     printf("VIC20: Created %zu connector ports\n", connector_ports_.size());
 }

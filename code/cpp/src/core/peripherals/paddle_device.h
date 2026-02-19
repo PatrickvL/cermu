@@ -20,6 +20,20 @@ public:
     void reset() override;
     uint32_t get_output_signals() const override;
 
+    // --- Host input support -------------------------------------------
+    bool accepts_host_input() const override { return true; }
+    int  get_supported_input_type_count() const override { return 2; }
+    HostInputType get_supported_input_type(int index) const override {
+        return (index == 0) ? HostInputType::HOST_MOUSE : HostInputType::SDL_GAMEPAD;
+    }
+    const HostInputBinding& get_host_input_binding() const override { return binding_; }
+    void set_host_input_binding(const HostInputBinding& binding) override;
+    bool process_sdl_event(const SDL_Event& event) override;
+
+#ifdef IMGUI_VERSION
+    void render_device_ui() override;
+#endif
+
     /// Set paddle X position (0-255).
     void set_paddle_x(uint8_t value) { pot_x_ = value; }
     /// Set paddle Y position (0-255).
@@ -36,4 +50,5 @@ private:
     uint32_t state_;
     uint8_t  pot_x_;
     uint8_t  pot_y_;
+    HostInputBinding binding_;
 };
