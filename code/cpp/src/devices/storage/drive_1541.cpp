@@ -973,6 +973,11 @@ void Drive1541Device::render_device_ui() {
         ImGui::TextDisabled("No disk inserted");
     }
 
+    // Insert Disk button (always available)
+    if (ImGui::Button("Insert Disk...")) {
+        wants_file_dialog_ = true;  // Signal GUI layer to open file dialog
+    }
+
     // Fliplist display (collapsible)
     if (!fliplist_.empty()) {
         if (ImGui::TreeNode("Fliplist")) {

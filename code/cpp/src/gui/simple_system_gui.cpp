@@ -5,6 +5,7 @@
 #include "imgui_impl_opengl3.h"
 #include "../core/config/path_discovery.h"
 #include "../core/formats/format_handler.h"
+#include "../devices/storage/drive_1541.h"
 #include <stdio.h>
 #include <cstring>
 
@@ -291,6 +292,37 @@ void SimpleSystemGUI::render_frame() {
         }
         ImGuiFileDialog::Instance()->Close();
     }
+
+    // Display drive insert disk dialog and handle results
+    if (ImGuiFileDialog::Instance()->Display("DriveInsertDiskKey")) {
+        if (ImGuiFileDialog::Instance()->IsOk() && pending_drive_insert_) {
+            std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
+            printf("Drive insert: user selected file: %s\n", filePathName.c_str());
+
+            // Save the last selected file path for next time
+            last_file_path_ = filePathName;
+
+            // Insert disk into the drive (this auto-populates the fliplist)
+            if (pending_drive_insert_->insert_disk(filePathName.c_str())) {
+                printf("Disk inserted successfully into drive %d: %s\n",
+                       pending_drive_insert_->get_device_number(), filePathName.c_str());
+            } else {
+                printf("Failed to insert disk into drive %d: %s\n",
+                       pending_drive_insert_->get_device_number(), filePathName.c_str());
+            }
+        } else {
+            // User canceled - save the current path they were browsing
+            std::string currentPath = ImGuiFileDialog::Instance()->GetCurrentPath();
+            if (!currentPath.empty()) {
+                last_file_path_ = currentPath;
+            }
+        }
+        pending_drive_insert_ = nullptr;
+        ImGuiFileDialog::Instance()->Close();
+    }
+
+    // Poll attached drives for file dialog requests
+    poll_drive_file_dialog_requests();
 #endif
     
     // Render screen (full-screen background)
@@ -821,6 +853,10 @@ void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, 
 // ============================================================================
 
 void SimpleSystemGUI::load_file_dialog() {
+    open_file_dialog("ChooseFileDlgKey", "Choose File");
+}
+
+void SimpleSystemGUI::open_file_dialog(const char* dialog_key, const char* title) {
     if (!system_) return;
     
 #ifdef HAS_IMGUIFILEDIALOG
@@ -869,9 +905,35 @@ void SimpleSystemGUI::load_file_dialog() {
     config.path = default_path;
     config.fileName = default_filename;
     config.flags = ImGuiFileDialogFlags_CaseInsensitiveExtentionFiltering;
-    ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose File", filter_str.c_str(), config);
+    ImGuiFileDialog::Instance()->OpenDialog(dialog_key, title, filter_str.c_str(), config);
 #else
+    (void)dialog_key;
+    (void)title;
     printf("ImGuiFileDialog not available - file loading disabled\n");
+#endif
+}
+
+// ============================================================================
+// Drive File Dialog Polling
+// ============================================================================
+
+void SimpleSystemGUI::poll_drive_file_dialog_requests() {
+#ifdef HAS_IMGUIFILEDIALOG
+    if (!system_ || pending_drive_insert_) return;  // Already have a pending request
+
+    // Scan IEC bus devices for any 1541 drive that wants a file dialog
+    for (auto& port : system_->get_connector_ports()) {
+        if (!port->get_definition().is_bus) continue;
+        for (auto* dev : port->get_attached_devices()) {
+            auto* drive = dynamic_cast<Drive1541Device*>(dev);
+            if (drive && drive->wants_file_dialog()) {
+                drive->clear_file_dialog_request();
+                pending_drive_insert_ = drive;
+                open_file_dialog("DriveInsertDiskKey", "Insert Disk");
+                return;
+            }
+        }
+    }
 #endif
 }
 
