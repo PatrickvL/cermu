@@ -293,6 +293,9 @@ bool Drive1541Device::insert_disk(const char* filepath) {
     disk_inserted_ = true;
     set_error(0, "OK");
 
+    // Auto-add to fliplist (convenient for multi-disc games)
+    fliplist_add(filepath);
+
     printf("1541: Disk inserted: '%s' (%ld bytes)\n", filepath, size);
     return true;
 }
@@ -304,6 +307,110 @@ void Drive1541Device::eject_disk() {
     for (auto& ch : channels_) ch.clear();
     set_error(74, "DRIVE NOT READY");
     printf("1541: Disk ejected\n");
+}
+
+bool Drive1541Device::swap_disk(const char* filepath) {
+    // Swap = replace image without resetting drive state.
+    // Only the disc media changes — IEC protocol state, uploaded fastloader
+    // code, and VIA state are all preserved (like physically swapping a floppy).
+
+    FILE* f = fopen(filepath, "rb");
+    if (!f) {
+        printf("1541: Cannot open disk image '%s' for swap\n", filepath);
+        return false;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    if (size != DRIVE_D64_STD_SIZE && size != DRIVE_D64_STD_SIZE_ERR &&
+        size != DRIVE_D64_EXT_SIZE && size != DRIVE_D64_EXT_SIZE_ERR) {
+        printf("1541: Invalid D64 size %ld for swap '%s'\n", size, filepath);
+        fclose(f);
+        return false;
+    }
+
+    disk_image_.resize(static_cast<size_t>(size));
+    if (fread(disk_image_.data(), 1, static_cast<size_t>(size), f) != static_cast<size_t>(size)) {
+        printf("1541: Failed to read disk image '%s' for swap\n", filepath);
+        fclose(f);
+        disk_image_.clear();
+        disk_inserted_ = false;
+        return false;
+    }
+    fclose(f);
+
+    // Invalidate open channels — file references are stale after swap
+    for (auto& ch : channels_) ch.clear();
+
+    disk_path_ = filepath;
+    disk_inserted_ = true;
+    set_error(0, "OK");
+
+    printf("1541: Disk swapped: '%s' (%ld bytes)\n", filepath, size);
+    return true;
+}
+
+// ============================================================================
+// DISC FLIPLIST
+// ============================================================================
+
+void Drive1541Device::fliplist_add(const char* filepath) {
+    std::string path(filepath);
+
+    // Avoid duplicates
+    for (const auto& entry : fliplist_) {
+        if (entry == path) return;
+    }
+    fliplist_.push_back(std::move(path));
+
+    // If this is the currently inserted disc, update index
+    if (disk_inserted_ && disk_path_ == filepath) {
+        fliplist_index_ = static_cast<int>(fliplist_.size()) - 1;
+    }
+    printf("1541: Fliplist add '%s' (total: %zu)\n", filepath,
+           fliplist_.size());
+}
+
+void Drive1541Device::fliplist_remove(int index) {
+    if (index < 0 || index >= static_cast<int>(fliplist_.size())) return;
+
+    fliplist_.erase(fliplist_.begin() + index);
+
+    // Adjust current index
+    if (fliplist_.empty()) {
+        fliplist_index_ = -1;
+    } else if (fliplist_index_ >= static_cast<int>(fliplist_.size())) {
+        fliplist_index_ = static_cast<int>(fliplist_.size()) - 1;
+    }
+}
+
+void Drive1541Device::fliplist_clear() {
+    fliplist_.clear();
+    fliplist_index_ = -1;
+}
+
+bool Drive1541Device::flip_next() {
+    if (fliplist_.empty()) return false;
+
+    fliplist_index_++;
+    if (fliplist_index_ >= static_cast<int>(fliplist_.size())) {
+        fliplist_index_ = 0;  // Wrap around
+    }
+
+    return swap_disk(fliplist_[fliplist_index_].c_str());
+}
+
+bool Drive1541Device::flip_prev() {
+    if (fliplist_.empty()) return false;
+
+    fliplist_index_--;
+    if (fliplist_index_ < 0) {
+        fliplist_index_ = static_cast<int>(fliplist_.size()) - 1;  // Wrap
+    }
+
+    return swap_disk(fliplist_[fliplist_index_].c_str());
 }
 
 // ============================================================================
@@ -610,8 +717,62 @@ void Drive1541Device::render_device_ui() {
         }
 
         if (ImGui::Button("Eject")) eject_disk();
+
+        // Fliplist navigation (same line if space permits)
+        if (!fliplist_.empty() && fliplist_.size() > 1) {
+            ImGui::SameLine();
+            if (ImGui::Button("<")) flip_prev();
+            ImGui::SameLine();
+            ImGui::Text("%d/%d", fliplist_index_ + 1,
+                        static_cast<int>(fliplist_.size()));
+            ImGui::SameLine();
+            if (ImGui::Button(">")) flip_next();
+        }
     } else {
         ImGui::TextDisabled("No disk inserted");
+    }
+
+    // Fliplist display (collapsible)
+    if (!fliplist_.empty()) {
+        if (ImGui::TreeNode("Fliplist")) {
+            int remove_idx = -1;
+            for (int i = 0; i < static_cast<int>(fliplist_.size()); i++) {
+                ImGui::PushID(i);
+
+                bool is_current = (i == fliplist_index_);
+
+                // Quick-swap button
+                if (is_current) {
+                    ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), ">");
+                } else {
+                    if (ImGui::SmallButton(">")) {
+                        fliplist_index_ = i;
+                        swap_disk(fliplist_[i].c_str());
+                    }
+                }
+                ImGui::SameLine();
+
+                // Show filename
+                const char* path = fliplist_[i].c_str();
+                const char* sep = strrchr(path, '/');
+                if (!sep) sep = strrchr(path, '\\');
+                ImGui::Text("%s", sep ? sep + 1 : path);
+
+                // Remove button
+                ImGui::SameLine();
+                if (ImGui::SmallButton("x")) {
+                    remove_idx = i;
+                }
+
+                ImGui::PopID();
+            }
+
+            if (remove_idx >= 0) fliplist_remove(remove_idx);
+
+            if (ImGui::SmallButton("Clear All")) fliplist_clear();
+
+            ImGui::TreePop();
+        }
     }
 
     ImGui::TextWrapped("Status: %s", error_message_.c_str());
