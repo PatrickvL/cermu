@@ -1754,6 +1754,16 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
                     address = vicii->memory.cb_base | (char_code << 3);
                 }
                 address |= vicii->video_logic.rc; // Add row counter (3 bits)
+                
+                // ECM address masking: hold address lines A9 and A10 low
+                // Documentation section 3.5.7: "If the ECM bit is set, the address
+                // generator will additionally hold the address lines 9 and 10 low."
+                // This applies ONLY to g-access (character/bitmap data), NOT to
+                // p-access (sprite pointers), s-access (sprite data), c-access
+                // (screen RAM), or refresh accesses.
+                if (vicii->sequencer.graphics_mode & VICII_EXTENDED_COLOR_MODE_MASK) {
+                    address &= ~(0x03 << 9);
+                }
                 break;
             }
             // Fall through to idle if display_state is false
@@ -1762,11 +1772,6 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
             // Idle address
             address = 0x3fff;
             break;
-    }
-
-    // If Extended Color Mode (ECM) bit is set, hold address lines 9 and 10 low
-    if (vicii->sequencer.graphics_mode & VICII_EXTENDED_COLOR_MODE_MASK) {
-        address &= ~(0x03 << 9);
     }
 
     // Apply CIA2 originating vic-ii bank base (set in vicii_memory_bank_change)
@@ -1971,6 +1976,7 @@ void vicii_tick_phi2(vicii_t* vicii, bus_state_t bus_state) {
             // S-access PHI2: sprite data byte 2 (third/final data byte)
             if (vicii->bus.active_sprite && vicii->bus.active_sprite->dma_enabled) {
                 vicii->bus.active_sprite->shift_reg |= (uint32_t)bus_data;
+
                 // Advance MC by 3 (all 3 bytes consumed across P+S cycle pair)
                 vicii->bus.active_sprite->mc = (vicii->bus.active_sprite->mc + 3) & 63;
             }

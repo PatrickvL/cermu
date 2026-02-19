@@ -197,7 +197,7 @@ int main(int argc, char** argv) {
 
         // Run frames and dump at key points
         float drain[4096];
-        int frame_targets[] = { 5, 200 };
+        int frame_targets[] = { 5, 500 };
         int frame_count = 0;
         for (int t = 0; t < 2; t++) {
             while (frame_count < frame_targets[t]) {
@@ -213,133 +213,136 @@ int main(int argc, char** argv) {
             uint8_t d021 = c64->vicii->registers.data[0x21];
             uint8_t yscroll = d011 & 0x07;
             uint8_t xscroll = d016 & 0x07;
-            bool csel = (d016 & 0x08) != 0;
             uint16_t bank_base = c64->vicii->memory.bank_base;
             uint16_t vm_base = c64->vicii->memory.vm_base;
             uint16_t cb_base = c64->vicii->memory.cb_base;
-            printf("$D011=$%02X $D016=$%02X $D018=$%02X $D020=$%02X $D021=$%02X YSCROLL=%d XSCROLL=%d CSEL=%d\n",
-                   d011, d016, d018, d020, d021, yscroll, xscroll, csel?1:0);
+            bool bmm = (d011 & 0x20) != 0;
+            printf("$D011=$%02X $D016=$%02X $D018=$%02X $D020=$%02X $D021=$%02X YSCROLL=%d BMM=%d\n",
+                   d011, d016, d018, d020, d021, yscroll, bmm?1:0);
             printf("VIC bank=%d base=$%04X  VM=$%04X (abs=$%04X)  CB=$%04X (abs=$%04X)\n",
                    bank_base / 0x4000, bank_base, vm_base, bank_base | vm_base, cb_base, bank_base | cb_base);
-            // Show what VIC-II actually reads for character data
-            // Check if CHARROM is active at cb_base (banks 1 and 9 have CHARROM)
-            uint16_t abs_cb = bank_base | cb_base;
-            bool charrom_at_cb = (abs_cb == 0x1000 || abs_cb == 0x9000);
-            printf("VIC reads from: %s at $%04X\n", charrom_at_cb ? "CHARROM" : "RAM", abs_cb);
             
-            // Screen codes (from what VIC sees - vm_base in RAM)
-            uint16_t abs_vm = bank_base | vm_base;
-            printf("Screen at $%04X[0..9]: ", abs_vm);
-            for (int i = 0; i < 10; i++) printf("$%02X ", c64->ram->memory[abs_vm+i]);
-            printf("\n");
-            printf("Screen at $%04X+40..49: ", abs_vm);
-            for (int i = 40; i < 50; i++) printf("$%02X ", c64->ram->memory[abs_vm+i]);
-            printf("\n");
+            // ===== SPRITE STATE =====
+            uint8_t d015 = c64->vicii->registers.data[0x15]; // enable
+            uint8_t d010 = c64->vicii->registers.data[0x10]; // X bit 8
+            uint8_t d017 = c64->vicii->registers.data[0x17]; // Y expand
+            uint8_t d01b = c64->vicii->registers.data[0x1B]; // priority
+            uint8_t d01c = c64->vicii->registers.data[0x1C]; // multicolor
+            uint8_t d01d = c64->vicii->registers.data[0x1D]; // X expand
+            printf("\nSPRITE STATE:\n");
+            printf("$D015=$%02X(enable) $D01C=$%02X(mc) $D01D=$%02X(xexp) $D017=$%02X(yexp) $D01B=$%02X(pri) $D010=$%02X(x8)\n",
+                   d015, d01c, d01d, d017, d01b, d010);
             
-            // Color RAM
-            printf("ColorRAM[0..9]: ");
-            for (int i = 0; i < 10; i++) printf("%d ", c64->ram->memory[0xD800+i] & 0x0F);
-            printf("\n");
+            for (int s = 0; s < 8; s++) {
+                uint16_t sx = c64->vicii->registers.data[0x00 + s*2] | ((d010 & (1<<s)) ? 256 : 0);
+                uint8_t sy = c64->vicii->registers.data[0x01 + s*2];
+                uint8_t sc = c64->vicii->registers.data[0x27 + s]; // color
+                bool en = (d015 & (1<<s)) != 0;
+                bool xexp = (d01d & (1<<s)) != 0;
+                bool yexp = (d017 & (1<<s)) != 0;
+                
+                // Read sprite pointer from the CORRECT screen area
+                uint16_t sp_ptr_addr = (bank_base | vm_base) + 0x3F8 + s;
+                uint8_t sp_ptr = c64->ram->memory[sp_ptr_addr];
+                uint16_t sp_data_addr = bank_base + (uint16_t)sp_ptr * 64;
+                
+                printf("  Spr%d: %s X=%3d Y=%3d col=%d ptr=$%02X (data@$%04X) %s%s",
+                       s, en ? "ON " : "off", sx, sy, sc, sp_ptr, sp_data_addr,
+                       xexp ? "Xexp " : "", yexp ? "Yexp " : "");
+                
+                if (en) {
+                    // Show first 3 bytes of sprite data (first row)
+                    printf(" data[0..2]=%02X %02X %02X",
+                           c64->ram->memory[sp_data_addr],
+                           c64->ram->memory[sp_data_addr+1],
+                           c64->ram->memory[sp_data_addr+2]);
+                }
+                printf("\n");
+            }
             
-            // Character ROM reference for screen code at position 5
-            uint8_t sc = c64->ram->memory[abs_vm+5];
-            uint8_t sc_row1_5 = c64->ram->memory[abs_vm+40+5];
-            printf("CharROM ref for sc=$%02X: ", sc);
-            if (c64->charrom && c64->charrom->memory) {
-                for (int row = 0; row < 8; row++) {
-                    printf("$%02X ", c64->charrom->memory[sc * 8 + row]);
+            // ===== EMULATOR SPRITE INTERNAL STATE =====
+            printf("\nSprite internal state (emulator):\n");
+            for (int s = 0; s < 8; s++) {
+                auto& spr = c64->vicii->sprites.sprites[s];
+                printf("  Spr%d: enabled=%d dma=%d display=%d dp=$%02X mc=%d shift=$%06X\n",
+                       s, spr.enabled, spr.dma_enabled, spr.display_state,
+                       spr.data_pointer, spr.mc, spr.shift_reg);
+            }
+            
+            // ===== FRAMEBUFFER SCAN =====
+            // Scan entire framebuffer to find non-black rows
+            int fb_w = c64->vicii->pixel.framebuffer_width;
+            int fb_h = c64->vicii->pixel.framebuffer_height;
+            printf("\nFramebuffer size: %dx%d\n", fb_w, fb_h);
+            printf("Scanning for non-black rows (showing first non-bg pixel per row):\n");
+            int shown_rows = 0;
+            for (int y = 0; y < fb_h && shown_rows < 80; y++) {
+                // Count non-black pixels in this row
+                int non_black = 0;
+                int first_non_black_x = -1;
+                uint32_t first_color = 0;
+                for (int x = 0; x < fb_w; x++) {
+                    uint32_t c = fb_px(x, y);
+                    if (c != PAL[0]) { // not black
+                        non_black++;
+                        if (first_non_black_x < 0) {
+                            first_non_black_x = x;
+                            first_color = c;
+                        }
+                    }
+                }
+                if (non_black > 0) {
+                    int ci = -1;
+                    for (int i = 0; i < 16; i++) {
+                        if (PAL[i] == first_color) { ci = i; break; }
+                    }
+                    printf("  Y=%3d: %4d non-bg pixels, first at X=%d (color=%d)\n", 
+                           y, non_black, first_non_black_x, ci);
+                    shown_rows++;
                 }
             }
-            printf("\n");
-            printf("CharROM ref for row1 sc=$%02X: ", sc_row1_5);
-            if (c64->charrom && c64->charrom->memory) {
-                for (int row = 0; row < 8; row++) {
-                    printf("$%02X ", c64->charrom->memory[sc_row1_5 * 8 + row]);
+            
+            // Show a few representative rows in detail
+            int check_rows[] = { 42, 50, 58, 66, 74, 82, 90, 100, 120, 140 };
+            for (int r = 0; r < 10; r++) {
+                int y = check_rows[r];
+                if (y >= fb_h) continue;
+                printf("Row Y=%d (X=0..%d): ", y, fb_w < 160 ? fb_w-1 : 159);
+                for (int x = 0; x < fb_w && x < 160; x++) {
+                    uint32_t c = fb_px(x, y);
+                    int ci = -1;
+                    for (int i = 0; i < 16; i++) {
+                        if (PAL[i] == c) { ci = i; break; }
+                    }
+                    if (x > 0 && x % 8 == 0) printf("|");
+                    printf("%X", ci >= 0 ? ci : 0);
                 }
+                printf("\n");
             }
-            printf("\n");
-            // What VIC-II actually reads: if CHARROM active, use charrom, else RAM
-            printf("VIC-II actual char data for sc=$%02X: ", sc_row1_5);
-            for (int row = 0; row < 8; row++) {
-                if (charrom_at_cb && c64->charrom && c64->charrom->memory) {
-                    printf("$%02X ", c64->charrom->memory[sc_row1_5 * 8 + row]);
-                } else {
-                    printf("$%02X ", c64->ram->memory[abs_cb + sc_row1_5 * 8 + row]);
-                }
-            }
-            printf("\n");
+            
+            // ECM mode check
+            bool ecm = (d011 & 0x40) != 0;
+            printf("\nECM=%d BMM=%d → mode: %s\n", ecm?1:0, bmm?1:0,
+                   ecm && !bmm ? "Extended Color Mode" : 
+                   !ecm && bmm ? "Bitmap Mode" : 
+                   !ecm && !bmm ? "Standard Text Mode" : "Invalid");
 
-            // First bad line for YSCROLL=3 is raster 51
-            // Char row N starts at raster 51 + N*8
-            int first_raster = 48 + yscroll; // $30 + YSCROLL
-            printf("First bad line at raster %d\n", first_raster);
+            // Check CIA2 DD00 for bank config
+            printf("\nCIA2 $DD00 port A value: $%02X\n", c64->ram->memory[0xDD00]);
+            // Actually read from CIA2 register directly
+            printf("CIA2 PRA register: $%02X\n", c64->cia2->reg[0] & 0x03);
             
-            // Dump char row 0 — full 8 rasters, showing pixel bits for col 5
-            printf("\nChar row 0 (rasters %d-%d), col5 fb_x 82-89:\n", first_raster, first_raster+7);
-            for (int fy = first_raster; fy <= first_raster+7; fy++) {
-                int rc_expected = fy - first_raster;
-                printf("  y=%3d (RC%d):", fy, rc_expected);
-                // Show 8 pixels from col 5
-                uint8_t bits = 0;
-                for (int px = 0; px < 8; px++) {
-                    uint32_t c = fb_px(82 + px, fy);
-                    const char* cn = color_name(c);
-                    // Check if foreground or background
-                    bool is_fg = (c != PAL[d021]); // not background
-                    bits |= (is_fg ? 1 : 0) << (7 - px);
-                    printf(" %s", cn);
-                }
-                printf(" = $%02X", bits);
-                // Compare with expected character ROM row
-                if (c64->charrom && c64->charrom->memory) {
-                    uint8_t expected = c64->charrom->memory[sc * 8 + rc_expected];
-                    printf(" (ROM row%d=$%02X %s)", rc_expected, expected, bits == expected ? "OK" : "MISMATCH!");
-                }
+            // ===== BITMAP MODE DATA =====
+            if (bmm) {
+                printf("\nBITMAP MODE DATA (bank=$%04X):\n", bank_base);
+                uint16_t bitmap_base = bank_base + (cb_base & 0x2000); // CB13 selects $0000 or $2000
+                printf("Bitmap base: $%04X (CB13=%d)\n", bitmap_base, (cb_base & 0x2000) ? 1 : 0);
+                printf("Bitmap[0..7] at $%04X: ", bitmap_base);
+                for (int i = 0; i < 8; i++) printf("$%02X ", c64->ram->memory[bitmap_base + i]);
                 printf("\n");
-            }
-            
-            // Also dump char row 1
-            int r1_start = first_raster + 8;
-            printf("\nChar row 1 (rasters %d-%d), col5 fb_x 82-89:\n", r1_start, r1_start+7);
-            for (int fy = r1_start; fy <= r1_start+7; fy++) {
-                int rc_expected = fy - r1_start;
-                printf("  y=%3d (RC%d):", fy, rc_expected);
-                uint8_t bits = 0;
-                for (int px = 0; px < 8; px++) {
-                    uint32_t c = fb_px(82 + px, fy);
-                    const char* cn = color_name(c);
-                    bool is_fg = (c != PAL[d021]);
-                    bits |= (is_fg ? 1 : 0) << (7 - px);
-                    printf(" %s", cn);
-                }
-                printf(" = $%02X", bits);
-                if (c64->charrom && c64->charrom->memory) {
-                    uint8_t expected = c64->charrom->memory[sc_row1_5 * 8 + rc_expected];
-                    printf(" (ROM row%d=$%02X %s)", rc_expected, expected, bits == expected ? "OK" : "MISMATCH!");
-                }
-                printf("\n");
-            }
-            
-            // Dump char row 2 for good measure
-            int r2_start = first_raster + 16;
-            uint8_t sc_row2_5 = c64->ram->memory[0x0400+80+5];
-            printf("\nChar row 2 col5 sc=$%02X (rasters %d-%d):\n", sc_row2_5, r2_start, r2_start+7);
-            for (int fy = r2_start; fy <= r2_start+7; fy++) {
-                int rc_expected = fy - r2_start;
-                printf("  y=%3d (RC%d):", fy, rc_expected);
-                uint8_t bits = 0;
-                for (int px = 0; px < 8; px++) {
-                    uint32_t c = fb_px(82 + px, fy);
-                    const char* cn = color_name(c);
-                    bool is_fg = (c != PAL[d021]);
-                    bits |= (is_fg ? 1 : 0) << (7 - px);
-                    printf(" %s", cn);
-                }
-                printf(" = $%02X", bits);
-                if (c64->charrom && c64->charrom->memory) {
-                    uint8_t expected = c64->charrom->memory[sc_row2_5 * 8 + rc_expected];
-                    printf(" (ROM row%d=$%02X %s)", rc_expected, expected, bits == expected ? "OK" : "MISMATCH!");
-                }
+                // Show bitmap data for cell(5,0) = offset 5*8 = 40
+                printf("Bitmap cell(5,0) at $%04X: ", bitmap_base + 40);
+                for (int i = 0; i < 8; i++) printf("$%02X ", c64->ram->memory[bitmap_base + 40 + i]);
                 printf("\n");
             }
         }
