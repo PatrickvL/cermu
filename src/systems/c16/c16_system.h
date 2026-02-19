@@ -2,6 +2,8 @@
 #define C16_SYSTEM_H
 
 #include "../../core/emulated_system.h"
+#include "../../core/system_lines.h"
+#include "../../chip/cpu/fam65xx/mos7501.h"
 #include "../../chip/input/commodore_keyboard.h"
 #include "../../chip/input/keyboard_mapper.h"
 #include <cstdint>
@@ -74,9 +76,10 @@ private:
     // Variant flag — true for Plus/4, false for C16
     bool is_plus4_;
     const char* system_name_;   // "C16" or "Plus/4" — used for logging
-    // Chip instances (TODO: Implement MOS7501 CPU and TED 7360 chips)
-    void* mos7501_;              // MOS7501 CPU (TODO: Create proper chip type)
+    // Chip instances
+    mos7501_t* cpu_;              // MOS 7501/8501 CPU
     void* ted_;                  // TED 7360 ($FD00-$FEFF, 4KB) - TODO: Create proper chip type
+    bus_state_t bus_state_;       // Current bus state for CPU cycle
     commodore_keyboard_t* keyboard_;  // Keyboard matrix (8×8, scanned via TED)
     std::unique_ptr<KeyboardMapper> keyboard_mapper_; // Layered keyboard mapping engine
     
@@ -93,6 +96,7 @@ private:
     bool load_roms();
     uint8_t cpu_read(uint32_t addr);
     void cpu_write(uint32_t addr, uint8_t data);
+    bus_state_t mem_tick(bus_state_t s);  // Service CPU memory bus access
     
     // Connector port setup (registers C16/Plus4 connector ports with base class)
     void setup_connector_ports();
@@ -100,6 +104,13 @@ private:
     // Static callbacks for CPU
     static uint8_t cpu_read_callback(void* user_data, uint32_t addr, uint8_t bus_state);
     static void cpu_write_callback(void* user_data, uint32_t addr, uint8_t data);
+    
+    // MOS 7501 I/O port callbacks (cassette motor, serial bus, etc.)
+    static uint8_t io_port_in(void* user_data);
+    static void io_port_out(uint8_t data, void* user_data);
+    
+    // Commodore load helper: set CPU PC
+    static void set_cpu_pc(void* user_data, uint16_t addr);
 };
 
 #endif // C16_SYSTEM_H
