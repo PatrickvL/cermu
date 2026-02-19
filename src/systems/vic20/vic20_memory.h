@@ -79,7 +79,7 @@ typedef struct vic20_memory_s {
     vic20_io_handler_t io_handlers[4];
     
     // Direct chip pointers for I/O access
-    void* vic_chip;   // mos6560_t* or mos6561_t*
+    void* vic_chip;   // vic_base_t* — works for both MOS6561 (PAL) and MOS6560 (NTSC)
     void* via1_chip;  // mos6522_t*
     void* via2_chip;  // mos6522_t*
     
