@@ -538,7 +538,12 @@ float EmulatedSystem::render_connector_menu_bar_icons() {
     const float total_w  = visible.size() * btn_w +
                            (visible.size() - 1) * spacing + 8.0f;
 
-    // --- 3. Render buttons --------------------------------------------------
+    // --- 3. Right-align: position cursor so icons hug the right edge -------
+    float window_w = ImGui::GetWindowWidth();
+    float start_x  = window_w - total_w;
+    ImGui::SetCursorPosX(start_x);
+
+    // --- 4. Render buttons --------------------------------------------------
     for (size_t vi = 0; vi < visible.size(); vi++) {
         auto& vp = visible[vi];
         auto* port = vp.port;
