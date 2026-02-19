@@ -481,6 +481,7 @@ public:
     
 private:
     void setup_audio_timing();
+    void setup_connector_ports();
     void clock();
     bus_state_t create_bus_state(uint16_t addr, uint8_t data, bool rw);
 

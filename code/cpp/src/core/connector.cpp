@@ -83,6 +83,49 @@ const SignalLine USER_PORT_SIGNALS[] = {
 };
 const uint8_t USER_PORT_SIGNAL_COUNT = sizeof(USER_PORT_SIGNALS) / sizeof(USER_PORT_SIGNALS[0]);
 
+// --- NES Controller Port (7-pin) ---
+const SignalLine NES_CONTROLLER_SIGNALS[] = {
+    { "CLK",   SignalDirection::OUTPUT, NES_CLK   },
+    { "LATCH", SignalDirection::OUTPUT, NES_LATCH },
+    { "D0",    SignalDirection::INPUT,  NES_D0    },
+    { "D3",    SignalDirection::INPUT,  NES_D3    },
+    { "D4",    SignalDirection::INPUT,  NES_D4    },
+};
+const uint8_t NES_CONTROLLER_SIGNAL_COUNT = sizeof(NES_CONTROLLER_SIGNALS) / sizeof(NES_CONTROLLER_SIGNALS[0]);
+
+// --- NES Expansion Port (48-pin) ---
+const SignalLine NES_EXPANSION_SIGNALS[] = {
+    { "D0",    SignalDirection::INPUT,         NEXP_D0    },
+    { "D1",    SignalDirection::INPUT,         NEXP_D1    },
+    { "D2",    SignalDirection::INPUT,         NEXP_D2    },
+    { "D3",    SignalDirection::INPUT,         NEXP_D3    },
+    { "D4",    SignalDirection::INPUT,         NEXP_D4    },
+    { "OUT0",  SignalDirection::OUTPUT,        NEXP_OUT0  },
+    { "OUT1",  SignalDirection::OUTPUT,        NEXP_OUT1  },
+    { "OUT2",  SignalDirection::OUTPUT,        NEXP_OUT2  },
+    { "CLK",   SignalDirection::OUTPUT,        NEXP_CLK   },
+    { "LATCH", SignalDirection::OUTPUT,        NEXP_LATCH },
+    { "/IRQ",  SignalDirection::INPUT,         NEXP_IRQ   },
+};
+const uint8_t NES_EXPANSION_SIGNAL_COUNT = sizeof(NES_EXPANSION_SIGNALS) / sizeof(NES_EXPANSION_SIGNALS[0]);
+
+// --- Apple 1 Expansion Connector (44-pin edge) ---
+const SignalLine APPLE1_EXPANSION_SIGNALS[] = {
+    { "/RESET", SignalDirection::OUTPUT,        A1_RESET },
+    { "/IRQ",   SignalDirection::INPUT,         A1_IRQ   },
+    { "RDY",    SignalDirection::INPUT,         A1_RDY   },
+    { "PHI2",   SignalDirection::OUTPUT,        A1_PHI2  },
+    { "R/W",    SignalDirection::BIDIRECTIONAL, A1_RW    },
+};
+const uint8_t APPLE1_EXPANSION_SIGNAL_COUNT = sizeof(APPLE1_EXPANSION_SIGNALS) / sizeof(APPLE1_EXPANSION_SIGNALS[0]);
+
+// --- Apple 1 Cassette Interface (ACI) ---
+const SignalLine APPLE1_CASSETTE_SIGNALS[] = {
+    { "CASS_IN",  SignalDirection::INPUT,  A1_CASS_IN  },
+    { "CASS_OUT", SignalDirection::OUTPUT, A1_CASS_OUT },
+};
+const uint8_t APPLE1_CASSETTE_SIGNAL_COUNT = sizeof(APPLE1_CASSETTE_SIGNALS) / sizeof(APPLE1_CASSETTE_SIGNALS[0]);
+
 } // namespace ConnectorSignals
 
 // ============================================================================

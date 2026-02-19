@@ -237,6 +237,7 @@ bool C16System::initialize() {
     // chip is implemented. The keyboard contact arrays are updated immediately
     // by key_down/key_up and will be ready for TED readback.
     
+    setup_connector_ports();
     initialized_ = true;
     return true;
 }
@@ -301,6 +302,9 @@ void C16System::run_frame() {
     for (uint32_t i = 0; i < adjusted_cycles; i++) {
         tick();
     }
+
+    // Tick all attached peripheral devices
+    tick_peripherals();
 }
 
 // ============================================================================
@@ -593,6 +597,86 @@ uint8_t C16System::cpu_read_callback(void* user_data, uint32_t addr, uint8_t bus
 void C16System::cpu_write_callback(void* user_data, uint32_t addr, uint8_t data) {
     C16System* sys = static_cast<C16System*>(user_data);
     sys->cpu_write(addr, data);
+}
+
+// ============================================================================
+// CONNECTOR PORT SETUP — C16/Plus4
+// ============================================================================
+// C16/Plus4 has: 2× Joystick ports (mini-DIN, electrically DB-9 compatible,
+// directly read by TED — no paddles), IEC Serial Bus, Cassette Port,
+// User Port (Plus/4 only), and Expansion Port (cartridge slot).
+//
+// Joystick port signals are a subset of the standard DB-9 control port:
+// UP, DOWN, LEFT, RIGHT, FIRE — no analog paddle lines (no SID POT inputs).
+
+static const ConnectorDefinition c16_joy_port_1_def = {
+    ConnectorType::CONTROL_PORT_DB9,
+    "Joystick Port 1",
+    ConnectorSignals::CONTROL_PORT_SIGNALS,
+    ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT
+};
+
+static const ConnectorDefinition c16_joy_port_2_def = {
+    ConnectorType::CONTROL_PORT_DB9,
+    "Joystick Port 2",
+    ConnectorSignals::CONTROL_PORT_SIGNALS,
+    ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT
+};
+
+static const ConnectorDefinition c16_iec_serial_def = {
+    ConnectorType::IEC_SERIAL,
+    "IEC Serial Bus",
+    ConnectorSignals::IEC_SERIAL_SIGNALS,
+    ConnectorSignals::IEC_SERIAL_SIGNAL_COUNT
+};
+
+static const ConnectorDefinition c16_cassette_def = {
+    ConnectorType::CASSETTE_PORT,
+    "Cassette Port",
+    ConnectorSignals::CASSETTE_PORT_SIGNALS,
+    ConnectorSignals::CASSETTE_PORT_SIGNAL_COUNT
+};
+
+static const ConnectorDefinition c16_user_port_def = {
+    ConnectorType::USER_PORT,
+    "User Port",
+    ConnectorSignals::USER_PORT_SIGNALS,
+    ConnectorSignals::USER_PORT_SIGNAL_COUNT
+};
+
+static const SignalLine c16_expansion_signals[] = {
+    { "/RESET", SignalDirection::OUTPUT, 0 },
+    { "/IRQ",   SignalDirection::INPUT,  1 },
+};
+static const ConnectorDefinition c16_expansion_def = {
+    ConnectorType::EXPANSION_PORT,
+    "Expansion Port",
+    c16_expansion_signals,
+    2
+};
+
+void C16System::setup_connector_ports() {
+    connector_ports_.clear();
+
+    // Port 0 — Joystick Port 1 (directly scanned by TED $FF08)
+    add_connector_port(c16_joy_port_1_def, 1);
+
+    // Port 1 — Joystick Port 2 (directly scanned by TED $FF08)
+    add_connector_port(c16_joy_port_2_def, 2);
+
+    // Port 2 — IEC Serial Bus (disk drive, printer)
+    add_connector_port(c16_iec_serial_def, 0);
+
+    // Port 3 — Cassette Port (datasette, mini-DIN connector)
+    add_connector_port(c16_cassette_def, 0);
+
+    // Port 4 — User Port (Plus/4 only; directly connected to 6529 port chip)
+    add_connector_port(c16_user_port_def, 0);
+
+    // Port 5 — Expansion Port (cartridge slot)
+    add_connector_port(c16_expansion_def, 0);
+
+    printf("C16: Created %zu connector ports\n", connector_ports_.size());
 }
 
 // ============================================================================

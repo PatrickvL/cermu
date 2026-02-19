@@ -1151,6 +1151,7 @@ bool NESSystem::initialize() {
     bus_->connect_ppu(ppu_);
     
     setup_audio_timing();
+    setup_connector_ports();
     initialized_ = true;
     
     return true;
@@ -1205,6 +1206,9 @@ void NESSystem::run_frame() {
     while (!ppu_->frame_complete) {
         clock();
     }
+
+    // Tick all attached peripheral devices
+    tick_peripherals();
 }
 
 bool NESSystem::load_file(const char* filepath) {
@@ -1632,6 +1636,48 @@ bool NESSystem::load_state(const std::string& filename) {
 void NESSystem::power_cycle() {
     eject_cartridge();
     reset();
+}
+
+// ============================================================================
+// CONNECTOR PORT SETUP — NES
+// ============================================================================
+// NES has: 2× front controller ports (7-pin) and 1× bottom expansion port (48-pin).
+// Controller ports use a serial shift-register protocol (LATCH + CLK + D0).
+
+static const ConnectorDefinition nes_controller_1_def = {
+    ConnectorType::CONTROLLER_NES,
+    "Controller Port 1",
+    ConnectorSignals::NES_CONTROLLER_SIGNALS,
+    ConnectorSignals::NES_CONTROLLER_SIGNAL_COUNT
+};
+
+static const ConnectorDefinition nes_controller_2_def = {
+    ConnectorType::CONTROLLER_NES,
+    "Controller Port 2",
+    ConnectorSignals::NES_CONTROLLER_SIGNALS,
+    ConnectorSignals::NES_CONTROLLER_SIGNAL_COUNT
+};
+
+static const ConnectorDefinition nes_expansion_def = {
+    ConnectorType::EXPANSION_PORT,
+    "Expansion Port",
+    ConnectorSignals::NES_EXPANSION_SIGNALS,
+    ConnectorSignals::NES_EXPANSION_SIGNAL_COUNT
+};
+
+void NESSystem::setup_connector_ports() {
+    connector_ports_.clear();
+
+    // Port 0 — Controller Port 1 (front, left)
+    add_connector_port(nes_controller_1_def, 1);
+
+    // Port 1 — Controller Port 2 (front, right)
+    add_connector_port(nes_controller_2_def, 2);
+
+    // Port 2 — Expansion Port (bottom of console)
+    add_connector_port(nes_expansion_def, 0);
+
+    printf("NES: Created %zu connector ports\n", connector_ports_.size());
 }
 
 } // namespace nes_system

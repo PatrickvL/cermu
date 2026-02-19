@@ -88,6 +88,9 @@ private:
     uint8_t cpu_read(uint32_t addr);
     void cpu_write(uint32_t addr, uint8_t data);
     
+    // Connector port setup (registers C16/Plus4 connector ports with base class)
+    void setup_connector_ports();
+    
     // Static callbacks for CPU
     static uint8_t cpu_read_callback(void* user_data, uint32_t addr, uint8_t bus_state);
     static void cpu_write_callback(void* user_data, uint32_t addr, uint8_t data);
