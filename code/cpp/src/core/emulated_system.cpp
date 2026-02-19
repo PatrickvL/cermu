@@ -723,3 +723,118 @@ float EmulatedSystem::render_connector_menu_bar_icons() {
     return 0.0f;
 #endif
 }
+
+// ============================================================================
+// AUTO-BIND HOST INPUTS — assign available controllers to peripherals
+// ============================================================================
+
+void EmulatedSystem::auto_bind_host_inputs() {
+    // Collect owned devices that accept host input
+    std::vector<PeripheralDevice*> gamepad_devices;   // devices that support SDL_GAMEPAD
+    std::vector<PeripheralDevice*> keyboard_devices;  // devices that support KEYBOARD (but not gamepad-assigned)
+    std::vector<PeripheralDevice*> mouse_devices;     // devices that support HOST_MOUSE
+
+    for (auto& dev : owned_devices_) {
+        if (!dev || !dev->accepts_host_input()) continue;
+
+        bool supports_gamepad  = false;
+        bool supports_keyboard = false;
+        bool supports_mouse    = false;
+
+        int type_count = dev->get_supported_input_type_count();
+        for (int t = 0; t < type_count; t++) {
+            HostInputType ht = dev->get_supported_input_type(t);
+            if (ht == HostInputType::SDL_GAMEPAD) supports_gamepad = true;
+            if (ht == HostInputType::KEYBOARD)    supports_keyboard = true;
+            if (ht == HostInputType::HOST_MOUSE)  supports_mouse = true;
+        }
+
+        if (supports_gamepad)       gamepad_devices.push_back(dev.get());
+        else if (supports_keyboard) keyboard_devices.push_back(dev.get());
+
+        if (supports_mouse)         mouse_devices.push_back(dev.get());
+    }
+
+    // --- Enumerate available SDL gamepads ---
+    struct GamepadInfo {
+        int             device_index;   // SDL device index
+        SDL_JoystickID  instance_id;    // SDL joystick instance ID
+        const char*     name;
+    };
+    std::vector<GamepadInfo> gamepads;
+
+    int num_joysticks = SDL_NumJoysticks();
+    for (int j = 0; j < num_joysticks; j++) {
+        if (!SDL_IsGameController(j)) continue;
+        SDL_GameController* gc = SDL_GameControllerOpen(j);
+        if (!gc) continue;
+        SDL_Joystick* js = SDL_GameControllerGetJoystick(gc);
+        if (!js) continue;
+        SDL_JoystickID jid = SDL_JoystickInstanceID(js);
+        const char* name = SDL_GameControllerNameForIndex(j);
+        if (!name) name = "Game Controller";
+        gamepads.push_back({ j, jid, name });
+    }
+
+    // --- Assign gamepads to gamepad-compatible devices (round-robin) ---
+    int gp_idx = 0;
+    for (auto* dev : gamepad_devices) {
+        if (gp_idx < static_cast<int>(gamepads.size())) {
+            // Assign a specific gamepad
+            auto& gp = gamepads[gp_idx];
+            HostInputBinding b;
+            b.type = HostInputType::SDL_GAMEPAD;
+            b.gamepad_instance_id = gp.instance_id;
+            char label[128];
+            snprintf(label, sizeof(label), "Gamepad #%d: %s", gp.device_index, gp.name);
+            b.label = label;
+            dev->set_host_input_binding(b);
+            printf("Auto-bind: %s -> %s\n", dev->get_name(), label);
+            gp_idx++;
+        } else {
+            // No more gamepads available; fall back to keyboard if supported
+            bool supports_keyboard = false;
+            int type_count = dev->get_supported_input_type_count();
+            for (int t = 0; t < type_count; t++) {
+                if (dev->get_supported_input_type(t) == HostInputType::KEYBOARD) {
+                    supports_keyboard = true;
+                    break;
+                }
+            }
+            if (supports_keyboard) {
+                HostInputBinding b;
+                b.type = HostInputType::KEYBOARD;
+                b.label = "Keyboard";
+                dev->set_host_input_binding(b);
+                printf("Auto-bind: %s -> Keyboard (no gamepad available)\n", dev->get_name());
+            }
+        }
+    }
+
+    // --- Keyboard-only devices (no gamepad support, e.g. paddles on KEYBOARD) ---
+    for (auto* dev : keyboard_devices) {
+        HostInputBinding b;
+        b.type = HostInputType::KEYBOARD;
+        b.label = "Keyboard";
+        dev->set_host_input_binding(b);
+        printf("Auto-bind: %s -> Keyboard\n", dev->get_name());
+    }
+
+    // --- Mouse devices ---
+    for (auto* dev : mouse_devices) {
+        // Only bind mouse if the device isn't already bound to a gamepad
+        const auto& current = dev->get_host_input_binding();
+        if (current.type == HostInputType::SDL_GAMEPAD) continue;
+
+        HostInputBinding b;
+        b.type = HostInputType::HOST_MOUSE;
+        b.label = "Host Mouse";
+        dev->set_host_input_binding(b);
+        printf("Auto-bind: %s -> Host Mouse\n", dev->get_name());
+    }
+
+    if (gamepads.empty() && gamepad_devices.empty() && mouse_devices.empty()
+        && keyboard_devices.empty()) {
+        printf("Auto-bind: no input-accepting devices on this system\n");
+    }
+}

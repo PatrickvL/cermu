@@ -318,6 +318,13 @@ public:
 
     /// Render host input binding selector for a device (called from connector UI).
     void render_host_input_binding_ui(PeripheralDevice* device);
+
+    /// Automatically bind available host input devices to attached peripherals.
+    /// Assigns SDL gamepads to gamepad-compatible devices (round-robin), falls
+    /// back to keyboard for remaining joystick devices, and binds host mouse to
+    /// mouse-accepting devices.  Call after initialize() to make a newly created
+    /// system immediately playable with whatever controllers are connected.
+    void auto_bind_host_inputs();
     
     // Default implementations (can be overridden if needed)
     virtual void set_framebuffer(uint32_t* buffer, int width, int height);

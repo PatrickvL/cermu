@@ -773,7 +773,10 @@ void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, 
         system_.reset();
         return;
     }
-    
+
+    // Auto-bind available host input devices (gamepads, mouse) to peripherals
+    system_->auto_bind_host_inputs();
+
     // Allocate framebuffer for new system
     allocate_framebuffer();
 
