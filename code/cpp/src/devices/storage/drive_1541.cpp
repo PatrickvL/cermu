@@ -28,6 +28,8 @@
 #include <cstring>
 #include <algorithm>
 #include <cctype>
+#include <regex>
+#include <dirent.h>
 
 #ifdef IMGUI_VERSION
 #include "imgui.h"
@@ -258,6 +260,220 @@ void Drive1541Device::process_command(uint8_t command) {
 }
 
 // ============================================================================
+// DISC SET DETECTION
+// ============================================================================
+//
+// When a D64 is inserted, scan the same directory for sibling disc images that
+// belong to the same multi-disc set and pre-populate the fliplist.
+//
+// Recognized naming conventions (case-insensitive):
+//
+//   Parenthetical:
+//     Game (Disk 1).d64          Game (Disc 2).d64
+//     Game (Disk 1 of 3).d64    Game (Disc 2 of 3).d64
+//     Game (Side A).d64          Game (Side B).d64
+//     Game (Side 1).d64          Game (Side 2).d64
+//     Game (Part 1).d64          Game (Part 2).d64
+//     Game (Part 1 of 3).d64
+//
+//   Bracketed (TOSEC/GoodTools style):
+//     Game [Disk 1].d64          Game [Disc 2 of 4].d64
+//     Game [Side A].d64          Game [Part 1].d64
+//
+//   Suffix separators:
+//     Game_1.d64   Game_2.d64     (underscore)
+//     Game-1.d64   Game-2.d64     (dash)
+//     Game 1.d64   Game 2.d64     (space)
+//     Game_a.d64   Game_b.d64     (letter a-d)
+//     Game-a.d64   Game-b.d64
+//
+
+/// Split a filepath into directory and filename.
+static void split_path(const std::string& filepath, std::string& dir, std::string& fname) {
+    auto pos = filepath.find_last_of("/\\");
+    if (pos != std::string::npos) {
+        dir   = filepath.substr(0, pos);
+        fname = filepath.substr(pos + 1);
+    } else {
+        dir   = ".";
+        fname = filepath;
+    }
+}
+
+/// Case-insensitive string equality.
+static bool iequals(const std::string& a, const std::string& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); i++) {
+        if (std::tolower(static_cast<unsigned char>(a[i])) !=
+            std::tolower(static_cast<unsigned char>(b[i])))
+            return false;
+    }
+    return true;
+}
+
+/// Sort key for disc ordering.  Returns a comparable value that puts
+/// disc 1 < disc 2 < ... < disc 10, and side A < side B.
+struct DiscSortKey {
+    std::string base;      // Lowercase base name (for grouping)
+    int         numeric;   // Numeric disc number (1, 2, ...) or letter ordinal
+    std::string original;  // Original full path
+
+    bool operator<(const DiscSortKey& o) const {
+        if (base != o.base) return base < o.base;
+        return numeric < o.numeric;
+    }
+};
+
+/// Try to extract a disc set base name and disc index from a filename.
+/// Returns true if a known pattern matched, filling `base_out` (lowercase)
+/// and `index_out` (1-based).
+static bool extract_disc_set_info(const std::string& filename,
+                                   std::string& base_out, int& index_out) {
+    // Work with the part before the extension
+    auto dot = filename.find_last_of('.');
+    std::string stem = (dot != std::string::npos) ? filename.substr(0, dot) : filename;
+    std::string ext  = (dot != std::string::npos) ? filename.substr(dot) : "";
+
+    // Lowercase stem for matching
+    std::string stem_lower = stem;
+    for (auto& c : stem_lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+    // --- Pattern group 1: Parenthetical / Bracketed ---
+    // Matches: (Disk 2), (Disc 1 of 3), (Side A), (Side 2), (Part 1), [Disk 2], etc.
+    // Captures:  $1=prefix  $2=open-bracket  $3=keyword  $4=number/letter  $5=suffix
+    static const std::regex rx_paren(
+        R"(^(.+?)\s*[\(\[]\s*(disk|disc|side|part)\s+(\d+|[a-d])(?:\s+of\s+\d+)?\s*[\)\]](.*)$)",
+        std::regex::icase | std::regex::optimize);
+
+    std::smatch m;
+    if (std::regex_match(stem, m, rx_paren)) {
+        std::string prefix  = m[1].str();
+        std::string keyword = m[2].str();
+        std::string idx_str = m[3].str();
+        std::string suffix  = m[4].str();
+
+        // Build base: prefix + keyword (lowercase) + suffix
+        std::string kw_lower = keyword;
+        for (auto& c : kw_lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+        base_out = prefix + " " + kw_lower;
+        if (!suffix.empty()) base_out += suffix;
+        for (auto& c : base_out) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+        // Parse index
+        if (std::isdigit(static_cast<unsigned char>(idx_str[0]))) {
+            index_out = std::stoi(idx_str);
+        } else {
+            index_out = std::tolower(static_cast<unsigned char>(idx_str[0])) - 'a' + 1;
+        }
+        return true;
+    }
+
+    // --- Pattern group 2: Trailing separator + number/letter ---
+    // Matches: Game_1, Game-2, Game 3, Game_a, Game-b
+    // The separator must be _, -, or space.  For numbers: 1+ digits.
+    // For letters: single a-d (to avoid false positives on random suffixes).
+    static const std::regex rx_suffix(
+        R"(^(.+?)[_\- ](\d+|[a-dA-D])$)",
+        std::regex::optimize);
+
+    if (std::regex_match(stem, m, rx_suffix)) {
+        std::string prefix  = m[1].str();
+        std::string idx_str = m[2].str();
+
+        base_out = prefix;
+        for (auto& c : base_out) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+        if (std::isdigit(static_cast<unsigned char>(idx_str[0]))) {
+            index_out = std::stoi(idx_str);
+        } else {
+            index_out = std::tolower(static_cast<unsigned char>(idx_str[0])) - 'a' + 1;
+        }
+        return true;
+    }
+
+    return false;
+}
+
+/// Scan a directory for sibling disc images belonging to the same set.
+/// Returns a sorted list of full paths (disc 1, 2, 3, ...).
+/// If no siblings are found (single disc), returns an empty vector.
+static std::vector<std::string> detect_disc_set(const std::string& filepath) {
+    std::string dir, fname;
+    split_path(filepath, dir, fname);
+
+    // Check if the inserted file itself matches a disc set pattern
+    std::string my_base;
+    int my_index;
+    if (!extract_disc_set_info(fname, my_base, my_index)) {
+        return {};  // Doesn't look like part of a set
+    }
+
+    // Get the extension of the inserted file (to only match same type)
+    auto dot = fname.find_last_of('.');
+    std::string my_ext = (dot != std::string::npos) ? fname.substr(dot) : "";
+    std::string my_ext_lower = my_ext;
+    for (auto& c : my_ext_lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+    // Scan directory for siblings
+    std::vector<DiscSortKey> candidates;
+
+    DIR* d = opendir(dir.c_str());
+    if (!d) return {};
+
+    struct dirent* entry;
+    while ((entry = readdir(d)) != nullptr) {
+        std::string name(entry->d_name);
+
+        // Skip hidden files and non-regular entries
+        if (name.empty() || name[0] == '.') continue;
+
+        // Must have matching extension
+        auto edot = name.find_last_of('.');
+        std::string entry_ext = (edot != std::string::npos) ? name.substr(edot) : "";
+        if (!iequals(entry_ext, my_ext_lower)) continue;
+
+        // Must match a disc set pattern
+        std::string entry_base;
+        int entry_index;
+        if (!extract_disc_set_info(name, entry_base, entry_index)) continue;
+
+        // Must belong to the same set (same base name)
+        if (entry_base != my_base) continue;
+
+        DiscSortKey key;
+        key.base     = entry_base;
+        key.numeric  = entry_index;
+        key.original = dir + "/" + name;
+        candidates.push_back(std::move(key));
+    }
+    closedir(d);
+
+    // Need at least 2 files to constitute a "set"
+    if (candidates.size() < 2) return {};
+
+    // Sort by disc index
+    std::sort(candidates.begin(), candidates.end());
+
+    // Remove duplicates (shouldn't happen but be safe)
+    candidates.erase(
+        std::unique(candidates.begin(), candidates.end(),
+                    [](const DiscSortKey& a, const DiscSortKey& b) {
+                        return a.original == b.original;
+                    }),
+        candidates.end()
+    );
+
+    std::vector<std::string> result;
+    result.reserve(candidates.size());
+    for (auto& c : candidates) {
+        result.push_back(std::move(c.original));
+    }
+
+    return result;
+}
+
+// ============================================================================
 // DISK IMAGE MANAGEMENT
 // ============================================================================
 
@@ -293,8 +509,33 @@ bool Drive1541Device::insert_disk(const char* filepath) {
     disk_inserted_ = true;
     set_error(0, "OK");
 
-    // Auto-add to fliplist (convenient for multi-disc games)
-    fliplist_add(filepath);
+    // Auto-detect disc set siblings and pre-populate fliplist
+    if (fliplist_.empty()) {
+        auto disc_set = detect_disc_set(filepath);
+        if (!disc_set.empty()) {
+            printf("1541: Detected disc set (%zu discs):\n",
+                   disc_set.size());
+            for (size_t i = 0; i < disc_set.size(); i++) {
+                const char* p = disc_set[i].c_str();
+                const char* s = strrchr(p, '/');
+                printf("  %zu: %s%s\n", i + 1, s ? s + 1 : p,
+                       (disc_set[i] == std::string(filepath)) ? " [current]" : "");
+                fliplist_add(disc_set[i].c_str());
+            }
+            // Set fliplist index to the current disc
+            for (int i = 0; i < static_cast<int>(fliplist_.size()); i++) {
+                if (fliplist_[i] == filepath) {
+                    fliplist_index_ = i;
+                    break;
+                }
+            }
+        } else {
+            fliplist_add(filepath);
+        }
+    } else {
+        // Fliplist already populated — just add this entry
+        fliplist_add(filepath);
+    }
 
     printf("1541: Disk inserted: '%s' (%ld bytes)\n", filepath, size);
     return true;
