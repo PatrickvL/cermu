@@ -3,6 +3,7 @@
  */
 
 #include "connector.h"
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -136,27 +137,27 @@ ConnectorPort::ConnectorPort(const ConnectorDefinition& def, int port_index)
     : definition_(def)
     , port_index_(port_index)
     , system_signals_(0xFFFFFFFF)   // All lines idle (high)
-    , device_signals_(0xFFFFFFFF)   // No device: all high
-    , attached_device_(nullptr)
+    , combined_device_signals_(0xFFFFFFFF)   // No devices: all high
 {
 }
 
 ConnectorPort::~ConnectorPort() {
-    detach_device();
+    detach_device(nullptr);  // Detach all
 }
 
 uint32_t ConnectorPort::read_signals() const {
-    // Wired-AND: both sides contribute.
-    // A line is LOW (asserted) if EITHER side pulls it low.
-    return system_signals_ & device_signals_;
+    // Wired-AND: system output AND combined device outputs.
+    // A line is LOW (asserted) if ANY participant pulls it low.
+    return system_signals_ & combined_device_signals_;
 }
 
 void ConnectorPort::write_system_signals(uint32_t mask, uint32_t value) {
     system_signals_ = (system_signals_ & ~mask) | (value & mask);
 
-    // Notify the attached device of the new combined state
-    if (attached_device_) {
-        attached_device_->on_signal_change(read_signals());
+    // Notify all attached devices of the new combined state
+    uint32_t combined = read_signals();
+    for (auto* device : attached_devices_) {
+        device->on_signal_change(combined);
     }
 }
 
@@ -173,39 +174,73 @@ bool ConnectorPort::attach_device(PeripheralDevice* device) {
         return false;
     }
 
-    // Detach existing device first
-    if (attached_device_) {
-        detach_device();
+    // For point-to-point ports: detach existing device first
+    if (!definition_.is_bus && !attached_devices_.empty()) {
+        detach_device(nullptr);
     }
 
-    attached_device_ = device;
-    device_signals_  = device->get_output_signals();
+    // Check for duplicate attachment
+    for (auto* d : attached_devices_) {
+        if (d == device) {
+            printf("Connector: '%s' already attached to %s (port %d)\n",
+                   device->get_name(), definition_.name, port_index_);
+            return false;
+        }
+    }
+
+    attached_devices_.push_back(device);
+    recompute_device_signals();
     device->on_attach(this);
 
-    printf("Connector: '%s' attached to %s (port %d)\n",
-           device->get_name(), definition_.name, port_index_);
+    printf("Connector: '%s' attached to %s (port %d)%s\n",
+           device->get_name(), definition_.name, port_index_,
+           definition_.is_bus ? " [bus]" : "");
     return true;
 }
 
-void ConnectorPort::detach_device() {
-    if (attached_device_) {
-        printf("Connector: '%s' detached from %s (port %d)\n",
-               attached_device_->get_name(), definition_.name, port_index_);
-        attached_device_->on_detach();
-        attached_device_ = nullptr;
-        device_signals_  = 0xFFFFFFFF;  // All lines released
+void ConnectorPort::detach_device(PeripheralDevice* device) {
+    if (attached_devices_.empty()) return;
 
-        // Notify system that signals changed (device removed)
-        if (on_device_output_changed_) {
-            on_device_output_changed_(this, read_signals());
+    if (device == nullptr) {
+        // Detach ALL devices
+        for (auto* d : attached_devices_) {
+            printf("Connector: '%s' detached from %s (port %d)\n",
+                   d->get_name(), definition_.name, port_index_);
+            d->on_detach();
         }
+        attached_devices_.clear();
+    } else {
+        // Detach a specific device
+        auto it = std::find(attached_devices_.begin(), attached_devices_.end(), device);
+        if (it == attached_devices_.end()) return;
+
+        printf("Connector: '%s' detached from %s (port %d)\n",
+               device->get_name(), definition_.name, port_index_);
+        device->on_detach();
+        attached_devices_.erase(it);
+    }
+
+    recompute_device_signals();
+
+    // Notify system that signals changed (device(s) removed)
+    if (on_device_output_changed_) {
+        on_device_output_changed_(this, read_signals());
     }
 }
 
-void ConnectorPort::notify_device_output_changed(uint32_t device_signals) {
-    device_signals_ = device_signals;
+void ConnectorPort::notify_device_output_changed(uint32_t /*device_signals*/) {
+    // A device changed its output — recompute the AND of all device outputs
+    recompute_device_signals();
 
     if (on_device_output_changed_) {
         on_device_output_changed_(this, read_signals());
     }
+}
+
+void ConnectorPort::recompute_device_signals() {
+    uint32_t combined = 0xFFFFFFFF;
+    for (auto* d : attached_devices_) {
+        combined &= d->get_output_signals();
+    }
+    combined_device_signals_ = combined;
 }

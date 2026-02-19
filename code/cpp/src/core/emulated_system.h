@@ -290,10 +290,16 @@ public:
     }
 
     /// Attach a device to a connector port (creates from DeviceRegistry).
+    /// On bus ports, multiple devices can be attached simultaneously.
     bool attach_device_to_port(int port_index, const char* device_id);
 
-    /// Detach whatever device is on a connector port.
+    /// Detach whatever device is on a connector port (point-to-point ports).
+    /// For bus ports, detaches ALL devices.  Use the overload with device ptr
+    /// to detach a specific device from a bus.
     void detach_device_from_port(int port_index);
+
+    /// Detach a specific device from a bus port.
+    void detach_device_from_port(int port_index, PeripheralDevice* device);
 
     /// Route an SDL event to all owned devices that accept host input.
     /// Returns true if any device consumed the event.

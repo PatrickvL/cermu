@@ -638,7 +638,7 @@ static const ConnectorDefinition apple1_expansion_def = {
     "Expansion Connector",
     ConnectorSignals::APPLE1_EXPANSION_SIGNALS,
     ConnectorSignals::APPLE1_EXPANSION_SIGNAL_COUNT,
-    false
+    false, false
 };
 
 static const ConnectorDefinition apple1_cassette_def = {
@@ -646,7 +646,7 @@ static const ConnectorDefinition apple1_cassette_def = {
     "Cassette Interface (ACI)",
     ConnectorSignals::APPLE1_CASSETTE_SIGNALS,
     ConnectorSignals::APPLE1_CASSETTE_SIGNAL_COUNT,
-    false
+    false, false
 };
 
 void Apple1System::setup_connector_ports() {

@@ -1103,7 +1103,7 @@ static const ConnectorDefinition vic20_control_port_def = {
     "Control Port",
     ConnectorSignals::CONTROL_PORT_SIGNALS,
     ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT,
-    false
+    false, false
 };
 
 static const ConnectorDefinition vic20_iec_serial_def = {
@@ -1111,7 +1111,8 @@ static const ConnectorDefinition vic20_iec_serial_def = {
     "IEC Serial Bus",
     ConnectorSignals::IEC_SERIAL_SIGNALS,
     ConnectorSignals::IEC_SERIAL_SIGNAL_COUNT,
-    false
+    false,  // is_internal
+    true    // is_bus — shared bus, multiple drives/printers
 };
 
 static const ConnectorDefinition vic20_cassette_def = {
@@ -1119,7 +1120,7 @@ static const ConnectorDefinition vic20_cassette_def = {
     "Cassette Port",
     ConnectorSignals::CASSETTE_PORT_SIGNALS,
     ConnectorSignals::CASSETTE_PORT_SIGNAL_COUNT,
-    false
+    false, false
 };
 
 static const ConnectorDefinition vic20_user_port_def = {
@@ -1127,7 +1128,7 @@ static const ConnectorDefinition vic20_user_port_def = {
     "User Port",
     ConnectorSignals::USER_PORT_SIGNALS,
     ConnectorSignals::USER_PORT_SIGNAL_COUNT,
-    false
+    false, false
 };
 
 static const SignalLine vic20_expansion_signals[] = {
@@ -1138,7 +1139,7 @@ static const ConnectorDefinition vic20_expansion_def = {
     "Expansion Port",
     vic20_expansion_signals,
     1,
-    false
+    false, false
 };
 
 void VIC20System::setup_connector_ports() {
@@ -1161,7 +1162,7 @@ void VIC20System::setup_connector_ports() {
 
     // Port 5 — Internal Keyboard (always attached)
     static const ConnectorDefinition vic20_keyboard_def = {
-        ConnectorType::CUSTOM, "Keyboard", nullptr, 0, true
+        ConnectorType::CUSTOM, "Keyboard", nullptr, 0, true, false
     };
     int kb_port = add_connector_port(vic20_keyboard_def, 0);
 

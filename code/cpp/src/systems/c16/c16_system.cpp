@@ -615,7 +615,7 @@ static const ConnectorDefinition c16_joy_port_1_def = {
     "Joystick Port 1",
     ConnectorSignals::CONTROL_PORT_SIGNALS,
     ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT,
-    false
+    false, false
 };
 
 static const ConnectorDefinition c16_joy_port_2_def = {
@@ -623,7 +623,7 @@ static const ConnectorDefinition c16_joy_port_2_def = {
     "Joystick Port 2",
     ConnectorSignals::CONTROL_PORT_SIGNALS,
     ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT,
-    false
+    false, false
 };
 
 static const ConnectorDefinition c16_iec_serial_def = {
@@ -631,7 +631,8 @@ static const ConnectorDefinition c16_iec_serial_def = {
     "IEC Serial Bus",
     ConnectorSignals::IEC_SERIAL_SIGNALS,
     ConnectorSignals::IEC_SERIAL_SIGNAL_COUNT,
-    false
+    false,  // is_internal
+    true    // is_bus — shared bus, multiple drives/printers
 };
 
 static const ConnectorDefinition c16_cassette_def = {
@@ -639,7 +640,7 @@ static const ConnectorDefinition c16_cassette_def = {
     "Cassette Port",
     ConnectorSignals::CASSETTE_PORT_SIGNALS,
     ConnectorSignals::CASSETTE_PORT_SIGNAL_COUNT,
-    false
+    false, false
 };
 
 static const ConnectorDefinition c16_user_port_def = {
@@ -647,7 +648,7 @@ static const ConnectorDefinition c16_user_port_def = {
     "User Port",
     ConnectorSignals::USER_PORT_SIGNALS,
     ConnectorSignals::USER_PORT_SIGNAL_COUNT,
-    false
+    false, false
 };
 
 static const SignalLine c16_expansion_signals[] = {
@@ -659,7 +660,7 @@ static const ConnectorDefinition c16_expansion_def = {
     "Expansion Port",
     c16_expansion_signals,
     2,
-    false
+    false, false
 };
 
 void C16System::setup_connector_ports() {
@@ -685,7 +686,7 @@ void C16System::setup_connector_ports() {
 
     // Port 6 — Internal Keyboard (always attached)
     static const ConnectorDefinition c16_keyboard_def = {
-        ConnectorType::CUSTOM, "Keyboard", nullptr, 0, true
+        ConnectorType::CUSTOM, "Keyboard", nullptr, 0, true, false
     };
     int kb_port = add_connector_port(c16_keyboard_def, 0);
 

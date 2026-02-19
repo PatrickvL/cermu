@@ -560,11 +560,14 @@ void C64SystemWrapper::apply_pending_load() {
     if (pending_load_.mode == LoadMode::DISK_FAST) {
         printf("C64: BASIC READY — DISK_FAST load\n");
 
-        // Find the 1541 drive on the IEC serial port
+        // Find a 1541 drive on the IEC serial bus
         auto* iec_port = get_connector_port(PORT_IEC_SERIAL);
         Drive1541Device* drive = nullptr;
         if (iec_port) {
-            drive = dynamic_cast<Drive1541Device*>(iec_port->get_attached_device());
+            for (auto* dev : iec_port->get_attached_devices()) {
+                drive = dynamic_cast<Drive1541Device*>(dev);
+                if (drive) break;  // Use the first available 1541
+            }
         }
 
         if (drive) {
@@ -1109,7 +1112,7 @@ static const ConnectorDefinition c64_control_port_1_def = {
     "Control Port 1",
     ConnectorSignals::CONTROL_PORT_SIGNALS,
     ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT,
-    false
+    false, false
 };
 
 static const ConnectorDefinition c64_control_port_2_def = {
@@ -1117,7 +1120,7 @@ static const ConnectorDefinition c64_control_port_2_def = {
     "Control Port 2",
     ConnectorSignals::CONTROL_PORT_SIGNALS,
     ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT,
-    false
+    false, false
 };
 
 static const ConnectorDefinition c64_iec_serial_def = {
@@ -1125,7 +1128,8 @@ static const ConnectorDefinition c64_iec_serial_def = {
     "IEC Serial Bus",
     ConnectorSignals::IEC_SERIAL_SIGNALS,
     ConnectorSignals::IEC_SERIAL_SIGNAL_COUNT,
-    false
+    false,  // is_internal
+    true    // is_bus — shared bus, multiple drives/printers
 };
 
 static const ConnectorDefinition c64_cassette_def = {
@@ -1133,7 +1137,7 @@ static const ConnectorDefinition c64_cassette_def = {
     "Cassette Port",
     ConnectorSignals::CASSETTE_PORT_SIGNALS,
     ConnectorSignals::CASSETTE_PORT_SIGNAL_COUNT,
-    false
+    false, false
 };
 
 static const ConnectorDefinition c64_user_port_def = {
@@ -1141,7 +1145,7 @@ static const ConnectorDefinition c64_user_port_def = {
     "User Port",
     ConnectorSignals::USER_PORT_SIGNALS,
     ConnectorSignals::USER_PORT_SIGNAL_COUNT,
-    false
+    false, false
 };
 
 // Expansion port definition (minimal — cartridge insertion is handled separately)
@@ -1155,7 +1159,7 @@ static const ConnectorDefinition c64_expansion_def = {
     "Expansion Port",
     expansion_signals,
     3,
-    false
+    false, false
 };
 
 // ============================================================================
@@ -1270,7 +1274,7 @@ void C64SystemWrapper::setup_connector_ports() {
 
     // PORT_KEYBOARD = 6 — Internal Keyboard (always attached)
     static const ConnectorDefinition c64_keyboard_def = {
-        ConnectorType::CUSTOM, "Keyboard", nullptr, 0, true  // is_internal
+        ConnectorType::CUSTOM, "Keyboard", nullptr, 0, true, false  // is_internal, not bus
     };
     int kb_port = add_connector_port(c64_keyboard_def, 0);
 
