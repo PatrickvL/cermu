@@ -13,11 +13,16 @@ chip_descriptor_t mos6561_descriptor = {
     .bank_change = NULL
 };
 
-// VIC-6561 chip configuration
+// MOS6561 chip configuration — PAL variant
+// The MOS 6561 is the PAL version of the VIC-I chip used in PAL VIC-20s.
+// PAL crystal: 4.433619 MHz / 4 = 1,108,405 Hz system clock
+// 63 cycles per line, 312 total lines per frame → ~50 Hz refresh
+// NOTE: VICE uses 71 cycles/line for PAL; 63 here matches the existing
+// working VIC rendering code and should be reviewed separately.
 static const vic_chip_config_t vic_config_pal = {
     .cycles_per_line = VIC_PAL_CYCLES_PER_LINE,
     .total_lines = VIC_PAL_TOTAL_LINES,
-    .clock_frequency = 886723,
+    .clock_frequency = 1108405,
     .chip_name = "MOS6561 PAL",
     .is_pal = true
 };
@@ -28,7 +33,7 @@ void* mos6561_create(chip_descriptor_t* desc) {
 
     vic->base.desc = desc;
     vic->base.is_pal = true;
-    vic->base.clock_frequency = 886723; // PAL clock frequency
+    vic->base.clock_frequency = vic_config_pal.clock_frequency;
     vic->base.config = &vic_config_pal;
 
     // Initialize registers

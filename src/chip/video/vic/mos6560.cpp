@@ -13,13 +13,16 @@ chip_descriptor_t mos6560_descriptor = {
     .bank_change = NULL
 };
 
-// VIC-6560 chip configuration
-static const vic_chip_config_t vic_config_pal = {
-    .cycles_per_line = VIC_PAL_CYCLES_PER_LINE,
-    .total_lines = VIC_PAL_TOTAL_LINES,
-    .clock_frequency = 886723,
-    .chip_name = "MOS6560 PAL",
-    .is_pal = true
+// VIC-6560 chip configuration — NTSC variant
+// The MOS 6560 is the NTSC version of the VIC-I chip used in NTSC VIC-20s.
+// NTSC crystal: 14.31818 MHz / 14 = 1,022,727 Hz system clock
+// 65 cycles per line, 262 total lines per frame → ~60 Hz refresh
+static const vic_chip_config_t vic_config_ntsc = {
+    .cycles_per_line = VIC_NTSC_CYCLES_PER_LINE,
+    .total_lines = VIC_NTSC_TOTAL_LINES,
+    .clock_frequency = 1022727,
+    .chip_name = "MOS6560 NTSC",
+    .is_pal = false
 };
 
 void* mos6560_create(chip_descriptor_t* desc) {
@@ -27,23 +30,23 @@ void* mos6560_create(chip_descriptor_t* desc) {
     if (!vic) return NULL;
 
     vic->base.desc = desc;
-    vic->base.is_pal = true;
-    vic->base.clock_frequency = 886723; // PAL clock frequency
-    vic->base.config = &vic_config_pal;
+    vic->base.is_pal = false;
+    vic->base.clock_frequency = vic_config_ntsc.clock_frequency;
+    vic->base.config = &vic_config_ntsc;
 
     // Initialize registers
     memset(vic->base.registers, 0, sizeof(vic->base.registers));
     memset(vic->base.color_ram, 0, sizeof(vic->base.color_ram));
 
-    // Default timing for PAL
-    vic->base.cycles_per_line = VIC_PAL_CYCLES_PER_LINE;
-    vic->base.total_lines = VIC_PAL_TOTAL_LINES;
+    // Default timing for NTSC
+    vic->base.cycles_per_line = VIC_NTSC_CYCLES_PER_LINE;
+    vic->base.total_lines = VIC_NTSC_TOTAL_LINES;
 
     // Reset video generation state
     vic_system_reset(&vic->base);
 
-    // Initialise audio with PAL clock and default sample rate
-    vic_audio_reset(&vic->base, vic_config_pal.clock_frequency, 22050);
+    // Initialise audio with NTSC clock and default sample rate
+    vic_audio_reset(&vic->base, vic_config_ntsc.clock_frequency, 22050);
 
     return vic;
 }

@@ -11,6 +11,7 @@
 #include "../../chip/input/keyboard_mapper.h"
 #include "../../chip/video/vic/mos6560.h"
 #include "../../chip/video/vic/mos6561.h"
+#include "../../chip/video/vic/vic_common.h"
 #include "vic20_bus.h"
 #include "vic20_config.h"
 #include "vic20_memory.h"
@@ -112,7 +113,7 @@ private:
     
     // Chip instances (properly typed)
     mos6502_t* cpu_;                 // MOS6502 CPU instance
-    mos6560_t* vic_;                 // VIC 6560 (PAL) or 6561 (NTSC) video & sound chip
+    vic_base_t* vic_;                // VIC chip: MOS6561 (PAL) or MOS6560 (NTSC)
     mos6522_t* via1_;                // MOS6522 VIA 1 - keyboard, joystick
     mos6522_t* via2_;                // MOS6522 VIA 2 - user port, serial
     commodore_keyboard_t* keyboard_; // Keyboard matrix (shared with C64)

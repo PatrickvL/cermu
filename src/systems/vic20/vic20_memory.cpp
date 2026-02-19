@@ -2,8 +2,7 @@
 #include "vic20_chips.h"
 #include "../../core/cermu.h"
 #include "../../chip/io/mos6522.h"
-#include "../../chip/video/vic/mos6560.h"
-#include "../../chip/video/vic/mos6561.h"
+#include "../../chip/video/vic/vic_common.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -250,7 +249,7 @@ static bus_state_t vic20_io_vic_via_read(void* ctx, bus_state_t bus_state) {
     if (offset < 0x10) {
         // VIC registers
         if (mem->vic_chip) {
-            uint8_t data = mos6560_read_register((mos6560_t*)mem->vic_chip, offset & 0x0F);
+            uint8_t data = vic_read_register((vic_base_t*)mem->vic_chip, offset & 0x0F);
             BUS_SET_DATA(bus_state, data);
         }
     } else if (offset < 0x20) {
@@ -272,7 +271,7 @@ static bus_state_t vic20_io_vic_via_read(void* ctx, bus_state_t bus_state) {
     } else {
         // $9x30-$9x3F: VIC mirrors
         if (mem->vic_chip) {
-            uint8_t data = mos6560_read_register((mos6560_t*)mem->vic_chip, offset & 0x0F);
+            uint8_t data = vic_read_register((vic_base_t*)mem->vic_chip, offset & 0x0F);
             BUS_SET_DATA(bus_state, data);
         }
     }
@@ -289,7 +288,7 @@ static bus_state_t vic20_io_vic_via_write(void* ctx, bus_state_t bus_state) {
     if (offset < 0x10) {
         // VIC registers
         if (mem->vic_chip) {
-            mos6560_write_register((mos6560_t*)mem->vic_chip, offset & 0x0F, data);
+            vic_write_register((vic_base_t*)mem->vic_chip, offset & 0x0F, data);
         }
     } else if (offset < 0x20) {
         // VIA1 registers
@@ -310,7 +309,7 @@ static bus_state_t vic20_io_vic_via_write(void* ctx, bus_state_t bus_state) {
     } else {
         // $9x30-$9x3F: VIC mirrors
         if (mem->vic_chip) {
-            mos6560_write_register((mos6560_t*)mem->vic_chip, offset & 0x0F, data);
+            vic_write_register((vic_base_t*)mem->vic_chip, offset & 0x0F, data);
         }
     }
     
