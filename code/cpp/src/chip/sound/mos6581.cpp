@@ -1,5 +1,5 @@
 #include "mos6581.h"
-#include "../../core/aiemuc.h"
+#include "../../core/cermu.h"
 #include <string.h>
 #include <stdlib.h>
 #include <math.h> // for tanhf

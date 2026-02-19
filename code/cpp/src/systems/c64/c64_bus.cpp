@@ -3,7 +3,7 @@
 #include "../../chip/io/mos6526.h"
 //#include "../../chip/cpu/fam65xx/mos6510.h"
 #include "../../chip/logic/pla.h"
-#include "../../core/aiemuc.h"
+#include "../../core/cermu.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -198,7 +198,7 @@ void c64_write_memory(c64_bus_t* bus, uint16_t addr, uint8_t value) {
 void c64_bus_system_destroy(void* chip) {
     c64_bus_t* c64_bus = (c64_bus_t*)chip;
     if (c64_bus && c64_bus->allocated_buffer) {
-        aiemuc_aligned_free(c64_bus->allocated_buffer);
+        cermu_aligned_free(c64_bus->allocated_buffer);
     }
     free(chip);
 }
@@ -665,7 +665,7 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
     
     // Clean up any existing allocation (shouldn't happen, but be safe)
     if (c64_bus->allocated_buffer) {
-        aiemuc_aligned_free(c64_bus->allocated_buffer);
+        cermu_aligned_free(c64_bus->allocated_buffer);
         c64_bus->allocated_buffer = NULL;
     }
     
@@ -692,7 +692,7 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
     }
     
     // Allocate aligned memory for optimal cache performance
-    c64_bus->allocated_buffer = (uint8_t*)aiemuc_aligned_alloc(64, required_size);
+    c64_bus->allocated_buffer = (uint8_t*)cermu_aligned_alloc(64, required_size);
     
     if (!c64_bus->allocated_buffer) {
         printf("c64_bus: ERROR - Failed to allocate unified memory buffer (%zu KB)\n", required_size / 1024);

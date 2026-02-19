@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "../../core/system_lines.h"
-#include "../../core/aiemuc.h"  // For REGISTER_CALL macro
+#include "../../core/cermu.h"  // For REGISTER_CALL macro
 #include "../../core/chip.h"
 #include "vic20_chips.h"
 

@@ -1,6 +1,6 @@
 #include "vic20_memory.h"
 #include "vic20_chips.h"
-#include "../../core/aiemuc.h"
+#include "../../core/cermu.h"
 #include "../../chip/io/mos6522.h"
 #include "../../chip/video/vic/mos6560.h"
 #include "../../chip/video/vic/mos6561.h"
@@ -157,7 +157,7 @@ static void vic20_memory_chip_destroy(void* chip) {
     if (!mem) return;
     
     if (mem->buffer) {
-        aiemuc_aligned_free(mem->buffer);
+        cermu_aligned_free(mem->buffer);
         mem->buffer = NULL;
     }
     
@@ -185,7 +185,7 @@ vic20_memory_t* vic20_memory_create(uint8_t expansion_flags, bool cartridge_pres
     
     // Allocate 64KB unified buffer (aligned for cache efficiency)
     mem->buffer_size = 65536;
-    mem->buffer = (uint8_t*)aiemuc_aligned_alloc(64, mem->buffer_size);
+    mem->buffer = (uint8_t*)cermu_aligned_alloc(64, mem->buffer_size);
     if (!mem->buffer) {
         printf("VIC20 Memory: Failed to allocate 64KB unified buffer\n");
         free(mem);

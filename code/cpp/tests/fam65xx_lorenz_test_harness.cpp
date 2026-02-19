@@ -7,8 +7,8 @@
 #include <filesystem>
 #include <chrono>
 
-#ifndef AIEMUC_IMPL
-    #define AIEMUC_IMPL
+#ifndef CERMU_IMPL
+    #define CERMU_IMPL
 #endif
 
 // Include processor-specific headers

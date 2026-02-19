@@ -11,7 +11,7 @@
 #include <type_traits>
 
 // Include system-wide bus definitions
-#include "../../../core/aiemuc.h"
+#include "../../../core/cermu.h"
 #include "../../../core/chip.h"
 #include "../../../core/system_lines.h"
 
