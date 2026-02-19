@@ -84,6 +84,9 @@ private:
     // Helper methods
     void tick_cpu();
     
+    // Connector port setup (registers Apple 1 connector ports with base class)
+    void setup_connector_ports();
+    
     // ROM loading
     bool load_roms();
     

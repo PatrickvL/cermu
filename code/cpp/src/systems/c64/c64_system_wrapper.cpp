@@ -986,24 +986,12 @@ SystemConfiguration C64SystemWrapper::detect_optimal_configuration(
 
 void C64SystemWrapper::render_configuration_ui() {
 #ifdef IMGUI_VERSION
-    if (!c64_ || !c64_->sid) return;
+    // SID revision is a creation-time setting — selectable only in the
+    // system selection dialog via custom_options / custom_settings.
+    // It cannot be changed at runtime because the SID filter model and
+    // internal state are tightly coupled to the chosen revision.
 
-    // SID revision selector
-    const char* sid_labels[] = { "MOS 6581", "MOS 8580" };
-    int current = (c64_->sid->revision == SID_REVISION_8580_R5) ? 1 : 0;
-    if (ImGui::Combo("SID Revision", &current, sid_labels, IM_ARRAYSIZE(sid_labels))) {
-        sid_revision_t rev = (current == 1) ? SID_REVISION_8580_R5 : SID_REVISION_6581_R4AR;
-        mos6581_set_revision(c64_->sid, rev);
-        pending_sid_revision_ = rev;
-        config_.custom_settings["sid_revision"] = sid_labels[current];
-        printf("C64: SID revision changed to %s\n", sid_labels[current]);
-    }
-    if (ImGui::IsItemHovered()) {
-        ImGui::SetTooltip("6581: analog filter distortion, volume-click digi\n"
-                          "8580: cleaner filter, no distortion");
-    }
-
-    // Peripheral connector UI is now rendered generically by the GUI layer
+    // Peripheral connector UI is rendered generically by the GUI layer
     // via EmulatedSystem::render_peripheral_connector_ui() — no C64-specific
     // duplication needed here.
 #endif

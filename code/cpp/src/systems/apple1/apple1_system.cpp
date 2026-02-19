@@ -227,6 +227,8 @@ bool Apple1System::initialize() {
     pia_.port_a_direction = 0x00;  // Port A = input (keyboard)
     pia_.port_b_direction = 0xFF;  // Port B = output (display)
     
+    setup_connector_ports();
+    
     printf("Apple1: System initialized (RAM: %dKB)\n", ram_size_ / 1024);
     return true;
 }
@@ -257,6 +259,9 @@ void Apple1System::run_frame() {
     for (uint32_t i = 0; i < adjusted_cycles; i++) {
         tick();
     }
+
+    // Tick all attached peripheral devices
+    tick_peripherals();
 }
 
 // ============================================================================
@@ -618,6 +623,40 @@ void Apple1System::convert_2513_to_8x8_font(const uint8_t* char_rom, uint8_t* fo
             font_8x8[ch * 8 + row] = 0x00;
         }
     }
+}
+
+// ============================================================================
+// CONNECTOR PORT SETUP — Apple 1
+// ============================================================================
+// Apple 1 has: 1× Expansion Connector (44-pin edge, exposes full 6502 bus)
+// and 1× Cassette Interface (the Apple Cassette Interface / ACI was a
+// separately sold card that plugged into the expansion slot; modeled as
+// its own port since nearly all Apple 1 setups included it).
+
+static const ConnectorDefinition apple1_expansion_def = {
+    ConnectorType::EXPANSION_PORT,
+    "Expansion Connector",
+    ConnectorSignals::APPLE1_EXPANSION_SIGNALS,
+    ConnectorSignals::APPLE1_EXPANSION_SIGNAL_COUNT
+};
+
+static const ConnectorDefinition apple1_cassette_def = {
+    ConnectorType::CASSETTE_PORT,
+    "Cassette Interface (ACI)",
+    ConnectorSignals::APPLE1_CASSETTE_SIGNALS,
+    ConnectorSignals::APPLE1_CASSETTE_SIGNAL_COUNT
+};
+
+void Apple1System::setup_connector_ports() {
+    connector_ports_.clear();
+
+    // Port 0 — Expansion Connector (44-pin edge, full 6502 bus)
+    add_connector_port(apple1_expansion_def, 0);
+
+    // Port 1 — Cassette Interface (ACI card, audio in/out)
+    add_connector_port(apple1_cassette_def, 0);
+
+    printf("Apple1: Created %zu connector ports\n", connector_ports_.size());
 }
 
 // ============================================================================

@@ -305,4 +305,63 @@ enum UserPortBit : uint8_t {
 extern const SignalLine USER_PORT_SIGNALS[];
 extern const uint8_t    USER_PORT_SIGNAL_COUNT;
 
+// --- NES Controller Port (7-pin) ---
+// The NES controller uses a parallel-in/serial-out shift register protocol.
+// System asserts LATCH to sample all button states, then pulses CLK to shift
+// each bit out on D0.  D3/D4 are expansion data lines (used on port 2).
+enum NESControllerBit : uint8_t {
+    NES_CLK    = 0,  // Pin 2: Clock pulse (system → controller)
+    NES_LATCH  = 1,  // Pin 3: Latch/Strobe (system → controller)
+    NES_D0     = 2,  // Pin 4: Serial data bit 0 (controller → system)
+    NES_D3     = 3,  // Pin 6: Data bit 3 (expansion, typically port 2)
+    NES_D4     = 4,  // Pin 7: Data bit 4 (expansion, typically port 2)
+};
+
+extern const SignalLine NES_CONTROLLER_SIGNALS[];
+extern const uint8_t    NES_CONTROLLER_SIGNAL_COUNT;
+
+// --- NES Expansion Port (bottom, 48-pin) ---
+// The NES expansion port exposes controller data lines, output strobes,
+// and system control signals for expansion peripherals (Famicom accessories, etc.)
+enum NESExpansionBit : uint8_t {
+    NEXP_D0     = 0,   // Expansion data 0
+    NEXP_D1     = 1,   // Expansion data 1
+    NEXP_D2     = 2,   // Expansion data 2
+    NEXP_D3     = 3,   // Expansion data 3
+    NEXP_D4     = 4,   // Expansion data 4
+    NEXP_OUT0   = 5,   // Output strobe 0 ($4016 bit 0)
+    NEXP_OUT1   = 6,   // Output strobe 1 ($4016 bit 1)
+    NEXP_OUT2   = 7,   // Output strobe 2 ($4016 bit 2)
+    NEXP_CLK    = 8,   // Clock
+    NEXP_LATCH  = 9,   // Latch/Strobe
+    NEXP_IRQ    = 10,  // /IRQ (directly active-low)
+};
+
+extern const SignalLine NES_EXPANSION_SIGNALS[];
+extern const uint8_t    NES_EXPANSION_SIGNAL_COUNT;
+
+// --- Apple 1 Expansion Connector (44-pin edge) ---
+// Exposes the full 6502 bus for expansion cards (ACI cassette, etc.)
+enum Apple1ExpansionBit : uint8_t {
+    A1_RESET = 0,   // /RESET
+    A1_IRQ   = 1,   // /IRQ
+    A1_RDY   = 2,   // RDY (halt CPU)
+    A1_PHI2  = 3,   // Phase 2 clock
+    A1_RW    = 4,   // Read/Write
+};
+
+extern const SignalLine APPLE1_EXPANSION_SIGNALS[];
+extern const uint8_t    APPLE1_EXPANSION_SIGNAL_COUNT;
+
+// --- Apple 1 Cassette Interface (ACI) ---
+// The Apple Cassette Interface was a separately sold card that plugged into
+// the expansion connector.  Modeled as its own port for peripheral attachment.
+enum Apple1CassetteBit : uint8_t {
+    A1_CASS_IN  = 0,  // Audio input from tape
+    A1_CASS_OUT = 1,  // Audio output to tape
+};
+
+extern const SignalLine APPLE1_CASSETTE_SIGNALS[];
+extern const uint8_t    APPLE1_CASSETTE_SIGNAL_COUNT;
+
 } // namespace ConnectorSignals
