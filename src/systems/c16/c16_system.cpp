@@ -267,8 +267,20 @@ bool C16System::initialize() {
     // Initialize bus state: RW HIGH (read mode), IRQ/NMI HIGH (inactive for active-low)
     bus_state_ = BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_RDY_BIT);
     
-    // TODO: Initialize TED 7360 when implemented
-    ted_ = nullptr;
+    // Initialize TED 7360 (video, sound, timers, keyboard scanning)
+    {
+        bool is_pal_region = (config_.region_option_index <= 0);
+        ted7360_desc_t ted_desc = {};
+        ted_desc.is_pal = is_pal_region;
+        ted_desc.keyboard_scan = ted_keyboard_scan;
+        ted_desc.keyboard_user_data = this;
+        ted_ = ted7360_create(&ted_desc);
+        if (ted_) {
+            printf("%s: Created TED 7360 (%s)\n", system_name_, is_pal_region ? "PAL" : "NTSC");
+        } else {
+            printf("%s: Warning - TED 7360 creation failed\n", system_name_);
+        }
+    }
     
     // Create keyboard matrix (8×8, scanned by TED)
     keyboard_ = commodore_keyboard_create(&c16_keyboard_config);
@@ -296,8 +308,11 @@ void C16System::shutdown() {
         cpu_ = nullptr;
     }
     
-    // TODO: Destroy TED when implemented
-    ted_ = nullptr;
+    // Destroy TED 7360
+    if (ted_) {
+        ted7360_destroy(ted_);
+        ted_ = nullptr;
+    }
     
     // Destroy keyboard
     if (keyboard_) {
@@ -330,7 +345,10 @@ void C16System::reset() {
         printf("%s: CPU reset (PC=$%04X)\n", system_name_, reset_vector);
     }
     
-    // TODO: Reset TED when implemented
+    // Reset TED 7360
+    if (ted_) {
+        ted7360_reset(ted_);
+    }
     
     // Reset bus state
     bus_state_ = BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_RDY_BIT);
@@ -350,10 +368,19 @@ void C16System::reset() {
 void C16System::tick() {
     bus_state_t s = bus_state_;
     
-    // TODO: Tick TED when implemented (before CPU, sets IRQ lines)
-    // if (ted_) {
-    //     s = ted_tick(ted_, s);
-    // }
+    // TED ticks at 2× CPU clock — tick twice per CPU cycle
+    // TED also generates IRQ from timers and raster compare
+    if (ted_) {
+        ted7360_tick(ted_);
+        ted7360_tick(ted_);
+        
+        // Propagate TED IRQ to CPU bus (active LOW)
+        if (ted7360_irq_pending(ted_)) {
+            s &= ~BUS_BIT(BUS_IRQ_BIT);   // Assert IRQ (active low)
+        } else {
+            s |= BUS_BIT(BUS_IRQ_BIT);    // De-assert IRQ
+        }
+    }
     
     // CPU PHI2 — drives address bus, sets R/W
     if (cpu_) {
@@ -464,7 +491,10 @@ void C16System::set_framebuffer(uint32_t* buffer, int width, int height) {
     rgba_width_ = width;
     rgba_height_ = height;
     
-    // TODO: Set TED framebuffer when TED 7360 chip is implemented
+    // Set TED framebuffer for pixel output
+    if (ted_) {
+        ted7360_set_framebuffer(ted_, buffer, width, height);
+    }
 }
 
 // ============================================================================
@@ -590,9 +620,9 @@ bool C16System::load_roms() {
     
     // Load KERNAL ROM (16KB at $C000-$FFFF)
     const char* kernal_files[] = {
-        "kernal.318006-01.bin",
+        "kernal.318004-05.bin",
         "kernal.rom",
-        "318006-01.bin",
+        "318004-05.bin",
         nullptr
     };
     
@@ -607,9 +637,9 @@ bool C16System::load_roms() {
     
     // Load BASIC ROM (16KB at $8000-$BFFF)
     const char* basic_files[] = {
-        "basic.318006-02.bin",
+        "basic.318006-01.bin",
         "basic.rom",
-        "318006-02.bin",
+        "318006-01.bin",
         nullptr
     };
     
@@ -628,6 +658,15 @@ bool C16System::load_roms() {
 uint8_t C16System::cpu_read(uint32_t addr) {
     uint16_t addr16 = addr & 0xFFFF;
     
+    // TED registers at $FF00-$FF3F (active only when ROM banking is active)
+    // In the real hardware these are always visible regardless of ROM/RAM mode
+    if (addr16 >= 0xFF00 && addr16 <= 0xFF3F) {
+        if (ted_) {
+            return ted7360_read_register(ted_, addr16 & 0x3F);
+        }
+        return 0xFF;
+    }
+    
     // RAM (0x0000-size based on configuration)
     size_t ram_size = 16384;  // Default C16
     if (config_.memory_option_index >= 0 &&
@@ -639,14 +678,25 @@ uint8_t C16System::cpu_read(uint32_t addr) {
         return ram_simple_[addr16];
     }
     
-    // BASIC ROM (0x8000-0xBFFF = 16KB)
+    // ROM/RAM banking: TED controls whether ROMs are visible
+    bool rom_visible = ted_ ? ted_->rom_enabled : true;
+    
+    // BASIC ROM (0x8000-0xBFFF = 16KB) — only when ROM is enabled
     if (addr16 >= 0x8000 && addr16 < 0xC000) {
-        return basic_rom_[addr16 - 0x8000];
+        if (rom_visible) {
+            return basic_rom_[addr16 - 0x8000];
+        }
+        // RAM under ROM (64KB models)
+        return ram_simple_[addr16];
     }
     
-    // KERNAL ROM (0xC000-0xFFFF = 16KB)
+    // KERNAL ROM (0xC000-0xFFFF = 16KB) — only when ROM is enabled
     if (addr16 >= 0xC000) {
-        return kernal_rom_[addr16 - 0xC000];
+        if (rom_visible) {
+            return kernal_rom_[addr16 - 0xC000];
+        }
+        // RAM under ROM (64KB models)
+        return ram_simple_[addr16];
     }
     
     return 0xFF;  // Unmapped memory
@@ -655,6 +705,14 @@ uint8_t C16System::cpu_read(uint32_t addr) {
 void C16System::cpu_write(uint32_t addr, uint8_t data) {
     uint16_t addr16 = addr & 0xFFFF;
     
+    // TED registers at $FF00-$FF3F (always writable)
+    if (addr16 >= 0xFF00 && addr16 <= 0xFF3F) {
+        if (ted_) {
+            ted7360_write_register(ted_, addr16 & 0x3F, data);
+        }
+        return;
+    }
+    
     // RAM (0x0000-size based on configuration)
     size_t ram_size = 16384;  // Default C16
     if (config_.memory_option_index >= 0 &&
@@ -662,11 +720,14 @@ void C16System::cpu_write(uint32_t addr, uint8_t data) {
         ram_size = hardware_traits_.memory_options[config_.memory_option_index].ram_size;
     }
     
+    // Writes always go to RAM (ROM is read-only, writes pass through to underlying RAM)
     if (addr16 < ram_size) {
         ram_simple_[addr16] = data;
     }
-    
-    // ROM areas are read-only, writes are ignored
+    // For 64KB models, RAM extends to $FFFF (excluding TED registers)
+    else if (ram_size >= 65536 && addr16 < 0xFF00) {
+        ram_simple_[addr16] = data;
+    }
 }
 
 uint8_t C16System::cpu_read_callback(void* user_data, uint32_t addr, uint8_t bus_state) {
@@ -729,6 +790,30 @@ void C16System::io_port_out(uint8_t data, void* user_data) {
     
     // Stub: ignore output for now
     // TODO: Handle cassette motor (bit 0), serial bus signals (bits 2-4)
+}
+
+// ============================================================================
+// TED KEYBOARD SCAN CALLBACK
+// ============================================================================
+// The TED scans the keyboard by writing a column select pattern to $FF08
+// and reading back the row state.  The keyboard matrix is 8×8 (directly
+// wired, no CIA — this is a key difference from the C64).
+
+uint8_t C16System::ted_keyboard_scan(void* user_data, uint8_t column) {
+    C16System* sys = static_cast<C16System*>(user_data);
+    if (!sys->keyboard_) return 0xFF;
+    
+    // TED keyboard scanning: write column select to $FF08, read rows back.
+    // Active-low: 0 bits select columns, 0 bits in result = key pressed.
+    // Scan all selected columns and OR the row results together.
+    uint8_t result = 0xFF;
+    for (int col = 0; col < 8; col++) {
+        if (!(column & (1 << col))) {
+            // Column is selected (active low)
+            result &= sys->keyboard_->row_open_contacts[col];
+        }
+    }
+    return result;
 }
 
 // ============================================================================
