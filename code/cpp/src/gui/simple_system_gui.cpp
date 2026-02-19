@@ -1,4 +1,5 @@
 #include "simple_system_gui.h"
+#include "connector_icons.h"
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
@@ -56,6 +57,7 @@ SimpleSystemGUI::SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system, const c
 SimpleSystemGUI::~SimpleSystemGUI() {
     close_audio_device();
     teardown_current_system();
+    ConnectorIcons::cleanup();
 }
 
 // ============================================================================
@@ -70,6 +72,9 @@ bool SimpleSystemGUI::init(const char* window_title, int width, int height) {
     
     // Now that OpenGL context exists, allocate framebuffer and create texture
     allocate_framebuffer();
+
+    // Create connector icon textures (shared across all systems)
+    ConnectorIcons::init();
 
     // Open SDL audio for the current system (if it has audio)
     open_audio_device();
@@ -412,9 +417,30 @@ void SimpleSystemGUI::render_menu_bar() {
         ImGui::EndMenu();
     }
     
-    // Status bar on the right
+    // Status bar on the right — connector icons + text status
     if (system_) {
-        ImGui::SameLine(ImGui::GetWindowWidth() - 450);
+        // Position connector icons and status text right-aligned.
+        // Layout:  [menus...]   [connector icons]  [status text]
+        const float status_text_w = 350.0f;  // approx. width for status text
+        const float bar_width = ImGui::GetWindowWidth();
+
+        // Render connector icons first (they need to calculate their width)
+        float icons_start = bar_width - status_text_w - 8.0f;
+
+        // Count external ports to estimate icon area width
+        int ext_port_count = 0;
+        for (auto& p : system_->get_connector_ports())
+            if (!p->get_definition().is_internal) ext_port_count++;
+        float icon_area_w = ext_port_count > 0
+            ? (ext_port_count * 24.0f + (ext_port_count - 1) * 2.0f + 8.0f)
+            : 0.0f;
+
+        if (ext_port_count > 0) {
+            ImGui::SameLine(icons_start - icon_area_w);
+            system_->render_connector_menu_bar_icons();
+        }
+
+        ImGui::SameLine(bar_width - status_text_w);
         ImGui::Text("%s", system_->get_descriptor().short_name);
         ImGui::SameLine();
         ImGui::Text("Cycles: %llu", (unsigned long long)system_->get_total_cycles());
