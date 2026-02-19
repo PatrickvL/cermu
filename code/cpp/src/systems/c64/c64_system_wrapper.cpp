@@ -1003,55 +1003,9 @@ void C64SystemWrapper::render_configuration_ui() {
                           "8580: cleaner filter, no distortion");
     }
 
-    // =========================================================================
-    // PERIPHERAL CONNECTOR PORTS
-    // =========================================================================
-    ImGui::Separator();
-    ImGui::Text("Peripherals");
-    ImGui::Spacing();
-
-    auto& registry = DeviceRegistry::instance();
-
-    for (int i = 0; i < static_cast<int>(connector_ports_.size()); i++) {
-        auto& port = connector_ports_[i];
-        auto compatible = registry.get_compatible_devices(port->get_type());
-        if (compatible.empty()) continue;  // Skip ports with no available devices
-
-        ImGui::PushID(i);
-
-        // Build combo items: "<none>" + compatible device names
-        auto* attached = port->get_attached_device();
-        const char* current_name = attached ? attached->get_name() : "<none>";
-
-        if (ImGui::BeginCombo(port->get_name(), current_name)) {
-            // "<none>" option — detach
-            if (ImGui::Selectable("<none>", attached == nullptr)) {
-                detach_device_from_port(i);
-            }
-
-            for (const auto* desc : compatible) {
-                bool is_selected = (attached && strcmp(attached->get_id(), desc->id) == 0);
-                if (ImGui::Selectable(desc->name, is_selected)) {
-                    if (!is_selected) {
-                        attach_device_to_port(i, desc->id);
-                    }
-                }
-                if (ImGui::IsItemHovered() && desc->description) {
-                    ImGui::SetTooltip("%s", desc->description);
-                }
-            }
-            ImGui::EndCombo();
-        }
-
-        // Show device-specific UI if attached
-        if (attached) {
-            ImGui::Indent();
-            attached->render_device_ui();
-            ImGui::Unindent();
-        }
-
-        ImGui::PopID();
-    }
+    // Peripheral connector UI is now rendered generically by the GUI layer
+    // via EmulatedSystem::render_peripheral_connector_ui() — no C64-specific
+    // duplication needed here.
 #endif
 }
 
@@ -1201,22 +1155,22 @@ void C64SystemWrapper::setup_connector_ports() {
     connector_ports_.clear();
 
     // PORT_CONTROL1 = 0 — Control Port 1 (directly connected to CIA1 Port B bits 0-4)
-    connector_ports_.push_back(std::make_unique<ConnectorPort>(c64_control_port_1_def, 1));
+    add_connector_port(c64_control_port_1_def, 1);
 
     // PORT_CONTROL2 = 1 — Control Port 2 (directly connected to CIA1 Port A bits 0-4)
-    connector_ports_.push_back(std::make_unique<ConnectorPort>(c64_control_port_2_def, 2));
+    add_connector_port(c64_control_port_2_def, 2);
 
     // PORT_IEC_SERIAL = 2 — IEC Serial Bus (connected to CIA2 Port A bits 3-5)
-    connector_ports_.push_back(std::make_unique<ConnectorPort>(c64_iec_serial_def, 0));
+    add_connector_port(c64_iec_serial_def, 0);
 
     // PORT_CASSETTE = 3 — Cassette Port (CPU I/O port + CIA1 FLAG)
-    connector_ports_.push_back(std::make_unique<ConnectorPort>(c64_cassette_def, 0));
+    add_connector_port(c64_cassette_def, 0);
 
     // PORT_USER = 4 — User Port (CIA2 Port B + control lines)
-    connector_ports_.push_back(std::make_unique<ConnectorPort>(c64_user_port_def, 0));
+    add_connector_port(c64_user_port_def, 0);
 
     // PORT_EXPANSION = 5 — Expansion Port (cartridge slot)
-    connector_ports_.push_back(std::make_unique<ConnectorPort>(c64_expansion_def, 0));
+    add_connector_port(c64_expansion_def, 0);
 
     // Wire joystick-aware CIA1 callbacks (replace the defaults set by c64_system_create)
     if (c64_ && c64_->cia1) {
@@ -1231,60 +1185,6 @@ void C64SystemWrapper::setup_connector_ports() {
     }
 
     printf("C64: Created %zu connector ports\n", connector_ports_.size());
-}
-
-void C64SystemWrapper::tick_peripherals() {
-    for (auto& device : owned_devices_) {
-        device->tick();
-    }
-}
-
-bool C64SystemWrapper::attach_device_to_port(int port_index, const char* device_id) {
-    if (port_index < 0 || port_index >= static_cast<int>(connector_ports_.size())) {
-        printf("C64: Invalid port index %d\n", port_index);
-        return false;
-    }
-
-    auto& port = connector_ports_[port_index];
-
-    // Create device from registry
-    auto device = DeviceRegistry::instance().create_device(device_id);
-    if (!device) {
-        printf("C64: Unknown device '%s'\n", device_id);
-        return false;
-    }
-
-    // Detach any existing device first
-    detach_device_from_port(port_index);
-
-    // Attach and take ownership
-    auto* raw_ptr = device.get();
-    if (!port->attach_device(raw_ptr)) {
-        return false;
-    }
-
-    raw_ptr->reset();
-    owned_devices_.push_back(std::move(device));
-    return true;
-}
-
-void C64SystemWrapper::detach_device_from_port(int port_index) {
-    if (port_index < 0 || port_index >= static_cast<int>(connector_ports_.size())) return;
-
-    auto& port = connector_ports_[port_index];
-    auto* attached = port->get_attached_device();
-    if (!attached) return;
-
-    port->detach_device();
-
-    // Remove from owned_devices_ list
-    owned_devices_.erase(
-        std::remove_if(owned_devices_.begin(), owned_devices_.end(),
-                        [attached](const std::unique_ptr<PeripheralDevice>& p) {
-                            return p.get() == attached;
-                        }),
-        owned_devices_.end()
-    );
 }
 
 uint32_t C64SystemWrapper::get_audio_samples(float* buffer, uint32_t max_samples) {

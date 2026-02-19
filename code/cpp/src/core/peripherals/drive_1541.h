@@ -201,11 +201,11 @@ private:
     bool                 drive_led_;
     std::string          error_message_;
 
-    // D64 constants
-    static constexpr uint32_t D64_STANDARD_SIZE     = 174848;
-    static constexpr uint32_t D64_STANDARD_SIZE_ERR = 175531;
-    static constexpr uint32_t D64_EXTENDED_SIZE     = 196608;
-    static constexpr uint32_t D64_EXTENDED_SIZE_ERR = 197376;
+    // D64 constants (prefixed to avoid collision with d64_format.h macros)
+    static constexpr uint32_t DRIVE_D64_STD_SIZE     = 174848;
+    static constexpr uint32_t DRIVE_D64_STD_SIZE_ERR = 175531;
+    static constexpr uint32_t DRIVE_D64_EXT_SIZE     = 196608;
+    static constexpr uint32_t DRIVE_D64_EXT_SIZE_ERR = 197376;
     static constexpr uint8_t  DIR_TRACK = 18;
     static constexpr uint8_t  DIR_SECTOR = 1;
     static constexpr uint8_t  BAM_TRACK = 18;

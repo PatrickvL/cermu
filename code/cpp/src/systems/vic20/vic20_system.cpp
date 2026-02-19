@@ -643,6 +643,9 @@ bool VIC20System::initialize() {
     // Initialize I/O handlers now that all chips are created
     vic20_memory_init_io_handlers(memory_);
     
+    // Setup connector ports (generic framework from EmulatedSystem)
+    setup_connector_ports();
+    
     return true;
 }
 
@@ -798,6 +801,9 @@ void VIC20System::run_frame() {
     for (uint32_t i = 0; i < adjusted_cycles; i++) {
         tick();
     }
+
+    // Tick all attached peripheral devices (datasette, drive, etc.)
+    tick_peripherals();
 }
 
 // ============================================================================
@@ -1083,6 +1089,71 @@ uint8_t VIC20System::vic20_via2_port_b_read(void* context, uint8_t port_b_output
         }
     }
     return col_state;
+}
+
+// ============================================================================
+// CONNECTOR PORT SETUP — VIC-20
+// ============================================================================
+// VIC-20 has: 1× Control Port (DB-9), IEC Serial Bus, Cassette Port,
+// User Port, and Expansion Port (cartridge slot).
+
+static const ConnectorDefinition vic20_control_port_def = {
+    ConnectorType::CONTROL_PORT_DB9,
+    "Control Port",
+    ConnectorSignals::CONTROL_PORT_SIGNALS,
+    ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT
+};
+
+static const ConnectorDefinition vic20_iec_serial_def = {
+    ConnectorType::IEC_SERIAL,
+    "IEC Serial Bus",
+    ConnectorSignals::IEC_SERIAL_SIGNALS,
+    ConnectorSignals::IEC_SERIAL_SIGNAL_COUNT
+};
+
+static const ConnectorDefinition vic20_cassette_def = {
+    ConnectorType::CASSETTE_PORT,
+    "Cassette Port",
+    ConnectorSignals::CASSETTE_PORT_SIGNALS,
+    ConnectorSignals::CASSETTE_PORT_SIGNAL_COUNT
+};
+
+static const ConnectorDefinition vic20_user_port_def = {
+    ConnectorType::USER_PORT,
+    "User Port",
+    ConnectorSignals::USER_PORT_SIGNALS,
+    ConnectorSignals::USER_PORT_SIGNAL_COUNT
+};
+
+static const SignalLine vic20_expansion_signals[] = {
+    { "RESET", SignalDirection::OUTPUT, 0 },
+};
+static const ConnectorDefinition vic20_expansion_def = {
+    ConnectorType::EXPANSION_PORT,
+    "Expansion Port",
+    vic20_expansion_signals,
+    1
+};
+
+void VIC20System::setup_connector_ports() {
+    connector_ports_.clear();
+
+    // Port 0 — Control Port (joystick/paddles/lightpen)
+    add_connector_port(vic20_control_port_def, 1);
+
+    // Port 1 — IEC Serial Bus (disk drive, printer)
+    add_connector_port(vic20_iec_serial_def, 0);
+
+    // Port 2 — Cassette Port (datasette)
+    add_connector_port(vic20_cassette_def, 0);
+
+    // Port 3 — User Port (modems, RS-232, custom peripherals)
+    add_connector_port(vic20_user_port_def, 0);
+
+    // Port 4 — Expansion Port (cartridge)
+    add_connector_port(vic20_expansion_def, 0);
+
+    printf("VIC20: Created %zu connector ports\n", connector_ports_.size());
 }
 
 // ============================================================================
