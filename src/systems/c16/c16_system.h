@@ -11,6 +11,10 @@
  * C16 System - Commodore 16 / Plus/4 Emulator
  *
  * Direct EmulatedSystem implementation for the Commodore 16 and Plus/4.
+ * The Plus/4 is treated as a variant of the C16 (like Famicom is to NES):
+ * same CPU (MOS 7501), same video/sound chip (TED 7360), same BASIC 3.5,
+ * but the Plus/4 has 64KB RAM, a User Port, and built-in "3-PLUS-1"
+ * productivity software in additional ROM.
  *
  * NOTE: This system currently uses a legacy C struct internally because
  * the actual chip implementations (MOS7501 CPU, TED 7360) don't exist yet.
@@ -19,7 +23,7 @@
  */
 class C16System : public EmulatedSystem {
 public:
-    C16System();
+    C16System(bool is_plus4 = false);
     ~C16System() override;
     
     // System identification
@@ -65,9 +69,11 @@ public:
     // Hardware traits
     static HardwareTraits create_hardware_traits();
     static float can_load_file_static(const char* filepath, const uint8_t* data, size_t size);
-    static const SystemDescriptor c16_descriptor;
 
 private:
+    // Variant flag — true for Plus/4, false for C16
+    bool is_plus4_;
+    const char* system_name_;   // "C16" or "Plus/4" — used for logging
     // Chip instances (TODO: Implement MOS7501 CPU and TED 7360 chips)
     void* mos7501_;              // MOS7501 CPU (TODO: Create proper chip type)
     void* ted_;                  // TED 7360 ($FD00-$FEFF, 4KB) - TODO: Create proper chip type
