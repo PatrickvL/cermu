@@ -278,6 +278,13 @@ public:
     /// Returns true if the event was consumed by this device.
     virtual bool process_sdl_event(const SDL_Event& /*event*/) { return false; }
 
+    // --- Activity indicator ------------------------------------------------
+
+    /// Returns true when the device is performing data transfer or I/O
+    /// activity that should be visually indicated (e.g. drive LED on,
+    /// tape motor running).  Used by the GUI to blink connector icons.
+    virtual bool has_activity() const { return false; }
+
     // --- GUI -----------------------------------------------------------
 
 #ifdef IMGUI_VERSION

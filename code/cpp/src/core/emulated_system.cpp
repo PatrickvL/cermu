@@ -1,5 +1,6 @@
 #include "emulated_system.h"
 #include <cstring>
+#include <cmath>
 #include <algorithm>
 #include <cstdio>
 #include <cstdint>
@@ -550,8 +551,26 @@ float EmulatedSystem::render_connector_menu_bar_icons() {
 
         // Tint: full brightness if device attached, dim gray if empty
         bool has_device = (port->get_device_count() > 0);
-        ImVec4 tint = has_device ? ImVec4(1.0f, 1.0f, 1.0f, 1.0f)
-                                 : ImVec4(0.5f, 0.5f, 0.5f, 0.7f);
+
+        // Check if any attached device is actively transferring data
+        bool any_activity = false;
+        if (has_device) {
+            for (auto* dev : port->get_attached_devices()) {
+                if (dev->has_activity()) { any_activity = true; break; }
+            }
+        }
+
+        ImVec4 tint;
+        if (any_activity) {
+            // Blink: pulse between bright green and dim green
+            float t = static_cast<float>(ImGui::GetTime());
+            float pulse = 0.55f + 0.45f * sinf(t * 8.0f);  // ~1.3 Hz blink
+            tint = ImVec4(pulse * 0.3f, pulse, pulse * 0.3f, 1.0f);
+        } else if (has_device) {
+            tint = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+        } else {
+            tint = ImVec4(0.5f, 0.5f, 0.5f, 0.7f);
+        }
 
         // Use plain Image + hover detection so it blends with menu bar
         ImGui::SameLine(0, spacing);
