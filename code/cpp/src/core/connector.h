@@ -95,6 +95,9 @@ struct ConnectorDefinition {
     uint8_t             signal_count;   ///< Number of entries in `signals`
     bool                is_internal;    ///< True for internal connectors (keyboard, etc.)
                                         ///< Internal devices cannot be detached via UI.
+    bool                is_bus;         ///< True for shared bus connectors (e.g. IEC serial)
+                                        ///< Bus ports allow multiple devices attached simultaneously.
+                                        ///< Signal lines use open-collector AND of all device outputs.
 };
 
 // ============================================================================
@@ -152,17 +155,32 @@ public:
 
     // --- Device management ---------------------------------------------
 
-    /// Returns the currently attached device, or nullptr.
-    PeripheralDevice* get_attached_device() const { return attached_device_; }
+    /// Returns the first attached device, or nullptr.
+    /// For bus ports with multiple devices, use get_attached_devices().
+    PeripheralDevice* get_attached_device() const {
+        return attached_devices_.empty() ? nullptr : attached_devices_[0];
+    }
+
+    /// Returns all attached devices (non-const for iteration).
+    const std::vector<PeripheralDevice*>& get_attached_devices() const { return attached_devices_; }
+
+    /// Number of devices currently attached.
+    int get_device_count() const { return static_cast<int>(attached_devices_.size()); }
+
+    /// Is this a bus port that supports multiple devices?
+    bool is_bus() const { return definition_.is_bus; }
 
     /**
      * Attach a peripheral device to this port.
+     * For bus ports: appends to the device list (multiple allowed).
+     * For point-to-point ports: replaces the existing device.
      * @return true on success, false if connector types are incompatible.
      */
     bool attach_device(PeripheralDevice* device);
 
-    /// Detach the current device (if any).  The device is NOT destroyed.
-    void detach_device();
+    /// Detach a specific device.  If nullptr, detaches ALL devices.
+    /// The device is NOT destroyed.
+    void detach_device(PeripheralDevice* device = nullptr);
 
     /// Install a callback for device-output changes.
     void set_signal_change_callback(SignalChangeCallback cb) { on_device_output_changed_ = std::move(cb); }
@@ -173,12 +191,15 @@ public:
     void notify_device_output_changed(uint32_t device_signals);
 
 private:
-    ConnectorDefinition     definition_;
-    int                     port_index_;        ///< E.g. port 1 vs port 2
-    uint32_t                system_signals_;    ///< System-side output (all 1s = idle)
-    uint32_t                device_signals_;    ///< Device-side output (all 1s = nothing attached)
-    PeripheralDevice*       attached_device_;
-    SignalChangeCallback    on_device_output_changed_;
+    ConnectorDefinition                 definition_;
+    int                                 port_index_;        ///< E.g. port 1 vs port 2
+    uint32_t                            system_signals_;    ///< System-side output (all 1s = idle)
+    uint32_t                            combined_device_signals_;  ///< AND of all device outputs
+    std::vector<PeripheralDevice*>      attached_devices_;  ///< Attached devices (1 for point-to-point, N for bus)
+    SignalChangeCallback                on_device_output_changed_;
+
+    /// Recompute combined_device_signals_ from all attached devices.
+    void recompute_device_signals();
 };
 
 // ============================================================================

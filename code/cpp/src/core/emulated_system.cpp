@@ -208,8 +208,10 @@ bool EmulatedSystem::attach_device_to_port(int port_index, const char* device_id
         return false;
     }
 
-    // Detach any existing device first
-    detach_device_from_port(port_index);
+    // For point-to-point ports: detach existing device first
+    if (!port->is_bus()) {
+        detach_device_from_port(port_index);
+    }
 
     // Attach and take ownership
     auto* raw_ptr = device.get();
@@ -227,17 +229,39 @@ void EmulatedSystem::detach_device_from_port(int port_index) {
     if (port_index < 0 || port_index >= static_cast<int>(connector_ports_.size())) return;
 
     auto& port = connector_ports_[port_index];
-    auto* attached = port->get_attached_device();
-    if (!attached) return;
+    auto devices_copy = port->get_attached_devices();  // Copy — detach modifies the vector
+    if (devices_copy.empty()) return;
 
-    printf("System: Detached '%s' from %s\n", attached->get_name(), port->get_name());
-    port->detach_device();
+    for (auto* device : devices_copy) {
+        printf("System: Detached '%s' from %s\n", device->get_name(), port->get_name());
+    }
+    port->detach_device(nullptr);  // Detach all
 
-    // Remove from owned_devices_ list
+    // Remove all detached devices from owned_devices_
+    for (auto* device : devices_copy) {
+        owned_devices_.erase(
+            std::remove_if(owned_devices_.begin(), owned_devices_.end(),
+                            [device](const std::unique_ptr<PeripheralDevice>& p) {
+                                return p.get() == device;
+                            }),
+            owned_devices_.end()
+        );
+    }
+}
+
+void EmulatedSystem::detach_device_from_port(int port_index, PeripheralDevice* device) {
+    if (port_index < 0 || port_index >= static_cast<int>(connector_ports_.size())) return;
+    if (!device) return;
+
+    auto& port = connector_ports_[port_index];
+    printf("System: Detached '%s' from %s\n", device->get_name(), port->get_name());
+    port->detach_device(device);
+
+    // Remove from owned_devices_
     owned_devices_.erase(
         std::remove_if(owned_devices_.begin(), owned_devices_.end(),
-                        [attached](const std::unique_ptr<PeripheralDevice>& p) {
-                            return p.get() == attached;
+                        [device](const std::unique_ptr<PeripheralDevice>& p) {
+                            return p.get() == device;
                         }),
         owned_devices_.end()
     );
@@ -295,8 +319,68 @@ void EmulatedSystem::render_peripheral_connector_ui() {
                 attached->render_device_ui();
                 ImGui::Unindent();
             }
+        } else if (def.is_bus) {
+            // =================================================================
+            // BUS PORT — Multiple devices can be attached simultaneously
+            // =================================================================
+            auto compatible = registry.get_compatible_devices(port->get_type());
+            if (compatible.empty()) {
+                ImGui::PopID();
+                continue;
+            }
+
+            const auto& devices = port->get_attached_devices();
+            int dev_count = static_cast<int>(devices.size());
+
+            // Header: "IEC Serial Bus (2 devices)"
+            bool open = ImGui::TreeNodeEx(def.name, ImGuiTreeNodeFlags_DefaultOpen,
+                                          "%s (%d device%s)", def.name,
+                                          dev_count, dev_count == 1 ? "" : "s");
+            if (open) {
+                // List each attached device with a [x] remove button
+                for (int d = 0; d < dev_count; d++) {
+                    auto* dev = devices[d];
+                    ImGui::PushID(d);
+
+                    // Remove button
+                    if (ImGui::SmallButton("x")) {
+                        detach_device_from_port(i, dev);
+                        ImGui::PopID();
+                        break;  // Vector invalidated — exit loop, will redraw next frame
+                    }
+                    ImGui::SameLine();
+                    ImGui::Text("%s", dev->get_name());
+
+                    // Device-specific UI
+                    ImGui::Indent();
+                    dev->render_device_ui();
+                    if (dev->accepts_host_input()) {
+                        render_host_input_binding_ui(dev);
+                    }
+                    ImGui::Unindent();
+
+                    ImGui::PopID();
+                }
+
+                // "Add device" combo
+                if (ImGui::BeginCombo("Add device...", nullptr, ImGuiComboFlags_NoPreview)) {
+                    for (const auto* desc : compatible) {
+                        if (ImGui::Selectable(desc->name)) {
+                            attach_device_to_port(i, desc->id);
+                        }
+                        if (ImGui::IsItemHovered() && desc->description) {
+                            ImGui::SetTooltip("%s", desc->description);
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+
+                ImGui::TreePop();
+            }
         } else {
-            // External connector: show attach/detach combo
+            // =================================================================
+            // POINT-TO-POINT PORT — Single device, combo selector
+            // =================================================================
             auto compatible = registry.get_compatible_devices(port->get_type());
             if (compatible.empty()) {
                 ImGui::PopID();
