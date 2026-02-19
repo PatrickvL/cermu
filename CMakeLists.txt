@@ -248,6 +248,7 @@ set(CHIP_SOURCES
     # CPU sources - using fam65xx template-based implementation
     src/chip/cpu/fam65xx/mos6502.cpp
     src/chip/cpu/fam65xx/mos6510.cpp
+    src/chip/cpu/fam65xx/mos7501.cpp
     src/chip/cpu/fam65xx/nes6502.cpp
     src/chip/cpu/fam65xx/wdc65c02.cpp
     src/chip/cpu/fam65xx/rockwell65c02.cpp
