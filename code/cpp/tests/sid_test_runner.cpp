@@ -20,8 +20,8 @@
 #include <cstdio>
 
 // Implement the chip.cpp dependency minimally if not linking full core
-#ifndef AIEMUC_IMPL
-#define AIEMUC_IMPL
+#ifndef CERMU_IMPL
+#define CERMU_IMPL
 #endif
 
 static void print_usage(const char* argv0) {

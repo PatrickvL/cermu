@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include "../../core/aiemuc.h"
+#include "../../core/cermu.h"
 #include "../../core/chip.h"
 //#include "../../core/system.h"
 #include "../../core/system_lines.h"

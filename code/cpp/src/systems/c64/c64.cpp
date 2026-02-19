@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#include "../../core/aiemuc.h"
+#include "../../core/cermu.h"
 #include "../../core/chip.h"
 #include "../../core/system.h"
 #include "c64.h"

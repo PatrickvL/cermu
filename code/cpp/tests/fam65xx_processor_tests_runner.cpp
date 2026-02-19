@@ -23,8 +23,8 @@ extern "C" {
 #include "json_parser.h"
 }
 
-#ifndef AIEMUC_IMPL
-    #define AIEMUC_IMPL
+#ifndef CERMU_IMPL
+    #define CERMU_IMPL
 #endif
 
 // Include new fam65xx processor implementation

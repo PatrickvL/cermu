@@ -51,7 +51,7 @@
 #include <cstdint>
 #include <optional>
 
-namespace aiemu {
+namespace cermu {
 
 // =============================================================================
 // Variant enumeration
@@ -408,4 +408,4 @@ using Signetics2513_CM4800 = Signetics2513<Signetics2513Font::CM4800_Katakana, S
 // For the 64x7x5 organization variant (used in some systems for 9×7/10×8 scan formats)
 using Signetics2513_7row   = Signetics2513<Signetics2513Font::CM2140_ASCII,    Signetics2513Org::Org_64x7x5>;
 
-} // namespace aiemu
+} // namespace cermu

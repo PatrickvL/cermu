@@ -1,7 +1,7 @@
 #pragma once
 
 /* 
- * AIEMUC - Cross-platform compiler compatibility macros
+ * CERMU - Cross-platform compiler compatibility macros
  * Provides consistent interface for compiler-specific optimizations and attributes
  */
 
@@ -11,13 +11,13 @@
 
 /* Useful for conditional compilation based on compiler capabilities */
 #if defined(__GNUC__) && !defined(__clang__)
-    #define AIEMUC_COMPILER_GCC 1
+    #define CERMU_COMPILER_GCC 1
 #elif defined(__clang__)
-    #define AIEMUC_COMPILER_CLANG 1
+    #define CERMU_COMPILER_CLANG 1
 #elif defined(_MSC_VER)
-    #define AIEMUC_COMPILER_MSVC 1
+    #define CERMU_COMPILER_MSVC 1
 #else
-    #define AIEMUC_COMPILER_UNKNOWN 1
+    #define CERMU_COMPILER_UNKNOWN 1
 #endif
 
 /* ========================================================================== */
@@ -103,23 +103,23 @@
 
 #if defined(_WIN32)
     #include <malloc.h>
-    #define aiemuc_aligned_alloc(alignment, size) _aligned_malloc((size), (alignment))
-    #define aiemuc_aligned_free(ptr) _aligned_free(ptr)
+    #define cermu_aligned_alloc(alignment, size) _aligned_malloc((size), (alignment))
+    #define cermu_aligned_free(ptr) _aligned_free(ptr)
 #elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
     /* C11 aligned_alloc */
-    #define aiemuc_aligned_alloc(alignment, size) aligned_alloc((alignment), (size))
-    #define aiemuc_aligned_free(ptr) free(ptr)
+    #define cermu_aligned_alloc(alignment, size) aligned_alloc((alignment), (size))
+    #define cermu_aligned_free(ptr) free(ptr)
 #elif defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L
     /* POSIX posix_memalign */
-    static inline void* aiemuc_aligned_alloc(size_t alignment, size_t size) {
+    static inline void* cermu_aligned_alloc(size_t alignment, size_t size) {
         void* ptr = NULL;
         return (posix_memalign(&ptr, alignment, size) == 0) ? ptr : NULL;
     }
-    #define aiemuc_aligned_free(ptr) free(ptr)
+    #define cermu_aligned_free(ptr) free(ptr)
 #else
     /* Fallback to regular malloc - alignment not guaranteed */
-    #define aiemuc_aligned_alloc(alignment, size) malloc(size)
-    #define aiemuc_aligned_free(ptr) free(ptr)
+    #define cermu_aligned_alloc(alignment, size) malloc(size)
+    #define cermu_aligned_free(ptr) free(ptr)
 #endif
 
 /* ========================================================================== */
@@ -128,17 +128,17 @@
 
 /* Population count (number of set bits) */
 #if defined(__GNUC__) || defined(__clang__)
-    #define aiemuc_popcount(x) __builtin_popcount(x)
-    #define aiemuc_popcountl(x) __builtin_popcountl(x)
-    #define aiemuc_popcountll(x) __builtin_popcountll(x)
+    #define cermu_popcount(x) __builtin_popcount(x)
+    #define cermu_popcountl(x) __builtin_popcountl(x)
+    #define cermu_popcountll(x) __builtin_popcountll(x)
 #elif defined(_MSC_VER) && defined(_WIN64)
     #include <intrin.h>
-    #define aiemuc_popcount(x) __popcnt(x)
-    #define aiemuc_popcountl(x) __popcnt(x)
-    #define aiemuc_popcountll(x) __popcnt64(x)
+    #define cermu_popcount(x) __popcnt(x)
+    #define cermu_popcountl(x) __popcnt(x)
+    #define cermu_popcountll(x) __popcnt64(x)
 #else
     /* Fallback implementations */
-    static inline int aiemuc_popcount(unsigned int x) {
+    static inline int cermu_popcount(unsigned int x) {
         x = x - ((x >> 1) & 0x55555555u);
         x = (x & 0x33333333u) + ((x >> 2) & 0x33333333u);
         x = (x + (x >> 4)) & 0x0f0f0f0fu;
@@ -147,13 +147,13 @@
         return x & 0x3fu;
     }
     
-    static inline int aiemuc_popcountl(unsigned long x) {
-        return aiemuc_popcount((unsigned int)x) + 
-               (sizeof(long) > sizeof(int) ? aiemuc_popcount((unsigned int)(x >> 32)) : 0);
+    static inline int cermu_popcountl(unsigned long x) {
+        return cermu_popcount((unsigned int)x) + 
+               (sizeof(long) > sizeof(int) ? cermu_popcount((unsigned int)(x >> 32)) : 0);
     }
     
-    static inline int aiemuc_popcountll(unsigned long long x) {
-        return aiemuc_popcount((unsigned int)x) + aiemuc_popcount((unsigned int)(x >> 32));
+    static inline int cermu_popcountll(unsigned long long x) {
+        return cermu_popcount((unsigned int)x) + cermu_popcount((unsigned int)(x >> 32));
     }
 #endif
 
