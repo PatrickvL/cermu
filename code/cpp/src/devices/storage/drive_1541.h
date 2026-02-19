@@ -114,6 +114,12 @@ public:
     /// Eject the current disk.
     void eject_disk();
 
+    /// Swap disk — replaces the disk image without resetting drive state.
+    /// Channels are invalidated (files become stale), but IEC protocol state,
+    /// uploaded fastloader code, and VIA state are all preserved — exactly
+    /// like physically swapping a floppy while the drive is still powered on.
+    bool swap_disk(const char* filepath);
+
     /// Is a disk inserted?
     bool is_disk_inserted() const { return disk_inserted_; }
 
@@ -129,6 +135,33 @@ public:
 
     /// Get drive busy/LED state.
     bool is_drive_led_on() const { return drive_led_; }
+
+    // --- Disc Fliplist --------------------------------------------------
+    // A pre-loaded list of disc images that can be cycled through with a
+    // single keypress, like VICE's "attach next disc in fliplist" feature.
+    // Ideal for multi-disc games: load disc 1, 2, 3... and press a key to
+    // advance instead of navigating file dialogs for each swap prompt.
+
+    /// Add a disc image path to the fliplist (avoids duplicates).
+    void fliplist_add(const char* filepath);
+
+    /// Remove a disc image from the fliplist by index.
+    void fliplist_remove(int index);
+
+    /// Clear the entire fliplist.
+    void fliplist_clear();
+
+    /// Swap to the next disc in the fliplist.  Wraps around.
+    bool flip_next();
+
+    /// Swap to the previous disc in the fliplist.  Wraps around.
+    bool flip_prev();
+
+    /// Get current fliplist.
+    const std::vector<std::string>& get_fliplist() const { return fliplist_; }
+
+    /// Get current fliplist index (-1 if empty or no match).
+    int get_fliplist_index() const { return fliplist_index_; }
 
 private:
     // --- IEC Protocol --------------------------------------------------
@@ -200,6 +233,10 @@ private:
     // Drive state
     bool                 drive_led_;
     std::string          error_message_;
+
+    // Disc fliplist
+    std::vector<std::string> fliplist_;
+    int                      fliplist_index_ = -1;
 
     // D64 constants (prefixed to avoid collision with d64_format.h macros)
     static constexpr uint32_t DRIVE_D64_STD_SIZE     = 174848;

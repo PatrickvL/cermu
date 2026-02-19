@@ -809,6 +809,23 @@ void C64SystemWrapper::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode sc
         if (handle_sid_player_key(key)) return;
     }
 
+    // Disc flip hotkeys — Alt+N (next) / Alt+P (prev) on drive 8
+    if (pressed && !repeat && (mod & KMOD_ALT)) {
+        if (key == SDLK_n || key == SDLK_p) {
+            auto* iec_port = get_connector_port(PORT_IEC_SERIAL);
+            if (iec_port) {
+                for (auto* dev : iec_port->get_attached_devices()) {
+                    auto* drive = dynamic_cast<Drive1541Device*>(dev);
+                    if (drive && !drive->get_fliplist().empty()) {
+                        if (key == SDLK_n) drive->flip_next();
+                        else                drive->flip_prev();
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
     if (keyboard_mapper_) {
         if (pressed) {
             keyboard_mapper_->process_key_down(key, scancode, mod, repeat);
