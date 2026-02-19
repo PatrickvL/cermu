@@ -1,0 +1,27 @@
+# resid-test: test01 — Normal ADSR cycle
+# Source: https://github.com/libsidplayfp/resid-test/blob/master/tests/test01
+# AD=0x12 (Attack=1, Decay=2), SR=0x84 (Sustain=8→0x88, Release=4)
+# Exercises full attack-decay-sustain-release cycle.
+
+reset
+
+# Set AD register for voice 3
+write, 0x13, 0x12
+run, 3
+
+# Set SR register for voice 3
+write, 0x14, 0x84
+run, 3
+
+# Gate ON — start attack
+write, 0x12, 0x01
+run, 5000
+
+# Gate OFF — start release
+write, 0x12, 0x00
+run, 55000
+
+# Note: with exponential decay at rate 4, full release from ~0x9C takes ~80000
+# cycles. After 55000, envelope is still partially decaying (correct behavior).
+
+end

@@ -2,13 +2,13 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug C64 Emulator (Console)",
+            "name": "Debug cermu (Console)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/code/cpp/build/bin/c64emu",
+            "program": "${workspaceFolder}/build/bin/cermu_console",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/code/cpp",
+            "cwd": "${workspaceFolder}",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
@@ -26,13 +26,13 @@
             }
         },
         {
-            "name": "Debug C64 Emulator (GUI)",
+            "name": "Debug cermu (GUI)",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/code/cpp/build/bin/c64emu_gui",
+            "program": "${workspaceFolder}/build/bin/cermu",
             "args": [],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/code/cpp",
+            "cwd": "${workspaceFolder}",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",

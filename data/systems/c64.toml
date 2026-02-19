@@ -1,0 +1,503 @@
+# Commodore 64 System Configuration
+# Commodore 64 (1982) - Best-selling home computer of all time
+
+[system]
+name = "Commodore 64"
+short_name = "C64"
+description = "Commodore 64 (1982) - Best-selling home computer of all time, 64KB RAM, VIC-II graphics, SID sound"
+version = "1.0"
+author = "Configurable System"
+created = "2026-01-18"
+
+[hardware_traits.display]
+native_width = 403
+native_height = 284
+visible_width = 384
+visible_height = 272
+format = "RGBA8888"
+palette_size = 16
+pixel_aspect_ratio = 1.0
+has_overscan = true
+palette = [
+    [0, 0, 0, 255],       # Black
+    [255, 255, 255, 255], # White
+    [136, 57, 50, 255],   # Red
+    [103, 182, 189, 255], # Cyan
+    [139, 63, 150, 255],  # Purple
+    [85, 160, 73, 255],   # Green
+    [64, 49, 141, 255],   # Blue
+    [191, 206, 114, 255], # Yellow
+    [139, 84, 41, 255],   # Orange
+    [87, 66, 0, 255],     # Brown
+    [184, 105, 98, 255],  # Light Red
+    [80, 80, 80, 255],    # Dark Gray
+    [120, 120, 120, 255], # Gray
+    [148, 224, 137, 255], # Light Green
+    [120, 105, 196, 255], # Light Blue
+    [160, 160, 160, 255]  # Light Gray
+]
+
+[hardware_traits.audio]
+format = "MONO_16BIT"
+sample_rate = 44100
+channels = 1
+chip_name = "MOS 6581 SID"
+
+[hardware_traits.timing]
+cpu_frequency = 1022727
+video_frequency = 17734472
+audio_sample_rate = 44100
+target_fps = 50
+cycles_per_frame = 19656
+region = "PAL"
+
+[[components]]
+id = "cpu"
+type = "CPU"
+model = "MOS6510"
+description = "MOS 6510 CPU @ ~1 MHz with I/O port"
+
+    [components.config]
+    frequency = 1022727
+    has_port = true
+    port_address = "$0000"
+    port_ddr_address = "$0001"
+
+[[components]]
+id = "ram"
+type = "RAM"
+model = "GENERIC"
+description = "64KB main RAM"
+
+    [components.config]
+    address = "$0000"
+    size = 65536
+
+[[components]]
+id = "vic"
+type = "VIC"
+model = "MOS6569"
+description = "VIC-II video chip (PAL)"
+
+    [components.config]
+    address = "$D000"
+    size = 1024
+    revision = "R3"
+    pal = true
+    frame_rate = 50
+
+[[components]]
+id = "sid"
+type = "SID"
+model = "MOS6581"
+description = "SID sound chip"
+
+    [components.config]
+    address = "$D400"
+    size = 1024
+    revision = "R2"
+    frequency = 1022727
+
+[[components]]
+id = "cia1"
+type = "CIA"
+model = "MOS6526"
+description = "CIA 1 - Keyboard, joysticks, IRQ"
+
+    [components.config]
+    address = "$DC00"
+    size = 256
+    irq_output = "cpu.irq"
+    frequency = 1022727
+
+[[components]]
+id = "cia2"
+type = "CIA"
+model = "MOS6526"
+description = "CIA 2 - Serial port, VIC bank, NMI"
+
+    [components.config]
+    address = "$DD00"
+    size = 256
+    nmi_output = "cpu.nmi"
+    frequency = 1022727
+
+[[components]]
+id = "color_ram"
+type = "RAM"
+model = "MOS2114"
+description = "1KB color RAM (4-bit nibbles)"
+
+    [components.config]
+    address = "$D800"
+    size = 1024
+    nibble_mode = true
+
+[[components]]
+id = "basic_rom"
+type = "ROM"
+model = "GENERIC"
+description = "BASIC ROM (8KB)"
+
+    [components.config]
+    address = "$A000"
+    size = 8192
+    file = "data/c64/roms/basic.rom"
+
+[[components]]
+id = "kernal_rom"
+type = "ROM"
+model = "GENERIC"
+description = "KERNAL ROM (8KB)"
+
+    [components.config]
+    address = "$E000"
+    size = 8192
+    file = "data/c64/roms/kernal.rom"
+
+[[components]]
+id = "char_rom"
+type = "ROM"
+model = "GENERIC"
+description = "Character ROM (4KB)"
+
+    [components.config]
+    address = "$D000"
+    size = 4096
+    file = "data/c64/roms/characters.rom"
+
+[memory_map]
+type = "BANKED"
+description = "C64 memory banking controlled by CPU port ($0000/$0001)"
+banking_component = "cpu"
+banking_register = "port"
+
+[[memory_map.banks]]
+id = 0
+description = "All RAM mode"
+config = "$30"
+
+    [[memory_map.banks.regions]]
+    address = "$0000"
+    size = 65536
+    component = "ram"
+    writable = true
+
+[[memory_map.banks]]
+id = 1
+description = "RAM + CHAR ROM visible"
+config = "$31"
+
+    [[memory_map.banks.regions]]
+    address = "$0000"
+    size = 40960
+    component = "ram"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$A000"
+    size = 8192
+    component = "ram"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$C000"
+    size = 4096
+    component = "ram"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$D000"
+    size = 4096
+    component = "char_rom"
+    writable = false
+    
+    [[memory_map.banks.regions]]
+    address = "$E000"
+    size = 8192
+    component = "ram"
+    writable = true
+
+[[memory_map.banks]]
+id = 2
+description = "RAM + KERNAL ROM"
+config = "$32"
+
+    [[memory_map.banks.regions]]
+    address = "$0000"
+    size = 40960
+    component = "ram"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$A000"
+    size = 8192
+    component = "ram"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$C000"
+    size = 4096
+    component = "ram"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$D000"
+    size = 4096
+    component = "ram"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$E000"
+    size = 8192
+    component = "kernal_rom"
+    writable = false
+
+[[memory_map.banks]]
+id = 3
+description = "RAM + BASIC + KERNAL ROMs"
+config = "$33"
+
+    [[memory_map.banks.regions]]
+    address = "$0000"
+    size = 40960
+    component = "ram"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$A000"
+    size = 8192
+    component = "basic_rom"
+    writable = false
+    
+    [[memory_map.banks.regions]]
+    address = "$C000"
+    size = 4096
+    component = "ram"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$D000"
+    size = 4096
+    component = "ram"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$E000"
+    size = 8192
+    component = "kernal_rom"
+    writable = false
+
+[[memory_map.banks]]
+id = 4
+description = "Full system (BASIC + I/O + KERNAL)"
+config = "$37"
+
+    [[memory_map.banks.regions]]
+    address = "$0000"
+    size = 40960
+    component = "ram"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$A000"
+    size = 8192
+    component = "basic_rom"
+    writable = false
+    
+    [[memory_map.banks.regions]]
+    address = "$C000"
+    size = 4096
+    component = "ram"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$D000"
+    size = 1024
+    component = "vic"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$D400"
+    size = 1024
+    component = "sid"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$D800"
+    size = 1024
+    component = "color_ram"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$DC00"
+    size = 256
+    component = "cia1"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$DD00"
+    size = 256
+    component = "cia2"
+    writable = true
+    
+    [[memory_map.banks.regions]]
+    address = "$E000"
+    size = 8192
+    component = "kernal_rom"
+    writable = false
+
+[[connections]]
+from = "cpu"
+to = "ram"
+type = "bus"
+signals = ["ADDRESS", "DATA", "RW"]
+description = "Main system bus to RAM"
+
+[[connections]]
+from = "cpu"
+to = "vic"
+type = "bus"
+signals = ["ADDRESS", "DATA", "RW", "BA"]
+description = "CPU to VIC-II (VIC can halt CPU via BA line)"
+
+[[connections]]
+from = "cpu"
+to = "sid"
+type = "bus"
+signals = ["ADDRESS", "DATA", "RW"]
+description = "CPU to SID"
+
+[[connections]]
+from = "cpu"
+to = "cia1"
+type = "bus"
+signals = ["ADDRESS", "DATA", "RW"]
+description = "CPU to CIA1"
+
+[[connections]]
+from = "cpu"
+to = "cia2"
+type = "bus"
+signals = ["ADDRESS", "DATA", "RW"]
+description = "CPU to CIA2"
+
+[[connections]]
+from = "cia1"
+to = "cpu"
+type = "signal"
+signals = ["IRQ"]
+description = "CIA1 IRQ to CPU"
+
+    [connections.mapping]
+    "cia1.irq" = "cpu.irq"
+
+[[connections]]
+from = "cia2"
+to = "cpu"
+type = "signal"
+signals = ["NMI"]
+description = "CIA2 NMI to CPU"
+
+    [connections.mapping]
+    "cia2.nmi" = "cpu.nmi"
+
+[[connections]]
+from = "vic"
+to = "ram"
+type = "bus"
+signals = ["ADDRESS", "DATA"]
+description = "VIC-II can read from RAM (video DMA)"
+
+[board_layout]
+name = "C64 ASSY NO. 250425"
+revision = "Rev A"
+manufacture_date = "1982-1983"
+width_mm = 240
+height_mm = 200
+pcb_color = "Brown"
+silk_screen_color = "White"
+
+[[board_layout.sockets]]
+socket_id = "U1"
+component = "cpu"
+x = 50
+y = 150
+orientation = "NORTH"
+is_socketed = false
+silk_screen_label = "MOS 6510"
+
+[[board_layout.sockets]]
+socket_id = "U19"
+component = "vic"
+x = 120
+y = 120
+orientation = "SOUTH"
+is_socketed = true
+silk_screen_label = "VIC-II"
+notes = "Often socketed for easy replacement"
+
+[[board_layout.sockets]]
+socket_id = "U18"
+component = "sid"
+x = 120
+y = 150
+orientation = "NORTH"
+is_socketed = true
+silk_screen_label = "SID"
+notes = "Usually socketed"
+
+[[board_layout.sockets]]
+socket_id = "U7"
+component = "cia1"
+x = 80
+y = 150
+orientation = "NORTH"
+is_socketed = false
+silk_screen_label = "CIA1"
+
+[[board_layout.sockets]]
+socket_id = "U8"
+component = "cia2"
+x = 80
+y = 120
+orientation = "NORTH"
+is_socketed = false
+silk_screen_label = "CIA2"
+
+[[board_layout.sockets]]
+socket_id = "U26"
+component = "color_ram"
+x = 170
+y = 100
+orientation = "NORTH"
+is_socketed = false
+silk_screen_label = "COLOR RAM"
+
+[input.keyboard]
+type = "MATRIX"
+target_component = "cia1"
+target_port = "KEYBOARD_MATRIX"
+mapping = "C64_KEYBOARD"
+
+[input.joystick]
+count = 2
+target_component = "cia1"
+
+[file_support]
+extensions = [".prg", ".d64", ".t64", ".tap", ".crt"]
+
+[[file_support.loaders]]
+extension = ".prg"
+type = "BINARY"
+auto_run = true
+
+[[file_support.loaders]]
+extension = ".d64"
+type = "DISK"
+auto_run = false
+
+[[file_support.loaders]]
+extension = ".crt"
+type = "CARTRIDGE"
+auto_run = true

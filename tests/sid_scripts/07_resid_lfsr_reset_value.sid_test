@@ -1,0 +1,43 @@
+# =============================================================================
+# reSID Behavioral Test: LFSR Initial State After Reset
+# =============================================================================
+# Reference: libsidplayfp/resid wave.cc — reset() sets shift_register = 0x7FFFFE
+#
+# After chip reset, the noise LFSR should be 0x7FFFFE (not 0x7FFFF8).
+# The noise output bits are extracted from LFSR positions:
+#   {20,18,14,11,9,5,2,0} → output bits {11,10,9,8,7,6,5,4}
+#
+# For LFSR = 0x7FFFFE (binary: 0111_1111_1111_1111_1111_1110):
+#   bit 20 = 1 → output bit 11 = 1
+#   bit 18 = 1 → output bit 10 = 1
+#   bit 14 = 1 → output bit  9 = 1
+#   bit 11 = 1 → output bit  8 = 1
+#   bit  9 = 1 → output bit  7 = 1
+#   bit  5 = 1 → output bit  6 = 1
+#   bit  2 = 1 → output bit  5 = 1
+#   bit  0 = 0 → output bit  4 = 0   ← THIS IS THE KEY DIFFERENCE
+# Output = 0xFE0 → OSC3 (upper 8 bits) = 0xFE
+#
+# For LFSR = 0x7FFFF8 (binary: 0111_1111_1111_1111_1111_1000):
+#   bit  2 = 0 → output bit  5 = 0
+#   bit  0 = 0 → output bit  4 = 0
+# Output = 0xFC0 → OSC3 = 0xFC
+#
+# For LFSR = 0x7FFFFF (binary all 1s):
+# All bits high → output = 0xFF0 → OSC3 = 0xFF
+# =============================================================================
+
+reset
+revision, 6581
+
+# Set noise waveform on voice 3 WITHOUT using test bit (to get the reset state)
+write, 0x0E, 0x00
+write, 0x0F, 0x00   # freq = 0 (LFSR won't clock)
+write, 0x12, 0x80   # noise waveform, no test bit, no gate
+write, 0x18, 0x0F   # volume max
+
+# Read OSC3 — should reflect initial LFSR state
+run, 1
+# reSID: LFSR = 0x7FFFFE → OSC3 = 0xFE
+# Our code: LFSR = 0x7FFFF8 → OSC3 = 0xFC
+expect_osc3, 0xFE   # reSID reference value

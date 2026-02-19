@@ -1,0 +1,57 @@
+# =============================================================================
+# reSID Behavioral Test: 15-bit Rate Counter Wrapping (ADSR Delay Bug)
+# =============================================================================
+# Reference: libsidplayfp/resid envelope.h — 15-bit rate counter with 0x8000 wrap
+#
+# The SID rate counter is 15-bit. When ADSR parameters change to a value LOWER
+# than the current counter, the counter does NOT immediately trigger. Instead it
+# continues counting up, wraps at 0x8000, and continues until it reaches the
+# new rate_period value. This creates a long delay before the first envelope
+# step — the famous "ADSR bug" that many SID tunes rely on.
+#
+# Test procedure:
+# 1. Start attack with slow rate (period 31251, rate index 15)
+# 2. Run for 20000 cycles — rate counter has advanced to ~20000
+# 3. Switch to fastest attack rate (period 9, rate index 0)
+# 4. With 15-bit wrapping: counter wraps at 0x8000 (32768), then counts to 9
+#    Total delay = (32768 - 20000) + 9 = 12777 cycles before first tick
+# 5. Without wrapping (bug): counter >= 9 is immediately true, ticks every 9 cycles
+#
+# Expected: ENV3 should NOT have advanced significantly after only 1000 cycles
+#           because the rate counter still needs to wrap around
+# =============================================================================
+
+reset
+revision, 6581
+
+# Set slowest attack (rate 15, period=31251), fast decay, sustain=F
+write, 0x13, 0xF0   # V3 A=15, D=0
+write, 0x14, 0xF0   # V3 S=F, R=0
+
+# Init voice 3 with sawtooth
+write, 0x0E, 0x00   # V3 freq lo = 0x00
+write, 0x0F, 0x10   # V3 freq hi = 0x10
+write, 0x12, 0x28   # V3 control: sawtooth + test bit
+run, 1
+write, 0x12, 0x21   # V3 control: sawtooth + gate ON
+write, 0x18, 0x0F   # Volume max
+
+# Run for 20000 cycles — rate counter reaches ~20000
+# With period 31251, no envelope step yet (counter < 31251)
+run, 20000
+expect_env3, 0x00   # Should still be 0 — no rate tick yet
+
+# NOW: Switch to fastest attack (rate 0, period=9)
+write, 0x13, 0x00   # V3 A=0, D=0
+
+# With proper 15-bit wrapping: counter is at 20000, needs to wrap at 32768
+# then count to 9 before next tick. That's 32768 - 20000 + 9 = 12777 cycles.
+# So after 1000 cycles, envelope should STILL be 0.
+run, 1000
+expect_env3, 0x00   # Should still be 0 if rate counter wraps properly
+
+# After the full wrap delay (~12777 total), envelope should start ticking
+# at the fast rate (every 9 cycles)
+run, 12000          # Total ~13000 since rate change (past the wrap point)
+# Now envelope should have started advancing
+snapshot             # Record what happened

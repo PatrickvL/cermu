@@ -1,7 +1,7 @@
 {
     "cmake.cmakePath": "/usr/bin/cmake",
-    "cmake.sourceDirectory": "${workspaceFolder}/code/cpp",
-    "cmake.buildDirectory": "${workspaceFolder}/code/cpp/build",
+    "cmake.sourceDirectory": "${workspaceFolder}",
+    "cmake.buildDirectory": "${workspaceFolder}/build",
     "cmake.configureOnOpen": true,
     "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
     "C_Cpp.intelliSenseEngine": "default",

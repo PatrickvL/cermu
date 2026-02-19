@@ -1,0 +1,25 @@
+# resid-test: test02 — Change sustain level
+# Source: https://github.com/libsidplayfp/resid-test/blob/master/tests/test02
+# AD=0x00 (fastest attack+decay), SR=0x84 (Sustain=8, Release=4)
+# Tests: lower sustain during sustain triggers decay, raise sustain does NOT raise env.
+
+reset
+
+write, 0x13, 0x00
+run, 3
+write, 0x14, 0x84
+run, 3
+
+# Gate ON
+write, 0x12, 0x01
+run, 5000
+
+# Decrease sustain from 8→4
+write, 0x14, 0x44
+run, 5000
+
+# Increase sustain from 4→6 (envelope should NOT increase — stays <= 0x44)
+write, 0x14, 0x64
+run, 2000
+
+end

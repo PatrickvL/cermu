@@ -1,0 +1,93 @@
+# =============================================================================
+# Bug 2: ADSR rate counter resets on gate transition (missing ADSR bug)
+# =============================================================================
+# The famous "ADSR bug" on real SID hardware: the rate counter is NOT reset
+# when the gate bit transitions. It continues counting from wherever it was.
+# This means that after a gate-on, the first envelope tick does NOT happen
+# at exactly <period> cycles later — it happens after the REMAINING count.
+#
+# Our implementation incorrectly resets envelope_rate_counter to 0 on gate
+# transition, making retriggering perfectly predictable.
+#
+# Test strategy:
+#   - Use attack rate 1 (period = 32 cycles per envelope tick)
+#   - Gate on → attack begins, counter starts from 0 (after the buggy reset)
+#   - Run exactly 48 cycles (counter should be at 48 % 32 = 16 after 1 tick)
+#   - Gate off → with bug: counter resets to 0; without bug: counter at 16
+#   - Gate on → with bug: first attack tick at cycle 32; without: at cycle 16
+#   - After 20 cycles from retrigger: buggy = 0 ticks = env stays at value;
+#     correct = 1 tick already happened = env is at value+1
+#
+# We detect this by carefully counting:
+#   1. Attack at rate 1, gate on, run 32 cycles → 1 tick → amplitude = 1
+#   2. Gate off (enter release at rate 0, period 9)
+#   3. Run 1 cycle (counter was at 0 from reset, or for correct: does 1 more)
+#   4. Gate on again (re-enter attack at rate 1)
+#   5. With buggy reset: counter = 0, first tick at 32 cycles
+#   6. Without reset: counter was 1 (from the 1 cycle run), first tick at 31
+#   7. Run 31 cycles: buggy = 0 ticks, correct = 1 tick
+#
+# Actually, the simplest behavioral check: after a fast gate-off/gate-on
+# the first tick timing is unpredictable on real hardware. With the reset
+# bug, it's always exactly <period> cycles.
+#
+# Let's use a more robust approach:
+#   - Attack rate 1 (period 32), gate on
+#   - Run 1000 cycles → 31 ticks → amplitude = 31
+#   - Gate off, run 0 cycles immediately gate on
+#   - With reset: counter = 0, so 32 cycles until next tick
+#   - Without reset: counter preserved, next tick may be sooner
+#   - Run 16 cycles and check: if ENV3 changed, counter wasn't reset
+# =============================================================================
+
+reset
+
+# Voice 3: Attack rate = 1 (period 32), Decay=0, Sustain=F, Release=0
+write, 0x13, 0x10
+write, 0x14, 0xF0
+
+# Set frequency
+write, 0x0E, 0x00
+write, 0x0F, 0x10
+
+# Zero accumulator via test bit, then gate on
+write, 0x12, 0x28
+run, 1
+write, 0x12, 0x21
+write, 0x18, 0x0F
+
+# Run exactly 32 cycles — one full period at rate 1
+# After 32 cycles: rate_counter wraps, 1 envelope tick, amplitude = 1
+run, 32
+snapshot
+label, after_32_cycles
+
+# Now run 16 more cycles → rate_counter should be at 16
+run, 16
+label, counter_at_16
+
+# Gate off — starts release
+# Bug: rate_counter resets to 0
+# Correct: rate_counter stays at 16
+write, 0x12, 0x20
+
+# Immediately gate on again — back to attack
+# Bug: rate_counter = 0, next tick in 32 cycles
+# Correct: rate_counter = 16, next tick in 16 cycles
+write, 0x12, 0x21
+
+# Run 16 cycles
+run, 16
+snapshot
+label, after_retrigger_16
+
+# If counter was preserved (correct): we should have gotten 1 more tick
+# If counter was reset (bug): no tick yet, need 32 total
+# Run 16 more cycles  
+run, 16
+snapshot
+label, after_retrigger_32
+
+# At this point both buggy and correct should have had at least 1 tick
+# since retrigger. The difference is WHEN the tick happened.
+# We use snapshots to verify the timing difference.

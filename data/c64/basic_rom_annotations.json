@@ -1,0 +1,1187 @@
+{
+  "rom_name": "C64 BASIC ROM",
+  "rom_range": {
+    "start": "0xA000",
+    "end": "0xBFFF",
+    "size": 8192
+  },
+  "description": "Commodore 64 BASIC interpreter ROM v2",
+  "source": "pagetable.com ROM Disassembly - Ultimate Commodore 64 Reference",
+  "entries": [
+    {
+      "address": "0xA000",
+      "byte_count": 2,
+      "description": "BASIC cold start entry point"
+    },
+    {
+      "address": "0xA002",
+      "byte_count": 2,
+      "description": "BASIC warm start entry point"
+    },
+    {
+      "address": "0xA004",
+      "byte_count": 8,
+      "description": "'cbmbasic', ROM name, unreferenced action addresses for primary commands these are called by pushing the address onto the stack and doing an RTS so the actual address -1 needs to be pushed"
+    },
+    {
+      "address": "0xA00C",
+      "byte_count": 2,
+      "description": "perform END $80"
+    },
+    {
+      "address": "0xA00E",
+      "byte_count": 2,
+      "description": "perform FOR $81"
+    },
+    {
+      "address": "0xA010",
+      "byte_count": 2,
+      "description": "perform NEXT $82"
+    },
+    {
+      "address": "0xA012",
+      "byte_count": 2,
+      "description": "perform DATA $83"
+    },
+    {
+      "address": "0xA014",
+      "byte_count": 2,
+      "description": "perform INPUT# $84"
+    },
+    {
+      "address": "0xA016",
+      "byte_count": 2,
+      "description": "perform INPUT $85"
+    },
+    {
+      "address": "0xA018",
+      "byte_count": 2,
+      "description": "perform DIM $86"
+    },
+    {
+      "address": "0xA01A",
+      "byte_count": 2,
+      "description": "perform READ $87"
+    },
+    {
+      "address": "0xA01C",
+      "byte_count": 2,
+      "description": "perform LET $88"
+    },
+    {
+      "address": "0xA01E",
+      "byte_count": 2,
+      "description": "perform GOTO $89"
+    },
+    {
+      "address": "0xA020",
+      "byte_count": 2,
+      "description": "perform RUN $8A"
+    },
+    {
+      "address": "0xA022",
+      "byte_count": 2,
+      "description": "perform IF $8B"
+    },
+    {
+      "address": "0xA024",
+      "byte_count": 2,
+      "description": "perform RESTORE $8C"
+    },
+    {
+      "address": "0xA026",
+      "byte_count": 2,
+      "description": "perform GOSUB $8D"
+    },
+    {
+      "address": "0xA028",
+      "byte_count": 2,
+      "description": "perform RETURN $8E"
+    },
+    {
+      "address": "0xA02A",
+      "byte_count": 2,
+      "description": "perform REM $8F"
+    },
+    {
+      "address": "0xA02C",
+      "byte_count": 2,
+      "description": "perform STOP $90"
+    },
+    {
+      "address": "0xA02E",
+      "byte_count": 2,
+      "description": "perform ON $91"
+    },
+    {
+      "address": "0xA030",
+      "byte_count": 2,
+      "description": "perform WAIT $92"
+    },
+    {
+      "address": "0xA032",
+      "byte_count": 2,
+      "description": "perform LOAD $93"
+    },
+    {
+      "address": "0xA034",
+      "byte_count": 2,
+      "description": "perform SAVE $94"
+    },
+    {
+      "address": "0xA036",
+      "byte_count": 2,
+      "description": "perform VERIFY $95"
+    },
+    {
+      "address": "0xA038",
+      "byte_count": 2,
+      "description": "perform DEF $96"
+    },
+    {
+      "address": "0xA03A",
+      "byte_count": 2,
+      "description": "perform POKE $97"
+    },
+    {
+      "address": "0xA03C",
+      "byte_count": 2,
+      "description": "perform PRINT# $98"
+    },
+    {
+      "address": "0xA03E",
+      "byte_count": 2,
+      "description": "perform PRINT $99"
+    },
+    {
+      "address": "0xA040",
+      "byte_count": 2,
+      "description": "perform CONT $9A"
+    },
+    {
+      "address": "0xA042",
+      "byte_count": 2,
+      "description": "perform LIST $9B"
+    },
+    {
+      "address": "0xA044",
+      "byte_count": 2,
+      "description": "perform CLR $9C"
+    },
+    {
+      "address": "0xA046",
+      "byte_count": 2,
+      "description": "perform CMD $9D"
+    },
+    {
+      "address": "0xA048",
+      "byte_count": 2,
+      "description": "perform SYS $9E"
+    },
+    {
+      "address": "0xA04A",
+      "byte_count": 2,
+      "description": "perform OPEN $9F"
+    },
+    {
+      "address": "0xA04C",
+      "byte_count": 2,
+      "description": "perform CLOSE $A0"
+    },
+    {
+      "address": "0xA04E",
+      "byte_count": 2,
+      "description": "perform GET $A1"
+    },
+    {
+      "address": "0xA050",
+      "byte_count": 2,
+      "description": "perform NEW $A2 action addresses for functions"
+    },
+    {
+      "address": "0xA052",
+      "byte_count": 2,
+      "description": "perform SGN $B4"
+    },
+    {
+      "address": "0xA054",
+      "byte_count": 2,
+      "description": "perform INT $B5"
+    },
+    {
+      "address": "0xA056",
+      "byte_count": 2,
+      "description": "perform ABS $B6"
+    },
+    {
+      "address": "0xA058",
+      "byte_count": 2,
+      "description": "perform USR $B7"
+    },
+    {
+      "address": "0xA05A",
+      "byte_count": 2,
+      "description": "perform FRE $B8"
+    },
+    {
+      "address": "0xA05C",
+      "byte_count": 2,
+      "description": "perform POS $B9"
+    },
+    {
+      "address": "0xA05E",
+      "byte_count": 2,
+      "description": "perform SQR $BA"
+    },
+    {
+      "address": "0xA060",
+      "byte_count": 2,
+      "description": "perform RND $BB"
+    },
+    {
+      "address": "0xA062",
+      "byte_count": 2,
+      "description": "perform LOG $BC"
+    },
+    {
+      "address": "0xA064",
+      "byte_count": 2,
+      "description": "perform EXP $BD"
+    },
+    {
+      "address": "0xA066",
+      "byte_count": 2,
+      "description": "perform COS $BE"
+    },
+    {
+      "address": "0xA068",
+      "byte_count": 2,
+      "description": "perform SIN $BF"
+    },
+    {
+      "address": "0xA06A",
+      "byte_count": 2,
+      "description": "perform TAN $C0"
+    },
+    {
+      "address": "0xA06C",
+      "byte_count": 2,
+      "description": "perform ATN $C1"
+    },
+    {
+      "address": "0xA06E",
+      "byte_count": 2,
+      "description": "perform PEEK $C2"
+    },
+    {
+      "address": "0xA070",
+      "byte_count": 2,
+      "description": "perform LEN $C3"
+    },
+    {
+      "address": "0xA072",
+      "byte_count": 2,
+      "description": "perform STR$ $C4"
+    },
+    {
+      "address": "0xA074",
+      "byte_count": 2,
+      "description": "perform VAL $C5"
+    },
+    {
+      "address": "0xA076",
+      "byte_count": 2,
+      "description": "perform ASC $C6"
+    },
+    {
+      "address": "0xA078",
+      "byte_count": 2,
+      "description": "perform CHR$ $C7"
+    },
+    {
+      "address": "0xA07A",
+      "byte_count": 2,
+      "description": "perform LEFT$ $C8"
+    },
+    {
+      "address": "0xA07C",
+      "byte_count": 2,
+      "description": "perform RIGHT$ $C9"
+    },
+    {
+      "address": "0xA07E",
+      "byte_count": 2,
+      "description": "perform MID$ $CA precedence byte and action addresses for operators like the primary commands these are called by pushing the address onto the stack and doing an RTS, so again the actual address -1 needs to be pushed"
+    },
+    {
+      "address": "0xA080",
+      "byte_count": 3,
+      "description": "+"
+    },
+    {
+      "address": "0xA083",
+      "byte_count": 3,
+      "description": "-"
+    },
+    {
+      "address": "0xA086",
+      "byte_count": 3,
+      "description": "*"
+    },
+    {
+      "address": "0xA089",
+      "byte_count": 3,
+      "description": "/"
+    },
+    {
+      "address": "0xA08C",
+      "byte_count": 3,
+      "description": "^"
+    },
+    {
+      "address": "0xA08F",
+      "byte_count": 3,
+      "description": "AND"
+    },
+    {
+      "address": "0xA092",
+      "byte_count": 3,
+      "description": "OR"
+    },
+    {
+      "address": "0xA095",
+      "byte_count": 3,
+      "description": ">"
+    },
+    {
+      "address": "0xA098",
+      "byte_count": 3,
+      "description": "="
+    },
+    {
+      "address": "0xA09B",
+      "byte_count": 3,
+      "description": "< BASIC keywords each word has b7 set in it's last character as an end marker, even the one character keywords such as \"<\" or \"=\" first are the primary command keywords, only these can start a statement"
+    },
+    {
+      "address": "0xA09E",
+      "byte_count": 2,
+      "description": "end"
+    },
+    {
+      "address": "0xA0A0",
+      "byte_count": 8,
+      "description": "for next"
+    },
+    {
+      "address": "0xA0A8",
+      "byte_count": 8,
+      "description": "data input#"
+    },
+    {
+      "address": "0xA0B0",
+      "byte_count": 8,
+      "description": "input dim"
+    },
+    {
+      "address": "0xA0B8",
+      "byte_count": 8,
+      "description": "read let"
+    },
+    {
+      "address": "0xA0C0",
+      "byte_count": 8,
+      "description": "goto run"
+    },
+    {
+      "address": "0xA0C8",
+      "byte_count": 8,
+      "description": "if restore"
+    },
+    {
+      "address": "0xA0D0",
+      "byte_count": 8,
+      "description": "gosub return"
+    },
+    {
+      "address": "0xA0D8",
+      "byte_count": 8,
+      "description": "rem stop"
+    },
+    {
+      "address": "0xA0E0",
+      "byte_count": 8,
+      "description": "on wait"
+    },
+    {
+      "address": "0xA0E8",
+      "byte_count": 8,
+      "description": "load save"
+    },
+    {
+      "address": "0xA0F0",
+      "byte_count": 8,
+      "description": "verify def"
+    },
+    {
+      "address": "0xA0F8",
+      "byte_count": 8,
+      "description": "poke print#"
+    },
+    {
+      "address": "0xA100",
+      "byte_count": 8,
+      "description": "print"
+    },
+    {
+      "address": "0xA108",
+      "byte_count": 8,
+      "description": "cont list"
+    },
+    {
+      "address": "0xA110",
+      "byte_count": 8,
+      "description": "clr cmd sys"
+    },
+    {
+      "address": "0xA118",
+      "byte_count": 8,
+      "description": "open close"
+    },
+    {
+      "address": "0xA120",
+      "byte_count": 8,
+      "description": "get new next are the secondary command keywords, these can not start a statement"
+    },
+    {
+      "address": "0xA128",
+      "byte_count": 8,
+      "description": "tab( to"
+    },
+    {
+      "address": "0xA130",
+      "byte_count": 8,
+      "description": "spc( then"
+    },
+    {
+      "address": "0xA138",
+      "byte_count": 8,
+      "description": "not step next are the operators"
+    },
+    {
+      "address": "0xA140",
+      "byte_count": 8,
+      "description": "+ - * / ' and"
+    },
+    {
+      "address": "0xA148",
+      "byte_count": 8,
+      "description": "or <=>"
+    },
+    {
+      "address": "0xA150",
+      "byte_count": 8,
+      "description": "sgn and finally the functions int abs usr"
+    },
+    {
+      "address": "0xA158",
+      "byte_count": 8,
+      "description": "fre pos sqr"
+    },
+    {
+      "address": "0xA160",
+      "byte_count": 8,
+      "description": "rnd log"
+    },
+    {
+      "address": "0xA168",
+      "byte_count": 8,
+      "description": "exp cos sin"
+    },
+    {
+      "address": "0xA170",
+      "byte_count": 8,
+      "description": "tan atn peek"
+    },
+    {
+      "address": "0xA178",
+      "byte_count": 8,
+      "description": "len str$"
+    },
+    {
+      "address": "0xA180",
+      "byte_count": 8,
+      "description": "val asc"
+    },
+    {
+      "address": "0xA188",
+      "byte_count": 8,
+      "description": "chr$ left$"
+    },
+    {
+      "address": "0xA190",
+      "byte_count": 8,
+      "description": "right$ mid$ lastly is GO, this is an add on so that GO TO, as well as GOTO, will work"
+    },
+    {
+      "address": "0xA198",
+      "byte_count": 6,
+      "description": "go"
+    },
+    {
+      "address": "0xA1A0",
+      "byte_count": 2,
+      "description": "end marker BASIC error messages 1 too many files"
+    },
+    {
+      "address": "0xA1A0",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA1A8",
+      "byte_count": 8,
+      "description": "2 file open"
+    },
+    {
+      "address": "0xA1B0",
+      "byte_count": 8,
+      "description": "3 file not open"
+    },
+    {
+      "address": "0xA1B8",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA1C0",
+      "byte_count": 8,
+      "description": "4 file not found"
+    },
+    {
+      "address": "0xA1C8",
+      "byte_count": 8,
+      "description": "5 device not present"
+    },
+    {
+      "address": "0xA1D0",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA1D8",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA1E0",
+      "byte_count": 8,
+      "description": "6 not input file"
+    },
+    {
+      "address": "0xA1E8",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA1F0",
+      "byte_count": 8,
+      "description": "7 not output file"
+    },
+    {
+      "address": "0xA1F8",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA200",
+      "byte_count": 8,
+      "description": "8 missing filename"
+    },
+    {
+      "address": "0xA208",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA210",
+      "byte_count": 8,
+      "description": "9 illegal device number"
+    },
+    {
+      "address": "0xA218",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA220",
+      "byte_count": 8,
+      "description": "10 next without for"
+    },
+    {
+      "address": "0xA228",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA230",
+      "byte_count": 8,
+      "description": "11 syntax"
+    },
+    {
+      "address": "0xA238",
+      "byte_count": 8,
+      "description": "12 return without gosub"
+    },
+    {
+      "address": "0xA240",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA248",
+      "byte_count": 8,
+      "description": "13 out of data"
+    },
+    {
+      "address": "0xA250",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA258",
+      "byte_count": 8,
+      "description": "14 illegal quantity"
+    },
+    {
+      "address": "0xA260",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA268",
+      "byte_count": 8,
+      "description": "15 overflow"
+    },
+    {
+      "address": "0xA270",
+      "byte_count": 8,
+      "description": "16 out of memory"
+    },
+    {
+      "address": "0xA278",
+      "byte_count": 8,
+      "description": "17 undef'd statement"
+    },
+    {
+      "address": "0xA280",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA288",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA290",
+      "byte_count": 8,
+      "description": "18 bad subscript"
+    },
+    {
+      "address": "0xA298",
+      "byte_count": 8,
+      "description": "19 redim'd array"
+    },
+    {
+      "address": "0xA2A0",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA2A8",
+      "byte_count": 8,
+      "description": "20 division by zero"
+    },
+    {
+      "address": "0xA2B0",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA2B8",
+      "byte_count": 8,
+      "description": "21 illegal direct"
+    },
+    {
+      "address": "0xA2C0",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA2C8",
+      "byte_count": 8,
+      "description": "22 type mismatch"
+    },
+    {
+      "address": "0xA2D0",
+      "byte_count": 8,
+      "description": "23 string too long"
+    },
+    {
+      "address": "0xA2D8",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA2E0",
+      "byte_count": 8,
+      "description": "24 file data"
+    },
+    {
+      "address": "0xA2E8",
+      "byte_count": 8,
+      "description": "25 formula too complex"
+    },
+    {
+      "address": "0xA2F0",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA2F8",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA300",
+      "byte_count": 8,
+      "description": "26 can't continue"
+    },
+    {
+      "address": "0xA308",
+      "byte_count": 8,
+      "description": "27 undef'd function"
+    },
+    {
+      "address": "0xA310",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA318",
+      "byte_count": 8,
+      "description": "28 verify"
+    },
+    {
+      "address": "0xA320",
+      "byte_count": 8,
+      "description": "29 load error message pointer table"
+    },
+    {
+      "address": "0xA328",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA330",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA338",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA340",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA348",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA350",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA358",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xA360",
+      "byte_count": 4,
+      "description": "BASIC messages"
+    },
+    {
+      "address": "0xA364",
+      "byte_count": 4,
+      "description": "OK"
+    },
+    {
+      "address": "0xA368",
+      "byte_count": 8,
+      "description": "ERROR"
+    },
+    {
+      "address": "0xA370",
+      "byte_count": 8,
+      "description": "IN"
+    },
+    {
+      "address": "0xA378",
+      "byte_count": 8,
+      "description": "READY."
+    },
+    {
+      "address": "0xA380",
+      "byte_count": 8,
+      "description": "BREAK"
+    },
+    {
+      "address": "0xA388",
+      "byte_count": 2,
+      "description": "spare byte, not referenced"
+    },
+    {
+      "address": "0xA8E2",
+      "byte_count": 1,
+      "description": "makes next line BIT $11A2"
+    },
+    {
+      "address": "0xA908",
+      "byte_count": 1,
+      "description": "makes next line BIT $00A2 scan for next BASIC line returns Y as index to [EOL]"
+    },
+    {
+      "address": "0xAB41",
+      "byte_count": 1,
+      "description": "makes next line BIT $1DA9"
+    },
+    {
+      "address": "0xAB44",
+      "byte_count": 1,
+      "description": "makes next line BIT $3FA9 print \"?\""
+    },
+    {
+      "address": "0xAC0C",
+      "byte_count": 1,
+      "description": "makes next line BIT $00A9"
+    },
+    {
+      "address": "0xACFC",
+      "byte_count": 8,
+      "description": "'?extra ignored'"
+    },
+    {
+      "address": "0xAD04",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xAD0C",
+      "byte_count": 8,
+      "description": "'?redo from start'"
+    },
+    {
+      "address": "0xAD14",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xAD1C",
+      "byte_count": 2,
+      "description": "perform NEXT"
+    },
+    {
+      "address": "0xAD8E",
+      "byte_count": 1,
+      "description": "makes next line BIT $38 check if source and destination are string"
+    },
+    {
+      "address": "0xADA8",
+      "byte_count": 1,
+      "description": "makes next line BIT $48"
+    },
+    {
+      "address": "0xAEA8",
+      "byte_count": 5,
+      "description": "3.141592653 get value from line .. continued wasn't variable name so ..."
+    },
+    {
+      "address": "0xAEF9",
+      "byte_count": 1,
+      "description": "makes next line BIT $28A9 scan for \"(\", else do syntax error then warm start"
+    },
+    {
+      "address": "0xAEFC",
+      "byte_count": 1,
+      "description": "makes next line BIT $2CA9 scan for \",\", else do syntax error then warm start"
+    },
+    {
+      "address": "0xAFE8",
+      "byte_count": 1,
+      "description": "makes next line BIT $00A0 perform AND"
+    },
+    {
+      "address": "0xB1A5",
+      "byte_count": 5,
+      "description": "-32768 convert float to fixed"
+    },
+    {
+      "address": "0xB247",
+      "byte_count": 1,
+      "description": "makes next line BIT $0EA2 do illegal quantity error"
+    },
+    {
+      "address": "0xB3AD",
+      "byte_count": 1,
+      "description": "makes next line BIT $1BA2"
+    },
+    {
+      "address": "0xB9BC",
+      "byte_count": 5,
+      "description": "1"
+    },
+    {
+      "address": "0xB9C1",
+      "byte_count": 1,
+      "description": "series counter"
+    },
+    {
+      "address": "0xB9C2",
+      "byte_count": 5,
+      "description": ".434255942"
+    },
+    {
+      "address": "0xB9C7",
+      "byte_count": 5,
+      "description": ".576584541"
+    },
+    {
+      "address": "0xB9CC",
+      "byte_count": 5,
+      "description": ".961800759"
+    },
+    {
+      "address": "0xB9D1",
+      "byte_count": 5,
+      "description": "2.88539007"
+    },
+    {
+      "address": "0xB9D6",
+      "byte_count": 5,
+      "description": ".707106781 = 1/SQR(2)"
+    },
+    {
+      "address": "0xB9DB",
+      "byte_count": 5,
+      "description": "1.41421356 = SQR(2)"
+    },
+    {
+      "address": "0xB9E0",
+      "byte_count": 5,
+      "description": "-.5"
+    },
+    {
+      "address": "0xB9E5",
+      "byte_count": 5,
+      "description": ".693147181  =  LOG(2) perform LOG()"
+    },
+    {
+      "address": "0xBAC3",
+      "byte_count": 1,
+      "description": "makes next line BIT $1410"
+    },
+    {
+      "address": "0xBAF9",
+      "byte_count": 5,
+      "description": "10 divide FAC1 by 10"
+    },
+    {
+      "address": "0xBBC9",
+      "byte_count": 1,
+      "description": "makes next line BIT $57A2 pack FAC1 into $57"
+    },
+    {
+      "address": "0xBDB3",
+      "byte_count": 5,
+      "description": "99999999.90625, maximum value with at least one decimal"
+    },
+    {
+      "address": "0xBDB8",
+      "byte_count": 5,
+      "description": "999999999.25, maximum value before scientific notation"
+    },
+    {
+      "address": "0xBDBD",
+      "byte_count": 5,
+      "description": "1000000000 do \" IN \" line number message"
+    },
+    {
+      "address": "0xBF11",
+      "byte_count": 5,
+      "description": "0.5, first two bytes"
+    },
+    {
+      "address": "0xBF16",
+      "byte_count": 4,
+      "description": "null return for undefined variables -100 000 000"
+    },
+    {
+      "address": "0xBF1A",
+      "byte_count": 4,
+      "description": "+10 000 000"
+    },
+    {
+      "address": "0xBF1E",
+      "byte_count": 4,
+      "description": "-1 000 000"
+    },
+    {
+      "address": "0xBF22",
+      "byte_count": 4,
+      "description": "+100 000"
+    },
+    {
+      "address": "0xBF26",
+      "byte_count": 4,
+      "description": "-10 000"
+    },
+    {
+      "address": "0xBF2A",
+      "byte_count": 4,
+      "description": "+1 000"
+    },
+    {
+      "address": "0xBF2E",
+      "byte_count": 4,
+      "description": "- 100"
+    },
+    {
+      "address": "0xBF32",
+      "byte_count": 4,
+      "description": "+10"
+    },
+    {
+      "address": "0xBF36",
+      "byte_count": 4,
+      "description": "-1 jiffy counts"
+    },
+    {
+      "address": "0xBF3A",
+      "byte_count": 4,
+      "description": "-2160000    10s hours"
+    },
+    {
+      "address": "0xBF3E",
+      "byte_count": 4,
+      "description": "+216000        hours"
+    },
+    {
+      "address": "0xBF42",
+      "byte_count": 4,
+      "description": "-36000    10s mins"
+    },
+    {
+      "address": "0xBF46",
+      "byte_count": 4,
+      "description": "+3600        mins"
+    },
+    {
+      "address": "0xBF4A",
+      "byte_count": 4,
+      "description": "-600    10s secs"
+    },
+    {
+      "address": "0xBF4E",
+      "byte_count": 4,
+      "description": "+60        secs not referenced"
+    },
+    {
+      "address": "0xBF52",
+      "byte_count": 1,
+      "description": "checksum byte spare bytes, not referenced"
+    },
+    {
+      "address": "0xBF53",
+      "byte_count": 5,
+      "description": ""
+    },
+    {
+      "address": "0xBF58",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xBF60",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xBF68",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xBF70",
+      "byte_count": 1,
+      "description": "perform SQR()"
+    },
+    {
+      "address": "0xBFBF",
+      "byte_count": 5,
+      "description": "1.44269504 = 1/LOG(2)"
+    },
+    {
+      "address": "0xBFC4",
+      "byte_count": 1,
+      "description": "series count"
+    },
+    {
+      "address": "0xBFC5",
+      "byte_count": 5,
+      "description": "2.14987637E-5"
+    },
+    {
+      "address": "0xBFCA",
+      "byte_count": 5,
+      "description": "1.43523140E-4"
+    },
+    {
+      "address": "0xBFCF",
+      "byte_count": 5,
+      "description": "1.34226348E-3"
+    },
+    {
+      "address": "0xBFD4",
+      "byte_count": 5,
+      "description": "9.61401701E-3"
+    },
+    {
+      "address": "0xBFD9",
+      "byte_count": 5,
+      "description": "5.55051269E-2"
+    },
+    {
+      "address": "0xBFDE",
+      "byte_count": 5,
+      "description": "2.40226385E-1"
+    },
+    {
+      "address": "0xBFE3",
+      "byte_count": 5,
+      "description": "6.93147186E-1"
+    },
+    {
+      "address": "0xBFE8",
+      "byte_count": 5,
+      "description": "1.00000000 perform EXP()"
+    }
+  ]
+}

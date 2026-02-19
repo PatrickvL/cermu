@@ -1,0 +1,61 @@
+# =============================================================================
+# Bug 1: ENV3 register read returns 0 when gate is off
+# =============================================================================
+# On real hardware, the ENV3 register ($D41C) always reflects the current
+# envelope amplitude, regardless of gate state. During release, reading
+# ENV3 shows the decaying value.
+#
+# Bug: mos6581_registers_read() returns 0 for ENV3 when gate is off.
+# Fix: Always return envelope_amplitude >> 8, ignoring gate state.
+# =============================================================================
+
+reset
+
+# Voice 3: Attack=0 (period=9), Decay=15 (period=31251, very slow)
+# Sustain=F, Release=4 (period=149)
+write, 0x13, 0x0F
+write, 0x14, 0xF4
+
+# Set frequency
+write, 0x0E, 0x00
+write, 0x0F, 0x10
+
+# Zero accumulator via test bit, then gate on with sawtooth
+write, 0x12, 0x28
+run, 1
+write, 0x12, 0x21
+write, 0x18, 0x0F
+
+# Attack to max: 255 * 9 = 2295 cycles (8-bit envelope).
+# Decay rate 15 (period 31251) is so slow that after 3000 total cycles,
+# no decay tick has happened yet. Amplitude is still 0xFF.
+run, 3000
+
+label, before_release
+# ENV3 should be 0xFF (full amplitude, no decay yet)
+expect_env3, 0xFF
+
+# Gate off → release begins (rate 4, period 149)
+write, 0x12, 0x20
+
+# After just 10 cycles, no release tick yet. ENV3 should still be 0xFF.
+# Bug: returns 0x00 because gate is off.
+run, 10
+label, release_10_cycles
+expect_env3, 0xFF
+
+# After 200 cycles: With the 15-bit rate counter ADSR delay bug, the counter
+# was at ~705 (from attack+decay phase) when release started with period 148.
+# Since 705 > 148, the counter wraps through 0x8000 before the first tick.
+# Total delay ~32211 cycles. So after only 200 cycles, still 0xFF.
+run, 190
+label, release_200_cycles
+expect_env3, 0xFF
+
+# After many more cycles the exponential decay slows down.
+# After another ~30000 cycles from release start: many release ticks
+# have fired.  The exponential counter periods slow as level drops.
+# We just check it's well below 0xFF but still above 0.
+run, 29800
+label, release_30000_cycles
+snapshot

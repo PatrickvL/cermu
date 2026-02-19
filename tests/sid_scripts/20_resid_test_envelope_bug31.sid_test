@@ -1,0 +1,81 @@
+# resid-test: testEnvelope01 — libsidplayfp bug #31
+# Source: https://github.com/libsidplayfp/resid-test/blob/master/tests/testEnvelope01
+# Tests envelope behavior across various waveform/gate combinations.
+# Verifies envelope operates correctly when waveform bits change while gated.
+
+reset
+check, 0x1c
+
+# AD = 0x00 (fastest attack+decay)
+write, 0x13, 0x00
+run, 3
+
+# SR = 0x00 (sustain=0, release=0 fastest)
+write, 0x14, 0x00
+run, 3
+
+# Control = 0xC7 (noise+pulse+sawtooth+triangle + gate + sync + ring)
+write, 0x12, 0xc7
+run, 3
+run, 20000
+
+# Control = 0x09 (test bit + gate)
+write, 0x12, 0x09
+run, 3
+run, 20000
+
+# Control = 0x81 (noise + gate)
+write, 0x12, 0x81
+run, 3
+run, 20000
+
+# Control = 0x14 (triangle + 0x04=ring, no gate)
+write, 0x12, 0x14
+run, 3
+run, 20000
+
+# Control = 0x10 (triangle, no gate)
+write, 0x12, 0x10
+run, 3
+run, 20000
+
+# Wait for envelope to fully settle
+run, 50000
+
+# After 150000+ total cycles with fastest rates and no gate, envelope must be 0
+expect_env3, 0x00
+
+# --- Phase 2: with non-zero AD/SR ---
+
+# AD = 0x10 (Attack=1, Decay=0)
+write, 0x13, 0x10
+run, 3
+
+# SR = 0xF8 (Sustain=15→0xFF, Release=8)
+write, 0x14, 0xf8
+run, 3
+
+# Control = 0x09 (test bit + gate)
+write, 0x12, 0x09
+run, 3
+run, 20000
+
+# Control = 0x81 (noise + gate)
+write, 0x12, 0x81
+run, 3
+run, 20000
+
+# Control = 0x11 (triangle + gate)
+write, 0x12, 0x11
+run, 3
+run, 20000
+
+# Control = 0x10 (triangle, no gate — release)
+write, 0x12, 0x10
+run, 3
+run, 20000
+
+# Wait
+run, 50000
+
+end

@@ -1,0 +1,29 @@
+# resid-test: test08 — OSC3 pulse waveform
+# Source: https://github.com/libsidplayfp/resid-test/blob/master/tests/test08
+# Sets max frequency, resets with test bit, sets pulse width, then enables pulse.
+# Checks OSC3 register output.
+
+reset
+check, 0x1b
+
+# Voice 3 freq = 0xFFFF
+write, 0x0f, 0xff
+run, 3
+write, 0x0e, 0xff
+run, 3
+
+# Test bit ON (resets accumulator)
+write, 0x12, 0x08
+run, 3
+
+# Set pulse width = 0x0321
+write, 0x10, 0x21
+run, 3
+write, 0x11, 0x03
+run, 3
+
+# Pulse ON (test bit OFF — accumulator starts running)
+write, 0x12, 0x40
+run, 500
+
+end

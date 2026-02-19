@@ -1,0 +1,62 @@
+# =============================================================================
+# Bug 3: Test bit kills envelope generator
+# =============================================================================
+# On real hardware, the test bit (bit 3 of the control register) only affects
+# the oscillator: it zeros the accumulator and resets the noise LFSR.
+# The envelope generator is completely independent and unaffected.
+#
+# This test:
+#   1. Gates voice 3 with fast attack to reach max envelope
+#   2. Engages the test bit while gate remains on
+#   3. Verifies envelope is unaffected (still at max)
+#
+# Bug: Our implementation sets envelope_cycle=CYCLE_OFF and amplitude=0
+#      when the test bit is set.
+# Fix: Remove envelope_cycle and envelope_amplitude changes from test bit handler.
+# =============================================================================
+
+reset
+
+# Voice 3: Attack=0 (fastest), Decay=15 (slowest), Sustain=F, Release=0
+write, 0x13, 0x0F
+write, 0x14, 0xF0
+
+# Set frequency
+write, 0x0E, 0x00
+write, 0x0F, 0x10
+
+# Zero accumulator via test bit first, then gate on
+write, 0x12, 0x28
+run, 1
+write, 0x12, 0x21
+
+# Volume on
+write, 0x18, 0x0F
+
+# Attack to max: 255 * 9 = 2295 cycles (8-bit)
+run, 3000
+label, at_full_envelope
+
+# Verify we're at max
+expect_env3, 0xFF
+
+# Now engage test bit while keeping gate on
+# Control: test=1, sawtooth=1, gate=1 → 0x08 | 0x20 | 0x01 = 0x29
+write, 0x12, 0x29
+run, 10
+label, after_test_bit
+
+# Envelope should still be at max — test bit does NOT affect envelope
+expect_env3, 0xFF
+
+# Run more cycles with test bit engaged
+run, 1000
+label, after_test_bit_1000
+
+# Still at max
+expect_env3, 0xFF
+
+# Release test bit, keep gate on: should still be at sustain=F
+write, 0x12, 0x21
+run, 100
+expect_env3, 0xFF
