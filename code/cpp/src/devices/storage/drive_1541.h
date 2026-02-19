@@ -165,6 +165,14 @@ public:
     /// Get current fliplist index (-1 if empty or no match).
     int get_fliplist_index() const { return fliplist_index_; }
 
+    // --- File Dialog Request (GUI communication) -----------------------
+
+    /// Returns true if the device UI requested a file dialog (e.g. "Insert Disk...").
+    bool wants_file_dialog() const { return wants_file_dialog_; }
+
+    /// Clear the file dialog request flag (called by GUI after opening the dialog).
+    void clear_file_dialog_request() { wants_file_dialog_ = false; }
+
 private:
     // --- IEC Protocol --------------------------------------------------
 
@@ -239,6 +247,9 @@ private:
     // Disc fliplist
     std::vector<std::string> fliplist_;
     int                      fliplist_index_ = -1;
+
+    // GUI communication
+    bool                     wants_file_dialog_ = false;  ///< Set by render_device_ui, cleared by GUI
 
     // D64 constants (prefixed to avoid collision with d64_format.h macros)
     static constexpr uint32_t DRIVE_D64_STD_SIZE     = 174848;

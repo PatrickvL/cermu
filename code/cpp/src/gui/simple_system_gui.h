@@ -6,6 +6,8 @@
 #include "../core/emulated_system.h"
 #include <memory>
 
+class Drive1541Device;  // Forward declaration for drive file dialog
+
 /**
  * SimpleSystemGUI - Generic GUI for any EmulatedSystem
  *
@@ -43,6 +45,9 @@ private:
     
     // Last selected file path for file dialog
     std::string last_file_path_;
+    
+    // Pending drive insert — set when a 1541 drive requests a file dialog
+    Drive1541Device* pending_drive_insert_ = nullptr;
     
     // Pending file to load after system selection (from command line)
     std::string pending_file_path_;
@@ -89,6 +94,14 @@ public:
     uint32_t get_frame_delay_ms() const override { return 0; }
     
 private:
+    /// Open file dialog with system-appropriate filters.
+    /// @param dialog_key  ImGuiFileDialog key (different keys for different contexts)
+    /// @param title       Dialog window title
+    void open_file_dialog(const char* dialog_key, const char* title);
+    
+    /// Check attached 1541 drives for pending file dialog requests.
+    void poll_drive_file_dialog_requests();
+    
     // Helper functions
     void update_fps();
     void reset_frame_pacing();
