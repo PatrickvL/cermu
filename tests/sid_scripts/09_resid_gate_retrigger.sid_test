@@ -1,0 +1,75 @@
+# =============================================================================
+# reSID Behavioral Test: Gate Retrigger Envelope Continuity
+# =============================================================================
+# Reference: libsidplayfp/resid envelope.cc — state transitions
+#
+# When gate goes off (release) and then immediately back on (attack):
+# - Rate counter is NOT reset (ADSR bug)
+# - hold_zero is cleared
+# - Attack starts from the current envelope level (not from 0)
+# - If envelope was at some value < 0xFF during release, attack continues UP
+# =============================================================================
+
+reset
+revision, 6581
+
+# Fast attack, fast decay, sustain=0xF, fastest release
+write, 0x13, 0x00   # V3 A=0, D=0
+write, 0x14, 0xF0   # V3 S=F, R=0
+
+# Init voice 3
+write, 0x0E, 0x00
+write, 0x0F, 0x10
+write, 0x12, 0x28   # sawtooth + test
+run, 1
+write, 0x12, 0x21   # sawtooth + gate
+write, 0x18, 0x0F
+
+# Let attack complete to 0xFF: 9 × 255 = 2295 cycles
+run, 5000
+expect_env3, 0xFF   # At sustain max
+
+# Gate off — start release
+write, 0x12, 0x20   # sawtooth, gate off
+
+# Let envelope decay partially (release rate 0, period 9)
+# After 1000 cycles of release: about 100+ decrements accounting for exponential
+run, 1000
+snapshot   # Capture current envelope level
+
+# Gate ON again — should retrigger attack from current level
+write, 0x12, 0x21   # sawtooth + gate
+
+# Attack should ramp FROM current level back UP to 0xFF
+# Since we're partway down, it should reach 0xFF relatively quickly
+run, 5000
+expect_env3, 0xFF   # Should reach max again
+
+# Test 2: Gate rapidly toggled during attack
+label, rapid_retrigger
+reset
+write, 0x13, 0x20   # V3 A=2 (period=63), D=0
+write, 0x14, 0xF0   # V3 S=F, R=0
+write, 0x0E, 0x00
+write, 0x0F, 0x10
+write, 0x12, 0x28   # test
+run, 1
+write, 0x12, 0x21   # gate ON
+write, 0x18, 0x0F
+
+# Run for some attack time
+run, 500
+snapshot   # Should be partway through attack
+
+# Gate off briefly, then on
+write, 0x12, 0x20   # gate OFF
+run, 1
+write, 0x12, 0x21   # gate ON immediately
+
+# Attack should continue from where it was (rate counter NOT reset)
+run, 500
+snapshot   # Should have continued advancing
+
+# Eventually reach 0xFF
+run, 50000
+expect_env3, 0xFF

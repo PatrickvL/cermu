@@ -1,0 +1,94 @@
+# =============================================================================
+# Bug 4: Sustain level nibble duplication
+# =============================================================================
+# On real hardware, the 4-bit sustain nibble is duplicated to form an 8-bit
+# comparator value: nibble 0xF → 0xFF, nibble 0xA → 0xAA, nibble 0x5 → 0x55.
+# This is because the SID compares the upper 8 bits of the envelope counter
+# against the duplicated nibble (high nibble = sustain, low nibble = sustain).
+#
+# This test:
+#   1. Tests sustain=0xF → ENV3 should reach 0xFF (not 0xF0)
+#   2. Tests sustain=0x8 → ENV3 should reach 0x88 (not 0x80)
+#   3. Tests sustain=0x5 → ENV3 should reach 0x55 (not 0x50)
+#
+# Bug: sustain_level = nibble << 12, giving ENV3 = nibble << 4 (e.g., 0xF0)
+# Fix: sustain_level = ((nibble << 4) | nibble) << 8, giving ENV3 = (nibble<<4)|nibble
+# =============================================================================
+
+reset
+
+# ── Test A: Sustain = 0xF → expect ENV3 = 0xFF ──
+
+label, sustain_F
+write, 0x13, 0x00
+write, 0x14, 0xF0
+
+write, 0x0E, 0x00
+write, 0x0F, 0x10
+
+# Zero acc via test bit, then gate on sawtooth
+write, 0x12, 0x28
+run, 1
+write, 0x12, 0x21
+write, 0x18, 0x0F
+
+# Full attack (255*9=2295 cycles) + decay to sustain (exponential)
+run, 100000
+label, sustain_F_check
+
+# Real hardware: 0xFF for sustain nibble 0xF
+expect_env3, 0xFF
+
+# Hold check
+run, 50000
+expect_env3, 0xFF
+
+# ── Test B: Sustain = 0x8 → expect ENV3 = 0x88 ──
+
+reset
+label, sustain_8
+
+write, 0x13, 0x00
+write, 0x14, 0x80
+
+write, 0x0E, 0x00
+write, 0x0F, 0x10
+
+write, 0x12, 0x28
+run, 1
+write, 0x12, 0x21
+write, 0x18, 0x0F
+
+run, 100000
+label, sustain_8_check
+
+# Real hardware: 0x88 for sustain nibble 0x8
+expect_env3, 0x88
+
+run, 50000
+expect_env3, 0x88
+
+# ── Test C: Sustain = 0x5 → expect ENV3 = 0x55 ──
+
+reset
+label, sustain_5
+
+write, 0x13, 0x00
+write, 0x14, 0x50
+
+write, 0x0E, 0x00
+write, 0x0F, 0x10
+
+write, 0x12, 0x28
+run, 1
+write, 0x12, 0x21
+write, 0x18, 0x0F
+
+run, 100000
+label, sustain_5_check
+
+# Real hardware: 0x55 for sustain nibble 0x5
+expect_env3, 0x55
+
+run, 50000
+expect_env3, 0x55

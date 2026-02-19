@@ -1,6 +1,6 @@
-# C64 Emulator Build Guide
+# cermu Build Guide
 
-Comprehensive build instructions for the C64 Emulator project supporting multiple platforms and build systems.
+Comprehensive build instructions for the cermu multi-system emulator project supporting multiple platforms and build systems.
 
 ## Table of Contents
 - [System Requirements](#system-requirements)
@@ -36,35 +36,27 @@ Comprehensive build instructions for the C64 Emulator project supporting multipl
 
 ### Windows (MSBuild - Recommended)
 ```powershell
-# Navigate to project root
-cd code/c
-
 # Build using PowerShell script (recommended)
-.\..\..\build.ps1 Release
+.\scripts\build.ps1 Release
 
-# Or build manually
-& "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe" aiemuc.sln /p:Configuration=Release
+# Or build manually with CMake
+cmake -B build -G "Visual Studio 17 2022" -A x64
+cmake --build build --config Release
 ```
 
 ### Linux (Make via CMake)
 ```bash
-# Navigate to project root
-cd code/c
-
 # Configure and build
 mkdir -p build && cd build
 cmake ..
 make -j$(nproc)
 
-# Or use CMake directly from source directory
-cmake --build . --config Release -j$(nproc)
+# Or use the build script
+./scripts/build.sh Release
 ```
 
 ### macOS (Make via CMake)
 ```bash
-# Navigate to project root
-cd code/c
-
 # Configure and build
 mkdir -p build && cd build
 cmake ..
@@ -83,7 +75,7 @@ The project supports multiple build approaches:
 
 ### 2. **MSBuild (Windows)**
 - **Description**: Microsoft's native build system
-- **Files**: `aiemuc.sln`, `*.vcxproj`
+- **Files**: `cermu.sln`, `*.vcxproj`
 - **Benefits**: Deep Visual Studio integration, Windows-optimized
 - **Usage**: Recommended for Windows development
 
@@ -99,10 +91,10 @@ The project supports multiple build approaches:
 #### Method 1: Using Build Scripts (Recommended)
 ```powershell
 # PowerShell script (recommended)
-.\build.ps1 [Release|Debug]
+.\scripts\build.ps1 [Release|Debug]
 
 # Batch script (alternative)
-.\build.bat [Release|Debug]
+.\scripts\build.bat [Release|Debug]
 ```
 
 #### Method 2: Direct MSBuild
@@ -111,7 +103,7 @@ The project supports multiple build approaches:
 $MSBuild = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
 
 # Build solution
-& $MSBuild aiemuc.sln /p:Configuration=Release /verbosity:minimal
+& $MSBuild cermu.sln /p:Configuration=Release /verbosity:minimal
 ```
 
 #### Method 3: CMake on Windows
@@ -123,7 +115,7 @@ cmake -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release
 
 # Or use generated solution
-& $MSBuild build\aiemuc.sln /p:Configuration=Release
+& $MSBuild build\cermu.sln /p:Configuration=Release
 ```
 
 #### Windows Environment Setup
@@ -194,7 +186,7 @@ make -j$(sysctl -n hw.ncpu)
 #### Method 2: Xcode Project Generation
 ```bash
 cmake -B build -G Xcode
-open build/aiemuc.xcodeproj
+open build/cermu.xcodeproj
 ```
 
 #### macOS Dependencies Installation
@@ -212,9 +204,9 @@ sudo port install cmake libsdl2
 ## Build Targets
 
 ### Executables
-- **`c64emu`** - Console-based C64 emulator
-- **`c64emu_gui`** - GUI C64 emulator with Dear ImGui interface (requires SDL2 + OpenGL)
-- **`test_mos6510_basic`** - Basic MOS6510 CPU functionality tests
+- **`cermu`** - Multi-system emulator with GUI (C64, VIC-20, NES, Apple 1, CHIP-8, C16)
+- **`cermu_console`** - Console-only multi-system emulator
+- **`c64_test_runner`** - C64 test suite runner
 
 ### Build Configurations
 - **Debug** - Unoptimized, debug symbols, assertions enabled
@@ -223,8 +215,8 @@ sudo port install cmake libsdl2
 - **MinSizeRel** - Size-optimized release build
 
 ### Output Locations
-- **Windows**: `bin\Release\` or `bin\Debug\`
-- **Linux/macOS**: `bin/` directory in build folder
+- **Windows**: `build\bin\Release\` or `build\bin\Debug\`
+- **Linux/macOS**: `build/bin/` directory
 
 ### CMake Build Options
 ```bash
@@ -235,13 +227,13 @@ cmake -DBUILD_GUI=ON ..
 cmake -DCMAKE_BUILD_TYPE=Release ..
 
 # Custom install prefix
-cmake -DCMAKE_INSTALL_PREFIX=/opt/c64emu ..
+cmake -DCMAKE_INSTALL_PREFIX=/opt/cermu ..
 ```
 
 ## Dependencies
 
 ### Core Dependencies (Always Required)
-- **C99 Compiler** - GCC, Clang, or MSVC
+- **C++20 Compiler** - GCC 10+, Clang 10+, or MSVC 2022
 - **CMake 3.16+** - Build system generator
 
 ### GUI Dependencies (Optional, auto-detected)
@@ -250,7 +242,7 @@ cmake -DCMAKE_INSTALL_PREFIX=/opt/c64emu ..
   - Linux: Install via package manager (`libsdl2-dev`)
   - macOS: Install via Homebrew/MacPorts
 - **OpenGL** - 3D graphics library (system-provided)
-- **Dear ImGui** - Immediate mode GUI (included as submodule in `external/cimgui/`)
+- **Dear ImGui** - Immediate mode GUI (included in `external/imgui/`)
 
 ### Dependency Detection
 The build system automatically detects available dependencies:
@@ -344,18 +336,25 @@ mkdir build && cd build && cmake ..
 
 ### Project Structure
 ```
-code/c/
+cermu/
 ├── CMakeLists.txt          # Main CMake configuration
-├── aiemuc.sln              # Visual Studio solution
 ├── src/                    # Source code
-├── deps/                   # Local dependencies (SDL2)
-├── external/               # External libraries (cimgui)
-├── bin/                    # Build output directory
-└── tests/                  # Test executables
+│   ├── core/               # Core emulation framework
+│   ├── chip/               # Hardware chip implementations
+│   ├── systems/            # Emulated systems (C64, VIC-20, NES, etc.)
+│   ├── gui/                # ImGui-based visualization
+│   └── main/               # Entry points
+├── tests/                  # Test executables
+├── tools/                  # Utility tools (test runners, extractors)
+├── external/               # External libraries (ImGui, etc.)
+├── data/                   # ROM data and system configs
+├── scripts/                # Build scripts (build.sh, build.bat, build.ps1)
+├── docs/                   # Documentation
+└── build/                  # Build output (generated)
 ```
 
 ### Adding New Source Files
-1. Add to appropriate `*_SOURCES` variable in [`CMakeLists.txt`](code/c/CMakeLists.txt)
+1. Add to appropriate `*_SOURCES` variable in [CMakeLists.txt](CMakeLists.txt)
 2. For Windows: Add to corresponding `.vcxproj` file
 3. Rebuild to update build system
 
@@ -386,10 +385,10 @@ code/c/
 Test-Path "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
 
 # List built executables
-Get-ChildItem "bin\Release\*.exe"
+Get-ChildItem "build\bin\Release\*.exe"
 
 # Run GUI after successful build
-if (Test-Path "bin\Release\c64emu_gui.exe") { .\bin\Release\c64emu_gui.exe }
+if (Test-Path "build\bin\Release\multi_emu.exe") { .\build\bin\Release\multi_emu.exe }
 ```
 
 ### Linux/macOS
@@ -398,7 +397,7 @@ if (Test-Path "bin\Release\c64emu_gui.exe") { .\bin\Release\c64emu_gui.exe }
 pkg-config --exists sdl2 && echo "SDL2 found" || echo "SDL2 missing"
 
 # List built executables
-ls -la bin/*.exe 2>/dev/null || ls -la bin/*
+ls -la build/bin/
 
 # Run tests
 cd build && ctest

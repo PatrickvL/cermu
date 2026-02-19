@@ -1,6 +1,6 @@
 # External Dependencies
 
-This folder contains external projects and dependencies used by the aiemuc C64 emulator.
+This folder contains external projects and dependencies used by the cermuc C64 emulator.
 
 ## Structure
 

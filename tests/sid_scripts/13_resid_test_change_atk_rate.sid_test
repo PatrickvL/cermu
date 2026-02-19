@@ -1,0 +1,23 @@
+# resid-test: test03 — Change attack rate during attack
+# Source: https://github.com/libsidplayfp/resid-test/blob/master/tests/test03
+# Tests changing the attack rate while the envelope is still in the attack phase.
+
+reset
+
+# AD=0x20 (Attack=2, Decay=0)
+write, 0x13, 0x20
+run, 3
+
+# Gate ON — start attack at rate index 2
+write, 0x12, 0x01
+run, 5000
+
+# Increase attack rate to index 0xC (slower)
+write, 0x13, 0xc0
+run, 5000
+
+# Decrease attack rate to index 0x8 (faster than 0xC, slower than 0x2)
+write, 0x13, 0x80
+run, 15000
+
+end

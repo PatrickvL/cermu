@@ -1,0 +1,32 @@
+# resid-test: test04 — Counter wrap / reset behavior
+# Source: https://github.com/libsidplayfp/resid-test/blob/master/tests/test04
+# AD=0x10 (Attack=1, Decay=0), SR=0x00 (Sustain=0, Release=0 fastest)
+# Tests gate on briefly, full release, re-gate briefly, release again.
+
+reset
+
+write, 0x13, 0x10
+run, 3
+write, 0x14, 0x00
+run, 3
+
+# Gate ON
+write, 0x12, 0x01
+run, 1500
+
+# Gate OFF — release (sustain=0, release rate=0 fastest)
+write, 0x12, 0x00
+run, 23000
+
+# ADSR bug: rate counter was at 28 (period 31 attack), new period is 8.
+# Since 28 > 8, counter must wrap ~32747 cycles. In 23000 cycles, no release
+# tick fires — envelope stays at the value reached during attack.
+expect_env3, 0x2E
+
+# Brief re-gate (counter still wrapping, no attack/release tick fires)
+write, 0x12, 0x01
+run, 3
+write, 0x12, 0x00
+run, 5000
+
+end

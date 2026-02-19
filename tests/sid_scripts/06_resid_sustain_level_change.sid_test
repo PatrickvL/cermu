@@ -1,0 +1,51 @@
+# =============================================================================
+# reSID Behavioral Test: Sustain Level Change During Sustain
+# =============================================================================
+# Reference: libsidplayfp/resid envelope.cc — DECAY_SUSTAIN state
+#
+# reSID has NO separate SUSTAIN state. It uses a combined DECAY_SUSTAIN state.
+# Each rate tick, it checks: if (envelope_counter != sustain_level) decrement.
+# This means:
+#   1. If sustain is LOWERED during sustain, the envelope resumes decaying
+#   2. If sustain is RAISED during sustain, the envelope stays at current level
+#
+# Our implementation has a separate CYCLE_SUSTAIN state that doesn't check
+# sustain changes. This test verifies the correct reSID behavior.
+# =============================================================================
+
+reset
+revision, 6581
+
+# Fast attack/decay, sustain=0xA (=0xAA in 8-bit), fast release
+write, 0x13, 0x00   # V3 A=0 (fastest), D=0 (fastest)
+write, 0x14, 0xA0   # V3 S=A, R=0
+
+# Init voice 3
+write, 0x0E, 0x00
+write, 0x0F, 0x10   # freq = 0x1000
+write, 0x12, 0x28   # sawtooth + test
+run, 1
+write, 0x12, 0x21   # sawtooth + gate ON
+write, 0x18, 0x0F   # volume max
+
+# Wait for envelope to reach sustain level 0xAA
+# Attack: 255 steps × 9 cycles = 2295 cycles
+# Decay from 0xFF to 0xAA with exponential slowing... ~10000 cycles should be enough
+run, 200000
+snapshot
+# ENV3 should now be at 0xAA (sustain)
+
+# NOW: Lower sustain to 0x5 (= 0x55 in 8-bit)
+write, 0x14, 0x50   # V3 S=5, R=0
+
+# If DECAY_SUSTAIN correctly: envelope should resume decaying from 0xAA to 0x55
+# If separate SUSTAIN state (bug): envelope stays stuck at 0xAA
+run, 200000
+snapshot
+# ENV3 should now be at 0x55 (new sustain level)
+
+# Lower once more to 0x0 (= 0x00)
+write, 0x14, 0x00   # V3 S=0, R=0
+run, 200000
+snapshot
+# ENV3 should now be at 0x00 (sustain=0 means decay to zero)

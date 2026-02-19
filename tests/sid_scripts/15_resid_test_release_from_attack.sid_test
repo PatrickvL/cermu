@@ -1,0 +1,26 @@
+# resid-test: test05 — Switch to release from attack
+# Source: https://github.com/libsidplayfp/resid-test/blob/master/tests/test05
+# AD=0x10 (Attack=1, Decay=0), SR=0xE0 (Sustain=14→0xEE, Release=0 fastest)
+# Tests: gate off during attack phase, triggering immediate release.
+
+reset
+
+write, 0x13, 0x10
+run, 3
+write, 0x14, 0xe0
+run, 3
+
+# Gate ON — start attack
+write, 0x12, 0x01
+run, 2000
+
+# Gate OFF — release during attack, from whatever level was reached (~0x3E)
+write, 0x12, 0x00
+run, 3000
+
+# ADSR bug: rate counter was at 16 (from attack period 31), new period is 8.
+# Since 16 > 8, counter must wrap ~32759 cycles. In 3000 cycles, no release
+# tick fires — envelope stays frozen at the attack value.
+expect_env3, 0x3E
+
+end

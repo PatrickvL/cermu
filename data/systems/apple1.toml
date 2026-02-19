@@ -1,0 +1,224 @@
+# Apple 1 System Configuration
+# Apple Computer 1 (1976) - Steve Wozniak's first computer design
+
+[system]
+name = "Apple 1"
+short_name = "APPLE1"
+description = "Apple Computer 1 (1976) - Steve Wozniak's first computer design"
+version = "1.0"
+author = "Configurable System"
+created = "2026-01-18"
+
+[hardware_traits.display]
+native_width = 320
+native_height = 192
+visible_width = 320
+visible_height = 192
+format = "RGBA8888"
+palette_size = 2
+pixel_aspect_ratio = 1.0
+has_overscan = false
+palette = [
+    [0, 0, 0, 255],
+    [51, 255, 51, 255]
+]
+
+[hardware_traits.audio]
+format = "NONE"
+sample_rate = 0
+channels = 0
+chip_name = "None"
+
+[hardware_traits.timing]
+cpu_frequency = 1000000
+video_frequency = 1000000
+audio_sample_rate = 0
+target_fps = 60
+cycles_per_frame = 16667
+region = "NTSC"
+
+[[components]]
+id = "cpu"
+type = "CPU"
+model = "MOS6502"
+description = "MOS 6502 CPU @ 1 MHz"
+
+    [components.config]
+    frequency = 1000000
+    start_vector = "$FFFC"
+
+[[components]]
+id = "ram"
+type = "RAM"
+model = "GENERIC"
+description = "8KB main RAM"
+
+    [components.config]
+    address = "$0000"
+    size = 8192
+
+[[components]]
+id = "monitor_rom"
+type = "ROM"
+model = "GENERIC"
+description = "Woz Monitor ROM (256 bytes)"
+
+    [components.config]
+    address = "$FF00"
+    size = 256
+    file = "data/apple1/roms/apple1.rom"
+
+[[components]]
+id = "pia"
+type = "PIA"
+model = "PIA6820"
+description = "PIA 6820 for keyboard and display I/O"
+
+    [components.config]
+    address = "$D010"
+    size = 4
+    port_a_direction = "INPUT"
+    port_b_direction = "OUTPUT"
+
+[[components]]
+id = "terminal"
+type = "DISPLAY"
+model = "TEXT_TERMINAL"
+description = "40x24 character display"
+
+    [components.config]
+    columns = 40
+    rows = 24
+    char_width = 8
+    char_height = 8
+    font_rom = "data/apple1/roms/2513.rom"
+    foreground_color = [51, 255, 51, 255]
+    background_color = [0, 0, 0, 255]
+
+[memory_map]
+type = "SIMPLE"
+description = "Apple 1 memory layout - simple linear address space"
+
+[[memory_map.regions]]
+name = "Main RAM"
+address = "$0000"
+size = 8192
+component = "ram"
+writable = true
+description = "8KB RAM at $0000-$1FFF"
+
+[[memory_map.regions]]
+name = "PIA Registers"
+address = "$D010"
+size = 4
+component = "pia"
+writable = true
+description = "PIA 6820 registers at $D010-$D013"
+
+[[memory_map.regions]]
+name = "Woz Monitor ROM"
+address = "$FF00"
+size = 256
+component = "monitor_rom"
+writable = false
+description = "Monitor ROM at $FF00-$FFFF"
+
+[[connections]]
+from = "cpu"
+to = "ram"
+type = "bus"
+signals = ["ADDRESS", "DATA", "RW"]
+description = "CPU to RAM bus connection"
+
+[[connections]]
+from = "cpu"
+to = "pia"
+type = "bus"
+signals = ["ADDRESS", "DATA", "RW"]
+description = "CPU to PIA bus connection"
+
+[[connections]]
+from = "cpu"
+to = "monitor_rom"
+type = "bus"
+signals = ["ADDRESS", "DATA"]
+description = "CPU to ROM bus connection (read-only)"
+
+[[connections]]
+from = "pia"
+to = "terminal"
+type = "port"
+signals = ["PORT_B"]
+description = "PIA Port B output to terminal display"
+
+    [connections.mapping]
+    "pia.port_b" = "terminal.data_in"
+
+[board_layout]
+name = "Apple Computer 1 (Original)"
+revision = "Rev 0"
+manufacture_date = "1976-1977"
+width_mm = 210
+height_mm = 270
+pcb_color = "Green"
+silk_screen_color = "White"
+
+[[board_layout.sockets]]
+socket_id = "A1"
+component = "cpu"
+x = 50
+y = 150
+orientation = "NORTH"
+is_socketed = true
+silk_screen_label = "6502 CPU"
+notes = "MOS 6502 @ 1 MHz"
+
+[[board_layout.sockets]]
+socket_id = "A2"
+component = "pia"
+x = 100
+y = 150
+orientation = "NORTH"
+is_socketed = true
+silk_screen_label = "PIA 6820"
+notes = "Keyboard/Display I/O"
+
+[[board_layout.sockets]]
+socket_id = "A3-A10"
+component = "ram"
+x = 50
+y = 100
+orientation = "NORTH"
+is_socketed = true
+silk_screen_label = "RAM (8x 4116)"
+notes = "8KB RAM chips"
+
+[[board_layout.sockets]]
+socket_id = "A11"
+component = "monitor_rom"
+x = 150
+y = 150
+orientation = "NORTH"
+is_socketed = true
+silk_screen_label = "PROM"
+notes = "256-byte Monitor ROM"
+
+[input.keyboard]
+type = "ASCII"
+target_component = "pia"
+target_port = "PORT_A"
+mapping = "APPLE1_KEYBOARD"
+
+[file_support]
+extensions = [".bin", ".hex", ".txt"]
+
+[[file_support.loaders]]
+extension = ".bin"
+type = "BINARY"
+load_address = "$0280"
+auto_run = false
+
+[[file_support.loaders]]
+extension = ".hex"
+type = "HEX"
+auto_run = false

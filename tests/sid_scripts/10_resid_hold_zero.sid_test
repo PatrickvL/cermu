@@ -1,0 +1,52 @@
+# =============================================================================
+# reSID Behavioral Test: Hold-Zero and Envelope Frozen State
+# =============================================================================
+# Reference: libsidplayfp/resid envelope.cc — hold_zero / FREEZED state
+#
+# When the envelope reaches 0x00 during decay or release, the hold_zero flag
+# is set. This prevents any further envelope changes until gate is turned ON.
+# Even re-releasing (gate off→off) should not cause any movement.
+#
+# reSID also has a FREEZED state when envelope hits 0 during decay (not during
+# release). In FREEZED state, the envelope stays at 0 forever even if sustain
+# is changed, until gate toggles.
+# =============================================================================
+
+reset
+revision, 6581
+
+# Fast everything, sustain=0 (so decay goes all the way to 0)
+write, 0x13, 0x00   # V3 A=0, D=0
+write, 0x14, 0x00   # V3 S=0, R=0
+
+# Init voice 3
+write, 0x0E, 0x00
+write, 0x0F, 0x10
+write, 0x12, 0x28   # test
+run, 1
+write, 0x12, 0x21   # gate ON
+write, 0x18, 0x0F
+
+# Attack: 255 × 9 = 2295 cycles to reach 0xFF
+# Then decay to sustain 0x00: many cycles with exponential slowing
+# Total decay from 0xFF to 0x00 ≈ 753 × 9 = 6777 cycles
+run, 50000   # Should be well past full decay
+expect_env3, 0x00
+
+# Envelope should be frozen (hold_zero = true)
+# Even running more cycles shouldn't change it
+run, 50000
+expect_env3, 0x00
+
+# Now change sustain to 0xF while still gated — should NOT cause movement
+# because hold_zero is set and we're in decay/sustain
+write, 0x14, 0xF0   # S=F, R=0
+run, 50000
+expect_env3, 0x00   # Should still be frozen at 0
+
+# Gate off and on should restart
+write, 0x12, 0x20   # gate OFF  
+write, 0x12, 0x21   # gate ON — clears hold_zero, starts attack
+run, 5000
+# Envelope should have started attacking
+snapshot   # Should show envelope > 0

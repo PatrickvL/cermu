@@ -1,0 +1,23 @@
+# resid-test: test06 — OSC3 sawtooth waveform
+# Source: https://github.com/libsidplayfp/resid-test/blob/master/tests/test06
+# Sets max frequency, resets with test bit, then enables sawtooth.
+# Checks OSC3 register output.
+
+reset
+check, 0x1b
+
+# Voice 3 freq = 0xFFFF
+write, 0x0f, 0xff
+run, 3
+write, 0x0e, 0xff
+run, 3
+
+# Test bit ON (resets accumulator)
+write, 0x12, 0x08
+run, 3
+
+# Sawtooth ON (test bit OFF — accumulator starts running)
+write, 0x12, 0x20
+run, 100
+
+end

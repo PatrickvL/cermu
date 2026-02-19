@@ -1,0 +1,567 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://cermu.org/schemas/system-config.json",
+  "title": "Emulated System Configuration",
+  "description": "Configuration schema for data-driven emulated computer systems",
+  "type": "object",
+  "required": ["system", "hardware_traits", "components", "memory_map"],
+  
+  "properties": {
+    "system": {
+      "type": "object",
+      "description": "System identification and metadata",
+      "required": ["name", "short_name", "description"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Full system name (e.g., 'Commodore 64')",
+          "minLength": 1
+        },
+        "short_name": {
+          "type": "string",
+          "description": "Short identifier (e.g., 'C64')",
+          "minLength": 1,
+          "pattern": "^[A-Z0-9_]+$"
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief description of the system"
+        },
+        "version": {
+          "type": "string",
+          "description": "Configuration version",
+          "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
+        },
+        "author": {
+          "type": "string",
+          "description": "Configuration author"
+        },
+        "created": {
+          "type": "string",
+          "description": "Creation date (ISO 8601)",
+          "format": "date"
+        }
+      }
+    },
+    
+    "hardware_traits": {
+      "type": "object",
+      "description": "Fixed hardware characteristics",
+      "required": ["display", "audio", "timing"],
+      "properties": {
+        "display": {
+          "type": "object",
+          "required": ["native_width", "native_height", "format"],
+          "properties": {
+            "native_width": {
+              "type": "integer",
+              "description": "Native display width in pixels",
+              "minimum": 1
+            },
+            "native_height": {
+              "type": "integer",
+              "description": "Native display height in pixels",
+              "minimum": 1
+            },
+            "visible_width": {
+              "type": "integer",
+              "description": "Visible area width (defaults to native_width)"
+            },
+            "visible_height": {
+              "type": "integer",
+              "description": "Visible area height (defaults to native_height)"
+            },
+            "format": {
+              "type": "string",
+              "description": "Framebuffer color format",
+              "enum": ["RGBA8888", "RGB888", "RGB565", "PALETTE_INDEXED_8", "PALETTE_INDEXED_4", "MONOCHROME_1"]
+            },
+            "palette_size": {
+              "type": "integer",
+              "description": "Number of colors in palette (0 for RGB)",
+              "minimum": 0
+            },
+            "pixel_aspect_ratio": {
+              "type": "number",
+              "description": "Pixel aspect ratio (1.0 = square pixels)",
+              "minimum": 0.1,
+              "maximum": 10.0,
+              "default": 1.0
+            },
+            "has_overscan": {
+              "type": "boolean",
+              "description": "Whether system has overscan/border area",
+              "default": false
+            },
+            "palette": {
+              "type": "array",
+              "description": "Default color palette (RGBA values)",
+              "items": {
+                "type": "array",
+                "description": "RGBA color [R, G, B, A] (0-255 each)",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 255
+                },
+                "minItems": 3,
+                "maxItems": 4
+              }
+            }
+          }
+        },
+        
+        "audio": {
+          "type": "object",
+          "required": ["format"],
+          "properties": {
+            "format": {
+              "type": "string",
+              "description": "Audio output format",
+              "enum": ["NONE", "MONO_8BIT", "MONO_16BIT", "STEREO_8BIT", "STEREO_16BIT"]
+            },
+            "sample_rate": {
+              "type": "integer",
+              "description": "Audio sample rate in Hz",
+              "minimum": 0,
+              "default": 0
+            },
+            "channels": {
+              "type": "integer",
+              "description": "Number of audio channels (1=mono, 2=stereo)",
+              "minimum": 0,
+              "maximum": 2,
+              "default": 0
+            },
+            "chip_name": {
+              "type": "string",
+              "description": "Name of audio chip (e.g., 'SID 6581')"
+            }
+          }
+        },
+        
+        "timing": {
+          "type": "object",
+          "required": ["cpu_frequency", "target_fps", "cycles_per_frame", "region"],
+          "properties": {
+            "cpu_frequency": {
+              "type": "integer",
+              "description": "CPU clock frequency in Hz",
+              "minimum": 1
+            },
+            "video_frequency": {
+              "type": "integer",
+              "description": "Video chip frequency in Hz (0 if not applicable)",
+              "minimum": 0,
+              "default": 0
+            },
+            "audio_sample_rate": {
+              "type": "integer",
+              "description": "Audio sample rate in Hz (0 if no audio)",
+              "minimum": 0,
+              "default": 0
+            },
+            "target_fps": {
+              "type": "integer",
+              "description": "Target frames per second",
+              "minimum": 1,
+              "maximum": 240
+            },
+            "cycles_per_frame": {
+              "type": "integer",
+              "description": "CPU cycles per frame",
+              "minimum": 1
+            },
+            "region": {
+              "type": "string",
+              "description": "Video region standard",
+              "enum": ["NTSC", "PAL", "PAL_M", "SECAM", "CUSTOM"]
+            }
+          }
+        }
+      }
+    },
+    
+    "components": {
+      "type": "array",
+      "description": "Hardware components in the system",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "model", "config"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique component identifier",
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "type": {
+            "type": "string",
+            "description": "Component type",
+            "enum": ["CPU", "RAM", "ROM", "VIC", "SID", "CIA", "PIA", "VIA", "DISPLAY", "CUSTOM_IO"]
+          },
+          "model": {
+            "type": "string",
+            "description": "Specific model/variant (e.g., 'MOS6502', 'MOS6569')"
+          },
+          "description": {
+            "type": "string",
+            "description": "Human-readable description of component"
+          },
+          "config": {
+            "type": "object",
+            "description": "Component-specific configuration",
+            "properties": {
+              "address": {
+                "type": "string",
+                "description": "Base address (hex format: '$1000' or '0x1000')",
+                "pattern": "^(\\$|0x)[0-9A-Fa-f]+$"
+              },
+              "size": {
+                "type": "integer",
+                "description": "Size in bytes",
+                "minimum": 1
+              },
+              "frequency": {
+                "type": "integer",
+                "description": "Component frequency in Hz",
+                "minimum": 1
+              },
+              "file": {
+                "type": "string",
+                "description": "ROM file path (for ROM components)"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    
+    "memory_map": {
+      "type": "object",
+      "description": "System memory layout",
+      "required": ["regions"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Memory map type",
+          "enum": ["SIMPLE", "BANKED"],
+          "default": "SIMPLE"
+        },
+        "description": {
+          "type": "string",
+          "description": "Memory map description"
+        },
+        "banking_component": {
+          "type": "string",
+          "description": "Component that controls banking (for BANKED type)"
+        },
+        "banking_register": {
+          "type": "string",
+          "description": "Register/port that controls banking"
+        },
+        "regions": {
+          "type": "array",
+          "description": "Memory regions (for SIMPLE type)",
+          "items": {
+            "type": "object",
+            "required": ["name", "address", "size", "component"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Region name"
+              },
+              "address": {
+                "type": "string",
+                "description": "Start address",
+                "pattern": "^(\\$|0x)[0-9A-Fa-f]+$"
+              },
+              "size": {
+                "type": "integer",
+                "description": "Region size in bytes",
+                "minimum": 1
+              },
+              "component": {
+                "type": "string",
+                "description": "Component ID that handles this region"
+              },
+              "writable": {
+                "type": "boolean",
+                "description": "Whether region is writable",
+                "default": true
+              },
+              "description": {
+                "type": "string",
+                "description": "Region description"
+              }
+            }
+          }
+        },
+        "banks": {
+          "type": "array",
+          "description": "Memory banks (for BANKED type)",
+          "items": {
+            "type": "object",
+            "required": ["id", "description", "config", "regions"],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "description": "Bank ID"
+              },
+              "description": {
+                "type": "string",
+                "description": "Bank description"
+              },
+              "config": {
+                "type": "string",
+                "description": "Banking register value to activate this bank"
+              },
+              "regions": {
+                "type": "array",
+                "description": "Memory regions in this bank",
+                "items": {
+                  "type": "object",
+                  "required": ["address", "size", "component"],
+                  "properties": {
+                    "address": {
+                      "type": "string",
+                      "pattern": "^(\\$|0x)[0-9A-Fa-f]+$"
+                    },
+                    "size": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "component": {
+                      "type": "string"
+                    },
+                    "writable": {
+                      "type": "boolean",
+                      "default": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    
+    "connections": {
+      "type": "array",
+      "description": "Connections between components",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "type"],
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Source component ID"
+          },
+          "to": {
+            "type": "string",
+            "description": "Destination component ID"
+          },
+          "type": {
+            "type": "string",
+            "description": "Connection type",
+            "enum": ["bus", "port", "signal", "cable"]
+          },
+          "signals": {
+            "type": "array",
+            "description": "Signals on this connection",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mapping": {
+            "type": "object",
+            "description": "Signal name mapping (from.signal: to.signal)",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "description": {
+            "type": "string",
+            "description": "Connection description"
+          }
+        }
+      }
+    },
+    
+    "board_layout": {
+      "type": "object",
+      "description": "Physical PCB board layout",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Board name/model"
+        },
+        "revision": {
+          "type": "string",
+          "description": "Board revision"
+        },
+        "manufacture_date": {
+          "type": "string",
+          "description": "Manufacturing date/range"
+        },
+        "width_mm": {
+          "type": "number",
+          "description": "Board width in millimeters",
+          "minimum": 0
+        },
+        "height_mm": {
+          "type": "number",
+          "description": "Board height in millimeters",
+          "minimum": 0
+        },
+        "pcb_color": {
+          "type": "string",
+          "description": "PCB color (e.g., 'Green', 'Brown')"
+        },
+        "silk_screen_color": {
+          "type": "string",
+          "description": "Silkscreen color (e.g., 'White', 'Yellow')"
+        },
+        "sockets": {
+          "type": "array",
+          "description": "Chip sockets on the board",
+          "items": {
+            "type": "object",
+            "required": ["socket_id", "component", "x", "y"],
+            "properties": {
+              "socket_id": {
+                "type": "string",
+                "description": "Socket identifier (e.g., 'U1', 'IC1')"
+              },
+              "component": {
+                "type": "string",
+                "description": "Component ID in this socket"
+              },
+              "x": {
+                "type": "number",
+                "description": "X position on board (mm)"
+              },
+              "y": {
+                "type": "number",
+                "description": "Y position on board (mm)"
+              },
+              "z": {
+                "type": "number",
+                "description": "Z offset above board (mm)",
+                "default": 0
+              },
+              "orientation": {
+                "type": "string",
+                "description": "Chip orientation (pin 1 direction)",
+                "enum": ["NORTH", "EAST", "SOUTH", "WEST"],
+                "default": "NORTH"
+              },
+              "is_socketed": {
+                "type": "boolean",
+                "description": "Whether chip is in removable socket",
+                "default": false
+              },
+              "silk_screen_label": {
+                "type": "string",
+                "description": "Label on PCB silkscreen"
+              },
+              "notes": {
+                "type": "string",
+                "description": "Additional notes (e.g., 'Rev 3+ only')"
+              }
+            }
+          }
+        }
+      }
+    },
+    
+    "input": {
+      "type": "object",
+      "description": "Input device configuration",
+      "properties": {
+        "keyboard": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["ASCII", "MATRIX", "CUSTOM"]
+            },
+            "target_component": {
+              "type": "string",
+              "description": "Component that receives keyboard input"
+            },
+            "target_port": {
+              "type": "string",
+              "description": "Port/register on target component"
+            },
+            "mapping": {
+              "type": "string",
+              "description": "Keyboard mapping name"
+            }
+          }
+        },
+        "joystick": {
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 4,
+              "description": "Number of joystick ports"
+            },
+            "target_component": {
+              "type": "string",
+              "description": "Component that receives joystick input"
+            }
+          }
+        }
+      }
+    },
+    
+    "file_support": {
+      "type": "object",
+      "description": "Supported file types and loaders",
+      "properties": {
+        "extensions": {
+          "type": "array",
+          "description": "Supported file extensions",
+          "items": {
+            "type": "string",
+            "pattern": "^\\.[a-z0-9]+$"
+          }
+        },
+        "loaders": {
+          "type": "array",
+          "description": "File loader configurations",
+          "items": {
+            "type": "object",
+            "required": ["extension", "type"],
+            "properties": {
+              "extension": {
+                "type": "string",
+                "description": "File extension"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["BINARY", "HEX", "TAPE", "DISK", "CARTRIDGE"],
+                "description": "File type"
+              },
+              "load_address": {
+                "type": "string",
+                "description": "Load address for binary files",
+                "pattern": "^(\\$|0x)[0-9A-Fa-f]+$"
+              },
+              "auto_run": {
+                "type": "boolean",
+                "description": "Automatically run after loading",
+                "default": false
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

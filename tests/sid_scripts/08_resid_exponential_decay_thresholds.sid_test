@@ -1,0 +1,82 @@
+# =============================================================================
+# reSID Behavioral Test: Exact Exponential Decay Curve Thresholds
+# =============================================================================
+# Reference: libsidplayfp/resid envelope.cc — set_exponential_counter()
+#
+# During decay/release, the exponential counter period changes at these
+# exact envelope values (these are checked AFTER decrement):
+#   0xFF → period 1 (instant, but this is the attack→decay transition)
+#   0x5D → period 2  (from 0x5D down, each rate tick needs 2 exp ticks)
+#   0x36 → period 4
+#   0x1A → period 8
+#   0x0E → period 16
+#   0x06 → period 30
+#   0x00 → period 1 + hold_zero (freeze at 0)
+#
+# The total time for a complete decay from 0xFF to 0x00 with rate period P:
+#   0xFF to 0x5E: 161 steps × P × 1 = 161P
+#   0x5D to 0x37: 38 steps × P × 2 = 76P
+#   0x36 to 0x1B: 28 steps × P × 4 = 112P
+#   0x1A to 0x0F: 12 steps × P × 8 = 96P
+#   0x0E to 0x07: 8 steps × P × 16 = 128P
+#   0x06 to 0x01: 6 steps × P × 30 = 180P
+#   0x00: hold_zero kicks in
+#   Total: ~753P rate ticks effective, but with exponential counter gating
+#
+# This test verifies the exponential counter thresholds are exact.
+# =============================================================================
+
+reset
+revision, 6581
+
+# Test 1: Verify exponential decay thresholds
+# Use fastest attack (period 9) and fastest decay (period 9)
+write, 0x13, 0x00   # V3 A=0, D=0
+write, 0x14, 0x00   # V3 S=0, R=0
+
+# Init voice 3
+write, 0x0E, 0x00
+write, 0x0F, 0x10
+write, 0x12, 0x28   # sawtooth + test
+run, 1
+write, 0x12, 0x21   # sawtooth + gate ON
+write, 0x18, 0x0F
+
+# Attack completes at 9 × 255 = 2295 cycles, envelope = 0xFF
+run, 2295
+expect_env3, 0xFF
+
+# Now decay starts (rate period = 9, exponential period = 1)
+# First threshold at 0x5D: 161 decrements × 9 cycles = 1449 cycles
+# (161 decrements because 0xFF - 0x5E = 161, going from 0xFF→0xFE→...→0x5E)
+# But actually: after attack reaches 0xFF, the exponential period is set to 1.
+# Each rate tick (9 cycles) decrements once.
+# After 161 rate ticks: envelope = 0xFF - 161 = 0x5E
+# At 161 × 9 = 1449 cycles of decay
+run, 1449
+expect_env3, 0x5E
+
+# Next tick at 0x5D changes exp period to 2
+# One more rate tick to get to 0x5D
+run, 9
+expect_env3, 0x5D
+
+# Now exp period = 2: need 2 rate ticks per decrement
+# 0x5D to 0x37: that's 38 decrements, each needing 2 rate ticks = 76 rate ticks
+# 76 × 9 = 684 cycles
+run, 684
+expect_env3, 0x37
+
+# Next: at 0x36, exp period changes to 4
+run, 18   # 2 rate ticks × 9 cycles
+expect_env3, 0x36
+
+# With exp period 4: 0x36 to 0x1B = 27 decrements, each 4 rate ticks = 108 rate ticks
+# Actually 0x36 - 0x1B = 0x1B = 27. 27 × 4 × 9 = 972 cycles
+# But the first decrement after 0x36 actually uses the NEW period (4)
+run, 972
+expect_env3, 0x1B
+
+# At 0x1A, exp period = 8
+run, 36   # 4 rate ticks × 9 cycles
+expect_env3, 0x1A

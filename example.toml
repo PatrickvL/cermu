@@ -1,0 +1,88 @@
+# Example TOML Configuration File
+# This demonstrates the capabilities of the TOML reader
+
+# Root level values
+title = "TOML Example Configuration"
+version = 1
+enabled = true
+ratio = 3.14159
+
+# Simple table
+[application]
+name = "cermu"
+author = "Patrick"
+debug_mode = false
+
+# Database configuration
+[database]
+host = "localhost"
+port = 5432
+username = "admin"
+password = "secret"
+max_connections = 100
+
+# Nested table using dot notation
+[database.connection]
+timeout = 30
+retries = 3
+keepalive = true
+
+[database.ssl]
+enabled = true
+cert_path = "/etc/ssl/certs/db.crt"
+
+# Server configuration
+[servers]
+alpha = "10.0.0.1"
+beta = "10.0.0.2"
+gamma = "10.0.0.3"
+
+[servers.ports]
+http = 80
+https = 443
+api = 8080
+
+# Emulator configuration example
+[emulator]
+system = "c64"
+rom_path = "./data/c64/roms"
+speed_mhz = 1.023
+enable_audio = true
+enable_video = true
+
+[emulator.display]
+width = 640
+height = 480
+fullscreen = false
+vsync = true
+
+[emulator.input]
+keyboard_enabled = true
+joystick_enabled = true
+
+# Array examples
+[features]
+enabled_features = ["audio", "video", "joystick", "tape"]
+disabled_features = ["printer", "modem"]
+
+[rom_files]
+# Array of strings
+required_files = ["kernal.rom", "basic.rom", "chargen.rom"]
+
+# Numeric arrays
+supported_versions = [1, 2, 3]
+timing_values = [63.0, 65.0, 262.0, 263.0]
+
+# Boolean array
+feature_flags = [true, false, true, true]
+
+# Test configuration
+[testing]
+run_tests = false
+verbose = true
+test_timeout = 300
+
+[testing.paths]
+test_dir = "./tests"
+output_dir = "./test_results"
+log_file = "test.log"

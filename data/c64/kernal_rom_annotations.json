@@ -1,0 +1,837 @@
+{
+  "rom_name": "C64 KERNAL ROM",
+  "rom_range": {
+    "start": "0xE000",
+    "end": "0xFFFF",
+    "size": 8192
+  },
+  "description": "Commodore 64 KERNAL operating system ROM",
+  "source": "pagetable.com ROM Disassembly - Ultimate Commodore 64 Reference",
+  "entries": [
+    {
+      "address": "0xE08D",
+      "byte_count": 5,
+      "description": "11879546            multiplier"
+    },
+    {
+      "address": "0xE092",
+      "byte_count": 5,
+      "description": "3.927677739E-8      offset perform RND()"
+    },
+    {
+      "address": "0xE167",
+      "byte_count": 1,
+      "description": "makes next line BIT $00A9 perform LOAD"
+    },
+    {
+      "address": "0xE2E0",
+      "byte_count": 5,
+      "description": "1.570796371, pi/2, as floating number"
+    },
+    {
+      "address": "0xE2E5",
+      "byte_count": 5,
+      "description": "6.28319, 2*pi, as floating number"
+    },
+    {
+      "address": "0xE2EA",
+      "byte_count": 5,
+      "description": "0.25"
+    },
+    {
+      "address": "0xE2EF",
+      "byte_count": 1,
+      "description": "series counter"
+    },
+    {
+      "address": "0xE2F0",
+      "byte_count": 5,
+      "description": "-14.3813907"
+    },
+    {
+      "address": "0xE2F5",
+      "byte_count": 5,
+      "description": "42.0077971"
+    },
+    {
+      "address": "0xE2FA",
+      "byte_count": 5,
+      "description": "-76.7041703"
+    },
+    {
+      "address": "0xE2FF",
+      "byte_count": 5,
+      "description": "81.6052237"
+    },
+    {
+      "address": "0xE304",
+      "byte_count": 5,
+      "description": "-41.3147021"
+    },
+    {
+      "address": "0xE309",
+      "byte_count": 5,
+      "description": "6.28318531   2*pi perform ATN()"
+    },
+    {
+      "address": "0xE33E",
+      "byte_count": 1,
+      "description": "series counter"
+    },
+    {
+      "address": "0xE33F",
+      "byte_count": 5,
+      "description": "-6.84793912E-04"
+    },
+    {
+      "address": "0xE344",
+      "byte_count": 5,
+      "description": "4.85094216E-03"
+    },
+    {
+      "address": "0xE349",
+      "byte_count": 5,
+      "description": "-.0161117015"
+    },
+    {
+      "address": "0xE34E",
+      "byte_count": 5,
+      "description": ".034209638"
+    },
+    {
+      "address": "0xE353",
+      "byte_count": 5,
+      "description": "-.054279133"
+    },
+    {
+      "address": "0xE358",
+      "byte_count": 5,
+      "description": ".0724571965"
+    },
+    {
+      "address": "0xE35D",
+      "byte_count": 5,
+      "description": "-.0898019185"
+    },
+    {
+      "address": "0xE362",
+      "byte_count": 5,
+      "description": ".110932413"
+    },
+    {
+      "address": "0xE367",
+      "byte_count": 5,
+      "description": "-.142839808"
+    },
+    {
+      "address": "0xE36C",
+      "byte_count": 5,
+      "description": ".19999912"
+    },
+    {
+      "address": "0xE371",
+      "byte_count": 5,
+      "description": "-.333333316"
+    },
+    {
+      "address": "0xE376",
+      "byte_count": 5,
+      "description": "1 BASIC warm start entry point"
+    },
+    {
+      "address": "0xE3BA",
+      "byte_count": 5,
+      "description": "0.811635157 initialise BASIC RAM locations"
+    },
+    {
+      "address": "0xE447",
+      "byte_count": 8,
+      "description": "error message $0300"
+    },
+    {
+      "address": "0xE44F",
+      "byte_count": 4,
+      "description": "BASIC warm start $0302 crunch BASIC tokens $0304 uncrunch BASIC tokens $0306 start new BASIC code $0308"
+    },
+    {
+      "address": "0xE45F",
+      "byte_count": 8,
+      "description": "basic bytes free"
+    },
+    {
+      "address": "0xE467",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xE46F",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xE473",
+      "byte_count": 8,
+      "description": "(clr) **** commodore 64 basic v2 ****"
+    },
+    {
+      "address": "0xE47B",
+      "byte_count": 8,
+      "description": "(cr) (cr) 64k ram system"
+    },
+    {
+      "address": "0xE483",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xE48B",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xE493",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xE49B",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xE4A3",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xE4AB",
+      "byte_count": 1,
+      "description": "unused"
+    },
+    {
+      "address": "0xE4AC",
+      "byte_count": 1,
+      "description": "open channel for output"
+    },
+    {
+      "address": "0xE4B7",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xE4BF",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xE4C7",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xE4CF",
+      "byte_count": 8,
+      "description": "flag the RS232 start bit and set the parity"
+    },
+    {
+      "address": "0xE4D7",
+      "byte_count": 3,
+      "description": "save the start bit check flag, set start bit received set the initial parity state save the receiver parity bit"
+    },
+    {
+      "address": "0xE4EC",
+      "byte_count": 2,
+      "description": "50   baud   985300"
+    },
+    {
+      "address": "0xE4EE",
+      "byte_count": 2,
+      "description": "75   baud   985200"
+    },
+    {
+      "address": "0xE4F0",
+      "byte_count": 2,
+      "description": "110   baud   985160"
+    },
+    {
+      "address": "0xE4F2",
+      "byte_count": 2,
+      "description": "134.5 baud   984540"
+    },
+    {
+      "address": "0xE4F4",
+      "byte_count": 2,
+      "description": "150   baud   985200"
+    },
+    {
+      "address": "0xE4F6",
+      "byte_count": 2,
+      "description": "300   baud   985200"
+    },
+    {
+      "address": "0xE4F8",
+      "byte_count": 2,
+      "description": "600   baud   985200"
+    },
+    {
+      "address": "0xE4FA",
+      "byte_count": 2,
+      "description": "1200   baud   986400"
+    },
+    {
+      "address": "0xE4FC",
+      "byte_count": 2,
+      "description": "1800   baud   986400"
+    },
+    {
+      "address": "0xE4FE",
+      "byte_count": 2,
+      "description": "2400   baud   984000 return the base address of the I/O devices"
+    },
+    {
+      "address": "0xE8DA",
+      "byte_count": 8,
+      "description": "144    black"
+    },
+    {
+      "address": "0xE8E2",
+      "byte_count": 8,
+      "description": "5    white 28    red 159    cyan 156    purple 30    green 31    blue 158    yellow 129    orange"
+    },
+    {
+      "address": "0xEB79",
+      "byte_count": 8,
+      "description": "standard"
+    },
+    {
+      "address": "0xEB81",
+      "byte_count": 8,
+      "description": "shift commodore control standard keyboard table"
+    },
+    {
+      "address": "0xEB89",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEB91",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEB99",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEBA1",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEBA9",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEBB1",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEBB9",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEBC1",
+      "byte_count": 1,
+      "description": "shifted keyboard table"
+    },
+    {
+      "address": "0xEBC2",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEBCA",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEBD2",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEBDA",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEBE2",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEBEA",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEBF2",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEBFA",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEC02",
+      "byte_count": 1,
+      "description": "CBM key keyboard table"
+    },
+    {
+      "address": "0xEC03",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEC0B",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEC13",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEC1B",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEC23",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEC2B",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEC33",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEC3B",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEC43",
+      "byte_count": 1,
+      "description": "check for special character codes"
+    },
+    {
+      "address": "0xEC78",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEC80",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEC88",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEC90",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xEC98",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xECA0",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xECA8",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xECB0",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xECB8",
+      "byte_count": 1,
+      "description": "vic ii chip initialisation values"
+    },
+    {
+      "address": "0xECB9",
+      "byte_count": 8,
+      "description": "sprite 0 x,y"
+    },
+    {
+      "address": "0xECC1",
+      "byte_count": 8,
+      "description": "sprite 1 x,y sprite 2 x,y sprite 3 x,y sprite 4 x,y"
+    },
+    {
+      "address": "0xECC9",
+      "byte_count": 8,
+      "description": "sprite 5 x,y sprite 6 x,y sprite 7 x,y sprites 0 to 7 x bit 8"
+    },
+    {
+      "address": "0xECD1",
+      "byte_count": 8,
+      "description": "enable screen, enable 25 rows vertical fine scroll and control bit function --- ------- 7  raster compare bit 8 6  1 = enable extended color text mode 5  1 = enable bitmap graphics mode 4  1 = enable screen, 0 = blank screen 3  1 = 25 row display, 0 = 24 row display 2-0 vertical scroll count raster compare light pen x light pen y sprite 0 to 7 enable enable 40 column display horizontal fine scroll and control bit function --- ------- 7-6 unused 5  1 = vic reset, 0 = vic on 4  1 = enable multicolor mode 3  1 = 40 column display, 0 = 38 column display 2-0 horizontal scroll count sprite 0 to 7 y expand memory control bit function --- ------- 7-4 video matrix base address 3-1 character data base address 0  unused"
+    },
+    {
+      "address": "0xECD9",
+      "byte_count": 8,
+      "description": "clear all interrupts interrupt flags 7 1 = interrupt 6-4 unused 3  1 = light pen interrupt 2  1 = sprite to sprite collision interrupt 1  1 = sprite to foreground collision interrupt 0  1 = raster compare interrupt all vic IRQs disabled IRQ enable bit function --- ------- 7-4 unused 3  1 = enable light pen 2  1 = enable sprite to sprite collision 1  1 = enable sprite to foreground collision 0  1 = enable raster compare sprite 0 to 7 foreground priority sprite 0 to 7 multicolour sprite 0 to 7 x expand sprite 0 to 7 sprite collision sprite 0 to 7 foreground collision border colour"
+    },
+    {
+      "address": "0xECE1",
+      "byte_count": 6,
+      "description": "background colour 0 background colour 1 background colour 2 background colour 3 sprite multicolour 0 sprite multicolour 1 sprite 0 colour sprite 1 colour"
+    },
+    {
+      "address": "0xECE7",
+      "byte_count": 8,
+      "description": "sprite 2 colour sprite 3 colour sprite 4 colour sprite 5 colour sprite 6 colour sprite 7 colour is actually the first character of \"LOAD\" ( $4C ) keyboard buffer for auto load/run 'load (cr) run (cr)'"
+    },
+    {
+      "address": "0xECEA",
+      "byte_count": 6,
+      "description": ""
+    },
+    {
+      "address": "0xECF0",
+      "byte_count": 8,
+      "description": "low bytes of screen line addresses"
+    },
+    {
+      "address": "0xECF8",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xED00",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xED08",
+      "byte_count": 1,
+      "description": "command serial bus device to TALK"
+    },
+    {
+      "address": "0xED0B",
+      "byte_count": 1,
+      "description": "makes next line BIT $2009 command devices on the serial bus to LISTEN"
+    },
+    {
+      "address": "0xEDAF",
+      "byte_count": 1,
+      "description": "makes next line BIT $03A9 timeout on serial bus"
+    },
+    {
+      "address": "0xEDFD",
+      "byte_count": 1,
+      "description": "makes next line BIT $3FA9 command serial bus to UNLISTEN"
+    },
+    {
+      "address": "0xEF30",
+      "byte_count": 1,
+      "description": "makes next line BIT $10A9 set CTS signal not present"
+    },
+    {
+      "address": "0xEFC4",
+      "byte_count": 1,
+      "description": "makes next line BIT $A650"
+    },
+    {
+      "address": "0xEFC9",
+      "byte_count": 1,
+      "description": "makes next line BIT $04A9"
+    },
+    {
+      "address": "0xEFCC",
+      "byte_count": 1,
+      "description": "makes next line BIT $80A9"
+    },
+    {
+      "address": "0xEFCF",
+      "byte_count": 1,
+      "description": "makes next line BIT $02A9"
+    },
+    {
+      "address": "0xF0BD",
+      "byte_count": 8,
+      "description": "I/O ERROR #"
+    },
+    {
+      "address": "0xF0C6",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xF0C9",
+      "byte_count": 8,
+      "description": "SEARCHING"
+    },
+    {
+      "address": "0xF0D1",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xF0D4",
+      "byte_count": 8,
+      "description": "FOR"
+    },
+    {
+      "address": "0xF0D8",
+      "byte_count": 8,
+      "description": "PRESS PLAY ON TAPE"
+    },
+    {
+      "address": "0xF0E0",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xF0E8",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xF0EB",
+      "byte_count": 8,
+      "description": "PRESS RECORD & PLAY ON TAPE"
+    },
+    {
+      "address": "0xF0F3",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xF0FB",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xF103",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xF106",
+      "byte_count": 8,
+      "description": "LOADING"
+    },
+    {
+      "address": "0xF10E",
+      "byte_count": 8,
+      "description": "SAVING"
+    },
+    {
+      "address": "0xF116",
+      "byte_count": 8,
+      "description": "VERIFYING"
+    },
+    {
+      "address": "0xF11E",
+      "byte_count": 8,
+      "description": ""
+    },
+    {
+      "address": "0xF120",
+      "byte_count": 8,
+      "description": "FOUND"
+    },
+    {
+      "address": "0xF127",
+      "byte_count": 4,
+      "description": "OK display control I/O message if in direct mode"
+    },
+    {
+      "address": "0xF51B",
+      "byte_count": 1,
+      "description": "makes next line BIT $AE91"
+    },
+    {
+      "address": "0xF5A8",
+      "byte_count": 1,
+      "description": "makes next line BIT $18 , keep the error flag in Cb"
+    },
+    {
+      "address": "0xF68C",
+      "byte_count": 1,
+      "description": "makes next line BIT $18 so Cb is not changed"
+    },
+    {
+      "address": "0xF6FD",
+      "byte_count": 1,
+      "description": "makes next line BIT $02A9"
+    },
+    {
+      "address": "0xF700",
+      "byte_count": 1,
+      "description": "makes next line BIT $03A9"
+    },
+    {
+      "address": "0xF703",
+      "byte_count": 1,
+      "description": "makes next line BIT $04A9"
+    },
+    {
+      "address": "0xF706",
+      "byte_count": 1,
+      "description": "makes next line BIT $05A9"
+    },
+    {
+      "address": "0xF709",
+      "byte_count": 1,
+      "description": "makes next line BIT $06A9"
+    },
+    {
+      "address": "0xF70C",
+      "byte_count": 1,
+      "description": "makes next line BIT $07A9"
+    },
+    {
+      "address": "0xF70F",
+      "byte_count": 1,
+      "description": "makes next line BIT $08A9"
+    },
+    {
+      "address": "0xF712",
+      "byte_count": 1,
+      "description": "makes next line BIT $09A9"
+    },
+    {
+      "address": "0xF9DD",
+      "byte_count": 1,
+      "description": "makes next line BIT $B0E6"
+    },
+    {
+      "address": "0xFD10",
+      "byte_count": 5,
+      "description": "'CBM80’ restore default I/O vectors"
+    },
+    {
+      "address": "0xFD30",
+      "byte_count": 8,
+      "description": "$0314 IRQ vector"
+    },
+    {
+      "address": "0xFD38",
+      "byte_count": 8,
+      "description": "$0316 BRK vector $0318 NMI vector $031A open a logical file $031C close a specified logical file"
+    },
+    {
+      "address": "0xFD40",
+      "byte_count": 8,
+      "description": "$031E open channel for input $0320 open channel for output $0322 close input and output channels $0324 input character from channel"
+    },
+    {
+      "address": "0xFD48",
+      "byte_count": 8,
+      "description": "$0326 output character to channel $0328 scan stop key $032A get character from the input device $032C close all channels and files"
+    },
+    {
+      "address": "0xFD9B",
+      "byte_count": 8,
+      "description": "$08 write tape leader IRQ routine"
+    },
+    {
+      "address": "0xFEC2",
+      "byte_count": 2,
+      "description": "50   baud   1027700"
+    },
+    {
+      "address": "0xFEC4",
+      "byte_count": 2,
+      "description": "75   baud   1022700"
+    },
+    {
+      "address": "0xFEC6",
+      "byte_count": 2,
+      "description": "110   baud   1022780"
+    },
+    {
+      "address": "0xFEC8",
+      "byte_count": 2,
+      "description": "134.5 baud   1022200"
+    },
+    {
+      "address": "0xFECA",
+      "byte_count": 2,
+      "description": "150   baud   1022700"
+    },
+    {
+      "address": "0xFECC",
+      "byte_count": 2,
+      "description": "300   baud   1023000"
+    },
+    {
+      "address": "0xFECE",
+      "byte_count": 2,
+      "description": "600   baud   1022400"
+    },
+    {
+      "address": "0xFED0",
+      "byte_count": 2,
+      "description": "1200   baud   1022400"
+    },
+    {
+      "address": "0xFED2",
+      "byte_count": 2,
+      "description": "1800   baud   1022400"
+    },
+    {
+      "address": "0xFED4",
+      "byte_count": 2,
+      "description": "2400   baud   1022400 ??"
+    },
+    {
+      "address": "0xFFF6",
+      "byte_count": 4,
+      "description": "RRBY hardware vectors"
+    },
+    {
+      "address": "0xFFFA",
+      "byte_count": 2,
+      "description": "NMI Vector"
+    },
+    {
+      "address": "0xFFFC",
+      "byte_count": 2,
+      "description": "RESET Vector"
+    },
+    {
+      "address": "0xFFFE",
+      "byte_count": 2,
+      "description": "IRQ Vector"
+    }
+  ]
+}

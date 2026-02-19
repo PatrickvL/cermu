@@ -2,15 +2,9 @@
 .vscode/settings.json
 
 # Build directories
-# IMPORTANT: All binaries now output to code/cpp/build/bin/ regardless of build system
-build/**
-code/cpp/build/
-code/cpp/build_gui/
-code/cpp/bin/
-code/cpp/tests/build/
-code/cpp/_deps/
-code/csharp/bin/
-code/csharp/obj/
+build/
+tests/build/
+_deps/
 
 # CMake generated files (should never be committed)
 CMakeCache.txt
@@ -21,6 +15,7 @@ Makefile
 **/**/Makefile
 CTestTestfile.cmake
 **/**/CTestTestfile.cmake
+compile_commands.json
 
 # Visual Studio files
 .vs/
@@ -30,8 +25,8 @@ CTestTestfile.cmake
 *.vcxproj.filters
 
 # Executables
-aiemuc
 c64emu
+cermu
 *.exe
 
 # Object files
@@ -42,33 +37,16 @@ c64emu
 # Debug files
 *.pdb
 *.ilk
-
 *.exp
 
-# Build files
+# Build artifacts
 *.a
 *.recipe
 *.lastbuildstate
 *.tlog
 
-code/cpp/**/*_build/*
-code/cpp/**/*.dir/*
-code/cpp/x64/Debug/*
-
-code/cpp/deps/*
-code/cpp/external/cimgui/
-
-code/cpp/test_optimized_cpu
-code/cpp/test_pla_clean
-code/cpp/test_pla_mapping
-code/cpp/test_pla_standalone
-code/cpp/test_ram_consolidation
-code/cpp/tests/test_pla_clean
-code/cpp/tests/test_pla_standalone
-code/cpp/test_ram_consolidation
-code/cpp/imgui.ini
-
-code/cpp/CTestTestfile.cmake
+# Runtime files
+imgui.ini
 
 # Data files (ROMs, cartridges, disk images) - keep README files
 data/**/*.rom
@@ -113,15 +91,13 @@ external/**/*.zip
 !external/**/*_SETUP*.md
 !external/**/*_RESULTS*.md
 
+# Embedded git repos (not submodules - managed separately)
+external/imgui/
+external/toonplusplus_initial/
+tests/processor_tests/
+
 # Test runner executables and build artifacts
-code/cpp/tests/build/external/
-code/cpp/tests/fam65xx_cpp_65c02_test_runner
-code/cpp/tests/fam65xx_cpp_klaus_test_runner
-code/cpp/tests/fam65xx_cpp_lorenz_test_runner
-code/cpp/tests/fam65xx_processor_tests_runner
-code/csharp/aiemu/obj/*
-code/cpp/tests/CTestTestfile.cmake
-code/cpp/.cache/*
-code/cpp/tests/fam65xx_klaus_test_runner
-code/cpp/tests/fam65xx_lorenz_test_harness
-code/cpp/src/main/c64_main_gui.cpp
+tests/build/
+tests/fam65xx_klaus_test_runner
+tests/fam65xx_lorenz_test_harness
+tests/fam65xx_processor_tests_runner
