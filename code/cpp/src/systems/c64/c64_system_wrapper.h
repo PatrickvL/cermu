@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+class LightpenDevice;
+
 /**
  * C64 System Wrapper
  * Adapts the existing C64 system to the EmulatedSystem interface
@@ -244,7 +246,20 @@ public:
     static constexpr int PORT_USER       = 4;
     static constexpr int PORT_EXPANSION  = 5;
 
+    /// Cached lightpen pointer (used by LP pin callback for zero-overhead access).
+    LightpenDevice* get_cached_lightpen() const { return cached_lightpen_; }
+
+    /// Update cached lightpen pointer when devices change on Control Port 1.
+    void on_port_device_changed(int port_index) override;
+
 private:
     /// Create and wire up all C64 connector ports (CIA1 joystick callbacks etc).
     void setup_connector_ports();
+
+    /// Pass the current display rect to any lightpen on Control Port 1 (once per frame).
+    void update_lightpen_display_rect();
+
+    /// Cached pointer to lightpen device on Control Port 1 (nullptr if none).
+    /// Updated by on_port_device_changed() to avoid per-cycle lookups.
+    LightpenDevice* cached_lightpen_ = nullptr;
 };

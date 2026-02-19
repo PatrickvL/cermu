@@ -16,6 +16,7 @@
 #include "../../core/formats/commodore_load_helpers.h"
 #include "../../chip/cpu/fam65xx/mos6510.h"
 #include "../../devices/input/joystick_device.h"
+#include "../../devices/input/lightpen_device.h"
 #include "../../devices/storage/drive_1541.h"
 #include "../../devices/storage/datasette_device.h"
 #include "../../devices/keyboard/commodore_keyboard_device.h"
@@ -389,6 +390,10 @@ void C64SystemWrapper::run_frame() {
     // from the wrapper tick() (which checks pending_load_ on every cycle).
     // This cuts ~19,705 virtual dispatches + conditional checks per frame.
     if (c64_) {
+        // Update per-frame state for peripheral devices before cycle loop.
+        // Lightpen: pass display rect so it can convert SDL mouse → VIC-II coords.
+        update_lightpen_display_rect();
+
         for (uint32_t i = 0; i < adjusted_cycles; i++) {
             c64_system_tick(c64_);
         }
@@ -1268,6 +1273,21 @@ static uint8_t c64_cia1_port_b_read_with_joystick(void* context, uint8_t port_b_
     return row_state;
 }
 
+/// VIC-II LP pin read callback.
+/// Called every VIC-II cycle from vicii_tick_phi1.  Uses the cached lightpen
+/// pointer (set by on_port_device_changed) to avoid per-cycle lookups.
+/// Returns true (HIGH) when no lightpen or no trigger, false (LOW) when the
+/// beam matches the pen's target position.
+static bool c64_vicii_lp_pin_read(void* context) {
+    auto* ctx = static_cast<C64PortCallbackContext*>(context);
+    auto* lightpen = ctx->wrapper ? ctx->wrapper->get_cached_lightpen() : nullptr;
+    if (!lightpen) return true;
+
+    uint16_t beam_x = vicii_get_x_coordinate(ctx->c64->vicii);
+    uint16_t beam_y = vicii_get_raster_counter(ctx->c64->vicii);
+    return lightpen->get_lp_pin_state(beam_x, beam_y);
+}
+
 void C64SystemWrapper::setup_connector_ports() {
     connector_ports_.clear();
 
@@ -1316,7 +1336,31 @@ void C64SystemWrapper::setup_connector_ports() {
         printf("C64: Wired joystick-aware CIA1 port callbacks\n");
     }
 
+    // Wire VIC-II LP pin read callback (Control Port 1 pin 6 → VIC-II LP input)
+    if (c64_ && c64_->vicii) {
+        c64_->vicii->bus.lp_pin_read    = c64_vicii_lp_pin_read;
+        c64_->vicii->bus.lp_pin_context = &s_port_callback_ctx;
+        printf("C64: Wired VIC-II lightpen pin callback\n");
+    }
+
     printf("C64: Created %zu connector ports\n", connector_ports_.size());
+}
+
+void C64SystemWrapper::update_lightpen_display_rect() {
+    if (!cached_lightpen_) return;
+    const auto& rect = get_display_screen_rect();
+    cached_lightpen_->set_display_screen_rect(rect.x, rect.y, rect.w, rect.h);
+}
+
+void C64SystemWrapper::on_port_device_changed(int port_index) {
+    if (port_index != PORT_CONTROL1) return;
+    cached_lightpen_ = nullptr;
+    auto* port = get_connector_port(PORT_CONTROL1);
+    if (!port) return;
+    auto* device = port->get_attached_device();
+    if (device && strcmp(device->get_id(), "lightpen") == 0) {
+        cached_lightpen_ = static_cast<LightpenDevice*>(device);
+    }
 }
 
 uint32_t C64SystemWrapper::get_audio_samples(float* buffer, uint32_t max_samples) {

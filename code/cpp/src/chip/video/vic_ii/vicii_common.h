@@ -442,11 +442,23 @@ typedef struct {
     int framebuffer_height;
 } vicii_pixel_unit_t;
 
+// Lightpen Unit - LP pin edge detection and latch state
+// The VIC-II has a single LP input pin (active LOW, directly from Control Port 1 pin 6).
+// On a 1→0 (negative) edge, it latches the current raster position into LPX/LPY
+// and sets the ILP interrupt flag. Only one trigger per frame is recognized.
+typedef struct {
+    bool triggered;         // Already triggered this frame (one trigger per frame)
+    bool lp_pin_prev;       // Previous LP pin state (true=HIGH/released, false=LOW/active)
+} vicii_lightpen_unit_t;
+
 // Bus Interface Unit - External bus communication
 typedef struct {
     void* bus;
     void (*bank_change)(void* context, uint8_t bank);
-    bool lp_edge_detected;
+    // LP pin callback — reads the light pen input from Control Port 1.
+    // Returns true if LP pin is HIGH (released), false if LOW (asserted).
+    bool (*lp_pin_read)(void* context);
+    void* lp_pin_context;
     uint8_t pending_phi2_access_type;  // Track which PHI2 access type was set up for vicii_tick_phi2
     vicii_sprite_unit_t* active_sprite;  // Active sprite pointer for P/S accesses (NULL if none)
     uint8_t ba_prediction_shift_reg;     // 3-bit shift register: bit0=cycle+1, bit1=cycle+2, bit2=cycle+3
@@ -472,6 +484,7 @@ struct vicii_s {
     vicii_memory_unit_t memory;
     vicii_sprites_unit_t sprites;
     vicii_pixel_unit_t pixel;
+    vicii_lightpen_unit_t lightpen;
     vicii_bus_unit_t bus;
 };
 
@@ -507,3 +520,12 @@ void vicii_memory_bank_change(void* chip, uint8_t bank);
 
 // Utility functions
 void vicii_set_framebuffer(vicii_t* vicii, uint32_t* framebuffer, int width, int height);
+
+// Lightpen functions
+// Set the LP pin state. The VIC-II detects negative edges (HIGH→LOW transition)
+// and latches its current x_coordinate/2 → LPX, raster_counter → LPY.
+void vicii_lightpen_set_pin(vicii_t* vicii, bool pin_high);
+
+// Read current raster position for external lightpen coordinate matching.
+uint16_t vicii_get_raster_counter(const vicii_t* vicii);
+uint16_t vicii_get_x_coordinate(const vicii_t* vicii);
