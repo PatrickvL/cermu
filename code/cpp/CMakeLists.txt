@@ -221,6 +221,14 @@ set(CORE_SOURCES
     src/core/system_registry.cpp
     src/core/framebuffer_renderer.cpp
     src/core/text_terminal.cpp
+    src/core/connector.cpp
+    src/core/device_registry.cpp
+    src/core/peripherals/joystick_device.cpp
+    src/core/peripherals/mouse_device.cpp
+    src/core/peripherals/paddle_device.cpp
+    src/core/peripherals/lightpen_device.cpp
+    src/core/peripherals/datasette_device.cpp
+    src/core/peripherals/drive_1541.cpp
 )
 
 # FAM65XX Decoder - standalone library for instruction decoding

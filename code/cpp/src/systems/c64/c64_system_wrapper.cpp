@@ -15,6 +15,9 @@
 #include "../../core/formats/sid_format.h"
 #include "../../core/formats/commodore_load_helpers.h"
 #include "../../chip/cpu/fam65xx/mos6510.h"
+#include "../../core/peripherals/joystick_device.h"
+#include "../../core/peripherals/drive_1541.h"
+#include "../../core/peripherals/datasette_device.h"
 #include <cstring>
 #include <cstdio>
 #include <cctype>
@@ -309,11 +312,21 @@ bool C64SystemWrapper::initialize() {
         keyboard_mapper_.reset(create_c64_keyboard_mapper(c64_->keyboard));
     }
     
+    // Set up connector ports and wire them to the C64 hardware
+    setup_connector_ports();
+    
     printf("C64: System initialized successfully\n");
     return true;
 }
 
 void C64SystemWrapper::shutdown() {
+    // Detach all devices before destroying the system
+    for (auto& port : connector_ports_) {
+        port->detach_device();
+    }
+    owned_devices_.clear();
+    connector_ports_.clear();
+
     // Free any pending load that was never applied
     if (pending_load_.active) {
         format_load_result_free(&pending_load_.result);
@@ -386,6 +399,9 @@ void C64SystemWrapper::run_frame() {
         if (pending_load_.active && is_basic_ready()) {
             apply_pending_load();
         }
+
+        // Tick all attached peripheral devices (datasette timing, 1541 IEC, etc.)
+        tick_peripherals();
     }
 }
 
@@ -715,8 +731,28 @@ void C64SystemWrapper::release_all_keys() {
 }
 
 void C64SystemWrapper::handle_controller_event(int controller, int button, bool pressed) {
-    // C64 joystick support would go here
-    // TODO: Implement joystick handling
+    // Map host controller events to the joystick device attached to the
+    // appropriate control port.  Controller 0 → Port 2 (the normal C64
+    // joystick port for single-player games), controller 1 → Port 1.
+    int port_index = (controller == 0) ? PORT_CONTROL2 : PORT_CONTROL1;
+
+    if (port_index < static_cast<int>(connector_ports_.size())) {
+        auto* device = connector_ports_[port_index]->get_attached_device();
+        auto* joy = dynamic_cast<JoystickDevice*>(device);
+        if (joy) {
+            // Map SDL controller buttons to joystick directions
+            // SDL_CONTROLLER_BUTTON_DPAD_UP = 11, DOWN=12, LEFT=13, RIGHT=14, A=0
+            switch (button) {
+                case 11: joy->set_up(pressed);    break;  // DPAD_UP
+                case 12: joy->set_down(pressed);  break;  // DPAD_DOWN
+                case 13: joy->set_left(pressed);  break;  // DPAD_LEFT
+                case 14: joy->set_right(pressed); break;  // DPAD_RIGHT
+                case 0:  joy->set_fire(pressed);  break;  // A button = FIRE
+                case 1:  joy->set_fire(pressed);  break;  // B button = FIRE (alt)
+                default: break;
+            }
+        }
+    }
 }
 
 // =============================================================================
@@ -966,7 +1002,289 @@ void C64SystemWrapper::render_configuration_ui() {
         ImGui::SetTooltip("6581: analog filter distortion, volume-click digi\n"
                           "8580: cleaner filter, no distortion");
     }
+
+    // =========================================================================
+    // PERIPHERAL CONNECTOR PORTS
+    // =========================================================================
+    ImGui::Separator();
+    ImGui::Text("Peripherals");
+    ImGui::Spacing();
+
+    auto& registry = DeviceRegistry::instance();
+
+    for (int i = 0; i < static_cast<int>(connector_ports_.size()); i++) {
+        auto& port = connector_ports_[i];
+        auto compatible = registry.get_compatible_devices(port->get_type());
+        if (compatible.empty()) continue;  // Skip ports with no available devices
+
+        ImGui::PushID(i);
+
+        // Build combo items: "<none>" + compatible device names
+        auto* attached = port->get_attached_device();
+        const char* current_name = attached ? attached->get_name() : "<none>";
+
+        if (ImGui::BeginCombo(port->get_name(), current_name)) {
+            // "<none>" option — detach
+            if (ImGui::Selectable("<none>", attached == nullptr)) {
+                detach_device_from_port(i);
+            }
+
+            for (const auto* desc : compatible) {
+                bool is_selected = (attached && strcmp(attached->get_id(), desc->id) == 0);
+                if (ImGui::Selectable(desc->name, is_selected)) {
+                    if (!is_selected) {
+                        attach_device_to_port(i, desc->id);
+                    }
+                }
+                if (ImGui::IsItemHovered() && desc->description) {
+                    ImGui::SetTooltip("%s", desc->description);
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        // Show device-specific UI if attached
+        if (attached) {
+            ImGui::Indent();
+            attached->render_device_ui();
+            ImGui::Unindent();
+        }
+
+        ImGui::PopID();
+    }
 #endif
+}
+
+// ============================================================================
+// CONNECTOR PORT SETUP
+// ============================================================================
+
+// Connector definitions for C64 system ports
+static const ConnectorDefinition c64_control_port_1_def = {
+    ConnectorType::CONTROL_PORT_DB9,
+    "Control Port 1",
+    ConnectorSignals::CONTROL_PORT_SIGNALS,
+    ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT
+};
+
+static const ConnectorDefinition c64_control_port_2_def = {
+    ConnectorType::CONTROL_PORT_DB9,
+    "Control Port 2",
+    ConnectorSignals::CONTROL_PORT_SIGNALS,
+    ConnectorSignals::CONTROL_PORT_SIGNAL_COUNT
+};
+
+static const ConnectorDefinition c64_iec_serial_def = {
+    ConnectorType::IEC_SERIAL,
+    "IEC Serial Bus",
+    ConnectorSignals::IEC_SERIAL_SIGNALS,
+    ConnectorSignals::IEC_SERIAL_SIGNAL_COUNT
+};
+
+static const ConnectorDefinition c64_cassette_def = {
+    ConnectorType::CASSETTE_PORT,
+    "Cassette Port",
+    ConnectorSignals::CASSETTE_PORT_SIGNALS,
+    ConnectorSignals::CASSETTE_PORT_SIGNAL_COUNT
+};
+
+static const ConnectorDefinition c64_user_port_def = {
+    ConnectorType::USER_PORT,
+    "User Port",
+    ConnectorSignals::USER_PORT_SIGNALS,
+    ConnectorSignals::USER_PORT_SIGNAL_COUNT
+};
+
+// Expansion port definition (minimal — cartridge insertion is handled separately)
+static const SignalLine expansion_signals[] = {
+    { "EXROM", SignalDirection::INPUT,  0 },
+    { "GAME",  SignalDirection::INPUT,  1 },
+    { "RESET", SignalDirection::OUTPUT, 2 },
+};
+static const ConnectorDefinition c64_expansion_def = {
+    ConnectorType::EXPANSION_PORT,
+    "Expansion Port",
+    expansion_signals,
+    3
+};
+
+// ============================================================================
+// JOYSTICK-AWARE CIA1 PORT CALLBACKS
+// ============================================================================
+// These replace the default CIA1 port callbacks set by c64_system_create().
+// They first call the original keyboard scanning logic, then AND-in the
+// joystick state from the connector port (wired-AND, matching real hardware).
+
+// Context structure passed to the CIA1 callback overrides
+struct C64PortCallbackContext {
+    c64_t*              c64;
+    C64SystemWrapper*   wrapper;
+};
+
+// Global instances (one per wrapper lifetime — safe because only one C64 at a time)
+static C64PortCallbackContext s_port_callback_ctx;
+
+/// CIA1 Port A read callback — combines keyboard reverse-scan with Control Port 2 joystick.
+static uint8_t c64_cia1_port_a_read_with_joystick(void* context, uint8_t port_a_output) {
+    auto* ctx = static_cast<C64PortCallbackContext*>(context);
+    auto* c64 = ctx->c64;
+
+    // Keyboard reverse scanning (same as original c64.cpp logic)
+    uint8_t col_state = 0xFF;
+    if (c64 && c64->keyboard && c64->cia1) {
+        uint8_t port_b_output = c64->cia1->port_b_value;
+        uint8_t row_select = ~port_b_output;
+        for (int row = 0; row < 8; row++) {
+            if (row_select & (1 << row)) {
+                col_state &= c64->keyboard->row_open_contacts[row];
+            }
+        }
+    }
+
+    // AND-in Control Port 2 joystick state (bits 0-4 of CIA1 PA)
+    // Joystick connector signals map to CIA1 PA:
+    //   JOY_UP(0)→PA0, JOY_DOWN(1)→PA1, JOY_LEFT(2)→PA2, JOY_RIGHT(3)→PA3, JOY_FIRE(6)→PA4
+    if (ctx->wrapper) {
+        auto* port = ctx->wrapper->get_connector_port(C64SystemWrapper::PORT_CONTROL2);
+        if (port && port->get_attached_device()) {
+            uint32_t dev_signals = port->get_attached_device()->get_output_signals();
+            // Map connector signal bits to CIA1 PA bits
+            uint8_t joy_mask = 0xFF;
+            if (!(dev_signals & (1u << ConnectorSignals::JOY_UP)))    joy_mask &= ~0x01;
+            if (!(dev_signals & (1u << ConnectorSignals::JOY_DOWN)))  joy_mask &= ~0x02;
+            if (!(dev_signals & (1u << ConnectorSignals::JOY_LEFT)))  joy_mask &= ~0x04;
+            if (!(dev_signals & (1u << ConnectorSignals::JOY_RIGHT))) joy_mask &= ~0x08;
+            if (!(dev_signals & (1u << ConnectorSignals::JOY_FIRE)))  joy_mask &= ~0x10;
+            col_state &= joy_mask;
+        }
+    }
+
+    return col_state;
+}
+
+/// CIA1 Port B read callback — combines keyboard forward-scan with Control Port 1 joystick.
+static uint8_t c64_cia1_port_b_read_with_joystick(void* context, uint8_t port_b_output) {
+    auto* ctx = static_cast<C64PortCallbackContext*>(context);
+    auto* c64 = ctx->c64;
+
+    // Keyboard forward scanning (same as original c64.cpp logic)
+    uint8_t row_state = 0xFF;
+    if (c64 && c64->keyboard && c64->cia1) {
+        uint8_t port_a_value = c64->cia1->port_a_value;
+        uint8_t column_select = ~port_a_value;
+        for (int col = 0; col < 8; col++) {
+            if (column_select & (1 << col)) {
+                row_state &= static_cast<uint8_t>(c64->keyboard->col_open_contacts[col]);
+            }
+        }
+    }
+
+    // AND-in Control Port 1 joystick state (bits 0-4 of CIA1 PB)
+    if (ctx->wrapper) {
+        auto* port = ctx->wrapper->get_connector_port(C64SystemWrapper::PORT_CONTROL1);
+        if (port && port->get_attached_device()) {
+            uint32_t dev_signals = port->get_attached_device()->get_output_signals();
+            uint8_t joy_mask = 0xFF;
+            if (!(dev_signals & (1u << ConnectorSignals::JOY_UP)))    joy_mask &= ~0x01;
+            if (!(dev_signals & (1u << ConnectorSignals::JOY_DOWN)))  joy_mask &= ~0x02;
+            if (!(dev_signals & (1u << ConnectorSignals::JOY_LEFT)))  joy_mask &= ~0x04;
+            if (!(dev_signals & (1u << ConnectorSignals::JOY_RIGHT))) joy_mask &= ~0x08;
+            if (!(dev_signals & (1u << ConnectorSignals::JOY_FIRE)))  joy_mask &= ~0x10;
+            row_state &= joy_mask;
+        }
+    }
+
+    return row_state;
+}
+
+void C64SystemWrapper::setup_connector_ports() {
+    connector_ports_.clear();
+
+    // PORT_CONTROL1 = 0 — Control Port 1 (directly connected to CIA1 Port B bits 0-4)
+    connector_ports_.push_back(std::make_unique<ConnectorPort>(c64_control_port_1_def, 1));
+
+    // PORT_CONTROL2 = 1 — Control Port 2 (directly connected to CIA1 Port A bits 0-4)
+    connector_ports_.push_back(std::make_unique<ConnectorPort>(c64_control_port_2_def, 2));
+
+    // PORT_IEC_SERIAL = 2 — IEC Serial Bus (connected to CIA2 Port A bits 3-5)
+    connector_ports_.push_back(std::make_unique<ConnectorPort>(c64_iec_serial_def, 0));
+
+    // PORT_CASSETTE = 3 — Cassette Port (CPU I/O port + CIA1 FLAG)
+    connector_ports_.push_back(std::make_unique<ConnectorPort>(c64_cassette_def, 0));
+
+    // PORT_USER = 4 — User Port (CIA2 Port B + control lines)
+    connector_ports_.push_back(std::make_unique<ConnectorPort>(c64_user_port_def, 0));
+
+    // PORT_EXPANSION = 5 — Expansion Port (cartridge slot)
+    connector_ports_.push_back(std::make_unique<ConnectorPort>(c64_expansion_def, 0));
+
+    // Wire joystick-aware CIA1 callbacks (replace the defaults set by c64_system_create)
+    if (c64_ && c64_->cia1) {
+        s_port_callback_ctx.c64 = c64_;
+        s_port_callback_ctx.wrapper = this;
+
+        c64_->cia1->port_a_read_callback = c64_cia1_port_a_read_with_joystick;
+        c64_->cia1->port_a_read_context  = &s_port_callback_ctx;
+        c64_->cia1->port_b_read_callback = c64_cia1_port_b_read_with_joystick;
+        c64_->cia1->port_b_read_context  = &s_port_callback_ctx;
+        printf("C64: Wired joystick-aware CIA1 port callbacks\n");
+    }
+
+    printf("C64: Created %zu connector ports\n", connector_ports_.size());
+}
+
+void C64SystemWrapper::tick_peripherals() {
+    for (auto& device : owned_devices_) {
+        device->tick();
+    }
+}
+
+bool C64SystemWrapper::attach_device_to_port(int port_index, const char* device_id) {
+    if (port_index < 0 || port_index >= static_cast<int>(connector_ports_.size())) {
+        printf("C64: Invalid port index %d\n", port_index);
+        return false;
+    }
+
+    auto& port = connector_ports_[port_index];
+
+    // Create device from registry
+    auto device = DeviceRegistry::instance().create_device(device_id);
+    if (!device) {
+        printf("C64: Unknown device '%s'\n", device_id);
+        return false;
+    }
+
+    // Detach any existing device first
+    detach_device_from_port(port_index);
+
+    // Attach and take ownership
+    auto* raw_ptr = device.get();
+    if (!port->attach_device(raw_ptr)) {
+        return false;
+    }
+
+    raw_ptr->reset();
+    owned_devices_.push_back(std::move(device));
+    return true;
+}
+
+void C64SystemWrapper::detach_device_from_port(int port_index) {
+    if (port_index < 0 || port_index >= static_cast<int>(connector_ports_.size())) return;
+
+    auto& port = connector_ports_[port_index];
+    auto* attached = port->get_attached_device();
+    if (!attached) return;
+
+    port->detach_device();
+
+    // Remove from owned_devices_ list
+    owned_devices_.erase(
+        std::remove_if(owned_devices_.begin(), owned_devices_.end(),
+                        [attached](const std::unique_ptr<PeripheralDevice>& p) {
+                            return p.get() == attached;
+                        }),
+        owned_devices_.end()
+    );
 }
 
 uint32_t C64SystemWrapper::get_audio_samples(float* buffer, uint32_t max_samples) {
