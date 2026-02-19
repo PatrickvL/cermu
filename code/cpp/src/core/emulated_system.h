@@ -240,6 +240,12 @@ protected:
     float speed_multiplier_;
     bool quit_requested_;
 
+    // Display screen rect — where the emulated display is drawn in SDL window coords.
+    // Updated each frame by the GUI after rendering the display image.
+    // Used by peripheral devices (e.g. lightpen) for mouse → display coordinate mapping.
+    struct ScreenRect { float x = 0, y = 0, w = 0, h = 0; };
+    ScreenRect display_screen_rect_;
+
     // =========================================================================
     // CONNECTOR PORTS & PERIPHERAL DEVICES (generic for all systems)
     // =========================================================================
@@ -254,6 +260,10 @@ protected:
 
     /// Tick all attached peripheral devices (call once per frame).
     void tick_peripherals();
+
+    /// Called after a device is attached to or detached from a port.
+    /// Derived systems can override to update cached device pointers.
+    virtual void on_port_device_changed(int /*port_index*/) {}
     
 public:
     EmulatedSystem();
@@ -269,6 +279,12 @@ public:
     float get_speed_multiplier() const;
     bool is_quit_requested() const { return quit_requested_; }
     void request_quit() { quit_requested_ = true; }
+
+    /// Update the screen rect where the emulated display is rendered (SDL window coords).
+    void set_display_screen_rect(float x, float y, float w, float h) {
+        display_screen_rect_ = {x, y, w, h};
+    }
+    const ScreenRect& get_display_screen_rect() const { return display_screen_rect_; }
 
     // --- Connector Port Access (generic, available for all systems) ---------
 

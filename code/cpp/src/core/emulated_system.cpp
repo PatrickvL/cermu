@@ -224,6 +224,7 @@ bool EmulatedSystem::attach_device_to_port(int port_index, const char* device_id
     raw_ptr->reset();
     owned_devices_.push_back(std::move(device));
     printf("System: Attached '%s' to %s\n", raw_ptr->get_name(), port->get_name());
+    on_port_device_changed(port_index);
     return true;
 }
 
@@ -249,6 +250,7 @@ void EmulatedSystem::detach_device_from_port(int port_index) {
             owned_devices_.end()
         );
     }
+    on_port_device_changed(port_index);
 }
 
 void EmulatedSystem::detach_device_from_port(int port_index, PeripheralDevice* device) {
@@ -267,6 +269,7 @@ void EmulatedSystem::detach_device_from_port(int port_index, PeripheralDevice* d
                         }),
         owned_devices_.end()
     );
+    on_port_device_changed(port_index);
 }
 
 bool EmulatedSystem::process_sdl_event_for_devices(const SDL_Event& event) {

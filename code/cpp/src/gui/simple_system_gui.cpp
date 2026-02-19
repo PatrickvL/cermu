@@ -510,6 +510,16 @@ void SimpleSystemGUI::render_screen() {
         ImGui::Image((ImTextureID)(intptr_t)upload_tex,
                     ImVec2(display_w, display_h));
         
+        // Store display rect in SDL window coordinates for peripheral devices
+        // (e.g. lightpen uses this to map mouse position to emulated screen)
+        if (system_) {
+            auto item_min = ImGui::GetItemRectMin();
+            auto item_max = ImGui::GetItemRectMax();
+            system_->set_display_screen_rect(
+                item_min.x, item_min.y,
+                item_max.x - item_min.x, item_max.y - item_min.y);
+        }
+
         // Swap write index for next frame
         texture_write_idx_ ^= 1;
         // Keep base-class id in sync for filter-change code

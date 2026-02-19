@@ -591,6 +591,39 @@ static inline void vicii_pixel_set_framebuffer(vicii_pixel_unit_t* pixel, uint32
 }
 
 // ========================================================================================
+// LIGHTPEN
+// ========================================================================================
+
+// Set the LP pin state. The VIC-II detects a negative edge (HIGH→LOW transition)
+// and latches the current raster position into LPX/LPY registers.
+// Only one negative edge is recognized per frame — subsequent edges are ignored
+// until the next vertical blanking interval resets the latch.
+void vicii_lightpen_set_pin(vicii_t* vicii, bool pin_high) {
+    // Detect negative edge: previous HIGH, now LOW
+    if (vicii->lightpen.lp_pin_prev && !pin_high) {
+        if (!vicii->lightpen.triggered) {
+            vicii->lightpen.triggered = true;
+            // Latch current raster position
+            vicii->registers.data[VICII_LPX] = (uint8_t)(vicii->timing.x_coordinate >> 1);
+            vicii->registers.data[VICII_LPY] = (uint8_t)vicii->timing.raster_counter;
+            // Signal the lightpen interrupt
+            vicii_set_interrupt(vicii, VICII_IR_ILP);
+        }
+    }
+    vicii->lightpen.lp_pin_prev = pin_high;
+}
+
+// Accessors for external peripherals that need to compare their target
+// position against the current raster beam position.
+uint16_t vicii_get_raster_counter(const vicii_t* vicii) {
+    return vicii->timing.raster_counter;
+}
+
+uint16_t vicii_get_x_coordinate(const vicii_t* vicii) {
+    return vicii->timing.x_coordinate;
+}
+
+// ========================================================================================
 // MEMORY ACCESS
 // ========================================================================================
 
@@ -1001,6 +1034,9 @@ static inline void vicii_perform_line0_raster_irq_operations(vicii_t* vicii) {
     vicii->video_logic.is_bad_line = false;
     vicii->video_logic.bad_line_occurred = false;
     vicii->video_logic.refresh_counter = 0xFF;
+
+    // Reset lightpen trigger — can re-trigger on the new frame
+    vicii->lightpen.triggered = false;
     
     // Reset VCBASE/VC (shared with timing advance logic)
     vicii_reset_vcbase_vc(vicii);
@@ -1875,6 +1911,17 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
         vicii_pixel_sequencer(vicii);
     }
     
+    // STEP 5.5: Light pen pin sampling
+    // Read LP pin state via callback (control port 1 pin 6 → VIC-II pin 9).
+    // vicii_lightpen_set_pin() handles negative-edge detection and coordinate
+    // latching (LPX = x_coordinate/2, LPY = raster_counter, one trigger per frame).
+    // Must happen BEFORE STEP 7 (timing advance) so the latched coordinates
+    // reflect the current cycle's beam position.
+    if (vicii->bus.lp_pin_read) {
+        bool lp_pin_high = vicii->bus.lp_pin_read(vicii->bus.lp_pin_context);
+        vicii_lightpen_set_pin(vicii, lp_pin_high);
+    }
+
     // STEP 6: Handle VIC-II IRQ signaling to CPU
     // The VIC-II can generate interrupts from 4 sources (raster, sprite collision, etc.)
     // When any enabled interrupt is triggered, bit 7 (VICII_IR_IRQ) of register $D019 is set
@@ -2327,7 +2374,11 @@ static inline void vicii_initialize(vicii_t* vicii) {
     // The KERNAL will enable raster interrupts after initialization is complete
     // Starting with interrupts enabled causes repeated CINT calls that corrupt zero-page
     vicii->registers.data[VICII_IE] = 0; // No interrupts enabled at startup
-    
+
+    // Initialize lightpen: LP pin starts HIGH (released), not triggered
+    vicii->lightpen.lp_pin_prev = true;
+    vicii->lightpen.triggered = false;
+
     // Set default colors
     vicii->registers.data[VICII_EC] = VICII_COLOR_LIGHT_BLUE; // 14: Border Color
     vicii->registers.data[VICII_B0C] = VICII_COLOR_BLUE; // 6: Background Color 0
