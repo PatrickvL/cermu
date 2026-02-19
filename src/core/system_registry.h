@@ -53,13 +53,17 @@ private:
 /**
  * Helper macro for system registration
  * Place this in each system's .cpp file to auto-register the system
+ * Can be used multiple times in the same file (e.g., for system variants)
  */
+#define REGISTER_SYSTEM_CONCAT_IMPL(a, b) a##b
+#define REGISTER_SYSTEM_CONCAT(a, b) REGISTER_SYSTEM_CONCAT_IMPL(a, b)
 #define REGISTER_SYSTEM(descriptor, factory) \
     namespace { \
-        struct SystemRegistrar { \
-            SystemRegistrar() { \
+        struct REGISTER_SYSTEM_CONCAT(SystemRegistrar_, __LINE__) { \
+            REGISTER_SYSTEM_CONCAT(SystemRegistrar_, __LINE__)() { \
                 SystemRegistry::instance().register_system(descriptor, factory); \
             } \
         }; \
-        static SystemRegistrar registrar; \
+        static REGISTER_SYSTEM_CONCAT(SystemRegistrar_, __LINE__) \
+            REGISTER_SYSTEM_CONCAT(registrar_, __LINE__); \
     }

@@ -400,6 +400,7 @@ private:
     
     // System state
     bool is_pal_;
+    bool is_famicom_;              ///< True for Famicom variant (expansion audio, mic, hardwired controllers)
     bool system_ready_;
     uint32_t cycles_per_frame_;
     bool initialized_;
@@ -414,7 +415,7 @@ private:
     double residual_time_;
     
 public:
-    NESSystem();
+    explicit NESSystem(bool famicom = false);
     ~NESSystem() override;
     
     // EmulatedSystem interface - System identification

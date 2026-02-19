@@ -1009,7 +1009,7 @@ static float nes_can_load_file(const char* filepath, const uint8_t* data, size_t
     return 0.0f;
 }
 
-/** Formats the NES can load — used by SystemDescriptor and file dialogs. */
+/** Formats the NES/Famicom can load — used by SystemDescriptor and file dialogs. */
 static const format_descriptor_t* const nes_formats[] = {
     &NSF_FORMAT_DESCRIPTOR, nullptr
 };
@@ -1017,16 +1017,26 @@ static const format_descriptor_t* const nes_formats[] = {
 static SystemDescriptor nes_descriptor = {
     "Nintendo Entertainment System",
     "NES",
-    "Nintendo Entertainment System / Famicom (1983)",
+    "Nintendo Entertainment System (1985)",
     nes_formats,
     create_nes_hardware_traits(),
     nes_can_load_file
 };
 
-NESSystem::NESSystem()
+static SystemDescriptor famicom_descriptor = {
+    "Nintendo Famicom",
+    "FC",
+    "Nintendo Family Computer (1983) — expansion audio, hardwired controllers, microphone",
+    nes_formats,
+    create_nes_hardware_traits(),
+    nes_can_load_file
+};
+
+NESSystem::NESSystem(bool famicom)
     : EmulatedSystem()
     , cpu_(nullptr)
     , is_pal_(false)
+    , is_famicom_(famicom)
     , system_ready_(false)
     , cycles_per_frame_(29829)
     , initialized_(false)
@@ -1043,7 +1053,7 @@ NESSystem::~NESSystem() {
 }
 
 const SystemDescriptor& NESSystem::get_descriptor() const {
-    return nes_descriptor;
+    return is_famicom_ ? famicom_descriptor : nes_descriptor;
 }
 
 bool NESSystem::set_configuration(const SystemConfiguration& config) {
@@ -1131,7 +1141,8 @@ bool NESSystem::initialize() {
         return true;
     }
     
-    printf("NES: Initializing system (%s)\n", is_pal_ ? "PAL" : "NTSC");
+    printf("%s: Initializing system (%s)\n", 
+           is_famicom_ ? "Famicom" : "NES", is_pal_ ? "PAL" : "NTSC");
     
     // Create CPU with integrated APU
     cpu_ = nes6502_create();
@@ -1668,19 +1679,47 @@ static const ConnectorDefinition nes_expansion_def = {
     false, false
 };
 
+// Famicom-specific: hardwired controllers (not removable)
+static const ConnectorDefinition fc_controller_1_def = {
+    ConnectorType::CONTROLLER_NES,
+    "Controller I (hardwired)",
+    ConnectorSignals::NES_CONTROLLER_SIGNALS,
+    ConnectorSignals::NES_CONTROLLER_SIGNAL_COUNT,
+    false, false
+};
+
+static const ConnectorDefinition fc_controller_2_def = {
+    ConnectorType::CONTROLLER_NES,
+    "Controller II (hardwired, microphone)",
+    ConnectorSignals::NES_CONTROLLER_SIGNALS,
+    ConnectorSignals::NES_CONTROLLER_SIGNAL_COUNT,
+    false, false
+};
+
+static const ConnectorDefinition fc_expansion_def = {
+    ConnectorType::EXPANSION_PORT,
+    "Expansion Port (15-pin)",
+    ConnectorSignals::NES_EXPANSION_SIGNALS,
+    ConnectorSignals::NES_EXPANSION_SIGNAL_COUNT,
+    false, false
+};
+
 void NESSystem::setup_connector_ports() {
     connector_ports_.clear();
 
-    // Port 0 — Controller Port 1 (front, left)
-    add_connector_port(nes_controller_1_def, 1);
-
-    // Port 1 — Controller Port 2 (front, right)
-    add_connector_port(nes_controller_2_def, 2);
-
-    // Port 2 — Expansion Port (bottom of console)
-    add_connector_port(nes_expansion_def, 0);
-
-    printf("NES: Created %zu connector ports\n", connector_ports_.size());
+    if (is_famicom_) {
+        // Famicom: hardwired controllers, 15-pin expansion port
+        add_connector_port(fc_controller_1_def, 1);
+        add_connector_port(fc_controller_2_def, 2);
+        add_connector_port(fc_expansion_def, 0);
+        printf("Famicom: Created %zu connector ports\n", connector_ports_.size());
+    } else {
+        // NES: removable controller ports, bottom expansion
+        add_connector_port(nes_controller_1_def, 1);
+        add_connector_port(nes_controller_2_def, 2);
+        add_connector_port(nes_expansion_def, 0);
+        printf("NES: Created %zu connector ports\n", connector_ports_.size());
+    }
 }
 
 } // namespace nes_system
@@ -1690,5 +1729,9 @@ void NESSystem::setup_connector_ports() {
 // ============================================================================
 
 REGISTER_SYSTEM(nes_system::nes_descriptor, []() {
-    return std::make_unique<nes_system::NESSystem>();
+    return std::make_unique<nes_system::NESSystem>(false);
+})
+
+REGISTER_SYSTEM(nes_system::famicom_descriptor, []() {
+    return std::make_unique<nes_system::NESSystem>(true);
 })
