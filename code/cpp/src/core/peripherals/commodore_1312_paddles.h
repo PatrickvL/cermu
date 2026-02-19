@@ -1,24 +1,22 @@
 #pragma once
 /**
- * paddle_device.h - Paddle Controller Peripheral
+ * commodore_1312_paddles.h - Commodore 1312 Paddle Controller Pair
  *
- * Emulates a Commodore paddle controller pair that plugs into a
+ * Emulates a Commodore 1312 paddle controller pair that plugs into a
  * Control Port (DB-9).  Each paddle has a potentiometer (0-255)
  * and a fire button.
  */
 
-#include "../connector.h"
+#include "pot_input_device.h"
+#include <algorithm>
 
-class PaddleDevice : public PeripheralDevice {
+class Commodore1312Paddles : public PotInputDevice {
 public:
-    PaddleDevice();
-    ~PaddleDevice() override = default;
+    Commodore1312Paddles();
+    ~Commodore1312Paddles() override = default;
 
-    const char* get_name() const override { return "Paddles"; }
-    const char* get_id() const override   { return "paddles"; }
-    ConnectorType get_connector_type() const override { return ConnectorType::CONTROL_PORT_DB9; }
-    void reset() override;
-    uint32_t get_output_signals() const override;
+    const char* get_name() const override { return "Commodore 1312 Paddles"; }
+    const char* get_id() const override   { return "paddles_1312"; }
 
     // --- Host input support -------------------------------------------
     bool accepts_host_input() const override { return true; }
@@ -40,15 +38,9 @@ public:
     void set_paddle_y(uint8_t value) { pot_y_ = value; }
 
     /// Fire buttons (active-low).
-    void set_fire_x(bool pressed);
-    void set_fire_y(bool pressed);
-
-    uint8_t get_pot_x() const { return pot_x_; }
-    uint8_t get_pot_y() const { return pot_y_; }
+    void set_fire_x(bool pressed) { set_signal(ConnectorSignals::JOY_FIRE, pressed); }
+    void set_fire_y(bool pressed) { set_signal(ConnectorSignals::JOY_UP, pressed); }
 
 private:
-    uint32_t state_;
-    uint8_t  pot_x_;
-    uint8_t  pot_y_;
     HostInputBinding binding_;
 };

@@ -7,18 +7,15 @@
  * at its position.
  */
 
-#include "../connector.h"
+#include "control_port_device.h"
 
-class LightpenDevice : public PeripheralDevice {
+class LightpenDevice : public ControlPortInputDevice {
 public:
     LightpenDevice();
     ~LightpenDevice() override = default;
 
     const char* get_name() const override { return "Light Pen"; }
     const char* get_id() const override   { return "lightpen"; }
-    ConnectorType get_connector_type() const override { return ConnectorType::CONTROL_PORT_DB9; }
-    void reset() override;
-    uint32_t get_output_signals() const override;
 
     // --- Host input support -------------------------------------------
     bool accepts_host_input() const override { return true; }
@@ -45,7 +42,6 @@ public:
     bool is_triggered() const { return triggered_; }
 
 private:
-    uint32_t state_;
     int      pen_x_;
     int      pen_y_;
     bool     triggered_;

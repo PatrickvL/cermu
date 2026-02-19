@@ -1,10 +1,11 @@
 /**
- * paddle_device.cpp - Paddle Controller Implementation
+ * commodore_1312_paddles.cpp - Commodore 1312 Paddle Controller Implementation
  */
 
-#include "paddle_device.h"
+#include "commodore_1312_paddles.h"
 #include "../device_registry.h"
 #include <cstdio>
+#include <algorithm>
 #include <SDL_events.h>
 #include <SDL_gamecontroller.h>
 
@@ -12,40 +13,29 @@
 #include "imgui.h"
 #endif
 
-PaddleDevice::PaddleDevice()
-    : state_(0xFFFFFFFF), pot_x_(128), pot_y_(128)
-{
+Commodore1312Paddles::Commodore1312Paddles() {
     binding_.type = HostInputType::HOST_MOUSE;
     binding_.label = "Host Mouse";
 }
 
-void PaddleDevice::reset() {
-    state_ = 0xFFFFFFFF;
+void Commodore1312Paddles::set_host_input_binding(const HostInputBinding& binding) {
+    release_all_signals();
     pot_x_ = 128;
     pot_y_ = 128;
-    if (port_) port_->notify_device_output_changed(state_);
-}
-
-uint32_t PaddleDevice::get_output_signals() const { return state_; }
-
-void PaddleDevice::set_host_input_binding(const HostInputBinding& binding) {
-    state_ = 0xFFFFFFFF;
-    pot_x_ = 128;
-    pot_y_ = 128;
-    if (port_) port_->notify_device_output_changed(state_);
+    notify_port();
     binding_ = binding;
-    printf("Paddles: Input source changed to %s\n", binding_.label.c_str());
+    printf("1312 Paddles: Input source changed to %s\n", binding_.label.c_str());
 }
 
-bool PaddleDevice::process_sdl_event(const SDL_Event& event) {
+bool Commodore1312Paddles::process_sdl_event(const SDL_Event& event) {
     if (binding_.type == HostInputType::HOST_MOUSE) {
         switch (event.type) {
             case SDL_MOUSEMOTION:
                 // Mouse X motion maps to paddle X, Y to paddle Y
                 set_paddle_x(static_cast<uint8_t>(
-                    std::max(0, std::min(255, pot_x_ + event.motion.xrel))));
+                    std::max(0, std::min(255, (int)pot_x_ + event.motion.xrel))));
                 set_paddle_y(static_cast<uint8_t>(
-                    std::max(0, std::min(255, pot_y_ + event.motion.yrel))));
+                    std::max(0, std::min(255, (int)pot_y_ + event.motion.yrel))));
                 return true;
 
             case SDL_MOUSEBUTTONDOWN:
@@ -101,28 +91,14 @@ bool PaddleDevice::process_sdl_event(const SDL_Event& event) {
     return false;
 }
 
-void PaddleDevice::set_fire_x(bool pressed) {
-    // Paddle A fire maps to FIRE line
-    if (pressed) state_ &= ~(1u << ConnectorSignals::JOY_FIRE);
-    else         state_ |=  (1u << ConnectorSignals::JOY_FIRE);
-    if (port_) port_->notify_device_output_changed(state_);
-}
-
-void PaddleDevice::set_fire_y(bool pressed) {
-    // Paddle B fire maps to UP line (active-low)
-    if (pressed) state_ &= ~(1u << ConnectorSignals::JOY_UP);
-    else         state_ |=  (1u << ConnectorSignals::JOY_UP);
-    if (port_) port_->notify_device_output_changed(state_);
-}
-
 // ============================================================================
 // GUI
 // ============================================================================
 
 #ifdef IMGUI_VERSION
-void PaddleDevice::render_device_ui() {
-    bool fire_x = !(state_ & (1u << ConnectorSignals::JOY_FIRE));
-    bool fire_y = !(state_ & (1u << ConnectorSignals::JOY_UP));
+void Commodore1312Paddles::render_device_ui() {
+    bool fire_x = is_signal_asserted(ConnectorSignals::JOY_FIRE);
+    bool fire_y = is_signal_asserted(ConnectorSignals::JOY_UP);
 
     ImGui::Text("  X:%3d  Y:%3d  Fire A:%s  B:%s",
                 pot_x_, pot_y_, fire_x ? "Y" : ".", fire_y ? "Y" : ".");
@@ -133,14 +109,14 @@ void PaddleDevice::render_device_ui() {
 // SELF-REGISTRATION
 // ============================================================================
 
-static const DeviceDescriptor paddle_descriptor = {
-    "paddles",
-    "Paddles",
-    "Commodore paddle controller pair — analog potentiometers + fire buttons",
+static const DeviceDescriptor paddles_1312_descriptor = {
+    "paddles_1312",
+    "Commodore 1312 Paddles",
+    "Commodore 1312 paddle controller pair — analog potentiometers + fire buttons",
     ConnectorType::CONTROL_PORT_DB9,
     false
 };
 
-REGISTER_DEVICE(paddle_descriptor, []() {
-    return std::make_unique<PaddleDevice>();
+REGISTER_DEVICE(paddles_1312_descriptor, []() {
+    return std::make_unique<Commodore1312Paddles>();
 })

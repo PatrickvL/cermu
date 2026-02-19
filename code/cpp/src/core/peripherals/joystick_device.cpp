@@ -16,19 +16,14 @@
 // CONSTRUCTION / RESET
 // ============================================================================
 
-JoystickDevice::JoystickDevice()
-    : state_(0xFFFFFFFF)  // All lines released (idle)
-{
+JoystickDevice::JoystickDevice() {
     // Default binding: Keyboard (arrows + right ctrl)
     binding_.type = HostInputType::KEYBOARD;
     binding_.label = "Keyboard";
 }
 
 void JoystickDevice::reset() {
-    state_ = 0xFFFFFFFF;
-    if (port_) {
-        port_->notify_device_output_changed(state_);
-    }
+    ControlPortInputDevice::reset();
 }
 
 // ============================================================================
@@ -37,8 +32,8 @@ void JoystickDevice::reset() {
 
 void JoystickDevice::set_host_input_binding(const HostInputBinding& binding) {
     // Release all directions when switching input source
-    state_ = 0xFFFFFFFF;
-    if (port_) port_->notify_device_output_changed(state_);
+    release_all_signals();
+    notify_port();
 
     binding_ = binding;
     printf("Joystick: Input source changed to %s\n", binding_.label.c_str());
@@ -126,26 +121,7 @@ bool JoystickDevice::process_gamepad_event(const SDL_Event& event) {
     return false;
 }
 
-// ============================================================================
-// SIGNAL OUTPUT
-// ============================================================================
 
-uint32_t JoystickDevice::get_output_signals() const {
-    return state_;
-}
-
-void JoystickDevice::set_direction(uint8_t bit_index, bool pressed) {
-    if (pressed) {
-        state_ &= ~(1u << bit_index);   // Pull LOW (assert)
-    } else {
-        state_ |= (1u << bit_index);    // Release HIGH
-    }
-
-    // Notify the connector port that our output changed
-    if (port_) {
-        port_->notify_device_output_changed(state_);
-    }
-}
 
 // ============================================================================
 // GUI
@@ -154,11 +130,11 @@ void JoystickDevice::set_direction(uint8_t bit_index, bool pressed) {
 #ifdef IMGUI_VERSION
 void JoystickDevice::render_device_ui() {
     // Joystick state display
-    bool up    = !(state_ & (1u << ConnectorSignals::JOY_UP));
-    bool down  = !(state_ & (1u << ConnectorSignals::JOY_DOWN));
-    bool left  = !(state_ & (1u << ConnectorSignals::JOY_LEFT));
-    bool right = !(state_ & (1u << ConnectorSignals::JOY_RIGHT));
-    bool fire  = !(state_ & (1u << ConnectorSignals::JOY_FIRE));
+    bool up    = is_signal_asserted(ConnectorSignals::JOY_UP);
+    bool down  = is_signal_asserted(ConnectorSignals::JOY_DOWN);
+    bool left  = is_signal_asserted(ConnectorSignals::JOY_LEFT);
+    bool right = is_signal_asserted(ConnectorSignals::JOY_RIGHT);
+    bool fire  = is_signal_asserted(ConnectorSignals::JOY_FIRE);
 
     ImGui::Text("  %s %s %s %s %s",
                 up ? "U" : ".", down ? "D" : ".", left ? "L" : ".",
@@ -198,8 +174,8 @@ void JoystickDevice::render_device_ui() {
 
 static const DeviceDescriptor joystick_descriptor = {
     "joystick",
-    "Joystick",
-    "Standard digital joystick (Atari-compatible, 4 directions + fire)",
+    "Digital Joystick",
+    "Atari-compatible digital joystick (Competition Pro, TAC-2, etc.)",
     ConnectorType::CONTROL_PORT_DB9,
     false  // Not a bus device
 };
