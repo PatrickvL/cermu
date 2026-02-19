@@ -1321,8 +1321,11 @@ void C64SystemWrapper::setup_connector_ports() {
     connector_ports_[kb_port]->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
-    // Default: attach joystick to Control Port 2 (most C64 games use port 2)
-    attach_device_to_port(1, "joystick");
+    // Default devices: mouse in Port 1, joystick in Port 2.
+    // Port 2 is the standard game port; Port 1 provides mouse for GEOS/etc.
+    // Users can manually swap these or attach a lightpen via the connector menu.
+    attach_device_to_port(PORT_CONTROL1, "mouse_1351");
+    attach_device_to_port(PORT_CONTROL2, "joystick");
 
     // Wire joystick-aware CIA1 callbacks (replace the defaults set by c64_system_create)
     if (c64_ && c64_->cia1) {
