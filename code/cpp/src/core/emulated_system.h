@@ -295,8 +295,15 @@ public:
     /// Detach whatever device is on a connector port.
     void detach_device_from_port(int port_index);
 
+    /// Route an SDL event to all owned devices that accept host input.
+    /// Returns true if any device consumed the event.
+    bool process_sdl_event_for_devices(const SDL_Event& event);
+
     /// Render the generic peripheral connector UI (called from GUI layer).
     void render_peripheral_connector_ui();
+
+    /// Render host input binding selector for a device (called from connector UI).
+    void render_host_input_binding_ui(PeripheralDevice* device);
     
     // Default implementations (can be overridden if needed)
     virtual void set_framebuffer(uint32_t* buffer, int width, int height);

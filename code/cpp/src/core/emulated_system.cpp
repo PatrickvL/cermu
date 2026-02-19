@@ -4,6 +4,9 @@
 #include <cstdio>
 #include <cstdint>
 #include <vector>
+#include <SDL_events.h>
+#include <SDL_gamecontroller.h>
+#include <SDL_joystick.h>
 
 #ifdef IMGUI_VERSION
 #include <imgui.h>
@@ -240,21 +243,37 @@ void EmulatedSystem::detach_device_from_port(int port_index) {
     );
 }
 
+bool EmulatedSystem::process_sdl_event_for_devices(const SDL_Event& event) {
+    bool consumed = false;
+    for (auto& device : owned_devices_) {
+        if (device->accepts_host_input()) {
+            if (device->process_sdl_event(event)) {
+                consumed = true;
+            }
+        }
+    }
+    return consumed;
+}
+
 void EmulatedSystem::render_peripheral_connector_ui() {
 #ifdef IMGUI_VERSION
     if (connector_ports_.empty()) return;
 
     auto& registry = DeviceRegistry::instance();
 
-    // Only show if at least one port has compatible devices
-    bool any_has_devices = false;
+    // Check if there's anything worth showing (external ports with devices,
+    // or internal ports with attached devices that have UI)
+    bool any_visible = false;
     for (auto& port : connector_ports_) {
-        if (!registry.get_compatible_devices(port->get_type()).empty()) {
-            any_has_devices = true;
-            break;
+        const auto& def = port->get_definition();
+        if (def.is_internal) {
+            if (port->get_attached_device()) any_visible = true;
+        } else {
+            if (!registry.get_compatible_devices(port->get_type()).empty())
+                any_visible = true;
         }
     }
-    if (!any_has_devices) return;
+    if (!any_visible) return;
 
     ImGui::Separator();
     ImGui::Text("Peripheral Connectors");
@@ -262,43 +281,142 @@ void EmulatedSystem::render_peripheral_connector_ui() {
 
     for (int i = 0; i < static_cast<int>(connector_ports_.size()); i++) {
         auto& port = connector_ports_[i];
-        auto compatible = registry.get_compatible_devices(port->get_type());
-        if (compatible.empty()) continue;  // Skip ports with no available devices
+        const auto& def = port->get_definition();
+        auto* attached = port->get_attached_device();
 
         ImGui::PushID(i);
 
-        // Build combo items: "<none>" + compatible device names
-        auto* attached = port->get_attached_device();
-        const char* current_name = attached ? attached->get_name() : "<none>";
-
-        if (ImGui::BeginCombo(port->get_name(), current_name)) {
-            // "<none>" option — detach
-            if (ImGui::Selectable("<none>", attached == nullptr)) {
-                detach_device_from_port(i);
+        if (def.is_internal) {
+            // Internal connector: show as fixed label, no attach/detach combo
+            if (attached) {
+                ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f),
+                                   "%s: %s", def.name, attached->get_name());
+                ImGui::Indent();
+                attached->render_device_ui();
+                ImGui::Unindent();
+            }
+        } else {
+            // External connector: show attach/detach combo
+            auto compatible = registry.get_compatible_devices(port->get_type());
+            if (compatible.empty()) {
+                ImGui::PopID();
+                continue;
             }
 
-            for (const auto* desc : compatible) {
-                bool is_selected = (attached && strcmp(attached->get_id(), desc->id) == 0);
-                if (ImGui::Selectable(desc->name, is_selected)) {
-                    if (!is_selected) {
-                        attach_device_to_port(i, desc->id);
+            const char* current_name = attached ? attached->get_name() : "<none>";
+
+            if (ImGui::BeginCombo(def.name, current_name)) {
+                // "<none>" option — detach
+                if (ImGui::Selectable("<none>", attached == nullptr)) {
+                    detach_device_from_port(i);
+                    attached = nullptr;  // Device destroyed — clear dangling pointer
+                }
+
+                for (const auto* desc : compatible) {
+                    bool is_selected = (attached && strcmp(attached->get_id(), desc->id) == 0);
+                    if (ImGui::Selectable(desc->name, is_selected)) {
+                        if (!is_selected) {
+                            attach_device_to_port(i, desc->id);
+                            attached = port->get_attached_device();  // Refresh pointer
+                        }
+                    }
+                    if (ImGui::IsItemHovered() && desc->description) {
+                        ImGui::SetTooltip("%s", desc->description);
                     }
                 }
-                if (ImGui::IsItemHovered() && desc->description) {
-                    ImGui::SetTooltip("%s", desc->description);
-                }
+                ImGui::EndCombo();
             }
-            ImGui::EndCombo();
-        }
 
-        // Show device-specific UI if attached
-        if (attached) {
-            ImGui::Indent();
-            attached->render_device_ui();
-            ImGui::Unindent();
+            // Show device-specific UI if attached
+            if (attached) {
+                ImGui::Indent();
+                attached->render_device_ui();
+
+                // Host input binding selector for input-accepting devices
+                if (attached->accepts_host_input()) {
+                    render_host_input_binding_ui(attached);
+                }
+
+                ImGui::Unindent();
+            }
         }
 
         ImGui::PopID();
     }
+#endif
+}
+
+void EmulatedSystem::render_host_input_binding_ui(PeripheralDevice* device) {
+#ifdef IMGUI_VERSION
+    if (!device || !device->accepts_host_input()) return;
+
+    const auto& binding = device->get_host_input_binding();
+    int type_count = device->get_supported_input_type_count();
+    if (type_count <= 0) return;
+
+    // Build combo label from current binding
+    ImGui::PushID("host_input");
+
+    if (ImGui::BeginCombo("Input Source", binding.label.c_str())) {
+        // "None" option
+        bool is_none = (binding.type == HostInputType::NONE);
+        if (ImGui::Selectable("None", is_none)) {
+            HostInputBinding none;
+            none.type = HostInputType::NONE;
+            none.label = "None";
+            device->set_host_input_binding(none);
+        }
+
+        for (int t = 0; t < type_count; t++) {
+            HostInputType supported = device->get_supported_input_type(t);
+            if (supported == HostInputType::NONE) continue;
+
+            if (supported == HostInputType::SDL_GAMEPAD) {
+                // List available SDL game controllers
+                int num_joysticks = SDL_NumJoysticks();
+                for (int j = 0; j < num_joysticks; j++) {
+                    if (SDL_IsGameController(j)) {
+                        const char* name = SDL_GameControllerNameForIndex(j);
+                        if (!name) name = "Unknown Controller";
+
+                        char label[128];
+                        snprintf(label, sizeof(label), "Gamepad #%d: %s", j, name);
+
+                        SDL_JoystickID jid = -1;
+                        SDL_GameController* gc = SDL_GameControllerOpen(j);
+                        if (gc) {
+                            SDL_Joystick* js = SDL_GameControllerGetJoystick(gc);
+                            if (js) jid = SDL_JoystickInstanceID(js);
+                        }
+
+                        bool is_sel = (binding.type == HostInputType::SDL_GAMEPAD &&
+                                       binding.gamepad_instance_id == jid);
+                        if (ImGui::Selectable(label, is_sel)) {
+                            HostInputBinding b;
+                            b.type = HostInputType::SDL_GAMEPAD;
+                            b.gamepad_instance_id = jid;
+                            b.label = label;
+                            device->set_host_input_binding(b);
+                        }
+                    }
+                }
+            } else {
+                // Keyboard, Host Mouse — single selectable entry
+                const char* name = host_input_type_name(supported);
+                bool is_sel = (binding.type == supported);
+                if (ImGui::Selectable(name, is_sel)) {
+                    HostInputBinding b;
+                    b.type = supported;
+                    b.label = name;
+                    device->set_host_input_binding(b);
+                }
+            }
+        }
+        ImGui::EndCombo();
+    }
+
+    ImGui::PopID();
+#else
+    (void)device;
 #endif
 }

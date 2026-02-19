@@ -229,6 +229,7 @@ set(CORE_SOURCES
     src/core/peripherals/lightpen_device.cpp
     src/core/peripherals/datasette_device.cpp
     src/core/peripherals/drive_1541.cpp
+    src/core/peripherals/commodore_keyboard_device.cpp
 )
 
 # FAM65XX Decoder - standalone library for instruction decoding

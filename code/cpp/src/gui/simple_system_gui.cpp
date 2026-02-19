@@ -133,6 +133,27 @@ void SimpleSystemGUI::handle_events() {
                 system_->handle_text_input(event.text.text);
             }
         }
+
+        // Route SDL events to attached peripheral devices (joystick, mouse, etc.)
+        // Keyboard events are only forwarded when ImGui doesn't claim keyboard focus.
+        // Mouse/controller events are only forwarded when ImGui doesn't claim mouse focus.
+        if (system_) {
+            ImGuiIO& io2 = ImGui::GetIO();
+            bool is_keyboard_event =
+                (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP);
+            bool is_mouse_event =
+                (event.type == SDL_MOUSEMOTION ||
+                 event.type == SDL_MOUSEBUTTONDOWN ||
+                 event.type == SDL_MOUSEBUTTONUP);
+
+            bool should_forward = true;
+            if (is_keyboard_event && io2.WantCaptureKeyboard) should_forward = false;
+            if (is_mouse_event && io2.WantCaptureMouse)       should_forward = false;
+
+            if (should_forward) {
+                system_->process_sdl_event_for_devices(event);
+            }
+        }
     }
     
     // Check if the system requested application exit (e.g. ESC in SID player)

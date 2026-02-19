@@ -1648,21 +1648,24 @@ static const ConnectorDefinition nes_controller_1_def = {
     ConnectorType::CONTROLLER_NES,
     "Controller Port 1",
     ConnectorSignals::NES_CONTROLLER_SIGNALS,
-    ConnectorSignals::NES_CONTROLLER_SIGNAL_COUNT
+    ConnectorSignals::NES_CONTROLLER_SIGNAL_COUNT,
+    false
 };
 
 static const ConnectorDefinition nes_controller_2_def = {
     ConnectorType::CONTROLLER_NES,
     "Controller Port 2",
     ConnectorSignals::NES_CONTROLLER_SIGNALS,
-    ConnectorSignals::NES_CONTROLLER_SIGNAL_COUNT
+    ConnectorSignals::NES_CONTROLLER_SIGNAL_COUNT,
+    false
 };
 
 static const ConnectorDefinition nes_expansion_def = {
     ConnectorType::EXPANSION_PORT,
     "Expansion Port",
     ConnectorSignals::NES_EXPANSION_SIGNALS,
-    ConnectorSignals::NES_EXPANSION_SIGNAL_COUNT
+    ConnectorSignals::NES_EXPANSION_SIGNAL_COUNT,
+    false
 };
 
 void NESSystem::setup_connector_ports() {
