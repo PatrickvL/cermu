@@ -458,6 +458,17 @@ bool C64SystemWrapper::load_file(const char* filepath) {
         ensure_compatible_for_sid(sid_check);
     }
 
+    // Determine load mode based on format type
+    LoadMode mode = LoadMode::DIRECT;
+    if (result.format) {
+        const char* fmt = result.format->name;
+        if (fmt && strcmp(fmt, "D64") == 0) {
+            mode = LoadMode::DISK_FAST;
+        } else if (fmt && strcmp(fmt, "TAP") == 0) {
+            mode = LoadMode::TAPE_INSERTED;
+        }
+    }
+
     // Defer loading until KERNAL/BASIC boot completes.
     // The CPU starts at $FCE2 (KERNAL reset vector) and must complete its
     // full boot sequence — IOINIT, RAMTAS, RESTOR, screen init, BASIC cold
@@ -466,8 +477,11 @@ bool C64SystemWrapper::load_file(const char* filepath) {
     pending_load_.result = result;  // Transfer ownership (don't free yet)
     pending_load_.filepath = filepath;
     pending_load_.active = true;
+    pending_load_.mode = mode;
 
-    printf("C64: File parsed — deferred until BASIC READY\n");
+    printf("C64: File parsed (mode=%s) — deferred until BASIC READY\n",
+           mode == LoadMode::DISK_FAST ? "DISK_FAST" :
+           mode == LoadMode::TAPE_INSERTED ? "TAPE_INSERTED" : "DIRECT");
     return true;
 }
 
@@ -541,7 +555,94 @@ void C64SystemWrapper::apply_pending_load() {
     }
 
     // =========================================================================
-    // STANDARD PATH — PRG / D64 / T64 / CRT / LNX / BIN
+    // DISK_FAST PATH — D64: Insert disk into 1541 + extract first PRG to RAM
+    // =========================================================================
+    if (pending_load_.mode == LoadMode::DISK_FAST) {
+        printf("C64: BASIC READY — DISK_FAST load\n");
+
+        // Find the 1541 drive on the IEC serial port
+        auto* iec_port = get_connector_port(PORT_IEC_SERIAL);
+        Drive1541Device* drive = nullptr;
+        if (iec_port) {
+            drive = dynamic_cast<Drive1541Device*>(iec_port->get_attached_device());
+        }
+
+        if (drive) {
+            drive->insert_disk(pending_load_.filepath.c_str());
+            printf("C64: D64 inserted into drive %d\n", drive->get_device_number());
+        } else {
+            printf("C64: No 1541 drive attached — D64 not mounted\n");
+        }
+
+        // Also fast-load the extracted PRG into RAM for instant start
+        if (pending_load_.result.type == FORMAT_LOAD_PROGRAM &&
+            pending_load_.result.program.data) {
+            commodore_load_context_t ctx = {};
+            ctx.system_name     = "C64";
+            ctx.write_byte      = c64_mem_write_byte;
+            ctx.write_block     = c64_mem_write_block;
+            ctx.mem_read        = c64_mem_read;
+            ctx.mem_ctx         = c64_->ram;
+            ctx.basic_params    = &COMMODORE_BASIC_C64;
+            ctx.basic_start_addrs[0] = 0x0801;
+            ctx.default_raw_addr = 0xC000;
+
+            commodore_apply_load_result(&ctx, &pending_load_.result,
+                                        pending_load_.filepath.c_str());
+        } else if (drive) {
+            // No PRG extracted — inject LOAD"*",8,1 + RUN for native disk load
+            const char* load_cmd = "LOAD\"*\",8,1\r";
+            int len = (int)strlen(load_cmd);
+            if (len > 10) len = 10;
+            for (int i = 0; i < len; i++) {
+                c64_mem_write_byte(c64_->ram, (uint16_t)(0x0277 + i), (uint8_t)load_cmd[i]);
+            }
+            c64_mem_write_byte(c64_->ram, 0x00C6, (uint8_t)len);
+        }
+
+        format_load_result_free(&pending_load_.result);
+        pending_load_.active = false;
+        boot_completed_ = true;
+        return;
+    }
+
+    // =========================================================================
+    // TAPE_INSERTED PATH — TAP: Load tape into datasette + inject LOAD
+    // =========================================================================
+    if (pending_load_.mode == LoadMode::TAPE_INSERTED) {
+        printf("C64: BASIC READY — TAPE_INSERTED load\n");
+
+        // Find the datasette on the cassette port
+        auto* cass_port = get_connector_port(PORT_CASSETTE);
+        DatasetteDevice* datasette = nullptr;
+        if (cass_port) {
+            datasette = dynamic_cast<DatasetteDevice*>(cass_port->get_attached_device());
+        }
+
+        if (datasette) {
+            datasette->load_tap(pending_load_.filepath.c_str());
+            datasette->press_play();
+            printf("C64: TAP loaded into datasette, PLAY pressed\n");
+
+            // Inject LOAD + RETURN to start tape loading
+            const char* load_cmd = "LOAD\r";
+            int len = (int)strlen(load_cmd);
+            for (int i = 0; i < len; i++) {
+                c64_mem_write_byte(c64_->ram, (uint16_t)(0x0277 + i), (uint8_t)load_cmd[i]);
+            }
+            c64_mem_write_byte(c64_->ram, 0x00C6, (uint8_t)len);
+        } else {
+            printf("C64: No datasette attached — TAP not loaded\n");
+        }
+
+        format_load_result_free(&pending_load_.result);
+        pending_load_.active = false;
+        boot_completed_ = true;
+        return;
+    }
+
+    // =========================================================================
+    // STANDARD PATH — PRG / T64 / CRT / LNX / BIN
     // =========================================================================
     printf("C64: BASIC READY — applying deferred load\n");
 

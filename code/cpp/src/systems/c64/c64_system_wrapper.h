@@ -163,6 +163,13 @@ private:
     // parsed format result and applies it only after BASIC reaches its READY
     // state (warm-start vector set, keyboard buffer empty).
     //
+    // MEDIA ATTACHMENT: For D64 and TAP files, the media is inserted into the
+    // appropriate storage device (1541 drive or datasette). D64 files also
+    // extract the first PRG for fast direct-load (hybrid approach: disk is
+    // available for directory listing AND the first program auto-runs). TAP
+    // files are loaded into the datasette; full tape loading requires KERNAL
+    // cassette I/O integration (CASS_READ signal wiring to CPU I/O port).
+    //
     // FUTURE OPTIMIZATION: Some files (e.g. raw ML at $C000, or programs
     // that never touch KERNAL/BASIC-initialized memory) could be loaded
     // earlier — even before BASIC or KERNAL init completes. This would
@@ -171,10 +178,19 @@ private:
     // near-instant startup for many programs. Not yet implemented; the
     // current approach prioritizes correctness over speed.
     // =========================================================================
+
+    /** How the deferred load should be applied after BASIC READY. */
+    enum class LoadMode {
+        DIRECT,         ///< Standard: write program data to RAM, inject RUN
+        DISK_FAST,      ///< D64: disk inserted in 1541 + fast PRG extraction to RAM
+        TAPE_INSERTED   ///< TAP: tape loaded in datasette, inject LOAD + press play
+    };
+
     struct PendingLoad {
         format_load_result_t result;  // Parsed file data (owns heap allocations)
         std::string filepath;         // Original filepath for SYS-from-filename
         bool active = false;          // Whether a deferred load is pending
+        LoadMode mode = LoadMode::DIRECT;  // How to apply the load
     };
     PendingLoad pending_load_;
     bool boot_completed_ = false;  // Set after first deferred load; skips VARTAB check
