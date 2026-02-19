@@ -510,6 +510,9 @@ void SimpleSystemGUI::render_settings() {
         // System-specific configuration UI
         ImGui::Text("System Configuration:");
         system_->render_configuration_ui();
+
+        // Generic peripheral connector UI (available for all systems)
+        system_->render_peripheral_connector_ui();
     }
     
     ImGui::End();

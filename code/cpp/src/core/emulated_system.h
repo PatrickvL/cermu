@@ -7,6 +7,8 @@
 #include <functional>
 #include <map>
 #include <SDL_keycode.h>
+#include "connector.h"
+#include "device_registry.h"
 
 // Forward-declare format descriptor so SystemDescriptor can reference it
 struct format_descriptor_s;
@@ -237,6 +239,21 @@ protected:
     uint64_t total_cycles_;
     float speed_multiplier_;
     bool quit_requested_;
+
+    // =========================================================================
+    // CONNECTOR PORTS & PERIPHERAL DEVICES (generic for all systems)
+    // =========================================================================
+    /// Connector ports registered by each system during initialization.
+    std::vector<std::unique_ptr<ConnectorPort>> connector_ports_;
+
+    /// Peripheral device instances owned by the system (attached to ports).
+    std::vector<std::unique_ptr<PeripheralDevice>> owned_devices_;
+
+    /// Helper: add a connector port (called by derived systems in initialize).
+    int add_connector_port(const ConnectorDefinition& def, int port_number = 0);
+
+    /// Tick all attached peripheral devices (call once per frame).
+    void tick_peripherals();
     
 public:
     EmulatedSystem();
@@ -252,6 +269,34 @@ public:
     float get_speed_multiplier() const;
     bool is_quit_requested() const { return quit_requested_; }
     void request_quit() { quit_requested_ = true; }
+
+    // --- Connector Port Access (generic, available for all systems) ---------
+
+    /// Get all connector ports on this system.
+    const std::vector<std::unique_ptr<ConnectorPort>>& get_connector_ports() const {
+        return connector_ports_;
+    }
+
+    /// Get a connector port by index (nullptr if out of range).
+    ConnectorPort* get_connector_port(int index) {
+        if (index >= 0 && index < static_cast<int>(connector_ports_.size()))
+            return connector_ports_[index].get();
+        return nullptr;
+    }
+
+    /// Get all owned peripheral device instances.
+    const std::vector<std::unique_ptr<PeripheralDevice>>& get_owned_devices() const {
+        return owned_devices_;
+    }
+
+    /// Attach a device to a connector port (creates from DeviceRegistry).
+    bool attach_device_to_port(int port_index, const char* device_id);
+
+    /// Detach whatever device is on a connector port.
+    void detach_device_from_port(int port_index);
+
+    /// Render the generic peripheral connector UI (called from GUI layer).
+    void render_peripheral_connector_ui();
     
     // Default implementations (can be overridden if needed)
     virtual void set_framebuffer(uint32_t* buffer, int width, int height);

@@ -138,30 +138,12 @@ public:
     c64_t* get_c64_system() { return c64_; }
     
     // --- Connector Port Access -----------------------------------------
-    
-    /// Get all connector ports on this system.
-    const std::vector<std::unique_ptr<ConnectorPort>>& get_connector_ports() const {
-        return connector_ports_;
-    }
-    
-    /// Get a connector port by index.
-    ConnectorPort* get_connector_port(int index) {
-        if (index >= 0 && index < static_cast<int>(connector_ports_.size()))
-            return connector_ports_[index].get();
-        return nullptr;
-    }
-    
-    /// Get all owned peripheral device instances.
-    const std::vector<std::unique_ptr<PeripheralDevice>>& get_owned_devices() const {
-        return owned_devices_;
-    }
-    
-    /// Attach a device to a connector port by port index and device ID.
-    /// The wrapper takes ownership of the device instance.
-    bool attach_device_to_port(int port_index, const char* device_id);
-    
-    /// Detach whatever is on a connector port.
-    void detach_device_from_port(int port_index);
+    //
+    // Connector ports, owned devices, attach/detach, and the generic
+    // peripheral connector UI are all provided by the EmulatedSystem base
+    // class.  The C64 only defines its port layout constants and the
+    // system-specific setup_connector_ports() initializer below.
+    //
     
 private:
     c64_t* c64_;
@@ -235,22 +217,18 @@ private:
     // total_cycles_ are now stored in EmulatedSystem base class
     
     // =========================================================================
-    // CONNECTOR PORTS & PERIPHERAL DEVICES
+    // CONNECTOR PORTS — C64-SPECIFIC LAYOUT
     // =========================================================================
-    std::vector<std::unique_ptr<ConnectorPort>> connector_ports_;
-    std::vector<std::unique_ptr<PeripheralDevice>> owned_devices_;
-    
-    /// Create and wire up all C64 connector ports.
-    void setup_connector_ports();
-    
-    /// Tick all attached peripheral devices (called per system tick).
-    void tick_peripherals();
-
-    // Indices into connector_ports_ for quick access
+public:
+    // Indices into connector_ports_ for quick access (public for CIA1 callbacks)
     static constexpr int PORT_CONTROL1   = 0;
     static constexpr int PORT_CONTROL2   = 1;
     static constexpr int PORT_IEC_SERIAL = 2;
     static constexpr int PORT_CASSETTE   = 3;
     static constexpr int PORT_USER       = 4;
     static constexpr int PORT_EXPANSION  = 5;
+
+private:
+    /// Create and wire up all C64 connector ports (CIA1 joystick callbacks etc).
+    void setup_connector_ports();
 };

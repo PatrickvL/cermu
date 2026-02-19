@@ -273,8 +273,8 @@ bool Drive1541Device::insert_disk(const char* filepath) {
     fseek(f, 0, SEEK_SET);
 
     // Validate D64 size
-    if (size != D64_STANDARD_SIZE && size != D64_STANDARD_SIZE_ERR &&
-        size != D64_EXTENDED_SIZE && size != D64_EXTENDED_SIZE_ERR) {
+    if (size != DRIVE_D64_STD_SIZE && size != DRIVE_D64_STD_SIZE_ERR &&
+        size != DRIVE_D64_EXT_SIZE && size != DRIVE_D64_EXT_SIZE_ERR) {
         printf("1541: Invalid D64 size %ld for '%s'\n", size, filepath);
         fclose(f);
         return false;

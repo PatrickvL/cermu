@@ -5,6 +5,10 @@
 #include <cstdint>
 #include <vector>
 
+#ifdef IMGUI_VERSION
+#include <imgui.h>
+#endif
+
 // ============================================================================
 // EmulatedSystem Base Class Implementation
 // ============================================================================
@@ -168,4 +172,133 @@ uint32_t EmulatedSystem::get_audio_samples(float* /*buffer*/, uint32_t /*max_sam
 
 void EmulatedSystem::set_audio_sample_rate(int /*sample_rate_hz*/) {
     // No-op by default; systems with audio override this.
+}
+
+// ============================================================================
+// CONNECTOR PORT & PERIPHERAL DEVICE MANAGEMENT (generic)
+// ============================================================================
+
+int EmulatedSystem::add_connector_port(const ConnectorDefinition& def, int port_number) {
+    int index = static_cast<int>(connector_ports_.size());
+    connector_ports_.push_back(std::make_unique<ConnectorPort>(def, port_number));
+    return index;
+}
+
+void EmulatedSystem::tick_peripherals() {
+    for (auto& device : owned_devices_) {
+        device->tick();
+    }
+}
+
+bool EmulatedSystem::attach_device_to_port(int port_index, const char* device_id) {
+    if (port_index < 0 || port_index >= static_cast<int>(connector_ports_.size())) {
+        printf("System: Invalid port index %d\n", port_index);
+        return false;
+    }
+
+    auto& port = connector_ports_[port_index];
+
+    // Create device from registry
+    auto device = DeviceRegistry::instance().create_device(device_id);
+    if (!device) {
+        printf("System: Unknown device '%s'\n", device_id);
+        return false;
+    }
+
+    // Detach any existing device first
+    detach_device_from_port(port_index);
+
+    // Attach and take ownership
+    auto* raw_ptr = device.get();
+    if (!port->attach_device(raw_ptr)) {
+        return false;
+    }
+
+    raw_ptr->reset();
+    owned_devices_.push_back(std::move(device));
+    printf("System: Attached '%s' to %s\n", raw_ptr->get_name(), port->get_name());
+    return true;
+}
+
+void EmulatedSystem::detach_device_from_port(int port_index) {
+    if (port_index < 0 || port_index >= static_cast<int>(connector_ports_.size())) return;
+
+    auto& port = connector_ports_[port_index];
+    auto* attached = port->get_attached_device();
+    if (!attached) return;
+
+    printf("System: Detached '%s' from %s\n", attached->get_name(), port->get_name());
+    port->detach_device();
+
+    // Remove from owned_devices_ list
+    owned_devices_.erase(
+        std::remove_if(owned_devices_.begin(), owned_devices_.end(),
+                        [attached](const std::unique_ptr<PeripheralDevice>& p) {
+                            return p.get() == attached;
+                        }),
+        owned_devices_.end()
+    );
+}
+
+void EmulatedSystem::render_peripheral_connector_ui() {
+#ifdef IMGUI_VERSION
+    if (connector_ports_.empty()) return;
+
+    auto& registry = DeviceRegistry::instance();
+
+    // Only show if at least one port has compatible devices
+    bool any_has_devices = false;
+    for (auto& port : connector_ports_) {
+        if (!registry.get_compatible_devices(port->get_type()).empty()) {
+            any_has_devices = true;
+            break;
+        }
+    }
+    if (!any_has_devices) return;
+
+    ImGui::Separator();
+    ImGui::Text("Peripheral Connectors");
+    ImGui::Spacing();
+
+    for (int i = 0; i < static_cast<int>(connector_ports_.size()); i++) {
+        auto& port = connector_ports_[i];
+        auto compatible = registry.get_compatible_devices(port->get_type());
+        if (compatible.empty()) continue;  // Skip ports with no available devices
+
+        ImGui::PushID(i);
+
+        // Build combo items: "<none>" + compatible device names
+        auto* attached = port->get_attached_device();
+        const char* current_name = attached ? attached->get_name() : "<none>";
+
+        if (ImGui::BeginCombo(port->get_name(), current_name)) {
+            // "<none>" option — detach
+            if (ImGui::Selectable("<none>", attached == nullptr)) {
+                detach_device_from_port(i);
+            }
+
+            for (const auto* desc : compatible) {
+                bool is_selected = (attached && strcmp(attached->get_id(), desc->id) == 0);
+                if (ImGui::Selectable(desc->name, is_selected)) {
+                    if (!is_selected) {
+                        attach_device_to_port(i, desc->id);
+                    }
+                }
+                if (ImGui::IsItemHovered() && desc->description) {
+                    ImGui::SetTooltip("%s", desc->description);
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        // Show device-specific UI if attached
+        if (attached) {
+            ImGui::Indent();
+            attached->render_device_ui();
+            ImGui::Unindent();
+        }
+
+        ImGui::PopID();
+    }
+#endif
 }
