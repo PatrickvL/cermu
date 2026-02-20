@@ -117,6 +117,9 @@ private:
     // TED keyboard scan callback
     static uint8_t ted_keyboard_scan(void* user_data, uint8_t column);
     
+    // TED memory read callback (for TED's own character/bitmap/screen fetches)
+    static uint8_t ted_mem_read(void* user_data, uint16_t address);
+    
     // Commodore load helper: set CPU PC
     static void set_cpu_pc(void* user_data, uint16_t addr);
 };
