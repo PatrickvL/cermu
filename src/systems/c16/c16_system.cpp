@@ -67,7 +67,7 @@ HardwareTraits Commodore264System<V>::create_hardware_traits() {
     traits.timing.region = VideoRegion::PAL;
     
     // Memory options — variant-specific
-    if constexpr (Traits::is_plus4) {
+    if constexpr (Traits::default_ram >= 65536) {
         traits.memory_options.push_back({
             "64KB RAM",
             65536,
@@ -886,7 +886,7 @@ void Commodore264System<V>::setup_connector_ports() {
     add_connector_port(c16_cassette_def, 0);
 
     // Port 4 — User Port (Plus/4 only)
-    if constexpr (Traits::is_plus4) {
+    if constexpr (Traits::has_user_port) {
         add_connector_port(plus4_user_port_def, 0);
     }
 

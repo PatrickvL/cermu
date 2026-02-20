@@ -3,8 +3,10 @@
 #include "c64_sid_player.h"
 #include "../../chip/input/commodore_keyboard.h"
 #include "../../chip/input/emu_key_sdl_map.h"
+// gui_state_t dependency eliminated — chip debug uses base class,
+// system menu items are inlined, test binary dialog removed.
 #ifdef IMGUI_VERSION
-#include "../../gui/imgui_interface.h"
+#include "imgui.h"
 #endif
 #include "../../core/formats/format_registry.h"
 #include "../../core/formats/prg_format.h"
@@ -244,7 +246,6 @@ static SystemDescriptor c64_descriptor = {
 C64SystemWrapper::C64SystemWrapper()
     : CommodoreSystem()  // Call base class constructor
     , c64_(nullptr)
-    , gui_state_(nullptr)
 {
     cycles_per_frame_ = 19705;  // PAL: 985248 Hz / 50 fps
     // Initialize C64-specific config with defaults
@@ -262,25 +263,10 @@ C64SystemWrapper::C64SystemWrapper()
     // Initialize base class members
     hardware_traits_ = c64_descriptor.hardware_traits;
     speed_multiplier_ = 1.0f;
-    
-    // Create persistent GUI state for menu handling
-#ifdef IMGUI_VERSION
-    gui_state_ = gui_create_state();
-#else
-    gui_state_ = nullptr;
-#endif
 }
 
 C64SystemWrapper::~C64SystemWrapper() {
     shutdown();
-    
-    // Destroy persistent GUI state
-#ifdef IMGUI_VERSION
-    if (gui_state_) {
-        gui_destroy_state(static_cast<gui_state_t*>(gui_state_));
-        gui_state_ = nullptr;
-    }
-#endif
 }
 
 const SystemDescriptor& C64SystemWrapper::get_descriptor() const {
@@ -920,29 +906,16 @@ bool C64SystemWrapper::handle_sid_player_key(SDL_Keycode key) {
 }
 
 void C64SystemWrapper::render_system_menu_items() {
-    // Forward menu creation to the old C64 GUI code
-    // This allows C64-specific menus (Load Test Binary, Chip Debug Windows, etc.)
-    // to appear in the multi_emu interface
-    
 #ifdef IMGUI_VERSION
-    if (gui_state_ && c64_) {
-        // Call the C64-specific menu rendering function from the old GUI
-        // Using persistent gui_state_ so menu clicks persist
-        gui_render_c64_system_menu_items(c64_, static_cast<gui_state_t*>(gui_state_));
+    if (ImGui::MenuItem("Reset C64")) {
+        reset();
     }
 #endif
 }
 
 void C64SystemWrapper::render_debug_windows(void* gui_state) {
 #ifdef IMGUI_VERSION
-    if (!gui_state_ || !c64_) return;
-    
-    gui_state_t* state = static_cast<gui_state_t*>(gui_state_);
-    
-    // Render test binary dialog if needed (legacy, not a chip window)
-    if (state->show_test_binary_dialog) {
-        gui_render_test_binary_dialog(c64_, state, nullptr);
-    }
+    if (!c64_) return;
     
     // Chip debug/settings windows — use base class dispatch via get_chip_info()
     EmulatedSystem::render_debug_windows(gui_state);
