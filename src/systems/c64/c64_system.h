@@ -18,9 +18,10 @@ class LightpenDevice;
  *
  * CONSOLIDATION STATUS (see docs/C64_CONSOLIDATION_PLAN.md):
  * ==========================================================
- * Phases 1a-1c, 2, 3, 4c, 5 are complete:
+ * Phases 1a-1c, 2, 3, 4a, 4c, 5 are complete:
  *   - c64_t embedded directly (no heap allocation)
  *   - tick/reset/init/shutdown/framebuffer absorbed as methods
+ *   - PLA generation, memory init, CPU banking callback absorbed
  *   - Bus back-pointer typed to C64SystemData*, container_of removed
  *   - gui_state_t eliminated; chip debug uses generic ChipInfo
  *   - Legacy chip registry (system_8bit_t) eliminated from wrapper path
@@ -28,13 +29,11 @@ class LightpenDevice;
  *   - SimpleSystemGUI → SystemGUI
  *
  * Remaining:
- *   - Phase 4a: Absorb c64_pla_maps_generate, c64_memory_init, c64_cpu_banking_callback
  *   - Phase 4b: Merge c64_config_t into SystemConfiguration
  *   - Phase 6: Remove dead legacy GUI code
  *
- * A few C functions in c64.cpp are still called (PLA generation, memory init,
- * CPU banking callback, screenshot). These are shared with the test framework
- * and will be absorbed or redirected in Phase 4a.
+ * c64.cpp still provides c64_system_create/init/tick/reset for the test
+ * framework's independent code path.
  */
 class C64System : public CommodoreSystem {
 public:
@@ -162,6 +161,12 @@ private:
 
     /** Single system tick — ticks all chips in correct phase order. */
     void system_tick();
+
+    /** Generate PLA memory maps and set initial banking mode. */
+    bool pla_maps_generate();
+
+    /** Initialize RAM, color RAM, and load ROMs from configured paths. */
+    void memory_init(const c64_config_t* config);
 
     /**
      * Ensure the C64 is configured compatibly for a SID file's requirements.

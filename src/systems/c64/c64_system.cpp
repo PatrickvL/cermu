@@ -39,15 +39,13 @@
  * ARCHITECTURE:
  * =============
  * This file implements the C64 system as a self-contained EmulatedSystem.
- * All core functions (initialize, shutdown, tick, reset, framebuffer) are
- * implemented directly — chip creation, phase-ordered ticking, and cleanup
- * are performed here without delegating to C functions.
+ * All core functions (initialize, shutdown, tick, reset, framebuffer, PLA
+ * generation, memory init, CPU banking callback) are implemented directly —
+ * no delegations to c64.cpp remain.
  *
- * REMAINING DELEGATIONS TO c64.cpp:
- * - c64_pla_maps_generate()   — PLA mode table generation
- * - c64_memory_init()         — RAM init + ROM loading from disk
- * - c64_cpu_banking_callback() — CPU I/O port → PLA mode switch (extern "C")
- * These are shared with the test framework and will be absorbed in Phase 4.
+ * c64.cpp still exists for the test framework's independent code path
+ * (c64_system_create/init/tick/reset/destroy), which will eventually be
+ * refactored to use the class interface.
  *
  * CYCLE COUNTING:
  * ===============
@@ -304,7 +302,14 @@ static void cia2_port_a_bank_callback(void* context, uint8_t port_a_value) {
 }
 
 // CPU I/O port banking callback — updates PLA memory mode
-extern "C" void c64_cpu_banking_callback(void* context, uint8_t banking_state);
+// Static with extern "C" linkage so it can serve as a C function pointer
+// for the mos6510 chip descriptor's bank_change field.
+extern "C" {
+static void cpu_banking_callback(void* context, uint8_t banking_state) {
+    c64_t* c64 = static_cast<c64_t*>(context);
+    c64_bus_on_banking_change(&c64->bus, banking_state);
+}
+}
 
 
 bool C64System::initialize() {
@@ -403,7 +408,7 @@ bool C64System::initialize() {
     // =========================================================================
     // PLA memory maps and bus initialization
     // =========================================================================
-    if (!c64_pla_maps_generate(c64_)) { cleanup(); return false; }
+    if (!pla_maps_generate()) { cleanup(); return false; }
 
     printf("VIC-II memory mapping for mode 0x07:\n");
     for (int bank = 0; bank < 16; bank++) {
@@ -415,7 +420,7 @@ bool C64System::initialize() {
 
     // Attach bus and load ROMs from configured paths
     c64_bus_system_attach(&c64_->bus, c64_);
-    c64_memory_init(c64_, &c64_config_);
+    memory_init(&c64_config_);
     c64_bus_init_unified_pointers(&c64_->bus, c64_, &c64_config_);
 
     // =========================================================================
@@ -428,7 +433,7 @@ bool C64System::initialize() {
     cia2_port_a_bank_callback(c64_, c64_->cia2->port_a_value);  // Set initial bank
 
     // CPU I/O port → PLA memory banking
-    mos6510_descriptor.bank_change = c64_cpu_banking_callback;
+    mos6510_descriptor.bank_change = cpu_banking_callback;
 
     // NOTE: CIA1 keyboard callbacks are NOT set here — setup_connector_ports()
     // installs joystick-aware versions that supersede the basic ones.
@@ -1636,6 +1641,213 @@ void C64System::set_audio_sample_rate(int sample_rate_hz) {
         printf("C64: Updating SID sample rate from %.0f to %d Hz\n",
                c64_->sid->sample_rate, sample_rate_hz);
         mos6581_set_sample_rate(c64_->sid, static_cast<float>(sample_rate_hz));
+    }
+}
+
+// ============================================================================
+// PLA Memory Map Generation (absorbed from c64.cpp)
+// ============================================================================
+
+bool C64System::pla_maps_generate() {
+    c64_bus_t* bus = &(c64_->bus);
+
+    // Create a temporary PLA instance for generating memory maps
+    pla_906114_01_t* pla = pla_906114_01_create();
+    if (!pla)
+        return false;
+
+    // Generate all 32 memory modes using PLA
+    c64_bus_generate_all_pla_modes(bus, (struct pla_906114_01_s*)pla);
+
+    // Clean up PLA instance
+    pla_906114_01_destroy(pla);
+
+    // Calculate initial PLA mode from system_lines (EXROM/GAME) and default CPU port value
+    // CPU I/O port initializes to $17 (bits 0-2 = 0b111 = LORAM=1, HIRAM=1, CHAREN=1)
+    // Combined with system_lines (EXROM=1, GAME=1) this gives mode $1F
+    uint8_t cpu_port_bits = 0x07;  // Default from init_io_port(): $17 & $07 = $07
+    uint8_t initial_pla_mode = c64_bus_generate_pla_mode(bus, cpu_port_bits);
+    c64_bus_mode_switch(bus, initial_pla_mode);
+
+    printf("C64 initial banking: PLA mode=$%02X (standard config, no cartridge)\n", initial_pla_mode);
+
+    return true;
+}
+
+// ============================================================================
+// Memory Initialization (absorbed from c64.cpp)
+// ============================================================================
+
+// Helper: Initialize RAM with debug test patterns
+static void memory_init_debug_patterns(ram_t* ram) {
+    if (!ram || !ram->memory) {
+        printf("ERROR: RAM pointer invalid for debug pattern initialization\n");
+        return;
+    }
+
+    printf("Initializing RAM with debug test patterns...\n");
+
+    // Clear zero page and stack
+    memset(ram->memory, 0, 0x0200);
+
+    // Fill remaining RAM with random bytes for realistic uninitialized memory behavior
+    for (uint32_t addr = 0x0200; addr < 0x10000; addr++) {
+        ram->memory[addr] = (uint8_t)rand();
+    }
+
+    // Add test pattern to video matrix at $0400 in all VIC-II banks
+    for (int bank = 0; bank < 4; bank++) {
+        uint16_t base = bank * 0x4000 + 0x0400;
+        for (int i = 0; i < 1000; i++) {
+            ram->memory[base + i] = (uint8_t)((base + i) & 0xFF);
+        }
+        printf("  Bank %d: Screen memory at $%04X filled with address pattern\n", bank, base);
+    }
+}
+
+// Helper: Initialize Color RAM with debug patterns
+static void colorram_init_debug(mos2114_t* colorram) {
+    if (!colorram || !colorram->memory) {
+        printf("ERROR: Color RAM pointer invalid for debug initialization\n");
+        return;
+    }
+
+    // Randomize all 1024 color RAM locations (4-bit values 0-15)
+    for (int i = 0; i < 1024; i++) {
+        colorram->memory[i] = (uint8_t)(rand() & 0x0F);
+    }
+    printf("Color RAM initialized with random colors\n");
+}
+
+void C64System::memory_init(const c64_config_t* config) {
+    // Use default ROM configuration if none provided
+    const rom_config_t* rom_config = config && config->rom_config ?
+                                      config->rom_config :
+                                      system_config_get_default_roms();
+
+    // Discover ROM root path for C64 system
+    char rom_root_path[1024];
+    bool rom_root_found = system_config_discover_rom_root("c64", rom_root_path, sizeof(rom_root_path));
+
+    // -------------------------------------------------------------------------
+    // Initialize RAM
+    // -------------------------------------------------------------------------
+    if (c64_->ram && c64_->ram->memory) {
+        c64_test_mode_t test_mode = config ? config->test_mode : C64_TEST_MODE_NORMAL;
+
+        switch (test_mode) {
+            case C64_TEST_MODE_NORMAL:
+                printf("Normal boot mode: RAM cleared\n");
+                memset(c64_->ram->memory, 0, 0x10000);
+                break;
+
+            case C64_TEST_MODE_DEBUG_PATTERNS:
+                memory_init_debug_patterns(c64_->ram);
+                break;
+
+            case C64_TEST_MODE_PRG_FILE:
+                if (config && config->test_binary_config && config->test_binary_config->filename) {
+                    printf("Loading PRG file: %s\n", config->test_binary_config->filename);
+                    memset(c64_->ram->memory, 0, 0x10000);
+                    commodore_prg_t prg = {};
+                    if (commodore_prg_load(config->test_binary_config->filename, &prg)) {
+                        memcpy(&c64_->ram->memory[prg.load_addr], prg.data, prg.data_size);
+                        printf("  Loaded $%04X-$%04X (%zu bytes)\n",
+                               prg.load_addr, prg.end_addr, prg.data_size);
+                        commodore_prg_free(&prg);
+                    } else {
+                        printf("ERROR: Failed to load PRG file, falling back to normal init\n");
+                        memset(c64_->ram->memory, 0, 0x10000);
+                    }
+                } else {
+                    printf("ERROR: PRG mode selected but no filename provided\n");
+                    memset(c64_->ram->memory, 0, 0x10000);
+                }
+                break;
+
+            case C64_TEST_MODE_BIN_FILE:
+                if (config && config->test_binary_config && config->test_binary_config->filename) {
+                    printf("Loading BIN file: %s at $%04X\n",
+                           config->test_binary_config->filename,
+                           config->test_binary_config->load_address);
+                    memset(c64_->ram->memory, 0, 0x10000);
+                    uint8_t* bin_data = NULL;
+                    size_t bin_size = 0;
+                    if (commodore_bin_load(config->test_binary_config->filename,
+                                          &bin_data, &bin_size)) {
+                        uint16_t addr = config->test_binary_config->load_address;
+                        if (addr + bin_size <= 0x10000) {
+                            memcpy(&c64_->ram->memory[addr], bin_data, bin_size);
+                            printf("  Loaded %zu bytes at $%04X\n", bin_size, addr);
+                        }
+                        free(bin_data);
+                    } else {
+                        printf("ERROR: Failed to load BIN file, falling back to normal init\n");
+                        memset(c64_->ram->memory, 0, 0x10000);
+                    }
+                } else {
+                    printf("ERROR: BIN mode selected but no filename provided\n");
+                    memset(c64_->ram->memory, 0, 0x10000);
+                }
+                break;
+
+            default:
+                printf("WARNING: Unknown test mode, using normal init\n");
+                memset(c64_->ram->memory, 0, 0x10000);
+                break;
+        }
+    } else {
+        printf("ERROR: RAM memory pointer is NULL!\n");
+    }
+
+    // -------------------------------------------------------------------------
+    // Initialize Color RAM
+    // -------------------------------------------------------------------------
+    if (c64_->colorram && c64_->colorram->memory) {
+        c64_test_mode_t test_mode = config ? config->test_mode : C64_TEST_MODE_NORMAL;
+        if (test_mode == C64_TEST_MODE_DEBUG_PATTERNS) {
+            colorram_init_debug(c64_->colorram);
+        } else {
+            memset(c64_->colorram->memory, 0, 1024);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Load ROMs from files
+    // -------------------------------------------------------------------------
+    struct { rom_t* rom; const char** filenames; uint16_t size; const char* name; } roms[] = {
+        { c64_->basic,   rom_config ? (const char**)rom_config->basic_rom_filenames   : nullptr, 8192, "BASIC" },
+        { c64_->kernal,  rom_config ? (const char**)rom_config->kernal_rom_filenames  : nullptr, 8192, "KERNAL" },
+        { c64_->charrom, rom_config ? (const char**)rom_config->chargen_rom_filenames : nullptr, 4096, "Character" },
+    };
+
+    for (auto& r : roms) {
+        if (!r.rom || !r.rom->memory) {
+            if (r.rom) printf("Warning: %s ROM has no allocated memory\n", r.name);
+            continue;
+        }
+        printf("[ROM-INIT] Processing %s ROM (size=%u memory=%p)\n", r.name, r.size, (void*)r.rom->memory);
+
+        bool loaded = false;
+        if (rom_root_found && r.filenames) {
+            loaded = rom_loader_load_from_root(rom_root_path, r.filenames, r.size,
+                                               r.rom->memory, r.size);
+            if (!loaded) printf("Warning: Failed to load %s ROM\n", r.name);
+        } else if (!rom_root_found) {
+            printf("Warning: ROM root not found, skipping %s ROM loading\n", r.name);
+        }
+
+        if (!loaded) {
+            memset(r.rom->memory, 0xFF, r.size);
+        }
+    }
+
+    // Cartridge ROMs: not loaded by default (filled with 0xFF if present)
+    if (c64_->cartridge_roml && c64_->cartridge_roml->memory) {
+        memset(c64_->cartridge_roml->memory, 0xFF, 8192);
+    }
+    if (c64_->cartridge_romh && c64_->cartridge_romh->memory) {
+        memset(c64_->cartridge_romh->memory, 0xFF, 8192);
     }
 }
 
