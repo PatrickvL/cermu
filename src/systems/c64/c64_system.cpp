@@ -464,6 +464,8 @@ bool C64System::initialize() {
     // =========================================================================
 
     // Track the actual VIC-II standard this system was created with.
+    // apply_configuration() can desync c64_config_.vicii_standard from
+    // reality without recreating the chip; this field stays in sync.
     created_vicii_standard_ = c64_config_.vicii_standard;
 
     // Apply SID revision from configuration
@@ -566,10 +568,16 @@ void C64System::reset() {
 
         // Clear the memory locations that is_basic_ready() checks, so stale
         // values from the previous session don't cause premature detection.
+        // KERNAL boot will set these properly: RAMTAS clears zero page
+        // (including $2D), $E453 copies the vector table ($0302/$0303),
+        // and NEW sets VARTAB ($2D) to TXTTAB+2.
         if (c64_->ram) {
             c64_->ram->memory[0x0302] = 0;
             c64_->ram->memory[0x0303] = 0;
             c64_->ram->memory[0x002D] = 0;
+            // Clear the keyboard buffer count so is_basic_ready() doesn't
+            // get stuck waiting for a stale non-zero $C6 left by a
+            // previously running program.
             c64_->ram->memory[0x00C6] = 0;
         }
 
@@ -652,6 +660,7 @@ void C64System::run_frame() {
 
     if (c64_) {
         // Update per-frame state for peripheral devices before cycle loop.
+        // Lightpen: pass display rect so it can convert SDL mouse → VIC-II coords.
         update_lightpen_display_rect();
 
         for (uint32_t i = 0; i < adjusted_cycles; i++) {
