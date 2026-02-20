@@ -14,72 +14,26 @@
 class LightpenDevice;
 
 /**
- * C64 System Wrapper
- * Adapts the existing C64 system to the EmulatedSystem interface
+ * C64 System Wrapper — transitional name for the C64 system implementation.
  *
- * FUTURE REFACTORING PLAN:
- * ========================
- * This wrapper should eventually be merged into a single unified C64System class.
- * The current design has two layers:
+ * CONSOLIDATION STATUS (see docs/C64_CONSOLIDATION_PLAN.md):
+ * ==========================================================
+ * Phases 1a-1c, 2, 3 are complete:
+ *   - c64_t embedded directly (no heap allocation)
+ *   - tick/reset/init/shutdown/framebuffer absorbed as methods
+ *   - Bus back-pointer typed to C64System*, container_of removed
+ *   - gui_state_t eliminated; chip debug uses generic ChipInfo
+ *   - Legacy chip registry (system_8bit_t) eliminated from wrapper path
  *
- * 1. C64SystemWrapper (C++ class, EmulatedSystem interface)
- * 2. c64_t struct (C-style, internal implementation)
+ * Remaining:
+ *   - Phase 1d: Merge c64_config_t into SystemConfiguration
+ *   - Absorb c64_pla_maps_generate, c64_memory_init, c64_cpu_banking_callback
+ *   - Phase 4: Delete c64.h/c64.cpp, rename → C64System / c64_system.h
+ *   - Phase 5-6: Rename SystemGUI, remove dead legacy GUI code
  *
- * MERGER STRATEGY:
- * ----------------
- * The unified C64System class should:
- *
- * 1. **Direct Member Integration**: Convert c64_t members to C64System class members
- *    - system_8bit_t system → keep as compatibility layer or remove
- *    - c64_bus_t bus → make it a direct member (not embedded)
- *    - All chip pointers (vicii, sid, cia1, cia2, keyboard, etc.) → direct members
- *    - total_cycles → already in base class as total_cycles_
- *
- * 2. **Method Conversion**: Convert C functions to C64System methods
- *    - c64_system_tick() → void tick() override
- *    - c64_system_reset() → void reset() override
- *    - c64_system_create() → constructor logic
- *    - c64_system_destroy() → destructor logic
- *    - c64_set_framebuffer() → void set_framebuffer() override
- *
- * 3. **Bus Integration**: The c64_bus_t should become a nested class or direct member
- *    - Keep bus cycle-accurate interface
- *    - Maintain unified memory buffer architecture
- *    - Preserve PLA banking system
- *
- * 4. **Chip Management**: Use smart pointers for chip ownership
- *    - std::unique_ptr<vicii_t> vicii_;
- *    - std::unique_ptr<mos6581_t> sid_;
- *    - etc.
- *
- * 5. **Configuration**: Merge c64_config_t into SystemConfiguration
- *    - Map VIC standard to timing region
- *    - Map ROM paths to configuration system
- *
- * BENEFITS OF MERGER:
- * -------------------
- * - Single unified type (no wrapper indirection)
- * - Consistent with CHIP-8System design pattern
- * - Better C++ resource management (RAII)
- * - Cleaner API without dual-layer access
- * - Eliminates c64_ pointer indirection
- *
- * CHALLENGES:
- * -----------
- * - Large codebase (~850 lines in c64.cpp to convert)
- * - Complex bus architecture with cycle-accurate timing
- * - Many C-style functions to convert to methods
- * - Extensive chip interaction code
- * - Need to maintain compatibility with existing test harnesses
- *
- * MIGRATION PATH:
- * ---------------
- * 1. Keep wrapper working (current state)
- * 2. Gradually move functionality into wrapper
- * 3. Convert C functions to static methods
- * 4. Make c64_t members direct C64System members
- * 5. Remove wrapper layer entirely
- * 6. Rename C64SystemWrapper → C64System
+ * A few C functions in c64.cpp are still called (PLA generation, memory init,
+ * CPU banking callback, screenshot). These are shared with the test framework
+ * and will be absorbed or redirected in Phase 4.
  */
 class C64SystemWrapper : public CommodoreSystem {
 public:

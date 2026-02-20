@@ -1798,7 +1798,7 @@ bool gui_reload_roms_from_state(c64_t *c64, const gui_state_t *gui_state) {
 // NOTE: The old gui_open_file_dialog and gui_save_file_dialog functions
 // are deprecated because ImGuiFileDialog works asynchronously.
 // Use ImGuiFileDialog::Instance()->OpenDialog() to open dialogs and check
-// results in Display() as shown in simple_system_gui.cpp
+// results in Display() as shown in system_gui.cpp
 // These stub functions are provided for backward compatibility only.
 // ============================================================================
 

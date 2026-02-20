@@ -1,5 +1,5 @@
-#ifndef SIMPLE_SYSTEM_GUI_H
-#define SIMPLE_SYSTEM_GUI_H
+#ifndef SYSTEM_GUI_H
+#define SYSTEM_GUI_H
 
 #include "generic_gui.h"
 #include "system_selection_dialog.h"
@@ -9,13 +9,13 @@
 class Drive1541Device;  // Forward declaration for drive file dialog
 
 /**
- * SimpleSystemGUI - Generic GUI for any EmulatedSystem
+ * SystemGUI - Generic GUI for any EmulatedSystem
  *
- * This class provides a simple GUI that works with any system implementing
+ * This class provides a GUI that works with any system implementing
  * the EmulatedSystem interface. It handles display scaling, keyboard input,
  * and basic menus. Systems can extend menus via their callback methods.
  */
-class SimpleSystemGUI : public GenericEmulatorGUI {
+class SystemGUI : public GenericEmulatorGUI {
 private:
     std::unique_ptr<EmulatedSystem> system_;
     uint32_t* framebuffer_;
@@ -60,8 +60,8 @@ public:
     /**
      * Constructor - takes ownership of the system (can be nullptr to show selection dialog)
      */
-    explicit SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system, const char* pending_file = nullptr);
-    virtual ~SimpleSystemGUI();
+    explicit SystemGUI(std::unique_ptr<EmulatedSystem> system, const char* pending_file = nullptr);
+    virtual ~SystemGUI();
     
     // Override init to allocate framebuffer after OpenGL context is created
     bool init(const char* window_title, int width, int height);
@@ -115,4 +115,4 @@ private:
     static void sdl_audio_callback(void* userdata, uint8_t* stream, int len);
 };
 
-#endif // SIMPLE_SYSTEM_GUI_H
+#endif // SYSTEM_GUI_H

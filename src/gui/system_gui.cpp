@@ -1,4 +1,4 @@
-#include "simple_system_gui.h"
+#include "system_gui.h"
 #include "connector_icons.h"
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
@@ -20,7 +20,7 @@
 // Constructor / Destructor
 // ============================================================================
 
-SimpleSystemGUI::SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system, const char* pending_file)
+SystemGUI::SystemGUI(std::unique_ptr<EmulatedSystem> system, const char* pending_file)
     : GenericEmulatorGUI()
     , system_(std::move(system))
     , framebuffer_(nullptr)
@@ -47,15 +47,15 @@ SimpleSystemGUI::SimpleSystemGUI(std::unique_ptr<EmulatedSystem> system, const c
         // so clear the pending file path — it must not survive into a later
         // system switch (otherwise the new system would try to load it).
         pending_file_path_.clear();
-        printf("SimpleSystemGUI created for system: %s\n",
+        printf("SystemGUI created for system: %s\n",
                system_->get_descriptor().name);
     } else {
-        printf("SimpleSystemGUI created without system - selection dialog will be shown\n");
+        printf("SystemGUI created without system - selection dialog will be shown\n");
         system_selection_dialog_.open();  // Open dialog if no system provided
     }
 }
 
-SimpleSystemGUI::~SimpleSystemGUI() {
+SystemGUI::~SystemGUI() {
     close_audio_device();
     teardown_current_system();
     ConnectorIcons::cleanup();
@@ -65,7 +65,7 @@ SimpleSystemGUI::~SimpleSystemGUI() {
 // Initialization Override
 // ============================================================================
 
-bool SimpleSystemGUI::init(const char* window_title, int width, int height) {
+bool SystemGUI::init(const char* window_title, int width, int height) {
     // Call base class init to create OpenGL context
     if (!GenericEmulatorGUI::init(window_title, width, height)) {
         return false;
@@ -87,7 +87,7 @@ bool SimpleSystemGUI::init(const char* window_title, int width, int height) {
 // Virtual Hook Implementations
 // ============================================================================
 
-void SimpleSystemGUI::handle_events() {
+void SystemGUI::handle_events() {
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         ImGui_ImplSDL2_ProcessEvent(&event);
@@ -168,7 +168,7 @@ void SimpleSystemGUI::handle_events() {
     }
 }
 
-void SimpleSystemGUI::update_frame() {
+void SystemGUI::update_frame() {
     if (!system_ || !emulation_running_ || emulation_paused_) {
         // Reset pacing when not running so we don't accumulate stale time
         frame_pace_counter_ = 0;
@@ -216,7 +216,7 @@ void SimpleSystemGUI::update_frame() {
     update_fps();
 }
 
-void SimpleSystemGUI::render_frame() {
+void SystemGUI::render_frame() {
     begin_frame();
     
     // Only render dialog if it's actually open
@@ -355,7 +355,7 @@ void SimpleSystemGUI::render_frame() {
     end_frame();
 }
 
-void SimpleSystemGUI::render_menu_bar() {
+void SystemGUI::render_menu_bar() {
     if (!ImGui::BeginMainMenuBar()) {
         return;
     }
@@ -538,7 +538,7 @@ void SimpleSystemGUI::render_menu_bar() {
     ImGui::EndMainMenuBar();
 }
 
-void SimpleSystemGUI::render_screen() {
+void SystemGUI::render_screen() {
     if (!system_) return;
     
     // Get viewport for fullscreen rendering
@@ -615,7 +615,7 @@ void SimpleSystemGUI::render_screen() {
     ImGui::End();
 }
 
-void SimpleSystemGUI::render_memory_viewer() {
+void SystemGUI::render_memory_viewer() {
     if (!ImGui::Begin("Memory Viewer", &show_memory_viewer_)) {
         ImGui::End();
         return;
@@ -627,7 +627,7 @@ void SimpleSystemGUI::render_memory_viewer() {
     ImGui::End();
 }
 
-void SimpleSystemGUI::render_settings() {
+void SystemGUI::render_settings() {
     if (!ImGui::Begin("Settings", &show_settings_, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::End();
         return;
@@ -661,7 +661,7 @@ void SimpleSystemGUI::render_settings() {
     ImGui::End();
 }
 
-void SimpleSystemGUI::render_about() {
+void SystemGUI::render_about() {
     render_about_dialog_generic();
 }
 
@@ -669,19 +669,19 @@ void SimpleSystemGUI::render_about() {
 // System Control
 // ============================================================================
 
-void SimpleSystemGUI::start_emulation() {
+void SystemGUI::start_emulation() {
     emulation_running_ = true;
     emulation_paused_ = false;
     reset_frame_pacing();
     printf("Emulation started\n");
 }
 
-void SimpleSystemGUI::pause_emulation() {
+void SystemGUI::pause_emulation() {
     emulation_paused_ = true;
     printf("Emulation paused\n");
 }
 
-void SimpleSystemGUI::reset_emulation() {
+void SystemGUI::reset_emulation() {
     if (system_) {
         system_->reset();
         total_frames_ = 0;
@@ -696,7 +696,7 @@ void SimpleSystemGUI::reset_emulation() {
     }
 }
 
-void SimpleSystemGUI::step_emulation() {
+void SystemGUI::step_emulation() {
     if (system_ && emulation_paused_) {
         system_->tick();
         printf("Single step executed\n");
@@ -707,7 +707,7 @@ void SimpleSystemGUI::step_emulation() {
 // Helper Functions
 // ============================================================================
 
-void SimpleSystemGUI::update_fps() {
+void SystemGUI::update_fps() {
     // Count emulated frames completed this second (not main loop iterations).
     // total_frames_ is incremented once per run_frame() call, so the delta
     // over one second gives the true emulated FPS.
@@ -724,12 +724,12 @@ void SimpleSystemGUI::update_fps() {
     }
 }
 
-void SimpleSystemGUI::reset_frame_pacing() {
+void SystemGUI::reset_frame_pacing() {
     frame_pace_counter_ = 0;
     frame_time_accumulator_ = 0.0;
 }
 
-void SimpleSystemGUI::allocate_framebuffer() {
+void SystemGUI::allocate_framebuffer() {
     if (!system_) return;
     
     // Get display dimensions from system
@@ -761,7 +761,7 @@ void SimpleSystemGUI::allocate_framebuffer() {
     }
 }
 
-void SimpleSystemGUI::free_framebuffer() {
+void SystemGUI::free_framebuffer() {
     if (framebuffer_) {
         delete[] framebuffer_;
         framebuffer_ = nullptr;
@@ -781,7 +781,7 @@ void SimpleSystemGUI::free_framebuffer() {
 // System Switching
 // ============================================================================
 
-void SimpleSystemGUI::teardown_current_system() {
+void SystemGUI::teardown_current_system() {
     // Stop audio before destroying the system (callback references system_)
     close_audio_device();
 
@@ -801,7 +801,7 @@ void SimpleSystemGUI::teardown_current_system() {
     actual_fps_ = 0;
     reset_frame_pacing();
 }
-void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, int region_option, const std::map<std::string, bool>* peripherals, const char* pending_file, const std::map<std::string, std::string>* custom_settings) {
+void SystemGUI::switch_system(const char* system_name, int memory_option, int region_option, const std::map<std::string, bool>* peripherals, const char* pending_file, const std::map<std::string, std::string>* custom_settings) {
     if (!system_name) {
         printf("ERROR: switch_system called with null system name\n");
         return;
@@ -901,11 +901,11 @@ void SimpleSystemGUI::switch_system(const char* system_name, int memory_option, 
 // File Loading
 // ============================================================================
 
-void SimpleSystemGUI::load_file_dialog() {
+void SystemGUI::load_file_dialog() {
     open_file_dialog("ChooseFileDlgKey", "Choose File");
 }
 
-void SimpleSystemGUI::open_file_dialog(const char* dialog_key, const char* title) {
+void SystemGUI::open_file_dialog(const char* dialog_key, const char* title) {
     if (!system_) return;
     
 #ifdef HAS_IMGUIFILEDIALOG
@@ -966,7 +966,7 @@ void SimpleSystemGUI::open_file_dialog(const char* dialog_key, const char* title
 // Drive File Dialog Polling
 // ============================================================================
 
-void SimpleSystemGUI::poll_drive_file_dialog_requests() {
+void SystemGUI::poll_drive_file_dialog_requests() {
 #ifdef HAS_IMGUIFILEDIALOG
     if (!system_ || pending_drive_insert_) return;  // Already have a pending request
 
@@ -990,8 +990,8 @@ void SimpleSystemGUI::poll_drive_file_dialog_requests() {
 // Audio Output
 // ============================================================================
 
-void SimpleSystemGUI::sdl_audio_callback(void* userdata, uint8_t* stream, int len) {
-    SimpleSystemGUI* gui = static_cast<SimpleSystemGUI*>(userdata);
+void SystemGUI::sdl_audio_callback(void* userdata, uint8_t* stream, int len) {
+    SystemGUI* gui = static_cast<SystemGUI*>(userdata);
     int sample_count = len / static_cast<int>(sizeof(float));
     float* out = reinterpret_cast<float*>(stream);
 
@@ -1005,7 +1005,7 @@ void SimpleSystemGUI::sdl_audio_callback(void* userdata, uint8_t* stream, int le
     }
 }
 
-void SimpleSystemGUI::open_audio_device() {
+void SystemGUI::open_audio_device() {
     close_audio_device();
 
     if (!system_) return;
@@ -1046,7 +1046,7 @@ void SimpleSystemGUI::open_audio_device() {
     SDL_PauseAudioDevice(audio_device_, 0);
 }
 
-void SimpleSystemGUI::close_audio_device() {
+void SystemGUI::close_audio_device() {
     if (audio_device_ != 0) {
         SDL_CloseAudioDevice(audio_device_);
         audio_device_ = 0;
