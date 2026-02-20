@@ -11,6 +11,7 @@
 #include "../../core/formats/lnx_format.h"
 #include "../../core/formats/commodore_load_helpers.h"
 #include "../../devices/keyboard/commodore_keyboard_device.h"
+#include "../../chip/cpu/fam65xx/fam65xx_gui.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -604,12 +605,46 @@ void Commodore264System<V>::render_system_menu_items() {
 template<C264SeriesVariant V>
 std::vector<ChipInfo> Commodore264System<V>::get_chip_info() const {
     return {
-        { "MOS 7501/8501 CPU",          "7501",   "CPU",    0x0000, false, false },
+        { "MOS 7501/8501 CPU",          "7501",   "CPU",    0x0000, true,  true  },
         { "TED 7360 (Video/Audio/I/O)", "TED",    "Video",  0xFF00, false, false },
         { "RAM",                        "RAM",    "Memory", 0x0000, false, false },
         { "BASIC ROM (16KB)",           "BASIC",  "Memory", 0x8000, false, false },
         { "KERNAL ROM (16KB)",          "KERNAL", "Memory", 0xC000, false, false },
     };
+}
+
+template<C264SeriesVariant V>
+void Commodore264System<V>::render_chip_debug_window(int chip_index, bool* show) {
+    if (!show || !*show) return;
+#ifdef IMGUI_VERSION
+    enum { C264_CI_CPU = 0 };
+    switch (chip_index) {
+        case C264_CI_CPU:
+            if (cpu_) fam65xx_render_debug_window(cpu_, show);
+            break;
+        default:
+            break;
+    }
+#else
+    (void)chip_index;
+#endif
+}
+
+template<C264SeriesVariant V>
+void Commodore264System<V>::render_chip_settings_window(int chip_index, bool* show) {
+    if (!show || !*show) return;
+#ifdef IMGUI_VERSION
+    enum { C264_CI_CPU = 0 };
+    switch (chip_index) {
+        case C264_CI_CPU:
+            if (cpu_) fam65xx_render_settings_window(cpu_, show);
+            break;
+        default:
+            break;
+    }
+#else
+    (void)chip_index;
+#endif
 }
 
 template<C264SeriesVariant V>

@@ -10,6 +10,7 @@
 #include "nes_nsf_cartridge.h"
 #include "../../core/formats/nsf_format.h"
 #include "../../core/formats/format_registry.h"
+#include "../../chip/cpu/fam65xx/fam65xx_gui.h"
 #include <fstream>
 #include <iostream>
 #include <cmath>
@@ -1493,12 +1494,46 @@ void NintendoSystem<V>::render_system_menu_items() {
 template<NintendoVariant V>
 std::vector<ChipInfo> NintendoSystem<V>::get_chip_info() const {
     return {
-        { "Ricoh 2A03 (6502 + APU)",    "2A03",   "CPU",    0x0000, false, false },
+        { "Ricoh 2A03 (6502 + APU)",    "2A03",   "CPU",    0x0000, true,  true  },
         { "Ricoh 2C02 PPU",             "PPU",    "Video",  0x2000, false, false },
         { "APU (built-in 2A03)",        "APU",    "Audio",  0x4000, false, false },
         { "RAM (2KB)",                  "RAM",    "Memory", 0x0000, false, false },
         { "Cartridge",                  "Cart",   "Memory", 0x4020, false, false },
     };
+}
+
+template<NintendoVariant V>
+void NintendoSystem<V>::render_chip_debug_window(int chip_index, bool* show) {
+    if (!show || !*show) return;
+#ifdef IMGUI_VERSION
+    enum { NES_CI_CPU = 0 };
+    switch (chip_index) {
+        case NES_CI_CPU:
+            if (cpu_) fam65xx_render_debug_window(cpu_, show);
+            break;
+        default:
+            break;
+    }
+#else
+    (void)chip_index;
+#endif
+}
+
+template<NintendoVariant V>
+void NintendoSystem<V>::render_chip_settings_window(int chip_index, bool* show) {
+    if (!show || !*show) return;
+#ifdef IMGUI_VERSION
+    enum { NES_CI_CPU = 0 };
+    switch (chip_index) {
+        case NES_CI_CPU:
+            if (cpu_) fam65xx_render_settings_window(cpu_, show);
+            break;
+        default:
+            break;
+    }
+#else
+    (void)chip_index;
+#endif
 }
 
 template<NintendoVariant V>

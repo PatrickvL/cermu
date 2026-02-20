@@ -18,9 +18,14 @@
 #include "../../core/formats/sid_format.h"
 #include "../../core/formats/commodore_load_helpers.h"
 #include "../../chip/cpu/fam65xx/mos6510.h"
+#include "../../chip/cpu/fam65xx/fam65xx_gui.h"
 #include "../../chip/video/vic_ii/mos6569.h"
 #include "../../chip/video/vic_ii/mos6567.h"
+#include "../../chip/video/vic_ii/vicii_gui.h"
+#include "../../chip/io/mos6526_gui.h"
+#include "../../chip/memory/mos2114_gui.h"
 #include "../../chip/logic/pla.h"
+#include "../../chip/logic/pla_gui.h"
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
 #include "c64_keyboard_matrix.h"
@@ -1214,19 +1219,19 @@ enum C64ChipIndex {
 
 std::vector<ChipInfo> C64System::get_chip_info() const {
     return {
-        { "MOS 6510 CPU",                "6510",       "CPU",    0x0000, false, false },
-        { "VIC-II (MOS 6569/6567)",       "VIC-II",     "Video",  0xD000, false, false },
-        { "SID (MOS 6581/8580)",          "SID",        "Audio",  0xD400, true,  false },
-        { "CIA 1 (MOS 6526)",             "CIA 1",      "I/O",    0xDC00, false, false },
-        { "CIA 2 (MOS 6526)",             "CIA 2",      "I/O",    0xDD00, false, false },
-        { "Color RAM (MOS 2114)",         "Color RAM",  "I/O",    0xD800, false, false },
+        { "MOS 6510 CPU",                "6510",       "CPU",    0x0000, true,  true  },
+        { "VIC-II (MOS 6569/6567)",       "VIC-II",     "Video",  0xD000, true,  true  },
+        { "SID (MOS 6581/8580)",          "SID",        "Audio",  0xD400, true,  true  },
+        { "CIA 1 (MOS 6526)",             "CIA 1",      "I/O",    0xDC00, true,  true  },
+        { "CIA 2 (MOS 6526)",             "CIA 2",      "I/O",    0xDD00, true,  true  },
+        { "Color RAM (MOS 2114)",         "Color RAM",  "I/O",    0xD800, true,  true  },
         { "RAM (64KB)",                   "RAM",        "Memory", 0x0000, false, false },
         { "BASIC ROM (8KB)",              "BASIC",      "Memory", 0xA000, false, false },
         { "KERNAL ROM (8KB)",             "KERNAL",     "Memory", 0xE000, false, false },
         { "Character ROM (4KB)",          "CHARROM",    "Memory", 0xD000, false, false },
         { "Cartridge ROM Low (8KB)",      "ROML",       "Memory", 0x8000, false, false },
         { "Cartridge ROM High (8KB)",     "ROMH",       "Memory", 0xA000, false, false },
-        { "PLA / Address Decoder",        "PLA",        "Bus",    0x0000, false, false },
+        { "PLA / Address Decoder",        "PLA",        "Bus",    0x0000, true,  true  },
     };
 }
 
@@ -1234,12 +1239,42 @@ void C64System::render_chip_debug_window(int chip_index, bool* show) {
     if (!c64_ || !show || !*show) return;
 #ifdef IMGUI_VERSION
     switch (chip_index) {
+        case C64_CI_CPU:
+            if (c64_->mos6510) {
+                fam65xx_render_debug_window(c64_->mos6510, show);
+            }
+            break;
+        case C64_CI_VICII:
+            if (c64_->vicii) {
+                const char* title = (created_vicii_standard_ == VIC_PAL)
+                    ? "VIC-II (MOS 6569 PAL)" : "VIC-II (MOS 6567 NTSC)";
+                vicii_gui_render_debug_window(c64_->vicii, show, title);
+            }
+            break;
         case C64_CI_SID:
             if (c64_->sid) {
                 mos6581_render_debug_window(c64_->sid, show);
             }
             break;
-        // Other chips: not yet implemented
+        case C64_CI_CIA1:
+            if (c64_->cia1) {
+                mos6526_render_debug_window(c64_->cia1, show);
+            }
+            break;
+        case C64_CI_CIA2:
+            if (c64_->cia2) {
+                mos6526_render_debug_window(c64_->cia2, show);
+            }
+            break;
+        case C64_CI_COLORRAM:
+            if (c64_->colorram) {
+                mos2114_render_debug_window(c64_->colorram, show);
+            }
+            break;
+        case C64_CI_PLA:
+            // PLA debug uses the c64_t* as chip context (see pla_gui.cpp)
+            pla_render_debug_window(c64_, show);
+            break;
         default:
             break;
     }
@@ -1250,8 +1285,49 @@ void C64System::render_chip_debug_window(int chip_index, bool* show) {
 
 void C64System::render_chip_settings_window(int chip_index, bool* show) {
     if (!c64_ || !show || !*show) return;
-    // No chip settings windows implemented yet
+#ifdef IMGUI_VERSION
+    switch (chip_index) {
+        case C64_CI_CPU:
+            if (c64_->mos6510) {
+                fam65xx_render_settings_window(c64_->mos6510, show);
+            }
+            break;
+        case C64_CI_VICII:
+            if (c64_->vicii) {
+                const char* title = (created_vicii_standard_ == VIC_PAL)
+                    ? "VIC-II (MOS 6569 PAL)" : "VIC-II (MOS 6567 NTSC)";
+                vicii_gui_render_settings_window(c64_->vicii, show, title);
+            }
+            break;
+        case C64_CI_SID:
+            if (c64_->sid) {
+                mos6581_render_settings_window(c64_->sid, show);
+            }
+            break;
+        case C64_CI_CIA1:
+            if (c64_->cia1) {
+                mos6526_render_settings_window(c64_->cia1, show);
+            }
+            break;
+        case C64_CI_CIA2:
+            if (c64_->cia2) {
+                mos6526_render_settings_window(c64_->cia2, show);
+            }
+            break;
+        case C64_CI_COLORRAM:
+            if (c64_->colorram) {
+                mos2114_render_settings_window(c64_->colorram, show);
+            }
+            break;
+        case C64_CI_PLA:
+            pla_render_settings_window(c64_, show);
+            break;
+        default:
+            break;
+    }
+#else
     (void)chip_index;
+#endif
 }
 
 // Note: get_target_fps() and set_speed_multiplier() are now provided by

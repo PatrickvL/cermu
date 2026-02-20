@@ -85,6 +85,8 @@ public:
 
     // Chip enumeration for Hardware menu
     std::vector<ChipInfo> get_chip_info() const override;
+    void render_chip_debug_window(int chip_index, bool* show) override;
+    void render_chip_settings_window(int chip_index, bool* show) override;
 
     // Auto-detect memory expansion and region from file contents
     SystemConfiguration detect_optimal_configuration(
