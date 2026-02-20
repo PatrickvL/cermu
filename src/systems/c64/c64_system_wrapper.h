@@ -205,6 +205,9 @@ private:
     /** Apply the pending load result to RAM and inject auto-run. */
     void apply_pending_load();
 
+    /** Single system tick — ticks all chips in correct phase order. */
+    void system_tick();
+
     /**
      * Ensure the C64 is configured compatibly for a SID file's requirements.
      *
