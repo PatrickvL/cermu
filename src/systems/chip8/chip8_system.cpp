@@ -597,6 +597,31 @@ void Chip8System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 }
 
 // ============================================================================
+// Chip Visualization
+// ============================================================================
+
+std::vector<ChipInfo> Chip8System::get_chip_info() const {
+    // CHIP-8 is a virtual machine — no discrete physical chips.
+    // List logical functional blocks so the Hardware menu remains useful.
+    const char* mode_name = (mode_ == Chip8Mode::XOCHIP) ? "XO-CHIP Interpreter" :
+                            (mode_ == Chip8Mode::SCHIP)  ? "SCHIP 1.1 Interpreter" :
+                                                           "CHIP-8 Interpreter";
+    const char* mem_name  = (mode_ == Chip8Mode::XOCHIP) ? "RAM (64KB)" : "RAM (4KB)";
+    const char* disp_name = (mode_ == Chip8Mode::XOCHIP) ? "Display (128x64, 4-color)" :
+                            (mode_ == Chip8Mode::SCHIP)  ? "Display (128x64)" :
+                                                           "Display (64x32)";
+
+    return {
+        { mode_name,                  "CPU",      "CPU",     0x200,  false, false },
+        { mem_name,                   "RAM",      "Memory",  0x000,  false, false },
+        { disp_name,                  "Display",  "Video",   0x000,  false, false },
+        { "Hex Keypad (16 keys)",     "Keypad",   "I/O",     0x000,  false, false },
+        { "Delay Timer (60 Hz)",      "DT",       "I/O",     0x000,  false, false },
+        { "Sound Timer / Beeper",     "ST",       "Audio",   0x000,  false, false },
+    };
+}
+
+// ============================================================================
 // GUI Integration
 // ============================================================================
 

@@ -56,6 +56,9 @@ public:
     // GUI integration
     void render_system_menu_items() override;
     void render_configuration_ui() override;
+
+    // Chip visualization
+    std::vector<ChipInfo> get_chip_info() const override;
     
     // State
     uint32_t get_target_fps() const override;
