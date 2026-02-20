@@ -340,29 +340,108 @@ void C64SystemWrapper::reset() {
     sid_player_active_ = false;
     active_sid_data_.clear();
     if (c64_) {
-        c64_system_reset(c64_);
+        printf("C64 System: Performing system-wide reset...\n");
+
+        // Reset CIA chips first (they control interrupts and I/O)
+        if (c64_->cia1) mos6526_reset(c64_->cia1);
+        if (c64_->cia2) mos6526_reset(c64_->cia2);
+
+        // Reset VIC-II to clear sprite pipeline state
+        if (c64_->vicii) vicii_reset(c64_->vicii);
+
+        // Reset SID — clears all registers, envelopes, and the sample ring buffer
+        if (c64_->sid) mos6581_reset(c64_->sid);
+
+        // Reset CPU last (so it can read the reset vector after other chips are ready)
+        if (c64_->mos6510) {
+            mos6510_desc_t cpu_desc = {};
+            mos6510_init((mos6510_t*)c64_->mos6510, &cpu_desc);
+            mos6510_set_bank_change_context((mos6510_t*)c64_->mos6510, c64_);
+
+            uint16_t reset_vector = c64_read_kernal_reset_vector(&c64_->bus);
+            mos6510_set_pc((mos6510_t*)c64_->mos6510, reset_vector);
+            mos6510_set_ab((mos6510_t*)c64_->mos6510, reset_vector);
+        }
+
+        // Reset keyboard
+        if (c64_->keyboard) commodore_keyboard_reset(c64_->keyboard);
+
+        // Reset cycle counter
+        c64_->total_cycles = 0;
 
         // Clear the memory locations that is_basic_ready() checks, so stale
         // values from the previous session don't cause premature detection.
-        // KERNAL boot will set these properly: RAMTAS clears zero page
-        // (including $2D), $E453 copies the vector table ($0302/$0303),
-        // and NEW sets VARTAB ($2D) to TXTTAB+2.
         if (c64_->ram) {
             c64_->ram->memory[0x0302] = 0;
             c64_->ram->memory[0x0303] = 0;
             c64_->ram->memory[0x002D] = 0;
-            // Clear the keyboard buffer count so is_basic_ready() doesn't
-            // get stuck waiting for a stale non-zero $C6 left by a
-            // previously running program.
             c64_->ram->memory[0x00C6] = 0;
         }
+
+        printf("C64 System: Reset complete\n");
     }
+}
+
+// ============================================================================
+// system_tick — inline system tick (performance-critical hot loop)
+// ============================================================================
+// This is the core emulation loop — ticks all chips in correct phase order.
+// Inlined from c64_system_tick() to eliminate function call overhead.
+// ============================================================================
+
+void C64SystemWrapper::system_tick() {
+    c64_t* c64 = c64_;
+
+    c64->total_cycles++;
+    c64_bus_t* bus = &(c64->bus);
+
+    // Start each cycle with pull-up resistors (default_state: IRQ=1, NMI=1, BA=1, AEC=1, RDY=1)
+    bus_state_t s = bus->default_state;
+    BUS_SET_ADDR(s, BUS_GET_ADDR(bus->state));
+    BUS_SET_DATA(s, BUS_GET_DATA(bus->state));
+
+    // PHASE 1: VIC-II PHI1 — g-access read, pixel sequencing
+    s = vicii_tick_phi1(c64->vicii, s);
+
+    // PHASE 1.5: CIA PHI2 — apply pending interrupt lines before CPU
+    s = mos6526_tick_phi2(c64->cia2, s);
+    s = mos6526_tick_phi2(c64->cia1, s);
+
+    // BA→RDY wiring (direct bit manipulation to preserve IRQ/NMI from CIAs)
+    if (BUS_GET_LINES(s) & BUS_MASK_BA)
+        s |= BUS_BIT(BUS_RDY_BIT);
+    else
+        s &= ~BUS_BIT(BUS_RDY_BIT);
+
+    // PHASE 2: CPU PHI2 — instruction execution
+    s = mos6510_tick_phi2(c64->mos6510, s);
+
+    // PHASE 3: Memory service (AEC determines CPU vs VIC-II bus ownership)
+    s = c64_memory_tick(bus, s);
+
+    // PHASE 3.1: VIC-II PHI2 — c/p/s-access data delivery
+    vicii_tick_phi2(c64->vicii, s);
+
+    // PHASE 3.5: CIA PHI1 — timer counting, TOD, interrupt generation
+    s = mos6526_tick_phi1(c64->cia2, s);
+    s = mos6526_tick_phi1(c64->cia1, s);
+
+    // PHASE 4: CPU PHI1 — prepare next fetch
+    s = mos6510_tick_phi1(c64->mos6510, s);
+
+    // Restore R/W line to read mode
+    s |= BUS_BIT(BUS_RW_BIT);
+
+    // PHASE 5: SID — sound generation
+    s = mos6581_tick(c64->sid, s);
+
+    bus->state = s;
 }
 
 void C64SystemWrapper::tick() {
     if (c64_) {
-        c64_system_tick(c64_);
-        
+        system_tick();
+
         // CRITICAL: Sync base class cycle counter with C64's internal counter
         total_cycles_ = c64_->total_cycles;
 
@@ -376,16 +455,12 @@ void C64SystemWrapper::tick() {
 void C64SystemWrapper::run_frame() {
     uint32_t adjusted_cycles = static_cast<uint32_t>(cycles_per_frame_ * speed_multiplier_);
 
-    // Hot loop: call the C system tick directly to avoid per-cycle overhead
-    // from the wrapper tick() (which checks pending_load_ on every cycle).
-    // This cuts ~19,705 virtual dispatches + conditional checks per frame.
     if (c64_) {
         // Update per-frame state for peripheral devices before cycle loop.
-        // Lightpen: pass display rect so it can convert SDL mouse → VIC-II coords.
         update_lightpen_display_rect();
 
         for (uint32_t i = 0; i < adjusted_cycles; i++) {
-            c64_system_tick(c64_);
+            system_tick();
         }
 
         // Sync cycle counter once per frame instead of per-cycle
@@ -768,8 +843,8 @@ void C64SystemWrapper::get_display_dimensions(int* width, int* height) const {
 }
 
 void C64SystemWrapper::set_framebuffer(uint32_t* buffer, int width, int height) {
-    if (c64_) {
-        c64_set_framebuffer(c64_, buffer, width, height);
+    if (c64_ && c64_->vicii && buffer) {
+        vicii_set_framebuffer(c64_->vicii, buffer, width, height);
     }
 }
 
@@ -970,15 +1045,7 @@ void C64SystemWrapper::render_chip_debug_window(int chip_index, bool* show) {
     switch (chip_index) {
         case C64_CI_SID:
             if (c64_->sid) {
-                // Find SID entry in legacy chip registry for its descriptor callback
-                system_8bit_t* sys = &c64_->system;
-                for (uint8_t i = 0; i < sys->chip_count; i++) {
-                    if (sys->chips[i].chip == c64_->sid && sys->chips[i].desc &&
-                        sys->chips[i].desc->render_debug_window) {
-                        sys->chips[i].desc->render_debug_window(c64_->sid, show);
-                        return;
-                    }
-                }
+                mos6581_render_debug_window(c64_->sid, show);
             }
             break;
         // Other chips: not yet implemented
