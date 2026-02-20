@@ -20,7 +20,7 @@ enum class C264SeriesVariant { C16, C116, PLUS4 };
 template<C264SeriesVariant V> struct C264SeriesVariantTraits;
 
 template<> struct C264SeriesVariantTraits<C264SeriesVariant::C16> {
-    static constexpr bool is_plus4       = false;
+    static constexpr bool has_user_port  = false;
     static constexpr size_t default_ram  = 16384;
     static constexpr const char* name    = "C16";
     static constexpr const char* full_name = "Commodore 16";
@@ -30,7 +30,7 @@ template<> struct C264SeriesVariantTraits<C264SeriesVariant::C16> {
 };
 
 template<> struct C264SeriesVariantTraits<C264SeriesVariant::C116> {
-    static constexpr bool is_plus4       = false;
+    static constexpr bool has_user_port  = false;
     static constexpr size_t default_ram  = 16384;
     static constexpr const char* name    = "C116";
     static constexpr const char* full_name = "Commodore 116";
@@ -40,7 +40,7 @@ template<> struct C264SeriesVariantTraits<C264SeriesVariant::C116> {
 };
 
 template<> struct C264SeriesVariantTraits<C264SeriesVariant::PLUS4> {
-    static constexpr bool is_plus4       = true;
+    static constexpr bool has_user_port  = true;
     static constexpr size_t default_ram  = 65536;
     static constexpr const char* name    = "Plus/4";
     static constexpr const char* full_name = "Commodore Plus/4";
