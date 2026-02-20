@@ -48,13 +48,6 @@ struct C64System {
 using c64_t = C64System;
 using c64_s = C64System;  // For GUI interface compatibility
 
-// Container-of macro for embedded bus access
-#define container_of(ptr, type, member) \
-    ((type *)((char *)(ptr) - offsetof(type, member)))
-
-// Convenience macro to get c64_t from embedded bus
-#define BUS_TO_C64(bus_ptr) container_of(bus_ptr, c64_t, bus)
-
 // Function declarations
 
 // Initialize / clean up a pre-allocated c64_t (no heap alloc/free).

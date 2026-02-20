@@ -38,10 +38,13 @@ extern "C" {
 #define C64_BUS_DEFAULT_STATE() \
     (BUS_STATE(0, 0xFF, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY | BUS_MASK_RW) | BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_CNT_BIT) | BUS_BIT(BUS_FLAG_BIT))
 
+// Forward declaration to avoid circular dependency with c64.h
+struct C64System;
+
 // C64 bus controller structure
 typedef struct c64_bus_s {
     chip_descriptor_t* desc;
-    void* c64;  // c64_t* - opaque pointer to avoid circular dependency
+    C64System* c64;  // Typed back-pointer to owning C64 system
     bus_state_t default_state; // Default bus state with pull-up resistors (start of each tick)
     bus_state_t state;         // Current bus state (after all chip ticks)
     // System lines for control signals (includes EXROM and GAME)
@@ -118,7 +121,7 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
  * @param c64_system Pointer to the C64 system (for pointer updates)
  * @param config Pointer to the C64 system configuration structure
  */
-void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c64_config_t* config);
+void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, C64System* c64_system, const c64_config_t* config);
 
 /**
  * Ultra-optimized unified address calculation function for memory access.
@@ -287,7 +290,7 @@ void c64_write_memory(c64_bus_t* bus, uint16_t addr, uint8_t value);
 // System functions
 void* c64_bus_system_create(chip_descriptor_t* desc);
 void c64_bus_system_destroy(void* chip);
-void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64);  // c64_t*
+void c64_bus_system_attach(c64_bus_t* c64_bus, C64System* c64);
 
 // Cartridge interface functions for controlling EXROM and GAME signals
 void c64_bus_set_exrom_signal(c64_bus_t* c64_bus, bool active);
