@@ -23,7 +23,7 @@
 // Hardware Traits Definition
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 HardwareTraits Commodore264System<V>::create_hardware_traits() {
     HardwareTraits traits = {};
     
@@ -112,7 +112,7 @@ HardwareTraits Commodore264System<V>::create_hardware_traits() {
 // File Detection (shared across all TED variants)
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 float Commodore264System<V>::can_load_file_static(const char* filepath, const uint8_t* data, size_t size) {
     const char* ext = strrchr(filepath, '.');
     if (ext) {
@@ -221,7 +221,7 @@ static const ConnectorDefinition c16_expansion_def = {
 // Constructor / Destructor
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 Commodore264System<V>::Commodore264System()
     : CommodoreSystem()
     , cpu_(nullptr)
@@ -242,7 +242,7 @@ Commodore264System<V>::Commodore264System()
     memset(kernal_rom_, 0, sizeof(kernal_rom_));
 }
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 Commodore264System<V>::~Commodore264System() {
     shutdown();
 }
@@ -251,7 +251,7 @@ Commodore264System<V>::~Commodore264System() {
 // System Identification
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 const SystemDescriptor& Commodore264System<V>::static_descriptor() {
     static const format_descriptor_t* const formats[] = {
         &PRG_FORMAT_DESCRIPTOR, &TAP_FORMAT_DESCRIPTOR, &D64_FORMAT_DESCRIPTOR,
@@ -269,7 +269,7 @@ const SystemDescriptor& Commodore264System<V>::static_descriptor() {
     return desc;
 }
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 const SystemDescriptor& Commodore264System<V>::get_descriptor() const {
     return static_descriptor();
 }
@@ -278,7 +278,7 @@ const SystemDescriptor& Commodore264System<V>::get_descriptor() const {
 // Configuration Management
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 bool Commodore264System<V>::apply_configuration() {
     // Apply region settings
     if (config_.region_option_index >= 0 &&
@@ -294,7 +294,7 @@ bool Commodore264System<V>::apply_configuration() {
 // System Lifecycle
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 bool Commodore264System<V>::initialize() {
     if (initialized_) {
         return true;
@@ -370,7 +370,7 @@ bool Commodore264System<V>::initialize() {
     return true;
 }
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 void Commodore264System<V>::shutdown() {
     printf("%s: Shutting down system\n", Traits::name);
     
@@ -395,7 +395,7 @@ void Commodore264System<V>::shutdown() {
     initialized_ = false;
 }
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 void Commodore264System<V>::reset() {
     printf("%s: Resetting system\n", Traits::name);
     
@@ -438,7 +438,7 @@ void Commodore264System<V>::reset() {
 // Execution
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 void Commodore264System<V>::tick() {
     bus_state_t s = bus_state_;
     
@@ -483,7 +483,7 @@ void Commodore264System<V>::tick() {
     total_cycles_++;
 }
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 void Commodore264System<V>::run_frame() {
     uint32_t adjusted_cycles = static_cast<uint32_t>(cycles_per_frame_ * speed_multiplier_);
     for (uint32_t i = 0; i < adjusted_cycles; i++) {
@@ -498,7 +498,7 @@ void Commodore264System<V>::run_frame() {
 // File Loading
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 bool Commodore264System<V>::load_file(const char* filepath) {
     if (!initialized_) {
         printf("%s: System not initialized, initializing now...\n", Traits::name);
@@ -539,18 +539,18 @@ bool Commodore264System<V>::load_file(const char* filepath) {
 // Display
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 uint32_t* Commodore264System<V>::get_framebuffer() {
     return rgba_framebuffer_;
 }
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 void Commodore264System<V>::get_display_dimensions(int* width, int* height) const {
     *width = 320;
     *height = 200;
 }
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 void Commodore264System<V>::set_framebuffer(uint32_t* buffer, int width, int height) {
     rgba_framebuffer_ = buffer;
     rgba_width_ = width;
@@ -566,7 +566,7 @@ void Commodore264System<V>::set_framebuffer(uint32_t* buffer, int width, int hei
 // Input
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 void Commodore264System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     if (keyboard_mapper_) {
         if (pressed) {
@@ -590,7 +590,7 @@ void Commodore264System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed)
 // GUI Integration
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 void Commodore264System<V>::render_system_menu_items() {
 #ifdef IMGUI_VERSION
     char reset_label[32];
@@ -601,7 +601,7 @@ void Commodore264System<V>::render_system_menu_items() {
 #endif
 }
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 std::vector<ChipInfo> Commodore264System<V>::get_chip_info() const {
     return {
         { "MOS 7501/8501 CPU",          "7501",   "CPU",    0x0000, false, false },
@@ -612,7 +612,7 @@ std::vector<ChipInfo> Commodore264System<V>::get_chip_info() const {
     };
 }
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 void Commodore264System<V>::render_configuration_ui() {
 #ifdef IMGUI_VERSION
     ImGui::Text("%s Configuration", Traits::name);
@@ -650,7 +650,7 @@ void Commodore264System<V>::render_configuration_ui() {
 // Private Helper Methods
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 bool Commodore264System<V>::load_roms() {
     // Try to load C16/Plus4 ROMs from standard locations
     const char* rom_root = "data/c16/roms";  // Default ROM path
@@ -692,7 +692,7 @@ bool Commodore264System<V>::load_roms() {
     return (kernal_ok && basic_ok);
 }
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 uint8_t Commodore264System<V>::cpu_read(uint32_t addr) {
     uint16_t addr16 = addr & 0xFFFF;
     
@@ -739,7 +739,7 @@ uint8_t Commodore264System<V>::cpu_read(uint32_t addr) {
     return 0xFF;  // Unmapped memory
 }
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 void Commodore264System<V>::cpu_write(uint32_t addr, uint8_t data) {
     uint16_t addr16 = addr & 0xFFFF;
     
@@ -768,14 +768,14 @@ void Commodore264System<V>::cpu_write(uint32_t addr, uint8_t data) {
     }
 }
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 uint8_t Commodore264System<V>::cpu_read_callback(void* user_data, uint32_t addr, uint8_t bus_state) {
     auto* sys = static_cast<Commodore264System<V>*>(user_data);
     (void)bus_state;
     return sys->cpu_read(addr);
 }
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 void Commodore264System<V>::cpu_write_callback(void* user_data, uint32_t addr, uint8_t data) {
     auto* sys = static_cast<Commodore264System<V>*>(user_data);
     sys->cpu_write(addr, data);
@@ -785,7 +785,7 @@ void Commodore264System<V>::cpu_write_callback(void* user_data, uint32_t addr, u
 // BUS MEMORY SERVICE
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
     uint16_t addr = BUS_GET_ADDR(s);
     
@@ -806,14 +806,14 @@ bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
 // MOS 7501 I/O PORT CALLBACKS
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 uint8_t Commodore264System<V>::io_port_in(void* user_data) {
     (void)user_data;
     // Stub: all input lines HIGH (no external devices connected yet)
     return 0x5F;
 }
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 void Commodore264System<V>::io_port_out(uint8_t data, void* user_data) {
     (void)data;
     (void)user_data;
@@ -825,7 +825,7 @@ void Commodore264System<V>::io_port_out(uint8_t data, void* user_data) {
 // TED KEYBOARD SCAN CALLBACK
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 uint8_t Commodore264System<V>::ted_keyboard_scan(void* user_data, uint8_t column) {
     auto* sys = static_cast<Commodore264System<V>*>(user_data);
     if (!sys->keyboard_) return 0xFF;
@@ -844,7 +844,7 @@ uint8_t Commodore264System<V>::ted_keyboard_scan(void* user_data, uint8_t column
 // TED MEMORY READ CALLBACK
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 uint8_t Commodore264System<V>::ted_mem_read(void* user_data, uint16_t address) {
     auto* sys = static_cast<Commodore264System<V>*>(user_data);
     return sys->ram_simple_[address & 0xFFFF];
@@ -854,7 +854,7 @@ uint8_t Commodore264System<V>::ted_mem_read(void* user_data, uint16_t address) {
 // LOAD HELPER — set CPU PC
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 void Commodore264System<V>::set_cpu_pc(void* user_data, uint16_t addr) {
     auto* sys = static_cast<Commodore264System<V>*>(user_data);
     if (sys->cpu_) {
@@ -869,7 +869,7 @@ void Commodore264System<V>::set_cpu_pc(void* user_data, uint16_t addr) {
 // CONNECTOR PORT SETUP
 // ============================================================================
 
-template<TEDVariant V>
+template<C264SeriesVariant V>
 void Commodore264System<V>::setup_connector_ports() {
     connector_ports_.clear();
 
@@ -916,9 +916,9 @@ void Commodore264System<V>::setup_connector_ports() {
 // Explicit Template Instantiations
 // ============================================================================
 
-template class Commodore264System<TEDVariant::C16>;
-template class Commodore264System<TEDVariant::C116>;
-template class Commodore264System<TEDVariant::PLUS4>;
+template class Commodore264System<C264SeriesVariant::C16>;
+template class Commodore264System<C264SeriesVariant::C116>;
+template class Commodore264System<C264SeriesVariant::PLUS4>;
 
 // ============================================================================
 // System Registration
