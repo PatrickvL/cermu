@@ -11,15 +11,15 @@
 // TED-based system variant (compile-time template parameter)
 // ============================================================================
 
-enum class TEDVariant { C16, C116, PLUS4 };
+enum class C264SeriesVariant { C16, C116, PLUS4 };
 
 // ============================================================================
 // Compile-time variant traits
 // ============================================================================
 
-template<TEDVariant V> struct TEDVariantTraits;
+template<C264SeriesVariant V> struct C264SeriesVariantTraits;
 
-template<> struct TEDVariantTraits<TEDVariant::C16> {
+template<> struct C264SeriesVariantTraits<C264SeriesVariant::C16> {
     static constexpr bool is_plus4       = false;
     static constexpr size_t default_ram  = 16384;
     static constexpr const char* name    = "C16";
@@ -29,7 +29,7 @@ template<> struct TEDVariantTraits<TEDVariant::C16> {
         "Commodore 16 (1984) - 16KB RAM, TED 7360 graphics and sound";
 };
 
-template<> struct TEDVariantTraits<TEDVariant::C116> {
+template<> struct C264SeriesVariantTraits<C264SeriesVariant::C116> {
     static constexpr bool is_plus4       = false;
     static constexpr size_t default_ram  = 16384;
     static constexpr const char* name    = "C116";
@@ -39,7 +39,7 @@ template<> struct TEDVariantTraits<TEDVariant::C116> {
         "Commodore 116 (1984) - 16KB RAM, TED 7360, chiclet keyboard variant of C16";
 };
 
-template<> struct TEDVariantTraits<TEDVariant::PLUS4> {
+template<> struct C264SeriesVariantTraits<C264SeriesVariant::PLUS4> {
     static constexpr bool is_plus4       = true;
     static constexpr size_t default_ram  = 65536;
     static constexpr const char* name    = "Plus/4";
@@ -64,15 +64,15 @@ template<> struct TEDVariantTraits<TEDVariant::PLUS4> {
  *   - Plus/4: 64 KB RAM, full-travel keyboard, User Port, built-in
  *             "3-PLUS-1" productivity ROM
  *
- * These differences are captured by TEDVariantTraits<V> and selected at
+ * These differences are captured by C264SeriesVariantTraits<V> and selected at
  * compile time via the template parameter.
  *
  * Inherits from CommodoreSystem which provides shared Commodore 8-bit
  * infrastructure (keyboard mapper, configuration, speed control).
  */
-template<TEDVariant V>
+template<C264SeriesVariant V>
 class Commodore264System : public CommodoreSystem {
-    using Traits = TEDVariantTraits<V>;
+    using Traits = C264SeriesVariantTraits<V>;
 
 public:
     Commodore264System();
@@ -152,7 +152,7 @@ private:
 };
 
 // Convenience type aliases
-using C16System   = Commodore264System<TEDVariant::C16>;
-using C116System  = Commodore264System<TEDVariant::C116>;
-using Plus4System = Commodore264System<TEDVariant::PLUS4>;
+using C16System   = Commodore264System<C264SeriesVariant::C16>;
+using C116System  = Commodore264System<C264SeriesVariant::C116>;
+using Plus4System = Commodore264System<C264SeriesVariant::PLUS4>;
 #endif // C16_SYSTEM_H
