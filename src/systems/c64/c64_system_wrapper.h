@@ -152,7 +152,8 @@ public:
     //
     
 private:
-    c64_t* c64_;
+    c64_t c64_data_{};          // Embedded C64 system struct (no heap allocation)
+    c64_t* c64_ = nullptr;     // Points to &c64_data_ when initialized, nullptr otherwise
     c64_config_t c64_config_;  // Renamed to avoid conflict with base class config_
     vicii_standard_t created_vicii_standard_ = VIC_PAL;  // Actual VIC-II standard at creation time
     sid_revision_t pending_sid_revision_ = SID_REVISION_6581_R4AR;  // Applied after SID creation

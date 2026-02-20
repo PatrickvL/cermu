@@ -56,6 +56,13 @@ using c64_s = C64System;  // For GUI interface compatibility
 #define BUS_TO_C64(bus_ptr) container_of(bus_ptr, c64_t, bus)
 
 // Function declarations
+
+// Initialize / clean up a pre-allocated c64_t (no heap alloc/free).
+// The caller owns the memory; c64 must be zero-initialized before calling init.
+bool c64_system_init(c64_t* c64, const c64_config_t* config);
+void c64_system_cleanup(c64_t* c64);
+
+// Legacy heap-allocating wrappers (thin wrappers around init/cleanup).
 c64_t* c64_system_create(const c64_config_t* config);
 void c64_system_destroy(c64_t* c64);
 

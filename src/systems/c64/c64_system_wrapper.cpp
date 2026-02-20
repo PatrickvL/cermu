@@ -278,11 +278,12 @@ bool C64SystemWrapper::initialize() {
         return true;  // Already initialized
     }
     
-    c64_ = c64_system_create(&c64_config_);
-    if (!c64_) {
+    // Initialize the embedded c64_t struct (already zero-initialized by c64_data_{})
+    if (!c64_system_init(&c64_data_, &c64_config_)) {
         printf("C64: Failed to create system\n");
         return false;
     }
+    c64_ = &c64_data_;  // Mark as initialized
 
     // Track the actual VIC-II standard this system was created with.
     // apply_configuration() can desync c64_config_.vicii_standard from
@@ -322,8 +323,10 @@ void C64SystemWrapper::shutdown() {
         pending_load_.active = false;
     }
     if (c64_) {
-        c64_system_destroy(c64_);
+        c64_system_cleanup(c64_);
         c64_ = nullptr;
+        // Zero the embedded struct for clean re-initialization
+        c64_data_ = {};
     }
 }
 
