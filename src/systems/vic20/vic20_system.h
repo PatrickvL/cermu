@@ -1,14 +1,12 @@
 #pragma once
 
-#include "../../core/emulated_system.h"
+#include "../commodore/commodore_system.h"
 #include "../../core/system.h"
 #include "../../chip/cpu/fam65xx/mos6502.h"
 #include "../../chip/memory/ram.h"
 #include "../../chip/memory/rom.h"
 #include "../../chip/memory/mos2114.h"
 #include "../../chip/io/mos6522.h"
-#include "../../chip/input/commodore_keyboard.h"
-#include "../../chip/input/keyboard_mapper.h"
 #include "../../chip/video/vic/mos6560.h"
 #include "../../chip/video/vic/mos6561.h"
 #include "../../chip/video/vic/vic_common.h"
@@ -17,7 +15,6 @@
 #include "vic20_memory.h"
 #include "vic20_chips.h"
 #include <cstdint>
-#include <memory>
 #include <string>
 
 /**
@@ -51,7 +48,7 @@
  * $C000–$DFFF  8 KB   BASIC ROM
  * $E000–$FFFF  8 KB   KERNAL ROM
  */
-class VIC20System : public EmulatedSystem {
+class VIC20System : public CommodoreSystem {
 public:
     VIC20System();
     ~VIC20System() override;
@@ -60,7 +57,6 @@ public:
     const SystemDescriptor& get_descriptor() const override;
     
     // Configuration management
-    bool set_configuration(const SystemConfiguration& config) override;
     bool apply_configuration() override;
     
     // System lifecycle
@@ -82,19 +78,10 @@ public:
     
     // Input
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
-    void handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) override;
-    void handle_text_input(const char* text) override;
-    void release_all_keys() override;
     
     // GUI integration
     void render_system_menu_items() override;
     void render_configuration_ui() override;
-    
-    // State
-    uint32_t get_target_fps() const override;
-    
-    // Emulation control
-    void set_speed_multiplier(float multiplier) override;
 
     // Auto-detect memory expansion and region from file contents
     SystemConfiguration detect_optimal_configuration(
@@ -116,11 +103,8 @@ private:
     vic_base_t* vic_;                // VIC chip: MOS6561 (PAL) or MOS6560 (NTSC)
     mos6522_t* via1_;                // MOS6522 VIA 1 - keyboard, joystick
     mos6522_t* via2_;                // MOS6522 VIA 2 - user port, serial
-    commodore_keyboard_t* keyboard_; // Keyboard matrix (shared with C64)
-    std::unique_ptr<KeyboardMapper> keyboard_mapper_; // Layered keyboard mapping engine
     
     // System state
-    uint32_t cycles_per_frame_;
     uint8_t expansion_flags_;        // Expansion RAM configuration
 
     // Deferred autostart — file loading and keyboard buffer injection

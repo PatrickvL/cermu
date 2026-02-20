@@ -253,17 +253,16 @@ static SystemDescriptor vic20_descriptor = {
 // Constructor / Destructor
 // ============================================================================
 VIC20System::VIC20System()
-    : EmulatedSystem()
+    : CommodoreSystem()
     , memory_(nullptr)
     , cpu_(nullptr)
     , vic_(nullptr)
     , via1_(nullptr)
     , via2_(nullptr)
-    , keyboard_(nullptr)
-    , cycles_per_frame_(22168)
     , expansion_flags_(VIC20_EXP_NONE)
     , autostart_delay_frames_(0)
 {
+    cycles_per_frame_ = 22168;
     hardware_traits_ = create_vic20_hardware_traits();
     current_palette_ = hardware_traits_.display.default_palette;
     
@@ -323,11 +322,6 @@ const SystemDescriptor& VIC20System::get_descriptor() const {
 // ============================================================================
 // Configuration Management
 // ============================================================================
-
-bool VIC20System::set_configuration(const SystemConfiguration& config) {
-    config_ = config;
-    return true;
-}
 
 bool VIC20System::apply_configuration() {
     // Apply region settings
@@ -936,30 +930,6 @@ void VIC20System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     }
 }
 
-void VIC20System::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) {
-    if (keyboard_mapper_) {
-        if (pressed) {
-            keyboard_mapper_->process_key_down(key, scancode, mod, repeat);
-        } else {
-            keyboard_mapper_->process_key_up(key, scancode, mod);
-        }
-    } else if (!repeat) {
-        handle_keyboard_event(key, pressed);
-    }
-}
-
-void VIC20System::handle_text_input(const char* text) {
-    if (keyboard_mapper_) {
-        keyboard_mapper_->process_text_input(text);
-    }
-}
-
-void VIC20System::release_all_keys() {
-    if (keyboard_mapper_) {
-        keyboard_mapper_->release_all();
-    }
-}
-
 // ============================================================================
 // GUI Integration
 // ============================================================================
@@ -1008,22 +978,6 @@ void VIC20System::render_configuration_ui() {
 // ============================================================================
 // State
 // ============================================================================
-
-uint32_t VIC20System::get_target_fps() const {
-    if (config_.region_option_index >= 0 &&
-        config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
-        return hardware_traits_.region_options[config_.region_option_index].timing.target_fps;
-    }
-    return 50;  // Default PAL
-}
-
-// ============================================================================
-// Emulation Control
-// ============================================================================
-
-void VIC20System::set_speed_multiplier(float multiplier) {
-    speed_multiplier_ = multiplier;
-}
 
 uint32_t VIC20System::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!vic_ || max_samples == 0 || !buffer) return 0;

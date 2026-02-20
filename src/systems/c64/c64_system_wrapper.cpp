@@ -242,11 +242,11 @@ static SystemDescriptor c64_descriptor = {
 };
 
 C64SystemWrapper::C64SystemWrapper()
-    : EmulatedSystem()  // Call base class constructor
+    : CommodoreSystem()  // Call base class constructor
     , c64_(nullptr)
-    , cycles_per_frame_(19705)  // PAL: 985248 Hz / 50 fps
     , gui_state_(nullptr)
 {
+    cycles_per_frame_ = 19705;  // PAL: 985248 Hz / 50 fps
     // Initialize C64-specific config with defaults
     c64_config_.vicii_standard = VIC_PAL;
     c64_config_.rom_config = nullptr;
@@ -846,18 +846,6 @@ void C64SystemWrapper::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode sc
     }
 }
 
-void C64SystemWrapper::handle_text_input(const char* text) {
-    if (keyboard_mapper_) {
-        keyboard_mapper_->process_text_input(text);
-    }
-}
-
-void C64SystemWrapper::release_all_keys() {
-    if (keyboard_mapper_) {
-        keyboard_mapper_->release_all();
-    }
-}
-
 void C64SystemWrapper::handle_controller_event(int controller, int button, bool pressed) {
     // Map host controller events to the joystick device attached to the
     // appropriate control port.  Controller 0 → Port 2 (the normal C64
@@ -973,21 +961,8 @@ void C64SystemWrapper::render_debug_windows(void* gui_state) {
 #endif
 }
 
-uint32_t C64SystemWrapper::get_target_fps() const {
-    // Return target FPS from the currently-selected region (PAL=50, NTSC=60)
-    if (config_.region_option_index >= 0 &&
-        config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
-        return hardware_traits_.region_options[config_.region_option_index].timing.target_fps;
-    }
-    return 50;  // PAL default
-}
-
-void C64SystemWrapper::set_speed_multiplier(float multiplier) {
-    speed_multiplier_ = multiplier;
-    // Note: cycles_per_frame_ stays at the base value (region-dependent).
-    // The multiplier is applied in run_frame() via:
-    //   adjusted_cycles = cycles_per_frame_ * speed_multiplier_
-}
+// Note: get_target_fps() and set_speed_multiplier() are now provided by
+// CommodoreSystem base class.
 
 // Note: get_total_cycles() now provided by base class (returns total_cycles_)
 // However, C64 has its own cycle counter, so we need to sync it
@@ -998,12 +973,7 @@ void C64SystemWrapper::set_speed_multiplier(float multiplier) {
 // Note: Hardware trait queries (get_hardware_traits, get_current_timing,
 // get_display_traits, get_audio_traits) now provided by base class
 // Note: get_configuration() now provided by base class (returns config_)
-
-bool C64SystemWrapper::set_configuration(const SystemConfiguration& config) {
-    config_ = config;  // Update base class SystemConfiguration
-    // TODO: Map SystemConfiguration changes to c64_config_ when needed
-    return true;
-}
+// Note: set_configuration() now provided by CommodoreSystem base class
 
 bool C64SystemWrapper::apply_configuration() {
     // Apply region settings

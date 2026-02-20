@@ -387,10 +387,39 @@ public:
 };
 
 // ============================================================================
-// MAIN NES SYSTEM
+// Nintendo system variant (compile-time template parameter)
 // ============================================================================
 
-class NESSystem : public EmulatedSystem {
+enum class NintendoVariant { NES, FAMICOM };
+
+template<NintendoVariant V> struct NintendoVariantTraits;
+
+template<> struct NintendoVariantTraits<NintendoVariant::NES> {
+    static constexpr bool is_famicom    = false;
+    static constexpr const char* name   = "NES";
+    static constexpr const char* full_name = "Nintendo Entertainment System";
+    static constexpr const char* short_id = "NES";
+    static constexpr const char* description =
+        "Nintendo Entertainment System (1985)";
+};
+
+template<> struct NintendoVariantTraits<NintendoVariant::FAMICOM> {
+    static constexpr bool is_famicom    = true;
+    static constexpr const char* name   = "Famicom";
+    static constexpr const char* full_name = "Nintendo Famicom";
+    static constexpr const char* short_id = "FC";
+    static constexpr const char* description =
+        "Nintendo Family Computer (1983) \u2014 expansion audio, hardwired controllers, microphone";
+};
+
+// ============================================================================
+// MAIN NINTENDO SYSTEM (NES / Famicom)
+// ============================================================================
+
+template<NintendoVariant V>
+class NintendoSystem : public EmulatedSystem {
+    using Traits = NintendoVariantTraits<V>;
+
 private:
     // Core components
     nes6502_t* cpu_;
@@ -400,7 +429,6 @@ private:
     
     // System state
     bool is_pal_;
-    bool is_famicom_;              ///< True for Famicom variant (expansion audio, mic, hardwired controllers)
     bool system_ready_;
     uint32_t cycles_per_frame_;
     bool initialized_;
@@ -415,11 +443,12 @@ private:
     double residual_time_;
     
 public:
-    explicit NESSystem(bool famicom = false);
-    ~NESSystem() override;
+    NintendoSystem();
+    ~NintendoSystem() override;
     
     // EmulatedSystem interface - System identification
     const SystemDescriptor& get_descriptor() const override;
+    static const SystemDescriptor& static_descriptor();
     
     // EmulatedSystem interface - Configuration management
     bool set_configuration(const SystemConfiguration& config) override;
@@ -503,5 +532,9 @@ private:
      *  Returns true if the key was consumed (should not be forwarded). */
     bool handle_nsf_player_key(SDL_Keycode key);
 };
+
+// Convenience type aliases
+using NESSystem     = NintendoSystem<NintendoVariant::NES>;
+using FamicomSystem = NintendoSystem<NintendoVariant::FAMICOM>;
 
 } // namespace nes_system
