@@ -104,6 +104,11 @@ public:
     // GUI forwarding methods - delegate to old C64 GUI code (imgui_interface.cpp)
     void render_system_menu_items() override;      // Forwards to gui_render_c64_system_menu_items()
     void render_debug_windows(void* gui_state) override;  // Forwards to chip debug system
+
+    // Chip enumeration and debug windows (generic interface)
+    std::vector<ChipInfo> get_chip_info() const override;
+    void render_chip_debug_window(int chip_index, bool* show) override;
+    void render_chip_settings_window(int chip_index, bool* show) override;
     
     // Configuration interface
     bool apply_configuration() override;

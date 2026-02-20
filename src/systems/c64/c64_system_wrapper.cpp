@@ -939,26 +939,82 @@ void C64SystemWrapper::render_debug_windows(void* gui_state) {
     
     gui_state_t* state = static_cast<gui_state_t*>(gui_state_);
     
-    // Render test binary dialog if needed
+    // Render test binary dialog if needed (legacy, not a chip window)
     if (state->show_test_binary_dialog) {
         gui_render_test_binary_dialog(c64_, state, nullptr);
     }
-    // Iterate through all chips and render their debug windows
-    system_8bit_t* sys = &c64_->system;
-    for (uint8_t chip_id = 0; chip_id < sys->chip_count; chip_id++) {
-        chip_entry_t* entry = &sys->chips[chip_id];
-        
-        if (state->show_chip_debug[chip_id] &&
-            entry->desc &&
-            entry->desc->render_debug_window) {
-            
-            entry->desc->render_debug_window(
-                entry->chip,
-                &state->show_chip_debug[chip_id]
-            );
-        }
-    }
+    
+    // Chip debug/settings windows — use base class dispatch via get_chip_info()
+    EmulatedSystem::render_debug_windows(gui_state);
 #endif
+}
+
+// ============================================================================
+// Chip Info / Debug / Settings — generic interface (Hardware menu)
+// ============================================================================
+
+// Chip indices for get_chip_info() / render_chip_debug_window()
+enum C64ChipIndex {
+    C64_CI_CPU = 0,
+    C64_CI_VICII,
+    C64_CI_SID,
+    C64_CI_CIA1,
+    C64_CI_CIA2,
+    C64_CI_COLORRAM,
+    C64_CI_RAM,
+    C64_CI_BASIC_ROM,
+    C64_CI_KERNAL_ROM,
+    C64_CI_CHARROM,
+    C64_CI_CART_ROML,
+    C64_CI_CART_ROMH,
+    C64_CI_PLA,
+    C64_CI_COUNT
+};
+
+std::vector<ChipInfo> C64SystemWrapper::get_chip_info() const {
+    return {
+        { "MOS 6510 CPU",                "6510",       "CPU",    0x0000, false, false },
+        { "VIC-II (MOS 6569/6567)",       "VIC-II",     "Video",  0xD000, false, false },
+        { "SID (MOS 6581/8580)",          "SID",        "Audio",  0xD400, true,  false },
+        { "CIA 1 (MOS 6526)",             "CIA 1",      "I/O",    0xDC00, false, false },
+        { "CIA 2 (MOS 6526)",             "CIA 2",      "I/O",    0xDD00, false, false },
+        { "Color RAM (MOS 2114)",         "Color RAM",  "I/O",    0xD800, false, false },
+        { "RAM (64KB)",                   "RAM",        "Memory", 0x0000, false, false },
+        { "BASIC ROM (8KB)",              "BASIC",      "Memory", 0xA000, false, false },
+        { "KERNAL ROM (8KB)",             "KERNAL",     "Memory", 0xE000, false, false },
+        { "Character ROM (4KB)",          "CHARROM",    "Memory", 0xD000, false, false },
+        { "Cartridge ROM Low (8KB)",      "ROML",       "Memory", 0x8000, false, false },
+        { "Cartridge ROM High (8KB)",     "ROMH",       "Memory", 0xA000, false, false },
+        { "PLA / Address Decoder",        "PLA",        "Bus",    0x0000, false, false },
+    };
+}
+
+void C64SystemWrapper::render_chip_debug_window(int chip_index, bool* show) {
+    if (!c64_ || !show || !*show) return;
+    switch (chip_index) {
+        case C64_CI_SID:
+            if (c64_->sid) {
+                // Find SID entry in legacy chip registry for its descriptor callback
+                system_8bit_t* sys = &c64_->system;
+                for (uint8_t i = 0; i < sys->chip_count; i++) {
+                    if (sys->chips[i].chip == c64_->sid && sys->chips[i].desc &&
+                        sys->chips[i].desc->render_debug_window) {
+                        sys->chips[i].desc->render_debug_window(c64_->sid, show);
+                        return;
+                    }
+                }
+            }
+            break;
+        // Other chips: not yet implemented
+        default:
+            break;
+    }
+}
+
+void C64SystemWrapper::render_chip_settings_window(int chip_index, bool* show) {
+    if (!c64_ || !show || !*show) return;
+    // No chip settings windows implemented yet
+    (void)chip_index;
 }
 
 // Note: get_target_fps() and set_speed_multiplier() are now provided by

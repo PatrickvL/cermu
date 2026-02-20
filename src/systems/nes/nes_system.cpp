@@ -1491,6 +1491,17 @@ void NintendoSystem<V>::render_system_menu_items() {
 }
 
 template<NintendoVariant V>
+std::vector<ChipInfo> NintendoSystem<V>::get_chip_info() const {
+    return {
+        { "Ricoh 2A03 (6502 + APU)",    "2A03",   "CPU",    0x0000, false, false },
+        { "Ricoh 2C02 PPU",             "PPU",    "Video",  0x2000, false, false },
+        { "APU (built-in 2A03)",        "APU",    "Audio",  0x4000, false, false },
+        { "RAM (2KB)",                  "RAM",    "Memory", 0x0000, false, false },
+        { "Cartridge",                  "Cart",   "Memory", 0x4020, false, false },
+    };
+}
+
+template<NintendoVariant V>
 void NintendoSystem<V>::render_configuration_ui() {
 #ifdef IMGUI_VERSION
     ImGui::Text("%s Configuration", Traits::name);

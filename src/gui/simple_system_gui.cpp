@@ -423,6 +423,51 @@ void SimpleSystemGUI::render_menu_bar() {
         ImGui::EndMenu();
     }
     
+    // Hardware menu — chip debug/settings windows (auto-generated from get_chip_info)
+    if (system_) {
+        auto chips = system_->get_chip_info();
+        if (!chips.empty()) {
+            auto& dbg = system_->get_chip_debug_state();
+            dbg.ensure_size(chips.size());
+
+            if (ImGui::BeginMenu("Hardware")) {
+                // Group chips by category.  Collect unique categories in order.
+                struct CatEntry { const char* category; size_t first; };
+                std::vector<CatEntry> categories;
+                for (size_t i = 0; i < chips.size(); i++) {
+                    const char* cat = chips[i].category ? chips[i].category : "Other";
+                    bool found = false;
+                    for (auto& c : categories) {
+                        if (strcmp(c.category, cat) == 0) { found = true; break; }
+                    }
+                    if (!found) categories.push_back({cat, i});
+                }
+
+                for (auto& cat : categories) {
+                    if (ImGui::BeginMenu(cat.category)) {
+                        for (size_t i = 0; i < chips.size(); i++) {
+                            const char* c = chips[i].category ? chips[i].category : "Other";
+                            if (strcmp(c, cat.category) != 0) continue;
+
+                            bool has_any = chips[i].has_debug_window || chips[i].has_settings_window;
+                            ImGui::BeginDisabled(!has_any);
+
+                            bool debug_on = dbg.show_debug[i];
+                            if (ImGui::MenuItem(chips[i].name, nullptr, debug_on, has_any)) {
+                                dbg.show_debug[i] = !debug_on;
+                            }
+
+                            ImGui::EndDisabled();
+                        }
+                        ImGui::EndMenu();
+                    }
+                }
+
+                ImGui::EndMenu();
+            }
+        }
+    }
+    
     // View menu
     if (ImGui::BeginMenu("View")) {
         render_view_menu_generic();

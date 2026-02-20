@@ -85,8 +85,34 @@ void EmulatedSystem::handle_controller_event(int controller, int button, bool pr
 }
 
 void EmulatedSystem::render_debug_windows(void* gui_state) {
-    // Default: no debug windows
+    // Default: render any chip debug/settings windows toggled by the Hardware menu
     (void)gui_state;
+    auto chips = get_chip_info();
+    chip_debug_state_.ensure_size(chips.size());
+    for (size_t i = 0; i < chips.size(); i++) {
+        if (chip_debug_state_.show_debug[i] && chips[i].has_debug_window) {
+            bool show = chip_debug_state_.show_debug[i];
+            render_chip_debug_window(static_cast<int>(i), &show);
+            chip_debug_state_.show_debug[i] = show;
+        }
+        if (chip_debug_state_.show_settings[i] && chips[i].has_settings_window) {
+            bool show = chip_debug_state_.show_settings[i];
+            render_chip_settings_window(static_cast<int>(i), &show);
+            chip_debug_state_.show_settings[i] = show;
+        }
+    }
+}
+
+void EmulatedSystem::render_chip_debug_window(int chip_index, bool* show) {
+    // Default: no debug window
+    (void)chip_index;
+    (void)show;
+}
+
+void EmulatedSystem::render_chip_settings_window(int chip_index, bool* show) {
+    // Default: no settings window
+    (void)chip_index;
+    (void)show;
 }
 
 void EmulatedSystem::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) {

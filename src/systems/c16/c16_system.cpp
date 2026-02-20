@@ -602,6 +602,17 @@ void Commodore264System<V>::render_system_menu_items() {
 }
 
 template<TEDVariant V>
+std::vector<ChipInfo> Commodore264System<V>::get_chip_info() const {
+    return {
+        { "MOS 7501/8501 CPU",          "7501",   "CPU",    0x0000, false, false },
+        { "TED 7360 (Video/Audio/I/O)", "TED",    "Video",  0xFF00, false, false },
+        { "RAM",                        "RAM",    "Memory", 0x0000, false, false },
+        { "BASIC ROM (16KB)",           "BASIC",  "Memory", 0x8000, false, false },
+        { "KERNAL ROM (16KB)",          "KERNAL", "Memory", 0xC000, false, false },
+    };
+}
+
+template<TEDVariant V>
 void Commodore264System<V>::render_configuration_ui() {
 #ifdef IMGUI_VERSION
     ImGui::Text("%s Configuration", Traits::name);
