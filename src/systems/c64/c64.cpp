@@ -599,7 +599,7 @@ void c64_system_destroy(c64_t* c64) {
 bool c64_system_init(c64_t* c64, const c64_config_t* config) {
     // c64 must be zero-initialized by the caller
 
-    // Initialize the legacy system wrapper first
+    // Initialize the legacy system_8bit chip registry
     system_8bit_init(&c64->system);
     if (!c64->system.cpp_system) {
         printf("ERROR: Failed to initialize system\n");
@@ -764,7 +764,7 @@ bool c64_system_init(c64_t* c64, const c64_config_t* config) {
     return true;
 }
 
-// Legacy heap-allocating wrapper around c64_system_init
+// Legacy heap-allocating entry point for c64_system_init
 c64_t* c64_system_create(const c64_config_t* config) {
     c64_t* c64 = static_cast<c64_t*>(calloc(1, sizeof(c64_t)));
     if (!c64) {

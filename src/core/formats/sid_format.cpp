@@ -220,7 +220,7 @@ static bool sid_load(const char* filepath, format_load_result_t* out) {
     }
     memcpy(out->program.data, file_data + payload_start, payload_size);
 
-    // Store parsed header as metadata so the C64 wrapper can detect SID files
+    // Store parsed header as metadata so C64System can detect SID files
     // and inject the player stub instead of BASIC auto-run
     if (sizeof(sid_metadata_blob_t) <= FORMAT_METADATA_MAX_SIZE) {
         sid_metadata_blob_t* blob = (sid_metadata_blob_t*)out->metadata;

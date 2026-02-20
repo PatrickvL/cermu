@@ -12,7 +12,6 @@
 // We just need to ensure the system object files are linked
 #include "../systems/chip8/chip8_system.h"
 #include "../systems/c64/c64_system.h"
-#include "../systems/c64/c64_kernal_patches.h"
 
 // ============================================================================
 // MAIN FUNCTION - Multi-System Emulator with Automatic Detection
@@ -147,11 +146,9 @@ int main(int argc, char** argv) {
     // (SID files) already applies this automatically via ensure_compatible_for_sid.
     // =========================================================================
     if (skip_memtest && system) {
-        auto* c64_wrapper = dynamic_cast<C64System*>(system.get());
-        if (c64_wrapper && c64_wrapper->get_c64_system()) {
-            c64_patch_skip_memtest(c64_wrapper->get_c64_system());
-        } else if (c64_wrapper) {
-            printf("WARNING: --skip-memtest specified but C64 not yet initialized\n");
+        auto* c64_sys = dynamic_cast<C64System*>(system.get());
+        if (c64_sys) {
+            c64_sys->patch_skip_memtest();
         } else {
             printf("WARNING: --skip-memtest is only supported for C64 systems\n");
         }
@@ -161,9 +158,9 @@ int main(int argc, char** argv) {
     // VIC-II DUMP MODE — normal boot + framebuffer pixel dump
     // =========================================================================
     if (vicii_dump_mode && system) {
-        C64System* c64_wrapper = dynamic_cast<C64System*>(system.get());
-        if (!c64_wrapper) { printf("ERROR: --vicii-dump requires C64\n"); return 1; }
-        c64_t* c64 = c64_wrapper->get_c64_system();
+        C64System* c64_sys = dynamic_cast<C64System*>(system.get());
+        if (!c64_sys) { printf("ERROR: --vicii-dump requires C64\n"); return 1; }
+        c64_t* c64 = c64_sys->get_system_data();
         if (!c64) { printf("ERROR: C64 not initialized\n"); return 1; }
 
         // Allocate headless framebuffer (no GUI)
@@ -382,13 +379,13 @@ int main(int argc, char** argv) {
     // VIC-II TEST MODE — headless test suite
     // =========================================================================
     if (vicii_test_mode && system) {
-        // Get the C64 system wrapper to access the underlying c64_t
-        C64System* c64_wrapper = dynamic_cast<C64System*>(system.get());
-        if (!c64_wrapper) {
+        // Get the C64 system to access the underlying c64_t
+        C64System* c64_sys = dynamic_cast<C64System*>(system.get());
+        if (!c64_sys) {
             printf("ERROR: --vicii-test requires C64 system\n");
             return 1;
         }
-        c64_t* c64 = c64_wrapper->get_c64_system();
+        c64_t* c64 = c64_sys->get_system_data();
         if (!c64) {
             printf("ERROR: C64 system not initialized\n");
             return 1;

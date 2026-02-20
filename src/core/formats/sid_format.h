@@ -37,7 +37,7 @@
  *
  * The format handler returns FORMAT_LOAD_PROGRAM with the C64 payload as
  * program data, plus the parsed SID header in the metadata blob. The C64
- * system wrapper detects this metadata and injects a 6502 player stub
+ * system detects this metadata and injects a 6502 player stub
  * instead of the standard BASIC auto-run sequence.
  *
  * References:
@@ -82,7 +82,7 @@ typedef enum {
  * All addresses are ready-to-use (load_addr resolved from payload if zero).
  *
  * This struct is stored in the format_load_result_t metadata[] blob so the
- * C64 wrapper can extract it without SID-specific coupling in the load chain.
+ * C64System can extract it without SID-specific coupling in the load chain.
  */
 typedef struct {
     sid_type_t  type;           /**< PSID or RSID */

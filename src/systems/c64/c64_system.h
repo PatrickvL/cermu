@@ -18,19 +18,20 @@ class LightpenDevice;
  *
  * CONSOLIDATION STATUS (see docs/C64_CONSOLIDATION_PLAN.md):
  * ==========================================================
- * Phases 1a-1c, 2, 3, 4a, 4c, 5 are complete:
+ * Phases 1a-1c, 2, 3, 4a, 4c, 5, 6 are complete:
  *   - c64_t embedded directly (no heap allocation)
  *   - tick/reset/init/shutdown/framebuffer absorbed as methods
  *   - PLA generation, memory init, CPU banking callback absorbed
  *   - Bus back-pointer typed to C64SystemData*, container_of removed
  *   - gui_state_t eliminated; chip debug uses generic ChipInfo
- *   - Legacy chip registry (system_8bit_t) eliminated from wrapper path
+ *   - Legacy chip registry (system_8bit_t) eliminated
  *   - Class renamed C64SystemWrapper → C64System
  *   - SimpleSystemGUI → SystemGUI
+ *   - Dead legacy GUI code removed (imgui_interface, c64_main, c64_main_gui)
+ *   - Residual "wrapper" terminology cleaned up
  *
  * Remaining:
  *   - Phase 4b: Merge c64_config_t into SystemConfiguration
- *   - Phase 6: Remove dead legacy GUI code
  *
  * c64.cpp still provides c64_system_create/init/tick/reset for the test
  * framework's independent code path.
@@ -94,8 +95,13 @@ public:
     // - get_total_cycles() - returns total_cycles_
     // - get_speed_multiplier() - returns speed_multiplier_
     
-    // Get the underlying C64 system (for compatibility with existing GUI code)
-    c64_t* get_c64_system() { return c64_; }
+    // Apply KERNAL RAMTAS patch to skip the memory test during boot.
+    // Returns true if the patch was applied.
+    bool patch_skip_memtest() { return c64_patch_skip_memtest(c64_); }
+
+    // Direct access to the raw C64 system data struct.
+    // Used by the VIC-II test harness and diagnostic dump modes.
+    c64_t* get_system_data() { return c64_; }
     
     // --- Connector Port Access -----------------------------------------
     //
@@ -117,7 +123,7 @@ private:
     // =========================================================================
     // File loading is deferred until KERNAL/BASIC boot completes. This avoids
     // the problem where BASIC's cold-start NEW routine zeros $0801/$0802,
-    // corrupting program data loaded before boot. The wrapper stores the
+    // corrupting program data loaded before boot. The system stores the
     // parsed format result and applies it only after BASIC reaches its READY
     // state (warm-start vector set, keyboard buffer empty).
     //
