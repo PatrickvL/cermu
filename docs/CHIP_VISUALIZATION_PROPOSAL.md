@@ -183,7 +183,7 @@ struct ChipDebugState {
 };
 ```
 
-This lives in `EmulatedSystem` as a protected member. `SystemGUI` (formerly `SimpleSystemGUI`) builds the Hardware menu from `get_chip_info()` and toggles `chip_debug_state_.show_debug[i]`. In `render_debug_windows()`, the base class iterates and calls `render_chip_debug_window(i, &show)` for each enabled chip.
+This lives in `EmulatedSystem` as a protected member. `SystemGUI` builds the Hardware menu from `get_chip_info()` and toggles `chip_debug_state_.show_debug[i]`. In `render_debug_windows()`, the base class iterates and calls `render_chip_debug_window(i, &show)` for each enabled chip.
 
 ---
 

@@ -14,31 +14,32 @@
 class LightpenDevice;
 
 /**
- * C64 System Wrapper — transitional name for the C64 system implementation.
+ * C64System — Commodore 64 system emulation.
  *
  * CONSOLIDATION STATUS (see docs/C64_CONSOLIDATION_PLAN.md):
  * ==========================================================
- * Phases 1a-1c, 2, 3 are complete:
+ * Phases 1a-1c, 2, 3, 4c, 5 are complete:
  *   - c64_t embedded directly (no heap allocation)
  *   - tick/reset/init/shutdown/framebuffer absorbed as methods
- *   - Bus back-pointer typed to C64System*, container_of removed
+ *   - Bus back-pointer typed to C64SystemData*, container_of removed
  *   - gui_state_t eliminated; chip debug uses generic ChipInfo
  *   - Legacy chip registry (system_8bit_t) eliminated from wrapper path
+ *   - Class renamed C64SystemWrapper → C64System
+ *   - SimpleSystemGUI → SystemGUI
  *
  * Remaining:
- *   - Phase 1d: Merge c64_config_t into SystemConfiguration
- *   - Absorb c64_pla_maps_generate, c64_memory_init, c64_cpu_banking_callback
- *   - Phase 4: Delete c64.h/c64.cpp, rename → C64System / c64_system.h
- *   - Phase 5-6: Rename SystemGUI, remove dead legacy GUI code
+ *   - Phase 4a: Absorb c64_pla_maps_generate, c64_memory_init, c64_cpu_banking_callback
+ *   - Phase 4b: Merge c64_config_t into SystemConfiguration
+ *   - Phase 6: Remove dead legacy GUI code
  *
  * A few C functions in c64.cpp are still called (PLA generation, memory init,
  * CPU banking callback, screenshot). These are shared with the test framework
- * and will be absorbed or redirected in Phase 4.
+ * and will be absorbed or redirected in Phase 4a.
  */
-class C64SystemWrapper : public CommodoreSystem {
+class C64System : public CommodoreSystem {
 public:
-    C64SystemWrapper();
-    ~C64SystemWrapper() override;
+    C64System();
+    ~C64System() override;
     
     // EmulatedSystem interface - system-specific overrides
     const SystemDescriptor& get_descriptor() const override;

@@ -20,8 +20,8 @@
 // Forward declarations
 class System8Bit;
 
-// Modern C++ C64 system structure
-struct C64System {
+// Modern C++ C64 system data structure (holds chip pointers and bus)
+struct C64SystemData {
     system_8bit_t system;       // Legacy system wrapper
     c64_bus_t bus;
     void* mos6510;              // MOS6510 instance (C++ core)
@@ -45,8 +45,8 @@ struct C64System {
 };
 
 // Legacy typedefs for compatibility during transition
-using c64_t = C64System;
-using c64_s = C64System;  // For GUI interface compatibility
+using c64_t = C64SystemData;
+using c64_s = C64SystemData;  // For GUI interface compatibility
 
 // Function declarations
 

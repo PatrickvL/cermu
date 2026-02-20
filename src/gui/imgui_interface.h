@@ -5,8 +5,8 @@
 #include <stddef.h>
 
 // Forward declarations
-struct C64System;
-typedef struct C64System c64_s;  // Use typedef instead of forward declaration to match our using alias
+struct C64SystemData;
+typedef struct C64SystemData c64_s;  // Use typedef instead of forward declaration to match our using alias
 
 // Aspect ratio configuration enums
 typedef enum {

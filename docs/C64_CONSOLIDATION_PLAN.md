@@ -1,7 +1,7 @@
 # C64 System Consolidation Plan
 
 **Date:** 2026-02-20
-**Goal:** Eliminate the C64SystemWrapper indirection — merge into a single `C64System` class
+**Goal:** Eliminate the C64System indirection — merge into a single `C64System` class
 
 ---
 
@@ -10,7 +10,7 @@
 ```
 EmulatedSystem
   └─ CommodoreSystem (base: keyboard_, keyboard_mapper_, cycles_per_frame_)
-       └─ C64SystemWrapper            ← C++ adapter layer
+       └─ C64System            ← C++ adapter layer
             └─ c64_t*                 ← C struct (owns all chips)
                  ├─ system_8bit_t     ← legacy chip registry
                  ├─ c64_bus_t         ← embedded bus + PLA
@@ -77,7 +77,7 @@ No `c64_t` struct. No `gui_state_t`. Chip debug windows use the generic system-w
 
 **Step 1a — Move `c64_t` members into the wrapper**
 
-Convert `c64_t`'s members to `C64SystemWrapper` private members. The `c64_t` struct becomes an empty shell that aggregates pointers back to the class (or is removed entirely via `this`).
+Convert `c64_t`'s members to `C64System` private members. The `c64_t` struct becomes an empty shell that aggregates pointers back to the class (or is removed entirely via `this`).
 
 - `c64_->vicii` → `vicii_`
 - `c64_->sid` → `sid_`
@@ -125,7 +125,7 @@ Eliminate `c64_config_t` struct entirely.
 
 The `gui_state_t` struct is the legacy C64 GUI's global state. The chip debug arrays (`show_chip_debug[16]`, `show_chip_settings[16]`) need to move to the generic visualization system (see Visualization Proposal). The other fields are either:
 
-- Already in `SimpleSystemGUI` (show_memory_viewer, emulation state, screen_texture_id, etc.)
+- Already in `SystemGUI` (show_memory_viewer, emulation state, screen_texture_id, etc.)
 - C64-specific dialogs (test binary dialog) — move to `C64System::render_system_menu_items()` with local state
 - ROM path buffers — eliminate (use platform file dialogs)
 
@@ -153,7 +153,7 @@ The `system_8bit_t` struct exists only so the GUI can iterate chips generically.
 |------|--------|
 | `c64.h` / `c64.cpp` | **Delete** — all logic absorbed into C64System |
 | `c64_config.h` / `c64_config.cpp` | **Delete** — merged into SystemConfiguration |
-| `c64_system_wrapper.h` / `c64_system_wrapper.cpp` | **Rename** → `c64_system.h` / `c64_system.cpp`, class → `C64System` |
+| `c64_system.h` / `c64_system.cpp` | **Rename** → `c64_system.h` / `c64_system.cpp`, class → `C64System` |
 | `c64_bus.h` / `c64_bus.cpp` | **Keep** — bus is complex enough to be its own translation unit |
 | `c64_chips.h` / `c64_chips.cpp` | **Keep** — chip ID enum + description lookup (used by debug UI) |
 | `c64_kernal_patches.cpp` | **Keep** — change signature from `c64_t*` to `rom_t*` (it only touches kernal ROM) |
@@ -166,20 +166,9 @@ The `system_8bit_t` struct exists only so the GUI can iterate chips generically.
 | `c64_banking_verify.cpp` | **Keep** — uses `c64_bus_t` directly, no changes |
 | `c64_hardware_config.cpp` | **Keep** — pure data/mapping |
 
-### Phase 5: Rename `SimpleSystemGUI` → `SystemGUI`
+### Phase 5: ~~Rename `SimpleSystemGUI` → `SystemGUI`~~ ✅ DONE
 
-Once the C64 wrapper is gone, every system flows through the same GUI. The "Simple" prefix was only meaningful relative to the old C64-specific GUI path — it's now just THE system GUI.
-
-| Change | Details |
-|--------|---------|
-| File rename | `simple_system_gui.h` → `system_gui.h`, `.cpp` → `.cpp` |
-| Class rename | `SimpleSystemGUI` → `SystemGUI` |
-| Include guard | `SIMPLE_SYSTEM_GUI_H` → `SYSTEM_GUI_H` |
-| References | ~46 occurrences across 7 files |
-| CMakeLists.txt | Update source path |
-| Comments | Update `generic_gui.h` ("Derived classes (C64GUI, SimpleSystemGUI, etc.)"), `system_selection_dialog.h`, `imgui_interface.cpp` |
-
-This is a pure mechanical rename — no logic changes.
+Completed. The class is now `SystemGUI` in `system_gui.h` / `system_gui.cpp`.
 
 ### Phase 6: Remove dead legacy GUI code
 
@@ -223,7 +212,7 @@ This is a natural encapsulation boundary — the test framework shouldn't reach 
 | 2 | Eliminate gui_state_t | 1 hour |
 | 3 | Remove system_8bit_t legacy registry | 30 min |
 | 4 | File cleanup + rename | 30 min |
-| 5 | SimpleSystemGUI → SystemGUI rename | 15 min |
+| 5 | ~~SimpleSystemGUI → SystemGUI rename~~ | ✅ Done |
 | 6 | Dead legacy GUI code removal | 30 min |
 | **Total** | | **~5–6 hours** |
 
