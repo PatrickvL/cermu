@@ -1,6 +1,6 @@
 #define SDL_MAIN_HANDLED
 #include "../core/emulated_system.h"
-#include "../gui/simple_system_gui.h"
+#include "../gui/system_gui.h"
 #include "../testing/vicii_test_harness.h"
 #include "../testing/vicii_pixel_tests.h"
 #include <stdio.h>
@@ -455,7 +455,7 @@ int main(int argc, char** argv) {
     // Create GUI (with or without a system)
     // If no system, nullptr will cause GUI to show system selection dialog
     // Pass any pending file path so it can be loaded after system selection
-    SimpleSystemGUI gui(std::move(system), file_path);
+    SystemGUI gui(std::move(system), file_path);
     
     // Initialize GUI with window title
     const char* window_title = "cermu - Multi-System Emulator";

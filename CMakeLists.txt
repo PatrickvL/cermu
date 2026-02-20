@@ -375,7 +375,7 @@ if(BUILD_GUI)
     # Generic GUI sources for multi-system support
     set(GENERIC_GUI_SOURCES
         src/gui/generic_gui.cpp
-        src/gui/simple_system_gui.cpp
+        src/gui/system_gui.cpp
         src/gui/system_selection_dialog.cpp
         src/gui/connector_icons.cpp
     )

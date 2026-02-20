@@ -36,36 +36,29 @@
 /**
  * C64 System Wrapper Implementation
  *
- * CURRENT ARCHITECTURE:
- * =====================
- * This file implements the wrapper layer that adapts the C-style c64_t system
- * to the C++ EmulatedSystem interface. It delegates most work to C functions
- * in c64.cpp.
+ * ARCHITECTURE:
+ * =============
+ * This file implements the C64 system as a self-contained EmulatedSystem.
+ * All core functions (initialize, shutdown, tick, reset, framebuffer) are
+ * implemented directly — chip creation, phase-ordered ticking, and cleanup
+ * are performed here without delegating to C functions.
+ *
+ * REMAINING DELEGATIONS TO c64.cpp:
+ * - c64_pla_maps_generate()   — PLA mode table generation
+ * - c64_memory_init()         — RAM init + ROM loading from disk
+ * - c64_cpu_banking_callback() — CPU I/O port → PLA mode switch (extern "C")
+ * These are shared with the test framework and will be absorbed in Phase 4.
  *
  * CYCLE COUNTING:
  * ===============
- * - c64_->total_cycles: Internal C64 cycle counter (updated by c64_system_tick)
- * - total_cycles_: Base class cycle counter (synced in tick() method)
- * - Both are kept in sync to maintain consistency
+ * - c64_->total_cycles: Internal C64 cycle counter (updated by system_tick)
+ * - total_cycles_: Base class cycle counter (synced once per frame in run_frame)
  *
  * FRAMEBUFFER MANAGEMENT:
  * =======================
- * - VIC-II owns the actual framebuffer: c64_->vicii->pixel.framebuffer
+ * - VIC-II owns the framebuffer: c64_->vicii->pixel.framebuffer
  * - get_framebuffer() returns pointer to VIC-II's buffer
- * - set_framebuffer() delegates to c64_set_framebuffer() which calls vicii_set_framebuffer()
- *
- * FUTURE MERGER NOTES:
- * ====================
- * When merging into unified C64System class, this file's logic should become
- * direct methods of C64System. The c64_t pointer would be eliminated and its
- * members would become direct members of C64System class.
- *
- * Key functions to convert:
- * - Constructor logic from c64_system_create()
- * - Destructor logic from c64_system_destroy()
- * - tick() from c64_system_tick()
- * - reset() from c64_system_reset()
- * - All chip management code
+ * - set_framebuffer() calls vicii_set_framebuffer() directly
  */
 
 /** Check if load address is a typical C64 address */
@@ -322,9 +315,15 @@ bool C64SystemWrapper::initialize() {
     // Point c64_ at the embedded struct (will be nulled on failure)
     c64_ = &c64_data_;
 
+    // =========================================================================
+    // System infrastructure
+    // =========================================================================
+    chip_descriptor_t* vicii_descriptor =
+        (c64_config_.vicii_standard == VIC_PAL) ? &mos6569_descriptor : &mos6567_descriptor;
+
     // Cleanup helper for error paths — destroys keyboard + all created chips,
     // resets the pointer and zeroes the embedded struct for re-use.
-    auto cleanup = [this]() {
+    auto cleanup = [this, vicii_descriptor]() {
         if (c64_->keyboard) {
             commodore_keyboard_destroy(c64_->keyboard);
             c64_->keyboard = nullptr;
@@ -335,8 +334,7 @@ bool C64SystemWrapper::initialize() {
         destroy_chip(c64_->cia1, &mos6526_descriptor);
         destroy_chip(c64_->colorram, &mos2114_descriptor);
         destroy_chip(c64_->sid, &mos6581_descriptor);
-        chip_descriptor_t* vdesc = (c64_config_.vicii_standard == VIC_PAL) ? &mos6569_descriptor : &mos6567_descriptor;
-        destroy_chip(c64_->vicii, vdesc);
+        destroy_chip(c64_->vicii, vicii_descriptor);
         destroy_chip(c64_->charrom, &rom_descriptor);
         destroy_chip(c64_->cartridge_romh, &rom_descriptor);
         destroy_chip(c64_->basic, &rom_descriptor);
@@ -346,12 +344,6 @@ bool C64SystemWrapper::initialize() {
         c64_ = nullptr;
         c64_data_ = {};
     };
-
-    // =========================================================================
-    // System infrastructure
-    // =========================================================================
-    chip_descriptor_t* vicii_descriptor =
-        (c64_config_.vicii_standard == VIC_PAL) ? &mos6569_descriptor : &mos6567_descriptor;
 
     // Initialize bus as embedded struct (not heap-allocated)
     c64_->bus.desc = &c64_bus_descriptor;

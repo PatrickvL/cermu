@@ -9,7 +9,7 @@
  *
  * This dialog displays all registered systems from the SystemRegistry and
  * allows the user to select one. It's designed to be used within an existing
- * ImGui context (e.g., in SimpleSystemGUI).
+ * ImGui context (e.g., in SystemGUI).
  */
 class SystemSelectionDialog {
 private:

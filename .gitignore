@@ -101,3 +101,4 @@ tests/build/
 tests/fam65xx_klaus_test_runner
 tests/fam65xx_lorenz_test_harness
 tests/fam65xx_processor_tests_runner
+.cache/

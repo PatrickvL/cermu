@@ -37,7 +37,7 @@ typedef enum {
  * GenericEmulatorGUI - Base class for all emulator GUIs
  * 
  * This class provides the common SDL/ImGui initialization, window management,
- * and basic rendering loop. Derived classes (C64GUI, SimpleSystemGUI, etc.)
+ * and basic rendering loop. Derived classes (C64GUI, SystemGUI, etc.)
  * override virtual methods to provide system-specific behavior.
  */
 class GenericEmulatorGUI {
