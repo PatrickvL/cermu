@@ -1009,34 +1009,31 @@ static float nes_can_load_file(const char* filepath, const uint8_t* data, size_t
     return 0.0f;
 }
 
-/** Formats the NES/Famicom can load — used by SystemDescriptor and file dialogs. */
-static const format_descriptor_t* const nes_formats[] = {
-    &NSF_FORMAT_DESCRIPTOR, nullptr
-};
+// ============================================================================
+// NintendoSystem static descriptor (function-local static, same pattern as TED)
+// ============================================================================
 
-static SystemDescriptor nes_descriptor = {
-    "Nintendo Entertainment System",
-    "NES",
-    "Nintendo Entertainment System (1985)",
-    nes_formats,
-    create_nes_hardware_traits(),
-    nes_can_load_file
-};
+template<NintendoVariant V>
+const SystemDescriptor& NintendoSystem<V>::static_descriptor() {
+    static const format_descriptor_t* const formats[] = {
+        &NSF_FORMAT_DESCRIPTOR, nullptr
+    };
+    static const SystemDescriptor desc = {
+        Traits::full_name,
+        Traits::short_id,
+        Traits::description,
+        formats,
+        create_nes_hardware_traits(),
+        nes_can_load_file
+    };
+    return desc;
+}
 
-static SystemDescriptor famicom_descriptor = {
-    "Nintendo Famicom",
-    "FC",
-    "Nintendo Family Computer (1983) — expansion audio, hardwired controllers, microphone",
-    nes_formats,
-    create_nes_hardware_traits(),
-    nes_can_load_file
-};
-
-NESSystem::NESSystem(bool famicom)
+template<NintendoVariant V>
+NintendoSystem<V>::NintendoSystem()
     : EmulatedSystem()
     , cpu_(nullptr)
     , is_pal_(false)
-    , is_famicom_(famicom)
     , system_ready_(false)
     , cycles_per_frame_(29829)
     , initialized_(false)
@@ -1048,15 +1045,18 @@ NESSystem::NESSystem(bool famicom)
     current_palette_ = hardware_traits_.display.default_palette;
 }
 
-NESSystem::~NESSystem() {
+template<NintendoVariant V>
+NintendoSystem<V>::~NintendoSystem() {
     shutdown();
 }
 
-const SystemDescriptor& NESSystem::get_descriptor() const {
-    return is_famicom_ ? famicom_descriptor : nes_descriptor;
+template<NintendoVariant V>
+const SystemDescriptor& NintendoSystem<V>::get_descriptor() const {
+    return static_descriptor();
 }
 
-bool NESSystem::set_configuration(const SystemConfiguration& config) {
+template<NintendoVariant V>
+bool NintendoSystem<V>::set_configuration(const SystemConfiguration& config) {
     config_ = config;
     
     // Check if region changed
@@ -1076,7 +1076,8 @@ bool NESSystem::set_configuration(const SystemConfiguration& config) {
     return true;
 }
 
-bool NESSystem::apply_configuration() {
+template<NintendoVariant V>
+bool NintendoSystem<V>::apply_configuration() {
     // Apply region settings
     if (config_.region_option_index >= 0 &&
         config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
@@ -1090,7 +1091,8 @@ bool NESSystem::apply_configuration() {
 // ============================================================================
 // Auto-detect optimal configuration from iNES header
 // ============================================================================
-SystemConfiguration NESSystem::detect_optimal_configuration(
+template<NintendoVariant V>
+SystemConfiguration NintendoSystem<V>::detect_optimal_configuration(
     const char* filepath, const uint8_t* data, size_t size) {
 
     SystemConfiguration config = EmulatedSystem::detect_optimal_configuration(filepath, data, size);
@@ -1112,9 +1114,9 @@ SystemConfiguration NESSystem::detect_optimal_configuration(
         uint8_t timing = data[12] & 0x03;
         if (timing == 1) {
             detected_pal = true;
-            printf("NES: iNES 2.0 header indicates PAL timing\n");
+            printf("%s: iNES 2.0 header indicates PAL timing\n", Traits::name);
         } else {
-            printf("NES: iNES 2.0 header indicates %s timing\n",
+            printf("%s: iNES 2.0 header indicates %s timing\n", Traits::name,
                    timing == 0 ? "NTSC" : (timing == 2 ? "Multi-region" : "Dendy"));
         }
     } else {
@@ -1122,7 +1124,7 @@ SystemConfiguration NESSystem::detect_optimal_configuration(
         //   0 = NTSC, 1 = PAL
         if (data[9] & 0x01) {
             detected_pal = true;
-            printf("NES: iNES 1.0 header byte 9 indicates PAL\n");
+            printf("%s: iNES 1.0 header byte 9 indicates PAL\n", Traits::name);
         }
     }
 
@@ -1136,18 +1138,19 @@ SystemConfiguration NESSystem::detect_optimal_configuration(
     return config;
 }
 
-bool NESSystem::initialize() {
+template<NintendoVariant V>
+bool NintendoSystem<V>::initialize() {
     if (initialized_) {
         return true;
     }
     
-    printf("%s: Initializing system (%s)\n", 
-           is_famicom_ ? "Famicom" : "NES", is_pal_ ? "PAL" : "NTSC");
+    printf("%s: Initializing system (%s)\n", Traits::name, 
+           Traits::name, is_pal_ ? "PAL" : "NTSC");
     
     // Create CPU with integrated APU
     cpu_ = nes6502_create();
     if (!cpu_) {
-        printf("NES: Failed to create CPU\n");
+        printf("%s: Failed to create CPU\n", Traits::name);
         return false;
     }
     
@@ -1168,9 +1171,10 @@ bool NESSystem::initialize() {
     return true;
 }
 
-void NESSystem::shutdown() {
+template<NintendoVariant V>
+void NintendoSystem<V>::shutdown() {
     if (cpu_) {
-        printf("NES: Shutting down system\n");
+        printf("%s: Shutting down system\n", Traits::name);
         nes6502_destroy(cpu_);
         cpu_ = nullptr;
     }
@@ -1178,10 +1182,11 @@ void NESSystem::shutdown() {
     system_ready_ = false;
 }
 
-void NESSystem::reset() {
+template<NintendoVariant V>
+void NintendoSystem<V>::reset() {
     if (!cpu_) return;
     
-    printf("NES: Resetting system\n");
+    printf("%s: Resetting system\n", Traits::name);
     
     bus_state_t pins = create_bus_state(0, 0, 1);
     nes6502_reset(cpu_, pins);
@@ -1203,14 +1208,16 @@ void NESSystem::reset() {
     audio_sample_counter_ = 0;
 }
 
-void NESSystem::tick() {
+template<NintendoVariant V>
+void NintendoSystem<V>::tick() {
     if (!cpu_) return;
     
     clock();
     // total_cycles_ is updated in clock()
 }
 
-void NESSystem::run_frame() {
+template<NintendoVariant V>
+void NintendoSystem<V>::run_frame() {
     if (!system_ready_ || !ppu_) return;
     
     ppu_->frame_complete = false;
@@ -1222,14 +1229,15 @@ void NESSystem::run_frame() {
     tick_peripherals();
 }
 
-bool NESSystem::load_file(const char* filepath) {
+template<NintendoVariant V>
+bool NintendoSystem<V>::load_file(const char* filepath) {
     if (!cpu_) {
         if (!initialize()) {
             return false;
         }
     }
     
-    printf("NES: Loading file: %s\n", filepath);
+    printf("%s: Loading file: %s\n", Traits::name, filepath);
 
     // =========================================================================
     // NSF FILE — Use the format system to parse, then launch NSF player
@@ -1254,14 +1262,14 @@ bool NESSystem::load_file(const char* filepath) {
         size_t file_size = 0;
         uint8_t* file_data = format_read_entire_file(filepath, &file_size);
         if (!file_data) {
-            printf("NES: Failed to read NSF file\n");
+            printf("%s: Failed to read NSF file\n", Traits::name);
             return false;
         }
 
         // Parse NSF header
         nsf_header_t header;
         if (!nsf_parse_header(file_data, file_size, &header)) {
-            printf("NES: Invalid NSF header\n");
+            printf("%s: Invalid NSF header\n", Traits::name);
             free(file_data);
             return false;
         }
@@ -1285,7 +1293,7 @@ bool NESSystem::load_file(const char* filepath) {
             &header, &prog, subtune, is_pal_);
 
         if (!nsf_cartridge_) {
-            printf("NES: Failed to apply NSF load\n");
+            printf("%s: Failed to apply NSF load\n", Traits::name);
             free(file_data);
             return false;
         }
@@ -1297,8 +1305,8 @@ bool NESSystem::load_file(const char* filepath) {
         nsf_player_active_ = true;
         system_ready_ = true;
 
-        printf("NES: NSF player active — \"%s\" by %s\n",
-               header.name, header.artist);
+        printf("%s: NSF player active — \"%s\" by %s\n",
+               Traits::name, header.name, header.artist);
         free(file_data);
         return true;
     }
@@ -1318,15 +1326,16 @@ bool NESSystem::load_file(const char* filepath) {
         reset();
         system_ready_ = true;
         
-        printf("NES: Cartridge loaded successfully\n");
+        printf("%s: Cartridge loaded successfully\n", Traits::name);
         return true;
     } catch (const std::exception& e) {
-        printf("NES: Failed to load cartridge: %s\n", e.what());
+        printf("%s: Failed to load cartridge: %s\n", Traits::name, e.what());
         return false;
     }
 }
 
-uint32_t* NESSystem::get_framebuffer() {
+template<NintendoVariant V>
+uint32_t* NintendoSystem<V>::get_framebuffer() {
     if (!ppu_ || !rgba_framebuffer_) return rgba_framebuffer_;
     
     // Get NES screen buffer and copy to our framebuffer
@@ -1339,18 +1348,21 @@ uint32_t* NESSystem::get_framebuffer() {
     return rgba_framebuffer_;
 }
 
-void NESSystem::get_display_dimensions(int* width, int* height) const {
+template<NintendoVariant V>
+void NintendoSystem<V>::get_display_dimensions(int* width, int* height) const {
     *width = 256;
     *height = 240;
 }
 
-void NESSystem::set_framebuffer(uint32_t* buffer, int width, int height) {
+template<NintendoVariant V>
+void NintendoSystem<V>::set_framebuffer(uint32_t* buffer, int width, int height) {
     rgba_framebuffer_ = buffer;
     rgba_width_ = width;
     rgba_height_ = height;
 }
 
-void NESSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
+template<NintendoVariant V>
+void NintendoSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 #ifdef IMGUI_VERSION
     if (!cpu_) return;
     
@@ -1383,7 +1395,8 @@ void NESSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 #endif
 }
 
-void NESSystem::handle_controller_event(int controller, int button, bool pressed) {
+template<NintendoVariant V>
+void NintendoSystem<V>::handle_controller_event(int controller, int button, bool pressed) {
     if (!bus_) return;
     
     if (pressed) {
@@ -1397,7 +1410,8 @@ void NESSystem::handle_controller_event(int controller, int button, bool pressed
 // NSF Player — Extended keyboard handler with subtune selection
 // =============================================================================
 
-void NESSystem::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode,
+template<NintendoVariant V>
+void NintendoSystem<V>::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode,
                                           uint16_t mod, bool pressed, bool repeat) {
     // NSF player subtune selection — intercept before controller mapping
     if (nsf_player_active_ && pressed && !repeat) {
@@ -1421,7 +1435,8 @@ void NESSystem::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode,
 // ESC:          exit application
 // =============================================================================
 
-bool NESSystem::handle_nsf_player_key(SDL_Keycode key) {
+template<NintendoVariant V>
+bool NintendoSystem<V>::handle_nsf_player_key(SDL_Keycode key) {
     if (!cpu_ || active_nsf_header_.num_songs == 0) return false;
 
     const uint16_t num_songs = active_nsf_header_.num_songs;
@@ -1460,9 +1475,12 @@ bool NESSystem::handle_nsf_player_key(SDL_Keycode key) {
     return true;
 }
 
-void NESSystem::render_system_menu_items() {
+template<NintendoVariant V>
+void NintendoSystem<V>::render_system_menu_items() {
 #ifdef IMGUI_VERSION
-    if (ImGui::MenuItem("Reset NES")) {
+    char reset_label[32];
+    snprintf(reset_label, sizeof(reset_label), "Reset %s", Traits::name);
+    if (ImGui::MenuItem(reset_label)) {
         reset();
     }
     
@@ -1472,9 +1490,10 @@ void NESSystem::render_system_menu_items() {
 #endif
 }
 
-void NESSystem::render_configuration_ui() {
+template<NintendoVariant V>
+void NintendoSystem<V>::render_configuration_ui() {
 #ifdef IMGUI_VERSION
-    ImGui::Text("NES Configuration");
+    ImGui::Text("%s Configuration", Traits::name);
     ImGui::Separator();
     
     // Region configuration
@@ -1500,7 +1519,8 @@ void NESSystem::render_configuration_ui() {
 #endif
 }
 
-uint32_t NESSystem::get_target_fps() const {
+template<NintendoVariant V>
+uint32_t NintendoSystem<V>::get_target_fps() const {
     if (config_.region_option_index >= 0 &&
         config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
         return hardware_traits_.region_options[config_.region_option_index].timing.target_fps;
@@ -1508,11 +1528,13 @@ uint32_t NESSystem::get_target_fps() const {
     return 60;  // Default NTSC
 }
 
-void NESSystem::set_speed_multiplier(float multiplier) {
+template<NintendoVariant V>
+void NintendoSystem<V>::set_speed_multiplier(float multiplier) {
     speed_multiplier_ = multiplier;
 }
 
-uint32_t NESSystem::get_audio_samples(float* buffer, uint32_t max_samples) {
+template<NintendoVariant V>
+uint32_t NintendoSystem<V>::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
 
     uint32_t avail = static_cast<uint32_t>(audio_buffer_.size());
@@ -1526,12 +1548,14 @@ uint32_t NESSystem::get_audio_samples(float* buffer, uint32_t max_samples) {
     return to_copy;
 }
 
-void NESSystem::setup_audio_timing() {
+template<NintendoVariant V>
+void NintendoSystem<V>::setup_audio_timing() {
     uint32_t cpu_freq = is_pal_ ? nes_constants::CPU_FREQ_PAL : nes_constants::CPU_FREQ_NTSC;
     audio_samples_per_frame_ = (audio_sample_rate_ * (is_pal_ ? 50 : 60)) / (is_pal_ ? 50 : 60);
 }
 
-void NESSystem::eject_cartridge() {
+template<NintendoVariant V>
+void NintendoSystem<V>::eject_cartridge() {
     cartridge_.reset();
     if (bus_) {
         bus_->connect_cartridge(nullptr);
@@ -1542,7 +1566,8 @@ void NESSystem::eject_cartridge() {
     system_ready_ = false;
 }
 
-void NESSystem::clock() {
+template<NintendoVariant V>
+void NintendoSystem<V>::clock() {
     // Clock the memory bus (which clocks PPU 3 times)
     bus_->clock();
     
@@ -1588,7 +1613,8 @@ void NESSystem::clock() {
     total_cycles_++;
 }
 
-void NESSystem::set_controller_state(int controller, uint8_t state) {
+template<NintendoVariant V>
+void NintendoSystem<V>::set_controller_state(int controller, uint8_t state) {
     if (!bus_ || controller < 0 || controller >= 2) return;
     
     // Set individual buttons based on state
@@ -1599,32 +1625,38 @@ void NESSystem::set_controller_state(int controller, uint8_t state) {
     }
 }
 
-void NESSystem::press_button(int controller, Controller::Button button) {
+template<NintendoVariant V>
+void NintendoSystem<V>::press_button(int controller, Controller::Button button) {
     if (!bus_ || controller < 0 || controller >= 2) return;
     bus_->controllers[controller].set_button_state(button, true);
 }
 
-void NESSystem::release_button(int controller, Controller::Button button) {
+template<NintendoVariant V>
+void NintendoSystem<V>::release_button(int controller, Controller::Button button) {
     if (!bus_ || controller < 0 || controller >= 2) return;
     bus_->controllers[controller].set_button_state(button, false);
 }
 
-const std::vector<uint32_t>& NESSystem::get_screen() const {
+template<NintendoVariant V>
+const std::vector<uint32_t>& NintendoSystem<V>::get_screen() const {
     static std::vector<uint32_t> empty_screen;
     return ppu_ ? ppu_->get_screen() : empty_screen;
 }
 
-const std::vector<uint32_t>& NESSystem::get_pattern_table(int table, uint8_t palette) const {
+template<NintendoVariant V>
+const std::vector<uint32_t>& NintendoSystem<V>::get_pattern_table(int table, uint8_t palette) const {
     static std::vector<uint32_t> empty_table;
     return ppu_ ? ppu_->get_pattern_table(table, palette) : empty_table;
 }
 
-void NESSystem::set_audio_sample_rate(uint32_t rate) {
+template<NintendoVariant V>
+void NintendoSystem<V>::set_audio_sample_rate(uint32_t rate) {
     audio_sample_rate_ = rate;
     setup_audio_timing();
 }
 
-bus_state_t NESSystem::create_bus_state(uint16_t addr, uint8_t data, bool rw) {
+template<NintendoVariant V>
+bus_state_t NintendoSystem<V>::create_bus_state(uint16_t addr, uint8_t data, bool rw) {
     bus_state_t state = 0;
     BUS_SET_ADDR(state, addr);
     BUS_SET_DATA(state, data);
@@ -1634,17 +1666,20 @@ bus_state_t NESSystem::create_bus_state(uint16_t addr, uint8_t data, bool rw) {
     return state;
 }
 
-bool NESSystem::save_state(const std::string& filename) const {
+template<NintendoVariant V>
+bool NintendoSystem<V>::save_state(const std::string& filename) const {
     // TODO: Implement save state functionality
     return false;
 }
 
-bool NESSystem::load_state(const std::string& filename) {
+template<NintendoVariant V>
+bool NintendoSystem<V>::load_state(const std::string& filename) {
     // TODO: Implement load state functionality
     return false;
 }
 
-void NESSystem::power_cycle() {
+template<NintendoVariant V>
+void NintendoSystem<V>::power_cycle() {
     eject_cartridge();
     reset();
 }
@@ -1704,34 +1739,42 @@ static const ConnectorDefinition fc_expansion_def = {
     false, false
 };
 
-void NESSystem::setup_connector_ports() {
+template<NintendoVariant V>
+void NintendoSystem<V>::setup_connector_ports() {
     connector_ports_.clear();
 
-    if (is_famicom_) {
+    if constexpr (Traits::is_famicom) {
         // Famicom: hardwired controllers, 15-pin expansion port
         add_connector_port(fc_controller_1_def, 1);
         add_connector_port(fc_controller_2_def, 2);
         add_connector_port(fc_expansion_def, 0);
-        printf("Famicom: Created %zu connector ports\n", connector_ports_.size());
+        printf("%s: Created %zu connector ports\n", Traits::name, connector_ports_.size());
     } else {
         // NES: removable controller ports, bottom expansion
         add_connector_port(nes_controller_1_def, 1);
         add_connector_port(nes_controller_2_def, 2);
         add_connector_port(nes_expansion_def, 0);
-        printf("NES: Created %zu connector ports\n", connector_ports_.size());
+        printf("%s: Created %zu connector ports\n", Traits::name, connector_ports_.size());
     }
 }
 
 } // namespace nes_system
 
 // ============================================================================
+// Explicit Template Instantiations
+// ============================================================================
+
+template class nes_system::NintendoSystem<nes_system::NintendoVariant::NES>;
+template class nes_system::NintendoSystem<nes_system::NintendoVariant::FAMICOM>;
+
+// ============================================================================
 // SYSTEM REGISTRATION
 // ============================================================================
 
-REGISTER_SYSTEM(nes_system::nes_descriptor, []() {
-    return std::make_unique<nes_system::NESSystem>(false);
+REGISTER_SYSTEM(nes_system::NESSystem::static_descriptor(), []() {
+    return std::make_unique<nes_system::NESSystem>();
 })
 
-REGISTER_SYSTEM(nes_system::famicom_descriptor, []() {
-    return std::make_unique<nes_system::NESSystem>(true);
+REGISTER_SYSTEM(nes_system::FamicomSystem::static_descriptor(), []() {
+    return std::make_unique<nes_system::FamicomSystem>();
 })

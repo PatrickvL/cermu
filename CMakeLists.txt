@@ -315,12 +315,15 @@ set(SYSTEM_SOURCES
     src/systems/vic20/vic20_keyboard_matrix.cpp
     src/systems/vic20/vic20_memory.cpp
     
+    # Commodore shared base class (keyboard mapper, config, speed control)
+    src/systems/commodore/commodore_system.cpp
+    
     # NES system (clean EmulatedSystem implementation)
     src/systems/nes/nes_system.cpp
     src/systems/nes/nes_screen_utils.cpp
     src/systems/nes/nes_nsf_player.cpp
     
-    # C16/Plus4 system (clean EmulatedSystem implementation with stubs)
+    # Commodore 264 series (C16/C116/Plus4 — TED 7360 family)
     src/systems/c16/c16_system.cpp
     src/systems/c16/c16_keyboard_matrix.cpp
     

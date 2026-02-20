@@ -1,127 +1,155 @@
 #ifndef C16_SYSTEM_H
 #define C16_SYSTEM_H
 
-#include "../../core/emulated_system.h"
+#include "../commodore/commodore_system.h"
 #include "../../core/system_lines.h"
 #include "../../chip/cpu/fam65xx/mos7501.h"
 #include "../../chip/video/ted/ted7360.h"
-#include "../../chip/input/commodore_keyboard.h"
-#include "../../chip/input/keyboard_mapper.h"
 #include <cstdint>
-#include <memory>
 
+// ============================================================================
+// TED-based system variant (compile-time template parameter)
+// ============================================================================
+
+enum class TEDVariant { C16, C116, PLUS4 };
+
+// ============================================================================
+// Compile-time variant traits
+// ============================================================================
+
+template<TEDVariant V> struct TEDVariantTraits;
+
+template<> struct TEDVariantTraits<TEDVariant::C16> {
+    static constexpr bool is_plus4       = false;
+    static constexpr size_t default_ram  = 16384;
+    static constexpr const char* name    = "C16";
+    static constexpr const char* full_name = "Commodore 16";
+    static constexpr const char* short_id = "C16";
+    static constexpr const char* description =
+        "Commodore 16 (1984) - 16KB RAM, TED 7360 graphics and sound";
+};
+
+template<> struct TEDVariantTraits<TEDVariant::C116> {
+    static constexpr bool is_plus4       = false;
+    static constexpr size_t default_ram  = 16384;
+    static constexpr const char* name    = "C116";
+    static constexpr const char* full_name = "Commodore 116";
+    static constexpr const char* short_id = "C116";
+    static constexpr const char* description =
+        "Commodore 116 (1984) - 16KB RAM, TED 7360, chiclet keyboard variant of C16";
+};
+
+template<> struct TEDVariantTraits<TEDVariant::PLUS4> {
+    static constexpr bool is_plus4       = true;
+    static constexpr size_t default_ram  = 65536;
+    static constexpr const char* name    = "Plus/4";
+    static constexpr const char* full_name = "Commodore Plus/4";
+    static constexpr const char* short_id = "PLUS4";
+    static constexpr const char* description =
+        "Commodore Plus/4 (1984) - 64KB RAM, TED 7360, built-in 3-PLUS-1 software";
+};
+
+// ============================================================================
+// Commodore264System — Commodore 264 Series Emulator (C16, C116, Plus/4)
+// ============================================================================
 /**
- * C16 System - Commodore 16 / Plus/4 Emulator
+ * Template-based system for the Commodore 264 series (TED 7360 family).
  *
- * Direct EmulatedSystem implementation for the Commodore 16 and Plus/4.
- * The Plus/4 is treated as a variant of the C16 (like Famicom is to NES):
- * same CPU (MOS 7501), same video/sound chip (TED 7360), same BASIC 3.5,
- * but the Plus/4 has 64KB RAM, a User Port, and built-in "3-PLUS-1"
- * productivity software in additional ROM.
+ * The "264 series" was Commodore's internal project codename for the
+ * budget computer line released in 1984–1985.  All three machines share
+ * the same CPU (MOS 7501), video/sound/IO chip (TED 7360), memory map,
+ * and BASIC 3.5 ROM.  The only hardware-level differences are:
+ *   - C16:    16 KB RAM, full-travel keyboard, no User Port
+ *   - C116:   16 KB RAM, chiclet (rubber) keyboard, no User Port
+ *   - Plus/4: 64 KB RAM, full-travel keyboard, User Port, built-in
+ *             "3-PLUS-1" productivity ROM
  *
- * NOTE: This system currently uses a legacy C struct internally because
- * the actual chip implementations (MOS7501 CPU, TED 7360) don't exist yet.
- * Once those chips are implemented, this can be refactored to use real
- * chip instances like the VIC-20 system.
+ * These differences are captured by TEDVariantTraits<V> and selected at
+ * compile time via the template parameter.
+ *
+ * Inherits from CommodoreSystem which provides shared Commodore 8-bit
+ * infrastructure (keyboard mapper, configuration, speed control).
  */
-class C16System : public EmulatedSystem {
+template<TEDVariant V>
+class Commodore264System : public CommodoreSystem {
+    using Traits = TEDVariantTraits<V>;
+
 public:
-    /// Variant identifier for the TED-based system family
-    enum class Variant { C16, C116, PLUS4 };
-    
-    C16System(Variant variant = Variant::C16);
-    ~C16System() override;
-    
+    Commodore264System();
+    ~Commodore264System() override;
+
     // System identification
     const SystemDescriptor& get_descriptor() const override;
-    
+
     // Configuration management
-    bool set_configuration(const SystemConfiguration& config) override;
     bool apply_configuration() override;
-    
+
     // System lifecycle
     bool initialize() override;
     void shutdown() override;
     void reset() override;
-    
+
     // Execution
     void tick() override;
     void run_frame() override;
-    
+
     // File loading
     bool load_file(const char* filepath) override;
-    
+
     // Display
     uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
     void set_framebuffer(uint32_t* buffer, int width, int height) override;
-    
+
     // Input
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
-    void handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) override;
-    void handle_text_input(const char* text) override;
-    void release_all_keys() override;
-    
+
     // GUI integration
     void render_system_menu_items() override;
     void render_configuration_ui() override;
-    
-    // State
-    uint32_t get_target_fps() const override;
-    
-    // Emulation control
-    void set_speed_multiplier(float multiplier) override;
 
-    // Hardware traits
-    static HardwareTraits create_hardware_traits(bool is_plus4);
+    // Hardware traits (compile-time variant-specific)
+    static HardwareTraits create_hardware_traits();
+
+    // File detection (shared across all TED variants)
     static float can_load_file_static(const char* filepath, const uint8_t* data, size_t size);
 
+    // Static descriptor accessor (usable without an instance, e.g. for REGISTER_SYSTEM)
+    static const SystemDescriptor& static_descriptor();
+
 private:
-    // Variant flag
-    Variant variant_;
-    bool is_plus4_;
-    const char* system_name_;   // "C16", "C116", or "Plus/4" — used for logging
     // Chip instances
-    mos7501_t* cpu_;              // MOS 7501/8501 CPU
-    ted7360_t* ted_;             // TED 7360 (video, sound, I/O, timers)
-    bus_state_t bus_state_;       // Current bus state for CPU cycle
-    commodore_keyboard_t* keyboard_;  // Keyboard matrix (8×8, scanned via TED)
-    std::unique_ptr<KeyboardMapper> keyboard_mapper_; // Layered keyboard mapping engine
-    
-    // Memory arrays (simplified storage like VIC-20)
-    uint8_t ram_simple_[65536];  // Up to 64KB RAM (C16 uses 16KB, Plus/4 uses 64KB)
-    uint8_t basic_rom_[16384];   // BASIC ROM $8000-$BFFF (16KB)
-    uint8_t kernal_rom_[16384];  // Kernal ROM $C000-$FFFF (16KB)
-    
+    mos7501_t* cpu_;
+    ted7360_t* ted_;
+    bus_state_t bus_state_;
+
+    // Memory
+    uint8_t ram_simple_[65536];   // Up to 64KB RAM (C16/C116 use 16KB, Plus/4 uses 64KB)
+    uint8_t basic_rom_[16384];    // BASIC ROM $8000-$BFFF (16KB)
+    uint8_t kernal_rom_[16384];   // Kernal ROM $C000-$FFFF (16KB)
+
     // System state
-    uint32_t cycles_per_frame_;
     bool initialized_;
-    
+
     // Helper methods
     bool load_roms();
     uint8_t cpu_read(uint32_t addr);
     void cpu_write(uint32_t addr, uint8_t data);
-    bus_state_t mem_tick(bus_state_t s);  // Service CPU memory bus access
-    
-    // Connector port setup (registers C16/Plus4 connector ports with base class)
+    bus_state_t mem_tick(bus_state_t s);
     void setup_connector_ports();
-    
-    // Static callbacks for CPU
+
+    // Static callbacks
     static uint8_t cpu_read_callback(void* user_data, uint32_t addr, uint8_t bus_state);
     static void cpu_write_callback(void* user_data, uint32_t addr, uint8_t data);
-    
-    // MOS 7501 I/O port callbacks (cassette motor, serial bus, etc.)
     static uint8_t io_port_in(void* user_data);
     static void io_port_out(uint8_t data, void* user_data);
-    
-    // TED keyboard scan callback
     static uint8_t ted_keyboard_scan(void* user_data, uint8_t column);
-    
-    // TED memory read callback (for TED's own character/bitmap/screen fetches)
     static uint8_t ted_mem_read(void* user_data, uint16_t address);
-    
-    // Commodore load helper: set CPU PC
     static void set_cpu_pc(void* user_data, uint16_t addr);
 };
 
+// Convenience type aliases
+using C16System   = Commodore264System<TEDVariant::C16>;
+using C116System  = Commodore264System<TEDVariant::C116>;
+using Plus4System = Commodore264System<TEDVariant::PLUS4>;
 #endif // C16_SYSTEM_H

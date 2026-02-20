@@ -1,15 +1,13 @@
 #pragma once
 
-#include "../../core/emulated_system.h"
+#include "../commodore/commodore_system.h"
 #include "../../core/connector.h"
 #include "../../core/device_registry.h"
-#include "../../chip/input/keyboard_mapper.h"
 #include "../../core/formats/format_handler.h"
 #include "../../core/formats/sid_format.h"
 #include "c64.h"
 #include "c64_config.h"
 #include "c64_kernal_patches.h"
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -83,7 +81,7 @@ class LightpenDevice;
  * 5. Remove wrapper layer entirely
  * 6. Rename C64SystemWrapper → C64System
  */
-class C64SystemWrapper : public EmulatedSystem {
+class C64SystemWrapper : public CommodoreSystem {
 public:
     C64SystemWrapper();
     ~C64SystemWrapper() override;
@@ -101,19 +99,13 @@ public:
     void set_framebuffer(uint32_t* buffer, int width, int height) override;
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
     void handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) override;
-    void handle_text_input(const char* text) override;
-    void release_all_keys() override;
     void handle_controller_event(int controller, int button, bool pressed) override;
     
     // GUI forwarding methods - delegate to old C64 GUI code (imgui_interface.cpp)
     void render_system_menu_items() override;      // Forwards to gui_render_c64_system_menu_items()
     void render_debug_windows(void* gui_state) override;  // Forwards to chip debug system
     
-    uint32_t get_target_fps() const override;
-    void set_speed_multiplier(float multiplier) override;
-    
     // Configuration interface
-    bool set_configuration(const SystemConfiguration& config) override;
     bool apply_configuration() override;
     void render_configuration_ui() override;
 
@@ -127,7 +119,14 @@ public:
     // Update SID sample rate to match actual audio device rate
     void set_audio_sample_rate(int sample_rate_hz) override;
     
-    // Note: The following methods are now provided by EmulatedSystem base class:
+    // Note: The following methods are now provided by CommodoreSystem base class:
+    // - set_configuration() - stores config_
+    // - get_target_fps() - reads from region_options
+    // - set_speed_multiplier() - stores speed_multiplier_
+    // - handle_text_input() - delegates to keyboard_mapper_
+    // - release_all_keys() - delegates to keyboard_mapper_
+    //
+    // Note: The following methods are provided by EmulatedSystem base class:
     // - get_configuration() - returns config_
     // - get_hardware_traits() - returns hardware_traits_
     // - get_current_timing() - returns hardware_traits_.timing
@@ -149,12 +148,10 @@ public:
     
 private:
     c64_t* c64_;
-    uint32_t cycles_per_frame_;
     c64_config_t c64_config_;  // Renamed to avoid conflict with base class config_
     vicii_standard_t created_vicii_standard_ = VIC_PAL;  // Actual VIC-II standard at creation time
     sid_revision_t pending_sid_revision_ = SID_REVISION_6581_R4AR;  // Applied after SID creation
     void* gui_state_;  // Opaque pointer to gui_state_t (persistent GUI state)
-    std::unique_ptr<KeyboardMapper> keyboard_mapper_;  // Layered keyboard mapping engine
 
     // =========================================================================
     // DEFERRED LOADING
