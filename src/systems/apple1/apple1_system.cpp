@@ -367,6 +367,25 @@ void Apple1System::render_configuration_ui() {
 }
 
 // ============================================================================
+// Chip Info — Hardware menu enumeration
+// ============================================================================
+
+std::vector<ChipInfo> Apple1System::get_chip_info() const {
+    std::vector<ChipInfo> chips = {
+        { "MOS 6502 CPU",                "6502",       "CPU",     0x0000, false, false },
+        { "PIA 6820 (Keyboard/Display)", "PIA",        "I/O",     0xD010, false, false },
+        { "Text Terminal (40x24)",       "Terminal",   "Video",   0x0000, false, false },
+        { "RAM",                         "RAM",        "Memory",  0x0000, false, false },
+        { "Woz Monitor ROM (256B)",      "Monitor",    "Memory",  0xFF00, false, false },
+    };
+    if (has_basic_) {
+        chips.push_back({ "Apple 1 BASIC ROM (4KB)", "BASIC", "Memory", 0xE000, false, false });
+    }
+    chips.push_back({ "Signetics 2513 Char ROM", "CharROM", "Memory", 0x0000, false, false });
+    return chips;
+}
+
+// ============================================================================
 // State
 // ============================================================================
 
