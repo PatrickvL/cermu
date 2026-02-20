@@ -110,6 +110,8 @@ public:
 
     // Chip enumeration for Hardware menu
     std::vector<ChipInfo> get_chip_info() const override;
+    void render_chip_debug_window(int chip_index, bool* show) override;
+    void render_chip_settings_window(int chip_index, bool* show) override;
 
     // Hardware traits (compile-time variant-specific)
     static HardwareTraits create_hardware_traits();

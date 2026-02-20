@@ -13,6 +13,7 @@
 
 // Include chip headers
 #include "../../chip/cpu/fam65xx/mos6502.h"
+#include "../../chip/cpu/fam65xx/fam65xx_gui.h"
 #include "../../chip/video/vic/mos6560.h"
 #include "../../chip/video/vic/mos6561.h"
 #include "../../chip/video/vic/vic_common.h"  // For VIC_COLOR_* constants
@@ -944,7 +945,7 @@ void VIC20System::render_system_menu_items() {
 
 std::vector<ChipInfo> VIC20System::get_chip_info() const {
     return {
-        { "MOS 6502 CPU",              "6502",   "CPU",    0x0000, false, false },
+        { "MOS 6502 CPU",              "6502",   "CPU",    0x0000, true,  true  },
         { "VIC (MOS 6560/6561)",        "VIC",    "Video",  0x9000, false, false },
         { "VIA 1 (MOS 6522)",           "VIA 1",  "I/O",    0x9110, false, false },
         { "VIA 2 (MOS 6522)",           "VIA 2",  "I/O",    0x9120, false, false },
@@ -953,6 +954,38 @@ std::vector<ChipInfo> VIC20System::get_chip_info() const {
         { "BASIC ROM (8KB)",            "BASIC",  "Memory", 0xC000, false, false },
         { "KERNAL ROM (8KB)",           "KERNAL", "Memory", 0xE000, false, false },
     };
+}
+
+void VIC20System::render_chip_debug_window(int chip_index, bool* show) {
+    if (!show || !*show) return;
+#ifdef IMGUI_VERSION
+    enum { VIC20_CI_CPU = 0 };
+    switch (chip_index) {
+        case VIC20_CI_CPU:
+            if (cpu_) fam65xx_render_debug_window(cpu_, show);
+            break;
+        default:
+            break;
+    }
+#else
+    (void)chip_index;
+#endif
+}
+
+void VIC20System::render_chip_settings_window(int chip_index, bool* show) {
+    if (!show || !*show) return;
+#ifdef IMGUI_VERSION
+    enum { VIC20_CI_CPU = 0 };
+    switch (chip_index) {
+        case VIC20_CI_CPU:
+            if (cpu_) fam65xx_render_settings_window(cpu_, show);
+            break;
+        default:
+            break;
+    }
+#else
+    (void)chip_index;
+#endif
 }
 
 void VIC20System::render_configuration_ui() {
