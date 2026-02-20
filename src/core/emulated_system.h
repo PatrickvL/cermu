@@ -216,6 +216,39 @@ struct SystemDescriptor {
     std::function<float(const char* filepath, const uint8_t* data, size_t size)> can_load_file;
 };
 
+// ============================================================================
+// CHIP INFO — generic chip enumeration for debug/visualization
+// ============================================================================
+
+/**
+ * Describes one chip in the emulated system for the Hardware menu and
+ * chip debug/settings windows.  Returned by get_chip_info().
+ */
+struct ChipInfo {
+    const char* name;               // Full name, e.g. "VIC-II (MOS 6569)"
+    const char* short_name;         // Short label, e.g. "VIC-II"
+    const char* category;           // Grouping key: "CPU", "Video", "Audio", "I/O", "Memory", "Bus"
+    uint16_t base_address;          // I/O base address ($D400, $DC00, …) or 0
+    bool has_debug_window;          // true if render_chip_debug_window() does something
+    bool has_settings_window;       // true if render_chip_settings_window() does something
+};
+
+/**
+ * Persistent toggle state for chip debug / settings windows.
+ * Managed by SystemGUI, indexed in parallel with get_chip_info().
+ * Uses uint8_t instead of bool to allow taking address of elements
+ * (std::vector<bool> is bit-packed and does not support &v[i]).
+ */
+struct ChipDebugState {
+    std::vector<uint8_t> show_debug;
+    std::vector<uint8_t> show_settings;
+
+    void ensure_size(size_t n) {
+        if (show_debug.size() < n) show_debug.resize(n, 0);
+        if (show_settings.size() < n) show_settings.resize(n, 0);
+    }
+};
+
 /**
  * Abstract base class for all emulated systems
  * Provides common infrastructure while requiring system-specific implementations
@@ -239,6 +272,9 @@ protected:
     uint64_t total_cycles_;
     float speed_multiplier_;
     bool quit_requested_;
+
+    // Chip debug/settings window toggle state (managed by the GUI layer)
+    ChipDebugState chip_debug_state_;
 
     // Display screen rect — where the emulated display is drawn in SDL window coords.
     // Updated each frame by the GUI after rendering the display image.
@@ -352,6 +388,24 @@ public:
     virtual void shutdown();
     virtual void handle_controller_event(int controller, int button, bool pressed);
     virtual void render_debug_windows(void* gui_state);
+
+    // --- Chip Info / Debug / Settings (generic for all systems) ----------
+
+    /// Return information about each chip in this system.
+    /// The GUI builds the Hardware menu from this list.
+    /// Default: empty (no chips listed).
+    virtual std::vector<ChipInfo> get_chip_info() const { return {}; }
+
+    /// Render the ImGui debug window for chip at \p chip_index.
+    /// \p show points into chip_debug_state_.show_debug[chip_index].
+    virtual void render_chip_debug_window(int chip_index, bool* show);
+
+    /// Render the ImGui settings window for chip at \p chip_index.
+    /// \p show points into chip_debug_state_.show_settings[chip_index].
+    virtual void render_chip_settings_window(int chip_index, bool* show);
+
+    /// Access chip debug toggle state (for the GUI layer).
+    ChipDebugState& get_chip_debug_state() { return chip_debug_state_; }
     
     // Pure virtual (must implement in derived classes)
     virtual const SystemDescriptor& get_descriptor() const = 0;

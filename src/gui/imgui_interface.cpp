@@ -730,41 +730,8 @@ void gui_render_c64_system_menu_items(c64_t* c64, gui_state_t* gui_state) {
     ImGui::Text("CPU Mode: Modern C++ Core");
     ImGui::Text("Status: Active");
     
-    // Chip debug windows submenu
-    ImGui::Separator();
-    if (c64->system.chip_count > 0) {
-        if (ImGui::BeginMenu("Chip Debug Windows")) {
-            for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
-                chip_entry_t* entry = &c64->system.chips[chip_id];
-                if (entry->desc && entry->desc->render_debug_window) {
-                    ImGui::PushID(chip_id);
-                    char menu_label[64];
-                    const char* desc = entry->desc->description;
-                    snprintf(menu_label, sizeof(menu_label), "%s Debug",
-                            desc ? desc : "Unknown Chip");
-                    ImGui::MenuItem(menu_label, NULL, &gui_state->show_chip_debug[chip_id]);
-                    ImGui::PopID();
-                }
-            }
-            ImGui::EndMenu();
-        }
-        
-        if (ImGui::BeginMenu("Chip Settings Windows")) {
-            for (uint8_t chip_id = 0; chip_id < c64->system.chip_count && chip_id < 16; chip_id++) {
-                chip_entry_t* entry = &c64->system.chips[chip_id];
-                if (entry->desc && entry->desc->render_settings_window) {
-                    ImGui::PushID(chip_id);
-                    char menu_label[64];
-                    const char* desc = entry->desc->description;
-                    snprintf(menu_label, sizeof(menu_label), "%s Settings",
-                            desc ? desc : "Unknown Chip");
-                    ImGui::MenuItem(menu_label, NULL, &gui_state->show_chip_settings[chip_id]);
-                    ImGui::PopID();
-                }
-            }
-            ImGui::EndMenu();
-        }
-    }
+    // NOTE: Chip debug/settings windows are now in the Hardware menu
+    // (driven by get_chip_info() / ChipDebugState in EmulatedSystem base class)
 }
 
 void gui_render_memory_viewer(c64_t *c64, gui_state_t *gui_state) {

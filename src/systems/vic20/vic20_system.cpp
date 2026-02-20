@@ -942,6 +942,19 @@ void VIC20System::render_system_menu_items() {
 #endif
 }
 
+std::vector<ChipInfo> VIC20System::get_chip_info() const {
+    return {
+        { "MOS 6502 CPU",              "6502",   "CPU",    0x0000, false, false },
+        { "VIC (MOS 6560/6561)",        "VIC",    "Video",  0x9000, false, false },
+        { "VIA 1 (MOS 6522)",           "VIA 1",  "I/O",    0x9110, false, false },
+        { "VIA 2 (MOS 6522)",           "VIA 2",  "I/O",    0x9120, false, false },
+        { "RAM (up to 32KB)",           "RAM",    "Memory", 0x0000, false, false },
+        { "Character ROM (4KB)",        "CHARROM","Memory", 0x8000, false, false },
+        { "BASIC ROM (8KB)",            "BASIC",  "Memory", 0xC000, false, false },
+        { "KERNAL ROM (8KB)",           "KERNAL", "Memory", 0xE000, false, false },
+    };
+}
+
 void VIC20System::render_configuration_ui() {
 #ifdef IMGUI_VERSION
     ImGui::Text("VIC-20 Configuration");

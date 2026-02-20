@@ -108,6 +108,9 @@ public:
     void render_system_menu_items() override;
     void render_configuration_ui() override;
 
+    // Chip enumeration for Hardware menu
+    std::vector<ChipInfo> get_chip_info() const override;
+
     // Hardware traits (compile-time variant-specific)
     static HardwareTraits create_hardware_traits();
 
