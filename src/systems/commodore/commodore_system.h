@@ -11,7 +11,7 @@
  * Sits between EmulatedSystem and the three Commodore system families:
  *   - VIC-20     (VIC20System)
  *   - 264 Series (Commodore264System<V>: C16, C116, Plus/4)
- *   - C64        (C64SystemWrapper)
+ *   - C64        (C64System)
  *
  * Provides the members and methods that are identical across all three
  * families:

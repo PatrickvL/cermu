@@ -124,7 +124,7 @@ auto tests = framework.get_filtered_tests(filter);
 // Create C64 system
 c64_config_t config = {};
 c64_config_init_defaults(&config);
-C64System* c64 = c64_system_create(&config);
+C64SystemData* c64 = c64_system_create(&config);
 
 // Run tests
 auto results = framework.run_tests(tests, c64);

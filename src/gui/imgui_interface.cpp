@@ -698,7 +698,7 @@ void gui_render_menu_bar(c64_t *c64, gui_state_t *gui_state,
   }
 }
 
-// Helper functions for C64SystemWrapper to avoid typedef conflicts
+// Helper functions for C64System to avoid typedef conflicts
 gui_state_t* gui_create_state() {
     gui_state_t* state = (gui_state_t*)calloc(1, sizeof(gui_state_t));
     if (state) {
@@ -715,7 +715,7 @@ void gui_destroy_state(gui_state_t* state) {
 
 // Render C64-specific menu items for the new generic GUI system
 // This function extracts the C64-specific menus from gui_render_menu_bar
-// so they can be called from C64SystemWrapper::render_system_menu_items()
+// so they can be called from C64System::render_system_menu_items()
 void gui_render_c64_system_menu_items(c64_t* c64, gui_state_t* gui_state) {
     if (!c64 || !gui_state) return;
     

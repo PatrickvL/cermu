@@ -45,8 +45,8 @@ The multi-system architecture has been successfully implemented and tested. Runn
 **Status:** ✅ Complete
 
 **Files:**
-- `c64_system_wrapper.h` - Adapter interface
-- `c64_system_wrapper.cpp` - Wrapper implementation (~200 lines)
+- `c64_system.h` - Adapter interface
+- `c64_system.cpp` - Wrapper implementation (~200 lines)
 
 **Capabilities:**
 - Wraps existing C64 system
@@ -61,7 +61,7 @@ The multi-system architecture has been successfully implemented and tested. Runn
 `CMakeLists.txt` updated to include:
 - `emulated_system.cpp` in core sources
 - `chip8_system.cpp` in system sources  
-- `c64_system_wrapper.cpp` in system sources
+- `c64_system.cpp` in system sources
 
 ## Pending Work
 

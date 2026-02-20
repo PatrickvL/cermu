@@ -43,7 +43,7 @@ bus_state_t io_write_intercept_handler(void* context, bus_state_t bus_state) {
 }
 
 // Install the $D7FF debug register interceptor on SID IO page 7
-void TestFramework::install_debug_intercept(C64System* c64) {
+void TestFramework::install_debug_intercept(c64_t* c64) {
     if (debug_intercept_installed_) return;
 
     auto& page = c64->bus.io_handlers[DEBUG_REGISTER_IO_PAGE];
@@ -60,7 +60,7 @@ void TestFramework::install_debug_intercept(C64System* c64) {
 }
 
 // Uninstall the interceptor — restore original chip handler
-void TestFramework::uninstall_debug_intercept(C64System* c64) {
+void TestFramework::uninstall_debug_intercept(c64_t* c64) {
     if (!debug_intercept_installed_) return;
 
     auto& page = c64->bus.io_handlers[DEBUG_REGISTER_IO_PAGE];
@@ -412,7 +412,7 @@ struct TickLoopResult {
     uint8_t border_color;
 };
 
-static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles, io_write_intercept_t* intercept) {
+static TickLoopResult tick_loop_protected(c64_t* c64, uint32_t max_cycles, io_write_intercept_t* intercept) {
     TickLoopResult r = {};
     r.reason = 1; // timeout by default
     
@@ -498,7 +498,7 @@ static int seh_call(void(*func)(void*), void* arg) {
 struct RunTestArgs {
     TestFramework* fw;
     const TestDescriptor* test;
-    C64System* c64;
+    c64_t* c64;
     TestResult result;
 };
 
@@ -508,7 +508,7 @@ static void run_test_thunk(void* arg) {
 }
 #endif
 
-TestResult TestFramework::run_test_safe(const TestDescriptor& test, C64System* c64) {
+TestResult TestFramework::run_test_safe(const TestDescriptor& test, c64_t* c64) {
 #ifdef _WIN32
     RunTestArgs args;
     args.fw = this;
@@ -532,7 +532,7 @@ TestResult TestFramework::run_test_safe(const TestDescriptor& test, C64System* c
 #endif
 }
 
-TestResult TestFramework::run_test(const TestDescriptor& test, C64System* c64) {
+TestResult TestFramework::run_test(const TestDescriptor& test, c64_t* c64) {
     TestResult result;
     result.test = test;
     
@@ -638,7 +638,7 @@ TestEnvironment TestFramework::detect_test_environment(const TestDescriptor& tes
 }
 
 // Execute KERNAL boot sequence
-bool TestFramework::execute_kernal_boot(C64System* c64) {
+bool TestFramework::execute_kernal_boot(c64_t* c64) {
     mos6510_t* cpu = static_cast<mos6510_t*>(c64->mos6510);
     
     // Read KERNAL reset vector from ROM
@@ -700,7 +700,7 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
 }
 
 // Execute BASIC boot sequence (KERNAL + BASIC initialization)
-bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& test, uint16_t sys_addr) {
+bool TestFramework::execute_basic_boot(c64_t* c64, const TestDescriptor& test, uint16_t sys_addr) {
     mos6510_t* cpu = static_cast<mos6510_t*>(c64->mos6510);
     
     if (verbose_) {
@@ -797,7 +797,7 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
     return true;
 }
 
-bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64) {
+bool TestFramework::load_test_program(const TestDescriptor& test, c64_t* c64) {
     std::string full_path = vice_testprogs_path_ + "/" + test.path;
     
     // Reset C64 system (reset all components)
@@ -896,7 +896,7 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
 
     
 // Detect test protocol based on test characteristics
-TestProtocol TestFramework::detect_test_protocol(const TestDescriptor& test, C64System* c64) {
+TestProtocol TestFramework::detect_test_protocol(const TestDescriptor& test, c64_t* c64) {
     // If protocol is already specified, use it
     if (test.protocol != TestProtocol::AUTO_DETECT) {
         return test.protocol;
@@ -969,7 +969,7 @@ uint16_t TestFramework::calculate_basic_entry_point(ram_t* ram, uint16_t sys_add
     return addr;
 }
 // Detect if CPU is stuck in infinite loop and check border color
-bool TestFramework::detect_infinite_loop(C64System* c64, uint16_t& loop_pc, uint32_t check_cycles) {
+bool TestFramework::detect_infinite_loop(c64_t* c64, uint16_t& loop_pc, uint32_t check_cycles) {
     mos6510_t* cpu = static_cast<mos6510_t*>(c64->mos6510);
     uint16_t pc = mos6510_get_pc(cpu);
     
@@ -997,7 +997,7 @@ bool TestFramework::detect_infinite_loop(C64System* c64, uint16_t& loop_pc, uint
 }
 
 // Get current VIC-II border color
-uint8_t TestFramework::get_border_color(C64System* c64) {
+uint8_t TestFramework::get_border_color(c64_t* c64) {
     if (!c64 || !c64->vicii) {
         return 0;
     }
@@ -1008,7 +1008,7 @@ uint8_t TestFramework::get_border_color(C64System* c64) {
 }
 
 // Enhanced exitcode test with multi-protocol support
-TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test, C64System* c64) {
+TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test, c64_t* c64) {
     TestResult result;
     result.test = test;
     result.status = TestStatus::TIMEOUT;
@@ -1255,7 +1255,7 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
     return result;
 }
 
-TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64System* c64) {
+TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, c64_t* c64) {
     TestResult result;
     result.test = test;
     result.status = TestStatus::TIMEOUT;
@@ -1386,7 +1386,7 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
     return result;
 }
 
-TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64System* c64) {
+TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, c64_t* c64) {
     TestResult result;
     result.test = test;
     result.status = TestStatus::TIMEOUT;
@@ -1552,7 +1552,7 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
     return result;
 }
 
-std::vector<TestResult> TestFramework::run_tests(const std::vector<TestDescriptor>& tests, C64System* c64) {
+std::vector<TestResult> TestFramework::run_tests(const std::vector<TestDescriptor>& tests, c64_t* c64) {
     std::vector<TestResult> results;
     
     printf("\n=== Running %zu tests ===\n", tests.size());
@@ -1578,7 +1578,7 @@ std::vector<TestResult> TestFramework::run_tests(const std::vector<TestDescripto
     return results;
 }
 
-std::vector<TestResult> TestFramework::run_all_tests(C64System* c64, const TestFilter& filter) {
+std::vector<TestResult> TestFramework::run_all_tests(c64_t* c64, const TestFilter& filter) {
     std::vector<TestDescriptor> tests = get_filtered_tests(filter);
     return run_tests(tests, c64);
 }
@@ -1752,7 +1752,7 @@ bool TestFramework::requires_reconfiguration(const TestDescriptor& test) const {
 }
 
 // Create a C64 system configured for the specific test
-C64System* TestFramework::create_system_for_test(const TestDescriptor& test) {
+c64_t* TestFramework::create_system_for_test(const TestDescriptor& test) {
     c64_config_t config;
     c64_config_init_defaults(&config);
     
@@ -1782,7 +1782,7 @@ C64System* TestFramework::create_system_for_test(const TestDescriptor& test) {
     config.test_mode = C64_TEST_MODE_NORMAL;
     
     // Create the system
-    C64System* c64 = c64_system_create(&config);
+    c64_t* c64 = c64_system_create(&config);
     if (!c64) {
         printf("ERROR: Failed to create C64 system for test\n");
         return nullptr;
@@ -1818,7 +1818,7 @@ C64System* TestFramework::create_system_for_test(const TestDescriptor& test) {
 // Run a single test with automatic system creation
 TestResult TestFramework::run_test_with_config(const TestDescriptor& test) {
     // Create system configured for this test
-    C64System* c64 = create_system_for_test(test);
+    c64_t* c64 = create_system_for_test(test);
     if (!c64) {
         TestResult result;
         result.test = test;
@@ -1842,7 +1842,7 @@ std::vector<TestResult> TestFramework::run_tests_with_auto_config(const std::vec
     
     printf("\n=== Running %zu tests with automatic hardware configuration ===\n", tests.size());
     
-    C64System* current_c64 = nullptr;
+    c64_t* current_c64 = nullptr;
     uint32_t* current_framebuffer = nullptr;  // Track framebuffer for cleanup
     
     for (size_t i = 0; i < tests.size(); i++) {

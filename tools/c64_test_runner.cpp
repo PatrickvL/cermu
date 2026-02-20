@@ -173,7 +173,7 @@ int main(int argc, char** argv) {
         
         config.test_mode = C64_TEST_MODE_NORMAL;
         
-        C64System* c64 = c64_system_create(&config);
+        c64_t* c64 = c64_system_create(&config);
         if (!c64) {
             printf("ERROR: Failed to create C64 system\n");
             return 1;

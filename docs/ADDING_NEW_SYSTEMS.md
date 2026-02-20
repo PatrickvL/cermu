@@ -494,5 +494,5 @@ After adding your system:
 ## Resources
 
 - See [`chip8_system.cpp`](../code/cpp/src/systems/chip8/chip8_system.cpp) for a complete self-contained example
-- See [`c64_system_wrapper.cpp`](../code/cpp/src/systems/c64/c64_system_wrapper.cpp) for a wrapper example
+- See [`c64_system.cpp`](../code/cpp/src/systems/c64/c64_system.cpp) for a wrapper example
 - Check [`emulated_system.h`](../code/cpp/src/core/emulated_system.h) for interface documentation

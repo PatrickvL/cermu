@@ -1,4 +1,4 @@
-﻿#include "c64_system_wrapper.h"
+﻿#include "c64_system.h"
 #include "c64_kernal_patches.h"
 #include "c64_sid_player.h"
 #include "../../chip/input/commodore_keyboard.h"
@@ -242,7 +242,7 @@ static SystemDescriptor c64_descriptor = {
     c64_can_load_file
 };
 
-C64SystemWrapper::C64SystemWrapper()
+C64System::C64System()
     : CommodoreSystem()  // Call base class constructor
     , c64_(nullptr)
 {
@@ -264,11 +264,11 @@ C64SystemWrapper::C64SystemWrapper()
     speed_multiplier_ = 1.0f;
 }
 
-C64SystemWrapper::~C64SystemWrapper() {
+C64System::~C64System() {
     shutdown();
 }
 
-const SystemDescriptor& C64SystemWrapper::get_descriptor() const {
+const SystemDescriptor& C64System::get_descriptor() const {
     return c64_descriptor;
 }
 
@@ -307,7 +307,7 @@ static void cia2_port_a_bank_callback(void* context, uint8_t port_a_value) {
 extern "C" void c64_cpu_banking_callback(void* context, uint8_t banking_state);
 
 
-bool C64SystemWrapper::initialize() {
+bool C64System::initialize() {
     if (c64_) {
         return true;  // Already initialized
     }
@@ -475,7 +475,7 @@ bool C64SystemWrapper::initialize() {
     return true;
 }
 
-void C64SystemWrapper::shutdown() {
+void C64System::shutdown() {
     // Detach all devices before destroying the system
     for (auto& port : connector_ports_) {
         port->detach_device();
@@ -515,7 +515,7 @@ void C64SystemWrapper::shutdown() {
     }
 }
 
-void C64SystemWrapper::reset() {
+void C64System::reset() {
     // Clear any pending deferred load (will be re-set by the next load_file call)
     if (pending_load_.active) {
         format_load_result_free(&pending_load_.result);
@@ -574,7 +574,7 @@ void C64SystemWrapper::reset() {
 // Inlined from c64_system_tick() to eliminate function call overhead.
 // ============================================================================
 
-void C64SystemWrapper::system_tick() {
+void C64System::system_tick() {
     c64_t* c64 = c64_;
 
     c64->total_cycles++;
@@ -623,7 +623,7 @@ void C64SystemWrapper::system_tick() {
     bus->state = s;
 }
 
-void C64SystemWrapper::tick() {
+void C64System::tick() {
     if (c64_) {
         system_tick();
 
@@ -637,7 +637,7 @@ void C64SystemWrapper::tick() {
     }
 }
 
-void C64SystemWrapper::run_frame() {
+void C64System::run_frame() {
     uint32_t adjusted_cycles = static_cast<uint32_t>(cycles_per_frame_ * speed_multiplier_);
 
     if (c64_) {
@@ -681,7 +681,7 @@ static void c64_mem_write_block(void* ctx, uint16_t addr,
     memcpy(&ram->memory[addr], data, len);
 }
 
-bool C64SystemWrapper::load_file(const char* filepath) {
+bool C64System::load_file(const char* filepath) {
     if (!c64_) {
         printf("C64: System not initialized\n");
         return false;
@@ -740,7 +740,7 @@ bool C64SystemWrapper::load_file(const char* filepath) {
     return true;
 }
 
-bool C64SystemWrapper::is_basic_ready() const {
+bool C64System::is_basic_ready() const {
     if (!c64_ || !c64_->ram) return false;
 
     const uint8_t* ram = c64_->ram->memory;
@@ -772,7 +772,7 @@ bool C64SystemWrapper::is_basic_ready() const {
     return true;
 }
 
-void C64SystemWrapper::apply_pending_load() {
+void C64System::apply_pending_load() {
     if (!pending_load_.active || !c64_) return;
 
     // =========================================================================
@@ -943,7 +943,7 @@ void C64SystemWrapper::apply_pending_load() {
 //      the RAMTAS memory test (fast boot for SID playback).
 // ============================================================================
 
-void C64SystemWrapper::ensure_compatible_for_sid(const sid_header_t* sid) {
+void C64System::ensure_compatible_for_sid(const sid_header_t* sid) {
     if (!sid) return;
 
     // ---- Determine needed video standard ----
@@ -1014,26 +1014,26 @@ void C64SystemWrapper::ensure_compatible_for_sid(const sid_header_t* sid) {
 }
 
 // ============================================================================
-uint32_t* C64SystemWrapper::get_framebuffer() {
+uint32_t* C64System::get_framebuffer() {
     if (c64_ && c64_->vicii) {
         return c64_->vicii->pixel.framebuffer;
     }
     return nullptr;
 }
 
-void C64SystemWrapper::get_display_dimensions(int* width, int* height) const {
+void C64System::get_display_dimensions(int* width, int* height) const {
     // VIC-II visible area
     *width = 403;
     *height = 284;
 }
 
-void C64SystemWrapper::set_framebuffer(uint32_t* buffer, int width, int height) {
+void C64System::set_framebuffer(uint32_t* buffer, int width, int height) {
     if (c64_ && c64_->vicii && buffer) {
         vicii_set_framebuffer(c64_->vicii, buffer, width, height);
     }
 }
 
-void C64SystemWrapper::handle_keyboard_event(SDL_Keycode key, bool pressed) {
+void C64System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     // Legacy path â€” still used when handle_keyboard_event_ex is not called
     // (e.g., from the old C64-only GUI, test harness, or non-SDL input)
     if (keyboard_mapper_) {
@@ -1058,7 +1058,7 @@ void C64SystemWrapper::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     }
 }
 
-void C64SystemWrapper::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) {
+void C64System::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) {
     // SID player subtune selection — intercept before keyboard mapper
     if (sid_player_active_ && pressed && !repeat) {
         if (handle_sid_player_key(key)) return;
@@ -1095,7 +1095,7 @@ void C64SystemWrapper::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode sc
     }
 }
 
-void C64SystemWrapper::handle_controller_event(int controller, int button, bool pressed) {
+void C64System::handle_controller_event(int controller, int button, bool pressed) {
     // Map host controller events to the joystick device attached to the
     // appropriate control port.  Controller 0 → Port 2 (the normal C64
     // joystick port for single-player games), controller 1 → Port 1.
@@ -1130,7 +1130,7 @@ void C64SystemWrapper::handle_controller_event(int controller, int button, bool 
 // Left arrow:   previous subtune (wraps from first → last)
 // =============================================================================
 
-bool C64SystemWrapper::handle_sid_player_key(SDL_Keycode key) {
+bool C64System::handle_sid_player_key(SDL_Keycode key) {
     if (!c64_ || active_sid_header_.num_songs == 0) return false;
 
     const uint16_t num_songs = active_sid_header_.num_songs;
@@ -1168,7 +1168,7 @@ bool C64SystemWrapper::handle_sid_player_key(SDL_Keycode key) {
     return true;
 }
 
-void C64SystemWrapper::render_system_menu_items() {
+void C64System::render_system_menu_items() {
 #ifdef IMGUI_VERSION
     if (ImGui::MenuItem("Reset C64")) {
         reset();
@@ -1176,7 +1176,7 @@ void C64SystemWrapper::render_system_menu_items() {
 #endif
 }
 
-void C64SystemWrapper::render_debug_windows(void* gui_state) {
+void C64System::render_debug_windows(void* gui_state) {
 #ifdef IMGUI_VERSION
     if (!c64_) return;
     
@@ -1207,7 +1207,7 @@ enum C64ChipIndex {
     C64_CI_COUNT
 };
 
-std::vector<ChipInfo> C64SystemWrapper::get_chip_info() const {
+std::vector<ChipInfo> C64System::get_chip_info() const {
     return {
         { "MOS 6510 CPU",                "6510",       "CPU",    0x0000, false, false },
         { "VIC-II (MOS 6569/6567)",       "VIC-II",     "Video",  0xD000, false, false },
@@ -1225,8 +1225,9 @@ std::vector<ChipInfo> C64SystemWrapper::get_chip_info() const {
     };
 }
 
-void C64SystemWrapper::render_chip_debug_window(int chip_index, bool* show) {
+void C64System::render_chip_debug_window(int chip_index, bool* show) {
     if (!c64_ || !show || !*show) return;
+#ifdef IMGUI_VERSION
     switch (chip_index) {
         case C64_CI_SID:
             if (c64_->sid) {
@@ -1237,9 +1238,12 @@ void C64SystemWrapper::render_chip_debug_window(int chip_index, bool* show) {
         default:
             break;
     }
+#else
+    (void)chip_index;
+#endif
 }
 
-void C64SystemWrapper::render_chip_settings_window(int chip_index, bool* show) {
+void C64System::render_chip_settings_window(int chip_index, bool* show) {
     if (!c64_ || !show || !*show) return;
     // No chip settings windows implemented yet
     (void)chip_index;
@@ -1259,7 +1263,7 @@ void C64SystemWrapper::render_chip_settings_window(int chip_index, bool* show) {
 // Note: get_configuration() now provided by base class (returns config_)
 // Note: set_configuration() now provided by CommodoreSystem base class
 
-bool C64SystemWrapper::apply_configuration() {
+bool C64System::apply_configuration() {
     // Apply region settings
     if (config_.region_option_index >= 0 &&
         config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
@@ -1293,7 +1297,7 @@ bool C64SystemWrapper::apply_configuration() {
 // ============================================================================
 // Auto-detect optimal configuration from file contents
 // ============================================================================
-SystemConfiguration C64SystemWrapper::detect_optimal_configuration(
+SystemConfiguration C64System::detect_optimal_configuration(
     const char* filepath, const uint8_t* data, size_t size) {
 
     SystemConfiguration config = EmulatedSystem::detect_optimal_configuration(filepath, data, size);
@@ -1366,7 +1370,7 @@ SystemConfiguration C64SystemWrapper::detect_optimal_configuration(
     return config;
 }
 
-void C64SystemWrapper::render_configuration_ui() {
+void C64System::render_configuration_ui() {
 #ifdef IMGUI_VERSION
     // SID revision is a creation-time setting — selectable only in the
     // system selection dialog via custom_options / custom_settings.
@@ -1449,7 +1453,7 @@ static const ConnectorDefinition c64_expansion_def = {
 // Context structure passed to the CIA1 callback overrides
 struct C64PortCallbackContext {
     c64_t*              c64;
-    C64SystemWrapper*   wrapper;
+    C64System*   wrapper;
 };
 
 // Global instances (one per wrapper lifetime — safe because only one C64 at a time)
@@ -1476,7 +1480,7 @@ static uint8_t c64_cia1_port_a_read_with_joystick(void* context, uint8_t port_a_
     // Joystick connector signals map to CIA1 PA:
     //   JOY_UP(0)→PA0, JOY_DOWN(1)→PA1, JOY_LEFT(2)→PA2, JOY_RIGHT(3)→PA3, JOY_FIRE(6)→PA4
     if (ctx->wrapper) {
-        auto* port = ctx->wrapper->get_connector_port(C64SystemWrapper::PORT_CONTROL2);
+        auto* port = ctx->wrapper->get_connector_port(C64System::PORT_CONTROL2);
         if (port && port->get_attached_device()) {
             uint32_t dev_signals = port->get_attached_device()->get_output_signals();
             // Map connector signal bits to CIA1 PA bits
@@ -1512,7 +1516,7 @@ static uint8_t c64_cia1_port_b_read_with_joystick(void* context, uint8_t port_b_
 
     // AND-in Control Port 1 joystick state (bits 0-4 of CIA1 PB)
     if (ctx->wrapper) {
-        auto* port = ctx->wrapper->get_connector_port(C64SystemWrapper::PORT_CONTROL1);
+        auto* port = ctx->wrapper->get_connector_port(C64System::PORT_CONTROL1);
         if (port && port->get_attached_device()) {
             uint32_t dev_signals = port->get_attached_device()->get_output_signals();
             uint8_t joy_mask = 0xFF;
@@ -1543,7 +1547,7 @@ static bool c64_vicii_lp_pin_read(void* context) {
     return lightpen->get_lp_pin_state(beam_x, beam_y);
 }
 
-void C64SystemWrapper::setup_connector_ports() {
+void C64System::setup_connector_ports() {
     connector_ports_.clear();
 
     // PORT_CONTROL1 = 0 — Control Port 1 (directly connected to CIA1 Port B bits 0-4)
@@ -1604,13 +1608,13 @@ void C64SystemWrapper::setup_connector_ports() {
     printf("C64: Created %zu connector ports\n", connector_ports_.size());
 }
 
-void C64SystemWrapper::update_lightpen_display_rect() {
+void C64System::update_lightpen_display_rect() {
     if (!cached_lightpen_) return;
     const auto& rect = get_display_screen_rect();
     cached_lightpen_->set_display_screen_rect(rect.x, rect.y, rect.w, rect.h);
 }
 
-void C64SystemWrapper::on_port_device_changed(int port_index) {
+void C64System::on_port_device_changed(int port_index) {
     if (port_index != PORT_CONTROL1) return;
     cached_lightpen_ = nullptr;
     auto* port = get_connector_port(PORT_CONTROL1);
@@ -1621,13 +1625,13 @@ void C64SystemWrapper::on_port_device_changed(int port_index) {
     }
 }
 
-uint32_t C64SystemWrapper::get_audio_samples(float* buffer, uint32_t max_samples) {
+uint32_t C64System::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!c64_ || !c64_->sid || !buffer || max_samples == 0) return 0;
     mos6581_generate_samples(c64_->sid, buffer, max_samples);
     return max_samples;
 }
 
-void C64SystemWrapper::set_audio_sample_rate(int sample_rate_hz) {
+void C64System::set_audio_sample_rate(int sample_rate_hz) {
     if (c64_ && c64_->sid && sample_rate_hz > 0) {
         printf("C64: Updating SID sample rate from %.0f to %d Hz\n",
                c64_->sid->sample_rate, sample_rate_hz);
@@ -1637,5 +1641,5 @@ void C64SystemWrapper::set_audio_sample_rate(int sample_rate_hz) {
 
 // Register C64 system with the registry
 REGISTER_SYSTEM(c64_descriptor, []() {
-    return std::make_unique<C64SystemWrapper>();
+    return std::make_unique<C64System>();
 })

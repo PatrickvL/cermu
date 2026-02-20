@@ -220,7 +220,7 @@ void* c64_bus_system_create(chip_descriptor_t* desc) {
     return c64_bus;
 }
 
-void c64_bus_system_attach(c64_bus_t* c64_bus, C64System* c64) {
+void c64_bus_system_attach(c64_bus_t* c64_bus, C64SystemData* c64) {
     c64_bus->c64 = c64;
 
     // Initialize ROM/RAM pointers and allocate unified buffer with default configuration
@@ -614,7 +614,7 @@ const char* c64_bus_size_to_str(size_t size) {
  * @param c64_system Pointer to the C64 system (for pointer updates)
  * @param config Pointer to the C64 system configuration structure
  */
-void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, C64System* c64_system, const c64_config_t* config) {
+void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, C64SystemData* c64_system, const c64_config_t* config) {
     if (!c64_bus || !c64_system || !config) return;
     
     // Store cartridge ROM presence flags from configuration
