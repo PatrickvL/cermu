@@ -18,6 +18,12 @@
 #include "../../core/formats/sid_format.h"
 #include "../../core/formats/commodore_load_helpers.h"
 #include "../../chip/cpu/fam65xx/mos6510.h"
+#include "../../chip/video/vic_ii/mos6569.h"
+#include "../../chip/video/vic_ii/mos6567.h"
+#include "../../chip/logic/pla.h"
+#include "../../core/storage/rom_loader.h"
+#include "../../core/config/path_discovery.h"
+#include "c64_keyboard_matrix.h"
 #include "../../devices/input/joystick_device.h"
 #include "../../devices/input/lightpen_device.h"
 #include "../../devices/storage/drive_1541.h"
@@ -273,38 +279,207 @@ const SystemDescriptor& C64SystemWrapper::get_descriptor() const {
     return c64_descriptor;
 }
 
+// ============================================================================
+// Chip creation + callback helpers (absorbed from c64.cpp)
+// ============================================================================
+
+// Create a chip, register it in the legacy chip registry, and return the pointer.
+static inline void* create_and_register_chip(c64_t* c64, chip_descriptor_t* desc,
+                                              uint16_t addr, unsigned int size) {
+    void* chip;
+    if (desc == &rom_descriptor)
+        chip = rom_system_create_with_size(desc, size);
+    else
+        chip = desc->create(desc);
+
+    if (!chip) {
+        printf("ERROR: Failed to create chip: %s\n", desc->description);
+        return nullptr;
+    }
+    if (system_chip_register(&c64->system, chip, desc, addr, size) == 0xFF) {
+        printf("ERROR: Failed to register chip: %s\n", desc->description);
+        return nullptr;
+    }
+    return chip;
+}
+
+// CIA2 Port A change callback — updates VIC-II bank select
+static void cia2_port_a_bank_callback(void* context, uint8_t port_a_value) {
+    c64_t* c64 = static_cast<c64_t*>(context);
+    vicii_memory_bank_change(c64->vicii, port_a_value & 0x03);
+}
+
+// CPU I/O port banking callback — updates PLA memory mode
+extern "C" void c64_cpu_banking_callback(void* context, uint8_t banking_state);
+
+
 bool C64SystemWrapper::initialize() {
     if (c64_) {
         return true;  // Already initialized
     }
-    
-    // Initialize the embedded c64_t struct (already zero-initialized by c64_data_{})
-    if (!c64_system_init(&c64_data_, &c64_config_)) {
-        printf("C64: Failed to create system\n");
+
+    // Point c64_ at the embedded struct (will be nulled on failure)
+    c64_ = &c64_data_;
+
+    // Cleanup helper for error paths — destroys keyboard + registered chips,
+    // resets the pointer and zeroes the embedded struct for re-use.
+    auto cleanup = [this]() {
+        if (c64_->keyboard) {
+            commodore_keyboard_destroy(c64_->keyboard);
+            c64_->keyboard = nullptr;
+        }
+        system_chips_destroy(&c64_->system);
+        c64_ = nullptr;
+        c64_data_ = {};
+    };
+
+    // =========================================================================
+    // Phase 1: System infrastructure
+    // =========================================================================
+    system_8bit_init(&c64_->system);
+    if (!c64_->system.cpp_system) {
+        printf("ERROR: Failed to initialize system\n");
+        cleanup();
         return false;
     }
-    c64_ = &c64_data_;  // Mark as initialized
+
+    chip_descriptor_t* vicii_descriptor =
+        (c64_config_.vicii_standard == VIC_PAL) ? &mos6569_descriptor : &mos6567_descriptor;
+
+    // Initialize bus as embedded struct (not heap-allocated)
+    c64_->bus.desc = &c64_bus_descriptor;
+    c64_->bus.c64 = c64_;
+
+    // Bus pull-up defaults and cartridge lines (no cartridge)
+    c64_->bus.default_state = C64_BUS_DEFAULT_STATE();
+    c64_->bus.state = c64_->bus.default_state;
+    c64_->bus.system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;
+
+    // =========================================================================
+    // Phase 2: Create and register all chips
+    // =========================================================================
+    if (!(c64_->ram = static_cast<ram_t*>(create_and_register_chip(c64_, &ram_descriptor, 0x0000, 65536)))) { cleanup(); return false; }
+    if (!(c64_->mos6510 = create_and_register_chip(c64_, &mos6510_descriptor, 0x0000, 4096))) { cleanup(); return false; }
+    if (!(c64_->cartridge_roml = static_cast<rom_t*>(create_and_register_chip(c64_, &rom_descriptor, 0x8000, 8192)))) { cleanup(); return false; }
+    if (!(c64_->basic = static_cast<rom_t*>(create_and_register_chip(c64_, &rom_descriptor, 0xA000, 8192)))) { cleanup(); return false; }
+    if (!(c64_->cartridge_romh = static_cast<rom_t*>(create_and_register_chip(c64_, &rom_descriptor, 0xC000, 8192)))) { cleanup(); return false; }
+    if (!(c64_->charrom = static_cast<rom_t*>(create_and_register_chip(c64_, &rom_descriptor, 0xD000, 4096)))) { cleanup(); return false; }
+    if (!(c64_->vicii = static_cast<vicii_t*>(create_and_register_chip(c64_, vicii_descriptor, 0xD000, 1024)))) { cleanup(); return false; }
+    if (!(c64_->sid = static_cast<mos6581_t*>(create_and_register_chip(c64_, &mos6581_descriptor, 0xD400, 1024)))) { cleanup(); return false; }
+
+    // Configure SID timing to match C64 CPU clock
+    {
+        bool is_pal = (c64_config_.vicii_standard == VIC_PAL);
+        float cpu_clock = is_pal ? 985248.0f : 1022727.0f;
+        mos6581_set_cpu_clock(c64_->sid, cpu_clock);
+        mos6581_set_timing(c64_->sid, is_pal);
+    }
+
+    if (!(c64_->colorram = static_cast<mos2114_t*>(create_and_register_chip(c64_, &mos2114_descriptor, 0xD800, 1024)))) { cleanup(); return false; }
+    c64_->vicii->colorram = c64_->colorram;
+
+    // VIC-II bank selection via bank_base offset; no bus-level callback needed
+    c64_->vicii->bus.bus = &c64_->bus;
+    c64_->vicii->bus.bank_change = nullptr;
+
+    if (!(c64_->cia1 = static_cast<mos6526_t*>(create_and_register_chip(c64_, &mos6526_descriptor, 0xDC00, 256)))) { cleanup(); return false; }
+    if (!(c64_->cia2 = static_cast<mos6526_t*>(create_and_register_chip(c64_, &mos6526_descriptor, 0xDD00, 256)))) { cleanup(); return false; }
+
+    // Create keyboard matrix
+    c64_->keyboard = commodore_keyboard_create(&c64_keyboard_config);
+    if (!c64_->keyboard) {
+        printf("ERROR: Failed to create keyboard\n");
+        cleanup();
+        return false;
+    }
+    commodore_keyboard_reset(c64_->keyboard);
+    printf("C64: Keyboard matrix initialized (all keys released)\n");
+
+    if (!(c64_->kernal = static_cast<rom_t*>(create_and_register_chip(c64_, &rom_descriptor, 0xE000, 8192)))) { cleanup(); return false; }
+
+    // No cartridge I/O by default
+    c64_->io1 = nullptr;
+    c64_->io2 = nullptr;
+
+    // Register PLA for GUI debug (special case — chip is the c64_t itself)
+    if (system_chip_register(&c64_->system, c64_, &pla_descriptor, 0x0000, 0) == 0xFF) { cleanup(); return false; }
+
+    // =========================================================================
+    // Phase 3: PLA memory maps and bus initialization
+    // =========================================================================
+    if (!c64_pla_maps_generate(c64_)) { cleanup(); return false; }
+
+    printf("VIC-II memory mapping for mode 0x07:\n");
+    for (int bank = 0; bank < 16; bank++) {
+        uint8_t chip = c64_->bus.vicii_chip_per_bank[bank];
+        printf("  Bank %d (0x%04X-0x%04X): CHIP=%d (%s)\n",
+               bank, bank * 0x1000, (bank + 1) * 0x1000 - 1,
+               chip, c64_chips_to_title(chip));
+    }
+
+    // Attach bus and load ROMs from configured paths
+    c64_bus_system_attach(&c64_->bus, c64_);
+    c64_memory_init(&c64_->system, &c64_config_);
+    c64_bus_init_unified_pointers(&c64_->bus, c64_, &c64_config_);
+
+    // =========================================================================
+    // Phase 4: Wire callbacks and initialize CPU
+    // =========================================================================
+
+    // CIA2 Port A → VIC-II bank selection
+    c64_->cia2->port_a_change_callback = cia2_port_a_bank_callback;
+    c64_->cia2->port_a_callback_context = c64_;
+    cia2_port_a_bank_callback(c64_, c64_->cia2->port_a_value);  // Set initial bank
+
+    // CPU I/O port → PLA memory banking
+    mos6510_descriptor.bank_change = c64_cpu_banking_callback;
+
+    // NOTE: CIA1 keyboard callbacks are NOT set here — setup_connector_ports()
+    // installs joystick-aware versions that supersede the basic ones.
+
+    // CIA2 interrupt line → NMI (CIA1 defaults to IRQ)
+    c64_->cia2->configured_interrupt_bit = BUS_NMI_BIT;
+
+    // Initialize CPU and point it at the reset vector
+    mos6510_desc_t cpu_desc = {};
+    mos6510_init(static_cast<mos6510_t*>(c64_->mos6510), &cpu_desc);
+    mos6510_set_bank_change_context(static_cast<mos6510_t*>(c64_->mos6510), c64_);
+
+    uint16_t reset_vector = c64_read_kernal_reset_vector(&c64_->bus);
+    mos6510_set_pc(static_cast<mos6510_t*>(c64_->mos6510), reset_vector);
+    mos6510_set_ab(static_cast<mos6510_t*>(c64_->mos6510), reset_vector);
+    printf("C64: CPU reset vector $%04X loaded\n", reset_vector);
+
+    // Attach all chips that have bus_attach callbacks
+    for (int i = 0; i < c64_->system.chip_count; i++) {
+        chip_entry_t* chip = &c64_->system.chips[i];
+        if (chip->desc && chip->desc->bus_attach && chip->desc != &c64_bus_descriptor) {
+            chip->desc->bus_attach(chip->chip, &c64_->bus);
+        }
+    }
+
+    // =========================================================================
+    // Phase 5: Wrapper-level initialization
+    // =========================================================================
 
     // Track the actual VIC-II standard this system was created with.
-    // apply_configuration() can desync c64_config_.vicii_standard from
-    // reality without recreating the chip; this field stays in sync.
     created_vicii_standard_ = c64_config_.vicii_standard;
-    
-    // Apply SID revision from configuration (set before initialize)
+
+    // Apply SID revision from configuration
     if (c64_->sid) {
         mos6581_set_revision(c64_->sid, pending_sid_revision_);
         const char* rev_name = (pending_sid_revision_ == SID_REVISION_8580_R5) ? "MOS 8580" : "MOS 6581";
         printf("C64: SID revision initialized as %s\n", rev_name);
     }
-    
+
     // Create the layered keyboard mapper for character-based input
     if (c64_->keyboard) {
         keyboard_mapper_.reset(create_c64_keyboard_mapper(c64_->keyboard));
     }
-    
+
     // Set up connector ports and wire them to the C64 hardware
     setup_connector_ports();
-    
+
     printf("C64: System initialized successfully\n");
     return true;
 }
@@ -323,7 +498,14 @@ void C64SystemWrapper::shutdown() {
         pending_load_.active = false;
     }
     if (c64_) {
-        c64_system_cleanup(c64_);
+        // Destroy keyboard
+        if (c64_->keyboard) {
+            commodore_keyboard_destroy(c64_->keyboard);
+            c64_->keyboard = nullptr;
+        }
+        // Destroy all registered chips
+        system_chips_destroy(&c64_->system);
+
         c64_ = nullptr;
         // Zero the embedded struct for clean re-initialization
         c64_data_ = {};
