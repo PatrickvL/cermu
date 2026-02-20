@@ -358,7 +358,6 @@ set(CORE_UTIL_SOURCES
 # GUI sources
 if(BUILD_GUI)
     set(GUI_SOURCES
-        # src/gui/imgui_interface.cpp  # Legacy C64-only GUI — replaced by system_gui + EmulatedSystem
         src/gui/chip_visualization.cpp
         src/gui/global_chip_style.cpp
         src/chip/video/vic_ii/vicii_gui.cpp

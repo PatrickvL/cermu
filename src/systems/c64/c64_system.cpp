@@ -39,7 +39,7 @@
 #include <cctype>
 
 /**
- * C64 System Wrapper Implementation
+ * C64 System Implementation
  *
  * ARCHITECTURE:
  * =============
@@ -460,7 +460,7 @@ bool C64System::initialize() {
     // No legacy bus_attach iteration needed.
 
     // =========================================================================
-    // Phase 5: Wrapper-level initialization
+    // Phase 5: System-level initialization
     // =========================================================================
 
     // Track the actual VIC-II standard this system was created with.
@@ -1533,11 +1533,11 @@ static const ConnectorDefinition c64_expansion_def = {
 
 // Context structure passed to the CIA1 callback overrides
 struct C64PortCallbackContext {
-    c64_t*              c64;
-    C64System*   wrapper;
+    c64_t*       c64;
+    C64System*   system;
 };
 
-// Global instances (one per wrapper lifetime — safe because only one C64 at a time)
+// Global instance (one per system lifetime — safe because only one C64 at a time)
 static C64PortCallbackContext s_port_callback_ctx;
 
 /// CIA1 Port A read callback — combines keyboard reverse-scan with Control Port 2 joystick.
@@ -1560,8 +1560,8 @@ static uint8_t c64_cia1_port_a_read_with_joystick(void* context, uint8_t port_a_
     // AND-in Control Port 2 joystick state (bits 0-4 of CIA1 PA)
     // Joystick connector signals map to CIA1 PA:
     //   JOY_UP(0)→PA0, JOY_DOWN(1)→PA1, JOY_LEFT(2)→PA2, JOY_RIGHT(3)→PA3, JOY_FIRE(6)→PA4
-    if (ctx->wrapper) {
-        auto* port = ctx->wrapper->get_connector_port(C64System::PORT_CONTROL2);
+    if (ctx->system) {
+        auto* port = ctx->system->get_connector_port(C64System::PORT_CONTROL2);
         if (port && port->get_attached_device()) {
             uint32_t dev_signals = port->get_attached_device()->get_output_signals();
             // Map connector signal bits to CIA1 PA bits
@@ -1596,8 +1596,8 @@ static uint8_t c64_cia1_port_b_read_with_joystick(void* context, uint8_t port_b_
     }
 
     // AND-in Control Port 1 joystick state (bits 0-4 of CIA1 PB)
-    if (ctx->wrapper) {
-        auto* port = ctx->wrapper->get_connector_port(C64System::PORT_CONTROL1);
+    if (ctx->system) {
+        auto* port = ctx->system->get_connector_port(C64System::PORT_CONTROL1);
         if (port && port->get_attached_device()) {
             uint32_t dev_signals = port->get_attached_device()->get_output_signals();
             uint8_t joy_mask = 0xFF;
@@ -1620,7 +1620,7 @@ static uint8_t c64_cia1_port_b_read_with_joystick(void* context, uint8_t port_b_
 /// beam matches the pen's target position.
 static bool c64_vicii_lp_pin_read(void* context) {
     auto* ctx = static_cast<C64PortCallbackContext*>(context);
-    auto* lightpen = ctx->wrapper ? ctx->wrapper->get_cached_lightpen() : nullptr;
+    auto* lightpen = ctx->system ? ctx->system->get_cached_lightpen() : nullptr;
     if (!lightpen) return true;
 
     uint16_t beam_x = vicii_get_x_coordinate(ctx->c64->vicii);
@@ -1670,7 +1670,7 @@ void C64System::setup_connector_ports() {
     // Wire joystick-aware CIA1 callbacks (replace the defaults set by c64_system_create)
     if (c64_ && c64_->cia1) {
         s_port_callback_ctx.c64 = c64_;
-        s_port_callback_ctx.wrapper = this;
+        s_port_callback_ctx.system = this;
 
         c64_->cia1->port_a_read_callback = c64_cia1_port_a_read_with_joystick;
         c64_->cia1->port_a_read_context  = &s_port_callback_ctx;

@@ -1,5 +1,4 @@
 #include "mos6581.h"
-#include "../../gui/imgui_interface.h"
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability

@@ -17,7 +17,8 @@
  * families:
  *
  *   Members:
- *     keyboard_        — Commodore keyboard matrix (may be nullptr for C64 wrapper)
+ *     keyboard_        — Commodore keyboard matrix (may be nullptr for C64’s
+ *                        indirect keyboard access path)
  *     keyboard_mapper_ — layered keyboard mapping engine
  *     cycles_per_frame_ — CPU cycles per video frame (region-dependent)
  *
@@ -29,13 +30,13 @@
  *     release_all_keys()     — delegates to keyboard_mapper_
  *     handle_keyboard_event_ex() — optional pre-intercept hook, then keyboard_mapper_
  *
- * The C64 wrapper overrides handle_keyboard_event_ex() to add SID player
+ * C64System overrides handle_keyboard_event_ex() to add SID player
  * and disc-flip hotkey intercepts before the mapper dispatch.
  */
 class CommodoreSystem : public EmulatedSystem {
 protected:
     // Commodore keyboard matrix — owned by the derived system's chip
-    // infrastructure.  May be nullptr for the C64 wrapper (which accesses
+    // infrastructure.  May be nullptr for C64System (which accesses
     // the keyboard through c64_t indirection).
     commodore_keyboard_t* keyboard_ = nullptr;
 
@@ -60,7 +61,7 @@ public:
 
     // Default implementation dispatches to keyboard_mapper_ if available,
     // else falls back to handle_keyboard_event(key, pressed).
-    // C64 wrapper overrides to add SID player / disc-flip intercepts.
+    // C64System overrides to add SID player / disc-flip intercepts.
     void handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode,
                                   uint16_t mod, bool pressed, bool repeat) override;
 };

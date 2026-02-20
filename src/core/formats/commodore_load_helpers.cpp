@@ -175,7 +175,7 @@ static bool handle_program(const commodore_load_context_t* ctx,
 
         /* Auto-run: inject RUN into the keyboard buffer.
          *
-         * The system wrapper is responsible for deferring the call to this
+         * The system is responsible for deferring the call to this
          * function until KERNAL/BASIC boot has completed (BASIC READY state).
          * At that point:
          *   - KERNAL has initialized all hardware (CIA, VIC-II, SID, IRQ vectors)

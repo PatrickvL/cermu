@@ -10,7 +10,7 @@
  *   - Commodore 1351 Mouse (proportional mouse, motion → POT delta)
  *   - Commodore 1312 Paddles (analog paddle pair, position → POT value)
  *
- * The system wrapper reads pot_x_ / pot_y_ via get_pot_x() / get_pot_y()
+ * The system reads pot_x_ / pot_y_ via get_pot_x() / get_pot_y()
  * and feeds them to the SID's POTX ($D419) / POTY ($D41A) registers.
  */
 

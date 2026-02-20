@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../commodore/commodore_system.h"
-#include "../../core/system.h"
 #include "../../chip/cpu/fam65xx/mos6502.h"
 #include "../../chip/memory/ram.h"
 #include "../../chip/memory/rom.h"
@@ -96,8 +95,6 @@ public:
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
 
 private:
-    // Legacy system integration
-    system_8bit_t system_;           // Legacy system wrapper
     vic20_bus_t bus_;
     
     // New memory banking system

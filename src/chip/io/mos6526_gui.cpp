@@ -1,5 +1,4 @@
 #include "mos6526.h"
-#include "../../gui/imgui_interface.h"
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
 #include "../../systems/c64/c64.h"  // Need this to access C64 structure
