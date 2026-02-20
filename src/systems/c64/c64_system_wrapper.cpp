@@ -283,9 +283,8 @@ const SystemDescriptor& C64SystemWrapper::get_descriptor() const {
 // Chip creation + callback helpers (absorbed from c64.cpp)
 // ============================================================================
 
-// Create a chip, register it in the legacy chip registry, and return the pointer.
-static inline void* create_and_register_chip(c64_t* c64, chip_descriptor_t* desc,
-                                              uint16_t addr, unsigned int size) {
+// Create a chip and return the pointer (no legacy registry involvement).
+static inline void* create_chip(chip_descriptor_t* desc, unsigned int size) {
     void* chip;
     if (desc == &rom_descriptor)
         chip = rom_system_create_with_size(desc, size);
@@ -294,13 +293,15 @@ static inline void* create_and_register_chip(c64_t* c64, chip_descriptor_t* desc
 
     if (!chip) {
         printf("ERROR: Failed to create chip: %s\n", desc->description);
-        return nullptr;
-    }
-    if (system_chip_register(&c64->system, chip, desc, addr, size) == 0xFF) {
-        printf("ERROR: Failed to register chip: %s\n", desc->description);
-        return nullptr;
     }
     return chip;
+}
+
+// Destroy a single chip via its descriptor.
+static inline void destroy_chip(void* chip, chip_descriptor_t* desc) {
+    if (chip && desc && desc->destroy) {
+        desc->destroy(chip);
+    }
 }
 
 // CIA2 Port A change callback — updates VIC-II bank select
@@ -321,28 +322,34 @@ bool C64SystemWrapper::initialize() {
     // Point c64_ at the embedded struct (will be nulled on failure)
     c64_ = &c64_data_;
 
-    // Cleanup helper for error paths — destroys keyboard + registered chips,
+    // Cleanup helper for error paths — destroys keyboard + all created chips,
     // resets the pointer and zeroes the embedded struct for re-use.
     auto cleanup = [this]() {
         if (c64_->keyboard) {
             commodore_keyboard_destroy(c64_->keyboard);
             c64_->keyboard = nullptr;
         }
-        system_chips_destroy(&c64_->system);
+        // Destroy each chip individually (no legacy registry)
+        destroy_chip(c64_->kernal, &rom_descriptor);
+        destroy_chip(c64_->cia2, &mos6526_descriptor);
+        destroy_chip(c64_->cia1, &mos6526_descriptor);
+        destroy_chip(c64_->colorram, &mos2114_descriptor);
+        destroy_chip(c64_->sid, &mos6581_descriptor);
+        chip_descriptor_t* vdesc = (c64_config_.vicii_standard == VIC_PAL) ? &mos6569_descriptor : &mos6567_descriptor;
+        destroy_chip(c64_->vicii, vdesc);
+        destroy_chip(c64_->charrom, &rom_descriptor);
+        destroy_chip(c64_->cartridge_romh, &rom_descriptor);
+        destroy_chip(c64_->basic, &rom_descriptor);
+        destroy_chip(c64_->cartridge_roml, &rom_descriptor);
+        destroy_chip(c64_->mos6510, &mos6510_descriptor);
+        destroy_chip(c64_->ram, &ram_descriptor);
         c64_ = nullptr;
         c64_data_ = {};
     };
 
     // =========================================================================
-    // Phase 1: System infrastructure
+    // System infrastructure
     // =========================================================================
-    system_8bit_init(&c64_->system);
-    if (!c64_->system.cpp_system) {
-        printf("ERROR: Failed to initialize system\n");
-        cleanup();
-        return false;
-    }
-
     chip_descriptor_t* vicii_descriptor =
         (c64_config_.vicii_standard == VIC_PAL) ? &mos6569_descriptor : &mos6567_descriptor;
 
@@ -356,16 +363,16 @@ bool C64SystemWrapper::initialize() {
     c64_->bus.system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;
 
     // =========================================================================
-    // Phase 2: Create and register all chips
+    // Create all chips
     // =========================================================================
-    if (!(c64_->ram = static_cast<ram_t*>(create_and_register_chip(c64_, &ram_descriptor, 0x0000, 65536)))) { cleanup(); return false; }
-    if (!(c64_->mos6510 = create_and_register_chip(c64_, &mos6510_descriptor, 0x0000, 4096))) { cleanup(); return false; }
-    if (!(c64_->cartridge_roml = static_cast<rom_t*>(create_and_register_chip(c64_, &rom_descriptor, 0x8000, 8192)))) { cleanup(); return false; }
-    if (!(c64_->basic = static_cast<rom_t*>(create_and_register_chip(c64_, &rom_descriptor, 0xA000, 8192)))) { cleanup(); return false; }
-    if (!(c64_->cartridge_romh = static_cast<rom_t*>(create_and_register_chip(c64_, &rom_descriptor, 0xC000, 8192)))) { cleanup(); return false; }
-    if (!(c64_->charrom = static_cast<rom_t*>(create_and_register_chip(c64_, &rom_descriptor, 0xD000, 4096)))) { cleanup(); return false; }
-    if (!(c64_->vicii = static_cast<vicii_t*>(create_and_register_chip(c64_, vicii_descriptor, 0xD000, 1024)))) { cleanup(); return false; }
-    if (!(c64_->sid = static_cast<mos6581_t*>(create_and_register_chip(c64_, &mos6581_descriptor, 0xD400, 1024)))) { cleanup(); return false; }
+    if (!(c64_->ram = static_cast<ram_t*>(create_chip(&ram_descriptor, 65536)))) { cleanup(); return false; }
+    if (!(c64_->mos6510 = create_chip(&mos6510_descriptor, 4096))) { cleanup(); return false; }
+    if (!(c64_->cartridge_roml = static_cast<rom_t*>(create_chip(&rom_descriptor, 8192)))) { cleanup(); return false; }
+    if (!(c64_->basic = static_cast<rom_t*>(create_chip(&rom_descriptor, 8192)))) { cleanup(); return false; }
+    if (!(c64_->cartridge_romh = static_cast<rom_t*>(create_chip(&rom_descriptor, 8192)))) { cleanup(); return false; }
+    if (!(c64_->charrom = static_cast<rom_t*>(create_chip(&rom_descriptor, 4096)))) { cleanup(); return false; }
+    if (!(c64_->vicii = static_cast<vicii_t*>(create_chip(vicii_descriptor, 1024)))) { cleanup(); return false; }
+    if (!(c64_->sid = static_cast<mos6581_t*>(create_chip(&mos6581_descriptor, 1024)))) { cleanup(); return false; }
 
     // Configure SID timing to match C64 CPU clock
     {
@@ -375,15 +382,15 @@ bool C64SystemWrapper::initialize() {
         mos6581_set_timing(c64_->sid, is_pal);
     }
 
-    if (!(c64_->colorram = static_cast<mos2114_t*>(create_and_register_chip(c64_, &mos2114_descriptor, 0xD800, 1024)))) { cleanup(); return false; }
+    if (!(c64_->colorram = static_cast<mos2114_t*>(create_chip(&mos2114_descriptor, 1024)))) { cleanup(); return false; }
     c64_->vicii->colorram = c64_->colorram;
 
     // VIC-II bank selection via bank_base offset; no bus-level callback needed
     c64_->vicii->bus.bus = &c64_->bus;
     c64_->vicii->bus.bank_change = nullptr;
 
-    if (!(c64_->cia1 = static_cast<mos6526_t*>(create_and_register_chip(c64_, &mos6526_descriptor, 0xDC00, 256)))) { cleanup(); return false; }
-    if (!(c64_->cia2 = static_cast<mos6526_t*>(create_and_register_chip(c64_, &mos6526_descriptor, 0xDD00, 256)))) { cleanup(); return false; }
+    if (!(c64_->cia1 = static_cast<mos6526_t*>(create_chip(&mos6526_descriptor, 256)))) { cleanup(); return false; }
+    if (!(c64_->cia2 = static_cast<mos6526_t*>(create_chip(&mos6526_descriptor, 256)))) { cleanup(); return false; }
 
     // Create keyboard matrix
     c64_->keyboard = commodore_keyboard_create(&c64_keyboard_config);
@@ -395,17 +402,14 @@ bool C64SystemWrapper::initialize() {
     commodore_keyboard_reset(c64_->keyboard);
     printf("C64: Keyboard matrix initialized (all keys released)\n");
 
-    if (!(c64_->kernal = static_cast<rom_t*>(create_and_register_chip(c64_, &rom_descriptor, 0xE000, 8192)))) { cleanup(); return false; }
+    if (!(c64_->kernal = static_cast<rom_t*>(create_chip(&rom_descriptor, 8192)))) { cleanup(); return false; }
 
     // No cartridge I/O by default
     c64_->io1 = nullptr;
     c64_->io2 = nullptr;
 
-    // Register PLA for GUI debug (special case — chip is the c64_t itself)
-    if (system_chip_register(&c64_->system, c64_, &pla_descriptor, 0x0000, 0) == 0xFF) { cleanup(); return false; }
-
     // =========================================================================
-    // Phase 3: PLA memory maps and bus initialization
+    // PLA memory maps and bus initialization
     // =========================================================================
     if (!c64_pla_maps_generate(c64_)) { cleanup(); return false; }
 
@@ -419,11 +423,11 @@ bool C64SystemWrapper::initialize() {
 
     // Attach bus and load ROMs from configured paths
     c64_bus_system_attach(&c64_->bus, c64_);
-    c64_memory_init(&c64_->system, &c64_config_);
+    c64_memory_init(c64_, &c64_config_);
     c64_bus_init_unified_pointers(&c64_->bus, c64_, &c64_config_);
 
     // =========================================================================
-    // Phase 4: Wire callbacks and initialize CPU
+    // Wire callbacks and initialize CPU
     // =========================================================================
 
     // CIA2 Port A → VIC-II bank selection
@@ -450,13 +454,8 @@ bool C64SystemWrapper::initialize() {
     mos6510_set_ab(static_cast<mos6510_t*>(c64_->mos6510), reset_vector);
     printf("C64: CPU reset vector $%04X loaded\n", reset_vector);
 
-    // Attach all chips that have bus_attach callbacks
-    for (int i = 0; i < c64_->system.chip_count; i++) {
-        chip_entry_t* chip = &c64_->system.chips[i];
-        if (chip->desc && chip->desc->bus_attach && chip->desc != &c64_bus_descriptor) {
-            chip->desc->bus_attach(chip->chip, &c64_->bus);
-        }
-    }
+    // NOTE: VIC-II bus.bus is already wired above. SID bus_interface is unused.
+    // No legacy bus_attach iteration needed.
 
     // =========================================================================
     // Phase 5: Wrapper-level initialization
@@ -503,8 +502,20 @@ void C64SystemWrapper::shutdown() {
             commodore_keyboard_destroy(c64_->keyboard);
             c64_->keyboard = nullptr;
         }
-        // Destroy all registered chips
-        system_chips_destroy(&c64_->system);
+        // Destroy all chips individually (no legacy registry)
+        chip_descriptor_t* vdesc = (created_vicii_standard_ == VIC_PAL) ? &mos6569_descriptor : &mos6567_descriptor;
+        destroy_chip(c64_->kernal, &rom_descriptor);
+        destroy_chip(c64_->cia2, &mos6526_descriptor);
+        destroy_chip(c64_->cia1, &mos6526_descriptor);
+        destroy_chip(c64_->colorram, &mos2114_descriptor);
+        destroy_chip(c64_->sid, &mos6581_descriptor);
+        destroy_chip(c64_->vicii, vdesc);
+        destroy_chip(c64_->charrom, &rom_descriptor);
+        destroy_chip(c64_->cartridge_romh, &rom_descriptor);
+        destroy_chip(c64_->basic, &rom_descriptor);
+        destroy_chip(c64_->cartridge_roml, &rom_descriptor);
+        destroy_chip(c64_->mos6510, &mos6510_descriptor);
+        destroy_chip(c64_->ram, &ram_descriptor);
 
         c64_ = nullptr;
         // Zero the embedded struct for clean re-initialization

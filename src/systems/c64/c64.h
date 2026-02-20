@@ -66,7 +66,7 @@ void c64_system_reset(c64_t* c64);
 void c64_system_tick(c64_t* c64);
 
 bool c64_pla_maps_generate(c64_t* c64);  // PLA memory mapping generation
-void c64_memory_init(system_8bit_t* system, const c64_config_t* config);
+void c64_memory_init(c64_t* c64, const c64_config_t* config);
 bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config);
 
 // Set the framebuffer for VIC-II pixel output

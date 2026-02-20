@@ -69,7 +69,7 @@ static void c64_colorram_init_debug(mos2114_t* colorram) {
 }
 
 // Main memory initialization function with test mode support
-void c64_memory_init(system_8bit_t* system, const c64_config_t* config) {
+void c64_memory_init(c64_t* c64, const c64_config_t* config) {
     // Use default ROM configuration if none provided
     const rom_config_t* rom_config = config && config->rom_config ?
                                       config->rom_config :
@@ -79,145 +79,125 @@ void c64_memory_init(system_8bit_t* system, const c64_config_t* config) {
     char rom_root_path[1024];
     bool rom_root_found = system_config_discover_rom_root("c64", rom_root_path, sizeof(rom_root_path));
 
-    for (int i = 0; i < system->chip_count; i++) {
-        chip_entry_t* dev = &system->chips[i];
+    // -------------------------------------------------------------------------
+    // Initialize RAM
+    // -------------------------------------------------------------------------
+    if (c64->ram && c64->ram->memory) {
+        c64_test_mode_t test_mode = config ? config->test_mode : C64_TEST_MODE_NORMAL;
 
-        // Find and initialize RAM
-        if (dev->desc == &ram_descriptor) {
-            ram_t* ram = (ram_t*)dev->chip;
-            if (!ram->memory) {
-                printf("ERROR: RAM memory pointer is NULL!\n");
-                continue;
-            }
-            // Initialize based on test mode
-            c64_test_mode_t test_mode = config ? config->test_mode : C64_TEST_MODE_NORMAL;
-            
-            switch (test_mode) {
-                case C64_TEST_MODE_NORMAL:
-                    printf("Normal boot mode: RAM cleared\n");
-                    memset(ram->memory, 0, 0x10000);
-                    break;
+        switch (test_mode) {
+            case C64_TEST_MODE_NORMAL:
+                printf("Normal boot mode: RAM cleared\n");
+                memset(c64->ram->memory, 0, 0x10000);
+                break;
 
-                case C64_TEST_MODE_DEBUG_PATTERNS:
-                    c64_memory_init_debug_patterns(ram);
-                    break;
+            case C64_TEST_MODE_DEBUG_PATTERNS:
+                c64_memory_init_debug_patterns(c64->ram);
+                break;
 
-                case C64_TEST_MODE_PRG_FILE:
-                    if (config && config->test_binary_config && config->test_binary_config->filename) {
-                        printf("Loading PRG file: %s\n", config->test_binary_config->filename);
-                        memset(ram->memory, 0, 0x10000);  // Clear RAM first
-                        commodore_prg_t prg = {};
-                        if (commodore_prg_load(config->test_binary_config->filename, &prg)) {
-                            memcpy(&ram->memory[prg.load_addr], prg.data, prg.data_size);
-                            printf("  Loaded $%04X-$%04X (%zu bytes)\n",
-                                   prg.load_addr, prg.end_addr, prg.data_size);
-                            commodore_prg_free(&prg);
-                        } else {
-                            printf("ERROR: Failed to load PRG file, falling back to normal init\n");
-                            memset(ram->memory, 0, 0x10000);
-                        }
+            case C64_TEST_MODE_PRG_FILE:
+                if (config && config->test_binary_config && config->test_binary_config->filename) {
+                    printf("Loading PRG file: %s\n", config->test_binary_config->filename);
+                    memset(c64->ram->memory, 0, 0x10000);
+                    commodore_prg_t prg = {};
+                    if (commodore_prg_load(config->test_binary_config->filename, &prg)) {
+                        memcpy(&c64->ram->memory[prg.load_addr], prg.data, prg.data_size);
+                        printf("  Loaded $%04X-$%04X (%zu bytes)\n",
+                               prg.load_addr, prg.end_addr, prg.data_size);
+                        commodore_prg_free(&prg);
                     } else {
-                        printf("ERROR: PRG mode selected but no filename provided\n");
-                        memset(ram->memory, 0, 0x10000);
+                        printf("ERROR: Failed to load PRG file, falling back to normal init\n");
+                        memset(c64->ram->memory, 0, 0x10000);
                     }
-                    break;
-
-                case C64_TEST_MODE_BIN_FILE:
-                    if (config && config->test_binary_config && config->test_binary_config->filename) {
-                        printf("Loading BIN file: %s at $%04X\n",
-                               config->test_binary_config->filename,
-                               config->test_binary_config->load_address);
-                        memset(ram->memory, 0, 0x10000);  // Clear RAM first
-                        uint8_t* bin_data = NULL;
-                        size_t bin_size = 0;
-                        if (commodore_bin_load(config->test_binary_config->filename,
-                                              &bin_data, &bin_size)) {
-                            uint16_t addr = config->test_binary_config->load_address;
-                            if (addr + bin_size <= 0x10000) {
-                                memcpy(&ram->memory[addr], bin_data, bin_size);
-                                printf("  Loaded %zu bytes at $%04X\n", bin_size, addr);
-                            }
-                            free(bin_data);
-                        } else {
-                            printf("ERROR: Failed to load BIN file, falling back to normal init\n");
-                            memset(ram->memory, 0, 0x10000);
-                        }
-                    } else {
-                        printf("ERROR: BIN mode selected but no filename provided\n");
-                        memset(ram->memory, 0, 0x10000);
-                    }
-                    break;
-
-                default:
-                    printf("WARNING: Unknown test mode, using normal init\n");
-                    memset(ram->memory, 0, 0x10000);
-                    break;
-            }
-        }
-        
-        // Find and initialize Color RAM
-        else if (dev->desc == &mos2114_descriptor) {
-            mos2114_t* colorram = (mos2114_t*)dev->chip;
-            if (colorram->memory) {
-                // Initialize Color RAM based on test mode
-                c64_test_mode_t test_mode = config ? config->test_mode : C64_TEST_MODE_NORMAL;
-                if (test_mode == C64_TEST_MODE_DEBUG_PATTERNS) {
-                    c64_colorram_init_debug(colorram);
                 } else {
-                    // Normal mode: clear Color RAM
-                    memset(colorram->memory, 0, 1024);
+                    printf("ERROR: PRG mode selected but no filename provided\n");
+                    memset(c64->ram->memory, 0, 0x10000);
                 }
-            }
+                break;
+
+            case C64_TEST_MODE_BIN_FILE:
+                if (config && config->test_binary_config && config->test_binary_config->filename) {
+                    printf("Loading BIN file: %s at $%04X\n",
+                           config->test_binary_config->filename,
+                           config->test_binary_config->load_address);
+                    memset(c64->ram->memory, 0, 0x10000);
+                    uint8_t* bin_data = NULL;
+                    size_t bin_size = 0;
+                    if (commodore_bin_load(config->test_binary_config->filename,
+                                          &bin_data, &bin_size)) {
+                        uint16_t addr = config->test_binary_config->load_address;
+                        if (addr + bin_size <= 0x10000) {
+                            memcpy(&c64->ram->memory[addr], bin_data, bin_size);
+                            printf("  Loaded %zu bytes at $%04X\n", bin_size, addr);
+                        }
+                        free(bin_data);
+                    } else {
+                        printf("ERROR: Failed to load BIN file, falling back to normal init\n");
+                        memset(c64->ram->memory, 0, 0x10000);
+                    }
+                } else {
+                    printf("ERROR: BIN mode selected but no filename provided\n");
+                    memset(c64->ram->memory, 0, 0x10000);
+                }
+                break;
+
+            default:
+                printf("WARNING: Unknown test mode, using normal init\n");
+                memset(c64->ram->memory, 0, 0x10000);
+                break;
+        }
+    } else {
+        printf("ERROR: RAM memory pointer is NULL!\n");
+    }
+
+    // -------------------------------------------------------------------------
+    // Initialize Color RAM
+    // -------------------------------------------------------------------------
+    if (c64->colorram && c64->colorram->memory) {
+        c64_test_mode_t test_mode = config ? config->test_mode : C64_TEST_MODE_NORMAL;
+        if (test_mode == C64_TEST_MODE_DEBUG_PATTERNS) {
+            c64_colorram_init_debug(c64->colorram);
+        } else {
+            memset(c64->colorram->memory, 0, 1024);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Load ROMs from files
+    // -------------------------------------------------------------------------
+    struct { rom_t* rom; const char** filenames; uint16_t size; const char* name; } roms[] = {
+        { c64->basic,   rom_config ? (const char**)rom_config->basic_rom_filenames   : nullptr, 8192, "BASIC" },
+        { c64->kernal,  rom_config ? (const char**)rom_config->kernal_rom_filenames  : nullptr, 8192, "KERNAL" },
+        { c64->charrom, rom_config ? (const char**)rom_config->chargen_rom_filenames : nullptr, 4096, "Character" },
+    };
+
+    for (auto& r : roms) {
+        if (!r.rom || !r.rom->memory) {
+            if (r.rom) printf("Warning: %s ROM has no allocated memory\n", r.name);
+            continue;
+        }
+        printf("[ROM-INIT] Processing %s ROM (size=%u memory=%p)\n", r.name, r.size, (void*)r.rom->memory);
+
+        bool loaded = false;
+        if (rom_root_found && r.filenames) {
+            loaded = rom_loader_load_from_root(rom_root_path, r.filenames, r.size,
+                                               r.rom->memory, r.size);
+            if (!loaded) printf("Warning: Failed to load %s ROM\n", r.name);
+        } else if (!rom_root_found) {
+            printf("Warning: ROM root not found, skipping %s ROM loading\n", r.name);
         }
 
-        // Initialize ROM chips by loading from files
-        else if (dev->desc == &rom_descriptor) {
-            rom_t* rom = (rom_t*)dev->chip;
-            if (!rom->memory) {
-                printf("Warning: ROM chip has no allocated memory (base=$%04X size=%u)\n",
-                       dev->base_address, dev->size);
-                continue;
-            }
-            printf("[ROM-INIT] Processing ROM at base=$%04X size=%u memory=%p\n",
-                   dev->base_address, dev->size, (void*)rom->memory);
-
-            bool rom_loaded = false;
-              // Only attempt to load ROMs if we found the ROM root directory
-            if (rom_root_found) {
-                // Determine ROM type based on memory address and size
-                if (dev->base_address == 0xA000 && dev->size == 8192) {
-                    // BASIC ROM
-                    rom_loaded = rom_loader_load_from_root(rom_root_path, (const char**)rom_config->basic_rom_filenames, 8192,
-                                                         rom->memory, dev->size);
-                    if (!rom_loaded) {
-                        printf("Warning: Failed to load BASIC ROM\n");
-                    }
-                }
-                else if (dev->base_address == 0xE000 && dev->size == 8192) {
-                    // KERNAL ROM
-                    rom_loaded = rom_loader_load_from_root(rom_root_path, (const char**)rom_config->kernal_rom_filenames, 8192,
-                                                         rom->memory, dev->size);
-                    if (!rom_loaded) {
-                        printf("Warning: Failed to load KERNAL ROM\n");
-                    }
-                }
-                else if (dev->base_address == 0xD000 && dev->size == 4096) {
-                    // Character ROM
-                    rom_loaded = rom_loader_load_from_root(rom_root_path, (const char**)rom_config->chargen_rom_filenames, 4096,
-                                                         rom->memory, dev->size);
-                    if (!rom_loaded) {
-                        printf("Warning: Failed to load Character ROM\n");
-                    }
-                }
-            } else {
-                printf("Warning: ROM root not found, skipping ROM loading\n");
-            }
-
-            // If ROM loading failed, fill with default pattern (0xFF for unloaded ROM)
-            if (!rom_loaded) {
-                memset(rom->memory, 0xFF, dev->size);
-            }
+        if (!loaded) {
+            memset(r.rom->memory, 0xFF, r.size);
         }
+    }
+
+    // Cartridge ROMs: not loaded by default (filled with 0xFF if present)
+    if (c64->cartridge_roml && c64->cartridge_roml->memory) {
+        memset(c64->cartridge_roml->memory, 0xFF, 8192);
+    }
+    if (c64->cartridge_romh && c64->cartridge_romh->memory) {
+        memset(c64->cartridge_romh->memory, 0xFF, 8192);
     }
 }
 
@@ -705,7 +685,7 @@ bool c64_system_init(c64_t* c64, const c64_config_t* config) {
     c64_bus_system_attach(&(c64->bus), c64);
 
     // Set default memory contents and load ROMs from configured paths
-    c64_memory_init(&c64->system, config);
+    c64_memory_init(c64, config);
     
     // Re-initialize unified pointers after ROM loading to copy loaded ROM data into unified buffer
     c64_bus_init_unified_pointers(&c64->bus, c64, config);
@@ -943,7 +923,7 @@ bool c64_reload_roms(c64_t* c64, const rom_config_t* rom_config) {
     reload_config.test_mode = C64_TEST_MODE_NORMAL;  // Always use normal mode for ROM reload
 
     // Reload ROMs using the memory initialization function
-    c64_memory_init(&c64->system, &reload_config);
+    c64_memory_init(c64, &reload_config);
 
     printf("ROMs reloaded successfully\n");
     return true;
