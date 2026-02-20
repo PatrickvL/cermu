@@ -55,9 +55,9 @@ public:
     void handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) override;
     void handle_controller_event(int controller, int button, bool pressed) override;
     
-    // GUI forwarding methods - delegate to old C64 GUI code (imgui_interface.cpp)
-    void render_system_menu_items() override;      // Forwards to gui_render_c64_system_menu_items()
-    void render_debug_windows(void* gui_state) override;  // Forwards to chip debug system
+    // GUI rendering overrides
+    void render_system_menu_items() override;
+    void render_debug_windows(void* gui_state) override;
 
     // Chip enumeration and debug windows (generic interface)
     std::vector<ChipInfo> get_chip_info() const override;
