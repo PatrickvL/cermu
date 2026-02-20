@@ -220,8 +220,8 @@ void* c64_bus_system_create(chip_descriptor_t* desc) {
     return c64_bus;
 }
 
-void c64_bus_system_attach(c64_bus_t* c64_bus, void* c64) {
-    c64_bus->c64 = c64;  // Store as opaque pointer
+void c64_bus_system_attach(c64_bus_t* c64_bus, C64System* c64) {
+    c64_bus->c64 = c64;
 
     // Initialize ROM/RAM pointers and allocate unified buffer with default configuration
     c64_config_t default_config;
@@ -614,7 +614,7 @@ const char* c64_bus_size_to_str(size_t size) {
  * @param c64_system Pointer to the C64 system (for pointer updates)
  * @param config Pointer to the C64 system configuration structure
  */
-void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c64_config_t* config) {
+void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, C64System* c64_system, const c64_config_t* config) {
     if (!c64_bus || !c64_system || !config) return;
     
     // Store cartridge ROM presence flags from configuration
@@ -623,7 +623,7 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
     
     // If buffer already exists, just update the ROM pointers to preserve loaded data
     if (c64_bus->allocated_buffer) {
-        c64_t* c64 = (c64_t*)c64_system;
+        c64_t* c64 = c64_system;
         uint8_t* buffer = c64_bus->unified_memory_buffer;
         
         // Update ROM chip pointers but preserve existing data by copying it
@@ -707,7 +707,7 @@ void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, void* c64_system, const c
     // Initialize allocated memory to zero
     memset(c64_bus->allocated_buffer, 0, required_size);
     
-    c64_t* c64 = (c64_t*)c64_system;
+    c64_t* c64 = c64_system;
     uint8_t* buffer = c64_bus->unified_memory_buffer;
     
 #define DO(c64_device, offset, size, present_flag) \
@@ -785,7 +785,7 @@ static bus_state_t c64_bus_unmapped_write(void* chip, bus_state_t bus_state) {
  * $DF00-$DFFF (page 15):     I/O2 expansion (unmapped by default)
  */
 void c64_bus_init_io_handlers(c64_bus_t* c64_bus) {
-    c64_t* c64 = (c64_t*)c64_bus->c64;
+    c64_t* c64 = c64_bus->c64;
 
     // Set up direct callbacks and chip instances for each IO page (0-15 for $D000-$DFFF)
     // Each page gets the appropriate chip register function and chip instance directly
