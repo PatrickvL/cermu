@@ -290,6 +290,8 @@ bool C16System::initialize() {
         ted_desc.is_pal = is_pal_region;
         ted_desc.keyboard_scan = ted_keyboard_scan;
         ted_desc.keyboard_user_data = this;
+        ted_desc.mem_read = ted_mem_read;
+        ted_desc.mem_read_user_data = this;
         ted_ = ted7360_create(&ted_desc);
         if (ted_) {
             printf("%s: Created TED 7360 (%s)\n", system_name_, is_pal_region ? "PAL" : "NTSC");
@@ -384,29 +386,50 @@ void C16System::reset() {
 void C16System::tick() {
     bus_state_t s = bus_state_;
     
-    // TED ticks at 2× CPU clock — tick twice per CPU cycle
-    // TED also generates IRQ from timers and raster compare
+    // =========================================================================
+    // UNIFIED TIMING MODEL (matching C64 phi1/phi2 pattern)
+    // =========================================================================
+    
+    // PHASE 1: TED PHI1
+    // TED performs g-access reads (chargen/bitmap data via mem_read callback),
+    // pixel sequencing (8 pixels), timer countdown, DMA detection, and sets
+    // BA/AEC/IRQ signals on the bus. Sets up PHI2 address for DMA c-access.
     if (ted_) {
-        ted7360_tick(ted_);
-        ted7360_tick(ted_);
-        
-        // Propagate TED IRQ to CPU bus (active LOW)
-        if (ted7360_irq_pending(ted_)) {
-            s &= ~BUS_BIT(BUS_IRQ_BIT);   // Assert IRQ (active low)
-        } else {
-            s |= BUS_BIT(BUS_IRQ_BIT);    // De-assert IRQ
-        }
+        s = ted7360_tick_phi1(ted_, s);
     }
     
-    // CPU PHI2 — drives address bus, sets R/W
+    // HARDWARE WIRING: BA → RDY
+    // TED's BA output connects directly to CPU's RDY input.
+    // BA goes LOW 3 cycles before TED needs the bus for DMA, giving CPU
+    // time to finish write cycles. CPU halts on READ operations when RDY LOW.
+    // Use direct bit manipulation to preserve IRQ state set by TED.
+    if (BUS_GET_LINES(s) & BUS_MASK_BA) {
+        s |= BUS_BIT(BUS_RDY_BIT);
+    } else {
+        s &= ~BUS_BIT(BUS_RDY_BIT);
+    }
+    
+    // PHASE 2: CPU PHI2
+    // CPU drives address bus, sets R/W. Samples IRQ during this phase.
     if (cpu_) {
         s = mos7501_tick_phi2(cpu_, s);
     }
     
-    // Memory service — between PHI2 and PHI1
+    // PHASE 3: Memory service
+    // Services memory access from either CPU or TED (during DMA).
+    // When AEC is LOW, TED has bus control and the address on the bus
+    // is TED's c-access address (screen matrix read).
     s = mem_tick(s);
     
-    // CPU PHI1 — completes cycle, reads/writes data
+    // PHASE 3.1: TED PHI2 delivery
+    // TED reads the data returned by memory service. On DMA lines,
+    // stores screen matrix data into video line buffer.
+    if (ted_) {
+        ted7360_tick_phi2(ted_, s);
+    }
+    
+    // PHASE 4: CPU PHI1
+    // CPU completes cycle, consumes read data or acknowledges write.
     if (cpu_) {
         s = mos7501_tick_phi1(cpu_, s);
     }
@@ -830,6 +853,31 @@ uint8_t C16System::ted_keyboard_scan(void* user_data, uint8_t column) {
         }
     }
     return result;
+}
+
+// ============================================================================
+// TED MEMORY READ CALLBACK
+// ============================================================================
+// Called by TED during PHI1 for its own memory accesses:
+//   - g-access: character generator or bitmap data reads
+//   - c-access: screen matrix and color attribute reads (on DMA lines)
+//
+// On the real C16/Plus4, TED accesses the full 64K address space directly.
+// Character ROM ($D000-$DFFF or wherever TED register mapping points)
+// is accessible only by TED, not by the CPU. For now we read from RAM;
+// character ROM support will be added once the char ROM file is available.
+
+uint8_t C16System::ted_mem_read(void* user_data, uint16_t address) {
+    C16System* sys = static_cast<C16System*>(user_data);
+    
+    // TED always reads from RAM for its video accesses.
+    // The address has already been computed by TED from its own registers
+    // (screen_base, char_base, bitmap_base).
+    //
+    // TODO: When character ROM is loaded, check if the address falls in
+    // the character ROM range (determined by $FF12/$FF13) and return
+    // char ROM data instead of RAM data.
+    return sys->ram_simple_[address & 0xFFFF];
 }
 
 // ============================================================================
