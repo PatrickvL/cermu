@@ -151,11 +151,15 @@ static ChipLayout& get_cia_layout() {
     return layout;
 }
 
-void mos6526_render_debug_content(void* chip) {
-    mos6526_t* cia = (mos6526_t*)chip;
-    if (!cia || !cia->desc) return;
+// Legacy C-linkage wrapper
+extern "C" void mos6526_render_debug_content(void* chip) {
+    if (chip) static_cast<mos6526_t*>(chip)->render_debug_content();
+}
+
+void mos6526_s::render_debug_content() {
     
 #ifdef IMGUI_VERSION
+    mos6526_t* cia = this;
     const char* cia_name = mos6526_get_cia_name(cia);
 
     // Create two-column layout: chip visualization on left, debugging info on right
@@ -255,11 +259,15 @@ void mos6526_render_debug_content(void* chip) {
 // MOS6526 CIA GUI SETTINGS
 // ============================================================================
 
-void mos6526_render_settings_content(void* chip) {
-    mos6526_t* cia = (mos6526_t*)chip;
-    if (!cia || !cia->desc) return;
+// Legacy C-linkage wrapper
+extern "C" void mos6526_render_settings_content(void* chip) {
+    if (chip) static_cast<mos6526_t*>(chip)->render_settings_content();
+}
+
+void mos6526_s::render_settings_content() {
     
 #ifdef IMGUI_VERSION
+    mos6526_t* cia = this;
     const char* cia_name = mos6526_get_cia_name(cia);
 
     // Show which CIA this is
@@ -381,11 +389,15 @@ static const char* mos6526_get_cia_name(mos6526_t* cia) {
 // MOS6526 CIA LAYOUT WINDOW (standalone pinout diagram)
 // ============================================================================
 
-void mos6526_render_layout_content(void* chip) {
-    mos6526_t* cia = (mos6526_t*)chip;
-    if (!cia) return;
+// Legacy C-linkage wrapper
+extern "C" void mos6526_render_layout_content(void* chip) {
+    if (chip) static_cast<mos6526_t*>(chip)->render_layout_content();
+}
+
+void mos6526_s::render_layout_content() {
 
 #ifdef IMGUI_VERSION
+    mos6526_t* cia = this;
     const char* cia_name = mos6526_get_cia_name(cia);
 
     ChipLayout& layout = get_cia_layout();

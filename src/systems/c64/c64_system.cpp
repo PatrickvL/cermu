@@ -22,7 +22,7 @@
 #include "../../chip/video/vic_ii/mos6569.h"
 #include "../../chip/video/vic_ii/mos6567.h"
 #include "../../chip/video/vic_ii/vicii_gui.h"
-#include "../../chip/io/mos6526_gui.h"
+// MOS6526 is a native C++ ChipBase — no separate GUI header needed
 // MOS2114 is a native C++ ChipBase — no separate GUI header needed
 #include "../../chip/logic/pla.h"
 #include "../../chip/logic/pla_gui.h"
@@ -319,8 +319,8 @@ bool C64System::initialize() {
         }
         // Destroy each chip individually using typed destroyers
         rom_destroy(c64_->kernal);
-        mos6526_destroy(c64_->cia2);
-        mos6526_destroy(c64_->cia1);
+        delete c64_->cia2;
+        delete c64_->cia1;
         delete c64_->colorram;
         mos6581_destroy(c64_->sid);
         vicii_destroy(c64_->vicii);
@@ -370,8 +370,8 @@ bool C64System::initialize() {
     c64_->vicii->bus.bus = &c64_->bus;
     c64_->vicii->bus.bank_change = nullptr;
 
-    if (!(c64_->cia1 = mos6526_create())) { cleanup(); return false; }
-    if (!(c64_->cia2 = mos6526_create())) { cleanup(); return false; }
+    c64_->cia1 = mos6526_create();
+    c64_->cia2 = mos6526_create();
 
     // Create keyboard matrix
     c64_->keyboard = commodore_keyboard_create(&c64_keyboard_config);
@@ -491,8 +491,8 @@ void C64System::shutdown() {
         }
         // Destroy all chips individually using typed destroyers
         rom_destroy(c64_->kernal);
-        mos6526_destroy(c64_->cia2);
-        mos6526_destroy(c64_->cia1);
+        delete c64_->cia2;
+        delete c64_->cia1;
         delete c64_->colorram;
         mos6581_destroy(c64_->sid);
         vicii_destroy(c64_->vicii);
@@ -1224,20 +1224,12 @@ void C64System::register_c64_chips() {
         [sid]() { mos6581_render_layout_content(sid); }),
         "SID (MOS 6581/8580)", "SID", "Audio", 0xD400);
 
-    // CIA 1
-    register_chip(std::make_unique<CChipAdapter>(
-        cia1, ChipIdentity{"MOS6526", "MOS Technology"},
-        [cia1]() { mos6526_render_debug_content(cia1); },
-        [cia1]() { mos6526_render_settings_content(cia1); },
-        [cia1]() { mos6526_render_layout_content(cia1); }),
+    // CIA 1 — MOS6526 is a native C++ ChipBase, register directly
+    register_chip(cia1,
         "CIA 1 (MOS 6526)", "CIA 1", "I/O", 0xDC00);
 
     // CIA 2
-    register_chip(std::make_unique<CChipAdapter>(
-        cia2, ChipIdentity{"MOS6526", "MOS Technology"},
-        [cia2]() { mos6526_render_debug_content(cia2); },
-        [cia2]() { mos6526_render_settings_content(cia2); },
-        [cia2]() { mos6526_render_layout_content(cia2); }),
+    register_chip(cia2,
         "CIA 2 (MOS 6526)", "CIA 2", "I/O", 0xDD00);
 
     // Color RAM — MOS2114 is a native C++ ChipBase, register directly

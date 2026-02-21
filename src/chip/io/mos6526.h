@@ -52,65 +52,64 @@ typedef enum {
 #define SHIFT_OFFSET 28 // Delta on SDR so Serial Data Shift register resides at 28
 #define IDDRB_OFFSET 29 // Internal Data Direction of Port B (a version of DDRB which includes the PBON mask)
 
-typedef struct mos6526_s {
-    chip_descriptor_t* desc;
-    uint8_t configured_interrupt_bit; // BUS_IRQ_BIT for CIA1, BUS_NMI_BIT for CIA2
+typedef struct mos6526_s : public ChipBase {
+    uint8_t configured_interrupt_bit = 0; // BUS_IRQ_BIT for CIA1, BUS_NMI_BIT for CIA2
     
     // CIA ports, timers, alarm, registers, latches, interrupt and other status variables.
-    uint8_t port_a_value;
-    uint8_t port_b_value;
-    int cycles_tod[2]; // Assigned once in constructor
-    uint8_t reg[CIA_REGS_SIZE + 4 + 4 + 4 + 1 + 1]; // Registers, plus TIMER, CLOCK, ALARM, SDR and DDRB latches
-    uint32_t read_tod_delta;
-    uint32_t write_tod_delta;
-    bool is_running_tod;
-    int tod_cycles;
-    int serial_shift;
-    bool cnt_output_state;  // CNT flip-flop for serial output mode (toggled by Timer A underflow)
-    bool sp_output_bit;     // Current SP output bit value (driven during serial output)
-    uint8_t interrupt_mask;
-    uint8_t interrupt_mask_delayed;  // 1-cycle delay for interrupt mask updates (IMR → IMR1)
+    uint8_t port_a_value = 0;
+    uint8_t port_b_value = 0;
+    int cycles_tod[2] = {}; // Assigned once in constructor
+    uint8_t reg[CIA_REGS_SIZE + 4 + 4 + 4 + 1 + 1] = {}; // Registers, plus TIMER, CLOCK, ALARM, SDR and DDRB latches
+    uint32_t read_tod_delta = 0;
+    uint32_t write_tod_delta = 0;
+    bool is_running_tod = false;
+    int tod_cycles = 0;
+    int serial_shift = 0;
+    bool cnt_output_state = false;  // CNT flip-flop for serial output mode (toggled by Timer A underflow)
+    bool sp_output_bit = false;     // Current SP output bit value (driven during serial output)
+    uint8_t interrupt_mask = 0;
+    uint8_t interrupt_mask_delayed = 0;  // 1-cycle delay for interrupt mask updates (IMR → IMR1)
     
     // TOD alarm state for edge detection (prevents retriggering alarm every cycle)
     // Per chips_mos6526.hpp: Only trigger alarm interrupt on rising edge
-    bool prev_alarm_state;
+    bool prev_alarm_state = false;
     
     // Timer B Bug: Track ICR reads to block Timer B interrupt generation
     // Per chips_mos6526.hpp lines 476-477: "Timer B Bug" implementation
-    bool icr_read_this_cycle;
+    bool icr_read_this_cycle = false;
     
     // Timer underflow event tracking (one-cycle pulse, NOT the persistent ICR flag)
     // Used for Timer B cascade mode (counts Timer A underflows) and PB6/PB7 pulse output.
     // Set TRUE during the late tick when underflow occurs, cleared at start of next late tick.
-    uint8_t timer_underflowed;
+    uint8_t timer_underflowed = 0;
     
     // PB6/PB7 toggle flip-flops (per CIA6526.txt lines 104-110)
     // Set HIGH on rising edge of START bit, toggle on each underflow
     // Used when PBON=1 and OUTMODE=1 (toggle mode)
-    uint8_t pb67_toggle;  // Bit 6 = PB6 toggle state, Bit 7 = PB7 toggle state
+    uint8_t pb67_toggle = 0;  // Bit 6 = PB6 toggle state, Bit 7 = PB7 toggle state
     
     // Bus line control for interrupt delay implementation
     // This mask is applied at the START of each tick to pull lines LOW (assert)
     // Updated at the END of the tick based on pending interrupts
     // Implements the required 1-cycle delay for interrupt assertion
-    bus_state_t pending_bus_lines;  // Lines to assert in NEXT cycle
+    bus_state_t pending_bus_lines = 0;  // Lines to assert in NEXT cycle
     
     // Previous bus state for edge detection
     // Stored at end of each tick to detect signal transitions in next cycle
     // This is the standard pattern all chips should use for edge detection
-    bus_state_t prev_bus_state;
+    bus_state_t prev_bus_state = 0;
     
     // Callback for port A output changes (used by CIA2 for VIC-II bank switching)
-    void (*port_a_change_callback)(void* context, uint8_t port_a_output);
-    void* port_a_callback_context;
+    void (*port_a_change_callback)(void* context, uint8_t port_a_output) = nullptr;
+    void* port_a_callback_context = nullptr;
     
     // Callbacks for port input reads (used by CIA1 for keyboard matrix scanning)
     // These callbacks allow external devices (keyboard, joystick) to pull port lines LOW
     // Called when CIA reads from port to get external device state
-    uint8_t (*port_a_read_callback)(void* context, uint8_t port_a_output);
-    void* port_a_read_context;
-    uint8_t (*port_b_read_callback)(void* context, uint8_t port_b_output);
-    void* port_b_read_context;
+    uint8_t (*port_a_read_callback)(void* context, uint8_t port_a_output) = nullptr;
+    void* port_a_read_context = nullptr;
+    uint8_t (*port_b_read_callback)(void* context, uint8_t port_b_output) = nullptr;
+    void* port_b_read_context = nullptr;
 
     // Multi-cycle delay line using StaticShiftRegister for cycle-accurate timing
     // Configuration: TA_COUNT(3), TB_COUNT(3), TA_LOAD(2), TB_LOAD(2),
@@ -120,6 +119,15 @@ typedef struct mos6526_s {
     //               4=ONESHOT_A, 5=ONESHOT_B, 6=CNT_SWITCH_A, 7=CNT_SWITCH_B
     using DelayLine = StaticShiftRegister<uint64_t, 3, 3, 2, 2, 2, 2, 2, 2>;
     DelayLine delay_line;
+
+    // --- ChipBase interface ---
+    ChipIdentity chip_identity() const override;
+    bool has_debug_content()    const override;
+    bool has_settings_content() const override;
+    bool has_layout_content()   const override;
+    void render_debug_content()    override;
+    void render_settings_content() override;
+    void render_layout_content()   override;
 } mos6526_t;
 
 namespace MOS6526 {
@@ -222,7 +230,7 @@ bus_state_t mos6526_tick_phi1(void* chip, bus_state_t bus_state);
 bus_state_t mos6526_tick(void* chip, bus_state_t bus_state);
 
 #ifdef IMGUI_VERSION
-// GUI function declarations
+// Legacy GUI wrappers (C-linkage, for c64.cpp test path)
 void mos6526_render_debug_window(void* chip, bool* show_window);
 void mos6526_render_settings_window(void* chip, bool* show_window);
 #endif
