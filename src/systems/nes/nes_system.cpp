@@ -11,7 +11,6 @@
 #include "../../core/formats/nsf_format.h"
 #include "../../core/formats/format_registry.h"
 // CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
-#include "nes_apu_gui.h"
 #include "../../core/chip.h"
 #include <fstream>
 #include <iostream>
@@ -1513,12 +1512,8 @@ void NintendoSystem<V>::register_nes_chips() {
     register_chip(ppu_.get(),
         "Ricoh 2C02 PPU", "PPU", "Video", 0x2000);
 
-    // APU (built into 2A03 — uses cpu_ pointer)
-    register_chip(std::make_unique<CChipAdapter>(
-        cpu, ChipIdentity{"RP2A03-APU", "Ricoh"},
-        [cpu]() { nes_apu_render_debug_content(cpu); },
-        [cpu]() { nes_apu_render_settings_content(cpu); },
-        [cpu]() { nes_apu_render_layout_content(cpu); }),
+    // APU (built into 2A03) — native ChipBase, registered directly
+    register_chip(nes6502_get_apu(cpu),
         "APU (built-in 2A03)", "APU", "Audio", 0x4000);
 
     // RAM (no debug window)

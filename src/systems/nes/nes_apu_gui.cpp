@@ -81,6 +81,18 @@ inline ChipLayout create_ricoh_2a03_apu_layout() {
     return layout;
 }
 
+// ============================================================================
+// ChipBase interface implementation
+// ============================================================================
+
+ChipIdentity nes6502_apu::APU::chip_identity() const {
+    return {"RP2A03-APU", "Ricoh"};
+}
+
+bool nes6502_apu::APU::has_debug_content()    const { return true; }
+bool nes6502_apu::APU::has_settings_content() const { return true; }
+bool nes6502_apu::APU::has_layout_content()   const { return true; }
+
 #ifdef IMGUI_VERSION
 
 // ============================================================================
@@ -152,11 +164,8 @@ static std::vector<PinSignalState> get_apu_pin_states(
 // DEBUG WINDOW
 // ============================================================================
 
-void nes_apu_render_debug_content(nes6502_t* cpu) {
-    if (!cpu) return;
-
-    nes6502_apu::APU* apu = nes6502_get_apu(cpu);
-    if (!apu) return;
+void nes6502_apu::APU::render_debug_content() {
+    auto* apu = this;
 
     float avail_w = ImGui::GetContentRegionAvail().x;
     float chip_w  = 250.0f;
@@ -346,11 +355,8 @@ void nes_apu_render_debug_content(nes6502_t* cpu) {
 // SETTINGS
 // ============================================================================
 
-void nes_apu_render_settings_content(nes6502_t* cpu) {
-    if (!cpu) return;
-
-    nes6502_apu::APU* apu = nes6502_get_apu(cpu);
-    if (!apu) return;
+void nes6502_apu::APU::render_settings_content() {
+    auto* apu = this;
 
     // Channel output summary
     if (ImGui::CollapsingHeader("Channel Outputs",
@@ -393,18 +399,38 @@ void nes_apu_render_settings_content(nes6502_t* cpu) {
 // NES APU LAYOUT (standalone pinout diagram)
 // ============================================================================
 
-void nes_apu_render_layout_content(nes6502_t* cpu) {
-    if (!cpu) return;
-
-    auto* apu = nes6502_get_apu(cpu);
-    if (!apu) return;
+void nes6502_apu::APU::render_layout_content() {
+    auto* apu = this;
 
     static ChipLayout layout = create_ricoh_2a03_apu_layout();
     auto pin_states = get_apu_pin_states(apu);
     render_chip_layout(layout, pin_states, "RP2A03");
 }
 
+// ============================================================================
+// Backward-compatible free-function wrappers
+// ============================================================================
+
+void nes_apu_render_debug_content(nes6502_t* cpu) {
+    auto* apu = nes6502_get_apu(cpu);
+    if (apu) apu->render_debug_content();
+}
+
+void nes_apu_render_settings_content(nes6502_t* cpu) {
+    auto* apu = nes6502_get_apu(cpu);
+    if (apu) apu->render_settings_content();
+}
+
+void nes_apu_render_layout_content(nes6502_t* cpu) {
+    auto* apu = nes6502_get_apu(cpu);
+    if (apu) apu->render_layout_content();
+}
+
 #else // !IMGUI_VERSION
+
+void nes6502_apu::APU::render_debug_content() {}
+void nes6502_apu::APU::render_settings_content() {}
+void nes6502_apu::APU::render_layout_content() {}
 
 void nes_apu_render_debug_content(nes6502_t*) {}
 void nes_apu_render_settings_content(nes6502_t*) {}

@@ -1045,7 +1045,7 @@ public:
 // ============================================================================
 // Main APU
 // ============================================================================
-class APU {
+class APU : public ChipBase {
 public:
   PulseChannel pulse1{true};
   PulseChannel pulse2{false};
@@ -1498,6 +1498,15 @@ public:
 
   // Helper: Check for IRQ
   bool irq() const { return frame.irq_flag || dmc.irq_flag; }
+
+  // --- ChipBase interface ---
+  ChipIdentity chip_identity() const override;
+  bool has_debug_content()    const override;
+  bool has_settings_content() const override;
+  bool has_layout_content()   const override;
+  void render_debug_content()    override;
+  void render_settings_content() override;
+  void render_layout_content()   override;
 };
 
 } // namespace nes6502_apu
