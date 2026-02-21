@@ -9,11 +9,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <map>
-#include <memory>
 #include <thread>
 #include <type_traits>
-#include <unordered_map>
 
 // Include the modern fam65xx implementation
 #include "fam65xx.hpp"
@@ -370,38 +367,14 @@ void render_interrupt_state(fam65xx_t<Traits> *cpu) {
 }
 
 // ============================================================================
-// GENERIC CPU TYPE DETECTION AND DISPATCH
+// ChipBase VIRTUAL METHOD IMPLEMENTATIONS (template definitions)
+// Must be inside namespace fam65xx for proper linkage of explicit instantiations
 // ============================================================================
 
-// Base class for type-erased CPU GUI rendering
-class CPUGUIRenderer {
-public:
-  virtual ~CPUGUIRenderer() = default;
-  virtual void render_debug_content() = 0;
-  virtual void render_settings_content() = 0;
-  virtual void render_layout_content() = 0;
-  virtual const char *get_processor_name() const = 0;
-  virtual void update_bus_state(bus_state_t pins) = 0;
-};
+namespace fam65xx {
 
-// Template implementation for specific CPU types
 template <const CPUTraits &Traits>
-class CPUGUIRendererImpl : public CPUGUIRenderer {
-private:
-  fam65xx_t<Traits> *cpu;
-  bus_state_t last_bus_state;
-
-public:
-  explicit CPUGUIRendererImpl(fam65xx_t<Traits> *cpu_ptr)
-      : cpu(cpu_ptr), last_bus_state(0) {}
-
-  // Update the stored bus state (should be called from tick functions)
-  void update_bus_state(bus_state_t pins) override { last_bus_state = pins; }
-
-  void render_debug_content() override {
-    if (!cpu)
-      return;
-
+void fam65xx_t<Traits>::render_debug_content() {
     // Create two-column layout: chip visualization on left, debugging info on
     // right
     ImVec2 window_size = ImGui::GetContentRegionAvail();
@@ -419,8 +392,18 @@ public:
       chip_center.x += content_region.x * 0.5f;
       chip_center.y += 200.0f; // Space for the chip
 
-      // Show chip visualization with real bus state from emulation
-      render_chip_visualization<Traits>(cpu, chip_center, last_bus_state);
+      // Compute bus state from registers if not externally set
+      bus_state_t bus_state = this->gui_bus_state;
+      if (bus_state == 0) {
+        BUS_SET_ADDR(bus_state, this->get(REG_AB));
+        BUS_SET_DATA(bus_state, this->get(REG_DL));
+        bus_state |= BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) |
+                     BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_IRQ_BIT) |
+                     BUS_BIT(BUS_NMI_BIT);
+      }
+
+      // Show chip visualization with bus state
+      render_chip_visualization<Traits>(this, chip_center, bus_state);
     }
     ImGui::EndChild();
 
@@ -431,25 +414,23 @@ public:
         window_size.x - 270.0f, 0); // Remaining width minus left column and gap
     if (ImGui::BeginChild("DebugInfo", right_column_size, true,
                           ImGuiWindowFlags_HorizontalScrollbar)) {
-      render_cpu_registers<Traits>(cpu);
+      render_cpu_registers<Traits>(this);
       ImGui::Separator();
 
-      render_internal_state<Traits>(cpu);
+      render_internal_state<Traits>(this);
       ImGui::Separator();
 
-      render_interrupt_state<Traits>(cpu);
+      render_interrupt_state<Traits>(this);
       ImGui::Separator();
 
-      render_processor_features<Traits>(cpu);
+      render_processor_features<Traits>(this);
     }
     ImGui::EndChild();
-  }
+}
 
-  void render_settings_content() override {
-    if (!cpu)
-      return;
-
-    ImGui::Text("%s Configuration", get_processor_name());
+template <const CPUTraits &Traits>
+void fam65xx_t<Traits>::render_settings_content() {
+    ImGui::Text("%s %s Configuration", Traits.get_vendor(), Traits.get_chip_id());
     ImGui::Separator();
 
     ImGui::Text("Processor Family: MOS Technology 65xx");
@@ -470,267 +451,151 @@ public:
     ImGui::Separator();
 
     // Show processor-specific configuration options
-    render_processor_features<Traits>(cpu);
-  }
-
-  void render_layout_content() override {
-    if (!cpu)
-      return;
-
-    static ChipLayout layout = create_cpu_pin_layout<Traits>();
-    std::vector<PinSignalState> pin_states =
-        get_cpu_pin_states<Traits>(cpu, &layout, last_bus_state);
-    render_chip_layout(layout, pin_states, get_processor_name());
-  }
-
-  const char *get_processor_name() const override {
-    // Use a thread-local static buffer to avoid conflicts between template
-    // instantiations
-    static thread_local char processor_name_buffer[64];
-    snprintf(processor_name_buffer, sizeof(processor_name_buffer), "%s %s",
-             Traits.get_vendor(), Traits.get_chip_id());
-    return processor_name_buffer;
-  }
-};
-
-// Factory function to create appropriate renderer
-// This would be called by the specific CPU implementations (mos6502.cpp, etc.)
-template <const fam65xx::CPUTraits &Traits>
-CPUGUIRenderer *create_cpu_gui_renderer(fam65xx::fam65xx_t<Traits> *cpu) {
-  return new CPUGUIRendererImpl<Traits>(cpu);
+    render_processor_features<Traits>(this);
 }
 
-// Global storage for CPU renderers (keyed by chip pointer)
-// In a real implementation, this might be part of the chip descriptor
-static std::unordered_map<void *, std::unique_ptr<CPUGUIRenderer>>
-    cpu_renderers;
+template <const CPUTraits &Traits>
+void fam65xx_t<Traits>::render_layout_content() {
+    static ChipLayout layout = create_cpu_pin_layout<Traits>();
+    bus_state_t bus_state = this->gui_bus_state;
+    if (bus_state == 0) {
+      BUS_SET_ADDR(bus_state, this->get(REG_AB));
+      BUS_SET_DATA(bus_state, this->get(REG_DL));
+      bus_state |= BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) |
+                   BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_IRQ_BIT) |
+                   BUS_BIT(BUS_NMI_BIT);
+    }
+    std::vector<PinSignalState> pin_states =
+        get_cpu_pin_states<Traits>(this, &layout, bus_state);
+    render_chip_layout(layout, pin_states, get_processor_name<Traits>());
+}
+
+// Explicit template instantiations for all CPU variants
+template void fam65xx_t<MOS6502>::render_debug_content();
+template void fam65xx_t<MOS6502>::render_settings_content();
+template void fam65xx_t<MOS6502>::render_layout_content();
+
+template void fam65xx_t<MOS6510>::render_debug_content();
+template void fam65xx_t<MOS6510>::render_settings_content();
+template void fam65xx_t<MOS6510>::render_layout_content();
+
+template void fam65xx_t<CSG7501>::render_debug_content();
+template void fam65xx_t<CSG7501>::render_settings_content();
+template void fam65xx_t<CSG7501>::render_layout_content();
+
+template void fam65xx_t<RICOH_2A03>::render_debug_content();
+template void fam65xx_t<RICOH_2A03>::render_settings_content();
+template void fam65xx_t<RICOH_2A03>::render_layout_content();
+
+template void fam65xx_t<SYNERTEK_65C02>::render_debug_content();
+template void fam65xx_t<SYNERTEK_65C02>::render_settings_content();
+template void fam65xx_t<SYNERTEK_65C02>::render_layout_content();
+
+template void fam65xx_t<WDC_65C02_EARLY>::render_debug_content();
+template void fam65xx_t<WDC_65C02_EARLY>::render_settings_content();
+template void fam65xx_t<WDC_65C02_EARLY>::render_layout_content();
+
+template void fam65xx_t<WDC_W65C02S>::render_debug_content();
+template void fam65xx_t<WDC_W65C02S>::render_settings_content();
+template void fam65xx_t<WDC_W65C02S>::render_layout_content();
+
+template void fam65xx_t<ROCKWELL_R65C02>::render_debug_content();
+template void fam65xx_t<ROCKWELL_R65C02>::render_settings_content();
+template void fam65xx_t<ROCKWELL_R65C02>::render_layout_content();
+
+template void fam65xx_t<WDC_65C816>::render_debug_content();
+template void fam65xx_t<WDC_65C816>::render_settings_content();
+template void fam65xx_t<WDC_65C816>::render_layout_content();
+
+} // namespace fam65xx
 
 // ============================================================================
-// C INTERFACE FUNCTIONS (for chip descriptor callbacks)
+// C INTERFACE FUNCTIONS (legacy wrappers — delegate to ChipBase virtuals)
 // ============================================================================
 
 extern "C" {
 
 void fam65xx_render_debug_content(void *chip) {
-  // Look up the CPU renderer in our registry
-  auto it = cpu_renderers.find(chip);
-  if (it != cpu_renderers.end()) {
-    it->second->render_debug_content();
-  } else {
-    // Fallback for unknown CPU types
-    ImGui::Text("CPU type not registered for GUI rendering");
-    ImGui::Text("Chip pointer: %p", chip);
+  if (auto* base = static_cast<ChipBase*>(chip)) {
+    base->render_debug_content();
   }
 }
 
 void fam65xx_render_settings_content(void *chip) {
-  // Look up the CPU renderer in our registry
-  auto it = cpu_renderers.find(chip);
-  if (it != cpu_renderers.end()) {
-    it->second->render_settings_content();
-    return;
-  }
-
-  // Fallback for unknown CPU types
-  if (!chip)
-    return;
-
-  ImGui::Text("65xx Family CPU Configuration");
-  ImGui::Text("CPU type not registered for GUI rendering");
-  ImGui::Separator();
-
-  // Pin Configuration (static info, doesn't need CPU access)
-  if (ImGui::CollapsingHeader("Pin Configuration")) {
-    ImGui::Indent(16.0f);
-    ImGui::Text("MOS 65xx DIP-40 Package (40 pins):");
-    ImGui::Separator();
-
-    ImGui::Text("Power and Clock:");
-    ImGui::Text("  VCC (8) - +5V Power Supply");
-    ImGui::Text("  VSS (21) - Ground (0V)");
-    ImGui::Text("  φ0 (3) - Phase 0 Clock Input");
-    ImGui::Text("  φ1 (37) - Phase 1 Clock Output");
-    ImGui::Text("  φ2 (39) - Phase 2 Clock Output");
-
-    ImGui::Separator();
-
-    ImGui::Text("Address Bus (16 lines):");
-    ImGui::Text("  A0-A15 (9-20, 22-25) - Address Lines");
-
-    ImGui::Separator();
-
-    ImGui::Text("Data Bus (8 lines):");
-    ImGui::Text("  D0-D7 (26, 28-33) - Data Lines");
-
-    ImGui::Separator();
-
-    ImGui::Text("Control Lines:");
-    ImGui::Text("  R/W̅ (34) - Read/Write");
-    ImGui::Text("  SYNC (7) - Synchronize");
-    ImGui::Text("  RDY (2) - Ready");
-
-    ImGui::Separator();
-
-    ImGui::Text("Interrupt Lines:");
-    ImGui::Text("  IRQ̅ (4) - Interrupt Request");
-    ImGui::Text("  NMI̅ (6) - Non-Maskable Interrupt");
-    ImGui::Text("  RES̅ (40) - Reset");
-
-    ImGui::Separator();
-
-    ImGui::Text("Special:");
-    ImGui::Text("  SO̅ (38) - Set Overflow");
-    ImGui::Text("  BE (36) - Bus Enable");
-    ImGui::Text("  ML̅ (35) - Memory Lock");
-
-    ImGui::Unindent(16.0f);
-  }
-
-  ImGui::Separator();
-
-  // CPU Controls (placeholder - would need CPU access for real functionality)
-  if (ImGui::CollapsingHeader("CPU Controls", ImGuiTreeNodeFlags_DefaultOpen)) {
-    ImGui::Indent(16.0f);
-
-    ImVec2 button_size = ImVec2(0, 0);
-    if (ImGui::Button("Reset CPU", button_size)) {
-      // Reset would require bus state - this is just UI placeholder
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("Trigger NMI", button_size)) {
-      // NMI trigger would require pin manipulation
-    }
-
-    ImGui::SameLine();
-
-    if (ImGui::Button("Trigger IRQ", button_size)) {
-      // IRQ trigger would require pin manipulation
-    }
-
-    ImGui::Separator();
-
-    static bool step_mode = false;
-    ImGui::Checkbox("Single Step Mode", &step_mode);
-
-    static bool trace_mode = false;
-    ImGui::Checkbox("Instruction Trace", &trace_mode);
-
-    static bool break_on_brk = true;
-    ImGui::Checkbox("Break on BRK instruction", &break_on_brk);
-
-    ImGui::Unindent(16.0f);
+  if (auto* base = static_cast<ChipBase*>(chip)) {
+    base->render_settings_content();
   }
 }
 
 void fam65xx_render_layout_content(void *chip) {
-  auto it = cpu_renderers.find(chip);
-  if (it != cpu_renderers.end()) {
-    it->second->render_layout_content();
+  if (auto* base = static_cast<ChipBase*>(chip)) {
+    base->render_layout_content();
   }
 }
 
-void fam65xx_update_bus_state(void *chip, bus_state_t bus_state) {
-  // Update the bus state for the given CPU chip
-  auto it = cpu_renderers.find(chip);
-  if (it != cpu_renderers.end()) {
-    it->second->update_bus_state(bus_state);
-  }
+void fam65xx_update_bus_state(void * /*chip*/, bus_state_t /*bus_state*/) {
+  // Bus state is now stored directly on the fam65xx_t instance (gui_bus_state member).
+  // Systems that need to update it should set it directly on the CPU object.
+  // This function is retained for backward compatibility but is a no-op.
 }
 
 } // extern "C"
 #endif // IMGUI_VERSION
 
 // ============================================================================
-// C++ REGISTRATION API
+// Stub implementations when ImGui is not available
 // ============================================================================
 
-#ifdef IMGUI_VERSION
+#ifndef IMGUI_VERSION
 
 namespace fam65xx {
 
 template <const CPUTraits &Traits>
-void register_cpu_for_gui(fam65xx_t<Traits> *cpu) {
-  if (cpu) {
-    cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<Traits>>(cpu);
-  }
-}
+void fam65xx_t<Traits>::render_debug_content() {}
 
-// Non-template registration functions for different CPU types
-void register_mos6502_for_gui(void *cpu) {
-  if (cpu) {
-    cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<fam65xx::MOS6502>>(
-        reinterpret_cast<fam65xx_t<fam65xx::MOS6502> *>(cpu));
-  }
-}
+template <const CPUTraits &Traits>
+void fam65xx_t<Traits>::render_settings_content() {}
 
-void register_nes6502_for_gui(void *cpu) {
-  if (cpu) {
-    cpu_renderers[cpu] =
-        std::make_unique<CPUGUIRendererImpl<fam65xx::RICOH_2A03>>(
-            reinterpret_cast<fam65xx_t<fam65xx::RICOH_2A03> *>(cpu));
-  }
-}
+template <const CPUTraits &Traits>
+void fam65xx_t<Traits>::render_layout_content() {}
 
-void register_rockwell65c02_for_gui(void *cpu) {
-  if (cpu) {
-    cpu_renderers[cpu] =
-        std::make_unique<CPUGUIRendererImpl<fam65xx::ROCKWELL_R65C02>>(
-            reinterpret_cast<fam65xx_t<fam65xx::ROCKWELL_R65C02> *>(cpu));
-  }
-}
+// Explicit template instantiations for non-GUI builds
+template void fam65xx_t<MOS6502>::render_debug_content();
+template void fam65xx_t<MOS6502>::render_settings_content();
+template void fam65xx_t<MOS6502>::render_layout_content();
 
-void register_mos6510_for_gui(void *cpu) {
-  if (cpu) {
-    cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<fam65xx::MOS6510>>(
-        reinterpret_cast<fam65xx_t<fam65xx::MOS6510> *>(cpu));
-  }
-}
+template void fam65xx_t<MOS6510>::render_debug_content();
+template void fam65xx_t<MOS6510>::render_settings_content();
+template void fam65xx_t<MOS6510>::render_layout_content();
 
-void register_csg7501_for_gui(void *cpu) {
-  if (cpu) {
-    cpu_renderers[cpu] = std::make_unique<CPUGUIRendererImpl<fam65xx::CSG7501>>(
-        reinterpret_cast<fam65xx_t<fam65xx::CSG7501> *>(cpu));
-  }
-}
+template void fam65xx_t<CSG7501>::render_debug_content();
+template void fam65xx_t<CSG7501>::render_settings_content();
+template void fam65xx_t<CSG7501>::render_layout_content();
 
-void register_wdc65c816_for_gui(void *cpu) {
-  if (cpu) {
-    cpu_renderers[cpu] =
-        std::make_unique<CPUGUIRendererImpl<fam65xx::WDC_65C816>>(
-            reinterpret_cast<fam65xx_t<fam65xx::WDC_65C816> *>(cpu));
-  }
-}
+template void fam65xx_t<RICOH_2A03>::render_debug_content();
+template void fam65xx_t<RICOH_2A03>::render_settings_content();
+template void fam65xx_t<RICOH_2A03>::render_layout_content();
 
-void unregister_cpu_from_gui(void *cpu) {
-  auto it = cpu_renderers.find(cpu);
-  if (it != cpu_renderers.end()) {
-    cpu_renderers.erase(it);
-  }
-}
+template void fam65xx_t<SYNERTEK_65C02>::render_debug_content();
+template void fam65xx_t<SYNERTEK_65C02>::render_settings_content();
+template void fam65xx_t<SYNERTEK_65C02>::render_layout_content();
 
-// Simple non-template functions for rendering CPU content
-void render_cpu_debug_content_impl(void *cpu, const char *cpu_name) {
-  auto it = cpu_renderers.find(cpu);
-  if (it != cpu_renderers.end()) {
-    it->second->render_debug_content();
-  }
-}
+template void fam65xx_t<WDC_65C02_EARLY>::render_debug_content();
+template void fam65xx_t<WDC_65C02_EARLY>::render_settings_content();
+template void fam65xx_t<WDC_65C02_EARLY>::render_layout_content();
 
-void render_cpu_settings_content_impl(void *cpu, const char *cpu_name) {
-  auto it = cpu_renderers.find(cpu);
-  if (it != cpu_renderers.end()) {
-    it->second->render_settings_content();
-  }
-}
+template void fam65xx_t<WDC_W65C02S>::render_debug_content();
+template void fam65xx_t<WDC_W65C02S>::render_settings_content();
+template void fam65xx_t<WDC_W65C02S>::render_layout_content();
 
-// Explicit template instantiations for CPUGUIRendererImpl - TEMPORARILY
-// DISABLED template class CPUGUIRendererImpl<fam65xx::MOS6502>; template class
-// CPUGUIRendererImpl<fam65xx::MOS6510>; template class
-// CPUGUIRendererImpl<fam65xx::RICOH_2A03>; template class
-// CPUGUIRendererImpl<fam65xx::ROCKWELL_R65C02>; template class
-// CPUGUIRendererImpl<fam65xx::WDC_65C816>;
+template void fam65xx_t<ROCKWELL_R65C02>::render_debug_content();
+template void fam65xx_t<ROCKWELL_R65C02>::render_settings_content();
+template void fam65xx_t<ROCKWELL_R65C02>::render_layout_content();
+
+template void fam65xx_t<WDC_65C816>::render_debug_content();
+template void fam65xx_t<WDC_65C816>::render_settings_content();
+template void fam65xx_t<WDC_65C816>::render_layout_content();
 
 } // namespace fam65xx
-#endif // IMGUI_VERSION
+
+#endif // !IMGUI_VERSION

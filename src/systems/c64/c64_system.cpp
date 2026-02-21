@@ -18,7 +18,7 @@
 #include "../../core/formats/sid_format.h"
 #include "../../core/formats/commodore_load_helpers.h"
 #include "../../chip/cpu/fam65xx/mos6510.h"
-#include "../../chip/cpu/fam65xx/fam65xx_gui.h"
+// CPU (fam65xx) is a native C++ ChipBase — no separate GUI header needed
 #include "../../chip/video/vic_ii/mos6569.h"
 #include "../../chip/video/vic_ii/mos6567.h"
 // VIC-II is a native C++ ChipBase — no separate GUI header needed
@@ -1200,12 +1200,8 @@ void C64System::register_c64_chips() {
     auto* colorram = c64_->colorram;
     auto* c64 = c64_;
 
-    // CPU
-    register_chip(std::make_unique<CChipAdapter>(
-        cpu, ChipIdentity{"MOS6510", "MOS Technology"},
-        [cpu]() { fam65xx_render_debug_content(cpu); },
-        [cpu]() { fam65xx_render_settings_content(cpu); },
-        [cpu]() { fam65xx_render_layout_content(cpu); }),
+    // CPU — fam65xx is a native C++ ChipBase, register directly
+    register_chip(mos6510_as_chip_base(static_cast<mos6510_t*>(cpu)),
         "MOS 6510 CPU", "6510", "CPU", 0x0000);
 
     // VIC-II — native C++ ChipBase, register directly

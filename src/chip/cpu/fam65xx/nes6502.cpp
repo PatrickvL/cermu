@@ -4,7 +4,6 @@
 
 #include "nes6502.h"
 #include "fam65xx.hpp"
-#include "fam65xx_gui.h"
 
 using namespace fam65xx;
 
@@ -22,18 +21,15 @@ using nes6502_cpu_t = fam65xx::nes6502_cpu_impl_t;
 // ============================================================================
 
 nes6502_t *nes6502_create(void) {
-  nes6502_t *cpu = reinterpret_cast<nes6502_t *>(new nes6502_cpu_t());
-#ifdef IMGUI_VERSION
-  register_nes6502_for_gui(cpu);
-#endif
-  return cpu;
+  return reinterpret_cast<nes6502_t *>(new nes6502_cpu_t());
 }
 
 void nes6502_destroy(nes6502_t *cpu) {
-#ifdef IMGUI_VERSION
-  unregister_cpu_from_gui(cpu);
-#endif
   delete CPU_CAST(cpu);
+}
+
+ChipBase* nes6502_as_chip_base(nes6502_t *cpu) {
+  return static_cast<ChipBase*>(CPU_CAST(cpu));
 }
 
 bus_state_t nes6502_init(nes6502_t *cpu, const chip_descriptor_t *desc) {

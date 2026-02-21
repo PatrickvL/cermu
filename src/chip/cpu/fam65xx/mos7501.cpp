@@ -9,7 +9,6 @@
 
 #include "mos7501.h"
 #include "fam65xx.hpp"
-#include "fam65xx_gui.h"
 
 using namespace fam65xx;
 
@@ -27,18 +26,15 @@ using mos7501_cpu_t = fam65xx::fam65xx_t<CSG7501>;
 // ============================================================================
 
 mos7501_t *mos7501_create(void) {
-  mos7501_t *cpu = reinterpret_cast<mos7501_t *>(new mos7501_cpu_t());
-#ifdef IMGUI_VERSION
-  fam65xx::register_csg7501_for_gui(cpu);
-#endif
-  return cpu;
+  return reinterpret_cast<mos7501_t *>(new mos7501_cpu_t());
 }
 
 void mos7501_destroy(mos7501_t *cpu) {
-#ifdef IMGUI_VERSION
-  fam65xx::unregister_cpu_from_gui(cpu);
-#endif
   delete CPU_CAST(cpu);
+}
+
+ChipBase* mos7501_as_chip_base(mos7501_t *cpu) {
+  return static_cast<ChipBase*>(CPU_CAST(cpu));
 }
 
 bus_state_t mos7501_init(mos7501_t *cpu, const mos7501_desc_t *desc) {

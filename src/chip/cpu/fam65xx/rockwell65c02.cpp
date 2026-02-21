@@ -4,7 +4,6 @@
 
 #include "rockwell65c02.h"
 #include "fam65xx.hpp"
-#include "fam65xx_gui.h"
 
 using namespace fam65xx;
 
@@ -22,18 +21,10 @@ using rockwell65c02_cpu_t = fam65xx::rockwell65c02_cpu_impl_t;
 // ============================================================================
 
 rockwell65c02_t *rockwell65c02_create(void) {
-  rockwell65c02_t *cpu =
-      reinterpret_cast<rockwell65c02_t *>(new rockwell65c02_cpu_t());
-#ifdef IMGUI_VERSION
-  register_rockwell65c02_for_gui(cpu);
-#endif
-  return cpu;
+  return reinterpret_cast<rockwell65c02_t *>(new rockwell65c02_cpu_t());
 }
 
 void rockwell65c02_destroy(rockwell65c02_t *cpu) {
-#ifdef IMGUI_VERSION
-  unregister_cpu_from_gui(cpu);
-#endif
   delete CPU_CAST(cpu);
 }
 

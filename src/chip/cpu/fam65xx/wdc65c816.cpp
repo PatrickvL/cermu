@@ -4,7 +4,6 @@
 
 #include "wdc65c816.h"
 #include "fam65xx.hpp"
-#include "fam65xx_gui.h"
 
 // ============================================================================
 // CONCRETE CPU TYPE DEFINITION
@@ -20,17 +19,10 @@ using wdc65c816_cpu_t = fam65xx::wdc65c816_cpu_impl_t;
 // ============================================================================
 
 wdc65c816_t *wdc65c816_create(void) {
-  wdc65c816_t *cpu = reinterpret_cast<wdc65c816_t *>(new wdc65c816_cpu_t());
-#ifdef IMGUI_VERSION
-  fam65xx::register_wdc65c816_for_gui(cpu);
-#endif
-  return cpu;
+  return reinterpret_cast<wdc65c816_t *>(new wdc65c816_cpu_t());
 }
 
 void wdc65c816_destroy(wdc65c816_t *cpu) {
-#ifdef IMGUI_VERSION
-  fam65xx::unregister_cpu_from_gui(cpu);
-#endif
   delete CPU_CAST(cpu);
 }
 
