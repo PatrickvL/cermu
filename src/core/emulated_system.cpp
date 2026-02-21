@@ -117,8 +117,16 @@ void EmulatedSystem::render_debug_windows(void* gui_state) {
 void EmulatedSystem::register_chip(std::unique_ptr<ChipBase> chip,
                                    const char* display_name, const char* short_name,
                                    const char* category, uint16_t base_address) {
+    ChipBase* raw = chip.get();
+    owned_chip_adapters_.push_back(std::move(chip));
+    register_chip(raw, display_name, short_name, category, base_address);
+}
+
+void EmulatedSystem::register_chip(ChipBase* chip,
+                                   const char* display_name, const char* short_name,
+                                   const char* category, uint16_t base_address) {
     SystemChip sc;
-    sc.chip = std::move(chip);
+    sc.chip = chip;
     sc.display_name = display_name;
     sc.short_name = short_name;
     sc.category = category;

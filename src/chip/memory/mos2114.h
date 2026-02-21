@@ -1,40 +1,56 @@
 #pragma once
 
+#include <cstdint>
+#include "../../core/chip.h"
 
-#include <stdint.h>
-#include "../../core/system.h"
-
-// MOS Technology 2114 Static RAM - 1K x 4-bit
-// Used as ColorRAM in C64 at 0xD800-0xDBFF
-// Only the lower 4 bits are used (color information)
+// ============================================================================
+// MOS Technology 2114 Static RAM — 1K × 4-bit
+// ============================================================================
+//
+// Used as Color RAM in C64 at $D800–$DBFF.
+// Only the lower 4 bits of each byte are significant (color indices 0–15).
 // https://www.amiga-stuff.com/hardware/1kx4-sram.html
 //
 // HARDWARE CONNECTION: PLA _GRW Signal Control
 // ============================================
-// In C64 hardware, this Color RAM chip's #WE (Write Enable) pin is connected
-// to the PLA's _GRW output signal. The PLA controls when Color RAM writes are
-// allowed based on memory configuration and address decoding.
+// In C64 hardware, the #WE (Write Enable) pin is driven by the PLA's _GRW
+// output.  The PLA blocks writes when:
+//   - I/O region is disabled (Character ROM visible instead)
+//   - Address is outside $D800–$DBFF
+//   - CPU is reading, not writing
+//   - Memory banking prevents I/O access
 //
-// _GRW Signal gates Color RAM writes when:
-// - I/O region is disabled (Character ROM visible instead)
-// - Address is outside Color RAM range ($D800-$DBFF)
-// - CPU is reading (not writing)
-// - Memory banking prevents I/O access
-//
-// This prevents Color RAM corruption during memory bank switching and ensures
-// hardware-accurate behavior matching real C64 systems.
-typedef struct mos2114_s {
-    chip_descriptor_t* desc;
-    uint8_t* memory;  // Pointer to allocated 1KB Color RAM memory
-} mos2114_t;
+class MOS2114 : public ChipBase {
+public:
+    uint8_t memory[1024];  // 1K × 4-bit Color RAM (public for VIC-II access)
 
-// Chip descriptor
+    MOS2114();
+    ~MOS2114() override = default;
+
+    // --- ChipBase interface ---
+    ChipIdentity chip_identity() const override;
+    bool has_debug_content()    const override;
+    bool has_settings_content() const override;
+    bool has_layout_content()   const override;
+    void render_debug_content()    override;
+    void render_settings_content() override;
+    void render_layout_content()   override;
+
+    // --- Bus interface (C-compatible statics for I/O handler table) ---
+    static bus_state_t bus_read(void* context, bus_state_t bus_state);
+    static bus_state_t bus_write(void* context, bus_state_t bus_state);
+};
+
+// Backward-compatibility typedef
+using mos2114_t = MOS2114;
+
+// Legacy chip descriptor (used by c64.cpp System8Bit test path)
 extern chip_descriptor_t mos2114_descriptor;
 
-// Creation and destruction functions
-mos2114_t* mos2114_create();
-void mos2114_destroy(mos2114_t* chip);
+// Legacy lifecycle helpers
+MOS2114* mos2114_create();
+void     mos2114_destroy(MOS2114* chip);
 
-// Read/Write functions - bus state interface
+// Legacy free-function bus wrappers (used by c64_bus.cpp I/O handler table)
 bus_state_t mos2114_read(void* context, bus_state_t bus_state);
 bus_state_t mos2114_write(void* context, bus_state_t bus_state);

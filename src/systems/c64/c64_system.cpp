@@ -23,7 +23,7 @@
 #include "../../chip/video/vic_ii/mos6567.h"
 #include "../../chip/video/vic_ii/vicii_gui.h"
 #include "../../chip/io/mos6526_gui.h"
-#include "../../chip/memory/mos2114_gui.h"
+// MOS2114 is a native C++ ChipBase — no separate GUI header needed
 #include "../../chip/logic/pla.h"
 #include "../../chip/logic/pla_gui.h"
 #include "../../chip/sound/mos6581_gui.h"
@@ -321,7 +321,7 @@ bool C64System::initialize() {
         rom_destroy(c64_->kernal);
         mos6526_destroy(c64_->cia2);
         mos6526_destroy(c64_->cia1);
-        mos2114_destroy(c64_->colorram);
+        delete c64_->colorram;
         mos6581_destroy(c64_->sid);
         vicii_destroy(c64_->vicii);
         rom_destroy(c64_->charrom);
@@ -363,7 +363,7 @@ bool C64System::initialize() {
         mos6581_set_timing(c64_->sid, is_pal);
     }
 
-    if (!(c64_->colorram = mos2114_create())) { cleanup(); return false; }
+    c64_->colorram = new MOS2114();
     c64_->vicii->colorram = c64_->colorram;
 
     // VIC-II bank selection via bank_base offset; no bus-level callback needed
@@ -493,7 +493,7 @@ void C64System::shutdown() {
         rom_destroy(c64_->kernal);
         mos6526_destroy(c64_->cia2);
         mos6526_destroy(c64_->cia1);
-        mos2114_destroy(c64_->colorram);
+        delete c64_->colorram;
         mos6581_destroy(c64_->sid);
         vicii_destroy(c64_->vicii);
         rom_destroy(c64_->charrom);
@@ -1240,12 +1240,8 @@ void C64System::register_c64_chips() {
         [cia2]() { mos6526_render_layout_content(cia2); }),
         "CIA 2 (MOS 6526)", "CIA 2", "I/O", 0xDD00);
 
-    // Color RAM
-    register_chip(std::make_unique<CChipAdapter>(
-        colorram, ChipIdentity{"MOS2114", "MOS Technology"},
-        [colorram]() { mos2114_render_debug_content(colorram); },
-        [colorram]() { mos2114_render_settings_content(colorram); },
-        [colorram]() { mos2114_render_layout_content(colorram); }),
+    // Color RAM — MOS2114 is a native C++ ChipBase, register directly
+    register_chip(colorram,
         "Color RAM (MOS 2114)", "Color RAM", "I/O", 0xD800);
 
     // RAM (no debug window)
@@ -1739,8 +1735,8 @@ static void memory_init_debug_patterns(ram_t* ram) {
 }
 
 // Helper: Initialize Color RAM with debug patterns
-static void colorram_init_debug(mos2114_t* colorram) {
-    if (!colorram || !colorram->memory) {
+static void colorram_init_debug(MOS2114* colorram) {
+    if (!colorram) {
         printf("ERROR: Color RAM pointer invalid for debug initialization\n");
         return;
     }

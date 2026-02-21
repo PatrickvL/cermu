@@ -237,7 +237,7 @@ struct SystemDescriptor {
  * and does not support taking the address of an element.
  */
 struct SystemChip {
-    std::unique_ptr<ChipBase> chip;
+    ChipBase* chip = nullptr;    // Non-owning: system or owned_chip_adapters_ manages lifetime
 
     // System-specific metadata (how this chip is named/categorized here)
     const char* display_name;    // "CIA 1 (MOS 6526)" — for UI
@@ -287,9 +287,20 @@ protected:
     /// window rendering through each chip's ChipBase virtual methods.
     std::vector<SystemChip> registered_chips_;
 
-    /// Register a chip during system initialization.
-    /// The ChipBase adapter is owned by the SystemChip entry.
+    /// Owned CChipAdapters — keeps legacy adapters alive while registered_chips_
+    /// holds non-owning pointers to them. Cleared when the system is destroyed.
+    std::vector<std::unique_ptr<ChipBase>> owned_chip_adapters_;
+
+    /// Register a chip with transferred ownership (legacy CChipAdapter pattern).
+    /// The adapter is moved into owned_chip_adapters_ and a raw pointer stored
+    /// in the SystemChip entry.
     void register_chip(std::unique_ptr<ChipBase> chip,
+                       const char* display_name, const char* short_name,
+                       const char* category, uint16_t base_address = 0);
+
+    /// Register a system-owned chip (borrowed pointer, no ownership transfer).
+    /// The system class must ensure the chip outlives the EmulatedSystem.
+    void register_chip(ChipBase* chip,
                        const char* display_name, const char* short_name,
                        const char* category, uint16_t base_address = 0);
 
