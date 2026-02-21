@@ -370,28 +370,28 @@ void Apple1System::render_configuration_ui() {
 // ============================================================================
 
 void Apple1System::register_apple1_chips() {
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"MOS6502", "MOS Technology"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"MOS6502", "MOS Technology"}),
         "MOS 6502 CPU", "6502", "CPU", 0x0000);
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"PIA6820", "Motorola"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"PIA6820", "Motorola"}),
         "PIA 6820 (Keyboard/Display)", "PIA", "I/O", 0xD010);
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"Terminal", "Custom"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"Terminal", "Custom"}),
         "Text Terminal (40x24)", "Terminal", "Video", 0x0000);
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"SRAM", "Various"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"SRAM", "Various"}),
         "RAM", "RAM", "Memory", 0x0000);
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"PROM", "Various"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"PROM", "Various"}),
         "Woz Monitor ROM (256B)", "Monitor", "Memory", 0xFF00);
     if (has_basic_) {
-        register_chip(std::make_unique<CChipAdapter>(
-            nullptr, ChipIdentity{"ROM", "Apple"}),
+        register_chip(std::make_unique<ChipPlaceholder>(
+            ChipIdentity{"ROM", "Apple"}),
             "Apple 1 BASIC ROM (4KB)", "BASIC", "Memory", 0xE000);
     }
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"2513", "Signetics"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"2513", "Signetics"}),
         "Signetics 2513 Char ROM", "CharROM", "Memory", 0x0000);
 }
 

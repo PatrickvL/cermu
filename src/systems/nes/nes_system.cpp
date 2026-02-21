@@ -1517,13 +1517,13 @@ void NintendoSystem<V>::register_nes_chips() {
         "APU (built-in 2A03)", "APU", "Audio", 0x4000);
 
     // RAM (no debug window)
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"SRAM", "Various"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"SRAM", "Various"}),
         "RAM (2KB)", "RAM", "Memory", 0x0000);
 
     // Cartridge (no debug window)
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"Cartridge", "Various"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"Cartridge", "Various"}),
         "Cartridge", "Cart", "Memory", 0x4020);
 }
 

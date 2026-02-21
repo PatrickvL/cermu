@@ -1,4 +1,5 @@
 #include "pla.h"
+#include "pla_gui.h"
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
 #include "../../systems/c64/c64_bus.h"
@@ -197,9 +198,8 @@ static ChipLayout& get_pla_layout() {
     return layout;
 }
 
-void pla_render_debug_content(void* chip) {
-    // The chip parameter is expected to be a c64_t* since PLA is part of the C64 bus
-    c64_t* c64 = (c64_t*)chip;
+void PlaChip::render_debug_content() {
+    c64_t* c64 = c64_;
     if (!c64) return;
         
 #ifdef IMGUI_VERSION
@@ -580,8 +580,8 @@ void pla_render_debug_content(void* chip) {
 // PLA GUI SETTINGS WINDOW
 // ============================================================================
 
-void pla_render_settings_content(void* chip) {
-    c64_t* c64 = (c64_t*)chip;
+void PlaChip::render_settings_content() {
+    c64_t* c64 = c64_;
     if (!c64) return;
 
 #ifdef IMGUI_VERSION
@@ -618,14 +618,37 @@ void pla_render_settings_content(void* chip) {
 // PLA LAYOUT (standalone pinout diagram)
 // ============================================================================
 
-void pla_render_layout_content(void* chip) {
-    if (!chip) return;
+void PlaChip::render_layout_content() {
+    if (!c64_) return;
 
 #ifdef IMGUI_VERSION
-    c64_t* c64 = (c64_t*)chip;
+    c64_t* c64 = c64_;
 
     ChipLayout& layout = get_pla_layout();
     std::vector<PinSignalState> pin_states = get_pla_pin_states(c64, &layout);
     render_chip_layout(layout, pin_states, "906114-01");
 #endif
+}
+
+// ============================================================================
+// BACKWARD-COMPATIBLE FREE FUNCTION WRAPPERS
+// ============================================================================
+
+void pla_render_debug_content(void* chip) {
+    if (!chip) return;
+    // Construct a temporary PlaChip to forward the call
+    PlaChip pla(static_cast<c64_t*>(chip));
+    pla.render_debug_content();
+}
+
+void pla_render_settings_content(void* chip) {
+    if (!chip) return;
+    PlaChip pla(static_cast<c64_t*>(chip));
+    pla.render_settings_content();
+}
+
+void pla_render_layout_content(void* chip) {
+    if (!chip) return;
+    PlaChip pla(static_cast<c64_t*>(chip));
+    pla.render_layout_content();
 }

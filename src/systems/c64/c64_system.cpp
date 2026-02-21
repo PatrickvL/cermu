@@ -1224,41 +1224,37 @@ void C64System::register_c64_chips() {
         "Color RAM (MOS 2114)", "Color RAM", "I/O", 0xD800);
 
     // RAM (no debug window)
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"DRAM", "Various"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"DRAM", "Various"}),
         "RAM (64KB)", "RAM", "Memory", 0x0000);
 
     // BASIC ROM (no debug window)
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"ROM", "Commodore"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"ROM", "Commodore"}),
         "BASIC ROM (8KB)", "BASIC", "Memory", 0xA000);
 
     // KERNAL ROM (no debug window)
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"ROM", "Commodore"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"ROM", "Commodore"}),
         "KERNAL ROM (8KB)", "KERNAL", "Memory", 0xE000);
 
     // Character ROM (no debug window)
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"ROM", "Commodore"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"ROM", "Commodore"}),
         "Character ROM (4KB)", "CHARROM", "Memory", 0xD000);
 
     // Cartridge ROM Low (no debug window)
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"ROM", "Various"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"ROM", "Various"}),
         "Cartridge ROM Low (8KB)", "ROML", "Memory", 0x8000);
 
     // Cartridge ROM High (no debug window)
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"ROM", "Various"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"ROM", "Various"}),
         "Cartridge ROM High (8KB)", "ROMH", "Memory", 0xA000);
 
-    // PLA (uses c64_t* as chip context)
-    register_chip(std::make_unique<CChipAdapter>(
-        c64, ChipIdentity{"PLA", "MOS Technology"},
-        [c64]() { pla_render_debug_content(c64); },
-        [c64]() { pla_render_settings_content(c64); },
-        [c64]() { pla_render_layout_content(c64); }),
+    // PLA — native ChipBase (PlaChip holds c64_t* for GUI context)
+    register_chip(std::make_unique<PlaChip>(c64),
         "PLA / Address Decoder", "PLA", "Bus", 0x0000);
 }
 
