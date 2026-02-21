@@ -341,14 +341,8 @@ void mos6522_render_layout_content(void* chip) {
 #ifdef IMGUI_VERSION
     const char* via_name = mos6522_get_via_name(via);
 
-    ChipVisualization& renderer = GetGlobalChipRenderer();
     ChipLayout& layout = get_via_layout();
     std::vector<PinSignalState> pin_states = get_via_pin_states(via, &layout);
-
-    ImVec2 size = renderer.get_recommended_size(layout);
-    ImVec2 cursor = ImGui::GetCursorScreenPos();
-    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
-    ImGui::Dummy(size);
-    renderer.render(layout, center, pin_states, via_name);
+    render_chip_layout(layout, pin_states, via_name);
 #endif
 }

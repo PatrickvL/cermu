@@ -624,14 +624,8 @@ void pla_render_layout_content(void* chip) {
 #ifdef IMGUI_VERSION
     c64_t* c64 = (c64_t*)chip;
 
-    ChipVisualization& renderer = GetGlobalChipRenderer();
     ChipLayout& layout = get_pla_layout();
     std::vector<PinSignalState> pin_states = get_pla_pin_states(c64, &layout);
-
-    ImVec2 size = renderer.get_recommended_size(layout);
-    ImVec2 cursor = ImGui::GetCursorScreenPos();
-    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
-    ImGui::Dummy(size);
-    renderer.render(layout, center, pin_states, "906114-01");
+    render_chip_layout(layout, pin_states, "906114-01");
 #endif
 }

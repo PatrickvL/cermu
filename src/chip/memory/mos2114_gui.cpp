@@ -293,14 +293,8 @@ extern "C" void mos2114_render_layout_content(void* chip) {
 #ifdef IMGUI_VERSION
     mos2114_t* mos2114 = (mos2114_t*)chip;
 
-    ChipVisualization& renderer = GetGlobalChipRenderer();
     ChipLayout& layout = get_mos2114_layout();
     std::vector<PinSignalState> pin_states = get_mos2114_pin_states(mos2114, &layout, 0);
-
-    ImVec2 size = renderer.get_recommended_size(layout);
-    ImVec2 cursor = ImGui::GetCursorScreenPos();
-    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
-    ImGui::Dummy(size);
-    renderer.render(layout, center, pin_states, "MOS2114");
+    render_chip_layout(layout, pin_states, "MOS2114");
 #endif
 }

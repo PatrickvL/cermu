@@ -208,3 +208,17 @@ private:
 // Global renderer instance - single instance used by all chip rendering
 ChipVisualization& GetGlobalChipRenderer();
 
+// Helper: render a chip layout at the current ImGui cursor position.
+// Computes recommended size, places a Dummy, and renders the chip visualization.
+// This deduplicates the identical 5-line pattern across all render_layout_content() functions.
+inline void render_chip_layout(ChipLayout& layout,
+                               const std::vector<PinSignalState>& pin_states,
+                               const char* chip_name) {
+    ChipVisualization& renderer = GetGlobalChipRenderer();
+    ImVec2 size = renderer.get_recommended_size(layout);
+    ImVec2 cursor = ImGui::GetCursorScreenPos();
+    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
+    ImGui::Dummy(size);
+    renderer.render(layout, center, pin_states, chip_name);
+}
+

@@ -444,6 +444,11 @@ void SystemGUI::render_menu_bar() {
 
                     // Each chip with content opens as a submenu on hover,
                     // showing combined layout+debug+settings inline.
+                    // Set minimum size so chip layout + debug content has room.
+                    ImGui::SetNextWindowSizeConstraints(
+                        ImVec2(600.0f, 200.0f),   // min
+                        ImVec2(FLT_MAX, FLT_MAX)  // max (unconstrained)
+                    );
                     if (ImGui::BeginMenu(sc.display_name)) {
                         if (sc.chip->has_debug_content()) {
                             sc.chip->render_debug_content();

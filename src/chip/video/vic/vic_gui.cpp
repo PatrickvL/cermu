@@ -326,14 +326,8 @@ void vic_gui_render_layout_content(void* chip) {
 #ifdef IMGUI_VERSION
     const char* chip_name = get_vic_type_name(vic);
 
-    ChipVisualization& renderer = GetGlobalChipRenderer();
     ChipLayout& layout = get_vic_layout(vic->is_pal);
     std::vector<PinSignalState> pin_states = get_vic_pin_states(vic, &layout);
-
-    ImVec2 size = renderer.get_recommended_size(layout);
-    ImVec2 cursor = ImGui::GetCursorScreenPos();
-    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
-    ImGui::Dummy(size);
-    renderer.render(layout, center, pin_states, chip_name);
+    render_chip_layout(layout, pin_states, chip_name);
 #endif
 }

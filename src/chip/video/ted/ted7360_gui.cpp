@@ -371,14 +371,8 @@ void ted7360_render_layout_content(void* chip) {
     if (!ted) return;
 
 #ifdef IMGUI_VERSION
-    ChipVisualization& renderer = GetGlobalChipRenderer();
     ChipLayout& layout = get_ted_layout();
     std::vector<PinSignalState> pin_states = get_ted_pin_states(ted, &layout);
-
-    ImVec2 size = renderer.get_recommended_size(layout);
-    ImVec2 cursor = ImGui::GetCursorScreenPos();
-    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
-    ImGui::Dummy(size);
-    renderer.render(layout, center, pin_states, "TED7360");
+    render_chip_layout(layout, pin_states, "TED7360");
 #endif
 }
