@@ -231,3 +231,35 @@ void ram_render_settings_window(void* chip, bool* show_window) {
     ImGui::PopID();
 #endif
 }
+
+// ============================================================================
+// RAM LAYOUT WINDOW (standalone pinout diagram)
+// ============================================================================
+
+void ram_render_layout_window(void* chip, bool* show_window) {
+    if (!chip || !show_window || !*show_window) return;
+
+#ifdef IMGUI_VERSION
+    ram_t* ram = (ram_t*)chip;
+    ImGui::PushID((int)(uintptr_t)ram + 0x10000);
+
+    if (!ImGui::Begin("RAM Layout", show_window)) {
+        ImGui::End();
+        ImGui::PopID();
+        return;
+    }
+
+    ChipVisualization& renderer = GetGlobalChipRenderer();
+    ChipLayout& layout = get_ram_layout();
+    std::vector<PinSignalState> pin_states = get_ram_pin_states(ram, &layout, 0);
+
+    ImVec2 size = renderer.get_recommended_size(layout);
+    ImVec2 cursor = ImGui::GetCursorScreenPos();
+    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
+    ImGui::Dummy(size);
+    renderer.render(layout, center, pin_states, "RAM");
+
+    ImGui::End();
+    ImGui::PopID();
+#endif
+}

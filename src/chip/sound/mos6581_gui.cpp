@@ -401,3 +401,31 @@ void mos6581_render_settings_window(void* chip, bool* show_window) {
     ImGui::End();
 #endif
 }
+
+// ============================================================================
+// MOS6581 SID LAYOUT WINDOW (standalone pinout diagram)
+// ============================================================================
+
+void mos6581_render_layout_window(void* chip, bool* show_window) {
+    mos6581_t* sid = (mos6581_t*)chip;
+    if (!sid || !show_window || !*show_window) return;
+
+#ifdef IMGUI_VERSION
+    if (!ImGui::Begin("SID (MOS 6581) Layout", show_window)) {
+        ImGui::End();
+        return;
+    }
+
+    ChipVisualization& renderer = GetGlobalChipRenderer();
+    ChipLayout& layout = get_sid_layout();
+    std::vector<PinSignalState> pin_states = get_sid_pin_states(sid, &layout, 0);
+
+    ImVec2 size = renderer.get_recommended_size(layout);
+    ImVec2 cursor = ImGui::GetCursorScreenPos();
+    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
+    ImGui::Dummy(size);
+    renderer.render(layout, center, pin_states, "MOS6581");
+
+    ImGui::End();
+#endif
+}

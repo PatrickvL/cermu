@@ -423,44 +423,46 @@ void SystemGUI::render_menu_bar() {
         ImGui::EndMenu();
     }
     
-    // Hardware menu — chip debug/settings windows (from registered_chips_)
+    // Hardware menu — chip layout/debug/settings windows (from registered_chips_)
     if (system_) {
         auto& chips = system_->get_registered_chips();
         if (!chips.empty()) {
             if (ImGui::BeginMenu("Hardware")) {
-                // Group chips by category.  Collect unique categories in order.
-                struct CatEntry { const char* category; size_t first; };
-                std::vector<CatEntry> categories;
+                // Flat list: each chip gets a separator header, then toggleable
+                // items for Layout, Debug, and Settings windows.
                 for (size_t i = 0; i < chips.size(); i++) {
-                    const char* cat = chips[i].category ? chips[i].category : "Other";
-                    bool found = false;
-                    for (auto& c : categories) {
-                        if (strcmp(c.category, cat) == 0) { found = true; break; }
-                    }
-                    if (!found) categories.push_back({cat, i});
-                }
+                    auto& sc = chips[i];
+                    bool has_layout   = sc.chip && sc.chip->has_layout_window();
+                    bool has_debug    = sc.chip && sc.chip->has_debug_window();
+                    bool has_settings = sc.chip && sc.chip->has_settings_window();
 
-                for (auto& cat : categories) {
-                    if (ImGui::BeginMenu(cat.category)) {
-                        for (size_t i = 0; i < chips.size(); i++) {
-                            const char* c = chips[i].category ? chips[i].category : "Other";
-                            if (strcmp(c, cat.category) != 0) continue;
+                    // Skip chips with no windows at all
+                    if (!has_layout && !has_debug && !has_settings) continue;
 
-                            auto& sc = chips[i];
-                            bool has_debug = sc.chip && sc.chip->has_debug_window();
-                            bool has_settings = sc.chip && sc.chip->has_settings_window();
-                            bool has_any = has_debug || has_settings;
-                            ImGui::BeginDisabled(!has_any);
+                    ImGui::SeparatorText(sc.display_name);
 
-                            bool debug_on = sc.show_debug;
-                            if (ImGui::MenuItem(sc.display_name, nullptr, debug_on, has_any)) {
-                                sc.show_debug = !debug_on;
-                            }
+                    ImGui::PushID(static_cast<int>(i));
 
-                            ImGui::EndDisabled();
+                    if (has_layout) {
+                        bool layout_on = sc.show_layout;
+                        if (ImGui::MenuItem("Layout", nullptr, layout_on)) {
+                            sc.show_layout = !layout_on;
                         }
-                        ImGui::EndMenu();
                     }
+                    if (has_debug) {
+                        bool debug_on = sc.show_debug;
+                        if (ImGui::MenuItem("Debug", nullptr, debug_on)) {
+                            sc.show_debug = !debug_on;
+                        }
+                    }
+                    if (has_settings) {
+                        bool settings_on = sc.show_settings;
+                        if (ImGui::MenuItem("Settings", nullptr, settings_on)) {
+                            sc.show_settings = !settings_on;
+                        }
+                    }
+
+                    ImGui::PopID();
                 }
 
                 ImGui::EndMenu();

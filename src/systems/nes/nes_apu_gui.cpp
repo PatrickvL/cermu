@@ -407,9 +407,38 @@ void nes_apu_render_settings_window(nes6502_t* cpu, bool* show_window) {
     ImGui::End();
 }
 
+// ============================================================================
+// NES APU LAYOUT WINDOW (standalone pinout diagram)
+// ============================================================================
+
+void nes_apu_render_layout_window(nes6502_t* cpu, bool* show_window) {
+    if (!cpu || !show_window || !*show_window) return;
+
+    auto* apu = nes6502_get_apu(cpu);
+    if (!apu) return;
+
+    if (!ImGui::Begin("APU (RP2A03) Layout", show_window)) {
+        ImGui::End();
+        return;
+    }
+
+    static ChipLayout layout = create_ricoh_2a03_apu_layout();
+    auto pin_states = get_apu_pin_states(apu);
+
+    ChipVisualization& renderer = GetGlobalChipRenderer();
+    ImVec2 size = renderer.get_recommended_size(layout);
+    ImVec2 cursor = ImGui::GetCursorScreenPos();
+    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
+    ImGui::Dummy(size);
+    renderer.render(layout, center, pin_states, "RP2A03");
+
+    ImGui::End();
+}
+
 #else // !IMGUI_VERSION
 
 void nes_apu_render_debug_window(nes6502_t*, bool*) {}
 void nes_apu_render_settings_window(nes6502_t*, bool*) {}
+void nes_apu_render_layout_window(nes6502_t*, bool*) {}
 
 #endif

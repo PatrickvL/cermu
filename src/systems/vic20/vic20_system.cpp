@@ -962,28 +962,32 @@ void VIC20System::register_vic20_chips() {
     register_chip(std::make_unique<CChipAdapter>(
         cpu, ChipIdentity{"MOS6502", "MOS Technology"},
         [cpu](bool* s) { fam65xx_render_debug_window(cpu, s); },
-        [cpu](bool* s) { fam65xx_render_settings_window(cpu, s); }),
+        [cpu](bool* s) { fam65xx_render_settings_window(cpu, s); },
+        [cpu](bool* s) { fam65xx_render_layout_window(cpu, s); }),
         "MOS 6502 CPU", "6502", "CPU", 0x0000);
 
     // VIC
     register_chip(std::make_unique<CChipAdapter>(
         vic, ChipIdentity{"MOS6560", "MOS Technology"},
         [vic](bool* s) { vic_gui_render_debug_window(vic, s); },
-        [vic](bool* s) { vic_gui_render_settings_window(vic, s); }),
+        [vic](bool* s) { vic_gui_render_settings_window(vic, s); },
+        [vic](bool* s) { vic_gui_render_layout_window(vic, s); }),
         "VIC (MOS 6560/6561)", "VIC", "Video", 0x9000);
 
     // VIA 1
     register_chip(std::make_unique<CChipAdapter>(
         via1, ChipIdentity{"MOS6522", "MOS Technology"},
         [via1](bool* s) { mos6522_render_debug_window(via1, s); },
-        [via1](bool* s) { mos6522_render_settings_window(via1, s); }),
+        [via1](bool* s) { mos6522_render_settings_window(via1, s); },
+        [via1](bool* s) { mos6522_render_layout_window(via1, s); }),
         "VIA 1 (MOS 6522)", "VIA 1", "I/O", 0x9110);
 
     // VIA 2
     register_chip(std::make_unique<CChipAdapter>(
         via2, ChipIdentity{"MOS6522", "MOS Technology"},
         [via2](bool* s) { mos6522_render_debug_window(via2, s); },
-        [via2](bool* s) { mos6522_render_settings_window(via2, s); }),
+        [via2](bool* s) { mos6522_render_settings_window(via2, s); },
+        [via2](bool* s) { mos6522_render_layout_window(via2, s); }),
         "VIA 2 (MOS 6522)", "VIA 2", "I/O", 0x9120);
 
     // RAM (no debug window)
