@@ -121,10 +121,8 @@ static void initialize_rockwell65c02_descriptor() {
   rockwell65c02_base_descriptor.bank_change =
       nullptr; // Basic CPU doesn't have banking
 #ifdef IMGUI_VERSION
-  rockwell65c02_base_descriptor.render_debug_window =
-      fam65xx_render_debug_window;
-  rockwell65c02_base_descriptor.render_settings_window =
-      fam65xx_render_settings_window;
+  rockwell65c02_base_descriptor.render_debug_window = NULL;
+  rockwell65c02_base_descriptor.render_settings_window = NULL;
 #endif
 }
 

@@ -197,21 +197,12 @@ static ChipLayout& get_pla_layout() {
     return layout;
 }
 
-void pla_render_debug_window(void* chip, bool* show_window) {
+void pla_render_debug_content(void* chip) {
     // The chip parameter is expected to be a c64_t* since PLA is part of the C64 bus
     c64_t* c64 = (c64_t*)chip;
-    
-    if (!c64 || !show_window || !*show_window) return;
+    if (!c64) return;
         
 #ifdef IMGUI_VERSION
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "PLA Debug");
-    
-    if (!ImGui::Begin(window_title, show_window)) {
-        ImGui::End();
-        return;
-    }
-
     // Create two-column layout: chip visualization on left, debugging info on right
     ImVec2 window_size = ImGui::GetWindowSize();
     
@@ -582,8 +573,6 @@ void pla_render_debug_window(void* chip, bool* show_window) {
         }
     }
     ImGui::EndChild();
-
-    ImGui::End();
 #endif
 }
 
@@ -591,20 +580,11 @@ void pla_render_debug_window(void* chip, bool* show_window) {
 // PLA GUI SETTINGS WINDOW
 // ============================================================================
 
-void pla_render_settings_window(void* chip, bool* show_window) {
+void pla_render_settings_content(void* chip) {
     c64_t* c64 = (c64_t*)chip;
     if (!c64) return;
-    
-    if (!*show_window) return;
-    
+
 #ifdef IMGUI_VERSION
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "PLA Settings");
-    
-    if (!ImGui::Begin(window_title, show_window, 0)) {
-        ImGui::End();
-        return;
-    }
 
     // Show PLA information
     ImGui::Text("Programmable Logic Array - C64 PLA Configuration");
@@ -631,25 +611,18 @@ void pla_render_settings_window(void* chip, bool* show_window) {
     ImGui::Text("CHAREN: %s", (current_mode & 0x04) ? "High" : "Low");
     ImGui::Text("EXROM: %s", (current_mode & 0x08) ? "High" : "Low");
     ImGui::Text("GAME: %s", (current_mode & 0x10) ? "High" : "Low");
-    
-    ImGui::End();
 #endif
 }
 
 // ============================================================================
-// PLA LAYOUT WINDOW (standalone pinout diagram)
+// PLA LAYOUT (standalone pinout diagram)
 // ============================================================================
 
-void pla_render_layout_window(void* chip, bool* show_window) {
-    if (!chip || !show_window || !*show_window) return;
+void pla_render_layout_content(void* chip) {
+    if (!chip) return;
 
 #ifdef IMGUI_VERSION
     c64_t* c64 = (c64_t*)chip;
-
-    if (!ImGui::Begin("PLA (906114-01) Layout", show_window)) {
-        ImGui::End();
-        return;
-    }
 
     ChipVisualization& renderer = GetGlobalChipRenderer();
     ChipLayout& layout = get_pla_layout();
@@ -660,7 +633,5 @@ void pla_render_layout_window(void* chip, bool* show_window) {
     ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
     ImGui::Dummy(size);
     renderer.render(layout, center, pin_states, "906114-01");
-
-    ImGui::End();
 #endif
 }

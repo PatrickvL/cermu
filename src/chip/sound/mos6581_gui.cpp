@@ -175,21 +175,13 @@ static ChipLayout& get_sid_layout() {
     return layout;
 }
 
-void mos6581_render_debug_window(void* chip, bool* show_window) {
+void mos6581_render_debug_content(void* chip) {
     mos6581_t* sid = (mos6581_t*)chip;
-    if (!sid || !sid->desc || !show_window || !*show_window) return;
+    if (!sid || !sid->desc) return;
     
 #ifdef IMGUI_VERSION
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Debug", sid->desc->description);
-    
-    if (!ImGui::Begin(window_title, show_window)) {
-        ImGui::End();
-        return;
-    }
-
     // Create two-column layout: chip visualization on left, debugging info on right
-    ImVec2 window_size = ImGui::GetWindowSize();
+    ImVec2 window_size = ImGui::GetContentRegionAvail();
     
     // Left column: Chip Visualization (fixed width ~250px)
     ImVec2 chip_viz_size = ImVec2(250.0f, 0);
@@ -262,26 +254,17 @@ void mos6581_render_debug_window(void* chip, bool* show_window) {
         }
     }
     ImGui::EndChild();
-
-    ImGui::End();
 #endif
 }
 
 // ============================================================================
 // MOS6581 SID GUI SETTINGS WINDOW
 // ============================================================================
-void mos6581_render_settings_window(void* chip, bool* show_window) {
+void mos6581_render_settings_content(void* chip) {
     mos6581_t* sid = (mos6581_t*)chip;
-    if (!sid || !sid->desc || !show_window || !*show_window) return;
+    if (!sid || !sid->desc) return;
     
 #ifdef IMGUI_VERSION
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Settings", sid->desc->description);
-    
-    if (!ImGui::Begin(window_title, show_window)) {
-        ImGui::End();
-        return;
-    }
 
     ImGui::Text("SID Configuration");
     ImGui::Separator();
@@ -397,25 +380,18 @@ void mos6581_render_settings_window(void* chip, bool* show_window) {
 
     // Reset to single column at the end
     ImGui::Columns(1, nullptr, false);
-
-    ImGui::End();
 #endif
 }
 
 // ============================================================================
-// MOS6581 SID LAYOUT WINDOW (standalone pinout diagram)
+// MOS6581 SID LAYOUT (standalone pinout diagram)
 // ============================================================================
 
-void mos6581_render_layout_window(void* chip, bool* show_window) {
+void mos6581_render_layout_content(void* chip) {
     mos6581_t* sid = (mos6581_t*)chip;
-    if (!sid || !show_window || !*show_window) return;
+    if (!sid) return;
 
 #ifdef IMGUI_VERSION
-    if (!ImGui::Begin("SID (MOS 6581) Layout", show_window)) {
-        ImGui::End();
-        return;
-    }
-
     ChipVisualization& renderer = GetGlobalChipRenderer();
     ChipLayout& layout = get_sid_layout();
     std::vector<PinSignalState> pin_states = get_sid_pin_states(sid, &layout, 0);
@@ -425,7 +401,5 @@ void mos6581_render_layout_window(void* chip, bool* show_window) {
     ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
     ImGui::Dummy(size);
     renderer.render(layout, center, pin_states, "MOS6581");
-
-    ImGui::End();
 #endif
 }

@@ -35,8 +35,8 @@ chip_descriptor_t pla_descriptor = {
     .bus_attach = NULL,
     .bank_change = NULL,
 #ifdef IMGUI_VERSION
-    .render_debug_window = pla_render_debug_window,
-    .render_settings_window = pla_render_settings_window
+    .render_debug_window = NULL,
+    .render_settings_window = NULL
 #endif
 };
 

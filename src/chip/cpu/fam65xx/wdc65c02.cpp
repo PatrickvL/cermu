@@ -102,9 +102,8 @@ static void initialize_wdc65c02_descriptor() {
   wdc65c02_base_descriptor.bus_attach = nullptr;
   wdc65c02_base_descriptor.bank_change = nullptr;
 #ifdef IMGUI_VERSION
-  wdc65c02_base_descriptor.render_debug_window = fam65xx_render_debug_window;
-  wdc65c02_base_descriptor.render_settings_window =
-      fam65xx_render_settings_window;
+  wdc65c02_base_descriptor.render_debug_window = NULL;
+  wdc65c02_base_descriptor.render_settings_window = NULL;
 #endif
 }
 

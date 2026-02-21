@@ -157,9 +157,8 @@ static void initialize_mos6502_descriptor() {
   mos6502_base_descriptor.bank_change =
       nullptr; // Basic CPU doesn't have banking
 #ifdef IMGUI_VERSION
-  mos6502_base_descriptor.render_debug_window = fam65xx_render_debug_window;
-  mos6502_base_descriptor.render_settings_window =
-      fam65xx_render_settings_window;
+  mos6502_base_descriptor.render_debug_window = NULL;
+  mos6502_base_descriptor.render_settings_window = NULL;
 #endif
 }
 

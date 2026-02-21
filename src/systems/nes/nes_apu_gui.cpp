@@ -152,18 +152,11 @@ static std::vector<PinSignalState> get_apu_pin_states(
 // DEBUG WINDOW
 // ============================================================================
 
-void nes_apu_render_debug_window(nes6502_t* cpu, bool* show_window) {
-    if (!show_window || !*show_window) return;
+void nes_apu_render_debug_content(nes6502_t* cpu) {
     if (!cpu) return;
 
     nes6502_apu::APU* apu = nes6502_get_apu(cpu);
     if (!apu) return;
-
-    ImGui::SetNextWindowSize(ImVec2(640, 580), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("APU (Ricoh 2A03) Debug", show_window)) {
-        ImGui::End();
-        return;
-    }
 
     float avail_w = ImGui::GetContentRegionAvail().x;
     float chip_w  = 250.0f;
@@ -347,26 +340,17 @@ void nes_apu_render_debug_window(nes6502_t* cpu, bool* show_window) {
         }
     }
     ImGui::EndChild();
-
-    ImGui::End();
 }
 
 // ============================================================================
-// SETTINGS WINDOW
+// SETTINGS
 // ============================================================================
 
-void nes_apu_render_settings_window(nes6502_t* cpu, bool* show_window) {
-    if (!show_window || !*show_window) return;
+void nes_apu_render_settings_content(nes6502_t* cpu) {
     if (!cpu) return;
 
     nes6502_apu::APU* apu = nes6502_get_apu(cpu);
     if (!apu) return;
-
-    ImGui::SetNextWindowSize(ImVec2(400, 350), ImGuiCond_FirstUseEver);
-    if (!ImGui::Begin("APU (Ricoh 2A03) Settings", show_window)) {
-        ImGui::End();
-        return;
-    }
 
     // Channel output summary
     if (ImGui::CollapsingHeader("Channel Outputs",
@@ -403,24 +387,17 @@ void nes_apu_render_settings_window(nes6502_t* cpu, bool* show_window) {
         ImGui::Text("$4015       : Status");
         ImGui::Text("$4017       : Frame Counter");
     }
-
-    ImGui::End();
 }
 
 // ============================================================================
-// NES APU LAYOUT WINDOW (standalone pinout diagram)
+// NES APU LAYOUT (standalone pinout diagram)
 // ============================================================================
 
-void nes_apu_render_layout_window(nes6502_t* cpu, bool* show_window) {
-    if (!cpu || !show_window || !*show_window) return;
+void nes_apu_render_layout_content(nes6502_t* cpu) {
+    if (!cpu) return;
 
     auto* apu = nes6502_get_apu(cpu);
     if (!apu) return;
-
-    if (!ImGui::Begin("APU (RP2A03) Layout", show_window)) {
-        ImGui::End();
-        return;
-    }
 
     static ChipLayout layout = create_ricoh_2a03_apu_layout();
     auto pin_states = get_apu_pin_states(apu);
@@ -431,14 +408,12 @@ void nes_apu_render_layout_window(nes6502_t* cpu, bool* show_window) {
     ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
     ImGui::Dummy(size);
     renderer.render(layout, center, pin_states, "RP2A03");
-
-    ImGui::End();
 }
 
 #else // !IMGUI_VERSION
 
-void nes_apu_render_debug_window(nes6502_t*, bool*) {}
-void nes_apu_render_settings_window(nes6502_t*, bool*) {}
-void nes_apu_render_layout_window(nes6502_t*, bool*) {}
+void nes_apu_render_debug_content(nes6502_t*) {}
+void nes_apu_render_settings_content(nes6502_t*) {}
+void nes_apu_render_layout_content(nes6502_t*) {}
 
 #endif

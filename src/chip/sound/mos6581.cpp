@@ -1060,7 +1060,7 @@ chip_descriptor_t mos6581_descriptor = {
     .bus_attach = (void (*)(void *, void *))mos6581_bus_attach,
     .bank_change = NULL,
 #ifdef IMGUI_VERSION
-    .render_debug_window = mos6581_render_debug_window,
-    .render_settings_window = mos6581_render_settings_window
+    .render_debug_window = NULL,
+    .render_settings_window = NULL
 #endif
 };

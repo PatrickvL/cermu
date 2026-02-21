@@ -22,8 +22,8 @@ chip_descriptor_t mos6567_descriptor = {
     .bus_attach  = vicii_bus_attach,
     .bank_change = vicii_memory_bank_change,
 #ifdef IMGUI_VERSION
-    .render_debug_window = mos6567_render_debug_window,
-    .render_settings_window = mos6567_render_settings_window
+    .render_debug_window = NULL,
+    .render_settings_window = NULL
 #endif
 };
 

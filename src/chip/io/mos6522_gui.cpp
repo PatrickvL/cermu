@@ -169,25 +169,15 @@ static ChipLayout& get_via_layout() {
 // MOS6522 VIA GUI DEBUG WINDOW
 // ============================================================================
 
-void mos6522_render_debug_window(void* chip, bool* show_window) {
+void mos6522_render_debug_content(void* chip) {
     mos6522_t* via = (mos6522_t*)chip;
-    if (!via || !show_window || !*show_window) return;
+    if (!via) return;
 
 #ifdef IMGUI_VERSION
-    ImGui::PushID((int)(uintptr_t)via);
-
-    char window_title[128];
     const char* via_name = mos6522_get_via_name(via);
-    snprintf(window_title, sizeof(window_title), "%s Debug", via_name);
-
-    if (!ImGui::Begin(window_title, show_window)) {
-        ImGui::End();
-        ImGui::PopID();
-        return;
-    }
 
     // Two-column layout: chip visualization | debug info
-    ImVec2 window_size = ImGui::GetWindowSize();
+    ImVec2 window_size = ImGui::GetContentRegionAvail();
 
     ImVec2 chip_viz_size = ImVec2(250.0f, 0);
     if (ImGui::BeginChild("ChipVisualization", chip_viz_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
@@ -277,32 +267,19 @@ void mos6522_render_debug_window(void* chip, bool* show_window) {
         }
     }
     ImGui::EndChild();
-
-    ImGui::End();
-    ImGui::PopID();
 #endif
 }
 
 // ============================================================================
-// MOS6522 VIA GUI SETTINGS WINDOW
+// MOS6522 VIA GUI SETTINGS
 // ============================================================================
 
-void mos6522_render_settings_window(void* chip, bool* show_window) {
+void mos6522_render_settings_content(void* chip) {
     mos6522_t* via = (mos6522_t*)chip;
-    if (!via || !show_window || !*show_window) return;
+    if (!via) return;
 
 #ifdef IMGUI_VERSION
-    ImGui::PushID((int)(uintptr_t)via);
-
-    char window_title[128];
     const char* via_name = mos6522_get_via_name(via);
-    snprintf(window_title, sizeof(window_title), "%s Settings", via_name);
-
-    if (!ImGui::Begin(window_title, show_window, 0)) {
-        ImGui::End();
-        ImGui::PopID();
-        return;
-    }
 
     ImGui::Text("Versatile Interface Adapter - %s Configuration", via_name);
     ImGui::Separator();
@@ -336,9 +313,6 @@ void mos6522_render_settings_window(void* chip, bool* show_window) {
                         is_output ? "OUT" : "IN");
         }
     }
-
-    ImGui::End();
-    ImGui::PopID();
 #endif
 }
 
@@ -360,22 +334,12 @@ static const char* mos6522_get_via_name(mos6522_t* via) {
 // MOS6522 VIA LAYOUT WINDOW (standalone pinout diagram)
 // ============================================================================
 
-void mos6522_render_layout_window(void* chip, bool* show_window) {
+void mos6522_render_layout_content(void* chip) {
     mos6522_t* via = (mos6522_t*)chip;
-    if (!via || !show_window || !*show_window) return;
+    if (!via) return;
 
 #ifdef IMGUI_VERSION
-    ImGui::PushID((int)(uintptr_t)via + 0x10000);
-
-    char window_title[128];
     const char* via_name = mos6522_get_via_name(via);
-    snprintf(window_title, sizeof(window_title), "%s Layout", via_name);
-
-    if (!ImGui::Begin(window_title, show_window)) {
-        ImGui::End();
-        ImGui::PopID();
-        return;
-    }
 
     ChipVisualization& renderer = GetGlobalChipRenderer();
     ChipLayout& layout = get_via_layout();
@@ -386,8 +350,5 @@ void mos6522_render_layout_window(void* chip, bool* show_window) {
     ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
     ImGui::Dummy(size);
     renderer.render(layout, center, pin_states, via_name);
-
-    ImGui::End();
-    ImGui::PopID();
 #endif
 }

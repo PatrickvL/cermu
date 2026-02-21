@@ -167,23 +167,13 @@ static const char* get_vic_type_name(vic_base_t* vic) {
 // VIC GUI DEBUG WINDOW
 // ============================================================================
 
-void vic_gui_render_debug_window(void* chip, bool* show_window) {
+void vic_gui_render_debug_content(void* chip) {
     vic_base_t* vic = (vic_base_t*)chip;
-    if (!vic || !show_window || !*show_window) return;
+    if (!vic) return;
 
 #ifdef IMGUI_VERSION
-    const char* vic_name = get_vic_type_name(vic);
-
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Debug", vic_name);
-
-    if (!ImGui::Begin(window_title, show_window)) {
-        ImGui::End();
-        return;
-    }
-
     // Two-column layout
-    ImVec2 window_size = ImGui::GetWindowSize();
+    ImVec2 window_size = ImGui::GetContentRegionAvail();
 
     ImVec2 chip_viz_size = ImVec2(250.0f, 0);
     if (ImGui::BeginChild("ChipVisualization", chip_viz_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
@@ -198,7 +188,7 @@ void vic_gui_render_debug_window(void* chip, bool* show_window) {
         ChipVisualization& renderer = GetGlobalChipRenderer();
         ChipLayout& layout = get_vic_layout(vic->is_pal);
         std::vector<PinSignalState> pin_states = get_vic_pin_states(vic, &layout);
-        renderer.render(layout, chip_center, pin_states, vic_name);
+        renderer.render(layout, chip_center, pin_states, get_vic_type_name(vic));
     }
     ImGui::EndChild();
 
@@ -206,7 +196,7 @@ void vic_gui_render_debug_window(void* chip, bool* show_window) {
 
     ImVec2 right_column_size = ImVec2(window_size.x - 270.0f, 0);
     if (ImGui::BeginChild("DebugInfo", right_column_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
-        ImGui::Text("Video Interface Chip - %s", vic_name);
+        ImGui::Text("Video Interface Chip - %s", get_vic_type_name(vic));
         ImGui::Separator();
 
         // Raster Information
@@ -287,33 +277,22 @@ void vic_gui_render_debug_window(void* chip, bool* show_window) {
         }
     }
     ImGui::EndChild();
-
-    ImGui::End();
 #endif
 }
 
 // ============================================================================
-// VIC GUI SETTINGS WINDOW
+// VIC GUI SETTINGS
 // ============================================================================
 
-void vic_gui_render_settings_window(void* chip, bool* show_window) {
+void vic_gui_render_settings_content(void* chip) {
     vic_base_t* vic = (vic_base_t*)chip;
-    if (!vic || !show_window || !*show_window) return;
+    if (!vic) return;
 
 #ifdef IMGUI_VERSION
-    const char* vic_name = get_vic_type_name(vic);
 
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Settings", vic_name);
-
-    if (!ImGui::Begin(window_title, show_window, 0)) {
-        ImGui::End();
-        return;
-    }
-
-    ImGui::Text("Video Interface Chip - %s Configuration", vic_name);
+    ImGui::Text("Video Interface Chip - %s Configuration", get_vic_type_name(vic));
     ImGui::Separator();
-    ImGui::Text("Chip Type: %s", vic_name);
+    ImGui::Text("Chip Type: %s", get_vic_type_name(vic));
     ImGui::Text("Clock: %u Hz", vic->clock_frequency);
     ImGui::Text("Lines: %u lines/frame", vic->total_lines);
     ImGui::Text("Cycles/line: %u", vic->cycles_per_line);
@@ -333,28 +312,19 @@ void vic_gui_render_settings_window(void* chip, bool* show_window) {
                         reg_names[i], vic->registers[i]);
         }
     }
-
-    ImGui::End();
 #endif
 }
 
 // ============================================================================
-// VIC LAYOUT WINDOW (standalone pinout diagram)
+// VIC LAYOUT (standalone pinout diagram)
 // ============================================================================
 
-void vic_gui_render_layout_window(void* chip, bool* show_window) {
+void vic_gui_render_layout_content(void* chip) {
     vic_base_t* vic = (vic_base_t*)chip;
-    if (!vic || !show_window || !*show_window) return;
+    if (!vic) return;
 
 #ifdef IMGUI_VERSION
     const char* chip_name = get_vic_type_name(vic);
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Layout", chip_name);
-
-    if (!ImGui::Begin(window_title, show_window)) {
-        ImGui::End();
-        return;
-    }
 
     ChipVisualization& renderer = GetGlobalChipRenderer();
     ChipLayout& layout = get_vic_layout(vic->is_pal);
@@ -365,7 +335,5 @@ void vic_gui_render_layout_window(void* chip, bool* show_window) {
     ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
     ImGui::Dummy(size);
     renderer.render(layout, center, pin_states, chip_name);
-
-    ImGui::End();
 #endif
 }

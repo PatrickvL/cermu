@@ -116,24 +116,13 @@ static ChipLayout& get_ram_layout() {
 // ============================================================================
 // RAM GUI DEBUG WINDOW
 // ============================================================================
-void ram_render_debug_window(void* chip, bool* show_window) {
+void ram_render_debug_content(void* chip) {
     ram_t* ram = (ram_t*)chip;
     if (!ram || !ram->desc) return;
-    
-    if (!*show_window) return;
 
 #ifdef IMGUI_VERSION
-    // Create window title
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Debug", ram->desc->description);
-    
-    if (!ImGui::Begin(window_title, show_window)) {
-        ImGui::End();
-        return;
-    }
-
     // Create two-column layout: chip visualization on left, debugging info on right
-    ImVec2 window_size = ImGui::GetWindowSize();
+    ImVec2 window_size = ImGui::GetContentRegionAvail();
     
     // Left column: Chip Visualization (fixed width ~250px)
     ImVec2 chip_viz_size = ImVec2(250.0f, 0);
@@ -189,28 +178,14 @@ void ram_render_debug_window(void* chip, bool* show_window) {
         }
     }
     ImGui::EndChild();
-
-    ImGui::End();
 #endif
 }
 
-void ram_render_settings_window(void* chip, bool* show_window) {
+void ram_render_settings_content(void* chip) {
     ram_t* ram = (ram_t*)chip;
     if (!ram || !ram->desc) return;
-    
-    if (!*show_window) return;
-    
+
 #ifdef IMGUI_VERSION
-    // Push unique ID to prevent conflicts between multiple RAM instances
-    ImGui::PushID((int)(uintptr_t)ram);
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Settings", ram->desc->description);
-    
-    if (!ImGui::Begin(window_title, show_window, 0)) {
-        ImGui::End();
-        ImGui::PopID();
-        return;
-    }
 
     ImGui::Text("RAM Configuration");
     ImGui::Separator();
@@ -226,28 +201,18 @@ void ram_render_settings_window(void* chip, bool* show_window) {
     if (ImGui::Button("Fill with Pattern", ImVec2(0, 0))) {
         // Fill with pattern
     }
-
-    ImGui::End();
-    ImGui::PopID();
 #endif
 }
 
 // ============================================================================
-// RAM LAYOUT WINDOW (standalone pinout diagram)
+// RAM LAYOUT (standalone pinout diagram)
 // ============================================================================
 
-void ram_render_layout_window(void* chip, bool* show_window) {
-    if (!chip || !show_window || !*show_window) return;
+void ram_render_layout_content(void* chip) {
+    if (!chip) return;
 
 #ifdef IMGUI_VERSION
     ram_t* ram = (ram_t*)chip;
-    ImGui::PushID((int)(uintptr_t)ram + 0x10000);
-
-    if (!ImGui::Begin("RAM Layout", show_window)) {
-        ImGui::End();
-        ImGui::PopID();
-        return;
-    }
 
     ChipVisualization& renderer = GetGlobalChipRenderer();
     ChipLayout& layout = get_ram_layout();
@@ -258,8 +223,5 @@ void ram_render_layout_window(void* chip, bool* show_window) {
     ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
     ImGui::Dummy(size);
     renderer.render(layout, center, pin_states, "RAM");
-
-    ImGui::End();
-    ImGui::PopID();
 #endif
 }

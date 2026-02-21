@@ -144,24 +144,13 @@ static ChipLayout& get_mos2114_layout() {
 // ============================================================================
 // MOS2114 GUI FUNCTIONS (always defined for linking, conditionally implemented)
 // ============================================================================
-extern "C" void mos2114_render_debug_window(void* chip, bool* show_window) {
+extern "C" void mos2114_render_debug_content(void* chip) {
     mos2114_t* mos2114 = (mos2114_t*)chip;
     if (!mos2114 || !mos2114->desc) return;
-    
-    if (!*show_window) return;
 
 #ifdef IMGUI_VERSION
-    // Create window title from chip description
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Debug", mos2114->desc->description);
-    
-    if (!ImGui::Begin(window_title, show_window)) {
-        ImGui::End();
-        return;
-    }
-
     // Create two-column layout: chip visualization on left, debugging info on right
-    ImVec2 window_size = ImGui::GetWindowSize();
+    ImVec2 window_size = ImGui::GetContentRegionAvail();
     
     // Left column: Chip Visualization (fixed width ~250px)
     ImVec2 chip_viz_size = ImVec2(250.0f, 0);
@@ -254,26 +243,14 @@ extern "C" void mos2114_render_debug_window(void* chip, bool* show_window) {
         }
     }
     ImGui::EndChild();
-
-    ImGui::End();
 #endif
 }
 
-extern "C" void mos2114_render_settings_window(void* chip, bool* show_window) {
+extern "C" void mos2114_render_settings_content(void* chip) {
     mos2114_t* mos2114 = (mos2114_t*)chip;
     if (!mos2114 || !mos2114->desc) return;
-    
-    if (!*show_window) return;
-    
+
 #ifdef IMGUI_VERSION
-    // Create window title from chip description
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Settings", mos2114->desc->description);
-    
-    if (!ImGui::Begin(window_title, show_window, 0)) {
-        ImGui::End();
-        return;
-    }
 
     ImGui::Text("MOS2114 Color RAM Settings");
     ImGui::Separator();
@@ -303,25 +280,18 @@ extern "C" void mos2114_render_settings_window(void* chip, bool* show_window) {
     ImGui::Separator();
     ImGui::Text("Color RAM contains 4-bit values (0-15)");
     ImGui::Text("representing C64 text color information.");
-
-    ImGui::End();
 #endif
 }
 
 // ============================================================================
-// MOS2114 LAYOUT WINDOW (standalone pinout diagram)
+// MOS2114 LAYOUT (standalone pinout diagram)
 // ============================================================================
 
-extern "C" void mos2114_render_layout_window(void* chip, bool* show_window) {
-    if (!chip || !show_window || !*show_window) return;
+extern "C" void mos2114_render_layout_content(void* chip) {
+    if (!chip) return;
 
 #ifdef IMGUI_VERSION
     mos2114_t* mos2114 = (mos2114_t*)chip;
-
-    if (!ImGui::Begin("MOS 2114 Layout", show_window)) {
-        ImGui::End();
-        return;
-    }
 
     ChipVisualization& renderer = GetGlobalChipRenderer();
     ChipLayout& layout = get_mos2114_layout();
@@ -332,7 +302,5 @@ extern "C" void mos2114_render_layout_window(void* chip, bool* show_window) {
     ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
     ImGui::Dummy(size);
     renderer.render(layout, center, pin_states, "MOS2114");
-
-    ImGui::End();
 #endif
 }

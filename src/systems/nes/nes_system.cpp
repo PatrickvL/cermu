@@ -1510,25 +1510,25 @@ void NintendoSystem<V>::register_nes_chips() {
     // CPU (Ricoh 2A03)
     register_chip(std::make_unique<CChipAdapter>(
         cpu, ChipIdentity{"RP2A03", "Ricoh"},
-        [cpu](bool* s) { fam65xx_render_debug_window(cpu, s); },
-        [cpu](bool* s) { fam65xx_render_settings_window(cpu, s); },
-        [cpu](bool* s) { fam65xx_render_layout_window(cpu, s); }),
+        [cpu]() { fam65xx_render_debug_content(cpu); },
+        [cpu]() { fam65xx_render_settings_content(cpu); },
+        [cpu]() { fam65xx_render_layout_content(cpu); }),
         "Ricoh 2A03 (6502 + APU)", "2A03", "CPU", 0x0000);
 
     // PPU (Ricoh 2C02)
     register_chip(std::make_unique<CChipAdapter>(
         ppu_raw, ChipIdentity{"RP2C02", "Ricoh"},
-        [ppu_raw](bool* s) { nes_ppu_render_debug_window(ppu_raw, s); },
-        [ppu_raw](bool* s) { nes_ppu_render_settings_window(ppu_raw, s); },
-        [ppu_raw](bool* s) { nes_ppu_render_layout_window(ppu_raw, s); }),
+        [ppu_raw]() { nes_ppu_render_debug_content(ppu_raw); },
+        [ppu_raw]() { nes_ppu_render_settings_content(ppu_raw); },
+        [ppu_raw]() { nes_ppu_render_layout_content(ppu_raw); }),
         "Ricoh 2C02 PPU", "PPU", "Video", 0x2000);
 
     // APU (built into 2A03 — uses cpu_ pointer)
     register_chip(std::make_unique<CChipAdapter>(
         cpu, ChipIdentity{"RP2A03-APU", "Ricoh"},
-        [cpu](bool* s) { nes_apu_render_debug_window(cpu, s); },
-        [cpu](bool* s) { nes_apu_render_settings_window(cpu, s); },
-        [cpu](bool* s) { nes_apu_render_layout_window(cpu, s); }),
+        [cpu]() { nes_apu_render_debug_content(cpu); },
+        [cpu]() { nes_apu_render_settings_content(cpu); },
+        [cpu]() { nes_apu_render_layout_content(cpu); }),
         "APU (built-in 2A03)", "APU", "Audio", 0x4000);
 
     // RAM (no debug window)
