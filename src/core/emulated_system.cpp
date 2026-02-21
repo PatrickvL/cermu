@@ -1,4 +1,5 @@
 #include "emulated_system.h"
+#include "chip.h"
 #include <cstring>
 #include <cmath>
 #include <algorithm>
@@ -85,34 +86,34 @@ void EmulatedSystem::handle_controller_event(int controller, int button, bool pr
 }
 
 void EmulatedSystem::render_debug_windows(void* gui_state) {
-    // Default: render any chip debug/settings windows toggled by the Hardware menu
+    // Iterate registered chips and render any toggled debug/settings windows.
     (void)gui_state;
-    auto chips = get_chip_info();
-    chip_debug_state_.ensure_size(chips.size());
-    for (size_t i = 0; i < chips.size(); i++) {
-        if (chip_debug_state_.show_debug[i] && chips[i].has_debug_window) {
-            bool show = chip_debug_state_.show_debug[i];
-            render_chip_debug_window(static_cast<int>(i), &show);
-            chip_debug_state_.show_debug[i] = show;
+    for (auto& sc : registered_chips_) {
+        if (sc.show_debug && sc.chip && sc.chip->has_debug_window()) {
+            bool show = sc.show_debug;
+            sc.chip->render_debug_window(&show);
+            sc.show_debug = show;
         }
-        if (chip_debug_state_.show_settings[i] && chips[i].has_settings_window) {
-            bool show = chip_debug_state_.show_settings[i];
-            render_chip_settings_window(static_cast<int>(i), &show);
-            chip_debug_state_.show_settings[i] = show;
+        if (sc.show_settings && sc.chip && sc.chip->has_settings_window()) {
+            bool show = sc.show_settings;
+            sc.chip->render_settings_window(&show);
+            sc.show_settings = show;
         }
     }
 }
 
-void EmulatedSystem::render_chip_debug_window(int chip_index, bool* show) {
-    // Default: no debug window
-    (void)chip_index;
-    (void)show;
-}
-
-void EmulatedSystem::render_chip_settings_window(int chip_index, bool* show) {
-    // Default: no settings window
-    (void)chip_index;
-    (void)show;
+void EmulatedSystem::register_chip(std::unique_ptr<ChipBase> chip,
+                                   const char* display_name, const char* short_name,
+                                   const char* category, uint16_t base_address) {
+    SystemChip sc;
+    sc.chip = std::move(chip);
+    sc.display_name = display_name;
+    sc.short_name = short_name;
+    sc.category = category;
+    sc.base_address = base_address;
+    sc.show_debug = 0;
+    sc.show_settings = 0;
+    registered_chips_.push_back(std::move(sc));
 }
 
 void EmulatedSystem::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) {

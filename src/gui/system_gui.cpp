@@ -423,13 +423,10 @@ void SystemGUI::render_menu_bar() {
         ImGui::EndMenu();
     }
     
-    // Hardware menu — chip debug/settings windows (auto-generated from get_chip_info)
+    // Hardware menu — chip debug/settings windows (from registered_chips_)
     if (system_) {
-        auto chips = system_->get_chip_info();
+        auto& chips = system_->get_registered_chips();
         if (!chips.empty()) {
-            auto& dbg = system_->get_chip_debug_state();
-            dbg.ensure_size(chips.size());
-
             if (ImGui::BeginMenu("Hardware")) {
                 // Group chips by category.  Collect unique categories in order.
                 struct CatEntry { const char* category; size_t first; };
@@ -449,12 +446,15 @@ void SystemGUI::render_menu_bar() {
                             const char* c = chips[i].category ? chips[i].category : "Other";
                             if (strcmp(c, cat.category) != 0) continue;
 
-                            bool has_any = chips[i].has_debug_window || chips[i].has_settings_window;
+                            auto& sc = chips[i];
+                            bool has_debug = sc.chip && sc.chip->has_debug_window();
+                            bool has_settings = sc.chip && sc.chip->has_settings_window();
+                            bool has_any = has_debug || has_settings;
                             ImGui::BeginDisabled(!has_any);
 
-                            bool debug_on = dbg.show_debug[i];
-                            if (ImGui::MenuItem(chips[i].name, nullptr, debug_on, has_any)) {
-                                dbg.show_debug[i] = !debug_on;
+                            bool debug_on = sc.show_debug;
+                            if (ImGui::MenuItem(sc.display_name, nullptr, debug_on, has_any)) {
+                                sc.show_debug = !debug_on;
                             }
 
                             ImGui::EndDisabled();
@@ -893,6 +893,12 @@ void SystemGUI::switch_system(const char* system_name, int memory_option, int re
     // Start emulation
     emulation_running_ = true;
     emulation_paused_ = false;
+
+    // Update window title with system name
+    char title_buf[256];
+    snprintf(title_buf, sizeof(title_buf), "cermu — %s",
+             system_->get_descriptor().name);
+    SDL_SetWindowTitle(get_window(), title_buf);
 
     printf("Successfully switched to %s\n", system_->get_descriptor().name);
 }

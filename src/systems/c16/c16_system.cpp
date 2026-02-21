@@ -13,6 +13,7 @@
 #include "../../devices/keyboard/commodore_keyboard_device.h"
 #include "../../chip/cpu/fam65xx/fam65xx_gui.h"
 #include "../../chip/video/ted/ted7360_gui.h"
+#include "../../core/chip.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -368,6 +369,10 @@ bool Commodore264System<V>::initialize() {
     }
     
     setup_connector_ports();
+
+    // Register chips for the Hardware menu and debug windows
+    register_c264_chips();
+
     initialized_ = true;
     return true;
 }
@@ -603,55 +608,43 @@ void Commodore264System<V>::render_system_menu_items() {
 #endif
 }
 
-template<C264SeriesVariant V>
-std::vector<ChipInfo> Commodore264System<V>::get_chip_info() const {
-    return {
-        { "MOS 7501/8501 CPU",          "7501",   "CPU",    0x0000, true,  true  },
-        { "TED 7360 (Video/Audio/I/O)", "TED",    "Video",  0xFF00, true,  true  },
-        { "RAM",                        "RAM",    "Memory", 0x0000, false, false },
-        { "BASIC ROM (16KB)",           "BASIC",  "Memory", 0x8000, false, false },
-        { "KERNAL ROM (16KB)",          "KERNAL", "Memory", 0xC000, false, false },
-    };
-}
+// ============================================================================
+// Chip Registration — populate registered_chips_ for Hardware menu + debug
+// ============================================================================
 
 template<C264SeriesVariant V>
-void Commodore264System<V>::render_chip_debug_window(int chip_index, bool* show) {
-    if (!show || !*show) return;
-#ifdef IMGUI_VERSION
-    enum { C264_CI_CPU = 0, C264_CI_TED = 1 };
-    switch (chip_index) {
-        case C264_CI_CPU:
-            if (cpu_) fam65xx_render_debug_window(cpu_, show);
-            break;
-        case C264_CI_TED:
-            if (ted_) ted7360_render_debug_window(ted_, show);
-            break;
-        default:
-            break;
-    }
-#else
-    (void)chip_index;
-#endif
-}
+void Commodore264System<V>::register_c264_chips() {
+    auto* cpu = cpu_;
+    auto* ted = ted_;
 
-template<C264SeriesVariant V>
-void Commodore264System<V>::render_chip_settings_window(int chip_index, bool* show) {
-    if (!show || !*show) return;
-#ifdef IMGUI_VERSION
-    enum { C264_CI_CPU = 0, C264_CI_TED = 1 };
-    switch (chip_index) {
-        case C264_CI_CPU:
-            if (cpu_) fam65xx_render_settings_window(cpu_, show);
-            break;
-        case C264_CI_TED:
-            if (ted_) ted7360_render_settings_window(ted_, show);
-            break;
-        default:
-            break;
-    }
-#else
-    (void)chip_index;
-#endif
+    // CPU
+    register_chip(std::make_unique<CChipAdapter>(
+        cpu, ChipIdentity{"CSG7501", "Commodore"},
+        [cpu](bool* s) { fam65xx_render_debug_window(cpu, s); },
+        [cpu](bool* s) { fam65xx_render_settings_window(cpu, s); }),
+        "MOS 7501/8501 CPU", "7501", "CPU", 0x0000);
+
+    // TED
+    register_chip(std::make_unique<CChipAdapter>(
+        ted, ChipIdentity{"TED7360", "Commodore"},
+        [ted](bool* s) { ted7360_render_debug_window(ted, s); },
+        [ted](bool* s) { ted7360_render_settings_window(ted, s); }),
+        "TED 7360 (Video/Audio/I/O)", "TED", "Video", 0xFF00);
+
+    // RAM (no debug window)
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"DRAM", "Various"}),
+        "RAM", "RAM", "Memory", 0x0000);
+
+    // BASIC ROM
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"ROM", "Commodore"}),
+        "BASIC ROM (16KB)", "BASIC", "Memory", 0x8000);
+
+    // KERNAL ROM
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"ROM", "Commodore"}),
+        "KERNAL ROM (16KB)", "KERNAL", "Memory", 0xC000);
 }
 
 template<C264SeriesVariant V>

@@ -1,4 +1,5 @@
 #include "chip8_system.h"
+#include "../../core/chip.h"
 #include <fstream>
 #include <cstring>
 #include <cstdio>
@@ -181,6 +182,9 @@ Chip8System::Chip8System()
     memset(rpl_flags_, 0, sizeof(rpl_flags_));
     memset(audio_pattern_, 0, sizeof(audio_pattern_));
     reset();
+
+    // Register logical chips for the Hardware menu (no debug windows)
+    register_chip8_chips();
 }
 
 // ============================================================================
@@ -600,25 +604,31 @@ void Chip8System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 // Chip Visualization
 // ============================================================================
 
-std::vector<ChipInfo> Chip8System::get_chip_info() const {
+// ============================================================================
+// Chip Registration
+// ============================================================================
+
+void Chip8System::register_chip8_chips() {
     // CHIP-8 is a virtual machine — no discrete physical chips.
     // List logical functional blocks so the Hardware menu remains useful.
-    const char* mode_name = (mode_ == Chip8Mode::XOCHIP) ? "XO-CHIP Interpreter" :
-                            (mode_ == Chip8Mode::SCHIP)  ? "SCHIP 1.1 Interpreter" :
-                                                           "CHIP-8 Interpreter";
-    const char* mem_name  = (mode_ == Chip8Mode::XOCHIP) ? "RAM (64KB)" : "RAM (4KB)";
-    const char* disp_name = (mode_ == Chip8Mode::XOCHIP) ? "Display (128x64, 4-color)" :
-                            (mode_ == Chip8Mode::SCHIP)  ? "Display (128x64)" :
-                                                           "Display (64x32)";
-
-    return {
-        { mode_name,                  "CPU",      "CPU",     0x200,  false, false },
-        { mem_name,                   "RAM",      "Memory",  0x000,  false, false },
-        { disp_name,                  "Display",  "Video",   0x000,  false, false },
-        { "Hex Keypad (16 keys)",     "Keypad",   "I/O",     0x000,  false, false },
-        { "Delay Timer (60 Hz)",      "DT",       "I/O",     0x000,  false, false },
-        { "Sound Timer / Beeper",     "ST",       "Audio",   0x000,  false, false },
-    };
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"CHIP-8", "COSMAC"}),
+        "CHIP-8 Interpreter", "CPU", "CPU", 0x200);
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"SRAM", "Various"}),
+        "RAM (4KB)", "RAM", "Memory", 0x000);
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"Display", "COSMAC"}),
+        "Display (64x32)", "Display", "Video", 0x000);
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"Keypad", "COSMAC"}),
+        "Hex Keypad (16 keys)", "Keypad", "I/O", 0x000);
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"Timer", "COSMAC"}),
+        "Delay Timer (60 Hz)", "DT", "I/O", 0x000);
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"Beeper", "COSMAC"}),
+        "Sound Timer / Beeper", "ST", "Audio", 0x000);
 }
 
 // ============================================================================

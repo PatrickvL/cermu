@@ -59,11 +59,6 @@ public:
     // GUI rendering overrides
     void render_system_menu_items() override;
     void render_debug_windows(void* gui_state) override;
-
-    // Chip enumeration and debug windows (generic interface)
-    std::vector<ChipInfo> get_chip_info() const override;
-    void render_chip_debug_window(int chip_index, bool* show) override;
-    void render_chip_settings_window(int chip_index, bool* show) override;
     
     // Configuration interface
     bool apply_configuration() override;
@@ -226,6 +221,9 @@ public:
 private:
     /// Create and wire up all C64 connector ports (CIA1 joystick callbacks etc).
     void setup_connector_ports();
+
+    /// Register all C64 chips into registered_chips_ for the Hardware menu.
+    void register_c64_chips();
 
     /// Pass the current display rect to any lightpen on Control Port 1 (once per frame).
     void update_lightpen_display_rect();
