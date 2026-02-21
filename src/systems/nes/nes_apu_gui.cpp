@@ -401,13 +401,7 @@ void nes_apu_render_layout_content(nes6502_t* cpu) {
 
     static ChipLayout layout = create_ricoh_2a03_apu_layout();
     auto pin_states = get_apu_pin_states(apu);
-
-    ChipVisualization& renderer = GetGlobalChipRenderer();
-    ImVec2 size = renderer.get_recommended_size(layout);
-    ImVec2 cursor = ImGui::GetCursorScreenPos();
-    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
-    ImGui::Dummy(size);
-    renderer.render(layout, center, pin_states, "RP2A03");
+    render_chip_layout(layout, pin_states, "RP2A03");
 }
 
 #else // !IMGUI_VERSION

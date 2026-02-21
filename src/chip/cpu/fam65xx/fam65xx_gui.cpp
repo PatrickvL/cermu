@@ -480,13 +480,7 @@ public:
     static ChipLayout layout = create_cpu_pin_layout<Traits>();
     std::vector<PinSignalState> pin_states =
         get_cpu_pin_states<Traits>(cpu, &layout, last_bus_state);
-
-    ChipVisualization &renderer = GetGlobalChipRenderer();
-    ImVec2 size = renderer.get_recommended_size(layout);
-    ImVec2 cursor = ImGui::GetCursorScreenPos();
-    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
-    ImGui::Dummy(size);
-    renderer.render(layout, center, pin_states, get_processor_name());
+    render_chip_layout(layout, pin_states, get_processor_name());
   }
 
   const char *get_processor_name() const override {
