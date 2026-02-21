@@ -1,0 +1,415 @@
+/*
+ * nes_apu_gui.cpp — NES APU (Ricoh 2A03 built-in) Debug/Settings GUI Windows
+ *
+ * Hardware-accurate 40-pin DIP pinout based on the Ricoh RP2A03 datasheet.
+ * The APU (Audio Processing Unit) is integrated into the 2A03 CPU package
+ * and provides 5 audio channels: 2 pulse, 1 triangle, 1 noise, 1 DMC.
+ *
+ * Pinout reference: Ricoh RP2A03 Datasheet
+ *
+ *           ╔═══════════╗
+ *   AD1  ──┤ 1      40 ├── VCC
+ *   AD2  ──┤ 2      39 ├── PHI2(OUT)
+ *   /RST ──┤ 3      38 ├── /NMI
+ *    A0  ──┤ 4      37 ├── /IRQ
+ *    A1  ──┤ 5      36 ├── M2
+ *    A2  ──┤ 6      35 ├── SND1
+ *    A3  ──┤ 7      34 ├── SND2
+ *    A4  ──┤ 8      33 ├── IN0
+ *    A5  ──┤ 9      32 ├── IN1
+ *    A6  ──┤10      31 ├── D0
+ *    A7  ──┤11      30 ├── D1
+ *    A8  ──┤12      29 ├── D2
+ *    A9  ──┤13      28 ├── D3
+ *   A10  ──┤14      27 ├── D4
+ *   A11  ──┤15      26 ├── D5
+ *   A12  ──┤16      25 ├── D6
+ *   A13  ──┤17      24 ├── D7
+ *   A14  ──┤18      23 ├── OUT0
+ *   R/W  ──┤19      22 ├── OUT1
+ *   GND  ──┤20      21 ├── OUT2
+ *           ╚═══════════╝
+ */
+
+#include "nes_apu_gui.h"
+#include "../../chip/cpu/fam65xx/nes6502.h"
+#include "../../core/chip_layout.h"
+#include "../../core/pin_macros.h"
+#ifdef IMGUI_VERSION
+#include <imgui.h>
+#include "../../gui/chip_visualization.h"
+#include "../../gui/global_chip_style.h"
+#endif
+#include <stdio.h>
+#include <memory>
+
+// ============================================================================
+// RICOH 2A03 LAYOUT (40-pin DIP) — APU-focused view
+// ============================================================================
+// Same physical package as the CPU; we re-render it here with emphasis
+// on the audio output pins SND1 (35) and SND2 (34).
+
+inline ChipLayout create_ricoh_2a03_apu_layout() {
+    auto layout = create_dip40_layout();
+    layout.markings.manufacturer = "Ricoh";
+    layout.markings.part_number  = "RP2A03";
+    layout.markings.custom_text  = "CPU + APU";
+
+    // Left column  (pins 1‑20, top to bottom)
+    // Right column (pins 40‑21, top to bottom)
+    PIN_LR(layout,  1, UNKNOWN,     VCC,        40);   // AD1 / VCC
+    PIN_LR(layout,  2, UNKNOWN,     PHI2,       39);   // AD2 / PHI2 OUT
+    PIN_LR(layout,  3, RES,         NMI,        38);   // /RST / /NMI
+    PIN_LR(layout,  4, A0,          IRQ,        37);   // A0 / /IRQ
+    PIN_LR(layout,  5, A1,          UNKNOWN,    36);   // A1 / M2
+    PIN_LR(layout,  6, A2,          SOUND,      35);   // A2 / SND1
+    PIN_LR(layout,  7, A3,          SOUND,      34);   // A3 / SND2
+    PIN_LR(layout,  8, A4,          UNKNOWN,    33);   // A4 / IN0
+    PIN_LR(layout,  9, A5,          UNKNOWN,    32);   // A5 / IN1
+    PIN_LR(layout, 10, A6,          D0,         31);   // A6 / D0
+    PIN_LR(layout, 11, A7,          D1,         30);   // A7 / D1
+    PIN_LR(layout, 12, A8,          D2,         29);   // A8 / D2
+    PIN_LR(layout, 13, A9,          D3,         28);   // A9 / D3
+    PIN_LR(layout, 14, A10,         D4,         27);   // A10 / D4
+    PIN_LR(layout, 15, A11,         D5,         26);   // A11 / D5
+    PIN_LR(layout, 16, A12,         D6,         25);   // A12 / D6
+    PIN_LR(layout, 17, A13,         D7,         24);   // A13 / D7
+    PIN_LR(layout, 18, A14,         UNKNOWN,    23);   // A14 / OUT0
+    PIN_LR(layout, 19, RW,          UNKNOWN,    22);   // R/W / OUT1
+    PIN_LR(layout, 20, VSS,         UNKNOWN,    21);   // GND / OUT2
+
+    return layout;
+}
+
+#ifdef IMGUI_VERSION
+
+// ============================================================================
+// PIN SIGNAL STATES
+// ============================================================================
+
+static std::vector<PinSignalState> get_apu_pin_states(
+        [[maybe_unused]] nes6502_apu::APU* apu) {
+    std::vector<PinSignalState> states;
+    if (!apu) return states;
+
+    // Initialize all 40 pins with defaults
+    states.resize(40);
+    for (int i = 0; i < 40; i++) {
+        states[i] = PinSignalState{
+            .pin_number = static_cast<uint8_t>(i + 1),
+            .signal_level = false,
+            .drive_direction = false,
+            .signal_value = 0,
+            .high_impedance = true,
+            .has_pullup = false,
+            .has_pulldown = false,
+            .signal_valid = true,
+            .analog_voltage = 0.0f,
+            .is_pwm = false,
+            .pwm_duty_cycle = 0.0f
+        };
+    }
+
+    // Power pins
+    states[39].signal_level = true;  // VCC (pin 40) — high
+    states[39].high_impedance = false;
+    states[19].signal_level = false; // GND (pin 20) — low
+    states[19].high_impedance = false;
+
+    // SND1 (pin 35, index 34) — pulse + triangle mix (analog, show PWM)
+    uint8_t p1   = apu->pulse1.output();
+    uint8_t p2   = apu->pulse2.output();
+    uint8_t tri  = apu->triangle.output();
+    float pulse_sum = (float)(p1 + p2);
+    float snd1_mix  = (pulse_sum > 0) ? (95.88f / ((8128.0f / pulse_sum) + 100.0f)) : 0.0f;
+    float tri_mix   = (tri > 0) ? (tri / 8227.0f) : 0.0f;
+    states[34].signal_level = (snd1_mix + tri_mix) > 0.01f;
+    states[34].drive_direction = true;
+    states[34].high_impedance = false;
+    states[34].is_pwm = true;
+    states[34].pwm_duty_cycle = snd1_mix + tri_mix * 0.5f;
+
+    // SND2 (pin 34, index 33) — noise + DMC mix (analog, show PWM)
+    uint8_t noi  = apu->noise.output();
+    uint8_t dmc  = apu->dmc.output();
+    float noi_f  = (float)noi / 12241.0f;
+    float dmc_f  = (float)dmc / 22638.0f;
+    states[33].signal_level = (noi_f + dmc_f) > 0.001f;
+    states[33].drive_direction = true;
+    states[33].high_impedance = false;
+    states[33].is_pwm = true;
+    states[33].pwm_duty_cycle = noi_f + dmc_f;
+
+    // IRQ (pin 37, index 36) — APU can assert IRQ via frame counter or DMC
+    states[36].signal_level = !apu->irq(); // active-low
+    states[36].drive_direction = true;
+    states[36].high_impedance = false;
+
+    return states;
+}
+
+// ============================================================================
+// DEBUG WINDOW
+// ============================================================================
+
+void nes_apu_render_debug_window(nes6502_t* cpu, bool* show_window) {
+    if (!show_window || !*show_window) return;
+    if (!cpu) return;
+
+    nes6502_apu::APU* apu = nes6502_get_apu(cpu);
+    if (!apu) return;
+
+    ImGui::SetNextWindowSize(ImVec2(640, 580), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("APU (Ricoh 2A03) Debug", show_window)) {
+        ImGui::End();
+        return;
+    }
+
+    float avail_w = ImGui::GetContentRegionAvail().x;
+    float chip_w  = 250.0f;
+    float info_w  = avail_w - chip_w - 8.0f;
+
+    // --- Chip visualization (left) ---
+    ImGui::BeginChild("##apu_chip_viz", ImVec2(chip_w, 0), true);
+    {
+        static ChipLayout layout = create_ricoh_2a03_apu_layout();
+        auto pin_states = get_apu_pin_states(apu);
+
+        ImVec2 region = ImGui::GetContentRegionAvail();
+        ImVec2 center(
+            ImGui::GetCursorScreenPos().x + region.x * 0.5f,
+            ImGui::GetCursorScreenPos().y + region.y * 0.5f);
+
+        GetGlobalChipRenderer().render(layout, center, pin_states, "RP2A03");
+    }
+    ImGui::EndChild();
+
+    ImGui::SameLine();
+
+    // --- Debug info (right) ---
+    ImGui::BeginChild("##apu_debug_info", ImVec2(info_w, 0), true);
+    {
+        // ---- Status register ($4015) ----
+        if (ImGui::CollapsingHeader("Status ($4015)",
+                ImGuiTreeNodeFlags_DefaultOpen)) {
+            bool p1_active  = apu->pulse1.length.active();
+            bool p2_active  = apu->pulse2.length.active();
+            bool tri_active = apu->triangle.length.active();
+            bool noi_active = apu->noise.length.active();
+            bool dmc_active = apu->dmc.active();
+            bool frame_irq  = apu->frame.irq_flag;
+            bool dmc_irq    = apu->dmc.irq_flag;
+
+            ImGui::Text("Channel Enable:");
+            ImGui::SameLine();
+            ImGui::TextColored(p1_active ? ImVec4(0,1,0,1) : ImVec4(0.5f,0.5f,0.5f,1), "P1");
+            ImGui::SameLine();
+            ImGui::TextColored(p2_active ? ImVec4(0,1,0,1) : ImVec4(0.5f,0.5f,0.5f,1), "P2");
+            ImGui::SameLine();
+            ImGui::TextColored(tri_active ? ImVec4(0,1,0,1) : ImVec4(0.5f,0.5f,0.5f,1), "TRI");
+            ImGui::SameLine();
+            ImGui::TextColored(noi_active ? ImVec4(0,1,0,1) : ImVec4(0.5f,0.5f,0.5f,1), "NOI");
+            ImGui::SameLine();
+            ImGui::TextColored(dmc_active ? ImVec4(0,1,0,1) : ImVec4(0.5f,0.5f,0.5f,1), "DMC");
+
+            ImGui::Text("IRQ: Frame=%s  DMC=%s",
+                frame_irq ? "SET" : "clr",
+                dmc_irq   ? "SET" : "clr");
+        }
+
+        ImGui::Separator();
+
+        // ---- Pulse 1 ($4000-$4003) ----
+        if (ImGui::CollapsingHeader("Pulse 1 ($4000-$4003)",
+                ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto& p = apu->pulse1;
+            ImGui::Text("Duty:   %d (%.1f%%)",
+                p.duty, p.duty == 0 ? 12.5f : p.duty == 1 ? 25.0f : p.duty == 2 ? 50.0f : 75.0f);
+            ImGui::Text("Timer:  %d  (period $%03X)",
+                p.output(), p.timer_period);
+            ImGui::Text("Length: %s  counter=%d",
+                p.length.active() ? "active" : "off",
+                p.length.value());
+
+            // Envelope
+            ImGui::Text("Envelope: const=%s  vol=%d  loop=%s",
+                p.envelope.constant_volume ? "Y" : "N",
+                p.envelope.volume(),
+                p.envelope.loop ? "Y" : "N");
+
+            // Sweep
+            ImGui::Text("Sweep: en=%s  period=%d  negate=%s  shift=%d",
+                p.sweep.enabled ? "Y" : "N",
+                p.sweep.period,
+                p.sweep.negate ? "Y" : "N",
+                p.sweep.shift);
+            ImGui::Text("  muting=%s  target=%d",
+                p.sweep.is_muting(p.timer_period) ? "Y" : "N",
+                p.sweep.calculate_target(p.timer_period));
+        }
+
+        // ---- Pulse 2 ($4004-$4007) ----
+        if (ImGui::CollapsingHeader("Pulse 2 ($4004-$4007)",
+                ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto& p = apu->pulse2;
+            ImGui::Text("Duty:   %d (%.1f%%)",
+                p.duty, p.duty == 0 ? 12.5f : p.duty == 1 ? 25.0f : p.duty == 2 ? 50.0f : 75.0f);
+            ImGui::Text("Timer:  %d  (period $%03X)",
+                p.output(), p.timer_period);
+            ImGui::Text("Length: %s  counter=%d",
+                p.length.active() ? "active" : "off",
+                p.length.value());
+            ImGui::Text("Envelope: const=%s  vol=%d  loop=%s",
+                p.envelope.constant_volume ? "Y" : "N",
+                p.envelope.volume(),
+                p.envelope.loop ? "Y" : "N");
+            ImGui::Text("Sweep: en=%s  period=%d  negate=%s  shift=%d",
+                p.sweep.enabled ? "Y" : "N",
+                p.sweep.period,
+                p.sweep.negate ? "Y" : "N",
+                p.sweep.shift);
+            ImGui::Text("  muting=%s  target=%d",
+                p.sweep.is_muting(p.timer_period) ? "Y" : "N",
+                p.sweep.calculate_target(p.timer_period));
+        }
+
+        // ---- Triangle ($4008-$400B) ----
+        if (ImGui::CollapsingHeader("Triangle ($4008-$400B)",
+                ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto& t = apu->triangle;
+            ImGui::Text("Timer period: $%03X", t.timer_period);
+            ImGui::Text("Output: %d", t.output());
+            ImGui::Text("Length: %s  counter=%d",
+                t.length.active() ? "active" : "off",
+                t.length.value());
+            ImGui::Text("Linear counter load: %d  control=%s",
+                t.linear_counter_load,
+                t.control_flag ? "Y" : "N");
+        }
+
+        // ---- Noise ($400C-$400F) ----
+        if (ImGui::CollapsingHeader("Noise ($400C-$400F)",
+                ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto& n = apu->noise;
+            ImGui::Text("Mode: %s  period_idx=%d",
+                n.mode ? "6-bit" : "15-bit",
+                n.period_index);
+            ImGui::Text("Output: %d", n.output());
+            ImGui::Text("Length: %s  counter=%d",
+                n.length.active() ? "active" : "off",
+                n.length.value());
+            ImGui::Text("Envelope: const=%s  vol=%d  loop=%s",
+                n.envelope.constant_volume ? "Y" : "N",
+                n.envelope.volume(),
+                n.envelope.loop ? "Y" : "N");
+            ImGui::Text("Shift reg: $%04X", n.shift_register);
+        }
+
+        // ---- DMC ($4010-$4013) ----
+        if (ImGui::CollapsingHeader("DMC ($4010-$4013)",
+                ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto& d = apu->dmc;
+            ImGui::Text("IRQ en: %s  loop: %s  rate_idx: %d",
+                d.irq_enabled ? "Y" : "N",
+                d.loop ? "Y" : "N",
+                d.rate_index);
+            ImGui::Text("Output level: %d / 127", d.output_level);
+            ImGui::Text("Sample addr: $%04X  length: %d",
+                d.sample_address, d.sample_length);
+            ImGui::Text("Current addr: $%04X  remaining: %d",
+                d.current_address, d.bytes_remaining);
+            ImGui::Text("Active: %s  IRQ flag: %s  Needs sample: %s",
+                d.active() ? "Y" : "N",
+                d.irq_flag ? "Y" : "N",
+                d.needs_sample ? "Y" : "N");
+        }
+
+        ImGui::Separator();
+
+        // ---- Frame Counter ($4017) ----
+        if (ImGui::CollapsingHeader("Frame Counter ($4017)",
+                ImGuiTreeNodeFlags_DefaultOpen)) {
+            auto& f = apu->frame;
+            ImGui::Text("Mode: %s", f.mode ? "5-step" : "4-step");
+            ImGui::Text("IRQ inhibit: %s  IRQ flag: %s",
+                f.irq_inhibit ? "Y" : "N",
+                f.irq_flag ? "Y" : "N");
+        }
+
+        // ---- Mixer Output ----
+        if (ImGui::CollapsingHeader("Mixer Output")) {
+            float sample = apu->sample();
+            ImGui::Text("Mixed output: %.6f", sample);
+
+            // Simple level bar
+            float abs_sample = sample < 0 ? -sample : sample;
+            ImGui::ProgressBar(abs_sample, ImVec2(-1, 0), "");
+        }
+    }
+    ImGui::EndChild();
+
+    ImGui::End();
+}
+
+// ============================================================================
+// SETTINGS WINDOW
+// ============================================================================
+
+void nes_apu_render_settings_window(nes6502_t* cpu, bool* show_window) {
+    if (!show_window || !*show_window) return;
+    if (!cpu) return;
+
+    nes6502_apu::APU* apu = nes6502_get_apu(cpu);
+    if (!apu) return;
+
+    ImGui::SetNextWindowSize(ImVec2(400, 350), ImGuiCond_FirstUseEver);
+    if (!ImGui::Begin("APU (Ricoh 2A03) Settings", show_window)) {
+        ImGui::End();
+        return;
+    }
+
+    // Channel output summary
+    if (ImGui::CollapsingHeader("Channel Outputs",
+            ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Columns(3, "apu_ch_out");
+        ImGui::Text("Channel"); ImGui::NextColumn();
+        ImGui::Text("Output");  ImGui::NextColumn();
+        ImGui::Text("Active");  ImGui::NextColumn();
+        ImGui::Separator();
+
+        auto row = [](const char* name, uint8_t out, bool active) {
+            ImGui::Text("%s", name); ImGui::NextColumn();
+            ImGui::Text("%3d",  out); ImGui::NextColumn();
+            ImGui::TextColored(
+                active ? ImVec4(0,1,0,1) : ImVec4(0.5f,0.5f,0.5f,1),
+                "%s", active ? "Yes" : "No");
+            ImGui::NextColumn();
+        };
+        row("Pulse 1",  apu->pulse1.output(),   apu->pulse1.length.active());
+        row("Pulse 2",  apu->pulse2.output(),   apu->pulse2.length.active());
+        row("Triangle", apu->triangle.output(),  apu->triangle.length.active());
+        row("Noise",    apu->noise.output(),     apu->noise.length.active());
+        row("DMC",      apu->dmc.output(),       apu->dmc.active());
+        ImGui::Columns(1);
+    }
+
+    // Register-level view (MMIO addresses)
+    if (ImGui::CollapsingHeader("APU Register Map")) {
+        ImGui::Text("$4000-$4003 : Pulse 1");
+        ImGui::Text("$4004-$4007 : Pulse 2");
+        ImGui::Text("$4008-$400B : Triangle");
+        ImGui::Text("$400C-$400F : Noise");
+        ImGui::Text("$4010-$4013 : DMC");
+        ImGui::Text("$4015       : Status");
+        ImGui::Text("$4017       : Frame Counter");
+    }
+
+    ImGui::End();
+}
+
+#else // !IMGUI_VERSION
+
+void nes_apu_render_debug_window(nes6502_t*, bool*) {}
+void nes_apu_render_settings_window(nes6502_t*, bool*) {}
+
+#endif

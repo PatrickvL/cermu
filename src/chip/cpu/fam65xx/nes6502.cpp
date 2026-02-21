@@ -141,6 +141,15 @@ void nes6502_set_apu_region(nes6502_t *cpu, bool is_pal) {
   // No-op if no APU
 }
 
+nes6502_apu::APU *nes6502_get_apu(nes6502_t *cpu) {
+  auto *cpu_ptr = CPU_CAST(cpu);
+  if constexpr (RICOH_2A03.has_apu()) {
+    return cpu_ptr->apu_state.apu_instance;
+  } else {
+    return nullptr;
+  }
+}
+
 // NES 6502 (RICOH 2A03) chip descriptor
 static chip_descriptor_t nes6502_base_descriptor;
 

@@ -18,6 +18,7 @@
 #include "../../chip/video/vic/mos6561.h"
 #include "../../chip/video/vic/vic_common.h"  // For VIC_COLOR_* constants
 #include "../../chip/io/mos6522.h"
+#include "../../chip/video/vic/vic_gui.h"
 
 // Include bus interface
 #include "../../core/bus_cycle_interface.h"
@@ -946,9 +947,9 @@ void VIC20System::render_system_menu_items() {
 std::vector<ChipInfo> VIC20System::get_chip_info() const {
     return {
         { "MOS 6502 CPU",              "6502",   "CPU",    0x0000, true,  true  },
-        { "VIC (MOS 6560/6561)",        "VIC",    "Video",  0x9000, false, false },
-        { "VIA 1 (MOS 6522)",           "VIA 1",  "I/O",    0x9110, false, false },
-        { "VIA 2 (MOS 6522)",           "VIA 2",  "I/O",    0x9120, false, false },
+        { "VIC (MOS 6560/6561)",        "VIC",    "Video",  0x9000, true,  true  },
+        { "VIA 1 (MOS 6522)",           "VIA 1",  "I/O",    0x9110, true,  true  },
+        { "VIA 2 (MOS 6522)",           "VIA 2",  "I/O",    0x9120, true,  true  },
         { "RAM (up to 32KB)",           "RAM",    "Memory", 0x0000, false, false },
         { "Character ROM (4KB)",        "CHARROM","Memory", 0x8000, false, false },
         { "BASIC ROM (8KB)",            "BASIC",  "Memory", 0xC000, false, false },
@@ -959,10 +960,19 @@ std::vector<ChipInfo> VIC20System::get_chip_info() const {
 void VIC20System::render_chip_debug_window(int chip_index, bool* show) {
     if (!show || !*show) return;
 #ifdef IMGUI_VERSION
-    enum { VIC20_CI_CPU = 0 };
+    enum { VIC20_CI_CPU = 0, VIC20_CI_VIC = 1, VIC20_CI_VIA1 = 2, VIC20_CI_VIA2 = 3 };
     switch (chip_index) {
         case VIC20_CI_CPU:
             if (cpu_) fam65xx_render_debug_window(cpu_, show);
+            break;
+        case VIC20_CI_VIC:
+            if (vic_) vic_gui_render_debug_window(vic_, show);
+            break;
+        case VIC20_CI_VIA1:
+            if (via1_) mos6522_render_debug_window(via1_, show);
+            break;
+        case VIC20_CI_VIA2:
+            if (via2_) mos6522_render_debug_window(via2_, show);
             break;
         default:
             break;
@@ -975,10 +985,19 @@ void VIC20System::render_chip_debug_window(int chip_index, bool* show) {
 void VIC20System::render_chip_settings_window(int chip_index, bool* show) {
     if (!show || !*show) return;
 #ifdef IMGUI_VERSION
-    enum { VIC20_CI_CPU = 0 };
+    enum { VIC20_CI_CPU = 0, VIC20_CI_VIC = 1, VIC20_CI_VIA1 = 2, VIC20_CI_VIA2 = 3 };
     switch (chip_index) {
         case VIC20_CI_CPU:
             if (cpu_) fam65xx_render_settings_window(cpu_, show);
+            break;
+        case VIC20_CI_VIC:
+            if (vic_) vic_gui_render_settings_window(vic_, show);
+            break;
+        case VIC20_CI_VIA1:
+            if (via1_) mos6522_render_settings_window(via1_, show);
+            break;
+        case VIC20_CI_VIA2:
+            if (via2_) mos6522_render_settings_window(via2_, show);
             break;
         default:
             break;
