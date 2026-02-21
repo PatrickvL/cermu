@@ -75,9 +75,7 @@ void mos6526_reset(mos6526_t* cia) {
 }
 
 mos6526_t* mos6526_create() {
-    mos6526_t* cia = (mos6526_t*)calloc(1, sizeof(mos6526_t));
-    if (!cia) return NULL;
-    cia->desc = &mos6526_descriptor;
+    mos6526_t* cia = new mos6526_t();
     cia->configured_interrupt_bit = BUS_IRQ_BIT; // Default to IRQ; caller must set to NMI for CIA2
     // Constructor equivalent - set up cycles for TOD
     // Used when CRA_TODIN = 0 (60 Hz TOD pin input pulses)
@@ -85,23 +83,22 @@ mos6526_t* mos6526_create() {
     // Used when CRA_TODIN = 1 (50 Hz TOD pin input pulses)
     cia->cycles_tod[1] = 1000000 / 50;
     
-    // Initialize port read callbacks to NULL
-    cia->port_a_read_callback = NULL;
-    cia->port_a_read_context = NULL;
-    cia->port_b_read_callback = NULL;
-    cia->port_b_read_context = NULL;
-    
-    // Initialize port change callback to NULL
-    cia->port_a_change_callback = NULL;
-    cia->port_a_callback_context = NULL;
-    
     mos6526_reset(cia);
     return cia;
 }
 
 void mos6526_destroy(mos6526_t* cia) {
-    free(cia);
+    delete cia;
 }
+
+// ChipBase identity
+ChipIdentity mos6526_s::chip_identity() const {
+    return {"MOS6526", "MOS Technology"};
+}
+
+bool mos6526_s::has_debug_content()    const { return true; }
+bool mos6526_s::has_settings_content() const { return true; }
+bool mos6526_s::has_layout_content()   const { return true; }
 
 // INTERRUPT CONTROL REGISTER (ICR) handling
 
@@ -924,9 +921,9 @@ bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state) {
 
 chip_descriptor_t mos6526_descriptor = {
     .description = "MOS6526 CIA Complex Interface Adapter",
-    .create = [](chip_descriptor_t*) -> void* { return mos6526_create(); },
-    .destroy = [](void* chip) { mos6526_destroy(static_cast<mos6526_t*>(chip)); },
-    .bus_attach = NULL
+    .create = [](chip_descriptor_t*) -> void* { return new mos6526_t(); },
+    .destroy = [](void* chip) { delete static_cast<mos6526_t*>(chip); },
+    .bus_attach = nullptr
 };
 
 /**
