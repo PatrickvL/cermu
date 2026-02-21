@@ -18,7 +18,6 @@
 #include "../../chip/video/vic/mos6561.h"
 #include "../../chip/video/vic/vic_common.h"  // For VIC_COLOR_* constants
 #include "../../chip/io/mos6522.h"
-#include "../../chip/video/vic/vic_gui.h"
 #include "../../core/chip.h"
 
 // Include bus interface
@@ -283,13 +282,9 @@ VIC20System::~VIC20System() {
         cpu_ = nullptr;
     }
     
-    // Destroy VIC chip — dispatch to correct typed destructor
+    // Destroy VIC chip — virtual destructor dispatches correctly
     if (vic_) {
-        if (vic_->is_pal) {
-            mos6561_destroy(reinterpret_cast<mos6561_t*>(vic_));
-        } else {
-            mos6560_destroy(reinterpret_cast<mos6560_t*>(vic_));
-        }
+        delete vic_;
         vic_ = nullptr;
     }
     
@@ -580,12 +575,10 @@ bool VIC20System::initialize() {
     // Create VIC chip — region-aware: MOS6561 for PAL, MOS6560 for NTSC
     bool is_pal_region = (config_.region_option_index <= 0);
     if (is_pal_region) {
-        mos6561_t* v = mos6561_create();
-        vic_ = v ? &v->base : nullptr;
+        vic_ = mos6561_create();
         if (vic_) printf("VIC20: Created MOS6561 (PAL) VIC chip\n");
     } else {
-        mos6560_t* v = mos6560_create();
-        vic_ = v ? &v->base : nullptr;
+        vic_ = mos6560_create();
         if (vic_) printf("VIC20: Created MOS6560 (NTSC) VIC chip\n");
     }
     if (!vic_) {
@@ -957,12 +950,8 @@ void VIC20System::register_vic20_chips() {
     register_chip(mos6502_as_chip_base(cpu),
         "MOS 6502 CPU", "6502", "CPU", 0x0000);
 
-    // VIC
-    register_chip(std::make_unique<CChipAdapter>(
-        vic, ChipIdentity{"MOS6560", "MOS Technology"},
-        [vic]() { vic_gui_render_debug_content(vic); },
-        [vic]() { vic_gui_render_settings_content(vic); },
-        [vic]() { vic_gui_render_layout_content(vic); }),
+    // VIC — native ChipBase, registered directly
+    register_chip(vic,
         "VIC (MOS 6560/6561)", "VIC", "Video", 0x9000);
 
     // VIA 1 — native ChipBase, registered directly

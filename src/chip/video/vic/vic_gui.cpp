@@ -164,12 +164,24 @@ static const char* get_vic_type_name(vic_base_t* vic) {
 }
 
 // ============================================================================
+// ChipBase interface implementation
+// ============================================================================
+
+ChipIdentity vic_base_s::chip_identity() const {
+    return is_pal ? ChipIdentity{"MOS6561", "MOS Technology"}
+                  : ChipIdentity{"MOS6560", "MOS Technology"};
+}
+
+bool vic_base_s::has_debug_content()    const { return true; }
+bool vic_base_s::has_settings_content() const { return true; }
+bool vic_base_s::has_layout_content()   const { return true; }
+
+// ============================================================================
 // VIC GUI DEBUG WINDOW
 // ============================================================================
 
-void vic_gui_render_debug_content(void* chip) {
-    vic_base_t* vic = (vic_base_t*)chip;
-    if (!vic) return;
+void vic_base_s::render_debug_content() {
+    vic_base_t* vic = this;
 
 #ifdef IMGUI_VERSION
     // Two-column layout
@@ -284,9 +296,8 @@ void vic_gui_render_debug_content(void* chip) {
 // VIC GUI SETTINGS
 // ============================================================================
 
-void vic_gui_render_settings_content(void* chip) {
-    vic_base_t* vic = (vic_base_t*)chip;
-    if (!vic) return;
+void vic_base_s::render_settings_content() {
+    vic_base_t* vic = this;
 
 #ifdef IMGUI_VERSION
 
@@ -319,9 +330,8 @@ void vic_gui_render_settings_content(void* chip) {
 // VIC LAYOUT (standalone pinout diagram)
 // ============================================================================
 
-void vic_gui_render_layout_content(void* chip) {
-    vic_base_t* vic = (vic_base_t*)chip;
-    if (!vic) return;
+void vic_base_s::render_layout_content() {
+    vic_base_t* vic = this;
 
 #ifdef IMGUI_VERSION
     const char* chip_name = get_vic_type_name(vic);
@@ -330,4 +340,20 @@ void vic_gui_render_layout_content(void* chip) {
     std::vector<PinSignalState> pin_states = get_vic_pin_states(vic, &layout);
     render_chip_layout(layout, pin_states, chip_name);
 #endif
+}
+
+// ============================================================================
+// Backward-compatible free-function wrappers
+// ============================================================================
+
+void vic_gui_render_debug_content(void* chip) {
+    static_cast<vic_base_t*>(chip)->render_debug_content();
+}
+
+void vic_gui_render_settings_content(void* chip) {
+    static_cast<vic_base_t*>(chip)->render_settings_content();
+}
+
+void vic_gui_render_layout_content(void* chip) {
+    static_cast<vic_base_t*>(chip)->render_layout_content();
 }

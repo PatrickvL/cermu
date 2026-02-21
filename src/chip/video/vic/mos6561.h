@@ -6,13 +6,11 @@
 #include "../../core/chip.h"
 #include "vic_common.h"
 
-// VIC-6561 chip structure (inherits from base)
-typedef struct {
-    vic_base_t base; // Base VIC structure
-
+// VIC-6561 chip structure (inherits from vic_base_t via C++ inheritance)
+typedef struct mos6561_s : public vic_base_t {
     // VIC-6561 specific fields
-    bool extended_color_mode;
-    uint8_t extended_colors[4];
+    bool extended_color_mode = false;
+    uint8_t extended_colors[4] = {};
 } mos6561_t;
 
 // Chip descriptor
