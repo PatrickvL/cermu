@@ -248,6 +248,7 @@ struct SystemChip {
     // GUI toggle state (managed by the GUI layer)
     uint8_t show_debug    = 0;
     uint8_t show_settings = 0;
+    uint8_t show_layout   = 0;
 };
 
 /**

@@ -281,3 +281,30 @@ void nes_ppu_render_settings_window(nes_system::PPU* ppu, bool* show_window) {
     ImGui::End();
 #endif
 }
+
+// ============================================================================
+// NES PPU LAYOUT WINDOW (standalone pinout diagram)
+// ============================================================================
+
+void nes_ppu_render_layout_window(nes_system::PPU* ppu, bool* show_window) {
+    if (!ppu || !show_window || !*show_window) return;
+
+#ifdef IMGUI_VERSION
+    if (!ImGui::Begin("Ricoh 2C02 PPU Layout", show_window)) {
+        ImGui::End();
+        return;
+    }
+
+    ChipVisualization& renderer = GetGlobalChipRenderer();
+    ChipLayout& layout = get_ppu_layout();
+    std::vector<PinSignalState> pin_states = get_ppu_pin_states(ppu, &layout);
+
+    ImVec2 size = renderer.get_recommended_size(layout);
+    ImVec2 cursor = ImGui::GetCursorScreenPos();
+    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
+    ImGui::Dummy(size);
+    renderer.render(layout, center, pin_states, "RP2C02");
+
+    ImGui::End();
+#endif
+}

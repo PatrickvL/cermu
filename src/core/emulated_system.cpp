@@ -86,7 +86,7 @@ void EmulatedSystem::handle_controller_event(int controller, int button, bool pr
 }
 
 void EmulatedSystem::render_debug_windows(void* gui_state) {
-    // Iterate registered chips and render any toggled debug/settings windows.
+    // Iterate registered chips and render any toggled debug/settings/layout windows.
     (void)gui_state;
     for (auto& sc : registered_chips_) {
         if (sc.show_debug && sc.chip && sc.chip->has_debug_window()) {
@@ -98,6 +98,11 @@ void EmulatedSystem::render_debug_windows(void* gui_state) {
             bool show = sc.show_settings;
             sc.chip->render_settings_window(&show);
             sc.show_settings = show;
+        }
+        if (sc.show_layout && sc.chip && sc.chip->has_layout_window()) {
+            bool show = sc.show_layout;
+            sc.chip->render_layout_window(&show);
+            sc.show_layout = show;
         }
     }
 }
@@ -113,6 +118,7 @@ void EmulatedSystem::register_chip(std::unique_ptr<ChipBase> chip,
     sc.base_address = base_address;
     sc.show_debug = 0;
     sc.show_settings = 0;
+    sc.show_layout = 0;
     registered_chips_.push_back(std::move(sc));
 }
 

@@ -355,3 +355,39 @@ static const char* mos6522_get_via_name(mos6522_t* via) {
     }
     return "VIA";
 }
+
+// ============================================================================
+// MOS6522 VIA LAYOUT WINDOW (standalone pinout diagram)
+// ============================================================================
+
+void mos6522_render_layout_window(void* chip, bool* show_window) {
+    mos6522_t* via = (mos6522_t*)chip;
+    if (!via || !show_window || !*show_window) return;
+
+#ifdef IMGUI_VERSION
+    ImGui::PushID((int)(uintptr_t)via + 0x10000);
+
+    char window_title[128];
+    const char* via_name = mos6522_get_via_name(via);
+    snprintf(window_title, sizeof(window_title), "%s Layout", via_name);
+
+    if (!ImGui::Begin(window_title, show_window)) {
+        ImGui::End();
+        ImGui::PopID();
+        return;
+    }
+
+    ChipVisualization& renderer = GetGlobalChipRenderer();
+    ChipLayout& layout = get_via_layout();
+    std::vector<PinSignalState> pin_states = get_via_pin_states(via, &layout);
+
+    ImVec2 size = renderer.get_recommended_size(layout);
+    ImVec2 cursor = ImGui::GetCursorScreenPos();
+    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
+    ImGui::Dummy(size);
+    renderer.render(layout, center, pin_states, via_name);
+
+    ImGui::End();
+    ImGui::PopID();
+#endif
+}

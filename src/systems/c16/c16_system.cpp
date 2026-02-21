@@ -621,14 +621,16 @@ void Commodore264System<V>::register_c264_chips() {
     register_chip(std::make_unique<CChipAdapter>(
         cpu, ChipIdentity{"CSG7501", "Commodore"},
         [cpu](bool* s) { fam65xx_render_debug_window(cpu, s); },
-        [cpu](bool* s) { fam65xx_render_settings_window(cpu, s); }),
+        [cpu](bool* s) { fam65xx_render_settings_window(cpu, s); },
+        [cpu](bool* s) { fam65xx_render_layout_window(cpu, s); }),
         "MOS 7501/8501 CPU", "7501", "CPU", 0x0000);
 
     // TED
     register_chip(std::make_unique<CChipAdapter>(
         ted, ChipIdentity{"TED7360", "Commodore"},
         [ted](bool* s) { ted7360_render_debug_window(ted, s); },
-        [ted](bool* s) { ted7360_render_settings_window(ted, s); }),
+        [ted](bool* s) { ted7360_render_settings_window(ted, s); },
+        [ted](bool* s) { ted7360_render_layout_window(ted, s); }),
         "TED 7360 (Video/Audio/I/O)", "TED", "Video", 0xFF00);
 
     // RAM (no debug window)

@@ -27,6 +27,7 @@ template <const fam65xx::CPUTraits &Traits> ChipLayout create_cpu_pin_layout();
 // Specific CPU layout functions
 ChipLayout create_mos6502_layout();
 ChipLayout create_mos6510_layout();
+ChipLayout create_csg7501_layout();
 ChipLayout create_wdc_w65c02s_layout();
 ChipLayout create_wdc_65c816_layout();
 ChipLayout create_ricoh_2a03_layout();
@@ -35,7 +36,7 @@ ChipLayout create_rockwell_r65c02_layout();
 // CPU pin state functions - get pin states from CPU and bus state
 template <const fam65xx::CPUTraits &Traits>
 std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits> *cpu,
-                                               ChipLayout *layout,
+                                               const ChipLayout *layout,
                                                bus_state_t bus_state);
 
 // ============================================================================
@@ -57,6 +58,10 @@ template <const fam65xx::CPUTraits &Traits> ChipLayout create_cpu_pin_layout() {
     // MOS 6510 (C64/C128) PIN LAYOUT - use create_mos6510_layout()
   } else if constexpr (Traits == fam65xx::MOS6510) {
     layout = create_mos6510_layout();
+
+    // CSG 7501/8501 (C16/Plus4) PIN LAYOUT - use create_csg7501_layout()
+  } else if constexpr (Traits == fam65xx::CSG7501) {
+    layout = create_csg7501_layout();
 
     // WDC 65C02 (CMOS) PIN LAYOUT - use create_wdc_w65c02s_layout()
   } else if constexpr (Traits == fam65xx::WDC_W65C02S) {
@@ -355,6 +360,56 @@ ChipLayout create_mos6510_layout() {
   PIN_LR(layout, 18, A11, RW, 38)
   PIN_LR(layout, 19, A14, PHI2, 39)
   PIN_LR(layout, 20, A15, RES, 40)
+
+  return layout;
+}
+
+// ============================================================================
+// CSG 7501/8501 SPECIFIC LAYOUT IMPLEMENTATION (C16/Plus4 CPU)
+// ============================================================================
+
+ChipLayout create_csg7501_layout() {
+  // Start with DIP-40 base layout from core system
+  ChipLayout layout = create_dip40_layout();
+
+  // Update package info for CSG 7501/8501
+  layout.markings = {
+      "CSG7501",    // part_number (also branded 8501)
+      "Commodore",  // manufacturer
+      nullptr,      // package_variant
+      nullptr,      // date_code
+      nullptr,      // lot_number
+      nullptr,      // custom_text
+      true,         // show_part_number
+      true,         // show_manufacturer
+      false,        // show_package_variant
+      false         // show_date_code
+  };
+
+  // Pin assignments for CSG 7501/8501 (40-pin DIP)
+  // Similar to 6510 but with different I/O port mapping and no NMI line.
+  // I/O port mask 0x5F = bits 0,1,2,3,4,6 (no bit 5).
+  // The GATE IN pin replaces the NMI — directly managed by TED.
+  PIN_LR(layout, 1, PHI0, VSS, 21)
+  PIN_LR(layout, 2, RDY, A12, 22)
+  PIN_LR(layout, 3, IRQ, A13, 23)
+  PIN_LR(layout, 4, AEC, A14, 24) // Address Enable Control (from TED)
+  PIN_LR(layout, 5, VDD, A15, 25)
+  PIN_LR(layout, 6, A0, P0, 26)   // I/O Port bit 0
+  PIN_LR(layout, 7, A1, P1, 27)   // I/O Port bit 1
+  PIN_LR(layout, 8, A2, P2, 28)   // I/O Port bit 2
+  PIN_LR(layout, 9, A3, P3, 29)   // I/O Port bit 3
+  PIN_LR(layout, 10, A4, P4, 30)  // I/O Port bit 4
+  PIN_LR(layout, 11, A5, D7, 31)
+  PIN_LR(layout, 12, A6, D6, 32)
+  PIN_LR(layout, 13, A7, D5, 33)
+  PIN_LR(layout, 14, A8, D4, 34)
+  PIN_LR(layout, 15, A9, D3, 35)
+  PIN_LR(layout, 16, A10, D2, 36)
+  PIN_LR(layout, 17, A11, D1, 37)
+  PIN_LR(layout, 18, RW, D0, 38)
+  PIN_LR(layout, 19, P6, PHI2, 39)  // I/O Port bit 6 (no bit 5 — mask 0x5F)
+  PIN_LR(layout, 20, A14, RES, 40)
 
   return layout;
 }

@@ -11,6 +11,7 @@ extern "C" {
 // These are C-compatible wrappers around the C++ template implementation
 void fam65xx_render_debug_window(void *chip, bool *show_window);
 void fam65xx_render_settings_window(void *chip, bool *show_window);
+void fam65xx_render_layout_window(void *chip, bool *show_window);
 
 // Bus state update function (also needs C linkage)
 void fam65xx_update_bus_state(void *chip, uint64_t bus_state);

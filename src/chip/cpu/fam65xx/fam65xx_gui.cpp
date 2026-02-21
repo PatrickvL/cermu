@@ -379,6 +379,7 @@ public:
   virtual ~CPUGUIRenderer() = default;
   virtual void render_debug_window(bool *show_window) = 0;
   virtual void render_settings_window(bool *show_window) = 0;
+  virtual void render_layout_window(bool *show_window) = 0;
   virtual const char *get_processor_name() const = 0;
   virtual void update_bus_state(bus_state_t pins) = 0;
 };
@@ -490,6 +491,33 @@ public:
 
     // Show processor-specific configuration options
     render_processor_features<Traits>(cpu);
+
+    ImGui::End();
+  }
+
+  void render_layout_window(bool *show_window) override {
+    if (!cpu || !show_window || !*show_window)
+      return;
+
+    char window_title[128];
+    snprintf(window_title, sizeof(window_title), "%s Layout",
+             get_processor_name());
+
+    if (!ImGui::Begin(window_title, show_window)) {
+      ImGui::End();
+      return;
+    }
+
+    static ChipLayout layout = create_cpu_pin_layout<Traits>();
+    std::vector<PinSignalState> pin_states =
+        get_cpu_pin_states<Traits>(cpu, &layout, last_bus_state);
+
+    ChipVisualization &renderer = GetGlobalChipRenderer();
+    ImVec2 size = renderer.get_recommended_size(layout);
+    ImVec2 cursor = ImGui::GetCursorScreenPos();
+    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
+    ImGui::Dummy(size);
+    renderer.render(layout, center, pin_states, get_processor_name());
 
     ImGui::End();
   }
@@ -647,6 +675,13 @@ void fam65xx_render_settings_window(void *chip, bool *show_window) {
   }
 
   ImGui::End();
+}
+
+void fam65xx_render_layout_window(void *chip, bool *show_window) {
+  auto it = cpu_renderers.find(chip);
+  if (it != cpu_renderers.end()) {
+    it->second->render_layout_window(show_window);
+  }
 }
 
 void fam65xx_update_bus_state(void *chip, bus_state_t bus_state) {

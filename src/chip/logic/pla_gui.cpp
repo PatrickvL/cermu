@@ -635,3 +635,32 @@ void pla_render_settings_window(void* chip, bool* show_window) {
     ImGui::End();
 #endif
 }
+
+// ============================================================================
+// PLA LAYOUT WINDOW (standalone pinout diagram)
+// ============================================================================
+
+void pla_render_layout_window(void* chip, bool* show_window) {
+    if (!chip || !show_window || !*show_window) return;
+
+#ifdef IMGUI_VERSION
+    c64_t* c64 = (c64_t*)chip;
+
+    if (!ImGui::Begin("PLA (906114-01) Layout", show_window)) {
+        ImGui::End();
+        return;
+    }
+
+    ChipVisualization& renderer = GetGlobalChipRenderer();
+    ChipLayout& layout = get_pla_layout();
+    std::vector<PinSignalState> pin_states = get_pla_pin_states(c64, &layout);
+
+    ImVec2 size = renderer.get_recommended_size(layout);
+    ImVec2 cursor = ImGui::GetCursorScreenPos();
+    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
+    ImGui::Dummy(size);
+    renderer.render(layout, center, pin_states, "906114-01");
+
+    ImGui::End();
+#endif
+}

@@ -406,3 +406,39 @@ static const char* mos6526_get_cia_name(mos6526_t* cia) {
         return "CIA"; // Generic fallback for other systems
     }
 }
+
+// ============================================================================
+// MOS6526 CIA LAYOUT WINDOW (standalone pinout diagram)
+// ============================================================================
+
+void mos6526_render_layout_window(void* chip, bool* show_window) {
+    mos6526_t* cia = (mos6526_t*)chip;
+    if (!cia || !show_window || !*show_window) return;
+
+#ifdef IMGUI_VERSION
+    ImGui::PushID((int)(uintptr_t)cia + 0x10000); // Unique ID distinct from debug window
+
+    char window_title[128];
+    const char* cia_name = mos6526_get_cia_name(cia);
+    snprintf(window_title, sizeof(window_title), "%s Layout", cia_name);
+
+    if (!ImGui::Begin(window_title, show_window)) {
+        ImGui::End();
+        ImGui::PopID();
+        return;
+    }
+
+    ChipVisualization& renderer = GetGlobalChipRenderer();
+    ChipLayout& layout = get_cia_layout();
+    std::vector<PinSignalState> pin_states = get_cia_pin_states(cia, &layout, 0);
+
+    ImVec2 size = renderer.get_recommended_size(layout);
+    ImVec2 cursor = ImGui::GetCursorScreenPos();
+    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
+    ImGui::Dummy(size);
+    renderer.render(layout, center, pin_states, cia_name);
+
+    ImGui::End();
+    ImGui::PopID();
+#endif
+}

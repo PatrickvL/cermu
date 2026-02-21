@@ -374,3 +374,31 @@ void ted7360_render_settings_window(void* chip, bool* show_window) {
     ImGui::End();
 #endif
 }
+
+// ============================================================================
+// TED 7360 LAYOUT WINDOW (standalone pinout diagram)
+// ============================================================================
+
+void ted7360_render_layout_window(void* chip, bool* show_window) {
+    ted7360_t* ted = (ted7360_t*)chip;
+    if (!ted || !show_window || !*show_window) return;
+
+#ifdef IMGUI_VERSION
+    if (!ImGui::Begin("TED 7360 Layout", show_window)) {
+        ImGui::End();
+        return;
+    }
+
+    ChipVisualization& renderer = GetGlobalChipRenderer();
+    ChipLayout& layout = get_ted_layout();
+    std::vector<PinSignalState> pin_states = get_ted_pin_states(ted, &layout);
+
+    ImVec2 size = renderer.get_recommended_size(layout);
+    ImVec2 cursor = ImGui::GetCursorScreenPos();
+    ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
+    ImGui::Dummy(size);
+    renderer.render(layout, center, pin_states, "TED7360");
+
+    ImGui::End();
+#endif
+}
