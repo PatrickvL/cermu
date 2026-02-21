@@ -9,7 +9,6 @@
 vicii_t* mos6567_create() {
     const vicii_chip_config_t* config = vicii_get_default_config(false); // PAL = false (NTSC)
     vicii_t* vicii = vicii_create(config, vicii_memory_bank_change);
-    if (vicii) vicii->desc = &mos6567_descriptor;
     return vicii;
 }
 
@@ -19,7 +18,7 @@ vicii_t* mos6567_create() {
 chip_descriptor_t mos6567_descriptor = {
     .description = "MOS6567 VIC-II Video Interface Chip (NTSC)",
     .create      = [](chip_descriptor_t*) -> void* { return mos6567_create(); },
-    .destroy     = [](void* chip) { vicii_destroy(static_cast<vicii_t*>(chip)); },
+    .destroy     = [](void* chip) { delete static_cast<vicii_t*>(chip); },
     .bus_attach  = vicii_bus_attach
 };
 

@@ -16,8 +16,8 @@
 // ============================================================================
 
 static const char* get_vicii_type_name(vicii_t* vicii) {
-    if (vicii && vicii->desc && vicii->desc->description) {
-        return vicii->desc->description;
+    if (vicii && vicii->config && vicii->config->chip_name) {
+        return vicii->config->chip_name;
     }
     return "Unknown VIC-II";
 }
@@ -158,9 +158,9 @@ static ChipLayout& get_vicii_layout() {
     return layout;
 }
 
-void vicii_gui_render_debug_content(void* chip) {
-    vicii_t* vicii = (vicii_t*)chip;
-    if (!vicii) return;
+// Class method implementation
+void vicii_s::render_debug_content() {
+    vicii_t* vicii = this;
     
 #ifdef IMGUI_VERSION
     // Create two-column layout: chip visualization on left, debugging info on right
@@ -254,9 +254,14 @@ void vicii_gui_render_debug_content(void* chip) {
 #endif
 }
 
-void vicii_gui_render_settings_content(void* chip) {
-    vicii_t* vicii = (vicii_t*)chip;
-    if (!vicii) return;
+// Legacy C-linkage wrapper
+extern "C" void vicii_gui_render_debug_content(void* chip) {
+    if (chip) static_cast<vicii_t*>(chip)->render_debug_content();
+}
+
+// Class method implementation
+void vicii_s::render_settings_content() {
+    vicii_t* vicii = this;
     
 #ifdef IMGUI_VERSION
 
@@ -275,13 +280,18 @@ void vicii_gui_render_settings_content(void* chip) {
 #endif
 }
 
+// Legacy C-linkage wrapper
+extern "C" void vicii_gui_render_settings_content(void* chip) {
+    if (chip) static_cast<vicii_t*>(chip)->render_settings_content();
+}
+
 // ============================================================================
 // VIC-II LAYOUT (standalone pinout diagram)
 // ============================================================================
 
-void vicii_gui_render_layout_content(void* chip) {
-    vicii_t* vicii = (vicii_t*)chip;
-    if (!vicii) return;
+// Class method implementation
+void vicii_s::render_layout_content() {
+    vicii_t* vicii = this;
 
 #ifdef IMGUI_VERSION
     const char* chip_name = get_vicii_type_name(vicii);
@@ -290,4 +300,9 @@ void vicii_gui_render_layout_content(void* chip) {
     std::vector<PinSignalState> pin_states = get_vicii_pin_states(vicii, &layout, 0);
     render_chip_layout(layout, pin_states, chip_name);
 #endif
+}
+
+// Legacy C-linkage wrapper
+extern "C" void vicii_gui_render_layout_content(void* chip) {
+    if (chip) static_cast<vicii_t*>(chip)->render_layout_content();
 }
