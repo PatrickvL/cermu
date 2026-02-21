@@ -164,10 +164,6 @@ static void initialize_wdc65c816_descriptor() {
       nullptr; // Basic CPU doesn't need bus attach
   wdc65c816_base_descriptor.bank_change =
       nullptr; // Basic CPU doesn't have banking
-#ifdef IMGUI_VERSION
-  wdc65c816_base_descriptor.render_debug_window = NULL;
-  wdc65c816_base_descriptor.render_settings_window = NULL;
-#endif
 }
 
 const chip_descriptor_t *wdc65c816_get_chip_descriptor(void) {

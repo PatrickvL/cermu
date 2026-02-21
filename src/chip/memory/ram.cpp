@@ -27,11 +27,7 @@ chip_descriptor_t ram_descriptor = {
     .create = ram_system_create,
     .destroy = ram_system_destroy,
     .bus_attach = NULL,
-    .bank_change = NULL,
-#ifdef IMGUI_VERSION
-    .render_debug_window = NULL,
-    .render_settings_window = NULL
-#endif
+    .bank_change = NULL
 };
 
 // Include GUI implementation

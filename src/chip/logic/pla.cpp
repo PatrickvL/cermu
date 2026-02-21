@@ -33,11 +33,7 @@ chip_descriptor_t pla_descriptor = {
     .create = pla_create,
     .destroy = pla_destroy,
     .bus_attach = NULL,
-    .bank_change = NULL,
-#ifdef IMGUI_VERSION
-    .render_debug_window = NULL,
-    .render_settings_window = NULL
-#endif
+    .bank_change = NULL
 };
 
 // ============================================================================

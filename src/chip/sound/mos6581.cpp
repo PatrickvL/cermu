@@ -1058,9 +1058,5 @@ chip_descriptor_t mos6581_descriptor = {
     .create = mos6581_system_create,
     .destroy = mos6581_system_destroy,
     .bus_attach = (void (*)(void *, void *))mos6581_bus_attach,
-    .bank_change = NULL,
-#ifdef IMGUI_VERSION
-    .render_debug_window = NULL,
-    .render_settings_window = NULL
-#endif
+    .bank_change = NULL
 };

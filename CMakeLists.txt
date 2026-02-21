@@ -214,7 +214,6 @@ set(CORE_SOURCES
     src/core/ioport.cpp
     src/core/chip_layout.cpp
     src/core/pin_labels.cpp
-    src/core/emulation_context.cpp
     src/core/emulated_system.cpp
     src/core/system_registry.cpp
     src/core/framebuffer_renderer.cpp

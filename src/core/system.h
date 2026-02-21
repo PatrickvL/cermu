@@ -7,16 +7,6 @@
 #include <memory>
 #include <vector>
 
-// Unified chip access callback - modernized with C++ features
-struct AccessCallback {
-    chip_callback_t read_func;
-    chip_callback_t write_func;
-    void* context;  // Shared context for both read and write operations
-    
-    AccessCallback(chip_callback_t read, chip_callback_t write, void* ctx)
-        : read_func(read), write_func(write), context(ctx) {}
-};
-
 // Modern C++ system class for 8-bit systems
 class System8Bit {
 private:

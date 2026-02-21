@@ -1219,9 +1219,5 @@ chip_descriptor_t ted7360_descriptor = {
         ted7360_destroy(static_cast<ted7360_t*>(chip));
     },
     .bus_attach = nullptr,
-    .bank_change = nullptr,
-#ifdef IMGUI_VERSION
-    .render_debug_window = nullptr,
-    .render_settings_window = nullptr
-#endif
+    .bank_change = nullptr
 };
