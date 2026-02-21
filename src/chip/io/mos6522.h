@@ -8,56 +8,64 @@
 #include "../../core/system_lines.h"
 
 // MOS 6522 VIA (Versatile Interface Adapter) chip structure
-typedef struct {
-    void* bus;
+typedef struct mos6522_s : public ChipBase {
+    void* bus = nullptr;
 
     // Registers
-    uint8_t registers[16];
+    uint8_t registers[16] = {};
 
     // I/O Ports
-    uint8_t port_a_data;
-    uint8_t port_b_data;
-    uint8_t port_a_ddr;
-    uint8_t port_b_ddr;
+    uint8_t port_a_data = 0xFF;
+    uint8_t port_b_data = 0xFF;
+    uint8_t port_a_ddr = 0;
+    uint8_t port_b_ddr = 0;
 
     // Callbacks for port input reads (used for keyboard matrix scanning)
     // These callbacks allow external devices (keyboard, joystick) to pull port lines LOW
     // Called when VIA reads from port to get external device state
-    uint8_t (*port_a_read_callback)(void* context, uint8_t port_a_output);
-    void* port_a_read_context;
-    uint8_t (*port_b_read_callback)(void* context, uint8_t port_b_output);
-    void* port_b_read_context;
+    uint8_t (*port_a_read_callback)(void* context, uint8_t port_a_output) = nullptr;
+    void* port_a_read_context = nullptr;
+    uint8_t (*port_b_read_callback)(void* context, uint8_t port_b_output) = nullptr;
+    void* port_b_read_context = nullptr;
 
     // Timers
-    uint16_t timer1_latch;
-    uint16_t timer1_counter;
-    uint16_t timer2_latch;
-    uint16_t timer2_counter;
+    uint16_t timer1_latch = 0xFFFF;
+    uint16_t timer1_counter = 0xFFFF;
+    uint16_t timer2_latch = 0xFFFF;
+    uint16_t timer2_counter = 0xFFFF;
 
     // Shift register
-    uint8_t shift_register;
-    uint8_t shift_counter;
+    uint8_t shift_register = 0;
+    uint8_t shift_counter = 0;
 
     // Interrupt flags
-    uint8_t interrupt_flags;
-    uint8_t interrupt_enable;
+    uint8_t interrupt_flags = 0;
+    uint8_t interrupt_enable = 0;
 
     // Control registers
-    uint8_t acr;  // Auxiliary Control Register
-    uint8_t pcr;  // Peripheral Control Register
-    uint8_t ifr;  // Interrupt Flag Register
-    uint8_t ier;  // Interrupt Enable Register
+    uint8_t acr = 0;   // Auxiliary Control Register
+    uint8_t pcr = 0;   // Peripheral Control Register
+    uint8_t ifr = 0;   // Interrupt Flag Register
+    uint8_t ier = 0;   // Interrupt Enable Register
 
     // Timer control
-    bool timer1_running;
-    bool timer2_running;
-    bool timer1_continuous;
-    bool timer2_continuous;
+    bool timer1_running = false;
+    bool timer2_running = false;
+    bool timer1_continuous = false;
+    bool timer2_continuous = false;
 
     // Interrupt state
-    bool interrupt_active;
-    int interrupt_line;
+    bool interrupt_active = false;
+    int interrupt_line = 0;
 
+    // --- ChipBase interface ---
+    ChipIdentity chip_identity() const override;
+    bool has_debug_content()    const override;
+    bool has_settings_content() const override;
+    bool has_layout_content()   const override;
+    void render_debug_content()    override;
+    void render_settings_content() override;
+    void render_layout_content()   override;
 } mos6522_t;
 
 // Register addresses

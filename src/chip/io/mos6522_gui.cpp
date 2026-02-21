@@ -170,8 +170,11 @@ static ChipLayout& get_via_layout() {
 // ============================================================================
 
 void mos6522_render_debug_content(void* chip) {
-    mos6522_t* via = (mos6522_t*)chip;
-    if (!via) return;
+    if (chip) static_cast<mos6522_t*>(chip)->render_debug_content();
+}
+
+void mos6522_s::render_debug_content() {
+    mos6522_t* via = this;
 
 #ifdef IMGUI_VERSION
     const char* via_name = mos6522_get_via_name(via);
@@ -275,8 +278,11 @@ void mos6522_render_debug_content(void* chip) {
 // ============================================================================
 
 void mos6522_render_settings_content(void* chip) {
-    mos6522_t* via = (mos6522_t*)chip;
-    if (!via) return;
+    if (chip) static_cast<mos6522_t*>(chip)->render_settings_content();
+}
+
+void mos6522_s::render_settings_content() {
+    mos6522_t* via = this;
 
 #ifdef IMGUI_VERSION
     const char* via_name = mos6522_get_via_name(via);
@@ -335,8 +341,11 @@ static const char* mos6522_get_via_name(mos6522_t* via) {
 // ============================================================================
 
 void mos6522_render_layout_content(void* chip) {
-    mos6522_t* via = (mos6522_t*)chip;
-    if (!via) return;
+    if (chip) static_cast<mos6522_t*>(chip)->render_layout_content();
+}
+
+void mos6522_s::render_layout_content() {
+    mos6522_t* via = this;
 
 #ifdef IMGUI_VERSION
     const char* via_name = mos6522_get_via_name(via);

@@ -12,47 +12,24 @@ chip_descriptor_t mos6522_descriptor = {
 };
 
 mos6522_t* mos6522_create() {
-    mos6522_t* via = (mos6522_t*)calloc(1, sizeof(mos6522_t));
-    if (!via) return NULL;
-
-    // Initialize registers
-    memset(via->registers, 0, sizeof(via->registers));
-
-    // Initialize ports
-    via->port_a_data = 0xFF;
-    via->port_b_data = 0xFF;
-    via->port_a_ddr = 0x00;
-    via->port_b_ddr = 0x00;
-
-    // Initialize timers
-    via->timer1_latch = 0xFFFF;
-    via->timer1_counter = 0xFFFF;
-    via->timer2_latch = 0xFFFF;
-    via->timer2_counter = 0xFFFF;
-
-    // Initialize control registers
-    via->acr = 0x00;
-    via->pcr = 0x00;
-    via->ifr = 0x00;
-    via->ier = 0x00;
-
-    // Initialize timer state
-    via->timer1_running = false;
-    via->timer2_running = false;
-    via->timer1_continuous = false;
-    via->timer2_continuous = false;
-
-    // Initialize interrupt state
-    via->interrupt_active = false;
-    via->interrupt_line = 0;
-
+    mos6522_t* via = new mos6522_t();
+    // Default member initializers handle all field initialization
+    mos6522_reset(via);
     return via;
 }
 
 void mos6522_destroy(mos6522_t* via) {
-    if (!via) return;
-    free(via);
+    delete via;
 }
+
+// ChipBase identity
+ChipIdentity mos6522_s::chip_identity() const {
+    return {"MOS6522", "MOS Technology"};
+}
+
+bool mos6522_s::has_debug_content()    const { return true; }
+bool mos6522_s::has_settings_content() const { return true; }
+bool mos6522_s::has_layout_content()   const { return true; }
 
 void mos6522_set_port_a_read_callback(mos6522_t* via, uint8_t (*callback)(void*, uint8_t), void* context) {
     if (!via) return;
