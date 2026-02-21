@@ -9,9 +9,9 @@ extern "C" {
 
 // Function declarations for FAM65XX CPU family debug windows
 // These are C-compatible wrappers around the C++ template implementation
-void fam65xx_render_debug_window(void *chip, bool *show_window);
-void fam65xx_render_settings_window(void *chip, bool *show_window);
-void fam65xx_render_layout_window(void *chip, bool *show_window);
+void fam65xx_render_debug_content(void *chip);
+void fam65xx_render_settings_content(void *chip);
+void fam65xx_render_layout_content(void *chip);
 
 // Bus state update function (also needs C linkage)
 void fam65xx_update_bus_state(void *chip, uint64_t bus_state);
@@ -55,9 +55,9 @@ void register_nes6502_for_gui(void *cpu);
 void register_rockwell65c02_for_gui(void *cpu);
 void register_wdc65c816_for_gui(void *cpu);
 
-// Non-template function for rendering CPU windows
-void render_cpu_debug_window_impl(void *cpu, const char *cpu_name);
-void render_cpu_settings_window_impl(void *cpu, const char *cpu_name);
+// Non-template function for rendering CPU content (no window framing)
+void render_cpu_debug_content_impl(void *cpu, const char *cpu_name);
+void render_cpu_settings_content_impl(void *cpu, const char *cpu_name);
 
 // Update bus state for CPU visualization
 void fam65xx_update_bus_state(void *chip, bus_state_t bus_state);

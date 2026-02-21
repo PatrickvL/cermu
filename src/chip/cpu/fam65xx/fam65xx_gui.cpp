@@ -377,9 +377,9 @@ void render_interrupt_state(fam65xx_t<Traits> *cpu) {
 class CPUGUIRenderer {
 public:
   virtual ~CPUGUIRenderer() = default;
-  virtual void render_debug_window(bool *show_window) = 0;
-  virtual void render_settings_window(bool *show_window) = 0;
-  virtual void render_layout_window(bool *show_window) = 0;
+  virtual void render_debug_content() = 0;
+  virtual void render_settings_content() = 0;
+  virtual void render_layout_content() = 0;
   virtual const char *get_processor_name() const = 0;
   virtual void update_bus_state(bus_state_t pins) = 0;
 };
@@ -398,22 +398,13 @@ public:
   // Update the stored bus state (should be called from tick functions)
   void update_bus_state(bus_state_t pins) override { last_bus_state = pins; }
 
-  void render_debug_window(bool *show_window) override {
-    if (!cpu || !show_window || !*show_window)
+  void render_debug_content() override {
+    if (!cpu)
       return;
-
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Debug",
-             get_processor_name());
-
-    if (!ImGui::Begin(window_title, show_window)) {
-      ImGui::End();
-      return;
-    }
 
     // Create two-column layout: chip visualization on left, debugging info on
     // right
-    ImVec2 window_size = ImGui::GetWindowSize();
+    ImVec2 window_size = ImGui::GetContentRegionAvail();
 
     // Left column: Chip Visualization (fixed width ~250px, 25% wider)
     ImVec2 chip_viz_size = ImVec2(250.0f, 0);
@@ -452,22 +443,11 @@ public:
       render_processor_features<Traits>(cpu);
     }
     ImGui::EndChild();
-
-    ImGui::End();
   }
 
-  void render_settings_window(bool *show_window) override {
-    if (!cpu || !show_window || !*show_window)
+  void render_settings_content() override {
+    if (!cpu)
       return;
-
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Settings",
-             get_processor_name());
-
-    if (!ImGui::Begin(window_title, show_window)) {
-      ImGui::End();
-      return;
-    }
 
     ImGui::Text("%s Configuration", get_processor_name());
     ImGui::Separator();
@@ -491,22 +471,11 @@ public:
 
     // Show processor-specific configuration options
     render_processor_features<Traits>(cpu);
-
-    ImGui::End();
   }
 
-  void render_layout_window(bool *show_window) override {
-    if (!cpu || !show_window || !*show_window)
+  void render_layout_content() override {
+    if (!cpu)
       return;
-
-    char window_title[128];
-    snprintf(window_title, sizeof(window_title), "%s Layout",
-             get_processor_name());
-
-    if (!ImGui::Begin(window_title, show_window)) {
-      ImGui::End();
-      return;
-    }
 
     static ChipLayout layout = create_cpu_pin_layout<Traits>();
     std::vector<PinSignalState> pin_states =
@@ -518,8 +487,6 @@ public:
     ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
     ImGui::Dummy(size);
     renderer.render(layout, center, pin_states, get_processor_name());
-
-    ImGui::End();
   }
 
   const char *get_processor_name() const override {
@@ -550,41 +517,29 @@ static std::unordered_map<void *, std::unique_ptr<CPUGUIRenderer>>
 
 extern "C" {
 
-void fam65xx_render_debug_window(void *chip, bool *show_window) {
+void fam65xx_render_debug_content(void *chip) {
   // Look up the CPU renderer in our registry
   auto it = cpu_renderers.find(chip);
   if (it != cpu_renderers.end()) {
-    it->second->render_debug_window(show_window);
+    it->second->render_debug_content();
   } else {
     // Fallback for unknown CPU types
-    if (show_window && *show_window) {
-      if (!ImGui::Begin("Unknown 65xx CPU Debug", show_window)) {
-        ImGui::End();
-        return;
-      }
-      ImGui::Text("CPU type not registered for GUI rendering");
-      ImGui::Text("Chip pointer: %p", chip);
-      ImGui::End();
-    }
+    ImGui::Text("CPU type not registered for GUI rendering");
+    ImGui::Text("Chip pointer: %p", chip);
   }
 }
 
-void fam65xx_render_settings_window(void *chip, bool *show_window) {
+void fam65xx_render_settings_content(void *chip) {
   // Look up the CPU renderer in our registry
   auto it = cpu_renderers.find(chip);
   if (it != cpu_renderers.end()) {
-    it->second->render_settings_window(show_window);
+    it->second->render_settings_content();
     return;
   }
 
   // Fallback for unknown CPU types
-  if (!chip || !show_window || !*show_window)
+  if (!chip)
     return;
-
-  if (!ImGui::Begin("Unknown 65xx CPU Settings", show_window)) {
-    ImGui::End();
-    return;
-  }
 
   ImGui::Text("65xx Family CPU Configuration");
   ImGui::Text("CPU type not registered for GUI rendering");
@@ -673,14 +628,12 @@ void fam65xx_render_settings_window(void *chip, bool *show_window) {
 
     ImGui::Unindent(16.0f);
   }
-
-  ImGui::End();
 }
 
-void fam65xx_render_layout_window(void *chip, bool *show_window) {
+void fam65xx_render_layout_content(void *chip) {
   auto it = cpu_renderers.find(chip);
   if (it != cpu_renderers.end()) {
-    it->second->render_layout_window(show_window);
+    it->second->render_layout_content();
   }
 }
 
@@ -763,20 +716,18 @@ void unregister_cpu_from_gui(void *cpu) {
   }
 }
 
-// Simple non-template functions for rendering CPU windows
-void render_cpu_debug_window_impl(void *cpu, const char *cpu_name) {
+// Simple non-template functions for rendering CPU content
+void render_cpu_debug_content_impl(void *cpu, const char *cpu_name) {
   auto it = cpu_renderers.find(cpu);
   if (it != cpu_renderers.end()) {
-    bool show_window = true;
-    it->second->render_debug_window(&show_window);
+    it->second->render_debug_content();
   }
 }
 
-void render_cpu_settings_window_impl(void *cpu, const char *cpu_name) {
+void render_cpu_settings_content_impl(void *cpu, const char *cpu_name) {
   auto it = cpu_renderers.find(cpu);
   if (it != cpu_renderers.end()) {
-    bool show_window = true;
-    it->second->render_settings_window(&show_window);
+    it->second->render_settings_content();
   }
 }
 

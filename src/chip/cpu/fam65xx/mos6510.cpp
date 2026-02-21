@@ -169,7 +169,7 @@ chip_descriptor_t mos6510_descriptor = {
     .bus_attach = nullptr,
     .bank_change = nullptr, // Will be set by the system (e.g., C64) if banking callbacks are needed
 #ifdef IMGUI_VERSION
-    .render_debug_window = fam65xx_render_debug_window,
-    .render_settings_window = fam65xx_render_settings_window
+    .render_debug_window = NULL,
+    .render_settings_window = NULL
 #endif
 };

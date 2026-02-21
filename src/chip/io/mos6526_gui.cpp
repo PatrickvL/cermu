@@ -151,26 +151,15 @@ static ChipLayout& get_cia_layout() {
     return layout;
 }
 
-void mos6526_render_debug_window(void* chip, bool* show_window) {
+void mos6526_render_debug_content(void* chip) {
     mos6526_t* cia = (mos6526_t*)chip;
-    if (!cia || !cia->desc || !show_window || !*show_window) return;
+    if (!cia || !cia->desc) return;
     
 #ifdef IMGUI_VERSION
-    // Push unique ID to prevent conflicts between CIA1 and CIA2
-    ImGui::PushID((int)(uintptr_t)cia);
-    
-    char window_title[128];
     const char* cia_name = mos6526_get_cia_name(cia);
-    snprintf(window_title, sizeof(window_title), "%s Debug", cia_name);
-    
-    if (!ImGui::Begin(window_title, show_window)) {
-        ImGui::End();
-        ImGui::PopID();
-        return;
-    }
 
     // Create two-column layout: chip visualization on left, debugging info on right
-    ImVec2 window_size = ImGui::GetWindowSize();
+    ImVec2 window_size = ImGui::GetContentRegionAvail();
     
     // Left column: Chip Visualization (fixed width ~250px)
     ImVec2 chip_viz_size = ImVec2(250.0f, 0);
@@ -259,35 +248,19 @@ void mos6526_render_debug_window(void* chip, bool* show_window) {
         ImGui::Text("Serial Data Register: $%02X", cia->reg[SDR]);
     }
     ImGui::EndChild();
-
-    ImGui::End();
-    ImGui::PopID();
 #endif
 }
 
 // ============================================================================
-// MOS6526 CIA GUI SETTINGS WINDOW
+// MOS6526 CIA GUI SETTINGS
 // ============================================================================
 
-void mos6526_render_settings_window(void* chip, bool* show_window) {
+void mos6526_render_settings_content(void* chip) {
     mos6526_t* cia = (mos6526_t*)chip;
     if (!cia || !cia->desc) return;
     
-    if (!*show_window) return;
-    
 #ifdef IMGUI_VERSION
-    // Push unique ID to prevent conflicts between CIA1 and CIA2
-    ImGui::PushID((int)(uintptr_t)cia);
-    
-    char window_title[128];
     const char* cia_name = mos6526_get_cia_name(cia);
-    snprintf(window_title, sizeof(window_title), "%s Settings", cia_name);
-    
-    if (!ImGui::Begin(window_title, show_window, 0)) {
-        ImGui::End();
-        ImGui::PopID();
-        return;
-    }
 
     // Show which CIA this is
     ImGui::Text("Complex Interface Adapter - %s Configuration", cia_name);
@@ -388,9 +361,6 @@ void mos6526_render_settings_window(void* chip, bool* show_window) {
     
     // Reset to single column at the end
     ImGui::Columns(1, NULL, false);
-    
-    ImGui::End();
-    ImGui::PopID();
 #endif
 }
 
@@ -411,22 +381,12 @@ static const char* mos6526_get_cia_name(mos6526_t* cia) {
 // MOS6526 CIA LAYOUT WINDOW (standalone pinout diagram)
 // ============================================================================
 
-void mos6526_render_layout_window(void* chip, bool* show_window) {
+void mos6526_render_layout_content(void* chip) {
     mos6526_t* cia = (mos6526_t*)chip;
-    if (!cia || !show_window || !*show_window) return;
+    if (!cia) return;
 
 #ifdef IMGUI_VERSION
-    ImGui::PushID((int)(uintptr_t)cia + 0x10000); // Unique ID distinct from debug window
-
-    char window_title[128];
     const char* cia_name = mos6526_get_cia_name(cia);
-    snprintf(window_title, sizeof(window_title), "%s Layout", cia_name);
-
-    if (!ImGui::Begin(window_title, show_window)) {
-        ImGui::End();
-        ImGui::PopID();
-        return;
-    }
 
     ChipVisualization& renderer = GetGlobalChipRenderer();
     ChipLayout& layout = get_cia_layout();
@@ -437,8 +397,5 @@ void mos6526_render_layout_window(void* chip, bool* show_window) {
     ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
     ImGui::Dummy(size);
     renderer.render(layout, center, pin_states, cia_name);
-
-    ImGui::End();
-    ImGui::PopID();
 #endif
 }

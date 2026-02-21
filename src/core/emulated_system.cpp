@@ -86,25 +86,32 @@ void EmulatedSystem::handle_controller_event(int controller, int button, bool pr
 }
 
 void EmulatedSystem::render_debug_windows(void* gui_state) {
-    // Iterate registered chips and render any toggled debug/settings/layout windows.
+    // Render detached combined windows for chips that were "detached" from
+    // the Hardware menu preview.  Each detached window shows layout + debug
+    // + settings content in a standalone ImGui window.
     (void)gui_state;
+#ifdef IMGUI_VERSION
     for (auto& sc : registered_chips_) {
-        if (sc.show_debug && sc.chip && sc.chip->has_debug_window()) {
-            bool show = sc.show_debug;
-            sc.chip->render_debug_window(&show);
-            sc.show_debug = show;
+        if (!sc.show_detached || !sc.chip) continue;
+        bool show = true;
+        ImGui::SetNextWindowSize(ImVec2(700, 500), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin(sc.display_name, &show)) {
+            if (sc.chip->has_debug_content()) {
+                sc.chip->render_debug_content();
+            } else if (sc.chip->has_layout_content()) {
+                sc.chip->render_layout_content();
+            }
+            if (sc.chip->has_settings_content()) {
+                ImGui::Separator();
+                if (ImGui::CollapsingHeader("Settings")) {
+                    sc.chip->render_settings_content();
+                }
+            }
         }
-        if (sc.show_settings && sc.chip && sc.chip->has_settings_window()) {
-            bool show = sc.show_settings;
-            sc.chip->render_settings_window(&show);
-            sc.show_settings = show;
-        }
-        if (sc.show_layout && sc.chip && sc.chip->has_layout_window()) {
-            bool show = sc.show_layout;
-            sc.chip->render_layout_window(&show);
-            sc.show_layout = show;
-        }
+        ImGui::End();
+        sc.show_detached = show;
     }
+#endif
 }
 
 void EmulatedSystem::register_chip(std::unique_ptr<ChipBase> chip,
@@ -116,9 +123,7 @@ void EmulatedSystem::register_chip(std::unique_ptr<ChipBase> chip,
     sc.short_name = short_name;
     sc.category = category;
     sc.base_address = base_address;
-    sc.show_debug = 0;
-    sc.show_settings = 0;
-    sc.show_layout = 0;
+    sc.show_detached = 0;
     registered_chips_.push_back(std::move(sc));
 }
 

@@ -158,23 +158,13 @@ static ChipLayout& get_vicii_layout() {
     return layout;
 }
 
-void vicii_gui_render_debug_window(void* chip, bool* show_window, const char* window_title) {
-    if (!*show_window) return;
-    
+void vicii_gui_render_debug_content(void* chip) {
     vicii_t* vicii = (vicii_t*)chip;
-    if (!vicii) {
-        *show_window = false;
-        return;
-    }
+    if (!vicii) return;
     
 #ifdef IMGUI_VERSION
-    if (!ImGui::Begin(window_title, show_window)) {
-        ImGui::End();
-        return;
-    }
-
     // Create two-column layout: chip visualization on left, debugging info on right
-    ImVec2 window_size = ImGui::GetWindowSize();
+    ImVec2 window_size = ImGui::GetContentRegionAvail();
     
     // Left column: Chip Visualization (fixed width ~250px)
     ImVec2 chip_viz_size = ImVec2(250.0f, 0);
@@ -261,25 +251,14 @@ void vicii_gui_render_debug_window(void* chip, bool* show_window, const char* wi
         }
     }
     ImGui::EndChild();
-
-    ImGui::End();
 #endif
 }
 
-void vicii_gui_render_settings_window(void* chip, bool* show_window, const char* window_title) {
-    if (!*show_window) return;
-    
+void vicii_gui_render_settings_content(void* chip) {
     vicii_t* vicii = (vicii_t*)chip;
-    if (!vicii) {
-        *show_window = false;
-        return;
-    }
+    if (!vicii) return;
     
 #ifdef IMGUI_VERSION
-    if (!ImGui::Begin(window_title, show_window, 0)) {
-        ImGui::End();
-        return;
-    }
 
     ImGui::Text("VIC-II Configuration");
     ImGui::Separator();
@@ -293,27 +272,19 @@ void vicii_gui_render_settings_window(void* chip, bool* show_window, const char*
     ImGui::Text("Display Settings");
     // Add interactive controls here later if needed
     ImGui::Text("(Settings controls will be added here)");
-
-    ImGui::End();
 #endif
 }
 
 // ============================================================================
-// VIC-II LAYOUT WINDOW (standalone pinout diagram)
+// VIC-II LAYOUT (standalone pinout diagram)
 // ============================================================================
 
-void vicii_gui_render_layout_window(void* chip, bool* show_window, const char* window_title) {
+void vicii_gui_render_layout_content(void* chip) {
     vicii_t* vicii = (vicii_t*)chip;
-    if (!vicii || !show_window || !*show_window) return;
+    if (!vicii) return;
 
 #ifdef IMGUI_VERSION
-    char title[128];
-    snprintf(title, sizeof(title), "%s Layout", window_title ? window_title : "VIC-II");
-
-    if (!ImGui::Begin(title, show_window)) {
-        ImGui::End();
-        return;
-    }
+    const char* chip_name = get_vicii_type_name(vicii);
 
     ChipVisualization& renderer = GetGlobalChipRenderer();
     ChipLayout& layout = get_vicii_layout();
@@ -323,8 +294,6 @@ void vicii_gui_render_layout_window(void* chip, bool* show_window, const char* w
     ImVec2 cursor = ImGui::GetCursorScreenPos();
     ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
     ImGui::Dummy(size);
-    renderer.render(layout, center, pin_states, window_title);
-
-    ImGui::End();
+    renderer.render(layout, center, pin_states, chip_name);
 #endif
 }

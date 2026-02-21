@@ -82,7 +82,7 @@ chip_descriptor_t mos2114_descriptor = {
     .bus_attach = NULL,
     .bank_change = NULL
 #ifdef IMGUI_VERSION
-    ,.render_debug_window = mos2114_render_debug_window,
-    .render_settings_window = mos2114_render_settings_window
+    ,.render_debug_window = NULL,
+    .render_settings_window = NULL
 #endif
 };

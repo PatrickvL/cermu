@@ -1221,55 +1221,53 @@ void C64System::register_c64_chips() {
     auto* cia2 = c64_->cia2;
     auto* colorram = c64_->colorram;
     auto* c64 = c64_;
-    const char* vicii_title = (created_vicii_standard_ == VIC_PAL)
-        ? "VIC-II (MOS 6569 PAL)" : "VIC-II (MOS 6567 NTSC)";
 
     // CPU
     register_chip(std::make_unique<CChipAdapter>(
         cpu, ChipIdentity{"MOS6510", "MOS Technology"},
-        [cpu](bool* s) { fam65xx_render_debug_window(cpu, s); },
-        [cpu](bool* s) { fam65xx_render_settings_window(cpu, s); },
-        [cpu](bool* s) { fam65xx_render_layout_window(cpu, s); }),
+        [cpu]() { fam65xx_render_debug_content(cpu); },
+        [cpu]() { fam65xx_render_settings_content(cpu); },
+        [cpu]() { fam65xx_render_layout_content(cpu); }),
         "MOS 6510 CPU", "6510", "CPU", 0x0000);
 
     // VIC-II
     register_chip(std::make_unique<CChipAdapter>(
         vicii, ChipIdentity{"MOS6569", "MOS Technology"},
-        [vicii, vicii_title](bool* s) { vicii_gui_render_debug_window(vicii, s, vicii_title); },
-        [vicii, vicii_title](bool* s) { vicii_gui_render_settings_window(vicii, s, vicii_title); },
-        [vicii, vicii_title](bool* s) { vicii_gui_render_layout_window(vicii, s, vicii_title); }),
+        [vicii]() { vicii_gui_render_debug_content(vicii); },
+        [vicii]() { vicii_gui_render_settings_content(vicii); },
+        [vicii]() { vicii_gui_render_layout_content(vicii); }),
         "VIC-II (MOS 6569/6567)", "VIC-II", "Video", 0xD000);
 
     // SID
     register_chip(std::make_unique<CChipAdapter>(
         sid, ChipIdentity{"MOS6581", "MOS Technology"},
-        [sid](bool* s) { mos6581_render_debug_window(sid, s); },
-        [sid](bool* s) { mos6581_render_settings_window(sid, s); },
-        [sid](bool* s) { mos6581_render_layout_window(sid, s); }),
+        [sid]() { mos6581_render_debug_content(sid); },
+        [sid]() { mos6581_render_settings_content(sid); },
+        [sid]() { mos6581_render_layout_content(sid); }),
         "SID (MOS 6581/8580)", "SID", "Audio", 0xD400);
 
     // CIA 1
     register_chip(std::make_unique<CChipAdapter>(
         cia1, ChipIdentity{"MOS6526", "MOS Technology"},
-        [cia1](bool* s) { mos6526_render_debug_window(cia1, s); },
-        [cia1](bool* s) { mos6526_render_settings_window(cia1, s); },
-        [cia1](bool* s) { mos6526_render_layout_window(cia1, s); }),
+        [cia1]() { mos6526_render_debug_content(cia1); },
+        [cia1]() { mos6526_render_settings_content(cia1); },
+        [cia1]() { mos6526_render_layout_content(cia1); }),
         "CIA 1 (MOS 6526)", "CIA 1", "I/O", 0xDC00);
 
     // CIA 2
     register_chip(std::make_unique<CChipAdapter>(
         cia2, ChipIdentity{"MOS6526", "MOS Technology"},
-        [cia2](bool* s) { mos6526_render_debug_window(cia2, s); },
-        [cia2](bool* s) { mos6526_render_settings_window(cia2, s); },
-        [cia2](bool* s) { mos6526_render_layout_window(cia2, s); }),
+        [cia2]() { mos6526_render_debug_content(cia2); },
+        [cia2]() { mos6526_render_settings_content(cia2); },
+        [cia2]() { mos6526_render_layout_content(cia2); }),
         "CIA 2 (MOS 6526)", "CIA 2", "I/O", 0xDD00);
 
     // Color RAM
     register_chip(std::make_unique<CChipAdapter>(
         colorram, ChipIdentity{"MOS2114", "MOS Technology"},
-        [colorram](bool* s) { mos2114_render_debug_window(colorram, s); },
-        [colorram](bool* s) { mos2114_render_settings_window(colorram, s); },
-        [colorram](bool* s) { mos2114_render_layout_window(colorram, s); }),
+        [colorram]() { mos2114_render_debug_content(colorram); },
+        [colorram]() { mos2114_render_settings_content(colorram); },
+        [colorram]() { mos2114_render_layout_content(colorram); }),
         "Color RAM (MOS 2114)", "Color RAM", "I/O", 0xD800);
 
     // RAM (no debug window)
@@ -1305,9 +1303,9 @@ void C64System::register_c64_chips() {
     // PLA (uses c64_t* as chip context)
     register_chip(std::make_unique<CChipAdapter>(
         c64, ChipIdentity{"PLA", "MOS Technology"},
-        [c64](bool* s) { pla_render_debug_window(c64, s); },
-        [c64](bool* s) { pla_render_settings_window(c64, s); },
-        [c64](bool* s) { pla_render_layout_window(c64, s); }),
+        [c64]() { pla_render_debug_content(c64); },
+        [c64]() { pla_render_settings_content(c64); },
+        [c64]() { pla_render_layout_content(c64); }),
         "PLA / Address Decoder", "PLA", "Bus", 0x0000);
 }
 

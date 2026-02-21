@@ -29,8 +29,8 @@ chip_descriptor_t ram_descriptor = {
     .bus_attach = NULL,
     .bank_change = NULL,
 #ifdef IMGUI_VERSION
-    .render_debug_window = ram_render_debug_window,
-    .render_settings_window = ram_render_settings_window
+    .render_debug_window = NULL,
+    .render_settings_window = NULL
 #endif
 };
 

@@ -140,17 +140,12 @@ static ChipLayout& get_ppu_layout() {
 // NES PPU GUI DEBUG WINDOW
 // ============================================================================
 
-void nes_ppu_render_debug_window(nes_system::PPU* ppu, bool* show_window) {
-    if (!ppu || !show_window || !*show_window) return;
+void nes_ppu_render_debug_content(nes_system::PPU* ppu) {
+    if (!ppu) return;
 
 #ifdef IMGUI_VERSION
-    if (!ImGui::Begin("PPU (Ricoh 2C02) Debug", show_window)) {
-        ImGui::End();
-        return;
-    }
-
     // Two-column layout
-    ImVec2 window_size = ImGui::GetWindowSize();
+    ImVec2 window_size = ImGui::GetContentRegionAvail();
 
     ImVec2 chip_viz_size = ImVec2(250.0f, 0);
     if (ImGui::BeginChild("ChipVisualization", chip_viz_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
@@ -245,23 +240,17 @@ void nes_ppu_render_debug_window(nes_system::PPU* ppu, bool* show_window) {
         }
     }
     ImGui::EndChild();
-
-    ImGui::End();
 #endif
 }
 
 // ============================================================================
-// NES PPU GUI SETTINGS WINDOW
+// NES PPU GUI SETTINGS
 // ============================================================================
 
-void nes_ppu_render_settings_window(nes_system::PPU* ppu, bool* show_window) {
-    if (!ppu || !show_window || !*show_window) return;
+void nes_ppu_render_settings_content(nes_system::PPU* ppu) {
+    if (!ppu) return;
 
 #ifdef IMGUI_VERSION
-    if (!ImGui::Begin("PPU (Ricoh 2C02) Settings", show_window, 0)) {
-        ImGui::End();
-        return;
-    }
 
     ImGui::Text("Ricoh 2C02 PPU Configuration");
     ImGui::Separator();
@@ -277,24 +266,17 @@ void nes_ppu_render_settings_window(nes_system::PPU* ppu, bool* show_window) {
         ImGui::Text("OAM:     %zu bytes", ppu->oam.size());
         ImGui::Text("Palette: %zu bytes", ppu->palette.size());
     }
-
-    ImGui::End();
 #endif
 }
 
 // ============================================================================
-// NES PPU LAYOUT WINDOW (standalone pinout diagram)
+// NES PPU LAYOUT (standalone pinout diagram)
 // ============================================================================
 
-void nes_ppu_render_layout_window(nes_system::PPU* ppu, bool* show_window) {
-    if (!ppu || !show_window || !*show_window) return;
+void nes_ppu_render_layout_content(nes_system::PPU* ppu) {
+    if (!ppu) return;
 
 #ifdef IMGUI_VERSION
-    if (!ImGui::Begin("Ricoh 2C02 PPU Layout", show_window)) {
-        ImGui::End();
-        return;
-    }
-
     ChipVisualization& renderer = GetGlobalChipRenderer();
     ChipLayout& layout = get_ppu_layout();
     std::vector<PinSignalState> pin_states = get_ppu_pin_states(ppu, &layout);
@@ -304,7 +286,5 @@ void nes_ppu_render_layout_window(nes_system::PPU* ppu, bool* show_window) {
     ImVec2 center = {cursor.x + size.x * 0.5f, cursor.y + size.y * 0.5f};
     ImGui::Dummy(size);
     renderer.render(layout, center, pin_states, "RP2C02");
-
-    ImGui::End();
 #endif
 }

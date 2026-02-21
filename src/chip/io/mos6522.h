@@ -130,7 +130,7 @@ extern chip_descriptor_t mos6522_descriptor;
 
 // GUI functions
 #ifdef IMGUI_VERSION
-void mos6522_render_debug_window(void* chip, bool* show_window);
-void mos6522_render_settings_window(void* chip, bool* show_window);
-void mos6522_render_layout_window(void* chip, bool* show_window);
+void mos6522_render_debug_content(void* chip);
+void mos6522_render_settings_content(void* chip);
+void mos6522_render_layout_content(void* chip);
 #endif

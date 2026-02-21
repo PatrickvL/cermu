@@ -166,14 +166,8 @@ static void initialize_nes6502_descriptor() {
   nes6502_base_descriptor.bank_change =
       nullptr; // Basic CPU doesn't have banking
 #ifdef IMGUI_VERSION
-  nes6502_base_descriptor.render_debug_window = [](void *cpu_handle,
-                                                   bool *show_window) {
-    render_cpu_debug_window_impl(cpu_handle, "NES 6502");
-  };
-  nes6502_base_descriptor.render_settings_window = [](void *cpu_handle,
-                                                      bool *show_window) {
-    render_cpu_settings_window_impl(cpu_handle, "NES 6502");
-  };
+  nes6502_base_descriptor.render_debug_window = NULL;
+  nes6502_base_descriptor.render_settings_window = NULL;
 #endif
 }
 

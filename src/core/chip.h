@@ -35,13 +35,15 @@ public:
     // --- Identity ---
     virtual ChipIdentity chip_identity() const = 0;
 
-    // --- GUI capabilities (optional — defaults to no windows) ---
-    virtual bool has_debug_window() const { return false; }
-    virtual bool has_settings_window() const { return false; }
-    virtual bool has_layout_window() const { return false; }
-    virtual void render_debug_window(bool* show) { (void)show; }
-    virtual void render_settings_window(bool* show) { (void)show; }
-    virtual void render_layout_window(bool* show) { (void)show; }
+    // --- GUI content rendering (optional — defaults to nothing) ---
+    // Content-only: renders chip info WITHOUT ImGui::Begin/End window framing.
+    // The caller (Hardware menu submenu or detached window) provides the window.
+    virtual bool has_debug_content() const { return false; }
+    virtual bool has_settings_content() const { return false; }
+    virtual bool has_layout_content() const { return false; }
+    virtual void render_debug_content() {}
+    virtual void render_settings_content() {}
+    virtual void render_layout_content() {}
 };
 
 // ============================================================================
@@ -55,14 +57,14 @@ public:
 class CChipAdapter : public ChipBase {
     void* chip_ptr_;
     ChipIdentity identity_;
-    std::function<void(bool*)> debug_fn_;
-    std::function<void(bool*)> settings_fn_;
-    std::function<void(bool*)> layout_fn_;
+    std::function<void()> debug_fn_;
+    std::function<void()> settings_fn_;
+    std::function<void()> layout_fn_;
 public:
     CChipAdapter(void* chip, ChipIdentity identity,
-                 std::function<void(bool*)> debug_fn = nullptr,
-                 std::function<void(bool*)> settings_fn = nullptr,
-                 std::function<void(bool*)> layout_fn = nullptr)
+                 std::function<void()> debug_fn = nullptr,
+                 std::function<void()> settings_fn = nullptr,
+                 std::function<void()> layout_fn = nullptr)
         : chip_ptr_(chip)
         , identity_(identity)
         , debug_fn_(std::move(debug_fn))
@@ -70,12 +72,12 @@ public:
         , layout_fn_(std::move(layout_fn)) {}
 
     ChipIdentity chip_identity() const override { return identity_; }
-    bool has_debug_window() const override { return !!debug_fn_; }
-    bool has_settings_window() const override { return !!settings_fn_; }
-    bool has_layout_window() const override { return !!layout_fn_; }
-    void render_debug_window(bool* show) override { if (debug_fn_) debug_fn_(show); }
-    void render_settings_window(bool* show) override { if (settings_fn_) settings_fn_(show); }
-    void render_layout_window(bool* show) override { if (layout_fn_) layout_fn_(show); }
+    bool has_debug_content() const override { return !!debug_fn_; }
+    bool has_settings_content() const override { return !!settings_fn_; }
+    bool has_layout_content() const override { return !!layout_fn_; }
+    void render_debug_content() override { if (debug_fn_) debug_fn_(); }
+    void render_settings_content() override { if (settings_fn_) settings_fn_(); }
+    void render_layout_content() override { if (layout_fn_) layout_fn_(); }
 
     /// Access the underlying C-struct chip pointer.
     void* raw_chip() const { return chip_ptr_; }

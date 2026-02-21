@@ -423,43 +423,50 @@ void SystemGUI::render_menu_bar() {
         ImGui::EndMenu();
     }
     
-    // Hardware menu — chip layout/debug/settings windows (from registered_chips_)
+    // Hardware menu — chip submenus with live preview + detach-to-window
     if (system_) {
         auto& chips = system_->get_registered_chips();
         if (!chips.empty()) {
             if (ImGui::BeginMenu("Hardware")) {
-                // Flat list: each chip gets a separator header, then toggleable
-                // items for Layout, Debug, and Settings windows.
                 for (size_t i = 0; i < chips.size(); i++) {
                     auto& sc = chips[i];
-                    bool has_layout   = sc.chip && sc.chip->has_layout_window();
-                    bool has_debug    = sc.chip && sc.chip->has_debug_window();
-                    bool has_settings = sc.chip && sc.chip->has_settings_window();
+                    bool has_content = sc.chip && (
+                        sc.chip->has_debug_content() ||
+                        sc.chip->has_layout_content() ||
+                        sc.chip->has_settings_content());
 
-                    // Skip chips with no windows at all
-                    if (!has_layout && !has_debug && !has_settings) continue;
-
-                    ImGui::SeparatorText(sc.display_name);
+                    if (!has_content) {
+                        ImGui::TextDisabled("%s", sc.display_name);
+                        continue;
+                    }
 
                     ImGui::PushID(static_cast<int>(i));
 
-                    if (has_layout) {
-                        bool layout_on = sc.show_layout;
-                        if (ImGui::MenuItem("Layout", nullptr, layout_on)) {
-                            sc.show_layout = !layout_on;
+                    // Each chip with content opens as a submenu on hover,
+                    // showing combined layout+debug+settings inline.
+                    if (ImGui::BeginMenu(sc.display_name)) {
+                        if (sc.chip->has_debug_content()) {
+                            sc.chip->render_debug_content();
+                        } else if (sc.chip->has_layout_content()) {
+                            sc.chip->render_layout_content();
                         }
-                    }
-                    if (has_debug) {
-                        bool debug_on = sc.show_debug;
-                        if (ImGui::MenuItem("Debug", nullptr, debug_on)) {
-                            sc.show_debug = !debug_on;
+
+                        if (sc.chip->has_settings_content()) {
+                            ImGui::Separator();
+                            if (ImGui::CollapsingHeader("Settings")) {
+                                sc.chip->render_settings_content();
+                            }
                         }
-                    }
-                    if (has_settings) {
-                        bool settings_on = sc.show_settings;
-                        if (ImGui::MenuItem("Settings", nullptr, settings_on)) {
-                            sc.show_settings = !settings_on;
+
+                        ImGui::Separator();
+                        if (sc.show_detached) {
+                            ImGui::TextDisabled("(already detached)");
+                        } else if (ImGui::Button("Detach Window")) {
+                            sc.show_detached = 1;
+                            ImGui::CloseCurrentPopup();
                         }
+
+                        ImGui::EndMenu();
                     }
 
                     ImGui::PopID();

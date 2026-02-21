@@ -246,9 +246,7 @@ struct SystemChip {
     uint16_t base_address;       // Memory-mapped base address (0 if N/A)
 
     // GUI toggle state (managed by the GUI layer)
-    uint8_t show_debug    = 0;
-    uint8_t show_settings = 0;
-    uint8_t show_layout   = 0;
+    uint8_t show_detached = 0;   // Detached combined window (layout+debug+settings)
 };
 
 /**
