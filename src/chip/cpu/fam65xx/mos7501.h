@@ -89,8 +89,10 @@ uint8_t mos7501_get_io_data(mos7501_t *cpu);
 uint8_t mos7501_get_io_input(mos7501_t *cpu);
 void mos7501_set_io_input(mos7501_t *cpu, uint8_t value);
 
-// Set the context pointer passed to the bank_change callback.
-void mos7501_set_bank_change_context(mos7501_t *cpu, void* context);
+// Set the bank-change callback and context for memory banking.
+void mos7501_set_bank_change(mos7501_t *cpu,
+                             void(*fn)(void*, uint8_t),
+                             void* context);
 
 // Global descriptor for chip registration
 extern chip_descriptor_t mos7501_descriptor;

@@ -95,7 +95,6 @@ struct ChipDescriptor {
     void* (*create)(ChipDescriptor* desc);  // Create chip instance
     void (*destroy)(void* chip);            // Destroy chip instance
     void (*bus_attach)(void* chip, void* bus);     // Bus attachment (nullable)
-    void (*bank_change)(void* chip, std::uint8_t bank);  // Bank change (nullable)
 };
 
 /// Chip registry entry for legacy System8Bit.

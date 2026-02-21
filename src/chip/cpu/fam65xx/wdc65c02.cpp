@@ -100,7 +100,6 @@ static void initialize_wdc65c02_descriptor() {
     wdc65c02_destroy(reinterpret_cast<wdc65c02_t *>(chip));
   };
   wdc65c02_base_descriptor.bus_attach = nullptr;
-  wdc65c02_base_descriptor.bank_change = nullptr;
 }
 
 const chip_descriptor_t *wdc65c02_get_chip_descriptor(void) {

@@ -163,8 +163,6 @@ static void initialize_nes6502_descriptor() {
   };
   nes6502_base_descriptor.bus_attach =
       nullptr; // Basic CPU doesn't need bus attach
-  nes6502_base_descriptor.bank_change =
-      nullptr; // Basic CPU doesn't have banking
 }
 
 const chip_descriptor_t *nes6502_get_chip_descriptor(void) {

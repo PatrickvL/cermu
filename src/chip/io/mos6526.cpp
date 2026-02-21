@@ -926,8 +926,7 @@ chip_descriptor_t mos6526_descriptor = {
     .description = "MOS6526 CIA Complex Interface Adapter",
     .create = [](chip_descriptor_t*) -> void* { return mos6526_create(); },
     .destroy = [](void* chip) { mos6526_destroy(static_cast<mos6526_t*>(chip)); },
-    .bus_attach = NULL,
-    .bank_change = NULL
+    .bus_attach = NULL
 };
 
 /**

@@ -8,8 +8,7 @@ chip_descriptor_t mos6522_descriptor = {
     .description = "MOS6522 VIA Versatile Interface Adapter",
     .create = [](chip_descriptor_t*) -> void* { return mos6522_create(); },
     .destroy = [](void* chip) { mos6522_destroy(static_cast<mos6522_t*>(chip)); },
-    .bus_attach = (void (*)(void *, void *))mos6522_bus_attach,
-    .bank_change = NULL
+    .bus_attach = (void (*)(void *, void *))mos6522_bus_attach
 };
 
 mos6522_t* mos6522_create() {

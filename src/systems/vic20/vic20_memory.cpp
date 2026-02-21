@@ -167,8 +167,7 @@ chip_descriptor_t vic20_memory_descriptor = {
     /* description */ "VIC-20 Memory System",
     /* create */ vic20_memory_chip_create,
     /* destroy */ vic20_memory_chip_destroy,
-    /* bus_attach */ NULL,
-    /* bank_change */ NULL
+    /* bus_attach */ NULL
 };
 
 vic20_memory_t* vic20_memory_create(uint8_t expansion_flags, bool cartridge_present) {

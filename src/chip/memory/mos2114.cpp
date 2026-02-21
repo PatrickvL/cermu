@@ -78,6 +78,5 @@ chip_descriptor_t mos2114_descriptor = {
     .description = "MOS2114 Color RAM (1K x 4-bit)",
     .create = [](chip_descriptor_t*) -> void* { return mos2114_create(); },
     .destroy = [](void* chip) { mos2114_destroy(static_cast<mos2114_t*>(chip)); },
-    .bus_attach = NULL,
-    .bank_change = NULL
+    .bus_attach = NULL
 };

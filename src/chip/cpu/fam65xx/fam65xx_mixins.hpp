@@ -38,9 +38,12 @@ template <const CPUTraits &Traits> struct io_port_mixin_t {
     uint8_t _padding;  // Align to 4 bytes
   } io_port;
 
-  // Chip descriptor pointer - needed to call bank_change callback
-  chip_descriptor_t* descriptor = nullptr;
-  void* chip_instance = nullptr;
+  // Typed bank-change callback — replaces legacy chip_descriptor_t* indirection.
+  // Called when I/O port banking bits (0-2) change. Context is typically the
+  // system struct (e.g. c64_t*) so the callback can reconfigure the PLA.
+  using bank_change_fn_t = void(*)(void* context, uint8_t banking_bits);
+  bank_change_fn_t bank_change_fn = nullptr;
+  void*            bank_change_ctx = nullptr;
 
   // Initialize I/O port to C64 defaults
   void init_io_port() {
@@ -53,10 +56,10 @@ template <const CPUTraits &Traits> struct io_port_mixin_t {
   void write_io_ddr(uint8_t value) {
     uint8_t old_direction = io_port.direction;
     io_port.direction = value;
-    // If DDR changes affect banking bits (0-2), notify via descriptor's bank_change
-    if (((old_direction ^ value) & 0x07) && descriptor && descriptor->bank_change) {
+    // If DDR changes affect banking bits (0-2), notify via bank_change callback
+    if (((old_direction ^ value) & 0x07) && bank_change_fn) {
       uint8_t banking_bits = io_port.data & io_port.direction & 0x07;
-      descriptor->bank_change(chip_instance, banking_bits);
+      bank_change_fn(bank_change_ctx, banking_bits);
     }
   }
 
@@ -64,11 +67,11 @@ template <const CPUTraits &Traits> struct io_port_mixin_t {
   void write_io_data(uint8_t value) {
     uint8_t old_data = io_port.data;
     io_port.data = value;
-    // If banking bits (0-2) changed, notify via descriptor's bank_change
+    // If banking bits (0-2) changed, notify via bank_change callback
     if ((old_data ^ value) & 0x07) {
       uint8_t banking_bits = value & io_port.direction & 0x07;
-      if (descriptor && descriptor->bank_change) {
-        descriptor->bank_change(chip_instance, banking_bits);
+      if (bank_change_fn) {
+        bank_change_fn(bank_change_ctx, banking_bits);
       }
     }
   }

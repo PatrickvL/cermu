@@ -139,8 +139,6 @@ static void initialize_mos6502_descriptor() {
   };
   mos6502_base_descriptor.bus_attach =
       nullptr; // Basic CPU doesn't need bus attach
-  mos6502_base_descriptor.bank_change =
-      nullptr; // Basic CPU doesn't have banking
 }
 
 const chip_descriptor_t *mos6502_get_chip_descriptor(void) {

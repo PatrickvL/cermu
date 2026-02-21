@@ -40,6 +40,5 @@ chip_descriptor_t rom_descriptor = {
     .description = "ROM Chip (Read-Only Memory)",
     .create = [](chip_descriptor_t*) -> void* { return rom_create(); },
     .destroy = [](void* chip) { rom_destroy(static_cast<rom_t*>(chip)); },
-    .bus_attach = NULL,
-    .bank_change = NULL
+    .bus_attach = NULL
 };

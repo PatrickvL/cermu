@@ -236,8 +236,7 @@ chip_descriptor_t c64_bus_descriptor = {
     /* description */ "C64 System Bus Controller",
     /* create */ c64_bus_system_create,
     /* destroy */ c64_bus_system_destroy,
-    /* bus_attach */ NULL,
-    /* bank_change */ NULL
+    /* bus_attach */ NULL
 };
 
 void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {

@@ -416,8 +416,8 @@ bool C64System::initialize() {
     c64_->cia2->port_a_callback_context = c64_;
     cia2_port_a_bank_callback(c64_, c64_->cia2->port_a_value);  // Set initial bank
 
-    // CPU I/O port → PLA memory banking
-    mos6510_descriptor.bank_change = cpu_banking_callback;
+    // CPU I/O port → PLA memory banking (per-instance, no global descriptor mutation)
+    // (callback is set on the CPU instance, not on a shared descriptor)
 
     // NOTE: CIA1 keyboard callbacks are NOT set here — setup_connector_ports()
     // installs joystick-aware versions that supersede the basic ones.
@@ -428,7 +428,8 @@ bool C64System::initialize() {
     // Initialize CPU and point it at the reset vector
     mos6510_desc_t cpu_desc = {};
     mos6510_init(static_cast<mos6510_t*>(c64_->mos6510), &cpu_desc);
-    mos6510_set_bank_change_context(static_cast<mos6510_t*>(c64_->mos6510), c64_);
+    mos6510_set_bank_change(static_cast<mos6510_t*>(c64_->mos6510),
+                            cpu_banking_callback, c64_);
 
     uint16_t reset_vector = c64_read_kernal_reset_vector(&c64_->bus);
     mos6510_set_pc(static_cast<mos6510_t*>(c64_->mos6510), reset_vector);
@@ -534,7 +535,8 @@ void C64System::reset() {
         if (c64_->mos6510) {
             mos6510_desc_t cpu_desc = {};
             mos6510_init((mos6510_t*)c64_->mos6510, &cpu_desc);
-            mos6510_set_bank_change_context((mos6510_t*)c64_->mos6510, c64_);
+            mos6510_set_bank_change((mos6510_t*)c64_->mos6510,
+                                    cpu_banking_callback, c64_);
 
             uint16_t reset_vector = c64_read_kernal_reset_vector(&c64_->bus);
             mos6510_set_pc((mos6510_t*)c64_->mos6510, reset_vector);
