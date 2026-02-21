@@ -250,77 +250,87 @@ typedef struct voice_s {
     mos6581_t* sid;
 } voice_t;
 
-// Main SID chip structure - Enhanced
-typedef struct mos6581_s {
-    // Chip descriptor must be first
-    chip_descriptor_t* desc;
+// Main SID chip structure - Enhanced (C++ class inheriting ChipBase)
+typedef struct mos6581_s : public ChipBase {
 
     // Bus interface
-    bus_cycle_ops_t bus_interface;
+    bus_cycle_ops_t bus_interface = {};
 
     // SID register array
-    uint8_t regs[SID_REGS_SIZE];
-    uint8_t bus_value;                // Last bus value for read-only registers
+    uint8_t regs[SID_REGS_SIZE] = {};
+    uint8_t bus_value = 0;            // Last bus value for read-only registers
 
     // Three voices with cross-references
-    voice_t voice1;
-    voice_t voice2;
-    voice_t voice3;
-    voice_t* voices[3];               // Array for easy iteration
+    voice_t voice1 = {};
+    voice_t voice2 = {};
+    voice_t voice3 = {};
+    voice_t* voices[3] = {nullptr, nullptr, nullptr};  // Array for easy iteration
 
     // Filter state
-    filter_state_t filter_state;
-    uint16_t filter_cutoff_frequency; // Filter cutoff frequency (CUTLO/CUTHI)
+    filter_state_t filter_state = {};
+    uint16_t filter_cutoff_frequency = 0; // Filter cutoff frequency (CUTLO/CUTHI)
     // Decoded fields for RESON and SIGVOL registers are read from
     // regs[SID_REG_RESON] / regs[SID_REG_SIGVOL] at sample-rate;
     // no pre-decoded copies needed.
 
     // Timing and sample generation
-    uint32_t cycle_count;             // Cycle counter
-    uint32_t subcycle_count;          // Sub-cycle counter
-    bool pal_timing;                  // PAL (true) vs NTSC (false) timing
-    float sample_rate;                // Output sample rate
-    float sid_rate;                   // Internal SID update rate
+    uint32_t cycle_count = 0;         // Cycle counter
+    uint32_t subcycle_count = 0;      // Sub-cycle counter
+    bool pal_timing = false;          // PAL (true) vs NTSC (false) timing
+    float sample_rate = 0.0f;         // Output sample rate
+    float sid_rate = 0.0f;            // Internal SID update rate
     
     // Sample output
-    ring_buffer_t sample_buffer;      // Ring buffer for samples
+    ring_buffer_t sample_buffer = {}; // Ring buffer for samples
     
     // Chip revision and features
-    sid_revision_t revision;          // SID chip revision
-    bool enable_filter;               // Filter enable flag
-    bool enable_distortion;           // Distortion enable (6581 specific)
-    bool enable_digiboost;            // Digital boost for 4-bit samples
+    sid_revision_t revision = SID_REVISION_6581_R4AR; // SID chip revision
+    bool enable_filter = false;       // Filter enable flag
+    bool enable_distortion = false;   // Distortion enable (6581 specific)
+    bool enable_digiboost = false;    // Digital boost for 4-bit samples
     
     // Volume bug state (6581 specific)
-    bool volume_change_click;         // Volume change click flag
-    float volume_click_amplitude;     // Click amplitude
-    uint32_t volume_click_counter;    // Click duration counter
+    bool volume_change_click = false; // Volume change click flag
+    float volume_click_amplitude = 0.0f; // Click amplitude
+    uint32_t volume_click_counter = 0;   // Click duration counter
     
     // External input
-    float external_input;             // External audio input level
+    float external_input = 0.0f;      // External audio input level
     
     // POT interface
-    uint8_t pot_x_value;              // POT X value
-    uint8_t pot_y_value;              // POT Y value
+    uint8_t pot_x_value = 0;          // POT X value
+    uint8_t pot_y_value = 0;          // POT Y value
     
     // Fractional sample accumulator for cycle-accurate output
-    double sample_accumulator;        // Fractional accumulator for sample generation
-    float cpu_clock;                  // CPU clock frequency (e.g. 985248 for PAL)
+    double sample_accumulator = 0.0;  // Fractional accumulator for sample generation
+    float cpu_clock = 0.0f;           // CPU clock frequency (e.g. 985248 for PAL)
     
     // Per-cycle filter output accumulation for anti-aliased downsampling.
     // The filter runs every CPU cycle (~1 MHz); the accumulated output is
     // averaged at sample time (~44.1 kHz) for band-limited resampling.
-    double output_acc;                // Accumulated post-filter mixed output
-    uint32_t sample_cycle_count;      // Cycles accumulated since last sample
+    double output_acc = 0.0;          // Accumulated post-filter mixed output
+    uint32_t sample_cycle_count = 0;  // Cycles accumulated since last sample
     
     // DC blocker state for clean audio output (removes constant DC,
     // preserves fast changes for volume-register digi playback)
-    float dc_blocker_prev_in;         // Previous input to DC blocker
-    float dc_blocker_prev_out;        // Previous output from DC blocker
+    float dc_blocker_prev_in = 0.0f;  // Previous input to DC blocker
+    float dc_blocker_prev_out = 0.0f; // Previous output from DC blocker
     
     // Statistics and debugging
-    uint32_t total_cycles;            // Total cycles processed
-    uint32_t samples_generated;       // Total samples generated
+    uint32_t total_cycles = 0;        // Total cycles processed
+    uint32_t samples_generated = 0;   // Total samples generated
+
+    // Destructor — cleans up ring buffer
+    ~mos6581_s() override;
+
+    // ChipBase interface
+    ChipIdentity chip_identity() const override;
+    bool has_debug_content() const override { return true; }
+    bool has_settings_content() const override { return true; }
+    bool has_layout_content() const override { return true; }
+    void render_debug_content() override;
+    void render_settings_content() override;
+    void render_layout_content() override;
     
 } mos6581_t;
 
@@ -353,8 +363,9 @@ extern chip_descriptor_t mos6581_descriptor;
 mos6581_t* mos6581_create();
 void mos6581_destroy(mos6581_t* sid);
 
-#ifdef IMGUI_VERSION
-// GUI function declarations
-void mos6581_render_debug_window(void* chip, bool* show_window);
-void mos6581_render_settings_window(void* chip, bool* show_window);
-#endif
+// Legacy GUI wrappers (deprecated — use ChipBase virtual methods)
+extern "C" {
+void mos6581_render_debug_content(void* chip);
+void mos6581_render_settings_content(void* chip);
+void mos6581_render_layout_content(void* chip);
+}

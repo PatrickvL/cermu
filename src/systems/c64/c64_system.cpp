@@ -24,9 +24,9 @@
 #include "../../chip/video/vic_ii/vicii_gui.h"
 // MOS6526 is a native C++ ChipBase — no separate GUI header needed
 // MOS2114 is a native C++ ChipBase — no separate GUI header needed
+// MOS6581 is a native C++ ChipBase — no separate GUI header needed
 #include "../../chip/logic/pla.h"
 #include "../../chip/logic/pla_gui.h"
-#include "../../chip/sound/mos6581_gui.h"
 #include "../../core/chip.h"
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
@@ -322,7 +322,7 @@ bool C64System::initialize() {
         delete c64_->cia2;
         delete c64_->cia1;
         delete c64_->colorram;
-        mos6581_destroy(c64_->sid);
+        delete c64_->sid;
         vicii_destroy(c64_->vicii);
         rom_destroy(c64_->charrom);
         rom_destroy(c64_->cartridge_romh);
@@ -353,7 +353,7 @@ bool C64System::initialize() {
     if (!(c64_->cartridge_romh = rom_create_with_size(8192))) { cleanup(); return false; }
     if (!(c64_->charrom = rom_create_with_size(4096))) { cleanup(); return false; }
     if (!(c64_->vicii = (c64_config_.vicii_standard == VIC_PAL) ? mos6569_create() : mos6567_create())) { cleanup(); return false; }
-    if (!(c64_->sid = mos6581_create())) { cleanup(); return false; }
+    c64_->sid = mos6581_create();
 
     // Configure SID timing to match C64 CPU clock
     {
@@ -494,7 +494,7 @@ void C64System::shutdown() {
         delete c64_->cia2;
         delete c64_->cia1;
         delete c64_->colorram;
-        mos6581_destroy(c64_->sid);
+        delete c64_->sid;
         vicii_destroy(c64_->vicii);
         rom_destroy(c64_->charrom);
         rom_destroy(c64_->cartridge_romh);
@@ -1216,18 +1216,13 @@ void C64System::register_c64_chips() {
         [vicii]() { vicii_gui_render_layout_content(vicii); }),
         "VIC-II (MOS 6569/6567)", "VIC-II", "Video", 0xD000);
 
-    // SID
-    register_chip(std::make_unique<CChipAdapter>(
-        sid, ChipIdentity{"MOS6581", "MOS Technology"},
-        [sid]() { mos6581_render_debug_content(sid); },
-        [sid]() { mos6581_render_settings_content(sid); },
-        [sid]() { mos6581_render_layout_content(sid); }),
+    // SID — MOS6581 is a native C++ ChipBase, register directly
+    register_chip(sid,
         "SID (MOS 6581/8580)", "SID", "Audio", 0xD400);
 
     // CIA 1 — MOS6526 is a native C++ ChipBase, register directly
     register_chip(cia1,
         "CIA 1 (MOS 6526)", "CIA 1", "I/O", 0xDC00);
-
     // CIA 2
     register_chip(cia2,
         "CIA 2 (MOS 6526)", "CIA 2", "I/O", 0xDD00);
