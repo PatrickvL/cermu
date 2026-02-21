@@ -9,7 +9,6 @@
 
 // MOS 6522 VIA (Versatile Interface Adapter) chip structure
 typedef struct {
-    chip_descriptor_t* desc;
     void* bus;
 
     // Registers
@@ -113,8 +112,8 @@ typedef struct {
 #define MOS6522_PCR_CB1_IN   0x01
 
 // Function declarations
-void* mos6522_create(chip_descriptor_t* desc);
-void mos6522_destroy(void* chip);
+mos6522_t* mos6522_create();
+void mos6522_destroy(mos6522_t* via);
 void mos6522_reset(mos6522_t* via);
 void mos6522_bus_attach(void* chip, void* bus);
 bus_state_t mos6522_tick(void* chip, bus_state_t bus_state);

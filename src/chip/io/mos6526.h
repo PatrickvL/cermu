@@ -229,4 +229,8 @@ void mos6526_render_settings_window(void* chip, bool* show_window);
 
 extern chip_descriptor_t mos6526_descriptor;
 
+// Typed lifecycle functions
+mos6526_t* mos6526_create();
+void mos6526_destroy(mos6526_t* cia);
+
 

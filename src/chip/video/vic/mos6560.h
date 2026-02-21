@@ -17,8 +17,8 @@ typedef struct {
 extern chip_descriptor_t mos6560_descriptor;
 
 // Function prototypes
-void* mos6560_create(chip_descriptor_t* desc);
-void mos6560_destroy(void* chip);
+mos6560_t* mos6560_create();
+void mos6560_destroy(mos6560_t* vic);
 bus_state_t mos6560_tick(void* chip, bus_state_t bus_state);
 void mos6560_bus_attach(void* chip, void* bus);
 void mos6560_set_framebuffer(mos6560_t* vic, uint32_t* framebuffer, int width, int height);

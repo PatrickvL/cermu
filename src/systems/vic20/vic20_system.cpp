@@ -283,9 +283,13 @@ VIC20System::~VIC20System() {
         cpu_ = nullptr;
     }
     
-    // Destroy VIC chip (both mos6560_t and mos6561_t start with vic_base_t)
+    // Destroy VIC chip — dispatch to correct typed destructor
     if (vic_) {
-        free(vic_);
+        if (vic_->is_pal) {
+            mos6561_destroy(reinterpret_cast<mos6561_t*>(vic_));
+        } else {
+            mos6560_destroy(reinterpret_cast<mos6560_t*>(vic_));
+        }
         vic_ = nullptr;
     }
     
@@ -558,17 +562,8 @@ bool VIC20System::initialize() {
         return false;
     }
     
-    // Create enhanced descriptor with memory callbacks
-    fam65xx_chip_descriptor_t* cpu_desc = mos6502_create_descriptor(
-        cpu_read,
-        cpu_write,
-        this  // user_data points to this VIC20System instance
-    );
-    
-    if (cpu_desc) {
-        mos6502_init_enhanced(cpu_, cpu_desc);
-        mos6502_destroy_descriptor(cpu_desc);
-    }
+    // Initialize CPU (descriptor-free — memory I/O is handled via bus_state_t pins)
+    mos6502_init(cpu_, nullptr);
     
     // Reset CPU to initialize state
     mos6502_reset(cpu_, 0);
@@ -585,11 +580,11 @@ bool VIC20System::initialize() {
     // Create VIC chip — region-aware: MOS6561 for PAL, MOS6560 for NTSC
     bool is_pal_region = (config_.region_option_index <= 0);
     if (is_pal_region) {
-        mos6561_t* v = (mos6561_t*)mos6561_create(&mos6561_descriptor);
+        mos6561_t* v = mos6561_create();
         vic_ = v ? &v->base : nullptr;
         if (vic_) printf("VIC20: Created MOS6561 (PAL) VIC chip\n");
     } else {
-        mos6560_t* v = (mos6560_t*)mos6560_create(&mos6560_descriptor);
+        mos6560_t* v = mos6560_create();
         vic_ = v ? &v->base : nullptr;
         if (vic_) printf("VIC20: Created MOS6560 (NTSC) VIC chip\n");
     }
@@ -611,7 +606,7 @@ bool VIC20System::initialize() {
     // Create VIA chips (MOS6522)
     // VIC-20 hardware: VIA1 ($9110) → NMI line, VIA2 ($9120) → IRQ line
     // VIA2 Timer 1 is the system heartbeat (jiffy clock, keyboard scan, cursor blink)
-    via1_ = (mos6522_t*)mos6522_create(&mos6522_descriptor);
+    via1_ = mos6522_create();
     if (via1_) {
         via1_->interrupt_line = BUS_MASK_NMI;
         memory_->via1_chip = via1_;
@@ -619,7 +614,7 @@ bool VIC20System::initialize() {
         printf("VIC20: Failed to create VIA1\n");
     }
     
-    via2_ = (mos6522_t*)mos6522_create(&mos6522_descriptor);
+    via2_ = mos6522_create();
     if (via2_) {
         via2_->interrupt_line = BUS_MASK_IRQ;
         memory_->via2_chip = via2_;

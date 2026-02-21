@@ -391,7 +391,7 @@ static inline void* create_and_register_chip(c64_t* c64, chip_descriptor_t* desc
 
     // Special handling for ROM - allocate memory based on requested size before registration
     if (desc == &rom_descriptor) {
-        chip = rom_system_create_with_size(desc, size);
+        chip = rom_create_with_size(size);
     } else {
         chip = desc->create(desc);
     }

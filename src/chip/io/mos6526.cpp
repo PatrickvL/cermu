@@ -74,10 +74,10 @@ void mos6526_reset(mos6526_t* cia) {
     }
 }
 
-void* mos6526_system_create(chip_descriptor_t* desc) {
+mos6526_t* mos6526_create() {
     mos6526_t* cia = (mos6526_t*)calloc(1, sizeof(mos6526_t));
     if (!cia) return NULL;
-    cia->desc = desc;
+    cia->desc = &mos6526_descriptor;
     cia->configured_interrupt_bit = BUS_IRQ_BIT; // Default to IRQ; caller must set to NMI for CIA2
     // Constructor equivalent - set up cycles for TOD
     // Used when CRA_TODIN = 0 (60 Hz TOD pin input pulses)
@@ -99,8 +99,8 @@ void* mos6526_system_create(chip_descriptor_t* desc) {
     return cia;
 }
 
-void mos6526_system_destroy(void* chip) {
-    free(chip);
+void mos6526_destroy(mos6526_t* cia) {
+    free(cia);
 }
 
 // INTERRUPT CONTROL REGISTER (ICR) handling
@@ -924,8 +924,8 @@ bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state) {
 
 chip_descriptor_t mos6526_descriptor = {
     .description = "MOS6526 CIA Complex Interface Adapter",
-    .create = mos6526_system_create,
-    .destroy = mos6526_system_destroy,
+    .create = [](chip_descriptor_t*) -> void* { return mos6526_create(); },
+    .destroy = [](void* chip) { mos6526_destroy(static_cast<mos6526_t*>(chip)); },
     .bus_attach = NULL,
     .bank_change = NULL
 };

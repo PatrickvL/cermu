@@ -49,21 +49,6 @@ bus_state_t mos6502_init(mos6502_t *cpu, const chip_descriptor_t *desc) {
   return CPU_CAST(mos6502_cpu_t, cpu)->init(desc);
 }
 
-bus_state_t
-mos6502_init_enhanced(mos6502_t *cpu,
-                      const fam65xx_chip_descriptor_t *enhanced_desc) {
-  auto *cpu_impl = CPU_CAST(mos6502_cpu_t, cpu);
-
-  // Initialize with base descriptor first
-  bus_state_t result = cpu_impl->init(&enhanced_desc->base);
-
-  // TODO: Memory callbacks API has been removed in PHI2/PHI1 refactoring
-  // Memory access is now handled through bus_state_t pins interface
-  // If memory callbacks are needed, they should be implemented at bus level
-
-  return result;
-}
-
 bus_state_t mos6502_bootstrap(mos6502_t *cpu, bus_state_t pins) {
   return CPU_CAST(mos6502_cpu_t, cpu)->bootstrap(pins);
 }
@@ -156,24 +141,6 @@ static void initialize_mos6502_descriptor() {
       nullptr; // Basic CPU doesn't need bus attach
   mos6502_base_descriptor.bank_change =
       nullptr; // Basic CPU doesn't have banking
-}
-
-fam65xx_chip_descriptor_t *mos6502_create_descriptor(
-    uint8_t (*read_callback)(void *user_data, uint32_t addr, uint8_t bus_state),
-    void (*write_callback)(void *user_data, uint32_t addr, uint8_t data),
-    void *user_data) {
-
-  auto *desc = new fam65xx_chip_descriptor_t;
-  desc->base = *mos6502_get_chip_descriptor();
-  desc->mem_read = read_callback;
-  desc->mem_write = write_callback;
-  desc->mem_user_data = user_data;
-
-  return desc;
-}
-
-void mos6502_destroy_descriptor(fam65xx_chip_descriptor_t *desc) {
-  delete desc;
 }
 
 const chip_descriptor_t *mos6502_get_chip_descriptor(void) {

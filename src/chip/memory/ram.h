@@ -16,3 +16,7 @@ void ram_render_settings_window(void* chip, bool* show_window);
 
 extern chip_descriptor_t ram_descriptor;
 
+// Typed lifecycle functions
+ram_t* ram_create();
+void ram_destroy(ram_t* ram);
+

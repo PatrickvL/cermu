@@ -205,17 +205,8 @@ bool Apple1System::initialize() {
         return false;
     }
     
-    // Create enhanced descriptor with memory callbacks
-    fam65xx_chip_descriptor_t* cpu_desc = mos6502_create_descriptor(
-        cpu_read,
-        cpu_write,
-        this  // user_data points to this Apple1System instance
-    );
-    
-    if (cpu_desc) {
-        mos6502_init_enhanced(cpu_, cpu_desc);
-        mos6502_destroy_descriptor(cpu_desc);
-    }
+    // Initialize CPU (descriptor-free — memory I/O is handled via bus_state_t pins)
+    mos6502_init(cpu_, nullptr);
     
     // Reset CPU to initialize state
     mos6502_reset(cpu_, 0);

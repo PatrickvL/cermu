@@ -7,8 +7,8 @@
 // VIC-6560 chip descriptor
 chip_descriptor_t mos6560_descriptor = {
     .description = "MOS6560/6561 VIC Video Interface Controller",
-    .create = mos6560_create,
-    .destroy = mos6560_destroy,
+    .create = [](chip_descriptor_t*) -> void* { return mos6560_create(); },
+    .destroy = [](void* chip) { mos6560_destroy(static_cast<mos6560_t*>(chip)); },
     .bus_attach = (void (*)(void *, void *))mos6560_bus_attach,
     .bank_change = NULL
 };
@@ -25,11 +25,10 @@ static const vic_chip_config_t vic_config_ntsc = {
     .is_pal = false
 };
 
-void* mos6560_create(chip_descriptor_t* desc) {
+mos6560_t* mos6560_create() {
     mos6560_t* vic = (mos6560_t*)calloc(1, sizeof(mos6560_t));
     if (!vic) return NULL;
 
-    vic->base.desc = desc;
     vic->base.is_pal = false;
     vic->base.clock_frequency = vic_config_ntsc.clock_frequency;
     vic->base.config = &vic_config_ntsc;
@@ -51,9 +50,8 @@ void* mos6560_create(chip_descriptor_t* desc) {
     return vic;
 }
 
-void mos6560_destroy(void* chip) {
-    if (!chip) return;
-    mos6560_t* vic = (mos6560_t*)chip;
+void mos6560_destroy(mos6560_t* vic) {
+    if (!vic) return;
     free(vic);
 }
 

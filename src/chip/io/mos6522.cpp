@@ -6,17 +6,15 @@
 // MOS6522 VIA chip descriptor
 chip_descriptor_t mos6522_descriptor = {
     .description = "MOS6522 VIA Versatile Interface Adapter",
-    .create = mos6522_create,
-    .destroy = mos6522_destroy,
+    .create = [](chip_descriptor_t*) -> void* { return mos6522_create(); },
+    .destroy = [](void* chip) { mos6522_destroy(static_cast<mos6522_t*>(chip)); },
     .bus_attach = (void (*)(void *, void *))mos6522_bus_attach,
     .bank_change = NULL
 };
 
-void* mos6522_create(chip_descriptor_t* desc) {
+mos6522_t* mos6522_create() {
     mos6522_t* via = (mos6522_t*)calloc(1, sizeof(mos6522_t));
     if (!via) return NULL;
-
-    via->desc = desc;
 
     // Initialize registers
     memset(via->registers, 0, sizeof(via->registers));
@@ -52,9 +50,8 @@ void* mos6522_create(chip_descriptor_t* desc) {
     return via;
 }
 
-void mos6522_destroy(void* chip) {
-    if (!chip) return;
-    mos6522_t* via = (mos6522_t*)chip;
+void mos6522_destroy(mos6522_t* via) {
+    if (!via) return;
     free(via);
 }
 

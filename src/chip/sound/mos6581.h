@@ -349,6 +349,10 @@ void mos6581_set_cpu_clock(mos6581_t* sid, float clock_hz);
 // Chip descriptor
 extern chip_descriptor_t mos6581_descriptor;
 
+// Typed lifecycle functions
+mos6581_t* mos6581_create();
+void mos6581_destroy(mos6581_t* sid);
+
 #ifdef IMGUI_VERSION
 // GUI function declarations
 void mos6581_render_debug_window(void* chip, bool* show_window);

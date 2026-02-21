@@ -2,18 +2,17 @@
 #include <string.h>
 #include <stdlib.h>
 
-void* ram_system_create(chip_descriptor_t* desc) {
+ram_t* ram_create() {
     ram_t* ram = (ram_t*)calloc(1, sizeof(ram_t));
     if (!ram) return NULL;
-    ram->desc = desc;
+    ram->desc = &ram_descriptor;
     // Note: memory pointer will be set later to point into unified buffer
     ram->memory = NULL;
     ram->owns_memory = false;  // Memory will be owned by unified buffer
     return ram;
 }
 
-void ram_system_destroy(void* context) {
-    ram_t* ram = (ram_t*)context;
+void ram_destroy(ram_t* ram) {
     if (!ram) return;
     // Only free memory if we own it (not pointing into unified buffer)
     if (ram->owns_memory && ram->memory) {
@@ -24,8 +23,8 @@ void ram_system_destroy(void* context) {
 
 chip_descriptor_t ram_descriptor = {
     .description = "System RAM",
-    .create = ram_system_create,
-    .destroy = ram_system_destroy,
+    .create = [](chip_descriptor_t*) -> void* { return ram_create(); },
+    .destroy = [](void* chip) { ram_destroy(static_cast<ram_t*>(chip)); },
     .bus_attach = NULL,
     .bank_change = NULL
 };

@@ -67,17 +67,6 @@ using fam65xx_mem_write_t = void (*)(void *user_data, uint32_t addr,
                                      uint8_t data);
 
 // ============================================================================
-// Enhanced Chip Descriptor (extends chip_descriptor_t for fam65xx CPUs)
-// ============================================================================
-
-typedef struct {
-  chip_descriptor_t base;        // Base chip descriptor
-  fam65xx_mem_read_t mem_read;   // Memory read callback
-  fam65xx_mem_write_t mem_write; // Memory write callback
-  void *mem_user_data;           // User data for memory callbacks
-} fam65xx_chip_descriptor_t;
-
-// ============================================================================
 // CPU Flags
 // ============================================================================
 
