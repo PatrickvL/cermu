@@ -137,11 +137,23 @@ static ChipLayout& get_ppu_layout() {
 }
 
 // ============================================================================
+// ChipBase interface implementation
+// ============================================================================
+
+ChipIdentity nes_system::PPU::chip_identity() const {
+    return {"RP2C02", "Ricoh"};
+}
+
+bool nes_system::PPU::has_debug_content()    const { return true; }
+bool nes_system::PPU::has_settings_content() const { return true; }
+bool nes_system::PPU::has_layout_content()   const { return true; }
+
+// ============================================================================
 // NES PPU GUI DEBUG WINDOW
 // ============================================================================
 
-void nes_ppu_render_debug_content(nes_system::PPU* ppu) {
-    if (!ppu) return;
+void nes_system::PPU::render_debug_content() {
+    auto* ppu = this;
 
 #ifdef IMGUI_VERSION
     // Two-column layout
@@ -247,8 +259,8 @@ void nes_ppu_render_debug_content(nes_system::PPU* ppu) {
 // NES PPU GUI SETTINGS
 // ============================================================================
 
-void nes_ppu_render_settings_content(nes_system::PPU* ppu) {
-    if (!ppu) return;
+void nes_system::PPU::render_settings_content() {
+    auto* ppu = this;
 
 #ifdef IMGUI_VERSION
 
@@ -273,12 +285,28 @@ void nes_ppu_render_settings_content(nes_system::PPU* ppu) {
 // NES PPU LAYOUT (standalone pinout diagram)
 // ============================================================================
 
-void nes_ppu_render_layout_content(nes_system::PPU* ppu) {
-    if (!ppu) return;
+void nes_system::PPU::render_layout_content() {
+    auto* ppu = this;
 
 #ifdef IMGUI_VERSION
     ChipLayout& layout = get_ppu_layout();
     std::vector<PinSignalState> pin_states = get_ppu_pin_states(ppu, &layout);
     render_chip_layout(layout, pin_states, "RP2C02");
 #endif
+}
+
+// ============================================================================
+// Backward-compatible free-function wrappers
+// ============================================================================
+
+void nes_ppu_render_debug_content(nes_system::PPU* ppu) {
+    if (ppu) ppu->render_debug_content();
+}
+
+void nes_ppu_render_settings_content(nes_system::PPU* ppu) {
+    if (ppu) ppu->render_settings_content();
+}
+
+void nes_ppu_render_layout_content(nes_system::PPU* ppu) {
+    if (ppu) ppu->render_layout_content();
 }
