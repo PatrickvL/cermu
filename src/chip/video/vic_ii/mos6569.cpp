@@ -9,7 +9,6 @@
 vicii_t* mos6569_create() {
     const vicii_chip_config_t* config = vicii_get_default_config(true); // PAL = true
     vicii_t* vicii = vicii_create(config, vicii_memory_bank_change);
-    if (vicii) vicii->desc = &mos6569_descriptor;
     return vicii;
 }
 
@@ -19,7 +18,7 @@ vicii_t* mos6569_create() {
 chip_descriptor_t mos6569_descriptor = {
     .description = "MOS6569 VIC-II Video Interface Chip (PAL)",
     .create      = [](chip_descriptor_t*) -> void* { return mos6569_create(); },
-    .destroy     = [](void* chip) { vicii_destroy(static_cast<vicii_t*>(chip)); },
+    .destroy     = [](void* chip) { delete static_cast<vicii_t*>(chip); },
     .bus_attach  = vicii_bus_attach
 };
 

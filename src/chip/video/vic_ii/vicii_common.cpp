@@ -2500,8 +2500,7 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
 // ========================================================================================
 
 vicii_t* vicii_create(const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t)) {
-    vicii_t* vicii = (vicii_t*)calloc(1, sizeof(vicii_t));
-    if (!vicii) return NULL;
+    vicii_t* vicii = new vicii_t();
     
     vicii->config = config;
     vicii->bus.bank_change = bank_change;
@@ -2511,14 +2510,24 @@ vicii_t* vicii_create(const vicii_chip_config_t* config, void (*bank_change)(voi
     return vicii;
 }
 
+// Destructor — clean up dynamically allocated pixel line buffers
+vicii_s::~vicii_s() {
+    free(pixel.pixel_line_priority);
+    free(pixel.pixel_line_color);
+    free(pixel.sprite_collision_line);
+    free(pixel.graphics_fg_line);
+}
+
 void vicii_destroy(vicii_t* vicii) {
-    if (vicii) {
-        // Free buffers
-        free(vicii->pixel.pixel_line_priority);
-        free(vicii->pixel.pixel_line_color);
-        free(vicii->pixel.sprite_collision_line);
-        free(vicii->pixel.graphics_fg_line);
-        free(vicii);
+    delete vicii; // destructor handles buffer cleanup
+}
+
+// ChipBase identity — uses config to determine PAL/NTSC variant
+ChipIdentity vicii_s::chip_identity() const {
+    if (config && config->total_lines > 300) {
+        return ChipIdentity{"MOS6569", "MOS Technology"};
+    } else {
+        return ChipIdentity{"MOS6567", "MOS Technology"};
     }
 }
 
@@ -2527,7 +2536,6 @@ void vicii_reset(vicii_t* vicii) {
 
     // Preserve externally-owned pointers and configuration that survive reset
     const vicii_chip_config_t* config = vicii->config;
-    chip_descriptor_t* desc = vicii->desc;
     void (*bank_change)(void*, uint8_t) = vicii->bus.bank_change;
     void* bus = vicii->bus.bus;
     uint32_t* framebuffer = vicii->pixel.framebuffer;
@@ -2542,7 +2550,6 @@ void vicii_reset(vicii_t* vicii) {
 
     // Restore preserved pointers
     vicii->config = config;
-    vicii->desc = desc;
     vicii->bus.bank_change = bank_change;
     vicii->bus.bus = bus;
     vicii->pixel.framebuffer = framebuffer;

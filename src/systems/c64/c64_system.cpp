@@ -21,7 +21,7 @@
 #include "../../chip/cpu/fam65xx/fam65xx_gui.h"
 #include "../../chip/video/vic_ii/mos6569.h"
 #include "../../chip/video/vic_ii/mos6567.h"
-#include "../../chip/video/vic_ii/vicii_gui.h"
+// VIC-II is a native C++ ChipBase — no separate GUI header needed
 // MOS6526 is a native C++ ChipBase — no separate GUI header needed
 // MOS2114 is a native C++ ChipBase — no separate GUI header needed
 // MOS6581 is a native C++ ChipBase — no separate GUI header needed
@@ -323,7 +323,7 @@ bool C64System::initialize() {
         delete c64_->cia1;
         delete c64_->colorram;
         delete c64_->sid;
-        vicii_destroy(c64_->vicii);
+        delete c64_->vicii;
         rom_destroy(c64_->charrom);
         rom_destroy(c64_->cartridge_romh);
         rom_destroy(c64_->basic);
@@ -495,7 +495,7 @@ void C64System::shutdown() {
         delete c64_->cia1;
         delete c64_->colorram;
         delete c64_->sid;
-        vicii_destroy(c64_->vicii);
+        delete c64_->vicii;
         rom_destroy(c64_->charrom);
         rom_destroy(c64_->cartridge_romh);
         rom_destroy(c64_->basic);
@@ -1208,12 +1208,8 @@ void C64System::register_c64_chips() {
         [cpu]() { fam65xx_render_layout_content(cpu); }),
         "MOS 6510 CPU", "6510", "CPU", 0x0000);
 
-    // VIC-II
-    register_chip(std::make_unique<CChipAdapter>(
-        vicii, ChipIdentity{"MOS6569", "MOS Technology"},
-        [vicii]() { vicii_gui_render_debug_content(vicii); },
-        [vicii]() { vicii_gui_render_settings_content(vicii); },
-        [vicii]() { vicii_gui_render_layout_content(vicii); }),
+    // VIC-II — native C++ ChipBase, register directly
+    register_chip(vicii,
         "VIC-II (MOS 6569/6567)", "VIC-II", "Video", 0xD000);
 
     // SID — MOS6581 is a native C++ ChipBase, register directly

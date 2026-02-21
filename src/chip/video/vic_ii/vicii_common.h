@@ -467,25 +467,36 @@ typedef struct {
 } vicii_bus_unit_t;
 
 // Main VIC-II structure composed of units
-struct vicii_s {
-    chip_descriptor_t* desc;
-    mos2114_t* colorram;
+struct vicii_s : public ChipBase {
+    mos2114_t* colorram = nullptr;
 
     // Chip configuration (set at initialization)
-    const vicii_chip_config_t* config;
+    const vicii_chip_config_t* config = nullptr;
 
     // Topic-specific units
-    vicii_registers_unit_t registers;
-    vicii_timing_unit_t timing;
-    vicii_video_logic_unit_t video_logic;
-    vicii_video_data_unit_t video_data;
-    vicii_sequencer_unit_t sequencer;
-    vicii_border_unit_t border;
-    vicii_memory_unit_t memory;
-    vicii_sprites_unit_t sprites;
-    vicii_pixel_unit_t pixel;
-    vicii_lightpen_unit_t lightpen;
-    vicii_bus_unit_t bus;
+    vicii_registers_unit_t registers = {};
+    vicii_timing_unit_t timing = {};
+    vicii_video_logic_unit_t video_logic = {};
+    vicii_video_data_unit_t video_data = {};
+    vicii_sequencer_unit_t sequencer = {};
+    vicii_border_unit_t border = {};
+    vicii_memory_unit_t memory = {};
+    vicii_sprites_unit_t sprites = {};
+    vicii_pixel_unit_t pixel = {};
+    vicii_lightpen_unit_t lightpen = {};
+    vicii_bus_unit_t bus = {};
+
+    // Destructor — cleans up dynamically allocated pixel line buffers
+    ~vicii_s() override;
+
+    // ChipBase interface
+    ChipIdentity chip_identity() const override;
+    bool has_debug_content() const override { return true; }
+    bool has_settings_content() const override { return true; }
+    bool has_layout_content() const override { return true; }
+    void render_debug_content() override;
+    void render_settings_content() override;
+    void render_layout_content() override;
 };
 
 // ========================================================================================
