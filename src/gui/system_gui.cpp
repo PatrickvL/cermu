@@ -450,6 +450,62 @@ void SystemGUI::render_menu_bar() {
                         ImVec2(FLT_MAX, FLT_MAX)  // max (unconstrained)
                     );
                     if (ImGui::BeginMenu(sc.display_name)) {
+                        // Pin button at top-right to detach into a standalone window
+                        {
+                            float avail = ImGui::GetContentRegionAvail().x;
+                            float btn_h = ImGui::GetFrameHeight();
+                            float btn_w = btn_h; // square
+                            ImVec2 cursor = ImGui::GetCursorPos();
+                            ImGui::SetCursorPosX(cursor.x + avail - btn_w);
+
+                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered));
+
+                            // Draw a pin/thumbtack shape via the draw list
+                            ImVec2 btn_pos = ImGui::GetCursorScreenPos();
+                            bool already = sc.show_detached != 0;
+                            if (ImGui::InvisibleButton("##pin", ImVec2(btn_w, btn_h)) && !already) {
+                                sc.show_detached = 1;
+                                ImGui::CloseCurrentPopup();
+                            }
+                            bool hovered = ImGui::IsItemHovered();
+
+                            // Highlight on hover
+                            if (hovered && !already) {
+                                ImDrawList* dl = ImGui::GetWindowDrawList();
+                                dl->AddRectFilled(btn_pos,
+                                    ImVec2(btn_pos.x + btn_w, btn_pos.y + btn_h),
+                                    ImGui::GetColorU32(ImGuiCol_HeaderHovered),
+                                    ImGui::GetStyle().FrameRounding);
+                            }
+
+                            // Draw pin icon
+                            {
+                                ImDrawList* dl = ImGui::GetWindowDrawList();
+                                ImVec2 center(btn_pos.x + btn_w * 0.5f, btn_pos.y + btn_h * 0.5f);
+                                float r = btn_h * 0.28f;
+                                ImU32 col = already
+                                    ? ImGui::GetColorU32(ImGuiCol_TextDisabled)
+                                    : (hovered
+                                        ? ImGui::GetColorU32(ImGuiCol_Text)
+                                        : ImGui::GetColorU32(ImGuiCol_TextDisabled));
+
+                                // Pin head (circle)
+                                dl->AddCircleFilled(ImVec2(center.x, center.y - r * 0.3f), r, col);
+                                // Pin needle (line down from head)
+                                dl->AddLine(
+                                    ImVec2(center.x, center.y - r * 0.3f + r),
+                                    ImVec2(center.x, center.y + r * 1.4f),
+                                    col, 2.0f);
+                            }
+
+                            ImGui::PopStyleColor(2);
+                            if (hovered) {
+                                ImGui::SetTooltip(already ? "Already detached" : "Detach to window");
+                            }
+                            ImGui::SetCursorPos(cursor); // restore so content renders from top-left
+                        }
+
                         if (sc.chip->has_debug_content()) {
                             sc.chip->render_debug_content();
                         } else if (sc.chip->has_layout_content()) {
@@ -461,14 +517,6 @@ void SystemGUI::render_menu_bar() {
                             if (ImGui::CollapsingHeader("Settings")) {
                                 sc.chip->render_settings_content();
                             }
-                        }
-
-                        ImGui::Separator();
-                        if (sc.show_detached) {
-                            ImGui::TextDisabled("(already detached)");
-                        } else if (ImGui::Button("Detach Window")) {
-                            sc.show_detached = 1;
-                            ImGui::CloseCurrentPopup();
                         }
 
                         ImGui::EndMenu();
