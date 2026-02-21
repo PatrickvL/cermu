@@ -396,29 +396,27 @@ VICII test harnesses) uses the C-style API from `c64.cpp`:
 
 These functions go through `System8Bit` for chip lifecycle.
 
-**Solution options:**
+**Solution: Port test framework to C++**
 
-**Option A: Thin C API over C64System (recommended)**
-Keep the `c64_system_create/destroy/tick/reset` function signatures but implement them
-as wrappers around `C64System`:
-```cpp
-c64_t* c64_system_create() {
-    auto* sys = new C64System();
-    return &sys->c64_data();  // returns the embedded c64_t for field access
-}
-```
-This lets the test framework work unchanged while `System8Bit` is deleted from `c64_t`.
-
-**Option B: Port test framework to C++**
-Rewrite `c64_test_framework.cpp` to use `C64System` directly. Higher effort but cleaner.
+Rewrite `c64_test_framework.cpp`, `c64_test_runner.cpp`, and the VICII test harnesses
+to use `C64System` directly instead of the C-style `c64_system_create/destroy/tick/reset`
+API. This eliminates the translation layer entirely and removes the last consumer of
+`System8Bit`.
 
 **Actions:**
-1. Remove `system_8bit_t system` from `c64_t` struct.
-2. Move chip pointers from `System8Bit::chips_[]` array into direct named fields on `c64_t`
-   (most already exist: `c64->mos6510`, `c64->vicii`, etc.).
-3. Replace `create_and_register_chip()` with typed creation.
-4. Update `c64_system_create/destroy` to not use `System8Bit`.
-5. Delete `System8Bit`, `ChipEntry`, `system_8bit_t` from `system.h`/`system.cpp`.
+1. Create a `C64TestHarness` class wrapping `C64System` with test-friendly accessors
+   (typed chip pointers, memory read/write helpers, tick-until-condition, etc.).
+2. Port `c64_test_framework.cpp` to use `C64TestHarness` instead of raw `c64_t*` access.
+3. Port `c64_test_runner.cpp` — replace `c64_system_create/destroy` with
+   `C64TestHarness` construction/destruction.
+4. Port VICII test harnesses (`vicii_pixel_tests.h`, `vicii_test_harness.h`) — replace
+   `#include "c64.h"` with `C64TestHarness`.
+5. Remove `system_8bit_t system` from `c64_t` struct.
+6. Delete the C-style API functions from `c64.cpp` (`c64_system_create`, `c64_system_destroy`,
+   etc.) once all callers are ported.
+7. Delete `System8Bit`, `ChipEntry`, `system_8bit_t` from `system.h`/`system.cpp`.
+8. Delete `c64.h` / `c64.cpp` if fully superseded by `c64_system.h` / `c64_system.cpp`
+   (or merge any remaining logic into `C64System`).
 
 ---
 
@@ -514,6 +512,7 @@ Phases 5 and 6 are independent of Phase 4 and can proceed in parallel after Phas
 | Template chip families (VIC-II, VIC, etc.) | Zero overhead | Same as fam65xx: `if constexpr` eliminates dead branches at compile time |
 | `unique_ptr` instead of raw pointers | Zero runtime overhead | Destructor call is same as manual `delete` |
 | Removing `System8Bit` array scan | Marginal improvement | Eliminated linear scan of 16-slot array in destruction |
+| Floating bus read signature (`uint8_t bus_data` param) | Zero overhead | One extra register argument to read functions; enables correct open-bus behavior without bus-level fixup |
 
 **Net effect:** Slight improvement — `std::function` heap allocations eliminated,
 code-size reduction from template deduplication, no new overhead on the emulation
@@ -530,7 +529,7 @@ hot path.
 | 2 | 0 | ~8 | 0 |
 | 2b | 0 | ~20 | 0 (descriptors removed from existing files) |
 | 3 | 0 | ~30–50 | 0 (CChipAdapter deleted from `chip.h`) |
-| 4 | 0 | ~8 | 0 (`System8Bit` removed from `system.h/cpp`) |
+| 4 | ~1 (`C64TestHarness`) | ~12–15 | ~2 (`c64.h/cpp` if fully superseded, `system.h/cpp` trimmed) |
 | 5 | ~2–4 trait headers | ~10–15 | ~4–6 (deduplicated variant files) |
 | 6 | 0 | ~10–15 | 0 |
 
@@ -546,6 +545,50 @@ Each phase must pass before the next begins:
 4. **Smoke test:** Launch each system (C64, VIC-20, C16, NES, Apple 1, CHIP-8),
    verify Hardware menu works, chips render correctly, emulation runs.
 5. **Performance:** No measurable regression in frames-per-second or CPU time per frame.
+6. **Git commit:** Each completed phase is committed as a self-contained, buildable
+   changeset before the next phase begins. This provides rollback points and makes
+   bisection possible if regressions surface later.
+
+---
+
+## Cross-Cutting Concern: Floating Bus in Chip Read Signatures
+
+All chip MMIO / register **read** functions should receive the current bus data byte
+(or the full `bus_state_t`) as a parameter and return it — possibly modified — as the
+result. This makes floating bus behavior (returning whatever was last on the data bus
+when no chip drives it) a natural part of the code flow instead of requiring special
+handling at the bus level.
+
+**Current state:** Most chip read functions have signatures like:
+```cpp
+uint8_t mos6526_read(mos6526_t* cia, uint16_t addr);
+```
+These return a synthesized value with no knowledge of what was on the bus before.
+Unmapped addresses silently return 0 or garbage instead of preserving bus capacitance.
+
+**Target signatures (Phase 3 onward):**
+```cpp
+// Option A: data byte only (minimal change, sufficient for most chips)
+uint8_t MOS6526::read(uint16_t addr, uint8_t bus_data) const;
+
+// Option B: full bus state (needed if the chip inspects address/control lines)
+bus_state_t MOS6526::read(bus_state_t bus) const;
+```
+
+Option A is preferred for most chips — the data byte is the only floating component.
+Option B is reserved for chips that need the full bus context (e.g., VIC-II open
+bus behavior depends on the bus phase and address lines).
+
+**Write handlers** do not alter bus state fields and can keep their current `void`
+return signatures:
+```cpp
+void MOS6526::write(uint16_t addr, uint8_t data);
+```
+
+This change should be applied during Phase 3 (chip-by-chip C++ conversion) as each
+chip's read function is converted from a free C function to a class method. It is
+not a separate phase — it is a **mandatory signature convention** for all new
+`ChipBase::read()` implementations.
 
 ---
 
@@ -556,21 +599,18 @@ Each phase must pass before the next begins:
    `unique_ptr` with the system class yielding ownership? The non-owning model is simpler
    and matches how systems already manage chips, but requires careful lifetime ordering.
 
-2. **`c64.cpp` test framework:** Keep as thin C wrapper over `C64System`, or port to C++?
-   The C wrapper is less effort but adds a translation layer. Full port is cleaner but
-   touches many test files.
-
-3. **VIC-20 memory subsystem:** `vic20_memory_t` is a complex C struct with its own
+2. **VIC-20 memory subsystem:** `vic20_memory_t` is a complex C struct with its own
    create/destroy pattern. Does it become a ChipBase subclass, or remain a system-internal
    implementation detail that doesn't appear in the chip registry?
 
-4. **NES `shared_ptr` usage:** The NES already uses `shared_ptr<PPU>` and `shared_ptr<MemoryBus>`.
+3. **NES `shared_ptr` usage:** The NES already uses `shared_ptr<PPU>` and `shared_ptr<MemoryBus>`.
    Should these be converted to `unique_ptr` for consistency, or left as-is since they
    may have legitimate shared-ownership semantics?
 
 ---
 
 *Plan authored: 2025-07-15*
-*Confidence: 0.90*
-*Key uncertainties: Ownership model for Phase 3, test framework migration strategy*
+*Last updated: 2026-02-21 — Phase 4 decision (port to C++), git-commit-per-phase, floating bus read signatures*
+*Confidence: 0.92*
+*Key uncertainties: Ownership model for Phase 3, floating bus Option A vs B per chip*
 *How to improve: Prototype Phase 0 + Phase 1a (VIC-20) to validate the migration pattern before committing to the full plan*
