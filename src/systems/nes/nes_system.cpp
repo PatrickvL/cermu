@@ -10,7 +10,7 @@
 #include "nes_nsf_cartridge.h"
 #include "../../core/formats/nsf_format.h"
 #include "../../core/formats/format_registry.h"
-#include "../../chip/cpu/fam65xx/fam65xx_gui.h"
+// CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
 #include "nes_ppu_gui.h"
 #include "nes_apu_gui.h"
 #include "../../core/chip.h"
@@ -1507,12 +1507,8 @@ void NintendoSystem<V>::register_nes_chips() {
     auto* cpu = cpu_;
     auto* ppu_raw = ppu_.get();
 
-    // CPU (Ricoh 2A03)
-    register_chip(std::make_unique<CChipAdapter>(
-        cpu, ChipIdentity{"RP2A03", "Ricoh"},
-        [cpu]() { fam65xx_render_debug_content(cpu); },
-        [cpu]() { fam65xx_render_settings_content(cpu); },
-        [cpu]() { fam65xx_render_layout_content(cpu); }),
+    // CPU (Ricoh 2A03) — native ChipBase, registered directly
+    register_chip(nes6502_as_chip_base(cpu),
         "Ricoh 2A03 (6502 + APU)", "2A03", "CPU", 0x0000);
 
     // PPU (Ricoh 2C02)

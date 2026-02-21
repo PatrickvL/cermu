@@ -86,7 +86,7 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table() {
 // ============================================================================
 
 template <const CPUTraits &Traits>
-class fam65xx_t : public io_port_base_t<Traits>, public apu_base_t<Traits> {
+class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_base_t<Traits> {
 // Include register declarations and accessors
 #include "fam65xx_registers.inc.hpp"
 
@@ -1722,12 +1722,32 @@ public:
     this->init_registers();
   }
 
-  ~fam65xx_t() {
+  ~fam65xx_t() override {
     // Cleanup conditional features
     if constexpr (has_apu()) {
       this->destroy_apu();
     }
   }
+
+  // ========================================================================
+  // ChipBase VIRTUAL METHOD IMPLEMENTATIONS
+  // ========================================================================
+
+  ChipIdentity chip_identity() const override {
+    return {Traits.get_chip_id(), Traits.get_vendor()};
+  }
+
+  bool has_debug_content() const override { return true; }
+  bool has_settings_content() const override { return true; }
+  bool has_layout_content() const override { return true; }
+
+  // Declared here, defined in fam65xx_gui.cpp with explicit instantiations
+  void render_debug_content() override;
+  void render_settings_content() override;
+  void render_layout_content() override;
+
+  // Bus state for GUI visualization (updated from system tick)
+  bus_state_t gui_bus_state = 0;
 
   // ========================================================================
   // CPU STATE

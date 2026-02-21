@@ -94,6 +94,12 @@ void mos7501_set_bank_change(mos7501_t *cpu,
                              void(*fn)(void*, uint8_t),
                              void* context);
 
+// Get ChipBase pointer from opaque handle (for system chip registration)
+#ifdef __cplusplus
+class ChipBase;
+ChipBase* mos7501_as_chip_base(mos7501_t *cpu);
+#endif
+
 // Global descriptor for chip registration
 extern chip_descriptor_t mos7501_descriptor;
 

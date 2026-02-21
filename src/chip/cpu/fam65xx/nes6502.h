@@ -1547,3 +1547,7 @@ void nes6502_set_apu_region(nes6502_t *cpu, bool is_pal);
 
 // Get APU instance pointer (for debug GUI)
 nes6502_apu::APU *nes6502_get_apu(nes6502_t *cpu);
+
+// Get ChipBase pointer from opaque handle (for system chip registration)
+class ChipBase;
+ChipBase* nes6502_as_chip_base(nes6502_t *cpu);

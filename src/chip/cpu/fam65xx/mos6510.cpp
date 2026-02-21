@@ -4,7 +4,6 @@
 
 #include "mos6510.h"
 #include "fam65xx.hpp"
-#include "fam65xx_gui.h"
 
 using namespace fam65xx;
 
@@ -22,19 +21,15 @@ using mos6510_cpu_t = fam65xx::mos6510_cpu_impl_t;
 // ============================================================================
 
 mos6510_t *mos6510_create(void) {
-  mos6510_t *cpu = reinterpret_cast<mos6510_t *>(new mos6510_cpu_t());
-#ifdef IMGUI_VERSION
-  fam65xx::register_mos6510_for_gui(cpu);
-#endif
-  return cpu;
+  return reinterpret_cast<mos6510_t *>(new mos6510_cpu_t());
 }
 
 void mos6510_destroy(mos6510_t *cpu) {
-  // Unregister from GUI system before destroying
-#ifdef IMGUI_VERSION
-  fam65xx::unregister_cpu_from_gui(cpu);
-#endif
   delete CPU_CAST(cpu);
+}
+
+ChipBase* mos6510_as_chip_base(mos6510_t *cpu) {
+  return static_cast<ChipBase*>(CPU_CAST(cpu));
 }
 
 bus_state_t mos6510_init(mos6510_t *cpu, const mos6510_desc_t *desc) {

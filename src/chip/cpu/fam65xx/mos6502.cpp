@@ -10,10 +10,6 @@
 #include "fam65xx.hpp"
 #include <cstdio>
 
-#ifdef IMGUI_VERSION
-#include "fam65xx_gui.h"
-#endif
-
 // ============================================================================
 // CONCRETE CPU TYPE DEFINITIONS
 // ============================================================================
@@ -30,18 +26,10 @@ using mos6502_cpu_t = fam65xx::mos6502_cpu_impl_t;
 // ============================================================================
 
 mos6502_t *mos6502_create(void) {
-  mos6502_t *cpu = reinterpret_cast<mos6502_t *>(new mos6502_cpu_t());
-#ifdef IMGUI_VERSION
-  fam65xx::register_mos6502_for_gui(cpu);
-#endif
-  return cpu;
+  return reinterpret_cast<mos6502_t *>(new mos6502_cpu_t());
 }
 
 void mos6502_destroy(mos6502_t *cpu) {
-  // Unregister from GUI system before destroying
-#ifdef IMGUI_VERSION
-  fam65xx::unregister_cpu_from_gui(cpu);
-#endif
   delete CPU_CAST(mos6502_cpu_t, cpu);
 }
 
