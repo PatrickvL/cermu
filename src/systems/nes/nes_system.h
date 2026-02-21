@@ -479,11 +479,6 @@ public:
     // EmulatedSystem interface - GUI integration
     void render_system_menu_items() override;
     void render_configuration_ui() override;
-
-    // Chip enumeration for Hardware menu
-    std::vector<ChipInfo> get_chip_info() const override;
-    void render_chip_debug_window(int chip_index, bool* show) override;
-    void render_chip_settings_window(int chip_index, bool* show) override;
     
     // EmulatedSystem interface - State
     uint32_t get_target_fps() const override;
@@ -517,6 +512,9 @@ public:
 private:
     void setup_audio_timing();
     void setup_connector_ports();
+
+    /// Register all NES chips into registered_chips_ for the Hardware menu.
+    void register_nes_chips();
     void clock();
     bus_state_t create_bus_state(uint16_t addr, uint8_t data, bool rw);
 

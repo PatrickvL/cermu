@@ -13,6 +13,7 @@
 #include "../../chip/cpu/fam65xx/fam65xx_gui.h"
 #include "nes_ppu_gui.h"
 #include "nes_apu_gui.h"
+#include "../../core/chip.h"
 #include <fstream>
 #include <iostream>
 #include <cmath>
@@ -1169,6 +1170,10 @@ bool NintendoSystem<V>::initialize() {
     
     setup_audio_timing();
     setup_connector_ports();
+
+    // Register chips for the Hardware menu and debug windows
+    register_nes_chips();
+
     initialized_ = true;
     
     return true;
@@ -1493,61 +1498,45 @@ void NintendoSystem<V>::render_system_menu_items() {
 #endif
 }
 
-template<NintendoVariant V>
-std::vector<ChipInfo> NintendoSystem<V>::get_chip_info() const {
-    return {
-        { "Ricoh 2A03 (6502 + APU)",    "2A03",   "CPU",    0x0000, true,  true  },
-        { "Ricoh 2C02 PPU",             "PPU",    "Video",  0x2000, true,  true  },
-        { "APU (built-in 2A03)",        "APU",    "Audio",  0x4000, true,  true  },
-        { "RAM (2KB)",                  "RAM",    "Memory", 0x0000, false, false },
-        { "Cartridge",                  "Cart",   "Memory", 0x4020, false, false },
-    };
-}
+// ============================================================================
+// Chip Registration — populate registered_chips_ for Hardware menu + debug
+// ============================================================================
 
 template<NintendoVariant V>
-void NintendoSystem<V>::render_chip_debug_window(int chip_index, bool* show) {
-    if (!show || !*show) return;
-#ifdef IMGUI_VERSION
-    enum { NES_CI_CPU = 0, NES_CI_PPU = 1, NES_CI_APU = 2 };
-    switch (chip_index) {
-        case NES_CI_CPU:
-            if (cpu_) fam65xx_render_debug_window(cpu_, show);
-            break;
-        case NES_CI_PPU:
-            if (ppu_) nes_ppu_render_debug_window(ppu_.get(), show);
-            break;
-        case NES_CI_APU:
-            if (cpu_) nes_apu_render_debug_window(cpu_, show);
-            break;
-        default:
-            break;
-    }
-#else
-    (void)chip_index;
-#endif
-}
+void NintendoSystem<V>::register_nes_chips() {
+    auto* cpu = cpu_;
+    auto* ppu_raw = ppu_.get();
 
-template<NintendoVariant V>
-void NintendoSystem<V>::render_chip_settings_window(int chip_index, bool* show) {
-    if (!show || !*show) return;
-#ifdef IMGUI_VERSION
-    enum { NES_CI_CPU = 0, NES_CI_PPU = 1, NES_CI_APU = 2 };
-    switch (chip_index) {
-        case NES_CI_CPU:
-            if (cpu_) fam65xx_render_settings_window(cpu_, show);
-            break;
-        case NES_CI_PPU:
-            if (ppu_) nes_ppu_render_settings_window(ppu_.get(), show);
-            break;
-        case NES_CI_APU:
-            if (cpu_) nes_apu_render_settings_window(cpu_, show);
-            break;
-        default:
-            break;
-    }
-#else
-    (void)chip_index;
-#endif
+    // CPU (Ricoh 2A03)
+    register_chip(std::make_unique<CChipAdapter>(
+        cpu, ChipIdentity{"RP2A03", "Ricoh"},
+        [cpu](bool* s) { fam65xx_render_debug_window(cpu, s); },
+        [cpu](bool* s) { fam65xx_render_settings_window(cpu, s); }),
+        "Ricoh 2A03 (6502 + APU)", "2A03", "CPU", 0x0000);
+
+    // PPU (Ricoh 2C02)
+    register_chip(std::make_unique<CChipAdapter>(
+        ppu_raw, ChipIdentity{"RP2C02", "Ricoh"},
+        [ppu_raw](bool* s) { nes_ppu_render_debug_window(ppu_raw, s); },
+        [ppu_raw](bool* s) { nes_ppu_render_settings_window(ppu_raw, s); }),
+        "Ricoh 2C02 PPU", "PPU", "Video", 0x2000);
+
+    // APU (built into 2A03 — uses cpu_ pointer)
+    register_chip(std::make_unique<CChipAdapter>(
+        cpu, ChipIdentity{"RP2A03-APU", "Ricoh"},
+        [cpu](bool* s) { nes_apu_render_debug_window(cpu, s); },
+        [cpu](bool* s) { nes_apu_render_settings_window(cpu, s); }),
+        "APU (built-in 2A03)", "APU", "Audio", 0x4000);
+
+    // RAM (no debug window)
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"SRAM", "Various"}),
+        "RAM (2KB)", "RAM", "Memory", 0x0000);
+
+    // Cartridge (no debug window)
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"Cartridge", "Various"}),
+        "Cartridge", "Cart", "Memory", 0x4020);
 }
 
 template<NintendoVariant V>

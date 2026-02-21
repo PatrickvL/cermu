@@ -1,4 +1,5 @@
 #include "apple1_system.h"
+#include "../../core/chip.h"
 #include <cstring>
 #include <cstdio>
 
@@ -228,6 +229,9 @@ bool Apple1System::initialize() {
     pia_.port_b_direction = 0xFF;  // Port B = output (display)
     
     setup_connector_ports();
+
+    // Register chips for the Hardware menu (no debug windows)
+    register_apple1_chips();
     
     printf("Apple1: System initialized (RAM: %dKB)\n", ram_size_ / 1024);
     return true;
@@ -370,19 +374,34 @@ void Apple1System::render_configuration_ui() {
 // Chip Info — Hardware menu enumeration
 // ============================================================================
 
-std::vector<ChipInfo> Apple1System::get_chip_info() const {
-    std::vector<ChipInfo> chips = {
-        { "MOS 6502 CPU",                "6502",       "CPU",     0x0000, false, false },
-        { "PIA 6820 (Keyboard/Display)", "PIA",        "I/O",     0xD010, false, false },
-        { "Text Terminal (40x24)",       "Terminal",   "Video",   0x0000, false, false },
-        { "RAM",                         "RAM",        "Memory",  0x0000, false, false },
-        { "Woz Monitor ROM (256B)",      "Monitor",    "Memory",  0xFF00, false, false },
-    };
+// ============================================================================
+// Chip Registration
+// ============================================================================
+
+void Apple1System::register_apple1_chips() {
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"MOS6502", "MOS Technology"}),
+        "MOS 6502 CPU", "6502", "CPU", 0x0000);
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"PIA6820", "Motorola"}),
+        "PIA 6820 (Keyboard/Display)", "PIA", "I/O", 0xD010);
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"Terminal", "Custom"}),
+        "Text Terminal (40x24)", "Terminal", "Video", 0x0000);
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"SRAM", "Various"}),
+        "RAM", "RAM", "Memory", 0x0000);
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"PROM", "Various"}),
+        "Woz Monitor ROM (256B)", "Monitor", "Memory", 0xFF00);
     if (has_basic_) {
-        chips.push_back({ "Apple 1 BASIC ROM (4KB)", "BASIC", "Memory", 0xE000, false, false });
+        register_chip(std::make_unique<CChipAdapter>(
+            nullptr, ChipIdentity{"ROM", "Apple"}),
+            "Apple 1 BASIC ROM (4KB)", "BASIC", "Memory", 0xE000);
     }
-    chips.push_back({ "Signetics 2513 Char ROM", "CharROM", "Memory", 0x0000, false, false });
-    return chips;
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"2513", "Signetics"}),
+        "Signetics 2513 Char ROM", "CharROM", "Memory", 0x0000);
 }
 
 // ============================================================================

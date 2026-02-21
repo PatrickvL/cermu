@@ -82,11 +82,6 @@ public:
     void render_system_menu_items() override;
     void render_configuration_ui() override;
 
-    // Chip enumeration for Hardware menu
-    std::vector<ChipInfo> get_chip_info() const override;
-    void render_chip_debug_window(int chip_index, bool* show) override;
-    void render_chip_settings_window(int chip_index, bool* show) override;
-
     // Auto-detect memory expansion and region from file contents
     SystemConfiguration detect_optimal_configuration(
         const char* filepath, const uint8_t* data, size_t size) override;
@@ -138,6 +133,9 @@ private:
     
     // Connector port setup (registers VIC-20 connector ports with base class)
     void setup_connector_ports();
+
+    /// Register all VIC-20 chips into registered_chips_ for the Hardware menu.
+    void register_vic20_chips();
     
     // Legacy integration methods (deprecated, kept for compatibility)
     void memory_init(const rom_config_t* rom_config);

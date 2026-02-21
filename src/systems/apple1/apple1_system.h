@@ -55,9 +55,6 @@ public:
     // GUI integration
     void render_system_menu_items() override;
     void render_configuration_ui() override;
-
-    // Chip enumeration for Hardware menu
-    std::vector<ChipInfo> get_chip_info() const override;
     
     // State
     uint32_t get_target_fps() const override;
@@ -89,6 +86,9 @@ private:
     
     // Connector port setup (registers Apple 1 connector ports with base class)
     void setup_connector_ports();
+
+    /// Register all Apple 1 chips into registered_chips_ for the Hardware menu.
+    void register_apple1_chips();
     
     // ROM loading
     bool load_roms();

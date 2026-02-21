@@ -108,11 +108,6 @@ public:
     void render_system_menu_items() override;
     void render_configuration_ui() override;
 
-    // Chip enumeration for Hardware menu
-    std::vector<ChipInfo> get_chip_info() const override;
-    void render_chip_debug_window(int chip_index, bool* show) override;
-    void render_chip_settings_window(int chip_index, bool* show) override;
-
     // Hardware traits (compile-time variant-specific)
     static HardwareTraits create_hardware_traits();
 
@@ -142,6 +137,9 @@ private:
     void cpu_write(uint32_t addr, uint8_t data);
     bus_state_t mem_tick(bus_state_t s);
     void setup_connector_ports();
+
+    /// Register all C264 chips into registered_chips_ for the Hardware menu.
+    void register_c264_chips();
 
     // Static callbacks
     static uint8_t cpu_read_callback(void* user_data, uint32_t addr, uint8_t bus_state);

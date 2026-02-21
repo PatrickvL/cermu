@@ -19,6 +19,7 @@
 #include "../../chip/video/vic/vic_common.h"  // For VIC_COLOR_* constants
 #include "../../chip/io/mos6522.h"
 #include "../../chip/video/vic/vic_gui.h"
+#include "../../core/chip.h"
 
 // Include bus interface
 #include "../../core/bus_cycle_interface.h"
@@ -651,6 +652,9 @@ bool VIC20System::initialize() {
     
     // Setup connector ports (generic framework from EmulatedSystem)
     setup_connector_ports();
+
+    // Register chips for the Hardware menu and debug windows
+    register_vic20_chips();
     
     return true;
 }
@@ -944,67 +948,63 @@ void VIC20System::render_system_menu_items() {
 #endif
 }
 
-std::vector<ChipInfo> VIC20System::get_chip_info() const {
-    return {
-        { "MOS 6502 CPU",              "6502",   "CPU",    0x0000, true,  true  },
-        { "VIC (MOS 6560/6561)",        "VIC",    "Video",  0x9000, true,  true  },
-        { "VIA 1 (MOS 6522)",           "VIA 1",  "I/O",    0x9110, true,  true  },
-        { "VIA 2 (MOS 6522)",           "VIA 2",  "I/O",    0x9120, true,  true  },
-        { "RAM (up to 32KB)",           "RAM",    "Memory", 0x0000, false, false },
-        { "Character ROM (4KB)",        "CHARROM","Memory", 0x8000, false, false },
-        { "BASIC ROM (8KB)",            "BASIC",  "Memory", 0xC000, false, false },
-        { "KERNAL ROM (8KB)",           "KERNAL", "Memory", 0xE000, false, false },
-    };
-}
+// ============================================================================
+// Chip Registration — populate registered_chips_ for Hardware menu + debug
+// ============================================================================
 
-void VIC20System::render_chip_debug_window(int chip_index, bool* show) {
-    if (!show || !*show) return;
-#ifdef IMGUI_VERSION
-    enum { VIC20_CI_CPU = 0, VIC20_CI_VIC = 1, VIC20_CI_VIA1 = 2, VIC20_CI_VIA2 = 3 };
-    switch (chip_index) {
-        case VIC20_CI_CPU:
-            if (cpu_) fam65xx_render_debug_window(cpu_, show);
-            break;
-        case VIC20_CI_VIC:
-            if (vic_) vic_gui_render_debug_window(vic_, show);
-            break;
-        case VIC20_CI_VIA1:
-            if (via1_) mos6522_render_debug_window(via1_, show);
-            break;
-        case VIC20_CI_VIA2:
-            if (via2_) mos6522_render_debug_window(via2_, show);
-            break;
-        default:
-            break;
-    }
-#else
-    (void)chip_index;
-#endif
-}
+void VIC20System::register_vic20_chips() {
+    auto* cpu = cpu_;
+    auto* vic = vic_;
+    auto* via1 = via1_;
+    auto* via2 = via2_;
 
-void VIC20System::render_chip_settings_window(int chip_index, bool* show) {
-    if (!show || !*show) return;
-#ifdef IMGUI_VERSION
-    enum { VIC20_CI_CPU = 0, VIC20_CI_VIC = 1, VIC20_CI_VIA1 = 2, VIC20_CI_VIA2 = 3 };
-    switch (chip_index) {
-        case VIC20_CI_CPU:
-            if (cpu_) fam65xx_render_settings_window(cpu_, show);
-            break;
-        case VIC20_CI_VIC:
-            if (vic_) vic_gui_render_settings_window(vic_, show);
-            break;
-        case VIC20_CI_VIA1:
-            if (via1_) mos6522_render_settings_window(via1_, show);
-            break;
-        case VIC20_CI_VIA2:
-            if (via2_) mos6522_render_settings_window(via2_, show);
-            break;
-        default:
-            break;
-    }
-#else
-    (void)chip_index;
-#endif
+    // CPU
+    register_chip(std::make_unique<CChipAdapter>(
+        cpu, ChipIdentity{"MOS6502", "MOS Technology"},
+        [cpu](bool* s) { fam65xx_render_debug_window(cpu, s); },
+        [cpu](bool* s) { fam65xx_render_settings_window(cpu, s); }),
+        "MOS 6502 CPU", "6502", "CPU", 0x0000);
+
+    // VIC
+    register_chip(std::make_unique<CChipAdapter>(
+        vic, ChipIdentity{"MOS6560", "MOS Technology"},
+        [vic](bool* s) { vic_gui_render_debug_window(vic, s); },
+        [vic](bool* s) { vic_gui_render_settings_window(vic, s); }),
+        "VIC (MOS 6560/6561)", "VIC", "Video", 0x9000);
+
+    // VIA 1
+    register_chip(std::make_unique<CChipAdapter>(
+        via1, ChipIdentity{"MOS6522", "MOS Technology"},
+        [via1](bool* s) { mos6522_render_debug_window(via1, s); },
+        [via1](bool* s) { mos6522_render_settings_window(via1, s); }),
+        "VIA 1 (MOS 6522)", "VIA 1", "I/O", 0x9110);
+
+    // VIA 2
+    register_chip(std::make_unique<CChipAdapter>(
+        via2, ChipIdentity{"MOS6522", "MOS Technology"},
+        [via2](bool* s) { mos6522_render_debug_window(via2, s); },
+        [via2](bool* s) { mos6522_render_settings_window(via2, s); }),
+        "VIA 2 (MOS 6522)", "VIA 2", "I/O", 0x9120);
+
+    // RAM (no debug window)
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"DRAM", "Various"}),
+        "RAM (up to 32KB)", "RAM", "Memory", 0x0000);
+
+    // Character ROM
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"ROM", "Commodore"}),
+        "Character ROM (4KB)", "CHARROM", "Memory", 0x8000);
+
+    // BASIC ROM
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"ROM", "Commodore"}),
+        "BASIC ROM (8KB)", "BASIC", "Memory", 0xC000);
+
+    // KERNAL ROM
+    register_chip(std::make_unique<CChipAdapter>(
+        nullptr, ChipIdentity{"ROM", "Commodore"}),
+        "KERNAL ROM (8KB)", "KERNAL", "Memory", 0xE000);
 }
 
 void VIC20System::render_configuration_ui() {

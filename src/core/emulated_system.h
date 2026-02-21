@@ -217,36 +217,37 @@ struct SystemDescriptor {
 };
 
 // ============================================================================
-// CHIP INFO — generic chip enumeration for debug/visualization
+// SYSTEM CHIP — a chip's role within a specific emulated system
 // ============================================================================
 
-/**
- * Describes one chip in the emulated system for the Hardware menu and
- * chip debug/settings windows.  Returned by get_chip_info().
- */
-struct ChipInfo {
-    const char* name;               // Full name, e.g. "VIC-II (MOS 6569)"
-    const char* short_name;         // Short label, e.g. "VIC-II"
-    const char* category;           // Grouping key: "CPU", "Video", "Audio", "I/O", "Memory", "Bus"
-    uint16_t base_address;          // I/O base address ($D400, $DC00, …) or 0
-    bool has_debug_window;          // true if render_chip_debug_window() does something
-    bool has_settings_window;       // true if render_chip_settings_window() does something
-};
+// Forward-declare ChipBase (defined in chip.h)
+// Full include needed because unique_ptr<ChipBase> requires a complete type.
+#include "chip.h"
 
 /**
- * Persistent toggle state for chip debug / settings windows.
- * Managed by SystemGUI, indexed in parallel with get_chip_info().
- * Uses uint8_t instead of bool to allow taking address of elements
- * (std::vector<bool> is bit-packed and does not support &v[i]).
+ * Binds a ChipBase instance to its role in a specific system.
+ *
+ * Combines:
+ *   - the chip itself (via unique_ptr<ChipBase>)
+ *   - system-specific metadata (display name, category, address)
+ *   - GUI toggle state (debug/settings window visibility)
+ *
+ * Stored in EmulatedSystem::registered_chips_, populated during initialize().
+ * Uses uint8_t for toggle state because std::vector<bool> is bit-packed
+ * and does not support taking the address of an element.
  */
-struct ChipDebugState {
-    std::vector<uint8_t> show_debug;
-    std::vector<uint8_t> show_settings;
+struct SystemChip {
+    std::unique_ptr<ChipBase> chip;
 
-    void ensure_size(size_t n) {
-        if (show_debug.size() < n) show_debug.resize(n, 0);
-        if (show_settings.size() < n) show_settings.resize(n, 0);
-    }
+    // System-specific metadata (how this chip is named/categorized here)
+    const char* display_name;    // "CIA 1 (MOS 6526)" — for UI
+    const char* short_name;      // "CIA 1" — for compact display
+    const char* category;        // "CPU", "Video", "Audio", "I/O", "Memory", "Bus"
+    uint16_t base_address;       // Memory-mapped base address (0 if N/A)
+
+    // GUI toggle state (managed by the GUI layer)
+    uint8_t show_debug    = 0;
+    uint8_t show_settings = 0;
 };
 
 /**
@@ -273,14 +274,25 @@ protected:
     float speed_multiplier_;
     bool quit_requested_;
 
-    // Chip debug/settings window toggle state (managed by the GUI layer)
-    ChipDebugState chip_debug_state_;
-
     // Display screen rect — where the emulated display is drawn in SDL window coords.
     // Updated each frame by the GUI after rendering the display image.
     // Used by peripheral devices (e.g. lightpen) for mouse → display coordinate mapping.
     struct ScreenRect { float x = 0, y = 0, w = 0, h = 0; };
     ScreenRect display_screen_rect_;
+
+    // =========================================================================
+    // REGISTERED CHIPS (generic for all systems)
+    // =========================================================================
+    /// Chips registered by each system during initialization.
+    /// The GUI builds the Hardware menu from this list and routes debug/settings
+    /// window rendering through each chip's ChipBase virtual methods.
+    std::vector<SystemChip> registered_chips_;
+
+    /// Register a chip during system initialization.
+    /// The ChipBase adapter is owned by the SystemChip entry.
+    void register_chip(std::unique_ptr<ChipBase> chip,
+                       const char* display_name, const char* short_name,
+                       const char* category, uint16_t base_address = 0);
 
     // =========================================================================
     // CONNECTOR PORTS & PERIPHERAL DEVICES (generic for all systems)
@@ -389,23 +401,11 @@ public:
     virtual void handle_controller_event(int controller, int button, bool pressed);
     virtual void render_debug_windows(void* gui_state);
 
-    // --- Chip Info / Debug / Settings (generic for all systems) ----------
+    // --- Registered Chips (generic for all systems) -----------------------
 
-    /// Return information about each chip in this system.
-    /// The GUI builds the Hardware menu from this list.
-    /// Default: empty (no chips listed).
-    virtual std::vector<ChipInfo> get_chip_info() const { return {}; }
-
-    /// Render the ImGui debug window for chip at \p chip_index.
-    /// \p show points into chip_debug_state_.show_debug[chip_index].
-    virtual void render_chip_debug_window(int chip_index, bool* show);
-
-    /// Render the ImGui settings window for chip at \p chip_index.
-    /// \p show points into chip_debug_state_.show_settings[chip_index].
-    virtual void render_chip_settings_window(int chip_index, bool* show);
-
-    /// Access chip debug toggle state (for the GUI layer).
-    ChipDebugState& get_chip_debug_state() { return chip_debug_state_; }
+    /// Get all registered chips in this system.
+    const std::vector<SystemChip>& get_registered_chips() const { return registered_chips_; }
+    std::vector<SystemChip>& get_registered_chips() { return registered_chips_; }
     
     // Pure virtual (must implement in derived classes)
     virtual const SystemDescriptor& get_descriptor() const = 0;

@@ -56,9 +56,6 @@ public:
     // GUI integration
     void render_system_menu_items() override;
     void render_configuration_ui() override;
-
-    // Chip visualization
-    std::vector<ChipInfo> get_chip_info() const override;
     
     // State
     uint32_t get_target_fps() const override;
@@ -138,6 +135,9 @@ private:
 
     // Key mapping (SDL keycode to CHIP-8 key)
     int map_sdl_key_to_chip8(int sdl_key);
+
+    /// Register logical CHIP-8 chips into registered_chips_ for the Hardware menu.
+    void register_chip8_chips();
 
     // ROM analysis — detect SCHIP/XO-CHIP instructions
     static Chip8Mode detect_mode_from_rom(const uint8_t* data, size_t size);
