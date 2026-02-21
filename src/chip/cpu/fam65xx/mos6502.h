@@ -61,3 +61,8 @@ void mos6502_set_pc(mos6502_t *cpu, uint16_t value);
 
 // Basic descriptor for compatibility
 const chip_descriptor_t *mos6502_get_chip_descriptor(void);
+
+#ifdef __cplusplus
+class ChipBase;
+ChipBase* mos6502_as_chip_base(mos6502_t *cpu);
+#endif

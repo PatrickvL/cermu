@@ -33,6 +33,10 @@ void mos6502_destroy(mos6502_t *cpu) {
   delete CPU_CAST(mos6502_cpu_t, cpu);
 }
 
+ChipBase* mos6502_as_chip_base(mos6502_t *cpu) {
+  return static_cast<ChipBase*>(CPU_CAST(mos6502_cpu_t, cpu));
+}
+
 bus_state_t mos6502_init(mos6502_t *cpu, const chip_descriptor_t *desc) {
   return CPU_CAST(mos6502_cpu_t, cpu)->init(desc);
 }

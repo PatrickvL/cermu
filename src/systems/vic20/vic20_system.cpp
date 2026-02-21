@@ -13,7 +13,7 @@
 
 // Include chip headers
 #include "../../chip/cpu/fam65xx/mos6502.h"
-#include "../../chip/cpu/fam65xx/fam65xx_gui.h"
+// CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
 #include "../../chip/video/vic/mos6560.h"
 #include "../../chip/video/vic/mos6561.h"
 #include "../../chip/video/vic/vic_common.h"  // For VIC_COLOR_* constants
@@ -953,12 +953,8 @@ void VIC20System::register_vic20_chips() {
     auto* via1 = via1_;
     auto* via2 = via2_;
 
-    // CPU
-    register_chip(std::make_unique<CChipAdapter>(
-        cpu, ChipIdentity{"MOS6502", "MOS Technology"},
-        [cpu]() { fam65xx_render_debug_content(cpu); },
-        [cpu]() { fam65xx_render_settings_content(cpu); },
-        [cpu]() { fam65xx_render_layout_content(cpu); }),
+    // CPU — native ChipBase, registered directly
+    register_chip(mos6502_as_chip_base(cpu),
         "MOS 6502 CPU", "6502", "CPU", 0x0000);
 
     // VIC
@@ -969,20 +965,12 @@ void VIC20System::register_vic20_chips() {
         [vic]() { vic_gui_render_layout_content(vic); }),
         "VIC (MOS 6560/6561)", "VIC", "Video", 0x9000);
 
-    // VIA 1
-    register_chip(std::make_unique<CChipAdapter>(
-        via1, ChipIdentity{"MOS6522", "MOS Technology"},
-        [via1]() { mos6522_render_debug_content(via1); },
-        [via1]() { mos6522_render_settings_content(via1); },
-        [via1]() { mos6522_render_layout_content(via1); }),
+    // VIA 1 — native ChipBase, registered directly
+    register_chip(via1,
         "VIA 1 (MOS 6522)", "VIA 1", "I/O", 0x9110);
 
-    // VIA 2
-    register_chip(std::make_unique<CChipAdapter>(
-        via2, ChipIdentity{"MOS6522", "MOS Technology"},
-        [via2]() { mos6522_render_debug_content(via2); },
-        [via2]() { mos6522_render_settings_content(via2); },
-        [via2]() { mos6522_render_layout_content(via2); }),
+    // VIA 2 — native ChipBase, registered directly
+    register_chip(via2,
         "VIA 2 (MOS 6522)", "VIA 2", "I/O", 0x9120);
 
     // RAM (no debug window)
