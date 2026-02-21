@@ -2,7 +2,6 @@
 
 #include "cermu.h"  // Compiler compatibility macros
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include "system_lines.h"
 
@@ -22,7 +21,7 @@ struct ChipIdentity {
 // ============================================================================
 ///
 /// Every chip registered in a system implements this interface, either directly
-/// (native C++ chips) or through a CChipAdapter wrapper (legacy C-struct chips).
+/// (native C++ chips) or through a ChipPlaceholder (identity-only entries).
 ///
 /// Provides:
 ///   - Identity:  what chip type this is
@@ -47,40 +46,20 @@ public:
 };
 
 // ============================================================================
-// C-STRUCT CHIP ADAPTER — wraps legacy C-struct chips as ChipBase
+// CHIP PLACEHOLDER — identity-only chip entry (no GUI, no emulation state)
 // ============================================================================
 ///
-/// Non-owning adapter: the raw chip pointer's lifetime is managed by the system
-/// class that created it.  Rendering callbacks are captured as std::function so
-/// lambdas can close over extra context (chip pointer, titles, etc.).
+/// Lightweight ChipBase for chips that appear in the Hardware menu
+/// but have no debug/settings/layout GUI.  Typical for RAM, ROM, and
+/// other passive components whose emulation is handled elsewhere.
 ///
-class CChipAdapter : public ChipBase {
-    void* chip_ptr_;
+class ChipPlaceholder : public ChipBase {
     ChipIdentity identity_;
-    std::function<void()> debug_fn_;
-    std::function<void()> settings_fn_;
-    std::function<void()> layout_fn_;
 public:
-    CChipAdapter(void* chip, ChipIdentity identity,
-                 std::function<void()> debug_fn = nullptr,
-                 std::function<void()> settings_fn = nullptr,
-                 std::function<void()> layout_fn = nullptr)
-        : chip_ptr_(chip)
-        , identity_(identity)
-        , debug_fn_(std::move(debug_fn))
-        , settings_fn_(std::move(settings_fn))
-        , layout_fn_(std::move(layout_fn)) {}
-
+    explicit ChipPlaceholder(ChipIdentity identity)
+        : identity_(identity) {}
     ChipIdentity chip_identity() const override { return identity_; }
-    bool has_debug_content() const override { return !!debug_fn_; }
-    bool has_settings_content() const override { return !!settings_fn_; }
-    bool has_layout_content() const override { return !!layout_fn_; }
-    void render_debug_content() override { if (debug_fn_) debug_fn_(); }
-    void render_settings_content() override { if (settings_fn_) settings_fn_(); }
-    void render_layout_content() override { if (layout_fn_) layout_fn_(); }
-
-    /// Access the underlying C-struct chip pointer.
-    void* raw_chip() const { return chip_ptr_; }
+    // All has_*() default to false from ChipBase — nothing to override.
 };
 
 // ============================================================================

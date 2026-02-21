@@ -963,23 +963,23 @@ void VIC20System::register_vic20_chips() {
         "VIA 2 (MOS 6522)", "VIA 2", "I/O", 0x9120);
 
     // RAM (no debug window)
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"DRAM", "Various"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"DRAM", "Various"}),
         "RAM (up to 32KB)", "RAM", "Memory", 0x0000);
 
     // Character ROM
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"ROM", "Commodore"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"ROM", "Commodore"}),
         "Character ROM (4KB)", "CHARROM", "Memory", 0x8000);
 
     // BASIC ROM
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"ROM", "Commodore"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"ROM", "Commodore"}),
         "BASIC ROM (8KB)", "BASIC", "Memory", 0xC000);
 
     // KERNAL ROM
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"ROM", "Commodore"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"ROM", "Commodore"}),
         "KERNAL ROM (8KB)", "KERNAL", "Memory", 0xE000);
 }
 

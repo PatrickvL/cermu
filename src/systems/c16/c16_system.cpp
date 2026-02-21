@@ -624,18 +624,18 @@ void Commodore264System<V>::register_c264_chips() {
         "TED 7360 (Video/Audio/I/O)", "TED", "Video", 0xFF00);
 
     // RAM (no debug window)
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"DRAM", "Various"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"DRAM", "Various"}),
         "RAM", "RAM", "Memory", 0x0000);
 
     // BASIC ROM
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"ROM", "Commodore"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"ROM", "Commodore"}),
         "BASIC ROM (16KB)", "BASIC", "Memory", 0x8000);
 
     // KERNAL ROM
-    register_chip(std::make_unique<CChipAdapter>(
-        nullptr, ChipIdentity{"ROM", "Commodore"}),
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipIdentity{"ROM", "Commodore"}),
         "KERNAL ROM (16KB)", "KERNAL", "Memory", 0xC000);
 }
 

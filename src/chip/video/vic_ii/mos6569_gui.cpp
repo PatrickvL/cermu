@@ -6,8 +6,7 @@
 
 // ============================================================================
 // MOS6569 VIC-II GUI FUNCTIONS (PAL)
-// These are legacy wrappers. The new system uses vicii_gui_render_*_content()
-// directly via CChipAdapter lambdas.
+// These are legacy wrappers. The new system uses ChipBase virtual methods.
 // ============================================================================
 
 void mos6569_render_debug_window(void* chip, bool* show_window) {

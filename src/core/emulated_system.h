@@ -287,12 +287,12 @@ protected:
     /// window rendering through each chip's ChipBase virtual methods.
     std::vector<SystemChip> registered_chips_;
 
-    /// Owned CChipAdapters — keeps legacy adapters alive while registered_chips_
-    /// holds non-owning pointers to them. Cleared when the system is destroyed.
+    /// Owned chip objects — keeps ChipPlaceholders and other owned ChipBase
+    /// subclasses alive while registered_chips_ holds non-owning pointers.
     std::vector<std::unique_ptr<ChipBase>> owned_chip_adapters_;
 
-    /// Register a chip with transferred ownership (legacy CChipAdapter pattern).
-    /// The adapter is moved into owned_chip_adapters_ and a raw pointer stored
+    /// Register a chip with transferred ownership (e.g. ChipPlaceholder).
+    /// The chip is moved into owned_chip_adapters_ and a raw pointer stored
     /// in the SystemChip entry.
     void register_chip(std::unique_ptr<ChipBase> chip,
                        const char* display_name, const char* short_name,
