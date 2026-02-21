@@ -25,33 +25,32 @@ static const vic_chip_config_t vic_config_ntsc = {
 };
 
 mos6560_t* mos6560_create() {
-    mos6560_t* vic = (mos6560_t*)calloc(1, sizeof(mos6560_t));
-    if (!vic) return NULL;
+    mos6560_t* vic = new mos6560_t();
 
-    vic->base.is_pal = false;
-    vic->base.clock_frequency = vic_config_ntsc.clock_frequency;
-    vic->base.config = &vic_config_ntsc;
+    vic->is_pal = false;
+    vic->clock_frequency = vic_config_ntsc.clock_frequency;
+    vic->config = &vic_config_ntsc;
 
     // Initialize registers
-    memset(vic->base.registers, 0, sizeof(vic->base.registers));
-    memset(vic->base.color_ram, 0, sizeof(vic->base.color_ram));
+    memset(vic->registers, 0, sizeof(vic->registers));
+    memset(vic->color_ram, 0, sizeof(vic->color_ram));
 
     // Default timing for NTSC
-    vic->base.cycles_per_line = VIC_NTSC_CYCLES_PER_LINE;
-    vic->base.total_lines = VIC_NTSC_TOTAL_LINES;
+    vic->cycles_per_line = VIC_NTSC_CYCLES_PER_LINE;
+    vic->total_lines = VIC_NTSC_TOTAL_LINES;
 
     // Reset video generation state
-    vic_system_reset(&vic->base);
+    vic_system_reset(vic);
 
     // Initialise audio with NTSC clock and default sample rate
-    vic_audio_reset(&vic->base, vic_config_ntsc.clock_frequency, 22050);
+    vic_audio_reset(vic, vic_config_ntsc.clock_frequency, 22050);
 
     return vic;
 }
 
 void mos6560_destroy(mos6560_t* vic) {
     if (!vic) return;
-    free(vic);
+    delete vic;
 }
 
 void mos6560_bus_attach(void* chip, void* bus) {
@@ -59,20 +58,20 @@ void mos6560_bus_attach(void* chip, void* bus) {
 }
 
 void mos6560_set_framebuffer(mos6560_t* vic, uint32_t* framebuffer, int width, int height) {
-    vic_set_framebuffer(&vic->base, framebuffer, width, height);
+    vic_set_framebuffer(vic, framebuffer, width, height);
 }
 
 void mos6560_reset(mos6560_t* vic) {
-    vic_system_reset(&vic->base);
+    vic_system_reset(vic);
 }
 
 // Register access functions
 uint8_t mos6560_read_register(mos6560_t* vic, uint8_t reg) {
-    return vic_read_register(&vic->base, reg);
+    return vic_read_register(vic, reg);
 }
 
 void mos6560_write_register(mos6560_t* vic, uint8_t reg, uint8_t value) {
-    vic_write_register(&vic->base, reg, value);
+    vic_write_register(vic, reg, value);
 }
 
 // Main tick function

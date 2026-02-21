@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "../../core/chip.h"
 #include "../../core/system_lines.h"
 
 // VIC Register indices
@@ -214,50 +215,59 @@ typedef struct {
     uint32_t read_pos;               // Next read  index (wraps)
 } vic_audio_state_t;
 
-// VIC chip structure (common base)
-typedef struct {
-    void* bus;
+// VIC chip structure (common base — inherits ChipBase for GUI integration)
+typedef struct vic_base_s : public ChipBase {
+    void* bus = nullptr;
 
     // Registers
-    uint8_t registers[16];
+    uint8_t registers[16] = {};
 
     // Timing
-    uint16_t raster_counter;
-    uint32_t current_cycle;
-    uint32_t cycles_per_line;
-    uint32_t total_lines;
-    uint32_t clock_frequency;
+    uint16_t raster_counter = 0;
+    uint32_t current_cycle = 0;
+    uint32_t cycles_per_line = 0;
+    uint32_t total_lines = 0;
+    uint32_t clock_frequency = 0;
 
     // Video state
-    uint8_t current_line[40];
-    uint8_t color_ram[1024];
-    uint32_t pixel_line_buffer[284];  // Max line width for rendering
-    int pixel_line_index;
+    uint8_t current_line[40] = {};
+    uint8_t color_ram[1024] = {};
+    uint32_t pixel_line_buffer[284] = {};  // Max line width for rendering
+    int pixel_line_index = 0;
 
     // Framebuffer
-    uint32_t* framebuffer;
-    int framebuffer_width;
-    int framebuffer_height;
+    uint32_t* framebuffer = nullptr;
+    int framebuffer_width = 0;
+    int framebuffer_height = 0;
 
     // Configuration
-    bool is_pal;
-    const vic_chip_config_t* config;
+    bool is_pal = false;
+    const vic_chip_config_t* config = nullptr;
 
     // Memory access callbacks
-    vic_mem_read_fn_t mem_read;
-    void* mem_user_data;
-    vic_mem_read_fn_t color_read;
-    void* color_user_data;
+    vic_mem_read_fn_t mem_read = nullptr;
+    void* mem_user_data = nullptr;
+    vic_mem_read_fn_t color_read = nullptr;
+    void* color_user_data = nullptr;
 
     // Video generation state (updated every tick, not just register copies)
-    bool in_display_area;
-    uint16_t matrix_index;
-    uint8_t matrix_video_byte;
-    uint8_t matrix_color_byte;
-    uint8_t matrix_char_data;
+    bool in_display_area = false;
+    uint16_t matrix_index = 0;
+    uint8_t matrix_video_byte = 0;
+    uint8_t matrix_color_byte = 0;
+    uint8_t matrix_char_data = 0;
 
     // Audio generation state
-    vic_audio_state_t audio;
+    vic_audio_state_t audio = {};
+
+    // --- ChipBase interface ---
+    ChipIdentity chip_identity() const override;
+    bool has_debug_content()    const override;
+    bool has_settings_content() const override;
+    bool has_layout_content()   const override;
+    void render_debug_content()    override;
+    void render_settings_content() override;
+    void render_layout_content()   override;
 } vic_base_t;
 
 // Function prototypes

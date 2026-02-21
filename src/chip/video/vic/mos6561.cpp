@@ -27,20 +27,19 @@ static const vic_chip_config_t vic_config_pal = {
 };
 
 mos6561_t* mos6561_create() {
-    mos6561_t* vic = (mos6561_t*)calloc(1, sizeof(mos6561_t));
-    if (!vic) return NULL;
+    mos6561_t* vic = new mos6561_t();
 
-    vic->base.is_pal = true;
-    vic->base.clock_frequency = vic_config_pal.clock_frequency;
-    vic->base.config = &vic_config_pal;
+    vic->is_pal = true;
+    vic->clock_frequency = vic_config_pal.clock_frequency;
+    vic->config = &vic_config_pal;
 
     // Initialize registers
-    memset(vic->base.registers, 0, sizeof(vic->base.registers));
-    memset(vic->base.color_ram, 0, sizeof(vic->base.color_ram));
+    memset(vic->registers, 0, sizeof(vic->registers));
+    memset(vic->color_ram, 0, sizeof(vic->color_ram));
 
     // Default timing for PAL
-    vic->base.cycles_per_line = VIC_PAL_CYCLES_PER_LINE;
-    vic->base.total_lines = VIC_PAL_TOTAL_LINES;
+    vic->cycles_per_line = VIC_PAL_CYCLES_PER_LINE;
+    vic->total_lines = VIC_PAL_TOTAL_LINES;
 
     // Enable enhanced features
     vic->extended_color_mode = true;
@@ -50,17 +49,17 @@ mos6561_t* mos6561_create() {
     vic->extended_colors[3] = 0xAA; // Gray 2
 
     // Reset video generation state
-    vic_system_reset(&vic->base);
+    vic_system_reset(vic);
 
     // Initialise audio with PAL clock and default sample rate
-    vic_audio_reset(&vic->base, vic_config_pal.clock_frequency, 22050);
+    vic_audio_reset(vic, vic_config_pal.clock_frequency, 22050);
 
     return vic;
 }
 
 void mos6561_destroy(mos6561_t* vic) {
     if (!vic) return;
-    free(vic);
+    delete vic;
 }
 
 void mos6561_bus_attach(void* chip, void* bus) {
@@ -68,11 +67,11 @@ void mos6561_bus_attach(void* chip, void* bus) {
 }
 
 void mos6561_set_framebuffer(mos6561_t* vic, uint32_t* framebuffer, int width, int height) {
-    vic_set_framebuffer(&vic->base, framebuffer, width, height);
+    vic_set_framebuffer(vic, framebuffer, width, height);
 }
 
 void mos6561_reset(mos6561_t* vic) {
-    vic_system_reset(&vic->base);
+    vic_system_reset(vic);
 
     // Reset extended features
     vic->extended_color_mode = true;
@@ -88,7 +87,7 @@ uint8_t mos6561_read_register(mos6561_t* vic, uint8_t reg) {
         return vic->extended_colors[reg - 12];
     }
 
-    return vic_read_register(&vic->base, reg);
+    return vic_read_register(vic, reg);
 }
 
 void mos6561_write_register(mos6561_t* vic, uint8_t reg, uint8_t value) {
@@ -100,7 +99,7 @@ void mos6561_write_register(mos6561_t* vic, uint8_t reg, uint8_t value) {
         return;
     }
 
-    vic_write_register(&vic->base, reg, value);
+    vic_write_register(vic, reg, value);
 }
 
 // Main tick function
