@@ -976,11 +976,13 @@ void mos6581_reset(mos6581_t* sid) {
     mos6581_set_timing(sid, sid->pal_timing);
 }
 
+// Destructor — clean up dynamically allocated ring buffer
+mos6581_s::~mos6581_s() {
+    ring_buffer_destroy(&sample_buffer);
+}
+
 void mos6581_destroy(mos6581_t* sid) {
-    if (!sid) return;
-    
-    ring_buffer_destroy(&sid->sample_buffer);
-    free(sid);
+    delete sid; // destructor handles ring_buffer cleanup
 }
 
 void mos6581_bus_attach(void* chip, bus_cycle_ops_t* bus_interface) {
@@ -991,10 +993,7 @@ void mos6581_bus_attach(void* chip, bus_cycle_ops_t* bus_interface) {
 }
 
 mos6581_t* mos6581_create() {
-    mos6581_t* sid = (mos6581_t*)calloc(1, sizeof(mos6581_t));
-    if (!sid) return NULL;
-    
-    sid->desc = &mos6581_descriptor;
+    mos6581_t* sid = new mos6581_t();
     
     // Initialize voices with references
     sid->voices[0] = &sid->voice1;
@@ -1013,9 +1012,6 @@ mos6581_t* mos6581_create() {
     sid->pal_timing = true;
     sid->sample_rate = 44100.0f;
     sid->cpu_clock = 985248.0f;   // PAL C64 default
-    sid->sample_accumulator = 0.0;
-    sid->sample_cycle_count = 0;
-    sid->output_acc = 0.0;
     sid->enable_filter = true;
     sid->enable_distortion = true;
     sid->enable_digiboost = true;
@@ -1030,10 +1026,10 @@ mos6581_t* mos6581_create() {
     return sid;
 }
 
-// Include GUI implementation if available
-#ifdef IMGUI_VERSION
-#include "mos6581_gui.h"
-#endif
+// ChipBase identity
+ChipIdentity mos6581_s::chip_identity() const {
+    return ChipIdentity{"MOS6581", "MOS Technology"};
+}
 
 /**
  * Consolidated SID tick function - main entry point for SID cycle processing.
@@ -1056,5 +1052,7 @@ chip_descriptor_t mos6581_descriptor = {
     .description = "MOS6581 SID Sound Interface Device",
     .create = [](chip_descriptor_t*) -> void* { return mos6581_create(); },
     .destroy = [](void* chip) { mos6581_destroy(static_cast<mos6581_t*>(chip)); },
-    .bus_attach = (void (*)(void *, void *))mos6581_bus_attach
+    .bus_attach = [](void* chip, void* bus) {
+        mos6581_bus_attach(chip, static_cast<bus_cycle_ops_t*>(bus));
+    }
 };

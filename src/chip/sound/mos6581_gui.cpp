@@ -175,9 +175,9 @@ static ChipLayout& get_sid_layout() {
     return layout;
 }
 
-void mos6581_render_debug_content(void* chip) {
-    mos6581_t* sid = (mos6581_t*)chip;
-    if (!sid || !sid->desc) return;
+// Class method implementation
+void mos6581_s::render_debug_content() {
+    mos6581_t* sid = this;
     
 #ifdef IMGUI_VERSION
     // Create two-column layout: chip visualization on left, debugging info on right
@@ -257,12 +257,17 @@ void mos6581_render_debug_content(void* chip) {
 #endif
 }
 
+// Legacy C-linkage wrapper
+extern "C" void mos6581_render_debug_content(void* chip) {
+    if (chip) static_cast<mos6581_t*>(chip)->render_debug_content();
+}
+
 // ============================================================================
 // MOS6581 SID GUI SETTINGS WINDOW
 // ============================================================================
-void mos6581_render_settings_content(void* chip) {
-    mos6581_t* sid = (mos6581_t*)chip;
-    if (!sid || !sid->desc) return;
+// Class method implementation
+void mos6581_s::render_settings_content() {
+    mos6581_t* sid = this;
     
 #ifdef IMGUI_VERSION
 
@@ -383,17 +388,27 @@ void mos6581_render_settings_content(void* chip) {
 #endif
 }
 
+// Legacy C-linkage wrapper
+extern "C" void mos6581_render_settings_content(void* chip) {
+    if (chip) static_cast<mos6581_t*>(chip)->render_settings_content();
+}
+
 // ============================================================================
 // MOS6581 SID LAYOUT (standalone pinout diagram)
 // ============================================================================
 
-void mos6581_render_layout_content(void* chip) {
-    mos6581_t* sid = (mos6581_t*)chip;
-    if (!sid) return;
+// Class method implementation
+void mos6581_s::render_layout_content() {
+    mos6581_t* sid = this;
 
 #ifdef IMGUI_VERSION
     ChipLayout& layout = get_sid_layout();
     std::vector<PinSignalState> pin_states = get_sid_pin_states(sid, &layout, 0);
     render_chip_layout(layout, pin_states, "MOS6581");
 #endif
+}
+
+// Legacy C-linkage wrapper
+extern "C" void mos6581_render_layout_content(void* chip) {
+    if (chip) static_cast<mos6581_t*>(chip)->render_layout_content();
 }
