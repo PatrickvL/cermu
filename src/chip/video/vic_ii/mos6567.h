@@ -9,7 +9,7 @@
 typedef vicii_t mos6567_t;
 
 // Lifecycle and bus attach
-void* mos6567_system_create(chip_descriptor_t* desc);
+vicii_t* mos6567_create();
 
 // Register I/O
 bus_state_t mos6567_registers_read(void* chip, bus_state_t bus_state);

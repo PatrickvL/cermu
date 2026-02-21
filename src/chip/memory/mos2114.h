@@ -32,8 +32,8 @@ typedef struct mos2114_s {
 extern chip_descriptor_t mos2114_descriptor;
 
 // Creation and destruction functions
-void* mos2114_create(chip_descriptor_t* desc);
-void mos2114_destroy(void* chip);
+mos2114_t* mos2114_create();
+void mos2114_destroy(mos2114_t* chip);
 
 // Read/Write functions - bus state interface
 bus_state_t mos2114_read(void* context, bus_state_t bus_state);

@@ -976,8 +976,7 @@ void mos6581_reset(mos6581_t* sid) {
     mos6581_set_timing(sid, sid->pal_timing);
 }
 
-void mos6581_system_destroy(void* chip) {
-    mos6581_t* sid = (mos6581_t*)chip;
+void mos6581_destroy(mos6581_t* sid) {
     if (!sid) return;
     
     ring_buffer_destroy(&sid->sample_buffer);
@@ -991,11 +990,11 @@ void mos6581_bus_attach(void* chip, bus_cycle_ops_t* bus_interface) {
     sid->bus_interface = *bus_interface;
 }
 
-void* mos6581_system_create(chip_descriptor_t* desc) {
+mos6581_t* mos6581_create() {
     mos6581_t* sid = (mos6581_t*)calloc(1, sizeof(mos6581_t));
     if (!sid) return NULL;
     
-    sid->desc = desc;
+    sid->desc = &mos6581_descriptor;
     
     // Initialize voices with references
     sid->voices[0] = &sid->voice1;
@@ -1055,8 +1054,8 @@ bus_state_t mos6581_tick(void* chip, bus_state_t bus_state) {
 
 chip_descriptor_t mos6581_descriptor = {
     .description = "MOS6581 SID Sound Interface Device",
-    .create = mos6581_system_create,
-    .destroy = mos6581_system_destroy,
+    .create = [](chip_descriptor_t*) -> void* { return mos6581_create(); },
+    .destroy = [](void* chip) { mos6581_destroy(static_cast<mos6581_t*>(chip)); },
     .bus_attach = (void (*)(void *, void *))mos6581_bus_attach,
     .bank_change = NULL
 };

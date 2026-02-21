@@ -7,8 +7,8 @@
 // MOS6561 chip descriptor
 chip_descriptor_t mos6561_descriptor = {
     .description = "MOS6561 VIC Video Interface Controller (Enhanced)",
-    .create = mos6561_create,
-    .destroy = mos6561_destroy,
+    .create = [](chip_descriptor_t*) -> void* { return mos6561_create(); },
+    .destroy = [](void* chip) { mos6561_destroy(static_cast<mos6561_t*>(chip)); },
     .bus_attach = (void (*)(void *, void *))mos6561_bus_attach,
     .bank_change = NULL
 };
@@ -27,11 +27,10 @@ static const vic_chip_config_t vic_config_pal = {
     .is_pal = true
 };
 
-void* mos6561_create(chip_descriptor_t* desc) {
+mos6561_t* mos6561_create() {
     mos6561_t* vic = (mos6561_t*)calloc(1, sizeof(mos6561_t));
     if (!vic) return NULL;
 
-    vic->base.desc = desc;
     vic->base.is_pal = true;
     vic->base.clock_frequency = vic_config_pal.clock_frequency;
     vic->base.config = &vic_config_pal;
@@ -60,9 +59,8 @@ void* mos6561_create(chip_descriptor_t* desc) {
     return vic;
 }
 
-void mos6561_destroy(void* chip) {
-    if (!chip) return;
-    mos6561_t* vic = (mos6561_t*)chip;
+void mos6561_destroy(mos6561_t* vic) {
+    if (!vic) return;
     free(vic);
 }
 

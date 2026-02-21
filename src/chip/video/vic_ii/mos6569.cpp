@@ -6,9 +6,10 @@
 /**
  * PAL VIC-II (MOS6569) lifecycle and bus attach wrappers
  */
-void* mos6569_system_create(chip_descriptor_t* desc) {
+vicii_t* mos6569_create() {
     const vicii_chip_config_t* config = vicii_get_default_config(true); // PAL = true
-    vicii_t* vicii = vicii_system_create(desc, config, vicii_memory_bank_change);
+    vicii_t* vicii = vicii_create(config, vicii_memory_bank_change);
+    if (vicii) vicii->desc = &mos6569_descriptor;
     return vicii;
 }
 
@@ -17,8 +18,8 @@ void* mos6569_system_create(chip_descriptor_t* desc) {
  */
 chip_descriptor_t mos6569_descriptor = {
     .description = "MOS6569 VIC-II Video Interface Chip (PAL)",
-    .create      = mos6569_system_create,
-    .destroy     = vicii_system_destroy,
+    .create      = [](chip_descriptor_t*) -> void* { return mos6569_create(); },
+    .destroy     = [](void* chip) { vicii_destroy(static_cast<vicii_t*>(chip)); },
     .bus_attach  = vicii_bus_attach,
     .bank_change = vicii_memory_bank_change
 };

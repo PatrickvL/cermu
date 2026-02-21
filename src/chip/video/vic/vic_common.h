@@ -216,7 +216,6 @@ typedef struct {
 
 // VIC chip structure (common base)
 typedef struct {
-    void* desc;
     void* bus;
 
     // Registers

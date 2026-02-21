@@ -2499,11 +2499,10 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
 // PUBLIC API FUNCTIONS
 // ========================================================================================
 
-vicii_t* vicii_system_create(chip_descriptor_t* desc, const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t)) {
+vicii_t* vicii_create(const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t)) {
     vicii_t* vicii = (vicii_t*)calloc(1, sizeof(vicii_t));
     if (!vicii) return NULL;
     
-    vicii->desc = desc;
     vicii->config = config;
     vicii->bus.bank_change = bank_change;
     vicii_initialize(vicii);
@@ -2512,8 +2511,7 @@ vicii_t* vicii_system_create(chip_descriptor_t* desc, const vicii_chip_config_t*
     return vicii;
 }
 
-void vicii_system_destroy(void* chip) {
-    vicii_t* vicii = (vicii_t*)chip;
+void vicii_destroy(vicii_t* vicii) {
     if (vicii) {
         // Free buffers
         free(vicii->pixel.pixel_line_priority);

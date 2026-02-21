@@ -6,10 +6,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-void* mos2114_create(chip_descriptor_t* desc) {
+mos2114_t* mos2114_create() {
     mos2114_t* mos2114 = (mos2114_t*)calloc(1, sizeof(mos2114_t));
     if (!mos2114) return NULL;
-    mos2114->desc = desc;
+    mos2114->desc = &mos2114_descriptor;
     
     // Allocate 1KB memory for Color RAM (MOS2114 1K x 4-bit)
     mos2114->memory = (uint8_t*)calloc(1024, sizeof(uint8_t));
@@ -20,9 +20,8 @@ void* mos2114_create(chip_descriptor_t* desc) {
     return mos2114;
 }
 
-void mos2114_destroy(void* chip) {
-    if (!chip) return;
-    mos2114_t* mos2114 = (mos2114_t*)chip;
+void mos2114_destroy(mos2114_t* mos2114) {
+    if (!mos2114) return;
     
     // Free the allocated Color RAM memory
     if (mos2114->memory) {
@@ -77,8 +76,8 @@ bus_state_t mos2114_write(void* context, bus_state_t bus_state) {
 
 chip_descriptor_t mos2114_descriptor = {
     .description = "MOS2114 Color RAM (1K x 4-bit)",
-    .create = mos2114_create,
-    .destroy = mos2114_destroy,
+    .create = [](chip_descriptor_t*) -> void* { return mos2114_create(); },
+    .destroy = [](void* chip) { mos2114_destroy(static_cast<mos2114_t*>(chip)); },
     .bus_attach = NULL,
     .bank_change = NULL
 };

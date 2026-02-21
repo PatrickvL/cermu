@@ -77,10 +77,8 @@ public:
         // Create CPU instance
         cpu_ = mos6502_create();
         
-        // Initialize CPU with enhanced descriptor and memory callbacks
-        fam65xx_chip_descriptor_t* desc = mos6502_create_descriptor(mem_read, mem_write, this);
-        pins_ = mos6502_init_enhanced(cpu_, desc);
-        mos6502_destroy_descriptor(desc);
+        // Initialize CPU (descriptor-free — memory I/O is handled via bus_state_t pins)
+        pins_ = mos6502_init(cpu_, nullptr);
     }
     
     ~KlausTestHarness() {

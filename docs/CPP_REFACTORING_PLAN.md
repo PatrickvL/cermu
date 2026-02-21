@@ -60,88 +60,61 @@ This is the hottest legacy coupling — it runs every time the CPU I/O port bits
 
 ## Phased Refactoring Plan
 
-### Phase 0: Delete Dead Code
+### Phase 0: Delete Dead Code ✅ COMPLETE
 
-**Effort:** Small (< 1 hour)
-**Risk:** None
-**Files affected:** ~5
+**Status:** All dead code removed, builds verified.
 
-| Task | Files | Details |
-|------|-------|---------|
-| Delete `emulation_context_t` | `emulation_context.h`, `emulation_context.cpp` | 0 callers, 0 external includes. Contains memory leaks. Fully superseded by `EmulatedSystem` + `SystemChip`. |
-| Delete `chip_callback_t` typedef | `chip.h` | Declared, never referenced. |
-| Remove NULL'd render function pointers from `ChipDescriptor` | `chip.h` | `render_debug_window` and `render_settings_window` slots — all set to NULL in every descriptor. Remove the slots from the struct. |
-| Remove NULL'd render pointers from all 16 static descriptors | All chip `.cpp` files listed in §1 | Mechanical: delete `.render_debug_window = NULL, .render_settings_window = NULL` from each initializer. |
-
-**Verification:** Build + run all tests. No behavioral change.
+| Task | Status |
+|------|--------|
+| Delete `emulation_context_t` | ✅ Deleted `emulation_context.h` + `.cpp`, removed from CMakeLists.txt |
+| Delete `chip_callback_t` typedef | ✅ Removed from `chip.h`, also removed dead `AccessCallback` from `system.h` |
+| Remove render function pointer slots from `ChipDescriptor` | ✅ Removed `render_debug_window`/`render_settings_window` from struct |
+| Remove render pointers from all descriptors | ✅ Removed from 13 designated-initializer descriptors + 5 CPU imperative descriptors |
+| Delete `fam65xx_chip_descriptor_t` | ✅ Removed struct + all 3 supporting functions (`create_descriptor`, `init_enhanced`, `destroy_descriptor`) — discovered all callers were no-ops |
 
 ---
 
-### Phase 1: Typed Chip Lifecycle — Eliminate `desc->create` / `desc->destroy`
+### Phase 1: Typed Chip Lifecycle — Eliminate `desc->create` / `desc->destroy` ✅ COMPLETE
 
-**Effort:** Medium (2–4 hours per system)
-**Risk:** Low — each system is independent
-**Files affected:** ~15–20 across all systems
+**Status:** Implemented — all systems migrated to typed create/destroy
 
-**Goal:** Every chip is created by a typed C++ factory or constructor, and destroyed by
-a typed destructor. No more `desc->create(desc)` / `desc->destroy(chip)` vtable dispatch
-for lifecycle.
+**Summary of changes:**
 
-#### 1a. VIC-20 — Normalize Lifecycle Inconsistencies
+#### 1a. VIC-20 — Normalize Lifecycle Inconsistencies ✅
 
-Current VIC-20 destructor mixes `free()`, `mos6522_destroy()`, `mos6502_destroy()`:
+| Chip | Change |
+|------|--------|
+| VIC (mos6560/6561) | `void* create(desc*)` → `mos6560_t*/mos6561_t* create()`, `void destroy(void*)` → typed. Fixed `free(vic_)` bug → proper `mos6560_destroy()`/`mos6561_destroy()` dispatch based on `is_pal`. |
+| VIA (mos6522) | `void* create(desc*)` → `mos6522_t* create()`, `void destroy(void*)` → `void destroy(mos6522_t*)`. |
+| CPU (mos6502) | Removed dead `fam65xx_chip_descriptor_t` ceremony (create_descriptor → init_enhanced → destroy_descriptor did nothing — `init()` ignores desc, `mem_read`/`mem_write` fields unused). Now calls `mos6502_init(cpu, nullptr)`. |
 
-| Chip | Current Creation | Current Destruction | Target |
-|------|------------------|---------------------|--------|
-| VIC (mos6560/6561) | `desc->create(desc)` → `malloc` | `free(vic_)` | Typed constructor + destructor |
-| VIA (mos6522) | `desc->create(desc)` → `malloc` | `mos6522_destroy()` | Typed constructor + destructor |
-| CPU (mos6502) | `mos6502_create()` | `mos6502_destroy()` | Keep (fam65xx factory, unchanged until Phase 3) |
-| Memory | `vic20_memory_create()` | `vic20_memory_destroy()` | Keep (system-specific factory) |
-| Keyboard | `commodore_keyboard_create()` | `commodore_keyboard_destroy()` | Keep (shared factory) |
+- Removed `void* desc` field from `vic_base_t` (unused after typed lifecycle).
+- All VIC-20 callers in `vic20_system.cpp` updated to typed create/destroy.
 
-**Actions:**
-- Replace `mos6561_create(&desc)` / `free()` with typed `mos6561_t` constructor/destructor.
-- Replace `mos6522_create(&desc)` / `mos6522_destroy()` with typed constructor/destructor.
-- In each chip's `.cpp`, keep the static `chip_descriptor_t` for now (Phase 2 removes the
-  bank_change coupling; Phase 3 removes the struct entirely).
-- Use `std::unique_ptr<mos6561_t>` / `std::unique_ptr<mos6522_t>` in the system class.
+#### 1b. C64 System — Decouple from `desc->create` / `desc->destroy` ✅
 
-#### 1b. C64 System — Decouple from `desc->create` / `desc->destroy`
+| Chip | Change |
+|------|--------|
+| RAM | `void* ram_system_create(desc*)` → `ram_t* ram_create()` + `void ram_destroy(ram_t*)` |
+| ROM | `void* rom_system_create(desc*)` → `rom_t* rom_create()`, `rom_create_with_size(size)` + `void rom_destroy(rom_t*)` |
+| MOS2114 | `void* mos2114_create(desc*)` → `mos2114_t* mos2114_create()` + `void mos2114_destroy(mos2114_t*)` |
+| MOS6526 | `void* mos6526_system_create(desc*)` → `mos6526_t* mos6526_create()` + `void mos6526_destroy(mos6526_t*)` |
+| MOS6581 | `void* mos6581_system_create(desc*)` → `mos6581_t* mos6581_create()` + `void mos6581_destroy(mos6581_t*)` |
+| VIC-II | `vicii_system_create(desc*, config, bank_change)` → `vicii_create(config, bank_change)`, `mos6569_create()`/`mos6567_create()` + `void vicii_destroy(vicii_t*)` |
 
-`c64_system.cpp` currently calls:
-```cpp
-void* chip = desc->create(desc);   // e.g. ram_descriptor.create(&ram_descriptor)
-desc->destroy(chip);               // in shutdown
-```
+- All chip descriptors updated to use forwarding lambdas (e.g. `.create = [](desc*) -> void* { return mos6526_create(); }`)
+- `c64_system.cpp`: Removed `create_chip()`/`destroy_chip()` helpers, replaced with direct typed calls
+- `c64.cpp` (test framework): Still uses `desc->create()`/`desc->destroy()` through `System8Bit` — works via lambda forwarding. Full migration deferred to Phase 4.
 
-**Actions:**
-- Replace each `create_chip(&ram_descriptor, ...)` with a typed factory: `ram_create(size)`.
-- Replace each `destroy_chip(chip, &desc)` with a typed destroy: `ram_destroy(ram)`.
-- These typed factories already exist for most chips — just stop routing through
-  `desc->create`/`desc->destroy` indirection.
-- The `c64_system_init` / `c64_system_cleanup` functions in `c64.cpp` need equivalent
-  changes (this also fixes the test framework path).
+#### 1c. Apple 1 — Decouple CPU Initialization ✅
 
-#### 1c. Apple 1 — Decouple CPU Initialization
+- Removed dead `fam65xx_chip_descriptor_t` ceremony from Apple 1, VIC-20, and both test harnesses (Klaus, Lorenz).
+- Deleted `mos6502_create_descriptor()`, `mos6502_init_enhanced()`, `mos6502_destroy_descriptor()` (all callers removed).
+- Deleted `fam65xx_chip_descriptor_t` struct from `fam65xx_types.h` (no remaining consumers).
 
-Apple 1 uses `fam65xx_chip_descriptor_t` solely to wire `mem_read` / `mem_write` callbacks
-into the CPU during initialization. After init, the descriptor is freed.
-
-**Actions:**
-- Replace `fam65xx_chip_descriptor_t` with a typed init struct:
-  ```cpp
-  struct CPUCallbacks {
-      uint8_t (*mem_read)(void* context, uint16_t addr);
-      void (*mem_write)(void* context, uint16_t addr, uint8_t data);
-      void* context;
-  };
-  ```
-- Or better: pass `mem_read`/`mem_write` directly to the CPU init function as parameters
-  instead of packing them into a descriptor.
-- This decouples Apple 1 from `chip_descriptor_t` entirely.
-
-**After Phase 1:** `ChipDescriptor::create` and `ChipDescriptor::destroy` function pointer
-slots are unused. Remove them from the struct (leaving only `bank_change` and `bus_attach`).
+**Post Phase 1 status:** `ChipDescriptor::create`/`destroy` slots still exist with lambda forwarding.
+They are consumed by `c64.cpp` test framework via `System8Bit::destroy_all_chips()`.
+Full removal deferred to Phase 4 (eliminate `System8Bit`).
 
 ---
 

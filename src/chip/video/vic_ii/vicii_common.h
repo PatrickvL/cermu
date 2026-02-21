@@ -501,8 +501,8 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state);
 void vicii_tick_phi2(vicii_t* vicii, bus_state_t bus_state);
 
 // Factory and lifecycle
-vicii_t* vicii_system_create(chip_descriptor_t* desc, const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t));
-void vicii_system_destroy(void* chip);
+vicii_t* vicii_create(const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t));
+void vicii_destroy(vicii_t* vicii);
 void vicii_reset(vicii_t* vicii);
 
 // Configuration helpers
