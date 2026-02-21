@@ -62,7 +62,7 @@
 #include "../../core/system_lines.h"
 
 // Forward declaration
-typedef struct ted7360_t ted7360_t;
+struct ted7360_t;
 
 // ============================================================================
 // REGISTER INDICES ($FF00-$FF1F)
@@ -375,9 +375,9 @@ struct ted_sound_unit_t {
 // TED 7360 MAIN STRUCTURE
 // ============================================================================
 
-struct ted7360_t {
+struct ted7360_t : public ChipBase {
     // Configuration
-    chip_descriptor_t* desc;
+    chip_descriptor_t* desc = nullptr;
 
     // Unit structures (following VIC-II decomposition)
     ted_registers_unit_t   registers;
@@ -395,23 +395,32 @@ struct ted7360_t {
     ted_bus_unit_t         bus;
 
     // IRQ state
-    uint8_t irq_status;              // Pending IRQ sources (latched)
-    uint8_t irq_mask;                // Enabled IRQ sources
+    uint8_t irq_status = 0;              // Pending IRQ sources (latched)
+    uint8_t irq_mask = 0;                // Enabled IRQ sources
 
     // Memory banking
-    bool rom_enabled;                // true = ROM visible, false = RAM visible
+    bool rom_enabled = false;                // true = ROM visible, false = RAM visible
 
     // Keyboard
-    ted_keyboard_scan_fn keyboard_scan;
-    void* keyboard_user_data;
-    uint8_t keyboard_latch;          // Last value written to $FF08
+    ted_keyboard_scan_fn keyboard_scan = nullptr;
+    void* keyboard_user_data = nullptr;
+    uint8_t keyboard_latch = 0;          // Last value written to $FF08
 
     // Flash / cursor blink
-    uint8_t flash_counter;           // 6-bit flash counter (incremented each frame)
-    bool    cursor_visible;          // Current cursor blink phase
+    uint8_t flash_counter = 0;           // 6-bit flash counter (incremented each frame)
+    bool    cursor_visible = false;          // Current cursor blink phase
 
     // Reverse mode
-    bool reverse_mode;               // RVS bit from $FF07
+    bool reverse_mode = false;               // RVS bit from $FF07
+
+    // --- ChipBase interface ---
+    ChipIdentity chip_identity() const override;
+    bool has_debug_content()    const override;
+    bool has_settings_content() const override;
+    bool has_layout_content()   const override;
+    void render_debug_content()    override;
+    void render_settings_content() override;
+    void render_layout_content()   override;
 };
 
 // ============================================================================

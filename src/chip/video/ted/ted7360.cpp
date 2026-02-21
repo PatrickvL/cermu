@@ -31,7 +31,6 @@
  */
 
 #include "ted7360.h"
-#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 
@@ -625,8 +624,7 @@ static void ted_timing_advance(ted7360_t* ted) {
 ted7360_t* ted7360_create(const ted7360_desc_t* desc) {
     ted_init_palette();
 
-    ted7360_t* ted = (ted7360_t*)calloc(1, sizeof(ted7360_t));
-    if (!ted) return nullptr;
+    ted7360_t* ted = new ted7360_t();
 
     ted->timing.is_pal = desc ? desc->is_pal : true;
     ted->keyboard_scan = desc ? desc->keyboard_scan : nullptr;
@@ -646,7 +644,7 @@ ted7360_t* ted7360_create(const ted7360_desc_t* desc) {
     }
 
     // Allocate line buffer for pixel color indices
-    ted->pixel.color_line = (uint8_t*)calloc(TED_VISIBLE_WIDTH, sizeof(uint8_t));
+    ted->pixel.color_line = new uint8_t[TED_VISIBLE_WIDTH]();
 
     ted7360_reset(ted);
     return ted;
@@ -654,11 +652,9 @@ ted7360_t* ted7360_create(const ted7360_desc_t* desc) {
 
 void ted7360_destroy(ted7360_t* ted) {
     if (!ted) return;
-    if (ted->pixel.color_line) {
-        free(ted->pixel.color_line);
-        ted->pixel.color_line = nullptr;
-    }
-    free(ted);
+    delete[] ted->pixel.color_line;
+    ted->pixel.color_line = nullptr;
+    delete ted;
 }
 
 void ted7360_reset(ted7360_t* ted) {
