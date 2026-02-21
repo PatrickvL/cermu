@@ -64,7 +64,7 @@ inline ChipLayout create_mos2114_layout() {
 
 #ifdef IMGUI_VERSION
 // Helper function to get MOS2114 pin states for visualization
-static std::vector<PinSignalState> get_mos2114_pin_states(mos2114_t* mos2114, const ChipLayout* layout, bus_state_t bus_state) {
+static std::vector<PinSignalState> get_mos2114_pin_states(MOS2114* mos2114, const ChipLayout* layout, bus_state_t bus_state) {
     std::vector<PinSignalState> pin_states;
     if (!mos2114 || !layout) return pin_states;
     
@@ -142,11 +142,15 @@ static ChipLayout& get_mos2114_layout() {
 #endif
 
 // ============================================================================
-// MOS2114 GUI FUNCTIONS (always defined for linking, conditionally implemented)
+// MOS2114 GUI METHODS (ChipBase overrides)
 // ============================================================================
+
+// Legacy C-linkage wrapper (used by c64.cpp test path CChipAdapter)
 extern "C" void mos2114_render_debug_content(void* chip) {
-    mos2114_t* mos2114 = (mos2114_t*)chip;
-    if (!mos2114 || !mos2114->desc) return;
+    if (chip) static_cast<MOS2114*>(chip)->render_debug_content();
+}
+
+void MOS2114::render_debug_content() {
 
 #ifdef IMGUI_VERSION
     // Create two-column layout: chip visualization on left, debugging info on right
@@ -169,7 +173,7 @@ extern "C" void mos2114_render_debug_content(void* chip) {
         ChipLayout& layout = get_mos2114_layout();
         
         // Get current pin states from MOS2114
-        std::vector<PinSignalState> pin_states = get_mos2114_pin_states(mos2114, &layout, 0 /* bus_state */);
+        std::vector<PinSignalState> pin_states = get_mos2114_pin_states(this, &layout, 0 /* bus_state */);
         
         // Render the chip using global renderer
         renderer.render(layout, chip_center, pin_states, "MOS2114");
@@ -185,7 +189,7 @@ extern "C" void mos2114_render_debug_content(void* chip) {
         ImGui::Text("MOS2114 Color RAM");
         ImGui::Separator();
         
-        ImGui::Text("Type: %s", mos2114->desc->description);
+        ImGui::Text("Type: MOS2114 Color RAM (1K x 4-bit)");
         ImGui::Text("Capacity: 1024 x 4-bit (1KB)");
         ImGui::Text("Address Range: $D800-$DBFF");
         ImGui::Text("Usage: C64 Color RAM");
@@ -201,18 +205,14 @@ extern "C" void mos2114_render_debug_content(void* chip) {
             ImGui::Text("Color RAM at offset $%03X:", view_address);
             
             // Show 16 nibbles (4-bit values) in a row
-            if (mos2114->memory) {
-                for (int row = 0; row < 4 && (view_address + row * 16) < 1024; row++) {
-                    ImGui::Text("%03X: ", view_address + (row * 16));
+            for (int row = 0; row < 4 && (view_address + row * 16) < 1024; row++) {
+                ImGui::Text("%03X: ", view_address + (row * 16));
+                ImGui::SameLine();
+                for (int col = 0; col < 16 && (view_address + row * 16 + col) < 1024; col++) {
+                    uint8_t color_value = memory[view_address + row * 16 + col] & 0x0F;
                     ImGui::SameLine();
-                    for (int col = 0; col < 16 && (view_address + row * 16 + col) < 1024; col++) {
-                        uint8_t color_value = mos2114->memory[view_address + row * 16 + col] & 0x0F;
-                        ImGui::SameLine();
-                        ImGui::Text("%01X", color_value);
-                    }
+                    ImGui::Text("%01X", color_value);
                 }
-            } else {
-                ImGui::Text("Memory not allocated");
             }
         }
         
@@ -247,33 +247,31 @@ extern "C" void mos2114_render_debug_content(void* chip) {
 }
 
 extern "C" void mos2114_render_settings_content(void* chip) {
-    mos2114_t* mos2114 = (mos2114_t*)chip;
-    if (!mos2114 || !mos2114->desc) return;
+    static_cast<MOS2114*>(chip)->render_settings_content();
+}
+
+void MOS2114::render_settings_content() {
 
 #ifdef IMGUI_VERSION
 
     ImGui::Text("MOS2114 Color RAM Settings");
     ImGui::Separator();
     
-    ImGui::Text("Type: %s", mos2114->desc->description);
+    ImGui::Text("Type: MOS2114 Color RAM (1K x 4-bit)");
     ImGui::Text("Size: 1024 x 4-bit");
     ImGui::Text("C64 Usage: Color RAM");
 
     ImGui::Separator();
     
     if (ImGui::Button("Clear Color RAM", ImVec2(0, 0))) {
-        if (mos2114->memory) {
-            memset(mos2114->memory, 0, 1024);
-        }
+        memset(memory, 0, 1024);
     }
     
     ImGui::SameLine(0, 10.0f);
     if (ImGui::Button("Fill with Pattern", ImVec2(0, 0))) {
-        if (mos2114->memory) {
-            // Fill with alternating color pattern
-            for (int i = 0; i < 1024; i++) {
-                mos2114->memory[i] = (i % 16) & 0x0F;
-            }
+        // Fill with alternating color pattern
+        for (int i = 0; i < 1024; i++) {
+            memory[i] = (i % 16) & 0x0F;
         }
     }
     
@@ -288,13 +286,14 @@ extern "C" void mos2114_render_settings_content(void* chip) {
 // ============================================================================
 
 extern "C" void mos2114_render_layout_content(void* chip) {
-    if (!chip) return;
+    static_cast<MOS2114*>(chip)->render_layout_content();
+}
+
+void MOS2114::render_layout_content() {
 
 #ifdef IMGUI_VERSION
-    mos2114_t* mos2114 = (mos2114_t*)chip;
-
     ChipLayout& layout = get_mos2114_layout();
-    std::vector<PinSignalState> pin_states = get_mos2114_pin_states(mos2114, &layout, 0);
+    std::vector<PinSignalState> pin_states = get_mos2114_pin_states(this, &layout, 0);
     render_chip_layout(layout, pin_states, "MOS2114");
 #endif
 }

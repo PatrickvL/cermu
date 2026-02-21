@@ -1,82 +1,89 @@
 #include "mos2114.h"
 #include "../../core/system_lines.h"
-#ifdef IMGUI_VERSION
-#include "mos2114_gui.h"
-#endif
-#include <stdlib.h>
-#include <string.h>
+#include <cstring>
 
-mos2114_t* mos2114_create() {
-    mos2114_t* mos2114 = (mos2114_t*)calloc(1, sizeof(mos2114_t));
-    if (!mos2114) return NULL;
-    mos2114->desc = &mos2114_descriptor;
-    
-    // Allocate 1KB memory for Color RAM (MOS2114 1K x 4-bit)
-    mos2114->memory = (uint8_t*)calloc(1024, sizeof(uint8_t));
-    if (!mos2114->memory) {
-        free(mos2114);
-        return NULL;
-    }
-    return mos2114;
+// ============================================================================
+// MOS2114 — constructor
+// ============================================================================
+MOS2114::MOS2114() {
+    std::memset(memory, 0, sizeof(memory));
 }
 
-void mos2114_destroy(mos2114_t* mos2114) {
-    if (!mos2114) return;
-    
-    // Free the allocated Color RAM memory
-    if (mos2114->memory) {
-        free(mos2114->memory);
-        mos2114->memory = NULL;
-    }
-    
-    free(mos2114);
+// ============================================================================
+// ChipBase identity
+// ============================================================================
+ChipIdentity MOS2114::chip_identity() const {
+    return {"MOS2114", "MOS Technology"};
 }
 
-// MOS2114 read function - bus state interface
-bus_state_t mos2114_read(void* context, bus_state_t bus_state) {
-    mos2114_t* mos2114 = (mos2114_t*)context;
-    // Color RAM is mapped at $D800-$DBFF (1024 bytes)
+bool MOS2114::has_debug_content()    const { return true; }
+bool MOS2114::has_settings_content() const { return true; }
+bool MOS2114::has_layout_content()   const { return true; }
+
+// ============================================================================
+// Bus interface — static methods usable as C function pointers
+// ============================================================================
+bus_state_t MOS2114::bus_read(void* context, bus_state_t bus_state) {
+    auto* self = static_cast<MOS2114*>(context);
+    // Color RAM is mapped at $D800–$DBFF (1024 bytes)
     // Mask to 10 bits for 1K addressing
-    uint16_t offset = BUS_GET_ADDR(bus_state) & 0x3FF;  // 0x3FF = 1023, ensures we stay within bounds
-    
-    // MOS2114 is 4-bit wide - only lower 4 bits are valid (and written by mos2114_write)
-    // Upper 4 bits return undefined/floating values (use previous bus data)
-    uint8_t color_nibble = mos2114->memory[offset]; // No need to mask, already 4 bits
-    uint8_t floating_upper_bits = BUS_GET_DATA(bus_state) & 0xF0;  // Keep upper bits from bus
+    uint16_t offset = BUS_GET_ADDR(bus_state) & 0x3FF;
+
+    // MOS2114 is 4-bit wide — lower 4 bits valid, upper 4 float from bus
+    uint8_t color_nibble = self->memory[offset];
+    uint8_t floating_upper_bits = BUS_GET_DATA(bus_state) & 0xF0;
     BUS_SET_DATA(bus_state, floating_upper_bits | color_nibble);
     return bus_state;
 }
 
-// MOS2114 write function - bus state interface
-bus_state_t mos2114_write(void* context, bus_state_t bus_state) {
-    mos2114_t* mos2114 = (mos2114_t*)context;
-    
+bus_state_t MOS2114::bus_write(void* context, bus_state_t bus_state) {
+    auto* self = static_cast<MOS2114*>(context);
+
     // HARDWARE REFERENCE: PLA _GRW Signal for Color RAM Write Control
     // ================================================================
-    // In real C64 hardware, Color RAM writes are gated by the PLA's _GRW signal.
-    // The PLA MOS 906114-01 generates _GRW (Gated R/W) specifically for Color RAM.
+    // In real C64 hardware, Color RAM writes are gated by the PLA's _GRW
+    // signal.  The PLA MOS 906114-01 generates _GRW specifically for Color RAM.
     //
-    // _GRW Signal Conditions (active low):
-    // - I/O region must be enabled (!n_io = low)
-    // - Address must be in Color RAM range ($D800-$DBFF)
-    // - CPU must be writing (!r_w = low)
-    // - Memory configuration must allow I/O access (CHAREN bit)
-    //
-    // When _GRW is inactive (high), hardware blocks Color RAM writes:
-    // - Character ROM is visible instead of I/O region
-    // - CPU is reading, not writing
-    // - Address is outside Color RAM range ($D800-$DBFF)
-    // - Other PLA conditions prevent I/O access
-    
-    // MOS2114 is 4-bit wide, so only store lower 4 bits
-    uint16_t offset = BUS_GET_ADDR(bus_state) & 0x3FF;  // Mask to 1K boundary
-    mos2114->memory[offset] = BUS_GET_DATA(bus_state) & 0x0F;
+    // _GRW active-low conditions:
+    //   - I/O region enabled (!n_io = low)
+    //   - Address in Color RAM range ($D800–$DBFF)
+    //   - CPU writing (!r_w = low)
+    //   - Memory configuration allows I/O access (CHAREN bit)
+
+    // MOS2114 is 4-bit wide — store only lower nibble
+    uint16_t offset = BUS_GET_ADDR(bus_state) & 0x3FF;
+    self->memory[offset] = BUS_GET_DATA(bus_state) & 0x0F;
     return bus_state;
 }
 
+// ============================================================================
+// Legacy free-function bus wrappers (c64_bus.cpp I/O handler table)
+// ============================================================================
+bus_state_t mos2114_read(void* context, bus_state_t bus_state) {
+    return MOS2114::bus_read(context, bus_state);
+}
+
+bus_state_t mos2114_write(void* context, bus_state_t bus_state) {
+    return MOS2114::bus_write(context, bus_state);
+}
+
+// ============================================================================
+// Legacy lifecycle helpers
+// ============================================================================
+MOS2114* mos2114_create() {
+    return new MOS2114();
+}
+
+void mos2114_destroy(MOS2114* chip) {
+    delete chip;
+}
+
+// ============================================================================
+// Legacy chip descriptor (c64.cpp System8Bit test path)
+// ============================================================================
 chip_descriptor_t mos2114_descriptor = {
     .description = "MOS2114 Color RAM (1K x 4-bit)",
-    .create = [](chip_descriptor_t*) -> void* { return mos2114_create(); },
-    .destroy = [](void* chip) { mos2114_destroy(static_cast<mos2114_t*>(chip)); },
-    .bus_attach = NULL
+    .create  = [](chip_descriptor_t*) -> void* { return new MOS2114(); },
+    .destroy = [](void* chip) { delete static_cast<MOS2114*>(chip); },
+    .bus_attach = nullptr
 };
