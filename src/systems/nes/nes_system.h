@@ -74,7 +74,7 @@ namespace nes_constants {
 
 namespace nes_system {
 
-class PPU {
+class PPU : public ChipBase {
 public:
     // PPU registers
     struct Registers {
@@ -217,6 +217,16 @@ private:
     // Sprite evaluation
     void evaluate_sprites();
     void load_sprite_shifters();
+
+    // --- ChipBase interface ---
+public:
+    ChipIdentity chip_identity() const override;
+    bool has_debug_content()    const override;
+    bool has_settings_content() const override;
+    bool has_layout_content()   const override;
+    void render_debug_content()    override;
+    void render_settings_content() override;
+    void render_layout_content()   override;
 };
 
 // ============================================================================
