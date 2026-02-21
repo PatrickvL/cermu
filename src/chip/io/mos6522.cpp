@@ -383,14 +383,3 @@ bus_state_t mos6522_tick(void* chip, bus_state_t bus_state) {
 
     return bus_state;
 }
-
-// GUI functions (stub implementations)
-#ifdef IMGUI_VERSION
-void mos6522_render_debug_window(void* chip, bool* show_window) {
-    // TODO: Implement GUI debug window
-}
-
-void mos6522_render_settings_window(void* chip, bool* show_window) {
-    // TODO: Implement GUI settings window
-}
-#endif
