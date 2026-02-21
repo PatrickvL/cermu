@@ -118,8 +118,6 @@ static void initialize_rockwell65c02_descriptor() {
   };
   rockwell65c02_base_descriptor.bus_attach =
       nullptr; // Basic CPU doesn't need bus attach
-  rockwell65c02_base_descriptor.bank_change =
-      nullptr; // Basic CPU doesn't have banking
 }
 
 const chip_descriptor_t *rockwell65c02_get_chip_descriptor(void) {

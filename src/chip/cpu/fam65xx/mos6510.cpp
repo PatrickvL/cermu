@@ -47,10 +47,8 @@ bus_state_t mos6510_init(mos6510_t *cpu, const mos6510_desc_t *desc) {
     // Initialize I/O port with default C64 state
     cpu_impl->init_io_port();
 
-    // Set descriptor and chip instance for bank_change callback
-    // The mixin will call descriptor->bank_change() when banking bits change
-    cpu_impl->descriptor = &mos6510_descriptor;
-    cpu_impl->chip_instance = cpu;
+    // bank_change_fn + bank_change_ctx are set by the system via
+    // mos6510_set_bank_change() after init — no default wiring here.
   }
 
   return pins;
@@ -141,8 +139,11 @@ void mos6510_set_io_input(mos6510_t *cpu, uint8_t value) {
   CPU_CAST(cpu)->io_port.input = value;
 }
 
-void mos6510_set_bank_change_context(mos6510_t *cpu, void* context) {
-  CPU_CAST(cpu)->chip_instance = context;
+void mos6510_set_bank_change(mos6510_t *cpu,
+                             void(*fn)(void*, uint8_t),
+                             void* context) {
+  CPU_CAST(cpu)->bank_change_fn = fn;
+  CPU_CAST(cpu)->bank_change_ctx = context;
 }
 
 // ============================================================================
@@ -166,6 +167,5 @@ chip_descriptor_t mos6510_descriptor = {
     },
     .destroy =
         [](void *cpu) { mos6510_destroy(reinterpret_cast<mos6510_t *>(cpu)); },
-    .bus_attach = nullptr,
-    .bank_change = nullptr // Will be set by the system (e.g., C64) if banking callbacks are needed
+    .bus_attach = nullptr
 };

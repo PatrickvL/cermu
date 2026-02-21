@@ -328,8 +328,8 @@ bool Commodore264System<V>::initialize() {
     cpu_desc.m7501_user_data = this;
     mos7501_init(cpu_, &cpu_desc);
     
-    // Set bank_change context to this system (for I/O port callbacks)
-    mos7501_set_bank_change_context(cpu_, this);
+    // Note: C16 doesn't use the io_port_mixin bank_change path.
+    // Banking is handled via the m7501_out_cb (io_port_out) callback instead.
     
     // Read reset vector from KERNAL ROM and set CPU PC
     if (roms_loaded) {
@@ -416,7 +416,6 @@ void Commodore264System<V>::reset() {
         cpu_desc.m7501_io_floating = 0x00;
         cpu_desc.m7501_user_data = this;
         mos7501_init(cpu_, &cpu_desc);
-        mos7501_set_bank_change_context(cpu_, this);
         
         // Re-read reset vector from KERNAL ROM
         uint16_t reset_vector = kernal_rom_[0xFFFC - 0xC000] | (kernal_rom_[0xFFFD - 0xC000] << 8);

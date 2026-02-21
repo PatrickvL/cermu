@@ -25,8 +25,7 @@ chip_descriptor_t ram_descriptor = {
     .description = "System RAM",
     .create = [](chip_descriptor_t*) -> void* { return ram_create(); },
     .destroy = [](void* chip) { ram_destroy(static_cast<ram_t*>(chip)); },
-    .bus_attach = NULL,
-    .bank_change = NULL
+    .bus_attach = NULL
 };
 
 // Include GUI implementation

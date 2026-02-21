@@ -1056,6 +1056,5 @@ chip_descriptor_t mos6581_descriptor = {
     .description = "MOS6581 SID Sound Interface Device",
     .create = [](chip_descriptor_t*) -> void* { return mos6581_create(); },
     .destroy = [](void* chip) { mos6581_destroy(static_cast<mos6581_t*>(chip)); },
-    .bus_attach = (void (*)(void *, void *))mos6581_bus_attach,
-    .bank_change = NULL
+    .bus_attach = (void (*)(void *, void *))mos6581_bus_attach
 };

@@ -86,10 +86,13 @@ uint8_t mos6510_get_io_data(mos6510_t *cpu);
 uint8_t mos6510_get_io_input(mos6510_t *cpu);
 void mos6510_set_io_input(mos6510_t *cpu, uint8_t value);
 
-// Set the context pointer passed to the bank_change callback.
-// By default, chip_instance points to the MOS6510 itself. Use this to override
-// it with a system pointer (e.g., c64_t*) so callbacks receive the correct context.
-void mos6510_set_bank_change_context(mos6510_t *cpu, void* context);
+// Set the bank-change callback and context for memory banking.
+// Called when I/O port bits 0-2 change. Typically wired to the system's
+// PLA reconfiguration function (e.g. cpu_banking_callback) with the
+// system struct (e.g. c64_t*) as context.
+void mos6510_set_bank_change(mos6510_t *cpu,
+                             void(*fn)(void*, uint8_t),
+                             void* context);
 
 // Global descriptor for chip registration
 extern chip_descriptor_t mos6510_descriptor;

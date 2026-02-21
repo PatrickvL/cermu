@@ -118,19 +118,22 @@ Full removal deferred to Phase 4 (eliminate `System8Bit`).
 
 ---
 
-### Phase 2: Replace `bank_change` Coupling in `io_port_mixin_t`
+### Phase 2: Replace `bank_change` Coupling in `io_port_mixin_t` ✅ COMPLETE
 
-**Effort:** Medium (2–3 hours)
-**Risk:** Medium — touches the hot emulation path
-**Files affected:** ~8
+**Status:** Implemented using Option A (function pointer). All systems updated.
 
-**Problem:** `io_port_mixin_t<Traits>` stores:
-```cpp
-chip_descriptor_t* descriptor = nullptr;
-void* chip_instance = nullptr;
-```
-and calls `descriptor->bank_change(chip_instance, banking_bits)` when I/O port bits 0–2 change.
-This is the **only** runtime consumer of `ChipDescriptor` during emulation.
+**Summary of changes:**
+
+| Component | Change |
+|-----------|--------|
+| `io_port_mixin_t` | Replaced `chip_descriptor_t* descriptor` + `void* chip_instance` with `bank_change_fn_t bank_change_fn` + `void* bank_change_ctx` |
+| `write_io_ddr/data` | Call `bank_change_fn(bank_change_ctx, bits)` instead of `descriptor->bank_change(chip_instance, bits)` |
+| `mos6510_init` | No longer sets descriptor/chip_instance on mixin |
+| `mos6510_set_bank_change_context` | Replaced with `mos6510_set_bank_change(cpu, fn, ctx)` — sets both callback and context |
+| `mos7501_set_bank_change_context` | Replaced with `mos7501_set_bank_change(cpu, fn, ctx)` |
+| C64 (c64_system.cpp) | `mos6510_set_bank_change(cpu, cpu_banking_callback, c64_)` — per-instance, no global descriptor mutation |
+| C64 (c64.cpp) | Same pattern with `c64_cpu_banking_callback` |
+| C16 (c16_system.cpp) | Removed dead `mos7501_set_bank_change_context()` calls (descriptor bank_change was always nullptr) |
 
 **Solution: Typed callback, zero overhead**
 
@@ -182,21 +185,24 @@ the entire `ChipDescriptor` struct is now unused except for `bus_attach`.
 
 ---
 
-### Phase 2b: Eliminate `bus_attach` and Remove `ChipDescriptor` Entirely
+### Phase 2b: Eliminate `bus_attach` and Remove `ChipDescriptor` Entirely ⚠️ PARTIALLY COMPLETE
 
-**Effort:** Small (1 hour)
-**Risk:** Low
+**Status:** `bank_change` field removed from `ChipDescriptor` struct and all descriptor
+initializers. Full `ChipDescriptor` removal blocked by `c64.cpp` test framework (uses
+`desc->create`, `desc->destroy`, `desc->bus_attach` through `System8Bit`). Deferred to
+Phase 4.
 
-`bus_attach` is called during system init to connect chips to the bus. It's a one-time
-operation, easily replaced by a typed init method.
+**Completed:**
+- Removed `bank_change` field from `ChipDescriptor` struct in `chip.h`
+- Removed `.bank_change = ...` from all 19 descriptor initializers
+- Removed `mos6510_descriptor.bank_change = callback` mutations from `c64_system.cpp` and `c64.cpp`
+- Removed dead `mos7501_set_bank_change_context()` calls from `c16_system.cpp`
 
-**Actions:**
-1. Audit all `desc->bus_attach()` calls.
-2. Replace each with a direct typed function call.
-3. Delete `ChipDescriptor` / `chip_descriptor_t` struct from `chip.h`.
-4. Delete `fam65xx_chip_descriptor_t` from `fam65xx_types.h`.
-5. Delete all 16 static `chip_descriptor_t` definitions from chip `.cpp` files.
-6. Delete `ChipEntry` / `chip_entry_t` from `chip.h`.
+**Remaining (blocked, deferred to Phase 4):**
+- `desc->bus_attach()` still called in `c64.cpp` line 756 (System8Bit chip iteration)
+- `desc->create()` / `desc->destroy()` still used by `c64.cpp` and `system.cpp`
+- `ChipDescriptor` struct cannot be deleted until `System8Bit` is eliminated
+- 19 static `chip_descriptor_t` definitions still exist (needed by above)
 
 ---
 

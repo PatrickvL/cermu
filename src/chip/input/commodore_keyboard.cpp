@@ -51,7 +51,6 @@ commodore_keyboard_t* commodore_keyboard_create(const keyboard_matrix_config_t* 
     keyboard->descriptor.create = NULL;
     keyboard->descriptor.destroy = NULL;
     keyboard->descriptor.bus_attach = NULL;
-    keyboard->descriptor.bank_change = NULL;
 
     // Store model and matrix configuration
     keyboard->model = config->model;

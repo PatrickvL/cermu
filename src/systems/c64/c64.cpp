@@ -554,8 +554,9 @@ void c64_system_reset(c64_t* c64) {
         mos6510_desc_t cpu_desc = {};
         mos6510_init((mos6510_t*)c64->mos6510, &cpu_desc);
         
-        // Re-set banking context after init (init resets chip_instance to CPU pointer)
-        mos6510_set_bank_change_context((mos6510_t*)c64->mos6510, c64);
+        // Re-wire banking callback after init (init clears bank_change state)
+        mos6510_set_bank_change((mos6510_t*)c64->mos6510,
+                                c64_cpu_banking_callback, c64);
         
         // Read reset vector from KERNAL ROM
         uint16_t reset_vector = c64_read_kernal_reset_vector(&c64->bus);
@@ -710,10 +711,8 @@ bool c64_system_init(c64_t* c64, const c64_config_t* config) {
     c64_cia2_port_a_callback(c64, c64->cia2->port_a_value);
     
     // Hardware: CPU I/O port bits 0-2 control memory banking (LORAM, HIRAM, CHAREN)
-    // Assign the C64 banking callback directly to the MOS6510 descriptor
-    // This is where both the descriptor and the callback are in scope
-    mos6510_descriptor.bank_change = c64_cpu_banking_callback;
-    printf("C64 System: Assigned MOS6510 descriptor bank_change callback\n");
+    // Banking callback is set per-instance on the CPU, not on a shared global descriptor
+    printf("C64 System: Wiring CPU bank_change callback\n");
     
     // NOTE: Initial banking mode is already set correctly at line 226 (mode $17: I/O enabled)
     // The CPU I/O port initializes to $37 (DDR=$2F) which gives banking bits = $07
@@ -734,10 +733,10 @@ bool c64_system_init(c64_t* c64, const c64_config_t* config) {
     mos6510_desc_t cpu_desc = {};  // Empty descriptor for now
     mos6510_init((mos6510_t*)c64->mos6510, &cpu_desc);
     
-    // CRITICAL: Override chip_instance so banking callback receives c64_t*, not mos6510_t*
-    // mos6510_init sets chip_instance to the CPU pointer, but c64_cpu_banking_callback
-    // needs the C64 system pointer to access the bus for PLA mode switching.
-    mos6510_set_bank_change_context((mos6510_t*)c64->mos6510, c64);
+    // Set bank_change callback so CPU I/O port changes trigger PLA reconfiguration.
+    // Context is the c64_t* so the callback can access the bus.
+    mos6510_set_bank_change((mos6510_t*)c64->mos6510,
+                            c64_cpu_banking_callback, c64);
     
     // After ROMs are loaded, read the reset vector and initialize CPU for immediate execution
     uint16_t reset_vector = c64_read_kernal_reset_vector(&c64->bus);

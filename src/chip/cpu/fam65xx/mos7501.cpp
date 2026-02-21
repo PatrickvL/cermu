@@ -47,8 +47,8 @@ bus_state_t mos7501_init(mos7501_t *cpu, const mos7501_desc_t *desc) {
   auto *cpu_impl = CPU_CAST(cpu);
   if constexpr (CSG7501.has_io_port()) {
     cpu_impl->init_io_port();
-    cpu_impl->descriptor = &mos7501_descriptor;
-    cpu_impl->chip_instance = cpu;
+    // bank_change_fn + bank_change_ctx are set by the system via
+    // mos7501_set_bank_change() after init — no default wiring here.
   }
 
   return pins;
@@ -124,8 +124,11 @@ void mos7501_set_io_input(mos7501_t *cpu, uint8_t value) {
   CPU_CAST(cpu)->io_port.input = value;
 }
 
-void mos7501_set_bank_change_context(mos7501_t *cpu, void* context) {
-  CPU_CAST(cpu)->chip_instance = context;
+void mos7501_set_bank_change(mos7501_t *cpu,
+                             void(*fn)(void*, uint8_t),
+                             void* context) {
+  CPU_CAST(cpu)->bank_change_fn = fn;
+  CPU_CAST(cpu)->bank_change_ctx = context;
 }
 
 // ============================================================================
@@ -147,6 +150,5 @@ chip_descriptor_t mos7501_descriptor = {
     },
     .destroy =
         [](void *cpu) { mos7501_destroy(reinterpret_cast<mos7501_t *>(cpu)); },
-    .bus_attach = nullptr,
-    .bank_change = nullptr
+    .bus_attach = nullptr
 };

@@ -20,8 +20,7 @@ chip_descriptor_t mos6569_descriptor = {
     .description = "MOS6569 VIC-II Video Interface Chip (PAL)",
     .create      = [](chip_descriptor_t*) -> void* { return mos6569_create(); },
     .destroy     = [](void* chip) { vicii_destroy(static_cast<vicii_t*>(chip)); },
-    .bus_attach  = vicii_bus_attach,
-    .bank_change = vicii_memory_bank_change
+    .bus_attach  = vicii_bus_attach
 };
 
 // Include GUI implementation

@@ -32,8 +32,7 @@ chip_descriptor_t pla_descriptor = {
     .description = "PLA (Programmable Logic Array)",
     .create = pla_create,
     .destroy = pla_destroy,
-    .bus_attach = NULL,
-    .bank_change = NULL
+    .bus_attach = NULL
 };
 
 // ============================================================================
