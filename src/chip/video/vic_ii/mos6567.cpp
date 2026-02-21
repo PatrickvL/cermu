@@ -20,11 +20,7 @@ chip_descriptor_t mos6567_descriptor = {
     .create      = mos6567_system_create,
     .destroy     = vicii_system_destroy,
     .bus_attach  = vicii_bus_attach,
-    .bank_change = vicii_memory_bank_change,
-#ifdef IMGUI_VERSION
-    .render_debug_window = NULL,
-    .render_settings_window = NULL
-#endif
+    .bank_change = vicii_memory_bank_change
 };
 
 // Include GUI implementation

@@ -87,9 +87,6 @@ public:
 // LEGACY TYPES — kept for backward compatibility during transition
 // ============================================================================
 
-// Modern C++ callback type using std::function for type safety
-using chip_callback_t = std::function<bus_state_t(void* chip, bus_state_t bus_state)>;
-
 /// Chip descriptor - C-style vtable.
 /// DEPRECATED: prefer ChipBase virtual methods for new code.
 /// Existing C-struct chips still store a pointer to one of these.
@@ -99,10 +96,6 @@ struct ChipDescriptor {
     void (*destroy)(void* chip);            // Destroy chip instance
     void (*bus_attach)(void* chip, void* bus);     // Bus attachment (nullable)
     void (*bank_change)(void* chip, std::uint8_t bank);  // Bank change (nullable)
-#ifdef IMGUI_VERSION
-    void (*render_debug_window)(void* chip, bool* show_window);   // GUI debug window (nullable)
-    void (*render_settings_window)(void* chip, bool* show_window); // GUI settings window (nullable)
-#endif
 };
 
 /// Chip registry entry for legacy System8Bit.

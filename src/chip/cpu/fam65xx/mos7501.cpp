@@ -148,9 +148,5 @@ chip_descriptor_t mos7501_descriptor = {
     .destroy =
         [](void *cpu) { mos7501_destroy(reinterpret_cast<mos7501_t *>(cpu)); },
     .bus_attach = nullptr,
-    .bank_change = nullptr,
-#ifdef IMGUI_VERSION
-    .render_debug_window = NULL,
-    .render_settings_window = NULL
-#endif
+    .bank_change = nullptr
 };

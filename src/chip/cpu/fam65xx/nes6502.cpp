@@ -165,10 +165,6 @@ static void initialize_nes6502_descriptor() {
       nullptr; // Basic CPU doesn't need bus attach
   nes6502_base_descriptor.bank_change =
       nullptr; // Basic CPU doesn't have banking
-#ifdef IMGUI_VERSION
-  nes6502_base_descriptor.render_debug_window = NULL;
-  nes6502_base_descriptor.render_settings_window = NULL;
-#endif
 }
 
 const chip_descriptor_t *nes6502_get_chip_descriptor(void) {

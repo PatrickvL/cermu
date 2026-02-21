@@ -156,10 +156,6 @@ static void initialize_mos6502_descriptor() {
       nullptr; // Basic CPU doesn't need bus attach
   mos6502_base_descriptor.bank_change =
       nullptr; // Basic CPU doesn't have banking
-#ifdef IMGUI_VERSION
-  mos6502_base_descriptor.render_debug_window = NULL;
-  mos6502_base_descriptor.render_settings_window = NULL;
-#endif
 }
 
 fam65xx_chip_descriptor_t *mos6502_create_descriptor(

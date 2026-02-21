@@ -81,8 +81,4 @@ chip_descriptor_t mos2114_descriptor = {
     .destroy = mos2114_destroy,
     .bus_attach = NULL,
     .bank_change = NULL
-#ifdef IMGUI_VERSION
-    ,.render_debug_window = NULL,
-    .render_settings_window = NULL
-#endif
 };

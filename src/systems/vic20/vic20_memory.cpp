@@ -169,10 +169,6 @@ chip_descriptor_t vic20_memory_descriptor = {
     /* destroy */ vic20_memory_chip_destroy,
     /* bus_attach */ NULL,
     /* bank_change */ NULL
-#ifdef IMGUI_VERSION
-    , /* render_debug_window */ NULL,
-    /* render_settings_window */ NULL
-#endif
 };
 
 vic20_memory_t* vic20_memory_create(uint8_t expansion_flags, bool cartridge_present) {

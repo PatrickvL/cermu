@@ -167,9 +167,5 @@ chip_descriptor_t mos6510_descriptor = {
     .destroy =
         [](void *cpu) { mos6510_destroy(reinterpret_cast<mos6510_t *>(cpu)); },
     .bus_attach = nullptr,
-    .bank_change = nullptr, // Will be set by the system (e.g., C64) if banking callbacks are needed
-#ifdef IMGUI_VERSION
-    .render_debug_window = NULL,
-    .render_settings_window = NULL
-#endif
+    .bank_change = nullptr // Will be set by the system (e.g., C64) if banking callbacks are needed
 };

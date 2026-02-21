@@ -120,10 +120,6 @@ static void initialize_rockwell65c02_descriptor() {
       nullptr; // Basic CPU doesn't need bus attach
   rockwell65c02_base_descriptor.bank_change =
       nullptr; // Basic CPU doesn't have banking
-#ifdef IMGUI_VERSION
-  rockwell65c02_base_descriptor.render_debug_window = NULL;
-  rockwell65c02_base_descriptor.render_settings_window = NULL;
-#endif
 }
 
 const chip_descriptor_t *rockwell65c02_get_chip_descriptor(void) {

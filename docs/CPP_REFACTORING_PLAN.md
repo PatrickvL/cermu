@@ -512,7 +512,7 @@ Phases 5 and 6 are independent of Phase 4 and can proceed in parallel after Phas
 | Template chip families (VIC-II, VIC, etc.) | Zero overhead | Same as fam65xx: `if constexpr` eliminates dead branches at compile time |
 | `unique_ptr` instead of raw pointers | Zero runtime overhead | Destructor call is same as manual `delete` |
 | Removing `System8Bit` array scan | Marginal improvement | Eliminated linear scan of 16-slot array in destruction |
-| Floating bus read signature (`uint8_t bus_data` param) | Zero overhead | One extra register argument to read functions; enables correct open-bus behavior without bus-level fixup |
+| Uniform `bus_state_t` read/write/tick signatures | Zero overhead | Already the chip-level pattern; formalizes existing convention; enables floating bus without bus-level fixup |
 
 **Net effect:** Slight improvement — `std::function` heap allocations eliminated,
 code-size reduction from template deduplication, no new overhead on the emulation
@@ -551,44 +551,73 @@ Each phase must pass before the next begins:
 
 ---
 
-## Cross-Cutting Concern: Floating Bus in Chip Read Signatures
+## Cross-Cutting Concern: Chip Read/Write Signatures
 
-All chip MMIO / register **read** functions should receive the current bus data byte
-(or the full `bus_state_t`) as a parameter and return it — possibly modified — as the
-result. This makes floating bus behavior (returning whatever was last on the data bus
-when no chip drives it) a natural part of the code flow instead of requiring special
-handling at the bus level.
+### Read Signatures — Decision: Option B (full `bus_state_t`)
 
-**Current state:** Most chip read functions have signatures like:
+All chip MMIO / register **read** methods receive the full `bus_state_t` and return it
+(possibly modified). This was chosen over Option A (`uint8_t bus_data`) because:
+
+1. **Signature uniformity with `tick`:** tick, read, and write all become
+   `bus_state_t f(bus_state_t)` — one signature to reason about.
+2. **Already the established pattern:** The current codebase's chip-level register
+   functions (`mos6526_registers_read`, `mos6581_registers_read`, `mos6522_registers_read`,
+   all VIC-II register functions) already use `bus_state_t` input and return. This isn't
+   a migration — it's formalizing what most chips already do.
+3. **VIC-II open bus** needs address-line context that only `bus_state_t` provides.
+4. Floating bus behavior (returning whatever was last on the data bus when no chip
+   drives it) is a natural part of the code flow — the default case simply returns
+   `bus_state` unmodified.
+
+**Target read signature:**
 ```cpp
-uint8_t mos6526_read(mos6526_t* cia, uint16_t addr);
-```
-These return a synthesized value with no knowledge of what was on the bus before.
-Unmapped addresses silently return 0 or garbage instead of preserving bus capacitance.
-
-**Target signatures (Phase 3 onward):**
-```cpp
-// Option A: data byte only (minimal change, sufficient for most chips)
-uint8_t MOS6526::read(uint16_t addr, uint8_t bus_data) const;
-
-// Option B: full bus state (needed if the chip inspects address/control lines)
 bus_state_t MOS6526::read(bus_state_t bus) const;
 ```
 
-Option A is preferred for most chips — the data byte is the only floating component.
-Option B is reserved for chips that need the full bus context (e.g., VIC-II open
-bus behavior depends on the bus phase and address lines).
+### Write Signatures — Decision: Option B (full `bus_state_t`)
 
-**Write handlers** do not alter bus state fields and can keep their current `void`
-return signatures:
+**Analysis of `addr + data` vs `bus_state_t` for writes:**
+
+| Criterion | `void write(uint16_t addr, uint8_t data)` | `bus_state_t write(bus_state_t bus)` |
+|-----------|-------------------------------------------|-------------------------------------|
+| Caller convenience | Slightly easier — no packing needed | Caller must construct `bus_state_t` (but typically already has one) |
+| Implementation | Direct use of `addr` and `data` | Two macros at top: `BUS_GET_ADDR`, `BUS_GET_DATA` |
+| Signature consistency | Different from tick/read | Same as tick/read — uniform `bus_state_t → bus_state_t` |
+| Return value | `void` — no bus state feedback | Returns `bus_state_t` — can modify control lines (e.g., CIA IRQ assertion) |
+| Current codebase | Used only at CPU memory callback layer | Already used by all chip register write functions (CIA, SID, VIA, VIC-II) |
+
+**Recommendation: `bus_state_t write(bus_state_t bus)` (Option B).**
+
+The decisive factor is that **this is already the pattern**. Every chip-level register
+write function in the codebase (`mos6526_registers_write`, `mos6581_registers_write`,
+`mos6522_registers_write`, `mos6567_registers_write`, `mos6569_registers_write`) already
+takes and returns `bus_state_t`. The two-macro extraction at the top of each function
+(`uint8_t reg = BUS_GET_ADDR(bus) & MASK; uint8_t value = BUS_GET_DATA(bus);`) is
+trivial boilerplate — one line per argument.
+
+The `addr + data` pattern exists only at the CPU memory callback layer
+(`cpu_write(void*, uint32_t addr, uint8_t data)`), which is a different abstraction level.
+At the chip register level, `bus_state_t` is already universal.
+
+Signature uniformity (tick = read = write = `bus_state_t → bus_state_t`) makes the
+interface easier to compose and reason about. The return value also has practical value:
+write handlers that modify bus control lines (e.g., CIA IRQ assertion via `pending_bus_lines`)
+can propagate those changes through the return value instead of requiring side-channel state.
+
+**Target signatures for Phase 3 chip methods:**
 ```cpp
-void MOS6526::write(uint16_t addr, uint8_t data);
+class MOS6526 : public ChipBase {
+    bus_state_t tick(bus_state_t bus);   // already exists
+    bus_state_t read(bus_state_t bus);   // already exists as mos6526_registers_read
+    bus_state_t write(bus_state_t bus);  // already exists as mos6526_registers_write
+};
 ```
 
-This change should be applied during Phase 3 (chip-by-chip C++ conversion) as each
-chip's read function is converted from a free C function to a class method. It is
-not a separate phase — it is a **mandatory signature convention** for all new
-`ChipBase::read()` implementations.
+**Note:** The `addr + data` signature at the CPU memory callback layer
+(`fam65xx_mem_read_t`, `fam65xx_mem_write_t`) is a separate concern and may remain
+as-is — the CPU callback dispatches to the appropriate chip's `bus_state_t`-based
+method after constructing the bus state. This is the natural boundary between the
+CPU's scalar address/data view and the bus's full-state view.
 
 ---
 
@@ -610,7 +639,7 @@ not a separate phase — it is a **mandatory signature convention** for all new
 ---
 
 *Plan authored: 2025-07-15*
-*Last updated: 2026-02-21 — Phase 4 decision (port to C++), git-commit-per-phase, floating bus read signatures*
-*Confidence: 0.92*
-*Key uncertainties: Ownership model for Phase 3, floating bus Option A vs B per chip*
-*How to improve: Prototype Phase 0 + Phase 1a (VIC-20) to validate the migration pattern before committing to the full plan*
+*Last updated: 2026-02-21 — Phase 0 complete, bus signatures resolved (Option B: full bus_state_t for read+write+tick)*
+*Confidence: 0.93*
+*Key uncertainties: Ownership model for Phase 3 (system-owns-chip-borrows vs unique_ptr transfer)*
+*How to improve: Complete Phase 1a (VIC-20) to validate the lifecycle migration pattern*
