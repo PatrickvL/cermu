@@ -12,7 +12,6 @@
 #include "../../core/formats/commodore_load_helpers.h"
 #include "../../devices/keyboard/commodore_keyboard_device.h"
 // CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
-#include "../../chip/video/ted/ted7360_gui.h"
 #include "../../core/chip.h"
 #include <cstring>
 #include <cstdio>
@@ -620,12 +619,8 @@ void Commodore264System<V>::register_c264_chips() {
     register_chip(mos7501_as_chip_base(cpu),
         "MOS 7501/8501 CPU", "7501", "CPU", 0x0000);
 
-    // TED
-    register_chip(std::make_unique<CChipAdapter>(
-        ted, ChipIdentity{"TED7360", "Commodore"},
-        [ted]() { ted7360_render_debug_content(ted); },
-        [ted]() { ted7360_render_settings_content(ted); },
-        [ted]() { ted7360_render_layout_content(ted); }),
+    // TED — native ChipBase, registered directly
+    register_chip(ted,
         "TED 7360 (Video/Audio/I/O)", "TED", "Video", 0xFF00);
 
     // RAM (no debug window)

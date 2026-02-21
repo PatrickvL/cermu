@@ -181,12 +181,23 @@ static const char* get_screen_mode_name(uint8_t mode) {
 }
 
 // ============================================================================
+// ChipBase interface implementation
+// ============================================================================
+
+ChipIdentity ted7360_t::chip_identity() const {
+    return {"TED7360", "Commodore"};
+}
+
+bool ted7360_t::has_debug_content()    const { return true; }
+bool ted7360_t::has_settings_content() const { return true; }
+bool ted7360_t::has_layout_content()   const { return true; }
+
+// ============================================================================
 // TED 7360 GUI DEBUG WINDOW
 // ============================================================================
 
-void ted7360_render_debug_content(void* chip) {
-    ted7360_t* ted = (ted7360_t*)chip;
-    if (!ted) return;
+void ted7360_t::render_debug_content() {
+    ted7360_t* ted = this;
 
 #ifdef IMGUI_VERSION
     // Two-column layout
@@ -328,9 +339,8 @@ void ted7360_render_debug_content(void* chip) {
 // TED 7360 GUI SETTINGS WINDOW
 // ============================================================================
 
-void ted7360_render_settings_content(void* chip) {
-    ted7360_t* ted = (ted7360_t*)chip;
-    if (!ted) return;
+void ted7360_t::render_settings_content() {
+    ted7360_t* ted = this;
 
 #ifdef IMGUI_VERSION
 
@@ -366,13 +376,28 @@ void ted7360_render_settings_content(void* chip) {
 // TED 7360 LAYOUT (standalone pinout diagram)
 // ============================================================================
 
-void ted7360_render_layout_content(void* chip) {
-    ted7360_t* ted = (ted7360_t*)chip;
-    if (!ted) return;
+void ted7360_t::render_layout_content() {
+    ted7360_t* ted = this;
 
 #ifdef IMGUI_VERSION
     ChipLayout& layout = get_ted_layout();
     std::vector<PinSignalState> pin_states = get_ted_pin_states(ted, &layout);
     render_chip_layout(layout, pin_states, "TED7360");
 #endif
+}
+
+// ============================================================================
+// Backward-compatible free-function wrappers
+// ============================================================================
+
+void ted7360_render_debug_content(void* chip) {
+    static_cast<ted7360_t*>(chip)->render_debug_content();
+}
+
+void ted7360_render_settings_content(void* chip) {
+    static_cast<ted7360_t*>(chip)->render_settings_content();
+}
+
+void ted7360_render_layout_content(void* chip) {
+    static_cast<ted7360_t*>(chip)->render_layout_content();
 }
