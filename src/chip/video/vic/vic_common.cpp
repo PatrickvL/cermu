@@ -265,23 +265,21 @@ void vic_base_s::audio_reset(uint32_t chip_clock_hz, uint32_t sample_rate_hz) {
 
 // Called once per chip cycle from tick()
 void vic_base_s::audio_tick() {
-    vic_audio_state_t* a = &audio;
-
     // --- Step each voice's prescaler; on expiry clock the voice counter ---
     for (int v = 0; v < VIC_NUM_VOICES; v++) {
-        if (--a->prescaler[v] == 0) {
-            a->prescaler[v] = vic_voice_divisor[v]; // reload prescaler
+        if (--audio.prescaler[v] == 0) {
+            audio.prescaler[v] = vic_voice_divisor[v]; // reload prescaler
 
             uint8_t reg_val = registers[VIC_REG_BASS_FREQ + v];
             uint8_t enabled = (reg_val & VIC_VOICE_ENABLE) >> 7;  // 0 or 1
 
-            a->counter[v]--;
-            if (a->counter[v] <= 0) {
+            audio.counter[v]--;
+            if (audio.counter[v] <= 0) {
                 // Reload counter: period = (~reg) & 127, or 128 if zero
                 // This matches VICE's formula exactly.
                 int16_t period = (~reg_val) & VIC_VOICE_FREQ_MASK;
                 if (period == 0) period = 128;
-                a->counter[v] += period;  // += preserves phase accuracy
+                audio.counter[v] += period;  // += preserves phase accuracy
 
                 if (v < VIC_NUM_TONE_VOICES) {
                     // ------ Tone voice: 8-bit shift register ------
@@ -296,11 +294,11 @@ void vic_base_s::audio_tick() {
                     // the frequency is set to maximum shift rate, injecting
                     // arbitrary bit patterns.  Once loaded, the pattern
                     // rotates indefinitely at the playback frequency.
-                    uint8_t shift = a->shift_reg[v];
+                    uint8_t shift = audio.shift_reg[v];
                     uint8_t msb = (shift >> 7) & 1;
                     shift = (shift << 1) | (((msb ^ 1)) & enabled);
-                    a->shift_reg[v] = shift;
-                    a->output[v] = shift & 1;
+                    audio.shift_reg[v] = shift;
+                    audio.output[v] = shift & 1;
                 } else {
                     // ------ Noise voice: Fibonacci LFSR + shift register ------
                     // The noise channel uses a 16-bit Fibonacci LFSR (left-
@@ -315,7 +313,7 @@ void vic_base_s::audio_tick() {
                     //   gate3 = ~(gate1 ^ gate2)
                     //   gate4 = ~(gate3 & enabled)
                     //   LFSR  = (LFSR << 1) | gate4
-                    uint16_t lfsr = a->noise_lfsr;
+                    uint16_t lfsr = audio.noise_lfsr;
                     int bit3  = (lfsr >> 3) & 1;
                     int bit12 = (lfsr >> 12) & 1;
                     int bit14 = (lfsr >> 14) & 1;
@@ -324,19 +322,19 @@ void vic_base_s::audio_tick() {
                     int gate2 = bit14 ^ bit15;
                     int gate3 = (gate1 ^ gate2) ^ 1;
                     int gate4 = (gate3 & enabled) ^ 1;
-                    uint8_t lfsr0_old = a->noise_lfsr0_old;
-                    a->noise_lfsr0_old = lfsr & 1;
-                    a->noise_lfsr = (lfsr << 1) | gate4;
+                    uint8_t lfsr0_old = audio.noise_lfsr0_old;
+                    audio.noise_lfsr0_old = lfsr & 1;
+                    audio.noise_lfsr = (lfsr << 1) | gate4;
 
                     // Edge-triggered shift: only shift on rising edge of LFSR[0]
                     int edge_trigger = (lfsr & 1) & (!lfsr0_old);
                     if (edge_trigger) {
-                        uint8_t shift = a->shift_reg[v];
+                        uint8_t shift = audio.shift_reg[v];
                         uint8_t msb = (shift >> 7) & 1;
                         shift = (shift << 1) | (((msb ^ 1)) & enabled);
-                        a->shift_reg[v] = shift;
+                        audio.shift_reg[v] = shift;
                     }
-                    a->output[v] = a->shift_reg[v] & enabled;
+                    audio.output[v] = audio.shift_reg[v] & enabled;
                 }
             }
         }
@@ -345,60 +343,58 @@ void vic_base_s::audio_tick() {
     // --- Accumulate non-linear mix for this cycle ---
     // Count active voices (0-4), look up the combined non-linear amplitude
     // that models the VIC's DAC compression + volume ladder in one step.
-    uint8_t voices_active = a->output[0] + a->output[1] + a->output[2] + a->output[3];
+    uint8_t voices_active = audio.output[0] + audio.output[1] + audio.output[2] + audio.output[3];
     uint8_t volume = registers[VIC_REG_AUX_COLOR] & VIC_AUX_VOLUME_MASK;
-    a->sample_accum += vic_mix_table[voices_active][volume];
-    a->sample_tick_count++;
+    audio.sample_accum += vic_mix_table[voices_active][volume];
+    audio.sample_tick_count++;
 
     // --- Downsample: emit one output sample when enough cycles have elapsed ---
-    a->sample_frac += (1u << 16); // one cycle in 16.16 fixed point
-    if (a->sample_frac >= a->cycles_per_sample_fp) {
-        a->sample_frac -= a->cycles_per_sample_fp;
+    audio.sample_frac += (1u << 16); // one cycle in 16.16 fixed point
+    if (audio.sample_frac >= audio.cycles_per_sample_fp) {
+        audio.sample_frac -= audio.cycles_per_sample_fp;
 
         // Average the accumulated DAC values over this sample window
         float raw = 0.0f;
-        if (a->sample_tick_count > 0) {
-            raw = (float)a->sample_accum / (float)a->sample_tick_count;
+        if (audio.sample_tick_count > 0) {
+            raw = (float)audio.sample_accum / (float)audio.sample_tick_count;
         }
 
         // Lowpass filter: smooths the square-wave steps (models 1kΩ + 100nF)
-        a->lowpass_buf += a->lowpass_alpha * (raw - a->lowpass_buf);
+        audio.lowpass_buf += audio.lowpass_alpha * (raw - audio.lowpass_buf);
 
         // Highpass filter: removes DC offset (models 1µF coupling capacitor)
         // The AC component is the difference between lowpass output and the
         // slowly-tracking highpass buffer.
-        float ac = a->lowpass_buf - a->highpass_buf;
-        a->highpass_buf += a->highpass_alpha * (a->lowpass_buf - a->highpass_buf);
+        float ac = audio.lowpass_buf - audio.highpass_buf;
+        audio.highpass_buf += audio.highpass_alpha * (audio.lowpass_buf - audio.highpass_buf);
 
         // Scale to unsigned 8-bit centered at 128
-        int32_t out = 128 + (int32_t)(ac * a->output_gain);
+        int32_t out = 128 + (int32_t)(ac * audio.output_gain);
         if (out < 0) out = 0;
         if (out > 255) out = 255;
 
         // Write to ring buffer (drop sample if full)
-        uint32_t next_write = (a->write_pos + 1) % VIC_AUDIO_BUFFER_SIZE;
-        if (next_write != a->read_pos) {
-            a->buffer[a->write_pos] = (uint8_t)out;
-            a->write_pos = next_write;
+        uint32_t next_write = (audio.write_pos + 1) % VIC_AUDIO_BUFFER_SIZE;
+        if (next_write != audio.read_pos) {
+            audio.buffer[audio.write_pos] = (uint8_t)out;
+            audio.write_pos = next_write;
         }
 
-        a->sample_accum = 0;
-        a->sample_tick_count = 0;
+        audio.sample_accum = 0;
+        audio.sample_tick_count = 0;
     }
 }
 
 uint32_t vic_base_s::audio_available() const {
-    const vic_audio_state_t* a = &audio;
-    return (a->write_pos + VIC_AUDIO_BUFFER_SIZE - a->read_pos) % VIC_AUDIO_BUFFER_SIZE;
+    return (audio.write_pos + VIC_AUDIO_BUFFER_SIZE - audio.read_pos) % VIC_AUDIO_BUFFER_SIZE;
 }
 
 uint32_t vic_base_s::audio_read(uint8_t* dest, uint32_t max_samples) {
     if (!dest || max_samples == 0) return 0;
-    vic_audio_state_t* a = &audio;
     uint32_t count = 0;
-    while (count < max_samples && a->read_pos != a->write_pos) {
-        dest[count++] = a->buffer[a->read_pos];
-        a->read_pos = (a->read_pos + 1) % VIC_AUDIO_BUFFER_SIZE;
+    while (count < max_samples && audio.read_pos != audio.write_pos) {
+        dest[count++] = audio.buffer[audio.read_pos];
+        audio.read_pos = (audio.read_pos + 1) % VIC_AUDIO_BUFFER_SIZE;
     }
     return count;
 }
