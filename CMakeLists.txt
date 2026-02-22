@@ -209,7 +209,6 @@ endif()
 
 # Core library sources
 set(CORE_SOURCES
-    src/core/system.cpp
     src/core/chip.cpp
     src/core/ioport.cpp
     src/core/chip_layout.cpp

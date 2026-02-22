@@ -335,7 +335,6 @@ bool C64System::initialize() {
     };
 
     // Initialize bus as embedded struct (not heap-allocated)
-    c64_->bus.desc = &c64_bus_descriptor;
     c64_->bus.c64 = c64_;
 
     // Bus pull-up defaults and cartridge lines (no cartridge)

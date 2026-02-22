@@ -4,7 +4,6 @@
 
 #include "../../core/cermu.h"
 #include "../../core/chip.h"
-#include "../../core/system.h"
 #include "c64.h"
 #include "c64_bus.h"
 #include "c64_config.h"
@@ -385,32 +384,6 @@ void c64_system_tick(c64_t* c64) {
     bus->state = s;
 }
 
-// Compact chip creation helper - creates and registers a chip
-static inline void* create_and_register_chip(c64_t* c64, chip_descriptor_t* desc, uint16_t addr, unsigned int size) {
-    void* chip;
-
-    // Special handling for ROM - allocate memory based on requested size before registration
-    if (desc == &rom_descriptor) {
-        chip = rom_create_with_size(size);
-    } else {
-        chip = desc->create(desc);
-    }
-
-    if (!chip) {
-        printf("ERROR: Failed to create chip: %s\n", desc->description);
-        fflush(stdout);
-        return NULL;
-    }
-
-    uint8_t chip_id = system_chip_register(&c64->system, chip, desc, addr, size);
-    if (chip_id == 0xFF) {
-        printf("ERROR: Failed to register chip: %s\n", desc->description);
-        fflush(stdout);
-        return NULL;
-    }
-    return chip;
-}
-
 // Callback function for CIA2 Port A changes - updates VIC-II bank
 // Called whenever CIA2 Port A output changes (considering DDR masking)
 //
@@ -587,7 +560,26 @@ void c64_system_cleanup(c64_t* c64) {
         c64->keyboard = NULL;
     }
 
-    system_chips_destroy(&c64->system);
+    // Destroy all chips directly (reverse order of creation)
+    if (c64->kernal) { rom_destroy(c64->kernal); c64->kernal = NULL; }
+    if (c64->cia2) { mos6526_destroy(c64->cia2); c64->cia2 = NULL; }
+    if (c64->cia1) { mos6526_destroy(c64->cia1); c64->cia1 = NULL; }
+    if (c64->colorram) { mos2114_destroy(c64->colorram); c64->colorram = NULL; }
+    if (c64->sid) { mos6581_destroy(c64->sid); c64->sid = NULL; }
+    if (c64->vicii) { vicii_destroy(c64->vicii); c64->vicii = NULL; }
+    if (c64->charrom) { rom_destroy(c64->charrom); c64->charrom = NULL; }
+    if (c64->cartridge_romh) { rom_destroy(c64->cartridge_romh); c64->cartridge_romh = NULL; }
+    if (c64->basic) { rom_destroy(c64->basic); c64->basic = NULL; }
+    if (c64->cartridge_roml) { rom_destroy(c64->cartridge_roml); c64->cartridge_roml = NULL; }
+    if (c64->mos6510) { mos6510_destroy(static_cast<mos6510_t*>(c64->mos6510)); c64->mos6510 = NULL; }
+    if (c64->ram) { ram_destroy(c64->ram); c64->ram = NULL; }
+
+    // Clean up bus aligned buffer (allocated in c64_bus_init_unified_pointers)
+    if (c64->bus.allocated_buffer) {
+        cermu_aligned_free(c64->bus.allocated_buffer);
+        c64->bus.allocated_buffer = NULL;
+    }
+
     // Note: does NOT free c64 — caller owns the memory
 }
 
@@ -600,19 +592,7 @@ void c64_system_destroy(c64_t* c64) {
 bool c64_system_init(c64_t* c64, const c64_config_t* config) {
     // c64 must be zero-initialized by the caller
 
-    // Initialize the legacy system_8bit chip registry
-    system_8bit_init(&c64->system);
-    if (!c64->system.cpp_system) {
-        printf("ERROR: Failed to initialize system\n");
-        return false;
-    }
-
-    chip_descriptor_t* vicii_descriptor = (config->vicii_standard == VIC_PAL ? &mos6569_descriptor : &mos6567_descriptor);
-
-    // Initialize bus as embedded struct
-    // NOTE: The bus is embedded in c64_t (not allocated separately), so we initialize it here
-    // rather than calling c64_bus_system_create(). This is the ONLY initialization point.
-    c64->bus.desc = &c64_bus_descriptor;
+    // Initialize bus as embedded struct (not allocated separately)
     c64->bus.c64 = c64;
     
     // Initialize bus state with pull-up resistors (centralized definition in c64_bus.h)
@@ -622,15 +602,15 @@ bool c64_system_init(c64_t* c64, const c64_config_t* config) {
     // Initialize system lines with default cartridge signals (no cartridge)
     c64->bus.system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;
 
-    // One line per chip - create, register, assign memory address/size, and assign to C64 field
-    if (!(c64->ram = static_cast<ram_t*>(create_and_register_chip(c64, &ram_descriptor, 0x0000, 65536)))) { c64_system_cleanup(c64); return false; }
-    if (!(c64->mos6510 = create_and_register_chip(c64, &mos6510_descriptor, 0x0000, 4096))) { c64_system_cleanup(c64); return false; }
-    if (!(c64->cartridge_roml = static_cast<rom_t*>(create_and_register_chip(c64, &rom_descriptor, 0x8000, 8192)))) { c64_system_cleanup(c64); return false; }
-    if (!(c64->basic = static_cast<rom_t*>(create_and_register_chip(c64, &rom_descriptor, 0xA000, 8192)))) { c64_system_cleanup(c64); return false; }
-    if (!(c64->cartridge_romh = static_cast<rom_t*>(create_and_register_chip(c64, &rom_descriptor, 0xC000, 8192)))) { c64_system_cleanup(c64); return false; }
-    if (!(c64->charrom = static_cast<rom_t*>(create_and_register_chip(c64, &rom_descriptor, 0xD000, 4096)))) { c64_system_cleanup(c64); return false; }
-    if (!(c64->vicii = static_cast<vicii_t*>(create_and_register_chip(c64, vicii_descriptor, 0xD000, 1024)))) { c64_system_cleanup(c64); return false; }
-    if (!(c64->sid = static_cast<mos6581_t*>(create_and_register_chip(c64, &mos6581_descriptor, 0xD400, 1024)))) { c64_system_cleanup(c64); return false; }
+    // Create all chips directly with typed create functions
+    if (!(c64->ram = ram_create())) { c64_system_cleanup(c64); return false; }
+    if (!(c64->mos6510 = mos6510_create())) { c64_system_cleanup(c64); return false; }
+    if (!(c64->cartridge_roml = rom_create_with_size(8192))) { c64_system_cleanup(c64); return false; }
+    if (!(c64->basic = rom_create_with_size(8192))) { c64_system_cleanup(c64); return false; }
+    if (!(c64->cartridge_romh = rom_create_with_size(8192))) { c64_system_cleanup(c64); return false; }
+    if (!(c64->charrom = rom_create_with_size(4096))) { c64_system_cleanup(c64); return false; }
+    if (!(c64->vicii = (config->vicii_standard == VIC_PAL ? mos6569_create() : mos6567_create()))) { c64_system_cleanup(c64); return false; }
+    if (!(c64->sid = mos6581_create())) { c64_system_cleanup(c64); return false; }
     
     // Configure SID timing to match the C64's actual CPU clock
     {
@@ -640,7 +620,7 @@ bool c64_system_init(c64_t* c64, const c64_config_t* config) {
         mos6581_set_timing(c64->sid, is_pal);
     }
     
-    if (!(c64->colorram = static_cast<mos2114_t*>(create_and_register_chip(c64, &mos2114_descriptor, 0xD800, 1024)))) { c64_system_cleanup(c64); return false; }
+    if (!(c64->colorram = mos2114_create())) { c64_system_cleanup(c64); return false; }
     c64->vicii->colorram = c64->colorram; // Also assign to VIC-II for compatibility
     
     // VIC-II bank selection is handled internally via bank_base offset
@@ -648,8 +628,8 @@ bool c64_system_init(c64_t* c64, const c64_config_t* config) {
     c64->vicii->bus.bus = &c64->bus;
     c64->vicii->bus.bank_change = NULL;
     
-    if (!(c64->cia1 = static_cast<mos6526_t*>(create_and_register_chip(c64, &mos6526_descriptor, 0xDC00, 256)))) { c64_system_cleanup(c64); return false; }
-    if (!(c64->cia2 = static_cast<mos6526_t*>(create_and_register_chip(c64, &mos6526_descriptor, 0xDD00, 256)))) { c64_system_cleanup(c64); return false; }
+    if (!(c64->cia1 = mos6526_create())) { c64_system_cleanup(c64); return false; }
+    if (!(c64->cia2 = mos6526_create())) { c64_system_cleanup(c64); return false; }
     
     // Create keyboard and initialize with no keys pressed
     c64->keyboard = commodore_keyboard_create(&c64_keyboard_config);
@@ -660,17 +640,13 @@ bool c64_system_init(c64_t* c64, const c64_config_t* config) {
     }
     commodore_keyboard_reset(c64->keyboard);
     printf("C64 System: Keyboard matrix initialized (all keys released)\n");
-    if (!(c64->kernal = static_cast<rom_t*>(create_and_register_chip(c64, &rom_descriptor, 0xE000, 8192)))) { c64_system_cleanup(c64); return false; }
+    if (!(c64->kernal = rom_create_with_size(8192))) { c64_system_cleanup(c64); return false; }
 
     // Initialize placeholders for missing components
     c64->io1 = NULL; // No cartridge I/O by default
     c64->io2 = NULL; // No cartridge I/O by default
 
-    // Register PLA for GUI debugging (special case - chip is the C64 system itself)
-    uint8_t pla_chip_id = system_chip_register(&c64->system, c64, &pla_descriptor, 0x0000, 0);
-    if (pla_chip_id == 0xFF) { c64_system_cleanup(c64); return false; }
-
-    // Now having a registry of all chips, the PLA maps can be generated
+    // Generate PLA memory maps
     if (!c64_pla_maps_generate(c64)) { c64_system_cleanup(c64); return false; }
     
     // DEBUG: Print VIC-II memory mapping for bank 0 (addresses 0x0000-0x0FFF)
@@ -749,13 +725,9 @@ bool c64_system_init(c64_t* c64, const c64_config_t* config) {
 
     printf("C64 System: CPU initialized and loaded reset vector $%04X from KERNAL ROM (PC and AB set)\n", reset_vector);
 
-    // Attach all other chips with bus_attach callbacks
-    for (int i = 0; i < c64->system.chip_count; i++) {
-        chip_entry_t* chip = &c64->system.chips[i];
-        if (chip->desc && chip->desc->bus_attach && chip->desc != &c64_bus_descriptor) {
-            chip->desc->bus_attach(chip->chip, &(c64->bus));
-        }
-    }
+    // Bus connections already established:
+    // - VIC-II: c64->vicii->bus.bus = &c64->bus (set above)
+    // - SID: bus_interface unused (SID ticked directly in system tick loop)
 
     // Initialize bus state with reset released (HIGH = inactive for active-low reset)
     printf("C64 System: Reset complete, ready to run\n");

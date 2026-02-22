@@ -43,7 +43,6 @@ struct C64SystemData;
 
 // C64 bus controller structure
 typedef struct c64_bus_s {
-    chip_descriptor_t* desc;
     C64SystemData* c64;  // Typed back-pointer to owning C64 system data
     bus_state_t default_state; // Default bus state with pull-up resistors (start of each tick)
     bus_state_t state;         // Current bus state (after all chip ticks)

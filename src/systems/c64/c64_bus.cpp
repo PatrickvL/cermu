@@ -204,14 +204,13 @@ void c64_bus_system_destroy(void* chip) {
 }
 
 // Made non-static for banking verification utility
-void* c64_bus_system_create(chip_descriptor_t* desc) {
+void* c64_bus_system_create(chip_descriptor_t* /* desc */) {
     c64_bus_t* c64_bus = (c64_bus_t*)calloc(1, sizeof(c64_bus_t));
     if (!c64_bus) return NULL;
-    c64_bus->desc = desc;
     
     // NOTE: default_state, state, and system_lines initialization is done in c64_system_create()
     // since the bus is embedded in c64_t and never allocated via this function in actual use.
-    // This function exists for potential future standalone bus usage but currently isn't called.
+    // This function is used by c64_banking_verify for standalone bus testing.
     
     // Note: pla_banking_mode will be initialized by c64_bus_mode_switch()
     // after PLA mapping data is set up in c64_pla_maps_generate()
