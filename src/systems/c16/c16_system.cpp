@@ -717,101 +717,6 @@ bool Commodore264System<V>::load_roms() {
     return (kernal_ok && basic_ok);
 }
 
-template<C264SeriesVariant V>
-uint8_t Commodore264System<V>::cpu_read(uint32_t addr) {
-    uint16_t addr16 = addr & 0xFFFF;
-    
-    // TED registers at $FF00-$FF3F (always visible)
-    if (addr16 >= 0xFF00 && addr16 <= 0xFF3F) {
-        if (ted_) {
-            bus_state_t ted_state = 0;
-            BUS_SET_ADDR(ted_state, addr16);
-            ted_state = ted_->registers_read(ted_state);
-            return BUS_GET_DATA(ted_state);
-        }
-        return 0xFF;
-    }
-    
-    // RAM (0x0000-size based on configuration)
-    size_t ram_size = 16384;  // Default C16
-    if (config_.memory_option_index >= 0 &&
-        config_.memory_option_index < static_cast<int>(hardware_traits_.memory_options.size())) {
-        ram_size = hardware_traits_.memory_options[config_.memory_option_index].ram_size;
-    }
-    
-    if (addr16 < ram_size) {
-        return ram_simple_[addr16];
-    }
-    
-    // ROM/RAM banking: TED controls whether ROMs are visible
-    bool rom_visible = ted_ ? ted_->rom_enabled : true;
-    
-    // BASIC ROM (0x8000-0xBFFF = 16KB) — only when ROM is enabled
-    if (addr16 >= 0x8000 && addr16 < 0xC000) {
-        if (rom_visible) {
-            return basic_rom_[addr16 - 0x8000];
-        }
-        // RAM under ROM (64KB models)
-        return ram_simple_[addr16];
-    }
-    
-    // KERNAL ROM (0xC000-0xFFFF = 16KB) — only when ROM is enabled
-    if (addr16 >= 0xC000) {
-        if (rom_visible) {
-            return kernal_rom_[addr16 - 0xC000];
-        }
-        // RAM under ROM (64KB models)
-        return ram_simple_[addr16];
-    }
-    
-    return 0xFF;  // Unmapped memory
-}
-
-template<C264SeriesVariant V>
-void Commodore264System<V>::cpu_write(uint32_t addr, uint8_t data) {
-    uint16_t addr16 = addr & 0xFFFF;
-    
-    // TED registers at $FF00-$FF3F (always writable)
-    if (addr16 >= 0xFF00 && addr16 <= 0xFF3F) {
-        if (ted_) {
-            bus_state_t ted_state = 0;
-            BUS_SET_ADDR(ted_state, addr16);
-            BUS_SET_DATA(ted_state, data);
-            ted_->registers_write(ted_state);
-        }
-        return;
-    }
-    
-    // RAM (0x0000-size based on configuration)
-    size_t ram_size = 16384;  // Default C16
-    if (config_.memory_option_index >= 0 &&
-        config_.memory_option_index < static_cast<int>(hardware_traits_.memory_options.size())) {
-        ram_size = hardware_traits_.memory_options[config_.memory_option_index].ram_size;
-    }
-    
-    // Writes always go to RAM (ROM is read-only, writes pass through to underlying RAM)
-    if (addr16 < ram_size) {
-        ram_simple_[addr16] = data;
-    }
-    // For 64KB models, RAM extends to $FFFF (excluding TED registers)
-    else if (ram_size >= 65536 && addr16 < 0xFF00) {
-        ram_simple_[addr16] = data;
-    }
-}
-
-template<C264SeriesVariant V>
-uint8_t Commodore264System<V>::cpu_read_callback(void* user_data, uint32_t addr, uint8_t bus_state) {
-    auto* sys = static_cast<Commodore264System<V>*>(user_data);
-    (void)bus_state;
-    return sys->cpu_read(addr);
-}
-
-template<C264SeriesVariant V>
-void Commodore264System<V>::cpu_write_callback(void* user_data, uint32_t addr, uint8_t data) {
-    auto* sys = static_cast<Commodore264System<V>*>(user_data);
-    sys->cpu_write(addr, data);
-}
-
 // ============================================================================
 // BUS MEMORY SERVICE
 // ============================================================================
@@ -819,17 +724,66 @@ void Commodore264System<V>::cpu_write_callback(void* user_data, uint32_t addr, u
 template<C264SeriesVariant V>
 bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
     uint16_t addr = BUS_GET_ADDR(s);
-    
+
+    // Determine configured RAM size
+    size_t ram_size = 16384;  // Default C16
+    if (config_.memory_option_index >= 0 &&
+        config_.memory_option_index < static_cast<int>(hardware_traits_.memory_options.size())) {
+        ram_size = hardware_traits_.memory_options[config_.memory_option_index].ram_size;
+    }
+
     if (s & BUS_BIT(BUS_RW_BIT)) {
-        // Read cycle
-        uint8_t data = cpu_read(addr);
+        // ---- Read cycle ----
+        uint8_t data = 0xFF;
+
+        // TED registers at $FF00-$FF3F (always visible)
+        if (addr >= 0xFF00 && addr <= 0xFF3F) {
+            if (ted_) {
+                bus_state_t ted_state = 0;
+                BUS_SET_ADDR(ted_state, addr);
+                ted_state = ted_->registers_read(ted_state);
+                data = BUS_GET_DATA(ted_state);
+            }
+        }
+        // RAM (0x0000-size based on configuration)
+        else if (addr < ram_size) {
+            data = ram_simple_[addr];
+        }
+        // BASIC ROM (0x8000-0xBFFF = 16KB)
+        else if (addr >= 0x8000 && addr < 0xC000) {
+            bool rom_visible = ted_ ? ted_->rom_enabled : true;
+            data = rom_visible ? basic_rom_[addr - 0x8000] : ram_simple_[addr];
+        }
+        // KERNAL ROM (0xC000-0xFFFF = 16KB)
+        else if (addr >= 0xC000) {
+            bool rom_visible = ted_ ? ted_->rom_enabled : true;
+            data = rom_visible ? kernal_rom_[addr - 0xC000] : ram_simple_[addr];
+        }
+
         BUS_SET_DATA(s, data);
     } else {
-        // Write cycle
+        // ---- Write cycle ----
         uint8_t data = BUS_GET_DATA(s);
-        cpu_write(addr, data);
+
+        // TED registers at $FF00-$FF3F (always writable)
+        if (addr >= 0xFF00 && addr <= 0xFF3F) {
+            if (ted_) {
+                bus_state_t ted_state = 0;
+                BUS_SET_ADDR(ted_state, addr);
+                BUS_SET_DATA(ted_state, data);
+                ted_->registers_write(ted_state);
+            }
+        }
+        // Writes always go to RAM (ROM is read-only, writes pass through)
+        else if (addr < ram_size) {
+            ram_simple_[addr] = data;
+        }
+        // For 64KB models, RAM extends to $FFFF (excluding TED registers)
+        else if (ram_size >= 65536 && addr < 0xFF00) {
+            ram_simple_[addr] = data;
+        }
     }
-    
+
     return s;
 }
 
