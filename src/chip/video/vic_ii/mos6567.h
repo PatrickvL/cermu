@@ -18,9 +18,6 @@ bus_state_t mos6567_registers_write(void* chip, bus_state_t bus_state);
 // Bank change callback
 void mos6567_bank_change(void* chip, uint8_t bank);
 
-// Descriptor for NTSC VIC-II
-extern chip_descriptor_t mos6567_descriptor;
-
 #ifdef IMGUI_VERSION
 // GUI function declarations
 void mos6567_render_debug_window(void* chip, bool* show_window);

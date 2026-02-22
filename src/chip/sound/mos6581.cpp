@@ -1043,16 +1043,3 @@ ChipIdentity mos6581_s::chip_identity() const {
 bus_state_t mos6581_tick(void* chip, bus_state_t bus_state) {
     return mos6581_advance_cycle((mos6581_t*)chip, bus_state);
 }
-
-// =============================================================================
-// CHIP DESCRIPTOR
-// =============================================================================
-
-chip_descriptor_t mos6581_descriptor = {
-    .description = "MOS6581 SID Sound Interface Device",
-    .create = [](chip_descriptor_t*) -> void* { return mos6581_create(); },
-    .destroy = [](void* chip) { mos6581_destroy(static_cast<mos6581_t*>(chip)); },
-    .bus_attach = [](void* chip, void* bus) {
-        mos6581_bus_attach(chip, static_cast<bus_cycle_ops_t*>(bus));
-    }
-};

@@ -18,9 +18,6 @@ vicii_t* mos6569_create();
 bus_state_t mos6569_registers_read(void* chip, bus_state_t bus_state);
 bus_state_t mos6569_registers_write(void* chip, bus_state_t bus_state);
 
-// External descriptor instance
-extern chip_descriptor_t mos6569_descriptor;
-
 #ifdef IMGUI_VERSION
 // GUI function declarations
 void mos6569_render_debug_window(void* chip, bool* show_window);

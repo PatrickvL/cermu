@@ -32,8 +32,8 @@ ChipBase* nes6502_as_chip_base(nes6502_t *cpu) {
   return static_cast<ChipBase*>(CPU_CAST(cpu));
 }
 
-bus_state_t nes6502_init(nes6502_t *cpu, const chip_descriptor_t *desc) {
-  return CPU_CAST(cpu)->init(desc);
+bus_state_t nes6502_init(nes6502_t *cpu) {
+  return CPU_CAST(cpu)->init();
 }
 
 bus_state_t nes6502_reset(nes6502_t *cpu, bus_state_t pins) {
@@ -144,28 +144,4 @@ nes6502_apu::APU *nes6502_get_apu(nes6502_t *cpu) {
   } else {
     return nullptr;
   }
-}
-
-// NES 6502 (RICOH 2A03) chip descriptor
-static chip_descriptor_t nes6502_base_descriptor;
-
-static void initialize_nes6502_descriptor() {
-  nes6502_base_descriptor.description = "NES 6502 (RICOH 2A03)";
-  nes6502_base_descriptor.create = [](chip_descriptor_t *desc) -> void * {
-    return nes6502_create();
-  };
-  nes6502_base_descriptor.destroy = [](void *chip) {
-    nes6502_destroy(reinterpret_cast<nes6502_t *>(chip));
-  };
-  nes6502_base_descriptor.bus_attach =
-      nullptr; // Basic CPU doesn't need bus attach
-}
-
-const chip_descriptor_t *nes6502_get_chip_descriptor(void) {
-  static bool initialized = false;
-  if (!initialized) {
-    initialize_nes6502_descriptor();
-    initialized = true;
-  }
-  return &nes6502_base_descriptor;
 }

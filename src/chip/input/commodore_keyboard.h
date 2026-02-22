@@ -242,8 +242,6 @@ typedef struct {
 // ============================================================================
 
 typedef struct {
-    chip_descriptor_t descriptor;
-
     // Model and matrix configuration
     keyboard_model_t model;
     keyboard_scan_chip_t scan_chip;

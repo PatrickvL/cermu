@@ -1,39 +1,15 @@
 //#define DEBUG_PLA_BANKING
 
 #include "pla.h"
-#include "../../core/chip.h"
 //#include "../../systems/c64/c64_bus.h"
 #ifdef DEBUG_PLA_BANKING
 #include <stdio.h>
 #endif
 
-// ============================================================================
-// PLA CHIP DESCRIPTOR FOR GUI INTEGRATION
-// ============================================================================
-
-// PLA create function - returns NULL since PLA is part of the C64 bus system
-static void* pla_create(chip_descriptor_t* desc) {
-    // PLA is not a standalone chip - it's part of the C64 bus system
-    return NULL;
-}
-
-// PLA destroy function - no-op since PLA is part of the bus
-static void pla_destroy(void* chip) {
-    // PLA is part of the C64 system, not destroyed separately
-}
-
 // Include GUI implementation
 #ifdef IMGUI_VERSION
 #include "pla_gui.h"
 #endif
-
-// PLA chip descriptor
-chip_descriptor_t pla_descriptor = {
-    .description = "PLA (Programmable Logic Array)",
-    .create = pla_create,
-    .destroy = pla_destroy,
-    .bus_attach = NULL
-};
 
 // ============================================================================
 // PLA LOGIC IMPLEMENTATION

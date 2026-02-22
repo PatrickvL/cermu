@@ -4,14 +4,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-// VIC-6560 chip descriptor
-chip_descriptor_t mos6560_descriptor = {
-    .description = "MOS6560/6561 VIC Video Interface Controller",
-    .create = [](chip_descriptor_t*) -> void* { return mos6560_create(); },
-    .destroy = [](void* chip) { mos6560_destroy(static_cast<mos6560_t*>(chip)); },
-    .bus_attach = (void (*)(void *, void *))mos6560_bus_attach
-};
-
 // VIC-6560 chip configuration — NTSC variant
 // The MOS 6560 is the NTSC version of the VIC-I chip used in NTSC VIC-20s.
 // NTSC crystal: 14.31818 MHz / 14 = 1,022,727 Hz system clock

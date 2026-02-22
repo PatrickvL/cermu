@@ -144,10 +144,9 @@ void vic20_bank_map_init_vic(vic20_bank_map_t* map, uint8_t expansion_flags) {
 // Memory System Creation and Destruction
 // ============================================================================
 
-static void* vic20_memory_chip_create(chip_descriptor_t* desc) {
+static void* vic20_memory_chip_create() {
     vic20_memory_t* mem = (vic20_memory_t*)calloc(1, sizeof(vic20_memory_t));
     if (!mem) return NULL;
-    mem->desc = desc;
     return mem;
 }
 
@@ -163,15 +162,8 @@ static void vic20_memory_chip_destroy(void* chip) {
     free(mem);
 }
 
-chip_descriptor_t vic20_memory_descriptor = {
-    /* description */ "VIC-20 Memory System",
-    /* create */ vic20_memory_chip_create,
-    /* destroy */ vic20_memory_chip_destroy,
-    /* bus_attach */ NULL
-};
-
 vic20_memory_t* vic20_memory_create(uint8_t expansion_flags, bool cartridge_present) {
-    vic20_memory_t* mem = (vic20_memory_t*)vic20_memory_chip_create(&vic20_memory_descriptor);
+    vic20_memory_t* mem = (vic20_memory_t*)vic20_memory_chip_create();
     if (!mem) return NULL;
     
     mem->expansion_flags = expansion_flags;

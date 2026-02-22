@@ -132,9 +132,6 @@ bus_state_t mos6522_registers_write(void* chip, bus_state_t bus_state);
 void mos6522_set_port_a_read_callback(mos6522_t* via, uint8_t (*callback)(void*, uint8_t), void* context);
 void mos6522_set_port_b_read_callback(mos6522_t* via, uint8_t (*callback)(void*, uint8_t), void* context);
 
-// Chip descriptor
-extern chip_descriptor_t mos6522_descriptor;
-
 // GUI functions (implementations in mos6522_gui.cpp, compiled only with ImGui)
 void mos6522_render_debug_content(void* chip);
 void mos6522_render_settings_content(void* chip);

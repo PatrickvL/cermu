@@ -37,8 +37,8 @@ ChipBase* mos6502_as_chip_base(mos6502_t *cpu) {
   return static_cast<ChipBase*>(CPU_CAST(mos6502_cpu_t, cpu));
 }
 
-bus_state_t mos6502_init(mos6502_t *cpu, const chip_descriptor_t *desc) {
-  return CPU_CAST(mos6502_cpu_t, cpu)->init(desc);
+bus_state_t mos6502_init(mos6502_t *cpu) {
+  return CPU_CAST(mos6502_cpu_t, cpu)->init();
 }
 
 bus_state_t mos6502_bootstrap(mos6502_t *cpu, bus_state_t pins) {
@@ -113,31 +113,4 @@ void mos6502_set_p(mos6502_t *cpu, uint8_t value) {
 
 void mos6502_set_pc(mos6502_t *cpu, uint16_t value) {
   CPU_CAST(mos6502_cpu_t, cpu)->set(REG_PC, value);
-}
-
-// ============================================================================
-// Enhanced Descriptor API
-// ============================================================================
-
-static chip_descriptor_t mos6502_base_descriptor;
-
-static void initialize_mos6502_descriptor() {
-  mos6502_base_descriptor.description = "MOS Technology 6502 (NMOS)";
-  mos6502_base_descriptor.create = [](chip_descriptor_t *desc) -> void * {
-    return mos6502_create();
-  };
-  mos6502_base_descriptor.destroy = [](void *chip) {
-    mos6502_destroy(reinterpret_cast<mos6502_t *>(chip));
-  };
-  mos6502_base_descriptor.bus_attach =
-      nullptr; // Basic CPU doesn't need bus attach
-}
-
-const chip_descriptor_t *mos6502_get_chip_descriptor(void) {
-  static bool initialized = false;
-  if (!initialized) {
-    initialize_mos6502_descriptor();
-    initialized = true;
-  }
-  return &mos6502_base_descriptor;
 }

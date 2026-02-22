@@ -34,7 +34,7 @@ wdc65c816_t *wdc65c816_create(void);
 void wdc65c816_destroy(wdc65c816_t *cpu);
 
 // Basic API functions
-bus_state_t wdc65c816_init(wdc65c816_t *cpu, const chip_descriptor_t *desc);
+bus_state_t wdc65c816_init(wdc65c816_t *cpu);
 bus_state_t wdc65c816_reset(wdc65c816_t *cpu, bus_state_t pins);
 bus_state_t wdc65c816_tick(wdc65c816_t *cpu, bus_state_t pins);
 bool wdc65c816_opdone(wdc65c816_t *cpu);

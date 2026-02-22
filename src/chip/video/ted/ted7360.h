@@ -376,9 +376,6 @@ struct ted_sound_unit_t {
 // ============================================================================
 
 struct ted7360_t : public ChipBase {
-    // Configuration
-    chip_descriptor_t* desc = nullptr;
-
     // Unit structures (following VIC-II decomposition)
     ted_registers_unit_t   registers;
     ted_timing_unit_t      timing;
@@ -496,9 +493,3 @@ void ted7360_set_framebuffer(ted7360_t* ted, uint32_t* buffer, int width, int he
 
 /** Get the 128-entry TED color palette (RGBA format). */
 const uint32_t* ted7360_get_palette(void);
-
-// ============================================================================
-// Chip descriptor for system registration
-// ============================================================================
-
-extern chip_descriptor_t ted7360_descriptor;

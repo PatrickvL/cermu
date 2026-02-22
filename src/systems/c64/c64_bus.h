@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "../../core/cermu.h"
-#include "../../core/chip.h"
 //#include "../../core/system.h"
 #include "../../core/system_lines.h"
 //#include "../../core/bus_cycle_interface.h"
@@ -287,7 +286,7 @@ uint8_t c64_read_memory(c64_bus_t* bus, uint16_t addr);
 void c64_write_memory(c64_bus_t* bus, uint16_t addr, uint8_t value);
 
 // System functions
-void* c64_bus_system_create(chip_descriptor_t* desc);
+void* c64_bus_system_create();
 void c64_bus_system_destroy(void* chip);
 void c64_bus_system_attach(c64_bus_t* c64_bus, C64SystemData* c64);
 
@@ -313,8 +312,6 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
 
 // COMPACT I/O PAGE MAPPING FUNCTIONS - Efficient IO page-based dispatch
 void c64_bus_init_io_handlers(c64_bus_t* c64_bus);
-
-extern chip_descriptor_t c64_bus_descriptor;
 
 #ifdef __cplusplus
 }

@@ -38,7 +38,7 @@ template <const CPUTraits &Traits> struct io_port_mixin_t {
     uint8_t _padding;  // Align to 4 bytes
   } io_port;
 
-  // Typed bank-change callback — replaces legacy chip_descriptor_t* indirection.
+  // Typed bank-change callback for memory banking.
   // Called when I/O port banking bits (0-2) change. Context is typically the
   // system struct (e.g. c64_t*) so the callback can reconfigure the PLA.
   using bank_change_fn_t = void(*)(void* context, uint8_t banking_bits);

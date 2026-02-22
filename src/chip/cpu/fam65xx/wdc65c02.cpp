@@ -28,8 +28,8 @@ void wdc65c02_destroy(wdc65c02_t *cpu) {
   delete CPU_CAST(cpu);
 }
 
-bus_state_t wdc65c02_init(wdc65c02_t *cpu, const chip_descriptor_t *desc) {
-  return CPU_CAST(cpu)->init(desc);
+bus_state_t wdc65c02_init(wdc65c02_t *cpu) {
+  return CPU_CAST(cpu)->init();
 }
 
 bus_state_t wdc65c02_reset(wdc65c02_t *cpu, bus_state_t pins) {
@@ -78,30 +78,4 @@ void wdc65c02_set_p(wdc65c02_t *cpu, uint8_t value) {
 
 void wdc65c02_set_pc(wdc65c02_t *cpu, uint16_t value) {
   CPU_CAST(cpu)->set(REG_PC, value);
-}
-
-// ============================================================================
-// CHIP DESCRIPTOR
-// ============================================================================
-
-static chip_descriptor_t wdc65c02_base_descriptor;
-
-static void initialize_wdc65c02_descriptor() {
-  wdc65c02_base_descriptor.description = "WDC 65C02 (CMOS)";
-  wdc65c02_base_descriptor.create = [](chip_descriptor_t *desc) -> void * {
-    return wdc65c02_create();
-  };
-  wdc65c02_base_descriptor.destroy = [](void *chip) {
-    wdc65c02_destroy(reinterpret_cast<wdc65c02_t *>(chip));
-  };
-  wdc65c02_base_descriptor.bus_attach = nullptr;
-}
-
-const chip_descriptor_t *wdc65c02_get_chip_descriptor(void) {
-  static bool initialized = false;
-  if (!initialized) {
-    initialize_wdc65c02_descriptor();
-    initialized = true;
-  }
-  return &wdc65c02_base_descriptor;
 }

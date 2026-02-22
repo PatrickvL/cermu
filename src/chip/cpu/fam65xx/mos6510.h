@@ -23,14 +23,11 @@
 typedef struct mos6510_t mos6510_t;
 
 // ============================================================================
-// MOS 6510-SPECIFIC DESCRIPTOR (extends chip_descriptor_t)
+// MOS 6510-SPECIFIC DESCRIPTOR
 // ============================================================================
 
-// MOS 6510 descriptor that wraps chip_descriptor_t with I/O port specific
-// fields
+// MOS 6510 descriptor with I/O port specific fields
 typedef struct {
-  chip_descriptor_t base; // Base chip descriptor
-
   // 6510-specific I/O port callbacks
   uint8_t (*m6510_in_cb)(void *user_data); // Read from external I/O pins
   void (*m6510_out_cb)(uint8_t data,
@@ -99,9 +96,6 @@ void mos6510_set_bank_change(mos6510_t *cpu,
 class ChipBase;
 ChipBase* mos6510_as_chip_base(mos6510_t *cpu);
 #endif
-
-// Global descriptor for chip registration
-extern chip_descriptor_t mos6510_descriptor;
 
 // Chip-compatible tick function
 bus_state_t mos6510_tick_phi2(void *cpu, bus_state_t pins);

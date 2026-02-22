@@ -73,23 +73,6 @@ public:
 
     // Update SID sample rate to match actual audio device rate
     void set_audio_sample_rate(int sample_rate_hz) override;
-    
-    // Note: The following methods are now provided by CommodoreSystem base class:
-    // - set_configuration() - stores config_
-    // - get_target_fps() - reads from region_options
-    // - set_speed_multiplier() - stores speed_multiplier_
-    // - handle_text_input() - delegates to keyboard_mapper_
-    // - release_all_keys() - delegates to keyboard_mapper_
-    //
-    // Note: The following methods are provided by EmulatedSystem base class:
-    // - get_configuration() - returns config_
-    // - get_hardware_traits() - returns hardware_traits_
-    // - get_current_timing() - returns hardware_traits_.timing
-    // - get_display_traits() - returns hardware_traits_.display
-    // - get_audio_traits() - returns hardware_traits_.audio
-    // - get_total_cycles() - returns total_cycles_
-    // - get_speed_multiplier() - returns speed_multiplier_
-    
     // Apply KERNAL RAMTAS patch to skip the memory test during boot.
     // Returns true if the patch was applied.
     bool patch_skip_memtest() { return c64_patch_skip_memtest(c64_); }

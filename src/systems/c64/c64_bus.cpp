@@ -204,7 +204,7 @@ void c64_bus_system_destroy(void* chip) {
 }
 
 // Made non-static for banking verification utility
-void* c64_bus_system_create(chip_descriptor_t* /* desc */) {
+void* c64_bus_system_create() {
     c64_bus_t* c64_bus = (c64_bus_t*)calloc(1, sizeof(c64_bus_t));
     if (!c64_bus) return NULL;
     
@@ -230,13 +230,6 @@ void c64_bus_system_attach(c64_bus_t* c64_bus, C64SystemData* c64) {
     // Initialize compact IO page handlers for efficient I/O access
     c64_bus_init_io_handlers(c64_bus);
 }
-
-chip_descriptor_t c64_bus_descriptor = {
-    /* description */ "C64 System Bus Controller",
-    /* create */ c64_bus_system_create,
-    /* destroy */ c64_bus_system_destroy,
-    /* bus_attach */ NULL
-};
 
 void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
     // Update the optimized banking for the current mode

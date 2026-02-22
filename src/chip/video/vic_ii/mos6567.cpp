@@ -12,16 +12,6 @@ vicii_t* mos6567_create() {
     return vicii;
 }
 
-/*
- * Descriptor for NTSC VIC-II
- */
-chip_descriptor_t mos6567_descriptor = {
-    .description = "MOS6567 VIC-II Video Interface Chip (NTSC)",
-    .create      = [](chip_descriptor_t*) -> void* { return mos6567_create(); },
-    .destroy     = [](void* chip) { delete static_cast<vicii_t*>(chip); },
-    .bus_attach  = vicii_bus_attach
-};
-
 // Include GUI implementation
 #ifdef IMGUI_VERSION
 #include "mos6567_gui.h"

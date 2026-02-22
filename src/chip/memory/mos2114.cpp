@@ -77,13 +77,3 @@ MOS2114* mos2114_create() {
 void mos2114_destroy(MOS2114* chip) {
     delete chip;
 }
-
-// ============================================================================
-// Legacy chip descriptor (c64.cpp System8Bit test path)
-// ============================================================================
-chip_descriptor_t mos2114_descriptor = {
-    .description = "MOS2114 Color RAM (1K x 4-bit)",
-    .create  = [](chip_descriptor_t*) -> void* { return new MOS2114(); },
-    .destroy = [](void* chip) { delete static_cast<MOS2114*>(chip); },
-    .bus_attach = nullptr
-};

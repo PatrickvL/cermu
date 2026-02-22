@@ -38,7 +38,7 @@ ChipBase* mos7501_as_chip_base(mos7501_t *cpu) {
 }
 
 bus_state_t mos7501_init(mos7501_t *cpu, const mos7501_desc_t *desc) {
-  bus_state_t pins = CPU_CAST(cpu)->init(&desc->base);
+  bus_state_t pins = CPU_CAST(cpu)->init();
 
   auto *cpu_impl = CPU_CAST(cpu);
   if constexpr (CSG7501.has_io_port()) {
@@ -128,7 +128,7 @@ void mos7501_set_bank_change(mos7501_t *cpu,
 }
 
 // ============================================================================
-// CHIP DESCRIPTOR AND INTERFACE
+// CHIP TICK INTERFACE
 // ============================================================================
 
 bus_state_t mos7501_tick_phi2(void *cpu, bus_state_t pins) {
@@ -138,13 +138,3 @@ bus_state_t mos7501_tick_phi2(void *cpu, bus_state_t pins) {
 bus_state_t mos7501_tick_phi1(void *cpu, bus_state_t pins) {
   return CPU_CAST(cpu)->tick<mos7501_cpu_t::Phase::PHI1>(pins);
 }
-
-chip_descriptor_t mos7501_descriptor = {
-    .description = "MOS 7501 CPU (C16/Plus4)",
-    .create = [](chip_descriptor_t *desc) -> void * {
-      return mos7501_create();
-    },
-    .destroy =
-        [](void *cpu) { mos7501_destroy(reinterpret_cast<mos7501_t *>(cpu)); },
-    .bus_attach = nullptr
-};
