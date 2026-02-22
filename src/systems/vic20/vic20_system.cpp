@@ -179,9 +179,9 @@ static float vic20_can_load_file(const char* filepath, const uint8_t* data, size
         // LNX files — Lynx archive; parse to inspect contained files' load addresses
         if (strcmp(ext, ".lnx") == 0 || strcmp(ext, ".LNX") == 0) {
             commodore_lynx_t lynx;
-            if (commodore_lynx_open(filepath, &lynx)) {
+            if (lynx.open(filepath)) {
                 commodore_lynx_directory_t dir;
-                if (commodore_lynx_read_directory(&lynx, &dir)) {
+                if (lynx.read_directory(&dir)) {
                     // Check ALL PRG entries' load addresses for VIC-20 addresses
                     bool found_vic20 = false;
                     bool found_any = false;
@@ -198,11 +198,11 @@ static float vic20_can_load_file(const char* filepath, const uint8_t* data, size
                             }
                         }
                     }
-                    commodore_lynx_close(&lynx);
+                    lynx.close();
                     if (found_vic20) return 0.90f;
                     if (found_any) return 0.4f;
                 }
-                commodore_lynx_close(&lynx);
+                lynx.close();
             }
             return 0.5f;  // Could not inspect
         }
@@ -216,15 +216,15 @@ static float vic20_can_load_file(const char* filepath, const uint8_t* data, size
         if (strcmp(ext, ".d64") == 0 || strcmp(ext, ".D64") == 0) {
             // Inspect first PRG's load address to distinguish VIC-20 from C64 disks
             commodore_d64_t d64;
-            if (commodore_d64_open(filepath, &d64)) {
+            if (d64.open(filepath)) {
                 commodore_prg_t prg = {};
-                if (commodore_d64_extract_first_prg(&d64, &prg)) {
+                if (d64.extract_first_prg(&prg)) {
                     float score = is_vic20_load_address(prg.load_addr) ? 0.90f : 0.4f;
                     commodore_prg_free(&prg);
-                    commodore_d64_close(&d64);
+                    d64.close();
                     return score;
                 }
-                commodore_d64_close(&d64);
+                d64.close();
             }
             return 0.5f;  // Could not inspect — moderate confidence
         }
@@ -301,7 +301,7 @@ VIC20System::~VIC20System() {
     
     // Destroy keyboard
     if (keyboard_) {
-        commodore_keyboard_destroy(keyboard_);
+        delete keyboard_;
         keyboard_ = nullptr;
     }
     
@@ -431,10 +431,10 @@ SystemConfiguration VIC20System::detect_optimal_configuration(
             config.memory_option_index = mem_index;
             printf("VIC20: LNX auto-detected memory config: %s (%d files)\n",
                    hardware_traits_.memory_options[mem_index].name, result.file_count);
-            format_load_result_free(&result);
+            result.release();
             return config;
         }
-        format_load_result_free(&result);
+        result.release();
         return config;
     }
 
@@ -453,7 +453,7 @@ SystemConfiguration VIC20System::detect_optimal_configuration(
                 end_addr  = (uint32_t)load_addr + (uint32_t)result.program.data_size;
                 have_prg  = true;
             }
-            format_load_result_free(&result);
+            result.release();
         }
     }
 
@@ -623,7 +623,11 @@ bool VIC20System::initialize() {
     
     // Create keyboard matrix and connect to VIA2
     // VIC-20 keyboard: VIA2 Port B selects columns, VIA2 Port A reads rows
-    keyboard_ = commodore_keyboard_create(&vic20_keyboard_config);
+    keyboard_ = new commodore_keyboard_t();
+    if (!keyboard_->init(&vic20_keyboard_config)) {
+        delete keyboard_;
+        keyboard_ = nullptr;
+    }
     if (keyboard_) {
         // Create the layered keyboard mapper for character-based input
         keyboard_mapper_.reset(create_vic20_keyboard_mapper(keyboard_));
@@ -856,7 +860,7 @@ bool VIC20System::load_file_into_memory(const char* filepath) {
     format_load_result_t result = {};
     if (!format_load_file(filepath, &result)) {
         printf("VIC20: Failed to load file: %s\n", result.error_msg);
-        format_load_result_free(&result);
+        result.release();
         return false;
     }
 
@@ -876,7 +880,7 @@ bool VIC20System::load_file_into_memory(const char* filepath) {
 
     bool success = commodore_apply_load_result(&ctx, &result, filepath);
 
-    format_load_result_free(&result);
+    result.release();
     return success;
 }
 
@@ -922,9 +926,9 @@ void VIC20System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
         emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(key);
         if (ek != EMUKEY_NONE) {
             if (pressed) {
-                commodore_keyboard_key_down(keyboard_, ek, false);
+                keyboard_->key_down(ek, false);
             } else {
-                commodore_keyboard_key_up(keyboard_, ek, false);
+                keyboard_->key_up(ek, false);
             }
         }
     }

@@ -358,7 +358,11 @@ bool Commodore264System<V>::initialize() {
     }
     
     // Create keyboard matrix (8x8, scanned by TED)
-    keyboard_ = commodore_keyboard_create(&c16_keyboard_config);
+    keyboard_ = new commodore_keyboard_t();
+    if (!keyboard_->init(&c16_keyboard_config)) {
+        delete keyboard_;
+        keyboard_ = nullptr;
+    }
     if (keyboard_) {
         // Create the layered keyboard mapper for character-based input
         keyboard_mapper_.reset(create_c16_keyboard_mapper(keyboard_));
@@ -393,7 +397,7 @@ void Commodore264System<V>::shutdown() {
     
     // Destroy keyboard
     if (keyboard_) {
-        commodore_keyboard_destroy(keyboard_);
+        delete keyboard_;
         keyboard_ = nullptr;
     }
     
@@ -431,7 +435,7 @@ void Commodore264System<V>::reset() {
     
     // Reset keyboard matrix
     if (keyboard_) {
-        commodore_keyboard_reset(keyboard_);
+        keyboard_->reset();
     }
     
     total_cycles_ = 0;
@@ -516,7 +520,7 @@ bool Commodore264System<V>::load_file(const char* filepath) {
     format_load_result_t result = {};
     if (!format_load_file(filepath, &result)) {
         printf("%s: Failed to load file: %s\n", Traits::name, result.error_msg);
-        format_load_result_free(&result);
+        result.release();
         return false;
     }
 
@@ -534,7 +538,7 @@ bool Commodore264System<V>::load_file(const char* filepath) {
 
     bool success = commodore_apply_load_result(&ctx, &result, filepath);
 
-    format_load_result_free(&result);
+    result.release();
     return success;
 }
 
@@ -581,9 +585,9 @@ void Commodore264System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed)
         emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(key);
         if (ek != EMUKEY_NONE) {
             if (pressed) {
-                commodore_keyboard_key_down(keyboard_, ek, false);
+                keyboard_->key_down(ek, false);
             } else {
-                commodore_keyboard_key_up(keyboard_, ek, false);
+                keyboard_->key_up(ek, false);
             }
         }
     }

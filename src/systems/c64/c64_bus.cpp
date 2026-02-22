@@ -10,8 +10,8 @@
 // BANKING CHANGE CALLBACK
 // ============================================================================
 
-void c64_bus_on_banking_change(void* bus_ptr, uint8_t banking_state) {
-    c64_bus_t* bus = (c64_bus_t*)bus_ptr;
+void c64_bus_s::on_banking_change(uint8_t banking_state) {
+    c64_bus_t* bus = this;
     if (!bus || !bus->c64) return;
     
     // Convert MOS6510 banking state to C64 bus mode
@@ -24,7 +24,7 @@ void c64_bus_on_banking_change(void* bus_ptr, uint8_t banking_state) {
     uint8_t pla_mode = (game << 4) | (exrom << 3) | (banking_state & 0x07);
     
     // Switch to new memory mapping mode
-    c64_bus_mode_switch(bus, pla_mode);
+    mode_switch(pla_mode);
 }
 
 // Chip accessor functions - these use the chip descriptor's read/write callbacks using bus_state_t pattern
@@ -41,7 +41,8 @@ static inline int8_t c64_get_address_bank(uint16_t address) {
 // ULTRA-OPTIMIZED VIC-II MEMORY READ - Better performance than CPU version
 // VIC-II uses pre-selected active array (indexed by CHIP), can only read, never write
 // Uses unified memory buffer for branchless access to ROM and RAM
-bus_state_t c64_bus_vic_read(c64_bus_t* c64_bus, bus_state_t bus_state, uint16_t address) {
+bus_state_t c64_bus_s::vic_read(bus_state_t bus_state, uint16_t address) {
+    c64_bus_t* c64_bus = this;
     BUS_SET_ADDR(bus_state, address); // Perhaps this is no longer needed
     // Extract 4KB bank from address (0-15 for VIC-II's 64KB addressable space)
     const uint8_t vicii_bank = c64_get_address_bank(address);
@@ -54,7 +55,7 @@ bus_state_t c64_bus_vic_read(c64_bus_t* c64_bus, bus_state_t bus_state, uint16_t
         return bus_state;
     }
     
-    const uint8_t data = c64_bus_read_chip_byte(c64_bus, chip, address);
+    const uint8_t data = read_chip_byte(chip, address);
 
     BUS_SET_DATA(bus_state, data);
     return bus_state;
@@ -79,7 +80,8 @@ bus_state_t c64_bus_vic_read(c64_bus_t* c64_bus, bus_state_t bus_state, uint16_t
  * @param bus_state Current bus state (passed by value for register optimization)
  * @return Updated bus state (for register-to-register operation)
  */
-bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_state) {
+bus_state_t REGISTER_CALL c64_bus_s::memory_tick(bus_state_t bus_state) {
+    c64_bus_t* c64_bus = this;
     if (unlikely(!c64_bus)) return bus_state;
     
     // Determine if this is a read or write operation
@@ -113,7 +115,7 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
         // Fast path handles: CHIP_ROML, CHIP_ROMH, CHIP_KERNAL, CHIP_BASIC, CHIP_CHARROM, CHIP_RAM
         if (likely(chip <= CHIP_RAM)) {
             // Use unified buffer read helper for all ROM/RAM types
-            const uint8_t data = c64_bus_read_chip_byte(c64_bus, chip, address);
+            const uint8_t data = read_chip_byte(chip, address);
             BUS_SET_DATA(bus_state, data);
         } else if (chip == CHIP_IO) {
             // OPTIMIZED IO PAGE HANDLING: Direct dispatch using pre-initialized handlers
@@ -139,7 +141,7 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
         if (likely(chip == CHIP_RAM)) {
             const uint8_t data = BUS_GET_DATA(bus_state);
 
-            c64_bus_write_ram_byte(c64_bus, address, data);
+            write_ram_byte(address, data);
         } else if (chip == CHIP_IO) {
             // OPTIMIZED IO PAGE HANDLING: Direct dispatch using pre-initialized handlers
             // Calculate IO page number from address (0-15 for $D000-$DFFF)
@@ -169,11 +171,11 @@ bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_st
  * @param addr Address to read from
  * @return Byte value at the specified address
  */
-uint8_t c64_read_memory(c64_bus_t* bus, uint16_t addr) {
-    bus_state_t read_state = bus->state;
+uint8_t c64_bus_s::read_memory(uint16_t addr) {
+    bus_state_t read_state = state;
     BUS_SET_ADDR(read_state, addr);
     BUS_SET_LINES(read_state, BUS_GET_LINES(read_state) | BUS_MASK_RW);
-    read_state = c64_memory_tick(bus, read_state);
+    read_state = memory_tick(read_state);
     return BUS_GET_DATA(read_state);
 }
 
@@ -181,68 +183,50 @@ uint8_t c64_read_memory(c64_bus_t* bus, uint16_t addr) {
  * Write a byte to C64 system memory.
  * This is a convenience function for debugging and test programs.
  *
- * @param bus Pointer to c64_bus_t
  * @param addr Address to write to
  * @param value Byte value to write
  */
-void c64_write_memory(c64_bus_t* bus, uint16_t addr, uint8_t value) {
-    bus_state_t write_state = bus->state;
+void c64_bus_s::write_memory(uint16_t addr, uint8_t value) {
+    bus_state_t write_state = state;
     BUS_SET_ADDR(write_state, addr);
     BUS_SET_DATA(write_state, value);
     BUS_SET_LINES(write_state, BUS_GET_LINES(write_state) & ~BUS_MASK_RW);
-    c64_memory_tick(bus, write_state);
+    memory_tick(write_state);
 }
 
-// Made non-static for banking verification utility
-void c64_bus_system_destroy(void* chip) {
-    c64_bus_t* c64_bus = (c64_bus_t*)chip;
-    if (c64_bus && c64_bus->allocated_buffer) {
-        cermu_aligned_free(c64_bus->allocated_buffer);
+// Destructor — frees unified memory buffer
+c64_bus_s::~c64_bus_s() {
+    if (allocated_buffer) {
+        cermu_aligned_free(allocated_buffer);
+        allocated_buffer = nullptr;
     }
-    free(chip);
 }
 
-// Made non-static for banking verification utility
-void* c64_bus_system_create() {
-    c64_bus_t* c64_bus = (c64_bus_t*)calloc(1, sizeof(c64_bus_t));
-    if (!c64_bus) return NULL;
-    
-    // NOTE: default_state, state, and system_lines initialization is done in c64_system_create()
-    // since the bus is embedded in c64_t and never allocated via this function in actual use.
-    // This function is used by c64_banking_verify for standalone bus testing.
-    
-    // Note: pla_banking_mode will be initialized by c64_bus_mode_switch()
-    // after PLA mapping data is set up in c64_pla_maps_generate()
-    // Note: calloc already zeroed *chip_per_bank* arrays
-    
-    return c64_bus;
-}
-
-void c64_bus_system_attach(c64_bus_t* c64_bus, C64System* c64) {
-    c64_bus->c64 = c64;
+void c64_bus_s::system_attach(C64System* c64) {
+    this->c64 = c64;
 
     // Initialize ROM/RAM pointers and allocate unified buffer with default configuration
     c64_config_t default_config;
-    c64_config_init_defaults(&default_config);
-    c64_bus_init_unified_pointers(c64_bus, c64, &default_config);
+    default_config.init_defaults();
+    init_unified_pointers(c64, &default_config);
 
     // Initialize compact IO page handlers for efficient I/O access
-    c64_bus_init_io_handlers(c64_bus);
+    init_io_handlers();
 }
 
-void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode) {
+void c64_bus_s::mode_switch(uint8_t mode) {
     // Update the optimized banking for the current mode
-    c64_bus->pla_banking_mode = mode & 0x1F;
+    pla_banking_mode = mode & 0x1F;
     
-    memcpy(c64_bus->cpu_encoded_chip_per_bank, c64_bus->cpu_encoded_chip_per_bank_per_mode[mode], 16);
+    memcpy(cpu_encoded_chip_per_bank, cpu_encoded_chip_per_bank_per_mode[mode], 16);
     // Also copy VIC-II active array for optimal performance
-    memcpy(c64_bus->vicii_chip_per_bank, c64_bus->vicii_chip_per_bank_per_mode[mode], 16);
+    memcpy(vicii_chip_per_bank, vicii_chip_per_bank_per_mode[mode], 16);
 }
 
-static void c64_bus_update_pla_mode(c64_bus_t* c64_bus) {
-    uint8_t cpu_port_bits = c64_bus->pla_banking_mode & 0x07;
-    uint8_t pla_mode = c64_bus_generate_pla_mode(c64_bus, cpu_port_bits);
-    c64_bus_mode_switch(c64_bus, pla_mode);
+void c64_bus_s::update_pla_mode() {
+    uint8_t cpu_port_bits = pla_banking_mode & 0x07;
+    uint8_t pla_mode = generate_pla_mode(cpu_port_bits);
+    mode_switch(pla_mode);
 }
 
 // ============================================================================
@@ -280,7 +264,7 @@ uint8_t pla_906114_01_outputs_to_chip(pla_906114_01_t* pla) {
     return CHIP_UNMAPPED;
 }
 
-void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla) {
+void c64_bus_s::populate_cpu_pla_mapping(struct pla_906114_01_s* pla) {
     // Set other inputs for normal CPU operation (not VIC-II access)
     pla->inputs.n_aec = false;   // CPU has bus control (AEC high = !n_aec in product terms)
     pla->inputs.ba = true;       // Bus available (BA high = no DMA)
@@ -301,11 +285,11 @@ void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pl
         uint8_t write_chip = pla_906114_01_outputs_to_chip((pla_906114_01_t*)pla);
 
         // Encode both read and write CHIPs into the mapping
-        bus->cpu_encoded_chip_per_bank[bank] = encode_chip_rw(read_chip, write_chip);
+        cpu_encoded_chip_per_bank[bank] = encode_chip_rw(read_chip, write_chip);
     }
 }
 
-void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla) {
+void c64_bus_s::populate_vicii_pla_mapping(struct pla_906114_01_s* pla) {
     // Set other inputs for VIC-II access (not normal CPU operation)
     pla->inputs.n_aec = true;    // VIC-II has bus control (AEC low = n_aec in product terms)
     pla->inputs.ba = false;      // Bus available (BA low = DMA)
@@ -321,11 +305,12 @@ void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* 
         // Determine read CHIP based on PLA outputs for read mode
         uint8_t read_chip = pla_906114_01_outputs_to_chip((pla_906114_01_t*)pla);
         // VIC-II banking stores direct CHIP values, no encoding needed
-        bus->vicii_chip_per_bank[bank] = read_chip;        
+        vicii_chip_per_bank[bank] = read_chip;        
     }
 }
 
-void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla) {
+void c64_bus_s::generate_all_pla_modes(struct pla_906114_01_s* pla) {
+    c64_bus_t* bus = this;
     // Generate all 32 CPU memory modes (5-bit combinations of LORAM, HIRAM, CHAREN, EXROM, GAME)
     for (int mode = 0; mode < 32; mode++) {
         // Set PLA inputs based on mode
@@ -357,7 +342,7 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
         
         // CPU address bits will be set during populate_pla_mapping for each bank
         // Populate mapping for this mode
-        c64_bus_populate_cpu_pla_mapping(bus, pla);
+        populate_cpu_pla_mapping(pla);
         // Copy the CPU mapping to the mode-specific array
         memcpy(bus->cpu_encoded_chip_per_bank_per_mode[mode], bus->cpu_encoded_chip_per_bank, 16);
     }
@@ -374,7 +359,7 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
         
         // Populate VIC-II mapping for this mode (stores direct CHIPs)
         // #VA14 will be automatically set from address bit 14 during population
-        c64_bus_populate_vicii_pla_mapping(bus, pla);
+        populate_vicii_pla_mapping(pla);
         // Copy the VIC-II raw CHIPs to the mode-specific array
         memcpy(bus->vicii_chip_per_bank_per_mode[vic_mode], bus->vicii_chip_per_bank, 16);
     }
@@ -384,7 +369,7 @@ void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla)
 // PLA MODE GENERATION - Convert CPU port bits + cartridge signals to 5-bit PLA mode
 // ============================================================================
 
-uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits) {
+uint8_t c64_bus_s::generate_pla_mode(uint8_t cpu_port_bits) {
     // The mode value is used as an index into the pre-generated PLA mode tables.
     // The c64_bus_generate_all_pla_modes() function generates these tables with inverted logic:
     //   mode bit 0 set → n_loram = false (LORAM enabled)
@@ -402,8 +387,8 @@ uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits) {
     // Add cartridge control signals from system lines
     // System lines are active-high: bit set = signal inactive
     // Mode bits should also be active-high: bit set = signal inactive
-    pla_mode |= ((c64_bus->system_lines & SYS_MASK_EXROM) ? 0x08 : 0); // EXROM (bit 3)
-    pla_mode |= ((c64_bus->system_lines & SYS_MASK_GAME) ? 0x10 : 0);  // GAME (bit 4)
+    pla_mode |= ((system_lines & SYS_MASK_EXROM) ? 0x08 : 0); // EXROM (bit 3)
+    pla_mode |= ((system_lines & SYS_MASK_GAME) ? 0x10 : 0);  // GAME (bit 4)
 
     return pla_mode;
 }
@@ -419,16 +404,14 @@ uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits) {
  * @param c64_bus Pointer to the C64 bus
  * @param active true = EXROM active (signal low), false = EXROM inactive (signal high)
  */
-void c64_bus_set_exrom_signal(c64_bus_t* c64_bus, bool active) {
-    if (!c64_bus) return;
-    
+void c64_bus_s::set_exrom_signal(bool active) {
     if (active) {
-        c64_bus->system_lines &= ~SYS_MASK_EXROM;  // Clear bit (signal low)
+        system_lines &= ~SYS_MASK_EXROM;  // Clear bit (signal low)
     } else {
-        c64_bus->system_lines |= SYS_MASK_EXROM;   // Set bit (signal high)
+        system_lines |= SYS_MASK_EXROM;   // Set bit (signal high)
     }
 
-    c64_bus_update_pla_mode(c64_bus);
+    update_pla_mode();
 }
 
 /**
@@ -438,16 +421,14 @@ void c64_bus_set_exrom_signal(c64_bus_t* c64_bus, bool active) {
  * @param c64_bus Pointer to the C64 bus
  * @param active true = GAME active (signal low), false = GAME inactive (signal high)
  */
-void c64_bus_set_game_signal(c64_bus_t* c64_bus, bool active) {
-    if (!c64_bus) return;
-    
+void c64_bus_s::set_game_signal(bool active) {
     if (active) {
-        c64_bus->system_lines &= ~SYS_MASK_GAME;   // Clear bit (signal low)
+        system_lines &= ~SYS_MASK_GAME;   // Clear bit (signal low)
     } else {
-        c64_bus->system_lines |= SYS_MASK_GAME;    // Set bit (signal high)
+        system_lines |= SYS_MASK_GAME;    // Set bit (signal high)
     }
     
-    c64_bus_update_pla_mode(c64_bus);
+    update_pla_mode();
 }
 
 /**
@@ -458,23 +439,21 @@ void c64_bus_set_game_signal(c64_bus_t* c64_bus, bool active) {
  * @param exrom_active true = EXROM active (signal low), false = EXROM inactive (signal high)
  * @param game_active true = GAME active (signal low), false = GAME inactive (signal high)
  */
-void c64_bus_set_cartridge_signals(c64_bus_t* c64_bus, bool exrom_active, bool game_active) {
-    if (!c64_bus) return;
-    
+void c64_bus_s::set_cartridge_signals(bool exrom_active, bool game_active) {
     // Update EXROM signal
     if (exrom_active) {
-        c64_bus->system_lines &= ~SYS_MASK_EXROM;  // Clear bit (signal low)
+        system_lines &= ~SYS_MASK_EXROM;  // Clear bit (signal low)
     } else {
-        c64_bus->system_lines |= SYS_MASK_EXROM;   // Set bit (signal high)
+        system_lines |= SYS_MASK_EXROM;   // Set bit (signal high)
     }
     // Update GAME signal
     if (game_active) {
-        c64_bus->system_lines &= ~SYS_MASK_GAME;   // Clear bit (signal low)
+        system_lines &= ~SYS_MASK_GAME;   // Clear bit (signal low)
     } else {
-        c64_bus->system_lines |= SYS_MASK_GAME;    // Set bit (signal high)
+        system_lines |= SYS_MASK_GAME;    // Set bit (signal high)
     }
     
-    c64_bus_update_pla_mode(c64_bus);
+    update_pla_mode();
 }
 
 /**
@@ -483,24 +462,19 @@ void c64_bus_set_cartridge_signals(c64_bus_t* c64_bus, bool exrom_active, bool g
  * @param c64_bus Pointer to the C64 bus
  * @return true = EXROM active (signal low), false = EXROM inactive (signal high)
  */
-bool c64_bus_get_exrom_signal(c64_bus_t* c64_bus) {
-    if (!c64_bus) return false;
-    
+bool c64_bus_s::get_exrom_signal() const {
     // Return inverted state (bit set = signal high = inactive)
-    return (c64_bus->system_lines & SYS_MASK_EXROM) == 0;
+    return (system_lines & SYS_MASK_EXROM) == 0;
 }
 
 /**
  * Get the current GAME signal state.
  * 
- * @param c64_bus Pointer to the C64 bus
  * @return true = GAME active (signal low), false = GAME inactive (signal high)
  */
-bool c64_bus_get_game_signal(c64_bus_t* c64_bus) {
-    if (!c64_bus) return false;
-    
+bool c64_bus_s::get_game_signal() const {
     // Return inverted state (bit set = signal high = inactive)
-    return (c64_bus->system_lines & SYS_MASK_GAME) == 0;
+    return (system_lines & SYS_MASK_GAME) == 0;
 }
 
 // Chip entry lookup table for description and validation (handles irregular numbering)
@@ -527,9 +501,9 @@ static const c64_chip_entry_t c64_bus_chip_to_entry[] = {
 };
 static const size_t CHIP_ENTRY_COUNT = sizeof(c64_bus_chip_to_entry) / sizeof(c64_bus_chip_to_entry[0]);
 
-// Update c64_bus_get_chip_description to use the chip entry lookup table
-bool c64_bus_get_chip_description(const c64_bus_t* bus, uint8_t chip, chip_description_t* out) {
-    if (!bus || !out) return false;
+// Update get_chip_description to use the chip entry lookup table
+bool c64_bus_s::get_chip_description(uint8_t chip, chip_description_t* out) const {
+    if (!out) return false;
 
     memset(out, 0, sizeof(*out));
     
@@ -600,7 +574,8 @@ const char* c64_bus_size_to_str(size_t size) {
  * @param c64_system Pointer to the C64 system (for pointer updates)
  * @param config Pointer to the C64 system configuration structure
  */
-void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, C64System* c64_system, const c64_config_t* config) {
+void c64_bus_s::init_unified_pointers(C64System* c64_system, const c64_config_t* config) {
+    c64_bus_t* c64_bus = this;
     if (!c64_bus || !c64_system || !config) return;
     
     // Store cartridge ROM presence flags from configuration
@@ -770,50 +745,50 @@ static bus_state_t c64_bus_unmapped_write(void* chip, bus_state_t bus_state) {
  * $DE00-$DEFF (page 14):     I/O1 expansion (unmapped by default)
  * $DF00-$DFFF (page 15):     I/O2 expansion (unmapped by default)
  */
-void c64_bus_init_io_handlers(c64_bus_t* c64_bus) {
-    C64System* c64 = c64_bus->c64;
+void c64_bus_s::init_io_handlers() {
+    C64System* c64 = this->c64;
 
     // Set up direct callbacks and chip instances for each IO page (0-15 for $D000-$DFFF)
     // Each page gets the appropriate chip register function and chip instance directly
 
     // Pages 0-3 ($D000-$D3FF): VIC-II (64 bytes mirrored across 1KB)
     for (int page = 0; page <= 3; page++) {
-        c64_bus->io_handlers[page].read_handler = vicii_s::registers_read;
-        c64_bus->io_handlers[page].write_handler = vicii_s::registers_write;
-        c64_bus->io_handlers[page].chip_instance = c64->vicii;
+        io_handlers[page].read_handler = vicii_s::registers_read;
+        io_handlers[page].write_handler = vicii_s::registers_write;
+        io_handlers[page].chip_instance = c64->vicii;
     }
 
     // Pages 4-7 ($D400-$D7FF): SID (32 bytes mirrored across 1KB)
     for (int page = 4; page <= 7; page++) {
-        c64_bus->io_handlers[page].read_handler = mos6581_s::registers_read;
-        c64_bus->io_handlers[page].write_handler = mos6581_s::registers_write;
-        c64_bus->io_handlers[page].chip_instance = c64->sid;
+        io_handlers[page].read_handler = mos6581_s::registers_read;
+        io_handlers[page].write_handler = mos6581_s::registers_write;
+        io_handlers[page].chip_instance = c64->sid;
     }
 
     // Pages 8-11 ($D800-$DBFF): Color RAM (1KB, 1024 bytes)
     for (int page = 8; page <= 11; page++) {
-        c64_bus->io_handlers[page].read_handler = mos2114_read;
-        c64_bus->io_handlers[page].write_handler = mos2114_write;
-        c64_bus->io_handlers[page].chip_instance = c64->colorram;
+        io_handlers[page].read_handler = mos2114_read;
+        io_handlers[page].write_handler = mos2114_write;
+        io_handlers[page].chip_instance = c64->colorram;
     }
 
     // Page 12 ($DC00-$DCFF): CIA1 (16 bytes mirrored across 256 bytes)
-    c64_bus->io_handlers[12].read_handler = mos6526_s::registers_read;
-    c64_bus->io_handlers[12].write_handler = mos6526_s::registers_write;
-    c64_bus->io_handlers[12].chip_instance = c64->cia1;
+    io_handlers[12].read_handler = mos6526_s::registers_read;
+    io_handlers[12].write_handler = mos6526_s::registers_write;
+    io_handlers[12].chip_instance = c64->cia1;
 
     // Page 13 ($DD00-$DDFF): CIA2 (16 bytes mirrored across 256 bytes)
-    c64_bus->io_handlers[13].read_handler = mos6526_s::registers_read;
-    c64_bus->io_handlers[13].write_handler = mos6526_s::registers_write;
-    c64_bus->io_handlers[13].chip_instance = c64->cia2;
+    io_handlers[13].read_handler = mos6526_s::registers_read;
+    io_handlers[13].write_handler = mos6526_s::registers_write;
+    io_handlers[13].chip_instance = c64->cia2;
 
     // Page 14 ($DE00-$DEFF): I/O1 expansion port (unmapped by default - floating bus)
-    c64_bus->io_handlers[14].read_handler = c64_bus_unmapped_read;
-    c64_bus->io_handlers[14].write_handler = c64_bus_unmapped_write;
-    c64_bus->io_handlers[14].chip_instance = NULL;
+    io_handlers[14].read_handler = c64_bus_unmapped_read;
+    io_handlers[14].write_handler = c64_bus_unmapped_write;
+    io_handlers[14].chip_instance = NULL;
 
     // Page 15 ($DF00-$DFFF): I/O2 expansion port (unmapped by default - floating bus)
-    c64_bus->io_handlers[15].read_handler = c64_bus_unmapped_read;
-    c64_bus->io_handlers[15].write_handler = c64_bus_unmapped_write;
-    c64_bus->io_handlers[15].chip_instance = NULL;
+    io_handlers[15].read_handler = c64_bus_unmapped_read;
+    io_handlers[15].write_handler = c64_bus_unmapped_write;
+    io_handlers[15].chip_instance = NULL;
 }

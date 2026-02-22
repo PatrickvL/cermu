@@ -28,54 +28,51 @@ const rom_config_t* system_config_get_default_roms(void) {
     return &default_roms;
 }
 
-void c64_config_init_defaults(c64_config_t* config) {
-    if (!config) return;
-    
+void c64_config_s::init_defaults() {
     // System configuration defaults
-    config->vicii_standard = VIC_PAL;     // Default to PAL timing
-    config->rom_config = NULL;            // Use default ROM paths
+    vicii_standard = VIC_PAL;     // Default to PAL timing
+    rom_config = NULL;            // Use default ROM paths
     
     // Test mode defaults - normal boot (like real C64)
-    config->test_mode = C64_TEST_MODE_NORMAL;
-    config->test_binary_config = NULL;
+    test_mode = C64_TEST_MODE_NORMAL;
+    test_binary_config = NULL;
     
     // Initialize with no cartridge ROMs by default (saves memory)
-    config->roml_present = false;
-    config->romh_present = false;
-    config->roml_filename = NULL;
-    config->romh_filename = NULL;
+    roml_present = false;
+    romh_present = false;
+    roml_filename = NULL;
+    romh_filename = NULL;
     
     // Default cartridge signals (no cartridge)
-    config->initial_exrom_state = true;   // EXROM high = no cartridge ROM
-    config->initial_game_state = true;    // GAME high = no cartridge ROM
+    initial_exrom_state = true;   // EXROM high = no cartridge ROM
+    initial_game_state = true;    // GAME high = no cartridge ROM
 }
 
-bool c64_config_validate(const c64_config_t* config) {
-    if (!config) return false;
+bool c64_config_s::validate() const {
     
     // Validate test mode configuration
-    if (config->test_mode == C64_TEST_MODE_PRG_FILE || config->test_mode == C64_TEST_MODE_BIN_FILE) {
+    if (test_mode == C64_TEST_MODE_PRG_FILE || test_mode == C64_TEST_MODE_BIN_FILE) {
         // These modes require test binary configuration
-        if (!config->test_binary_config || !config->test_binary_config->filename) {
+        if (!test_binary_config || !test_binary_config->filename) {
             return false;
         }
     }
     
     // If ROM is present, filename must be provided
-    if (config->roml_present && !config->roml_filename) {
+    if (roml_present && !roml_filename) {
         return false;
     }
     
-    if (config->romh_present && !config->romh_filename) {
+    if (romh_present && !romh_filename) {
         return false;
     }
     
     // If ROM is not present, filename should be NULL
-    if (!config->roml_present && config->roml_filename) {
+    if (!roml_present && roml_filename) {
         return false;
     }
     
-    if (!config->romh_present && config->romh_filename) {
+    if (!romh_present && romh_filename) {
         return false;
     }
     

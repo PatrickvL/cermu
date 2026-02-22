@@ -173,6 +173,14 @@ typedef struct ring_buffer_s {
     volatile uint32_t write_pos;
     volatile uint32_t read_pos;
     uint32_t mask;
+
+    // Methods
+    void init(uint32_t size);
+    void destroy();
+    void write(float sample);
+    float read();
+    bool empty();
+    uint32_t available();
 } ring_buffer_t;
 
 // Filter state structure
@@ -248,6 +256,24 @@ typedef struct voice_s {
     
     // Reference to parent chip
     mos6581_t* sid;
+
+    // Methods
+    void reset();
+    void clock_cycle();
+    void apply_sync(voice_s* sync_source, voice_s* sync_source_source);
+    void set_waveform_output(voice_s* ring_source);
+    void write_pulse_waveform_width(uint16_t value);
+    void write_control_register_value(uint8_t value);
+    void write_attack_decay_register_value(uint8_t value);
+    void write_sustain_release_register_value(uint8_t value);
+    int cycles_per_millisecond();
+
+    static uint32_t rate_to_period(int rate);
+
+private:
+    void update_exponential_period();
+    void envelope_clock();
+    void update_envelope();
 } voice_t;
 
 // Main SID chip structure - Enhanced (C++ class inheriting ChipBase)

@@ -45,19 +45,17 @@ typedef enum {
  * A block of loadable program data: load address and raw bytes.
  * This is the universal exchange type between format handlers and the
  * system layer.  Caller is responsible for freeing `data` via
- * program_data_free().
+ * release().
  */
-typedef struct {
+typedef struct program_data_s {
     uint8_t* data;          /**< Program data bytes.  Caller frees. */
     size_t   data_size;     /**< Size of data in bytes */
     uint16_t load_addr;     /**< Load address (destination in system memory) */
     uint16_t end_addr;      /**< End address (load_addr + data_size) */
-} program_data_t;
 
-/**
- * Free a program_data_t's heap-allocated data buffer.
- */
-void program_data_free(program_data_t* pd);
+    /** Free the heap-allocated data buffer. */
+    void release();
+} program_data_t;
 
 // ============================================================================
 // Load Result — Unified result from any format handler
@@ -86,7 +84,7 @@ typedef struct format_descriptor_s format_descriptor_t;
 /**
  * Unified load result.  Filled by a format handler's load() callback.
  */
-typedef struct {
+typedef struct format_load_result_s {
     format_load_type_t           type;
     const format_descriptor_t*   format;      /**< Which format handler produced this */
     program_data_t               program;     /**< Valid for PROGRAM / RAW */
@@ -95,10 +93,12 @@ typedef struct {
     uint8_t                      metadata[FORMAT_METADATA_MAX_SIZE]; /**< Opaque metadata blob */
     size_t                       metadata_size; /**< Bytes used in metadata[] */
     char                         error_msg[256];
+
+    /** Free all heap-allocated program data buffers. */
+    void release();
 } format_load_result_t;
 
 const char* format_load_type_name(format_load_type_t type);
-void format_load_result_free(format_load_result_t* result);
 
 // ============================================================================
 // Format Descriptor — each format handler provides one of these

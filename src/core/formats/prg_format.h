@@ -25,7 +25,7 @@ extern "C" {
 /** Alias so container formats and consumers can keep using the old name. */
 typedef program_data_t commodore_prg_t;
 
-/** Free wrapper (delegates to program_data_free). */
+/** Free allocated data (equivalent to release()). */
 void commodore_prg_free(commodore_prg_t* prg);
 
 // ============================================================================

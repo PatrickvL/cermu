@@ -81,21 +81,17 @@ void verify_c64_banking_modes() {
     printf("╚═══════════════════════════════════════════════════════════════════╝\n");
     
     // Create bus and PLA for testing
-    c64_bus_t* bus = (c64_bus_t*)c64_bus_system_create();
-    if (!bus) {
-        printf("ERROR: Failed to create bus\n");
-        return;
-    }
+    c64_bus_t* bus = new c64_bus_t();
     
     pla_906114_01_t* pla = pla_906114_01_create();
     if (!pla) {
         printf("ERROR: Failed to create PLA\n");
-        c64_bus_system_destroy(bus);
+        delete bus;
         return;
     }
     
     // Generate all PLA modes
-    c64_bus_generate_all_pla_modes(bus, pla);
+    bus->generate_all_pla_modes(pla);
     
     // Test all 32 modes
     for (uint8_t mode = 0; mode < 32; mode++) {
@@ -162,7 +158,7 @@ void verify_c64_banking_modes() {
     
     // Cleanup
     pla_906114_01_destroy(pla);
-    c64_bus_system_destroy(bus);
+    delete bus;
 }
 
 // Parse LHGX pattern string and generate matching mode numbers
@@ -209,21 +205,17 @@ void verify_c64_banking_by_table() {
     printf("╚═══════════════════════════════════════════════════════════════════╝\n");
     
     // Create bus and PLA for testing
-    c64_bus_t* bus = (c64_bus_t*)c64_bus_system_create();
-    if (!bus) {
-        printf("ERROR: Failed to create bus\n");
-        return;
-    }
+    c64_bus_t* bus = new c64_bus_t();
     
     pla_906114_01_t* pla = pla_906114_01_create();
     if (!pla) {
         printf("ERROR: Failed to create PLA\n");
-        c64_bus_system_destroy(bus);
+        delete bus;
         return;
     }
     
     // Generate all PLA modes
-    c64_bus_generate_all_pla_modes(bus, pla);
+    bus->generate_all_pla_modes(pla);
     
     // Define table groups matching PLA document Appendix A
     // Using actual LHGX strings from the document
@@ -371,5 +363,5 @@ void verify_c64_banking_by_table() {
     
     // Cleanup
     pla_906114_01_destroy(pla);
-    c64_bus_system_destroy(bus);
+    delete bus;
 }

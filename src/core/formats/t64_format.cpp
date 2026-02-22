@@ -13,46 +13,44 @@
 // Open / Close
 // ============================================================================
 
-bool commodore_t64_open(const char* filepath, commodore_t64_t* out_t64) {
-    if (!filepath || !out_t64) return false;
-    memset(out_t64, 0, sizeof(*out_t64));
+bool commodore_t64_s::open(const char* filepath) {
+    if (!filepath) return false;
+    memset(this, 0, sizeof(*this));
 
-    out_t64->data = format_read_entire_file(filepath, &out_t64->data_size);
-    if (!out_t64->data) {
+    data = format_read_entire_file(filepath, &data_size);
+    if (!data) {
         printf("T64Format: Cannot open T64 file: %s\n", filepath);
         return false;
     }
-    out_t64->owns_data = true;
+    owns_data = true;
 
     /* Verify T64 signature: "C64 tape image file" or "C64S tape image file" */
-    if (out_t64->data_size < T64_HEADER_SIZE ||
-        memcmp(out_t64->data, "C64", 3) != 0) {
+    if (data_size < T64_HEADER_SIZE ||
+        memcmp(data, "C64", 3) != 0) {
         printf("T64Format: Invalid T64 signature\n");
-        free(out_t64->data);
-        out_t64->data = NULL;
+        free(data);
+        data = NULL;
         return false;
     }
 
-    printf("T64Format: Opened T64: %zu bytes\n", out_t64->data_size);
+    printf("T64Format: Opened T64: %zu bytes\n", data_size);
     return true;
 }
 
-void commodore_t64_close(commodore_t64_t* t64) {
-    if (t64) {
-        if (t64->owns_data && t64->data) free(t64->data);
-        memset(t64, 0, sizeof(*t64));
-    }
+void commodore_t64_s::close() {
+    if (owns_data && data) free(data);
+    memset(this, 0, sizeof(*this));
 }
 
 // ============================================================================
 // Directory
 // ============================================================================
 
-bool commodore_t64_read_directory(const commodore_t64_t* t64, commodore_t64_directory_t* out_dir) {
-    if (!t64 || !t64->data || !out_dir) return false;
+bool commodore_t64_s::read_directory(commodore_t64_directory_t* out_dir) const {
+    if (!data || !out_dir) return false;
     memset(out_dir, 0, sizeof(*out_dir));
 
-    const uint8_t* hdr = t64->data;
+    const uint8_t* hdr = data;
 
     out_dir->version     = format_read_le16(hdr + 0x20);
     out_dir->max_entries = format_read_le16(hdr + 0x22);
@@ -68,9 +66,9 @@ bool commodore_t64_read_directory(const commodore_t64_t* t64, commodore_t64_dire
 
     for (int i = 0; i < max && count < T64_MAX_ENTRIES; i++) {
         size_t entry_offset = T64_HEADER_SIZE + (size_t)i * T64_ENTRY_SIZE;
-        if (entry_offset + T64_ENTRY_SIZE > t64->data_size) break;
+        if (entry_offset + T64_ENTRY_SIZE > data_size) break;
 
-        const uint8_t* e = t64->data + entry_offset;
+        const uint8_t* e = data + entry_offset;
 
         uint8_t  c64s_type = e[0];
         uint8_t  file_type = e[1];
@@ -104,12 +102,12 @@ bool commodore_t64_read_directory(const commodore_t64_t* t64, commodore_t64_dire
 // File Extraction
 // ============================================================================
 
-bool commodore_t64_extract_file(const commodore_t64_t* t64, int entry_idx, commodore_prg_t* out_prg) {
-    if (!t64 || !out_prg) return false;
+bool commodore_t64_s::extract_file(int entry_idx, commodore_prg_t* out_prg) const {
+    if (!out_prg) return false;
     memset(out_prg, 0, sizeof(*out_prg));
 
     commodore_t64_directory_t dir;
-    if (!commodore_t64_read_directory(t64, &dir)) return false;
+    if (!read_directory(&dir)) return false;
     if (entry_idx < 0 || entry_idx >= dir.count) return false;
 
     const commodore_t64_entry_t* entry = &dir.entries[entry_idx];
@@ -119,7 +117,7 @@ bool commodore_t64_extract_file(const commodore_t64_t* t64, int entry_idx, commo
         return false;
     }
 
-    if (entry->data_offset + entry->data_size > t64->data_size) {
+    if (entry->data_offset + entry->data_size > data_size) {
         printf("T64Format: Entry %d data extends beyond file\n", entry_idx);
         return false;
     }
@@ -130,22 +128,22 @@ bool commodore_t64_extract_file(const commodore_t64_t* t64, int entry_idx, commo
     out_prg->data = (uint8_t*)malloc(entry->data_size);
     if (!out_prg->data) return false;
 
-    memcpy(out_prg->data, t64->data + entry->data_offset, entry->data_size);
+    memcpy(out_prg->data, data + entry->data_offset, entry->data_size);
 
     printf("T64Format: Extracted \"%s\": load=$%04X size=%u\n",
            entry->filename, entry->start_addr, entry->data_size);
     return true;
 }
 
-bool commodore_t64_extract_first_prg(const commodore_t64_t* t64, commodore_prg_t* out_prg) {
-    if (!t64 || !out_prg) return false;
+bool commodore_t64_s::extract_first_prg(commodore_prg_t* out_prg) const {
+    if (!out_prg) return false;
 
     commodore_t64_directory_t dir;
-    if (!commodore_t64_read_directory(t64, &dir)) return false;
+    if (!read_directory(&dir)) return false;
 
     for (int i = 0; i < dir.count; i++) {
         if (dir.entries[i].c64s_file_type == 1 && dir.entries[i].data_size > 0)
-            return commodore_t64_extract_file(t64, i, out_prg);
+            return extract_file(i, out_prg);
     }
 
     printf("T64Format: No valid entries found\n");
@@ -170,13 +168,13 @@ static float t64_identify(const uint8_t* data, size_t file_size, const char* ext
 
 static bool t64_load(const char* filepath, format_load_result_t* out) {
     commodore_t64_t t64;
-    if (commodore_t64_open(filepath, &t64)) {
-        if (commodore_t64_extract_first_prg(&t64, &out->program)) {
+    if (t64.open(filepath)) {
+        if (t64.extract_first_prg(&out->program)) {
             out->type = FORMAT_LOAD_PROGRAM;
-            commodore_t64_close(&t64);
+            t64.close();
             return true;
         }
-        commodore_t64_close(&t64);
+        t64.close();
         snprintf(out->error_msg, sizeof(out->error_msg),
                  "T64 opened but no PRG found: %s", filepath);
     } else {

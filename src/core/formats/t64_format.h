@@ -48,30 +48,26 @@ typedef struct {
 } commodore_t64_directory_t;
 
 /** T64 archive handle */
-typedef struct {
+typedef struct commodore_t64_s {
     uint8_t* data;                  /**< Raw T64 data */
     size_t   data_size;             /**< Size of T64 data */
     bool     owns_data;             /**< Whether we allocated data */
+
+    /** Open a T64 tape archive from file. */
+    bool open(const char* filepath);
+
+    /** Read the directory of a T64 tape archive. */
+    bool read_directory(commodore_t64_directory_t* out_dir) const;
+
+    /** Extract a file from a T64 archive as a PRG. */
+    bool extract_file(int entry_idx, commodore_prg_t* out_prg) const;
+
+    /** Extract the first PRG from a T64 archive. */
+    bool extract_first_prg(commodore_prg_t* out_prg) const;
+
+    /** Close a T64 archive and free resources. */
+    void close();
 } commodore_t64_t;
-
-// ============================================================================
-// T64 Format API
-// ============================================================================
-
-/** Open a T64 tape archive from file. */
-bool commodore_t64_open(const char* filepath, commodore_t64_t* out_t64);
-
-/** Read the directory of a T64 tape archive. */
-bool commodore_t64_read_directory(const commodore_t64_t* t64, commodore_t64_directory_t* out_dir);
-
-/** Extract a file from a T64 archive as a PRG. */
-bool commodore_t64_extract_file(const commodore_t64_t* t64, int entry_idx, commodore_prg_t* out_prg);
-
-/** Extract the first PRG from a T64 archive. */
-bool commodore_t64_extract_first_prg(const commodore_t64_t* t64, commodore_prg_t* out_prg);
-
-/** Close a T64 archive and free resources. */
-void commodore_t64_close(commodore_t64_t* t64);
 
 // ============================================================================
 // Format Descriptor

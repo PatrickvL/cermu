@@ -47,7 +47,7 @@ typedef struct {
  * This centralizes all C64 system settings to eliminate parameter proliferation.
  * Pass this to c64_system_create() to configure the C64 system.
  */
-typedef struct {
+typedef struct c64_config_s {
     // System configuration
     vicii_standard_t vicii_standard;
     rom_config_t* rom_config;    // Optional ROM configuration (NULL = use defaults)
@@ -65,6 +65,9 @@ typedef struct {
     // Initial cartridge control signal states
     bool initial_exrom_state;    // Initial EXROM signal state
     bool initial_game_state;     // Initial GAME signal state
+    // Methods
+    void init_defaults();
+    bool validate() const;
 } c64_config_t;
 
 /**
@@ -72,10 +75,4 @@ typedef struct {
  * Returns a static configuration with typical ROM file locations.
  */
 const rom_config_t* system_config_get_default_roms(void);
-
-// Initialize C64 configuration with default values
-void c64_config_init_defaults(c64_config_t* config);
-
-// Validate C64 configuration settings
-bool c64_config_validate(const c64_config_t* config);
 

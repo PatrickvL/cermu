@@ -69,51 +69,31 @@ typedef struct {
  * Usable both for one-shot file extraction and as an ongoing volume
  * (e.g., attached to a 1541 drive emulation).
  */
-typedef struct {
+typedef struct commodore_d64_s {
     uint8_t* data;                  /**< Raw disk image data */
     size_t   data_size;             /**< Size of disk image */
     int      num_tracks;            /**< 35 or 40 */
     bool     has_errors;            /**< Whether error bytes are present */
     bool     owns_data;             /**< Whether we allocated data (and should free it) */
+
+    /** Open a D64 disk image from file. Caller must call close(). */
+    bool open(const char* filepath);
+
+    /** Open a D64 disk image from an in-memory buffer. Buffer is NOT copied. */
+    bool open_mem(const uint8_t* buf, size_t size);
+
+    /** Read the directory of a D64 disk image. */
+    bool read_directory(commodore_d64_directory_t* out_dir) const;
+
+    /** Extract a file by directory index. Returns raw file data. */
+    bool extract_file(int entry_idx, uint8_t** out_data, size_t* out_size) const;
+
+    /** Extract the first PRG file from a D64 disk image. */
+    bool extract_first_prg(commodore_prg_t* out_prg) const;
+
+    /** Close a D64 disk image and free resources. */
+    void close();
 } commodore_d64_t;
-
-// ============================================================================
-// D64 Format API
-// ============================================================================
-
-/**
- * Open a D64 disk image from file.
- * @param filepath  Path to the .d64 file
- * @param out_d64   Output disk handle
- * @return true on success.  Caller must call commodore_d64_close().
- */
-bool commodore_d64_open(const char* filepath, commodore_d64_t* out_d64);
-
-/**
- * Open a D64 disk image from an in-memory buffer.
- * The buffer is NOT copied; caller must keep it alive until close.
- */
-bool commodore_d64_open_mem(const uint8_t* data, size_t size, commodore_d64_t* out_d64);
-
-/** Read the directory of a D64 disk image. */
-bool commodore_d64_read_directory(const commodore_d64_t* d64, commodore_d64_directory_t* out_dir);
-
-/**
- * Extract a file from a D64 disk image by directory index.
- * Follows the track/sector chain and returns raw file data (with 2-byte
- * load-address header for PRG files).
- */
-bool commodore_d64_extract_file(const commodore_d64_t* d64, int entry_idx,
-                                uint8_t** out_data, size_t* out_size);
-
-/**
- * Extract the first PRG file from a D64 disk image.
- * Convenience: finds the first closed PRG and extracts it.
- */
-bool commodore_d64_extract_first_prg(const commodore_d64_t* d64, commodore_prg_t* out_prg);
-
-/** Close a D64 disk image and free resources. */
-void commodore_d64_close(commodore_d64_t* d64);
 
 // ============================================================================
 // Low-Level Sector Access (for future 1541 drive emulation)
