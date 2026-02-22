@@ -1,8 +1,5 @@
 #include "mos6560.h"
-#include "vic_common.h"
 #include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
 
 // VIC-6560 chip configuration — NTSC variant
 // The MOS 6560 is the NTSC version of the VIC-I chip used in NTSC VIC-20s.
@@ -16,57 +13,22 @@ static const vic_chip_config_t vic_config_ntsc = {
     .is_pal = false
 };
 
-mos6560_t* mos6560_create() {
-    mos6560_t* vic = new mos6560_t();
-
-    vic->is_pal = false;
-    vic->clock_frequency = vic_config_ntsc.clock_frequency;
-    vic->config = &vic_config_ntsc;
+void mos6560_s::init() {
+    is_pal = false;
+    clock_frequency = vic_config_ntsc.clock_frequency;
+    config = &vic_config_ntsc;
 
     // Initialize registers
-    memset(vic->registers, 0, sizeof(vic->registers));
-    memset(vic->color_ram, 0, sizeof(vic->color_ram));
+    memset(registers, 0, sizeof(registers));
+    memset(color_ram, 0, sizeof(color_ram));
 
     // Default timing for NTSC
-    vic->cycles_per_line = VIC_NTSC_CYCLES_PER_LINE;
-    vic->total_lines = VIC_NTSC_TOTAL_LINES;
+    cycles_per_line = VIC_NTSC_CYCLES_PER_LINE;
+    total_lines = VIC_NTSC_TOTAL_LINES;
 
     // Reset video generation state
-    vic_system_reset(vic);
+    reset();
 
     // Initialise audio with NTSC clock and default sample rate
-    vic_audio_reset(vic, vic_config_ntsc.clock_frequency, 22050);
-
-    return vic;
-}
-
-void mos6560_destroy(mos6560_t* vic) {
-    if (!vic) return;
-    delete vic;
-}
-
-void mos6560_bus_attach(void* chip, void* bus) {
-    vic_bus_attach(chip, bus);
-}
-
-void mos6560_set_framebuffer(mos6560_t* vic, uint32_t* framebuffer, int width, int height) {
-    vic_set_framebuffer(vic, framebuffer, width, height);
-}
-
-void mos6560_reset(mos6560_t* vic) {
-    vic_system_reset(vic);
-}
-
-// Register access functions
-bus_state_t mos6560_registers_read(void* context, bus_state_t bus_state) {
-    return vic_registers_read(context, bus_state);
-}
-
-bus_state_t mos6560_registers_write(void* context, bus_state_t bus_state) {
-    return vic_registers_write(context, bus_state);
-}
-
-// Main tick function
-bus_state_t mos6560_tick(void* chip, bus_state_t bus_state) {
-    return vic_tick(chip, bus_state);
+    audio_reset(vic_config_ntsc.clock_frequency, 22050);
 }

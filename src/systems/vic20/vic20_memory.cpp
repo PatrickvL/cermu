@@ -238,7 +238,7 @@ static bus_state_t vic20_io_vic_via_read(void* ctx, bus_state_t bus_state) {
         if (mem->vic_chip) {
             bus_state_t vic_state = 0;
             BUS_SET_ADDR(vic_state, offset & 0x0F);
-            vic_state = vic_registers_read(mem->vic_chip, vic_state);
+            vic_state = ((vic_base_t*)mem->vic_chip)->registers_read(vic_state);
             BUS_SET_DATA(bus_state, BUS_GET_DATA(vic_state));
         }
     } else if (offset < 0x20) {
@@ -262,7 +262,7 @@ static bus_state_t vic20_io_vic_via_read(void* ctx, bus_state_t bus_state) {
         if (mem->vic_chip) {
             bus_state_t vic_state = 0;
             BUS_SET_ADDR(vic_state, offset & 0x0F);
-            vic_state = vic_registers_read(mem->vic_chip, vic_state);
+            vic_state = ((vic_base_t*)mem->vic_chip)->registers_read(vic_state);
             BUS_SET_DATA(bus_state, BUS_GET_DATA(vic_state));
         }
     }
@@ -282,7 +282,7 @@ static bus_state_t vic20_io_vic_via_write(void* ctx, bus_state_t bus_state) {
             bus_state_t vic_state = 0;
             BUS_SET_ADDR(vic_state, offset & 0x0F);
             BUS_SET_DATA(vic_state, data);
-            vic_registers_write(mem->vic_chip, vic_state);
+            ((vic_base_t*)mem->vic_chip)->registers_write(vic_state);
         }
     } else if (offset < 0x20) {
         // VIA1 registers
@@ -306,7 +306,7 @@ static bus_state_t vic20_io_vic_via_write(void* ctx, bus_state_t bus_state) {
             bus_state_t vic_state = 0;
             BUS_SET_ADDR(vic_state, offset & 0x0F);
             BUS_SET_DATA(vic_state, data);
-            vic_registers_write(mem->vic_chip, vic_state);
+            ((vic_base_t*)mem->vic_chip)->registers_write(vic_state);
         }
     }
     

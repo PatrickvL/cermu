@@ -60,7 +60,7 @@ static HardwareTraits create_vic20_hardware_traits() {
     // VIC-20 PAL palette (16 colors) - Hardware accurate colors
     // Get from VIC chip (ABGR format) and convert to RGB for hardware traits
     // This ensures palette consistency between VIC chip rendering and system traits
-    uint32_t* vic_palette_abgr = vic_get_default_palette();
+    uint32_t* vic_palette_abgr = vic_base_t::get_default_palette();
     
     for (int i = 0; i < 16; i++) {
         uint32_t abgr = vic_palette_abgr[i];
@@ -575,11 +575,15 @@ bool VIC20System::initialize() {
     // Create VIC chip — region-aware: MOS6561 for PAL, MOS6560 for NTSC
     bool is_pal_region = (config_.region_option_index <= 0);
     if (is_pal_region) {
-        vic_ = mos6561_create();
-        if (vic_) printf("VIC20: Created MOS6561 (PAL) VIC chip\n");
+        auto* pal_vic = new mos6561_t();
+        pal_vic->init();
+        vic_ = pal_vic;
+        printf("VIC20: Created MOS6561 (PAL) VIC chip\n");
     } else {
-        vic_ = mos6560_create();
-        if (vic_) printf("VIC20: Created MOS6560 (NTSC) VIC chip\n");
+        auto* ntsc_vic = new mos6560_t();
+        ntsc_vic->init();
+        vic_ = ntsc_vic;
+        printf("VIC20: Created MOS6560 (NTSC) VIC chip\n");
     }
     if (!vic_) {
         printf("VIC20: Failed to create VIC chip\n");
@@ -590,7 +594,7 @@ bool VIC20System::initialize() {
     memory_->vic_chip = vic_;
     
     // Set up VIC memory callbacks for accessing video and character memory
-    vic_set_memory_callbacks(vic_,
+    vic_->set_memory_callbacks(
         VIC20System::vic_mem_read,      // Memory read callback
         this,                            // User data (VIC20System instance)
         VIC20System::vic_color_read,    // Color RAM read callback
@@ -658,14 +662,14 @@ void VIC20System::reset() {
     
     // Reset VIC chip (clears registers, video state, audio state)
     if (vic_) {
-        vic_system_reset(vic_);
-        // Re-establish memory callbacks (vic_system_reset clears them)
-        vic_set_memory_callbacks(vic_,
+        vic_->reset();
+        // Re-establish memory callbacks (reset clears them)
+        vic_->set_memory_callbacks(
             VIC20System::vic_mem_read, this,
             VIC20System::vic_color_read, this);
         // Re-establish framebuffer pointer
         if (rgba_framebuffer_) {
-            vic_set_framebuffer(vic_, rgba_framebuffer_, rgba_width_, rgba_height_);
+            vic_->set_framebuffer(rgba_framebuffer_, rgba_width_, rgba_height_);
         }
     }
     
@@ -736,7 +740,7 @@ void VIC20System::tick() {
     // VIC-20's VIC chip runs continuously, generating video and handling DMA
     // =========================================================================
     if (vic_) {
-        s = vic_tick(vic_, s);
+        s = vic_->tick(s);
     }
     
     // =========================================================================
@@ -897,7 +901,7 @@ void VIC20System::set_framebuffer(uint32_t* buffer, int width, int height) {
     // Update VIC chip with new framebuffer (critical for display!)
     if (vic_ && buffer) {
         printf("VIC20: Setting framebuffer on VIC chip: %dx%d buffer=%p\n", width, height, (void*)buffer);
-        vic_set_framebuffer(vic_, buffer, width, height);
+        vic_->set_framebuffer(buffer, width, height);
     } else {
         printf("VIC20: Warning - cannot set framebuffer (vic_=%p buffer=%p)\n", (void*)vic_, (void*)buffer);
     }
@@ -1026,7 +1030,7 @@ uint32_t VIC20System::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!vic_ || max_samples == 0 || !buffer) return 0;
 
     // Read unsigned-8-bit samples from VIC ring buffer and convert to float
-    uint32_t avail = vic_audio_available(vic_);
+    uint32_t avail = vic_->audio_available();
     uint32_t to_read = avail < max_samples ? avail : max_samples;
     if (to_read == 0) return 0;
 
@@ -1036,7 +1040,7 @@ uint32_t VIC20System::get_audio_samples(float* buffer, uint32_t max_samples) {
     while (written < to_read) {
         uint32_t chunk = to_read - written;
         if (chunk > sizeof(tmp)) chunk = sizeof(tmp);
-        uint32_t n = vic_audio_read(vic_, tmp, chunk);
+        uint32_t n = vic_->audio_read(tmp, chunk);
         if (n == 0) break;
         for (uint32_t i = 0; i < n; i++) {
             // 128 = silence  →  0.0f ;  0 = -1.0f ;  255 = ~+1.0f

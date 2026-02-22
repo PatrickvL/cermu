@@ -30,7 +30,7 @@ extern "C" {
  */
 
 // Forward declarations
-struct mos6560_s;
+struct vic_base_s;
 struct mos6522_s;
 
 // ============================================================================
