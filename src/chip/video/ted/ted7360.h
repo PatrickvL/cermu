@@ -61,9 +61,6 @@
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
 
-// Forward declaration
-struct ted7360_t;
-
 // ============================================================================
 // REGISTER INDICES ($FF00-$FF1F)
 // ============================================================================
@@ -376,7 +373,87 @@ struct ted_sound_unit_t {
 // ============================================================================
 
 struct ted7360_t : public ChipBase {
-    // Unit structures (following VIC-II decomposition)
+    // ========================================================================
+    // Public API — Lifecycle
+    // ========================================================================
+
+    /** Construct and initialize a TED 7360 instance. */
+    explicit ted7360_t(const ted7360_desc_t& desc);
+
+    /** Destructor — frees internal line buffer. */
+    ~ted7360_t();
+
+    // Non-copyable, non-movable
+    ted7360_t(const ted7360_t&) = delete;
+    ted7360_t& operator=(const ted7360_t&) = delete;
+
+    /** Reset TED to power-on state (preserving configuration). */
+    void reset();
+
+    // ========================================================================
+    // Public API — Cycle-accurate tick (phi1/phi2 model)
+    // ========================================================================
+
+    /**
+     * PHI1 phase — performs one full CPU cycle of TED processing.
+     *
+     * Handles: timing advance, raster compare, DMA detection, g-access,
+     * pixel sequencing (8 pixels per cycle), border logic, timer countdown,
+     * IRQ generation, and sets up PHI2 address for DMA lines.
+     *
+     * @param bus_state  Current bus state (from system default state)
+     * @return Updated bus state with TED's IRQ/BA signals and PHI2 address
+     */
+    bus_state_t tick_phi1(bus_state_t bus_state);
+
+    /**
+     * PHI2 delivery — processes data from memory tick.
+     *
+     * On DMA lines, reads the memory tick result (screen matrix / color data)
+     * and stores it in the video line buffer.  On non-DMA lines, this is a no-op.
+     *
+     * @param bus_state  Bus state after memory service (contains read data)
+     */
+    void tick_phi2(bus_state_t bus_state);
+
+    /** Tick one TED cycle — legacy wrapper, calls phi1+phi2 internally. */
+    void tick();
+
+    // ========================================================================
+    // Public API — Register I/O
+    // ========================================================================
+
+    /** Read a TED register (addr encodes $FF00-$FF3F offset). */
+    bus_state_t registers_read(bus_state_t bus_state);
+
+    /** Write a TED register (addr encodes $FF00-$FF3F offset). */
+    bus_state_t registers_write(bus_state_t bus_state);
+
+    // ========================================================================
+    // Public API — IRQ query
+    // ========================================================================
+
+    /** Check if TED has a pending IRQ (true = IRQ line asserted). */
+    bool irq_pending() const;
+
+    // ========================================================================
+    // Public API — Framebuffer
+    // ========================================================================
+
+    /** Set the output framebuffer for pixel rendering. */
+    void set_framebuffer(uint32_t* buffer, int width, int height);
+
+    // ========================================================================
+    // Public API — Color palette (static)
+    // ========================================================================
+
+    /** Get the 128-entry TED color palette (RGBA format). */
+    static const uint32_t* get_palette();
+
+    // ========================================================================
+    // Public data — Unit structures (following VIC-II decomposition)
+    // ========================================================================
+
     ted_registers_unit_t   registers;
     ted_timing_unit_t      timing;
     ted_video_logic_unit_t video_logic;
@@ -396,7 +473,7 @@ struct ted7360_t : public ChipBase {
     uint8_t irq_mask = 0;                // Enabled IRQ sources
 
     // Memory banking
-    bool rom_enabled = false;                // true = ROM visible, false = RAM visible
+    bool rom_enabled = false;            // true = ROM visible, false = RAM visible
 
     // Keyboard
     ted_keyboard_scan_fn keyboard_scan = nullptr;
@@ -405,10 +482,30 @@ struct ted7360_t : public ChipBase {
 
     // Flash / cursor blink
     uint8_t flash_counter = 0;           // 6-bit flash counter (incremented each frame)
-    bool    cursor_visible = false;          // Current cursor blink phase
+    bool    cursor_visible = false;      // Current cursor blink phase
 
     // Reverse mode
-    bool reverse_mode = false;               // RVS bit from $FF07
+    bool reverse_mode = false;           // RVS bit from $FF07
+
+private:
+    // ========================================================================
+    // Internal helpers
+    // ========================================================================
+
+    void update_memory_addresses();
+    void update_border_limits();
+    void update_dma_condition();
+    void check_raster_interrupt();
+    void tick_timers();
+    void pixel_sequencer();
+    void flush_line(uint16_t raster_line);
+    void timing_advance();
+
+    uint8_t get_graphics_mode() const;
+    uint16_t get_raster_compare() const;
+
+    // Legacy tick subcycle tracker
+    int legacy_subcycle_ = 0;
 
     // --- ChipBase interface ---
     ChipIdentity chip_identity() const override;
@@ -419,77 +516,3 @@ struct ted7360_t : public ChipBase {
     void render_settings_content() override;
     void render_layout_content()   override;
 };
-
-// ============================================================================
-// API — Lifecycle
-// ============================================================================
-
-ted7360_t* ted7360_create(const ted7360_desc_t* desc);
-void       ted7360_destroy(ted7360_t* ted);
-void       ted7360_reset(ted7360_t* ted);
-
-// ============================================================================
-// API — Cycle-accurate tick (phi1/phi2 model, one CPU cycle per call)
-// ============================================================================
-
-/**
- * TED PHI1 phase — performs one full CPU cycle of TED processing.
- *
- * Handles: timing advance, raster compare, DMA detection, g-access (character
- * or bitmap data fetch), pixel sequencing (8 pixels per cycle), border logic,
- * timer countdown, IRQ generation, and sets up PHI2 address for DMA lines.
- *
- * @param ted        TED instance
- * @param bus_state  Current bus state (from system default state)
- * @return Updated bus state with TED's IRQ/BA signals and PHI2 address (if DMA)
- */
-bus_state_t ted7360_tick_phi1(ted7360_t* ted, bus_state_t bus_state);
-
-/**
- * TED PHI2 delivery — processes data from memory tick.
- *
- * On DMA lines, reads the memory tick result (screen matrix / color data)
- * and stores it in the video line buffer.  On non-DMA lines, this is a no-op.
- *
- * @param ted        TED instance
- * @param bus_state  Bus state after memory service (contains read data)
- */
-void ted7360_tick_phi2(ted7360_t* ted, bus_state_t bus_state);
-
-// ============================================================================
-// API — Legacy single-tick (kept for backward compat)
-// ============================================================================
-
-/** Tick one TED cycle — legacy wrapper, calls phi1+phi2 internally. */
-void ted7360_tick(ted7360_t* ted);
-
-// ============================================================================
-// API — Register I/O
-// ============================================================================
-
-/** Read a TED register (addr encodes $FF00-$FF3F offset). */
-bus_state_t ted7360_registers_read(void* context, bus_state_t bus_state);
-
-/** Write a TED register (addr encodes $FF00-$FF3F offset). */
-bus_state_t ted7360_registers_write(void* context, bus_state_t bus_state);
-
-// ============================================================================
-// API — IRQ query
-// ============================================================================
-
-/** Check if TED has a pending IRQ (true = IRQ line asserted). */
-bool ted7360_irq_pending(const ted7360_t* ted);
-
-// ============================================================================
-// API — Framebuffer
-// ============================================================================
-
-/** Set the output framebuffer for pixel rendering. */
-void ted7360_set_framebuffer(ted7360_t* ted, uint32_t* buffer, int width, int height);
-
-// ============================================================================
-// API — Color palette
-// ============================================================================
-
-/** Get the 128-entry TED color palette (RGBA format). */
-const uint32_t* ted7360_get_palette(void);

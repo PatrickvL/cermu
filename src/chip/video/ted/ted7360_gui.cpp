@@ -103,7 +103,7 @@ static std::vector<PinSignalState> get_ted_pin_states(ted7360_t* ted, const Chip
     pin_states[47].high_impedance = false;
 
     // IRQ pin (pin 43, index 42) — active low
-    pin_states[42].signal_level = !ted7360_irq_pending(ted);
+    pin_states[42].signal_level = !ted->irq_pending();
     pin_states[42].drive_direction = true;
     pin_states[42].high_impedance = false;
 
@@ -260,7 +260,7 @@ void ted7360_t::render_debug_content() {
         if (ImGui::CollapsingHeader("Interrupts", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Text("IRQ Status ($FF09): $%02X", ted->irq_status);
             ImGui::Text("IRQ Mask   ($FF0A): $%02X", ted->irq_mask);
-            ImGui::Text("IRQ Pending: %s", ted7360_irq_pending(ted) ? "YES" : "NO");
+            ImGui::Text("IRQ Pending: %s", ted->irq_pending() ? "YES" : "NO");
             ImGui::Indent(20.0f);
             ImGui::Text("Raster:  %s", (ted->irq_status & TED_IRQ_RASTER) ? "SET" : "---");
             ImGui::Text("Timer 1: %s", (ted->irq_status & TED_IRQ_TIMER1) ? "SET" : "---");
