@@ -98,6 +98,43 @@ template <const fam65xx::CPUTraits &Traits> ChipLayout create_cpu_pin_layout() {
 }
 
 // ============================================================================
+// PIN-TO-BUS-BIT MAPPING HELPER
+// ============================================================================
+
+// Describes how a CPU PinLabel maps to a bus_state bit for signal extraction.
+struct PinBusMapping {
+    int bus_bit;     // Bus bit index, or -1 if no direct mapping
+    bool is_input;   // true = input to CPU, false = output from CPU
+    bool invert;     // true = signal level is inverted from bus bit (active-low)
+};
+
+// Maps a CPU PinLabel to its bus_state bit and signal characteristics.
+// Returns bus_bit = -1 for pins handled separately (ADDRESS, DATA, POWER,
+// CLOCK, NC) or for labels with no bus mapping.
+constexpr PinBusMapping get_pin_bus_mapping(PinLabel label) {
+    switch (label) {
+    // Control signals (active-high)
+    case PinLabel::RW:     return { BUS_RW_BIT,    false, false };
+    case PinLabel::SYNC:   return { BUS_SYNC_BIT,  false, false };
+    case PinLabel::RDY:    return { BUS_RDY_BIT,   true,  false };
+    case PinLabel::AEC:    return { BUS_AEC_BIT,   false, false };
+    case PinLabel::BE:     return { BUS_BE_BIT,    true,  false };
+    case PinLabel::BA:     return { BUS_BA_BIT,    false, false };
+    // Interrupt signals (active-low, all inputs)
+    case PinLabel::_IRQ:   return { BUS_IRQ_BIT,   true,  true };
+    case PinLabel::_NMI:   return { BUS_NMI_BIT,   true,  true };
+    case PinLabel::_RES:   return { BUS_RES_BIT,   true,  true };
+    case PinLabel::_ABORT: return { BUS_ABORT_BIT, true,  true };
+    // Special signals
+    case PinLabel::_SO:    return { BUS_SO_BIT,    true,  true  };
+    case PinLabel::_VP:    return { BUS_VP_BIT,    false, false }; // Bus bit already physical
+    case PinLabel::_VPB:   return { BUS_VP_BIT,    false, false };
+    case PinLabel::_ML:    return { BUS_ML_BIT,    false, true  };
+    default:               return { -1,            false, false };
+    }
+}
+
+// ============================================================================
 // CPU PIN STATE EXTRACTION WITH BUS STATE
 // ============================================================================
 
@@ -140,7 +177,6 @@ std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits> *cpu,
       if (bit_index < 16) {
         state.signal_level = (addr_bus & (1 << bit_index)) != 0;
         state.drive_direction = true;
-        state.signal_value = state.signal_level ? 1 : 0;
       }
       break;
     }
@@ -150,99 +186,30 @@ std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits> *cpu,
         state.signal_level = (data_bus & (1 << bit_index)) != 0;
         state.drive_direction =
             (bus_state & BUS_BIT(BUS_RW_BIT)) == 0; // Output on write
-        state.signal_value = state.signal_level ? 1 : 0;
         state.high_impedance = !state.drive_direction;
       }
       break;
     }
-    case PinType::CONTROL: {
-      if (pin.label == PinLabel::RW) {
-        state.signal_level = (bus_state & BUS_BIT(BUS_RW_BIT)) != 0;
-        state.drive_direction = true;
-      } else if (pin.label == PinLabel::SYNC) {
-        state.signal_level = (bus_state & BUS_BIT(BUS_SYNC_BIT)) != 0;
-        state.drive_direction = true;
-      } else if (pin.label == PinLabel::RDY) {
-        state.signal_level = (bus_state & BUS_BIT(BUS_RDY_BIT)) != 0;
-        state.drive_direction = false; // Input to CPU
-      } else if (pin.label == PinLabel::AEC) {
-        state.signal_level = (bus_state & BUS_BIT(BUS_AEC_BIT)) != 0;
-        state.drive_direction = true;
-      } else if (pin.label == PinLabel::BE) {
-        state.signal_level = (bus_state & BUS_BIT(BUS_BE_BIT)) != 0;
-        state.drive_direction = false; // Input to CPU
-      } else if (pin.label == PinLabel::BA) {
-        state.signal_level = (bus_state & BUS_BIT(BUS_BA_BIT)) != 0;
-        state.drive_direction = true;
-      }
-      break;
-    }
-    case PinType::INTERRUPT: {
-      if (pin.label == PinLabel::_IRQ) {
-        state.signal_level =
-            (bus_state & BUS_BIT(BUS_IRQ_BIT)) == 0; // Active low
-        state.drive_direction = false;
-      } else if (pin.label == PinLabel::_NMI) {
-        state.signal_level =
-            (bus_state & BUS_BIT(BUS_NMI_BIT)) == 0; // Active low
-        state.drive_direction = false;
-      } else if (pin.label == PinLabel::_RES) {
-        state.signal_level =
-            (bus_state & BUS_BIT(BUS_RES_BIT)) == 0; // Active low
-        state.drive_direction = false;
-      } else if (pin.label == PinLabel::_ABORT) {
-        state.signal_level =
-            (bus_state & BUS_BIT(BUS_ABORT_BIT)) == 0; // Active low
-        state.drive_direction = false;
-      }
-      break;
-    }
     case PinType::POWER: {
-      // Power pins always active
       state.signal_level = true;
-      state.drive_direction = false;
       break;
     }
     case PinType::CLOCK: {
-      // Clock pins - would need actual clock state from bus
-      // For now, assume active during valid cycles
       state.signal_level = true;
-      if (pin.label == PinLabel::PHI0) {
-        state.drive_direction = false; // Input clock
-      } else {
-        state.drive_direction = true; // Generated clocks
-      }
+      state.drive_direction = (pin.label != PinLabel::PHI0);
       break;
     }
-    case PinType::SPECIAL: {
-      if (pin.label == PinLabel::_SO) {
-        state.signal_level =
-            (bus_state & BUS_BIT(BUS_SO_BIT)) == 0; // Active low
-        state.drive_direction = false;
-      } else if (pin.label == PinLabel::_VP ||
-                 pin.label == PinLabel::_VPB) {
-        state.signal_level = (bus_state & BUS_BIT(BUS_VP_BIT)) != 0;
-        state.drive_direction = true;
-      } else if (pin.label == PinLabel::_ML) {
-        state.signal_level =
-            (bus_state & BUS_BIT(BUS_ML_BIT)) == 0; // Active low
-        state.drive_direction = true;
+    default: {
+      auto [bus_bit, is_input, invert] = get_pin_bus_mapping(pin.label);
+      if (bus_bit >= 0) {
+        bool bit_set = (bus_state & BUS_BIT(bus_bit)) != 0;
+        state.signal_level = invert ? !bit_set : bit_set;
+        state.drive_direction = !is_input;
       } else if (pin.label == PinLabel::NC) {
-        state.signal_level = false; // No connect
-        state.drive_direction = false;
         state.high_impedance = true;
       }
       break;
     }
-    default:
-      state.signal_level = false;
-      break;
-    }
-
-    // Handle active-low pins
-    if (pin.get_invert_logic() && pin.get_pin_type() != PinType::INTERRUPT &&
-        pin.get_pin_type() != PinType::SPECIAL) {
-      state.signal_level = !state.signal_level;
     }
 
     state.signal_value = state.signal_level ? 1 : 0;
@@ -268,8 +235,6 @@ std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits> *cpu,
 
   return states;
 }
-
-// Note: PIN and PIN_LR macros are now defined in core/chip_layout.h
 
 // ============================================================================
 // MOS 6502 SPECIFIC LAYOUT IMPLEMENTATION
