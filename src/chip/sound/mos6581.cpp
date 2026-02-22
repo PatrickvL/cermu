@@ -1011,7 +1011,8 @@ mos6581_s::~mos6581_s() {
 
 // ChipBase identity
 ChipIdentity mos6581_s::chip_identity() const {
-    return ChipIdentity{"MOS6581", "MOS Technology"};
+    return {"MOS6581", "MOS Technology",
+            pal_timing ? VideoStandard::PAL : VideoStandard::NTSC};
 }
 
 /**

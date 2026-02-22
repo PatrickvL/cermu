@@ -2516,11 +2516,9 @@ vicii_s::~vicii_s() {
 
 // ChipBase identity — uses config to determine PAL/NTSC variant
 ChipIdentity vicii_s::chip_identity() const {
-    if (config && config->total_lines > 300) {
-        return ChipIdentity{"MOS6569", "MOS Technology"};
-    } else {
-        return ChipIdentity{"MOS6567", "MOS Technology"};
-    }
+    bool pal = config && config->total_lines > 300;
+    return {pal ? "MOS6569" : "MOS6567", "MOS Technology",
+            pal ? VideoStandard::PAL : VideoStandard::NTSC};
 }
 
 void vicii_s::reset() {

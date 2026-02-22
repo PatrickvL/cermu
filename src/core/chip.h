@@ -6,14 +6,35 @@
 #include "system_lines.h"
 
 // ============================================================================
+// VIDEO STANDARD — TV broadcast standard affecting chip timing
+// ============================================================================
+
+/// Video broadcast standard — determines system-wide timing
+/// (video, audio, CPU clock).  Stored in ChipIdentity so each chip
+/// instance can report which standard it is configured for.
+enum class VideoStandard : uint8_t {
+    NTSC,           // NTSC (North America, Japan)
+    PAL,            // PAL (Europe, Australia)
+    PAL_M,          // PAL-M (Brazil)
+    SECAM,          // SECAM (France, Eastern Europe)
+    CUSTOM          // Custom/configurable timing
+};
+
+// ============================================================================
 // CHIP IDENTITY — intrinsic metadata about a chip type
 // ============================================================================
 
-/// Static identity of a chip type (part number + manufacturer).
+/// Static identity of a chip type (part number, manufacturer, video standard).
 /// Returned by ChipBase::chip_identity().
+///
+/// The standard field indicates which video-standard variant this chip instance
+/// represents.  Standard-agnostic chips (I/O, RAM, ...) leave it at the
+/// default (NTSC).  Zero runtime cost: the enum is returned by value
+/// together with the two pointers that were already there.
 struct ChipIdentity {
     const char* part_number;    // e.g. "MOS6526", "TED7360", "RP2A03"
     const char* manufacturer;   // e.g. "MOS Technology", "Ricoh", "Commodore"
+    VideoStandard standard = VideoStandard::NTSC; // Video standard this instance is configured for
 };
 
 // ============================================================================

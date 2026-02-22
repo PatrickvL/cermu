@@ -43,8 +43,8 @@ const HardwareTraits& EmulatedSystem::get_hardware_traits() const {
 
 const SystemTiming& EmulatedSystem::get_current_timing() const {
     int idx = config_.region_option_index;
-    if (idx >= 0 && idx < static_cast<int>(hardware_traits_.region_options.size())) {
-        return hardware_traits_.region_options[idx].timing;
+    if (idx >= 0 && idx < static_cast<int>(hardware_traits_.video_standard_configs.size())) {
+        return hardware_traits_.video_standard_configs[idx].timing;
     }
     return hardware_traits_.timing;
 }
@@ -224,8 +224,8 @@ SystemConfiguration EmulatedSystem::detect_optimal_configuration(
     }
 
     // Region: find the default option
-    for (size_t i = 0; i < hardware_traits_.region_options.size(); i++) {
-        if (hardware_traits_.region_options[i].is_default) {
+    for (size_t i = 0; i < hardware_traits_.video_standard_configs.size(); i++) {
+        if (hardware_traits_.video_standard_configs[i].is_default) {
             config.region_option_index = static_cast<int>(i);
             break;
         }

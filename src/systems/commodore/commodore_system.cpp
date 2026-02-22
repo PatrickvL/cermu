@@ -11,8 +11,8 @@ bool CommodoreSystem::set_configuration(const SystemConfiguration& config) {
 
 uint32_t CommodoreSystem::get_target_fps() const {
     if (config_.region_option_index >= 0 &&
-        config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
-        return hardware_traits_.region_options[config_.region_option_index].timing.target_fps;
+        config_.region_option_index < static_cast<int>(hardware_traits_.video_standard_configs.size())) {
+        return hardware_traits_.video_standard_configs[config_.region_option_index].timing.target_fps;
     }
     return 50;  // Default PAL
 }

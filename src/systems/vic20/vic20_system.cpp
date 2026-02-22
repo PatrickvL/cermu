@@ -85,7 +85,7 @@ static HardwareTraits create_vic20_hardware_traits() {
     traits.timing.audio_sample_rate_hz = 22050;
     traits.timing.target_fps = 50;              // PAL
     traits.timing.cycles_per_frame = 22168;     // 1108405 / 50
-    traits.timing.region = VideoRegion::PAL;
+    traits.timing.standard = VideoStandard::PAL;
     
     // Memory options
     traits.memory_options.push_back({
@@ -126,9 +126,9 @@ static HardwareTraits create_vic20_hardware_traits() {
     });
     
     // Region options
-    traits.region_options.push_back({
+    traits.video_standard_configs.push_back({
         "PAL",
-        VideoRegion::PAL,
+        VideoStandard::PAL,
         traits.timing,
         true
     });
@@ -138,11 +138,11 @@ static HardwareTraits create_vic20_hardware_traits() {
     ntsc_timing.video_frequency_hz = 1022727;
     ntsc_timing.target_fps = 60;
     ntsc_timing.cycles_per_frame = 17045;       // 1022727 / 60
-    ntsc_timing.region = VideoRegion::NTSC;
+    ntsc_timing.standard = VideoStandard::NTSC;
     
-    traits.region_options.push_back({
+    traits.video_standard_configs.push_back({
         "NTSC",
-        VideoRegion::NTSC,
+        VideoStandard::NTSC,
         ntsc_timing,
         false
     });
@@ -328,9 +328,9 @@ const SystemDescriptor& VIC20System::get_descriptor() const {
 bool VIC20System::apply_configuration() {
     // Apply region settings
     if (config_.region_option_index >= 0 &&
-        config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
-        const RegionOption& region = hardware_traits_.region_options[config_.region_option_index];
-        cycles_per_frame_ = region.timing.cycles_per_frame;
+        config_.region_option_index < static_cast<int>(hardware_traits_.video_standard_configs.size())) {
+        const VideoStandardConfig& std_cfg = hardware_traits_.video_standard_configs[config_.region_option_index];
+        cycles_per_frame_ = std_cfg.timing.cycles_per_frame;
     }
     
     // Apply memory configuration
@@ -1014,9 +1014,9 @@ void VIC20System::render_configuration_ui() {
     
     // Region configuration
     ImGui::Text("Video Region:");
-    for (size_t i = 0; i < hardware_traits_.region_options.size(); i++) {
+    for (size_t i = 0; i < hardware_traits_.video_standard_configs.size(); i++) {
         bool selected = (config_.region_option_index == static_cast<int>(i));
-        if (ImGui::RadioButton(hardware_traits_.region_options[i].name, selected)) {
+        if (ImGui::RadioButton(hardware_traits_.video_standard_configs[i].name, selected)) {
             SystemConfiguration new_config = config_;
             new_config.region_option_index = static_cast<int>(i);
             set_configuration(new_config);

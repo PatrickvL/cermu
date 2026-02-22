@@ -51,7 +51,7 @@ static HardwareTraits create_apple1_hardware_traits() {
     traits.timing.audio_sample_rate_hz = 0;
     traits.timing.target_fps = 60;              // Video refresh
     traits.timing.cycles_per_frame = 16667;     // 1000000 / 60
-    traits.timing.region = VideoRegion::NTSC;
+    traits.timing.standard = VideoStandard::NTSC;
     
     // Memory options
     traits.memory_options.push_back({

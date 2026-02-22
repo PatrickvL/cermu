@@ -92,29 +92,29 @@ static HardwareTraits create_chip8_hardware_traits() {
     traits.timing.audio_sample_rate_hz = 4000;
     traits.timing.target_fps = 60;
     traits.timing.cycles_per_frame = 10;
-    traits.timing.region = VideoRegion::NTSC;
+    traits.timing.standard = VideoStandard::NTSC;
     
     // Memory options
     traits.memory_options.push_back({"4KB Standard", 4096, 0, true});
     traits.memory_options.push_back({"64KB (XO-CHIP)", 65536, 0, false});
     
     // Speed presets
-    traits.region_options.push_back({
-        "Standard (600 Hz)", VideoRegion::NTSC, traits.timing, true
+    traits.video_standard_configs.push_back({
+        "Standard (600 Hz)", VideoStandard::NTSC, traits.timing, true
     });
     
     SystemTiming fast = traits.timing;
     fast.cpu_frequency_hz = 1200;
     fast.cycles_per_frame = 20;
-    traits.region_options.push_back({
-        "Fast (1200 Hz)", VideoRegion::CUSTOM, fast, false
+    traits.video_standard_configs.push_back({
+        "Fast (1200 Hz)", VideoStandard::CUSTOM, fast, false
     });
     
     SystemTiming xo = traits.timing;
     xo.cpu_frequency_hz = 1000;
     xo.cycles_per_frame = 17;
-    traits.region_options.push_back({
-        "XO-CHIP (1000 Hz)", VideoRegion::CUSTOM, xo, false
+    traits.video_standard_configs.push_back({
+        "XO-CHIP (1000 Hz)", VideoStandard::CUSTOM, xo, false
     });
     
     // Custom options — interpreter mode
@@ -255,8 +255,8 @@ bool Chip8System::set_configuration(const SystemConfiguration& config) {
 
 bool Chip8System::apply_configuration() {
     if (config_.region_option_index >= 0 &&
-        config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
-        cycles_per_frame_ = hardware_traits_.region_options[config_.region_option_index]
+        config_.region_option_index < static_cast<int>(hardware_traits_.video_standard_configs.size())) {
+        cycles_per_frame_ = hardware_traits_.video_standard_configs[config_.region_option_index]
                                 .timing.cycles_per_frame;
     }
     
@@ -327,20 +327,20 @@ SystemConfiguration Chip8System::detect_optimal_configuration(
         case Chip8Mode::SCHIP:
             config.custom_settings["chip8_mode"] = "SCHIP 1.1";
             // Use fast speed for SCHIP
-            if (hardware_traits_.region_options.size() > 1)
+            if (hardware_traits_.video_standard_configs.size() > 1)
                 config.region_option_index = 1;
             printf("CHIP8: Detected SCHIP mode\n");
             break;
         case Chip8Mode::XOCHIP:
             config.custom_settings["chip8_mode"] = "XO-CHIP";
             config.memory_option_index = 1;  // 64KB
-            if (hardware_traits_.region_options.size() > 2)
+            if (hardware_traits_.video_standard_configs.size() > 2)
                 config.region_option_index = 2;  // XO-CHIP speed
             printf("CHIP8: Detected XO-CHIP mode\n");
             break;
         default:
             config.custom_settings["chip8_mode"] = "CHIP-8";
-            if (size > 2048 && hardware_traits_.region_options.size() > 1)
+            if (size > 2048 && hardware_traits_.video_standard_configs.size() > 1)
                 config.region_option_index = 1;
             break;
     }
@@ -692,9 +692,9 @@ void Chip8System::render_configuration_ui() {
     
     // Speed configuration
     ImGui::Text("Execution Speed:");
-    for (size_t i = 0; i < hardware_traits_.region_options.size(); i++) {
+    for (size_t i = 0; i < hardware_traits_.video_standard_configs.size(); i++) {
         bool sel = (config_.region_option_index == static_cast<int>(i));
-        if (ImGui::RadioButton(hardware_traits_.region_options[i].name, sel)) {
+        if (ImGui::RadioButton(hardware_traits_.video_standard_configs[i].name, sel)) {
             SystemConfiguration new_config = config_;
             new_config.region_option_index = static_cast<int>(i);
             set_configuration(new_config);

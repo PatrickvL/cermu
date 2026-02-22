@@ -145,18 +145,18 @@ void SystemSelectionDialog::render(bool allow_cancel) {
                 }
             }
             
-            // Region filter (0 = All, 1 = NTSC, 2 = PAL, 3 = PAL-M, 4 = SECAM)
+            // Video standard filter (0 = All, 1 = NTSC, 2 = PAL, 3 = PAL-M, 4 = SECAM)
             if (passes_filter && region_filter_ > 0) {
-                VideoRegion target_region = (VideoRegion)(region_filter_ - 1);
-                bool has_matching_region = false;
-                for (const auto& region_opt : hardware_traits.region_options) {
-                    if (region_opt.region == target_region) {
-                        has_matching_region = true;
+                VideoStandard target_standard = (VideoStandard)(region_filter_ - 1);
+                bool has_match = false;
+                for (const auto& std_cfg : hardware_traits.video_standard_configs) {
+                    if (std_cfg.standard == target_standard) {
+                        has_match = true;
                         break;
                     }
                 }
-                // Only filter out if system has regions but none match
-                if (!has_matching_region && !hardware_traits.region_options.empty()) {
+                // Only filter out if system has standards but none match
+                if (!has_match && !hardware_traits.video_standard_configs.empty()) {
                     passes_filter = false;
                 }
             }
@@ -168,9 +168,9 @@ void SystemSelectionDialog::render(bool allow_cancel) {
             
             // Check if system has configuration options
             bool has_memory_options = !hardware_traits.memory_options.empty();
-            bool has_region_options = !hardware_traits.region_options.empty();
+            bool has_video_standard_configs = !hardware_traits.video_standard_configs.empty();
             bool has_custom_options_for_config = !hardware_traits.custom_options.empty();
-            bool has_configurations = has_memory_options || has_region_options || has_custom_options_for_config;
+            bool has_configurations = has_memory_options || has_video_standard_configs || has_custom_options_for_config;
             
             ImGui::PushID((int)i);
             
@@ -193,9 +193,9 @@ void SystemSelectionDialog::render(bool allow_cancel) {
                     } else {
                         selected_memory_option_ = -1;
                     }
-                    if (has_region_options) {
-                        for (size_t r = 0; r < hardware_traits.region_options.size(); r++) {
-                            if (hardware_traits.region_options[r].is_default) {
+                    if (has_video_standard_configs) {
+                        for (size_t r = 0; r < hardware_traits.video_standard_configs.size(); r++) {
+                            if (hardware_traits.video_standard_configs[r].is_default) {
                                 selected_region_option_ = (int)r;
                                 break;
                             }
@@ -250,9 +250,9 @@ void SystemSelectionDialog::render(bool allow_cancel) {
                                 selected_memory_option_ = (int)mem_idx;
                                 selected_system_name_ = descriptor.short_name;
                                 // Set default region if not selected
-                                if (selected_region_option_ < 0 && has_region_options) {
-                                    for (size_t r = 0; r < hardware_traits.region_options.size(); r++) {
-                                        if (hardware_traits.region_options[r].is_default) {
+                                if (selected_region_option_ < 0 && has_video_standard_configs) {
+                                    for (size_t r = 0; r < hardware_traits.video_standard_configs.size(); r++) {
+                                        if (hardware_traits.video_standard_configs[r].is_default) {
                                             selected_region_option_ = (int)r;
                                             break;
                                         }
@@ -271,12 +271,12 @@ void SystemSelectionDialog::render(bool allow_cancel) {
                     }
                     
                     // Show region options if available
-                    if (has_region_options) {
+                    if (has_video_standard_configs) {
                         if (has_memory_options) ImGui::Spacing();
                         ImGui::TextDisabled("Video Region:");
                         ImGui::Indent();
-                        for (size_t reg_idx = 0; reg_idx < hardware_traits.region_options.size(); reg_idx++) {
-                            const auto& reg_opt = hardware_traits.region_options[reg_idx];
+                        for (size_t reg_idx = 0; reg_idx < hardware_traits.video_standard_configs.size(); reg_idx++) {
+                            const auto& reg_opt = hardware_traits.video_standard_configs[reg_idx];
                             bool is_selected = (selected_system_index_ == (int)i &&
                                               selected_region_option_ == (int)reg_idx);
                             
@@ -312,7 +312,7 @@ void SystemSelectionDialog::render(bool allow_cancel) {
                     // Show peripheral options if available
                     bool has_peripheral_options = !hardware_traits.peripheral_options.empty();
                     if (has_peripheral_options) {
-                        if (has_memory_options || has_region_options) ImGui::Spacing();
+                        if (has_memory_options || has_video_standard_configs) ImGui::Spacing();
                         ImGui::TextDisabled("Peripherals:");
                         ImGui::Indent();
                         
@@ -346,9 +346,9 @@ void SystemSelectionDialog::render(bool allow_cancel) {
                                             }
                                         }
                                     }
-                                    if (selected_region_option_ < 0 && has_region_options) {
-                                        for (size_t r = 0; r < hardware_traits.region_options.size(); r++) {
-                                            if (hardware_traits.region_options[r].is_default) {
+                                    if (selected_region_option_ < 0 && has_video_standard_configs) {
+                                        for (size_t r = 0; r < hardware_traits.video_standard_configs.size(); r++) {
+                                            if (hardware_traits.video_standard_configs[r].is_default) {
                                                 selected_region_option_ = (int)r;
                                                 break;
                                             }
@@ -383,7 +383,7 @@ void SystemSelectionDialog::render(bool allow_cancel) {
                         
                         for (size_t cust_idx = 0; cust_idx < hardware_traits.custom_options.size(); cust_idx++) {
                             const auto& custom_opt = hardware_traits.custom_options[cust_idx];
-                            if (has_memory_options || has_region_options || has_peripheral_options) ImGui::Spacing();
+                            if (has_memory_options || has_video_standard_configs || has_peripheral_options) ImGui::Spacing();
                             ImGui::TextDisabled("%s:", custom_opt.name);
                             ImGui::Indent();
                             
@@ -417,9 +417,9 @@ void SystemSelectionDialog::render(bool allow_cancel) {
                                             }
                                         }
                                     }
-                                    if (selected_region_option_ < 0 && has_region_options) {
-                                        for (size_t r = 0; r < hardware_traits.region_options.size(); r++) {
-                                            if (hardware_traits.region_options[r].is_default) {
+                                    if (selected_region_option_ < 0 && has_video_standard_configs) {
+                                        for (size_t r = 0; r < hardware_traits.video_standard_configs.size(); r++) {
+                                            if (hardware_traits.video_standard_configs[r].is_default) {
                                                 selected_region_option_ = (int)r;
                                                 break;
                                             }

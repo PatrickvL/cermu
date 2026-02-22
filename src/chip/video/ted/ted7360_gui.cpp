@@ -150,7 +150,8 @@ static const char* get_screen_mode_name(uint8_t mode) {
 // ============================================================================
 
 ChipIdentity ted7360_t::chip_identity() const {
-    return {"TED7360", "Commodore"};
+    return {"TED7360", "Commodore",
+            timing.is_pal ? VideoStandard::PAL : VideoStandard::NTSC};
 }
 
 bool ted7360_t::has_debug_content()    const { return true; }
