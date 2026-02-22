@@ -451,9 +451,15 @@ typedef struct {
     bool lp_pin_prev;       // Previous LP pin state (true=HIGH/released, false=LOW/active)
 } vicii_lightpen_unit_t;
 
+// Memory read callback type for VIC-II PHI1/PHI2 accesses.
+// Decouples VIC-II from the system bus — the system injects this at init.
+using vicii_mem_read_fn_t = bus_state_t (*)(void* ctx, bus_state_t bus_state, uint16_t addr);
+
 // Bus Interface Unit - External bus communication
 typedef struct {
     void* bus;
+    vicii_mem_read_fn_t mem_read;  // System-provided memory read callback
+    void* mem_read_ctx;            // Context for mem_read (typically the system bus)
     void (*bank_change)(void* context, uint8_t bank);
     // LP pin callback — reads the light pen input from Control Port 1.
     // Returns true if LP pin is HIGH (released), false if LOW (asserted).

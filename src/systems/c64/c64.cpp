@@ -627,6 +627,10 @@ bool c64_system_init(c64_t* c64, const c64_config_t* config) {
     // No bus callback needed - PLA pre-calculation covers all #VA14 states
     c64->vicii->bus.bus = &c64->bus;
     c64->vicii->bus.bank_change = NULL;
+    c64->vicii->bus.mem_read = [](void* ctx, bus_state_t bus, uint16_t addr) -> bus_state_t {
+        return c64_bus_vic_read(static_cast<c64_bus_t*>(ctx), bus, addr);
+    };
+    c64->vicii->bus.mem_read_ctx = &c64->bus;
     
     if (!(c64->cia1 = mos6526_create())) { c64_system_cleanup(c64); return false; }
     if (!(c64->cia2 = mos6526_create())) { c64_system_cleanup(c64); return false; }
