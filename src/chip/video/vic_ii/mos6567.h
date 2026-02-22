@@ -18,9 +18,3 @@ bus_state_t mos6567_registers_write(void* chip, bus_state_t bus_state);
 // Bank change callback
 void mos6567_bank_change(void* chip, uint8_t bank);
 
-#ifdef IMGUI_VERSION
-// GUI function declarations
-void mos6567_render_debug_window(void* chip, bool* show_window);
-void mos6567_render_settings_window(void* chip, bool* show_window);
-#endif
-

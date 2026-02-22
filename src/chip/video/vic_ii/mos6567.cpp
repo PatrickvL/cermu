@@ -11,8 +11,3 @@ vicii_t* mos6567_create() {
     vicii_t* vicii = vicii_create(config, vicii_memory_bank_change);
     return vicii;
 }
-
-// Include GUI implementation
-#ifdef IMGUI_VERSION
-#include "mos6567_gui.h"
-#endif

@@ -145,11 +145,6 @@ static ChipLayout& get_mos2114_layout() {
 // MOS2114 GUI METHODS (ChipBase overrides)
 // ============================================================================
 
-// Legacy C-linkage wrapper (used by c64.cpp test path)
-extern "C" void mos2114_render_debug_content(void* chip) {
-    if (chip) static_cast<MOS2114*>(chip)->render_debug_content();
-}
-
 void MOS2114::render_debug_content() {
 
 #ifdef IMGUI_VERSION
@@ -246,10 +241,6 @@ void MOS2114::render_debug_content() {
 #endif
 }
 
-extern "C" void mos2114_render_settings_content(void* chip) {
-    static_cast<MOS2114*>(chip)->render_settings_content();
-}
-
 void MOS2114::render_settings_content() {
 
 #ifdef IMGUI_VERSION
@@ -284,10 +275,6 @@ void MOS2114::render_settings_content() {
 // ============================================================================
 // MOS2114 LAYOUT (standalone pinout diagram)
 // ============================================================================
-
-extern "C" void mos2114_render_layout_content(void* chip) {
-    static_cast<MOS2114*>(chip)->render_layout_content();
-}
 
 void MOS2114::render_layout_content() {
 

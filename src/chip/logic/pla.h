@@ -79,7 +79,4 @@ void pla_906114_01_set_vicii_address_bank(pla_906114_01_t* pla, uint8_t va_high)
 // Convert PLA output signals to CHIP values
 uint8_t pla_906114_01_outputs_to_chip(pla_906114_01_t* pla);
 
-// GUI debug window
-void pla_render_debug_window(void* chip, bool* show_window);
-
 

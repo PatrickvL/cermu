@@ -1,5 +1,4 @@
 #include "mos6526.h" // cia
-//#include "../../systems/c64/c64_bus.h" // for BUS_MASK_IRQ
 #include "../../core/system_lines.h"
 #include <string.h>
 #include <stdlib.h>
@@ -1153,8 +1152,3 @@ bus_state_t mos6526_tick(void* chip, bus_state_t bus_state) {
     bus_state = mos6526_tick_phi1(chip, bus_state);
     return bus_state;
 }
-
-// Include GUI implementation
-#ifdef IMGUI_VERSION
-#include "mos6526_gui.h"
-#endif

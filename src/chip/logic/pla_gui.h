@@ -14,7 +14,7 @@ using c64_t = C64SystemData;
 /// The PLA's GUI needs access to the whole c64_t system (banking tables, bus
 /// state) rather than just the pla_906114_01_t struct (which is ephemeral and
 /// only used during map generation).  PlaChip holds a c64_t* back-pointer and
-/// implements ChipBase so the PLA can be registered without CChipAdapter.
+/// implements ChipBase so the PLA can be registered directly.
 ///
 class PlaChip : public ChipBase {
     c64_t* c64_;
@@ -30,10 +30,5 @@ public:
     void render_settings_content() override;
     void render_layout_content() override;
 };
-
-// Backward-compatible free-function declarations
-void pla_render_debug_content(void* chip);
-void pla_render_settings_content(void* chip);
-void pla_render_layout_content(void* chip);
 
 

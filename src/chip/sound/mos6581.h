@@ -359,10 +359,3 @@ void mos6581_set_cpu_clock(mos6581_t* sid, float clock_hz);
 // Typed lifecycle functions
 mos6581_t* mos6581_create();
 void mos6581_destroy(mos6581_t* sid);
-
-// Legacy GUI wrappers (deprecated — use ChipBase virtual methods)
-extern "C" {
-void mos6581_render_debug_content(void* chip);
-void mos6581_render_settings_content(void* chip);
-void mos6581_render_layout_content(void* chip);
-}

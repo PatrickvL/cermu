@@ -31,7 +31,6 @@
  *           ╚═══════════╝
  */
 
-#include "nes_ppu_gui.h"
 #include "nes_system.h"
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
@@ -293,20 +292,4 @@ void nes_system::PPU::render_layout_content() {
     std::vector<PinSignalState> pin_states = get_ppu_pin_states(ppu, &layout);
     render_chip_layout(layout, pin_states, "RP2C02");
 #endif
-}
-
-// ============================================================================
-// Backward-compatible free-function wrappers
-// ============================================================================
-
-void nes_ppu_render_debug_content(nes_system::PPU* ppu) {
-    if (ppu) ppu->render_debug_content();
-}
-
-void nes_ppu_render_settings_content(nes_system::PPU* ppu) {
-    if (ppu) ppu->render_settings_content();
-}
-
-void nes_ppu_render_layout_content(nes_system::PPU* ppu) {
-    if (ppu) ppu->render_layout_content();
 }

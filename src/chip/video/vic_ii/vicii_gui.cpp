@@ -254,11 +254,6 @@ void vicii_s::render_debug_content() {
 #endif
 }
 
-// Legacy C-linkage wrapper
-extern "C" void vicii_gui_render_debug_content(void* chip) {
-    if (chip) static_cast<vicii_t*>(chip)->render_debug_content();
-}
-
 // Class method implementation
 void vicii_s::render_settings_content() {
     vicii_t* vicii = this;
@@ -280,11 +275,6 @@ void vicii_s::render_settings_content() {
 #endif
 }
 
-// Legacy C-linkage wrapper
-extern "C" void vicii_gui_render_settings_content(void* chip) {
-    if (chip) static_cast<vicii_t*>(chip)->render_settings_content();
-}
-
 // ============================================================================
 // VIC-II LAYOUT (standalone pinout diagram)
 // ============================================================================
@@ -300,9 +290,4 @@ void vicii_s::render_layout_content() {
     std::vector<PinSignalState> pin_states = get_vicii_pin_states(vicii, &layout, 0);
     render_chip_layout(layout, pin_states, chip_name);
 #endif
-}
-
-// Legacy C-linkage wrapper
-extern "C" void vicii_gui_render_layout_content(void* chip) {
-    if (chip) static_cast<vicii_t*>(chip)->render_layout_content();
 }

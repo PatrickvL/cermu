@@ -385,19 +385,3 @@ void ted7360_t::render_layout_content() {
     render_chip_layout(layout, pin_states, "TED7360");
 #endif
 }
-
-// ============================================================================
-// Backward-compatible free-function wrappers
-// ============================================================================
-
-void ted7360_render_debug_content(void* chip) {
-    static_cast<ted7360_t*>(chip)->render_debug_content();
-}
-
-void ted7360_render_settings_content(void* chip) {
-    static_cast<ted7360_t*>(chip)->render_settings_content();
-}
-
-void ted7360_render_layout_content(void* chip) {
-    static_cast<ted7360_t*>(chip)->render_layout_content();
-}

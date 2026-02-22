@@ -257,11 +257,6 @@ void mos6581_s::render_debug_content() {
 #endif
 }
 
-// Legacy C-linkage wrapper
-extern "C" void mos6581_render_debug_content(void* chip) {
-    if (chip) static_cast<mos6581_t*>(chip)->render_debug_content();
-}
-
 // ============================================================================
 // MOS6581 SID GUI SETTINGS WINDOW
 // ============================================================================
@@ -388,11 +383,6 @@ void mos6581_s::render_settings_content() {
 #endif
 }
 
-// Legacy C-linkage wrapper
-extern "C" void mos6581_render_settings_content(void* chip) {
-    if (chip) static_cast<mos6581_t*>(chip)->render_settings_content();
-}
-
 // ============================================================================
 // MOS6581 SID LAYOUT (standalone pinout diagram)
 // ============================================================================
@@ -406,9 +396,4 @@ void mos6581_s::render_layout_content() {
     std::vector<PinSignalState> pin_states = get_sid_pin_states(sid, &layout, 0);
     render_chip_layout(layout, pin_states, "MOS6581");
 #endif
-}
-
-// Legacy C-linkage wrapper
-extern "C" void mos6581_render_layout_content(void* chip) {
-    if (chip) static_cast<mos6581_t*>(chip)->render_layout_content();
 }

@@ -31,7 +31,6 @@
  *           ╚═══════════╝
  */
 
-#include "nes_apu_gui.h"
 #include "../../chip/cpu/fam65xx/nes6502.h"
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
@@ -407,33 +406,10 @@ void nes6502_apu::APU::render_layout_content() {
     render_chip_layout(layout, pin_states, "RP2A03");
 }
 
-// ============================================================================
-// Backward-compatible free-function wrappers
-// ============================================================================
-
-void nes_apu_render_debug_content(nes6502_t* cpu) {
-    auto* apu = nes6502_get_apu(cpu);
-    if (apu) apu->render_debug_content();
-}
-
-void nes_apu_render_settings_content(nes6502_t* cpu) {
-    auto* apu = nes6502_get_apu(cpu);
-    if (apu) apu->render_settings_content();
-}
-
-void nes_apu_render_layout_content(nes6502_t* cpu) {
-    auto* apu = nes6502_get_apu(cpu);
-    if (apu) apu->render_layout_content();
-}
-
 #else // !IMGUI_VERSION
 
 void nes6502_apu::APU::render_debug_content() {}
 void nes6502_apu::APU::render_settings_content() {}
 void nes6502_apu::APU::render_layout_content() {}
-
-void nes_apu_render_debug_content(nes6502_t*) {}
-void nes_apu_render_settings_content(nes6502_t*) {}
-void nes_apu_render_layout_content(nes6502_t*) {}
 
 #endif

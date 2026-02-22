@@ -229,12 +229,6 @@ bus_state_t mos6526_tick_phi1(void* chip, bus_state_t bus_state);
 // Legacy single-phase tick (calls early+late in sequence, for non-C64 systems)
 bus_state_t mos6526_tick(void* chip, bus_state_t bus_state);
 
-#ifdef IMGUI_VERSION
-// Legacy GUI wrappers (C-linkage, for c64.cpp test path)
-void mos6526_render_debug_window(void* chip, bool* show_window);
-void mos6526_render_settings_window(void* chip, bool* show_window);
-#endif
-
 // Typed lifecycle functions
 mos6526_t* mos6526_create();
 void mos6526_destroy(mos6526_t* cia);

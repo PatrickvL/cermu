@@ -151,11 +151,6 @@ static ChipLayout& get_cia_layout() {
     return layout;
 }
 
-// Legacy C-linkage wrapper
-extern "C" void mos6526_render_debug_content(void* chip) {
-    if (chip) static_cast<mos6526_t*>(chip)->render_debug_content();
-}
-
 void mos6526_s::render_debug_content() {
     
 #ifdef IMGUI_VERSION
@@ -258,11 +253,6 @@ void mos6526_s::render_debug_content() {
 // ============================================================================
 // MOS6526 CIA GUI SETTINGS
 // ============================================================================
-
-// Legacy C-linkage wrapper
-extern "C" void mos6526_render_settings_content(void* chip) {
-    if (chip) static_cast<mos6526_t*>(chip)->render_settings_content();
-}
 
 void mos6526_s::render_settings_content() {
     
@@ -388,11 +378,6 @@ static const char* mos6526_get_cia_name(mos6526_t* cia) {
 // ============================================================================
 // MOS6526 CIA LAYOUT WINDOW (standalone pinout diagram)
 // ============================================================================
-
-// Legacy C-linkage wrapper
-extern "C" void mos6526_render_layout_content(void* chip) {
-    if (chip) static_cast<mos6526_t*>(chip)->render_layout_content();
-}
 
 void mos6526_s::render_layout_content() {
 
