@@ -7,7 +7,7 @@
 
 // Include GUI implementation
 #ifdef IMGUI_VERSION
-#include "pla_gui.h"
+// PlaChip GUI moved to src/systems/c64/c64_pla_chip.h
 #endif
 
 // ============================================================================

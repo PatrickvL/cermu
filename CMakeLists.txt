@@ -361,7 +361,7 @@ if(BUILD_GUI)
         src/chip/video/vic_ii/vicii_gui.cpp
         src/chip/video/vic/vic_gui.cpp
         src/chip/video/ted/ted7360_gui.cpp
-        src/chip/logic/pla_gui.cpp
+        src/systems/c64/c64_pla_chip.cpp
         src/chip/cpu/fam65xx/fam65xx_gui.cpp
         src/chip/io/mos6526_gui.cpp
         src/chip/io/mos6522_gui.cpp
