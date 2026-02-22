@@ -349,7 +349,7 @@ bool Commodore264System<V>::initialize() {
         ted_desc.keyboard_user_data = this;
         ted_desc.mem_read = ted_mem_read;
         ted_desc.mem_read_user_data = this;
-        ted_ = ted7360_create(&ted_desc);
+        ted_ = new ted7360_t(ted_desc);
         if (ted_) {
             printf("%s: Created TED 7360 (%s)\n", Traits::name, is_pal_region ? "PAL" : "NTSC");
         } else {
@@ -387,7 +387,7 @@ void Commodore264System<V>::shutdown() {
     
     // Destroy TED 7360
     if (ted_) {
-        ted7360_destroy(ted_);
+        delete ted_;
         ted_ = nullptr;
     }
     
@@ -423,7 +423,7 @@ void Commodore264System<V>::reset() {
     
     // Reset TED 7360
     if (ted_) {
-        ted7360_reset(ted_);
+        ted_->reset();
     }
     
     // Reset bus state
@@ -451,7 +451,7 @@ void Commodore264System<V>::tick() {
     
     // PHASE 1: TED PHI1
     if (ted_) {
-        s = ted7360_tick_phi1(ted_, s);
+        s = ted_->tick_phi1(s);
     }
     
     // HARDWARE WIRING: BA -> RDY
@@ -471,7 +471,7 @@ void Commodore264System<V>::tick() {
     
     // PHASE 3.1: TED PHI2 delivery
     if (ted_) {
-        ted7360_tick_phi2(ted_, s);
+        ted_->tick_phi2(s);
     }
     
     // PHASE 4: CPU PHI1
@@ -561,7 +561,7 @@ void Commodore264System<V>::set_framebuffer(uint32_t* buffer, int width, int hei
     
     // Set TED framebuffer for pixel output
     if (ted_) {
-        ted7360_set_framebuffer(ted_, buffer, width, height);
+        ted_->set_framebuffer(buffer, width, height);
     }
 }
 
@@ -726,7 +726,7 @@ uint8_t Commodore264System<V>::cpu_read(uint32_t addr) {
         if (ted_) {
             bus_state_t ted_state = 0;
             BUS_SET_ADDR(ted_state, addr16);
-            ted_state = ted7360_registers_read(ted_, ted_state);
+            ted_state = ted_->registers_read(ted_state);
             return BUS_GET_DATA(ted_state);
         }
         return 0xFF;
@@ -777,7 +777,7 @@ void Commodore264System<V>::cpu_write(uint32_t addr, uint8_t data) {
             bus_state_t ted_state = 0;
             BUS_SET_ADDR(ted_state, addr16);
             BUS_SET_DATA(ted_state, data);
-            ted7360_registers_write(ted_, ted_state);
+            ted_->registers_write(ted_state);
         }
         return;
     }
