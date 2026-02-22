@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../../core/emulated_system.h"
-#include "../../core/system.h"
 #include "../../core/text_terminal.h"
 #include "../../chip/cpu/fam65xx/mos6502.h"
 #include "../../chip/io/pia6820.h"

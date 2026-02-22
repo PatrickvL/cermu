@@ -4,7 +4,6 @@
 #include <cstddef>
 //#include <memory>
 //#include "../../core/cermu.h"
-#include "../../core/system.h"
 #include "../../chip/memory/ram.h"
 #include "../../chip/memory/rom.h"
 #include "../../chip/memory/mos2114.h"
@@ -17,12 +16,8 @@
 #include "c64_bus.h"  // Include the bus header to get c64_bus_t definition
 #include "c64_config.h"
 
-// Forward declarations
-class System8Bit;
-
 // Modern C++ C64 system data structure (holds chip pointers and bus)
 struct C64SystemData {
-    system_8bit_t system;       // Legacy system wrapper
     c64_bus_t bus;
     void* mos6510;              // MOS6510 instance (C++ core)
     ram_t* ram;                 // RAM memory $0000-$FFFF (64KB)
