@@ -66,6 +66,21 @@ typedef struct mos6522_s : public ChipBase {
     void render_debug_content()    override;
     void render_settings_content() override;
     void render_layout_content()   override;
+
+    // Lifecycle
+    void reset();
+    void bus_attach(void* bus);
+
+    // Memory-mapped register access
+    bus_state_t registers_read(bus_state_t bus_state);
+    bus_state_t registers_write(bus_state_t bus_state);
+
+    // Tick (timer processing + interrupt assertion)
+    bus_state_t tick(bus_state_t bus_state);
+
+    // Port read callback registration (used for keyboard matrix scanning, joystick, etc.)
+    void set_port_a_read_callback(uint8_t (*callback)(void*, uint8_t), void* context);
+    void set_port_b_read_callback(uint8_t (*callback)(void*, uint8_t), void* context);
 } mos6522_t;
 
 // Register addresses
@@ -120,14 +135,3 @@ typedef struct mos6522_s : public ChipBase {
 #define MOS6522_PCR_CB1_IN   0x01
 
 // Function declarations
-mos6522_t* mos6522_create();
-void mos6522_destroy(mos6522_t* via);
-void mos6522_reset(mos6522_t* via);
-void mos6522_bus_attach(void* chip, void* bus);
-bus_state_t mos6522_tick(void* chip, bus_state_t bus_state);
-bus_state_t mos6522_registers_read(void* chip, bus_state_t bus_state);
-bus_state_t mos6522_registers_write(void* chip, bus_state_t bus_state);
-
-// Port read callback registration (used for keyboard matrix scanning, joystick, etc.)
-void mos6522_set_port_a_read_callback(mos6522_t* via, uint8_t (*callback)(void*, uint8_t), void* context);
-void mos6522_set_port_b_read_callback(mos6522_t* via, uint8_t (*callback)(void*, uint8_t), void* context);
