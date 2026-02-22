@@ -1,6 +1,5 @@
 #include "vicii_common.h"
 #include "../../memory/mos2114.h"
-#include "../../../systems/c64/c64_bus.h"
 #include "../../../core/system_lines.h"
 #include <cstdint>
 #include <stdlib.h>
@@ -1661,7 +1660,6 @@ static inline bus_state_t vicii_update_ba_aec_signals(vicii_t* vicii, bus_state_
 
 // PHI1 tick function — processes one VIC-II cycle
 bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
-    c64_bus_t* c64_bus = (c64_bus_t*)vicii->bus.bus;
 
     // STEP 1: Get current cycle entry and parameter
     const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[vicii->timing.x_cycle];
@@ -1813,8 +1811,8 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
     // Apply CIA2 originating vic-ii bank base (set in vicii_memory_bank_change)
     address |= vicii->memory.bank_base;
 
-    // Perform PHI1 memory read (common path for all PHI1 accesses)
-    bus_state = c64_bus_vic_read(c64_bus, bus_state, address);
+    // Perform PHI1 memory read via system-provided callback
+    bus_state = vicii->bus.mem_read(vicii->bus.mem_read_ctx, bus_state, address);
 
     // Post-PHI1 read: Handle sprite pointer/data storage immediately
     // P PHI1 reads the sprite pointer, S PHI1 reads data byte 1
@@ -1937,7 +1935,7 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
     // - When IRQ flag is cleared: set bit 33 (release IRQ)
     //
     // CORRECT BEHAVIOR: VIC-II should ONLY assert (clear bit) when it has an interrupt.
-    // The pull-up resistor model (C64_BUS_DEFAULT_STATE in c64_bus.h:32) already sets
+    // The pull-up resistor model (system bus default state) already sets
     // IRQ high at the start of each cycle. If we set it here, we would overwrite any IRQ
     // assertion by CIA or other chips. VIC-II should ONLY assert, never explicitly release.
     if (vicii->registers.data[VICII_IR] & VICII_IR_IRQ) {

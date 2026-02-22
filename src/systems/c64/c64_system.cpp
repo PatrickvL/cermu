@@ -368,6 +368,10 @@ bool C64System::initialize() {
     // VIC-II bank selection via bank_base offset; no bus-level callback needed
     c64_->vicii->bus.bus = &c64_->bus;
     c64_->vicii->bus.bank_change = nullptr;
+    c64_->vicii->bus.mem_read = [](void* ctx, bus_state_t bus, uint16_t addr) -> bus_state_t {
+        return c64_bus_vic_read(static_cast<c64_bus_t*>(ctx), bus, addr);
+    };
+    c64_->vicii->bus.mem_read_ctx = &c64_->bus;
 
     c64_->cia1 = mos6526_create();
     c64_->cia2 = mos6526_create();
