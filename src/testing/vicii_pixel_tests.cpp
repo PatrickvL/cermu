@@ -1812,15 +1812,15 @@ static void test_raster_bar_cpu(C64System* c64, EmulatedSystem* sys, check_ctx_t
     a.sei();
     a.lda_imm(0x35);                  // All-RAM + I/O banking
     a.sta_zp(0x01);
-    a.store_imm(asm6510::VIC_D011, 0x0B);  // DEN=0 (no display, no bad lines)
-    a.store_imm(asm6510::VIC_D020, 0x00);  // Border = BLACK
+    a.store_imm(vicii_regs::ADDR_D011, 0x0B);  // DEN=0 (no display, no bad lines)
+    a.store_imm(vicii_regs::ADDR_D020, 0x00);  // Border = BLACK
 
     auto loop = a.here();
     a.wait_raster(200);               // Frame sync: wait past visible area
     a.wait_raster(100);               // Wait for line 100
-    a.store_imm(asm6510::VIC_D020, 0x02); // Border = RED
+    a.store_imm(vicii_regs::ADDR_D020, 0x02); // Border = RED
     a.wait_raster(120);               // Wait for line 120
-    a.store_imm(asm6510::VIC_D020, 0x00); // Border = BLACK
+    a.store_imm(vicii_regs::ADDR_D020, 0x00); // Border = BLACK
     a.jmp(loop);
 
     printf("    Injecting %zu bytes of 6510 raster-bar code at $8000\n", a.pos);
@@ -1947,10 +1947,10 @@ static void test_fli_bug_width(C64System* c64, EmulatedSystem* sys, check_ctx_t&
     a.sei();
     a.lda_imm(0x35);
     a.sta_zp(0x01);                            // All-RAM + I/O
-    a.store_imm(asm6510::VIC_D018, 0x1C);      // Default: screen A
+    a.store_imm(vicii_regs::ADDR_D018, 0x1C);      // Default: screen A
 
     auto main_loop = a.here();
-    a.lda_abs(asm6510::VIC_D012);
+    a.lda_abs(vicii_regs::ADDR_D012);
     a.and_imm(0x07);
     a.cmp_imm(0x02);
     auto fix_setB = a.beq_fwd();               // BEQ → set_B (patched below)
@@ -1960,12 +1960,12 @@ static void test_fli_bug_width(C64System* c64, EmulatedSystem* sys, check_ctx_t&
 
     // set_B: switch to screen B ($0800)
     a.fixup(fix_setB);
-    a.store_imm(asm6510::VIC_D018, 0x2C);      // Screen B + charset $3000
+    a.store_imm(vicii_regs::ADDR_D018, 0x2C);      // Screen B + charset $3000
     a.jmp(main_loop);
 
     // set_A: restore screen A ($0400)
     a.fixup(fix_setA);
-    a.store_imm(asm6510::VIC_D018, 0x1C);      // Screen A + charset $3000
+    a.store_imm(vicii_regs::ADDR_D018, 0x1C);      // Screen A + charset $3000
     a.jmp(main_loop);
 
     printf("    Injecting %zu bytes of D018 switch code at $8000\n", a.pos);
@@ -2149,8 +2149,8 @@ static void test_fli_diagnostic(C64System* c64, EmulatedSystem* sys, check_ctx_t
 
         auto frame_loop = a.here();
         // Pre-set: YSCROLL=4 → raster 100 natural bad line; D018=bank for line 0
-        a.store_imm(asm6510::VIC_D011, 0x1C);
-        a.store_imm(asm6510::VIC_D018, d018_for_bank[banks[0]]);
+        a.store_imm(vicii_regs::ADDR_D011, 0x1C);
+        a.store_imm(vicii_regs::ADDR_D018, d018_for_bank[banks[0]]);
 
         a.wait_raster(250);
         // Sync directly to raster 100. The natural bad line freezes the CPU.
@@ -2163,14 +2163,14 @@ static void test_fli_diagnostic(C64System* c64, EmulatedSystem* sys, check_ctx_t
         auto fli_loop = a.here();
         // D018 first (before triggering bad line), then D011
         a.lda_abs_x(D018_TABLE);
-        a.sta_abs(asm6510::VIC_D018);
+        a.sta_abs(vicii_regs::ADDR_D018);
         a.lda_abs_x(D011_TABLE);
-        a.sta_abs(asm6510::VIC_D011);
+        a.sta_abs(vicii_regs::ADDR_D011);
         a.dex();
         a.bpl(fli_loop);
 
-        a.store_imm(asm6510::VIC_D011, 0x1C);
-        a.store_imm(asm6510::VIC_D018, d018_for_bank[banks[0]]);
+        a.store_imm(vicii_regs::ADDR_D011, 0x1C);
+        a.store_imm(vicii_regs::ADDR_D018, d018_for_bank[banks[0]]);
         a.jmp(frame_loop);
 
         printf("    Injecting %zu bytes at $8000\n", a.pos);

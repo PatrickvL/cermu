@@ -444,11 +444,19 @@ void SystemGUI::render_menu_bar() {
 
                     // Each chip with content opens as a submenu on hover,
                     // showing combined layout+debug+settings inline.
-                    // Set minimum size so chip layout + debug content has room.
-                    ImGui::SetNextWindowSizeConstraints(
-                        ImVec2(600.0f, 200.0f),   // min
-                        ImVec2(FLT_MAX, FLT_MAX)  // max (unconstrained)
-                    );
+                    // Lock popup size after first render so it doesn't grow
+                    // as register values change width over time.
+                    if (sc.submenu_locked_w > 0.0f) {
+                        // Already measured — force fixed size
+                        ImGui::SetNextWindowSizeConstraints(
+                            ImVec2(sc.submenu_locked_w, sc.submenu_locked_h),
+                            ImVec2(sc.submenu_locked_w, sc.submenu_locked_h));
+                    } else {
+                        // First open — auto-size with a minimum floor
+                        ImGui::SetNextWindowSizeConstraints(
+                            ImVec2(600.0f, 200.0f),
+                            ImVec2(FLT_MAX, FLT_MAX));
+                    }
                     if (ImGui::BeginMenu(sc.display_name)) {
                         // Pin button at top-right to detach into a standalone window
                         {
@@ -516,6 +524,16 @@ void SystemGUI::render_menu_bar() {
                             ImGui::Separator();
                             if (ImGui::CollapsingHeader("Settings")) {
                                 sc.chip->render_settings_content();
+                            }
+                        }
+
+                        // Lock the popup size after the first render so it
+                        // stays stable as emulation values change width.
+                        if (sc.submenu_locked_w <= 0.0f) {
+                            ImVec2 sz = ImGui::GetWindowSize();
+                            if (sz.x > 0.0f && sz.y > 0.0f) {
+                                sc.submenu_locked_w = sz.x;
+                                sc.submenu_locked_h = sz.y;
                             }
                         }
 

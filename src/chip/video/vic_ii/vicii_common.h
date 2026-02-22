@@ -63,6 +63,16 @@ namespace vicii_regs {
     // MxM and MxD storage is moved outside the 0..63 range
     constexpr uint8_t MXM_2 = 64; // Shadow register for MxM $d01e Sprite-sprite collision x
     constexpr uint8_t MXD_2 = 65; // Shadow register for MxD $d01f Sprite-data collision x
+
+    // Absolute memory-mapped I/O addresses (C64: $D000-based)
+    constexpr uint16_t ADDR_D011 = 0xD011;  // Control register 1
+    constexpr uint16_t ADDR_D012 = 0xD012;  // Raster counter
+    constexpr uint16_t ADDR_D016 = 0xD016;  // Control register 2
+    constexpr uint16_t ADDR_D018 = 0xD018;  // Memory pointers
+    constexpr uint16_t ADDR_D019 = 0xD019;  // Interrupt register
+    constexpr uint16_t ADDR_D01A = 0xD01A;  // Interrupt enabled
+    constexpr uint16_t ADDR_D020 = 0xD020;  // Border color
+    constexpr uint16_t ADDR_D021 = 0xD021;  // Background color 0
 }
 
 // Legacy macro compatibility - can be removed once all code is updated

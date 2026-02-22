@@ -247,6 +247,12 @@ struct SystemChip {
 
     // GUI toggle state (managed by the GUI layer)
     uint8_t show_detached = 0;   // Detached combined window (layout+debug+settings)
+
+    // Submenu popup size lock — once the popup has been rendered, its size is
+    // captured and reused as both min and max constraint so the popup cannot
+    // grow (or shrink) on subsequent frames.  0 = not yet measured.
+    float submenu_locked_w = 0.0f;
+    float submenu_locked_h = 0.0f;
 };
 
 /**
