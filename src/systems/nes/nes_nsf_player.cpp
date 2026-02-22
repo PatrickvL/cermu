@@ -341,7 +341,13 @@ void nes_nsf_switch_subtune(
     if (!cpu || !ppu || !bus || !nsf_cart || !nsf) return;
 
     // ---- Silence APU: write $00 to $4015 to disable all channels ----
-    bus->cpu_write(0x4015, 0x00);
+    {
+        bus_state_t s = 0;
+        BUS_SET_ADDR(s, 0x4015);
+        BUS_SET_DATA(s, 0x00);
+        s |= BUS_MASK_RW;  // write
+        bus->mem_tick(s);
+    }
 
     // ---- Reload NSF data (in case tune self-modified) ----
     nsf_cart->reload_nsf_data(payload, payload_size);

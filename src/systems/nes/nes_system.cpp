@@ -801,62 +801,70 @@ void Cartridge::reset() {
 // MEMORY BUS IMPLEMENTATION
 // ============================================================================
 
-uint8_t MemoryBus::cpu_read(uint16_t addr, bool read_only) {
-    uint8_t data = 0x00;
+bus_state_t MemoryBus::mem_tick(bus_state_t bus) {
+    uint16_t addr = BUS_GET_ADDR(bus);
     
-    if (addr >= 0x0000 && addr <= 0x1FFF) {
-        // CPU RAM (with mirroring)
-        data = cpu_ram[addr & 0x07FF];
-    } else if (addr >= 0x2000 && addr <= 0x3FFF) {
-        // PPU registers (with mirroring)
-        if (ppu) {
-            data = ppu->cpu_read(addr & 0x2007, read_only);
+    if (bus & BUS_MASK_RW) {
+        // ---- WRITE ----
+        uint8_t data = BUS_GET_DATA(bus);
+        
+        if (addr <= 0x1FFF) {
+            // CPU RAM (with mirroring)
+            cpu_ram[addr & 0x07FF] = data;
+        } else if (addr <= 0x3FFF) {
+            // PPU registers (with mirroring)
+            if (ppu) {
+                ppu->cpu_write(addr & 0x2007, data);
+            }
+        } else if (addr <= 0x4017) {
+            // APU and I/O registers
+            if (addr == 0x4014) {
+                // OAM DMA
+                dma_page = data;
+                dma_addr = 0x00;
+                dma_transfer = true;
+            } else if (addr == 0x4016) {
+                controllers[0].write(data);
+                controllers[1].write(data);
+            }
+            // APU registers handled by NES6502 CPU
+        } else {
+            // Cartridge space ($4020-$FFFF)
+            if (cartridge) {
+                cartridge->cpu_write(addr, data);
+            }
         }
-    } else if (addr >= 0x4000 && addr <= 0x4017) {
-        // APU and I/O registers
-        if (addr == 0x4016) {
-            data = controllers[0].read();
-        } else if (addr == 0x4017) {
-            data = controllers[1].read();
+    } else {
+        // ---- READ ----
+        uint8_t data = 0x00;
+        
+        if (addr <= 0x1FFF) {
+            // CPU RAM (with mirroring)
+            data = cpu_ram[addr & 0x07FF];
+        } else if (addr <= 0x3FFF) {
+            // PPU registers (with mirroring)
+            if (ppu) {
+                data = ppu->cpu_read(addr & 0x2007);
+            }
+        } else if (addr <= 0x4017) {
+            // APU and I/O registers
+            if (addr == 0x4016) {
+                data = controllers[0].read();
+            } else if (addr == 0x4017) {
+                data = controllers[1].read();
+            }
+            // APU registers handled by NES6502 CPU
+        } else {
+            // Cartridge space ($4020-$FFFF)
+            if (cartridge) {
+                cartridge->cpu_read(addr, data);
+            }
         }
-        // APU registers handled by NES6502 CPU
-    } else if (addr >= 0x4020 && addr <= 0xFFFF) {
-        // Cartridge space
-        if (cartridge) {
-            cartridge->cpu_read(addr, data);
-        }
+        
+        BUS_SET_DATA(bus, data);
     }
     
-    return data;
-}
-
-void MemoryBus::cpu_write(uint16_t addr, uint8_t data) {
-    if (addr >= 0x0000 && addr <= 0x1FFF) {
-        // CPU RAM (with mirroring)
-        cpu_ram[addr & 0x07FF] = data;
-    } else if (addr >= 0x2000 && addr <= 0x3FFF) {
-        // PPU registers (with mirroring)
-        if (ppu) {
-            ppu->cpu_write(addr & 0x2007, data);
-        }
-    } else if (addr >= 0x4000 && addr <= 0x4017) {
-        // APU and I/O registers
-        if (addr == 0x4014) {
-            // OAM DMA
-            dma_page = data;
-            dma_addr = 0x00;
-            dma_transfer = true;
-        } else if (addr == 0x4016) {
-            controllers[0].write(data);
-            controllers[1].write(data);
-        }
-        // APU registers handled by NES6502 CPU
-    } else if (addr >= 0x4020 && addr <= 0xFFFF) {
-        // Cartridge space
-        if (cartridge) {
-            cartridge->cpu_write(addr, data);
-        }
-    }
+    return bus;
 }
 
 void MemoryBus::reset() {
@@ -879,7 +887,12 @@ void MemoryBus::clock() {
             }
         } else {
             if (system_clock_counter % 2 == 0) {
-                dma_data = cpu_read((dma_page << 8) | dma_addr);
+                // DMA read — construct a read bus_state_t and service it
+                bus_state_t dma_bus = 0;
+                BUS_SET_ADDR(dma_bus, (dma_page << 8) | dma_addr);
+                // RW bit clear = read
+                dma_bus = mem_tick(dma_bus);
+                dma_data = BUS_GET_DATA(dma_bus);
             } else {
                 ppu->oam[dma_addr] = dma_data;
                 dma_addr++;
@@ -1035,6 +1048,7 @@ template<NintendoVariant V>
 NintendoSystem<V>::NintendoSystem()
     : EmulatedSystem()
     , cpu_(nullptr)
+    , pins_(0)
     , is_pal_(false)
     , system_ready_(false)
     , cycles_per_frame_(29829)
@@ -1194,8 +1208,9 @@ void NintendoSystem<V>::reset() {
     
     printf("%s: Resetting system\n", Traits::name);
     
-    bus_state_t pins = create_bus_state(0, 0, 1);
-    nes6502_reset(cpu_, pins);
+    pins_ = 0;
+    pins_ |= BUS_MASK_RW;  // Initial state: read
+    nes6502_reset(cpu_, pins_);
     
     if (ppu_) {
         ppu_->reset();
@@ -1614,28 +1629,16 @@ void NintendoSystem<V>::clock() {
         if (bus_->dma_transfer) {
             // CPU is stalled during DMA
         } else {
-            // Create bus state for CPU
-            bus_state_t pins = create_bus_state(0, 0, 1);
-            
             // Tick CPU (handles APU internally)
-            pins = nes6502_tick(cpu_, pins);
+            pins_ = nes6502_tick(cpu_, pins_);
             
-            // Handle CPU memory requests
-            uint16_t addr = BUS_GET_ADDR(pins);
-            bool is_write = pins & BUS_MASK_RW;
-            
-            if (is_write) {
-                uint8_t data = BUS_GET_DATA(pins);
-                bus_->cpu_write(addr, data);
-            } else {
-                uint8_t data = bus_->cpu_read(addr);
-                BUS_SET_DATA(pins, data);
-            }
+            // Service CPU memory request via bus
+            pins_ = bus_->mem_tick(pins_);
             
             // Handle NMI from PPU
             if (ppu_->get_nmi()) {
                 // Set NMI line low (NMI is active low)
-                pins &= ~BUS_MASK_NMI;
+                pins_ &= ~BUS_MASK_NMI;
             }
         }
         
@@ -1690,17 +1693,6 @@ template<NintendoVariant V>
 void NintendoSystem<V>::set_audio_sample_rate(uint32_t rate) {
     audio_sample_rate_ = rate;
     setup_audio_timing();
-}
-
-template<NintendoVariant V>
-bus_state_t NintendoSystem<V>::create_bus_state(uint16_t addr, uint8_t data, bool rw) {
-    bus_state_t state = 0;
-    BUS_SET_ADDR(state, addr);
-    BUS_SET_DATA(state, data);
-    if (rw) {
-        state |= BUS_MASK_RW;
-    }
-    return state;
 }
 
 template<NintendoVariant V>

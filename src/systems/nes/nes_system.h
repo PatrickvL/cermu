@@ -385,9 +385,8 @@ public:
     void connect_ppu(std::shared_ptr<PPU> p) { ppu = p; }
     void connect_cartridge(std::shared_ptr<Cartridge> c) { cartridge = c; }
     
-    // CPU memory interface
-    uint8_t cpu_read(uint16_t addr, bool read_only = false);
-    void cpu_write(uint16_t addr, uint8_t data);
+    // CPU memory interface — unified bus_state_t
+    bus_state_t mem_tick(bus_state_t bus);
     
     // System reset
     void reset();
@@ -433,6 +432,7 @@ class NintendoSystem : public EmulatedSystem {
 private:
     // Core components
     nes6502_t* cpu_;
+    bus_state_t pins_;  // Persistent CPU bus state across ticks
     std::shared_ptr<PPU> ppu_;
     std::shared_ptr<Cartridge> cartridge_;
     std::shared_ptr<MemoryBus> bus_;
@@ -526,7 +526,6 @@ private:
     /// Register all NES chips into registered_chips_ for the Hardware menu.
     void register_nes_chips();
     void clock();
-    bus_state_t create_bus_state(uint16_t addr, uint8_t data, bool rw);
 
     // =========================================================================
     // NSF PLAYER STATE
