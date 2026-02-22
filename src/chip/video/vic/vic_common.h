@@ -260,6 +260,22 @@ typedef struct vic_base_s : public ChipBase {
     // Audio generation state
     vic_audio_state_t audio = {};
 
+    // --- Public methods ---
+    virtual void reset();
+    bus_state_t tick(bus_state_t bus_state);
+    void set_framebuffer(uint32_t* framebuffer, int width, int height);
+    void set_memory_callbacks(vic_mem_read_fn_t mem_read, void* mem_user_data,
+                              vic_mem_read_fn_t color_read, void* color_user_data);
+    virtual bus_state_t registers_read(bus_state_t bus_state);
+    virtual bus_state_t registers_write(bus_state_t bus_state);
+    static uint32_t* get_default_palette();
+
+    // Audio API
+    void audio_reset(uint32_t chip_clock_hz, uint32_t sample_rate_hz);
+    void audio_tick();       // Called once per chip cycle from tick
+    uint32_t audio_available() const;
+    uint32_t audio_read(uint8_t* dest, uint32_t max_samples);
+
     // --- ChipBase interface ---
     ChipIdentity chip_identity() const override;
     bool has_debug_content()    const override;
@@ -268,21 +284,8 @@ typedef struct vic_base_s : public ChipBase {
     void render_debug_content()    override;
     void render_settings_content() override;
     void render_layout_content()   override;
+
+private:
+    void emit_pixel(uint8_t color_index);
+    void flush_pixel_line(int raster_line);
 } vic_base_t;
-
-// Function prototypes
-void vic_system_reset(vic_base_t* vic);
-bus_state_t vic_tick(void* chip, bus_state_t bus_state);
-void vic_bus_attach(void* chip, void* bus);
-void vic_set_framebuffer(vic_base_t* vic, uint32_t* framebuffer, int width, int height);
-void vic_set_memory_callbacks(vic_base_t* vic, vic_mem_read_fn_t mem_read, void* mem_user_data,
-                              vic_mem_read_fn_t color_read, void* color_user_data);
-bus_state_t vic_registers_read(void* context, bus_state_t bus_state);
-bus_state_t vic_registers_write(void* context, bus_state_t bus_state);
-uint32_t* vic_get_default_palette(void);
-
-// Audio API
-void vic_audio_reset(vic_base_t* vic, uint32_t chip_clock_hz, uint32_t sample_rate_hz);
-void vic_audio_tick(vic_base_t* vic);       // Called once per chip cycle from vic_tick
-uint32_t vic_audio_available(const vic_base_t* vic);
-uint32_t vic_audio_read(vic_base_t* vic, uint8_t* dest, uint32_t max_samples);

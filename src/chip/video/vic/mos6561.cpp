@@ -1,8 +1,5 @@
 #include "mos6561.h"
-#include "vic_common.h"
 #include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
 
 // MOS6561 chip configuration — PAL variant
 // The MOS 6561 is the PAL version of the VIC-I chip used in PAL VIC-20s.
@@ -18,87 +15,61 @@ static const vic_chip_config_t vic_config_pal = {
     .is_pal = true
 };
 
-mos6561_t* mos6561_create() {
-    mos6561_t* vic = new mos6561_t();
-
-    vic->is_pal = true;
-    vic->clock_frequency = vic_config_pal.clock_frequency;
-    vic->config = &vic_config_pal;
+void mos6561_s::init() {
+    is_pal = true;
+    clock_frequency = vic_config_pal.clock_frequency;
+    config = &vic_config_pal;
 
     // Initialize registers
-    memset(vic->registers, 0, sizeof(vic->registers));
-    memset(vic->color_ram, 0, sizeof(vic->color_ram));
+    memset(registers, 0, sizeof(registers));
+    memset(color_ram, 0, sizeof(color_ram));
 
     // Default timing for PAL
-    vic->cycles_per_line = VIC_PAL_CYCLES_PER_LINE;
-    vic->total_lines = VIC_PAL_TOTAL_LINES;
+    cycles_per_line = VIC_PAL_CYCLES_PER_LINE;
+    total_lines = VIC_PAL_TOTAL_LINES;
 
     // Enable enhanced features
-    vic->extended_color_mode = true;
-    vic->extended_colors[0] = 0x00; // Black
-    vic->extended_colors[1] = 0xFF; // White
-    vic->extended_colors[2] = 0x88; // Gray 1
-    vic->extended_colors[3] = 0xAA; // Gray 2
+    extended_color_mode = true;
+    extended_colors[0] = 0x00; // Black
+    extended_colors[1] = 0xFF; // White
+    extended_colors[2] = 0x88; // Gray 1
+    extended_colors[3] = 0xAA; // Gray 2
 
     // Reset video generation state
-    vic_system_reset(vic);
+    reset();
 
     // Initialise audio with PAL clock and default sample rate
-    vic_audio_reset(vic, vic_config_pal.clock_frequency, 22050);
-
-    return vic;
+    audio_reset(vic_config_pal.clock_frequency, 22050);
 }
 
-void mos6561_destroy(mos6561_t* vic) {
-    if (!vic) return;
-    delete vic;
-}
-
-void mos6561_bus_attach(void* chip, void* bus) {
-    vic_bus_attach(chip, bus);
-}
-
-void mos6561_set_framebuffer(mos6561_t* vic, uint32_t* framebuffer, int width, int height) {
-    vic_set_framebuffer(vic, framebuffer, width, height);
-}
-
-void mos6561_reset(mos6561_t* vic) {
-    vic_system_reset(vic);
+void mos6561_s::reset() {
+    vic_base_s::reset();
 
     // Reset extended features
-    vic->extended_color_mode = true;
+    extended_color_mode = true;
 }
 
 // Enhanced register access functions
-bus_state_t mos6561_registers_read(void* context, bus_state_t bus_state) {
-    mos6561_t* vic = (mos6561_t*)context;
-    if (!vic) return bus_state;
-    uint8_t reg = BUS_GET_ADDR(bus_state) & 0x0F;
+bus_state_t mos6561_s::registers_read(bus_state_t bus_state) {
+    uint8_t r = BUS_GET_ADDR(bus_state) & 0x0F;
 
     // Handle extended color registers (if implemented)
-    if (vic->extended_color_mode && reg >= 12 && reg <= 15) {
-        BUS_SET_DATA(bus_state, vic->extended_colors[reg - 12]);
+    if (extended_color_mode && r >= 12 && r <= 15) {
+        BUS_SET_DATA(bus_state, extended_colors[r - 12]);
         return bus_state;
     }
 
-    return vic_registers_read(context, bus_state);
+    return vic_base_s::registers_read(bus_state);
 }
 
-bus_state_t mos6561_registers_write(void* context, bus_state_t bus_state) {
-    mos6561_t* vic = (mos6561_t*)context;
-    if (!vic) return bus_state;
-    uint8_t reg = BUS_GET_ADDR(bus_state) & 0x0F;
+bus_state_t mos6561_s::registers_write(bus_state_t bus_state) {
+    uint8_t r = BUS_GET_ADDR(bus_state) & 0x0F;
 
     // Handle extended color registers
-    if (vic->extended_color_mode && reg >= 12 && reg <= 15) {
-        vic->extended_colors[reg - 12] = BUS_GET_DATA(bus_state);
+    if (extended_color_mode && r >= 12 && r <= 15) {
+        extended_colors[r - 12] = BUS_GET_DATA(bus_state);
         return bus_state;
     }
 
-    return vic_registers_write(context, bus_state);
-}
-
-// Main tick function
-bus_state_t mos6561_tick(void* chip, bus_state_t bus_state) {
-    return vic_tick(chip, bus_state);
+    return vic_base_s::registers_write(bus_state);
 }
