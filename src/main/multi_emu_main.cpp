@@ -158,10 +158,8 @@ int main(int argc, char** argv) {
     // VIC-II DUMP MODE — normal boot + framebuffer pixel dump
     // =========================================================================
     if (vicii_dump_mode && system) {
-        C64System* c64_sys = dynamic_cast<C64System*>(system.get());
-        if (!c64_sys) { printf("ERROR: --vicii-dump requires C64\n"); return 1; }
-        c64_t* c64 = c64_sys->get_system_data();
-        if (!c64) { printf("ERROR: C64 not initialized\n"); return 1; }
+        C64System* c64 = dynamic_cast<C64System*>(system.get());
+        if (!c64) { printf("ERROR: --vicii-dump requires C64\n"); return 1; }
 
         // Allocate headless framebuffer (no GUI)
         int fb_width, fb_height;
@@ -346,9 +344,9 @@ int main(int argc, char** argv) {
         
         // Save final framebuffer as PNG for visual inspection
         printf("\nSaving framebuffer to /tmp/vicii_dump_f200.png...\n");
-        c64_set_framebuffer(c64, fb.get(), fb_width, fb_height);
-        // Use stbi_write_png via c64_save_screenshot  
-        c64_save_screenshot(c64, "/tmp/vicii_dump_f200.png");
+        c64->set_framebuffer(fb.get(), fb_width, fb_height);
+        // Use base class save_screenshot method
+        c64->save_screenshot("/tmp/vicii_dump_f200.png");
         printf("Done. Check /tmp/vicii_dump_f200.png\n");
         
         // Save full 64K RAM dump for offline analysis of decompressed demos
@@ -379,15 +377,9 @@ int main(int argc, char** argv) {
     // VIC-II TEST MODE — headless test suite
     // =========================================================================
     if (vicii_test_mode && system) {
-        // Get the C64 system to access the underlying c64_t
-        C64System* c64_sys = dynamic_cast<C64System*>(system.get());
-        if (!c64_sys) {
-            printf("ERROR: --vicii-test requires C64 system\n");
-            return 1;
-        }
-        c64_t* c64 = c64_sys->get_system_data();
+        C64System* c64 = dynamic_cast<C64System*>(system.get());
         if (!c64) {
-            printf("ERROR: C64 system not initialized\n");
+            printf("ERROR: --vicii-test requires C64 system\n");
             return 1;
         }
 

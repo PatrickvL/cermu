@@ -15,7 +15,7 @@
 // This catches bugs where registers read back correctly but rendering is wrong.
 // =============================================================================
 
-#include "../systems/c64/c64.h"
+#include "../systems/c64/c64_system.h"
 #include "../core/emulated_system.h"
 #include <cstdint>
 
@@ -43,7 +43,7 @@ struct pixel_test_results_t {
 // screen/color/sprite data in RAM, runs frames, and checks framebuffer pixels.
 // ---------------------------------------------------------------------------
 pixel_test_results_t run_pixel_verification_tests(
-    c64_t* c64,
+    C64System* c64,
     EmulatedSystem* system,
     uint32_t* framebuffer,
     int fb_width,

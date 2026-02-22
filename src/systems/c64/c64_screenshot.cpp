@@ -6,9 +6,8 @@
 #include <algorithm>
 #include <unordered_set>
 
-// stb_image for PNG loading (test comparison only)
-#define STB_IMAGE_IMPLEMENTATION
-#include "../../../../external/stb_image.h"
+// stb_image for PNG loading (test comparison only — implementation in stb_impl.cpp)
+#include "../../external/stb_image.h"
 
 namespace c64_test {
 

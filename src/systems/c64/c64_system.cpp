@@ -56,12 +56,11 @@
  *
  * CYCLE COUNTING:
  * ===============
- * - c64_->total_cycles: Internal C64 cycle counter (updated by system_tick)
- * - total_cycles_: Base class cycle counter (synced once per frame in run_frame)
+ * - total_cycles_: Base class cycle counter (incremented by system_tick)
  *
  * FRAMEBUFFER MANAGEMENT:
  * =======================
- * - VIC-II owns the framebuffer: c64_->vicii->pixel.framebuffer
+ * - VIC-II owns the framebuffer: this->vicii->pixel.framebuffer
  * - get_framebuffer() returns pointer to VIC-II's buffer
  * - set_framebuffer() calls vicii_set_framebuffer() directly
  */
@@ -249,7 +248,7 @@ static SystemDescriptor c64_descriptor = {
 
 C64System::C64System()
     : CommodoreSystem()  // Call base class constructor
-    , c64_(nullptr)
+    
 {
     cycles_per_frame_ = 19705;  // PAL: 985248 Hz / 50 fps
     // Initialize C64-specific config with defaults
@@ -283,7 +282,7 @@ const SystemDescriptor& C64System::get_descriptor() const {
 
 // CIA2 Port A change callback — updates VIC-II bank select
 static void cia2_port_a_bank_callback(void* context, uint8_t port_a_value) {
-    c64_t* c64 = static_cast<c64_t*>(context);
+    C64System* c64 = static_cast<C64System*>(context);
     vicii_memory_bank_change(c64->vicii, port_a_value & 0x03);
 }
 
@@ -292,19 +291,18 @@ static void cia2_port_a_bank_callback(void* context, uint8_t port_a_value) {
 // for the mos6510 chip descriptor's bank_change field.
 extern "C" {
 static void cpu_banking_callback(void* context, uint8_t banking_state) {
-    c64_t* c64 = static_cast<c64_t*>(context);
+    C64System* c64 = static_cast<C64System*>(context);
     c64_bus_on_banking_change(&c64->bus, banking_state);
 }
 }
 
 
 bool C64System::initialize() {
-    if (c64_) {
+    if (initialized_) {
         return true;  // Already initialized
     }
 
-    // Point c64_ at the embedded struct (will be nulled on failure)
-    c64_ = &c64_data_;
+    initialized_ = true;
 
     // =========================================================================
     // System infrastructure
@@ -313,84 +311,84 @@ bool C64System::initialize() {
     // Cleanup helper for error paths — destroys keyboard + all created chips,
     // resets the pointer and zeroes the embedded struct for re-use.
     auto cleanup = [this]() {
-        if (c64_->keyboard) {
-            commodore_keyboard_destroy(c64_->keyboard);
-            c64_->keyboard = nullptr;
+        if (this->keyboard) {
+            commodore_keyboard_destroy(this->keyboard);
+            this->keyboard = nullptr;
         }
         // Destroy each chip individually using typed destroyers
-        rom_destroy(c64_->kernal);
-        delete c64_->cia2;
-        delete c64_->cia1;
-        delete c64_->colorram;
-        delete c64_->sid;
-        delete c64_->vicii;
-        rom_destroy(c64_->charrom);
-        rom_destroy(c64_->cartridge_romh);
-        rom_destroy(c64_->basic);
-        rom_destroy(c64_->cartridge_roml);
-        mos6510_destroy(static_cast<mos6510_t*>(c64_->mos6510));
-        ram_destroy(c64_->ram);
-        c64_ = nullptr;
-        c64_data_ = {};
+        rom_destroy(this->kernal);
+        delete this->cia2;
+        delete this->cia1;
+        delete this->colorram;
+        delete this->sid;
+        delete this->vicii;
+        rom_destroy(this->charrom);
+        rom_destroy(this->cartridge_romh);
+        rom_destroy(this->basic);
+        rom_destroy(this->cartridge_roml);
+        mos6510_destroy(static_cast<mos6510_t*>(this->mos6510));
+        ram_destroy(this->ram);
+        initialized_ = false;
+        // Chip pointers already nulled above
     };
 
     // Initialize bus as embedded struct (not heap-allocated)
-    c64_->bus.c64 = c64_;
+    this->bus.c64 = this;
 
     // Bus pull-up defaults and cartridge lines (no cartridge)
-    c64_->bus.default_state = C64_BUS_DEFAULT_STATE();
-    c64_->bus.state = c64_->bus.default_state;
-    c64_->bus.system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;
+    this->bus.default_state = C64_BUS_DEFAULT_STATE();
+    this->bus.state = this->bus.default_state;
+    this->bus.system_lines = SYS_MASK_EXROM | SYS_MASK_GAME;
 
     // =========================================================================
     // Create all chips
     // =========================================================================
-    if (!(c64_->ram = ram_create())) { cleanup(); return false; }
-    if (!(c64_->mos6510 = mos6510_create())) { cleanup(); return false; }
-    if (!(c64_->cartridge_roml = rom_create_with_size(8192))) { cleanup(); return false; }
-    if (!(c64_->basic = rom_create_with_size(8192))) { cleanup(); return false; }
-    if (!(c64_->cartridge_romh = rom_create_with_size(8192))) { cleanup(); return false; }
-    if (!(c64_->charrom = rom_create_with_size(4096))) { cleanup(); return false; }
-    if (!(c64_->vicii = (c64_config_.vicii_standard == VIC_PAL) ? mos6569_create() : mos6567_create())) { cleanup(); return false; }
-    c64_->sid = mos6581_create();
+    if (!(this->ram = ram_create())) { cleanup(); return false; }
+    if (!(this->mos6510 = mos6510_create())) { cleanup(); return false; }
+    if (!(this->cartridge_roml = rom_create_with_size(8192))) { cleanup(); return false; }
+    if (!(this->basic = rom_create_with_size(8192))) { cleanup(); return false; }
+    if (!(this->cartridge_romh = rom_create_with_size(8192))) { cleanup(); return false; }
+    if (!(this->charrom = rom_create_with_size(4096))) { cleanup(); return false; }
+    if (!(this->vicii = (c64_config_.vicii_standard == VIC_PAL) ? mos6569_create() : mos6567_create())) { cleanup(); return false; }
+    this->sid = mos6581_create();
 
     // Configure SID timing to match C64 CPU clock
     {
         bool is_pal = (c64_config_.vicii_standard == VIC_PAL);
         float cpu_clock = is_pal ? 985248.0f : 1022727.0f;
-        mos6581_set_cpu_clock(c64_->sid, cpu_clock);
-        mos6581_set_timing(c64_->sid, is_pal);
+        mos6581_set_cpu_clock(this->sid, cpu_clock);
+        mos6581_set_timing(this->sid, is_pal);
     }
 
-    c64_->colorram = new MOS2114();
-    c64_->vicii->colorram = c64_->colorram;
+    this->colorram = new MOS2114();
+    this->vicii->colorram = this->colorram;
 
     // VIC-II bank selection via bank_base offset; no bus-level callback needed
-    c64_->vicii->bus.bus = &c64_->bus;
-    c64_->vicii->bus.bank_change = nullptr;
-    c64_->vicii->bus.mem_read = [](void* ctx, bus_state_t bus, uint16_t addr) -> bus_state_t {
+    this->vicii->bus.bus = &this->bus;
+    this->vicii->bus.bank_change = nullptr;
+    this->vicii->bus.mem_read = [](void* ctx, bus_state_t bus, uint16_t addr) -> bus_state_t {
         return c64_bus_vic_read(static_cast<c64_bus_t*>(ctx), bus, addr);
     };
-    c64_->vicii->bus.mem_read_ctx = &c64_->bus;
+    this->vicii->bus.mem_read_ctx = &this->bus;
 
-    c64_->cia1 = mos6526_create();
-    c64_->cia2 = mos6526_create();
+    this->cia1 = mos6526_create();
+    this->cia2 = mos6526_create();
 
     // Create keyboard matrix
-    c64_->keyboard = commodore_keyboard_create(&c64_keyboard_config);
-    if (!c64_->keyboard) {
+    this->keyboard = commodore_keyboard_create(&c64_keyboard_config);
+    if (!this->keyboard) {
         printf("ERROR: Failed to create keyboard\n");
         cleanup();
         return false;
     }
-    commodore_keyboard_reset(c64_->keyboard);
+    commodore_keyboard_reset(this->keyboard);
     printf("C64: Keyboard matrix initialized (all keys released)\n");
 
-    if (!(c64_->kernal = rom_create_with_size(8192))) { cleanup(); return false; }
+    if (!(this->kernal = rom_create_with_size(8192))) { cleanup(); return false; }
 
     // No cartridge I/O by default
-    c64_->io1 = nullptr;
-    c64_->io2 = nullptr;
+    this->io1 = nullptr;
+    this->io2 = nullptr;
 
     // =========================================================================
     // PLA memory maps and bus initialization
@@ -399,25 +397,25 @@ bool C64System::initialize() {
 
     printf("VIC-II memory mapping for mode 0x07:\n");
     for (int bank = 0; bank < 16; bank++) {
-        uint8_t chip = c64_->bus.vicii_chip_per_bank[bank];
+        uint8_t chip = this->bus.vicii_chip_per_bank[bank];
         printf("  Bank %d (0x%04X-0x%04X): CHIP=%d (%s)\n",
                bank, bank * 0x1000, (bank + 1) * 0x1000 - 1,
                chip, c64_chips_to_title(chip));
     }
 
     // Attach bus and load ROMs from configured paths
-    c64_bus_system_attach(&c64_->bus, c64_);
+    c64_bus_system_attach(&this->bus, this);
     memory_init(&c64_config_);
-    c64_bus_init_unified_pointers(&c64_->bus, c64_, &c64_config_);
+    c64_bus_init_unified_pointers(&this->bus, this, &c64_config_);
 
     // =========================================================================
     // Wire callbacks and initialize CPU
     // =========================================================================
 
     // CIA2 Port A → VIC-II bank selection
-    c64_->cia2->port_a_change_callback = cia2_port_a_bank_callback;
-    c64_->cia2->port_a_callback_context = c64_;
-    cia2_port_a_bank_callback(c64_, c64_->cia2->port_a_value);  // Set initial bank
+    this->cia2->port_a_change_callback = cia2_port_a_bank_callback;
+    this->cia2->port_a_callback_context = this;
+    cia2_port_a_bank_callback(this, this->cia2->port_a_value);  // Set initial bank
 
     // CPU I/O port → PLA memory banking (per-instance, no global descriptor mutation)
     // (callback is set on the CPU instance, not on a shared descriptor)
@@ -426,17 +424,17 @@ bool C64System::initialize() {
     // installs joystick-aware versions that supersede the basic ones.
 
     // CIA2 interrupt line → NMI (CIA1 defaults to IRQ)
-    c64_->cia2->configured_interrupt_bit = BUS_NMI_BIT;
+    this->cia2->configured_interrupt_bit = BUS_NMI_BIT;
 
     // Initialize CPU and point it at the reset vector
     mos6510_desc_t cpu_desc = {};
-    mos6510_init(static_cast<mos6510_t*>(c64_->mos6510), &cpu_desc);
-    mos6510_set_bank_change(static_cast<mos6510_t*>(c64_->mos6510),
-                            cpu_banking_callback, c64_);
+    mos6510_init(static_cast<mos6510_t*>(this->mos6510), &cpu_desc);
+    mos6510_set_bank_change(static_cast<mos6510_t*>(this->mos6510),
+                            cpu_banking_callback, this);
 
-    uint16_t reset_vector = c64_read_kernal_reset_vector(&c64_->bus);
-    mos6510_set_pc(static_cast<mos6510_t*>(c64_->mos6510), reset_vector);
-    mos6510_set_ab(static_cast<mos6510_t*>(c64_->mos6510), reset_vector);
+    uint16_t reset_vector = c64_read_kernal_reset_vector(&this->bus);
+    mos6510_set_pc(static_cast<mos6510_t*>(this->mos6510), reset_vector);
+    mos6510_set_ab(static_cast<mos6510_t*>(this->mos6510), reset_vector);
     printf("C64: CPU reset vector $%04X loaded\n", reset_vector);
 
     // NOTE: VIC-II bus.bus is already wired above. SID bus_interface is unused.
@@ -452,15 +450,15 @@ bool C64System::initialize() {
     created_vicii_standard_ = c64_config_.vicii_standard;
 
     // Apply SID revision from configuration
-    if (c64_->sid) {
-        mos6581_set_revision(c64_->sid, pending_sid_revision_);
+    if (this->sid) {
+        mos6581_set_revision(this->sid, pending_sid_revision_);
         const char* rev_name = (pending_sid_revision_ == SID_REVISION_8580_R5) ? "MOS 8580" : "MOS 6581";
         printf("C64: SID revision initialized as %s\n", rev_name);
     }
 
     // Create the layered keyboard mapper for character-based input
-    if (c64_->keyboard) {
-        keyboard_mapper_.reset(create_c64_keyboard_mapper(c64_->keyboard));
+    if (this->keyboard) {
+        keyboard_mapper_.reset(create_c64_keyboard_mapper(this->keyboard));
     }
 
     // Set up connector ports and wire them to the C64 hardware
@@ -486,29 +484,29 @@ void C64System::shutdown() {
         format_load_result_free(&pending_load_.result);
         pending_load_.active = false;
     }
-    if (c64_) {
+    if (initialized_) {
         // Destroy keyboard
-        if (c64_->keyboard) {
-            commodore_keyboard_destroy(c64_->keyboard);
-            c64_->keyboard = nullptr;
+        if (this->keyboard) {
+            commodore_keyboard_destroy(this->keyboard);
+            this->keyboard = nullptr;
         }
         // Destroy all chips individually using typed destroyers
-        rom_destroy(c64_->kernal);
-        delete c64_->cia2;
-        delete c64_->cia1;
-        delete c64_->colorram;
-        delete c64_->sid;
-        delete c64_->vicii;
-        rom_destroy(c64_->charrom);
-        rom_destroy(c64_->cartridge_romh);
-        rom_destroy(c64_->basic);
-        rom_destroy(c64_->cartridge_roml);
-        mos6510_destroy(static_cast<mos6510_t*>(c64_->mos6510));
-        ram_destroy(c64_->ram);
+        rom_destroy(this->kernal);
+        delete this->cia2;
+        delete this->cia1;
+        delete this->colorram;
+        delete this->sid;
+        delete this->vicii;
+        rom_destroy(this->charrom);
+        rom_destroy(this->cartridge_romh);
+        rom_destroy(this->basic);
+        rom_destroy(this->cartridge_roml);
+        mos6510_destroy(static_cast<mos6510_t*>(this->mos6510));
+        ram_destroy(this->ram);
 
-        c64_ = nullptr;
+        initialized_ = false;
         // Zero the embedded struct for clean re-initialization
-        c64_data_ = {};
+        // Chip pointers already nulled above
     }
 }
 
@@ -521,50 +519,50 @@ void C64System::reset() {
     boot_completed_ = false;
     sid_player_active_ = false;
     active_sid_data_.clear();
-    if (c64_) {
+    if (initialized_) {
         printf("C64 System: Performing system-wide reset...\n");
 
         // Reset CIA chips first (they control interrupts and I/O)
-        if (c64_->cia1) mos6526_reset(c64_->cia1);
-        if (c64_->cia2) mos6526_reset(c64_->cia2);
+        if (this->cia1) mos6526_reset(this->cia1);
+        if (this->cia2) mos6526_reset(this->cia2);
 
         // Reset VIC-II to clear sprite pipeline state
-        if (c64_->vicii) vicii_reset(c64_->vicii);
+        if (this->vicii) vicii_reset(this->vicii);
 
         // Reset SID — clears all registers, envelopes, and the sample ring buffer
-        if (c64_->sid) mos6581_reset(c64_->sid);
+        if (this->sid) mos6581_reset(this->sid);
 
         // Reset CPU last (so it can read the reset vector after other chips are ready)
-        if (c64_->mos6510) {
+        if (this->mos6510) {
             mos6510_desc_t cpu_desc = {};
-            mos6510_init((mos6510_t*)c64_->mos6510, &cpu_desc);
-            mos6510_set_bank_change((mos6510_t*)c64_->mos6510,
-                                    cpu_banking_callback, c64_);
+            mos6510_init((mos6510_t*)this->mos6510, &cpu_desc);
+            mos6510_set_bank_change((mos6510_t*)this->mos6510,
+                                    cpu_banking_callback, this);
 
-            uint16_t reset_vector = c64_read_kernal_reset_vector(&c64_->bus);
-            mos6510_set_pc((mos6510_t*)c64_->mos6510, reset_vector);
-            mos6510_set_ab((mos6510_t*)c64_->mos6510, reset_vector);
+            uint16_t reset_vector = c64_read_kernal_reset_vector(&this->bus);
+            mos6510_set_pc((mos6510_t*)this->mos6510, reset_vector);
+            mos6510_set_ab((mos6510_t*)this->mos6510, reset_vector);
         }
 
         // Reset keyboard
-        if (c64_->keyboard) commodore_keyboard_reset(c64_->keyboard);
+        if (this->keyboard) commodore_keyboard_reset(this->keyboard);
 
         // Reset cycle counter
-        c64_->total_cycles = 0;
+        total_cycles_ = 0;
 
         // Clear the memory locations that is_basic_ready() checks, so stale
         // values from the previous session don't cause premature detection.
         // KERNAL boot will set these properly: RAMTAS clears zero page
         // (including $2D), $E453 copies the vector table ($0302/$0303),
         // and NEW sets VARTAB ($2D) to TXTTAB+2.
-        if (c64_->ram) {
-            c64_->ram->memory[0x0302] = 0;
-            c64_->ram->memory[0x0303] = 0;
-            c64_->ram->memory[0x002D] = 0;
+        if (this->ram) {
+            this->ram->memory[0x0302] = 0;
+            this->ram->memory[0x0303] = 0;
+            this->ram->memory[0x002D] = 0;
             // Clear the keyboard buffer count so is_basic_ready() doesn't
             // get stuck waiting for a stale non-zero $C6 left by a
             // previously running program.
-            c64_->ram->memory[0x00C6] = 0;
+            this->ram->memory[0x00C6] = 0;
         }
 
         printf("C64 System: Reset complete\n");
@@ -579,22 +577,20 @@ void C64System::reset() {
 // ============================================================================
 
 void C64System::system_tick() {
-    c64_t* c64 = c64_;
-
-    c64->total_cycles++;
-    c64_bus_t* bus = &(c64->bus);
+    total_cycles_++;
+    c64_bus_t* bus_ptr = &bus;
 
     // Start each cycle with pull-up resistors (default_state: IRQ=1, NMI=1, BA=1, AEC=1, RDY=1)
-    bus_state_t s = bus->default_state;
-    BUS_SET_ADDR(s, BUS_GET_ADDR(bus->state));
-    BUS_SET_DATA(s, BUS_GET_DATA(bus->state));
+    bus_state_t s = bus_ptr->default_state;
+    BUS_SET_ADDR(s, BUS_GET_ADDR(bus_ptr->state));
+    BUS_SET_DATA(s, BUS_GET_DATA(bus_ptr->state));
 
     // PHASE 1: VIC-II PHI1 — g-access read, pixel sequencing
-    s = vicii_tick_phi1(c64->vicii, s);
+    s = vicii_tick_phi1(vicii, s);
 
     // PHASE 1.5: CIA PHI2 — apply pending interrupt lines before CPU
-    s = mos6526_tick_phi2(c64->cia2, s);
-    s = mos6526_tick_phi2(c64->cia1, s);
+    s = mos6526_tick_phi2(cia2, s);
+    s = mos6526_tick_phi2(cia1, s);
 
     // BA→RDY wiring (direct bit manipulation to preserve IRQ/NMI from CIAs)
     if (BUS_GET_LINES(s) & BUS_MASK_BA)
@@ -603,36 +599,33 @@ void C64System::system_tick() {
         s &= ~BUS_BIT(BUS_RDY_BIT);
 
     // PHASE 2: CPU PHI2 — instruction execution
-    s = mos6510_tick_phi2(c64->mos6510, s);
+    s = mos6510_tick_phi2(mos6510, s);
 
     // PHASE 3: Memory service (AEC determines CPU vs VIC-II bus ownership)
-    s = c64_memory_tick(bus, s);
+    s = c64_memory_tick(bus_ptr, s);
 
     // PHASE 3.1: VIC-II PHI2 — c/p/s-access data delivery
-    vicii_tick_phi2(c64->vicii, s);
+    vicii_tick_phi2(vicii, s);
 
     // PHASE 3.5: CIA PHI1 — timer counting, TOD, interrupt generation
-    s = mos6526_tick_phi1(c64->cia2, s);
-    s = mos6526_tick_phi1(c64->cia1, s);
+    s = mos6526_tick_phi1(cia2, s);
+    s = mos6526_tick_phi1(cia1, s);
 
     // PHASE 4: CPU PHI1 — prepare next fetch
-    s = mos6510_tick_phi1(c64->mos6510, s);
+    s = mos6510_tick_phi1(mos6510, s);
 
     // Restore R/W line to read mode
     s |= BUS_BIT(BUS_RW_BIT);
 
     // PHASE 5: SID — sound generation
-    s = mos6581_tick(c64->sid, s);
+    s = mos6581_tick(sid, s);
 
-    bus->state = s;
+    bus_ptr->state = s;
 }
 
 void C64System::tick() {
-    if (c64_) {
+    if (initialized_) {
         system_tick();
-
-        // CRITICAL: Sync base class cycle counter with C64's internal counter
-        total_cycles_ = c64_->total_cycles;
 
         // Check if a deferred file load is waiting for BASIC to reach READY
         if (pending_load_.active && is_basic_ready()) {
@@ -644,7 +637,7 @@ void C64System::tick() {
 void C64System::run_frame() {
     uint32_t adjusted_cycles = static_cast<uint32_t>(cycles_per_frame_ * speed_multiplier_);
 
-    if (c64_) {
+    if (initialized_) {
         // Update per-frame state for peripheral devices before cycle loop.
         // Lightpen: pass display rect so it can convert SDL mouse → VIC-II coords.
         update_lightpen_display_rect();
@@ -652,9 +645,6 @@ void C64System::run_frame() {
         for (uint32_t i = 0; i < adjusted_cycles; i++) {
             system_tick();
         }
-
-        // Sync cycle counter once per frame instead of per-cycle
-        total_cycles_ = c64_->total_cycles;
 
         // Check deferred load once per frame (only active during boot)
         if (pending_load_.active && is_basic_ready()) {
@@ -687,7 +677,7 @@ static void c64_mem_write_block(void* ctx, uint16_t addr,
 }
 
 bool C64System::load_file(const char* filepath) {
-    if (!c64_) {
+    if (!initialized_) {
         printf("C64: System not initialized\n");
         return false;
     }
@@ -746,9 +736,9 @@ bool C64System::load_file(const char* filepath) {
 }
 
 bool C64System::is_basic_ready() const {
-    if (!c64_ || !c64_->ram) return false;
+    if (!initialized_ || !this->ram) return false;
 
-    const uint8_t* ram = c64_->ram->memory;
+    const uint8_t* ram = this->ram->memory;
 
     // The BASIC warm-start vector at $0302/$0303 is set to $A483 by the
     // very first subroutine of the cold-start sequence (JSR $E453, which
@@ -778,7 +768,7 @@ bool C64System::is_basic_ready() const {
 }
 
 void C64System::apply_pending_load() {
-    if (!pending_load_.active || !c64_) return;
+    if (!pending_load_.active || !initialized_) return;
 
     // =========================================================================
     // SID FILE PATH — Inject 6502 player stub instead of BASIC auto-run
@@ -789,7 +779,7 @@ void C64System::apply_pending_load() {
         uint16_t subtune = sid->start_song;
         if (subtune > 0) subtune--;
 
-        c64_apply_sid_load(c64_, sid, &pending_load_.result.program, subtune);
+        c64_apply_sid_load(this, sid, &pending_load_.result.program, subtune);
 
         // Keep a copy of the SID header and payload for subtune switching
         active_sid_header_ = *sid;
@@ -845,7 +835,7 @@ void C64System::apply_pending_load() {
             ctx.write_byte      = c64_mem_write_byte;
             ctx.write_block     = c64_mem_write_block;
             ctx.mem_read        = c64_mem_read;
-            ctx.mem_ctx         = c64_->ram;
+            ctx.mem_ctx         = this->ram;
             ctx.basic_params    = &COMMODORE_BASIC_C64;
             ctx.basic_start_addrs[0] = 0x0801;
             ctx.default_raw_addr = 0xC000;
@@ -858,9 +848,9 @@ void C64System::apply_pending_load() {
             int len = (int)strlen(load_cmd);
             if (len > 10) len = 10;
             for (int i = 0; i < len; i++) {
-                c64_mem_write_byte(c64_->ram, (uint16_t)(0x0277 + i), (uint8_t)load_cmd[i]);
+                c64_mem_write_byte(this->ram, (uint16_t)(0x0277 + i), (uint8_t)load_cmd[i]);
             }
-            c64_mem_write_byte(c64_->ram, 0x00C6, (uint8_t)len);
+            c64_mem_write_byte(this->ram, 0x00C6, (uint8_t)len);
         }
 
         format_load_result_free(&pending_load_.result);
@@ -891,9 +881,9 @@ void C64System::apply_pending_load() {
             const char* load_cmd = "LOAD\r";
             int len = (int)strlen(load_cmd);
             for (int i = 0; i < len; i++) {
-                c64_mem_write_byte(c64_->ram, (uint16_t)(0x0277 + i), (uint8_t)load_cmd[i]);
+                c64_mem_write_byte(this->ram, (uint16_t)(0x0277 + i), (uint8_t)load_cmd[i]);
             }
-            c64_mem_write_byte(c64_->ram, 0x00C6, (uint8_t)len);
+            c64_mem_write_byte(this->ram, 0x00C6, (uint8_t)len);
         } else {
             printf("C64: No datasette attached — TAP not loaded\n");
         }
@@ -914,7 +904,7 @@ void C64System::apply_pending_load() {
     ctx.write_byte      = c64_mem_write_byte;
     ctx.write_block     = c64_mem_write_block;
     ctx.mem_read        = c64_mem_read;
-    ctx.mem_ctx         = c64_->ram;
+    ctx.mem_ctx         = this->ram;
     ctx.basic_params    = &COMMODORE_BASIC_C64;
     ctx.basic_start_addrs[0] = 0x0801;
     ctx.default_raw_addr = 0xC000;
@@ -1002,8 +992,8 @@ void C64System::ensure_compatible_for_sid(const sid_header_t* sid) {
         // Same region — just update SID revision in-place and reset
         if (needed_revision != pending_sid_revision_) {
             pending_sid_revision_ = needed_revision;
-            if (c64_ && c64_->sid) {
-                mos6581_set_revision(c64_->sid, needed_revision);
+            if (initialized_ && this->sid) {
+                mos6581_set_revision(this->sid, needed_revision);
                 printf("C64: SID revision set to %s (from SID file flags)\n",
                        needed_revision == SID_REVISION_8580_R5 ? "MOS 8580" : "MOS 6581");
             }
@@ -1012,7 +1002,7 @@ void C64System::ensure_compatible_for_sid(const sid_header_t* sid) {
     }
 
     // ---- Patch KERNAL for fast SID boot ----
-    c64_patch_skip_memtest(c64_);
+    patch_skip_memtest();
 
     // Reset boot-completed flag so the deferred load machinery works
     boot_completed_ = false;
@@ -1020,8 +1010,8 @@ void C64System::ensure_compatible_for_sid(const sid_header_t* sid) {
 
 // ============================================================================
 uint32_t* C64System::get_framebuffer() {
-    if (c64_ && c64_->vicii) {
-        return c64_->vicii->pixel.framebuffer;
+    if (initialized_ && this->vicii) {
+        return this->vicii->pixel.framebuffer;
     }
     return nullptr;
 }
@@ -1033,8 +1023,8 @@ void C64System::get_display_dimensions(int* width, int* height) const {
 }
 
 void C64System::set_framebuffer(uint32_t* buffer, int width, int height) {
-    if (c64_ && c64_->vicii && buffer) {
-        vicii_set_framebuffer(c64_->vicii, buffer, width, height);
+    if (initialized_ && this->vicii && buffer) {
+        vicii_set_framebuffer(this->vicii, buffer, width, height);
     }
 }
 
@@ -1050,14 +1040,14 @@ void C64System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
             keyboard_mapper_->process_key_up(
                 key, SDL_SCANCODE_UNKNOWN, 0);
         }
-    } else if (c64_ && c64_->keyboard) {
+    } else if (initialized_ && this->keyboard) {
         // No mapper â€” convert SDL keycode to EmuKey and pass through
         emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(key);
         if (ek != EMUKEY_NONE) {
             if (pressed) {
-                commodore_keyboard_key_down(c64_->keyboard, ek, false);
+                commodore_keyboard_key_down(this->keyboard, ek, false);
             } else {
-                commodore_keyboard_key_up(c64_->keyboard, ek, false);
+                commodore_keyboard_key_up(this->keyboard, ek, false);
             }
         }
     }
@@ -1136,7 +1126,7 @@ void C64System::handle_controller_event(int controller, int button, bool pressed
 // =============================================================================
 
 bool C64System::handle_sid_player_key(SDL_Keycode key) {
-    if (!c64_ || active_sid_header_.num_songs == 0) return false;
+    if (!initialized_ || active_sid_header_.num_songs == 0) return false;
 
     const uint16_t num_songs = active_sid_header_.num_songs;
     int new_subtune = -1;
@@ -1167,7 +1157,7 @@ bool C64System::handle_sid_player_key(SDL_Keycode key) {
     if ((uint16_t)new_subtune == active_subtune_) return true;  // Already playing
 
     active_subtune_ = (uint16_t)new_subtune;
-    c64_sid_switch_subtune(c64_, &active_sid_header_,
+    c64_sid_switch_subtune(this, &active_sid_header_,
                             active_sid_data_.data(), active_sid_data_.size(),
                             active_subtune_);
     return true;
@@ -1183,7 +1173,7 @@ void C64System::render_system_menu_items() {
 
 void C64System::render_debug_windows(void* gui_state) {
 #ifdef IMGUI_VERSION
-    if (!c64_) return;
+    if (!initialized_) return;
     EmulatedSystem::render_debug_windows(gui_state);
 #endif
 }
@@ -1193,15 +1183,15 @@ void C64System::render_debug_windows(void* gui_state) {
 // ============================================================================
 
 void C64System::register_c64_chips() {
-    if (!c64_) return;
+    if (!initialized_) return;
 
-    auto* cpu = c64_->mos6510;
-    auto* vicii = c64_->vicii;
-    auto* sid = c64_->sid;
-    auto* cia1 = c64_->cia1;
-    auto* cia2 = c64_->cia2;
-    auto* colorram = c64_->colorram;
-    auto* c64 = c64_;
+    auto* cpu = this->mos6510;
+    auto* vicii = this->vicii;
+    auto* sid = this->sid;
+    auto* cia1 = this->cia1;
+    auto* cia2 = this->cia2;
+    auto* colorram = this->colorram;
+    auto* c64 = this;
 
     // CPU — fam65xx is a native C++ ChipBase, register directly
     register_chip(mos6510_as_chip_base(static_cast<mos6510_t*>(cpu)),
@@ -1295,8 +1285,8 @@ bool C64System::apply_configuration() {
         if (sid_it->second == "MOS 8580") {
             rev = SID_REVISION_8580_R5;
         }
-        if (c64_ && c64_->sid) {
-            mos6581_set_revision(c64_->sid, rev);
+        if (initialized_ && this->sid) {
+            mos6581_set_revision(this->sid, rev);
             printf("C64: SID revision set to %s\n", sid_it->second.c_str());
         }
         // Store for later (SID may not exist yet during initial config)
@@ -1464,7 +1454,7 @@ static const ConnectorDefinition c64_expansion_def = {
 
 // Context structure passed to the CIA1 callback overrides
 struct C64PortCallbackContext {
-    c64_t*       c64;
+    C64System*   c64;
     C64System*   system;
 };
 
@@ -1587,7 +1577,7 @@ void C64System::setup_connector_ports() {
     int kb_port = add_connector_port(c64_keyboard_def, 0);
 
     // Attach internal keyboard device
-    auto kb_device = std::make_unique<CommodoreKeyboardDevice>(c64_ ? c64_->keyboard : nullptr);
+    auto kb_device = std::make_unique<CommodoreKeyboardDevice>(initialized_ ? this->keyboard : nullptr);
     auto* kb_raw = kb_device.get();
     connector_ports_[kb_port]->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
@@ -1599,21 +1589,21 @@ void C64System::setup_connector_ports() {
     attach_device_to_port(PORT_CONTROL2, "joystick");
 
     // Wire joystick-aware CIA1 callbacks (replace the defaults set by c64_system_create)
-    if (c64_ && c64_->cia1) {
-        s_port_callback_ctx.c64 = c64_;
+    if (initialized_ && this->cia1) {
+        s_port_callback_ctx.c64 = this;
         s_port_callback_ctx.system = this;
 
-        c64_->cia1->port_a_read_callback = c64_cia1_port_a_read_with_joystick;
-        c64_->cia1->port_a_read_context  = &s_port_callback_ctx;
-        c64_->cia1->port_b_read_callback = c64_cia1_port_b_read_with_joystick;
-        c64_->cia1->port_b_read_context  = &s_port_callback_ctx;
+        this->cia1->port_a_read_callback = c64_cia1_port_a_read_with_joystick;
+        this->cia1->port_a_read_context  = &s_port_callback_ctx;
+        this->cia1->port_b_read_callback = c64_cia1_port_b_read_with_joystick;
+        this->cia1->port_b_read_context  = &s_port_callback_ctx;
         printf("C64: Wired joystick-aware CIA1 port callbacks\n");
     }
 
     // Wire VIC-II LP pin read callback (Control Port 1 pin 6 → VIC-II LP input)
-    if (c64_ && c64_->vicii) {
-        c64_->vicii->bus.lp_pin_read    = c64_vicii_lp_pin_read;
-        c64_->vicii->bus.lp_pin_context = &s_port_callback_ctx;
+    if (initialized_ && this->vicii) {
+        this->vicii->bus.lp_pin_read    = c64_vicii_lp_pin_read;
+        this->vicii->bus.lp_pin_context = &s_port_callback_ctx;
         printf("C64: Wired VIC-II lightpen pin callback\n");
     }
 
@@ -1638,17 +1628,25 @@ void C64System::on_port_device_changed(int port_index) {
 }
 
 uint32_t C64System::get_audio_samples(float* buffer, uint32_t max_samples) {
-    if (!c64_ || !c64_->sid || !buffer || max_samples == 0) return 0;
-    mos6581_generate_samples(c64_->sid, buffer, max_samples);
+    if (!initialized_ || !this->sid || !buffer || max_samples == 0) return 0;
+    mos6581_generate_samples(this->sid, buffer, max_samples);
     return max_samples;
 }
 
 void C64System::set_audio_sample_rate(int sample_rate_hz) {
-    if (c64_ && c64_->sid && sample_rate_hz > 0) {
+    if (initialized_ && this->sid && sample_rate_hz > 0) {
         printf("C64: Updating SID sample rate from %.0f to %d Hz\n",
-               c64_->sid->sample_rate, sample_rate_hz);
-        mos6581_set_sample_rate(c64_->sid, static_cast<float>(sample_rate_hz));
+               this->sid->sample_rate, sample_rate_hz);
+        mos6581_set_sample_rate(this->sid, static_cast<float>(sample_rate_hz));
     }
+}
+
+// ============================================================================
+// KERNAL Patches
+// ============================================================================
+
+bool C64System::patch_skip_memtest() {
+    return c64_patch_skip_memtest(this);
 }
 
 // ============================================================================
@@ -1656,7 +1654,7 @@ void C64System::set_audio_sample_rate(int sample_rate_hz) {
 // ============================================================================
 
 bool C64System::pla_maps_generate() {
-    c64_bus_t* bus = &(c64_->bus);
+    c64_bus_t* bus = &(this->bus);
 
     // Create a temporary PLA instance for generating memory maps
     pla_906114_01_t* pla = pla_906114_01_create();
@@ -1739,36 +1737,36 @@ void C64System::memory_init(const c64_config_t* config) {
     // -------------------------------------------------------------------------
     // Initialize RAM
     // -------------------------------------------------------------------------
-    if (c64_->ram && c64_->ram->memory) {
+    if (this->ram && this->ram->memory) {
         c64_test_mode_t test_mode = config ? config->test_mode : C64_TEST_MODE_NORMAL;
 
         switch (test_mode) {
             case C64_TEST_MODE_NORMAL:
                 printf("Normal boot mode: RAM cleared\n");
-                memset(c64_->ram->memory, 0, 0x10000);
+                memset(this->ram->memory, 0, 0x10000);
                 break;
 
             case C64_TEST_MODE_DEBUG_PATTERNS:
-                memory_init_debug_patterns(c64_->ram);
+                memory_init_debug_patterns(this->ram);
                 break;
 
             case C64_TEST_MODE_PRG_FILE:
                 if (config && config->test_binary_config && config->test_binary_config->filename) {
                     printf("Loading PRG file: %s\n", config->test_binary_config->filename);
-                    memset(c64_->ram->memory, 0, 0x10000);
+                    memset(this->ram->memory, 0, 0x10000);
                     commodore_prg_t prg = {};
                     if (commodore_prg_load(config->test_binary_config->filename, &prg)) {
-                        memcpy(&c64_->ram->memory[prg.load_addr], prg.data, prg.data_size);
+                        memcpy(&this->ram->memory[prg.load_addr], prg.data, prg.data_size);
                         printf("  Loaded $%04X-$%04X (%zu bytes)\n",
                                prg.load_addr, prg.end_addr, prg.data_size);
                         commodore_prg_free(&prg);
                     } else {
                         printf("ERROR: Failed to load PRG file, falling back to normal init\n");
-                        memset(c64_->ram->memory, 0, 0x10000);
+                        memset(this->ram->memory, 0, 0x10000);
                     }
                 } else {
                     printf("ERROR: PRG mode selected but no filename provided\n");
-                    memset(c64_->ram->memory, 0, 0x10000);
+                    memset(this->ram->memory, 0, 0x10000);
                 }
                 break;
 
@@ -1777,30 +1775,30 @@ void C64System::memory_init(const c64_config_t* config) {
                     printf("Loading BIN file: %s at $%04X\n",
                            config->test_binary_config->filename,
                            config->test_binary_config->load_address);
-                    memset(c64_->ram->memory, 0, 0x10000);
+                    memset(this->ram->memory, 0, 0x10000);
                     uint8_t* bin_data = NULL;
                     size_t bin_size = 0;
                     if (commodore_bin_load(config->test_binary_config->filename,
                                           &bin_data, &bin_size)) {
                         uint16_t addr = config->test_binary_config->load_address;
                         if (addr + bin_size <= 0x10000) {
-                            memcpy(&c64_->ram->memory[addr], bin_data, bin_size);
+                            memcpy(&this->ram->memory[addr], bin_data, bin_size);
                             printf("  Loaded %zu bytes at $%04X\n", bin_size, addr);
                         }
                         free(bin_data);
                     } else {
                         printf("ERROR: Failed to load BIN file, falling back to normal init\n");
-                        memset(c64_->ram->memory, 0, 0x10000);
+                        memset(this->ram->memory, 0, 0x10000);
                     }
                 } else {
                     printf("ERROR: BIN mode selected but no filename provided\n");
-                    memset(c64_->ram->memory, 0, 0x10000);
+                    memset(this->ram->memory, 0, 0x10000);
                 }
                 break;
 
             default:
                 printf("WARNING: Unknown test mode, using normal init\n");
-                memset(c64_->ram->memory, 0, 0x10000);
+                memset(this->ram->memory, 0, 0x10000);
                 break;
         }
     } else {
@@ -1810,12 +1808,12 @@ void C64System::memory_init(const c64_config_t* config) {
     // -------------------------------------------------------------------------
     // Initialize Color RAM
     // -------------------------------------------------------------------------
-    if (c64_->colorram && c64_->colorram->memory) {
+    if (this->colorram && this->colorram->memory) {
         c64_test_mode_t test_mode = config ? config->test_mode : C64_TEST_MODE_NORMAL;
         if (test_mode == C64_TEST_MODE_DEBUG_PATTERNS) {
-            colorram_init_debug(c64_->colorram);
+            colorram_init_debug(this->colorram);
         } else {
-            memset(c64_->colorram->memory, 0, 1024);
+            memset(this->colorram->memory, 0, 1024);
         }
     }
 
@@ -1823,9 +1821,9 @@ void C64System::memory_init(const c64_config_t* config) {
     // Load ROMs from files
     // -------------------------------------------------------------------------
     struct { rom_t* rom; const char** filenames; uint16_t size; const char* name; } roms[] = {
-        { c64_->basic,   rom_config ? (const char**)rom_config->basic_rom_filenames   : nullptr, 8192, "BASIC" },
-        { c64_->kernal,  rom_config ? (const char**)rom_config->kernal_rom_filenames  : nullptr, 8192, "KERNAL" },
-        { c64_->charrom, rom_config ? (const char**)rom_config->chargen_rom_filenames : nullptr, 4096, "Character" },
+        { this->basic,   rom_config ? (const char**)rom_config->basic_rom_filenames   : nullptr, 8192, "BASIC" },
+        { this->kernal,  rom_config ? (const char**)rom_config->kernal_rom_filenames  : nullptr, 8192, "KERNAL" },
+        { this->charrom, rom_config ? (const char**)rom_config->chargen_rom_filenames : nullptr, 4096, "Character" },
     };
 
     for (auto& r : roms) {
@@ -1850,11 +1848,11 @@ void C64System::memory_init(const c64_config_t* config) {
     }
 
     // Cartridge ROMs: not loaded by default (filled with 0xFF if present)
-    if (c64_->cartridge_roml && c64_->cartridge_roml->memory) {
-        memset(c64_->cartridge_roml->memory, 0xFF, 8192);
+    if (this->cartridge_roml && this->cartridge_roml->memory) {
+        memset(this->cartridge_roml->memory, 0xFF, 8192);
     }
-    if (c64_->cartridge_romh && c64_->cartridge_romh->memory) {
-        memset(c64_->cartridge_romh->memory, 0xFF, 8192);
+    if (this->cartridge_romh && this->cartridge_romh->memory) {
+        memset(this->cartridge_romh->memory, 0xFF, 8192);
     }
 }
 

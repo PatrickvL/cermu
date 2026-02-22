@@ -214,6 +214,7 @@ set(CORE_SOURCES
     src/core/chip_layout.cpp
     src/core/pin_labels.cpp
     src/core/emulated_system.cpp
+    src/core/stb_impl.cpp
     src/core/system_registry.cpp
     src/core/framebuffer_renderer.cpp
     src/core/text_terminal.cpp
@@ -291,7 +292,6 @@ list(APPEND CHIP_SOURCES
 # System sources
 set(SYSTEM_SOURCES
     # C64 system
-    src/systems/c64/c64.cpp
     src/systems/c64/c64_bus.cpp
     src/systems/c64/c64_chips.cpp
     src/systems/c64/c64_config.cpp

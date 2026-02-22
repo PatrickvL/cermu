@@ -88,22 +88,22 @@ static inline uint32_t fb_pixel(const uint32_t* fb, int width, int x, int y) {
 // =============================================================================
 
 // Write a VIC-II register through the bus (triggers side effects)
-static void write_vic(c64_t* c64, uint8_t reg, uint8_t val) {
+static void write_vic(C64System* c64, uint8_t reg, uint8_t val) {
     c64_write_memory(&c64->bus, 0xD000 + (reg & 0x3F), val);
 }
 
 // Read a VIC-II register through the bus
-static uint8_t read_vic(c64_t* c64, uint8_t reg) {
+static uint8_t read_vic(C64System* c64, uint8_t reg) {
     return c64_read_memory(&c64->bus, 0xD000 + (reg & 0x3F));
 }
 
 // Write to color RAM ($D800-$DBFF)
-static void write_colorram(c64_t* c64, uint16_t offset, uint8_t val) {
+static void write_colorram(C64System* c64, uint16_t offset, uint8_t val) {
     c64_write_memory(&c64->bus, 0xD800 + offset, val);
 }
 
 // Write directly to RAM (bypasses banking/IO)
-static void write_ram(c64_t* c64, uint16_t addr, uint8_t val) {
+static void write_ram(C64System* c64, uint16_t addr, uint8_t val) {
     c64->ram->memory[addr] = val;
 }
 
@@ -117,7 +117,7 @@ static void run_frames(EmulatedSystem* system, int n) {
 }
 
 // Reset VIC-II to a known default state for pixel tests
-static void reset_vic_state(c64_t* c64) {
+static void reset_vic_state(C64System* c64) {
     // Standard text mode: ECM=0, BMM=0, MCM=0, DEN=1, RSEL=1, YSCROLL=3
     write_vic(c64, 0x11, 0x1B);
     // CSEL=1, XSCROLL=0
@@ -158,7 +158,7 @@ static void reset_vic_state(c64_t* c64) {
 // Set up custom charset at $3000 in RAM (VIC bank 0) and point $D018 to it.
 // Keeps screen at $0400. Defines char 0 = all $FF (filled), char 1 = all $00 (empty).
 // $D018 = (1 << 4) | (6 << 1) = 0x1C  → screen=$0400, charset=$3000
-static void setup_custom_charset(c64_t* c64) {
+static void setup_custom_charset(C64System* c64) {
     // Char 0: all pixels set (solid fill - used by many tests)
     for (int i = 0; i < 8; i++)
         write_ram(c64, 0x3000 + i, 0xFF);
@@ -229,7 +229,7 @@ static void check_rect(check_ctx_t& ctx, int x, int y, int w, int h,
 // =============================================================================
 
 // P1: Border color — write $D020, verify border pixels
-static void test_border_color(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_border_color(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 1;
     ctx.group_name = "Border Color";
     printf("  P1: Border Color\n");
@@ -252,7 +252,7 @@ static void test_border_color(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx)
 }
 
 // P2: Background color — write $D021, verify display-area background pixels
-static void test_background_color(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_background_color(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 2;
     ctx.group_name = "Background Color";
     printf("  P2: Background Color\n");
@@ -273,7 +273,7 @@ static void test_background_color(c64_t* c64, EmulatedSystem* sys, check_ctx_t& 
 }
 
 // P3: Standard text character rendering — foreground and background pixels
-static void test_text_character(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_text_character(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 3;
     ctx.group_name = "Text Char Render";
     printf("  P3: Standard Text Character\n");
@@ -316,7 +316,7 @@ static void test_text_character(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ct
 }
 
 // P4: Multicolor text mode — 4-color characters
-static void test_multicolor_text(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_multicolor_text(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 4;
     ctx.group_name = "MC Text Mode";
     printf("  P4: Multicolor Text Mode\n");
@@ -374,7 +374,7 @@ static void test_multicolor_text(c64_t* c64, EmulatedSystem* sys, check_ctx_t& c
 }
 
 // P5: ECM text mode — 4 background colors
-static void test_ecm_mode(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_ecm_mode(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 5;
     ctx.group_name = "ECM Text Mode";
     printf("  P5: ECM Text Mode\n");
@@ -409,7 +409,7 @@ static void test_ecm_mode(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
 }
 
 // P6: Standard bitmap mode
-static void test_bitmap_mode(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_bitmap_mode(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 6;
     ctx.group_name = "Bitmap Mode";
     printf("  P6: Standard Bitmap Mode\n");
@@ -446,7 +446,7 @@ static void test_bitmap_mode(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) 
 }
 
 // P7: Multicolor bitmap mode
-static void test_mc_bitmap_mode(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_mc_bitmap_mode(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 7;
     ctx.group_name = "MC Bitmap Mode";
     printf("  P7: Multicolor Bitmap Mode\n");
@@ -489,7 +489,7 @@ static void test_mc_bitmap_mode(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ct
 }
 
 // P8: Sprite rendering — standard mode, position, and color
-static void test_sprite_pixels(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_sprite_pixels(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 8;
     ctx.group_name = "Sprite Pixels";
     printf("  P8: Sprite Standard Rendering\n");
@@ -538,7 +538,7 @@ static void test_sprite_pixels(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx
 }
 
 // P9: Sprite multicolor mode
-static void test_sprite_multicolor(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_sprite_multicolor(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 9;
     ctx.group_name = "Sprite MC Mode";
     printf("  P9: Sprite Multicolor\n");
@@ -575,7 +575,7 @@ static void test_sprite_multicolor(c64_t* c64, EmulatedSystem* sys, check_ctx_t&
 }
 
 // P10: Sprite X-expand
-static void test_sprite_x_expand(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_sprite_x_expand(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 10;
     ctx.group_name = "Sprite X-Expand";
     printf("  P10: Sprite X-Expand\n");
@@ -606,7 +606,7 @@ static void test_sprite_x_expand(c64_t* c64, EmulatedSystem* sys, check_ctx_t& c
 }
 
 // P11: Sprite Y-expand
-static void test_sprite_y_expand(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_sprite_y_expand(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 11;
     ctx.group_name = "Sprite Y-Expand";
     printf("  P11: Sprite Y-Expand\n");
@@ -635,7 +635,7 @@ static void test_sprite_y_expand(c64_t* c64, EmulatedSystem* sys, check_ctx_t& c
 }
 
 // P12: Sprite priority — behind graphics
-static void test_sprite_priority(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_sprite_priority(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 12;
     ctx.group_name = "Sprite Priority";
     printf("  P12: Sprite Priority (behind graphics)\n");
@@ -685,7 +685,7 @@ static void test_sprite_priority(c64_t* c64, EmulatedSystem* sys, check_ctx_t& c
 }
 
 // P13: Display enable — DEN=0 blanks the display area
-static void test_display_enable(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_display_enable(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 13;
     ctx.group_name = "Display Enable";
     printf("  P13: DEN=0 Blanks Display\n");
@@ -705,7 +705,7 @@ static void test_display_enable(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ct
 }
 
 // P14: XSCROLL — shifts display horizontally
-static void test_xscroll(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_xscroll(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 14;
     ctx.group_name = "XSCROLL";
     printf("  P14: XSCROLL Horizontal Shift\n");
@@ -739,7 +739,7 @@ static void test_xscroll(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
 }
 
 // P15: YSCROLL — shifts display vertically
-static void test_yscroll(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_yscroll(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 15;
     ctx.group_name = "YSCROLL";
     printf("  P15: YSCROLL Vertical Shift\n");
@@ -770,7 +770,7 @@ static void test_yscroll(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
 }
 
 // P16: CSEL=0 narrows display to 38 columns (border covers cols 0 and 39)
-static void test_csel(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_csel(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 16;
     ctx.group_name = "CSEL=0 38-Column";
     printf("  P16: CSEL=0 (38-Column Mode)\n");
@@ -798,7 +798,7 @@ static void test_csel(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
 }
 
 // P17: RSEL=0 narrows display to 24 rows
-static void test_rsel(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_rsel(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 17;
     ctx.group_name = "RSEL=0 24-Row";
     printf("  P17: RSEL=0 (24-Row Mode)\n");
@@ -827,7 +827,7 @@ static void test_rsel(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
 }
 
 // P18: Memory pointer $D018 — change character set base
-static void test_charset_base(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_charset_base(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 18;
     ctx.group_name = "Charset Base";
     printf("  P18: Character Set Base ($D018)\n");
@@ -866,7 +866,7 @@ static void test_charset_base(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx)
 }
 
 // P19: VIC bank selection via CIA2
-static void test_vic_bank(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_vic_bank(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 19;
     ctx.group_name = "VIC Bank Select";
     printf("  P19: VIC Bank Selection (CIA2)\n");
@@ -908,7 +908,7 @@ static void test_vic_bank(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
 }
 
 // P20: Invalid mode — ECM+BMM produces black in display area
-static void test_invalid_mode(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_invalid_mode(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 20;
     ctx.group_name = "Invalid Mode";
     printf("  P20: Invalid Mode (ECM+BMM)\n");
@@ -934,7 +934,7 @@ static void test_invalid_mode(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx)
 // This is a beam-racing test. The 6510 is in a JMP loop, so we can't use IRQ
 // handlers. Instead we verify that $D012 matches the raster counter precisely
 // by checking the IRQ flag bit in $D019.
-static void test_raster_irq(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_raster_irq(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 21;
     ctx.group_name = "Raster IRQ Flag";
     printf("  P21: Raster IRQ Register\n");
@@ -981,7 +981,7 @@ static void test_raster_irq(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
 // Note: A true beam-racing test requires an IRQ handler, which we can't easily
 // set up since the CPU is in a JMP loop. Instead we use a different approach:
 // change border color, run 1 frame, check top lines; change again, run 1 frame.
-static void test_mid_frame_color(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_mid_frame_color(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 22;
     ctx.group_name = "Frame Color Change";
     printf("  P22: Border Color Change Between Frames\n");
@@ -1005,7 +1005,7 @@ static void test_mid_frame_color(c64_t* c64, EmulatedSystem* sys, check_ctx_t& c
 
 // P23: Sprite-sprite collision produces pixels — verify that overlapping
 // sprites actually show rendered pixels from both
-static void test_sprite_collision_pixels(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_sprite_collision_pixels(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 23;
     ctx.group_name = "Sprite Collision Pixels";
     printf("  P23: Sprite Collision Rendering\n");
@@ -1070,7 +1070,7 @@ static void test_sprite_collision_pixels(c64_t* c64, EmulatedSystem* sys, check_
 }
 
 // P24: Sprite-background collision pixels — verify rendering plus register
-static void test_sprite_bg_collision_pixels(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_sprite_bg_collision_pixels(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 24;
     ctx.group_name = "Sprite-BG Collision Px";
     printf("  P24: Sprite-Background Collision Pixels\n");
@@ -1118,7 +1118,7 @@ static void test_sprite_bg_collision_pixels(c64_t* c64, EmulatedSystem* sys, che
 }
 
 // P25: All 16 colors — render each color as border and verify pixel value
-static void test_all_16_colors(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_all_16_colors(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 25;
     ctx.group_name = "All 16 Colors";
     printf("  P25: All 16 Palette Colors in Border\n");
@@ -1135,7 +1135,7 @@ static void test_all_16_colors(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx
 // the same character data.  Catches regressions where VC is not reloaded from
 // VCBASE on non-bad lines (only the first row would render correctly; rows 1-7
 // would read from wrong video matrix positions, showing random characters).
-static void test_char_row_consistency(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_char_row_consistency(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 26;
     ctx.group_name = "Char Row Consistency";
     printf("  P26: Character Row Consistency (VC reload)\n");
@@ -1177,7 +1177,7 @@ static void test_char_row_consistency(c64_t* c64, EmulatedSystem* sys, check_ctx
 // read from consecutive addresses (rc=0..7), not from offset positions.
 // Catches regressions where VC is not reloaded from VCBASE, causing each row
 // to read bitmap data at (VC+40)*8+rc instead of VC*8+rc (slanted bitmaps).
-static void test_bitmap_row_consistency(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_bitmap_row_consistency(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 27;
     ctx.group_name = "Bitmap Row Consistency";
     printf("  P27: Bitmap Row Consistency (VC reload)\n");
@@ -1226,7 +1226,7 @@ static void test_bitmap_row_consistency(c64_t* c64, EmulatedSystem* sys, check_c
 // displays the correct RC data. Uses a custom character where each row (RC=0..7)
 // has a unique pattern: RC=0 has leftmost pixel set, RC=1 has pixel 1 set, etc.
 // This precisely identifies any RC offset/wrap in the rendering pipeline.
-static void test_char_scanline_alignment(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_char_scanline_alignment(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 28;
     ctx.group_name = "Char Scanline Align";
     printf("  P28: Character Scanline Alignment\n");
@@ -1338,7 +1338,7 @@ static void test_char_scanline_alignment(c64_t* c64, EmulatedSystem* sys, check_
 //   - Border-to-display alignment errors
 //   - XSCROLL initialization failures
 //   - RC=0/RC=1 data pipeline issues on bad lines
-static void test_top_left_alignment(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_top_left_alignment(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 29;
     ctx.group_name = "TopLeft Align";
     printf("  P29: Top-Left Pixel Alignment (KERNAL defaults)\n");
@@ -1386,7 +1386,7 @@ static void test_top_left_alignment(c64_t* c64, EmulatedSystem* sys, check_ctx_t
 // P30: Sprite Y position accuracy — verify sprites appear at the correct
 // raster line matching their Y coordinate register value.
 // =============================================================================
-static void test_sprite_y_position(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_sprite_y_position(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 30;
     ctx.group_name = "Sprite Y Position";
     printf("  P30: Sprite Y Position Accuracy\n");
@@ -1420,7 +1420,7 @@ static void test_sprite_y_position(c64_t* c64, EmulatedSystem* sys, check_ctx_t&
 // =============================================================================
 // P31: Sprite DMA enable — verify sprite DMA turns on at the correct raster
 // =============================================================================
-static void test_sprite_dma_enable(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_sprite_dma_enable(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 31;
     ctx.group_name = "Sprite DMA Enable";
     printf("  P31: Sprite DMA Enable\n");
@@ -1464,7 +1464,7 @@ static void test_sprite_dma_enable(c64_t* c64, EmulatedSystem* sys, check_ctx_t&
 // =============================================================================
 // P32: Sprite-Sprite Collision detection
 // =============================================================================
-static void test_sprite_sprite_collision(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_sprite_sprite_collision(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 32;
     ctx.group_name = "Sprite-Sprite Collision";
     printf("  P32: Sprite-Sprite Collision\n");
@@ -1508,7 +1508,7 @@ static void test_sprite_sprite_collision(c64_t* c64, EmulatedSystem* sys, check_
 // =============================================================================
 // P33: DEN control — verify DEN=0 blanks display, DEN=1 enables it
 // =============================================================================
-static void test_den_control(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_den_control(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 33;
     ctx.group_name = "DEN Control";
     printf("  P33: DEN Control (enable/disable display)\n");
@@ -1537,7 +1537,7 @@ static void test_den_control(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) 
 // P34: Y-position diagnostic — pinpoint where RC=0 character data first
 // appears in the framebuffer to diagnose vertical offset issues.
 // =============================================================================
-static void test_y_position_diagnostic(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_y_position_diagnostic(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 34;
     ctx.group_name = "Y Position";
     printf("  P34: Y Position Diagnostic (border-to-display transition)\n");
@@ -1650,7 +1650,7 @@ static const char* color_name(uint32_t rgba) {
     return "???";
 }
 
-static void diagnostic_dump(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void diagnostic_dump(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     printf("\n=== DIAGNOSTIC: Character row 0, columns 0-2, all 8 scanlines ===\n");
     printf("Default boot: '@' (screen code 0), ROM pattern: $3C,$66,$6E,$6E,$60,$62,$3C,$00\n");
     printf("Expected: bg=BLU(6), border=LBL(14), fg=LBL(14)\n");
@@ -1722,7 +1722,7 @@ static void diagnostic_dump(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
 }
 
 // Diagnostic dump after normal KERNAL boot (no reset_vic_state, just raw boot)
-static void diagnostic_dump_boot(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void diagnostic_dump_boot(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     printf("\n=== DIAGNOSTIC: KERNAL boot screen (no state reset, 200 frames) ===\n");
     printf("This captures what the user actually sees during normal C64 boot.\n\n");
     
@@ -1804,7 +1804,7 @@ static void diagnostic_dump_boot(c64_t* c64, EmulatedSystem* sys, check_ctx_t& c
 //     LDA #$00; STA $D020                         — Border = BLACK
 //     JMP loop
 // =============================================================================
-static void test_raster_bar_cpu(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_raster_bar_cpu(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 35;
     ctx.group_name = "CPU Raster Bar";
     printf("  P35: CPU-Driven Raster Bar\n");
@@ -1910,7 +1910,7 @@ static void test_raster_bar_cpu(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ct
 //   Bad lines (RC=0): screen B chars → empty → black background
 //   Non-bad lines (RC=1-7): screen A chars → solid → white foreground
 // =============================================================================
-static void test_fli_bug_width(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_fli_bug_width(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 36;
     ctx.group_name = "D018 Matrix Switch";
     printf("  P36: D018 Bad-Line Matrix Switch\n");
@@ -2087,7 +2087,7 @@ static uint8_t fli_read_pattern(const check_ctx_t& ctx, int col, int raster) {
     return pattern;
 }
 
-static void test_fli_diagnostic(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
+static void test_fli_diagnostic(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
     ctx.test_group = 37;
     ctx.group_name = "FLI Diagnostic";
     printf("  P37: FLI Diagnostic\n");
@@ -2302,7 +2302,7 @@ static void test_fli_diagnostic(c64_t* c64, EmulatedSystem* sys, check_ctx_t& ct
 // =============================================================================
 
 pixel_test_results_t run_pixel_verification_tests(
-    c64_t* c64,
+    C64System* c64,
     EmulatedSystem* system,
     uint32_t* framebuffer,
     int fb_width,

@@ -411,6 +411,18 @@ public:
     virtual void handle_controller_event(int controller, int button, bool pressed);
     virtual void render_debug_windows(void* gui_state);
 
+    // --- Screenshot -------------------------------------------------------
+
+    /// Save the current framebuffer to a PNG file.
+    /// Returns true on success.
+    bool save_screenshot(const char* filename) const;
+
+    /// Save a cropped region of the framebuffer to a PNG file.
+    /// Returns true on success.
+    bool save_screenshot_cropped(const char* filename,
+                                 int crop_x, int crop_y,
+                                 int crop_w, int crop_h) const;
+
     // --- Registered Chips (generic for all systems) -----------------------
 
     /// Get all registered chips in this system.

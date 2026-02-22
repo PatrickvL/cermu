@@ -1,5 +1,5 @@
 #include "../src/systems/c64/c64_test_framework.h"
-#include "../src/systems/c64/c64.h"
+#include "../src/systems/c64/c64_system.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -173,8 +173,9 @@ int main(int argc, char** argv) {
         
         config.test_mode = C64_TEST_MODE_NORMAL;
         
-        c64_t* c64 = c64_system_create(&config);
-        if (!c64) {
+        C64System* c64 = new C64System();
+        c64->get_c64_config() = config;
+        if (!c64->initialize()) {
             printf("ERROR: Failed to create C64 system\n");
             return 1;
         }
@@ -184,7 +185,8 @@ int main(int argc, char** argv) {
         results = framework.run_tests(tests, c64);
         
         // Cleanup
-        c64_system_destroy(c64);
+        c64->shutdown();
+        delete c64;
     }
     
     // Print summary
