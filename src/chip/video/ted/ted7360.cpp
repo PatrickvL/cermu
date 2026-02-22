@@ -672,7 +672,6 @@ void ted7360_reset(ted7360_t* ted) {
     uint32_t* fb = ted->pixel.framebuffer;
     int fb_w = ted->pixel.fb_width;
     int fb_h = ted->pixel.fb_height;
-    chip_descriptor_t* desc = ted->desc;
 
     // Zero everything
     memset(&ted->registers, 0, sizeof(ted->registers));
@@ -697,7 +696,6 @@ void ted7360_reset(ted7360_t* ted) {
     ted->pixel.framebuffer = fb;
     ted->pixel.fb_width = fb_w;
     ted->pixel.fb_height = fb_h;
-    ted->desc = desc;
 
     // Default register values after reset
     ted->registers.data[TED_REG_CONTROL1] = 0x00;  // Display disabled
@@ -1199,20 +1197,3 @@ void ted7360_set_framebuffer(ted7360_t* ted, uint32_t* buffer, int width, int he
     ted->pixel.fb_width = width;
     ted->pixel.fb_height = height;
 }
-
-// ============================================================================
-// CHIP DESCRIPTOR
-// ============================================================================
-
-chip_descriptor_t ted7360_descriptor = {
-    .description = "TED 7360 (C16/Plus4)",
-    .create = [](chip_descriptor_t* desc) -> void* {
-        ted7360_desc_t d = {};
-        d.is_pal = true;
-        return ted7360_create(&d);
-    },
-    .destroy = [](void* chip) {
-        ted7360_destroy(static_cast<ted7360_t*>(chip));
-    },
-    .bus_attach = nullptr
-};

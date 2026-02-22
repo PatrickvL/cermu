@@ -118,7 +118,7 @@ static ChipLayout& get_ram_layout() {
 // ============================================================================
 void ram_render_debug_content(void* chip) {
     ram_t* ram = (ram_t*)chip;
-    if (!ram || !ram->desc) return;
+    if (!ram) return;
 
 #ifdef IMGUI_VERSION
     // Create two-column layout: chip visualization on left, debugging info on right
@@ -157,11 +157,7 @@ void ram_render_debug_content(void* chip) {
         ImGui::Text("RAM Memory");
         ImGui::Separator();
         
-        if (ram->desc) {
-            ImGui::Text("Size: %s", ram->desc->description);
-        } else {
-            ImGui::Text("Size: 64KB");
-        }
+        ImGui::Text("Size: 64KB");
         ImGui::Text("Address Range: $0000-$FFFF");
         
         ImGui::Separator();
@@ -183,7 +179,7 @@ void ram_render_debug_content(void* chip) {
 
 void ram_render_settings_content(void* chip) {
     ram_t* ram = (ram_t*)chip;
-    if (!ram || !ram->desc) return;
+    if (!ram) return;
 
 #ifdef IMGUI_VERSION
 

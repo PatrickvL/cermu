@@ -3,11 +3,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "../../core/chip.h"
-
-// PLA chip descriptor for GUI integration
-extern chip_descriptor_t pla_descriptor;
-
 // Commodore PLA MOS 906114-01 REV3 8411
 // https://www.c64-wiki.com/wiki/PLA_(C64_chip)
 // http://skoe.de/docs/c64-dissected/pla/c64_pla_dissected_a4ss.pdf

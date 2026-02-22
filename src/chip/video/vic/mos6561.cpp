@@ -4,14 +4,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-// MOS6561 chip descriptor
-chip_descriptor_t mos6561_descriptor = {
-    .description = "MOS6561 VIC Video Interface Controller (Enhanced)",
-    .create = [](chip_descriptor_t*) -> void* { return mos6561_create(); },
-    .destroy = [](void* chip) { mos6561_destroy(static_cast<mos6561_t*>(chip)); },
-    .bus_attach = (void (*)(void *, void *))mos6561_bus_attach
-};
-
 // MOS6561 chip configuration — PAL variant
 // The MOS 6561 is the PAL version of the VIC-I chip used in PAL VIC-20s.
 // PAL crystal: 4.433619 MHz / 4 = 1,108,405 Hz system clock

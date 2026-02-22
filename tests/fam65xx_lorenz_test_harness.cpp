@@ -92,7 +92,7 @@ public:
         cpu_ = mos6502_create();
         
         // Initialize CPU (descriptor-free — memory I/O is handled via bus_state_t pins)
-        pins_ = mos6502_init(cpu_, nullptr);
+        pins_ = mos6502_init(cpu_);
         
         // Set up memory map
         setup_memory_map();

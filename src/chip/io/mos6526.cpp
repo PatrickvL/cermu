@@ -919,13 +919,6 @@ bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state) {
     return bus_state;
 }
 
-chip_descriptor_t mos6526_descriptor = {
-    .description = "MOS6526 CIA Complex Interface Adapter",
-    .create = [](chip_descriptor_t*) -> void* { return new mos6526_t(); },
-    .destroy = [](void* chip) { delete static_cast<mos6526_t*>(chip); },
-    .bus_attach = nullptr
-};
-
 /**
  * Main CIA tick function - handles all CIA cycle processing including timers,
  * TOD clock, serial I/O, and interrupt generation with 1-cycle delay.

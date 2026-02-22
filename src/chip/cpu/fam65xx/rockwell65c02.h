@@ -33,8 +33,7 @@ rockwell65c02_t *rockwell65c02_create(void);
 void rockwell65c02_destroy(rockwell65c02_t *cpu);
 
 // Basic API functions
-bus_state_t rockwell65c02_init(rockwell65c02_t *cpu,
-                               const chip_descriptor_t *desc);
+bus_state_t rockwell65c02_init(rockwell65c02_t *cpu);
 bus_state_t rockwell65c02_reset(rockwell65c02_t *cpu, bus_state_t pins);
 bus_state_t rockwell65c02_tick(rockwell65c02_t *cpu, bus_state_t pins);
 bool rockwell65c02_opdone(rockwell65c02_t *cpu);

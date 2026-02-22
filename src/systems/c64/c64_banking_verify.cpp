@@ -81,7 +81,7 @@ void verify_c64_banking_modes() {
     printf("╚═══════════════════════════════════════════════════════════════════╝\n");
     
     // Create bus and PLA for testing
-    c64_bus_t* bus = (c64_bus_t*)c64_bus_system_create(&c64_bus_descriptor);
+    c64_bus_t* bus = (c64_bus_t*)c64_bus_system_create();
     if (!bus) {
         printf("ERROR: Failed to create bus\n");
         return;
@@ -209,7 +209,7 @@ void verify_c64_banking_by_table() {
     printf("╚═══════════════════════════════════════════════════════════════════╝\n");
     
     // Create bus and PLA for testing
-    c64_bus_t* bus = (c64_bus_t*)c64_bus_system_create(&c64_bus_descriptor);
+    c64_bus_t* bus = (c64_bus_t*)c64_bus_system_create();
     if (!bus) {
         printf("ERROR: Failed to create bus\n");
         return;

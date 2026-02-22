@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "../../core/bus_cycle_interface.h"
-#include "../../core/chip.h"
 #include "vic_common.h"
 
 // VIC-6561 chip structure (inherits from vic_base_t via C++ inheritance)
@@ -12,9 +11,6 @@ typedef struct mos6561_s : public vic_base_t {
     bool extended_color_mode = false;
     uint8_t extended_colors[4] = {};
 } mos6561_t;
-
-// Chip descriptor
-extern chip_descriptor_t mos6561_descriptor;
 
 // Function prototypes
 mos6561_t* mos6561_create();

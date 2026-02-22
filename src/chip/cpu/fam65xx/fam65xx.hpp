@@ -1690,7 +1690,7 @@ public:
   // CONSTRUCTOR AND INITIALIZATION
   // ========================================================================
 
-  bus_state_t init(const chip_descriptor_t * /*desc*/) {
+  bus_state_t init() {
     // Initialize processor-specific features
     this->init_conditional_features();
 

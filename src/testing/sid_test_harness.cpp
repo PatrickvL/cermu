@@ -85,7 +85,7 @@ static std::string to_lower(const std::string& s) {
 
 harness_t* create(bool verbose) {
     harness_t* h = new harness_t{};
-    h->sid = (mos6581_t*)mos6581_descriptor.create(&mos6581_descriptor);
+    h->sid = mos6581_create();
     h->sid_owned = true;
     h->verbose = verbose;
     h->trace_enabled = false;
@@ -111,7 +111,7 @@ harness_t* create_with_sid(mos6581_t* sid, bool verbose) {
 void destroy(harness_t* h) {
     if (!h) return;
     if (h->sid_owned && h->sid) {
-        mos6581_descriptor.destroy(h->sid);
+        mos6581_destroy(h->sid);
     }
     delete h;
 }

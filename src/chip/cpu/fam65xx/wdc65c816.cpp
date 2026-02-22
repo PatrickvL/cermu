@@ -26,8 +26,8 @@ void wdc65c816_destroy(wdc65c816_t *cpu) {
   delete CPU_CAST(cpu);
 }
 
-bus_state_t wdc65c816_init(wdc65c816_t *cpu, const chip_descriptor_t *desc) {
-  return CPU_CAST(cpu)->init(desc);
+bus_state_t wdc65c816_init(wdc65c816_t *cpu) {
+  return CPU_CAST(cpu)->init();
 }
 
 bus_state_t wdc65c816_reset(wdc65c816_t *cpu, bus_state_t pins) {
@@ -138,29 +138,4 @@ void wdc65c816_set_pbr(wdc65c816_t *cpu, uint8_t value) {
 
 void wdc65c816_set_emulation_mode(wdc65c816_t *cpu, bool emulation) {
   CPU_CAST(cpu)->set_emulation_mode(emulation);
-}
-
-// WDC65C816 chip descriptor
-static chip_descriptor_t wdc65c816_base_descriptor;
-
-static void initialize_wdc65c816_descriptor() {
-  wdc65c816_base_descriptor.description = "WDC 65C816";
-  wdc65c816_base_descriptor.create = [](chip_descriptor_t *desc) -> void * {
-    (void)desc; // Suppress unused parameter warning
-    return wdc65c816_create();
-  };
-  wdc65c816_base_descriptor.destroy = [](void *chip) {
-    wdc65c816_destroy(reinterpret_cast<wdc65c816_t *>(chip));
-  };
-  wdc65c816_base_descriptor.bus_attach =
-      nullptr; // Basic CPU doesn't need bus attach
-}
-
-const chip_descriptor_t *wdc65c816_get_chip_descriptor(void) {
-  static bool initialized = false;
-  if (!initialized) {
-    initialize_wdc65c816_descriptor();
-    initialized = true;
-  }
-  return &wdc65c816_base_descriptor;
 }

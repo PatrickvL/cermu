@@ -28,9 +28,8 @@ void rockwell65c02_destroy(rockwell65c02_t *cpu) {
   delete CPU_CAST(cpu);
 }
 
-bus_state_t rockwell65c02_init(rockwell65c02_t *cpu,
-                               const chip_descriptor_t *desc) {
-  return CPU_CAST(cpu)->init(desc);
+bus_state_t rockwell65c02_init(rockwell65c02_t *cpu) {
+  return CPU_CAST(cpu)->init();
 }
 
 bus_state_t rockwell65c02_reset(rockwell65c02_t *cpu, bus_state_t pins) {
@@ -93,29 +92,4 @@ void rockwell65c02_set_p(rockwell65c02_t *cpu, uint8_t value) {
 
 void rockwell65c02_set_pc(rockwell65c02_t *cpu, uint16_t value) {
   CPU_CAST(cpu)->set(REG_PC, value);
-}
-
-// Rockwell 65C02 chip descriptor
-static chip_descriptor_t rockwell65c02_base_descriptor;
-
-static void initialize_rockwell65c02_descriptor() {
-  rockwell65c02_base_descriptor.description = "Rockwell 65C02";
-  rockwell65c02_base_descriptor.create = [](chip_descriptor_t *desc) -> void * {
-    (void)desc; // Suppress unused parameter warning
-    return rockwell65c02_create();
-  };
-  rockwell65c02_base_descriptor.destroy = [](void *chip) {
-    rockwell65c02_destroy(reinterpret_cast<rockwell65c02_t *>(chip));
-  };
-  rockwell65c02_base_descriptor.bus_attach =
-      nullptr; // Basic CPU doesn't need bus attach
-}
-
-const chip_descriptor_t *rockwell65c02_get_chip_descriptor(void) {
-  static bool initialized = false;
-  if (!initialized) {
-    initialize_rockwell65c02_descriptor();
-    initialized = true;
-  }
-  return &rockwell65c02_base_descriptor;
 }

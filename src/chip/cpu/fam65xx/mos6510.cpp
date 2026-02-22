@@ -33,8 +33,8 @@ ChipBase* mos6510_as_chip_base(mos6510_t *cpu) {
 }
 
 bus_state_t mos6510_init(mos6510_t *cpu, const mos6510_desc_t *desc) {
-  // Initialize base CPU with the chip descriptor
-  bus_state_t pins = CPU_CAST(cpu)->init(&desc->base);
+  // Initialize base CPU
+  bus_state_t pins = CPU_CAST(cpu)->init();
 
   // Initialize 6510-specific I/O port state
   auto *cpu_impl = CPU_CAST(cpu);
@@ -142,10 +142,9 @@ void mos6510_set_bank_change(mos6510_t *cpu,
 }
 
 // ============================================================================
-// CHIP DESCRIPTOR AND INTERFACE
+// CHIP TICK INTERFACE
 // ============================================================================
 
-// Chip-compatible tick function
 bus_state_t mos6510_tick_phi2(void *cpu, bus_state_t pins) {
   return CPU_CAST(cpu)->tick<mos6510_cpu_t::Phase::PHI2>(pins);
 }
@@ -153,14 +152,3 @@ bus_state_t mos6510_tick_phi2(void *cpu, bus_state_t pins) {
 bus_state_t mos6510_tick_phi1(void *cpu, bus_state_t pins) {
   return CPU_CAST(cpu)->tick<mos6510_cpu_t::Phase::PHI1>(pins);
 }
-
-// Chip descriptor for system registration
-chip_descriptor_t mos6510_descriptor = {
-    .description = "MOS 6510 CPU (C64/C128)",
-    .create = [](chip_descriptor_t *desc) -> void * {
-      return mos6510_create();
-    },
-    .destroy =
-        [](void *cpu) { mos6510_destroy(reinterpret_cast<mos6510_t *>(cpu)); },
-    .bus_attach = nullptr
-};

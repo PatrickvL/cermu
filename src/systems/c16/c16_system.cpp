@@ -319,7 +319,6 @@ bool Commodore264System<V>::initialize() {
     
     // Set up CPU descriptor with I/O port callbacks
     mos7501_desc_t cpu_desc = {};
-    cpu_desc.base.description = "MOS 7501 CPU";
     cpu_desc.m7501_in_cb = io_port_in;
     cpu_desc.m7501_out_cb = io_port_out;
     cpu_desc.m7501_io_pullup = 0x5F;    // Pull-up on all used pins
@@ -408,7 +407,6 @@ void Commodore264System<V>::reset() {
     // Reset MOS 7501 CPU
     if (cpu_) {
         mos7501_desc_t cpu_desc = {};
-        cpu_desc.base.description = "MOS 7501 CPU";
         cpu_desc.m7501_in_cb = io_port_in;
         cpu_desc.m7501_out_cb = io_port_out;
         cpu_desc.m7501_io_pullup = 0x5F;

@@ -29,12 +29,10 @@
 typedef struct mos7501_t mos7501_t;
 
 // ============================================================================
-// MOS 7501-SPECIFIC DESCRIPTOR (extends chip_descriptor_t)
+// MOS 7501-SPECIFIC DESCRIPTOR
 // ============================================================================
 
 typedef struct {
-  chip_descriptor_t base; // Base chip descriptor
-
   // 7501-specific I/O port callbacks (same structure as 6510)
   uint8_t (*m7501_in_cb)(void *user_data);   // Read from external I/O pins
   void (*m7501_out_cb)(uint8_t data,
@@ -99,9 +97,6 @@ void mos7501_set_bank_change(mos7501_t *cpu,
 class ChipBase;
 ChipBase* mos7501_as_chip_base(mos7501_t *cpu);
 #endif
-
-// Global descriptor for chip registration
-extern chip_descriptor_t mos7501_descriptor;
 
 // Chip-compatible tick function
 bus_state_t mos7501_tick_phi2(void *cpu, bus_state_t pins);

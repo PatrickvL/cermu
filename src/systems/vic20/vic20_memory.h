@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include "../../core/system_lines.h"
 #include "../../core/cermu.h"  // For REGISTER_CALL macro
-#include "../../core/chip.h"
 #include "vic20_chips.h"
 
 #ifdef __cplusplus
@@ -89,7 +88,6 @@ typedef struct vic20_memory_s {
     // ========================================================================
     // CONFIGURATION
     // ========================================================================
-    chip_descriptor_t* desc;
     void* vic20;                  // Pointer to VIC20System
     uint8_t expansion_flags;      // Which expansion blocks are present
     bool cartridge_present;       // Whether cartridge ROM is present
@@ -213,12 +211,6 @@ void vic20_memory_set_expansion(vic20_memory_t* mem, uint8_t expansion_flags);
 static inline bool vic20_memory_has_expansion(vic20_memory_t* mem, uint8_t block) {
     return (mem->expansion_flags & block) != 0;
 }
-
-// ============================================================================
-// Chip Descriptor
-// ============================================================================
-
-extern chip_descriptor_t vic20_memory_descriptor;
 
 #ifdef __cplusplus
 }

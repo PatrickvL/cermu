@@ -36,7 +36,7 @@ mos6502_t *mos6502_create(void);
 void mos6502_destroy(mos6502_t *cpu);
 
 // Basic API functions
-bus_state_t mos6502_init(mos6502_t *cpu, const chip_descriptor_t *desc);
+bus_state_t mos6502_init(mos6502_t *cpu);
 bus_state_t mos6502_bootstrap(mos6502_t *cpu, bus_state_t pins);
 bus_state_t mos6502_reset(mos6502_t *cpu, bus_state_t pins);
 bus_state_t mos6502_tick(mos6502_t *cpu, bus_state_t pins);
@@ -58,9 +58,6 @@ void mos6502_set_y(mos6502_t *cpu, uint8_t value);
 void mos6502_set_s(mos6502_t *cpu, uint8_t value);
 void mos6502_set_p(mos6502_t *cpu, uint8_t value);
 void mos6502_set_pc(mos6502_t *cpu, uint16_t value);
-
-// Basic descriptor for compatibility
-const chip_descriptor_t *mos6502_get_chip_descriptor(void);
 
 #ifdef __cplusplus
 class ChipBase;

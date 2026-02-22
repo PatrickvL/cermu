@@ -44,9 +44,6 @@ public:
 // Backward-compatibility typedef
 using mos2114_t = MOS2114;
 
-// Legacy chip descriptor (used by c64.cpp System8Bit test path)
-extern chip_descriptor_t mos2114_descriptor;
-
 // Legacy lifecycle helpers
 MOS2114* mos2114_create();
 void     mos2114_destroy(MOS2114* chip);

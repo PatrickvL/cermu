@@ -356,9 +356,6 @@ void mos6581_set_timing(mos6581_t* sid, bool pal_timing);
 void mos6581_set_sample_rate(mos6581_t* sid, float sample_rate);
 void mos6581_set_cpu_clock(mos6581_t* sid, float clock_hz);
 
-// Chip descriptor
-extern chip_descriptor_t mos6581_descriptor;
-
 // Typed lifecycle functions
 mos6581_t* mos6581_create();
 void mos6581_destroy(mos6581_t* sid);

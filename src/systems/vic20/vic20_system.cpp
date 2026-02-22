@@ -558,7 +558,7 @@ bool VIC20System::initialize() {
     }
     
     // Initialize CPU (descriptor-free — memory I/O is handled via bus_state_t pins)
-    mos6502_init(cpu_, nullptr);
+    mos6502_init(cpu_);
     
     // Reset CPU to initialize state
     mos6502_reset(cpu_, 0);

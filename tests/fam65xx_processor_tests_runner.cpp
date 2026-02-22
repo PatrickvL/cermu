@@ -135,7 +135,7 @@ class ProcessorTestHarness;
 class UnifiedProcessorInterface {
 public:
     virtual ~UnifiedProcessorInterface() = default;
-    virtual uint64_t init(const chip_descriptor_t* desc) = 0;
+    virtual uint64_t init() = 0;
     virtual uint64_t bootstrap(uint64_t pins) = 0;
     virtual uint64_t tick_phi2(uint64_t pins) = 0;  // PHI2 phase
     virtual uint64_t tick_phi1(uint64_t pins) = 0;  // PHI1 phase
@@ -354,10 +354,7 @@ public:
         cpu_wrapper->set_harness(this);
         
         // Initialize CPU with new API (memory callbacks handled differently)
-        chip_descriptor_t desc = {};
-        desc.description = "MOS6502 Test CPU";
-        
-        pins = cpu_wrapper->init(&desc);
+        pins = cpu_wrapper->init();
         
         // CRITICAL: Initialize pins with interrupt lines HIGH (inactive) BEFORE any operations
         // This prevents false interrupt detection during bootstrap and test execution
@@ -640,7 +637,6 @@ template<const fam65xx::CPUTraits& Traits>
 class ProcessorWrapper : public UnifiedProcessorInterface {
 private:
     fam65xx::fam65xx_t<Traits>* cpu;
-    chip_descriptor_t desc;
     void* harness_ptr; // Store harness for memory callbacks
     
     // Instance memory callbacks that know about this wrapper's harness
@@ -706,7 +702,7 @@ public:
         }
         
         // Initialize CPU
-        cpu->init(&desc);
+        cpu->init();
         
         // Processor tests mode is now handled via PROCESSOR_TESTS compile-time define
         // No runtime configuration needed - interrupt hijacking and memory-mapped I/O
@@ -719,11 +715,7 @@ public:
         }
     }
     
-    // Implement interface methods
-    uint64_t init(const chip_descriptor_t* desc_ptr) override {
-        if (desc_ptr) {
-            desc = *desc_ptr;
-        }
+    uint64_t init() override {
         // CPU already initialized in constructor
         return 0;
     }
