@@ -371,8 +371,17 @@ bool C64System::initialize() {
     };
     this->vicii->bus.mem_read_ctx = &this->bus;
 
-    this->cia1 = mos6526_create();
-    this->cia2 = mos6526_create();
+    this->cia1 = new mos6526_t();
+    this->cia1->configured_interrupt_bit = BUS_IRQ_BIT;
+    this->cia1->cycles_tod[0] = 1000000 / 60;
+    this->cia1->cycles_tod[1] = 1000000 / 50;
+    this->cia1->reset();
+
+    this->cia2 = new mos6526_t();
+    this->cia2->configured_interrupt_bit = BUS_NMI_BIT;
+    this->cia2->cycles_tod[0] = 1000000 / 60;
+    this->cia2->cycles_tod[1] = 1000000 / 50;
+    this->cia2->reset();
 
     // Create keyboard matrix
     this->keyboard = commodore_keyboard_create(&c64_keyboard_config);
@@ -523,8 +532,8 @@ void C64System::reset() {
         printf("C64 System: Performing system-wide reset...\n");
 
         // Reset CIA chips first (they control interrupts and I/O)
-        if (this->cia1) mos6526_reset(this->cia1);
-        if (this->cia2) mos6526_reset(this->cia2);
+        if (this->cia1) this->cia1->reset();
+        if (this->cia2) this->cia2->reset();
 
         // Reset VIC-II to clear sprite pipeline state
         if (this->vicii) vicii_reset(this->vicii);
@@ -589,8 +598,8 @@ void C64System::system_tick() {
     s = vicii_tick_phi1(vicii, s);
 
     // PHASE 1.5: CIA PHI2 — apply pending interrupt lines before CPU
-    s = mos6526_tick_phi2(cia2, s);
-    s = mos6526_tick_phi2(cia1, s);
+    s = cia2->tick_phi2(s);
+    s = cia1->tick_phi2(s);
 
     // BA→RDY wiring (direct bit manipulation to preserve IRQ/NMI from CIAs)
     if (BUS_GET_LINES(s) & BUS_MASK_BA)
@@ -608,8 +617,8 @@ void C64System::system_tick() {
     vicii_tick_phi2(vicii, s);
 
     // PHASE 3.5: CIA PHI1 — timer counting, TOD, interrupt generation
-    s = mos6526_tick_phi1(cia2, s);
-    s = mos6526_tick_phi1(cia1, s);
+    s = cia2->tick_phi1(s);
+    s = cia1->tick_phi1(s);
 
     // PHASE 4: CPU PHI1 — prepare next fetch
     s = mos6510_tick_phi1(mos6510, s);
