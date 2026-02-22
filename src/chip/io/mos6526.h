@@ -128,6 +128,40 @@ typedef struct mos6526_s : public ChipBase {
     void render_debug_content()    override;
     void render_settings_content() override;
     void render_layout_content()   override;
+
+    // --- Public methods ---
+    void reset();
+    bus_state_t tick(bus_state_t bus_state);
+    bus_state_t tick_phi2(bus_state_t bus_state);
+    bus_state_t tick_phi1(bus_state_t bus_state);
+
+    // Static methods for function pointer table compatibility (io_page_handlers_t)
+    static bus_state_t registers_read(void* context, bus_state_t bus_state);
+    static bus_state_t registers_write(void* context, bus_state_t bus_state);
+
+private:
+    // --- Internal helpers ---
+    uint8_t read_and_clear_interrupt_control_register();
+    void check_interrupt_mask();
+    void write_interrupt_control_register(uint32_t v);
+    void write_data_direction_port(uint32_t p, uint8_t v);
+    void update_output_port(uint32_t p, uint8_t v);
+    void update_output_port_b(uint8_t v);
+    uint8_t read_port_data(uint32_t p);
+    void update_internal_data_direction_port_b(uint8_t port_b_output_mask);
+    void reload_timer(uint32_t t);
+    void check_reload_timer(uint32_t t);
+    void decrease_timer(uint32_t t);
+    void write_control_register(uint32_t c, uint8_t v);
+    uint8_t latch_read_tod_hr();
+    uint8_t unlatch_read_tod_10ths();
+    uint8_t write_tod_hr(uint8_t v);
+    void check_alarm_interrupt();
+    uint8_t bcd_inc(uint32_t r);
+    void increase_tod_and_check_alarm();
+    void write_serial_data_register(uint8_t v);
+    void serial_output();
+    void serial_input(bus_state_t bus_state);
 } mos6526_t;
 
 namespace MOS6526 {
@@ -204,33 +238,5 @@ namespace MOS6526 {
 
 // Using declarations to maintain compatibility in MOS6526 implementation files
 using namespace MOS6526;
-
-// Export generic control register bits to global scope for convenience
-using MOS6526::CR_START;
-using MOS6526::CR_LOAD;
-using MOS6526::CR_RUNMODE;
-using MOS6526::CR_OUTMODE;
-using MOS6526::CR_PBON;
-
-// Function declarations
-void mos6526_reset(mos6526_t* cia);
-
-// Register I/O functions (used directly in chip descriptor)
-bus_state_t mos6526_registers_read(void* context, bus_state_t bus_state);
-bus_state_t mos6526_registers_write(void* context, bus_state_t bus_state);
-
-// Split CIA tick into two phases for cycle-accurate timer reads:
-// - tick_phi2: Apply pending interrupts (before CPU samples IRQ/NMI)
-// - tick_phi1: Timer counting, interrupt generation (after CPU register reads)
-// This ensures CPU reads see the pre-decrement timer value (matching real hardware).
-bus_state_t mos6526_tick_phi2(void* chip, bus_state_t bus_state);
-bus_state_t mos6526_tick_phi1(void* chip, bus_state_t bus_state);
-
-// Legacy single-phase tick (calls early+late in sequence, for non-C64 systems)
-bus_state_t mos6526_tick(void* chip, bus_state_t bus_state);
-
-// Typed lifecycle functions
-mos6526_t* mos6526_create();
-void mos6526_destroy(mos6526_t* cia);
 
 

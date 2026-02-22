@@ -798,13 +798,13 @@ void c64_bus_init_io_handlers(c64_bus_t* c64_bus) {
     }
 
     // Page 12 ($DC00-$DCFF): CIA1 (16 bytes mirrored across 256 bytes)
-    c64_bus->io_handlers[12].read_handler = mos6526_registers_read;
-    c64_bus->io_handlers[12].write_handler = mos6526_registers_write;
+    c64_bus->io_handlers[12].read_handler = mos6526_s::registers_read;
+    c64_bus->io_handlers[12].write_handler = mos6526_s::registers_write;
     c64_bus->io_handlers[12].chip_instance = c64->cia1;
 
     // Page 13 ($DD00-$DDFF): CIA2 (16 bytes mirrored across 256 bytes)
-    c64_bus->io_handlers[13].read_handler = mos6526_registers_read;
-    c64_bus->io_handlers[13].write_handler = mos6526_registers_write;
+    c64_bus->io_handlers[13].read_handler = mos6526_s::registers_read;
+    c64_bus->io_handlers[13].write_handler = mos6526_s::registers_write;
     c64_bus->io_handlers[13].chip_instance = c64->cia2;
 
     // Page 14 ($DE00-$DEFF): I/O1 expansion port (unmapped by default - floating bus)
