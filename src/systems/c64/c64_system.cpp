@@ -26,7 +26,7 @@
 // MOS2114 is a native C++ ChipBase — no separate GUI header needed
 // MOS6581 is a native C++ ChipBase — no separate GUI header needed
 #include "../../chip/logic/pla.h"
-#include "../../chip/logic/pla_gui.h"
+#include "c64_pla_chip.h"
 #include "../../core/chip.h"
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"

@@ -1,9 +1,9 @@
-#include "pla.h"
-#include "pla_gui.h"
+#include "../../chip/logic/pla.h"
+#include "c64_pla_chip.h"
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
-#include "../../systems/c64/c64_bus.h"
-#include "../../systems/c64/c64.h"
+#include "c64_bus.h"
+#include "c64.h"
 #include "../../chip/video/vic_ii/vicii_common.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
 #ifdef IMGUI_VERSION
