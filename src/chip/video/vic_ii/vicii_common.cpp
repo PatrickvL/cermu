@@ -30,7 +30,7 @@ static const uint32_t c64_palette[16] = {
 // ========================================================================================
 
 // Get default palette
-const uint32_t* vicii_get_default_palette(void) {
+const uint32_t* vicii_s::get_default_palette() {
     return (uint32_t*)c64_palette;
 }
 
@@ -614,12 +614,12 @@ void vicii_lightpen_set_pin(vicii_t* vicii, bool pin_high) {
 
 // Accessors for external peripherals that need to compare their target
 // position against the current raster beam position.
-uint16_t vicii_get_raster_counter(const vicii_t* vicii) {
-    return vicii->timing.raster_counter;
+uint16_t vicii_s::get_raster_counter() const {
+    return timing.raster_counter;
 }
 
-uint16_t vicii_get_x_coordinate(const vicii_t* vicii) {
-    return vicii->timing.x_coordinate;
+uint16_t vicii_s::get_x_coordinate() const {
+    return timing.x_coordinate;
 }
 
 // ========================================================================================
@@ -635,7 +635,7 @@ static inline void vicii_memory_update_mapping(vicii_memory_unit_t* memory, uint
     memory->cb_base = ((uint16_t)mp_reg & 0x0E) << 10; // CB11-CB13 bits * 0x800 -> << 10
 }
 
-void vicii_memory_bank_change(void* chip, uint8_t bank) {
+void vicii_s::memory_bank_change(void* chip, uint8_t bank) {
     vicii_t* vicii = (vicii_t*)chip;
     uint8_t inverted_bank = 3 - (bank & 0x03);  // Invert bank
     
@@ -817,7 +817,7 @@ static inline void vicii_registers_write_interrupt(vicii_registers_unit_t* regs,
 }
 
 // Register write function (uses all the above handlers)
-bus_state_t vicii_registers_write(void* context, bus_state_t bus_state) {
+bus_state_t vicii_s::registers_write(void* context, bus_state_t bus_state) {
     vicii_t* vicii = (vicii_t*)context;
     uint8_t value = BUS_GET_DATA(bus_state);
     uint8_t reg = BUS_GET_ADDR(bus_state) & VICII_REGS_MASK; // The VIC registers are repeated each 64 bytes in the area $d000-$d3ff
@@ -940,7 +940,7 @@ bus_state_t vicii_registers_write(void* context, bus_state_t bus_state) {
     (1ULL << VICII_IR)  | (1ULL << VICII_IE)       \
 )
 
-bus_state_t vicii_registers_read(void* context, bus_state_t bus_state) {
+bus_state_t vicii_s::registers_read(void* context, bus_state_t bus_state) {
     vicii_t* vicii = (vicii_t*)context;
     uint8_t reg = BUS_GET_ADDR(bus_state) & VICII_REGS_MASK;
     uint8_t bus_data = BUS_GET_DATA(bus_state);
@@ -1073,7 +1073,7 @@ void vicii_timing_advance(vicii_t* vicii) {
     // at the correct Y position (which is still the OLD raster_counter value).
     const uint16_t completed_raster = vicii->timing.raster_counter;
     if (vicii->pixel.framebuffer && completed_raster < vicii->pixel.framebuffer_height) {
-        vicii_pixel_flush_line(vicii, vicii_get_default_palette(), completed_raster);
+        vicii_pixel_flush_line(vicii, vicii_s::get_default_palette(), completed_raster);
     }
     
     vicii_set_x_cycle(vicii, 0);
@@ -1659,7 +1659,8 @@ static inline bus_state_t vicii_update_ba_aec_signals(vicii_t* vicii, bus_state_
 // ========================================================================================
 
 // PHI1 tick function — processes one VIC-II cycle
-bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
+bus_state_t vicii_s::tick_phi1(bus_state_t bus_state) {
+    vicii_t* vicii = this;
 
     // STEP 1: Get current cycle entry and parameter
     const vicii_cycle_entry_t* entry = &vicii->timing.cycle_table[vicii->timing.x_cycle];
@@ -2006,7 +2007,8 @@ bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state) {
 // Because this runs in the same cycle as PHI1, vmli is still valid from STEP 3/4 —
 // no cross-cycle storage is needed for c-access column positions.
 
-void vicii_tick_phi2(vicii_t* vicii, bus_state_t bus_state) {
+void vicii_s::tick_phi2(bus_state_t bus_state) {
+    vicii_t* vicii = this;
     const uint8_t bus_data = BUS_GET_DATA(bus_state);
 
     switch (vicii->bus.pending_phi2_access_type) {
@@ -2497,15 +2499,11 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
 // PUBLIC API FUNCTIONS
 // ========================================================================================
 
-vicii_t* vicii_create(const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t)) {
-    vicii_t* vicii = new vicii_t();
-    
-    vicii->config = config;
-    vicii->bus.bank_change = bank_change;
-    vicii_initialize(vicii);
-    vicii_initialize_timing(vicii, config);
-    
-    return vicii;
+void vicii_s::init(const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t)) {
+    this->config = config;
+    this->bus.bank_change = bank_change;
+    vicii_initialize(this);
+    vicii_initialize_timing(this, config);
 }
 
 // Destructor — clean up dynamically allocated pixel line buffers
@@ -2514,10 +2512,6 @@ vicii_s::~vicii_s() {
     free(pixel.pixel_line_color);
     free(pixel.sprite_collision_line);
     free(pixel.graphics_fg_line);
-}
-
-void vicii_destroy(vicii_t* vicii) {
-    delete vicii; // destructor handles buffer cleanup
 }
 
 // ChipBase identity — uses config to determine PAL/NTSC variant
@@ -2529,51 +2523,45 @@ ChipIdentity vicii_s::chip_identity() const {
     }
 }
 
-void vicii_reset(vicii_t* vicii) {
-    if (!vicii) return;
-
+void vicii_s::reset() {
     // Preserve externally-owned pointers and configuration that survive reset
-    const vicii_chip_config_t* config = vicii->config;
-    void (*bank_change)(void*, uint8_t) = vicii->bus.bank_change;
-    void* bus = vicii->bus.bus;
-    uint32_t* framebuffer = vicii->pixel.framebuffer;
-    int fb_width = vicii->pixel.framebuffer_width;
-    int fb_height = vicii->pixel.framebuffer_height;
-    mos2114_t* colorram = vicii->colorram;
+    const vicii_chip_config_t* saved_config = config;
+    void (*saved_bank_change)(void*, uint8_t) = bus.bank_change;
+    void* saved_bus = bus.bus;
+    uint32_t* saved_framebuffer = pixel.framebuffer;
+    int saved_fb_width = pixel.framebuffer_width;
+    int saved_fb_height = pixel.framebuffer_height;
+    mos2114_t* saved_colorram = colorram;
 
     // Re-initialize all state (zeroes + defaults)
     // vicii_initialize_timing will free/re-allocate pixel line buffers
-    vicii_initialize(vicii);
-    vicii_initialize_timing(vicii, config);
+    vicii_initialize(this);
+    vicii_initialize_timing(this, saved_config);
 
     // Restore preserved pointers
-    vicii->config = config;
-    vicii->bus.bank_change = bank_change;
-    vicii->bus.bus = bus;
-    vicii->pixel.framebuffer = framebuffer;
-    vicii->pixel.framebuffer_width = fb_width;
-    vicii->pixel.framebuffer_height = fb_height;
-    vicii->colorram = colorram;
-}
-
-void vicii_bus_attach(void* chip, void* bus) {
-    ((vicii_t*)chip)->bus.bus = bus;
+    config = saved_config;
+    bus.bank_change = saved_bank_change;
+    bus.bus = saved_bus;
+    pixel.framebuffer = saved_framebuffer;
+    pixel.framebuffer_width = saved_fb_width;
+    pixel.framebuffer_height = saved_fb_height;
+    colorram = saved_colorram;
 }
 
 // Configuration helper function
-const vicii_chip_config_t* vicii_get_default_config(bool is_pal) {
+const vicii_chip_config_t* vicii_s::get_default_config(bool is_pal) {
     return is_pal ? &MOS6569_config : &MOS6567R8_config;
 }
 
-void vicii_set_framebuffer(vicii_t* vicii, uint32_t* framebuffer, int width, int height) {
-    vicii_pixel_set_framebuffer(&vicii->pixel, framebuffer, width, height);
+void vicii_s::set_framebuffer(uint32_t* framebuffer, int width, int height) {
+    vicii_pixel_set_framebuffer(&pixel, framebuffer, width, height);
     // Border color should come from register, not hardcoded
-    vicii->border.border_pixel.priority = VICII_PRIORITY_BORDER;
-    vicii->border.border_pixel.color = static_cast<vicii_color_t>(vicii->registers.data[VICII_EC]);
-        if (vicii->pixel.pixel_line_color && vicii->config->visible_pixels_per_line > 0) {
+    border.border_pixel.priority = VICII_PRIORITY_BORDER;
+    border.border_pixel.color = static_cast<vicii_color_t>(registers.data[VICII_EC]);
+        if (pixel.pixel_line_color && config->visible_pixels_per_line > 0) {
             // Initialize buffer with current border color
-            const uint8_t border_color = vicii->registers.data[VICII_EC] & 0x0F;
-            memset(vicii->pixel.pixel_line_priority, VICII_PRIORITY_BORDER, vicii->config->visible_pixels_per_line);
-            memset(vicii->pixel.pixel_line_color, border_color, vicii->config->visible_pixels_per_line);
+            const uint8_t border_color = registers.data[VICII_EC] & 0x0F;
+            memset(pixel.pixel_line_priority, VICII_PRIORITY_BORDER, config->visible_pixels_per_line);
+            memset(pixel.pixel_line_color, border_color, config->visible_pixels_per_line);
         }
 }

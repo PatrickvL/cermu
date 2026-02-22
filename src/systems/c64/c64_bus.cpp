@@ -778,8 +778,8 @@ void c64_bus_init_io_handlers(c64_bus_t* c64_bus) {
 
     // Pages 0-3 ($D000-$D3FF): VIC-II (64 bytes mirrored across 1KB)
     for (int page = 0; page <= 3; page++) {
-        c64_bus->io_handlers[page].read_handler = vicii_registers_read;
-        c64_bus->io_handlers[page].write_handler = vicii_registers_write;
+        c64_bus->io_handlers[page].read_handler = vicii_s::registers_read;
+        c64_bus->io_handlers[page].write_handler = vicii_s::registers_write;
         c64_bus->io_handlers[page].chip_instance = c64->vicii;
     }
 
