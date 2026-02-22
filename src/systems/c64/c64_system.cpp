@@ -199,12 +199,12 @@ static HardwareTraits create_c64_hardware_traits() {
     traits.timing.audio_sample_rate_hz = 44100;
     traits.timing.target_fps = 50;
     traits.timing.cycles_per_frame = 19705;
-    traits.timing.region = VideoRegion::PAL;
+    traits.timing.standard = VideoStandard::PAL;
 
     // Region options
-    traits.region_options.push_back({
+    traits.video_standard_configs.push_back({
         "PAL",
-        VideoRegion::PAL,
+        VideoStandard::PAL,
         traits.timing,
         true
     });
@@ -214,11 +214,11 @@ static HardwareTraits create_c64_hardware_traits() {
     ntsc_timing.video_frequency_hz = 1022727;
     ntsc_timing.target_fps = 60;
     ntsc_timing.cycles_per_frame = 17045;   // 1022727 / 60
-    ntsc_timing.region = VideoRegion::NTSC;
+    ntsc_timing.standard = VideoStandard::NTSC;
 
-    traits.region_options.push_back({
+    traits.video_standard_configs.push_back({
         "NTSC",
-        VideoRegion::NTSC,
+        VideoStandard::NTSC,
         ntsc_timing,
         false
     });
@@ -1280,14 +1280,14 @@ void C64System::register_c64_chips() {
 bool C64System::apply_configuration() {
     // Apply region settings
     if (config_.region_option_index >= 0 &&
-        config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
-        const RegionOption& region = hardware_traits_.region_options[config_.region_option_index];
-        cycles_per_frame_ = region.timing.cycles_per_frame;
-        hardware_traits_.timing = region.timing;  // Keep active timing in sync
+        config_.region_option_index < static_cast<int>(hardware_traits_.video_standard_configs.size())) {
+        const VideoStandardConfig& std_cfg = hardware_traits_.video_standard_configs[config_.region_option_index];
+        cycles_per_frame_ = std_cfg.timing.cycles_per_frame;
+        hardware_traits_.timing = std_cfg.timing;  // Keep active timing in sync
 
         // Map to legacy c64_config_t
         c64_config_.vicii_standard =
-            (region.region == VideoRegion::NTSC) ? VIC_NTSC : VIC_PAL;
+            (std_cfg.standard == VideoStandard::NTSC) ? VIC_NTSC : VIC_PAL;
     }
 
     // Apply SID revision from custom settings
@@ -1335,7 +1335,7 @@ SystemConfiguration C64System::detect_optimal_configuration(
 
         if (lower_name.find("ntsc") != std::string::npos) {
             // Select NTSC region (index 1)
-            if (hardware_traits_.region_options.size() > 1) {
+            if (hardware_traits_.video_standard_configs.size() > 1) {
                 config.region_option_index = 1;
                 printf("C64: Filename contains 'ntsc' â€” selecting NTSC region\n");
             }
@@ -1349,7 +1349,7 @@ SystemConfiguration C64System::detect_optimal_configuration(
             sid_header_t sid_hdr;
             if (sid_parse_header(data, size, &sid_hdr) && sid_hdr.version >= 2) {
                 if (sid_hdr.video == SID_VIDEO_NTSC) {
-                    if (hardware_traits_.region_options.size() > 1) {
+                    if (hardware_traits_.video_standard_configs.size() > 1) {
                         config.region_option_index = 1;  // NTSC
                         printf("C64: SID flags specify NTSC — selecting NTSC region\n");
                     }

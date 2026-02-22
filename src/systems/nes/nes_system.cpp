@@ -951,7 +951,7 @@ static HardwareTraits create_nes_hardware_traits() {
     traits.timing.audio_sample_rate_hz = 44100;
     traits.timing.target_fps = 60;
     traits.timing.cycles_per_frame = 29829;     // 1789773 / 60
-    traits.timing.region = VideoRegion::NTSC;
+    traits.timing.standard = VideoStandard::NTSC;
     
     // Memory options (NES has fixed 2KB RAM)
     traits.memory_options.push_back({
@@ -962,9 +962,9 @@ static HardwareTraits create_nes_hardware_traits() {
     });
     
     // Region options
-    traits.region_options.push_back({
+    traits.video_standard_configs.push_back({
         "NTSC",
-        VideoRegion::NTSC,
+        VideoStandard::NTSC,
         traits.timing,
         true
     });
@@ -974,11 +974,11 @@ static HardwareTraits create_nes_hardware_traits() {
     pal_timing.video_frequency_hz = 4987821;    // PPU is 3x CPU
     pal_timing.target_fps = 50;
     pal_timing.cycles_per_frame = 33252;        // 1662607 / 50
-    pal_timing.region = VideoRegion::PAL;
+    pal_timing.standard = VideoStandard::PAL;
     
-    traits.region_options.push_back({
+    traits.video_standard_configs.push_back({
         "PAL",
-        VideoRegion::PAL,
+        VideoStandard::PAL,
         pal_timing,
         false
     });
@@ -1076,8 +1076,8 @@ bool NintendoSystem<V>::set_configuration(const SystemConfiguration& config) {
     
     // Check if region changed
     if (config_.region_option_index >= 0 &&
-        config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
-        bool new_is_pal = (hardware_traits_.region_options[config_.region_option_index].region == VideoRegion::PAL);
+        config_.region_option_index < static_cast<int>(hardware_traits_.video_standard_configs.size())) {
+        bool new_is_pal = (hardware_traits_.video_standard_configs[config_.region_option_index].standard == VideoStandard::PAL);
         if (new_is_pal != is_pal_) {
             is_pal_ = new_is_pal;
             // Need to recreate system with new region
@@ -1095,9 +1095,9 @@ template<NintendoVariant V>
 bool NintendoSystem<V>::apply_configuration() {
     // Apply region settings
     if (config_.region_option_index >= 0 &&
-        config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
-        const RegionOption& region = hardware_traits_.region_options[config_.region_option_index];
-        cycles_per_frame_ = region.timing.cycles_per_frame;
+        config_.region_option_index < static_cast<int>(hardware_traits_.video_standard_configs.size())) {
+        const VideoStandardConfig& std_cfg = hardware_traits_.video_standard_configs[config_.region_option_index];
+        cycles_per_frame_ = std_cfg.timing.cycles_per_frame;
     }
     
     return true;
@@ -1145,7 +1145,7 @@ SystemConfiguration NintendoSystem<V>::detect_optimal_configuration(
 
     if (detected_pal) {
         // PAL is region option index 1 in create_nes_hardware_traits()
-        if (hardware_traits_.region_options.size() > 1) {
+        if (hardware_traits_.video_standard_configs.size() > 1) {
             config.region_option_index = 1;
         }
     }
@@ -1549,9 +1549,9 @@ void NintendoSystem<V>::render_configuration_ui() {
     
     // Region configuration
     ImGui::Text("Video Region:");
-    for (size_t i = 0; i < hardware_traits_.region_options.size(); i++) {
+    for (size_t i = 0; i < hardware_traits_.video_standard_configs.size(); i++) {
         bool selected = (config_.region_option_index == static_cast<int>(i));
-        if (ImGui::RadioButton(hardware_traits_.region_options[i].name, selected)) {
+        if (ImGui::RadioButton(hardware_traits_.video_standard_configs[i].name, selected)) {
             SystemConfiguration new_config = config_;
             new_config.region_option_index = static_cast<int>(i);
             set_configuration(new_config);
@@ -1573,8 +1573,8 @@ void NintendoSystem<V>::render_configuration_ui() {
 template<NintendoVariant V>
 uint32_t NintendoSystem<V>::get_target_fps() const {
     if (config_.region_option_index >= 0 &&
-        config_.region_option_index < static_cast<int>(hardware_traits_.region_options.size())) {
-        return hardware_traits_.region_options[config_.region_option_index].timing.target_fps;
+        config_.region_option_index < static_cast<int>(hardware_traits_.video_standard_configs.size())) {
+        return hardware_traits_.video_standard_configs[config_.region_option_index].timing.target_fps;
     }
     return 60;  // Default NTSC
 }

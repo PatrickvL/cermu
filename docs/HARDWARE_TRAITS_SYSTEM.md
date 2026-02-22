@@ -95,7 +95,7 @@ struct SystemTiming {
     uint32_t audio_sample_rate_hz;  // Audio sampling rate
     uint32_t target_fps;            // Target frames per second
     uint32_t cycles_per_frame;      // CPU cycles per frame
-    VideoRegion region;             // PAL, NTSC, etc.
+    VideoStandard region;             // PAL, NTSC, etc.
 };
 ```
 
@@ -106,7 +106,7 @@ timing.video_frequency_hz = 985248;     // VIC-II runs at CPU speed
 timing.audio_sample_rate_hz = 44100;
 timing.target_fps = 50;
 timing.cycles_per_frame = 19705;        // 985248 / 50
-timing.region = VideoRegion::PAL;
+timing.standard = VideoStandard::PAL;
 ```
 
 **Example - C64 NTSC:**
@@ -116,7 +116,7 @@ timing.video_frequency_hz = 1022730;
 timing.audio_sample_rate_hz = 44100;
 timing.target_fps = 60;
 timing.cycles_per_frame = 17045;        // 1022730 / 60
-timing.region = VideoRegion::NTSC;
+timing.standard = VideoStandard::NTSC;
 ```
 
 ## Configuration Options
@@ -177,9 +177,9 @@ traits.memory_options.push_back({
 Allows users to select PAL/NTSC and associated timing:
 
 ```cpp
-struct RegionOption {
+struct VideoStandardConfig {
     const char* name;           // Display name
-    VideoRegion region;         // Region enum
+    VideoStandard region;         // Region enum
     SystemTiming timing;        // Timing for this region
     bool is_default;            // Whether this is default
 };
@@ -188,17 +188,17 @@ struct RegionOption {
 **Example - C64:**
 ```cpp
 // PAL (European)
-traits.region_options.push_back({
+traits.video_standard_configs.push_back({
     "PAL (European)",
-    VideoRegion::PAL,
+    VideoStandard::PAL,
     pal_timing,     // See timing examples above
     true            // default
 });
 
 // NTSC (American)
-traits.region_options.push_back({
+traits.video_standard_configs.push_back({
     "NTSC (American)",
-    VideoRegion::NTSC,
+    VideoStandard::NTSC,
     ntsc_timing,
     false
 });
@@ -270,7 +270,7 @@ User's current selected configuration:
 ```cpp
 struct SystemConfiguration {
     int memory_option_index;        // Index into memory_options
-    int region_option_index;        // Index into region_options
+    int region_option_index;        // Index into video_standard_configs
     std::map<std::string, bool> enabled_peripherals;  // Peripheral states
     std::map<std::string, std::string> custom_settings;  // Custom key-value pairs
 };
@@ -337,11 +337,11 @@ static HardwareTraits create_c64_hardware_traits() {
     // ... add more options
     
     // Region options
-    traits.region_options.push_back({
-        "PAL (European)", VideoRegion::PAL, pal_timing, true
+    traits.video_standard_configs.push_back({
+        "PAL (European)", VideoStandard::PAL, pal_timing, true
     });
-    traits.region_options.push_back({
-        "NTSC (American)", VideoRegion::NTSC, ntsc_timing, false
+    traits.video_standard_configs.push_back({
+        "NTSC (American)", VideoStandard::NTSC, ntsc_timing, false
     });
     
     // Peripherals
@@ -388,7 +388,7 @@ public:
         }
         
         if (config.region_option_index < 0 ||
-            config.region_option_index >= traits.region_options.size()) {
+            config.region_option_index >= traits.video_standard_configs.size()) {
             return false;  // Invalid region option
         }
         
@@ -410,7 +410,7 @@ public:
         }
         
         // Get selected region config
-        const RegionOption& region_opt = traits.region_options[config_.region_option_index];
+        const VideoStandardConfig& region_opt = traits.video_standard_configs[config_.region_option_index];
         
         // Update timing
         update_timing(region_opt.timing);
@@ -432,7 +432,7 @@ public:
     
     const SystemTiming& get_current_timing() const override {
         const HardwareTraits& traits = get_hardware_traits();
-        return traits.region_options[config_.region_option_index].timing;
+        return traits.video_standard_configs[config_.region_option_index].timing;
     }
 };
 ```
@@ -460,9 +460,9 @@ void C64System::render_configuration_ui() {
     
     // Region configuration
     ImGui::Text("Region/Timing:");
-    for (size_t i = 0; i < traits.region_options.size(); i++) {
+    for (size_t i = 0; i < traits.video_standard_configs.size(); i++) {
         bool selected = (config_.region_option_index == static_cast<int>(i));
-        if (ImGui::RadioButton(traits.region_options[i].name, selected)) {
+        if (ImGui::RadioButton(traits.video_standard_configs[i].name, selected)) {
             SystemConfiguration new_config = config_;
             new_config.region_option_index = static_cast<int>(i);
             set_configuration(new_config);

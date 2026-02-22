@@ -137,8 +137,8 @@ static const char* get_vic_type_name(vic_base_t* vic) {
 // ============================================================================
 
 ChipIdentity vic_base_s::chip_identity() const {
-    return is_pal ? ChipIdentity{"MOS6561", "MOS Technology"}
-                  : ChipIdentity{"MOS6560", "MOS Technology"};
+    return {is_pal ? "MOS6561" : "MOS6560", "MOS Technology",
+            is_pal ? VideoStandard::PAL : VideoStandard::NTSC};
 }
 
 bool vic_base_s::has_debug_content()    const { return true; }

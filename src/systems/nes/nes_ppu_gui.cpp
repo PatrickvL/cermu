@@ -115,7 +115,8 @@ static ChipLayout& get_ppu_layout() {
 // ============================================================================
 
 ChipIdentity nes_system::PPU::chip_identity() const {
-    return {"RP2C02", "Ricoh"};
+    return {is_pal ? "RP2C07" : "RP2C02", "Ricoh",
+            is_pal ? VideoStandard::PAL : VideoStandard::NTSC};
 }
 
 bool nes_system::PPU::has_debug_content()    const { return true; }

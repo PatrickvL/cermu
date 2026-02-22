@@ -24,7 +24,7 @@
  *
  *   Methods (fully implemented, no override needed):
  *     set_configuration()    — stores config_ (base class member)
- *     get_target_fps()       — reads from region_options[config_.region_option_index]
+ *     get_target_fps()       — reads from video_standard_configs[config_.region_option_index]
  *     set_speed_multiplier() — stores speed_multiplier_ (base class member)
  *     handle_text_input()    — delegates to keyboard_mapper_
  *     release_all_keys()     — delegates to keyboard_mapper_

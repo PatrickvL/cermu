@@ -7,6 +7,7 @@
 #include <functional>
 #include <map>
 #include <SDL_keycode.h>
+#include "chip.h"     // VideoStandard, ChipBase, ChipIdentity
 #include "connector.h"
 #include "device_registry.h"
 
@@ -18,16 +19,7 @@ typedef struct format_descriptor_s format_descriptor_t;
 // SYSTEM HARDWARE TRAITS
 // ============================================================================
 
-/**
- * Video region standard
- */
-enum class VideoRegion {
-    NTSC,           // NTSC (North America, Japan)
-    PAL,            // PAL (Europe, Australia)
-    PAL_M,          // PAL-M (Brazil)
-    SECAM,          // SECAM (France, Eastern Europe)
-    CUSTOM          // Custom/configurable timing
-};
+// VideoStandard enum and ChipBase are defined in chip.h (included at top)
 
 /**
  * Framebuffer color format
@@ -63,7 +55,7 @@ struct SystemTiming {
     uint32_t audio_sample_rate_hz;  // Audio sample rate in Hz (0 if no audio)
     uint32_t target_fps;            // Target frames per second
     uint32_t cycles_per_frame;      // CPU cycles per frame
-    VideoRegion region;             // Video region standard
+    VideoStandard standard;           // Video standard (PAL, NTSC, etc.)
 };
 
 /**
@@ -119,13 +111,13 @@ struct MemoryOption {
 };
 
 /**
- * Region configuration option
+ * Describes a video standard configuration available for a system.
  */
-struct RegionOption {
-    const char* name;               // E.g., "NTSC", "PAL", "PAL-N"
-    VideoRegion region;             // Video region enum
-    SystemTiming timing;            // Timing characteristics for this region
-    bool is_default;                // Whether this is the default configuration
+struct VideoStandardConfig {
+    const char*   name;         // Display name, e.g. "PAL-B", "NTSC-M"
+    VideoStandard standard;     // Color encoding and line standard
+    SystemTiming  timing;       // Clock, scanline and frame timing
+    bool          is_default = false;
 };
 
 /**
@@ -165,7 +157,7 @@ struct HardwareTraits {
     
     // Available configurations
     std::vector<MemoryOption> memory_options;
-    std::vector<RegionOption> region_options;
+    std::vector<VideoStandardConfig> video_standard_configs;
     std::vector<PeripheralOption> peripheral_options;
     std::vector<CustomOption> custom_options;
 };
@@ -220,9 +212,7 @@ struct SystemDescriptor {
 // SYSTEM CHIP — a chip's role within a specific emulated system
 // ============================================================================
 
-// Forward-declare ChipBase (defined in chip.h)
-// Full include needed because unique_ptr<ChipBase> requires a complete type.
-#include "chip.h"
+// (ChipBase already included at top of this file via chip.h)
 
 /**
  * Binds a ChipBase instance to its role in a specific system.
