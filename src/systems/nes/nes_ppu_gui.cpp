@@ -37,26 +37,26 @@ inline ChipLayout create_ricoh_2c02_layout() {
     };
 
     // Hardware-accurate Ricoh 2C02 PPU pinout (40-pin DIP)
-    PIN_LR(layout,  1, RW,      VDD, 40)       // Read/Write / +5V
-    PIN_LR(layout,  2, D0,      ALE, 39)       // Data 0 / ALE (Address Latch Enable)
-    PIN_LR(layout,  3, D1,      MA0, 38)       // Data 1 / AD0 (Addr/Data mux)
-    PIN_LR(layout,  4, D2,      MA1, 37)       // Data 2 / AD1
-    PIN_LR(layout,  5, D3,      MA2, 36)       // Data 3 / AD2
-    PIN_LR(layout,  6, D4,      MA3, 35)       // Data 4 / AD3
-    PIN_LR(layout,  7, D5,      MA4, 34)       // Data 5 / AD4
-    PIN_LR(layout,  8, D6,      MA5, 33)       // Data 6 / AD5
-    PIN_LR(layout,  9, D7,      MA6, 32)       // Data 7 / AD6
-    PIN_LR(layout, 10, A2,      MA7, 31)       // CPU Address 2 / AD7
-    PIN_LR(layout, 11, A1,      A8, 30)        // CPU Address 1 / PPU Address 8
-    PIN_LR(layout, 12, A0,      A9, 29)        // CPU Address 0 / PPU Address 9
-    PIN_LR(layout, 13, CS,      A10, 28)       // /Chip Select / PPU Address 10
-    PIN_LR(layout, 14, EXT0,    A11, 27)       // EXT0 / PPU Address 11
-    PIN_LR(layout, 15, EXT1,    A12, 26)       // EXT1 / PPU Address 12
-    PIN_LR(layout, 16, EXT2,    A13, 25)       // EXT2 / PPU Address 13
-    PIN_LR(layout, 17, EXT3,    RD, 24)        // EXT3 / /RD
-    PIN_LR(layout, 18, CLK,     WE, 23)        // CLK / /WR
-    PIN_LR(layout, 19, NMI,     RES, 22)       // /INT (NMI output) / /RST
-    PIN_LR(layout, 20, VSS,     VOUT, 21)      // Ground / VOUT (composite video)
+    PIN_LR(layout,  1, RW,      VDD, 40)       // R/W / +5V
+    PIN_LR(layout,  2, D0,      ALE, 39)       // data lo / addr latch en
+    PIN_LR(layout,  3, D1,      MA0, 38)       // / PPU mux addr lo
+    PIN_LR(layout,  4, D2,      MA1, 37)
+    PIN_LR(layout,  5, D3,      MA2, 36)
+    PIN_LR(layout,  6, D4,      MA3, 35)
+    PIN_LR(layout,  7, D5,      MA4, 34)
+    PIN_LR(layout,  8, D6,      MA5, 33)
+    PIN_LR(layout,  9, D7,      MA6, 32)       // data hi
+    PIN_LR(layout, 10, A2,      MA7, 31)       // CPU addr / mux addr hi
+    PIN_LR(layout, 11, A1,      A8, 30)        // / PPU addr hi
+    PIN_LR(layout, 12, A0,      A9, 29)        // CPU addr lo
+    PIN_LR(layout, 13, _CS,     A10, 28)       // chip sel / PPU addr
+    PIN_LR(layout, 14, EXT0,    A11, 27)       // ext port lo
+    PIN_LR(layout, 15, EXT1,    A12, 26)
+    PIN_LR(layout, 16, EXT2,    A13, 25)       // ext port hi / PPU addr hi
+    PIN_LR(layout, 17, EXT3,    _RD, 24)       // / VRAM read strobe
+    PIN_LR(layout, 18, CLK,     _WE, 23)       // master clock / VRAM write
+    PIN_LR(layout, 19, _NMI,    _RES, 22)      // interrupt out / reset
+    PIN_LR(layout, 20, VSS,     VOUT, 21)      // gnd / composite video
 
     return layout;
 }

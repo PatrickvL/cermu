@@ -41,26 +41,26 @@ inline ChipLayout create_mos6522_layout() {
     };
 
     // Hardware-accurate MOS6522 VIA pinout (40-pin DIP)
-    PIN_LR(layout,  1, VSS,     CA1, 40)        // Ground / CA1 (handshake input)
-    PIN_LR(layout,  2, PA0,     CA2, 39)        // Port A Bit 0 / CA2 (handshake I/O)
-    PIN_LR(layout,  3, PA1,     A3, 38)         // Port A Bit 1 / RS3 (Register Select 3)
-    PIN_LR(layout,  4, PA2,     A2, 37)         // Port A Bit 2 / RS2
-    PIN_LR(layout,  5, PA3,     A1, 36)         // Port A Bit 3 / RS1
-    PIN_LR(layout,  6, PA4,     A0, 35)         // Port A Bit 4 / RS0
-    PIN_LR(layout,  7, PA5,     RES, 34)        // Port A Bit 5 / /RESET
-    PIN_LR(layout,  8, PA6,     D7, 33)         // Port A Bit 6 / Data 7
-    PIN_LR(layout,  9, PA7,     D6, 32)         // Port A Bit 7 / Data 6
-    PIN_LR(layout, 10, PB0,     D5, 31)         // Port B Bit 0 / Data 5
-    PIN_LR(layout, 11, PB1,     D4, 30)         // Port B Bit 1 / Data 4
-    PIN_LR(layout, 12, PB2,     D3, 29)         // Port B Bit 2 / Data 3
-    PIN_LR(layout, 13, PB3,     D2, 28)         // Port B Bit 3 / Data 2
-    PIN_LR(layout, 14, PB4,     D1, 27)         // Port B Bit 4 / Data 1
-    PIN_LR(layout, 15, PB5,     D0, 26)         // Port B Bit 5 / Data 0
-    PIN_LR(layout, 16, PB6,     PHI2, 25)       // Port B Bit 6 / Clock
-    PIN_LR(layout, 17, PB7,     CS1, 24)        // Port B Bit 7 / Chip Select 1
-    PIN_LR(layout, 18, CB1,     CS2, 23)        // CB1 / /CS2
-    PIN_LR(layout, 19, CB2,     RW, 22)         // CB2 / Read/Write
-    PIN_LR(layout, 20, VDD,     IRQ, 21)        // +5V Power / /IRQ
+    PIN_LR(layout,  1, VSS,     CA1, 40)        // gnd / handshake in
+    PIN_LR(layout,  2, PA0,     CA2, 39)        // port A lo / handshake I/O
+    PIN_LR(layout,  3, PA1,     A3, 38)         // / reg sel 3
+    PIN_LR(layout,  4, PA2,     A2, 37)         // / reg sel 2
+    PIN_LR(layout,  5, PA3,     A1, 36)         // / reg sel 1
+    PIN_LR(layout,  6, PA4,     A0, 35)         // / reg sel 0
+    PIN_LR(layout,  7, PA5,     _RES, 34)       // / reset
+    PIN_LR(layout,  8, PA6,     D7, 33)         // / data hi
+    PIN_LR(layout,  9, PA7,     D6, 32)         // port A hi
+    PIN_LR(layout, 10, PB0,     D5, 31)         // port B lo
+    PIN_LR(layout, 11, PB1,     D4, 30)
+    PIN_LR(layout, 12, PB2,     D3, 29)
+    PIN_LR(layout, 13, PB3,     D2, 28)
+    PIN_LR(layout, 14, PB4,     D1, 27)
+    PIN_LR(layout, 15, PB5,     D0, 26)         // / data lo
+    PIN_LR(layout, 16, PB6,     PHI2, 25)       // / clock
+    PIN_LR(layout, 17, PB7,     CS1, 24)        // port B hi / chip sel 1
+    PIN_LR(layout, 18, CB1,     _CS2, 23)       // handshake / chip sel 2
+    PIN_LR(layout, 19, CB2,     RW, 22)         // handshake / R/W
+    PIN_LR(layout, 20, VDD,     _IRQ, 21)       // +5V / interrupt
 
     return layout;
 }

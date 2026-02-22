@@ -111,29 +111,10 @@ uint8_t get_bit_index_from_label(PinLabel label) {
     return 0;
 }
 
-// Get invert logic from pin label (hardware-consistent across all chips)
+// Get invert logic from pin label — active-low labels are declared
+// before PinLabel::ACTIVE_LOW_END, enabling a simple comparison.
 bool get_invert_logic_from_label(PinLabel label) {
-    switch(label) {
-        // Interrupt pins - always active low
-        case PinLabel::IRQ:
-        case PinLabel::NMI:
-        case PinLabel::RES:
-        case PinLabel::ABORT:
-        
-        // Special control pins - always active low
-        case PinLabel::SO:
-        case PinLabel::ML:
-        
-        // Chip select pins - typically active low
-        case PinLabel::CS:
-        case PinLabel::CS0:
-        case PinLabel::OE:
-        case PinLabel::WE:
-            return true;  // Active low
-            
-        default:
-            return false; // Active high
-    }
+    return label < PinLabel::ACTIVE_LOW_END;
 }
 
 // Convert pin type to group name string

@@ -119,22 +119,22 @@ inline ChipLayout create_pla_layout() {
         false                        // show_date_code
     };
     
-    // Hardware-accurate C64 PLA pinout (28-pin DIP) - Official Specifications
-    // Right-hand pins (15-28) are numbered bottom-up, not top-down
-    PIN_LR(layout,  1, NC,       VCC, 28);          // FE/NC (Programming)   / +5V Power
-    PIN_LR(layout,  2, A13,      A12, 27);          // I7 (A13)              / I8 (A12)
-    PIN_LR(layout,  3, A14,      BA, 26);           // I6 (A14)              / I9 (BA)
-    PIN_LR(layout,  4, A15,      AEC, 25);          // I5 (A15)              / I10 (#AEC)
-    PIN_LR(layout,  5, VA14,     RW, 24);           // I4 (#VA14)            / I11 (R/#W)
-    PIN_LR(layout,  6, CHAREN,   EXROM, 23);        // I3 (#CHAREN)          / I12 (#EXROM)
-    PIN_LR(layout,  7, HIRAM,    GAME, 22);         // I2 (#HIRAM)           / I13 (#GAME)
-    PIN_LR(layout,  8, LORAM,    VA13, 21);         // I1 (#LORAM)           / I14 (VA13)
-    PIN_LR(layout,  9, CAS,      VA12, 20);         // I0 (#CAS)             / I15 (VA12)
-    PIN_LR(layout, 10, ROMH,     CS, 19);           // F7 (#ROMH)            / #CE (Chip Enable)
-    PIN_LR(layout, 11, ROML,     CASRAM_PLA, 18);   // F6 (#ROML)            / F0 (#CASRAM)
-    PIN_LR(layout, 12, IO,       BASIC, 17);        // F5 (#I/O)             / F1 (#BASIC)
-    PIN_LR(layout, 13, GRW,      KERNAL, 16);       // F4 (GR/#W)            / F2 (#KERNAL)
-    PIN_LR(layout, 14, VSS,      CHAROM, 15);       // VSS (Ground)          / F3 (#CHAROM)
+    // Hardware-accurate C64 PLA pinout (28-pin DIP)
+    // I0-I15 = inputs, F0-F7 = outputs, active-low signals marked
+    PIN_LR(layout,  1, NC,        VCC, 28);       // prog / +5V
+    PIN_LR(layout,  2, A13,       A12, 27);       // I7 / I8
+    PIN_LR(layout,  3, A14,       BA, 26);        // I6 / I9
+    PIN_LR(layout,  4, A15,       _AEC, 25);      // I5 / I10
+    PIN_LR(layout,  5, _VA14,     RW, 24);        // I4 / I11 (R/W)
+    PIN_LR(layout,  6, _CHAREN,   _EXROM, 23);    // I3 / I12
+    PIN_LR(layout,  7, _HIRAM,    _GAME, 22);     // I2 / I13
+    PIN_LR(layout,  8, _LORAM,    VA13, 21);      // I1 / I14
+    PIN_LR(layout,  9, _CAS,      VA12, 20);      // I0 / I15
+    PIN_LR(layout, 10, _ROMH,     _CS, 19);       // F7 / chip enable
+    PIN_LR(layout, 11, _ROML,     _CASRAM_PLA, 18); // F6 / F0
+    PIN_LR(layout, 12, _IO,       _BASIC, 17);    // F5 / F1
+    PIN_LR(layout, 13, GRW,       _KERNAL, 16);   // F4 (GR/W) / F2
+    PIN_LR(layout, 14, VSS,       _CHAROM, 15);   // gnd / F3
     
     return layout;
 }

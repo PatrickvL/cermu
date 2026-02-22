@@ -39,170 +39,240 @@ enum class PinType {
     NO_CONNECT    // Explicitly no-connect pins
 };
 
-// Pin label enumeration for 65xx CPU family and common pins
+// Pin label enumeration for 65xx CPU family and common pins.
+//
+// Active-low (inverted) labels appear first, prefixed with underscore.
+// Detect active-low via: label < PinLabel::ACTIVE_LOW_END
+//
 enum class PinLabel {
+    // ================================================================
+    // Active-low (inverted) pins — sorted alphabetically.
+    // These correspond to signals that are default-high / active-low.
+    // The string representation omits the underscore; the display
+    // layer prepends "/" or overbar based on notation style.
+    // ================================================================
+    _ABORT,       // /ABORT — abort (65C816)
+    _AEC,         // /AEC — address enable control (active-low form)
+    _BASIC,       // /BASIC — BASIC ROM select
+    _CAS,         // /CAS — column address strobe
+    _CASRAM_PLA,  // /CASRAM — CAS RAM (PLA output F0)
+    _CHAREN,      // /CHAREN — character ROM enable
+    _CHAROM,      // /CHAROM — character ROM select
+    _CS,          // /CS — chip select
+    _CS0,         // /CS0 — chip select 0
+    _CS1,         // /CS1 — chip select 1
+    _CS2,         // /CS2 — chip select 2
+    _EXROM,       // /EXROM — external ROM
+    _GAME,        // /GAME — game line
+    _HIRAM,       // /HIRAM — high RAM
+    _IO,          // /I/O — I/O area select
+    _IRQ,         // /IRQ — interrupt request
+    _KERNAL,      // /KERNAL — KERNAL ROM select
+    _LORAM,       // /LORAM — low RAM
+    _ML,          // /ML — memory lock (65C02/65C816)
+    _NMI,         // /NMI — non-maskable interrupt
+    _OE,          // /OE — output enable
+    _RAS,         // /RAS — row address strobe
+    _RD,          // /RD — read strobe
+    _RES,         // /RES — reset
+    _ROMH,        // /ROMH — ROM high
+    _ROML,        // /ROML — ROM low
+    _SO,          // /SO — set overflow
+    _VA14,        // /VA14 — video address 14 (inverted form)
+    _VP,          // /VP — vector pull (active-low)
+    _VPB,         // /VPB — vector pull bar (active-low)
+    _WE,          // /WE — write enable
+
+    // Sentinel — all labels below this point are active-high.
+    ACTIVE_LOW_END,
+
+    // ================================================================
+    // Active-high pins — normal polarity, sorted within each group.
+    // ================================================================
+
     // Power pins
+    GND,          // Ground (legacy naming, prefer VSS)
+    VCC,          // +5V power (legacy naming, prefer VDD)
     VDD,          // +5V power supply
     VSS,          // Ground (0V)
-    VCC,          // Legacy +5V naming (prefer VDD)
-    GND,          // Legacy ground naming (prefer VSS)
-    
+
     // Clock pins
-    PHI0,         // Φ0 - Clock input
-    PHI1,         // Φ1 - Inverted clock output
-    PHI2,         // Φ2 - Primary clock output
     CLK,          // Generic clock input
     M2,           // Derived clock output (2A03)
-    
-    // Address bus pins (A0-A23 for full 24-bit addressing)
-    A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15,
+    PHI0,         // Φ0 — clock input
+    PHI1,         // Φ1 — inverted clock output
+    PHI2,         // Φ2 — primary clock output
+
+    // Address bus pins (A0-A23, must remain sequential)
+    A0, A1, A2, A3, A4, A5, A6, A7,
+    A8, A9, A10, A11, A12, A13, A14, A15,
     A16, A17, A18, A19, A20, A21, A22, A23,
-    
-    // Data bus pins (D0-D15 for 16-bit data)
-    D0, D1, D2, D3, D4, D5, D6, D7, D8, D9, D10, D11, D12, D13, D14, D15,
-    
+
+    // Data bus pins (D0-D15, must remain sequential)
+    D0, D1, D2, D3, D4, D5, D6, D7,
+    D8, D9, D10, D11, D12, D13, D14, D15,
+
     // Control signals
+    AEC,          // Address Enable Control (6510)
+    ALE,          // Address Latch Enable
+    BA,           // Bus Available
+    BE,           // Bus Enable (65C02/65C816)
+    CAS,          // Column Address Strobe (active-high form)
+    CS,           // Chip Select (active-high form)
+    CS0,          // Chip Select 0 (active-high form)
+    CS1,          // Chip Select 1 (active-high form)
+    CS2,          // Chip Select 2 (active-high form)
+    MUX,          // Address multiplexer
+    OE,           // Output Enable (active-high form)
+    RAS,          // Row Address Strobe (active-high form)
+    RD,           // Read strobe (active-high form)
+    RDY,          // Ready input/output
     RW,           // Read/Write control
     SYNC,         // Synchronization output
-    RDY,          // Ready input/output
-    AEC,          // Address Enable Control (6510)
-    BE,           // Bus Enable (65C02/65C816)
-    BA,           // Bus Available
-    
-    // Interrupt pins
-    IRQ,          // Interrupt Request (active low)
-    NMI,          // Non-Maskable Interrupt (active low)
-    RES,          // Reset (active low)
-    ABORT,        // Abort (65C816, active low)
-    
+    WE,           // Write Enable (active-high form)
+
+    // Interrupt pins (active-high forms — active-low in _-prefixed)
+    ABORT,        // Abort (65C816, active-high form)
+    IRQ,          // Interrupt Request (active-high form)
+    NMI,          // Non-Maskable Interrupt (active-high form)
+    RES,          // Reset (active-high form)
+
     // Special pins
-    SO,           // Set Overflow (active low)
-    VP,           // Vector Pull (65C02/65C816)
-    VPB,          // Vector Pull Bar (alternate naming)
-    VPA,          // Valid Program Address (65C816)
-    VDA,          // Valid Data Address (65C816)
-    ML,           // Memory Lock (65C02/65C816, active low)
     E,            // Emulation mode (65C816)
+    ML,           // Memory Lock (active-high form)
     MX,           // Memory/Index size status (65C816)
-    
-    // I/O Port pins (6510 specific)
+    SO,           // Set Overflow (active-high form)
+    VDA,          // Valid Data Address (65C816)
+    VP,           // Vector Pull (active-high form)
+    VPA,          // Valid Program Address (65C816)
+    VPB,          // Vector Pull Bar (active-high form)
+
+    // I/O Port pins (6510 specific, must remain sequential)
     P0, P1, P2, P3, P4, P5, P6, P7,
-    
-    // GPIO pins (general purpose)
+
+    // GPIO pins (must remain sequential within each port)
     PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7,
     PB0, PB1, PB2, PB3, PB4, PB5, PB6, PB7,
     PC0, PC1, PC2, PC3, PC4, PC5, PC6, PC7,
     PD0, PD1, PD2, PD3, PD4, PD5, PD6, PD7,
-    
-    // Peripheral pins (for microcontroller variants)
-    UART_TX, UART_RX,
-    SPI_CLK, SPI_MOSI, SPI_MISO, SPI_CS,
+
+    // Peripheral pins (microcontroller variants)
     PWM0, PWM1, PWM2, PWM3,
-    
-    // Common control pins
-    ALE,          // Address Latch Enable
-    CS,           // Chip Select
-    CS0, CS1, CS2, // Multiple chip selects
-    OE,           // Output Enable
-    RD,           // Read strobe (active low)
-    WE,           // Write Enable
-    
-    // Video chip pins (VIC-II, etc.)
-    LUMA,         // Luminance output
+    SPI_CLK,      // SPI clock
+    SPI_CS,       // SPI chip select
+    SPI_MISO,     // SPI data in
+    SPI_MOSI,     // SPI data out
+    UART_RX,      // UART receive
+    UART_TX,      // UART transmit
+
+    // Video chip pins
     CHROMA,       // Chrominance output
-    HSYNC,        // Horizontal sync
-    VSYNC,        // Vertical sync
+    COLOR,        // Color signal output (VIC-II)
+    COLOR_CLK,    // Color clock
     CSYNC,        // Composite sync
     DOT_CLK,      // Dot clock
-    COLOR_CLK,    // Color clock
+    HSYNC,        // Horizontal sync
     LIGHT_PEN,    // Light pen input
-    CAS,          // Column Address Strobe
-    RAS,          // Row Address Strobe
-    MUX,          // Address multiplexer
+    LUMA,         // Luminance output
     VOUT,         // Composite video output
-    
-    // Audio chip pins (SID, etc.)
-    AUDIO_OUT,    // Audio output
+    VSYNC,        // Vertical sync
+
+    // Audio chip pins
     AUDIO_IN,     // Audio input
-    FILTER_OUT,   // Filter output
+    AUDIO_OUT,    // Audio output
     FILTER_IN,    // Filter input
-    OSC1, OSC2, OSC3, // Oscillator outputs
+    FILTER_OUT,   // Filter output
     NOISE,        // Noise output
-    
+    OSC1,         // Oscillator output 1
+    OSC2,         // Oscillator output 2
+    OSC3,         // Oscillator output 3
+    SOUND,        // Sound output (VIC-I/II composite audio)
+
     // CIA/Timer chip pins
     CNT,          // Counter input
+    FLAG,         // Flag input
+    PC,           // Peripheral Control output
+    SDR,          // Serial Data Register
     SP,           // Serial port
     TOD,          // Time of day clock
-    FLAG,         // Flag input
-    PC,           // Serial port (alternate naming)
-    SDR,          // Serial Data Register
-    
+
     // VIA handshake pins (MOS 6522)
-    CA1, CA2,     // Port A handshake lines
-    CB1, CB2,     // Port B handshake lines
-    
-    // Memory chip pins
-    DQ0, DQ1, DQ2, DQ3, DQ4, DQ5, DQ6, DQ7, // Data I/O
-    MA0, MA1, MA2, MA3, MA4, MA5, MA6, MA7,  // Memory address
-    MA8, MA9, MA10, MA11, MA12, MA13, MA14, MA15,
+    CA1,          // Port A control line 1
+    CA2,          // Port A control line 2
+    CB1,          // Port B control line 1
+    CB2,          // Port B control line 2
+
+    // Memory chip pins (DQ/MA must remain sequential)
     CASRAM,       // CAS for RAM
-    
+    DQ0, DQ1, DQ2, DQ3, DQ4, DQ5, DQ6, DQ7,
+    MA0, MA1, MA2, MA3, MA4, MA5, MA6, MA7,
+    MA8, MA9, MA10, MA11, MA12, MA13, MA14, MA15,
+
     // SID-specific pins
-    CAP1A, CAP1B, // Filter capacitor connections
-    CAP2A, CAP2B, // Filter capacitor connections
-    POTX, POTY,   // Paddle inputs
+    CAP1A,        // Filter capacitor 1A
+    CAP1B,        // Filter capacitor 1B
+    CAP2A,        // Filter capacitor 2A
+    CAP2B,        // Filter capacitor 2B
     EXT_IN,       // External audio input
-    
-    // VIC-II specific pins
-    COLOR,        // Color signal output
-    SOUND,        // Sound output (VIC-II composite audio)
-    
-    // PLA specific pins (for C64 PLA chip)
-    BASIC,        // BASIC ROM select
-    KERNAL,       // KERNAL ROM select
-    CHAROM,       // Character ROM select
-    CASRAM_PLA,   // CAS RAM (PLA specific)
+    POTX,         // Paddle X input
+    POTY,         // Paddle Y input
+
+    // PLA specific pins (active-high forms; PLA outputs often
+    // active-low — use _-prefixed labels for those)
+    BASIC,        // BASIC ROM select (active-high form)
+    CASRAM_PLA,   // CAS RAM — PLA specific (active-high form)
+    CHAREN,       // Character ROM enable (active-high form)
+    CHAROM,       // Character ROM select (active-high form)
+    EXROM,        // External ROM (active-high form)
+    GAME,         // Game line (active-high form)
     GRW,          // Graphics Read/Write
-    IO,           // I/O select
-    ROML,         // ROM Low
-    ROMH,         // ROM High
-    GAME,         // Game line
-    EXROM,        // External ROM
-    CHAREN,       // Character ROM enable
-    LORAM,        // Low RAM
-    HIRAM,        // High RAM
-    VA12, VA13, VA14, // Video address lines
-    
-    // Keyboard matrix pins (TED 7360)
+    HIRAM,        // High RAM (active-high form)
+    IO,           // I/O select (active-high form)
+    KERNAL,       // KERNAL ROM select (active-high form)
+    LORAM,        // Low RAM (active-high form)
+    ROMH,         // ROM High (active-high form)
+    ROML,         // ROM Low (active-high form)
+    VA12,         // Video address 12
+    VA13,         // Video address 13
+    VA14,         // Video address 14 (active-high form)
+
+    // Keyboard matrix pins (TED 7360, must remain sequential)
     K0, K1, K2, K3, K4, K5, K6, K7,
-    
+
     // NES-specific pins (Ricoh 2A03 / 2C02)
-    AD1, AD2,             // Multiplexed address/data (2A03)
-    IN0, IN1,             // Controller data input (2A03)
-    OUT0, OUT1, OUT2,     // Controller strobe output (2A03)
+    AD1,          // Multiplexed address/data 1 (2A03)
+    AD2,          // Multiplexed address/data 2 (2A03)
     EXT0, EXT1, EXT2, EXT3, // PPU extension port (2C02)
-    
-    // Logic chip pins
-    Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7,         // Outputs
-    I0, I1, I2, I3, I4, I5, I6, I7,         // Inputs
-    Y0, Y1, Y2, Y3, Y4, Y5, Y6, Y7,         // Logic outputs
-    S0, S1, S2, S3,                         // Select lines
+    IN0,          // Controller data input 0 (2A03)
+    IN1,          // Controller data input 1 (2A03)
+    OUT0,         // Controller strobe 0 (2A03)
+    OUT1,         // Controller strobe 1 (2A03)
+    OUT2,         // Controller strobe 2 (2A03)
+
+    // Logic chip pins (must remain sequential within sub-groups)
     G,            // Gate/Enable
-    
-    // Test and configuration pins
-    TEST,         // Test mode pin
+    I0, I1, I2, I3, I4, I5, I6, I7,
+    Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7,
+    S0, S1, S2, S3,
+    Y0, Y1, Y2, Y3, Y4, Y5, Y6, Y7,
+
+    // Test and configuration
     NC,           // No Connect
-    
-    // Analog pins
-    VREF,         // Voltage Reference
+    TEST,         // Test mode pin
+
+    // Analog pins (AIN must remain sequential)
     AIN0, AIN1, AIN2, AIN3, AIN4, AIN5, AIN6, AIN7,
-    AOUT0, AOUT1,
-    
+    AOUT0,        // Analog output 0
+    AOUT1,        // Analog output 1
+    VREF,         // Voltage reference
+
     // Crystal/oscillator pins
-    XTAL1, XTAL2,
-    OSC_IN, OSC_OUT,
-    
-    // Unknown/custom pin
+    OSC_IN,       // Oscillator input
+    OSC_OUT,      // Oscillator output
+    XTAL1,        // Crystal 1
+    XTAL2,        // Crystal 2
+
+    // Unknown/custom pin — must be last
     UNKNOWN
 };
 

@@ -39,30 +39,30 @@ inline ChipLayout create_ted7360_layout() {
     };
 
     // Hardware-accurate TED 7360 pinout (48-pin DIP, 24 pins per side)
-    PIN_LR(layout,  1, VSS,     VDD, 48)       // Ground / +5V
-    PIN_LR(layout,  2, D0,      RAS, 47)       // Data 0 / /RAS
-    PIN_LR(layout,  3, D1,      CAS, 46)       // Data 1 / /CAS
-    PIN_LR(layout,  4, D2,      MUX, 45)       // Data 2 / MUX
-    PIN_LR(layout,  5, D3,      BA, 44)        // Data 3 / Bus Available
-    PIN_LR(layout,  6, D4,      IRQ, 43)       // Data 4 / /IRQ
-    PIN_LR(layout,  7, D5,      PHI0, 42)      // Data 5 / Clock In
-    PIN_LR(layout,  8, D6,      PHI2, 41)      // Data 6 / Clock Out
-    PIN_LR(layout,  9, D7,      RW, 40)        // Data 7 / R/W
-    PIN_LR(layout, 10, A0,      A15, 39)       // Address 0 / Address 15
-    PIN_LR(layout, 11, A1,      A14, 38)       // Address 1 / Address 14
-    PIN_LR(layout, 12, A2,      A13, 37)       // Address 2 / Address 13
-    PIN_LR(layout, 13, A3,      A12, 36)       // Address 3 / Address 12
-    PIN_LR(layout, 14, A4,      A11, 35)       // Address 4 / Address 11
-    PIN_LR(layout, 15, A5,      A10, 34)       // Address 5 / Address 10
-    PIN_LR(layout, 16, A6,      A9, 33)        // Address 6 / Address 9
-    PIN_LR(layout, 17, A7,      A8, 32)        // Address 7 / Address 8
-    PIN_LR(layout, 18, K0,      K7, 31)        // K0 / K7
-    PIN_LR(layout, 19, K1,      K6, 30)        // K1 / K6
-    PIN_LR(layout, 20, K2,      K5, 29)        // K2 / K5
-    PIN_LR(layout, 21, K3,      K4, 28)        // K3 / K4
-    PIN_LR(layout, 22, LUMA,    SOUND, 27)     // Luminance / Sound Output
-    PIN_LR(layout, 23, CHROMA,  CS1, 26)       // Chrominance / /CS1
-    PIN_LR(layout, 24, VSS,     CS0, 25)       // Ground / CS0
+    PIN_LR(layout,  1, VSS,     VDD, 48)       // gnd / +5V supply
+    PIN_LR(layout,  2, D0,      _RAS, 47)      // data bus lo
+    PIN_LR(layout,  3, D1,      _CAS, 46)      // / DRAM strobes
+    PIN_LR(layout,  4, D2,      MUX, 45)       // / addr mux
+    PIN_LR(layout,  5, D3,      BA, 44)        // / bus available
+    PIN_LR(layout,  6, D4,      _IRQ, 43)      // / interrupt
+    PIN_LR(layout,  7, D5,      PHI0, 42)      // / clock in
+    PIN_LR(layout,  8, D6,      PHI2, 41)      // / clock out
+    PIN_LR(layout,  9, D7,      RW, 40)        // data bus hi / R/W
+    PIN_LR(layout, 10, A0,      A15, 39)       // addr bus lo
+    PIN_LR(layout, 11, A1,      A14, 38)
+    PIN_LR(layout, 12, A2,      A13, 37)
+    PIN_LR(layout, 13, A3,      A12, 36)
+    PIN_LR(layout, 14, A4,      A11, 35)
+    PIN_LR(layout, 15, A5,      A10, 34)
+    PIN_LR(layout, 16, A6,      A9, 33)
+    PIN_LR(layout, 17, A7,      A8, 32)        // / addr bus hi
+    PIN_LR(layout, 18, K0,      K7, 31)        // keyboard matrix
+    PIN_LR(layout, 19, K1,      K6, 30)
+    PIN_LR(layout, 20, K2,      K5, 29)
+    PIN_LR(layout, 21, K3,      K4, 28)
+    PIN_LR(layout, 22, LUMA,    SOUND, 27)     // luminance / audio
+    PIN_LR(layout, 23, CHROMA,  _CS1, 26)      // chrominance / chip sel
+    PIN_LR(layout, 24, VSS,     CS0, 25)       // gnd / chip sel (hi)
 
     return layout;
 }
