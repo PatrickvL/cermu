@@ -1183,27 +1183,6 @@ void VIC20System::setup_connector_ports() {
 }
 
 // ============================================================================
-// Private Helper Methods - CPU Memory Callbacks
-// ============================================================================
-
-uint8_t VIC20System::cpu_read(void* user_data, uint32_t addr, uint8_t bus_state_param) {
-    VIC20System* sys = static_cast<VIC20System*>(user_data);
-    (void)bus_state_param;
-    
-    if (!sys || !sys->memory_) return 0xFF;
-    
-    return vic20_memory_read_byte(sys->memory_, addr & 0xFFFF);
-}
-
-void VIC20System::cpu_write(void* user_data, uint32_t addr, uint8_t data) {
-    VIC20System* sys = static_cast<VIC20System*>(user_data);
-    
-    if (!sys || !sys->memory_) return;
-    
-    vic20_memory_write_byte(sys->memory_, addr & 0xFFFF, data);
-}
-
-// ============================================================================
 // Private Helper Methods - VIC Memory Callbacks
 // ============================================================================
 
