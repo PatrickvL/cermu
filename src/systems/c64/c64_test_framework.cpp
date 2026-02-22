@@ -1584,7 +1584,7 @@ std::vector<TestResult> TestFramework::run_all_tests(C64System* c64, const TestF
 }
 
 TestFramework::TestStats TestFramework::get_statistics(const std::vector<TestResult>& results) const {
-    TestStats stats = {0};
+    TestStats stats = {};
     
     for (const auto& result : results) {
         stats.total++;

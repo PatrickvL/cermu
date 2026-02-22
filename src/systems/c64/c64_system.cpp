@@ -1820,7 +1820,7 @@ void C64System::memory_init(const c64_config_t* config) {
     // -------------------------------------------------------------------------
     // Initialize Color RAM
     // -------------------------------------------------------------------------
-    if (this->colorram && this->colorram->memory) {
+    if (this->colorram) {
         c64_test_mode_t test_mode = config ? config->test_mode : C64_TEST_MODE_NORMAL;
         if (test_mode == C64_TEST_MODE_DEBUG_PATTERNS) {
             colorram_init_debug(this->colorram);

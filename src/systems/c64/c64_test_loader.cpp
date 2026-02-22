@@ -159,7 +159,6 @@ static uint16_t evaluate_basic_expression(ram_t* ram, const char* expr, size_t l
         // Find the last number in the expression - it's likely the offset
         // We scan backwards to find the last sequence of digits
         uint16_t offset = 0;
-        bool found_offset = false;
         
         for (int i = len - 1; i >= 0; i--) {
             if (isdigit((unsigned char)expr[i])) {
@@ -177,7 +176,6 @@ static uint16_t evaluate_basic_expression(ram_t* ram, const char* expr, size_t l
                 // Check if this number is not 43, 44, or 256
                 if (num != 43 && num != 44 && num != 256) {
                     offset = num;
-                    found_offset = true;
                     break;
                 }
                 
