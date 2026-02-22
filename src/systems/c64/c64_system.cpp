@@ -19,8 +19,7 @@
 #include "../../core/formats/commodore_load_helpers.h"
 #include "../../chip/cpu/fam65xx/mos6510.h"
 // CPU (fam65xx) is a native C++ ChipBase — no separate GUI header needed
-#include "../../chip/video/vic_ii/mos6569.h"
-#include "../../chip/video/vic_ii/mos6567.h"
+#include "../../chip/video/vic_ii/vicii_common.h"
 // VIC-II is a native C++ ChipBase — no separate GUI header needed
 // MOS6526 is a native C++ ChipBase — no separate GUI header needed
 // MOS2114 is a native C++ ChipBase — no separate GUI header needed
@@ -283,7 +282,7 @@ const SystemDescriptor& C64System::get_descriptor() const {
 // CIA2 Port A change callback — updates VIC-II bank select
 static void cia2_port_a_bank_callback(void* context, uint8_t port_a_value) {
     C64System* c64 = static_cast<C64System*>(context);
-    vicii_memory_bank_change(c64->vicii, port_a_value & 0x03);
+    vicii_s::memory_bank_change(c64->vicii, port_a_value & 0x03);
 }
 
 // CPU I/O port banking callback — updates PLA memory mode
@@ -349,7 +348,9 @@ bool C64System::initialize() {
     if (!(this->basic = rom_create_with_size(8192))) { cleanup(); return false; }
     if (!(this->cartridge_romh = rom_create_with_size(8192))) { cleanup(); return false; }
     if (!(this->charrom = rom_create_with_size(4096))) { cleanup(); return false; }
-    if (!(this->vicii = (c64_config_.vicii_standard == VIC_PAL) ? mos6569_create() : mos6567_create())) { cleanup(); return false; }
+    this->vicii = new vicii_t();
+    this->vicii->init(vicii_s::get_default_config(c64_config_.vicii_standard == VIC_PAL), vicii_s::memory_bank_change);
+    if (!this->vicii) { cleanup(); return false; }
     this->sid = new mos6581_t();
     sid->init();
 
@@ -537,7 +538,7 @@ void C64System::reset() {
         if (this->cia2) this->cia2->reset();
 
         // Reset VIC-II to clear sprite pipeline state
-        if (this->vicii) vicii_reset(this->vicii);
+        if (this->vicii) this->vicii->reset();
 
         // Reset SID — clears all registers, envelopes, and the sample ring buffer
         if (this->sid) this->sid->reset();
@@ -596,7 +597,7 @@ void C64System::system_tick() {
     BUS_SET_DATA(s, BUS_GET_DATA(bus_ptr->state));
 
     // PHASE 1: VIC-II PHI1 — g-access read, pixel sequencing
-    s = vicii_tick_phi1(vicii, s);
+    s = vicii->tick_phi1(s);
 
     // PHASE 1.5: CIA PHI2 — apply pending interrupt lines before CPU
     s = cia2->tick_phi2(s);
@@ -615,7 +616,7 @@ void C64System::system_tick() {
     s = c64_memory_tick(bus_ptr, s);
 
     // PHASE 3.1: VIC-II PHI2 — c/p/s-access data delivery
-    vicii_tick_phi2(vicii, s);
+    vicii->tick_phi2(s);
 
     // PHASE 3.5: CIA PHI1 — timer counting, TOD, interrupt generation
     s = cia2->tick_phi1(s);
@@ -1034,7 +1035,7 @@ void C64System::get_display_dimensions(int* width, int* height) const {
 
 void C64System::set_framebuffer(uint32_t* buffer, int width, int height) {
     if (initialized_ && this->vicii && buffer) {
-        vicii_set_framebuffer(this->vicii, buffer, width, height);
+        this->vicii->set_framebuffer(buffer, width, height);
     }
 }
 
@@ -1554,8 +1555,8 @@ static bool c64_vicii_lp_pin_read(void* context) {
     auto* lightpen = ctx->system ? ctx->system->get_cached_lightpen() : nullptr;
     if (!lightpen) return true;
 
-    uint16_t beam_x = vicii_get_x_coordinate(ctx->c64->vicii);
-    uint16_t beam_y = vicii_get_raster_counter(ctx->c64->vicii);
+    uint16_t beam_x = ctx->c64->vicii->get_x_coordinate();
+    uint16_t beam_y = ctx->c64->vicii->get_raster_counter();
     return lightpen->get_lp_pin_state(beam_x, beam_y);
 }
 

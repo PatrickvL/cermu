@@ -503,46 +503,30 @@ struct vicii_s : public ChipBase {
     void render_debug_content() override;
     void render_settings_content() override;
     void render_layout_content() override;
+
+    // Initialization and lifecycle
+    void init(const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t));
+    void reset();
+
+    // Tick functions
+    bus_state_t tick_phi1(bus_state_t bus_state);
+    void tick_phi2(bus_state_t bus_state);
+
+    // Register I/O (static — for io_page_handlers_t function pointer tables)
+    static bus_state_t registers_read(void* context, bus_state_t bus_state);
+    static bus_state_t registers_write(void* context, bus_state_t bus_state);
+
+    // Memory bank change (static — used as callback from CIA2)
+    static void memory_bank_change(void* chip, uint8_t bank);
+
+    // Framebuffer management
+    void set_framebuffer(uint32_t* framebuffer, int width, int height);
+
+    // Configuration and utility
+    static const vicii_chip_config_t* get_default_config(bool is_pal);
+    static const uint32_t* get_default_palette();
+    uint16_t get_raster_counter() const;
+    uint16_t get_x_coordinate() const;
 };
 
-// ========================================================================================
-// PUBLIC API FUNCTION PROTOTYPES
-// ========================================================================================
 
-// Only externally-visible (non-static/non-inline) functions need declarations
-
-// VIC-II PHI1 phase — cycle processing, PHI1 memory read, sets up PHI2 address
-bus_state_t vicii_tick_phi1(vicii_t* vicii, bus_state_t bus_state);
-
-// VIC-II PHI2 delivery — reads c64_memory_tick result, stores C/P/S data internally
-void vicii_tick_phi2(vicii_t* vicii, bus_state_t bus_state);
-
-// Factory and lifecycle
-vicii_t* vicii_create(const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t));
-void vicii_destroy(vicii_t* vicii);
-void vicii_reset(vicii_t* vicii);
-
-// Configuration helpers
-const vicii_chip_config_t* vicii_get_default_config(bool is_pal);
-
-// Bus attachment
-void vicii_bus_attach(void* chip, void* bus);
-
-// Register I/O with bus_state_t
-bus_state_t vicii_registers_read(void* context, bus_state_t bus_state);
-bus_state_t vicii_registers_write(void* context, bus_state_t bus_state);
-
-// Bank change callback
-void vicii_memory_bank_change(void* chip, uint8_t bank);
-
-// Utility functions
-void vicii_set_framebuffer(vicii_t* vicii, uint32_t* framebuffer, int width, int height);
-
-// Lightpen functions
-// Set the LP pin state. The VIC-II detects negative edges (HIGH→LOW transition)
-// and latches its current x_coordinate/2 → LPX, raster_counter → LPY.
-void vicii_lightpen_set_pin(vicii_t* vicii, bool pin_high);
-
-// Read current raster position for external lightpen coordinate matching.
-uint16_t vicii_get_raster_counter(const vicii_t* vicii);
-uint16_t vicii_get_x_coordinate(const vicii_t* vicii);
