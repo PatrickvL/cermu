@@ -120,9 +120,7 @@ private:
     
     // Memory access callbacks for CPU
     bus_state_t mem_tick(bus_state_t s);
-    static uint8_t cpu_read(void* user_data, uint32_t addr, uint8_t bus_state);
-    static void cpu_write(void* user_data, uint32_t addr, uint8_t data);
-    
+
     // Memory access callbacks for VIC chip
     static uint8_t vic_mem_read(void* user_data, uint16_t addr);
     static uint8_t vic_color_read(void* user_data, uint16_t addr);
