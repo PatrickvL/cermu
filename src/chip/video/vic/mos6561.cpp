@@ -28,48 +28,9 @@ void mos6561_s::init() {
     cycles_per_line = VIC_PAL_CYCLES_PER_LINE;
     total_lines = VIC_PAL_TOTAL_LINES;
 
-    // Enable enhanced features
-    extended_color_mode = true;
-    extended_colors[0] = 0x00; // Black
-    extended_colors[1] = 0xFF; // White
-    extended_colors[2] = 0x88; // Gray 1
-    extended_colors[3] = 0xAA; // Gray 2
-
     // Reset video generation state
     reset();
 
     // Initialise audio with PAL clock and default sample rate
     audio_reset(vic_config_pal.clock_frequency, 22050);
-}
-
-void mos6561_s::reset() {
-    vic_base_s::reset();
-
-    // Reset extended features
-    extended_color_mode = true;
-}
-
-// Enhanced register access functions
-bus_state_t mos6561_s::registers_read(bus_state_t bus_state) {
-    uint8_t r = BUS_GET_ADDR(bus_state) & 0x0F;
-
-    // Handle extended color registers (if implemented)
-    if (extended_color_mode && r >= 12 && r <= 15) {
-        BUS_SET_DATA(bus_state, extended_colors[r - 12]);
-        return bus_state;
-    }
-
-    return vic_base_s::registers_read(bus_state);
-}
-
-bus_state_t mos6561_s::registers_write(bus_state_t bus_state) {
-    uint8_t r = BUS_GET_ADDR(bus_state) & 0x0F;
-
-    // Handle extended color registers
-    if (extended_color_mode && r >= 12 && r <= 15) {
-        extended_colors[r - 12] = BUS_GET_DATA(bus_state);
-        return bus_state;
-    }
-
-    return vic_base_s::registers_write(bus_state);
 }
