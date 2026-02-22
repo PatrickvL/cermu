@@ -724,7 +724,10 @@ uint8_t Commodore264System<V>::cpu_read(uint32_t addr) {
     // TED registers at $FF00-$FF3F (always visible)
     if (addr16 >= 0xFF00 && addr16 <= 0xFF3F) {
         if (ted_) {
-            return ted7360_read_register(ted_, addr16 & 0x3F);
+            bus_state_t ted_state = 0;
+            BUS_SET_ADDR(ted_state, addr16);
+            ted_state = ted7360_registers_read(ted_, ted_state);
+            return BUS_GET_DATA(ted_state);
         }
         return 0xFF;
     }
@@ -771,7 +774,10 @@ void Commodore264System<V>::cpu_write(uint32_t addr, uint8_t data) {
     // TED registers at $FF00-$FF3F (always writable)
     if (addr16 >= 0xFF00 && addr16 <= 0xFF3F) {
         if (ted_) {
-            ted7360_write_register(ted_, addr16 & 0x3F, data);
+            bus_state_t ted_state = 0;
+            BUS_SET_ADDR(ted_state, addr16);
+            BUS_SET_DATA(ted_state, data);
+            ted7360_registers_write(ted_, ted_state);
         }
         return;
     }

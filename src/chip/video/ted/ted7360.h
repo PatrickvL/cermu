@@ -467,11 +467,11 @@ void ted7360_tick(ted7360_t* ted);
 // API — Register I/O
 // ============================================================================
 
-/** Read a TED register (addr = $FF00-$FF3F offset, i.e. 0x00-0x3F). */
-uint8_t ted7360_read_register(ted7360_t* ted, uint8_t reg);
+/** Read a TED register (addr encodes $FF00-$FF3F offset). */
+bus_state_t ted7360_registers_read(void* context, bus_state_t bus_state);
 
-/** Write a TED register (addr = $FF00-$FF3F offset, i.e. 0x00-0x3F). */
-void    ted7360_write_register(ted7360_t* ted, uint8_t reg, uint8_t data);
+/** Write a TED register (addr encodes $FF00-$FF3F offset). */
+bus_state_t ted7360_registers_write(void* context, bus_state_t bus_state);
 
 // ============================================================================
 // API — IRQ query

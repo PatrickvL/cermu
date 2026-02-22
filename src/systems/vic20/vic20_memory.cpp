@@ -236,8 +236,10 @@ static bus_state_t vic20_io_vic_via_read(void* ctx, bus_state_t bus_state) {
     if (offset < 0x10) {
         // VIC registers
         if (mem->vic_chip) {
-            uint8_t data = vic_read_register((vic_base_t*)mem->vic_chip, offset & 0x0F);
-            BUS_SET_DATA(bus_state, data);
+            bus_state_t vic_state = 0;
+            BUS_SET_ADDR(vic_state, offset & 0x0F);
+            vic_state = vic_registers_read(mem->vic_chip, vic_state);
+            BUS_SET_DATA(bus_state, BUS_GET_DATA(vic_state));
         }
     } else if (offset < 0x20) {
         // VIA1 registers
@@ -258,8 +260,10 @@ static bus_state_t vic20_io_vic_via_read(void* ctx, bus_state_t bus_state) {
     } else {
         // $9x30-$9x3F: VIC mirrors
         if (mem->vic_chip) {
-            uint8_t data = vic_read_register((vic_base_t*)mem->vic_chip, offset & 0x0F);
-            BUS_SET_DATA(bus_state, data);
+            bus_state_t vic_state = 0;
+            BUS_SET_ADDR(vic_state, offset & 0x0F);
+            vic_state = vic_registers_read(mem->vic_chip, vic_state);
+            BUS_SET_DATA(bus_state, BUS_GET_DATA(vic_state));
         }
     }
     
@@ -275,7 +279,10 @@ static bus_state_t vic20_io_vic_via_write(void* ctx, bus_state_t bus_state) {
     if (offset < 0x10) {
         // VIC registers
         if (mem->vic_chip) {
-            vic_write_register((vic_base_t*)mem->vic_chip, offset & 0x0F, data);
+            bus_state_t vic_state = 0;
+            BUS_SET_ADDR(vic_state, offset & 0x0F);
+            BUS_SET_DATA(vic_state, data);
+            vic_registers_write(mem->vic_chip, vic_state);
         }
     } else if (offset < 0x20) {
         // VIA1 registers
@@ -296,7 +303,10 @@ static bus_state_t vic20_io_vic_via_write(void* ctx, bus_state_t bus_state) {
     } else {
         // $9x30-$9x3F: VIC mirrors
         if (mem->vic_chip) {
-            vic_write_register((vic_base_t*)mem->vic_chip, offset & 0x0F, data);
+            bus_state_t vic_state = 0;
+            BUS_SET_ADDR(vic_state, offset & 0x0F);
+            BUS_SET_DATA(vic_state, data);
+            vic_registers_write(mem->vic_chip, vic_state);
         }
     }
     

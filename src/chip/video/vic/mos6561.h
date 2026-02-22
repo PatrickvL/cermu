@@ -21,5 +21,5 @@ void mos6561_set_framebuffer(mos6561_t* vic, uint32_t* framebuffer, int width, i
 void mos6561_reset(mos6561_t* vic);
 
 // Enhanced register access functions
-uint8_t mos6561_read_register(mos6561_t* vic, uint8_t reg);
-void mos6561_write_register(mos6561_t* vic, uint8_t reg, uint8_t value);
+bus_state_t mos6561_registers_read(void* context, bus_state_t bus_state);
+bus_state_t mos6561_registers_write(void* context, bus_state_t bus_state);
