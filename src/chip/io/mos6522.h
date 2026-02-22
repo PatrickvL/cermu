@@ -6,6 +6,7 @@
 #include "../../core/chip.h"
 #include "../../core/bus_cycle_interface.h"
 #include "../../core/system_lines.h"
+#include "../../core/ioport.h"       // For io_port<Mask> and io_port_state
 
 // MOS 6522 VIA (Versatile Interface Adapter) chip structure
 typedef struct mos6522_s : public ChipBase {
@@ -14,11 +15,12 @@ typedef struct mos6522_s : public ChipBase {
     // Registers
     uint8_t registers[16] = {};
 
-    // I/O Ports
-    uint8_t port_a_data = 0xFF;
-    uint8_t port_b_data = 0xFF;
-    uint8_t port_a_ddr = 0;
-    uint8_t port_b_ddr = 0;
+    // I/O Ports — io_port_state owns DDR/ORA/ORB/pin storage, io_port<0xFF> provides view
+    // data initialized to 0xFF to match existing pull-up behavior (all HIGH after reset)
+    io_port_state port_a_regs{0x00, 0xFF, 0xFF};
+    io_port_state port_b_regs{0x00, 0xFF, 0xFF};
+    io_port<0xFF> port_a{port_a_regs};
+    io_port<0xFF> port_b{port_b_regs};
 
     // Callbacks for port input reads (used for keyboard matrix scanning)
     // These callbacks allow external devices (keyboard, joystick) to pull port lines LOW

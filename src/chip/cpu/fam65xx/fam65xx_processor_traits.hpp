@@ -281,16 +281,39 @@ inline constexpr CPUTraits MOS6510 = {
     BankingType::NONE,                                // banking
     {SoundChip::NONE, DMAController::NONE, false}     // peripheral
 };
+// MOS 6510 I/O Port bit assignments (mask 0x3F):
+//   Bit 0: LORAM  — BASIC ROM enable (active high, output)
+//   Bit 1: HIRAM  — KERNAL ROM enable (active high, output)
+//   Bit 2: CHAREN — Character ROM / I/O select (active high, output)
+//   Bit 3: Cassette data output (directly drives tape write)
+//   Bit 4: Cassette sense (active low, input — tape button pressed)
+//   Bit 5: Cassette motor control (active low, output)
+//   Bits 6-7: Not connected (absent from mask)
 
 inline constexpr CPUTraits MOS6510T = MOS6510; // Identical
 
+// CSG 7501/8501 — C16/Plus4 CPU
+// I/O Port bit assignments (active via DDR at $00/$01, mask 0x5F):
+//   Bit 0: Cassette motor control (active low, output)
+//   Bit 1: Serial bus SRQ IN (directly from IEC bus)
+//   Bit 2: Serial bus DATA (directly from IEC bus)
+//   Bit 3: Serial bus CLK  (directly from IEC bus)
+//   Bit 4: Serial bus ATN  (directly from IEC bus)
+//   Bit 5: Not connected   (absent from mask — no physical pin)
+//   Bit 6: Cassette sense   (active low, input — directly samples tape data)
+//
+// Banking: ROM selection is driven jointly by bits 0-3 and TED registers,
+// unlike the 6510 where LORAM/HIRAM/CHAREN in the CPU port drive PLA
+// banking more directly. Here the TED participates in address decode.
+//
+// No NMI line: GATE IN (from TED) replaces NMI on this chip.
 inline constexpr CPUTraits CSG7501 = {
     "Commodore", // vendor
     "7501",      // chip_id
     CoreFlags::NMOS_BASE | CPUCoreFlags::HAS_IO_PORT |
         CPUCoreFlags::NO_NMI_LINE, // core_flags
     16,                            // address_bits
-    0x5F,                          // io_port_mask (Pins 0-4, 6 - no pin 5)
+    0x5F,                          // io_port_mask (Pins 0-4, 6 — no pin 5)
     BankingType::NONE,             // banking
     {SoundChip::NONE, DMAController::NONE, false} // peripheral
 };

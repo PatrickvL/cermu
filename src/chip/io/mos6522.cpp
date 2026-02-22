@@ -27,11 +27,9 @@ void mos6522_t::reset() {
     // Reset registers
     memset(registers, 0, sizeof(registers));
 
-    // Reset ports
-    port_a_data = 0xFF;
-    port_b_data = 0xFF;
-    port_a_ddr = 0x00;
-    port_b_ddr = 0x00;
+    // Reset ports via io_port (sets DDR=0, ORA/ORB=0xFF, pins=0xFF)
+    port_a.reset(0x00, 0xFF, 0xFF);
+    port_b.reset(0x00, 0xFF, 0xFF);
 
     // Reset timers
     timer1_latch = 0xFFFF;
@@ -65,30 +63,28 @@ bus_state_t mos6522_t::registers_read(bus_state_t bus_state) {
 
     switch (reg) {
         case MOS6522_PORTB: {
-            // 6522 Port B read: output pins (DDR=1) return ORA, input pins (DDR=0) return pin state
-            uint8_t pb_pin_state = 0xFF;  // Default: all pins pulled HIGH (no external device)
+            // 6522 Port B read: output pins (DDR=1) return ORB, input pins (DDR=0) return pin state
             if (port_b_read_callback) {
-                uint8_t port_b_output = port_b_data & port_b_ddr;
-                pb_pin_state = port_b_read_callback(port_b_read_context, port_b_output);
+                uint8_t port_b_output = port_b.output();
+                port_b.set_input(port_b_read_callback(port_b_read_context, port_b_output));
             }
-            BUS_SET_DATA(bus_state, (port_b_data & port_b_ddr) | (pb_pin_state & ~port_b_ddr));
+            BUS_SET_DATA(bus_state, port_b.read());
             break;
         }
         case MOS6522_PORTA: {
             // 6522 Port A read: output pins (DDR=1) return ORA, input pins (DDR=0) return pin state
-            uint8_t pa_pin_state = 0xFF;  // Default: all pins pulled HIGH (no external device)
             if (port_a_read_callback) {
-                uint8_t port_a_output = port_a_data & port_a_ddr;
-                pa_pin_state = port_a_read_callback(port_a_read_context, port_a_output);
+                uint8_t port_a_output = port_a.output();
+                port_a.set_input(port_a_read_callback(port_a_read_context, port_a_output));
             }
-            BUS_SET_DATA(bus_state, (port_a_data & port_a_ddr) | (pa_pin_state & ~port_a_ddr));
+            BUS_SET_DATA(bus_state, port_a.read());
             break;
         }
         case MOS6522_DDRB:
-            BUS_SET_DATA(bus_state, port_b_ddr);
+            BUS_SET_DATA(bus_state, *port_b.ddr);
             break;
         case MOS6522_DDRA:
-            BUS_SET_DATA(bus_state, port_a_ddr);
+            BUS_SET_DATA(bus_state, *port_a.ddr);
             break;
         case MOS6522_T1CL:
             BUS_SET_DATA(bus_state, (uint8_t)(timer1_counter & 0xFF));
@@ -138,12 +134,11 @@ bus_state_t mos6522_t::registers_read(bus_state_t bus_state) {
             break;
         case MOS6522_PORTA_NH: {
             // Port A read without handshake - same logic as MOS6522_PORTA
-            uint8_t pa_nh_pin_state = 0xFF;  // Default: all pins pulled HIGH
             if (port_a_read_callback) {
-                uint8_t port_a_output = port_a_data & port_a_ddr;
-                pa_nh_pin_state = port_a_read_callback(port_a_read_context, port_a_output);
+                uint8_t port_a_output = port_a.output();
+                port_a.set_input(port_a_read_callback(port_a_read_context, port_a_output));
             }
-            BUS_SET_DATA(bus_state, (port_a_data & port_a_ddr) | (pa_nh_pin_state & ~port_a_ddr));
+            BUS_SET_DATA(bus_state, port_a.read());
             break;
         }
         default:
@@ -161,16 +156,16 @@ bus_state_t mos6522_t::registers_write(bus_state_t bus_state) {
 
     switch (reg) {
         case MOS6522_PORTB:
-            port_b_data = value;
+            (void)port_b.write_data(value);
             break;
         case MOS6522_PORTA:
-            port_a_data = value;
+            (void)port_a.write_data(value);
             break;
         case MOS6522_DDRB:
-            port_b_ddr = value;
+            (void)port_b.write_ddr(value);
             break;
         case MOS6522_DDRA:
-            port_a_ddr = value;
+            (void)port_a.write_ddr(value);
             break;
         case MOS6522_T1LL:
             // Write to T1 Low Latch only (does not affect counter or start timer)
@@ -248,7 +243,7 @@ bus_state_t mos6522_t::registers_write(bus_state_t bus_state) {
             }
             break;
         case MOS6522_PORTA_NH:
-            port_a_data = value;
+            (void)port_a.write_data(value);
             break;
         default:
             // Unknown register - ignore write

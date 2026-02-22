@@ -1072,7 +1072,7 @@ uint8_t VIC20System::vic20_via2_port_a_read(void* context, uint8_t port_a_output
 
     // Port A reads rows based on which columns are selected via Port B
     // Get Port B output (column select) - only bits with DDR=1 are driven
-    uint8_t port_b_output = sys->via2_->port_b_data & sys->via2_->port_b_ddr;
+    uint8_t port_b_output = sys->via2_->port_b.output();
     uint8_t column_select = ~port_b_output;  // Active-LOW: 0 = selected
 
     uint8_t row_state = 0xFF;  // Default: all rows open (no keys pressed)
@@ -1091,7 +1091,7 @@ uint8_t VIC20System::vic20_via2_port_b_read(void* context, uint8_t port_b_output
 
     // Port B reads columns based on which rows are selected via Port A
     // (Reverse scanning direction)
-    uint8_t port_a_output = sys->via2_->port_a_data & sys->via2_->port_a_ddr;
+    uint8_t port_a_output = sys->via2_->port_a.output();
     uint8_t row_select = ~port_a_output;  // Active-LOW: 0 = selected
 
     uint8_t col_state = 0xFF;  // Default: all columns open (no keys pressed)

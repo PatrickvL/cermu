@@ -408,15 +408,13 @@ template<C264SeriesVariant V>
 void Commodore264System<V>::reset() {
     printf("%s: Resetting system\n", Traits::name);
     
-    // Reset MOS 7501 CPU
+    // Reset MOS 7501 CPU — use mos7501_reset (not mos7501_init) to properly
+    // reset the instruction decoder state (current_handler, half_cycle,
+    // opcode_entry).  init() only reinitialises the IO port — it leaves the
+    // CPU mid-instruction, which causes a segfault when emulation resumes
+    // with an inconsistent pipeline.
     if (cpu_) {
-        mos7501_desc_t cpu_desc = {};
-        cpu_desc.m7501_in_cb = io_port_in;
-        cpu_desc.m7501_out_cb = io_port_out;
-        cpu_desc.m7501_io_pullup = 0x5F;
-        cpu_desc.m7501_io_floating = 0x00;
-        cpu_desc.m7501_user_data = this;
-        mos7501_init(cpu_, &cpu_desc);
+        mos7501_reset(cpu_, 0);
         
         // Re-read reset vector from KERNAL ROM
         uint16_t reset_vector = kernal_rom_[0xFFFC - 0xC000] | (kernal_rom_[0xFFFD - 0xC000] << 8);
@@ -807,7 +805,8 @@ void Commodore264System<V>::io_port_out(uint8_t data, void* user_data) {
     (void)data;
     (void)user_data;
     // Stub: ignore output for now
-    // TODO: Handle cassette motor (bit 0), serial bus signals (bits 2-4)
+    // TODO: Handle cassette motor (bit 0), serial bus SRQ/DATA/CLK/ATN (bits 1-4),
+    //       cassette sense (bit 6). Bit 5 absent (mask 0x5F).
 }
 
 // ============================================================================

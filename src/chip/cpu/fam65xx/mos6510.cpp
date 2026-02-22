@@ -119,19 +119,19 @@ void mos6510_transition_to_fetch(mos6510_t *cpu) {
 
 // I/O Port access (6510-specific)
 uint8_t mos6510_get_io_ddr(mos6510_t *cpu) {
-  return CPU_CAST(cpu)->io_port.direction;
+  return CPU_CAST(cpu)->io_port_regs.ddr;
 }
 
 uint8_t mos6510_get_io_data(mos6510_t *cpu) {
-  return CPU_CAST(cpu)->io_port.data;
+  return CPU_CAST(cpu)->io_port_regs.data;
 }
 
 uint8_t mos6510_get_io_input(mos6510_t *cpu) {
-  return CPU_CAST(cpu)->io_port.input;
+  return CPU_CAST(cpu)->io_port_regs.pins;
 }
 
 void mos6510_set_io_input(mos6510_t *cpu, uint8_t value) {
-  CPU_CAST(cpu)->io_port.input = value;
+  CPU_CAST(cpu)->port.set_input(value);
 }
 
 void mos6510_set_bank_change(mos6510_t *cpu,

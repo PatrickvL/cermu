@@ -545,11 +545,20 @@ void C64System::reset() {
         if (this->sid) this->sid->reset();
 
         // Reset CPU last (so it can read the reset vector after other chips are ready)
+        // Use mos6510_reset (not mos6510_init) to properly reset the instruction
+        // decoder state (current_handler, half_cycle, opcode_entry).  init() only
+        // reinitialises the IO port — it leaves the CPU mid-instruction, which
+        // causes a segfault when emulation resumes with an inconsistent pipeline.
         if (this->mos6510) {
-            mos6510_desc_t cpu_desc = {};
-            mos6510_init((mos6510_t*)this->mos6510, &cpu_desc);
+            mos6510_reset((mos6510_t*)this->mos6510, 0);
             mos6510_set_bank_change((mos6510_t*)this->mos6510,
                                     cpu_banking_callback, this);
+
+            // Trigger banking callback so PLA matches the freshly-reset IO port
+            uint8_t banking_bits = mos6510_get_io_data((mos6510_t*)this->mos6510)
+                                 & mos6510_get_io_ddr((mos6510_t*)this->mos6510)
+                                 & 0x07;
+            cpu_banking_callback(this, banking_bits);
 
             uint16_t reset_vector = this->bus.read_kernal_reset_vector();
             mos6510_set_pc((mos6510_t*)this->mos6510, reset_vector);
