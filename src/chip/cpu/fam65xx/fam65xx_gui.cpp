@@ -9,8 +9,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <thread>
-#include <type_traits>
 
 // Include the modern fam65xx implementation
 #include "fam65xx.hpp"
@@ -20,7 +18,6 @@
 
 // Include GUI interface first (defines IMGUI_VERSION)
 #include "../../../core/chip_layout.h"
-#include "../../../core/pin_macros.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
 #ifdef IMGUI_VERSION
 #include "../../../gui/chip_visualization.h"

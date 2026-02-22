@@ -4,7 +4,6 @@
 #include <vector>
 #include <sstream>
 #include <iomanip>
-#include <filesystem>
 #include <chrono>
 
 #ifndef CERMU_IMPL

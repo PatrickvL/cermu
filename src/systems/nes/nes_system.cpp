@@ -9,7 +9,6 @@
 #include "nes_nsf_player.h"
 #include "nes_nsf_cartridge.h"
 #include "../../core/formats/nsf_format.h"
-#include "../../core/formats/format_registry.h"
 // CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
 #include "../../core/chip.h"
 #include <fstream>

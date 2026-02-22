@@ -13,14 +13,12 @@
 
 #include "vic_common.h"
 #include "../../../core/chip_layout.h"
-#include "../../../core/pin_macros.h"
 #ifdef IMGUI_VERSION
 #include <imgui.h>
 #include "../../../gui/chip_visualization.h"
 #include "../../../gui/global_chip_style.h"
 #endif
 #include <stdio.h>
-#include <memory>
 
 // ============================================================================
 // MOS 6560/6561 VIC LAYOUT (40-pin DIP)

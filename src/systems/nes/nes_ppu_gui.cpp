@@ -10,14 +10,12 @@
 
 #include "nes_system.h"
 #include "../../core/chip_layout.h"
-#include "../../core/pin_macros.h"
 #ifdef IMGUI_VERSION
 #include <imgui.h>
 #include "../../gui/chip_visualization.h"
 #include "../../gui/global_chip_style.h"
 #endif
 #include <stdio.h>
-#include <memory>
 
 // ============================================================================
 // RICOH 2C02 PPU LAYOUT (40-pin DIP)
