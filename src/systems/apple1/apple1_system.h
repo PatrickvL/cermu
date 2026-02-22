@@ -79,23 +79,21 @@ private:
     bool has_basic_;                 // Whether BASIC ROM is loaded
     int cursor_col_;                 // Terminal cursor position
     int cursor_row_;
-    
+    bus_state_t pins_;               // CPU bus state (persisted across ticks)
+
     // Helper methods
     void tick_cpu();
-    
+    bus_state_t mem_tick(bus_state_t s);
+
     // Connector port setup (registers Apple 1 connector ports with base class)
     void setup_connector_ports();
 
     /// Register all Apple 1 chips into registered_chips_ for the Hardware menu.
     void register_apple1_chips();
-    
+
     // ROM loading
     bool load_roms();
-    
-    // Memory access callbacks for CPU
-    static uint8_t cpu_read(void* user_data, uint32_t addr, uint8_t bus_state);
-    static void cpu_write(void* user_data, uint32_t addr, uint8_t data);
-    
+
     // PIA callbacks
     static uint8_t pia_keyboard_read(void* user_data);  // Port A read (keyboard)
     static void pia_display_write(void* user_data, uint8_t data);  // Port B write (display)

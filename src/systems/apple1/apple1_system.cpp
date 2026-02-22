@@ -117,6 +117,7 @@ Apple1System::Apple1System()
     , has_basic_(false)
     , cursor_col_(0)
     , cursor_row_(0)
+    , pins_(0)
 {
     hardware_traits_ = create_apple1_hardware_traits();
     current_palette_ = hardware_traits_.display.default_palette;
@@ -237,6 +238,7 @@ void Apple1System::reset() {
     if (cpu_) {
         mos6502_reset(cpu_, 0);
     }
+    pins_ = 0;
     total_cycles_ = 0;
 }
 
@@ -415,58 +417,54 @@ void Apple1System::set_speed_multiplier(float multiplier) {
 // Private Helper Methods
 // ============================================================================
 
-// Memory access callbacks for CPU
-uint8_t Apple1System::cpu_read(void* user_data, uint32_t addr, uint8_t bus_state) {
-    Apple1System* sys = static_cast<Apple1System*>(user_data);
-    (void)bus_state;
-    
-    uint16_t addr16 = addr & 0xFFFF;
-    
-    // PIA 6820 registers (0xD010-0xD013)
-    if (addr16 >= 0xD010 && addr16 <= 0xD013) {
-        return pia6820_read(&sys->pia_, addr16);
-    }
-    
-    // RAM (0x0000 to ram_size)
-    if (addr16 < sys->ram_size_) {
-        return sys->ram_simple_[addr16];
-    }
-    
-    // Monitor ROM (0xFF00-0xFFFF = 256 bytes)
-    if (addr16 >= 0xFF00) {
-        return sys->monitor_rom_[addr16 - 0xFF00];
-    }
-    
-    // Optional BASIC ROM locations (varies by configuration)
-    // TODO: Add BASIC ROM mapping if has_basic_ is true
-    
-    return 0xFF;  // Unmapped memory
-}
+// ============================================================================
+// BUS MEMORY SERVICE
+// ============================================================================
 
-void Apple1System::cpu_write(void* user_data, uint32_t addr, uint8_t data) {
-    Apple1System* sys = static_cast<Apple1System*>(user_data);
-    
-    uint16_t addr16 = addr & 0xFFFF;
-    
-    // PIA 6820 registers (0xD010-0xD013)
-    if (addr16 >= 0xD010 && addr16 <= 0xD013) {
-        pia6820_write(&sys->pia_, addr16, data);
-        return;
+bus_state_t Apple1System::mem_tick(bus_state_t s) {
+    uint16_t addr = BUS_GET_ADDR(s);
+
+    if (s & BUS_BIT(BUS_RW_BIT)) {
+        // ---- Read cycle ----
+        uint8_t data = 0xFF;
+
+        // PIA 6820 registers (0xD010-0xD013)
+        if (addr >= 0xD010 && addr <= 0xD013) {
+            data = pia6820_read(&pia_, addr);
+        }
+        // RAM (0x0000 to ram_size)
+        else if (addr < ram_size_) {
+            data = ram_simple_[addr];
+        }
+        // Monitor ROM (0xFF00-0xFFFF = 256 bytes)
+        else if (addr >= 0xFF00) {
+            data = monitor_rom_[addr - 0xFF00];
+        }
+        // TODO: Add BASIC ROM mapping if has_basic_ is true
+
+        BUS_SET_DATA(s, data);
+    } else {
+        // ---- Write cycle ----
+        uint8_t data = BUS_GET_DATA(s);
+
+        // PIA 6820 registers (0xD010-0xD013)
+        if (addr >= 0xD010 && addr <= 0xD013) {
+            pia6820_write(&pia_, addr, data);
+        }
+        // RAM (0x0000 to ram_size)
+        else if (addr < ram_size_) {
+            ram_simple_[addr] = data;
+        }
+        // ROM areas are read-only, writes are ignored
     }
-    
-    // RAM (0x0000 to ram_size)
-    if (addr16 < sys->ram_size_) {
-        sys->ram_simple_[addr16] = data;
-        return;
-    }
-    
-    // ROM areas are read-only, writes are ignored
+
+    return s;
 }
 
 void Apple1System::tick_cpu() {
     if (cpu_) {
-        // Tick the CPU (this handles one cycle of execution)
-        mos6502_tick(cpu_, 0);
+        pins_ = mos6502_tick(cpu_, pins_);
+        pins_ = mem_tick(pins_);
     }
 }
 
