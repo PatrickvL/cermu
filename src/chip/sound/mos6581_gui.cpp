@@ -106,20 +106,20 @@ inline ChipLayout create_mos6581_layout() {
     
     // Hardware-accurate MOS6581 SID pinout (28-pin DIP)
     // Right-hand pins (15-28) are numbered bottom-up, not top-down
-    PIN_LR(layout,  1, CAP1A,  VDD, 28);      // Filter Cap 1A / +12V Power
-    PIN_LR(layout,  2, CAP1B,  AUDIO_OUT, 27); // Filter Cap 1B / Audio Output
-    PIN_LR(layout,  3, CAP2A,  EXT_IN, 26);   // Filter Cap 2A / External Input
-    PIN_LR(layout,  4, CAP2B,  VCC, 25);      // Filter Cap 2B / +5V Power
-    PIN_LR(layout,  5, RES,    POTX, 24);     // Reset         / Paddle X
-    PIN_LR(layout,  6, PHI2,   POTY, 23);     // Clock         / Paddle Y
-    PIN_LR(layout,  7, RW,     D7, 22);       // Read/Write    / Data 7
-    PIN_LR(layout,  8, CS,     D6, 21);       // Chip Select   / Data 6
-    PIN_LR(layout,  9, A0,     D5, 20);       // Address 0     / Data 5
-    PIN_LR(layout, 10, A1,     D4, 19);       // Address 1     / Data 4
-    PIN_LR(layout, 11, A2,     D3, 18);       // Address 2     / Data 3
-    PIN_LR(layout, 12, A3,     D2, 17);       // Address 3     / Data 2
-    PIN_LR(layout, 13, A4,     D1, 16);       // Address 4     / Data 1
-    PIN_LR(layout, 14, VSS,    D0, 15);       // Ground        / Data 0
+    PIN_LR(layout,  1, CAP1A,  VDD, 28);      // filter cap 1A / +12V
+    PIN_LR(layout,  2, CAP1B,  AUDIO_OUT, 27);// filter cap 1B / audio
+    PIN_LR(layout,  3, CAP2A,  EXT_IN, 26);   // filter cap 2A / ext in
+    PIN_LR(layout,  4, CAP2B,  VCC, 25);      // filter cap 2B / +5V
+    PIN_LR(layout,  5, _RES,   POTX, 24);     // reset / paddle X
+    PIN_LR(layout,  6, PHI2,   POTY, 23);     // clock / paddle Y
+    PIN_LR(layout,  7, RW,     D7, 22);       // R/W / data hi
+    PIN_LR(layout,  8, _CS,    D6, 21);       // chip sel
+    PIN_LR(layout,  9, A0,     D5, 20);       // addr lo / data
+    PIN_LR(layout, 10, A1,     D4, 19);
+    PIN_LR(layout, 11, A2,     D3, 18);
+    PIN_LR(layout, 12, A3,     D2, 17);
+    PIN_LR(layout, 13, A4,     D1, 16);       // addr hi
+    PIN_LR(layout, 14, VSS,    D0, 15);       // gnd / data lo
     
     return layout;
 }

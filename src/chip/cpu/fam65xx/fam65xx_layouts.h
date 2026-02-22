@@ -178,19 +178,19 @@ std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits> *cpu,
       break;
     }
     case PinType::INTERRUPT: {
-      if (pin.label == PinLabel::IRQ) {
+      if (pin.label == PinLabel::_IRQ) {
         state.signal_level =
             (bus_state & BUS_BIT(BUS_IRQ_BIT)) == 0; // Active low
         state.drive_direction = false;
-      } else if (pin.label == PinLabel::NMI) {
+      } else if (pin.label == PinLabel::_NMI) {
         state.signal_level =
             (bus_state & BUS_BIT(BUS_NMI_BIT)) == 0; // Active low
         state.drive_direction = false;
-      } else if (pin.label == PinLabel::RES) {
+      } else if (pin.label == PinLabel::_RES) {
         state.signal_level =
             (bus_state & BUS_BIT(BUS_RES_BIT)) == 0; // Active low
         state.drive_direction = false;
-      } else if (pin.label == PinLabel::ABORT) {
+      } else if (pin.label == PinLabel::_ABORT) {
         state.signal_level =
             (bus_state & BUS_BIT(BUS_ABORT_BIT)) == 0; // Active low
         state.drive_direction = false;
@@ -215,14 +215,15 @@ std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits> *cpu,
       break;
     }
     case PinType::SPECIAL: {
-      if (pin.label == PinLabel::SO) {
+      if (pin.label == PinLabel::_SO) {
         state.signal_level =
             (bus_state & BUS_BIT(BUS_SO_BIT)) == 0; // Active low
         state.drive_direction = false;
-      } else if (pin.label == PinLabel::VP) {
+      } else if (pin.label == PinLabel::_VP ||
+                 pin.label == PinLabel::_VPB) {
         state.signal_level = (bus_state & BUS_BIT(BUS_VP_BIT)) != 0;
         state.drive_direction = true;
-      } else if (pin.label == PinLabel::ML) {
+      } else if (pin.label == PinLabel::_ML) {
         state.signal_level =
             (bus_state & BUS_BIT(BUS_ML_BIT)) == 0; // Active low
         state.drive_direction = true;
@@ -295,27 +296,27 @@ ChipLayout create_mos6502_layout() {
       false             // show_date_code
   };
 
-  // Pin assignments for MOS 6502 (40-pin DIP) - Using simplified PIN_LR macro
+  // Pin assignments for MOS 6502 (40-pin DIP)
   PIN_LR(layout, 1, VSS, VSS, 21)
-  PIN_LR(layout, 2, RDY, A12, 22)
+  PIN_LR(layout, 2, RDY, A12, 22)   // Ready
   PIN_LR(layout, 3, PHI1, A13, 23)
-  PIN_LR(layout, 4, IRQ, A14, 24)
+  PIN_LR(layout, 4, _IRQ, A14, 24)  // Interrupt Request
   PIN_LR(layout, 5, NC, A15, 25)
-  PIN_LR(layout, 6, NMI, D7, 26)
-  PIN_LR(layout, 7, SYNC, D6, 27)
+  PIN_LR(layout, 6, _NMI, D7, 26)   // Non-Maskable Interrupt
+  PIN_LR(layout, 7, SYNC, D6, 27)   // Instruction fetch indicator
   PIN_LR(layout, 8, VDD, D5, 28)
   PIN_LR(layout, 9, A0, D4, 29)
   PIN_LR(layout, 10, A1, D3, 30)
   PIN_LR(layout, 11, A2, D2, 31)
   PIN_LR(layout, 12, A3, D1, 32)
   PIN_LR(layout, 13, A4, D0, 33)
-  PIN_LR(layout, 14, A5, RW, 34)
+  PIN_LR(layout, 14, A5, RW, 34)    // Read/Write
   PIN_LR(layout, 15, A6, NC, 35)
   PIN_LR(layout, 16, A7, NC, 36)
   PIN_LR(layout, 17, A8, PHI0, 37)
-  PIN_LR(layout, 18, A9, SO, 38)
+  PIN_LR(layout, 18, A9, _SO, 38)   // Set Overflow flag
   PIN_LR(layout, 19, A10, PHI2, 39)
-  PIN_LR(layout, 20, A11, RES, 40)
+  PIN_LR(layout, 20, A11, _RES, 40) // Reset
 
   return layout;
 }
@@ -338,17 +339,16 @@ ChipLayout create_mos6510_layout() {
       false             // show_date_code
   };
 
-  // Pin assignments for MOS 6510 (40-pin DIP) - Hardware accurate per
-  // documentation
+  // Pin assignments for MOS 6510 (40-pin DIP)
   PIN_LR(layout, 1, PHI0, VSS, 21)
-  PIN_LR(layout, 2, RDY, A12, 22)
-  PIN_LR(layout, 3, IRQ, A13, 23)
-  PIN_LR(layout, 4, NMI, P0, 24) // I/O Port bit 0
-  PIN_LR(layout, 5, AEC, P1, 25) // I/O Port bit 1
-  PIN_LR(layout, 6, VDD, P2, 26) // I/O Port bit 2
-  PIN_LR(layout, 7, A0, P3, 27)  // I/O Port bit 3
-  PIN_LR(layout, 8, A1, P4, 28)  // I/O Port bit 4
-  PIN_LR(layout, 9, A2, P5, 29)  // I/O Port bit 5
+  PIN_LR(layout, 2, RDY, A12, 22)    // Ready
+  PIN_LR(layout, 3, _IRQ, A13, 23)   // Interrupt Request
+  PIN_LR(layout, 4, _NMI, P0, 24)    // Non-Maskable Interrupt / I/O Port bit 0
+  PIN_LR(layout, 5, AEC, P1, 25)     // Address Enable Control / I/O Port bit 1
+  PIN_LR(layout, 6, VDD, P2, 26)     // I/O Port bit 2
+  PIN_LR(layout, 7, A0, P3, 27)      // I/O Port bit 3
+  PIN_LR(layout, 8, A1, P4, 28)      // I/O Port bit 4
+  PIN_LR(layout, 9, A2, P5, 29)      // I/O Port bit 5
   PIN_LR(layout, 10, A3, D7, 30)
   PIN_LR(layout, 11, A4, D6, 31)
   PIN_LR(layout, 12, A5, D5, 32)
@@ -357,9 +357,9 @@ ChipLayout create_mos6510_layout() {
   PIN_LR(layout, 15, A8, D2, 35)
   PIN_LR(layout, 16, A9, D1, 36)
   PIN_LR(layout, 17, A10, D0, 37)
-  PIN_LR(layout, 18, A11, RW, 38)
+  PIN_LR(layout, 18, A11, RW, 38)    // Read/Write
   PIN_LR(layout, 19, A14, PHI2, 39)
-  PIN_LR(layout, 20, A15, RES, 40)
+  PIN_LR(layout, 20, A15, _RES, 40)  // Reset
 
   return layout;
 }
@@ -391,15 +391,15 @@ ChipLayout create_csg7501_layout() {
   // I/O port mask 0x5F = bits 0,1,2,3,4,6 (no bit 5).
   // The GATE IN pin replaces the NMI — directly managed by TED.
   PIN_LR(layout, 1, PHI0, VSS, 21)
-  PIN_LR(layout, 2, RDY, A12, 22)
-  PIN_LR(layout, 3, IRQ, A13, 23)
-  PIN_LR(layout, 4, AEC, A14, 24) // Address Enable Control (from TED)
+  PIN_LR(layout, 2, RDY, A12, 22)    // Ready
+  PIN_LR(layout, 3, _IRQ, A13, 23)   // Interrupt Request
+  PIN_LR(layout, 4, AEC, A14, 24)    // Address Enable Control (from TED)
   PIN_LR(layout, 5, VDD, A15, 25)
-  PIN_LR(layout, 6, A0, P0, 26)   // I/O Port bit 0
-  PIN_LR(layout, 7, A1, P1, 27)   // I/O Port bit 1
-  PIN_LR(layout, 8, A2, P2, 28)   // I/O Port bit 2
-  PIN_LR(layout, 9, A3, P3, 29)   // I/O Port bit 3
-  PIN_LR(layout, 10, A4, P4, 30)  // I/O Port bit 4
+  PIN_LR(layout, 6, A0, P0, 26)      // I/O Port bit 0
+  PIN_LR(layout, 7, A1, P1, 27)      // I/O Port bit 1
+  PIN_LR(layout, 8, A2, P2, 28)      // I/O Port bit 2
+  PIN_LR(layout, 9, A3, P3, 29)      // I/O Port bit 3
+  PIN_LR(layout, 10, A4, P4, 30)     // I/O Port bit 4
   PIN_LR(layout, 11, A5, D7, 31)
   PIN_LR(layout, 12, A6, D6, 32)
   PIN_LR(layout, 13, A7, D5, 33)
@@ -407,9 +407,9 @@ ChipLayout create_csg7501_layout() {
   PIN_LR(layout, 15, A9, D3, 35)
   PIN_LR(layout, 16, A10, D2, 36)
   PIN_LR(layout, 17, A11, D1, 37)
-  PIN_LR(layout, 18, RW, D0, 38)
-  PIN_LR(layout, 19, P6, PHI2, 39)  // I/O Port bit 6 (no bit 5 — mask 0x5F)
-  PIN_LR(layout, 20, A14, RES, 40)
+  PIN_LR(layout, 18, RW, D0, 38)     // Read/Write
+  PIN_LR(layout, 19, P6, PHI2, 39)   // I/O Port bit 6 (no bit 5 — mask 0x5F)
+  PIN_LR(layout, 20, A14, _RES, 40)  // Reset
 
   return layout;
 }
@@ -432,28 +432,27 @@ ChipLayout create_wdc_w65c02s_layout() {
       false                    // show_date_code
   };
 
-  // Pin assignments for WDC W65C02S (40-pin DIP) - Hardware accurate per
-  // documentation
-  PIN_LR(layout, 1, VP, VSS, 21)  // Vector Pull
-  PIN_LR(layout, 2, RDY, A12, 22) // Bidirectional on 65C02
+  // Pin assignments for WDC W65C02S (40-pin DIP)
+  PIN_LR(layout, 1, _VP, VSS, 21)    // Vector Pull (low during vector fetch)
+  PIN_LR(layout, 2, RDY, A12, 22)    // Ready (bidirectional on 65C02)
   PIN_LR(layout, 3, PHI1, A13, 23)
-  PIN_LR(layout, 4, IRQ, A14, 24)
-  PIN_LR(layout, 5, ML, A15, 25) // Memory Lock
-  PIN_LR(layout, 6, NMI, D7, 26)
-  PIN_LR(layout, 7, SYNC, D6, 27)
+  PIN_LR(layout, 4, _IRQ, A14, 24)   // Interrupt Request
+  PIN_LR(layout, 5, _ML, A15, 25)    // Memory Lock (low during RMW)
+  PIN_LR(layout, 6, _NMI, D7, 26)    // Non-Maskable Interrupt
+  PIN_LR(layout, 7, SYNC, D6, 27)    // Instruction fetch indicator
   PIN_LR(layout, 8, VDD, D5, 28)
   PIN_LR(layout, 9, A0, D4, 29)
   PIN_LR(layout, 10, A1, D3, 30)
   PIN_LR(layout, 11, A2, D2, 31)
   PIN_LR(layout, 12, A3, D1, 32)
   PIN_LR(layout, 13, A4, D0, 33)
-  PIN_LR(layout, 14, A5, RW, 34)
+  PIN_LR(layout, 14, A5, RW, 34)     // Read/Write
   PIN_LR(layout, 15, A6, NC, 35)
-  PIN_LR(layout, 16, A7, BE, 36) // Bus Enable on 65C02
+  PIN_LR(layout, 16, A7, BE, 36)     // Bus Enable
   PIN_LR(layout, 17, A8, PHI0, 37)
-  PIN_LR(layout, 18, A9, SO, 38)
+  PIN_LR(layout, 18, A9, _SO, 38)    // Set Overflow flag
   PIN_LR(layout, 19, A10, PHI2, 39)
-  PIN_LR(layout, 20, A11, RES, 40)
+  PIN_LR(layout, 20, A11, _RES, 40)  // Reset
 
   return layout;
 }
@@ -476,28 +475,27 @@ ChipLayout create_wdc_65c816_layout() {
       false                    // show_date_code
   };
 
-  // Pin assignments for WDC 65C816 (40-pin DIP) - Hardware accurate per
-  // documentation
-  PIN_LR(layout, 1, VPB, VSS, 21) // Vector Pull Bar
-  PIN_LR(layout, 2, RDY, A12, 22)
-  PIN_LR(layout, 3, ABORT, A13, 23) // Abort
-  PIN_LR(layout, 4, IRQ, A14, 24)
-  PIN_LR(layout, 5, ML, A15, 25) // Memory Lock
-  PIN_LR(layout, 6, NMI, D7, 26)
-  PIN_LR(layout, 7, VPA, D6, 27) // Valid Program Address
+  // Pin assignments for WDC 65C816 (40-pin DIP)
+  PIN_LR(layout, 1, _VPB, VSS, 21)    // Vector Pull Bar (low during vector fetch)
+  PIN_LR(layout, 2, RDY, A12, 22)     // Ready
+  PIN_LR(layout, 3, _ABORT, A13, 23)  // Abort current instruction
+  PIN_LR(layout, 4, _IRQ, A14, 24)    // Interrupt Request
+  PIN_LR(layout, 5, _ML, A15, 25)     // Memory Lock (low during RMW)
+  PIN_LR(layout, 6, _NMI, D7, 26)     // Non-Maskable Interrupt
+  PIN_LR(layout, 7, VPA, D6, 27)      // Valid Program Address
   PIN_LR(layout, 8, VDD, D5, 28)
   PIN_LR(layout, 9, A0, D4, 29)
   PIN_LR(layout, 10, A1, D3, 30)
   PIN_LR(layout, 11, A2, D2, 31)
   PIN_LR(layout, 12, A3, D1, 32)
   PIN_LR(layout, 13, A4, D0, 33)
-  PIN_LR(layout, 14, A5, RW, 34)
-  PIN_LR(layout, 15, A6, E, 35)  // Emulation mode
-  PIN_LR(layout, 16, A7, BE, 36) // Bus Enable
+  PIN_LR(layout, 14, A5, RW, 34)      // Read/Write
+  PIN_LR(layout, 15, A6, E, 35)       // Emulation mode status
+  PIN_LR(layout, 16, A7, BE, 36)      // Bus Enable
   PIN_LR(layout, 17, A8, PHI0, 37)
-  PIN_LR(layout, 18, A9, MX, 38)   // M/X Status
-  PIN_LR(layout, 19, A10, VDA, 39) // Valid Data Address
-  PIN_LR(layout, 20, A11, RES, 40)
+  PIN_LR(layout, 18, A9, MX, 38)      // M/X status flags
+  PIN_LR(layout, 19, A10, VDA, 39)    // Valid Data Address
+  PIN_LR(layout, 20, A11, _RES, 40)   // Reset
 
   return layout;
 }
@@ -521,27 +519,27 @@ ChipLayout create_ricoh_2a03_layout() {
       false     // show_date_code
   };
 
-  // Pin assignments for RICOH 2A03 (40-pin DIP)
+  // Pin assignments for Ricoh 2A03 (40-pin DIP)
   PIN_LR(layout, 1, VSS, VSS, 21)
-  PIN_LR(layout, 2, RDY, A12, 22) // Tied high internally in some revisions
+  PIN_LR(layout, 2, RDY, A12, 22)    // Ready (tied high in some revisions)
   PIN_LR(layout, 3, PHI1, A13, 23)
-  PIN_LR(layout, 4, IRQ, A14, 24)
+  PIN_LR(layout, 4, _IRQ, A14, 24)   // Interrupt Request
   PIN_LR(layout, 5, NC, A15, 25)
-  PIN_LR(layout, 6, NMI, D7, 26)
-  PIN_LR(layout, 7, SYNC, D6, 27)
+  PIN_LR(layout, 6, _NMI, D7, 26)    // Non-Maskable Interrupt
+  PIN_LR(layout, 7, SYNC, D6, 27)    // Instruction fetch indicator
   PIN_LR(layout, 8, VDD, D5, 28)
   PIN_LR(layout, 9, A0, D4, 29)
   PIN_LR(layout, 10, A1, D3, 30)
   PIN_LR(layout, 11, A2, D2, 31)
   PIN_LR(layout, 12, A3, D1, 32)
   PIN_LR(layout, 13, A4, D0, 33)
-  PIN_LR(layout, 14, A5, RW, 34)
+  PIN_LR(layout, 14, A5, RW, 34)     // Read/Write
   PIN_LR(layout, 15, A6, NC, 35)
-  PIN_LR(layout, 16, A7, NC, 36) // No BE on 2A03
+  PIN_LR(layout, 16, A7, NC, 36)     // No Bus Enable on 2A03
   PIN_LR(layout, 17, A8, PHI0, 37)
-  PIN_LR(layout, 18, A9, SO, 38)
+  PIN_LR(layout, 18, A9, _SO, 38)    // Set Overflow flag
   PIN_LR(layout, 19, A10, PHI2, 39)
-  PIN_LR(layout, 20, A11, RES, 40)
+  PIN_LR(layout, 20, A11, _RES, 40)  // Reset
 
   return layout;
 }
@@ -566,25 +564,25 @@ ChipLayout create_rockwell_r65c02_layout() {
 
   // Pin assignments for Rockwell R65C02 (40-pin DIP)
   PIN_LR(layout, 1, VSS, VSS, 21)
-  PIN_LR(layout, 2, RDY, A12, 22)
+  PIN_LR(layout, 2, RDY, A12, 22)    // Ready
   PIN_LR(layout, 3, PHI1, A13, 23)
-  PIN_LR(layout, 4, IRQ, A14, 24)
+  PIN_LR(layout, 4, _IRQ, A14, 24)   // Interrupt Request
   PIN_LR(layout, 5, NC, A15, 25)
-  PIN_LR(layout, 6, NMI, D7, 26)
-  PIN_LR(layout, 7, SYNC, D6, 27)
+  PIN_LR(layout, 6, _NMI, D7, 26)    // Non-Maskable Interrupt
+  PIN_LR(layout, 7, SYNC, D6, 27)    // Instruction fetch indicator
   PIN_LR(layout, 8, VDD, D5, 28)
   PIN_LR(layout, 9, A0, D4, 29)
   PIN_LR(layout, 10, A1, D3, 30)
   PIN_LR(layout, 11, A2, D2, 31)
   PIN_LR(layout, 12, A3, D1, 32)
   PIN_LR(layout, 13, A4, D0, 33)
-  PIN_LR(layout, 14, A5, RW, 34)
+  PIN_LR(layout, 14, A5, RW, 34)     // Read/Write
   PIN_LR(layout, 15, A6, NC, 35)
-  PIN_LR(layout, 16, A7, BE, 36) // Bus Enable on R65C02
+  PIN_LR(layout, 16, A7, BE, 36)     // Bus Enable
   PIN_LR(layout, 17, A8, PHI0, 37)
-  PIN_LR(layout, 18, A9, SO, 38)
+  PIN_LR(layout, 18, A9, _SO, 38)    // Set Overflow flag
   PIN_LR(layout, 19, A10, PHI2, 39)
-  PIN_LR(layout, 20, A11, RES, 40)
+  PIN_LR(layout, 20, A11, _RES, 40)  // Reset
 
   return layout;
 }

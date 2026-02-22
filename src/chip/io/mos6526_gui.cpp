@@ -43,26 +43,26 @@ inline ChipLayout create_mos6526_layout() {
     
     // Hardware-accurate MOS6526 CIA pinout (40-pin DIP)
     // Right-hand pins (21-40) are numbered bottom-up, not top-down
-    PIN_LR(layout,  1, VSS,  RES, 40)    // Ground / Reset
-    PIN_LR(layout,  2, PA0,  D7, 39)     // Port A Bit 0 / Data 7
-    PIN_LR(layout,  3, PA1,  D6, 38)     // Port A Bit 1 / Data 6
-    PIN_LR(layout,  4, PA2,  D5, 37)     // Port A Bit 2 / Data 5
-    PIN_LR(layout,  5, PA3,  D4, 36)     // Port A Bit 3 / Data 4
-    PIN_LR(layout,  6, PA4,  D3, 35)     // Port A Bit 4 / Data 3
-    PIN_LR(layout,  7, PA5,  D2, 34)     // Port A Bit 5 / Data 2
-    PIN_LR(layout,  8, PA6,  D1, 33)     // Port A Bit 6 / Data 1
-    PIN_LR(layout,  9, PA7,  D0, 32)     // Port A Bit 7 / Data 0
-    PIN_LR(layout, 10, PB0,  A3, 31)     // Port B Bit 0 / Address 3
-    PIN_LR(layout, 11, PB1,  A2, 30)     // Port B Bit 1 / Address 2
-    PIN_LR(layout, 12, PB2,  A1, 29)     // Port B Bit 2 / Address 1
-    PIN_LR(layout, 13, PB3,  A0, 28)     // Port B Bit 3 / Address 0
-    PIN_LR(layout, 14, PB4,  CNT, 27)    // Port B Bit 4 / Counter
-    PIN_LR(layout, 15, PB5,  SP, 26)     // Port B Bit 5 / Serial Port
-    PIN_LR(layout, 16, PB6,  PHI2, 25)   // Port B Bit 6 / Clock
-    PIN_LR(layout, 17, PB7,  FLAG, 24)   // Port B Bit 7 / Flag Input
-    PIN_LR(layout, 18, PC,   CS, 23)     // Serial Port / Chip Select
-    PIN_LR(layout, 19, TOD,  RW, 22)     // Time of Day / Read/Write
-    PIN_LR(layout, 20, VDD,  IRQ, 21)    // +5V Power / Interrupt Request
+    PIN_LR(layout,  1, VSS,  _RES, 40)   // gnd / reset
+    PIN_LR(layout,  2, PA0,  D7, 39)     // port A lo / data hi
+    PIN_LR(layout,  3, PA1,  D6, 38)
+    PIN_LR(layout,  4, PA2,  D5, 37)
+    PIN_LR(layout,  5, PA3,  D4, 36)
+    PIN_LR(layout,  6, PA4,  D3, 35)
+    PIN_LR(layout,  7, PA5,  D2, 34)
+    PIN_LR(layout,  8, PA6,  D1, 33)
+    PIN_LR(layout,  9, PA7,  D0, 32)     // port A hi / data lo
+    PIN_LR(layout, 10, PB0,  A3, 31)     // port B lo / reg sel hi
+    PIN_LR(layout, 11, PB1,  A2, 30)
+    PIN_LR(layout, 12, PB2,  A1, 29)
+    PIN_LR(layout, 13, PB3,  A0, 28)     // / reg sel lo
+    PIN_LR(layout, 14, PB4,  CNT, 27)    // / counter in
+    PIN_LR(layout, 15, PB5,  SP, 26)     // / serial port
+    PIN_LR(layout, 16, PB6,  PHI2, 25)   // / clock
+    PIN_LR(layout, 17, PB7,  FLAG, 24)   // port B hi / flag in
+    PIN_LR(layout, 18, PC,   _CS, 23)    // periph ctrl / chip sel
+    PIN_LR(layout, 19, TOD,  RW, 22)     // TOD clock / R/W
+    PIN_LR(layout, 20, VDD,  _IRQ, 21)   // +5V / interrupt
     
     return layout;
 }

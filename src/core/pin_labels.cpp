@@ -12,6 +12,40 @@
 // Fast enum-to-string lookup table for basic pin names
 const char* pin_label_to_string(PinLabel label) {
     switch (label) {
+        // Active-low pins — base name without "/" prefix.
+        // The display layer adds "/" via get_invert_logic().
+        case PinLabel::_ABORT: return "ABORT";
+        case PinLabel::_AEC: return "AEC";
+        case PinLabel::_BASIC: return "BASIC";
+        case PinLabel::_CAS: return "CAS";
+        case PinLabel::_CASRAM_PLA: return "CASRAM";
+        case PinLabel::_CHAREN: return "CHAREN";
+        case PinLabel::_CHAROM: return "CHAROM";
+        case PinLabel::_CS: return "CS";
+        case PinLabel::_CS0: return "CS0";
+        case PinLabel::_CS1: return "CS1";
+        case PinLabel::_CS2: return "CS2";
+        case PinLabel::_EXROM: return "EXROM";
+        case PinLabel::_GAME: return "GAME";
+        case PinLabel::_HIRAM: return "HIRAM";
+        case PinLabel::_IO: return "I/O";
+        case PinLabel::_IRQ: return "IRQ";
+        case PinLabel::_KERNAL: return "KERNAL";
+        case PinLabel::_LORAM: return "LORAM";
+        case PinLabel::_ML: return "ML";
+        case PinLabel::_NMI: return "NMI";
+        case PinLabel::_OE: return "OE";
+        case PinLabel::_RAS: return "RAS";
+        case PinLabel::_RD: return "RD";
+        case PinLabel::_RES: return "RES";
+        case PinLabel::_ROMH: return "ROMH";
+        case PinLabel::_ROML: return "ROML";
+        case PinLabel::_SO: return "SO";
+        case PinLabel::_VA14: return "VA14";
+        case PinLabel::_VP: return "VP";
+        case PinLabel::_VPB: return "VPB";
+        case PinLabel::_WE: return "WE";
+
         // Power pins
         case PinLabel::VDD: return "VDD";
         case PinLabel::VSS: return "VSS";
@@ -154,7 +188,7 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::CS2: return "CS2";
         case PinLabel::OE: return "OE";
         case PinLabel::WE: return "WE";
-        case PinLabel::RD: return "/RD";
+        case PinLabel::RD: return "RD";
         case PinLabel::ALE: return "ALE";
         
         // Video chip pins
@@ -361,6 +395,49 @@ std::string pin_label_to_display_string(PinLabel label) {
 // Derive pin type from pin label for GUI color coding and categorization
 PinType pin_label_to_pin_type(PinLabel label) {
     switch (label) {
+        // Active-low interrupt pins
+        case PinLabel::_ABORT:
+        case PinLabel::_IRQ:
+        case PinLabel::_NMI:
+        case PinLabel::_RES:
+            return PinType::INTERRUPT;
+
+        // Active-low control pins
+        case PinLabel::_AEC:
+        case PinLabel::_BASIC:
+        case PinLabel::_CAS:
+        case PinLabel::_CASRAM_PLA:
+        case PinLabel::_CHAREN:
+        case PinLabel::_CHAROM:
+        case PinLabel::_CS:
+        case PinLabel::_CS0:
+        case PinLabel::_CS1:
+        case PinLabel::_CS2:
+        case PinLabel::_EXROM:
+        case PinLabel::_GAME:
+        case PinLabel::_HIRAM:
+        case PinLabel::_IO:
+        case PinLabel::_KERNAL:
+        case PinLabel::_LORAM:
+        case PinLabel::_OE:
+        case PinLabel::_RAS:
+        case PinLabel::_RD:
+        case PinLabel::_ROMH:
+        case PinLabel::_ROML:
+        case PinLabel::_WE:
+            return PinType::CONTROL;
+
+        // Active-low special pins
+        case PinLabel::_ML:
+        case PinLabel::_SO:
+        case PinLabel::_VP:
+        case PinLabel::_VPB:
+            return PinType::SPECIAL;
+
+        // Active-low address pin
+        case PinLabel::_VA14:
+            return PinType::ADDRESS;
+
         // Power pins
         case PinLabel::VDD:
         case PinLabel::VSS:

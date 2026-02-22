@@ -49,15 +49,15 @@ inline ChipLayout create_mos2114_layout() {
     // Pin 18: Vcc (Supply voltage)
     //
     // Right-hand pins (10-18) are numbered bottom-up as per DIP standard
-    PIN_LR(layout,  1, A6,    VDD, 18)   // Address 6 / +5V Power
-    PIN_LR(layout,  2, A5,    A7,  17)   // Address 5 / Address 7
-    PIN_LR(layout,  3, A4,    A8,  16)   // Address 4 / Address 8
-    PIN_LR(layout,  4, A3,    A9,  15)   // Address 3 / Address 9
-    PIN_LR(layout,  5, A2,    D4,  14)   // Address 2 / Data 4
-    PIN_LR(layout,  6, A1,    D3,  13)   // Address 1 / Data 3
-    PIN_LR(layout,  7, A0,    D2,  12)   // Address 0 / Data 2
-    PIN_LR(layout,  8, CS,    D1,  11)   // Chip Select (active low) / Data 1
-    PIN_LR(layout,  9, VSS,   WE,  10)   // Ground / Write Enable (active low)
+    PIN_LR(layout,  1, A6,    VDD, 18)   // addr 6 / +5V
+    PIN_LR(layout,  2, A5,    A7,  17)   // addr 5 / addr 7
+    PIN_LR(layout,  3, A4,    A8,  16)   // addr 4 / addr 8
+    PIN_LR(layout,  4, A3,    A9,  15)   // addr 3 / addr 9
+    PIN_LR(layout,  5, A2,    D4,  14)   // addr 2 / data 4
+    PIN_LR(layout,  6, A1,    D3,  13)   // addr 1 / data 3
+    PIN_LR(layout,  7, A0,    D2,  12)   // addr 0 / data 2
+    PIN_LR(layout,  8, _CS,   D1,  11)   // chip sel / data 1
+    PIN_LR(layout,  9, VSS,   _WE, 10)   // gnd / write enable
     
     return layout;
 }

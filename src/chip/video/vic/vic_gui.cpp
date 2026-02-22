@@ -40,26 +40,26 @@ inline ChipLayout create_vic_layout(const char* part_number) {
     };
 
     // Hardware-accurate MOS 6560/6561 VIC pinout (40-pin DIP)
-    PIN_LR(layout,  1, D7,      VDD, 40)       // Data 7 / +5V Power
-    PIN_LR(layout,  2, D6,      CSYNC, 39)     // Data 6 / Composite Sync
-    PIN_LR(layout,  3, D5,      LUMA, 38)      // Data 5 / Luminance Output
-    PIN_LR(layout,  4, D4,      CHROMA, 37)    // Data 4 / Chrominance Output
-    PIN_LR(layout,  5, D3,      RW, 36)        // Data 3 / Read/Write
-    PIN_LR(layout,  6, D2,      A13, 35)       // Data 2 / Address 13
-    PIN_LR(layout,  7, D1,      A12, 34)       // Data 1 / Address 12
-    PIN_LR(layout,  8, D0,      A11, 33)       // Data 0 / Address 11
-    PIN_LR(layout,  9, MA7,     A10, 32)       // Mux Bus 7 / Address 10
-    PIN_LR(layout, 10, MA6,     A9, 31)        // Mux Bus 6 / Address 9
-    PIN_LR(layout, 11, MA5,     A8, 30)        // Mux Bus 5 / Address 8
-    PIN_LR(layout, 12, MA4,     A7, 29)        // Mux Bus 4 / Address 7
-    PIN_LR(layout, 13, MA3,     A6, 28)        // Mux Bus 3 / Address 6
-    PIN_LR(layout, 14, MA2,     A5, 27)        // Mux Bus 2 / Address 5
-    PIN_LR(layout, 15, MA1,     SOUND, 26)     // Mux Bus 1 / Sound Output
-    PIN_LR(layout, 16, MA0,     POTX, 25)      // Mux Bus 0 / Paddle X
-    PIN_LR(layout, 17, PHI0,    POTY, 24)      // Clock Input / Paddle Y
-    PIN_LR(layout, 18, PHI1,    LIGHT_PEN, 23) // Clock Phase 1 / Light Pen
-    PIN_LR(layout, 19, PHI2,    CS, 22)        // Clock Phase 2 / Chip Select
-    PIN_LR(layout, 20, VSS,     IRQ, 21)       // Ground / /IRQ (active low)
+    PIN_LR(layout,  1, D7,      VDD, 40)       // data hi / +5V
+    PIN_LR(layout,  2, D6,      CSYNC, 39)     // / comp sync
+    PIN_LR(layout,  3, D5,      LUMA, 38)      // / luminance
+    PIN_LR(layout,  4, D4,      CHROMA, 37)    // / chrominance
+    PIN_LR(layout,  5, D3,      RW, 36)        // / R/W
+    PIN_LR(layout,  6, D2,      A13, 35)       // / addr hi
+    PIN_LR(layout,  7, D1,      A12, 34)
+    PIN_LR(layout,  8, D0,      A11, 33)       // data lo
+    PIN_LR(layout,  9, MA7,     A10, 32)       // mux bus hi / addr
+    PIN_LR(layout, 10, MA6,     A9, 31)
+    PIN_LR(layout, 11, MA5,     A8, 30)        // / addr lo
+    PIN_LR(layout, 12, MA4,     A7, 29)
+    PIN_LR(layout, 13, MA3,     A6, 28)
+    PIN_LR(layout, 14, MA2,     A5, 27)
+    PIN_LR(layout, 15, MA1,     SOUND, 26)     // mux bus lo / audio
+    PIN_LR(layout, 16, MA0,     POTX, 25)      // / paddle X
+    PIN_LR(layout, 17, PHI0,    POTY, 24)      // clock in / paddle Y
+    PIN_LR(layout, 18, PHI1,    LIGHT_PEN, 23) // clock phi1 / light pen
+    PIN_LR(layout, 19, PHI2,    _CS, 22)       // clock phi2 / chip sel
+    PIN_LR(layout, 20, VSS,     _IRQ, 21)      // gnd / interrupt
 
     return layout;
 }
