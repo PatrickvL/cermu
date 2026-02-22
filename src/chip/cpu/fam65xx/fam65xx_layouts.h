@@ -25,13 +25,13 @@ template <const CPUTraits &Traits> class fam65xx_t;
 template <const fam65xx::CPUTraits &Traits> ChipLayout create_cpu_pin_layout();
 
 // Specific CPU layout functions
-ChipLayout create_mos6502_layout();
-ChipLayout create_mos6510_layout();
-ChipLayout create_csg7501_layout();
-ChipLayout create_wdc_w65c02s_layout();
-ChipLayout create_wdc_65c816_layout();
-ChipLayout create_ricoh_2a03_layout();
-ChipLayout create_rockwell_r65c02_layout();
+inline ChipLayout create_mos6502_layout();
+inline ChipLayout create_mos6510_layout();
+inline ChipLayout create_csg7501_layout();
+inline ChipLayout create_wdc_w65c02s_layout();
+inline ChipLayout create_wdc_65c816_layout();
+inline ChipLayout create_ricoh_2a03_layout();
+inline ChipLayout create_rockwell_r65c02_layout();
 
 // CPU pin state functions - get pin states from CPU and bus state
 template <const fam65xx::CPUTraits &Traits>
@@ -240,7 +240,7 @@ std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits> *cpu,
 // MOS 6502 SPECIFIC LAYOUT IMPLEMENTATION
 // ============================================================================
 
-ChipLayout create_mos6502_layout() {
+inline ChipLayout create_mos6502_layout() {
   // Start with DIP-40 base layout from core system
   ChipLayout layout = create_dip40_layout();
 
@@ -286,7 +286,7 @@ ChipLayout create_mos6502_layout() {
   return layout;
 }
 
-ChipLayout create_mos6510_layout() {
+inline ChipLayout create_mos6510_layout() {
   // Start with DIP-40 base layout from core system
   ChipLayout layout = create_dip40_layout();
 
@@ -333,7 +333,7 @@ ChipLayout create_mos6510_layout() {
 // CSG 7501/8501 SPECIFIC LAYOUT IMPLEMENTATION (C16/Plus4 CPU)
 // ============================================================================
 
-ChipLayout create_csg7501_layout() {
+inline ChipLayout create_csg7501_layout() {
   // Start with DIP-40 base layout from core system
   ChipLayout layout = create_dip40_layout();
 
@@ -379,7 +379,7 @@ ChipLayout create_csg7501_layout() {
   return layout;
 }
 
-ChipLayout create_wdc_w65c02s_layout() {
+inline ChipLayout create_wdc_w65c02s_layout() {
   // Start with DIP-40 base layout from core system
   ChipLayout layout = create_dip40_layout();
 
@@ -422,7 +422,7 @@ ChipLayout create_wdc_w65c02s_layout() {
   return layout;
 }
 
-ChipLayout create_wdc_65c816_layout() {
+inline ChipLayout create_wdc_65c816_layout() {
   // Start with DIP-40 base layout from core system
   ChipLayout layout = create_dip40_layout();
 
@@ -465,7 +465,7 @@ ChipLayout create_wdc_65c816_layout() {
   return layout;
 }
 
-ChipLayout create_ricoh_2a03_layout() {
+inline ChipLayout create_ricoh_2a03_layout() {
   // Start with DIP-40 base layout from core system
   ChipLayout layout = create_dip40_layout();
 
@@ -509,7 +509,7 @@ ChipLayout create_ricoh_2a03_layout() {
   return layout;
 }
 
-ChipLayout create_rockwell_r65c02_layout() {
+inline ChipLayout create_rockwell_r65c02_layout() {
   // Start with DIP-40 base layout from core system
   ChipLayout layout = create_dip40_layout();
 

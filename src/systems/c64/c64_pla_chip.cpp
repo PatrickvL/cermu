@@ -1,10 +1,8 @@
 #include "../../chip/logic/pla.h"
 #include "c64_pla_chip.h"
 #include "../../core/chip_layout.h"
-#include "../../core/pin_macros.h"
 #include "c64_bus.h"
 #include "c64_system.h"
-#include "../../chip/video/vic_ii/vicii_common.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
 #ifdef IMGUI_VERSION
 #include <imgui.h>
@@ -13,7 +11,6 @@
 #endif
 #include <stdio.h>
 #include <string.h>
-#include <memory>
 
 // Helper function to get PLA mode description
 static const char* get_pla_mode_cpu_description(uint8_t mode) {

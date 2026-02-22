@@ -100,7 +100,7 @@ static inline uint8_t ted_color_index(uint8_t color_reg) {
 }
 
 // Convert TED color register value to RGBA
-static inline uint32_t ted_color_to_rgba(uint8_t color_reg) {
+[[maybe_unused]] static inline uint32_t ted_color_to_rgba(uint8_t color_reg) {
     return ted_palette[ted_color_index(color_reg)];
 }
 

@@ -1,6 +1,5 @@
 #include "vicii_common.h"
 #include "../../../core/chip_layout.h"
-#include "../../../core/pin_macros.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
 #ifdef IMGUI_VERSION
 #include <imgui.h>
@@ -9,7 +8,6 @@
 #endif
 #include <stdio.h>
 #include <string.h>
-#include <memory>
 
 // ============================================================================
 // COMMON VIC-II GUI RENDERING FUNCTIONS
