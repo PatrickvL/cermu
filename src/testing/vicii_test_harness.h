@@ -12,7 +12,7 @@
 // (~1.2M cycles → ~8K cycles for the page-clear portion only).
 // =============================================================================
 
-#include "../systems/c64/c64.h"
+#include "../systems/c64/c64_system.h"
 #include <cstdint>
 #include <cstdio>
 
@@ -91,7 +91,7 @@ struct vicii_test_state_t {
 ///
 /// NOTE: The RAMTAS skip is now delegated to the shared c64_patch_skip_memtest()
 /// in c64_kernal_patches.h.  This function still owns Patch B (BASIC redirect).
-void patch_kernal_for_test(c64_t* c64);
+void patch_kernal_for_test(C64System* c64);
 /* TODO:
 Once the kernal boot is passed after the RAMTAS call, it would be good to
 restore the original contents of the KERNAL ROM area that got patched, so
@@ -102,16 +102,16 @@ of detecting PC hitting the RAMTAS ROM code...
 */
 
 /// Inject the 6510 test program into RAM at TEST_LOAD_ADDR.
-void inject_test_program(c64_t* c64);
+void inject_test_program(C64System* c64);
 
 /// Initialize harness state.
 void harness_init(vicii_test_state_t* state);
 
 /// Poll once per frame; returns true while tests are still running.
-bool harness_poll(vicii_test_state_t* state, c64_t* c64);
+bool harness_poll(vicii_test_state_t* state, C64System* c64);
 
 /// Read the results buffer from RAM and print detailed results.
-void harness_read_results(vicii_test_state_t* state, c64_t* c64);
+void harness_read_results(vicii_test_state_t* state, C64System* c64);
 
 /// Print final summary.
 void harness_summary(const vicii_test_state_t* state);

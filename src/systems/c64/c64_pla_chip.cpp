@@ -3,7 +3,7 @@
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
 #include "c64_bus.h"
-#include "c64.h"
+#include "c64_system.h"
 #include "../../chip/video/vic_ii/vicii_common.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
 #ifdef IMGUI_VERSION
@@ -144,7 +144,7 @@ inline ChipLayout create_pla_layout() {
 // ============================================================================
 
 // Helper function to get PLA pin states for visualization
-static std::vector<PinSignalState> get_pla_pin_states(c64_t* c64, const ChipLayout* layout) {
+static std::vector<PinSignalState> get_pla_pin_states(C64System* c64, const ChipLayout* layout) {
     std::vector<PinSignalState> pin_states;
     if (!c64 || !layout) return pin_states;
     
@@ -199,7 +199,7 @@ static ChipLayout& get_pla_layout() {
 }
 
 void PlaChip::render_debug_content() {
-    c64_t* c64 = c64_;
+    C64System* c64 = c64_;
     if (!c64) return;
         
 #ifdef IMGUI_VERSION
@@ -581,7 +581,7 @@ void PlaChip::render_debug_content() {
 // ============================================================================
 
 void PlaChip::render_settings_content() {
-    c64_t* c64 = c64_;
+    C64System* c64 = c64_;
     if (!c64) return;
 
 #ifdef IMGUI_VERSION
@@ -622,7 +622,7 @@ void PlaChip::render_layout_content() {
     if (!c64_) return;
 
 #ifdef IMGUI_VERSION
-    c64_t* c64 = c64_;
+    C64System* c64 = c64_;
 
     ChipLayout& layout = get_pla_layout();
     std::vector<PinSignalState> pin_states = get_pla_pin_states(c64, &layout);

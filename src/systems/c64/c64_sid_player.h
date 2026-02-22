@@ -21,7 +21,7 @@
 // safe because SID tunes never use tape I/O.
 // =============================================================================
 
-#include "c64.h"
+#include "c64_system.h"
 #include "../../core/formats/sid_format.h"
 #include "../../core/formats/format_handler.h"
 
@@ -67,7 +67,7 @@ void c64_write_sid_info_page(uint8_t* screen, uint8_t* color,
  * @param prog     Program data from format_load_result_t (payload bytes)
  * @param subtune  0-based subtune index to play
  */
-void c64_apply_sid_load(c64_t* c64, const sid_header_t* sid,
+void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
                         const program_data_t* prog, uint16_t subtune);
 
 /**
@@ -83,6 +83,6 @@ void c64_apply_sid_load(c64_t* c64, const sid_header_t* sid,
  * @param payload_size  Size of the payload in bytes
  * @param subtune       0-based subtune index to switch to
  */
-void c64_sid_switch_subtune(c64_t* c64, const sid_header_t* sid,
+void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
                              const uint8_t* payload, size_t payload_size,
                              uint16_t subtune);

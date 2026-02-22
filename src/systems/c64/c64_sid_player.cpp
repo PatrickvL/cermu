@@ -259,7 +259,7 @@ static void build_init_stub(uint8_t* ram,
 // SID Loader — Payload injection + 6502 player stub
 // =============================================================================
 
-void c64_apply_sid_load(c64_t* c64, const sid_header_t* sid,
+void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
                         const program_data_t* prog, uint16_t subtune) {
     if (!sid || !c64 || !c64->ram) return;
 
@@ -337,7 +337,7 @@ void c64_apply_sid_load(c64_t* c64, const sid_header_t* sid,
 // Subtune Switch — Lightweight re-init without full reload
 // =============================================================================
 
-void c64_sid_switch_subtune(c64_t* c64, const sid_header_t* sid,
+void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
                              const uint8_t* payload, size_t payload_size,
                              uint16_t subtune) {
     if (!sid || !c64 || !c64->ram) return;

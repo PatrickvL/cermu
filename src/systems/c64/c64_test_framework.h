@@ -10,8 +10,7 @@
 
 // Forward declarations
 typedef struct ram_s ram_t;
-struct C64SystemData;
-using c64_t = C64SystemData;
+class C64System;
 
 namespace c64_test {
 
@@ -180,10 +179,10 @@ public:
     std::vector<TestDescriptor> get_filtered_tests(const TestFilter& filter) const;
     
     // Test execution with automatic hardware reconfiguration
-    TestResult run_test(const TestDescriptor& test, c64_t* c64);
-    TestResult run_test_safe(const TestDescriptor& test, c64_t* c64);  // SEH-protected on Windows
-    std::vector<TestResult> run_tests(const std::vector<TestDescriptor>& tests, c64_t* c64);
-    std::vector<TestResult> run_all_tests(c64_t* c64, const TestFilter& filter);
+    TestResult run_test(const TestDescriptor& test, C64System* c64);
+    TestResult run_test_safe(const TestDescriptor& test, C64System* c64);  // SEH-protected on Windows
+    std::vector<TestResult> run_tests(const std::vector<TestDescriptor>& tests, C64System* c64);
+    std::vector<TestResult> run_all_tests(C64System* c64, const TestFilter& filter);
     
     // New: Test execution with dynamic system creation per test
     TestResult run_test_with_config(const TestDescriptor& test);
@@ -224,7 +223,7 @@ public:
     
     // Hardware configuration management
     bool requires_reconfiguration(const TestDescriptor& test) const;
-    c64_t* create_system_for_test(const TestDescriptor& test);
+    C64System* create_system_for_test(const TestDescriptor& test);
     HardwareConfig get_current_hardware_config() const { return current_hardware_; }
     
 private:
@@ -250,19 +249,19 @@ private:
     TestEnvironment detect_test_environment(const TestDescriptor& test, uint16_t load_addr, uint16_t sys_addr);
     
     // Protocol detection and handling
-    TestProtocol detect_test_protocol(const TestDescriptor& test, c64_t* c64);
+    TestProtocol detect_test_protocol(const TestDescriptor& test, C64System* c64);
     bool detect_basic_two_stage_loader(ram_t* ram, uint16_t load_addr);
     uint16_t calculate_basic_entry_point(ram_t* ram, uint16_t sys_addr);
-    bool detect_infinite_loop(c64_t* c64, uint16_t& loop_pc, uint32_t check_cycles = 1000);
-    uint8_t get_border_color(c64_t* c64);
+    bool detect_infinite_loop(C64System* c64, uint16_t& loop_pc, uint32_t check_cycles = 1000);
+    uint8_t get_border_color(C64System* c64);
     
     // Test execution helpers
-    bool load_test_program(const TestDescriptor& test, c64_t* c64);
-    bool execute_basic_boot(c64_t* c64, const TestDescriptor& test, uint16_t sys_addr);
-    bool execute_kernal_boot(c64_t* c64);
-    TestResult run_exitcode_test(const TestDescriptor& test, c64_t* c64);
-    TestResult run_exitcode_test_enhanced(const TestDescriptor& test, c64_t* c64);
-    TestResult run_screenshot_test(const TestDescriptor& test, c64_t* c64);
+    bool load_test_program(const TestDescriptor& test, C64System* c64);
+    bool execute_basic_boot(C64System* c64, const TestDescriptor& test, uint16_t sys_addr);
+    bool execute_kernal_boot(C64System* c64);
+    TestResult run_exitcode_test(const TestDescriptor& test, C64System* c64);
+    TestResult run_exitcode_test_enhanced(const TestDescriptor& test, C64System* c64);
+    TestResult run_screenshot_test(const TestDescriptor& test, C64System* c64);
     bool compare_screenshots(const std::string& generated, const std::string& reference, double& similarity);
     
     // Debug register monitoring via IO write intercept (zero-cost to main emulator)
@@ -272,8 +271,8 @@ private:
     bool debug_intercept_installed_;        // Whether intercept is currently active
 
     // Install/uninstall the $D7FF write interceptor on the bus io_handlers
-    void install_debug_intercept(c64_t* c64);
-    void uninstall_debug_intercept(c64_t* c64);
+    void install_debug_intercept(C64System* c64);
+    void uninstall_debug_intercept(C64System* c64);
 };
 
 // Utility functions

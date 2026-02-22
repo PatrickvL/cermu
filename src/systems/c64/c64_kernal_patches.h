@@ -13,7 +13,7 @@
 //       users can enable/disable via a configuration UI.
 // =============================================================================
 
-#include "c64.h"
+#include "c64_system.h"
 
 /**
  * Patch KERNAL RAMTAS routine at $FD5F to skip the memory-test loop.
@@ -30,4 +30,4 @@
  * @param c64  Initialized C64 system with KERNAL ROM loaded.
  * @return     true if patch was applied, false otherwise.
  */
-bool c64_patch_skip_memtest(c64_t* c64);
+bool c64_patch_skip_memtest(C64System* c64);

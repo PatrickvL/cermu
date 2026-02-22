@@ -25,7 +25,7 @@ namespace vicii_test {
 //   we can't override it via RAM writes since ROM is banked in at that point.
 // ============================================================================
 
-void patch_kernal_for_test(c64_t* c64) {
+void patch_kernal_for_test(C64System* c64) {
     if (!c64 || !c64->kernal || !c64->kernal->memory) {
         printf("VICII-TEST: WARNING — cannot patch KERNAL (ROM not loaded)\n");
         return;
@@ -410,7 +410,7 @@ static size_t build_test_program(uint8_t* buffer, size_t buffer_size) {
 // 3. INJECT TEST PROGRAM INTO RAM
 // ============================================================================
 
-void inject_test_program(c64_t* c64) {
+void inject_test_program(C64System* c64) {
     if (!c64 || !c64->ram) return;
 
     uint8_t program[4096];
@@ -441,7 +441,7 @@ void harness_init(vicii_test_state_t* state) {
     state->max_frames = 600;  // ~10 seconds at 50/60fps
 }
 
-bool harness_poll(vicii_test_state_t* state, c64_t* c64) {
+bool harness_poll(vicii_test_state_t* state, C64System* c64) {
     if (!state->active || !c64 || !c64->ram) return false;
 
     state->frames_run++;
@@ -464,7 +464,7 @@ bool harness_poll(vicii_test_state_t* state, c64_t* c64) {
     return true;
 }
 
-void harness_read_results(vicii_test_state_t* state, c64_t* c64) {
+void harness_read_results(vicii_test_state_t* state, C64System* c64) {
     if (!c64 || !c64->ram) return;
 
     const uint8_t* ram = c64->ram->memory;

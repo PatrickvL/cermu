@@ -10,6 +10,9 @@
 #include <SDL_gamecontroller.h>
 #include <SDL_joystick.h>
 
+// stb_image_write header (implementation lives in stb_impl.cpp)
+#include "../../external/stb_image_write.h"
+
 #ifdef IMGUI_VERSION
 #include <imgui.h>
 #include "../gui/connector_icons.h"
@@ -67,6 +70,59 @@ void EmulatedSystem::set_framebuffer(uint32_t* buffer, int width, int height) {
     rgba_framebuffer_ = buffer;
     rgba_width_ = width;
     rgba_height_ = height;
+}
+
+// ============================================================================
+// Screenshot
+// ============================================================================
+
+bool EmulatedSystem::save_screenshot(const char* filename) const {
+    if (!rgba_framebuffer_ || rgba_width_ <= 0 || rgba_height_ <= 0 || !filename) {
+        fprintf(stderr, "ERROR: Cannot save screenshot — framebuffer not initialized\n");
+        return false;
+    }
+
+    int ok = stbi_write_png(filename, rgba_width_, rgba_height_, 4,
+                            rgba_framebuffer_, rgba_width_ * 4);
+    if (!ok) {
+        fprintf(stderr, "ERROR: Failed to write PNG: %s\n", filename);
+        return false;
+    }
+    return true;
+}
+
+bool EmulatedSystem::save_screenshot_cropped(const char* filename,
+                                             int crop_x, int crop_y,
+                                             int crop_w, int crop_h) const {
+    if (!rgba_framebuffer_ || rgba_width_ <= 0 || rgba_height_ <= 0 || !filename) {
+        fprintf(stderr, "ERROR: Cannot save screenshot — framebuffer not initialized\n");
+        return false;
+    }
+
+    if (crop_x < 0 || crop_y < 0 || crop_w <= 0 || crop_h <= 0 ||
+        crop_x + crop_w > rgba_width_ || crop_y + crop_h > rgba_height_) {
+        fprintf(stderr, "ERROR: Invalid crop parameters (%d,%d %dx%d) for %dx%d framebuffer\n",
+                crop_x, crop_y, crop_w, crop_h, rgba_width_, rgba_height_);
+        return false;
+    }
+
+    // Extract cropped region
+    auto* cropped = new uint32_t[crop_w * crop_h];
+    for (int y = 0; y < crop_h; y++) {
+        std::memcpy(cropped + y * crop_w,
+                    rgba_framebuffer_ + (y + crop_y) * rgba_width_ + crop_x,
+                    crop_w * sizeof(uint32_t));
+    }
+
+    int ok = stbi_write_png(filename, crop_w, crop_h, 4,
+                            cropped, crop_w * 4);
+    delete[] cropped;
+
+    if (!ok) {
+        fprintf(stderr, "ERROR: Failed to write PNG: %s\n", filename);
+        return false;
+    }
+    return true;
 }
 
 bool EmulatedSystem::initialize() {

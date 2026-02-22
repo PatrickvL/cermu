@@ -5,9 +5,16 @@
 #include "../../core/device_registry.h"
 #include "../../core/formats/format_handler.h"
 #include "../../core/formats/sid_format.h"
-#include "c64.h"
+// Chip headers (previously included via c64.h)
+#include "../../chip/memory/ram.h"
+#include "../../chip/memory/rom.h"
+#include "../../chip/memory/mos2114.h"
+#include "../../chip/sound/mos6581.h"
+#include "../../chip/io/mos6526.h"
+#include "../../chip/video/vic_ii/vicii_common.h"
+#include "../../chip/input/commodore_keyboard.h"
+#include "c64_bus.h"
 #include "c64_config.h"
-#include "c64_kernal_patches.h"
 #include <string>
 #include <vector>
 
@@ -75,12 +82,12 @@ public:
     void set_audio_sample_rate(int sample_rate_hz) override;
     // Apply KERNAL RAMTAS patch to skip the memory test during boot.
     // Returns true if the patch was applied.
-    bool patch_skip_memtest() { return c64_patch_skip_memtest(c64_); }
+    bool patch_skip_memtest();
 
-    // Direct access to the raw C64 system data struct.
-    // Used by the VIC-II test harness and diagnostic dump modes.
-    c64_t* get_system_data() { return c64_; }
-    
+    // Access to internal C64 configuration (needed by test framework)
+    c64_config_t& get_c64_config() { return c64_config_; }
+    const c64_config_t& get_c64_config() const { return c64_config_; }
+
     // --- Connector Port Access -----------------------------------------
     //
     // Connector ports, owned devices, attach/detach, and the generic
@@ -88,10 +95,30 @@ public:
     // class.  The C64 only defines its port layout constants and the
     // system-specific setup_connector_ports() initializer below.
     //
-    
+
+    // =========================================================================
+    // CHIP INSTANCES — formerly in C64SystemData struct
+    // =========================================================================
+public:
+    c64_bus_t bus{};                    // C64 bus controller (embedded, not heap-allocated)
+    void* mos6510 = nullptr;            // MOS6510 CPU instance (C++ core)
+    ram_t* ram = nullptr;               // RAM memory $0000-$FFFF (64KB)
+    rom_t* cartridge_roml = nullptr;    // Cartridge ROM Low $8000-$9FFF (8KB)
+    rom_t* cartridge_romh = nullptr;    // Cartridge ROM High $A000-$BFFF (8KB)
+    rom_t* basic = nullptr;             // Basic ROM $A000-$BFFF (8KB)
+    rom_t* charrom = nullptr;           // Character ROM $D000-$DFFF (4KB) when CHAREN=0
+    vicii_t* vicii = nullptr;           // mos6567_t (NTSC) or mos6569_t (PAL) ($D000-$DFFF, 4KB)
+    mos6581_t* sid = nullptr;           // MOS6581 SID sound chip ($D400-$D7FF, 1KB)
+    mos2114_t* colorram = nullptr;      // Color RAM (1KB at $D800-$DBFF)
+    mos6526_t* cia1 = nullptr;          // MOS6526 CIA 1 (BUS_MASK_IRQ) ($DC00-$DDFF, 256 bytes)
+    mos6526_t* cia2 = nullptr;          // MOS6526 CIA 2 (BUS_MASK_NMI) ($DD00-$DFFF, 256 bytes)
+    commodore_keyboard_t* keyboard = nullptr; // Keyboard matrix (connected to CIA1)
+    void* io1 = nullptr;               // Cartridge I/O 1 ($DE00-$DEFF)
+    void* io2 = nullptr;               // Cartridge I/O 2 ($DF00-$DFFF)
+    rom_t* kernal = nullptr;            // Kernal ROM $E000-$FFFF (8KB)
+
 private:
-    c64_t c64_data_{};          // Embedded C64 system struct (no heap allocation)
-    c64_t* c64_ = nullptr;     // Points to &c64_data_ when initialized, nullptr otherwise
+    bool initialized_ = false;          // True when initialize() has succeeded
     c64_config_t c64_config_;  // Renamed to avoid conflict with base class config_
     vicii_standard_t created_vicii_standard_ = VIC_PAL;  // Actual VIC-II standard at creation time
     sid_revision_t pending_sid_revision_ = SID_REVISION_6581_R4AR;  // Applied after SID creation

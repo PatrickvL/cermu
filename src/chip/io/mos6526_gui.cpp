@@ -1,7 +1,6 @@
 #include "mos6526.h"
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
-#include "../../systems/c64/c64.h"  // Need this to access C64 structure
 // Native Dear ImGui C++ - conditional compilation for GUI availability
 #ifdef IMGUI_VERSION
 #include <imgui.h>
