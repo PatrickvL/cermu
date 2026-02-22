@@ -359,15 +359,12 @@ if(BUILD_GUI)
         src/gui/chip_visualization.cpp
         src/gui/global_chip_style.cpp
         src/chip/video/vic_ii/vicii_gui.cpp
-        src/chip/video/vic_ii/mos6567_gui.cpp
-        src/chip/video/vic_ii/mos6569_gui.cpp
         src/chip/video/vic/vic_gui.cpp
         src/chip/video/ted/ted7360_gui.cpp
         src/chip/logic/pla_gui.cpp
         src/chip/cpu/fam65xx/fam65xx_gui.cpp
         src/chip/io/mos6526_gui.cpp
         src/chip/io/mos6522_gui.cpp
-        src/chip/memory/ram_gui.cpp
         src/chip/memory/mos2114_gui.cpp
         src/chip/sound/mos6581_gui.cpp
         src/systems/nes/nes_ppu_gui.cpp

@@ -509,37 +509,6 @@ template void fam65xx_t<WDC_65C816>::render_layout_content();
 
 } // namespace fam65xx
 
-// ============================================================================
-// C INTERFACE FUNCTIONS (legacy wrappers — delegate to ChipBase virtuals)
-// ============================================================================
-
-extern "C" {
-
-void fam65xx_render_debug_content(void *chip) {
-  if (auto* base = static_cast<ChipBase*>(chip)) {
-    base->render_debug_content();
-  }
-}
-
-void fam65xx_render_settings_content(void *chip) {
-  if (auto* base = static_cast<ChipBase*>(chip)) {
-    base->render_settings_content();
-  }
-}
-
-void fam65xx_render_layout_content(void *chip) {
-  if (auto* base = static_cast<ChipBase*>(chip)) {
-    base->render_layout_content();
-  }
-}
-
-void fam65xx_update_bus_state(void * /*chip*/, bus_state_t /*bus_state*/) {
-  // Bus state is now stored directly on the fam65xx_t instance (gui_bus_state member).
-  // Systems that need to update it should set it directly on the CPU object.
-  // This function is retained for backward compatibility but is a no-op.
-}
-
-} // extern "C"
 #endif // IMGUI_VERSION
 
 // ============================================================================

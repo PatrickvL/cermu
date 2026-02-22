@@ -19,8 +19,3 @@ void ram_destroy(ram_t* ram) {
     }
     free(ram);
 }
-
-// Include GUI implementation
-#ifdef IMGUI_VERSION
-#include "ram_gui.h"
-#endif

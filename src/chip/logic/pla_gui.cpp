@@ -629,26 +629,3 @@ void PlaChip::render_layout_content() {
     render_chip_layout(layout, pin_states, "906114-01");
 #endif
 }
-
-// ============================================================================
-// BACKWARD-COMPATIBLE FREE FUNCTION WRAPPERS
-// ============================================================================
-
-void pla_render_debug_content(void* chip) {
-    if (!chip) return;
-    // Construct a temporary PlaChip to forward the call
-    PlaChip pla(static_cast<c64_t*>(chip));
-    pla.render_debug_content();
-}
-
-void pla_render_settings_content(void* chip) {
-    if (!chip) return;
-    PlaChip pla(static_cast<c64_t*>(chip));
-    pla.render_settings_content();
-}
-
-void pla_render_layout_content(void* chip) {
-    if (!chip) return;
-    PlaChip pla(static_cast<c64_t*>(chip));
-    pla.render_layout_content();
-}

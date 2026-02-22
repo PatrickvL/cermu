@@ -341,19 +341,3 @@ void vic_base_s::render_layout_content() {
     render_chip_layout(layout, pin_states, chip_name);
 #endif
 }
-
-// ============================================================================
-// Backward-compatible free-function wrappers
-// ============================================================================
-
-void vic_gui_render_debug_content(void* chip) {
-    static_cast<vic_base_t*>(chip)->render_debug_content();
-}
-
-void vic_gui_render_settings_content(void* chip) {
-    static_cast<vic_base_t*>(chip)->render_settings_content();
-}
-
-void vic_gui_render_layout_content(void* chip) {
-    static_cast<vic_base_t*>(chip)->render_layout_content();
-}

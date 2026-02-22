@@ -4,9 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "../../core/cermu.h"
-//#include "../../core/system.h"
 #include "../../core/system_lines.h"
-//#include "../../core/bus_cycle_interface.h"
 #include "c64_config.h"
 #include "c64_chips.h"
 
