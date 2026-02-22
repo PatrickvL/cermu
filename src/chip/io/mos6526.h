@@ -4,6 +4,7 @@
 //#include "../../core/bus_cycle_interface.h"
 #include <stdint.h>
 #include "../../core/system_lines.h" // For bus_state_t
+#include "../../core/ioport.h"       // For io_port<Mask>
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdbool.h>
@@ -60,6 +61,12 @@ typedef struct mos6526_s : public ChipBase {
     uint8_t port_b_value = 0;
     int cycles_tod[2] = {}; // Assigned once in constructor
     uint8_t reg[CIA_REGS_SIZE + 4 + 4 + 4 + 1 + 1] = {}; // Registers, plus TIMER, CLOCK, ALARM, SDR and DDRB latches
+
+    // Generic IO port views for DDR/data/pins mechanics
+    // Register indices: PRA=0, PRB=1, DDRA=2, DDRB=3 (constants defined in MOS6526 namespace below)
+    io_port<0xFF> port_a{reg[2], reg[0], port_a_value};  // DDR→DDRA, data→PRA, pins→port_a_value
+    io_port<0xFF> port_b{reg[3], reg[1], port_b_value};  // DDR→DDRB, data→PRB, pins→port_b_value
+
     uint32_t read_tod_delta = 0;
     uint32_t write_tod_delta = 0;
     bool is_running_tod = false;

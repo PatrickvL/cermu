@@ -2522,10 +2522,11 @@ ChipIdentity vicii_s::chip_identity() const {
 }
 
 void vicii_s::reset() {
-    // Preserve externally-owned pointers and configuration that survive reset
+    // Preserve externally-owned pointers and configuration that survive reset.
+    // vicii_initialize() memsets every unit to zero, so anything the system
+    // wired up (callbacks, framebuffer, color RAM) must be saved/restored.
     const vicii_chip_config_t* saved_config = config;
-    void (*saved_bank_change)(void*, uint8_t) = bus.bank_change;
-    void* saved_bus = bus.bus;
+    const vicii_bus_unit_t saved_bus = bus;       // entire bus unit (mem_read, bank_change, etc.)
     uint32_t* saved_framebuffer = pixel.framebuffer;
     int saved_fb_width = pixel.framebuffer_width;
     int saved_fb_height = pixel.framebuffer_height;
@@ -2536,10 +2537,15 @@ void vicii_s::reset() {
     vicii_initialize(this);
     vicii_initialize_timing(this, saved_config);
 
-    // Restore preserved pointers
+    // Restore preserved pointers and callbacks
     config = saved_config;
-    bus.bank_change = saved_bank_change;
-    bus.bus = saved_bus;
+    bus = saved_bus;
+    // Zero runtime state within bus that should be cleared on reset
+    bus.pending_phi2_access_type = 0;
+    bus.active_sprite = nullptr;
+    bus.ba_prediction_shift_reg = 0;
+    bus.ba_low_count = 0;
+    bus.bus_line_mask = 0;
     pixel.framebuffer = saved_framebuffer;
     pixel.framebuffer_width = saved_fb_width;
     pixel.framebuffer_height = saved_fb_height;

@@ -158,46 +158,28 @@ void mos6526_s::write_interrupt_control_register(uint32_t v) {
 // PORT/PERIPHERAL DATA / DATA DIRECTION handling
 
 void mos6526_s::write_data_direction_port(uint32_t p, uint8_t v) { // p:A or B
-    // Access either DDRA or DDRB
-    uint32_t i = DDRA + p;
-    // First fetch the existing output data direction value
-    // (so it can be compared) and then store the new value.
-    uint8_t old_outputs = reg[i]; // DDRA / DDRB
-    reg[i] = v; // DDRA / DDRB
-    
-    uint8_t* port = (p == A) ? &port_a_value : &port_b_value;
-    uint8_t pra_value = reg[PRA + p];
-    
-    // Determine which port bit lines have changed from output to input.
-    uint8_t new_inputs = old_outputs & ~v;
-    if (new_inputs > 0) {
-        // 'Pull up' all port bit lines that changed from output to input.
-        *port |= new_inputs;
-    }
-    
-    // Determine which port bit lines have changed from input to output.
-    uint8_t new_outputs = ~old_outputs & v;
-    if (new_outputs > 0) {
-        // Drive PRA/PRB value onto bits that changed from input to output
-        *port = (*port & ~new_outputs) | (pra_value & new_outputs);
-    }
-    
-    // Note : Pull-up bits can be lowered by connected devices (keyboard, joystick, mouse)
+    // Delegate to generic io_port which handles:
+    //   - output→input transitions: pull up pins (passive pull-ups)
+    //   - input→output transitions: drive PRA/PRB value onto pins
+    // Note: Pull-up bits can be lowered by connected devices (keyboard, joystick, mouse)
     // when that happens AFTER the CIA cycle update!
+    auto& port = (p == A) ? port_a : port_b;
+    (void)port.write_ddr(v);
 }
 
 void mos6526_s::update_output_port(uint32_t p, uint8_t v) { // p:A or B
-    // Update only the port pins that are set to output
-    uint8_t* port = (p == A) ? &port_a_value : &port_b_value;
-    uint8_t mask = reg[(p == A) ? DDRA : IDDRB_OFFSET];
-    // Note : For port B, IDDRB is DDRB but with PBON taken into account - see update_internal_data_direction_port_b()
-    *port = (*port & ~mask) | (v & mask);
+    // Drive port pin values through output mask
+    // For port A: mask = DDRA (standard)
+    // For port B: mask = IDDRB (DDRB with PBON forced outputs) — see update_internal_data_direction_port_b()
+    auto& port = (p == A) ? port_a : port_b;
+    uint8_t mask = (p == A) ? *port_a.ddr : reg[IDDRB_OFFSET];
+    port.force_pins(v, mask);
     
     // Call port A change callback if port A and callback is registered
     // Note: Always call for Port A writes (even if value unchanged) because VIC-II
     // banking needs to be notified on every PRA write for correct operation
     if (p == A && port_a_change_callback) {
-        port_a_change_callback(port_a_callback_context, *port);
+        port_a_change_callback(port_a_callback_context, port_a_value);
     }
 }
 

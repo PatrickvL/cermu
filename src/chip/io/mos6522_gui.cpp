@@ -96,9 +96,9 @@ static std::vector<PinSignalState> get_via_pin_states(mos6522_t* via, const Chip
     for (int i = 0; i < 8; i++) {
         int pin_idx = i + 1; // PA0 is pin 2, index 1
         if (pin_idx < total_pins) {
-            pin_states[pin_idx].signal_level = (via->port_a_data & (1 << i)) != 0;
-            pin_states[pin_idx].drive_direction = (via->port_a_ddr & (1 << i)) != 0;
-            pin_states[pin_idx].high_impedance = !(via->port_a_ddr & (1 << i));
+            pin_states[pin_idx].signal_level = (via->port_a_regs.pins & (1 << i)) != 0;
+            pin_states[pin_idx].drive_direction = (via->port_a_regs.ddr & (1 << i)) != 0;
+            pin_states[pin_idx].high_impedance = !(via->port_a_regs.ddr & (1 << i));
             pin_states[pin_idx].signal_valid = true;
         }
     }
@@ -107,9 +107,9 @@ static std::vector<PinSignalState> get_via_pin_states(mos6522_t* via, const Chip
     for (int i = 0; i < 8; i++) {
         int pin_idx = i + 9; // PB0 is pin 10, index 9
         if (pin_idx < total_pins) {
-            pin_states[pin_idx].signal_level = (via->port_b_data & (1 << i)) != 0;
-            pin_states[pin_idx].drive_direction = (via->port_b_ddr & (1 << i)) != 0;
-            pin_states[pin_idx].high_impedance = !(via->port_b_ddr & (1 << i));
+            pin_states[pin_idx].signal_level = (via->port_b_regs.pins & (1 << i)) != 0;
+            pin_states[pin_idx].drive_direction = (via->port_b_regs.ddr & (1 << i)) != 0;
+            pin_states[pin_idx].high_impedance = !(via->port_b_regs.ddr & (1 << i));
             pin_states[pin_idx].signal_valid = true;
         }
     }
@@ -179,10 +179,10 @@ void mos6522_s::render_debug_content() {
 
         // Data Ports
         if (ImGui::CollapsingHeader("Data Ports", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::Text("Port A Data (ORA):  $%02X", via->port_a_data);
-            ImGui::Text("Port A DDR (DDRA):  $%02X", via->port_a_ddr);
-            ImGui::Text("Port B Data (ORB):  $%02X", via->port_b_data);
-            ImGui::Text("Port B DDR (DDRB):  $%02X", via->port_b_ddr);
+            ImGui::Text("Port A Data (ORA):  $%02X", via->port_a_regs.data);
+            ImGui::Text("Port A DDR (DDRA):  $%02X", via->port_a_regs.ddr);
+            ImGui::Text("Port B Data (ORB):  $%02X", via->port_b_regs.data);
+            ImGui::Text("Port B DDR (DDRB):  $%02X", via->port_b_regs.ddr);
         }
 
         // Timers
@@ -269,8 +269,8 @@ void mos6522_s::render_settings_content() {
         // Port A pin-by-pin
         ImGui::Text("Port A (pin by pin):");
         for (int i = 0; i < 8; i++) {
-            bool is_output = (via->port_a_ddr & (1 << i)) != 0;
-            bool pin_level = (via->port_a_data & (1 << i)) != 0;
+            bool is_output = (via->port_a_regs.ddr & (1 << i)) != 0;
+            bool pin_level = (via->port_a_regs.pins & (1 << i)) != 0;
             ImGui::Text("  PA%d: %s  Dir: %s", i, pin_level ? "HIGH" : "LOW",
                         is_output ? "OUT" : "IN");
         }
@@ -280,8 +280,8 @@ void mos6522_s::render_settings_content() {
         // Port B pin-by-pin
         ImGui::Text("Port B (pin by pin):");
         for (int i = 0; i < 8; i++) {
-            bool is_output = (via->port_b_ddr & (1 << i)) != 0;
-            bool pin_level = (via->port_b_data & (1 << i)) != 0;
+            bool is_output = (via->port_b_regs.ddr & (1 << i)) != 0;
+            bool pin_level = (via->port_b_regs.pins & (1 << i)) != 0;
             ImGui::Text("  PB%d: %s  Dir: %s", i, pin_level ? "HIGH" : "LOW",
                         is_output ? "OUT" : "IN");
         }

@@ -533,7 +533,7 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
           // $0000 = DDR (Data Direction Register)
           // $0001 = Data Port (effective I/O value combining data, direction, and input)
           const uint8_t io_data =
-              (addr == 0x0000) ? this->io_port.direction : this->read_io_port();
+              (addr == 0x0000) ? *this->port.ddr : this->read_io_port();
           FAM65XX_SET_DATA(pins, io_data);
           return true;
         }

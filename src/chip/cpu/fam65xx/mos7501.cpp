@@ -108,16 +108,16 @@ void mos7501_transition_to_fetch(mos7501_t *cpu) {
 
 // I/O Port access
 uint8_t mos7501_get_io_ddr(mos7501_t *cpu) {
-  return CPU_CAST(cpu)->io_port.direction;
+  return CPU_CAST(cpu)->io_port_regs.ddr;
 }
 uint8_t mos7501_get_io_data(mos7501_t *cpu) {
-  return CPU_CAST(cpu)->io_port.data;
+  return CPU_CAST(cpu)->io_port_regs.data;
 }
 uint8_t mos7501_get_io_input(mos7501_t *cpu) {
-  return CPU_CAST(cpu)->io_port.input;
+  return CPU_CAST(cpu)->io_port_regs.pins;
 }
 void mos7501_set_io_input(mos7501_t *cpu, uint8_t value) {
-  CPU_CAST(cpu)->io_port.input = value;
+  CPU_CAST(cpu)->port.set_input(value);
 }
 
 void mos7501_set_bank_change(mos7501_t *cpu,
