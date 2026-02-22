@@ -331,31 +331,29 @@ typedef struct mos6581_s : public ChipBase {
     void render_debug_content() override;
     void render_settings_content() override;
     void render_layout_content() override;
+
+    // Public methods
+    void init();
+    void reset();
+    bus_state_t tick(bus_state_t bus_state);
+    void generate_samples(float* output, uint32_t sample_count);
+    void set_revision(sid_revision_t revision);
+    void set_timing(bool pal_timing);
+    void set_sample_rate(float sample_rate);
+    void set_cpu_clock(float clock_hz);
+
+    // Static methods for C function pointer compatibility (io_page_handlers_t)
+    static bus_state_t registers_read(void* context, bus_state_t bus_state);
+    static bus_state_t registers_write(void* context, bus_state_t bus_state);
+
+private:
+    // Internal helpers
+    void filter_update_cutoff();
+    float filter_process(float input);
+    void filter_reset();
+    void filter_init();
+    void write_resonance_control_register_value(uint8_t value);
+    bus_state_t advance_cycle(bus_state_t bus_state);
+    uint32_t calculate_envelope_time_ms(voice_t* v, envelope_cycle_t cycle, uint8_t rate_index);
     
 } mos6581_t;
-
-// Function declarations
-
-// System functions
-void mos6581_reset(mos6581_t* sid);
-
-// Main cycle function with unified bus state threading
-// Consolidated SID tick function - main entry point for cycle processing
-bus_state_t mos6581_tick(void* chip, bus_state_t bus_state);
-
-// Voice output
-void mos6581_generate_samples(mos6581_t* sid, float* output, uint32_t sample_count);
-
-// Register I/O functions
-bus_state_t mos6581_registers_read(void* context, bus_state_t bus_state);
-bus_state_t mos6581_registers_write(void* context, bus_state_t bus_state);
-
-// Utility functions
-void mos6581_set_revision(mos6581_t* sid, sid_revision_t revision);
-void mos6581_set_timing(mos6581_t* sid, bool pal_timing);
-void mos6581_set_sample_rate(mos6581_t* sid, float sample_rate);
-void mos6581_set_cpu_clock(mos6581_t* sid, float clock_hz);
-
-// Typed lifecycle functions
-mos6581_t* mos6581_create();
-void mos6581_destroy(mos6581_t* sid);

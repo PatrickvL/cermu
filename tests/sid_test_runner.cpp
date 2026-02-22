@@ -87,7 +87,7 @@ int main(int argc, char* argv[]) {
 
     // Set revision if requested
     if (use_8580) {
-        mos6581_set_revision(h->sid, SID_REVISION_8580_R5);
+        h->sid->set_revision(SID_REVISION_8580_R5);
         printf("Using 8580 revision\n");
     }
 

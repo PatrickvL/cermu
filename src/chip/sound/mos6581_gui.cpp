@@ -278,7 +278,7 @@ void mos6581_s::render_settings_content() {
         int current = (int)sid->revision;
         if (current < 0 || current > 1) current = 0;
         if (ImGui::Combo("SID Revision", &current, revision_labels, IM_ARRAYSIZE(revision_labels))) {
-            mos6581_set_revision(sid, (sid_revision_t)current);
+            sid->set_revision((sid_revision_t)current);
         }
     }
     
@@ -369,7 +369,7 @@ void mos6581_s::render_settings_content() {
     ImGui::Separator();
     
     if (ImGui::Button("Reset SID")) {
-        mos6581_reset(sid);
+        sid->reset();
     }
     
     ImGui::SameLine();

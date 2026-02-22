@@ -785,8 +785,8 @@ void c64_bus_init_io_handlers(c64_bus_t* c64_bus) {
 
     // Pages 4-7 ($D400-$D7FF): SID (32 bytes mirrored across 1KB)
     for (int page = 4; page <= 7; page++) {
-        c64_bus->io_handlers[page].read_handler = mos6581_registers_read;
-        c64_bus->io_handlers[page].write_handler = mos6581_registers_write;
+        c64_bus->io_handlers[page].read_handler = mos6581_s::registers_read;
+        c64_bus->io_handlers[page].write_handler = mos6581_s::registers_write;
         c64_bus->io_handlers[page].chip_instance = c64->sid;
     }
 

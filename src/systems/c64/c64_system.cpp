@@ -350,14 +350,15 @@ bool C64System::initialize() {
     if (!(this->cartridge_romh = rom_create_with_size(8192))) { cleanup(); return false; }
     if (!(this->charrom = rom_create_with_size(4096))) { cleanup(); return false; }
     if (!(this->vicii = (c64_config_.vicii_standard == VIC_PAL) ? mos6569_create() : mos6567_create())) { cleanup(); return false; }
-    this->sid = mos6581_create();
+    this->sid = new mos6581_t();
+    sid->init();
 
     // Configure SID timing to match C64 CPU clock
     {
         bool is_pal = (c64_config_.vicii_standard == VIC_PAL);
         float cpu_clock = is_pal ? 985248.0f : 1022727.0f;
-        mos6581_set_cpu_clock(this->sid, cpu_clock);
-        mos6581_set_timing(this->sid, is_pal);
+        this->sid->set_cpu_clock(cpu_clock);
+        this->sid->set_timing(is_pal);
     }
 
     this->colorram = new MOS2114();
@@ -460,7 +461,7 @@ bool C64System::initialize() {
 
     // Apply SID revision from configuration
     if (this->sid) {
-        mos6581_set_revision(this->sid, pending_sid_revision_);
+        this->sid->set_revision(pending_sid_revision_);
         const char* rev_name = (pending_sid_revision_ == SID_REVISION_8580_R5) ? "MOS 8580" : "MOS 6581";
         printf("C64: SID revision initialized as %s\n", rev_name);
     }
@@ -539,7 +540,7 @@ void C64System::reset() {
         if (this->vicii) vicii_reset(this->vicii);
 
         // Reset SID — clears all registers, envelopes, and the sample ring buffer
-        if (this->sid) mos6581_reset(this->sid);
+        if (this->sid) this->sid->reset();
 
         // Reset CPU last (so it can read the reset vector after other chips are ready)
         if (this->mos6510) {
@@ -627,7 +628,7 @@ void C64System::system_tick() {
     s |= BUS_BIT(BUS_RW_BIT);
 
     // PHASE 5: SID — sound generation
-    s = mos6581_tick(sid, s);
+    s = sid->tick(s);
 
     bus_ptr->state = s;
 }
@@ -1002,7 +1003,7 @@ void C64System::ensure_compatible_for_sid(const sid_header_t* sid) {
         if (needed_revision != pending_sid_revision_) {
             pending_sid_revision_ = needed_revision;
             if (initialized_ && this->sid) {
-                mos6581_set_revision(this->sid, needed_revision);
+                this->sid->set_revision(needed_revision);
                 printf("C64: SID revision set to %s (from SID file flags)\n",
                        needed_revision == SID_REVISION_8580_R5 ? "MOS 8580" : "MOS 6581");
             }
@@ -1295,7 +1296,7 @@ bool C64System::apply_configuration() {
             rev = SID_REVISION_8580_R5;
         }
         if (initialized_ && this->sid) {
-            mos6581_set_revision(this->sid, rev);
+            this->sid->set_revision(rev);
             printf("C64: SID revision set to %s\n", sid_it->second.c_str());
         }
         // Store for later (SID may not exist yet during initial config)
@@ -1638,7 +1639,7 @@ void C64System::on_port_device_changed(int port_index) {
 
 uint32_t C64System::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!initialized_ || !this->sid || !buffer || max_samples == 0) return 0;
-    mos6581_generate_samples(this->sid, buffer, max_samples);
+    this->sid->generate_samples(buffer, max_samples);
     return max_samples;
 }
 
@@ -1646,7 +1647,7 @@ void C64System::set_audio_sample_rate(int sample_rate_hz) {
     if (initialized_ && this->sid && sample_rate_hz > 0) {
         printf("C64: Updating SID sample rate from %.0f to %d Hz\n",
                this->sid->sample_rate, sample_rate_hz);
-        mos6581_set_sample_rate(this->sid, static_cast<float>(sample_rate_hz));
+        this->sid->set_sample_rate(static_cast<float>(sample_rate_hz));
     }
 }
 

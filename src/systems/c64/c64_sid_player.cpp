@@ -286,7 +286,7 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
         sid_revision_t rev = (sid->sid_model == SID_MODEL_8580)
                              ? SID_REVISION_8580_R5
                              : SID_REVISION_6581_R4AR;
-        mos6581_set_revision(c64->sid, rev);
+        c64->sid->set_revision(rev);
         printf("C64: SID revision set to %s (from SID file flags)\n",
                rev == SID_REVISION_8580_R5 ? "MOS 8580" : "MOS 6581");
     }
@@ -347,7 +347,7 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
 
     // ---- Silence SID: reset all voice state ----
     if (c64->sid) {
-        mos6581_reset(c64->sid);
+        c64->sid->reset();
     }
 
     // ---- Re-copy payload (in case the tune self-modified during play) ----
