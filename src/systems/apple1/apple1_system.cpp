@@ -123,7 +123,7 @@ Apple1System::Apple1System()
     current_palette_ = hardware_traits_.display.default_palette;
     
     // Initialize PIA with callbacks
-    pia6820_init(&pia_);
+    pia_.init();
     pia_.user_data = this;
     pia_.on_port_a_read = pia_keyboard_read;  // Port A: keyboard input
     pia_.on_port_b_write = pia_display_write; // Port B: display output
@@ -213,7 +213,7 @@ bool Apple1System::initialize() {
     mos6502_reset(cpu_, 0);
     
     // Reset PIA with callbacks
-    pia6820_init(&pia_);
+    pia_.init();
     pia_.user_data = this;
     pia_.on_port_a_read = pia_keyboard_read;
     pia_.on_port_b_write = pia_display_write;
@@ -375,8 +375,7 @@ void Apple1System::register_apple1_chips() {
     register_chip(std::make_unique<ChipPlaceholder>(
         ChipIdentity{"MOS6502", "MOS Technology"}),
         "MOS 6502 CPU", "6502", "CPU", 0x0000);
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"PIA6820", "Motorola"}),
+    register_chip(&pia_,
         "PIA 6820 (Keyboard/Display)", "PIA", "I/O", 0xD010);
     register_chip(std::make_unique<ChipPlaceholder>(
         ChipIdentity{"Terminal", "Custom"}),
@@ -430,7 +429,7 @@ bus_state_t Apple1System::mem_tick(bus_state_t s) {
 
         // PIA 6820 registers (0xD010-0xD013)
         if (addr >= 0xD010 && addr <= 0xD013) {
-            data = pia6820_read(&pia_, addr);
+            data = pia_.read(addr);
         }
         // RAM (0x0000 to ram_size)
         else if (addr < ram_size_) {
@@ -449,7 +448,7 @@ bus_state_t Apple1System::mem_tick(bus_state_t s) {
 
         // PIA 6820 registers (0xD010-0xD013)
         if (addr >= 0xD010 && addr <= 0xD013) {
-            pia6820_write(&pia_, addr, data);
+            pia_.write(addr, data);
         }
         // RAM (0x0000 to ram_size)
         else if (addr < ram_size_) {
@@ -533,10 +532,10 @@ void Apple1System::display_char(uint8_t ch) {
 // Apple 1 keyboard helpers (system-specific PIA Port A usage)
 void Apple1System::set_keyboard_data(uint8_t key_code) {
     // Apple 1 convention: Set bit 7 (strobe) and key code in bits 0-6
-    pia6820_set_port_a_input(&pia_, 0x80 | (key_code & 0x7F));
+    pia_.set_port_a_input(0x80 | (key_code & 0x7F));
     
     // Trigger CA1 to signal key press (for interrupt-driven input)
-    pia6820_set_ca1(&pia_, true);
+    pia_.set_ca1(true);
 }
 
 bool Apple1System::keyboard_ready() const {

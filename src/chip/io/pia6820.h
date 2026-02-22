@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../../core/chip.h"
 #include <cstdint>
 
 /**
@@ -19,7 +20,7 @@
  * using the Data Direction Register (0=input, 1=output).
  */
 
-struct pia6820_t {
+struct pia6820_t : public ChipBase {
     // Port A registers
     uint8_t port_a_data;        // Data register (output latch)
     uint8_t port_a_control;     // Control register
@@ -52,24 +53,34 @@ struct pia6820_t {
     void (*on_irq_b)(void* user_data, bool asserted);   // IRQ B callback
     void (*on_ca2_output)(void* user_data, bool state); // CA2 output callback
     void (*on_cb2_output)(void* user_data, bool state); // CB2 output callback
+
+    // --- ChipBase interface ---
+    ChipIdentity chip_identity() const override { return {"PIA6820", "Motorola"}; }
+
+    // Initialize PIA to default state
+    void init();
+
+    // Reset PIA to power-on state
+    void reset();
+
+    // Memory-mapped register access
+    uint8_t read(uint16_t addr);
+    void write(uint16_t addr, uint8_t data);
+
+    // External control line inputs (for handshaking and interrupts)
+    void set_ca1(bool state);
+    void set_ca2_input(bool state);
+    void set_cb1(bool state);
+    void set_cb2_input(bool state);
+
+    // Direct port input (bypasses callbacks, for external hardware simulation)
+    void set_port_a_input(uint8_t value);
+    void set_port_b_input(uint8_t value);
+
+private:
+    void update_irq();
+    void update_ca2_output_state();
+    void update_cb2_output_state();
+    static uint8_t read_port_with_direction(uint8_t output_reg, uint8_t ddr,
+                                            uint8_t (*read_cb)(void*), void* ud);
 };
-
-// Initialize PIA to default state
-void pia6820_init(pia6820_t* pia);
-
-// Reset PIA to power-on state
-void pia6820_reset(pia6820_t* pia);
-
-// Memory-mapped register access
-uint8_t pia6820_read(pia6820_t* pia, uint16_t addr);
-void pia6820_write(pia6820_t* pia, uint16_t addr, uint8_t data);
-
-// External control line inputs (for handshaking and interrupts)
-void pia6820_set_ca1(pia6820_t* pia, bool state);
-void pia6820_set_ca2_input(pia6820_t* pia, bool state);
-void pia6820_set_cb1(pia6820_t* pia, bool state);
-void pia6820_set_cb2_input(pia6820_t* pia, bool state);
-
-// Direct port input (bypasses callbacks, for external hardware simulation)
-void pia6820_set_port_a_input(pia6820_t* pia, uint8_t value);
-void pia6820_set_port_b_input(pia6820_t* pia, uint8_t value);
