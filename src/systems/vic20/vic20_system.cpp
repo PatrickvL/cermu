@@ -290,12 +290,12 @@ VIC20System::~VIC20System() {
     
     // Destroy VIA chips
     if (via1_) {
-        mos6522_destroy(via1_);
+        delete via1_;
         via1_ = nullptr;
     }
     
     if (via2_) {
-        mos6522_destroy(via2_);
+        delete via2_;
         via2_ = nullptr;
     }
     
@@ -599,7 +599,8 @@ bool VIC20System::initialize() {
     // Create VIA chips (MOS6522)
     // VIC-20 hardware: VIA1 ($9110) → NMI line, VIA2 ($9120) → IRQ line
     // VIA2 Timer 1 is the system heartbeat (jiffy clock, keyboard scan, cursor blink)
-    via1_ = mos6522_create();
+    via1_ = new mos6522_t();
+    via1_->reset();
     if (via1_) {
         via1_->interrupt_line = BUS_MASK_NMI;
         memory_->via1_chip = via1_;
@@ -607,7 +608,8 @@ bool VIC20System::initialize() {
         printf("VIC20: Failed to create VIA1\n");
     }
     
-    via2_ = mos6522_create();
+    via2_ = new mos6522_t();
+    via2_->reset();
     if (via2_) {
         via2_->interrupt_line = BUS_MASK_IRQ;
         memory_->via2_chip = via2_;
@@ -625,8 +627,8 @@ bool VIC20System::initialize() {
         if (via2_) {
             // Register port read callbacks for keyboard matrix scanning
             // Port A reads rows, Port B reads columns (reverse scanning)
-            mos6522_set_port_a_read_callback(via2_, vic20_via2_port_a_read, this);
-            mos6522_set_port_b_read_callback(via2_, vic20_via2_port_b_read, this);
+            via2_->set_port_a_read_callback(vic20_via2_port_a_read, this);
+            via2_->set_port_b_read_callback(vic20_via2_port_b_read, this);
             printf("VIC20: Keyboard connected to VIA2 via callbacks\n");
         } else {
             printf("VIC20: Warning: Could not connect keyboard to VIA2\n");
@@ -670,10 +672,10 @@ void VIC20System::reset() {
     // Reset VIA chips (clears timers, interrupt flags, port registers)
     // interrupt_line is preserved by mos6522_reset — it's hardware wiring, not state
     if (via1_) {
-        mos6522_reset(via1_);
+        via1_->reset();
     }
     if (via2_) {
-        mos6522_reset(via2_);
+        via2_->reset();
     }
     
     // Clear RAM (zero page, stack, main RAM $0000-$7FFF) but preserve ROMs
@@ -742,10 +744,10 @@ void VIC20System::tick() {
     // VIA chips handle I/O and timing, must tick before CPU to set interrupt lines
     // =========================================================================
     if (via1_) {
-        s = mos6522_tick(via1_, s);
+        s = via1_->tick(s);
     }
     if (via2_) {
-        s = mos6522_tick(via2_, s);
+        s = via2_->tick(s);
     }
     
     // =========================================================================

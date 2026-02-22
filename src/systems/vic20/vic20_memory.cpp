@@ -246,7 +246,7 @@ static bus_state_t vic20_io_vic_via_read(void* ctx, bus_state_t bus_state) {
         if (mem->via1_chip) {
             bus_state_t via_state = 0;
             BUS_SET_ADDR(via_state, offset & 0x0F);
-            via_state = mos6522_registers_read((mos6522_t*)mem->via1_chip, via_state);
+            via_state = ((mos6522_t*)mem->via1_chip)->registers_read(via_state);
             BUS_SET_DATA(bus_state, BUS_GET_DATA(via_state));
         }
     } else if (offset < 0x30) {
@@ -254,7 +254,7 @@ static bus_state_t vic20_io_vic_via_read(void* ctx, bus_state_t bus_state) {
         if (mem->via2_chip) {
             bus_state_t via_state = 0;
             BUS_SET_ADDR(via_state, offset & 0x0F);
-            via_state = mos6522_registers_read((mos6522_t*)mem->via2_chip, via_state);
+            via_state = ((mos6522_t*)mem->via2_chip)->registers_read(via_state);
             BUS_SET_DATA(bus_state, BUS_GET_DATA(via_state));
         }
     } else {
@@ -290,7 +290,7 @@ static bus_state_t vic20_io_vic_via_write(void* ctx, bus_state_t bus_state) {
             bus_state_t via_state = 0;
             BUS_SET_ADDR(via_state, offset & 0x0F);
             BUS_SET_DATA(via_state, data);
-            mos6522_registers_write((mos6522_t*)mem->via1_chip, via_state);
+            ((mos6522_t*)mem->via1_chip)->registers_write(via_state);
         }
     } else if (offset < 0x30) {
         // VIA2 registers
@@ -298,7 +298,7 @@ static bus_state_t vic20_io_vic_via_write(void* ctx, bus_state_t bus_state) {
             bus_state_t via_state = 0;
             BUS_SET_ADDR(via_state, offset & 0x0F);
             BUS_SET_DATA(via_state, data);
-            mos6522_registers_write((mos6522_t*)mem->via2_chip, via_state);
+            ((mos6522_t*)mem->via2_chip)->registers_write(via_state);
         }
     } else {
         // $9x30-$9x3F: VIC mirrors
