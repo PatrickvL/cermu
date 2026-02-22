@@ -208,7 +208,7 @@ static void check_pixel(check_ctx_t& ctx, int x, int y, uint8_t expected_color,
 }
 
 // Check that a rectangular region is entirely one color
-static void check_rect(check_ctx_t& ctx, int x, int y, int w, int h,
+[[maybe_unused]] static void check_rect(check_ctx_t& ctx, int x, int y, int w, int h,
                        uint8_t expected_color, const char* desc = nullptr) {
     // Sample corners and center
     check_pixel(ctx, x, y, expected_color, desc);

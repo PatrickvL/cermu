@@ -136,7 +136,7 @@ uint8_t PPU::ppu_read(uint16_t addr, bool read_only) {
     
     if (cart && cart->ppu_read(addr, data)) {
         // Cartridge handled the read
-    } else if (addr >= 0x0000 && addr <= 0x1FFF) {
+    } else if (addr <= 0x1FFF) {
         // Pattern table
         data = pattern_table[addr >> 12][addr & 0x0FFF];
     } else if (addr >= 0x2000 && addr <= 0x3EFF) {
@@ -147,13 +147,13 @@ uint8_t PPU::ppu_read(uint16_t addr, bool read_only) {
         if (cart) {
             if (cart->get_mirror_vertical()) {
                 // Vertical mirroring
-                if (addr >= 0x0000 && addr <= 0x03FF) data = vram[addr & 0x03FF];
+                if (addr <= 0x03FF) data = vram[addr & 0x03FF];
                 if (addr >= 0x0400 && addr <= 0x07FF) data = vram[(addr & 0x03FF) + 0x0400];
                 if (addr >= 0x0800 && addr <= 0x0BFF) data = vram[addr & 0x03FF];
                 if (addr >= 0x0C00 && addr <= 0x0FFF) data = vram[(addr & 0x03FF) + 0x0400];
             } else {
                 // Horizontal mirroring
-                if (addr >= 0x0000 && addr <= 0x03FF) data = vram[addr & 0x03FF];
+                if (addr <= 0x03FF) data = vram[addr & 0x03FF];
                 if (addr >= 0x0400 && addr <= 0x07FF) data = vram[addr & 0x03FF];
                 if (addr >= 0x0800 && addr <= 0x0BFF) data = vram[(addr & 0x03FF) + 0x0400];
                 if (addr >= 0x0C00 && addr <= 0x0FFF) data = vram[(addr & 0x03FF) + 0x0400];
@@ -177,7 +177,7 @@ void PPU::ppu_write(uint16_t addr, uint8_t data) {
     
     if (cart && cart->ppu_write(addr, data)) {
         // Cartridge handled the write
-    } else if (addr >= 0x0000 && addr <= 0x1FFF) {
+    } else if (addr <= 0x1FFF) {
         // Pattern table (CHR-RAM)
         pattern_table[addr >> 12][addr & 0x0FFF] = data;
     } else if (addr >= 0x2000 && addr <= 0x3EFF) {
@@ -188,13 +188,13 @@ void PPU::ppu_write(uint16_t addr, uint8_t data) {
         if (cart) {
             if (cart->get_mirror_vertical()) {
                 // Vertical mirroring
-                if (addr >= 0x0000 && addr <= 0x03FF) vram[addr & 0x03FF] = data;
+                if (addr <= 0x03FF) vram[addr & 0x03FF] = data;
                 if (addr >= 0x0400 && addr <= 0x07FF) vram[(addr & 0x03FF) + 0x0400] = data;
                 if (addr >= 0x0800 && addr <= 0x0BFF) vram[addr & 0x03FF] = data;
                 if (addr >= 0x0C00 && addr <= 0x0FFF) vram[(addr & 0x03FF) + 0x0400] = data;
             } else {
                 // Horizontal mirroring
-                if (addr >= 0x0000 && addr <= 0x03FF) vram[addr & 0x03FF] = data;
+                if (addr <= 0x03FF) vram[addr & 0x03FF] = data;
                 if (addr >= 0x0400 && addr <= 0x07FF) vram[addr & 0x03FF] = data;
                 if (addr >= 0x0800 && addr <= 0x0BFF) vram[(addr & 0x03FF) + 0x0400] = data;
                 if (addr >= 0x0C00 && addr <= 0x0FFF) vram[(addr & 0x03FF) + 0x0400] = data;
@@ -467,7 +467,7 @@ void PPU::update_shifters() {
     }
     
     if (regs.mask & 0x10 && cycle >= 1 && cycle < 258) {
-        for (int i = 0; i < internal.sprite_scanline.size(); i++) {
+        for (size_t i = 0; i < internal.sprite_scanline.size(); i++) {
             if (internal.sprite_scanline[i].x > 0) {
                 internal.sprite_scanline[i].x--;
             } else {
@@ -536,12 +536,12 @@ void PPU::load_sprite_shifters() {
                     // Top half (flipped, so actually bottom)
                     sprite_pattern_addr_lo = ((internal.sprite_scanline[i].tile_id & 0x01) << 12) |
                                            (((internal.sprite_scanline[i].tile_id & 0xFE) + 1) << 4) |
-                                           (7 - (scanline - internal.sprite_scanline[i].y) & 0x07);
+                                           ((7 - (scanline - internal.sprite_scanline[i].y)) & 0x07);
                 } else {
                     // Bottom half (flipped, so actually top)
                     sprite_pattern_addr_lo = ((internal.sprite_scanline[i].tile_id & 0x01) << 12) |
                                            ((internal.sprite_scanline[i].tile_id & 0xFE) << 4) |
-                                           (7 - (scanline - internal.sprite_scanline[i].y) & 0x07);
+                                           ((7 - (scanline - internal.sprite_scanline[i].y)) & 0x07);
                 }
             }
         } else {
@@ -648,7 +648,7 @@ public:
     Mapper000(uint8_t prgBanks, uint8_t chrBanks) : prg_banks(prgBanks), chr_banks(chrBanks) {}
     
     bool cpu_map_read(uint16_t addr, uint32_t& mapped_addr) override {
-        if (addr >= 0x8000 && addr <= 0xFFFF) {
+        if (addr >= 0x8000) {
             mapped_addr = addr & (prg_banks > 1 ? 0x7FFF : 0x3FFF);
             return true;
         }
@@ -656,7 +656,7 @@ public:
     }
     
     bool cpu_map_write(uint16_t addr, uint32_t& mapped_addr, uint8_t data) override {
-        if (addr >= 0x8000 && addr <= 0xFFFF) {
+        if (addr >= 0x8000) {
             mapped_addr = addr & (prg_banks > 1 ? 0x7FFF : 0x3FFF);
             return true;
         }
@@ -664,7 +664,7 @@ public:
     }
     
     bool ppu_map_read(uint16_t addr, uint32_t& mapped_addr) override {
-        if (addr >= 0x0000 && addr <= 0x1FFF) {
+        if (addr <= 0x1FFF) {
             mapped_addr = addr;
             return true;
         }
@@ -672,7 +672,7 @@ public:
     }
     
     bool ppu_map_write(uint16_t addr, uint32_t& mapped_addr) override {
-        if (addr >= 0x0000 && addr <= 0x1FFF && chr_banks == 0) {
+        if (addr <= 0x1FFF && chr_banks == 0) {
             mapped_addr = addr;
             return true;
         }
@@ -1160,8 +1160,8 @@ bool NintendoSystem<V>::initialize() {
         return true;
     }
     
-    printf("%s: Initializing system (%s)\n", Traits::name, 
-           Traits::name, is_pal_ ? "PAL" : "NTSC");
+    printf("%s: Initializing system (%s)\n", Traits::name,
+           is_pal_ ? "PAL" : "NTSC");
     
     // Create CPU with integrated APU
     cpu_ = nes6502_create();

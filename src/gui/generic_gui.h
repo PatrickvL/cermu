@@ -54,16 +54,6 @@ protected:
     bool screen_filter_;
     bool screen_scanlines_;
     
-    // Aspect ratio and scaling configuration
-    aspect_ratio_mode_t aspect_ratio_mode_;
-    scaling_mode_t scaling_mode_;
-    float custom_aspect_ratio_;       // For ASPECT_RATIO_CUSTOM mode
-    bool maintain_pixel_aspect_;      // Maintain square pixels
-    bool show_overscan_;              // Include overscan/border area
-    bool center_display_;             // Center display in available space
-    bool show_invisible_area_;        // Show non-visible area around display output
-    float host_dpi_scale_;            // Host DPI scaling factor
-    
     // Window visibility flags
     bool show_screen_;
     bool show_memory_viewer_;
@@ -73,6 +63,16 @@ protected:
     // Window dimensions
     int window_width_;
     int window_height_;
+
+    // Aspect ratio and scaling configuration
+    aspect_ratio_mode_t aspect_ratio_mode_;
+    scaling_mode_t scaling_mode_;
+    float custom_aspect_ratio_;       // For ASPECT_RATIO_CUSTOM mode
+    bool maintain_pixel_aspect_;      // Maintain square pixels
+    bool show_overscan_;              // Include overscan/border area
+    bool center_display_;             // Center display in available space
+    bool show_invisible_area_;        // Show non-visible area around display output
+    float host_dpi_scale_;            // Host DPI scaling factor
     
 public:
     GenericEmulatorGUI();

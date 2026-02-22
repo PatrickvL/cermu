@@ -79,7 +79,7 @@ static void set_basic_pointers(const commodore_load_context_t* ctx,
  * Set only the BASIC end pointers ($2D–$32), used when an archive loads
  * a BASIC program and we only need the end pointer updated.
  */
-static void set_basic_end_pointers(const commodore_load_context_t* ctx,
+[[maybe_unused]] static void set_basic_end_pointers(const commodore_load_context_t* ctx,
                                    uint16_t end_addr)
 {
     ctx_write_le16(ctx, 0x2D, end_addr);

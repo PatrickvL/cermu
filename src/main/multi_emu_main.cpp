@@ -176,7 +176,7 @@ int main(int argc, char** argv) {
             0xFF254F6F, 0xFF003943, 0xFF59679A, 0xFF444444,
             0xFF6C6C6C, 0xFF84D29A, 0xFFB55E6C, 0xFF959595
         };
-        auto color_name = [&](uint32_t rgba) -> const char* {
+        [[maybe_unused]] auto color_name = [&](uint32_t rgba) -> const char* {
             for (int i = 0; i < 16; i++) {
                 if (PAL[i] == rgba) {
                     static const char* n[16] = {"BLK","WHT","RED","CYN","PUR","GRN","BLU","YEL","ORN","BRN","LRD","DG1","DG2","LGN","LBL","LG3"};
