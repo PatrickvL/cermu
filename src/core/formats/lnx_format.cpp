@@ -24,45 +24,43 @@
 // Open / Close
 // ============================================================================
 
-bool commodore_lynx_open(const char* filepath, commodore_lynx_t* out_lynx) {
-    if (!filepath || !out_lynx) return false;
-    memset(out_lynx, 0, sizeof(*out_lynx));
+bool commodore_lynx_s::open(const char* filepath) {
+    if (!filepath) return false;
+    memset(this, 0, sizeof(*this));
 
-    out_lynx->data = format_read_entire_file(filepath, &out_lynx->data_size);
-    if (!out_lynx->data) {
+    data = format_read_entire_file(filepath, &data_size);
+    if (!data) {
         printf("LNXFormat: Failed to read file: %s\n", filepath);
         return false;
     }
-    out_lynx->owns_data = true;
+    owns_data = true;
 
-    if (out_lynx->data_size < 100) {
-        printf("LNXFormat: File too small (%zu bytes)\n", out_lynx->data_size);
-        free(out_lynx->data);
-        out_lynx->data = NULL;
+    if (data_size < 100) {
+        printf("LNXFormat: File too small (%zu bytes)\n", data_size);
+        free(data);
+        data = NULL;
         return false;
     }
 
-    printf("LNXFormat: Opened LNX archive: %zu bytes\n", out_lynx->data_size);
+    printf("LNXFormat: Opened LNX archive: %zu bytes\n", data_size);
     return true;
 }
 
-void commodore_lynx_close(commodore_lynx_t* lynx) {
-    if (lynx) {
-        if (lynx->owns_data && lynx->data) free(lynx->data);
-        memset(lynx, 0, sizeof(*lynx));
-    }
+void commodore_lynx_s::close() {
+    if (owns_data && data) free(data);
+    memset(this, 0, sizeof(*this));
 }
 
 // ============================================================================
 // Directory
 // ============================================================================
 
-bool commodore_lynx_read_directory(const commodore_lynx_t* lynx, commodore_lynx_directory_t* out_dir) {
-    if (!lynx || !lynx->data || !out_dir) return false;
+bool commodore_lynx_s::read_directory(commodore_lynx_directory_t* out_dir) const {
+    if (!data || !out_dir) return false;
     memset(out_dir, 0, sizeof(*out_dir));
 
-    const uint8_t* buf = lynx->data;
-    size_t size = lynx->data_size;
+    const uint8_t* buf = data;
+    size_t size = data_size;
 
     /* Step 1: Skip the BASIC dissolve header by finding \0\0\0\r pattern */
     size_t pos = 4;
@@ -196,10 +194,9 @@ bool commodore_lynx_read_directory(const commodore_lynx_t* lynx, commodore_lynx_
 // File Extraction
 // ============================================================================
 
-bool commodore_lynx_extract_file(const commodore_lynx_t* lynx,
-                                 const commodore_lynx_directory_t* dir,
-                                 int entry_idx, commodore_prg_t* out_prg) {
-    if (!lynx || !lynx->data || !dir || !out_prg) return false;
+bool commodore_lynx_s::extract_file(const commodore_lynx_directory_t* dir,
+                                    int entry_idx, commodore_prg_t* out_prg) const {
+    if (!data || !dir || !out_prg) return false;
     if (entry_idx < 0 || entry_idx >= (int)dir->file_count) return false;
     memset(out_prg, 0, sizeof(*out_prg));
 
@@ -211,33 +208,32 @@ bool commodore_lynx_extract_file(const commodore_lynx_t* lynx,
         return false;
     }
 
-    if (entry->data_offset + entry->data_length > lynx->data_size) {
-        size_t avail = lynx->data_size - entry->data_offset;
+    if (entry->data_offset + entry->data_length > data_size) {
+        size_t avail = data_size - entry->data_offset;
         if (avail < 2) return false;
         printf("LNXFormat: File \"%s\" truncated (%zu of %zu bytes available)\n",
                entry->filename, avail, entry->data_length);
-        return commodore_prg_parse(lynx->data + entry->data_offset, avail, out_prg);
+        return commodore_prg_parse(data + entry->data_offset, avail, out_prg);
     }
 
-    return commodore_prg_parse(lynx->data + entry->data_offset,
+    return commodore_prg_parse(data + entry->data_offset,
                                entry->data_length, out_prg);
 }
 
-bool commodore_lynx_extract_all_prgs(const commodore_lynx_t* lynx,
-                                     commodore_prg_t* out_prgs, int max_prgs,
-                                     int* out_count) {
-    if (!lynx || !out_prgs || !out_count) return false;
+bool commodore_lynx_s::extract_all_prgs(commodore_prg_t* out_prgs, int max_prgs,
+                                        int* out_count) const {
+    if (!out_prgs || !out_count) return false;
     *out_count = 0;
 
     commodore_lynx_directory_t dir;
-    if (!commodore_lynx_read_directory(lynx, &dir)) return false;
+    if (!read_directory(&dir)) return false;
 
     for (unsigned i = 0; i < dir.file_count && *out_count < max_prgs; i++) {
         if (dir.entries[i].file_type != 'P') continue;
         if (dir.entries[i].data_length < 2) continue;
 
         commodore_prg_t prg = {};
-        if (commodore_lynx_extract_file(lynx, &dir, (int)i, &prg)) {
+        if (extract_file(&dir, (int)i, &prg)) {
             out_prgs[*out_count] = prg;
             (*out_count)++;
             printf("LNXFormat: Extracted PRG \"%s\": $%04X-$%04X (%zu bytes)\n",
@@ -273,16 +269,16 @@ static float lnx_identify(const uint8_t* data, size_t file_size, const char* ext
 
 static bool lnx_load(const char* filepath, format_load_result_t* out) {
     commodore_lynx_t lynx;
-    if (commodore_lynx_open(filepath, &lynx)) {
+    if (lynx.open(filepath)) {
         int count = 0;
-        if (commodore_lynx_extract_all_prgs(&lynx, out->files,
-                                            FORMAT_LOAD_MAX_FILES, &count)) {
+        if (lynx.extract_all_prgs(out->files,
+                                  FORMAT_LOAD_MAX_FILES, &count)) {
             out->type = FORMAT_LOAD_ARCHIVE;
             out->file_count = count;
-            commodore_lynx_close(&lynx);
+            lynx.close();
             return true;
         }
-        commodore_lynx_close(&lynx);
+        lynx.close();
         snprintf(out->error_msg, sizeof(out->error_msg),
                  "LNX opened but no PRGs extracted: %s", filepath);
     } else {

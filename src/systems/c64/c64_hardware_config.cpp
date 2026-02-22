@@ -4,47 +4,43 @@
 #include <stdio.h>
 #include <string.h>
 
-void c64_hardware_config_init_defaults(c64_hardware_config_t* hw_config) {
-    if (!hw_config) return;
-    
+void c64_hardware_config_s::init_defaults() {
     // C64C defaults (most common modern C64)
-    hw_config->vicii_model = VICII_MODEL_6569_R3;  // PAL new
-    hw_config->is_pal = true;
-    hw_config->is_ntsc = false;
-    hw_config->cia1_model = CIA_MODEL_6526A;       // New CIA
-    hw_config->cia2_model = CIA_MODEL_6526A;
-    hw_config->sid_model = SID_REV_8580_R5;        // 8580 SID
-    hw_config->sid_filters_enabled = true;
-    hw_config->pal_timing = true;
+    vicii_model = VICII_MODEL_6569_R3;  // PAL new
+    is_pal = true;
+    is_ntsc = false;
+    cia1_model = CIA_MODEL_6526A;       // New CIA
+    cia2_model = CIA_MODEL_6526A;
+    sid_model = SID_REV_8580_R5;        // 8580 SID
+    sid_filters_enabled = true;
+    pal_timing = true;
 }
 
-void c64_hardware_config_init_original(c64_hardware_config_t* hw_config, bool pal) {
-    if (!hw_config) return;
-    
+void c64_hardware_config_s::init_original(bool pal) {
     // Original C64 "breadbin"
     if (pal) {
-        hw_config->vicii_model = VICII_MODEL_6569_R1;  // PAL old
-        hw_config->is_pal = true;
-        hw_config->is_ntsc = false;
-        hw_config->pal_timing = true;
+        vicii_model = VICII_MODEL_6569_R1;  // PAL old
+        is_pal = true;
+        is_ntsc = false;
+        pal_timing = true;
     } else {
-        hw_config->vicii_model = VICII_MODEL_6567_R56A; // NTSC old
-        hw_config->is_pal = false;
-        hw_config->is_ntsc = true;
-        hw_config->pal_timing = false;
+        vicii_model = VICII_MODEL_6567_R56A; // NTSC old
+        is_pal = false;
+        is_ntsc = true;
+        pal_timing = false;
     }
     
-    hw_config->cia1_model = CIA_MODEL_6526;        // Old CIA
-    hw_config->cia2_model = CIA_MODEL_6526;
-    hw_config->sid_model = SID_REV_6581_R3;        // 6581 SID
-    hw_config->sid_filters_enabled = true;
+    cia1_model = CIA_MODEL_6526;        // Old CIA
+    cia2_model = CIA_MODEL_6526;
+    sid_model = SID_REV_6581_R3;        // 6581 SID
+    sid_filters_enabled = true;
 }
 
-c64_hardware_config_t c64_hardware_config_from_test_flags(uint32_t test_hw_flags) {
+c64_hardware_config_t c64_hardware_config_s::from_test_flags(uint32_t test_hw_flags) {
     using namespace c64_test;
     
     c64_hardware_config_t hw_config;
-    c64_hardware_config_init_defaults(&hw_config);  // Start with defaults
+    hw_config.init_defaults();  // Start with defaults
     
     // VIC-II configuration
     if (test_hw_flags & static_cast<uint32_t>(HardwareConfig::VICII_PAL)) {
@@ -101,36 +97,33 @@ c64_hardware_config_t c64_hardware_config_from_test_flags(uint32_t test_hw_flags
     return hw_config;
 }
 
-bool c64_hardware_config_matches(const c64_hardware_config_t* current,
-                                  const c64_hardware_config_t* required) {
-    if (!current || !required) return false;
+bool c64_hardware_config_s::matches(const c64_hardware_config_t* required) const {
+    if (!required) return false;
     
     // Check VIC-II match (PAL/NTSC compatibility)
-    if (required->is_pal && !current->is_pal) return false;
-    if (required->is_ntsc && !current->is_ntsc) return false;
+    if (required->is_pal && !is_pal) return false;
+    if (required->is_ntsc && !is_ntsc) return false;
     
     // Check CIA match (old vs new)
-    if (required->cia1_model != current->cia1_model) return false;
-    if (required->cia2_model != current->cia2_model) return false;
+    if (required->cia1_model != cia1_model) return false;
+    if (required->cia2_model != cia2_model) return false;
     
     // Check SID match (6581 vs 8580)
     bool required_is_6581 = (required->sid_model >= SID_REV_6581_R1 && 
                              required->sid_model <= SID_REV_CSG_6581);
-    bool current_is_6581 = (current->sid_model >= SID_REV_6581_R1 && 
-                            current->sid_model <= SID_REV_CSG_6581);
+    bool current_is_6581 = (sid_model >= SID_REV_6581_R1 && 
+                            sid_model <= SID_REV_CSG_6581);
     
     if (required_is_6581 != current_is_6581) return false;
     
     return true;
 }
 
-const char* c64_hardware_config_description(const c64_hardware_config_t* hw_config) {
+const char* c64_hardware_config_s::description() const {
     static char desc[256];
     
-    if (!hw_config) return "NULL";
-    
     const char* vic_name = "Unknown";
-    switch (hw_config->vicii_model) {
+    switch (vicii_model) {
         case VICII_MODEL_6569_R1: vic_name = "6569 R1 (PAL old)"; break;
         case VICII_MODEL_6569_R3: vic_name = "6569 R3 (PAL new)"; break;
         case VICII_MODEL_6567_R56A: vic_name = "6567 R56A (NTSC old)"; break;
@@ -140,14 +133,14 @@ const char* c64_hardware_config_description(const c64_hardware_config_t* hw_conf
     }
     
     const char* cia_name = "Unknown";
-    switch (hw_config->cia1_model) {
+    switch (cia1_model) {
         case CIA_MODEL_6526: cia_name = "6526 (old)"; break;
         case CIA_MODEL_6526A: cia_name = "6526A (new)"; break;
         case CIA_MODEL_8521: cia_name = "8521"; break;
     }
     
     const char* sid_name = "Unknown";
-    switch (hw_config->sid_model) {
+    switch (sid_model) {
         case SID_REV_6581_R1: sid_name = "6581 R1"; break;
         case SID_REV_6581_R2: sid_name = "6581 R2"; break;
         case SID_REV_6581_R3: sid_name = "6581 R3"; break;
@@ -164,12 +157,11 @@ const char* c64_hardware_config_description(const c64_hardware_config_t* hw_conf
     return desc;
 }
 
-void c64_hardware_config_apply(const c64_hardware_config_t* hw_config, 
-                                c64_config_t* system_config) {
-    if (!hw_config || !system_config) return;
+void c64_hardware_config_s::apply(c64_config_t* system_config) const {
+    if (!system_config) return;
     
     // Apply VIC-II configuration
-    system_config->vicii_standard = hw_config->is_pal ? VIC_PAL : VIC_NTSC;
+    system_config->vicii_standard = is_pal ? VIC_PAL : VIC_NTSC;
     
     // Note: CIA and SID models need to be applied during chip creation
     // or via additional configuration in c64_system_create

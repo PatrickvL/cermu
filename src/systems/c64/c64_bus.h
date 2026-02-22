@@ -8,10 +8,6 @@
 #include "c64_config.h"
 #include "c64_chips.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // =============================
 // Bus Types & Macros
 // =============================
@@ -37,6 +33,7 @@ extern "C" {
 
 // Forward declaration to avoid circular dependency with c64_system.h
 class C64System;
+struct pla_906114_01_s;
 
 // C64 bus controller structure
 typedef struct c64_bus_s {
@@ -83,234 +80,66 @@ typedef struct c64_bus_s {
         bus_state_t (*write_handler)(void* context, bus_state_t bus_state); // Direct chip register function signature
     } io_page_handlers_t;
     io_page_handlers_t io_handlers[16]; // One handler per IO page (0-15)
+
+    // =============================
+    // Methods
+    // =============================
+
+    ~c64_bus_s();
+
+    void mode_switch(uint8_t mode);
+    uint8_t generate_pla_mode(uint8_t cpu_port_bits);
+    bus_state_t vic_read(bus_state_t bus_state, uint16_t address);
+    bus_state_t REGISTER_CALL memory_tick(bus_state_t bus_state);
+    void init_unified_pointers(C64System* c64_system, const c64_config_t* config);
+    void system_attach(C64System* c64);
+    void set_exrom_signal(bool active);
+    void set_game_signal(bool active);
+    void set_cartridge_signals(bool exrom_active, bool game_active);
+    bool get_exrom_signal() const;
+    bool get_game_signal() const;
+    void on_banking_change(uint8_t banking_state);
+    void populate_cpu_pla_mapping(struct pla_906114_01_s* pla);
+    void populate_vicii_pla_mapping(struct pla_906114_01_s* pla);
+    void generate_all_pla_modes(struct pla_906114_01_s* pla);
+    void init_io_handlers();
+    bool get_chip_description(uint8_t chip, chip_description_t* out) const;
+    uint8_t read_memory(uint16_t addr);
+    void write_memory(uint16_t addr, uint8_t value);
+
+    // Ultra-optimized unified address calculation — pure branchless arithmetic
+    static uint32_t unified_address_calc(uint8_t chip, uint16_t addr) {
+        const uint32_t base = (uint32_t)chip << 12;
+        const uint32_t mask = 0x1FFF | -(chip == CHIP_RAM);
+        return base + (addr & mask);
+    }
+
+    void write_chip_byte(uint8_t chip, uint16_t address, uint8_t value) {
+        unified_memory_buffer[unified_address_calc(chip, address)] = value;
+    }
+
+    void write_ram_byte(uint16_t address, uint8_t value) {
+        write_chip_byte(CHIP_RAM, address, value);
+    }
+
+    uint8_t read_chip_byte(uint8_t chip, uint16_t address) const {
+        return unified_memory_buffer[unified_address_calc(chip, address)];
+    }
+
+    uint8_t read_kernal_byte(uint16_t address) const {
+        return read_chip_byte(CHIP_KERNAL, address);
+    }
+
+    uint16_t read_kernal_reset_vector() const {
+        uint8_t reset_low = read_kernal_byte(0xFFFC);
+        uint8_t reset_high = read_kernal_byte(0xFFFD);
+        return (reset_high << 8) | reset_low;
+    }
+
+private:
+    void update_pla_mode();
 } c64_bus_t;
 
-void c64_bus_mode_switch(c64_bus_t* c64_bus, uint8_t mode);
-
-// PLA mode generation function - maps CPU I/O port bits + cartridge signals to 5-bit PLA mode
-uint8_t c64_bus_generate_pla_mode(c64_bus_t* c64_bus, uint8_t cpu_port_bits);
-
-// Memory functions
-bus_state_t c64_bus_vic_read(c64_bus_t* c64_bus, bus_state_t bus_state, uint16_t address);
-
-/**
- * New cycle-accurate memory tick function for the refactored architecture.
- * This function will be used by the new MOS6510 implementation to handle
- * memory access in a cycle-accurate manner.
- *
- * Optimized for register-based calling convention to avoid host stack accesses.
- * Takes bus state by value and returns updated bus state for efficient register usage.
- *
- * @param c64_bus Pointer to the C64 bus controller
- * @param bus_state Current bus state (passed by value for register optimization)
- * @return Updated bus state (for register-to-register operation)
- */
-bus_state_t REGISTER_CALL c64_memory_tick(c64_bus_t* c64_bus, bus_state_t bus_state);
-
-/**
- * Initialize RAM/ROM pointers to point into the unified memory buffer.
- * This eliminates separate memory allocations and ensures consistency.
- * Uses configuration structure to determine cartridge ROM presence.
- * Should be called after system is attached.
- *
- * @param c64_bus Pointer to the C64 bus controller
- * @param c64_system Pointer to the C64 system (for pointer updates)
- * @param config Pointer to the C64 system configuration structure
- */
-void c64_bus_init_unified_pointers(c64_bus_t* c64_bus, C64System* c64_system, const c64_config_t* config);
-
-/**
- * Ultra-optimized unified address calculation function for memory access.
- * Pure branchless arithmetic using strategic CHIP_* numbering for maximum performance.
- * CHIP values are chosen so that (chip << 12) directly maps to buffer offsets.
- *
- * CRITICAL DEPENDENCY: This function relies on the specific CHIP_* enum values
- * in c64_chips.h. The calculation uses chip << 12 (chip * 4096) for base offsets:
- *
- * - CHIP_ROML     = 0  -> base_offset = 0x0000 (0 << 12 = 0x0000)
- * - CHIP_ROMH     = 2  -> base_offset = 0x2000 (2 << 12 = 0x2000)
- * - CHIP_KERNAL   = 4  -> base_offset = 0x4000 (4 << 12 = 0x4000)
- * - CHIP_BASIC    = 6  -> base_offset = 0x6000 (6 << 12 = 0x6000)
- * - CHIP_CHARROM  = 7  -> base_offset = 0x7000 (7 << 12 = 0x7000) [but data stored at 0x8000]
- * - CHIP_RAM      = 9  -> base_offset = 0x9000 (9 << 12 = 0x9000)
- *
- * WARNING: Changing these CHIP_* values will break address calculation!
- *
- * CHARROM ADDRESSING EXPLANATION (4KB chip, data stored at buffer offset 0x8000):
- * The 0x1FFF mask works correctly for CHARROM despite being 4KB because:
- *
- * Example 1 - VIC-II reads CHARROM at 0x1000:
- *   base   = 7 << 12        = 0x7000  (CHARROM buffer offset)
- *   offset = 0x1000 & 0x1FFF = 0x1000  (address within range)
- *   result = 0x7000 + 0x1000 = 0x8000  ✓ Correct buffer position
- *
- * Example 2 - VIC-II reads CHARROM at 0x9000:
- *   base   = 7 << 12        = 0x7000  (CHARROM buffer offset)
- *   offset = 0x9000 & 0x1FFF = 0x1000  (wraps to 0x1000 due to 13-bit mask)
- *   result = 0x7000 + 0x1000 = 0x8000  ✓ Same buffer position as 0x1000
- *
- * Example 3 - CPU reads at 0xD000:
- *   base   = 7 << 12        = 0x7000  (CHARROM buffer offset)
- *   offset = 0xD000 & 0x1FFF = 0x1000  (wraps to 0x1000 due to 13-bit mask)
- *   result = 0x7000 + 0x1000 = 0x8000  ✓ Same buffer position
- *
- * PROOF OF NO OVERLAP BETWEEN BASIC ROM AND CHARROM:
- * BASIC ROM occupies buffer range 0x6000-0x7FFF (8KB at CHIP_BASIC=6)
- * CHARROM occupies buffer range 0x8000-0x8FFF (4KB starting at base 0x7000)
- *
- * BASIC ROM address calculation (8KB at addresses 0xA000-0xBFFF):
- *   base   = 6 << 12        = 0x6000  (BASIC buffer offset)
- *   offset = 0xA000 & 0x1FFF = 0x0000  (wraps to start)
- *   result = 0x6000 + 0x0000 = 0x6000  (buffer start)
- *
- *   offset = 0xBFFF & 0x1FFF = 0x1FFF  (8KB-1 offset)
- *   result = 0x6000 + 0x1FFF = 0x7FFF  (buffer end)
- *
- * CHARROM address calculation (4KB, accessed via specific addresses):
- *   Base for calculation = 0x7000 (CHIP_CHARROM << 12)
- *   Minimum result = 0x7000 + (0x1000 & 0x1FFF) = 0x8000
- *   Maximum result = 0x7000 + (0x1FFF & 0x1FFF) = 0x8FFF
- *
- * CRITICAL INSIGHT: CHARROM is NEVER accessed with addresses in range 0x0000-0x0FFF!
- * - CPU accesses CHARROM at 0xD000-0xDFFF (masks to 0x1000-0x1FFF)
- * - VIC-II accesses CHARROM at 0x1000-0x1FFF or 0x9000-0x9FFF (both mask to 0x1000-0x1FFF)
- *
- * Therefore, CHARROM calculations always produce: 0x7000 + [0x1000 to 0x1FFF] = 0x8000-0x8FFF
- * While BASIC ROM calculations produce: 0x6000 + [0x0000 to 0x1FFF] = 0x6000-0x7FFF
- *
- * Result: BASIC ends at 0x7FFF, CHARROM data starts at 0x8000 → NO OVERLAP! ✓
- *
- * IMPORTANT: CHARROM data must be stored at buffer offset 0x8000, not 0x7000,
- * because all valid CHARROM accesses calculate to addresses >= 0x8000.
- *
- * This strategic placement means all CHARROM addresses (0x1000, 0x9000, 0xD000)
- * mask to the same offset range (0x1000-0x1FFF) and map to buffer range 0x8000-0x8FFF,
- * which is safely above BASIC ROM's range. This enables unified 0x1FFF mask for all ROMs.
- *
- * OPTIMIZATION: Single shift + mask operation, completely branchless.
- * Total buffer size: 0x9000 + 64KB RAM = 100KB (36KB + 64KB)
- *
- * @param chip The target chip ID (must be 0-9 for unified buffer chips)
- * @param addr The 16-bit address to access
- * @return The calculated offset into the unified memory buffer
- */
-static inline uint32_t c64_bus_unified_address_calc(uint8_t chip, uint16_t addr) {
-    // Ultra-branchless calculation using strategic numbering
-    const uint32_t base = (uint32_t)chip << 12;  // Direct offset calculation via strategic numbering
-    
-    // CRITICAL: addr contains original C64 memory map addresses (e.g. KERNAL 0xE000-0xFFFF)
-    // Mask strips bank/base address to get chip-relative offset
-    // Unified 0x1FFF mask works for all ROMs (8KB and 4KB) due to strategic CHARROM placement
-    // RAM uses special mask 0xFFFF for full 64KB address space
-    const uint32_t mask = 0x1FFF | -(chip == CHIP_RAM);  // Branchless: 0x1FFF for ROMs, 0xFFFF for RAM
-    return base + (addr & mask);
-}
-
-/**
- * Helper function to write a byte to unified buffer using chip-based addressing.
- * This is used for direct unified buffer writes during memory operations.
- * Uses c64_bus_unified_address_calc for correct buffer offset calculation.
- *
- * @param bus Pointer to the C64 bus controller
- * @param chip The target chip ID (typically CHIP_RAM for write operations)
- * @param address 16-bit address in the chip's address range
- * @param value The byte value to write
- */
-static inline void c64_bus_write_chip_byte(c64_bus_t* bus, uint8_t chip, uint16_t address, uint8_t value) {
-    // Use the unified address calculation function with the specified chip
-    const uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
-    bus->unified_memory_buffer[unified_addr] = value;
-}
-
-/**
- * Helper function to write a byte to RAM using direct unified buffer access.
- * This is a specialized convenience function for RAM writes (the most common write case).
- * Uses c64_bus_write_chip_byte with CHIP_RAM.
- *
- * @param bus Pointer to the C64 bus controller
- * @param address 16-bit address in RAM range ($0000-$FFFF)
- * @param value The byte value to write
- */
-static inline void c64_bus_write_ram_byte(c64_bus_t* bus, uint16_t address, uint8_t value) {
-    c64_bus_write_chip_byte(bus, CHIP_RAM, address, value);
-}
-
-/**
- * Helper function to read a byte from unified buffer using chip-based addressing.
- * This is the general-purpose read function for all unified buffer chips.
- * Uses c64_bus_unified_address_calc for correct buffer offset calculation.
- *
- * @param bus Pointer to the C64 bus controller
- * @param chip The target chip ID (CHIP_ROML, CHIP_ROMH, CHIP_KERNAL, CHIP_BASIC, CHIP_CHARROM, CHIP_RAM)
- * @param address 16-bit address in the chip's address range
- * @return The byte value at the specified address
- */
-static inline uint8_t c64_bus_read_chip_byte(c64_bus_t* bus, uint8_t chip, uint16_t address) {
-    // Use the unified address calculation function with the specified chip
-    const uint32_t unified_addr = c64_bus_unified_address_calc(chip, address);
-    return bus->unified_memory_buffer[unified_addr];
-}
-
-/**
- * Helper function to read a byte from KERNAL ROM using direct unified buffer access.
- * This is used for reading the reset vector at $FFFC-$FFFD.
- * Uses c64_bus_read_chip_byte with CHIP_KERNAL.
- *
- * @param bus Pointer to the C64 bus controller
- * @param address 16-bit address in KERNAL ROM range ($E000-$FFFF)
- * @return The byte value at the specified address
- */
-static inline uint8_t c64_bus_read_kernal_byte(c64_bus_t* bus, uint16_t address) {
-    // Use the general unified buffer read function with CHIP_KERNAL
-    return c64_bus_read_chip_byte(bus, CHIP_KERNAL, address);
-}
-
-/**
- * Helper function to read the reset vector from KERNAL ROM.
- * The reset vector is located at $FFFC-$FFFD and points to the
- * KERNAL reset routine (typically $FCE2 on C64).
- *
- * @param bus Pointer to the C64 bus controller
- * @return The 16-bit reset vector address
- */
-static inline uint16_t c64_read_kernal_reset_vector(c64_bus_t* bus) {
-    uint8_t reset_low = c64_bus_read_kernal_byte(bus, 0xFFFC);
-    uint8_t reset_high = c64_bus_read_kernal_byte(bus, 0xFFFD);
-    return (reset_high << 8) | reset_low;
-}
-
-// Memory utility functions for debugging and testing
-uint8_t c64_read_memory(c64_bus_t* bus, uint16_t addr);
-void c64_write_memory(c64_bus_t* bus, uint16_t addr, uint8_t value);
-
-// System functions
-void* c64_bus_system_create();
-void c64_bus_system_destroy(void* chip);
-void c64_bus_system_attach(c64_bus_t* c64_bus, C64System* c64);
-
-// Cartridge interface functions for controlling EXROM and GAME signals
-void c64_bus_set_exrom_signal(c64_bus_t* c64_bus, bool active);
-void c64_bus_set_game_signal(c64_bus_t* c64_bus, bool active);
-void c64_bus_set_cartridge_signals(c64_bus_t* c64_bus, bool exrom_active, bool game_active);
-bool c64_bus_get_exrom_signal(c64_bus_t* c64_bus);
-bool c64_bus_get_game_signal(c64_bus_t* c64_bus);
-
-// Banking change callback function for MOS6510
-void c64_bus_on_banking_change(void* bus_ptr, uint8_t banking_state);
-
-// Forward declaration for PLA
-struct pla_906114_01_s;
-
-// PLA-based bus mapping functions
-void c64_bus_populate_cpu_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla);
-void c64_bus_populate_vicii_pla_mapping(c64_bus_t* bus, struct pla_906114_01_s* pla);
-
-// Generate all 32 memory modes using PLA
-void c64_bus_generate_all_pla_modes(c64_bus_t* bus, struct pla_906114_01_s* pla);
-
-// COMPACT I/O PAGE MAPPING FUNCTIONS - Efficient IO page-based dispatch
-void c64_bus_init_io_handlers(c64_bus_t* c64_bus);
-
-#ifdef __cplusplus
-}
-#endif
+// Free functions (no bus param)
+const char* c64_bus_chip_to_title(uint8_t chip);
+const char* c64_bus_size_to_str(size_t size);

@@ -215,7 +215,7 @@ void KeyboardMapper::register_default_synthetic_mappings() {
     auto find_in_matrix = [this](emu_key_t target_key) -> GuestKeyAction {
         if (!keyboard_) return GuestKeyAction();
         uint8_t row, col;
-        if (commodore_keyboard_find_key(keyboard_, target_key, &row, &col)) {
+        if (keyboard_->find_key(target_key, &row, &col)) {
             return GuestKeyAction(row, col, KEYMOD_NONE);
         }
         return GuestKeyAction();
@@ -368,7 +368,7 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
     if (is_modifier_key(sym)) {
         emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
         if (ek != EMUKEY_NONE) {
-            commodore_keyboard_key_down(keyboard_, ek, false);
+            keyboard_->key_down(ek, false);
         }
         return true;
     }
@@ -377,13 +377,13 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
     if (!is_printable_key(sym)) {
         // Special case: backtick with shift → treat as printable so TEXTINPUT "~"
         // can be mapped (e.g., to π on C64/VIC-20). Without shift, backtick
-        // falls through to commodore_keyboard_key_down which handles RESTORE.
+        // falls through to key_down which handles RESTORE.
         if (sym == SDLK_BACKQUOTE && (mod & (KMOD_LSHIFT | KMOD_RSHIFT))) {
             // Fall through to the printable key / text input path below
         } else {
             emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
             if (ek != EMUKEY_NONE) {
-                commodore_keyboard_key_down(keyboard_, ek, false);
+                keyboard_->key_down(ek, false);
             }
             return true;
         }
@@ -409,7 +409,7 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
         emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
         if (ek != EMUKEY_NONE) {
             uint8_t row, col;
-            if (commodore_keyboard_find_key(keyboard_, ek, &row, &col)) {
+            if (keyboard_->find_key(ek, &row, &col)) {
                 // Build modifier mask from actual host state — no forcing/suppressing
                 uint8_t mods = KEYMOD_NONE;
                 if (host_cbm_held_)   mods |= KEYMOD_CBM;
@@ -439,7 +439,7 @@ bool KeyboardMapper::process_key_down(SDL_Keycode sym, SDL_Scancode scancode,
     // Fallback: text input disabled, use direct SDL keycode → EmuKey mapping
     emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
     if (ek != EMUKEY_NONE) {
-        commodore_keyboard_key_down(keyboard_, ek, false);
+        keyboard_->key_down(ek, false);
     }
     return true;
 }
@@ -504,7 +504,7 @@ bool KeyboardMapper::process_key_up(SDL_Keycode sym, SDL_Scancode scancode, uint
     if (is_modifier_key(sym)) {
         emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
         if (ek != EMUKEY_NONE) {
-            commodore_keyboard_key_up(keyboard_, ek, false);
+            keyboard_->key_up(ek, false);
         }
         return true;
     }
@@ -513,7 +513,7 @@ bool KeyboardMapper::process_key_up(SDL_Keycode sym, SDL_Scancode scancode, uint
     if (!is_printable_key(sym)) {
         emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
         if (ek != EMUKEY_NONE) {
-            commodore_keyboard_key_up(keyboard_, ek, false);
+            keyboard_->key_up(ek, false);
         }
         return true;
     }
@@ -522,7 +522,7 @@ bool KeyboardMapper::process_key_up(SDL_Keycode sym, SDL_Scancode scancode, uint
     if (!text_input_enabled_) {
         emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(sym);
         if (ek != EMUKEY_NONE) {
-            commodore_keyboard_key_up(keyboard_, ek, false);
+            keyboard_->key_up(ek, false);
         }
     }
 
@@ -629,7 +629,7 @@ void KeyboardMapper::release_all() {
 void KeyboardMapper::reset_state() {
     release_all();
     // Reset the underlying keyboard matrix
-    commodore_keyboard_reset(keyboard_);
+    keyboard_->reset();
 }
 
 // ============================================================================

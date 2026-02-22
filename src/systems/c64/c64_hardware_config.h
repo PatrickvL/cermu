@@ -45,7 +45,7 @@ typedef enum {
  * Complete hardware configuration for test execution
  * Maps to VICE test requirements
  */
-typedef struct {
+typedef struct c64_hardware_config_s {
     // VIC-II configuration
     vicii_model_t vicii_model;
     bool is_pal;          // Derived from vicii_model
@@ -61,44 +61,14 @@ typedef struct {
     
     // Timing configuration
     bool pal_timing;      // Master clock: PAL (985248 Hz) vs NTSC (1022727 Hz)
+
+    // Methods
+    void init_defaults();
+    void init_original(bool pal);
+    bool matches(const c64_hardware_config_s* required) const;
+    const char* description() const;
+    void apply(c64_config_t* system_config) const;
+
+    static c64_hardware_config_s from_test_flags(uint32_t test_hw_flags);
     
 } c64_hardware_config_t;
-
-/**
- * Initialize hardware config with C64C defaults (most common)
- * - PAL 6569 (new)
- * - 6526A CIA (new)
- * - 8580 SID
- */
-void c64_hardware_config_init_defaults(c64_hardware_config_t* hw_config);
-
-/**
- * Initialize hardware config for original C64 (breadbin)
- * - PAL 6569 R1 (old) or NTSC 6567 R56A (old)
- * - 6526 CIA (old)
- * - 6581 SID
- */
-void c64_hardware_config_init_original(c64_hardware_config_t* hw_config, bool pal);
-
-/**
- * Convert test framework HardwareConfig flags to system hardware config
- */
-c64_hardware_config_t c64_hardware_config_from_test_flags(uint32_t test_hw_flags);
-
-/**
- * Check if current hardware config matches test requirements
- * Returns true if all required hardware is present
- */
-bool c64_hardware_config_matches(const c64_hardware_config_t* current,
-                                  const c64_hardware_config_t* required);
-
-/**
- * Get human-readable description of hardware configuration
- */
-const char* c64_hardware_config_description(const c64_hardware_config_t* hw_config);
-
-/**
- * Apply hardware configuration to c64_config_t for system creation
- */
-void c64_hardware_config_apply(const c64_hardware_config_t* hw_config, 
-                                c64_config_t* system_config);

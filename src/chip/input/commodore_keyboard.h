@@ -281,39 +281,37 @@ typedef struct {
     void* scan_port_a_reference;
     void* scan_port_b_reference;
 
+    // ========================================================================
+    // Methods
+    // ========================================================================
+
+    // Lifecycle
+    bool init(const keyboard_matrix_config_t* config);
+    void reset();
+
+    // EmuKey-based keyboard input handling
+    void key_down(emu_key_t key, bool shifted);
+    void key_up(emu_key_t key, bool shifted);
+
+    // Key position lookup (O(1) via the optimised structures)
+    bool find_key(emu_key_t key, uint8_t* out_row, uint8_t* out_col) const;
+
+    // Utility
+    static bool is_special_key(emu_key_t key);
+    void toggle_caps_lock();
+
+    // Keyboard scanning and I/O chip integration
+    void update_matrix();
+    void connect_ports(void* port_a, void* port_b);
+
+    // Keyboard matrix state functions for CIA/VIA/TED integration
+    bool is_row_closed(uint8_t row, uint8_t col);
+    bool is_col_closed(uint8_t row, uint8_t col);
+
+    // Debug functions
+    void print_matrix();
+    void print_state();
+
 } commodore_keyboard_t;
-
-// ============================================================================
-// Function declarations
-// ============================================================================
-
-// Lifecycle
-commodore_keyboard_t* commodore_keyboard_create(const keyboard_matrix_config_t* config);
-void commodore_keyboard_destroy(commodore_keyboard_t* keyboard);
-void commodore_keyboard_reset(commodore_keyboard_t* keyboard);
-
-// EmuKey-based keyboard input handling
-void commodore_keyboard_key_down(commodore_keyboard_t* keyboard, emu_key_t key, bool shifted);
-void commodore_keyboard_key_up(commodore_keyboard_t* keyboard, emu_key_t key, bool shifted);
-
-// Key position lookup (O(1) via the optimised structures)
-bool commodore_keyboard_find_key(const commodore_keyboard_t* keyboard,
-                                 emu_key_t key, uint8_t* out_row, uint8_t* out_col);
-
-// Utility
-bool commodore_keyboard_is_special_key(emu_key_t key);
-void commodore_keyboard_toggle_caps_lock(commodore_keyboard_t* keyboard);
-
-// Keyboard scanning and I/O chip integration
-void commodore_keyboard_update_matrix(commodore_keyboard_t* keyboard);
-void commodore_keyboard_connect_ports(commodore_keyboard_t* keyboard, void* port_a, void* port_b);
-
-// Keyboard matrix state functions for CIA/VIA/TED integration
-bool commodore_keyboard_is_row_closed(commodore_keyboard_t* keyboard, uint8_t row, uint8_t col);
-bool commodore_keyboard_is_col_closed(commodore_keyboard_t* keyboard, uint8_t row, uint8_t col);
-
-// Debug functions
-void commodore_keyboard_print_matrix(commodore_keyboard_t* keyboard);
-void commodore_keyboard_print_state(commodore_keyboard_t* keyboard);
 
 #endif // COMMODORE_KEYBOARD_H

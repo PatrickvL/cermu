@@ -49,74 +49,72 @@ int d64_max_sector(int track) {
 // Open / Close
 // ============================================================================
 
-bool commodore_d64_open(const char* filepath, commodore_d64_t* out_d64) {
-    if (!filepath || !out_d64) return false;
-    memset(out_d64, 0, sizeof(*out_d64));
+bool commodore_d64_s::open(const char* filepath) {
+    if (!filepath) return false;
+    memset(this, 0, sizeof(*this));
 
-    out_d64->data = format_read_entire_file(filepath, &out_d64->data_size);
-    if (!out_d64->data) {
+    data = format_read_entire_file(filepath, &data_size);
+    if (!data) {
         printf("D64Format: Cannot open D64 file: %s\n", filepath);
         return false;
     }
-    out_d64->owns_data = true;
+    owns_data = true;
 
-    switch (out_d64->data_size) {
-        case D64_STANDARD_SIZE:     out_d64->num_tracks = 35; out_d64->has_errors = false; break;
-        case D64_STANDARD_SIZE_ERR: out_d64->num_tracks = 35; out_d64->has_errors = true;  break;
-        case D64_EXTENDED_SIZE:     out_d64->num_tracks = 40; out_d64->has_errors = false; break;
-        case D64_EXTENDED_SIZE_ERR: out_d64->num_tracks = 40; out_d64->has_errors = true;  break;
+    switch (data_size) {
+        case D64_STANDARD_SIZE:     num_tracks = 35; has_errors = false; break;
+        case D64_STANDARD_SIZE_ERR: num_tracks = 35; has_errors = true;  break;
+        case D64_EXTENDED_SIZE:     num_tracks = 40; has_errors = false; break;
+        case D64_EXTENDED_SIZE_ERR: num_tracks = 40; has_errors = true;  break;
         default:
-            printf("D64Format: Unrecognized D64 file size: %zu bytes\n", out_d64->data_size);
-            free(out_d64->data);
-            out_d64->data = NULL;
+            printf("D64Format: Unrecognized D64 file size: %zu bytes\n", data_size);
+            free(data);
+            data = NULL;
             return false;
     }
 
     printf("D64Format: Opened D64: %d tracks, %s error bytes\n",
-           out_d64->num_tracks, out_d64->has_errors ? "with" : "no");
+           num_tracks, has_errors ? "with" : "no");
     return true;
 }
 
-bool commodore_d64_open_mem(const uint8_t* data, size_t size, commodore_d64_t* out_d64) {
-    if (!data || !out_d64) return false;
-    memset(out_d64, 0, sizeof(*out_d64));
+bool commodore_d64_s::open_mem(const uint8_t* buf, size_t size) {
+    if (!buf) return false;
+    memset(this, 0, sizeof(*this));
 
-    out_d64->data = (uint8_t*)data;
-    out_d64->data_size = size;
-    out_d64->owns_data = false;
+    data = (uint8_t*)buf;
+    data_size = size;
+    owns_data = false;
 
     if (size == D64_STANDARD_SIZE || size == D64_STANDARD_SIZE_ERR) {
-        out_d64->num_tracks = 35;
-        out_d64->has_errors = (size == D64_STANDARD_SIZE_ERR);
+        num_tracks = 35;
+        has_errors = (size == D64_STANDARD_SIZE_ERR);
     } else if (size == D64_EXTENDED_SIZE || size == D64_EXTENDED_SIZE_ERR) {
-        out_d64->num_tracks = 40;
-        out_d64->has_errors = (size == D64_EXTENDED_SIZE_ERR);
+        num_tracks = 40;
+        has_errors = (size == D64_EXTENDED_SIZE_ERR);
     } else {
         return false;
     }
     return true;
 }
 
-void commodore_d64_close(commodore_d64_t* d64) {
-    if (d64) {
-        if (d64->owns_data && d64->data) free(d64->data);
-        memset(d64, 0, sizeof(*d64));
-    }
+void commodore_d64_s::close() {
+    if (owns_data && data) free(data);
+    memset(this, 0, sizeof(*this));
 }
 
 // ============================================================================
 // Directory
 // ============================================================================
 
-bool commodore_d64_read_directory(const commodore_d64_t* d64, commodore_d64_directory_t* out_dir) {
-    if (!d64 || !d64->data || !out_dir) return false;
+bool commodore_d64_s::read_directory(commodore_d64_directory_t* out_dir) const {
+    if (!data || !out_dir) return false;
     memset(out_dir, 0, sizeof(*out_dir));
 
     /* BAM sector (track 18, sector 0) — disk name and ID */
     int bam_off = d64_sector_offset(D64_BAM_TRACK, D64_BAM_SECTOR);
-    if (bam_off + D64_SECTOR_SIZE > (int)d64->data_size) return false;
+    if (bam_off + D64_SECTOR_SIZE > (int)data_size) return false;
 
-    const uint8_t* bam = d64->data + bam_off;
+    const uint8_t* bam = data + bam_off;
     memcpy(out_dir->disk_name, bam + 0x90, 16);
     out_dir->disk_name[16] = '\0';
     petscii_trim_padding(out_dir->disk_name, 16);
@@ -131,9 +129,9 @@ bool commodore_d64_read_directory(const commodore_d64_t* d64, commodore_d64_dire
 
     for (int chain = 0; chain < 18 && dir_track != 0; chain++) {
         int offset = d64_sector_offset(dir_track, dir_sector);
-        if (offset + D64_SECTOR_SIZE > (int)d64->data_size) break;
+        if (offset + D64_SECTOR_SIZE > (int)data_size) break;
 
-        const uint8_t* sector = d64->data + offset;
+        const uint8_t* sector = data + offset;
         int next_track  = sector[0];
         int next_sector = sector[1];
 
@@ -171,38 +169,38 @@ bool commodore_d64_read_directory(const commodore_d64_t* d64, commodore_d64_dire
 // File Extraction
 // ============================================================================
 
-bool commodore_d64_extract_file(const commodore_d64_t* d64, int entry_idx,
-                                uint8_t** out_data, size_t* out_size) {
-    if (!d64 || !d64->data || !out_data || !out_size) return false;
+bool commodore_d64_s::extract_file(int entry_idx,
+                                   uint8_t** out_data, size_t* out_size) const {
+    if (!data || !out_data || !out_size) return false;
 
     commodore_d64_directory_t dir;
-    if (!commodore_d64_read_directory(d64, &dir)) return false;
+    if (!read_directory(&dir)) return false;
     if (entry_idx < 0 || entry_idx >= dir.count) return false;
 
     const commodore_d64_entry_t* entry = &dir.entries[entry_idx];
 
     size_t capacity = (size_t)entry->size_blocks * 254 + 256;
-    uint8_t* data = (uint8_t*)malloc(capacity);
-    if (!data) return false;
+    uint8_t* buf = (uint8_t*)malloc(capacity);
+    if (!buf) return false;
 
     size_t total = 0;
     int track  = entry->start_track;
     int sector = entry->start_sector;
 
     for (int chain = 0; chain < 1000 && track != 0; chain++) {
-        if (track < 1 || track > d64->num_tracks || sector >= d64_max_sector(track)) {
+        if (track < 1 || track > num_tracks || sector >= d64_max_sector(track)) {
             printf("D64Format: Bad track/sector: %d/%d\n", track, sector);
-            free(data);
+            free(buf);
             return false;
         }
 
         int offset = d64_sector_offset(track, sector);
-        if (offset + D64_SECTOR_SIZE > (int)d64->data_size) {
-            free(data);
+        if (offset + D64_SECTOR_SIZE > (int)data_size) {
+            free(buf);
             return false;
         }
 
-        const uint8_t* sec = d64->data + offset;
+        const uint8_t* sec = data + offset;
         int next_track  = sec[0];
         int next_sector = sec[1];
 
@@ -211,18 +209,18 @@ bool commodore_d64_extract_file(const commodore_d64_t* d64, int entry_idx,
             if (used < 1) used = 254;
             if (total + (size_t)used > capacity) {
                 capacity = total + used + 256;
-                data = (uint8_t*)realloc(data, capacity);
-                if (!data) return false;
+                buf = (uint8_t*)realloc(buf, capacity);
+                if (!buf) return false;
             }
-            memcpy(data + total, sec + 2, used - 1);
+            memcpy(buf + total, sec + 2, used - 1);
             total += used - 1;
         } else {
             if (total + 254 > capacity) {
                 capacity += 256 * 8;
-                data = (uint8_t*)realloc(data, capacity);
-                if (!data) return false;
+                buf = (uint8_t*)realloc(buf, capacity);
+                if (!buf) return false;
             }
-            memcpy(data + total, sec + 2, 254);
+            memcpy(buf + total, sec + 2, 254);
             total += 254;
         }
 
@@ -230,25 +228,25 @@ bool commodore_d64_extract_file(const commodore_d64_t* d64, int entry_idx,
         sector = next_sector;
     }
 
-    *out_data = data;
+    *out_data = buf;
     *out_size = total;
     printf("D64Format: Extracted \"%s\": %zu bytes\n", entry->filename, total);
     return true;
 }
 
-bool commodore_d64_extract_first_prg(const commodore_d64_t* d64, commodore_prg_t* out_prg) {
-    if (!d64 || !out_prg) return false;
+bool commodore_d64_s::extract_first_prg(commodore_prg_t* out_prg) const {
+    if (!out_prg) return false;
     memset(out_prg, 0, sizeof(*out_prg));
 
     commodore_d64_directory_t dir;
-    if (!commodore_d64_read_directory(d64, &dir)) return false;
+    if (!read_directory(&dir)) return false;
 
     for (int i = 0; i < dir.count; i++) {
         uint8_t ft = dir.entries[i].file_type;
         if ((ft & D64_FTYPE_MASK) == D64_FTYPE_PRG && (ft & D64_FTYPE_CLOSED)) {
             uint8_t* raw = NULL;
             size_t raw_size = 0;
-            if (commodore_d64_extract_file(d64, i, &raw, &raw_size)) {
+            if (extract_file(i, &raw, &raw_size)) {
                 bool ok = commodore_prg_parse(raw, raw_size, out_prg);
                 free(raw);
                 if (ok) {
@@ -284,13 +282,13 @@ static float d64_identify(const uint8_t* data, size_t file_size, const char* ext
 
 static bool d64_load(const char* filepath, format_load_result_t* out) {
     commodore_d64_t d64;
-    if (commodore_d64_open(filepath, &d64)) {
-        if (commodore_d64_extract_first_prg(&d64, &out->program)) {
+    if (d64.open(filepath)) {
+        if (d64.extract_first_prg(&out->program)) {
             out->type = FORMAT_LOAD_PROGRAM;
-            commodore_d64_close(&d64);
+            d64.close();
             return true;
         }
-        commodore_d64_close(&d64);
+        d64.close();
         snprintf(out->error_msg, sizeof(out->error_msg),
                  "D64 opened but no PRG found: %s", filepath);
     } else {

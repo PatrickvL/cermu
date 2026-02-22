@@ -12,11 +12,11 @@
 // Program Data
 // ============================================================================
 
-void program_data_free(program_data_t* pd) {
-    if (pd && pd->data) {
-        free(pd->data);
-        pd->data = NULL;
-        pd->data_size = 0;
+void program_data_s::release() {
+    if (data) {
+        free(data);
+        data = NULL;
+        data_size = 0;
     }
 }
 
@@ -35,12 +35,11 @@ const char* format_load_type_name(format_load_type_t type) {
     }
 }
 
-void format_load_result_free(format_load_result_t* result) {
-    if (!result) return;
-    program_data_free(&result->program);
-    for (int i = 0; i < result->file_count; i++)
-        program_data_free(&result->files[i]);
-    memset(result, 0, sizeof(*result));
+void format_load_result_s::release() {
+    program.release();
+    for (int i = 0; i < file_count; i++)
+        files[i].release();
+    memset(this, 0, sizeof(*this));
 }
 
 // ============================================================================

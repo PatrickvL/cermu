@@ -91,9 +91,9 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
         // LNX files â€” Lynx archive; parse to inspect contained files' load addresses
         if (strcmp(ext, ".lnx") == 0 || strcmp(ext, ".LNX") == 0) {
             commodore_lynx_t lynx;
-            if (commodore_lynx_open(filepath, &lynx)) {
+            if (lynx.open(filepath)) {
                 commodore_lynx_directory_t dir;
-                if (commodore_lynx_read_directory(&lynx, &dir)) {
+                if (lynx.read_directory(&dir)) {
                     // Check ALL PRG entries' load addresses for C64 addresses
                     bool found_c64 = false;
                     bool found_any = false;
@@ -110,26 +110,26 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
                             }
                         }
                     }
-                    commodore_lynx_close(&lynx);
+                    lynx.close();
                     if (found_c64) return 0.95f;
                     if (found_any) return 0.5f;
                 }
-                commodore_lynx_close(&lynx);
+                lynx.close();
             }
             return 0.6f;  // Could not inspect â€” C64 is most common
         }
         if (strcmp(ext, ".d64") == 0 || strcmp(ext, ".D64") == 0) {
             // D64 disk images â€” inspect first PRG's load address to distinguish systems
             commodore_d64_t d64;
-            if (commodore_d64_open(filepath, &d64)) {
+            if (d64.open(filepath)) {
                 commodore_prg_t prg = {};
-                if (commodore_d64_extract_first_prg(&d64, &prg)) {
+                if (d64.extract_first_prg(&prg)) {
                     float score = is_c64_load_address(prg.load_addr) ? 0.95f : 0.6f;
                     commodore_prg_free(&prg);
-                    commodore_d64_close(&d64);
+                    d64.close();
                     return score;
                 }
-                commodore_d64_close(&d64);
+                d64.close();
             }
             // Could not inspect â€” still likely C64 (most common system)
             if (size == D64_STANDARD_SIZE || size == D64_STANDARD_SIZE_ERR ||
@@ -291,7 +291,7 @@ static void cia2_port_a_bank_callback(void* context, uint8_t port_a_value) {
 extern "C" {
 static void cpu_banking_callback(void* context, uint8_t banking_state) {
     C64System* c64 = static_cast<C64System*>(context);
-    c64_bus_on_banking_change(&c64->bus, banking_state);
+    c64->bus.on_banking_change(banking_state);
 }
 }
 
@@ -311,22 +311,22 @@ bool C64System::initialize() {
     // resets the pointer and zeroes the embedded struct for re-use.
     auto cleanup = [this]() {
         if (this->keyboard) {
-            commodore_keyboard_destroy(this->keyboard);
+            delete this->keyboard;
             this->keyboard = nullptr;
         }
         // Destroy each chip individually using typed destroyers
-        rom_destroy(this->kernal);
+        delete this->kernal;
         delete this->cia2;
         delete this->cia1;
         delete this->colorram;
         delete this->sid;
         delete this->vicii;
-        rom_destroy(this->charrom);
-        rom_destroy(this->cartridge_romh);
-        rom_destroy(this->basic);
-        rom_destroy(this->cartridge_roml);
+        delete this->charrom;
+        delete this->cartridge_romh;
+        delete this->basic;
+        delete this->cartridge_roml;
         mos6510_destroy(static_cast<mos6510_t*>(this->mos6510));
-        ram_destroy(this->ram);
+        delete this->ram;
         initialized_ = false;
         // Chip pointers already nulled above
     };
@@ -342,12 +342,12 @@ bool C64System::initialize() {
     // =========================================================================
     // Create all chips
     // =========================================================================
-    if (!(this->ram = ram_create())) { cleanup(); return false; }
+    this->ram = new ram_t();
     if (!(this->mos6510 = mos6510_create())) { cleanup(); return false; }
-    if (!(this->cartridge_roml = rom_create_with_size(8192))) { cleanup(); return false; }
-    if (!(this->basic = rom_create_with_size(8192))) { cleanup(); return false; }
-    if (!(this->cartridge_romh = rom_create_with_size(8192))) { cleanup(); return false; }
-    if (!(this->charrom = rom_create_with_size(4096))) { cleanup(); return false; }
+    this->cartridge_roml = new rom_t();
+    this->basic = new rom_t();
+    this->cartridge_romh = new rom_t();
+    this->charrom = new rom_t();
     this->vicii = new vicii_t();
     this->vicii->init(vicii_s::get_default_config(c64_config_.vicii_standard == VIC_PAL), vicii_s::memory_bank_change);
     if (!this->vicii) { cleanup(); return false; }
@@ -369,7 +369,7 @@ bool C64System::initialize() {
     this->vicii->bus.bus = &this->bus;
     this->vicii->bus.bank_change = nullptr;
     this->vicii->bus.mem_read = [](void* ctx, bus_state_t bus, uint16_t addr) -> bus_state_t {
-        return c64_bus_vic_read(static_cast<c64_bus_t*>(ctx), bus, addr);
+        return static_cast<c64_bus_t*>(ctx)->vic_read(bus, addr);
     };
     this->vicii->bus.mem_read_ctx = &this->bus;
 
@@ -386,16 +386,17 @@ bool C64System::initialize() {
     this->cia2->reset();
 
     // Create keyboard matrix
-    this->keyboard = commodore_keyboard_create(&c64_keyboard_config);
-    if (!this->keyboard) {
+    this->keyboard = new commodore_keyboard_t();
+    if (!this->keyboard->init(&c64_keyboard_config)) {
         printf("ERROR: Failed to create keyboard\n");
+        delete this->keyboard;
+        this->keyboard = nullptr;
         cleanup();
         return false;
     }
-    commodore_keyboard_reset(this->keyboard);
     printf("C64: Keyboard matrix initialized (all keys released)\n");
 
-    if (!(this->kernal = rom_create_with_size(8192))) { cleanup(); return false; }
+    this->kernal = new rom_t();
 
     // No cartridge I/O by default
     this->io1 = nullptr;
@@ -415,9 +416,9 @@ bool C64System::initialize() {
     }
 
     // Attach bus and load ROMs from configured paths
-    c64_bus_system_attach(&this->bus, this);
+    this->bus.system_attach(this);
     memory_init(&c64_config_);
-    c64_bus_init_unified_pointers(&this->bus, this, &c64_config_);
+    this->bus.init_unified_pointers(this, &c64_config_);
 
     // =========================================================================
     // Wire callbacks and initialize CPU
@@ -443,7 +444,7 @@ bool C64System::initialize() {
     mos6510_set_bank_change(static_cast<mos6510_t*>(this->mos6510),
                             cpu_banking_callback, this);
 
-    uint16_t reset_vector = c64_read_kernal_reset_vector(&this->bus);
+    uint16_t reset_vector = this->bus.read_kernal_reset_vector();
     mos6510_set_pc(static_cast<mos6510_t*>(this->mos6510), reset_vector);
     mos6510_set_ab(static_cast<mos6510_t*>(this->mos6510), reset_vector);
     printf("C64: CPU reset vector $%04X loaded\n", reset_vector);
@@ -492,28 +493,28 @@ void C64System::shutdown() {
 
     // Free any pending load that was never applied
     if (pending_load_.active) {
-        format_load_result_free(&pending_load_.result);
+        pending_load_.result.release();
         pending_load_.active = false;
     }
     if (initialized_) {
         // Destroy keyboard
         if (this->keyboard) {
-            commodore_keyboard_destroy(this->keyboard);
+            delete this->keyboard;
             this->keyboard = nullptr;
         }
-        // Destroy all chips individually using typed destroyers
-        rom_destroy(this->kernal);
+        // Destroy all chips individually
+        delete this->kernal;
         delete this->cia2;
         delete this->cia1;
         delete this->colorram;
         delete this->sid;
         delete this->vicii;
-        rom_destroy(this->charrom);
-        rom_destroy(this->cartridge_romh);
-        rom_destroy(this->basic);
-        rom_destroy(this->cartridge_roml);
+        delete this->charrom;
+        delete this->cartridge_romh;
+        delete this->basic;
+        delete this->cartridge_roml;
         mos6510_destroy(static_cast<mos6510_t*>(this->mos6510));
-        ram_destroy(this->ram);
+        delete this->ram;
 
         initialized_ = false;
         // Zero the embedded struct for clean re-initialization
@@ -524,7 +525,7 @@ void C64System::shutdown() {
 void C64System::reset() {
     // Clear any pending deferred load (will be re-set by the next load_file call)
     if (pending_load_.active) {
-        format_load_result_free(&pending_load_.result);
+        pending_load_.result.release();
         pending_load_.active = false;
     }
     boot_completed_ = false;
@@ -550,13 +551,13 @@ void C64System::reset() {
             mos6510_set_bank_change((mos6510_t*)this->mos6510,
                                     cpu_banking_callback, this);
 
-            uint16_t reset_vector = c64_read_kernal_reset_vector(&this->bus);
+            uint16_t reset_vector = this->bus.read_kernal_reset_vector();
             mos6510_set_pc((mos6510_t*)this->mos6510, reset_vector);
             mos6510_set_ab((mos6510_t*)this->mos6510, reset_vector);
         }
 
         // Reset keyboard
-        if (this->keyboard) commodore_keyboard_reset(this->keyboard);
+        if (this->keyboard) this->keyboard->reset();
 
         // Reset cycle counter
         total_cycles_ = 0;
@@ -613,7 +614,7 @@ void C64System::system_tick() {
     s = mos6510_tick_phi2(mos6510, s);
 
     // PHASE 3: Memory service (AEC determines CPU vs VIC-II bus ownership)
-    s = c64_memory_tick(bus_ptr, s);
+    s = bus_ptr->memory_tick(s);
 
     // PHASE 3.1: VIC-II PHI2 — c/p/s-access data delivery
     vicii->tick_phi2(s);
@@ -697,7 +698,7 @@ bool C64System::load_file(const char* filepath) {
 
     // Clear any previous pending load
     if (pending_load_.active) {
-        format_load_result_free(&pending_load_.result);
+        pending_load_.result.release();
         pending_load_.active = false;
     }
     sid_player_active_ = false;
@@ -707,7 +708,7 @@ bool C64System::load_file(const char* filepath) {
     format_load_result_t result = {};
     if (!format_load_file(filepath, &result)) {
         printf("C64: Failed to load file: %s\n", result.error_msg);
-        format_load_result_free(&result);
+        result.release();
         return false;
     }
 
@@ -809,7 +810,7 @@ void C64System::apply_pending_load() {
                                     ? SID_REVISION_8580_R5
                                     : SID_REVISION_6581_R4AR;
         }
-        format_load_result_free(&pending_load_.result);
+        pending_load_.result.release();
         pending_load_.active = false;
         boot_completed_ = true;
         return;
@@ -864,7 +865,7 @@ void C64System::apply_pending_load() {
             c64_mem_write_byte(this->ram, 0x00C6, (uint8_t)len);
         }
 
-        format_load_result_free(&pending_load_.result);
+        pending_load_.result.release();
         pending_load_.active = false;
         boot_completed_ = true;
         return;
@@ -899,7 +900,7 @@ void C64System::apply_pending_load() {
             printf("C64: No datasette attached — TAP not loaded\n");
         }
 
-        format_load_result_free(&pending_load_.result);
+        pending_load_.result.release();
         pending_load_.active = false;
         boot_completed_ = true;
         return;
@@ -927,7 +928,7 @@ void C64System::apply_pending_load() {
     commodore_apply_load_result(&ctx, &pending_load_.result,
                                 pending_load_.filepath.c_str());
 
-    format_load_result_free(&pending_load_.result);
+    pending_load_.result.release();
     pending_load_.active = false;
     boot_completed_ = true;
 }
@@ -1056,9 +1057,9 @@ void C64System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
         emu_key_t ek = EmuKeySDLMap::instance().sdl_keycode_to_emu_key(key);
         if (ek != EMUKEY_NONE) {
             if (pressed) {
-                commodore_keyboard_key_down(this->keyboard, ek, false);
+                this->keyboard->key_down(ek, false);
             } else {
-                commodore_keyboard_key_up(this->keyboard, ek, false);
+                this->keyboard->key_up(ek, false);
             }
         }
     }
@@ -1673,7 +1674,7 @@ bool C64System::pla_maps_generate() {
         return false;
 
     // Generate all 32 memory modes using PLA
-    c64_bus_generate_all_pla_modes(bus, (struct pla_906114_01_s*)pla);
+    bus->generate_all_pla_modes((struct pla_906114_01_s*)pla);
 
     // Clean up PLA instance
     pla_906114_01_destroy(pla);
@@ -1682,8 +1683,8 @@ bool C64System::pla_maps_generate() {
     // CPU I/O port initializes to $17 (bits 0-2 = 0b111 = LORAM=1, HIRAM=1, CHAREN=1)
     // Combined with system_lines (EXROM=1, GAME=1) this gives mode $1F
     uint8_t cpu_port_bits = 0x07;  // Default from init_io_port(): $17 & $07 = $07
-    uint8_t initial_pla_mode = c64_bus_generate_pla_mode(bus, cpu_port_bits);
-    c64_bus_mode_switch(bus, initial_pla_mode);
+    uint8_t initial_pla_mode = bus->generate_pla_mode(cpu_port_bits);
+    bus->mode_switch(initial_pla_mode);
 
     printf("C64 initial banking: PLA mode=$%02X (standard config, no cartridge)\n", initial_pla_mode);
 

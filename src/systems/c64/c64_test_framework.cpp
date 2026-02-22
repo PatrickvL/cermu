@@ -648,13 +648,13 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
     // Read low byte of reset vector
     BUS_SET_ADDR(read_state, 0xFFFC);
     BUS_SET_LINES(read_state, BUS_GET_LINES(read_state) | BUS_MASK_RW);
-    read_state = c64_memory_tick(&c64->bus, read_state);
+    read_state = c64->bus.memory_tick(read_state);
     uint8_t reset_low = BUS_GET_DATA(read_state);
     
     // Read high byte of reset vector
     BUS_SET_ADDR(read_state, 0xFFFD);
     BUS_SET_LINES(read_state, BUS_GET_LINES(read_state) | BUS_MASK_RW);
-    read_state = c64_memory_tick(&c64->bus, read_state);
+    read_state = c64->bus.memory_tick(read_state);
     uint8_t reset_high = BUS_GET_DATA(read_state);
     
     uint16_t reset_vector = reset_low | (reset_high << 8);
@@ -816,7 +816,7 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
     // Banking mode 0x07: LORAM=1, HIRAM=1, CHAREN=1 (standard C64 boot configuration)
     c64->ram->memory[0x00] = 0x2F;  // DDR: bits 0-2 output, others input
     c64->ram->memory[0x01] = 0x37;  // Data: LORAM=1, HIRAM=1, CHAREN=1
-    c64_bus_on_banking_change(&c64->bus, 0x07);
+    c64->bus.on_banking_change(0x07);
     
     mos6510_t* cpu = static_cast<mos6510_t*>(c64->mos6510);
     if (!cpu) {
@@ -1754,7 +1754,7 @@ bool TestFramework::requires_reconfiguration(const TestDescriptor& test) const {
 // Create a C64 system configured for the specific test
 C64System* TestFramework::create_system_for_test(const TestDescriptor& test) {
     c64_config_t config;
-    c64_config_init_defaults(&config);
+    config.init_defaults();
     
     // Determine required video standard
     bool needs_pal = static_cast<int>(test.required_hw & HardwareConfig::VICII_PAL) != 0;
