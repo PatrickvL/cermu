@@ -133,17 +133,11 @@ private:
 
     // Helper methods
     bool load_roms();
-    uint8_t cpu_read(uint32_t addr);
-    void cpu_write(uint32_t addr, uint8_t data);
     bus_state_t mem_tick(bus_state_t s);
     void setup_connector_ports();
 
     /// Register all C264 chips into registered_chips_ for the Hardware menu.
     void register_c264_chips();
-
-    // Static callbacks
-    static uint8_t cpu_read_callback(void* user_data, uint32_t addr, uint8_t bus_state);
-    static void cpu_write_callback(void* user_data, uint32_t addr, uint8_t data);
     static uint8_t io_port_in(void* user_data);
     static void io_port_out(uint8_t data, void* user_data);
     static uint8_t ted_keyboard_scan(void* user_data, uint8_t column);
