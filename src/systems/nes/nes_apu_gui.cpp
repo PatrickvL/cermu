@@ -7,7 +7,7 @@
  *
  * Pinout reference: Ricoh RP2A03 Datasheet
  *
- *           ╔═══════════╗
+ *          ╔═══════════╗
  *   AD1  ──┤ 1      40 ├── VCC
  *   AD2  ──┤ 2      39 ├── PHI2(OUT)
  *   /RST ──┤ 3      38 ├── /NMI
@@ -28,7 +28,7 @@
  *   A14  ──┤18      23 ├── OUT0
  *   R/W  ──┤19      22 ├── OUT1
  *   GND  ──┤20      21 ├── OUT2
- *           ╚═══════════╝
+ *          ╚═══════════╝
  */
 
 #include "../../chip/cpu/fam65xx/nes6502.h"

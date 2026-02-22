@@ -58,12 +58,12 @@ void mos6560_reset(mos6560_t* vic) {
 }
 
 // Register access functions
-uint8_t mos6560_read_register(mos6560_t* vic, uint8_t reg) {
-    return vic_read_register(vic, reg);
+bus_state_t mos6560_registers_read(void* context, bus_state_t bus_state) {
+    return vic_registers_read(context, bus_state);
 }
 
-void mos6560_write_register(mos6560_t* vic, uint8_t reg, uint8_t value) {
-    vic_write_register(vic, reg, value);
+bus_state_t mos6560_registers_write(void* context, bus_state_t bus_state) {
+    return vic_registers_write(context, bus_state);
 }
 
 // Main tick function

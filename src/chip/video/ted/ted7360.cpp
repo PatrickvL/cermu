@@ -1002,82 +1002,98 @@ void ted7360_tick(ted7360_t* ted) {
 // REGISTER READ
 // ============================================================================
 
-uint8_t ted7360_read_register(ted7360_t* ted, uint8_t reg) {
-    if (!ted) return 0xFF;
+bus_state_t ted7360_registers_read(void* context, bus_state_t bus_state) {
+    ted7360_t* ted = (ted7360_t*)context;
+    if (!ted) { BUS_SET_DATA(bus_state, 0xFF); return bus_state; }
 
-    reg &= 0x3F;  // Handle mirroring in $FF00-$FF3F range
+    uint8_t reg = BUS_GET_ADDR(bus_state) & 0x3F;  // Handle mirroring in $FF00-$FF3F range
 
     // Banking latches: $FF3E/$FF3F read as open bus
     if (reg >= 0x20) {
-        if (reg == 0x3E || reg == 0x3F) return 0xFF;
+        if (reg == 0x3E || reg == 0x3F) { BUS_SET_DATA(bus_state, 0xFF); return bus_state; }
         // Mirrored registers ($20-$3D map to $00-$1D)
         reg &= 0x1F;
     }
 
+    uint8_t data;
     switch (reg) {
         // Timer reads return current counter value (not latch)
-        case TED_REG_TIMER1_LO: return ted->timer1.counter & 0xFF;
-        case TED_REG_TIMER1_HI: return (ted->timer1.counter >> 8) & 0xFF;
-        case TED_REG_TIMER2_LO: return ted->timer2.counter & 0xFF;
-        case TED_REG_TIMER2_HI: return (ted->timer2.counter >> 8) & 0xFF;
-        case TED_REG_TIMER3_LO: return ted->timer3.counter & 0xFF;
-        case TED_REG_TIMER3_HI: return (ted->timer3.counter >> 8) & 0xFF;
+        case TED_REG_TIMER1_LO: data = ted->timer1.counter & 0xFF; break;
+        case TED_REG_TIMER1_HI: data = (ted->timer1.counter >> 8) & 0xFF; break;
+        case TED_REG_TIMER2_LO: data = ted->timer2.counter & 0xFF; break;
+        case TED_REG_TIMER2_HI: data = (ted->timer2.counter >> 8) & 0xFF; break;
+        case TED_REG_TIMER3_LO: data = ted->timer3.counter & 0xFF; break;
+        case TED_REG_TIMER3_HI: data = (ted->timer3.counter >> 8) & 0xFF; break;
 
         case TED_REG_KEYBOARD:
             // Scan keyboard matrix using column pattern in latch
             if (ted->keyboard_scan) {
-                return ted->keyboard_scan(ted->keyboard_user_data, ted->keyboard_latch);
+                data = ted->keyboard_scan(ted->keyboard_user_data, ted->keyboard_latch);
+            } else {
+                data = 0xFF;  // No keys pressed
             }
-            return 0xFF;  // No keys pressed
+            break;
 
         case TED_REG_IRQ_STATUS:
             // Bit 7 = any enabled IRQ source is active
-            return ted->irq_status | ((ted->irq_status & ted->irq_mask) ? TED_IRQ_ANY : 0);
+            data = ted->irq_status | ((ted->irq_status & ted->irq_mask) ? TED_IRQ_ANY : 0);
+            break;
 
         case TED_REG_IRQ_MASK:
-            return ted->irq_mask;
+            data = ted->irq_mask;
+            break;
 
         case TED_REG_RASTER_LO:
-            return ted->timing.raster_counter & 0xFF;
+            data = ted->timing.raster_counter & 0xFF;
+            break;
 
         case TED_REG_CHARPOS_HI:
             // Bit 0 = raster counter bit 8, rest from register
-            return (ted->registers.data[reg] & 0xFE) |
+            data = (ted->registers.data[reg] & 0xFE) |
                    ((ted->timing.raster_counter >> 8) & 0x01);
+            break;
 
         case TED_REG_HPOS:
             // Horizontal position: return current CPU cycle × 2 (TED clocks)
-            return (ted->timing.x_cycle * 2) & 0xFF;
+            data = (ted->timing.x_cycle * 2) & 0xFF;
+            break;
 
         case TED_REG_VPOS:
-            return ted->timing.raster_counter & 0xFF;
+            data = ted->timing.raster_counter & 0xFF;
+            break;
 
         case TED_REG_FLASH:
             // Bits 7-0: flash counter (6 bits) in upper bits, raster compare in lower
-            return (ted->flash_counter << 1) | (ted->registers.data[reg] & 0x01);
+            data = (ted->flash_counter << 1) | (ted->registers.data[reg] & 0x01);
+            break;
 
         default:
-            return ted->registers.data[reg];
+            data = ted->registers.data[reg];
+            break;
     }
+    BUS_SET_DATA(bus_state, data);
+    return bus_state;
 }
 
 // ============================================================================
 // REGISTER WRITE
 // ============================================================================
 
-void ted7360_write_register(ted7360_t* ted, uint8_t reg, uint8_t data) {
-    if (!ted) return;
+bus_state_t ted7360_registers_write(void* context, bus_state_t bus_state) {
+    ted7360_t* ted = (ted7360_t*)context;
+    if (!ted) return bus_state;
 
-    reg &= 0x3F;  // Handle mirroring
+    uint8_t reg = BUS_GET_ADDR(bus_state) & 0x3F;  // Handle mirroring
+    uint8_t data = BUS_GET_DATA(bus_state);
 
     // ROM/RAM banking latches (not mirrored)
     if (reg == 0x3E) {
         ted->rom_enabled = true;
-        return;
+        return bus_state;
     }
     if (reg == 0x3F) {
         ted->rom_enabled = false;
-        return;
+        return bus_state;
     }
 
     // Mirror writes above $1F to actual register range
@@ -1176,6 +1192,7 @@ void ted7360_write_register(ted7360_t* ted, uint8_t reg, uint8_t data) {
             ted->registers.data[reg] = data;
             break;
     }
+    return bus_state;
 }
 
 // ============================================================================

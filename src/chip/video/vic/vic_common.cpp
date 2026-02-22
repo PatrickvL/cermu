@@ -131,24 +131,35 @@ void vic_set_framebuffer(vic_base_t* vic, uint32_t* framebuffer, int width, int 
 }
 
 // Register read function
-uint8_t vic_read_register(vic_base_t* vic, uint8_t reg) {
-    if (!vic || reg >= 16) return 0;
+bus_state_t vic_registers_read(void* context, bus_state_t bus_state) {
+    vic_base_t* vic = (vic_base_t*)context;
+    if (!vic) return bus_state;
+    uint8_t reg = BUS_GET_ADDR(bus_state) & 0x0F;
 
+    uint8_t data;
     // Handle special registers that require computed values from tick state
     switch (reg) {
         case VIC_REG_ROWS: // RasterLine bit 0 | NoOfVideoMatrixRows | DoubleHeight
-            return ((vic->raster_counter << 7) & VIC_ROWS_RASTER_BIT0) | (vic->registers[reg] & 0x7F);
+            data = ((vic->raster_counter << 7) & VIC_ROWS_RASTER_BIT0) | (vic->registers[reg] & 0x7F);
+            break;
         case VIC_REG_RASTER: // RasterLine bits 8-1
-            return (uint8_t)(vic->raster_counter >> 1);
+            data = (uint8_t)(vic->raster_counter >> 1);
+            break;
         default:
-            return vic->registers[reg];
+            data = vic->registers[reg];
+            break;
     }
+    BUS_SET_DATA(bus_state, data);
+    return bus_state;
 }
 
 // Register write function
-void vic_write_register(vic_base_t* vic, uint8_t reg, uint8_t value) {
-    if (!vic || reg >= 16) return;
-    vic->registers[reg] = value;
+bus_state_t vic_registers_write(void* context, bus_state_t bus_state) {
+    vic_base_t* vic = (vic_base_t*)context;
+    if (!vic) return bus_state;
+    uint8_t reg = BUS_GET_ADDR(bus_state) & 0x0F;
+    vic->registers[reg] = BUS_GET_DATA(bus_state);
+    return bus_state;
 }
 
 // Emit a single pixel to the line buffer

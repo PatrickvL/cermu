@@ -70,28 +70,32 @@ void mos6561_reset(mos6561_t* vic) {
 }
 
 // Enhanced register access functions
-uint8_t mos6561_read_register(mos6561_t* vic, uint8_t reg) {
-    if (!vic || reg >= 16) return 0;
+bus_state_t mos6561_registers_read(void* context, bus_state_t bus_state) {
+    mos6561_t* vic = (mos6561_t*)context;
+    if (!vic) return bus_state;
+    uint8_t reg = BUS_GET_ADDR(bus_state) & 0x0F;
 
     // Handle extended color registers (if implemented)
     if (vic->extended_color_mode && reg >= 12 && reg <= 15) {
-        // Return extended color information
-        return vic->extended_colors[reg - 12];
+        BUS_SET_DATA(bus_state, vic->extended_colors[reg - 12]);
+        return bus_state;
     }
 
-    return vic_read_register(vic, reg);
+    return vic_registers_read(context, bus_state);
 }
 
-void mos6561_write_register(mos6561_t* vic, uint8_t reg, uint8_t value) {
-    if (!vic || reg >= 16) return;
+bus_state_t mos6561_registers_write(void* context, bus_state_t bus_state) {
+    mos6561_t* vic = (mos6561_t*)context;
+    if (!vic) return bus_state;
+    uint8_t reg = BUS_GET_ADDR(bus_state) & 0x0F;
 
     // Handle extended color registers
     if (vic->extended_color_mode && reg >= 12 && reg <= 15) {
-        vic->extended_colors[reg - 12] = value;
-        return;
+        vic->extended_colors[reg - 12] = BUS_GET_DATA(bus_state);
+        return bus_state;
     }
 
-    vic_write_register(vic, reg, value);
+    return vic_registers_write(context, bus_state);
 }
 
 // Main tick function
