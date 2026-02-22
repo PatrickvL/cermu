@@ -254,19 +254,6 @@ struct asm6510 {
         bne(wait);
     }
 
-    // =========================================================================
-    //  C64 I/O CONSTANTS (convenience)
-    // =========================================================================
-    static constexpr uint16_t VIC_D011 = 0xD011;
-    static constexpr uint16_t VIC_D012 = 0xD012;
-    static constexpr uint16_t VIC_D016 = 0xD016;
-    static constexpr uint16_t VIC_D018 = 0xD018;
-    static constexpr uint16_t VIC_D019 = 0xD019;
-    static constexpr uint16_t VIC_D01A = 0xD01A;
-    static constexpr uint16_t VIC_D020 = 0xD020;
-    static constexpr uint16_t VIC_D021 = 0xD021;
-    static constexpr uint16_t CPU_PORT = 0x0001;
-
 private:
     /// Compute signed 8-bit relative offset for branch from current pos+2 to target
     uint8_t rel8(uint16_t target) {
