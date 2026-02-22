@@ -168,15 +168,15 @@ void voice_update_envelope(voice_t* voice) {
 // FILTER IMPLEMENTATION
 // =============================================================================
 
-void mos6581_filter_update_cutoff(mos6581_t* sid) {
-    filter_state_t* f = &sid->filter_state;
+void mos6581_s::filter_update_cutoff() {
+    filter_state_t* f = &filter_state;
     
     // Calculate cutoff frequency in Hz from the 11-bit register (0-2047).
-    float fc = (float)sid->filter_cutoff_frequency;
+    float fc = (float)filter_cutoff_frequency;
     float normalized = fc / FILTER_CUTOFF_MAX;  // 0.0 .. 1.0
     float cutoff_hz;
     
-    if (sid->revision <= SID_REVISION_6581_R4AR) {
+    if (revision <= SID_REVISION_6581_R4AR) {
         // 6581: roughly 220 Hz to ~12 kHz (non-linear / quadratic)
         cutoff_hz = 220.0f + normalized * normalized * 11780.0f;
     } else {
@@ -192,7 +192,7 @@ void mos6581_filter_update_cutoff(mos6581_t* sid) {
     //
     // The filter is clocked every CPU cycle (~985 kHz PAL), so we use the
     // CPU clock as the effective sample rate for coefficient calculation.
-    float rate = sid->cpu_clock > 0.0f ? sid->cpu_clock : 985248.0f;
+    float rate = cpu_clock > 0.0f ? cpu_clock : 985248.0f;
     
     // Clamp cutoff to just below Nyquist to avoid tan() blowing up
     float max_hz = rate * 0.499f;
@@ -208,10 +208,10 @@ void mos6581_filter_update_cutoff(mos6581_t* sid) {
     f->a3 = g * f->a2;
 }
 
-float mos6581_filter_process(mos6581_t* sid, float input) {
-    if (!sid->enable_filter) return input;
+float mos6581_s::filter_process(float input) {
+    if (!enable_filter) return input;
     
-    filter_state_t* f = &sid->filter_state;
+    filter_state_t* f = &filter_state;
     
     // ZDF (zero-delay feedback) topology-preserving SVF
     // (Andy Simper / Cytomic / Vadim Zavalishin).
@@ -239,7 +239,7 @@ float mos6581_filter_process(mos6581_t* sid, float input) {
     // Apply soft-clipping distortion for 6581 (models NMOS op-amp non-linearity).
     // Applied outside the feedback loop to preserve filter stability while
     // still providing the characteristic 6581 "grit."
-    if (f->enable_distortion && sid->revision <= SID_REVISION_6581_R4AR) {
+    if (f->enable_distortion && revision <= SID_REVISION_6581_R4AR) {
         float res_norm = f->resonance / FILTER_RESONANCE_MAX;
         float distortion_amount = res_norm * 0.5f;
         if (distortion_amount > 1e-6f) {
@@ -257,7 +257,7 @@ float mos6581_filter_process(mos6581_t* sid, float input) {
     
     // Mix filter outputs based on selected filter mode
     float output = 0.0f;
-    uint8_t sigvol = sid->regs[SID_REG_SIGVOL];
+    uint8_t sigvol = regs[SID_REG_SIGVOL];
     if (sigvol & SIGVOL_LP) output += lp;
     if (sigvol & SIGVOL_BP) output += bp;
     if (sigvol & SIGVOL_HP) output += hp;
@@ -265,8 +265,8 @@ float mos6581_filter_process(mos6581_t* sid, float input) {
     return output;
 }
 
-void mos6581_filter_reset(mos6581_t* sid) {
-    filter_state_t* f = &sid->filter_state;
+void mos6581_s::filter_reset() {
+    filter_state_t* f = &filter_state;
     
     f->cutoff_frequency = 0.0f;
     f->resonance = 0.0f;
@@ -280,20 +280,20 @@ void mos6581_filter_reset(mos6581_t* sid) {
     f->a3 = 0.0f;
     f->ic1eq = 0.0f;
     f->ic2eq = 0.0f;
-    f->enable_distortion = (sid->revision <= SID_REVISION_6581_R4AR);
+    f->enable_distortion = (revision <= SID_REVISION_6581_R4AR);
 }
 
-void mos6581_filter_init(mos6581_t* sid) {
-    mos6581_filter_reset(sid);
+void mos6581_s::filter_init() {
+    filter_reset();
 }
 
 // =============================================================================
 // FILTER REGISTER WRITERS
 // =============================================================================
 
-void mos6581_write_resonance_control_register_value(mos6581_t* sid, uint8_t value) {
+void mos6581_s::write_resonance_control_register_value(uint8_t value) {
     // Extract resonance nibble for the float computation.
-    sid->filter_state.resonance = (float)((value >> RESON_RES_SHIFT) & 0x0F);
+    filter_state.resonance = (float)((value >> RESON_RES_SHIFT) & 0x0F);
     
     // Recompute k and derived SVF coefficients.
     // The 6581's resonance is controlled by a VCR (voltage-controlled resistor)
@@ -302,7 +302,7 @@ void mos6581_write_resonance_control_register_value(mos6581_t* sid, uint8_t valu
     // a direct Q mapping: Q_min ≈ 0.707 (Butterworth) to Q_max ≈ 15.
     // Previous mapping (k = 1.7*(1-res/15), clamped to 0.01) gave Q_max = 100,
     // which caused enormous resonant gain (+40 dB) on filter sweeps → "pieuw".
-    filter_state_t* f = &sid->filter_state;
+    filter_state_t* f = &filter_state;
     float res_norm = f->resonance / FILTER_RESONANCE_MAX;
     float Q = 0.707f + res_norm * 14.3f;  // Q range [0.707, 15.0]
     f->k = 1.0f / Q;
@@ -544,7 +544,7 @@ void voice_set_waveform_output(voice_t* voice, voice_t* ring_source) {
 // =============================================================================
 
 // Unified bus state threading main cycle function
-inline bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) {
+inline bus_state_t mos6581_s::advance_cycle(bus_state_t bus_state) {
     // reSID per-cycle order:
     //   1. Clock envelopes  (inside voice_clock_cycle)
     //   2. Clock oscillators (accumulator + noise LFSR)
@@ -554,20 +554,20 @@ inline bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) 
 
     // Steps 1-2: Clock accumulators, noise, and envelopes
     for (int i = 0; i < 3; i++) {
-        voice_clock_cycle(sid->voices[i]);
+        voice_clock_cycle(voices[i]);
     }
 
     // Step 3: Apply oscillator sync.
     // Sync source mapping: voice1←voice3, voice2←voice1, voice3←voice2
-    voice_apply_sync(&sid->voice1, &sid->voice3, &sid->voice2);
-    voice_apply_sync(&sid->voice2, &sid->voice1, &sid->voice3);
-    voice_apply_sync(&sid->voice3, &sid->voice2, &sid->voice1);
+    voice_apply_sync(&voice1, &voice3, &voice2);
+    voice_apply_sync(&voice2, &voice1, &voice3);
+    voice_apply_sync(&voice3, &voice2, &voice1);
 
     // Step 4: Generate waveform outputs with ring mod baked in.
     // Ring source mapping matches sync: voice1←voice3, etc.
-    voice_set_waveform_output(&sid->voice1, &sid->voice3);
-    voice_set_waveform_output(&sid->voice2, &sid->voice1);
-    voice_set_waveform_output(&sid->voice3, &sid->voice2);
+    voice_set_waveform_output(&voice1, &voice3);
+    voice_set_waveform_output(&voice2, &voice1);
+    voice_set_waveform_output(&voice3, &voice2);
 
     // Step 4.5: Per-cycle voice mixing, filter processing, and output accumulation.
     //
@@ -581,66 +581,66 @@ inline bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) 
         // Compute instantaneous centred voice outputs (waveform × envelope).
         // 12-bit waveform centred to [-2048, +2047] × 8-bit envelope [0, 255].
         const float inv_scale = 1.0f / (3.0f * OSCILLATOR_CENTER * ENVELOPE_MAX);
-        float v1 = (float)((int32_t)sid->voice1.oscillator_waveform - OSCILLATOR_CENTER)
-                 * (float)sid->voice1.envelope_amplitude * inv_scale;
-        float v2 = (float)((int32_t)sid->voice2.oscillator_waveform - OSCILLATOR_CENTER)
-                 * (float)sid->voice2.envelope_amplitude * inv_scale;
-        float v3 = (float)((int32_t)sid->voice3.oscillator_waveform - OSCILLATOR_CENTER)
-                 * (float)sid->voice3.envelope_amplitude * inv_scale;
+        float v1 = (float)((int32_t)voice1.oscillator_waveform - OSCILLATOR_CENTER)
+                 * (float)voice1.envelope_amplitude * inv_scale;
+        float v2 = (float)((int32_t)voice2.oscillator_waveform - OSCILLATOR_CENTER)
+                 * (float)voice2.envelope_amplitude * inv_scale;
+        float v3 = (float)((int32_t)voice3.oscillator_waveform - OSCILLATOR_CENTER)
+                 * (float)voice3.envelope_amplitude * inv_scale;
 
         // Route voices to filtered / unfiltered paths (read register bits).
         float filtered_input = 0.0f;
         float unfiltered_output = 0.0f;
-        uint8_t reson = sid->regs[SID_REG_RESON];
-        uint8_t sigvol = sid->regs[SID_REG_SIGVOL];
+        uint8_t reson = regs[SID_REG_RESON];
+        uint8_t sigvol = regs[SID_REG_SIGVOL];
         if (reson & RESON_FILT1) filtered_input += v1; else unfiltered_output += v1;
         if (reson & RESON_FILT2) filtered_input += v2; else unfiltered_output += v2;
         if (reson & RESON_FILT3) filtered_input += v3;
         else if (!(sigvol & SIGVOL_3OFF)) unfiltered_output += v3;
-        if (reson & RESON_FILTEX) filtered_input += sid->external_input;
-        else unfiltered_output += sid->external_input;
+        if (reson & RESON_FILTEX) filtered_input += external_input;
+        else unfiltered_output += external_input;
 
         // Clock the ZDF SVF filter at CPU rate.
-        float filtered_output = mos6581_filter_process(sid, filtered_input);
+        float filtered_output = filter_process(filtered_input);
 
         // Accumulate post-filter mixed output for box-filter downsampling.
-        sid->output_acc += (double)(unfiltered_output + filtered_output);
+        output_acc += (double)(unfiltered_output + filtered_output);
     }
-    sid->sample_cycle_count++;
+    sample_cycle_count++;
 
     // Step 5: Generate output samples at the target sample rate (~44.1 kHz).
     // Average the accumulated per-cycle output, apply master volume and DC blocker.
-    if (sid->cpu_clock > 0.0f) {
-        sid->sample_accumulator += (double)sid->sample_rate / (double)sid->cpu_clock;
+    if (cpu_clock > 0.0f) {
+        sample_accumulator += (double)sample_rate / (double)cpu_clock;
 
-        if (sid->sample_accumulator >= 1.0) {
-            sid->sample_accumulator -= 1.0;
+        if (sample_accumulator >= 1.0) {
+            sample_accumulator -= 1.0;
 
             // Average the accumulated filter output over the sample period.
-            const float cyc = (sid->sample_cycle_count > 0) ? (float)sid->sample_cycle_count : 1.0f;
-            float mixed = (float)(sid->output_acc / (double)cyc);
+            const float cyc = (sample_cycle_count > 0) ? (float)sample_cycle_count : 1.0f;
+            float mixed = (float)(output_acc / (double)cyc);
 
             // Reset accumulators for next sample period
-            sid->output_acc = 0.0;
-            sid->sample_cycle_count = 0;
+            output_acc = 0.0;
+            sample_cycle_count = 0;
 
             // 6581 digi support: add constant DC bias from the voice DACs.
-            if (sid->revision <= SID_REVISION_6581_R4AR) {
+            if (revision <= SID_REVISION_6581_R4AR) {
                 mixed += SID_6581_DIGI_BIAS;
             }
 
             // Apply master volume
-            uint8_t sigvol = sid->regs[SID_REG_SIGVOL];
+            uint8_t sigvol = regs[SID_REG_SIGVOL];
             mixed *= (float)(sigvol & SIGVOL_VOL_MASK) / SIGVOL_VOL_MAX;
 
             // DC blocker: removes the constant bias×volume product while
             // preserving fast changes (digi samples).  ~20 Hz high-pass.
             //   y[n] = x[n] - x[n-1] + α · y[n-1],  α = 0.997
             {
-                float dc_out = mixed - sid->dc_blocker_prev_in
-                             + DC_BLOCKER_ALPHA * sid->dc_blocker_prev_out;
-                sid->dc_blocker_prev_in = mixed;
-                sid->dc_blocker_prev_out = dc_out;
+                float dc_out = mixed - dc_blocker_prev_in
+                             + DC_BLOCKER_ALPHA * dc_blocker_prev_out;
+                dc_blocker_prev_in = mixed;
+                dc_blocker_prev_out = dc_out;
                 mixed = dc_out;
             }
 
@@ -648,13 +648,13 @@ inline bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) 
             if (mixed > 1.0f) mixed = 1.0f;
             if (mixed < -1.0f) mixed = -1.0f;
 
-            ring_buffer_write(&sid->sample_buffer, mixed);
-            sid->samples_generated++;
+            ring_buffer_write(&sample_buffer, mixed);
+            samples_generated++;
         }
     }
 
-    sid->cycle_count++;
-    sid->total_cycles++;
+    cycle_count++;
+    total_cycles++;
 
     return bus_state;
 }
@@ -663,11 +663,11 @@ inline bus_state_t mos6581_advance_cycle(mos6581_t* sid, bus_state_t bus_state) 
 // SAMPLE GENERATION
 // =============================================================================
 
-void mos6581_generate_samples(mos6581_t* sid, float* output, uint32_t sample_count) {
-    if (!sid || !output) return;
+void mos6581_s::generate_samples(float* output, uint32_t sample_count) {
+    if (!output) return;
     
     for (uint32_t i = 0; i < sample_count; i++) {
-        output[i] = ring_buffer_read(&sid->sample_buffer);
+        output[i] = ring_buffer_read(&sample_buffer);
     }
 }
 
@@ -675,32 +675,32 @@ void mos6581_generate_samples(mos6581_t* sid, float* output, uint32_t sample_cou
 // UTILITY FUNCTIONS
 // =============================================================================
 
-void mos6581_set_revision(mos6581_t* sid, sid_revision_t revision) {
-    sid->revision = revision;
-    sid->enable_distortion = (revision <= SID_REVISION_6581_R4AR);
-    mos6581_filter_reset(sid);
+void mos6581_s::set_revision(sid_revision_t rev) {
+    revision = rev;
+    enable_distortion = (rev <= SID_REVISION_6581_R4AR);
+    filter_reset();
 }
 
-void mos6581_set_timing(mos6581_t* sid, bool pal_timing) {
-    sid->pal_timing = pal_timing;
-    sid->sid_rate = sid->cpu_clock / (pal_timing ? 18.0f : 17.0f);
-    mos6581_filter_update_cutoff(sid);
+void mos6581_s::set_timing(bool pal) {
+    pal_timing = pal;
+    sid_rate = cpu_clock / (pal ? 18.0f : 17.0f);
+    filter_update_cutoff();
 }
 
-void mos6581_set_sample_rate(mos6581_t* sid, float sample_rate) {
-    sid->sample_rate = sample_rate;
+void mos6581_s::set_sample_rate(float rate) {
+    sample_rate = rate;
     // Update filter coefficient since w0 depends on sample rate
-    mos6581_filter_update_cutoff(sid);
+    filter_update_cutoff();
 }
 
-void mos6581_set_cpu_clock(mos6581_t* sid, float clock_hz) {
-    sid->cpu_clock = clock_hz;
+void mos6581_s::set_cpu_clock(float clock_hz) {
+    cpu_clock = clock_hz;
     for (int i = 0; i < 3; i++) {
-        sid->voices[i]->cpu_clock = clock_hz;
+        voices[i]->cpu_clock = clock_hz;
     }
     // Update derived timing values
-    sid->sid_rate = clock_hz / (sid->pal_timing ? 18.0f : 17.0f);
-    mos6581_filter_update_cutoff(sid);
+    sid_rate = clock_hz / (pal_timing ? 18.0f : 17.0f);
+    filter_update_cutoff();
 }
 
 int voice_cycles_per_millisecond(voice_t* voice) {
@@ -711,9 +711,9 @@ int voice_cycles_per_millisecond(voice_t* voice) {
 // ENVELOPE TIMING ANALYSIS
 // =============================================================================
 
-uint32_t mos6581_calculate_envelope_time_ms(voice_t* voice, envelope_cycle_t cycle, uint8_t rate) {
+uint32_t mos6581_s::calculate_envelope_time_ms(voice_t* v, envelope_cycle_t cycle, uint8_t rate) {
     uint32_t period = voice_rate_to_period(rate);
-    uint32_t cycles_per_ms = voice_cycles_per_millisecond(voice);
+    uint32_t cycles_per_ms = voice_cycles_per_millisecond(v);
     
     switch (cycle) {
         case CYCLE_ATTACK:
@@ -796,7 +796,7 @@ void voice_write_sustain_release_register_value(voice_t* voice, uint8_t value) {
 // REGISTER ACCESS
 // =============================================================================
 
-bus_state_t mos6581_registers_write(void* context, bus_state_t bus_state) {
+bus_state_t mos6581_s::registers_write(void* context, bus_state_t bus_state) {
     mos6581_t* sid = (mos6581_t*)context;
     if (!sid) return bus_state;
     
@@ -841,16 +841,16 @@ bus_state_t mos6581_registers_write(void* context, bus_state_t bus_state) {
         switch (r) {
             case SID_REG_CUTLO:
                 sid->filter_cutoff_frequency = (sid->filter_cutoff_frequency & 0x7F8) | (value & 0x07);
-                mos6581_filter_update_cutoff(sid);
+                sid->filter_update_cutoff();
                 break;
                 
             case SID_REG_CUTHI:
                 sid->filter_cutoff_frequency = ((uint16_t)value << 3) | (sid->filter_cutoff_frequency & 0x07);
-                mos6581_filter_update_cutoff(sid);
+                sid->filter_update_cutoff();
                 break;
                 
             case SID_REG_RESON:
-                mos6581_write_resonance_control_register_value(sid, value);
+                sid->write_resonance_control_register_value(value);
                 break;
                 
             case SID_REG_SIGVOL:
@@ -881,7 +881,7 @@ bus_state_t mos6581_registers_write(void* context, bus_state_t bus_state) {
     return bus_state;
 }
 
-bus_state_t mos6581_registers_read(void* context, bus_state_t bus_state) {
+bus_state_t mos6581_s::registers_read(void* context, bus_state_t bus_state) {
     mos6581_t* sid = (mos6581_t*)context;
     if (!sid) return bus_state;
     
@@ -925,104 +925,88 @@ bus_state_t mos6581_registers_read(void* context, bus_state_t bus_state) {
 // SYSTEM FUNCTIONS
 // =============================================================================
 
-void mos6581_reset(mos6581_t* sid) {
-    if (!sid) return;
+void mos6581_s::init() {
+    // Initialize voices with references
+    voices[0] = &voice1;
+    voices[1] = &voice2;
+    voices[2] = &voice3;
     
+    // Set voice indices and parent references
+    for (int i = 0; i < 3; i++) {
+        voices[i]->voice_index = i;
+        voices[i]->sid = this;
+        voices[i]->cpu_clock = 985248.0f; // PAL C64 default
+    }
+    
+    // Initialize default settings
+    revision = SID_REVISION_6581_R4AR;
+    pal_timing = true;
+    sample_rate = 44100.0f;
+    cpu_clock = 985248.0f;   // PAL C64 default
+    enable_filter = true;
+    enable_distortion = true;
+    enable_digiboost = true;
+    
+    // Initialize ring buffer
+    ring_buffer_init(&sample_buffer, SAMPLE_BUFFER_SIZE);
+    
+    // Initialize filter
+    filter_init();
+    
+    reset();
+}
+
+void mos6581_s::reset() {
     // Reset all registers
-    memset(sid->regs, 0, SID_REGS_SIZE);
-    sid->bus_value = 0;
+    memset(regs, 0, SID_REGS_SIZE);
+    bus_value = 0;
     
     // Reset voices
     for (int i = 0; i < 3; i++) {
-        voice_reset(sid->voices[i]);
+        voice_reset(voices[i]);
     }
     
     // Reset filter state
-    mos6581_filter_reset(sid);
+    filter_reset();
     
     // Reset SID state
-    sid->filter_cutoff_frequency = 0;
+    filter_cutoff_frequency = 0;
     
     // Reset timing
-    sid->cycle_count = 0;
-    sid->subcycle_count = 0;
-    sid->sample_accumulator = 0.0;
-    sid->sample_cycle_count = 0;
-    sid->output_acc = 0.0;
+    cycle_count = 0;
+    subcycle_count = 0;
+    sample_accumulator = 0.0;
+    sample_cycle_count = 0;
+    output_acc = 0.0;
 
     // Flush the sample ring buffer so the audio callback doesn't replay
     // stale data from the previous session.
-    sid->sample_buffer.write_pos = 0;
-    sid->sample_buffer.read_pos = 0;
+    sample_buffer.write_pos = 0;
+    sample_buffer.read_pos = 0;
     
     // Reset volume bug state
-    sid->volume_change_click = false;
-    sid->volume_click_amplitude = 0.0f;
-    sid->volume_click_counter = 0;
+    volume_change_click = false;
+    volume_click_amplitude = 0.0f;
+    volume_click_counter = 0;
     
     // Reset DC blocker state
-    sid->dc_blocker_prev_in = 0.0f;
-    sid->dc_blocker_prev_out = 0.0f;
+    dc_blocker_prev_in = 0.0f;
+    dc_blocker_prev_out = 0.0f;
     
     // Reset POT values
-    sid->pot_x_value = 0xFF;
-    sid->pot_y_value = 0xFF;
+    pot_x_value = 0xFF;
+    pot_y_value = 0xFF;
     
     // Reset external input
-    sid->external_input = 0.0f;
+    external_input = 0.0f;
     
     // Update timing-dependent values
-    mos6581_set_timing(sid, sid->pal_timing);
+    set_timing(pal_timing);
 }
 
 // Destructor — clean up dynamically allocated ring buffer
 mos6581_s::~mos6581_s() {
     ring_buffer_destroy(&sample_buffer);
-}
-
-void mos6581_destroy(mos6581_t* sid) {
-    delete sid; // destructor handles ring_buffer cleanup
-}
-
-void mos6581_bus_attach(void* chip, bus_cycle_ops_t* bus_interface) {
-    mos6581_t* sid = (mos6581_t*)chip;
-    if (!sid || !bus_interface) return;
-    
-    sid->bus_interface = *bus_interface;
-}
-
-mos6581_t* mos6581_create() {
-    mos6581_t* sid = new mos6581_t();
-    
-    // Initialize voices with references
-    sid->voices[0] = &sid->voice1;
-    sid->voices[1] = &sid->voice2;
-    sid->voices[2] = &sid->voice3;
-    
-    // Set voice indices and parent references
-    for (int i = 0; i < 3; i++) {
-        sid->voices[i]->voice_index = i;
-        sid->voices[i]->sid = sid;
-        sid->voices[i]->cpu_clock = 985248.0f; // PAL C64 default
-    }
-    
-    // Initialize default settings
-    sid->revision = SID_REVISION_6581_R4AR;
-    sid->pal_timing = true;
-    sid->sample_rate = 44100.0f;
-    sid->cpu_clock = 985248.0f;   // PAL C64 default
-    sid->enable_filter = true;
-    sid->enable_distortion = true;
-    sid->enable_digiboost = true;
-    
-    // Initialize ring buffer
-    ring_buffer_init(&sid->sample_buffer, SAMPLE_BUFFER_SIZE);
-    
-    // Initialize filter
-    mos6581_filter_init(sid);
-    
-    mos6581_reset(sid);
-    return sid;
 }
 
 // ChipBase identity
@@ -1032,13 +1016,7 @@ ChipIdentity mos6581_s::chip_identity() const {
 
 /**
  * Consolidated SID tick function - main entry point for SID cycle processing.
- * Combines advance cycle functionality with I/O bus coordination.
- * This replaces direct calls to mos6581_advance_cycle() in the new architecture.
- *
- * @param chip Pointer to SID chip instance
- * @param bus_state Current bus state
- * @return Updated bus state
  */
-bus_state_t mos6581_tick(void* chip, bus_state_t bus_state) {
-    return mos6581_advance_cycle((mos6581_t*)chip, bus_state);
+bus_state_t mos6581_s::tick(bus_state_t bus_state) {
+    return advance_cycle(bus_state);
 }

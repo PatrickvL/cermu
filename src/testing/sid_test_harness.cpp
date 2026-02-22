@@ -85,16 +85,17 @@ static std::string to_lower(const std::string& s) {
 
 harness_t* create(bool verbose) {
     harness_t* h = new harness_t{};
-    h->sid = mos6581_create();
+    h->sid = new mos6581_t();
+    h->sid->init();
     h->sid_owned = true;
     h->verbose = verbose;
     h->trace_enabled = false;
 
     // Configure for testing: PAL clock, no sample generation needed
-    mos6581_set_cpu_clock(h->sid, PAL_CLOCK);
-    mos6581_set_sample_rate(h->sid, 44100.0f);
-    mos6581_set_timing(h->sid, true);
-    mos6581_reset(h->sid);
+    h->sid->set_cpu_clock(PAL_CLOCK);
+    h->sid->set_sample_rate(44100.0f);
+    h->sid->set_timing(true);
+    h->sid->reset();
 
     return h;
 }
@@ -111,14 +112,14 @@ harness_t* create_with_sid(mos6581_t* sid, bool verbose) {
 void destroy(harness_t* h) {
     if (!h) return;
     if (h->sid_owned && h->sid) {
-        mos6581_destroy(h->sid);
+        delete h->sid;
     }
     delete h;
 }
 
 void reset(harness_t* h) {
     if (!h) return;
-    mos6581_reset(h->sid);
+    h->sid->reset();
     h->total_cycles = 0;
     h->check_osc3 = false;
     h->check_env3 = false;
@@ -136,14 +137,14 @@ void reset(harness_t* h) {
 void write_reg(harness_t* h, uint8_t reg, uint8_t value) {
     if (!h || !h->sid) return;
     bus_state_t bs = BUS_STATE(0xD400 + reg, value, 0);
-    mos6581_registers_write(h->sid, bs);
+    mos6581_s::registers_write(h->sid, bs);
 }
 
 uint8_t read_osc3(harness_t* h) {
     if (!h || !h->sid) return 0;
     // Read through the actual register path — tests what the CPU would see
     bus_state_t bs = BUS_STATE(0xD400 + REG_OSC3, 0, 0);
-    bs = mos6581_registers_read(h->sid, bs);
+    bs = mos6581_s::registers_read(h->sid, bs);
     return BUS_GET_DATA(bs);
 }
 
@@ -151,7 +152,7 @@ uint8_t read_env3(harness_t* h) {
     if (!h || !h->sid) return 0;
     // Read through the actual register path — tests what the CPU would see
     bus_state_t bs = BUS_STATE(0xD400 + REG_ENV3, 0, 0);
-    bs = mos6581_registers_read(h->sid, bs);
+    bs = mos6581_s::registers_read(h->sid, bs);
     return BUS_GET_DATA(bs);
 }
 
@@ -160,7 +161,7 @@ void clock_cycles(harness_t* h, uint32_t n) {
 
     bus_state_t bs = BUS_STATE(0, 0, 0);
     for (uint32_t i = 0; i < n; i++) {
-        mos6581_tick(h->sid, bs);
+        h->sid->tick(bs);
         h->total_cycles++;
 
         if (h->trace_enabled) {
@@ -360,7 +361,7 @@ void execute_command(harness_t* h, const command_t* cmd) {
 
     switch (cmd->type) {
         case cmd_type_t::RESET:
-            mos6581_reset(h->sid);
+            h->sid->reset();
             h->total_cycles = 0;
             h->check_osc3 = false;
             h->check_env3 = false;
@@ -368,9 +369,9 @@ void execute_command(harness_t* h, const command_t* cmd) {
 
         case cmd_type_t::REVISION:
             if (cmd->is_8580)
-                mos6581_set_revision(h->sid, SID_REVISION_8580_R5);
+                h->sid->set_revision(SID_REVISION_8580_R5);
             else
-                mos6581_set_revision(h->sid, SID_REVISION_6581_R4AR);
+                h->sid->set_revision(SID_REVISION_6581_R4AR);
             break;
 
         case cmd_type_t::WRITE:
@@ -1795,7 +1796,7 @@ int run_all_builtin_tests(harness_t* h, bool verbose) {
 
     for (const auto& t : tests) {
         // Reset SID between tests
-        mos6581_reset(h->sid);
+        h->sid->reset();
         h->total_cycles = 0;
         h->trace.clear();
         h->snapshots.clear();
