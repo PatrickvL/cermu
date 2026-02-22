@@ -51,6 +51,8 @@ enum class PinLabel {
     PHI0,         // Φ0 - Clock input
     PHI1,         // Φ1 - Inverted clock output
     PHI2,         // Φ2 - Primary clock output
+    CLK,          // Generic clock input
+    M2,           // Derived clock output (2A03)
     
     // Address bus pins (A0-A23 for full 24-bit addressing)
     A0, A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11, A12, A13, A14, A15,
@@ -98,9 +100,11 @@ enum class PinLabel {
     PWM0, PWM1, PWM2, PWM3,
     
     // Common control pins
+    ALE,          // Address Latch Enable
     CS,           // Chip Select
     CS0, CS1, CS2, // Multiple chip selects
     OE,           // Output Enable
+    RD,           // Read strobe (active low)
     WE,           // Write Enable
     
     // Video chip pins (VIC-II, etc.)
@@ -115,6 +119,7 @@ enum class PinLabel {
     CAS,          // Column Address Strobe
     RAS,          // Row Address Strobe
     MUX,          // Address multiplexer
+    VOUT,         // Composite video output
     
     // Audio chip pins (SID, etc.)
     AUDIO_OUT,    // Audio output
@@ -131,6 +136,10 @@ enum class PinLabel {
     FLAG,         // Flag input
     PC,           // Serial port (alternate naming)
     SDR,          // Serial Data Register
+    
+    // VIA handshake pins (MOS 6522)
+    CA1, CA2,     // Port A handshake lines
+    CB1, CB2,     // Port B handshake lines
     
     // Memory chip pins
     DQ0, DQ1, DQ2, DQ3, DQ4, DQ5, DQ6, DQ7, // Data I/O
@@ -163,6 +172,15 @@ enum class PinLabel {
     LORAM,        // Low RAM
     HIRAM,        // High RAM
     VA12, VA13, VA14, // Video address lines
+    
+    // Keyboard matrix pins (TED 7360)
+    K0, K1, K2, K3, K4, K5, K6, K7,
+    
+    // NES-specific pins (Ricoh 2A03 / 2C02)
+    AD1, AD2,             // Multiplexed address/data (2A03)
+    IN0, IN1,             // Controller data input (2A03)
+    OUT0, OUT1, OUT2,     // Controller strobe output (2A03)
+    EXT0, EXT1, EXT2, EXT3, // PPU extension port (2C02)
     
     // Logic chip pins
     Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7,         // Outputs

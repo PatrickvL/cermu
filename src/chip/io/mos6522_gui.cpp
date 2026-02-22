@@ -26,31 +26,6 @@ static const char* mos6522_get_via_name(mos6522_t* via);
 // ============================================================================
 // MOS6522 VIA LAYOUT (40-pin DIP)
 // ============================================================================
-//
-// Hardware-accurate MOS 6522 VIA pinout (MOS Technology datasheet, 1977):
-//
-//         ╔═══════════╗
-//   VSS ──┤ 1      40 ├── CA1
-//   PA0 ──┤ 2      39 ├── CA2
-//   PA1 ──┤ 3      38 ├── RS3
-//   PA2 ──┤ 4      37 ├── RS2
-//   PA3 ──┤ 5      36 ├── RS1
-//   PA4 ──┤ 6      35 ├── RS0
-//   PA5 ──┤ 7      34 ├── /RES
-//   PA6 ──┤ 8      33 ├── D7
-//   PA7 ──┤ 9      32 ├── D6
-//   PB0 ──┤10      31 ├── D5
-//   PB1 ──┤11      30 ├── D4
-//   PB2 ──┤12      29 ├── D3
-//   PB3 ──┤13      28 ├── D2
-//   PB4 ──┤14      27 ├── D1
-//   PB5 ──┤15      26 ├── D0
-//   PB6 ──┤16      25 ├── Φ2
-//   PB7 ──┤17      24 ├── CS1
-//   CB1 ──┤18      23 ├── /CS2
-//   CB2 ──┤19      22 ├── R/W
-//   VCC ──┤20      21 ├── /IRQ
-//         ╚═══════════╝
 
 inline ChipLayout create_mos6522_layout() {
     ChipLayout layout = create_dip40_layout();
@@ -66,8 +41,8 @@ inline ChipLayout create_mos6522_layout() {
     };
 
     // Hardware-accurate MOS6522 VIA pinout (40-pin DIP)
-    PIN_LR(layout,  1, VSS,     UNKNOWN, 40)    // Ground / CA1 (handshake input)
-    PIN_LR(layout,  2, PA0,     UNKNOWN, 39)    // Port A Bit 0 / CA2 (handshake I/O)
+    PIN_LR(layout,  1, VSS,     CA1, 40)        // Ground / CA1 (handshake input)
+    PIN_LR(layout,  2, PA0,     CA2, 39)        // Port A Bit 0 / CA2 (handshake I/O)
     PIN_LR(layout,  3, PA1,     A3, 38)         // Port A Bit 1 / RS3 (Register Select 3)
     PIN_LR(layout,  4, PA2,     A2, 37)         // Port A Bit 2 / RS2
     PIN_LR(layout,  5, PA3,     A1, 36)         // Port A Bit 3 / RS1
@@ -83,8 +58,8 @@ inline ChipLayout create_mos6522_layout() {
     PIN_LR(layout, 15, PB5,     D0, 26)         // Port B Bit 5 / Data 0
     PIN_LR(layout, 16, PB6,     PHI2, 25)       // Port B Bit 6 / Clock
     PIN_LR(layout, 17, PB7,     CS1, 24)        // Port B Bit 7 / Chip Select 1
-    PIN_LR(layout, 18, UNKNOWN, CS2, 23)        // CB1 / /CS2
-    PIN_LR(layout, 19, UNKNOWN, RW, 22)         // CB2 / Read/Write
+    PIN_LR(layout, 18, CB1,     CS2, 23)        // CB1 / /CS2
+    PIN_LR(layout, 19, CB2,     RW, 22)         // CB2 / Read/Write
     PIN_LR(layout, 20, VDD,     IRQ, 21)        // +5V Power / /IRQ
 
     return layout;
