@@ -24,41 +24,6 @@
 // ============================================================================
 // TED 7360 LAYOUT (48-pin DIP)
 // ============================================================================
-//
-// Hardware-accurate MOS 7360 TED pinout (48-pin DIP):
-//
-//           ╔═════════════╗
-//    VSS ──┤ 1        48 ├── VDD
-//    D0  ──┤ 2        47 ├── /RAS
-//    D1  ──┤ 3        46 ├── /CAS
-//    D2  ──┤ 4        45 ├── MUX  
-//    D3  ──┤ 5        44 ├── BA
-//    D4  ──┤ 6        43 ├── /IRQ
-//    D5  ──┤ 7        42 ├── Φ0 (in)
-//    D6  ──┤ 8        41 ├── Φ2 (out)
-//    D7  ──┤ 9        40 ├── R/W
-//    A0  ──┤10        39 ├── A15
-//    A1  ──┤11        38 ├── A14
-//    A2  ──┤12        37 ├── A13
-//    A3  ──┤13        36 ├── A12
-//    A4  ──┤14        35 ├── A11
-//    A5  ──┤15        34 ├── A10
-//    A6  ──┤16        33 ├── A9
-//    A7  ──┤17        32 ├── A8
-//    K0  ──┤18        31 ├── K7
-//    K1  ──┤19        30 ├── K6
-//    K2  ──┤20        29 ├── K5
-//    K3  ──┤21        28 ├── K4
-//   LUMA ──┤22        27 ├── SOUND
-//  CHROMA──┤23        26 ├── /CS1
-//    VSS ──┤24        25 ├── CS0
-//           ╚═════════════╝
-//
-// Notes:
-// - K0-K7 are keyboard matrix column select / row return lines
-// - Two VSS pins (1, 24) for improved grounding
-// - BA = Bus Available (active high when TED releases bus to CPU)
-// - MUX = Address multiplexer output (drives external DRAM)
 
 inline ChipLayout create_ted7360_layout() {
     ChipLayout layout = create_custom_dip(48, "TED7360");
@@ -75,9 +40,9 @@ inline ChipLayout create_ted7360_layout() {
 
     // Hardware-accurate TED 7360 pinout (48-pin DIP, 24 pins per side)
     PIN_LR(layout,  1, VSS,     VDD, 48)       // Ground / +5V
-    PIN_LR(layout,  2, D0,      UNKNOWN, 47)   // Data 0 / /RAS
-    PIN_LR(layout,  3, D1,      UNKNOWN, 46)   // Data 1 / /CAS
-    PIN_LR(layout,  4, D2,      UNKNOWN, 45)   // Data 2 / MUX
+    PIN_LR(layout,  2, D0,      RAS, 47)       // Data 0 / /RAS
+    PIN_LR(layout,  3, D1,      CAS, 46)       // Data 1 / /CAS
+    PIN_LR(layout,  4, D2,      MUX, 45)       // Data 2 / MUX
     PIN_LR(layout,  5, D3,      BA, 44)        // Data 3 / Bus Available
     PIN_LR(layout,  6, D4,      IRQ, 43)       // Data 4 / /IRQ
     PIN_LR(layout,  7, D5,      PHI0, 42)      // Data 5 / Clock In
@@ -91,10 +56,10 @@ inline ChipLayout create_ted7360_layout() {
     PIN_LR(layout, 15, A5,      A10, 34)       // Address 5 / Address 10
     PIN_LR(layout, 16, A6,      A9, 33)        // Address 6 / Address 9
     PIN_LR(layout, 17, A7,      A8, 32)        // Address 7 / Address 8
-    PIN_LR(layout, 18, UNKNOWN, UNKNOWN, 31)   // K0 / K7
-    PIN_LR(layout, 19, UNKNOWN, UNKNOWN, 30)   // K1 / K6
-    PIN_LR(layout, 20, UNKNOWN, UNKNOWN, 29)   // K2 / K5
-    PIN_LR(layout, 21, UNKNOWN, UNKNOWN, 28)   // K3 / K4
+    PIN_LR(layout, 18, K0,      K7, 31)        // K0 / K7
+    PIN_LR(layout, 19, K1,      K6, 30)        // K1 / K6
+    PIN_LR(layout, 20, K2,      K5, 29)        // K2 / K5
+    PIN_LR(layout, 21, K3,      K4, 28)        // K3 / K4
     PIN_LR(layout, 22, LUMA,    SOUND, 27)     // Luminance / Sound Output
     PIN_LR(layout, 23, CHROMA,  CS1, 26)       // Chrominance / /CS1
     PIN_LR(layout, 24, VSS,     CS0, 25)       // Ground / CS0

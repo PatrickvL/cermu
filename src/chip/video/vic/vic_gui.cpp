@@ -25,35 +25,6 @@
 // ============================================================================
 // MOS 6560/6561 VIC LAYOUT (40-pin DIP)
 // ============================================================================
-//
-// Hardware-accurate MOS 6560/6561 VIC pinout (MOS Technology datasheet):
-//
-//         ╔═══════════╗
-//   D7  ──┤ 1      40 ├── VDD (+5V)
-//   D6  ──┤ 2      39 ├── COMP SYNC
-//   D5  ──┤ 3      38 ├── LUMA OUT
-//   D4  ──┤ 4      37 ├── /CHROMA
-//   D3  ──┤ 5      36 ├── R/W
-//   D2  ──┤ 6      35 ├── A13
-//   D1  ──┤ 7      34 ├── A12
-//   D0  ──┤ 8      33 ├── A11
-//   DB7 ──┤ 9      32 ├── A10
-//   DB6 ──┤10      31 ├── A9
-//   DB5 ──┤11      30 ├── A8
-//   DB4 ──┤12      29 ├── A7
-//   DB3 ──┤13      28 ├── A6
-//   DB2 ──┤14      27 ├── A5
-//   DB1 ──┤15      26 ├── SOUND
-//   DB0 ──┤16      25 ├── /POTX
-//  Φ0   ──┤17      24 ├── /POTY
-//   Φ1  ──┤18      23 ├── LIGHT PEN
-//   Φ2  ──┤19      22 ├── /CS
-//   VSS ──┤20      21 ├── /IRQ (not connected)
-//         ╚═══════════╝
-//
-// Note: Pins 9-16 (DB0-DB7) are the VIC's multiplexed address/data
-// bus for accessing video memory. The VIC generates addresses on these
-// pins (muxed with A0-A5 on the address bus) during PHI1.
 
 inline ChipLayout create_vic_layout(const char* part_number) {
     ChipLayout layout = create_dip40_layout();

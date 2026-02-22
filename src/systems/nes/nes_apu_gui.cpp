@@ -6,29 +6,6 @@
  * and provides 5 audio channels: 2 pulse, 1 triangle, 1 noise, 1 DMC.
  *
  * Pinout reference: Ricoh RP2A03 Datasheet
- *
- *          ╔═══════════╗
- *   AD1  ──┤ 1      40 ├── VCC
- *   AD2  ──┤ 2      39 ├── PHI2(OUT)
- *   /RST ──┤ 3      38 ├── /NMI
- *    A0  ──┤ 4      37 ├── /IRQ
- *    A1  ──┤ 5      36 ├── M2
- *    A2  ──┤ 6      35 ├── SND1
- *    A3  ──┤ 7      34 ├── SND2
- *    A4  ──┤ 8      33 ├── IN0
- *    A5  ──┤ 9      32 ├── IN1
- *    A6  ──┤10      31 ├── D0
- *    A7  ──┤11      30 ├── D1
- *    A8  ──┤12      29 ├── D2
- *    A9  ──┤13      28 ├── D3
- *   A10  ──┤14      27 ├── D4
- *   A11  ──┤15      26 ├── D5
- *   A12  ──┤16      25 ├── D6
- *   A13  ──┤17      24 ├── D7
- *   A14  ──┤18      23 ├── OUT0
- *   R/W  ──┤19      22 ├── OUT1
- *   GND  ──┤20      21 ├── OUT2
- *          ╚═══════════╝
  */
 
 #include "../../chip/cpu/fam65xx/nes6502.h"
@@ -56,15 +33,15 @@ inline ChipLayout create_ricoh_2a03_apu_layout() {
 
     // Left column  (pins 1‑20, top to bottom)
     // Right column (pins 40‑21, top to bottom)
-    PIN_LR(layout,  1, UNKNOWN,     VCC,        40);   // AD1 / VCC
-    PIN_LR(layout,  2, UNKNOWN,     PHI2,       39);   // AD2 / PHI2 OUT
+    PIN_LR(layout,  1, AD1,         VCC,        40);   // AD1 / VCC
+    PIN_LR(layout,  2, AD2,         PHI2,       39);   // AD2 / PHI2 OUT
     PIN_LR(layout,  3, RES,         NMI,        38);   // /RST / /NMI
     PIN_LR(layout,  4, A0,          IRQ,        37);   // A0 / /IRQ
-    PIN_LR(layout,  5, A1,          UNKNOWN,    36);   // A1 / M2
+    PIN_LR(layout,  5, A1,          M2,         36);   // A1 / M2
     PIN_LR(layout,  6, A2,          SOUND,      35);   // A2 / SND1
     PIN_LR(layout,  7, A3,          SOUND,      34);   // A3 / SND2
-    PIN_LR(layout,  8, A4,          UNKNOWN,    33);   // A4 / IN0
-    PIN_LR(layout,  9, A5,          UNKNOWN,    32);   // A5 / IN1
+    PIN_LR(layout,  8, A4,          IN0,        33);   // A4 / IN0
+    PIN_LR(layout,  9, A5,          IN1,        32);   // A5 / IN1
     PIN_LR(layout, 10, A6,          D0,         31);   // A6 / D0
     PIN_LR(layout, 11, A7,          D1,         30);   // A7 / D1
     PIN_LR(layout, 12, A8,          D2,         29);   // A8 / D2
@@ -73,9 +50,9 @@ inline ChipLayout create_ricoh_2a03_apu_layout() {
     PIN_LR(layout, 15, A11,         D5,         26);   // A11 / D5
     PIN_LR(layout, 16, A12,         D6,         25);   // A12 / D6
     PIN_LR(layout, 17, A13,         D7,         24);   // A13 / D7
-    PIN_LR(layout, 18, A14,         UNKNOWN,    23);   // A14 / OUT0
-    PIN_LR(layout, 19, RW,          UNKNOWN,    22);   // R/W / OUT1
-    PIN_LR(layout, 20, VSS,         UNKNOWN,    21);   // GND / OUT2
+    PIN_LR(layout, 18, A14,         OUT0,       23);   // A14 / OUT0
+    PIN_LR(layout, 19, RW,          OUT1,       22);   // R/W / OUT1
+    PIN_LR(layout, 20, VSS,         OUT2,       21);   // GND / OUT2
 
     return layout;
 }

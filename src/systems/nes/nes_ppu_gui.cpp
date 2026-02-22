@@ -6,29 +6,6 @@
  * rendering backgrounds from name tables and sprites from OAM.
  *
  * Pinout reference: Ricoh RP2C02 Datasheet
- *
- *           ╔═══════════╗
- *    R/W ──┤ 1      40 ├── VCC
- *    D0  ──┤ 2      39 ├── ALE
- *    D1  ──┤ 3      38 ├── AD0
- *    D2  ──┤ 4      37 ├── AD1
- *    D3  ──┤ 5      36 ├── AD2
- *    D4  ──┤ 6      35 ├── AD3
- *    D5  ──┤ 7      34 ├── AD4
- *    D6  ──┤ 8      33 ├── AD5
- *    D7  ──┤ 9      32 ├── AD6
- *    A2  ──┤10      31 ├── AD7
- *    A1  ──┤11      30 ├── A8
- *    A0  ──┤12      29 ├── A9
- *   /CS  ──┤13      28 ├── A10
- *  EXT0  ──┤14      27 ├── A11
- *  EXT1  ──┤15      26 ├── A12
- *  EXT2  ──┤16      25 ├── A13
- *  EXT3  ──┤17      24 ├── /RD
- *   CLK  ──┤18      23 ├── /WR
- *  /INT  ──┤19      22 ├── /RST
- *   GND  ──┤20      21 ├── VOUT
- *           ╚═══════════╝
  */
 
 #include "nes_system.h"
@@ -61,7 +38,7 @@ inline ChipLayout create_ricoh_2c02_layout() {
 
     // Hardware-accurate Ricoh 2C02 PPU pinout (40-pin DIP)
     PIN_LR(layout,  1, RW,      VDD, 40)       // Read/Write / +5V
-    PIN_LR(layout,  2, D0,      UNKNOWN, 39)   // Data 0 / ALE (Address Latch Enable)
+    PIN_LR(layout,  2, D0,      ALE, 39)       // Data 0 / ALE (Address Latch Enable)
     PIN_LR(layout,  3, D1,      MA0, 38)       // Data 1 / AD0 (Addr/Data mux)
     PIN_LR(layout,  4, D2,      MA1, 37)       // Data 2 / AD1
     PIN_LR(layout,  5, D3,      MA2, 36)       // Data 3 / AD2
@@ -73,13 +50,13 @@ inline ChipLayout create_ricoh_2c02_layout() {
     PIN_LR(layout, 11, A1,      A8, 30)        // CPU Address 1 / PPU Address 8
     PIN_LR(layout, 12, A0,      A9, 29)        // CPU Address 0 / PPU Address 9
     PIN_LR(layout, 13, CS,      A10, 28)       // /Chip Select / PPU Address 10
-    PIN_LR(layout, 14, UNKNOWN, A11, 27)       // EXT0 / PPU Address 11
-    PIN_LR(layout, 15, UNKNOWN, A12, 26)       // EXT1 / PPU Address 12
-    PIN_LR(layout, 16, UNKNOWN, A13, 25)       // EXT2 / PPU Address 13
-    PIN_LR(layout, 17, UNKNOWN, UNKNOWN, 24)   // EXT3 / /RD
-    PIN_LR(layout, 18, UNKNOWN, WE, 23)        // CLK / /WR
+    PIN_LR(layout, 14, EXT0,    A11, 27)       // EXT0 / PPU Address 11
+    PIN_LR(layout, 15, EXT1,    A12, 26)       // EXT1 / PPU Address 12
+    PIN_LR(layout, 16, EXT2,    A13, 25)       // EXT2 / PPU Address 13
+    PIN_LR(layout, 17, EXT3,    RD, 24)        // EXT3 / /RD
+    PIN_LR(layout, 18, CLK,     WE, 23)        // CLK / /WR
     PIN_LR(layout, 19, NMI,     RES, 22)       // /INT (NMI output) / /RST
-    PIN_LR(layout, 20, VSS,     UNKNOWN, 21)   // Ground / VOUT (composite video)
+    PIN_LR(layout, 20, VSS,     VOUT, 21)      // Ground / VOUT (composite video)
 
     return layout;
 }
