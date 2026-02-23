@@ -13,8 +13,6 @@
 #ifndef FAM65XX_TEMPLATE_CONTEXT
 // Restore compiler diagnostics when parsing standalone
 
-#if defined(_MSC_VER)
-#pragma warning(pop)
-#endif
+CERMU_MSVC_WARNING_POP
 
 #endif // FAM65XX_TEMPLATE_CONTEXT

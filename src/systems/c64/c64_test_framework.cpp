@@ -5,22 +5,10 @@
 #include "../../chip/memory/ram.h"
 #include "../../chip/cpu/fam65xx/mos6510.h"
 #include "../../chip/video/vic_ii/vicii_common.h"
+#include "../../utils/platform_fs.h"
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
-#ifdef _MSC_VER
-#include <filesystem>
-namespace fs = std::filesystem;
-// POSIX compat macros for MSVC
-#ifndef S_ISREG
-#define S_ISREG(m) (((m) & _S_IFMT) == _S_IFREG)
-#endif
-#ifndef S_ISDIR
-#define S_ISDIR(m) (((m) & _S_IFMT) == _S_IFDIR)
-#endif
-#else
-#include <dirent.h>
-#endif
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -222,9 +210,9 @@ bool TestFramework::scan_tests() {
 }
 
 bool TestFramework::discover_tests_in_directory(const std::string& category_path, const std::string& category) {
-#ifdef _MSC_VER
-    // C++17 filesystem implementation for MSVC (no dirent.h)
-    if (!fs::is_directory(category_path)) {
+#ifdef CERMU_USE_STD_FILESYSTEM
+    // C++17 filesystem implementation (MSVC — no dirent.h)
+    if (!cermu_fs::is_directory(category_path)) {
         if (verbose_) {
             printf("  Category not found: %s\n", category.c_str());
         }
@@ -234,7 +222,7 @@ bool TestFramework::discover_tests_in_directory(const std::string& category_path
     TestSuite suite;
     suite.name = category;
     
-    for (auto& entry : fs::recursive_directory_iterator(category_path)) {
+    for (auto& entry : cermu_fs::recursive_directory_iterator(category_path)) {
         if (!entry.is_regular_file()) continue;
         auto ext = entry.path().extension().string();
         if (ext != ".prg") continue;
@@ -244,7 +232,7 @@ bool TestFramework::discover_tests_in_directory(const std::string& category_path
         std::replace(full_path.begin(), full_path.end(), '\\', '/');
         
         // Compute relative path from category_path
-        std::string relative = fs::relative(entry.path(), category_path).string();
+        std::string relative = cermu_fs::relative(entry.path(), category_path).string();
         std::replace(relative.begin(), relative.end(), '\\', '/');
         
         TestDescriptor test = parse_test_from_file(full_path, category);
@@ -323,7 +311,7 @@ TestDescriptor TestFramework::parse_test_from_file(const std::string& prg_path, 
     test.name = prg_path.substr(prg_path.find_last_of("/\\") + 1);
     test.category = category;
     test.type = TestType::EXITCODE;  // Default
-    test.timeout_cycles = 5000000;  // 5 million cycles default for quick baseline scan
+    test.timeout_cycles = 50000000;  // 50 million cycles (~50s of C64 time)
     
     // Check for reference image
     check_for_reference_image(prg_path, test);
@@ -399,8 +387,7 @@ std::vector<TestDescriptor> TestFramework::get_filtered_tests(const TestFilter& 
     return filtered;
 }
 
-#ifdef _WIN32
-#include <excpt.h>
+#ifdef CERMU_HAS_SEH
 // SEH-protected tick loop: runs c64_system_tick in a __try/__except block.
 // This function has NO C++ objects with destructors, so __try/__except is safe.
 // Returns: 0=debug_reg, 1=timeout, 2=crash, 3=infinite_loop_detected
@@ -475,14 +462,12 @@ static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles, i
     }
     __except(EXCEPTION_EXECUTE_HANDLER) {
         r.reason = 2; // crash
-        r.cycles = c64->total_cycles;
+        r.cycles = c64->get_total_cycles();
     }
     
     return r;
 }
-#endif
 
-#ifdef _WIN32
 // Two-level SEH wrapper: Level 1 has __try but NO C++ objects with destructors.
 // Level 2 (the thunk) has C++ objects but no __try. This satisfies MSVC C2712.
 static int seh_call(void(*func)(void*), void* arg) {
@@ -506,10 +491,10 @@ static void run_test_thunk(void* arg) {
     auto* a = static_cast<RunTestArgs*>(arg);
     a->result = a->fw->run_test(*a->test, a->c64);
 }
-#endif
+#endif // CERMU_HAS_SEH
 
 TestResult TestFramework::run_test_safe(const TestDescriptor& test, C64System* c64) {
-#ifdef _WIN32
+#ifdef CERMU_HAS_SEH
     RunTestArgs args;
     args.fw = this;
     args.test = &test;
@@ -1052,7 +1037,7 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
     debug_intercept_.written = false;
     debug_intercept_.value = 0;
     
-#ifdef _WIN32
+#ifdef CERMU_HAS_SEH
     // Use SEH-protected tick loop on Windows to catch access violations
     TickLoopResult tr = tick_loop_protected(c64, max_cycles, &debug_intercept_);
     cycles = tr.cycles;
@@ -1433,8 +1418,12 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
     }
     std::string output_png = output_dir + "/" + test_name + ".png";
     
+    // Normalize path separators for current platform
+    cermu_normalize_path(output_dir);
+    cermu_normalize_path(output_png);
+    
     // Create output directory if needed
-    system(("mkdir -p " + output_dir).c_str());
+    cermu_mkdir_p(output_dir);
     
     // Save framebuffer to PNG using base class screenshot method
     if (!c64->save_screenshot(output_png.c_str())) {
@@ -1894,6 +1883,18 @@ std::vector<TestResult> TestFramework::run_tests_with_auto_config(const std::vec
         // Run the test on current system (SEH-protected on Windows)
         TestResult result = run_test_safe(test, current_c64);
         results.push_back(result);
+        
+        // If test crashed, the system is corrupted — destroy it so next test gets a fresh one
+        if (result.status == TestStatus::ERROR && result.message.find("CRASH") != std::string::npos) {
+            if (current_c64) {
+                delete current_c64;
+                current_c64 = nullptr;
+            }
+            if (current_framebuffer) {
+                delete[] current_framebuffer;
+                current_framebuffer = nullptr;
+            }
+        }
         
         // Print quick status
         const char* status_symbol = "?";

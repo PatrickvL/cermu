@@ -1,6 +1,7 @@
 ﻿#include "vic20_system.h"
 #include "vic20_memory.h"
 #include "vic20_chips.h"
+#include "../../core/cermu.h"
 #include "../../chip/input/commodore_keyboard.h"
 #include "../../chip/input/emu_key_sdl_map.h"
 #include "vic20_keyboard_matrix.h" // VIC-20 keyboard matrix data
@@ -393,13 +394,8 @@ SystemConfiguration VIC20System::detect_optimal_configuration(
     bool     have_prg  = false;
 
     const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
-#ifdef _MSC_VER
-    bool is_prg = ext && (_stricmp(ext, ".prg") == 0);
-    bool is_lnx = ext && (_stricmp(ext, ".lnx") == 0);
-#else
-    bool is_prg = ext && (strcasecmp(ext, ".prg") == 0);
-    bool is_lnx = ext && (strcasecmp(ext, ".lnx") == 0);
-#endif
+    bool is_prg = ext && (cermu_strcasecmp(ext, ".prg") == 0);
+    bool is_lnx = ext && (cermu_strcasecmp(ext, ".lnx") == 0);
 
     // LNX archives need special handling: inspect ALL contained files
     // to determine the maximum memory expansion needed.

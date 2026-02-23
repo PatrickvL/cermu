@@ -241,7 +241,7 @@ typedef struct {
 // Commodore keyboard state
 // ============================================================================
 
-typedef struct {
+struct commodore_keyboard_t {
     // Model and matrix configuration
     keyboard_model_t model;
     keyboard_scan_chip_t scan_chip;
@@ -312,6 +312,6 @@ typedef struct {
     void print_matrix();
     void print_state();
 
-} commodore_keyboard_t;
+};
 
 #endif // COMMODORE_KEYBOARD_H

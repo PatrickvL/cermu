@@ -1047,6 +1047,10 @@ void C64System::set_framebuffer(uint32_t* buffer, int width, int height) {
     if (initialized_ && this->vicii && buffer) {
         this->vicii->set_framebuffer(buffer, width, height);
     }
+    // Also update base class fields so save_screenshot() works in headless mode
+    rgba_framebuffer_ = buffer;
+    rgba_width_ = width;
+    rgba_height_ = height;
 }
 
 void C64System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
