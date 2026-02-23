@@ -1463,22 +1463,27 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
                        vicii->pixel.framebuffer_width, vicii->pixel.framebuffer_height);
             }
             
-            // Try to match reference dimensions by adjusting crop
-            // Use border info if available to better align the crop
+            // Use VICE-aligned crop offsets to extract the correct display window.
+            // VICE PAL display: rasters 16-287 (272 lines), 384 pixels wide
+            // (32px left border + 320px content + 32px right border)
+            // Our framebuffer maps buffer_pos 0 → first_visible_x.
+            // Content starts at buffer_pos 48, VICE left edge at buffer_pos 16.
             int crop_w = ref_info.width;
             int crop_h = ref_info.height;
             int crop_x, crop_y;
             
-            // Calculate offset to center the crop, adjusted for detected borders
             int fb_w = vicii->pixel.framebuffer_width;
             int fb_h = vicii->pixel.framebuffer_height;
             
-            if (ref_info.borders.detected) {
-                // Align based on border info
-                crop_x = ref_info.borders.left_border;
-                crop_y = ref_info.borders.top_border;
+            // VICE PAL: first_displayed_line=16, display is 384x272
+            if (ref_info.width == 384 && ref_info.height == 272) {
+                // VICE PAL standard crop.
+                // Framebuffer row 0 = raster 16 (first visible line) due to
+                // raster-to-fb-row offset mapping, so crop_y starts at 0.
+                crop_x = 16;  // Buffer position where VICE left border starts
+                crop_y = 0;   // fb row 0 = raster 16 = VICE first displayed line
             } else {
-                // Center the crop
+                // Fallback: center the crop for non-standard reference sizes
                 crop_x = (fb_w - ref_info.width) / 2;
                 crop_y = (fb_h - ref_info.height) / 2;
             }
@@ -1780,6 +1785,7 @@ C64System* TestFramework::create_system_for_test(const TestDescriptor& test) {
     }
     
     // Allocate framebuffer for VIC-II rendering (403x284 for PAL, 418x235 for NTSC)
+    // Framebuffer row 0 = first visible raster (16 for PAL), matching documentation Section 3.4
     int fb_width = is_pal_system_ ? 403 : 418;
     int fb_height = is_pal_system_ ? 284 : 235;
     uint32_t* framebuffer = new uint32_t[fb_width * fb_height];
