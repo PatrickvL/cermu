@@ -247,3 +247,104 @@ endif()
 message(STATUS "  fam65xx Klaus Test Runner: Built")
 message(STATUS "  fam65xx Lorenz Test Harness: Built")
 message(STATUS "  SID Test Runner: Built")
+
+# =============================================================================
+# SID Reference Comparison Runner (cermu vs reSID)
+# =============================================================================
+# Builds reSID (Dag Lem) from the VICE source tree as a static library,
+# then links it with our SID test harness for cycle-exact comparison.
+# =============================================================================
+
+# Locate reSID sources in the VICE workspace folder
+set(RESID_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../VICE/vice/src/resid")
+set(RESID_STANDALONE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../external/resid")
+
+if(EXISTS "${RESID_SRC_DIR}/sid.cc")
+    # Build reSID as a static library with our standalone siddefs.h
+    # NOTE: filter.cc is excluded because filter8580new.cc provides the
+    # same Filter class when NEW_8580_FILTER=1 (the improved model).
+    add_library(resid STATIC
+        ${RESID_SRC_DIR}/dac.cc
+        ${RESID_SRC_DIR}/envelope.cc
+        ${RESID_SRC_DIR}/extfilt.cc
+        ${RESID_SRC_DIR}/filter8580new.cc
+        ${RESID_SRC_DIR}/pot.cc
+        ${RESID_SRC_DIR}/sid.cc
+        ${RESID_SRC_DIR}/version.cc
+        ${RESID_SRC_DIR}/voice.cc
+        ${RESID_SRC_DIR}/wave.cc
+    )
+    target_include_directories(resid PRIVATE
+        ${RESID_STANDALONE_DIR}   # Our standalone siddefs.h (found before VICE's)
+        ${RESID_SRC_DIR}
+    )
+    target_include_directories(resid SYSTEM PUBLIC
+        ${RESID_SRC_DIR}          # Public: so sid_comparison_runner can #include "sid.h"
+    )
+    target_compile_definitions(resid PRIVATE
+        RESID_INLINING=1
+        VERSION="1.0-cermu-standalone"
+    )
+    set_property(TARGET resid PROPERTY CXX_STANDARD 20)
+    # Suppress warnings in third-party code
+    if(NOT MSVC)
+        target_compile_options(resid PRIVATE -w)
+    else()
+        target_compile_options(resid PRIVATE /w)
+    endif()
+
+    # Build the comparison runner
+    add_executable(sid_comparison_runner
+        sid_comparison_runner.cpp
+        ${TESTING_DIR}/sid_test_harness.cpp
+        ${SOUND_DIR}/mos6581.cpp
+        ${CORE_DIR}/chip.cpp
+        ${CORE_DIR}/ioport.cpp
+    )
+    target_include_directories(sid_comparison_runner PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/sound
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/testing
+        ${RESID_STANDALONE_DIR}
+    )
+    target_compile_definitions(sid_comparison_runner PRIVATE CERMU_IMPL)
+    set_property(TARGET sid_comparison_runner PROPERTY CXX_STANDARD 20)
+    set_property(TARGET sid_comparison_runner PROPERTY CXX_STANDARD_REQUIRED ON)
+    target_link_libraries(sid_comparison_runner resid)
+    if(NOT WIN32 AND NOT MSVC)
+        target_link_libraries(sid_comparison_runner m)
+    endif()
+
+    # CTest integration
+    add_test(NAME sid_reference_comparison
+        COMMAND sid_comparison_runner
+    )
+    set_tests_properties(sid_reference_comparison PROPERTIES TIMEOUT 120)
+
+    # Custom target for running comparison
+    add_custom_target(run_sid_comparison
+        COMMAND sid_comparison_runner
+        DEPENDS sid_comparison_runner
+        COMMENT "Running SID reference comparison (cermu vs reSID)"
+    )
+
+    # Custom target for comparing against all VICE hardware traces
+    set(VICE_TESTPROGS_SID "${CMAKE_CURRENT_SOURCE_DIR}/../../VICE-testprogs/SID/resid-test")
+    if(EXISTS "${VICE_TESTPROGS_SID}")
+        add_custom_target(run_sid_hw_comparison
+            COMMAND sid_comparison_runner --all-dat "${VICE_TESTPROGS_SID}"
+            DEPENDS sid_comparison_runner
+            COMMENT "Comparing SID output against hardware-captured .dat traces"
+        )
+        message(STATUS "  SID HW Comparison: Available (VICE-testprogs found)")
+    endif()
+
+    # Install
+    install(TARGETS sid_comparison_runner RUNTIME DESTINATION bin)
+
+    message(STATUS "  SID Comparison Runner: Built (reSID found at ${RESID_SRC_DIR})")
+else()
+    message(STATUS "  SID Comparison Runner: SKIPPED (reSID not found at ${RESID_SRC_DIR})")
+    message(STATUS "    To enable: clone VICE into ../VICE/vice/src/resid/")
+endif()
