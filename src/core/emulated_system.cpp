@@ -690,7 +690,7 @@ float EmulatedSystem::render_connector_menu_bar_icons() {
         ImVec2 cursor = ImGui::GetCursorScreenPos();
 
         // Draw the icon image (ImageWithBg supports tint)
-        ImGui::ImageWithBg(ImTextureRef((ImTextureID)(intptr_t)tex),
+        ImGui::ImageWithBg((ImTextureID)(intptr_t)tex,
                      ImVec2(icon_sz, icon_sz), ImVec2(0, 0), ImVec2(1, 1),
                      ImVec4(0, 0, 0, 0), tint);
 
