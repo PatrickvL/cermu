@@ -39,11 +39,14 @@ const uint32_t* vicii_s::get_default_palette() {
 // BORDER LOGIC
 // ========================================================================================
 
-static inline void vicii_border_update_limits(vicii_border_unit_t* border, uint8_t c1_reg, uint8_t c2_reg) {
+static inline void vicii_vborder_update_limits(vicii_border_unit_t* border, uint8_t c1_reg) {
     border->border_top = (c1_reg & VICII_C1_RSEL) ?
         VICII_BORDER_TOP_RSEL1 : VICII_BORDER_TOP_RSEL0;
     border->border_bottom = (c1_reg & VICII_C1_RSEL) ?
         VICII_BORDER_BOTTOM_RSEL1 : VICII_BORDER_BOTTOM_RSEL0;
+}
+    
+static inline void vicii_hborder_update_limits(vicii_border_unit_t* border, uint8_t c2_reg) {
     border->border_left = (c2_reg & VICII_C2_CSEL) ?
         VICII_BORDER_LEFT_CSEL1 : VICII_BORDER_LEFT_CSEL0;
     border->border_right = (c2_reg & VICII_C2_CSEL) ?
@@ -877,17 +880,16 @@ bus_state_t vicii_s::registers_write(void* context, bus_state_t bus_state) {
             vicii_update_badline_condition(vicii);
             // Update prev_raster_compare for edge detection (bit 8 changed)
             vicii->timing.prev_raster_compare = vicii_get_raster_compare(vicii);
-            // Re-evaluate vertical border after DEN/RSEL change
-            // (must happen after border_update_limits updates border_top/bottom)
             // Note: only VICII_C1 affects vborder inputs (DEN, RSEL → border_top/bottom).
             // VICII_C2 only changes CSEL (horizontal borders), so no vborder check needed.
+            vicii_vborder_update_limits(&vicii->border, value);
+            // Re-evaluate vertical border after DEN/RSEL change
+            // (must happen after vicii_vborder_update_limits updates border_top/bottom)
+            vicii_check_vertical_border(vicii);
             FALLTHROUGH; // to C2 case
         case VICII_C2: // $d016 Control register 2
+            vicii_hborder_update_limits(&vicii->border, vicii->registers.data[VICII_C2]);
             vicii_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
-            vicii_border_update_limits(&vicii->border, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
-            if (reg == VICII_C1) {
-                vicii_check_vertical_border(vicii);
-            }
             // Re-sync color palette when graphics mode changes
             vicii_sequencer_update_colors(vicii);
             break;
@@ -1209,25 +1211,6 @@ static uint8_t vicii_cycle_refresh_vc_update(vicii_t* vicii, int unused_param) {
     return VIC_ACCESS_REFRESH;
 }
 
-// Spec cycle 15 (x_cycle 14): First c-access — refresh PHI1, c-access PHI2
-//
-// VICE reference (vicii-chip-model.c): Cycle 15 has PHI1=Refresh, PHI2=FetchC.
-// This is the first c-access (column 0). The VC update already happened in the
-// previous cycle (spec 14 / x_cycle 13), so vmli=0 and vc=vcbase are ready.
-//
-// Returns VIC_ACCESS_REFRESH_C on bad lines (refresh PHI1 + c-access PHI2),
-// or VIC_ACCESS_REFRESH on non-bad lines (refresh only).
-static uint8_t vicii_cycle_refresh_first_c_access(vicii_t* vicii, int unused_param) {
-    // VICE reference: Uses instantaneous bad_line check. If CPU writes $D011
-    // clearing the bad line condition, c-access stops (used in FLI techniques).
-    // Also processes pending sprite crunch effects from $D017 writes (ChkSprCrunch).
-    vicii_sprite_process_pending_crunch(vicii);
-    if (vicii->video_logic.is_bad_line) {
-        return VIC_ACCESS_REFRESH_C;
-    }
-    return VIC_ACCESS_REFRESH;
-}
-
 // Process pending sprite crunch effects from $D017 writes during spec cycle 15 PHI2.
 // VICE reference (viciisc/vicii-mem.c d017_store, viciisc/vicii-cycle.c):
 // When the CPU clears a Y-expansion bit in $D017 during the second phase of
@@ -1251,6 +1234,25 @@ static inline void vicii_sprite_process_pending_crunch(vicii_t* vicii) {
         }
     }
     vicii->sprites.pending_mxye_crunch = 0;
+}
+
+// Spec cycle 15 (x_cycle 14): First c-access — refresh PHI1, c-access PHI2
+//
+// VICE reference (vicii-chip-model.c): Cycle 15 has PHI1=Refresh, PHI2=FetchC.
+// This is the first c-access (column 0). The VC update already happened in the
+// previous cycle (spec 14 / x_cycle 13), so vmli=0 and vc=vcbase are ready.
+//
+// Returns VIC_ACCESS_REFRESH_C on bad lines (refresh PHI1 + c-access PHI2),
+// or VIC_ACCESS_REFRESH on non-bad lines (refresh only).
+static uint8_t vicii_cycle_refresh_first_c_access(vicii_t* vicii, int unused_param) {
+    // VICE reference: Uses instantaneous bad_line check. If CPU writes $D011
+    // clearing the bad line condition, c-access stops (used in FLI techniques).
+    // Also processes pending sprite crunch effects from $D017 writes (ChkSprCrunch).
+    vicii_sprite_process_pending_crunch(vicii);
+    if (vicii->video_logic.is_bad_line) {
+        return VIC_ACCESS_REFRESH_C;
+    }
+    return VIC_ACCESS_REFRESH;
 }
 
 
@@ -2151,7 +2153,7 @@ static const vicii_cycle_entry_t vicii_cycle_table_6569[63] = {
     {vicii_cycle_refresh, -1},                  // 12 r_X r_x
     {vicii_cycle_refresh, -1},                  // 13 r_X r_x
     {vicii_cycle_refresh_vc_update, -1},        // 14 r_X r_x (+ VC=VCBASE, VMLI=0, RC=0 on bad line)
-    {vicii_cycle_refresh_first_c_access_sprite_crunch, -1}, // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
+    {vicii_cycle_refresh_first_c_access, -1},   // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
     {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
     {vicii_cycle_char_color_hborder_l1, 1},     // 17 gc_ g_x + ChkBrdL1
     {vicii_cycle_char_color_hborder_l0, 2},     // 18 gc_ g_x + ChkBrdL0
@@ -2220,7 +2222,7 @@ static const vicii_cycle_entry_t vicii_cycle_table_6567R56A[64] = {
     {vicii_cycle_refresh, -1},                  // 12 r_X r_x
     {vicii_cycle_refresh, -1},                  // 13 r_X r_x
     {vicii_cycle_refresh_vc_update, -1},        // 14 r_X r_x (+ VC=VCBASE, VMLI=0, RC=0 on bad line)
-    {vicii_cycle_refresh_first_c_access, -1},  // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
+    {vicii_cycle_refresh_first_c_access, -1},   // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
     {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
     {vicii_cycle_char_color_hborder_l1, 1},     // 17 gc_ g_x + ChkBrdL1
     {vicii_cycle_char_color_hborder_l0, 2},     // 18 gc_ g_x + ChkBrdL0
@@ -2290,7 +2292,7 @@ static const vicii_cycle_entry_t vicii_cycle_table_6567R8[65] = {
     {vicii_cycle_refresh, -1},                  // 12 r_X r_x
     {vicii_cycle_refresh, -1},                  // 13 r_X r_x
     {vicii_cycle_refresh_vc_update, -1},        // 14 r_X r_x (+ VC=VCBASE, VMLI=0, RC=0 on bad line)
-    {vicii_cycle_refresh_first_c_access, -1},  // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
+    {vicii_cycle_refresh_first_c_access, -1},   // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
     {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
     {vicii_cycle_char_color_hborder_l1, 1},     // 17 gc_ g_x + ChkBrdL1
     {vicii_cycle_char_color_hborder_l0, 2},     // 18 gc_ g_x + ChkBrdL0
@@ -2476,7 +2478,8 @@ static inline void vicii_initialize(vicii_t* vicii) {
     
     // Update units based on register values
     vicii_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
-    vicii_border_update_limits(&vicii->border, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
+    vicii_vborder_update_limits(&vicii->border, vicii->registers.data[VICII_C1]);
+    vicii_hborder_update_limits(&vicii->border, vicii->registers.data[VICII_C2]);
     
     // Initialize border pixel from register value (EC was set to LIGHT_BLUE at line 1815)
     vicii->border.border_pixel.priority = VICII_PRIORITY_BORDER;
