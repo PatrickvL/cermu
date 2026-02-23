@@ -182,6 +182,7 @@ add_executable(sid_test_runner
     sid_test_runner.cpp
     ${TESTING_DIR}/sid_test_harness.cpp
     ${SOUND_DIR}/mos6581.cpp
+    ${SOUND_DIR}/sid_waveform_tables.cpp
     ${CORE_DIR}/chip.cpp
     ${CORE_DIR}/ioport.cpp
 )
@@ -298,6 +299,7 @@ if(EXISTS "${RESID_SRC_DIR}/sid.cc")
         sid_comparison_runner.cpp
         ${TESTING_DIR}/sid_test_harness.cpp
         ${SOUND_DIR}/mos6581.cpp
+        ${SOUND_DIR}/sid_waveform_tables.cpp
         ${CORE_DIR}/chip.cpp
         ${CORE_DIR}/ioport.cpp
     )

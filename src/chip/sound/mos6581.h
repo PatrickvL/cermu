@@ -50,13 +50,14 @@ typedef enum {
     // SID_REVISION_CSG_8580     // same behaviour as 8580_R5 for now
 } sid_revision_t;
 
-// Voice envelope cycle states
+// Voice envelope cycle states (matches reSID State enum)
 typedef enum {
-    CYCLE_OFF = 0,     // Off cycle (0)
-    CYCLE_ATTACK = 1,  // Attack cycle (1)
-    CYCLE_DECAY = 2,   // Decay cycle (2)
-    CYCLE_SUSTAIN = 3, // Sustain cycle (3)
-    CYCLE_RELEASE = 4  // Release cycle (4)
+    CYCLE_OFF = 0,      // Off cycle (0)
+    CYCLE_ATTACK = 1,   // Attack cycle (1)
+    CYCLE_DECAY = 2,    // Decay/Sustain cycle (reSID DECAY_SUSTAIN)
+    CYCLE_SUSTAIN = 3,  // Sustain cycle (unused — decay handles sustain check)
+    CYCLE_RELEASE = 4,  // Release cycle (4)
+    CYCLE_FREEZED = 5   // Frozen at zero (reSID FREEZED)
 } envelope_cycle_t;
 
 // Waveform bits — positioned at their VCREG bit locations (bits 4-7)
@@ -233,11 +234,18 @@ typedef struct voice_s {
     bool envelope_hold_zero;          // Hold envelope at zero (reSID hold_zero)
     uint8_t exponential_counter;      // Exponential counter for decay/release
     uint8_t exponential_counter_period; // Period for exponential counter
+    uint32_t envelope_pipeline;       // Pipeline delay for envelope counter change (reSID)
+    uint32_t exponential_pipeline;    // Pipeline delay for exponential counter check
+    bool reset_rate_counter;          // Deferred rate counter reset (reSID pipeline)
+    int32_t state_pipeline;           // Pipeline delay for envelope state transitions (reSID)
+    envelope_cycle_t envelope_next_state; // Next state for deferred state transition
     
     // Noise generation state
     uint32_t noise_lfsr;              // 23-bit LFSR state
     uint32_t noise_output;            // Current noise output
     bool noise_clock_enable;          // Noise clock enable from accumulator
+    uint32_t shift_pipeline;          // 2-cycle pipeline delay for noise shift
+    uint32_t shift_register_reset;    // Countdown for test bit LFSR fade to 0x7FFFFF
     
     // Waveform generation state
     uint32_t triangle_output;         // Triangle waveform output
@@ -273,7 +281,7 @@ typedef struct voice_s {
 private:
     void update_exponential_period();
     void envelope_clock();
-    void update_envelope();
+    void envelope_state_change();
 } voice_t;
 
 // Main SID chip structure - Enhanced (C++ class inheriting ChipBase)
