@@ -350,8 +350,10 @@ void mos6526_s::render_settings_content() {
     ImGui::Separator();
     
     ImGui::Text("SDR: $%02X", cia->reg[SDR]);
-    ImGui::Text("Shift Register: $%02X", cia->reg[SHIFT_OFFSET]);
-    ImGui::Text("Serial Shift: %d", cia->serial_shift);
+    ImGui::Text("Shifter: $%04X", cia->shifter);
+    ImGui::Text("SR Bits: %d", cia->sr_bits);
+    ImGui::Text("SDR Valid: %s", cia->sdr_valid ? "YES" : "NO");
+    ImGui::Text("SDR Delay: $%05X", cia->sdr_delay);
     ImGui::Text("CNT Output: %s", cia->cnt_output_state ? "HIGH" : "LOW");
     ImGui::Text("SP Output: %d", cia->sp_output_bit ? 1 : 0);
     ImGui::Text("SPMODE: %s", (cia->reg[CRA] & CRA_SPMODE) ? "Output" : "Input");

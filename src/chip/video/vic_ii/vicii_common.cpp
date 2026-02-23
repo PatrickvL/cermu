@@ -68,20 +68,19 @@ static inline int16_t vicii_fetch_x_to_buffer_pos(const vicii_t* vicii, uint16_t
     const uint16_t pixels_per_line = vicii->config->cycles_per_line * 8;
     const uint16_t display_x_coord = (fetch_x_coord + pixels_per_line + VICII_PIPELINE_DELAY_PIXELS + VICII_X_CENTERING_PIXELS) % pixels_per_line;
     
-    // Check if this coordinate is in the visible range
-    // For PAL: first_visible_x_coord = 480, visible_pixels = 403
-    // Visible range wraps: 480-503 (24 pixels), then 0-378 (379 pixels) = 403 total
-    const uint16_t first_visible = vicii->config->first_visible_x_coord;
+    // CRITICAL: Apply the SAME transform to first_visible_x_coord so the range check
+    // is in the same coordinate space as display_x_coord. Without this, the centering
+    // offset causes valid visible pixels to be incorrectly rejected.
+    const uint16_t first_visible_display = (vicii->config->first_visible_x_coord + pixels_per_line + VICII_PIPELINE_DELAY_PIXELS + VICII_X_CENTERING_PIXELS) % pixels_per_line;
     const uint16_t visible_pixels = vicii->config->visible_pixels_per_line;
     
-    // Calculate position in line buffer (0-402)
+    // Calculate position in line buffer (0-402 for PAL)
+    // The visible range wraps around: [first_visible_display .. first_visible_display+visible_pixels)
     uint16_t buffer_pos;
-    if (display_x_coord >= first_visible) {
-        // First part of visible range (480-503 for PAL)
-        buffer_pos = display_x_coord - first_visible;
-    } else if (display_x_coord < (first_visible + visible_pixels) % pixels_per_line) {
-        // Second part of visible range after wrap (0-378 for PAL)
-        buffer_pos = (pixels_per_line - first_visible) + display_x_coord;
+    if (display_x_coord >= first_visible_display) {
+        buffer_pos = display_x_coord - first_visible_display;
+    } else if (display_x_coord < (first_visible_display + visible_pixels) % pixels_per_line) {
+        buffer_pos = (pixels_per_line - first_visible_display) + display_x_coord;
     } else {
         // Not in visible range
         return -1;
@@ -555,6 +554,19 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
     // Sprites are processed every cycle and can overlay any area
     // They have priority over both graphics and border pixels
     vicii_sprite_sequencer(vicii);
+}
+
+// Map raster counter to framebuffer row.
+// The framebuffer stores only visible lines (284 for PAL, 234/235 for NTSC).
+// Row 0 = first visible raster line (last_vblank_line + 1).
+// VBlank rasters map to values >= visible_lines and are filtered out by callers.
+static inline int vicii_raster_to_fb_row(const vicii_t* vicii, uint16_t raster) {
+    const uint16_t first_visible = vicii->config->last_vblank_line + 1;
+    if (raster >= first_visible) {
+        return (int)(raster - first_visible);
+    } else {
+        return (int)(raster + vicii->config->total_lines - first_visible);
+    }
 }
 
 void vicii_pixel_flush_line(vicii_t* vicii, const uint32_t* palette, int y) {
@@ -1073,8 +1085,9 @@ void vicii_timing_advance(vicii_t* vicii) {
     // This ensures pixels from the PREVIOUS raster line are written to the framebuffer
     // at the correct Y position (which is still the OLD raster_counter value).
     const uint16_t completed_raster = vicii->timing.raster_counter;
-    if (vicii->pixel.framebuffer && completed_raster < vicii->pixel.framebuffer_height) {
-        vicii_pixel_flush_line(vicii, vicii_s::get_default_palette(), completed_raster);
+    const int fb_row = vicii_raster_to_fb_row(vicii, completed_raster);
+    if (vicii->pixel.framebuffer && fb_row < vicii->pixel.framebuffer_height) {
+        vicii_pixel_flush_line(vicii, vicii_s::get_default_palette(), fb_row);
     }
     
     vicii_set_x_cycle(vicii, 0);
@@ -1907,8 +1920,11 @@ bus_state_t vicii_s::tick_phi1(bus_state_t bus_state) {
     // STEP 5: Perform unified pixel sequencing (8 pixels per cycle)
     // Border flip-flops are now updated per-pixel WITHIN the pixel sequencer
     // This uses the graphics data that was JUST loaded above AND the border flip-flop state updated above
-    if (vicii->pixel.framebuffer && vicii->timing.raster_counter < vicii->pixel.framebuffer_height) {
-        vicii_pixel_sequencer(vicii);
+    {
+        const int fb_row = vicii_raster_to_fb_row(vicii, vicii->timing.raster_counter);
+        if (vicii->pixel.framebuffer && fb_row < vicii->pixel.framebuffer_height) {
+            vicii_pixel_sequencer(vicii);
+        }
     }
     
     // STEP 5.5: Light pen pin sampling

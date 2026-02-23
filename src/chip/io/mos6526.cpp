@@ -4,6 +4,53 @@
 #include <stdlib.h>
 #include <cstdio>
 
+// =========================================================================
+// SDR delay pipeline constants (per VICE ciacore.c)
+// Each group is a countdown: bits shift LEFT each tick, action fires at ...0
+// =========================================================================
+#define CIA_SDR_TOGGLE_CNT2     0x0001u  // Countdown to toggling CNT
+#define CIA_SDR_TOGGLE_CNT1     0x0002u
+#define CIA_SDR_TOGGLE_CNT0     0x0004u  // Action: toggle CNT, shift data
+#define CIA_SDR_TOGGLE_CNT_1    0x0008u
+
+#define CIA_SDR_NOGGLE_CNT2     0x0010u  // Countdown to NOT toggling (fast timer)
+#define CIA_SDR_NOGGLE_CNT1     0x0020u
+#define CIA_SDR_NOGGLE_CNT0     0x0040u
+#define CIA_SDR_NOGGLE_CNT_1    0x0080u
+
+#define CIA_SDR_SET_SDR_IRQ3    0x0100u  // Countdown to setting SDR IRQ
+#define CIA_SDR_SET_SDR_IRQ2    0x0200u
+#define CIA_SDR_SET_SDR_IRQ1    0x0400u
+#define CIA_SDR_SET_SDR_IRQ0    0x0800u  // Action: set ICR_SP
+
+#define CIA_SDR_CNT0            0x1000u  // CNT output state history
+#define CIA_SDR_CNT1            0x2000u
+#define CIA_SDR_CNT2            0x4000u
+#define CIA_SDR_CNT3            0x8000u
+
+#define CIA_SDR_SET3        0x00010000u  // Countdown to loading SDR into shifter
+#define CIA_SDR_SET2        0x00020000u
+#define CIA_SDR_SET1        0x00040000u
+#define CIA_SDR_SET0        0x00080000u  // Action: load SDR
+
+#define CIA_SDR_LEFTMOST    0x00100000u
+
+// Bits cleared after each shift
+#define CIA_SDR_CLEAR   (CIA_SDR_NOGGLE_CNT2 | CIA_SDR_SET_SDR_IRQ3 | \
+                         CIA_SDR_CNT0 | CIA_SDR_SET3 | CIA_SDR_LEFTMOST)
+
+// Bits that indicate active pipeline operations
+#define CIA_SDR_ACTIVE  (CIA_SDR_TOGGLE_CNT2 | CIA_SDR_TOGGLE_CNT1 |   \
+                         CIA_SDR_TOGGLE_CNT0 | CIA_SDR_TOGGLE_CNT_1 |  \
+                         CIA_SDR_NOGGLE_CNT2 | CIA_SDR_NOGGLE_CNT1 |   \
+                         CIA_SDR_NOGGLE_CNT0 | CIA_SDR_NOGGLE_CNT_1 |  \
+                         CIA_SDR_SET_SDR_IRQ3 | CIA_SDR_SET_SDR_IRQ2 | \
+                         CIA_SDR_SET_SDR_IRQ1 | CIA_SDR_SET_SDR_IRQ0 | \
+                         CIA_SDR_SET3 | CIA_SDR_SET2 |                 \
+                         CIA_SDR_SET1 | CIA_SDR_SET0)
+
+#define ALL_SDR_CNT     (CIA_SDR_CNT0|CIA_SDR_CNT1|CIA_SDR_CNT2|CIA_SDR_CNT3)
+
 void mos6526_s::reset() {
     // "Hardware RESET resets all I/O lines to inputs, and
     // thanks to the CIA's internal pull-up resistors,
@@ -41,6 +88,14 @@ void mos6526_s::reset() {
     write_tod_delta = 0;
     is_running_tod = false;
     tod_cycles = 0;
+    tod_tick_counter = 0;
+    // Serial shift register state
+    sdr_delay = 0;
+    shifter = 0;
+    sr_bits = 0;
+    sdr_valid = false;
+    cnt_output_state = true;  // CNT idles HIGH
+    sp_output_bit = false;
     interrupt_mask = 0;
     interrupt_mask_delayed = 0;  // IMR delay (chips imr1)
     pending_bus_lines = 0;  // No pending interrupt assertions
@@ -55,10 +110,7 @@ void mos6526_s::reset() {
     pb67_toggle = 0;
     
     // Initialize serial output state
-    // CNT idles HIGH when no transmission is active
-    cnt_output_state = true;
-    sp_output_bit = false;
-    serial_shift = 0;
+    // Already reset above in the grouped SDR state initialization
     
     // Initialize previous bus state for edge detection
     // CNT and FLAG pins have internal pull-ups, so they start HIGH
@@ -378,24 +430,17 @@ void mos6526_s::decrease_timer(uint32_t t) { // t:A or B
         uint8_t toggle_bit = (t == A) ? PB6_MASK : PB7_MASK;
         pb67_toggle ^= toggle_bit;
         
-        // Serial output: Timer A underflow toggles CNT in SPMODE=output
-        // Per CIA datasheet: "In the output mode, TIMER A is used for the baud
-        // rate generator. Data is shifted out on the SP pin at 1/2 the underflow
-        // rate of TIMER A." Each underflow toggles CNT; falling edge shifts a bit.
+        // Serial output: Timer A underflow schedules CNT toggle via delay pipeline
+        // Per VICE: ~1.5 cycle delay until CNT is toggled after Timer A underflow.
         if (t == A && (reg[CRA] & CRA_SPMODE)) {
-            if (serial_shift > 0) {
-                // Toggle CNT flip-flop
-                bool was_high = cnt_output_state;
-                cnt_output_state = !cnt_output_state;
-                // Falling edge (HIGH→LOW) clocks the shift register
-                if (was_high) {
-                    serial_output();
+            if (sr_bits != 0 || sdr_valid) {
+                uint32_t event = CIA_SDR_TOGGLE_CNT1;
+                // If timer pulses come too fast, we can't detect the CNT transition.
+                // Use NOGGLE (no-toggle) to handle very short timer periods.
+                if (sdr_delay & (CIA_SDR_TOGGLE_CNT0 | CIA_SDR_NOGGLE_CNT0)) {
+                    event = CIA_SDR_NOGGLE_CNT1;
                 }
-            } else {
-                // "If no further data is to be transmitted, after the 8th CNT
-                // pulse, CNT will return high and SP will remain at the level
-                // of the last data bit transmitted."
-                cnt_output_state = true;
+                sdr_delay |= event;
             }
         }
         
@@ -422,7 +467,10 @@ void mos6526_s::write_control_register(uint32_t c, uint8_t v) { // c:A or B
         if ((old_crx & CRA_SPMODE) != (v & CRA_SPMODE)) {
             // Reset the shift register and serial state
             reg[SHIFT_OFFSET] = 0;
-            serial_shift = 0;
+            shifter = 0;
+            sr_bits = 0;
+            sdr_valid = false;
+            sdr_delay = 0;
             cnt_output_state = true;  // CNT returns to idle HIGH
             sp_output_bit = false;
         }
@@ -593,26 +641,41 @@ uint8_t mos6526_s::bcd_inc(uint32_t r) { // r:TOD_SEC,TOD_MIN or TOD_HR
 }
 
 void mos6526_s::increase_tod_and_check_alarm() {
-    // Instead of detecting pulses on TOD pin (which happens only
-    // 50 or 60 times per second) count cycles.
+    // Count CPU cycles to simulate the power-line frequency input (50/60 Hz)
     if (tod_cycles++ < cycles_tod[(reg[CRA] & CRA_TODIN) >> 7])
         return;
 
     tod_cycles = 0;
-    check_alarm_interrupt();
 
-    if (++reg[TOD_10THS] <= 9)
+    // The TOD pin receives 50Hz or 60Hz from the power supply.
+    // TOD_10THS must increment at 10Hz, so we divide:
+    //   50Hz / 5 = 10Hz, or 60Hz / 6 = 10Hz
+    // CRA_TODIN selects the expected power frequency (0=60Hz, 1=50Hz)
+    int divider = (reg[CRA] & CRA_TODIN) ? 5 : 6;
+    if (++tod_tick_counter < divider)
         return;
+
+    tod_tick_counter = 0;
+
+    // Increment TOD_10THS first, THEN check alarm (per VICE behavior)
+    if (++reg[TOD_10THS] <= 9) {
+        check_alarm_interrupt();
+        return;
+    }
 
     reg[TOD_10THS] = 0;
     // Note : Invalid BCD-encoded register values are treated as if they ARE valid;
     // Only when they overflow, does a reset happen which makes them valid BCD again.
-    if (bcd_inc(TOD_SEC) <= 0x59) // Note the BCD encoding!
+    if (bcd_inc(TOD_SEC) <= 0x59) { // Note the BCD encoding!
+        check_alarm_interrupt();
         return;
+    }
 
     reg[TOD_SEC] = 0;
-    if (bcd_inc(TOD_MIN) <= 0x59) // Note the BCD encoding!
+    if (bcd_inc(TOD_MIN) <= 0x59) { // Note the BCD encoding!
+        check_alarm_interrupt();
         return;
+    }
 
     reg[TOD_MIN] = 0;
     // Hour increments are somewhat special (besides their BCD encoding);
@@ -626,8 +689,10 @@ void mos6526_s::increase_tod_and_check_alarm() {
     // * when exceeding 12, reset to 1
     uint8_t hr_new = bcd_inc(TOD_HR);
     int hr_HR = hr_new & TOD_HR_MASK;
-    if (hr_HR < 0x12) // Note the BCD encoding!
+    if (hr_HR < 0x12) { // Note the BCD encoding!
+        check_alarm_interrupt();
         return;
+    }
 
     int hr_PM = hr_new & TOD_HR_PM;
     if (hr_HR == 0x12) // Note the BCD encoding!
@@ -636,72 +701,84 @@ void mos6526_s::increase_tod_and_check_alarm() {
         hr_HR = 1;
 
     reg[TOD_HR] = (uint8_t)(hr_PM | hr_HR);
+    check_alarm_interrupt();
 }
 
 // SERIAL DATA REGISTER (SDR) handling
 
 void mos6526_s::write_serial_data_register(uint8_t v) {
     reg[SDR] = v;
-    // "Transmission will start following a write to the Serial Data
-    // Register (provided TIMER A is running and in continuous mode)."
-    // Only start transmission in SPMODE=output (CRA bit 6 set)
-    if ((reg[CRA] & (CRA_SPMODE | CRA_START | CRA_RUNMODE)) == (CRA_SPMODE | CRA_START)) {
-        // "If the microprocessor stays one byte ahead of the
-        // shift register, transmission will be continuous."
-        // Double-buffering: adding 8 allows the current byte to finish
-        // before the new byte starts (detected by serial_shift & 7 == 0)
-        if (serial_shift < 8)
-            serial_shift += 8;
+    // In output mode: load data into shift pipeline
+    if (reg[CRA] & CRA_SPMODE) {
+        if (sr_bits == 0) {
+            // Shifter idle: schedule load with ~2 cycle delay
+            sdr_delay |= CIA_SDR_SET1;
+        } else {
+            // Shifter busy: buffer for continuous transmission
+            sdr_valid = true;
+        }
     }
 }
 
-void mos6526_s::serial_output() {
-    // Called on internal CNT falling edge (generated by Timer A underflow toggle).
-    // Data is shifted out on SP at 1/2 the Timer A underflow rate because:
-    //   - Each Timer A underflow toggles CNT (HIGH→LOW or LOW→HIGH)
-    //   - One bit shifts out on each falling edge of CNT
-    //   - 2 underflows per bit = 1/2 the underflow rate
-
-    // "The data in the Serial Data Register will be loaded
-    // into the shift register, then shift out to the SP pin
-    // when a CNT pulse occurs."
-    // Load at byte boundaries (serial_shift is a multiple of 8)
-    if ((serial_shift & 7) == 0)
-        reg[SHIFT_OFFSET] = reg[SDR];
-
-    // "SDR data is shifted out MSB first and serial input data
-    // should also appear in this format."
-    int current_bit = (--serial_shift) & 7;
-    sp_output_bit = (reg[SHIFT_OFFSET] >> current_bit) & 1;
-
-    if (current_bit == 0) {
-        // "After 8 CNT pulses, an interrupt is generated
-        // to indicate more data can be sent."
-        reg[ICR] |= ICR_SP;
-        // "If the Serial Data Register was loaded with new
-        // information prior to this interrupt, the new data
-        // will automatically be loaded into the shift register
-        // and transmission will continue."
+/**
+ * Process the SDR delay pipeline — called once per tick.
+ * This implements VICE's sdr_alarm logic as a per-cycle pipeline shift.
+ * Actions fire when their countdown bit reaches the ...0 position.
+ */
+void mos6526_s::process_sdr_pipeline() {
+    // SET0: Load SDR value into the 16-bit shifter
+    if (sdr_delay & CIA_SDR_SET0) {
+        if (sr_bits == 0) {
+            sr_bits = 16;
+            shifter = (uint16_t)reg[SDR] << 1;
+        } else if (sr_bits == 1) {
+            // Mid-completion: append new byte
+            shifter |= reg[SDR];
+            sr_bits = 17;
+        } else {
+            // Shifter busy: mark as buffered
+            sdr_valid = true;
+        }
     }
-}
 
-void mos6526_s::serial_input(bus_state_t bus_state) {
-    // "In input mode, data on the SP pin is
-    // shifted into the shift register on the rising edge of
-    // the signal applied to the CNT pin."
-    // NOTE: Per datasheet this should trigger on CNT rising edge.
-    // The caller may use either edge depending on compatibility needs.
-    bool sp_bit = BUS_GET_BIT(bus_state, BUS_SP_BIT);
-    reg[SHIFT_OFFSET] = (reg[SHIFT_OFFSET] << 1) | (sp_bit ? 1 : 0);
+    // TOGGLE_CNT0: Toggle CNT and shift data (delayed ~1.5 cycles from Timer A underflow)
+    if (sdr_delay & CIA_SDR_TOGGLE_CNT0) {
+        if (sr_bits && (--sr_bits & 1)) {
+            // Odd sr_bits: data phase — output bit from shifter, CNT goes LOW
+            sp_output_bit = (shifter >> 8) & 1;
+            cnt_output_state = false;
 
-    if (++serial_shift >= 8) {
-        // "After 8 CNT pulses, the data in the shift register is dumped
-        // into the Serial Data Register and an interrupt is generated."
-        reg[SDR] = reg[SHIFT_OFFSET];
-        reg[SHIFT_OFFSET] = 0;
-        serial_shift = 0;
-        // SDR full or empty, so full byte was transferred
+            if (sr_bits == 1) {
+                // Last bit: byte transmission complete
+                // Schedule IRQ with 2-cycle delay (per VICE)
+                sdr_delay |= CIA_SDR_SET_SDR_IRQ2;
+                
+                // If another byte is buffered, start continuous transmission
+                if (sdr_valid) {
+                    shifter |= reg[SDR];
+                    sdr_valid = false;
+                    sr_bits = 17;
+                }
+            }
+        } else {
+            // Even sr_bits (or was 0): clock phase — shift left, CNT goes HIGH
+            shifter <<= 1;
+            cnt_output_state = true;
+        }
+    }
+
+    // SET_SDR_IRQ0: Set the SDR interrupt flag (2 cycles after byte complete)
+    if (sdr_delay & CIA_SDR_SET_SDR_IRQ0) {
         reg[ICR] |= ICR_SP;
+    }
+
+    // Advance the pipeline: shift left, clear overflow bits
+    sdr_delay <<= 1;
+    sdr_delay &= ~CIA_SDR_CLEAR;
+
+    // Track CNT output state history in the delay word
+    if (cnt_output_state) {
+        sdr_delay |= CIA_SDR_CNT0;
     }
 }
 
@@ -850,8 +927,12 @@ bus_state_t mos6526_s::registers_write(void* context, bus_state_t bus_state) {
         // Write TOD registers / ALARM latches
         case TOD_10THS:
             cia->reg[cia->write_tod_delta + TOD_10THS] = value;
+            // Only start TOD clock when writing to TOD registers (not alarm)
+            if (cia->write_tod_delta == 0) {
+                cia->tod_tick_counter = 0;
+                cia->is_running_tod = true;
+            }
             cia->check_alarm_interrupt();
-            cia->is_running_tod = true;
             break;
         case TOD_SEC:
             cia->reg[cia->write_tod_delta + TOD_SEC] = value;
@@ -861,7 +942,10 @@ bus_state_t mos6526_s::registers_write(void* context, bus_state_t bus_state) {
             break;
         case TOD_HR:
             cia->reg[cia->write_tod_delta + TOD_HR] = cia->write_tod_hr(value);
-            cia->is_running_tod = false;
+            // Only stop TOD clock when writing to TOD registers (not alarm)
+            if (cia->write_tod_delta == 0) {
+                cia->is_running_tod = false;
+            }
             break;
         // Write control registers
         case SDR:
@@ -985,13 +1069,36 @@ bus_state_t mos6526_s::tick_phi2(bus_state_t bus_state) {
         increase_tod_and_check_alarm();
 
     // Serial I/O:
-    // - Output mode (SPMODE=1): Handled internally by Timer A underflow toggling
-    //   the CNT flip-flop in decrease_timer(). No external CNT needed.
+    // - Output mode (SPMODE=1): Handled by SDR delay pipeline (process_sdr_pipeline).
+    //   Timer A underflows schedule delayed CNT toggles; pipeline processes them each tick.
     // - Input mode (SPMODE=0): External CNT drives the shift register clock.
-    //   Per datasheet: "data on the SP pin is shifted into the shift register
+    //   Per CIA datasheet: "data on the SP pin is shifted into the shift register
     //   on the rising edge of the signal applied to the CNT pin."
-    if ((reg[CRA] & CRA_SPMODE) == 0 && cnt_is_negative_edge) {
-        serial_input(bus_state);
+    if ((reg[CRA] & CRA_SPMODE) == 0) {
+        // Input mode: handle CNT edges for serial input
+        // Falling edge starts a new byte (per VICE ciacore_set_cnt)
+        if (cnt_is_negative_edge && sr_bits == 0) {
+            sr_bits = 16;
+        }
+        if (sr_bits > 0) {
+            sr_bits--;
+        }
+        // Rising edge: shift data in, sample SP
+        if (cnt_is_positive_edge) {
+            bool sp_bit = BUS_GET_BIT(bus_state, BUS_SP_BIT);
+            shifter = (shifter << 1) | (sp_bit ? 1 : 0);
+            
+            if (sr_bits == 0) {
+                // Byte complete: dump into SDR and generate interrupt
+                reg[SDR] = shifter & 0xFF;
+                reg[ICR] |= ICR_SP;
+            }
+        }
+    }
+    
+    // Process SDR output delay pipeline (runs every tick)
+    if (reg[CRA] & CRA_SPMODE) {
+        process_sdr_pipeline();
     }
     
     // Drive CIA serial output pins onto bus for external visibility (user port)

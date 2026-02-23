@@ -71,9 +71,15 @@ typedef struct mos6526_s : public ChipBase {
     uint32_t write_tod_delta = 0;
     bool is_running_tod = false;
     int tod_cycles = 0;
-    int serial_shift = 0;
-    bool cnt_output_state = false;  // CNT flip-flop for serial output mode (toggled by Timer A underflow)
-    bool sp_output_bit = false;     // Current SP output bit value (driven during serial output)
+    int tod_tick_counter = 0;  // Power-line divider: counts 50/60Hz ticks, fires TOD at 10Hz
+    
+    // --- Serial shift register (VICE-style delay pipeline) ---
+    uint32_t sdr_delay = 0;        // VICE-style software delay line for SDR timing
+    uint16_t shifter = 0;          // 16-bit shift register (output bit at bit 8)
+    uint8_t sr_bits = 0;           // Shifts remaining: 16→0 (pairs of half-cycles)
+    bool sdr_valid = false;        // SDR has new data buffered for next byte
+    bool cnt_output_state = false; // CNT output flip-flop (toggled by Timer A underflow, delayed)
+    bool sp_output_bit = false;    // Current SP output bit value (driven during serial output)
     uint8_t interrupt_mask = 0;
     uint8_t interrupt_mask_delayed = 0;  // 1-cycle delay for interrupt mask updates (IMR → IMR1)
     
@@ -167,8 +173,7 @@ private:
     uint8_t bcd_inc(uint32_t r);
     void increase_tod_and_check_alarm();
     void write_serial_data_register(uint8_t v);
-    void serial_output();
-    void serial_input(bus_state_t bus_state);
+    void process_sdr_pipeline();  // Process SDR delay pipeline each tick
 } mos6526_t;
 
 namespace MOS6526 {

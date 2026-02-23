@@ -1038,7 +1038,7 @@ uint32_t* C64System::get_framebuffer() {
 }
 
 void C64System::get_display_dimensions(int* width, int* height) const {
-    // VIC-II visible area
+    // VIC-II visible area (284 visible lines for PAL per documentation Section 3.4)
     *width = 403;
     *height = 284;
 }
