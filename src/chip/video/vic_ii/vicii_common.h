@@ -392,6 +392,9 @@ typedef struct {
     
     bool main_border_flip_flop;      // Main border flip flop (Documentation section 3.9)
     bool vertical_border_flip_flop;  // Vertical border flip flop (Documentation section 3.9)
+    bool set_vertical_border_flip_flop; // Two-stage vborder latch (VICE: set_vborder)
+                                        // Updated per-cycle, transferred to vertical_border_flip_flop
+                                        // at left border position and start of line.
 } vicii_border_unit_t;
 
 // Memory Mapping Unit - VIC-II memory access configuration (Documentation section 2.4.2)

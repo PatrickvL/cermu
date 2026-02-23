@@ -50,6 +50,26 @@ static inline void vicii_border_update_limits(vicii_border_unit_t* border, uint8
         VICII_BORDER_RIGHT_CSEL1 : VICII_BORDER_RIGHT_CSEL0;
 }
 
+// Two-stage vertical border latch check (VICE: check_vborder_top/bottom).
+// Called when any input changes: raster_counter advance or $D011 write.
+// Inputs: raster_counter, DEN bit, border_top, border_bottom.
+static inline void vicii_check_vertical_border(vicii_t* vicii) {
+    const uint16_t raster = vicii->timing.raster_counter;
+    const bool den_set = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
+    
+    // check_vborder_top: top border + DEN → clear both immediately
+    if (raster == vicii->border.border_top && den_set) {
+        vicii->border.vertical_border_flip_flop = false;
+        vicii->border.set_vertical_border_flip_flop = false;
+    }
+    
+    // check_vborder_bottom: bottom border → set staged latch
+    // (transferred to active flip-flop at left border position and start of line)
+    if (raster == vicii->border.border_bottom) {
+        vicii->border.set_vertical_border_flip_flop = true;
+    }
+}
+
 // ========================================================================================
 // PIXEL SEQUENCER AND GRAPHICS - HARDWARE-ACCURATE ARCHITECTURE
 // ========================================================================================
@@ -320,17 +340,17 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         
         // Rules 4, 5, 6: Handle left coordinate checks
         if (pixel_x == border_left) {
-            // Rule 4: "If the X coordinate reaches the left comparison value and the Y
-            // coordinate reaches the bottom one, the vertical border flip flop is set."
+            // VICE-style two-stage vborder latch:
+            // At the left border position, check bottom border condition and
+            // transfer the staged vborder latch to the active flip-flop.
+            
+            // Rule 4 / check_vborder_bottom: set staged latch if raster matches bottom
             if (raster == border_bottom) {
-                vicii->border.vertical_border_flip_flop = true;
+                vicii->border.set_vertical_border_flip_flop = true;
             }
-            // Rule 5: "If the X coordinate reaches the left comparison value and the Y
-            // coordinate reaches the top one and the DEN bit in register $d011 is set,
-            // the vertical border flip flop is reset."
-            else if (raster == border_top && den_set) {
-                vicii->border.vertical_border_flip_flop = false;
-            }
+            
+            // Transfer staged latch → active flip-flop (VICE: vborder = set_vborder)
+            vicii->border.vertical_border_flip_flop = vicii->border.set_vertical_border_flip_flop;
             
             // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
             // border flip flop is not set, the main flip flop is reset."
@@ -746,15 +766,16 @@ static inline void vicii_sequencer_update_mode(vicii_sequencer_unit_t* sequencer
 void vicii_update_badline_condition(vicii_t* vicii) {
     uint16_t raster = vicii->timing.raster_counter;
     
-    // Bad lines only occur in range $30-$F7 (48-247) INCLUSIVE
+    // Bad lines only occur in range $30-$F6 (48-246) INCLUSIVE
+    // VICE reference: VICII_LAST_DMA_LINE = $F7 (247), but allow_bad_lines is cleared
+    // at the START of line $F7, so no bad lines actually occur on $F7 itself.
+    // Effective range: $30-$F6 (198 values: 246-48 = 198).
+    //
     // Optimized single comparison using intentional unsigned underflow:
     // When raster < 48, (raster - 48) underflows to large positive, making comparison false
-    // When raster >= 48 && raster <= 247, (raster - 48) is in range [0, 199]
-    //
-    // CRITICAL FIX: Extract to variable to ensure correct evaluation
-    // Direct inline comparison had subtle issues with compiler optimization
+    // When raster >= 48 && raster <= 246, (raster - 48) is in range [0, 198]
     uint16_t range_check = raster - 48;
-    bool in_range = (range_check <= 199);
+    bool in_range = (range_check <= 198);
     
     if (in_range) {  // Equivalent to raster >= 48 && raster <= 247
         // "A Bad Line Condition is given at any arbitrary clock cycle, if at the
@@ -872,10 +893,17 @@ bus_state_t vicii_s::registers_write(void* context, bus_state_t bus_state) {
             vicii_update_badline_condition(vicii);
             // Update prev_raster_compare for edge detection (bit 8 changed)
             vicii->timing.prev_raster_compare = vicii_get_raster_compare(vicii);
+            // Re-evaluate vertical border after DEN/RSEL change
+            // (must happen after border_update_limits updates border_top/bottom)
+            // Note: only VICII_C1 affects vborder inputs (DEN, RSEL → border_top/bottom).
+            // VICII_C2 only changes CSEL (horizontal borders), so no vborder check needed.
             FALLTHROUGH; // to C2 case
         case VICII_C2: // $d016 Control register 2
             vicii_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
             vicii_border_update_limits(&vicii->border, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
+            if (reg == VICII_C1) {
+                vicii_check_vertical_border(vicii);
+            }
             // Re-sync color palette when graphics mode changes
             vicii_sequencer_update_colors(vicii);
             break;
@@ -1098,14 +1126,10 @@ void vicii_timing_advance(vicii_t* vicii) {
     // advances so the next line starts fresh.
     vicii->video_logic.bad_line_occurred = false;
     
-    // CRITICAL: Pre-display area setup — reset video counters before entering raster $30
-    // (first display raster). This prevents cycle 58 on line $2F from corrupting
-    // VCBASE/VC and ensures display_state starts FALSE (set TRUE by first bad line).
-    if (completed_raster == 0x2F) {
-        vicii->video_logic.vcbase = 0;
-        vicii->video_logic.vc = 0;
-        vicii->video_logic.display_state = false;
-    }
+    // VICE reference: No special handling at raster $2F. vcbase/vc are reset at
+    // start-of-frame (line 0) in vicii_perform_line0_raster_irq_operations().
+    // display_state is controlled by bad line conditions (set true) and cycle 58
+    // RC==7 check (set false). No explicit reset needed here.
     
     // Advance raster counter
     // Documentation (vic-ii.txt lines 1012-1014):
@@ -1135,6 +1159,12 @@ void vicii_timing_advance(vicii_t* vicii) {
     
     // Prepare line buffers for the next scanline
     vicii_line_buffer_reset(vicii);
+    
+    // Vertical border check after raster_counter changed.
+    // Also transfers staged vborder latch → active flip-flop at start of line
+    // (VICE: vicii-cycle.c line 481).
+    vicii_check_vertical_border(vicii);
+    vicii->border.vertical_border_flip_flop = vicii->border.set_vertical_border_flip_flop;
 }
 
 // ========================================================================================
@@ -1161,14 +1191,11 @@ static uint8_t vicii_cycle_sprite_s_access(vicii_t* vicii, int param_sprite_num)
 }
 
 static uint8_t vicii_cycle_refresh(vicii_t* vicii, int unused_param) {
-    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-    
-    // BA/AEC will be set centrally in vicii_tick based on access type
-    if (den_enabled) {
-        return VIC_ACCESS_REFRESH;
-    } else {
-        return VIC_ACCESS_IDLE;
-    }
+    // VICE reference: Refresh access is UNCONDITIONAL — no DEN check.
+    // The VIC-II always performs refresh cycles regardless of display enable state.
+    // DEN only affects allow_bad_lines (captured at raster $30), which gates bad line
+    // detection in vicii_update_badline_condition(). Separate DEN checks here were wrong.
+    return VIC_ACCESS_REFRESH;
 }
 
 // Spec cycle 14 (x_cycle 13): VC update — refresh PHI1, VC/VMLI/RC update
@@ -1188,9 +1215,9 @@ static uint8_t vicii_cycle_refresh_vc_update(vicii_t* vicii, int unused_param) {
     // Only on bad lines: reset RC to zero (starts a new 8-row character block)
     // Documentation (vic-ii.txt line 1236-1238): "If there is a Bad Line Condition
     // in this phase, RC is also reset to zero."
-    // Use bad_line_occurred latch to survive CPU D011 writes that clear is_bad_line.
-    const bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-    if (vicii->video_logic.bad_line_occurred && den_enabled) {
+    // VICE reference: No DEN guard here — bad_line already incorporates allow_bad_lines
+    // which was set based on DEN during raster $30.
+    if (vicii->video_logic.bad_line_occurred) {
         vicii->video_logic.rc = 0;
     }
 
@@ -1206,11 +1233,9 @@ static uint8_t vicii_cycle_refresh_vc_update(vicii_t* vicii, int unused_param) {
 // Returns VIC_ACCESS_REFRESH_C on bad lines (refresh PHI1 + c-access PHI2),
 // or VIC_ACCESS_REFRESH on non-bad lines (refresh only).
 static uint8_t vicii_cycle_refresh_first_c_access(vicii_t* vicii, int unused_param) {
-    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-    
-    // Use bad_line_occurred latch: once a bad line was detected this raster line,
-    // the c-access sequence proceeds regardless of subsequent D011 writes.
-    if (vicii->video_logic.bad_line_occurred && den_enabled) {
+    // VICE reference: No DEN guard — bad_line_occurred already incorporates
+    // allow_bad_lines which was set based on DEN during raster $30.
+    if (vicii->video_logic.bad_line_occurred) {
         return VIC_ACCESS_REFRESH_C;
     }
     return VIC_ACCESS_REFRESH;
@@ -1267,20 +1292,14 @@ static inline void vicii_sprite_mcbase_update(vicii_t* vicii) {
 
 static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int unused_param_vmli) {
     // Char/color access for cycles 16-54 (cycle 16 wrapper adds MCBASE update before this)
-    bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-    
-    // BA/AEC will be set centrally in vicii_tick based on access type
-    if (den_enabled) {
-        // Use bad_line_occurred latch: once a bad line was detected at any point
-        // on this raster line, the c-access sequence proceeds to completion.
-        if (vicii->video_logic.bad_line_occurred) {
-            return VIC_ACCESS_C; // Will FALLTHROUGH in vicii_tick PHI1 phase to VIC_ACCESS_G as well
-        } else if (vicii->video_logic.display_state) {
-            // On non-bad lines during display state, still need G-access for graphics data
-            // DO NOT change display_state here - it's managed by cycle 15 (bad lines set it true)
-            // and cycle 58 (RC==7 check sets it false when going to idle)
-            return VIC_ACCESS_G;
-        }
+    // VICE reference (vicii-fetch.c vicii_fetch_idle_c): No DEN guard.
+    // The decision uses !idle_state (= display_state) || bad_line.
+    // bad_line_occurred already incorporates allow_bad_lines (set based on DEN at raster $30).
+    if (vicii->video_logic.bad_line_occurred) {
+        return VIC_ACCESS_C; // Will FALLTHROUGH in vicii_tick PHI1 phase to VIC_ACCESS_G as well
+    } else if (vicii->video_logic.display_state) {
+        // On non-bad lines during display state, still need G-access for graphics data
+        return VIC_ACCESS_G;
     }
     return VIC_ACCESS_IDLE;
 }
@@ -1479,27 +1498,10 @@ static uint8_t vicii_cycle_sprite_p_rc_mc_load(vicii_t* vicii, int param_sprite_
     return vicii_cycle_sprite_p_access(vicii, param_sprite_num);
 }
 
-// Border Rules 2 & 3: Y coordinate checks in cycle 63 (1-based numbering)
-// Combined with sprite S access for cycle efficiency
-static inline void vicii_cycle_63_border_check(vicii_t* vicii) {
-    uint16_t raster = vicii->timing.raster_counter;
-    bool den_set = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-                
-    // Rule 2: "If the Y coordinate reaches the bottom comparison value in cycle 63,
-    // the vertical border flip flop is set."
-    if (raster == vicii->border.border_bottom) {
-        vicii->border.vertical_border_flip_flop = true;
-    }
-
-    // Rule 3: "If the Y coordinate reaches the top comparison value in cycle 63 and
-    // the DEN bit in register $d011 is set, the vertical border flip flop is reset."
-    else if (raster == vicii->border.border_top && den_set) {
-        vicii->border.vertical_border_flip_flop = false;
-    }    
-}
-
 static uint8_t vicii_cycle_sprite_s_border_check(vicii_t* vicii, int param_sprite_num) {
-    vicii_cycle_63_border_check(vicii);
+    // Border Rules 2 & 3: Y coordinate checks in cycle 63 (1-based numbering).
+    // Reuses the same two-stage vborder latch logic as raster-advance and $D011 writes.
+    vicii_check_vertical_border(vicii);
     // Perform the sprite S access for this cycle
     return vicii_cycle_sprite_s_access(vicii, param_sprite_num);
 }
@@ -2444,6 +2446,7 @@ static inline void vicii_initialize(vicii_t* vicii) {
     // Initialize border flip-flops (Documentation section 3.9)
     vicii->border.main_border_flip_flop = true;      // Start with border on
     vicii->border.vertical_border_flip_flop = true;  // Start with vertical border on
+    vicii->border.set_vertical_border_flip_flop = true; // Staged latch also starts on
     vicii_memory_update_mapping(&vicii->memory, vicii->registers.data[VICII_MP]);
     
     // Initialize refresh counter (Documentation section 3.13)
@@ -2510,6 +2513,7 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
     // Initialize border flip-flops to show border initially
     vicii->border.main_border_flip_flop = true;
     vicii->border.vertical_border_flip_flop = true;
+    vicii->border.set_vertical_border_flip_flop = true;
 }
 
 // ========================================================================================
