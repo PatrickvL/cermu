@@ -50,24 +50,31 @@ static inline void vicii_border_update_limits(vicii_border_unit_t* border, uint8
         VICII_BORDER_RIGHT_CSEL1 : VICII_BORDER_RIGHT_CSEL0;
 }
 
-// Two-stage vertical border latch check (VICE: check_vborder_top/bottom).
-// Called when any input changes: raster_counter advance or $D011 write.
-// Inputs: raster_counter, DEN bit, border_top, border_bottom.
-static inline void vicii_check_vertical_border(vicii_t* vicii) {
-    const uint16_t raster = vicii->timing.raster_counter;
-    const bool den_set = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-    
-    // check_vborder_top: top border + DEN → clear both immediately
-    if (raster == vicii->border.border_top && den_set) {
+// Vertical border check — bottom half (VICE: check_vborder_bottom).
+// Sets the staged latch when raster reaches border_bottom.
+// Shared by vicii_check_vertical_border (full check) and
+// vicii_check_hborder_left (left border open sequence).
+static inline void vicii_check_vborder_bottom(vicii_t* vicii) {
+    if (vicii->timing.raster_counter == vicii->border.border_bottom) {
+        vicii->border.set_vertical_border_flip_flop = true;
+    }
+}
+
+// Vertical border check — top half (VICE: check_vborder_top).
+// Clears both flip-flops when raster reaches border_top AND DEN is set.
+static inline void vicii_check_vborder_top(vicii_t* vicii) {
+    if (vicii->timing.raster_counter == vicii->border.border_top &&
+        (vicii->registers.data[VICII_C1] & VICII_C1_DEN)) {
         vicii->border.vertical_border_flip_flop = false;
         vicii->border.set_vertical_border_flip_flop = false;
     }
-    
-    // check_vborder_bottom: bottom border → set staged latch
-    // (transferred to active flip-flop at left border position and start of line)
-    if (raster == vicii->border.border_bottom) {
-        vicii->border.set_vertical_border_flip_flop = true;
-    }
+}
+
+// Full vertical border check (top + bottom).
+// Called when any input changes: raster_counter advance or $D011 write.
+static inline void vicii_check_vertical_border(vicii_t* vicii) {
+    vicii_check_vborder_top(vicii);
+    vicii_check_vborder_bottom(vicii);
 }
 
 // ========================================================================================
@@ -311,78 +318,56 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
     // This ensures CPU register writes (like border/background color changes) affect
     // pixels being OUTPUT at that moment, not pixels being LOADED into the pipeline.
     const uint16_t x_coord = vicii->timing.x_coordinate;
-    const uint16_t raster = vicii->timing.raster_counter;
-    const uint8_t c1_reg = vicii->registers.data[VICII_C1];
-    const bool den_set = (c1_reg & VICII_C1_DEN) != 0;
     
-    // Border limits for per-pixel comparison
-    const uint16_t border_left = vicii->border.border_left;
-    const uint16_t border_right = vicii->border.border_right;
-    const uint16_t border_top = vicii->border.border_top;
-    const uint16_t border_bottom = vicii->border.border_bottom;
-    
-    // Sequence exactly 8 pixels, checking border flip-flops at EACH pixel position
-    // Save per-pixel border state for use in the display loop below.
-    // The border flip-flop transitions mid-cycle (e.g., opens at border_left),
-    // so we must not use the final flip-flop state for pixels that were in the border.
+    // ---------------------------------------------------------------
+    // PER-PIXEL BORDER RENDERING with two-stage pipeline (VICE: draw_border8)
+    // ---------------------------------------------------------------
+    // Horizontal border checks (left open / right close) have already been
+    // performed by the cycle callback wrappers (vicii_cycle_char_color_hborder_l1,
+    // _l0, vicii_cycle_idle_y_match_hborder_r0, vicii_cycle_idle_hborder_r1)
+    // BEFORE this function runs, so main_border_flip_flop is up-to-date.
+    //
+    // border_state holds the PREVIOUS cycle's main_border value.
+    // During transitions, rendering uses border_state (old) for most/all pixels.
+    //
+    // Transition rendering (matching VICE draw_border8):
+    // - CSEL=1: ALL 8 pixels use OLD border_state; then update
+    // - CSEL=0: pixels 0-6 use OLD border_state; pixel 7 uses NEW state
     bool per_pixel_in_border[8];
-    vicii_sequencer_unit_t* seq = &vicii->sequencer;
+    const bool old_border = vicii->border.border_state;
+    const bool new_border = vicii->border.main_border_flip_flop;
+    const bool vborder = vicii->border.vertical_border_flip_flop;
+    const bool csel = (vicii->registers.data[VICII_C2] & VICII_C2_CSEL) != 0;
+    
+    if (old_border == new_border) {
+        // No transition: all pixels use same state
+        const bool in_border = old_border || vborder;
+        for (int i = 0; i < 8; i++)
+            per_pixel_in_border[i] = in_border;
+    } else if (csel) {
+        // CSEL=1 transition: all 8 pixels use OLD state (transition takes effect next cycle)
+        for (int i = 0; i < 8; i++)
+            per_pixel_in_border[i] = old_border || vborder;
+    } else {
+        // CSEL=0 transition: pixels 0-6 use old state, pixel 7 uses new state
+        const bool old_in_border = old_border || vborder;
+        for (int i = 0; i < 7; i++)
+            per_pixel_in_border[i] = old_in_border;
+        per_pixel_in_border[7] = new_border || vborder;
+    }
+    
+    // Update border_state for next cycle
+    vicii->border.border_state = new_border;
+    
+    // Emit border pixels
     for (int pixel = 0; pixel < 8; pixel++) {
-        const uint16_t pixel_x = x_coord + (uint16_t)pixel;
-        
-        // CRITICAL: Check border flip-flops at exact pixel position
-        // This implements the instantaneous transition described in the documentation
-        
-        // Rule 1: "If the X coordinate reaches the right comparison value, the main border flip flop is set."
-        if (pixel_x == border_right) {
-            vicii->border.main_border_flip_flop = true;
+        if (per_pixel_in_border[pixel] || !vicii->video_logic.display_state) {
+            vicii_pixel_emit_at_x(vicii, &vicii->border.border_pixel, x_coord + (uint16_t)pixel);
         }
-        
-        // Rules 4, 5, 6: Handle left coordinate checks
-        if (pixel_x == border_left) {
-            // VICE-style two-stage vborder latch:
-            // At the left border position, check bottom border condition and
-            // transfer the staged vborder latch to the active flip-flop.
-            
-            // Rule 4 / check_vborder_bottom: set staged latch if raster matches bottom
-            if (raster == border_bottom) {
-                vicii->border.set_vertical_border_flip_flop = true;
-            }
-            
-            // Transfer staged latch → active flip-flop (VICE: vborder = set_vborder)
-            vicii->border.vertical_border_flip_flop = vicii->border.set_vertical_border_flip_flop;
-            
-            // Rule 6: "If the X coordinate reaches the left comparison value and the vertical
-            // border flip flop is not set, the main flip flop is reset."
-            if (!vicii->border.vertical_border_flip_flop) {
-                // Detect main border opening transition for XSCROLL initialization.
-                // On real VIC-II hardware, the graphics data sequencer resets when the
-                // main border flip-flop turns off. XSCROLL delays the first character
-                // pixel by that many dot clocks after the border opens.
-                if (vicii->border.main_border_flip_flop) {
-                    seq->xscroll_counter = vicii->registers.data[VICII_C2] & VICII_C2_XSCROLL;
-                    seq->pixel_in_char = 0;
-                    seq->display_vmli = 0;
-                }
-                vicii->border.main_border_flip_flop = false;
-            }
-        }
-        
-        // Now determine if THIS specific pixel is border or display
-        const bool in_border = vicii->border.main_border_flip_flop
-                            || vicii->border.vertical_border_flip_flop;
-        per_pixel_in_border[pixel] = in_border;
-        
-        if (in_border || !vicii->video_logic.display_state) {
-            // This pixel is in border area
-            vicii_pixel_emit_at_x(vicii, &vicii->border.border_pixel, pixel_x);
-        }
-        // Display pixels will be handled in the second loop below
     }
     
     // Now handle display area pixel sequencing
-    // This section processes pixels that are NOT in border
-    // (seq was declared before the border loop above for XSCROLL init)
+    vicii_sequencer_unit_t* seq = &vicii->sequencer;
     
     // Only process display logic if we're in display state
     if (vicii->video_logic.display_state) {
@@ -397,10 +382,9 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         // The shift register reloads from the latch when the previous character's
         // 8 pixels have been fully consumed (pixel_in_char wraps to 0).  This means
         // character pixel output is NOT aligned to cycle boundaries — it spans
-        // across cycles.  With first_x_coord=404 (PAL), the border opens at pixel 4
-        // of cycle 15 (x=24).  Column 0's SR loads at that moment, outputting bits
-        // 7-0 across pixels 4-7 of cycle 15 and pixels 0-3 of cycle 16.  This gives
-        // all 40 columns exactly 8 visible pixels within the 320-pixel display window.
+        // across cycles.  Border checks happen at cycle level (cycle 17/18 for left,
+        // 56/57 for right), with the rendering pipeline delaying the transition by
+        // one cycle (CSEL=1) or 7 pixels within the cycle (CSEL=0).
         //
         // The display_vmli counter tracks which column to load next (0-39),
         // independent of the g-access vmli.  The SR reload happens inside the pixel
@@ -1236,6 +1220,8 @@ static uint8_t vicii_cycle_refresh_vc_update(vicii_t* vicii, int unused_param) {
 static uint8_t vicii_cycle_refresh_first_c_access(vicii_t* vicii, int unused_param) {
     // VICE reference: Uses instantaneous bad_line check. If CPU writes $D011
     // clearing the bad line condition, c-access stops (used in FLI techniques).
+    // Also processes pending sprite crunch effects from $D017 writes (ChkSprCrunch).
+    vicii_sprite_process_pending_crunch(vicii);
     if (vicii->video_logic.is_bad_line) {
         return VIC_ACCESS_REFRESH_C;
     }
@@ -1267,13 +1253,7 @@ static inline void vicii_sprite_process_pending_crunch(vicii_t* vicii) {
     vicii->sprites.pending_mxye_crunch = 0;
 }
 
-// Spec cycle 15 wrapper: First c-access + sprite crunch processing
-// VICE reference (vicii-chip-model.c): Cycle 15 Phi2 has ChkSprCrunch flag.
-static uint8_t vicii_cycle_refresh_first_c_access_sprite_crunch(vicii_t* vicii, int param) {
-    uint8_t result = vicii_cycle_refresh_first_c_access(vicii, param);
-    vicii_sprite_process_pending_crunch(vicii);
-    return result;
-}
+
 
 // VICE reference (viciisc/vicii-cycle.c): sprite_mcbase_update() at cycle 16 Phi2
 // MCBASE ← MC (if exp_flop set), DMA off if mcbase==63.
@@ -1316,6 +1296,64 @@ static uint8_t vicii_cycle_idle(vicii_t* vicii, int unused_param) {
     // Idle cycle: VIC accesses during PHI1, CPU can use PHI2
     // BA/AEC will be set centrally in vicii_tick based on look-ahead
     return VIC_ACCESS_IDLE;
+}
+
+// ========================================================================================
+// HORIZONTAL BORDER CHECK HELPERS (VICE: check_hborder)
+// ========================================================================================
+//
+// Border checks fire at specific cycles determined by CSEL:
+//   Left open:   CSEL=1 at cycle 17 (x_cycle 16), CSEL=0 at cycle 18 (x_cycle 17)
+//   Right close: CSEL=0 at cycle 56 (x_cycle 55), CSEL=1 at cycle 57 (x_cycle 56)
+//
+// Each check cycle gets a wrapper that tests whether CSEL matches.
+// VICE reference: viciisc/vicii-cycle.c check_hborder()
+
+// (vicii_cycle_idle_y_match defined later, includes CSEL=0 right border check)
+
+// Left horizontal border check (VICE: check_hborder left path).
+// Unconditional — the CSEL gating is done by the cycle callback wrapper.
+// Reuses vicii_check_vborder_bottom for the staged latch update.
+static inline void vicii_check_hborder_left(vicii_t* vicii) {
+    vicii_check_vborder_bottom(vicii);
+    // Transfer staged latch → active flip-flop (VICE: vborder = set_vborder)
+    vicii->border.vertical_border_flip_flop = vicii->border.set_vertical_border_flip_flop;
+    // Open border if vertical border is not set
+    if (!vicii->border.vertical_border_flip_flop) {
+        if (vicii->border.main_border_flip_flop) {
+            vicii->sequencer.xscroll_counter = vicii->registers.data[VICII_C2] & VICII_C2_XSCROLL;
+            vicii->sequencer.pixel_in_char = 0;
+            vicii->sequencer.display_vmli = 0;
+        }
+        vicii->border.main_border_flip_flop = false;
+    }
+}
+
+// Right horizontal border check (VICE: check_hborder right path).
+// Unconditional — the CSEL gating is done by the cycle callback wrapper.
+static inline void vicii_check_hborder_right(vicii_t* vicii) {
+    vicii->border.main_border_flip_flop = true;
+}
+
+// Cycle 17 (x_cycle 16): char/color access + left hborder check for CSEL=1
+static uint8_t vicii_cycle_char_color_hborder_l1(vicii_t* vicii, int param) {
+    if (vicii->registers.data[VICII_C2] & VICII_C2_CSEL)
+        vicii_check_hborder_left(vicii);
+    return vicii_cycle_char_color_access(vicii, param);
+}
+
+// Cycle 18 (x_cycle 17): char/color access + left hborder check for CSEL=0
+static uint8_t vicii_cycle_char_color_hborder_l0(vicii_t* vicii, int param) {
+    if (!(vicii->registers.data[VICII_C2] & VICII_C2_CSEL))
+        vicii_check_hborder_left(vicii);
+    return vicii_cycle_char_color_access(vicii, param);
+}
+
+// Cycle 57 (x_cycle 56): idle + right hborder check for CSEL=1
+static uint8_t vicii_cycle_idle_hborder_r1(vicii_t* vicii, int param) {
+    if (vicii->registers.data[VICII_C2] & VICII_C2_CSEL)
+        vicii_check_hborder_right(vicii);
+    return vicii_cycle_idle(vicii, param);
 }
 
 // PAL Cycle 1 wrapper: Execute line 0 operations here (delayed from cycle 0)
@@ -1422,9 +1460,11 @@ static uint8_t vicii_cycle_char_color_y_match(vicii_t* vicii, int unused_param_v
     return vicii_cycle_char_color_access(vicii, unused_param_vmli);
 }
 
-// Cycle 56: Sprite Y-match + expansion flip-flop toggle + idle access
-// VICE timing: ChkSprDma at Phi1(56), ChkSprExp at Phi2(56)
+// Cycle 56: Sprite Y-match + expansion flip-flop toggle + idle access + ChkBrdR0
+// VICE timing: ChkSprDma at Phi1(56), ChkSprExp at Phi2(56), ChkBrdR0
 static uint8_t vicii_cycle_idle_y_match(vicii_t* vicii, int unused_param) {
+    if (!(vicii->registers.data[VICII_C2] & VICII_C2_CSEL))
+        vicii_check_hborder_right(vicii);
     vicii_sprite_y_coordinate_check(vicii);
     vicii_sprite_expansion_toggle(vicii);
     return vicii_cycle_idle(vicii, unused_param);
@@ -2113,8 +2153,8 @@ static const vicii_cycle_entry_t vicii_cycle_table_6569[63] = {
     {vicii_cycle_refresh_vc_update, -1},        // 14 r_X r_x (+ VC=VCBASE, VMLI=0, RC=0 on bad line)
     {vicii_cycle_refresh_first_c_access_sprite_crunch, -1}, // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
     {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
-    {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
-    {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
+    {vicii_cycle_char_color_hborder_l1, 1},     // 17 gc_ g_x + ChkBrdL1
+    {vicii_cycle_char_color_hborder_l0, 2},     // 18 gc_ g_x + ChkBrdL0
     {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
     {vicii_cycle_char_color_access, 4},         // 20 gc_ g_x
     {vicii_cycle_char_color_access, 5},         // 21 gc_ g_x
@@ -2152,8 +2192,8 @@ static const vicii_cycle_entry_t vicii_cycle_table_6569[63] = {
     {vicii_cycle_char_color_access, 37},        // 53 gc_ g_x
     {vicii_cycle_char_color_access, 38},        // 54 gc_ g_x
     {vicii_cycle_char_color_y_match, 39},       // 55 g_x g_x (+ sprite Y match)
-    {vicii_cycle_idle_y_match, -1},             // 56 i_x i_x (+ sprite Y match)
-    {vicii_cycle_idle, -1},                     // 57 i_x i_x
+    {vicii_cycle_idle_y_match, -1},             // 56 i_x i_x (+ sprite Y match + ChkBrdR0)
+    {vicii_cycle_idle_hborder_r1, -1},          // 57 i_x i_x + ChkBrdR1
     {vicii_cycle_sprite_p_rc_mc_load, 0},       // 58 0_x 0_x : Sprite 0 P-access + RC/VCBASE + MC load (Rules 5 & 4)
     {vicii_cycle_sprite_s_access, 0},           // 59 i_x i_x : Sprite 0 S-access
     {vicii_cycle_sprite_p_access, 1},           // 60 1_x 1_x : Sprite 1 P-access
@@ -2180,10 +2220,10 @@ static const vicii_cycle_entry_t vicii_cycle_table_6567R56A[64] = {
     {vicii_cycle_refresh, -1},                  // 12 r_X r_x
     {vicii_cycle_refresh, -1},                  // 13 r_X r_x
     {vicii_cycle_refresh_vc_update, -1},        // 14 r_X r_x (+ VC=VCBASE, VMLI=0, RC=0 on bad line)
-    {vicii_cycle_refresh_first_c_access_sprite_crunch, -1}, // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
+    {vicii_cycle_refresh_first_c_access, -1},  // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
     {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
-    {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
-    {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
+    {vicii_cycle_char_color_hborder_l1, 1},     // 17 gc_ g_x + ChkBrdL1
+    {vicii_cycle_char_color_hborder_l0, 2},     // 18 gc_ g_x + ChkBrdL0
     {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
     {vicii_cycle_char_color_access, 4},         // 20 gc_ g_x
     {vicii_cycle_char_color_access, 5},         // 21 gc_ g_x
@@ -2221,8 +2261,8 @@ static const vicii_cycle_entry_t vicii_cycle_table_6567R56A[64] = {
     {vicii_cycle_char_color_access, 37},        // 53 gc_ g_x
     {vicii_cycle_char_color_access, 38},        // 54 gc_ g_x
     {vicii_cycle_char_color_y_match, 39},       // 55 g_x g_x (+ sprite Y match)
-    {vicii_cycle_idle_y_match, -1},             // 56 i_x i_x (+ sprite Y match)
-    {vicii_cycle_idle, -1},                     // 57 i_x i_x
+    {vicii_cycle_idle_y_match, -1},             // 56 i_x i_x (+ sprite Y match + ChkBrdR0)
+    {vicii_cycle_idle_hborder_r1, -1},          // 57 i_x i_x + ChkBrdR1
     {vicii_cycle_idle, -1},                     // 58 i_x i_x
     {vicii_cycle_sprite_p_rc_mc_load, 0},       // 59 0_x 0_x : Sprite 0 P-access + RC/VCBASE + MC load (Rules 5 & 4)
     {vicii_cycle_sprite_s_access, 0},           // 60 i_x i_x : Sprite 0 S-access
@@ -2250,10 +2290,10 @@ static const vicii_cycle_entry_t vicii_cycle_table_6567R8[65] = {
     {vicii_cycle_refresh, -1},                  // 12 r_X r_x
     {vicii_cycle_refresh, -1},                  // 13 r_X r_x
     {vicii_cycle_refresh_vc_update, -1},        // 14 r_X r_x (+ VC=VCBASE, VMLI=0, RC=0 on bad line)
-    {vicii_cycle_refresh_first_c_access_sprite_crunch, -1}, // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
+    {vicii_cycle_refresh_first_c_access, -1},  // 15 rc_ r_x (refresh PHI1 + first c-access PHI2 + sprite crunch)
     {vicii_cycle_16_mcbase_char_color, 0},      // 16 gc_ g_x + MCBASE update
-    {vicii_cycle_char_color_access, 1},         // 17 gc_ g_x
-    {vicii_cycle_char_color_access, 2},         // 18 gc_ g_x
+    {vicii_cycle_char_color_hborder_l1, 1},     // 17 gc_ g_x + ChkBrdL1
+    {vicii_cycle_char_color_hborder_l0, 2},     // 18 gc_ g_x + ChkBrdL0
     {vicii_cycle_char_color_access, 3},         // 19 gc_ g_x
     {vicii_cycle_char_color_access, 4},         // 20 gc_ g_x
     {vicii_cycle_char_color_access, 5},         // 21 gc_ g_x
@@ -2291,8 +2331,8 @@ static const vicii_cycle_entry_t vicii_cycle_table_6567R8[65] = {
     {vicii_cycle_char_color_access, 37},        // 53 gc_ g_x
     {vicii_cycle_char_color_access, 38},        // 54 gc_ g_x
     {vicii_cycle_char_color_y_match, 39},       // 55 g_x g_x (+ sprite Y match)
-    {vicii_cycle_idle_y_match, -1},             // 56 i_x i_x (+ sprite Y match)
-    {vicii_cycle_idle, -1},                     // 57 i_x i_x
+    {vicii_cycle_idle_y_match, -1},             // 56 i_x i_x (+ sprite Y match + ChkBrdR0)
+    {vicii_cycle_idle_hborder_r1, -1},          // 57 i_x i_x + ChkBrdR1
     {vicii_cycle_idle, -1},                     // 58 i_x i_x
     {vicii_cycle_idle, -1},                     // 59 i_x i_x
     {vicii_cycle_sprite_p_rc_mc_load, 0},       // 60 0_x 0_x : Sprite 0 P-access + RC/VCBASE + MC load (Rules 5 & 4)
@@ -2445,6 +2485,7 @@ static inline void vicii_initialize(vicii_t* vicii) {
     vicii->border.main_border_flip_flop = true;      // Start with border on
     vicii->border.vertical_border_flip_flop = true;  // Start with vertical border on
     vicii->border.set_vertical_border_flip_flop = true; // Staged latch also starts on
+    vicii->border.border_state = true;               // Rendering pipeline starts with border on
     vicii_memory_update_mapping(&vicii->memory, vicii->registers.data[VICII_MP]);
     
     // Initialize refresh counter (Documentation section 3.13)
@@ -2512,6 +2553,7 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
     vicii->border.main_border_flip_flop = true;
     vicii->border.vertical_border_flip_flop = true;
     vicii->border.set_vertical_border_flip_flop = true;
+    vicii->border.border_state = true;
 }
 
 // ========================================================================================

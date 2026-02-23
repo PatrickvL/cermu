@@ -395,6 +395,10 @@ typedef struct {
     bool set_vertical_border_flip_flop; // Two-stage vborder latch (VICE: set_vborder)
                                         // Updated per-cycle, transferred to vertical_border_flip_flop
                                         // at left border position and start of line.
+    bool border_state;               // Rendering-side border state (VICE: border_state).
+                                     // Holds the PREVIOUS cycle's main_border value.
+                                     // During transitions, rendering uses border_state (old)
+                                     // for most/all pixels, then updates to main_border (new).
 } vicii_border_unit_t;
 
 // Memory Mapping Unit - VIC-II memory access configuration (Documentation section 2.4.2)
