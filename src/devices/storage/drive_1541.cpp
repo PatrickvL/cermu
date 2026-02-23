@@ -1023,6 +1023,101 @@ void Drive1541Device::render_device_ui() {
 #endif
 
 // ============================================================================
+// SERIAL TRAP API — KERNAL SERIAL TRAP INTERFACE
+// ============================================================================
+// These methods are called by the C64's KERNAL serial trap handlers to
+// perform drive operations without going through the IEC bit-banged protocol.
+// This is equivalent to VICE's fsdrive/vdrive layer.
+// ============================================================================
+
+void Drive1541Device::trap_open(uint8_t sa) {
+    trap_sa_ = sa & 0x0F;
+    trap_awaiting_name_ = true;
+    trap_name_buffer_.clear();
+}
+
+void Drive1541Device::trap_close(uint8_t sa) {
+    channels_[sa & 0x0F].clear();
+}
+
+void Drive1541Device::trap_second(uint8_t sa) {
+    trap_sa_ = sa & 0x0F;
+}
+
+void Drive1541Device::trap_send(uint8_t byte) {
+    if (trap_awaiting_name_) {
+        // Accumulating filename bytes during OPEN sequence
+        trap_name_buffer_.push_back(static_cast<char>(byte));
+    } else {
+        // Data byte during LISTEN (e.g., SAVE — not yet implemented)
+        DriveChannel& ch = channels_[trap_sa_];
+        if (ch.open) {
+            ch.buffer.push_back(byte);
+        }
+    }
+}
+
+int Drive1541Device::trap_receive(uint8_t& byte) {
+    DriveChannel& ch = channels_[trap_sa_];
+
+    // Error/command channel (15) — always readable
+    if (trap_sa_ == 15) {
+        if (ch.position < ch.buffer.size()) {
+            byte = ch.buffer[ch.position++];
+            return (ch.position >= ch.buffer.size()) ? 0x40 : 0;
+        }
+        byte = 0x0D;  // CR
+        return 0x40;   // EOF
+    }
+
+    if (!ch.open || ch.eof) {
+        byte = 0;
+        return 0x42;   // EOF + read error
+    }
+
+    if (ch.position >= ch.buffer.size()) {
+        ch.eof = true;
+        byte = 0;
+        return 0x42;
+    }
+
+    byte = ch.buffer[ch.position++];
+    if (ch.position >= ch.buffer.size()) {
+        ch.eof = true;
+        return 0x40;   // Last byte, signal EOF
+    }
+
+    return 0;  // OK
+}
+
+void Drive1541Device::trap_unlisten() {
+    if (trap_awaiting_name_) {
+        trap_awaiting_name_ = false;
+        uint8_t sa = trap_sa_;
+        DriveChannel& ch = channels_[sa];
+        ch.clear();
+        ch.filename = trap_name_buffer_;
+
+        if (sa == 15) {
+            // Command channel — process DOS command
+            ch.open = true;
+        } else {
+            // Normal file open
+            drive_led_ = true;
+            if (!open_file(ch, trap_name_buffer_)) {
+                set_error(62, "FILE NOT FOUND");
+            }
+            drive_led_ = false;
+        }
+        trap_name_buffer_.clear();
+    }
+}
+
+void Drive1541Device::trap_untalk() {
+    // Nothing to do — data transfer was handled byte by byte
+}
+
+// ============================================================================
 // SELF-REGISTRATION
 // ============================================================================
 

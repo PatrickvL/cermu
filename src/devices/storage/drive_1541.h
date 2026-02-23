@@ -173,6 +173,32 @@ public:
     /// Clear the file dialog request flag (called by GUI after opening the dialog).
     void clear_file_dialog_request() { wants_file_dialog_ = false; }
 
+    // --- Serial Trap API ------------------------------------------------
+    // Called by the C64's KERNAL serial trap handlers to perform drive
+    // operations without going through the IEC bit-banged protocol.
+    // This mirrors VICE's serial-trap.c → fsdrive.c dispatch path.
+
+    /// Begin OPEN on secondary address — prepare for filename accumulation.
+    void trap_open(uint8_t sa);
+
+    /// Close channel.
+    void trap_close(uint8_t sa);
+
+    /// Set secondary address for subsequent data transfer.
+    void trap_second(uint8_t sa);
+
+    /// CIOUT — receive byte from C64 (filename during OPEN, data during LISTEN).
+    void trap_send(uint8_t byte);
+
+    /// ACPTR — send byte to C64.  Returns status: 0=ok, 0x40=EOF.
+    int trap_receive(uint8_t& byte);
+
+    /// Complete pending OPEN with accumulated filename.
+    void trap_unlisten();
+
+    /// Clean up after TALK session.
+    void trap_untalk();
+
 private:
     // --- IEC Protocol --------------------------------------------------
 
@@ -250,6 +276,11 @@ private:
 
     // GUI communication
     bool                     wants_file_dialog_ = false;  ///< Set by render_device_ui, cleared by GUI
+
+    // Serial trap state (used by KERNAL trap path)
+    uint8_t         trap_sa_ = 0;                ///< Current secondary address for trap ops
+    bool            trap_awaiting_name_ = false;  ///< True between OPEN and UNLISTEN
+    std::string     trap_name_buffer_;            ///< Filename accumulator during OPEN
 
     // D64 constants (prefixed to avoid collision with d64_format.h macros)
     static constexpr uint32_t DRIVE_D64_STD_SIZE     = 174848;

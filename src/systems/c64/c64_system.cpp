@@ -586,8 +586,226 @@ void C64System::reset() {
             this->ram->memory[0x00C6] = 0;
         }
 
+        // Reset serial trap state
+        serial_trap_ = {};
+
         printf("C64 System: Reset complete\n");
     }
+}
+
+// ============================================================================
+// KERNAL SERIAL TRAPS — IEC bus trap handlers
+// ============================================================================
+// Intercept KERNAL serial bus routines to provide instant drive I/O.
+// Addresses match the standard C64 KERNAL ROM (901227-03).
+// Same approach as VICE's serial-trap.c but dispatching directly to our
+// Drive1541Device channel buffers.
+// ============================================================================
+
+// KERNAL serial routine addresses (from VICE c64.c c64_serial_traps[])
+static constexpr uint16_t TRAP_SERIAL_LISTEN      = 0xED24;
+static constexpr uint16_t TRAP_SERIAL_SA_LISTEN    = 0xED37;
+static constexpr uint16_t TRAP_SERIAL_SEND_BYTE    = 0xED41;
+static constexpr uint16_t TRAP_SERIAL_RECEIVE_BYTE = 0xEE14;
+static constexpr uint16_t TRAP_SERIAL_READY        = 0xEEA9;
+static constexpr uint16_t TRAP_RESUME_ADDRESS      = 0xEDAB;  // RTS in KERNAL
+
+// KERNAL zero-page addresses for serial I/O
+static constexpr uint16_t ZP_BSOUR  = 0x95;   // Buffered character for serial bus
+static constexpr uint16_t ZP_TMP_IN = 0xA4;   // Temp storage for received byte
+static constexpr uint16_t ZP_STATUS = 0x90;   // I/O status word (ST)
+
+// IEC command byte masks
+static constexpr uint8_t IEC_LISTEN_MASK   = 0x20;
+static constexpr uint8_t IEC_TALK_MASK     = 0x40;
+static constexpr uint8_t IEC_SECOND_MASK   = 0x60;
+static constexpr uint8_t IEC_CLOSE_MASK    = 0xE0;
+static constexpr uint8_t IEC_OPEN_MASK     = 0xF0;
+static constexpr uint8_t IEC_UNLISTEN      = 0x3F;
+static constexpr uint8_t IEC_UNTALK        = 0x5F;
+static constexpr uint8_t IEC_DEVNR_MASK    = 0x0F;
+
+Drive1541Device* C64System::find_iec_drive(int device_number) {
+    if (device_number < 4) return nullptr;
+    auto* port = get_connector_port(PORT_IEC_SERIAL);
+    if (!port) return nullptr;
+    for (auto* dev : port->get_attached_devices()) {
+        auto* drive = dynamic_cast<Drive1541Device*>(dev);
+        if (drive && drive->get_device_number() == device_number) return drive;
+    }
+    return nullptr;
+}
+
+bool C64System::check_serial_traps(uint16_t pc) {
+    switch (pc) {
+        case TRAP_SERIAL_LISTEN:
+        case TRAP_SERIAL_SA_LISTEN:
+            return serial_trap_attention();
+        case TRAP_SERIAL_SEND_BYTE:
+            return serial_trap_send();
+        case TRAP_SERIAL_RECEIVE_BYTE:
+            return serial_trap_receive();
+        case TRAP_SERIAL_READY:
+            return serial_trap_ready();
+        default:
+            return false;
+    }
+}
+
+bool C64System::serial_trap_attention() {
+    auto* cpu = static_cast<mos6510_t*>(mos6510);
+    uint8_t iecdata = ram->memory[ZP_BSOUR];
+
+    if (iecdata == IEC_UNLISTEN) {
+        // UNLISTEN — finalize pending OPEN (send accumulated filename)
+        auto* drive = find_iec_drive(serial_trap_.active_device);
+        if (drive) {
+            drive->trap_unlisten();
+        }
+        serial_trap_.active_device = -1;
+    } else if (iecdata == IEC_UNTALK) {
+        // UNTALK — end talk session
+        auto* drive = find_iec_drive(serial_trap_.active_device);
+        if (drive) {
+            drive->trap_untalk();
+        }
+        serial_trap_.active_device = -1;
+    } else if ((iecdata & 0xF0) == IEC_LISTEN_MASK || (iecdata & 0xF0) == IEC_TALK_MASK) {
+        // LISTEN or TALK — address a device
+        serial_trap_.active_device = iecdata & IEC_DEVNR_MASK;
+        serial_trap_.trap_device = iecdata;
+        serial_trap_.trap_secondary = 0;
+    } else if ((iecdata & 0xF0) == IEC_SECOND_MASK) {
+        // SECONDARY — set secondary address for data transfer
+        serial_trap_.trap_secondary = iecdata;
+        auto* drive = find_iec_drive(serial_trap_.active_device);
+        if (drive) {
+            drive->trap_second(iecdata & 0x0F);
+        }
+    } else if ((iecdata & 0xF0) == IEC_OPEN_MASK) {
+        // OPEN — begin opening a channel (filename follows via CIOUT)
+        serial_trap_.trap_secondary = iecdata;
+        auto* drive = find_iec_drive(serial_trap_.active_device);
+        if (drive) {
+            drive->trap_open(iecdata & 0x0F);
+        }
+    } else if ((iecdata & 0xF0) == IEC_CLOSE_MASK) {
+        // CLOSE — close a channel
+        serial_trap_.trap_secondary = iecdata;
+        auto* drive = find_iec_drive(serial_trap_.active_device);
+        if (drive) {
+            drive->trap_close(iecdata & 0x0F);
+        }
+    }
+
+    // Check if the addressed device is present
+    if (serial_trap_.active_device >= 4) {
+        auto* drive = find_iec_drive(serial_trap_.active_device);
+        if (!drive) {
+            ram->memory[ZP_STATUS] |= 0x80;  // Device not present
+        }
+    }
+
+    // Clear carry and interrupt disable flags (as the real KERNAL would)
+    uint8_t p = mos6510_get_p(cpu);
+    p &= ~0x01;  // Clear carry
+    p &= ~0x04;  // Clear interrupt disable
+    mos6510_set_p(cpu, p);
+
+    // Resume at the KERNAL's RTS
+    mos6510_set_pc(cpu, TRAP_RESUME_ADDRESS);
+    mos6510_transition_to_fetch(cpu);
+    return true;
+}
+
+bool C64System::serial_trap_send() {
+    // Only handle if we have a valid device
+    if (serial_trap_.active_device < 4) return false;
+    auto* drive = find_iec_drive(serial_trap_.active_device);
+    if (!drive) return false;
+
+    auto* cpu = static_cast<mos6510_t*>(mos6510);
+    uint8_t iecdata = ram->memory[ZP_BSOUR];
+
+    // If no secondary address was sent, default to SA 0
+    if (serial_trap_.trap_secondary == 0) {
+        serial_trap_.trap_secondary = IEC_SECOND_MASK;
+        drive->trap_second(0);
+    }
+
+    drive->trap_send(iecdata);
+
+    // Clear carry and interrupt disable
+    uint8_t p = mos6510_get_p(cpu);
+    p &= ~0x01;
+    p &= ~0x04;
+    mos6510_set_p(cpu, p);
+
+    mos6510_set_pc(cpu, TRAP_RESUME_ADDRESS);
+    mos6510_transition_to_fetch(cpu);
+    return true;
+}
+
+bool C64System::serial_trap_receive() {
+    // Only handle if we have a valid device
+    if (serial_trap_.active_device < 4) return false;
+    auto* drive = find_iec_drive(serial_trap_.active_device);
+    if (!drive) return false;
+
+    auto* cpu = static_cast<mos6510_t*>(mos6510);
+
+    // If no secondary address was sent, default to SA 0
+    if (serial_trap_.trap_secondary == 0) {
+        serial_trap_.trap_secondary = IEC_SECOND_MASK;
+        drive->trap_second(0);
+    }
+
+    uint8_t data = 0;
+    int status = drive->trap_receive(data);
+
+    // Store received byte in TMP_IN and A register
+    ram->memory[ZP_TMP_IN] = data;
+    mos6510_set_a(cpu, data);
+
+    // Set/update I/O status (ST)
+    if (status) {
+        ram->memory[ZP_STATUS] |= static_cast<uint8_t>(status);
+    }
+
+    // Set CPU flags to match the received byte
+    uint8_t p = mos6510_get_p(cpu);
+    p &= ~0x01;  // Clear carry
+    p &= ~0x04;  // Clear interrupt disable
+    // Set N (sign) and Z (zero) flags based on data
+    if (data & 0x80) p |= 0x80; else p &= ~0x80;
+    if (data == 0)   p |= 0x02; else p &= ~0x02;
+    mos6510_set_p(cpu, p);
+
+    mos6510_set_pc(cpu, TRAP_RESUME_ADDRESS);
+    mos6510_transition_to_fetch(cpu);
+    return true;
+}
+
+bool C64System::serial_trap_ready() {
+    // Only handle if we have a valid device on the bus
+    if (serial_trap_.active_device < 4) return false;
+    auto* drive = find_iec_drive(serial_trap_.active_device);
+    if (!drive) return false;
+
+    auto* cpu = static_cast<mos6510_t*>(mos6510);
+
+    // Fake the serial-ready check: pretend the bus signals are fine
+    mos6510_set_a(cpu, 1);
+
+    uint8_t p = mos6510_get_p(cpu);
+    p &= ~0x80;  // Clear sign
+    p &= ~0x02;  // Clear zero
+    p &= ~0x04;  // Clear interrupt disable
+    mos6510_set_p(cpu, p);
+
+    mos6510_set_pc(cpu, TRAP_RESUME_ADDRESS);
+    mos6510_transition_to_fetch(cpu);
+    return true;
 }
 
 // ============================================================================
@@ -634,6 +852,18 @@ void C64System::system_tick() {
 
     // PHASE 4: CPU PHI1 — prepare next fetch
     s = mos6510_tick_phi1(mos6510, s);
+
+    // KERNAL serial trap check — intercept IEC bus routines at instruction boundaries
+    {
+        auto* cpu = static_cast<mos6510_t*>(mos6510);
+        if (mos6510_opdone(cpu)) {
+            uint16_t pc = mos6510_get_pc(cpu);
+            // All serial trap addresses are in the $ED00-$EEFF range
+            if (pc >= 0xED00 && pc < 0xEF00) {
+                check_serial_traps(pc);
+            }
+        }
+    }
 
     // Restore R/W line to read mode
     s |= BUS_BIT(BUS_RW_BIT);
@@ -845,7 +1075,20 @@ void C64System::apply_pending_load() {
             drive->insert_disk(pending_load_.filepath.c_str());
             printf("C64: D64 inserted into drive %d\n", drive->get_device_number());
         } else {
-            printf("C64: No 1541 drive attached — D64 not mounted\n");
+            // Auto-attach a 1541 drive to the IEC bus
+            if (iec_port && attach_device_to_port(PORT_IEC_SERIAL, "1541")) {
+                // Find the newly attached drive
+                for (auto* dev : iec_port->get_attached_devices()) {
+                    drive = dynamic_cast<Drive1541Device*>(dev);
+                    if (drive) break;
+                }
+                if (drive) {
+                    drive->insert_disk(pending_load_.filepath.c_str());
+                    printf("C64: Auto-attached 1541 drive #8, D64 inserted\n");
+                }
+            } else {
+                printf("C64: No IEC serial port available — D64 not mounted\n");
+            }
         }
 
         // Also fast-load the extracted PRG into RAM for instant start
