@@ -278,6 +278,7 @@ list(APPEND CHIP_SOURCES
 
     # Sound
     src/chip/sound/mos6581.cpp
+    src/chip/sound/sid_waveform_tables.cpp
 
     # Video - VIC-II (C64)
     src/chip/video/vic_ii/mos6569.cpp

@@ -1,4 +1,5 @@
 #include "mos6581.h"
+#include "sid_waveform_tables.h"
 #include <string.h>
 #include <stdlib.h>
 #include <math.h> // for tanhf
@@ -76,93 +77,112 @@ uint32_t voice_s::rate_to_period(int rate) {
     return envelope_rate_periods[rate & 0x0F];
 }
 
-void voice_s::envelope_clock() {
-    // reSID-accurate 8-bit envelope generator.
-    // Attack: envelope_counter increments by 1 each rate tick.
-    //         Transitions to decay when reaching 0xFF.
-    // Decay/Sustain: envelope_counter decrements by 1, gated by
-    //         the exponential counter reaching its period.
-    // Release: same decrement logic as decay.
-    // hold_zero prevents any further changes once envelope reaches 0.
-    
-    switch (envelope_cycle) {
-        case CYCLE_OFF:
-            break;
-            
-        case CYCLE_ATTACK:
-            // Attack always increments (exponential counter not used for gating).
-            // reSID: the first envelope step in attack also resets the exponential
-            // counter. This ensures decay starts with a fresh counter after attack
-            // completes. Verified by sampling ENV3 on real hardware.
-            if (envelope_hold_zero) break;
-            exponential_counter = 0;
-            envelope_amplitude = (envelope_amplitude + 1) & 0xFF;
-            if (envelope_amplitude == 0xFF) {
-                envelope_cycle = CYCLE_DECAY;
-                uint8_t decay_rate = sid->regs[voice_index * VOICE_REGS + VOICE_ATDCY] & 0x0F;
-                envelope_rate_period = rate_to_period(decay_rate);
-            }
-            break;
-            
-        case CYCLE_DECAY:
-            // reSID: Combined DECAY_SUSTAIN state (no separate sustain).
-            // Each rate tick gated by the exponential counter, if envelope !=
-            // sustain_level, decrement. Otherwise hold. If sustain is changed
-            // while in this state, decay resumes automatically.
-            // reSID uses strict == for exponential counter comparison (not >=).
-            if (envelope_hold_zero) break;
-            if (++exponential_counter == exponential_counter_period) {
-                exponential_counter = 0;
-                if (envelope_amplitude != sustain_level) {
-                    envelope_amplitude = (envelope_amplitude - 1) & 0xFF;
-                }
-            }
-            update_exponential_period();
-            // Note: do NOT transition to CYCLE_SUSTAIN. Stay in CYCLE_DECAY
-            // so that sustain level changes cause decay to resume.
-            break;
-            
-        case CYCLE_SUSTAIN:
-            // Legacy state — kept for save-state compatibility but should not
-            // be entered by new code paths. Behaves like CYCLE_DECAY.
-            if (envelope_hold_zero) break;
-            if (envelope_amplitude != sustain_level) {
-                // Sustain level was changed — resume decay behavior
-                envelope_cycle = CYCLE_DECAY;
-            }
-            break;
-            
-        case CYCLE_RELEASE:
-            if (envelope_hold_zero) break;
-            if (++exponential_counter == exponential_counter_period) {
-                exponential_counter = 0;
-                envelope_amplitude = (envelope_amplitude - 1) & 0xFF;
-            }
-            update_exponential_period();
-            break;
+// Envelope state pipeline change (reSID state_change())
+// Models the 2-3 cycle delay for gate transitions observed on real hardware.
+void voice_s::envelope_state_change() {
+    state_pipeline--;
+
+    switch (envelope_next_state) {
+    case CYCLE_ATTACK:
+        if (state_pipeline == 0) {
+            envelope_cycle = CYCLE_ATTACK;
+            // The attack register is correctly activated during second cycle of attack phase
+            uint8_t attack_rate = (sid->regs[voice_index * VOICE_REGS + VOICE_ATDCY] >> 4) & 0x0F;
+            envelope_rate_period = rate_to_period(attack_rate);
+            envelope_hold_zero = false;
+        }
+        break;
+    case CYCLE_DECAY:
+        // DECAY_SUSTAIN transitions are handled elsewhere
+        break;
+    case CYCLE_RELEASE:
+        if ((envelope_cycle == CYCLE_ATTACK && state_pipeline == 0) ||
+            (envelope_cycle == CYCLE_DECAY && state_pipeline == 1)) {
+            envelope_cycle = CYCLE_RELEASE;
+            uint8_t release_rate = sid->regs[voice_index * VOICE_REGS + VOICE_SUREL] & 0x0F;
+            envelope_rate_period = rate_to_period(release_rate);
+        }
+        break;
+    case CYCLE_FREEZED:
+        break;
+    default:
+        break;
     }
 }
 
-void voice_s::update_envelope() {
-    // reSID-accurate 15-bit rate counter.
-    // The rate counter increments each cycle. When it matches the rate period,
-    // the envelope is clocked. The counter is 15-bit and wraps at 0x8000.
-    // This wrapping behavior is the root of the "ADSR bug": if the rate period
-    // changes to a value below the current counter, the counter must wrap all
-    // the way around before the next envelope step, causing a long delay.
-    // reSID reference: envelope.h — rate_counter is 15-bit, uses != comparison.
-    if (envelope_rate_counter != envelope_rate_period) {
-        // Increment with 15-bit wrapping (counter skips 0 on wrap)
-        if (++envelope_rate_counter & ENVELOPE_RATE_OVERFLOW) {
-            envelope_rate_counter = 1; // Wrap: 0x7FFF → 0x0001 (skip 0)
-        }
-        return;
+void voice_s::envelope_clock() {
+    // reSID-accurate envelope clocking with full pipeline chain.
+    //
+    // The reSID envelope uses a multi-stage pipeline:
+    //   1. Rate counter matches rate_period → set reset_rate_counter = true
+    //   2. Next clock: reset_rate_counter processed → exponential_pipeline set
+    //   3. Next clock: exponential_pipeline fires → envelope_pipeline = 1
+    //   4. Next clock: envelope_pipeline fires → envelope_counter changes
+    //   5. Next clock: env3 latch captures new value
+    //
+    // This function is called once per clock cycle and manages the entire
+    // pipeline chain in the same order as reSID's EnvelopeGenerator::clock().
+    
+    // Process state pipeline (deferred gate transitions)
+    if (state_pipeline) {
+        envelope_state_change();
     }
     
-    // Rate counter matched — reset to 0 and clock the envelope
-    envelope_rate_counter = 0;
-    envelope_clock();
+    // Stage 2: Process envelope_pipeline (actual envelope counter change)
+    if (envelope_pipeline != 0 && (--envelope_pipeline == 0)) {
+        if (!envelope_hold_zero) {
+            if (envelope_cycle == CYCLE_ATTACK) {
+                envelope_amplitude = (envelope_amplitude + 1) & 0xFF;
+                if (envelope_amplitude == 0xFF) {
+                    envelope_cycle = CYCLE_DECAY;
+                    uint8_t decay_rate = sid->regs[voice_index * VOICE_REGS + VOICE_ATDCY] & 0x0F;
+                    envelope_rate_period = rate_to_period(decay_rate);
+                }
+            } else if (envelope_cycle == CYCLE_DECAY || envelope_cycle == CYCLE_RELEASE) {
+                envelope_amplitude = (envelope_amplitude - 1) & 0xFF;
+            }
+            update_exponential_period();
+        }
+    }
+    
+    // Stage 3: Process exponential_pipeline
+    if (exponential_pipeline != 0 && (--exponential_pipeline == 0)) {
+        exponential_counter = 0;
+        if ((envelope_cycle == CYCLE_DECAY && envelope_amplitude != sustain_level) ||
+            envelope_cycle == CYCLE_RELEASE) {
+            envelope_pipeline = 1;
+        }
+    }
+    // Stage 4: Process reset_rate_counter (deferred from rate counter match)
+    else if (reset_rate_counter) {
+        envelope_rate_counter = 0;
+        reset_rate_counter = false;
+        
+        if (envelope_cycle == CYCLE_ATTACK) {
+            exponential_counter = 0;
+            envelope_pipeline = 2;
+        } else {
+            if (!envelope_hold_zero &&
+                ++exponential_counter == exponential_counter_period) {
+                // exponential_pipeline delay depends on counter period:
+                // period 1 → 1-cycle delay, period > 1 → 2-cycle delay
+                exponential_pipeline = (exponential_counter_period != 1) ? 2 : 1;
+            }
+        }
+    }
+    
+    // Stage 1: Rate counter check
+    if (envelope_rate_counter != envelope_rate_period) {
+        if (++envelope_rate_counter & ENVELOPE_RATE_OVERFLOW) {
+            ++envelope_rate_counter &= 0x7FFF;
+        }
+    } else {
+        // Rate counter matched — defer processing to next clock
+        reset_rate_counter = true;
+    }
 }
+
+
 
 // =============================================================================
 // FILTER IMPLEMENTATION
@@ -414,29 +434,36 @@ void voice_s::reset() {
     control_reg = 0;
     sustain_level = 0;
     
-    // Reset internal state
-    waveform_accumulator = ACC_POWERUP_VALUE;
+    // Internal state — reSID: accumulator and envelope_counter are NOT
+    // changed on reset (only set once at power-on in the constructor).
+    // waveform_accumulator and envelope_amplitude are preserved.
     envelope_accumulator = 0;
-    envelope_cycle = CYCLE_OFF;
-    envelope_amplitude = 0;
+    envelope_cycle = CYCLE_RELEASE;     // reSID: state = RELEASE after reset
     envelope_rate_counter = 0;
-    envelope_rate_period = 0;
+    envelope_rate_period = rate_to_period(0);  // release rate 0
     envelope_hold_zero = false;
     exponential_counter = 0;
     exponential_counter_period = 1;
+    envelope_pipeline = 0;
+    exponential_pipeline = 0;
+    reset_rate_counter = false;
+    state_pipeline = 0;
+    envelope_next_state = CYCLE_RELEASE;
     
-    // Reset waveform outputs — 0xFFF means "not driving any DAC lines low"
+    // Reset waveform outputs
     oscillator_waveform = 0;
     triangle_output = OSCILLATOR_MAX;
     sawtooth_output = OSCILLATOR_MAX;
-    pulse_output = OSCILLATOR_MAX;
+    pulse_output = OSCILLATOR_MAX;      // reSID: pulse_output = 0xfff after reset
     combined_output = 0;
     
-    // Reset noise state — reSID: shift_register = 0x7FFFFE after reset.
-    // Latch noise_output immediately so it is valid before the first clock.
+    // Reset noise state — reSID: shift_register = 0x7FFFFE after reset,
+    // then clocked once. Latch noise_output immediately.
     noise_lfsr = NOISE_LFSR_RESET;
     noise_output = noise_lfsr_to_output(noise_lfsr);
     noise_clock_enable = false;
+    shift_pipeline = 0;
+    shift_register_reset = 0;
     
     // Reset sync state
     prev_accumulator = 0;
@@ -453,15 +480,19 @@ void voice_s::clock_cycle() {
     prev_accumulator = waveform_accumulator;
     
     // Update accumulator unless test bit is set
-    if (!(control_reg & VCREG_TEST)) {
-        waveform_accumulator = (waveform_accumulator + frequency) & WAVEFORM_ACCUMULATOR_MAX;
+    if (control_reg & VCREG_TEST) {
+        // Test bit: lock accumulator at 0, force pulse high.
+        // reSID: shift_register gradually fades to 0x7FFFFF over many cycles
+        // via a countdown timer. We model the same countdown.
+        if (shift_register_reset && !--shift_register_reset) {
+            noise_lfsr = NOISE_LFSR_TEST;  // All bits → 1
+            noise_output = noise_lfsr_to_output(noise_lfsr);
+        }
+        // Pulse output is forced high while test bit is set (reSID behavior)
+        pulse_output = OSCILLATOR_MAX;
     } else {
-        // Test bit locks accumulator and resets noise LFSR.
-        // reSID: test bit gradually fades all LFSR bits to 1 (0x7FFFFF)
-        // over ~35000 cycles (6581). We approximate this as instant.
-        waveform_accumulator = 0;
-        noise_lfsr = NOISE_LFSR_TEST;
-        noise_output = noise_lfsr_to_output(noise_lfsr);
+        // Normal operation: advance accumulator
+        waveform_accumulator = (waveform_accumulator + frequency) & WAVEFORM_ACCUMULATOR_MAX;
     }
     
     // Detect MSB change for sync
@@ -469,23 +500,30 @@ void voice_s::clock_cycle() {
                       ((waveform_accumulator & WAVEFORM_ACCUMULATOR_MSB) != 0);
     sync_trigger = msb_rising;
     
-    // Always clock noise LFSR based on accumulator bit 19 — real hardware
-    // clocks it regardless of waveform selection (reSID does this in clock()).
-    // Latch noise_output immediately on shift so it is always valid and never
-    // needs recalculating on each cycle (LFSR shifts much less often).
-    {
-        bool clock_noise = (waveform_accumulator & ACC_BIT19) != 0;
-        if (clock_noise && !noise_clock_enable) {
+    // Noise LFSR shift with 2-cycle pipeline delay (reSID-accurate).
+    // When accumulator bit 19 rises, set shift_pipeline = 2.
+    // Decrement each cycle; when it reaches 0, clock the shift register.
+    // When test bit is active, the clock() returns early in reSID — no shifting.
+    if (!(control_reg & VCREG_TEST)) {
+        bool bit19_now = (waveform_accumulator & ACC_BIT19) != 0;
+        bool bit19_was = (prev_accumulator & ACC_BIT19) != 0;
+        if (bit19_now && !bit19_was) {
+            // Rising edge of bit 19 — start pipeline
+            shift_pipeline = 2;
+        } else if (shift_pipeline && !--shift_pipeline) {
+            // Pipeline expired — clock the shift register
             uint32_t feedback = ((noise_lfsr >> 22) ^ (noise_lfsr >> 17)) & 1;
             noise_lfsr = ((noise_lfsr << 1) | feedback) & NOISE_LFSR_MASK;
             noise_output = noise_lfsr_to_output(noise_lfsr);
         }
-        noise_clock_enable = clock_noise;
     }
     
-    // Update envelope (rate counter + envelope clock)
-    update_envelope();
+    // Sample ENV3 latch BEFORE any envelope changes (reSID: env3 = envelope_counter
+    // is captured at the start of each clock, before rate counter and state processing).
     envelope_output = envelope_amplitude;
+    
+    // Update envelope — full pipeline chain runs inside envelope_clock()
+    envelope_clock();
 }
 
 // Generate waveform outputs with ring modulation baked in (reSID-accurate).
@@ -504,39 +542,81 @@ void voice_s::clock_cycle() {
 void voice_s::set_waveform_output(voice_t* ring_source) {
     uint8_t wf = control_reg;
     
+    // Determine chip model index for table lookup
+    int model = (sid && sid->revision > SID_REVISION_6581_R4AR) ? 1 : 0;
+    
+    // Waveform index for table lookup: lower 3 bits of waveform selector (without noise)
+    int wf_index = (wf >> 4) & 0x7;
+    
     // Compute ring modulation MSB mask (reSID: ring_msb_mask).
     // Active only when ring_mod=1 AND sawtooth=0.
     uint32_t ring_msb_mask = ((wf & VCREG_RING) && !(wf & WAVEFORM_SAWTOOTH))
                            ? WAVEFORM_ACCUMULATOR_MSB : 0;
     
-    // Ring-modified accumulator: XOR our MSB with ~source_MSB.
-    // reSID: accumulator ^ (~sync_source->accumulator & ring_msb_mask)
-    uint32_t ring_acc = waveform_accumulator
-                      ^ (~ring_source->waveform_accumulator & ring_msb_mask);
-    
-    // Generate waveform outputs.  Unselected waveforms output 0xFFF so their
-    // bits don't pull any DAC lines low in the combined AND — matching real
-    // hardware where unselected waveform switches are open.
-    triangle_output = (wf & WAVEFORM_TRIANGLE)
-        ? voice_generate_triangle(ring_acc) : OSCILLATOR_MAX;
-    sawtooth_output = (wf & WAVEFORM_SAWTOOTH)
-        ? (waveform_accumulator >> OSCILLATOR_SHIFT_SAW) : OSCILLATOR_MAX;
-    pulse_output = (wf & WAVEFORM_PULSE)
-        ? (((waveform_accumulator >> OSCILLATOR_SHIFT_SAW) >= pulse_waveform_width) ? OSCILLATOR_MAX : 0) : OSCILLATOR_MAX;
-    
-    // Combined waveform output: AND of all waveform DAC lines.
-    // Disabled waveforms carry 0xFFF and pass through transparently.
-    // No waveform selected → floating DAC, simplified as zero.
-    uint32_t noise_and = (wf & WAVEFORM_NOISE) ? noise_output : OSCILLATOR_MAX;
-    uint32_t waveform_output = (wf & WAVEFORM_MASK)
-        ? (triangle_output & sawtooth_output & pulse_output & noise_and)
-        : 0;
-    
-    oscillator_waveform = waveform_output;
-    oscillator_output = (uint8_t)(waveform_output >> 4);
+    if (wf & WAVEFORM_MASK) {
+        // Lookup index: ring-modified accumulator, upper 12 bits.
+        // reSID: ix = (accumulator ^ (~sync_source->accumulator & ring_msb_mask)) >> 12
+        int ix = (waveform_accumulator
+                  ^ (~ring_source->waveform_accumulator & ring_msb_mask)) >> 12;
+        
+        // no_pulse bitmask: 0x000 when pulse selected (so pulse_output gates),
+        // 0xFFF when not (transparent).
+        uint32_t no_pulse = (wf & WAVEFORM_PULSE) ? 0x000 : 0xFFF;
+        
+        // no_noise bitmask and noise output.
+        uint32_t no_noise = (wf & WAVEFORM_NOISE) ? 0x000 : 0xFFF;
+        uint32_t no_noise_or_noise_output = no_noise | noise_output;
+        
+        // Combined waveform output from lookup table.
+        uint32_t waveform_output = sid_tables::model_wave[model][wf_index][ix]
+                                 & (no_pulse | pulse_output)
+                                 & no_noise_or_noise_output;
+        
+        oscillator_waveform = waveform_output;
+        oscillator_output = (uint8_t)(waveform_output >> 4);
+
+        // 6581-specific: accumulator MSB driven low by combined waveform output.
+        // When sawtooth is selected along with any other waveform(s), the top
+        // bit of the accumulator can be pulled low. This is a side-effect of
+        // the analog waveform bus being connected back to the accumulator on
+        // the 6581 die.
+        uint8_t wf_sel = (wf >> 4) & 0xF;
+        if ((wf_sel & 0x2) && (wf_sel & 0xD) && model == 0) {
+            waveform_accumulator &= (waveform_output << 12) | 0x7FFFFF;
+        }
+
+        // Combined waveforms write to the shift register (reSID behavior).
+        // When waveform > 0x8 (noise + any other), the noise shift register
+        // gets bits written back, eventually zeroing out.
+        if ((wf_index > 0) && (wf & WAVEFORM_NOISE) && !(wf & VCREG_TEST) && shift_pipeline != 1) {
+            // Write waveform output back into noise shift register
+            // This causes combined noise waveforms to decay to zero
+            noise_lfsr &= 0x7fffff;
+            noise_lfsr |= ((waveform_output & (1 << 11)) ? (1 << 20) : 0);
+            noise_lfsr |= ((waveform_output & (1 <<  8)) ? (1 << 18) : 0);
+            noise_lfsr |= ((waveform_output & (1 <<  5)) ? (1 << 14) : 0);
+            noise_lfsr |= ((waveform_output & (1 <<  3)) ? (1 << 11) : 0);
+            noise_lfsr |= ((waveform_output & (1 <<  1)) ? (1 <<  9) : 0);
+            noise_lfsr |= ((waveform_output & (1 <<  0)) ? (1 <<  5) : 0);
+            noise_output = noise_lfsr_to_output(noise_lfsr);
+        }
+    } else {
+        // No waveform selected → floating DAC, simplified as zero.
+        oscillator_waveform = 0;
+        oscillator_output = 0;
+    }
     
     // Apply envelope to waveform (result includes ring mod)
     result = (oscillator_waveform * envelope_amplitude) >> 8;
+    
+    // Pulse output pipeline: the result of the pulse width compare is delayed
+    // one cycle (reSID behavior). Compute for the NEXT cycle's use.
+    // When test bit is set, pulse output stays forced high (handled in clock_cycle).
+    if (!(wf & VCREG_TEST)) {
+        pulse_output = (wf & WAVEFORM_PULSE)
+            ? (((waveform_accumulator >> OSCILLATOR_SHIFT_SAW) >= pulse_waveform_width) ? OSCILLATOR_MAX : 0)
+            : OSCILLATOR_MAX;
+    }
 }
 
 // =============================================================================
@@ -738,35 +818,66 @@ void voice_s::write_pulse_waveform_width(uint16_t value) {
     pulse_waveform_width = value & PULSE_WIDTH_MAX;
 }
 
+// Number of cycles for shift register to fully reset to 0x7FFFFF.
+// reSID: ~0x8000 cycles on 6581, different on 8580.
+static const uint32_t SHIFT_REGISTER_FADE_6581 = 0x8000;
+static const uint32_t SHIFT_REGISTER_FADE_8580 = 0x950000;
+
 void voice_s::write_control_register_value(uint8_t value) {
     uint8_t prev = control_reg;
     control_reg = value;
     
-    // Handle test bit changes
-    // Real hardware: test bit only affects the oscillator (zeros accumulator,
-    // resets noise LFSR to all 1s). The envelope generator is completely independent.
-    // reSID: test bit fades LFSR to 0x7FFFFF over ~35000 cycles; we do it instantly.
+    // Handle test bit rising edge
+    // reSID: accumulator is cleared, shift register begins fading to 0x7FFFFF
+    // over many cycles (countdown). Pulse output is forced high.
     if ((value & VCREG_TEST) && !(prev & VCREG_TEST)) {
         waveform_accumulator = 0;
-        noise_lfsr = NOISE_LFSR_TEST;
+        shift_pipeline = 0;  // Flush any pending shift
+        // Start countdown for gradual LFSR fade to all 1s
+        bool is_6581 = sid && (sid->revision <= SID_REVISION_6581_R4AR);
+        shift_register_reset = is_6581 ? SHIFT_REGISTER_FADE_6581 : SHIFT_REGISTER_FADE_8580;
+        pulse_output = OSCILLATOR_MAX;  // Test bit forces pulse high
+    }
+    // Handle test bit falling edge
+    // reSID: shift register is clocked once and noise output updated.
+    else if (!(value & VCREG_TEST) && (prev & VCREG_TEST)) {
+        // bit0 = (~shift_register >> 17) & 1
+        uint32_t bit0 = (~noise_lfsr >> 17) & 1;
+        noise_lfsr = ((noise_lfsr << 1) | bit0) & NOISE_LFSR_MASK;
+        noise_output = noise_lfsr_to_output(noise_lfsr);
+        shift_register_reset = 0;
     }
     
-    // Handle gate bit changes
-    // Real hardware: the rate counter is NOT reset on gate transition.
-    // This is the famous "ADSR bug" — the counter persists, causing variable
-    // delay before the first envelope tick after retriggering.
+    // Handle gate bit changes using reSID state_pipeline mechanism.
+    // Real hardware delays state transitions by 2-3 cycles via internal pipeline.
+    // The rate counter is NOT reset on gate transition (the "ADSR bug").
     if ((value ^ prev) & VCREG_GATE) {
         if (value & VCREG_GATE) {
-            envelope_cycle = CYCLE_ATTACK;
-            uint8_t attack_rate = (sid->regs[voice_index * VOICE_REGS + VOICE_ATDCY] >> 4) & 0x0F;
-            envelope_rate_period = rate_to_period(attack_rate);
-            // Gate on clears hold_zero so the envelope can restart
-            envelope_hold_zero = false;
+            // Gate on: Start attack via pipeline.
+            // The decay register is "accidentally" activated during first cycle of attack phase.
+            envelope_next_state = CYCLE_ATTACK;
+            envelope_cycle = CYCLE_DECAY;  // "Accidentally" activate decay state first
+            uint8_t decay_rate = sid->regs[voice_index * VOICE_REGS + VOICE_ATDCY] & 0x0F;
+            envelope_rate_period = rate_to_period(decay_rate);
+            state_pipeline = 2;
+            if (reset_rate_counter || exponential_pipeline == 2) {
+                envelope_pipeline = (exponential_counter_period == 1 || exponential_pipeline == 2) ? 2 : 4;
+            } else if (exponential_pipeline == 1) {
+                state_pipeline = 3;
+            }
         } else {
-            envelope_cycle = CYCLE_RELEASE;
-            uint8_t release_rate = sid->regs[voice_index * VOICE_REGS + VOICE_SUREL] & 0x0F;
-            envelope_rate_period = rate_to_period(release_rate);
+            // Gate off: Start release via pipeline.
+            envelope_next_state = CYCLE_RELEASE;
+            state_pipeline = (envelope_pipeline > 0) ? 3 : 2;
         }
+    }
+
+    // reSID: update waveform output after any control register write.
+    // This recomputes pulse_output pipeline and combined waveform DAC,
+    // critical for correct behavior after test bit transitions.
+    if (value & WAVEFORM_MASK) {
+        voice_t* ring_source = sid->voices[(voice_index + 2) % 3];
+        set_waveform_output(ring_source);
     }
 }
 
@@ -901,9 +1012,10 @@ bus_state_t mos6581_s::registers_read(void* context, bus_state_t bus_state) {
             break;
             
         case SID_REG_ENV3:
-            // Real hardware: ENV3 always reflects current envelope amplitude,
-            // regardless of gate state (the envelope continues during release).
-            BUS_SET_DATA(bus_state, sid->voice3.envelope_amplitude);
+            // Real hardware: ENV3 reads a latched value captured at the start
+            // of each clock cycle, before the envelope counter is modified.
+            // This matches reSID's env3 latch behavior.
+            BUS_SET_DATA(bus_state, sid->voice3.envelope_output);
             break;
             
         case SID_REG_UNUSED_START:
@@ -926,6 +1038,9 @@ bus_state_t mos6581_s::registers_read(void* context, bus_state_t bus_state) {
 // =============================================================================
 
 void mos6581_s::init() {
+    // Initialize combined waveform lookup tables (once, thread-safe via static guard)
+    sid_tables::init_waveform_tables();
+    
     // Initialize voices with references
     voices[0] = &voice1;
     voices[1] = &voice2;
@@ -936,6 +1051,10 @@ void mos6581_s::init() {
         voices[i]->voice_index = i;
         voices[i]->sid = this;
         voices[i]->cpu_clock = 985248.0f; // PAL C64 default
+        // Power-on values — only set here, NOT on reset (reSID behavior).
+        // Real hardware: accumulator even bits high, envelope odd bits high.
+        voices[i]->waveform_accumulator = ACC_POWERUP_VALUE;  // 0x555555
+        voices[i]->envelope_amplitude = 0xAA;                 // Odd bits high
     }
     
     // Initialize default settings
