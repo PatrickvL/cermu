@@ -1215,9 +1215,10 @@ static uint8_t vicii_cycle_refresh_vc_update(vicii_t* vicii, int unused_param) {
     // Only on bad lines: reset RC to zero (starts a new 8-row character block)
     // Documentation (vic-ii.txt line 1236-1238): "If there is a Bad Line Condition
     // in this phase, RC is also reset to zero."
-    // VICE reference: No DEN guard here — bad_line already incorporates allow_bad_lines
-    // which was set based on DEN during raster $30.
-    if (vicii->video_logic.bad_line_occurred) {
+    // VICE reference: Uses instantaneous bad_line check (not latched). If CPU writes
+    // $D011 to change YSCROLL mid-line, the bad line condition can toggle on/off.
+    // RC is only reset if the condition is true RIGHT NOW at cycle 14.
+    if (vicii->video_logic.is_bad_line) {
         vicii->video_logic.rc = 0;
     }
 
@@ -1233,9 +1234,9 @@ static uint8_t vicii_cycle_refresh_vc_update(vicii_t* vicii, int unused_param) {
 // Returns VIC_ACCESS_REFRESH_C on bad lines (refresh PHI1 + c-access PHI2),
 // or VIC_ACCESS_REFRESH on non-bad lines (refresh only).
 static uint8_t vicii_cycle_refresh_first_c_access(vicii_t* vicii, int unused_param) {
-    // VICE reference: No DEN guard — bad_line_occurred already incorporates
-    // allow_bad_lines which was set based on DEN during raster $30.
-    if (vicii->video_logic.bad_line_occurred) {
+    // VICE reference: Uses instantaneous bad_line check. If CPU writes $D011
+    // clearing the bad line condition, c-access stops (used in FLI techniques).
+    if (vicii->video_logic.is_bad_line) {
         return VIC_ACCESS_REFRESH_C;
     }
     return VIC_ACCESS_REFRESH;
@@ -1294,8 +1295,9 @@ static uint8_t vicii_cycle_char_color_access(vicii_t* vicii, int unused_param_vm
     // Char/color access for cycles 16-54 (cycle 16 wrapper adds MCBASE update before this)
     // VICE reference (vicii-fetch.c vicii_fetch_idle_c): No DEN guard.
     // The decision uses !idle_state (= display_state) || bad_line.
-    // bad_line_occurred already incorporates allow_bad_lines (set based on DEN at raster $30).
-    if (vicii->video_logic.bad_line_occurred) {
+    // VICE uses instantaneous bad_line (not latched). If CPU writes $D011 mid-line
+    // to clear the bad line condition, c-access stops for subsequent cycles.
+    if (vicii->video_logic.is_bad_line) {
         return VIC_ACCESS_C; // Will FALLTHROUGH in vicii_tick PHI1 phase to VIC_ACCESS_G as well
     } else if (vicii->video_logic.display_state) {
         // On non-bad lines during display state, still need G-access for graphics data
@@ -1594,16 +1596,12 @@ static inline bool vicii_cycle_needs_phi2_access(vicii_t* vicii, uint8_t cycle) 
     // so BA must go LOW 3 cycles early (at x_cycle 11) to warn the CPU.
     // DEN only affects bad line detection, not sprite accesses
     if (cycle >= 14 && cycle <= 54) {
-        bool den_enabled = (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
-        if (!den_enabled) return false;
-        // CRITICAL: Use bad_line_occurred (latch) instead of is_bad_line.
-        // In FLI mode, the CPU writes D011 to force a bad line (setting YSCROLL),
-        // then writes D011 again for the NEXT line, which clears is_bad_line.
-        // But the VIC-II's c-access state machine, once triggered, runs to
-        // completion — the c-access sequence cannot be cancelled mid-line.
-        // The latch captures "was there a bad line at ANY point this line?"
-        // and ensures BA prediction and c-access execution proceed correctly.
-        return vicii->video_logic.bad_line_occurred;
+        // VICE reference: Uses instantaneous bad_line for BA checks.
+        // No separate DEN guard needed — is_bad_line already incorporates
+        // was_den_set_during_raster_30 (DEN captured at line $30).
+        // When CPU writes $D011 mid-line to clear YSCROLL match, BA goes high
+        // after the 3-cycle shift register drains (correct hardware behavior).
+        return vicii->video_logic.is_bad_line;
     }
     
     // Get sprite number from cycle table param field
