@@ -163,7 +163,7 @@ int main(int argc, char** argv) {
         // Use single system configuration (legacy mode for compatibility)
         printf("\nLegacy mode: Initializing single C64 system...\n");
         c64_config_t config = {};
-        c64_config_init_defaults(&config);
+        config.init_defaults();
         
         // Default to PAL, adjust based on hardware filter
         config.vicii_standard = VIC_PAL;

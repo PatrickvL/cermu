@@ -1,4 +1,5 @@
 #include "rom_loader.h"
+#include "../cermu.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -117,11 +118,7 @@ bool rom_loader_load_from_root(const char* rom_root_path, const char* filenames[
     for (int i = 0; i < filename_count; i++) {
         snprintf(path_buffers[i], sizeof(path_buffers[i]), "%s%c%s", 
                  rom_root_path, 
-#ifdef _WIN32
-                 '\\',
-#else
-                 '/',
-#endif
+                 CERMU_PATH_SEPARATOR,
                  filenames[i]);
         full_paths[i] = path_buffers[i];
     }

@@ -29,7 +29,7 @@
 #include <algorithm>
 #include <cctype>
 #include <regex>
-#include <dirent.h>
+#include <filesystem>
 
 #ifdef IMGUI_VERSION
 #include "imgui.h"
@@ -418,14 +418,12 @@ static std::vector<std::string> detect_disc_set(const std::string& filepath) {
     // Scan directory for siblings
     std::vector<DiscSortKey> candidates;
 
-    DIR* d = opendir(dir.c_str());
-    if (!d) return {};
+    std::error_code ec;
+    for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+        if (!entry.is_regular_file()) continue;
+        std::string name = entry.path().filename().string();
 
-    struct dirent* entry;
-    while ((entry = readdir(d)) != nullptr) {
-        std::string name(entry->d_name);
-
-        // Skip hidden files and non-regular entries
+        // Skip hidden files
         if (name.empty() || name[0] == '.') continue;
 
         // Must have matching extension
@@ -447,7 +445,6 @@ static std::vector<std::string> detect_disc_set(const std::string& filepath) {
         key.original = dir + "/" + name;
         candidates.push_back(std::move(key));
     }
-    closedir(d);
 
     // Need at least 2 files to constitute a "set"
     if (candidates.size() < 2) return {};

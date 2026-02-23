@@ -63,6 +63,9 @@ if(MSVC)
         /wd4099                 # Disable struct/class type mismatch warnings
         /wd4458                 # Disable declaration hides class member warnings
         /wd4457                 # Disable declaration hides function parameter warnings
+        /wd4661                 # Disable missing template instantiation warnings (GUI methods in non-GUI builds)
+        /wd4701                 # Disable potentially uninitialized local variable warnings
+        /wd4127                 # Disable constant conditional expression warnings (if constexpr pattern)
     )
     # Define to silence C++17 deprecation warnings
     add_compile_definitions(_SILENCE_CXX17_C_HEADER_DEPRECATION_WARNING)
@@ -380,6 +383,23 @@ if(BUILD_GUI)
     )
 endif()
 
+# GUI stub sources — provide virtual method implementations that compile
+# to empty bodies when IMGUI_VERSION is not defined.  Required by any
+# non-GUI executable that links CHIP_SOURCES / SYSTEM_SOURCES.
+set(GUI_STUB_SOURCES
+    src/chip/cpu/fam65xx/fam65xx_gui.cpp
+    src/chip/io/mos6526_gui.cpp
+    src/chip/io/mos6522_gui.cpp
+    src/chip/memory/mos2114_gui.cpp
+    src/chip/sound/mos6581_gui.cpp
+    src/chip/video/vic_ii/vicii_gui.cpp
+    src/chip/video/vic/vic_gui.cpp
+    src/chip/video/ted/ted7360_gui.cpp
+    src/systems/c64/c64_pla_chip.cpp
+    src/systems/nes/nes_ppu_gui.cpp
+    src/systems/nes/nes_apu_gui.cpp
+)
+
 # Console executable (no GUI dependencies)
 add_executable(cermu_console
     src/main/multi_emu_console.cpp
@@ -387,6 +407,7 @@ add_executable(cermu_console
     ${CHIP_SOURCES}
     ${SYSTEM_SOURCES}
     ${CORE_UTIL_SOURCES}
+    ${GUI_STUB_SOURCES}
 )
 
 target_link_libraries(cermu_console
@@ -496,6 +517,7 @@ add_executable(c64_test_runner
     ${CHIP_SOURCES}
     ${SYSTEM_SOURCES}
     ${CORE_UTIL_SOURCES}
+    ${GUI_STUB_SOURCES}
 )
 
 # Link required libraries for test runner

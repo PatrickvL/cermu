@@ -1,24 +1,26 @@
 #include "path_discovery.h"
+#include "../cermu.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <sys/stat.h>
 
-#ifdef _WIN32
-#pragma warning(push)
-#pragma warning(disable: 4996)  // Disable deprecation warnings for string functions
+CERMU_MSVC_WARNING_PUSH
+CERMU_MSVC_WARNING_DISABLE(4996)  /* Disable deprecation warnings for string functions */
+
+#ifdef CERMU_PLATFORM_WINDOWS
 #include <windows.h>
 #include <direct.h>
-#define PATH_SEPARATOR '\\'
 #define getcwd _getcwd
 #else
 #include <unistd.h>
-#include <sys/stat.h>
-#define PATH_SEPARATOR '/'
-#ifdef __APPLE__
-#include <mach-o/dyld.h>  // _NSGetExecutablePath
+#ifdef CERMU_PLATFORM_MACOS
+#include <mach-o/dyld.h>  /* _NSGetExecutablePath */
 #endif
 #endif
+
+#define PATH_SEPARATOR CERMU_PATH_SEPARATOR
 
 // ---------------------------------------------------------------------------
 // get_executable_dir — resolve the directory containing the running executable
@@ -30,10 +32,10 @@
 static bool get_executable_dir(char* out, size_t out_size) {
     if (!out || out_size < 2) return false;
 
-#ifdef _WIN32
+#ifdef CERMU_PLATFORM_WINDOWS
     DWORD n = GetModuleFileNameA(NULL, out, (DWORD)out_size);
     if (n == 0 || n >= out_size) return false;
-#elif defined(__APPLE__)
+#elif defined(CERMU_PLATFORM_MACOS)
     uint32_t bufsize = (uint32_t)out_size;
     if (_NSGetExecutablePath(out, &bufsize) != 0) {
         // Buffer too small or call failed — fall back to CWD
@@ -69,13 +71,8 @@ static bool get_executable_dir(char* out, size_t out_size) {
 // dir_exists — check if a path is an existing directory
 // ---------------------------------------------------------------------------
 static bool dir_exists(const char* path) {
-#ifdef _WIN32
-    DWORD attrs = GetFileAttributesA(path);
-    return attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY);
-#else
     struct stat st;
     return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
-#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -181,6 +178,4 @@ bool system_config_discover_rom_root(const char* system_name, char* out_path, si
     return false;
 }
 
-#ifdef _WIN32
-#pragma warning(pop)
-#endif
+CERMU_MSVC_WARNING_POP

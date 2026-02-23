@@ -3,6 +3,10 @@
 /* 
  * CERMU - Cross-platform compiler compatibility macros
  * Provides consistent interface for compiler-specific optimizations and attributes
+ *
+ * ALL compiler/platform conditional logic belongs here.  Source files should
+ * never test _MSC_VER, __GNUC__, __clang__, _WIN32, __APPLE__ etc. directly;
+ * instead include this header and use the CERMU_* macros defined below.
  */
 
 /* ========================================================================== */
@@ -18,6 +22,114 @@
     #define CERMU_COMPILER_MSVC 1
 #else
     #define CERMU_COMPILER_UNKNOWN 1
+#endif
+
+/* ========================================================================== */
+/* PLATFORM IDENTIFICATION */
+/* ========================================================================== */
+
+#if defined(_WIN32) || defined(_WIN64)
+    #define CERMU_PLATFORM_WINDOWS 1
+#elif defined(__APPLE__)
+    #define CERMU_PLATFORM_MACOS 1
+#elif defined(__linux__)
+    #define CERMU_PLATFORM_LINUX 1
+#else
+    #define CERMU_PLATFORM_UNKNOWN 1
+#endif
+
+/* ========================================================================== */
+/* PATH SEPARATOR */
+/* ========================================================================== */
+
+#ifdef CERMU_PLATFORM_WINDOWS
+    #define CERMU_PATH_SEPARATOR     '\\'
+    #define CERMU_PATH_SEPARATOR_STR "\\"
+#else
+    #define CERMU_PATH_SEPARATOR     '/'
+    #define CERMU_PATH_SEPARATOR_STR "/"
+#endif
+
+/* ========================================================================== */
+/* CASE-INSENSITIVE STRING COMPARISON */
+/* ========================================================================== */
+
+/* Portability wrappers for strcasecmp / strncasecmp (POSIX) vs
+   _stricmp / _strnicmp (MSVC).  Use cermu_strcasecmp / cermu_strncasecmp
+   instead of the platform-specific names in all source files. */
+#ifdef CERMU_PLATFORM_WINDOWS
+    #include <string.h>
+    #define cermu_strcasecmp   _stricmp
+    #define cermu_strncasecmp  _strnicmp
+#else
+    #include <strings.h>
+    #define cermu_strcasecmp   strcasecmp
+    #define cermu_strncasecmp  strncasecmp
+#endif
+
+/* ========================================================================== */
+/* POSIX STAT COMPATIBILITY */
+/* ========================================================================== */
+
+/* MSVC <sys/stat.h> does not define S_ISREG / S_ISDIR.  Provide them here
+   so that source files can use the standard POSIX macros unconditionally. */
+#ifdef CERMU_COMPILER_MSVC
+    #include <sys/stat.h>
+    #ifndef S_ISREG
+        #define S_ISREG(m) (((m) & _S_IFMT) == _S_IFREG)
+    #endif
+    #ifndef S_ISDIR
+        #define S_ISDIR(m) (((m) & _S_IFMT) == _S_IFDIR)
+    #endif
+#endif
+
+/* ========================================================================== */
+/* DIRECTORY ITERATION SUPPORT */
+/* ========================================================================== */
+
+/* MSVC does not ship <dirent.h>; use C++17 <filesystem> instead. */
+#ifdef CERMU_COMPILER_MSVC
+    #define CERMU_USE_STD_FILESYSTEM 1
+#else
+    #define CERMU_USE_DIRENT 1
+#endif
+
+/* ========================================================================== */
+/* SEH (STRUCTURED EXCEPTION HANDLING) SUPPORT */
+/* ========================================================================== */
+
+/* Only available on Windows (MSVC). */
+#ifdef CERMU_PLATFORM_WINDOWS
+    #define CERMU_HAS_SEH 1
+#endif
+
+/* ========================================================================== */
+/* WARNING MANAGEMENT */
+/* ========================================================================== */
+
+/* Portable MSVC-warning push/pop/disable.  On non-MSVC compilers these
+   expand to nothing so call-sites don't need their own #ifdefs. */
+#if defined(CERMU_COMPILER_MSVC)
+    #define CERMU_MSVC_WARNING_PUSH          __pragma(warning(push))
+    #define CERMU_MSVC_WARNING_DISABLE(num)  __pragma(warning(disable: num))
+    #define CERMU_MSVC_WARNING_POP           __pragma(warning(pop))
+#else
+    #define CERMU_MSVC_WARNING_PUSH
+    #define CERMU_MSVC_WARNING_DISABLE(num)
+    #define CERMU_MSVC_WARNING_POP
+#endif
+
+/* Mark a region as a "system header" to suppress all warnings.
+   Useful for included files that are not under our control or for
+   intentionally non-conforming code (e.g. lint-prevention headers). */
+#if defined(CERMU_COMPILER_CLANG)
+    #define CERMU_PRAGMA_SYSTEM_HEADER  _Pragma("clang system_header")
+#elif defined(CERMU_COMPILER_GCC)
+    #define CERMU_PRAGMA_SYSTEM_HEADER  _Pragma("GCC system_header")
+#elif defined(CERMU_COMPILER_MSVC)
+    #define CERMU_PRAGMA_SYSTEM_HEADER  __pragma(warning(push, 0))
+#else
+    #define CERMU_PRAGMA_SYSTEM_HEADER
 #endif
 
 /* ========================================================================== */

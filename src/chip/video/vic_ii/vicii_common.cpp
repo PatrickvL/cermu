@@ -1,6 +1,7 @@
 #include "vicii_common.h"
 #include "../../memory/mos2114.h"
 #include "../../../core/system_lines.h"
+#include "../../../core/cermu.h"
 #include <cstdint>
 #include <stdlib.h>
 #include <string.h>
@@ -947,7 +948,7 @@ bus_state_t vicii_s::registers_read(void* context, bus_state_t bus_state) {
     uint8_t reg_val = vicii->registers.data[reg];
 
     // Single test — one branch, predicted not-taken
-    if (__builtin_expect((VICII_SPECIAL_REGS >> reg) & 1, 0)) {
+    if (unlikely((VICII_SPECIAL_REGS >> reg) & 1)) {
         switch (reg) {
             case VICII_C1:     reg_val = (reg_val & 0x7F) | ((vicii->timing.raster_counter >> 1) & VICII_C1_RST8); break;
             case VICII_RASTER: reg_val = vicii->timing.raster_counter & 0xFF; break;

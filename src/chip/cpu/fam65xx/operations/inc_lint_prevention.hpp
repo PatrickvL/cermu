@@ -24,15 +24,10 @@
 
 // Include the types needed for basic IDE symbol resolution
 #include "../fam65xx_types.h"
+#include "../../../../core/cermu.h"
 
 // Suppress all compiler diagnostics for standalone analysis
-#if defined(__clang__)
-#pragma clang system_header
-#elif defined(__GNUC__)
-#pragma GCC system_header
-#elif defined(_MSC_VER)
-#pragma warning(push, 0)
-#endif
+CERMU_PRAGMA_SYSTEM_HEADER
 
 // Skip all content when parsed standalone - this prevents IDE errors
 #define FAM65XX_SKIP_IMPLEMENTATION

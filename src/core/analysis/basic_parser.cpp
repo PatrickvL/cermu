@@ -3,13 +3,13 @@
  */
 
 #include "basic_parser.h"
+#include "../cermu.h"
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 
-#ifdef _MSC_VER
-#define strncasecmp _strnicmp
-#endif
+/* Use cermu_strncasecmp (maps to _strnicmp on MSVC, strncasecmp on POSIX) */
+#define strncasecmp cermu_strncasecmp
 
 // ============================================================================
 // BASIC V2 Parameters — Pre-defined for Common Systems

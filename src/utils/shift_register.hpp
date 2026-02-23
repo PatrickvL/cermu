@@ -5,6 +5,7 @@
 #include <array>
 #include <stdexcept>
 #include <cstring>
+#include "../core/cermu.h"
 
 // =============================================================================
 // DYNAMIC VERSION: Runtime allocation with small-vector optimization
@@ -139,9 +140,9 @@ public:
     [[nodiscard]]
     constexpr int PopCount() const noexcept {
         if constexpr (sizeof(StorageT) == 8) {
-            return __builtin_popcountll(storage_);
+            return cermu_popcountll(storage_);
         } else if constexpr (sizeof(StorageT) <= 4) {
-            return __builtin_popcount(static_cast<unsigned int>(storage_));
+            return cermu_popcount(static_cast<unsigned int>(storage_));
         } else {
             int count = 0;
             StorageT x = storage_;
