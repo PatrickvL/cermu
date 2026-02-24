@@ -3,8 +3,10 @@
 
 #include "../commodore/commodore_system.h"
 #include "../../core/system_lines.h"
-#include "../../chip/cpu/fam65xx/mos7501.h"
 #include "../../chip/video/ted/ted7360.h"
+
+struct mos7501_t;  // Opaque handle — .cpp uses fam65xx.hpp directly
+
 #include <cstdint>
 
 // ============================================================================
