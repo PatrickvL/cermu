@@ -144,10 +144,21 @@ typedef enum {
 #define FILTER_RESONANCE_MAX        15.0f
 
 // SID constants — audio output
-#define SID_6581_DIGI_BIAS          0.13f      // DC bias for 6581 digi playback
+// Voice DC offset for 6581 digi playback.  On real 6581 hardware each voice
+// amplifier has a significant DC bias (~5 V operating point with 1.5 V signal
+// swing).  The master volume register multiplies the ENTIRE mixer output
+// (voices + DC).  When programs rapidly write $D418 the DC component is
+// modulated, producing a 4-bit PCM "digi" signal.  We fold the three per-voice
+// DC contributions into a single constant added to the mixer sum every cycle.
+// The DC blocker (~20 Hz high-pass) removes the static DC×avg_vol product,
+// leaving only the rapid volume variations as audible digi audio.
+//
+// Calibrated against reSID's 6581 voice_DC / voice_signal_max ratio (~3.6×),
+// then reduced to compensate for our linear (non-compressed) output model
+// vs the real 6581's nonlinear op-amp saturation curve.
+#define SID_6581_VOICE_DC           0.26f      // Total 3-voice DC offset (6581)
 #define DC_BLOCKER_ALPHA            0.997f     // ~20 Hz high-pass coefficient
 #define SIGVOL_VOL_MAX              15.0f      // Maximum master volume (4-bit)
-#define VOLUME_CLICK_DURATION       1000       // Volume-bug click duration (cycles)
 
 // Voice register addressing helpers
 #define SID_VOICE_REG_COUNT         (3 * VOICE_REGS) // Total voice registers (21)
@@ -342,11 +353,6 @@ typedef struct mos6581_s : public ChipBase {
     bool enable_filter = false;       // Filter enable flag
     bool enable_distortion = false;   // Distortion enable (6581 specific)
     bool enable_digiboost = false;    // Digital boost for 4-bit samples
-    
-    // Volume bug state (6581 specific)
-    bool volume_change_click = false; // Volume change click flag
-    float volume_click_amplitude = 0.0f; // Click amplitude
-    uint32_t volume_click_counter = 0;   // Click duration counter
     
     // External input
     float external_input = 0.0f;      // External audio input level
