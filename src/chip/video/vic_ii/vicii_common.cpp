@@ -180,13 +180,20 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
     const uint16_t base_x = vicii->timing.x_coordinate;
     
     // Sprite width: 24 pixels standard, 48 pixels when X-expanded
-    const bool x_expanded = (vicii->registers.data[VICII_MXXE] & sprite_bit) != 0;
+    // Use cached x_expand/multicolor — updated on MXXE/MXMC register writes.
+    const bool x_expanded = sprite->x_expand;
     const uint16_t sprite_width = x_expanded ? 48 : 24;
     
     // Quick range check: do any of the 8 pixels in this cycle overlap the sprite?
     if ((base_x + 7) < sprite_x || base_x >= (sprite_x + sprite_width)) return;
     
-    const bool is_multicolor = (vicii->registers.data[VICII_MXMC] & sprite_bit) != 0;
+    const bool is_multicolor = sprite->multicolor;
+    
+    // Hoist color register reads before the 8-pixel loop to prevent
+    // aliasing-induced reloads after writes to pixel/collision buffers.
+    const uint8_t sprite_own_color = vicii->registers.data[VICII_M0C + param_sprite_num];
+    const uint8_t mm0 = vicii->registers.data[VICII_MM0];
+    const uint8_t mm1 = vicii->registers.data[VICII_MM1];
     
     // Process all 8 pixels in this cycle (matching the graphics sequencer)
     for (int pixel = 0; pixel < 8; pixel++) {
@@ -279,12 +286,12 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
             uint8_t sprite_color;
             if (is_multicolor) {
                 switch (sprite_pixel_data) {
-                    case 1:  sprite_color = vicii->registers.data[VICII_MM0]; break;
-                    case 2:  sprite_color = vicii->registers.data[VICII_M0C + param_sprite_num]; break;
-                    default: sprite_color = vicii->registers.data[VICII_MM1]; break;  // case 3
+                    case 1:  sprite_color = mm0; break;
+                    case 2:  sprite_color = sprite_own_color; break;
+                    default: sprite_color = mm1; break;  // case 3
                 }
             } else {
-                sprite_color = vicii->registers.data[VICII_M0C + param_sprite_num];
+                sprite_color = sprite_own_color;
             }
             
             vicii->pixel.pixel_line_color[pixel_line_x] = sprite_color;
@@ -931,6 +938,16 @@ bus_state_t vicii_s::registers_write(void* context, bus_state_t bus_state) {
                     VICII_PRIORITY_SPRITE_BEHIND : VICII_PRIORITY_SPRITE_IN_FRONT;
             }
             break;
+        case VICII_MXMC: // $d01c Sprite multicolor x select
+            for (int i = 0; i < VICII_NUM_SPRITES; i++) {
+                vicii->sprites.sprites[i].multicolor = (value & (1 << i)) != 0;
+            }
+            break;
+        case VICII_MXXE: // $d01d Sprite X expansion x
+            for (int i = 0; i < VICII_NUM_SPRITES; i++) {
+                vicii->sprites.sprites[i].x_expand = (value & (1 << i)) != 0;
+            }
+            break;
         case VICII_EC: // $d020 (4 bits) Exterior color (Border)
             vicii->border.border_pixel.color = static_cast<vicii_color_t>(value); // value already masked to 0x0F above
             FALLTHROUGH; // to B0C-B2C case
@@ -938,13 +955,9 @@ bus_state_t vicii_s::registers_write(void* context, bus_state_t bus_state) {
         case VICII_B1C: // $d022 (4 bits) Background color 1
         case VICII_B2C: // $d023 (4 bits) Background color 2
             break;
-        case VICII_MM0: // $d025 (4 bits) Sprite multicolor 0
-        case VICII_MM1: // $d026 (4 bits) Sprite multicolor 1
-            // Global sprite multicolor registers - update all sprites with pre-masked value
-            for (int i = 0; i < VICII_NUM_SPRITES; i++) {
-                // MM0/MM1 are global multicolor registers, not per-sprite
-            }
-            break;
+        // MM0/MM1 ($d025/$d026) are global sprite multicolor registers.
+        // No per-sprite decode needed — pixel sequencer reads the register value directly.
+        // Fall through to default (register file already updated above).
         default:
             // No special handling needed for other registers
             break;
