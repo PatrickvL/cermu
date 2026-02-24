@@ -1,309 +1,285 @@
 #!/bin/bash
-# Cross-platform build script for C64 Emulator
-# Supports: CMake, Make, MSBuild (via Wine/MinGW)
+# Build Script for cermu Multi-System Emulator
 #
 # Usage:
-#   ./build.sh [console|gui] [debug|release] [cmake|make|msbuild]
+#   ./build.sh [gui|console|all] [release|debug] [--skip-deps] [--clean]
+#
+# This script:
+#   1. Fetches missing external dependencies (SDL2, Dear ImGui)
+#   2. Configures CMake
+#   3. Builds the requested target(s)
 
 set -e
 
-# Configuration
-PROJECT_NAME="c64emu"
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && cd .. && pwd)"
-CODE_DIR="${PROJECT_DIR}"
+# ============================================================================
+# Paths & versions
+# ============================================================================
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+EXTERNAL_DIR="${PROJECT_DIR}/external"
 BUILD_DIR="${PROJECT_DIR}/build"
-BIN_DIR="${PROJECT_DIR}/build/bin"
+BIN_DIR="${BUILD_DIR}/bin"
 
-# Default values
-TARGET="${1:-console}"
+SDL2_VERSION="2.30.10"
+IMGUI_VERSION="v1.92.1"
+SDL2_DIR="${EXTERNAL_DIR}/SDL2/SDL2-${SDL2_VERSION}"
+IMGUI_DIR="${EXTERNAL_DIR}/imgui"
+
+# Defaults
+TARGET="${1:-gui}"
 BUILD_TYPE="${2:-release}"
-BUILD_SYSTEM="${3:-auto}"
+SKIP_DEPS=false
+CLEAN=false
 
-# Colors for output
+# Parse flags (can appear anywhere)
+for arg in "$@"; do
+    case "$arg" in
+        --skip-deps) SKIP_DEPS=true ;;
+        --clean)     CLEAN=true ;;
+    esac
+done
+
+# ============================================================================
+# Helpers
+# ============================================================================
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+CYAN='\033[0;36m'
+NC='\033[0m'
 
-# Logging functions
-info() { echo -e "${BLUE}[INFO]${NC} $1"; }
-success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
-warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
-error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+step()    { echo -e "\n${CYAN}==> $1${NC}"; }
+ok()      { echo -e "    ${GREEN}OK:${NC} $1"; }
+skip_msg(){ echo -e "    ${YELLOW}SKIP:${NC} $1"; }
+err()     { echo -e "    ${RED}ERROR:${NC} $1"; exit 1; }
 
-# Platform detection
 detect_platform() {
     case "$(uname -s)" in
-        Linux*)     PLATFORM=linux;;
-        Darwin*)    PLATFORM=macos;;
-        CYGWIN*|MINGW*|MSYS*) PLATFORM=windows;;
-        *)          PLATFORM=unknown;;
-    esac
-    info "Detected platform: $PLATFORM"
-}
-
-# Build system detection
-detect_build_system() {
-    if [ "$BUILD_SYSTEM" != "auto" ]; then
-        return
-    fi
-    
-    if [ "$PLATFORM" = "windows" ]; then
-        # On Windows, prefer MSBuild if available, otherwise CMake
-        if command -v msbuild.exe >/dev/null 2>&1; then
-            BUILD_SYSTEM="msbuild"
-        elif [ -f "${CODE_DIR}/cermu.sln" ]; then
-            BUILD_SYSTEM="msbuild"
-        else
-            BUILD_SYSTEM="cmake"
-        fi
-    else
-        # On Unix-like systems, prefer Make if Makefile exists, otherwise CMake
-        if [ -f "${CODE_DIR}/Makefile" ] && [ ! -f "${CODE_DIR}/CMakeCache.txt" ]; then
-            BUILD_SYSTEM="make"
-        else
-            BUILD_SYSTEM="cmake"
-        fi
-    fi
-    
-    info "Selected build system: $BUILD_SYSTEM"
-}
-
-# Check dependencies
-check_dependencies() {
-    case "$BUILD_SYSTEM" in
-        cmake)
-            command -v cmake >/dev/null 2>&1 || error "CMake not found. Please install CMake 3.16 or later."
-            ;;
-        make)
-            command -v make >/dev/null 2>&1 || error "Make not found. Please install GNU Make."
-            command -v gcc >/dev/null 2>&1 || command -v clang >/dev/null 2>&1 || error "No C compiler found. Please install GCC or Clang."
-            ;;
-        msbuild)
-            if [ "$PLATFORM" = "windows" ]; then
-                command -v msbuild.exe >/dev/null 2>&1 || error "MSBuild not found. Please install Visual Studio Build Tools 2022."
-            else
-                error "MSBuild is only supported on Windows"
-            fi
-            ;;
+        Linux*)                  PLATFORM=linux ;;
+        Darwin*)                 PLATFORM=macos ;;
+        CYGWIN*|MINGW*|MSYS*)   PLATFORM=windows ;;
+        *)                       PLATFORM=unknown ;;
     esac
 }
 
-# Check SDL2 availability for GUI builds
-check_gui_dependencies() {
-    if [ "$TARGET" != "gui" ]; then
+nproc_safe() { nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4; }
+
+# ============================================================================
+# Dependency: SDL2
+# ============================================================================
+fetch_sdl2() {
+    step "Checking SDL2 ${SDL2_VERSION}..."
+
+    if [ -f "${SDL2_DIR}/include/SDL.h" ]; then
+        ok "SDL2 already present at ${SDL2_DIR}"
         return
     fi
-    
-    info "Checking GUI dependencies..."
-    
-    # Check for SDL2
-    SDL2_FOUND=false
-    if command -v sdl2-config >/dev/null 2>&1; then
-        SDL2_FOUND=true
-        info "Found system SDL2: $(sdl2-config --version)"
-    elif [ -f "${CODE_DIR}/deps/sdl2/SDL2-2.30.10/include/SDL.h" ]; then
-        SDL2_FOUND=true
-        info "Found local SDL2 in deps/"
-    fi
-    
-    if [ "$SDL2_FOUND" = false ]; then
-        warning "SDL2 not found. GUI build may fail."
-        case "$PLATFORM" in
-            linux)
-                info "Install with: sudo apt install libsdl2-dev (Ubuntu/Debian)"
-                info "            or: sudo yum install SDL2-devel (CentOS/RHEL)"
-                ;;
-            macos)
-                info "Install with: brew install sdl2"
-                ;;
-        esac
-    fi
-}
 
-# CMake build
-build_cmake() {
-    info "Building with CMake..."
-    
-    cd "$CODE_DIR"
-    
-    # Determine CMake build type
-    CMAKE_BUILD_TYPE="Release"
-    if [ "$BUILD_TYPE" = "debug" ]; then
-        CMAKE_BUILD_TYPE="Debug"
-    fi
-    
-    # Create and enter build directory
-    mkdir -p "$BUILD_DIR"
-    cd "$BUILD_DIR"
-    
-    # Configure
-    info "Configuring with CMake..."
-    cmake .. -DCMAKE_BUILD_TYPE="$CMAKE_BUILD_TYPE"
-    
-    # Build
-    info "Building..."
-    if [ "$TARGET" = "gui" ]; then
-        cmake --build . --config "$CMAKE_BUILD_TYPE" --target c64emu_gui -j$(nproc 2>/dev/null || echo 4)
-    else
-        cmake --build . --config "$CMAKE_BUILD_TYPE" --target c64emu -j$(nproc 2>/dev/null || echo 4)
-    fi
-    
-    success "CMake build completed"
-}
-
-# Make build
-build_make() {
-    info "Building with Make..."
-    
-    cd "$CODE_DIR"
-    
-    # Set build type
-    MAKE_BUILD_TYPE="Release"
-    if [ "$BUILD_TYPE" = "debug" ]; then
-        MAKE_BUILD_TYPE="Debug"
-    fi
-    
-    # Build
-    if [ "$TARGET" = "gui" ]; then
-        make gui BUILD_TYPE="$MAKE_BUILD_TYPE" -j$(nproc 2>/dev/null || echo 4)
-    else
-        make console BUILD_TYPE="$MAKE_BUILD_TYPE" -j$(nproc 2>/dev/null || echo 4)
-    fi
-    
-    success "Make build completed"
-}
-
-# MSBuild build
-build_msbuild() {
-    info "Building with MSBuild..."
-    
-    cd "$CODE_DIR"
-    
-    # Determine configuration
-    MSBUILD_CONFIG="Release"
-    if [ "$BUILD_TYPE" = "debug" ]; then
-        MSBUILD_CONFIG="Debug"
-    fi
-    
-    # Build
-    if command -v msbuild.exe >/dev/null 2>&1; then
-        msbuild.exe cermu.sln /p:Configuration="$MSBUILD_CONFIG" /verbosity:minimal
-    else
-        error "MSBuild not found in PATH"
-    fi
-    
-    success "MSBuild build completed"
-}
-
-# Show build results
-show_results() {
-    info "Build completed successfully!"
-    echo ""
-    
-    # Find built executables
-    EXECUTABLES=()
-    
-    # Check different possible output locations
-    for dir in "$BIN_DIR" "$BUILD_DIR/bin" "$CODE_DIR/bin/Release" "$CODE_DIR/bin/Debug"; do
-        if [ -d "$dir" ]; then
-            while IFS= read -r -d '' exe; do
-                EXECUTABLES+=("$exe")
-            done < <(find "$dir" -name "*.exe" -o -name "*emu*" -type f -executable 2>/dev/null | grep -E "(c64emu|test_)" | sort | tr '\n' '\0' 2>/dev/null || true)
-        fi
-    done
-    
-    if [ ${#EXECUTABLES[@]} -gt 0 ]; then
-        echo "Built executables:"
-        for exe in "${EXECUTABLES[@]}"; do
-            echo "  - $exe"
-        done
-        echo ""
-        
-        # Show how to run
-        if [ "$TARGET" = "gui" ]; then
-            GUI_EXE=$(printf '%s\n' "${EXECUTABLES[@]}" | grep -E "(gui|GUI)" | head -1 || true)
-            if [ -n "$GUI_EXE" ]; then
-                echo "Run GUI version:"
-                echo "  $GUI_EXE"
-            fi
-        else
-            CONSOLE_EXE=$(printf '%s\n' "${EXECUTABLES[@]}" | grep -v -E "(gui|GUI|test)" | head -1 || true)
-            if [ -n "$CONSOLE_EXE" ]; then
-                echo "Run console version:"
-                echo "  $CONSOLE_EXE"
-            fi
-        fi
-    else
-        warning "No executables found. Build may have failed."
-    fi
-}
-
-# Show usage
-show_usage() {
-    echo "Usage: $0 [TARGET] [BUILD_TYPE] [BUILD_SYSTEM]"
-    echo ""
-    echo "Arguments:"
-    echo "  TARGET      console|gui (default: console)"
-    echo "  BUILD_TYPE  debug|release (default: release)"
-    echo "  BUILD_SYSTEM cmake|make|msbuild|auto (default: auto)"
-    echo ""
-    echo "Examples:"
-    echo "  $0                    # Build console version with auto-detected build system"
-    echo "  $0 gui                # Build GUI version"
-    echo "  $0 console debug      # Build debug console version"
-    echo "  $0 gui release cmake  # Build GUI with CMake specifically"
-    echo ""
-    echo "Platform: $PLATFORM"
-    echo "Auto-detected build system: $BUILD_SYSTEM"
-}
-
-# Main execution
-main() {
-    # Show usage if help requested
-    if [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$1" = "help" ]; then
-        detect_platform
-        detect_build_system
-        show_usage
-        exit 0
-    fi
-    
-    info "Starting build for $PROJECT_NAME"
-    info "Target: $TARGET, Build Type: $BUILD_TYPE"
-    
-    # Detect platform and build system
     detect_platform
-    detect_build_system
-    
-    # Check dependencies
-    check_dependencies
-    check_gui_dependencies
-    
-    # Ensure we're in the right directory
-    if [ ! -f "$CODE_DIR/CMakeLists.txt" ] && [ ! -f "$CODE_DIR/Makefile" ] && [ ! -f "$CODE_DIR/cermu.sln" ]; then
-        error "Build files not found in $CODE_DIR. Please run from project root."
-    fi
-    
-    # Build based on selected system
-    case "$BUILD_SYSTEM" in
-        cmake)
-            build_cmake
+
+    case "$PLATFORM" in
+        linux)
+            # Prefer system package
+            if pkg-config --exists sdl2 2>/dev/null; then
+                ok "System SDL2 found: $(pkg-config --modversion sdl2)"
+                return
+            fi
+            echo "    SDL2 not found. Installing via package manager..."
+            if command -v apt-get >/dev/null 2>&1; then
+                sudo apt-get update -qq && sudo apt-get install -y libsdl2-dev
+            elif command -v dnf >/dev/null 2>&1; then
+                sudo dnf install -y SDL2-devel
+            elif command -v pacman >/dev/null 2>&1; then
+                sudo pacman -S --noconfirm sdl2
+            else
+                err "Cannot auto-install SDL2. Please install libsdl2-dev manually."
+            fi
+            ok "SDL2 installed via system package manager"
             ;;
-        make)
-            build_make
+        macos)
+            if pkg-config --exists sdl2 2>/dev/null; then
+                ok "System SDL2 found: $(pkg-config --modversion sdl2)"
+                return
+            fi
+            echo "    Installing SDL2 via Homebrew..."
+            command -v brew >/dev/null 2>&1 || err "Homebrew not found. Install from https://brew.sh"
+            brew install sdl2
+            ok "SDL2 installed via Homebrew"
             ;;
-        msbuild)
-            build_msbuild
+        windows)
+            # Download VC dev package (same as build.ps1)
+            echo "    Downloading SDL2 dev package..."
+            local zip_name="SDL2-devel-${SDL2_VERSION}-VC.zip"
+            local url="https://github.com/libsdl-org/SDL/releases/download/release-${SDL2_VERSION}/${zip_name}"
+            local tmp_zip="/tmp/${zip_name}"
+
+            curl -fSL -o "$tmp_zip" "$url" || wget -q -O "$tmp_zip" "$url" || err "Failed to download SDL2"
+
+            local extract_tmp="/tmp/sdl2_extract"
+            rm -rf "$extract_tmp"
+            unzip -q "$tmp_zip" -d "$extract_tmp"
+
+            mkdir -p "$(dirname "$SDL2_DIR")"
+            rm -rf "$SDL2_DIR"
+            mv "${extract_tmp}/SDL2-${SDL2_VERSION}" "$SDL2_DIR"
+            rm -f "$tmp_zip"
+            rm -rf "$extract_tmp"
+
+            if [ -f "${SDL2_DIR}/include/SDL.h" ]; then
+                ok "SDL2 installed to ${SDL2_DIR}"
+            else
+                err "SDL2 installation failed"
+            fi
             ;;
         *)
-            error "Unknown build system: $BUILD_SYSTEM"
+            err "Unsupported platform for SDL2 auto-install: $PLATFORM"
             ;;
     esac
-    
-    # Show results
-    show_results
 }
 
-# Run main function
-main "$@"
+# ============================================================================
+# Dependency: Dear ImGui
+# ============================================================================
+fetch_imgui() {
+    step "Checking Dear ImGui ${IMGUI_VERSION}..."
+
+    if [ -f "${IMGUI_DIR}/imgui.h" ]; then
+        ok "Dear ImGui already present at ${IMGUI_DIR}"
+        return
+    fi
+
+    if command -v git >/dev/null 2>&1; then
+        echo "    Cloning Dear ImGui ${IMGUI_VERSION}..."
+        git clone --depth 1 --branch "$IMGUI_VERSION" \
+            "https://github.com/ocornut/imgui.git" "$IMGUI_DIR"
+    else
+        local tag_bare="${IMGUI_VERSION#v}"
+        local url="https://github.com/ocornut/imgui/archive/refs/tags/${IMGUI_VERSION}.tar.gz"
+        local tmp_tar="/tmp/imgui-${IMGUI_VERSION}.tar.gz"
+        echo "    Downloading Dear ImGui ${IMGUI_VERSION}..."
+
+        curl -fSL -o "$tmp_tar" "$url" || wget -q -O "$tmp_tar" "$url" || err "Failed to download ImGui"
+
+        local extract_tmp="/tmp/imgui_extract"
+        rm -rf "$extract_tmp"
+        mkdir -p "$extract_tmp"
+        tar xzf "$tmp_tar" -C "$extract_tmp"
+
+        rm -rf "$IMGUI_DIR"
+        mv "${extract_tmp}/imgui-${tag_bare}" "$IMGUI_DIR"
+        rm -f "$tmp_tar"
+        rm -rf "$extract_tmp"
+    fi
+
+    if [ -f "${IMGUI_DIR}/imgui.h" ]; then
+        ok "Dear ImGui installed to ${IMGUI_DIR}"
+    else
+        err "Dear ImGui installation failed"
+    fi
+}
+
+# ============================================================================
+# CMake configure & build
+# ============================================================================
+build_project() {
+    # CMake build type
+    local cmake_type="Release"
+    case "$BUILD_TYPE" in
+        debug)   cmake_type="Debug" ;;
+        release) cmake_type="Release" ;;
+    esac
+
+    step "Configuring CMake (${cmake_type})..."
+
+    command -v cmake >/dev/null 2>&1 || err "CMake not found. Please install CMake 3.16 or later."
+
+    if $CLEAN; then
+        echo "    Cleaning build directory..."
+        rm -f "${BUILD_DIR}/CMakeCache.txt"
+        rm -rf "${BUILD_DIR}/CMakeFiles"
+    fi
+
+    mkdir -p "$BUILD_DIR"
+
+    cd "$PROJECT_DIR"
+    cmake -B build -S . -DCMAKE_BUILD_TYPE="$cmake_type"
+
+    # Determine targets
+    local targets=()
+    case "$TARGET" in
+        gui)     targets=(cermu) ;;
+        console) targets=(cermu_console) ;;
+        all)     targets=(cermu cermu_console) ;;
+        *)       err "Unknown target: $TARGET (use gui, console, or all)" ;;
+    esac
+
+    local jobs
+    jobs=$(nproc_safe)
+
+    for t in "${targets[@]}"; do
+        step "Building target: ${t} (${cmake_type})..."
+        cmake --build build --config "$cmake_type" --target "$t" -j"$jobs"
+        ok "Target '${t}' built successfully"
+    done
+
+    # Show results
+    step "Build results:"
+    if [ -d "$BIN_DIR" ]; then
+        find "$BIN_DIR" -maxdepth 1 -type f \( -name "*.exe" -o -executable \) 2>/dev/null | sort | while read -r f; do
+            echo "    $f"
+        done
+    else
+        skip_msg "No bin directory found at ${BIN_DIR}"
+    fi
+}
+
+# ============================================================================
+# Usage
+# ============================================================================
+show_usage() {
+    echo "Usage: $0 [TARGET] [BUILD_TYPE] [OPTIONS]"
+    echo ""
+    echo "Arguments:"
+    echo "  TARGET       gui|console|all  (default: gui)"
+    echo "  BUILD_TYPE   debug|release    (default: release)"
+    echo ""
+    echo "Options:"
+    echo "  --skip-deps  Skip dependency fetching"
+    echo "  --clean      Remove CMake cache before configuring"
+    echo "  -h, --help   Show this help"
+    echo ""
+    echo "Examples:"
+    echo "  $0                    # Build GUI (Release)"
+    echo "  $0 gui debug          # Build GUI (Debug)"
+    echo "  $0 all release        # Build everything"
+    echo "  $0 console --clean    # Clean + build console"
+}
+
+# ============================================================================
+# Main
+# ============================================================================
+for arg in "$@"; do
+    case "$arg" in
+        -h|--help|help) show_usage; exit 0 ;;
+    esac
+done
+
+echo -e "${CYAN}============================================${NC}"
+echo -e "${CYAN} cermu Build Script${NC}"
+echo -e "${CYAN} Target: ${TARGET} | Config: ${BUILD_TYPE}${NC}"
+echo -e "${CYAN}============================================${NC}"
+
+# Fetch dependencies
+if ! $SKIP_DEPS; then
+    fetch_sdl2
+    fetch_imgui
+else
+    skip_msg "Dependency fetch skipped (--skip-deps)"
+fi
+
+# Build
+build_project
+
+echo -e "\n${GREEN}============================================${NC}"
+echo -e "${GREEN} Build complete!${NC}"
+echo -e "${GREEN}============================================${NC}"

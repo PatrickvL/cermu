@@ -25,7 +25,6 @@ compile_commands.json
 *.vcxproj.filters
 
 # Executables
-c64emu
 cermu
 *.exe
 
@@ -70,30 +69,26 @@ data/**/*.txt
 data/**/*.cmd
 !data/**/README.md
 
-# External test suites and ROM files - keep setup documentation
-external/6502-tests/*
-external/65c02-tests/*
-external/lorenz-tests/*
-external/**/*.bin
-external/**/*.rom
-external/**/*.prg
-external/**/*.d64
-external/**/*.d71
-external/**/*.d81
-external/**/*.tap
-external/**/*.t64
-external/**/*.p00
-external/**/*.img
-external/**/*.adf
-external/**/*.tar.gz
-external/**/*.zip
+# External dependencies - ignore by default, unignore committed items
+# Submodules (ImGuiFileDialog, tomlplusplus, toonplusplus, LJON) are
+# handled by .gitmodules and unaffected by this rule.
+external/**
+
+# Unignore documentation
 !external/**/README.md
 !external/**/*_SETUP*.md
 !external/**/*_RESULTS*.md
 
-# Embedded git repos (not submodules - managed separately)
-external/imgui/
-external/toonplusplus_initial/
+# Unignore vendored single-file headers
+!external/stb_image.h
+!external/stb_image_write.h
+!external/resid/
+!external/resid/siddefs.h
+
+# Downloaded test suites (contents ignored, READMEs kept above)
+# external/6502-tests/  external/65c02-tests/  external/lorenz-tests/
+
+# Other ignored directories
 tests/processor_tests/
 
 # Test runner executables and build artifacts
