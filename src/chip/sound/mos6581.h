@@ -303,9 +303,18 @@ typedef struct mos6581_s : public ChipBase {
     // Filter state
     filter_state_t filter_state = {};
     uint16_t filter_cutoff_frequency = 0; // Filter cutoff frequency (CUTLO/CUTHI)
-    // Decoded fields for RESON and SIGVOL registers are read from
-    // regs[SID_REG_RESON] / regs[SID_REG_SIGVOL] at sample-rate;
-    // no pre-decoded copies needed.
+
+    // Cached decoded routing from RESON and SIGVOL registers.
+    // Updated on register writes; avoids per-cycle reg[] + bit-test overhead.
+    bool filt1 = false;             // Voice 1 routed through filter
+    bool filt2 = false;             // Voice 2 routed through filter
+    bool filt3 = false;             // Voice 3 routed through filter
+    bool filtex = false;            // External input routed through filter
+    bool voice3_off = false;        // Voice 3 output disabled
+    bool filter_lp = false;         // Low-pass filter output enabled
+    bool filter_bp = false;         // Band-pass filter output enabled
+    bool filter_hp = false;         // High-pass filter output enabled
+    uint8_t master_volume = 0;      // Master volume (0-15)
 
     // Timing and sample generation
     uint32_t cycle_count = 0;         // Cycle counter
