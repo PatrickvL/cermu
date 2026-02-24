@@ -2,8 +2,16 @@
 #include "sid_waveform_tables.h"
 #include <string.h>
 #include <stdlib.h>
-#include <math.h> // for tanhf
+#include <math.h>
 #include <stdio.h>  // For snprintf
+
+// Fast tanh approximation: x / (1 + |x|).
+// Monotonic, odd-symmetric, same [-1,+1] range — good enough for SID
+// soft-clipping distortion where exactness doesn't matter, and this is
+// called ~1M times/sec per filter output (lp/bp/hp).
+static inline float fast_tanh(float x) {
+    return x / (1.0f + fabsf(x));
+}
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -264,9 +272,9 @@ float mos6581_s::filter_process(float input) {
         float distortion_amount = res_norm * 0.5f;
         if (distortion_amount > 1e-6f) {
             float inv_k = 1.0f / distortion_amount;
-            lp = tanhf(lp * distortion_amount) * inv_k;
-            bp = tanhf(bp * distortion_amount) * inv_k;
-            hp = tanhf(hp * distortion_amount) * inv_k;
+            lp = fast_tanh(lp * distortion_amount) * inv_k;
+            bp = fast_tanh(bp * distortion_amount) * inv_k;
+            hp = fast_tanh(hp * distortion_amount) * inv_k;
         }
     }
     
