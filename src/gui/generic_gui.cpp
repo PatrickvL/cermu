@@ -91,7 +91,7 @@ bool GenericEmulatorGUI::init(const char* window_title, int width, int height) {
     }
     
     SDL_GL_MakeCurrent(window_, gl_context_);
-    SDL_GL_SetSwapInterval(0); // Disable vsync — frame pacing handled by accumulator
+    SDL_GL_SetSwapInterval(1); // VSync — paces the GUI render loop (~60Hz)
     
     // Show the window
     SDL_ShowWindow(window_);
