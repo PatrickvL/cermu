@@ -347,8 +347,8 @@ typedef struct mos6581_s : public ChipBase {
     uint8_t pot_y_value = 0;          // POT Y value
     
     // Fractional sample accumulator for cycle-accurate output
-    double sample_accumulator = 0.0;  // Fractional accumulator for sample generation
-    double sample_rate_ratio = 0.0;   // Precomputed sample_rate / cpu_clock
+    float sample_accumulator = 0.0f;   // Fractional accumulator for sample generation
+    float sample_rate_ratio = 0.0f;    // Precomputed sample_rate / cpu_clock
     float cpu_clock = 0.0f;           // CPU clock frequency (e.g. 985248 for PAL)
     
     // Per-cycle filter output accumulation for anti-aliased downsampling.

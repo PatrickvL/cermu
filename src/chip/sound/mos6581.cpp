@@ -709,8 +709,8 @@ inline bus_state_t mos6581_s::advance_cycle(bus_state_t bus_state) {
     // are generated until timing is configured — no explicit guard needed.
     sample_accumulator += sample_rate_ratio;
 
-    if (sample_accumulator >= 1.0) {
-        sample_accumulator -= 1.0;
+    if (sample_accumulator >= 1.0f) {
+        sample_accumulator -= 1.0f;
 
         // Average the accumulated filter output over the sample period.
         const float cyc = (sample_cycle_count > 0) ? (float)sample_cycle_count : 1.0f;
@@ -789,7 +789,7 @@ void mos6581_s::set_timing(bool pal) {
 void mos6581_s::set_sample_rate(float rate) {
     sample_rate = rate;
     if (cpu_clock > 0.0f)
-        sample_rate_ratio = (double)sample_rate / (double)cpu_clock;
+        sample_rate_ratio = sample_rate / cpu_clock;
     // Update filter coefficient since w0 depends on sample rate
     filter_update_cutoff();
 }
@@ -797,7 +797,7 @@ void mos6581_s::set_sample_rate(float rate) {
 void mos6581_s::set_cpu_clock(float clock_hz) {
     cpu_clock = clock_hz;
     if (cpu_clock > 0.0f)
-        sample_rate_ratio = (double)sample_rate / (double)cpu_clock;
+        sample_rate_ratio = sample_rate / cpu_clock;
     for (int i = 0; i < 3; i++) {
         voices[i]->cpu_clock = clock_hz;
     }
@@ -1123,7 +1123,7 @@ void mos6581_s::reset() {
     // Reset timing
     cycle_count = 0;
     subcycle_count = 0;
-    sample_accumulator = 0.0;
+    sample_accumulator = 0.0f;
     sample_cycle_count = 0;
     output_acc = 0.0f;
 
