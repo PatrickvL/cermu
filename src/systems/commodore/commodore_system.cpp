@@ -6,15 +6,16 @@
 
 bool CommodoreSystem::set_configuration(const SystemConfiguration& config) {
     config_ = config;
-    return true;
-}
 
-uint32_t CommodoreSystem::get_target_fps() const {
+    // Update cached target FPS from region config
     if (config_.region_option_index >= 0 &&
         config_.region_option_index < static_cast<int>(hardware_traits_.video_standard_configs.size())) {
-        return hardware_traits_.video_standard_configs[config_.region_option_index].timing.target_fps;
+        cached_target_fps_ = hardware_traits_.video_standard_configs[config_.region_option_index].timing.target_fps;
+    } else {
+        cached_target_fps_ = 50;  // Default PAL
     }
-    return 50;  // Default PAL
+
+    return true;
 }
 
 void CommodoreSystem::set_speed_multiplier(float multiplier) {
