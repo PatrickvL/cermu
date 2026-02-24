@@ -670,8 +670,9 @@ inline bus_state_t mos6581_s::advance_cycle(bus_state_t bus_state) {
     // This is critical because songs modulate the filter cutoff rapidly; sample-rate
     // filter processing (44.1 kHz) creates audible stepping/wobbling artifacts.
     //
-    // The accumulated post-filter output is averaged at sample time to produce
-    // band-limited 44.1 kHz samples (box-filter anti-aliasing).
+    // Volume is applied per-cycle (not per-sample) so that rapid $D418 writes
+    // correctly modulate the voice DC offset — this is how 6581 "digi" playback
+    // works.  The accumulated post-filter output is averaged at sample time.
     {
         // Compute instantaneous centred voice outputs (waveform × envelope).
         // 12-bit waveform centred to [-2048, +2047] × 8-bit envelope [0, 255].
@@ -696,8 +697,17 @@ inline bus_state_t mos6581_s::advance_cycle(bus_state_t bus_state) {
         // Clock the ZDF SVF filter at CPU rate.
         float filtered_output = filter_process(filtered_input);
 
+        // 6581: add voice DC offset — each voice amplifier biases the mixer
+        // line even when idle; volume modulates this DC to produce digi audio.
+        float voice_dc = (revision <= SID_REVISION_6581_R4AR) ? SID_6581_VOICE_DC : 0.0f;
+
+        // Apply master volume per-cycle: output = (voices + DC) × vol/15.
+        // For digi playback, the DC is modulated by rapid volume changes.
+        float vol = (float)master_volume / SIGVOL_VOL_MAX;
+        float total = (unfiltered_output + filtered_output + voice_dc) * vol;
+
         // Accumulate post-filter mixed output for box-filter downsampling.
-        output_acc += unfiltered_output + filtered_output;
+        output_acc += total;
     }
     sample_cycle_count++;
 
@@ -717,14 +727,6 @@ inline bus_state_t mos6581_s::advance_cycle(bus_state_t bus_state) {
         // Reset accumulators for next sample period
         output_acc = 0.0f;
         sample_cycle_count = 0;
-
-        // 6581 digi support: add constant DC bias from the voice DACs.
-        if (revision <= SID_REVISION_6581_R4AR) {
-            mixed += SID_6581_DIGI_BIAS;
-        }
-
-        // Apply master volume (cached on register write)
-        mixed *= (float)master_volume / SIGVOL_VOL_MAX;
 
         // DC blocker: removes the constant bias×volume product while
         // preserving fast changes (digi samples).  ~20 Hz high-pass.
@@ -992,12 +994,6 @@ bus_state_t mos6581_s::registers_write(void* context, bus_state_t bus_state) {
                 break;
                 
             case SID_REG_SIGVOL:
-                // Handle volume bug for 6581
-                if (sid->revision <= SID_REVISION_6581_R4AR && (sid->regs[SID_REG_SIGVOL] & SIGVOL_VOL_MASK) != (value & SIGVOL_VOL_MASK)) {
-                    sid->volume_change_click = true;
-                    sid->volume_click_amplitude = (float)(value & SIGVOL_VOL_MASK) / SIGVOL_VOL_MAX * 0.1f;
-                    sid->volume_click_counter = VOLUME_CLICK_DURATION;
-                }
                 // Cache decoded SIGVOL bits for per-cycle use
                 sid->voice3_off   = (value & SIGVOL_3OFF) != 0;
                 sid->filter_lp    = (value & SIGVOL_LP) != 0;
@@ -1135,11 +1131,6 @@ void mos6581_s::reset() {
     // stale data from the previous session.
     sample_buffer.write_pos.store(0, std::memory_order_relaxed);
     sample_buffer.read_pos.store(0, std::memory_order_relaxed);
-    
-    // Reset volume bug state
-    volume_change_click = false;
-    volume_click_amplitude = 0.0f;
-    volume_click_counter = 0;
     
     // Reset DC blocker state
     dc_blocker_prev_in = 0.0f;
