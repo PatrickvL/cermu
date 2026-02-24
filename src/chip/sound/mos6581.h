@@ -261,6 +261,7 @@ typedef struct voice_s {
     uint32_t result;                  // Final voice output
     float cpu_clock;                  // CPU clock frequency
     uint32_t voice_index;             // Voice index (0, 1, 2)
+    int model_index = 0;             // Cached chip model (0=6581, 1=8580) for table lookup
     
     // Reference to parent chip
     mos6581_t* sid;

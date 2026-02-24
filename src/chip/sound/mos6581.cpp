@@ -560,8 +560,8 @@ void voice_s::clock_cycle() {
 void voice_s::set_waveform_output(voice_t* ring_source) {
     uint8_t wf = control_reg;
     
-    // Determine chip model index for table lookup
-    int model = (sid && sid->revision > SID_REVISION_6581_R4AR) ? 1 : 0;
+    // Use cached chip model index for table lookup (set on revision change)
+    int model = model_index;
     
     // Waveform index for table lookup: lower 3 bits of waveform selector (without noise)
     int wf_index = (wf >> 4) & 0x7;
@@ -773,6 +773,11 @@ void mos6581_s::generate_samples(float* output, uint32_t sample_count) {
 void mos6581_s::set_revision(sid_revision_t rev) {
     revision = rev;
     enable_distortion = (rev <= SID_REVISION_6581_R4AR);
+    // Cache model index in each voice for per-cycle waveform table lookup
+    int mi = (rev > SID_REVISION_6581_R4AR) ? 1 : 0;
+    voice1.model_index = mi;
+    voice2.model_index = mi;
+    voice3.model_index = mi;
     filter_reset();
 }
 
