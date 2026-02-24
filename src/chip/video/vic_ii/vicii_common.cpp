@@ -46,13 +46,6 @@ static inline void vicii_vborder_update_limits(vicii_border_unit_t* border, uint
         VICII_BORDER_BOTTOM_RSEL1 : VICII_BORDER_BOTTOM_RSEL0;
 }
     
-static inline void vicii_hborder_update_limits(vicii_border_unit_t* border, uint8_t c2_reg) {
-    border->border_left = (c2_reg & VICII_C2_CSEL) ?
-        VICII_BORDER_LEFT_CSEL1 : VICII_BORDER_LEFT_CSEL0;
-    border->border_right = (c2_reg & VICII_C2_CSEL) ?
-        VICII_BORDER_RIGHT_CSEL1 : VICII_BORDER_RIGHT_CSEL0;
-}
-
 // Vertical border check — bottom half (VICE: check_vborder_bottom).
 // Sets the staged latch when raster reaches border_bottom.
 // Shared by vicii_check_vertical_border (full check) and
@@ -65,6 +58,8 @@ static inline void vicii_check_vborder_bottom(vicii_t* vicii) {
 
 // Vertical border check — top half (VICE: check_vborder_top).
 // Clears both flip-flops when raster reaches border_top AND DEN is set.
+// Note: Changes to vertical_border_flip_flop are picked up automatically
+// by the inline border mask computation in vicii_pixel_sequencer.
 static inline void vicii_check_vborder_top(vicii_t* vicii) {
     if (vicii->timing.raster_counter == vicii->border.border_top &&
         (vicii->registers.data[VICII_C1] & VICII_C1_DEN)) {
@@ -323,48 +318,26 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
     const uint16_t x_coord = vicii->timing.x_coordinate;
     
     // ---------------------------------------------------------------
-    // PER-PIXEL BORDER RENDERING with two-stage pipeline (VICE: draw_border8)
+    // PER-PIXEL BORDER RENDERING
     // ---------------------------------------------------------------
-    // Horizontal border checks (left open / right close) have already been
-    // performed by the cycle callback wrappers (vicii_cycle_char_color_hborder_l1,
-    // _l0, vicii_cycle_idle_y_match_hborder_r0, vicii_cycle_idle_hborder_r1)
-    // BEFORE this function runs, so main_border_flip_flop is up-to-date.
-    //
-    // border_state holds the PREVIOUS cycle's main_border value.
-    // During transitions, rendering uses border_state (old) for most/all pixels.
-    //
-    // Transition rendering (matching VICE draw_border8):
-    // - CSEL=1: ALL 8 pixels use OLD border_state; then update
-    // - CSEL=0: pixels 0-6 use OLD border_state; pixel 7 uses NEW state
-    bool per_pixel_in_border[8];
+    // Branchless per-pixel border mask (VICE draw_border8 transition rules):
+    //   base = 0xFF when old_border or vborder active, else 0x00
+    //   XOR bit 7 on CSEL=0 transition (old≠new, !vborder, !csel)
     const bool old_border = vicii->border.border_state;
     const bool new_border = vicii->border.main_border_flip_flop;
-    const bool vborder = vicii->border.vertical_border_flip_flop;
-    const bool csel = (vicii->registers.data[VICII_C2] & VICII_C2_CSEL) != 0;
-    
-    if (old_border == new_border) {
-        // No transition: all pixels use same state
-        const bool in_border = old_border || vborder;
-        for (int i = 0; i < 8; i++)
-            per_pixel_in_border[i] = in_border;
-    } else if (csel) {
-        // CSEL=1 transition: all 8 pixels use OLD state (transition takes effect next cycle)
-        for (int i = 0; i < 8; i++)
-            per_pixel_in_border[i] = old_border || vborder;
-    } else {
-        // CSEL=0 transition: pixels 0-6 use old state, pixel 7 uses new state
-        const bool old_in_border = old_border || vborder;
-        for (int i = 0; i < 7; i++)
-            per_pixel_in_border[i] = old_in_border;
-        per_pixel_in_border[7] = new_border || vborder;
-    }
-    
-    // Update border_state for next cycle
+    const bool vborder    = vicii->border.vertical_border_flip_flop;
+    const bool csel       = (vicii->registers.data[VICII_C2] & VICII_C2_CSEL) != 0;
+
+    const uint8_t base       = (uint8_t)(-(old_border | vborder));
+    const uint8_t transition = (uint8_t)((old_border ^ new_border) & !csel & !vborder) << 7;
+    const uint8_t border_mask = base ^ transition;
+
+    // Advance the two-stage pipeline: border_state ← main_border_flip_flop.
     vicii->border.border_state = new_border;
     
-    // Emit border pixels
+    // Emit border pixels using precomputed bitmask
     for (int pixel = 0; pixel < 8; pixel++) {
-        if (per_pixel_in_border[pixel] || !vicii->video_logic.display_state) {
+        if ((border_mask & (1 << pixel)) || !vicii->video_logic.display_state) {
             vicii_pixel_emit_at_x(vicii, &vicii->border.border_pixel, x_coord + (uint16_t)pixel);
         }
     }
@@ -401,7 +374,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             // from the first loop. We MUST NOT use the live flip-flop here because
             // the first loop may have cleared it mid-cycle (e.g., at border_left),
             // which would incorrectly make earlier pixels appear as display.
-            const bool pixel_in_border = per_pixel_in_border[pixel];
+            const bool pixel_in_border = (border_mask & (1 << pixel)) != 0;
             
             // Skip if this pixel is in border (already handled in first loop).
             // The shift register is not advanced during border because the border
@@ -888,10 +861,10 @@ bus_state_t vicii_s::registers_write(void* context, bus_state_t bus_state) {
             vicii_check_vertical_border(vicii);
             FALLTHROUGH; // to C2 case
         case VICII_C2: // $d016 Control register 2
-            vicii_hborder_update_limits(&vicii->border, vicii->registers.data[VICII_C2]);
             vicii_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
             // Re-sync color palette when graphics mode changes
             vicii_sequencer_update_colors(vicii);
+            // CSEL or vborder may have changed — border mask recomputed inline in pixel_sequencer
             break;
         case VICII_RASTER: // $d012 Raster compare (bits 0-7)
             // Update prev_raster_compare for edge detection
@@ -1338,6 +1311,7 @@ static inline void vicii_check_hborder_right(vicii_t* vicii) {
 }
 
 // Cycle 17 (x_cycle 16): char/color access + left hborder check for CSEL=1
+// When CSEL=1, display window opens at x=VICII_BORDER_LEFT_CSEL1 (24/$18)
 static uint8_t vicii_cycle_char_color_hborder_l1(vicii_t* vicii, int param) {
     if (vicii->registers.data[VICII_C2] & VICII_C2_CSEL)
         vicii_check_hborder_left(vicii);
@@ -1345,6 +1319,7 @@ static uint8_t vicii_cycle_char_color_hborder_l1(vicii_t* vicii, int param) {
 }
 
 // Cycle 18 (x_cycle 17): char/color access + left hborder check for CSEL=0
+// When CSEL=0, display window opens at x=VICII_BORDER_LEFT_CSEL0 (31/$1f)
 static uint8_t vicii_cycle_char_color_hborder_l0(vicii_t* vicii, int param) {
     if (!(vicii->registers.data[VICII_C2] & VICII_C2_CSEL))
         vicii_check_hborder_left(vicii);
@@ -1352,6 +1327,7 @@ static uint8_t vicii_cycle_char_color_hborder_l0(vicii_t* vicii, int param) {
 }
 
 // Cycle 57 (x_cycle 56): idle + right hborder check for CSEL=1
+// When CSEL=1, display window closes at x=VICII_BORDER_RIGHT_CSEL1 (344/$158)
 static uint8_t vicii_cycle_idle_hborder_r1(vicii_t* vicii, int param) {
     if (vicii->registers.data[VICII_C2] & VICII_C2_CSEL)
         vicii_check_hborder_right(vicii);
@@ -1464,6 +1440,7 @@ static uint8_t vicii_cycle_char_color_y_match(vicii_t* vicii, int unused_param_v
 
 // Cycle 56: Sprite Y-match + expansion flip-flop toggle + idle access + ChkBrdR0
 // VICE timing: ChkSprDma at Phi1(56), ChkSprExp at Phi2(56), ChkBrdR0
+// When CSEL=0, display window closes at x=VICII_BORDER_RIGHT_CSEL0 (335/$14f)
 static uint8_t vicii_cycle_idle_y_match(vicii_t* vicii, int unused_param) {
     if (!(vicii->registers.data[VICII_C2] & VICII_C2_CSEL))
         vicii_check_hborder_right(vicii);
@@ -2479,7 +2456,6 @@ static inline void vicii_initialize(vicii_t* vicii) {
     // Update units based on register values
     vicii_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[VICII_C1], vicii->registers.data[VICII_C2]);
     vicii_vborder_update_limits(&vicii->border, vicii->registers.data[VICII_C1]);
-    vicii_hborder_update_limits(&vicii->border, vicii->registers.data[VICII_C2]);
     
     // Initialize border pixel from register value (EC was set to LIGHT_BLUE at line 1815)
     vicii->border.border_pixel.priority = VICII_PRIORITY_BORDER;
@@ -2533,17 +2509,17 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
         free(vicii->pixel.sprite_collision_line);
         free(vicii->pixel.graphics_fg_line);
         
-                // Allocate single line buffers
-                vicii->pixel.pixel_line_priority = static_cast<vicii_priority_t*>(malloc(config->visible_pixels_per_line * sizeof(vicii_priority_t)));
-                vicii->pixel.pixel_line_color = static_cast<uint8_t*>(malloc(config->visible_pixels_per_line * sizeof(uint8_t)));
-                // Collision detection buffers (independent of display)
-                vicii->pixel.sprite_collision_line = static_cast<uint8_t*>(calloc(config->visible_pixels_per_line, sizeof(uint8_t)));
-                vicii->pixel.graphics_fg_line = static_cast<bool*>(calloc(config->visible_pixels_per_line, sizeof(bool)));
-                
-                // Initialize buffer with current border color
-                const uint8_t border_color = vicii->registers.data[VICII_EC] & 0x0F;
-                memset(vicii->pixel.pixel_line_priority, VICII_PRIORITY_BORDER, config->visible_pixels_per_line);
-                memset(vicii->pixel.pixel_line_color, border_color, config->visible_pixels_per_line);
+        // Allocate single line buffers
+        vicii->pixel.pixel_line_priority = static_cast<vicii_priority_t*>(malloc(config->visible_pixels_per_line * sizeof(vicii_priority_t)));
+        vicii->pixel.pixel_line_color = static_cast<uint8_t*>(malloc(config->visible_pixels_per_line * sizeof(uint8_t)));
+        // Collision detection buffers (independent of display)
+        vicii->pixel.sprite_collision_line = static_cast<uint8_t*>(calloc(config->visible_pixels_per_line, sizeof(uint8_t)));
+        vicii->pixel.graphics_fg_line = static_cast<bool*>(calloc(config->visible_pixels_per_line, sizeof(bool)));
+        
+        // Initialize buffer with current border color
+        const uint8_t border_color = vicii->registers.data[VICII_EC] & 0x0F;
+        memset(vicii->pixel.pixel_line_priority, VICII_PRIORITY_BORDER, config->visible_pixels_per_line);
+        memset(vicii->pixel.pixel_line_color, border_color, config->visible_pixels_per_line);
     }
     
     vicii_set_x_cycle(vicii, 0);
@@ -2626,10 +2602,10 @@ void vicii_s::set_framebuffer(uint32_t* framebuffer, int width, int height) {
     // Border color should come from register, not hardcoded
     border.border_pixel.priority = VICII_PRIORITY_BORDER;
     border.border_pixel.color = static_cast<vicii_color_t>(registers.data[VICII_EC]);
-        if (pixel.pixel_line_color && config->visible_pixels_per_line > 0) {
-            // Initialize buffer with current border color
-            const uint8_t border_color = registers.data[VICII_EC] & 0x0F;
-            memset(pixel.pixel_line_priority, VICII_PRIORITY_BORDER, config->visible_pixels_per_line);
-            memset(pixel.pixel_line_color, border_color, config->visible_pixels_per_line);
-        }
+    if (pixel.pixel_line_color && config->visible_pixels_per_line > 0) {
+        // Initialize buffer with current border color
+        const uint8_t border_color = registers.data[VICII_EC] & 0x0F;
+        memset(pixel.pixel_line_priority, VICII_PRIORITY_BORDER, config->visible_pixels_per_line);
+        memset(pixel.pixel_line_color, border_color, config->visible_pixels_per_line);
+    }
 }

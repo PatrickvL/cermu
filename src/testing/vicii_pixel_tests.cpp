@@ -38,11 +38,12 @@ static const uint32_t PAL[16] = {
 //
 // LATCH-BASED SR MODEL: The g-access fills a data latch, and the shift register
 // reloads from the latch when pixel_in_char wraps to 0.  With first_x_coord=404,
-// the border opens at x=24 (pixel 4 of cycle 15).  The pixel_in_char counter resets
-// at that point, triggering an immediate SR load with column 0 data.  Column 0's
-// full 8 pixels output at x=24-31 (spanning cycles 15-16).  Subsequent columns
-// reload every 8 display pixels, keeping all 40 columns × 8 pixels = 320 pixels
-// perfectly aligned within the display window (x=24 to x=343).
+// the border opens at x=VICII_BORDER_LEFT_CSEL1 (24, pixel 4 of cycle 15).
+// The pixel_in_char counter resets at that point, triggering an immediate SR
+// load with column 0 data.  Column 0's full 8 pixels output at x=24-31
+// (spanning cycles 15-16).  Subsequent columns reload every 8 display pixels,
+// keeping all 40 columns × 8 pixels = 320 pixels perfectly aligned within
+// the display window (x=VICII_BORDER_LEFT_CSEL1 to x=VICII_BORDER_RIGHT_CSEL1).
 //
 // Display area (CSEL=1, RSEL=1, YSCROLL=3, XSCROLL=0):
 //   Theoretical: VIC 24..343 → fb cols 46..365, rasters 51..250 → fb rows 51..250
@@ -57,7 +58,7 @@ static int vic_x_to_fb(int vic_x) {
 
 // Character grid → framebuffer pixel (first pixel of character cell's shift register output)
 // Hardware-accurate calibration for CSEL=1, XSCROLL=0, YSCROLL=3:
-// X: Border opens at x=24 (border_left for CSEL=1).  The latch-based SR model
+// X: Border opens at x=VICII_BORDER_LEFT_CSEL1 (24).  The latch-based SR model
 //    loads column 0 immediately at the border edge, so column 0's bit 7 appears
 //    at x=24.  Pipeline delay+centering maps x=24 to fb_pos=46.
 // Y: RC=0 is the first raster of each character row at raster 51+row*8.
@@ -648,7 +649,7 @@ static void test_sprite_priority(C64System* c64, EmulatedSystem* sys, check_ctx_
     write_ram(c64, 0x07F8, 0x80);
 
     // Position sprite to overlap that character cell
-    int vx = 24 + 5 * 8;  // char col 5 VIC-II X
+    int vx = VICII_BORDER_LEFT_CSEL1 + 5 * 8;  // char col 5 VIC-II X
     int vy = 51 + 2 * 8;  // char row 2 VIC-II Y (raster line)
     write_vic(c64, 0x00, vx & 0xFF);
     write_vic(c64, 0x01, vy);
@@ -715,7 +716,7 @@ static void test_xscroll(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) 
     write_colorram(c64, 1, 1);
 
     // XSCROLL=0: col 0 starts at char_fb_x(0) with all 8 pixels visible.
-    // The latch-based SR model loads column 0 at the border edge (x=24).
+    // The latch-based SR model loads column 0 at the border edge (x=VICII_BORDER_LEFT_CSEL1).
     write_vic(c64, 0x16, 0xC8); // CSEL=1, XSCROLL=0
     run_frames(sys, 3);
 
@@ -783,9 +784,10 @@ static void test_csel(C64System* c64, EmulatedSystem* sys, check_ctx_t& ctx) {
 
     run_frames(sys, 3);
 
-    // In 38-column mode, left border extends to VIC-II x=31 instead of 24.
-    // With the latch-based SR model, column 0 starts at x=24 for CSEL=1, but
-    // the extended CSEL=0 border covers x=24-30, hiding the first 7 pixels.
+    // In 38-column mode, left border extends to VIC-II x=VICII_BORDER_LEFT_CSEL0 (31)
+    // instead of VICII_BORDER_LEFT_CSEL1 (24).  With the latch-based SR model,
+    // column 0 starts at x=24 for CSEL=1, but the extended CSEL=0 border covers
+    // x=24-30, hiding the first 7 pixels.
     int x0 = char_fb_x(0);
     // Check at x0+1, which maps to VIC-II x=25, firmly inside the CSEL=0 border.
     check_pixel(ctx, x0 + 1, char_fb_y(0) + 4, 14, "CSEL=0 left border covers col 0");
@@ -1082,7 +1084,7 @@ static void test_sprite_bg_collision_pixels(C64System* c64, EmulatedSystem* sys,
         write_ram(c64, 0x2000 + i, 0xFF);
     write_ram(c64, 0x07F8, 0x80);
 
-    int vx = 24 + 10 * 8;
+    int vx = VICII_BORDER_LEFT_CSEL1 + 10 * 8;
     int vy = 51 + 5 * 8;
     write_vic(c64, 0x00, vx & 0xFF);
     write_vic(c64, 0x01, vy);
