@@ -362,11 +362,9 @@ typedef struct mos6581_s : public ChipBase {
     bool has_debug_content() const override { return true; }
     bool has_settings_content() const override { return true; }
     bool has_layout_content() const override { return true; }
-#ifdef IMGUI_VERSION
     void render_debug_content() override;
     void render_settings_content() override;
     void render_layout_content() override;
-#endif
 
     // Public methods
     void init();

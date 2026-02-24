@@ -62,8 +62,15 @@ foreach(source ${CORE_SOURCES})
     endif()
 endforeach()
 
+# GUI stub sources needed by chip classes that override ChipBase virtuals.
+# These *_gui.cpp files compile to empty stubs when IMGUI_VERSION is not defined.
+set(MOS6510_GUI_STUBS
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx/fam65xx_gui.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/systems/nes/nes_apu_gui.cpp
+)
+
 # Create a library for the MOS6510 CPU
-add_library(mos6510_lib STATIC ${CPU_SOURCES} ${CORE_SOURCES})
+add_library(mos6510_lib STATIC ${CPU_SOURCES} ${CORE_SOURCES} ${MOS6510_GUI_STUBS})
 target_include_directories(mos6510_lib PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/../
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
@@ -112,6 +119,7 @@ endif()
 add_executable(fam65xx_processor_tests_runner
     fam65xx_processor_tests_runner.cpp
     ${CPU_DIR}/fam65xx/fam65xx_decoder.cpp
+    ${MOS6510_GUI_STUBS}
 )
 target_include_directories(fam65xx_processor_tests_runner PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
@@ -182,6 +190,7 @@ add_executable(sid_test_runner
     sid_test_runner.cpp
     ${TESTING_DIR}/sid_test_harness.cpp
     ${SOUND_DIR}/mos6581.cpp
+    ${SOUND_DIR}/mos6581_gui.cpp
     ${SOUND_DIR}/sid_waveform_tables.cpp
     ${CORE_DIR}/chip.cpp
     ${CORE_DIR}/ioport.cpp

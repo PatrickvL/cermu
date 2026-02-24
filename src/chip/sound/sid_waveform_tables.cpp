@@ -466,7 +466,7 @@ void init_waveform_tables() {
         model_wave[0][4][i] = model_wave[1][4][i] = 0xfff;
 
         // Triangle: ((accumulator ^ -!!msb) >> 11) & 0xffe
-        tri[i] = ((accumulator ^ -(uint32_t)!!msb) >> 11) & 0xffe;
+        tri[i] = ((accumulator ^ (uint32_t)(-(int32_t)!!msb)) >> 11) & 0xffe;
         model_wave[0][1][i] = model_wave[1][1][i] = tri[i];
 
         // Sawtooth: accumulator >> 12
