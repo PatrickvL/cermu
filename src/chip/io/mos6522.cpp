@@ -47,7 +47,7 @@ void mos6522_t::reset() {
     timer1_running = false;
     timer2_running = false;
 
-    // Reset interrupt state (preserves interrupt_line — that's hardware wiring config)
+    // Reset interrupt state (preserves interrupt_bit — that's hardware wiring config)
     interrupt_active = false;
 }
 
@@ -305,11 +305,11 @@ bus_state_t mos6522_t::tick(bus_state_t bus_state) {
         // Set the master IRQ bit in IFR
         ifr |= MOS6522_IFR_IRQ;
         
-        // Assert interrupt line (active-low, so we set the legacy mask bit)
+        // Assert interrupt line (active-low: clear the pin bit to assert).
         // This must happen EVERY tick, not just once, because the bus state is
         // reset to default at the start of each cycle.
-        // OR-ing with 0 is a no-op, so no guard on interrupt_line needed.
-        BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | interrupt_line);
+        if (interrupt_bit != 0)
+            BUS_CLR_BIT(bus_state, interrupt_bit);
     } else {
         // Clear the master IRQ bit if no enabled interrupts are active
         ifr &= ~MOS6522_IFR_IRQ;

@@ -295,10 +295,10 @@ void mos6522_s::render_settings_content() {
 
 static const char* mos6522_get_via_name(mos6522_t* via) {
     // The VIC-20 has two VIAs distinguished by their interrupt line
-    if (via->interrupt_line == BUS_IRQ_BIT) {
-        return "VIA 1 ($9110)";
-    } else if (via->interrupt_line == BUS_NMI_BIT) {
-        return "VIA 2 ($9120)";
+    if (via->interrupt_bit == BUS_NMI_BIT) {
+        return "VIA 1 ($9110)";  // VIA1 at $9110 drives NMI
+    } else if (via->interrupt_bit == BUS_IRQ_BIT) {
+        return "VIA 2 ($9120)";  // VIA2 at $9120 drives IRQ
     }
     return "VIA";
 }

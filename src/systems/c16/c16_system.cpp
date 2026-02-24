@@ -467,12 +467,11 @@ void Commodore264System<V>::tick() {
     // PHASE 1: TED PHI1
     s = ted_->tick_phi1(s);
     
-    // HARDWARE WIRING: BA -> RDY
-    if (BUS_GET_LINES(s) & BUS_MASK_BA) {
-        s |= BUS_BIT(BUS_RDY_BIT);
-    } else {
-        s &= ~BUS_BIT(BUS_RDY_BIT);
-    }
+    // HARDWARE WIRING: BA -> RDY (direct bit test + set/clear)
+    if (BUS_GET_BIT(s, BUS_BA_BIT))
+        BUS_SET_BIT(s, BUS_RDY_BIT);
+    else
+        BUS_CLR_BIT(s, BUS_RDY_BIT);
     
     // PHASE 2: CPU PHI2
     auto* cpu = CPU(cpu_);

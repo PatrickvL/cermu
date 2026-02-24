@@ -363,20 +363,25 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         border_mask = in_border ? 0xFF : 0x00;
         
         if (in_border) {
-            // Actual border area: emit border color with BORDER priority
-            for (int pixel = 0; pixel < 8; pixel++) {
-                vicii_pixel_emit_at_x(vicii, &vicii->border.border_pixel, x_coord + (uint16_t)pixel);
+            // Actual border area: emit border color with BORDER priority.
+            // Batch-fill: compute base buffer position once instead of calling
+            // vicii_fetch_x_to_buffer_pos 8 times through vicii_pixel_emit_at_x.
+            // 8 consecutive X coords always map to 8 consecutive buffer positions
+            // (no wrap within a single cycle).
+            const int16_t base = vicii_fetch_x_to_buffer_pos(vicii, x_coord);
+            if (base >= 0) {
+                memset(&vicii->pixel.pixel_line_priority[base], vicii->border.border_pixel.priority, 8);
+                memset(&vicii->pixel.pixel_line_color[base], (uint8_t)vicii->border.border_pixel.color, 8);
             }
         } else if (!vicii->video_logic.display_state) {
             // Content area in idle mode: emit background color with BACKGROUND priority.
             // This allows sprites to display over idle areas (sprites have higher priority
             // than BACKGROUND but lower than BORDER). The VIC-II displays idle pattern
             // graphics in this state, but we approximate with background color for now.
-            vicii_pixel_t idle_pixel;
-            idle_pixel.color = (vicii_color_t)(vicii->registers.data[VICII_B0C] & 0x0F);
-            idle_pixel.priority = VICII_PRIORITY_BACKGROUND;
-            for (int pixel = 0; pixel < 8; pixel++) {
-                vicii_pixel_emit_at_x(vicii, &idle_pixel, x_coord + (uint16_t)pixel);
+            const int16_t base = vicii_fetch_x_to_buffer_pos(vicii, x_coord);
+            if (base >= 0) {
+                memset(&vicii->pixel.pixel_line_priority[base], VICII_PRIORITY_BACKGROUND, 8);
+                memset(&vicii->pixel.pixel_line_color[base], vicii->registers.data[VICII_B0C] & 0x0F, 8);
             }
         }
     } else {
@@ -1044,9 +1049,14 @@ void vicii_set_x_cycle(vicii_t* vicii, uint8_t value) {
     // Formula derived from vic-ii.txt timing diagram (lines 989-992):
     // - Cycle 13 start: x_coordinate = 0x1F4 (500)
     // - Cycle 14 start: x_coordinate = 0x004 (4)
-    // - This requires: (base_offset + cycle*8) mod pixels_per_line
-    const uint16_t pixels_per_line = vicii->config->cycles_per_line * 8;
-    vicii->timing.x_coordinate = (vicii->config->first_x_coord + (vicii->timing.x_cycle * 8)) % pixels_per_line;
+    //
+    // Uses conditional subtract instead of modulo (non-power-of-2):
+    // raw = first_x_coord + cycle*8.  Max value (PAL): 404 + 62*8 = 900.
+    // 900 < 2*504=1008, so at most one subtraction is needed.
+    const uint16_t ppl = vicii->cached_pixels_per_line;
+    uint16_t raw = vicii->cached_first_x_coord + (static_cast<uint16_t>(value) << 3);
+    if (raw >= ppl) raw -= ppl;
+    vicii->timing.x_coordinate = raw;
 }
 
 // Helper function: Reset VCBASE/VC when outside display area
@@ -1574,20 +1584,24 @@ static uint8_t vicii_cycle_sprite_s_border_check(vicii_t* vicii, int param_sprit
 //
 // BA returns HIGH when VIC no longer needs PHI2 access.
 
+// Direct single-pin helpers for BA/AEC control.
+// Uses BUS_SET_BIT / BUS_CLR_BIT (single bit-or / bit-and-not) instead of
+// the legacy bus_lines_extract → modify → bus_lines_apply roundtrip, which did
+// 12 conditional branches per call through bus_lines_extract/bus_lines_apply.
 static inline bus_state_t vicii_bus_control_aec_high(bus_state_t bus_state) {
-    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_AEC);
+    BUS_SET_BIT(bus_state, BUS_AEC_BIT);
     return bus_state;
 }
 
 static inline bus_state_t vicii_bus_control_aec_low(bus_state_t bus_state) {
-    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) & ~BUS_MASK_AEC);
+    BUS_CLR_BIT(bus_state, BUS_AEC_BIT);
     return bus_state;
 }
 
 static inline bus_state_t vicii_bus_control_ba_high(bus_state_t bus_state) {
     // BA HIGH: Bus is available to CPU during PHI2
     // This is the normal/default state
-    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | BUS_MASK_BA);
+    BUS_SET_BIT(bus_state, BUS_BA_BIT);
     return bus_state;
 }
 
@@ -1597,7 +1611,7 @@ static inline bus_state_t vicii_bus_control_ba_low(bus_state_t bus_state) {
     // - Bad Line c-accesses (character pointer reads)
     // - Sprite p-accesses (sprite data pointer reads)
     // - Sprite s-accesses (sprite data reads)
-    BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) & ~BUS_MASK_BA);
+    BUS_CLR_BIT(bus_state, BUS_BA_BIT);
     return bus_state;
 }
 
@@ -1750,7 +1764,7 @@ bus_state_t vicii_s::tick_phi1(bus_state_t bus_state) {
     // during PHI2 because AEC still follows φ2. This causes the c-accesses to read $FF
     // from the tri-stated data bus — the "FLI bug" that makes columns 0-2 show garbage
     // in Flexible Line Interpretation (FLI) mode.
-    const bool ba_is_low = (BUS_GET_LINES(bus_state) & BUS_MASK_BA) == 0;
+    const bool ba_is_low = !BUS_GET_BIT(bus_state, BUS_BA_BIT);
     if (ba_is_low) {
         if (vicii->bus.ba_low_count < 4) {
             vicii->bus.ba_low_count++;
@@ -2534,6 +2548,7 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
     const uint16_t ppl = config->cycles_per_line * 8;
     vicii->cached_pixels_per_line = ppl;
     vicii->cached_visible_pixels = config->visible_pixels_per_line;
+    vicii->cached_first_x_coord = config->first_x_coord;
     vicii->cached_display_offset = ppl + VICII_PIPELINE_DELAY_PIXELS + VICII_X_CENTERING_PIXELS;
     vicii->cached_first_visible_display = (config->first_visible_x_coord + vicii->cached_display_offset) % ppl;
     vicii->cached_wrap_threshold = (vicii->cached_first_visible_display + vicii->cached_visible_pixels) % ppl;

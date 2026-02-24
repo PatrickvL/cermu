@@ -498,6 +498,7 @@ struct vicii_s : public ChipBase {
     uint16_t cached_first_visible_display = 0;   // transformed first_visible_x_coord
     uint16_t cached_wrap_threshold = 0;          // (first_visible_display + visible_pixels) % pixels_per_line
     uint16_t cached_display_offset = 0;          // pixels_per_line + pipeline_delay + centering
+    uint16_t cached_first_x_coord = 0;           // config->first_x_coord (X at cycle 0)
 
     // Topic-specific units
     vicii_registers_unit_t registers = {};

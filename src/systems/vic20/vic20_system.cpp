@@ -606,7 +606,7 @@ bool VIC20System::initialize() {
     via1_ = new mos6522_t();
     via1_->reset();
     if (via1_) {
-        via1_->interrupt_line = BUS_MASK_NMI;
+        via1_->interrupt_bit = BUS_NMI_BIT;
         memory_->via1_chip = via1_;
     } else {
         printf("VIC20: Failed to create VIA1\n");
@@ -615,7 +615,7 @@ bool VIC20System::initialize() {
     via2_ = new mos6522_t();
     via2_->reset();
     if (via2_) {
-        via2_->interrupt_line = BUS_MASK_IRQ;
+        via2_->interrupt_bit = BUS_IRQ_BIT;
         memory_->via2_chip = via2_;
     } else {
         printf("VIC20: Warning: VIA2 not created (optional)\n");
@@ -678,7 +678,7 @@ void VIC20System::reset() {
     }
     
     // Reset VIA chips (clears timers, interrupt flags, port registers)
-    // interrupt_line is preserved by mos6522_reset — it's hardware wiring, not state
+    // interrupt_bit is preserved by mos6522_reset — it's hardware wiring, not state
     if (via1_) {
         via1_->reset();
     }
