@@ -699,7 +699,7 @@ inline bus_state_t mos6581_s::advance_cycle(bus_state_t bus_state) {
     // Step 5: Generate output samples at the target sample rate (~44.1 kHz).
     // Average the accumulated per-cycle output, apply master volume and DC blocker.
     if (cpu_clock > 0.0f) {
-        sample_accumulator += (double)sample_rate / (double)cpu_clock;
+        sample_accumulator += sample_rate_ratio;
 
         if (sample_accumulator >= 1.0) {
             sample_accumulator -= 1.0;
@@ -777,12 +777,16 @@ void mos6581_s::set_timing(bool pal) {
 
 void mos6581_s::set_sample_rate(float rate) {
     sample_rate = rate;
+    if (cpu_clock > 0.0f)
+        sample_rate_ratio = (double)sample_rate / (double)cpu_clock;
     // Update filter coefficient since w0 depends on sample rate
     filter_update_cutoff();
 }
 
 void mos6581_s::set_cpu_clock(float clock_hz) {
     cpu_clock = clock_hz;
+    if (cpu_clock > 0.0f)
+        sample_rate_ratio = (double)sample_rate / (double)cpu_clock;
     for (int i = 0; i < 3; i++) {
         voices[i]->cpu_clock = clock_hz;
     }

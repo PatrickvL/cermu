@@ -337,6 +337,7 @@ typedef struct mos6581_s : public ChipBase {
     
     // Fractional sample accumulator for cycle-accurate output
     double sample_accumulator = 0.0;  // Fractional accumulator for sample generation
+    double sample_rate_ratio = 0.0;   // Precomputed sample_rate / cpu_clock
     float cpu_clock = 0.0f;           // CPU clock frequency (e.g. 985248 for PAL)
     
     // Per-cycle filter output accumulation for anti-aliased downsampling.
