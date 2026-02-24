@@ -452,9 +452,7 @@ void Commodore264System<V>::tick() {
     // =========================================================================
     
     // PHASE 1: TED PHI1
-    if (ted_) {
-        s = ted_->tick_phi1(s);
-    }
+    s = ted_->tick_phi1(s);
     
     // HARDWARE WIRING: BA -> RDY
     if (BUS_GET_LINES(s) & BUS_MASK_BA) {
@@ -464,22 +462,16 @@ void Commodore264System<V>::tick() {
     }
     
     // PHASE 2: CPU PHI2
-    if (cpu_) {
-        s = mos7501_tick_phi2(cpu_, s);
-    }
+    s = mos7501_tick_phi2(cpu_, s);
     
     // PHASE 3: Memory service
     s = mem_tick(s);
     
     // PHASE 3.1: TED PHI2 delivery
-    if (ted_) {
-        ted_->tick_phi2(s);
-    }
+    ted_->tick_phi2(s);
     
     // PHASE 4: CPU PHI1
-    if (cpu_) {
-        s = mos7501_tick_phi1(cpu_, s);
-    }
+    s = mos7501_tick_phi1(cpu_, s);
     
     // Restore R/W line to read mode after CPU PHI1 has consumed write info
     s |= BUS_BIT(BUS_RW_BIT);
