@@ -186,7 +186,7 @@ void vic_base_s::decode_register(uint8_t reg_index) {
         case VIC_REG_BACKGROUND:
             cached_border_color = registers[VIC_REG_BACKGROUND] & VIC_BG_BORDER_MASK;
             cached_background_color = (registers[VIC_REG_BACKGROUND] & VIC_BG_BACKGROUND_MASK) >> VIC_BG_BACKGROUND_SHIFT;
-            cached_reverse_flag = registers[VIC_REG_BACKGROUND] & VIC_BG_REVERSE;
+            cached_reversed = (registers[VIC_REG_BACKGROUND] & VIC_BG_REVERSE) == 0;
             break;
         default:
             break;
@@ -574,7 +574,7 @@ bus_state_t vic_base_s::tick(bus_state_t bus_state) {
             // Reverse mode: bit 3 of $900F controls screen inversion
             // When reverse=1 (normal): set pixels use foreground, clear pixels use background
             // When reverse=0 (inverted): set pixels use background, clear pixels use foreground
-            const bool reversed = cached_reverse_flag == 0;  // Note: 0 means reversed!
+            const bool reversed = cached_reversed;
             const uint8_t fg = reversed ? background_color : foreground_color;
             const uint8_t bg = reversed ? foreground_color : background_color;
             emit_pixel((matrix_char_data & 0x80) ? fg : bg);
