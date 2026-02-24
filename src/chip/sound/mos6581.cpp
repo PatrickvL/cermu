@@ -641,9 +641,9 @@ inline bus_state_t mos6581_s::advance_cycle(bus_state_t bus_state) {
     //   5. Clock filter → generate sample
 
     // Steps 1-2: Clock accumulators, noise, and envelopes
-    for (int i = 0; i < 3; i++) {
-        voices[i]->clock_cycle();
-    }
+    voice1.clock_cycle();
+    voice2.clock_cycle();
+    voice3.clock_cycle();
 
     // Step 3: Apply oscillator sync.
     // Sync source mapping: voice1←voice3, voice2←voice1, voice3←voice2
