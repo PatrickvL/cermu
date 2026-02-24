@@ -4,11 +4,14 @@
 
 #include "c64_sid_player.h"
 #include "c64_screen_utils.h"
-#include "../../chip/cpu/fam65xx/mos6510.h"
+#include "../../chip/cpu/fam65xx/fam65xx.hpp"
 #include "../../chip/sound/mos6581.h"
 #include "asm6510.h"
 #include <cstdio>
 #include <cstring>
+
+using mos6510_cpu_t = fam65xx::mos6510_cpu_impl_t;
+#define CPU(ptr) reinterpret_cast<mos6510_cpu_t*>(ptr)
 
 // =============================================================================
 // SID Info Page — Full-screen display of SID header information
@@ -270,7 +273,7 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
            sid->num_songs, sid->start_song);
 
     uint8_t* ram = c64->ram->memory;
-    mos6510_t* cpu = (mos6510_t*)c64->mos6510;
+    auto* cpu = CPU(c64->mos6510);
 
     // ---- Step 1: Write tune payload to C64 RAM ----
     if (prog && prog->data && prog->data_size > 0) {
@@ -322,12 +325,12 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
            needs_timer_irq ? ", self-contained IRQ at $0390" : " (init-only)");
 
     // ---- Step 6: Set CPU to execute the stub ----
-    mos6510_set_a(cpu, (uint8_t)subtune);
-    mos6510_set_x(cpu, 0);
-    mos6510_set_y(cpu, 0);
-    mos6510_set_s(cpu, 0xFF);    // Reset stack
-    mos6510_set_pc(cpu, STUB_BASE);
-    mos6510_transition_to_fetch(cpu);  // Reset pipeline for clean fetch
+    cpu->set(REG_A, (uint8_t)subtune);
+    cpu->set(REG_X, 0);
+    cpu->set(REG_Y, 0);
+    cpu->set(REG_SPL, 0xFF);    // Reset stack
+    cpu->set(REG_PC, STUB_BASE);
+    cpu->transition_to_fetch();  // Reset pipeline for clean fetch
 
     printf("C64: PC set to $%04X — subtune %u/%u starting\n",
            STUB_BASE, subtune + 1, sid->num_songs);
@@ -343,7 +346,7 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
     if (!sid || !c64 || !c64->ram) return;
 
     uint8_t* ram = c64->ram->memory;
-    mos6510_t* cpu = (mos6510_t*)c64->mos6510;
+    auto* cpu = CPU(c64->mos6510);
 
     // ---- Silence SID: reset all voice state ----
     if (c64->sid) {
@@ -377,12 +380,12 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
     build_init_stub(ram, sid, subtune, timer_period, needs_timer_irq);
 
     // ---- Reset CPU to start of stub ----
-    mos6510_set_a(cpu, (uint8_t)subtune);
-    mos6510_set_x(cpu, 0);
-    mos6510_set_y(cpu, 0);
-    mos6510_set_s(cpu, 0xFF);
-    mos6510_set_pc(cpu, STUB_BASE);
-    mos6510_transition_to_fetch(cpu);
+    cpu->set(REG_A, (uint8_t)subtune);
+    cpu->set(REG_X, 0);
+    cpu->set(REG_Y, 0);
+    cpu->set(REG_SPL, 0xFF);
+    cpu->set(REG_PC, STUB_BASE);
+    cpu->transition_to_fetch();
 
     printf("C64: Switched to subtune %u/%u\n", subtune + 1, sid->num_songs);
 }
