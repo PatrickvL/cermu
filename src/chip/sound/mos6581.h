@@ -353,7 +353,7 @@ typedef struct mos6581_s : public ChipBase {
     // Per-cycle filter output accumulation for anti-aliased downsampling.
     // The filter runs every CPU cycle (~1 MHz); the accumulated output is
     // averaged at sample time (~44.1 kHz) for band-limited resampling.
-    double output_acc = 0.0;          // Accumulated post-filter mixed output
+    float output_acc = 0.0f;          // Accumulated post-filter mixed output
     uint32_t sample_cycle_count = 0;  // Cycles accumulated since last sample
     
     // DC blocker state for clean audio output (removes constant DC,
