@@ -739,28 +739,20 @@ void VIC20System::tick() {
     // PHASE 1: VIC CHIP TICKING
     // VIC-20's VIC chip runs continuously, generating video and handling DMA
     // =========================================================================
-    if (vic_) {
-        s = vic_->tick(s);
-    }
+    s = vic_->tick(s);
     
     // =========================================================================
     // PHASE 2: VIA CHIPS TICKING (BEFORE CPU PHI2)
     // VIA chips handle I/O and timing, must tick before CPU to set interrupt lines
     // =========================================================================
-    if (via1_) {
-        s = via1_->tick(s);
-    }
-    if (via2_) {
-        s = via2_->tick(s);
-    }
+    s = via1_->tick(s);
+    s = via2_->tick(s);
     
     // =========================================================================
     // PHASE 3: CPU TICKING (PHI2 phase - sets up memory access)
     // CPU executes instruction and puts address/control on bus
     // =========================================================================
-    if (cpu_) {
-        s = mos6502_tick_phi2(cpu_, s);
-    }
+    s = mos6502_tick_phi2(cpu_, s);
     
     // =========================================================================
     // PHASE 4: MEMORY SERVICE PHASE
@@ -774,9 +766,7 @@ void VIC20System::tick() {
     // PHASE 5: CPU TICKING (PHI1 phase - completes cycle)
     // CPU prepares next instruction fetch
     // =========================================================================
-    if (cpu_) {
-        s = mos6502_tick_phi1(cpu_, s);
-    }
+    s = mos6502_tick_phi1(cpu_, s);
     
     // Restore R/W line to read mode after CPU PHI1 has consumed write info.
     // Maintains invariant: BUS_MASK_RW is always set outside the CPU write window.
