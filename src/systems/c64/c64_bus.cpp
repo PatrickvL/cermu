@@ -82,7 +82,6 @@ bus_state_t c64_bus_s::vic_read(bus_state_t bus_state, uint16_t address) {
  */
 bus_state_t REGISTER_CALL c64_bus_s::memory_tick(bus_state_t bus_state) {
     c64_bus_t* c64_bus = this;
-    if (unlikely(!c64_bus)) return bus_state;
     
     // Determine if this is a read or write operation
     const bool is_read = BUS_GET_LINES(bus_state) & BUS_MASK_RW;
