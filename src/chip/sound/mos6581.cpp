@@ -236,6 +236,11 @@ void mos6581_s::filter_update_cutoff() {
     f->a3 = g * f->a2;
 }
 
+#ifdef _MSC_VER
+__forceinline
+#else
+__attribute__((always_inline)) inline
+#endif
 float mos6581_s::filter_process(float input) {
     if (!enable_filter) return input;
     
