@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../commodore/commodore_system.h"
-#include "../../chip/cpu/fam65xx/mos6502.h"
 #include "../../chip/memory/ram.h"
 #include "../../chip/memory/rom.h"
 #include "../../chip/memory/mos2114.h"
@@ -13,6 +12,8 @@
 #include "vic20_config.h"
 #include "vic20_memory.h"
 #include "vic20_chips.h"
+struct mos6502_t;  // Opaque handle — .cpp uses fam65xx.hpp directly
+
 #include <cstdint>
 #include <string>
 

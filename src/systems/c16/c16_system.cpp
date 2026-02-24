@@ -11,11 +11,17 @@
 #include "../../core/formats/lnx_format.h"
 #include "../../core/formats/commodore_load_helpers.h"
 #include "../../devices/keyboard/commodore_keyboard_device.h"
+// CPU uses fam65xx.hpp directly for inlining
+#include "../../chip/cpu/fam65xx/fam65xx.hpp"
 // CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
 #include "../../core/chip.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
+
+// Concrete CPU type — allows compiler to inline tick<> into the hot loop
+using mos7501_cpu_t = fam65xx::csg7501_cpu_impl_t;
+#define CPU(ptr) reinterpret_cast<mos7501_cpu_t*>(ptr)
 
 #ifdef IMGUI_VERSION
 #include "imgui.h"
@@ -310,30 +316,28 @@ bool Commodore264System<V>::initialize() {
         printf("%s: Warning - ROMs not loaded, system may not function correctly\n", Traits::name);
     }
     
-    // Initialize MOS 7501 CPU
-    cpu_ = mos7501_create();
+    // Initialize MOS 7501 CPU — direct C++ instantiation for inlining
+    cpu_ = reinterpret_cast<mos7501_t*>(new mos7501_cpu_t());
     if (!cpu_) {
         printf("%s: Failed to create MOS 7501 CPU\n", Traits::name);
         return false;
     }
     
-    // Set up CPU descriptor with I/O port callbacks
-    mos7501_desc_t cpu_desc = {};
-    cpu_desc.m7501_in_cb = io_port_in;
-    cpu_desc.m7501_out_cb = io_port_out;
-    cpu_desc.m7501_io_pullup = 0x5F;    // Pull-up on all used pins
-    cpu_desc.m7501_io_floating = 0x00;
-    cpu_desc.m7501_user_data = this;
-    mos7501_init(cpu_, &cpu_desc);
+    // Initialize CPU and I/O port
+    auto* cpu = CPU(cpu_);
+    cpu->init();
+    if constexpr (fam65xx::CSG7501.has_io_port()) {
+        cpu->init_io_port();
+    }
     
     // Note: C16 doesn't use the io_port_mixin bank_change path.
-    // Banking is handled via the m7501_out_cb (io_port_out) callback instead.
+    // Banking is handled by TED register writes.
     
     // Read reset vector from KERNAL ROM and set CPU PC
     if (roms_loaded) {
         uint16_t reset_vector = kernal_rom_[0xFFFC - 0xC000] | (kernal_rom_[0xFFFD - 0xC000] << 8);
-        mos7501_set_pc(cpu_, reset_vector);
-        mos7501_set_ab(cpu_, reset_vector);
+        cpu->set(REG_PC, reset_vector);
+        cpu->set(REG_AB, reset_vector);
         printf("%s: CPU reset vector = $%04X\n", Traits::name, reset_vector);
     }
     
@@ -385,7 +389,7 @@ void Commodore264System<V>::shutdown() {
     
     // Destroy MOS 7501 CPU
     if (cpu_) {
-        mos7501_destroy(cpu_);
+        delete CPU(cpu_);
         cpu_ = nullptr;
     }
     
@@ -414,12 +418,13 @@ void Commodore264System<V>::reset() {
     // CPU mid-instruction, which causes a segfault when emulation resumes
     // with an inconsistent pipeline.
     if (cpu_) {
-        mos7501_reset(cpu_, 0);
+        auto* cpu = CPU(cpu_);
+        cpu->reset(0);
         
         // Re-read reset vector from KERNAL ROM
         uint16_t reset_vector = kernal_rom_[0xFFFC - 0xC000] | (kernal_rom_[0xFFFD - 0xC000] << 8);
-        mos7501_set_pc(cpu_, reset_vector);
-        mos7501_set_ab(cpu_, reset_vector);
+        cpu->set(REG_PC, reset_vector);
+        cpu->set(REG_AB, reset_vector);
         printf("%s: CPU reset (PC=$%04X)\n", Traits::name, reset_vector);
     }
     
@@ -462,7 +467,8 @@ void Commodore264System<V>::tick() {
     }
     
     // PHASE 2: CPU PHI2
-    s = mos7501_tick_phi2(cpu_, s);
+    auto* cpu = CPU(cpu_);
+    s = cpu->tick<mos7501_cpu_t::Phase::PHI2>(s);
     
     // PHASE 3: Memory service
     s = mem_tick(s);
@@ -471,7 +477,7 @@ void Commodore264System<V>::tick() {
     ted_->tick_phi2(s);
     
     // PHASE 4: CPU PHI1
-    s = mos7501_tick_phi1(cpu_, s);
+    s = cpu->tick<mos7501_cpu_t::Phase::PHI1>(s);
     
     // Restore R/W line to read mode after CPU PHI1 has consumed write info
     s |= BUS_BIT(BUS_RW_BIT);
@@ -608,7 +614,7 @@ void Commodore264System<V>::register_c264_chips() {
     auto* ted = ted_;
 
     // CPU — native ChipBase, registered directly
-    register_chip(mos7501_as_chip_base(cpu),
+    register_chip(static_cast<ChipBase*>(CPU(cpu)),
         "MOS 7501/8501 CPU", "7501", "CPU", 0x0000);
 
     // TED — native ChipBase, registered directly
@@ -838,9 +844,10 @@ template<C264SeriesVariant V>
 void Commodore264System<V>::set_cpu_pc(void* user_data, uint16_t addr) {
     auto* sys = static_cast<Commodore264System<V>*>(user_data);
     if (sys->cpu_) {
-        mos7501_set_pc(sys->cpu_, addr);
-        mos7501_set_ab(sys->cpu_, addr);
-        mos7501_transition_to_fetch(sys->cpu_);
+        auto* cpu = CPU(sys->cpu_);
+        cpu->set(REG_PC, addr);
+        cpu->set(REG_AB, addr);
+        cpu->transition_to_fetch();
         printf("%s: PC set to $%04X\n", Traits::name, addr);
     }
 }
