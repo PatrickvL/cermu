@@ -242,6 +242,11 @@ private:
     /// Updated by on_port_device_changed() to avoid per-cycle lookups.
     LightpenDevice* cached_lightpen_ = nullptr;
 
+    /// True when at least one drive is attached to PORT_IEC_SERIAL.
+    /// Updated by on_port_device_changed() to skip the per-cycle opdone()
+    /// + PC range check when no drive is present.
+    bool serial_traps_enabled_ = false;
+
     // =========================================================================
     // KERNAL SERIAL TRAPS
     // =========================================================================

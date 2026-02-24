@@ -854,7 +854,7 @@ void C64System::system_tick() {
     s = mos6510_tick_phi1(mos6510, s);
 
     // KERNAL serial trap check — intercept IEC bus routines at instruction boundaries
-    {
+    if (serial_traps_enabled_) {
         auto* cpu = static_cast<mos6510_t*>(mos6510);
         if (mos6510_opdone(cpu)) {
             uint16_t pc = mos6510_get_pc(cpu);
@@ -1885,13 +1885,30 @@ void C64System::update_lightpen_display_rect() {
 }
 
 void C64System::on_port_device_changed(int port_index) {
-    if (port_index != PORT_CONTROL1) return;
-    cached_lightpen_ = nullptr;
-    auto* port = get_connector_port(PORT_CONTROL1);
-    if (!port) return;
-    auto* device = port->get_attached_device();
-    if (device && strcmp(device->get_id(), "lightpen") == 0) {
-        cached_lightpen_ = static_cast<LightpenDevice*>(device);
+    // Update cached lightpen for Control Port 1
+    if (port_index == PORT_CONTROL1) {
+        cached_lightpen_ = nullptr;
+        auto* port = get_connector_port(PORT_CONTROL1);
+        if (port) {
+            auto* device = port->get_attached_device();
+            if (device && strcmp(device->get_id(), "lightpen") == 0) {
+                cached_lightpen_ = static_cast<LightpenDevice*>(device);
+            }
+        }
+    }
+
+    // Update serial-traps-enabled flag when IEC serial port changes
+    if (port_index == PORT_IEC_SERIAL) {
+        serial_traps_enabled_ = false;
+        auto* port = get_connector_port(PORT_IEC_SERIAL);
+        if (port) {
+            for (auto* dev : port->get_attached_devices()) {
+                if (dynamic_cast<Drive1541Device*>(dev)) {
+                    serial_traps_enabled_ = true;
+                    break;
+                }
+            }
+        }
     }
 }
 
