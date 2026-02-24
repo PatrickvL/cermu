@@ -279,9 +279,14 @@ void ted7360_t::pixel_sequencer() {
     const uint16_t border_top   = border.top;
     const uint16_t border_bottom = border.bottom;
 
-    // Border color (7-bit register value)
+    // Border and background colors (7-bit register values)
+    // Hoisted before pixel loops to prevent aliasing-induced reloads after
+    // writes through pixel.color_line (uint8_t*) which aliases registers.data[].
     const uint8_t border_color = ted_color_index(registers.data[TED_REG_BORDER]);
     const uint8_t bg0_color = ted_color_index(registers.data[TED_REG_COLOR_BG0]);
+    const uint8_t bg1_color = ted_color_index(registers.data[TED_REG_COLOR_BG1]);
+    const uint8_t bg2_color = ted_color_index(registers.data[TED_REG_COLOR_BG2]);
+    const uint8_t bg3_color = ted_color_index(registers.data[TED_REG_COLOR_BG3]);
 
     ted_sequencer_unit_t* seq = &sequencer;
 
@@ -343,8 +348,7 @@ void ted7360_t::pixel_sequencer() {
         return;
     }
 
-    // Update graphics mode from registers
-    seq->graphics_mode = get_graphics_mode();
+    // Graphics mode is cached on CR1/CR2 register write — no per-cycle recomputation needed.
 
     for (int pi = 0; pi < 8; pi++) {
         if (per_pixel_in_border[pi]) continue;
@@ -421,8 +425,8 @@ void ted7360_t::pixel_sequencer() {
                     pixel_bits = (seq->shift_reg >> 6) & 3;
                     switch (pixel_bits) {
                         case 0: color_idx = bg0_color; break;
-                        case 1: color_idx = ted_color_index(registers.data[TED_REG_COLOR_BG1]); break;
-                        case 2: color_idx = ted_color_index(registers.data[TED_REG_COLOR_BG2]); break;
+                        case 1: color_idx = bg1_color; break;
+                        case 2: color_idx = bg2_color; break;
                         case 3: color_idx = ted_color_index(attr & 0x77); break; // attribute color, mask bit 3
                     }
                     if (seq->pixel_in_char & 1) {
@@ -492,7 +496,7 @@ void ted7360_t::pixel_sequencer() {
                         color_idx = (lum << 4) | hue;
                         break;
                     }
-                    case 3: color_idx = ted_color_index(registers.data[TED_REG_COLOR_BG1]); break;
+                    case 3: color_idx = bg1_color; break;
                 }
                 if (seq->pixel_in_char & 1) {
                     seq->shift_reg <<= 2;
@@ -511,7 +515,8 @@ void ted7360_t::pixel_sequencer() {
                 } else {
                     // Background selected by upper 2 bits of screen code
                     uint8_t bg_sel = (screen_code >> 6) & 0x03;
-                    color_idx = ted_color_index(registers.data[TED_REG_COLOR_BG0 + bg_sel]);
+                    const uint8_t ecm_bg[4] = { bg0_color, bg1_color, bg2_color, bg3_color };
+                    color_idx = ecm_bg[bg_sel];
                 }
                 seq->shift_reg <<= 1;
                 break;
@@ -1111,6 +1116,8 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
             timing.raster_compare = get_raster_compare();
             // DMA condition may change due to YSCROLL or DEN change
             update_dma_condition();
+            // Update cached graphics mode (ECM/BMM bits live in CR1)
+            sequencer.graphics_mode = get_graphics_mode();
             break;
 
         case TED_REG_CONTROL2:
@@ -1118,6 +1125,8 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
             update_border_limits();
             // Update reverse mode
             reverse_mode = (data & TED_CR2_RVS) != 0;
+            // Update cached graphics mode (MCM bit lives in CR2)
+            sequencer.graphics_mode = get_graphics_mode();
             break;
 
         case TED_REG_KEYBOARD:
