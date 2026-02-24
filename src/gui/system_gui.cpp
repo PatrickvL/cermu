@@ -1106,6 +1106,7 @@ void SystemGUI::emu_thread_func() {
     uint64_t pace_counter = 0;
     double accumulator = 0.0;
     bool was_running = false;
+    std::vector<SDL_Event> events;  // Reuse allocation across loop iterations
 
     while (emu_thread_running_.load()) {
         bool running = emulation_running_.load() && !emulation_paused_.load();
@@ -1127,7 +1128,7 @@ void SystemGUI::emu_thread_func() {
         }
 
         // ----- Drain input queue (brief input_mutex_ only) -----
-        std::vector<SDL_Event> events;
+        events.clear();
         {
             std::lock_guard<std::mutex> lock(input_mutex_);
             events.swap(input_queue_);
