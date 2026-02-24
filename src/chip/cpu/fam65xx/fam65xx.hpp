@@ -1338,7 +1338,8 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
   }
 
   opcode_info_t get_opcode_info(uint8_t opcode) const {
-    return generate_opcode_table<Traits>()[opcode];
+    static constexpr auto table = generate_opcode_table<Traits>();
+    return table[opcode];
   }
 
 public:
