@@ -641,22 +641,21 @@ void SystemGUI::render_screen() {
     // the GPU keeps displaying the previously uploaded texture.
     bool have_new_frame = fb_new_frame_.exchange(false, std::memory_order_acquire);
     if (have_new_frame && fb_snapshot_ && screen_textures_[0]) {
-        uint32_t* fb = nullptr;
-        {
-            std::lock_guard<std::mutex> lock(fb_mutex_);
-            fb = fb_snapshot_;
-        }
-        if (fb) {
-            // Double-buffered texture upload: write to the current write
-            // texture while the GPU may still be reading from the other one.
-            GLuint upload_tex = screen_textures_[texture_write_idx_];
-            update_screen_texture(upload_tex, fb_width_, fb_height_, fb);
+        // Hold fb_mutex_ for the *entire* texture upload so the emu thread
+        // cannot memcpy a new frame into fb_snapshot_ while glTexSubImage2D
+        // is reading from it.  The previous code released the lock before
+        // update_screen_texture(), creating a data-race window.
+        std::lock_guard<std::mutex> lock(fb_mutex_);
 
-            // Swap write index for next frame
-            texture_write_idx_ ^= 1;
-            // Keep base-class id in sync for filter-change code
-            screen_texture_id_ = screen_textures_[texture_write_idx_];
-        }
+        // Double-buffered texture upload: write to the current write
+        // texture while the GPU may still be reading from the other one.
+        GLuint upload_tex = screen_textures_[texture_write_idx_];
+        update_screen_texture(upload_tex, fb_width_, fb_height_, fb_snapshot_);
+
+        // Swap write index for next frame
+        texture_write_idx_ ^= 1;
+        // Keep base-class id in sync for filter-change code
+        screen_texture_id_ = screen_textures_[texture_write_idx_];
     }
     // Always render the most recently uploaded texture (read index = opposite of write)
     if (screen_textures_[0]) {
