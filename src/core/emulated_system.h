@@ -267,6 +267,7 @@ protected:
     // Emulation state
     uint64_t total_cycles_;
     float speed_multiplier_;
+    uint32_t cached_target_fps_ = 60;  // Cached to avoid per-frame virtual dispatch + vector lookup
     bool quit_requested_;
 
     // Display screen rect — where the emulated display is drawn in SDL window coords.
@@ -438,7 +439,7 @@ public:
     virtual void handle_keyboard_event(SDL_Keycode key, bool pressed) = 0;
     virtual void render_system_menu_items() = 0;
     virtual void render_configuration_ui() = 0;
-    virtual uint32_t get_target_fps() const = 0;
+    uint32_t get_target_fps() const { return cached_target_fps_; }
     virtual void set_speed_multiplier(float multiplier) = 0;
 
     // Extended keyboard event handler with full SDL event information.

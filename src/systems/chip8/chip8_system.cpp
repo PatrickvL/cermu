@@ -714,14 +714,6 @@ void Chip8System::render_configuration_ui() {
 #endif
 }
 
-// ============================================================================
-// State
-// ============================================================================
-
-uint32_t Chip8System::get_target_fps() const {
-    return 60;
-}
-
 void Chip8System::set_speed_multiplier(float multiplier) {
     speed_multiplier_ = multiplier;
     cycles_per_frame_ = static_cast<uint32_t>(10 * multiplier);

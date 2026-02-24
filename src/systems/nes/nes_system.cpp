@@ -1074,9 +1074,10 @@ template<NintendoVariant V>
 bool NintendoSystem<V>::set_configuration(const SystemConfiguration& config) {
     config_ = config;
     
-    // Check if region changed
+    // Check if region changed and update cached target FPS
     if (config_.region_option_index >= 0 &&
         config_.region_option_index < static_cast<int>(hardware_traits_.video_standard_configs.size())) {
+        cached_target_fps_ = hardware_traits_.video_standard_configs[config_.region_option_index].timing.target_fps;
         bool new_is_pal = (hardware_traits_.video_standard_configs[config_.region_option_index].standard == VideoStandard::PAL);
         if (new_is_pal != is_pal_) {
             is_pal_ = new_is_pal;
@@ -1568,15 +1569,6 @@ void NintendoSystem<V>::render_configuration_ui() {
         ImGui::TextDisabled("Cartridge: None");
     }
 #endif
-}
-
-template<NintendoVariant V>
-uint32_t NintendoSystem<V>::get_target_fps() const {
-    if (config_.region_option_index >= 0 &&
-        config_.region_option_index < static_cast<int>(hardware_traits_.video_standard_configs.size())) {
-        return hardware_traits_.video_standard_configs[config_.region_option_index].timing.target_fps;
-    }
-    return 60;  // Default NTSC
 }
 
 template<NintendoVariant V>

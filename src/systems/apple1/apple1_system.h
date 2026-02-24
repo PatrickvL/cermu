@@ -55,9 +55,6 @@ public:
     void render_system_menu_items() override;
     void render_configuration_ui() override;
     
-    // State
-    uint32_t get_target_fps() const override;
-    
     // Emulation control
     void set_speed_multiplier(float multiplier) override;
 

@@ -23,8 +23,7 @@
  *     cycles_per_frame_ — CPU cycles per video frame (region-dependent)
  *
  *   Methods (fully implemented, no override needed):
- *     set_configuration()    — stores config_ (base class member)
- *     get_target_fps()       — reads from video_standard_configs[config_.region_option_index]
+ *     set_configuration()    — stores config_, updates cached_target_fps_
  *     set_speed_multiplier() — stores speed_multiplier_ (base class member)
  *     handle_text_input()    — delegates to keyboard_mapper_
  *     release_all_keys()     — delegates to keyboard_mapper_
@@ -54,7 +53,6 @@ public:
     // ---- Identical across all Commodore systems ----
 
     bool set_configuration(const SystemConfiguration& config) override;
-    uint32_t get_target_fps() const override;
     void set_speed_multiplier(float multiplier) override;
     void handle_text_input(const char* text) override;
     void release_all_keys() override;
