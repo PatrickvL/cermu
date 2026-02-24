@@ -706,46 +706,46 @@ inline bus_state_t mos6581_s::advance_cycle(bus_state_t bus_state) {
 
     // Step 5: Generate output samples at the target sample rate (~44.1 kHz).
     // Average the accumulated per-cycle output, apply master volume and DC blocker.
-    if (cpu_clock > 0.0f) {
-        sample_accumulator += sample_rate_ratio;
+    // Note: sample_rate_ratio is 0 when cpu_clock is unset, so no samples
+    // are generated until timing is configured — no explicit guard needed.
+    sample_accumulator += sample_rate_ratio;
 
-        if (sample_accumulator >= 1.0) {
-            sample_accumulator -= 1.0;
+    if (sample_accumulator >= 1.0) {
+        sample_accumulator -= 1.0;
 
-            // Average the accumulated filter output over the sample period.
-            const float cyc = (sample_cycle_count > 0) ? (float)sample_cycle_count : 1.0f;
-            float mixed = output_acc / (float)cyc;
+        // Average the accumulated filter output over the sample period.
+        const float cyc = (sample_cycle_count > 0) ? (float)sample_cycle_count : 1.0f;
+        float mixed = output_acc / (float)cyc;
 
-            // Reset accumulators for next sample period
-            output_acc = 0.0f;
-            sample_cycle_count = 0;
+        // Reset accumulators for next sample period
+        output_acc = 0.0f;
+        sample_cycle_count = 0;
 
-            // 6581 digi support: add constant DC bias from the voice DACs.
-            if (revision <= SID_REVISION_6581_R4AR) {
-                mixed += SID_6581_DIGI_BIAS;
-            }
-
-            // Apply master volume (cached on register write)
-            mixed *= (float)master_volume / SIGVOL_VOL_MAX;
-
-            // DC blocker: removes the constant bias×volume product while
-            // preserving fast changes (digi samples).  ~20 Hz high-pass.
-            //   y[n] = x[n] - x[n-1] + α · y[n-1],  α = 0.997
-            {
-                float dc_out = mixed - dc_blocker_prev_in
-                             + DC_BLOCKER_ALPHA * dc_blocker_prev_out;
-                dc_blocker_prev_in = mixed;
-                dc_blocker_prev_out = dc_out;
-                mixed = dc_out;
-            }
-
-            // Clamp to [-1, 1]
-            if (mixed > 1.0f) mixed = 1.0f;
-            if (mixed < -1.0f) mixed = -1.0f;
-
-            sample_buffer.write(mixed);
-            samples_generated++;
+        // 6581 digi support: add constant DC bias from the voice DACs.
+        if (revision <= SID_REVISION_6581_R4AR) {
+            mixed += SID_6581_DIGI_BIAS;
         }
+
+        // Apply master volume (cached on register write)
+        mixed *= (float)master_volume / SIGVOL_VOL_MAX;
+
+        // DC blocker: removes the constant bias×volume product while
+        // preserving fast changes (digi samples).  ~20 Hz high-pass.
+        //   y[n] = x[n] - x[n-1] + α · y[n-1],  α = 0.997
+        {
+            float dc_out = mixed - dc_blocker_prev_in
+                         + DC_BLOCKER_ALPHA * dc_blocker_prev_out;
+            dc_blocker_prev_in = mixed;
+            dc_blocker_prev_out = dc_out;
+            mixed = dc_out;
+        }
+
+        // Clamp to [-1, 1]
+        if (mixed > 1.0f) mixed = 1.0f;
+        if (mixed < -1.0f) mixed = -1.0f;
+
+        sample_buffer.write(mixed);
+        samples_generated++;
     }
 
     cycle_count++;
