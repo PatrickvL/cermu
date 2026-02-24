@@ -83,8 +83,8 @@ bus_state_t c64_bus_s::vic_read(bus_state_t bus_state, uint16_t address) {
 bus_state_t REGISTER_CALL c64_bus_s::memory_tick(bus_state_t bus_state) {
     c64_bus_t* c64_bus = this;
     
-    // Determine if this is a read or write operation
-    const bool is_read = BUS_GET_LINES(bus_state) & BUS_MASK_RW;
+    // Determine if this is a read or write operation (direct bit test)
+    const bool is_read = BUS_GET_BIT(bus_state, BUS_RW_BIT);
     const uint16_t address = BUS_GET_ADDR(bus_state);
     const uint8_t address_bank = c64_get_address_bank(address);  // Extract 4KB bank (0-15)
     
@@ -105,7 +105,7 @@ bus_state_t REGISTER_CALL c64_bus_s::memory_tick(bus_state_t bus_state) {
         //
         // The VIC-II has its own memory map where Character ROM appears at $1000-$1FFF
         // in banks 0 and 2 (not at $D000 like the CPU sees it).
-        const bool cpu_has_bus = (BUS_GET_LINES(bus_state) & BUS_MASK_AEC) != 0;
+        const bool cpu_has_bus = BUS_GET_BIT(bus_state, BUS_AEC_BIT);
         const uint8_t chip = cpu_has_bus ?
             decode_read_chip(c64_bus->cpu_encoded_chip_per_bank[address_bank]) :
             c64_bus->vicii_chip_per_bank[address_bank];
@@ -173,7 +173,7 @@ bus_state_t REGISTER_CALL c64_bus_s::memory_tick(bus_state_t bus_state) {
 uint8_t c64_bus_s::read_memory(uint16_t addr) {
     bus_state_t read_state = state;
     BUS_SET_ADDR(read_state, addr);
-    BUS_SET_LINES(read_state, BUS_GET_LINES(read_state) | BUS_MASK_RW);
+    BUS_SET_BIT(read_state, BUS_RW_BIT);
     read_state = memory_tick(read_state);
     return BUS_GET_DATA(read_state);
 }
@@ -189,7 +189,7 @@ void c64_bus_s::write_memory(uint16_t addr, uint8_t value) {
     bus_state_t write_state = state;
     BUS_SET_ADDR(write_state, addr);
     BUS_SET_DATA(write_state, value);
-    BUS_SET_LINES(write_state, BUS_GET_LINES(write_state) & ~BUS_MASK_RW);
+    BUS_CLR_BIT(write_state, BUS_RW_BIT);
     memory_tick(write_state);
 }
 

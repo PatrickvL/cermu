@@ -388,7 +388,7 @@ bus_state_t REGISTER_CALL vic20_memory_cpu_tick(vic20_memory_t* mem, bus_state_t
     const uint16_t addr = BUS_GET_ADDR(bus_state);
     const uint8_t bank = addr >> 10;  // 1KB bank (0-63)
     const uint8_t encoded = mem->cpu_bank_map.bank_type[bank];
-    const bool is_read = (BUS_GET_LINES(bus_state) & BUS_MASK_RW) != 0;
+    const bool is_read = BUS_GET_BIT(bus_state, BUS_RW_BIT);
     
     if (is_read) {
         // === READ OPERATION ===
@@ -473,7 +473,7 @@ uint8_t vic20_memory_read_byte(vic20_memory_t* mem, uint16_t addr) {
     
     bus_state_t bus_state = 0;
     BUS_SET_ADDR(bus_state, addr);
-    BUS_SET_LINES(bus_state, BUS_MASK_RW);  // Read mode
+    BUS_SET_BIT(bus_state, BUS_RW_BIT);  // Read mode
     
     bus_state = vic20_memory_cpu_tick(mem, bus_state);
     return BUS_GET_DATA(bus_state);
@@ -485,7 +485,7 @@ void vic20_memory_write_byte(vic20_memory_t* mem, uint16_t addr, uint8_t value) 
     bus_state_t bus_state = 0;
     BUS_SET_ADDR(bus_state, addr);
     BUS_SET_DATA(bus_state, value);
-    // BUS_MASK_RW clear = write mode
+    // BUS_RW_BIT clear = write mode
     
     vic20_memory_cpu_tick(mem, bus_state);
 }

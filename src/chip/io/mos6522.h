@@ -56,7 +56,7 @@ typedef struct mos6522_s : public ChipBase {
 
     // Interrupt state
     bool interrupt_active = false;
-    int interrupt_line = 0;
+    int interrupt_bit = 0;  // Bus pin bit index (BUS_IRQ_BIT or BUS_NMI_BIT); 0 = not wired
 
     // --- ChipBase interface ---
     ChipIdentity chip_identity() const override;

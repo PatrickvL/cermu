@@ -842,11 +842,11 @@ void C64System::system_tick() {
     s = cia2->tick_phi2(s);
     s = cia1->tick_phi2(s);
 
-    // BA→RDY wiring (direct bit manipulation to preserve IRQ/NMI from CIAs)
-    if (BUS_GET_LINES(s) & BUS_MASK_BA)
-        s |= BUS_BIT(BUS_RDY_BIT);
+    // BA→RDY wiring (direct bit test + set/clear)
+    if (BUS_GET_BIT(s, BUS_BA_BIT))
+        BUS_SET_BIT(s, BUS_RDY_BIT);
     else
-        s &= ~BUS_BIT(BUS_RDY_BIT);
+        BUS_CLR_BIT(s, BUS_RDY_BIT);
 
     // PHASE 2: CPU PHI2 — instruction execution (direct C++ call, inlineable)
     auto* cpu = CPU(mos6510);

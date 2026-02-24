@@ -632,13 +632,13 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
     
     // Read low byte of reset vector
     BUS_SET_ADDR(read_state, 0xFFFC);
-    BUS_SET_LINES(read_state, BUS_GET_LINES(read_state) | BUS_MASK_RW);
+    BUS_SET_BIT(read_state, BUS_RW_BIT);  // Read mode
     read_state = c64->bus.memory_tick(read_state);
     uint8_t reset_low = BUS_GET_DATA(read_state);
     
     // Read high byte of reset vector
     BUS_SET_ADDR(read_state, 0xFFFD);
-    BUS_SET_LINES(read_state, BUS_GET_LINES(read_state) | BUS_MASK_RW);
+    BUS_SET_BIT(read_state, BUS_RW_BIT);  // Read mode
     read_state = c64->bus.memory_tick(read_state);
     uint8_t reset_high = BUS_GET_DATA(read_state);
     

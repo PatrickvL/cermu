@@ -10,7 +10,8 @@ Layout:
 - [BANK:31-24]  (next 8 bits)
 - [INPUT PINS:47-32]  (active-low for IRQ/NMI/RES, others active-high)
 - [OUTPUT PINS:63-48] (active-high)
-This header preserves legacy BUS_GET_LINES/BUS_SET_LINES semantics to avoid touching call sites.
+All pin access uses direct BUS_GET_BIT/BUS_SET_BIT/BUS_CLR_BIT operations.
+Legacy BUS_MASK, bus_lines_apply, BUS_STATE retained for NES and test helpers.
 */
 
 typedef uint64_t bus_state_t;
@@ -56,6 +57,12 @@ typedef uint64_t bus_state_t;
 #define BUS_BIT(bit)            (1ULL << (bit))
 #define BUS_GET_BIT(state, bit) (((state) & BUS_BIT(bit)) != 0)
 
+/* Direct single-pin manipulation — avoids the full extract→modify→apply
+   roundtrip through bus_lines_extract/bus_lines_apply.  Use these when
+   setting or clearing individual active-high pins (BA, AEC, RW, RDY). */
+#define BUS_SET_BIT(state, bit)    ((state) |=  BUS_BIT(bit))
+#define BUS_CLR_BIT(state, bit)    ((state) &= ~BUS_BIT(bit))
+
 /* High-performance field access macros */
 #define BUS_GET_DATA(state)     ((uint8_t) (((state) & BUS_DATA_MASK) >> BUS_DATA_SHIFT))
 #define BUS_GET_ADDR(state)     ((uint16_t)(((state) & BUS_ADDR_MASK) >> BUS_ADDR_SHIFT))
@@ -81,24 +88,7 @@ typedef uint64_t bus_state_t;
 #define BUS_MASK_AEC        (1 << BUS_LINE_AEC)
 #define BUS_MASK_RDY        (1 << BUS_LINE_RDY)
 
-/* Internal mapping between legacy 8-bit LINES and 64-bit pin layout */
-static inline uint8_t bus_lines_extract(bus_state_t s) {
-    uint8_t lines = 0;
-
-    /* Active-low inputs map to legacy active-high flags */
-    if (!(s & BUS_BIT(BUS_IRQ_BIT))) lines |= BUS_MASK_IRQ;
-    if (!(s & BUS_BIT(BUS_NMI_BIT))) lines |= BUS_MASK_NMI;
-
-    /* Active-high pins */
-    if (s & BUS_BIT(BUS_RW_BIT))  lines |= BUS_MASK_RW;
-    if (s & BUS_BIT(BUS_BA_BIT))  lines |= BUS_MASK_BA;
-    if (s & BUS_BIT(BUS_AEC_BIT)) lines |= BUS_MASK_AEC;
-    if (s & BUS_BIT(BUS_RDY_BIT)) lines |= BUS_MASK_RDY;
-
-    return lines;
-}
-
-/* Apply legacy 8-bit LINES to 64-bit pin layout */
+/* Apply legacy 8-bit LINES to 64-bit pin layout (retained for BUS_STATE helper) */
 static inline bus_state_t bus_lines_apply(bus_state_t s, uint8_t lines) {
     /* IRQ/NMI are active-low inputs on the core */
     if (lines & BUS_MASK_IRQ)  s &= ~BUS_BIT(BUS_IRQ_BIT); else s |= BUS_BIT(BUS_IRQ_BIT);
@@ -113,11 +103,8 @@ static inline bus_state_t bus_lines_apply(bus_state_t s, uint8_t lines) {
     return s;
 }
 
-/* Legacy API compatibility */
-#define BUS_GET_LINES(state)        (bus_lines_extract((state)))
-#define BUS_SET_LINES(state, lines) ((state) = bus_lines_apply((state), (uint8_t)(lines)))
-
-/* Constructor helper preserving legacy semantics */
+/* Constructor helper — uses bus_lines_apply for legacy mask→pin-bit translation */
+/* Prefer direct BUS_SET_BIT/BUS_CLR_BIT for new code. */
 static inline bus_state_t bus_state_make(uint16_t addr, uint8_t data, uint8_t lines) {
     bus_state_t s = 0;
     s |= (((bus_state_t)data & 0xFFULL) << BUS_DATA_SHIFT);
