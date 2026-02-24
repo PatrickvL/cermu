@@ -372,8 +372,8 @@ void ring_buffer_s::init(uint32_t size) {
     this->size = size;
     mask = size - 1;
     buffer = (float*)calloc(size, sizeof(float));
-    write_pos = 0;
-    read_pos = 0;
+    write_pos.store(0, std::memory_order_relaxed);
+    read_pos.store(0, std::memory_order_relaxed);
 }
 
 void ring_buffer_s::destroy() {
@@ -381,38 +381,37 @@ void ring_buffer_s::destroy() {
     buffer = NULL;
     size = 0;
     mask = 0;
-    write_pos = 0;
-    read_pos = 0;
+    write_pos.store(0, std::memory_order_relaxed);
+    read_pos.store(0, std::memory_order_relaxed);
 }
 
 void ring_buffer_s::write(float sample) {
     // SPSC safety: only the writer touches write_pos, only the reader touches read_pos.
-    // Read read_pos once into a local (volatile ensures we get the latest value).
-    uint32_t next = (write_pos + 1) & mask;
-    if (next == read_pos) return; // full — drop sample
+    uint32_t wp = write_pos.load(std::memory_order_relaxed);
+    uint32_t next = (wp + 1) & mask;
+    if (next == read_pos.load(std::memory_order_acquire)) return; // full — drop sample
 
-    buffer[write_pos] = sample;
-    write_pos = next;  // publish (volatile store)
+    buffer[wp] = sample;
+    write_pos.store(next, std::memory_order_release);  // publish
 }
 
 bool ring_buffer_s::empty() {
-    return read_pos == write_pos;
+    return read_pos.load(std::memory_order_relaxed) == write_pos.load(std::memory_order_relaxed);
 }
 
 float ring_buffer_s::read() {
-    // Snapshot write_pos once (volatile load) to avoid TOCTOU with empty()
-    uint32_t wp = write_pos;
-    uint32_t rp = read_pos;
+    uint32_t rp = read_pos.load(std::memory_order_relaxed);
+    uint32_t wp = write_pos.load(std::memory_order_acquire);
     if (rp == wp) return 0.0f;  // empty
 
     float sample = buffer[rp];
-    read_pos = (rp + 1) & mask;  // publish (volatile store)
+    read_pos.store((rp + 1) & mask, std::memory_order_release);  // publish
     return sample;
 }
 
 uint32_t ring_buffer_s::available() {
-    uint32_t wp = write_pos;
-    uint32_t rp = read_pos;
+    uint32_t wp = write_pos.load(std::memory_order_acquire);
+    uint32_t rp = read_pos.load(std::memory_order_relaxed);
     return (wp - rp) & mask;
 }
 
@@ -1130,8 +1129,8 @@ void mos6581_s::reset() {
 
     // Flush the sample ring buffer so the audio callback doesn't replay
     // stale data from the previous session.
-    sample_buffer.write_pos = 0;
-    sample_buffer.read_pos = 0;
+    sample_buffer.write_pos.store(0, std::memory_order_relaxed);
+    sample_buffer.read_pos.store(0, std::memory_order_relaxed);
     
     // Reset volume bug state
     volume_change_click = false;
