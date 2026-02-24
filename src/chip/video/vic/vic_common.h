@@ -258,6 +258,20 @@ typedef struct vic_base_s : public ChipBase {
     uint8_t matrix_color_byte = 0;
     uint8_t matrix_char_data = 0;
 
+    // Cached register-derived values (decoded on register write, read in tick)
+    uint16_t cached_columns = 0;           // VIC_REG_VIDEO_MATRIX & VIC_VM_COLUMNS_MASK
+    uint8_t  cached_border_color = 0;      // VIC_REG_BACKGROUND & VIC_BG_BORDER_MASK
+    uint8_t  cached_background_color = 0;  // (VIC_REG_BACKGROUND >> 4) & 0x0F
+    uint8_t  cached_reverse_flag = 0;      // VIC_REG_BACKGROUND & VIC_BG_REVERSE
+    uint8_t  cached_char_height = 8;       // 8 or 16 from VIC_REG_ROWS bit 0
+    uint8_t  cached_volume = 0;            // VIC_REG_AUX_COLOR & VIC_AUX_VOLUME_MASK
+    uint8_t  cached_auxiliary_color = 0;   // (VIC_REG_AUX_COLOR >> 4) & 0x0F
+    uint16_t cached_screen_origin_x = 0;   // VIC_REG_CONTROL1 & VIC_C1_SCREEN_ORIGIN_X_MASK
+    uint16_t cached_screen_origin_y = 0;   // VIC_REG_CONTROL2 << 1
+    uint16_t cached_num_rows = 0;          // (VIC_REG_ROWS >> 1) & 0x3F
+    uint16_t cached_base_video = 0;        // Combined from REG_VIDEO_MATRIX + REG_CHAR_BASE
+    uint16_t cached_base_char = 0;         // (REG_CHAR_BASE & 0x0F) << 10
+
     // Audio generation state
     vic_audio_state_t audio = {};
 
@@ -269,6 +283,8 @@ typedef struct vic_base_s : public ChipBase {
                               vic_mem_read_fn_t color_read, void* color_user_data);
     virtual bus_state_t registers_read(bus_state_t bus_state);
     virtual bus_state_t registers_write(bus_state_t bus_state);
+    void decode_register(uint8_t reg_index);   // Update cached fields from register value
+    void decode_all_registers();               // Decode all registers (after reset/bulk load)
     static uint32_t* get_default_palette();
 
     // Audio API
