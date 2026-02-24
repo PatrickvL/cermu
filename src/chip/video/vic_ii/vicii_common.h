@@ -221,28 +221,16 @@ struct vicii_pixel_s {
 };
 using vicii_pixel_t = vicii_pixel_s;
 
-// VIC-II border flip-flop comparator values (identical across all chip variants)
-// From VIC-II-Updated2025.txt section 3.9 "The border unit"
-//
-// These are the X/Y coordinates at which the hardware comparators trigger the
-// border flip-flops. The comparisons only match if the values are reached
-// precisely — there is no interval comparison.
-//
-// Vertical comparators (Y coordinate, checked in cycle 63 and at left border):
-constexpr uint16_t VICII_BORDER_TOP_RSEL1    =  51;  // $33
-constexpr uint16_t VICII_BORDER_TOP_RSEL0    =  55;  // $37
-constexpr uint16_t VICII_BORDER_BOTTOM_RSEL0 = 247;  // $f7
-constexpr uint16_t VICII_BORDER_BOTTOM_RSEL1 = 251;  // $fb
-// Horizontal comparators (X coordinate):
-// At runtime, these checks are driven by cycle callbacks with CSEL gating
-// (cycles 17/18 for left, 56/57 for right) rather than per-pixel X comparisons.
-// Note: The "Last X coo." values in section 3.4 (334/343) are one less than
-// the right comparator values here because the comparator fires at the first
-// pixel PAST the display window.
-constexpr uint16_t VICII_BORDER_LEFT_CSEL1   =  24;  // $18  — cycle 17, CSEL=1 (40-col)
-constexpr uint16_t VICII_BORDER_LEFT_CSEL0   =  31;  // $1f  — cycle 18, CSEL=0 (38-col)
-constexpr uint16_t VICII_BORDER_RIGHT_CSEL0  = 335;  // $14f — cycle 56, CSEL=0 (38-col)
-constexpr uint16_t VICII_BORDER_RIGHT_CSEL1  = 344;  // $158 — cycle 57, CSEL=1 (40-col)
+// VIC-II border coordinates (identical across all chip variants)
+// From vic-ii.txt lines 751-759
+constexpr uint16_t VICII_BORDER_TOP_RSEL1 = 51;
+constexpr uint16_t VICII_BORDER_TOP_RSEL0 = 55;
+constexpr uint16_t VICII_BORDER_BOTTOM_RSEL0 = 247;
+constexpr uint16_t VICII_BORDER_BOTTOM_RSEL1 = 251;
+constexpr uint16_t VICII_BORDER_LEFT_CSEL1 = 24; // 0x18
+constexpr uint16_t VICII_BORDER_LEFT_CSEL0 = 31; // 0x1F (7 pixels later)
+constexpr uint16_t VICII_BORDER_RIGHT_CSEL0 = 335; // 0x14F (9 pixels earlier)
+constexpr uint16_t VICII_BORDER_RIGHT_CSEL1 = 344; // 0x158
 
 // VIC-II access types (Documentation section 3.6.2)
 // PHI1 = PHI2 low
@@ -399,15 +387,14 @@ typedef struct {
     // Border limits in hardware coordinate space (VIC-II X coordinates 0-503)
     uint16_t border_top;
     uint16_t border_bottom;
+    uint16_t border_left;
+    uint16_t border_right;
+    
     bool main_border_flip_flop;      // Main border flip flop (Documentation section 3.9)
     bool vertical_border_flip_flop;  // Vertical border flip flop (Documentation section 3.9)
     bool set_vertical_border_flip_flop; // Two-stage vborder latch (VICE: set_vborder)
                                         // Updated per-cycle, transferred to vertical_border_flip_flop
                                         // at left border position and start of line.
-    bool border_state;               // Rendering-side border state (VICE: border_state).
-                                     // Holds the PREVIOUS cycle's main_border value.
-                                     // During transitions, rendering uses border_state (old)
-                                     // for most/all pixels, then updates to main_border (new).
 } vicii_border_unit_t;
 
 // Memory Mapping Unit - VIC-II memory access configuration (Documentation section 2.4.2)
