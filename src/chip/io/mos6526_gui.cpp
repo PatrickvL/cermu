@@ -211,12 +211,11 @@ void mos6526_s::render_debug_content() {
         ImGui::Text("Timers");
         ImGui::Separator();
         
-        uint16_t timer_a = (cia->reg[TA_HI] << 8) | cia->reg[TA_LO];
-        ImGui::Text("Timer A: %04X", timer_a);
+        ImGui::Text("Timer A: %04X", cia->timer_counter_[A]);
         ImGui::Text("Timer A Control: $%02X", cia->reg[CRA]);
         ImGui::Text("Timer A Running: %s", (cia->reg[CRA] & 0x01) ? "YES" : "NO");
         
-        uint16_t timer_b = (cia->reg[TB_HI] << 8) | cia->reg[TB_LO];
+        uint16_t timer_b = cia->timer_counter_[B];
         ImGui::Text("Timer B: %04X", timer_b);
         ImGui::Text("Timer B Control: $%02X", cia->reg[CRB]);
         ImGui::Text("Timer B Running: %s", (cia->reg[CRB] & 0x01) ? "YES" : "NO");
@@ -288,16 +287,14 @@ void mos6526_s::render_settings_content() {
     ImGui::Text("Timers (with Latches)");
     ImGui::Separator();
     
-    uint16_t timer_a = (cia->reg[TA_HI] << 8) | cia->reg[TA_LO];
     uint16_t timer_a_latch = (cia->reg[TIMER_OFFSET + TA_HI] << 8) | cia->reg[TIMER_OFFSET + TA_LO];
-    ImGui::Text("Timer A: $%04X", timer_a);
+    ImGui::Text("Timer A: $%04X", cia->timer_counter_[A]);
     ImGui::Text("Timer A Latch: $%04X", timer_a_latch);
     ImGui::Text("Timer A Control: $%02X", cia->reg[CRA]);
     ImGui::Text("Timer A Running: %s", (cia->reg[CRA] & CRA_START) ? "YES" : "NO");
     
-    uint16_t timer_b = (cia->reg[TB_HI] << 8) | cia->reg[TB_LO];
     uint16_t timer_b_latch = (cia->reg[TIMER_OFFSET + TB_HI] << 8) | cia->reg[TIMER_OFFSET + TB_LO];
-    ImGui::Text("Timer B: $%04X", timer_b);
+    ImGui::Text("Timer B: $%04X", cia->timer_counter_[B]);
     ImGui::Text("Timer B Latch: $%04X", timer_b_latch);
     ImGui::Text("Timer B Control: $%02X", cia->reg[CRB]);
     ImGui::Text("Timer B Running: %s", (cia->reg[CRB] & CRB_START) ? "YES" : "NO");

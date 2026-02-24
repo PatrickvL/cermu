@@ -83,6 +83,8 @@ void mos6526_s::reset() {
     reg[TA_HI] = 0xFF;
     reg[TB_LO] = 0xFF;
     reg[TB_HI] = 0xFF;
+    timer_counter_[A] = 0xFFFF;
+    timer_counter_[B] = 0xFFFF;
     // Also reset implementation-related variables
     read_tod_delta = 0;
     write_tod_delta = 0;
@@ -355,6 +357,7 @@ void mos6526_s::reload_timer(uint32_t t) { // t:A or B
     uint32_t i = t * 2; // Turn A or B into TA_LO / TB_LO offsets
     reg[TA_LO + i] = reg[TIMER_OFFSET + TA_LO + i];
     reg[TA_HI + i] = reg[TIMER_OFFSET + TA_HI + i];
+    timer_counter_[t] = (reg[TA_HI + i] << 8) | reg[TA_LO + i];
 }
 
 void mos6526_s::check_reload_timer(uint32_t t) { // t:A or B
@@ -370,8 +373,7 @@ void mos6526_s::check_reload_timer(uint32_t t) { // t:A or B
 }
 
 void mos6526_s::decrease_timer(uint32_t t) { // t:A or B
-    uint32_t i = t * 2; // Turn A or B into TA_LO / TB_LO offsets
-    uint16_t timer = (reg[TA_HI + i] << 8) | reg[TA_LO + i];
+    uint16_t timer = timer_counter_[t];
 
     // =========================================================================
     // Pipeline state: MSB (bit 2) = decrement permission, bit 1 = "count active"
@@ -394,8 +396,7 @@ void mos6526_s::decrease_timer(uint32_t t) { // t:A or B
     // =========================================================================
     if (can_count) {
         timer--;
-        reg[TA_LO + i] = (uint8_t)(timer & 0xFF);
-        reg[TA_HI + i] = (uint8_t)(timer >> 8);
+        timer_counter_[t] = timer;
     }
 
     // =========================================================================
@@ -806,18 +807,18 @@ bus_state_t mos6526_s::registers_read(void* context, bus_state_t bus_state) {
             // Note : Assume this always excludes the optional PBON output mask? (If not, use IDDRB!)
             BUS_SET_DATA(bus_state, cia->reg[DDRB]);
             break;
-        // Read timers - return current counter value
+        // Read timers - return current counter value from native 16-bit counter
         case TA_LO:
-            BUS_SET_DATA(bus_state, cia->reg[TA_LO]);
+            BUS_SET_DATA(bus_state, (uint8_t)(cia->timer_counter_[A] & 0xFF));
             break;
         case TA_HI:
-            BUS_SET_DATA(bus_state, cia->reg[TA_HI]);
+            BUS_SET_DATA(bus_state, (uint8_t)(cia->timer_counter_[A] >> 8));
             break;
         case TB_LO:
-            BUS_SET_DATA(bus_state, cia->reg[TB_LO]);
+            BUS_SET_DATA(bus_state, (uint8_t)(cia->timer_counter_[B] & 0xFF));
             break;
         case TB_HI:
-            BUS_SET_DATA(bus_state, cia->reg[TB_HI]);
+            BUS_SET_DATA(bus_state, (uint8_t)(cia->timer_counter_[B] >> 8));
             break;
         // Read TOD registers
         case TOD_10THS: {

@@ -95,6 +95,10 @@ typedef struct mos6526_s : public ChipBase {
     // Used for Timer B cascade mode (counts Timer A underflows) and PB6/PB7 pulse output.
     // Set TRUE during the late tick when underflow occurs, cleared at start of next late tick.
     uint8_t timer_underflowed = 0;
+
+    // Native 16-bit timer counters — avoids per-cycle byte reassembly/split.
+    // Canonical source of truth; byte registers synced lazily on CPU read.
+    uint16_t timer_counter_[2] = {0xFFFF, 0xFFFF};
     
     // PB6/PB7 toggle flip-flops (per CIA6526.txt lines 104-110)
     // Set HIGH on rising edge of START bit, toggle on each underflow
