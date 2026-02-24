@@ -490,6 +490,22 @@ void voice_s::reset() {
     oscillator_output = 0;
     envelope_output = 0;
     result = 0;
+
+    // Refresh cached waveform lookup state
+    update_cached_waveform_state();
+}
+
+// Pre-compute waveform table pointer and bitmasks from control_reg / model.
+// Called on control register write, model change, and reset.
+void voice_s::update_cached_waveform_state() {
+    uint8_t wf = control_reg;
+    int wf_index = (wf >> 4) & 0x7;
+    cached_wave_table = sid_tables::model_wave[model_index][wf_index];
+    cached_ring_msb_mask = ((wf & VCREG_RING) && !(wf & WAVEFORM_SAWTOOTH))
+                         ? WAVEFORM_ACCUMULATOR_MSB : 0;
+    cached_no_pulse_mask = (wf & WAVEFORM_PULSE) ? 0x000 : 0xFFF;
+    cached_no_noise_mask = (wf & WAVEFORM_NOISE) ? 0x000 : 0xFFF;
+    cached_wf_mask = wf & WAVEFORM_MASK;
 }
 
 void voice_s::clock_cycle() {
@@ -557,37 +573,18 @@ void voice_s::clock_cycle() {
 // pulse and noise use the original accumulator (pulse is a comparator and
 // sawtooth selection disables the ring MSB mask).
 void voice_s::set_waveform_output(voice_t* ring_source) {
-    uint8_t wf = control_reg;
-    
-    // Use cached chip model index for table lookup (set on revision change)
-    int model = model_index;
-    
-    // Waveform index for table lookup: lower 3 bits of waveform selector (without noise)
-    int wf_index = (wf >> 4) & 0x7;
-    
-    // Compute ring modulation MSB mask (reSID: ring_msb_mask).
-    // Active only when ring_mod=1 AND sawtooth=0.
-    uint32_t ring_msb_mask = ((wf & VCREG_RING) && !(wf & WAVEFORM_SAWTOOTH))
-                           ? WAVEFORM_ACCUMULATOR_MSB : 0;
-    
-    if (wf & WAVEFORM_MASK) {
+    const uint8_t wf = control_reg;
+
+    if (cached_wf_mask) {
         // Lookup index: ring-modified accumulator, upper 12 bits.
         // reSID: ix = (accumulator ^ (~sync_source->accumulator & ring_msb_mask)) >> 12
-        int ix = (waveform_accumulator
-                  ^ (~ring_source->waveform_accumulator & ring_msb_mask)) >> 12;
-        
-        // no_pulse bitmask: 0x000 when pulse selected (so pulse_output gates),
-        // 0xFFF when not (transparent).
-        uint32_t no_pulse = (wf & WAVEFORM_PULSE) ? 0x000 : 0xFFF;
-        
-        // no_noise bitmask and noise output.
-        uint32_t no_noise = (wf & WAVEFORM_NOISE) ? 0x000 : 0xFFF;
-        uint32_t no_noise_or_noise_output = no_noise | noise_output;
-        
-        // Combined waveform output from lookup table.
-        uint32_t waveform_output = sid_tables::model_wave[model][wf_index][ix]
-                                 & (no_pulse | pulse_output)
-                                 & no_noise_or_noise_output;
+        const int ix = (waveform_accumulator
+                  ^ (~ring_source->waveform_accumulator & cached_ring_msb_mask)) >> 12;
+
+        // Combined waveform output from cached table pointer and pre-computed masks.
+        uint32_t waveform_output = cached_wave_table[ix]
+                                 & (cached_no_pulse_mask | pulse_output)
+                                 & (cached_no_noise_mask | noise_output);
         
         oscillator_waveform = waveform_output;
         oscillator_output = (uint8_t)(waveform_output >> 4);
@@ -597,14 +594,15 @@ void voice_s::set_waveform_output(voice_t* ring_source) {
         // bit of the accumulator can be pulled low. This is a side-effect of
         // the analog waveform bus being connected back to the accumulator on
         // the 6581 die.
-        uint8_t wf_sel = (wf >> 4) & 0xF;
-        if ((wf_sel & 0x2) && (wf_sel & 0xD) && model == 0) {
+        const uint8_t wf_sel = (wf >> 4) & 0xF;
+        if ((wf_sel & 0x2) && (wf_sel & 0xD) && model_index == 0) {
             waveform_accumulator &= (waveform_output << 12) | 0x7FFFFF;
         }
 
         // Combined waveforms write to the shift register (reSID behavior).
         // When waveform > 0x8 (noise + any other), the noise shift register
         // gets bits written back, eventually zeroing out.
+        const int wf_index = (wf >> 4) & 0x7;
         if ((wf_index > 0) && (wf & WAVEFORM_NOISE) && !(wf & VCREG_TEST) && shift_pipeline != 1) {
             // Write waveform output back into noise shift register
             // This causes combined noise waveforms to decay to zero
@@ -677,7 +675,7 @@ inline bus_state_t mos6581_s::advance_cycle(bus_state_t bus_state) {
     {
         // Compute instantaneous centred voice outputs (waveform × envelope).
         // 12-bit waveform centred to [-2048, +2047] × 8-bit envelope [0, 255].
-        const float inv_scale = 1.0f / (3.0f * OSCILLATOR_CENTER * ENVELOPE_MAX);
+        static constexpr float inv_scale = 1.0f / (3.0f * float(OSCILLATOR_CENTER) * float(ENVELOPE_MAX));
         float v1 = (float)((int32_t)voice1.oscillator_waveform - OSCILLATOR_CENTER)
                  * (float)voice1.envelope_amplitude * inv_scale;
         float v2 = (float)((int32_t)voice2.oscillator_waveform - OSCILLATOR_CENTER)
@@ -777,6 +775,9 @@ void mos6581_s::set_revision(sid_revision_t rev) {
     voice1.model_index = mi;
     voice2.model_index = mi;
     voice3.model_index = mi;
+    voice1.update_cached_waveform_state();
+    voice2.update_cached_waveform_state();
+    voice3.update_cached_waveform_state();
     filter_reset();
 }
 
@@ -849,6 +850,9 @@ static const uint32_t SHIFT_REGISTER_FADE_8580 = 0x950000;
 void voice_s::write_control_register_value(uint8_t value) {
     uint8_t prev = control_reg;
     control_reg = value;
+
+    // Refresh cached waveform table pointer and bitmasks
+    update_cached_waveform_state();
     
     // Handle test bit rising edge
     // reSID: accumulator is cleared, shift register begins fading to 0x7FFFFF
