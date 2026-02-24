@@ -374,7 +374,7 @@ void vic_base_s::audio_tick() {
         if (out > 255) out = 255;
 
         // Write to ring buffer (drop sample if full)
-        uint32_t next_write = (audio.write_pos + 1) % VIC_AUDIO_BUFFER_SIZE;
+        uint32_t next_write = (audio.write_pos + 1) & VIC_AUDIO_BUFFER_MASK;
         if (next_write != audio.read_pos) {
             audio.buffer[audio.write_pos] = (uint8_t)out;
             audio.write_pos = next_write;
@@ -386,7 +386,7 @@ void vic_base_s::audio_tick() {
 }
 
 uint32_t vic_base_s::audio_available() const {
-    return (audio.write_pos + VIC_AUDIO_BUFFER_SIZE - audio.read_pos) % VIC_AUDIO_BUFFER_SIZE;
+    return (audio.write_pos + VIC_AUDIO_BUFFER_SIZE - audio.read_pos) & VIC_AUDIO_BUFFER_MASK;
 }
 
 uint32_t vic_base_s::audio_read(uint8_t* dest, uint32_t max_samples) {
@@ -394,7 +394,7 @@ uint32_t vic_base_s::audio_read(uint8_t* dest, uint32_t max_samples) {
     uint32_t count = 0;
     while (count < max_samples && audio.read_pos != audio.write_pos) {
         dest[count++] = audio.buffer[audio.read_pos];
-        audio.read_pos = (audio.read_pos + 1) % VIC_AUDIO_BUFFER_SIZE;
+        audio.read_pos = (audio.read_pos + 1) & VIC_AUDIO_BUFFER_MASK;
     }
     return count;
 }
