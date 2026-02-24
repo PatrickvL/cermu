@@ -1141,15 +1141,25 @@ void SystemGUI::emu_thread_func() {
         pace_counter = now;
         accumulator += elapsed;
 
-        // ----- Single emu_mutex_ scope for all system_ interactions -----
-        // Previously this was 4 separate lock/unlock cycles (input, fps,
-        // run_frame, audio).  Consolidating eliminates 3 redundant
-        // acquire/release pairs and the associated cache-line bouncing.
-        double target_fps = 50.0;
-        double target_frame_time = 1.0 / target_fps;
+        // ----- Frame pacing (no lock needed) -----
+        // get_target_fps() is a non-virtual inline returning a cached uint32_t
+        // (Fix #1).  Naturally-aligned uint32_t reads are atomic on x86/ARM.
+        // Configuration changes only happen with the emu thread stopped.
+        const double target_fps = system_->get_target_fps();
+        const double target_frame_time = 1.0 / target_fps;
+
+        // Cap accumulator (death-spiral prevention: max 3 frames catch-up)
+        if (accumulator > target_frame_time * 3.0)
+            accumulator = target_frame_time * 3.0;
+
         int frames_ran = 0;
-        uint32_t audio_got = 0;
+        uint32_t samples_needed = 0;
         {
+            // ----- emu_mutex_ scope: input + frame simulation only -----
+            // Audio sample generation moved OUTSIDE the lock: the SID's
+            // sample_buffer is an SPSC ring buffer with atomic indices,
+            // only read by this thread.  This reduces lock hold time and
+            // gives the GUI thread's try_lock more windows to succeed.
             std::lock_guard<std::mutex> lock(emu_mutex_);
 
             // Process queued input events
@@ -1176,13 +1186,6 @@ void SystemGUI::emu_thread_func() {
                 system_->process_sdl_event_for_devices(evt);
             }
 
-            target_fps = system_->get_target_fps();
-            target_frame_time = 1.0 / target_fps;
-
-            // Cap accumulator (death-spiral prevention: max 3 frames catch-up)
-            if (accumulator > target_frame_time * 3.0)
-                accumulator = target_frame_time * 3.0;
-
             // Run emulation frames
             while (accumulator >= target_frame_time) {
                 system_->run_frame();
@@ -1191,15 +1194,25 @@ void SystemGUI::emu_thread_func() {
                 frames_ran++;
             }
 
-            // Generate audio samples proportional to the frames that ran
+            // Compute how many audio samples to generate (under lock for
+            // consistent frames_ran, but the actual generation is outside).
             if (frames_ran > 0 && audio_ring_ && audio_sample_rate_ > 0) {
                 uint32_t samples_per_frame = static_cast<uint32_t>(
                     audio_sample_rate_ / target_fps + 0.5);
-                uint32_t samples_needed = samples_per_frame * static_cast<uint32_t>(frames_ran);
-                if (samples_needed > static_cast<uint32_t>(emu_audio_tmp_.size()))
-                    emu_audio_tmp_.resize(samples_needed);
-                audio_got = system_->get_audio_samples(emu_audio_tmp_.data(), samples_needed);
+                samples_needed = samples_per_frame * static_cast<uint32_t>(frames_ran);
             }
+        }
+
+        // ----- Audio sample generation (outside emu_mutex_) -----
+        // SID sample_buffer is SPSC with atomic read/write positions.
+        // Only the emu thread reads (here) and writes (during run_frame).
+        // No concurrent access possible: run_frame completed above, and
+        // the GUI thread never touches the sample buffer.
+        uint32_t audio_got = 0;
+        if (samples_needed > 0) {
+            if (samples_needed > static_cast<uint32_t>(emu_audio_tmp_.size()))
+                emu_audio_tmp_.resize(samples_needed);
+            audio_got = system_->get_audio_samples(emu_audio_tmp_.data(), samples_needed);
         }
 
         // ----- Snapshot framebuffer (separate fb_mutex_) -----
