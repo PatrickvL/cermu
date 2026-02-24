@@ -8,6 +8,7 @@
 #include "../devices/storage/drive_1541.h"
 #include <stdio.h>
 #include <cstring>
+#include <chrono>
 
 #ifdef __has_include
 #if __has_include("ImGuiFileDialog.h")
@@ -41,6 +42,8 @@ SystemGUI::SystemGUI(std::unique_ptr<EmulatedSystem> system, const char* pending
     , pending_file_path_(pending_file ? pending_file : "")
     , audio_device_(0)
     , audio_sample_rate_(0)
+    , fb_snapshot_(nullptr)
+    , audio_ring_(std::make_unique<AudioRingBuffer>(8192))
 {
     if (system_) {
         // System already initialised + file loaded before entering the GUI,
@@ -56,6 +59,7 @@ SystemGUI::SystemGUI(std::unique_ptr<EmulatedSystem> system, const char* pending
 }
 
 SystemGUI::~SystemGUI() {
+    stop_emu_thread();
     close_audio_device();
     teardown_current_system();
     ConnectorIcons::cleanup();
@@ -79,6 +83,9 @@ bool SystemGUI::init(const char* window_title, int width, int height) {
 
     // Open SDL audio for the current system (if it has audio)
     open_audio_device();
+
+    // Start the emulation thread (runs independently of the GUI loop)
+    start_emu_thread();
 
     return true;
 }
@@ -114,50 +121,41 @@ void SystemGUI::handle_events() {
         if (event.type == SDL_WINDOWEVENT &&
             event.window.event == SDL_WINDOWEVENT_FOCUS_LOST &&
             system_) {
-            system_->release_all_keys();
+            // Queue a synthetic focus-loss event for the emu thread
+            std::lock_guard<std::mutex> lock(input_mutex_);
+            input_queue_.push_back(event);
         }
         
-        // Forward keyboard events to system only when ImGui doesn't want input
-        // This prevents conflicts with ImGui dialogs (like file browser) that need keyboard input
-        ImGuiIO& io = ImGui::GetIO();
-        if (system_ && !io.WantCaptureKeyboard) {
-            if (event.type == SDL_KEYDOWN) {
-                system_->handle_keyboard_event_ex(
-                    event.key.keysym.sym,
-                    event.key.keysym.scancode,
-                    event.key.keysym.mod,
-                    true,
-                    event.key.repeat != 0);
-            } else if (event.type == SDL_KEYUP) {
-                system_->handle_keyboard_event_ex(
-                    event.key.keysym.sym,
-                    event.key.keysym.scancode,
-                    event.key.keysym.mod,
-                    false,
-                    false);
-            } else if (event.type == SDL_TEXTINPUT) {
-                system_->handle_text_input(event.text.text);
-            }
-        }
-
-        // Route SDL events to attached peripheral devices (joystick, mouse, etc.)
-        // Keyboard events are only forwarded when ImGui doesn't claim keyboard focus.
-        // Mouse/controller events are only forwarded when ImGui doesn't claim mouse focus.
+        // Queue keyboard/text/mouse/controller events for the emulation thread.
+        // ImGui capture filtering is applied HERE on the GUI thread so the emu
+        // thread doesn't need to know about ImGui state.
         if (system_) {
-            ImGuiIO& io2 = ImGui::GetIO();
+            ImGuiIO& io = ImGui::GetIO();
+
             bool is_keyboard_event =
-                (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP);
+                (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP ||
+                 event.type == SDL_TEXTINPUT);
             bool is_mouse_event =
                 (event.type == SDL_MOUSEMOTION ||
                  event.type == SDL_MOUSEBUTTONDOWN ||
                  event.type == SDL_MOUSEBUTTONUP);
+            bool is_controller_event =
+                (event.type == SDL_JOYAXISMOTION ||
+                 event.type == SDL_JOYBUTTONDOWN ||
+                 event.type == SDL_JOYBUTTONUP ||
+                 event.type == SDL_JOYHATMOTION ||
+                 event.type == SDL_CONTROLLERAXISMOTION ||
+                 event.type == SDL_CONTROLLERBUTTONDOWN ||
+                 event.type == SDL_CONTROLLERBUTTONUP);
 
-            bool should_forward = true;
-            if (is_keyboard_event && io2.WantCaptureKeyboard) should_forward = false;
-            if (is_mouse_event && io2.WantCaptureMouse)       should_forward = false;
+            bool should_queue = false;
+            if (is_keyboard_event && !io.WantCaptureKeyboard) should_queue = true;
+            if (is_mouse_event && !io.WantCaptureMouse)       should_queue = true;
+            if (is_controller_event)                          should_queue = true;
 
-            if (should_forward) {
-                system_->process_sdl_event_for_devices(event);
+            if (should_queue) {
+                std::lock_guard<std::mutex> lock(input_mutex_);
+                input_queue_.push_back(event);
             }
         }
     }
@@ -169,50 +167,8 @@ void SystemGUI::handle_events() {
 }
 
 void SystemGUI::update_frame() {
-    if (!system_ || !emulation_running_ || emulation_paused_) {
-        // Reset pacing when not running so we don't accumulate stale time
-        frame_pace_counter_ = 0;
-        frame_time_accumulator_ = 0.0;
-        return;
-    }
-    
-    // High-resolution timing for frame pacing
-    uint64_t now = SDL_GetPerformanceCounter();
-    
-    // First frame: initialize counter and run one frame
-    if (frame_pace_counter_ == 0) {
-        frame_pace_counter_ = now;
-        system_->run_frame();
-        total_frames_++;
-        update_fps();
-        return;
-    }
-    
-    // Calculate elapsed real time since last update
-    double freq = static_cast<double>(SDL_GetPerformanceFrequency());
-    double elapsed = static_cast<double>(now - frame_pace_counter_) / freq;
-    frame_pace_counter_ = now;
-    
-    // Accumulate real time
-    frame_time_accumulator_ += elapsed;
-    
-    // Target time per emulation frame based on system's target FPS (PAL=50, NTSC=60)
-    double target_frame_time = 1.0 / system_->get_target_fps();
-    
-    // Cap accumulator to prevent death spiral after lag spikes (max 3 frames catch-up)
-    double max_accumulator = target_frame_time * 3.0;
-    if (frame_time_accumulator_ > max_accumulator) {
-        frame_time_accumulator_ = max_accumulator;
-    }
-    
-    // Run emulation frames as needed to keep in sync with real time
-    while (frame_time_accumulator_ >= target_frame_time) {
-        system_->run_frame();
-        total_frames_++;
-        frame_time_accumulator_ -= target_frame_time;
-    }
-    
-    // Update FPS counter
+    // Emulation now runs on a separate thread (emu_thread_func).
+    // The GUI thread only updates the FPS counter from the atomic frame count.
     update_fps();
 }
 
@@ -250,11 +206,9 @@ void SystemGUI::render_frame() {
             // Save the last selected file path for next time
             last_file_path_ = filePathName;
             
-            // Pause emulation while loading
-            bool was_running = emulation_running_ && !emulation_paused_;
-            if (was_running) {
-                pause_emulation();
-            }
+            // Stop emulation thread while loading for exclusive system access
+            bool was_running = emulation_running_.load() && !emulation_paused_.load();
+            stop_emu_thread();
             
             // Auto-detect optimal configuration (e.g. memory expansion) from file.
             // Never downgrades from the user's current selection — only increases.
@@ -272,17 +226,20 @@ void SystemGUI::render_frame() {
                 printf("File loaded successfully: %s\n", filePathName.c_str());
                 
                 // Ensure emulation is running after successful file load
-                if (!emulation_running_ || emulation_paused_) {
-                    start_emulation();
-                }
+                emulation_running_.store(true);
+                emulation_paused_.store(false);
             } else {
                 printf("Failed to load file: %s\n", filePathName.c_str());
                 
                 // Resume previous state if load failed
                 if (was_running) {
-                    start_emulation();
+                    emulation_running_.store(true);
+                    emulation_paused_.store(false);
                 }
             }
+            
+            // Restart emulation thread
+            start_emu_thread();
         } else {
             // User canceled - save the current path they were browsing
             std::string currentPath = ImGuiFileDialog::Instance()->GetCurrentPath();
@@ -303,12 +260,15 @@ void SystemGUI::render_frame() {
             last_file_path_ = filePathName;
 
             // Insert disk into the drive (this auto-populates the fliplist)
-            if (pending_drive_insert_->insert_disk(filePathName.c_str())) {
-                printf("Disk inserted successfully into drive %d: %s\n",
-                       pending_drive_insert_->get_device_number(), filePathName.c_str());
-            } else {
-                printf("Failed to insert disk into drive %d: %s\n",
-                       pending_drive_insert_->get_device_number(), filePathName.c_str());
+            {
+                std::lock_guard<std::mutex> lock(emu_mutex_);
+                if (pending_drive_insert_->insert_disk(filePathName.c_str())) {
+                    printf("Disk inserted successfully into drive %d: %s\n",
+                           pending_drive_insert_->get_device_number(), filePathName.c_str());
+                } else {
+                    printf("Failed to insert disk into drive %d: %s\n",
+                           pending_drive_insert_->get_device_number(), filePathName.c_str());
+                }
             }
         } else {
             // User canceled - save the current path they were browsing
@@ -347,9 +307,12 @@ void SystemGUI::render_frame() {
         render_about();
     }
     
-    // Let system render its debug windows
+    // Let system render its debug windows (try_lock: skip if emu thread is busy)
     if (system_) {
-        system_->render_debug_windows(nullptr);
+        std::unique_lock<std::mutex> lock(emu_mutex_, std::try_to_lock);
+        if (lock.owns_lock()) {
+            system_->render_debug_windows(nullptr);
+        }
     }
     
     end_frame();
@@ -408,7 +371,10 @@ void SystemGUI::render_menu_bar() {
         // Speed control
         if (ImGui::SliderFloat("Speed", &speed_multiplier_, 0.1f, 5.0f, "%.1fx")) {
             if (system_) {
-                system_->set_speed_multiplier(speed_multiplier_);
+                std::unique_lock<std::mutex> lock(emu_mutex_, std::try_to_lock);
+                if (lock.owns_lock()) {
+                    system_->set_speed_multiplier(speed_multiplier_);
+                }
             }
         }
         
@@ -417,7 +383,10 @@ void SystemGUI::render_menu_bar() {
         // System-specific menu items (if system is loaded)
         if (system_) {
             ImGui::Separator();
-            system_->render_system_menu_items();
+            std::unique_lock<std::mutex> lock(emu_mutex_, std::try_to_lock);
+            if (lock.owns_lock()) {
+                system_->render_system_menu_items();
+            }
         }
         
         ImGui::EndMenu();
@@ -515,15 +484,32 @@ void SystemGUI::render_menu_bar() {
                         }
 
                         if (sc.chip->has_debug_content()) {
-                            sc.chip->render_debug_content();
+                            // try_lock: chip state is read-only for rendering;
+                            // the emu thread may be updating it concurrently.
+                            std::unique_lock<std::mutex> chip_lock(emu_mutex_, std::try_to_lock);
+                            if (chip_lock.owns_lock()) {
+                                sc.chip->render_debug_content();
+                            } else {
+                                ImGui::TextDisabled("(updating...)");
+                            }
                         } else if (sc.chip->has_layout_content()) {
-                            sc.chip->render_layout_content();
+                            std::unique_lock<std::mutex> chip_lock(emu_mutex_, std::try_to_lock);
+                            if (chip_lock.owns_lock()) {
+                                sc.chip->render_layout_content();
+                            } else {
+                                ImGui::TextDisabled("(updating...)");
+                            }
                         }
 
                         if (sc.chip->has_settings_content()) {
                             ImGui::Separator();
                             if (ImGui::CollapsingHeader("Settings")) {
-                                sc.chip->render_settings_content();
+                                std::unique_lock<std::mutex> chip_lock(emu_mutex_, std::try_to_lock);
+                                if (chip_lock.owns_lock()) {
+                                    sc.chip->render_settings_content();
+                                } else {
+                                    ImGui::TextDisabled("(updating...)");
+                                }
                             }
                         }
 
@@ -650,8 +636,13 @@ void SystemGUI::render_screen() {
     
     ImGui::Begin("##Screen", nullptr, flags);
     
-    // Get system framebuffer
-    uint32_t* fb = system_->get_framebuffer();
+    // Read the latest framebuffer snapshot produced by the emulation thread.
+    // The snapshot is a stable copy — no tearing from concurrent run_frame().
+    uint32_t* fb = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(fb_mutex_);
+        fb = fb_snapshot_;
+    }
     if (fb && screen_textures_[0]) {
         // Double-buffered texture upload: write to the current write
         // texture while the GPU may still be reading from the other one.
@@ -714,28 +705,33 @@ void SystemGUI::render_settings() {
     }
     
     if (system_) {
-        ImGui::Text("System: %s", system_->get_descriptor().name);
-        ImGui::Text("Description: %s", system_->get_descriptor().description);
-        ImGui::Separator();
-        
-        // Hardware information
-        const auto& traits = system_->get_hardware_traits();
-        ImGui::Text("Display: %dx%d", 
-                   traits.display.visible_width,
-                   traits.display.visible_height);
-        ImGui::Text("Format: %s",
-                   traits.display.format == FramebufferFormat::MONOCHROME_1 ? "1-bit Monochrome" :
-                   traits.display.format == FramebufferFormat::PALETTE_INDEXED_8 ? "8-bit Indexed" :
-                   traits.display.format == FramebufferFormat::RGBA8888 ? "RGBA8888" : "Unknown");
-        ImGui::Text("Palette Size: %d colors", (int)traits.display.palette_size);
-        ImGui::Separator();
-        
-        // System-specific configuration UI
-        ImGui::Text("System Configuration:");
-        system_->render_configuration_ui();
+        std::unique_lock<std::mutex> lock(emu_mutex_, std::try_to_lock);
+        if (lock.owns_lock()) {
+            ImGui::Text("System: %s", system_->get_descriptor().name);
+            ImGui::Text("Description: %s", system_->get_descriptor().description);
+            ImGui::Separator();
+            
+            // Hardware information
+            const auto& traits = system_->get_hardware_traits();
+            ImGui::Text("Display: %dx%d", 
+                       traits.display.visible_width,
+                       traits.display.visible_height);
+            ImGui::Text("Format: %s",
+                       traits.display.format == FramebufferFormat::MONOCHROME_1 ? "1-bit Monochrome" :
+                       traits.display.format == FramebufferFormat::PALETTE_INDEXED_8 ? "8-bit Indexed" :
+                       traits.display.format == FramebufferFormat::RGBA8888 ? "RGBA8888" : "Unknown");
+            ImGui::Text("Palette Size: %d colors", (int)traits.display.palette_size);
+            ImGui::Separator();
+            
+            // System-specific configuration UI
+            ImGui::Text("System Configuration:");
+            system_->render_configuration_ui();
 
-        // Generic peripheral connector UI (available for all systems)
-        system_->render_peripheral_connector_ui();
+            // Generic peripheral connector UI (available for all systems)
+            system_->render_peripheral_connector_ui();
+        } else {
+            ImGui::TextDisabled("(emulation busy)");
+        }
     }
     
     ImGui::End();
@@ -750,35 +746,45 @@ void SystemGUI::render_about() {
 // ============================================================================
 
 void SystemGUI::start_emulation() {
-    emulation_running_ = true;
-    emulation_paused_ = false;
-    reset_frame_pacing();
+    emulation_running_.store(true);
+    emulation_paused_.store(false);
+    // Frame pacing is reset inside the emu thread when it detects
+    // the transition from paused/stopped to running.
     printf("Emulation started\n");
 }
 
 void SystemGUI::pause_emulation() {
-    emulation_paused_ = true;
+    emulation_paused_.store(true);
     printf("Emulation paused\n");
 }
 
 void SystemGUI::reset_emulation() {
     if (system_) {
+        // Stop the emu thread so we have exclusive access to system_
+        stop_emu_thread();
+
         system_->reset();
-        total_frames_ = 0;
+        total_frames_.store(0);
         reset_frame_pacing();
-        // Ensure emulation is running after reset — the user may have
-        // triggered reset while emulation was paused (e.g. after a failed
-        // file load or from the file-dialog flow that pauses first).
-        if (!emulation_running_ || emulation_paused_) {
-            start_emulation();
-        }
+
+        // Restart thread and ensure emulation is running
+        emulation_running_.store(true);
+        emulation_paused_.store(false);
+        start_emu_thread();
         printf("System reset\n");
     }
 }
 
 void SystemGUI::step_emulation() {
-    if (system_ && emulation_paused_) {
+    if (system_ && emulation_paused_.load()) {
+        std::lock_guard<std::mutex> lock(emu_mutex_);
         system_->tick();
+        // Snapshot the framebuffer so the GUI sees the result
+        if (framebuffer_ && fb_snapshot_) {
+            std::lock_guard<std::mutex> flock(fb_mutex_);
+            memcpy(fb_snapshot_, framebuffer_,
+                   static_cast<size_t>(fb_width_) * fb_height_ * sizeof(uint32_t));
+        }
         printf("Single step executed\n");
     }
 }
@@ -817,12 +823,22 @@ void SystemGUI::allocate_framebuffer() {
     fb_width_ = traits.display.visible_width;
     fb_height_ = traits.display.visible_height;
     
-    // Allocate framebuffer
+    size_t fb_bytes = static_cast<size_t>(fb_width_) * fb_height_ * sizeof(uint32_t);
+
+    // Allocate framebuffer (written by emulation thread via run_frame)
     framebuffer_ = new uint32_t[fb_width_ * fb_height_];
-    memset(framebuffer_, 0, fb_width_ * fb_height_ * sizeof(uint32_t));
+    memset(framebuffer_, 0, fb_bytes);
     
-    // Give it to the system
+    // Allocate snapshot buffer (read by GUI thread for texture upload)
+    fb_snapshot_ = new uint32_t[fb_width_ * fb_height_];
+    memset(fb_snapshot_, 0, fb_bytes);
+    
+    // Give the live buffer to the system
     system_->set_framebuffer(framebuffer_, fb_width_, fb_height_);
+
+    // Resize the temporary audio buffer for the emu thread
+    // Enough for ~2 frames at 44100 Hz / 50 fps = 1764 samples, rounded up
+    emu_audio_tmp_.resize(2048);
     
     // Create double-buffered OpenGL textures.
     // Two textures let us upload to one while the GPU may still be
@@ -846,6 +862,10 @@ void SystemGUI::free_framebuffer() {
         delete[] framebuffer_;
         framebuffer_ = nullptr;
     }
+    if (fb_snapshot_) {
+        delete[] fb_snapshot_;
+        fb_snapshot_ = nullptr;
+    }
     
     // Delete double-buffered textures
     for (int i = 0; i < 2; i++) {
@@ -862,6 +882,9 @@ void SystemGUI::free_framebuffer() {
 // ============================================================================
 
 void SystemGUI::teardown_current_system() {
+    // Stop emulation thread before touching system_
+    stop_emu_thread();
+
     // Stop audio before destroying the system (callback references system_)
     close_audio_device();
 
@@ -875,9 +898,9 @@ void SystemGUI::teardown_current_system() {
     free_framebuffer();
     
     // Reset emulation state
-    emulation_running_ = false;
-    emulation_paused_ = false;
-    total_frames_ = 0;
+    emulation_running_.store(false);
+    emulation_paused_.store(false);
+    total_frames_.store(0);
     actual_fps_ = 0;
     reset_frame_pacing();
 }
@@ -971,8 +994,11 @@ void SystemGUI::switch_system(const char* system_name, int memory_option, int re
     }
 
     // Start emulation
-    emulation_running_ = true;
-    emulation_paused_ = false;
+    emulation_running_.store(true);
+    emulation_paused_.store(false);
+
+    // Start the emulation thread for the new system
+    start_emu_thread();
 
     // Update window title with system name
     char title_buf[256];
@@ -1049,6 +1075,149 @@ void SystemGUI::open_file_dialog(const char* dialog_key, const char* title) {
 }
 
 // ============================================================================
+// Emulation Thread
+// ============================================================================
+
+void SystemGUI::start_emu_thread() {
+    if (emu_thread_running_.load()) return;  // Already running
+    emu_thread_running_.store(true);
+    audio_ring_->reset();
+    emu_thread_ = std::thread(&SystemGUI::emu_thread_func, this);
+    printf("Emulation thread started\n");
+}
+
+void SystemGUI::stop_emu_thread() {
+    if (!emu_thread_running_.load()) return;
+    emu_thread_running_.store(false);
+    if (emu_thread_.joinable()) {
+        emu_thread_.join();
+    }
+    printf("Emulation thread stopped\n");
+}
+
+void SystemGUI::emu_thread_func() {
+    uint64_t pace_counter = 0;
+    double accumulator = 0.0;
+    bool was_running = false;
+
+    while (emu_thread_running_.load()) {
+        bool running = emulation_running_.load() && !emulation_paused_.load();
+
+        if (!running || !system_) {
+            // Reset pacing so we start fresh when unpaused
+            pace_counter = 0;
+            accumulator = 0.0;
+            was_running = false;
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
+
+        // Detect transition to running — reset pacing
+        if (!was_running) {
+            pace_counter = SDL_GetPerformanceCounter();
+            accumulator = 0.0;
+            was_running = true;
+        }
+
+        // ----- Process queued input events (between frames) -----
+        {
+            std::vector<SDL_Event> events;
+            {
+                std::lock_guard<std::mutex> lock(input_mutex_);
+                events.swap(input_queue_);
+            }
+            std::lock_guard<std::mutex> lock(emu_mutex_);
+            for (auto& evt : events) {
+                // Focus loss → release all keys
+                if (evt.type == SDL_WINDOWEVENT &&
+                    evt.window.event == SDL_WINDOWEVENT_FOCUS_LOST) {
+                    system_->release_all_keys();
+                    continue;
+                }
+                // Keyboard events → system keyboard handler + device routing
+                if (evt.type == SDL_KEYDOWN) {
+                    system_->handle_keyboard_event_ex(
+                        evt.key.keysym.sym, evt.key.keysym.scancode,
+                        evt.key.keysym.mod, true, evt.key.repeat != 0);
+                } else if (evt.type == SDL_KEYUP) {
+                    system_->handle_keyboard_event_ex(
+                        evt.key.keysym.sym, evt.key.keysym.scancode,
+                        evt.key.keysym.mod, false, false);
+                } else if (evt.type == SDL_TEXTINPUT) {
+                    system_->handle_text_input(evt.text.text);
+                }
+                // All events also go through the peripheral device router
+                system_->process_sdl_event_for_devices(evt);
+            }
+        }
+
+        // ----- Time accumulator -----
+        uint64_t now = SDL_GetPerformanceCounter();
+        double freq = static_cast<double>(SDL_GetPerformanceFrequency());
+        double elapsed = static_cast<double>(now - pace_counter) / freq;
+        pace_counter = now;
+        accumulator += elapsed;
+
+        double target_fps = 50.0;
+        {
+            std::lock_guard<std::mutex> lock(emu_mutex_);
+            target_fps = system_->get_target_fps();
+        }
+        double target_frame_time = 1.0 / target_fps;
+
+        // Cap accumulator (death-spiral prevention: max 3 frames catch-up)
+        if (accumulator > target_frame_time * 3.0)
+            accumulator = target_frame_time * 3.0;
+
+        // ----- Run emulation frames -----
+        int frames_ran = 0;
+        while (accumulator >= target_frame_time) {
+            {
+                std::lock_guard<std::mutex> lock(emu_mutex_);
+                system_->run_frame();
+            }
+            total_frames_.fetch_add(1, std::memory_order_relaxed);
+            accumulator -= target_frame_time;
+            frames_ran++;
+        }
+
+        // ----- Snapshot framebuffer + generate audio -----
+        if (frames_ran > 0) {
+            // Framebuffer snapshot (very brief lock)
+            if (framebuffer_ && fb_snapshot_) {
+                std::lock_guard<std::mutex> lock(fb_mutex_);
+                memcpy(fb_snapshot_, framebuffer_,
+                       static_cast<size_t>(fb_width_) * fb_height_ * sizeof(uint32_t));
+                fb_new_frame_.store(true, std::memory_order_release);
+            }
+
+            // Generate audio samples into ring buffer.
+            // Request samples proportional to the number of frames that ran
+            // so the audio stays in sync with the emulation.
+            if (audio_ring_ && audio_sample_rate_ > 0) {
+                uint32_t samples_per_frame = static_cast<uint32_t>(
+                    audio_sample_rate_ / target_fps + 0.5);
+                uint32_t samples_needed = samples_per_frame * static_cast<uint32_t>(frames_ran);
+                if (samples_needed > static_cast<uint32_t>(emu_audio_tmp_.size()))
+                    emu_audio_tmp_.resize(samples_needed);
+                uint32_t got = 0;
+                {
+                    std::lock_guard<std::mutex> lock(emu_mutex_);
+                    got = system_->get_audio_samples(emu_audio_tmp_.data(), samples_needed);
+                }
+                if (got > 0)
+                    audio_ring_->write(emu_audio_tmp_.data(), got);
+            }
+        }
+
+        // ----- Yield CPU if we're ahead of schedule -----
+        if (accumulator < target_frame_time * 0.5) {
+            std::this_thread::sleep_for(std::chrono::microseconds(500));
+        }
+    }
+}
+
+// ============================================================================
 // Drive File Dialog Polling
 // ============================================================================
 
@@ -1056,7 +1225,11 @@ void SystemGUI::poll_drive_file_dialog_requests() {
 #ifdef HAS_IMGUIFILEDIALOG
     if (!system_ || pending_drive_insert_) return;  // Already have a pending request
 
-    // Scan IEC bus devices for any 1541 drive that wants a file dialog
+    // Scan IEC bus devices for any 1541 drive that wants a file dialog.
+    // Use try_lock because the emulation thread may be running.
+    std::unique_lock<std::mutex> lock(emu_mutex_, std::try_to_lock);
+    if (!lock.owns_lock()) return;
+
     for (auto& port : system_->get_connector_ports()) {
         if (!port->get_definition().is_bus) continue;
         for (auto* dev : port->get_attached_devices()) {
@@ -1081,9 +1254,11 @@ void SystemGUI::sdl_audio_callback(void* userdata, uint8_t* stream, int len) {
     int sample_count = len / static_cast<int>(sizeof(float));
     float* out = reinterpret_cast<float*>(stream);
 
+    // Read from the lock-free ring buffer (fed by the emulation thread)
     uint32_t written = 0;
-    if (gui->system_ && gui->emulation_running_ && !gui->emulation_paused_) {
-        written = gui->system_->get_audio_samples(out, static_cast<uint32_t>(sample_count));
+    if (gui->audio_ring_) {
+        written = static_cast<uint32_t>(
+            gui->audio_ring_->read(out, static_cast<size_t>(sample_count)));
     }
     // Fill remainder with silence
     for (uint32_t i = written; i < static_cast<uint32_t>(sample_count); i++) {
