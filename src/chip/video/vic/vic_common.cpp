@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <cassert>
 
 // VIC color palette (16 colors) - Hardware accurate VIC-20 colors
 // Format: 0xAABBGGRR (ABGR byte order for little-endian OpenGL GL_RGBA texture format)
@@ -34,6 +35,8 @@ uint32_t* vic_base_s::get_default_palette() {
 // Set memory callbacks for VIC
 void vic_base_s::set_memory_callbacks(vic_mem_read_fn_t mem_read_fn, void* mem_ud,
                                      vic_mem_read_fn_t color_read_fn, void* color_ud) {
+    assert(mem_read_fn && "VIC mem_read callback must not be null");
+    assert(color_read_fn && "VIC color_read callback must not be null");
     mem_read = mem_read_fn;
     mem_user_data = mem_ud;
     color_read = color_read_fn;
@@ -516,28 +519,22 @@ bus_state_t vic_base_s::tick(bus_state_t bus_state) {
         const uint8_t char_height = cached_char_height;
 
         if (is_char_fetch_cycle) {
-            // Fetch character data from memory
-            if (mem_read && color_read) {
-                uint16_t char_index = matrix_index;
-                uint16_t screen_addr = base_video + char_index;
-                matrix_video_byte = mem_read(mem_user_data, screen_addr);
-                uint16_t color_offset = (base_video & 0x3FF) + char_index;
-                matrix_color_byte = color_read(color_user_data, color_offset);
-                
-                // Character line within the cell, relative to screen origin.
-                // For 8px: (ycounter & 7)  → rows 0-7
-                // For 16px: (ycounter & 15) → rows 0-15
-                const uint8_t char_line = (raster_counter - cached_screen_origin_y) & ((char_height >> 1) | 7);
-                
-                // Character ROM/RAM address (matches VICE):
-                //   base_char + (char_code * char_height + char_line)
-                uint16_t char_rom_addr = base_char + ((uint16_t)matrix_video_byte * char_height + char_line);
-                matrix_char_data = mem_read(mem_user_data, char_rom_addr);
-            } else {
-                // No memory access available - emit blank
-                matrix_char_data = 0;
-                matrix_color_byte = 0;
-            }
+            // Fetch character data from memory (callbacks guaranteed non-null by set_memory_callbacks)
+            uint16_t char_index = matrix_index;
+            uint16_t screen_addr = base_video + char_index;
+            matrix_video_byte = mem_read(mem_user_data, screen_addr);
+            uint16_t color_offset = (base_video & 0x3FF) + char_index;
+            matrix_color_byte = color_read(color_user_data, color_offset);
+            
+            // Character line within the cell, relative to screen origin.
+            // For 8px: (ycounter & 7)  → rows 0-7
+            // For 16px: (ycounter & 15) → rows 0-15
+            const uint8_t char_line = (raster_counter - cached_screen_origin_y) & ((char_height >> 1) | 7);
+            
+            // Character ROM/RAM address (matches VICE):
+            //   base_char + (char_code * char_height + char_line)
+            uint16_t char_rom_addr = base_char + ((uint16_t)matrix_video_byte * char_height + char_line);
+            matrix_char_data = mem_read(mem_user_data, char_rom_addr);
             
             matrix_index++;
         }
