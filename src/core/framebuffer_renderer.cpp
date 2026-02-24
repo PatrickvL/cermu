@@ -210,9 +210,10 @@ void FramebufferRenderer::convert_palette_8bit(
         return;
     }
     
-    // Pre-convert palette to RGBA32
-    std::vector<uint32_t> rgba_palette(palette.size());
-    for (size_t i = 0; i < palette.size(); i++) {
+    // Pre-convert palette to RGBA32 (stack array — palettes are always ≤256 entries)
+    uint32_t rgba_palette[256];
+    const size_t pal_count = std::min(palette.size(), size_t(256));
+    for (size_t i = 0; i < pal_count; i++) {
         rgba_palette[i] = palette[i].to_rgba32();
     }
     
@@ -221,7 +222,7 @@ void FramebufferRenderer::convert_palette_8bit(
             int index = y * native_width + x;
             uint8_t palette_index = native_buffer[index];
             
-            if (palette_index < rgba_palette.size()) {
+            if (palette_index < pal_count) {
                 rgba_buffer[y * rgba_width + x] = rgba_palette[palette_index];
             }
         }
