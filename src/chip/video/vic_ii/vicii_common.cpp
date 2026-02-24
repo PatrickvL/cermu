@@ -433,6 +433,15 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         // independent of the g-access vmli.  The SR reload happens inside the pixel
         // loop when pixel_in_char == 0, driven by the display sequencer state.
         
+        // Hoist background color reads to locals — prevents aliasing-induced reloads
+        // after vicii_pixel_emit_at_x() writes through uint8_t* pointers.
+        // Safe within a single cycle: pixel sequencer runs during PHI1; CPU color
+        // register writes happen during PHI2, so B0C-B3C cannot change mid-cycle.
+        const uint8_t bg0 = vicii->registers.data[VICII_B0C];
+        const uint8_t bg1 = vicii->registers.data[VICII_B1C];
+        const uint8_t bg2 = vicii->registers.data[VICII_B2C];
+        const uint8_t bg3 = vicii->registers.data[VICII_B3C];
+        
         // Sequence exactly 8 pixels from shift register
         for (int pixel = 0; pixel < 8; pixel++) {
             const uint16_t pixel_x = x_coord + (uint16_t)pixel;
@@ -454,11 +463,10 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             vicii_pixel_t pixel_data;
             
             // XSCROLL handling - delay pixel output by XSCROLL pixels
-            // Read background color directly from register to avoid stale cached value.
-            // The VIC-II outputs the current $D021 value during scroll delay.
+            // Background color during scroll delay uses the hoisted bg0 local.
             if (seq->xscroll_counter > 0) {
                 seq->xscroll_counter--;
-                pixel_data.color = static_cast<vicii_color_t>(vicii->registers.data[VICII_B0C]);
+                pixel_data.color = static_cast<vicii_color_t>(bg0);
                 pixel_data.priority = VICII_PRIORITY_BACKGROUND;
                 vicii_pixel_emit_at_x(vicii, &pixel_data, pixel_x);
                 continue;
@@ -486,7 +494,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                     pixel_bits = (seq->shift_reg >> 7) & 1;
                     color_index = pixel_bits ?
                         (uint8_t)vicii->video_data.video_color_line[vmli] :
-                        vicii->registers.data[VICII_B0C];
+                        bg0;
                     is_background = (pixel_bits == 0);
                     seq->shift_reg <<= 1;
                     break;
@@ -498,9 +506,9 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                         // to align MC pairs with the character pixel grid (not cycle position).
                         pixel_bits = (seq->shift_reg >> 6) & 3;
                         switch (pixel_bits) {
-                            case 0: color_index = vicii->registers.data[VICII_B0C]; break;
-                            case 1: color_index = vicii->registers.data[VICII_B1C]; break;
-                            case 2: color_index = vicii->registers.data[VICII_B2C]; break;
+                            case 0: color_index = bg0; break;
+                            case 1: color_index = bg1; break;
+                            case 2: color_index = bg2; break;
                             case 3: color_index = vicii->video_data.video_color_line[vmli]; break;
                         }
                         is_background = (pixel_bits <= 1);  // MCM=1: "00","01" = background
@@ -512,7 +520,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                         pixel_bits = (seq->shift_reg >> 7) & 1;
                         color_index = pixel_bits ?
                             (uint8_t)vicii->video_data.video_color_line[vmli] :
-                            vicii->registers.data[VICII_B0C];
+                            bg0;
                         is_background = (pixel_bits == 0);
                         seq->shift_reg <<= 1;
                     }
@@ -534,7 +542,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                     // Each 2-bit pair spans 2 screen pixels. Shift on odd pixel_in_char.
                     pixel_bits = (seq->shift_reg >> 6) & 3;
                     switch (pixel_bits) {
-                        case 0: color_index = vicii->registers.data[VICII_B0C]; break;
+                        case 0: color_index = bg0; break;
                         case 1: color_index = vicii->video_data.video_matrix_line[vmli] >> 4; break;
                         case 2: color_index = vicii->video_data.video_matrix_line[vmli] & 0x0F; break;
                         case 3: color_index = vicii->video_data.video_color_line[vmli]; break;
@@ -551,8 +559,8 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                         color_index = vicii->video_data.video_color_line[vmli];
                     } else {
                         const uint8_t bg_select = (vicii->video_data.video_matrix_line[vmli] >> 6) & 3;
-
-                        color_index = vicii->registers.data[VICII_B0C + bg_select];
+                        const uint8_t bg_colors[4] = { bg0, bg1, bg2, bg3 };
+                        color_index = bg_colors[bg_select];
                     }
                     is_background = (pixel_bits == 0);
                     seq->shift_reg <<= 1;
@@ -621,7 +629,7 @@ void vicii_pixel_flush_line(vicii_t* vicii, const uint32_t* palette, int y) {
     
     vicii_pixel_unit_t* pixel = &vicii->pixel;
     uint32_t* row_ptr = &pixel->framebuffer[y * pixel->framebuffer_width];
-    const uint8_t border_color_index = vicii->registers.data[VICII_EC] & 0x0F;
+    const uint8_t border_color_index = vicii->registers.data[VICII_EC]; // Already masked to 4 bits on write
     const uint32_t border_color = palette[border_color_index];
     
     // Fill entire line with border color first
@@ -726,59 +734,7 @@ static inline bus_state_t vicii_bus_memory_setup(vicii_t* vicii, bus_state_t bus
 // SEQUENCER LOGIC
 // ========================================================================================
 
-static inline void vicii_sequencer_update_colors(vicii_t* vicii) {
-    vicii_sequencer_unit_t* sequencer = &vicii->sequencer;
-    vicii_registers_unit_t* regs = &vicii->registers;
-    
-    // Update color palette based on graphics mode and background colors
-    switch (sequencer->graphics_mode) {
-        case VICII_GM_STANDARD_TEXT:
-            sequencer->colors[0].color = static_cast<vicii_color_t>(regs->data[VICII_B0C]);
-            sequencer->colors[0].priority = VICII_PRIORITY_BACKGROUND;
-            sequencer->colors[4].priority = VICII_PRIORITY_FOREGROUND;
-            break;
-        case VICII_GM_MULTICOLOR_TEXT:
-            sequencer->colors[0].color = static_cast<vicii_color_t>(regs->data[VICII_B0C]);
-            sequencer->colors[1].color = static_cast<vicii_color_t>(regs->data[VICII_B1C]);
-            sequencer->colors[2].color = static_cast<vicii_color_t>(regs->data[VICII_B2C]);
-            // Documentation (VIC-II-Updated2025.txt section 3.8.2):
-            // MCM=1: "00" and "01" are background, "10" and "11" are foreground
-            sequencer->colors[0].priority = VICII_PRIORITY_BACKGROUND;
-            sequencer->colors[1].priority = VICII_PRIORITY_BACKGROUND;
-            sequencer->colors[2].priority = VICII_PRIORITY_FOREGROUND;
-            sequencer->colors[3].priority = VICII_PRIORITY_FOREGROUND;
-            break;
-        case VICII_GM_STANDARD_BITMAP:
-            sequencer->colors[0].priority = VICII_PRIORITY_BACKGROUND;
-            sequencer->colors[4].priority = VICII_PRIORITY_FOREGROUND;
-            break;
-        case VICII_GM_MULTICOLOR_BITMAP:
-            sequencer->colors[0].color = static_cast<vicii_color_t>(regs->data[VICII_B0C]);
-            // Documentation (VIC-II-Updated2025.txt section 3.8.2):
-            // MCM=1: "00" and "01" are background, "10" and "11" are foreground
-            sequencer->colors[0].priority = VICII_PRIORITY_BACKGROUND;
-            sequencer->colors[1].priority = VICII_PRIORITY_BACKGROUND;
-            sequencer->colors[2].priority = VICII_PRIORITY_FOREGROUND;
-            sequencer->colors[3].priority = VICII_PRIORITY_FOREGROUND;
-            break;
-        case VICII_GM_ECM_TEXT:
-            sequencer->colors[0].color = static_cast<vicii_color_t>(regs->data[VICII_B0C]);
-            sequencer->colors[1].color = static_cast<vicii_color_t>(regs->data[VICII_B1C]);
-            sequencer->colors[2].color = static_cast<vicii_color_t>(regs->data[VICII_B2C]);
-            sequencer->colors[3].color = static_cast<vicii_color_t>(regs->data[VICII_B3C]);
-            for (int i = 0; i < 4; i++) {
-                sequencer->colors[i].priority = VICII_PRIORITY_BACKGROUND;
-            }
-            sequencer->colors[4].priority = VICII_PRIORITY_FOREGROUND;
-            break;
-        default:
-            for (int i = 0; i < 5; i++) {
-                sequencer->colors[i].color = VICII_COLOR_BLACK;
-                sequencer->colors[i].priority = VICII_PRIORITY_BACKGROUND;
-            }
-            break;
-    }
-}
+// vicii_sequencer_update_colors() removed — colors[] was write-only (never read in pixel loop)
 
 // ========================================================================================
 // REGISTER HANDLING
@@ -931,8 +887,6 @@ bus_state_t vicii_s::registers_write(void* context, bus_state_t bus_state) {
             if (reg == VICII_C1) {
                 vicii_check_vertical_border(vicii);
             }
-            // Re-sync color palette when graphics mode changes
-            vicii_sequencer_update_colors(vicii);
             break;
         case VICII_RASTER: // $d012 Raster compare (bits 0-7)
             // Update prev_raster_compare for edge detection
@@ -983,8 +937,6 @@ bus_state_t vicii_s::registers_write(void* context, bus_state_t bus_state) {
         case VICII_B0C: // $d021 (4 bits) Background color 0
         case VICII_B1C: // $d022 (4 bits) Background color 1
         case VICII_B2C: // $d023 (4 bits) Background color 2
-            // Inline vicii_border_update_color since priority is set only once during init
-            vicii_sequencer_update_colors(vicii);
             break;
         case VICII_MM0: // $d025 (4 bits) Sprite multicolor 0
         case VICII_MM1: // $d026 (4 bits) Sprite multicolor 1
@@ -2448,13 +2400,6 @@ static inline void vicii_initialize(vicii_t* vicii) {
         vicii->sprites.sprites[i].priority = VICII_PRIORITY_SPRITE_IN_FRONT;
         vicii->sprites.sprites[i].expansion_flip_flop = true;  // starts set (not expanded)
     }
-    
-    // Initialize color priorities
-    vicii->sequencer.colors[0].priority = VICII_PRIORITY_BACKGROUND; // "00" / "0" Use in both MC modes
-    vicii->sequencer.colors[1].priority = VICII_PRIORITY_BACKGROUND; // "01" Used in EmitMCPixel()
-    vicii->sequencer.colors[2].priority = VICII_PRIORITY_FOREGROUND; // "10"
-    vicii->sequencer.colors[3].priority = VICII_PRIORITY_FOREGROUND; // "11"
-    vicii->sequencer.colors[4].priority = VICII_PRIORITY_FOREGROUND; // "1" Used in EmitPixel()
     
     // Initialize sequencer
     vicii->sequencer.last_mode = 0xFF;
