@@ -263,6 +263,14 @@ typedef struct voice_s {
     float cpu_clock;                  // CPU clock frequency
     uint32_t voice_index;             // Voice index (0, 1, 2)
     int model_index = 0;             // Cached chip model (0=6581, 1=8580) for table lookup
+
+    // Cached waveform lookup state — updated on control register or model change
+    // to avoid per-cycle recomputation of table address and bitmasks.
+    const uint16_t* cached_wave_table = nullptr;  // &model_wave[model][wf_index][0]
+    uint32_t cached_ring_msb_mask = 0;  // Ring mod MSB mask (waveform-dependent)
+    uint32_t cached_no_pulse_mask = 0xFFF;  // 0x000 when pulse selected, 0xFFF otherwise
+    uint32_t cached_no_noise_mask = 0xFFF;  // 0x000 when noise selected, 0xFFF otherwise
+    uint8_t cached_wf_mask = 0;       // control_reg & WAVEFORM_MASK (non-zero = waveform active)
     
     // Reference to parent chip
     mos6581_t* sid;
@@ -279,6 +287,7 @@ typedef struct voice_s {
     int cycles_per_millisecond();
 
     static uint32_t rate_to_period(int rate);
+    void update_cached_waveform_state();  // Refresh cached_wave_table, masks from control_reg
 
 private:
     void update_exponential_period();
