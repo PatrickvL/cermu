@@ -161,7 +161,8 @@ typedef uint8_t (*vic_mem_read_fn_t)(void* user_data, uint16_t addr);
 // ============================================================================
 // Audio state for the four VIC voices
 // ============================================================================
-#define VIC_AUDIO_BUFFER_SIZE 2048   // Ring buffer capacity (mono 8-bit samples)
+#define VIC_AUDIO_BUFFER_SIZE (1 << 11)                    // 2048 — ring buffer capacity (mono 8-bit samples)
+#define VIC_AUDIO_BUFFER_MASK (VIC_AUDIO_BUFFER_SIZE - 1)   // 0x7FF — index wrap mask
 #define VIC_NUM_TONE_VOICES   3
 #define VIC_NUM_VOICES        4      // 3 tones + 1 noise
 
