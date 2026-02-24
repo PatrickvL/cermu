@@ -129,6 +129,7 @@ private:
     uint8_t ram_simple_[65536];   // Up to 64KB RAM (C16/C116 use 16KB, Plus/4 uses 64KB)
     uint8_t basic_rom_[16384];    // BASIC ROM $8000-$BFFF (16KB)
     uint8_t kernal_rom_[16384];   // Kernal ROM $C000-$FFFF (16KB)
+    size_t  ram_size_ = 16384;    // Cached configured RAM size (updated in apply_configuration)
 
     // System state
     bool initialized_;

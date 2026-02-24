@@ -295,6 +295,14 @@ bool Commodore264System<V>::apply_configuration() {
         cycles_per_frame_ = std_cfg.timing.cycles_per_frame;
     }
     
+    // Cache RAM size from memory options (avoids vector lookup every cycle in mem_tick)
+    if (config_.memory_option_index >= 0 &&
+        config_.memory_option_index < static_cast<int>(hardware_traits_.memory_options.size())) {
+        ram_size_ = hardware_traits_.memory_options[config_.memory_option_index].ram_size;
+    } else {
+        ram_size_ = 16384;  // Default C16
+    }
+    
     return true;
 }
 
@@ -725,12 +733,8 @@ template<C264SeriesVariant V>
 bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
     uint16_t addr = BUS_GET_ADDR(s);
 
-    // Determine configured RAM size
-    size_t ram_size = 16384;  // Default C16
-    if (config_.memory_option_index >= 0 &&
-        config_.memory_option_index < static_cast<int>(hardware_traits_.memory_options.size())) {
-        ram_size = hardware_traits_.memory_options[config_.memory_option_index].ram_size;
-    }
+    // Use cached RAM size (updated in apply_configuration)
+    const size_t ram_size = ram_size_;
 
     if (s & BUS_BIT(BUS_RW_BIT)) {
         // ---- Read cycle ----
