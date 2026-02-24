@@ -262,7 +262,7 @@ typedef struct vic_base_s : public ChipBase {
     uint16_t cached_columns = 0;           // VIC_REG_VIDEO_MATRIX & VIC_VM_COLUMNS_MASK
     uint8_t  cached_border_color = 0;      // VIC_REG_BACKGROUND & VIC_BG_BORDER_MASK
     uint8_t  cached_background_color = 0;  // (VIC_REG_BACKGROUND >> 4) & 0x0F
-    uint8_t  cached_reverse_flag = 0;      // VIC_REG_BACKGROUND & VIC_BG_REVERSE
+    bool     cached_reversed = true;       // !(VIC_REG_BACKGROUND & VIC_BG_REVERSE)  (0 = reversed)
     uint8_t  cached_char_height = 8;       // 8 or 16 from VIC_REG_ROWS bit 0
     uint8_t  cached_volume = 0;            // VIC_REG_AUX_COLOR & VIC_AUX_VOLUME_MASK
     uint8_t  cached_auxiliary_color = 0;   // (VIC_REG_AUX_COLOR >> 4) & 0x0F
