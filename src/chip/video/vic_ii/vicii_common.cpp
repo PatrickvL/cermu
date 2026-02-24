@@ -357,9 +357,21 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                             || vicii->border.vertical_border_flip_flop;
         border_mask = in_border ? 0xFF : 0x00;
         
-        if (in_border || !vicii->video_logic.display_state) {
+        if (in_border) {
+            // Actual border area: emit border color with BORDER priority
             for (int pixel = 0; pixel < 8; pixel++) {
                 vicii_pixel_emit_at_x(vicii, &vicii->border.border_pixel, x_coord + (uint16_t)pixel);
+            }
+        } else if (!vicii->video_logic.display_state) {
+            // Content area in idle mode: emit background color with BACKGROUND priority.
+            // This allows sprites to display over idle areas (sprites have higher priority
+            // than BACKGROUND but lower than BORDER). The VIC-II displays idle pattern
+            // graphics in this state, but we approximate with background color for now.
+            vicii_pixel_t idle_pixel;
+            idle_pixel.color = (vicii_color_t)(vicii->registers.data[VICII_B0C] & 0x0F);
+            idle_pixel.priority = VICII_PRIORITY_BACKGROUND;
+            for (int pixel = 0; pixel < 8; pixel++) {
+                vicii_pixel_emit_at_x(vicii, &idle_pixel, x_coord + (uint16_t)pixel);
             }
         }
     } else {
@@ -410,8 +422,14 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                                 || vicii->border.vertical_border_flip_flop;
             if (in_border) border_mask |= (1 << pixel);
             
-            if (in_border || !vicii->video_logic.display_state) {
+            if (in_border) {
                 vicii_pixel_emit_at_x(vicii, &vicii->border.border_pixel, pixel_x);
+            } else if (!vicii->video_logic.display_state) {
+                // Content area idle mode: background color with BACKGROUND priority
+                vicii_pixel_t idle_pixel;
+                idle_pixel.color = (vicii_color_t)(vicii->registers.data[VICII_B0C] & 0x0F);
+                idle_pixel.priority = VICII_PRIORITY_BACKGROUND;
+                vicii_pixel_emit_at_x(vicii, &idle_pixel, pixel_x);
             }
         }
     }
