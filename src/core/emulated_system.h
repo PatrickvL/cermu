@@ -270,6 +270,10 @@ protected:
     uint32_t cached_target_fps_ = 60;  // Cached to avoid per-frame virtual dispatch + vector lookup
     bool quit_requested_;
 
+    // Loaded program title — set by load_file() implementations.
+    // For SID/NSF: song name + author.  For PRG/NES: bare filename.
+    std::string program_title_;
+
     // Display screen rect — where the emulated display is drawn in SDL window coords.
     // Updated each frame by the GUI after rendering the display image.
     // Used by peripheral devices (e.g. lightpen) for mouse → display coordinate mapping.
@@ -434,12 +438,28 @@ public:
     virtual void tick() = 0;
     virtual void run_frame() = 0;
     virtual bool load_file(const char* filepath) = 0;
+
+    /// Title of the currently loaded program (set by load_file()).
+    /// Empty string if nothing is loaded.
+    const std::string& get_program_title() const { return program_title_; }
+
     virtual uint32_t* get_framebuffer() = 0;
     virtual void get_display_dimensions(int* width, int* height) const = 0;
     virtual void handle_keyboard_event(SDL_Keycode key, bool pressed) = 0;
     virtual void render_system_menu_items() = 0;
     virtual void render_configuration_ui() = 0;
     uint32_t get_target_fps() const { return cached_target_fps_; }
+
+    /// Precise frame time in seconds, derived from hardware timing.
+    /// Avoids integer-FPS rounding error (e.g. PAL=19656/985248≈19.95ms,
+    /// not 1/50=20.00ms).  Falls back to 1/target_fps if cycles_per_frame is 0.
+    double get_target_frame_time() const {
+        const auto& t = hardware_traits_.timing;
+        if (t.cycles_per_frame > 0 && t.cpu_frequency_hz > 0)
+            return static_cast<double>(t.cycles_per_frame) / static_cast<double>(t.cpu_frequency_hz);
+        return 1.0 / (cached_target_fps_ > 0 ? cached_target_fps_ : 60);
+    }
+
     virtual void set_speed_multiplier(float multiplier) = 0;
 
     // Extended keyboard event handler with full SDL event information.

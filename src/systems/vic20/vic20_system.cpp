@@ -829,6 +829,14 @@ bool VIC20System::load_file(const char* filepath) {
     // after enough frames for boot to reach the READY prompt.
     pending_filepath_ = filepath;
     autostart_delay_frames_ = 120;  // ~2 seconds at 60fps
+
+    // Set program title to bare filename
+    const char* name = filepath;
+    const char* sep = strrchr(filepath, '/');
+    if (!sep) sep = strrchr(filepath, '\\');
+    if (sep) name = sep + 1;
+    program_title_ = name;
+
     return true;
 }
 

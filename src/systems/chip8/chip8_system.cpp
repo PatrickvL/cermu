@@ -524,6 +524,14 @@ bool Chip8System::load_file(const char* filepath) {
     reset();
     
     file.read(reinterpret_cast<char*>(memory_.data() + 0x200), size);
+
+    // Set program title to bare filename
+    const char* name = filepath;
+    const char* sep = strrchr(filepath, '/');
+    if (!sep) sep = strrchr(filepath, '\\');
+    if (sep) name = sep + 1;
+    program_title_ = name;
+
     printf("CHIP-8: Loaded %zu bytes from %s (mode: %s)\n", size, filepath,
            mode_ == Chip8Mode::XOCHIP ? "XO-CHIP" :
            mode_ == Chip8Mode::SCHIP ? "SCHIP" : "CHIP-8");
