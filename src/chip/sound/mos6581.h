@@ -3,6 +3,7 @@
 #include "../../core/chip.h"
 #include "../../core/bus_cycle_interface.h"
 #include "../../core/system_lines.h" // For bus_state_t
+#include <atomic>
 #include <stdint.h>
 #include <stdbool.h>
 #include <math.h>
@@ -165,14 +166,14 @@ using filter_state_t = filter_state_s;
 using ring_buffer_t = ring_buffer_s;
 
 // Ring buffer for sample output (SPSC: emulation thread writes, audio thread reads).
-// write_pos and read_pos are volatile to prevent the compiler from caching them
-// in registers across function calls — essential for correct cross-thread visibility
-// in Release builds (-O2+).
+// write_pos and read_pos use std::atomic with release/acquire ordering to ensure
+// correct cross-thread visibility with minimal overhead on x86 (acquire/release
+// are free on x86; on ARM they emit the appropriate barriers).
 typedef struct ring_buffer_s {
     float* buffer;
     uint32_t size;
-    volatile uint32_t write_pos;
-    volatile uint32_t read_pos;
+    std::atomic<uint32_t> write_pos;
+    std::atomic<uint32_t> read_pos;
     uint32_t mask;
 
     // Methods
