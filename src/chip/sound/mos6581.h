@@ -153,10 +153,15 @@ typedef enum {
 // The DC blocker (~20 Hz high-pass) removes the static DC×avg_vol product,
 // leaving only the rapid volume variations as audible digi audio.
 //
-// Calibrated against reSID's 6581 voice_DC / voice_signal_max ratio (~3.6×),
-// then reduced to compensate for our linear (non-compressed) output model
-// vs the real 6581's nonlinear op-amp saturation curve.
-#define SID_6581_VOICE_DC           0.26f      // Total 3-voice DC offset (6581)
+// Calibrated against reSID's 6581 voice_DC / voice_signal_max ratio (~3.33×).
+// Real HW: each voice has 5.0V DC offset with 1.5V signal swing.  Three voices
+// produce 15.0V total DC vs 4.5V peak signal → DC is 3.33× voice amplitude.
+// Our model normalises 3 voices to ±1.0 peak, so the equivalent DC would be
+// 3.33.  We reduce to 1.5 to compensate for our linear (non-compressed) output
+// model vs the real 6581's nonlinear op-amp saturation in the mixer/gain stage.
+// At 1.5, digi amplitude roughly equals voice amplitude after the DC blocker,
+// matching the perceptual balance on real hardware.
+#define SID_6581_VOICE_DC           1.5f       // Total 3-voice DC offset (6581)
 #define DC_BLOCKER_ALPHA            0.997f     // ~20 Hz high-pass coefficient
 #define SIGVOL_VOL_MAX              15.0f      // Maximum master volume (4-bit)
 

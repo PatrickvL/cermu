@@ -405,8 +405,18 @@ bus_state_t op_brk(bus_state_t pins) {
     // while we're reading the vector (cycles 10-13). Without this, IRQs sampled
     // during vector read will trigger immediately after BRK completes.
     this->interrupt_shift_register = 0;
-    // Clear NMI edge latch when NMI is serviced — allows future NMI edges to trigger
-    this->nmi_edge_latch = 0;
+    // Clear NMI edge latch ONLY when NMI is actually being serviced.
+    // On real 6502 hardware the edge-detect flip-flop is cleared during the
+    // NMI vector fetch — NOT during IRQ or BRK sequences.  Clearing it
+    // unconditionally causes NMI deadlocks: if an NMI falling edge arrives
+    // during an IRQ's op_brk sequence, the latch gets erased, the CPU never
+    // detects the NMI, and the NMI line stays LOW permanently (CIA ICR never
+    // read → pending_bus_lines never released).
+    if constexpr (has_nmi_line()) {
+      if (this->active_interrupt == FAM65XX_INT_NMI) {
+        this->nmi_edge_latch = 0;
+      }
+    }
     // Reset NMI edge detection using INVERTED convention:
     // Pin HIGH (inactive) → inverted = 0, Pin LOW (asserted) → inverted = 1
     this->nmi_prev = (pins & FAM65XX_NMI) ? 0 : 1;
