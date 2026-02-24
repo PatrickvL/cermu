@@ -288,12 +288,11 @@ float mos6581_s::filter_process(float input) {
     f->band_pass_output = bp;
     f->high_pass_output = hp;
     
-    // Mix filter outputs based on selected filter mode
+    // Mix filter outputs based on selected filter mode (cached on register write)
     float output = 0.0f;
-    uint8_t sigvol = regs[SID_REG_SIGVOL];
-    if (sigvol & SIGVOL_LP) output += lp;
-    if (sigvol & SIGVOL_BP) output += bp;
-    if (sigvol & SIGVOL_HP) output += hp;
+    if (filter_lp) output += lp;
+    if (filter_bp) output += bp;
+    if (filter_hp) output += hp;
     
     return output;
 }
@@ -325,6 +324,12 @@ void mos6581_s::filter_init() {
 // =============================================================================
 
 void mos6581_s::write_resonance_control_register_value(uint8_t value) {
+    // Cache decoded routing bits for per-cycle use
+    filt1  = (value & RESON_FILT1) != 0;
+    filt2  = (value & RESON_FILT2) != 0;
+    filt3  = (value & RESON_FILT3) != 0;
+    filtex = (value & RESON_FILTEX) != 0;
+
     // Extract resonance nibble for the float computation.
     filter_state.resonance = (float)((value >> RESON_RES_SHIFT) & 0x0F);
     
@@ -347,8 +352,8 @@ void mos6581_s::write_resonance_control_register_value(uint8_t value) {
     f->a3 = g * f->a2;
 }
 
-// SIGVOL register (0x18): no decoded fields — regs[SID_REG_SIGVOL] stores
-// the raw byte. All reads extract bits directly at sample rate.
+// SIGVOL register (0x18): decoded fields cached in voice3_off, filter_lp/bp/hp,
+// master_volume — updated on register write for per-cycle use.
 
 // =============================================================================
 // RING BUFFER IMPLEMENTATION
@@ -681,16 +686,14 @@ inline bus_state_t mos6581_s::advance_cycle(bus_state_t bus_state) {
         float v3 = (float)((int32_t)voice3.oscillator_waveform - OSCILLATOR_CENTER)
                  * (float)voice3.envelope_amplitude * inv_scale;
 
-        // Route voices to filtered / unfiltered paths (read register bits).
+        // Route voices to filtered / unfiltered paths (cached on register write).
         float filtered_input = 0.0f;
         float unfiltered_output = 0.0f;
-        uint8_t reson = regs[SID_REG_RESON];
-        uint8_t sigvol = regs[SID_REG_SIGVOL];
-        if (reson & RESON_FILT1) filtered_input += v1; else unfiltered_output += v1;
-        if (reson & RESON_FILT2) filtered_input += v2; else unfiltered_output += v2;
-        if (reson & RESON_FILT3) filtered_input += v3;
-        else if (!(sigvol & SIGVOL_3OFF)) unfiltered_output += v3;
-        if (reson & RESON_FILTEX) filtered_input += external_input;
+        if (filt1) filtered_input += v1; else unfiltered_output += v1;
+        if (filt2) filtered_input += v2; else unfiltered_output += v2;
+        if (filt3) filtered_input += v3;
+        else if (!voice3_off) unfiltered_output += v3;
+        if (filtex) filtered_input += external_input;
         else unfiltered_output += external_input;
 
         // Clock the ZDF SVF filter at CPU rate.
@@ -722,9 +725,8 @@ inline bus_state_t mos6581_s::advance_cycle(bus_state_t bus_state) {
                 mixed += SID_6581_DIGI_BIAS;
             }
 
-            // Apply master volume
-            uint8_t sigvol = regs[SID_REG_SIGVOL];
-            mixed *= (float)(sigvol & SIGVOL_VOL_MASK) / SIGVOL_VOL_MAX;
+            // Apply master volume (cached on register write)
+            mixed *= (float)master_volume / SIGVOL_VOL_MAX;
 
             // DC blocker: removes the constant bias×volume product while
             // preserving fast changes (digi samples).  ~20 Hz high-pass.
@@ -988,6 +990,12 @@ bus_state_t mos6581_s::registers_write(void* context, bus_state_t bus_state) {
                     sid->volume_click_amplitude = (float)(value & SIGVOL_VOL_MASK) / SIGVOL_VOL_MAX * 0.1f;
                     sid->volume_click_counter = VOLUME_CLICK_DURATION;
                 }
+                // Cache decoded SIGVOL bits for per-cycle use
+                sid->voice3_off   = (value & SIGVOL_3OFF) != 0;
+                sid->filter_lp    = (value & SIGVOL_LP) != 0;
+                sid->filter_bp    = (value & SIGVOL_BP) != 0;
+                sid->filter_hp    = (value & SIGVOL_HP) != 0;
+                sid->master_volume = value & SIGVOL_VOL_MASK;
                 break;
                 
             case SID_REG_POTX:
