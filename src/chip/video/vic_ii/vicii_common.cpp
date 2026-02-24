@@ -314,6 +314,18 @@ void vicii_sprite_sequencer(vicii_t* vicii) {
 // Pixel sequencer - sequences exactly 8 pixels per cycle
 // This is the ONLY function that emits pixels to the framebuffer
 static void vicii_pixel_sequencer(vicii_t* vicii) {
+    // VICE-compatible deferred right border: Apply pending main_border=true from the
+    // previous cycle's right border check. This 1-cycle deferral matches VICE's
+    // border_state pipeline delay and gives the CPU time to change CSEL (via DEC $D016)
+    // between the comparison check and the actual flip-flop set. Without this, the
+    // CSEL side-border-opening trick fails because our pixel-level comparison at x=344
+    // fires in the same VIC cycle as the CPU write, while VICE's cycle-level check at
+    // cycle 57 fires one cycle later (giving the CPU's DEC time to take effect).
+    if (vicii->border.deferred_right_border) {
+        vicii->border.main_border_flip_flop = true;
+        vicii->border.deferred_right_border = false;
+    }
+    
     // Use x_coordinate directly from the timing unit.
     // The VIC-II fetches graphics data at x_coordinate, but those pixels are displayed
     // 12 pixels later due to the pipeline delay. The vicii_pixel_emit_at_x() function
@@ -396,8 +408,12 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             
             // Rule 1: "If the X coordinate reaches the right comparison value,
             // the main border flip flop is set."
+            // DEFERRED: Instead of setting main_border immediately, defer to the
+            // start of the next pixel_sequencer call. This matches VICE's 1-cycle
+            // border_state pipeline delay and is critical for the CSEL side-border
+            // opening trick (DEC $D016 at the right-border cycle).
             if (pixel_x == border_right) {
-                vicii->border.main_border_flip_flop = true;
+                vicii->border.deferred_right_border = true;
             }
             
             // Rules 4, 5, 6: Handle left coordinate checks
@@ -2474,6 +2490,7 @@ static inline void vicii_initialize(vicii_t* vicii) {
     vicii->border.main_border_flip_flop = true;      // Start with border on
     vicii->border.vertical_border_flip_flop = true;  // Start with vertical border on
     vicii->border.set_vertical_border_flip_flop = true; // Staged latch also starts on
+    vicii->border.deferred_right_border = false;      // No pending right border
     vicii_memory_update_mapping(&vicii->memory, vicii->registers.data[VICII_MP]);
     
     // Initialize refresh counter (Documentation section 3.13)
@@ -2541,6 +2558,7 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
     vicii->border.main_border_flip_flop = true;
     vicii->border.vertical_border_flip_flop = true;
     vicii->border.set_vertical_border_flip_flop = true;
+    vicii->border.deferred_right_border = false;
 
     // Pre-compute display mapping constants for the pixel pipeline.
     // These are session-constant (PAL/NTSC chosen at init) and eliminate

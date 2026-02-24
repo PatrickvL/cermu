@@ -394,6 +394,17 @@ typedef struct {
     bool set_vertical_border_flip_flop; // Two-stage vborder latch (VICE: set_vborder)
                                         // Updated per-cycle, transferred to vertical_border_flip_flop
                                         // at left border position and start of line.
+    
+    // VICE-compatible border_state pipeline: VICE's draw_border8() uses a 1-cycle delayed
+    // border_state variable. It checks CSEL=0 and CSEL=1 right borders at DIFFERENT cycles
+    // (CSEL=0 at cycle 56, CSEL=1 at cycle 57 in 1-based PAL). Our pixel-level comparisons
+    // happen within a single cycle. To match VICE's effective timing, we defer the right
+    // border main_border SET by 1 cycle. At the documented x=344 (CSEL=1), instead of
+    // immediately setting main_border=true, we set this flag. The actual main_border=true
+    // is applied at the START of the next pixel_sequencer call (after the CPU has had a
+    // chance to change $D016/CSEL). This gives the CSEL side-border-opening trick the
+    // same 1-cycle margin as VICE.
+    bool deferred_right_border;      // Pending main_border=true from previous cycle's right border check
 } vicii_border_unit_t;
 
 // Memory Mapping Unit - VIC-II memory access configuration (Documentation section 2.4.2)
