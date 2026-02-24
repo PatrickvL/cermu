@@ -370,8 +370,12 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         // FAST PATH (>97% of cycles): Uniform border state for all 8 pixels.
         // No flip-flop transitions occur in this span, so the current state applies
         // identically to all 8 pixels without per-pixel checks.
-        const bool in_border = vicii->border.main_border_flip_flop
-                            || vicii->border.vertical_border_flip_flop;
+        // NOTE: Only main_border is checked for rendering, NOT vborder (matching VICE).
+        // The vborder flag controls whether main_border is CLEARED at the left border
+        // check (Rule 6), but is not a direct rendering input. This distinction is
+        // critical for the CSEL side-border-opening trick, where main_border stays 0
+        // (CSEL trick prevents right border set) even though vborder=1.
+        const bool in_border = vicii->border.main_border_flip_flop;
         border_mask = in_border ? 0xFF : 0x00;
         
         if (in_border) {
@@ -408,12 +412,8 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             
             // Rule 1: "If the X coordinate reaches the right comparison value,
             // the main border flip flop is set."
-            // DEFERRED: Instead of setting main_border immediately, defer to the
-            // start of the next pixel_sequencer call. This matches VICE's 1-cycle
-            // border_state pipeline delay and is critical for the CSEL side-border
-            // opening trick (DEC $D016 at the right-border cycle).
             if (pixel_x == border_right) {
-                vicii->border.deferred_right_border = true;
+                vicii->border.main_border_flip_flop = true;
             }
             
             // Rules 4, 5, 6: Handle left coordinate checks
@@ -444,8 +444,8 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             }
             
             // Determine if THIS specific pixel is border or display
-            const bool in_border = vicii->border.main_border_flip_flop
-                                || vicii->border.vertical_border_flip_flop;
+            // Only main_border is checked (matching VICE: vborder is not a render input)
+            const bool in_border = vicii->border.main_border_flip_flop;
             if (in_border) border_mask |= (1 << pixel);
             
             if (in_border) {
@@ -831,6 +831,7 @@ void vicii_update_badline_condition(vicii_t* vicii) {
                     (vicii->registers.data[VICII_C1] & VICII_C1_DEN) != 0;
             }
         }
+        
         vicii->video_logic.is_bad_line = vicii->video_logic.was_den_set_during_raster_30 &&
                                  ((raster & 0x07) == (vicii->registers.data[VICII_C1] & VICII_C1_YSCROLL));
         

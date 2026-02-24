@@ -399,12 +399,13 @@ typedef struct {
     // border_state variable. It checks CSEL=0 and CSEL=1 right borders at DIFFERENT cycles
     // (CSEL=0 at cycle 56, CSEL=1 at cycle 57 in 1-based PAL). Our pixel-level comparisons
     // happen within a single cycle. To match VICE's effective timing, we defer the right
-    // border main_border SET by 1 cycle. At the documented x=344 (CSEL=1), instead of
-    // immediately setting main_border=true, we set this flag. The actual main_border=true
-    // is applied at the START of the next pixel_sequencer call (after the CPU has had a
-    // chance to change $D016/CSEL). This gives the CSEL side-border-opening trick the
-    // same 1-cycle margin as VICE.
+    // border main_border SET by 1 cycle AND re-validate the comparison at the deferred
+    // cycle using the CURRENT CSEL value. If CSEL changed between the comparison and the
+    // deferred application (the CSEL side-border-opening trick), the deferred set is
+    // cancelled — matching VICE's behavior where the CSEL=1 check at cycle 57 fires with
+    // the (now changed) CSEL=0 value and misses.
     bool deferred_right_border;      // Pending main_border=true from previous cycle's right border check
+    uint16_t deferred_right_border_x; // The x position that triggered the deferred set
 } vicii_border_unit_t;
 
 // Memory Mapping Unit - VIC-II memory access configuration (Documentation section 2.4.2)
