@@ -46,8 +46,6 @@ void mos6522_t::reset() {
     // Reset timer state
     timer1_running = false;
     timer2_running = false;
-    timer1_continuous = false;
-    timer2_continuous = false;
 
     // Reset interrupt state (preserves interrupt_line — that's hardware wiring config)
     interrupt_active = false;

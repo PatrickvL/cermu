@@ -53,8 +53,6 @@ typedef struct mos6522_s : public ChipBase {
     // Timer control
     bool timer1_running = false;
     bool timer2_running = false;
-    bool timer1_continuous = false;
-    bool timer2_continuous = false;
 
     // Interrupt state
     bool interrupt_active = false;

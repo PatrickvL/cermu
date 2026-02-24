@@ -190,7 +190,7 @@ void mos6522_s::render_debug_content() {
             ImGui::Text("Timer 1 Counter: $%04X (%d)", via->timer1_counter, via->timer1_counter);
             ImGui::Text("Timer 1 Latch:   $%04X", via->timer1_latch);
             ImGui::Text("Timer 1 Running: %s", via->timer1_running ? "YES" : "NO");
-            ImGui::Text("Timer 1 Mode:    %s", via->timer1_continuous ? "Free-running" : "One-shot");
+            ImGui::Text("Timer 1 Mode:    %s", (via->acr & MOS6522_ACR_T1_CONT) ? "Free-running" : "One-shot");
 
             ImGui::Separator();
 
