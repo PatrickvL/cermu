@@ -87,6 +87,9 @@ void vic_base_s::reset() {
     matrix_char_data = 0;
     pixel_line_index = 0;
 
+    // Decode all cached register fields from the reset defaults
+    decode_all_registers();
+
     // Reset audio state (preserves cycles_per_sample_fp set by audio_reset)
     for (int i = 0; i < VIC_NUM_VOICES; i++) {
         audio.prescaler[i] = vic_voice_divisor[i]; // Must match audio_reset!
@@ -144,7 +147,58 @@ bus_state_t vic_base_s::registers_read(bus_state_t bus_state) {
 bus_state_t vic_base_s::registers_write(bus_state_t bus_state) {
     uint8_t r = BUS_GET_ADDR(bus_state) & 0x0F;
     registers[r] = BUS_GET_DATA(bus_state);
+    decode_register(r);
     return bus_state;
+}
+
+// Decode a single register's cached fields after a write
+void vic_base_s::decode_register(uint8_t reg_index) {
+    switch (reg_index) {
+        case VIC_REG_CONTROL1:
+            cached_screen_origin_x = registers[VIC_REG_CONTROL1] & VIC_C1_SCREEN_ORIGIN_X_MASK;
+            break;
+        case VIC_REG_CONTROL2:
+            cached_screen_origin_y = registers[VIC_REG_CONTROL2] << 1;
+            break;
+        case VIC_REG_VIDEO_MATRIX:
+            cached_columns = registers[VIC_REG_VIDEO_MATRIX] & VIC_VM_COLUMNS_MASK;
+            // base_video depends on this register too
+            cached_base_video = ((registers[VIC_REG_VIDEO_MATRIX] & VIC_VM_BASE_VIDEO_BIT9) << 2) |
+                               ((registers[VIC_REG_CHAR_BASE] & VIC_CB_BASE_VIDEO_MASK) << VIC_CB_BASE_VIDEO_SHIFT);
+            break;
+        case VIC_REG_ROWS:
+            cached_char_height = (registers[VIC_REG_ROWS] & VIC_ROWS_DOUBLE_HEIGHT) ? 16 : 8;
+            cached_num_rows = (registers[VIC_REG_ROWS] & VIC_ROWS_ROWS_MASK) >> VIC_ROWS_ROWS_SHIFT;
+            break;
+        case VIC_REG_CHAR_BASE:
+            // Both base_video and base_char depend on this register
+            cached_base_video = ((registers[VIC_REG_VIDEO_MATRIX] & VIC_VM_BASE_VIDEO_BIT9) << 2) |
+                               ((registers[VIC_REG_CHAR_BASE] & VIC_CB_BASE_VIDEO_MASK) << VIC_CB_BASE_VIDEO_SHIFT);
+            cached_base_char = (registers[VIC_REG_CHAR_BASE] & VIC_CB_BASE_CHAR_MASK) << VIC_CB_BASE_CHAR_SHIFT;
+            break;
+        case VIC_REG_AUX_COLOR:
+            cached_volume = registers[VIC_REG_AUX_COLOR] & VIC_AUX_VOLUME_MASK;
+            cached_auxiliary_color = (registers[VIC_REG_AUX_COLOR] & VIC_AUX_COLOR_MASK) >> VIC_AUX_COLOR_SHIFT;
+            break;
+        case VIC_REG_BACKGROUND:
+            cached_border_color = registers[VIC_REG_BACKGROUND] & VIC_BG_BORDER_MASK;
+            cached_background_color = (registers[VIC_REG_BACKGROUND] & VIC_BG_BACKGROUND_MASK) >> VIC_BG_BACKGROUND_SHIFT;
+            cached_reverse_flag = registers[VIC_REG_BACKGROUND] & VIC_BG_REVERSE;
+            break;
+        default:
+            break;
+    }
+}
+
+// Decode all registers (called after reset or bulk register load)
+void vic_base_s::decode_all_registers() {
+    decode_register(VIC_REG_CONTROL1);
+    decode_register(VIC_REG_CONTROL2);
+    decode_register(VIC_REG_VIDEO_MATRIX);
+    decode_register(VIC_REG_ROWS);
+    decode_register(VIC_REG_CHAR_BASE);
+    decode_register(VIC_REG_AUX_COLOR);
+    decode_register(VIC_REG_BACKGROUND);
 }
 
 // Emit a single pixel to the line buffer
@@ -170,8 +224,7 @@ void vic_base_s::flush_pixel_line(int raster_line) {
     
     // Fill remaining pixels with border color if line is shorter
     if (pixels_to_copy < framebuffer_width) {
-        uint8_t border_color = registers[VIC_REG_BACKGROUND] & VIC_BG_BORDER_MASK;
-        uint32_t border_pixel = vic_palette[border_color];
+        uint32_t border_pixel = vic_palette[cached_border_color];
         for (int i = pixels_to_copy; i < framebuffer_width; i++) {
             dest[i] = border_pixel;
         }
@@ -344,8 +397,7 @@ void vic_base_s::audio_tick() {
     // Count active voices (0-4), look up the combined non-linear amplitude
     // that models the VIC's DAC compression + volume ladder in one step.
     uint8_t voices_active = audio.output[0] + audio.output[1] + audio.output[2] + audio.output[3];
-    uint8_t volume = registers[VIC_REG_AUX_COLOR] & VIC_AUX_VOLUME_MASK;
-    audio.sample_accum += vic_mix_table[voices_active][volume];
+    audio.sample_accum += vic_mix_table[voices_active][cached_volume];
     audio.sample_tick_count++;
 
     // --- Downsample: emit one output sample when enough cycles have elapsed ---
@@ -407,8 +459,7 @@ bus_state_t vic_base_s::tick(bus_state_t bus_state) {
         audio_tick();
     }
 
-    const uint8_t reg_video_matrix = registers[VIC_REG_VIDEO_MATRIX];
-    uint16_t columns = reg_video_matrix & VIC_VM_COLUMNS_MASK;
+    const uint16_t columns = cached_columns;
 
     // Increment cycle counter
     current_cycle++;
@@ -424,11 +475,10 @@ bus_state_t vic_base_s::tick(bus_state_t bus_state) {
             raster_counter = 0;
         }
 
-        const uint8_t reg_rows = registers[VIC_REG_ROWS];
-        const uint8_t char_height = (reg_rows & VIC_ROWS_DOUBLE_HEIGHT) ? 16 : 8;
+        const uint8_t char_height = cached_char_height;
         // Check if entering/leaving display area
-        const uint16_t screen_origin_y = registers[VIC_REG_CONTROL2] << 1;
-        const uint16_t num_rows = (reg_rows & VIC_ROWS_ROWS_MASK) >> VIC_ROWS_ROWS_SHIFT;
+        const uint16_t screen_origin_y = cached_screen_origin_y;
+        const uint16_t num_rows = cached_num_rows;
         if (raster_counter == screen_origin_y) {
             in_display_area = true;
             matrix_index = 0;
@@ -446,30 +496,24 @@ bus_state_t vic_base_s::tick(bus_state_t bus_state) {
     }
 
     // Derive character area status from current cycle position
-    const uint16_t screen_origin_x = registers[VIC_REG_CONTROL1] & VIC_C1_SCREEN_ORIGIN_X_MASK;
+    const uint16_t screen_origin_x = cached_screen_origin_x;
     const uint16_t char_area_end = screen_origin_x + (columns << 1);
     const bool in_char_area = (current_cycle >= screen_origin_x) && (current_cycle < char_area_end);
 
-    const uint8_t reg_background = registers[VIC_REG_BACKGROUND];
-    const uint8_t border_color = reg_background & VIC_BG_BORDER_MASK;
+    const uint8_t border_color = cached_border_color;
     
     // Emit 4 pixels per cycle
 
     if (in_display_area && in_char_area) {
-        // Extract frequently accessed register values
-        const uint8_t reg_char_base = registers[VIC_REG_CHAR_BASE];
-        
-        // Extract base addresses and colors (used for pixel rendering)
-        const uint16_t base_video = ((reg_video_matrix & VIC_VM_BASE_VIDEO_BIT9) << 2) |
-                                   ((reg_char_base & VIC_CB_BASE_VIDEO_MASK) << VIC_CB_BASE_VIDEO_SHIFT);
-        const uint16_t base_char = (reg_char_base & VIC_CB_BASE_CHAR_MASK) << VIC_CB_BASE_CHAR_SHIFT;
+        // Use cached base addresses (decoded on register write)
+        const uint16_t base_video = cached_base_video;
+        const uint16_t base_char = cached_base_char;
         // Derive is_char_fetch_cycle from cycle position: even cycles relative to screen_origin_x are fetch cycles
         const bool is_char_fetch_cycle = ((current_cycle - screen_origin_x) & 1) == 0;
         
         // Double-height: bit 0 of $9003 selects 8 or 16 pixel tall characters.
         // VICE formula: addr = base_char + (code * char_height + (ycounter & ((char_height >> 1) | 7)))
-        const uint8_t reg_rows = registers[VIC_REG_ROWS];
-        const uint8_t char_height = (reg_rows & VIC_ROWS_DOUBLE_HEIGHT) ? 16 : 8;
+        const uint8_t char_height = cached_char_height;
 
         if (is_char_fetch_cycle) {
             // Fetch character data from memory
@@ -483,8 +527,7 @@ bus_state_t vic_base_s::tick(bus_state_t bus_state) {
                 // Character line within the cell, relative to screen origin.
                 // For 8px: (ycounter & 7)  → rows 0-7
                 // For 16px: (ycounter & 15) → rows 0-15
-                const uint16_t screen_origin_y = registers[VIC_REG_CONTROL2] << 1;
-                const uint8_t char_line = (raster_counter - screen_origin_y) & ((char_height >> 1) | 7);
+                const uint8_t char_line = (raster_counter - cached_screen_origin_y) & ((char_height >> 1) | 7);
                 
                 // Character ROM/RAM address (matches VICE):
                 //   base_char + (char_code * char_height + char_line)
@@ -503,12 +546,12 @@ bus_state_t vic_base_s::tick(bus_state_t bus_state) {
             matrix_char_data <<= 4;
         }
 
-        const uint8_t background_color = (reg_background & VIC_BG_BACKGROUND_MASK) >> VIC_BG_BACKGROUND_SHIFT;
+        const uint8_t background_color = cached_background_color;
         const uint8_t foreground_color = matrix_color_byte & VIC_COLOR_FOREGROUND_MASK;
 
         // Emit high nyble (4 pixels)
         if (matrix_color_byte & VIC_COLOR_MULTICOLOR) {  // Multicolor mode
-            const uint8_t auxiliary_color = (registers[VIC_REG_AUX_COLOR] & VIC_AUX_COLOR_MASK) >> VIC_AUX_COLOR_SHIFT;
+            const uint8_t auxiliary_color = cached_auxiliary_color;
             // Emit 2 pixels for bits 7-6
             uint8_t color = 0;
             switch ((matrix_char_data >> 6) & 3) {
@@ -534,7 +577,7 @@ bus_state_t vic_base_s::tick(bus_state_t bus_state) {
             // Reverse mode: bit 3 of $900F controls screen inversion
             // When reverse=1 (normal): set pixels use foreground, clear pixels use background
             // When reverse=0 (inverted): set pixels use background, clear pixels use foreground
-            const bool reversed = (reg_background & VIC_BG_REVERSE) == 0;  // Note: 0 means reversed!
+            const bool reversed = cached_reverse_flag == 0;  // Note: 0 means reversed!
             const uint8_t fg = reversed ? background_color : foreground_color;
             const uint8_t bg = reversed ? foreground_color : background_color;
             emit_pixel((matrix_char_data & 0x80) ? fg : bg);
