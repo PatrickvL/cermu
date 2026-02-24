@@ -1577,6 +1577,17 @@ public:
             // Reset NMI edge detection using INVERTED convention:
             // Pin HIGH (inactive) → inverted = 0, Pin LOW (asserted) → inverted = 1
             this->nmi_prev = (pins & FAM65XX_NMI) ? 0 : 1;
+            // Clear NMI edge latch when NMI is serviced.
+            // On real 6502 hardware the internal edge-detect flip-flop is cleared
+            // during the NMI vector fetch.  Without this, the stale latch feeds 1s
+            // into the shift register continuously, causing infinite spurious NMIs
+            // that starve the digi playback routine (e.g. CIA2 NMI-driven $D418
+            // sample output in Rob Hubbard tunes).
+            if constexpr (has_nmi_line()) {
+              if (this->active_interrupt == FAM65XX_INT_NMI) {
+                this->nmi_edge_latch = 0;
+              }
+            }
           } else {
             // I flag set - don't service IRQ, keep it pending in shift register
             // Restore active_interrupt to what it was before detection
