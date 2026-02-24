@@ -301,8 +301,11 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
     } // end 8-pixel loop
 }
 
-// Sprite sequencer 
+// Sprite sequencer — emit pixels for all enabled sprites with active display state.
+// Early-out when no sprites are enabled (MXE == 0) saves ~8 function calls per cycle
+// on sprite-free frames (the common case for many programs).
 void vicii_sprite_sequencer(vicii_t* vicii) {
+    if (vicii->registers.data[VICII_MXE] == 0) return;
     for (int i = VICII_NUM_SPRITES - 1; i >= 0; i--) {
         vicii_sprite_emit_pixels(vicii, i);
     }
@@ -606,23 +609,30 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                     break;
             }
             
-            // Set pixel data
+            // Set pixel data and emit to line buffer.
+            // Compute buffer position ONCE and reuse for both pixel emission and
+            // collision detection — eliminates duplicate vicii_fetch_x_to_buffer_pos
+            // call that was previously made separately for each foreground pixel.
             pixel_data.color = static_cast<vicii_color_t>(color_index);
             pixel_data.priority = is_background ? VICII_PRIORITY_BACKGROUND : VICII_PRIORITY_FOREGROUND;
-            vicii_pixel_emit_at_x(vicii, &pixel_data, pixel_x);
             
-            // Track raw graphics foreground output for sprite-data collision detection.
-            // This is independent of the display priority buffer - collisions are based
-            // on the graphics data sequencer's raw output, not what's displayed.
-            // TODO: The graphics sequencer continues to run during left/right border
-            // (main_border_flip_flop set, vertical not set), but currently the pixel
-            // sequencer skips display processing for border pixels. This means MxD
-            // collisions in the left/right border area are missed. A future refactor
-            // should clock the shift register even during main border for full accuracy.
-            if (!is_background) {
-                const int16_t gfx_buf_pos = vicii_fetch_x_to_buffer_pos(vicii, pixel_x);
-                if (gfx_buf_pos >= 0 && gfx_buf_pos < (int16_t)vicii->cached_visible_pixels) {
-                    vicii->pixel.graphics_fg_line[gfx_buf_pos] = true;
+            const int16_t buf_pos = vicii_fetch_x_to_buffer_pos(vicii, pixel_x);
+            if (buf_pos >= 0) {
+                vicii->pixel.pixel_line_priority[buf_pos] = pixel_data.priority;
+                vicii->pixel.pixel_line_color[buf_pos] = pixel_data.color;
+                
+                // Track raw graphics foreground output for sprite-data collision
+                // detection.  Independent of the display priority buffer — collisions
+                // are based on the graphics data sequencer's raw output, not what's
+                // displayed.
+                // TODO: The graphics sequencer continues to run during left/right
+                // border (main_border_flip_flop set, vertical not set), but currently
+                // the pixel sequencer skips display processing for border pixels.
+                // This means MxD collisions in the left/right border area are missed.
+                // A future refactor should clock the shift register even during main
+                // border for full accuracy.
+                if (!is_background) {
+                    vicii->pixel.graphics_fg_line[buf_pos] = true;
                 }
             }
             
