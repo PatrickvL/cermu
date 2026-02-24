@@ -17,7 +17,7 @@
 #include "../../core/formats/lnx_format.h"
 #include "../../core/formats/sid_format.h"
 #include "../../core/formats/commodore_load_helpers.h"
-#include "../../chip/cpu/fam65xx/mos6510.h"
+#include "../../chip/cpu/fam65xx/fam65xx.hpp"  // Concrete CPU type for direct method calls
 // CPU (fam65xx) is a native C++ ChipBase — no separate GUI header needed
 #include "../../chip/video/vic_ii/vicii_common.h"
 // VIC-II is a native C++ ChipBase — no separate GUI header needed
@@ -38,6 +38,12 @@
 #include <cstring>
 #include <cstdio>
 #include <cctype>
+
+// Concrete CPU type — used to call template methods directly instead of going
+// through the C-wrapper functions, enabling the compiler to inline the CPU tick
+// into system_tick() (the hottest loop in the emulator).
+using mos6510_cpu_t = fam65xx::mos6510_cpu_impl_t;
+#define CPU(ptr) reinterpret_cast<mos6510_cpu_t*>(ptr)
 
 /**
  * C64 System Implementation
@@ -325,7 +331,7 @@ bool C64System::initialize() {
         delete this->cartridge_romh;
         delete this->basic;
         delete this->cartridge_roml;
-        mos6510_destroy(static_cast<mos6510_t*>(this->mos6510));
+        delete CPU(this->mos6510); this->mos6510 = nullptr;
         delete this->ram;
         initialized_ = false;
         // Chip pointers already nulled above
@@ -343,7 +349,7 @@ bool C64System::initialize() {
     // Create all chips
     // =========================================================================
     this->ram = new ram_t();
-    if (!(this->mos6510 = mos6510_create())) { cleanup(); return false; }
+    if (!(this->mos6510 = reinterpret_cast<mos6510_t*>(new mos6510_cpu_t()))) { cleanup(); return false; }
     this->cartridge_roml = new rom_t();
     this->basic = new rom_t();
     this->cartridge_romh = new rom_t();
@@ -439,14 +445,17 @@ bool C64System::initialize() {
     this->cia2->configured_interrupt_bit = BUS_NMI_BIT;
 
     // Initialize CPU and point it at the reset vector
-    mos6510_desc_t cpu_desc = {};
-    mos6510_init(static_cast<mos6510_t*>(this->mos6510), &cpu_desc);
-    mos6510_set_bank_change(static_cast<mos6510_t*>(this->mos6510),
-                            cpu_banking_callback, this);
+    auto* cpu = CPU(this->mos6510);
+    cpu->init();
+    if constexpr (fam65xx::MOS6510.has_io_port()) {
+        cpu->init_io_port();
+    }
+    cpu->bank_change_fn = cpu_banking_callback;
+    cpu->bank_change_ctx = this;
 
     uint16_t reset_vector = this->bus.read_kernal_reset_vector();
-    mos6510_set_pc(static_cast<mos6510_t*>(this->mos6510), reset_vector);
-    mos6510_set_ab(static_cast<mos6510_t*>(this->mos6510), reset_vector);
+    cpu->set(REG_PC, reset_vector);
+    cpu->set(REG_AB, reset_vector);
     printf("C64: CPU reset vector $%04X loaded\n", reset_vector);
 
     // NOTE: VIC-II bus.bus is already wired above. SID bus_interface is unused.
@@ -513,7 +522,8 @@ void C64System::shutdown() {
         delete this->cartridge_romh;
         delete this->basic;
         delete this->cartridge_roml;
-        mos6510_destroy(static_cast<mos6510_t*>(this->mos6510));
+        delete CPU(this->mos6510);
+        this->mos6510 = nullptr;
         delete this->ram;
 
         initialized_ = false;
@@ -550,19 +560,20 @@ void C64System::reset() {
         // reinitialises the IO port — it leaves the CPU mid-instruction, which
         // causes a segfault when emulation resumes with an inconsistent pipeline.
         if (this->mos6510) {
-            mos6510_reset((mos6510_t*)this->mos6510, 0);
-            mos6510_set_bank_change((mos6510_t*)this->mos6510,
-                                    cpu_banking_callback, this);
+            auto* cpu = CPU(this->mos6510);
+            cpu->reset(0);
+            cpu->bank_change_fn = cpu_banking_callback;
+            cpu->bank_change_ctx = this;
 
             // Trigger banking callback so PLA matches the freshly-reset IO port
-            uint8_t banking_bits = mos6510_get_io_data((mos6510_t*)this->mos6510)
-                                 & mos6510_get_io_ddr((mos6510_t*)this->mos6510)
+            uint8_t banking_bits = cpu->io_port_regs.data
+                                 & cpu->io_port_regs.ddr
                                  & 0x07;
             cpu_banking_callback(this, banking_bits);
 
             uint16_t reset_vector = this->bus.read_kernal_reset_vector();
-            mos6510_set_pc((mos6510_t*)this->mos6510, reset_vector);
-            mos6510_set_ab((mos6510_t*)this->mos6510, reset_vector);
+            cpu->set(REG_PC, reset_vector);
+            cpu->set(REG_AB, reset_vector);
         }
 
         // Reset keyboard
@@ -653,7 +664,7 @@ bool C64System::check_serial_traps(uint16_t pc) {
 }
 
 bool C64System::serial_trap_attention() {
-    auto* cpu = static_cast<mos6510_t*>(mos6510);
+    auto* cpu = CPU(mos6510);
     uint8_t iecdata = ram->memory[ZP_BSOUR];
 
     if (iecdata == IEC_UNLISTEN) {
@@ -707,14 +718,14 @@ bool C64System::serial_trap_attention() {
     }
 
     // Clear carry and interrupt disable flags (as the real KERNAL would)
-    uint8_t p = mos6510_get_p(cpu);
+    uint8_t p = cpu->get(REG_P);
     p &= ~0x01;  // Clear carry
     p &= ~0x04;  // Clear interrupt disable
-    mos6510_set_p(cpu, p);
+    cpu->set(REG_P, p);
 
     // Resume at the KERNAL's RTS
-    mos6510_set_pc(cpu, TRAP_RESUME_ADDRESS);
-    mos6510_transition_to_fetch(cpu);
+    cpu->set(REG_PC, TRAP_RESUME_ADDRESS);
+    cpu->transition_to_fetch();
     return true;
 }
 
@@ -724,7 +735,7 @@ bool C64System::serial_trap_send() {
     auto* drive = find_iec_drive(serial_trap_.active_device);
     if (!drive) return false;
 
-    auto* cpu = static_cast<mos6510_t*>(mos6510);
+    auto* cpu = CPU(mos6510);
     uint8_t iecdata = ram->memory[ZP_BSOUR];
 
     // If no secondary address was sent, default to SA 0
@@ -736,13 +747,13 @@ bool C64System::serial_trap_send() {
     drive->trap_send(iecdata);
 
     // Clear carry and interrupt disable
-    uint8_t p = mos6510_get_p(cpu);
+    uint8_t p = cpu->get(REG_P);
     p &= ~0x01;
     p &= ~0x04;
-    mos6510_set_p(cpu, p);
+    cpu->set(REG_P, p);
 
-    mos6510_set_pc(cpu, TRAP_RESUME_ADDRESS);
-    mos6510_transition_to_fetch(cpu);
+    cpu->set(REG_PC, TRAP_RESUME_ADDRESS);
+    cpu->transition_to_fetch();
     return true;
 }
 
@@ -752,7 +763,7 @@ bool C64System::serial_trap_receive() {
     auto* drive = find_iec_drive(serial_trap_.active_device);
     if (!drive) return false;
 
-    auto* cpu = static_cast<mos6510_t*>(mos6510);
+    auto* cpu = CPU(mos6510);
 
     // If no secondary address was sent, default to SA 0
     if (serial_trap_.trap_secondary == 0) {
@@ -765,7 +776,7 @@ bool C64System::serial_trap_receive() {
 
     // Store received byte in TMP_IN and A register
     ram->memory[ZP_TMP_IN] = data;
-    mos6510_set_a(cpu, data);
+    cpu->set(REG_A, data);
 
     // Set/update I/O status (ST)
     if (status) {
@@ -773,16 +784,16 @@ bool C64System::serial_trap_receive() {
     }
 
     // Set CPU flags to match the received byte
-    uint8_t p = mos6510_get_p(cpu);
+    uint8_t p = cpu->get(REG_P);
     p &= ~0x01;  // Clear carry
     p &= ~0x04;  // Clear interrupt disable
     // Set N (sign) and Z (zero) flags based on data
     if (data & 0x80) p |= 0x80; else p &= ~0x80;
     if (data == 0)   p |= 0x02; else p &= ~0x02;
-    mos6510_set_p(cpu, p);
+    cpu->set(REG_P, p);
 
-    mos6510_set_pc(cpu, TRAP_RESUME_ADDRESS);
-    mos6510_transition_to_fetch(cpu);
+    cpu->set(REG_PC, TRAP_RESUME_ADDRESS);
+    cpu->transition_to_fetch();
     return true;
 }
 
@@ -792,19 +803,19 @@ bool C64System::serial_trap_ready() {
     auto* drive = find_iec_drive(serial_trap_.active_device);
     if (!drive) return false;
 
-    auto* cpu = static_cast<mos6510_t*>(mos6510);
+    auto* cpu = CPU(mos6510);
 
     // Fake the serial-ready check: pretend the bus signals are fine
-    mos6510_set_a(cpu, 1);
+    cpu->set(REG_A, 1);
 
-    uint8_t p = mos6510_get_p(cpu);
+    uint8_t p = cpu->get(REG_P);
     p &= ~0x80;  // Clear sign
     p &= ~0x02;  // Clear zero
     p &= ~0x04;  // Clear interrupt disable
-    mos6510_set_p(cpu, p);
+    cpu->set(REG_P, p);
 
-    mos6510_set_pc(cpu, TRAP_RESUME_ADDRESS);
-    mos6510_transition_to_fetch(cpu);
+    cpu->set(REG_PC, TRAP_RESUME_ADDRESS);
+    cpu->transition_to_fetch();
     return true;
 }
 
@@ -837,8 +848,9 @@ void C64System::system_tick() {
     else
         s &= ~BUS_BIT(BUS_RDY_BIT);
 
-    // PHASE 2: CPU PHI2 — instruction execution
-    s = mos6510_tick_phi2(mos6510, s);
+    // PHASE 2: CPU PHI2 — instruction execution (direct C++ call, inlineable)
+    auto* cpu = CPU(mos6510);
+    s = cpu->tick<mos6510_cpu_t::Phase::PHI2>(s);
 
     // PHASE 3: Memory service (AEC determines CPU vs VIC-II bus ownership)
     s = bus_ptr->memory_tick(s);
@@ -850,14 +862,13 @@ void C64System::system_tick() {
     s = cia2->tick_phi1(s);
     s = cia1->tick_phi1(s);
 
-    // PHASE 4: CPU PHI1 — prepare next fetch
-    s = mos6510_tick_phi1(mos6510, s);
+    // PHASE 4: CPU PHI1 — prepare next fetch (direct C++ call, inlineable)
+    s = cpu->tick<mos6510_cpu_t::Phase::PHI1>(s);
 
     // KERNAL serial trap check — intercept IEC bus routines at instruction boundaries
     if (serial_traps_enabled_) {
-        auto* cpu = static_cast<mos6510_t*>(mos6510);
-        if (mos6510_opdone(cpu)) {
-            uint16_t pc = mos6510_get_pc(cpu);
+        if (cpu->opdone()) {
+            uint16_t pc = cpu->get(REG_PC);
             // All serial trap addresses are in the $ED00-$EEFF range
             if (pc >= 0xED00 && pc < 0xEF00) {
                 check_serial_traps(pc);
@@ -1462,7 +1473,7 @@ void C64System::register_c64_chips() {
     auto* c64 = this;
 
     // CPU — fam65xx is a native C++ ChipBase, register directly
-    register_chip(mos6510_as_chip_base(static_cast<mos6510_t*>(cpu)),
+    register_chip(static_cast<ChipBase*>(CPU(cpu)),
         "MOS 6510 CPU", "6510", "CPU", 0x0000);
 
     // VIC-II — native C++ ChipBase, register directly
