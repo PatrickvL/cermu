@@ -343,7 +343,6 @@ typedef struct {
     uint8_t current_vmli_for_display; // VMLI value from g-access (before increment)
     uint8_t display_vmli;     // Display-side column counter (0-39), next column to load into SR
     uint8_t active_display_column; // Column index whose data is currently in the shift register
-    vicii_pixel_t colors[5];  // Color palette for current mode
 } vicii_sequencer_unit_t;
 
 // Border Unit - Border generation and limits (Documentation section 3.9)
