@@ -84,29 +84,31 @@ static inline void vicii_check_vertical_border(vicii_t* vicii) {
 // Applies hardware pipeline delay (12px) and visual centering adjustment
 // Returns buffer position (0-402 for PAL) or -1 if not in visible range
 static inline int16_t vicii_fetch_x_to_buffer_pos(const vicii_t* vicii, uint16_t fetch_x_coord) {
-    // Apply hardware pipeline delay and visual centering adjustment
-    const uint16_t pixels_per_line = vicii->config->cycles_per_line * 8;
-    const uint16_t display_x_coord = (fetch_x_coord + pixels_per_line + VICII_PIPELINE_DELAY_PIXELS + VICII_X_CENTERING_PIXELS) % pixels_per_line;
-    
-    // CRITICAL: Apply the SAME transform to first_visible_x_coord so the range check
-    // is in the same coordinate space as display_x_coord. Without this, the centering
-    // offset causes valid visible pixels to be incorrectly rejected.
-    const uint16_t first_visible_display = (vicii->config->first_visible_x_coord + pixels_per_line + VICII_PIPELINE_DELAY_PIXELS + VICII_X_CENTERING_PIXELS) % pixels_per_line;
-    const uint16_t visible_pixels = vicii->config->visible_pixels_per_line;
-    
+    // Apply hardware pipeline delay and visual centering adjustment.
+    // Uses pre-computed session-constant values to avoid per-pixel modulo
+    // and repeated pointer dereferences through vicii->config->.
+    const uint16_t ppl = vicii->cached_pixels_per_line;
+
+    // Conditional subtract replaces modulo on non-power-of-2 (504 PAL / 520 NTSC).
+    // fetch_x_coord is in [0, ppl-1], offset is ppl-2, so sum is in [ppl-2, 2*ppl-3].
+    uint16_t display_x_coord = fetch_x_coord + vicii->cached_display_offset;
+    if (display_x_coord >= ppl) display_x_coord -= ppl;
+
+    const uint16_t first_vis = vicii->cached_first_visible_display;
+    const uint16_t vis_pixels = vicii->cached_visible_pixels;
+
     // Calculate position in line buffer (0-402 for PAL)
-    // The visible range wraps around: [first_visible_display .. first_visible_display+visible_pixels)
+    // The visible range wraps around: [first_vis .. first_vis+vis_pixels)
     uint16_t buffer_pos;
-    if (display_x_coord >= first_visible_display) {
-        buffer_pos = display_x_coord - first_visible_display;
-    } else if (display_x_coord < (first_visible_display + visible_pixels) % pixels_per_line) {
-        buffer_pos = (pixels_per_line - first_visible_display) + display_x_coord;
+    if (display_x_coord >= first_vis) {
+        buffer_pos = display_x_coord - first_vis;
+    } else if (display_x_coord < vicii->cached_wrap_threshold) {
+        buffer_pos = (ppl - first_vis) + display_x_coord;
     } else {
-        // Not in visible range
         return -1;
     }
-    
-    if (buffer_pos < visible_pixels) {
+
+    if (buffer_pos < vis_pixels) {
         return buffer_pos;
     }
     return -1;
@@ -222,7 +224,7 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
         
         // Convert to line buffer position (handles hardware pipeline delay and centering).
         const int16_t pixel_line_x = vicii_fetch_x_to_buffer_pos(vicii, current_x);
-        if (pixel_line_x < 0 || pixel_line_x >= (int16_t)vicii->config->visible_pixels_per_line) continue;
+        if (pixel_line_x < 0 || pixel_line_x >= (int16_t)vicii->cached_visible_pixels) continue;
         
         // ---- Collision detection (independent of display priority) ----
         // Documentation (VIC-II-Updated2025.txt section 3.8.2):
@@ -619,7 +621,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             // should clock the shift register even during main border for full accuracy.
             if (!is_background) {
                 const int16_t gfx_buf_pos = vicii_fetch_x_to_buffer_pos(vicii, pixel_x);
-                if (gfx_buf_pos >= 0 && gfx_buf_pos < (int16_t)vicii->config->visible_pixels_per_line) {
+                if (gfx_buf_pos >= 0 && gfx_buf_pos < (int16_t)vicii->cached_visible_pixels) {
                     vicii->pixel.graphics_fg_line[gfx_buf_pos] = true;
                 }
             }
@@ -2515,6 +2517,16 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
     vicii->border.main_border_flip_flop = true;
     vicii->border.vertical_border_flip_flop = true;
     vicii->border.set_vertical_border_flip_flop = true;
+
+    // Pre-compute display mapping constants for the pixel pipeline.
+    // These are session-constant (PAL/NTSC chosen at init) and eliminate
+    // per-pixel modulo operations and repeated pointer dereferences.
+    const uint16_t ppl = config->cycles_per_line * 8;
+    vicii->cached_pixels_per_line = ppl;
+    vicii->cached_visible_pixels = config->visible_pixels_per_line;
+    vicii->cached_display_offset = ppl + VICII_PIPELINE_DELAY_PIXELS + VICII_X_CENTERING_PIXELS;
+    vicii->cached_first_visible_display = (config->first_visible_x_coord + vicii->cached_display_offset) % ppl;
+    vicii->cached_wrap_threshold = (vicii->cached_first_visible_display + vicii->cached_visible_pixels) % ppl;
 }
 
 // ========================================================================================

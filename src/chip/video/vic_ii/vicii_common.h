@@ -491,6 +491,14 @@ struct vicii_s : public ChipBase {
     // Chip configuration (set at initialization)
     const vicii_chip_config_t* config = nullptr;
 
+    // Pre-computed display mapping constants (session-constant, set during init)
+    // Eliminates per-pixel modulo and pointer dereferences in the pixel pipeline.
+    uint16_t cached_pixels_per_line = 0;         // config->cycles_per_line * 8
+    uint16_t cached_visible_pixels = 0;          // config->visible_pixels_per_line
+    uint16_t cached_first_visible_display = 0;   // transformed first_visible_x_coord
+    uint16_t cached_wrap_threshold = 0;          // (first_visible_display + visible_pixels) % pixels_per_line
+    uint16_t cached_display_offset = 0;          // pixels_per_line + pipeline_delay + centering
+
     // Topic-specific units
     vicii_registers_unit_t registers = {};
     vicii_timing_unit_t timing = {};
