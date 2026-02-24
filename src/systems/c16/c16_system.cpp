@@ -293,6 +293,7 @@ bool Commodore264System<V>::apply_configuration() {
         config_.region_option_index < static_cast<int>(hardware_traits_.video_standard_configs.size())) {
         const VideoStandardConfig& std_cfg = hardware_traits_.video_standard_configs[config_.region_option_index];
         cycles_per_frame_ = std_cfg.timing.cycles_per_frame;
+        cached_target_fps_ = std_cfg.timing.target_fps;
     }
     
     // Cache RAM size from memory options (avoids vector lookup every cycle in mem_tick)
@@ -540,6 +541,15 @@ bool Commodore264System<V>::load_file(const char* filepath) {
     ctx.pc_ctx          = this;
 
     bool success = commodore_apply_load_result(&ctx, &result, filepath);
+
+    if (success) {
+        // Set program title to bare filename
+        const char* name = filepath;
+        const char* sep = strrchr(filepath, '/');
+        if (!sep) sep = strrchr(filepath, '\\');
+        if (sep) name = sep + 1;
+        program_title_ = name;
+    }
 
     result.release();
     return success;

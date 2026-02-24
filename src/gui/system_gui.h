@@ -102,6 +102,10 @@ private:
     uint32_t actual_fps_;
     uint32_t last_fps_time_;
     uint64_t last_fps_frame_count_;  // total_frames_ snapshot for FPS delta
+
+    // Per-frame emulation time (microseconds, exponential moving average).
+    // Written by the emu thread, read by the GUI thread for display.
+    std::atomic<uint32_t> emu_frame_time_us_{0};
     
     // Frame pacing lives on the emu thread (private to emu_thread_func)
     // These are no longer accessed from the GUI thread.
@@ -196,6 +200,7 @@ private:
     void poll_drive_file_dialog_requests();
     
     // Helper functions
+    void update_window_title();
     void update_fps();
     void reset_frame_pacing();
     void allocate_framebuffer();

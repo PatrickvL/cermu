@@ -1326,6 +1326,13 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         nsf_player_active_ = true;
         system_ready_ = true;
 
+        // Set program title from NSF header
+        program_title_ = header.name;
+        if (header.artist[0]) {
+            program_title_ += " — ";
+            program_title_ += header.artist;
+        }
+
         printf("%s: NSF player active — \"%s\" by %s\n",
                Traits::name, header.name, header.artist);
         free(file_data);
@@ -1346,6 +1353,13 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         // Reset system with new cartridge
         reset();
         system_ready_ = true;
+
+        // Set program title to bare filename
+        const char* name = filepath;
+        const char* sep = strrchr(filepath, '/');
+        if (!sep) sep = strrchr(filepath, '\\');
+        if (sep) name = sep + 1;
+        program_title_ = name;
         
         printf("%s: Cartridge loaded successfully\n", Traits::name);
         return true;

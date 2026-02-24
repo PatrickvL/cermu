@@ -200,11 +200,15 @@ static HardwareTraits create_c64_hardware_traits() {
     traits.audio.chip_name = "SID 6581";
     
     // Timing (PAL default)
+    // cycles_per_frame must match the VIC-II's actual frame length
+    // (MOS6569: 312 lines × 63 cycles = 19656) so that each run_frame()
+    // produces exactly one video frame.  target_fps is the nearest integer
+    // for display/audio calculations; precise pacing uses cycles/clock.
     traits.timing.cpu_frequency_hz = 985248;
     traits.timing.video_frequency_hz = 985248;
     traits.timing.audio_sample_rate_hz = 44100;
     traits.timing.target_fps = 50;
-    traits.timing.cycles_per_frame = 19705;
+    traits.timing.cycles_per_frame = 19656;   // MOS6569 PAL: 312 × 63
     traits.timing.standard = VideoStandard::PAL;
 
     // Region options
@@ -219,7 +223,7 @@ static HardwareTraits create_c64_hardware_traits() {
     ntsc_timing.cpu_frequency_hz = 1022727;
     ntsc_timing.video_frequency_hz = 1022727;
     ntsc_timing.target_fps = 60;
-    ntsc_timing.cycles_per_frame = 17045;   // 1022727 / 60
+    ntsc_timing.cycles_per_frame = 17095;   // MOS6567R8 NTSC: 263 × 65
     ntsc_timing.standard = VideoStandard::NTSC;
 
     traits.video_standard_configs.push_back({
@@ -991,6 +995,22 @@ bool C64System::load_file(const char* filepath) {
     pending_load_.active = true;
     pending_load_.mode = mode;
 
+    // Set window title from file content
+    if (sid_check && sid_check->name[0]) {
+        program_title_ = sid_check->name;
+        if (sid_check->author[0]) {
+            program_title_ += " — ";
+            program_title_ += sid_check->author;
+        }
+    } else {
+        // Use bare filename (strip directory path)
+        const char* name = filepath;
+        const char* sep = strrchr(filepath, '/');
+        if (!sep) sep = strrchr(filepath, '\\');
+        if (sep) name = sep + 1;
+        program_title_ = name;
+    }
+
     printf("C64: File parsed (mode=%s) — deferred until BASIC READY\n",
            mode == LoadMode::DISK_FAST ? "DISK_FAST" :
            mode == LoadMode::TAPE_INSERTED ? "TAPE_INSERTED" : "DIRECT");
@@ -1551,6 +1571,7 @@ bool C64System::apply_configuration() {
         const VideoStandardConfig& std_cfg = hardware_traits_.video_standard_configs[config_.region_option_index];
         cycles_per_frame_ = std_cfg.timing.cycles_per_frame;
         hardware_traits_.timing = std_cfg.timing;  // Keep active timing in sync
+        cached_target_fps_ = std_cfg.timing.target_fps;  // Keep FPS pacing in sync
 
         // Map to legacy c64_config_t
         c64_config_.vicii_standard =

@@ -300,11 +300,18 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
         use_cia_rate = (sid->speed_flags >> subtune) & 1;
     }
 
-    // PAL 50Hz: 985248/50 = 19705 cycles
-    // CIA 60Hz: 985248/60 = 16421 cycles
-    uint16_t timer_period = use_cia_rate ? 16421 : 19705;
-    printf("C64: Speed flag for subtune %u: %s (timer=%u cycles)\n",
-           subtune + 1, use_cia_rate ? "CIA" : "VBI", timer_period);
+    // Timer period derived from the system's actual CPU clock and target rate:
+    //   VBI: cycles_per_frame  (one play() call per video frame — PAL 19656, NTSC 17095)
+    //   CIA: cpu_freq / 60     (PAL ~16421, NTSC ~17045)
+    const auto& timing = c64->get_current_timing();
+    uint16_t timer_period;
+    if (use_cia_rate) {
+        timer_period = static_cast<uint16_t>(timing.cpu_frequency_hz / 60);
+    } else {
+        timer_period = static_cast<uint16_t>(timing.cycles_per_frame);
+    }
+    printf("C64: Speed flag for subtune %u: %s (timer=%u cycles, cpu=%u Hz)\n",
+           subtune + 1, use_cia_rate ? "CIA" : "VBI", timer_period, timing.cpu_frequency_hz);
 
     // ---- Step 4: Write SID info page to screen RAM ----
     uint8_t* screen_ram = &ram[0x0400];
@@ -363,7 +370,13 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
     if (subtune < 32) {
         use_cia_rate = (sid->speed_flags >> subtune) & 1;
     }
-    uint16_t timer_period = use_cia_rate ? 16421 : 19705;
+    const auto& timing = c64->get_current_timing();
+    uint16_t timer_period;
+    if (use_cia_rate) {
+        timer_period = static_cast<uint16_t>(timing.cpu_frequency_hz / 60);
+    } else {
+        timer_period = static_cast<uint16_t>(timing.cycles_per_frame);
+    }
 
     // ---- Update info page ----
     uint8_t* screen_ram = &ram[0x0400];

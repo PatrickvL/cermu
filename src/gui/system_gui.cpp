@@ -87,6 +87,9 @@ bool SystemGUI::init(const char* window_title, int width, int height) {
     // Start the emulation thread (runs independently of the GUI loop)
     start_emu_thread();
 
+    // Set window title with system name and loaded program (if any)
+    update_window_title();
+
     return true;
 }
 
@@ -224,6 +227,9 @@ void SystemGUI::render_frame() {
             // Load the file
             if (system_ && system_->load_file(filePathName.c_str())) {
                 printf("File loaded successfully: %s\n", filePathName.c_str());
+                
+                // Update window title with loaded program name
+                update_window_title();
                 
                 // Ensure emulation is running after successful file load
                 emulation_running_.store(true);
@@ -564,7 +570,7 @@ void SystemGUI::render_menu_bar() {
     if (system_) {
         // Position connector icons and status text right-aligned.
         // Layout:  [menus...]   [connector icons]  [status text]
-        const float status_text_w = 350.0f;  // approx. width for status text
+        const float status_text_w = 450.0f;  // approx. width for status text
         const float bar_width = ImGui::GetWindowWidth();
 
         // Render connector icons first (they need to calculate their width)
@@ -587,9 +593,12 @@ void SystemGUI::render_menu_bar() {
         ImGui::Text("%s", system_->get_descriptor().short_name);
         ImGui::SameLine();
         if (system_->is_system_ready()) {
+            uint32_t emu_us = emu_frame_time_us_.load(std::memory_order_relaxed);
             ImGui::Text("Cycles: %llu", (unsigned long long)system_->get_total_cycles());
             ImGui::SameLine();
             ImGui::Text("FPS: %u", actual_fps_);
+            ImGui::SameLine();
+            ImGui::Text("Frame: %.2f ms", emu_us * 0.001);
             ImGui::SameLine();
             ImGui::Text("%s", emulation_paused_ ? "Paused" : 
                              emulation_running_ ? "Running" : "Stopped");
@@ -800,6 +809,23 @@ void SystemGUI::step_emulation() {
 // Helper Functions
 // ============================================================================
 
+void SystemGUI::update_window_title() {
+    if (!system_) {
+        SDL_SetWindowTitle(get_window(), "cermu");
+        return;
+    }
+    char buf[256];
+    const auto& title = system_->get_program_title();
+    if (title.empty()) {
+        snprintf(buf, sizeof(buf), "cermu — %s",
+                 system_->get_descriptor().short_name);
+    } else {
+        snprintf(buf, sizeof(buf), "cermu — %s — %s",
+                 system_->get_descriptor().short_name, title.c_str());
+    }
+    SDL_SetWindowTitle(get_window(), buf);
+}
+
 void SystemGUI::update_fps() {
     // Count emulated frames completed this second (not main loop iterations).
     // total_frames_ is incremented once per run_frame() call, so the delta
@@ -1007,11 +1033,8 @@ void SystemGUI::switch_system(const char* system_name, int memory_option, int re
     // Start the emulation thread for the new system
     start_emu_thread();
 
-    // Update window title with system name
-    char title_buf[256];
-    snprintf(title_buf, sizeof(title_buf), "cermu — %s",
-             system_->get_descriptor().name);
-    SDL_SetWindowTitle(get_window(), title_buf);
+    // Update window title with system name and loaded program
+    update_window_title();
 
     printf("Successfully switched to %s\n", system_->get_descriptor().name);
 }
@@ -1142,11 +1165,12 @@ void SystemGUI::emu_thread_func() {
         accumulator += elapsed;
 
         // ----- Frame pacing (no lock needed) -----
-        // get_target_fps() is a non-virtual inline returning a cached uint32_t
-        // (Fix #1).  Naturally-aligned uint32_t reads are atomic on x86/ARM.
-        // Configuration changes only happen with the emu thread stopped.
+        // Use the precise frame time derived from cycles_per_frame / cpu_freq
+        // to avoid integer-FPS rounding error.  PAL ≈ 19.95 ms (not 20.00),
+        // NTSC ≈ 16.72 ms (not 16.67).  Configuration changes only happen
+        // with the emu thread stopped.
         const double target_fps = system_->get_target_fps();
-        const double target_frame_time = 1.0 / target_fps;
+        const double target_frame_time = system_->get_target_frame_time();
 
         // Cap accumulator (death-spiral prevention: max 3 frames catch-up)
         if (accumulator > target_frame_time * 3.0)
@@ -1188,10 +1212,21 @@ void SystemGUI::emu_thread_func() {
 
             // Run emulation frames
             while (accumulator >= target_frame_time) {
+                uint64_t t0 = SDL_GetPerformanceCounter();
                 system_->run_frame();
+                uint64_t t1 = SDL_GetPerformanceCounter();
                 total_frames_.fetch_add(1, std::memory_order_relaxed);
                 accumulator -= target_frame_time;
                 frames_ran++;
+
+                // Exponential moving average of frame emulation time (µs).
+                // Alpha ≈ 0.05 gives a ~20-frame smoothing window.
+                double frame_us = static_cast<double>(t1 - t0) / freq * 1e6;
+                uint32_t prev = emu_frame_time_us_.load(std::memory_order_relaxed);
+                uint32_t smoothed = prev == 0
+                    ? static_cast<uint32_t>(frame_us)
+                    : static_cast<uint32_t>(prev * 0.95 + frame_us * 0.05);
+                emu_frame_time_us_.store(smoothed, std::memory_order_relaxed);
             }
 
             // Compute how many audio samples to generate (under lock for
