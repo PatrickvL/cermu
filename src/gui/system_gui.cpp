@@ -1126,14 +1126,32 @@ void SystemGUI::emu_thread_func() {
             was_running = true;
         }
 
-        // ----- Process queued input events (between frames) -----
+        // ----- Drain input queue (brief input_mutex_ only) -----
+        std::vector<SDL_Event> events;
         {
-            std::vector<SDL_Event> events;
-            {
-                std::lock_guard<std::mutex> lock(input_mutex_);
-                events.swap(input_queue_);
-            }
+            std::lock_guard<std::mutex> lock(input_mutex_);
+            events.swap(input_queue_);
+        }
+
+        // ----- Time accumulator (no lock needed) -----
+        uint64_t now = SDL_GetPerformanceCounter();
+        double freq = static_cast<double>(SDL_GetPerformanceFrequency());
+        double elapsed = static_cast<double>(now - pace_counter) / freq;
+        pace_counter = now;
+        accumulator += elapsed;
+
+        // ----- Single emu_mutex_ scope for all system_ interactions -----
+        // Previously this was 4 separate lock/unlock cycles (input, fps,
+        // run_frame, audio).  Consolidating eliminates 3 redundant
+        // acquire/release pairs and the associated cache-line bouncing.
+        double target_fps = 50.0;
+        double target_frame_time = 1.0 / target_fps;
+        int frames_ran = 0;
+        uint32_t audio_got = 0;
+        {
             std::lock_guard<std::mutex> lock(emu_mutex_);
+
+            // Process queued input events
             for (auto& evt : events) {
                 // Focus loss → release all keys
                 if (evt.type == SDL_WINDOWEVENT &&
@@ -1156,66 +1174,46 @@ void SystemGUI::emu_thread_func() {
                 // All events also go through the peripheral device router
                 system_->process_sdl_event_for_devices(evt);
             }
-        }
 
-        // ----- Time accumulator -----
-        uint64_t now = SDL_GetPerformanceCounter();
-        double freq = static_cast<double>(SDL_GetPerformanceFrequency());
-        double elapsed = static_cast<double>(now - pace_counter) / freq;
-        pace_counter = now;
-        accumulator += elapsed;
-
-        double target_fps = 50.0;
-        {
-            std::lock_guard<std::mutex> lock(emu_mutex_);
             target_fps = system_->get_target_fps();
-        }
-        double target_frame_time = 1.0 / target_fps;
+            target_frame_time = 1.0 / target_fps;
 
-        // Cap accumulator (death-spiral prevention: max 3 frames catch-up)
-        if (accumulator > target_frame_time * 3.0)
-            accumulator = target_frame_time * 3.0;
+            // Cap accumulator (death-spiral prevention: max 3 frames catch-up)
+            if (accumulator > target_frame_time * 3.0)
+                accumulator = target_frame_time * 3.0;
 
-        // ----- Run emulation frames -----
-        int frames_ran = 0;
-        while (accumulator >= target_frame_time) {
-            {
-                std::lock_guard<std::mutex> lock(emu_mutex_);
+            // Run emulation frames
+            while (accumulator >= target_frame_time) {
                 system_->run_frame();
+                total_frames_.fetch_add(1, std::memory_order_relaxed);
+                accumulator -= target_frame_time;
+                frames_ran++;
             }
-            total_frames_.fetch_add(1, std::memory_order_relaxed);
-            accumulator -= target_frame_time;
-            frames_ran++;
+
+            // Generate audio samples proportional to the frames that ran
+            if (frames_ran > 0 && audio_ring_ && audio_sample_rate_ > 0) {
+                uint32_t samples_per_frame = static_cast<uint32_t>(
+                    audio_sample_rate_ / target_fps + 0.5);
+                uint32_t samples_needed = samples_per_frame * static_cast<uint32_t>(frames_ran);
+                if (samples_needed > static_cast<uint32_t>(emu_audio_tmp_.size()))
+                    emu_audio_tmp_.resize(samples_needed);
+                audio_got = system_->get_audio_samples(emu_audio_tmp_.data(), samples_needed);
+            }
         }
 
-        // ----- Snapshot framebuffer + generate audio -----
+        // ----- Snapshot framebuffer (separate fb_mutex_) -----
         if (frames_ran > 0) {
-            // Framebuffer snapshot (very brief lock)
             if (framebuffer_ && fb_snapshot_) {
                 std::lock_guard<std::mutex> lock(fb_mutex_);
                 memcpy(fb_snapshot_, framebuffer_,
                        static_cast<size_t>(fb_width_) * fb_height_ * sizeof(uint32_t));
                 fb_new_frame_.store(true, std::memory_order_release);
             }
-
-            // Generate audio samples into ring buffer.
-            // Request samples proportional to the number of frames that ran
-            // so the audio stays in sync with the emulation.
-            if (audio_ring_ && audio_sample_rate_ > 0) {
-                uint32_t samples_per_frame = static_cast<uint32_t>(
-                    audio_sample_rate_ / target_fps + 0.5);
-                uint32_t samples_needed = samples_per_frame * static_cast<uint32_t>(frames_ran);
-                if (samples_needed > static_cast<uint32_t>(emu_audio_tmp_.size()))
-                    emu_audio_tmp_.resize(samples_needed);
-                uint32_t got = 0;
-                {
-                    std::lock_guard<std::mutex> lock(emu_mutex_);
-                    got = system_->get_audio_samples(emu_audio_tmp_.data(), samples_needed);
-                }
-                if (got > 0)
-                    audio_ring_->write(emu_audio_tmp_.data(), got);
-            }
         }
+
+        // Write audio to ring buffer (lock-free SPSC, outside any mutex)
+        if (audio_got > 0)
+            audio_ring_->write(emu_audio_tmp_.data(), audio_got);
 
         // ----- Yield CPU if we're ahead of schedule -----
         if (accumulator < target_frame_time * 0.5) {
