@@ -700,7 +700,7 @@ inline bus_state_t mos6581_s::advance_cycle(bus_state_t bus_state) {
         float filtered_output = filter_process(filtered_input);
 
         // Accumulate post-filter mixed output for box-filter downsampling.
-        output_acc += (double)(unfiltered_output + filtered_output);
+        output_acc += unfiltered_output + filtered_output;
     }
     sample_cycle_count++;
 
@@ -714,10 +714,10 @@ inline bus_state_t mos6581_s::advance_cycle(bus_state_t bus_state) {
 
             // Average the accumulated filter output over the sample period.
             const float cyc = (sample_cycle_count > 0) ? (float)sample_cycle_count : 1.0f;
-            float mixed = (float)(output_acc / (double)cyc);
+            float mixed = output_acc / (float)cyc;
 
             // Reset accumulators for next sample period
-            output_acc = 0.0;
+            output_acc = 0.0f;
             sample_cycle_count = 0;
 
             // 6581 digi support: add constant DC bias from the voice DACs.
@@ -1126,7 +1126,7 @@ void mos6581_s::reset() {
     subcycle_count = 0;
     sample_accumulator = 0.0;
     sample_cycle_count = 0;
-    output_acc = 0.0;
+    output_acc = 0.0f;
 
     // Flush the sample ring buffer so the audio callback doesn't replay
     // stale data from the previous session.
