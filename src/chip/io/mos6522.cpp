@@ -307,10 +307,9 @@ bus_state_t mos6522_t::tick(bus_state_t bus_state) {
         
         // Assert interrupt line (active-low, so we set the legacy mask bit)
         // This must happen EVERY tick, not just once, because the bus state is
-        // reset to default at the start of each cycle
-        if (interrupt_line > 0) {
-            BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | interrupt_line);
-        }
+        // reset to default at the start of each cycle.
+        // OR-ing with 0 is a no-op, so no guard on interrupt_line needed.
+        BUS_SET_LINES(bus_state, BUS_GET_LINES(bus_state) | interrupt_line);
     } else {
         // Clear the master IRQ bit if no enabled interrupts are active
         ifr &= ~MOS6522_IFR_IRQ;
