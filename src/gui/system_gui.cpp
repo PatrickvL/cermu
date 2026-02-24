@@ -637,17 +637,30 @@ void SystemGUI::render_screen() {
     ImGui::Begin("##Screen", nullptr, flags);
     
     // Read the latest framebuffer snapshot produced by the emulation thread.
-    // The snapshot is a stable copy — no tearing from concurrent run_frame().
-    uint32_t* fb = nullptr;
-    {
-        std::lock_guard<std::mutex> lock(fb_mutex_);
-        fb = fb_snapshot_;
+    // Only re-upload the texture when a new frame is available; otherwise
+    // the GPU keeps displaying the previously uploaded texture.
+    bool have_new_frame = fb_new_frame_.exchange(false, std::memory_order_acquire);
+    if (have_new_frame && fb_snapshot_ && screen_textures_[0]) {
+        uint32_t* fb = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(fb_mutex_);
+            fb = fb_snapshot_;
+        }
+        if (fb) {
+            // Double-buffered texture upload: write to the current write
+            // texture while the GPU may still be reading from the other one.
+            GLuint upload_tex = screen_textures_[texture_write_idx_];
+            update_screen_texture(upload_tex, fb_width_, fb_height_, fb);
+
+            // Swap write index for next frame
+            texture_write_idx_ ^= 1;
+            // Keep base-class id in sync for filter-change code
+            screen_texture_id_ = screen_textures_[texture_write_idx_];
+        }
     }
-    if (fb && screen_textures_[0]) {
-        // Double-buffered texture upload: write to the current write
-        // texture while the GPU may still be reading from the other one.
-        GLuint upload_tex = screen_textures_[texture_write_idx_];
-        update_screen_texture(upload_tex, fb_width_, fb_height_, fb);
+    // Always render the most recently uploaded texture (read index = opposite of write)
+    if (screen_textures_[0]) {
+        GLuint display_tex = screen_textures_[texture_write_idx_ ^ 1];
         
         // Get hardware traits to determine PAL/NTSC (default to PAL for most systems)
         const auto& traits = system_->get_hardware_traits();
@@ -662,9 +675,9 @@ void SystemGUI::render_screen() {
             is_pal, use_pixel_aspect,
             &display_w, &display_h, &pos_x, &pos_y);
         
-        // Set cursor position and render from the just-uploaded texture
+        // Set cursor position and render from the last-uploaded texture
         ImGui::SetCursorPos(ImVec2(pos_x, pos_y));
-        ImGui::Image((ImTextureID)(intptr_t)upload_tex,
+        ImGui::Image((ImTextureID)(intptr_t)display_tex,
                     ImVec2(display_w, display_h));
         
         // Store display rect in SDL window coordinates for peripheral devices
@@ -676,11 +689,6 @@ void SystemGUI::render_screen() {
                 item_min.x, item_min.y,
                 item_max.x - item_min.x, item_max.y - item_min.y);
         }
-
-        // Swap write index for next frame
-        texture_write_idx_ ^= 1;
-        // Keep base-class id in sync for filter-change code
-        screen_texture_id_ = screen_textures_[texture_write_idx_];
     }
     
     ImGui::End();
