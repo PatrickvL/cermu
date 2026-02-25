@@ -67,6 +67,9 @@ data/**/*.png
 data/**/*.jpg
 data/**/*.txt
 data/**/*.cmd
+data/**/*.nsf
+data/**/*.nes
+data/**/*.m3u
 !data/**/README.md
 
 # External dependencies - ignore by default, unignore committed items
