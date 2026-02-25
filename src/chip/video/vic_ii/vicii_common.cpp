@@ -2011,7 +2011,7 @@ bus_state_t vicii_s::tick_phi1(bus_state_t bus_state) {
     // assertion by CIA or other chips. VIC-II should ONLY assert, never explicitly release.
     if (vicii->registers.data[VICII_IR] & VICII_IR_IRQ) {
         // IRQ flag is set - assert IRQ line (active-low, clear bit)
-        bus_state &= ~BUS_BIT(BUS_IRQ_BIT);
+        BUS_CLR_BIT(bus_state, BUS_IRQ_BIT);
     }
     // Do NOT set IRQ high in else clause - pull-up resistor handles that
     

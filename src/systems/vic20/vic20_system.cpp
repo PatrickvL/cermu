@@ -776,7 +776,7 @@ void VIC20System::tick() {
     
     // Restore R/W line to read mode after CPU PHI1 has consumed write info.
     // Maintains invariant: BUS_MASK_RW is always set outside the CPU write window.
-    s |= BUS_BIT(BUS_RW_BIT);
+    BUS_SET_BIT(s, BUS_RW_BIT);
 
     // Update bus state
     bus_.state = s;

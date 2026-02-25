@@ -83,8 +83,8 @@ private:
         bus_state_t bus_state = 0;
         
         // Set up default bus state
-        bus_state |= BUS_BIT(BUS_RW_BIT);  // Default to read
-        bus_state |= BUS_BIT(BUS_RDY_BIT); // CPU is ready
+        BUS_SET_BIT(bus_state, BUS_RW_BIT);  // Default to read
+        BUS_SET_BIT(bus_state, BUS_RDY_BIT); // CPU is ready
         
         // Get the address the CPU wants to access
         uint16_t addr = cpu->get_address();
@@ -94,7 +94,7 @@ private:
         bus_state = cpu->cycle_tick(bus_state);
         
         // Handle memory operations
-        if (bus_state & BUS_BIT(BUS_RW_BIT)) {
+        if (BUS_GET_BIT(bus_state, BUS_RW_BIT)) {
             // Read cycle - provide data to CPU
             uint16_t read_addr = BUS_GET_ADDR(bus_state);
             uint8_t data = memory->read(read_addr);

@@ -773,17 +773,17 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
     if (ba_should_be_low) {
         if (bus.ba_low_count < 4) bus.ba_low_count++;
         // Pull BA LOW on the bus
-        bus_state &= ~BUS_BIT(BUS_BA_BIT);
+        BUS_CLR_BIT(bus_state, BUS_BA_BIT);
         // After 3 cycles of BA low, AEC stays low during PHI2
         if (bus.ba_low_count >= 3) {
-            bus_state &= ~BUS_BIT(BUS_AEC_BIT);
+            BUS_CLR_BIT(bus_state, BUS_AEC_BIT);
         }
         // Copy BA to RDY (CPU halts on reads when RDY is LOW)
-        bus_state &= ~BUS_BIT(BUS_RDY_BIT);
+        BUS_CLR_BIT(bus_state, BUS_RDY_BIT);
     } else {
         bus.ba_low_count = 0;
-        bus_state |= BUS_BIT(BUS_BA_BIT);
-        bus_state |= BUS_BIT(BUS_RDY_BIT);
+        BUS_SET_BIT(bus_state, BUS_BA_BIT);
+        BUS_SET_BIT(bus_state, BUS_RDY_BIT);
     }
 
     // ===== STEP 2: PHI1 memory access (g-access) =====
@@ -876,7 +876,7 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
     // ===== STEP 6: IRQ signaling =====
     // TED IRQ is active-LOW. Assert by clearing IRQ bit.
     if (irq_status & irq_mask) {
-        bus_state &= ~BUS_BIT(BUS_IRQ_BIT);
+        BUS_CLR_BIT(bus_state, BUS_IRQ_BIT);
     }
     // Pull-up resistor model handles de-assertion (system default state)
 
@@ -914,7 +914,7 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
     if (c_access_pending) {
         BUS_SET_ADDR(bus_state, c_access_address);
         // Set RW high (read mode)
-        bus_state |= BUS_BIT(BUS_RW_BIT);
+        BUS_SET_BIT(bus_state, BUS_RW_BIT);
     }
 
     return bus_state;
@@ -959,18 +959,18 @@ void ted7360_t::tick() {
     // Alternate between PHI1 (actual work) and PHI2 (no-op for legacy callers)
     if (legacy_subcycle_ == 0) {
         bus_state_t bs = 0;
-        bs |= BUS_BIT(BUS_IRQ_BIT);  // IRQ de-asserted (active low, so set high)
-        bs |= BUS_BIT(BUS_RW_BIT);   // Read mode
-        bs |= BUS_BIT(BUS_BA_BIT);   // Bus available
-        bs |= BUS_BIT(BUS_RDY_BIT);  // Ready
+        BUS_SET_BIT(bs, BUS_IRQ_BIT);  // IRQ de-asserted (active low, so set high)
+        BUS_SET_BIT(bs, BUS_RW_BIT);   // Read mode
+        BUS_SET_BIT(bs, BUS_BA_BIT);   // Bus available
+        BUS_SET_BIT(bs, BUS_RDY_BIT);  // Ready
 
         tick_phi1(bs);
     } else {
         bus_state_t bs = 0;
-        bs |= BUS_BIT(BUS_IRQ_BIT);
-        bs |= BUS_BIT(BUS_RW_BIT);
-        bs |= BUS_BIT(BUS_BA_BIT);
-        bs |= BUS_BIT(BUS_RDY_BIT);
+        BUS_SET_BIT(bs, BUS_IRQ_BIT);
+        BUS_SET_BIT(bs, BUS_RW_BIT);
+        BUS_SET_BIT(bs, BUS_BA_BIT);
+        BUS_SET_BIT(bs, BUS_RDY_BIT);
         BUS_SET_DATA(bs, 0xFF);
 
         tick_phi2(bs);

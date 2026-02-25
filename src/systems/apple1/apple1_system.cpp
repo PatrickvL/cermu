@@ -415,7 +415,7 @@ void Apple1System::set_speed_multiplier(float multiplier) {
 bus_state_t Apple1System::mem_tick(bus_state_t s) {
     uint16_t addr = BUS_GET_ADDR(s);
 
-    if (s & BUS_BIT(BUS_RW_BIT)) {
+    if (BUS_GET_BIT(s, BUS_RW_BIT)) {
         // ---- Read cycle ----
         uint8_t data = 0xFF;
 

@@ -488,7 +488,7 @@ void Commodore264System<V>::tick() {
     s = cpu->tick<mos7501_cpu_t::Phase::PHI1>(s);
     
     // Restore R/W line to read mode after CPU PHI1 has consumed write info
-    s |= BUS_BIT(BUS_RW_BIT);
+    BUS_SET_BIT(s, BUS_RW_BIT);
     
     bus_state_ = s;
     total_cycles_++;
@@ -745,7 +745,7 @@ bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
     // Use cached RAM size (updated in apply_configuration)
     const size_t ram_size = ram_size_;
 
-    if (s & BUS_BIT(BUS_RW_BIT)) {
+    if (BUS_GET_BIT(s, BUS_RW_BIT)) {
         // ---- Read cycle ----
         uint8_t data = 0xFF;
 
