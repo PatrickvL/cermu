@@ -4,6 +4,8 @@
 #include "imgui_impl_sdl2.h"
 #include <stdio.h>
 #include <algorithm>
+#include <chrono>
+#include <cstring>
 
 // ============================================================================
 // Constructor / Destructor
@@ -33,6 +35,29 @@ GenericEmulatorGUI::GenericEmulatorGUI()
     , center_display_(true)
     , show_invisible_area_(false)
     , host_dpi_scale_(1.0f)  // Will be detected at runtime
+    // Emulation state
+    , emulation_running_(false)
+    , emulation_paused_(false)
+    , speed_multiplier_(1.0f)
+    // Framebuffer
+    , framebuffer_(nullptr)
+    , fb_width_(0)
+    , fb_height_(0)
+    , screen_textures_{0, 0}
+    , texture_write_idx_(0)
+    // Statistics
+    , total_frames_(0)
+    , actual_fps_(0)
+    , last_fps_time_(0)
+    , last_fps_frame_count_(0)
+    , frame_pace_counter_(0)
+    , frame_time_accumulator_(0.0)
+    // Threading
+    , fb_snapshot_(nullptr)
+    // Audio
+    , audio_device_(0)
+    , audio_sample_rate_(0)
+    , audio_ring_(std::make_unique<AudioRingBuffer>(8192))
 {
 }
 
@@ -483,4 +508,114 @@ void GenericEmulatorGUI::render_screen_menu_generic() {
     // Host DPI information
     ImGui::Separator();
     ImGui::Text("Host DPI Scale: %.2f", host_dpi_scale_);
+}
+
+// ============================================================================
+// Emulation Lifecycle (generic)
+// ============================================================================
+
+void GenericEmulatorGUI::start_emulation() {
+    emulation_running_.store(true);
+    emulation_paused_.store(false);
+    // Frame pacing is reset inside the emu thread when it detects
+    // the transition from paused/stopped to running.
+    printf("Emulation started\n");
+}
+
+void GenericEmulatorGUI::pause_emulation() {
+    emulation_paused_.store(true);
+    printf("Emulation paused\n");
+}
+
+void GenericEmulatorGUI::update_fps() {
+    // Count emulated frames completed this second (not main loop iterations).
+    // total_frames_ is incremented once per run_frame() call, so the delta
+    // over one second gives the true emulated FPS.
+    uint32_t current_time = SDL_GetTicks();
+    if (last_fps_time_ == 0) {
+        last_fps_time_ = current_time;
+        last_fps_frame_count_ = total_frames_;
+    }
+    
+    if (current_time - last_fps_time_ >= 1000) {
+        actual_fps_ = total_frames_ - last_fps_frame_count_;
+        last_fps_frame_count_ = total_frames_;
+        last_fps_time_ = current_time;
+    }
+}
+
+void GenericEmulatorGUI::reset_frame_pacing() {
+    frame_pace_counter_ = 0;
+    frame_time_accumulator_ = 0.0;
+}
+
+void GenericEmulatorGUI::free_framebuffer() {
+    if (framebuffer_) {
+        delete[] framebuffer_;
+        framebuffer_ = nullptr;
+    }
+    if (fb_snapshot_) {
+        delete[] fb_snapshot_;
+        fb_snapshot_ = nullptr;
+    }
+    
+    // Delete double-buffered textures
+    for (int i = 0; i < 2; i++) {
+        if (screen_textures_[i]) {
+            glDeleteTextures(1, &screen_textures_[i]);
+            screen_textures_[i] = 0;
+        }
+    }
+    screen_texture_id_ = 0;
+}
+
+// ============================================================================
+// Threading (generic)
+// ============================================================================
+
+void GenericEmulatorGUI::start_emu_thread() {
+    if (emu_thread_running_.load()) return;  // Already running
+    emu_thread_running_.store(true);
+    audio_ring_->reset();
+    emu_thread_ = std::thread(&GenericEmulatorGUI::emu_thread_func, this);
+    printf("Emulation thread started\n");
+}
+
+void GenericEmulatorGUI::stop_emu_thread() {
+    if (!emu_thread_running_.load()) return;
+    emu_thread_running_.store(false);
+    if (emu_thread_.joinable()) {
+        emu_thread_.join();
+    }
+    printf("Emulation thread stopped\n");
+}
+
+// ============================================================================
+// Audio (generic)
+// ============================================================================
+
+void GenericEmulatorGUI::sdl_audio_callback(void* userdata, uint8_t* stream, int len) {
+    GenericEmulatorGUI* gui = static_cast<GenericEmulatorGUI*>(userdata);
+    int sample_count = len / static_cast<int>(sizeof(float));
+    float* out = reinterpret_cast<float*>(stream);
+
+    // Read from the lock-free ring buffer (fed by the emulation thread)
+    uint32_t written = 0;
+    if (gui->audio_ring_) {
+        written = static_cast<uint32_t>(
+            gui->audio_ring_->read(out, static_cast<size_t>(sample_count)));
+    }
+    // Fill remainder with silence
+    for (uint32_t i = written; i < static_cast<uint32_t>(sample_count); i++) {
+        out[i] = 0.0f;
+    }
+}
+
+void GenericEmulatorGUI::close_audio_device() {
+    if (audio_device_ != 0) {
+        SDL_CloseAudioDevice(audio_device_);
+        audio_device_ = 0;
+        audio_sample_rate_ = 0;
+        printf("Audio: device closed\n");
+    }
 }

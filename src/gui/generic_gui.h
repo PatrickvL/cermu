@@ -5,6 +5,11 @@
 #include <SDL_opengl.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <memory>
+#include <thread>
+#include <mutex>
+#include <atomic>
+#include <vector>
 
 // Forward declarations
 struct ImGuiIO;
@@ -33,12 +38,75 @@ typedef enum {
     SCALING_MODE_COUNT
 } scaling_mode_t;
 
+// ============================================================================
+// Lock-free Single-Producer Single-Consumer ring buffer for audio samples.
+// The emulation thread writes; the SDL audio callback reads.
+// ============================================================================
+class AudioRingBuffer {
+public:
+    explicit AudioRingBuffer(size_t capacity)
+        : buf_(capacity, 0.0f), cap_(capacity) {}
+
+    /// Number of samples available for reading.
+    size_t available() const {
+        size_t w = write_.load(std::memory_order_acquire);
+        size_t r = read_.load(std::memory_order_acquire);
+        return (w >= r) ? (w - r) : (cap_ - r + w);
+    }
+
+    /// Write up to @p count samples.  Returns number actually written.
+    size_t write(const float* data, size_t count) {
+        size_t w = write_.load(std::memory_order_relaxed);
+        size_t r = read_.load(std::memory_order_acquire);
+        size_t free = cap_ - 1 - ((w >= r) ? (w - r) : (cap_ - r + w));
+        if (count > free) count = free;
+        for (size_t i = 0; i < count; i++)
+            buf_[(w + i) % cap_] = data[i];
+        write_.store((w + count) % cap_, std::memory_order_release);
+        return count;
+    }
+
+    /// Read up to @p count samples.  Returns number actually read.
+    size_t read(float* data, size_t count) {
+        size_t r = read_.load(std::memory_order_relaxed);
+        size_t w = write_.load(std::memory_order_acquire);
+        size_t avail = (w >= r) ? (w - r) : (cap_ - r + w);
+        if (count > avail) count = avail;
+        for (size_t i = 0; i < count; i++)
+            data[i] = buf_[(r + i) % cap_];
+        read_.store((r + count) % cap_, std::memory_order_release);
+        return count;
+    }
+
+    void reset() {
+        read_.store(0, std::memory_order_relaxed);
+        write_.store(0, std::memory_order_relaxed);
+    }
+
+private:
+    std::vector<float> buf_;
+    size_t cap_;
+    std::atomic<size_t> read_{0};
+    std::atomic<size_t> write_{0};
+};
+
 /**
  * GenericEmulatorGUI - Base class for all emulator GUIs
  * 
  * This class provides the common SDL/ImGui initialization, window management,
  * and basic rendering loop. Derived classes (C64GUI, SystemGUI, etc.)
  * override virtual methods to provide system-specific behavior.
+ *
+ * Threading model:
+ *   - GUI thread   : SDL events, ImGui rendering, texture upload
+ *   - Emu thread   : run_frame(), audio sample generation
+ *   - SDL audio    : reads from lock-free AudioRingBuffer
+ *
+ * Synchronisation:
+ *   emu_mutex_   \u2014 held by the emu thread during run_frame(); GUI thread
+ *                  uses try_lock for debug/menu reads (skips if busy).
+ *   fb_mutex_    \u2014 protects the framebuffer snapshot (very brief lock).
+ *   input_mutex_ \u2014 protects the queued SDL input events.
  */
 class GenericEmulatorGUI {
 protected:
@@ -73,7 +141,71 @@ protected:
     bool center_display_;             // Center display in available space
     bool show_invisible_area_;        // Show non-visible area around display output
     float host_dpi_scale_;            // Host DPI scaling factor
-    
+
+    // ========================================================================
+    // Emulation state (generic)
+    // ========================================================================
+    std::atomic<bool> emulation_running_;
+    std::atomic<bool> emulation_paused_;
+    float speed_multiplier_;
+
+    // ========================================================================
+    // Framebuffer & double-buffered display
+    // ========================================================================
+    uint32_t* framebuffer_;
+    int fb_width_;
+    int fb_height_;
+
+    /// Double-buffered GL textures — upload to one while the GPU
+    /// may still be rendering the previous frame from the other.
+    GLuint screen_textures_[2];
+    int    texture_write_idx_;
+
+    // ========================================================================
+    // Statistics / Frame pacing
+    // ========================================================================
+    std::atomic<uint64_t> total_frames_;
+    uint32_t actual_fps_;
+    uint32_t last_fps_time_;
+    uint64_t last_fps_frame_count_;
+
+    /// Per-frame emulation time (microseconds, exponential moving average).
+    std::atomic<uint32_t> emu_frame_time_us_{0};
+
+    /// Frame pacing (private to emu thread)
+    uint64_t frame_pace_counter_;
+    double frame_time_accumulator_;
+
+    // ========================================================================
+    // Emulation threading
+    // ========================================================================
+    std::thread emu_thread_;
+    std::atomic<bool> emu_thread_running_{false};
+
+    /// Protects system state during run_frame() and other mutating operations.
+    std::mutex emu_mutex_;
+
+    /// Framebuffer snapshot (written by emu thread, read by GUI for texture upload).
+    uint32_t* fb_snapshot_;
+    std::mutex fb_mutex_;
+    std::atomic<bool> fb_new_frame_{false};
+
+    /// Input event queue (pushed by GUI thread, consumed by emu thread).
+    std::mutex input_mutex_;
+    std::vector<SDL_Event> input_queue_;
+
+    // ========================================================================
+    // Audio
+    // ========================================================================
+    SDL_AudioDeviceID audio_device_;
+    int audio_sample_rate_;
+
+    /// Lock-free audio ring buffer (emu thread produces, SDL callback consumes).
+    std::unique_ptr<AudioRingBuffer> audio_ring_;
+
+    /// Temporary buffer used by the emu thread to call get_audio_samples().
+    std::vector<float> emu_audio_tmp_;
+
 public:
     GenericEmulatorGUI();
     virtual ~GenericEmulatorGUI();
@@ -221,6 +353,71 @@ protected:
      * Can be called from derived class's render_menu_bar()
      */
     void render_screen_menu_generic();
+
+    // ========================================================================
+    // Emulation lifecycle (generic)
+    // ========================================================================
+
+    /**
+     * Start/resume emulation
+     */
+    void start_emulation();
+
+    /**
+     * Pause emulation
+     */
+    void pause_emulation();
+
+    /**
+     * Update FPS counter from atomic frame count.
+     */
+    void update_fps();
+
+    /**
+     * Reset frame pacing accumulators.
+     */
+    void reset_frame_pacing();
+
+    /**
+     * Free framebuffer arrays and associated GL textures.
+     */
+    void free_framebuffer();
+
+    // ========================================================================
+    // Threading (generic)
+    // ========================================================================
+
+    /**
+     * Start the emulation thread.
+     * Calls the virtual emu_thread_func() on the new thread.
+     */
+    void start_emu_thread();
+
+    /**
+     * Stop the emulation thread and join.
+     */
+    void stop_emu_thread();
+
+    /**
+     * Emulation thread entry point — override in derived classes.
+     * This runs on a separate thread and should loop while
+     * emu_thread_running_ is true.
+     */
+    virtual void emu_thread_func() = 0;
+
+    // ========================================================================
+    // Audio (generic)
+    // ========================================================================
+
+    /**
+     * Close the SDL audio device.
+     */
+    void close_audio_device();
+
+    /**
+     * SDL audio callback — reads from the lock-free AudioRingBuffer.
+     */
+    static void sdl_audio_callback(void* userdata, uint8_t* stream, int len);
 
 private:
     // Prevent copying
