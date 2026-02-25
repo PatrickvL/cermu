@@ -1481,10 +1481,10 @@ std::string C64System::get_subtitle_info() const {
            std::to_string(active_sid_header_.num_songs) + "]";
 }
 
-void C64System::render_debug_windows(void* gui_state) {
+void C64System::render_debug_windows(void* gui_state, std::mutex& emu_mutex) {
 #ifdef IMGUI_VERSION
     if (!initialized_) return;
-    EmulatedSystem::render_debug_windows(gui_state);
+    EmulatedSystem::render_debug_windows(gui_state, emu_mutex);
 #endif
 }
 
