@@ -29,6 +29,11 @@
 #include "../../core/emulated_system.h"
 #include "../../core/formats/nsf_format.h"
 
+// NES default bus state — initial pin values before any chip asserts.
+// RW=1 (read mode), active-low signals NMI/IRQ/RES start HIGH (inactive).
+#define NES_BUS_DEFAULT_STATE \
+    (BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_RES_BIT))
+
 // Forward declarations
 namespace nes_system {
     class PPU;

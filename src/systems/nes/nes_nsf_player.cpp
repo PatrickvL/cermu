@@ -320,10 +320,7 @@ std::shared_ptr<NsfCartridge> nes_apply_nsf_load(
     nes_write_nsf_info_page(ppu, nsf, subtune);
 
     // ---- Step 5: Reset CPU to RESET vector ----
-    bus_state_t pins = 0;
-    BUS_SET_ADDR(pins, 0);
-    BUS_SET_DATA(pins, 0);
-    pins |= BUS_MASK_RW;
+    bus_state_t pins = NES_BUS_DEFAULT_STATE;
     nes6502_reset(cpu, pins);
 
     // After reset, CPU reads RESET vector ($FFFC/$FFFD)
@@ -358,7 +355,7 @@ void nes_nsf_switch_subtune(
         bus_state_t s = 0;
         BUS_SET_ADDR(s, 0x4015);
         BUS_SET_DATA(s, 0x00);
-        s |= BUS_MASK_RW;  // write
+        // RW=0 (write) — bit 48 already clear since s started as 0
         bus->mem_tick(s);
     }
 
@@ -383,10 +380,7 @@ void nes_nsf_switch_subtune(
     nes_write_nsf_info_page(ppu, nsf, subtune);
 
     // ---- Reset CPU ----
-    bus_state_t pins = 0;
-    BUS_SET_ADDR(pins, 0);
-    BUS_SET_DATA(pins, 0);
-    pins |= BUS_MASK_RW;
+    bus_state_t pins = NES_BUS_DEFAULT_STATE;
     nes6502_reset(cpu, pins);
 
     printf("NES NSF: Switched to subtune %d/%d\n",
