@@ -5,6 +5,12 @@
 #include "../../core/bus_cycle_interface.h"
 #include "../../core/system_lines.h"
 
+// VIC-20 default bus state with pull-up resistors.
+// Data bus: 0xFF (pull-ups), BA/AEC/RDY/RW HIGH, active-low IRQ/NMI/RES HIGH (inactive).
+#define VIC20_BUS_DEFAULT_STATE \
+    (BUS_STATE(0, 0xFF, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY | BUS_MASK_RW) | \
+     BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT))
+
 // VIC-20 bus structure
 typedef struct {
     void* vic20; // Pointer to VIC-20 system

@@ -273,9 +273,7 @@ VIC20System::VIC20System()
     current_palette_ = hardware_traits_.display.default_palette;
     
     // Initialize bus state with pull-up resistors (all control lines HIGH = inactive)
-    // VIC-20 uses same pull-up model as C64: IRQ, NMI, RES, BA, RDY, RW all pulled HIGH
-    bus_.default_state = BUS_STATE(0, 0xFF, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY | BUS_MASK_RW) | 
-                         BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT);
+    bus_.default_state = VIC20_BUS_DEFAULT_STATE;
     bus_.state = bus_.default_state;
 }
 

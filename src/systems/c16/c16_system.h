@@ -5,6 +5,11 @@
 #include "../../core/system_lines.h"
 #include "../../chip/video/ted/ted7360.h"
 
+// C264 series (C16/C116/Plus4) default bus state — initial pin values.
+// RW=1 (read mode), active-low IRQ/NMI HIGH (inactive), RDY HIGH (CPU ready).
+#define C264_BUS_DEFAULT_STATE \
+    (BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_RDY_BIT))
+
 struct mos7501_t;  // Opaque handle — .cpp uses fam65xx.hpp directly
 
 #include <cstdint>
