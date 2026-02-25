@@ -1,21 +1,21 @@
 #pragma once
 /**
- * datasette_device.h - Commodore Datasette Tape Drive Peripheral
+ * datasette_1530.h - Commodore 1530 Datasette Tape Drive Peripheral
  *
  * Emulates the Commodore 1530 Datasette (C2N) unit that connects through
  * the cassette port.  Handles TAP file playback — each pulse edge is timed
  * according to the TAP format's cycle counts and presented on the READ line.
  */
 
-#include "../../core/connector.h"
+#include "storage_device.h"
 #include <cstdint>
 #include <vector>
 #include <string>
 
-class DatasetteDevice : public PeripheralDevice {
+class Datasette1530Device : public StorageDevice {
 public:
-    DatasetteDevice();
-    ~DatasetteDevice() override = default;
+    Datasette1530Device();
+    ~Datasette1530Device() override = default;
 
     const char* get_name() const override { return "Datasette (1530)"; }
     const char* get_id() const override   { return "datasette"; }
@@ -39,7 +39,7 @@ public:
     /// Insert a blank tape (for recording — placeholder).
     void insert_blank();
 
-    /// Eject the tape.
+    /// Eject the tape (delegates to StorageDevice::eject_media).
     void eject();
 
     /// Transport controls.
@@ -49,11 +49,15 @@ public:
     void press_fast_forward();
 
     /// Tape position info.
-    bool is_tape_loaded() const    { return tape_loaded_; }
+    bool is_tape_loaded() const    { return media_loaded_; }
     bool is_playing() const        { return playing_; }
     bool is_motor_on() const       { return motor_on_; }
     uint32_t get_tape_position() const { return tape_position_; }
     uint32_t get_tape_length() const   { return static_cast<uint32_t>(tap_data_.size()); }
+
+protected:
+    // --- StorageDevice override ----------------------------------------
+    bool swap_media(const char* filepath) override { return load_tap(filepath); }
 
 private:
     uint32_t    state_;             ///< Output signal state
@@ -62,7 +66,6 @@ private:
     std::vector<uint8_t> tap_data_;
     uint8_t     tap_version_;       ///< TAP format version (0 or 1)
     uint32_t    tape_position_;     ///< Current byte position in tap_data_
-    bool        tape_loaded_;
 
     // Transport state
     bool        playing_;

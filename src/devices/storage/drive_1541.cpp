@@ -64,7 +64,6 @@ Drive1541Device::Drive1541Device(uint8_t device_number)
     , shift_register_(0)
     , bit_counter_(-1)
     , eoi_sent_(false)
-    , disk_inserted_(false)
     , drive_led_(false)
 {
     name_ = "1541 Drive (#" + std::to_string(device_number) + ")";
@@ -502,8 +501,8 @@ bool Drive1541Device::insert_disk(const char* filepath) {
     }
     fclose(f);
 
-    disk_path_ = filepath;
-    disk_inserted_ = true;
+    media_path_ = filepath;
+    media_loaded_ = true;
     set_error(0, "OK");
 
     // Auto-detect disc set siblings and pre-populate fliplist
@@ -540,8 +539,7 @@ bool Drive1541Device::insert_disk(const char* filepath) {
 
 void Drive1541Device::eject_disk() {
     disk_image_.clear();
-    disk_path_.clear();
-    disk_inserted_ = false;
+    eject_media();  // Clears media_path_ and media_loaded_ via base class
     for (auto& ch : channels_) ch.clear();
     set_error(74, "DRIVE NOT READY");
     printf("1541: Disk ejected\n");
@@ -574,7 +572,7 @@ bool Drive1541Device::swap_disk(const char* filepath) {
         printf("1541: Failed to read disk image '%s' for swap\n", filepath);
         fclose(f);
         disk_image_.clear();
-        disk_inserted_ = false;
+        media_loaded_ = false;
         return false;
     }
     fclose(f);
@@ -582,73 +580,12 @@ bool Drive1541Device::swap_disk(const char* filepath) {
     // Invalidate open channels — file references are stale after swap
     for (auto& ch : channels_) ch.clear();
 
-    disk_path_ = filepath;
-    disk_inserted_ = true;
+    media_path_ = filepath;
+    media_loaded_ = true;
     set_error(0, "OK");
 
     printf("1541: Disk swapped: '%s' (%ld bytes)\n", filepath, size);
     return true;
-}
-
-// ============================================================================
-// DISC FLIPLIST
-// ============================================================================
-
-void Drive1541Device::fliplist_add(const char* filepath) {
-    std::string path(filepath);
-
-    // Avoid duplicates
-    for (const auto& entry : fliplist_) {
-        if (entry == path) return;
-    }
-    fliplist_.push_back(std::move(path));
-
-    // If this is the currently inserted disc, update index
-    if (disk_inserted_ && disk_path_ == filepath) {
-        fliplist_index_ = static_cast<int>(fliplist_.size()) - 1;
-    }
-    printf("1541: Fliplist add '%s' (total: %zu)\n", filepath,
-           fliplist_.size());
-}
-
-void Drive1541Device::fliplist_remove(int index) {
-    if (index < 0 || index >= static_cast<int>(fliplist_.size())) return;
-
-    fliplist_.erase(fliplist_.begin() + index);
-
-    // Adjust current index
-    if (fliplist_.empty()) {
-        fliplist_index_ = -1;
-    } else if (fliplist_index_ >= static_cast<int>(fliplist_.size())) {
-        fliplist_index_ = static_cast<int>(fliplist_.size()) - 1;
-    }
-}
-
-void Drive1541Device::fliplist_clear() {
-    fliplist_.clear();
-    fliplist_index_ = -1;
-}
-
-bool Drive1541Device::flip_next() {
-    if (fliplist_.empty()) return false;
-
-    fliplist_index_++;
-    if (fliplist_index_ >= static_cast<int>(fliplist_.size())) {
-        fliplist_index_ = 0;  // Wrap around
-    }
-
-    return swap_disk(fliplist_[fliplist_index_].c_str());
-}
-
-bool Drive1541Device::flip_prev() {
-    if (fliplist_.empty()) return false;
-
-    fliplist_index_--;
-    if (fliplist_index_ < 0) {
-        fliplist_index_ = static_cast<int>(fliplist_.size()) - 1;  // Wrap
-    }
-
-    return swap_disk(fliplist_[fliplist_index_].c_str());
 }
 
 // ============================================================================
@@ -676,7 +613,7 @@ uint32_t Drive1541Device::track_sector_to_offset(uint8_t track, uint8_t sector) 
 }
 
 bool Drive1541Device::read_sector(uint8_t track, uint8_t sector, uint8_t* buffer) {
-    if (!disk_inserted_ || disk_image_.empty()) return false;
+    if (!media_loaded_ || disk_image_.empty()) return false;
     if (sector >= sectors_per_track(track)) return false;
 
     uint32_t offset = track_sector_to_offset(track, sector);
@@ -704,7 +641,7 @@ void Drive1541Device::set_error(int code, const char* message, int track, int se
 }
 
 bool Drive1541Device::open_file(DriveChannel& channel, const std::string& filename) {
-    if (!disk_inserted_) {
+    if (!media_loaded_) {
         set_error(74, "DRIVE NOT READY");
         return false;
     }
@@ -818,7 +755,7 @@ bool Drive1541Device::open_file(DriveChannel& channel, const std::string& filena
 }
 
 void Drive1541Device::load_directory(DriveChannel& channel) {
-    if (!disk_inserted_) return;
+    if (!media_loaded_) return;
 
     channel.buffer.clear();
     channel.position = 0;
@@ -942,9 +879,9 @@ void Drive1541Device::load_directory(DriveChannel& channel) {
 void Drive1541Device::render_device_ui() {
     ImGui::Text("Device #%d", device_number_);
 
-    if (disk_inserted_) {
+    if (media_loaded_) {
         // Show just the filename
-        const char* fname = disk_path_.c_str();
+        const char* fname = media_path_.c_str();
         const char* sep = strrchr(fname, '/');
         if (!sep) sep = strrchr(fname, '\\');
         ImGui::Text("Disk: %s", sep ? sep + 1 : fname);

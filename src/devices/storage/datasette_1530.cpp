@@ -1,12 +1,12 @@
 /**
- * datasette_device.cpp - Commodore Datasette Implementation
+ * datasette_1530.cpp - Commodore 1530 Datasette Implementation
  *
  * Plays back TAP files through the cassette port's READ signal line.
  * TAP v0: each byte = pulse length * 8 cycles (0 = 256*8 = 2048 cycles).
  * TAP v1: byte 0x00 signals a 3-byte little-endian long pulse.
  */
 
-#include "datasette_device.h"
+#include "datasette_1530.h"
 #include "../../core/device_registry.h"
 #include <cstdio>
 #include <cstring>
@@ -27,11 +27,10 @@ struct TAPHeader {
 // CONSTRUCTION / RESET
 // ============================================================================
 
-DatasetteDevice::DatasetteDevice()
+Datasette1530Device::Datasette1530Device()
     : state_(0xFFFFFFFF)
     , tap_version_(0)
     , tape_position_(0)
-    , tape_loaded_(false)
     , playing_(false)
     , motor_on_(false)
     , button_pressed_(false)
@@ -40,7 +39,7 @@ DatasetteDevice::DatasetteDevice()
 {
 }
 
-void DatasetteDevice::reset() {
+void Datasette1530Device::reset() {
     playing_ = false;
     motor_on_ = false;
     tape_position_ = 0;
@@ -54,11 +53,11 @@ void DatasetteDevice::reset() {
 // SIGNAL I/O
 // ============================================================================
 
-uint32_t DatasetteDevice::get_output_signals() const {
+uint32_t Datasette1530Device::get_output_signals() const {
     return state_;
 }
 
-void DatasetteDevice::on_signal_change(uint32_t signals) {
+void Datasette1530Device::on_signal_change(uint32_t signals) {
     // The MOTOR signal is active-low: 0 = motor running
     bool motor = !(signals & (1u << ConnectorSignals::CASS_MOTOR));
     if (motor != motor_on_) {
@@ -70,7 +69,7 @@ void DatasetteDevice::on_signal_change(uint32_t signals) {
 // TAPE TRANSPORT
 // ============================================================================
 
-bool DatasetteDevice::load_tap(const char* filepath) {
+bool Datasette1530Device::load_tap(const char* filepath) {
     FILE* f = fopen(filepath, "rb");
     if (!f) {
         printf("Datasette: Cannot open '%s'\n", filepath);
@@ -104,7 +103,8 @@ bool DatasetteDevice::load_tap(const char* filepath) {
         tap_data_.resize(read);
     }
 
-    tape_loaded_ = true;
+    media_loaded_ = true;
+    media_path_ = filepath;
     tape_position_ = 0;
     playing_ = false;
     pulse_countdown_ = 0;
@@ -115,17 +115,18 @@ bool DatasetteDevice::load_tap(const char* filepath) {
     return true;
 }
 
-void DatasetteDevice::insert_blank() {
+void Datasette1530Device::insert_blank() {
     tap_data_.clear();
     tap_version_ = 0;
-    tape_loaded_ = true;
+    media_loaded_ = true;
+    media_path_.clear();
     tape_position_ = 0;
     playing_ = false;
 }
 
-void DatasetteDevice::eject() {
+void Datasette1530Device::eject() {
     tap_data_.clear();
-    tape_loaded_ = false;
+    eject_media();  // Clears media_path_ and media_loaded_ via base class
     tape_position_ = 0;
     playing_ = false;
     pulse_countdown_ = 0;
@@ -134,8 +135,8 @@ void DatasetteDevice::eject() {
     if (port_) port_->notify_device_output_changed(state_);
 }
 
-void DatasetteDevice::press_play() {
-    if (!tape_loaded_) return;
+void Datasette1530Device::press_play() {
+    if (!media_loaded_) return;
     button_pressed_ = true;
     playing_ = true;
 
@@ -144,7 +145,7 @@ void DatasetteDevice::press_play() {
     if (port_) port_->notify_device_output_changed(state_);
 }
 
-void DatasetteDevice::press_stop() {
+void Datasette1530Device::press_stop() {
     button_pressed_ = false;
     playing_ = false;
 
@@ -158,13 +159,13 @@ void DatasetteDevice::press_stop() {
     if (port_) port_->notify_device_output_changed(state_);
 }
 
-void DatasetteDevice::press_rewind() {
+void Datasette1530Device::press_rewind() {
     tape_position_ = 0;
     pulse_countdown_ = 0;
 }
 
-void DatasetteDevice::press_fast_forward() {
-    if (tape_loaded_) {
+void Datasette1530Device::press_fast_forward() {
+    if (media_loaded_) {
         tape_position_ = static_cast<uint32_t>(tap_data_.size());
     }
 }
@@ -173,7 +174,7 @@ void DatasetteDevice::press_fast_forward() {
 // TICK — Pulse playback
 // ============================================================================
 
-uint32_t DatasetteDevice::read_next_pulse() {
+uint32_t Datasette1530Device::read_next_pulse() {
     if (tape_position_ >= tap_data_.size()) return 0;
 
     uint8_t byte = tap_data_[tape_position_++];
@@ -197,9 +198,9 @@ uint32_t DatasetteDevice::read_next_pulse() {
     return lo | (mid << 8) | (hi << 16);
 }
 
-void DatasetteDevice::tick() {
+void Datasette1530Device::tick() {
     // Only play back if motor on AND play button pressed AND tape loaded
-    if (!playing_ || !motor_on_ || !tape_loaded_) return;
+    if (!playing_ || !motor_on_ || !media_loaded_) return;
 
     if (pulse_countdown_ == 0) {
         // Load next pulse
@@ -230,8 +231,8 @@ void DatasetteDevice::tick() {
 // ============================================================================
 
 #ifdef IMGUI_VERSION
-void DatasetteDevice::render_device_ui() {
-    if (!tape_loaded_) {
+void Datasette1530Device::render_device_ui() {
+    if (!media_loaded_) {
         ImGui::TextDisabled("No tape loaded");
         return;
     }
@@ -264,5 +265,5 @@ static const DeviceDescriptor datasette_descriptor = {
 };
 
 REGISTER_DEVICE(datasette_descriptor, []() {
-    return std::make_unique<DatasetteDevice>();
+    return std::make_unique<Datasette1530Device>();
 })

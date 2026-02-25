@@ -33,7 +33,7 @@
 #include "../../devices/input/joystick_device.h"
 #include "../../devices/input/lightpen_device.h"
 #include "../../devices/storage/drive_1541.h"
-#include "../../devices/storage/datasette_device.h"
+#include "../../devices/storage/datasette_1530.h"
 #include "../../devices/keyboard/commodore_keyboard_device.h"
 #include <cstring>
 #include <cstdio>
@@ -1162,9 +1162,9 @@ void C64System::apply_pending_load() {
 
         // Find the datasette on the cassette port
         auto* cass_port = get_connector_port(PORT_CASSETTE);
-        DatasetteDevice* datasette = nullptr;
+        Datasette1530Device* datasette = nullptr;
         if (cass_port) {
-            datasette = dynamic_cast<DatasetteDevice*>(cass_port->get_attached_device());
+            datasette = dynamic_cast<Datasette1530Device*>(cass_port->get_attached_device());
         }
 
         if (datasette) {
