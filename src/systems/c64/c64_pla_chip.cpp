@@ -140,14 +140,16 @@ inline ChipLayout create_pla_layout() {
 // PLA GUI DEBUG WINDOW
 // ============================================================================
 
-// Helper function to get PLA pin states for visualization
+// Helper function to get PLA pin states for visualization.
+// Populates input pins from bus_state + banking mode, then evaluates the
+// PLA product-term logic to compute all 8 output signals.
 static std::vector<PinSignalState> get_pla_pin_states(C64System* c64, const ChipLayout* layout, bus_state_t bus_state) {
     if (!c64 || !layout) return {};
 
     // Generic bus-derived pin states (address, data, power, clock, control)
     auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
 
-    // PLA specific: Control signal pins from banking mode
+    // --- Input pins from banking mode ---
     uint8_t current_mode = c64->bus.pla_banking_mode;
 
     pin_states[5].signal_level = (current_mode & 0x04) != 0;   // CHAREN (pin 6)
@@ -160,6 +162,75 @@ static std::vector<PinSignalState> get_pla_pin_states(C64System* c64, const Chip
     pin_states[21].high_impedance = false;
     pin_states[22].signal_level = (current_mode & 0x08) != 0;  // EXROM (pin 23)
     pin_states[22].high_impedance = false;
+
+    // --- Evaluate PLA outputs from current inputs ---
+    // Build a temporary PLA struct, populate inputs from bus state and banking
+    // mode, then run the product-term logic to compute output signals.
+    pla_906114_01_t pla{};
+    uint16_t addr = BUS_GET_ADDR(bus_state);
+
+    // Address bus inputs (I5-I8)
+    pla.inputs.a12    = (addr & 0x1000) != 0;
+    pla.inputs.a13    = (addr & 0x2000) != 0;
+    pla.inputs.a14    = (addr & 0x4000) != 0;
+    pla.inputs.a15    = (addr & 0x8000) != 0;
+
+    // Control signals from bus state
+    pla.inputs.r_w    = BUS_GET_BIT(bus_state, BUS_RW_BIT);
+    pla.inputs.n_aec  = !BUS_GET_BIT(bus_state, BUS_AEC_BIT);  // AEC bit is active-high in bus_state
+    pla.inputs.ba     = BUS_GET_BIT(bus_state, BUS_BA_BIT);
+
+    // CPU port / cartridge signals from banking mode
+    pla.inputs.n_loram  = (current_mode & 0x01) == 0;  // Active-low: bit clear = asserted
+    pla.inputs.n_hiram  = (current_mode & 0x02) == 0;
+    pla.inputs.n_charen = (current_mode & 0x04) == 0;
+    pla.inputs.n_exrom  = (current_mode & 0x08) == 0;
+    pla.inputs.n_game   = (current_mode & 0x10) == 0;
+
+    // VIC-II address lines and CAS — not in bus_state, use idle defaults
+    pla.inputs.n_va14 = true;   // VA14 not asserted
+    pla.inputs.va13   = false;
+    pla.inputs.va12   = false;
+    pla.inputs.n_cas  = true;   // CAS not asserted (idle)
+
+    pla_906114_01_update_outputs(&pla);
+
+    // --- Output pins (active-low signals, pin label inversion handles display) ---
+    // Pin 10: _ROMH (F7)   — index 9
+    // Pin 11: _ROML (F6)   — index 10
+    // Pin 12: _IO   (F5)   — index 11
+    // Pin 13: GRW   (F4)   — index 12
+    // Pin 15: _CHAROM (F3) — index 14
+    // Pin 16: _KERNAL (F2) — index 15
+    // Pin 17: _BASIC  (F1) — index 16
+    // Pin 18: _CASRAM (F0) — index 17
+
+    auto set_output = [&](int idx, bool n_value) {
+        pin_states[idx].signal_level = !n_value;  // Active-low: low = asserted = "on"
+        pin_states[idx].drive_direction = true;    // PLA drives outputs
+        pin_states[idx].high_impedance = false;
+        pin_states[idx].signal_value = pin_states[idx].signal_level ? 1 : 0;
+    };
+
+    set_output(9,  pla.outputs.n_romh);     // Pin 10: _ROMH
+    set_output(10, pla.outputs.n_roml);     // Pin 11: _ROML
+    set_output(11, pla.outputs.n_io);       // Pin 12: _IO
+    set_output(12, pla.outputs.n_grw);      // Pin 13: GRW
+    set_output(14, pla.outputs.n_charrom);  // Pin 15: _CHAROM
+    set_output(15, pla.outputs.n_kernal);   // Pin 16: _KERNAL
+    set_output(16, pla.outputs.n_basic);    // Pin 17: _BASIC
+    set_output(17, pla.outputs.n_casram);   // Pin 18: _CASRAM
+
+    // Pin 9 (_CAS) is an input, set from our default
+    pin_states[8].signal_level = false;  // n_cas = true → CAS not asserted → pin low (active-low)
+    pin_states[8].high_impedance = false;
+    pin_states[8].signal_value = 0;
+
+    // Pin 19 (_CS): chip select — PLA enabled when low
+    pin_states[18].signal_level = true;     // CS asserted (active-low, chip enabled)
+    pin_states[18].drive_direction = false;  // Input to PLA
+    pin_states[18].high_impedance = false;
+    pin_states[18].signal_value = 1;
 
     return pin_states;
 }
