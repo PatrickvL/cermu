@@ -84,6 +84,9 @@ private:
     void allocate_framebuffer();
     void teardown_current_system();
 
+    /// Cached window title — avoids SDL_SetWindowTitle on every frame.
+    std::string last_window_title_;
+
     // Emulation thread (override of base class pure virtual)
     void emu_thread_func() override;
 

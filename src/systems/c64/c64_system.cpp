@@ -999,7 +999,7 @@ bool C64System::load_file(const char* filepath) {
     if (sid_check && sid_check->name[0]) {
         program_title_ = sid_check->name;
         if (sid_check->author[0]) {
-            program_title_ += " — ";
+            program_title_ += " - ";
             program_title_ += sid_check->author;
         }
     } else {
@@ -1468,6 +1468,16 @@ void C64System::render_system_menu_items() {
         reset();
     }
 #endif
+}
+
+const char* C64System::get_mode_label() const {
+    return sid_player_active_ ? "SID Player" : nullptr;
+}
+
+std::string C64System::get_subtitle_info() const {
+    if (!sid_player_active_ || active_sid_header_.num_songs <= 1) return {};
+    return "[" + std::to_string(active_subtune_ + 1) + "/" +
+           std::to_string(active_sid_header_.num_songs) + "]";
 }
 
 void C64System::render_debug_windows(void* gui_state) {

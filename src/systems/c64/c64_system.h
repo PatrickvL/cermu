@@ -67,6 +67,10 @@ public:
     // GUI rendering overrides
     void render_system_menu_items() override;
     void render_debug_windows(void* gui_state) override;
+
+    // Window title metadata
+    const char* get_mode_label() const override;
+    std::string get_subtitle_info() const override;
     
     // Configuration interface
     bool apply_configuration() override;

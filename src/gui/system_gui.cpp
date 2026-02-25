@@ -160,6 +160,10 @@ void SystemGUI::update_frame() {
     // Emulation now runs on a separate thread (emu_thread_func).
     // The GUI thread only updates the FPS counter from the atomic frame count.
     update_fps();
+
+    // Refresh window title periodically — systems may update program_title_,
+    // mode label, or subtitle info asynchronously (e.g. subtune switches).
+    update_window_title();
 }
 
 void SystemGUI::render_frame() {
@@ -803,19 +807,41 @@ void SystemGUI::step_emulation() {
 
 void SystemGUI::update_window_title() {
     if (!system_) {
-        SDL_SetWindowTitle(get_window(), "cermu");
+        if (last_window_title_ != "cermu") {
+            last_window_title_ = "cermu";
+            SDL_SetWindowTitle(get_window(), "cermu");
+        }
         return;
     }
-    char buf[256];
-    const auto& title = system_->get_program_title();
-    if (title.empty()) {
-        snprintf(buf, sizeof(buf), "cermu — %s",
-                 system_->get_descriptor().short_name);
-    } else {
-        snprintf(buf, sizeof(buf), "cermu — %s — %s",
-                 system_->get_descriptor().short_name, title.c_str());
+
+    // Build: cermu - {system} [{mode}] - {title} {subtitle}
+    std::string buf = "cermu - ";
+    buf += system_->get_descriptor().short_name;
+
+    const char* mode = system_->get_mode_label();
+    if (mode) {
+        buf += " [";
+        buf += mode;
+        buf += "]";
     }
-    SDL_SetWindowTitle(get_window(), buf);
+
+    const auto& title = system_->get_program_title();
+    if (!title.empty()) {
+        buf += " - ";
+        buf += title;
+    }
+
+    std::string subtitle = system_->get_subtitle_info();
+    if (!subtitle.empty()) {
+        buf += " ";
+        buf += subtitle;
+    }
+
+    // Only call SDL if the title actually changed
+    if (buf != last_window_title_) {
+        last_window_title_ = buf;
+        SDL_SetWindowTitle(get_window(), buf.c_str());
+    }
 }
 
 void SystemGUI::allocate_framebuffer() {

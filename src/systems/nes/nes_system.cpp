@@ -1329,7 +1329,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         // Set program title from NSF header
         program_title_ = header.name;
         if (header.artist[0]) {
-            program_title_ += " — ";
+            program_title_ += " - ";
             program_title_ += header.artist;
         }
 
@@ -1523,6 +1523,18 @@ void NintendoSystem<V>::render_system_menu_items() {
         eject_cartridge();
     }
 #endif
+}
+
+template<NintendoVariant V>
+const char* NintendoSystem<V>::get_mode_label() const {
+    return nsf_player_active_ ? "NSF Player" : nullptr;
+}
+
+template<NintendoVariant V>
+std::string NintendoSystem<V>::get_subtitle_info() const {
+    if (!nsf_player_active_ || active_nsf_header_.num_songs <= 1) return {};
+    return "[" + std::to_string(active_nsf_subtune_ + 1) + "/" +
+           std::to_string(active_nsf_header_.num_songs) + "]";
 }
 
 // ============================================================================
