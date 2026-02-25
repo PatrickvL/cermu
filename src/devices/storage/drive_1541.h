@@ -36,7 +36,7 @@
  * - Multiple drive units on the same IEC bus (device #8-11)
  */
 
-#include "../../core/connector.h"
+#include "storage_device.h"
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -88,7 +88,7 @@ struct DriveChannel {
 // DRIVE 1541
 // ============================================================================
 
-class Drive1541Device : public PeripheralDevice {
+class Drive1541Device : public StorageDevice {
 public:
     explicit Drive1541Device(uint8_t device_number = 8);
     ~Drive1541Device() override = default;
@@ -113,7 +113,7 @@ public:
     /// Insert a D64 disk image.
     bool insert_disk(const char* filepath);
 
-    /// Eject the current disk.
+    /// Eject the current disk (extends StorageDevice::eject_media).
     void eject_disk();
 
     /// Swap disk — replaces the disk image without resetting drive state.
@@ -123,10 +123,10 @@ public:
     bool swap_disk(const char* filepath);
 
     /// Is a disk inserted?
-    bool is_disk_inserted() const { return disk_inserted_; }
+    bool is_disk_inserted() const { return media_loaded_; }
 
     /// Get the disk image path.
-    const std::string& get_disk_path() const { return disk_path_; }
+    const std::string& get_disk_path() const { return media_path_; }
 
     /// Get/set device number (8-11).
     uint8_t get_device_number() const { return device_number_; }
@@ -137,41 +137,6 @@ public:
 
     /// Get drive busy/LED state.
     bool is_drive_led_on() const { return drive_led_; }
-
-    // --- Disc Fliplist --------------------------------------------------
-    // A pre-loaded list of disc images that can be cycled through with a
-    // single keypress, like VICE's "attach next disc in fliplist" feature.
-    // Ideal for multi-disc games: load disc 1, 2, 3... and press a key to
-    // advance instead of navigating file dialogs for each swap prompt.
-
-    /// Add a disc image path to the fliplist (avoids duplicates).
-    void fliplist_add(const char* filepath);
-
-    /// Remove a disc image from the fliplist by index.
-    void fliplist_remove(int index);
-
-    /// Clear the entire fliplist.
-    void fliplist_clear();
-
-    /// Swap to the next disc in the fliplist.  Wraps around.
-    bool flip_next();
-
-    /// Swap to the previous disc in the fliplist.  Wraps around.
-    bool flip_prev();
-
-    /// Get current fliplist.
-    const std::vector<std::string>& get_fliplist() const { return fliplist_; }
-
-    /// Get current fliplist index (-1 if empty or no match).
-    int get_fliplist_index() const { return fliplist_index_; }
-
-    // --- File Dialog Request (GUI communication) -----------------------
-
-    /// Returns true if the device UI requested a file dialog (e.g. "Insert Disk...").
-    bool wants_file_dialog() const { return wants_file_dialog_; }
-
-    /// Clear the file dialog request flag (called by GUI after opening the dialog).
-    void clear_file_dialog_request() { wants_file_dialog_ = false; }
 
     // --- Serial Trap API ------------------------------------------------
     // Called by the C64's KERNAL serial trap handlers to perform drive
@@ -236,6 +201,11 @@ private:
     /// Get the number of sectors on a given track.
     uint8_t sectors_per_track(uint8_t track) const;
 
+    // --- StorageDevice override ----------------------------------------
+
+    /// Swap media at the StorageDevice level (delegates to swap_disk).
+    bool swap_media(const char* filepath) override { return swap_disk(filepath); }
+
     // --- Data members --------------------------------------------------
 
     std::string     name_;
@@ -263,19 +233,10 @@ private:
 
     // Disk image
     std::vector<uint8_t> disk_image_;
-    std::string          disk_path_;
-    bool                 disk_inserted_;
 
     // Drive state
     bool                 drive_led_;
     std::string          error_message_;
-
-    // Disc fliplist
-    std::vector<std::string> fliplist_;
-    int                      fliplist_index_ = -1;
-
-    // GUI communication
-    bool                     wants_file_dialog_ = false;  ///< Set by render_device_ui, cleared by GUI
 
     // Serial trap state (used by KERNAL trap path)
     uint8_t         trap_sa_ = 0;                ///< Current secondary address for trap ops

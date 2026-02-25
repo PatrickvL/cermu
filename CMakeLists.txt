@@ -232,7 +232,8 @@ set(CORE_SOURCES
     src/devices/input/neos_mouse.cpp
     src/devices/input/lightpen_device.cpp
     # Devices — storage
-    src/devices/storage/datasette_device.cpp
+    src/devices/storage/storage_device.cpp
+    src/devices/storage/datasette_1530.cpp
     src/devices/storage/drive_1541.cpp
     # Devices — keyboard
     src/devices/keyboard/commodore_keyboard_device.cpp

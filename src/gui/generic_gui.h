@@ -11,6 +11,8 @@
 #include <atomic>
 #include <vector>
 
+#include "../utils/ring_buffer.hpp"
+
 // Forward declarations
 struct ImGuiIO;
 
@@ -37,58 +39,6 @@ typedef enum {
     SCALING_MODE_INTEGER,         // Use integer scaling only
     SCALING_MODE_COUNT
 } scaling_mode_t;
-
-// ============================================================================
-// Lock-free Single-Producer Single-Consumer ring buffer for audio samples.
-// The emulation thread writes; the SDL audio callback reads.
-// ============================================================================
-class AudioRingBuffer {
-public:
-    explicit AudioRingBuffer(size_t capacity)
-        : buf_(capacity, 0.0f), cap_(capacity) {}
-
-    /// Number of samples available for reading.
-    size_t available() const {
-        size_t w = write_.load(std::memory_order_acquire);
-        size_t r = read_.load(std::memory_order_acquire);
-        return (w >= r) ? (w - r) : (cap_ - r + w);
-    }
-
-    /// Write up to @p count samples.  Returns number actually written.
-    size_t write(const float* data, size_t count) {
-        size_t w = write_.load(std::memory_order_relaxed);
-        size_t r = read_.load(std::memory_order_acquire);
-        size_t free = cap_ - 1 - ((w >= r) ? (w - r) : (cap_ - r + w));
-        if (count > free) count = free;
-        for (size_t i = 0; i < count; i++)
-            buf_[(w + i) % cap_] = data[i];
-        write_.store((w + count) % cap_, std::memory_order_release);
-        return count;
-    }
-
-    /// Read up to @p count samples.  Returns number actually read.
-    size_t read(float* data, size_t count) {
-        size_t r = read_.load(std::memory_order_relaxed);
-        size_t w = write_.load(std::memory_order_acquire);
-        size_t avail = (w >= r) ? (w - r) : (cap_ - r + w);
-        if (count > avail) count = avail;
-        for (size_t i = 0; i < count; i++)
-            data[i] = buf_[(r + i) % cap_];
-        read_.store((r + count) % cap_, std::memory_order_release);
-        return count;
-    }
-
-    void reset() {
-        read_.store(0, std::memory_order_relaxed);
-        write_.store(0, std::memory_order_relaxed);
-    }
-
-private:
-    std::vector<float> buf_;
-    size_t cap_;
-    std::atomic<size_t> read_{0};
-    std::atomic<size_t> write_{0};
-};
 
 /**
  * GenericEmulatorGUI - Base class for all emulator GUIs

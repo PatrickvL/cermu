@@ -24,27 +24,13 @@
 SystemGUI::SystemGUI(std::unique_ptr<EmulatedSystem> system, const char* pending_file)
     : GenericEmulatorGUI()
     , system_(std::move(system))
-    , framebuffer_(nullptr)
-    , fb_width_(0)
-    , fb_height_(0)
-    , emulation_running_(system_ != nullptr)  // Only run if we have a system
-    , emulation_paused_(false)
-    , speed_multiplier_(1.0f)
-    , screen_textures_{0, 0}
-    , texture_write_idx_(0)
-    , total_frames_(0)
-    , actual_fps_(0)
-    , last_fps_time_(0)
-    , last_fps_frame_count_(0)
-    , frame_pace_counter_(0)
-    , frame_time_accumulator_(0.0)
     , system_selection_dialog_()
     , pending_file_path_(pending_file ? pending_file : "")
-    , audio_device_(0)
-    , audio_sample_rate_(0)
-    , fb_snapshot_(nullptr)
-    , audio_ring_(std::make_unique<AudioRingBuffer>(8192))
 {
+    // Set emulation running if we already have a system loaded
+    if (system_) {
+        emulation_running_.store(true);
+    }
     if (system_) {
         // System already initialised + file loaded before entering the GUI,
         // so clear the pending file path — it must not survive into a later
@@ -761,19 +747,6 @@ void SystemGUI::render_about() {
 // System Control
 // ============================================================================
 
-void SystemGUI::start_emulation() {
-    emulation_running_.store(true);
-    emulation_paused_.store(false);
-    // Frame pacing is reset inside the emu thread when it detects
-    // the transition from paused/stopped to running.
-    printf("Emulation started\n");
-}
-
-void SystemGUI::pause_emulation() {
-    emulation_paused_.store(true);
-    printf("Emulation paused\n");
-}
-
 void SystemGUI::reset_emulation() {
     if (system_) {
         // Stop the emu thread so we have exclusive access to system_
@@ -826,28 +799,6 @@ void SystemGUI::update_window_title() {
     SDL_SetWindowTitle(get_window(), buf);
 }
 
-void SystemGUI::update_fps() {
-    // Count emulated frames completed this second (not main loop iterations).
-    // total_frames_ is incremented once per run_frame() call, so the delta
-    // over one second gives the true emulated FPS.
-    uint32_t current_time = SDL_GetTicks();
-    if (last_fps_time_ == 0) {
-        last_fps_time_ = current_time;
-        last_fps_frame_count_ = total_frames_;
-    }
-    
-    if (current_time - last_fps_time_ >= 1000) {
-        actual_fps_ = total_frames_ - last_fps_frame_count_;
-        last_fps_frame_count_ = total_frames_;
-        last_fps_time_ = current_time;
-    }
-}
-
-void SystemGUI::reset_frame_pacing() {
-    frame_pace_counter_ = 0;
-    frame_time_accumulator_ = 0.0;
-}
-
 void SystemGUI::allocate_framebuffer() {
     if (!system_) return;
     
@@ -888,26 +839,6 @@ void SystemGUI::allocate_framebuffer() {
     } else {
         printf("Allocated %dx%d framebuffer (texture creation deferred until init)\n", fb_width_, fb_height_);
     }
-}
-
-void SystemGUI::free_framebuffer() {
-    if (framebuffer_) {
-        delete[] framebuffer_;
-        framebuffer_ = nullptr;
-    }
-    if (fb_snapshot_) {
-        delete[] fb_snapshot_;
-        fb_snapshot_ = nullptr;
-    }
-    
-    // Delete double-buffered textures
-    for (int i = 0; i < 2; i++) {
-        if (screen_textures_[i]) {
-            glDeleteTextures(1, &screen_textures_[i]);
-            screen_textures_[i] = 0;
-        }
-    }
-    screen_texture_id_ = 0;
 }
 
 // ============================================================================
@@ -1108,23 +1039,6 @@ void SystemGUI::open_file_dialog(const char* dialog_key, const char* title) {
 // Emulation Thread
 // ============================================================================
 
-void SystemGUI::start_emu_thread() {
-    if (emu_thread_running_.load()) return;  // Already running
-    emu_thread_running_.store(true);
-    audio_ring_->reset();
-    emu_thread_ = std::thread(&SystemGUI::emu_thread_func, this);
-    printf("Emulation thread started\n");
-}
-
-void SystemGUI::stop_emu_thread() {
-    if (!emu_thread_running_.load()) return;
-    emu_thread_running_.store(false);
-    if (emu_thread_.joinable()) {
-        emu_thread_.join();
-    }
-    printf("Emulation thread stopped\n");
-}
-
 void SystemGUI::emu_thread_func() {
     uint64_t pace_counter = 0;
     double accumulator = 0.0;
@@ -1303,23 +1217,6 @@ void SystemGUI::poll_drive_file_dialog_requests() {
 // Audio Output
 // ============================================================================
 
-void SystemGUI::sdl_audio_callback(void* userdata, uint8_t* stream, int len) {
-    SystemGUI* gui = static_cast<SystemGUI*>(userdata);
-    int sample_count = len / static_cast<int>(sizeof(float));
-    float* out = reinterpret_cast<float*>(stream);
-
-    // Read from the lock-free ring buffer (fed by the emulation thread)
-    uint32_t written = 0;
-    if (gui->audio_ring_) {
-        written = static_cast<uint32_t>(
-            gui->audio_ring_->read(out, static_cast<size_t>(sample_count)));
-    }
-    // Fill remainder with silence
-    for (uint32_t i = written; i < static_cast<uint32_t>(sample_count); i++) {
-        out[i] = 0.0f;
-    }
-}
-
 void SystemGUI::open_audio_device() {
     close_audio_device();
 
@@ -1361,11 +1258,3 @@ void SystemGUI::open_audio_device() {
     SDL_PauseAudioDevice(audio_device_, 0);
 }
 
-void SystemGUI::close_audio_device() {
-    if (audio_device_ != 0) {
-        SDL_CloseAudioDevice(audio_device_);
-        audio_device_ = 0;
-        audio_sample_rate_ = 0;
-        printf("Audio: device closed\n");
-    }
-}
