@@ -98,6 +98,43 @@ void pla_906114_01_set_cardrigde_mode(pla_906114_01_t* pla, uint8_t high_nybble)
     // are not pulled down from the cartridge port, resistors in RP4 pull them up."
 }
 
+void pla_906114_01_set_banking_mode(pla_906114_01_t* pla, uint8_t mode) {
+    // Positive logic: bit set = feature enabled = PLA variable true.
+    // The n_ prefix in the PLA struct refers to the signal name, not the
+    // variable's polarity — see c64_bus.cpp generate_all_pla_modes() for
+    // the detailed explanation.
+    pla->inputs.n_loram  = (mode & 0x01) != 0;
+    pla->inputs.n_hiram  = (mode & 0x02) != 0;
+    pla->inputs.n_charen = (mode & 0x04) != 0;
+    pla->inputs.n_exrom  = (mode & 0x08) != 0;
+    pla->inputs.n_game   = (mode & 0x10) != 0;
+}
+
+void pla_906114_01_tick(pla_906114_01_t* pla, bus_state_t bus_state) {
+    // Extract address bus bits A12-A15 from bus state
+    uint16_t addr = BUS_GET_ADDR(bus_state);
+    pla->inputs.a12 = (addr & 0x1000) != 0;
+    pla->inputs.a13 = (addr & 0x2000) != 0;
+    pla->inputs.a14 = (addr & 0x4000) != 0;
+    pla->inputs.a15 = (addr & 0x8000) != 0;
+
+    // Control signals from bus state
+    pla->inputs.r_w   = BUS_GET_BIT(bus_state, BUS_RW_BIT);
+    pla->inputs.n_aec = !BUS_GET_BIT(bus_state, BUS_AEC_BIT); // AEC active-high in bus_state, n_aec in PLA
+    pla->inputs.ba    = BUS_GET_BIT(bus_state, BUS_BA_BIT);
+
+    // In Ultimax mode, RP4 pulls A12-A15 high when VIC-II has the bus
+    // (n_aec = true means AEC is low, i.e. VIC-II is driving).
+    if (pla_906114_01_is_ultimax_mode(pla) && pla->inputs.n_aec) {
+        pla->inputs.a12 = true;
+        pla->inputs.a13 = true;
+        pla->inputs.a14 = true;
+        pla->inputs.a15 = true;
+    }
+
+    pla_906114_01_update_outputs(pla);
+}
+
 void pla_906114_01_update_outputs(pla_906114_01_t* pla) {
     #ifdef DEBUG_PLA_BANKING
     static int debug_call_count = 0;

@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "../../core/system_lines.h"
 
 // Commodore PLA MOS 906114-01 REV3 8411
 // https://www.c64-wiki.com/wiki/PLA_(C64_chip)
@@ -78,5 +79,16 @@ void pla_906114_01_set_vicii_address_bank(pla_906114_01_t* pla, uint8_t va_high)
 
 // Convert PLA output signals to CHIP values
 uint8_t pla_906114_01_outputs_to_chip(pla_906114_01_t* pla);
+
+// Tick the PLA with a bus state — extracts A12-A15, R/W, AEC, BA from
+// bus_state and evaluates all product-term outputs.  Banking inputs
+// (LORAM, HIRAM, CHAREN, EXROM, GAME) and VIC-specific inputs (VA12,
+// VA13, VA14, CAS) must be set before calling tick.
+void pla_906114_01_tick(pla_906114_01_t* pla, bus_state_t bus_state);
+
+// Set the 5 banking input signals from a mode byte.
+// Bits: 0=LORAM, 1=HIRAM, 2=CHAREN, 3=EXROM, 4=GAME.
+// Uses positive logic: bit set = feature enabled = PLA variable true.
+void pla_906114_01_set_banking_mode(pla_906114_01_t* pla, uint8_t mode);
 
 
