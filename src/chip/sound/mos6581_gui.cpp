@@ -130,42 +130,16 @@ inline ChipLayout create_mos6581_layout() {
 
 // Helper function to get SID pin states for visualization
 static std::vector<PinSignalState> get_sid_pin_states(mos6581_t* sid, const ChipLayout* layout, bus_state_t bus_state) {
-    std::vector<PinSignalState> pin_states;
-    if (!sid || !layout) return pin_states;
-    
-    int total_pins = layout->get_total_pins();
-    pin_states.resize(total_pins);
-    
-    // Initialize all pins as inactive by default
-    for (int i = 0; i < total_pins; i++) {
-        pin_states[i] = PinSignalState{
-            .pin_number = static_cast<uint8_t>(i + 1),
-            .signal_level = false,
-            .drive_direction = false,
-            .signal_value = 0,
-            .high_impedance = true,
-            .has_pullup = false,
-            .has_pulldown = false,
-            .signal_valid = true,
-            .analog_voltage = 0.0f,
-            .is_pwm = false,
-            .pwm_duty_cycle = 0.0f
-        };
-    }
-    
-    // Set power pins as active
-    pin_states[13].signal_level = false; // VSS (Ground, pin 14)
-    pin_states[13].high_impedance = false;
-    pin_states[24].signal_level = true;  // VCC (+5V, pin 25)
-    pin_states[24].high_impedance = false;
-    pin_states[27].signal_level = true;  // VDD (+12V, pin 28)
-    pin_states[27].high_impedance = false;
-    
-    // Audio output pin should be active if SID is producing sound
+    if (!sid || !layout) return {};
+
+    // Generic bus-derived pin states (address, data, power, clock, control)
+    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
+
+    // SID specific: Audio output pin (always driven)
     pin_states[26].signal_level = true;  // AUDIO_OUT (pin 27)
     pin_states[26].drive_direction = true;
     pin_states[26].high_impedance = false;
-    
+
     return pin_states;
 }
 

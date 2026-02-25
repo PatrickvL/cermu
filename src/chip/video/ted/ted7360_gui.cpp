@@ -71,38 +71,13 @@ inline ChipLayout create_ted7360_layout() {
 // TED PIN STATES
 // ============================================================================
 
-static std::vector<PinSignalState> get_ted_pin_states(ted7360_t* ted, const ChipLayout* layout) {
-    std::vector<PinSignalState> pin_states;
-    if (!ted || !layout) return pin_states;
+static std::vector<PinSignalState> get_ted_pin_states(ted7360_t* ted, const ChipLayout* layout, bus_state_t bus_state) {
+    if (!ted || !layout) return {};
 
-    int total_pins = layout->get_total_pins();
-    pin_states.resize(total_pins);
+    // Generic bus-derived pin states (address, data, power, clock, control)
+    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
 
-    for (int i = 0; i < total_pins; i++) {
-        pin_states[i] = PinSignalState{
-            .pin_number = static_cast<uint8_t>(i + 1),
-            .signal_level = false,
-            .drive_direction = false,
-            .signal_value = 0,
-            .high_impedance = true,
-            .has_pullup = false,
-            .has_pulldown = false,
-            .signal_valid = true,
-            .analog_voltage = 0.0f,
-            .is_pwm = false,
-            .pwm_duty_cycle = 0.0f
-        };
-    }
-
-    // Power pins
-    pin_states[0].signal_level = false;   // VSS (pin 1)
-    pin_states[0].high_impedance = false;
-    pin_states[23].signal_level = false;  // VSS (pin 24)
-    pin_states[23].high_impedance = false;
-    pin_states[47].signal_level = true;   // VDD (pin 48)
-    pin_states[47].high_impedance = false;
-
-    // IRQ pin (pin 43, index 42) — active low
+    // TED specific: IRQ (pin 43, index 42) — driven by TED
     pin_states[42].signal_level = !ted->irq_pending();
     pin_states[42].drive_direction = true;
     pin_states[42].high_impedance = false;
@@ -181,7 +156,7 @@ void ted7360_t::render_debug_content() {
 
         ChipVisualization& renderer = GetGlobalChipRenderer();
         ChipLayout& layout = get_ted_layout();
-        std::vector<PinSignalState> pin_states = get_ted_pin_states(ted, &layout);
+        std::vector<PinSignalState> pin_states = get_ted_pin_states(ted, &layout, ted->bus_snapshot_);
         renderer.render(layout, chip_center, pin_states, "TED 7360");
     }
     ImGui::EndChild();
@@ -347,7 +322,7 @@ void ted7360_t::render_layout_content() {
 
 #ifdef IMGUI_VERSION
     ChipLayout& layout = get_ted_layout();
-    std::vector<PinSignalState> pin_states = get_ted_pin_states(ted, &layout);
+    std::vector<PinSignalState> pin_states = get_ted_pin_states(ted, &layout, ted->bus_snapshot_);
     render_chip_layout(layout, pin_states, "TED7360");
 #endif
 }

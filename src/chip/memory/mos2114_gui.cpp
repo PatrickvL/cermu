@@ -65,72 +65,25 @@ inline ChipLayout create_mos2114_layout() {
 #ifdef IMGUI_VERSION
 // Helper function to get MOS2114 pin states for visualization
 static std::vector<PinSignalState> get_mos2114_pin_states(MOS2114* mos2114, const ChipLayout* layout, bus_state_t bus_state) {
-    std::vector<PinSignalState> pin_states;
-    if (!mos2114 || !layout) return pin_states;
-    
-    int total_pins = layout->get_total_pins();
-    pin_states.resize(total_pins);
-    
-    // Initialize all pins as inactive by default
-    for (int i = 0; i < total_pins; i++) {
-        pin_states[i] = PinSignalState{
-            .pin_number = static_cast<uint8_t>(i + 1),
-            .signal_level = false,
-            .drive_direction = false,
-            .signal_value = 0,
-            .high_impedance = true,
-            .has_pullup = false,
-            .has_pulldown = false,
-            .signal_valid = true,
-            .analog_voltage = 0.0f,
-            .is_pwm = false,
-            .pwm_duty_cycle = 0.0f
-        };
-    }
-    
-    // Set power pins as active
-    pin_states[8].signal_level = false;  // GND (pin 9) - Ground
-    pin_states[8].high_impedance = false;
-    pin_states[17].signal_level = true;  // Vcc (pin 18) - +5V Power
-    pin_states[17].high_impedance = false;
-    
-    // Set control pins based on current bus state
-    pin_states[7].signal_level = true;   // /CS (pin 8) - assume active when accessed
-    pin_states[7].drive_direction = false; // Input
-    pin_states[7].high_impedance = false;
-    pin_states[9].signal_level = false;  // /WE (pin 10) - active low for writes
-    pin_states[9].drive_direction = false; // Input
-    pin_states[9].high_impedance = false;
-    
-    // Address pins (A0-A9) - show as active during access
-    for (int addr_pin = 0; addr_pin < 10; addr_pin++) {
-        int pin_index;
-        if (addr_pin <= 6) {
-            // A0-A6 are pins 7,6,5,4,3,2,1 (reversed order)
-            pin_index = 6 - addr_pin;
-        } else {
-            // A7-A9 are pins 17,16,15
-            pin_index = 10 + (addr_pin - 7);
+    if (!mos2114 || !layout) return {};
+
+    // Generic bus-derived pin states (address, data, power, clock, control)
+    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
+
+    // MOS2114 specific: address pins are inputs (SRAM receives address)
+    // The generic function already sets signal_level from bus_state.
+    // Override drive_direction for address pins (input to SRAM).
+    for (const auto& pin : layout->left_pins) {
+        if (pin.get_pin_type() == PinType::ADDRESS && pin.pin_number > 0) {
+            pin_states[pin.pin_number - 1].drive_direction = false;
         }
-        pin_states[pin_index].signal_level = true;
-        pin_states[pin_index].drive_direction = false; // Input
-        pin_states[pin_index].high_impedance = false;
     }
-    
-    // Data pins (D1-D4) - show as active during access (4-bit wide memory)
-    pin_states[10].signal_level = true;  // D1 (pin 11)
-    pin_states[10].drive_direction = true; // Output when reading
-    pin_states[10].high_impedance = false;
-    pin_states[11].signal_level = true;  // D2 (pin 12)
-    pin_states[11].drive_direction = true; // Output when reading
-    pin_states[11].high_impedance = false;
-    pin_states[12].signal_level = true;  // D3 (pin 13)
-    pin_states[12].drive_direction = true; // Output when reading
-    pin_states[12].high_impedance = false;
-    pin_states[13].signal_level = true;  // D4 (pin 14)
-    pin_states[13].drive_direction = true; // Output when reading
-    pin_states[13].high_impedance = false;
-    
+    for (const auto& pin : layout->right_pins) {
+        if (pin.get_pin_type() == PinType::ADDRESS && pin.pin_number > 0) {
+            pin_states[pin.pin_number - 1].drive_direction = false;
+        }
+    }
+
     return pin_states;
 }
 
@@ -280,7 +233,7 @@ void MOS2114::render_layout_content() {
 
 #ifdef IMGUI_VERSION
     ChipLayout& layout = get_mos2114_layout();
-    std::vector<PinSignalState> pin_states = get_mos2114_pin_states(this, &layout, 0);
+    std::vector<PinSignalState> pin_states = get_mos2114_pin_states(this, &layout, this->bus_snapshot_);
     render_chip_layout(layout, pin_states, "MOS2114");
 #endif
 }

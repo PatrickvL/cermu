@@ -141,51 +141,26 @@ inline ChipLayout create_pla_layout() {
 // ============================================================================
 
 // Helper function to get PLA pin states for visualization
-static std::vector<PinSignalState> get_pla_pin_states(C64System* c64, const ChipLayout* layout) {
-    std::vector<PinSignalState> pin_states;
-    if (!c64 || !layout) return pin_states;
-    
-    int total_pins = layout->get_total_pins();
-    pin_states.resize(total_pins);
-    
-    // Initialize all pins as inactive by default
-    for (int i = 0; i < total_pins; i++) {
-        pin_states[i] = PinSignalState{
-            .pin_number = static_cast<uint8_t>(i + 1),
-            .signal_level = false,
-            .drive_direction = false,
-            .signal_value = 0,
-            .high_impedance = true,
-            .has_pullup = false,
-            .has_pulldown = false,
-            .signal_valid = true,
-            .analog_voltage = 0.0f,
-            .is_pwm = false,
-            .pwm_duty_cycle = 0.0f
-        };
-    }
-    
-    // Set pin states based on PLA logic
+static std::vector<PinSignalState> get_pla_pin_states(C64System* c64, const ChipLayout* layout, bus_state_t bus_state) {
+    if (!c64 || !layout) return {};
+
+    // Generic bus-derived pin states (address, data, power, clock, control)
+    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
+
+    // PLA specific: Control signal pins from banking mode
     uint8_t current_mode = c64->bus.pla_banking_mode;
-    
-    // Power pins are always active
-    pin_states[13].signal_level = false;  // VSS (Ground, pin 14)
-    pin_states[13].high_impedance = false;
-    pin_states[27].signal_level = true;   // VCC (+5V, pin 28)
-    pin_states[27].high_impedance = false;
-    
-    // Control signal pins based on current banking mode
+
     pin_states[5].signal_level = (current_mode & 0x04) != 0;   // CHAREN (pin 6)
     pin_states[5].high_impedance = false;
-    pin_states[6].signal_level = (current_mode & 0x02) != 0;  // HIRAM (pin 7)
+    pin_states[6].signal_level = (current_mode & 0x02) != 0;   // HIRAM (pin 7)
     pin_states[6].high_impedance = false;
-    pin_states[7].signal_level = (current_mode & 0x01) != 0;  // LORAM (pin 8)
+    pin_states[7].signal_level = (current_mode & 0x01) != 0;   // LORAM (pin 8)
     pin_states[7].high_impedance = false;
     pin_states[21].signal_level = (current_mode & 0x10) != 0;  // GAME (pin 22)
     pin_states[21].high_impedance = false;
     pin_states[22].signal_level = (current_mode & 0x08) != 0;  // EXROM (pin 23)
     pin_states[22].high_impedance = false;
-    
+
     return pin_states;
 }
 
@@ -220,7 +195,7 @@ void PlaChip::render_debug_content() {
         ChipLayout& layout = get_pla_layout();
         
         // Get current pin states from PLA
-        std::vector<PinSignalState> pin_states = get_pla_pin_states(c64, &layout);
+        std::vector<PinSignalState> pin_states = get_pla_pin_states(c64, &layout, bus_snapshot_);
         
         // Render the chip using global renderer
         renderer.render(layout, chip_center, pin_states, "PLA");
@@ -622,7 +597,7 @@ void PlaChip::render_layout_content() {
     C64System* c64 = c64_;
 
     ChipLayout& layout = get_pla_layout();
-    std::vector<PinSignalState> pin_states = get_pla_pin_states(c64, &layout);
+    std::vector<PinSignalState> pin_states = get_pla_pin_states(c64, &layout, bus_snapshot_);
     render_chip_layout(layout, pin_states, "906114-01");
 #endif
 }

@@ -77,35 +77,13 @@ bool nes6502_apu::APU::has_layout_content()   const { return true; }
 // ============================================================================
 
 static std::vector<PinSignalState> get_apu_pin_states(
-        [[maybe_unused]] nes6502_apu::APU* apu) {
-    std::vector<PinSignalState> states;
-    if (!apu) return states;
+        nes6502_apu::APU* apu, const ChipLayout* layout, bus_state_t bus_state) {
+    if (!apu || !layout) return {};
 
-    // Initialize all 40 pins with defaults
-    states.resize(40);
-    for (int i = 0; i < 40; i++) {
-        states[i] = PinSignalState{
-            .pin_number = static_cast<uint8_t>(i + 1),
-            .signal_level = false,
-            .drive_direction = false,
-            .signal_value = 0,
-            .high_impedance = true,
-            .has_pullup = false,
-            .has_pulldown = false,
-            .signal_valid = true,
-            .analog_voltage = 0.0f,
-            .is_pwm = false,
-            .pwm_duty_cycle = 0.0f
-        };
-    }
+    // Generic bus-derived pin states (address, data, power, clock, control)
+    auto states = populate_pin_states_from_bus(*layout, bus_state);
 
-    // Power pins
-    states[39].signal_level = true;  // VCC (pin 40) — high
-    states[39].high_impedance = false;
-    states[19].signal_level = false; // GND (pin 20) — low
-    states[19].high_impedance = false;
-
-    // SND1 (pin 35, index 34) — pulse + triangle mix (analog, show PWM)
+    // APU specific: SND1 (pin 35, index 34) — pulse + triangle mix (analog, show PWM)
     uint8_t p1   = apu->pulse1.output();
     uint8_t p2   = apu->pulse2.output();
     uint8_t tri  = apu->triangle.output();
@@ -152,7 +130,7 @@ void nes6502_apu::APU::render_debug_content() {
     ImGui::BeginChild("##apu_chip_viz", ImVec2(chip_w, 0), true);
     {
         static ChipLayout layout = create_ricoh_2a03_apu_layout();
-        auto pin_states = get_apu_pin_states(apu);
+        auto pin_states = get_apu_pin_states(apu, &layout, apu->bus_snapshot_);
 
         ImVec2 region = ImGui::GetContentRegionAvail();
         ImVec2 center(
@@ -380,7 +358,7 @@ void nes6502_apu::APU::render_layout_content() {
     auto* apu = this;
 
     static ChipLayout layout = create_ricoh_2a03_apu_layout();
-    auto pin_states = get_apu_pin_states(apu);
+    auto pin_states = get_apu_pin_states(apu, &layout, apu->bus_snapshot_);
     render_chip_layout(layout, pin_states, "RP2A03");
 }
 
