@@ -408,3 +408,77 @@ else()
     message(STATUS "  SID Comparison Runner: SKIPPED (reSID not found at ${RESID_SRC_DIR})")
     message(STATUS "    To enable: clone VICE into ../VICE/vice/src/resid/")
 endif()
+
+# =============================================================================
+# NES APU Reference Comparison Runner (cermu vs Blargg's Nes_Snd_Emu)
+# =============================================================================
+# Builds Blargg's Nes_Snd_Emu (from game-music-emu) as a static library,
+# then links it with our APU test harness for waveform comparison.
+# =============================================================================
+
+set(NES_SND_EMU_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../external/nes_snd_emu")
+
+if(EXISTS "${NES_SND_EMU_DIR}/Nes_Apu.cpp")
+    # Build Nes_Snd_Emu as a static library
+    add_library(nes_snd_emu STATIC
+        ${NES_SND_EMU_DIR}/Blip_Buffer.cpp
+        ${NES_SND_EMU_DIR}/Nes_Apu.cpp
+        ${NES_SND_EMU_DIR}/Nes_Oscs.cpp
+    )
+    target_include_directories(nes_snd_emu PUBLIC
+        ${NES_SND_EMU_DIR}
+    )
+    set_property(TARGET nes_snd_emu PROPERTY CXX_STANDARD 20)
+    # Suppress warnings in third-party code
+    if(NOT MSVC)
+        target_compile_options(nes_snd_emu PRIVATE -w)
+    else()
+        target_compile_options(nes_snd_emu PRIVATE /w)
+    endif()
+
+    # Build the comparison runner
+    add_executable(apu_comparison_runner
+        apu_comparison_runner.cpp
+        ${TESTING_DIR}/apu_test_harness.cpp
+        ${NES_DIR}/nes_apu_gui.cpp
+        ${CORE_DIR}/chip.cpp
+        ${CORE_DIR}/chip_layout.cpp
+        ${CORE_DIR}/pin_labels.cpp
+        ${CORE_DIR}/ioport.cpp
+    )
+    target_include_directories(apu_comparison_runner PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/testing
+        ${NES_SND_EMU_DIR}
+    )
+    target_compile_definitions(apu_comparison_runner PRIVATE CERMU_IMPL)
+    set_property(TARGET apu_comparison_runner PROPERTY CXX_STANDARD 20)
+    set_property(TARGET apu_comparison_runner PROPERTY CXX_STANDARD_REQUIRED ON)
+    target_link_libraries(apu_comparison_runner nes_snd_emu)
+    if(NOT WIN32 AND NOT MSVC)
+        target_link_libraries(apu_comparison_runner m)
+    endif()
+
+    # CTest integration
+    add_test(NAME apu_reference_comparison
+        COMMAND apu_comparison_runner
+    )
+    set_tests_properties(apu_reference_comparison PROPERTIES TIMEOUT 120)
+
+    # Custom target for running comparison
+    add_custom_target(run_apu_comparison
+        COMMAND apu_comparison_runner
+        DEPENDS apu_comparison_runner
+        COMMENT "Running NES APU reference comparison (cermu vs Blargg)"
+    )
+
+    # Install
+    install(TARGETS apu_comparison_runner RUNTIME DESTINATION bin)
+
+    message(STATUS "  APU Comparison Runner: Built (Nes_Snd_Emu found)")
+else()
+    message(STATUS "  APU Comparison Runner: SKIPPED (Nes_Snd_Emu not found)")
+    message(STATUS "    To enable: place Blargg's nes_snd_emu in external/nes_snd_emu/")
+endif()

@@ -936,7 +936,8 @@ void nes6502_destroy(nes6502_t *cpu);
 // Basic API functions
 bus_state_t nes6502_init(nes6502_t *cpu);
 bus_state_t nes6502_reset(nes6502_t *cpu, bus_state_t pins);
-bus_state_t nes6502_tick(nes6502_t *cpu, bus_state_t pins);
+bus_state_t nes6502_tick(nes6502_t *cpu, bus_state_t pins);      // PHI2: bus setup
+bus_state_t nes6502_tick_phi1(nes6502_t *cpu, bus_state_t pins); // PHI1: internal ops + APU
 bool nes6502_opdone(nes6502_t *cpu);
 
 // Register access
