@@ -446,9 +446,8 @@ int main(int argc, char** argv) {
     // Pass any pending file path so it can be loaded after system selection
     SystemGUI gui(std::move(system), file_path);
     
-    // Initialize GUI with window title
-    const char* window_title = "cermu - Multi-System Emulator";
-    if (!gui.init(window_title, 1200, 800)) {
+    // Initialize GUI — window title is managed dynamically by update_window_title()
+    if (!gui.init("cermu", 1200, 800)) {
         printf("ERROR: Failed to initialize GUI\n");
         return 1;
     }

@@ -443,6 +443,14 @@ public:
     /// Empty string if nothing is loaded.
     const std::string& get_program_title() const { return program_title_; }
 
+    /// Optional mode label shown in the window title (e.g. "SID Player").
+    /// Returns nullptr when no special mode is active.
+    virtual const char* get_mode_label() const { return nullptr; }
+
+    /// Optional subtitle info (e.g. "[3/25]" for subtune 3 of 25).
+    /// Returns empty string when not applicable.
+    virtual std::string get_subtitle_info() const { return {}; }
+
     virtual uint32_t* get_framebuffer() = 0;
     virtual void get_display_dimensions(int* width, int* height) const = 0;
     virtual void handle_keyboard_event(SDL_Keycode key, bool pressed) = 0;

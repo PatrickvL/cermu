@@ -489,6 +489,10 @@ public:
     // EmulatedSystem interface - GUI integration
     void render_system_menu_items() override;
     void render_configuration_ui() override;
+
+    // Window title metadata
+    const char* get_mode_label() const override;
+    std::string get_subtitle_info() const override;
     
     // EmulatedSystem interface - Emulation control
     void set_speed_multiplier(float multiplier) override;
