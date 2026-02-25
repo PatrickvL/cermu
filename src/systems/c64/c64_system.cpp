@@ -881,7 +881,7 @@ void C64System::system_tick() {
     }
 
     // Restore R/W line to read mode
-    s |= BUS_BIT(BUS_RW_BIT);
+    BUS_SET_BIT(s, BUS_RW_BIT);
 
     // PHASE 5: SID — sound generation
     s = sid->tick(s);

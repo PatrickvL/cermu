@@ -185,7 +185,7 @@ std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits> *cpu,
       if (bit_index < 8) {
         state.signal_level = (data_bus & (1 << bit_index)) != 0;
         state.drive_direction =
-            (bus_state & BUS_BIT(BUS_RW_BIT)) == 0; // Output on write
+            !BUS_GET_BIT(bus_state, BUS_RW_BIT); // Output on write
         state.high_impedance = !state.drive_direction;
       }
       break;
@@ -202,7 +202,7 @@ std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits> *cpu,
     default: {
       auto [bus_bit, is_input, invert] = get_pin_bus_mapping(pin.label);
       if (bus_bit >= 0) {
-        bool bit_set = (bus_state & BUS_BIT(bus_bit)) != 0;
+        bool bit_set = BUS_GET_BIT(bus_state, bus_bit);
         state.signal_level = invert ? !bit_set : bit_set;
         state.drive_direction = !is_input;
       } else if (pin.label == PinLabel::NC) {

@@ -87,9 +87,11 @@ void render_chip_visualization(fam65xx_t<Traits> *cpu, ImVec2 chip_center) {
     BUS_SET_ADDR(bus_state, cpu->get(REG_AB));
     BUS_SET_DATA(bus_state, cpu->get(REG_DL));
     // Set safe defaults for control signals
-    bus_state |= BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) |
-                 BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_IRQ_BIT) |
-                 BUS_BIT(BUS_NMI_BIT);
+    BUS_SET_BIT(bus_state, BUS_RW_BIT);
+    BUS_SET_BIT(bus_state, BUS_RDY_BIT);
+    BUS_SET_BIT(bus_state, BUS_RES_BIT);
+    BUS_SET_BIT(bus_state, BUS_IRQ_BIT);
+    BUS_SET_BIT(bus_state, BUS_NMI_BIT);
   }
   render_chip_visualization<Traits>(cpu, chip_center, bus_state);
 }
@@ -394,9 +396,11 @@ void fam65xx_t<Traits>::render_debug_content() {
       if (bus_state == 0) {
         BUS_SET_ADDR(bus_state, this->get(REG_AB));
         BUS_SET_DATA(bus_state, this->get(REG_DL));
-        bus_state |= BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) |
-                     BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_IRQ_BIT) |
-                     BUS_BIT(BUS_NMI_BIT);
+        BUS_SET_BIT(bus_state, BUS_RW_BIT);
+        BUS_SET_BIT(bus_state, BUS_RDY_BIT);
+        BUS_SET_BIT(bus_state, BUS_RES_BIT);
+        BUS_SET_BIT(bus_state, BUS_IRQ_BIT);
+        BUS_SET_BIT(bus_state, BUS_NMI_BIT);
       }
 
       // Show chip visualization with bus state
@@ -458,9 +462,11 @@ void fam65xx_t<Traits>::render_layout_content() {
     if (bus_state == 0) {
       BUS_SET_ADDR(bus_state, this->get(REG_AB));
       BUS_SET_DATA(bus_state, this->get(REG_DL));
-      bus_state |= BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) |
-                   BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_IRQ_BIT) |
-                   BUS_BIT(BUS_NMI_BIT);
+      BUS_SET_BIT(bus_state, BUS_RW_BIT);
+      BUS_SET_BIT(bus_state, BUS_RDY_BIT);
+      BUS_SET_BIT(bus_state, BUS_RES_BIT);
+      BUS_SET_BIT(bus_state, BUS_IRQ_BIT);
+      BUS_SET_BIT(bus_state, BUS_NMI_BIT);
     }
     std::vector<PinSignalState> pin_states =
         get_cpu_pin_states<Traits>(this, &layout, bus_state);

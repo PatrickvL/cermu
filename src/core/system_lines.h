@@ -91,14 +91,14 @@ typedef uint64_t bus_state_t;
 /* Apply legacy 8-bit LINES to 64-bit pin layout (retained for BUS_STATE helper) */
 static inline bus_state_t bus_lines_apply(bus_state_t s, uint8_t lines) {
     /* IRQ/NMI are active-low inputs on the core */
-    if (lines & BUS_MASK_IRQ)  s &= ~BUS_BIT(BUS_IRQ_BIT); else s |= BUS_BIT(BUS_IRQ_BIT);
-    if (lines & BUS_MASK_NMI)  s &= ~BUS_BIT(BUS_NMI_BIT); else s |= BUS_BIT(BUS_NMI_BIT);
+    if (lines & BUS_MASK_IRQ)  BUS_CLR_BIT(s, BUS_IRQ_BIT); else BUS_SET_BIT(s, BUS_IRQ_BIT);
+    if (lines & BUS_MASK_NMI)  BUS_CLR_BIT(s, BUS_NMI_BIT); else BUS_SET_BIT(s, BUS_NMI_BIT);
 
     /* Active-high pins */
-    if (lines & BUS_MASK_RW)   s |=  BUS_BIT(BUS_RW_BIT);  else s &= ~BUS_BIT(BUS_RW_BIT);
-    if (lines & BUS_MASK_BA)   s |=  BUS_BIT(BUS_BA_BIT);  else s &= ~BUS_BIT(BUS_BA_BIT);
-    if (lines & BUS_MASK_AEC)  s |=  BUS_BIT(BUS_AEC_BIT); else s &= ~BUS_BIT(BUS_AEC_BIT);
-    if (lines & BUS_MASK_RDY)  s |=  BUS_BIT(BUS_RDY_BIT); else s &= ~BUS_BIT(BUS_RDY_BIT);
+    if (lines & BUS_MASK_RW)   BUS_SET_BIT(s, BUS_RW_BIT);  else BUS_CLR_BIT(s, BUS_RW_BIT);
+    if (lines & BUS_MASK_BA)   BUS_SET_BIT(s, BUS_BA_BIT);  else BUS_CLR_BIT(s, BUS_BA_BIT);
+    if (lines & BUS_MASK_AEC)  BUS_SET_BIT(s, BUS_AEC_BIT); else BUS_CLR_BIT(s, BUS_AEC_BIT);
+    if (lines & BUS_MASK_RDY)  BUS_SET_BIT(s, BUS_RDY_BIT); else BUS_CLR_BIT(s, BUS_RDY_BIT);
 
     return s;
 }

@@ -1106,12 +1106,12 @@ bus_state_t mos6526_s::tick_phi2(bus_state_t bus_state) {
     if (reg[CRA] & CRA_SPMODE) {
         // SPMODE=output: CIA drives CNT and SP pins
         if (!cnt_output_state) {
-            bus_state &= ~BUS_BIT(BUS_CNT_BIT);  // Pull CNT LOW
+            BUS_CLR_BIT(bus_state, BUS_CNT_BIT);  // Pull CNT LOW
         }
         if (sp_output_bit) {
-            bus_state |= BUS_BIT(BUS_SP_BIT);     // Drive SP HIGH
+            BUS_SET_BIT(bus_state, BUS_SP_BIT);     // Drive SP HIGH
         } else {
-            bus_state &= ~BUS_BIT(BUS_SP_BIT);    // Drive SP LOW
+            BUS_CLR_BIT(bus_state, BUS_SP_BIT);    // Drive SP LOW
         }
     }
 
