@@ -25,6 +25,9 @@ bool MOS2114::has_layout_content()   const { return true; }
 // ============================================================================
 bus_state_t MOS2114::bus_read(void* context, bus_state_t bus_state) {
     auto* self = static_cast<MOS2114*>(context);
+#ifdef IMGUI_VERSION
+    self->bus_snapshot_ = bus_state;
+#endif
     // Color RAM is mapped at $D800–$DBFF (1024 bytes)
     // Mask to 10 bits for 1K addressing
     uint16_t offset = BUS_GET_ADDR(bus_state) & 0x3FF;
@@ -38,6 +41,9 @@ bus_state_t MOS2114::bus_read(void* context, bus_state_t bus_state) {
 
 bus_state_t MOS2114::bus_write(void* context, bus_state_t bus_state) {
     auto* self = static_cast<MOS2114*>(context);
+#ifdef IMGUI_VERSION
+    self->bus_snapshot_ = bus_state;
+#endif
 
     // HARDWARE REFERENCE: PLA _GRW Signal for Color RAM Write Control
     // ================================================================

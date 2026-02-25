@@ -173,8 +173,10 @@ static ChipLayout& get_pla_layout() {
 void PlaChip::render_debug_content() {
     C64System* c64 = c64_;
     if (!c64) return;
-        
+
 #ifdef IMGUI_VERSION
+    // PLA is combinational logic — no tick function — snapshot bus state at render time
+    bus_snapshot_ = c64->bus.state;
     // Create two-column layout: chip visualization on left, debugging info on right
     ImVec2 window_size = ImGui::GetWindowSize();
     
@@ -594,6 +596,9 @@ void PlaChip::render_layout_content() {
     if (!c64_) return;
 
 #ifdef IMGUI_VERSION
+    // PLA is combinational logic — no tick function — snapshot bus state at render time
+    bus_snapshot_ = c64_->bus.state;
+
     C64System* c64 = c64_;
 
     ChipLayout& layout = get_pla_layout();

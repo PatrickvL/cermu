@@ -121,7 +121,7 @@ void MOS2114::render_debug_content() {
         ChipLayout& layout = get_mos2114_layout();
         
         // Get current pin states from MOS2114
-        std::vector<PinSignalState> pin_states = get_mos2114_pin_states(this, &layout, 0 /* bus_state */);
+        std::vector<PinSignalState> pin_states = get_mos2114_pin_states(this, &layout, this->bus_snapshot_);
         
         // Render the chip using global renderer
         renderer.render(layout, chip_center, pin_states, "MOS2114");
