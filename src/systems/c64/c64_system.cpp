@@ -1058,33 +1058,45 @@ void C64System::apply_pending_load() {
     // =========================================================================
     const sid_header_t* sid = sid_get_metadata(&pending_load_.result);
     if (sid) {
-        // Compute 0-based subtune index from the 1-based start_song
-        uint16_t subtune = sid->start_song;
-        if (subtune > 0) subtune--;
+        // RSID with init_addr=0: BASIC program SID.
+        // These are full BASIC programs that play music — they must be loaded
+        // at $0801 and RUN via BASIC like any normal .prg file.  We skip the
+        // player stub entirely and fall through to the standard BASIC load
+        // path, but still track the SID metadata for UI/title display.
+        bool is_basic_sid = (sid->type == SID_TYPE_RSID && sid->init_addr == 0);
 
-        c64_apply_sid_load(this, sid, &pending_load_.result.program, subtune);
+        if (!is_basic_sid) {
+            // Compute 0-based subtune index from the 1-based start_song
+            uint16_t subtune = sid->start_song;
+            if (subtune > 0) subtune--;
 
-        // Keep a copy of the SID header and payload for subtune switching
-        active_sid_header_ = *sid;
-        const auto& prog = pending_load_.result.program;
-        if (prog.data && prog.data_size > 0) {
-            active_sid_data_.assign(prog.data, prog.data + prog.data_size);
-        } else {
-            active_sid_data_.clear();
+            c64_apply_sid_load(this, sid, &pending_load_.result.program, subtune);
+
+            // Keep a copy of the SID header and payload for subtune switching
+            active_sid_header_ = *sid;
+            const auto& prog = pending_load_.result.program;
+            if (prog.data && prog.data_size > 0) {
+                active_sid_data_.assign(prog.data, prog.data + prog.data_size);
+            } else {
+                active_sid_data_.clear();
+            }
+            active_subtune_ = subtune;
+            sid_player_active_ = true;
+
+            // Track the SID revision that was applied so the GUI stays in sync
+            if (sid->version >= 2 && sid->sid_model != SID_MODEL_UNKNOWN) {
+                pending_sid_revision_ = (sid->sid_model == SID_MODEL_8580)
+                                        ? SID_REVISION_8580_R5
+                                        : SID_REVISION_6581_R4AR;
+            }
+            pending_load_.result.release();
+            pending_load_.active = false;
+            boot_completed_ = true;
+            return;
         }
-        active_subtune_ = subtune;
-        sid_player_active_ = true;
 
-        // Track the SID revision that was applied so the GUI stays in sync
-        if (sid->version >= 2 && sid->sid_model != SID_MODEL_UNKNOWN) {
-            pending_sid_revision_ = (sid->sid_model == SID_MODEL_8580)
-                                    ? SID_REVISION_8580_R5
-                                    : SID_REVISION_6581_R4AR;
-        }
-        pending_load_.result.release();
-        pending_load_.active = false;
-        boot_completed_ = true;
-        return;
+        // BASIC SID: log and fall through to standard BASIC load path
+        printf("C64: RSID BASIC program — loading as standard BASIC PRG\n");
     }
 
     // =========================================================================

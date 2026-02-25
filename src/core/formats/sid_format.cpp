@@ -122,10 +122,11 @@ bool sid_parse_header(const uint8_t* data, size_t size, sid_header_t* out) {
 
     // RSID constraints validation
     if (out->type == SID_TYPE_RSID) {
-        // RSID init_addr must not be 0 (that's a PSID-only feature)
-        // RSID play_addr should be 0 (tune provides its own IRQ handler)
-        if (out->init_addr == 0) {
-            printf("SIDFormat: RSID with init_addr=0 is invalid\n");
+        // RSID play_addr must be 0 (tune provides its own IRQ handler).
+        // RSID init_addr == 0 is valid — it indicates a BASIC program SID
+        // that should be loaded at the BASIC start address and RUN.
+        if (out->play_addr != 0) {
+            printf("SIDFormat: RSID with play_addr != 0 is invalid\n");
             return false;
         }
     }
