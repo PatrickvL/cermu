@@ -1,5 +1,5 @@
 #include "c64_test_loader.h"
-#include "../../chip/memory/ram.h"
+#include "../../chip/memory/memory_chip.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,9 +10,9 @@ static uint16_t read_le16(const uint8_t* data) {
     return data[0] | (data[1] << 8);
 }
 
-bool c64_test_load_prg_file(const char* filename, ram_t* ram, 
+bool c64_test_load_prg_file(const char* filename, MemoryChip* ram, 
                             uint16_t* out_load_address, uint16_t* out_sys_address) {
-    if (!filename || !ram || !ram->memory) {
+    if (!filename || !ram || !ram->data()) {
         printf("ERROR: Invalid parameters for PRG loading\n");
         return false;
     }
@@ -53,7 +53,7 @@ bool c64_test_load_prg_file(const char* filename, ram_t* ram,
     }
 
     // Read file data into RAM
-    if (fread(&ram->memory[load_address], 1, data_size, file) != data_size) {
+    if (fread(&ram->data()[load_address], 1, data_size, file) != data_size) {
         printf("ERROR: Failed to read PRG file data\n");
         fclose(file);
         return false;
@@ -81,8 +81,8 @@ bool c64_test_load_prg_file(const char* filename, ram_t* ram,
     return true;
 }
 
-bool c64_test_load_bin_file(const char* filename, ram_t* ram, uint16_t load_address) {
-    if (!filename || !ram || !ram->memory) {
+bool c64_test_load_bin_file(const char* filename, MemoryChip* ram, uint16_t load_address) {
+    if (!filename || !ram || !ram->data()) {
         printf("ERROR: Invalid parameters for BIN loading\n");
         return false;
     }
@@ -106,7 +106,7 @@ bool c64_test_load_bin_file(const char* filename, ram_t* ram, uint16_t load_addr
     }
 
     // Read file data directly into RAM at specified address
-    if (fread(&ram->memory[load_address], 1, file_size, file) != (size_t)file_size) {
+    if (fread(&ram->data()[load_address], 1, file_size, file) != (size_t)file_size) {
         printf("ERROR: Failed to read BIN file data\n");
         fclose(file);
         return false;
@@ -125,7 +125,7 @@ bool c64_test_load_bin_file(const char* filename, ram_t* ram, uint16_t load_addr
 // Helper to evaluate simple BASIC expression for SYS command
 // Handles: PEEK(addr), numbers, +, *, and combinations
 // Supports both tokenized BASIC ($C2 for PEEK) and text
-static uint16_t evaluate_basic_expression(ram_t* ram, const char* expr, size_t len, uint16_t load_address) {
+static uint16_t evaluate_basic_expression(MemoryChip* ram, const char* expr, size_t len, uint16_t load_address) {
     // Parse SYS address from BASIC expression
     // Handles both simple numeric addresses and complex PEEK expressions
     
@@ -220,8 +220,8 @@ static uint16_t evaluate_basic_expression(ram_t* ram, const char* expr, size_t l
     return 0;  // Unable to parse
 }
 
-uint16_t c64_test_parse_sys_address(ram_t* ram, uint16_t start_address, uint16_t load_address) {
-    if (!ram || !ram->memory) {
+uint16_t c64_test_parse_sys_address(MemoryChip* ram, uint16_t start_address, uint16_t load_address) {
+    if (!ram || !ram->data()) {
         return 0;
     }
 
@@ -238,7 +238,7 @@ uint16_t c64_test_parse_sys_address(ram_t* ram, uint16_t start_address, uint16_t
     for (int line_count = 0; line_count < 10; line_count++) {
         // Read next line address
         if (current_line + 2 >= 0x10000) break;
-        uint16_t next_line = read_le16(&ram->memory[current_line]);
+        uint16_t next_line = read_le16(&ram->data()[current_line]);
 
         // Check for end of BASIC program
         if (next_line == 0x0000) {
@@ -247,7 +247,7 @@ uint16_t c64_test_parse_sys_address(ram_t* ram, uint16_t start_address, uint16_t
 
         // Read line number (for debugging)
         if (current_line + 4 >= 0x10000) break;
-        uint16_t line_number = read_le16(&ram->memory[current_line + 2]);
+        uint16_t line_number = read_le16(&ram->data()[current_line + 2]);
 
         // Start of line tokens/text
         uint16_t line_data = current_line + 4;
@@ -256,11 +256,11 @@ uint16_t c64_test_parse_sys_address(ram_t* ram, uint16_t start_address, uint16_t
         // Skip REM lines (0x8F token)
         bool is_rem_line = false;
         for (uint16_t check_pos = line_data; check_pos < next_line && !is_rem_line; check_pos++) {
-            if (ram->memory[check_pos] == 0x8F) {  // REM token
+            if (ram->data()[check_pos] == 0x8F) {  // REM token
                 is_rem_line = true;
                 break;
             }
-            if (ram->memory[check_pos] == 0x00) break;  // End of line
+            if (ram->data()[check_pos] == 0x00) break;  // End of line
         }
         
         if (is_rem_line) {
@@ -270,12 +270,12 @@ uint16_t c64_test_parse_sys_address(ram_t* ram, uint16_t start_address, uint16_t
         }
         
         for (uint16_t pos = line_data; pos < next_line; pos++) {
-            if (ram->memory[pos] == 0x9E) {  // SYS token
+            if (ram->data()[pos] == 0x9E) {  // SYS token
                 // Extract the expression after SYS
                 pos++;
                 
                 // Skip leading spaces
-                while (pos < next_line && ram->memory[pos] == ' ') {
+                while (pos < next_line && ram->data()[pos] == ' ') {
                     pos++;
                 }
                 
@@ -284,9 +284,9 @@ uint16_t c64_test_parse_sys_address(ram_t* ram, uint16_t start_address, uint16_t
                 size_t expr_len = 0;
                 uint16_t expr_start = pos;
                 
-                while (pos < next_line && ram->memory[pos] != 0x00 &&
-                       ram->memory[pos] != ':' && expr_len < sizeof(expr_buffer) - 1) {
-                    expr_buffer[expr_len++] = ram->memory[pos];
+                while (pos < next_line && ram->data()[pos] != 0x00 &&
+                       ram->data()[pos] != ':' && expr_len < sizeof(expr_buffer) - 1) {
+                    expr_buffer[expr_len++] = ram->data()[pos];
                     pos++;
                 }
                 expr_buffer[expr_len] = '\0';

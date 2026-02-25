@@ -238,7 +238,7 @@ int main(int argc, char** argv) {
                 
                 // Read sprite pointer from the CORRECT screen area
                 uint16_t sp_ptr_addr = (bank_base | vm_base) + 0x3F8 + s;
-                uint8_t sp_ptr = c64->ram->memory[sp_ptr_addr];
+                uint8_t sp_ptr = c64->ram->data()[sp_ptr_addr];
                 uint16_t sp_data_addr = bank_base + (uint16_t)sp_ptr * 64;
                 
                 printf("  Spr%d: %s X=%3d Y=%3d col=%d ptr=$%02X (data@$%04X) %s%s",
@@ -248,9 +248,9 @@ int main(int argc, char** argv) {
                 if (en) {
                     // Show first 3 bytes of sprite data (first row)
                     printf(" data[0..2]=%02X %02X %02X",
-                           c64->ram->memory[sp_data_addr],
-                           c64->ram->memory[sp_data_addr+1],
-                           c64->ram->memory[sp_data_addr+2]);
+                           c64->ram->data()[sp_data_addr],
+                           c64->ram->data()[sp_data_addr+1],
+                           c64->ram->data()[sp_data_addr+2]);
                 }
                 printf("\n");
             }
@@ -323,7 +323,7 @@ int main(int argc, char** argv) {
                    !ecm && !bmm ? "Standard Text Mode" : "Invalid");
 
             // Check CIA2 DD00 for bank config
-            printf("\nCIA2 $DD00 port A value: $%02X\n", c64->ram->memory[0xDD00]);
+            printf("\nCIA2 $DD00 port A value: $%02X\n", c64->ram->data()[0xDD00]);
             // Actually read from CIA2 register directly
             printf("CIA2 PRA register: $%02X\n", c64->cia2->reg[0] & 0x03);
             
@@ -333,11 +333,11 @@ int main(int argc, char** argv) {
                 uint16_t bitmap_base = bank_base + (cb_base & 0x2000); // CB13 selects $0000 or $2000
                 printf("Bitmap base: $%04X (CB13=%d)\n", bitmap_base, (cb_base & 0x2000) ? 1 : 0);
                 printf("Bitmap[0..7] at $%04X: ", bitmap_base);
-                for (int i = 0; i < 8; i++) printf("$%02X ", c64->ram->memory[bitmap_base + i]);
+                for (int i = 0; i < 8; i++) printf("$%02X ", c64->ram->data()[bitmap_base + i]);
                 printf("\n");
                 // Show bitmap data for cell(5,0) = offset 5*8 = 40
                 printf("Bitmap cell(5,0) at $%04X: ", bitmap_base + 40);
-                for (int i = 0; i < 8; i++) printf("$%02X ", c64->ram->memory[bitmap_base + 40 + i]);
+                for (int i = 0; i < 8; i++) printf("$%02X ", c64->ram->data()[bitmap_base + 40 + i]);
                 printf("\n");
             }
         }
@@ -353,15 +353,15 @@ int main(int argc, char** argv) {
         {
             FILE* f = fopen("/tmp/c64_memdump.bin", "wb");
             if (f) {
-                fwrite(c64->ram->memory, 1, 65536, f);
+                fwrite(c64->ram->data(), 1, 65536, f);
                 fclose(f);
                 printf("Saved 64K RAM dump to /tmp/c64_memdump.bin\n");
             }
             // Also dump IRQ vector and key zero-page/hardware state
-            uint16_t irq_lo = c64->ram->memory[0xFFFE] | (c64->ram->memory[0xFFFF] << 8);
-            uint16_t nmi_lo = c64->ram->memory[0xFFFA] | (c64->ram->memory[0xFFFB] << 8);
+            uint16_t irq_lo = c64->ram->data()[0xFFFE] | (c64->ram->data()[0xFFFF] << 8);
+            uint16_t nmi_lo = c64->ram->data()[0xFFFA] | (c64->ram->data()[0xFFFB] << 8);
             // Hardware IRQ vector (from KERNAL RAM copy at $0314/$0315)
-            uint16_t hw_irq = c64->ram->memory[0x0314] | (c64->ram->memory[0x0315] << 8);
+            uint16_t hw_irq = c64->ram->data()[0x0314] | (c64->ram->data()[0x0315] << 8);
             printf("IRQ vector: $%04X, NMI vector: $%04X, HW IRQ ($0314): $%04X\n", 
                    irq_lo, nmi_lo, hw_irq);
             printf("CIA1 ICR mask: $%02X, VIC $D01A: $%02X\n",

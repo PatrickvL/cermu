@@ -2,7 +2,7 @@
 #include "c64_system.h"
 #include "c64_test_loader.h"
 #include "c64_screenshot.h"
-#include "../../chip/memory/ram.h"
+#include "../../chip/memory/memory_chip.h"
 #include "../../chip/cpu/fam65xx/fam65xx.hpp"
 #include "../../chip/video/vic_ii/vicii_common.h"
 #include "../../utils/platform_fs.h"
@@ -436,11 +436,11 @@ static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles, i
                     pc_stable_count++;
                     if (pc_stable_count >= 2) {
                         // Verify JMP *
-                        uint8_t opcode = c64->ram->memory[current_pc];
+                        uint8_t opcode = c64->ram->data()[current_pc];
                         bool is_jmp_self = false;
                         if (opcode == 0x4C) {
-                            uint16_t target = c64->ram->memory[(current_pc + 1) & 0xFFFF] |
-                                             (c64->ram->memory[(current_pc + 2) & 0xFFFF] << 8);
+                            uint16_t target = c64->ram->data()[(current_pc + 1) & 0xFFFF] |
+                                             (c64->ram->data()[(current_pc + 2) & 0xFFFF] << 8);
                             is_jmp_self = (target == current_pc);
                         }
                         if (is_jmp_self || pc_stable_count >= 8) {
@@ -777,9 +777,9 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
     // test does RTS, it returns to BASIC safely.
     uint8_t sp = cpu->get(REG_S);
     uint16_t return_addr = 0xA7AE - 1;  // BASIC warm start, adjusted for RTS convention
-    c64->ram->memory[0x0100 + sp] = (return_addr >> 8) & 0xFF;  // High byte
+    c64->ram->data()[0x0100 + sp] = (return_addr >> 8) & 0xFF;  // High byte
     sp--;
-    c64->ram->memory[0x0100 + sp] = return_addr & 0xFF;          // Low byte
+    c64->ram->data()[0x0100 + sp] = return_addr & 0xFF;          // Low byte
     sp--;
     cpu->set(REG_S, sp);
     
@@ -803,8 +803,8 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
     
     // Set up CPU I/O port for standard C64 configuration (needed for all environments)
     // Banking mode 0x07: LORAM=1, HIRAM=1, CHAREN=1 (standard C64 boot configuration)
-    c64->ram->memory[0x00] = 0x2F;  // DDR: bits 0-2 output, others input
-    c64->ram->memory[0x01] = 0x37;  // Data: LORAM=1, HIRAM=1, CHAREN=1
+    c64->ram->data()[0x00] = 0x2F;  // DDR: bits 0-2 output, others input
+    c64->ram->data()[0x01] = 0x37;  // Data: LORAM=1, HIRAM=1, CHAREN=1
     c64->bus.on_banking_change(0x07);
     
     auto* cpu = CPU(c64->mos6510);
@@ -892,7 +892,7 @@ TestProtocol TestFramework::detect_test_protocol(const TestDescriptor& test, C64
     }
     
     // Check for BASIC two-stage loader pattern
-    ram_t* ram = c64->ram;
+    MemoryChip* ram = c64->ram;
     auto* cpu = CPU(c64->mos6510);
     uint16_t pc = cpu->get(REG_PC);
     
@@ -920,20 +920,20 @@ TestProtocol TestFramework::detect_test_protocol(const TestDescriptor& test, C64
 }
 
 // Detect BASIC two-stage loader (loads at $0801, calculates entry point)
-bool TestFramework::detect_basic_two_stage_loader(ram_t* ram, uint16_t load_addr) {
+bool TestFramework::detect_basic_two_stage_loader(MemoryChip* ram, uint16_t load_addr) {
     // BASIC programs start with link address at $0801/$0802
     if (load_addr != 0x0801) return false;
     
     // Check for BASIC structure: link pointer, line number, SYS token
-    uint16_t link = ram->memory[0x0801] | (ram->memory[0x0802] << 8);
+    uint16_t link = ram->data()[0x0801] | (ram->data()[0x0802] << 8);
     if (link == 0) return false;  // No BASIC program
     
     // Look for SYS token ($9E) in first line
     for (int i = 0x0804; i < 0x0820; i++) {
-        if (ram->memory[i] == 0x9E) {  // SYS token
+        if (ram->data()[i] == 0x9E) {  // SYS token
             return true;
         }
-        if (ram->memory[i] == 0x00) {  // End of line
+        if (ram->data()[i] == 0x00) {  // End of line
             break;
         }
     }
@@ -942,11 +942,11 @@ bool TestFramework::detect_basic_two_stage_loader(ram_t* ram, uint16_t load_addr
 }
 
 // Calculate entry point from BASIC SYS command
-uint16_t TestFramework::calculate_basic_entry_point(ram_t* ram, uint16_t sys_addr) {
+uint16_t TestFramework::calculate_basic_entry_point(MemoryChip* ram, uint16_t sys_addr) {
     // Parse ASCII digits after SYS token
     uint16_t addr = 0;
     for (int i = sys_addr + 1; i < sys_addr + 20; i++) {
-        uint8_t c = ram->memory[i];
+        uint8_t c = ram->data()[i];
         if (c >= '0' && c <= '9') {
             addr = addr * 10 + (c - '0');
         } else if (c == ' ') {
@@ -1154,7 +1154,7 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
                 if (verbose_) {
                     printf("\n  ERRBUF ($5F00): ");
                     for (int di = 0; di < 24; di++) {
-                        printf("%02X ", c64->ram->memory[0x5F00 + di]);
+                        printf("%02X ", c64->ram->data()[0x5F00 + di]);
                     }
                     printf("\n");
                     
@@ -1166,24 +1166,24 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
                     // Heuristic: if $6000-$60FF has non-zero data, use $6000/$8000
                     bool has_6000_data = false;
                     for (int di = 0; di < 64; di++) {
-                        if (c64->ram->memory[0x6000 + di] != 0) { has_6000_data = true; break; }
+                        if (c64->ram->data()[0x6000 + di] != 0) { has_6000_data = true; break; }
                     }
                     if (has_6000_data) { tmp_base = 0x6000; dat_base = 0x8000; }
                     
                     // Dump up to 3 failing subtests
                     int shown = 0;
                     for (int st = 0; st < 24 && shown < 3; st++) {
-                        if (c64->ram->memory[0x5F00 + st] == 0x0A) {
+                        if (c64->ram->data()[0x5F00 + st] == 0x0A) {
                             uint16_t tmp_addr = tmp_base + st * sub_size;
                             uint16_t data_addr = dat_base + st * sub_size;
                             printf("  Fail subtest %d (TMP=$%04X DATA=$%04X)\n", st, tmp_addr, data_addr);
                             printf("  TMP (actual):    ");
-                            for (int di = 0; di < 48; di++) printf("%02X ", c64->ram->memory[tmp_addr + di]);
+                            for (int di = 0; di < 48; di++) printf("%02X ", c64->ram->data()[tmp_addr + di]);
                             printf("\n  DATA (expected): ");
-                            for (int di = 0; di < 48; di++) printf("%02X ", c64->ram->memory[data_addr + di]);
+                            for (int di = 0; di < 48; di++) printf("%02X ", c64->ram->data()[data_addr + di]);
                             printf("\n  Differences:     ");
                             for (int di = 0; di < 48; di++) {
-                                if (c64->ram->memory[tmp_addr + di] != c64->ram->memory[data_addr + di])
+                                if (c64->ram->data()[tmp_addr + di] != c64->ram->data()[data_addr + di])
                                     printf("^^ "); else printf("   ");
                             }
                             printf("\n");
@@ -1202,11 +1202,11 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
                 if (pc_stable_count == 0) stable_pc = current_pc;
                 pc_stable_count++;
                 if (pc_stable_count >= 2) {
-                    uint8_t opcode = c64->ram->memory[current_pc];
+                    uint8_t opcode = c64->ram->data()[current_pc];
                     bool is_jmp_self = false;
                     if (opcode == 0x4C) {
-                        uint16_t target = c64->ram->memory[(current_pc + 1) & 0xFFFF] |
-                                         (c64->ram->memory[(current_pc + 2) & 0xFFFF] << 8);
+                        uint16_t target = c64->ram->data()[(current_pc + 1) & 0xFFFF] |
+                                         (c64->ram->data()[(current_pc + 2) & 0xFFFF] << 8);
                         is_jmp_self = (target == current_pc);
                     }
                     if (is_jmp_self || pc_stable_count >= 8) {

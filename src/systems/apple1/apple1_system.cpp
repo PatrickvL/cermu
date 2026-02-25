@@ -181,11 +181,27 @@ bool Apple1System::apply_configuration() {
 bool Apple1System::initialize() {
     printf("Apple1: Initializing system\n");
     
-    // Initialize memory arrays
-    memset(ram_simple_, 0, sizeof(ram_simple_));
-    memset(monitor_rom_, 0, sizeof(monitor_rom_));
-    memset(basic_rom_, 0, sizeof(basic_rom_));
-    memset(char_rom_, 0, sizeof(char_rom_));
+    // Create memory chips — registered later, storage is ready immediately
+    // RAM chip — allocated at full 64KB but only ram_size_ is addressable
+    auto ram_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"SRAM", "Various"}, 65536, MemoryChip::SRAM, &pins_,
+        "RAM", 0x0000);
+    ram_ = ram_chip.get();
+
+    auto monitor_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"PROM", "Various"}, 256, MemoryChip::PROM, &pins_,
+        "Monitor", 0xFF00);
+    monitor_rom_ = monitor_chip.get();
+
+    auto basic_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "Apple"}, 4096, MemoryChip::ROM, &pins_,
+        "BASIC", 0xE000);
+    basic_rom_ = basic_chip.get();
+
+    auto char_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"2513", "Signetics"}, 512, MemoryChip::ROM, &pins_,
+        "CharROM");
+    char_rom_ = char_chip.get();
     
     // Create terminal (40 cols x 24 rows, 8x8 characters)
     terminal_ = new TextTerminal(40, 24, 8, 8);
@@ -222,8 +238,19 @@ bool Apple1System::initialize() {
     
     setup_connector_ports();
 
-    // Register chips for the Hardware menu (no debug windows)
-    register_apple1_chips();
+    // Register chips for the Hardware menu (transfers ownership of memory chips)
+    register_chip(mos6502_as_chip_base(cpu_),
+        "MOS 6502 CPU", "6502", "CPU", 0x0000);
+    register_chip(&pia_,
+        "PIA 6820 (Keyboard/Display)", "PIA", "I/O", 0xD010);
+    register_chip(std::make_unique<ChipPlaceholder>(
+        ChipInfo{"Terminal", "Custom"}, "Text Terminal (40x24)", "Terminal", "Video"));
+    register_chip(std::move(ram_chip));
+    register_chip(std::move(monitor_chip));
+    if (has_basic_) {
+        register_chip(std::move(basic_chip));
+    }
+    register_chip(std::move(char_chip));
     
     printf("Apple1: System initialized (RAM: %dKB)\n", ram_size_ / 1024);
     return true;
@@ -368,27 +395,8 @@ void Apple1System::render_configuration_ui() {
 // ============================================================================
 
 // ============================================================================
-// Chip Registration
+// Chip Registration — now done inline in initialize()
 // ============================================================================
-
-void Apple1System::register_apple1_chips() {
-    register_chip(mos6502_as_chip_base(cpu_),
-        "MOS 6502 CPU", "6502", "CPU", 0x0000);
-    register_chip(&pia_,
-        "PIA 6820 (Keyboard/Display)", "PIA", "I/O", 0xD010);
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipInfo{"Terminal", "Custom"}, "Text Terminal (40x24)", "Terminal", "Video"));
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipInfo{"SRAM", "Various"}, "SRAM (8KB)", "RAM", "Memory"));
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipInfo{"PROM", "Various"}, "Woz Monitor ROM (256B)", "Monitor", "Memory", 0xFF00));
-    if (has_basic_) {
-        register_chip(std::make_unique<ChipPlaceholder>(
-            ChipInfo{"ROM", "Apple"}, "Apple 1 BASIC ROM (4KB)", "BASIC", "Memory", 0xE000));
-    }
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipInfo{"2513", "Signetics"}, "Signetics 2513 Char ROM", "CharROM", "Memory"));
-}
 
 // ============================================================================
 // Emulation Control
@@ -419,11 +427,11 @@ bus_state_t Apple1System::mem_tick(bus_state_t s) {
         }
         // RAM (0x0000 to ram_size)
         else if (addr < ram_size_) {
-            data = ram_simple_[addr];
+            data = (*ram_)[addr];
         }
         // Monitor ROM (0xFF00-0xFFFF = 256 bytes)
         else if (addr >= 0xFF00) {
-            data = monitor_rom_[addr - 0xFF00];
+            data = (*monitor_rom_)[addr - 0xFF00];
         }
         // TODO: Add BASIC ROM mapping if has_basic_ is true
 
@@ -438,7 +446,7 @@ bus_state_t Apple1System::mem_tick(bus_state_t s) {
         }
         // RAM (0x0000 to ram_size)
         else if (addr < ram_size_) {
-            ram_simple_[addr] = data;
+            (*ram_)[addr] = data;
         }
         // ROM areas are read-only, writes are ignored
     }
@@ -550,7 +558,7 @@ bool Apple1System::load_roms() {
     
     bool monitor_ok = rom_loader_load_from_root(
         rom_root, monitor_files,
-        sizeof(monitor_rom_), monitor_rom_, sizeof(monitor_rom_)
+        monitor_rom_->size_bytes(), monitor_rom_->data(), monitor_rom_->size_bytes()
     );
     
     if (!monitor_ok) {
@@ -568,7 +576,7 @@ bool Apple1System::load_roms() {
     
     bool char_ok = rom_loader_load_from_root(
         rom_root, char_files,
-        sizeof(char_rom_), char_rom_, sizeof(char_rom_)
+        char_rom_->size_bytes(), char_rom_->data(), char_rom_->size_bytes()
     );
     
     if (char_ok && terminal_) {
@@ -576,7 +584,7 @@ bool Apple1System::load_roms() {
         // Convert 2513 ROM format to 8x8 font for TextTerminal
         uint8_t font_8x8[256 * 8];
         memset(font_8x8, 0, sizeof(font_8x8));
-        convert_2513_to_8x8_font(char_rom_, font_8x8);
+        convert_2513_to_8x8_font(char_rom_->data(), font_8x8);
         terminal_->set_font(font_8x8);
     } else {
         printf("Apple1: Character ROM not found, using built-in font\n");
@@ -591,7 +599,7 @@ bool Apple1System::load_roms() {
     
     bool basic_ok = rom_loader_load_from_root(
         rom_root, basic_files,
-        sizeof(basic_rom_), basic_rom_, sizeof(basic_rom_)
+        basic_rom_->size_bytes(), basic_rom_->data(), basic_rom_->size_bytes()
     );
     
     if (basic_ok) {

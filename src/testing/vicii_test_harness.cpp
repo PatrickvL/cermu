@@ -26,12 +26,12 @@ namespace vicii_test {
 // ============================================================================
 
 void patch_kernal_for_test(C64System* c64) {
-    if (!c64 || !c64->kernal || !c64->kernal->memory) {
+    if (!c64 || !c64->kernal || !c64->kernal->data()) {
         printf("VICII-TEST: WARNING — cannot patch KERNAL (ROM not loaded)\n");
         return;
     }
 
-    uint8_t* rom = c64->kernal->memory;
+    uint8_t* rom = c64->kernal->data();
 
     // --- Patch A: Skip RAMTAS memory test (shared implementation) ---
     if (!c64_patch_skip_memtest(c64)) {
@@ -422,10 +422,10 @@ void inject_test_program(C64System* c64) {
     }
 
     // Copy to C64 RAM
-    memcpy(&c64->ram->memory[TEST_LOAD_ADDR], program, size);
+    memcpy(&c64->ram->data()[TEST_LOAD_ADDR], program, size);
 
     // Clear results buffer
-    memset(&c64->ram->memory[RESULTS_BASE], 0, RESULTS_MAX * RESULT_ENTRY_SIZE);
+    memset(&c64->ram->data()[RESULTS_BASE], 0, RESULTS_MAX * RESULT_ENTRY_SIZE);
 
     printf("VICII-TEST: Injected %zu bytes at $%04X\n", size, TEST_LOAD_ADDR);
 }
@@ -447,7 +447,7 @@ bool harness_poll(vicii_test_state_t* state, C64System* c64) {
     state->frames_run++;
 
     // Check done flag
-    if (c64->ram->memory[ZP_DONE_FLAG] == DONE_SIGNAL) {
+    if (c64->ram->data()[ZP_DONE_FLAG] == DONE_SIGNAL) {
         state->all_done = true;
         state->active = false;
         return false;
@@ -456,7 +456,7 @@ bool harness_poll(vicii_test_state_t* state, C64System* c64) {
     // Safety timeout
     if (state->frames_run >= state->max_frames) {
         printf("VICII-TEST: TIMEOUT after %d frames (done_flag=$%02X)\n",
-               state->frames_run, c64->ram->memory[ZP_DONE_FLAG]);
+               state->frames_run, c64->ram->data()[ZP_DONE_FLAG]);
         state->active = false;
         return false;
     }
@@ -467,7 +467,7 @@ bool harness_poll(vicii_test_state_t* state, C64System* c64) {
 void harness_read_results(vicii_test_state_t* state, C64System* c64) {
     if (!c64 || !c64->ram) return;
 
-    const uint8_t* ram = c64->ram->memory;
+    const uint8_t* ram = c64->ram->data();
 
     // Read the results write pointer to know how many entries were written
     uint16_t write_ptr = ram[ZP_RESULT_PTR_LO] | (ram[ZP_RESULT_PTR_HI] << 8);

@@ -6,8 +6,7 @@
 #include "../../core/formats/format_handler.h"
 #include "../../core/formats/sid_format.h"
 // Chip headers (previously included via c64.h)
-#include "../../chip/memory/ram.h"
-#include "../../chip/memory/rom.h"
+#include "../../chip/memory/memory_chip.h"
 #include "../../chip/memory/mos2114.h"
 #include "../../chip/sound/mos6581.h"
 #include "../../chip/io/mos6526.h"
@@ -107,11 +106,11 @@ public:
 public:
     c64_bus_t bus{};                    // C64 bus controller (embedded, not heap-allocated)
     mos6510_t* mos6510 = nullptr;       // MOS6510 CPU instance (opaque C++ core)
-    ram_t* ram = nullptr;               // RAM memory $0000-$FFFF (64KB)
-    rom_t* cartridge_roml = nullptr;    // Cartridge ROM Low $8000-$9FFF (8KB)
-    rom_t* cartridge_romh = nullptr;    // Cartridge ROM High $A000-$BFFF (8KB)
-    rom_t* basic = nullptr;             // Basic ROM $A000-$BFFF (8KB)
-    rom_t* charrom = nullptr;           // Character ROM $D000-$DFFF (4KB) when CHAREN=0
+    MemoryChip* ram = nullptr;          // RAM memory $0000-$FFFF (64KB)
+    MemoryChip* cartridge_roml = nullptr; // Cartridge ROM Low $8000-$9FFF (8KB)
+    MemoryChip* cartridge_romh = nullptr; // Cartridge ROM High $A000-$BFFF (8KB)
+    MemoryChip* basic = nullptr;        // Basic ROM $A000-$BFFF (8KB)
+    MemoryChip* charrom = nullptr;      // Character ROM $D000-$DFFF (4KB) when CHAREN=0
     vicii_t* vicii = nullptr;           // mos6567_t (NTSC) or mos6569_t (PAL) ($D000-$DFFF, 4KB)
     mos6581_t* sid = nullptr;           // MOS6581 SID sound chip ($D400-$D7FF, 1KB)
     mos2114_t* colorram = nullptr;      // Color RAM (1KB at $D800-$DBFF)
@@ -120,7 +119,7 @@ public:
     commodore_keyboard_t* keyboard = nullptr; // Keyboard matrix (connected to CIA1)
     void* io1 = nullptr;               // Cartridge I/O 1 ($DE00-$DEFF)
     void* io2 = nullptr;               // Cartridge I/O 2 ($DF00-$DFFF)
-    rom_t* kernal = nullptr;            // Kernal ROM $E000-$FFFF (8KB)
+    MemoryChip* kernal = nullptr;       // Kernal ROM $E000-$FFFF (8KB)
 
 private:
     bool initialized_ = false;          // True when initialize() has succeeded

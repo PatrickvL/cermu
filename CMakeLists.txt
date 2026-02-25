@@ -274,8 +274,6 @@ list(APPEND CHIP_SOURCES
     src/chip/logic/pla.cpp
 
     # Memory
-    src/chip/memory/ram.cpp
-    src/chip/memory/rom.cpp
     src/chip/memory/mos2114.cpp
     src/chip/memory/memory_chip.cpp
 
