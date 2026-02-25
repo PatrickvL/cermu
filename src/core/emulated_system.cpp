@@ -141,7 +141,7 @@ void EmulatedSystem::handle_controller_event(int controller, int button, bool pr
     (void)pressed;
 }
 
-void EmulatedSystem::render_debug_windows(void* gui_state) {
+void EmulatedSystem::render_debug_windows(void* gui_state, std::mutex& emu_mutex) {
     // Render detached combined windows for chips that were "detached" from
     // the Hardware menu preview.  Each detached window shows layout + debug
     // + settings content in a standalone ImGui window.
@@ -152,6 +152,10 @@ void EmulatedSystem::render_debug_windows(void* gui_state) {
         bool show = true;
         ImGui::SetNextWindowSize(ImVec2(700, 500), ImGuiCond_FirstUseEver);
         if (ImGui::Begin(sc.display_name, &show)) {
+            // Blocking lock — same rationale as the Hardware submenu:
+            // the emu thread releases the mutex between frames, so this
+            // acquires quickly.  try_to_lock caused content to flash.
+            std::lock_guard<std::mutex> lock(emu_mutex);
             if (sc.chip->has_debug_content()) {
                 sc.chip->render_debug_content();
             } else if (sc.chip->has_layout_content()) {

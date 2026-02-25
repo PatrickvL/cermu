@@ -306,10 +306,7 @@ void SystemGUI::render_frame() {
     
     // Let system render its debug windows (try_lock: skip if emu thread is busy)
     if (system_) {
-        std::unique_lock<std::mutex> lock(emu_mutex_, std::try_to_lock);
-        if (lock.owns_lock()) {
-            system_->render_debug_windows(nullptr);
-        }
+        system_->render_debug_windows(nullptr, emu_mutex_);
     }
     
     end_frame();
@@ -410,18 +407,15 @@ void SystemGUI::render_menu_bar() {
 
                     // Each chip with content opens as a submenu on hover,
                     // showing combined layout+debug+settings inline.
-                    // Lock popup size after first render so it doesn't grow
-                    // as register values change width over time.
-                    if (sc.submenu_locked_w > 0.0f) {
-                        // Already measured — force fixed size
+                    // Lock the width after first render so it doesn't
+                    // jitter as register values change, but let the
+                    // height auto-size freely so tall layouts always fit.
+                    {
+                        float min_w = sc.submenu_locked_w > 0.0f
+                                    ? sc.submenu_locked_w : 600.0f;
                         ImGui::SetNextWindowSizeConstraints(
-                            ImVec2(sc.submenu_locked_w, sc.submenu_locked_h),
-                            ImVec2(sc.submenu_locked_w, sc.submenu_locked_h));
-                    } else {
-                        // First open — auto-size with a minimum floor
-                        ImGui::SetNextWindowSizeConstraints(
-                            ImVec2(600.0f, 200.0f),
-                            ImVec2(FLT_MAX, FLT_MAX));
+                            ImVec2(min_w, 0.0f),
+                            ImVec2(min_w, FLT_MAX));
                     }
                     if (ImGui::BeginMenu(sc.display_name)) {
                         // Pin button at top-right to detach into a standalone window
@@ -480,43 +474,35 @@ void SystemGUI::render_menu_bar() {
                             ImGui::SetCursorPos(cursor); // restore so content renders from top-left
                         }
 
-                        if (sc.chip->has_debug_content()) {
-                            // try_lock: chip state is read-only for rendering;
-                            // the emu thread may be updating it concurrently.
-                            std::unique_lock<std::mutex> chip_lock(emu_mutex_, std::try_to_lock);
-                            if (chip_lock.owns_lock()) {
+                        // Blocking lock — the emu thread releases emu_mutex_
+                        // between frames (and rapidly during its idle spin
+                        // loop), so this typically acquires within
+                        // microseconds.  During frame simulation it may
+                        // block for a few ms, which is imperceptible for a
+                        // debug popup.  A try_to_lock here caused content to
+                        // flash on/off every frame.
+                        {
+                            std::lock_guard<std::mutex> chip_lock(emu_mutex_);
+                            if (sc.chip->has_debug_content()) {
                                 sc.chip->render_debug_content();
-                            } else {
-                                ImGui::TextDisabled("(updating...)");
-                            }
-                        } else if (sc.chip->has_layout_content()) {
-                            std::unique_lock<std::mutex> chip_lock(emu_mutex_, std::try_to_lock);
-                            if (chip_lock.owns_lock()) {
+                            } else if (sc.chip->has_layout_content()) {
                                 sc.chip->render_layout_content();
-                            } else {
-                                ImGui::TextDisabled("(updating...)");
                             }
-                        }
 
-                        if (sc.chip->has_settings_content()) {
-                            ImGui::Separator();
-                            if (ImGui::CollapsingHeader("Settings")) {
-                                std::unique_lock<std::mutex> chip_lock(emu_mutex_, std::try_to_lock);
-                                if (chip_lock.owns_lock()) {
+                            if (sc.chip->has_settings_content()) {
+                                ImGui::Separator();
+                                if (ImGui::CollapsingHeader("Settings")) {
                                     sc.chip->render_settings_content();
-                                } else {
-                                    ImGui::TextDisabled("(updating...)");
                                 }
                             }
                         }
 
-                        // Lock the popup size after the first render so it
-                        // stays stable as emulation values change width.
+                        // Capture the auto-sized width after first render
+                        // so it stays locked on subsequent frames.
                         if (sc.submenu_locked_w <= 0.0f) {
                             ImVec2 sz = ImGui::GetWindowSize();
-                            if (sz.x > 0.0f && sz.y > 0.0f) {
+                            if (sz.x > 0.0f) {
                                 sc.submenu_locked_w = sz.x;
-                                sc.submenu_locked_h = sz.y;
                             }
                         }
 

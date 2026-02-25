@@ -6,6 +6,7 @@
 #include <memory>
 #include <functional>
 #include <map>
+#include <mutex>
 #include <SDL_keycode.h>
 #include "chip.h"     // VideoStandard, ChipBase, ChipIdentity
 #include "connector.h"
@@ -238,11 +239,11 @@ struct SystemChip {
     // GUI toggle state (managed by the GUI layer)
     uint8_t show_detached = 0;   // Detached combined window (layout+debug+settings)
 
-    // Submenu popup size lock — once the popup has been rendered, its size is
-    // captured and reused as both min and max constraint so the popup cannot
-    // grow (or shrink) on subsequent frames.  0 = not yet measured.
+    // Submenu popup width lock — once the popup has been rendered, its
+    // auto-sized width is captured and reused so the popup can't jitter
+    // horizontally as register values change.  Height is left free so
+    // tall layouts always fit.  0 = not yet measured.
     float submenu_locked_w = 0.0f;
-    float submenu_locked_h = 0.0f;
 };
 
 /**
@@ -410,7 +411,7 @@ public:
     virtual bool initialize();
     virtual void shutdown();
     virtual void handle_controller_event(int controller, int button, bool pressed);
-    virtual void render_debug_windows(void* gui_state);
+    virtual void render_debug_windows(void* gui_state, std::mutex& emu_mutex);
 
     // --- Screenshot -------------------------------------------------------
 

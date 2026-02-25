@@ -66,7 +66,7 @@ public:
     
     // GUI rendering overrides
     void render_system_menu_items() override;
-    void render_debug_windows(void* gui_state) override;
+    void render_debug_windows(void* gui_state, std::mutex& emu_mutex) override;
 
     // Window title metadata
     const char* get_mode_label() const override;
