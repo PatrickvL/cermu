@@ -233,8 +233,6 @@ void GenericEmulatorGUI::render_file_menu_generic() {
 void GenericEmulatorGUI::render_view_menu_generic() {
     ImGui::MenuItem("Screen Display", nullptr, &show_screen_);
     ImGui::MenuItem("Memory Viewer", nullptr, &show_memory_viewer_);
-    ImGui::Separator();
-    ImGui::MenuItem("Settings", nullptr, &show_settings_);
 }
 
 void GenericEmulatorGUI::render_help_menu_generic() {

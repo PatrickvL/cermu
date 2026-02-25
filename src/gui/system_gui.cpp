@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <cstring>
 #include <chrono>
+#include <ctime>
 
 #ifdef __has_include
 #if __has_include("ImGuiFileDialog.h")
@@ -535,6 +536,24 @@ void SystemGUI::render_menu_bar() {
     // Screen menu
     if (ImGui::BeginMenu("Screen")) {
         render_screen_menu_generic();
+
+        ImGui::Separator();
+        ImGui::BeginDisabled(!system_ || !framebuffer_);
+        if (ImGui::MenuItem("Save Screenshot...")) {
+            // Generate timestamped filename
+            time_t now = time(nullptr);
+            struct tm* tm_info = localtime(&now);
+            char filename[128];
+            strftime(filename, sizeof(filename),
+                     "cermu_%Y%m%d_%H%M%S.png", tm_info);
+
+            std::lock_guard<std::mutex> lock(emu_mutex_);
+            if (system_->save_screenshot(filename)) {
+                printf("Screenshot saved: %s\n", filename);
+            }
+        }
+        ImGui::EndDisabled();
+
         ImGui::EndMenu();
     }
     
