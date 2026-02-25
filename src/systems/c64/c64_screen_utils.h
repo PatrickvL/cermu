@@ -27,12 +27,16 @@ uint8_t c64_ascii_to_screencode(char c);
 /**
  * Convert an ISO 8859-1 (Latin-1) byte to a C64 screen code.
  *
- * ASCII letters and punctuation are mapped normally.  Latin-1 extended
- * characters (0xC0–0xFF) are accent-stripped to their base letter so
- * e.g. ü → U, é → E.  This is the correct converter for SID file
- * metadata which the spec defines as ISO 8859-1.
+ * Produces mixed-case output suitable for the upper/lower charset mode
+ * ($D018 bit 1 set):
+ *   - A–Z → screen codes $01–$1A (uppercase)
+ *   - a–z → screen codes $41–$5A (lowercase)
+ *   - Accented uppercase (0xC0–0xDF) → accent-stripped uppercase
+ *   - Accented lowercase (0xE0–0xFF) → accent-stripped lowercase
+ *   - £ (0xA3) → C64 native £ sign (screen code $1C)
  *
- * Special: £ (0xA3) maps to the C64's native £ sign (screen code $1C).
+ * This is the correct converter for SID file metadata which the
+ * spec defines as ISO 8859-1.  Requires VIC-II $D018 = $16.
  */
 uint8_t c64_latin1_to_screencode(uint8_t ch);
 

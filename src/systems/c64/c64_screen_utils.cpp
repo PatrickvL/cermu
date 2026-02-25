@@ -5,17 +5,21 @@
 #include "c64_screen_utils.h"
 
 uint8_t c64_ascii_to_screencode(char c) {
-    if (c >= 'A' && c <= 'Z') return (uint8_t)(c - 64);   // $01–$1A
-    if (c >= 'a' && c <= 'z') return (uint8_t)(c - 96);   // $01–$1A (same)
+    // Used for labels — always uppercase.  In upper/lower charset mode,
+    // uppercase glyphs are at screen codes $41–$5A.
+    if (c >= 'A' && c <= 'Z') return (uint8_t)(c - 'A' + 0x41);  // $41–$5A (uppercase)
+    if (c >= 'a' && c <= 'z') return (uint8_t)(c - 'a' + 0x41);  // $41–$5A (uppercase too)
     if (c >= ' ' && c <= '?') return (uint8_t)c;           // $20–$3F
     if (c == '@') return 0x00;
     return 0x2E;  // '.' for unmapped chars
 }
 
 uint8_t c64_latin1_to_screencode(uint8_t ch) {
-    // ASCII letters
-    if (ch >= 'A' && ch <= 'Z') return ch - 0x40;  // A–Z → $01–$1A
-    if (ch >= 'a' && ch <= 'z') return ch - 0x60;  // a–z → $01–$1A (uppercase)
+    // In upper/lower charset mode ($D018 bit 1 set):
+    //   Screen codes $01–$1A → lowercase glyphs
+    //   Screen codes $41–$5A → uppercase glyphs
+    if (ch >= 'A' && ch <= 'Z') return ch - 0x40 + 0x40;  // → $41–$5A (uppercase)
+    if (ch >= 'a' && ch <= 'z') return ch - 0x60;           // → $01–$1A (lowercase)
     if (ch >= 0x20 && ch <= 0x3F) return ch;        // space, digits, punctuation
     if (ch == '@') return 0x00;
 
@@ -24,12 +28,14 @@ uint8_t c64_latin1_to_screencode(uint8_t ch) {
     if (ch == 0xA3) return 0x1C;  // £ → C64 native £ sign
 
     // Latin-1 accented letters (0xC0–0xFF) → accent-stripped screen codes
+    // Uppercase accented (0xC0–0xDF) → uppercase screen codes ($41–$5A)
+    // Lowercase accented (0xE0–0xFF) → lowercase screen codes ($01–$1A)
     if (ch >= 0xC0) {
         //                      À  Á  Â  Ã  Ä  Å  Æ  Ç  È  É  Ê  Ë  Ì  Í  Î  Ï
         static const uint8_t t[64] = {
-            0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x03,0x05,0x05,0x05,0x05,0x09,0x09,0x09,0x09,
+            0x41,0x41,0x41,0x41,0x41,0x41,0x41,0x43,0x45,0x45,0x45,0x45,0x49,0x49,0x49,0x49,
         //  Ð  Ñ  Ò  Ó  Ô  Õ  Ö  ×  Ø  Ù  Ú  Û  Ü  Ý  Þ  ß
-            0x04,0x0E,0x0F,0x0F,0x0F,0x0F,0x0F,0x2E,0x0F,0x15,0x15,0x15,0x15,0x19,0x2E,0x13,
+            0x44,0x4E,0x4F,0x4F,0x4F,0x4F,0x4F,0x2E,0x4F,0x55,0x55,0x55,0x55,0x59,0x2E,0x53,
         //  à  á  â  ã  ä  å  æ  ç  è  é  ê  ë  ì  í  î  ï
             0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x03,0x05,0x05,0x05,0x05,0x09,0x09,0x09,0x09,
         //  ð  ñ  ò  ó  ô  õ  ö  ÷  ø  ù  ú  û  ü  ý  þ  ÿ
