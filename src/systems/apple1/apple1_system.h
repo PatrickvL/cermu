@@ -1,10 +1,17 @@
 #pragma once
 
 #include "../../core/emulated_system.h"
+#include "../../core/system_lines.h"
 #include "../../core/text_terminal.h"
 #include "../../chip/cpu/fam65xx/mos6502.h"
 #include "../../chip/io/pia6820.h"
 #include <cstdint>
+
+// Apple 1 default bus state — initial pin values.
+// RW=1 (read mode), active-low IRQ/RES HIGH (inactive).
+// Apple 1 has no NMI line connected.
+#define APPLE1_BUS_DEFAULT_STATE \
+    (BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_RES_BIT))
 #include <memory>
 
 /**

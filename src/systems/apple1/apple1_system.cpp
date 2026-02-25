@@ -117,7 +117,7 @@ Apple1System::Apple1System()
     , has_basic_(false)
     , cursor_col_(0)
     , cursor_row_(0)
-    , pins_(0)
+    , pins_(APPLE1_BUS_DEFAULT_STATE)
 {
     hardware_traits_ = create_apple1_hardware_traits();
     current_palette_ = hardware_traits_.display.default_palette;
@@ -238,7 +238,7 @@ void Apple1System::reset() {
     if (cpu_) {
         mos6502_reset(cpu_, 0);
     }
-    pins_ = 0;
+    pins_ = APPLE1_BUS_DEFAULT_STATE;
     total_cycles_ = 0;
 }
 

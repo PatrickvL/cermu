@@ -78,20 +78,19 @@ void render_chip_visualization(fam65xx_t<Traits> *cpu, ImVec2 chip_center,
   renderer.render(layout, chip_center, pin_states, chip_name);
 }
 
+// Safe default control-signal state for GUI rendering when no live bus state is available.
+static constexpr bus_state_t FAM65XX_GUI_DEFAULT_PINS =
+    BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) | BUS_BIT(BUS_RES_BIT) |
+    BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT);
+
 // Fallback version without bus state
 template <const CPUTraits &Traits>
 void render_chip_visualization(fam65xx_t<Traits> *cpu, ImVec2 chip_center) {
   // Create default bus state from CPU registers if possible
-  bus_state_t bus_state = 0;
+  bus_state_t bus_state = FAM65XX_GUI_DEFAULT_PINS;
   if (cpu) {
     BUS_SET_ADDR(bus_state, cpu->get(REG_AB));
     BUS_SET_DATA(bus_state, cpu->get(REG_DL));
-    // Set safe defaults for control signals
-    BUS_SET_BIT(bus_state, BUS_RW_BIT);
-    BUS_SET_BIT(bus_state, BUS_RDY_BIT);
-    BUS_SET_BIT(bus_state, BUS_RES_BIT);
-    BUS_SET_BIT(bus_state, BUS_IRQ_BIT);
-    BUS_SET_BIT(bus_state, BUS_NMI_BIT);
   }
   render_chip_visualization<Traits>(cpu, chip_center, bus_state);
 }
@@ -394,13 +393,9 @@ void fam65xx_t<Traits>::render_debug_content() {
       // Compute bus state from registers if not externally set
       bus_state_t bus_state = this->gui_bus_state;
       if (bus_state == 0) {
+        bus_state = FAM65XX_GUI_DEFAULT_PINS;
         BUS_SET_ADDR(bus_state, this->get(REG_AB));
         BUS_SET_DATA(bus_state, this->get(REG_DL));
-        BUS_SET_BIT(bus_state, BUS_RW_BIT);
-        BUS_SET_BIT(bus_state, BUS_RDY_BIT);
-        BUS_SET_BIT(bus_state, BUS_RES_BIT);
-        BUS_SET_BIT(bus_state, BUS_IRQ_BIT);
-        BUS_SET_BIT(bus_state, BUS_NMI_BIT);
       }
 
       // Show chip visualization with bus state
@@ -460,13 +455,9 @@ void fam65xx_t<Traits>::render_layout_content() {
     static ChipLayout layout = create_cpu_pin_layout<Traits>();
     bus_state_t bus_state = this->gui_bus_state;
     if (bus_state == 0) {
+      bus_state = FAM65XX_GUI_DEFAULT_PINS;
       BUS_SET_ADDR(bus_state, this->get(REG_AB));
       BUS_SET_DATA(bus_state, this->get(REG_DL));
-      BUS_SET_BIT(bus_state, BUS_RW_BIT);
-      BUS_SET_BIT(bus_state, BUS_RDY_BIT);
-      BUS_SET_BIT(bus_state, BUS_RES_BIT);
-      BUS_SET_BIT(bus_state, BUS_IRQ_BIT);
-      BUS_SET_BIT(bus_state, BUS_NMI_BIT);
     }
     std::vector<PinSignalState> pin_states =
         get_cpu_pin_states<Traits>(this, &layout, bus_state);

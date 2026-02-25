@@ -350,8 +350,8 @@ bool Commodore264System<V>::initialize() {
         printf("%s: CPU reset vector = $%04X\n", Traits::name, reset_vector);
     }
     
-    // Initialize bus state: RW HIGH (read mode), IRQ/NMI HIGH (inactive for active-low)
-    bus_state_ = BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_RDY_BIT);
+    // Initialize bus state with default pin levels
+    bus_state_ = C264_BUS_DEFAULT_STATE;
     
     // Initialize TED 7360 (video, sound, timers, keyboard scanning)
     {
@@ -443,7 +443,7 @@ void Commodore264System<V>::reset() {
     }
     
     // Reset bus state
-    bus_state_ = BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_RDY_BIT);
+    bus_state_ = C264_BUS_DEFAULT_STATE;
     
     // Reset keyboard matrix
     if (keyboard_) {

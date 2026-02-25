@@ -954,25 +954,19 @@ void ted7360_t::tick_phi2(bus_state_t bus_state) {
 
 
 
+// Default bus state for legacy single-tick wrapper:
+// IRQ HIGH (inactive), RW=read, BA/RDY HIGH.
+static constexpr bus_state_t TED_LEGACY_BUS_DEFAULT =
+    BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_BA_BIT) | BUS_BIT(BUS_RDY_BIT);
+
 void ted7360_t::tick() {
 
     // Alternate between PHI1 (actual work) and PHI2 (no-op for legacy callers)
     if (legacy_subcycle_ == 0) {
-        bus_state_t bs = 0;
-        BUS_SET_BIT(bs, BUS_IRQ_BIT);  // IRQ de-asserted (active low, so set high)
-        BUS_SET_BIT(bs, BUS_RW_BIT);   // Read mode
-        BUS_SET_BIT(bs, BUS_BA_BIT);   // Bus available
-        BUS_SET_BIT(bs, BUS_RDY_BIT);  // Ready
-
-        tick_phi1(bs);
+        tick_phi1(TED_LEGACY_BUS_DEFAULT);
     } else {
-        bus_state_t bs = 0;
-        BUS_SET_BIT(bs, BUS_IRQ_BIT);
-        BUS_SET_BIT(bs, BUS_RW_BIT);
-        BUS_SET_BIT(bs, BUS_BA_BIT);
-        BUS_SET_BIT(bs, BUS_RDY_BIT);
+        bus_state_t bs = TED_LEGACY_BUS_DEFAULT;
         BUS_SET_DATA(bs, 0xFF);
-
         tick_phi2(bs);
     }
     legacy_subcycle_ ^= 1;
