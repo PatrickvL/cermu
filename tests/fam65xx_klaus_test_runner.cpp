@@ -11,7 +11,9 @@
 
 
 // Include processor-specific headers
-#include "../src/chip/cpu/fam65xx/mos6502.h"
+#include "../src/chip/cpu/fam65xx/fam65xx.hpp"
+
+using mos6502_cpu_t = fam65xx::mos6502_cpu_impl_t;
 
 // ============================================================================
 // Klaus2m5 Test Runner for fam65xx Implementation
@@ -52,7 +54,7 @@ enum class TestMode {
 
 class KlausTestHarness {
 private:
-    mos6502_t* cpu_;                       // Use the C wrapper type
+    mos6502_cpu_t* cpu_;                    // Direct C++ template type
     std::vector<uint8_t> memory_;
     std::vector<uint8_t> test_binary_;
     uint64_t max_cycles_;
@@ -75,16 +77,14 @@ private:
 public:
     KlausTestHarness() : memory_(65536, 0x00), max_cycles_(KLAUS_MAX_CYCLES), trace_enabled_(false), pins_(0) {
         // Create CPU instance
-        cpu_ = mos6502_create();
+        cpu_ = new mos6502_cpu_t();
         
         // Initialize CPU (descriptor-free — memory I/O is handled via bus_state_t pins)
-        pins_ = mos6502_init(cpu_);
+        pins_ = cpu_->init();
     }
     
     ~KlausTestHarness() {
-        if (cpu_) {
-            mos6502_destroy(cpu_);
-        }
+        delete cpu_;
     }
 
     bool load_binary(const std::string& filename) {
@@ -138,10 +138,10 @@ public:
         memory_[0xFFFD] = (KLAUS_TEST_START_ADDRESS >> 8) & 0xFF;
 
         // Bootstrap processor for immediate execution (skip reset sequence)
-        pins_ = mos6502_bootstrap(cpu_, pins_);
+        pins_ = cpu_->bootstrap(pins_);
         
         // Set PC directly to test start address
-        mos6502_set_pc(cpu_, KLAUS_TEST_START_ADDRESS);
+        cpu_->set(REG_PC, KLAUS_TEST_START_ADDRESS);
 
         std::cout << "Starting Klaus functional test..." << std::endl;
         
@@ -152,7 +152,7 @@ public:
         constexpr uint32_t STUCK_THRESHOLD = 1000;
 
         while (cycles < max_cycles_) {
-            uint16_t current_pc = mos6502_get_pc(cpu_);
+            uint16_t current_pc = cpu_->get(REG_PC);
             
             // Check for success condition - Klaus test success is indicated by infinite loops
             uint8_t instruction = memory_[current_pc];
@@ -191,31 +191,31 @@ public:
             }
             
             // Execute one CPU cycle
-            pins_ = mos6502_tick(cpu_, pins_);
+            pins_ = cpu_->tick<mos6502_cpu_t::Phase::PHI2>(pins_);
             cycles++;
             
             // Optional trace output
             if (trace_enabled_ && trace_file_.is_open() && cycles % 10 == 0) {
                 trace_file_ << "Cycle " << cycles
-                           << ": PC=$" << std::hex << std::setw(4) << std::setfill('0') << mos6502_get_pc(cpu_)
-                           << " A=$" << std::setw(2) << static_cast<int>(mos6502_get_a(cpu_))
-                           << " X=$" << std::setw(2) << static_cast<int>(mos6502_get_x(cpu_))
-                           << " Y=$" << std::setw(2) << static_cast<int>(mos6502_get_y(cpu_))
-                           << " P=$" << std::setw(2) << static_cast<int>(mos6502_get_p(cpu_))
-                           << " S=$" << std::setw(2) << static_cast<int>(mos6502_get_s(cpu_))
+                           << ": PC=$" << std::hex << std::setw(4) << std::setfill('0') << cpu_->get(REG_PC)
+                           << " A=$" << std::setw(2) << static_cast<int>(cpu_->get(REG_A))
+                           << " X=$" << std::setw(2) << static_cast<int>(cpu_->get(REG_X))
+                           << " Y=$" << std::setw(2) << static_cast<int>(cpu_->get(REG_Y))
+                           << " P=$" << std::setw(2) << static_cast<int>(cpu_->get(REG_P))
+                           << " S=$" << std::setw(2) << static_cast<int>(cpu_->get(REG_S))
                            << std::endl;
             }
             
             if (cycles % 100000 == 0) {
                 std::cout << "Executed " << cycles << " cycles, PC=$"
                          << std::hex << std::setw(4) << std::setfill('0')
-                         << mos6502_get_pc(cpu_) << std::endl;
+                         << cpu_->get(REG_PC) << std::endl;
             }
         }
         
         status.end_time = std::chrono::steady_clock::now();
         status.cycles_executed = cycles;
-        status.final_pc = mos6502_get_pc(cpu_);
+        status.final_pc = cpu_->get(REG_PC);
         
         if (status.result == TestResult::NOT_SET) {
             if (cycles >= max_cycles_) {
@@ -223,7 +223,7 @@ public:
                 status.error_message = "Test timed out after " + std::to_string(cycles) + " cycles";
             } else {
                 status.result = TestResult::FAILED;
-                status.error_message = "Test failed at PC=$" + std::to_string(mos6502_get_pc(cpu_));
+                status.error_message = "Test failed at PC=$" + std::to_string(cpu_->get(REG_PC));
             }
         }
         

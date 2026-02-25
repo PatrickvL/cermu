@@ -54,6 +54,8 @@ typedef enum {
 #define IDDRB_OFFSET 29 // Internal Data Direction of Port B (a version of DDRB which includes the PBON mask)
 
 typedef struct mos6526_s : public ChipBase {
+    mos6526_s() : ChipBase(ChipInfo{"MOS6526", "MOS Technology"}) {}
+
     uint8_t configured_interrupt_bit = 0; // BUS_IRQ_BIT for CIA1, BUS_NMI_BIT for CIA2
     
     // CIA ports, timers, alarm, registers, latches, interrupt and other status variables.
@@ -139,7 +141,6 @@ typedef struct mos6526_s : public ChipBase {
     DelayLine delay_line;
 
     // --- ChipBase interface ---
-    ChipIdentity chip_identity() const override;
     bool has_debug_content()    const override;
     bool has_settings_content() const override;
     bool has_layout_content()   const override;

@@ -1717,7 +1717,9 @@ public:
     return pins;
   }
 
-  fam65xx_t() {
+  fam65xx_t()
+    : ChipBase(ChipInfo{Traits.get_chip_id(), Traits.get_vendor()})
+  {
     // Initialize CPU state to zero
     opcode_entry = {};
     current_handler = &fam65xx_t::fetch_opcode; // Always initialize to valid handler
@@ -1750,10 +1752,6 @@ public:
   // ========================================================================
   // ChipBase VIRTUAL METHOD IMPLEMENTATIONS
   // ========================================================================
-
-  ChipIdentity chip_identity() const override {
-    return {Traits.get_chip_id(), Traits.get_vendor()};
-  }
 
   bool has_debug_content() const override { return true; }
   bool has_settings_content() const override { return true; }

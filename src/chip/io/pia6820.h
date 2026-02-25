@@ -21,6 +21,8 @@
  */
 
 struct pia6820_t : public ChipBase {
+    pia6820_t() : ChipBase(ChipInfo{"PIA6820", "Motorola"}) {}
+
     // Port A registers
     uint8_t port_a_data;        // Data register (output latch)
     uint8_t port_a_control;     // Control register
@@ -53,9 +55,6 @@ struct pia6820_t : public ChipBase {
     void (*on_irq_b)(void* user_data, bool asserted);   // IRQ B callback
     void (*on_ca2_output)(void* user_data, bool state); // CA2 output callback
     void (*on_cb2_output)(void* user_data, bool state); // CB2 output callback
-
-    // --- ChipBase interface ---
-    ChipIdentity chip_identity() const override { return {"PIA6820", "Motorola"}; }
 
     // Initialize PIA to default state
     void init();

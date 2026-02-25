@@ -33,7 +33,7 @@ inline ChipLayout create_vic_layout(const char* part_number) {
     layout.markings = {
         part_number,
         "MOS Technology",
-        nullptr, nullptr, nullptr, nullptr,
+        {}, {}, {}, {},
         true, true, false, false
     };
 
@@ -112,11 +112,6 @@ static const char* get_vic_type_name(vic_base_t* vic) {
 // ============================================================================
 // ChipBase interface implementation
 // ============================================================================
-
-ChipIdentity vic_base_s::chip_identity() const {
-    return {is_pal ? "MOS6561" : "MOS6560", "MOS Technology",
-            is_pal ? VideoStandard::PAL : VideoStandard::NTSC};
-}
 
 bool vic_base_s::has_debug_content()    const { return true; }
 bool vic_base_s::has_settings_content() const { return true; }

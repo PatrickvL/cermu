@@ -123,11 +123,6 @@ void mos6526_s::reset() {
     }
 }
 
-// ChipBase identity
-ChipIdentity mos6526_s::chip_identity() const {
-    return {"MOS6526", "MOS Technology"};
-}
-
 bool mos6526_s::has_debug_content()    const { return true; }
 bool mos6526_s::has_settings_content() const { return true; }
 bool mos6526_s::has_layout_content()   const { return true; }

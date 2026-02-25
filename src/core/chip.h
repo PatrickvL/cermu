@@ -1,17 +1,17 @@
 #pragma once
 
 #include "cermu.h"  // Compiler compatibility macros
+#include "component_info.h"
 #include <cstdint>
 #include <memory>
 #include "system_lines.h"
 
 // ============================================================================
-// VIDEO STANDARD — TV broadcast standard affecting chip timing
+// VIDEO STANDARD — TV broadcast standard affecting system timing
 // ============================================================================
 
 /// Video broadcast standard — determines system-wide timing
-/// (video, audio, CPU clock).  Stored in ChipIdentity so each chip
-/// instance can report which standard it is configured for.
+/// (video, audio, CPU clock).  Lives on SystemTiming, NOT on chip identity.
 enum class VideoStandard : uint8_t {
     NTSC,           // NTSC (North America, Japan)
     PAL,            // PAL (Europe, Australia)
@@ -21,39 +21,40 @@ enum class VideoStandard : uint8_t {
 };
 
 // ============================================================================
-// CHIP IDENTITY — intrinsic metadata about a chip type
-// ============================================================================
-
-/// Static identity of a chip type (part number, manufacturer, video standard).
-/// Returned by ChipBase::chip_identity().
-///
-/// The standard field indicates which video-standard variant this chip instance
-/// represents.  Standard-agnostic chips (I/O, RAM, ...) leave it at the
-/// default (NTSC).  Zero runtime cost: the enum is returned by value
-/// together with the two pointers that were already there.
-struct ChipIdentity {
-    const char* part_number;    // e.g. "MOS6526", "TED7360", "RP2A03"
-    const char* manufacturer;   // e.g. "MOS Technology", "Ricoh", "Commodore"
-    VideoStandard standard = VideoStandard::NTSC; // Video standard this instance is configured for
-};
-
-// ============================================================================
-// CHIP BASE — abstract interface for all emulated chips
+// CHIP BASE — base class for all emulated chips
 // ============================================================================
 ///
-/// Every chip registered in a system implements this interface, either directly
+/// Every chip registered in a system derives from this, either directly
 /// (native C++ chips) or through a ChipPlaceholder (identity-only entries).
 ///
 /// Provides:
-///   - Identity:  what chip type this is
+///   - Identity:  ChipInfo stored here (part number, manufacturer, …)
 ///   - GUI:       debug and settings window rendering (optional)
+///
+/// ChipInfo lives in ChipBase so derived classes don't duplicate it.
+/// Derived classes pass their identity to the base constructor (or assign
+/// to the protected info_ after construction for late-bound cases like
+/// PAL/NTSC chip variants).
 ///
 class ChipBase {
 public:
+    ChipBase() = default;
+    explicit ChipBase(ChipInfo info) : info_(std::move(info)) {}
     virtual ~ChipBase() = default;
 
-    // --- Identity ---
-    virtual ChipIdentity chip_identity() const = 0;
+    // --- Identity (non-virtual — data lives here, not in subclasses) ---
+    const ChipInfo& chip_info() const { return info_; }
+
+    // --- Registration metadata (how this chip appears in a specific system) ---
+    // These fields describe the chip's *placement* in a system: its role name,
+    // category for menu grouping, and memory-mapped base address.
+    // For owned chips (MemoryChip, ChipPlaceholder, PlaChip) these are set in the
+    // constructor.  For borrowed chips (CPU, VIA, etc.) the system sets them via
+    // the register_chip() overload that accepts placement arguments.
+    const char* display_name() const { return display_name_ ? display_name_ : info_.part_number.data(); }
+    const char* short_name()   const { return short_name_   ? short_name_   : info_.part_number.data(); }
+    const char* category()     const { return category_     ? category_     : ""; }
+    uint16_t    base_address() const { return base_address_; }
 
     // --- GUI content rendering (optional — defaults to nothing) ---
     // Content-only: renders chip info WITHOUT ImGui::Begin/End window framing.
@@ -71,6 +72,15 @@ public:
     // the most recent bus state without coupling to the emulation loop.
     bus_state_t bus_snapshot_ = 0;
 #endif
+
+protected:
+    ChipInfo info_;
+
+    // Registration metadata — set by derived constructors or by register_chip()
+    const char* display_name_ = nullptr;  // "VIA 1 (MOS 6522)" — full UI label
+    const char* short_name_   = nullptr;  // "VIA 1" — compact label
+    const char* category_     = nullptr;  // "CPU", "Video", "Audio", "I/O", "Memory"
+    uint16_t    base_address_ = 0;        // Memory-mapped base address (0 if N/A)
 };
 
 // ============================================================================
@@ -82,11 +92,22 @@ public:
 /// other passive components whose emulation is handled elsewhere.
 ///
 class ChipPlaceholder : public ChipBase {
-    ChipIdentity identity_;
 public:
-    explicit ChipPlaceholder(ChipIdentity identity)
-        : identity_(identity) {}
-    ChipIdentity chip_identity() const override { return identity_; }
+    explicit ChipPlaceholder(ChipInfo info)
+        : ChipBase(std::move(info)) {}
+
+    /// Self-describing placeholder — carries its own registration metadata.
+    ChipPlaceholder(ChipInfo info, const char* display_name,
+                    const char* short_name, const char* category,
+                    uint16_t base_address = 0)
+        : ChipBase(std::move(info))
+    {
+        display_name_ = display_name;
+        short_name_   = short_name;
+        category_     = category;
+        base_address_ = base_address;
+    }
+
     // All has_*() default to false from ChipBase — nothing to override.
 };
 

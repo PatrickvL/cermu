@@ -3,7 +3,7 @@
 #include "c64_test_loader.h"
 #include "c64_screenshot.h"
 #include "../../chip/memory/ram.h"
-#include "../../chip/cpu/fam65xx/mos6510.h"
+#include "../../chip/cpu/fam65xx/fam65xx.hpp"
 #include "../../chip/video/vic_ii/vicii_common.h"
 #include "../../utils/platform_fs.h"
 #include <stdio.h>
@@ -13,6 +13,10 @@
 #include <chrono>
 #include <fstream>
 #include <sstream>
+
+
+using mos6510_cpu_t = fam65xx::mos6510_cpu_impl_t;
+#define CPU(ptr) reinterpret_cast<mos6510_cpu_t*>(ptr)
 
 namespace c64_test {
 
@@ -404,8 +408,8 @@ static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles, i
     r.reason = 1; // timeout by default
     
     __try {
-        mos6510_t* cpu = static_cast<mos6510_t*>(c64->mos6510);
-        uint16_t last_pc = mos6510_get_pc(cpu);
+        auto* cpu = CPU(c64->mos6510);
+        uint16_t last_pc = cpu->get(REG_PC);
         uint32_t pc_stable_count = 0;
         
         for (uint32_t i = 0; i < max_cycles; i++) {
@@ -427,7 +431,7 @@ static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles, i
             
             // Periodic infinite-loop check every 256 cycles
             if ((i & 0xFF) == 0) {
-                uint16_t current_pc = mos6510_get_pc(cpu);
+                uint16_t current_pc = cpu->get(REG_PC);
                 if (current_pc == last_pc) {
                     pc_stable_count++;
                     if (pc_stable_count >= 2) {
@@ -624,7 +628,7 @@ TestEnvironment TestFramework::detect_test_environment(const TestDescriptor& tes
 
 // Execute KERNAL boot sequence
 bool TestFramework::execute_kernal_boot(C64System* c64) {
-    mos6510_t* cpu = static_cast<mos6510_t*>(c64->mos6510);
+    auto* cpu = CPU(c64->mos6510);
     
     // Read KERNAL reset vector from ROM
     // The bus read will automatically route to KERNAL ROM at $FFFC-$FFFD
@@ -649,12 +653,12 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
     }
     
     // Set PC to reset vector
-    mos6510_set_pc(cpu, reset_vector);
+    cpu->set(REG_PC, reset_vector);
     
     // Enable interrupts for KERNAL (it needs them for initialization)
-    uint8_t status = mos6510_get_p(cpu);
+    uint8_t status = cpu->get(REG_P);
     status &= ~0x04;  // Clear I flag
-    mos6510_set_p(cpu, status);
+    cpu->set(REG_P, status);
     
     // Execute KERNAL initialization
     // KERNAL boot takes about 2.1 million cycles (includes memory test)
@@ -672,13 +676,13 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
         
         // Progress indicator
         if (verbose_ && boot_cycles % 500000 == 0) {
-            uint16_t current_pc = mos6510_get_pc(cpu);
+            uint16_t current_pc = cpu->get(REG_PC);
             printf("  Still booting... PC=$%04X (cycle %u)\n", current_pc, boot_cycles);
         }
     }
     
     if (verbose_) {
-        uint16_t final_pc = mos6510_get_pc(cpu);
+        uint16_t final_pc = cpu->get(REG_PC);
         printf("  KERNAL boot complete after %u cycles (PC=$%04X)\n", boot_cycles, final_pc);
     }
     return true;
@@ -686,7 +690,7 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
 
 // Execute BASIC boot sequence (KERNAL + BASIC initialization)
 bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& test, uint16_t sys_addr) {
-    mos6510_t* cpu = static_cast<mos6510_t*>(c64->mos6510);
+    auto* cpu = CPU(c64->mos6510);
     
     if (verbose_) {
         printf("  Executing BASIC boot sequence...\n");
@@ -713,7 +717,7 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
         c64->tick();
         boot_cycles++;
         
-        uint16_t current_pc = mos6510_get_pc(cpu);
+        uint16_t current_pc = cpu->get(REG_PC);
         
         // Check every 1000 cycles for keyboard input loop
         if (boot_cycles % 1000 == 0) {
@@ -745,7 +749,7 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
         }
     }
     
-    uint16_t final_pc = mos6510_get_pc(cpu);
+    uint16_t final_pc = cpu->get(REG_PC);
     
     if (verbose_) {
         printf("  Boot sequence finished at PC=$%04X after %u cycles\n", final_pc, boot_cycles);
@@ -753,16 +757,16 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
     }
     
     // After boot, set PC to target address (simulating SYS command)
-    mos6510_set_pc(cpu, sys_addr);
+    cpu->set(REG_PC, sys_addr);
     
     // CRITICAL: Reset CPU pipeline state machine to fetch mode.
     // Without this, the CPU's current_handler and half_cycle are still
     // mid-instruction from the KERNAL keyboard loop, causing the CPU to
     // finish that stale instruction instead of fetching from the new PC.
-    mos6510_transition_to_fetch(cpu);
+    cpu->transition_to_fetch();
     
     // Sync address bus register with new PC (needed for first fetch)
-    mos6510_set_ab(cpu, sys_addr);
+    cpu->set(REG_AB, sys_addr);
     
     // Set up stack for SYS command context.
     // Real BASIC SYS uses JSR internally: it pushes the return address - 1
@@ -771,13 +775,13 @@ bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& tes
     // Use the current stack pointer from BASIC boot (don't clobber it).
     // Push return address pointing to BASIC warm start ($A7AE) so if the
     // test does RTS, it returns to BASIC safely.
-    uint8_t sp = mos6510_get_s(cpu);
+    uint8_t sp = cpu->get(REG_S);
     uint16_t return_addr = 0xA7AE - 1;  // BASIC warm start, adjusted for RTS convention
     c64->ram->memory[0x0100 + sp] = (return_addr >> 8) & 0xFF;  // High byte
     sp--;
     c64->ram->memory[0x0100 + sp] = return_addr & 0xFF;          // Low byte
     sp--;
-    mos6510_set_s(cpu, sp);
+    cpu->set(REG_S, sp);
     
     return true;
 }
@@ -803,7 +807,7 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
     c64->ram->memory[0x01] = 0x37;  // Data: LORAM=1, HIRAM=1, CHAREN=1
     c64->bus.on_banking_change(0x07);
     
-    mos6510_t* cpu = static_cast<mos6510_t*>(c64->mos6510);
+    auto* cpu = CPU(c64->mos6510);
     if (!cpu) {
         return false;
     }
@@ -838,9 +842,9 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
             } else {
                 // After KERNAL boot, set PC to test entry point
                 uint16_t start_addr = (sys_addr != 0) ? sys_addr : load_addr;
-                mos6510_set_pc(cpu, start_addr);
-                mos6510_transition_to_fetch(cpu);
-                mos6510_set_ab(cpu, start_addr);
+                cpu->set(REG_PC, start_addr);
+                cpu->transition_to_fetch();
+                cpu->set(REG_AB, start_addr);
                 if (verbose_) {
                     printf("  Set PC to test entry: $%04X\n", start_addr);
                 }
@@ -857,11 +861,11 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
             }
             
             uint16_t start_addr = (sys_addr != 0) ? sys_addr : load_addr;
-            mos6510_set_pc(cpu, start_addr);
+            cpu->set(REG_PC, start_addr);
             
             // CRITICAL: Reset CPU pipeline and sync AB register for first fetch
-            mos6510_transition_to_fetch(cpu);
-            mos6510_set_ab(cpu, start_addr);
+            cpu->transition_to_fetch();
+            cpu->set(REG_AB, start_addr);
             
             // IMPORTANT: Leave interrupts ENABLED for direct execution
             // Many tests (especially CIA/Lorenz tests) rely on interrupts for timing
@@ -889,8 +893,8 @@ TestProtocol TestFramework::detect_test_protocol(const TestDescriptor& test, C64
     
     // Check for BASIC two-stage loader pattern
     ram_t* ram = c64->ram;
-    mos6510_t* cpu = static_cast<mos6510_t*>(c64->mos6510);
-    uint16_t pc = mos6510_get_pc(cpu);
+    auto* cpu = CPU(c64->mos6510);
+    uint16_t pc = cpu->get(REG_PC);
     
     // BASIC two-stage loaders start at $0801 and have SYS command
     if (pc == 0x0801 && detect_basic_two_stage_loader(ram, pc)) {
@@ -955,8 +959,8 @@ uint16_t TestFramework::calculate_basic_entry_point(ram_t* ram, uint16_t sys_add
 }
 // Detect if CPU is stuck in infinite loop and check border color
 bool TestFramework::detect_infinite_loop(C64System* c64, uint16_t& loop_pc, uint32_t check_cycles) {
-    mos6510_t* cpu = static_cast<mos6510_t*>(c64->mos6510);
-    uint16_t pc = mos6510_get_pc(cpu);
+    auto* cpu = CPU(c64->mos6510);
+    uint16_t pc = cpu->get(REG_PC);
     
     // Run for check_cycles and see if PC stays at same address
     uint32_t stable_count = 0;
@@ -964,7 +968,7 @@ bool TestFramework::detect_infinite_loop(C64System* c64, uint16_t& loop_pc, uint
     
     for (uint32_t i = 0; i < check_cycles; i++) {
         c64->tick();
-        uint16_t current_pc = mos6510_get_pc(cpu);
+        uint16_t current_pc = cpu->get(REG_PC);
         
         if (current_pc == last_pc) {
             stable_count++;
@@ -1004,8 +1008,8 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
     uint32_t max_cycles = test.timeout_cycles;
     uint32_t cycles = 0;
     
-    mos6510_t* cpu = static_cast<mos6510_t*>(c64->mos6510);
-    uint16_t start_pc = mos6510_get_pc(cpu);
+    auto* cpu = CPU(c64->mos6510);
+    uint16_t start_pc = cpu->get(REG_PC);
     
     if (verbose_) {
         printf("  Protocol: ");
@@ -1193,7 +1197,7 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
         
         // Periodic checks every 256 cycles
         if ((cycles & 0xFF) == 0) {
-            uint16_t current_pc = mos6510_get_pc(cpu);
+            uint16_t current_pc = cpu->get(REG_PC);
             if (current_pc == last_pc) {
                 if (pc_stable_count == 0) stable_pc = current_pc;
                 pc_stable_count++;
@@ -1255,8 +1259,8 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
     debug_intercept_.value = 0;
     
     // Get initial PC for diagnostics
-    mos6510_t* cpu = static_cast<mos6510_t*>(c64->mos6510);
-    uint16_t start_pc = mos6510_get_pc(cpu);
+    auto* cpu = CPU(c64->mos6510);
+    uint16_t start_pc = cpu->get(REG_PC);
     uint16_t last_pc = start_pc;
     bool pc_changed = false;
     uint32_t pc_change_count = 0;
@@ -1305,7 +1309,7 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
         
         // Check PC every 1000 cycles for diagnostic
         if (cycles % 1000 == 0) {
-            uint16_t current_pc = mos6510_get_pc(cpu);
+            uint16_t current_pc = cpu->get(REG_PC);
             if (current_pc != last_pc) {
                 pc_changed = true;
                 pc_change_count++;

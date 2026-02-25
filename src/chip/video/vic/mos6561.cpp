@@ -17,6 +17,7 @@ static const vic_chip_config_t vic_config_pal = {
 
 void mos6561_s::init() {
     is_pal = true;
+    info_ = ChipInfo{"MOS6561", "MOS Technology"};
     clock_frequency = vic_config_pal.clock_frequency;
     config = &vic_config_pal;
 

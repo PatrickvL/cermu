@@ -8,7 +8,7 @@
 #include <map>
 #include <mutex>
 #include <SDL_keycode.h>
-#include "chip.h"     // VideoStandard, ChipBase, ChipIdentity
+#include "chip.h"     // VideoStandard, ChipBase, ChipInfo
 #include "connector.h"
 #include "device_registry.h"
 
@@ -293,9 +293,13 @@ protected:
     /// subclasses alive while registered_chips_ holds non-owning pointers.
     std::vector<std::unique_ptr<ChipBase>> owned_chip_adapters_;
 
-    /// Register a chip with transferred ownership (e.g. ChipPlaceholder).
-    /// The chip is moved into owned_chip_adapters_ and a raw pointer stored
-    /// in the SystemChip entry.
+    /// Register a self-describing chip with transferred ownership.
+    /// The chip's own display_name(), short_name(), category(), and
+    /// base_address() supply the SystemChip metadata.
+    void register_chip(std::unique_ptr<ChipBase> chip);
+
+    /// Register a chip with transferred ownership — explicit placement.
+    /// Kept for backward compatibility; prefer the self-describing overload.
     void register_chip(std::unique_ptr<ChipBase> chip,
                        const char* display_name, const char* short_name,
                        const char* category, uint16_t base_address = 0);

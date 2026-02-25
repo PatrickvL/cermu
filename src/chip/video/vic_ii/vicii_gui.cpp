@@ -58,10 +58,10 @@ inline ChipLayout create_vicii_layout() {
     layout.markings = {
         "MOS6567/6569",              // part_number
         "MOS Technology",            // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
+        {},                     // package_variant
+        {},                     // date_code
+        {},                     // lot_number
+        {},                     // custom_text
         true,                        // show_part_number
         true,                        // show_manufacturer
         false,                       // show_package_variant

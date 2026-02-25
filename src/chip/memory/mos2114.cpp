@@ -5,15 +5,10 @@
 // ============================================================================
 // MOS2114 — constructor
 // ============================================================================
-MOS2114::MOS2114() {
+MOS2114::MOS2114()
+    : ChipBase(ChipInfo{"MOS2114", "MOS Technology"})
+{
     std::memset(memory, 0, sizeof(memory));
-}
-
-// ============================================================================
-// ChipBase identity
-// ============================================================================
-ChipIdentity MOS2114::chip_identity() const {
-    return {"MOS2114", "MOS Technology"};
 }
 
 bool MOS2114::has_debug_content()    const { return true; }

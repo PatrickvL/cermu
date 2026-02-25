@@ -25,9 +25,9 @@ inline ChipLayout create_mos2114_layout() {
         "MOS2114",                   // part_number
         "MOS Technology",            // manufacturer
         "1K x 4-bit SRAM",          // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
+        {},                     // date_code
+        {},                     // lot_number
+        {},                     // custom_text
         true,                        // show_part_number
         true,                        // show_manufacturer
         true,                        // show_package_variant

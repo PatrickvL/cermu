@@ -2583,6 +2583,8 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
 void vicii_s::init(const vicii_chip_config_t* config, void (*bank_change)(void*, uint8_t)) {
     this->config = config;
     this->bus.bank_change = bank_change;
+    bool pal = config && config->total_lines > 300;
+    info_ = ChipInfo{pal ? "MOS6569" : "MOS6567", "MOS Technology"};
     vicii_initialize(this);
     vicii_initialize_timing(this, config);
 }
@@ -2593,13 +2595,6 @@ vicii_s::~vicii_s() {
     free(pixel.pixel_line_color);
     free(pixel.sprite_collision_line);
     free(pixel.graphics_fg_line);
-}
-
-// ChipBase identity — uses config to determine PAL/NTSC variant
-ChipIdentity vicii_s::chip_identity() const {
-    bool pal = config && config->total_lines > 300;
-    return {pal ? "MOS6569" : "MOS6567", "MOS Technology",
-            pal ? VideoStandard::PAL : VideoStandard::NTSC};
 }
 
 void vicii_s::reset() {

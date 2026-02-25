@@ -153,6 +153,7 @@ public:
     
 public:
     PPU(bool pal = false) : is_pal(pal) {
+        info_ = ChipInfo{pal ? "RP2C07" : "RP2C02", "Ricoh"};
         // Initialize PPU memory
         vram.resize(2048, 0);
         oam.resize(256, 0);
@@ -225,7 +226,6 @@ private:
 
     // --- ChipBase interface ---
 public:
-    ChipIdentity chip_identity() const override;
     bool has_debug_content()    const override;
     bool has_settings_content() const override;
     bool has_layout_content()   const override;

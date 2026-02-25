@@ -372,28 +372,22 @@ void Apple1System::render_configuration_ui() {
 // ============================================================================
 
 void Apple1System::register_apple1_chips() {
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"MOS6502", "MOS Technology"}),
+    register_chip(mos6502_as_chip_base(cpu_),
         "MOS 6502 CPU", "6502", "CPU", 0x0000);
     register_chip(&pia_,
         "PIA 6820 (Keyboard/Display)", "PIA", "I/O", 0xD010);
     register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"Terminal", "Custom"}),
-        "Text Terminal (40x24)", "Terminal", "Video", 0x0000);
+        ChipInfo{"Terminal", "Custom"}, "Text Terminal (40x24)", "Terminal", "Video"));
     register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"SRAM", "Various"}),
-        "RAM", "RAM", "Memory", 0x0000);
+        ChipInfo{"SRAM", "Various"}, "SRAM (8KB)", "RAM", "Memory"));
     register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"PROM", "Various"}),
-        "Woz Monitor ROM (256B)", "Monitor", "Memory", 0xFF00);
+        ChipInfo{"PROM", "Various"}, "Woz Monitor ROM (256B)", "Monitor", "Memory", 0xFF00));
     if (has_basic_) {
         register_chip(std::make_unique<ChipPlaceholder>(
-            ChipIdentity{"ROM", "Apple"}),
-            "Apple 1 BASIC ROM (4KB)", "BASIC", "Memory", 0xE000);
+            ChipInfo{"ROM", "Apple"}, "Apple 1 BASIC ROM (4KB)", "BASIC", "Memory", 0xE000));
     }
     register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"2513", "Signetics"}),
-        "Signetics 2513 Char ROM", "CharROM", "Memory", 0x0000);
+        ChipInfo{"2513", "Signetics"}, "Signetics 2513 Char ROM", "CharROM", "Memory"));
 }
 
 // ============================================================================

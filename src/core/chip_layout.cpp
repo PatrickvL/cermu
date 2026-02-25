@@ -230,12 +230,12 @@ ChipLayout create_dip8_layout() {
     PIN_LR(layout, 4, GND,  VSS, 5);
     
     layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
+        {},                     // part_number
+        {},                     // manufacturer
+        {},                     // package_variant
+        {},                     // date_code
+        {},                     // lot_number
+        {},                     // custom_text
         false,                       // show_part_number
         false,                       // show_manufacturer
         false,                       // show_package_variant
@@ -764,10 +764,10 @@ ChipLayout create_to220_layout() {
     
     layout.markings = {
         "LM7805",                    // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
+        {},                     // manufacturer
+        {},                     // package_variant
+        {},                     // date_code
+        {},                     // lot_number
         "+5V Regulator",             // custom_text
         true,                        // show_part_number
         false,                       // show_manufacturer
@@ -894,11 +894,11 @@ ChipLayout create_sip9_layout() {
     }
     
     layout.markings = {
-        nullptr,                     // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
+        {},                     // part_number
+        {},                     // manufacturer
+        {},                     // package_variant
+        {},                     // date_code
+        {},                     // lot_number
         "10K Resistor Network",      // custom_text
         false,                       // show_part_number
         false,                       // show_manufacturer
@@ -977,12 +977,12 @@ ChipLayout create_custom_qfp(uint8_t total_pins, const char* part_name) {
     }
     
     layout.markings = {
-        part_name,                   // part_number
-        nullptr,                     // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
+        part_name ? part_name : std::string_view{},  // part_number
+        {},                     // manufacturer
+        {},                     // package_variant
+        {},                     // date_code
+        {},                     // lot_number
+        {},                     // custom_text
         part_name != nullptr,        // show_part_number
         false,                       // show_manufacturer
         false,                       // show_package_variant
@@ -1018,12 +1018,12 @@ ChipLayout create_custom_bga(uint8_t rows, uint8_t cols, const char* part_name) 
     }
     
     layout.markings = {
-        part_name,                   // part_number
-        nullptr,                     // manufacturer  
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
+        part_name ? part_name : std::string_view{},  // part_number
+        {},                     // manufacturer  
+        {},                     // package_variant
+        {},                     // date_code
+        {},                     // lot_number
+        {},                     // custom_text
         part_name != nullptr,        // show_part_number
         false,                       // show_manufacturer
         false,                       // show_package_variant

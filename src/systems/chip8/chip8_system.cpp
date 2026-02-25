@@ -620,23 +620,17 @@ void Chip8System::register_chip8_chips() {
     // CHIP-8 is a virtual machine — no discrete physical chips.
     // List logical functional blocks so the Hardware menu remains useful.
     register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"CHIP-8", "COSMAC"}),
-        "CHIP-8 Interpreter", "CPU", "CPU", 0x200);
+        ChipInfo{"CHIP-8", "COSMAC"}, "CHIP-8 Interpreter", "CPU", "CPU", 0x200));
     register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"SRAM", "Various"}),
-        "RAM (4KB)", "RAM", "Memory", 0x000);
+        ChipInfo{"SRAM", "Various"}, "RAM (4KB)", "RAM", "Memory"));
     register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"Display", "COSMAC"}),
-        "Display (64x32)", "Display", "Video", 0x000);
+        ChipInfo{"Display", "COSMAC"}, "Display (64x32)", "Display", "Video"));
     register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"Keypad", "COSMAC"}),
-        "Hex Keypad (16 keys)", "Keypad", "I/O", 0x000);
+        ChipInfo{"Keypad", "COSMAC"}, "Hex Keypad (16 keys)", "Keypad", "I/O"));
     register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"Timer", "COSMAC"}),
-        "Delay Timer (60 Hz)", "DT", "I/O", 0x000);
+        ChipInfo{"Timer", "COSMAC"}, "Delay Timer (60 Hz)", "DT", "I/O"));
     register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"Beeper", "COSMAC"}),
-        "Sound Timer / Beeper", "ST", "Audio", 0x000);
+        ChipInfo{"Beeper", "COSMAC"}, "Sound Timer / Beeper", "ST", "Audio"));
 }
 
 // ============================================================================

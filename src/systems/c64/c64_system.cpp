@@ -27,6 +27,7 @@
 #include "../../chip/logic/pla.h"
 #include "c64_pla_chip.h"
 #include "../../core/chip.h"
+#include "../../chip/memory/memory_chip.h"
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
 #include "c64_keyboard_matrix.h"
@@ -1538,39 +1539,38 @@ void C64System::register_c64_chips() {
     register_chip(colorram,
         "Color RAM (MOS 2114)", "Color RAM", "I/O", 0xD800);
 
-    // RAM (no debug window)
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"DRAM", "Various"}),
-        "RAM (64KB)", "RAM", "Memory", 0x0000);
+    // RAM — MemoryChip with layout rendering
+    register_chip(std::make_unique<MemoryChip>(
+        ChipInfo{"4164", "Various"}, 65536, MemoryChip::RAM, &bus.state,
+        "RAM", 0x0000));
 
-    // BASIC ROM (no debug window)
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"ROM", "Commodore"}),
-        "BASIC ROM (8KB)", "BASIC", "Memory", 0xA000);
+    // BASIC ROM
+    register_chip(std::make_unique<MemoryChip>(
+        ChipInfo{"MOS 901226-01", "Commodore"}, 8192, MemoryChip::ROM, &bus.state,
+        "BASIC", 0xA000));
 
-    // KERNAL ROM (no debug window)
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"ROM", "Commodore"}),
-        "KERNAL ROM (8KB)", "KERNAL", "Memory", 0xE000);
+    // KERNAL ROM
+    register_chip(std::make_unique<MemoryChip>(
+        ChipInfo{"MOS 901227-03", "Commodore"}, 8192, MemoryChip::ROM, &bus.state,
+        "KERNAL", 0xE000));
 
-    // Character ROM (no debug window)
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"ROM", "Commodore"}),
-        "Character ROM (4KB)", "CHARROM", "Memory", 0xD000);
+    // Character ROM
+    register_chip(std::make_unique<MemoryChip>(
+        ChipInfo{"MOS 901225-01", "Commodore"}, 4096, MemoryChip::ROM, &bus.state,
+        "CHARROM", 0xD000));
 
-    // Cartridge ROM Low (no debug window)
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"ROM", "Various"}),
-        "Cartridge ROM Low (8KB)", "ROML", "Memory", 0x8000);
+    // Cartridge ROM Low
+    register_chip(std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "Various"}, 8192, MemoryChip::ROM, &bus.state,
+        "ROML", 0x8000));
 
-    // Cartridge ROM High (no debug window)
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"ROM", "Various"}),
-        "Cartridge ROM High (8KB)", "ROMH", "Memory", 0xA000);
+    // Cartridge ROM High
+    register_chip(std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "Various"}, 8192, MemoryChip::ROM, &bus.state,
+        "ROMH", 0xA000));
 
     // PLA — native ChipBase (PlaChip holds c64_t* for GUI context)
-    register_chip(std::make_unique<PlaChip>(c64),
-        "PLA / Address Decoder", "PLA", "Bus", 0x0000);
+    register_chip(std::make_unique<PlaChip>(c64));
 }
 
 // Note: get_target_fps() and set_speed_multiplier() are now provided by
