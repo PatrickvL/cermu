@@ -39,10 +39,15 @@ bool nsf_parse_header(const uint8_t* data, size_t size, nsf_header_t* out) {
     out->init_addr  = format_read_le16(data + 0x0A);
     out->play_addr  = format_read_le16(data + 0x0C);
 
-    // Metadata strings (32 bytes each, null-terminated)
+    // Metadata strings (32 bytes each, null-terminated).
+    // NSF is nominally ASCII but files in the wild may contain Latin-1
+    // characters — convert to UTF-8 for SDL/ImGui compatibility.
     memcpy(out->name,      data + 0x0E, 32);  out->name[31] = '\0';
     memcpy(out->artist,    data + 0x2E, 32);  out->artist[31] = '\0';
     memcpy(out->copyright, data + 0x4E, 32);  out->copyright[31] = '\0';
+    format_latin1_to_utf8_buf(out->name,      sizeof(out->name));
+    format_latin1_to_utf8_buf(out->artist,    sizeof(out->artist));
+    format_latin1_to_utf8_buf(out->copyright, sizeof(out->copyright));
 
     // Timing
     out->ntsc_speed = format_read_le16(data + 0x6E);

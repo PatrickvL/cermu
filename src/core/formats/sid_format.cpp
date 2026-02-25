@@ -71,10 +71,15 @@ bool sid_parse_header(const uint8_t* data, size_t size, sid_header_t* out) {
     if (out->start_song == 0) out->start_song = 1;
     if (out->start_song > out->num_songs) out->start_song = 1;
 
-    // Metadata strings (32 bytes each, may not be null-terminated in file)
+    // Metadata strings (32 bytes each, may not be null-terminated in file).
+    // SID spec defines these as ISO 8859-1 (Latin-1) — convert to UTF-8
+    // so all downstream consumers (SDL window title, ImGui) get valid text.
     memcpy(out->name,     data + 0x16, 32); out->name[32] = '\0';
     memcpy(out->author,   data + 0x36, 32); out->author[32] = '\0';
     memcpy(out->released, data + 0x56, 32); out->released[32] = '\0';
+    format_latin1_to_utf8_buf(out->name,     sizeof(out->name));
+    format_latin1_to_utf8_buf(out->author,   sizeof(out->author));
+    format_latin1_to_utf8_buf(out->released, sizeof(out->released));
 
     // Version 2+ flags
     if (out->version >= 2 && size >= SID_V2_HEADER_SIZE) {

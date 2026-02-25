@@ -1326,7 +1326,8 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         nsf_player_active_ = true;
         system_ready_ = true;
 
-        // Set program title from NSF header
+        // Set program title from NSF header (strings are already UTF-8
+        // after parsing — Latin-1→UTF-8 conversion happens in nsf_parse_header).
         program_title_ = header.name;
         if (header.artist[0]) {
             program_title_ += " - ";

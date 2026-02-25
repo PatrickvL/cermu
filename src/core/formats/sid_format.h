@@ -97,9 +97,9 @@ typedef struct {
     uint16_t    start_song;     /**< Default subtune (1-based) */
     uint32_t    speed_flags;    /**< Bit per subtune: 0=VBI, 1=CIA timer */
 
-    char        name[33];       /**< Tune name (null-terminated) */
-    char        author[33];     /**< Author name (null-terminated) */
-    char        released[33];   /**< Release info (null-terminated) */
+    char        name[65];       /**< Tune name (null-terminated, UTF-8) */
+    char        author[65];     /**< Author name (null-terminated, UTF-8) */
+    char        released[65];   /**< Release info (null-terminated, UTF-8) */
 
     /* Version 2+ fields (zero if version < 2) */
     uint16_t    flags;          /**< Raw flags word */

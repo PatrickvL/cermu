@@ -53,10 +53,10 @@ struct nsf_header_t {
     uint16_t init_addr;         ///< Address of init routine
     uint16_t play_addr;         ///< Address of play routine
 
-    // Metadata strings (null-terminated, padded)
-    char     name[32];          ///< Song title
-    char     artist[32];        ///< Artist name
-    char     copyright[32];     ///< Copyright string
+    // Metadata strings (null-terminated, padded, UTF-8 after parsing)
+    char     name[65];          ///< Song title (UTF-8)
+    char     artist[65];        ///< Artist name (UTF-8)
+    char     copyright[65];     ///< Copyright string (UTF-8)
 
     // Timing
     uint16_t ntsc_speed;        ///< NTSC play speed in microseconds (usually 16666 = 60Hz)
