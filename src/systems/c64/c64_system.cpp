@@ -995,7 +995,8 @@ bool C64System::load_file(const char* filepath) {
     pending_load_.active = true;
     pending_load_.mode = mode;
 
-    // Set window title from file content
+    // Set window title from file content (strings are already UTF-8
+    // after parsing — Latin-1→UTF-8 conversion happens in sid_parse_header).
     if (sid_check && sid_check->name[0]) {
         program_title_ = sid_check->name;
         if (sid_check->author[0]) {

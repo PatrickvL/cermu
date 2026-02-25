@@ -138,6 +138,55 @@ uint8_t* format_read_entire_file(const char* filepath, size_t* out_size);
 bool format_ext_match(const char* ext, const char* target);
 
 /**
+ * Convert a Latin-1 (ISO 8859-1) string to UTF-8 in-place within a buffer.
+ * SID metadata uses ISO 8859-1; NSF metadata is nominally ASCII but files in
+ * the wild sometimes contain Latin-1 characters.  Window managers and ImGui
+ * require valid UTF-8.  Bytes 0x00–0x7F pass through unchanged; bytes
+ * 0x80–0xFF are expanded to the correct 2-byte UTF-8 sequence.
+ *
+ * @param buf      Buffer containing the Latin-1 string (null-terminated).
+ *                 Must be large enough to hold the expanded result
+ *                 (worst case: 2× input length + 1).
+ * @param buf_size Total size of the buffer in bytes.
+ */
+static inline void format_latin1_to_utf8_buf(char* buf, size_t buf_size) {
+    if (!buf || buf_size < 2) return;
+    /* First pass: measure the UTF-8 length */
+    size_t src_len = 0;
+    size_t utf8_len = 0;
+    for (size_t i = 0; buf[i] && i < buf_size - 1; i++) {
+        unsigned char ch = (unsigned char)buf[i];
+        utf8_len += (ch >= 0x80) ? 2 : 1;
+        src_len = i + 1;
+    }
+    if (utf8_len == src_len) return;  /* Pure ASCII — nothing to do */
+    if (utf8_len >= buf_size) {
+        /* Truncate: find the longest prefix that fits */
+        utf8_len = 0;
+        src_len = 0;
+        for (size_t i = 0; buf[i] && i < buf_size - 1; i++) {
+            unsigned char ch = (unsigned char)buf[i];
+            size_t needed = (ch >= 0x80) ? 2 : 1;
+            if (utf8_len + needed >= buf_size) break;
+            utf8_len += needed;
+            src_len = i + 1;
+        }
+    }
+    /* Second pass: expand from the end to avoid overwriting unread bytes */
+    buf[utf8_len] = '\0';
+    size_t dst = utf8_len;
+    for (size_t i = src_len; i > 0; i--) {
+        unsigned char ch = (unsigned char)buf[i - 1];
+        if (ch >= 0x80) {
+            buf[--dst] = (char)(0x80 | (ch & 0x3F));
+            buf[--dst] = (char)(0xC0 | (ch >> 6));
+        } else {
+            buf[--dst] = (char)ch;
+        }
+    }
+}
+
+/**
  * Check whether a format descriptor appears in a NULL-terminated array.
  * Useful for checking if a system supports a specific format.
  */
