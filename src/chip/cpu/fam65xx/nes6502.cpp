@@ -44,6 +44,10 @@ bus_state_t nes6502_tick(nes6502_t *cpu, bus_state_t pins) {
   return CPU_CAST(cpu)->tick<nes6502_cpu_t::Phase::PHI2>(pins);
 }
 
+bus_state_t nes6502_tick_phi1(nes6502_t *cpu, bus_state_t pins) {
+  return CPU_CAST(cpu)->tick<nes6502_cpu_t::Phase::PHI1>(pins);
+}
+
 bool nes6502_opdone(nes6502_t *cpu) { return CPU_CAST(cpu)->opdone(); }
 
 // Register getters

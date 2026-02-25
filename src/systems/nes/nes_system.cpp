@@ -1210,6 +1210,10 @@ void NintendoSystem<V>::reset() {
     
     pins_ = 0;
     pins_ |= BUS_MASK_RW;  // Initial state: read
+    // Active-low signals start HIGH (inactive)
+    pins_ |= BUS_BIT(BUS_NMI_BIT);
+    pins_ |= BUS_BIT(BUS_IRQ_BIT);
+    pins_ |= BUS_BIT(BUS_RES_BIT);
     nes6502_reset(cpu_, pins_);
     
     if (ppu_) {
@@ -1647,17 +1651,24 @@ void NintendoSystem<V>::clock() {
         if (bus_->dma_transfer) {
             // CPU is stalled during DMA
         } else {
-            // Tick CPU (handles APU internally)
+            // PHI2: CPU sets up bus (address, R/W)
             pins_ = nes6502_tick(cpu_, pins_);
             
-            // Service CPU memory request via bus
+            // Service CPU memory request via bus (between phases)
             pins_ = bus_->mem_tick(pins_);
             
-            // Handle NMI from PPU
+            // Handle NMI from PPU — NMI is edge-sensitive (active low)
             if (ppu_->get_nmi()) {
-                // Set NMI line low (NMI is active low)
-                pins_ &= ~BUS_MASK_NMI;
+                // Assert NMI: drive pin LOW (bit 34 = 0)
+                pins_ &= ~BUS_BIT(BUS_NMI_BIT);
+            } else {
+                // Deassert NMI: release pin HIGH (bit 34 = 1)
+                // Required for edge detection — next NMI needs a new HIGH→LOW
+                pins_ |= BUS_BIT(BUS_NMI_BIT);
             }
+            
+            // PHI1: CPU internal operations (including APU clock)
+            pins_ = nes6502_tick_phi1(cpu_, pins_);
         }
         
         // Generate audio sample
