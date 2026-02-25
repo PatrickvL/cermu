@@ -181,7 +181,7 @@ void vicii_s::render_debug_content() {
         ChipLayout& layout = get_vicii_layout();
         
         // Get current pin states from VIC-II
-        std::vector<PinSignalState> pin_states = get_vicii_pin_states(vicii, &layout, 0 /* bus_state */);
+        std::vector<PinSignalState> pin_states = get_vicii_pin_states(vicii, &layout, vicii->bus_snapshot_);
         
         // Render the chip using global renderer
         renderer.render(layout, chip_center, pin_states, get_vicii_type_name(vicii));
@@ -285,7 +285,7 @@ void vicii_s::render_layout_content() {
     const char* chip_name = get_vicii_type_name(vicii);
 
     ChipLayout& layout = get_vicii_layout();
-    std::vector<PinSignalState> pin_states = get_vicii_pin_states(vicii, &layout, 0);
+    std::vector<PinSignalState> pin_states = get_vicii_pin_states(vicii, &layout, vicii->bus_snapshot_);
     render_chip_layout(layout, pin_states, chip_name);
 #endif
 }

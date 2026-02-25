@@ -1162,5 +1162,9 @@ ChipIdentity mos6581_s::chip_identity() const {
  * Consolidated SID tick function - main entry point for SID cycle processing.
  */
 bus_state_t mos6581_s::tick(bus_state_t bus_state) {
-    return advance_cycle(bus_state);
+    bus_state = advance_cycle(bus_state);
+#ifdef IMGUI_VERSION
+    bus_snapshot_ = bus_state;
+#endif
+    return bus_state;
 }

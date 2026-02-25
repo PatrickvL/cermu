@@ -2140,6 +2140,9 @@ void vicii_s::tick_phi2(bus_state_t bus_state) {
     // occur between here and the next phi1 (CIA phi1 and CPU phi1 don't write VIC regs),
     // so the cycle function at the start of the next phi1 sees the correct bad line state.
     vicii_update_badline_condition(vicii);
+#ifdef IMGUI_VERSION
+    bus_snapshot_ = bus_state;
+#endif
 }
 
 // ========================================================================================

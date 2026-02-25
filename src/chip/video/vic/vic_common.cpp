@@ -591,5 +591,8 @@ bus_state_t vic_base_s::tick(bus_state_t bus_state) {
         emit_pixel(border_color);
     }
 
+#ifdef IMGUI_VERSION
+    bus_snapshot_ = bus_state;
+#endif
     return bus_state;
 }

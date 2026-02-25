@@ -176,7 +176,7 @@ void mos6526_s::render_debug_content() {
         ChipLayout& layout = get_cia_layout();
         
         // Get current pin states from CIA
-        std::vector<PinSignalState> pin_states = get_cia_pin_states(cia, &layout, 0 /* bus_state */);
+        std::vector<PinSignalState> pin_states = get_cia_pin_states(cia, &layout, cia->bus_snapshot_);
         
         // Render the chip using global renderer
         renderer.render(layout, chip_center, pin_states, cia_name);
@@ -384,7 +384,7 @@ void mos6526_s::render_layout_content() {
     const char* cia_name = mos6526_get_cia_name(cia);
 
     ChipLayout& layout = get_cia_layout();
-    std::vector<PinSignalState> pin_states = get_cia_pin_states(cia, &layout, 0);
+    std::vector<PinSignalState> pin_states = get_cia_pin_states(cia, &layout, cia->bus_snapshot_);
     render_chip_layout(layout, pin_states, cia_name);
 #endif
 }
