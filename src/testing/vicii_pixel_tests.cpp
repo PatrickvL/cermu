@@ -99,7 +99,7 @@ static void write_colorram(C64System* c64, uint16_t offset, uint8_t val) {
 
 // Write directly to RAM (bypasses banking/IO)
 static void write_ram(C64System* c64, uint16_t addr, uint8_t val) {
-    c64->ram->memory[addr] = val;
+    c64->ram->data()[addr] = val;
 }
 
 // Run N frames (with audio drain)
@@ -1739,7 +1739,7 @@ static void diagnostic_dump_boot(C64System* c64, EmulatedSystem* sys, check_ctx_
     // Read first few screen bytes to see what characters are on screen
     printf("Screen $0400-$0427 (first row): ");
     for (int i = 0; i < 40; i++) {
-        uint8_t ch = c64->ram->memory[0x0400 + i];
+        uint8_t ch = c64->ram->data()[0x0400 + i];
         printf("%02X ", ch);
     }
     printf("\n");

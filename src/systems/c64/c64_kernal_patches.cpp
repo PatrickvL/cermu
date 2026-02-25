@@ -7,12 +7,12 @@
 #include <cstring>
 
 bool c64_patch_skip_memtest(C64System* c64) {
-    if (!c64 || !c64->kernal || !c64->kernal->memory) {
+    if (!c64 || !c64->kernal || !c64->kernal->data()) {
         printf("C64: WARNING — cannot patch KERNAL (ROM not loaded)\n");
         return false;
     }
 
-    uint8_t* rom = c64->kernal->memory;
+    uint8_t* rom = c64->kernal->data();
 
     // $FD5F - $E000 = 0x1D5F (ROM offset for RAMTAS memory test)
     constexpr uint16_t RAMTAS_OFFSET = 0x1D5F;

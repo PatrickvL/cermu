@@ -5,6 +5,8 @@
 #include "../../gui/chip_visualization.h"
 #endif
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 #include <string>
 
 // ============================================================================
@@ -31,8 +33,9 @@ static std::string format_bytes(size_t bytes) {
 }
 
 // ============================================================================
-// MemoryChip — constructor
+// MemoryChip — lifecycle
 // ============================================================================
+
 MemoryChip::MemoryChip(ChipInfo     info,
                        size_t       size_bytes,
                        MemoryType   type,
@@ -48,6 +51,12 @@ MemoryChip::MemoryChip(ChipInfo     info,
     category_     = "Memory";
     base_address_ = base_address;
 
+    // Allocate zero-filled storage
+    if (size_bytes_ > 0) {
+        data_ = static_cast<uint8_t*>(calloc(1, size_bytes_));
+        owns_data_ = true;
+    }
+
     // Auto-generate display name: "{part_number} [{type}] ({size})"
     // Skip type label if part_number already contains it to avoid
     // redundancies like "SRAM SRAM (2KB)".
@@ -61,6 +70,66 @@ MemoryChip::MemoryChip(ChipInfo     info,
         display_name_buf_ = pn + " " + label + " (" + size_str + ")";
     }
     display_name_ = display_name_buf_.c_str();
+}
+
+MemoryChip::~MemoryChip() {
+    if (owns_data_) {
+        free(data_);
+    }
+    data_ = nullptr;
+}
+
+MemoryChip::MemoryChip(MemoryChip&& other) noexcept
+    : ChipBase(std::move(other))
+    , data_(other.data_)
+    , owns_data_(other.owns_data_)
+    , size_bytes_(other.size_bytes_)
+    , type_(other.type_)
+    , system_bus_(other.system_bus_)
+    , display_name_buf_(std::move(other.display_name_buf_))
+{
+    other.data_ = nullptr;
+    other.owns_data_ = false;
+    display_name_ = display_name_buf_.c_str();
+}
+
+MemoryChip& MemoryChip::operator=(MemoryChip&& other) noexcept {
+    if (this != &other) {
+        if (owns_data_) free(data_);
+
+        ChipBase::operator=(std::move(other));
+        data_             = other.data_;
+        owns_data_        = other.owns_data_;
+        size_bytes_       = other.size_bytes_;
+        type_             = other.type_;
+        system_bus_       = other.system_bus_;
+        display_name_buf_ = std::move(other.display_name_buf_);
+
+        other.data_ = nullptr;
+        other.owns_data_ = false;
+        display_name_ = display_name_buf_.c_str();
+    }
+    return *this;
+}
+
+// ============================================================================
+// External buffer management
+// ============================================================================
+
+void MemoryChip::bind(uint8_t* external) {
+    if (data_ && data_ != external) {
+        // Preserve existing data by copying to the target buffer
+        memcpy(external, data_, size_bytes_);
+        if (owns_data_) free(data_);
+    }
+    data_ = external;
+    owns_data_ = false;
+}
+
+void MemoryChip::release() {
+    if (owns_data_) free(data_);
+    data_ = nullptr;
+    owns_data_ = false;
 }
 
 // ============================================================================

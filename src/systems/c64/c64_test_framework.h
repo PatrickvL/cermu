@@ -9,7 +9,7 @@
 #include "../../core/system_lines.h"  // bus_state_t, BUS_GET_ADDR, BUS_GET_DATA
 
 // Forward declarations
-typedef struct ram_s ram_t;
+class MemoryChip;
 class C64System;
 
 namespace c64_test {
@@ -250,8 +250,8 @@ private:
     
     // Protocol detection and handling
     TestProtocol detect_test_protocol(const TestDescriptor& test, C64System* c64);
-    bool detect_basic_two_stage_loader(ram_t* ram, uint16_t load_addr);
-    uint16_t calculate_basic_entry_point(ram_t* ram, uint16_t sys_addr);
+    bool detect_basic_two_stage_loader(MemoryChip* ram, uint16_t load_addr);
+    uint16_t calculate_basic_entry_point(MemoryChip* ram, uint16_t sys_addr);
     bool detect_infinite_loop(C64System* c64, uint16_t& loop_pc, uint32_t check_cycles = 1000);
     uint8_t get_border_color(C64System* c64);
     

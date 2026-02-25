@@ -1,8 +1,6 @@
 #pragma once
 
 #include "../commodore/commodore_system.h"
-#include "../../chip/memory/ram.h"
-#include "../../chip/memory/rom.h"
 #include "../../chip/memory/mos2114.h"
 #include "../../chip/io/mos6522.h"
 #include "../../chip/video/vic/mos6560.h"

@@ -5,6 +5,7 @@
 #include "../../core/text_terminal.h"
 #include "../../chip/cpu/fam65xx/mos6502.h"
 #include "../../chip/io/pia6820.h"
+#include "../../chip/memory/memory_chip.h"
 #include <cstdint>
 
 // Apple 1 default bus state — initial pin values.
@@ -71,11 +72,11 @@ private:
     pia6820_t pia_;                  // PIA 6820 for keyboard and display I/O
     TextTerminal* terminal_;         // Text terminal (40x24)
     
-    // Apple 1 Memory (simple arrays)
-    uint8_t ram_simple_[65536];      // Up to 64KB RAM (typically 8KB at $0000-$1FFF)
-    uint8_t monitor_rom_[256];       // Woz Monitor ROM at $FF00-$FFFF
-    uint8_t basic_rom_[4096];        // Optional Apple 1 BASIC (4KB at various addresses)
-    uint8_t char_rom_[512];          // Signetics 2513 character ROM (64 chars x 8 bytes)
+    // Memory chips — owned by registered_chips_ (base class), borrowed here
+    MemoryChip* ram_         = nullptr;  // Up to 64KB RAM (typically 8KB at $0000-$1FFF)
+    MemoryChip* monitor_rom_ = nullptr;  // Woz Monitor ROM at $FF00-$FFFF (256 bytes)
+    MemoryChip* basic_rom_   = nullptr;  // Optional Apple 1 BASIC (4KB at various addresses)
+    MemoryChip* char_rom_    = nullptr;  // Signetics 2513 character ROM (512 bytes)
     
     // System state
     uint32_t cycles_per_frame_;
@@ -91,9 +92,6 @@ private:
 
     // Connector port setup (registers Apple 1 connector ports with base class)
     void setup_connector_ports();
-
-    /// Register all Apple 1 chips into registered_chips_ for the Hardware menu.
-    void register_apple1_chips();
 
     // ROM loading
     bool load_roms();

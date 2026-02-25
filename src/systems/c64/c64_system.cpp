@@ -353,12 +353,12 @@ bool C64System::initialize() {
     // =========================================================================
     // Create all chips
     // =========================================================================
-    this->ram = new ram_t();
+    this->ram = new MemoryChip(ChipInfo{"4164", "Various"}, 65536, MemoryChip::RAM, &bus.state, "RAM", 0x0000);
     if (!(this->mos6510 = reinterpret_cast<mos6510_t*>(new mos6510_cpu_t()))) { cleanup(); return false; }
-    this->cartridge_roml = new rom_t();
-    this->basic = new rom_t();
-    this->cartridge_romh = new rom_t();
-    this->charrom = new rom_t();
+    this->cartridge_roml = new MemoryChip(ChipInfo{"ROM", "Various"}, 8192, MemoryChip::ROM, &bus.state, "ROML", 0x8000);
+    this->basic = new MemoryChip(ChipInfo{"MOS 901226-01", "Commodore"}, 8192, MemoryChip::ROM, &bus.state, "BASIC", 0xA000);
+    this->cartridge_romh = new MemoryChip(ChipInfo{"ROM", "Various"}, 8192, MemoryChip::ROM, &bus.state, "ROMH", 0xA000);
+    this->charrom = new MemoryChip(ChipInfo{"MOS 901225-01", "Commodore"}, 4096, MemoryChip::ROM, &bus.state, "CHARROM", 0xD000);
     this->vicii = new vicii_t();
     this->vicii->init(vicii_s::get_default_config(c64_config_.vicii_standard == VIC_PAL), vicii_s::memory_bank_change);
     if (!this->vicii) { cleanup(); return false; }
@@ -407,7 +407,7 @@ bool C64System::initialize() {
     }
     printf("C64: Keyboard matrix initialized (all keys released)\n");
 
-    this->kernal = new rom_t();
+    this->kernal = new MemoryChip(ChipInfo{"MOS 901227-03", "Commodore"}, 8192, MemoryChip::ROM, &bus.state, "KERNAL", 0xE000);
 
     // No cartridge I/O by default
     this->io1 = nullptr;
@@ -593,13 +593,13 @@ void C64System::reset() {
         // (including $2D), $E453 copies the vector table ($0302/$0303),
         // and NEW sets VARTAB ($2D) to TXTTAB+2.
         if (this->ram) {
-            this->ram->memory[0x0302] = 0;
-            this->ram->memory[0x0303] = 0;
-            this->ram->memory[0x002D] = 0;
+            this->ram->data()[0x0302] = 0;
+            this->ram->data()[0x0303] = 0;
+            this->ram->data()[0x002D] = 0;
             // Clear the keyboard buffer count so is_basic_ready() doesn't
             // get stuck waiting for a stale non-zero $C6 left by a
             // previously running program.
-            this->ram->memory[0x00C6] = 0;
+            this->ram->data()[0x00C6] = 0;
         }
 
         // Reset serial trap state
@@ -670,7 +670,7 @@ bool C64System::check_serial_traps(uint16_t pc) {
 
 bool C64System::serial_trap_attention() {
     auto* cpu = CPU(mos6510);
-    uint8_t iecdata = ram->memory[ZP_BSOUR];
+    uint8_t iecdata = ram->data()[ZP_BSOUR];
 
     if (iecdata == IEC_UNLISTEN) {
         // UNLISTEN — finalize pending OPEN (send accumulated filename)
@@ -718,7 +718,7 @@ bool C64System::serial_trap_attention() {
     if (serial_trap_.active_device >= 4) {
         auto* drive = find_iec_drive(serial_trap_.active_device);
         if (!drive) {
-            ram->memory[ZP_STATUS] |= 0x80;  // Device not present
+            ram->data()[ZP_STATUS] |= 0x80;  // Device not present
         }
     }
 
@@ -741,7 +741,7 @@ bool C64System::serial_trap_send() {
     if (!drive) return false;
 
     auto* cpu = CPU(mos6510);
-    uint8_t iecdata = ram->memory[ZP_BSOUR];
+    uint8_t iecdata = ram->data()[ZP_BSOUR];
 
     // If no secondary address was sent, default to SA 0
     if (serial_trap_.trap_secondary == 0) {
@@ -780,12 +780,12 @@ bool C64System::serial_trap_receive() {
     int status = drive->trap_receive(data);
 
     // Store received byte in TMP_IN and A register
-    ram->memory[ZP_TMP_IN] = data;
+    ram->data()[ZP_TMP_IN] = data;
     cpu->set(REG_A, data);
 
     // Set/update I/O status (ST)
     if (status) {
-        ram->memory[ZP_STATUS] |= static_cast<uint8_t>(status);
+        ram->data()[ZP_STATUS] |= static_cast<uint8_t>(status);
     }
 
     // Set CPU flags to match the received byte
@@ -928,19 +928,19 @@ void C64System::run_frame() {
 // ============================================================================
 
 static uint8_t c64_mem_read(void* ctx, uint16_t addr) {
-    ram_t* ram = static_cast<ram_t*>(ctx);
-    return ram->memory[addr];
+    auto* ram = static_cast<MemoryChip*>(ctx);
+    return ram->data()[addr];
 }
 
 static void c64_mem_write_byte(void* ctx, uint16_t addr, uint8_t val) {
-    ram_t* ram = static_cast<ram_t*>(ctx);
-    ram->memory[addr] = val;
+    auto* ram = static_cast<MemoryChip*>(ctx);
+    ram->data()[addr] = val;
 }
 
 static void c64_mem_write_block(void* ctx, uint16_t addr,
                                 const uint8_t* data, size_t len) {
-    ram_t* ram = static_cast<ram_t*>(ctx);
-    memcpy(&ram->memory[addr], data, len);
+    auto* ram = static_cast<MemoryChip*>(ctx);
+    memcpy(&ram->data()[addr], data, len);
 }
 
 bool C64System::load_file(const char* filepath) {
@@ -1022,7 +1022,7 @@ bool C64System::load_file(const char* filepath) {
 bool C64System::is_basic_ready() const {
     if (!initialized_ || !this->ram) return false;
 
-    const uint8_t* ram = this->ram->memory;
+    const uint8_t* ram = this->ram->data();
 
     // The BASIC warm-start vector at $0302/$0303 is set to $A483 by the
     // very first subroutine of the cold-start sequence (JSR $E453, which
@@ -1540,34 +1540,28 @@ void C64System::register_c64_chips() {
         "Color RAM (MOS 2114)", "Color RAM", "I/O", 0xD800);
 
     // RAM — MemoryChip with layout rendering
-    register_chip(std::make_unique<MemoryChip>(
-        ChipInfo{"4164", "Various"}, 65536, MemoryChip::RAM, &bus.state,
-        "RAM", 0x0000));
+    register_chip(this->ram,
+        "RAM (4164)", "RAM", "Memory", 0x0000);
 
     // BASIC ROM
-    register_chip(std::make_unique<MemoryChip>(
-        ChipInfo{"MOS 901226-01", "Commodore"}, 8192, MemoryChip::ROM, &bus.state,
-        "BASIC", 0xA000));
+    register_chip(this->basic,
+        "BASIC ROM (MOS 901226-01)", "BASIC", "Memory", 0xA000);
 
     // KERNAL ROM
-    register_chip(std::make_unique<MemoryChip>(
-        ChipInfo{"MOS 901227-03", "Commodore"}, 8192, MemoryChip::ROM, &bus.state,
-        "KERNAL", 0xE000));
+    register_chip(this->kernal,
+        "KERNAL ROM (MOS 901227-03)", "KERNAL", "Memory", 0xE000);
 
     // Character ROM
-    register_chip(std::make_unique<MemoryChip>(
-        ChipInfo{"MOS 901225-01", "Commodore"}, 4096, MemoryChip::ROM, &bus.state,
-        "CHARROM", 0xD000));
+    register_chip(this->charrom,
+        "Character ROM (MOS 901225-01)", "CHARROM", "Memory", 0xD000);
 
     // Cartridge ROM Low
-    register_chip(std::make_unique<MemoryChip>(
-        ChipInfo{"ROM", "Various"}, 8192, MemoryChip::ROM, &bus.state,
-        "ROML", 0x8000));
+    register_chip(this->cartridge_roml,
+        "Cartridge ROML", "ROML", "Memory", 0x8000);
 
     // Cartridge ROM High
-    register_chip(std::make_unique<MemoryChip>(
-        ChipInfo{"ROM", "Various"}, 8192, MemoryChip::ROM, &bus.state,
-        "ROMH", 0xA000));
+    register_chip(this->cartridge_romh,
+        "Cartridge ROMH", "ROMH", "Memory", 0xA000);
 
     // PLA — native ChipBase (PlaChip holds c64_t* for GUI context)
     register_chip(std::make_unique<PlaChip>(c64));
@@ -2024,8 +2018,8 @@ bool C64System::pla_maps_generate() {
 // ============================================================================
 
 // Helper: Initialize RAM with debug test patterns
-static void memory_init_debug_patterns(ram_t* ram) {
-    if (!ram || !ram->memory) {
+static void memory_init_debug_patterns(MemoryChip* ram) {
+    if (!ram || !ram->data()) {
         printf("ERROR: RAM pointer invalid for debug pattern initialization\n");
         return;
     }
@@ -2033,18 +2027,18 @@ static void memory_init_debug_patterns(ram_t* ram) {
     printf("Initializing RAM with debug test patterns...\n");
 
     // Clear zero page and stack
-    memset(ram->memory, 0, 0x0200);
+    memset(ram->data(), 0, 0x0200);
 
     // Fill remaining RAM with random bytes for realistic uninitialized memory behavior
     for (uint32_t addr = 0x0200; addr < 0x10000; addr++) {
-        ram->memory[addr] = (uint8_t)rand();
+        ram->data()[addr] = (uint8_t)rand();
     }
 
     // Add test pattern to video matrix at $0400 in all VIC-II banks
     for (int bank = 0; bank < 4; bank++) {
         uint16_t base = bank * 0x4000 + 0x0400;
         for (int i = 0; i < 1000; i++) {
-            ram->memory[base + i] = (uint8_t)((base + i) & 0xFF);
+            ram->data()[base + i] = (uint8_t)((base + i) & 0xFF);
         }
         printf("  Bank %d: Screen memory at $%04X filled with address pattern\n", bank, base);
     }
@@ -2077,13 +2071,13 @@ void C64System::memory_init(const c64_config_t* config) {
     // -------------------------------------------------------------------------
     // Initialize RAM
     // -------------------------------------------------------------------------
-    if (this->ram && this->ram->memory) {
+    if (this->ram && this->ram->data()) {
         c64_test_mode_t test_mode = config ? config->test_mode : C64_TEST_MODE_NORMAL;
 
         switch (test_mode) {
             case C64_TEST_MODE_NORMAL:
                 printf("Normal boot mode: RAM cleared\n");
-                memset(this->ram->memory, 0, 0x10000);
+                memset(this->ram->data(), 0, 0x10000);
                 break;
 
             case C64_TEST_MODE_DEBUG_PATTERNS:
@@ -2093,20 +2087,20 @@ void C64System::memory_init(const c64_config_t* config) {
             case C64_TEST_MODE_PRG_FILE:
                 if (config && config->test_binary_config && config->test_binary_config->filename) {
                     printf("Loading PRG file: %s\n", config->test_binary_config->filename);
-                    memset(this->ram->memory, 0, 0x10000);
+                    memset(this->ram->data(), 0, 0x10000);
                     commodore_prg_t prg = {};
                     if (commodore_prg_load(config->test_binary_config->filename, &prg)) {
-                        memcpy(&this->ram->memory[prg.load_addr], prg.data, prg.data_size);
+                        memcpy(&this->ram->data()[prg.load_addr], prg.data, prg.data_size);
                         printf("  Loaded $%04X-$%04X (%zu bytes)\n",
                                prg.load_addr, prg.end_addr, prg.data_size);
                         commodore_prg_free(&prg);
                     } else {
                         printf("ERROR: Failed to load PRG file, falling back to normal init\n");
-                        memset(this->ram->memory, 0, 0x10000);
+                        memset(this->ram->data(), 0, 0x10000);
                     }
                 } else {
                     printf("ERROR: PRG mode selected but no filename provided\n");
-                    memset(this->ram->memory, 0, 0x10000);
+                    memset(this->ram->data(), 0, 0x10000);
                 }
                 break;
 
@@ -2115,30 +2109,30 @@ void C64System::memory_init(const c64_config_t* config) {
                     printf("Loading BIN file: %s at $%04X\n",
                            config->test_binary_config->filename,
                            config->test_binary_config->load_address);
-                    memset(this->ram->memory, 0, 0x10000);
+                    memset(this->ram->data(), 0, 0x10000);
                     uint8_t* bin_data = NULL;
                     size_t bin_size = 0;
                     if (commodore_bin_load(config->test_binary_config->filename,
                                           &bin_data, &bin_size)) {
                         uint16_t addr = config->test_binary_config->load_address;
                         if (addr + bin_size <= 0x10000) {
-                            memcpy(&this->ram->memory[addr], bin_data, bin_size);
+                            memcpy(&this->ram->data()[addr], bin_data, bin_size);
                             printf("  Loaded %zu bytes at $%04X\n", bin_size, addr);
                         }
                         free(bin_data);
                     } else {
                         printf("ERROR: Failed to load BIN file, falling back to normal init\n");
-                        memset(this->ram->memory, 0, 0x10000);
+                        memset(this->ram->data(), 0, 0x10000);
                     }
                 } else {
                     printf("ERROR: BIN mode selected but no filename provided\n");
-                    memset(this->ram->memory, 0, 0x10000);
+                    memset(this->ram->data(), 0, 0x10000);
                 }
                 break;
 
             default:
                 printf("WARNING: Unknown test mode, using normal init\n");
-                memset(this->ram->memory, 0, 0x10000);
+                memset(this->ram->data(), 0, 0x10000);
                 break;
         }
     } else {
@@ -2160,39 +2154,39 @@ void C64System::memory_init(const c64_config_t* config) {
     // -------------------------------------------------------------------------
     // Load ROMs from files
     // -------------------------------------------------------------------------
-    struct { rom_t* rom; const char** filenames; uint16_t size; const char* name; } roms[] = {
+    struct { MemoryChip* rom; const char** filenames; uint16_t size; const char* name; } roms[] = {
         { this->basic,   rom_config ? (const char**)rom_config->basic_rom_filenames   : nullptr, 8192, "BASIC" },
         { this->kernal,  rom_config ? (const char**)rom_config->kernal_rom_filenames  : nullptr, 8192, "KERNAL" },
         { this->charrom, rom_config ? (const char**)rom_config->chargen_rom_filenames : nullptr, 4096, "Character" },
     };
 
     for (auto& r : roms) {
-        if (!r.rom || !r.rom->memory) {
+        if (!r.rom || !r.rom->data()) {
             if (r.rom) printf("Warning: %s ROM has no allocated memory\n", r.name);
             continue;
         }
-        printf("[ROM-INIT] Processing %s ROM (size=%u memory=%p)\n", r.name, r.size, (void*)r.rom->memory);
+        printf("[ROM-INIT] Processing %s ROM (size=%u memory=%p)\n", r.name, r.size, (void*)r.rom->data());
 
         bool loaded = false;
         if (rom_root_found && r.filenames) {
             loaded = rom_loader_load_from_root(rom_root_path, r.filenames, r.size,
-                                               r.rom->memory, r.size);
+                                               r.rom->data(), r.size);
             if (!loaded) printf("Warning: Failed to load %s ROM\n", r.name);
         } else if (!rom_root_found) {
             printf("Warning: ROM root not found, skipping %s ROM loading\n", r.name);
         }
 
         if (!loaded) {
-            memset(r.rom->memory, 0xFF, r.size);
+            memset(r.rom->data(), 0xFF, r.size);
         }
     }
 
     // Cartridge ROMs: not loaded by default (filled with 0xFF if present)
-    if (this->cartridge_roml && this->cartridge_roml->memory) {
-        memset(this->cartridge_roml->memory, 0xFF, 8192);
+    if (this->cartridge_roml && this->cartridge_roml->data()) {
+        memset(this->cartridge_roml->data(), 0xFF, 8192);
     }
-    if (this->cartridge_romh && this->cartridge_romh->memory) {
-        memset(this->cartridge_romh->memory, 0xFF, 8192);
+    if (this->cartridge_romh && this->cartridge_romh->data()) {
+        memset(this->cartridge_romh->data(), 0xFF, 8192);
     }
 }
 

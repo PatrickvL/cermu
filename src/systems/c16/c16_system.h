@@ -3,6 +3,7 @@
 
 #include "../commodore/commodore_system.h"
 #include "../../core/system_lines.h"
+#include "../../chip/memory/memory_chip.h"
 #include "../../chip/video/ted/ted7360.h"
 
 // C264 series (C16/C116/Plus4) default bus state — initial pin values.
@@ -130,11 +131,11 @@ private:
     ted7360_t* ted_;
     bus_state_t bus_state_;
 
-    // Memory
-    uint8_t ram_simple_[65536];   // Up to 64KB RAM (C16/C116 use 16KB, Plus/4 uses 64KB)
-    uint8_t basic_rom_[16384];    // BASIC ROM $8000-$BFFF (16KB)
-    uint8_t kernal_rom_[16384];   // Kernal ROM $C000-$FFFF (16KB)
-    size_t  ram_size_ = 16384;    // Cached configured RAM size (updated in apply_configuration)
+    // Memory chips — owned by registered_chips_ (base class), borrowed here
+    MemoryChip* ram_         = nullptr;  // Up to 64KB RAM (C16/C116 use 16KB, Plus/4 uses 64KB)
+    MemoryChip* basic_rom_   = nullptr;  // BASIC ROM $8000-$BFFF (16KB)
+    MemoryChip* kernal_rom_  = nullptr;  // Kernal ROM $C000-$FFFF (16KB)
+    size_t  ram_size_ = 16384;           // Cached configured RAM size (updated in apply_configuration)
 
     // System state
     bool initialized_;
@@ -143,9 +144,6 @@ private:
     bool load_roms();
     bus_state_t mem_tick(bus_state_t s);
     void setup_connector_ports();
-
-    /// Register all C264 chips into registered_chips_ for the Hardware menu.
-    void register_c264_chips();
     static uint8_t io_port_in(void* user_data);
     static void io_port_out(uint8_t data, void* user_data);
     static uint8_t ted_keyboard_scan(void* user_data, uint8_t column);

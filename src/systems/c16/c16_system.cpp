@@ -244,11 +244,6 @@ Commodore264System<V>::Commodore264System()
     
     // Each variant has exactly one memory option (index 0)
     config_.memory_option_index = 0;
-    
-    // Initialize memory arrays
-    memset(ram_simple_, 0, sizeof(ram_simple_));
-    memset(basic_rom_, 0, sizeof(basic_rom_));
-    memset(kernal_rom_, 0, sizeof(kernal_rom_));
 }
 
 template<C264SeriesVariant V>
@@ -320,6 +315,22 @@ bool Commodore264System<V>::initialize() {
     
     printf("%s: Initializing system\n", Traits::name);
     
+    // Create memory chips early — storage is ready for ROM loading
+    auto ram_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"DRAM", "Various"}, 65536, MemoryChip::RAM, &bus_state_,
+        "RAM", 0x0000);
+    ram_ = ram_chip.get();
+
+    auto basic_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "Commodore"}, 16384, MemoryChip::ROM, &bus_state_,
+        "BASIC", 0x8000);
+    basic_rom_ = basic_chip.get();
+
+    auto kernal_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "Commodore"}, 16384, MemoryChip::ROM, &bus_state_,
+        "KERNAL", 0xC000);
+    kernal_rom_ = kernal_chip.get();
+    
     // Load ROMs using common ROM loader
     bool roms_loaded = load_roms();
     if (!roms_loaded) {
@@ -345,7 +356,7 @@ bool Commodore264System<V>::initialize() {
     
     // Read reset vector from KERNAL ROM and set CPU PC
     if (roms_loaded) {
-        uint16_t reset_vector = kernal_rom_[0xFFFC - 0xC000] | (kernal_rom_[0xFFFD - 0xC000] << 8);
+        uint16_t reset_vector = (*kernal_rom_)[0xFFFC - 0xC000] | ((*kernal_rom_)[0xFFFD - 0xC000] << 8);
         cpu->set(REG_PC, reset_vector);
         cpu->set(REG_AB, reset_vector);
         printf("%s: CPU reset vector = $%04X\n", Traits::name, reset_vector);
@@ -387,7 +398,13 @@ bool Commodore264System<V>::initialize() {
     setup_connector_ports();
 
     // Register chips for the Hardware menu and debug windows
-    register_c264_chips();
+    register_chip(static_cast<ChipBase*>(CPU(cpu_)),
+        "MOS 7501/8501 CPU", "7501", "CPU", 0x0000);
+    register_chip(ted_,
+        "TED 7360 (Video/Audio/I/O)", "TED", "Video", 0xFF00);
+    register_chip(std::move(ram_chip));
+    register_chip(std::move(basic_chip));
+    register_chip(std::move(kernal_chip));
 
     initialized_ = true;
     return true;
@@ -432,7 +449,7 @@ void Commodore264System<V>::reset() {
         cpu->reset(0);
         
         // Re-read reset vector from KERNAL ROM
-        uint16_t reset_vector = kernal_rom_[0xFFFC - 0xC000] | (kernal_rom_[0xFFFD - 0xC000] << 8);
+        uint16_t reset_vector = (*kernal_rom_)[0xFFFC - 0xC000] | ((*kernal_rom_)[0xFFFD - 0xC000] << 8);
         cpu->set(REG_PC, reset_vector);
         cpu->set(REG_AB, reset_vector);
         printf("%s: CPU reset (PC=$%04X)\n", Traits::name, reset_vector);
@@ -534,7 +551,7 @@ bool Commodore264System<V>::load_file(const char* filepath) {
     ctx.write_byte      = c16_mem_write_byte;
     ctx.write_block     = c16_mem_write_block;
     ctx.mem_read        = c16_mem_read;
-    ctx.mem_ctx         = ram_simple_;
+    ctx.mem_ctx         = ram_->data();
     ctx.basic_params    = &COMMODORE_BASIC_C16;
     ctx.basic_start_addrs[0] = 0x1001;
     ctx.default_raw_addr = 0x4000;
@@ -623,37 +640,8 @@ void Commodore264System<V>::render_system_menu_items() {
 }
 
 // ============================================================================
-// Chip Registration — populate registered_chips_ for Hardware menu + debug
+// Chip Registration — now done inline in initialize()
 // ============================================================================
-
-template<C264SeriesVariant V>
-void Commodore264System<V>::register_c264_chips() {
-    auto* cpu = cpu_;
-    auto* ted = ted_;
-
-    // CPU — native ChipBase, registered directly
-    register_chip(static_cast<ChipBase*>(CPU(cpu)),
-        "MOS 7501/8501 CPU", "7501", "CPU", 0x0000);
-
-    // TED — native ChipBase, registered directly
-    register_chip(ted,
-        "TED 7360 (Video/Audio/I/O)", "TED", "Video", 0xFF00);
-
-    // RAM — MemoryChip with layout rendering
-    register_chip(std::make_unique<MemoryChip>(
-        ChipInfo{"DRAM", "Various"}, 65536, MemoryChip::RAM, &bus_state_,
-        "RAM", 0x0000));
-
-    // BASIC ROM
-    register_chip(std::make_unique<MemoryChip>(
-        ChipInfo{"ROM", "Commodore"}, 16384, MemoryChip::ROM, &bus_state_,
-        "BASIC", 0x8000));
-
-    // KERNAL ROM
-    register_chip(std::make_unique<MemoryChip>(
-        ChipInfo{"ROM", "Commodore"}, 16384, MemoryChip::ROM, &bus_state_,
-        "KERNAL", 0xC000));
-}
 
 template<C264SeriesVariant V>
 void Commodore264System<V>::render_configuration_ui() {
@@ -708,7 +696,7 @@ bool Commodore264System<V>::load_roms() {
     
     bool kernal_ok = rom_loader_load_from_root(
         rom_root, kernal_files,
-        sizeof(kernal_rom_), kernal_rom_, sizeof(kernal_rom_)
+        kernal_rom_->size_bytes(), kernal_rom_->data(), kernal_rom_->size_bytes()
     );
     
     if (!kernal_ok) {
@@ -725,7 +713,7 @@ bool Commodore264System<V>::load_roms() {
     
     bool basic_ok = rom_loader_load_from_root(
         rom_root, basic_files,
-        sizeof(basic_rom_), basic_rom_, sizeof(basic_rom_)
+        basic_rom_->size_bytes(), basic_rom_->data(), basic_rom_->size_bytes()
     );
     
     if (!basic_ok) {
@@ -761,17 +749,17 @@ bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
         }
         // RAM (0x0000-size based on configuration)
         else if (addr < ram_size) {
-            data = ram_simple_[addr];
+            data = (*ram_)[addr];
         }
         // BASIC ROM (0x8000-0xBFFF = 16KB)
         else if (addr >= 0x8000 && addr < 0xC000) {
             bool rom_visible = ted_ ? ted_->rom_enabled : true;
-            data = rom_visible ? basic_rom_[addr - 0x8000] : ram_simple_[addr];
+            data = rom_visible ? (*basic_rom_)[addr - 0x8000] : (*ram_)[addr];
         }
         // KERNAL ROM (0xC000-0xFFFF = 16KB)
         else if (addr >= 0xC000) {
             bool rom_visible = ted_ ? ted_->rom_enabled : true;
-            data = rom_visible ? kernal_rom_[addr - 0xC000] : ram_simple_[addr];
+            data = rom_visible ? (*kernal_rom_)[addr - 0xC000] : (*ram_)[addr];
         }
 
         BUS_SET_DATA(s, data);
@@ -790,11 +778,11 @@ bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
         }
         // Writes always go to RAM (ROM is read-only, writes pass through)
         else if (addr < ram_size) {
-            ram_simple_[addr] = data;
+            (*ram_)[addr] = data;
         }
         // For 64KB models, RAM extends to $FFFF (excluding TED registers)
         else if (ram_size >= 65536 && addr < 0xFF00) {
-            ram_simple_[addr] = data;
+            (*ram_)[addr] = data;
         }
     }
 
@@ -847,7 +835,7 @@ uint8_t Commodore264System<V>::ted_keyboard_scan(void* user_data, uint8_t column
 template<C264SeriesVariant V>
 uint8_t Commodore264System<V>::ted_mem_read(void* user_data, uint16_t address) {
     auto* sys = static_cast<Commodore264System<V>*>(user_data);
-    return sys->ram_simple_[address & 0xFFFF];
+    return (*sys->ram_)[address & 0xFFFF];
 }
 
 // ============================================================================

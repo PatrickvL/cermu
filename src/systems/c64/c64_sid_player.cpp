@@ -295,7 +295,7 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
            sid->load_addr, sid->init_addr, sid->play_addr,
            sid->num_songs, sid->start_song);
 
-    uint8_t* ram = c64->ram->memory;
+    uint8_t* ram = c64->ram->data();
     auto* cpu = CPU(c64->mos6510);
 
     // ---- Step 1: Write tune payload to C64 RAM ----
@@ -386,7 +386,7 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
                              uint16_t subtune) {
     if (!sid || !c64 || !c64->ram) return;
 
-    uint8_t* ram = c64->ram->memory;
+    uint8_t* ram = c64->ram->data();
     auto* cpu = CPU(c64->mos6510);
 
     // ---- Silence SID: reset all voice state ----
@@ -419,13 +419,18 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
         c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
     }
 
-    // Ensure VIC-II is in uppercase/lowercase charset mode
+    // Switch VIC-II to uppercase/lowercase character set so metadata
+    // text renders in mixed case.  $D018=$16 → screen at $0400,
+    // charset at ROM $1800 (upper/lower).  Default $14 uses $1000 (upper/graphics).
+    // Must update both the register byte AND the internal memory mapping that
+    // the VIC-II rendering actually uses (registers.data[] is just storage).
     if (c64->vicii) {
         c64->vicii->registers.data[0x18] = 0x16;
-        c64->vicii->memory.vm_base = ((uint16_t)0x16 & 0xF0) << 6;
-        c64->vicii->memory.cb_base = ((uint16_t)0x16 & 0x0E) << 10;
+        c64->vicii->memory.vm_base = ((uint16_t)0x16 & 0xF0) << 6;   // $0400
+        c64->vicii->memory.cb_base = ((uint16_t)0x16 & 0x0E) << 10;  // $1800
     }
 
+    // ---- Step 5: Inject 6502 player stub ----
     // ---- Re-inject stub ----
     bool needs_timer_irq = (sid->type == SID_TYPE_PSID && sid->play_addr != 0);
     if (needs_timer_irq) {
