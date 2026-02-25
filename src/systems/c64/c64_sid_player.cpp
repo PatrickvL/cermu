@@ -60,45 +60,45 @@ void c64_write_sid_info_page(uint8_t* screen, uint8_t* color,
     // ---- Technical details ----
     c64_fill_screen_row(screen, color, 13, SC_BAR, COL_BORDER);
 
-    // Row 14: SID model + Video standard
+    // Row 14: SID model + Load address
     c64_write_screen_text(screen, color, 14, 1, "SID:", COL_LABEL);
     const char* sid_names[] = {"UNKNOWN", "MOS 6581", "MOS 8580", "6581/8580"};
     c64_write_screen_text(screen, color, 14, 6,
         sid_names[sid->sid_model & 3], COL_VALUE);
 
-    c64_write_screen_text(screen, color, 14, 21, "VIDEO:", COL_LABEL);
-    const char* vid_names[] = {"UNKNOWN", "PAL", "NTSC", "PAL/NTSC"};
-    c64_write_screen_text(screen, color, 14, 28,
-        vid_names[sid->video & 3], COL_VALUE);
+    c64_write_screen_text(screen, color, 14, 21, "LOAD:", COL_LABEL);
+    c64_write_hex16(screen, color, 14, 27, sid->load_addr, COL_DETAIL);
 
-    // Row 15: Songs + Default subtune
+    // Row 15: Songs + Init address
     c64_write_screen_text(screen, color, 15, 1, "SONGS:", COL_LABEL);
     char num_buf[8];
     snprintf(num_buf, sizeof(num_buf), "%u", sid->num_songs);
     c64_write_screen_text(screen, color, 15, 8, num_buf, COL_VALUE);
 
-    c64_write_screen_text(screen, color, 15, 21, "DEFAULT:", COL_LABEL);
+    c64_write_screen_text(screen, color, 15, 21, "INIT:", COL_LABEL);
+    c64_write_hex16(screen, color, 15, 27, sid->init_addr, COL_DETAIL);
+
+    // Row 16: Default subtune + Play address
+    c64_write_screen_text(screen, color, 16, 1, "DEFAULT:", COL_LABEL);
     snprintf(num_buf, sizeof(num_buf), "%u", sid->start_song);
-    c64_write_screen_text(screen, color, 15, 30, num_buf, COL_VALUE);
+    c64_write_screen_text(screen, color, 16, 10, num_buf, COL_VALUE);
 
-    // Row 16: Load + Init addresses
-    c64_write_screen_text(screen, color, 16, 1, "LOAD:", COL_LABEL);
-    c64_write_hex16(screen, color, 16, 7, sid->load_addr, COL_VALUE);
-
-    c64_write_screen_text(screen, color, 16, 21, "INIT:", COL_LABEL);
-    c64_write_hex16(screen, color, 16, 27, sid->init_addr, COL_VALUE);
-
-    // Row 17: Play address + Speed
-    c64_write_screen_text(screen, color, 17, 1, "PLAY:", COL_LABEL);
+    c64_write_screen_text(screen, color, 16, 21, "PLAY:", COL_LABEL);
     if (sid->play_addr != 0) {
-        c64_write_hex16(screen, color, 17, 7, sid->play_addr, COL_VALUE);
+        c64_write_hex16(screen, color, 16, 27, sid->play_addr, COL_DETAIL);
     } else {
-        c64_write_screen_text(screen, color, 17, 7, "IRQ", COL_VALUE);
+        c64_write_screen_text(screen, color, 16, 27, "IRQ", COL_DETAIL);
     }
 
-    c64_write_screen_text(screen, color, 17, 21, "SPEED:", COL_LABEL);
+    // Row 17: Speed + Video standard
+    c64_write_screen_text(screen, color, 17, 1, "SPEED:", COL_LABEL);
     const char* speed_str = use_cia ? "CIA (60HZ)" : "VBI (50HZ)";
-    c64_write_screen_text(screen, color, 17, 28, speed_str, COL_VALUE);
+    c64_write_screen_text(screen, color, 17, 8, speed_str, COL_VALUE);
+
+    c64_write_screen_text(screen, color, 17, 21, "VIDEO:", COL_LABEL);
+    const char* vid_names[] = {"UNKNOWN", "PAL", "NTSC", "PAL/NTSC"};
+    c64_write_screen_text(screen, color, 17, 28,
+        vid_names[sid->video & 3], COL_DETAIL);
 
     // ---- Bottom section ----
     c64_fill_screen_row(screen, color, 19, SC_BAR, COL_BORDER);
