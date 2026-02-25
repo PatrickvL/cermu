@@ -225,11 +225,54 @@ add_custom_target(run_sid_tests
     COMMENT "Running SID digital verification tests"
 )
 
-# Update run_all_tests to include SID tests
+# Update run_all_tests to include SID + APU tests
 add_custom_target(run_all_tests_full
     COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} --verbose
-    DEPENDS fam65xx_klaus_test_runner fam65xx_processor_tests_runner sid_test_runner
-    COMMENT "Running all tests (CPU + SID)"
+    DEPENDS fam65xx_klaus_test_runner fam65xx_processor_tests_runner sid_test_runner apu_test_runner
+    COMMENT "Running all tests (CPU + SID + APU)"
+)
+
+# =============================================================================
+# NES APU Digital Verification Tests
+# =============================================================================
+
+set(NES_DIR ${SRC_DIR}/systems/nes)
+
+add_executable(apu_test_runner
+    apu_test_runner.cpp
+    ${TESTING_DIR}/apu_test_harness.cpp
+    ${NES_DIR}/nes_apu_gui.cpp
+    ${CORE_DIR}/chip.cpp
+    ${CORE_DIR}/chip_layout.cpp
+    ${CORE_DIR}/pin_labels.cpp
+    ${CORE_DIR}/ioport.cpp
+)
+target_include_directories(apu_test_runner PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/testing
+)
+target_compile_definitions(apu_test_runner PRIVATE CERMU_IMPL)
+set_property(TARGET apu_test_runner PROPERTY CXX_STANDARD 20)
+set_property(TARGET apu_test_runner PROPERTY CXX_STANDARD_REQUIRED ON)
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(apu_test_runner m)
+endif()
+
+# APU test CTest integration
+add_test(NAME apu_digital_verification
+    COMMAND apu_test_runner
+)
+set_tests_properties(apu_digital_verification PROPERTIES
+    TIMEOUT 60
+)
+
+# Custom target for running APU tests
+add_custom_target(run_apu_tests
+    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -R apu --verbose
+    DEPENDS apu_test_runner
+    COMMENT "Running NES APU digital verification tests"
 )
 
 # Install targets (optional)
@@ -259,6 +302,7 @@ endif()
 message(STATUS "  fam65xx Klaus Test Runner: Built")
 message(STATUS "  fam65xx Lorenz Test Harness: Built")
 message(STATUS "  SID Test Runner: Built")
+message(STATUS "  APU Test Runner: Built")
 
 # =============================================================================
 # SID Reference Comparison Runner (cermu vs reSID)

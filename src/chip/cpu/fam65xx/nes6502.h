@@ -328,11 +328,10 @@ public:
   }
 
   uint8_t output() const {
-    // Silencing: ultrasonic frequencies (period < 2) produce inaudible output
-    // but the DAC still outputs the value — we keep it for mixer accuracy.
-    // Some emulators silence this; we follow NESdev wiki and output normally.
     return TRIANGLE_TABLE[sequence_pos];
   }
+
+  uint8_t linear_counter_value() const { return linear_counter; }
 
   void reset() {
     sequence_pos = 0;
@@ -606,13 +605,13 @@ public:
     uint8_t events = 0;
 
     if (mode) {
-      // 5-step mode
+      // 5-step mode: QF at steps 0,1,2,4; HF at steps 1,4; step 3 is empty
       const uint32_t* steps = is_pal ? STEP_PAL_5 : STEP_NTSC_5;
       if (cycle == steps[0] || cycle == steps[1] ||
-          cycle == steps[2] || cycle == steps[3]) {
+          cycle == steps[2] || cycle == steps[4]) {
         events |= 1; // Quarter frame
       }
-      if (cycle == steps[1] || cycle == steps[3]) {
+      if (cycle == steps[1] || cycle == steps[4]) {
         events |= 2; // Half frame
       }
       if (cycle >= steps[4]) {
@@ -694,6 +693,10 @@ public:
 
     // Noise LFSR properly initialized
     noise.shift_register = 1;
+
+    // Reset filter state
+    hp_prev_in = 0.0f;
+    hp_prev_out = 0.0f;
 
     cycle_counter = 0;
   }
