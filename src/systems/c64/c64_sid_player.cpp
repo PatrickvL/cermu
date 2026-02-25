@@ -47,15 +47,15 @@ void c64_write_sid_info_page(uint8_t* screen, uint8_t* color,
     c64_write_screen_text(screen, color, 1, 30, ver_str, COL_DETAIL);
     c64_fill_screen_row(screen, color, 2, SC_BAR, COL_BORDER);
 
-    // ---- Metadata fields (use raw bytes for native C64 display) ----
+    // ---- Metadata fields (raw Latin-1 bytes → accent-stripped screen codes) ----
     c64_write_screen_text(screen, color, 4, 1, "TITLE:", COL_LABEL);
-    c64_write_screen_petscii(screen, color, 5, 2, sid->name_raw, COL_VALUE);
+    c64_write_screen_latin1(screen, color, 5, 2, sid->name_raw, COL_VALUE);
 
     c64_write_screen_text(screen, color, 7, 1, "AUTHOR:", COL_LABEL);
-    c64_write_screen_petscii(screen, color, 8, 2, sid->author_raw, COL_VALUE);
+    c64_write_screen_latin1(screen, color, 8, 2, sid->author_raw, COL_VALUE);
 
     c64_write_screen_text(screen, color, 10, 1, "RELEASED:", COL_LABEL);
-    c64_write_screen_petscii(screen, color, 11, 2, sid->released_raw, COL_VALUE);
+    c64_write_screen_latin1(screen, color, 11, 2, sid->released_raw, COL_VALUE);
 
     // ---- Technical details ----
     c64_fill_screen_row(screen, color, 13, SC_BAR, COL_BORDER);

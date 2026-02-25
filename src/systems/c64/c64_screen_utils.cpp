@@ -12,6 +12,35 @@ uint8_t c64_ascii_to_screencode(char c) {
     return 0x2E;  // '.' for unmapped chars
 }
 
+uint8_t c64_latin1_to_screencode(uint8_t ch) {
+    // ASCII letters
+    if (ch >= 'A' && ch <= 'Z') return ch - 0x40;  // A–Z → $01–$1A
+    if (ch >= 'a' && ch <= 'z') return ch - 0x60;  // a–z → $01–$1A (uppercase)
+    if (ch >= 0x20 && ch <= 0x3F) return ch;        // space, digits, punctuation
+    if (ch == '@') return 0x00;
+
+    // Latin-1 specials
+    if (ch == 0xA0) return 0x20;  // non-breaking space → space
+    if (ch == 0xA3) return 0x1C;  // £ → C64 native £ sign
+
+    // Latin-1 accented letters (0xC0–0xFF) → accent-stripped screen codes
+    if (ch >= 0xC0) {
+        //                      À  Á  Â  Ã  Ä  Å  Æ  Ç  È  É  Ê  Ë  Ì  Í  Î  Ï
+        static const uint8_t t[64] = {
+            0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x03,0x05,0x05,0x05,0x05,0x09,0x09,0x09,0x09,
+        //  Ð  Ñ  Ò  Ó  Ô  Õ  Ö  ×  Ø  Ù  Ú  Û  Ü  Ý  Þ  ß
+            0x04,0x0E,0x0F,0x0F,0x0F,0x0F,0x0F,0x2E,0x0F,0x15,0x15,0x15,0x15,0x19,0x2E,0x13,
+        //  à  á  â  ã  ä  å  æ  ç  è  é  ê  ë  ì  í  î  ï
+            0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x03,0x05,0x05,0x05,0x05,0x09,0x09,0x09,0x09,
+        //  ð  ñ  ò  ó  ô  õ  ö  ÷  ø  ù  ú  û  ü  ý  þ  ÿ
+            0x04,0x0E,0x0F,0x0F,0x0F,0x0F,0x0F,0x2E,0x0F,0x15,0x15,0x15,0x15,0x19,0x2E,0x19,
+        };
+        return t[ch - 0xC0];
+    }
+
+    return 0x2E;  // everything else → dot
+}
+
 uint8_t c64_petscii_to_screencode(uint8_t ch) {
     if (ch < 0x20) return 0x2E;       // Control codes → dot
     if (ch < 0x40) return ch;         // $20–$3F: space, digits, punctuation
@@ -34,12 +63,12 @@ void c64_write_screen_text(uint8_t* screen, uint8_t* color,
     }
 }
 
-void c64_write_screen_petscii(uint8_t* screen, uint8_t* color,
-                               int row, int col,
-                               const char* text, uint8_t color_val) {
+void c64_write_screen_latin1(uint8_t* screen, uint8_t* color,
+                              int row, int col,
+                              const char* text, uint8_t color_val) {
     int offset = row * 40 + col;
     for (int i = 0; text[i] && col + i < 40; i++) {
-        screen[offset + i] = c64_petscii_to_screencode((uint8_t)text[i]);
+        screen[offset + i] = c64_latin1_to_screencode((uint8_t)text[i]);
         color[offset + i] = color_val;
     }
 }

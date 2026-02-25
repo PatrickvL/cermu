@@ -8,9 +8,10 @@
 // uint8_t* buffers and have no dependency on the C64 system struct, making
 // them usable from any context (SID player info page, test harnesses, etc.).
 //
-// Two character conversion modes are provided:
+// Three character conversion modes are provided:
 //   - ASCII:   for string literals and host-generated text (c64_ascii_to_screencode)
-//   - PETSCII: for raw metadata bytes from file formats   (c64_petscii_to_screencode)
+//   - Latin-1: for raw metadata from file formats like SID (c64_latin1_to_screencode)
+//   - PETSCII: for native C64 text data (c64_petscii_to_screencode)
 // =============================================================================
 
 #include <cstdint>
@@ -24,21 +25,23 @@
 uint8_t c64_ascii_to_screencode(char c);
 
 /**
+ * Convert an ISO 8859-1 (Latin-1) byte to a C64 screen code.
+ *
+ * ASCII letters and punctuation are mapped normally.  Latin-1 extended
+ * characters (0xC0–0xFF) are accent-stripped to their base letter so
+ * e.g. ü → U, é → E.  This is the correct converter for SID file
+ * metadata which the spec defines as ISO 8859-1.
+ *
+ * Special: £ (0xA3) maps to the C64's native £ sign (screen code $1C).
+ */
+uint8_t c64_latin1_to_screencode(uint8_t ch);
+
+/**
  * Convert a PETSCII byte to a C64 screen code (uppercase/graphics mode).
  *
- * Handles the full 0x00–0xFF range including PETSCII graphic characters
- * in the 0xA0–0xFF range.  Suitable for raw metadata bytes from SID files
- * which may be encoded as Latin-1 or PETSCII.
- *
- *   $00–$1F → dot (control codes)
- *   $20–$3F → direct
- *   $40–$5F → $00–$1F  (@, A–Z, [, £, ], ↑, ←)
- *   $60–$7F → $40–$5F  (graphic characters)
- *   $80–$9F → dot (control codes)
- *   $A0–$BF → $60–$7F  (reversed/shifted graphics)
- *   $C0–$DF → $00–$1F  (duplicate of $40–$5F)
- *   $E0–$FE → $60–$7E  (duplicate of $A0–$BE)
- *   $FF     → $5E  (π)
+ * Handles the full 0x00–0xFF PETSCII range including graphic characters.
+ * Use this for text that originates from the C64 itself, NOT for file
+ * format metadata (which is typically Latin-1 or ASCII).
  */
 uint8_t c64_petscii_to_screencode(uint8_t ch);
 
@@ -52,13 +55,13 @@ void c64_write_screen_text(uint8_t* screen, uint8_t* color,
 
 /**
  * Write a null-terminated raw byte string to screen RAM and colour RAM
- * using PETSCII-to-screencode conversion.  Use this for metadata strings
- * that come directly from file formats (SID, etc.) rather than ASCII literals.
+ * using Latin-1-to-screencode conversion (accent stripping).
+ * Use this for metadata strings from file formats (SID, etc.).
  * Clipped to column 39.
  */
-void c64_write_screen_petscii(uint8_t* screen, uint8_t* color,
-                               int row, int col,
-                               const char* text, uint8_t color_val);
+void c64_write_screen_latin1(uint8_t* screen, uint8_t* color,
+                              int row, int col,
+                              const char* text, uint8_t color_val);
 
 /**
  * Fill an entire 40-column screen row with a single screen code and colour.
