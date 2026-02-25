@@ -101,6 +101,10 @@ typedef struct {
     char        author[65];     /**< Author name (null-terminated, UTF-8) */
     char        released[65];   /**< Release info (null-terminated, UTF-8) */
 
+    char        name_raw[33];   /**< Tune name — original bytes from file (Latin-1 or PETSCII) */
+    char        author_raw[33]; /**< Author name — original bytes from file */
+    char        released_raw[33]; /**< Release info — original bytes from file */
+
     /* Version 2+ fields (zero if version < 2) */
     uint16_t    flags;          /**< Raw flags word */
     sid_video_t video;          /**< Video standard hint */

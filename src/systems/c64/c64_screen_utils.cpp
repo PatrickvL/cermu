@@ -12,12 +12,34 @@ uint8_t c64_ascii_to_screencode(char c) {
     return 0x2E;  // '.' for unmapped chars
 }
 
+uint8_t c64_petscii_to_screencode(uint8_t ch) {
+    if (ch < 0x20) return 0x2E;       // Control codes → dot
+    if (ch < 0x40) return ch;         // $20–$3F: space, digits, punctuation
+    if (ch < 0x60) return ch - 0x40;  // $40–$5F: @, A–Z, [, £, ], ↑, ←
+    if (ch < 0x80) return ch - 0x20;  // $60–$7F: graphic characters
+    if (ch < 0xA0) return 0x2E;       // $80–$9F: control codes → dot
+    if (ch < 0xC0) return ch - 0x40;  // $A0–$BF: reversed/shifted graphics
+    if (ch < 0xE0) return ch - 0xC0;  // $C0–$DF: duplicate of $40–$5F
+    if (ch < 0xFF) return ch - 0x80;  // $E0–$FE: duplicate of $A0–$BE
+    return 0x5E;                      // $FF: π
+}
+
 void c64_write_screen_text(uint8_t* screen, uint8_t* color,
                            int row, int col,
                            const char* text, uint8_t color_val) {
     int offset = row * 40 + col;
     for (int i = 0; text[i] && col + i < 40; i++) {
         screen[offset + i] = c64_ascii_to_screencode(text[i]);
+        color[offset + i] = color_val;
+    }
+}
+
+void c64_write_screen_petscii(uint8_t* screen, uint8_t* color,
+                               int row, int col,
+                               const char* text, uint8_t color_val) {
+    int offset = row * 40 + col;
+    for (int i = 0; text[i] && col + i < 40; i++) {
+        screen[offset + i] = c64_petscii_to_screencode((uint8_t)text[i]);
         color[offset + i] = color_val;
     }
 }

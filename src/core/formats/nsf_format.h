@@ -58,6 +58,11 @@ struct nsf_header_t {
     char     artist[65];        ///< Artist name (UTF-8)
     char     copyright[65];     ///< Copyright string (UTF-8)
 
+    // Raw metadata — original bytes from file (ASCII/Latin-1) for NES display
+    char     name_raw[33];      ///< Song title — original bytes from file
+    char     artist_raw[33];    ///< Artist name — original bytes from file
+    char     copyright_raw[33]; ///< Copyright string — original bytes from file
+
     // Timing
     uint16_t ntsc_speed;        ///< NTSC play speed in microseconds (usually 16666 = 60Hz)
     uint16_t pal_speed;         ///< PAL play speed in microseconds (usually 20000 = 50Hz)

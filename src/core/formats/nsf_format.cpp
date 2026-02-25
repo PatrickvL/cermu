@@ -41,10 +41,17 @@ bool nsf_parse_header(const uint8_t* data, size_t size, nsf_header_t* out) {
 
     // Metadata strings (32 bytes each, null-terminated).
     // NSF is nominally ASCII but files in the wild may contain Latin-1
-    // characters — convert to UTF-8 for SDL/ImGui compatibility.
+    // characters.  Keep raw bytes for NES display, UTF-8 for host APIs.
     memcpy(out->name,      data + 0x0E, 32);  out->name[31] = '\0';
     memcpy(out->artist,    data + 0x2E, 32);  out->artist[31] = '\0';
     memcpy(out->copyright, data + 0x4E, 32);  out->copyright[31] = '\0';
+
+    // Preserve raw bytes before UTF-8 expansion
+    memcpy(out->name_raw,      out->name,      32);  out->name_raw[31] = '\0';
+    memcpy(out->artist_raw,    out->artist,    32);  out->artist_raw[31] = '\0';
+    memcpy(out->copyright_raw, out->copyright, 32);  out->copyright_raw[31] = '\0';
+
+    // Convert to UTF-8 for host display
     format_latin1_to_utf8_buf(out->name,      sizeof(out->name));
     format_latin1_to_utf8_buf(out->artist,    sizeof(out->artist));
     format_latin1_to_utf8_buf(out->copyright, sizeof(out->copyright));

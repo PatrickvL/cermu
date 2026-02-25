@@ -64,15 +64,15 @@ void nes_write_nsf_info_page(PPU* ppu,
     nes_screen_fill_row(ppu, 1, 0x01);  // Solid block tile for bar
     nes_screen_write_text(ppu, 1, 2, "  NES  NSF  PLAYER  ");
 
-    // ---- Title / Artist / Copyright (rows 4-8) ----
+    // ---- Title / Artist / Copyright (rows 4-8, raw bytes for NES display) ----
     nes_screen_write_text(ppu, 4, 1, "TITLE:");
-    nes_screen_write_text_n(ppu, 5, 2, nsf->name, 28);
+    nes_screen_write_text_n(ppu, 5, 2, nsf->name_raw, 28);
 
     nes_screen_write_text(ppu, 7, 1, "ARTIST:");
-    nes_screen_write_text_n(ppu, 8, 2, nsf->artist, 28);
+    nes_screen_write_text_n(ppu, 8, 2, nsf->artist_raw, 28);
 
     nes_screen_write_text(ppu, 10, 1, "COPYRIGHT:");
-    nes_screen_write_text_n(ppu, 11, 2, nsf->copyright, 28);
+    nes_screen_write_text_n(ppu, 11, 2, nsf->copyright_raw, 28);
 
     // ---- Separator ----
     nes_screen_fill_row(ppu, 13, '-');

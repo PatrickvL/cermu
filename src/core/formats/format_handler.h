@@ -76,7 +76,7 @@ typedef enum {
 } format_load_type_t;
 
 #define FORMAT_LOAD_MAX_FILES       64
-#define FORMAT_METADATA_MAX_SIZE    256
+#define FORMAT_METADATA_MAX_SIZE    512
 
 /* Forward-declare so load result can hold a back-pointer */
 typedef struct format_descriptor_s format_descriptor_t;
