@@ -1640,6 +1640,9 @@ public:
       // operations even when it was halted in the preceding PHI2 tick
       if (this->should_halt_for_rdy(pins)) {
         // HALT: Do NOT proceed with PHI1 - return without calling handler
+#ifdef IMGUI_VERSION
+        this->bus_snapshot_ = pins;
+#endif
         return pins;
       }
 
@@ -1682,6 +1685,9 @@ public:
         trace_registers("after PHI1");
         trace_exit("tick<PHI1>");
       }
+#ifdef IMGUI_VERSION
+      this->bus_snapshot_ = pins;
+#endif
     }
 
     return pins;
@@ -1757,9 +1763,6 @@ public:
   void render_debug_content() override;
   void render_settings_content() override;
   void render_layout_content() override;
-
-  // Bus state for GUI visualization (updated from system tick)
-  bus_state_t gui_bus_state = 0;
 
   // ========================================================================
   // CPU STATE

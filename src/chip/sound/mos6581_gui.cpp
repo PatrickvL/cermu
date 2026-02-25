@@ -200,7 +200,7 @@ void mos6581_s::render_debug_content() {
         ChipLayout& layout = get_sid_layout();
         
         // Get current pin states from SID
-        std::vector<PinSignalState> pin_states = get_sid_pin_states(sid, &layout, 0 /* bus_state */);
+        std::vector<PinSignalState> pin_states = get_sid_pin_states(sid, &layout, sid->bus_snapshot_);
         
         // Render the chip using global renderer
         renderer.render(layout, chip_center, pin_states, "MOS6581 SID");
@@ -393,7 +393,7 @@ void mos6581_s::render_layout_content() {
 
 #ifdef IMGUI_VERSION
     ChipLayout& layout = get_sid_layout();
-    std::vector<PinSignalState> pin_states = get_sid_pin_states(sid, &layout, 0);
+    std::vector<PinSignalState> pin_states = get_sid_pin_states(sid, &layout, sid->bus_snapshot_);
     render_chip_layout(layout, pin_states, "MOS6581");
 #endif
 }

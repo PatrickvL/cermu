@@ -114,9 +114,8 @@ void mos6526_s::reset() {
     // Initialize serial output state
     // Already reset above in the grouped SDR state initialization
     
-    // Initialize previous bus state for edge detection
-    // CNT and FLAG pins have internal pull-ups, so they start HIGH
-    prev_bus_state = BUS_BIT(BUS_CNT_BIT) | BUS_BIT(BUS_FLAG_BIT);
+    // Initialize bus snapshot for edge detection (CNT/FLAG have pull-ups → start HIGH)
+    bus_snapshot_ = BUS_BIT(BUS_CNT_BIT) | BUS_BIT(BUS_FLAG_BIT);
     
     // Call port A change callback with initial value (all high due to pull-ups)
     if (port_a_change_callback) {
@@ -1020,14 +1019,12 @@ bus_state_t mos6526_s::tick_phi2(bus_state_t bus_state) {
     bool cnt_pin = BUS_GET_BIT(bus_state, BUS_CNT_BIT);
     bool flag_pin = BUS_GET_BIT(bus_state, BUS_FLAG_BIT);
     
-    bool prev_cnt = BUS_GET_BIT(prev_bus_state, BUS_CNT_BIT);
-    bool prev_flag = BUS_GET_BIT(prev_bus_state, BUS_FLAG_BIT);
+    bool prev_cnt = BUS_GET_BIT(bus_snapshot_, BUS_CNT_BIT);
+    bool prev_flag = BUS_GET_BIT(bus_snapshot_, BUS_FLAG_BIT);
     
     bool cnt_is_positive_edge = (cnt_pin && !prev_cnt);
     bool cnt_is_negative_edge = (!cnt_pin && prev_cnt);
     bool flag_is_negative_edge = (!flag_pin && prev_flag);
-    
-    prev_bus_state = bus_state;
 
     // =========================================================================
     // TIMER COUNTDOWN (before pipeline tick, so timer sees PREVIOUS cycle's pipeline)
@@ -1207,6 +1204,10 @@ bus_state_t mos6526_s::tick_phi1(bus_state_t bus_state) {
     
     // Clear Timer B Bug flag for next cycle
     icr_read_this_cycle = false;
+    
+    // Store final bus state — serves as previous-cycle reference for
+    // edge detection (CNT/FLAG) AND as GUI layout rendering snapshot.
+    bus_snapshot_ = bus_state;
     
     return bus_state;
 }

@@ -315,5 +315,8 @@ bus_state_t mos6522_t::tick(bus_state_t bus_state) {
         ifr &= ~MOS6522_IFR_IRQ;
     }
 
+#ifdef IMGUI_VERSION
+    bus_snapshot_ = bus_state;
+#endif
     return bus_state;
 }

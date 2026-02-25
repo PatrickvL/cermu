@@ -79,7 +79,7 @@ void render_chip_visualization(fam65xx_t<Traits> *cpu, ImVec2 chip_center,
 }
 
 // Safe default control-signal state for GUI rendering when no live bus state is available.
-static constexpr bus_state_t FAM65XX_GUI_DEFAULT_PINS =
+static constexpr bus_state_t FAM65XX_GUI_DEFAULT_STATE =
     BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) | BUS_BIT(BUS_RES_BIT) |
     BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT);
 
@@ -87,7 +87,7 @@ static constexpr bus_state_t FAM65XX_GUI_DEFAULT_PINS =
 template <const CPUTraits &Traits>
 void render_chip_visualization(fam65xx_t<Traits> *cpu, ImVec2 chip_center) {
   // Create default bus state from CPU registers if possible
-  bus_state_t bus_state = FAM65XX_GUI_DEFAULT_PINS;
+  bus_state_t bus_state = FAM65XX_GUI_DEFAULT_STATE;
   if (cpu) {
     BUS_SET_ADDR(bus_state, cpu->get(REG_AB));
     BUS_SET_DATA(bus_state, cpu->get(REG_DL));
@@ -391,9 +391,9 @@ void fam65xx_t<Traits>::render_debug_content() {
       chip_center.y += 200.0f; // Space for the chip
 
       // Compute bus state from registers if not externally set
-      bus_state_t bus_state = this->gui_bus_state;
+      bus_state_t bus_state = this->bus_snapshot_;
       if (bus_state == 0) {
-        bus_state = FAM65XX_GUI_DEFAULT_PINS;
+        bus_state = FAM65XX_GUI_DEFAULT_STATE;
         BUS_SET_ADDR(bus_state, this->get(REG_AB));
         BUS_SET_DATA(bus_state, this->get(REG_DL));
       }
@@ -453,9 +453,9 @@ void fam65xx_t<Traits>::render_settings_content() {
 template <const CPUTraits &Traits>
 void fam65xx_t<Traits>::render_layout_content() {
     static ChipLayout layout = create_cpu_pin_layout<Traits>();
-    bus_state_t bus_state = this->gui_bus_state;
+    bus_state_t bus_state = this->bus_snapshot_;
     if (bus_state == 0) {
-      bus_state = FAM65XX_GUI_DEFAULT_PINS;
+      bus_state = FAM65XX_GUI_DEFAULT_STATE;
       BUS_SET_ADDR(bus_state, this->get(REG_AB));
       BUS_SET_DATA(bus_state, this->get(REG_DL));
     }

@@ -111,10 +111,11 @@ typedef struct mos6526_s : public ChipBase {
     // Implements the required 1-cycle delay for interrupt assertion
     bus_state_t pending_bus_lines = 0;  // Lines to assert in NEXT cycle
     
-    // Previous bus state for edge detection
-    // Stored at end of each tick to detect signal transitions in next cycle
-    // This is the standard pattern all chips should use for edge detection
-    bus_state_t prev_bus_state = 0;
+#ifndef IMGUI_VERSION
+    // Without GUI, ChipBase::bus_snapshot_ doesn't exist.
+    // Provide a local field so edge detection can always use bus_snapshot_.
+    bus_state_t bus_snapshot_ = 0;
+#endif
     
     // Callback for port A output changes (used by CIA2 for VIC-II bank switching)
     void (*port_a_change_callback)(void* context, uint8_t port_a_output) = nullptr;
