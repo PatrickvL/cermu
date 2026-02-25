@@ -77,25 +77,38 @@ void nes_write_nsf_info_page(PPU* ppu,
     // ---- Separator ----
     nes_screen_fill_row(ppu, 13, '-');
 
-    // ---- Technical details (rows 14-19) ----
-    nes_screen_write_text(ppu, 14, 1, "LOAD:");
-    nes_screen_write_hex16(ppu, 14, 7, nsf->load_addr);
-    nes_screen_write_text(ppu, 14, 14, "INIT:");
-    nes_screen_write_hex16(ppu, 14, 20, nsf->init_addr);
+    // ---- Technical details (rows 14-18) ----
 
-    nes_screen_write_text(ppu, 15, 1, "PLAY:");
-    nes_screen_write_hex16(ppu, 15, 7, nsf->play_addr);
+    // Row 14: Songs + Load address
+    nes_screen_write_text(ppu, 14, 1, "SONGS:");
+    nes_screen_write_dec(ppu, 14, 8, nsf->num_songs);
+    nes_screen_write_text(ppu, 14, 18, "LOAD:");
+    nes_screen_write_hex16(ppu, 14, 24, nsf->load_addr);
 
-    // Region
-    nes_screen_write_text(ppu, 15, 14, "REGION:");
+    // Row 15: Default + Init address
+    nes_screen_write_text(ppu, 15, 1, "DEFAULT:");
+    nes_screen_write_dec(ppu, 15, 10, nsf->start_song);
+    nes_screen_write_text(ppu, 15, 18, "INIT:");
+    nes_screen_write_hex16(ppu, 15, 24, nsf->init_addr);
+
+    // Row 16: Region + Play address
+    nes_screen_write_text(ppu, 16, 1, "REGION:");
     const char* region_str = "NTSC";
     if (nsf->region_flags == NSF_REGION_PAL) region_str = "PAL";
     else if (nsf->region_flags == NSF_REGION_DUAL) region_str = "DUAL";
-    nes_screen_write_text(ppu, 15, 22, region_str);
+    nes_screen_write_text(ppu, 16, 9, region_str);
+    nes_screen_write_text(ppu, 16, 18, "PLAY:");
+    nes_screen_write_hex16(ppu, 16, 24, nsf->play_addr);
 
-    // Extra chips
+    // Dim the address values on the right (palette 2 = light grey)
+    for (int col = 18; col < 32; col += 2) {
+        nes_screen_set_attribute(ppu, 14, col, 2);
+        nes_screen_set_attribute(ppu, 16, col, 2);
+    }
+
+    // Row 17: Extra chips
     if (nsf->chip_flags) {
-        nes_screen_write_text(ppu, 16, 1, "CHIPS:");
+        nes_screen_write_text(ppu, 17, 1, "CHIPS:");
         char chip_str[24] = "";
         if (nsf->chip_flags & NSF_CHIP_VRC6)      strcat(chip_str, "VRC6 ");
         if (nsf->chip_flags & NSF_CHIP_VRC7)       strcat(chip_str, "VRC7 ");
@@ -103,14 +116,14 @@ void nes_write_nsf_info_page(PPU* ppu,
         if (nsf->chip_flags & NSF_CHIP_MMC5)       strcat(chip_str, "MMC5 ");
         if (nsf->chip_flags & NSF_CHIP_NAMCO163)   strcat(chip_str, "N163 ");
         if (nsf->chip_flags & NSF_CHIP_SUNSOFT5B)  strcat(chip_str, "5B ");
-        nes_screen_write_text(ppu, 16, 8, chip_str);
+        nes_screen_write_text(ppu, 17, 8, chip_str);
     } else {
-        nes_screen_write_text(ppu, 16, 1, "CHIPS: 2A03 (standard)");
+        nes_screen_write_text(ppu, 17, 1, "CHIPS: 2A03 (STANDARD)");
     }
 
-    // Bankswitching
+    // Row 18: Bankswitching
     if (nsf->uses_bankswitching) {
-        nes_screen_write_text(ppu, 17, 1, "BANKS: YES");
+        nes_screen_write_text(ppu, 18, 1, "BANKS: YES");
     }
 
     // ---- Separator ----
