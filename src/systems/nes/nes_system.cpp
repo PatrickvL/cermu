@@ -802,9 +802,10 @@ void Cartridge::reset() {
 
 bus_state_t MemoryBus::mem_tick(bus_state_t bus) {
     uint16_t addr = BUS_GET_ADDR(bus);
+    const bool is_read = BUS_GET_BIT(bus, BUS_RW_BIT);
     
-    if (bus & BUS_MASK_RW) {
-        // ---- WRITE ----
+    if (!is_read) {
+        // ---- WRITE ---- (RW=0 per 6502 convention)
         uint8_t data = BUS_GET_DATA(bus);
         
         if (addr <= 0x1FFF) {
@@ -1208,12 +1209,7 @@ void NintendoSystem<V>::reset() {
     
     printf("%s: Resetting system\n", Traits::name);
     
-    pins_ = 0;
-    pins_ |= BUS_MASK_RW;  // Initial state: read
-    // Active-low signals start HIGH (inactive)
-    pins_ |= BUS_BIT(BUS_NMI_BIT);
-    pins_ |= BUS_BIT(BUS_IRQ_BIT);
-    pins_ |= BUS_BIT(BUS_RES_BIT);
+    pins_ = NES_BUS_DEFAULT_STATE;
     nes6502_reset(cpu_, pins_);
     
     if (ppu_) {
@@ -1660,11 +1656,11 @@ void NintendoSystem<V>::clock() {
             // Handle NMI from PPU — NMI is edge-sensitive (active low)
             if (ppu_->get_nmi()) {
                 // Assert NMI: drive pin LOW (bit 34 = 0)
-                pins_ &= ~BUS_BIT(BUS_NMI_BIT);
+                BUS_CLR_BIT(pins_, BUS_NMI_BIT);
             } else {
                 // Deassert NMI: release pin HIGH (bit 34 = 1)
                 // Required for edge detection — next NMI needs a new HIGH→LOW
-                pins_ |= BUS_BIT(BUS_NMI_BIT);
+                BUS_SET_BIT(pins_, BUS_NMI_BIT);
             }
             
             // PHI1: CPU internal operations (including APU clock)
