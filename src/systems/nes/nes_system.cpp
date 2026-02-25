@@ -11,6 +11,7 @@
 #include "../../core/formats/nsf_format.h"
 // CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
 #include "../../core/chip.h"
+#include "../../chip/memory/memory_chip.h"
 #include <fstream>
 #include <iostream>
 #include <cmath>
@@ -1558,15 +1559,14 @@ void NintendoSystem<V>::register_nes_chips() {
     register_chip(nes6502_get_apu(cpu),
         "APU (built-in 2A03)", "APU", "Audio", 0x4000);
 
-    // RAM (no debug window)
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"SRAM", "Various"}),
-        "RAM (2KB)", "RAM", "Memory", 0x0000);
+    // RAM — MemoryChip with layout rendering
+    register_chip(std::make_unique<MemoryChip>(
+        ChipInfo{"SRAM", "Various"}, 2048, MemoryChip::SRAM, &pins_,
+        "RAM", 0x0000));
 
-    // Cartridge (no debug window)
+    // Cartridge (no suitable chip type — mapper + ROM + optional RAM)
     register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"Cartridge", "Various"}),
-        "Cartridge", "Cart", "Memory", 0x4020);
+        ChipInfo{"Cartridge", "Various"}, "Cartridge", "Cart", "Memory", 0x4020));
 }
 
 template<NintendoVariant V>

@@ -174,6 +174,20 @@ void EmulatedSystem::render_debug_windows(void* gui_state, std::mutex& emu_mutex
 #endif
 }
 
+void EmulatedSystem::register_chip(std::unique_ptr<ChipBase> chip) {
+    ChipBase* raw = chip.get();
+    owned_chip_adapters_.push_back(std::move(chip));
+
+    SystemChip sc;
+    sc.chip = raw;
+    sc.display_name = raw->display_name();
+    sc.short_name = raw->short_name();
+    sc.category = raw->category();
+    sc.base_address = raw->base_address();
+    sc.show_detached = 0;
+    registered_chips_.push_back(std::move(sc));
+}
+
 void EmulatedSystem::register_chip(std::unique_ptr<ChipBase> chip,
                                    const char* display_name, const char* short_name,
                                    const char* category, uint16_t base_address) {

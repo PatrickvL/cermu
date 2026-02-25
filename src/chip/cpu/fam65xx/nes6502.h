@@ -664,6 +664,7 @@ private:
 
 public:
   APU(bool pal = false) : is_pal(pal) {
+    info_ = ChipInfo{pal ? "RP2A07-APU" : "RP2A03-APU", "Ricoh"};
     noise.is_pal = pal;
     dmc.is_pal = pal;
     frame.is_pal = pal;
@@ -908,7 +909,6 @@ public:
   bool irq() const { return frame.irq_flag || dmc.irq_flag; }
 
   // --- ChipBase interface ---
-  ChipIdentity chip_identity() const override;
   bool has_debug_content()    const override;
   bool has_settings_content() const override;
   bool has_layout_content()   const override;

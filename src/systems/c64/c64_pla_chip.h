@@ -18,9 +18,13 @@ class C64System;
 class PlaChip : public ChipBase {
     C64System* c64_;
 public:
-    explicit PlaChip(C64System* c64) : c64_(c64) {}
+    explicit PlaChip(C64System* c64)
+        : ChipBase(ChipInfo{"PLA", "MOS Technology"}), c64_(c64) {
+        display_name_ = "PLA / Address Decoder";
+        short_name_   = "PLA";
+        category_     = "Bus";
+    }
 
-    ChipIdentity chip_identity() const override { return {"PLA", "MOS Technology"}; }
     bool has_debug_content() const override { return true; }
     bool has_settings_content() const override { return true; }
     bool has_layout_content() const override { return true; }

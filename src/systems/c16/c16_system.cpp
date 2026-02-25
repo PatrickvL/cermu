@@ -15,6 +15,7 @@
 #include "../../chip/cpu/fam65xx/fam65xx.hpp"
 // CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
 #include "../../core/chip.h"
+#include "../../chip/memory/memory_chip.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -638,20 +639,20 @@ void Commodore264System<V>::register_c264_chips() {
     register_chip(ted,
         "TED 7360 (Video/Audio/I/O)", "TED", "Video", 0xFF00);
 
-    // RAM (no debug window)
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"DRAM", "Various"}),
-        "RAM", "RAM", "Memory", 0x0000);
+    // RAM — MemoryChip with layout rendering
+    register_chip(std::make_unique<MemoryChip>(
+        ChipInfo{"DRAM", "Various"}, 65536, MemoryChip::RAM, &bus_state_,
+        "RAM", 0x0000));
 
     // BASIC ROM
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"ROM", "Commodore"}),
-        "BASIC ROM (16KB)", "BASIC", "Memory", 0x8000);
+    register_chip(std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "Commodore"}, 16384, MemoryChip::ROM, &bus_state_,
+        "BASIC", 0x8000));
 
     // KERNAL ROM
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipIdentity{"ROM", "Commodore"}),
-        "KERNAL ROM (16KB)", "KERNAL", "Memory", 0xC000);
+    register_chip(std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "Commodore"}, 16384, MemoryChip::ROM, &bus_state_,
+        "KERNAL", 0xC000));
 }
 
 template<C264SeriesVariant V>

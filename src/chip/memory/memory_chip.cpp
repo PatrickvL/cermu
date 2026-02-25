@@ -5,27 +5,62 @@
 #include "../../gui/chip_visualization.h"
 #endif
 #include <cmath>
+#include <string>
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+const char* MemoryChip::type_label(MemoryType t) {
+    switch (t) {
+        case RAM:   return "DRAM";
+        case SRAM:  return "SRAM";
+        case ROM:   return "ROM";
+        case PROM:  return "PROM";
+        case EPROM: return "EPROM";
+    }
+    return "Memory";
+}
+
+static std::string format_bytes(size_t bytes) {
+    if (bytes >= 1024 * 1024)
+        return std::to_string(bytes / (1024 * 1024)) + "MB";
+    if (bytes >= 1024)
+        return std::to_string(bytes / 1024) + "KB";
+    return std::to_string(bytes) + "B";
+}
 
 // ============================================================================
 // MemoryChip — constructor
 // ============================================================================
-MemoryChip::MemoryChip(const char* part_number,
-                       const char* manufacturer,
-                       size_t      size_bytes,
-                       MemoryType  type,
-                       const bus_state_t* system_bus)
-    : part_number_(part_number)
-    , manufacturer_(manufacturer)
+MemoryChip::MemoryChip(ChipInfo     info,
+                       size_t       size_bytes,
+                       MemoryType   type,
+                       const bus_state_t* system_bus,
+                       const char*  short_name,
+                       uint16_t     base_address)
+    : ChipBase(std::move(info))
     , size_bytes_(size_bytes)
     , type_(type)
     , system_bus_(system_bus)
-{}
+{
+    short_name_   = short_name;
+    category_     = "Memory";
+    base_address_ = base_address;
 
-// ============================================================================
-// ChipBase identity
-// ============================================================================
-ChipIdentity MemoryChip::chip_identity() const {
-    return {part_number_, manufacturer_};
+    // Auto-generate display name: "{part_number} [{type}] ({size})"
+    // Skip type label if part_number already contains it to avoid
+    // redundancies like "SRAM SRAM (2KB)".
+    const char* label = type_label(type);
+    std::string size_str = format_bytes(size_bytes);
+    std::string pn(info_.part_number);
+
+    if (pn.find(label) != std::string::npos) {
+        display_name_buf_ = pn + " (" + size_str + ")";
+    } else {
+        display_name_buf_ = pn + " " + label + " (" + size_str + ")";
+    }
+    display_name_ = display_name_buf_.c_str();
 }
 
 // ============================================================================
@@ -48,8 +83,8 @@ ChipIdentity MemoryChip::chip_identity() const {
 //
 static ChipLayout create_memory_layout(size_t size_bytes,
                                        MemoryChip::MemoryType type,
-                                       const char* part_number,
-                                       const char* manufacturer) {
+                                       std::string_view part_number,
+                                       std::string_view manufacturer) {
     // Determine address pin count
     int addr_bits = 0;
     if (size_bytes > 0) {
@@ -95,11 +130,11 @@ static ChipLayout create_memory_layout(size_t size_bytes,
         part_number,                 // part_number
         manufacturer,                // manufacturer
         type_str,                    // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
+        {},                          // date_code
+        {},                          // lot_number
+        {},                          // custom_text
         true,                        // show_part_number
-        manufacturer != nullptr,     // show_manufacturer
+        !manufacturer.empty(),       // show_manufacturer
         true,                        // show_package_variant
         false                        // show_date_code
     };
@@ -197,7 +232,8 @@ void MemoryChip::render_layout_content() {
     if (!cached_layout || cached_size != size_bytes_ || cached_type != type_) {
         static thread_local ChipLayout layout_storage;
         layout_storage = create_memory_layout(size_bytes_, type_,
-                                              part_number_, manufacturer_);
+                                              info_.part_number,
+                                              info_.manufacturer);
         cached_layout = &layout_storage;
         cached_size = size_bytes_;
         cached_type = type_;
@@ -205,12 +241,6 @@ void MemoryChip::render_layout_content() {
 
     auto pin_states = populate_pin_states_from_bus(*cached_layout, bus_snapshot_);
 
-    // Memory chips: address pins are inputs (driven by CPU/bus master)
-    for (auto& s : pin_states) {
-        // Default: address pins are inputs, data pins direction from R/W
-        // populate_pin_states_from_bus already handles this correctly.
-    }
-
-    render_chip_layout(*cached_layout, pin_states, part_number_);
+    render_chip_layout(*cached_layout, pin_states, info_.part_number.data());
 #endif
 }

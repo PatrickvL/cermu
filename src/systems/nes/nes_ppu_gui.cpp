@@ -30,7 +30,7 @@ inline ChipLayout create_ricoh_2c02_layout() {
     layout.markings = {
         "RP2C02",
         "Ricoh",
-        nullptr, nullptr, nullptr, nullptr,
+        {}, {}, {}, {},
         true, true, false, false
     };
 
@@ -90,11 +90,6 @@ static ChipLayout& get_ppu_layout() {
 // ============================================================================
 // ChipBase interface implementation
 // ============================================================================
-
-ChipIdentity nes_system::PPU::chip_identity() const {
-    return {is_pal ? "RP2C07" : "RP2C02", "Ricoh",
-            is_pal ? VideoStandard::PAL : VideoStandard::NTSC};
-}
 
 bool nes_system::PPU::has_debug_content()    const { return true; }
 bool nes_system::PPU::has_settings_content() const { return true; }

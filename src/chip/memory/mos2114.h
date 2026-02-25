@@ -28,7 +28,6 @@ public:
     ~MOS2114() override = default;
 
     // --- ChipBase interface ---
-    ChipIdentity chip_identity() const override;
     bool has_debug_content()    const override;
     bool has_settings_content() const override;
     bool has_layout_content()   const override;

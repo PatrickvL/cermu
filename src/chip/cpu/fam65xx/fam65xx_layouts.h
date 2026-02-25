@@ -166,10 +166,10 @@ inline ChipLayout create_mos6502_layout() {
   layout.markings = {
       "MOS6502",        // part_number
       "MOS Technology", // manufacturer
-      nullptr,          // package_variant
-      nullptr,          // date_code
-      nullptr,          // lot_number
-      nullptr,          // custom_text
+      {},          // package_variant
+      {},          // date_code
+      {},          // lot_number
+      {},          // custom_text
       true,             // show_part_number
       true,             // show_manufacturer
       false,            // show_package_variant
@@ -209,10 +209,10 @@ inline ChipLayout create_mos6510_layout() {
   layout.markings = {
       "MOS6510",        // part_number
       "MOS Technology", // manufacturer
-      nullptr,          // package_variant
-      nullptr,          // date_code
-      nullptr,          // lot_number
-      nullptr,          // custom_text
+      {},          // package_variant
+      {},          // date_code
+      {},          // lot_number
+      {},          // custom_text
       true,             // show_part_number
       true,             // show_manufacturer
       false,            // show_package_variant
@@ -256,10 +256,10 @@ inline ChipLayout create_csg7501_layout() {
   layout.markings = {
       "CSG7501",    // part_number (also branded 8501)
       "Commodore",  // manufacturer
-      nullptr,      // package_variant
-      nullptr,      // date_code
-      nullptr,      // lot_number
-      nullptr,      // custom_text
+      {},      // package_variant
+      {},      // date_code
+      {},      // lot_number
+      {},      // custom_text
       true,         // show_part_number
       true,         // show_manufacturer
       false,        // show_package_variant
@@ -302,10 +302,10 @@ inline ChipLayout create_wdc_w65c02s_layout() {
   layout.markings = {
       "W65C02S",               // part_number
       "Western Design Center", // manufacturer
-      nullptr,                 // package_variant
-      nullptr,                 // date_code
-      nullptr,                 // lot_number
-      nullptr,                 // custom_text
+      {},                 // package_variant
+      {},                 // date_code
+      {},                 // lot_number
+      {},                 // custom_text
       true,                    // show_part_number
       true,                    // show_manufacturer
       false,                   // show_package_variant
@@ -345,10 +345,10 @@ inline ChipLayout create_wdc_65c816_layout() {
   layout.markings = {
       "W65C816S",              // part_number
       "Western Design Center", // manufacturer
-      nullptr,                 // package_variant
-      nullptr,                 // date_code
-      nullptr,                 // lot_number
-      nullptr,                 // custom_text
+      {},                 // package_variant
+      {},                 // date_code
+      {},                 // lot_number
+      {},                 // custom_text
       true,                    // show_part_number
       true,                    // show_manufacturer
       false,                   // show_package_variant
@@ -389,10 +389,10 @@ inline ChipLayout create_ricoh_2a03_layout() {
   layout.markings = {
       "RP2A03", // part_number
       "Ricoh",  // manufacturer
-      nullptr,  // package_variant
-      nullptr,  // date_code
-      nullptr,  // lot_number
-      nullptr,  // custom_text
+      {},  // package_variant
+      {},  // date_code
+      {},  // lot_number
+      {},  // custom_text
       true,     // show_part_number
       true,     // show_manufacturer
       false,    // show_package_variant
@@ -432,10 +432,10 @@ inline ChipLayout create_rockwell_r65c02_layout() {
   layout.markings = {
       "R65C02",   // part_number
       "Rockwell", // manufacturer
-      nullptr,    // package_variant
-      nullptr,    // date_code
-      nullptr,    // lot_number
-      nullptr,    // custom_text
+      {},    // package_variant
+      {},    // date_code
+      {},    // lot_number
+      {},    // custom_text
       true,       // show_part_number
       true,       // show_manufacturer
       false,      // show_package_variant

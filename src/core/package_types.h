@@ -7,7 +7,7 @@
 
 #pragma once
 
-
+#include "component_info.h"
 #include <cstdint>
 #include <string>
 
@@ -67,18 +67,29 @@ struct PackageLayout {
     float thermal_pad_size;          // Size of thermal pad (relative to package)
 };
 
-// Chip markings/labels
+// Chip markings/labels — text fields rendered on the DIP package visualization.
+// Fields use string_view for consistency with ComponentInfo.  Empty = not shown.
+// Chips with a ChipInfo member can populate these from chip_info() at layout time.
 struct ChipMarkings {
-    const char* part_number;         // Part number (e.g., "MOS6502", "74HC00")
-    const char* manufacturer;        // Manufacturer name (e.g., "MOS Technology", "Texas Instruments")
-    const char* package_variant;     // Package variant (e.g., "C", "N", "W")
-    const char* date_code;           // Date/lot code
-    const char* lot_number;          // Lot/batch number  
-    const char* custom_text;         // Custom text/description
-    bool show_part_number;           // Display part number on chip
-    bool show_manufacturer;          // Display manufacturer on chip
-    bool show_package_variant;       // Display package variant
-    bool show_date_code;             // Display date code
+    std::string_view part_number;        // "MOS6502", "74HC00"
+    std::string_view manufacturer;       // "MOS Technology", "Texas Instruments"
+    std::string_view package_variant;    // "C", "N", "W"
+    std::string_view date_code;          // Date/lot code
+    std::string_view lot_number;         // Lot/batch number
+    std::string_view custom_text;        // Freeform extra line
+    bool show_part_number     = true;    // Display part number on chip
+    bool show_manufacturer    = true;    // Display manufacturer on chip
+    bool show_package_variant = true;    // Display package variant
+    bool show_date_code       = false;   // Display date code
+
+    /// Convenience: populate identity fields from a ChipInfo.
+    void from_chip_info(const ChipInfo& info) {
+        part_number     = info.part_number;
+        manufacturer    = info.manufacturer;
+        package_variant = info.package_variant;
+        date_code       = info.date_code;
+        lot_number      = info.lot_number;
+    }
 };
 
 // ============================================================================

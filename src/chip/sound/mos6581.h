@@ -313,6 +313,7 @@ private:
 
 // Main SID chip structure - Enhanced (C++ class inheriting ChipBase)
 typedef struct mos6581_s : public ChipBase {
+    mos6581_s() : ChipBase(ChipInfo{"MOS6581", "MOS Technology"}) {}
 
     // Bus interface
     bus_cycle_ops_t bus_interface = {};
@@ -390,7 +391,6 @@ typedef struct mos6581_s : public ChipBase {
     ~mos6581_s() override;
 
     // ChipBase interface
-    ChipIdentity chip_identity() const override;
     bool has_debug_content() const override { return true; }
     bool has_settings_content() const override { return true; }
     bool has_layout_content() const override { return true; }

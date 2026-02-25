@@ -34,7 +34,7 @@ inline ChipLayout create_ted7360_layout() {
     layout.markings = {
         "MOS7360 TED",
         "MOS Technology",
-        nullptr, nullptr, nullptr, nullptr,
+        {}, {}, {}, {},
         true, true, false, false
     };
 
@@ -123,11 +123,6 @@ static const char* get_screen_mode_name(uint8_t mode) {
 // ============================================================================
 // ChipBase interface implementation
 // ============================================================================
-
-ChipIdentity ted7360_t::chip_identity() const {
-    return {"TED7360", "Commodore",
-            timing.is_pal ? VideoStandard::PAL : VideoStandard::NTSC};
-}
 
 bool ted7360_t::has_debug_content()    const { return true; }
 bool ted7360_t::has_settings_content() const { return true; }

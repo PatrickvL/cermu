@@ -94,10 +94,10 @@ inline ChipLayout create_mos6581_layout() {
     layout.markings = {
         "MOS6581",                   // part_number
         "MOS Technology",            // manufacturer
-        nullptr,                     // package_variant
-        nullptr,                     // date_code
-        nullptr,                     // lot_number
-        nullptr,                     // custom_text
+        {},                     // package_variant
+        {},                     // date_code
+        {},                     // lot_number
+        {},                     // custom_text
         true,                        // show_part_number
         true,                        // show_manufacturer
         false,                       // show_package_variant

@@ -1152,12 +1152,6 @@ mos6581_s::~mos6581_s() {
     sample_buffer.destroy();
 }
 
-// ChipBase identity
-ChipIdentity mos6581_s::chip_identity() const {
-    return {"MOS6581", "MOS Technology",
-            pal_timing ? VideoStandard::PAL : VideoStandard::NTSC};
-}
-
 /**
  * Consolidated SID tick function - main entry point for SID cycle processing.
  */

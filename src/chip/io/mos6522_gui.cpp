@@ -36,7 +36,7 @@ inline ChipLayout create_mos6522_layout() {
     layout.markings = {
         "MOS6522",
         "MOS Technology",
-        nullptr, nullptr, nullptr, nullptr,
+        {}, {}, {}, {},
         true, true, false, false
     };
 

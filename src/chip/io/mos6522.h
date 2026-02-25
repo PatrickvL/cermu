@@ -10,6 +10,8 @@
 
 // MOS 6522 VIA (Versatile Interface Adapter) chip structure
 typedef struct mos6522_s : public ChipBase {
+    mos6522_s() : ChipBase(ChipInfo{"MOS6522", "MOS Technology"}) {}
+
     void* bus = nullptr;
 
     // Registers
@@ -59,7 +61,6 @@ typedef struct mos6522_s : public ChipBase {
     int interrupt_bit = 0;  // Bus pin bit index (BUS_IRQ_BIT or BUS_NMI_BIT); 0 = not wired
 
     // --- ChipBase interface ---
-    ChipIdentity chip_identity() const override;
     bool has_debug_content()    const override;
     bool has_settings_content() const override;
     bool has_layout_content()   const override;

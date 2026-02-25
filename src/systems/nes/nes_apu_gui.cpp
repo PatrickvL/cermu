@@ -61,11 +61,6 @@ inline ChipLayout create_ricoh_2a03_apu_layout() {
 // ChipBase interface implementation
 // ============================================================================
 
-ChipIdentity nes6502_apu::APU::chip_identity() const {
-    return {is_pal ? "RP2A07-APU" : "RP2A03-APU", "Ricoh",
-            is_pal ? VideoStandard::PAL : VideoStandard::NTSC};
-}
-
 bool nes6502_apu::APU::has_debug_content()    const { return true; }
 bool nes6502_apu::APU::has_settings_content() const { return true; }
 bool nes6502_apu::APU::has_layout_content()   const { return true; }

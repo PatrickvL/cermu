@@ -575,20 +575,20 @@ void ChipVisualization::render_chip_markings(const ChipLayout& layout, ImVec2 ch
         }
     };
     
-    if (layout.markings.show_part_number && layout.markings.part_number) {
-        draw_marking(layout.markings.part_number);
+    if (layout.markings.show_part_number && !layout.markings.part_number.empty()) {
+        draw_marking(layout.markings.part_number.data());
     }
-    if (layout.markings.show_manufacturer && layout.markings.manufacturer) {
-        draw_marking(layout.markings.manufacturer);
+    if (layout.markings.show_manufacturer && !layout.markings.manufacturer.empty()) {
+        draw_marking(layout.markings.manufacturer.data());
     }
-    if (layout.markings.show_package_variant && layout.markings.package_variant) {
-        draw_marking(layout.markings.package_variant);
+    if (layout.markings.show_package_variant && !layout.markings.package_variant.empty()) {
+        draw_marking(layout.markings.package_variant.data());
     }
-    if (layout.markings.show_date_code && layout.markings.date_code) {
-        draw_marking(layout.markings.date_code);
+    if (layout.markings.show_date_code && !layout.markings.date_code.empty()) {
+        draw_marking(layout.markings.date_code.data());
     }
-    if (layout.markings.custom_text) {
-        draw_marking(layout.markings.custom_text);
+    if (!layout.markings.custom_text.empty()) {
+        draw_marking(layout.markings.custom_text.data());
     }
 }
 

@@ -294,7 +294,6 @@ typedef struct vic_base_s : public ChipBase {
     uint32_t audio_read(uint8_t* dest, uint32_t max_samples);
 
     // --- ChipBase interface ---
-    ChipIdentity chip_identity() const override;
     bool has_debug_content()    const override;
     bool has_settings_content() const override;
     bool has_layout_content()   const override;

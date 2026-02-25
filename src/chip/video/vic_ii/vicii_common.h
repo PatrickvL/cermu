@@ -529,7 +529,6 @@ struct vicii_s : public ChipBase {
     ~vicii_s() override;
 
     // ChipBase interface
-    ChipIdentity chip_identity() const override;
     bool has_debug_content() const override { return true; }
     bool has_settings_content() const override { return true; }
     bool has_layout_content() const override { return true; }
