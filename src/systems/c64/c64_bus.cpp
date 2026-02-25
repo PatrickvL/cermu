@@ -264,102 +264,69 @@ uint8_t pla_906114_01_outputs_to_chip(pla_906114_01_t* pla) {
 }
 
 void c64_bus_s::populate_cpu_pla_mapping(struct pla_906114_01_s* pla) {
-    // Set other inputs for normal CPU operation (not VIC-II access)
-    pla->inputs.n_aec = false;   // CPU has bus control (AEC high = !n_aec in product terms)
-    pla->inputs.ba = true;       // Bus available (BA high = no DMA)
-    pla->inputs.n_cas = false;   // CAS active (CAS low = enable RAM access for CPU)
-    
-    // Map memory regions based on PLA outputs
+    // CAS active for CPU operations (CAS low = enable RAM access)
+    pla->inputs.n_cas = false;
+
+    // CPU cycle: AEC high, BA high — encode these into a base bus state
+    // that pla_906114_01_tick will read.
     for (uint32_t bank = 0; bank < 16; bank++) {
-        // Configure PLA for READ mode
-        pla->inputs.r_w = true;  // Read mode
-        // Set address in PLA (will call pla_906114_01_update_outputs)
-        pla_906114_01_set_cpu_address_bank((pla_906114_01_t*)pla, (uint8_t)bank);
-        // Determine read CHIP based on PLA outputs for read mode
+        bus_state_t bus = 0;
+        BUS_SET_ADDR(bus, bank << 12);
+        BUS_SET_BIT(bus, BUS_AEC_BIT);   // CPU has bus control
+        BUS_SET_BIT(bus, BUS_BA_BIT);    // Bus available
+
+        // Read mode: R/W high
+        BUS_SET_BIT(bus, BUS_RW_BIT);
+        pla_906114_01_tick((pla_906114_01_t*)pla, bus);
         uint8_t read_chip = pla_906114_01_outputs_to_chip((pla_906114_01_t*)pla);
 
-        // Configure PLA for WRITE mode
-        pla->inputs.r_w = false;  // Write mode
-        pla_906114_01_update_outputs((pla_906114_01_t*)pla);
+        // Write mode: R/W low (clear the bit)
+        BUS_CLR_BIT(bus, BUS_RW_BIT);
+        pla_906114_01_tick((pla_906114_01_t*)pla, bus);
         uint8_t write_chip = pla_906114_01_outputs_to_chip((pla_906114_01_t*)pla);
 
-        // Encode both read and write CHIPs into the mapping
         cpu_encoded_chip_per_bank[bank] = encode_chip_rw(read_chip, write_chip);
     }
 }
 
 void c64_bus_s::populate_vicii_pla_mapping(struct pla_906114_01_s* pla) {
-    // Set other inputs for VIC-II access (not normal CPU operation)
-    pla->inputs.n_aec = true;    // VIC-II has bus control (AEC low = n_aec in product terms)
-    pla->inputs.ba = false;      // Bus available (BA low = DMA)
-    pla->inputs.n_cas = false;   // CAS active for VIC-II regular memory access (not refresh)
-    // Configure PLA for READ mode (VIC-II can only read, never write)
-    pla->inputs.r_w = true;     // Read mode
+    // CAS active for VIC-II regular memory access
+    pla->inputs.n_cas = false;
 
-    // VIC-II can access all 16 banks (full 16-bit address space)
-    // VA14 and VA15 are driven by CIA, so VIC-II can reach all 16 banks
+    // VIC-II cycle: AEC low (VIC has bus), BA low, read-only
     for (uint32_t bank = 0; bank < 16; bank++) {
-        // Set address in PLA (will call pla_906114_01_update_outputs)
-        pla_906114_01_set_vicii_address_bank((pla_906114_01_t*)pla, (uint8_t)bank);
-        // Determine read CHIP based on PLA outputs for read mode
+        // Set VIC-II address lines (VA12, VA13, VA14)
+        pla->inputs.va12   = (bank & 0x01) != 0;
+        pla->inputs.va13   = (bank & 0x02) != 0;
+        pla->inputs.n_va14 = (bank & 0x04) == 0;  // Active-low
+
+        // Tick with AEC=0, BA=0, R/W=read
+        bus_state_t bus = 0;
+        BUS_SET_ADDR(bus, bank << 12);
+        BUS_SET_BIT(bus, BUS_RW_BIT);   // Read mode
+        // AEC and BA bits not set → VIC-II has bus control, DMA active
+        pla_906114_01_tick((pla_906114_01_t*)pla, bus);
         uint8_t read_chip = pla_906114_01_outputs_to_chip((pla_906114_01_t*)pla);
-        // VIC-II banking stores direct CHIP values, no encoding needed
-        vicii_chip_per_bank[bank] = read_chip;        
+
+        vicii_chip_per_bank[bank] = read_chip;
     }
 }
 
 void c64_bus_s::generate_all_pla_modes(struct pla_906114_01_s* pla) {
     c64_bus_t* bus = this;
+
     // Generate all 32 CPU memory modes (5-bit combinations of LORAM, HIRAM, CHAREN, EXROM, GAME)
     for (int mode = 0; mode < 32; mode++) {
-        // Set PLA inputs based on mode
-        // CRITICAL: Understanding the signal polarity and variable naming
-        //
-        // From C64 PLA Dissected PDF (lines 181-187):
-        // "#LORAM, #HIRAM, #CHAREN (I1 to I3)
-        // The lines #LORAM (I1), #HIRAM (I2) and #CHAREN (I3) are connected to the processor port...
-        // After a reset these lines are all set to input mode by the CPU, which means that they are not driven.
-        // To make sure they have a sane value when the machine is started, they are pulled up by R43, R44 and R45.
-        // With all these values being 1, the C64 can start with KERNAL, I/O and BASIC banked in."
-        //
-        // Key insight: When CPU port bits are 1 (pulled up), the C64 boots with all ROMs enabled.
-        // The #signals (active-low) go LOW when the feature is active.
-        // The PLA variable n_loram represents "#LORAM inverted" - so it's FALSE when #LORAM is LOW (active).
-        //
-        // From product term p0 (PDF line 311): "n_loram and n_hiram and ..." enables BASIC
-        // For mode $17 (all bits 1), we want BASIC enabled, so n_loram and n_hiram must be TRUE.
-        // Therefore: n_loram = TRUE when mode bit 0 is 1 (INVERTED from signal level!)
-        //
-        // CONCLUSION: PLA variables use POSITIVE LOGIC (TRUE = enabled), but mode bits also use positive logic!
-        // The "n_" prefix in PLA variables is a red herring - it refers to the signal name, not the logic!
-        // NO INVERSION NEEDED!
-        pla->inputs.n_loram = (mode & 0x01) != 0;    // Mode bit 0 = feature enabled = n_loram TRUE
-        pla->inputs.n_hiram = (mode & 0x02) != 0;    // Mode bit 1 = feature enabled = n_hiram TRUE
-        pla->inputs.n_charen = (mode & 0x04) != 0;   // Mode bit 2 = I/O enabled = n_charen TRUE
-        pla->inputs.n_exrom = (mode & 0x08) != 0;    // Mode bit 3 = no EXROM = n_exrom TRUE
-        pla->inputs.n_game = (mode & 0x10) != 0;     // Mode bit 4 = no GAME = n_game TRUE
-        
-        // CPU address bits will be set during populate_pla_mapping for each bank
-        // Populate mapping for this mode
+        pla_906114_01_set_banking_mode((pla_906114_01_t*)pla, (uint8_t)mode);
         populate_cpu_pla_mapping(pla);
-        // Copy the CPU mapping to the mode-specific array
         memcpy(bus->cpu_encoded_chip_per_bank_per_mode[mode], bus->cpu_encoded_chip_per_bank, 16);
     }
-    
-    // Generate VIC-II memory modes
-    // VIC-II uses: #GAME, #EXROM (both from CPU mode)
-    // #VA14 is now automatically set from the address bit in pla_906114_01_set_vicii_address_bank()
-    // NOTE: We reuse the same PLA instance for VIC-II generation, but the CPU mode tables
-    // are already complete at this point, so modifying PLA inputs won't affect them.
+
+    // Generate VIC-II memory modes — only GAME and EXROM matter for VIC-II,
+    // but we iterate all 32 modes for table uniformity.
     for (int vic_mode = 0; vic_mode < 32; vic_mode++) {
-        // Extract mode bits directly (no inversion)
-        pla->inputs.n_game = (vic_mode & 0x10) != 0;     // Direct mapping
-        pla->inputs.n_exrom = (vic_mode & 0x08) != 0;    // Direct mapping
-        
-        // Populate VIC-II mapping for this mode (stores direct CHIPs)
-        // #VA14 will be automatically set from address bit 14 during population
+        pla_906114_01_set_banking_mode((pla_906114_01_t*)pla, (uint8_t)vic_mode);
         populate_vicii_pla_mapping(pla);
-        // Copy the VIC-II raw CHIPs to the mode-specific array
         memcpy(bus->vicii_chip_per_bank_per_mode[vic_mode], bus->vicii_chip_per_bank, 16);
     }
 }

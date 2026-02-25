@@ -277,6 +277,7 @@ list(APPEND CHIP_SOURCES
     src/chip/memory/ram.cpp
     src/chip/memory/rom.cpp
     src/chip/memory/mos2114.cpp
+    src/chip/memory/memory_chip.cpp
 
     # Sound
     src/chip/sound/mos6581.cpp
