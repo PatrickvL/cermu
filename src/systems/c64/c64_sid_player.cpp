@@ -129,12 +129,21 @@ static constexpr uint16_t IRQ_HANDLER = 0x0390;
  * all CPU registers, ensures correct RAM banking, calls the SID play
  * routine, acknowledges the CIA1 timer interrupt, and returns via RTI.
  *
- * The 6510 hardware IRQ pushes P and PC onto the stack, then fetches
- * the handler address from $FFFE/$FFFF.  With KERNAL banked out ($01=$35),
- * these bytes are read from RAM where we've written this handler's address.
+ * Banking strategy:
+ *   idle_banking ($35) — used during the idle loop so the CPU reads our
+ *     custom IRQ vector from RAM at $FFFE (HIRAM=0 → RAM at $E000+).
+ *   play_banking ($36) — used when calling the play routine.  HIRAM=1
+ *     keeps I/O visible at $D000 even when tunes do `AND #$FE` on $01
+ *     (a common pattern to access RAM under BASIC ROM).  Without HIRAM,
+ *     AND #$FE on $35 gives $34 which disables I/O entirely.
  */
 static void build_irq_handler(uint8_t* ram, uint16_t play_addr,
-                               uint8_t banking) {
+                               uint8_t idle_banking) {
+    // Play banking: set HIRAM (bit 1) so AND #$FE doesn't disable I/O.
+    // Clear LORAM (bit 0) — play routines that toggle it won't change state.
+    // $35 → $36: I/O visible, KERNAL ROM at $E000, no BASIC ROM.
+    uint8_t play_banking = (idle_banking | 0x02) & ~0x01;
+
     asm6510 a(ram + IRQ_HANDLER, 0x20, IRQ_HANDLER);
 
     a.pha();
@@ -143,10 +152,13 @@ static void build_irq_handler(uint8_t* ram, uint16_t play_addr,
     a.tya();
     a.pha();
 
-    a.lda_imm(banking);           // LDA #banking
+    a.lda_imm(play_banking);      // LDA #$36 — I/O stays visible after AND #$FE
     a.sta_zp(0x01);               // STA $01
 
     a.jsr(play_addr);             // JSR play_addr
+
+    a.lda_imm(idle_banking);      // LDA #$35 — RAM at $E000+ for IRQ vector
+    a.sta_zp(0x01);               // STA $01
 
     a.lda_abs(0xDC0D);            // LDA $DC0D (acknowledge CIA1)
 
@@ -205,7 +217,8 @@ static void build_init_stub(uint8_t* ram,
     if (needs_timer_irq) {
         // ---- PSID with play_addr != 0: we manage the playback IRQ ----
 
-        // Bank out BASIC + KERNAL ROMs, keep I/O visible ($01=$35).
+        // Bank out KERNAL, keep I/O visible ($01=$35) so we can write
+        // our IRQ vector to RAM at $FFFE/$FFFF and the CPU will read it.
         a.lda_imm(0x35);
         a.sta_zp(0x01);
 
@@ -216,9 +229,19 @@ static void build_init_stub(uint8_t* ram,
         a.lda_imm(IRQ_HANDLER >> 8);
         a.sta_abs(0xFFFF);
 
+        // Switch to $36 (HIRAM=1) before calling init — keeps I/O visible
+        // even if init does AND #$FE on $01 (common banking pattern).
+        a.lda_imm(0x36);
+        a.sta_zp(0x01);
+
         // Call SID init routine BEFORE starting the timer.
         a.lda_imm(static_cast<uint8_t>(subtune));
         a.jsr(sid->init_addr);
+
+        // Restore $35 — RAM at $E000+ so IRQ vector reads from our RAM
+        // copy at $FFFE.  I/O remains visible for CIA register writes.
+        a.lda_imm(0x35);
+        a.sta_zp(0x01);
 
         // Set CIA1 Timer A period
         a.lda_imm(static_cast<uint8_t>(timer_period & 0xFF));
