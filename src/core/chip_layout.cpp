@@ -1036,3 +1036,108 @@ ChipLayout create_custom_bga(uint8_t rows, uint8_t cols, const char* part_name) 
 // ============================================================================
 // ENUM-TO-STRING CONVERSION FUNCTIONS
 // ============================================================================
+
+// ============================================================================
+// GENERIC BUS STATE → PIN SIGNAL POPULATION
+// ============================================================================
+
+std::vector<PinSignalState> populate_pin_states_from_bus(
+    const ChipLayout& layout, bus_state_t bus_state) {
+
+    size_t total_pins = layout.get_total_pins();
+    std::vector<PinSignalState> states(total_pins);
+
+    // Initialize all pins as inactive and valid
+    for (size_t i = 0; i < total_pins; i++) {
+        states[i] = {
+            static_cast<uint8_t>(i + 1), // pin_number (1-based)
+            false,   // signal_level
+            false,   // drive_direction
+            0,       // signal_value
+            true,    // high_impedance (default tri-state)
+            false,   // has_pullup
+            false,   // has_pulldown
+            true,    // signal_valid
+            0.0f,    // analog_voltage
+            false,   // is_pwm
+            0.0f     // pwm_duty_cycle
+        };
+    }
+
+    uint16_t addr_bus = BUS_GET_ADDR(bus_state);
+    uint8_t data_bus = BUS_GET_DATA(bus_state);
+
+    // Process a single pin: extract signal level from bus_state based on
+    // the pin's PinType and PinLabel metadata.
+    auto process_pin = [&](const ChipPin& pin) {
+        if (pin.pin_number == 0 || pin.pin_number > total_pins)
+            return;
+        PinSignalState& state = states[pin.pin_number - 1];
+
+        switch (pin.get_pin_type()) {
+        case PinType::ADDRESS: {
+            uint8_t bit_index = pin.get_bit_index();
+            if (bit_index < 16) {
+                state.signal_level = (addr_bus & (1 << bit_index)) != 0;
+                state.high_impedance = false;
+            }
+            break;
+        }
+        case PinType::DATA: {
+            uint8_t bit_index = pin.get_bit_index();
+            if (bit_index < 8) {
+                state.signal_level = (data_bus & (1 << bit_index)) != 0;
+                state.drive_direction =
+                    !BUS_GET_BIT(bus_state, BUS_RW_BIT); // Output on write
+                state.high_impedance = !state.drive_direction;
+            }
+            break;
+        }
+        case PinType::POWER: {
+            // VDD/VCC = high, VSS/GND = low
+            state.signal_level =
+                (pin.label == PinLabel::VDD || pin.label == PinLabel::VCC);
+            state.high_impedance = false;
+            break;
+        }
+        case PinType::CLOCK: {
+            state.signal_level = true;
+            state.high_impedance = false;
+            break;
+        }
+        case PinType::NO_CONNECT: {
+            state.high_impedance = true;
+            break;
+        }
+        default: {
+            // CONTROL, INTERRUPT, SPECIAL — check for bus bit mapping
+            auto [bus_bit, is_input, invert] = get_pin_bus_mapping(pin.label);
+            if (bus_bit >= 0) {
+                bool bit_set = BUS_GET_BIT(bus_state, bus_bit);
+                state.signal_level = invert ? !bit_set : bit_set;
+                state.drive_direction = !is_input;
+                state.high_impedance = false;
+            }
+            // Pins with no mapping (IO_PORT, SPECIAL, ANALOG without bus bits)
+            // are left at defaults for chip-specific overlay.
+            break;
+        }
+        }
+
+        state.signal_value = state.signal_level ? 1 : 0;
+    };
+
+    // Process pins from all sides
+    for (const auto& pin : layout.left_pins)
+        process_pin(pin);
+    for (const auto& pin : layout.right_pins)
+        process_pin(pin);
+    for (const auto& pin : layout.top_pins)
+        process_pin(pin);
+    for (const auto& pin : layout.bottom_pins)
+        process_pin(pin);
+    for (const auto& pin : layout.grid_pins)
+        process_pin(pin);
+
+    return states;
+}

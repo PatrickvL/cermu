@@ -72,75 +72,44 @@ inline ChipLayout create_mos6526_layout() {
 
 // Helper function to get CIA pin states for visualization
 static std::vector<PinSignalState> get_cia_pin_states(mos6526_t* cia, const ChipLayout* layout, bus_state_t bus_state) {
-    std::vector<PinSignalState> pin_states;
-    if (!cia || !layout) return pin_states;
-    
-    int total_pins = layout->get_total_pins();
-    pin_states.resize(total_pins);
-    
-    // Initialize all pins as inactive by default
-    for (int i = 0; i < total_pins; i++) {
-        pin_states[i] = PinSignalState{
-            .pin_number = static_cast<uint8_t>(i + 1),
-            .signal_level = false,
-            .drive_direction = false,
-            .signal_value = 0,
-            .high_impedance = true,
-            .has_pullup = false,
-            .has_pulldown = false,
-            .signal_valid = true,
-            .analog_voltage = 0.0f,
-            .is_pwm = false,
-            .pwm_duty_cycle = 0.0f
-        };
-    }
-    
-    // Set pin states based on CIA registers
-    // Port A pins (PA0-PA7, pins 2-9)
+    if (!cia || !layout) return {};
+
+    // Generic bus-derived pin states (address, data, power, clock, control)
+    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
+    int total_pins = static_cast<int>(pin_states.size());
+
+    // CIA specific: Port A pins (PA0-PA7) from CIA registers
     for (int i = 0; i < 8; i++) {
         int pin_idx = i + 1; // PA0 is pin 2, so index 1
         if (pin_idx < total_pins) {
             bool pin_active = (cia->reg[PRA] & (1 << i)) != 0;
-            bool drive_direction = (cia->reg[DDRA] & (1 << i)) != 0;
+            bool drive_dir = (cia->reg[DDRA] & (1 << i)) != 0;
             pin_states[pin_idx].signal_level = pin_active;
-            pin_states[pin_idx].signal_valid = true;
-            pin_states[pin_idx].drive_direction = drive_direction;
-            pin_states[pin_idx].high_impedance = !drive_direction;
+            pin_states[pin_idx].drive_direction = drive_dir;
+            pin_states[pin_idx].high_impedance = !drive_dir;
         }
     }
-    
-    // Port B pins (PB0-PB7, pins 10-17)
+
+    // Port B pins (PB0-PB7)
     for (int i = 0; i < 8; i++) {
         int pin_idx = i + 9; // PB0 is pin 10, so index 9
         if (pin_idx < total_pins) {
             bool pin_active = (cia->reg[PRB] & (1 << i)) != 0;
-            bool drive_direction = (cia->reg[DDRB] & (1 << i)) != 0;
+            bool drive_dir = (cia->reg[DDRB] & (1 << i)) != 0;
             pin_states[pin_idx].signal_level = pin_active;
-            pin_states[pin_idx].signal_valid = true;
-            pin_states[pin_idx].drive_direction = drive_direction;
-            pin_states[pin_idx].high_impedance = !drive_direction;
+            pin_states[pin_idx].drive_direction = drive_dir;
+            pin_states[pin_idx].high_impedance = !drive_dir;
         }
     }
-    
-    // IRQ pin (pin 21, index 20)
+
+    // IRQ pin (pin 21, index 20) — CIA drives IRQ as output
     if (20 < total_pins) {
         bool irq_active = (cia->reg[ICR] & 0x80) != 0;
-        pin_states[20].signal_level = !irq_active; // IRQ is active low
-        pin_states[20].signal_valid = true;
+        pin_states[20].signal_level = !irq_active; // Active low
         pin_states[20].drive_direction = true;
         pin_states[20].high_impedance = false;
     }
-    
-    // Power pins are always active
-    pin_states[0].signal_level = false;  // VSS (Ground, pin 1)
-    pin_states[0].high_impedance = false;
-    pin_states[19].signal_level = true;  // VDD (+5V, pin 20)
-    pin_states[19].high_impedance = false;
-    if (39 < total_pins) {
-        pin_states[39].signal_level = true; // RES (Reset, pin 40) - active high when not reset
-        pin_states[39].high_impedance = false;
-    }
-    
+
     return pin_states;
 }
 

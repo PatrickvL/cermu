@@ -69,37 +69,20 @@ inline ChipLayout create_mos6522_layout() {
 // MOS6522 VIA PIN STATES
 // ============================================================================
 
-static std::vector<PinSignalState> get_via_pin_states(mos6522_t* via, const ChipLayout* layout) {
-    std::vector<PinSignalState> pin_states;
-    if (!via || !layout) return pin_states;
+static std::vector<PinSignalState> get_via_pin_states(mos6522_t* via, const ChipLayout* layout, bus_state_t bus_state) {
+    if (!via || !layout) return {};
 
-    int total_pins = layout->get_total_pins();
-    pin_states.resize(total_pins);
+    // Generic bus-derived pin states (address, data, power, clock, control)
+    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
+    int total_pins = static_cast<int>(pin_states.size());
 
-    for (int i = 0; i < total_pins; i++) {
-        pin_states[i] = PinSignalState{
-            .pin_number = static_cast<uint8_t>(i + 1),
-            .signal_level = false,
-            .drive_direction = false,
-            .signal_value = 0,
-            .high_impedance = true,
-            .has_pullup = false,
-            .has_pulldown = false,
-            .signal_valid = true,
-            .analog_voltage = 0.0f,
-            .is_pwm = false,
-            .pwm_duty_cycle = 0.0f
-        };
-    }
-
-    // Port A pins (PA0-PA7, pins 2-9)
+    // VIA specific: Port A pins (PA0-PA7, pins 2-9)
     for (int i = 0; i < 8; i++) {
         int pin_idx = i + 1; // PA0 is pin 2, index 1
         if (pin_idx < total_pins) {
             pin_states[pin_idx].signal_level = (via->port_a_regs.pins & (1 << i)) != 0;
             pin_states[pin_idx].drive_direction = (via->port_a_regs.ddr & (1 << i)) != 0;
             pin_states[pin_idx].high_impedance = !(via->port_a_regs.ddr & (1 << i));
-            pin_states[pin_idx].signal_valid = true;
         }
     }
 
@@ -110,26 +93,14 @@ static std::vector<PinSignalState> get_via_pin_states(mos6522_t* via, const Chip
             pin_states[pin_idx].signal_level = (via->port_b_regs.pins & (1 << i)) != 0;
             pin_states[pin_idx].drive_direction = (via->port_b_regs.ddr & (1 << i)) != 0;
             pin_states[pin_idx].high_impedance = !(via->port_b_regs.ddr & (1 << i));
-            pin_states[pin_idx].signal_valid = true;
         }
     }
 
-    // IRQ pin (pin 21, index 20)
+    // IRQ pin (pin 21, index 20) — VIA drives IRQ as output
     if (20 < total_pins) {
-        pin_states[20].signal_level = !via->interrupt_active; // IRQ is active low
-        pin_states[20].signal_valid = true;
+        pin_states[20].signal_level = !via->interrupt_active; // Active low
         pin_states[20].drive_direction = true;
         pin_states[20].high_impedance = false;
-    }
-
-    // Power pins
-    pin_states[0].signal_level = false;  // VSS (Ground, pin 1)
-    pin_states[0].high_impedance = false;
-    pin_states[19].signal_level = true;  // VCC (+5V, pin 20)
-    pin_states[19].high_impedance = false;
-    if (33 < total_pins) {
-        pin_states[33].signal_level = true; // /RES (Reset, pin 34) - active high when not reset
-        pin_states[33].high_impedance = false;
     }
 
     return pin_states;
@@ -165,7 +136,7 @@ void mos6522_s::render_debug_content() {
 
         ChipVisualization& renderer = GetGlobalChipRenderer();
         ChipLayout& layout = get_via_layout();
-        std::vector<PinSignalState> pin_states = get_via_pin_states(via, &layout);
+        std::vector<PinSignalState> pin_states = get_via_pin_states(via, &layout, via->bus_snapshot_);
         renderer.render(layout, chip_center, pin_states, via_name);
     }
     ImGui::EndChild();
@@ -314,7 +285,7 @@ void mos6522_s::render_layout_content() {
     const char* via_name = mos6522_get_via_name(via);
 
     ChipLayout& layout = get_via_layout();
-    std::vector<PinSignalState> pin_states = get_via_pin_states(via, &layout);
+    std::vector<PinSignalState> pin_states = get_via_pin_states(via, &layout, via->bus_snapshot_);
     render_chip_layout(layout, pin_states, via_name);
 #endif
 }

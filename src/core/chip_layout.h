@@ -102,3 +102,19 @@ ChipLayout create_custom_dip(uint8_t total_pins, const char* part_name = nullptr
 ChipLayout create_custom_qfp(uint8_t total_pins, const char* part_name = nullptr);
 ChipLayout create_custom_bga(uint8_t rows, uint8_t cols, const char* part_name = nullptr);
 
+// ============================================================================
+// GENERIC BUS STATE → PIN SIGNAL POPULATION
+// ============================================================================
+
+// Populate pin signal states from bus_state using PinType/PinLabel metadata.
+// Handles ADDRESS, DATA, POWER, CLOCK, CONTROL, INTERRUPT, and NO_CONNECT pins
+// generically. IO_PORT, SPECIAL, and ANALOG pins are left at defaults for
+// chip-specific code to overlay.
+//
+// Usage pattern in each chip's get_*_pin_states():
+//   auto states = populate_pin_states_from_bus(layout, bus_state);
+//   // ... overlay chip-specific pin states (port registers, video, audio) ...
+//   return states;
+std::vector<PinSignalState> populate_pin_states_from_bus(
+    const ChipLayout& layout, bus_state_t bus_state);
+

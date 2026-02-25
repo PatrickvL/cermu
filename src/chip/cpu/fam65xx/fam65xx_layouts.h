@@ -98,43 +98,6 @@ template <const fam65xx::CPUTraits &Traits> ChipLayout create_cpu_pin_layout() {
 }
 
 // ============================================================================
-// PIN-TO-BUS-BIT MAPPING HELPER
-// ============================================================================
-
-// Describes how a CPU PinLabel maps to a bus_state bit for signal extraction.
-struct PinBusMapping {
-    int bus_bit;     // Bus bit index, or -1 if no direct mapping
-    bool is_input;   // true = input to CPU, false = output from CPU
-    bool invert;     // true = signal level is inverted from bus bit (active-low)
-};
-
-// Maps a CPU PinLabel to its bus_state bit and signal characteristics.
-// Returns bus_bit = -1 for pins handled separately (ADDRESS, DATA, POWER,
-// CLOCK, NC) or for labels with no bus mapping.
-constexpr PinBusMapping get_pin_bus_mapping(PinLabel label) {
-    switch (label) {
-    // Control signals (active-high)
-    case PinLabel::RW:     return { BUS_RW_BIT,    false, false };
-    case PinLabel::SYNC:   return { BUS_SYNC_BIT,  false, false };
-    case PinLabel::RDY:    return { BUS_RDY_BIT,   true,  false };
-    case PinLabel::AEC:    return { BUS_AEC_BIT,   false, false };
-    case PinLabel::BE:     return { BUS_BE_BIT,    true,  false };
-    case PinLabel::BA:     return { BUS_BA_BIT,    false, false };
-    // Interrupt signals (active-low, all inputs)
-    case PinLabel::_IRQ:   return { BUS_IRQ_BIT,   true,  true };
-    case PinLabel::_NMI:   return { BUS_NMI_BIT,   true,  true };
-    case PinLabel::_RES:   return { BUS_RES_BIT,   true,  true };
-    case PinLabel::_ABORT: return { BUS_ABORT_BIT, true,  true };
-    // Special signals
-    case PinLabel::_SO:    return { BUS_SO_BIT,    true,  true  };
-    case PinLabel::_VP:    return { BUS_VP_BIT,    false, false }; // Bus bit already physical
-    case PinLabel::_VPB:   return { BUS_VP_BIT,    false, false };
-    case PinLabel::_ML:    return { BUS_ML_BIT,    false, true  };
-    default:               return { -1,            false, false };
-    }
-}
-
-// ============================================================================
 // CPU PIN STATE EXTRACTION WITH BUS STATE
 // ============================================================================
 
@@ -143,14 +106,8 @@ template <const fam65xx::CPUTraits &Traits>
 std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits> *cpu,
                                                const ChipLayout *layout,
                                                bus_state_t bus_state) {
-  // Map pins based on the pin layout for this CPU type
-  // Get the actual pin layout for this CPU
-  std::vector<PinSignalState> states(layout->get_total_pins());
-
-  // Initialize all pins as inactive and valid
-  for (auto &state : states) {
-    state = {0, false, false, 0, false, false, false, true, 0.0f, false, 0.0f};
-  }
+  // Start with generic bus-derived pin states
+  auto states = populate_pin_states_from_bus(*layout, bus_state);
 
   if (!cpu) {
     // Mark all states as invalid if no CPU
@@ -160,78 +117,36 @@ std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits> *cpu,
     return states;
   }
 
-  // Extract bus state components
-  uint16_t addr_bus = BUS_GET_ADDR(bus_state);
-  uint8_t data_bus = BUS_GET_DATA(bus_state);
-
-  // Process each pin according to its type and position
-  auto process_pin = [&](const ChipPin &pin, size_t state_index) {
-    if (state_index >= states.size())
+  // CPU-specific overlays: address pins are always driven by the CPU,
+  // and clock pin direction depends on whether it's PHI0 (input) or
+  // PHI1/PHI2 (output).
+  auto overlay_pin = [&](const ChipPin &pin) {
+    if (pin.pin_number == 0 || pin.pin_number > states.size())
       return;
-
-    PinSignalState &state = states[state_index];
+    PinSignalState &state = states[pin.pin_number - 1];
 
     switch (pin.get_pin_type()) {
-    case PinType::ADDRESS: {
-      uint8_t bit_index = pin.get_bit_index();
-      if (bit_index < 16) {
-        state.signal_level = (addr_bus & (1 << bit_index)) != 0;
-        state.drive_direction = true;
-      }
+    case PinType::ADDRESS:
+      state.drive_direction = true; // CPU always drives address bus
       break;
-    }
-    case PinType::DATA: {
-      uint8_t bit_index = pin.get_bit_index();
-      if (bit_index < 8) {
-        state.signal_level = (data_bus & (1 << bit_index)) != 0;
-        state.drive_direction =
-            !BUS_GET_BIT(bus_state, BUS_RW_BIT); // Output on write
-        state.high_impedance = !state.drive_direction;
-      }
-      break;
-    }
-    case PinType::POWER: {
-      state.signal_level = true;
-      break;
-    }
-    case PinType::CLOCK: {
-      state.signal_level = true;
+    case PinType::CLOCK:
       state.drive_direction = (pin.label != PinLabel::PHI0);
       break;
-    }
-    default: {
-      auto [bus_bit, is_input, invert] = get_pin_bus_mapping(pin.label);
-      if (bus_bit >= 0) {
-        bool bit_set = BUS_GET_BIT(bus_state, bus_bit);
-        state.signal_level = invert ? !bit_set : bit_set;
-        state.drive_direction = !is_input;
-      } else if (pin.label == PinLabel::NC) {
-        state.high_impedance = true;
-      }
+    default:
       break;
     }
-    }
-
-    state.signal_value = state.signal_level ? 1 : 0;
   };
 
-  // Process pins from all sides
-  size_t pin_index = 0;
-  for (const auto &pin : layout->left_pins) {
-    process_pin(pin, pin.pin_number - 1); // Pin numbers are 1-based
-  }
-  for (const auto &pin : layout->right_pins) {
-    process_pin(pin, pin.pin_number - 1);
-  }
-  for (const auto &pin : layout->top_pins) {
-    process_pin(pin, pin.pin_number - 1);
-  }
-  for (const auto &pin : layout->bottom_pins) {
-    process_pin(pin, pin.pin_number - 1);
-  }
-  for (const auto &pin : layout->grid_pins) {
-    process_pin(pin, pin.pin_number - 1);
-  }
+  for (const auto &pin : layout->left_pins)
+    overlay_pin(pin);
+  for (const auto &pin : layout->right_pins)
+    overlay_pin(pin);
+  for (const auto &pin : layout->top_pins)
+    overlay_pin(pin);
+  for (const auto &pin : layout->bottom_pins)
+    overlay_pin(pin);
+  for (const auto &pin : layout->grid_pins)
+    overlay_pin(pin);
 
   return states;
 }

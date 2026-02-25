@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <string>
+#include "system_lines.h"
 
 // ============================================================================
 // PIN TYPES AND ENUMERATIONS
@@ -352,3 +353,40 @@ std::string pin_label_to_display_string(PinLabel label); // With Unicode symbols
 
 // Derive pin type from pin label
 PinType pin_label_to_pin_type(PinLabel label);
+
+// ============================================================================
+// PIN-TO-BUS-BIT MAPPING
+// ============================================================================
+
+// Describes how a PinLabel maps to a bus_state bit for signal extraction.
+struct PinBusMapping {
+    int bus_bit;     // Bus bit index, or -1 if no direct mapping
+    bool is_input;   // true = input to chip (from bus perspective)
+    bool invert;     // true = signal level is inverted from bus bit (active-low)
+};
+
+// Maps a PinLabel to its bus_state bit and signal characteristics.
+// Returns bus_bit = -1 for pins handled separately (ADDRESS, DATA, POWER,
+// CLOCK, NC) or for labels with no bus mapping.
+constexpr PinBusMapping get_pin_bus_mapping(PinLabel label) {
+    switch (label) {
+    // Control signals (active-high)
+    case PinLabel::RW:     return { BUS_RW_BIT,    false, false };
+    case PinLabel::SYNC:   return { BUS_SYNC_BIT,  false, false };
+    case PinLabel::RDY:    return { BUS_RDY_BIT,   true,  false };
+    case PinLabel::AEC:    return { BUS_AEC_BIT,   false, false };
+    case PinLabel::BE:     return { BUS_BE_BIT,    true,  false };
+    case PinLabel::BA:     return { BUS_BA_BIT,    false, false };
+    // Interrupt signals (active-low, all inputs)
+    case PinLabel::_IRQ:   return { BUS_IRQ_BIT,   true,  true };
+    case PinLabel::_NMI:   return { BUS_NMI_BIT,   true,  true };
+    case PinLabel::_RES:   return { BUS_RES_BIT,   true,  true };
+    case PinLabel::_ABORT: return { BUS_ABORT_BIT, true,  true };
+    // Special signals
+    case PinLabel::_SO:    return { BUS_SO_BIT,    true,  true  };
+    case PinLabel::_VP:    return { BUS_VP_BIT,    false, false };
+    case PinLabel::_VPB:   return { BUS_VP_BIT,    false, false };
+    case PinLabel::_ML:    return { BUS_ML_BIT,    false, true  };
+    default:               return { -1,            false, false };
+    }
+}

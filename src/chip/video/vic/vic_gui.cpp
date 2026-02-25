@@ -66,36 +66,13 @@ inline ChipLayout create_vic_layout(const char* part_number) {
 // VIC PIN STATES
 // ============================================================================
 
-static std::vector<PinSignalState> get_vic_pin_states(vic_base_t* vic, const ChipLayout* layout) {
-    std::vector<PinSignalState> pin_states;
-    if (!vic || !layout) return pin_states;
+static std::vector<PinSignalState> get_vic_pin_states(vic_base_t* vic, const ChipLayout* layout, bus_state_t bus_state) {
+    if (!vic || !layout) return {};
 
-    int total_pins = layout->get_total_pins();
-    pin_states.resize(total_pins);
+    // Generic bus-derived pin states (address, data, power, clock, control)
+    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
 
-    for (int i = 0; i < total_pins; i++) {
-        pin_states[i] = PinSignalState{
-            .pin_number = static_cast<uint8_t>(i + 1),
-            .signal_level = false,
-            .drive_direction = false,
-            .signal_value = 0,
-            .high_impedance = true,
-            .has_pullup = false,
-            .has_pulldown = false,
-            .signal_valid = true,
-            .analog_voltage = 0.0f,
-            .is_pwm = false,
-            .pwm_duty_cycle = 0.0f
-        };
-    }
-
-    // Power pins
-    pin_states[19].signal_level = false; // VSS (Ground, pin 20)
-    pin_states[19].high_impedance = false;
-    pin_states[39].signal_level = true;  // VDD (+5V, pin 40)
-    pin_states[39].high_impedance = false;
-
-    // Video output pins (active when generating display)
+    // VIC specific: Video output pins (always driven)
     pin_states[37].signal_level = true; // LUMA (pin 38)
     pin_states[37].drive_direction = true;
     pin_states[37].high_impedance = false;
@@ -168,7 +145,7 @@ void vic_base_s::render_debug_content() {
 
         ChipVisualization& renderer = GetGlobalChipRenderer();
         ChipLayout& layout = get_vic_layout(vic->is_pal);
-        std::vector<PinSignalState> pin_states = get_vic_pin_states(vic, &layout);
+        std::vector<PinSignalState> pin_states = get_vic_pin_states(vic, &layout, vic->bus_snapshot_);
         renderer.render(layout, chip_center, pin_states, get_vic_type_name(vic));
     }
     ImGui::EndChild();
@@ -306,7 +283,7 @@ void vic_base_s::render_layout_content() {
     const char* chip_name = get_vic_type_name(vic);
 
     ChipLayout& layout = get_vic_layout(vic->is_pal);
-    std::vector<PinSignalState> pin_states = get_vic_pin_states(vic, &layout);
+    std::vector<PinSignalState> pin_states = get_vic_pin_states(vic, &layout, vic->bus_snapshot_);
     render_chip_layout(layout, pin_states, chip_name);
 #endif
 }

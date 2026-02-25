@@ -96,47 +96,19 @@ inline ChipLayout create_vicii_layout() {
 
 // Helper function to get VIC-II pin states for visualization
 static std::vector<PinSignalState> get_vicii_pin_states(vicii_t* vicii, const ChipLayout* layout, bus_state_t bus_state) {
-    std::vector<PinSignalState> pin_states;
-    if (!vicii || !layout) return pin_states;
-    
-    int total_pins = layout->get_total_pins();
-    pin_states.resize(total_pins);
-    
-    // Initialize all pins as inactive by default
-    for (int i = 0; i < total_pins; i++) {
-        pin_states[i] = PinSignalState{
-            .pin_number = static_cast<uint8_t>(i + 1),
-            .signal_level = false,
-            .drive_direction = false,
-            .signal_value = 0,
-            .high_impedance = true,
-            .has_pullup = false,
-            .has_pulldown = false,
-            .signal_valid = true,
-            .analog_voltage = 0.0f,
-            .is_pwm = false,
-            .pwm_duty_cycle = 0.0f
-        };
-    }
-    
-    // Set power pins as active
-    pin_states[0].signal_level = true;  // VDD (pin 1)
-    pin_states[0].high_impedance = false;
-    pin_states[39].signal_level = true; // VCC (pin 40)
-    pin_states[39].high_impedance = false;
-    pin_states[19].signal_level = false; // VSS (Ground, pin 20)
-    pin_states[19].high_impedance = false;
-    pin_states[20].signal_level = false; // VSS (Ground, pin 21)
-    pin_states[20].high_impedance = false;
-    
-    // Set IRQ pin state based on VIC-II registers
+    if (!vicii || !layout) return {};
+
+    // Generic bus-derived pin states (address, data, power, clock, control)
+    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
+
+    // VIC-II specific: IRQ driven by VIC-II (override direction from generic)
     if (vicii->registers.data[0x19] & 0x80) {
-        pin_states[5].signal_level = false; // IRQ (pin 6) - active low
+        pin_states[5].signal_level = false; // IRQ (pin 6) - active low, asserted
         pin_states[5].drive_direction = true;
         pin_states[5].high_impedance = false;
     }
-    
-    // Set video output pins as active
+
+    // Video output pins (always driven by VIC-II)
     pin_states[16].signal_level = true; // LUMA (pin 17)
     pin_states[16].drive_direction = true;
     pin_states[16].high_impedance = false;
@@ -146,7 +118,7 @@ static std::vector<PinSignalState> get_vicii_pin_states(vicii_t* vicii, const Ch
     pin_states[18].signal_level = true; // CSYNC (pin 19)
     pin_states[18].drive_direction = true;
     pin_states[18].high_impedance = false;
-    
+
     return pin_states;
 }
 

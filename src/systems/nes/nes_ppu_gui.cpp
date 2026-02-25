@@ -63,36 +63,13 @@ inline ChipLayout create_ricoh_2c02_layout() {
 // PPU PIN STATES
 // ============================================================================
 
-static std::vector<PinSignalState> get_ppu_pin_states(nes_system::PPU* ppu, const ChipLayout* layout) {
-    std::vector<PinSignalState> pin_states;
-    if (!ppu || !layout) return pin_states;
+static std::vector<PinSignalState> get_ppu_pin_states(nes_system::PPU* ppu, const ChipLayout* layout, bus_state_t bus_state) {
+    if (!ppu || !layout) return {};
 
-    int total_pins = layout->get_total_pins();
-    pin_states.resize(total_pins);
+    // Generic bus-derived pin states (address, data, power, clock, control)
+    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
 
-    for (int i = 0; i < total_pins; i++) {
-        pin_states[i] = PinSignalState{
-            .pin_number = static_cast<uint8_t>(i + 1),
-            .signal_level = false,
-            .drive_direction = false,
-            .signal_value = 0,
-            .high_impedance = true,
-            .has_pullup = false,
-            .has_pulldown = false,
-            .signal_valid = true,
-            .analog_voltage = 0.0f,
-            .is_pwm = false,
-            .pwm_duty_cycle = 0.0f
-        };
-    }
-
-    // Power pins
-    pin_states[19].signal_level = false; // VSS (Ground, pin 20)
-    pin_states[19].high_impedance = false;
-    pin_states[39].signal_level = true;  // VCC (+5V, pin 40)
-    pin_states[39].high_impedance = false;
-
-    // /INT (NMI) pin (pin 19, index 18) — active low
+    // PPU specific: /INT (NMI) pin (pin 19, index 18) — PPU drives NMI
     pin_states[18].signal_level = !ppu->nmi;
     pin_states[18].drive_direction = true;
     pin_states[18].high_impedance = false;
@@ -146,7 +123,7 @@ void nes_system::PPU::render_debug_content() {
 
         ChipVisualization& renderer = GetGlobalChipRenderer();
         ChipLayout& layout = get_ppu_layout();
-        std::vector<PinSignalState> pin_states = get_ppu_pin_states(ppu, &layout);
+        std::vector<PinSignalState> pin_states = get_ppu_pin_states(ppu, &layout, ppu->bus_snapshot_);
         renderer.render(layout, chip_center, pin_states, "RP2C02");
     }
     ImGui::EndChild();
@@ -265,7 +242,7 @@ void nes_system::PPU::render_layout_content() {
 
 #ifdef IMGUI_VERSION
     ChipLayout& layout = get_ppu_layout();
-    std::vector<PinSignalState> pin_states = get_ppu_pin_states(ppu, &layout);
+    std::vector<PinSignalState> pin_states = get_ppu_pin_states(ppu, &layout, ppu->bus_snapshot_);
     render_chip_layout(layout, pin_states, "RP2C02");
 #endif
 }
