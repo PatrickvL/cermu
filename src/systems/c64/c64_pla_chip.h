@@ -1,7 +1,7 @@
 #pragma once
 
-#include <stdint.h>
-#include <stdbool.h>
+#include <cstdint>
+
 #include "../../core/chip.h"
 
 // Forward declare C64System
@@ -33,5 +33,3 @@ public:
     void render_settings_content() override;
     void render_layout_content() override;
 };
-
-

@@ -956,8 +956,6 @@ void ted7360_t::tick_phi2(bus_state_t bus_state) {
 // twice to maintain the same number of invocations, but only the first call
 // does actual work.
 
-
-
 // Default bus state for legacy single-tick wrapper:
 // IRQ HIGH (inactive), RW=read, BA/RDY HIGH.
 static constexpr bus_state_t TED_LEGACY_BUS_DEFAULT =

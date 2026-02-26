@@ -9,9 +9,9 @@
 #include "tap_format.h"
 #include "crt_format.h"
 
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
 
 // ============================================================================
 // Internal helpers

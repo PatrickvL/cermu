@@ -50,23 +50,6 @@
 #define FAM65XX_GET_RW(pins) ((pins)&FAM65XX_RW)
 
 // ============================================================================
-// Memory Callback Types (for compatibility)
-// ============================================================================
-
-// Modern C++ function types - preferred for new code
-#include <functional>
-using fam65xx_mem_read_func =
-    std::function<uint8_t(void *user_data, uint32_t addr, uint8_t bus_state)>;
-using fam65xx_mem_write_func =
-    std::function<void(void *user_data, uint32_t addr, uint8_t data)>;
-
-// Legacy C function pointer types - kept for C compatibility
-using fam65xx_mem_read_t = uint8_t (*)(void *user_data, uint32_t addr,
-                                       uint8_t bus_state);
-using fam65xx_mem_write_t = void (*)(void *user_data, uint32_t addr,
-                                     uint8_t data);
-
-// ============================================================================
 // CPU Flags
 // ============================================================================
 
@@ -88,7 +71,7 @@ enum class cpu_flags : uint16_t {
   EMULATION_MODE = 0x100 // Emulation mode (not in P register, separate)
 };
 
-// Legacy macro compatibility - use static_cast for type-safe access
+// Flag access macros
 #define FLAG_C static_cast<uint8_t>(cpu_flags::CARRY)
 #define FLAG_Z static_cast<uint8_t>(cpu_flags::ZERO)
 #define FLAG_I static_cast<uint8_t>(cpu_flags::INTERRUPT_DISABLE)
@@ -116,7 +99,7 @@ enum class InterruptType : uint8_t {
   RESET     // Reset interrupt (highest priority)
 };
 
-// Legacy C-style enum compatibility
+// C-style enum aliases
 using interrupt_t = InterruptType;
 inline constexpr auto FAM65XX_INT_NONE = InterruptType::NONE;
 inline constexpr auto FAM65XX_INT_BRK = InterruptType::BRK;
@@ -379,7 +362,7 @@ enum class Operation : uint8_t {
 
 // 8-bit register constants - optimized layout with no gaps for 8-bit CPUs
 // Type-safe enum typedefs for register access
-typedef enum : uint8_t {
+enum reg8_t : uint8_t {
 // Core registers (0-13) - used by both 8-bit and 16-bit CPUs
 // 16-bit aligned register pairs (endian-aware) for memory addresses
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
@@ -452,10 +435,10 @@ typedef enum : uint8_t {
   // Memory operation pseudo-register - forces 8-bit behavior in template
   // functions
   REG_MEM = REG_DL // Alias to DL - not A, X, or Y, so always 8-bit
-} reg8_t;
+};
 
 // 16-bit register constants - these work for both narrow and wide CPUs
-typedef enum : uint8_t {
+enum reg16_t : uint8_t {
   REG_SP = REG_SPL / 2, // Stack pointer (16-bit)
   REG_AB = REG_ABL / 2, // Address Bus (16-bit)
   REG_PC = REG_PCL / 2, // Program Counter (16-bit)
@@ -472,7 +455,7 @@ typedef enum : uint8_t {
   // Compatibility mapping
   REG_C = REG_A_16, // Map legacy C register to REG_A_16 for compatibility
   REG_D = REG_D_16  // Direct Page register (16-bit, 65C816 only)
-} reg16_t;
+};
 
 // Addr enum class for template parameters
 enum class Addr : uint8_t {

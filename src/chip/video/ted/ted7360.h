@@ -56,8 +56,8 @@
  *   $FF3F        Write = switch to RAM mode
  */
 
-#include <stdint.h>
-#include <stdbool.h>
+#include <cstdint>
+
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
 
@@ -258,13 +258,13 @@ typedef uint8_t (*ted_mem_read_fn)(void* user_data, uint16_t address);
 // DESCRIPTOR
 // ============================================================================
 
-typedef struct {
+struct ted7360_desc_t {
     bool is_pal;                        // true = PAL, false = NTSC
     ted_keyboard_scan_fn keyboard_scan; // Keyboard scanning callback
     void* keyboard_user_data;           // Context for keyboard callback
     ted_mem_read_fn mem_read;           // Memory read callback for TED's own accesses
     void* mem_read_user_data;           // Context for memory read
-} ted7360_desc_t;
+};
 
 // ============================================================================
 // UNIT STRUCTURES (following VIC-II unit-based decomposition)

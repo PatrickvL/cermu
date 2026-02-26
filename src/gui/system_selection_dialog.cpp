@@ -3,7 +3,7 @@
 #include "../core/system_registry.h"
 #include "../core/formats/format_handler.h"
 #include "imgui.h"
-#include <stdio.h>
+#include <cstdio>
 #include <cstring>
 #include <cctype>
 

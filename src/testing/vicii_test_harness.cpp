@@ -53,8 +53,6 @@ void patch_kernal_for_test(C64System* c64) {
                rom[JMP_OFFSET], rom[JMP_OFFSET + 1], rom[JMP_OFFSET + 2]);
     }
 }
-
-
 // ============================================================================
 // 2. EMBEDDED 6510 TEST PROGRAM
 // ============================================================================
@@ -102,8 +100,6 @@ struct asm6510_harness : asm6510 {
         lda_imm(expected);  sta_zp(0x0C);
     }
 };
-
-
 // Build the 6510 program
 static size_t build_test_program(uint8_t* buffer, size_t buffer_size) {
     asm6510_harness a(buffer, buffer_size, TEST_LOAD_ADDR);
@@ -404,8 +400,6 @@ static size_t build_test_program(uint8_t* buffer, size_t buffer_size) {
 
     return a.pos;
 }
-
-
 // ============================================================================
 // 3. INJECT TEST PROGRAM INTO RAM
 // ============================================================================
@@ -429,8 +423,6 @@ void inject_test_program(C64System* c64) {
 
     printf("VICII-TEST: Injected %zu bytes at $%04X\n", size, TEST_LOAD_ADDR);
 }
-
-
 // ============================================================================
 // 4. HARNESS — init, poll, read results, summary
 // ============================================================================

@@ -3,16 +3,16 @@
  */
 
 #include "format_handler.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <ctype.h>
 
 // ============================================================================
 // Program Data
 // ============================================================================
 
-void program_data_s::release() {
+void program_data_t::release() {
     if (data) {
         free(data);
         data = NULL;
@@ -35,7 +35,7 @@ const char* format_load_type_name(format_load_type_t type) {
     }
 }
 
-void format_load_result_s::release() {
+void format_load_result_t::release() {
     program.release();
     for (int i = 0; i < file_count; i++)
         files[i].release();

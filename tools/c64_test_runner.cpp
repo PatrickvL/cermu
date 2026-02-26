@@ -162,19 +162,17 @@ int main(int argc, char** argv) {
     } else {
         // Use single system configuration (legacy mode for compatibility)
         printf("\nLegacy mode: Initializing single C64 system...\n");
-        c64_config_t config = {};
-        config.init_defaults();
         
         // Default to PAL, adjust based on hardware filter
-        config.vicii_standard = VIC_PAL;
+        int region_index = 0;  // PAL
         if (static_cast<int>(filter.hardware & c64_test::HardwareConfig::VICII_NTSC)) {
-            config.vicii_standard = VIC_NTSC;
+            region_index = 1;  // NTSC
         }
         
-        config.test_mode = C64_TEST_MODE_NORMAL;
-        
         C64System* c64 = new C64System();
-        c64->get_c64_config() = config;
+        auto cfg = c64->get_configuration();
+        cfg.region_option_index = region_index;
+        c64->set_configuration(cfg);
         if (!c64->initialize()) {
             printf("ERROR: Failed to create C64 system\n");
             return 1;

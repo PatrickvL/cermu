@@ -11,11 +11,6 @@
 
 #include "format_handler.h"
 #include "prg_format.h"   /* commodore_prg_t used as extraction target */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // ============================================================================
 // D64 Constants
 // ============================================================================
@@ -48,28 +43,28 @@ extern "C" {
 // ============================================================================
 
 /** D64 directory entry */
-typedef struct {
+struct commodore_d64_entry_t {
     char     filename[17];          /**< PETSCII filename, null-terminated */
     uint8_t  file_type;             /**< Raw file type byte (includes closed/locked flags) */
     uint8_t  start_track;           /**< First track of file data */
     uint8_t  start_sector;          /**< First sector of file data */
     uint16_t size_blocks;           /**< File size in 254-byte blocks */
-} commodore_d64_entry_t;
+};
 
 /** D64 directory listing */
-typedef struct {
+struct commodore_d64_directory_t {
     commodore_d64_entry_t entries[D64_MAX_DIR_ENTRIES];
     int count;                      /**< Number of entries found */
     char disk_name[17];             /**< Disk name from BAM, null-terminated */
     char disk_id[6];                /**< Disk ID + DOS type, null-terminated */
-} commodore_d64_directory_t;
+};
 
 /**
  * D64 disk image handle.
  * Usable both for one-shot file extraction and as an ongoing volume
  * (e.g., attached to a 1541 drive emulation).
  */
-typedef struct commodore_d64_s {
+struct commodore_d64_t {
     uint8_t* data;                  /**< Raw disk image data */
     size_t   data_size;             /**< Size of disk image */
     int      num_tracks;            /**< 35 or 40 */
@@ -93,7 +88,7 @@ typedef struct commodore_d64_s {
 
     /** Close a D64 disk image and free resources. */
     void close();
-} commodore_d64_t;
+};
 
 // ============================================================================
 // Low-Level Sector Access (for future 1541 drive emulation)
@@ -111,6 +106,3 @@ int d64_max_sector(int track);
 
 extern const format_descriptor_t D64_FORMAT_DESCRIPTOR;
 
-#ifdef __cplusplus
-}
-#endif

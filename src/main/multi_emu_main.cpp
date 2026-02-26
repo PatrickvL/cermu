@@ -3,7 +3,7 @@
 #include "../gui/system_gui.h"
 #include "../testing/vicii_test_harness.h"
 #include "../testing/vicii_pixel_tests.h"
-#include <stdio.h>
+#include <cstdio>
 #include <memory>
 #include <cstring>
 

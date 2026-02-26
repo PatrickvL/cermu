@@ -1,11 +1,9 @@
 #pragma once
 
-#include <stddef.h>
-#include <stdint.h>
-#include <stdbool.h>
-
+#include <cstddef>
+#include <cstdint>
 // Forward declaration for bus structure
-typedef struct c64_bus_s c64_bus_t;
+struct c64_bus_t;
 
 // ============================================================================
 // C64 CHIP MANAGEMENT - Basic CHIP Definitions and Management
@@ -16,7 +14,7 @@ typedef struct c64_bus_s c64_bus_t;
 // =============================
 
 // CHIP IDs strategically numbered for branchless unified memory buffer address calculation
-typedef enum {
+enum chip_id_t {
     // Strategic numbering with 4KB step size: offset = chip << 12 (chip * 4096)
     // 8KB regions take 2 steps each: ROML(0), ROMH(2), KERNAL(4), BASIC(6), CHARROM(7), RAM(9)
     // Buffer: ROML(0x0000) + ROMH(0x2000) + KERNAL(0x4000) + BASIC(0x6000) + CHARROM(0x7000) + RAM(0x9000)
@@ -50,7 +48,7 @@ typedef enum {
     // Non-offset values (not used in address calculation)
     CHIP_UNMAPPED     = 10,  // Unmapped regions (not in unified buffer)
     CHIP_IO           = 11,  // I/O region ($D000-$DFFF) - special case, not in unified buffer
-} chip_id_t;
+};
 
 // Array of valid CHIP IDs for iteration (due to irregular numbering)
 static const uint8_t VALID_CHIP_IDS[] = {
@@ -64,11 +62,11 @@ static const size_t VALID_CHIP_COUNT = sizeof(VALID_CHIP_IDS) / sizeof(VALID_CHI
 // =============================
 
 // CHIP descriptor struct for tooling
-typedef struct {
+struct chip_description_t {
     uint16_t base;
     size_t size;
     const char* label;
-} chip_description_t;
+};
 
 // =============================
 // Basic CHIP Function Declarations

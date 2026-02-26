@@ -6,8 +6,4 @@
  */
 
 #pragma once
-
-
 #include "pin_types.h"
-
-

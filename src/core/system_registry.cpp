@@ -3,7 +3,7 @@
 #include <cstring>
 #include <algorithm>
 #include <fstream>
-#include <stdio.h>
+#include <cstdio>
 
 // ============================================================================
 // SystemRegistry Implementation

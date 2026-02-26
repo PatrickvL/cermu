@@ -1,8 +1,7 @@
-#ifndef KEYBOARD_MAPPER_H
-#define KEYBOARD_MAPPER_H
+#pragma once
 
-#include <stdint.h>
-#include <stdbool.h>
+#include <cstdint>
+
 #include <SDL_keycode.h>
 #include <unordered_map>
 #include <vector>
@@ -284,5 +283,3 @@ KeyboardMapper* create_vic20_keyboard_mapper(commodore_keyboard_t* keyboard);
 
 // Create a mapper configured for the C16/Plus4 keyboard
 KeyboardMapper* create_c16_keyboard_mapper(commodore_keyboard_t* keyboard);
-
-#endif // KEYBOARD_MAPPER_H

@@ -15,7 +15,7 @@
 #include "../../gui/chip_visualization.h"
 #include "../../gui/global_chip_style.h"
 #endif
-#include <stdio.h>
+#include <cstdio>
 
 // ============================================================================
 // RICOH 2C02 PPU LAYOUT (40-pin DIP)

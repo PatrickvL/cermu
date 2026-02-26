@@ -2,16 +2,16 @@
 
 #include "../../core/chip.h"
 //#include "../../core/bus_cycle_interface.h"
-#include <stdint.h>
+#include <cstdint>
 #include "../../core/system_lines.h" // For bus_state_t
 #include "../../core/ioport.h"       // For io_port<Mask>
-#include <stdint.h>
-#include <stdbool.h>
-#include <stdbool.h>
+#include <cstdint>
+
+
 #include "../../utils/shift_register.hpp" // For delay line implementation
 
 // CIA MOS 6526 DIP has 40 pins; Pinout :
-typedef enum {
+enum mos6526_pin_t {
     PIN_VSS = 1, PIN_CNT = 40,
     PIN_PA0 = 2, PIN_SP = 39,
     PIN_PA1 = 3, PIN_RS0 = 38,
@@ -32,7 +32,7 @@ typedef enum {
     PIN_PC = 18, PIN_CS = 23,
     PIN_TOD = 19, PIN_R_W = 22,
     PIN_VCC = 20, PIN_IRQ = 21
-} mos6526_pin_t;
+};
 
 // Register dimensions
 #define CIA_REGS_BITS 4
@@ -53,8 +53,8 @@ typedef enum {
 #define SHIFT_OFFSET 28 // Delta on SDR so Serial Data Shift register resides at 28
 #define IDDRB_OFFSET 29 // Internal Data Direction of Port B (a version of DDRB which includes the PBON mask)
 
-typedef struct mos6526_s : public ChipBase {
-    mos6526_s() : ChipBase(ChipInfo{"MOS6526", "MOS Technology"}) {}
+struct mos6526_t : public ChipBase {
+    mos6526_t() : ChipBase(ChipInfo{"MOS6526", "MOS Technology"}) {}
 
     uint8_t configured_interrupt_bit = 0; // BUS_IRQ_BIT for CIA1, BUS_NMI_BIT for CIA2
     
@@ -180,7 +180,7 @@ private:
     void increase_tod_and_check_alarm();
     void write_serial_data_register(uint8_t v);
     void process_sdr_pipeline();  // Process SDR delay pipeline each tick
-} mos6526_t;
+};
 
 namespace MOS6526 {
     // Zero-storage pipe type-tags for delay line access (compile-time only)

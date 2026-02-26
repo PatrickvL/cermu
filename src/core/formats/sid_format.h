@@ -46,36 +46,31 @@
  */
 
 #include "format_handler.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // ============================================================================
 // SID Header — Parsed representation
 // ============================================================================
 
 /** SID file type: PSID (clean init/play) or RSID (needs full C64 environment) */
-typedef enum {
+enum sid_type_t {
     SID_TYPE_PSID = 0,   /**< PlaySID compatible — can use simple JSR init/play */
     SID_TYPE_RSID = 1    /**< RealSID — needs full KERNAL, CIA, VIC-II environment */
-} sid_type_t;
+};
 
 /** Video standard hint from v2+ flags */
-typedef enum {
+enum sid_video_t {
     SID_VIDEO_UNKNOWN = 0,
     SID_VIDEO_PAL     = 1,
     SID_VIDEO_NTSC    = 2,
     SID_VIDEO_BOTH    = 3
-} sid_video_t;
+};
 
 /** SID chip model hint from v2+ flags */
-typedef enum {
+enum sid_model_t {
     SID_MODEL_UNKNOWN = 0,
     SID_MODEL_6581    = 1,
     SID_MODEL_8580    = 2,
     SID_MODEL_BOTH    = 3
-} sid_model_t;
+};
 
 /**
  * Parsed SID file header.
@@ -84,7 +79,7 @@ typedef enum {
  * This struct is stored in the format_load_result_t metadata[] blob so the
  * C64System can extract it without SID-specific coupling in the load chain.
  */
-typedef struct {
+struct sid_header_t {
     sid_type_t  type;           /**< PSID or RSID */
     uint16_t    version;        /**< Header version (1..4) */
     uint16_t    data_offset;    /**< Byte offset to C64 payload in original file */
@@ -115,7 +110,7 @@ typedef struct {
     uint8_t     page_length;    /**< Driver relocation length */
     uint8_t     second_sid_addr; /**< Second SID I/O address (v3+) */
     uint8_t     third_sid_addr;  /**< Third SID I/O address (v4+) */
-} sid_header_t;
+};
 
 // ============================================================================
 // SID Format API
@@ -145,10 +140,10 @@ const sid_header_t* sid_get_metadata(const format_load_result_t* result);
  *  This is NOT part of the SID file — it's our internal tag for the metadata blob. */
 #define SID_METADATA_TAG  0x53494448  /* "SIDH" in big-endian */
 
-typedef struct {
+struct sid_metadata_blob_t {
     uint32_t    tag;        /**< Must be SID_METADATA_TAG */
     sid_header_t header;    /**< Parsed SID header */
-} sid_metadata_blob_t;
+};
 
 // ============================================================================
 // Format Descriptor
@@ -156,6 +151,3 @@ typedef struct {
 
 extern const format_descriptor_t SID_FORMAT_DESCRIPTOR;
 
-#ifdef __cplusplus
-}
-#endif

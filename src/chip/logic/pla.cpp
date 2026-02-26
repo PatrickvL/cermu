@@ -2,7 +2,7 @@
 
 #include "pla.h"
 #ifdef DEBUG_PLA_BANKING
-#include <stdio.h>
+#include <cstdio>
 #endif
 
 // Include GUI implementation
@@ -13,8 +13,8 @@
 // ============================================================================
 // PLA LOGIC IMPLEMENTATION
 // ============================================================================
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
 
 // Commodore PLA MOS 906114-01 implementation
 // Based on detailed analysis from C64 wiki and dissection documents

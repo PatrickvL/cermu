@@ -26,14 +26,9 @@
 #include "format_handler.h"
 #include "../analysis/basic_parser.h"
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <stddef.h>
+#include <cstdint>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
+#include <cstddef>
 // ============================================================================
 // Maximum constants
 // ============================================================================
@@ -91,7 +86,7 @@ typedef void (*commodore_inject_keys_fn)(void* ctx, const char* str);
  * Populate one of these with the system's callbacks and parameters,
  * then pass it to commodore_apply_load_result().
  */
-typedef struct {
+struct commodore_load_context_t {
     /* --- Identity --------------------------------------------------------- */
     const char* system_name;        /**< Short name for printf: "C64", "VIC20", "C16" */
 
@@ -126,7 +121,7 @@ typedef struct {
      * VIC-20 uses this; C64 and C16 do not.
      */
     bool try_sys_from_filename;
-} commodore_load_context_t;
+};
 
 // ============================================================================
 // Main API
@@ -151,6 +146,3 @@ bool commodore_apply_load_result(const commodore_load_context_t* ctx,
                                  const format_load_result_t* result,
                                  const char* filepath);
 
-#ifdef __cplusplus
-}
-#endif

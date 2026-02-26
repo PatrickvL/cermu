@@ -1,7 +1,7 @@
 #pragma once
 
-#include <stdint.h>
-#include <stdbool.h>
+#include <cstdint>
+
 #include <cstdint>
 #include "../../core/chip.h"
 #include "../../core/bus_cycle_interface.h"
@@ -9,8 +9,8 @@
 #include "../../core/ioport.h"       // For io_port<Mask> and io_port_state
 
 // MOS 6522 VIA (Versatile Interface Adapter) chip structure
-typedef struct mos6522_s : public ChipBase {
-    mos6522_s() : ChipBase(ChipInfo{"MOS6522", "MOS Technology"}) {}
+struct mos6522_t : public ChipBase {
+    mos6522_t() : ChipBase(ChipInfo{"MOS6522", "MOS Technology"}) {}
 
     void* bus = nullptr;
 
@@ -82,7 +82,7 @@ typedef struct mos6522_s : public ChipBase {
     // Port read callback registration (used for keyboard matrix scanning, joystick, etc.)
     void set_port_a_read_callback(uint8_t (*callback)(void*, uint8_t), void* context);
     void set_port_b_read_callback(uint8_t (*callback)(void*, uint8_t), void* context);
-} mos6522_t;
+};
 
 // Register addresses
 #define MOS6522_PORTB  0x00

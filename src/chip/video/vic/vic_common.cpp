@@ -1,7 +1,7 @@
 #include "vic_common.h"
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
+#include <cstdlib>
+#include <cstring>
+#include <cstdio>
 #include <cassert>
 
 // VIC color palette (16 colors) - Hardware accurate VIC-20 colors
@@ -28,12 +28,12 @@ static const uint32_t vic_palette[16] = {
 };
 
 // Get default VIC palette
-uint32_t* vic_base_s::get_default_palette() {
+uint32_t* vic_base_t::get_default_palette() {
     return (uint32_t*)vic_palette;
 }
 
 // Set memory callbacks for VIC
-void vic_base_s::set_memory_callbacks(vic_mem_read_fn_t mem_read_fn, void* mem_ud,
+void vic_base_t::set_memory_callbacks(vic_mem_read_fn_t mem_read_fn, void* mem_ud,
                                      vic_mem_read_fn_t color_read_fn, void* color_ud) {
     assert(mem_read_fn && "VIC mem_read callback must not be null");
     assert(color_read_fn && "VIC color_read callback must not be null");
@@ -53,7 +53,7 @@ static const uint32_t vic_voice_divisor[VIC_NUM_VOICES] = {
 };
 
 // System reset function
-void vic_base_s::reset() {
+void vic_base_t::reset() {
     // Reset registers to default values matching C# initialization
     memset(registers, 0, sizeof(registers));
     raster_counter = 0;
@@ -119,14 +119,14 @@ void vic_base_s::reset() {
 }
 
 // Set framebuffer function
-void vic_base_s::set_framebuffer(uint32_t* fb, int width, int height) {
+void vic_base_t::set_framebuffer(uint32_t* fb, int width, int height) {
     framebuffer = fb;
     framebuffer_width = width;
     framebuffer_height = height;
 }
 
 // Register read function
-bus_state_t vic_base_s::registers_read(bus_state_t bus_state) {
+bus_state_t vic_base_t::registers_read(bus_state_t bus_state) {
     uint8_t r = BUS_GET_ADDR(bus_state) & 0x0F;
 
     uint8_t data;
@@ -147,7 +147,7 @@ bus_state_t vic_base_s::registers_read(bus_state_t bus_state) {
 }
 
 // Register write function
-bus_state_t vic_base_s::registers_write(bus_state_t bus_state) {
+bus_state_t vic_base_t::registers_write(bus_state_t bus_state) {
     uint8_t r = BUS_GET_ADDR(bus_state) & 0x0F;
     registers[r] = BUS_GET_DATA(bus_state);
     decode_register(r);
@@ -155,7 +155,7 @@ bus_state_t vic_base_s::registers_write(bus_state_t bus_state) {
 }
 
 // Decode a single register's cached fields after a write
-void vic_base_s::decode_register(uint8_t reg_index) {
+void vic_base_t::decode_register(uint8_t reg_index) {
     switch (reg_index) {
         case VIC_REG_CONTROL1:
             cached_screen_origin_x = registers[VIC_REG_CONTROL1] & VIC_C1_SCREEN_ORIGIN_X_MASK;
@@ -194,7 +194,7 @@ void vic_base_s::decode_register(uint8_t reg_index) {
 }
 
 // Decode all registers (called after reset or bulk register load)
-void vic_base_s::decode_all_registers() {
+void vic_base_t::decode_all_registers() {
     decode_register(VIC_REG_CONTROL1);
     decode_register(VIC_REG_CONTROL2);
     decode_register(VIC_REG_VIDEO_MATRIX);
@@ -205,14 +205,14 @@ void vic_base_s::decode_all_registers() {
 }
 
 // Emit a single pixel to the line buffer
-void vic_base_s::emit_pixel(uint8_t color_index) {
+void vic_base_t::emit_pixel(uint8_t color_index) {
     if (pixel_line_index < 284) {  // Max line width
         pixel_line_buffer[pixel_line_index++] = vic_palette[color_index & 0x0F];
     }
 }
 
 // Flush accumulated pixel line to framebuffer
-void vic_base_s::flush_pixel_line(int raster_line) {
+void vic_base_t::flush_pixel_line(int raster_line) {
     if (!framebuffer) return;
     if (raster_line < 0 || raster_line >= framebuffer_height) return;
 
@@ -276,7 +276,7 @@ static const uint16_t vic_mix_table[5][16] = {
     {   0,   31,  109,  226,  380,  567,  787, 1039, 1321, 1634, 1974, 2345, 2742, 3165, 3618, 4095 }
 };
 
-void vic_base_s::audio_reset(uint32_t chip_clock_hz, uint32_t sample_rate_hz) {
+void vic_base_t::audio_reset(uint32_t chip_clock_hz, uint32_t sample_rate_hz) {
     if (sample_rate_hz == 0) return;
 
     // Compute fixed-point (16.16) cycles-per-sample ratio
@@ -320,7 +320,7 @@ void vic_base_s::audio_reset(uint32_t chip_clock_hz, uint32_t sample_rate_hz) {
 }
 
 // Called once per chip cycle from tick()
-void vic_base_s::audio_tick() {
+void vic_base_t::audio_tick() {
     // --- Step each voice's prescaler; on expiry clock the voice counter ---
     for (int v = 0; v < VIC_NUM_VOICES; v++) {
         if (--audio.prescaler[v] == 0) {
@@ -440,11 +440,11 @@ void vic_base_s::audio_tick() {
     }
 }
 
-uint32_t vic_base_s::audio_available() const {
+uint32_t vic_base_t::audio_available() const {
     return (audio.write_pos + VIC_AUDIO_BUFFER_SIZE - audio.read_pos) & VIC_AUDIO_BUFFER_MASK;
 }
 
-uint32_t vic_base_s::audio_read(uint8_t* dest, uint32_t max_samples) {
+uint32_t vic_base_t::audio_read(uint8_t* dest, uint32_t max_samples) {
     if (!dest || max_samples == 0) return 0;
     uint32_t count = 0;
     while (count < max_samples && audio.read_pos != audio.write_pos) {
@@ -453,10 +453,8 @@ uint32_t vic_base_s::audio_read(uint8_t* dest, uint32_t max_samples) {
     }
     return count;
 }
-
-
 // Main tick function (main video generation) - based on C# ClockCycle()
-bus_state_t vic_base_s::tick(bus_state_t bus_state) {
+bus_state_t vic_base_t::tick(bus_state_t bus_state) {
     // Advance audio oscillators / noise LFSR and downsample
     if (audio.cycles_per_sample_fp != 0) {
         audio_tick();

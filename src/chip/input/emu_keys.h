@@ -1,7 +1,6 @@
-#ifndef EMU_KEYS_H
-#define EMU_KEYS_H
+#pragma once
 
-#include <stdint.h>
+#include <cstdint>
 
 // ============================================================================
 // Generic Emulator Key Codes — IO-Library-Independent Key Representation
@@ -264,4 +263,3 @@ static inline bool emu_key_is_marker(emu_key_t key) {
     return key >= EMUKEY_SAME;
 }
 
-#endif // EMU_KEYS_H

@@ -51,8 +51,6 @@ template <const CPUTraits &Traits> const char *get_processor_name() {
            Traits.get_vendor(), Traits.get_chip_id());
   return processor_name_buffer;
 }
-
-
 // Helper function to format processor flags (unchanged from original)
 static void format_processor_flags(uint8_t flags, char *buffer,
                                    size_t buffer_size) {

@@ -1,9 +1,7 @@
 #pragma once
 
-#include <stdint.h>
-#include <stddef.h>
-#include <stdbool.h>
-
+#include <cstdint>
+#include <cstddef>
 /**
  * Load ROM file data into memory buffer.
  * 
@@ -50,5 +48,3 @@ bool rom_loader_load_to_buffer(const char* file_paths[], size_t expected_size,
  * @return true if checksum matches, false otherwise
  */
 bool rom_loader_verify_md5(const uint8_t* buffer, size_t size, const char* expected_md5);
-
-

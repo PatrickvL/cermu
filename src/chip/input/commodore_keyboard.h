@@ -1,8 +1,7 @@
-#ifndef COMMODORE_KEYBOARD_H
-#define COMMODORE_KEYBOARD_H
+#pragma once
 
-#include <stdint.h>
-#include <stdbool.h>
+#include <cstdint>
+
 #include <unordered_map>
 
 #include "emu_keys.h"
@@ -155,10 +154,10 @@ static inline char petscii_to_host_char(petscii_t p) {
 //   1-127   = PETSCII printable character (mostly ASCII-compatible)
 //   128-255 = PETSCII extended characters (graphics, colour codes, etc.)
 
-typedef struct {
+struct keyboard_decode_table_t {
     uint8_t modifiers;               // Modifier bitmask (KEYMOD_SHIFT, etc.)
     const petscii_t* petscii;        // PETSCII codes, rows × cols entries
-} keyboard_decode_table_t;
+};
 
 // ============================================================================
 // Matrix dimension limits
@@ -172,7 +171,7 @@ typedef struct {
 
 // Identifies which Commodore keyboard layout is active.
 // Each model has a unique matrix mapping even if the dimensions match.
-typedef enum {
+enum keyboard_model_t {
     KEYBOARD_MODEL_UNKNOWN = 0,
     KEYBOARD_MODEL_C64,         //  8×8, CIA 6526 — the "standard" home computer keyboard
     KEYBOARD_MODEL_VIC20,       //  8×8, VIA 6522 — simplified PET-derived layout
@@ -181,24 +180,24 @@ typedef enum {
     KEYBOARD_MODEL_PET,         // 10×8, PIA/VIA  — business/chiclet keyboard variants
     KEYBOARD_MODEL_CBM_II,      // 10×8, TPI 6525 — B-series (B128, B256, 710, 720)
     KEYBOARD_MODEL_COUNT
-} keyboard_model_t;
+};
 
 // Identifies which I/O chip handles the keyboard matrix scanning.
 // Determines how the system layer wires up port read callbacks.
-typedef enum {
+enum keyboard_scan_chip_t {
     KEYBOARD_SCAN_UNKNOWN = 0,
     KEYBOARD_SCAN_CIA,    // MOS 6526 CIA — C64, C128 (Port A = col select, Port B = row read)
     KEYBOARD_SCAN_VIA,    // MOS 6522 VIA — VIC-20 (Port B = col select, Port A = row read)
     KEYBOARD_SCAN_TED,    // MOS 7360 TED — Plus/4, C16 (integrated scan, no separate chip)
     KEYBOARD_SCAN_PIA,    // MOS 6520 PIA — early PET models
     KEYBOARD_SCAN_TPI,    // MOS 6525 TPI — CBM-II series
-} keyboard_scan_chip_t;
+};
 
 // ============================================================================
 // Matrix configuration — provided by system layer at creation time
 // ============================================================================
 
-typedef struct {
+struct keyboard_matrix_config_t {
     keyboard_model_t model;
     keyboard_scan_chip_t scan_chip;
     uint8_t rows;
@@ -226,16 +225,16 @@ typedef struct {
     //   [3] = KEYMOD_CTRL  (control key chars)    — optional
     int num_decode_tables;
     const keyboard_decode_table_t* decode_tables;
-} keyboard_matrix_config_t;
+};
 
 // ============================================================================
 // Key position info — stored in the optimised lookup
 // ============================================================================
 
-typedef struct {
+struct key_position_t {
     uint8_t row;
     uint8_t col;
-} key_position_t;
+};
 
 // ============================================================================
 // Commodore keyboard state
@@ -314,4 +313,3 @@ struct commodore_keyboard_t {
 
 };
 
-#endif // COMMODORE_KEYBOARD_H

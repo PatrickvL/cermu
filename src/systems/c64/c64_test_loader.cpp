@@ -1,8 +1,8 @@
 #include "c64_test_loader.h"
 #include "../../chip/memory/memory_chip.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <ctype.h>
 
 // Helper function to read 16-bit little-endian value

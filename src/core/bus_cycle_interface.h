@@ -1,15 +1,13 @@
 #pragma once
 
-#include <stdint.h>
-#include <stdbool.h>
-
+#include <cstdint>
 /**
  * Generic bus and cycle operations interface for system components.
  * Provides unified access to memory operations and system cycle advancement.
  * This allows components (especially CPUs) to be decoupled from specific
  * bus implementations while maintaining cycle-accurate timing.
  */
-typedef struct {
+struct bus_cycle_ops_t {
     /**
      * User-provided context pointer passed to all callback functions.
      * Can point to the bus implementation, system state, or any other data.
@@ -36,6 +34,4 @@ typedef struct {
      */
     void (*bus_write_cycle)(void* context, uint16_t address, uint8_t value);
 
-} bus_cycle_ops_t;
-
-
+};

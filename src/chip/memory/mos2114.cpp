@@ -16,7 +16,7 @@ bool MOS2114::has_settings_content() const { return true; }
 bool MOS2114::has_layout_content()   const { return true; }
 
 // ============================================================================
-// Bus interface — static methods usable as C function pointers
+// Bus interface — static methods for I/O handler table
 // ============================================================================
 bus_state_t MOS2114::bus_read(void* context, bus_state_t bus_state) {
     auto* self = static_cast<MOS2114*>(context);
@@ -57,24 +57,3 @@ bus_state_t MOS2114::bus_write(void* context, bus_state_t bus_state) {
     return bus_state;
 }
 
-// ============================================================================
-// Legacy free-function bus wrappers (c64_bus.cpp I/O handler table)
-// ============================================================================
-bus_state_t mos2114_read(void* context, bus_state_t bus_state) {
-    return MOS2114::bus_read(context, bus_state);
-}
-
-bus_state_t mos2114_write(void* context, bus_state_t bus_state) {
-    return MOS2114::bus_write(context, bus_state);
-}
-
-// ============================================================================
-// Legacy lifecycle helpers
-// ============================================================================
-MOS2114* mos2114_create() {
-    return new MOS2114();
-}
-
-void mos2114_destroy(MOS2114* chip) {
-    delete chip;
-}

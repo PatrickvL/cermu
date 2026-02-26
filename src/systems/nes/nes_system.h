@@ -17,8 +17,8 @@
  * - Region support (NTSC/PAL)
  */
 
-#include <stdint.h>
-#include <stdbool.h>
+#include <cstdint>
+
 #include <memory>
 #include <vector>
 #include <string>

@@ -3,9 +3,9 @@
 #include "../../core/cermu.h"
 #include "../../chip/io/mos6522.h"
 #include "../../chip/video/vic/vic_common.h"
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
+#include <cstdlib>
+#include <cstring>
+#include <cstdio>
 
 // ============================================================================
 // VIC-20 Memory Banking System - Optimized Encoded Bank Type Implementation

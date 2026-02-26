@@ -10,12 +10,7 @@
  * Format handlers store raw byte data; this module interprets it.
  */
 
-#include <stdint.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
+#include <cstdint>
 /**
  * Trim trailing PETSCII padding ($A0 shifted-space and regular spaces)
  * from a fixed-width string buffer.  Writes '\0' over padding bytes.
@@ -31,6 +26,3 @@ void petscii_trim_padding(char* str, int maxlen);
  */
 char petscii_to_ascii(uint8_t petscii);
 
-#ifdef __cplusplus
-}
-#endif

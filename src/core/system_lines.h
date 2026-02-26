@@ -1,7 +1,5 @@
 #pragma once
-#include <stdint.h>
-#include <stdbool.h>
-
+#include <cstdint>
 /*
 Unified 64-bit bus state layout (compatible with new C++ core pins)
 Layout:

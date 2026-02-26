@@ -1,9 +1,9 @@
 #include "path_discovery.h"
 #include "../cermu.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdbool.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+
 #include <sys/stat.h>
 
 CERMU_MSVC_WARNING_PUSH

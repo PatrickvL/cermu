@@ -13,11 +13,6 @@
  */
 
 #include "format_handler.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // ============================================================================
 // Backward-Compatible Alias
 // ============================================================================
@@ -62,6 +57,3 @@ bool commodore_bin_load(const char* filepath, uint8_t** out_data, size_t* out_si
 extern const format_descriptor_t PRG_FORMAT_DESCRIPTOR;
 extern const format_descriptor_t BIN_FORMAT_DESCRIPTOR;
 
-#ifdef __cplusplus
-}
-#endif

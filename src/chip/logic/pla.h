@@ -1,7 +1,7 @@
 #pragma once
 
-#include <stdint.h>
-#include <stdbool.h>
+#include <cstdint>
+
 #include "../../core/system_lines.h"
 
 // Commodore PLA MOS 906114-01 REV3 8411
@@ -11,7 +11,7 @@
 // PLA MOS 906114-01 DIP has 28 pins; Pinout :
 
 // Input pins structure
-typedef struct {
+struct pla_inputs_t {
     // Left hand side, top>down pins:
     // Not needed:      pin  1/FE : N.C.(FE) - Used for programming field-programmable parts and not connected internally for mask-programmable parts
     bool a13;        // pin  2/I7 : A13 - Address bus high bits
@@ -36,10 +36,10 @@ typedef struct {
     bool ba;         // pin 26/I9 : BA - Bus Available
     bool a12;        // pin 27/I8 : A12 - Address bus high bits
     // Not needed:      pin 28/VCC : Plus5Volt - +5V
-} pla_inputs_t;
+};
 
 // Output pins structure
-typedef struct {
+struct pla_outputs_t {
     // Left hand side, top>down pins:
     bool n_romh;     // pin 10/F7 : #ROMH - ROM High select
     bool n_roml;     // pin 11/F6 : #ROML - ROM Low select  
@@ -57,12 +57,12 @@ typedef struct {
     bool n_kernal;   // pin 16/F2 : #KERNAL - Kernal ROM select
     bool n_basic;    // pin 17/F1 : #BASIC - Basic ROM select
     bool n_casram;   // pin 18/F0 : #CASRAM - RAM CAS select
-} pla_outputs_t;
+};
 
-typedef struct pla_906114_01_s {
+struct pla_906114_01_t {
     pla_inputs_t inputs;
     pla_outputs_t outputs;
-} pla_906114_01_t;
+};
 
 // Function declarations
 pla_906114_01_t* pla_906114_01_create(void);
@@ -90,5 +90,3 @@ void pla_906114_01_tick(pla_906114_01_t* pla, bus_state_t bus_state);
 // Bits: 0=LORAM, 1=HIRAM, 2=CHAREN, 3=EXROM, 4=GAME.
 // Uses positive logic: bit set = feature enabled = PLA variable true.
 void pla_906114_01_set_banking_mode(pla_906114_01_t* pla, uint8_t mode);
-
-

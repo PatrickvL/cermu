@@ -271,20 +271,14 @@ const SystemDescriptor& C64System::get_descriptor() const {
 // CIA2 Port A change callback — updates VIC-II bank select
 static void cia2_port_a_bank_callback(void* context, uint8_t port_a_value) {
     C64System* c64 = static_cast<C64System*>(context);
-    vicii_s::memory_bank_change(c64->vicii, port_a_value & 0x03);
+    vicii_t::memory_bank_change(c64->vicii, port_a_value & 0x03);
 }
 
 // CPU I/O port banking callback — updates PLA memory mode
-// Static with extern "C" linkage so it can serve as a C function pointer
-// for the mos6510 chip descriptor's bank_change field.
-extern "C" {
 static void cpu_banking_callback(void* context, uint8_t banking_state) {
     C64System* c64 = static_cast<C64System*>(context);
     c64->bus.on_banking_change(banking_state);
 }
-}
-
-
 bool C64System::initialize() {
     if (initialized_) {
         return true;  // Already initialized
@@ -338,7 +332,7 @@ bool C64System::initialize() {
     this->cartridge_romh = new MemoryChip(ChipInfo{"ROM", "Various"}, 8192, MemoryChip::ROM, &bus.state, "ROMH", 0xA000);
     this->charrom = new MemoryChip(ChipInfo{"MOS 901225-01", "Commodore"}, 4096, MemoryChip::ROM, &bus.state, "CHARROM", 0xD000);
     this->vicii = new vicii_t();
-    this->vicii->init(vicii_s::get_default_config(get_vicii_standard() == VIC_PAL), vicii_s::memory_bank_change);
+    this->vicii->init(vicii_t::get_default_config(get_vicii_standard() == VIC_PAL), vicii_t::memory_bank_change);
     if (!this->vicii) { cleanup(); return false; }
     this->sid = new mos6581_t();
     sid->init();
@@ -1968,7 +1962,7 @@ bool C64System::pla_maps_generate() {
         return false;
 
     // Generate all 32 memory modes using PLA
-    bus->generate_all_pla_modes((struct pla_906114_01_s*)pla);
+    bus->generate_all_pla_modes((struct pla_906114_01_t*)pla);
 
     // Clean up PLA instance
     pla_906114_01_destroy(pla);

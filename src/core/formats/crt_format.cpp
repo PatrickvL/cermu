@@ -4,8 +4,8 @@
 
 #include "crt_format.h"
 #include "format_registry.h"
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 
 // ============================================================================
 // CRT Header Reading

@@ -105,8 +105,6 @@ private:
 inline const ChipVisualConfig& GetGlobalChipConfig() {
     return GlobalChipStyleManager::getInstance().getGlobalConfig();
 }
-
-
 // Simple utility functions for chip GUIs - no wrapper needed!
 // ChipVisualization now automatically uses global config:
 //

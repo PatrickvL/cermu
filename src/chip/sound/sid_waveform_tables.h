@@ -15,8 +15,7 @@
 // Combined waveform data from reSID by Dag Lem, sampled from real hardware.
 // Pure waveforms (0, 1, 2, 4) are computed mathematically.
 
-#ifndef SID_WAVEFORM_TABLES_H
-#define SID_WAVEFORM_TABLES_H
+#pragma once
 
 #include <cstdint>
 
@@ -30,4 +29,3 @@ void init_waveform_tables();
 
 } // namespace sid_tables
 
-#endif // SID_WAVEFORM_TABLES_H

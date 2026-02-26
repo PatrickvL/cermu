@@ -1,6 +1,6 @@
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 #include "system_lines.h"
 
 /**
@@ -9,7 +9,7 @@
  * 
  * Uses the system-wide line positions defined in system_lines.h for consistency.
  */
-typedef struct {
+struct control_lines_interface_t {
     /**
      * Callback to get the current state of all control lines.
      * 
@@ -31,6 +31,4 @@ typedef struct {
      * User-provided context pointer passed to all callback functions.
      */
     void* context;
-} control_lines_interface_t;
-
-
+};
