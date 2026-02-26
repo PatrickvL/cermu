@@ -40,41 +40,4 @@ void c64_config_s::init_defaults() {
     // Initialize with no cartridge ROMs by default (saves memory)
     roml_present = false;
     romh_present = false;
-    roml_filename = NULL;
-    romh_filename = NULL;
-    
-    // Default cartridge signals (no cartridge)
-    initial_exrom_state = true;   // EXROM high = no cartridge ROM
-    initial_game_state = true;    // GAME high = no cartridge ROM
-}
-
-bool c64_config_s::validate() const {
-    
-    // Validate test mode configuration
-    if (test_mode == C64_TEST_MODE_PRG_FILE || test_mode == C64_TEST_MODE_BIN_FILE) {
-        // These modes require test binary configuration
-        if (!test_binary_config || !test_binary_config->filename) {
-            return false;
-        }
-    }
-    
-    // If ROM is present, filename must be provided
-    if (roml_present && !roml_filename) {
-        return false;
-    }
-    
-    if (romh_present && !romh_filename) {
-        return false;
-    }
-    
-    // If ROM is not present, filename should be NULL
-    if (!roml_present && roml_filename) {
-        return false;
-    }
-    
-    if (!romh_present && romh_filename) {
-        return false;
-    }
-    
-    return true;
 }

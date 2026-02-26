@@ -87,7 +87,7 @@ struct vicii_test_state_t {
 
 /// Patch the KERNAL ROM in-place to skip the RAMTAS memory test
 /// AND redirect the BASIC cold-start JMP to the test program.
-/// Must be called AFTER c64_bus_init_unified_pointers().
+/// Must be called AFTER bus.init_unified_pointers().
 ///
 /// NOTE: The RAMTAS skip is now delegated to the shared c64_patch_skip_memtest()
 /// in c64_kernal_patches.h.  This function still owns Patch B (BASIC redirect).

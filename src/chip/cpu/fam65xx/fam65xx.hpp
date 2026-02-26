@@ -1452,7 +1452,6 @@ public:
 
     // NOTE: PC must be set externally after reset by reading the reset vector
     // This matches the C64 boot sequence where PC is set directly from KERNAL ROM
-    // See c64.cpp lines 364-368 for the direct PC initialization
     
     // Set up for instruction fetch - CPU ready to execute from the reset vector
     this->transition_to_fetch();

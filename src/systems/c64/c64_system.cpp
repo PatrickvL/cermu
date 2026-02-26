@@ -47,12 +47,7 @@
  * =============
  * This file implements the C64 system as a self-contained EmulatedSystem.
  * All core functions (initialize, shutdown, tick, reset, framebuffer, PLA
- * generation, memory init, CPU banking callback) are implemented directly —
- * no delegations to c64.cpp remain.
- *
- * c64.cpp still exists for the test framework's independent code path
- * (c64_system_create/init/tick/reset/destroy), which will eventually be
- * refactored to use the class interface.
+ * generation, memory init, CPU banking callback) live here.
  *
  * CYCLE COUNTING:
  * ===============
@@ -255,17 +250,6 @@ C64System::C64System()
     
 {
     cycles_per_frame_ = 19705;  // PAL: 985248 Hz / 50 fps
-    // Initialize C64-specific config with defaults
-    c64_config_.vicii_standard = VIC_PAL;
-    c64_config_.rom_config = nullptr;
-    c64_config_.test_mode = C64_TEST_MODE_NORMAL;
-    c64_config_.test_binary_config = nullptr;
-    c64_config_.roml_present = false;
-    c64_config_.romh_present = false;
-    c64_config_.roml_filename = nullptr;
-    c64_config_.romh_filename = nullptr;
-    c64_config_.initial_exrom_state = true;
-    c64_config_.initial_game_state = true;
     
     // Initialize base class members
     hardware_traits_ = c64_descriptor.hardware_traits;
@@ -281,7 +265,7 @@ const SystemDescriptor& C64System::get_descriptor() const {
 }
 
 // ============================================================================
-// Chip creation + callback helpers (absorbed from c64.cpp)
+// Chip creation + callback helpers
 // ============================================================================
 
 // CIA2 Port A change callback — updates VIC-II bank select
@@ -354,14 +338,14 @@ bool C64System::initialize() {
     this->cartridge_romh = new MemoryChip(ChipInfo{"ROM", "Various"}, 8192, MemoryChip::ROM, &bus.state, "ROMH", 0xA000);
     this->charrom = new MemoryChip(ChipInfo{"MOS 901225-01", "Commodore"}, 4096, MemoryChip::ROM, &bus.state, "CHARROM", 0xD000);
     this->vicii = new vicii_t();
-    this->vicii->init(vicii_s::get_default_config(c64_config_.vicii_standard == VIC_PAL), vicii_s::memory_bank_change);
+    this->vicii->init(vicii_s::get_default_config(get_vicii_standard() == VIC_PAL), vicii_s::memory_bank_change);
     if (!this->vicii) { cleanup(); return false; }
     this->sid = new mos6581_t();
     sid->init();
 
     // Configure SID timing to match C64 CPU clock
     {
-        bool is_pal = (c64_config_.vicii_standard == VIC_PAL);
+        bool is_pal = (get_vicii_standard() == VIC_PAL);
         float cpu_clock = is_pal ? 985248.0f : 1022727.0f;
         this->sid->set_cpu_clock(cpu_clock);
         this->sid->set_timing(is_pal);
@@ -422,8 +406,8 @@ bool C64System::initialize() {
 
     // Attach bus and load ROMs from configured paths
     this->bus.system_attach(this);
-    memory_init(&c64_config_);
-    this->bus.init_unified_pointers(this, &c64_config_);
+    memory_init();
+    this->bus.init_unified_pointers(this);
 
     // =========================================================================
     // Wire callbacks and initialize CPU
@@ -463,9 +447,7 @@ bool C64System::initialize() {
     // =========================================================================
 
     // Track the actual VIC-II standard this system was created with.
-    // apply_configuration() can desync c64_config_.vicii_standard from
-    // reality without recreating the chip; this field stays in sync.
-    created_vicii_standard_ = c64_config_.vicii_standard;
+    created_vicii_standard_ = get_vicii_standard();
 
     // Apply SID revision from configuration
     if (this->sid) {
@@ -820,7 +802,6 @@ bool C64System::serial_trap_ready() {
 // system_tick — inline system tick (performance-critical hot loop)
 // ============================================================================
 // This is the core emulation loop — ticks all chips in correct phase order.
-// Inlined from c64_system_tick() to eliminate function call overhead.
 // ============================================================================
 
 void C64System::system_tick() {
@@ -1243,7 +1224,7 @@ void C64System::ensure_compatible_for_sid(const sid_header_t* sid) {
     if (!sid) return;
 
     // ---- Determine needed video standard ----
-    vicii_standard_t needed_standard = c64_config_.vicii_standard;  // default: keep
+    vicii_standard_t needed_standard = get_vicii_standard();  // default: keep
     int needed_region_index = config_.region_option_index;
 
     if (sid->video == SID_VIDEO_PAL) {
@@ -1266,19 +1247,18 @@ void C64System::ensure_compatible_for_sid(const sid_header_t* sid) {
 
     // ---- Apply region change (requires full recreation) ----
     // Compare against the standard the VIC-II was actually created with,
-    // NOT c64_config_.vicii_standard which apply_configuration() may have
-    // updated without recreating the chip.
+    // not the configuration value which may have been updated without
+    // recreating the chip.
     bool region_changed = (needed_standard != created_vicii_standard_);
 
     if (region_changed) {
         printf("C64: SID requires %s — recreating system (was %s)\n",
                needed_standard == VIC_NTSC ? "NTSC" : "PAL",
-               c64_config_.vicii_standard == VIC_NTSC ? "NTSC" : "PAL");
+               get_vicii_standard() == VIC_NTSC ? "NTSC" : "PAL");
 
         shutdown();
 
-        // Update the internal config before recreation
-        c64_config_.vicii_standard = needed_standard;
+        // Update the configuration before recreation
         config_.region_option_index = needed_region_index;
         pending_sid_revision_ = needed_revision;
 
@@ -1573,6 +1553,10 @@ void C64System::register_c64_chips() {
 // Note: get_configuration() now provided by base class (returns config_)
 // Note: set_configuration() now provided by CommodoreSystem base class
 
+vicii_standard_t C64System::get_vicii_standard() const {
+    return (config_.region_option_index == 1) ? VIC_NTSC : VIC_PAL;
+}
+
 bool C64System::apply_configuration() {
     // Apply region settings
     if (config_.region_option_index >= 0 &&
@@ -1581,10 +1565,6 @@ bool C64System::apply_configuration() {
         cycles_per_frame_ = std_cfg.timing.cycles_per_frame;
         hardware_traits_.timing = std_cfg.timing;  // Keep active timing in sync
         cached_target_fps_ = std_cfg.timing.target_fps;  // Keep FPS pacing in sync
-
-        // Map to legacy c64_config_t
-        c64_config_.vicii_standard =
-            (std_cfg.standard == VideoStandard::NTSC) ? VIC_NTSC : VIC_PAL;
     }
 
     // Apply SID revision from custom settings
@@ -1757,9 +1737,9 @@ static const ConnectorDefinition c64_expansion_def = {
 // ============================================================================
 // JOYSTICK-AWARE CIA1 PORT CALLBACKS
 // ============================================================================
-// These replace the default CIA1 port callbacks set by c64_system_create().
-// They first call the original keyboard scanning logic, then AND-in the
-// joystick state from the connector port (wired-AND, matching real hardware).
+// These replace the default CIA1 port callbacks set during initialize().
+// They first call the keyboard scanning logic, then AND-in the joystick
+// state from the connector port (wired-AND, matching real hardware).
 
 // Context structure passed to the CIA1 callback overrides
 struct C64PortCallbackContext {
@@ -1775,7 +1755,7 @@ static uint8_t c64_cia1_port_a_read_with_joystick(void* context, uint8_t port_a_
     auto* ctx = static_cast<C64PortCallbackContext*>(context);
     auto* c64 = ctx->c64;
 
-    // Keyboard reverse scanning (same as original c64.cpp logic)
+    // Keyboard reverse scanning
     uint8_t col_state = 0xFF;
     if (c64 && c64->keyboard && c64->cia1) {
         uint8_t port_b_output = c64->cia1->port_b_value;
@@ -1813,7 +1793,7 @@ static uint8_t c64_cia1_port_b_read_with_joystick(void* context, uint8_t port_b_
     auto* ctx = static_cast<C64PortCallbackContext*>(context);
     auto* c64 = ctx->c64;
 
-    // Keyboard forward scanning (same as original c64.cpp logic)
+    // Keyboard forward scanning
     uint8_t row_state = 0xFF;
     if (c64 && c64->keyboard && c64->cia1) {
         uint8_t port_a_value = c64->cia1->port_a_value;
@@ -1897,7 +1877,7 @@ void C64System::setup_connector_ports() {
     attach_device_to_port(PORT_CONTROL1, "mouse_1351");
     attach_device_to_port(PORT_CONTROL2, "joystick");
 
-    // Wire joystick-aware CIA1 callbacks (replace the defaults set by c64_system_create)
+    // Wire joystick-aware CIA1 callbacks (replace the defaults set during initialize)
     if (initialized_ && this->cia1) {
         s_port_callback_ctx.c64 = this;
         s_port_callback_ctx.system = this;
@@ -1976,7 +1956,7 @@ bool C64System::patch_skip_memtest() {
 }
 
 // ============================================================================
-// PLA Memory Map Generation (absorbed from c64.cpp)
+// PLA Memory Map Generation
 // ============================================================================
 
 bool C64System::pla_maps_generate() {
@@ -2006,127 +1986,23 @@ bool C64System::pla_maps_generate() {
 }
 
 // ============================================================================
-// Memory Initialization (absorbed from c64.cpp)
+// Memory Initialization
 // ============================================================================
 
-// Helper: Initialize RAM with debug test patterns
-static void memory_init_debug_patterns(MemoryChip* ram) {
-    if (!ram || !ram->data()) {
-        printf("ERROR: RAM pointer invalid for debug pattern initialization\n");
-        return;
-    }
-
-    printf("Initializing RAM with debug test patterns...\n");
-
-    // Clear zero page and stack
-    memset(ram->data(), 0, 0x0200);
-
-    // Fill remaining RAM with random bytes for realistic uninitialized memory behavior
-    for (uint32_t addr = 0x0200; addr < 0x10000; addr++) {
-        ram->data()[addr] = (uint8_t)rand();
-    }
-
-    // Add test pattern to video matrix at $0400 in all VIC-II banks
-    for (int bank = 0; bank < 4; bank++) {
-        uint16_t base = bank * 0x4000 + 0x0400;
-        for (int i = 0; i < 1000; i++) {
-            ram->data()[base + i] = (uint8_t)((base + i) & 0xFF);
-        }
-        printf("  Bank %d: Screen memory at $%04X filled with address pattern\n", bank, base);
-    }
-}
-
-// Helper: Initialize Color RAM with debug patterns
-static void colorram_init_debug(MOS2114* colorram) {
-    if (!colorram) {
-        printf("ERROR: Color RAM pointer invalid for debug initialization\n");
-        return;
-    }
-
-    // Randomize all 1024 color RAM locations (4-bit values 0-15)
-    for (int i = 0; i < 1024; i++) {
-        colorram->memory[i] = (uint8_t)(rand() & 0x0F);
-    }
-    printf("Color RAM initialized with random colors\n");
-}
-
-void C64System::memory_init(const c64_config_t* config) {
-    // Use default ROM configuration if none provided
-    const rom_config_t* rom_config = config && config->rom_config ?
-                                      config->rom_config :
-                                      system_config_get_default_roms();
+void C64System::memory_init() {
+    // Use default ROM configuration
+    const rom_config_t* rom_config = system_config_get_default_roms();
 
     // Discover ROM root path for C64 system
     char rom_root_path[1024];
     bool rom_root_found = system_config_discover_rom_root("c64", rom_root_path, sizeof(rom_root_path));
 
     // -------------------------------------------------------------------------
-    // Initialize RAM
+    // Initialize RAM (normal boot: clear to zero)
     // -------------------------------------------------------------------------
     if (this->ram && this->ram->data()) {
-        c64_test_mode_t test_mode = config ? config->test_mode : C64_TEST_MODE_NORMAL;
-
-        switch (test_mode) {
-            case C64_TEST_MODE_NORMAL:
-                printf("Normal boot mode: RAM cleared\n");
-                memset(this->ram->data(), 0, 0x10000);
-                break;
-
-            case C64_TEST_MODE_DEBUG_PATTERNS:
-                memory_init_debug_patterns(this->ram);
-                break;
-
-            case C64_TEST_MODE_PRG_FILE:
-                if (config && config->test_binary_config && config->test_binary_config->filename) {
-                    printf("Loading PRG file: %s\n", config->test_binary_config->filename);
-                    memset(this->ram->data(), 0, 0x10000);
-                    commodore_prg_t prg = {};
-                    if (commodore_prg_load(config->test_binary_config->filename, &prg)) {
-                        memcpy(&this->ram->data()[prg.load_addr], prg.data, prg.data_size);
-                        printf("  Loaded $%04X-$%04X (%zu bytes)\n",
-                               prg.load_addr, prg.end_addr, prg.data_size);
-                        commodore_prg_free(&prg);
-                    } else {
-                        printf("ERROR: Failed to load PRG file, falling back to normal init\n");
-                        memset(this->ram->data(), 0, 0x10000);
-                    }
-                } else {
-                    printf("ERROR: PRG mode selected but no filename provided\n");
-                    memset(this->ram->data(), 0, 0x10000);
-                }
-                break;
-
-            case C64_TEST_MODE_BIN_FILE:
-                if (config && config->test_binary_config && config->test_binary_config->filename) {
-                    printf("Loading BIN file: %s at $%04X\n",
-                           config->test_binary_config->filename,
-                           config->test_binary_config->load_address);
-                    memset(this->ram->data(), 0, 0x10000);
-                    uint8_t* bin_data = NULL;
-                    size_t bin_size = 0;
-                    if (commodore_bin_load(config->test_binary_config->filename,
-                                          &bin_data, &bin_size)) {
-                        uint16_t addr = config->test_binary_config->load_address;
-                        if (addr + bin_size <= 0x10000) {
-                            memcpy(&this->ram->data()[addr], bin_data, bin_size);
-                            printf("  Loaded %zu bytes at $%04X\n", bin_size, addr);
-                        }
-                        free(bin_data);
-                    } else {
-                        printf("ERROR: Failed to load BIN file, falling back to normal init\n");
-                        memset(this->ram->data(), 0, 0x10000);
-                    }
-                } else {
-                    printf("ERROR: BIN mode selected but no filename provided\n");
-                    memset(this->ram->data(), 0, 0x10000);
-                }
-                break;
-
-            default:
-                printf("WARNING: Unknown test mode, using normal init\n");
-                memset(this->ram->data(), 0, 0x10000);
-                break;
-        }
+        printf("Normal boot mode: RAM cleared\n");
+        memset(this->ram->data(), 0, 0x10000);
     } else {
         printf("ERROR: RAM memory pointer is NULL!\n");
     }
@@ -2135,12 +2011,7 @@ void C64System::memory_init(const c64_config_t* config) {
     // Initialize Color RAM
     // -------------------------------------------------------------------------
     if (this->colorram) {
-        c64_test_mode_t test_mode = config ? config->test_mode : C64_TEST_MODE_NORMAL;
-        if (test_mode == C64_TEST_MODE_DEBUG_PATTERNS) {
-            colorram_init_debug(this->colorram);
-        } else {
-            memset(this->colorram->memory, 0, 1024);
-        }
+        memset(this->colorram->memory, 0, 1024);
     }
 
     // -------------------------------------------------------------------------

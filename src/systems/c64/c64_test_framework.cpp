@@ -388,7 +388,7 @@ std::vector<TestDescriptor> TestFramework::get_filtered_tests(const TestFilter& 
 }
 
 #ifdef CERMU_HAS_SEH
-// SEH-protected tick loop: runs c64_system_tick in a __try/__except block.
+// SEH-protected tick loop: runs system_tick() in a __try/__except block.
 // This function has NO C++ objects with destructors, so __try/__except is safe.
 // Returns: 0=debug_reg, 1=timeout, 2=crash, 3=infinite_loop_detected
 struct TickLoopResult {
@@ -1747,24 +1747,21 @@ bool TestFramework::requires_reconfiguration(const TestDescriptor& test) const {
 
 // Create a C64 system configured for the specific test
 C64System* TestFramework::create_system_for_test(const TestDescriptor& test) {
-    c64_config_t config;
-    config.init_defaults();
-    
     // Determine required video standard
     bool needs_pal = static_cast<int>(test.required_hw & HardwareConfig::VICII_PAL) != 0;
     bool needs_ntsc = (static_cast<int>(test.required_hw & HardwareConfig::VICII_NTSC) != 0) ||
                       (static_cast<int>(test.required_hw & HardwareConfig::VICII_NTSCOLD) != 0);
     
-    // If test specifies a video standard, use it; otherwise default to PAL
+    // Select region index: 0 = PAL, 1 = NTSC
+    int region_index = 0;  // default PAL
     if (needs_ntsc) {
-        config.vicii_standard = VIC_NTSC;
+        region_index = 1;
         is_pal_system_ = false;
         is_ntsc_system_ = true;
         if (verbose_) {
             printf("Creating NTSC C64 system for test\n");
         }
     } else {
-        config.vicii_standard = VIC_PAL;
         is_pal_system_ = true;
         is_ntsc_system_ = false;
         if (needs_pal && verbose_) {
@@ -1772,12 +1769,11 @@ C64System* TestFramework::create_system_for_test(const TestDescriptor& test) {
         }
     }
     
-    // Set test mode to normal (no special init)
-    config.test_mode = C64_TEST_MODE_NORMAL;
-    
     // Create the system
     C64System* c64 = new C64System();
-    c64->get_c64_config() = config;
+    auto cfg = c64->get_configuration();
+    cfg.region_option_index = region_index;
+    c64->set_configuration(cfg);
     if (!c64->initialize()) {
         printf("ERROR: Failed to create C64 system for test\n");
         delete c64;

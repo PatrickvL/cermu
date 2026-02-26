@@ -1,5 +1,4 @@
 #include "c64_hardware_config.h"
-#include "c64_config.h"
 #include "c64_test_framework.h"
 #include <stdio.h>
 #include <string.h>
@@ -155,15 +154,4 @@ const char* c64_hardware_config_s::description() const {
              vic_name, cia_name, sid_name);
     
     return desc;
-}
-
-void c64_hardware_config_s::apply(c64_config_t* system_config) const {
-    if (!system_config) return;
-    
-    // Apply VIC-II configuration
-    system_config->vicii_standard = is_pal ? VIC_PAL : VIC_NTSC;
-    
-    // Note: CIA and SID models need to be applied during chip creation
-    // or via additional configuration in c64_system_create
-    // For now, this just sets the basic PAL/NTSC mode
 }

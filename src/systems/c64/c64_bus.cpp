@@ -31,7 +31,7 @@ void c64_bus_s::on_banking_change(uint8_t banking_state) {
 
 // NOTE: Cartridge expansion port IO functions (io1_read, io1_write, io2_read, io2_write)
 // will be implemented when cartridge support is added. For now, I/O1 and I/O2 regions
-// ($DE00-$DEFF and $DF00-$DFFF) use floating bus behavior (see c64_bus_init_io_handlers).
+// ($DE00-$DEFF and $DF00-$DFFF) use floating bus behavior (see init_io_handlers).
 
 // Simple 4KB bank calculation for optimized system (0-15)
 static inline int8_t c64_get_address_bank(uint16_t address) {
@@ -204,10 +204,8 @@ c64_bus_s::~c64_bus_s() {
 void c64_bus_s::system_attach(C64System* c64) {
     this->c64 = c64;
 
-    // Initialize ROM/RAM pointers and allocate unified buffer with default configuration
-    c64_config_t default_config;
-    default_config.init_defaults();
-    init_unified_pointers(c64, &default_config);
+    // Initialize ROM/RAM pointers and allocate unified buffer (no cartridge ROMs by default)
+    init_unified_pointers(c64);
 
     // Initialize compact IO page handlers for efficient I/O access
     init_io_handlers();
@@ -540,13 +538,13 @@ const char* c64_bus_size_to_str(size_t size) {
  * @param c64_system Pointer to the C64 system (for pointer updates)
  * @param config Pointer to the C64 system configuration structure
  */
-void c64_bus_s::init_unified_pointers(C64System* c64_system, const c64_config_t* config) {
+void c64_bus_s::init_unified_pointers(C64System* c64_system, bool roml_present, bool romh_present) {
     c64_bus_t* c64_bus = this;
-    if (!c64_bus || !c64_system || !config) return;
+    if (!c64_bus || !c64_system) return;
     
-    // Store cartridge ROM presence flags from configuration
-    c64_bus->roml_present = config->roml_present;
-    c64_bus->romh_present = config->romh_present;
+    // Store cartridge ROM presence flags
+    c64_bus->roml_present = roml_present;
+    c64_bus->romh_present = romh_present;
     
     // If buffer already exists, just update the ROM pointers to preserve loaded data
     if (c64_bus->allocated_buffer) {
@@ -588,15 +586,15 @@ void c64_bus_s::init_unified_pointers(C64System* c64_system, const c64_config_t*
     size_t offset = 0;                  // No offset needed for strategic layout
     
     // Adjust for missing cartridge ROMs (can save space at beginning)
-    if (!config->roml_present && !config->romh_present) {
+    if (!roml_present && !romh_present) {
         // Skip first 16KB: start at KERNAL (0x4000)
         required_size = 84 * 1024;  // (36KB - 16KB) + 64KB RAM = 84KB
         offset = 16 * 1024;         // Offset buffer start by 16KB
-    } else if (!config->roml_present) {
+    } else if (!roml_present) {
         // Skip first 8KB: start at ROMH (0x2000)
         required_size = 92 * 1024;  // (36KB - 8KB) + 64KB RAM = 92KB
         offset = 8 * 1024;          // Offset buffer start by 8KB
-    } else if (!config->romh_present) {
+    } else if (!romh_present) {
         // Keep ROML, skip ROMH: need custom layout
         // For simplicity, allocate full size for now
         required_size = 100 * 1024;
@@ -642,8 +640,8 @@ void c64_bus_s::init_unified_pointers(C64System* c64_system, const c64_config_t*
     printf("c64_bus: Allocated %zu KB unified buffer (saved %zu KB), ROML:%s ROMH:%s\n",
            required_size / 1024,
            (100 * 1024 - required_size) / 1024,
-           config->roml_present ? "yes" : "no",
-           config->romh_present ? "yes" : "no");
+           roml_present ? "yes" : "no",
+           romh_present ? "yes" : "no");
 }
 
 // ============================================================================

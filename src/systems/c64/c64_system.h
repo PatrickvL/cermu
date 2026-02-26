@@ -24,25 +24,8 @@ class LightpenDevice;
 /**
  * C64System — Commodore 64 system emulation.
  *
- * CONSOLIDATION STATUS (see docs/C64_CONSOLIDATION_PLAN.md):
- * ==========================================================
- * Phases 1a-1c, 2, 3, 4a, 4c, 5, 6 are complete:
- *   - c64_t embedded directly (no heap allocation)
- *   - tick/reset/init/shutdown/framebuffer absorbed as methods
- *   - PLA generation, memory init, CPU banking callback absorbed
- *   - Bus back-pointer typed to C64SystemData*, container_of removed
- *   - gui_state_t eliminated; chip debug uses generic ChipInfo
- *   - Legacy chip registry (system_8bit_t) eliminated
- *   - Class renamed C64SystemWrapper → C64System
- *   - SimpleSystemGUI → SystemGUI
- *   - Dead legacy GUI code removed (imgui_interface, c64_main, c64_main_gui)
- *   - Residual "wrapper" terminology cleaned up
- *
- * Remaining:
- *   - Phase 4b: Merge c64_config_t into SystemConfiguration
- *
- * c64.cpp still provides c64_system_create/init/tick/reset for the test
- * framework's independent code path.
+ * Owns all chip instances (CPU, VIC-II, SID, CIAs, RAM, ROMs) and drives
+ * the per-cycle tick loop.
  */
 class C64System : public CommodoreSystem {
 public:
@@ -89,10 +72,6 @@ public:
     // Returns true if the patch was applied.
     bool patch_skip_memtest();
 
-    // Access to internal C64 configuration (needed by test framework)
-    c64_config_t& get_c64_config() { return c64_config_; }
-    const c64_config_t& get_c64_config() const { return c64_config_; }
-
     // --- Connector Port Access -----------------------------------------
     //
     // Connector ports, owned devices, attach/detach, and the generic
@@ -102,7 +81,7 @@ public:
     //
 
     // =========================================================================
-    // CHIP INSTANCES — formerly in C64SystemData struct
+    // CHIP INSTANCES
     // =========================================================================
 public:
     c64_bus_t bus{};                    // C64 bus controller (embedded, not heap-allocated)
@@ -124,7 +103,6 @@ public:
 
 private:
     bool initialized_ = false;          // True when initialize() has succeeded
-    c64_config_t c64_config_;  // Renamed to avoid conflict with base class config_
     vicii_standard_t created_vicii_standard_ = VIC_PAL;  // Actual VIC-II standard at creation time
     sid_revision_t pending_sid_revision_ = SID_REVISION_6581_R4AR;  // Applied after SID creation
 
@@ -178,11 +156,14 @@ private:
     /** Single system tick — ticks all chips in correct phase order. */
     void system_tick();
 
+    /** Derive VIC-II standard from SystemConfiguration region index. */
+    vicii_standard_t get_vicii_standard() const;
+
     /** Generate PLA memory maps and set initial banking mode. */
     bool pla_maps_generate();
 
     /** Initialize RAM, color RAM, and load ROMs from configured paths. */
-    void memory_init(const c64_config_t* config);
+    void memory_init();
 
     /**
      * Ensure the C64 is configured compatibly for a SID file's requirements.

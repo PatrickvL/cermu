@@ -44,8 +44,7 @@ typedef struct {
 
 /**
  * C64 system configuration structure.
- * This centralizes all C64 system settings to eliminate parameter proliferation.
- * Pass this to c64_system_create() to configure the C64 system.
+ * Centralizes C64-specific settings (video standard, ROM config, test mode).
  */
 typedef struct c64_config_s {
     // System configuration
@@ -59,15 +58,9 @@ typedef struct c64_config_s {
     // Cartridge ROM configuration
     bool roml_present;           // Whether ROML ROM should be included ($8000-$9FFF)
     bool romh_present;           // Whether ROMH ROM should be included ($A000-$BFFF/$E000-$FFFF)
-    const char* roml_filename;   // Path to ROML ROM file (NULL if not present)
-    const char* romh_filename;   // Path to ROMH ROM file (NULL if not present)
     
-    // Initial cartridge control signal states
-    bool initial_exrom_state;    // Initial EXROM signal state
-    bool initial_game_state;     // Initial GAME signal state
     // Methods
     void init_defaults();
-    bool validate() const;
 } c64_config_t;
 
 /**
