@@ -14,6 +14,10 @@
 
 namespace fam65xx {
 
+// All trait-related types live in detail:: to keep them out of the public API.
+// Internal fam65xx code pulls them in via `using namespace detail;`.
+namespace detail {
+
 // ============================================================================
 // CPU Core Feature Flags (only CPU execution behavior)
 // ============================================================================
@@ -263,5 +267,11 @@ template <const CPUTraits &Traits> constexpr bool has_nmos_bugs() {
 template <const CPUTraits &Traits> constexpr bool has_apu() {
   return Traits.has_apu();
 }
+
+} // namespace detail
+
+// Pull detail:: types into fam65xx scope so internal headers can use
+// CPUTraits, CPUCoreFlags, CoreFlags, etc. unqualified.
+using namespace detail;
 
 } // namespace fam65xx

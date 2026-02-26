@@ -20,7 +20,7 @@
 
 // CPUTraits-based opcode table generation function
 constexpr std::array<opcode_info_t, 256>
-generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
+generate_opcode_table_for_traits(const fam65xx::detail::CPUTraits &traits) {
   // Start with base NES 6502/RICOH 2A03 implementation with explicit illegal
   // opcodes
   std::array<opcode_info_t, 256> table{};
@@ -355,9 +355,9 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
 
   // Synertek 65C02 specific overrides - limited CMOS processor (MUST come
   // before general CMOS)
-  if (traits.has(fam65xx::CPUCoreFlags::CMOS_BASE) &&
-      !traits.has(fam65xx::CPUCoreFlags::WAI_STP) &&
-      !traits.has(fam65xx::CPUCoreFlags::ROCKWELL_BITS)) {
+  if (traits.has(fam65xx::detail::CPUCoreFlags::CMOS_BASE) &&
+      !traits.has(fam65xx::detail::CPUCoreFlags::WAI_STP) &&
+      !traits.has(fam65xx::detail::CPUCoreFlags::ROCKWELL_BITS)) {
     // Synertek 65C02 supports basic accumulator increment/decrement but not
     // advanced CMOS instructions
     table[0x1A] = {OP::INC, AM::ACC, OF::NONE}; // INC A - Increment Accumulator
@@ -375,7 +375,7 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
   }
 
   // CMOS processors: Replace illegal opcodes with NOPs
-  if (traits.has(fam65xx::CPUCoreFlags::CMOS_BASE)) {
+  if (traits.has(fam65xx::detail::CPUCoreFlags::CMOS_BASE)) {
     // WDC65C02: Specific illegal opcodes become 2-byte NOPs (AM::IMM)
     table[0x02] = {OP::NOP, AM::IMM, OF::NONE}; // JAM -> 2-byte NOP
     table[0x22] = {OP::NOP, AM::IMM, OF::NONE}; // JAM -> 2-byte NOP
@@ -533,9 +533,9 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
 
     // Synertek 65C02 post-CMOS overrides - must come after general CMOS
     // settings
-    if (traits.has(fam65xx::CPUCoreFlags::CMOS_BASE) &&
-        !traits.has(fam65xx::CPUCoreFlags::WAI_STP) &&
-        !traits.has(fam65xx::CPUCoreFlags::ROCKWELL_BITS)) {
+    if (traits.has(fam65xx::detail::CPUCoreFlags::CMOS_BASE) &&
+        !traits.has(fam65xx::detail::CPUCoreFlags::WAI_STP) &&
+        !traits.has(fam65xx::detail::CPUCoreFlags::ROCKWELL_BITS)) {
       // Synertek 65C02 doesn't support WAI/STP - override with proper NOPs
       table[0xCB] = {OP::NOP, AM::NON,
                      OF::NONE}; // WAI -> 1-byte NOP (implied) - halt
@@ -546,8 +546,8 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
     }
 
     // Rockwell 65C02 doesn't support WAI/STP - override with proper NOPs
-    if (traits.has(fam65xx::CPUCoreFlags::ROCKWELL_BITS) &&
-        !traits.has(fam65xx::CPUCoreFlags::WAI_STP)) {
+    if (traits.has(fam65xx::detail::CPUCoreFlags::ROCKWELL_BITS) &&
+        !traits.has(fam65xx::detail::CPUCoreFlags::WAI_STP)) {
       table[0xCB] = {OP::NOP, AM::NON,
                      OF::NONE}; // WAI -> 1-byte NOP (implied) - halt
       table[0xDB] = {OP::NOP, AM::IMM,
@@ -556,7 +556,7 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
   }
 
   // Rockwell 65C02 modifications (add RMB/SMB/BBR/BBS instructions)
-  if (traits.has(fam65xx::CPUCoreFlags::ROCKWELL_BITS)) {
+  if (traits.has(fam65xx::detail::CPUCoreFlags::ROCKWELL_BITS)) {
     // Add Rockwell bit manipulation instructions (RMB/SMB)
     table[0x07] = {OP::RMB0, AM::ZER, OF::RMW}; // RMB0
     table[0x17] = {OP::RMB1, AM::ZER, OF::RMW}; // RMB1
@@ -596,7 +596,7 @@ generate_opcode_table_for_traits(const fam65xx::CPUTraits &traits) {
   }
 
   // WDC 65C816 modifications (16-bit enhanced instructions)
-  if (traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+  if (traits.has(fam65xx::detail::CPUCoreFlags::C816_16BIT)) {
     // Mode Control Instructions
     table[0xC2] = {OP::REP, AM::IMM,
                    OF::NONE}; // REP - Reset Processor Status Bits
