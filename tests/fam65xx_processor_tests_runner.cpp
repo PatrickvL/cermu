@@ -27,8 +27,14 @@ extern "C" {
     #define CERMU_IMPL
 #endif
 
-// Include new fam65xx processor implementation
-#include "../src/chip/cpu/fam65xx/fam65xx.hpp"
+// Per-CPU headers for the variants tested here (each pulls in fam65xx.hpp)
+#include "../src/chip/cpu/fam65xx/mos6502.h"
+#include "../src/chip/cpu/fam65xx/mos6510.h"
+#include "../src/chip/cpu/fam65xx/ricoh_2a03.h"
+#include "../src/chip/cpu/fam65xx/synertek65c02.h"
+#include "../src/chip/cpu/fam65xx/rockwell65c02.h"
+#include "../src/chip/cpu/fam65xx/wdc_w65c02s.h"
+#include "../src/chip/cpu/fam65xx/wdc65c816.h"
 
 using namespace fam65xx;
 
@@ -926,28 +932,32 @@ public:
 };
 
 // Factory function to create processor instances - direct template instantiation
+// Note: template arguments must be fam65xx::-qualified because the per-CPU
+// headers re-export trait constants as global-scope references, which shadow
+// the namespace originals under `using namespace fam65xx;` and cannot serve
+// as non-type template parameters.
 std::unique_ptr<UnifiedProcessorInterface> create_processor(ProcessorType type) {
     switch (type) {
         case ProcessorType::MOS6502:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<MOS6502Traits>());
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::MOS6502Traits>());
             
         case ProcessorType::NES6502:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<RICOH_2A03Traits>());
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::RICOH_2A03Traits>());
             
         case ProcessorType::MOS6510:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<MOS6510Traits>());
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::MOS6510Traits>());
             
         case ProcessorType::SYNERTEK65C02:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<SYNERTEK_65C02Traits>());
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::SYNERTEK_65C02Traits>());
             
         case ProcessorType::ROCKWELL65C02:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<ROCKWELL_R65C02Traits>());
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::ROCKWELL_R65C02Traits>());
             
         case ProcessorType::WDC65C02:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<WDC_W65C02STraits>());
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::WDC_W65C02STraits>());
             
         case ProcessorType::WDC65C816:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<WDC_65C816Traits>());
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::WDC_65C816Traits>());
             
         default:
             throw std::invalid_argument("Unsupported processor type");
