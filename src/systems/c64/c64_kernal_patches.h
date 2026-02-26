@@ -5,7 +5,7 @@
 //
 // These patches modify the KERNAL ROM in-place to bypass time-consuming
 // routines during boot.  They are safe to apply after ROMs are loaded
-// (i.e. after c64_system_create / c64_bus_init_unified_pointers).
+// (i.e. after initialize() / bus.init_unified_pointers()).
 //
 // TODO: The skip-memtest flag could also be set automatically when
 //       whitelisted software is loaded (SID files, known-safe demos, etc.).

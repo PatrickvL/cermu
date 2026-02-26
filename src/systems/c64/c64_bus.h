@@ -5,7 +5,6 @@
 #include <stdbool.h>
 #include "../../core/cermu.h"
 #include "../../core/system_lines.h"
-#include "c64_config.h"
 #include "c64_chips.h"
 
 // =============================
@@ -91,7 +90,7 @@ typedef struct c64_bus_s {
     uint8_t generate_pla_mode(uint8_t cpu_port_bits);
     bus_state_t vic_read(bus_state_t bus_state, uint16_t address);
     bus_state_t REGISTER_CALL memory_tick(bus_state_t bus_state);
-    void init_unified_pointers(C64System* c64_system, const c64_config_t* config);
+    void init_unified_pointers(C64System* c64_system, bool roml_present = false, bool romh_present = false);
     void system_attach(C64System* c64);
     void set_exrom_signal(bool active);
     void set_game_signal(bool active);

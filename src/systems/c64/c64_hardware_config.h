@@ -3,10 +3,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-// Forward declarations
-struct c64_config_s;
-typedef struct c64_config_s c64_config_t;
-
 // SID revision enum (matches mos6581.h)
 typedef enum {
     SID_REV_6581_R1,
@@ -67,7 +63,6 @@ typedef struct c64_hardware_config_s {
     void init_original(bool pal);
     bool matches(const c64_hardware_config_s* required) const;
     const char* description() const;
-    void apply(c64_config_t* system_config) const;
 
     static c64_hardware_config_s from_test_flags(uint32_t test_hw_flags);
     

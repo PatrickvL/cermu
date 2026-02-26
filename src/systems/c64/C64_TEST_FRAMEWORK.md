@@ -122,12 +122,14 @@ filter.skip_interactive = true;
 auto tests = framework.get_filtered_tests(filter);
 
 // Create C64 system
-c64_config_t config = {};
-c64_config_init_defaults(&config);
-C64SystemData* c64 = c64_system_create(&config);
+auto c64 = std::make_unique<C64System>();
+auto cfg = c64->get_configuration();
+cfg.region_option_index = 0;  // PAL
+c64->set_configuration(cfg);
+c64->initialize();
 
 // Run tests
-auto results = framework.run_tests(tests, c64);
+auto results = framework.run_tests(tests, c64.get());
 
 // Print statistics
 framework.print_summary(results);
@@ -135,9 +137,6 @@ framework.print_summary(results);
 // Save results
 framework.save_results("results.txt", results);
 framework.save_results_json("results.json", results);
-
-// Cleanup
-c64_system_destroy(c64);
 ```
 
 ## Hardware Configuration
