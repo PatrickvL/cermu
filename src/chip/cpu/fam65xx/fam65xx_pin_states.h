@@ -1,5 +1,5 @@
 /*
- * fam65xx_layouts.h — CPU pin state extraction
+ * fam65xx_pin_states.h — CPU pin state extraction
  *
  * Provides get_cpu_pin_states<Traits>() which overlays CPU-specific signal
  * directions (address-bus driven, clock direction) on top of generic

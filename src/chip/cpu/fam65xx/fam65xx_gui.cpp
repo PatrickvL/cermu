@@ -34,7 +34,7 @@
 #include "../../../gui/global_chip_style.h"
 #include <imgui.h>
 #endif
-#include "fam65xx_layouts.h"
+#include "fam65xx_pin_states.h"
 
 using namespace fam65xx;
 
