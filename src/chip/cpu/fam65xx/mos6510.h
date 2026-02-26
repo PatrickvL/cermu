@@ -7,7 +7,7 @@
  */
 
 #include "fam65xx.hpp"
-#include "../../../core/chip_layout.h"
+#include "fam65xx_pin_layout.h"
 #include "../../../core/system_lines.h"
 
 namespace fam65xx {
@@ -84,4 +84,8 @@ inline ChipLayout create_mos6510_layout() {
   PIN_LR(layout, 20, A15, _RES, 40)  // Reset
 
   return layout;
+}
+
+template<> inline ChipLayout create_cpu_pin_layout<fam65xx::MOS6510Traits>() {
+  return create_mos6510_layout();
 }

@@ -106,7 +106,7 @@ public:
     // =========================================================================
 public:
     c64_bus_t bus{};                    // C64 bus controller (embedded, not heap-allocated)
-    MOS6510* mos6510 = nullptr;  // MOS6510Traits CPU instance
+    MOS6510* mos6510 = nullptr;         // MOS6510 CPU instance
     MemoryChip* ram = nullptr;          // RAM memory $0000-$FFFF (64KB)
     MemoryChip* cartridge_roml = nullptr; // Cartridge ROM Low $8000-$9FFF (8KB)
     MemoryChip* cartridge_romh = nullptr; // Cartridge ROM High $A000-$BFFF (8KB)
