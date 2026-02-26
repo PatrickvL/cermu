@@ -544,10 +544,10 @@ bool VIC20System::initialize() {
         printf("VIC20: Warning - ROMs not loaded, system may not function correctly\n");
     }
     
-    // Create CPU (MOS6502Traits) — direct C++ instantiation for inlining
+    // Create CPU (MOS6502) — direct C++ instantiation for inlining
     cpu_ = new MOS6502();
     if (!cpu_) {
-        printf("VIC20: Failed to create MOS6502Traits CPU\n");
+        printf("VIC20: Failed to create MOS6502 CPU\n");
         return false;
     }
     

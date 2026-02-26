@@ -214,10 +214,10 @@ bool Apple1System::initialize() {
         printf("Apple1: Warning - ROMs not loaded, system may not function correctly\n");
     }
     
-    // Create CPU (MOS6502Traits) — direct C++ instantiation
+    // Create CPU (MOS6502) — direct C++ instantiation
     cpu_ = new MOS6502();
     if (!cpu_) {
-        printf("Apple1: Failed to create MOS6502Traits CPU\n");
+        printf("Apple1: Failed to create MOS6502 CPU\n");
         return false;
     }
     

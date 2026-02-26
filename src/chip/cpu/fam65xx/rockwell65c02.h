@@ -7,7 +7,7 @@
  */
 
 #include "fam65xx.hpp"
-#include "../../../core/chip_layout.h"
+#include "fam65xx_pin_layout.h"
 #include "../../../core/system_lines.h"
 
 namespace fam65xx {
@@ -74,4 +74,8 @@ inline ChipLayout create_rockwell_r65c02_layout() {
   PIN_LR(layout, 20, A11, _RES, 40)  // Reset
 
   return layout;
+}
+
+template<> inline ChipLayout create_cpu_pin_layout<fam65xx::ROCKWELL_R65C02Traits>() {
+  return create_rockwell_r65c02_layout();
 }

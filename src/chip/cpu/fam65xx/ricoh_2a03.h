@@ -8,7 +8,7 @@
  */
 
 #include "fam65xx.hpp"
-#include "../../../core/chip_layout.h"
+#include "fam65xx_pin_layout.h"
 #include "../../../core/system_lines.h"
 
 namespace fam65xx {
@@ -78,4 +78,8 @@ inline ChipLayout create_ricoh_2a03_layout() {
   PIN_LR(layout, 20, A11, _RES, 40)  // Reset
 
   return layout;
+}
+
+template<> inline ChipLayout create_cpu_pin_layout<fam65xx::RICOH_2A03Traits>() {
+  return create_ricoh_2a03_layout();
 }

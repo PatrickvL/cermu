@@ -95,7 +95,7 @@ private:
     vic20_memory_t* memory_;         // Unified memory banking system
     
     // Chip instances (properly typed)
-    MOS6502* cpu_ = nullptr;  // MOS6502Traits CPU instance
+    MOS6502* cpu_ = nullptr;         // MOS6502 CPU instance
     vic_base_t* vic_;                // VIC chip: MOS6561 (PAL) or MOS6560 (NTSC)
     mos6522_t* via1_;                // MOS6522 VIA 1 - keyboard, joystick
     mos6522_t* via2_;                // MOS6522 VIA 2 - user port, serial
