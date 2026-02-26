@@ -31,10 +31,9 @@ using RICOH_2A03 = fam65xx_t<RICOH_2A03Traits>;
 
 } // namespace fam65xx
 
-// Re-export outside fam65xx namespace for convenience
+// Re-export type alias outside fam65xx namespace for convenience.
+// Trait constants remain internal to namespace fam65xx.
 using RICOH_2A03 = fam65xx::RICOH_2A03;
-inline constexpr auto& RICOH_2A03Traits = fam65xx::RICOH_2A03Traits;
-inline constexpr auto& RICOH_2A07Traits = fam65xx::RICOH_2A07Traits;
 
 // ============================================================================
 // RICOH 2A03 PIN LAYOUT (40-pin DIP, NES CPU)

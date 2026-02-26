@@ -25,5 +25,5 @@ inline constexpr CPUTraits HUDSON_HUC6280Traits = {
 
 } // namespace fam65xx
 
-// Re-export outside fam65xx namespace for convenience
-inline constexpr auto& HUDSON_HUC6280Traits = fam65xx::HUDSON_HUC6280Traits;
+// Trait constants remain internal to namespace fam65xx.
+// No type alias — the HuC6280 is not yet instantiated as a distinct type.

@@ -27,9 +27,9 @@ using WDC_65C816 = fam65xx_t<WDC_65C816Traits>;
 
 } // namespace fam65xx
 
-// Re-export outside fam65xx namespace for convenience
+// Re-export type alias outside fam65xx namespace for convenience.
+// Trait constants remain internal to namespace fam65xx.
 using WDC_65C816 = fam65xx::WDC_65C816;
-inline constexpr auto& WDC_65C816Traits = fam65xx::WDC_65C816Traits;
 
 // ============================================================================
 // WDC 65C816 PIN LAYOUT (40-pin DIP)

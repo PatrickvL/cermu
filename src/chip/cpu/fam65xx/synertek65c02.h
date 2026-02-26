@@ -25,6 +25,6 @@ using SYNERTEK_65C02 = fam65xx_t<SYNERTEK_65C02Traits>;
 
 } // namespace fam65xx
 
-// Re-export outside fam65xx namespace for convenience
+// Re-export type alias outside fam65xx namespace for convenience.
+// Trait constants remain internal to namespace fam65xx.
 using SYNERTEK_65C02 = fam65xx::SYNERTEK_65C02;
-inline constexpr auto& SYNERTEK_65C02Traits = fam65xx::SYNERTEK_65C02Traits;

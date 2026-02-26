@@ -27,9 +27,9 @@ using WDC_W65C02S = fam65xx_t<WDC_W65C02STraits>;
 
 } // namespace fam65xx
 
-// Re-export outside fam65xx namespace for convenience
+// Re-export type alias outside fam65xx namespace for convenience.
+// Trait constants remain internal to namespace fam65xx.
 using WDC_W65C02S = fam65xx::WDC_W65C02S;
-inline constexpr auto& WDC_W65C02STraits = fam65xx::WDC_W65C02STraits;
 
 // ============================================================================
 // WDC W65C02S PIN LAYOUT (40-pin DIP)
