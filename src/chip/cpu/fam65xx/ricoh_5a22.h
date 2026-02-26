@@ -23,5 +23,5 @@ inline constexpr CPUTraits RICOH_5A22Traits = {
 
 } // namespace fam65xx
 
-// Re-export outside fam65xx namespace for convenience
-inline constexpr auto& RICOH_5A22Traits = fam65xx::RICOH_5A22Traits;
+// Trait constants remain internal to namespace fam65xx.
+// No type alias — the 5A22 is not yet instantiated as a distinct type.

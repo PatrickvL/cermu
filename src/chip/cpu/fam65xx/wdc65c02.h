@@ -29,8 +29,6 @@ using WDC_65C02 = fam65xx_t<WDC_65C02_EARLYTraits>;
 
 } // namespace fam65xx
 
-// Re-export outside fam65xx namespace for convenience
+// Re-export type alias outside fam65xx namespace for convenience.
+// Trait constants remain internal to namespace fam65xx.
 using WDC_65C02 = fam65xx::WDC_65C02;
-inline constexpr auto& WDC_65C02_EARLYTraits = fam65xx::WDC_65C02_EARLYTraits;
-inline constexpr auto& WDC_65SC02Traits = fam65xx::WDC_65SC02Traits;
-inline constexpr auto& GTE_G65SC02Traits = fam65xx::GTE_G65SC02Traits;

@@ -23,5 +23,5 @@ inline constexpr CPUTraits MOS6509Traits = {
 
 } // namespace fam65xx
 
-// Re-export outside fam65xx namespace for convenience
-inline constexpr auto& MOS6509Traits = fam65xx::MOS6509Traits;
+// Trait constants remain internal to namespace fam65xx.
+// No type alias — the 6509 is not yet instantiated as a distinct type.

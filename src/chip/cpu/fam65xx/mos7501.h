@@ -42,9 +42,9 @@ using CSG7501 = fam65xx_t<CSG7501Traits>;
 
 } // namespace fam65xx
 
-// Re-export outside fam65xx namespace for convenience
+// Re-export type alias outside fam65xx namespace for convenience.
+// Trait constants remain internal to namespace fam65xx.
 using CSG7501 = fam65xx::CSG7501;
-inline constexpr auto& CSG7501Traits = fam65xx::CSG7501Traits;
 
 // ============================================================================
 // CSG 7501/8501 PIN LAYOUT (40-pin DIP, C16/Plus4 CPU)

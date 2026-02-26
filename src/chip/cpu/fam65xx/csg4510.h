@@ -26,5 +26,5 @@ inline constexpr CPUTraits CSG_4510Traits = {
 
 } // namespace fam65xx
 
-// Re-export outside fam65xx namespace for convenience
-inline constexpr auto& CSG_4510Traits = fam65xx::CSG_4510Traits;
+// Trait constants remain internal to namespace fam65xx.
+// No type alias — the 4510 is not yet instantiated as a distinct type.

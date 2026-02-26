@@ -37,10 +37,9 @@ using MOS6510 = fam65xx_t<MOS6510Traits>;
 
 } // namespace fam65xx
 
-// Re-export outside fam65xx namespace for convenience
+// Re-export type alias outside fam65xx namespace for convenience.
+// Trait constants remain internal to namespace fam65xx.
 using MOS6510 = fam65xx::MOS6510;
-inline constexpr auto& MOS6510Traits = fam65xx::MOS6510Traits;
-inline constexpr auto& MOS6510TTraits = fam65xx::MOS6510TTraits;
 
 // ============================================================================
 // MOS 6510 PIN LAYOUT (40-pin DIP)

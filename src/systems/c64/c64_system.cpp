@@ -446,9 +446,7 @@ bool C64System::initialize() {
     // Initialize CPU and point it at the reset vector
     auto* cpu = this->mos6510;
     cpu->init();
-    if constexpr (MOS6510Traits.has_io_port()) {
-        cpu->init_io_port();
-    }
+    cpu->init_io_port();
     cpu->bank_change_fn = cpu_banking_callback;
     cpu->bank_change_ctx = this;
 

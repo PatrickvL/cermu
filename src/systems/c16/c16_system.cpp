@@ -341,9 +341,7 @@ bool Commodore264System<V>::initialize() {
     // Initialize CPU and I/O port
     auto* cpu = cpu_;
     cpu->init();
-    if constexpr (CSG7501Traits.has_io_port()) {
-        cpu->init_io_port();
-    }
+    cpu->init_io_port();
     
     // Note: C16 doesn't use the io_port_mixin bank_change path.
     // Banking is handled by TED register writes.
