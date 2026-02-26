@@ -65,20 +65,6 @@ enum class ProcessorType {
     WDC65C816
 };
 
-// Centralized processor name determination - single source of truth
-std::string get_processor_name(ProcessorType type) {
-    switch (type) {
-        case ProcessorType::MOS6502:       return "MOS 6502";
-        case ProcessorType::NES6502:       return "NES 6502 (Ricoh 2A03/2A07)";
-        case ProcessorType::MOS6510:       return "MOS 6510 (C64)";
-        case ProcessorType::SYNERTEK65C02: return "Synertek 65C02";
-        case ProcessorType::ROCKWELL65C02: return "Rockwell 65C02";
-        case ProcessorType::WDC65C02:      return "WDC 65C02 (W65C02S)";
-        case ProcessorType::WDC65C816:     return "WDC 65C816";
-        default:                           return "Unknown Processor";
-    }
-}
-
 // Auto-detect processor type from test path
 ProcessorType detect_processor_from_path(const std::string& test_path) {
     std::string path_lower = test_path;
@@ -137,7 +123,7 @@ ProcessorType parse_processor_type(const std::string& processor_str) {
 }
 
 // Forward declarations
-template<const CPUTraits& Traits> class ProcessorTestHarness;
+template<typename CPU> class ProcessorTestHarness;
 
 // Test results tracking with enhanced statistics
 struct TestResults {
@@ -219,18 +205,18 @@ public:
 
 
 
-// Test harness — templated directly on CPUTraits for zero-overhead CPU access.
+// Test harness — templated directly on the CPU type for zero-overhead access.
 // The CPU type is selected once in main() and everything below is monomorphic.
-template<const CPUTraits& Traits>
+template<typename CPU>
 class ProcessorTestHarness {
 public:
-    fam65xx_t<Traits> cpu;  // Direct CPU instance — no virtual dispatch
+    CPU cpu;  // Direct CPU instance — no virtual dispatch
 private:
     uint8_t* memory;  // Point to global test_memory array (64KB base memory)
     std::unordered_map<uint32_t, uint8_t> extended_memory;  // For 24-bit addresses outside 64KB
     uint32_t cycle_count;
     uint64_t pins;  // Maintain pins state across steps
-    static constexpr uint32_t address_mask = Traits.address_mask();
+    static constexpr uint32_t address_mask = CPU::address_mask();
     
     // Bus cycle tracking for comparing against JSON test data - reserve capacity to avoid reallocations
     std::vector<bus_cycle_t> actual_bus_cycles;
@@ -381,28 +367,28 @@ public:
     // CPU state accessors — direct CPU access with if constexpr for 65816
     void set_pc(uint16_t pc) { cpu.set(REG_PC, pc); }
     void set_a(uint16_t a) {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+        if constexpr (CPU::has_wide_registers()) {
             cpu.set(REG_A_16, a);
         } else {
             cpu.set(REG_A, static_cast<uint8_t>(a & 0xFF));
         }
     }
     void set_x(uint16_t x) {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+        if constexpr (CPU::has_wide_registers()) {
             cpu.set(REG_X_16, x);
         } else {
             cpu.set(REG_X, static_cast<uint8_t>(x & 0xFF));
         }
     }
     void set_y(uint16_t y) {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+        if constexpr (CPU::has_wide_registers()) {
             cpu.set(REG_Y_16, y);
         } else {
             cpu.set(REG_Y, static_cast<uint8_t>(y & 0xFF));
         }
     }
     void set_sp(uint16_t sp) {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+        if constexpr (CPU::has_wide_registers()) {
             if (cpu.in_emulation_mode()) {
                 cpu.set(REG_SP, 0x0100 | (sp & 0xFF));
             } else {
@@ -413,7 +399,7 @@ public:
         }
     }
     void set_status(uint8_t p) {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+        if constexpr (CPU::has_wide_registers()) {
             uint16_t p16 = cpu.get(REG_P_16);
             p16 = (p16 & 0xFF00) | p;
             cpu.set(REG_P_16, p16);
@@ -424,22 +410,22 @@ public:
     
     // 65816-specific state setters
     void set_emulation_mode(bool mode) {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+        if constexpr (CPU::has_wide_registers()) {
             cpu.set_emulation_mode(mode);
         }
     }
     void set_d(uint16_t value) {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+        if constexpr (CPU::has_wide_registers()) {
             cpu.set(REG_D, value);
         }
     }
     void set_dbr(uint8_t value) {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+        if constexpr (CPU::has_wide_registers()) {
             cpu.set(REG_DBR, value);
         }
     }
     void set_pbr(uint8_t value) {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+        if constexpr (CPU::has_wide_registers()) {
             cpu.set(REG_PBR, value);
         }
     }
@@ -454,21 +440,21 @@ public:
     
     uint16_t get_pc() const { return cpu.get(REG_PC); }
     uint16_t get_a() const {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+        if constexpr (CPU::has_wide_registers()) {
             return cpu.get(REG_A_16);
         } else {
             return cpu.get(REG_A);
         }
     }
     uint16_t get_x() const {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+        if constexpr (CPU::has_wide_registers()) {
             return cpu.get(REG_X_16);
         } else {
             return cpu.get(REG_X);
         }
     }
     uint16_t get_y() const {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+        if constexpr (CPU::has_wide_registers()) {
             return cpu.get(REG_Y_16);
         } else {
             return cpu.get(REG_Y);
@@ -479,25 +465,25 @@ public:
     
     // 65816-specific getters
     bool get_emulation_mode() const {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+        if constexpr (CPU::has_wide_registers()) {
             return cpu.in_emulation_mode();
         }
         return true;
     }
     uint16_t get_d() const {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+        if constexpr (CPU::has_wide_registers()) {
             return cpu.get(REG_D);
         }
         return 0;
     }
     uint8_t get_dbr() const {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+        if constexpr (CPU::has_wide_registers()) {
             return cpu.get(REG_DBR);
         }
         return 0;
     }
     uint8_t get_pbr() const {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+        if constexpr (CPU::has_wide_registers()) {
             return cpu.get(REG_PBR);
         }
         return 0;
@@ -603,7 +589,7 @@ public:
                 uint8_t p_before = get_status();
                 
                 // Execute PHI2 phase (bus setup)
-                using Phase = typename fam65xx_t<Traits>::Phase;
+                using Phase = typename CPU::Phase;
                 pins = cpu.template tick<Phase::PHI2>(pins);
                 
                 // Memory access happens between PHI2 and PHI1
@@ -685,7 +671,7 @@ struct TestItem {
 };
 
 // Worker thread pool class
-template<const CPUTraits& Traits>
+template<typename CPU>
 class TestWorkerPool {
 private:
     std::vector<std::thread> workers;
@@ -785,7 +771,7 @@ private:
     void worker_thread(size_t worker_id) {
         // PERFORMANCE OPTIMIZATION: Create one harness per worker thread
         // Reuse the same harness for all tests in this thread to avoid repeated initialization
-        ProcessorTestHarness<Traits> harness;
+        ProcessorTestHarness<CPU> harness;
         processor_test_t* previous_test = nullptr;
         
         while (!shutdown) {
@@ -820,7 +806,7 @@ private:
         }
     }
     
-    void process_single_test(const TestItem& item, size_t worker_id, ProcessorTestHarness<Traits>* harness, processor_test_t*& previous_test) {
+    void process_single_test(const TestItem& item, size_t worker_id, ProcessorTestHarness<CPU>* harness, processor_test_t*& previous_test) {
         std::ostringstream thread_output;
         
         // Parse and run the test
@@ -897,7 +883,7 @@ private:
     }
     
     bool run_processor_test_threaded(const processor_test_t* test, std::ostringstream& output, size_t worker_id,
-                                    ProcessorTestHarness<Traits>* harness, const processor_test_t* previous_test) {
+                                    ProcessorTestHarness<CPU>* harness, const processor_test_t* previous_test) {
         results.total_tests++;
         
         // Capture all debug output in a separate buffer - only emit if test fails or verbose mode
@@ -1424,9 +1410,9 @@ void print_usage(const char* program_name) {
 }
 
 // Enhanced results printing
-void print_results(std::chrono::milliseconds duration, size_t num_workers, ProcessorType processor_type, size_t tests_collected) {
+void print_results(std::chrono::milliseconds duration, size_t num_workers, const std::string& cpu_name, size_t tests_collected) {
     std::cout << "\n=== FAM65XX PROCESSOR TESTS RESULTS (Multi-Processor Edition) ===\n";
-    std::cout << "CPU Implementation: " << get_processor_name(processor_type) << "\n";
+    std::cout << "CPU Implementation: " << cpu_name << "\n";
     std::cout << "Execution time: " << duration.count() << " ms\n";
     std::cout << "Worker threads: " << num_workers << "\n";
     
@@ -1499,11 +1485,29 @@ void print_results(std::chrono::milliseconds duration, size_t num_workers, Proce
 
 // Run all tests for a specific CPU variant — single dispatch point from main().
 // Everything below this call is monomorphic (zero virtual dispatch).
-template<const CPUTraits& Traits>
+template<typename CPU>
 int run_all_tests(const std::vector<std::string>& test_paths,
                   const std::string& opcode_filter,
                   size_t num_workers,
-                  ProcessorType processor_type) {
+                  bool processor_specified) {
+    const std::string cpu_name = std::string(CPU::vendor()) + " " + CPU::chip_id();
+
+    std::cout << "=== fam65xx ProcessorTests Runner - Multi-Processor Edition ===\n";
+    std::cout << "CPU Implementation: " << cpu_name << "\n";
+    if (processor_specified) {
+        std::cout << "Processor selection: Manual override (--processor)\n";
+    } else {
+        std::cout << "Processor selection: Auto-detected from test path\n";
+    }
+    std::cout << "Test paths: " << test_paths.size() << " specified\n";
+    std::cout << "Worker threads: " << num_workers << "\n";
+    if (!opcode_filter.empty()) {
+        std::cout << "Opcode filter: 0x" << opcode_filter << " (only this opcode will be tested)\n";
+    }
+    std::cout << "Verbose: " << (verbose_output ? "enabled" : "disabled") << "\n";
+    std::cout << "Quiet mode: " << (g_quiet_mode ? "enabled" : "disabled") << "\n";
+    std::cout << "Stop on failure: " << (g_stop_on_failure ? "enabled" : "disabled") << "\n\n";
+
     auto start_time = std::chrono::high_resolution_clock::now();
     
     // Collect all tests first with timing
@@ -1531,7 +1535,7 @@ int run_all_tests(const std::vector<std::string>& test_paths,
     // Set up parallel execution with adjusted worker count
     ThreadSafeOutput output_handler;
     ThreadSafeTestResults thread_results;
-    TestWorkerPool<Traits> worker_pool(effective_workers, output_handler, thread_results,
+    TestWorkerPool<CPU> worker_pool(effective_workers, output_handler, thread_results,
                                        verbose_output, g_quiet_mode, g_test_failed, g_stop_on_failure);
     
     // Submit all tests to worker pool
@@ -1569,7 +1573,7 @@ int run_all_tests(const std::vector<std::string>& test_paths,
     // Transfer results to global structure
     thread_results.merge_into_global(results);
     
-    print_results(duration, num_workers, processor_type, all_tests.size());
+    print_results(duration, num_workers, cpu_name, all_tests.size());
     
     if (results.total_tests == 0) {
         std::cout << "\nNo tests were executed!\n";
@@ -1587,7 +1591,7 @@ int run_all_tests(const std::vector<std::string>& test_paths,
 }
 
 // Main function — parses arguments, then dispatches to the monomorphic
-// run_all_tests<Traits>() for the selected CPU variant.
+// run_all_tests<CPU>() for the selected CPU variant.
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         print_usage(argv[0]);
@@ -1653,38 +1657,22 @@ int main(int argc, char* argv[]) {
     ProcessorType detected_processor_type = processor_specified ? 
         processor_type_override : detect_processor_from_path(test_paths[0]);
     
-    std::cout << "=== fam65xx ProcessorTests Runner - Multi-Processor Edition ===\n";
-    std::cout << "CPU Implementation: " << get_processor_name(detected_processor_type) << "\n";
-    if (processor_specified) {
-        std::cout << "Processor selection: Manual override (--processor)\n";
-    } else {
-        std::cout << "Processor selection: Auto-detected from test path\n";
-    }
-    std::cout << "Test paths: " << test_paths.size() << " specified\n";
-    std::cout << "Worker threads: " << num_workers << "\n";
-    if (!opcode_filter.empty()) {
-        std::cout << "Opcode filter: 0x" << opcode_filter << " (only this opcode will be tested)\n";
-    }
-    std::cout << "Verbose: " << (verbose_output ? "enabled" : "disabled") << "\n";
-    std::cout << "Quiet mode: " << (g_quiet_mode ? "enabled" : "disabled") << "\n";
-    std::cout << "Stop on failure: " << (g_stop_on_failure ? "enabled" : "disabled") << "\n\n";
-    
     // Single dispatch point — everything below is monomorphic (no virtual calls)
     switch (detected_processor_type) {
         case ProcessorType::MOS6502:
-            return run_all_tests<fam65xx::MOS6502Traits>(test_paths, opcode_filter, num_workers, detected_processor_type);
+            return run_all_tests<MOS6502>(test_paths, opcode_filter, num_workers, processor_specified);
         case ProcessorType::NES6502:
-            return run_all_tests<fam65xx::RICOH_2A03Traits>(test_paths, opcode_filter, num_workers, detected_processor_type);
+            return run_all_tests<RICOH_2A03>(test_paths, opcode_filter, num_workers, processor_specified);
         case ProcessorType::MOS6510:
-            return run_all_tests<fam65xx::MOS6510Traits>(test_paths, opcode_filter, num_workers, detected_processor_type);
+            return run_all_tests<MOS6510>(test_paths, opcode_filter, num_workers, processor_specified);
         case ProcessorType::SYNERTEK65C02:
-            return run_all_tests<fam65xx::SYNERTEK_65C02Traits>(test_paths, opcode_filter, num_workers, detected_processor_type);
+            return run_all_tests<SYNERTEK_65C02>(test_paths, opcode_filter, num_workers, processor_specified);
         case ProcessorType::ROCKWELL65C02:
-            return run_all_tests<fam65xx::ROCKWELL_R65C02Traits>(test_paths, opcode_filter, num_workers, detected_processor_type);
+            return run_all_tests<ROCKWELL_R65C02>(test_paths, opcode_filter, num_workers, processor_specified);
         case ProcessorType::WDC65C02:
-            return run_all_tests<fam65xx::WDC_W65C02STraits>(test_paths, opcode_filter, num_workers, detected_processor_type);
+            return run_all_tests<WDC_W65C02S>(test_paths, opcode_filter, num_workers, processor_specified);
         case ProcessorType::WDC65C816:
-            return run_all_tests<fam65xx::WDC_65C816Traits>(test_paths, opcode_filter, num_workers, detected_processor_type);
+            return run_all_tests<WDC_65C816>(test_paths, opcode_filter, num_workers, processor_specified);
         default:
             std::cout << "ERROR: Unsupported processor type\n";
             return 1;

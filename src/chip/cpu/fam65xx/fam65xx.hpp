@@ -138,6 +138,12 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
     return Traits.has_io_port();
   }
 
+  // Identity / addressing helpers — let consumers query the CPU type without
+  // depending on CPUTraits directly.
+  static constexpr uint32_t address_mask() { return Traits.address_mask(); }
+  static constexpr const char* vendor()    { return Traits.vendor; }
+  static constexpr const char* chip_id()   { return Traits.chip_id; }
+
   // ========================================================================
   // DEBUG TRACING STATE (must be declared before use in member functions)
   // ========================================================================
