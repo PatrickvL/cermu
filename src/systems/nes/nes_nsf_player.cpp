@@ -21,7 +21,6 @@
 #include "nes_nsf_cartridge.h"
 #include "nes_screen_utils.h"
 #include "nes_system.h"
-#include "../../chip/cpu/fam65xx/nes6502.h"
 #include "asm6510.h"
 #include <cstdio>
 #include <cstring>
@@ -277,7 +276,7 @@ static void write_vectors(NsfCartridge* cart) {
 // ============================================================================
 
 std::shared_ptr<NsfCartridge> nes_apply_nsf_load(
-    nes6502_t* cpu,
+    RICOH_2A03* cpu,
     PPU* ppu,
     MemoryBus* bus,
     const nsf_header_t* nsf,
@@ -321,7 +320,7 @@ std::shared_ptr<NsfCartridge> nes_apply_nsf_load(
 
     // ---- Step 5: Reset CPU to RESET vector ----
     bus_state_t pins = NES_BUS_DEFAULT_STATE;
-    nes6502_reset(cpu, pins);
+    cpu->reset(pins);
 
     // After reset, CPU reads RESET vector ($FFFC/$FFFD)
     // which points to STUB_BASE — our init stub.
@@ -338,7 +337,7 @@ std::shared_ptr<NsfCartridge> nes_apply_nsf_load(
 // ============================================================================
 
 void nes_nsf_switch_subtune(
-    nes6502_t* cpu,
+    RICOH_2A03* cpu,
     PPU* ppu,
     MemoryBus* bus,
     NsfCartridge* nsf_cart,
@@ -381,7 +380,7 @@ void nes_nsf_switch_subtune(
 
     // ---- Reset CPU ----
     bus_state_t pins = NES_BUS_DEFAULT_STATE;
-    nes6502_reset(cpu, pins);
+    cpu->reset(pins);
 
     printf("NES NSF: Switched to subtune %d/%d\n",
            subtune + 1, nsf->num_songs);

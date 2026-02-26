@@ -1166,14 +1166,17 @@ bool NintendoSystem<V>::initialize() {
            is_pal_ ? "PAL" : "NTSC");
     
     // Create CPU with integrated APU
-    cpu_ = nes6502_create();
+    cpu_ = new RICOH_2A03();
     if (!cpu_) {
         printf("%s: Failed to create CPU\n", Traits::name);
         return false;
     }
     
+    // Initialize CPU
+    cpu_->init();
+    
     // Set APU region
-    nes6502_set_apu_region(cpu_, is_pal_);
+    cpu_->set_apu_region(is_pal_);
     
     // Create PPU
     ppu_ = std::make_shared<PPU>(is_pal_);
@@ -1197,7 +1200,7 @@ template<NintendoVariant V>
 void NintendoSystem<V>::shutdown() {
     if (cpu_) {
         printf("%s: Shutting down system\n", Traits::name);
-        nes6502_destroy(cpu_);
+        delete cpu_;
         cpu_ = nullptr;
     }
     initialized_ = false;
@@ -1211,7 +1214,7 @@ void NintendoSystem<V>::reset() {
     printf("%s: Resetting system\n", Traits::name);
     
     pins_ = NES_BUS_DEFAULT_STATE;
-    nes6502_reset(cpu_, pins_);
+    cpu_->reset(pins_);
     
     if (ppu_) {
         ppu_->reset();
@@ -1548,7 +1551,7 @@ void NintendoSystem<V>::register_nes_chips() {
     auto* cpu = cpu_;
 
     // CPU (Ricoh 2A03) — native ChipBase, registered directly
-    register_chip(nes6502_as_chip_base(cpu),
+    register_chip(static_cast<ChipBase*>(cpu_),
         "Ricoh 2A03 (6502 + APU)", "2A03", "CPU", 0x0000);
 
     // PPU (Ricoh 2C02) — native ChipBase, registered directly
@@ -1556,7 +1559,7 @@ void NintendoSystem<V>::register_nes_chips() {
         "Ricoh 2C02 PPU", "PPU", "Video", 0x2000);
 
     // APU (built into 2A03) — native ChipBase, registered directly
-    register_chip(nes6502_get_apu(cpu),
+    register_chip(cpu_->get_apu(),
         "APU (built-in 2A03)", "APU", "Audio", 0x4000);
 
     // RAM — MemoryChip with layout rendering
@@ -1648,7 +1651,7 @@ void NintendoSystem<V>::clock() {
             // CPU is stalled during DMA
         } else {
             // PHI2: CPU sets up bus (address, R/W)
-            pins_ = nes6502_tick(cpu_, pins_);
+            pins_ = cpu_->tick<RICOH_2A03::Phase::PHI2>(pins_);
             
             // Service CPU memory request via bus (between phases)
             pins_ = bus_->mem_tick(pins_);
@@ -1664,12 +1667,12 @@ void NintendoSystem<V>::clock() {
             }
             
             // PHI1: CPU internal operations (including APU clock)
-            pins_ = nes6502_tick_phi1(cpu_, pins_);
+            pins_ = cpu_->tick<RICOH_2A03::Phase::PHI1>(pins_);
         }
         
         // Generate audio sample
         if (audio_sample_counter_ == 0) {
-            float sample = nes6502_generate_audio_sample(cpu_);
+            float sample = cpu_->generate_audio_sample();
             audio_buffer_.push_back(sample);
         }
         audio_sample_counter_ = (audio_sample_counter_ + 1) % (is_pal_ ? 33 : 37);

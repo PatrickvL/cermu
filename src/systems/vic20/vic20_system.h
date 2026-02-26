@@ -10,7 +10,7 @@
 #include "vic20_config.h"
 #include "vic20_memory.h"
 #include "vic20_chips.h"
-struct mos6502_t;  // Opaque handle — .cpp uses fam65xx.hpp directly
+#include "../../chip/cpu/fam65xx/mos6502.h"
 
 #include <cstdint>
 #include <string>
@@ -95,7 +95,7 @@ private:
     vic20_memory_t* memory_;         // Unified memory banking system
     
     // Chip instances (properly typed)
-    mos6502_t* cpu_;                 // MOS6502 CPU instance
+    MOS6502* cpu_ = nullptr;  // MOS6502Traits CPU instance
     vic_base_t* vic_;                // VIC chip: MOS6561 (PAL) or MOS6560 (NTSC)
     mos6522_t* via1_;                // MOS6522 VIA 1 - keyboard, joystick
     mos6522_t* via2_;                // MOS6522 VIA 2 - user port, serial

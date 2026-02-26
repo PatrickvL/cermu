@@ -52,31 +52,31 @@ template <const fam65xx::CPUTraits &Traits> ChipLayout create_cpu_pin_layout() {
 
   // Compare by vendor and model strings instead of types
   // MOS 6502 (NMOS) PIN LAYOUT - use create_mos6502_layout()
-  if constexpr (Traits == fam65xx::MOS6502) {
+  if constexpr (Traits == fam65xx::MOS6502Traits) {
     layout = create_mos6502_layout();
 
     // MOS 6510 (C64/C128) PIN LAYOUT - use create_mos6510_layout()
-  } else if constexpr (Traits == fam65xx::MOS6510) {
+  } else if constexpr (Traits == fam65xx::MOS6510Traits) {
     layout = create_mos6510_layout();
 
     // CSG 7501/8501 (C16/Plus4) PIN LAYOUT - use create_csg7501_layout()
-  } else if constexpr (Traits == fam65xx::CSG7501) {
+  } else if constexpr (Traits == fam65xx::CSG7501Traits) {
     layout = create_csg7501_layout();
 
     // WDC 65C02 (CMOS) PIN LAYOUT - use create_wdc_w65c02s_layout()
-  } else if constexpr (Traits == fam65xx::WDC_W65C02S) {
+  } else if constexpr (Traits == fam65xx::WDC_W65C02STraits) {
     layout = create_wdc_w65c02s_layout();
 
     // WDC 65C816 (16-BIT) PIN LAYOUT - use create_wdc_65c816_layout()
-  } else if constexpr (Traits == fam65xx::WDC_65C816) {
+  } else if constexpr (Traits == fam65xx::WDC_65C816Traits) {
     layout = create_wdc_65c816_layout();
 
     // NES 6502 (RICOH 2A03) PIN LAYOUT - use create_ricoh_2a03_layout()
-  } else if constexpr (Traits == fam65xx::RICOH_2A03) {
+  } else if constexpr (Traits == fam65xx::RICOH_2A03Traits) {
     layout = create_ricoh_2a03_layout();
 
     // ROCKWELL R65C02 PIN LAYOUT - use create_rockwell_r65c02_layout()
-  } else if constexpr (Traits == fam65xx::ROCKWELL_R65C02) {
+  } else if constexpr (Traits == fam65xx::ROCKWELL_R65C02Traits) {
     layout = create_rockwell_r65c02_layout();
 
   } else {

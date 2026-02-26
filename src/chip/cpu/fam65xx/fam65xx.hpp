@@ -129,9 +129,9 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
     return Traits.has(CPUCoreFlags::ROCKWELL_BITS);
   }
 
-  // AEC pin detection: Only MOS6510 has the AEC pin (for VIC-II bus arbitration in C64)
+  // AEC pin detection: Only MOS6510Traits has the AEC pin (for VIC-II bus arbitration in C64)
   static constexpr bool has_aec_pin() {
-    return Traits == MOS6510;
+    return Traits == MOS6510Traits;
   }
 
   // ========================================================================
@@ -1786,34 +1786,22 @@ public:
 };
 
 // ============================================================================
-// MSVC COMPATIBILITY TYPE ALIASES
+// CONCRETE CPU TYPE ALIASES
 // ============================================================================
 
-// Create concrete type aliases for MSVC template compatibility
-// MSVC has stricter requirements for non-type template parameters
-using mos6502_cpu_impl_t = fam65xx_t<MOS6502>;
-using mos6510_cpu_impl_t = fam65xx_t<MOS6510>;
-using csg7501_cpu_impl_t = fam65xx_t<CSG7501>;
-using nes6502_cpu_impl_t = fam65xx_t<RICOH_2A03>;
-using wdc65c02_cpu_impl_t = fam65xx_t<WDC_65C02_EARLY>;
-using rockwell65c02_cpu_impl_t = fam65xx_t<ROCKWELL_R65C02>;
-using wdc65c816_cpu_impl_t = fam65xx_t<WDC_65C816>;
-
-// ============================================================================
-// EXPLICIT TEMPLATE INSTANTIATIONS (required for MSVC compatibility)
-// ============================================================================
-
-// Explicit template instantiations for all CPU variants
-// This ensures MSVC can properly resolve template parameters
-template class fam65xx_t<MOS6502>;
-template class fam65xx_t<MOS6510>;
-template class fam65xx_t<CSG7501>;
-template class fam65xx_t<RICOH_2A03>;
-template class fam65xx_t<SYNERTEK_65C02>;
-template class fam65xx_t<WDC_65C02_EARLY>;
-template class fam65xx_t<WDC_W65C02S>;
-template class fam65xx_t<ROCKWELL_R65C02>;
-template class fam65xx_t<WDC_65C816>;
+// Canonical CPU type names — bare chip names, since the Traits constants
+// now carry the "Traits" suffix (e.g. MOS6502Traits).
+// Per-chip wrapper headers (mos6502.h, mos6510.h, …) re-export these
+// outside the fam65xx namespace for consumer convenience.
+using MOS6502       = fam65xx_t<MOS6502Traits>;
+using MOS6510       = fam65xx_t<MOS6510Traits>;
+using CSG7501       = fam65xx_t<CSG7501Traits>;
+using RICOH_2A03    = fam65xx_t<RICOH_2A03Traits>;
+using WDC_65C02     = fam65xx_t<WDC_65C02_EARLYTraits>;
+using SYNERTEK_65C02 = fam65xx_t<SYNERTEK_65C02Traits>;
+using ROCKWELL_R65C02 = fam65xx_t<ROCKWELL_R65C02Traits>;
+using WDC_W65C02S   = fam65xx_t<WDC_W65C02STraits>;
+using WDC_65C816    = fam65xx_t<WDC_65C816Traits>;
 
 // ============================================================================
 // OPCODE TABLE GENERATION (processor-specific specializations were included

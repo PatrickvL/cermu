@@ -14,10 +14,6 @@
 #include <fstream>
 #include <sstream>
 
-
-using mos6510_cpu_t = fam65xx::mos6510_cpu_impl_t;
-#define CPU(ptr) reinterpret_cast<mos6510_cpu_t*>(ptr)
-
 namespace c64_test {
 
 // =============================================================================
@@ -408,7 +404,7 @@ static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles, i
     r.reason = 1; // timeout by default
     
     __try {
-        auto* cpu = CPU(c64->mos6510);
+        auto* cpu = c64->mos6510;
         uint16_t last_pc = cpu->get(REG_PC);
         uint32_t pc_stable_count = 0;
         
@@ -628,7 +624,7 @@ TestEnvironment TestFramework::detect_test_environment(const TestDescriptor& tes
 
 // Execute KERNAL boot sequence
 bool TestFramework::execute_kernal_boot(C64System* c64) {
-    auto* cpu = CPU(c64->mos6510);
+    auto* cpu = c64->mos6510;
     
     // Read KERNAL reset vector from ROM
     // The bus read will automatically route to KERNAL ROM at $FFFC-$FFFD
@@ -690,7 +686,7 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
 
 // Execute BASIC boot sequence (KERNAL + BASIC initialization)
 bool TestFramework::execute_basic_boot(C64System* c64, const TestDescriptor& test, uint16_t sys_addr) {
-    auto* cpu = CPU(c64->mos6510);
+    auto* cpu = c64->mos6510;
     
     if (verbose_) {
         printf("  Executing BASIC boot sequence...\n");
@@ -807,7 +803,7 @@ bool TestFramework::load_test_program(const TestDescriptor& test, C64System* c64
     c64->ram->data()[0x01] = 0x37;  // Data: LORAM=1, HIRAM=1, CHAREN=1
     c64->bus.on_banking_change(0x07);
     
-    auto* cpu = CPU(c64->mos6510);
+    auto* cpu = c64->mos6510;
     if (!cpu) {
         return false;
     }
@@ -893,7 +889,7 @@ TestProtocol TestFramework::detect_test_protocol(const TestDescriptor& test, C64
     
     // Check for BASIC two-stage loader pattern
     MemoryChip* ram = c64->ram;
-    auto* cpu = CPU(c64->mos6510);
+    auto* cpu = c64->mos6510;
     uint16_t pc = cpu->get(REG_PC);
     
     // BASIC two-stage loaders start at $0801 and have SYS command
@@ -959,7 +955,7 @@ uint16_t TestFramework::calculate_basic_entry_point(MemoryChip* ram, uint16_t sy
 }
 // Detect if CPU is stuck in infinite loop and check border color
 bool TestFramework::detect_infinite_loop(C64System* c64, uint16_t& loop_pc, uint32_t check_cycles) {
-    auto* cpu = CPU(c64->mos6510);
+    auto* cpu = c64->mos6510;
     uint16_t pc = cpu->get(REG_PC);
     
     // Run for check_cycles and see if PC stays at same address
@@ -1008,7 +1004,7 @@ TestResult TestFramework::run_exitcode_test_enhanced(const TestDescriptor& test,
     uint32_t max_cycles = test.timeout_cycles;
     uint32_t cycles = 0;
     
-    auto* cpu = CPU(c64->mos6510);
+    auto* cpu = c64->mos6510;
     uint16_t start_pc = cpu->get(REG_PC);
     
     if (verbose_) {
@@ -1259,7 +1255,7 @@ TestResult TestFramework::run_exitcode_test(const TestDescriptor& test, C64Syste
     debug_intercept_.value = 0;
     
     // Get initial PC for diagnostics
-    auto* cpu = CPU(c64->mos6510);
+    auto* cpu = c64->mos6510;
     uint16_t start_pc = cpu->get(REG_PC);
     uint16_t last_pc = start_pc;
     bool pc_changed = false;

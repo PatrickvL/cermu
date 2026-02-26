@@ -17,8 +17,9 @@
 #include <string>
 #include <vector>
 
+#include "../../chip/cpu/fam65xx/mos6510.h"
+
 class LightpenDevice;
-struct mos6510_t;
 
 /**
  * C64System — Commodore 64 system emulation.
@@ -105,7 +106,7 @@ public:
     // =========================================================================
 public:
     c64_bus_t bus{};                    // C64 bus controller (embedded, not heap-allocated)
-    mos6510_t* mos6510 = nullptr;       // MOS6510 CPU instance (opaque C++ core)
+    MOS6510* mos6510 = nullptr;  // MOS6510Traits CPU instance
     MemoryChip* ram = nullptr;          // RAM memory $0000-$FFFF (64KB)
     MemoryChip* cartridge_roml = nullptr; // Cartridge ROM Low $8000-$9FFF (8KB)
     MemoryChip* cartridge_romh = nullptr; // Cartridge ROM High $A000-$BFFF (8KB)

@@ -11,9 +11,8 @@
 #endif
 
 // Include processor-specific headers
-#include "../src/chip/cpu/fam65xx/fam65xx.hpp"
+#include "../src/chip/cpu/fam65xx/mos6502.h"
 
-using mos6502_cpu_t = fam65xx::mos6502_cpu_impl_t;
 
 namespace fam65xx_lorenz {
 
@@ -54,7 +53,7 @@ struct LorenzTestResult {
 
 class LorenzTestHarness {
 private:
-    mos6502_cpu_t* cpu_;
+    MOS6502* cpu_;
     std::vector<uint8_t> memory_;
     uint64_t cycle_count_;
     uint16_t load_address_;
@@ -90,7 +89,7 @@ public:
         expected_cycles_(0) {
         
         // Create CPU instance
-        cpu_ = new mos6502_cpu_t();
+        cpu_ = new MOS6502();
         
         // Initialize CPU (descriptor-free — memory I/O is handled via bus_state_t pins)
         pins_ = cpu_->init();
@@ -324,7 +323,7 @@ private:
 
     void execute_cycle() {
         // Execute CPU cycle
-        pins_ = cpu_->tick<mos6502_cpu_t::Phase::PHI2>(pins_);
+        pins_ = cpu_->tick<MOS6502::Phase::PHI2>(pins_);
         
         if (trace_enabled_) {
             uint16_t pc = cpu_->get(REG_PC);

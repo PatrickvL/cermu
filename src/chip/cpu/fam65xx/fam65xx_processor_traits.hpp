@@ -119,8 +119,7 @@ struct PeripheralConfig {
 // ============================================================================
 
 struct CPUTraits {
-  const char
-      *vendor; // Manufacturer name (e.g., "MOS Technology", "Ricoh", "WDC")
+  const char *vendor;          // Manufacturer name (e.g., "MOS Technology", "Ricoh", "WDC")
   const char *chip_id;         // Chip identifier (e.g., "6502", "6510", "2A03")
   uint32_t core_flags;         // CPUCoreFlags combination
   uint8_t address_bits;        // Address bus width (13, 16, 20, 21, 24)
@@ -232,7 +231,7 @@ constexpr uint32_t WDC_MODERN = ROCKWELL_BASE | CPUCoreFlags::WAI_STP;
 
 // --- NMOS Family ---
 
-inline constexpr CPUTraits MOS6502 = {
+inline constexpr CPUTraits MOS6502Traits = {
     "MOS Technology",                             // vendor
     "6502",                                       // chip_id
     CoreFlags::NMOS_BASE,                         // core_flags
@@ -242,7 +241,7 @@ inline constexpr CPUTraits MOS6502 = {
     {SoundChip::NONE, DMAController::NONE, false} // peripheral
 };
 
-inline constexpr CPUTraits MOS6504 = {
+inline constexpr CPUTraits MOS6504Traits = {
     "MOS Technology",                             // vendor
     "6504",                                       // chip_id
     CoreFlags::NMOS_BASE,                         // core_flags
@@ -252,7 +251,7 @@ inline constexpr CPUTraits MOS6504 = {
     {SoundChip::NONE, DMAController::NONE, false} // peripheral
 };
 
-inline constexpr CPUTraits MOS6507 = {
+inline constexpr CPUTraits MOS6507Traits = {
     "MOS Technology",                                 // vendor
     "6507",                                           // chip_id
     CoreFlags::NMOS_BASE | CPUCoreFlags::NO_IRQ_LINE, // core_flags
@@ -262,7 +261,7 @@ inline constexpr CPUTraits MOS6507 = {
     {SoundChip::NONE, DMAController::NONE, false}     // peripheral
 };
 
-inline constexpr CPUTraits MOS6509 = {
+inline constexpr CPUTraits MOS6509Traits = {
     "MOS Technology",                                 // vendor
     "6509",                                           // chip_id
     CoreFlags::NMOS_BASE | CPUCoreFlags::HAS_BANKING, // core_flags
@@ -272,7 +271,7 @@ inline constexpr CPUTraits MOS6509 = {
     {SoundChip::NONE, DMAController::NONE, false}     // peripheral
 };
 
-inline constexpr CPUTraits MOS6510 = {
+inline constexpr CPUTraits MOS6510Traits = {
     "MOS Technology",                                 // vendor
     "6510",                                           // chip_id
     CoreFlags::NMOS_BASE | CPUCoreFlags::HAS_IO_PORT, // core_flags
@@ -290,7 +289,7 @@ inline constexpr CPUTraits MOS6510 = {
 //   Bit 5: Cassette motor control (active low, output)
 //   Bits 6-7: Not connected (absent from mask)
 
-inline constexpr CPUTraits MOS6510T = MOS6510; // Identical
+inline constexpr CPUTraits MOS6510TTraits = MOS6510Traits; // Identical
 
 // CSG 7501/8501 — C16/Plus4 CPU
 // I/O Port bit assignments (active via DDR at $00/$01, mask 0x5F):
@@ -307,7 +306,7 @@ inline constexpr CPUTraits MOS6510T = MOS6510; // Identical
 // banking more directly. Here the TED participates in address decode.
 //
 // No NMI line: GATE IN (from TED) replaces NMI on this chip.
-inline constexpr CPUTraits CSG7501 = {
+inline constexpr CPUTraits CSG7501Traits = {
     "Commodore", // vendor
     "7501",      // chip_id
     CoreFlags::NMOS_BASE | CPUCoreFlags::HAS_IO_PORT |
@@ -318,7 +317,7 @@ inline constexpr CPUTraits CSG7501 = {
     {SoundChip::NONE, DMAController::NONE, false} // peripheral
 };
 
-inline constexpr CPUTraits CSG8502 = {
+inline constexpr CPUTraits CSG8502Traits = {
     "Commodore", // vendor
     "CSG8502",   // chip_id
     CoreFlags::NMOS_BASE | CPUCoreFlags::HAS_IO_PORT |
@@ -329,7 +328,7 @@ inline constexpr CPUTraits CSG8502 = {
     {SoundChip::NONE, DMAController::NONE, false} // peripheral
 };
 
-inline constexpr CPUTraits RICOH_2A03 = {
+inline constexpr CPUTraits RICOH_2A03Traits = {
     "Ricoh", // vendor
     "2A03",  // chip_id
     CPUCoreFlags::ILLEGAL_OPCODES | CPUCoreFlags::JMP_INDIRECT_BUG |
@@ -340,11 +339,11 @@ inline constexpr CPUTraits RICOH_2A03 = {
     {SoundChip::RICOH_APU, DMAController::NONE, false} // peripheral
 };
 
-inline constexpr CPUTraits RICOH_2A07 = RICOH_2A03; // PAL version
+inline constexpr CPUTraits RICOH_2A07Traits = RICOH_2A03Traits; // PAL version
 
 // --- CMOS Family ---
 
-inline constexpr CPUTraits WDC_65C02_EARLY = {
+inline constexpr CPUTraits WDC_65C02_EARLYTraits = {
     "WDC",                                        // vendor
     "65C02",                                      // chip_id
     CoreFlags::CMOS_BASE_FLAGS,                   // core_flags
@@ -354,10 +353,10 @@ inline constexpr CPUTraits WDC_65C02_EARLY = {
     {SoundChip::NONE, DMAController::NONE, false} // peripheral
 };
 
-inline constexpr CPUTraits WDC_65SC02 = WDC_65C02_EARLY;
-inline constexpr CPUTraits GTE_G65SC02 = WDC_65C02_EARLY;
+inline constexpr CPUTraits WDC_65SC02Traits = WDC_65C02_EARLYTraits;
+inline constexpr CPUTraits GTE_G65SC02Traits = WDC_65C02_EARLYTraits;
 
-inline constexpr CPUTraits SYNERTEK_65C02 = {
+inline constexpr CPUTraits SYNERTEK_65C02Traits = {
     "Synertek",                                   // vendor
     "65C02",                                      // chip_id
     CoreFlags::CMOS_BASE_FLAGS,                   // core_flags
@@ -367,7 +366,7 @@ inline constexpr CPUTraits SYNERTEK_65C02 = {
     {SoundChip::NONE, DMAController::NONE, false} // peripheral
 };
 
-inline constexpr CPUTraits ROCKWELL_R65C02 = {
+inline constexpr CPUTraits ROCKWELL_R65C02Traits = {
     "Rockwell",                                   // vendor
     "R65C02",                                     // chip_id
     CoreFlags::ROCKWELL_BASE,                     // core_flags
@@ -377,7 +376,7 @@ inline constexpr CPUTraits ROCKWELL_R65C02 = {
     {SoundChip::NONE, DMAController::NONE, false} // peripheral
 };
 
-inline constexpr CPUTraits WDC_W65C02S = {
+inline constexpr CPUTraits WDC_W65C02STraits = {
     "WDC",                                        // vendor
     "W65C02S",                                    // chip_id
     CoreFlags::WDC_MODERN,                        // core_flags
@@ -389,7 +388,7 @@ inline constexpr CPUTraits WDC_W65C02S = {
 
 // --- Advanced 8-bit Family ---
 
-inline constexpr CPUTraits CSG_65CE02 = {
+inline constexpr CPUTraits CSG_65CE02Traits = {
     "Commodore", // vendor
     "65CE02",    // chip_id
     CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::CE02_EXTENDED |
@@ -400,7 +399,7 @@ inline constexpr CPUTraits CSG_65CE02 = {
     {SoundChip::NONE, DMAController::NONE, false} // peripheral
 };
 
-inline constexpr CPUTraits CSG_4510 = {
+inline constexpr CPUTraits CSG_4510Traits = {
     "Commodore", // vendor
     "4510",      // chip_id
     CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::CE02_EXTENDED |
@@ -412,7 +411,7 @@ inline constexpr CPUTraits CSG_4510 = {
     {SoundChip::NONE, DMAController::CSG4510_DMA, false} // peripheral
 };
 
-inline constexpr CPUTraits HUDSON_HUC6280 = {
+inline constexpr CPUTraits HUDSON_HUC6280Traits = {
     "Hudson Soft", // vendor
     "HuC6280",     // chip_id
     CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::HUC6280_EXTENDED |
@@ -425,7 +424,7 @@ inline constexpr CPUTraits HUDSON_HUC6280 = {
 
 // --- 16-bit Family ---
 
-inline constexpr CPUTraits WDC_65C816 = {
+inline constexpr CPUTraits WDC_65C816Traits = {
     "WDC",                                                 // vendor
     "65C816",                                              // chip_id
     CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::C816_16BIT, // core_flags
@@ -435,7 +434,7 @@ inline constexpr CPUTraits WDC_65C816 = {
     {SoundChip::NONE, DMAController::NONE, false}          // peripheral
 };
 
-inline constexpr CPUTraits RICOH_5A22 = {
+inline constexpr CPUTraits RICOH_5A22Traits = {
     "Ricoh",                                                // vendor
     "5A22",                                                 // chip_id
     CoreFlags::CMOS_BASE_FLAGS | CPUCoreFlags::C816_16BIT,  // core_flags

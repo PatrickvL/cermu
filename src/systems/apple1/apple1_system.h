@@ -68,7 +68,7 @@ public:
 
 private:
     // Chip instances
-    mos6502_t* cpu_;                 // MOS6502 CPU instance @ 1 MHz
+    MOS6502* cpu_ = nullptr;  // MOS6502Traits CPU instance @ 1 MHz
     pia6820_t pia_;                  // PIA 6820 for keyboard and display I/O
     TextTerminal* terminal_;         // Text terminal (40x24)
     

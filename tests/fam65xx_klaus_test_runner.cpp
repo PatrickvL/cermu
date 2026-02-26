@@ -11,9 +11,8 @@
 
 
 // Include processor-specific headers
-#include "../src/chip/cpu/fam65xx/fam65xx.hpp"
+#include "../src/chip/cpu/fam65xx/mos6502.h"
 
-using mos6502_cpu_t = fam65xx::mos6502_cpu_impl_t;
 
 // ============================================================================
 // Klaus2m5 Test Runner for fam65xx Implementation
@@ -54,7 +53,7 @@ enum class TestMode {
 
 class KlausTestHarness {
 private:
-    mos6502_cpu_t* cpu_;                    // Direct C++ template type
+    MOS6502* cpu_;                    // Direct C++ template type
     std::vector<uint8_t> memory_;
     std::vector<uint8_t> test_binary_;
     uint64_t max_cycles_;
@@ -77,7 +76,7 @@ private:
 public:
     KlausTestHarness() : memory_(65536, 0x00), max_cycles_(KLAUS_MAX_CYCLES), trace_enabled_(false), pins_(0) {
         // Create CPU instance
-        cpu_ = new mos6502_cpu_t();
+        cpu_ = new MOS6502();
         
         // Initialize CPU (descriptor-free — memory I/O is handled via bus_state_t pins)
         pins_ = cpu_->init();
@@ -191,7 +190,7 @@ public:
             }
             
             // Execute one CPU cycle
-            pins_ = cpu_->tick<mos6502_cpu_t::Phase::PHI2>(pins_);
+            pins_ = cpu_->tick<MOS6502::Phase::PHI2>(pins_);
             cycles++;
             
             // Optional trace output

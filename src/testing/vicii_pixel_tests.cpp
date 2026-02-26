@@ -12,7 +12,7 @@
 #include "vicii_pixel_tests.h"
 #include "asm6510.h"  // src/core/asm6510.h (via include path)
 #include "../chip/video/vic_ii/vicii_common.h"
-#include "../chip/cpu/fam65xx/mos6510.h"
+#include "../chip/cpu/fam65xx/fam65xx.hpp"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -1830,8 +1830,8 @@ static void test_raster_bar_cpu(C64System* c64, EmulatedSystem* sys, check_ctx_t
         write_ram(c64, 0x8000 + (uint16_t)i, code[i]);
 
     // Redirect CPU to $8000 and reset its pipeline
-    mos6510_set_pc((mos6510_t*)c64->mos6510, 0x8000);
-    mos6510_transition_to_fetch((mos6510_t*)c64->mos6510);
+    c64->mos6510->set(REG_PC, 0x8000);
+    c64->mos6510->transition_to_fetch();
 
     // Run enough frames for the effect to stabilize (3+ frames)
     run_frames(sys, 5);
@@ -1872,8 +1872,8 @@ static void test_raster_bar_cpu(C64System* c64, EmulatedSystem* sys, check_ctx_t
     // Restore: halt CPU with JMP * at $8000, then reset VIC
     { asm6510 h(code, sizeof(code), 0x8000); h.jmp_self(); }
     for (int i = 0; i < 3; i++) write_ram(c64, 0x8000 + i, code[i]);
-    mos6510_set_pc((mos6510_t*)c64->mos6510, 0x8000);
-    mos6510_transition_to_fetch((mos6510_t*)c64->mos6510);
+    c64->mos6510->set(REG_PC, 0x8000);
+    c64->mos6510->transition_to_fetch();
 
     reset_vic_state(c64);
     run_frames(sys, 2);
@@ -1974,8 +1974,8 @@ static void test_fli_bug_width(C64System* c64, EmulatedSystem* sys, check_ctx_t&
     for (size_t i = 0; i < a.pos; i++) write_ram(c64, 0x8000 + (uint16_t)i, code[i]);
 
     // Redirect CPU
-    mos6510_set_pc((mos6510_t*)c64->mos6510, 0x8000);
-    mos6510_transition_to_fetch((mos6510_t*)c64->mos6510);
+    c64->mos6510->set(REG_PC, 0x8000);
+    c64->mos6510->transition_to_fetch();
 
     // Run frames for effect to stabilize
     run_frames(sys, 5);
@@ -2039,8 +2039,8 @@ static void test_fli_bug_width(C64System* c64, EmulatedSystem* sys, check_ctx_t&
     // Test 2: Stop CPU, set D018 to screen A, run frames → should show screen A
     { asm6510 h(code, sizeof(code), 0x8000); h.jmp_self(); }
     for (int i = 0; i < 3; i++) write_ram(c64, 0x8000 + i, code[i]);
-    mos6510_set_pc((mos6510_t*)c64->mos6510, 0x8000);
-    mos6510_transition_to_fetch((mos6510_t*)c64->mos6510);
+    c64->mos6510->set(REG_PC, 0x8000);
+    c64->mos6510->transition_to_fetch();
 
     write_vic(c64, 0x18, 0x1C);   // Restore screen A
     run_frames(sys, 3);
@@ -2178,8 +2178,8 @@ static void test_fli_diagnostic(C64System* c64, EmulatedSystem* sys, check_ctx_t
         printf("    Injecting %zu bytes at $8000\n", a.pos);
         for (size_t i = 0; i < a.pos; i++)
             write_ram(c64, 0x8000 + (uint16_t)i, code[i]);
-        mos6510_set_pc((mos6510_t*)c64->mos6510, 0x8000);
-        mos6510_transition_to_fetch((mos6510_t*)c64->mos6510);
+        c64->mos6510->set(REG_PC, 0x8000);
+        c64->mos6510->transition_to_fetch();
         run_frames(sys, 5);
     };
 
@@ -2286,8 +2286,8 @@ static void test_fli_diagnostic(C64System* c64, EmulatedSystem* sys, check_ctx_t
 
     { uint8_t hcode[4]; asm6510 h(hcode, sizeof(hcode), 0x8000); h.jmp_self();
       for (int i = 0; i < 3; i++) write_ram(c64, 0x8000 + i, hcode[i]); }
-    mos6510_set_pc((mos6510_t*)c64->mos6510, 0x8000);
-    mos6510_transition_to_fetch((mos6510_t*)c64->mos6510);
+    c64->mos6510->set(REG_PC, 0x8000);
+    c64->mos6510->transition_to_fetch();
 
     reset_vic_state(c64);
     run_frames(sys, 2);

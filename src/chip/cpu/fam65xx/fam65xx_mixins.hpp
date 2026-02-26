@@ -194,6 +194,11 @@ template <const CPUTraits &Traits> struct apu_mixin_t {
       init_apu();
     }
   }
+
+  // Get the APU instance pointer (for debug GUI / chip registration)
+  nes6502_apu::APU* get_apu() const {
+    return apu_state.apu_instance;
+  }
 };
 
 // ============================================================================

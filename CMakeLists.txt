@@ -247,16 +247,9 @@ target_include_directories(fam65xx_decoder PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/fam65xx
 )
 
-# Chip library sources - Updated for fam65xx
+# Chip library sources
 set(CHIP_SOURCES
-    # CPU sources - using fam65xx template-based implementation
-    src/chip/cpu/fam65xx/mos6502.cpp
-    src/chip/cpu/fam65xx/mos6510.cpp
-    src/chip/cpu/fam65xx/mos7501.cpp
-    src/chip/cpu/fam65xx/nes6502.cpp
-    src/chip/cpu/fam65xx/wdc65c02.cpp
-    src/chip/cpu/fam65xx/rockwell65c02.cpp
-    src/chip/cpu/fam65xx/wdc65c816.cpp
+    # CPU - fam65xx is header-only (template-based); no .cpp wrappers needed
 )
 # Always include other chip sources
 list(APPEND CHIP_SOURCES
