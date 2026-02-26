@@ -17,11 +17,9 @@
 
 #include "../../core/formats/nsf_format.h"
 #include "../../core/formats/format_handler.h"
+#include "../../chip/cpu/fam65xx/ricoh_2a03.h"
 #include <cstdint>
 #include <memory>
-
-// Forward declarations (avoid pulling in full nes_system.h)
-struct nes6502_t;
 
 namespace nes_system {
 
@@ -65,7 +63,7 @@ void nes_write_nsf_info_page(PPU* ppu,
  * @return          The created NsfCartridge (caller keeps reference for subtune switching)
  */
 std::shared_ptr<NsfCartridge> nes_apply_nsf_load(
-    nes6502_t* cpu,
+    RICOH_2A03* cpu,
     PPU* ppu,
     MemoryBus* bus,
     const nsf_header_t* nsf,
@@ -90,7 +88,7 @@ std::shared_ptr<NsfCartridge> nes_apply_nsf_load(
  * @param is_pal        True for PAL timing
  */
 void nes_nsf_switch_subtune(
-    nes6502_t* cpu,
+    RICOH_2A03* cpu,
     PPU* ppu,
     MemoryBus* bus,
     NsfCartridge* nsf_cart,

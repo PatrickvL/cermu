@@ -17,7 +17,7 @@
 #include "../../core/formats/lnx_format.h"
 #include "../../core/formats/sid_format.h"
 #include "../../core/formats/commodore_load_helpers.h"
-#include "../../chip/cpu/fam65xx/fam65xx.hpp"  // Concrete CPU type for direct method calls
+#include "../../chip/cpu/fam65xx/mos6510.h"
 // CPU (fam65xx) is a native C++ ChipBase — no separate GUI header needed
 #include "../../chip/video/vic_ii/vicii_common.h"
 // VIC-II is a native C++ ChipBase — no separate GUI header needed
@@ -39,12 +39,6 @@
 #include <cstring>
 #include <cstdio>
 #include <cctype>
-
-// Concrete CPU type — used to call template methods directly instead of going
-// through the C-wrapper functions, enabling the compiler to inline the CPU tick
-// into system_tick() (the hottest loop in the emulator).
-using mos6510_cpu_t = fam65xx::mos6510_cpu_impl_t;
-#define CPU(ptr) reinterpret_cast<mos6510_cpu_t*>(ptr)
 
 /**
  * C64 System Implementation
@@ -336,7 +330,7 @@ bool C64System::initialize() {
         delete this->cartridge_romh;
         delete this->basic;
         delete this->cartridge_roml;
-        delete CPU(this->mos6510); this->mos6510 = nullptr;
+        delete this->mos6510; this->mos6510 = nullptr;
         delete this->ram;
         initialized_ = false;
         // Chip pointers already nulled above
@@ -354,7 +348,7 @@ bool C64System::initialize() {
     // Create all chips
     // =========================================================================
     this->ram = new MemoryChip(ChipInfo{"4164", "Various"}, 65536, MemoryChip::RAM, &bus.state, "RAM", 0x0000);
-    if (!(this->mos6510 = reinterpret_cast<mos6510_t*>(new mos6510_cpu_t()))) { cleanup(); return false; }
+    if (!(this->mos6510 = new MOS6510())) { cleanup(); return false; }
     this->cartridge_roml = new MemoryChip(ChipInfo{"ROM", "Various"}, 8192, MemoryChip::ROM, &bus.state, "ROML", 0x8000);
     this->basic = new MemoryChip(ChipInfo{"MOS 901226-01", "Commodore"}, 8192, MemoryChip::ROM, &bus.state, "BASIC", 0xA000);
     this->cartridge_romh = new MemoryChip(ChipInfo{"ROM", "Various"}, 8192, MemoryChip::ROM, &bus.state, "ROMH", 0xA000);
@@ -450,9 +444,9 @@ bool C64System::initialize() {
     this->cia2->configured_interrupt_bit = BUS_NMI_BIT;
 
     // Initialize CPU and point it at the reset vector
-    auto* cpu = CPU(this->mos6510);
+    auto* cpu = this->mos6510;
     cpu->init();
-    if constexpr (fam65xx::MOS6510.has_io_port()) {
+    if constexpr (MOS6510Traits.has_io_port()) {
         cpu->init_io_port();
     }
     cpu->bank_change_fn = cpu_banking_callback;
@@ -527,7 +521,7 @@ void C64System::shutdown() {
         delete this->cartridge_romh;
         delete this->basic;
         delete this->cartridge_roml;
-        delete CPU(this->mos6510);
+        delete this->mos6510;
         this->mos6510 = nullptr;
         delete this->ram;
 
@@ -565,7 +559,7 @@ void C64System::reset() {
         // reinitialises the IO port — it leaves the CPU mid-instruction, which
         // causes a segfault when emulation resumes with an inconsistent pipeline.
         if (this->mos6510) {
-            auto* cpu = CPU(this->mos6510);
+            auto* cpu = this->mos6510;
             cpu->reset(0);
             cpu->bank_change_fn = cpu_banking_callback;
             cpu->bank_change_ctx = this;
@@ -669,7 +663,7 @@ bool C64System::check_serial_traps(uint16_t pc) {
 }
 
 bool C64System::serial_trap_attention() {
-    auto* cpu = CPU(mos6510);
+    auto* cpu = mos6510;
     uint8_t iecdata = ram->data()[ZP_BSOUR];
 
     if (iecdata == IEC_UNLISTEN) {
@@ -740,7 +734,7 @@ bool C64System::serial_trap_send() {
     auto* drive = find_iec_drive(serial_trap_.active_device);
     if (!drive) return false;
 
-    auto* cpu = CPU(mos6510);
+    auto* cpu = mos6510;
     uint8_t iecdata = ram->data()[ZP_BSOUR];
 
     // If no secondary address was sent, default to SA 0
@@ -768,7 +762,7 @@ bool C64System::serial_trap_receive() {
     auto* drive = find_iec_drive(serial_trap_.active_device);
     if (!drive) return false;
 
-    auto* cpu = CPU(mos6510);
+    auto* cpu = mos6510;
 
     // If no secondary address was sent, default to SA 0
     if (serial_trap_.trap_secondary == 0) {
@@ -808,7 +802,7 @@ bool C64System::serial_trap_ready() {
     auto* drive = find_iec_drive(serial_trap_.active_device);
     if (!drive) return false;
 
-    auto* cpu = CPU(mos6510);
+    auto* cpu = mos6510;
 
     // Fake the serial-ready check: pretend the bus signals are fine
     cpu->set(REG_A, 1);
@@ -854,8 +848,8 @@ void C64System::system_tick() {
         BUS_CLR_BIT(s, BUS_RDY_BIT);
 
     // PHASE 2: CPU PHI2 — instruction execution (direct C++ call, inlineable)
-    auto* cpu = CPU(mos6510);
-    s = cpu->tick<mos6510_cpu_t::Phase::PHI2>(s);
+    auto* cpu = mos6510;
+    s = cpu->tick<MOS6510::Phase::PHI2>(s);
 
     // PHASE 3: Memory service (AEC determines CPU vs VIC-II bus ownership)
     s = bus_ptr->memory_tick(s);
@@ -868,7 +862,7 @@ void C64System::system_tick() {
     s = cia1->tick_phi1(s);
 
     // PHASE 4: CPU PHI1 — prepare next fetch (direct C++ call, inlineable)
-    s = cpu->tick<mos6510_cpu_t::Phase::PHI1>(s);
+    s = cpu->tick<MOS6510::Phase::PHI1>(s);
 
     // KERNAL serial trap check — intercept IEC bus routines at instruction boundaries
     if (serial_traps_enabled_) {
@@ -1517,7 +1511,7 @@ void C64System::register_c64_chips() {
     auto* c64 = this;
 
     // CPU — fam65xx is a native C++ ChipBase, register directly
-    register_chip(static_cast<ChipBase*>(CPU(cpu)),
+    register_chip(static_cast<ChipBase*>(cpu),
         "MOS 6510 CPU", "6510", "CPU", 0x0000);
 
     // VIC-II — native C++ ChipBase, register directly

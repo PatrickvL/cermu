@@ -14,7 +14,7 @@ void c64_bus_s::on_banking_change(uint8_t banking_state) {
     c64_bus_t* bus = this;
     if (!bus || !bus->c64) return;
     
-    // Convert MOS6510 banking state to C64 bus mode
+    // Convert MOS6510Traits banking state to C64 bus mode
     // banking_state contains LORAM (bit 0), HIRAM (bit 1), CHAREN (bit 2)
     // Need to add EXROM and GAME bits from system lines
     uint8_t exrom = (bus->system_lines & SYS_MASK_EXROM) ? 1 : 0;
@@ -63,7 +63,7 @@ bus_state_t c64_bus_s::vic_read(bus_state_t bus_state, uint16_t address) {
 
 /**
  * New cycle-accurate memory tick function for the refactored architecture.
- * This function will be used by the new MOS6510 implementation to handle
+ * This function will be used by the new MOS6510Traits implementation to handle
  * memory access in a cycle-accurate manner.
  *
  * Optimized for register-based calling convention to avoid host stack accesses.

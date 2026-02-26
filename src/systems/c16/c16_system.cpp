@@ -11,18 +11,12 @@
 #include "../../core/formats/lnx_format.h"
 #include "../../core/formats/commodore_load_helpers.h"
 #include "../../devices/keyboard/commodore_keyboard_device.h"
-// CPU uses fam65xx.hpp directly for inlining
-#include "../../chip/cpu/fam65xx/fam65xx.hpp"
 // CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
 #include "../../core/chip.h"
 #include "../../chip/memory/memory_chip.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
-
-// Concrete CPU type — allows compiler to inline tick<> into the hot loop
-using mos7501_cpu_t = fam65xx::csg7501_cpu_impl_t;
-#define CPU(ptr) reinterpret_cast<mos7501_cpu_t*>(ptr)
 
 #ifdef IMGUI_VERSION
 #include "imgui.h"
@@ -338,16 +332,16 @@ bool Commodore264System<V>::initialize() {
     }
     
     // Initialize MOS 7501 CPU — direct C++ instantiation for inlining
-    cpu_ = reinterpret_cast<mos7501_t*>(new mos7501_cpu_t());
+    cpu_ = new CSG7501();
     if (!cpu_) {
         printf("%s: Failed to create MOS 7501 CPU\n", Traits::name);
         return false;
     }
     
     // Initialize CPU and I/O port
-    auto* cpu = CPU(cpu_);
+    auto* cpu = cpu_;
     cpu->init();
-    if constexpr (fam65xx::CSG7501.has_io_port()) {
+    if constexpr (CSG7501Traits.has_io_port()) {
         cpu->init_io_port();
     }
     
@@ -398,7 +392,7 @@ bool Commodore264System<V>::initialize() {
     setup_connector_ports();
 
     // Register chips for the Hardware menu and debug windows
-    register_chip(static_cast<ChipBase*>(CPU(cpu_)),
+    register_chip(static_cast<ChipBase*>(cpu_),
         "MOS 7501/8501 CPU", "7501", "CPU", 0x0000);
     register_chip(ted_,
         "TED 7360 (Video/Audio/I/O)", "TED", "Video", 0xFF00);
@@ -416,7 +410,7 @@ void Commodore264System<V>::shutdown() {
     
     // Destroy MOS 7501 CPU
     if (cpu_) {
-        delete CPU(cpu_);
+        delete cpu_;
         cpu_ = nullptr;
     }
     
@@ -445,13 +439,12 @@ void Commodore264System<V>::reset() {
     // CPU mid-instruction, which causes a segfault when emulation resumes
     // with an inconsistent pipeline.
     if (cpu_) {
-        auto* cpu = CPU(cpu_);
-        cpu->reset(0);
+        cpu_->reset(0);
         
         // Re-read reset vector from KERNAL ROM
         uint16_t reset_vector = (*kernal_rom_)[0xFFFC - 0xC000] | ((*kernal_rom_)[0xFFFD - 0xC000] << 8);
-        cpu->set(REG_PC, reset_vector);
-        cpu->set(REG_AB, reset_vector);
+        cpu_->set(REG_PC, reset_vector);
+        cpu_->set(REG_AB, reset_vector);
         printf("%s: CPU reset (PC=$%04X)\n", Traits::name, reset_vector);
     }
     
@@ -493,8 +486,7 @@ void Commodore264System<V>::tick() {
         BUS_CLR_BIT(s, BUS_RDY_BIT);
     
     // PHASE 2: CPU PHI2
-    auto* cpu = CPU(cpu_);
-    s = cpu->tick<mos7501_cpu_t::Phase::PHI2>(s);
+    s = cpu_->tick<CSG7501::Phase::PHI2>(s);
     
     // PHASE 3: Memory service
     s = mem_tick(s);
@@ -503,7 +495,7 @@ void Commodore264System<V>::tick() {
     ted_->tick_phi2(s);
     
     // PHASE 4: CPU PHI1
-    s = cpu->tick<mos7501_cpu_t::Phase::PHI1>(s);
+    s = cpu_->tick<CSG7501::Phase::PHI1>(s);
     
     // Restore R/W line to read mode after CPU PHI1 has consumed write info
     BUS_SET_BIT(s, BUS_RW_BIT);
@@ -846,10 +838,9 @@ template<C264SeriesVariant V>
 void Commodore264System<V>::set_cpu_pc(void* user_data, uint16_t addr) {
     auto* sys = static_cast<Commodore264System<V>*>(user_data);
     if (sys->cpu_) {
-        auto* cpu = CPU(sys->cpu_);
-        cpu->set(REG_PC, addr);
-        cpu->set(REG_AB, addr);
-        cpu->transition_to_fetch();
+        sys->cpu_->set(REG_PC, addr);
+        sys->cpu_->set(REG_AB, addr);
+        sys->cpu_->transition_to_fetch();
         printf("%s: PC set to $%04X\n", Traits::name, addr);
     }
 }

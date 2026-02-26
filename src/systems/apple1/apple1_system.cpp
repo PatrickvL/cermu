@@ -7,8 +7,7 @@
 #include "imgui.h"
 #endif
 
-// Include chip headers
-#include "../../chip/cpu/fam65xx/mos6502.h"
+// CPU type included via apple1_system.h → fam65xx.hpp
 
 // Include ROM loader
 #include "../../core/storage/rom_loader.h"
@@ -136,7 +135,7 @@ Apple1System::Apple1System()
 Apple1System::~Apple1System() {
     // Destroy CPU
     if (cpu_) {
-        mos6502_destroy(cpu_);
+        delete cpu_;
         cpu_ = nullptr;
     }
     
@@ -215,18 +214,18 @@ bool Apple1System::initialize() {
         printf("Apple1: Warning - ROMs not loaded, system may not function correctly\n");
     }
     
-    // Create CPU (MOS6502) with memory callbacks
-    cpu_ = mos6502_create();
+    // Create CPU (MOS6502Traits) — direct C++ instantiation
+    cpu_ = new MOS6502();
     if (!cpu_) {
-        printf("Apple1: Failed to create MOS6502 CPU\n");
+        printf("Apple1: Failed to create MOS6502Traits CPU\n");
         return false;
     }
     
     // Initialize CPU (descriptor-free — memory I/O is handled via bus_state_t pins)
-    mos6502_init(cpu_);
+    cpu_->init();
     
     // Reset CPU to initialize state
-    mos6502_reset(cpu_, 0);
+    cpu_->reset(0);
     
     // Reset PIA with callbacks
     pia_.init();
@@ -239,7 +238,7 @@ bool Apple1System::initialize() {
     setup_connector_ports();
 
     // Register chips for the Hardware menu (transfers ownership of memory chips)
-    register_chip(mos6502_as_chip_base(cpu_),
+    register_chip(static_cast<ChipBase*>(cpu_),
         "MOS 6502 CPU", "6502", "CPU", 0x0000);
     register_chip(&pia_,
         "PIA 6820 (Keyboard/Display)", "PIA", "I/O", 0xD010);
@@ -263,7 +262,7 @@ void Apple1System::shutdown() {
 void Apple1System::reset() {
     printf("Apple1: Resetting system\n");
     if (cpu_) {
-        mos6502_reset(cpu_, 0);
+        cpu_->reset(0);
     }
     pins_ = APPLE1_BUS_DEFAULT_STATE;
     total_cycles_ = 0;
@@ -456,7 +455,7 @@ bus_state_t Apple1System::mem_tick(bus_state_t s) {
 
 void Apple1System::tick_cpu() {
     if (cpu_) {
-        pins_ = mos6502_tick(cpu_, pins_);
+        pins_ = cpu_->tick<MOS6502::Phase::PHI2>(pins_);
         pins_ = mem_tick(pins_);
     }
 }

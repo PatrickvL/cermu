@@ -23,7 +23,7 @@
 #include <vector>
 #include <string>
 
-#include "../../chip/cpu/fam65xx/nes6502.h"
+#include "../../chip/cpu/fam65xx/ricoh_2a03.h"
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
 #include "../../core/emulated_system.h"
@@ -436,7 +436,7 @@ class NintendoSystem : public EmulatedSystem {
 
 private:
     // Core components
-    nes6502_t* cpu_;
+    RICOH_2A03* cpu_;
     bus_state_t pins_;  // Persistent CPU bus state across ticks
     std::shared_ptr<PPU> ppu_;
     std::shared_ptr<Cartridge> cartridge_;

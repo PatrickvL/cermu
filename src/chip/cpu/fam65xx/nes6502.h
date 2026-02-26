@@ -1,18 +1,10 @@
 #pragma once
 /*
- * nes6502.h - Unified NES 6502 CPU with Integrated APU
+ * nes6502.h - NES APU (Audio Processing Unit) Implementation
  *
- * This file provides a complete NES 6502 implementation with integrated APU.
- * Following AGENTS.md consolidation principles, all functionality is unified
- * in a single file to eliminate redundancy and improve maintainability.
- *
- * DESIGN PRINCIPLES:
- * ==================
- * - Single unified file for complete NES 6502 + APU functionality
- * - Pure C interface for maximum compatibility
- * - Opaque CPU handle (void pointer)
- * - Zero overhead abstractions via compile-time features
- * - Complete APU integration with memory-mapped registers
+ * Contains the APU class used by the NES 6502 CPU template (RICOH_2A03Traits).
+ * The APU is integrated into the CPU via the apu_mixin in fam65xx_mixins.hpp.
+ * The CPU type itself is fam65xx::RICOH_2A03 defined in fam65xx.hpp.
  */
 
 #include <array>
@@ -920,52 +912,11 @@ public:
 } // namespace nes6502_apu
 
 // ============================================================================
-// OPAQUE CPU HANDLE
+// Convenience re-exports — include this header to get the NES CPU type
+// without pulling in fam65xx.hpp directly.
+// NOTE: fam65xx.hpp must be included separately since this header is
+// also included by fam65xx_mixins.hpp (avoid circular dependency).
 // ============================================================================
-
-typedef struct nes6502_t nes6502_t;
-
-// ============================================================================
-// NES 6502 API
-// ============================================================================
-
-// Create/destroy CPU instance
-nes6502_t *nes6502_create(void);
-void nes6502_destroy(nes6502_t *cpu);
-
-// Basic API functions
-bus_state_t nes6502_init(nes6502_t *cpu);
-bus_state_t nes6502_reset(nes6502_t *cpu, bus_state_t pins);
-bus_state_t nes6502_tick(nes6502_t *cpu, bus_state_t pins);      // PHI2: bus setup
-bus_state_t nes6502_tick_phi1(nes6502_t *cpu, bus_state_t pins); // PHI1: internal ops + APU
-bool nes6502_opdone(nes6502_t *cpu);
-
-// Register access
-uint8_t nes6502_get_a(nes6502_t *cpu);
-uint8_t nes6502_get_x(nes6502_t *cpu);
-uint8_t nes6502_get_y(nes6502_t *cpu);
-uint8_t nes6502_get_s(nes6502_t *cpu);
-uint8_t nes6502_get_p(nes6502_t *cpu);
-uint16_t nes6502_get_pc(nes6502_t *cpu);
-
-void nes6502_set_a(nes6502_t *cpu, uint8_t value);
-void nes6502_set_x(nes6502_t *cpu, uint8_t value);
-void nes6502_set_y(nes6502_t *cpu, uint8_t value);
-void nes6502_set_s(nes6502_t *cpu, uint8_t value);
-void nes6502_set_p(nes6502_t *cpu, uint8_t value);
-void nes6502_set_pc(nes6502_t *cpu, uint16_t value);
-
-// APU functions (only available when APU is enabled)
-float nes6502_generate_audio_sample(nes6502_t *cpu);
-bool nes6502_apu_needs_dma(nes6502_t *cpu);
-uint16_t nes6502_apu_dma_address(nes6502_t *cpu);
-void nes6502_apu_load_dma_sample(nes6502_t *cpu, uint8_t data);
-bool nes6502_apu_irq(nes6502_t *cpu);
-void nes6502_set_apu_region(nes6502_t *cpu, bool is_pal);
-
-// Get APU instance pointer (for debug GUI)
-nes6502_apu::APU *nes6502_get_apu(nes6502_t *cpu);
-
-// Get ChipBase pointer from opaque handle (for system chip registration)
-class ChipBase;
-ChipBase* nes6502_as_chip_base(nes6502_t *cpu);
+// Usage:  #include "nes6502.h"
+//         #include "fam65xx.hpp"   // provides fam65xx::RICOH_2A03
+// Or include fam65xx.hpp first and this header for APU only.

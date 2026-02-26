@@ -30,14 +30,8 @@ set(SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 set(CPU_DIR ${SRC_DIR}/chip/cpu)
 set(CORE_DIR ${SRC_DIR}/core)
 
-# Collect CPU source files (using fam65xx template-based implementation)
+# Collect CPU source files (fam65xx is header-only; only decoder needs compiling)
 set(CPU_SOURCES
-    ${CPU_DIR}/fam65xx/mos6502.cpp
-    ${CPU_DIR}/fam65xx/mos6510.cpp
-    ${CPU_DIR}/fam65xx/nes6502.cpp
-    ${CPU_DIR}/fam65xx/wdc65c02.cpp
-    ${CPU_DIR}/fam65xx/rockwell65c02.cpp
-    ${CPU_DIR}/fam65xx/wdc65c816.cpp
     ${CPU_DIR}/fam65xx/fam65xx_decoder.cpp
 )
 

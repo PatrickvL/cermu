@@ -30,6 +30,8 @@ extern "C" {
 // Include new fam65xx processor implementation
 #include "../src/chip/cpu/fam65xx/fam65xx.hpp"
 
+using namespace fam65xx;
+
 namespace fs = std::filesystem;
 
 // Thread-local memory for CPU testing - each worker gets its own memory space
@@ -633,10 +635,10 @@ public:
 };
 
 // Generic processor wrapper template - eliminates code duplication
-template<const fam65xx::CPUTraits& Traits>
+template<const CPUTraits& Traits>
 class ProcessorWrapper : public UnifiedProcessorInterface {
 private:
-    fam65xx::fam65xx_t<Traits>* cpu;
+    fam65xx_t<Traits>* cpu;
     void* harness_ptr; // Store harness for memory callbacks
     
     // Instance memory callbacks that know about this wrapper's harness
@@ -682,21 +684,21 @@ private:
         // Runtime identification based on CPUTraits features
         if (Traits.has_apu()) return "NES6502";
         else if (Traits.has_io_port()) return "MOS6510";
-        else if (Traits.has(fam65xx::CPUCoreFlags::ROCKWELL_BITS)) return "Rockwell65C02";
-        else if (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) return "WDC65C816";
-        else if (Traits.has(fam65xx::CPUCoreFlags::CMOS_BASE)) return "WDC65C02";
+        else if (Traits.has(CPUCoreFlags::ROCKWELL_BITS)) return "Rockwell65C02";
+        else if (Traits.has(CPUCoreFlags::C816_16BIT)) return "WDC65C816";
+        else if (Traits.has(CPUCoreFlags::CMOS_BASE)) return "WDC65C02";
         else return "MOS6502";
     }
     
     // Helper function to check if this is a 65816 processor
     bool is_65816() const {
-        return Traits.has(fam65xx::CPUCoreFlags::C816_16BIT);
+        return Traits.has(CPUCoreFlags::C816_16BIT);
     }
 
 public:
     ProcessorWrapper() : harness_ptr(nullptr) {
         // Create CPU using C++ template implementation
-        cpu = new fam65xx::fam65xx_t<Traits>();
+        cpu = new fam65xx_t<Traits>();
         if (!cpu) {
             throw std::runtime_error("Failed to create CPU");
         }
@@ -725,12 +727,12 @@ public:
     }
     
     uint64_t tick_phi2(uint64_t pins) override {
-        using Phase = typename fam65xx::fam65xx_t<Traits>::Phase;
+        using Phase = typename fam65xx_t<Traits>::Phase;
         return cpu->template tick<Phase::PHI2>(pins);
     }
     
     uint64_t tick_phi1(uint64_t pins) override {
-        using Phase = typename fam65xx::fam65xx_t<Traits>::Phase;
+        using Phase = typename fam65xx_t<Traits>::Phase;
         return cpu->template tick<Phase::PHI1>(pins);
     }
     
@@ -743,7 +745,7 @@ public:
     }
     
     uint16_t get_a() override {
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
             // For 65C816, ALWAYS return the full 16-bit C register value (A+B combined)
             // ProcessorTests JSON format stores the complete 16-bit register state
             // regardless of M flag or emulation mode - this is the raw hardware state
@@ -755,7 +757,7 @@ public:
     }
     
     uint16_t get_x() override {
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
             // For 65C816, ALWAYS return the full 16-bit X register value
             // ProcessorTests JSON format stores the complete 16-bit register state
             // regardless of X flag or emulation mode - this is the raw hardware state
@@ -767,7 +769,7 @@ public:
     }
     
     uint16_t get_y() override {
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
             // For 65C816, ALWAYS return the full 16-bit Y register value
             // ProcessorTests JSON format stores the complete 16-bit register state
             // regardless of X flag or emulation mode - this is the raw hardware state
@@ -793,7 +795,7 @@ public:
     
     void set_a(uint16_t a) override {
         // For 65816, ALWAYS set the full 16-bit C register (A+B combined)
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
             cpu->set(REG_A_16, a);
         } else {
             // For 8-bit processors, truncate to low byte
@@ -803,7 +805,7 @@ public:
     
     void set_x(uint16_t x) override {
         // For 65816, ALWAYS set the full 16-bit X register
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
             cpu->set(REG_X_16, x);
         } else {
             // For 8-bit processors, truncate to low byte
@@ -813,7 +815,7 @@ public:
     
     void set_y(uint16_t y) override {
         // For 65816, ALWAYS set the full 16-bit Y register
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
             cpu->set(REG_Y_16, y);
         } else {
             // For 8-bit processors, truncate to low byte
@@ -824,7 +826,7 @@ public:
     void set_sp(uint16_t sp) override {
         // For 65C816 in native mode, set full 16-bit stack pointer
         // For other processors, only use low byte (high byte forced to 0x01 by hardware)
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
             // 65C816: Check emulation mode
             if (cpu->in_emulation_mode()) {
                 // Emulation mode: Force SPH to 0x01, use low byte from test data
@@ -841,7 +843,7 @@ public:
     }
     
     void set_status(uint8_t p) override {
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
             // 65C816: Preserve the E flag (bit 8) when setting P
             uint16_t p16 = cpu->get(REG_P_16);
             p16 = (p16 & 0xFF00) | p;  // Keep high byte (E flag), set low byte
@@ -853,52 +855,52 @@ public:
     
     // 65816-specific methods - only compile for 65816
     void set_emulation_mode(bool mode) override {
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
             cpu->set_emulation_mode(mode);
         }
     }
     
     void set_d(uint16_t value) override {
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
             cpu->set(REG_D, value);
         }
     }
     
     void set_dbr(uint8_t value) override {
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
             cpu->set(REG_DBR, value);
         }
     }
     
     void set_pbr(uint8_t value) override {
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
             cpu->set(REG_PBR, value);
         }
     }
     
     bool get_emulation_mode() override {
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
             return cpu->in_emulation_mode();
         }
         return true;
     }
     
     uint16_t get_d() override {
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
             return cpu->get(REG_D);
         }
         return 0;
     }
     
     uint8_t get_dbr() override {
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
             return cpu->get(REG_DBR);
         }
         return 0;
     }
     
     uint8_t get_pbr() override {
-        if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
             return cpu->get(REG_PBR);
         }
         return 0;
@@ -927,25 +929,25 @@ public:
 std::unique_ptr<UnifiedProcessorInterface> create_processor(ProcessorType type) {
     switch (type) {
         case ProcessorType::MOS6502:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::MOS6502>());
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<MOS6502Traits>());
             
         case ProcessorType::NES6502:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::RICOH_2A03>());
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<RICOH_2A03Traits>());
             
         case ProcessorType::MOS6510:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::MOS6510>());
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<MOS6510Traits>());
             
         case ProcessorType::SYNERTEK65C02:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::SYNERTEK_65C02>());
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<SYNERTEK_65C02Traits>());
             
         case ProcessorType::ROCKWELL65C02:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::ROCKWELL_R65C02>());
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<ROCKWELL_R65C02Traits>());
             
         case ProcessorType::WDC65C02:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::WDC_W65C02S>());
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<WDC_W65C02STraits>());
             
         case ProcessorType::WDC65C816:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::WDC_65C816>());
+            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<WDC_65C816Traits>());
             
         default:
             throw std::invalid_argument("Unsupported processor type");

@@ -10,9 +10,6 @@
 #include <cstdio>
 #include <cstring>
 
-using mos6510_cpu_t = fam65xx::mos6510_cpu_impl_t;
-#define CPU(ptr) reinterpret_cast<mos6510_cpu_t*>(ptr)
-
 // =============================================================================
 // SID Info Page — Full-screen display of SID header information
 // =============================================================================
@@ -296,7 +293,7 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
            sid->num_songs, sid->start_song);
 
     uint8_t* ram = c64->ram->data();
-    auto* cpu = CPU(c64->mos6510);
+    auto* cpu = c64->mos6510;
 
     // ---- Step 1: Write tune payload to C64 RAM ----
     if (prog && prog->data && prog->data_size > 0) {
@@ -387,7 +384,7 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
     if (!sid || !c64 || !c64->ram) return;
 
     uint8_t* ram = c64->ram->data();
-    auto* cpu = CPU(c64->mos6510);
+    auto* cpu = c64->mos6510;
 
     // ---- Silence SID: reset all voice state ----
     if (c64->sid) {

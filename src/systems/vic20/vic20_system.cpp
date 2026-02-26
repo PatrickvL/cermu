@@ -13,7 +13,7 @@
 #endif
 
 // Include chip headers — CPU uses fam65xx.hpp directly for inlining
-#include "../../chip/cpu/fam65xx/fam65xx.hpp"
+#include "../../chip/cpu/fam65xx/mos6502.h"
 #include "../../chip/video/vic/mos6560.h"
 #include "../../chip/video/vic/mos6561.h"
 #include "../../chip/video/vic/vic_common.h"  // For VIC_COLOR_* constants
@@ -23,10 +23,6 @@
 
 // Include bus interface
 #include "../../core/bus_cycle_interface.h"
-
-// Concrete CPU type — allows compiler to inline tick<> into the hot loop
-using mos6502_cpu_t = fam65xx::mos6502_cpu_impl_t;
-#define CPU(ptr) reinterpret_cast<mos6502_cpu_t*>(ptr)
 
 // Include ROM loader
 #include "../../core/storage/rom_loader.h"
@@ -281,7 +277,7 @@ VIC20System::VIC20System()
 VIC20System::~VIC20System() {
     // Destroy CPU
     if (cpu_) {
-        delete CPU(cpu_);
+        delete cpu_;
         cpu_ = nullptr;
     }
     
@@ -548,27 +544,26 @@ bool VIC20System::initialize() {
         printf("VIC20: Warning - ROMs not loaded, system may not function correctly\n");
     }
     
-    // Create CPU (MOS6502) — direct C++ instantiation for inlining
-    cpu_ = reinterpret_cast<mos6502_t*>(new mos6502_cpu_t());
+    // Create CPU (MOS6502Traits) — direct C++ instantiation for inlining
+    cpu_ = new MOS6502();
     if (!cpu_) {
-        printf("VIC20: Failed to create MOS6502 CPU\n");
+        printf("VIC20: Failed to create MOS6502Traits CPU\n");
         return false;
     }
     
     // Initialize CPU (descriptor-free — memory I/O is handled via bus_state_t pins)
-    auto* cpu = CPU(cpu_);
-    cpu->init();
+    cpu_->init();
     
     // Reset CPU to initialize state
-    cpu->reset(0);
+    cpu_->reset(0);
     
     // Manually load the reset vector since automatic reset doesn't work with callback-only CPU
     // KERNAL is at $E000-$FFFF (8KB), reset vector is at $FFFC-$FFFD
     uint8_t* kernal_ptr = vic20_memory_get_rom_ptr(memory_, VIC20_BASE_KERNAL);
     if (kernal_ptr) {
         uint16_t reset_vector = kernal_ptr[0xFFFC - 0xE000] | (kernal_ptr[0xFFFD - 0xE000] << 8);
-        cpu->set(REG_PC, reset_vector);
-        printf("VIC20: CPU reset complete - PC = $%04X\n", (unsigned)cpu->get(REG_PC));
+        cpu_->set(REG_PC, reset_vector);
+        printf("VIC20: CPU reset complete - PC = $%04X\n", (unsigned)cpu_->get(REG_PC));
     }
     
     // Create VIC chip — region-aware: MOS6561 for PAL, MOS6560 for NTSC
@@ -699,7 +694,7 @@ void VIC20System::reset() {
     
     // Reset CPU last (so it picks up clean bus state)
     if (cpu_) {
-        auto* cpu = CPU(cpu_);
+        auto* cpu = cpu_;
         cpu->reset(0);
         
         // Reload reset vector
@@ -756,8 +751,8 @@ void VIC20System::tick() {
     // PHASE 3: CPU TICKING (PHI2 phase - sets up memory access)
     // CPU executes instruction and puts address/control on bus
     // =========================================================================
-    auto* cpu = CPU(cpu_);
-    s = cpu->tick<mos6502_cpu_t::Phase::PHI2>(s);
+    auto* cpu = cpu_;
+    s = cpu->tick<MOS6502::Phase::PHI2>(s);
     
     // =========================================================================
     // PHASE 4: MEMORY SERVICE PHASE
@@ -771,7 +766,7 @@ void VIC20System::tick() {
     // PHASE 5: CPU TICKING (PHI1 phase - completes cycle)
     // CPU prepares next instruction fetch
     // =========================================================================
-    s = cpu->tick<mos6502_cpu_t::Phase::PHI1>(s);
+    s = cpu->tick<MOS6502::Phase::PHI1>(s);
     
     // Restore R/W line to read mode after CPU PHI1 has consumed write info.
     // Maintains invariant: BUS_MASK_RW is always set outside the CPU write window.
@@ -956,7 +951,7 @@ void VIC20System::register_vic20_chips() {
     auto* via2 = via2_;
 
     // CPU — native ChipBase, registered directly
-    register_chip(static_cast<ChipBase*>(CPU(cpu)),
+    register_chip(static_cast<ChipBase*>(cpu_),
         "MOS 6502 CPU", "6502", "CPU", 0x0000);
 
     // VIC — native ChipBase, registered directly

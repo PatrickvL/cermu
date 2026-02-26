@@ -1,102 +1,14 @@
 #pragma once
 /*
- * mos6510.h - C API Wrapper for MOS 6510 CPU
+ * mos6510.h — MOS 6510 CPU type (separation layer)
  *
- * This file provides C-compatible wrapper functions for the C++ template-based
- * CPU emulator implementation. Each supported processor gets its own set of
- * wrapper functions.
- *
- * DESIGN PRINCIPLES:
- * ==================
- * - Pure C interface for maximum compatibility
- * - Opaque CPU handles (void pointers)
- * - Processor-specific function names
- * - Minimal API surface - only basic functions
+ * Includes the full fam65xx template and re-exports the MOS 6510 CPU type
+ * and its traits constant outside the fam65xx namespace.  Consumer code
+ * can include just this header to pull in only the MOS 6510 variant.
  */
 
-#include <stdbool.h>
-#include <stdint.h>
+#include "fam65xx.hpp"
 
-#include "../../core/chip.h"
-#include "../../core/system_lines.h"
-
-typedef struct mos6510_t mos6510_t;
-
-// ============================================================================
-// MOS 6510-SPECIFIC DESCRIPTOR
-// ============================================================================
-
-// MOS 6510 descriptor with I/O port specific fields
-typedef struct {
-  // 6510-specific I/O port callbacks
-  uint8_t (*m6510_in_cb)(void *user_data); // Read from external I/O pins
-  void (*m6510_out_cb)(uint8_t data,
-                       void *user_data); // Write to external I/O pins
-  uint8_t m6510_io_pullup;               // Pull-up resistor configuration
-  uint8_t m6510_io_floating;             // Floating pin configuration
-  void *m6510_user_data;                 // User data for I/O callbacks
-} mos6510_desc_t;
-
-// ============================================================================
-// MOS 6510 (C64/C128) API
-// ============================================================================
-
-mos6510_t *mos6510_create(void);
-void mos6510_destroy(mos6510_t *cpu);
-
-bus_state_t mos6510_init(mos6510_t *cpu, const mos6510_desc_t *desc);
-bus_state_t mos6510_reset(mos6510_t *cpu, bus_state_t pins);
-bus_state_t mos6510_bootstrap(mos6510_t *cpu, bus_state_t pins);
-bool mos6510_opdone(mos6510_t *cpu);
-
-// Register access (same as 6502)
-uint8_t mos6510_get_a(mos6510_t *cpu);
-uint8_t mos6510_get_x(mos6510_t *cpu);
-uint8_t mos6510_get_y(mos6510_t *cpu);
-uint8_t mos6510_get_s(mos6510_t *cpu);
-uint8_t mos6510_get_p(mos6510_t *cpu);
-uint16_t mos6510_get_pc(mos6510_t *cpu);
-uint8_t mos6510_get_ir(mos6510_t *cpu);
-
-// Get current opcode entry (for disassembly)
-#ifdef __cplusplus
-#include "fam65xx_types.h"
-opcode_info_t mos6510_get_opcode_entry(mos6510_t *cpu);
-opcode_info_t mos6510_lookup_opcode(uint8_t opcode);
-#endif
-
-void mos6510_set_a(mos6510_t *cpu, uint8_t value);
-void mos6510_set_x(mos6510_t *cpu, uint8_t value);
-void mos6510_set_y(mos6510_t *cpu, uint8_t value);
-void mos6510_set_s(mos6510_t *cpu, uint8_t value);
-void mos6510_set_p(mos6510_t *cpu, uint8_t value);
-void mos6510_set_pc(mos6510_t *cpu, uint16_t value);
-void mos6510_set_ab(mos6510_t *cpu, uint16_t value);
-
-// Reset CPU instruction pipeline to fetch state
-// MUST be called after externally setting PC to ensure clean instruction fetch
-void mos6510_transition_to_fetch(mos6510_t *cpu);
-
-// I/O Port access (6510-specific)
-uint8_t mos6510_get_io_ddr(mos6510_t *cpu);
-uint8_t mos6510_get_io_data(mos6510_t *cpu);
-uint8_t mos6510_get_io_input(mos6510_t *cpu);
-void mos6510_set_io_input(mos6510_t *cpu, uint8_t value);
-
-// Set the bank-change callback and context for memory banking.
-// Called when I/O port bits 0-2 change. Typically wired to the system's
-// PLA reconfiguration function (e.g. cpu_banking_callback) with the
-// system struct (e.g. c64_t*) as context.
-void mos6510_set_bank_change(mos6510_t *cpu,
-                             void(*fn)(void*, uint8_t),
-                             void* context);
-
-// Get ChipBase pointer from opaque handle (for system chip registration)
-#ifdef __cplusplus
-class ChipBase;
-ChipBase* mos6510_as_chip_base(mos6510_t *cpu);
-#endif
-
-// Chip-compatible tick function
-bus_state_t mos6510_tick_phi2(void *cpu, bus_state_t pins);
-bus_state_t mos6510_tick_phi1(void *cpu, bus_state_t pins);
+// Re-export outside fam65xx namespace for convenience
+using MOS6510 = fam65xx::MOS6510;
+inline constexpr auto& MOS6510Traits = fam65xx::MOS6510Traits;
