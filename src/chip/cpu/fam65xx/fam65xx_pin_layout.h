@@ -20,7 +20,7 @@
 /// Per-CPU headers override this via explicit specialization.
 /// CPUs without a custom layout get a generic DIP-40 package with the
 /// vendor and chip-id strings from their traits.
-template <const fam65xx::CPUTraits &Traits>
+template <const fam65xx::detail::CPUTraits &Traits>
 inline ChipLayout create_cpu_pin_layout() {
   ChipLayout layout = create_dip40_layout();
 

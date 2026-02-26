@@ -1304,13 +1304,13 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
         &fam65xx_t::am_zpy;  // Zero Page,Y (replaced by Direct Page,Y in 65C816)
 
     // Rockwell 65C02 addressing modes
-    if constexpr (Traits.has(fam65xx::CPUCoreFlags::ROCKWELL_BITS)) {
+    if constexpr (Traits.has(fam65xx::detail::CPUCoreFlags::ROCKWELL_BITS)) {
       addressing_mode_handlers[to_index(AM::ZPR)] =
           &fam65xx_t::am_zpr; // Zero Page Relative - BBR/BBS $nn,$offset
     }
 
     // CMOS processors
-    if constexpr (Traits.has(fam65xx::CPUCoreFlags::CMOS_BASE)) {
+    if constexpr (Traits.has(fam65xx::detail::CPUCoreFlags::CMOS_BASE)) {
       addressing_mode_handlers[to_index(AM::ZPI)] =
           &fam65xx_t::am_zpi;  // Zero Page Indirect
       addressing_mode_handlers[to_index(AM::ABI)] =
@@ -1318,7 +1318,7 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
     }
 
     // WDC 65C816 modifications (16-bit enhanced instructions)
-    if constexpr (Traits.has(fam65xx::CPUCoreFlags::C816_16BIT)) {
+    if constexpr (Traits.has(fam65xx::detail::CPUCoreFlags::C816_16BIT)) {
       // Initialize 65C816 exclusive addressing modes
       addressing_mode_handlers[to_index(AM::ABL)] =
           &fam65xx_t::am_abl; // Absolute Long

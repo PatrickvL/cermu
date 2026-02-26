@@ -20,7 +20,7 @@
 // CPU PIN STATE EXTRACTION WITH BUS STATE
 // ============================================================================
 
-template <const fam65xx::CPUTraits &Traits>
+template <const fam65xx::detail::CPUTraits &Traits>
 std::vector<PinSignalState> get_cpu_pin_states(fam65xx::fam65xx_t<Traits> *cpu,
                                                const ChipLayout *layout,
                                                bus_state_t bus_state) {
