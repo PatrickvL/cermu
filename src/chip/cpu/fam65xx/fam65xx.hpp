@@ -129,9 +129,13 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
     return Traits.has(CPUCoreFlags::ROCKWELL_BITS);
   }
 
-  // AEC pin detection: Only MOS6510Traits has the AEC pin (for VIC-II bus arbitration in C64)
+  // AEC pin detection: all 65xx CPUs with an I/O port (6510, 7501/8501, 8502)
+  // also carry the AEC (Address Enable Control) pin for VIC-II / TED bus
+  // arbitration.  Using the I/O-port flag avoids a non-dependent name lookup
+  // on a specific traits constant that may not yet be visible at template
+  // definition time.
   static constexpr bool has_aec_pin() {
-    return Traits == MOS6510Traits;
+    return Traits.has_io_port();
   }
 
   // ========================================================================
@@ -1789,23 +1793,10 @@ public:
 // CONCRETE CPU TYPE ALIASES
 // ============================================================================
 
-// Canonical CPU type names — bare chip names, since the Traits constants
-// now carry the "Traits" suffix (e.g. MOS6502Traits).
-// Per-chip wrapper headers (mos6502.h, mos6510.h, …) re-export these
-// outside the fam65xx namespace for consumer convenience.
-using MOS6502       = fam65xx_t<MOS6502Traits>;
-using MOS6510       = fam65xx_t<MOS6510Traits>;
-using CSG7501       = fam65xx_t<CSG7501Traits>;
-using RICOH_2A03    = fam65xx_t<RICOH_2A03Traits>;
-using WDC_65C02     = fam65xx_t<WDC_65C02_EARLYTraits>;
-using SYNERTEK_65C02 = fam65xx_t<SYNERTEK_65C02Traits>;
-using ROCKWELL_R65C02 = fam65xx_t<ROCKWELL_R65C02Traits>;
-using WDC_W65C02S   = fam65xx_t<WDC_W65C02STraits>;
-using WDC_65C816    = fam65xx_t<WDC_65C816Traits>;
-
 // ============================================================================
-// OPCODE TABLE GENERATION (processor-specific specializations were included
-// above)
+// Type aliases, trait constants, and pin layouts are defined in per-CPU
+// wrapper headers (mos6502.h, mos6510.h, etc.) and re-exported outside
+// the fam65xx namespace.  Include the headers you need directly.
 // ============================================================================
 
 } // namespace fam65xx

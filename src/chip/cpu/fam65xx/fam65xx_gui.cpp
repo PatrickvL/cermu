@@ -13,8 +13,18 @@
 // Include the modern fam65xx implementation
 #include "fam65xx.hpp"
 #include "fam65xx_decoder.h"
-#include "fam65xx_processor_traits.hpp"
 #include "fam65xx_types.h"
+
+// Per-CPU headers for explicit template instantiations below
+#include "mos6502.h"
+#include "mos6510.h"
+#include "mos7501.h"
+#include "ricoh_2a03.h"
+#include "wdc65c02.h"
+#include "synertek65c02.h"
+#include "rockwell65c02.h"
+#include "wdc_w65c02s.h"
+#include "wdc65c816.h"
 
 // Include GUI interface first (defines IMGUI_VERSION)
 #include "../../../core/chip_layout.h"
