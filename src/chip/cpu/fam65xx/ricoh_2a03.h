@@ -8,8 +8,10 @@
  */
 
 #include "fam65xx.hpp"
+#ifdef IMGUI_VERSION
 #include "fam65xx_pin_layout.h"
 #include "../../../core/system_lines.h"
+#endif
 
 namespace fam65xx {
 
@@ -35,6 +37,7 @@ using RICOH_2A03 = fam65xx_t<RICOH_2A03Traits>;
 // Trait constants remain internal to namespace fam65xx.
 using RICOH_2A03 = fam65xx::RICOH_2A03;
 
+#ifdef IMGUI_VERSION
 // ============================================================================
 // RICOH 2A03 PIN LAYOUT (40-pin DIP, NES CPU)
 // ============================================================================
@@ -83,3 +86,4 @@ inline ChipLayout create_ricoh_2a03_layout() {
 template<> inline ChipLayout create_cpu_pin_layout<fam65xx::RICOH_2A03Traits>() {
   return create_ricoh_2a03_layout();
 }
+#endif // IMGUI_VERSION
