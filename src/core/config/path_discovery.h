@@ -1,8 +1,8 @@
 #pragma once
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <stddef.h>
+#include <cstdint>
+
+#include <cstddef>
 
 /**
  * Discover the data root folder by searching upwards from executable location.
@@ -25,5 +25,3 @@ bool system_config_discover_data_root(const char* system_name, char* out_path, s
  * @return true if ROM root folder was found, false otherwise
  */
 bool system_config_discover_rom_root(const char* system_name, char* out_path, size_t path_size);
-
-

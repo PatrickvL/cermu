@@ -9,17 +9,12 @@
  */
 
 #include "format_handler.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // ============================================================================
 // CRT Types
 // ============================================================================
 
 /** CRT header (first 64 bytes) */
-typedef struct {
+struct commodore_crt_header_t {
     char     signature[16];         /**< "C64 CARTRIDGE   " */
     uint32_t header_length;         /**< Header length (usually 0x40) */
     uint16_t version;               /**< CRT version (big-endian) */
@@ -28,17 +23,17 @@ typedef struct {
     uint8_t  game;                  /**< GAME line state */
     uint8_t  reserved[6];
     char     name[32];              /**< Cartridge name, null-terminated */
-} commodore_crt_header_t;
+};
 
 /** CRT CHIP packet header */
-typedef struct {
+struct commodore_crt_chip_t {
     char     signature[4];          /**< "CHIP" */
     uint32_t packet_length;         /**< Total packet length (big-endian) */
     uint16_t chip_type;             /**< 0=ROM, 1=RAM, 2=Flash (big-endian) */
     uint16_t bank_number;           /**< Bank number (big-endian) */
     uint16_t load_address;          /**< Load address (big-endian) */
     uint16_t rom_size;              /**< ROM image size (big-endian) */
-} commodore_crt_chip_t;
+};
 
 // ============================================================================
 // CRT Format API
@@ -55,6 +50,3 @@ bool commodore_crt_read_header(const char* filepath, commodore_crt_header_t* out
 
 extern const format_descriptor_t CRT_FORMAT_DESCRIPTOR;
 
-#ifdef __cplusplus
-}
-#endif

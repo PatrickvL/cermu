@@ -6,9 +6,9 @@
  */
 
 #include "fam65xx_decoder.h"
-#include <stdbool.h>
-#include <stdio.h>
-#include <string.h>
+
+#include <cstdio>
+#include <cstring>
 
 // ============================================================================
 // OPERATION NAME LOOKUP TABLE

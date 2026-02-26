@@ -17,27 +17,15 @@
  */
 
 #include "format_handler.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * Load any supported file format (C API).
  * Identifies the format and dispatches to its load() callback.
  * @return true on success (type != FORMAT_LOAD_ERROR)
  */
 bool format_load_file(const char* filepath, format_load_result_t* out);
-
-#ifdef __cplusplus
-}
-#endif
-
 // ============================================================================
 // C++ Registry API
 // ============================================================================
-
-#ifdef __cplusplus
 
 #include <vector>
 #include <string>
@@ -96,4 +84,3 @@ private:
         static FormatRegistrar_##tag s_format_registrar_##tag; \
     }
 
-#endif /* __cplusplus */

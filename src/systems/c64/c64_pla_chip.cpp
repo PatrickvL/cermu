@@ -9,8 +9,8 @@
 #include "../../gui/chip_visualization.h"
 #include "../../gui/global_chip_style.h"
 #endif
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 
 // Helper function to get PLA mode description
 static const char* get_pla_mode_cpu_description(uint8_t mode) {

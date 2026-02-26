@@ -12,12 +12,7 @@
  * format delivered it there.
  */
 
-#include <stdint.h>
-#include <stdbool.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+#include <cstdint>
 
 // ============================================================================
 // Types
@@ -31,14 +26,14 @@ typedef uint8_t (*commodore_mem_read_fn)(void* ctx, uint16_t addr);
  * Each Commodore system has a different BASIC start address but shares
  * the same BASIC V2 tokenization.
  */
-typedef struct {
+struct commodore_basic_params_t {
     uint16_t basic_start;           /**< BASIC program start address ($0801 C64, $1001 VIC-20/C16) */
     uint8_t  sys_token;             /**< SYS token value (0x9E for BASIC V2 / BASIC 3.5) */
     uint8_t  rem_token;             /**< REM token value (0x8F for all Commodore BASIC versions) */
     uint8_t  peek_token;            /**< PEEK token value (0xC2 for BASIC V2) */
     uint16_t basic_start_ptr_lo;    /**< Zero-page address of BASIC start pointer low byte */
     uint16_t basic_start_ptr_hi;    /**< Zero-page address of BASIC start pointer high byte */
-} commodore_basic_params_t;
+};
 
 /** Pre-defined BASIC parameters for common systems */
 extern const commodore_basic_params_t COMMODORE_BASIC_C64;
@@ -48,11 +43,11 @@ extern const commodore_basic_params_t COMMODORE_BASIC_C16;
 /**
  * Result of BASIC SYS address parsing.
  */
-typedef struct {
+struct commodore_basic_sys_t {
     uint16_t sys_address;           /**< SYS target address (0 = not found) */
     uint16_t line_number;           /**< BASIC line number containing SYS */
     bool     found;                 /**< Whether a SYS statement was found */
-} commodore_basic_sys_t;
+};
 
 // ============================================================================
 // BASIC Parser API
@@ -74,6 +69,3 @@ bool commodore_basic_parse_sys(commodore_mem_read_fn mem_read, void* mem_ctx,
                                int max_lines,
                                commodore_basic_sys_t* out_sys);
 
-#ifdef __cplusplus
-}
-#endif

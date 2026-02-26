@@ -1,11 +1,9 @@
 #pragma once
 
 #include "../../../core/chip.h"
-#include <stdint.h>
+#include <cstdint>
 #include "../../../core/system_lines.h" // For bus_state_t
-#include "../../../chip/memory/mos2114.h"  // For mos2114_t
-#include <stdbool.h>
-
+#include "../../../chip/memory/mos2114.h"  // For MOS2114
 // VIC-II Register Constants - Modern C++ constexpr
 namespace vicii_regs {
     constexpr uint8_t SIZE = 64;
@@ -215,11 +213,10 @@ enum vicii_priority_e {
 using vicii_priority_t = uint8_t;  // Must be 1 byte for memset compatibility (values 0-4)
 
 // Pixel structure
-struct vicii_pixel_s {
+struct vicii_pixel_t {
     vicii_priority_t priority;
     vicii_color_t color;
 };
-using vicii_pixel_t = vicii_pixel_s;
 
 // VIC-II border coordinates (identical across all chip variants)
 // From vic-ii.txt lines 751-759
@@ -276,8 +273,7 @@ struct vicii_chip_config_t {
 // ========================================================================================
 // CYCLE TABLE ENTRY TYPE (needed for timing unit)
 // ========================================================================================
-struct vicii_s; // Forward declaration
-using vicii_t = struct vicii_s;
+struct vicii_t; // Forward declaration
 using vicii_cycle_func_t = uint8_t (*)(vicii_t*, int);
 
 struct vicii_cycle_entry_t {
@@ -308,7 +304,7 @@ struct vicii_timing_unit_t {
 };
 
 // Video Logic Unit - Display state and bad line logic (Documentation section 3.7)
-typedef struct {
+struct vicii_video_logic_unit_t {
     bool display_state;
     bool is_bad_line;
     bool bad_line_occurred;    // Latch: true if is_bad_line was true at ANY point on current raster line.
@@ -324,16 +320,16 @@ typedef struct {
     uint8_t rc;          // RC - Row Counter (3 bits) (Documentation section 3.7.2)
     uint8_t vmli;        // VMLI - Video Matrix Line Index (6 bits) (Documentation section 3.7.2)
     uint8_t refresh_counter; // REF - 8 bit refresh counter (Documentation section 3.13)
-} vicii_video_logic_unit_t;
+};
 
 // Video Data Unit - Character and color line buffers
-typedef struct {
+struct vicii_video_data_unit_t {
     uint8_t video_matrix_line[40];
     vicii_color_t video_color_line[40];
-} vicii_video_data_unit_t;
+};
 
 // Graphics Sequencer Unit - Graphics pixel generation state
-typedef struct {
+struct vicii_sequencer_unit_t {
     uint8_t graphics_mode;    // Current graphics mode
     uint8_t last_mode;        // Last graphics mode for change detection
     uint8_t shift_reg;        // Graphics shift register
@@ -343,10 +339,10 @@ typedef struct {
     uint8_t current_vmli_for_display; // VMLI value from g-access (before increment)
     uint8_t display_vmli;     // Display-side column counter (0-39), next column to load into SR
     uint8_t active_display_column; // Column index whose data is currently in the shift register
-} vicii_sequencer_unit_t;
+};
 
 // Border Unit - Border generation and limits (Documentation section 3.9)
-typedef struct {
+struct vicii_border_unit_t {
     vicii_pixel_t border_pixel;
     
     // SCREEN POSITION DECODES 6567 NTSC
@@ -406,17 +402,17 @@ typedef struct {
     // the (now changed) CSEL=0 value and misses.
     bool deferred_right_border;      // Pending main_border=true from previous cycle's right border check
     uint16_t deferred_right_border_x; // The x position that triggered the deferred set
-} vicii_border_unit_t;
+};
 
 // Memory Mapping Unit - VIC-II memory access configuration (Documentation section 2.4.2)
-typedef struct {
+struct vicii_memory_unit_t {
     uint16_t bank_base;         // Base address of current 16KB VIC bank
     uint16_t vm_base;           // VM10-VM13 bits - Video Matrix base within VIC bank
     uint16_t cb_base;           // CB11-CB13 bits - Character Base within VIC bank
-} vicii_memory_unit_t;
+};
 
 // Sprite Unit - Single sprite state (Documentation section 3.8 + VIC-Addendum)
-typedef struct {
+struct vicii_sprite_unit_t {
     uint8_t x_pos;
     uint8_t y_pos;
     bool enabled;
@@ -438,16 +434,16 @@ typedef struct {
     uint32_t shift_reg;          // 24-bit shift register
     uint8_t shift_register[3];
     uint8_t data_buffer[3];
-} vicii_sprite_unit_t;
+};
 
 // Sprites System Unit - All sprite management
-typedef struct {
+struct vicii_sprites_unit_t {
     vicii_sprite_unit_t sprites[VICII_NUM_SPRITES];
     uint8_t pending_mxye_crunch;  // Bitmask of sprites needing crunch in cycle 15 PHI2
-} vicii_sprites_unit_t;
+};
 
 // Pixel Output Unit - Pixel line generation and framebuffer
-typedef struct {
+struct vicii_pixel_unit_t {
     // Single line buffers for pixel generation
     vicii_priority_t* pixel_line_priority;
     uint8_t* pixel_line_color;  // Stores color INDICES (0-15), not RGB values
@@ -464,23 +460,23 @@ typedef struct {
     uint32_t* framebuffer;
     int framebuffer_width;
     int framebuffer_height;
-} vicii_pixel_unit_t;
+};
 
 // Lightpen Unit - LP pin edge detection and latch state
 // The VIC-II has a single LP input pin (active LOW, directly from Control Port 1 pin 6).
 // On a 1→0 (negative) edge, it latches the current raster position into LPX/LPY
 // and sets the ILP interrupt flag. Only one trigger per frame is recognized.
-typedef struct {
+struct vicii_lightpen_unit_t {
     bool triggered;         // Already triggered this frame (one trigger per frame)
     bool lp_pin_prev;       // Previous LP pin state (true=HIGH/released, false=LOW/active)
-} vicii_lightpen_unit_t;
+};
 
 // Memory read callback type for VIC-II PHI1/PHI2 accesses.
 // Decouples VIC-II from the system bus — the system injects this at init.
 using vicii_mem_read_fn_t = bus_state_t (*)(void* ctx, bus_state_t bus_state, uint16_t addr);
 
 // Bus Interface Unit - External bus communication
-typedef struct {
+struct vicii_bus_unit_t {
     void* bus;
     vicii_mem_read_fn_t mem_read;  // System-provided memory read callback
     void* mem_read_ctx;            // Context for mem_read (typically the system bus)
@@ -494,11 +490,11 @@ typedef struct {
     uint8_t ba_prediction_shift_reg;     // 3-bit shift register: bit0=cycle+1, bit1=cycle+2, bit2=cycle+3
     uint8_t ba_low_count;                // Consecutive cycles BA has been LOW (for AEC 3-cycle delay)
     bus_state_t bus_line_mask;           // Bitmask for bus lines to pull low (BA, AEC, etc.)
-} vicii_bus_unit_t;
+};
 
 // Main VIC-II structure composed of units
-struct vicii_s : public ChipBase {
-    mos2114_t* colorram = nullptr;
+struct vicii_t : public ChipBase {
+    MOS2114* colorram = nullptr;
 
     // Chip configuration (set at initialization)
     const vicii_chip_config_t* config = nullptr;
@@ -526,7 +522,7 @@ struct vicii_s : public ChipBase {
     vicii_bus_unit_t bus = {};
 
     // Destructor — cleans up dynamically allocated pixel line buffers
-    ~vicii_s() override;
+    ~vicii_t() override;
 
     // ChipBase interface
     bool has_debug_content() const override { return true; }
@@ -560,5 +556,3 @@ struct vicii_s : public ChipBase {
     uint16_t get_raster_counter() const;
     uint16_t get_x_coordinate() const;
 };
-
-

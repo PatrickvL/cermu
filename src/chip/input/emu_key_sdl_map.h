@@ -1,8 +1,7 @@
-#ifndef EMU_KEY_SDL_MAP_H
-#define EMU_KEY_SDL_MAP_H
+#pragma once
 
 #include "emu_keys.h"
-#include <stdint.h>
+#include <cstdint>
 #include <bitset>
 #include <unordered_map>
 
@@ -86,4 +85,3 @@ private:
     SDL_Scancode_t ascii_to_scancode_[128];
 };
 
-#endif // EMU_KEY_SDL_MAP_H

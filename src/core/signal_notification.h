@@ -1,7 +1,7 @@
 #pragma once
 
-#include <stdint.h>
-#include <stddef.h>
+#include <cstdint>
+#include <cstddef>
 #include "system_lines.h"
 
 /**
@@ -12,7 +12,7 @@
  * NO GLOBALS - all state is passed explicitly.
  */
 
-typedef struct signal_watcher_s signal_watcher_t;
+struct signal_watcher_t;
 
 /**
  * Callback function type for signal change notifications.
@@ -28,7 +28,7 @@ typedef void (*signal_change_callback_t)(signal_watcher_t* watcher,
                                         uint32_t new_lines, 
                                         uint32_t changed_mask);
 
-struct signal_watcher_s {
+struct signal_watcher_t {
     uint32_t watch_mask;                    // Which signals to watch for changes
     uint32_t last_state;                    // Last known state of watched signals
     signal_change_callback_t callback;      // Function to call on changes
@@ -74,5 +74,3 @@ static inline void signal_update_lines(system_lines_t* sys_lines,
 #define SIGNAL_IS_ASSERTED(sys_lines, mask)    SYS_LINES_TEST(sys_lines, mask)
 #define SIGNAL_IS_CLEAR(sys_lines, mask)       (!SYS_LINES_TEST(sys_lines, mask))
 #define SIGNAL_GET_VALUE(sys_lines, shift, mask) ((SYS_LINES_RAW(sys_lines) >> (shift)) & (mask))
-
-

@@ -1,5 +1,4 @@
-#ifndef SYSTEM_GUI_H
-#define SYSTEM_GUI_H
+#pragma once
 
 #include "generic_gui.h"
 #include "system_selection_dialog.h"
@@ -94,4 +93,3 @@ private:
     void open_audio_device();
 };
 
-#endif // SYSTEM_GUI_H

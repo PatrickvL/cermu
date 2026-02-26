@@ -7,25 +7,10 @@
 
 #pragma once
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
+#include <cstddef>
+#include <cstdint>
 
-// Always include types when in C++ mode (templates need C++ linkage)
-#ifdef __cplusplus
 #include "fam65xx_types.h"
-#endif
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-// For C compatibility, forward declare the structure
-#ifndef __cplusplus
-struct opcode_info_t;
-typedef struct opcode_info_t opcode_info_t;
-#endif
-
 // ============================================================================
 // INSTRUCTION DECODING FUNCTIONS
 // ============================================================================
@@ -57,6 +42,3 @@ int fam65xx_disassemble_instruction(uint16_t pc, opcode_info_t entry, uint8_t op
  */
 int fam65xx_disassemble_vice_format(uint16_t pc, opcode_info_t entry, uint8_t opcode, uint8_t operand1, uint8_t operand2, char* buffer, size_t buffer_size);
 
-#ifdef __cplusplus
-}
-#endif

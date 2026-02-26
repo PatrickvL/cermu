@@ -58,7 +58,7 @@
    _stricmp / _strnicmp (MSVC).  Use cermu_strcasecmp / cermu_strncasecmp
    instead of the platform-specific names in all source files. */
 #ifdef CERMU_PLATFORM_WINDOWS
-    #include <string.h>
+    #include <cstring>
     #define cermu_strcasecmp   _stricmp
     #define cermu_strncasecmp  _strnicmp
 #else
@@ -211,7 +211,7 @@
 /* ========================================================================== */
 
 /* Cross-platform aligned memory allocation and deallocation */
-#include <stdlib.h>
+#include <cstdlib>
 
 #if defined(_WIN32)
     #include <malloc.h>

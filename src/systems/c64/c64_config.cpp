@@ -1,5 +1,5 @@
 #include "c64_config.h"
-#include <string.h>
+#include <cstring>
 
 const rom_config_t* system_config_get_default_roms(void) {
     static const rom_config_t default_roms = {
@@ -28,7 +28,7 @@ const rom_config_t* system_config_get_default_roms(void) {
     return &default_roms;
 }
 
-void c64_config_s::init_defaults() {
+void c64_config_t::init_defaults() {
     // System configuration defaults
     vicii_standard = VIC_PAL;     // Default to PAL timing
     rom_config = NULL;            // Use default ROM paths

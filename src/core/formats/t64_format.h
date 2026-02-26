@@ -9,11 +9,6 @@
 
 #include "format_handler.h"
 #include "prg_format.h"   /* commodore_prg_t used as extraction target */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // ============================================================================
 // T64 Constants
 // ============================================================================
@@ -27,7 +22,7 @@ extern "C" {
 // ============================================================================
 
 /** T64 directory entry */
-typedef struct {
+struct commodore_t64_entry_t {
     char     filename[17];          /**< PETSCII filename, null-terminated */
     uint8_t  c64s_file_type;       /**< C64s file type (1=normal, 3=frozen memory image) */
     uint8_t  file_type;            /**< 1541 file type (0x82=PRG etc.) */
@@ -35,20 +30,20 @@ typedef struct {
     uint16_t end_addr;             /**< End address */
     uint32_t data_offset;          /**< Offset in T64 file to actual data */
     uint32_t data_size;            /**< Computed size (end_addr - start_addr) */
-} commodore_t64_entry_t;
+};
 
 /** T64 archive listing */
-typedef struct {
+struct commodore_t64_directory_t {
     char tape_name[25];             /**< Tape name from header, null-terminated */
     uint16_t version;               /**< T64 version */
     uint16_t max_entries;           /**< Max directory entries */
     uint16_t used_entries;          /**< Used directory entries */
     commodore_t64_entry_t entries[T64_MAX_ENTRIES];
     int count;                      /**< Actual valid entry count */
-} commodore_t64_directory_t;
+};
 
 /** T64 archive handle */
-typedef struct commodore_t64_s {
+struct commodore_t64_t {
     uint8_t* data;                  /**< Raw T64 data */
     size_t   data_size;             /**< Size of T64 data */
     bool     owns_data;             /**< Whether we allocated data */
@@ -67,7 +62,7 @@ typedef struct commodore_t64_s {
 
     /** Close a T64 archive and free resources. */
     void close();
-} commodore_t64_t;
+};
 
 // ============================================================================
 // Format Descriptor
@@ -75,6 +70,3 @@ typedef struct commodore_t64_s {
 
 extern const format_descriptor_t T64_FORMAT_DESCRIPTOR;
 
-#ifdef __cplusplus
-}
-#endif

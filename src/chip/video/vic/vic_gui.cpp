@@ -18,7 +18,7 @@
 #include "../../../gui/chip_visualization.h"
 #include "../../../gui/global_chip_style.h"
 #endif
-#include <stdio.h>
+#include <cstdio>
 
 // ============================================================================
 // MOS 6560/6561 VIC LAYOUT (40-pin DIP)
@@ -113,15 +113,15 @@ static const char* get_vic_type_name(vic_base_t* vic) {
 // ChipBase interface implementation
 // ============================================================================
 
-bool vic_base_s::has_debug_content()    const { return true; }
-bool vic_base_s::has_settings_content() const { return true; }
-bool vic_base_s::has_layout_content()   const { return true; }
+bool vic_base_t::has_debug_content()    const { return true; }
+bool vic_base_t::has_settings_content() const { return true; }
+bool vic_base_t::has_layout_content()   const { return true; }
 
 // ============================================================================
 // VIC GUI DEBUG WINDOW
 // ============================================================================
 
-void vic_base_s::render_debug_content() {
+void vic_base_t::render_debug_content() {
     vic_base_t* vic = this;
 
 #ifdef IMGUI_VERSION
@@ -237,7 +237,7 @@ void vic_base_s::render_debug_content() {
 // VIC GUI SETTINGS
 // ============================================================================
 
-void vic_base_s::render_settings_content() {
+void vic_base_t::render_settings_content() {
     vic_base_t* vic = this;
 
 #ifdef IMGUI_VERSION
@@ -271,7 +271,7 @@ void vic_base_s::render_settings_content() {
 // VIC LAYOUT (standalone pinout diagram)
 // ============================================================================
 
-void vic_base_s::render_layout_content() {
+void vic_base_t::render_layout_content() {
     vic_base_t* vic = this;
 
 #ifdef IMGUI_VERSION

@@ -5,9 +5,9 @@
 #include "d64_format.h"
 #include "format_registry.h"
 #include "../encoding/petscii.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 // ============================================================================
 // D64 Track / Sector Geometry
@@ -49,7 +49,7 @@ int d64_max_sector(int track) {
 // Open / Close
 // ============================================================================
 
-bool commodore_d64_s::open(const char* filepath) {
+bool commodore_d64_t::open(const char* filepath) {
     if (!filepath) return false;
     memset(this, 0, sizeof(*this));
 
@@ -77,7 +77,7 @@ bool commodore_d64_s::open(const char* filepath) {
     return true;
 }
 
-bool commodore_d64_s::open_mem(const uint8_t* buf, size_t size) {
+bool commodore_d64_t::open_mem(const uint8_t* buf, size_t size) {
     if (!buf) return false;
     memset(this, 0, sizeof(*this));
 
@@ -97,7 +97,7 @@ bool commodore_d64_s::open_mem(const uint8_t* buf, size_t size) {
     return true;
 }
 
-void commodore_d64_s::close() {
+void commodore_d64_t::close() {
     if (owns_data && data) free(data);
     memset(this, 0, sizeof(*this));
 }
@@ -106,7 +106,7 @@ void commodore_d64_s::close() {
 // Directory
 // ============================================================================
 
-bool commodore_d64_s::read_directory(commodore_d64_directory_t* out_dir) const {
+bool commodore_d64_t::read_directory(commodore_d64_directory_t* out_dir) const {
     if (!data || !out_dir) return false;
     memset(out_dir, 0, sizeof(*out_dir));
 
@@ -169,7 +169,7 @@ bool commodore_d64_s::read_directory(commodore_d64_directory_t* out_dir) const {
 // File Extraction
 // ============================================================================
 
-bool commodore_d64_s::extract_file(int entry_idx,
+bool commodore_d64_t::extract_file(int entry_idx,
                                    uint8_t** out_data, size_t* out_size) const {
     if (!data || !out_data || !out_size) return false;
 
@@ -234,7 +234,7 @@ bool commodore_d64_s::extract_file(int entry_idx,
     return true;
 }
 
-bool commodore_d64_s::extract_first_prg(commodore_prg_t* out_prg) const {
+bool commodore_d64_t::extract_first_prg(commodore_prg_t* out_prg) const {
     if (!out_prg) return false;
     memset(out_prg, 0, sizeof(*out_prg));
 

@@ -6,8 +6,8 @@
 #include "../../chip/cpu/fam65xx/fam65xx.hpp"
 #include "../../chip/video/vic_ii/vicii_common.h"
 #include "../../utils/platform_fs.h"
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 #include <sys/stat.h>
 #include <algorithm>
 #include <chrono>

@@ -1,8 +1,8 @@
 #include "emu_key_sdl_map.h"
 #include <SDL_scancode.h>
 #include <SDL_keycode.h>
-#include <string.h>
-#include <stdio.h>
+#include <cstring>
+#include <cstdio>
 
 // ============================================================================
 // EmuKeySDLMap implementation

@@ -1,11 +1,11 @@
 #include "mos6522.h"
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include <cstring>
+#include <cstdlib>
+#include <cstdio>
 
-bool mos6522_s::has_debug_content()    const { return true; }
-bool mos6522_s::has_settings_content() const { return true; }
-bool mos6522_s::has_layout_content()   const { return true; }
+bool mos6522_t::has_debug_content()    const { return true; }
+bool mos6522_t::has_settings_content() const { return true; }
+bool mos6522_t::has_layout_content()   const { return true; }
 
 void mos6522_t::set_port_a_read_callback(uint8_t (*callback)(void*, uint8_t), void* context) {
     port_a_read_callback = callback;
@@ -16,8 +16,6 @@ void mos6522_t::set_port_b_read_callback(uint8_t (*callback)(void*, uint8_t), vo
     port_b_read_callback = callback;
     port_b_read_context = context;
 }
-
-
 void mos6522_t::reset() {
     // Reset registers
     memset(registers, 0, sizeof(registers));

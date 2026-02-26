@@ -7,7 +7,7 @@
 #include "../../gui/chip_visualization.h"
 #include "../../gui/global_chip_style.h"
 #endif
-#include <stdio.h>
+#include <cstdio>
 #include <memory>
 
 static const char* waveform_names[] = {
@@ -150,7 +150,7 @@ static ChipLayout& get_sid_layout() {
 }
 
 // Class method implementation
-void mos6581_s::render_debug_content() {
+void mos6581_t::render_debug_content() {
     mos6581_t* sid = this;
     
 #ifdef IMGUI_VERSION
@@ -235,7 +235,7 @@ void mos6581_s::render_debug_content() {
 // MOS6581 SID GUI SETTINGS WINDOW
 // ============================================================================
 // Class method implementation
-void mos6581_s::render_settings_content() {
+void mos6581_t::render_settings_content() {
     mos6581_t* sid = this;
     
 #ifdef IMGUI_VERSION
@@ -362,7 +362,7 @@ void mos6581_s::render_settings_content() {
 // ============================================================================
 
 // Class method implementation
-void mos6581_s::render_layout_content() {
+void mos6581_t::render_layout_content() {
     mos6581_t* sid = this;
 
 #ifdef IMGUI_VERSION

@@ -1,5 +1,5 @@
 #include "mos6561.h"
-#include <string.h>
+#include <cstring>
 
 // MOS6561 chip configuration — PAL variant
 // The MOS 6561 is the PAL version of the VIC-I chip used in PAL VIC-20s.
@@ -15,7 +15,7 @@ static const vic_chip_config_t vic_config_pal = {
     .is_pal = true
 };
 
-void mos6561_s::init() {
+void mos6561_t::init() {
     is_pal = true;
     info_ = ChipInfo{"MOS6561", "MOS Technology"};
     clock_frequency = vic_config_pal.clock_frequency;

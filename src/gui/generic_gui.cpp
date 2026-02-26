@@ -2,7 +2,7 @@
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_sdl2.h"
-#include <stdio.h>
+#include <cstdio>
 #include <algorithm>
 #include <chrono>
 #include <cstring>

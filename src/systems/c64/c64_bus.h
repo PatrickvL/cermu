@@ -1,8 +1,8 @@
 #pragma once
 
-#include <stddef.h>
-#include <stdint.h>
-#include <stdbool.h>
+#include <cstddef>
+#include <cstdint>
+
 #include "../../core/cermu.h"
 #include "../../core/system_lines.h"
 #include "c64_chips.h"
@@ -32,10 +32,10 @@
 
 // Forward declaration to avoid circular dependency with c64_system.h
 class C64System;
-struct pla_906114_01_s;
+struct pla_906114_01_t;
 
 // C64 bus controller structure
-typedef struct c64_bus_s {
+struct c64_bus_t {
     C64System* c64;  // Typed back-pointer to owning C64System instance
     bus_state_t default_state; // Default bus state with pull-up resistors (start of each tick)
     bus_state_t state;         // Current bus state (after all chip ticks)
@@ -73,18 +73,18 @@ typedef struct c64_bus_s {
     // COMPACT I/O PAGE MAPPING - Efficient approach using IO page numbers
     // Maps IO page numbers (0-15 for $D000-$DFFF) directly to chip handlers
     // This is more efficient than the previous callback array approach
-    typedef struct {
+    struct io_page_handlers_t {
         bus_state_t (*read_handler)(void* context, bus_state_t bus_state);  // Direct chip register function signature
         void* chip_instance;  // Direct pointer to the chip instance for this IO page
         bus_state_t (*write_handler)(void* context, bus_state_t bus_state); // Direct chip register function signature
-    } io_page_handlers_t;
+    };
     io_page_handlers_t io_handlers[16]; // One handler per IO page (0-15)
 
     // =============================
     // Methods
     // =============================
 
-    ~c64_bus_s();
+    ~c64_bus_t();
 
     void mode_switch(uint8_t mode);
     uint8_t generate_pla_mode(uint8_t cpu_port_bits);
@@ -98,9 +98,9 @@ typedef struct c64_bus_s {
     bool get_exrom_signal() const;
     bool get_game_signal() const;
     void on_banking_change(uint8_t banking_state);
-    void populate_cpu_pla_mapping(struct pla_906114_01_s* pla);
-    void populate_vicii_pla_mapping(struct pla_906114_01_s* pla);
-    void generate_all_pla_modes(struct pla_906114_01_s* pla);
+    void populate_cpu_pla_mapping(struct pla_906114_01_t* pla);
+    void populate_vicii_pla_mapping(struct pla_906114_01_t* pla);
+    void generate_all_pla_modes(struct pla_906114_01_t* pla);
     void init_io_handlers();
     bool get_chip_description(uint8_t chip, chip_description_t* out) const;
     uint8_t read_memory(uint16_t addr);
@@ -137,7 +137,7 @@ typedef struct c64_bus_s {
 
 private:
     void update_pla_mode();
-} c64_bus_t;
+};
 
 // Free functions (no bus param)
 const char* c64_bus_chip_to_title(uint8_t chip);

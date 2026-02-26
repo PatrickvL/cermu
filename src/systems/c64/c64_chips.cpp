@@ -1,7 +1,7 @@
 #include "c64_chips.h"
 #include "c64_bus.h"
-#include <string.h>
-#include <stdio.h>
+#include <cstring>
+#include <cstdio>
 
 // ============================================================================
 // C64 CHIP MANAGEMENT IMPLEMENTATION - From Basic to Complex
@@ -12,11 +12,11 @@
 // =============================
 
 // Chip entry lookup table for description and validation (handles irregular numbering)
-typedef struct {
+struct c64_chip_entry_t {
     uint16_t base_address;
     size_t size;
     const char* label;
-} c64_chip_entry_t;
+};
 
 // Sparse lookup table indexed by CHIP_* values (supports irregular numbering)
 static const c64_chip_entry_t c64_chip_to_entry[] = {

@@ -1,5 +1,4 @@
-#ifndef C64_KEYBOARD_MATRIX_H
-#define C64_KEYBOARD_MATRIX_H
+#pragma once
 
 #include "commodore_keyboard.h"
 
@@ -17,4 +16,3 @@
 // Contains keys[] (EmuKey values) and decode tables.
 extern const keyboard_matrix_config_t c64_keyboard_config;
 
-#endif // C64_KEYBOARD_MATRIX_H

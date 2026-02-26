@@ -1,10 +1,9 @@
-#ifndef GENERIC_GUI_H
-#define GENERIC_GUI_H
+#pragma once
 
 #include <SDL.h>
 #include <SDL_opengl.h>
-#include <stdint.h>
-#include <stdbool.h>
+#include <cstdint>
+
 #include <memory>
 #include <thread>
 #include <mutex>
@@ -21,7 +20,7 @@ struct ImGuiIO;
 // ============================================================================
 
 // Aspect ratio configuration modes
-typedef enum {
+enum aspect_ratio_mode_t {
     ASPECT_RATIO_ORIGINAL = 0,    // Use original guest aspect ratio
     ASPECT_RATIO_4_3,             // Force 4:3 aspect ratio
     ASPECT_RATIO_16_10,           // Force 16:10 aspect ratio
@@ -29,16 +28,16 @@ typedef enum {
     ASPECT_RATIO_CUSTOM,          // Use custom aspect ratio
     ASPECT_RATIO_PIXEL_PERFECT,   // 1:1 pixel aspect ratio
     ASPECT_RATIO_COUNT
-} aspect_ratio_mode_t;
+};
 
 // Scaling mode configuration
-typedef enum {
+enum scaling_mode_t {
     SCALING_MODE_FIT = 0,         // Fit display within window (may add black bars)
     SCALING_MODE_FILL,            // Fill entire window (may crop)
     SCALING_MODE_STRETCH,         // Stretch to fill window (may distort)
     SCALING_MODE_INTEGER,         // Use integer scaling only
     SCALING_MODE_COUNT
-} scaling_mode_t;
+};
 
 /**
  * GenericEmulatorGUI - Base class for all emulator GUIs
@@ -375,4 +374,3 @@ private:
     GenericEmulatorGUI& operator=(const GenericEmulatorGUI&) = delete;
 };
 
-#endif // GENERIC_GUI_H

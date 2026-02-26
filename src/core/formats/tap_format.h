@@ -9,24 +9,19 @@
  */
 
 #include "format_handler.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // ============================================================================
 // TAP Types
 // ============================================================================
 
 /** TAP file header (first 20 bytes) */
-typedef struct {
+struct commodore_tap_header_t {
     char     signature[12];         /**< "C64-TAPE-RAW" or "C16-TAPE-RAW" */
     uint8_t  version;               /**< 0 or 1 */
     uint8_t  platform;              /**< 0=C64, 1=VIC-20, 2=C16 */
     uint8_t  video_standard;        /**< 0=PAL, 1=NTSC */
     uint8_t  reserved;
     uint32_t data_size;             /**< Size of pulse data */
-} commodore_tap_header_t;
+};
 
 // ============================================================================
 // TAP Format API
@@ -50,6 +45,3 @@ int commodore_tap_identify_platform(const char* filepath);
 
 extern const format_descriptor_t TAP_FORMAT_DESCRIPTOR;
 
-#ifdef __cplusplus
-}
-#endif

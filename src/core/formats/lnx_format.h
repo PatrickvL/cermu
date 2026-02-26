@@ -10,11 +10,6 @@
 
 #include "format_handler.h"
 #include "prg_format.h"   /* commodore_prg_t used as extraction target */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 // ============================================================================
 // LNX Constants
 // ============================================================================
@@ -27,24 +22,24 @@ extern "C" {
 // ============================================================================
 
 /** Lynx archive file entry */
-typedef struct {
+struct commodore_lynx_entry_t {
     char     filename[17];          /**< PETSCII filename, null-terminated */
     char     file_type;             /**< 'P'=PRG, 'S'=SEQ, 'U'=USR, 'R'=REL, 'D'=DEL */
     unsigned blocks;                /**< Number of 254-byte data blocks */
     unsigned last_block_len;        /**< Bytes used in last block (or record len for REL) */
     size_t   data_offset;           /**< Byte offset of file data within the archive */
     size_t   data_length;           /**< Actual file data length in bytes */
-} commodore_lynx_entry_t;
+};
 
 /** Lynx archive directory */
-typedef struct {
+struct commodore_lynx_directory_t {
     unsigned header_blocks;         /**< Blocks occupied by header+directory */
     unsigned file_count;            /**< Number of files in archive */
     commodore_lynx_entry_t entries[LNX_MAX_FILES];
-} commodore_lynx_directory_t;
+};
 
 /** Lynx archive handle */
-typedef struct commodore_lynx_s {
+struct commodore_lynx_t {
     uint8_t* data;                  /**< Raw archive data */
     size_t   data_size;             /**< Size of archive */
     bool     owns_data;             /**< Whether we allocated data */
@@ -65,7 +60,7 @@ typedef struct commodore_lynx_s {
 
     /** Close a Lynx archive and free resources. */
     void close();
-} commodore_lynx_t;
+};
 
 // ============================================================================
 // Format Descriptor
@@ -73,6 +68,3 @@ typedef struct commodore_lynx_s {
 
 extern const format_descriptor_t LNX_FORMAT_DESCRIPTOR;
 
-#ifdef __cplusplus
-}
-#endif

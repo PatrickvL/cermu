@@ -17,7 +17,7 @@
 #include "../../gui/chip_visualization.h"
 #include "../../gui/global_chip_style.h"
 #endif
-#include <stdio.h>
+#include <cstdio>
 #include <memory>
 
 // Forward declarations
@@ -115,7 +115,7 @@ static ChipLayout& get_via_layout() {
 // MOS6522 VIA GUI DEBUG WINDOW
 // ============================================================================
 
-void mos6522_s::render_debug_content() {
+void mos6522_t::render_debug_content() {
     mos6522_t* via = this;
 
 #ifdef IMGUI_VERSION
@@ -219,7 +219,7 @@ void mos6522_s::render_debug_content() {
 // MOS6522 VIA GUI SETTINGS
 // ============================================================================
 
-void mos6522_s::render_settings_content() {
+void mos6522_t::render_settings_content() {
     mos6522_t* via = this;
 
 #ifdef IMGUI_VERSION
@@ -278,7 +278,7 @@ static const char* mos6522_get_via_name(mos6522_t* via) {
 // MOS6522 VIA LAYOUT WINDOW (standalone pinout diagram)
 // ============================================================================
 
-void mos6522_s::render_layout_content() {
+void mos6522_t::render_layout_content() {
     mos6522_t* via = this;
 
 #ifdef IMGUI_VERSION

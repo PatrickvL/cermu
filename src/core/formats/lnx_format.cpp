@@ -16,15 +16,15 @@
 
 #include "lnx_format.h"
 #include "format_registry.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 // ============================================================================
 // Open / Close
 // ============================================================================
 
-bool commodore_lynx_s::open(const char* filepath) {
+bool commodore_lynx_t::open(const char* filepath) {
     if (!filepath) return false;
     memset(this, 0, sizeof(*this));
 
@@ -46,7 +46,7 @@ bool commodore_lynx_s::open(const char* filepath) {
     return true;
 }
 
-void commodore_lynx_s::close() {
+void commodore_lynx_t::close() {
     if (owns_data && data) free(data);
     memset(this, 0, sizeof(*this));
 }
@@ -55,7 +55,7 @@ void commodore_lynx_s::close() {
 // Directory
 // ============================================================================
 
-bool commodore_lynx_s::read_directory(commodore_lynx_directory_t* out_dir) const {
+bool commodore_lynx_t::read_directory(commodore_lynx_directory_t* out_dir) const {
     if (!data || !out_dir) return false;
     memset(out_dir, 0, sizeof(*out_dir));
 
@@ -194,7 +194,7 @@ bool commodore_lynx_s::read_directory(commodore_lynx_directory_t* out_dir) const
 // File Extraction
 // ============================================================================
 
-bool commodore_lynx_s::extract_file(const commodore_lynx_directory_t* dir,
+bool commodore_lynx_t::extract_file(const commodore_lynx_directory_t* dir,
                                     int entry_idx, commodore_prg_t* out_prg) const {
     if (!data || !dir || !out_prg) return false;
     if (entry_idx < 0 || entry_idx >= (int)dir->file_count) return false;
@@ -220,7 +220,7 @@ bool commodore_lynx_s::extract_file(const commodore_lynx_directory_t* dir,
                                entry->data_length, out_prg);
 }
 
-bool commodore_lynx_s::extract_all_prgs(commodore_prg_t* out_prgs, int max_prgs,
+bool commodore_lynx_t::extract_all_prgs(commodore_prg_t* out_prgs, int max_prgs,
                                         int* out_count) const {
     if (!out_prgs || !out_count) return false;
     *out_count = 0;

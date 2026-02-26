@@ -1,5 +1,4 @@
-#ifndef SYSTEM_SELECTION_DIALOG_H
-#define SYSTEM_SELECTION_DIALOG_H
+#pragma once
 
 #include <map>
 #include <string>
@@ -92,4 +91,3 @@ public:
     void reset();
 };
 
-#endif // SYSTEM_SELECTION_DIALOG_H

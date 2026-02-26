@@ -1,5 +1,5 @@
 #include "mos6560.h"
-#include <string.h>
+#include <cstring>
 
 // VIC-6560 chip configuration — NTSC variant
 // The MOS 6560 is the NTSC version of the VIC-I chip used in NTSC VIC-20s.
@@ -13,7 +13,7 @@ static const vic_chip_config_t vic_config_ntsc = {
     .is_pal = false
 };
 
-void mos6560_s::init() {
+void mos6560_t::init() {
     is_pal = false;
     info_ = ChipInfo{"MOS6560", "MOS Technology"};
     clock_frequency = vic_config_ntsc.clock_frequency;

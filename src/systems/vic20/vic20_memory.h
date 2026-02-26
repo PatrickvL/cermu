@@ -1,15 +1,10 @@
 #pragma once
 
-#include <stdint.h>
-#include <stdbool.h>
+#include <cstdint>
+
 #include "../../core/system_lines.h"
 #include "../../core/cermu.h"  // For REGISTER_CALL macro
 #include "vic20_chips.h"
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * VIC-20 Memory Banking System - Optimized Encoded Bank Type Design
  * 
@@ -30,25 +25,25 @@ extern "C" {
  */
 
 // Forward declarations
-struct vic_base_s;
-struct mos6522_s;
+struct vic_base_t;
+struct mos6522_t;
 
 // ============================================================================
 // I/O Handler Types
 // ============================================================================
 
-typedef struct {
+struct vic20_io_handler_t {
     bus_state_t (*read_handler)(void* context, bus_state_t bus_state);
     void* read_context;
     bus_state_t (*write_handler)(void* context, bus_state_t bus_state);
     void* write_context;
-} vic20_io_handler_t;
+};
 
 // ============================================================================
 // VIC-20 Memory System Structure
 // ============================================================================
 
-typedef struct vic20_memory_s {
+struct vic20_memory_t {
     // ========================================================================
     // OPTIMIZED BANK TYPE ARRAYS - Cache-line aligned (64 bytes each)
     // ========================================================================
@@ -92,7 +87,7 @@ typedef struct vic20_memory_s {
     uint8_t expansion_flags;      // Which expansion blocks are present
     bool cartridge_present;       // Whether cartridge ROM is present
     
-} vic20_memory_t;
+};
 
 // ============================================================================
 // Memory System Functions
@@ -212,6 +207,3 @@ static inline bool vic20_memory_has_expansion(vic20_memory_t* mem, uint8_t block
     return (mem->expansion_flags & block) != 0;
 }
 
-#ifdef __cplusplus
-}
-#endif

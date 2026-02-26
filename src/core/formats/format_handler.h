@@ -16,26 +16,21 @@
  *   - All allocations are documented; caller frees returned buffers
  */
 
-#include <stdint.h>
-#include <stdbool.h>
-#include <stddef.h>
+#include <cstdint>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
+#include <cstddef>
 // ============================================================================
 // Format Capability Flags
 // ============================================================================
 
-typedef enum {
+enum format_capability_t {
     FORMAT_CAP_NONE         = 0,
     FORMAT_CAP_LOADABLE     = (1 << 0),  /**< Produces directly loadable program data */
     FORMAT_CAP_CONTAINER    = (1 << 1),  /**< Contains multiple files (D64, T64, LNX) */
     FORMAT_CAP_STREAMABLE   = (1 << 2),  /**< Sequential/streaming data (TAP) */
     FORMAT_CAP_METADATA     = (1 << 3),  /**< Provides format-specific metadata (CRT, TAP) */
     FORMAT_CAP_VOLUME       = (1 << 4),  /**< Usable as storage volume (D64 for 1541, etc.) */
-} format_capability_t;
+};
 
 // ============================================================================
 // Program Data — Generic loadable program (address + bytes)
@@ -47,7 +42,7 @@ typedef enum {
  * system layer.  Caller is responsible for freeing `data` via
  * release().
  */
-typedef struct program_data_s {
+struct program_data_t {
     uint8_t* data;          /**< Program data bytes.  Caller frees. */
     size_t   data_size;     /**< Size of data in bytes */
     uint16_t load_addr;     /**< Load address (destination in system memory) */
@@ -55,7 +50,7 @@ typedef struct program_data_s {
 
     /** Free the heap-allocated data buffer. */
     void release();
-} program_data_t;
+};
 
 // ============================================================================
 // Load Result — Unified result from any format handler
@@ -66,25 +61,25 @@ typedef struct program_data_s {
  * Consumers switch on these; for METADATA results, check result.format
  * to determine the metadata layout.
  */
-typedef enum {
+enum format_load_type_t {
     FORMAT_LOAD_NONE = 0,
     FORMAT_LOAD_PROGRAM,    /**< Single loadable program (check program) */
     FORMAT_LOAD_ARCHIVE,    /**< Multiple programs extracted (check files[]) */
     FORMAT_LOAD_METADATA,   /**< Format-specific metadata only (check metadata) */
     FORMAT_LOAD_RAW,        /**< Raw binary, no header (check program, load_addr=0) */
     FORMAT_LOAD_ERROR       /**< Load failed (check error_msg) */
-} format_load_type_t;
+};
 
 #define FORMAT_LOAD_MAX_FILES       64
 #define FORMAT_METADATA_MAX_SIZE    512
 
 /* Forward-declare so load result can hold a back-pointer */
-typedef struct format_descriptor_s format_descriptor_t;
+struct format_descriptor_t;
 
 /**
  * Unified load result.  Filled by a format handler's load() callback.
  */
-typedef struct format_load_result_s {
+struct format_load_result_t {
     format_load_type_t           type;
     const format_descriptor_t*   format;      /**< Which format handler produced this */
     program_data_t               program;     /**< Valid for PROGRAM / RAW */
@@ -96,7 +91,7 @@ typedef struct format_load_result_s {
 
     /** Free all heap-allocated program data buffers. */
     void release();
-} format_load_result_t;
+};
 
 const char* format_load_type_name(format_load_type_t type);
 
@@ -114,7 +109,7 @@ const char* format_load_type_name(format_load_type_t type);
  *
  * Either callback may be NULL (e.g., a volume-only format might omit load).
  */
-struct format_descriptor_s {
+struct format_descriptor_t {
     const char*  name;           /**< Short name: "PRG", "D64", etc. */
     const char*  description;    /**< Human-readable: "Commodore Program File" */
     const char** extensions;     /**< NULL-terminated: {".prg", NULL} */
@@ -192,16 +187,10 @@ static inline void format_latin1_to_utf8_buf(char* buf, size_t buf_size) {
  */
 bool format_in_list(const format_descriptor_t* fmt,
                     const format_descriptor_t* const* list);
-
-#ifdef __cplusplus
-}
-#endif
-
 // ============================================================================
 // C++ Helpers — work on NULL-terminated format descriptor lists
 // ============================================================================
 
-#ifdef __cplusplus
 #include <string>
 #include <vector>
 
@@ -215,14 +204,12 @@ std::vector<std::string> format_list_extensions(
 /**
  * Build an ImGuiFileDialog-compatible filter from a format descriptor array.
  * @param formats  NULL-terminated array of format descriptor pointers
- * @param label    Short label, e.g. "C64" → produces "C64 Files{.prg,.d64,...}"
+ * @param label    Short label, e.g. "C64" produces "C64 Files{.prg,.d64,...}"
  * @return Filter string including an ",.*" All Files fallback.
  */
 std::string format_list_dialog_filter(
     const format_descriptor_t* const* formats,
     const char* label);
-
-#endif /* __cplusplus */
 
 static inline uint16_t format_read_le16(const uint8_t* data) {
     return (uint16_t)(data[0] | (data[1] << 8));

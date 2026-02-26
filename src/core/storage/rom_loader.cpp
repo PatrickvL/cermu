@@ -1,8 +1,8 @@
 #include "rom_loader.h"
 #include "../cermu.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 bool rom_loader_load_file(const char* file_paths[], size_t expected_size, 
                          uint8_t** out_buffer, size_t* out_size) {

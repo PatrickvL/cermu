@@ -6,7 +6,7 @@
 #include "../core/config/path_discovery.h"
 #include "../core/formats/format_handler.h"
 #include "../devices/storage/drive_1541.h"
-#include <stdio.h>
+#include <cstdio>
 #include <cstring>
 #include <chrono>
 #include <ctime>

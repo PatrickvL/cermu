@@ -10,8 +10,8 @@
 #include <array>
 #include <cmath>
 #include <cstring>
-#include <stdbool.h>
-#include <stdint.h>
+
+#include <cstdint>
 
 #include "../../../core/chip.h"
 #include "../../../core/system_lines.h"

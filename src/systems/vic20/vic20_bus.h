@@ -1,7 +1,7 @@
 #pragma once
 
-#include <stdint.h>
-#include <stdbool.h>
+#include <cstdint>
+
 #include "../../core/bus_cycle_interface.h"
 #include "../../core/system_lines.h"
 
@@ -12,7 +12,7 @@
      BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT))
 
 // VIC-20 bus structure
-typedef struct {
+struct vic20_bus_t {
     void* vic20; // Pointer to VIC-20 system
     bus_state_t state;
     bus_state_t default_state;  // Pull-up resistor state (control lines HIGH)
@@ -22,7 +22,7 @@ typedef struct {
     uint16_t io_address;
     bool io_access_pending;
     uint8_t system_lines;
-} vic20_bus_t;
+};
 
 // Function prototypes
 void* vic20_bus_create();

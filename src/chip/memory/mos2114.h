@@ -35,18 +35,7 @@ public:
     void render_settings_content() override;
     void render_layout_content()   override;
 
-    // --- Bus interface (C-compatible statics for I/O handler table) ---
+    // --- Bus interface (static methods matching I/O handler table signature) ---
     static bus_state_t bus_read(void* context, bus_state_t bus_state);
     static bus_state_t bus_write(void* context, bus_state_t bus_state);
 };
-
-// Backward-compatibility typedef
-using mos2114_t = MOS2114;
-
-// Legacy lifecycle helpers
-MOS2114* mos2114_create();
-void     mos2114_destroy(MOS2114* chip);
-
-// Legacy free-function bus wrappers (used by c64_bus.cpp I/O handler table)
-bus_state_t mos2114_read(void* context, bus_state_t bus_state);
-bus_state_t mos2114_write(void* context, bus_state_t bus_state);

@@ -93,7 +93,7 @@ public:
     MemoryChip* charrom = nullptr;      // Character ROM $D000-$DFFF (4KB) when CHAREN=0
     vicii_t* vicii = nullptr;           // mos6567_t (NTSC) or mos6569_t (PAL) ($D000-$DFFF, 4KB)
     mos6581_t* sid = nullptr;           // MOS6581 SID sound chip ($D400-$D7FF, 1KB)
-    mos2114_t* colorram = nullptr;      // Color RAM (1KB at $D800-$DBFF)
+    MOS2114* colorram = nullptr;        // Color RAM (1KB at $D800-$DBFF)
     mos6526_t* cia1 = nullptr;          // MOS6526 CIA 1 (BUS_MASK_IRQ) ($DC00-$DDFF, 256 bytes)
     mos6526_t* cia2 = nullptr;          // MOS6526 CIA 2 (BUS_MASK_NMI) ($DD00-$DFFF, 256 bytes)
     commodore_keyboard_t* keyboard = nullptr; // Keyboard matrix (connected to CIA1)

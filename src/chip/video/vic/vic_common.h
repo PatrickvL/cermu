@@ -1,7 +1,7 @@
 #pragma once
 
-#include <stdint.h>
-#include <stdbool.h>
+#include <cstdint>
+
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
 
@@ -127,7 +127,7 @@
 #define VIC_NTSC_TOTAL_LINES 262
 
 // VIC color palette (16 colors)
-typedef enum {
+enum vic_color_t {
     VIC_COLOR_BLACK = 0,
     VIC_COLOR_WHITE = 1,
     VIC_COLOR_RED = 2,
@@ -144,16 +144,16 @@ typedef enum {
     VIC_COLOR_LIGHT_GREEN = 13,
     VIC_COLOR_LIGHT_BLUE = 14,
     VIC_COLOR_LIGHT_GREY = 15
-} vic_color_t;
+};
 
 // VIC chip configuration
-typedef struct {
+struct vic_chip_config_t {
     uint8_t cycles_per_line;
     uint16_t total_lines;
     uint32_t clock_frequency;
     const char* chip_name;
     bool is_pal;
-} vic_chip_config_t;
+};
 
 // Memory read callback type for VIC to access system memory
 typedef uint8_t (*vic_mem_read_fn_t)(void* user_data, uint16_t addr);
@@ -166,7 +166,7 @@ typedef uint8_t (*vic_mem_read_fn_t)(void* user_data, uint16_t addr);
 #define VIC_NUM_TONE_VOICES   3
 #define VIC_NUM_VOICES        4      // 3 tones + 1 noise
 
-typedef struct {
+struct vic_audio_state_t {
     // Per-voice state --------------------------------------------------
     // Prescaler counters: count down chip cycles per voice-specific divisor
     uint32_t prescaler[VIC_NUM_VOICES];
@@ -214,10 +214,10 @@ typedef struct {
     uint8_t  buffer[VIC_AUDIO_BUFFER_SIZE];
     uint32_t write_pos;              // Next write index (wraps)
     uint32_t read_pos;               // Next read  index (wraps)
-} vic_audio_state_t;
+};
 
 // VIC chip structure (common base — inherits ChipBase for GUI integration)
-typedef struct vic_base_s : public ChipBase {
+struct vic_base_t : public ChipBase {
     void* bus = nullptr;
 
     // Registers
@@ -304,4 +304,4 @@ typedef struct vic_base_s : public ChipBase {
 private:
     void emit_pixel(uint8_t color_index);
     void flush_pixel_line(int raster_line);
-} vic_base_t;
+};

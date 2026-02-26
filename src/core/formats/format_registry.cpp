@@ -8,7 +8,7 @@
 #include "format_registry.h"
 #include <cstring>
 #include <algorithm>
-#include <stdio.h>
+#include <cstdio>
 
 // ============================================================================
 // FormatRegistry singleton

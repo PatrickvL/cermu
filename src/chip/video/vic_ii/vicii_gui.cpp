@@ -6,8 +6,8 @@
 #include "../../../gui/chip_visualization.h"
 #include "../../../gui/global_chip_style.h"
 #endif
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 
 // ============================================================================
 // COMMON VIC-II GUI RENDERING FUNCTIONS
@@ -129,7 +129,7 @@ static ChipLayout& get_vicii_layout() {
 }
 
 // Class method implementation
-void vicii_s::render_debug_content() {
+void vicii_t::render_debug_content() {
     vicii_t* vicii = this;
     
 #ifdef IMGUI_VERSION
@@ -225,7 +225,7 @@ void vicii_s::render_debug_content() {
 }
 
 // Class method implementation
-void vicii_s::render_settings_content() {
+void vicii_t::render_settings_content() {
     vicii_t* vicii = this;
     
 #ifdef IMGUI_VERSION
@@ -250,7 +250,7 @@ void vicii_s::render_settings_content() {
 // ============================================================================
 
 // Class method implementation
-void vicii_s::render_layout_content() {
+void vicii_t::render_layout_content() {
     vicii_t* vicii = this;
 
 #ifdef IMGUI_VERSION

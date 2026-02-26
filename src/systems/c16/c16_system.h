@@ -1,5 +1,4 @@
-#ifndef C16_SYSTEM_H
-#define C16_SYSTEM_H
+#pragma once
 
 #include "../commodore/commodore_system.h"
 #include "../../core/system_lines.h"
@@ -154,4 +153,3 @@ private:
 using C16System   = Commodore264System<C264SeriesVariant::C16>;
 using C116System  = Commodore264System<C264SeriesVariant::C116>;
 using Plus4System = Commodore264System<C264SeriesVariant::PLUS4>;
-#endif // C16_SYSTEM_H

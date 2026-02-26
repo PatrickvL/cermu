@@ -1,9 +1,9 @@
 #include "../core/emulated_system.h"
 #include "../core/formats/format_handler.h"
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 #include <memory>
-#include <stdlib.h>
+#include <cstdlib>
 
 // Simple console test for multi-system architecture
 int main(int argc, char** argv) {

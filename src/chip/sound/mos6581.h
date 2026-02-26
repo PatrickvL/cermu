@@ -4,12 +4,12 @@
 #include "../../core/bus_cycle_interface.h"
 #include "../../core/system_lines.h" // For bus_state_t
 #include <atomic>
-#include <stdint.h>
-#include <stdbool.h>
-#include <math.h>
+#include <cstdint>
+
+#include <cmath>
 
 // SID MOS 6581 DIP has 28 pins; Pinout:
-typedef enum {
+enum mos6581_pin_t {
     SID_PIN_CAP1A = 1, SID_PIN_VDD = 28,
     SID_PIN_CAP1B = 2, SID_PIN_AUDIO_OUT = 27,
     SID_PIN_CAP2A = 3, SID_PIN_EXT_IN = 26,
@@ -24,7 +24,7 @@ typedef enum {
     SID_PIN_A3 = 12, SID_PIN_D2 = 17,
     SID_PIN_A4 = 13, SID_PIN_D1 = 16,
     SID_PIN_GND = 14, SID_PIN_D0 = 15,
-} mos6581_pin_t;
+};
 
 // Register dimensions - Modern C++ constants
 namespace sid_constants {
@@ -40,7 +40,7 @@ namespace sid_constants {
 // SID chip revisions — only revisions that produce different emulation
 // behaviour are active.  The rest are commented out until per-revision
 // differences (combined-waveform tables, filter curves, etc.) are modelled.
-typedef enum {
+enum sid_revision_t {
     // SID_REVISION_6581_R1,     // same behaviour as R4AR for now
     // SID_REVISION_6581_R2,     // same behaviour as R4AR for now
     // SID_REVISION_6581_R3,     // same behaviour as R4AR for now
@@ -49,28 +49,28 @@ typedef enum {
     SID_REVISION_8580_R5,        // MOS 8580 family (clean filter, no volume-click)
     // SID_REVISION_CSG_6581,    // same behaviour as R4AR for now
     // SID_REVISION_CSG_8580     // same behaviour as 8580_R5 for now
-} sid_revision_t;
+};
 
 // Voice envelope cycle states (matches reSID State enum)
-typedef enum {
+enum envelope_cycle_t {
     CYCLE_OFF = 0,      // Off cycle (0)
     CYCLE_ATTACK = 1,   // Attack cycle (1)
     CYCLE_DECAY = 2,    // Decay/Sustain cycle (reSID DECAY_SUSTAIN)
     CYCLE_SUSTAIN = 3,  // Sustain cycle (unused — decay handles sustain check)
     CYCLE_RELEASE = 4,  // Release cycle (4)
     CYCLE_FREEZED = 5   // Frozen at zero (reSID FREEZED)
-} envelope_cycle_t;
+};
 
 // Waveform bits — positioned at their VCREG bit locations (bits 4-7)
 // so hot-path tests use control_reg & WAVEFORM_xxx with no shift.
-typedef enum {
+enum waveform_bits_t {
     WAVEFORM_NONE     = 0x00, // No waveform
     WAVEFORM_TRIANGLE = 0x10, // Triangle waveform (VCREG bit 4)
     WAVEFORM_SAWTOOTH = 0x20, // Sawtooth waveform (VCREG bit 5)
     WAVEFORM_PULSE    = 0x40, // Pulse waveform    (VCREG bit 6)
     WAVEFORM_NOISE    = 0x80, // Noise waveform    (VCREG bit 7)
     WAVEFORM_MASK     = 0xF0  // All waveform bits
-} waveform_bits_t;
+};
 
 // VCREG control bits (lower nibble)
 #define VCREG_GATE   0x01
@@ -173,19 +173,12 @@ typedef enum {
 #define SID_REG_UNUSED_END          0x1F
 
 // Combined waveform lookup table size
-// Forward declarations - Modern C++ style
-struct mos6581_s;
-struct filter_state_s;
-struct ring_buffer_s;
-using mos6581_t = mos6581_s;
-using filter_state_t = filter_state_s;
-using ring_buffer_t = ring_buffer_s;
 
 // Ring buffer for sample output (SPSC: emulation thread writes, audio thread reads).
 // write_pos and read_pos use std::atomic with release/acquire ordering to ensure
 // correct cross-thread visibility with minimal overhead on x86 (acquire/release
 // are free on x86; on ARM they emit the appropriate barriers).
-typedef struct ring_buffer_s {
+struct ring_buffer_t {
     float* buffer;
     uint32_t size;
     std::atomic<uint32_t> write_pos;
@@ -199,10 +192,10 @@ typedef struct ring_buffer_s {
     float read();
     bool empty();
     uint32_t available();
-} ring_buffer_t;
+};
 
 // Filter state structure
-typedef struct filter_state_s {
+struct filter_state_t {
     // ZDF (zero-delay feedback) topology-preserving SVF state.
     // Unlike the naive SVF, this formulation is unconditionally stable
     // at any cutoff/resonance combination — critical because we process
@@ -224,10 +217,13 @@ typedef struct filter_state_s {
     
     // Nonlinear distortion state (6581 specific)
     bool enable_distortion;
-} filter_state_t;
+};
+
+// Forward declaration (voice_t references parent mos6581_t)
+struct mos6581_t;
 
 // Voice structure - Enhanced with all SID features
-typedef struct voice_s {
+struct voice_t {
     // Write-only voice register values
     uint16_t frequency;               // Voice frequency control (FRELO/FREHI)
     uint16_t pulse_waveform_width;    // Pulse waveform width (PWLO/PWHI)
@@ -294,8 +290,8 @@ typedef struct voice_s {
     // Methods
     void reset();
     void clock_cycle();
-    void apply_sync(voice_s* sync_source, voice_s* sync_source_source);
-    void set_waveform_output(voice_s* ring_source);
+    void apply_sync(voice_t* sync_source, voice_t* sync_source_source);
+    void set_waveform_output(voice_t* ring_source);
     void write_pulse_waveform_width(uint16_t value);
     void write_control_register_value(uint8_t value);
     void write_attack_decay_register_value(uint8_t value);
@@ -309,11 +305,11 @@ private:
     void update_exponential_period();
     void envelope_clock();
     void envelope_state_change();
-} voice_t;
+};
 
 // Main SID chip structure - Enhanced (C++ class inheriting ChipBase)
-typedef struct mos6581_s : public ChipBase {
-    mos6581_s() : ChipBase(ChipInfo{"MOS6581", "MOS Technology"}) {}
+struct mos6581_t : public ChipBase {
+    mos6581_t() : ChipBase(ChipInfo{"MOS6581", "MOS Technology"}) {}
 
     // Bus interface
     bus_cycle_ops_t bus_interface = {};
@@ -388,7 +384,7 @@ typedef struct mos6581_s : public ChipBase {
     uint32_t samples_generated = 0;   // Total samples generated
 
     // Destructor — cleans up ring buffer
-    ~mos6581_s() override;
+    ~mos6581_t() override;
 
     // ChipBase interface
     bool has_debug_content() const override { return true; }
@@ -422,4 +418,4 @@ private:
     bus_state_t advance_cycle(bus_state_t bus_state);
     uint32_t calculate_envelope_time_ms(voice_t* v, envelope_cycle_t cycle, uint8_t rate_index);
     
-} mos6581_t;
+};

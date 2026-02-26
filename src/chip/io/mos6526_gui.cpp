@@ -7,8 +7,8 @@
 #include "../../gui/chip_visualization.h"
 #include "../../gui/global_chip_style.h"
 #endif
-#include <stdio.h>
-#include <stddef.h>  // For offsetof
+#include <cstdio>
+#include <cstddef>  // For offsetof
 #include <memory>
 
 // Forward declarations
@@ -119,7 +119,7 @@ static ChipLayout& get_cia_layout() {
     return layout;
 }
 
-void mos6526_s::render_debug_content() {
+void mos6526_t::render_debug_content() {
     
 #ifdef IMGUI_VERSION
     mos6526_t* cia = this;
@@ -221,7 +221,7 @@ void mos6526_s::render_debug_content() {
 // MOS6526 CIA GUI SETTINGS
 // ============================================================================
 
-void mos6526_s::render_settings_content() {
+void mos6526_t::render_settings_content() {
     
 #ifdef IMGUI_VERSION
     mos6526_t* cia = this;
@@ -346,7 +346,7 @@ static const char* mos6526_get_cia_name(mos6526_t* cia) {
 // MOS6526 CIA LAYOUT WINDOW (standalone pinout diagram)
 // ============================================================================
 
-void mos6526_s::render_layout_content() {
+void mos6526_t::render_layout_content() {
 
 #ifdef IMGUI_VERSION
     mos6526_t* cia = this;

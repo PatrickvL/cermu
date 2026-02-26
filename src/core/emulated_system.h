@@ -13,8 +13,8 @@
 #include "device_registry.h"
 
 // Forward-declare format descriptor so SystemDescriptor can reference it
-struct format_descriptor_s;
-typedef struct format_descriptor_s format_descriptor_t;
+struct format_descriptor_t;
+struct format_descriptor_t;
 
 // ============================================================================
 // SYSTEM HARDWARE TRAITS

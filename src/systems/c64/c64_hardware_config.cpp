@@ -1,9 +1,9 @@
 #include "c64_hardware_config.h"
 #include "c64_test_framework.h"
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 
-void c64_hardware_config_s::init_defaults() {
+void c64_hardware_config_t::init_defaults() {
     // C64C defaults (most common modern C64)
     vicii_model = VICII_MODEL_6569_R3;  // PAL new
     is_pal = true;
@@ -15,7 +15,7 @@ void c64_hardware_config_s::init_defaults() {
     pal_timing = true;
 }
 
-void c64_hardware_config_s::init_original(bool pal) {
+void c64_hardware_config_t::init_original(bool pal) {
     // Original C64 "breadbin"
     if (pal) {
         vicii_model = VICII_MODEL_6569_R1;  // PAL old
@@ -35,7 +35,7 @@ void c64_hardware_config_s::init_original(bool pal) {
     sid_filters_enabled = true;
 }
 
-c64_hardware_config_t c64_hardware_config_s::from_test_flags(uint32_t test_hw_flags) {
+c64_hardware_config_t c64_hardware_config_t::from_test_flags(uint32_t test_hw_flags) {
     using namespace c64_test;
     
     c64_hardware_config_t hw_config;
@@ -96,7 +96,7 @@ c64_hardware_config_t c64_hardware_config_s::from_test_flags(uint32_t test_hw_fl
     return hw_config;
 }
 
-bool c64_hardware_config_s::matches(const c64_hardware_config_t* required) const {
+bool c64_hardware_config_t::matches(const c64_hardware_config_t* required) const {
     if (!required) return false;
     
     // Check VIC-II match (PAL/NTSC compatibility)
@@ -118,7 +118,7 @@ bool c64_hardware_config_s::matches(const c64_hardware_config_t* required) const
     return true;
 }
 
-const char* c64_hardware_config_s::description() const {
+const char* c64_hardware_config_t::description() const {
     static char desc[256];
     
     const char* vic_name = "Unknown";
