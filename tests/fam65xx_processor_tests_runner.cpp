@@ -137,59 +137,7 @@ ProcessorType parse_processor_type(const std::string& processor_str) {
 }
 
 // Forward declarations
-class ProcessorTestHarness;
-
-// Unified processor interface that can work with any 65xx processor
-class UnifiedProcessorInterface {
-public:
-    virtual ~UnifiedProcessorInterface() = default;
-    virtual uint64_t init() = 0;
-    virtual uint64_t bootstrap(uint64_t pins) = 0;
-    virtual uint64_t tick_phi2(uint64_t pins) = 0;  // PHI2 phase
-    virtual uint64_t tick_phi1(uint64_t pins) = 0;  // PHI1 phase
-    virtual bool opdone() = 0;
-    
-    // Register accessors - support both 8-bit and 16-bit values for 65816 compatibility
-    virtual uint16_t get_pc() = 0;
-    virtual uint16_t get_a() = 0;  // Return 16-bit for 65816, 8-bit extended to 16-bit for others
-    virtual uint16_t get_x() = 0;  // Return 16-bit for 65816, 8-bit extended to 16-bit for others
-    virtual uint16_t get_y() = 0;  // Return 16-bit for 65816, 8-bit extended to 16-bit for others
-    virtual uint16_t get_sp() = 0;  // Returns 16-bit for 65816, 8-bit extended to 16-bit for others
-    virtual uint8_t get_status() = 0; // Always 8-bit
-    
-    // 65816-specific getters (return 0 for other processors)
-    virtual bool get_emulation_mode() { return false; }
-    virtual uint16_t get_d() { return 0; }
-    virtual uint8_t get_dbr() { return 0; }
-    virtual uint8_t get_pbr() { return 0; }
-    
-    virtual void set_pc(uint16_t pc) = 0;
-    virtual void set_a(uint16_t a) = 0;   // Accept 16-bit, truncate to 8-bit for non-65816
-    virtual void set_x(uint16_t x) = 0;   // Accept 16-bit, truncate to 8-bit for non-65816
-    virtual void set_y(uint16_t y) = 0;   // Accept 16-bit, truncate to 8-bit for non-65816
-    virtual void set_sp(uint16_t sp) = 0;  // Accept 16-bit for 65816 native mode
-    virtual void set_status(uint8_t p) = 0; // Always 8-bit
-    
-    // 65816-specific methods (no-op for other processors)
-    virtual void set_emulation_mode(bool mode) {}
-    virtual void set_d(uint16_t value) {}
-    virtual void set_dbr(uint8_t value) {}
-    virtual void set_pbr(uint8_t value) {}
-    
-    // Set harness for bus cycle recording (thread-safe)
-    virtual void set_harness(ProcessorTestHarness* harness) = 0;
-    
-    // Clear interrupt state (for test isolation)
-    virtual void clear_interrupt_state() = 0;
-    
-    // Get address mask for this processor type
-    virtual uint32_t get_address_mask() const = 0;
-};
-
-// Forward declaration for factory function
-std::unique_ptr<UnifiedProcessorInterface> create_processor(ProcessorType type);
-
-// ProcessorWrapper template will be defined after ProcessorTestHarness
+template<const CPUTraits& Traits> class ProcessorTestHarness;
 
 // Test results tracking with enhanced statistics
 struct TestResults {
@@ -271,17 +219,18 @@ public:
 
 
 
-// Updated test harness using the unified processor wrapper
+// Test harness — templated directly on CPUTraits for zero-overhead CPU access.
+// The CPU type is selected once in main() and everything below is monomorphic.
+template<const CPUTraits& Traits>
 class ProcessorTestHarness {
 public:
-    std::unique_ptr<UnifiedProcessorInterface> cpu_wrapper;  // Made public for test validation access
+    fam65xx_t<Traits> cpu;  // Direct CPU instance — no virtual dispatch
 private:
-    ProcessorType processor_type;
     uint8_t* memory;  // Point to global test_memory array (64KB base memory)
     std::unordered_map<uint32_t, uint8_t> extended_memory;  // For 24-bit addresses outside 64KB
     uint32_t cycle_count;
     uint64_t pins;  // Maintain pins state across steps
-    uint32_t address_mask;  // Cached address mask for this processor type (performance optimization)
+    static constexpr uint32_t address_mask = Traits.address_mask();
     
     // Bus cycle tracking for comparing against JSON test data - reserve capacity to avoid reallocations
     std::vector<bus_cycle_t> actual_bus_cycles;
@@ -343,26 +292,17 @@ public:
         pins |= FAM65XX_NMI;   /* NMI line high (inactive) */
         pins |= FAM65XX_RES;   /* RESET line high (inactive) */
         
-        pins = cpu_wrapper->bootstrap(pins);
+        pins = cpu.bootstrap(pins);
     }
 
-    ProcessorTestHarness(ProcessorType proc_type = ProcessorType::MOS6502)
-        : processor_type(proc_type), memory(test_memory), cycle_count(0), pins(0) {
+    ProcessorTestHarness()
+        : memory(test_memory), cycle_count(0), pins(0) {
         
         // Clear memory (optimized approach from C version)
         std::fill(memory, memory + 65536, static_cast<uint8_t>(0));
         
-        // Create processor wrapper for the specified type
-        cpu_wrapper = create_processor(processor_type);
-        
-        // Cache the address mask from CPUTraits for performance (avoid repeated calculations)
-        address_mask = cpu_wrapper->get_address_mask();
-        
-        // Set up harness for bus cycle recording - now works with all processors via unified interface
-        cpu_wrapper->set_harness(this);
-        
-        // Initialize CPU with new API (memory callbacks handled differently)
-        pins = cpu_wrapper->init();
+        // Initialize CPU directly
+        cpu.init();
         
         // CRITICAL: Initialize pins with interrupt lines HIGH (inactive) BEFORE any operations
         // This prevents false interrupt detection during bootstrap and test execution
@@ -438,34 +378,130 @@ public:
         return actual_bus_cycles;
     }
     
-    // CPU state accessors - use unified processor wrapper with 16-bit register support
-    void set_pc(uint16_t pc) { cpu_wrapper->set_pc(pc); }
-    void set_a(uint16_t a) { cpu_wrapper->set_a(a); }     // Accept 16-bit for 65816 compatibility
-    void set_x(uint16_t x) { cpu_wrapper->set_x(x); }     // Accept 16-bit for 65816 compatibility
-    void set_y(uint16_t y) { cpu_wrapper->set_y(y); }     // Accept 16-bit for 65816 compatibility
-    void set_sp(uint16_t sp) { cpu_wrapper->set_sp(sp); }  // 16-bit for 65816 native mode
-    void set_status(uint8_t p) { cpu_wrapper->set_status(p); } // Always 8-bit
+    // CPU state accessors — direct CPU access with if constexpr for 65816
+    void set_pc(uint16_t pc) { cpu.set(REG_PC, pc); }
+    void set_a(uint16_t a) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+            cpu.set(REG_A_16, a);
+        } else {
+            cpu.set(REG_A, static_cast<uint8_t>(a & 0xFF));
+        }
+    }
+    void set_x(uint16_t x) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+            cpu.set(REG_X_16, x);
+        } else {
+            cpu.set(REG_X, static_cast<uint8_t>(x & 0xFF));
+        }
+    }
+    void set_y(uint16_t y) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+            cpu.set(REG_Y_16, y);
+        } else {
+            cpu.set(REG_Y, static_cast<uint8_t>(y & 0xFF));
+        }
+    }
+    void set_sp(uint16_t sp) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+            if (cpu.in_emulation_mode()) {
+                cpu.set(REG_SP, 0x0100 | (sp & 0xFF));
+            } else {
+                cpu.set(REG_SP, sp);
+            }
+        } else {
+            cpu.set(REG_S, static_cast<uint8_t>(sp & 0xFF));
+        }
+    }
+    void set_status(uint8_t p) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+            uint16_t p16 = cpu.get(REG_P_16);
+            p16 = (p16 & 0xFF00) | p;
+            cpu.set(REG_P_16, p16);
+        } else {
+            cpu.set(REG_P, p);
+        }
+    }
     
     // 65816-specific state setters
-    void set_emulation_mode(bool mode) { cpu_wrapper->set_emulation_mode(mode); }
-    void set_d(uint16_t value) { cpu_wrapper->set_d(value); }
-    void set_dbr(uint8_t value) { cpu_wrapper->set_dbr(value); }
-    void set_pbr(uint8_t value) { cpu_wrapper->set_pbr(value); }
-    
-    // Thread-safe harness setting for bus cycle recording
-    void set_harness_for_bus_recording() { cpu_wrapper->set_harness(this); }
+    void set_emulation_mode(bool mode) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+            cpu.set_emulation_mode(mode);
+        }
+    }
+    void set_d(uint16_t value) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+            cpu.set(REG_D, value);
+        }
+    }
+    void set_dbr(uint8_t value) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+            cpu.set(REG_DBR, value);
+        }
+    }
+    void set_pbr(uint8_t value) {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+            cpu.set(REG_PBR, value);
+        }
+    }
     
     // Clear interrupt state to prevent false detection
     void clear_interrupt_state() {
-        cpu_wrapper->clear_interrupt_state();
+        cpu.active_interrupt = FAM65XX_INT_NONE;
+        cpu.interrupt_shift_register = 0;
+        cpu.nmi_prev = 1;  // NMI starts high (inactive)
+        cpu.nmi_edge_latch = 0;
     }
     
-    uint16_t get_pc() const { return cpu_wrapper->get_pc(); }
-    uint16_t get_a() const { return cpu_wrapper->get_a(); }   // Return 16-bit for consistency
-    uint16_t get_x() const { return cpu_wrapper->get_x(); }   // Return 16-bit for consistency
-    uint16_t get_y() const { return cpu_wrapper->get_y(); }   // Return 16-bit for consistency
-    uint16_t get_sp() const { return cpu_wrapper->get_sp(); }  // 16-bit for 65816, 8-bit extended to 16-bit for others
-    uint8_t get_status() const { return cpu_wrapper->get_status(); } // Always 8-bit
+    uint16_t get_pc() const { return cpu.get(REG_PC); }
+    uint16_t get_a() const {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+            return cpu.get(REG_A_16);
+        } else {
+            return cpu.get(REG_A);
+        }
+    }
+    uint16_t get_x() const {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+            return cpu.get(REG_X_16);
+        } else {
+            return cpu.get(REG_X);
+        }
+    }
+    uint16_t get_y() const {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+            return cpu.get(REG_Y_16);
+        } else {
+            return cpu.get(REG_Y);
+        }
+    }
+    uint16_t get_sp() const { return cpu.get_sp(); }
+    uint8_t get_status() const { return cpu.get(REG_P); }
+    
+    // 65816-specific getters
+    bool get_emulation_mode() const {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+            return cpu.in_emulation_mode();
+        }
+        return true;
+    }
+    uint16_t get_d() const {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+            return cpu.get(REG_D);
+        }
+        return 0;
+    }
+    uint8_t get_dbr() const {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+            return cpu.get(REG_DBR);
+        }
+        return 0;
+    }
+    uint8_t get_pbr() const {
+        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+            return cpu.get(REG_PBR);
+        }
+        return 0;
+    }
     
     // Memory access methods with address wrapping
     void set_memory(uint32_t addr, uint8_t data) {
@@ -559,32 +595,33 @@ public:
                 pins |= FAM65XX_RDY;  // Keep RDY high (no DMA)
                 
                 // Capture state before tick
-                uint16_t pc_before = cpu_wrapper->get_pc();
-                uint16_t a_before = cpu_wrapper->get_a();  // 16-bit for 65C816 compatibility
-                uint16_t x_before = cpu_wrapper->get_x();  // 16-bit for 65C816 compatibility
-                uint16_t y_before = cpu_wrapper->get_y();  // 16-bit for 65C816 compatibility
-                uint16_t s_before = cpu_wrapper->get_sp();  // 16-bit for 65C816 native mode
-                uint8_t p_before = cpu_wrapper->get_status();
+                uint16_t pc_before = get_pc();
+                uint16_t a_before = get_a();
+                uint16_t x_before = get_x();
+                uint16_t y_before = get_y();
+                uint16_t s_before = get_sp();
+                uint8_t p_before = get_status();
                 
                 // Execute PHI2 phase (bus setup)
-                pins = cpu_wrapper->tick_phi2(pins);
+                using Phase = typename fam65xx_t<Traits>::Phase;
+                pins = cpu.template tick<Phase::PHI2>(pins);
                 
                 // Memory access happens between PHI2 and PHI1
                 pins = memory_tick(pins);
                 
                 // Execute PHI1 phase (internal operations)
-                pins = cpu_wrapper->tick_phi1(pins);
+                pins = cpu.template tick<Phase::PHI1>(pins);
                 
                 cycle_count++;
                 cycle_in_instruction++;
                 
                 // Capture state after tick
-                uint16_t pc_after = cpu_wrapper->get_pc();
-                uint16_t a_after = cpu_wrapper->get_a();  // 16-bit for 65C816 compatibility
-                uint16_t x_after = cpu_wrapper->get_x();  // 16-bit for 65C816 compatibility
-                uint16_t y_after = cpu_wrapper->get_y();  // 16-bit for 65C816 compatibility
-                uint16_t s_after = cpu_wrapper->get_sp();  // 16-bit for 65C816 native mode
-                uint8_t p_after = cpu_wrapper->get_status();
+                uint16_t pc_after = get_pc();
+                uint16_t a_after = get_a();
+                uint16_t x_after = get_x();
+                uint16_t y_after = get_y();
+                uint16_t s_after = get_sp();
+                uint8_t p_after = get_status();
                 
                 // Log detailed cycle information if debug output provided
                 if (debug_output) {
@@ -614,7 +651,7 @@ public:
                 }
                 
                 // Instruction completes when opdone() returns true
-                bool instruction_done = cpu_wrapper->opdone();
+                bool instruction_done = cpu.opdone();
                 
                 max_cycles--;
                 if (max_cycles == 0) {
@@ -640,330 +677,6 @@ public:
     }
 };
 
-// Generic processor wrapper template - eliminates code duplication
-template<const CPUTraits& Traits>
-class ProcessorWrapper : public UnifiedProcessorInterface {
-private:
-    fam65xx_t<Traits>* cpu;
-    void* harness_ptr; // Store harness for memory callbacks
-    
-    // Instance memory callbacks that know about this wrapper's harness
-    static uint8_t instance_mem_read(void* user_data, uint32_t addr, uint8_t bus_state) {
-        (void)bus_state; // Suppress unused parameter warning
-        ProcessorWrapper<Traits>* wrapper = static_cast<ProcessorWrapper<Traits>*>(user_data);
-        uint8_t value;
-        
-        if (wrapper->harness_ptr) {
-            ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(wrapper->harness_ptr);
-            
-            // Use harness memory access (supports 24-bit addresses for 65816)
-            value = harness->get_memory(addr);
-            
-            // Always use full 32-bit address for bus cycle tracking
-            harness->record_bus_cycle(addr, value, false);
-        } else {
-            // Fallback to direct memory access (mask to 16-bit for safety)
-            value = test_memory[addr & 0xFFFF];
-        }
-        return value;
-    }
-    
-    static void instance_mem_write(void* user_data, uint32_t addr, uint8_t data) {
-        ProcessorWrapper<Traits>* wrapper = static_cast<ProcessorWrapper<Traits>*>(user_data);
-        
-        if (wrapper->harness_ptr) {
-            ProcessorTestHarness* harness = static_cast<ProcessorTestHarness*>(wrapper->harness_ptr);
-            
-            // Use harness memory access (supports 24-bit addresses for 65816)
-            harness->set_memory(addr, data);
-            
-            // Always use full 32-bit address for bus cycle tracking
-            harness->record_bus_cycle(addr, data, true);
-        } else {
-            // Fallback to direct memory access (mask to 16-bit for safety)
-            test_memory[addr & 0xFFFF] = data;
-        }
-    }
-    
-    // Helper function to get processor name for debug output
-    const char* get_processor_debug_name() const {
-        // Runtime identification based on CPUTraits features
-        if (Traits.has_apu()) return "NES6502";
-        else if (Traits.has_io_port()) return "MOS6510";
-        else if (Traits.has(CPUCoreFlags::ROCKWELL_BITS)) return "Rockwell65C02";
-        else if (Traits.has(CPUCoreFlags::C816_16BIT)) return "WDC65C816";
-        else if (Traits.has(CPUCoreFlags::CMOS_BASE)) return "WDC65C02";
-        else return "MOS6502";
-    }
-    
-    // Helper function to check if this is a 65816 processor
-    bool is_65816() const {
-        return Traits.has(CPUCoreFlags::C816_16BIT);
-    }
-
-public:
-    ProcessorWrapper() : harness_ptr(nullptr) {
-        // Create CPU using C++ template implementation
-        cpu = new fam65xx_t<Traits>();
-        if (!cpu) {
-            throw std::runtime_error("Failed to create CPU");
-        }
-        
-        // Initialize CPU
-        cpu->init();
-        
-        // Processor tests mode is now handled via PROCESSOR_TESTS compile-time define
-        // No runtime configuration needed - interrupt hijacking and memory-mapped I/O
-        // are automatically disabled when built with -DPROCESSOR_TESTS
-    }
-    
-    ~ProcessorWrapper() {
-        if (cpu) {
-            delete cpu;
-        }
-    }
-    
-    uint64_t init() override {
-        // CPU already initialized in constructor
-        return 0;
-    }
-    
-    uint64_t bootstrap(uint64_t pins) override {
-        return cpu->bootstrap(pins);
-    }
-    
-    uint64_t tick_phi2(uint64_t pins) override {
-        using Phase = typename fam65xx_t<Traits>::Phase;
-        return cpu->template tick<Phase::PHI2>(pins);
-    }
-    
-    uint64_t tick_phi1(uint64_t pins) override {
-        using Phase = typename fam65xx_t<Traits>::Phase;
-        return cpu->template tick<Phase::PHI1>(pins);
-    }
-    
-    bool opdone() override {
-        return cpu->opdone();
-    }
-    
-    uint16_t get_pc() override {
-        return cpu->get(REG_PC);
-    }
-    
-    uint16_t get_a() override {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            // For 65C816, ALWAYS return the full 16-bit C register value (A+B combined)
-            // ProcessorTests JSON format stores the complete 16-bit register state
-            // regardless of M flag or emulation mode - this is the raw hardware state
-            return cpu->get(REG_A_16);
-        } else {
-            // For 8-bit processors, extend to 16-bit
-            return cpu->get(REG_A);
-        }
-    }
-    
-    uint16_t get_x() override {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            // For 65C816, ALWAYS return the full 16-bit X register value
-            // ProcessorTests JSON format stores the complete 16-bit register state
-            // regardless of X flag or emulation mode - this is the raw hardware state
-            return cpu->get(REG_X_16);
-        } else {
-            // For 8-bit processors, extend to 16-bit
-            return cpu->get(REG_X);
-        }
-    }
-    
-    uint16_t get_y() override {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            // For 65C816, ALWAYS return the full 16-bit Y register value
-            // ProcessorTests JSON format stores the complete 16-bit register state
-            // regardless of X flag or emulation mode - this is the raw hardware state
-            return cpu->get(REG_Y_16);
-        } else {
-            // For 8-bit processors, extend to 16-bit
-            return cpu->get(REG_Y);
-        }
-    }
-    
-    uint16_t get_sp() override {
-        // Use the CPU's get_sp() which handles all processor variants correctly
-        return cpu->get_sp();
-    }
-    
-    uint8_t get_status() override {
-        return cpu->get(REG_P);
-    }
-    
-    void set_pc(uint16_t pc) override {
-        cpu->set(REG_PC, pc);
-    }
-    
-    void set_a(uint16_t a) override {
-        // For 65816, ALWAYS set the full 16-bit C register (A+B combined)
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            cpu->set(REG_A_16, a);
-        } else {
-            // For 8-bit processors, truncate to low byte
-            cpu->set(REG_A, static_cast<uint8_t>(a & 0xFF));
-        }
-    }
-    
-    void set_x(uint16_t x) override {
-        // For 65816, ALWAYS set the full 16-bit X register
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            cpu->set(REG_X_16, x);
-        } else {
-            // For 8-bit processors, truncate to low byte
-            cpu->set(REG_X, static_cast<uint8_t>(x & 0xFF));
-        }
-    }
-    
-    void set_y(uint16_t y) override {
-        // For 65816, ALWAYS set the full 16-bit Y register
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            cpu->set(REG_Y_16, y);
-        } else {
-            // For 8-bit processors, truncate to low byte
-            cpu->set(REG_Y, static_cast<uint8_t>(y & 0xFF));
-        }
-    }
-    
-    void set_sp(uint16_t sp) override {
-        // For 65C816 in native mode, set full 16-bit stack pointer
-        // For other processors, only use low byte (high byte forced to 0x01 by hardware)
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            // 65C816: Check emulation mode
-            if (cpu->in_emulation_mode()) {
-                // Emulation mode: Force SPH to 0x01, use low byte from test data
-                // This mimics hardware constraint of emulation mode
-                cpu->set(REG_SP, 0x0100 | (sp & 0xFF));
-            } else {
-                // Native mode: Use full 16-bit value from test data
-                cpu->set(REG_SP, sp);
-            }
-        } else {
-            // 8-bit processors: Only low byte matters (hardware forces page 1)
-            cpu->set(REG_S, static_cast<uint8_t>(sp & 0xFF));
-        }
-    }
-    
-    void set_status(uint8_t p) override {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            // 65C816: Preserve the E flag (bit 8) when setting P
-            uint16_t p16 = cpu->get(REG_P_16);
-            p16 = (p16 & 0xFF00) | p;  // Keep high byte (E flag), set low byte
-            cpu->set(REG_P_16, p16);
-        } else {
-            cpu->set(REG_P, p);
-        }
-    }
-    
-    // 65816-specific methods - only compile for 65816
-    void set_emulation_mode(bool mode) override {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            cpu->set_emulation_mode(mode);
-        }
-    }
-    
-    void set_d(uint16_t value) override {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            cpu->set(REG_D, value);
-        }
-    }
-    
-    void set_dbr(uint8_t value) override {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            cpu->set(REG_DBR, value);
-        }
-    }
-    
-    void set_pbr(uint8_t value) override {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            cpu->set(REG_PBR, value);
-        }
-    }
-    
-    bool get_emulation_mode() override {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            return cpu->in_emulation_mode();
-        }
-        return true;
-    }
-    
-    uint16_t get_d() override {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            return cpu->get(REG_D);
-        }
-        return 0;
-    }
-    
-    uint8_t get_dbr() override {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            return cpu->get(REG_DBR);
-        }
-        return 0;
-    }
-    
-    uint8_t get_pbr() override {
-        if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-            return cpu->get(REG_PBR);
-        }
-        return 0;
-    }
-    
-    // Set harness for bus cycle recording (thread-safe)
-    void set_harness(ProcessorTestHarness* harness) override {
-        harness_ptr = harness;
-    }
-    
-    // Clear interrupt state for test isolation
-    void clear_interrupt_state() override {
-        cpu->active_interrupt = FAM65XX_INT_NONE;
-        cpu->interrupt_shift_register = 0;
-        cpu->nmi_prev = 1;  // NMI starts high (inactive)
-        cpu->nmi_edge_latch = 0;
-    }
-    
-    // Get address mask from CPUTraits
-    uint32_t get_address_mask() const override {
-        return Traits.address_mask();
-    }
-};
-
-// Factory function to create processor instances - direct template instantiation
-// Note: template arguments must be fam65xx::-qualified because the per-CPU
-// headers re-export trait constants as global-scope references, which shadow
-// the namespace originals under `using namespace fam65xx;` and cannot serve
-// as non-type template parameters.
-std::unique_ptr<UnifiedProcessorInterface> create_processor(ProcessorType type) {
-    switch (type) {
-        case ProcessorType::MOS6502:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::MOS6502Traits>());
-            
-        case ProcessorType::NES6502:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::RICOH_2A03Traits>());
-            
-        case ProcessorType::MOS6510:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::MOS6510Traits>());
-            
-        case ProcessorType::SYNERTEK65C02:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::SYNERTEK_65C02Traits>());
-            
-        case ProcessorType::ROCKWELL65C02:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::ROCKWELL_R65C02Traits>());
-            
-        case ProcessorType::WDC65C02:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::WDC_W65C02STraits>());
-            
-        case ProcessorType::WDC65C816:
-            return std::unique_ptr<UnifiedProcessorInterface>(new ProcessorWrapper<fam65xx::WDC_65C816Traits>());
-            
-        default:
-            throw std::invalid_argument("Unsupported processor type");
-    }
-}
-
 // Test item for worker queue
 struct TestItem {
     std::string filepath;
@@ -971,10 +684,8 @@ struct TestItem {
     std::string test_name;
 };
 
-// Forward declaration for TestWorkerPool
-class TestWorkerPool;
-
 // Worker thread pool class
+template<const CPUTraits& Traits>
 class TestWorkerPool {
 private:
     std::vector<std::thread> workers;
@@ -991,15 +702,13 @@ private:
     bool quiet_mode;
     std::atomic<bool>& global_test_failed;
     bool stop_on_failure;
-    ProcessorType processor_type;
     
     
 public:
     TestWorkerPool(size_t num_workers, ThreadSafeOutput& output, ThreadSafeTestResults& res,
-                   bool verbose, bool quiet, std::atomic<bool>& test_failed, bool stop_fail,
-                   ProcessorType proc_type)
+                   bool verbose, bool quiet, std::atomic<bool>& test_failed, bool stop_fail)
         : output_handler(output), results(res), verbose_mode(verbose), quiet_mode(quiet),
-          global_test_failed(test_failed), stop_on_failure(stop_fail), processor_type(proc_type) {
+          global_test_failed(test_failed), stop_on_failure(stop_fail) {
         
         for (size_t i = 0; i < num_workers; ++i) {
             workers.emplace_back(&TestWorkerPool::worker_thread, this, i);
@@ -1076,7 +785,7 @@ private:
     void worker_thread(size_t worker_id) {
         // PERFORMANCE OPTIMIZATION: Create one harness per worker thread
         // Reuse the same harness for all tests in this thread to avoid repeated initialization
-        ProcessorTestHarness harness(processor_type);  // Pass processor type to harness
+        ProcessorTestHarness<Traits> harness;
         processor_test_t* previous_test = nullptr;
         
         while (!shutdown) {
@@ -1111,7 +820,7 @@ private:
         }
     }
     
-    void process_single_test(const TestItem& item, size_t worker_id, ProcessorTestHarness* harness, processor_test_t*& previous_test) {
+    void process_single_test(const TestItem& item, size_t worker_id, ProcessorTestHarness<Traits>* harness, processor_test_t*& previous_test) {
         std::ostringstream thread_output;
         
         // Parse and run the test
@@ -1188,7 +897,7 @@ private:
     }
     
     bool run_processor_test_threaded(const processor_test_t* test, std::ostringstream& output, size_t worker_id,
-                                    ProcessorTestHarness* harness, const processor_test_t* previous_test) {
+                                    ProcessorTestHarness<Traits>* harness, const processor_test_t* previous_test) {
         results.total_tests++;
         
         // Capture all debug output in a separate buffer - only emit if test fails or verbose mode
@@ -1222,9 +931,6 @@ private:
         
         // Reset cycle count for this test
         harness->reset_cycle_count();
-        
-        // THREAD SAFETY FIX: Set harness in processor wrapper for bus cycle recording
-        harness->set_harness_for_bus_recording();
         
         // CRITICAL FIX: Bootstrap CPU FIRST to clear internal state
         // This prepares the CPU for immediate execution
@@ -1377,13 +1083,13 @@ private:
             state_match = false;
         }
         
-        // Check 65C816-specific registers - use cpu_wrapper methods through harness
+        // Check 65C816-specific registers
         if (test->final.has_65816_state) {
-            // Get actual values from the harness (which delegates to cpu_wrapper)
-            bool actual_e = harness->cpu_wrapper->get_emulation_mode();
-            uint16_t actual_d = harness->cpu_wrapper->get_d();
-            uint8_t actual_dbr = harness->cpu_wrapper->get_dbr();
-            uint8_t actual_pbr = harness->cpu_wrapper->get_pbr();
+            // Get actual values from the harness directly
+            bool actual_e = harness->get_emulation_mode();
+            uint16_t actual_d = harness->get_d();
+            uint8_t actual_dbr = harness->get_dbr();
+            uint8_t actual_pbr = harness->get_pbr();
             
             // Compare emulation mode flag
             bool expected_e = (test->final.e != 0);
@@ -1791,7 +1497,97 @@ void print_results(std::chrono::milliseconds duration, size_t num_workers, Proce
     }
 }
 
-// Main function with parallel execution
+// Run all tests for a specific CPU variant — single dispatch point from main().
+// Everything below this call is monomorphic (zero virtual dispatch).
+template<const CPUTraits& Traits>
+int run_all_tests(const std::vector<std::string>& test_paths,
+                  const std::string& opcode_filter,
+                  size_t num_workers,
+                  ProcessorType processor_type) {
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
+    // Collect all tests first with timing
+    std::cout << "Collecting tests..." << std::flush;
+    auto collect_start = std::chrono::high_resolution_clock::now();
+    auto all_tests = collect_all_tests(test_paths, opcode_filter);
+    auto collect_end = std::chrono::high_resolution_clock::now();
+    auto collect_duration = std::chrono::duration_cast<std::chrono::milliseconds>(collect_end - collect_start);
+    std::cout << " Found " << all_tests.size() << " tests in " << collect_duration.count() << "ms\n";
+    
+    if (all_tests.empty()) {
+        std::cout << "No tests found in specified paths!\n";
+        return 1;
+    }
+    
+    // Adjust worker count to never exceed number of tests
+    size_t effective_workers = std::min(num_workers, std::max(static_cast<size_t>(1), all_tests.size()));
+    
+    if (effective_workers != num_workers) {
+        std::cout << "Effective worker threads: " << effective_workers << " (adjusted from " << num_workers << " to prevent thread hangs)\n";
+    } else {
+        std::cout << "Worker threads: " << effective_workers << "\n";
+    }
+    
+    // Set up parallel execution with adjusted worker count
+    ThreadSafeOutput output_handler;
+    ThreadSafeTestResults thread_results;
+    TestWorkerPool<Traits> worker_pool(effective_workers, output_handler, thread_results,
+                                       verbose_output, g_quiet_mode, g_test_failed, g_stop_on_failure);
+    
+    // Submit all tests to worker pool
+    std::cout << "Starting parallel execution...\n";
+    for (const auto& test : all_tests) {
+        worker_pool.add_test(test);
+    }
+    
+    // Use proper wait completion method with periodic output flushing
+    std::atomic<bool> flush_thread_should_exit{false};
+    std::thread flush_thread([&output_handler, &flush_thread_should_exit]() {
+        while (!flush_thread_should_exit.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            if (output_handler.has_pending()) {
+                output_handler.flush_all();
+            }
+        }
+    });
+    
+    // Wait for all tests to complete
+    worker_pool.wait_completion();
+    
+    // Stop the flush thread
+    flush_thread_should_exit = true;
+    if (flush_thread.joinable()) {
+        flush_thread.join();
+    }
+    
+    // Final output flush
+    output_handler.flush_all();
+    
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    
+    // Transfer results to global structure
+    thread_results.merge_into_global(results);
+    
+    print_results(duration, num_workers, processor_type, all_tests.size());
+    
+    if (results.total_tests == 0) {
+        std::cout << "\nNo tests were executed!\n";
+        return 1;
+    } else if (results.passed_tests == results.total_tests) {
+        std::cout << "\nALL TESTS PASSED - Template-based fam65xx matches ProcessorTests ground truth!\n";
+        return 0;
+    } else {
+        double overall_pass_rate = (double)results.passed_tests / all_tests.size() * 100.0;
+        std::cout << "\nSOME TESTS FAILED - fam65xx pass rate: "
+                  << std::fixed << std::setprecision(1) << overall_pass_rate << "%\n";
+        std::cout << "Implementation differs from hardware-verified ground truth\n";
+        return 1;
+    }
+}
+
+// Main function — parses arguments, then dispatches to the monomorphic
+// run_all_tests<Traits>() for the selected CPU variant.
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         print_usage(argv[0]);
@@ -1799,10 +1595,10 @@ int main(int argc, char* argv[]) {
     }
     
     std::vector<std::string> test_paths;
-    size_t num_workers = std::max(1u, std::thread::hardware_concurrency() - 1); // CPU cores - 1
-    ProcessorType processor_type_override = ProcessorType::MOS6502;  // Default fallback
+    size_t num_workers = std::max(1u, std::thread::hardware_concurrency() - 1);
+    ProcessorType processor_type_override = ProcessorType::MOS6502;
     bool processor_specified = false;
-    std::string opcode_filter;  // Optional opcode filter (e.g., "7c" or "0x7c")
+    std::string opcode_filter;
     
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -1833,7 +1629,6 @@ int main(int argc, char* argv[]) {
         } else if (arg == "-o" || arg == "--opcode") {
             if (i + 1 < argc) {
                 opcode_filter = argv[++i];
-                // Normalize opcode format (remove 0x prefix if present, convert to lowercase)
                 if (opcode_filter.substr(0, 2) == "0x" || opcode_filter.substr(0, 2) == "0X") {
                     opcode_filter = opcode_filter.substr(2);
                 }
@@ -1874,87 +1669,24 @@ int main(int argc, char* argv[]) {
     std::cout << "Quiet mode: " << (g_quiet_mode ? "enabled" : "disabled") << "\n";
     std::cout << "Stop on failure: " << (g_stop_on_failure ? "enabled" : "disabled") << "\n\n";
     
-    auto start_time = std::chrono::high_resolution_clock::now();
-    
-    // Collect all tests first with timing
-    std::cout << "Collecting tests..." << std::flush;
-    auto collect_start = std::chrono::high_resolution_clock::now();
-    auto all_tests = collect_all_tests(test_paths, opcode_filter);
-    auto collect_end = std::chrono::high_resolution_clock::now();
-    auto collect_duration = std::chrono::duration_cast<std::chrono::milliseconds>(collect_end - collect_start);
-    std::cout << " Found " << all_tests.size() << " tests in " << collect_duration.count() << "ms\n";
-    
-    if (all_tests.empty()) {
-        std::cout << "No tests found in specified paths!\n";
-        return 1;
-    }
-    
-    // CRITICAL FIX: Adjust worker count to never exceed number of tests
-    // This prevents hanging when there are fewer tests than worker threads
-    size_t effective_workers = std::min(num_workers, std::max(static_cast<size_t>(1), all_tests.size()));
-    
-    if (effective_workers != num_workers) {
-        std::cout << "Effective worker threads: " << effective_workers << " (adjusted from " << num_workers << " to prevent thread hangs)\n";
-    } else {
-        std::cout << "Worker threads: " << effective_workers << "\n";
-    }
-    
-    // Set up parallel execution with adjusted worker count
-    ThreadSafeOutput output_handler;
-    ThreadSafeTestResults thread_results;
-    TestWorkerPool worker_pool(effective_workers, output_handler, thread_results,
-                               verbose_output, g_quiet_mode, g_test_failed, g_stop_on_failure,
-                               detected_processor_type);
-    
-    // Submit all tests to worker pool
-    std::cout << "Starting parallel execution...\n";
-    for (const auto& test : all_tests) {
-        worker_pool.add_test(test);
-    }
-    
-    // Use proper wait completion method with periodic output flushing
-    std::atomic<bool> flush_thread_should_exit{false};
-    std::thread flush_thread([&output_handler, &flush_thread_should_exit]() {
-        while (!flush_thread_should_exit.load()) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            if (output_handler.has_pending()) {
-                output_handler.flush_all();
-            }
-        }
-    });
-    
-    // Wait for all tests to complete
-    worker_pool.wait_completion();
-    
-    // Stop the flush thread
-    flush_thread_should_exit = true;
-    if (flush_thread.joinable()) {
-        flush_thread.join();
-    }
-    
-    // Final output flush
-    output_handler.flush_all();
-    
-    auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    
-    // Transfer results to global structure
-    thread_results.merge_into_global(results);
-    
-    print_results(duration, num_workers, detected_processor_type, all_tests.size());
-    
-    if (results.total_tests == 0) {
-        std::cout << "\nNo tests were executed!\n";
-        return 1;
-    } else if (results.passed_tests == results.total_tests) {
-        std::cout << "\nALL TESTS PASSED - Template-based fam65xx matches ProcessorTests ground truth!\n";
-        return 0;
-    } else {
-        // Use overall pass rate accounting for early termination
-        double overall_pass_rate = (double)results.passed_tests / all_tests.size() * 100.0;
-        std::cout << "\nSOME TESTS FAILED - fam65xx pass rate: "
-                  << std::fixed << std::setprecision(1) << overall_pass_rate << "%\n";
-        std::cout << "Implementation differs from hardware-verified ground truth\n";
-        return 1;
+    // Single dispatch point — everything below is monomorphic (no virtual calls)
+    switch (detected_processor_type) {
+        case ProcessorType::MOS6502:
+            return run_all_tests<fam65xx::MOS6502Traits>(test_paths, opcode_filter, num_workers, detected_processor_type);
+        case ProcessorType::NES6502:
+            return run_all_tests<fam65xx::RICOH_2A03Traits>(test_paths, opcode_filter, num_workers, detected_processor_type);
+        case ProcessorType::MOS6510:
+            return run_all_tests<fam65xx::MOS6510Traits>(test_paths, opcode_filter, num_workers, detected_processor_type);
+        case ProcessorType::SYNERTEK65C02:
+            return run_all_tests<fam65xx::SYNERTEK_65C02Traits>(test_paths, opcode_filter, num_workers, detected_processor_type);
+        case ProcessorType::ROCKWELL65C02:
+            return run_all_tests<fam65xx::ROCKWELL_R65C02Traits>(test_paths, opcode_filter, num_workers, detected_processor_type);
+        case ProcessorType::WDC65C02:
+            return run_all_tests<fam65xx::WDC_W65C02STraits>(test_paths, opcode_filter, num_workers, detected_processor_type);
+        case ProcessorType::WDC65C816:
+            return run_all_tests<fam65xx::WDC_65C816Traits>(test_paths, opcode_filter, num_workers, detected_processor_type);
+        default:
+            std::cout << "ERROR: Unsupported processor type\n";
+            return 1;
     }
 }
