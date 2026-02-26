@@ -1,34 +1,20 @@
 /*
- * fam65xx_layouts.h — CPU pin layout dispatch + pin state extraction
+ * fam65xx_layouts.h — CPU pin state extraction
  *
- * Per-CPU wrapper headers (mos6502.h, mos6510.h, …) each provide an explicit
- * specialization of create_cpu_pin_layout<Traits>().  The primary template
- * (with a DIP-40 fallback) lives in fam65xx_pin_layout.h.
+ * Provides get_cpu_pin_states<Traits>() which overlays CPU-specific signal
+ * directions (address-bus driven, clock direction) on top of generic
+ * bus-derived pin states.
  *
- * This header pulls in all per-CPU specializations and provides:
- *   - get_cpu_pin_states<Traits>()  — overlays CPU-specific signal directions
+ * Pin layouts are resolved via create_cpu_pin_layout<Traits>() from
+ * fam65xx_pin_layout.h.  Per-CPU headers (mos6502.h, …) supply explicit
+ * specializations; the caller is responsible for including those it needs.
  */
 
 #pragma once
 
 #include "../../../core/chip_layout.h"
 #include "../../../core/system_lines.h"
-#include "fam65xx_pin_layout.h"
-
-// Per-CPU headers supply trait constants, type aliases, layout functions,
-// and create_cpu_pin_layout<> specializations.
-// Each transitively includes fam65xx.hpp.
-#include "mos6502.h"
-#include "mos6510.h"
-#include "mos7501.h"
-#include "ricoh_2a03.h"
-#include "wdc65c02.h"
-#include "synertek65c02.h"
-#include "rockwell65c02.h"
-#include "wdc_w65c02s.h"
-#include "wdc65c816.h"
-
-#include <type_traits>
+#include "fam65xx.hpp"
 
 // ============================================================================
 // CPU PIN STATE EXTRACTION WITH BUS STATE
