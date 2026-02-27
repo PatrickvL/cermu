@@ -278,7 +278,6 @@ public:
     Cartridge() = default;
     
 public:
-    explicit Cartridge(const std::string& filename);
     virtual ~Cartridge() = default;
 
     /** Parse iNES ROM from an already-loaded buffer.
@@ -330,7 +329,6 @@ public:
     uint8_t peek(uint16_t addr) const;
     
 private:
-    bool load_from_file(const std::string& filename);
     std::string rom_filepath_;  // stored for SRAM path derivation
     
     // Mapper implementations
