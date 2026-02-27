@@ -81,10 +81,6 @@ public:
     void render_system_menu_items() override;
     void render_configuration_ui() override;
 
-    // Auto-detect memory expansion and region from file contents
-    SystemConfiguration detect_optimal_configuration(
-        const char* filepath, const uint8_t* data, size_t size) override;
-
     // Audio output — drains VIC chip audio ring buffer
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
 

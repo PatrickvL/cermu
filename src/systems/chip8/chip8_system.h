@@ -60,10 +60,6 @@ public:
     // Emulation control
     void set_speed_multiplier(float multiplier) override;
 
-    // Auto-detect mode and speed profile from ROM contents
-    SystemConfiguration detect_optimal_configuration(
-        const char* filepath, const uint8_t* data, size_t size) override;
-
     // Audio output — beeper or XO-CHIP audio pattern
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
 
@@ -136,6 +132,4 @@ private:
     /// Register logical CHIP-8 chips into registered_chips_ for the Hardware menu.
     void register_chip8_chips();
 
-    // ROM analysis — detect SCHIP/XO-CHIP instructions
-    static Chip8Mode detect_mode_from_rom(const uint8_t* data, size_t size);
 };

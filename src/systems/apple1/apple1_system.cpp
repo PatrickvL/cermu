@@ -76,23 +76,25 @@ static HardwareTraits create_apple1_hardware_traits() {
 }
 
 // File detection callback
-static float apple1_can_load_file(const char* filepath, const uint8_t* data, size_t size) {
-    const char* ext = strrchr(filepath, '.');
+static SystemProbeResult apple1_probe_file(
+    const format_descriptor_t* /*matched_format*/,
+    const char* filepath, const uint8_t* data, size_t size) {
+
+    SystemProbeResult result = { 0.0f, {} };
+    const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
     if (ext) {
         // Apple 1 typically used simple binary files or text files
         if (strcmp(ext, ".bin") == 0 || strcmp(ext, ".BIN") == 0) {
-            return 0.4f;  // Low confidence - generic binary
-        }
-        if (strcmp(ext, ".hex") == 0 || strcmp(ext, ".HEX") == 0) {
-            return 0.5f;  // Intel HEX format
-        }
-        if (strcmp(ext, ".txt") == 0 || strcmp(ext, ".TXT") == 0) {
-            return 0.3f;  // Text/source files
+            result.confidence = 0.4f;  // Low confidence - generic binary
+        } else if (strcmp(ext, ".hex") == 0 || strcmp(ext, ".HEX") == 0) {
+            result.confidence = 0.5f;  // Intel HEX format
+        } else if (strcmp(ext, ".txt") == 0 || strcmp(ext, ".TXT") == 0) {
+            result.confidence = 0.3f;  // Text/source files
         }
     }
     (void)data;
     (void)size;
-    return 0.0f;
+    return result;
 }
 
 static SystemDescriptor apple1_descriptor = {
@@ -101,7 +103,7 @@ static SystemDescriptor apple1_descriptor = {
     "Apple 1 (1976) - Woz's first computer, 8KB RAM, terminal display",
     nullptr,  // supported_formats: Apple 1 does not use format handler system
     create_apple1_hardware_traits(),
-    apple1_can_load_file
+    apple1_probe_file
 };
 
 // ============================================================================

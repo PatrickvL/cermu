@@ -1,5 +1,7 @@
 #include "emulated_system.h"
 #include "chip.h"
+#include "formats/format_handler.h"
+#include "vfs/vfs.h"
 #include <cstring>
 #include <cmath>
 #include <algorithm>
@@ -228,9 +230,8 @@ void EmulatedSystem::release_all_keys() {
     // Default: nothing to release
 }
 
-SystemConfiguration EmulatedSystem::detect_optimal_configuration(
-    const char* /*filepath*/, const uint8_t* /*data*/, size_t /*size*/) {
-    // Default: walk hardware traits and select the default option for each axis
+SystemConfiguration EmulatedSystem::default_configuration() const {
+    // Walk hardware traits and select the default option for each axis
     SystemConfiguration config;
 
     // Memory: find the default option
@@ -260,19 +261,40 @@ SystemConfiguration EmulatedSystem::detect_optimal_configuration(
 void EmulatedSystem::apply_file_configuration(const char* filepath) {
     if (!filepath) return;
 
-    FILE* f = fopen(filepath, "rb");
-    if (!f) return;
+    const SystemDescriptor& desc = get_descriptor();
 
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    size_t read_size = fsize < 65536 ? (size_t)fsize : 65536;
-    std::vector<uint8_t> buf(read_size);
-    fread(buf.data(), 1, read_size, f);
-    fclose(f);
+    // Read file via VFS (supports both filesystem and archive paths)
+    size_t file_size = 0;
+    uint8_t* data = vfs_read_file(filepath, &file_size);
+    if (!data) return;
 
-    SystemConfiguration detected =
-        detect_optimal_configuration(filepath, buf.data(), (size_t)fsize);
+    SystemConfiguration detected;
+
+    if (desc.probe_file) {
+        // Find the best-matching format from supported_formats, if any
+        const format_descriptor_t* matched_format = nullptr;
+
+        if (desc.supported_formats) {
+            std::string ext_str = vfs_extension(filepath);
+            const char* ext = ext_str.empty() ? nullptr : ext_str.c_str();
+            float best_score = 0.0f;
+            for (const format_descriptor_t* const* fp = desc.supported_formats; *fp; ++fp) {
+                if (!(*fp)->identify) continue;
+                float score = (*fp)->identify(data, file_size, ext);
+                if (score > best_score) {
+                    best_score     = score;
+                    matched_format = *fp;
+                }
+            }
+        }
+
+        SystemProbeResult probe = desc.probe_file(matched_format, filepath, data, file_size);
+        detected = probe.configuration;
+    } else {
+        detected = default_configuration();
+    }
+
+    free(data);
 
     // Merge: never downgrade memory, keep detected region
     SystemConfiguration merged = config_;

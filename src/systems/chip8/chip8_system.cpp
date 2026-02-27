@@ -130,21 +130,107 @@ static HardwareTraits create_chip8_hardware_traits() {
     return traits;
 }
 
-// System file detection
-static float chip8_can_load_file(const char* filepath, const uint8_t* data, size_t size) {
-    const char* ext = strrchr(filepath, '.');
+// ============================================================================
+// ROM analysis — scan for extended instructions to determine mode
+// ============================================================================
+static Chip8Mode detect_mode_from_rom(const uint8_t* data, size_t size) {
+    bool uses_schip = false;
+    bool uses_xochip = false;
+
+    for (size_t i = 0; i + 1 < size; i += 2) {
+        uint16_t op = (data[i] << 8) | data[i + 1];
+
+        uint8_t hi = (op >> 12) & 0xF;
+        uint8_t lo = op & 0xFF;
+
+        // SCHIP instructions
+        if ((op & 0xFFF0) == 0x00C0) uses_schip = true;   // 00Cn: scroll down
+        if (op == 0x00FB) uses_schip = true;                // scroll right
+        if (op == 0x00FC) uses_schip = true;                // scroll left
+        if (op == 0x00FD) uses_schip = true;                // EXIT
+        if (op == 0x00FE) uses_schip = true;                // lo-res
+        if (op == 0x00FF) uses_schip = true;                // hi-res
+        if (hi == 0xD && (op & 0xF) == 0) uses_schip = true; // DXY0: 16x16 sprite
+        if (hi == 0xF && lo == 0x30) uses_schip = true;      // FX30: hi-res font
+        if (hi == 0xF && (lo == 0x75 || lo == 0x85)) uses_schip = true; // RPL flags
+
+        // XO-CHIP instructions
+        if ((op & 0xFFF0) == 0x00D0) uses_xochip = true;   // 00Dn: scroll up
+        if (op == 0xF000) uses_xochip = true;                // F000 NNNN: long I
+        if ((op & 0xFF00) == 0xF000 && lo == 0x02) uses_xochip = true; // F002: audio
+        if (hi == 0xF && lo == 0x3A) uses_xochip = true;     // F03A: pitch
+        if (hi == 0x5 && (op & 0xF) == 2) uses_xochip = true; // 5XY2: save range
+        if (hi == 0x5 && (op & 0xF) == 3) uses_xochip = true; // 5XY3: load range
+        if (hi == 0xF && lo == 0x01) uses_xochip = true;      // FN01: planes
+    }
+
+    if (uses_xochip) return Chip8Mode::XOCHIP;
+    if (uses_schip)  return Chip8Mode::SCHIP;
+    return Chip8Mode::CHIP8;
+}
+
+// System file detection + configuration probe
+static SystemProbeResult chip8_probe_file(
+    const format_descriptor_t* /*matched_format*/,
+    const char* filepath, const uint8_t* data, size_t size) {
+
+    SystemProbeResult result = { 0.0f, {} };
+
+    // Extension-based confidence
+    const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
     if (ext) {
-        if (strcmp(ext, ".ch8") == 0 || strcmp(ext, ".c8") == 0) return 0.9f;
-        if (strcmp(ext, ".sc8") == 0) return 0.95f;  // SCHIP ROM
-        if (strcmp(ext, ".xo8") == 0) return 0.95f;  // XO-CHIP ROM
+        if (strcmp(ext, ".ch8") == 0 || strcmp(ext, ".c8") == 0)  result.confidence = 0.9f;
+        else if (strcmp(ext, ".sc8") == 0)  result.confidence = 0.95f;
+        else if (strcmp(ext, ".xo8") == 0)  result.confidence = 0.95f;
     }
-    
-    // Heuristic: CHIP-8 ROMs are typically 200–65024 bytes
-    if (size >= 10 && size <= 65024) {
-        return 0.5f;
+
+    // Heuristic fallback for unknown extensions
+    if (result.confidence == 0.0f && size >= 10 && size <= 65024) {
+        result.confidence = 0.5f;
     }
-    
-    return 0.0f;
+
+    if (result.confidence == 0.0f) return result;
+
+    // --- Detect optimal configuration ---
+
+    // Mode from extension first
+    Chip8Mode detected = Chip8Mode::CHIP8;
+    if (ext) {
+        if (strcmp(ext, ".sc8") == 0) detected = Chip8Mode::SCHIP;
+        else if (strcmp(ext, ".xo8") == 0) detected = Chip8Mode::XOCHIP;
+    }
+
+    // If no extension hint, scan ROM for extended instructions
+    if (detected == Chip8Mode::CHIP8 && data && size > 0) {
+        detected = detect_mode_from_rom(data, size);
+    }
+
+    // Auto-extend memory for large ROMs
+    if (size > 3584) {
+        detected = Chip8Mode::XOCHIP;
+        result.configuration.memory_option_index = 1;  // 64KB
+        printf("CHIP8: ROM size %zu > 3584, selecting XO-CHIP mode with 64KB\n", size);
+    }
+
+    switch (detected) {
+        case Chip8Mode::SCHIP:
+            result.configuration.custom_settings["chip8_mode"] = "SCHIP 1.1";
+            result.configuration.region_option_index = 1;  // Fast (1200 Hz)
+            printf("CHIP8: Detected SCHIP mode\n");
+            break;
+        case Chip8Mode::XOCHIP:
+            result.configuration.custom_settings["chip8_mode"] = "XO-CHIP";
+            result.configuration.memory_option_index = 1;  // 64KB
+            result.configuration.region_option_index = 2;   // XO-CHIP (1000 Hz)
+            printf("CHIP8: Detected XO-CHIP mode\n");
+            break;
+        default:
+            result.configuration.custom_settings["chip8_mode"] = "CHIP-8";
+            if (size > 2048) result.configuration.region_option_index = 1;
+            break;
+    }
+
+    return result;
 }
 
 static SystemDescriptor chip8_descriptor = {
@@ -153,7 +239,7 @@ static SystemDescriptor chip8_descriptor = {
     "CHIP-8 interpreter with Super-CHIP and XO-CHIP extensions",
     nullptr,
     create_chip8_hardware_traits(),
-    chip8_can_load_file
+    chip8_probe_file
 };
 
 // ============================================================================
@@ -247,7 +333,7 @@ bool Chip8System::set_configuration(const SystemConfiguration& config) {
         if (m == "CHIP-8")      mode_ = Chip8Mode::CHIP8;
         else if (m == "SCHIP 1.1")  mode_ = Chip8Mode::SCHIP;
         else if (m == "XO-CHIP")    mode_ = Chip8Mode::XOCHIP;
-        // "Auto" is handled by detect_optimal_configuration
+        // "Auto" is handled by probe_file during identification
     }
     
     display_dirty_ = true;
@@ -293,99 +379,6 @@ bool Chip8System::apply_configuration() {
     }
     
     return true;
-}
-
-// ============================================================================
-// Auto-detect optimal configuration from ROM contents
-// ============================================================================
-SystemConfiguration Chip8System::detect_optimal_configuration(
-    const char* filepath, const uint8_t* data, size_t size) {
-
-    SystemConfiguration config = EmulatedSystem::detect_optimal_configuration(filepath, data, size);
-    
-    // Detect mode from file extension first
-    const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
-    Chip8Mode detected = Chip8Mode::CHIP8;
-    
-    if (ext) {
-        if (strcmp(ext, ".sc8") == 0) detected = Chip8Mode::SCHIP;
-        else if (strcmp(ext, ".xo8") == 0) detected = Chip8Mode::XOCHIP;
-    }
-    
-    // If no extension hint, scan ROM for extended instructions
-    if (detected == Chip8Mode::CHIP8 && data && size > 0) {
-        detected = detect_mode_from_rom(data, size);
-    }
-    
-    // Auto-extend memory for large ROMs
-    if (size > 3584) {
-        detected = Chip8Mode::XOCHIP;
-        config.memory_option_index = 1;  // 64KB
-        printf("CHIP8: ROM size %zu > 3584, selecting XO-CHIP mode with 64KB\n", size);
-    }
-    
-    switch (detected) {
-        case Chip8Mode::SCHIP:
-            config.custom_settings["chip8_mode"] = "SCHIP 1.1";
-            // Use fast speed for SCHIP
-            if (hardware_traits_.video_standard_configs.size() > 1)
-                config.region_option_index = 1;
-            printf("CHIP8: Detected SCHIP mode\n");
-            break;
-        case Chip8Mode::XOCHIP:
-            config.custom_settings["chip8_mode"] = "XO-CHIP";
-            config.memory_option_index = 1;  // 64KB
-            if (hardware_traits_.video_standard_configs.size() > 2)
-                config.region_option_index = 2;  // XO-CHIP speed
-            printf("CHIP8: Detected XO-CHIP mode\n");
-            break;
-        default:
-            config.custom_settings["chip8_mode"] = "CHIP-8";
-            if (size > 2048 && hardware_traits_.video_standard_configs.size() > 1)
-                config.region_option_index = 1;
-            break;
-    }
-    
-    return config;
-}
-
-// ============================================================================
-// ROM analysis — scan for extended instructions to determine mode
-// ============================================================================
-Chip8Mode Chip8System::detect_mode_from_rom(const uint8_t* data, size_t size) {
-    bool uses_schip = false;
-    bool uses_xochip = false;
-    
-    for (size_t i = 0; i + 1 < size; i += 2) {
-        uint16_t op = (data[i] << 8) | data[i + 1];
-        
-        // SCHIP instructions
-        uint8_t hi = (op >> 12) & 0xF;
-        uint8_t lo = op & 0xFF;
-        
-        if ((op & 0xFFF0) == 0x00C0) uses_schip = true;   // 00Cn: scroll down
-        if (op == 0x00FB) uses_schip = true;                // scroll right
-        if (op == 0x00FC) uses_schip = true;                // scroll left
-        if (op == 0x00FD) uses_schip = true;                // EXIT
-        if (op == 0x00FE) uses_schip = true;                // lo-res
-        if (op == 0x00FF) uses_schip = true;                // hi-res
-        if (hi == 0xD && (op & 0xF) == 0) uses_schip = true; // DXY0: 16×16 sprite
-        if (hi == 0xF && lo == 0x30) uses_schip = true;      // FX30: hi-res font
-        if (hi == 0xF && (lo == 0x75 || lo == 0x85)) uses_schip = true; // RPL flags
-        
-        // XO-CHIP instructions
-        if ((op & 0xFFF0) == 0x00D0) uses_xochip = true;   // 00Dn: scroll up
-        if (op == 0xF000) uses_xochip = true;                // F000 NNNN: long I
-        if ((op & 0xFF00) == 0xF000 && lo == 0x02) uses_xochip = true; // F002: audio
-        if (hi == 0xF && lo == 0x3A) uses_xochip = true;     // F03A: pitch
-        if (hi == 0x5 && (op & 0xF) == 2) uses_xochip = true; // 5XY2: save range
-        if (hi == 0x5 && (op & 0xF) == 3) uses_xochip = true; // 5XY3: load range
-        if (hi == 0xF && lo == 0x01) uses_xochip = true;      // FN01: planes
-    }
-    
-    if (uses_xochip) return Chip8Mode::XOCHIP;
-    if (uses_schip)  return Chip8Mode::SCHIP;
-    return Chip8Mode::CHIP8;
 }
 
 // ============================================================================

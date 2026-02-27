@@ -1,5 +1,6 @@
 #pragma once
 
+#include "emulated_system.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -9,6 +10,7 @@
 // Forward declarations
 class EmulatedSystem;
 struct SystemDescriptor;
+struct format_descriptor_t;
 
 /**
  * System factory function type
@@ -21,8 +23,10 @@ using SystemFactory = std::function<std::unique_ptr<EmulatedSystem>()>;
  * Returned by SystemRegistry::identify_system().
  */
 struct SystemMatch {
-    std::string system_name;   /**< Short name of the best-match system, or "" */
-    float       confidence;    /**< Confidence in the match (0.0–1.0) */
+    std::string system_name;                        /**< Short name of the best-match system, or "" */
+    float       confidence = 0.0f;                  /**< Confidence in the match (0.0-1.0) */
+    const format_descriptor_t* matched_format = nullptr; /**< Which format descriptor matched, if any */
+    SystemConfiguration configuration;              /**< Optimal config from the probe */
 };
 
 /**
@@ -47,10 +51,16 @@ public:
     /**
      * Identify the best emulated system for a file.
      *
-     * Iterates every registered system's can_load_file callback and
-     * returns the one with the highest confidence.  This is the single
-     * authority for "which system handles this file?" — used by both
-     * create_system_for_file() and the archive scanner.
+     * Two-phase identification:
+     *   1. Generic format probe — for each system with supported_formats,
+     *      run every format's identify() callback to find the best-matching
+     *      format descriptor.  If no format matches, skip the system.
+     *   2. System-specific probe — call the system's probe_file() callback
+     *      with the matched format, to get a confidence score AND the
+     *      optimal SystemConfiguration.
+     *
+     * Systems with supported_formats == nullptr have their probe called
+     * unconditionally (matched_format will be nullptr).
      *
      * @param filepath  Path (or VFS path) for extension / context hints
      * @param data      File content (first N bytes or entire file)

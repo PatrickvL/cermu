@@ -354,6 +354,7 @@ set(CORE_UTIL_SOURCES
     src/core/formats/lnx_format.cpp
     src/core/formats/sid_format.cpp
     src/core/formats/nsf_format.cpp
+    src/core/formats/ines_format.cpp
     src/core/formats/commodore_load_helpers.cpp
     src/core/os/os_filesystem.cpp
     src/core/os/os_archive.cpp
