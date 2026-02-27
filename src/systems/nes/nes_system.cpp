@@ -9,6 +9,7 @@
 #include "nes_nsf_player.h"
 #include "nes_nsf_cartridge.h"
 #include "../../core/formats/nsf_format.h"
+#include "../../core/vfs/vfs.h"
 // CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
 #include "../../core/chip.h"
 #include "../../chip/memory/memory_chip.h"
@@ -1271,17 +1272,28 @@ Cartridge::Cartridge(const std::string& filename) {
 }
 
 bool Cartridge::load_from_file(const std::string& filename) {
-    std::ifstream file(filename, std::ios::binary);
-    if (!file.is_open()) {
+    // Use VFS to read the file — transparently supports archive paths
+    // like "roms.zip!/game.nes"
+    size_t file_size = 0;
+    uint8_t* file_data = vfs_read_file(filename.c_str(), &file_size);
+    if (!file_data) {
+        return false;
+    }
+
+    // Need at least 16 bytes for the header
+    if (file_size < sizeof(Header)) {
+        free(file_data);
         return false;
     }
     
     Header header;
-    file.read(reinterpret_cast<char*>(&header), sizeof(Header));
+    memcpy(&header, file_data, sizeof(Header));
+    size_t offset = sizeof(Header);
     
     // Verify iNES header
     if (header.name[0] != 'N' || header.name[1] != 'E' || 
         header.name[2] != 'S' || header.name[3] != 0x1A) {
+        free(file_data);
         return false;
     }
     
@@ -1295,13 +1307,18 @@ bool Cartridge::load_from_file(const std::string& filename) {
     
     // Skip trainer if present
     if (header.mapper1 & 0x04) {
-        file.seekg(512, std::ios::cur);
+        offset += 512;
     }
     
     // Load PRG ROM
     uint32_t prg_size = prg_banks * 16384;
+    if (offset + prg_size > file_size) {
+        free(file_data);
+        return false;
+    }
     prg_memory.resize(prg_size);
-    file.read(reinterpret_cast<char*>(prg_memory.data()), prg_size);
+    memcpy(prg_memory.data(), file_data + offset, prg_size);
+    offset += prg_size;
     
     // Load CHR ROM/RAM
     if (chr_banks == 0) {
@@ -1310,9 +1327,15 @@ bool Cartridge::load_from_file(const std::string& filename) {
     } else {
         // CHR ROM
         uint32_t chr_size = chr_banks * 8192;
+        if (offset + chr_size > file_size) {
+            free(file_data);
+            return false;
+        }
         chr_memory.resize(chr_size);
-        file.read(reinterpret_cast<char*>(chr_memory.data()), chr_size);
+        memcpy(chr_memory.data(), file_data + offset, chr_size);
     }
+
+    free(file_data);  // Done with raw file data
 
     // Allocate PRG RAM (8KB, used by MMC1/MMC3 and others)
     uint32_t prg_ram_size = header.prg_ram_size ? header.prg_ram_size * 8192 : 8192;
@@ -1942,19 +1965,22 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
     // =========================================================================
     // NSF FILE — Use the format system to parse, then launch NSF player
     // =========================================================================
-    const char* ext = strrchr(filepath, '.');
-    bool is_nsf = (ext && (strcmp(ext, ".nsf") == 0 || strcmp(ext, ".NSF") == 0));
+    // Use VFS-aware extension extraction for archive paths
+    std::string ext_str = vfs_extension(filepath);
+    const char* ext = ext_str.empty() ? nullptr : ext_str.c_str();
+    bool is_nsf = (ext && (strcasecmp(ext, ".nsf") == 0));
 
     // Also check by header magic for extensionless files
     if (!is_nsf) {
-        std::ifstream probe(filepath, std::ios::binary);
-        uint8_t magic[5] = {};
-        if (probe.read(reinterpret_cast<char*>(magic), 5)) {
-            if (magic[0] == 'N' && magic[1] == 'E' && magic[2] == 'S' &&
-                magic[3] == 'M' && magic[4] == 0x1A) {
+        size_t probe_size = 0;
+        uint8_t* probe_data = vfs_read_file(filepath, &probe_size);
+        if (probe_data && probe_size >= 5) {
+            if (probe_data[0] == 'N' && probe_data[1] == 'E' && probe_data[2] == 'S' &&
+                probe_data[3] == 'M' && probe_data[4] == 0x1A) {
                 is_nsf = true;
             }
         }
+        free(probe_data);
     }
 
     if (is_nsf) {
@@ -2034,12 +2060,9 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         reset();
         system_ready_ = true;
 
-        // Set program title to bare filename
-        const char* name = filepath;
-        const char* sep = strrchr(filepath, '/');
-        if (!sep) sep = strrchr(filepath, '\\');
-        if (sep) name = sep + 1;
-        program_title_ = name;
+        // Set program title to bare filename (VFS-aware)
+        std::string fname = vfs_filename(filepath);
+        program_title_ = fname.empty() ? filepath : fname;
         
         printf("%s: Cartridge loaded successfully\n", Traits::name);
         return true;

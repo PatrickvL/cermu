@@ -3,6 +3,7 @@
  */
 
 #include "format_handler.h"
+#include "vfs/vfs.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -47,27 +48,9 @@ void format_load_result_t::release() {
 // ============================================================================
 
 uint8_t* format_read_entire_file(const char* filepath, size_t* out_size) {
-    FILE* f = fopen(filepath, "rb");
-    if (!f) return NULL;
-
-    fseek(f, 0, SEEK_END);
-    long sz = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    if (sz <= 0) { fclose(f); return NULL; }
-
-    uint8_t* buf = (uint8_t*)malloc((size_t)sz);
-    if (!buf) { fclose(f); return NULL; }
-
-    if (fread(buf, 1, (size_t)sz, f) != (size_t)sz) {
-        free(buf);
-        fclose(f);
-        return NULL;
-    }
-
-    fclose(f);
-    *out_size = (size_t)sz;
-    return buf;
+    // Delegate to VFS — transparently handles both plain files and archive paths
+    // (e.g. "game.zip!/rom.nes")
+    return vfs_read_file(filepath, out_size);
 }
 
 bool format_ext_match(const char* ext, const char* target) {

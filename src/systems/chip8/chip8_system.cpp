@@ -1,5 +1,6 @@
 #include "chip8_system.h"
 #include "../../core/chip.h"
+#include "../../core/vfs/vfs.h"
 #include <fstream>
 #include <cstring>
 #include <cstdio>
@@ -499,14 +500,13 @@ void Chip8System::run_frame() {
 // ============================================================================
 
 bool Chip8System::load_file(const char* filepath) {
-    std::ifstream file(filepath, std::ios::binary | std::ios::ate);
-    if (!file) {
+    // Use VFS to read — supports archive paths like "roms.zip!/game.ch8"
+    size_t size = 0;
+    uint8_t* file_data = vfs_read_file(filepath, &size);
+    if (!file_data) {
         printf("CHIP-8: Failed to open file: %s\n", filepath);
         return false;
     }
-    
-    size_t size = file.tellg();
-    file.seekg(0, std::ios::beg);
     
     // Auto-extend memory if ROM > 3584 bytes
     size_t max_rom = memory_.size() - 512;
@@ -517,20 +517,19 @@ bool Chip8System::load_file(const char* filepath) {
             printf("CHIP-8: ROM %zu bytes > 4KB, auto-extending to 64KB (XO-CHIP)\n", size);
         } else {
             printf("CHIP-8: File too large: %zu bytes (max 65024)\n", size);
+            free(file_data);
             return false;
         }
     }
     
     reset();
     
-    file.read(reinterpret_cast<char*>(memory_.data() + 0x200), size);
+    memcpy(memory_.data() + 0x200, file_data, size);
+    free(file_data);
 
-    // Set program title to bare filename
-    const char* name = filepath;
-    const char* sep = strrchr(filepath, '/');
-    if (!sep) sep = strrchr(filepath, '\\');
-    if (sep) name = sep + 1;
-    program_title_ = name;
+    // Set program title to bare filename (VFS-aware)
+    std::string name_str = vfs_filename(filepath);
+    program_title_ = name_str.empty() ? filepath : name_str;
 
     printf("CHIP-8: Loaded %zu bytes from %s (mode: %s)\n", size, filepath,
            mode_ == Chip8Mode::XOCHIP ? "XO-CHIP" :
