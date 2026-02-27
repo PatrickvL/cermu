@@ -27,23 +27,13 @@ struct commodore_tap_header_t {
 // TAP Format API
 // ============================================================================
 
-/**
- * Read TAP file header without loading full pulse data.
- * Useful for file type detection and metadata display.
- */
-bool commodore_tap_read_header(const char* filepath, commodore_tap_header_t* out_header);
-
 /** Read TAP header from an already-loaded buffer. */
 bool commodore_tap_read_header_mem(const uint8_t* data, size_t size,
                                    commodore_tap_header_t* out_header);
 
-/**
- * Identify the platform of a TAP file from its signature.
+/** Identify TAP platform from an already-loaded buffer.
  * @return 0=C64, 1=VIC-20, 2=C16, -1=unknown/error
  */
-int commodore_tap_identify_platform(const char* filepath);
-
-/** Identify TAP platform from an already-loaded buffer. */
 int commodore_tap_identify_platform_mem(const uint8_t* data, size_t size);
 
 // ============================================================================

@@ -11,24 +11,15 @@
 // CRT Header Reading
 // ============================================================================
 
-bool commodore_crt_read_header(const char* filepath, commodore_crt_header_t* out_header) {
-    if (!filepath || !out_header) return false;
+bool commodore_crt_read_header_mem(const uint8_t* data, size_t data_size, commodore_crt_header_t* out_header) {
+    if (!data || data_size < 64 || !out_header) return false;
     memset(out_header, 0, sizeof(*out_header));
 
-    // Use format_read_entire_file (VFS-aware) instead of direct fopen
-    size_t file_size = 0;
-    uint8_t* file_data = format_read_entire_file(filepath, &file_size);
-    if (!file_data || file_size < 64) {
-        free(file_data);
-        return false;
-    }
-
-    const uint8_t* raw = file_data;
+    const uint8_t* raw = data;
 
     /* Validate signature */
     if (memcmp(raw, "C64 CARTRIDGE   ", 16) != 0) {
         printf("CRTFormat: Invalid CRT signature\n");
-        free(file_data);
         return false;
     }
 
@@ -45,8 +36,19 @@ bool commodore_crt_read_header(const char* filepath, commodore_crt_header_t* out
     printf("CRTFormat: \"%s\" hw_type=%d EXROM=%d GAME=%d\n",
            out_header->name, out_header->hardware_type,
            out_header->exrom, out_header->game);
-    free(file_data);
     return true;
+}
+
+bool commodore_crt_read_header(const char* filepath, commodore_crt_header_t* out_header) {
+    if (!filepath || !out_header) return false;
+
+    size_t file_size = 0;
+    uint8_t* file_data = format_read_entire_file(filepath, &file_size);
+    if (!file_data) return false;
+
+    bool ok = commodore_crt_read_header_mem(file_data, file_size, out_header);
+    free(file_data);
+    return ok;
 }
 
 // ============================================================================
@@ -64,16 +66,16 @@ static float crt_identify(const uint8_t* data, size_t file_size, const char* ext
 // Load Callback
 // ============================================================================
 
-static bool crt_load(const char* filepath, format_load_result_t* out) {
+static bool crt_load(const uint8_t* data, size_t size, format_load_result_t* out) {
     commodore_crt_header_t hdr;
-    if (commodore_crt_read_header(filepath, &hdr)) {
+    if (commodore_crt_read_header_mem(data, size, &hdr)) {
         out->type = FORMAT_LOAD_METADATA;
         memcpy(out->metadata, &hdr, sizeof(hdr));
         out->metadata_size = sizeof(hdr);
         return true;
     }
     snprintf(out->error_msg, sizeof(out->error_msg),
-             "Failed to read CRT header: %s", filepath);
+             "Failed to read CRT header from memory");
     out->type = FORMAT_LOAD_ERROR;
     return false;
 }

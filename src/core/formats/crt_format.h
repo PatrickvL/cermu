@@ -44,6 +44,11 @@ struct commodore_crt_chip_t {
  */
 bool commodore_crt_read_header(const char* filepath, commodore_crt_header_t* out_header);
 
+/**
+ * Read CRT header from an in-memory buffer.
+ */
+bool commodore_crt_read_header_mem(const uint8_t* data, size_t data_size, commodore_crt_header_t* out_header);
+
 // ============================================================================
 // Format Descriptor
 // ============================================================================

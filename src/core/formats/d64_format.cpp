@@ -280,9 +280,9 @@ static float d64_identify(const uint8_t* data, size_t file_size, const char* ext
 // Load Callback
 // ============================================================================
 
-static bool d64_load(const char* filepath, format_load_result_t* out) {
+static bool d64_load(const uint8_t* data, size_t size, format_load_result_t* out) {
     commodore_d64_t d64;
-    if (d64.open(filepath)) {
+    if (d64.open_mem(data, size)) {
         if (d64.extract_first_prg(&out->program)) {
             out->type = FORMAT_LOAD_PROGRAM;
             d64.close();
@@ -290,10 +290,10 @@ static bool d64_load(const char* filepath, format_load_result_t* out) {
         }
         d64.close();
         snprintf(out->error_msg, sizeof(out->error_msg),
-                 "D64 opened but no PRG found: %s", filepath);
+                 "D64 opened but no PRG found");
     } else {
         snprintf(out->error_msg, sizeof(out->error_msg),
-                 "Failed to open D64: %s", filepath);
+                 "Failed to open D64 from memory");
     }
     out->type = FORMAT_LOAD_ERROR;
     return false;

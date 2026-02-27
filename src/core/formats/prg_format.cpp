@@ -12,22 +12,6 @@
 // PRG Format Implementation
 // ============================================================================
 
-bool commodore_prg_load(const char* filepath, commodore_prg_t* out_prg) {
-    if (!filepath || !out_prg) return false;
-    memset(out_prg, 0, sizeof(*out_prg));
-
-    size_t file_size = 0;
-    uint8_t* file_data = format_read_entire_file(filepath, &file_size);
-    if (!file_data) {
-        printf("PRGFormat: Cannot open PRG file: %s\n", filepath);
-        return false;
-    }
-
-    bool ok = commodore_prg_parse(file_data, file_size, out_prg);
-    free(file_data);
-    return ok;
-}
-
 bool commodore_prg_parse(const uint8_t* buffer, size_t size, commodore_prg_t* out_prg) {
     if (!buffer || !out_prg || size < 2) return false;
     memset(out_prg, 0, sizeof(*out_prg));
@@ -61,16 +45,6 @@ void commodore_prg_free(commodore_prg_t* prg) {
 }
 
 // ============================================================================
-// BIN Format Implementation
-// ============================================================================
-
-bool commodore_bin_load(const char* filepath, uint8_t** out_data, size_t* out_size) {
-    if (!filepath || !out_data || !out_size) return false;
-    *out_data = format_read_entire_file(filepath, out_size);
-    return (*out_data != NULL);
-}
-
-// ============================================================================
 // Format Identification
 // ============================================================================
 
@@ -89,30 +63,34 @@ static float bin_identify(const uint8_t* data, size_t file_size, const char* ext
 // Load Callbacks
 // ============================================================================
 
-static bool prg_load(const char* filepath, format_load_result_t* out) {
-    if (commodore_prg_load(filepath, &out->program)) {
+static bool prg_load(const uint8_t* data, size_t size, format_load_result_t* out) {
+    if (commodore_prg_parse(data, size, &out->program)) {
         out->type = FORMAT_LOAD_PROGRAM;
         return true;
     }
-    snprintf(out->error_msg, sizeof(out->error_msg), "Failed to load PRG: %s", filepath);
+    snprintf(out->error_msg, sizeof(out->error_msg), "Failed to parse PRG data");
     out->type = FORMAT_LOAD_ERROR;
     return false;
 }
 
-static bool bin_load(const char* filepath, format_load_result_t* out) {
-    uint8_t* data = NULL;
-    size_t size = 0;
-    if (commodore_bin_load(filepath, &data, &size)) {
-        out->type = FORMAT_LOAD_RAW;
-        out->program.data = data;
-        out->program.data_size = size;
-        out->program.load_addr = 0;
-        out->program.end_addr = (uint16_t)(size > 0xFFFF ? 0xFFFF : size);
-        return true;
+static bool bin_load(const uint8_t* data, size_t size, format_load_result_t* out) {
+    if (!data || size == 0) {
+        snprintf(out->error_msg, sizeof(out->error_msg), "Empty BIN data");
+        out->type = FORMAT_LOAD_ERROR;
+        return false;
     }
-    snprintf(out->error_msg, sizeof(out->error_msg), "Failed to load BIN: %s", filepath);
-    out->type = FORMAT_LOAD_ERROR;
-    return false;
+    out->type = FORMAT_LOAD_RAW;
+    out->program.data = (uint8_t*)malloc(size);
+    if (!out->program.data) {
+        snprintf(out->error_msg, sizeof(out->error_msg), "Out of memory");
+        out->type = FORMAT_LOAD_ERROR;
+        return false;
+    }
+    memcpy(out->program.data, data, size);
+    out->program.data_size = size;
+    out->program.load_addr = 0;
+    out->program.end_addr = (uint16_t)(size > 0xFFFF ? 0xFFFF : size);
+    return true;
 }
 
 // ============================================================================

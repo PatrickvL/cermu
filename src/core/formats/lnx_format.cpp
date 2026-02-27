@@ -279,9 +279,9 @@ static float lnx_identify(const uint8_t* data, size_t file_size, const char* ext
 // Load Callback
 // ============================================================================
 
-static bool lnx_load(const char* filepath, format_load_result_t* out) {
+static bool lnx_load(const uint8_t* data, size_t size, format_load_result_t* out) {
     commodore_lynx_t lynx;
-    if (lynx.open(filepath)) {
+    if (lynx.open_mem(data, size)) {
         int count = 0;
         if (lynx.extract_all_prgs(out->files,
                                   FORMAT_LOAD_MAX_FILES, &count)) {
@@ -292,10 +292,10 @@ static bool lnx_load(const char* filepath, format_load_result_t* out) {
         }
         lynx.close();
         snprintf(out->error_msg, sizeof(out->error_msg),
-                 "LNX opened but no PRGs extracted: %s", filepath);
+                 "LNX opened but no PRGs extracted");
     } else {
         snprintf(out->error_msg, sizeof(out->error_msg),
-                 "Failed to open LNX: %s", filepath);
+                 "Failed to open LNX from memory");
     }
     out->type = FORMAT_LOAD_ERROR;
     return false;

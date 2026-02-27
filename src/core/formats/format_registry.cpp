@@ -95,34 +95,41 @@ bool FormatRegistry::load_file(const char* filepath, format_load_result_t* out) 
     std::string ext_str = vfs_extension(filepath);
     const char* ext = ext_str.empty() ? nullptr : ext_str.c_str();
 
-    /* Identify format — try content-based first if we can read the file.
-     * format_read_entire_file() is VFS-aware and can extract from archives. */
-    const format_descriptor_t* fmt = nullptr;
-    {
-        size_t peek_size = 0;
-        uint8_t* peek = format_read_entire_file(filepath, &peek_size);
-        if (peek) {
-            fmt = identify(peek, peek_size, ext);
-            free(peek);
-        } else if (ext) {
-            fmt = find_by_extension(ext);
-        }
+    /* Read the file once — all subsequent operations use this buffer. */
+    size_t file_size = 0;
+    uint8_t* file_data = format_read_entire_file(filepath, &file_size);
+    if (!file_data) {
+        /* No data — try extension-only identification so we get a useful error. */
+        const format_descriptor_t* fmt = ext ? find_by_extension(ext) : nullptr;
+        snprintf(out->error_msg, sizeof(out->error_msg),
+                 fmt ? "Cannot read file: %s" : "Unrecognised file format: %s", filepath);
+        return false;
+    }
+
+    /* Identify format — content-based, falls back to extension. */
+    const format_descriptor_t* fmt = identify(file_data, file_size, ext);
+    if (!fmt && ext) {
+        fmt = find_by_extension(ext);
     }
 
     if (!fmt) {
         snprintf(out->error_msg, sizeof(out->error_msg),
                  "Unrecognised file format: %s", filepath);
+        free(file_data);
         return false;
     }
 
     if (!fmt->load) {
         snprintf(out->error_msg, sizeof(out->error_msg),
                  "Format '%s' does not support direct loading", fmt->name);
+        free(file_data);
         return false;
     }
 
-    bool ok = fmt->load(filepath, out);
+    /* Pass the already-read buffer — no double-read. */
+    bool ok = fmt->load(file_data, file_size, out);
     out->format = fmt;
+    free(file_data);
     return ok;
 }
 
