@@ -1265,26 +1265,6 @@ bool Cartridge::save_sram(const std::string& sav_path) const {
 
 // ============================================================================
 
-Cartridge::Cartridge(const std::string& filename) {
-    if (!load_from_file(filename)) {
-        throw std::runtime_error("Failed to load cartridge: " + filename);
-    }
-}
-
-bool Cartridge::load_from_file(const std::string& filename) {
-    // Use VFS to read the file — transparently supports archive paths
-    // like "roms.zip!/game.nes"
-    size_t file_size = 0;
-    uint8_t* file_data = vfs_read_file(filename.c_str(), &file_size);
-    if (!file_data) {
-        return false;
-    }
-
-    bool ok = load_from_buffer(file_data, file_size, filename);
-    free(file_data);
-    return ok;
-}
-
 bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
                                   const std::string& filepath_for_sram) {
     if (!data || data_size < sizeof(Header)) {
