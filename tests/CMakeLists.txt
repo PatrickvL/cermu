@@ -60,7 +60,7 @@ endforeach()
 # These *_gui.cpp files compile to empty stubs when IMGUI_VERSION is not defined.
 set(MOS6510_GUI_STUBS
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx/fam65xx_gui.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/systems/nes/nes_apu_gui.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/systems/nes/apu/nes_apu_gui.cpp
 )
 
 # Create a library for the MOS6510 CPU
@@ -235,7 +235,7 @@ set(NES_DIR ${SRC_DIR}/systems/nes)
 add_executable(apu_test_runner
     apu_test_runner.cpp
     ${TESTING_DIR}/apu_test_harness.cpp
-    ${NES_DIR}/nes_apu_gui.cpp
+    ${NES_DIR}/apu/nes_apu_gui.cpp
     ${CORE_DIR}/chip.cpp
     ${CORE_DIR}/chip_layout.cpp
     ${CORE_DIR}/pin_labels.cpp
@@ -434,7 +434,7 @@ if(EXISTS "${NES_SND_EMU_DIR}/Nes_Apu.cpp")
     add_executable(apu_comparison_runner
         apu_comparison_runner.cpp
         ${TESTING_DIR}/apu_test_harness.cpp
-        ${NES_DIR}/nes_apu_gui.cpp
+        ${NES_DIR}/apu/nes_apu_gui.cpp
         ${CORE_DIR}/chip.cpp
         ${CORE_DIR}/chip_layout.cpp
         ${CORE_DIR}/pin_labels.cpp

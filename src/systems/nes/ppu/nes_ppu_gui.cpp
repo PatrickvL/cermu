@@ -8,12 +8,12 @@
  * Pinout reference: Ricoh RP2C02 Datasheet
  */
 
-#include "nes_system.h"
-#include "../../core/chip_layout.h"
+#include "nes_ppu.h"
+#include "../../../core/chip_layout.h"
 #ifdef IMGUI_VERSION
 #include <imgui.h>
-#include "../../gui/chip_visualization.h"
-#include "../../gui/global_chip_style.h"
+#include "../../../gui/chip_visualization.h"
+#include "../../../gui/global_chip_style.h"
 #endif
 #include <cstdio>
 

@@ -15,9 +15,9 @@
  * which is the standard mechanism for NSF playback on the NES.
  */
 
-#include "../../core/formats/nsf_format.h"
-#include "../../core/formats/format_handler.h"
-#include "../../chip/cpu/fam65xx/ricoh_2a03.h"
+#include "../../../core/formats/nsf_format.h"
+#include "../../../core/formats/format_handler.h"
+#include "../../../chip/cpu/fam65xx/ricoh_2a03.h"
 #include <cstdint>
 #include <memory>
 

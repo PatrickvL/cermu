@@ -19,8 +19,8 @@
 
 #include "nes_nsf_player.h"
 #include "nes_nsf_cartridge.h"
-#include "nes_screen_utils.h"
-#include "nes_system.h"
+#include "../screen/nes_screen_utils.h"
+#include "../nes_system.h"
 #include "asm6510.h"
 #include <cstdio>
 #include <cstring>
