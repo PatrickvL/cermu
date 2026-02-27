@@ -17,6 +17,8 @@
  */
 
 #include "format_handler.h"
+#include "vfs/vfs.h"
+
 /**
  * Load any supported file format (C API).
  * Identifies the format and dispatches to its load() callback.
@@ -29,6 +31,21 @@ bool format_load_file(const char* filepath, format_load_result_t* out);
 
 #include <vector>
 #include <string>
+
+// ============================================================================
+// Archive Scan Result
+// ============================================================================
+
+/**
+ * Result of scanning an archive for loadable content.
+ * Produced by FormatRegistry::scan_archive().
+ */
+struct ArchiveScan {
+    std::string  archive_path;           /**< Path to the archive file */
+    std::vector<VfsEntry> loadable_files; /**< Files that match known formats */
+    std::string  suggested_system;       /**< Best-guess system short name, or "" */
+    float        confidence;             /**< Confidence in the system guess (0.0–1.0) */
+};
 
 /**
  * FormatRegistry — singleton that collects all file format descriptors.
@@ -64,6 +81,18 @@ public:
      * Unified load — identifies format, dispatches to descriptor->load().
      */
     bool load_file(const char* filepath, format_load_result_t* out) const;
+
+    /**
+     * Scan an archive for loadable content and suggest a system.
+     *
+     * Lists entries via VFS, identifies loadable files by extension and
+     * content-based identify(), then maps formats to systems via
+     * SystemRegistry's SystemDescriptor::supported_formats lists.
+     *
+     * @param archive_path  Path to the archive file (not a VFS "!/"-path)
+     * @return              Scan result with loadable entries and system guess
+     */
+    ArchiveScan scan_archive(const char* archive_path) const;
 
 private:
     FormatRegistry() = default;

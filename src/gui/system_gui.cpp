@@ -5,6 +5,7 @@
 #include "imgui_impl_opengl3.h"
 #include "../core/config/path_discovery.h"
 #include "../core/formats/format_handler.h"
+#include "../core/formats/format_registry.h"
 #include "../core/vfs/vfs.h"
 #include "../devices/storage/drive_1541.h"
 #include <cstdio>
@@ -207,7 +208,7 @@ void SystemGUI::render_frame() {
                 std::string ext = vfs_extension(filePathName.c_str());
                 if (vfs_is_archive_extension(ext.c_str())) {
                     printf("Archive selected — scanning for loadable content...\n");
-                    auto scan = vfs_scan_archive(filePathName.c_str());
+                    auto scan = FormatRegistry::instance().scan_archive(filePathName.c_str());
                     if (scan.loadable_files.size() == 1) {
                         // Exactly one loadable file — auto-select it
                         resolved_path = scan.loadable_files[0].full_path;
@@ -994,7 +995,7 @@ void SystemGUI::switch_system(const char* system_name, int memory_option, int re
         resolved_pending = pending_file;
         std::string pext = vfs_extension(pending_file);
         if (vfs_is_archive_extension(pext.c_str())) {
-            auto scan = vfs_scan_archive(pending_file);
+            auto scan = FormatRegistry::instance().scan_archive(pending_file);
             if (!scan.loadable_files.empty()) {
                 resolved_pending = scan.loadable_files[0].full_path;
                 printf("Archive resolved to: %s\n", resolved_pending.c_str());
