@@ -52,15 +52,27 @@ using ppu_bus_state_t = uint64_t;
 // PPU BUS FIELD ACCESS MACROS
 // ============================================================================
 
+#define PPU_BUS_DATA_MASK         (0xFFULL)
+#define PPU_BUS_ADDR_MASK         (0x3FFFULL << 8)
+
 #define PPU_BUS_GET_DATA(b)       ((uint8_t)((b) & 0xFFULL))
-#define PPU_BUS_SET_DATA(b, d)    ((b) = ((b) & ~0xFFULL) | ((uint64_t)(d) & 0xFFULL))
+#define PPU_BUS_SET_DATA(b, d)    ((b) = (b) ^ (((b) ^ (uint64_t)(d)) & PPU_BUS_DATA_MASK))
 
 #define PPU_BUS_GET_ADDR(b)       ((uint16_t)(((b) >> 8) & 0x3FFFULL))
-#define PPU_BUS_SET_ADDR(b, a)    ((b) = ((b) & ~(0x3FFFULL << 8)) | (((uint64_t)(a) & 0x3FFFULL) << 8))
+#define PPU_BUS_SET_ADDR(b, a)    ((b) = (b) ^ (((b) ^ ((uint64_t)(a) << 8)) & PPU_BUS_ADDR_MASK))
 
 #define PPU_BUS_GET_BIT(b, bit)   (((b) & (1ULL << (bit))) != 0)
 #define PPU_BUS_SET_BIT(b, bit)   ((b) |=  (1ULL << (bit)))
 #define PPU_BUS_CLR_BIT(b, bit)   ((b) &= ~(1ULL << (bit)))
+
+// ============================================================================
+// PPU BUS CONSTRUCTION HELPERS
+// ============================================================================
+// Build a ppu_bus_state_t from address (and optionally data) in one expression.
+// Useful at call sites that construct a bus transaction inline.
+
+#define PPU_BUS_WITH_ADDR(a)        ((ppu_bus_state_t)(((uint64_t)((a) & 0x3FFFULL)) << 8))
+#define PPU_BUS_WITH_ADDR_DATA(a,d) ((ppu_bus_state_t)((((uint64_t)((a) & 0x3FFFULL)) << 8) | ((uint64_t)(d) & 0xFFULL)))
 
 // ============================================================================
 // PPU-ONLY PIN BIT POSITIONS (22-28)
@@ -99,10 +111,10 @@ using ppu_bus_state_t = uint64_t;
 // Transfer shared signals from PPU bus onto CPU bus:
 //   cpu_bus = PPU_CPU_BITMIX(cpu_bus, ppu_bus);
 //
-// Clears the shared bits on cpu, then ORs in the PPU's values.
-// One mask-AND + one mask-OR.  Zero bit shifting, zero conditionals.
+// XOR-AND-XOR form (3 ops) — same pattern as bitmix() in cermu.h.
+// Zero bit shifting, zero conditionals.
 #define PPU_CPU_BITMIX(cpu, ppu) \
-    (((cpu) & ~PPU_CPU_SHARED_MASK) | ((ppu) & PPU_CPU_SHARED_MASK))
+    ((cpu) ^ (((cpu) ^ (ppu)) & PPU_CPU_SHARED_MASK))
 
 // ============================================================================
 // PPU BUS DEFAULT STATE
