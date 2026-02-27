@@ -131,7 +131,7 @@ float Commodore264System<V>::can_load_file_static(const char* filepath, const ui
         }
         if (strcmp(ext, ".tap") == 0 || strcmp(ext, ".TAP") == 0) {
             // Check TAP header to see if this is specifically a C16/Plus4 tape
-            int platform = commodore_tap_identify_platform(filepath);
+            int platform = commodore_tap_identify_platform_mem(data, size);
             if (platform == 2) return 0.95f;  // C16 TAP
             if (platform == 0) return 0.2f;   // C64 TAP (low for C16)
             return 0.4f;

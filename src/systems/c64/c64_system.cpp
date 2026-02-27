@@ -87,7 +87,7 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
         // LNX files â€” Lynx archive; parse to inspect contained files' load addresses
         if (strcmp(ext, ".lnx") == 0 || strcmp(ext, ".LNX") == 0) {
             commodore_lynx_t lynx;
-            if (lynx.open(filepath)) {
+            if (lynx.open_mem(data, size)) {
                 commodore_lynx_directory_t dir;
                 if (lynx.read_directory(&dir)) {
                     // Check ALL PRG entries' load addresses for C64 addresses
@@ -117,7 +117,7 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
         if (strcmp(ext, ".d64") == 0 || strcmp(ext, ".D64") == 0) {
             // D64 disk images â€” inspect first PRG's load address to distinguish systems
             commodore_d64_t d64;
-            if (d64.open(filepath)) {
+            if (d64.open_mem(data, size)) {
                 commodore_prg_t prg = {};
                 if (d64.extract_first_prg(&prg)) {
                     float score = is_c64_load_address(prg.load_addr) ? 0.95f : 0.6f;
@@ -140,7 +140,7 @@ static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t
         }
         if (strcmp(ext, ".tap") == 0 || strcmp(ext, ".TAP") == 0) {
             // Check TAP header to see if this is specifically a C64 tape
-            int platform = commodore_tap_identify_platform(filepath);
+            int platform = commodore_tap_identify_platform_mem(data, size);
             if (platform == 0) return 0.95f;  // C64 TAP
             if (platform == 1) return 0.3f;   // VIC-20 TAP
             return 0.6f;  // Unknown or error â€” C64 is most common

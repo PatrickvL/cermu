@@ -47,6 +47,9 @@ struct commodore_lynx_t {
     /** Open a Lynx archive from file. Caller must call close(). */
     bool open(const char* filepath);
 
+    /** Open a Lynx archive from an existing buffer (no copy, no ownership). */
+    bool open_mem(const uint8_t* buf, size_t size);
+
     /** Read the directory of a Lynx archive. */
     bool read_directory(commodore_lynx_directory_t* out_dir) const;
 
