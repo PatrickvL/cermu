@@ -19,6 +19,31 @@ void SystemRegistry::register_system(const SystemDescriptor& descriptor, SystemF
     systems_.push_back({descriptor, factory});
 }
 
+// ============================================================================
+// identify_system — single authority for file-to-system matching
+// ============================================================================
+
+SystemMatch SystemRegistry::identify_system(const char* filepath,
+                                            const uint8_t* data, size_t size) const {
+    SystemMatch best;
+
+    for (const auto& [descriptor, factory] : systems_) {
+        if (!descriptor.can_load_file) continue;
+
+        float confidence = descriptor.can_load_file(filepath, data, size);
+        if (confidence > best.confidence) {
+            best.confidence   = confidence;
+            best.system_name  = descriptor.short_name;
+        }
+    }
+
+    return best;
+}
+
+// ============================================================================
+// create_system_for_file — read file, identify system, instantiate
+// ============================================================================
+
 std::unique_ptr<EmulatedSystem> SystemRegistry::create_system_for_file(const char* filepath) {
     if (!filepath) {
         return nullptr;
@@ -46,35 +71,23 @@ std::unique_ptr<EmulatedSystem> SystemRegistry::create_system_for_file(const cha
     
     printf("SystemRegistry: File size: %zu bytes\n", file_size);
     
-    // Find system with highest confidence
-    float best_confidence = 0.0f;
-    SystemFactory best_factory = nullptr;
-    const char* best_system_name = nullptr;
-    
-    for (const auto& [descriptor, factory] : systems_) {
-        if (descriptor.can_load_file) {
-            float confidence = descriptor.can_load_file(filepath, data.data(), file_size);
-            printf("SystemRegistry: %s confidence: %.2f\n", descriptor.short_name, confidence);
-            if (confidence > best_confidence) {
-                best_confidence = confidence;
-                best_factory = factory;
-                best_system_name = descriptor.short_name;
-            }
-        }
-    }
-    
+    // Delegate to the single identification authority
+    auto match = identify_system(filepath, data.data(), file_size);
+
     printf("SystemRegistry: Best match: %s (confidence: %.2f)\n",
-           best_system_name ? best_system_name : "none", best_confidence);
+           match.system_name.empty() ? "none" : match.system_name.c_str(),
+           match.confidence);
     
     // Require at least 50% confidence
-    if (best_confidence >= 0.5f && best_factory) {
-        auto system = best_factory();
+    if (match.confidence < 0.5f) return nullptr;
 
-        // Let the system analyse the file and choose the best configuration
-        // (memory expansion, region, etc.) before the caller initialises it.
-        system->apply_file_configuration(filepath);
-
-        return system;
+    // Find the factory for the winning system
+    for (const auto& [descriptor, factory] : systems_) {
+        if (match.system_name == descriptor.short_name) {
+            auto system = factory();
+            system->apply_file_configuration(filepath);
+            return system;
+        }
     }
     
     return nullptr;
