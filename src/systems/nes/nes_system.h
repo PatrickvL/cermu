@@ -32,7 +32,7 @@
 // NES default bus state — initial pin values before any chip asserts.
 // RW=1 (read mode), active-low signals NMI/IRQ/RES start HIGH (inactive).
 #define NES_BUS_DEFAULT_STATE \
-    (BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_RES_BIT))
+    (BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_RES_BIT))
 
 // Forward declarations
 namespace nes_system {
@@ -142,6 +142,9 @@ public:
     bool frame_complete = false;
     bool nmi = false;
     
+    // Open bus data latch — PPU data bus retains last value
+    uint8_t ppu_data_bus_ = 0;
+    
     // Region
     bool is_pal = false;
     
@@ -182,9 +185,13 @@ public:
         std::fill(screen.begin(), screen.end(), 0);
     }
     
-    // Register access
-    uint8_t cpu_read(uint16_t addr, bool read_only = false);
-    void cpu_write(uint16_t addr, uint8_t data);
+    // CPU bus interface — the PPU is a bus device; it samples A0-A2, R/W
+    // and drives/samples D0-D7 via the shared bus_state_t.  Open-bus behavior
+    // emerges naturally because the data lines retain their last value.
+    bus_state_t cpu_bus_tick(bus_state_t bus);
+
+    // Read-only peek for debug/GUI (no side-effects on PPU state)
+    uint8_t cpu_peek(uint16_t addr) const;
     
     // PPU memory access
     uint8_t ppu_read(uint16_t addr, bool read_only = false);
@@ -219,6 +226,9 @@ private:
     // Color generation
     uint32_t get_color_from_palette_ram(uint8_t palette, uint8_t pixel);
     uint32_t nes2rgb(uint8_t nes_color);
+    
+    // Nametable mirroring helper
+    uint16_t mirror_nametable_addr(uint16_t addr) const;
     
     // Sprite evaluation
     void evaluate_sprites();
@@ -262,8 +272,6 @@ public:
     uint8_t mapper_id = 0;
     uint8_t prg_banks = 0;
     uint8_t chr_banks = 0;
-    bool mirror_horizontal = false;
-    bool mirror_vertical = false;
     bool battery_backed = false;
     
     /** Protected default constructor for subclasses (e.g. NsfCartridge). */
@@ -273,23 +281,52 @@ public:
     explicit Cartridge(const std::string& filename);
     virtual ~Cartridge() = default;
     
-    // CPU memory access (virtual for NsfCartridge override)
-    virtual bool cpu_read(uint16_t addr, uint8_t& data);
-    virtual bool cpu_write(uint16_t addr, uint8_t data);
-    
-    // PPU memory access (virtual for NsfCartridge override)
+    // CPU bus interface — cartridge sits on the shared bus.
+    // Returns the bus with data lines driven (for reads) or absorbed (for writes).
+    // The bool return indicates whether the cartridge claimed the address.
+    virtual bus_state_t cpu_bus_tick(bus_state_t bus, bool& handled);
+
+    // PPU bus interface (CHR ROM/RAM) — separate internal bus, not CPU data bus.
     virtual bool ppu_read(uint16_t addr, uint8_t& data);
     virtual bool ppu_write(uint16_t addr, uint8_t data);
     
-    // Mirroring
-    bool get_mirror_horizontal() const { return mirror_horizontal; }
-    bool get_mirror_vertical() const { return mirror_vertical; }
-    
+    // Nametable mirroring mode (mappers can change this dynamically)
+    enum class Mirror {
+        HORIZONTAL,
+        VERTICAL,
+        ONESCREEN_LO,
+        ONESCREEN_HI,
+        FOUR_SCREEN
+    };
+
+    // Mirroring — the active mode may be changed by the mapper at runtime
+    Mirror mirror_mode = Mirror::HORIZONTAL;
+    bool get_mirror_horizontal() const { return mirror_mode == Mirror::HORIZONTAL; }
+    bool get_mirror_vertical() const { return mirror_mode == Mirror::VERTICAL; }
+    Mirror get_mirror_mode() const { return mirror_mode; }
+
+    // Mapper IRQ (e.g. MMC3 scanline counter)
+    bool irq_state() const;
+    void irq_clear();
+
+    // Scanline callback — the PPU calls this once per visible scanline
+    void scanline();
+
     // Mapper interface
     virtual void reset();
+
+    // Battery-backed SRAM persistence
+    bool load_sram(const std::string& sav_path);
+    bool save_sram(const std::string& sav_path) const;
+    std::string sram_path_for_rom(const std::string& rom_path) const;
+    const std::string& get_rom_filepath() const { return rom_filepath_; }
+
+    // Debug read-only peek — no mapper side-effects, no bus modification
+    uint8_t peek(uint16_t addr) const;
     
 private:
     bool load_from_file(const std::string& filename);
+    std::string rom_filepath_;  // stored for SRAM path derivation
     
     // Mapper implementations
     class Mapper {
@@ -300,6 +337,12 @@ private:
         virtual bool ppu_map_read(uint16_t addr, uint32_t& mapped_addr) = 0;
         virtual bool ppu_map_write(uint16_t addr, uint32_t& mapped_addr) = 0;
         virtual void reset() = 0;
+
+        // Extended mapper interface (overridden by mappers that need it)
+        virtual Mirror mirror() { return Mirror::HORIZONTAL; }  // default: no override
+        virtual bool irq_state() { return false; }
+        virtual void irq_clear() {}
+        virtual void scanline() {}  // PPU notifies mapper on scanlines
     };
     
     std::unique_ptr<Mapper> mapper;
@@ -524,6 +567,10 @@ public:
     bool load_state(const std::string& filename);
     bool is_cartridge_loaded() const { return cartridge_ != nullptr; }
     bool is_system_ready() const override { return system_ready_; }
+
+    // Debug / test harness memory access (read-only, no side-effects)
+    uint8_t peek_memory(uint16_t addr) const;
+    uint16_t get_cpu_pc() const;
     
 private:
     void setup_audio_timing();

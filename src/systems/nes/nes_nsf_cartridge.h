@@ -134,68 +134,75 @@ public:
         }
 
         // Horizontal mirroring (vertical arrangement)
-        mirror_horizontal = true;
-        mirror_vertical = false;
+        mirror_mode = Mirror::HORIZONTAL;
 
         // Zero work RAM and CHR-RAM
         memset(work_ram_, 0, sizeof(work_ram_));
         memset(chr_ram_, 0, sizeof(chr_ram_));
     }
 
-    // ---- CPU memory access ----
+    // ---- CPU bus interface (overrides Cartridge::cpu_bus_tick) ----
 
-    bool cpu_read(uint16_t addr, uint8_t& data) {
-        // Work RAM: $6000-$7FFF
-        if (addr >= 0x6000 && addr <= 0x7FFF) {
-            data = work_ram_[addr - 0x6000];
-            return true;
-        }
+    bus_state_t cpu_bus_tick(bus_state_t bus, bool& handled) override {
+        const uint16_t addr   = BUS_GET_ADDR(bus);
+        const bool     is_read = BUS_GET_BIT(bus, BUS_RW_BIT);
+        handled = false;
 
-        // Bank-switch registers are write-only, reads return open bus
-        if (addr >= 0x5FF8 && addr <= 0x5FFF) {
-            data = bank_regs_[addr - 0x5FF8];
-            return true;
-        }
-
-        // NSF ROM: $8000-$FFFF
-        if (addr >= 0x8000) {
-            uint32_t mapped;
-            if (map_cpu_addr(addr, mapped)) {
-                data = nsf_rom_[mapped];
-                return true;
+        if (is_read) {
+            // Work RAM: $6000-$7FFF
+            if (addr >= 0x6000 && addr <= 0x7FFF) {
+                BUS_SET_DATA(bus, work_ram_[addr - 0x6000]);
+                handled = true;
+                return bus;
             }
-            data = 0x00;
-            return true;  // Still handled, just returns 0
-        }
 
-        return false;
-    }
-
-    bool cpu_write(uint16_t addr, uint8_t data) {
-        // Work RAM: $6000-$7FFF
-        if (addr >= 0x6000 && addr <= 0x7FFF) {
-            work_ram_[addr - 0x6000] = data;
-            return true;
-        }
-
-        // Bank-switch registers: $5FF8-$5FFF
-        if (addr >= 0x5FF8 && addr <= 0x5FFF) {
-            bank_regs_[addr - 0x5FF8] = data;
-            return true;
-        }
-
-        // NSF ROM writes: $8000-$FFFF
-        // Some NSFs may write to their own address space (self-modifying)
-        if (addr >= 0x8000) {
-            uint32_t mapped;
-            if (map_cpu_addr(addr, mapped)) {
-                nsf_rom_[mapped] = data;
-                return true;
+            // Bank-switch registers: $5FF8-$5FFF (readable)
+            if (addr >= 0x5FF8 && addr <= 0x5FFF) {
+                BUS_SET_DATA(bus, bank_regs_[addr - 0x5FF8]);
+                handled = true;
+                return bus;
             }
-            return true;  // Silently absorb unmapped writes
+
+            // NSF ROM: $8000-$FFFF
+            if (addr >= 0x8000) {
+                uint32_t mapped;
+                if (map_cpu_addr(addr, mapped)) {
+                    BUS_SET_DATA(bus, nsf_rom_[mapped]);
+                } else {
+                    BUS_SET_DATA(bus, 0x00);  // unmapped reads return 0
+                }
+                handled = true;
+                return bus;
+            }
+        } else {
+            uint8_t data = BUS_GET_DATA(bus);
+
+            // Work RAM: $6000-$7FFF
+            if (addr >= 0x6000 && addr <= 0x7FFF) {
+                work_ram_[addr - 0x6000] = data;
+                handled = true;
+                return bus;
+            }
+
+            // Bank-switch registers: $5FF8-$5FFF
+            if (addr >= 0x5FF8 && addr <= 0x5FFF) {
+                bank_regs_[addr - 0x5FF8] = data;
+                handled = true;
+                return bus;
+            }
+
+            // NSF ROM writes: $8000-$FFFF (self-modifying NSFs)
+            if (addr >= 0x8000) {
+                uint32_t mapped;
+                if (map_cpu_addr(addr, mapped)) {
+                    nsf_rom_[mapped] = data;
+                }
+                handled = true;
+                return bus;
+            }
         }
 
-        return false;
+        return bus;
     }
 
     // ---- PPU memory access (CHR-RAM) ----

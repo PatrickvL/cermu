@@ -41,93 +41,152 @@ static const uint32_t nes_palette[64] = {
 // PPU IMPLEMENTATION
 // ============================================================================
 
-uint8_t PPU::cpu_read(uint16_t addr, bool read_only) {
-    uint8_t data = 0x00;
-    
-    switch (addr) {
-        case 0x2000: // Control - write only
-            break;
-        case 0x2001: // Mask - write only
-            break;
-        case 0x2002: // Status
-            data = (regs.status & 0xE0) | (regs.data & 0x1F);
-            regs.status &= ~0x80; // Clear VBlank flag
-            internal.w = false; // Reset write toggle
-            break;
-        case 0x2003: // OAM Address - write only
-            break;
-        case 0x2004: // OAM Data
-            data = oam[regs.oam_addr];
-            break;
-        case 0x2005: // Scroll - write only
-            break;
-        case 0x2006: // PPU Address - write only
-            break;
-        case 0x2007: // PPU Data
-            data = regs.data;
-            regs.data = ppu_read(internal.v);
-            
-            // Palette reads are immediate
-            if (internal.v >= 0x3F00) {
+bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
+    const uint16_t addr = BUS_GET_ADDR(bus) & 0x2007;   // PPU mirrors every 8 bytes
+    const bool is_read  = BUS_GET_BIT(bus, BUS_RW_BIT);
+
+    if (is_read) {
+        // ---- READ ----
+        // Start with the data already on the bus (floating/open-bus value)
+        uint8_t data = BUS_GET_DATA(bus);
+
+        // The PPU's internal data bus latch drives open-bus bits.
+        // Only readable registers override the relevant bits.
+        data = ppu_data_bus_;
+
+        switch (addr) {
+            case 0x2000: // Control — write only (open bus)
+                break;
+            case 0x2001: // Mask — write only (open bus)
+                break;
+            case 0x2002: // Status
+                // Top 3 bits from status, bottom 5 from PPU data bus latch
+                data = (regs.status & 0xE0) | (ppu_data_bus_ & 0x1F);
+                regs.status &= ~0x80; // Clear VBlank flag on read
+                internal.w = false;   // Reset write toggle
+                break;
+            case 0x2003: // OAM Address — write only (open bus)
+                break;
+            case 0x2004: // OAM Data
+                data = oam[regs.oam_addr];
+                break;
+            case 0x2005: // Scroll — write only (open bus)
+                break;
+            case 0x2006: // PPU Address — write only (open bus)
+                break;
+            case 0x2007: // PPU Data
                 data = regs.data;
-            }
-            
-            // Increment VRAM address
-            internal.v += (regs.ctrl & 0x04) ? 32 : 1;
-            break;
+                regs.data = ppu_read(internal.v);
+
+                // Palette reads are immediate (no buffering delay)
+                if (internal.v >= 0x3F00) {
+                    data = regs.data;
+                }
+
+                // Increment VRAM address
+                internal.v += (regs.ctrl & 0x04) ? 32 : 1;
+                break;
+        }
+
+        ppu_data_bus_ = data;   // Update PPU-internal data bus latch
+        BUS_SET_DATA(bus, data); // Drive result onto shared system bus
+    } else {
+        // ---- WRITE ----
+        uint8_t data = BUS_GET_DATA(bus);  // Sample data lines from CPU
+        ppu_data_bus_ = data;              // Every write updates the open-bus latch
+
+        switch (addr) {
+            case 0x2000: // Control
+                regs.ctrl = data;
+                internal.t = (internal.t & 0xF3FF) | ((data & 0x03) << 10);
+                break;
+            case 0x2001: // Mask
+                regs.mask = data;
+                break;
+            case 0x2002: // Status — read only (write is ignored, bus latch updated above)
+                break;
+            case 0x2003: // OAM Address
+                regs.oam_addr = data;
+                break;
+            case 0x2004: // OAM Data
+                oam[regs.oam_addr] = data;
+                regs.oam_addr++;
+                break;
+            case 0x2005: // Scroll
+                if (!internal.w) {
+                    internal.t = (internal.t & 0xFFE0) | ((data & 0xF8) >> 3);
+                    internal.x = data & 0x07;
+                    internal.w = true;
+                } else {
+                    internal.t = (internal.t & 0x8FFF) | ((data & 0x07) << 12);
+                    internal.t = (internal.t & 0xFC1F) | ((data & 0xF8) << 2);
+                    internal.w = false;
+                }
+                break;
+            case 0x2006: // PPU Address
+                if (!internal.w) {
+                    internal.t = (internal.t & 0x80FF) | ((data & 0x3F) << 8);
+                    internal.w = true;
+                } else {
+                    internal.t = (internal.t & 0xFF00) | data;
+                    internal.v = internal.t;
+                    internal.w = false;
+                }
+                break;
+            case 0x2007: // PPU Data
+                ppu_write(internal.v, data);
+                internal.v += (regs.ctrl & 0x04) ? 32 : 1;
+                break;
+        }
     }
-    
-    return data;
+
+    return bus;
 }
 
-void PPU::cpu_write(uint16_t addr, uint8_t data) {
+// Read-only peek for debug/GUI — no side-effects on PPU state
+uint8_t PPU::cpu_peek(uint16_t addr) const {
+    addr &= 0x2007;
     switch (addr) {
-        case 0x2000: // Control
-            regs.ctrl = data;
-            internal.t = (internal.t & 0xF3FF) | ((data & 0x03) << 10);
-            break;
-        case 0x2001: // Mask
-            regs.mask = data;
-            break;
-        case 0x2002: // Status - read only
-            break;
-        case 0x2003: // OAM Address
-            regs.oam_addr = data;
-            break;
-        case 0x2004: // OAM Data
-            oam[regs.oam_addr] = data;
-            regs.oam_addr++;
-            break;
-        case 0x2005: // Scroll
-            if (!internal.w) {
-                // First write - X scroll
-                internal.t = (internal.t & 0xFFE0) | ((data & 0xF8) >> 3);
-                internal.x = data & 0x07;
-                internal.w = true;
-            } else {
-                // Second write - Y scroll
-                internal.t = (internal.t & 0x8FFF) | ((data & 0x07) << 12);
-                internal.t = (internal.t & 0xFC1F) | ((data & 0xF8) << 2);
-                internal.w = false;
-            }
-            break;
-        case 0x2006: // PPU Address
-            if (!internal.w) {
-                // First write - high byte
-                internal.t = (internal.t & 0x80FF) | ((data & 0x3F) << 8);
-                internal.w = true;
-            } else {
-                // Second write - low byte
-                internal.t = (internal.t & 0xFF00) | data;
-                internal.v = internal.t;
-                internal.w = false;
-            }
-            break;
-        case 0x2007: // PPU Data
-            ppu_write(internal.v, data);
-            internal.v += (regs.ctrl & 0x04) ? 32 : 1;
-            break;
+        case 0x2000: return ppu_data_bus_;
+        case 0x2001: return ppu_data_bus_;
+        case 0x2002: return (regs.status & 0xE0) | (ppu_data_bus_ & 0x1F);
+        case 0x2003: return ppu_data_bus_;
+        case 0x2004: return oam[regs.oam_addr];
+        case 0x2005: return ppu_data_bus_;
+        case 0x2006: return ppu_data_bus_;
+        case 0x2007: return regs.data;  // buffered value, don't trigger VRAM read
+        default:     return ppu_data_bus_;
     }
+}
+
+// Helper: map a 12-bit nametable offset ($000-$FFF) to a VRAM index (0-$7FF)
+// using the active cartridge mirroring mode.
+uint16_t PPU::mirror_nametable_addr(uint16_t addr) const {
+    addr &= 0x0FFF;
+    uint16_t table = addr >> 10;  // 0-3
+    uint16_t offset = addr & 0x03FF;
+
+    // Default horizontal mirroring lookup table
+    // H: [0,0,1,1]  V: [0,1,0,1]  1LO: [0,0,0,0]  1HI: [1,1,1,1]
+    static const uint16_t h_map[4] = {0, 0, 1, 1};
+    static const uint16_t v_map[4] = {0, 1, 0, 1};
+    static const uint16_t lo_map[4] = {0, 0, 0, 0};
+    static const uint16_t hi_map[4] = {1, 1, 1, 1};
+
+    const uint16_t* map = h_map;  // default
+
+    if (cart) {
+        switch (cart->get_mirror_mode()) {
+            case Cartridge::Mirror::HORIZONTAL:   map = h_map;  break;
+            case Cartridge::Mirror::VERTICAL:     map = v_map;  break;
+            case Cartridge::Mirror::ONESCREEN_LO: map = lo_map; break;
+            case Cartridge::Mirror::ONESCREEN_HI: map = hi_map; break;
+            case Cartridge::Mirror::FOUR_SCREEN:
+                return addr & 0x07FF;  // direct mapping (needs 4KB VRAM)
+        }
+    }
+
+    return map[table] * 0x0400 + offset;
 }
 
 uint8_t PPU::ppu_read(uint16_t addr, bool read_only) {
@@ -140,25 +199,9 @@ uint8_t PPU::ppu_read(uint16_t addr, bool read_only) {
         // Pattern table
         data = pattern_table[addr >> 12][addr & 0x0FFF];
     } else if (addr >= 0x2000 && addr <= 0x3EFF) {
-        // Nametables
+        // Nametables — apply mirroring
         addr &= 0x0FFF;
-        
-        // Handle mirroring
-        if (cart) {
-            if (cart->get_mirror_vertical()) {
-                // Vertical mirroring
-                if (addr <= 0x03FF) data = vram[addr & 0x03FF];
-                if (addr >= 0x0400 && addr <= 0x07FF) data = vram[(addr & 0x03FF) + 0x0400];
-                if (addr >= 0x0800 && addr <= 0x0BFF) data = vram[addr & 0x03FF];
-                if (addr >= 0x0C00 && addr <= 0x0FFF) data = vram[(addr & 0x03FF) + 0x0400];
-            } else {
-                // Horizontal mirroring
-                if (addr <= 0x03FF) data = vram[addr & 0x03FF];
-                if (addr >= 0x0400 && addr <= 0x07FF) data = vram[addr & 0x03FF];
-                if (addr >= 0x0800 && addr <= 0x0BFF) data = vram[(addr & 0x03FF) + 0x0400];
-                if (addr >= 0x0C00 && addr <= 0x0FFF) data = vram[(addr & 0x03FF) + 0x0400];
-            }
-        }
+        data = vram[mirror_nametable_addr(addr)];
     } else if (addr >= 0x3F00 && addr <= 0x3FFF) {
         // Palette RAM
         addr &= 0x001F;
@@ -181,25 +224,9 @@ void PPU::ppu_write(uint16_t addr, uint8_t data) {
         // Pattern table (CHR-RAM)
         pattern_table[addr >> 12][addr & 0x0FFF] = data;
     } else if (addr >= 0x2000 && addr <= 0x3EFF) {
-        // Nametables
+        // Nametables — apply mirroring
         addr &= 0x0FFF;
-        
-        // Handle mirroring
-        if (cart) {
-            if (cart->get_mirror_vertical()) {
-                // Vertical mirroring
-                if (addr <= 0x03FF) vram[addr & 0x03FF] = data;
-                if (addr >= 0x0400 && addr <= 0x07FF) vram[(addr & 0x03FF) + 0x0400] = data;
-                if (addr >= 0x0800 && addr <= 0x0BFF) vram[addr & 0x03FF] = data;
-                if (addr >= 0x0C00 && addr <= 0x0FFF) vram[(addr & 0x03FF) + 0x0400] = data;
-            } else {
-                // Horizontal mirroring
-                if (addr <= 0x03FF) vram[addr & 0x03FF] = data;
-                if (addr >= 0x0400 && addr <= 0x07FF) vram[addr & 0x03FF] = data;
-                if (addr >= 0x0800 && addr <= 0x0BFF) vram[(addr & 0x03FF) + 0x0400] = data;
-                if (addr >= 0x0C00 && addr <= 0x0FFF) vram[(addr & 0x03FF) + 0x0400] = data;
-            }
-        }
+        vram[mirror_nametable_addr(addr)] = data;
     } else if (addr >= 0x3F00 && addr <= 0x3FFF) {
         // Palette RAM
         addr &= 0x001F;
@@ -388,6 +415,15 @@ void PPU::clock() {
         }
     }
     
+    // Notify cartridge mapper on scanline boundary (for MMC3 IRQ counter)
+    // The real hardware clocks the counter on PPU A12 rising edge, but
+    // per-scanline notification at cycle 260 is the standard approximation.
+    if (cycle == 260 && scanline >= 0 && scanline < 240 && (regs.mask & 0x18)) {
+        if (cart) {
+            cart->scanline();
+        }
+    }
+
     // Advance cycle
     cycle++;
     if (cycle >= 341) {
@@ -398,6 +434,12 @@ void PPU::clock() {
             frame_complete = true;
             frame_count++;
         }
+    }
+
+    // NTSC odd-frame cycle skip: on odd frames, if rendering is enabled,
+    // skip one dot (cycle 0 of the pre-render scanline)
+    if (!is_pal && scanline == -1 && cycle == 0 && (frame_count & 1) && (regs.mask & 0x18)) {
+        cycle = 1;
     }
 }
 
@@ -648,6 +690,10 @@ public:
     Mapper000(uint8_t prgBanks, uint8_t chrBanks) : prg_banks(prgBanks), chr_banks(chrBanks) {}
     
     bool cpu_map_read(uint16_t addr, uint32_t& mapped_addr) override {
+        if (addr >= 0x6000 && addr <= 0x7FFF) {
+            mapped_addr = 0xFFFFFFFF;  // PRG RAM sentinel
+            return true;
+        }
         if (addr >= 0x8000) {
             mapped_addr = addr & (prg_banks > 1 ? 0x7FFF : 0x3FFF);
             return true;
@@ -656,6 +702,10 @@ public:
     }
     
     bool cpu_map_write(uint16_t addr, uint32_t& mapped_addr, uint8_t data) override {
+        if (addr >= 0x6000 && addr <= 0x7FFF) {
+            mapped_addr = 0xFFFFFFFF;  // PRG RAM sentinel
+            return true;
+        }
         if (addr >= 0x8000) {
             mapped_addr = addr & (prg_banks > 1 ? 0x7FFF : 0x3FFF);
             return true;
@@ -682,6 +732,538 @@ public:
     void reset() override {}
 };
 
+// ============================================================================
+// Mapper 001 (MMC1) — Nintendo SxROM
+// Covers: Zelda, Metroid, Mega Man 2, Final Fantasy, Kid Icarus, etc.
+// Features: PRG/CHR bank switching, mirroring control, PRG RAM
+// ============================================================================
+
+class Cartridge::Mapper001 : public Cartridge::Mapper {
+private:
+    uint8_t prg_banks_;
+    uint8_t chr_banks_;
+
+    // Shift register (serial writes)
+    uint8_t shift_register_ = 0x10;  // bit 4 set = "empty"
+    uint8_t write_count_ = 0;
+
+    // Internal registers
+    uint8_t reg_control_ = 0x0C;   // $8000-$9FFF — control
+    uint8_t reg_chr_bank0_ = 0;    // $A000-$BFFF — CHR bank 0
+    uint8_t reg_chr_bank1_ = 0;    // $C000-$DFFF — CHR bank 1
+    uint8_t reg_prg_bank_ = 0;     // $E000-$FFFF — PRG bank
+
+    // PRG RAM enable
+    bool prg_ram_enabled_ = true;
+
+    // Derived state
+    Cartridge::Mirror mirror_mode_ = Cartridge::Mirror::HORIZONTAL;
+
+    void update_mirroring() {
+        switch (reg_control_ & 0x03) {
+            case 0: mirror_mode_ = Cartridge::Mirror::ONESCREEN_LO; break;
+            case 1: mirror_mode_ = Cartridge::Mirror::ONESCREEN_HI; break;
+            case 2: mirror_mode_ = Cartridge::Mirror::VERTICAL;     break;
+            case 3: mirror_mode_ = Cartridge::Mirror::HORIZONTAL;   break;
+        }
+    }
+
+public:
+    Mapper001(uint8_t prgBanks, uint8_t chrBanks)
+        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+
+    bool cpu_map_read(uint16_t addr, uint32_t& mapped_addr) override {
+        if (addr >= 0x6000 && addr <= 0x7FFF) {
+            // PRG RAM — use a sentinel address range
+            // Caller checks prg_ram vector directly
+            mapped_addr = 0xFFFFFFFF;  // sentinel for PRG RAM
+            return true;
+        }
+
+        if (addr >= 0x8000) {
+            uint8_t prg_mode = (reg_control_ >> 2) & 0x03;
+
+            if (prg_mode <= 1) {
+                // 32KB mode: ignore low bit of bank number
+                uint32_t bank = (reg_prg_bank_ & 0x0E) >> 1;
+                mapped_addr = bank * 0x8000 + (addr & 0x7FFF);
+            } else if (prg_mode == 2) {
+                // Fix first bank at $8000, switch second at $C000
+                if (addr < 0xC000) {
+                    mapped_addr = addr & 0x3FFF;
+                } else {
+                    mapped_addr = (reg_prg_bank_ & 0x0F) * 0x4000 + (addr & 0x3FFF);
+                }
+            } else {
+                // Fix last bank at $C000, switch first at $8000
+                if (addr < 0xC000) {
+                    mapped_addr = (reg_prg_bank_ & 0x0F) * 0x4000 + (addr & 0x3FFF);
+                } else {
+                    mapped_addr = (prg_banks_ - 1) * 0x4000 + (addr & 0x3FFF);
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    bool cpu_map_write(uint16_t addr, uint32_t& mapped_addr, uint8_t data) override {
+        if (addr >= 0x6000 && addr <= 0x7FFF) {
+            mapped_addr = 0xFFFFFFFF;  // sentinel for PRG RAM
+            return true;
+        }
+
+        if (addr >= 0x8000) {
+            if (data & 0x80) {
+                // Reset shift register
+                shift_register_ = 0x10;
+                write_count_ = 0;
+                reg_control_ |= 0x0C;  // Reset to PRG bank mode 3
+                update_mirroring();
+            } else {
+                shift_register_ >>= 1;
+                shift_register_ |= (data & 0x01) << 4;
+                write_count_++;
+
+                if (write_count_ == 5) {
+                    uint8_t target = (addr >> 13) & 0x03;  // Which register
+
+                    switch (target) {
+                        case 0: // $8000-$9FFF — Control
+                            reg_control_ = shift_register_ & 0x1F;
+                            update_mirroring();
+                            break;
+                        case 1: // $A000-$BFFF — CHR bank 0
+                            reg_chr_bank0_ = shift_register_ & 0x1F;
+                            break;
+                        case 2: // $C000-$DFFF — CHR bank 1
+                            reg_chr_bank1_ = shift_register_ & 0x1F;
+                            break;
+                        case 3: // $E000-$FFFF — PRG bank
+                            reg_prg_bank_ = shift_register_ & 0x0F;
+                            prg_ram_enabled_ = !(shift_register_ & 0x10);
+                            break;
+                    }
+
+                    shift_register_ = 0x10;
+                    write_count_ = 0;
+                }
+            }
+            mapped_addr = 0;
+            return false;  // Don't write to PRG ROM
+        }
+        return false;
+    }
+
+    bool ppu_map_read(uint16_t addr, uint32_t& mapped_addr) override {
+        if (addr <= 0x1FFF) {
+            if (chr_banks_ == 0) {
+                // CHR RAM — direct mapping
+                mapped_addr = addr;
+                return true;
+            }
+
+            bool chr_mode = (reg_control_ & 0x10) != 0;
+
+            if (!chr_mode) {
+                // 8KB mode
+                uint32_t bank = (reg_chr_bank0_ & 0x1E) >> 1;
+                mapped_addr = bank * 0x2000 + (addr & 0x1FFF);
+            } else {
+                // 4KB mode
+                if (addr < 0x1000) {
+                    mapped_addr = reg_chr_bank0_ * 0x1000 + (addr & 0x0FFF);
+                } else {
+                    mapped_addr = reg_chr_bank1_ * 0x1000 + (addr & 0x0FFF);
+                }
+            }
+            return true;
+        }
+        return false;
+    }
+
+    bool ppu_map_write(uint16_t addr, uint32_t& mapped_addr) override {
+        if (addr <= 0x1FFF && chr_banks_ == 0) {
+            mapped_addr = addr;
+            return true;
+        }
+        return false;
+    }
+
+    Mirror mirror() override { return mirror_mode_; }
+
+    void reset() override {
+        shift_register_ = 0x10;
+        write_count_ = 0;
+        reg_control_ = 0x0C;
+        reg_chr_bank0_ = 0;
+        reg_chr_bank1_ = 0;
+        reg_prg_bank_ = 0;
+        prg_ram_enabled_ = true;
+        update_mirroring();
+    }
+};
+
+// ============================================================================
+// Mapper 002 (UxROM) — Simple PRG bank switching
+// Covers: Castlevania, Contra, Metal Gear, Mega Man, etc.
+// ============================================================================
+
+class Cartridge::Mapper002 : public Cartridge::Mapper {
+private:
+    uint8_t prg_banks_;
+    uint8_t chr_banks_;
+    uint8_t prg_bank_select_ = 0;
+
+public:
+    Mapper002(uint8_t prgBanks, uint8_t chrBanks)
+        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+
+    bool cpu_map_read(uint16_t addr, uint32_t& mapped_addr) override {
+        if (addr >= 0x8000 && addr <= 0xBFFF) {
+            // Switchable bank at $8000
+            mapped_addr = prg_bank_select_ * 0x4000 + (addr & 0x3FFF);
+            return true;
+        }
+        if (addr >= 0xC000) {
+            // Fixed last bank at $C000
+            mapped_addr = (prg_banks_ - 1) * 0x4000 + (addr & 0x3FFF);
+            return true;
+        }
+        return false;
+    }
+
+    bool cpu_map_write(uint16_t addr, uint32_t& mapped_addr, uint8_t data) override {
+        if (addr >= 0x8000) {
+            prg_bank_select_ = data & 0x0F;
+        }
+        return false;  // No actual ROM write
+    }
+
+    bool ppu_map_read(uint16_t addr, uint32_t& mapped_addr) override {
+        if (addr <= 0x1FFF) {
+            mapped_addr = addr;
+            return true;
+        }
+        return false;
+    }
+
+    bool ppu_map_write(uint16_t addr, uint32_t& mapped_addr) override {
+        if (addr <= 0x1FFF && chr_banks_ == 0) {
+            mapped_addr = addr;
+            return true;
+        }
+        return false;
+    }
+
+    void reset() override { prg_bank_select_ = 0; }
+};
+
+// ============================================================================
+// Mapper 003 (CNROM) — Simple CHR bank switching
+// Covers: Galaxian, Gradius, Arkista's Ring, etc.
+// ============================================================================
+
+class Cartridge::Mapper003 : public Cartridge::Mapper {
+private:
+    uint8_t prg_banks_;
+    uint8_t chr_banks_;
+    uint8_t chr_bank_select_ = 0;
+
+public:
+    Mapper003(uint8_t prgBanks, uint8_t chrBanks)
+        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+
+    bool cpu_map_read(uint16_t addr, uint32_t& mapped_addr) override {
+        if (addr >= 0x8000) {
+            mapped_addr = addr & (prg_banks_ > 1 ? 0x7FFF : 0x3FFF);
+            return true;
+        }
+        return false;
+    }
+
+    bool cpu_map_write(uint16_t addr, uint32_t& mapped_addr, uint8_t data) override {
+        if (addr >= 0x8000) {
+            chr_bank_select_ = data & 0x03;
+        }
+        return false;  // No actual ROM write
+    }
+
+    bool ppu_map_read(uint16_t addr, uint32_t& mapped_addr) override {
+        if (addr <= 0x1FFF) {
+            mapped_addr = chr_bank_select_ * 0x2000 + addr;
+            return true;
+        }
+        return false;
+    }
+
+    bool ppu_map_write(uint16_t addr, uint32_t& mapped_addr) override {
+        // CNROM uses CHR ROM, no writes
+        return false;
+    }
+
+    void reset() override { chr_bank_select_ = 0; }
+};
+
+// ============================================================================
+// Mapper 004 (MMC3/TxROM) — Advanced PRG/CHR switching with scanline IRQ
+// Covers: Super Mario Bros. 2/3, Kirby's Adventure, Mega Man 3-6, etc.
+// The most complex of the common mappers; scanline counter is critical.
+// ============================================================================
+
+class Cartridge::Mapper004 : public Cartridge::Mapper {
+private:
+    uint8_t prg_banks_;
+    uint8_t chr_banks_;
+
+    // Bank registers
+    uint8_t target_register_ = 0;    // R0-R7 selection
+    bool prg_bank_mode_ = false;     // false = $8000 swappable, true = $C000 swappable
+    bool chr_inversion_ = false;     // false = 2KB banks at $0000, true = 2KB banks at $1000
+    uint8_t registers_[8] = {};      // R0-R7 bank values
+
+    // PRG RAM protect
+    bool prg_ram_enabled_ = true;
+    bool prg_ram_write_protect_ = false;
+
+    // Mirroring
+    Cartridge::Mirror mirror_mode_ = Cartridge::Mirror::HORIZONTAL;
+
+    // IRQ
+    uint8_t irq_counter_ = 0;
+    uint8_t irq_reload_value_ = 0;
+    bool irq_enabled_ = false;
+    bool irq_active_ = false;
+    bool irq_reload_ = false;
+
+    // Derived banks for fast lookup
+    uint32_t prg_bank_[4] = {};  // 4 × 8KB PRG banks
+    uint32_t chr_bank_[8] = {};  // 8 × 1KB CHR banks
+
+    void update_prg_banks() {
+        uint32_t last_bank = (prg_banks_ * 2) - 1;  // Total 8KB banks - 1
+
+        if (!prg_bank_mode_) {
+            prg_bank_[0] = (registers_[6] & 0x3F) % (prg_banks_ * 2);
+            prg_bank_[1] = (registers_[7] & 0x3F) % (prg_banks_ * 2);
+            prg_bank_[2] = (last_bank - 1) % (prg_banks_ * 2);
+            prg_bank_[3] = last_bank % (prg_banks_ * 2);
+        } else {
+            prg_bank_[0] = (last_bank - 1) % (prg_banks_ * 2);
+            prg_bank_[1] = (registers_[7] & 0x3F) % (prg_banks_ * 2);
+            prg_bank_[2] = (registers_[6] & 0x3F) % (prg_banks_ * 2);
+            prg_bank_[3] = last_bank % (prg_banks_ * 2);
+        }
+    }
+
+    void update_chr_banks() {
+        uint32_t chr_size = chr_banks_ == 0 ? 8 : chr_banks_ * 8; // in 1KB units
+
+        if (!chr_inversion_) {
+            chr_bank_[0] = ((registers_[0] & 0xFE) + 0) % chr_size;
+            chr_bank_[1] = ((registers_[0] & 0xFE) + 1) % chr_size;
+            chr_bank_[2] = ((registers_[1] & 0xFE) + 0) % chr_size;
+            chr_bank_[3] = ((registers_[1] & 0xFE) + 1) % chr_size;
+            chr_bank_[4] = registers_[2] % chr_size;
+            chr_bank_[5] = registers_[3] % chr_size;
+            chr_bank_[6] = registers_[4] % chr_size;
+            chr_bank_[7] = registers_[5] % chr_size;
+        } else {
+            chr_bank_[0] = registers_[2] % chr_size;
+            chr_bank_[1] = registers_[3] % chr_size;
+            chr_bank_[2] = registers_[4] % chr_size;
+            chr_bank_[3] = registers_[5] % chr_size;
+            chr_bank_[4] = ((registers_[0] & 0xFE) + 0) % chr_size;
+            chr_bank_[5] = ((registers_[0] & 0xFE) + 1) % chr_size;
+            chr_bank_[6] = ((registers_[1] & 0xFE) + 0) % chr_size;
+            chr_bank_[7] = ((registers_[1] & 0xFE) + 1) % chr_size;
+        }
+    }
+
+public:
+    Mapper004(uint8_t prgBanks, uint8_t chrBanks)
+        : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
+
+    bool cpu_map_read(uint16_t addr, uint32_t& mapped_addr) override {
+        if (addr >= 0x6000 && addr <= 0x7FFF) {
+            // PRG RAM
+            mapped_addr = 0xFFFFFFFF;  // sentinel
+            return true;
+        }
+
+        if (addr >= 0x8000) {
+            uint8_t slot = (addr >> 13) & 0x03;  // 0-3 for $8000/$A000/$C000/$E000
+            mapped_addr = prg_bank_[slot] * 0x2000 + (addr & 0x1FFF);
+            return true;
+        }
+        return false;
+    }
+
+    bool cpu_map_write(uint16_t addr, uint32_t& mapped_addr, uint8_t data) override {
+        if (addr >= 0x6000 && addr <= 0x7FFF) {
+            mapped_addr = 0xFFFFFFFF;  // sentinel
+            return true;  // Write to PRG RAM
+        }
+
+        if (addr >= 0x8000) {
+            bool even = !(addr & 0x0001);
+
+            if (addr <= 0x9FFF) {
+                if (even) {
+                    // Bank select ($8000)
+                    target_register_ = data & 0x07;
+                    prg_bank_mode_ = (data & 0x40) != 0;
+                    chr_inversion_ = (data & 0x80) != 0;
+                    update_prg_banks();
+                    update_chr_banks();
+                } else {
+                    // Bank data ($8001)
+                    registers_[target_register_] = data;
+                    update_prg_banks();
+                    update_chr_banks();
+                }
+            } else if (addr <= 0xBFFF) {
+                if (even) {
+                    // Mirroring ($A000)
+                    mirror_mode_ = (data & 0x01) ? Cartridge::Mirror::HORIZONTAL
+                                                 : Cartridge::Mirror::VERTICAL;
+                } else {
+                    // PRG RAM protect ($A001)
+                    prg_ram_enabled_ = (data & 0x80) != 0;
+                    prg_ram_write_protect_ = (data & 0x40) != 0;
+                }
+            } else if (addr <= 0xDFFF) {
+                if (even) {
+                    // IRQ latch ($C000)
+                    irq_reload_value_ = data;
+                } else {
+                    // IRQ reload ($C001)
+                    irq_counter_ = 0;
+                    irq_reload_ = true;
+                }
+            } else {
+                if (even) {
+                    // IRQ disable ($E000) — also acknowledges
+                    irq_enabled_ = false;
+                    irq_active_ = false;
+                } else {
+                    // IRQ enable ($E001)
+                    irq_enabled_ = true;
+                }
+            }
+            return false;  // Don't write to PRG ROM
+        }
+        return false;
+    }
+
+    bool ppu_map_read(uint16_t addr, uint32_t& mapped_addr) override {
+        if (addr <= 0x1FFF) {
+            uint8_t slot = addr >> 10;  // 0-7 for each 1KB bank
+            mapped_addr = chr_bank_[slot] * 0x0400 + (addr & 0x03FF);
+            return true;
+        }
+        return false;
+    }
+
+    bool ppu_map_write(uint16_t addr, uint32_t& mapped_addr) override {
+        if (addr <= 0x1FFF && chr_banks_ == 0) {
+            uint8_t slot = addr >> 10;
+            mapped_addr = chr_bank_[slot] * 0x0400 + (addr & 0x03FF);
+            return true;
+        }
+        return false;
+    }
+
+    Mirror mirror() override { return mirror_mode_; }
+
+    bool irq_state() override { return irq_active_; }
+
+    void irq_clear() override { irq_active_ = false; }
+
+    void scanline() override {
+        if (irq_counter_ == 0 || irq_reload_) {
+            irq_counter_ = irq_reload_value_;
+            irq_reload_ = false;
+        } else {
+            irq_counter_--;
+        }
+
+        if (irq_counter_ == 0 && irq_enabled_) {
+            irq_active_ = true;
+        }
+    }
+
+    void reset() override {
+        target_register_ = 0;
+        prg_bank_mode_ = false;
+        chr_inversion_ = false;
+        std::memset(registers_, 0, sizeof(registers_));
+        prg_ram_enabled_ = true;
+        prg_ram_write_protect_ = false;
+        irq_counter_ = 0;
+        irq_reload_value_ = 0;
+        irq_enabled_ = false;
+        irq_active_ = false;
+        irq_reload_ = false;
+        mirror_mode_ = Cartridge::Mirror::HORIZONTAL;
+        update_prg_banks();
+        update_chr_banks();
+    }
+};
+
+// ============================================================================
+// Cartridge IRQ / scanline / mirroring delegation
+// ============================================================================
+
+bool Cartridge::irq_state() const {
+    return mapper ? mapper->irq_state() : false;
+}
+
+void Cartridge::irq_clear() {
+    if (mapper) mapper->irq_clear();
+}
+
+void Cartridge::scanline() {
+    if (mapper) mapper->scanline();
+}
+
+// ============================================================================
+// Battery-backed SRAM persistence
+// ============================================================================
+
+std::string Cartridge::sram_path_for_rom(const std::string& rom_path) const {
+    // Replace .nes extension with .sav
+    std::string sav = rom_path;
+    auto dot = sav.rfind('.');
+    if (dot != std::string::npos) {
+        sav = sav.substr(0, dot);
+    }
+    sav += ".sav";
+    return sav;
+}
+
+bool Cartridge::load_sram(const std::string& sav_path) {
+    if (prg_ram.empty()) return false;
+    std::ifstream f(sav_path, std::ios::binary);
+    if (!f.is_open()) return false;
+    f.read(reinterpret_cast<char*>(prg_ram.data()),
+           static_cast<std::streamsize>(prg_ram.size()));
+    printf("NES: Loaded SRAM from %s (%zu bytes)\n", sav_path.c_str(), prg_ram.size());
+    return true;
+}
+
+bool Cartridge::save_sram(const std::string& sav_path) const {
+    if (prg_ram.empty() || !battery_backed) return false;
+    std::ofstream f(sav_path, std::ios::binary);
+    if (!f.is_open()) return false;
+    f.write(reinterpret_cast<const char*>(prg_ram.data()),
+            static_cast<std::streamsize>(prg_ram.size()));
+    printf("NES: Saved SRAM to %s (%zu bytes)\n", sav_path.c_str(), prg_ram.size());
+    return true;
+}
+
+// ============================================================================
+
 Cartridge::Cartridge(const std::string& filename) {
     if (!load_from_file(filename)) {
         throw std::runtime_error("Failed to load cartridge: " + filename);
@@ -705,9 +1287,8 @@ bool Cartridge::load_from_file(const std::string& filename) {
     
     // Extract mapper ID
     mapper_id = ((header.mapper2 >> 4) << 4) | (header.mapper1 >> 4);
-    mirror_horizontal = !(header.mapper1 & 0x01);
-    mirror_vertical = header.mapper1 & 0x01;
-    battery_backed = header.mapper1 & 0x02;
+    mirror_mode = (header.mapper1 & 0x01) ? Mirror::VERTICAL : Mirror::HORIZONTAL;
+    battery_backed = (header.mapper1 & 0x02) != 0;
     
     prg_banks = header.prg_rom_chunks;
     chr_banks = header.chr_rom_chunks;
@@ -732,41 +1313,96 @@ bool Cartridge::load_from_file(const std::string& filename) {
         chr_memory.resize(chr_size);
         file.read(reinterpret_cast<char*>(chr_memory.data()), chr_size);
     }
+
+    // Allocate PRG RAM (8KB, used by MMC1/MMC3 and others)
+    uint32_t prg_ram_size = header.prg_ram_size ? header.prg_ram_size * 8192 : 8192;
+    prg_ram.resize(prg_ram_size, 0);
     
     // Create appropriate mapper
     switch (mapper_id) {
         case 0:
             mapper = std::make_unique<Mapper000>(prg_banks, chr_banks);
             break;
+        case 1:
+            mapper = std::make_unique<Mapper001>(prg_banks, chr_banks);
+            break;
+        case 2:
+            mapper = std::make_unique<Mapper002>(prg_banks, chr_banks);
+            break;
+        case 3:
+            mapper = std::make_unique<Mapper003>(prg_banks, chr_banks);
+            break;
+        case 4:
+            mapper = std::make_unique<Mapper004>(prg_banks, chr_banks);
+            break;
         default:
-            std::cout << "Warning: Unsupported mapper " << (int)mapper_id << std::endl;
+            std::cout << "Warning: Unsupported mapper " << (int)mapper_id
+                      << ", falling back to NROM" << std::endl;
             mapper = std::make_unique<Mapper000>(prg_banks, chr_banks);
             break;
+    }
+
+    // Store ROM path for SRAM persistence
+    rom_filepath_ = filename;
+
+    // Load battery-backed SRAM if present
+    if (battery_backed) {
+        load_sram(sram_path_for_rom(filename));
     }
     
     return true;
 }
 
-bool Cartridge::cpu_read(uint16_t addr, uint8_t& data) {
-    uint32_t mapped_addr;
-    if (mapper->cpu_map_read(addr, mapped_addr)) {
-        if (mapped_addr < prg_memory.size()) {
-            data = prg_memory[mapped_addr];
-            return true;
-        }
-    }
-    return false;
-}
+bus_state_t Cartridge::cpu_bus_tick(bus_state_t bus, bool& handled) {
+    const uint16_t addr   = BUS_GET_ADDR(bus);
+    const bool     is_read = BUS_GET_BIT(bus, BUS_RW_BIT);
+    handled = false;
 
-bool Cartridge::cpu_write(uint16_t addr, uint8_t data) {
-    uint32_t mapped_addr;
-    if (mapper->cpu_map_write(addr, mapped_addr, data)) {
-        if (mapped_addr < prg_memory.size()) {
-            prg_memory[mapped_addr] = data;
-            return true;
+    if (is_read) {
+        // ---- READ ----
+        uint32_t mapped_addr;
+        if (mapper->cpu_map_read(addr, mapped_addr)) {
+            if (mapped_addr == 0xFFFFFFFF) {
+                // PRG RAM ($6000-$7FFF)
+                uint16_t ram_offset = addr & 0x1FFF;
+                if (ram_offset < prg_ram.size()) {
+                    BUS_SET_DATA(bus, prg_ram[ram_offset]);
+                }
+                handled = true;
+                return bus;
+            }
+            if (mapped_addr < prg_memory.size()) {
+                BUS_SET_DATA(bus, prg_memory[mapped_addr]);
+                handled = true;
+                return bus;
+            }
         }
+    } else {
+        // ---- WRITE ----
+        uint8_t data = BUS_GET_DATA(bus);
+        uint32_t mapped_addr;
+        if (mapper->cpu_map_write(addr, mapped_addr, data)) {
+            if (mapped_addr == 0xFFFFFFFF) {
+                // PRG RAM ($6000-$7FFF)
+                uint16_t ram_offset = addr & 0x1FFF;
+                if (ram_offset < prg_ram.size()) {
+                    prg_ram[ram_offset] = data;
+                }
+                handled = true;
+                return bus;
+            }
+            if (mapped_addr < prg_memory.size()) {
+                prg_memory[mapped_addr] = data;
+                handled = true;
+                return bus;
+            }
+        }
+        // Even if mapper returned false, the write may have updated mapper state
+        // (e.g. MMC1 shift register, UxROM bank select).  Update mirroring.
+        mirror_mode = mapper->mirror();
     }
-    return false;
+
+    return bus;
 }
 
 bool Cartridge::ppu_read(uint16_t addr, uint8_t& data) {
@@ -794,7 +1430,23 @@ bool Cartridge::ppu_write(uint16_t addr, uint8_t data) {
 void Cartridge::reset() {
     if (mapper) {
         mapper->reset();
+        mirror_mode = mapper->mirror();
     }
+}
+
+uint8_t Cartridge::peek(uint16_t addr) const {
+    if (!mapper) return 0;
+    uint32_t mapped_addr;
+    // cpu_map_read is logically const for all mappers (no state mutation)
+    if (const_cast<Mapper*>(mapper.get())->cpu_map_read(addr, mapped_addr)) {
+        if (mapped_addr == 0xFFFFFFFF) {
+            uint16_t ram_offset = addr & 0x1FFF;
+            if (ram_offset < prg_ram.size()) return prg_ram[ram_offset];
+            return 0;
+        }
+        if (mapped_addr < prg_memory.size()) return prg_memory[mapped_addr];
+    }
+    return 0;
 }
 
 // ============================================================================
@@ -804,18 +1456,24 @@ void Cartridge::reset() {
 bus_state_t MemoryBus::mem_tick(bus_state_t bus) {
     uint16_t addr = BUS_GET_ADDR(bus);
     const bool is_read = BUS_GET_BIT(bus, BUS_RW_BIT);
-    
+
+    // ========================================================================
+    // The data lines on `bus` retain their last value (floating bus).
+    // Each device that claims the address either drives (read) or samples
+    // (write) via the shared bus_state_t — no intermediate variables.
+    // ========================================================================
+
     if (!is_read) {
         // ---- WRITE ---- (RW=0 per 6502 convention)
         uint8_t data = BUS_GET_DATA(bus);
-        
+
         if (addr <= 0x1FFF) {
             // CPU RAM (with mirroring)
             cpu_ram[addr & 0x07FF] = data;
         } else if (addr <= 0x3FFF) {
-            // PPU registers (with mirroring)
+            // PPU registers (with mirroring) — pass full bus through
             if (ppu) {
-                ppu->cpu_write(addr & 0x2007, data);
+                bus = ppu->cpu_bus_tick(bus);
             }
         } else if (addr <= 0x4017) {
             // APU and I/O registers
@@ -828,43 +1486,45 @@ bus_state_t MemoryBus::mem_tick(bus_state_t bus) {
                 controllers[0].write(data);
                 controllers[1].write(data);
             }
-            // APU registers handled by NES6502 CPU
+            // APU registers ($4000-$4013, $4015, $4017) handled by CPU PHI1
         } else {
-            // Cartridge space ($4020-$FFFF)
+            // Cartridge space ($4020-$FFFF) — pass full bus through
             if (cartridge) {
-                cartridge->cpu_write(addr, data);
+                bool handled = false;
+                bus = cartridge->cpu_bus_tick(bus, handled);
             }
         }
     } else {
         // ---- READ ----
-        uint8_t data = 0x00;
-        
+        // Data lines carry whatever was last driven (floating).
+        // Each device that recognises the address overwrites the data field.
+
         if (addr <= 0x1FFF) {
             // CPU RAM (with mirroring)
-            data = cpu_ram[addr & 0x07FF];
+            BUS_SET_DATA(bus, cpu_ram[addr & 0x07FF]);
         } else if (addr <= 0x3FFF) {
-            // PPU registers (with mirroring)
+            // PPU registers (with mirroring) — pass full bus through
             if (ppu) {
-                data = ppu->cpu_read(addr & 0x2007);
+                bus = ppu->cpu_bus_tick(bus);
             }
         } else if (addr <= 0x4017) {
             // APU and I/O registers
             if (addr == 0x4016) {
-                data = controllers[0].read();
+                BUS_SET_DATA(bus, controllers[0].read());
             } else if (addr == 0x4017) {
-                data = controllers[1].read();
+                BUS_SET_DATA(bus, controllers[1].read());
             }
-            // APU registers handled by NES6502 CPU
+            // APU registers ($4000-$4013, $4015) handled by CPU PHI1
         } else {
-            // Cartridge space ($4020-$FFFF)
+            // Cartridge space ($4020-$FFFF) — pass full bus through
             if (cartridge) {
-                cartridge->cpu_read(addr, data);
+                bool handled = false;
+                bus = cartridge->cpu_bus_tick(bus, handled);
+                // If cartridge didn't claim, data lines stay floating
             }
         }
-        
-        BUS_SET_DATA(bus, data);
     }
-    
+
     return bus;
 }
 
@@ -1198,6 +1858,10 @@ bool NintendoSystem<V>::initialize() {
 
 template<NintendoVariant V>
 void NintendoSystem<V>::shutdown() {
+    // Save battery-backed SRAM before shutdown
+    if (cartridge_ && cartridge_->battery_backed) {
+        cartridge_->save_sram(cartridge_->sram_path_for_rom(cartridge_->get_rom_filepath()));
+    }
     if (cpu_) {
         printf("%s: Shutting down system\n", Traits::name);
         delete cpu_;
@@ -1226,6 +1890,17 @@ void NintendoSystem<V>::reset() {
     
     if (cartridge_) {
         cartridge_->reset();
+    }
+    
+    // Read reset vector from $FFFC/$FFFD and set CPU PC
+    // (fam65xx::reset() leaves PC at 0 — the caller must load it)
+    if (bus_) {
+        uint8_t lo = peek_memory(0xFFFC);
+        uint8_t hi = peek_memory(0xFFFD);
+        uint16_t reset_vector = lo | (hi << 8);
+        cpu_->set(REG_PC, reset_vector);
+        cpu_->set(REG_AB, reset_vector);
+        printf("%s: Reset vector $%04X\n", Traits::name, reset_vector);
     }
     
     total_cycles_ = 0;
@@ -1629,6 +2304,10 @@ void NintendoSystem<V>::setup_audio_timing() {
 
 template<NintendoVariant V>
 void NintendoSystem<V>::eject_cartridge() {
+    // Save battery-backed SRAM before ejecting
+    if (cartridge_ && cartridge_->battery_backed) {
+        cartridge_->save_sram(cartridge_->sram_path_for_rom(cartridge_->get_rom_filepath()));
+    }
     cartridge_.reset();
     if (bus_) {
         bus_->connect_cartridge(nullptr);
@@ -1666,6 +2345,22 @@ void NintendoSystem<V>::clock() {
                 BUS_SET_BIT(pins_, BUS_NMI_BIT);
             }
             
+            // Handle IRQ from cartridge (e.g. MMC3 scanline counter)
+            // and APU — IRQ is level-sensitive (active low)
+            bool irq_asserted = false;
+            if (cartridge_ && cartridge_->irq_state()) {
+                irq_asserted = true;
+                cartridge_->irq_clear();
+            }
+            if (cpu_->apu_irq()) {
+                irq_asserted = true;
+            }
+            if (irq_asserted) {
+                BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
+            } else {
+                BUS_SET_BIT(pins_, BUS_IRQ_BIT);
+            }
+
             // PHI1: CPU internal operations (including APU clock)
             pins_ = cpu_->tick<RICOH_2A03::Phase::PHI1>(pins_);
         }
@@ -1725,14 +2420,97 @@ void NintendoSystem<V>::set_audio_sample_rate(uint32_t rate) {
 
 template<NintendoVariant V>
 bool NintendoSystem<V>::save_state(const std::string& filename) const {
-    // TODO: Implement save state functionality
-    return false;
+    if (!cpu_ || !ppu_ || !bus_) return false;
+
+    std::ofstream f(filename, std::ios::binary);
+    if (!f.is_open()) return false;
+
+    // Magic + version
+    const char magic[4] = {'C','S','S','1'};  // cermu save state v1
+    f.write(magic, 4);
+
+    // CPU state — save pins and the full register file
+    f.write(reinterpret_cast<const char*>(&pins_), sizeof(pins_));
+
+    // PPU state
+    f.write(reinterpret_cast<const char*>(&ppu_->regs), sizeof(ppu_->regs));
+    f.write(reinterpret_cast<const char*>(ppu_->vram.data()), ppu_->vram.size());
+    f.write(reinterpret_cast<const char*>(ppu_->oam.data()), ppu_->oam.size());
+    f.write(reinterpret_cast<const char*>(ppu_->palette.data()), ppu_->palette.size());
+    f.write(reinterpret_cast<const char*>(&ppu_->internal), sizeof(ppu_->internal));
+    int16_t sl = ppu_->scanline; f.write(reinterpret_cast<const char*>(&sl), sizeof(sl));
+    uint16_t cy = ppu_->cycle;   f.write(reinterpret_cast<const char*>(&cy), sizeof(cy));
+    uint64_t fc = ppu_->frame_count; f.write(reinterpret_cast<const char*>(&fc), sizeof(fc));
+
+    // Bus state — CPU RAM
+    f.write(reinterpret_cast<const char*>(bus_->cpu_ram.data()), bus_->cpu_ram.size());
+    f.write(reinterpret_cast<const char*>(&bus_->dma_page), 1);
+    f.write(reinterpret_cast<const char*>(&bus_->dma_addr), 1);
+    f.write(reinterpret_cast<const char*>(&bus_->dma_data), 1);
+    uint8_t dma_flags = (bus_->dma_transfer ? 1 : 0) | (bus_->dma_dummy ? 2 : 0);
+    f.write(reinterpret_cast<const char*>(&dma_flags), 1);
+    f.write(reinterpret_cast<const char*>(&bus_->system_clock_counter), sizeof(bus_->system_clock_counter));
+
+    // PRG RAM (if present)
+    if (cartridge_ && !cartridge_->prg_ram.empty()) {
+        uint32_t ram_size = static_cast<uint32_t>(cartridge_->prg_ram.size());
+        f.write(reinterpret_cast<const char*>(&ram_size), sizeof(ram_size));
+        f.write(reinterpret_cast<const char*>(cartridge_->prg_ram.data()), ram_size);
+    } else {
+        uint32_t zero = 0;
+        f.write(reinterpret_cast<const char*>(&zero), sizeof(zero));
+    }
+
+    printf("%s: Saved state to %s\n", Traits::name, filename.c_str());
+    return true;
 }
 
 template<NintendoVariant V>
 bool NintendoSystem<V>::load_state(const std::string& filename) {
-    // TODO: Implement load state functionality
-    return false;
+    if (!cpu_ || !ppu_ || !bus_) return false;
+
+    std::ifstream f(filename, std::ios::binary);
+    if (!f.is_open()) return false;
+
+    char magic[4];
+    f.read(magic, 4);
+    if (magic[0] != 'C' || magic[1] != 'S' || magic[2] != 'S' || magic[3] != '1') {
+        printf("%s: Invalid save state file\n", Traits::name);
+        return false;
+    }
+
+    // CPU pins
+    f.read(reinterpret_cast<char*>(&pins_), sizeof(pins_));
+
+    // PPU state
+    f.read(reinterpret_cast<char*>(&ppu_->regs), sizeof(ppu_->regs));
+    f.read(reinterpret_cast<char*>(ppu_->vram.data()), ppu_->vram.size());
+    f.read(reinterpret_cast<char*>(ppu_->oam.data()), ppu_->oam.size());
+    f.read(reinterpret_cast<char*>(ppu_->palette.data()), ppu_->palette.size());
+    f.read(reinterpret_cast<char*>(&ppu_->internal), sizeof(ppu_->internal));
+    int16_t sl; f.read(reinterpret_cast<char*>(&sl), sizeof(sl)); ppu_->scanline = sl;
+    uint16_t cy; f.read(reinterpret_cast<char*>(&cy), sizeof(cy)); ppu_->cycle = cy;
+    uint64_t fc; f.read(reinterpret_cast<char*>(&fc), sizeof(fc)); ppu_->frame_count = fc;
+
+    // Bus state
+    f.read(reinterpret_cast<char*>(bus_->cpu_ram.data()), bus_->cpu_ram.size());
+    f.read(reinterpret_cast<char*>(&bus_->dma_page), 1);
+    f.read(reinterpret_cast<char*>(&bus_->dma_addr), 1);
+    f.read(reinterpret_cast<char*>(&bus_->dma_data), 1);
+    uint8_t dma_flags; f.read(reinterpret_cast<char*>(&dma_flags), 1);
+    bus_->dma_transfer = (dma_flags & 1) != 0;
+    bus_->dma_dummy = (dma_flags & 2) != 0;
+    f.read(reinterpret_cast<char*>(&bus_->system_clock_counter), sizeof(bus_->system_clock_counter));
+
+    // PRG RAM
+    uint32_t ram_size = 0;
+    f.read(reinterpret_cast<char*>(&ram_size), sizeof(ram_size));
+    if (ram_size > 0 && cartridge_ && cartridge_->prg_ram.size() >= ram_size) {
+        f.read(reinterpret_cast<char*>(cartridge_->prg_ram.data()), ram_size);
+    }
+
+    printf("%s: Loaded state from %s\n", Traits::name, filename.c_str());
+    return true;
 }
 
 template<NintendoVariant V>
@@ -1813,6 +2591,38 @@ void NintendoSystem<V>::setup_connector_ports() {
         add_connector_port(nes_expansion_def, 0);
         printf("%s: Created %zu connector ports\n", Traits::name, connector_ports_.size());
     }
+}
+
+// ============================================================================
+// Debug / Test harness helpers
+// ============================================================================
+
+template<NintendoVariant V>
+uint8_t NintendoSystem<V>::peek_memory(uint16_t addr) const {
+    if (!bus_) return 0;
+
+    // $0000-$1FFF: CPU RAM (mirrored every 2KB)
+    if (addr < 0x2000) {
+        return bus_->cpu_ram[addr & 0x07FF];
+    }
+
+    // $2000-$3FFF: PPU registers (read-only peek)
+    if (addr >= 0x2000 && addr <= 0x3FFF && ppu_) {
+        return ppu_->cpu_peek(addr);
+    }
+
+    // $6000-$FFFF: Cartridge space (PRG RAM + PRG ROM)
+    if (addr >= 0x6000 && cartridge_) {
+        return cartridge_->peek(addr);
+    }
+
+    return 0;
+}
+
+template<NintendoVariant V>
+uint16_t NintendoSystem<V>::get_cpu_pc() const {
+    if (!cpu_) return 0;
+    return static_cast<uint16_t>(cpu_->get(REG_PC));
 }
 
 } // namespace nes_system

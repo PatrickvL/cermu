@@ -527,6 +527,31 @@ endif()
 
 message(STATUS "Test runner c64_test_runner will be built")
 
+# NES test ROM validation runner
+add_executable(nes_test_runner
+    tools/nes_test_runner.cpp
+    ${CORE_SOURCES}
+    ${CHIP_SOURCES}
+    ${SYSTEM_SOURCES}
+    ${CORE_UTIL_SOURCES}
+    ${GUI_STUB_SOURCES}
+)
+
+target_link_libraries(nes_test_runner
+    fam65xx_decoder
+    ${SDL2_LIBRARIES}
+)
+
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(nes_test_runner m)
+endif()
+
+set_target_properties(nes_test_runner PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+message(STATUS "Test runner nes_test_runner will be built")
+
 # Link toml++ library (commented out - toml_test target not defined)
 # target_link_libraries(toml_test
 #     tomlplusplus::tomlplusplus
