@@ -325,6 +325,7 @@ set(SYSTEM_SOURCES
     # NES system (clean EmulatedSystem implementation)
     src/systems/nes/nes_system.cpp
     src/systems/nes/ppu/nes_ppu.cpp
+    src/systems/nes/bus/nes_bus.cpp
     src/systems/nes/cartridge/nes_cartridge.cpp
     src/systems/nes/screen/nes_screen_utils.cpp
     src/systems/nes/nsf/nes_nsf_player.cpp

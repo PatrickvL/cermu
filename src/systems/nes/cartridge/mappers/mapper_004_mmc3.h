@@ -211,6 +211,93 @@ public:
         update_prg_banks();
         update_chr_banks();
     }
+
+    // =======================================================================
+    // Phase 2 — page-pointer bank configuration
+    // =======================================================================
+
+    void get_prg_bank_config(MapperBankConfig& config) const override {
+        // 4 × 8KB PRG banks → 8 × 4KB page pointers
+        for (int slot = 0; slot < 4; slot++) {
+            uint32_t bank_base = prg_bank_[slot] * 0x2000;
+            for (int half = 0; half < 2; half++) {
+                uint32_t offset = bank_base + half * 0x1000;
+                config.prg_pages[slot * 2 + half] =
+                    (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
+            }
+        }
+
+        config.prg_ram_base = prg_ram_;
+        config.prg_ram_size = static_cast<uint32_t>(prg_ram_size_);
+        config.prg_ram_enabled = prg_ram_enabled_ && (prg_ram_ != nullptr);
+        config.prg_ram_write_protected = prg_ram_write_protect_;
+    }
+
+    void get_chr_bank_config(MapperChrConfig& config) const override {
+        // 8 × 1KB CHR banks → 8 × 1KB page pointers
+        for (int i = 0; i < 8; i++) {
+            uint32_t offset = chr_bank_[i] * 0x0400;
+            if (chr_is_ram_) {
+                config.chr_pages[i] = (offset < chr_mem_size_) ? chr_mem_ + offset : chr_mem_;
+                config.chr_writable[i] = true;
+            } else {
+                config.chr_pages[i] = (offset < chr_mem_size_) ? chr_mem_ + offset : nullptr;
+                config.chr_writable[i] = false;
+            }
+        }
+
+        // Mirroring
+        switch (mirror_mode_) {
+            case Mirror::HORIZONTAL:   config.nt_page[0] = 0; config.nt_page[1] = 0; config.nt_page[2] = 1; config.nt_page[3] = 1; break;
+            case Mirror::VERTICAL:     config.nt_page[0] = 0; config.nt_page[1] = 1; config.nt_page[2] = 0; config.nt_page[3] = 1; break;
+            case Mirror::ONESCREEN_LO: config.nt_page[0] = 0; config.nt_page[1] = 0; config.nt_page[2] = 0; config.nt_page[3] = 0; break;
+            case Mirror::ONESCREEN_HI: config.nt_page[0] = 1; config.nt_page[1] = 1; config.nt_page[2] = 1; config.nt_page[3] = 1; break;
+            default: break;
+        }
+    }
+
+    bool register_write(uint16_t addr, uint8_t data) override {
+        if (addr < 0x8000) return false;
+
+        bool even = !(addr & 0x0001);
+
+        if (addr <= 0x9FFF) {
+            if (even) {
+                target_register_ = data & 0x07;
+                prg_bank_mode_ = (data & 0x40) != 0;
+                chr_inversion_ = (data & 0x80) != 0;
+            } else {
+                registers_[target_register_] = data;
+            }
+            update_prg_banks();
+            update_chr_banks();
+            return true;
+        } else if (addr <= 0xBFFF) {
+            if (even) {
+                mirror_mode_ = (data & 0x01) ? Mirror::HORIZONTAL : Mirror::VERTICAL;
+            } else {
+                prg_ram_enabled_ = (data & 0x80) != 0;
+                prg_ram_write_protect_ = (data & 0x40) != 0;
+            }
+            return true;
+        } else if (addr <= 0xDFFF) {
+            if (even) {
+                irq_reload_value_ = data;
+            } else {
+                irq_counter_ = 0;
+                irq_reload_ = true;
+            }
+            return false;  // IRQ config doesn't change banking
+        } else {
+            if (even) {
+                irq_enabled_ = false;
+                irq_active_ = false;
+            } else {
+                irq_enabled_ = true;
+            }
+            return false;  // IRQ enable doesn't change banking
+        }
+    }
 };
 
 } // namespace nes_system

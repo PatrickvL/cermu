@@ -31,125 +31,7 @@ namespace nes_system {
 // Palette LUT is now in ppu/nes_ppu_palette.h
 // Cartridge implementation is now in cartridge/nes_cartridge.cpp
 // Mapper implementations are now in cartridge/mappers/ headers
-
-// ============================================================================
-// MEMORY BUS IMPLEMENTATION
-// ============================================================================
-
-bus_state_t MemoryBus::mem_tick(bus_state_t bus) {
-    uint16_t addr = BUS_GET_ADDR(bus);
-    const bool is_read = BUS_GET_BIT(bus, BUS_RW_BIT);
-
-    // ========================================================================
-    // The data lines on `bus` retain their last value (floating bus).
-    // Each device that claims the address either drives (read) or samples
-    // (write) via the shared bus_state_t — no intermediate variables.
-    // ========================================================================
-
-    if (!is_read) {
-        // ---- WRITE ---- (RW=0 per 6502 convention)
-        uint8_t data = BUS_GET_DATA(bus);
-
-        if (addr <= 0x1FFF) {
-            // CPU RAM (with mirroring)
-            cpu_ram[addr & 0x07FF] = data;
-        } else if (addr <= 0x3FFF) {
-            // PPU registers (with mirroring) — pass full bus through
-            if (ppu) {
-                bus = ppu->cpu_bus_tick(bus);
-            }
-        } else if (addr <= 0x4017) {
-            // APU and I/O registers
-            if (addr == 0x4014) {
-                // OAM DMA
-                dma_page = data;
-                dma_addr = 0x00;
-                dma_transfer = true;
-            } else if (addr == 0x4016) {
-                controllers[0].write(data);
-                controllers[1].write(data);
-            }
-            // APU registers ($4000-$4013, $4015, $4017) handled by CPU PHI1
-        } else {
-            // Cartridge space ($4020-$FFFF) — pass full bus through
-            if (cartridge) {
-                bool handled = false;
-                bus = cartridge->cpu_bus_tick(bus, handled);
-            }
-        }
-    } else {
-        // ---- READ ----
-        // Data lines carry whatever was last driven (floating).
-        // Each device that recognises the address overwrites the data field.
-
-        if (addr <= 0x1FFF) {
-            // CPU RAM (with mirroring)
-            BUS_SET_DATA(bus, cpu_ram[addr & 0x07FF]);
-        } else if (addr <= 0x3FFF) {
-            // PPU registers (with mirroring) — pass full bus through
-            if (ppu) {
-                bus = ppu->cpu_bus_tick(bus);
-            }
-        } else if (addr <= 0x4017) {
-            // APU and I/O registers
-            if (addr == 0x4016) {
-                BUS_SET_DATA(bus, controllers[0].read());
-            } else if (addr == 0x4017) {
-                BUS_SET_DATA(bus, controllers[1].read());
-            }
-            // APU registers ($4000-$4013, $4015) handled by CPU PHI1
-        } else {
-            // Cartridge space ($4020-$FFFF) — pass full bus through
-            if (cartridge) {
-                bool handled = false;
-                bus = cartridge->cpu_bus_tick(bus, handled);
-                // If cartridge didn't claim, data lines stay floating
-            }
-        }
-    }
-
-    return bus;
-}
-
-void MemoryBus::reset() {
-    std::fill(cpu_ram.begin(), cpu_ram.end(), 0);
-    system_clock_counter = 0;
-    dma_transfer = false;
-    dma_dummy = true;
-}
-
-void MemoryBus::clock() {
-    if (ppu) {
-        ppu->clock();
-    }
-    
-    // Handle OAM DMA
-    if (dma_transfer) {
-        if (dma_dummy) {
-            if (system_clock_counter % 2 == 1) {
-                dma_dummy = false;
-            }
-        } else {
-            if (system_clock_counter % 2 == 0) {
-                // DMA read — construct a read bus_state_t and service it
-                bus_state_t dma_bus = 0;
-                BUS_SET_ADDR(dma_bus, (dma_page << 8) | dma_addr);
-                // RW bit clear = read
-                dma_bus = mem_tick(dma_bus);
-                dma_data = BUS_GET_DATA(dma_bus);
-            } else {
-                ppu->oam[dma_addr] = dma_data;
-                dma_addr++;
-                if (dma_addr == 0x00) {
-                    dma_transfer = false;
-                    dma_dummy = true;
-                }
-            }
-        }
-    }
-    
-    system_clock_counter++;
-}
+// MemoryBus removed in Phase 2 — dispatch is now inline in NintendoSystem::clock()
 
 // ============================================================================
 // MAIN NES SYSTEM IMPLEMENTATION
@@ -389,9 +271,8 @@ bool NintendoSystem<V>::initialize() {
     // Create PPU
     ppu_ = std::make_shared<PPU>(is_pal_);
     
-    // Create memory bus
-    bus_ = std::make_shared<MemoryBus>();
-    bus_->connect_ppu(ppu_);
+    // Initialize page-pointer bus
+    bus_.init();
     
     setup_audio_timing();
     setup_connector_ports();
@@ -432,17 +313,15 @@ void NintendoSystem<V>::reset() {
         ppu_->reset();
     }
     
-    if (bus_) {
-        bus_->reset();
-    }
+    bus_.reset();
     
     if (cartridge_) {
         cartridge_->reset();
+        cartridge_->update_bank_map(&bus_, ppu_->vram.data());
     }
     
     // Read reset vector from $FFFC/$FFFD and set CPU PC
-    // (fam65xx::reset() leaves PC at 0 — the caller must load it)
-    if (bus_) {
+    {
         uint8_t lo = peek_memory(0xFFFC);
         uint8_t hi = peek_memory(0xFFFD);
         uint16_t reset_vector = lo | (hi << 8);
@@ -536,8 +415,9 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         if (subtune > 0) subtune--;
 
         // Launch NSF player
+        bus_.reset();
         nsf_cartridge_ = nes_apply_nsf_load(
-            cpu_, ppu_.get(), bus_.get(),
+            cpu_, ppu_.get(), bus_.cpu_ram,
             &header, &prog, subtune, is_pal_);
 
         if (!nsf_cartridge_) {
@@ -545,6 +425,10 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
             free(file_data);
             return false;
         }
+
+        // Connect NSF cartridge to system
+        cartridge_ = nsf_cartridge_;
+        ppu_->connect_cartridge(cartridge_);
 
         // Save state for subtune switching
         active_nsf_header_ = header;
@@ -582,8 +466,9 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         }
         free(file_data);
 
-        bus_->connect_cartridge(cartridge_);
+        // Connect cartridge to PPU and set up page-pointer bank maps
         ppu_->connect_cartridge(cartridge_);
+        cartridge_->update_bank_map(&bus_, ppu_->vram.data());
         
         // Reset system with new cartridge
         reset();
@@ -664,7 +549,7 @@ void NintendoSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 
 template<NintendoVariant V>
 void NintendoSystem<V>::handle_controller_event(int controller, int button, bool pressed) {
-    if (!bus_) return;
+    if (controller < 0 || controller >= 2) return;
     
     if (pressed) {
         press_button(controller, static_cast<Controller::Button>(button));
@@ -735,7 +620,7 @@ bool NintendoSystem<V>::handle_nsf_player_key(SDL_Keycode key) {
     if (static_cast<uint16_t>(new_subtune) == active_nsf_subtune_) return true;
 
     active_nsf_subtune_ = static_cast<uint16_t>(new_subtune);
-    nes_nsf_switch_subtune(cpu_, ppu_.get(), bus_.get(),
+    nes_nsf_switch_subtune(cpu_, ppu_.get(), bus_.cpu_ram,
                             nsf_cartridge_.get(), &active_nsf_header_,
                             active_nsf_data_.data(), active_nsf_data_.size(),
                             active_nsf_subtune_, is_pal_);
@@ -861,9 +746,7 @@ void NintendoSystem<V>::eject_cartridge() {
         cartridge_->save_sram(cartridge_->sram_path_for_rom(cartridge_->get_rom_filepath()));
     }
     cartridge_.reset();
-    if (bus_) {
-        bus_->connect_cartridge(nullptr);
-    }
+    bus_.init();  // Clear page pointers and RAM
     if (ppu_) {
         ppu_->connect_cartridge(nullptr);
     }
@@ -872,84 +755,202 @@ void NintendoSystem<V>::eject_cartridge() {
 
 template<NintendoVariant V>
 void NintendoSystem<V>::clock() {
-    // Clock the memory bus (which clocks PPU 3 times)
-    bus_->clock();
-    
-    // Clock CPU every 3 PPU cycles
-    if (bus_->system_clock_counter % 3 == 0) {
-        // Handle DMA stall
-        if (bus_->dma_transfer) {
-            // CPU is stalled during DMA
-        } else {
-            // PHI2: CPU sets up bus (address, R/W)
-            pins_ = cpu_->tick<RICOH_2A03::Phase::PHI2>(pins_);
-            
-            // Service CPU memory request via bus (between phases)
-            pins_ = bus_->mem_tick(pins_);
-            
-            // Handle NMI from PPU — NMI is edge-sensitive (active low)
-            if (ppu_->get_nmi()) {
-                // Assert NMI: drive pin LOW (bit 34 = 0)
-                BUS_CLR_BIT(pins_, BUS_NMI_BIT);
-            } else {
-                // Deassert NMI: release pin HIGH (bit 34 = 1)
-                // Required for edge detection — next NMI needs a new HIGH→LOW
-                BUS_SET_BIT(pins_, BUS_NMI_BIT);
-            }
-            
-            // Handle IRQ from cartridge (e.g. MMC3 scanline counter)
-            // and APU — IRQ is level-sensitive (active low)
-            bool irq_asserted = false;
-            if (cartridge_ && cartridge_->irq_state()) {
-                irq_asserted = true;
-                cartridge_->irq_clear();
-            }
-            if (cpu_->apu_irq()) {
-                irq_asserted = true;
-            }
-            if (irq_asserted) {
-                BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
-            } else {
-                BUS_SET_BIT(pins_, BUS_IRQ_BIT);
-            }
-
-            // PHI1: CPU internal operations (including APU clock)
-            pins_ = cpu_->tick<RICOH_2A03::Phase::PHI1>(pins_);
-        }
-        
-        // Generate audio sample
-        if (audio_sample_counter_ == 0) {
-            float sample = cpu_->generate_audio_sample();
-            audio_buffer_.push_back(sample);
-        }
-        audio_sample_counter_ = (audio_sample_counter_ + 1) % (is_pal_ ? 33 : 37);
+    // ====================================================================
+    // PPU tick (runs at 3× CPU clock)
+    // ====================================================================
+    if (ppu_) {
+        ppu_->clock();
     }
-    
+
+    // ====================================================================
+    // OAM DMA controller — stalls CPU while transferring 256 bytes
+    // ====================================================================
+    if (unlikely(bus_.dma_transfer)) {
+        if (bus_.dma_dummy) {
+            if (bus_.system_clock_counter % 2 == 1) {
+                bus_.dma_dummy = false;
+            }
+        } else {
+            if (bus_.system_clock_counter % 2 == 0) {
+                // DMA read from CPU address space
+                uint16_t dma_src = (bus_.dma_page << 8) | bus_.dma_addr;
+                bus_.dma_data = bus_.cpu_read(dma_src);
+            } else {
+                ppu_->oam[bus_.dma_addr] = bus_.dma_data;
+                bus_.dma_addr++;
+                if (bus_.dma_addr == 0x00) {
+                    bus_.dma_transfer = false;
+                    bus_.dma_dummy = true;
+                }
+            }
+        }
+        bus_.system_clock_counter++;
+        total_cycles_++;
+        return;
+    }
+
+    bus_.system_clock_counter++;
+
+    // ====================================================================
+    // CPU tick — one PHI2/PHI1 cycle every 3 PPU ticks
+    // ====================================================================
+    if (bus_.system_clock_counter % 3 != 0) {
+        total_cycles_++;
+        return;
+    }
+
+    // PHI2: CPU drives address bus and R/W signal
+    pins_ = cpu_->tick<RICOH_2A03::Phase::PHI2>(pins_);
+
+    const uint16_t addr = BUS_GET_ADDR(pins_);
+    const bool is_read = BUS_GET_BIT(pins_, BUS_RW_BIT);
+
+    // ====================================================================
+    // CPU bus dispatch — page-pointer fast path with I/O fallback
+    // ====================================================================
+
+    if (is_read) {
+        // ---- READ ----
+        if (addr < 0x2000) {
+            // Fast path: WRAM ($0000-$1FFF) — 2KB mirrored
+            BUS_SET_DATA(pins_, bus_.cpu_ram[addr & 0x07FF]);
+        } else {
+            const uint8_t page = addr >> 12;
+            const uint8_t* rp = bus_.cpu_read_page[page];
+            if (likely(rp != nullptr)) {
+                // Page pointer hit: PRG-ROM, PRG-RAM, or expansion
+                BUS_SET_DATA(pins_, rp[addr & 0x0FFF]);
+            } else if (page <= 3) {
+                // PPU registers ($2000-$3FFF, mirrored every 8 bytes)
+                if (ppu_) {
+                    pins_ = ppu_->cpu_bus_tick(pins_);
+                }
+            } else if (page == 4) {
+                // APU/IO registers ($4000-$4FFF)
+                if (addr == 0x4016) {
+                    BUS_SET_DATA(pins_, controllers_[0].read());
+                } else if (addr == 0x4017) {
+                    BUS_SET_DATA(pins_, controllers_[1].read());
+                }
+                // Other APU reads ($4015 etc.) handled by CPU PHI1
+            } else {
+                // Unmapped expansion or cartridge I/O — fall through to
+                // cartridge cpu_bus_tick for NSF and unusual mappers
+                if (cartridge_) {
+                    bool handled = false;
+                    pins_ = cartridge_->cpu_bus_tick(pins_, handled);
+                }
+            }
+        }
+    } else {
+        // ---- WRITE ----
+        const uint8_t data = BUS_GET_DATA(pins_);
+
+        if (addr < 0x2000) {
+            // Fast path: WRAM ($0000-$1FFF) — 2KB mirrored
+            bus_.cpu_ram[addr & 0x07FF] = data;
+        } else {
+            const uint8_t page = addr >> 12;
+            uint8_t* wp = bus_.cpu_write_page[page];
+            if (wp != nullptr) {
+                // Page pointer hit: PRG-RAM or expansion write
+                wp[addr & 0x0FFF] = data;
+            } else if (page <= 3) {
+                // PPU registers ($2000-$3FFF, mirrored every 8 bytes)
+                if (ppu_) {
+                    pins_ = ppu_->cpu_bus_tick(pins_);
+                }
+            } else if (page == 4) {
+                // APU/IO registers ($4000-$4FFF)
+                if (addr == 0x4014) {
+                    // OAM DMA trigger
+                    bus_.dma_page = data;
+                    bus_.dma_addr = 0x00;
+                    bus_.dma_transfer = true;
+                } else if (addr == 0x4016) {
+                    controllers_[0].write(data);
+                    controllers_[1].write(data);
+                }
+                // Other APU writes ($4000-$4013, $4015, $4017) handled by CPU PHI1
+            } else if (page >= 8) {
+                // ROM region writes → mapper register dispatch
+                if (cartridge_ && cartridge_->handle_mapper_write(addr, data)) {
+                    cartridge_->update_bank_map(&bus_, ppu_->vram.data());
+                }
+            } else {
+                // Expansion writes ($5000-$7FFF) not covered by page pointers
+                // Fall through to cartridge cpu_bus_tick for NSF etc.
+                if (cartridge_) {
+                    bool handled = false;
+                    pins_ = cartridge_->cpu_bus_tick(pins_, handled);
+                }
+            }
+        }
+    }
+
+    // ====================================================================
+    // Interrupt wire handling
+    // ====================================================================
+
+    // NMI from PPU — edge-sensitive (active low)
+    if (ppu_->get_nmi()) {
+        BUS_CLR_BIT(pins_, BUS_NMI_BIT);
+    } else {
+        BUS_SET_BIT(pins_, BUS_NMI_BIT);
+    }
+
+    // IRQ — level-sensitive (active low)
+    bool irq_asserted = false;
+    if (cartridge_ && cartridge_->irq_state()) {
+        irq_asserted = true;
+        cartridge_->irq_clear();
+    }
+    if (cpu_->apu_irq()) {
+        irq_asserted = true;
+    }
+    if (irq_asserted) {
+        BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
+    } else {
+        BUS_SET_BIT(pins_, BUS_IRQ_BIT);
+    }
+
+    // PHI1: CPU internal operations (including APU clock)
+    pins_ = cpu_->tick<RICOH_2A03::Phase::PHI1>(pins_);
+
+    // ====================================================================
+    // Audio sample generation
+    // ====================================================================
+    if (audio_sample_counter_ == 0) {
+        float sample = cpu_->generate_audio_sample();
+        audio_buffer_.push_back(sample);
+    }
+    audio_sample_counter_ = (audio_sample_counter_ + 1) % (is_pal_ ? 33 : 37);
+
     total_cycles_++;
 }
 
 template<NintendoVariant V>
 void NintendoSystem<V>::set_controller_state(int controller, uint8_t state) {
-    if (!bus_ || controller < 0 || controller >= 2) return;
+    if (controller < 0 || controller >= 2) return;
     
     // Set individual buttons based on state
     for (int i = 0; i < 8; i++) {
         bool pressed = (state >> i) & 1;
         Controller::Button button = static_cast<Controller::Button>(1 << i);
-        bus_->controllers[controller].set_button_state(button, pressed);
+        controllers_[controller].set_button_state(button, pressed);
     }
 }
 
 template<NintendoVariant V>
 void NintendoSystem<V>::press_button(int controller, Controller::Button button) {
-    if (!bus_ || controller < 0 || controller >= 2) return;
-    bus_->controllers[controller].set_button_state(button, true);
+    if (controller < 0 || controller >= 2) return;
+    controllers_[controller].set_button_state(button, true);
 }
 
 template<NintendoVariant V>
 void NintendoSystem<V>::release_button(int controller, Controller::Button button) {
-    if (!bus_ || controller < 0 || controller >= 2) return;
-    bus_->controllers[controller].set_button_state(button, false);
+    if (controller < 0 || controller >= 2) return;
+    controllers_[controller].set_button_state(button, false);
 }
 
 template<NintendoVariant V>
@@ -972,7 +973,7 @@ void NintendoSystem<V>::set_audio_sample_rate(uint32_t rate) {
 
 template<NintendoVariant V>
 bool NintendoSystem<V>::save_state(const std::string& filename) const {
-    if (!cpu_ || !ppu_ || !bus_) return false;
+    if (!cpu_ || !ppu_) return false;
 
     std::ofstream f(filename, std::ios::binary);
     if (!f.is_open()) return false;
@@ -995,13 +996,13 @@ bool NintendoSystem<V>::save_state(const std::string& filename) const {
     uint64_t fc = ppu_->frame_count; f.write(reinterpret_cast<const char*>(&fc), sizeof(fc));
 
     // Bus state — CPU RAM
-    f.write(reinterpret_cast<const char*>(bus_->cpu_ram.data()), bus_->cpu_ram.size());
-    f.write(reinterpret_cast<const char*>(&bus_->dma_page), 1);
-    f.write(reinterpret_cast<const char*>(&bus_->dma_addr), 1);
-    f.write(reinterpret_cast<const char*>(&bus_->dma_data), 1);
-    uint8_t dma_flags = (bus_->dma_transfer ? 1 : 0) | (bus_->dma_dummy ? 2 : 0);
+    f.write(reinterpret_cast<const char*>(bus_.cpu_ram), sizeof(bus_.cpu_ram));
+    f.write(reinterpret_cast<const char*>(&bus_.dma_page), 1);
+    f.write(reinterpret_cast<const char*>(&bus_.dma_addr), 1);
+    f.write(reinterpret_cast<const char*>(&bus_.dma_data), 1);
+    uint8_t dma_flags = (bus_.dma_transfer ? 1 : 0) | (bus_.dma_dummy ? 2 : 0);
     f.write(reinterpret_cast<const char*>(&dma_flags), 1);
-    f.write(reinterpret_cast<const char*>(&bus_->system_clock_counter), sizeof(bus_->system_clock_counter));
+    f.write(reinterpret_cast<const char*>(&bus_.system_clock_counter), sizeof(bus_.system_clock_counter));
 
     // PRG RAM (if present)
     if (cartridge_ && !cartridge_->prg_ram.empty()) {
@@ -1019,7 +1020,7 @@ bool NintendoSystem<V>::save_state(const std::string& filename) const {
 
 template<NintendoVariant V>
 bool NintendoSystem<V>::load_state(const std::string& filename) {
-    if (!cpu_ || !ppu_ || !bus_) return false;
+    if (!cpu_ || !ppu_) return false;
 
     std::ifstream f(filename, std::ios::binary);
     if (!f.is_open()) return false;
@@ -1045,14 +1046,14 @@ bool NintendoSystem<V>::load_state(const std::string& filename) {
     uint64_t fc; f.read(reinterpret_cast<char*>(&fc), sizeof(fc)); ppu_->frame_count = fc;
 
     // Bus state
-    f.read(reinterpret_cast<char*>(bus_->cpu_ram.data()), bus_->cpu_ram.size());
-    f.read(reinterpret_cast<char*>(&bus_->dma_page), 1);
-    f.read(reinterpret_cast<char*>(&bus_->dma_addr), 1);
-    f.read(reinterpret_cast<char*>(&bus_->dma_data), 1);
+    f.read(reinterpret_cast<char*>(bus_.cpu_ram), sizeof(bus_.cpu_ram));
+    f.read(reinterpret_cast<char*>(&bus_.dma_page), 1);
+    f.read(reinterpret_cast<char*>(&bus_.dma_addr), 1);
+    f.read(reinterpret_cast<char*>(&bus_.dma_data), 1);
     uint8_t dma_flags; f.read(reinterpret_cast<char*>(&dma_flags), 1);
-    bus_->dma_transfer = (dma_flags & 1) != 0;
-    bus_->dma_dummy = (dma_flags & 2) != 0;
-    f.read(reinterpret_cast<char*>(&bus_->system_clock_counter), sizeof(bus_->system_clock_counter));
+    bus_.dma_transfer = (dma_flags & 1) != 0;
+    bus_.dma_dummy = (dma_flags & 2) != 0;
+    f.read(reinterpret_cast<char*>(&bus_.system_clock_counter), sizeof(bus_.system_clock_counter));
 
     // PRG RAM
     uint32_t ram_size = 0;
@@ -1104,11 +1105,9 @@ void NintendoSystem<V>::setup_connector_ports() {
 
 template<NintendoVariant V>
 uint8_t NintendoSystem<V>::peek_memory(uint16_t addr) const {
-    if (!bus_) return 0;
-
     // $0000-$1FFF: CPU RAM (mirrored every 2KB)
     if (addr < 0x2000) {
-        return bus_->cpu_ram[addr & 0x07FF];
+        return bus_.cpu_ram[addr & 0x07FF];
     }
 
     // $2000-$3FFF: PPU registers (read-only peek)
@@ -1116,7 +1115,16 @@ uint8_t NintendoSystem<V>::peek_memory(uint16_t addr) const {
         return ppu_->cpu_peek(addr);
     }
 
-    // $6000-$FFFF: Cartridge space (PRG RAM + PRG ROM)
+    // $4000-$5FFF: APU/IO — no side-effect-free peek available
+    // Try page pointers for $6000+
+    if (addr >= 0x6000) {
+        const uint8_t* rp = bus_.cpu_read_page[addr >> 12];
+        if (rp != nullptr) {
+            return rp[addr & 0x0FFF];
+        }
+    }
+
+    // Fall through to cartridge for unmapped ranges
     if (addr >= 0x6000 && cartridge_) {
         return cartridge_->peek(addr);
     }

@@ -50,6 +50,39 @@ public:
     }
 
     void reset() override { chr_bank_select_ = 0; }
+
+    // =======================================================================
+    // Phase 2 — page-pointer bank configuration
+    // =======================================================================
+
+    void get_prg_bank_config(MapperBankConfig& config) const override {
+        // Fixed PRG — same as NROM
+        if (prg_banks_ <= 1) {
+            for (int i = 0; i < 4; i++) config.prg_pages[i] = prg_rom_ + (i * 0x1000);
+            for (int i = 0; i < 4; i++) config.prg_pages[4 + i] = prg_rom_ + (i * 0x1000);
+        } else {
+            for (int i = 0; i < 8; i++) config.prg_pages[i] = prg_rom_ + (i * 0x1000);
+        }
+        config.prg_ram_enabled = false;
+    }
+
+    void get_chr_bank_config(MapperChrConfig& config) const override {
+        // Switchable 8KB CHR bank
+        uint32_t chr_base = chr_bank_select_ * 0x2000;
+        for (int i = 0; i < 8; i++) {
+            uint32_t offset = chr_base + i * 0x0400;
+            config.chr_pages[i] = (offset < chr_mem_size_) ? chr_mem_ + offset : nullptr;
+            config.chr_writable[i] = false;  // CNROM uses CHR-ROM
+        }
+    }
+
+    bool register_write(uint16_t addr, uint8_t data) override {
+        if (addr >= 0x8000) {
+            chr_bank_select_ = data & 0x03;
+            return true;
+        }
+        return false;
+    }
 };
 
 } // namespace nes_system

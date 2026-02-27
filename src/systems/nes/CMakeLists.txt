@@ -5,6 +5,7 @@ add_library(nes_system
     nes_system.cpp
     nes_system.h
     ppu/nes_ppu.cpp
+    bus/nes_bus.cpp
     cartridge/nes_cartridge.cpp
     screen/nes_screen_utils.cpp
     screen/nes_screen_utils.h
