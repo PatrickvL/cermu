@@ -4,8 +4,8 @@
  * Virtual File System (VFS) — Transparent archive access
  *
  * Provides a unified API for reading files from both the real filesystem
- * and from within archive files (ZIP, etc.).  Archive entries are addressed
- * using a special path syntax:
+ * and from within archive files.  Archive entries are addressed using a
+ * special path syntax:
  *
  *     /path/to/archive.zip!/inner/file.nes
  *
@@ -18,9 +18,13 @@
  * The format system's `format_read_entire_file()` delegates to the VFS
  * so that all format handlers automatically gain archive transparency.
  *
- * Archive backends:
- *   - ZIP via miniz (built-in, no external dependency)
- *   - Additional backends can be added by implementing vfs_archive_backend_t
+ * All platform-specific I/O and archive library calls are delegated to
+ * the core OS layer (os/os.h).  This file contains only the VFS routing
+ * and nesting logic — zero #ifdef or library-specific code.
+ *
+ * Archive support (via libarchive): ZIP, 7-Zip, RAR, tar (all variants),
+ * ISO 9660, cab, cpio, and many more — with transparent decompression
+ * (gzip, bzip2, xz, zstd, lz4, etc.).
  */
 
 #include <cstdint>
@@ -159,6 +163,12 @@ bool vfs_exists(const char* path);
 
 /** Check if a file extension is a known archive format (e.g. ".zip"). */
 bool vfs_is_archive_extension(const char* ext);
+
+/**
+ * Get the null-terminated list of supported archive extensions (e.g. ".zip", ".7z", ...).
+ * Each entry includes the leading dot. The list ends with a nullptr sentinel.
+ */
+const char* const* vfs_archive_extensions();
 
 // ============================================================================
 // Path Utilities

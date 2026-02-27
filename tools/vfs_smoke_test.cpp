@@ -76,6 +76,9 @@ int main(int argc, char* argv[]) {
 
     test("vfs_is_archive_extension .zip", vfs_is_archive_extension(".zip"));
     test("vfs_is_archive_extension .ZIP", vfs_is_archive_extension(".ZIP"));
+    test("vfs_is_archive_extension .7z",  vfs_is_archive_extension(".7z"));
+    test("vfs_is_archive_extension .rar", vfs_is_archive_extension(".rar"));
+    test("vfs_is_archive_extension .tar", vfs_is_archive_extension(".tar"));
     test("vfs_is_archive_extension .nes", !vfs_is_archive_extension(".nes"));
 
     // ========================================================================

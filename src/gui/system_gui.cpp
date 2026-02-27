@@ -1066,13 +1066,19 @@ void SystemGUI::open_file_dialog(const char* dialog_key, const char* title) {
         filter_str = format_list_dialog_filter(desc.supported_formats,
                                                desc.short_name ? desc.short_name : "System");
 
-        // Inject archive extensions (.zip) into the collection filter so
-        // the user can select zip files containing ROMs directly.
+        // Inject archive extensions (.zip, .7z, .rar, .tar, etc.) into
+        // the collection filter so users can select archive files containing
+        // ROMs directly.
         // The filter format is "Label{.ext1,.ext2,...},.*"
-        // We insert ".zip" before the closing "}"
+        // We insert all supported archive extensions before the closing "}"
         size_t brace_pos = filter_str.find('}');
         if (brace_pos != std::string::npos) {
-            filter_str.insert(brace_pos, ",.zip");
+            std::string archive_exts;
+            for (const char* const* p = vfs_archive_extensions(); *p; ++p) {
+                archive_exts += ',';
+                archive_exts += *p;
+            }
+            filter_str.insert(brace_pos, archive_exts);
         }
     } else {
         filter_str = ".*"; // All files if no formats specified
