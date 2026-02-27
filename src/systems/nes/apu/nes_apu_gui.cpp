@@ -8,13 +8,13 @@
  * Pinout reference: Ricoh RP2A03 Datasheet
  */
 
-#include "../../chip/cpu/fam65xx/nes6502.h"
-#include "../../core/chip_layout.h"
-#include "../../core/pin_macros.h"
+#include "../../../chip/cpu/fam65xx/nes6502.h"
+#include "../../../core/chip_layout.h"
+#include "../../../core/pin_macros.h"
 #ifdef IMGUI_VERSION
 #include <imgui.h>
-#include "../../gui/chip_visualization.h"
-#include "../../gui/global_chip_style.h"
+#include "../../../gui/chip_visualization.h"
+#include "../../../gui/global_chip_style.h"
 #endif
 #include <cstdio>
 #include <memory>

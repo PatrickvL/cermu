@@ -237,6 +237,8 @@ set(CORE_SOURCES
     src/devices/input/commodore_1350_mouse.cpp
     src/devices/input/neos_mouse.cpp
     src/devices/input/lightpen_device.cpp
+    src/devices/input/nes_standard_controller.cpp
+    src/devices/input/nes_zapper.cpp
     # Devices — storage
     src/devices/storage/storage_device.cpp
     src/devices/storage/datasette_1530.cpp
@@ -322,8 +324,10 @@ set(SYSTEM_SOURCES
     
     # NES system (clean EmulatedSystem implementation)
     src/systems/nes/nes_system.cpp
-    src/systems/nes/nes_screen_utils.cpp
-    src/systems/nes/nes_nsf_player.cpp
+    src/systems/nes/ppu/nes_ppu.cpp
+    src/systems/nes/cartridge/nes_cartridge.cpp
+    src/systems/nes/screen/nes_screen_utils.cpp
+    src/systems/nes/nsf/nes_nsf_player.cpp
     
     # Commodore 264 series (C16/C116/Plus4 — TED 7360 family)
     src/systems/c16/c16_system.cpp
@@ -376,8 +380,9 @@ if(BUILD_GUI)
         src/chip/io/mos6522_gui.cpp
         src/chip/memory/mos2114_gui.cpp
         src/chip/sound/mos6581_gui.cpp
-        src/systems/nes/nes_ppu_gui.cpp
-        src/systems/nes/nes_apu_gui.cpp
+        src/systems/nes/ppu/nes_ppu_gui.cpp
+        src/systems/nes/apu/nes_apu_gui.cpp
+        src/chip/input/cd4021_gui.cpp
     )
     
     # Generic GUI sources for multi-system support
@@ -402,8 +407,9 @@ set(GUI_STUB_SOURCES
     src/chip/video/vic/vic_gui.cpp
     src/chip/video/ted/ted7360_gui.cpp
     src/systems/c64/c64_pla_chip.cpp
-    src/systems/nes/nes_ppu_gui.cpp
-    src/systems/nes/nes_apu_gui.cpp
+    src/systems/nes/ppu/nes_ppu_gui.cpp
+    src/systems/nes/apu/nes_apu_gui.cpp
+    src/chip/input/cd4021_gui.cpp
 )
 
 # Console executable (no GUI dependencies)

@@ -16,7 +16,7 @@
  * through the same shared_ptr<Cartridge> interface.
  */
 
-#include "nes_system.h"
+#include "../nes_system.h"
 #include <cstdint>
 #include <cstring>
 #include <vector>
