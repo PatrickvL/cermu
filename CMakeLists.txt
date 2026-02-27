@@ -16,6 +16,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(tomlplusplus)
 
+# Add miniz library (ZIP support for VFS)
+FetchContent_Declare(
+    miniz
+    GIT_REPOSITORY https://github.com/richgel999/miniz.git
+    GIT_TAG 3.0.2
+)
+FetchContent_MakeAvailable(miniz)
+
 # CRITICAL: Force all binaries to output to a single consistent location
 # This prevents confusion from multiple binary locations across different build methods
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/build/bin")
@@ -348,6 +356,7 @@ set(CORE_UTIL_SOURCES
     src/core/formats/sid_format.cpp
     src/core/formats/nsf_format.cpp
     src/core/formats/commodore_load_helpers.cpp
+    src/core/vfs/vfs.cpp
     src/core/encoding/petscii.cpp
     src/core/analysis/basic_parser.cpp
 )
@@ -407,6 +416,7 @@ add_executable(cermu_console
 
 target_link_libraries(cermu_console
     fam65xx_decoder
+    miniz
     ${SDL2_LIBRARIES}
 )
 
@@ -453,6 +463,7 @@ if(BUILD_GUI)
     set(CERMU_LINK_LIBS
         imgui
         fam65xx_decoder
+        miniz
         ${SDL2_LIBRARIES}
         ${OPENGL_LIBRARIES}
         ${CMAKE_DL_LIBS}
@@ -518,6 +529,7 @@ add_executable(c64_test_runner
 # Link required libraries for test runner
 target_link_libraries(c64_test_runner
     fam65xx_decoder
+    miniz
     ${SDL2_LIBRARIES}
 )
 
@@ -539,6 +551,7 @@ add_executable(nes_test_runner
 
 target_link_libraries(nes_test_runner
     fam65xx_decoder
+    miniz
     ${SDL2_LIBRARIES}
 )
 
@@ -551,6 +564,26 @@ set_target_properties(nes_test_runner PROPERTIES
 )
 
 message(STATUS "Test runner nes_test_runner will be built")
+
+# VFS smoke test tool
+add_executable(vfs_smoke_test
+    tools/vfs_smoke_test.cpp
+    src/core/vfs/vfs.cpp
+)
+
+target_include_directories(vfs_smoke_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+)
+
+target_link_libraries(vfs_smoke_test
+    miniz
+)
+
+set_target_properties(vfs_smoke_test PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+message(STATUS "VFS smoke test tool will be built")
 
 # Link toml++ library (commented out - toml_test target not defined)
 # target_link_libraries(toml_test

@@ -15,15 +15,15 @@ bool commodore_tap_read_header(const char* filepath, commodore_tap_header_t* out
     if (!filepath || !out_header) return false;
     memset(out_header, 0, sizeof(*out_header));
 
-    FILE* f = fopen(filepath, "rb");
-    if (!f) return false;
-
-    uint8_t raw[20];
-    if (fread(raw, 1, 20, f) != 20) {
-        fclose(f);
+    // Use format_read_entire_file (VFS-aware) instead of direct fopen
+    size_t file_size = 0;
+    uint8_t* file_data = format_read_entire_file(filepath, &file_size);
+    if (!file_data || file_size < 20) {
+        free(file_data);
         return false;
     }
-    fclose(f);
+
+    const uint8_t* raw = file_data;
 
     memcpy(out_header->signature, raw, 12);
     out_header->version        = raw[12];
@@ -36,12 +36,14 @@ bool commodore_tap_read_header(const char* filepath, commodore_tap_header_t* out
     if (memcmp(raw, "C64-TAPE-RAW", 12) != 0 &&
         memcmp(raw, "C16-TAPE-RAW", 12) != 0) {
         printf("TAPFormat: Invalid TAP signature: %.12s\n", raw);
+        free(file_data);
         return false;
     }
 
     printf("TAPFormat: sig=%.12s ver=%d platform=%d std=%d size=%u\n",
            out_header->signature, out_header->version, out_header->platform,
            out_header->video_standard, out_header->data_size);
+    free(file_data);
     return true;
 }
 

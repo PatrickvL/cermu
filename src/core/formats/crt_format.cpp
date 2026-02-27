@@ -15,19 +15,20 @@ bool commodore_crt_read_header(const char* filepath, commodore_crt_header_t* out
     if (!filepath || !out_header) return false;
     memset(out_header, 0, sizeof(*out_header));
 
-    FILE* f = fopen(filepath, "rb");
-    if (!f) return false;
-
-    uint8_t raw[64];
-    if (fread(raw, 1, 64, f) != 64) {
-        fclose(f);
+    // Use format_read_entire_file (VFS-aware) instead of direct fopen
+    size_t file_size = 0;
+    uint8_t* file_data = format_read_entire_file(filepath, &file_size);
+    if (!file_data || file_size < 64) {
+        free(file_data);
         return false;
     }
-    fclose(f);
+
+    const uint8_t* raw = file_data;
 
     /* Validate signature */
     if (memcmp(raw, "C64 CARTRIDGE   ", 16) != 0) {
         printf("CRTFormat: Invalid CRT signature\n");
+        free(file_data);
         return false;
     }
 
@@ -44,6 +45,7 @@ bool commodore_crt_read_header(const char* filepath, commodore_crt_header_t* out
     printf("CRTFormat: \"%s\" hw_type=%d EXROM=%d GAME=%d\n",
            out_header->name, out_header->hardware_type,
            out_header->exrom, out_header->game);
+    free(file_data);
     return true;
 }
 

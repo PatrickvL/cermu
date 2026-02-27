@@ -5,6 +5,7 @@
 #include "imgui_impl_opengl3.h"
 #include "../core/config/path_discovery.h"
 #include "../core/formats/format_handler.h"
+#include "../core/vfs/vfs.h"
 #include "../devices/storage/drive_1541.h"
 #include <cstdio>
 #include <cstring>
@@ -196,6 +197,36 @@ void SystemGUI::render_frame() {
         if (ImGuiFileDialog::Instance()->IsOk()) {
             std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
             printf("User selected file: %s\n", filePathName.c_str());
+
+            // =================================================================
+            // Archive resolution — if user selected a .zip (or other archive),
+            // scan its contents and resolve to the loadable file inside.
+            // =================================================================
+            std::string resolved_path = filePathName;
+            {
+                std::string ext = vfs_extension(filePathName.c_str());
+                if (vfs_is_archive_extension(ext.c_str())) {
+                    printf("Archive selected — scanning for loadable content...\n");
+                    auto scan = vfs_scan_archive(filePathName.c_str());
+                    if (scan.loadable_files.size() == 1) {
+                        // Exactly one loadable file — auto-select it
+                        resolved_path = scan.loadable_files[0].full_path;
+                        printf("Auto-selected: %s (system: %s, conf: %.2f)\n",
+                               resolved_path.c_str(),
+                               scan.suggested_system.c_str(), scan.confidence);
+                    } else if (scan.loadable_files.size() > 1) {
+                        // Multiple loadable files — pick the first one for now.
+                        // TODO: show a chooser popup for multi-file archives
+                        resolved_path = scan.loadable_files[0].full_path;
+                        printf("Archive contains %zu loadable files, "
+                               "auto-selected first: %s\n",
+                               scan.loadable_files.size(),
+                               resolved_path.c_str());
+                    } else {
+                        printf("No loadable files found in archive\n");
+                    }
+                }
+            }
             
             // Save the last selected file path for next time
             last_file_path_ = filePathName;
@@ -207,7 +238,7 @@ void SystemGUI::render_frame() {
             // Auto-detect optimal configuration (e.g. memory expansion) from file.
             // Never downgrades from the user's current selection — only increases.
             if (system_) {
-                system_->apply_file_configuration(filePathName.c_str());
+                system_->apply_file_configuration(resolved_path.c_str());
             }
 
             // Reset system before loading file for clean state
@@ -215,9 +246,9 @@ void SystemGUI::render_frame() {
                 system_->reset();
             }
             
-            // Load the file
-            if (system_ && system_->load_file(filePathName.c_str())) {
-                printf("File loaded successfully: %s\n", filePathName.c_str());
+            // Load the file (VFS-aware — handles archive paths transparently)
+            if (system_ && system_->load_file(resolved_path.c_str())) {
+                printf("File loaded successfully: %s\n", resolved_path.c_str());
                 
                 // Update window title with loaded program name
                 update_window_title();
@@ -226,7 +257,7 @@ void SystemGUI::render_frame() {
                 emulation_running_.store(true);
                 emulation_paused_.store(false);
             } else {
-                printf("Failed to load file: %s\n", filePathName.c_str());
+                printf("Failed to load file: %s\n", resolved_path.c_str());
                 
                 // Resume previous state if load failed
                 if (was_running) {
@@ -955,9 +986,21 @@ void SystemGUI::switch_system(const char* system_name, int memory_option, int re
     }
     
     // If a pending file was provided, apply its configuration BEFORE init
-    // so memory expansion / region are set up correctly
+    // so memory expansion / region are set up correctly.
+    // Resolve archive paths early so the resolved VFS path
+    // is used for both configuration and loading.
+    std::string resolved_pending;
     if (pending_file) {
-        system_->apply_file_configuration(pending_file);
+        resolved_pending = pending_file;
+        std::string pext = vfs_extension(pending_file);
+        if (vfs_is_archive_extension(pext.c_str())) {
+            auto scan = vfs_scan_archive(pending_file);
+            if (!scan.loadable_files.empty()) {
+                resolved_pending = scan.loadable_files[0].full_path;
+                printf("Archive resolved to: %s\n", resolved_pending.c_str());
+            }
+        }
+        system_->apply_file_configuration(resolved_pending.c_str());
     }
     
     // Initialize the system
@@ -980,11 +1023,11 @@ void SystemGUI::switch_system(const char* system_name, int memory_option, int re
     // Load pending file after system is fully initialized
     if (pending_file) {
         printf("Loading pending file into %s: %s\n",
-               system_->get_descriptor().short_name, pending_file);
-        if (system_->load_file(pending_file)) {
+               system_->get_descriptor().short_name, resolved_pending.c_str());
+        if (system_->load_file(resolved_pending.c_str())) {
             printf("Pending file loaded successfully\n");
         } else {
-            printf("Failed to load pending file: %s\n", pending_file);
+            printf("Failed to load pending file: %s\n", resolved_pending.c_str());
         }
     }
 
@@ -1022,6 +1065,15 @@ void SystemGUI::open_file_dialog(const char* dialog_key, const char* title) {
         // Build filter from format descriptors using format_list_dialog_filter()
         filter_str = format_list_dialog_filter(desc.supported_formats,
                                                desc.short_name ? desc.short_name : "System");
+
+        // Inject archive extensions (.zip) into the collection filter so
+        // the user can select zip files containing ROMs directly.
+        // The filter format is "Label{.ext1,.ext2,...},.*"
+        // We insert ".zip" before the closing "}"
+        size_t brace_pos = filter_str.find('}');
+        if (brace_pos != std::string::npos) {
+            filter_str.insert(brace_pos, ",.zip");
+        }
     } else {
         filter_str = ".*"; // All files if no formats specified
     }

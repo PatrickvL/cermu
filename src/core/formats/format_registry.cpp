@@ -6,6 +6,7 @@
  */
 
 #include "format_registry.h"
+#include "vfs/vfs.h"
 #include <cstring>
 #include <algorithm>
 #include <cstdio>
@@ -89,10 +90,13 @@ bool FormatRegistry::load_file(const char* filepath, format_load_result_t* out) 
     memset(out, 0, sizeof(*out));
     out->type = FORMAT_LOAD_ERROR;
 
-    /* Determine the file extension */
-    const char* ext = strrchr(filepath, '.');
+    /* Determine the file extension — use VFS-aware extraction for archive paths.
+     * For "game.zip!/rom.nes", we want ".nes" not ".zip".  */
+    std::string ext_str = vfs_extension(filepath);
+    const char* ext = ext_str.empty() ? nullptr : ext_str.c_str();
 
-    /* Identify format — try content-based first if we can read the file */
+    /* Identify format — try content-based first if we can read the file.
+     * format_read_entire_file() is VFS-aware and can extract from archives. */
     const format_descriptor_t* fmt = nullptr;
     {
         size_t peek_size = 0;
