@@ -16,13 +16,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(tomlplusplus)
 
-# Add miniz library (ZIP support for VFS)
-FetchContent_Declare(
-    miniz
-    GIT_REPOSITORY https://github.com/richgel999/miniz.git
-    GIT_TAG 3.0.2
-)
-FetchContent_MakeAvailable(miniz)
+# Find libarchive (archive reading — ZIP, 7z, RAR, tar, etc.)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBARCHIVE REQUIRED libarchive)
 
 # CRITICAL: Force all binaries to output to a single consistent location
 # This prevents confusion from multiple binary locations across different build methods
@@ -135,6 +131,7 @@ endif()
 # Include directories
 # SDL2 include dirs added project-wide because core headers (emulated_system.h,
 # keyboard_mapper.h) reference SDL_Keycode types unconditionally.
+# LIBARCHIVE include dirs added because os_archive.cpp needs <archive.h>.
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/fam65xx
@@ -148,6 +145,7 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui
     ${SDL2_INCLUDE_DIRS}
+    ${LIBARCHIVE_INCLUDE_DIRS}
 )
 
 # GUI include directories will be set later after detecting ImGui location
@@ -356,6 +354,8 @@ set(CORE_UTIL_SOURCES
     src/core/formats/sid_format.cpp
     src/core/formats/nsf_format.cpp
     src/core/formats/commodore_load_helpers.cpp
+    src/core/os/os_filesystem.cpp
+    src/core/os/os_archive.cpp
     src/core/vfs/vfs.cpp
     src/core/encoding/petscii.cpp
     src/core/analysis/basic_parser.cpp
@@ -416,7 +416,7 @@ add_executable(cermu_console
 
 target_link_libraries(cermu_console
     fam65xx_decoder
-    miniz
+    ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
 
@@ -463,7 +463,7 @@ if(BUILD_GUI)
     set(CERMU_LINK_LIBS
         imgui
         fam65xx_decoder
-        miniz
+        ${LIBARCHIVE_LIBRARIES}
         ${SDL2_LIBRARIES}
         ${OPENGL_LIBRARIES}
         ${CMAKE_DL_LIBS}
@@ -529,7 +529,7 @@ add_executable(c64_test_runner
 # Link required libraries for test runner
 target_link_libraries(c64_test_runner
     fam65xx_decoder
-    miniz
+    ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
 
@@ -551,7 +551,7 @@ add_executable(nes_test_runner
 
 target_link_libraries(nes_test_runner
     fam65xx_decoder
-    miniz
+    ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
 
@@ -568,15 +568,18 @@ message(STATUS "Test runner nes_test_runner will be built")
 # VFS smoke test tool
 add_executable(vfs_smoke_test
     tools/vfs_smoke_test.cpp
+    src/core/os/os_filesystem.cpp
+    src/core/os/os_archive.cpp
     src/core/vfs/vfs.cpp
 )
 
 target_include_directories(vfs_smoke_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+    ${LIBARCHIVE_INCLUDE_DIRS}
 )
 
 target_link_libraries(vfs_smoke_test
-    miniz
+    ${LIBARCHIVE_LIBRARIES}
 )
 
 set_target_properties(vfs_smoke_test PROPERTIES
