@@ -427,22 +427,31 @@ void nes_screen_set_row_attribute(PPU* ppu, int row, uint8_t palette) {
 void nes_screen_enable_display(PPU* ppu) {
     if (!ppu) return;
 
+    // Helper: construct a CPU-bus write cycle for a PPU register
+    auto ppu_reg_write = [&](uint16_t addr, uint8_t data) {
+        bus_state_t bus = NES_BUS_DEFAULT_STATE;
+        BUS_SET_ADDR(bus, addr);
+        BUS_SET_DATA(bus, data);
+        BUS_CLR_BIT(bus, BUS_RW_BIT);  // write
+        ppu->cpu_bus_tick(bus);
+    };
+
     // PPUCTRL ($2000): NMI enable, pattern table 0 for background
     //   bit 7 = NMI enable (1)
     //   bit 4 = BG pattern table select (0 = $0000)
     //   bit 3 = Sprite pattern table select (0 = $0000)
     //   bit 2 = sprite size (0 = 8x8)
     //   bits 0-1 = nametable select (0 = $2000)
-    ppu->cpu_write(0x2000, 0x80);  // Enable NMI, use pattern table 0, nametable 0
+    ppu_reg_write(0x2000, 0x80);  // Enable NMI, use pattern table 0, nametable 0
 
     // PPUMASK ($2001): Enable background rendering
     //   bit 3 = show background (1)
     //   bit 1 = show background in leftmost 8px (1)
-    ppu->cpu_write(0x2001, 0x0A);  // Show background, no clipping
+    ppu_reg_write(0x2001, 0x0A);  // Show background, no clipping
 
     // PPUSCROLL ($2005): No scrolling
-    ppu->cpu_write(0x2005, 0x00);  // X scroll = 0
-    ppu->cpu_write(0x2005, 0x00);  // Y scroll = 0
+    ppu_reg_write(0x2005, 0x00);  // X scroll = 0
+    ppu_reg_write(0x2005, 0x00);  // Y scroll = 0
 }
 
 } // namespace nes_system
