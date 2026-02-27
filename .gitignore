@@ -70,6 +70,7 @@ data/**/*.cmd
 data/**/*.nsf
 data/**/*.nes
 data/**/*.m3u
+data/**/*.sav
 data/**/*.zip
 !data/**/README.md
 
