@@ -13,6 +13,7 @@
 #include "../../core/vfs/vfs.h"
 // CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
 #include "../../core/chip.h"
+#include "../../chip/input/cd4021.h"
 #include "../../chip/memory/memory_chip.h"
 #include <fstream>
 #include <iostream>
@@ -679,13 +680,31 @@ void NintendoSystem<V>::register_nes_chips() {
         "APU (built-in 2A03)", "APU", "Audio", 0x4000);
 
     // RAM — MemoryChip with layout rendering
-    register_chip(std::make_unique<MemoryChip>(
+    auto ram = std::make_unique<MemoryChip>(
         ChipInfo{"SRAM", "Various"}, 2048, MemoryChip::SRAM, &pins_,
-        "RAM", 0x0000));
+        "RAM", 0x0000);
+    ram->bind(bus_.cpu_ram);  // Point at unified bus RAM for live debug view
+    register_chip(std::move(ram));
 
-    // Cartridge (no suitable chip type — mapper + ROM + optional RAM)
-    register_chip(std::make_unique<ChipPlaceholder>(
-        ChipInfo{"Cartridge", "Various"}, "Cartridge", "Cart", "Memory", 0x4020));
+    // CIRAM (2KB nametable VRAM on NES motherboard)
+    auto ciram = std::make_unique<MemoryChip>(
+        ChipInfo{"SRAM", "Various"}, 2048, MemoryChip::SRAM, &pins_,
+        "CIRAM", 0x2000);
+    ciram->bind(ppu_->vram.data());  // Point at PPU's CIRAM for live debug view
+    register_chip(std::move(ciram));
+
+    // Cartridge — now a proper ChipBase subclass
+    if (cartridge_) {
+        register_chip(cartridge_.get(),
+            "Cartridge", "Cart", "Memory", 0x4020);
+    }
+
+    // Controller shift registers (CD4021 × 2)
+    auto ctrl1 = std::make_unique<CD4021>();
+    register_chip(std::move(ctrl1), "Controller 1 SR", "CTRL1", "Input", 0x4016);
+
+    auto ctrl2 = std::make_unique<CD4021>();
+    register_chip(std::move(ctrl2), "Controller 2 SR", "CTRL2", "Input", 0x4017);
 }
 
 template<NintendoVariant V>
