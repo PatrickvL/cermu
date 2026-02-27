@@ -118,8 +118,8 @@ struct format_descriptor_t {
     /** Content-based format identification (0.0–1.0). */
     float (*identify)(const uint8_t* data, size_t file_size, const char* extension);
 
-    /** Load a file and fill the result.  NULL if format doesn't support direct loading. */
-    bool  (*load)(const char* filepath, format_load_result_t* out);
+    /** Load from an already-read buffer and fill the result.  NULL if format doesn't support direct loading. */
+    bool  (*load)(const uint8_t* data, size_t size, format_load_result_t* out);
 };
 
 // ============================================================================

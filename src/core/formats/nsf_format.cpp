@@ -120,35 +120,26 @@ static float nsf_identify(const uint8_t* data, size_t file_size, const char* ext
 // FORMAT LOADING
 // ============================================================================
 
-static bool nsf_load(const char* filepath, format_load_result_t* out) {
-    if (!filepath || !out) return false;
+static bool nsf_load(const uint8_t* data, size_t size, format_load_result_t* out) {
+    if (!data || !size || !out) return false;
 
-    // Read entire file
-    size_t file_size = 0;
-    uint8_t* file_data = format_read_entire_file(filepath, &file_size);
-    if (!file_data) {
-        snprintf(out->error_msg, sizeof(out->error_msg),
-                 "NSF: Cannot open file: %s", filepath);
-        out->type = FORMAT_LOAD_ERROR;
-        return false;
-    }
+    const uint8_t* file_data = data;
+    size_t file_size = size;
 
     // Parse header
     nsf_header_t header;
     if (!nsf_parse_header(file_data, file_size, &header)) {
         snprintf(out->error_msg, sizeof(out->error_msg),
-                 "NSF: Invalid NSF file: %s", filepath);
+                 "NSF: Invalid NSF data");
         out->type = FORMAT_LOAD_ERROR;
-        free(file_data);
         return false;
     }
 
     // Payload starts at offset 128
     if (file_size <= 128) {
         snprintf(out->error_msg, sizeof(out->error_msg),
-                 "NSF: No payload data in file: %s", filepath);
+                 "NSF: No payload data");
         out->type = FORMAT_LOAD_ERROR;
-        free(file_data);
         return false;
     }
 
@@ -164,7 +155,6 @@ static bool nsf_load(const char* filepath, format_load_result_t* out) {
         snprintf(out->error_msg, sizeof(out->error_msg),
                  "NSF: Out of memory for payload (%zu bytes)", payload_size);
         out->type = FORMAT_LOAD_ERROR;
-        free(file_data);
         return false;
     }
     memcpy(out->program.data, file_data + 128, payload_size);
@@ -203,7 +193,6 @@ static bool nsf_load(const char* filepath, format_load_result_t* out) {
         printf("\n");
     }
 
-    free(file_data);
     return true;
 }
 

@@ -168,26 +168,18 @@ static float sid_identify(const uint8_t* data, size_t file_size, const char* ext
 // Load Callback
 // ============================================================================
 
-static bool sid_load(const char* filepath, format_load_result_t* out) {
-    if (!filepath || !out) return false;
+static bool sid_load(const uint8_t* data, size_t size, format_load_result_t* out) {
+    if (!data || !size || !out) return false;
 
-    // Read entire file
-    size_t file_size = 0;
-    uint8_t* file_data = format_read_entire_file(filepath, &file_size);
-    if (!file_data) {
-        snprintf(out->error_msg, sizeof(out->error_msg),
-                 "SID: Cannot open file: %s", filepath);
-        out->type = FORMAT_LOAD_ERROR;
-        return false;
-    }
+    const uint8_t* file_data = data;
+    size_t file_size = size;
 
     // Parse header
     sid_header_t header;
     if (!sid_parse_header(file_data, file_size, &header)) {
         snprintf(out->error_msg, sizeof(out->error_msg),
-                 "SID: Invalid SID file: %s", filepath);
+                 "SID: Invalid SID data");
         out->type = FORMAT_LOAD_ERROR;
-        free(file_data);
         return false;
     }
 
@@ -204,9 +196,8 @@ static bool sid_load(const char* filepath, format_load_result_t* out) {
 
     if (payload_start >= file_size) {
         snprintf(out->error_msg, sizeof(out->error_msg),
-                 "SID: No payload data in file: %s", filepath);
+                 "SID: No payload data");
         out->type = FORMAT_LOAD_ERROR;
-        free(file_data);
         return false;
     }
 
@@ -229,7 +220,6 @@ static bool sid_load(const char* filepath, format_load_result_t* out) {
         snprintf(out->error_msg, sizeof(out->error_msg),
                  "SID: Out of memory for payload (%zu bytes)", payload_size);
         out->type = FORMAT_LOAD_ERROR;
-        free(file_data);
         return false;
     }
     memcpy(out->program.data, file_data + payload_start, payload_size);
@@ -256,7 +246,6 @@ static bool sid_load(const char* filepath, format_load_result_t* out) {
                vid_names[header.video & 3], sid_names[header.sid_model & 3]);
     }
 
-    free(file_data);
     return true;
 }
 

@@ -51,6 +51,9 @@ struct commodore_t64_t {
     /** Open a T64 tape archive from file. */
     bool open(const char* filepath);
 
+    /** Open a T64 tape archive from an in-memory buffer. */
+    bool open_mem(const uint8_t* buf, size_t buf_size);
+
     /** Read the directory of a T64 tape archive. */
     bool read_directory(commodore_t64_directory_t* out_dir) const;
 

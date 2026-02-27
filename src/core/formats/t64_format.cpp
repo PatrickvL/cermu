@@ -37,6 +37,25 @@ bool commodore_t64_t::open(const char* filepath) {
     return true;
 }
 
+bool commodore_t64_t::open_mem(const uint8_t* buf, size_t buf_size) {
+    if (!buf || buf_size == 0) return false;
+    memset(this, 0, sizeof(*this));
+
+    data = const_cast<uint8_t*>(buf);
+    data_size = buf_size;
+    owns_data = false;
+
+    if (data_size < T64_HEADER_SIZE ||
+        memcmp(data, "C64", 3) != 0) {
+        printf("T64Format: Invalid T64 signature\n");
+        data = NULL;
+        return false;
+    }
+
+    printf("T64Format: Opened T64 from memory: %zu bytes\n", data_size);
+    return true;
+}
+
 void commodore_t64_t::close() {
     if (owns_data && data) free(data);
     memset(this, 0, sizeof(*this));
@@ -166,9 +185,9 @@ static float t64_identify(const uint8_t* data, size_t file_size, const char* ext
 // Load Callback
 // ============================================================================
 
-static bool t64_load(const char* filepath, format_load_result_t* out) {
+static bool t64_load(const uint8_t* data, size_t size, format_load_result_t* out) {
     commodore_t64_t t64;
-    if (t64.open(filepath)) {
+    if (t64.open_mem(data, size)) {
         if (t64.extract_first_prg(&out->program)) {
             out->type = FORMAT_LOAD_PROGRAM;
             t64.close();
@@ -176,10 +195,10 @@ static bool t64_load(const char* filepath, format_load_result_t* out) {
         }
         t64.close();
         snprintf(out->error_msg, sizeof(out->error_msg),
-                 "T64 opened but no PRG found: %s", filepath);
+                 "T64 opened but no PRG found");
     } else {
         snprintf(out->error_msg, sizeof(out->error_msg),
-                 "Failed to open T64: %s", filepath);
+                 "Failed to open T64 from memory");
     }
     out->type = FORMAT_LOAD_ERROR;
     return false;
