@@ -141,6 +141,29 @@ public:
         memset(chr_ram_, 0, sizeof(chr_ram_));
     }
 
+    // ---- PPU page-pointer setup (CHR-RAM for font tiles) ----
+
+    void update_bank_map(nes_bus::nes_bus_t* bus, uint8_t* ciram) override {
+        if (!bus) return;
+
+        // CHR-RAM: 8 × 1KB pages covering $0000-$1FFF (writable)
+        MapperChrConfig chr_cfg;
+        for (int i = 0; i < 8; i++) {
+            chr_cfg.chr_pages[i] = chr_ram_ + (i * 0x400);
+            chr_cfg.chr_writable[i] = true;
+        }
+        // Horizontal mirroring: $2000/$2400 → page 0, $2800/$2C00 → page 1
+        chr_cfg.nt_page[0] = 0;
+        chr_cfg.nt_page[1] = 0;
+        chr_cfg.nt_page[2] = 1;
+        chr_cfg.nt_page[3] = 1;
+        bus->update_ppu_banks(chr_cfg, ciram);
+
+        // CPU page pointers are NOT set — NsfCartridge uses cpu_bus_tick
+        // fallback for all CPU address space access (banked ROM, work RAM,
+        // bank registers).
+    }
+
     // ---- CPU bus interface (overrides Cartridge::cpu_bus_tick) ----
 
     bus_state_t cpu_bus_tick(bus_state_t bus, bool& handled) override {

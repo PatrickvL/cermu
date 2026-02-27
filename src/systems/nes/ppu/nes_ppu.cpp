@@ -182,51 +182,63 @@ uint16_t PPU::mirror_nametable_addr(uint16_t addr) const {
 // ============================================================================
 
 uint8_t PPU::ppu_read(uint16_t addr, bool read_only) {
-    uint8_t data = 0x00;
     addr &= 0x3FFF;
-    
-    if (cart && cart->ppu_read(addr, data)) {
-        // Cartridge handled the read
-    } else if (addr <= 0x1FFF) {
-        // Pattern table
-        data = pattern_table[addr >> 12][addr & 0x0FFF];
-    } else if (addr >= 0x2000 && addr <= 0x3EFF) {
-        // Nametables — apply mirroring
-        addr &= 0x0FFF;
-        data = vram[mirror_nametable_addr(addr)];
-    } else if (addr >= 0x3F00 && addr <= 0x3FFF) {
-        // Palette RAM
+
+    // ---- Palette RAM ($3F00-$3FFF) — internal to PPU, no bus access ----
+    if (addr >= 0x3F00) {
         addr &= 0x001F;
         if (addr == 0x0010) addr = 0x0000;
         if (addr == 0x0014) addr = 0x0004;
         if (addr == 0x0018) addr = 0x0008;
         if (addr == 0x001C) addr = 0x000C;
-        data = palette[addr] & (regs.mask & 0x01 ? 0x30 : 0x3F);
+        return palette[addr] & (regs.mask & 0x01 ? 0x30 : 0x3F);
     }
-    
-    return data;
+
+    // ---- A12 edge detection (for MMC3 scanline counter) ----
+    // On real hardware, the mapper monitors PPU A12 rising edges.
+    // We detect 0→1 transitions on bit 12 of the PPU address.
+    if (!read_only) {
+        bool a12_rising = (addr & 0x1000) && !(last_ppu_addr_ & 0x1000);
+        if (a12_rising && cart) {
+            cart->scanline();
+        }
+        last_ppu_addr_ = addr;
+    }
+
+    // ---- CHR + nametable via page pointers ----
+    if (bus_ptr_) {
+        return bus_ptr_->ppu_read(addr);
+    }
+
+    return 0x00;
 }
 
 void PPU::ppu_write(uint16_t addr, uint8_t data) {
     addr &= 0x3FFF;
-    
-    if (cart && cart->ppu_write(addr, data)) {
-        // Cartridge handled the write
-    } else if (addr <= 0x1FFF) {
-        // Pattern table (CHR-RAM)
-        pattern_table[addr >> 12][addr & 0x0FFF] = data;
-    } else if (addr >= 0x2000 && addr <= 0x3EFF) {
-        // Nametables — apply mirroring
-        addr &= 0x0FFF;
-        vram[mirror_nametable_addr(addr)] = data;
-    } else if (addr >= 0x3F00 && addr <= 0x3FFF) {
-        // Palette RAM
+
+    // ---- Palette RAM ($3F00-$3FFF) — internal to PPU ----
+    if (addr >= 0x3F00) {
         addr &= 0x001F;
         if (addr == 0x0010) addr = 0x0000;
         if (addr == 0x0014) addr = 0x0004;
         if (addr == 0x0018) addr = 0x0008;
         if (addr == 0x001C) addr = 0x000C;
         palette[addr] = data;
+        return;
+    }
+
+    // ---- A12 edge detection (writes also put address on bus) ----
+    {
+        bool a12_rising = (addr & 0x1000) && !(last_ppu_addr_ & 0x1000);
+        if (a12_rising && cart) {
+            cart->scanline();
+        }
+        last_ppu_addr_ = addr;
+    }
+
+    // ---- CHR + nametable via page pointers ----
+    if (bus_ptr_) {
+        bus_ptr_->ppu_write(addr, data);
     }
 }
 
@@ -411,14 +423,8 @@ void PPU::clock() {
         }
     }
     
-    // Notify cartridge mapper on scanline boundary (for MMC3 IRQ counter)
-    // The real hardware clocks the counter on PPU A12 rising edge, but
-    // per-scanline notification at cycle 260 is the standard approximation.
-    if (cycle == 260 && scanline >= 0 && scanline < 240 && (regs.mask & 0x18)) {
-        if (cart) {
-            cart->scanline();
-        }
-    }
+    // (A12 edge detection for mapper IRQ counters is now handled inside
+    //  ppu_read() — see the rising-edge check on bit 12 of the address.)
 
     // Advance cycle
     cycle++;

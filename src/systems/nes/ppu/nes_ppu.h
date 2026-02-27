@@ -22,6 +22,7 @@
 
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
+#include "../bus/nes_bus.h"
 #include "nes_ppu_palette.h"
 
 // Forward declarations
@@ -155,8 +156,11 @@ public:
     // Main PPU tick - called 3 times per CPU cycle
     void clock();
 
-    // Connect cartridge for CHR data access
+    // Connect cartridge for CHR data access and mapper interaction
     void connect_cartridge(std::shared_ptr<Cartridge> cartridge);
+
+    // Connect bus for page-pointer VRAM access
+    void connect_bus(nes_bus::nes_bus_t* bus) { bus_ptr_ = bus; }
 
     // Get frame buffer
     const std::vector<uint32_t>& get_screen() const { return screen; }
@@ -169,6 +173,10 @@ public:
 
 private:
     std::shared_ptr<Cartridge> cart;
+    nes_bus::nes_bus_t* bus_ptr_ = nullptr;   // Page-pointer bus for VRAM reads
+
+    // A12 edge detection — tracks last PPU address for mapper IRQ (MMC3)
+    uint16_t last_ppu_addr_ = 0;
 
     // Internal rendering functions
     void increment_scroll_x();
