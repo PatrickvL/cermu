@@ -191,29 +191,3 @@ std::string vfs_extension(const char* path);
  * join_vfs_path("/data/roms.zip", "game.nes") → "/data/roms.zip!/game.nes"
  */
 std::string vfs_join_path(const std::string& base, const std::string& entry);
-
-// ============================================================================
-// Archive-Aware System Detection
-// ============================================================================
-
-/**
- * Result of scanning an archive for loadable content.
- */
-struct VfsArchiveScan {
-    std::string  archive_path;           /**< Path to the archive file */
-    std::vector<VfsEntry> loadable_files; /**< Files that match known formats */
-    std::string  suggested_system;       /**< Best-guess system short name, or "" */
-    float        confidence;             /**< Confidence in the system guess (0.0–1.0) */
-};
-
-/**
- * Scan an archive and identify loadable files + suggested system.
- *
- * Uses format extensions and SystemDescriptor::can_load_file callbacks
- * to determine which files inside the archive are loadable and which
- * emulated system they belong to.
- *
- * @param archive_path  Path to the archive file (not a VFS path)
- * @return              Scan result with loadable entries and system guess
- */
-VfsArchiveScan vfs_scan_archive(const char* archive_path);
