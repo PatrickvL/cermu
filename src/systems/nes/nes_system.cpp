@@ -29,7 +29,7 @@
 namespace nes_system {
 
 // PPU implementation is now in ppu/nes_ppu.cpp
-// Palette LUT is now in ppu/nes_ppu_palette.h
+// Palette LUT is now private to nes_ppu.cpp
 // Cartridge implementation is now in cartridge/nes_cartridge.cpp
 // Mapper implementations are now in cartridge/mappers/ headers
 // MemoryBus removed in Phase 2 — dispatch is now inline in NintendoSystem::clock()
@@ -420,7 +420,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
 
         // Launch NSF player
         bus_.reset();
-        nsf_cartridge_ = nes_apply_nsf_load(
+        nsf_cartridge_ = NsfPlayer::apply_load(
             cpu_, ppu_.get(), bus_.cpu_ram,
             &header, &prog, subtune, is_pal_);
 
@@ -625,7 +625,7 @@ bool NintendoSystem<V>::handle_nsf_player_key(SDL_Keycode key) {
     if (static_cast<uint16_t>(new_subtune) == active_nsf_subtune_) return true;
 
     active_nsf_subtune_ = static_cast<uint16_t>(new_subtune);
-    nes_nsf_switch_subtune(cpu_, ppu_.get(), bus_.cpu_ram,
+    NsfPlayer::switch_subtune(cpu_, ppu_.get(), bus_.cpu_ram,
                             nsf_cartridge_.get(), &active_nsf_header_,
                             active_nsf_data_.data(), active_nsf_data_.size(),
                             active_nsf_subtune_, is_pal_);
