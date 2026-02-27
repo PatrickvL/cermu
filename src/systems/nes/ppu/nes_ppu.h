@@ -23,7 +23,6 @@
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
 #include "../bus/nes_bus.h"
-#include "nes_ppu_palette.h"
 
 // Forward declarations
 namespace nes_system {

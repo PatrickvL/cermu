@@ -173,7 +173,7 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
     prg_ram.resize(prg_ram_size, 0);
 
     // Create appropriate mapper via factory
-    mapper = create_mapper(mapper_id, prg_banks, chr_banks);
+    mapper = MapperFactory::create(mapper_id, prg_banks, chr_banks);
 
     // Phase 2: Give mapper direct pointers into our ROM/RAM vectors
     mapper->set_memory_pointers(

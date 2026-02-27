@@ -23,22 +23,25 @@
 
 namespace nes_system {
 
-// Create a mapper instance for the given iNES mapper ID.
-// Returns nullptr only in theory — unsupported IDs fall back to NROM.
-inline std::unique_ptr<Mapper> create_mapper(uint8_t mapper_id,
-                                             uint8_t prg_banks,
-                                             uint8_t chr_banks) {
-    switch (mapper_id) {
-        case 0:  return std::make_unique<Mapper000>(prg_banks, chr_banks);
-        case 1:  return std::make_unique<Mapper001>(prg_banks, chr_banks);
-        case 2:  return std::make_unique<Mapper002>(prg_banks, chr_banks);
-        case 3:  return std::make_unique<Mapper003>(prg_banks, chr_banks);
-        case 4:  return std::make_unique<Mapper004>(prg_banks, chr_banks);
-        default:
-            std::cout << "Warning: Unsupported mapper " << (int)mapper_id
-                      << ", falling back to NROM" << std::endl;
-            return std::make_unique<Mapper000>(prg_banks, chr_banks);
+/// Factory for creating mapper instances by iNES mapper ID.
+struct MapperFactory {
+    /// Create a mapper instance for the given iNES mapper ID.
+    /// Returns nullptr only in theory — unsupported IDs fall back to NROM.
+    static inline std::unique_ptr<Mapper> create(uint8_t mapper_id,
+                                                  uint8_t prg_banks,
+                                                  uint8_t chr_banks) {
+        switch (mapper_id) {
+            case 0:  return std::make_unique<Mapper000>(prg_banks, chr_banks);
+            case 1:  return std::make_unique<Mapper001>(prg_banks, chr_banks);
+            case 2:  return std::make_unique<Mapper002>(prg_banks, chr_banks);
+            case 3:  return std::make_unique<Mapper003>(prg_banks, chr_banks);
+            case 4:  return std::make_unique<Mapper004>(prg_banks, chr_banks);
+            default:
+                std::cout << "Warning: Unsupported mapper " << (int)mapper_id
+                          << ", falling back to NROM" << std::endl;
+                return std::make_unique<Mapper000>(prg_banks, chr_banks);
+        }
     }
-}
+};
 
 } // namespace nes_system

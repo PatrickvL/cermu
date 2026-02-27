@@ -28,86 +28,73 @@
 namespace nes_system {
 
 // ============================================================================
-// STUB ADDRESSES IN NES CPU RAM
-// ============================================================================
-
-static constexpr uint16_t STUB_BASE    = 0x0700;  // Init stub
-static constexpr uint16_t NMI_HANDLER  = 0x0750;  // NMI play handler
-static constexpr uint16_t IRQ_HANDLER  = 0x0770;  // IRQ handler (just RTI)
-
-// NES CPU vectors (in ROM space — written to NsfCartridge)
-static constexpr uint16_t VECTOR_NMI   = 0xFFFA;
-static constexpr uint16_t VECTOR_RESET = 0xFFFC;
-static constexpr uint16_t VECTOR_IRQ   = 0xFFFE;
-
-// ============================================================================
 // INFO PAGE — NES-native display of NSF metadata
 // ============================================================================
 
-void nes_write_nsf_info_page(PPU* ppu,
+void NsfPlayer::write_info_page(PPU* ppu,
                               const nsf_header_t* nsf,
                               uint16_t subtune) {
     if (!ppu || !nsf) return;
 
     // Initialize font and palette
-    nes_screen_init_font(ppu);
-    nes_screen_set_palette(ppu,
+    NesScreenUtils::init_font(ppu);
+    NesScreenUtils::set_palette(ppu,
                            0x0F,   // Black background
                            0x30,   // White text
                            0x12,   // Blue accent
                            0x10);  // Light grey dim
 
-    nes_screen_clear(ppu);
+    NesScreenUtils::clear(ppu);
 
     // ---- Header bar (row 1) ----
-    nes_screen_fill_row(ppu, 1, 0x01);  // Solid block tile for bar
-    nes_screen_write_text(ppu, 1, 2, "  NES  NSF  PLAYER  ");
+    NesScreenUtils::fill_row(ppu, 1, 0x01);  // Solid block tile for bar
+    NesScreenUtils::write_text(ppu, 1, 2, "  NES  NSF  PLAYER  ");
 
     // ---- Title / Artist / Copyright (rows 4-8, raw bytes for NES display) ----
-    nes_screen_write_text(ppu, 4, 1, "TITLE:");
-    nes_screen_write_text_n(ppu, 5, 2, nsf->name_raw, 28);
+    NesScreenUtils::write_text(ppu, 4, 1, "TITLE:");
+    NesScreenUtils::write_text_n(ppu, 5, 2, nsf->name_raw, 28);
 
-    nes_screen_write_text(ppu, 7, 1, "ARTIST:");
-    nes_screen_write_text_n(ppu, 8, 2, nsf->artist_raw, 28);
+    NesScreenUtils::write_text(ppu, 7, 1, "ARTIST:");
+    NesScreenUtils::write_text_n(ppu, 8, 2, nsf->artist_raw, 28);
 
-    nes_screen_write_text(ppu, 10, 1, "COPYRIGHT:");
-    nes_screen_write_text_n(ppu, 11, 2, nsf->copyright_raw, 28);
+    NesScreenUtils::write_text(ppu, 10, 1, "COPYRIGHT:");
+    NesScreenUtils::write_text_n(ppu, 11, 2, nsf->copyright_raw, 28);
 
     // ---- Separator ----
-    nes_screen_fill_row(ppu, 13, '-');
+    NesScreenUtils::fill_row(ppu, 13, '-');
 
     // ---- Technical details (rows 14-18) ----
 
     // Row 14: Songs + Load address
-    nes_screen_write_text(ppu, 14, 1, "SONGS:");
-    nes_screen_write_dec(ppu, 14, 8, nsf->num_songs);
-    nes_screen_write_text(ppu, 14, 18, "LOAD:");
-    nes_screen_write_hex16(ppu, 14, 24, nsf->load_addr);
+    NesScreenUtils::write_text(ppu, 14, 1, "SONGS:");
+    NesScreenUtils::write_dec(ppu, 14, 8, nsf->num_songs);
+    NesScreenUtils::write_text(ppu, 14, 18, "LOAD:");
+    NesScreenUtils::write_hex16(ppu, 14, 24, nsf->load_addr);
 
     // Row 15: Default + Init address
-    nes_screen_write_text(ppu, 15, 1, "DEFAULT:");
-    nes_screen_write_dec(ppu, 15, 10, nsf->start_song);
-    nes_screen_write_text(ppu, 15, 18, "INIT:");
-    nes_screen_write_hex16(ppu, 15, 24, nsf->init_addr);
+    NesScreenUtils::write_text(ppu, 15, 1, "DEFAULT:");
+    NesScreenUtils::write_dec(ppu, 15, 10, nsf->start_song);
+    NesScreenUtils::write_text(ppu, 15, 18, "INIT:");
+    NesScreenUtils::write_hex16(ppu, 15, 24, nsf->init_addr);
 
     // Row 16: Region + Play address
-    nes_screen_write_text(ppu, 16, 1, "REGION:");
+    NesScreenUtils::write_text(ppu, 16, 1, "REGION:");
     const char* region_str = "NTSC";
     if (nsf->region_flags == NSF_REGION_PAL) region_str = "PAL";
     else if (nsf->region_flags == NSF_REGION_DUAL) region_str = "DUAL";
-    nes_screen_write_text(ppu, 16, 9, region_str);
-    nes_screen_write_text(ppu, 16, 18, "PLAY:");
-    nes_screen_write_hex16(ppu, 16, 24, nsf->play_addr);
+    NesScreenUtils::write_text(ppu, 16, 9, region_str);
+    NesScreenUtils::write_text(ppu, 16, 18, "PLAY:");
+    NesScreenUtils::write_hex16(ppu, 16, 24, nsf->play_addr);
 
     // Dim the address values on the right (palette 2 = light grey)
     for (int col = 18; col < 32; col += 2) {
-        nes_screen_set_attribute(ppu, 14, col, 2);
-        nes_screen_set_attribute(ppu, 16, col, 2);
+        NesScreenUtils::set_attribute(ppu, 14, col, 2);
+        NesScreenUtils::set_attribute(ppu, 16, col, 2);
     }
 
     // Row 17: Extra chips
     if (nsf->chip_flags) {
-        nes_screen_write_text(ppu, 17, 1, "CHIPS:");
+        NesScreenUtils::write_text(ppu, 17, 1, "CHIPS:");
         char chip_str[24] = "";
         if (nsf->chip_flags & NSF_CHIP_VRC6)      strcat(chip_str, "VRC6 ");
         if (nsf->chip_flags & NSF_CHIP_VRC7)       strcat(chip_str, "VRC7 ");
@@ -115,38 +102,38 @@ void nes_write_nsf_info_page(PPU* ppu,
         if (nsf->chip_flags & NSF_CHIP_MMC5)       strcat(chip_str, "MMC5 ");
         if (nsf->chip_flags & NSF_CHIP_NAMCO163)   strcat(chip_str, "N163 ");
         if (nsf->chip_flags & NSF_CHIP_SUNSOFT5B)  strcat(chip_str, "5B ");
-        nes_screen_write_text(ppu, 17, 8, chip_str);
+        NesScreenUtils::write_text(ppu, 17, 8, chip_str);
     } else {
-        nes_screen_write_text(ppu, 17, 1, "CHIPS: 2A03 (STANDARD)");
+        NesScreenUtils::write_text(ppu, 17, 1, "CHIPS: 2A03 (STANDARD)");
     }
 
     // Row 18: Bankswitching
     if (nsf->uses_bankswitching) {
-        nes_screen_write_text(ppu, 18, 1, "BANKS: YES");
+        NesScreenUtils::write_text(ppu, 18, 1, "BANKS: YES");
     }
 
     // ---- Separator ----
-    nes_screen_fill_row(ppu, 19, '-');
+    NesScreenUtils::fill_row(ppu, 19, '-');
 
     // ---- Now playing (row 20-21) ----
-    nes_screen_write_text(ppu, 21, 1, "NOW PLAYING:");
+    NesScreenUtils::write_text(ppu, 21, 1, "NOW PLAYING:");
 
     // Song number display: "SONG XX / YY"
     char song_buf[24];
     snprintf(song_buf, sizeof(song_buf), "SONG %d / %d",
              subtune + 1, nsf->num_songs);
-    nes_screen_write_text(ppu, 21, 14, song_buf);
+    NesScreenUtils::write_text(ppu, 21, 14, song_buf);
 
     // ---- Key help (rows 25-27) ----
-    nes_screen_write_text(ppu, 25, 1, "1-9,0: SELECT SONG");
-    nes_screen_write_text(ppu, 26, 1, "LEFT/RIGHT: PREV/NEXT");
-    nes_screen_write_text(ppu, 27, 1, "ESC: EXIT");
+    NesScreenUtils::write_text(ppu, 25, 1, "1-9,0: SELECT SONG");
+    NesScreenUtils::write_text(ppu, 26, 1, "LEFT/RIGHT: PREV/NEXT");
+    NesScreenUtils::write_text(ppu, 27, 1, "ESC: EXIT");
 
     // ---- Bottom bar (row 29) ----
-    nes_screen_fill_row(ppu, 29, 0x01);
+    NesScreenUtils::fill_row(ppu, 29, 0x01);
 
     // Enable PPU display
-    nes_screen_enable_display(ppu);
+    NesScreenUtils::enable_display(ppu);
 }
 
 // ============================================================================
@@ -159,7 +146,7 @@ void nes_write_nsf_info_page(PPU* ppu,
 // RTI                             — return from NMI
 // ============================================================================
 
-static void build_nmi_handler(uint8_t* ram, uint16_t play_addr) {
+void NsfPlayer::build_nmi_handler(uint8_t* ram, uint16_t play_addr) {
     asm6510 a(ram + NMI_HANDLER, 0x20, NMI_HANDLER);
 
     a.pha();
@@ -182,7 +169,7 @@ static void build_nmi_handler(uint8_t* ram, uint16_t play_addr) {
 // IRQ HANDLER — Simple RTI (NSF doesn't use IRQ by default)
 // ============================================================================
 
-static void build_irq_handler(uint8_t* ram) {
+void NsfPlayer::build_irq_handler(uint8_t* ram) {
     asm6510 a(ram + IRQ_HANDLER, 1, IRQ_HANDLER);
     a.rti();
 }
@@ -203,7 +190,7 @@ static void build_irq_handler(uint8_t* ram) {
 // idle: JMP idle                   — wait for NMI
 // ============================================================================
 
-static void build_init_stub(uint8_t* ram,
+void NsfPlayer::build_init_stub(uint8_t* ram,
                              const nsf_header_t* nsf,
                              uint16_t subtune,
                              bool is_pal) {
@@ -257,7 +244,7 @@ static void build_init_stub(uint8_t* ram,
 // VECTOR TABLE — Written to NsfCartridge ROM at $FFFA-$FFFF
 // ============================================================================
 
-static void write_vectors(NsfCartridge* cart) {
+void NsfPlayer::write_vectors(NsfCartridge* cart) {
     // NMI vector ($FFFA) → NMI handler in RAM
     cart->write_rom_direct(VECTOR_NMI,     static_cast<uint8_t>(NMI_HANDLER & 0xFF));
     cart->write_rom_direct(VECTOR_NMI + 1, static_cast<uint8_t>(NMI_HANDLER >> 8));
@@ -275,7 +262,7 @@ static void write_vectors(NsfCartridge* cart) {
 // NSF LOAD — Full setup
 // ============================================================================
 
-std::shared_ptr<NsfCartridge> nes_apply_nsf_load(
+std::shared_ptr<NsfCartridge> NsfPlayer::apply_load(
     RICOH_2A03* cpu,
     PPU* ppu,
     uint8_t* cpu_ram,
@@ -308,7 +295,7 @@ std::shared_ptr<NsfCartridge> nes_apply_nsf_load(
            STUB_BASE, NMI_HANDLER);
 
     // ---- Step 3: Write info page to PPU nametable ----
-    nes_write_nsf_info_page(ppu, nsf, subtune);
+    write_info_page(ppu, nsf, subtune);
 
     // ---- Step 4: Reset CPU to RESET vector ----
     bus_state_t pins = NES_BUS_DEFAULT_STATE;
@@ -324,7 +311,7 @@ std::shared_ptr<NsfCartridge> nes_apply_nsf_load(
 // SUBTUNE SWITCH — Lightweight re-init
 // ============================================================================
 
-void nes_nsf_switch_subtune(
+void NsfPlayer::switch_subtune(
     RICOH_2A03* cpu,
     PPU* ppu,
     uint8_t* cpu_ram,
@@ -354,7 +341,7 @@ void nes_nsf_switch_subtune(
     build_init_stub(cpu_ram, nsf, subtune, is_pal);
 
     // ---- Update info page ----
-    nes_write_nsf_info_page(ppu, nsf, subtune);
+    write_info_page(ppu, nsf, subtune);
 
     // ---- Reset CPU ----
     bus_state_t pins = NES_BUS_DEFAULT_STATE;

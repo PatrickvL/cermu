@@ -224,7 +224,7 @@ static const uint8_t ascii_font_8x8[96][8] = {
 // FONT UPLOAD
 // ============================================================================
 
-void nes_screen_init_font(PPU* ppu) {
+void NesScreenUtils::init_font(PPU* ppu) {
     if (!ppu) return;
 
     // Upload font glyphs into CHR-RAM pattern table 0.
@@ -260,7 +260,7 @@ void nes_screen_init_font(PPU* ppu) {
 // PALETTE SETUP
 // ============================================================================
 
-void nes_screen_set_palette(PPU* ppu,
+void NesScreenUtils::set_palette(PPU* ppu,
                             uint8_t bg_color,
                             uint8_t fg_color,
                             uint8_t accent_color,
@@ -296,7 +296,7 @@ void nes_screen_set_palette(PPU* ppu,
 // SCREEN CLEAR
 // ============================================================================
 
-void nes_screen_clear(PPU* ppu) {
+void NesScreenUtils::clear(PPU* ppu) {
     if (!ppu) return;
 
     // Fill nametable 0 ($2000-$23BF) with space tiles (0x20)
@@ -314,15 +314,15 @@ void nes_screen_clear(PPU* ppu) {
 // TEXT RENDERING
 // ============================================================================
 
-void nes_screen_write_text(PPU* ppu, int row, int col, const char* text) {
-    if (!ppu || !text || row < 0 || row >= NES_ROWS) return;
+void NesScreenUtils::write_text(PPU* ppu, int row, int col, const char* text) {
+    if (!ppu || !text || row < 0 || row >= ROWS) return;
 
-    uint16_t base = 0x2000 + static_cast<uint16_t>(row * NES_COLS + col);
+    uint16_t base = 0x2000 + static_cast<uint16_t>(row * COLS + col);
 
     for (int i = 0; text[i] != '\0'; i++) {
         int c = col + i;
         if (c < 0) continue;
-        if (c >= NES_COLS) break;
+        if (c >= COLS) break;
 
         uint8_t ch = static_cast<uint8_t>(text[i]);
         // Clamp to printable range
@@ -332,16 +332,16 @@ void nes_screen_write_text(PPU* ppu, int row, int col, const char* text) {
     }
 }
 
-void nes_screen_write_text_n(PPU* ppu, int row, int col,
+void NesScreenUtils::write_text_n(PPU* ppu, int row, int col,
                               const char* text, int max_len) {
-    if (!ppu || !text || row < 0 || row >= NES_ROWS) return;
+    if (!ppu || !text || row < 0 || row >= ROWS) return;
 
-    uint16_t base = 0x2000 + static_cast<uint16_t>(row * NES_COLS + col);
+    uint16_t base = 0x2000 + static_cast<uint16_t>(row * COLS + col);
 
     for (int i = 0; i < max_len && text[i] != '\0'; i++) {
         int c = col + i;
         if (c < 0) continue;
-        if (c >= NES_COLS) break;
+        if (c >= COLS) break;
 
         uint8_t ch = static_cast<uint8_t>(text[i]);
         if (ch < 0x20 || ch > 0x7F) ch = 0x20;
@@ -354,11 +354,11 @@ void nes_screen_write_text_n(PPU* ppu, int row, int col,
 // ROW FILL
 // ============================================================================
 
-void nes_screen_fill_row(PPU* ppu, int row, uint8_t tile) {
-    if (!ppu || row < 0 || row >= NES_ROWS) return;
+void NesScreenUtils::fill_row(PPU* ppu, int row, uint8_t tile) {
+    if (!ppu || row < 0 || row >= ROWS) return;
 
-    uint16_t base = 0x2000 + static_cast<uint16_t>(row * NES_COLS);
-    for (int c = 0; c < NES_COLS; c++) {
+    uint16_t base = 0x2000 + static_cast<uint16_t>(row * COLS);
+    for (int c = 0; c < COLS; c++) {
         ppu->ppu_write(base + c, tile);
     }
 }
@@ -369,8 +369,8 @@ void nes_screen_fill_row(PPU* ppu, int row, uint8_t tile) {
 
 static const char hex_chars[] = "0123456789ABCDEF";
 
-void nes_screen_write_hex16(PPU* ppu, int row, int col, uint16_t value) {
-    if (!ppu || row < 0 || row >= NES_ROWS) return;
+void NesScreenUtils::write_hex16(PPU* ppu, int row, int col, uint16_t value) {
+    if (!ppu || row < 0 || row >= ROWS) return;
 
     char buf[6] = { '$',
                     hex_chars[(value >> 12) & 0xF],
@@ -378,23 +378,23 @@ void nes_screen_write_hex16(PPU* ppu, int row, int col, uint16_t value) {
                     hex_chars[(value >> 4)  & 0xF],
                     hex_chars[ value        & 0xF],
                     '\0' };
-    nes_screen_write_text(ppu, row, col, buf);
+    write_text(ppu, row, col, buf);
 }
 
-void nes_screen_write_dec(PPU* ppu, int row, int col, int value) {
-    if (!ppu || row < 0 || row >= NES_ROWS) return;
+void NesScreenUtils::write_dec(PPU* ppu, int row, int col, int value) {
+    if (!ppu || row < 0 || row >= ROWS) return;
 
     char buf[8];
     snprintf(buf, sizeof(buf), "%d", value);
-    nes_screen_write_text(ppu, row, col, buf);
+    write_text(ppu, row, col, buf);
 }
 
 // ============================================================================
 // ATTRIBUTE TABLE
 // ============================================================================
 
-void nes_screen_set_attribute(PPU* ppu, int row, int col, uint8_t palette) {
-    if (!ppu || row < 0 || row >= NES_ROWS || col < 0 || col >= NES_COLS) return;
+void NesScreenUtils::set_attribute(PPU* ppu, int row, int col, uint8_t palette) {
+    if (!ppu || row < 0 || row >= ROWS || col < 0 || col >= COLS) return;
 
     // Attribute table byte covers a 4×4 tile area (32×32 pixels).
     // Each byte has 4 2-bit palette selectors for the 4 quadrants.
@@ -412,11 +412,11 @@ void nes_screen_set_attribute(PPU* ppu, int row, int col, uint8_t palette) {
     ppu->ppu_write(attr_addr, current);
 }
 
-void nes_screen_set_row_attribute(PPU* ppu, int row, uint8_t palette) {
-    if (!ppu || row < 0 || row >= NES_ROWS) return;
+void NesScreenUtils::set_row_attribute(PPU* ppu, int row, uint8_t palette) {
+    if (!ppu || row < 0 || row >= ROWS) return;
 
-    for (int col = 0; col < NES_COLS; col += 2) {
-        nes_screen_set_attribute(ppu, row, col, palette);
+    for (int col = 0; col < COLS; col += 2) {
+        set_attribute(ppu, row, col, palette);
     }
 }
 
@@ -424,7 +424,7 @@ void nes_screen_set_row_attribute(PPU* ppu, int row, uint8_t palette) {
 // DISPLAY ENABLE
 // ============================================================================
 
-void nes_screen_enable_display(PPU* ppu) {
+void NesScreenUtils::enable_display(PPU* ppu) {
     if (!ppu) return;
 
     // Helper: construct a CPU-bus write cycle for a PPU register
