@@ -59,6 +59,40 @@ int commodore_tap_identify_platform(const char* filepath) {
 }
 
 // ============================================================================
+// Buffer-based variants (avoid re-reading files already in memory)
+// ============================================================================
+
+bool commodore_tap_read_header_mem(const uint8_t* data, size_t size,
+                                   commodore_tap_header_t* out_header) {
+    if (!data || !out_header || size < 20) return false;
+    memset(out_header, 0, sizeof(*out_header));
+
+    memcpy(out_header->signature, data, 12);
+    out_header->version        = data[12];
+    out_header->platform       = data[13];
+    out_header->video_standard = data[14];
+    out_header->reserved       = data[15];
+    out_header->data_size      = format_read_le32(data + 16);
+
+    if (memcmp(data, "C64-TAPE-RAW", 12) != 0 &&
+        memcmp(data, "C16-TAPE-RAW", 12) != 0) {
+        return false;
+    }
+    return true;
+}
+
+int commodore_tap_identify_platform_mem(const uint8_t* data, size_t size) {
+    commodore_tap_header_t hdr;
+    if (!commodore_tap_read_header_mem(data, size, &hdr)) return -1;
+
+    if (memcmp(hdr.signature, "C64-TAPE-RAW", 12) == 0)
+        return hdr.platform;       /* 0=C64, 1=VIC-20 */
+    if (memcmp(hdr.signature, "C16-TAPE-RAW", 12) == 0)
+        return 2;                  /* C16/Plus4 */
+    return -1;
+}
+
+// ============================================================================
 // Format Identification
 // ============================================================================
 

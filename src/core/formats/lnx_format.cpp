@@ -46,6 +46,18 @@ bool commodore_lynx_t::open(const char* filepath) {
     return true;
 }
 
+bool commodore_lynx_t::open_mem(const uint8_t* buf, size_t size) {
+    if (!buf) return false;
+    memset(this, 0, sizeof(*this));
+
+    data = const_cast<uint8_t*>(buf);
+    data_size = size;
+    owns_data = false;
+
+    if (data_size < 100) return false;
+    return true;
+}
+
 void commodore_lynx_t::close() {
     if (owns_data && data) free(data);
     memset(this, 0, sizeof(*this));

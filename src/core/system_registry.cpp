@@ -1,9 +1,10 @@
 #include "system_registry.h"
 #include "emulated_system.h"
+#include "vfs/vfs.h"
 #include <cstring>
 #include <algorithm>
-#include <fstream>
 #include <cstdio>
+#include <cstdlib>
 
 // ============================================================================
 // SystemRegistry Implementation
@@ -51,28 +52,19 @@ std::unique_ptr<EmulatedSystem> SystemRegistry::create_system_for_file(const cha
     
     printf("SystemRegistry: %zu systems registered\n", systems_.size());
     
-    // Read file header for content-based detection
-    std::ifstream file(filepath, std::ios::binary);
-    if (!file.is_open() || !file.good()) {
+    // Read file content via VFS (handles both filesystem and archive paths)
+    size_t file_size = 0;
+    uint8_t* data = vfs_read_file(filepath, &file_size);
+    if (!data) {
         printf("SystemRegistry: Failed to open file: %s\n", filepath);
         return nullptr;
     }
     
-    // Read first 64KB or entire file, whichever is smaller
-    std::vector<uint8_t> data;
-    file.seekg(0, std::ios::end);
-    size_t file_size = file.tellg();
-    file.seekg(0, std::ios::beg);
-    
-    size_t read_size = std::min<size_t>(file_size, 65536);
-    data.resize(read_size);
-    file.read(reinterpret_cast<char*>(data.data()), read_size);
-    file.close();
-    
     printf("SystemRegistry: File size: %zu bytes\n", file_size);
     
     // Delegate to the single identification authority
-    auto match = identify_system(filepath, data.data(), file_size);
+    auto match = identify_system(filepath, data, file_size);
+    free(data);
 
     printf("SystemRegistry: Best match: %s (confidence: %.2f)\n",
            match.system_name.empty() ? "none" : match.system_name.c_str(),
