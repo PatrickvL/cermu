@@ -71,7 +71,7 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
                 break;
             case 0x2007: // PPU Data
                 data = regs.data;
-                regs.data = ppu_read(internal.v);
+                regs.data = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(internal.v)));
 
                 // Palette reads are immediate (no buffering delay)
                 if (internal.v >= 0x3F00) {
@@ -129,7 +129,7 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
                 }
                 break;
             case 0x2007: // PPU Data
-                ppu_write(internal.v, data);
+                ppu_write(PPU_BUS_WITH_ADDR_DATA(internal.v, data));
                 internal.v += (regs.ctrl & 0x04) ? 32 : 1;
                 break;
         }
@@ -193,8 +193,8 @@ uint16_t PPU::mirror_nametable_addr(uint16_t addr) const {
 // PPU — VRAM read / write
 // ============================================================================
 
-uint8_t PPU::ppu_read(uint16_t addr, bool read_only) {
-    addr &= 0x3FFF;
+ppu_bus_state_t PPU::ppu_read(ppu_bus_state_t bus, bool read_only) {
+    uint16_t addr = PPU_BUS_GET_ADDR(bus) & 0x3FFF;
 
     // ---- Palette RAM ($3F00-$3FFF) — internal to PPU, no bus access ----
     if (addr >= 0x3F00) {
@@ -203,7 +203,8 @@ uint8_t PPU::ppu_read(uint16_t addr, bool read_only) {
         if (addr == 0x0014) addr = 0x0004;
         if (addr == 0x0018) addr = 0x0008;
         if (addr == 0x001C) addr = 0x000C;
-        return palette[addr] & (regs.mask & 0x01 ? 0x30 : 0x3F);
+        PPU_BUS_SET_DATA(bus, palette[addr] & (regs.mask & 0x01 ? 0x30 : 0x3F));
+        return bus;
     }
 
     // ---- A12 edge detection (for MMC3 scanline counter) ----
@@ -219,14 +220,16 @@ uint8_t PPU::ppu_read(uint16_t addr, bool read_only) {
 
     // ---- CHR + nametable via page pointers ----
     if (bus_ptr_) {
-        return bus_ptr_->ppu_read(addr);
+        PPU_BUS_SET_ADDR(bus, addr);  // write back masked address
+        return bus_ptr_->ppu_read(bus);
     }
 
-    return 0x00;
+    return bus;
 }
 
-void PPU::ppu_write(uint16_t addr, uint8_t data) {
-    addr &= 0x3FFF;
+ppu_bus_state_t PPU::ppu_write(ppu_bus_state_t bus) {
+    uint16_t addr = PPU_BUS_GET_ADDR(bus) & 0x3FFF;
+    uint8_t data = PPU_BUS_GET_DATA(bus);
 
     // ---- Palette RAM ($3F00-$3FFF) — internal to PPU ----
     if (addr >= 0x3F00) {
@@ -236,7 +239,7 @@ void PPU::ppu_write(uint16_t addr, uint8_t data) {
         if (addr == 0x0018) addr = 0x0008;
         if (addr == 0x001C) addr = 0x000C;
         palette[addr] = data;
-        return;
+        return bus;
     }
 
     // ---- A12 edge detection (writes also put address on bus) ----
@@ -250,8 +253,11 @@ void PPU::ppu_write(uint16_t addr, uint8_t data) {
 
     // ---- CHR + nametable via page pointers ----
     if (bus_ptr_) {
-        bus_ptr_->ppu_write(addr, data);
+        PPU_BUS_SET_ADDR(bus, addr);  // write back masked address
+        return bus_ptr_->ppu_write(bus);
     }
+
+    return bus;
 }
 
 // ============================================================================
@@ -261,7 +267,7 @@ void PPU::ppu_write(uint16_t addr, uint8_t data) {
 void PPU::clock() {
     // Lambda to get pixel color from palette
     auto get_pixel = [this](uint8_t palette_idx, uint8_t pixel) -> uint32_t {
-        return nes2rgb(ppu_read(0x3F00 + (palette_idx << 2) + pixel) & 0x3F);
+        return nes2rgb(PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(0x3F00 + (palette_idx << 2) + pixel))) & 0x3F);
     };
     
     // Visible scanlines and pre-render scanline
@@ -290,21 +296,24 @@ void PPU::clock() {
                     internal.nt_addr = 0x2000 | (internal.v & 0x0FFF);
                     break;
                 case 2:
-                    internal.nt_byte = ppu_read(internal.nt_addr);
+                    internal.nt_byte = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(internal.nt_addr)));
                     break;
                 case 4:
-                    internal.at_byte = ppu_read(0x2000 | (internal.v & 0x0C00) | 0x03C0 |
-                                               ((internal.v >> 4) & 0x38) | ((internal.v >> 2) & 0x07));
+                    internal.at_byte = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(
+                        0x2000 | (internal.v & 0x0C00) | 0x03C0 |
+                        ((internal.v >> 4) & 0x38) | ((internal.v >> 2) & 0x07))));
                     break;
                 case 6:
-                    internal.bg_lo_byte = ppu_read(((regs.ctrl & 0x10) << 8) +
-                                                  ((uint16_t)internal.nt_byte << 4) +
-                                                  (internal.v >> 12) + 0);
+                    internal.bg_lo_byte = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(
+                        ((regs.ctrl & 0x10) << 8) +
+                        ((uint16_t)internal.nt_byte << 4) +
+                        (internal.v >> 12) + 0)));
                     break;
                 case 7:
-                    internal.bg_hi_byte = ppu_read(((regs.ctrl & 0x10) << 8) +
-                                                  ((uint16_t)internal.nt_byte << 4) +
-                                                  (internal.v >> 12) + 8);
+                    internal.bg_hi_byte = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(
+                        ((regs.ctrl & 0x10) << 8) +
+                        ((uint16_t)internal.nt_byte << 4) +
+                        (internal.v >> 12) + 8)));
                     increment_scroll_x();
                     break;
             }
@@ -320,7 +329,7 @@ void PPU::clock() {
         }
         
         if (cycle == 338 || cycle == 340) {
-            internal.nt_byte = ppu_read(internal.nt_addr);
+            internal.nt_byte = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(internal.nt_addr)));
         }
         
         if (scanline == -1 && cycle >= 280 && cycle < 305) {
@@ -502,13 +511,15 @@ void PPU::increment_scroll_y() {
 
 void PPU::transfer_address_x() {
     if (regs.mask & 0x18) {
-        internal.v = (internal.v & ~0x041F) | (internal.t & 0x041F);
+        // XOR-AND-XOR bitmix (3 ops) — merge t's coarse X + nametable X into v
+        internal.v = internal.v ^ ((internal.v ^ internal.t) & 0x041F);
     }
 }
 
 void PPU::transfer_address_y() {
     if (regs.mask & 0x18) {
-        internal.v = (internal.v & ~0x7BE0) | (internal.t & 0x7BE0);
+        // XOR-AND-XOR bitmix (3 ops) — merge t's fine Y + coarse Y + nametable Y into v
+        internal.v = internal.v ^ ((internal.v ^ internal.t) & 0x7BE0);
     }
 }
 
@@ -628,8 +639,8 @@ void PPU::load_sprite_shifters() {
         }
         
         sprite_pattern_addr_hi = sprite_pattern_addr_lo + 8;
-        sprite_pattern_bits_lo = ppu_read(sprite_pattern_addr_lo);
-        sprite_pattern_bits_hi = ppu_read(sprite_pattern_addr_hi);
+        sprite_pattern_bits_lo = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(sprite_pattern_addr_lo)));
+        sprite_pattern_bits_hi = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(sprite_pattern_addr_hi)));
         
         if (internal.sprite_scanline[i].attributes & 0x40) {
             // Horizontally flip
@@ -678,8 +689,8 @@ const std::vector<uint32_t>& PPU::get_pattern_table(int i, uint8_t palette) cons
             for (uint16_t row = 0; row < 8; row++) {
                 // Read the low and high bitplanes for this row
                 uint16_t addr = (i * 0x1000) + tile_offset + row;
-                uint8_t tile_lsb = non_const_this->ppu_read(addr, true);
-                uint8_t tile_msb = non_const_this->ppu_read(addr + 8, true);
+                uint8_t tile_lsb = PPU_BUS_GET_DATA(non_const_this->ppu_read(PPU_BUS_WITH_ADDR(addr), true));
+                uint8_t tile_msb = PPU_BUS_GET_DATA(non_const_this->ppu_read(PPU_BUS_WITH_ADDR(addr + 8), true));
                 
                 // Render each pixel in the row
                 for (uint16_t col = 0; col < 8; col++) {
@@ -689,7 +700,8 @@ const std::vector<uint32_t>& PPU::get_pattern_table(int i, uint8_t palette) cons
                     tile_msb >>= 1;
                     
                     // Get the color from the selected palette
-                    uint8_t palette_index = non_const_this->ppu_read(0x3F00 + (palette << 2) + pixel, true) & 0x3F;
+                    uint8_t palette_index = PPU_BUS_GET_DATA(non_const_this->ppu_read(
+                        PPU_BUS_WITH_ADDR(0x3F00 + (palette << 2) + pixel), true)) & 0x3F;
                     uint32_t color = NES_COLOR_TABLE[palette_index];
                     
                     // Calculate screen position

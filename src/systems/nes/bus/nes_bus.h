@@ -28,6 +28,7 @@
 
 #include "../../../core/cermu.h"         // likely/unlikely
 #include "../../../core/system_lines.h"  // bus_state_t, BUS_* macros
+#include "nes_bus_signals.h"             // ppu_bus_state_t, PPU_BUS_* macros
 #include "../cartridge/nes_mapper.h"     // MapperBankConfig, MapperChrConfig
 
 namespace nes_bus {
@@ -131,26 +132,27 @@ struct nes_bus_t {
     }
 
     // ====================================================================
-    // Inline PPU read/write helpers — for PPU internal memory access
+    // Inline PPU read/write — bus_state_t receiving/returning pattern
     // ====================================================================
     //
     // Palette ($3F00-$3F1F) must be intercepted BEFORE calling these.
 
-    inline uint8_t ppu_read(uint16_t addr) const {
-        uint16_t mapped = addr & 0x3FFF;
+    inline ppu_bus_state_t ppu_read(ppu_bus_state_t bus) const {
+        uint16_t mapped = PPU_BUS_GET_ADDR(bus) & 0x3FFF;
         const uint8_t* rp = ppu_read_page[mapped >> 10];
         if (likely(rp != nullptr)) {
-            return rp[mapped & 0x03FF];
+            PPU_BUS_SET_DATA(bus, rp[mapped & 0x03FF]);
         }
-        return 0x00;
+        return bus;
     }
 
-    inline void ppu_write(uint16_t addr, uint8_t data) {
-        uint16_t mapped = addr & 0x3FFF;
+    inline ppu_bus_state_t ppu_write(ppu_bus_state_t bus) {
+        uint16_t mapped = PPU_BUS_GET_ADDR(bus) & 0x3FFF;
         uint8_t* wp = ppu_write_page[mapped >> 10];
         if (likely(wp != nullptr)) {
-            wp[mapped & 0x03FF] = data;
+            wp[mapped & 0x03FF] = PPU_BUS_GET_DATA(bus);
         }
+        return bus;
     }
 };
 

@@ -148,9 +148,9 @@ public:
     // Read-only peek for debug/GUI (no side-effects on PPU state)
     uint8_t cpu_peek(uint16_t addr) const;
 
-    // PPU memory access
-    uint8_t ppu_read(uint16_t addr, bool read_only = false);
-    void ppu_write(uint16_t addr, uint8_t data);
+    // PPU memory access — bus_state_t receiving/returning pattern
+    ppu_bus_state_t ppu_read(ppu_bus_state_t bus, bool read_only = false);
+    ppu_bus_state_t ppu_write(ppu_bus_state_t bus);
 
     // Main PPU tick - called 3 times per CPU cycle
     void clock();
