@@ -7,12 +7,59 @@
 
 #include "nes_cartridge.h"
 #include "nes_mapper_factory.h"
+#include "../bus/nes_bus.h"
 
 #include <fstream>
 #include <iostream>
 #include <cstring>
 
 namespace nes_system {
+
+// ============================================================================
+// Phase 2: Page-pointer bank map interface
+// ============================================================================
+
+void Cartridge::update_bank_map(nes_bus::nes_bus_t* bus, uint8_t* ciram) {
+    if (!mapper || !bus) return;
+
+    MapperBankConfig prg_config;
+    mapper->get_prg_bank_config(prg_config);
+
+    // Apply mirroring from header or mapper for nametable config
+    MapperChrConfig chr_config;
+    mapper->get_chr_bank_config(chr_config);
+
+    // Override nametable mirroring based on current mirror mode
+    Mirror m = mapper->mirror();
+    mirror_mode = m;
+    switch (m) {
+        case Mirror::HORIZONTAL:   chr_config.nt_page[0] = 0; chr_config.nt_page[1] = 0; chr_config.nt_page[2] = 1; chr_config.nt_page[3] = 1; break;
+        case Mirror::VERTICAL:     chr_config.nt_page[0] = 0; chr_config.nt_page[1] = 1; chr_config.nt_page[2] = 0; chr_config.nt_page[3] = 1; break;
+        case Mirror::ONESCREEN_LO: chr_config.nt_page[0] = 0; chr_config.nt_page[1] = 0; chr_config.nt_page[2] = 0; chr_config.nt_page[3] = 0; break;
+        case Mirror::ONESCREEN_HI: chr_config.nt_page[0] = 1; chr_config.nt_page[1] = 1; chr_config.nt_page[2] = 1; chr_config.nt_page[3] = 1; break;
+        default: break;  // FOUR_SCREEN: use mapper's config
+    }
+
+    bus->update_cpu_banks(prg_config);
+    bus->update_ppu_banks(chr_config, ciram);
+}
+
+bool Cartridge::handle_mapper_write(uint16_t addr, uint8_t data) {
+    if (!mapper) return false;
+
+    // Also update via legacy interface to keep mapper state in sync
+    // (the old cpu_map_write handles shift registers, bank selection, etc.)
+    uint32_t dummy_addr;
+    mapper->cpu_map_write(addr, dummy_addr, data);
+    mirror_mode = mapper->mirror();
+
+    // Use new register_write to detect if banking changed
+    // Note: register_write and cpu_map_write may both update the same state.
+    // Since mappers update their state in cpu_map_write above, we just need
+    // to know if we should regenerate page pointers.
+    // Return true to always regenerate (safe fallback during transition).
+    return true;
+}
 
 // ============================================================================
 // Cartridge IRQ / scanline / mirroring delegation
@@ -127,6 +174,14 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
 
     // Create appropriate mapper via factory
     mapper = create_mapper(mapper_id, prg_banks, chr_banks);
+
+    // Phase 2: Give mapper direct pointers into our ROM/RAM vectors
+    mapper->set_memory_pointers(
+        prg_memory.data(), prg_memory.size(),
+        chr_memory.data(), chr_memory.size(),
+        chr_banks == 0,  // chr_is_ram: true when no CHR-ROM (CHR-RAM mode)
+        prg_ram.data(), prg_ram.size()
+    );
 
     // Store ROM path for SRAM persistence
     rom_filepath_ = filepath_for_sram;

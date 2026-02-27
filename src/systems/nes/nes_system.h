@@ -18,7 +18,7 @@
  */
 
 #include <cstdint>
-
+#include <array>
 #include <memory>
 #include <vector>
 #include <string>
@@ -31,6 +31,7 @@
 #include "cartridge/nes_mapper.h"
 #include "cartridge/nes_cartridge.h"
 #include "ppu/nes_ppu.h"
+#include "bus/nes_bus.h"
 
 // NES default bus state — initial pin values before any chip asserts.
 // RW=1 (read mode), active-low signals NMI/IRQ/RES start HIGH (inactive).
@@ -40,7 +41,6 @@
 // Forward declarations
 namespace nes_system {
     class Controller;
-    class MemoryBus;
     class NsfCartridge;
 }
 
@@ -76,6 +76,8 @@ namespace nes_constants {
 
 // PPU class now in ppu/nes_ppu.h (included above)
 // Cartridge class now in cartridge/nes_cartridge.h (included above)
+// Bus struct now in bus/nes_bus.h (included above)
+// MemoryBus class removed in Phase 2 — replaced by nes_bus_t + inline dispatch
 
 namespace nes_system {
 
@@ -104,6 +106,7 @@ public:
     Controller() = default;
     
     void write(uint8_t data) {
+        (void)data;
         controller_register = controller_state;
     }
     
@@ -122,49 +125,6 @@ public:
     }
     
     uint8_t get_state() const { return controller_state; }
-};
-
-// ============================================================================
-// MEMORY BUS
-// ============================================================================
-
-class MemoryBus {
-public:
-    // CPU RAM (2KB) — public for NSF player stub injection and direct access
-    std::vector<uint8_t> cpu_ram;
-    
-public:
-    // Connected devices
-    std::shared_ptr<PPU> ppu;
-    std::shared_ptr<Cartridge> cartridge;
-    std::array<Controller, 2> controllers;
-    
-    // DMA
-    uint8_t dma_page = 0x00;
-    uint8_t dma_addr = 0x00;
-    uint8_t dma_data = 0x00;
-    bool dma_transfer = false;
-    bool dma_dummy = true;
-    
-    // System clock counter
-    uint32_t system_clock_counter = 0;
-    
-public:
-    MemoryBus() {
-        cpu_ram.resize(2048, 0);
-    }
-    
-    void connect_ppu(std::shared_ptr<PPU> p) { ppu = p; }
-    void connect_cartridge(std::shared_ptr<Cartridge> c) { cartridge = c; }
-    
-    // CPU memory interface — unified bus_state_t
-    bus_state_t mem_tick(bus_state_t bus);
-    
-    // System reset
-    void reset();
-    
-    // Clock the bus and connected devices
-    void clock();
 };
 
 // ============================================================================
@@ -207,7 +167,8 @@ private:
     bus_state_t pins_;  // Persistent CPU bus state across ticks
     std::shared_ptr<PPU> ppu_;
     std::shared_ptr<Cartridge> cartridge_;
-    std::shared_ptr<MemoryBus> bus_;
+    nes_bus::nes_bus_t bus_;                     // Page-pointer bus (replaces MemoryBus)
+    std::array<Controller, 2> controllers_;     // Player 1 & 2 controllers
     
     // System state
     bool is_pal_;

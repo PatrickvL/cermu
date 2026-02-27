@@ -16,7 +16,10 @@
 #include <vector>
 
 #include "../../../core/system_lines.h"  // bus_state_t, BUS_* macros
-#include "nes_mapper.h"                  // Mirror, Mapper
+#include "nes_mapper.h"                  // Mirror, Mapper, MapperBankConfig, MapperChrConfig
+
+// Forward declaration for nes_bus_t
+namespace nes_bus { struct nes_bus_t; }
 
 namespace nes_system {
 
@@ -57,6 +60,26 @@ public:
     bool load_from_buffer(const uint8_t* data, size_t data_size,
                           const std::string& filepath_for_sram);
 
+    // ====================================================================
+    // Phase 2: Page-pointer bank map interface
+    // ====================================================================
+
+    /// Update nes_bus_t page pointers from current mapper state.
+    /// ciram points to the PPU's 2KB nametable VRAM for nametable mirroring.
+    /// Called after load, reset, and every mapper register write that changes banking.
+    virtual void update_bank_map(nes_bus::nes_bus_t* bus, uint8_t* ciram);
+
+    /// Handle a mapper register write ($8000-$FFFF ROM write).
+    /// Returns true if banking changed (caller should call update_bank_map).
+    bool handle_mapper_write(uint16_t addr, uint8_t data);
+
+    /// Get the mapper instance (for IRQ state, scanline, etc.)
+    Mapper* get_mapper() const { return mapper.get(); }
+
+    // ====================================================================
+    // Legacy bus interfaces (used by NsfCartridge and fallback dispatch)
+    // ====================================================================
+
     // CPU bus interface — cartridge sits on the shared bus.
     // Returns the bus with data lines driven (for reads) or absorbed (for writes).
     // The bool return indicates whether the cartridge claimed the address.
@@ -96,8 +119,6 @@ public:
 
 private:
     std::string rom_filepath_;  // stored for SRAM path derivation
-
-    using Mapper = nes_system::Mapper;
 
     std::unique_ptr<Mapper> mapper;
 };

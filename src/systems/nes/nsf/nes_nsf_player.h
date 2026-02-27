@@ -24,8 +24,6 @@
 namespace nes_system {
 
 class PPU;
-class MemoryBus;
-class Cartridge;
 class NsfCartridge;
 
 /**
@@ -55,7 +53,7 @@ void nes_write_nsf_info_page(PPU* ppu,
  *
  * @param cpu       NES 6502 CPU handle
  * @param ppu       PPU instance
- * @param bus       Memory bus
+ * @param cpu_ram   Pointer to 2KB CPU internal RAM
  * @param nsf       Parsed NSF header
  * @param prog      Program data (NSF payload)
  * @param subtune   Initial 0-based subtune index
@@ -65,7 +63,7 @@ void nes_write_nsf_info_page(PPU* ppu,
 std::shared_ptr<NsfCartridge> nes_apply_nsf_load(
     RICOH_2A03* cpu,
     PPU* ppu,
-    MemoryBus* bus,
+    uint8_t* cpu_ram,
     const nsf_header_t* nsf,
     const program_data_t* prog,
     uint16_t subtune,
@@ -79,7 +77,7 @@ std::shared_ptr<NsfCartridge> nes_apply_nsf_load(
  *
  * @param cpu           NES 6502 CPU handle
  * @param ppu           PPU instance
- * @param bus           Memory bus
+ * @param cpu_ram       Pointer to 2KB CPU internal RAM
  * @param nsf_cart      The NsfCartridge to reload data into
  * @param nsf           Parsed NSF header
  * @param payload       Original NSF payload data
@@ -90,7 +88,7 @@ std::shared_ptr<NsfCartridge> nes_apply_nsf_load(
 void nes_nsf_switch_subtune(
     RICOH_2A03* cpu,
     PPU* ppu,
-    MemoryBus* bus,
+    uint8_t* cpu_ram,
     NsfCartridge* nsf_cart,
     const nsf_header_t* nsf,
     const uint8_t* payload,

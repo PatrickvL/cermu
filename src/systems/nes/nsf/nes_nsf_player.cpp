@@ -278,13 +278,13 @@ static void write_vectors(NsfCartridge* cart) {
 std::shared_ptr<NsfCartridge> nes_apply_nsf_load(
     RICOH_2A03* cpu,
     PPU* ppu,
-    MemoryBus* bus,
+    uint8_t* cpu_ram,
     const nsf_header_t* nsf,
     const program_data_t* prog,
     uint16_t subtune,
     bool is_pal) {
 
-    if (!cpu || !ppu || !bus || !nsf) return nullptr;
+    if (!cpu || !ppu || !cpu_ram || !nsf) return nullptr;
 
     printf("NES NSF: Loading \"%s\" by %s\n", nsf->name, nsf->artist);
     printf("NES NSF: load=$%04X init=$%04X play=$%04X songs=%d start=%d\n",
@@ -298,33 +298,21 @@ std::shared_ptr<NsfCartridge> nes_apply_nsf_load(
     // Write CPU vectors to the cartridge ROM space
     write_vectors(nsf_cart.get());
 
-    // Connect cartridge to bus and PPU
-    bus->connect_cartridge(nsf_cart);
-    ppu->connect_cartridge(nsf_cart);
-
-    // ---- Step 2: Reset bus (clears CPU RAM) ----
-    bus->reset();
-
-    // ---- Step 3: Build 6502 stubs in CPU RAM ----
-    uint8_t* ram = bus->cpu_ram.data();
-
-    build_nmi_handler(ram, nsf->play_addr);
-    build_irq_handler(ram);
-    build_init_stub(ram, nsf, subtune, is_pal);
+    // ---- Step 2: Build 6502 stubs in CPU RAM ----
+    // (Caller is responsible for resetting bus/RAM before calling)
+    build_nmi_handler(cpu_ram, nsf->play_addr);
+    build_irq_handler(cpu_ram);
+    build_init_stub(cpu_ram, nsf, subtune, is_pal);
 
     printf("NES NSF: Stub at $%04X, NMI handler at $%04X\n",
            STUB_BASE, NMI_HANDLER);
 
-    // ---- Step 4: Write info page to PPU nametable ----
+    // ---- Step 3: Write info page to PPU nametable ----
     nes_write_nsf_info_page(ppu, nsf, subtune);
 
-    // ---- Step 5: Reset CPU to RESET vector ----
+    // ---- Step 4: Reset CPU to RESET vector ----
     bus_state_t pins = NES_BUS_DEFAULT_STATE;
     cpu->reset(pins);
-
-    // After reset, CPU reads RESET vector ($FFFC/$FFFD)
-    // which points to STUB_BASE — our init stub.
-    // The NMI handler will be called on each VBlank frame.
 
     printf("NES NSF: CPU reset — subtune %d/%d starting\n",
            subtune + 1, nsf->num_songs);
@@ -339,7 +327,7 @@ std::shared_ptr<NsfCartridge> nes_apply_nsf_load(
 void nes_nsf_switch_subtune(
     RICOH_2A03* cpu,
     PPU* ppu,
-    MemoryBus* bus,
+    uint8_t* cpu_ram,
     NsfCartridge* nsf_cart,
     const nsf_header_t* nsf,
     const uint8_t* payload,
@@ -347,16 +335,7 @@ void nes_nsf_switch_subtune(
     uint16_t subtune,
     bool is_pal) {
 
-    if (!cpu || !ppu || !bus || !nsf_cart || !nsf) return;
-
-    // ---- Silence APU: write $00 to $4015 to disable all channels ----
-    {
-        bus_state_t s = 0;
-        BUS_SET_ADDR(s, 0x4015);
-        BUS_SET_DATA(s, 0x00);
-        // RW=0 (write) — bit 48 already clear since s started as 0
-        bus->mem_tick(s);
-    }
+    if (!cpu || !ppu || !cpu_ram || !nsf_cart || !nsf) return;
 
     // ---- Reload NSF data (in case tune self-modified) ----
     nsf_cart->reload_nsf_data(payload, payload_size);
@@ -366,14 +345,13 @@ void nes_nsf_switch_subtune(
     write_vectors(nsf_cart);
 
     // ---- Clear CPU RAM (except stack) and rebuild stubs ----
-    uint8_t* ram = bus->cpu_ram.data();
     // Clear $0000-$00FF and $0200-$07FF, preserve stack $0100-$01FF
-    memset(ram, 0, 0x0100);
-    memset(ram + 0x0200, 0, 0x0600);
+    memset(cpu_ram, 0, 0x0100);
+    memset(cpu_ram + 0x0200, 0, 0x0600);
 
-    build_nmi_handler(ram, nsf->play_addr);
-    build_irq_handler(ram);
-    build_init_stub(ram, nsf, subtune, is_pal);
+    build_nmi_handler(cpu_ram, nsf->play_addr);
+    build_irq_handler(cpu_ram);
+    build_init_stub(cpu_ram, nsf, subtune, is_pal);
 
     // ---- Update info page ----
     nes_write_nsf_info_page(ppu, nsf, subtune);
