@@ -42,8 +42,6 @@ struct commodore_crt_chip_t {
 /**
  * Read CRT file header for identification and metadata.
  */
-bool commodore_crt_read_header(const char* filepath, commodore_crt_header_t* out_header);
-
 /**
  * Read CRT header from an in-memory buffer.
  */

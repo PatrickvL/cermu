@@ -44,9 +44,6 @@ struct commodore_lynx_t {
     size_t   data_size;             /**< Size of archive */
     bool     owns_data;             /**< Whether we allocated data */
 
-    /** Open a Lynx archive from file. Caller must call close(). */
-    bool open(const char* filepath);
-
     /** Open a Lynx archive from an existing buffer (no copy, no ownership). */
     bool open_mem(const uint8_t* buf, size_t size);
 

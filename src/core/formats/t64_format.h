@@ -48,9 +48,6 @@ struct commodore_t64_t {
     size_t   data_size;             /**< Size of T64 data */
     bool     owns_data;             /**< Whether we allocated data */
 
-    /** Open a T64 tape archive from file. */
-    bool open(const char* filepath);
-
     /** Open a T64 tape archive from an in-memory buffer. */
     bool open_mem(const uint8_t* buf, size_t buf_size);
 

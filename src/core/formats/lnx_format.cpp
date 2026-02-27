@@ -24,28 +24,6 @@
 // Open / Close
 // ============================================================================
 
-bool commodore_lynx_t::open(const char* filepath) {
-    if (!filepath) return false;
-    memset(this, 0, sizeof(*this));
-
-    data = format_read_entire_file(filepath, &data_size);
-    if (!data) {
-        printf("LNXFormat: Failed to read file: %s\n", filepath);
-        return false;
-    }
-    owns_data = true;
-
-    if (data_size < 100) {
-        printf("LNXFormat: File too small (%zu bytes)\n", data_size);
-        free(data);
-        data = NULL;
-        return false;
-    }
-
-    printf("LNXFormat: Opened LNX archive: %zu bytes\n", data_size);
-    return true;
-}
-
 bool commodore_lynx_t::open_mem(const uint8_t* buf, size_t size) {
     if (!buf) return false;
     memset(this, 0, sizeof(*this));

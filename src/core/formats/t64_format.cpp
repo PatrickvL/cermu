@@ -13,30 +13,6 @@
 // Open / Close
 // ============================================================================
 
-bool commodore_t64_t::open(const char* filepath) {
-    if (!filepath) return false;
-    memset(this, 0, sizeof(*this));
-
-    data = format_read_entire_file(filepath, &data_size);
-    if (!data) {
-        printf("T64Format: Cannot open T64 file: %s\n", filepath);
-        return false;
-    }
-    owns_data = true;
-
-    /* Verify T64 signature: "C64 tape image file" or "C64S tape image file" */
-    if (data_size < T64_HEADER_SIZE ||
-        memcmp(data, "C64", 3) != 0) {
-        printf("T64Format: Invalid T64 signature\n");
-        free(data);
-        data = NULL;
-        return false;
-    }
-
-    printf("T64Format: Opened T64: %zu bytes\n", data_size);
-    return true;
-}
-
 bool commodore_t64_t::open_mem(const uint8_t* buf, size_t buf_size) {
     if (!buf || buf_size == 0) return false;
     memset(this, 0, sizeof(*this));
