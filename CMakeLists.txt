@@ -343,6 +343,7 @@ set(TESTING_SOURCES
 set(CORE_UTIL_SOURCES
     src/core/storage/rom_loader.cpp
     src/core/config/path_discovery.cpp
+    src/core/archive_scanner.cpp
     src/core/formats/format_handler.cpp
     src/core/formats/format_registry.cpp
     src/core/formats/prg_format.cpp
