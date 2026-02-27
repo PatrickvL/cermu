@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 
+#include "../../../core/chip.h"           // ChipBase, ChipInfo
 #include "../../../core/system_lines.h"  // bus_state_t, BUS_* macros
 #include "nes_mapper.h"                  // Mirror, Mapper, MapperBankConfig, MapperChrConfig
 
@@ -23,7 +24,7 @@ namespace nes_bus { struct nes_bus_t; }
 
 namespace nes_system {
 
-class Cartridge {
+class Cartridge : public ChipBase {
 public:
     // iNES header structure
     struct Header {
@@ -50,7 +51,8 @@ public:
     bool battery_backed = false;
 
     /** Protected default constructor for subclasses (e.g. NsfCartridge). */
-    Cartridge() = default;
+    Cartridge()
+        : ChipBase(ChipInfo{"Cartridge", "iNES ROM Cartridge", "Various"}) {}
 
 public:
     virtual ~Cartridge() = default;
