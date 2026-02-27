@@ -49,34 +49,6 @@ int d64_max_sector(int track) {
 // Open / Close
 // ============================================================================
 
-bool commodore_d64_t::open(const char* filepath) {
-    if (!filepath) return false;
-    memset(this, 0, sizeof(*this));
-
-    data = format_read_entire_file(filepath, &data_size);
-    if (!data) {
-        printf("D64Format: Cannot open D64 file: %s\n", filepath);
-        return false;
-    }
-    owns_data = true;
-
-    switch (data_size) {
-        case D64_STANDARD_SIZE:     num_tracks = 35; has_errors = false; break;
-        case D64_STANDARD_SIZE_ERR: num_tracks = 35; has_errors = true;  break;
-        case D64_EXTENDED_SIZE:     num_tracks = 40; has_errors = false; break;
-        case D64_EXTENDED_SIZE_ERR: num_tracks = 40; has_errors = true;  break;
-        default:
-            printf("D64Format: Unrecognized D64 file size: %zu bytes\n", data_size);
-            free(data);
-            data = NULL;
-            return false;
-    }
-
-    printf("D64Format: Opened D64: %d tracks, %s error bytes\n",
-           num_tracks, has_errors ? "with" : "no");
-    return true;
-}
-
 bool commodore_d64_t::open_mem(const uint8_t* buf, size_t size) {
     if (!buf) return false;
     memset(this, 0, sizeof(*this));

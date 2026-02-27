@@ -39,18 +39,6 @@ bool commodore_crt_read_header_mem(const uint8_t* data, size_t data_size, commod
     return true;
 }
 
-bool commodore_crt_read_header(const char* filepath, commodore_crt_header_t* out_header) {
-    if (!filepath || !out_header) return false;
-
-    size_t file_size = 0;
-    uint8_t* file_data = format_read_entire_file(filepath, &file_size);
-    if (!file_data) return false;
-
-    bool ok = commodore_crt_read_header_mem(file_data, file_size, out_header);
-    free(file_data);
-    return ok;
-}
-
 // ============================================================================
 // Format Identification
 // ============================================================================

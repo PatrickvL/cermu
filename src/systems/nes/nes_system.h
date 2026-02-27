@@ -280,6 +280,11 @@ public:
 public:
     explicit Cartridge(const std::string& filename);
     virtual ~Cartridge() = default;
+
+    /** Parse iNES ROM from an already-loaded buffer.
+     *  filepath_for_sram is stored for battery-backed SRAM persistence. */
+    bool load_from_buffer(const uint8_t* data, size_t data_size,
+                          const std::string& filepath_for_sram);
     
     // CPU bus interface — cartridge sits on the shared bus.
     // Returns the bus with data lines driven (for reads) or absorbed (for writes).

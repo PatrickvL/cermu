@@ -71,9 +71,6 @@ struct commodore_d64_t {
     bool     has_errors;            /**< Whether error bytes are present */
     bool     owns_data;             /**< Whether we allocated data (and should free it) */
 
-    /** Open a D64 disk image from file. Caller must call close(). */
-    bool open(const char* filepath);
-
     /** Open a D64 disk image from an in-memory buffer. Buffer is NOT copied. */
     bool open_mem(const uint8_t* buf, size_t size);
 

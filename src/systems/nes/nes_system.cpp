@@ -1280,20 +1280,24 @@ bool Cartridge::load_from_file(const std::string& filename) {
         return false;
     }
 
-    // Need at least 16 bytes for the header
-    if (file_size < sizeof(Header)) {
-        free(file_data);
+    bool ok = load_from_buffer(file_data, file_size, filename);
+    free(file_data);
+    return ok;
+}
+
+bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
+                                  const std::string& filepath_for_sram) {
+    if (!data || data_size < sizeof(Header)) {
         return false;
     }
-    
+
     Header header;
-    memcpy(&header, file_data, sizeof(Header));
+    memcpy(&header, data, sizeof(Header));
     size_t offset = sizeof(Header);
     
     // Verify iNES header
     if (header.name[0] != 'N' || header.name[1] != 'E' || 
         header.name[2] != 'S' || header.name[3] != 0x1A) {
-        free(file_data);
         return false;
     }
     
@@ -1312,12 +1316,11 @@ bool Cartridge::load_from_file(const std::string& filename) {
     
     // Load PRG ROM
     uint32_t prg_size = prg_banks * 16384;
-    if (offset + prg_size > file_size) {
-        free(file_data);
+    if (offset + prg_size > data_size) {
         return false;
     }
     prg_memory.resize(prg_size);
-    memcpy(prg_memory.data(), file_data + offset, prg_size);
+    memcpy(prg_memory.data(), data + offset, prg_size);
     offset += prg_size;
     
     // Load CHR ROM/RAM
@@ -1327,15 +1330,12 @@ bool Cartridge::load_from_file(const std::string& filename) {
     } else {
         // CHR ROM
         uint32_t chr_size = chr_banks * 8192;
-        if (offset + chr_size > file_size) {
-            free(file_data);
+        if (offset + chr_size > data_size) {
             return false;
         }
         chr_memory.resize(chr_size);
-        memcpy(chr_memory.data(), file_data + offset, chr_size);
+        memcpy(chr_memory.data(), data + offset, chr_size);
     }
-
-    free(file_data);  // Done with raw file data
 
     // Allocate PRG RAM (8KB, used by MMC1/MMC3 and others)
     uint32_t prg_ram_size = header.prg_ram_size ? header.prg_ram_size * 8192 : 8192;
@@ -1366,11 +1366,11 @@ bool Cartridge::load_from_file(const std::string& filename) {
     }
 
     // Store ROM path for SRAM persistence
-    rom_filepath_ = filename;
+    rom_filepath_ = filepath_for_sram;
 
     // Load battery-backed SRAM if present
     if (battery_backed) {
-        load_sram(sram_path_for_rom(filename));
+        load_sram(sram_path_for_rom(filepath_for_sram));
     }
     
     return true;
@@ -1963,35 +1963,32 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
     printf("%s: Loading file: %s\n", Traits::name, filepath);
 
     // =========================================================================
-    // NSF FILE — Use the format system to parse, then launch NSF player
+    // Single VFS read — reuse buffer for format detection and loading
     // =========================================================================
-    // Use VFS-aware extension extraction for archive paths
+    size_t file_size = 0;
+    uint8_t* file_data = vfs_read_file(filepath, &file_size);
+    if (!file_data || file_size == 0) {
+        printf("%s: Failed to read file: %s\n", Traits::name, filepath);
+        free(file_data);
+        return false;
+    }
+
+    // Check for NSF by extension or header magic
     std::string ext_str = vfs_extension(filepath);
     const char* ext = ext_str.empty() ? nullptr : ext_str.c_str();
     bool is_nsf = (ext && (strcasecmp(ext, ".nsf") == 0));
 
-    // Also check by header magic for extensionless files
-    if (!is_nsf) {
-        size_t probe_size = 0;
-        uint8_t* probe_data = vfs_read_file(filepath, &probe_size);
-        if (probe_data && probe_size >= 5) {
-            if (probe_data[0] == 'N' && probe_data[1] == 'E' && probe_data[2] == 'S' &&
-                probe_data[3] == 'M' && probe_data[4] == 0x1A) {
-                is_nsf = true;
-            }
+    if (!is_nsf && file_size >= 5) {
+        if (file_data[0] == 'N' && file_data[1] == 'E' && file_data[2] == 'S' &&
+            file_data[3] == 'M' && file_data[4] == 0x1A) {
+            is_nsf = true;
         }
-        free(probe_data);
     }
 
+    // =========================================================================
+    // NSF FILE — parse from buffer, then launch NSF player
+    // =========================================================================
     if (is_nsf) {
-        // Read entire file
-        size_t file_size = 0;
-        uint8_t* file_data = format_read_entire_file(filepath, &file_size);
-        if (!file_data) {
-            printf("%s: Failed to read NSF file\n", Traits::name);
-            return false;
-        }
-
         // Parse NSF header
         nsf_header_t header;
         if (!nsf_parse_header(file_data, file_size, &header)) {
@@ -2046,13 +2043,20 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
     }
 
     // =========================================================================
-    // STANDARD PATH — iNES ROM cartridge
+    // STANDARD PATH — iNES ROM cartridge (load from already-read buffer)
     // =========================================================================
     nsf_player_active_ = false;
     nsf_cartridge_.reset();
     
     try {
-        cartridge_ = std::make_shared<Cartridge>(filepath);
+        cartridge_ = std::make_shared<Cartridge>();
+        if (!cartridge_->load_from_buffer(file_data, file_size, filepath)) {
+            printf("%s: Failed to parse cartridge data\n", Traits::name);
+            free(file_data);
+            return false;
+        }
+        free(file_data);
+
         bus_->connect_cartridge(cartridge_);
         ppu_->connect_cartridge(cartridge_);
         
