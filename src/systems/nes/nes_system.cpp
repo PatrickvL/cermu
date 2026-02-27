@@ -273,6 +273,9 @@ bool NintendoSystem<V>::initialize() {
     
     // Initialize page-pointer bus
     bus_.init();
+
+    // Connect bus to PPU for page-pointer VRAM access
+    ppu_->connect_bus(&bus_);
     
     setup_audio_timing();
     setup_connector_ports();
@@ -429,6 +432,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         // Connect NSF cartridge to system
         cartridge_ = nsf_cartridge_;
         ppu_->connect_cartridge(cartridge_);
+        cartridge_->update_bank_map(&bus_, ppu_->vram.data());
 
         // Save state for subtune switching
         active_nsf_header_ = header;
@@ -874,8 +878,15 @@ void NintendoSystem<V>::clock() {
                 // Other APU writes ($4000-$4013, $4015, $4017) handled by CPU PHI1
             } else if (page >= 8) {
                 // ROM region writes → mapper register dispatch
-                if (cartridge_ && cartridge_->handle_mapper_write(addr, data)) {
-                    cartridge_->update_bank_map(&bus_, ppu_->vram.data());
+                if (cartridge_) {
+                    if (cartridge_->handle_mapper_write(addr, data)) {
+                        cartridge_->update_bank_map(&bus_, ppu_->vram.data());
+                    } else {
+                        // Mapper didn't claim — fall through to cartridge
+                        // bus tick (needed for NsfCartridge self-modifying writes)
+                        bool handled = false;
+                        pins_ = cartridge_->cpu_bus_tick(pins_, handled);
+                    }
                 }
             } else {
                 // Expansion writes ($5000-$7FFF) not covered by page pointers
