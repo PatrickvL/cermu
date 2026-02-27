@@ -9,6 +9,7 @@
 #include "nes_nsf_player.h"
 #include "nes_nsf_cartridge.h"
 #include "../../core/formats/nsf_format.h"
+#include "../../core/formats/ines_format.h"
 #include "../../core/vfs/vfs.h"
 // CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
 #include "../../core/chip.h"
@@ -1651,41 +1652,56 @@ static HardwareTraits create_nes_hardware_traits() {
     return traits;
 }
 
-// File detection callback
-static float nes_can_load_file(const char* filepath, const uint8_t* data, size_t size) {
-    const char* ext = strrchr(filepath, '.');
-    if (ext) {
-        if (strcmp(ext, ".nes") == 0 || strcmp(ext, ".NES") == 0) {
-            // Check for iNES header
-            if (size >= 16 && data[0] == 'N' && data[1] == 'E' &&
-                data[2] == 'S' && data[3] == 0x1A) {
-                return 1.0f;  // Perfect match
+// ============================================================================
+// NES file probe — unified confidence + configuration detection
+// ============================================================================
+
+static SystemProbeResult nes_probe_file(
+    const format_descriptor_t* matched_format,
+    const char* /*filepath*/,
+    const uint8_t* data, size_t size)
+{
+    SystemProbeResult result;
+
+    if (!matched_format) return result;
+
+    if (matched_format == &INES_FORMAT_DESCRIPTOR) {
+        // iNES ROM
+        if (size >= 16 && data[0] == 'N' && data[1] == 'E' &&
+            data[2] == 'S' && data[3] == 0x1A) {
+            result.confidence = 1.0f;
+
+            // Detect PAL/NTSC from iNES header
+            bool is_ines2 = ((data[7] & 0x0C) == 0x08);
+            if (is_ines2) {
+                // iNES 2.0: byte 12, bits 0-1
+                uint8_t timing = data[12] & 0x03;
+                if (timing == 1)
+                    result.configuration.region_option_index = 1;  // PAL
+            } else {
+                // iNES 1.0: byte 9, bit 0
+                if (data[9] & 0x01)
+                    result.configuration.region_option_index = 1;  // PAL
             }
-            return 0.9f;  // .nes extension but no header
+        } else {
+            result.confidence = 0.9f;  // Extension match, no header
         }
-        // NSF music files
-        if (strcmp(ext, ".nsf") == 0 || strcmp(ext, ".NSF") == 0) {
-            if (size >= 128 && data[0] == 'N' && data[1] == 'E' &&
-                data[2] == 'S' && data[3] == 'M' && data[4] == 0x1A) {
-                return 1.0f;  // Perfect NSF match
-            }
-            return 0.9f;  // .nsf extension but no header
+
+    } else if (matched_format == &NSF_FORMAT_DESCRIPTOR) {
+        // NSF music file
+        if (size >= 128 && data[0] == 'N' && data[1] == 'E' &&
+            data[2] == 'S' && data[3] == 'M' && data[4] == 0x1A) {
+            result.confidence = 1.0f;
+            // NSF byte 0x7A: PAL/NTSC flags
+            // bit 0: 0=NTSC, 1=PAL; bit 1: dual-compatible
+            if (size > 0x7A && (data[0x7A] & 0x01) && !(data[0x7A] & 0x02))
+                result.configuration.region_option_index = 1;  // PAL-only
+        } else {
+            result.confidence = 0.9f;
         }
-    }
-    
-    // Check for iNES header without extension
-    if (size >= 16 && data[0] == 'N' && data[1] == 'E' &&
-        data[2] == 'S' && data[3] == 0x1A) {
-        return 0.95f;
     }
 
-    // Check for NSF header without extension
-    if (size >= 128 && data[0] == 'N' && data[1] == 'E' &&
-        data[2] == 'S' && data[3] == 'M' && data[4] == 0x1A) {
-        return 0.95f;
-    }
-    
-    return 0.0f;
+    return result;
 }
 
 // ============================================================================
@@ -1695,7 +1711,7 @@ static float nes_can_load_file(const char* filepath, const uint8_t* data, size_t
 template<NintendoVariant V>
 const SystemDescriptor& NintendoSystem<V>::static_descriptor() {
     static const format_descriptor_t* const formats[] = {
-        &NSF_FORMAT_DESCRIPTOR, nullptr
+        &INES_FORMAT_DESCRIPTOR, &NSF_FORMAT_DESCRIPTOR, nullptr
     };
     static const SystemDescriptor desc = {
         Traits::full_name,
@@ -1703,7 +1719,7 @@ const SystemDescriptor& NintendoSystem<V>::static_descriptor() {
         Traits::description,
         formats,
         create_nes_hardware_traits(),
-        nes_can_load_file
+        nes_probe_file
     };
     return desc;
 }
@@ -1767,56 +1783,6 @@ bool NintendoSystem<V>::apply_configuration() {
     }
     
     return true;
-}
-
-// ============================================================================
-// Auto-detect optimal configuration from iNES header
-// ============================================================================
-template<NintendoVariant V>
-SystemConfiguration NintendoSystem<V>::detect_optimal_configuration(
-    const char* filepath, const uint8_t* data, size_t size) {
-
-    SystemConfiguration config = EmulatedSystem::detect_optimal_configuration(filepath, data, size);
-
-    if (!data || size < 16) return config;
-
-    // Verify iNES header magic: "NES\x1A"
-    if (data[0] != 'N' || data[1] != 'E' || data[2] != 'S' || data[3] != 0x1A)
-        return config;
-
-    // Check for iNES 2.0 format (bits 2-3 of byte 7 == 0b10)
-    bool is_ines2 = ((data[7] & 0x0C) == 0x08);
-
-    bool detected_pal = false;
-
-    if (is_ines2) {
-        // iNES 2.0: byte 12, bits 0-1 encode the CPU/PPU timing mode
-        //   0 = NTSC, 1 = PAL, 2 = Multi-region, 3 = Dendy
-        uint8_t timing = data[12] & 0x03;
-        if (timing == 1) {
-            detected_pal = true;
-            printf("%s: iNES 2.0 header indicates PAL timing\n", Traits::name);
-        } else {
-            printf("%s: iNES 2.0 header indicates %s timing\n", Traits::name,
-                   timing == 0 ? "NTSC" : (timing == 2 ? "Multi-region" : "Dendy"));
-        }
-    } else {
-        // iNES 1.0: byte 9, bit 0 — unofficial but widely used
-        //   0 = NTSC, 1 = PAL
-        if (data[9] & 0x01) {
-            detected_pal = true;
-            printf("%s: iNES 1.0 header byte 9 indicates PAL\n", Traits::name);
-        }
-    }
-
-    if (detected_pal) {
-        // PAL is region option index 1 in create_nes_hardware_traits()
-        if (hardware_traits_.video_standard_configs.size() > 1) {
-            config.region_option_index = 1;
-        }
-    }
-
-    return config;
 }
 
 template<NintendoVariant V>

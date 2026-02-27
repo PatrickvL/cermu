@@ -157,83 +157,163 @@ static bool is_vic20_load_address(uint16_t addr) {
            addr == 0x2000 || addr == 0x4000 || addr == 0x6000 || addr == 0xA000;
 }
 
-// File detection callback
-static float vic20_can_load_file(const char* filepath, const uint8_t* data, size_t size) {
-    const char* ext = strrchr(filepath, '.');
-    if (ext) {
-        // PRG files — check load address
-        if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0) {
-            if (size >= 2) {
-                uint16_t load_addr = data[0] | (data[1] << 8);
-                if (load_addr == 0x1001) {
-                    return 0.85f;  // High confidence for VIC-20 PRG
-                }
-                // Other common VIC-20 addresses (expansion RAM, cartridge areas)
-                if (load_addr == 0x0401 || load_addr == 0x1201 || load_addr == 0x2000 ||
-                    load_addr == 0x4000 || load_addr == 0x6000 || load_addr == 0xA000) {
-                    return 0.7f;
-                }
-                // Generic PRG file - moderate confidence
-                return 0.5f;
-            }
+// ============================================================================
+// VIC-20 memory expansion helper — determines minimum memory config index
+// from a PRG's load address and end address.
+//
+// Memory option indices (from create_vic20_hardware_traits):
+//   0 = Unexpanded 5KB    ($1000-$1FFF user RAM)
+//   1 = +3KB              ($0400-$0FFF added)
+//   2 = +8KB              ($4000-$5FFF added, 13KB total)
+//   3 = +16KB             ($2000-$3FFF + $4000-$5FFF, 21KB total)
+//   4 = +24KB             (above + $6000-$7FFF, 29KB total)
+//   5 = Full 32KB         (all blocks, 37KB total)
+// ============================================================================
+static int vic20_memory_index_for_prg(uint16_t load_addr, uint32_t end_addr) {
+    int mem = 0;
+
+    if (load_addr == 0x0401) {
+        mem = 1;
+        if (end_addr > 0x1FFF) mem = 2;
+        if (end_addr > 0x5FFF) mem = 3;
+        if (end_addr > 0x7FFF) mem = 5;
+    } else if (load_addr == 0x1201) {
+        mem = 2;
+        if (end_addr > 0x5FFF) mem = 3;
+        if (end_addr > 0x7FFF) mem = 5;
+    } else if (load_addr == 0x1001) {
+        mem = 0;
+        if (end_addr > 0x1FFF) mem = 2;
+        if (end_addr > 0x5FFF) mem = 3;
+        if (end_addr > 0x7FFF) mem = 5;
+    } else {
+        if (load_addr >= 0x0400 && load_addr < 0x1000) mem = 1;
+        if (load_addr >= 0x2000 && load_addr < 0x4000) mem = 3;
+        if ((load_addr >= 0x4000 && load_addr < 0x6000) ||
+            (end_addr > 0x4000 && end_addr <= 0x6000))
+            { if (mem < 2) mem = 2; }
+        if ((load_addr >= 0x6000 && load_addr < 0x8000) ||
+            (end_addr > 0x6000 && end_addr <= 0x8000))
+            { if (mem < 4) mem = 4; }
+        if (end_addr > 0x6000 && load_addr < 0x6000)
+            { if (mem < 4) mem = 4; }
+    }
+
+    return mem;
+}
+
+// ============================================================================
+// VIC-20 file probe — unified confidence + configuration detection
+// ============================================================================
+
+static SystemProbeResult vic20_probe_file(
+    const format_descriptor_t* matched_format,
+    const char* /*filepath*/,
+    const uint8_t* data, size_t size)
+{
+    SystemProbeResult result;
+
+    if (!matched_format) return result;
+
+    // --- PRG: confidence from load address, config from memory expansion ---
+    if (matched_format == &PRG_FORMAT_DESCRIPTOR) {
+        if (size >= 2) {
+            uint16_t load_addr = data[0] | (data[1] << 8);
+            uint32_t end_addr  = (uint32_t)load_addr + (uint32_t)(size - 2);
+
+            if (load_addr == 0x1001)
+                result.confidence = 0.85f;
+            else if (is_vic20_load_address(load_addr))
+                result.confidence = 0.7f;
+            else
+                result.confidence = 0.5f;
+
+            result.configuration.memory_option_index =
+                vic20_memory_index_for_prg(load_addr, end_addr);
         }
-        // LNX files — Lynx archive; parse to inspect contained files' load addresses
-        if (strcmp(ext, ".lnx") == 0 || strcmp(ext, ".LNX") == 0) {
-            commodore_lynx_t lynx;
-            if (lynx.open_mem(data, size)) {
-                commodore_lynx_directory_t dir;
-                if (lynx.read_directory(&dir)) {
-                    // Check ALL PRG entries' load addresses for VIC-20 addresses
-                    bool found_vic20 = false;
-                    bool found_any = false;
-                    for (unsigned i = 0; i < dir.file_count; i++) {
-                        if (dir.entries[i].file_type == 'P' && dir.entries[i].data_length >= 2) {
-                            size_t off = dir.entries[i].data_offset;
-                            if (off + 1 < lynx.data_size) {
-                                uint16_t addr = lynx.data[off] | ((uint16_t)lynx.data[off+1] << 8);
-                                found_any = true;
-                                if (is_vic20_load_address(addr)) {
-                                    found_vic20 = true;
-                                    break;
-                                }
-                            }
+
+    // --- LNX: inspect all contained files for VIC-20 addresses + memory ---
+    } else if (matched_format == &LNX_FORMAT_DESCRIPTOR) {
+        commodore_lynx_t lynx;
+        if (lynx.open_mem(data, size)) {
+            commodore_lynx_directory_t dir;
+            if (lynx.read_directory(&dir)) {
+                bool found_vic20 = false;
+                bool found_any   = false;
+                int  mem_index   = 0;
+
+                for (unsigned i = 0; i < dir.file_count; i++) {
+                    if (dir.entries[i].file_type == 'P' && dir.entries[i].data_length >= 2) {
+                        size_t off = dir.entries[i].data_offset;
+                        if (off + 1 < lynx.data_size) {
+                            uint16_t addr = lynx.data[off] | ((uint16_t)lynx.data[off+1] << 8);
+                            uint32_t ea   = (uint32_t)addr + (uint32_t)dir.entries[i].data_length;
+                            found_any = true;
+                            if (is_vic20_load_address(addr)) found_vic20 = true;
+
+                            // Accumulate memory expansion from each entry
+                            if (addr >= 0x0400 && addr < 0x1000)  { if (mem_index < 1) mem_index = 1; }
+                            if (addr >= 0x2000 && addr < 0x4000)  { if (mem_index < 3) mem_index = 3; }
+                            if ((addr >= 0x4000 && addr < 0x6000) || (ea > 0x4000 && ea <= 0x6000))
+                                { if (mem_index < 2) mem_index = 2; }
+                            if ((addr >= 0x6000 && addr < 0x8000) || (ea > 0x6000 && ea <= 0x8000))
+                                { if (mem_index < 4) mem_index = 4; }
+                            if (addr == 0x0401) { if (mem_index < 1) mem_index = 1; }
+                            if (addr == 0x1201) { if (mem_index < 2) mem_index = 2; }
+                            if (ea > 0x6000 && addr < 0x6000) { if (mem_index < 4) mem_index = 4; }
                         }
                     }
-                    lynx.close();
-                    if (found_vic20) return 0.90f;
-                    if (found_any) return 0.4f;
                 }
+                // Many files spanning wide ranges -> full expansion
+                if (dir.file_count > 3 && mem_index >= 2) mem_index = 5;
+
                 lynx.close();
+                result.confidence = found_vic20 ? 0.90f : (found_any ? 0.4f : 0.5f);
+                result.configuration.memory_option_index = mem_index;
+            } else {
+                lynx.close();
+                result.confidence = 0.5f;
             }
-            return 0.5f;  // Could not inspect
+        } else {
+            result.confidence = 0.5f;
         }
-        if (strcmp(ext, ".tap") == 0 || strcmp(ext, ".TAP") == 0) {
-            // Check TAP header to see if this is specifically a VIC-20 tape
-            int platform = commodore_tap_identify_platform_mem(data, size);
-            if (platform == 1) return 0.95f;  // VIC-20 TAP
-            if (platform == 0) return 0.3f;   // C64 TAP (low for VIC-20)
-            return 0.5f;  // Unknown or error
-        }
-        if (strcmp(ext, ".d64") == 0 || strcmp(ext, ".D64") == 0) {
-            // Inspect first PRG's load address to distinguish VIC-20 from C64 disks
-            commodore_d64_t d64;
-            if (d64.open_mem(data, size)) {
-                commodore_prg_t prg = {};
-                if (d64.extract_first_prg(&prg)) {
-                    float score = is_vic20_load_address(prg.load_addr) ? 0.90f : 0.4f;
-                    commodore_prg_free(&prg);
-                    d64.close();
-                    return score;
-                }
-                d64.close();
+
+    // --- D64: extract first PRG, check load address + memory ---
+    } else if (matched_format == &D64_FORMAT_DESCRIPTOR) {
+        commodore_d64_t d64;
+        if (d64.open_mem(data, size)) {
+            commodore_prg_t prg = {};
+            if (d64.extract_first_prg(&prg)) {
+                uint32_t end_addr = (uint32_t)prg.load_addr + (uint32_t)prg.data_size;
+                result.confidence = is_vic20_load_address(prg.load_addr) ? 0.90f : 0.4f;
+                result.configuration.memory_option_index =
+                    vic20_memory_index_for_prg(prg.load_addr, end_addr);
+                commodore_prg_free(&prg);
+            } else {
+                result.confidence = 0.5f;
             }
-            return 0.5f;  // Could not inspect — moderate confidence
+            d64.close();
+        } else {
+            result.confidence = 0.5f;
         }
-        if (strcmp(ext, ".t64") == 0 || strcmp(ext, ".T64") == 0) {
-            return 0.5f;  // T64 tape archives (usually C64 but can contain VIC-20)
-        }
+
+    // --- TAP: platform byte distinguishes C64 / VIC-20 / C16 ---
+    } else if (matched_format == &TAP_FORMAT_DESCRIPTOR) {
+        int platform = commodore_tap_identify_platform_mem(data, size);
+        if (platform == 1)      result.confidence = 0.95f;  // VIC-20 TAP
+        else if (platform == 0) result.confidence = 0.3f;   // C64 TAP
+        else                    result.confidence = 0.5f;
+
+    // --- T64: usually C64-centric but can contain VIC-20 programs ---
+    } else if (matched_format == &T64_FORMAT_DESCRIPTOR) {
+        result.confidence = 0.5f;
+
+    // --- BIN: generic binary ---
+    } else if (matched_format == &BIN_FORMAT_DESCRIPTOR) {
+        result.confidence = 0.3f;
     }
-    return 0.0f;
+
+    return result;
 }
 
 /** Formats the VIC-20 can load — used by SystemDescriptor and file dialogs. */
@@ -249,7 +329,7 @@ static SystemDescriptor vic20_descriptor = {
     "Commodore VIC-20 (1980) - 5KB RAM, 22-column display",
     vic20_formats,
     create_vic20_hardware_traits(),
-    vic20_can_load_file
+    vic20_probe_file
 };
 
 // ============================================================================
@@ -372,148 +452,6 @@ bool VIC20System::apply_configuration() {
     return true;
 }
 
-// ============================================================================
-// Auto-detect optimal configuration from file contents
-// ============================================================================
-SystemConfiguration VIC20System::detect_optimal_configuration(
-    const char* filepath, const uint8_t* data, size_t size) {
-
-    // Start from the base-class defaults
-    SystemConfiguration config = EmulatedSystem::detect_optimal_configuration(filepath, data, size);
-
-    if (!filepath) return config;
-
-    // Determine the PRG load address and data size.
-    // For raw PRG files we can read the two-byte header directly.
-    // For container formats (D64, T64) we use the commodore file loader
-    // to extract the first PRG and inspect its load address.
-    uint16_t load_addr = 0;
-    uint32_t end_addr  = 0;
-    bool     have_prg  = false;
-
-    const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
-    bool is_prg = ext && (cermu_strcasecmp(ext, ".prg") == 0);
-    bool is_lnx = ext && (cermu_strcasecmp(ext, ".lnx") == 0);
-
-    // LNX archives need special handling: inspect ALL contained files
-    // to determine the maximum memory expansion needed.
-    if (is_lnx) {
-        format_load_result_t result = {};
-        if (format_load_file(filepath, &result) && result.type == FORMAT_LOAD_ARCHIVE) {
-            int mem_index = 0;
-            for (int f = 0; f < result.file_count; f++) {
-                const program_data_t* prg = &result.files[f];
-                uint16_t la = prg->load_addr;
-                uint32_t ea = (uint32_t)la + (uint32_t)prg->data_size;
-
-                // Determine minimum expansion for this file
-                if (la >= 0x0400 && la < 0x1000) { if (mem_index < 1) mem_index = 1; }
-                if (la >= 0x2000 && la < 0x4000) { if (mem_index < 3) mem_index = 3; }
-                if ((la >= 0x4000 && la < 0x6000) || (ea > 0x4000 && ea <= 0x6000))
-                    { if (mem_index < 2) mem_index = 2; }
-                if ((la >= 0x6000 && la < 0x8000) || (ea > 0x6000 && ea <= 0x8000))
-                    { if (mem_index < 4) mem_index = 4; }
-                if (la == 0x0401) { if (mem_index < 1) mem_index = 1; }
-                if (la == 0x1201) { if (mem_index < 2) mem_index = 2; }
-                // If any file writes above $6000, need 24KB+
-                if (ea > 0x6000 && la < 0x6000) { if (mem_index < 4) mem_index = 4; }
-            }
-            // For safety, if multiple files span wide address ranges, use full expansion
-            if (result.file_count > 3 && mem_index >= 2) {
-                mem_index = 5;  // Full 32KB expansion
-            }
-            config.memory_option_index = mem_index;
-            printf("VIC20: LNX auto-detected memory config: %s (%d files)\n",
-                   hardware_traits_.memory_options[mem_index].name, result.file_count);
-            result.release();
-            return config;
-        }
-        result.release();
-        return config;
-    }
-
-    if (is_prg && data && size >= 2) {
-        // Fast path: raw PRG — load address is first two bytes
-        load_addr = data[0] | (data[1] << 8);
-        end_addr  = (uint32_t)load_addr + (uint32_t)(size - 2);
-        have_prg  = true;
-    } else {
-        // Container formats (D64, T64, etc.) — extract first PRG via loader
-        format_load_result_t result = {};
-        if (format_load_file(filepath, &result)) {
-            if (result.type == FORMAT_LOAD_PROGRAM &&
-                result.program.data_size > 0) {
-                load_addr = result.program.load_addr;
-                end_addr  = (uint32_t)load_addr + (uint32_t)result.program.data_size;
-                have_prg  = true;
-            }
-            result.release();
-        }
-    }
-
-    if (!have_prg) return config;
-
-    // ---- Determine minimum memory configuration from load address ----
-    // Memory option indices (from create_vic20_hardware_traits):
-    //   0 = Unexpanded 5KB    ($1000-$1FFF user RAM)
-    //   1 = +3KB              ($0400-$0FFF added)
-    //   2 = +8KB              ($4000-$5FFF added, 13KB total)
-    //   3 = +16KB             ($2000-$3FFF + $4000-$5FFF, 21KB total)
-    //   4 = +24KB             (above + $6000-$7FFF, 29KB total)
-    //   5 = Full 32KB         (all blocks, 37KB total)
-    int mem_index = 0;
-
-    if (load_addr == 0x0401) {
-        // 3KB-expanded BASIC start address
-        mem_index = 1;
-        if (end_addr > 0x1FFF) mem_index = 2;
-        if (end_addr > 0x5FFF) mem_index = 3;
-        if (end_addr > 0x7FFF) mem_index = 5;
-    } else if (load_addr == 0x1201) {
-        // 8KB+ expanded BASIC start address
-        mem_index = 2;
-        if (end_addr > 0x5FFF) mem_index = 3;
-        if (end_addr > 0x7FFF) mem_index = 5;
-    } else if (load_addr == 0x1001) {
-        // Standard unexpanded BASIC
-        mem_index = 0;
-        // If the program overflows the 4KB user area, enable expansion
-        if (end_addr > 0x1FFF) mem_index = 2;
-        if (end_addr > 0x5FFF) mem_index = 3;
-        if (end_addr > 0x7FFF) mem_index = 5;
-    } else {
-        // Machine-language program — check which expansion blocks are needed
-        if (load_addr >= 0x0400 && load_addr < 0x1000) {
-            // Block 0 ($0400-$0FFF) — needs at least 3KB expansion
-            mem_index = 1;
-        }
-        if (load_addr >= 0x2000 && load_addr < 0x4000) {
-            // Block 2 ($2000-$3FFF) — needs 16KB config (includes block 2)
-            mem_index = 3;
-        }
-        if ((load_addr >= 0x4000 && load_addr < 0x6000) ||
-            (end_addr > 0x4000 && end_addr <= 0x6000)) {
-            // Block 3 ($4000-$5FFF) — needs at least 8KB config
-            if (mem_index < 2) mem_index = 2;
-        }
-        if ((load_addr >= 0x6000 && load_addr < 0x8000) ||
-            (end_addr > 0x6000 && end_addr <= 0x8000)) {
-            // Block 5 ($6000-$7FFF) — needs 24KB config
-            if (mem_index < 4) mem_index = 4;
-        }
-        // If data spans multiple blocks, pick the highest needed
-        if (end_addr > 0x6000 && load_addr < 0x6000) {
-            if (mem_index < 4) mem_index = 4;
-        }
-    }
-
-    config.memory_option_index = mem_index;
-    printf("VIC20: Auto-detected memory config: %s (load=$%04X end=$%04X)\n",
-           hardware_traits_.memory_options[mem_index].name,
-           load_addr, (uint16_t)(end_addr & 0xFFFF));
-
-    return config;
-}
 
 // ============================================================================
 // System Lifecycle

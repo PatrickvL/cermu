@@ -185,6 +185,19 @@ struct SystemConfiguration {
 };
 
 /**
+ * Result of probing a file for system-specific compatibility.
+ *
+ * Returned by a system's probe_file callback.  Combines the
+ * file-to-system confidence score with the optimal configuration
+ * for running the file on that system, eliminating the need for
+ * separate can_load_file and detect_optimal_configuration passes.
+ */
+struct SystemProbeResult {
+    float               confidence;     /**< 0.0-1.0: how well this file matches this system */
+    SystemConfiguration configuration;  /**< Optimal config (memory, region, custom settings) */
+};
+
+/**
  * System descriptor - provides metadata about an emulated system
  * Each system implementation provides this to describe itself
  */
@@ -195,8 +208,14 @@ struct SystemDescriptor {
 
     /**
      * NULL-terminated array of pointers to format descriptors that
-     * this system can load.  The GUI uses these to build file-dialog
-     * filters and tooltips without any system-specific knowledge.
+     * this system can load.  Used both for file-dialog filters and
+     * as a generic gatekeeper during system identification: the
+     * registry runs each format's identify() callback first, and
+     * only calls probe_file() when at least one format matches.
+     *
+     * May be nullptr for systems whose file types have no dedicated
+     * format descriptors (e.g., CHIP-8 raw binaries).  In that case
+     * the probe runs unconditionally.
      *
      * Example:  { &PRG_FORMAT_DESCRIPTOR, &D64_FORMAT_DESCRIPTOR, nullptr }
      */
@@ -204,9 +223,31 @@ struct SystemDescriptor {
 
     // Hardware traits (fixed characteristics)
     HardwareTraits hardware_traits;
-    
-    // File detection callback - returns confidence 0.0-1.0 that this system can load the file
-    std::function<float(const char* filepath, const uint8_t* data, size_t size)> can_load_file;
+
+    /**
+     * System-specific file probe.
+     *
+     * Called during system identification after the generic format
+     * gatekeeper has matched a format from supported_formats (passed
+     * as matched_format).  Responsible for returning:
+     *   - confidence: how well the file's content matches this system
+     *   - configuration: the optimal SystemConfiguration for running it
+     *
+     * When supported_formats is nullptr the probe is called with
+     * matched_format == nullptr; the callback must handle identification
+     * entirely (extension checks, content heuristics, etc.).
+     *
+     * @param matched_format  Best-matching format descriptor, or nullptr
+     * @param filepath        File path (for context hints, e.g. "ntsc" in name)
+     * @param data            Full file content buffer
+     * @param size            File size in bytes
+     * @return                Probe result: confidence + configuration
+     */
+    std::function<SystemProbeResult(
+        const format_descriptor_t* matched_format,
+        const char* filepath,
+        const uint8_t* data, size_t size
+    )> probe_file;
 };
 
 // ============================================================================
@@ -492,19 +533,16 @@ public:
     // Systems using KeyboardMapper should override this.
     virtual void release_all_keys();
 
-    // Analyze a file and return the optimal SystemConfiguration for it.
-    // Called by create_system_for_file() after the system is created but
-    // before initialize().  The returned configuration is applied via
-    // set_configuration() + apply_configuration().
-    // Default implementation returns a configuration using each trait's
-    // default option.
-    virtual SystemConfiguration detect_optimal_configuration(
-        const char* filepath, const uint8_t* data, size_t size);
-
-    // Convenience: read a file, detect optimal configuration, merge with
-    // the current config (never downgrading memory), and apply.
+    // Convenience: read a file, probe the system's descriptor for the
+    // optimal configuration, merge with the current config (never
+    // downgrading memory), and apply.
     // Safe to call both before and after initialize().
     void apply_file_configuration(const char* filepath);
+
+    // Return a default SystemConfiguration based on hardware_traits_.
+    // Selects the default memory, region, and peripheral options.
+    // Used internally by apply_file_configuration when no probe is set.
+    SystemConfiguration default_configuration() const;
 
     // ---- Audio output --------------------------------------------------
     // Fill \p buffer with up to \p max_samples mono float samples in the

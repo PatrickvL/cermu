@@ -548,10 +548,6 @@ public:
     // EmulatedSystem interface - Emulation control
     void set_speed_multiplier(float multiplier) override;
 
-    // Auto-detect PAL/NTSC from iNES header
-    SystemConfiguration detect_optimal_configuration(
-        const char* filepath, const uint8_t* data, size_t size) override;
-
     // Audio output — drains NES APU sample buffer
     uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
 

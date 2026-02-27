@@ -117,8 +117,11 @@ public:
     // Hardware traits (compile-time variant-specific)
     static HardwareTraits create_hardware_traits();
 
-    // File detection (shared across all TED variants)
-    static float can_load_file_static(const char* filepath, const uint8_t* data, size_t size);
+    // File probe — returns confidence + optimal configuration for this TED variant
+    static SystemProbeResult probe_file_static(
+        const format_descriptor_t* matched_format,
+        const char* filepath,
+        const uint8_t* data, size_t size);
 
     // Static descriptor accessor (usable without an instance, e.g. for REGISTER_SYSTEM)
     static const SystemDescriptor& static_descriptor();

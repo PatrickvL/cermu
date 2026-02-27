@@ -66,101 +66,126 @@ static bool is_c64_load_address(uint16_t addr) {
            addr == 0x4000 || addr == 0x8000 || addr == 0xE000;
 }
 
-// C64 file detection
-static float c64_can_load_file(const char* filepath, const uint8_t* data, size_t size) {
-    // Check extensions
-    const char* ext = strrchr(filepath, '.');
-    if (ext) {
-        // PRG files â€” check load address
-        if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0) {
-            if (size >= 2) {
-                uint16_t load_addr = data[0] | (data[1] << 8);
-                // C64 BASIC start address gives highest confidence
-                if (load_addr == 0x0801) return 0.95f;
-                // Common C64 ML addresses
-                if (load_addr == 0xC000 || load_addr == 0x0800 || load_addr == 0x4000) return 0.85f;
-                // VIC-20/C16 address â€” lower confidence
-                if (load_addr == 0x1001) return 0.6f;
-                return 0.7f;  // Generic PRG â€” C64 is the most common Commodore system
-            }
+// ============================================================================
+// C64 file probe — unified confidence + configuration detection
+// ============================================================================
+
+static SystemProbeResult c64_probe_file(
+    const format_descriptor_t* matched_format,
+    const char* filepath,
+    const uint8_t* data, size_t size)
+{
+    SystemProbeResult result;
+
+    if (!matched_format) return result;
+
+    // --- Dispatch based on which format the generic layer matched ---
+
+    if (matched_format == &PRG_FORMAT_DESCRIPTOR) {
+        if (size >= 2) {
+            uint16_t load_addr = data[0] | (data[1] << 8);
+            if (load_addr == 0x0801)
+                result.confidence = 0.95f;              // C64 BASIC start
+            else if (load_addr == 0xC000 || load_addr == 0x0800 || load_addr == 0x4000)
+                result.confidence = 0.85f;              // Common C64 ML addresses
+            else if (load_addr == 0x1001)
+                result.confidence = 0.6f;               // VIC-20 / C16 territory
+            else
+                result.confidence = 0.7f;               // Generic PRG (C64 most common)
         }
-        // LNX files â€” Lynx archive; parse to inspect contained files' load addresses
-        if (strcmp(ext, ".lnx") == 0 || strcmp(ext, ".LNX") == 0) {
-            commodore_lynx_t lynx;
-            if (lynx.open_mem(data, size)) {
-                commodore_lynx_directory_t dir;
-                if (lynx.read_directory(&dir)) {
-                    // Check ALL PRG entries' load addresses for C64 addresses
-                    bool found_c64 = false;
-                    bool found_any = false;
-                    for (unsigned i = 0; i < dir.file_count; i++) {
-                        if (dir.entries[i].file_type == 'P' && dir.entries[i].data_length >= 2) {
-                            size_t off = dir.entries[i].data_offset;
-                            if (off + 1 < lynx.data_size) {
-                                uint16_t addr = lynx.data[off] | ((uint16_t)lynx.data[off+1] << 8);
-                                found_any = true;
-                                if (is_c64_load_address(addr)) {
-                                    found_c64 = true;
-                                    break;
-                                }
-                            }
+
+    } else if (matched_format == &LNX_FORMAT_DESCRIPTOR) {
+        commodore_lynx_t lynx;
+        if (lynx.open_mem(data, size)) {
+            commodore_lynx_directory_t dir;
+            if (lynx.read_directory(&dir)) {
+                bool found_c64 = false;
+                bool found_any = false;
+                for (unsigned i = 0; i < dir.file_count; i++) {
+                    if (dir.entries[i].file_type == 'P' && dir.entries[i].data_length >= 2) {
+                        size_t off = dir.entries[i].data_offset;
+                        if (off + 1 < lynx.data_size) {
+                            uint16_t addr = lynx.data[off] | ((uint16_t)lynx.data[off+1] << 8);
+                            found_any = true;
+                            if (is_c64_load_address(addr)) { found_c64 = true; break; }
                         }
                     }
-                    lynx.close();
-                    if (found_c64) return 0.95f;
-                    if (found_any) return 0.5f;
                 }
                 lynx.close();
+                result.confidence = found_c64 ? 0.95f : (found_any ? 0.5f : 0.6f);
+            } else {
+                lynx.close();
+                result.confidence = 0.6f;
             }
-            return 0.6f;  // Could not inspect â€” C64 is most common
+        } else {
+            result.confidence = 0.6f;
         }
-        if (strcmp(ext, ".d64") == 0 || strcmp(ext, ".D64") == 0) {
-            // D64 disk images â€” inspect first PRG's load address to distinguish systems
-            commodore_d64_t d64;
-            if (d64.open_mem(data, size)) {
-                commodore_prg_t prg = {};
-                if (d64.extract_first_prg(&prg)) {
-                    float score = is_c64_load_address(prg.load_addr) ? 0.95f : 0.6f;
-                    commodore_prg_free(&prg);
-                    d64.close();
-                    return score;
-                }
-                d64.close();
+
+    } else if (matched_format == &D64_FORMAT_DESCRIPTOR) {
+        commodore_d64_t d64;
+        if (d64.open_mem(data, size)) {
+            commodore_prg_t prg = {};
+            if (d64.extract_first_prg(&prg)) {
+                result.confidence = is_c64_load_address(prg.load_addr) ? 0.95f : 0.6f;
+                commodore_prg_free(&prg);
+            } else {
+                result.confidence = (size == D64_STANDARD_SIZE || size == D64_STANDARD_SIZE_ERR ||
+                                     size == D64_EXTENDED_SIZE || size == D64_EXTENDED_SIZE_ERR)
+                                    ? 0.7f : 0.6f;
             }
-            // Could not inspect â€” still likely C64 (most common system)
-            if (size == D64_STANDARD_SIZE || size == D64_STANDARD_SIZE_ERR ||
-                size == D64_EXTENDED_SIZE || size == D64_EXTENDED_SIZE_ERR) {
-                return 0.7f;
+            d64.close();
+        } else {
+            result.confidence = 0.6f;
+        }
+
+    } else if (matched_format == &T64_FORMAT_DESCRIPTOR) {
+        result.confidence = 0.85f;  // T64 archives are C64-centric
+
+    } else if (matched_format == &TAP_FORMAT_DESCRIPTOR) {
+        int platform = commodore_tap_identify_platform_mem(data, size);
+        if (platform == 0)      result.confidence = 0.95f;  // C64 TAP
+        else if (platform == 1) result.confidence = 0.3f;   // VIC-20 TAP
+        else                    result.confidence = 0.6f;    // Unknown
+
+    } else if (matched_format == &CRT_FORMAT_DESCRIPTOR) {
+        if (size >= 64 && memcmp(data, "C64 CARTRIDGE   ", 16) == 0)
+            result.confidence = 1.0f;
+
+    } else if (matched_format == &SID_FORMAT_DESCRIPTOR) {
+        if (size >= 4 && (memcmp(data, "PSID", 4) == 0 || memcmp(data, "RSID", 4) == 0)) {
+            result.confidence = 1.0f;
+            // SID v2+ flags encode video standard and chip model
+            sid_header_t sid_hdr;
+            if (sid_parse_header(data, size, &sid_hdr) && sid_hdr.version >= 2) {
+                if (sid_hdr.video == SID_VIDEO_NTSC)
+                    result.configuration.region_option_index = 1;       // NTSC
+                else if (sid_hdr.video == SID_VIDEO_PAL)
+                    result.configuration.region_option_index = 0;       // PAL
+                if (sid_hdr.sid_model == SID_MODEL_8580)
+                    result.configuration.custom_settings["sid_revision"] = "MOS 8580";
+                else if (sid_hdr.sid_model == SID_MODEL_6581)
+                    result.configuration.custom_settings["sid_revision"] = "MOS 6581";
             }
-            return 0.6f;  // Non-standard size but .d64 extension
+        } else {
+            result.confidence = 0.9f;  // Extension match only
         }
-        if (strcmp(ext, ".t64") == 0 || strcmp(ext, ".T64") == 0) {
-            // T64 tape archives are C64-centric
-            return 0.85f;
-        }
-        if (strcmp(ext, ".tap") == 0 || strcmp(ext, ".TAP") == 0) {
-            // Check TAP header to see if this is specifically a C64 tape
-            int platform = commodore_tap_identify_platform_mem(data, size);
-            if (platform == 0) return 0.95f;  // C64 TAP
-            if (platform == 1) return 0.3f;   // VIC-20 TAP
-            return 0.6f;  // Unknown or error â€” C64 is most common
-        }
-        if (strcmp(ext, ".crt") == 0 || strcmp(ext, ".CRT") == 0) {
-            // CRT cartridge files
-            if (size >= 64 && memcmp(data, "C64 CARTRIDGE   ", 16) == 0) {
-                return 1.0f;  // Perfect match
-            }
-        }
-        if (strcmp(ext, ".sid") == 0 || strcmp(ext, ".SID") == 0) {
-            // SID music files — check PSID/RSID magic
-            if (size >= 4 && (memcmp(data, "PSID", 4) == 0 || memcmp(data, "RSID", 4) == 0)) {
-                return 1.0f;  // Perfect match — unambiguous magic
-            }
-            return 0.9f;  // Extension match only
-        }
+
+    } else if (matched_format == &BIN_FORMAT_DESCRIPTOR) {
+        result.confidence = 0.4f;
     }
-    
-    return 0.0f;
+
+    // --- Filename heuristic: "ntsc" in name suggests NTSC region ---
+    if (filepath) {
+        const char* name = strrchr(filepath, '/');
+        if (!name) name = strrchr(filepath, '\\');
+        if (!name) name = filepath; else name++;
+        std::string lower(name);
+        for (auto& c : lower) c = static_cast<char>(tolower(c));
+        if (lower.find("ntsc") != std::string::npos)
+            result.configuration.region_option_index = 1;
+    }
+
+    return result;
 }
 
 /** Formats the C64 can load — used by SystemDescriptor and file dialogs. */
@@ -242,7 +267,7 @@ static SystemDescriptor c64_descriptor = {
     "8-bit home computer with VIC-II graphics and SID sound chip (1982)",
     c64_formats,
     create_c64_hardware_traits(),
-    c64_can_load_file
+    c64_probe_file
 };
 
 C64System::C64System()
@@ -1579,81 +1604,6 @@ bool C64System::apply_configuration() {
     return true;
 }
 
-// ============================================================================
-// Auto-detect optimal configuration from file contents
-// ============================================================================
-SystemConfiguration C64System::detect_optimal_configuration(
-    const char* filepath, const uint8_t* data, size_t size) {
-
-    SystemConfiguration config = EmulatedSystem::detect_optimal_configuration(filepath, data, size);
-
-    const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
-
-    // --- CRT cartridge: byte 8 of the header specifies hardware type ---
-    // Byte 0x08-0x09 = hardware type.  Region cannot be derived directly,
-    // but certain cartridges are NTSC-only.  For now, leave at PAL default.
-
-    // --- PRG heuristic: filenames containing "ntsc" suggest NTSC ---
-    if (filepath) {
-        // Case-insensitive substring search in the filename
-        const char* name = strrchr(filepath, '/');
-        if (!name) name = strrchr(filepath, '\\');
-        if (!name) name = filepath; else name++;
-
-        // Simple case-insensitive search for "ntsc" in the filename
-        std::string lower_name(name);
-        for (auto& c : lower_name) c = static_cast<char>(tolower(c));
-
-        if (lower_name.find("ntsc") != std::string::npos) {
-            // Select NTSC region (index 1)
-            if (hardware_traits_.video_standard_configs.size() > 1) {
-                config.region_option_index = 1;
-                printf("C64: Filename contains 'ntsc' â€” selecting NTSC region\n");
-            }
-        }
-    }
-
-    // --- SID file: v2+ flags encode video standard directly ---
-    if (ext && (strcmp(ext, ".sid") == 0 || strcmp(ext, ".SID") == 0)) {
-        if (data && size >= 4 &&
-            (memcmp(data, "PSID", 4) == 0 || memcmp(data, "RSID", 4) == 0)) {
-            sid_header_t sid_hdr;
-            if (sid_parse_header(data, size, &sid_hdr) && sid_hdr.version >= 2) {
-                if (sid_hdr.video == SID_VIDEO_NTSC) {
-                    if (hardware_traits_.video_standard_configs.size() > 1) {
-                        config.region_option_index = 1;  // NTSC
-                        printf("C64: SID flags specify NTSC — selecting NTSC region\n");
-                    }
-                } else if (sid_hdr.video == SID_VIDEO_PAL) {
-                    config.region_option_index = 0;  // PAL
-                    printf("C64: SID flags specify PAL — selecting PAL region\n");
-                }
-                // SID_VIDEO_BOTH or UNKNOWN: keep default (PAL)
-
-                // Propagate SID chip model so apply_configuration pre-selects it
-                if (sid_hdr.sid_model == SID_MODEL_8580) {
-                    config.custom_settings["sid_revision"] = "MOS 8580";
-                    printf("C64: SID flags specify 8580 chip\n");
-                } else if (sid_hdr.sid_model == SID_MODEL_6581) {
-                    config.custom_settings["sid_revision"] = "MOS 6581";
-                    printf("C64: SID flags specify 6581 chip\n");
-                }
-                // SID_MODEL_BOTH or UNKNOWN: keep user's current selection
-            }
-        }
-    }
-
-    // --- TAP file: header byte 0x0C indicates platform/standard ---
-    if (ext && (strcmp(ext, ".tap") == 0 || strcmp(ext, ".TAP") == 0)) {
-        // TAP v1 header: byte 0x0C = platform (0 = C64, 1 = VIC-20)
-        // The TAP spec doesn't directly encode PAL/NTSC, so we keep default.
-    }
-
-    // --- D64 disk image: some SID tunes store region in metadata ---
-    // Not enough reliable data in D64 to determine region automatically.
-
-    return config;
-}
 
 void C64System::render_configuration_ui() {
 #ifdef IMGUI_VERSION

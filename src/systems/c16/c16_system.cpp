@@ -116,34 +116,44 @@ HardwareTraits Commodore264System<V>::create_hardware_traits() {
 // ============================================================================
 
 template<C264SeriesVariant V>
-float Commodore264System<V>::can_load_file_static(const char* filepath, const uint8_t* data, size_t size) {
-    const char* ext = strrchr(filepath, '.');
-    if (ext) {
-        if (strcmp(ext, ".prg") == 0 || strcmp(ext, ".PRG") == 0) {
-            // PRG files with C16/Plus4 load address (0x1001)
-            if (size >= 2) {
-                uint16_t load_addr = data[0] | (data[1] << 8);
-                if (load_addr == 0x1001) {
-                    return 0.6f;  // Moderate confidence (could be VIC-20 too)
-                }
-                return 0.4f;  // Lower confidence for generic PRG
-            }
+SystemProbeResult Commodore264System<V>::probe_file_static(
+    const format_descriptor_t* matched_format,
+    const char* /*filepath*/,
+    const uint8_t* data, size_t size)
+{
+    SystemProbeResult result;
+
+    if (!matched_format) return result;
+
+    if (matched_format == &PRG_FORMAT_DESCRIPTOR) {
+        if (size >= 2) {
+            uint16_t load_addr = data[0] | (data[1] << 8);
+            if (load_addr == 0x1001)
+                result.confidence = 0.6f;   // Moderate (could also be VIC-20)
+            else
+                result.confidence = 0.4f;   // Lower for generic PRG
         }
-        if (strcmp(ext, ".tap") == 0 || strcmp(ext, ".TAP") == 0) {
-            // Check TAP header to see if this is specifically a C16/Plus4 tape
-            int platform = commodore_tap_identify_platform_mem(data, size);
-            if (platform == 2) return 0.95f;  // C16 TAP
-            if (platform == 0) return 0.2f;   // C64 TAP (low for C16)
-            return 0.4f;
-        }
-        if (strcmp(ext, ".d64") == 0 || strcmp(ext, ".D64") == 0) {
-            return 0.4f;
-        }
-        if (strcmp(ext, ".t64") == 0 || strcmp(ext, ".T64") == 0) {
-            return 0.4f;  // T64 archives are usually C64, but can contain C16
-        }
+
+    } else if (matched_format == &TAP_FORMAT_DESCRIPTOR) {
+        int platform = commodore_tap_identify_platform_mem(data, size);
+        if (platform == 2)      result.confidence = 0.95f;  // C16 TAP
+        else if (platform == 0) result.confidence = 0.2f;   // C64 TAP
+        else                    result.confidence = 0.4f;
+
+    } else if (matched_format == &D64_FORMAT_DESCRIPTOR) {
+        result.confidence = 0.4f;
+
+    } else if (matched_format == &T64_FORMAT_DESCRIPTOR) {
+        result.confidence = 0.4f;   // Usually C64, but can contain C16
+
+    } else if (matched_format == &LNX_FORMAT_DESCRIPTOR) {
+        result.confidence = 0.4f;
+
+    } else if (matched_format == &BIN_FORMAT_DESCRIPTOR) {
+        result.confidence = 0.3f;
     }
-    return 0.0f;
+
+    return result;
 }
 
 // ============================================================================
@@ -262,7 +272,7 @@ const SystemDescriptor& Commodore264System<V>::static_descriptor() {
         Traits::description,
         formats,
         create_hardware_traits(),
-        can_load_file_static
+        probe_file_static
     };
     return desc;
 }
