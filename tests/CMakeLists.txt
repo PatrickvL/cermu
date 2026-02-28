@@ -121,7 +121,7 @@ target_include_directories(fam65xx_processor_tests_runner PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
-target_compile_definitions(fam65xx_processor_tests_runner PRIVATE CERMU_IMPL)
+target_compile_definitions(fam65xx_processor_tests_runner PRIVATE CERMU_IMPL PROCESSOR_TESTS)
 # Set C++20 standard for fam65xx template support
 set_property(TARGET fam65xx_processor_tests_runner PROPERTY CXX_STANDARD 20)
 set_property(TARGET fam65xx_processor_tests_runner PROPERTY CXX_STANDARD_REQUIRED ON)
