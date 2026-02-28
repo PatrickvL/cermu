@@ -705,6 +705,9 @@ void VIC20System::tick() {
     // so data is ready for CPU to complete the cycle
     // =========================================================================
     s = mem_tick(s);
+
+    // NMI edge detection — sample after bus dispatch (post-dispatch state)
+    cpu->sample_nmi_pin(s);
     
     // =========================================================================
     // PHASE 5: CPU TICKING (PHI1 phase - completes cycle)

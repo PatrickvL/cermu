@@ -71,7 +71,8 @@ static std::vector<PinSignalState> get_ppu_pin_states(nes_system::PPU* ppu, cons
     auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
 
     // PPU specific: /INT (NMI) pin (pin 19, index 18) — PPU drives NMI
-    pin_states[18].signal_level = !ppu->nmi;
+    // Read directly from the PPU bus word (active-low: bit HIGH = not asserted)
+    pin_states[18].signal_level = PPU_BUS_GET_BIT(ppu->ppu_bus_, BUS_NMI_BIT);
     pin_states[18].drive_direction = true;
     pin_states[18].high_impedance = false;
 
@@ -138,7 +139,7 @@ void nes_system::PPU::render_debug_content() {
             ImGui::Text("Frame:        %llu", (unsigned long long)ppu->frame_count);
             ImGui::Text("Region:       %s", ppu->is_pal ? "PAL" : "NTSC");
             ImGui::Text("Frame Done:   %s", ppu->frame_complete ? "YES" : "NO");
-            ImGui::Text("NMI Pending:  %s", ppu->nmi ? "YES" : "NO");
+            ImGui::Text("NMI Internal: %s", ppu->vbl_flag_internal_ ? "YES" : "NO");
 
             // Scanline progress
             int total_scanlines = ppu->is_pal ? nes_constants::TOTAL_SCANLINES_PAL : nes_constants::TOTAL_SCANLINES_NTSC;

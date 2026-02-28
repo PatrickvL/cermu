@@ -872,6 +872,45 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
   // EMULATION HELPER FUNCTIONS AND DECLARATIONS
   // ========================================================================
 
+  /**
+   * Sample NMI pin using post-bus-dispatch pin state.
+   *
+   * The end of PHI2 and start of PHI1 are the same clock edge.  In our
+   * half-cycle model, bus dispatch happens between PHI2 and PHI1, so
+   * calling this method after dispatch is equivalent to sampling at the
+   * end of PHI2 (= start of the next PHI1).
+   *
+   * Edge detection: compares nmi_prev (previous sample) to the current
+   * pin state.  A falling edge sets nmi_edge_latch.  The latch persists
+   * until NMI is serviced (vector fetch clears it), matching the 6502's
+   * internal edge-detect flip-flop.  A brief NMI pulse that returns HIGH
+   * within one cycle is caught — once the latch is set, pin state doesn't
+   * matter.  IRQ by contrast is level-sensitive (shift register based).
+   *
+   * The 1-cycle-before-acting delay is inherent in the pipeline:
+   *   Post-dispatch N   : /NMI falls → edge_latch SET
+   *   PHI2 N+1          : process_interrupt_detection sees edge_latch
+   *                        → NMI serviceable (hijack at instruction boundary)
+   *
+   * Every system tick loop MUST call this method once per CPU cycle,
+   * after bus dispatch and before PHI1.  process_interrupt_detection()
+   * does NOT perform inline edge detection — it only reads the latch
+   * state established here.
+   */
+  inline void sample_nmi_pin(bus_state_t pins) {
+    if constexpr (has_nmi_line()) {
+      uint32_t int_pins = (~pins) >> BUS_RES_BIT;
+      constexpr uint8_t NMI_OFFSET = BUS_NMI_BIT - BUS_RES_BIT;
+      uint8_t nmi_current = (int_pins >> NMI_OFFSET) & 0x1;
+
+      // Detect FALLING edge: 0→1 in inverted domain (pin went HIGH→LOW)
+      if ((!this->nmi_prev) & nmi_current) {
+        this->nmi_edge_latch = 1;
+      }
+      this->nmi_prev = nmi_current;
+    }
+  }
+
   // Hardware-accurate interrupt detection with priority-order processing
   bool process_interrupt_detection(bus_state_t pins) {
     // Load state into registers to reduce memory accesses
@@ -893,22 +932,53 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
       shift_reg |= ((int_pins >> IRQ_OFFSET) & 0x1) << INT_IRQ_START_BIT;
     }
 
-    // NMI edge detection (extracted bit 2) - only if NMI line exists
+    // NMI edge detection — only if NMI line exists
+    //
     // The 6502 uses an internal edge-detect flip-flop for NMI:
-    // - Set on the falling edge of the NMI pin (HIGH→LOW)
-    // - Stays latched until the NMI is actually serviced
-    // - The latched output is fed into the shift register like a level signal
-    // This ensures the 3-bit shift register fills up properly for NMI detection.
+    //   - SET on the falling edge of /NMI (HIGH→LOW)
+    //   - CLEARED when the NMI vector is fetched (service acknowledgement)
+    //   - Persists regardless of subsequent pin state — once latched, the
+    //     pin can return HIGH and the NMI will still fire.
+    //
+    // This is nmi_edge_latch.  It IS the NMI pending state.
+    //
+    // The 6502 samples IRQ/NMI one cycle before acting on it.  The sample
+    // taken at the end of cycle N determines whether an interrupt sequence
+    // begins after cycle N+1 (the last cycle of the current instruction).
+    // "After N+1" means the interrupt starts at N+2 — the instruction at
+    // N+1 executes normally first.  Total latency = 2 cycles from sample.
+    //
+    // In our model this is achieved with a 2-stage pipeline:
+    //
+    //   Stage 1 — Edge latch (in sample_nmi_pin(), called by the system
+    //     tick loop after bus dispatch):
+    //     End of cycle N: sample_nmi_pin() detects falling edge →
+    //                     nmi_edge_latch SET
+    //
+    //   Stage 2 — Serviceability (1-cycle delay, in this function):
+    //     PHI2 of N+1: process_interrupt_detection reads the latch and
+    //     sets nmi_output_latch_ = 1 (not yet serviceable this cycle)
+    //     PHI2 of N+2: nmi_output_latch_ is true → NMI serviceable → hijack
+    //
+    // IRQ is level-sensitive: sampled directly each cycle via the shift
+    // register, no latch.  A pulse shorter than one cycle can be missed.
+    //
+    // A brief NMI pulse (low and back high within one cycle) IS caught,
+    // because the edge detector latches the transition.  Once latched,
+    // the NMI fires regardless of the current pin state.
+    bool nmi_serviceable = false;
+
     if constexpr (has_nmi_line()) {
-      uint8_t nmi_current = (int_pins >> NMI_OFFSET) & 0x1;
-      // Detect FALLING edge on physical pin: 0→1 transition in inverted domain
-      // (was inactive/0, now asserted/1) — sets the latch
-      if ((!this->nmi_prev) & nmi_current) {
-        this->nmi_edge_latch = 1;
-      }
-      this->nmi_prev = nmi_current;
-      // Feed the latched edge into the shift register (acts like a level signal)
-      shift_reg |= ((uint32_t)this->nmi_edge_latch) << INT_NMI_START_BIT;
+      // Capture the output latch from the PREVIOUS cycle.
+      // This is the 1-cycle-before-acting delay.
+      nmi_serviceable = this->nmi_output_latch_;
+
+      // Feed current NMI pin state into shift register for debug visibility
+      shift_reg |= ((int_pins >> NMI_OFFSET) & 0x1) << INT_NMI_START_BIT;
+
+      // Update output latch for NEXT cycle's serviceability check.
+      // sample_nmi_pin() already ran edge detection and set nmi_edge_latch.
+      this->nmi_output_latch_ = (this->nmi_edge_latch != 0);
     }
 
     // Sample RESET (extracted bit 0 -> shift_reg bit 8)
@@ -936,8 +1006,12 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
     }
 
     // Check NMI (third highest priority)
+    // nmi_edge_latch is the hardware's internal flip-flop.  Once set by
+    // a falling edge it persists until the NMI vector is fetched.  The
+    // nmi_serviceable flag (computed above) incorporates the 1-cycle
+    // pipeline delay so we don't act on an edge detected this very cycle.
     if constexpr (has_nmi_line()) {
-      if ((shift_reg & INT_NMI_MASK) == INT_NMI_MASK) {
+      if (nmi_serviceable) {
         this->active_interrupt = FAM65XX_INT_NMI;
         return true;
       }
@@ -1438,6 +1512,7 @@ public:
     // Reset interrupt state
     this->nmi_prev = 0;
     this->nmi_edge_latch = 0;
+    this->nmi_output_latch_ = false;
     this->interrupt_shift_register = 0;
 
     // Reset 65C02 extended state
@@ -1478,6 +1553,7 @@ public:
         0x00000000;     /* No interrupt activity detected yet */
     this->nmi_prev = 0; /* NMI line inactive (inverted convention: 0=pin HIGH) */
     this->nmi_edge_latch = 0;
+    this->nmi_output_latch_ = false;
 
     /* Set up for instruction fetch - CPU ready to execute next instruction */
     this->transition_to_fetch();
@@ -1595,6 +1671,7 @@ public:
             if constexpr (has_nmi_line()) {
               if (this->active_interrupt == FAM65XX_INT_NMI) {
                 this->nmi_edge_latch = 0;
+                this->nmi_output_latch_ = false;
               }
             }
           } else {
@@ -1736,6 +1813,7 @@ public:
     active_interrupt = FAM65XX_INT_NONE;
     nmi_prev = 0;
     nmi_edge_latch = 0;
+    nmi_output_latch_ = false;
     interrupt_shift_register = 0;
     wait_for_interrupt = false;
     stopped = false;
@@ -1785,7 +1863,12 @@ public:
   interrupt_t active_interrupt; /* Currently active interrupt (enum serves as
                                    vector index) */
   uint8_t nmi_prev;             /* Previous NMI line state for edge detection */
-  uint8_t nmi_edge_latch;       /* Latched NMI edge: set on falling edge, cleared when serviced */
+  uint8_t nmi_edge_latch;       /* Internal edge-detect flip-flop: set on /NMI falling edge,
+                                   cleared when NMI vector is fetched.  Persists regardless of
+                                   subsequent pin state — this IS the NMI pending flag. */
+  bool nmi_output_latch_;        /* 1-cycle pipeline output: reflects nmi_edge_latch from the
+                                   PREVIOUS cycle.  NMI is serviceable when this is true.
+                                   Implements the "sample at N, act after N+1" delay. */
   uint32_t interrupt_shift_register; /* Combined shift register for all
                                         interrupt types */
 

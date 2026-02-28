@@ -499,6 +499,9 @@ void Commodore264System<V>::tick() {
     
     // PHASE 3: Memory service
     s = mem_tick(s);
+
+    // NMI edge detection — sample after bus dispatch (post-dispatch state)
+    cpu_->sample_nmi_pin(s);
     
     // PHASE 3.1: TED PHI2 delivery
     ted_->tick_phi2(s);

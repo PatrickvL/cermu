@@ -59,8 +59,25 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
             case 0x2002: // Status
                 // Top 3 bits from status, bottom 5 from PPU data bus latch
                 data = (regs.status & 0xE0) | (ppu_data_bus_ & 0x1F);
-                regs.status &= ~0x80; // Clear VBlank flag on read
+                // Record the PPU dot of this status read for VBL
+                // suppression race-condition detection.
+                // Use total_dots_ (which has been incremented by PPU::clock()
+                // for this tick) minus 1 to get the actual dot of this tick.
+                status_read_dot_ = total_dots_ - 1;
+
+
+                // Clear VBL on read — both internal (NMI) and external ($2002).
+                // Also cancel any pending propagation since the read overtakes it.
+                // NMI suppression is handled naturally by the CPU's pin-state
+                // shift register: clearing vbl_flag_internal_ de-asserts NMI,
+                // which feeds 0s into the shift register, preventing the
+                // 3-consecutive-LOW condition.  The nmi_pending flag (set when
+                // the shift register WAS full) persists independently.
+                regs.status &= ~0x80;
+                vbl_flag_internal_ = false;
+                pending_vbl_set_ = false;
                 internal.w = false;   // Reset write toggle
+                update_nmi_output();  // NMI level changes (VBL cleared)
                 break;
             case 0x2003: // OAM Address — write only (open bus)
                 break;
@@ -94,8 +111,12 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
 
         switch (addr) {
             case 0x2000: // Control
-                regs.ctrl = data;
-                internal.t = (internal.t & 0xF3FF) | ((data & 0x03) << 10);
+                {
+                    uint8_t old_ctrl = regs.ctrl;
+                    regs.ctrl = data;
+                    internal.t = (internal.t & 0xF3FF) | ((data & 0x03) << 10);
+                    update_nmi_output();  // NMI enable may have changed
+                }
                 break;
             case 0x2001: // Mask
                 regs.mask = data;
@@ -263,10 +284,50 @@ ppu_bus_state_t PPU::ppu_write(ppu_bus_state_t bus) {
 }
 
 // ============================================================================
+// PPU — Color conversion
+// ============================================================================
+
+inline uint32_t nes2rgb(uint8_t nes_color) {
+    return NES_COLOR_TABLE[nes_color & 0x3F];
+}
+
+// ============================================================================
 // PPU — Main clock (one PPU dot)
 // ============================================================================
 
 void PPU::clock() {
+    // ---- Commit pending VBL flag changes (1-dot propagation delay) ----
+    // These were queued on the previous dot; now propagate to regs.status
+    // so that $2002 reads reflect the updated value.
+    if (pending_vbl_set_) {
+        // VBL suppression race condition (nesdev wiki):
+        //   Reading $2002 1 PPU clock before the flag becomes VISIBLE in
+        //   $2002 prevents VBL from being set that frame.
+        //
+        // The visible VBL time is NOW (the commit point, 1 dot after the
+        // internal VBL was set).  "1 dot before visible" corresponds to
+        // the previous dot — the same dot where vbl_flag_internal_ was set.
+        // status_read_dot_ recorded as total_dots_-1 by cpu_bus_tick will
+        // match total_dots_-1 here when the read was on the previous dot.
+        if (status_read_dot_ == total_dots_ - 1) {
+            // $2002 was read on the internal VBL dot — suppress entirely.
+            // Cancel the pending set AND clear internal state and NMI.
+            pending_vbl_set_ = false;
+            vbl_flag_internal_ = false;
+            vbl_was_suppressed_ = true;
+            update_nmi_output();
+        } else {
+            regs.status |= 0x80;
+            pending_vbl_set_ = false;
+        }
+    }
+    if (pending_vbl_clear_) {
+        regs.status &= ~0x80;
+        regs.status &= ~0x40; // Clear Sprite 0 Hit
+        regs.status &= ~0x20; // Clear Sprite Overflow
+        pending_vbl_clear_ = false;
+    }
+
     // Lambda to get pixel color from palette
     auto get_pixel = [this](uint8_t palette_idx, uint8_t pixel) -> uint32_t {
         return nes2rgb(PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(0x3F00 + (palette_idx << 2) + pixel))) & 0x3F);
@@ -275,11 +336,15 @@ void PPU::clock() {
     // Visible scanlines and pre-render scanline
     if (scanline >= -1 && scanline < 240) {
         
-        // Pre-render scanline setup
+        // Pre-render scanline setup — dot 1.
+        // VBL internal flag is cleared immediately (de-asserts NMI at dot 1);
+        // regs.status bit 7 clear is deferred via pending_vbl_clear_ and
+        // committed at the start of the NEXT clock() call (dot 2 visibility).
         if (scanline == -1 && cycle == 1) {
-            regs.status &= ~0x80; // Clear VBlank
-            regs.status &= ~0x40; // Clear Sprite 0 Hit
-            regs.status &= ~0x20; // Clear Sprite Overflow
+            vbl_flag_internal_ = false;     // NMI de-asserts immediately
+            pending_vbl_clear_ = true;      // $2002 visible next dot
+            vbl_was_suppressed_ = false;    // Reset suppression for new frame
+            status_read_dot_ = UINT64_MAX;  // Reset stale reads
             
             // Clear sprite shifters
             for (int i = 0; i < 8; i++) {
@@ -438,45 +503,54 @@ void PPU::clock() {
         uint32_t color = get_pixel(palette_val, pixel);
         screen[(scanline * 256) + (cycle - 1)] = color;
     }
-    
-    // VBlank
-    if (scanline >= nes_constants::VBLANK_SCANLINE && scanline < (is_pal ? nes_constants::TOTAL_SCANLINES_PAL - 1 : nes_constants::TOTAL_SCANLINES_NTSC - 1)) {
-        if (scanline == nes_constants::VBLANK_SCANLINE && cycle == 1) {
-            regs.status |= 0x80;
-            if (regs.ctrl & 0x80) {
-                nmi = true;
-            }
-        }
+
+    // VBlank flag set — (scanline 241, dot 1)
+    //
+    // The internal VBL state (vbl_flag_internal_) and NMI output assert
+    // immediately at dot 1.  The $2002-readable flag (regs.status bit 7)
+    // is deferred by 1 PPU clock via pending_vbl_set_, committed at the
+    // start of the next clock() call.  Suppression is also checked at
+    // commit time — see the pending_vbl_set_ block at the top of clock().
+    if (scanline == nes_constants::VBLANK_SCANLINE && cycle == 1) {
+        vbl_flag_internal_ = true;     // NMI asserts immediately
+        pending_vbl_set_ = true;       // $2002 visible next dot
+        vbl_was_suppressed_ = false;
     }
-    
+
+    // Drive /NMI output level (updated every dot for correctness)
+    update_nmi_output();
+
     // (A12 edge detection for mapper IRQ counters is now handled inside
     //  ppu_read() — see the rising-edge check on bit 12 of the address.)
 
     // Advance cycle
     cycle++;
+
+    // NTSC odd-frame cycle skip — evaluated at the END of dot 339 of
+    // the pre-render scanline (cycle has just advanced to 340).
+    // If rendering is enabled on an odd frame, the would-be dot 340 is
+    // skipped: the pre-render line becomes 340 dots instead of 341.
+    // Advancing cycle to 341 triggers the normal scanline-end wrap below.
+    //
+    // Blargg's 10-even_odd_timing verifies this exact boundary: the
+    // rendering-enabled check must see writes to $2001 that land at
+    // dot 339 but NOT those at dot 340.
+    if (!is_pal && scanline == -1 && cycle == 340 &&
+        (frame_count & 1) && (regs.mask & 0x18)) {
+        cycle++;  // 340 → 341, caught by the >= check below
+    }
+
     if (cycle >= nes_constants::DOTS_PER_SCANLINE) {
         cycle = 0;
         scanline++;
-        if (scanline >= (is_pal ? nes_constants::TOTAL_SCANLINES_PAL : nes_constants::TOTAL_SCANLINES_NTSC)) {
+        if (scanline >= (is_pal ? nes_constants::TOTAL_SCANLINES_PAL - 1
+                                    : nes_constants::TOTAL_SCANLINES_NTSC - 1)) {
             scanline = -1;
             frame_complete = true;
             frame_count++;
         }
     }
-
-    // NTSC odd-frame cycle skip: on odd frames, if rendering is enabled,
-    // skip one dot (cycle 0 of the pre-render scanline)
-    if (!is_pal && scanline == -1 && cycle == 0 && (frame_count & 1) && (regs.mask & 0x18)) {
-        cycle = 1;
-    }
-}
-
-// ============================================================================
-// PPU — Color conversion
-// ============================================================================
-
-uint32_t PPU::nes2rgb(uint8_t nes_color) {
-    return NES_COLOR_TABLE[nes_color & 0x3F];
+    total_dots_++;
 }
 
 // ============================================================================
@@ -706,8 +780,8 @@ const std::vector<uint32_t>& PPU::get_pattern_table(int i, uint8_t palette) cons
                     
                     // Get the color from the selected palette
                     uint8_t palette_index = PPU_BUS_GET_DATA(non_const_this->ppu_read(
-                        PPU_BUS_WITH_ADDR(0x3F00 + (palette << 2) + pixel), true)) & 0x3F;
-                    uint32_t color = NES_COLOR_TABLE[palette_index];
+                        PPU_BUS_WITH_ADDR(0x3F00 + (palette << 2) + pixel), true));
+                    uint32_t color = nes2rgb(palette_index);
                     
                     // Calculate screen position
                     uint16_t x = tile_x * 8 + (7 - col);

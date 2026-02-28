@@ -820,6 +820,15 @@ void NintendoSystem<V>::clock() {
         return;
     }
 
+    // Transfer PPU /NMI onto CPU bus BEFORE PHI2, so the CPU's
+    // edge-detect flip-flop samples the current NMI level.
+    //
+    // NMI pulse preservation DISABLED — the CPU's edge-detect latch
+    // (nmi_edge_latch) handles persistence.  Once latched, the NMI fires
+    // was giving iteration 05 of blargg 06-suppression an extra NMI LOW
+    // cycle, making NMI fire when it shouldn't.
+    pins_ = PPU_CPU_BITMIX(pins_, ppu_->ppu_bus_);
+
     // PHI2: CPU drives address bus and R/W signal
     pins_ = cpu_->tick<RICOH_2A03::Phase::PHI2>(pins_);
 
@@ -917,15 +926,19 @@ void NintendoSystem<V>::clock() {
     }
 
     // ====================================================================
-    // Interrupt wire handling
+    // Interrupt wire handling — post bus-dispatch update
     // ====================================================================
 
-    // NMI from PPU — edge-sensitive (active low)
-    if (ppu_->get_nmi()) {
-        BUS_CLR_BIT(pins_, BUS_NMI_BIT);
-    } else {
-        BUS_SET_BIT(pins_, BUS_NMI_BIT);
-    }
+    // Re-transfer PPU /NMI after bus dispatch — cpu_bus_tick() may have
+    // changed NMI state ($2002 read clears VBL, $2000 write toggles enable).
+    pins_ = PPU_CPU_BITMIX(pins_, ppu_->ppu_bus_);
+
+    // Sample NMI pin AFTER bus dispatch so the CPU sees the post-operation
+    // pin state.  End of PHI2 and start of PHI1 are the same clock edge;
+    // sampling here is equivalent to sampling at the end of PHI2.
+    // The 1-cycle-before-acting delay is inherent: edge latched at end of
+    // cycle N → process_interrupt_detection at PHI2 of N+1 sees it.
+    cpu_->sample_nmi_pin(pins_);
 
     // IRQ — level-sensitive (active low)
     bool irq_asserted = false;
