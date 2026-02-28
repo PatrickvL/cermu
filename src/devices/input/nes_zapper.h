@@ -39,8 +39,7 @@ public:
     HostInputType get_supported_input_type(int index) const override {
         return (index == 0) ? HostInputType::HOST_MOUSE : HostInputType::NONE;
     }
-    const HostInputBinding& get_host_input_binding() const override { return binding_; }
-    void set_host_input_binding(const HostInputBinding& binding) override { binding_ = binding; }
+    void set_host_input_binding(const HostInputBinding& binding) override;
     bool process_sdl_event(const SDL_Event& event) override;
 
 #ifdef CERMU_HAS_GUI
@@ -68,11 +67,11 @@ public:
 
 private:
     void update_output();
+    void on_input_source_will_change() override;
 
     int aim_x_ = 128;          // Screen X coordinate of aim point
     int aim_y_ = 120;          // Screen Y coordinate of aim point
     bool trigger_pulled_ = false;
     bool light_detected_ = false;
     uint32_t output_signals_ = 0xFFFFFFFF;  // All released (active-low)
-    HostInputBinding binding_{};
 };

@@ -14,11 +14,6 @@
 #include "lightpen_device.h"
 #include "../../core/device_registry.h"
 #include <cstdio>
-#include <SDL_events.h>
-
-#ifdef CERMU_HAS_GUI
-#include "imgui.h"
-#endif
 
 LightpenDevice::LightpenDevice()
 {
@@ -26,12 +21,8 @@ LightpenDevice::LightpenDevice()
     binding_.label = "Host Mouse";
 }
 
-void LightpenDevice::set_host_input_binding(const HostInputBinding& binding) {
-    release_all_signals();
+void LightpenDevice::on_input_source_will_change() {
     triggered_ = false;
-    notify_port();
-    binding_ = binding;
-    printf("Light Pen: Input source changed to %s\n", binding_.label.c_str());
 }
 
 bool LightpenDevice::process_sdl_event(const SDL_Event& event) {

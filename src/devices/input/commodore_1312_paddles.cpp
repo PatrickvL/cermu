@@ -6,25 +6,15 @@
 #include "../../core/device_registry.h"
 #include <cstdio>
 #include <algorithm>
-#include <SDL_events.h>
-#include <SDL_gamecontroller.h>
-
-#ifdef CERMU_HAS_GUI
-#include "imgui.h"
-#endif
 
 Commodore1312Paddles::Commodore1312Paddles() {
     binding_.type = HostInputType::HOST_MOUSE;
     binding_.label = "Host Mouse";
 }
 
-void Commodore1312Paddles::set_host_input_binding(const HostInputBinding& binding) {
-    release_all_signals();
+void Commodore1312Paddles::on_input_source_will_change() {
     pot_x_ = 128;
     pot_y_ = 128;
-    notify_port();
-    binding_ = binding;
-    printf("1312 Paddles: Input source changed to %s\n", binding_.label.c_str());
 }
 
 bool Commodore1312Paddles::process_sdl_event(const SDL_Event& event) {
@@ -54,10 +44,9 @@ bool Commodore1312Paddles::process_sdl_event(const SDL_Event& event) {
         }
     } else if (binding_.type == HostInputType::SDL_GAMEPAD) {
         // Filter by gamepad instance if bound
+        if (!should_accept_gamepad_event(event)) return false;
+
         if (event.type == SDL_CONTROLLERAXISMOTION) {
-            if (binding_.gamepad_instance_id >= 0 &&
-                event.caxis.which != binding_.gamepad_instance_id)
-                return false;
 
             // Left stick X → paddle X, left stick Y → paddle Y
             if (event.caxis.axis == SDL_CONTROLLER_AXIS_LEFTX) {
@@ -73,10 +62,6 @@ bool Commodore1312Paddles::process_sdl_event(const SDL_Event& event) {
             }
         }
         if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP) {
-            if (binding_.gamepad_instance_id >= 0 &&
-                event.cbutton.which != binding_.gamepad_instance_id)
-                return false;
-
             bool pressed = (event.type == SDL_CONTROLLERBUTTONDOWN);
             if (event.cbutton.button == SDL_CONTROLLER_BUTTON_A) {
                 set_fire_x(pressed);

@@ -47,9 +47,8 @@ public:
     HostInputType get_supported_input_type(int index) const override {
         (void)index; return HostInputType::HOST_MOUSE;
     }
-    const HostInputBinding& get_host_input_binding() const override { return binding_; }
-    void set_host_input_binding(const HostInputBinding& binding) override;
     bool process_sdl_event(const SDL_Event& event) override;
+    void on_input_source_will_change() override;
 
 #ifdef CERMU_HAS_GUI
     void render_device_ui() override;
@@ -78,7 +77,6 @@ public:
     int get_phase() const { return phase_; }
 
 private:
-    HostInputBinding binding_;
 
     // Accumulated motion (raw host mouse delta)
     int accum_dx_ = 0;

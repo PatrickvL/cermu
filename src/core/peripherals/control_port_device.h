@@ -36,6 +36,17 @@ public:
 
     uint32_t get_output_signals() const override { return signal_state_; }
 
+    /// Override: release all active-low signals and notify the port before
+    /// the binding changes.  Subclasses that need additional cleanup (e.g.
+    /// resetting accumulators) override on_input_source_will_change() instead.
+    void set_host_input_binding(const HostInputBinding& binding) override {
+        release_all_signals();
+        on_input_source_will_change();
+        notify_port();
+        binding_ = binding;
+        printf("%s: Input source changed to %s\n", get_name(), binding_.label.c_str());
+    }
+
 protected:
     /// Set a signal line LOW (active / asserted).
     void assert_signal(uint8_t bit_index) {

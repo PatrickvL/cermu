@@ -22,8 +22,6 @@ public:
     HostInputType get_supported_input_type(int index) const override {
         (void)index; return HostInputType::HOST_MOUSE;
     }
-    const HostInputBinding& get_host_input_binding() const override { return binding_; }
-    void set_host_input_binding(const HostInputBinding& binding) override;
     bool process_sdl_event(const SDL_Event& event) override;
 
 #ifdef CERMU_HAS_GUI
@@ -34,7 +32,4 @@ public:
     void set_left_button(bool pressed)  { set_signal(ConnectorSignals::JOY_FIRE, pressed); }
     void set_right_button(bool pressed) { set_signal(ConnectorSignals::JOY_UP, pressed); }
     void move(int dx, int dy);  ///< Relative mouse movement
-
-private:
-    HostInputBinding binding_;
 };
