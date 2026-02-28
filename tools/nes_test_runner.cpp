@@ -42,6 +42,40 @@ struct TestResult {
 };
 
 // ============================================================================
+// Nametable text reader — reads ASCII-mapped tiles from PPU nametable
+// ============================================================================
+// Blargg's test ROMs use a font where tile indices match ASCII codes.
+// The nametable at PPU $2000 is 32 columns × 30 rows.
+// We scan the entire nametable and extract printable text lines.
+// ============================================================================
+
+static std::string read_nametable_text(NES& nes) {
+    std::string result;
+    constexpr uint16_t NT_BASE = 0x2000;
+    constexpr int COLS = 32;
+    constexpr int ROWS = 30;
+
+    for (int row = 0; row < ROWS; ++row) {
+        std::string line;
+        for (int col = 0; col < COLS; ++col) {
+            uint8_t tile = nes.peek_ppu_memory(NT_BASE + row * COLS + col);
+            if (tile >= 0x20 && tile < 0x7F) {
+                line += static_cast<char>(tile);
+            } else {
+                line += ' ';
+            }
+        }
+        // Trim trailing spaces
+        while (!line.empty() && line.back() == ' ') line.pop_back();
+        if (!line.empty()) {
+            if (!result.empty()) result += '\n';
+            result += line;
+        }
+    }
+    return result;
+}
+
+// ============================================================================
 // Test protocol: nestest.nes
 // ============================================================================
 // nestest enters automation mode at $C000 (JMP $C5F5).
@@ -122,7 +156,10 @@ static TestResult run_blargg_6000(NES& nes, const std::string& name,
 
     auto t0 = std::chrono::steady_clock::now();
 
-    // Run frames until $6000 protocol resolves
+    uint16_t prev_pc = 0;
+    int stuck_count = 0;
+
+    // Run frames until $6000 protocol resolves or infinite loop detected
     for (int frame = 0; frame < max_frames; ++frame) {
         nes.run_frame();
         result.frames_run = frame + 1;
@@ -135,12 +172,10 @@ static TestResult run_blargg_6000(NES& nes, const std::string& name,
         if (verbose && (frame < 10 || (frame % 500 == 0))) {
             uint8_t s = nes.peek_memory(0x6000);
             uint16_t pc = nes.get_cpu_pc();
-            // Dump a few bytes at PC to see what instruction the CPU is on
             uint8_t b0 = nes.peek_memory(pc);
             uint8_t b1 = nes.peek_memory(pc + 1);
             uint8_t b2 = nes.peek_memory(pc + 2);
-            // Also check CPU register state and RAM changes
-            uint8_t sp = nes.peek_memory(0x01FD);  // near top of stack
+            uint8_t sp = nes.peek_memory(0x01FD);
             uint8_t ram0 = nes.peek_memory(0x0000);
             uint8_t ram1 = nes.peek_memory(0x0001);
             printf("  frame %5d: PC=$%04X [%02X %02X %02X]  $6000=$%02X  "
@@ -148,20 +183,86 @@ static TestResult run_blargg_6000(NES& nes, const std::string& name,
                    frame, pc, b0, b1, b2, s, m1, m2, m3, sp, ram0, ram1);
         }
 
+        // --- Check for infinite loop (JMP self) ---
+        uint16_t pc = nes.get_cpu_pc();
+        // Detect JMP-self: check PC and nearby bytes for $4C xx yy where xxyy == addr
+        // Due to mid-instruction sampling, PC might be at the JMP or 1-2 bytes ahead
+        bool is_jmp_self = false;
+        for (int off = 0; off <= 2; ++off) {
+            uint16_t check = pc - off;
+            if (nes.peek_memory(check) == 0x4C) {  // JMP absolute
+                uint16_t target = nes.peek_memory(check + 1) |
+                                  (nes.peek_memory(check + 2) << 8);
+                if (target == check) {
+                    is_jmp_self = true;
+                    break;
+                }
+            }
+        }
+        if (is_jmp_self) {
+            stuck_count++;
+            if (stuck_count >= 3) {
+                // ROM completed — check $6000 first, then nametable
+                if (m1 == 0xDE && m2 == 0xB0 && m3 == 0x61) {
+                    uint8_t status = nes.peek_memory(0x6000);
+                    std::string text;
+                    for (uint16_t addr = 0x6004; addr < 0x7000; ++addr) {
+                        uint8_t ch = nes.peek_memory(addr);
+                        if (ch == 0) break;
+                        if (ch >= 0x20 && ch < 0x7F) text += static_cast<char>(ch);
+                        else text += '.';
+                    }
+                    if (status == 0x00) {
+                        result.verdict = TestVerdict::PASS;
+                        result.detail = text.empty() ? "Passed" : text;
+                    } else {
+                        result.verdict = TestVerdict::FAIL;
+                        char buf[16];
+                        snprintf(buf, sizeof(buf), "Error $%02X: ", status);
+                        result.detail = std::string(buf) + text;
+                    }
+                } else {
+                    // No $6000 protocol — read nametable text
+                    std::string nt_text = read_nametable_text(nes);
+                    if (verbose) {
+                        printf("  Nametable text:\n%s\n", nt_text.c_str());
+                    }
+                    // Detect pass/fail from nametable content
+                    if (nt_text.find("Passed") != std::string::npos ||
+                        nt_text.find("PASSED") != std::string::npos ||
+                        nt_text.find("passed") != std::string::npos) {
+                        result.verdict = TestVerdict::PASS;
+                        result.detail = nt_text;
+                    } else if (nt_text.find("Failed") != std::string::npos ||
+                               nt_text.find("FAILED") != std::string::npos ||
+                               nt_text.find("failed") != std::string::npos) {
+                        result.verdict = TestVerdict::FAIL;
+                        result.detail = nt_text;
+                    } else {
+                        // Can't determine — report nametable content
+                        result.verdict = TestVerdict::FAIL;
+                        result.detail = "Unknown result (nametable): " + nt_text;
+                    }
+                }
+                break;
+            }
+        } else {
+            stuck_count = 0;
+        }
+        prev_pc = pc;
+
+        // --- $6000 protocol check ---
         if (m1 != 0xDE || m2 != 0xB0 || m3 != 0x61) {
-            // Protocol not active yet — wait
             continue;
         }
 
         uint8_t status = nes.peek_memory(0x6000);
 
         if (status == 0x80) {
-            // Still running
             continue;
         }
 
         if (status == 0x81) {
-            // Needs reset — unusual for combined ROMs
             result.verdict = TestVerdict::ERROR;
             result.detail = "Test requested reset ($81) — not supported";
             break;

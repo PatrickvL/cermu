@@ -128,8 +128,7 @@ bus_state_t am_abs(bus_state_t pins) {
     /* PHI1: Load high byte and transition */
     this->bus_load_reg(REG_ABH, pins);
     this->inc(REG_PC);
-    this->transition_to_operation();
-    return pins;
+    return this->transition_to_operation(pins);
   }
   return pins;
 }
@@ -305,8 +304,7 @@ bus_state_t am_ind(bus_state_t pins) {
     /* PHI1: Assemble final address from TMP (low) and bus data (high) */
     this->bus_load_reg(REG_ABH, pins);  // High byte to ABH
     this->set(REG_ABL, this->get(REG_DL)); // Low byte from DL to ABL
-    this->transition_to_operation();
-    return pins;
+    return this->transition_to_operation(pins);
   }
   return pins;
 }
@@ -582,8 +580,7 @@ bus_state_t am_abi(bus_state_t pins) {
       /* PHI1: Assemble final target address and transition */
       this->bus_load_reg(REG_ABH, pins);  // High byte to ABH
       this->set(REG_ABL, this->get(REG_SBR)); // Low byte from SBR to ABL
-      this->transition_to_operation();
-      return pins;
+      return this->transition_to_operation(pins);
   }
   return pins;
 }
