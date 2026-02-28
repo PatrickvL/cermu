@@ -10,13 +10,13 @@
 // decoupling the emulation core from any specific host input library.
 //
 // Design:
-//   - Values 0–511 are identity-mapped to SDL scancodes (SDL_Scancode).
+//   - Values 0–(EMUKEY_EMU_BASE-1) are identity-mapped to SDL scancodes (SDL_Scancode).
 //     These cover all standard keyboard keys: letters, digits, punctuation,
 //     modifiers, function keys, cursor keys, etc.  Conversion is free: just
-//     cast the value. A 512-bit bitset in the SDL mapper marks which values
+//     cast the value. An EMUKEY_EMU_BASE-bit bitset in the SDL mapper marks which values
 //     are identity-mapped, so only deviations require a map lookup.
 //
-//   - Values 512+ are emulator-specific keys with no host equivalent:
+//   - Values EMUKEY_EMU_BASE+ are emulator-specific keys with no host equivalent:
 //     Commodore ← ↑ £ π, RESTORE, etc.  Future systems add keys here too.
 //
 //   - Marker values near UINT32_MAX signal "no key" and "same as unshifted."
@@ -252,7 +252,7 @@ static inline char emu_key_to_char(emu_key_t key) {
 // ============================================================================
 
 static inline bool emu_key_is_identity(emu_key_t key) {
-    return key < 512;
+    return key < EMUKEY_EMU_BASE;
 }
 
 static inline bool emu_key_is_emu_specific(emu_key_t key) {

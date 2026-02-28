@@ -103,7 +103,7 @@ EmuKeySDLMap::EmuKeySDLMap() {
 // ============================================================================
 
 emu_key_t EmuKeySDLMap::scancode_to_emu_key(SDL_Scancode_t scancode) const {
-    if (scancode < 512 && identity_[scancode]) {
+    if (scancode < EMUKEY_EMU_BASE && identity_[scancode]) {
         return (emu_key_t)scancode;
     }
     auto it = sdl_to_emu_.find(scancode);
@@ -114,7 +114,7 @@ emu_key_t EmuKeySDLMap::scancode_to_emu_key(SDL_Scancode_t scancode) const {
 }
 
 SDL_Scancode_t EmuKeySDLMap::emu_key_to_scancode(emu_key_t key) const {
-    if (key < 512 && identity_[key]) {
+    if (key < EMUKEY_EMU_BASE && identity_[key]) {
         return key;
     }
     auto it = emu_to_sdl_.find(key);
@@ -164,5 +164,5 @@ void EmuKeySDLMap::remove_mapping(emu_key_t key) {
 // ============================================================================
 
 bool EmuKeySDLMap::is_identity_mapped(SDL_Scancode_t scancode) const {
-    return scancode < 512 && identity_[scancode];
+    return scancode < EMUKEY_EMU_BASE && identity_[scancode];
 }
