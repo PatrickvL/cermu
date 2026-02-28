@@ -11,7 +11,7 @@
 #include <cstdio>
 #include <cstring>
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "imgui.h"
 #endif
 
@@ -230,7 +230,7 @@ void Datasette1530Device::tick() {
 // GUI
 // ============================================================================
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 void Datasette1530Device::render_device_ui() {
     if (!media_loaded_) {
         ImGui::TextDisabled("No tape loaded");

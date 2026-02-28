@@ -1,7 +1,7 @@
 #include "vicii_common.h"
 #include "../../../core/chip_layout.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #include "../../../gui/chip_visualization.h"
 #include "../../../gui/global_chip_style.h"
@@ -132,7 +132,7 @@ static ChipLayout& get_vicii_layout() {
 void vicii_t::render_debug_content() {
     vicii_t* vicii = this;
     
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     // Create two-column layout: chip visualization on left, debugging info on right
     ImVec2 window_size = ImGui::GetContentRegionAvail();
     
@@ -228,7 +228,7 @@ void vicii_t::render_debug_content() {
 void vicii_t::render_settings_content() {
     vicii_t* vicii = this;
     
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 
     ImGui::Text("VIC-II Configuration");
     ImGui::Separator();
@@ -253,7 +253,7 @@ void vicii_t::render_settings_content() {
 void vicii_t::render_layout_content() {
     vicii_t* vicii = this;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     const char* chip_name = get_vicii_type_name(vicii);
 
     ChipLayout& layout = get_vicii_layout();

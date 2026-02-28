@@ -1155,7 +1155,7 @@ mos6581_t::~mos6581_t() {
  */
 bus_state_t mos6581_t::tick(bus_state_t bus_state) {
     bus_state = advance_cycle(bus_state);
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     bus_snapshot_ = bus_state;
 #endif
     return bus_state;

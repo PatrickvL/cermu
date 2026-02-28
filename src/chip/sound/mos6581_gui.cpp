@@ -2,7 +2,7 @@
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #include "../../gui/chip_visualization.h"
 #include "../../gui/global_chip_style.h"
@@ -30,7 +30,7 @@ static const char* envelope_cycle_names[] = {
     "Off"
 };
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 static void render_voice_debug(voice_t* voice, int voice_num) {
     ImGui::PushID(voice_num);
     
@@ -153,7 +153,7 @@ static ChipLayout& get_sid_layout() {
 void mos6581_t::render_debug_content() {
     mos6581_t* sid = this;
     
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     // Create two-column layout: chip visualization on left, debugging info on right
     ImVec2 window_size = ImGui::GetContentRegionAvail();
     
@@ -238,7 +238,7 @@ void mos6581_t::render_debug_content() {
 void mos6581_t::render_settings_content() {
     mos6581_t* sid = this;
     
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 
     ImGui::Text("SID Configuration");
     ImGui::Separator();
@@ -365,7 +365,7 @@ void mos6581_t::render_settings_content() {
 void mos6581_t::render_layout_content() {
     mos6581_t* sid = this;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     ChipLayout& layout = get_sid_layout();
     std::vector<PinSignalState> pin_states = get_sid_pin_states(sid, &layout, sid->bus_snapshot_);
     render_chip_layout(layout, pin_states, "MOS6581");

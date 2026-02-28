@@ -10,7 +10,7 @@
  * MUST NOT include any per-CPU header itself (that would be circular).
  */
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 
 #include "../../../core/chip_layout.h"
 #include "fam65xx_processor_traits.hpp"
@@ -34,4 +34,4 @@ inline ChipLayout create_cpu_pin_layout() {
   return layout;
 }
 
-#endif // IMGUI_VERSION
+#endif // CERMU_HAS_GUI

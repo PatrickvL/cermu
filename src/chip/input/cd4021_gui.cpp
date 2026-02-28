@@ -5,13 +5,13 @@
  * The CD4021 is a CMOS 8-stage static shift register used as a
  * parallel-in/serial-out (PISO) interface in NES/SNES controllers.
  *
- * Compiled only when IMGUI_VERSION is defined.
+ * Compiled only when CERMU_HAS_GUI is defined.
  */
 
 #include "cd4021.h"
 #include "../../core/chip_layout.h"
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #include "../../gui/chip_visualization.h"
 #include "../../gui/global_chip_style.h"
@@ -64,7 +64,7 @@ bool CD4021::has_layout_content() const { return true; }
 bool CD4021::has_debug_content()  const { return true; }
 
 void CD4021::render_layout_content() {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     ChipLayout& layout = get_cd4021_layout();
     std::vector<PinSignalState> pin_states; // Empty — no live signal mapping yet
     render_chip_layout(layout, pin_states, "CD4021");
@@ -72,7 +72,7 @@ void CD4021::render_layout_content() {
 }
 
 void CD4021::render_debug_content() {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     uint8_t sr = get_shift_register();
 
     ImGui::Text("Shift Register: $%02X (%d)", sr, sr);

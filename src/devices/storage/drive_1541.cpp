@@ -31,7 +31,7 @@
 #include <regex>
 #include <filesystem>
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "imgui.h"
 #endif
 
@@ -875,7 +875,7 @@ void Drive1541Device::load_directory(DriveChannel& channel) {
 // GUI
 // ============================================================================
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 void Drive1541Device::render_device_ui() {
     ImGui::Text("Device #%d", device_number_);
 

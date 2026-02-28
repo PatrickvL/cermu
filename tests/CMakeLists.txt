@@ -57,7 +57,7 @@ foreach(source ${CORE_SOURCES})
 endforeach()
 
 # GUI stub sources needed by chip classes that override ChipBase virtuals.
-# These *_gui.cpp files compile to empty stubs when IMGUI_VERSION is not defined.
+# These *_gui.cpp files compile to empty stubs when CERMU_HAS_GUI is not defined.
 set(MOS6510_GUI_STUBS
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/fam65xx/fam65xx_gui.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/systems/nes/apu/nes_apu_gui.cpp

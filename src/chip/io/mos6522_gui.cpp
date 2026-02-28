@@ -12,7 +12,7 @@
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #include "../../gui/chip_visualization.h"
 #include "../../gui/global_chip_style.h"
@@ -118,7 +118,7 @@ static ChipLayout& get_via_layout() {
 void mos6522_t::render_debug_content() {
     mos6522_t* via = this;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     const char* via_name = mos6522_get_via_name(via);
 
     // Two-column layout: chip visualization | debug info
@@ -222,7 +222,7 @@ void mos6522_t::render_debug_content() {
 void mos6522_t::render_settings_content() {
     mos6522_t* via = this;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     const char* via_name = mos6522_get_via_name(via);
 
     ImGui::Text("Versatile Interface Adapter - %s Configuration", via_name);
@@ -281,7 +281,7 @@ static const char* mos6522_get_via_name(mos6522_t* via) {
 void mos6522_t::render_layout_content() {
     mos6522_t* via = this;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     const char* via_name = mos6522_get_via_name(via);
 
     ChipLayout& layout = get_via_layout();

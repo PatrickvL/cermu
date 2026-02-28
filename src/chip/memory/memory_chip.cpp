@@ -1,7 +1,7 @@
 #include "memory_chip.h"
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "../../gui/chip_visualization.h"
 #endif
 #include <cmath>
@@ -287,7 +287,7 @@ static ChipLayout create_memory_layout(size_t size_bytes,
 // Layout content rendering — generic memory chip DIP diagram
 // ============================================================================
 void MemoryChip::render_layout_content() {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     // Snapshot bus state at render time (passive chip, no tick)
     if (system_bus_) {
         bus_snapshot_ = *system_bus_;

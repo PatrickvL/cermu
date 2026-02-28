@@ -19,7 +19,7 @@
 
 using ConnectorSignals::NESControllerBit;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "imgui.h"
 #endif
 
@@ -181,7 +181,7 @@ bool NesStandardController::process_gamepad_event(const SDL_Event& event) {
 // GUI
 // ============================================================================
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 void NesStandardController::render_device_ui() {
     // Button state visualization
     bool a      = (button_state_ & A)      != 0;

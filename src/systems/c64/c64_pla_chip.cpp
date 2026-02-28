@@ -4,7 +4,7 @@
 #include "c64_bus.h"
 #include "c64_system.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #include "../../gui/chip_visualization.h"
 #include "../../gui/global_chip_style.h"
@@ -215,7 +215,7 @@ void PlaChip::render_debug_content() {
     C64System* c64 = c64_;
     if (!c64) return;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     // PLA is combinational logic — no tick function — snapshot bus state at render time
     bus_snapshot_ = c64->bus.state;
     // Create two-column layout: chip visualization on left, debugging info on right
@@ -603,7 +603,7 @@ void PlaChip::render_settings_content() {
     C64System* c64 = c64_;
     if (!c64) return;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 
     // Show PLA information
     ImGui::Text("Programmable Logic Array - C64 PLA Configuration");
@@ -640,7 +640,7 @@ void PlaChip::render_settings_content() {
 void PlaChip::render_layout_content() {
     if (!c64_) return;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     // PLA is combinational logic — no tick function — snapshot bus state at render time
     bus_snapshot_ = c64_->bus.state;
 

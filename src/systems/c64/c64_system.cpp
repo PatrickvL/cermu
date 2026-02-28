@@ -5,7 +5,7 @@
 #include "../../chip/input/emu_key_sdl_map.h"
 // gui_state_t dependency eliminated — chip debug uses base class,
 // system menu items are inlined, test binary dialog removed.
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "imgui.h"
 #endif
 #include "../../core/formats/format_registry.h"
@@ -1468,7 +1468,7 @@ bool C64System::handle_sid_player_key(SDL_Keycode key) {
 }
 
 void C64System::render_system_menu_items() {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     if (ImGui::MenuItem("Reset C64")) {
         reset();
     }
@@ -1486,7 +1486,7 @@ std::string C64System::get_subtitle_info() const {
 }
 
 void C64System::render_debug_windows(void* gui_state, std::mutex& emu_mutex) {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     if (!initialized_) return;
     EmulatedSystem::render_debug_windows(gui_state, emu_mutex);
 #endif
@@ -1606,7 +1606,7 @@ bool C64System::apply_configuration() {
 
 
 void C64System::render_configuration_ui() {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     // SID revision is a creation-time setting — selectable only in the
     // system selection dialog via custom_options / custom_settings.
     // It cannot be changed at runtime because the SID filter model and

@@ -9,7 +9,7 @@
 #include <cstdio>
 
 // Only compile when ImGui is available
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 
 // ============================================================================
 // GLOBAL CHIP STYLE MANAGER IMPLEMENTATION
@@ -641,4 +641,4 @@ void RenderChipStyleDebugWindow(bool* show_window) {
     ImGui::End();
 }
 
-#endif // IMGUI_VERSION
+#endif // CERMU_HAS_GUI

@@ -22,7 +22,7 @@
 #include <algorithm>
 #include <cstring>
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "imgui.h"
 #include <SDL.h>
 #endif
@@ -538,7 +538,7 @@ void NintendoSystem<V>::set_framebuffer(uint32_t* buffer, int width, int height)
 
 template<NintendoVariant V>
 void NintendoSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     // NES has no system keyboard — all keyboard input flows through
     // the attached NesStandardController peripheral devices via
     // process_sdl_event_for_devices().  Nothing to do here.
@@ -632,7 +632,7 @@ bool NintendoSystem<V>::handle_nsf_player_key(SDL_Keycode key) {
 
 template<NintendoVariant V>
 void NintendoSystem<V>::render_system_menu_items() {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     char reset_label[32];
     snprintf(reset_label, sizeof(reset_label), "Reset %s", Traits::name);
     if (ImGui::MenuItem(reset_label)) {
@@ -707,7 +707,7 @@ void NintendoSystem<V>::register_nes_chips() {
 
 template<NintendoVariant V>
 void NintendoSystem<V>::render_configuration_ui() {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     ImGui::Text("%s Configuration", Traits::name);
     ImGui::Separator();
     

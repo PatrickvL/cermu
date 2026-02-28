@@ -396,7 +396,7 @@ if(BUILD_GUI)
 endif()
 
 # GUI stub sources — provide virtual method implementations that compile
-# to empty bodies when IMGUI_VERSION is not defined.  Required by any
+# to empty bodies when CERMU_HAS_GUI is not defined.  Required by any
 # non-GUI executable that links CHIP_SOURCES / SYSTEM_SOURCES.
 set(GUI_STUB_SOURCES
     src/chip/cpu/fam65xx/fam65xx_gui.cpp
@@ -460,8 +460,10 @@ if(BUILD_GUI)
         target_include_directories(cermu PRIVATE ${IMGUIFILEDIALOG_ROOT})
     endif()
     
-    # Define IMGUI_VERSION macro
-    target_compile_definitions(cermu PRIVATE IMGUI_VERSION="1.92.1")
+    # Define CERMU_HAS_GUI — gates all ImGui-dependent code throughout the project.
+    # Non-GUI builds (test runners, headless) omit this, so _gui.cpp files
+    # compile to empty stubs and #ifdef CERMU_HAS_GUI blocks are skipped.
+    target_compile_definitions(cermu PRIVATE CERMU_HAS_GUI)
     
     # Disable warnings
     if(NOT MSVC)

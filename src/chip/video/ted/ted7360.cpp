@@ -943,7 +943,7 @@ void ted7360_t::tick_phi2(bus_state_t bus_state) {
 
     // Update DMA condition at end of PHI2 (catches register writes by CPU)
     update_dma_condition();
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     bus_snapshot_ = bus_state;
 #endif
 }

@@ -12,7 +12,7 @@
 #include <cmath>
 #include <SDL_events.h>
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "imgui.h"
 #endif
 
@@ -82,7 +82,7 @@ void Commodore1350Mouse::move(int dx, int dy) {
 // GUI
 // ============================================================================
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 void Commodore1350Mouse::render_device_ui() {
     bool u = is_signal_asserted(ConnectorSignals::JOY_UP);
     bool d = is_signal_asserted(ConnectorSignals::JOY_DOWN);

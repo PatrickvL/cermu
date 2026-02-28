@@ -287,7 +287,7 @@ public:
 
     // --- GUI -----------------------------------------------------------
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     /// Optional device-specific settings/status UI.
     virtual void render_device_ui() {}
 #endif

@@ -1649,7 +1649,7 @@ public:
       // operations even when it was halted in the preceding PHI2 tick
       if (this->should_halt_for_rdy(pins)) {
         // HALT: Do NOT proceed with PHI1 - return without calling handler
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
         this->bus_snapshot_ = pins;
 #endif
         return pins;
@@ -1694,7 +1694,7 @@ public:
         trace_registers("after PHI1");
         trace_exit("tick<PHI1>");
       }
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
       this->bus_snapshot_ = pins;
 #endif
     }

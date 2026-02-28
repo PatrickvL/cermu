@@ -6,7 +6,7 @@
 #endif
 
 // Include GUI implementation
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 // PlaChip GUI moved to src/systems/c64/c64_pla_chip.h
 #endif
 

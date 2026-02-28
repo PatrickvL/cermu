@@ -26,10 +26,10 @@
 #include "wdc_w65c02s.h"
 #include "wdc65c816.h"
 
-// Include GUI interface first (defines IMGUI_VERSION)
+// Include GUI interface first (defines CERMU_HAS_GUI)
 #include "../../../core/chip_layout.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "../../../gui/chip_visualization.h"
 #include "../../../gui/global_chip_style.h"
 #include <imgui.h>
@@ -64,7 +64,7 @@ static void format_processor_flags(uint8_t flags, char *buffer,
 // Flag names for processor status register
 static const char *flag_names[] = {"C", "Z", "I", "D", "B", "U", "V", "N"};
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 // ============================================================================
 // CPU-SPECIFIC CHIP VISUALIZATION HELPERS
 // ============================================================================
@@ -511,13 +511,13 @@ template void fam65xx_t<WDC_65C816Traits>::render_layout_content();
 
 } // namespace fam65xx
 
-#endif // IMGUI_VERSION
+#endif // CERMU_HAS_GUI
 
 // ============================================================================
 // Stub implementations when ImGui is not available
 // ============================================================================
 
-#ifndef IMGUI_VERSION
+#ifndef CERMU_HAS_GUI
 
 namespace fam65xx {
 
@@ -569,4 +569,4 @@ template void fam65xx_t<WDC_65C816Traits>::render_layout_content();
 
 } // namespace fam65xx
 
-#endif // !IMGUI_VERSION
+#endif // !CERMU_HAS_GUI

@@ -66,7 +66,7 @@ public:
     virtual void render_settings_content() {}
     virtual void render_layout_content() {}
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     // Bus state snapshot for layout pin rendering.
     // Assigned at the end of each system tick so that GUI code can read
     // the most recent bus state without coupling to the emulation loop.
