@@ -33,9 +33,9 @@ namespace nes_system {
 
 class PPU : public ChipBase {
 public:
-    // Screen dimensions (duplicated here for self-containment)
-    static constexpr uint32_t SCREEN_W = 256;
-    static constexpr uint32_t SCREEN_H = 240;
+    // Screen dimensions
+    // PPU memory sizes
+    static constexpr uint32_t PATTERN_TABLE_DIM = 128;       // 128×128 px debug tile grid
     // PPU registers (memory-mapped at $2000-$2007)
     struct Registers {
         uint8_t ctrl;       // $2000 - PPUCTRL
@@ -116,9 +116,9 @@ public:
         vram.resize(2048, 0);
         oam.resize(256, 0);
         palette.resize(32, 0);
-        screen.resize(SCREEN_W * SCREEN_H, 0);
-        pattern_table[0].resize(128 * 128, 0);
-        pattern_table[1].resize(128 * 128, 0);
+        screen.resize(256 * 240, 0);
+        pattern_table[0].resize(PATTERN_TABLE_DIM * PATTERN_TABLE_DIM, 0);
+        pattern_table[1].resize(PATTERN_TABLE_DIM * PATTERN_TABLE_DIM, 0);
         internal.sprite_scanline.resize(8);
 
         reset();

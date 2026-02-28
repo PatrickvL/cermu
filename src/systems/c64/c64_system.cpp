@@ -39,6 +39,7 @@
 #include <cstring>
 #include <cstdio>
 #include <cctype>
+#include "c64_constants.h"
 
 /**
  * C64 System Implementation
@@ -62,8 +63,8 @@
 
 /** Check if load address is a typical C64 address */
 static bool is_c64_load_address(uint16_t addr) {
-    return addr == 0x0801 || addr == 0xC000 || addr == 0x0800 ||
-           addr == 0x4000 || addr == 0x8000 || addr == 0xE000;
+    return addr == c64_constants::BASIC_START || addr == 0xC000 || addr == 0x0800 ||
+           addr == 0x4000 || addr == c64_constants::ROML_BASE || addr == c64_constants::KERNAL_BASE;
 }
 
 // ============================================================================
@@ -84,7 +85,7 @@ static SystemProbeResult c64_probe_file(
     if (matched_format == &PRG_FORMAT_DESCRIPTOR) {
         if (size >= 2) {
             uint16_t load_addr = data[0] | (data[1] << 8);
-            if (load_addr == 0x0801)
+            if (load_addr == c64_constants::BASIC_START)
                 result.confidence = 0.95f;              // C64 BASIC start
             else if (load_addr == 0xC000 || load_addr == 0x0800 || load_addr == 0x4000)
                 result.confidence = 0.85f;              // Common C64 ML addresses
@@ -199,10 +200,10 @@ static HardwareTraits create_c64_hardware_traits() {
     HardwareTraits traits;
     
     // Display
-    traits.display.native_width = 403;
-    traits.display.native_height = 284;
-    traits.display.visible_width = 403;
-    traits.display.visible_height = 284;
+    traits.display.native_width = c64_constants::DISPLAY_WIDTH_PAL;
+    traits.display.native_height = c64_constants::DISPLAY_HEIGHT_PAL;
+    traits.display.visible_width = c64_constants::DISPLAY_WIDTH_PAL;
+    traits.display.visible_height = c64_constants::DISPLAY_HEIGHT_PAL;
     traits.display.format = FramebufferFormat::RGBA8888;
     traits.display.palette_size = 0;  // Direct RGB
     traits.display.pixel_aspect_ratio = 1.0f;
@@ -210,7 +211,7 @@ static HardwareTraits create_c64_hardware_traits() {
     
     // Audio
     traits.audio.format = AudioFormat::STEREO_16BIT;
-    traits.audio.sample_rate_hz = 44100;
+    traits.audio.sample_rate_hz = c64_constants::AUDIO_SAMPLE_RATE;
     traits.audio.channels = 2;
     traits.audio.chip_name = "SID 6581";
     
@@ -219,10 +220,10 @@ static HardwareTraits create_c64_hardware_traits() {
     // (MOS6569: 312 lines × 63 cycles = 19656) so that each run_frame()
     // produces exactly one video frame.  target_fps is the nearest integer
     // for display/audio calculations; precise pacing uses cycles/clock.
-    traits.timing.cpu_frequency_hz = 985248;
-    traits.timing.video_frequency_hz = 985248;
-    traits.timing.audio_sample_rate_hz = 44100;
-    traits.timing.target_fps = 50;
+    traits.timing.cpu_frequency_hz = c64_constants::CPU_FREQ_PAL;
+    traits.timing.video_frequency_hz = c64_constants::CPU_FREQ_PAL;
+    traits.timing.audio_sample_rate_hz = c64_constants::AUDIO_SAMPLE_RATE;
+    traits.timing.target_fps = c64_constants::TARGET_FPS_PAL;
     traits.timing.cycles_per_frame = 19656;   // MOS6569 PAL: 312 × 63
     traits.timing.standard = VideoStandard::PAL;
 
@@ -235,8 +236,8 @@ static HardwareTraits create_c64_hardware_traits() {
     });
 
     SystemTiming ntsc_timing = traits.timing;
-    ntsc_timing.cpu_frequency_hz = 1022727;
-    ntsc_timing.video_frequency_hz = 1022727;
+    ntsc_timing.cpu_frequency_hz = c64_constants::CPU_FREQ_NTSC;
+    ntsc_timing.video_frequency_hz = c64_constants::CPU_FREQ_NTSC;
     ntsc_timing.target_fps = 60;
     ntsc_timing.cycles_per_frame = 17095;   // MOS6567R8 NTSC: 263 × 65
     ntsc_timing.standard = VideoStandard::NTSC;
@@ -274,7 +275,7 @@ C64System::C64System()
     : CommodoreSystem()  // Call base class constructor
     
 {
-    cycles_per_frame_ = 19705;  // PAL: 985248 Hz / 50 fps
+    cycles_per_frame_ = 19705;  // PAL: c64_constants::CPU_FREQ_PAL / c64_constants::TARGET_FPS_PAL
     
     // Initialize base class members
     hardware_traits_ = c64_descriptor.hardware_traits;
@@ -352,10 +353,10 @@ bool C64System::initialize() {
     // =========================================================================
     this->ram = new MemoryChip(ChipInfo{"4164", "Various"}, 65536, MemoryChip::RAM, &bus.state, "RAM", 0x0000);
     if (!(this->mos6510 = new MOS6510())) { cleanup(); return false; }
-    this->cartridge_roml = new MemoryChip(ChipInfo{"ROM", "Various"}, 8192, MemoryChip::ROM, &bus.state, "ROML", 0x8000);
-    this->basic = new MemoryChip(ChipInfo{"MOS 901226-01", "Commodore"}, 8192, MemoryChip::ROM, &bus.state, "BASIC", 0xA000);
-    this->cartridge_romh = new MemoryChip(ChipInfo{"ROM", "Various"}, 8192, MemoryChip::ROM, &bus.state, "ROMH", 0xA000);
-    this->charrom = new MemoryChip(ChipInfo{"MOS 901225-01", "Commodore"}, 4096, MemoryChip::ROM, &bus.state, "CHARROM", 0xD000);
+    this->cartridge_roml = new MemoryChip(ChipInfo{"ROM", "Various"}, c64_constants::BASIC_ROM_SIZE, MemoryChip::ROM, &bus.state, "ROML", c64_constants::ROML_BASE);
+    this->basic = new MemoryChip(ChipInfo{"MOS 901226-01", "Commodore"}, c64_constants::BASIC_ROM_SIZE, MemoryChip::ROM, &bus.state, "BASIC", c64_constants::BASIC_ROM_BASE);
+    this->cartridge_romh = new MemoryChip(ChipInfo{"ROM", "Various"}, c64_constants::BASIC_ROM_SIZE, MemoryChip::ROM, &bus.state, "ROMH", c64_constants::BASIC_ROM_BASE);
+    this->charrom = new MemoryChip(ChipInfo{"MOS 901225-01", "Commodore"}, c64_constants::CHAR_ROM_SIZE, MemoryChip::ROM, &bus.state, "CHARROM", c64_constants::CHAR_ROM_BASE);
     this->vicii = new vicii_t();
     this->vicii->init(vicii_t::get_default_config(get_vicii_standard() == VIC_PAL), vicii_t::memory_bank_change);
     if (!this->vicii) { cleanup(); return false; }
@@ -365,7 +366,7 @@ bool C64System::initialize() {
     // Configure SID timing to match C64 CPU clock
     {
         bool is_pal = (get_vicii_standard() == VIC_PAL);
-        float cpu_clock = is_pal ? 985248.0f : 1022727.0f;
+        float cpu_clock = is_pal ? static_cast<float>(c64_constants::CPU_FREQ_PAL) : static_cast<float>(c64_constants::CPU_FREQ_NTSC);
         this->sid->set_cpu_clock(cpu_clock);
         this->sid->set_timing(is_pal);
     }
@@ -404,7 +405,7 @@ bool C64System::initialize() {
     }
     printf("C64: Keyboard matrix initialized (all keys released)\n");
 
-    this->kernal = new MemoryChip(ChipInfo{"MOS 901227-03", "Commodore"}, 8192, MemoryChip::ROM, &bus.state, "KERNAL", 0xE000);
+    this->kernal = new MemoryChip(ChipInfo{"MOS 901227-03", "Commodore"}, c64_constants::KERNAL_ROM_SIZE, MemoryChip::ROM, &bus.state, "KERNAL", c64_constants::KERNAL_BASE);
 
     // No cartridge I/O by default
     this->io1 = nullptr;
@@ -592,7 +593,7 @@ void C64System::reset() {
             // Clear the keyboard buffer count so is_basic_ready() doesn't
             // get stuck waiting for a stale non-zero $C6 left by a
             // previously running program.
-            this->ram->data()[0x00C6] = 0;
+            this->ram->data()[c64_constants::KBD_BUFFER_COUNT] = 0;
         }
 
         // Reset serial trap state
@@ -1035,7 +1036,7 @@ bool C64System::is_basic_ready() const {
     // byte is $00 (e.g. $1000).
     if (ram[0x0302] != 0x83 || ram[0x0303] != 0xA4)
         return false;
-    if (ram[0x00C6] != 0)
+    if (ram[c64_constants::KBD_BUFFER_COUNT] != 0)
         return false;
     if (!boot_completed_ && ram[0x002D] == 0)
         return false;
@@ -1138,7 +1139,7 @@ void C64System::apply_pending_load() {
             ctx.mem_read        = c64_mem_read;
             ctx.mem_ctx         = this->ram;
             ctx.basic_params    = &COMMODORE_BASIC_C64;
-            ctx.basic_start_addrs[0] = 0x0801;
+            ctx.basic_start_addrs[0] = c64_constants::BASIC_START;
             ctx.default_raw_addr = 0xC000;
 
             commodore_apply_load_result(&ctx, &pending_load_.result,
@@ -1149,9 +1150,9 @@ void C64System::apply_pending_load() {
             int len = (int)strlen(load_cmd);
             if (len > 10) len = 10;
             for (int i = 0; i < len; i++) {
-                c64_mem_write_byte(this->ram, (uint16_t)(0x0277 + i), (uint8_t)load_cmd[i]);
+                c64_mem_write_byte(this->ram, (uint16_t)(c64_constants::KBD_BUFFER_BASE + i), (uint8_t)load_cmd[i]);
             }
-            c64_mem_write_byte(this->ram, 0x00C6, (uint8_t)len);
+            c64_mem_write_byte(this->ram, c64_constants::KBD_BUFFER_COUNT, (uint8_t)len);
         }
 
         pending_load_.result.release();
@@ -1182,9 +1183,9 @@ void C64System::apply_pending_load() {
             const char* load_cmd = "LOAD\r";
             int len = (int)strlen(load_cmd);
             for (int i = 0; i < len; i++) {
-                c64_mem_write_byte(this->ram, (uint16_t)(0x0277 + i), (uint8_t)load_cmd[i]);
+                c64_mem_write_byte(this->ram, (uint16_t)(c64_constants::KBD_BUFFER_BASE + i), (uint8_t)load_cmd[i]);
             }
-            c64_mem_write_byte(this->ram, 0x00C6, (uint8_t)len);
+            c64_mem_write_byte(this->ram, c64_constants::KBD_BUFFER_COUNT, (uint8_t)len);
         } else {
             printf("C64: No datasette attached — TAP not loaded\n");
         }
@@ -1207,7 +1208,7 @@ void C64System::apply_pending_load() {
     ctx.mem_read        = c64_mem_read;
     ctx.mem_ctx         = this->ram;
     ctx.basic_params    = &COMMODORE_BASIC_C64;
-    ctx.basic_start_addrs[0] = 0x0801;
+    ctx.basic_start_addrs[0] = c64_constants::BASIC_START;
     ctx.default_raw_addr = 0xC000;
     // No set_pc for deferred loads — BASIC programs use RUN injection,
     // and even ML programs benefit from full KERNAL init already done.
@@ -1318,8 +1319,8 @@ uint32_t* C64System::get_framebuffer() {
 
 void C64System::get_display_dimensions(int* width, int* height) const {
     // VIC-II visible area (284 visible lines for PAL per documentation Section 3.4)
-    *width = 403;
-    *height = 284;
+    *width = c64_constants::DISPLAY_WIDTH_PAL;
+    *height = c64_constants::DISPLAY_HEIGHT_PAL;
 }
 
 void C64System::set_framebuffer(uint32_t* buffer, int width, int height) {
@@ -1513,7 +1514,7 @@ void C64System::register_c64_chips() {
 
     // VIC-II — native C++ ChipBase, register directly
     register_chip(vicii,
-        "VIC-II (MOS 6569/6567)", "VIC-II", "Video", 0xD000);
+        "VIC-II (MOS 6569/6567)", "VIC-II", "Video", c64_constants::CHAR_ROM_BASE);
 
     // SID — MOS6581 is a native C++ ChipBase, register directly
     register_chip(sid,
@@ -1536,23 +1537,23 @@ void C64System::register_c64_chips() {
 
     // BASIC ROM
     register_chip(this->basic,
-        "BASIC ROM (MOS 901226-01)", "BASIC", "Memory", 0xA000);
+        "BASIC ROM (MOS 901226-01)", "BASIC", "Memory", c64_constants::BASIC_ROM_BASE);
 
     // KERNAL ROM
     register_chip(this->kernal,
-        "KERNAL ROM (MOS 901227-03)", "KERNAL", "Memory", 0xE000);
+        "KERNAL ROM (MOS 901227-03)", "KERNAL", "Memory", c64_constants::KERNAL_BASE);
 
     // Character ROM
     register_chip(this->charrom,
-        "Character ROM (MOS 901225-01)", "CHARROM", "Memory", 0xD000);
+        "Character ROM (MOS 901225-01)", "CHARROM", "Memory", c64_constants::CHAR_ROM_BASE);
 
     // Cartridge ROM Low
     register_chip(this->cartridge_roml,
-        "Cartridge ROML", "ROML", "Memory", 0x8000);
+        "Cartridge ROML", "ROML", "Memory", c64_constants::ROML_BASE);
 
     // Cartridge ROM High
     register_chip(this->cartridge_romh,
-        "Cartridge ROMH", "ROMH", "Memory", 0xA000);
+        "Cartridge ROMH", "ROMH", "Memory", c64_constants::BASIC_ROM_BASE);
 
     // PLA — native ChipBase (PlaChip holds c64_t* for GUI context)
     register_chip(std::make_unique<PlaChip>(c64));
@@ -1972,9 +1973,9 @@ void C64System::memory_init() {
     // Load ROMs from files
     // -------------------------------------------------------------------------
     struct { MemoryChip* rom; const char** filenames; uint16_t size; const char* name; } roms[] = {
-        { this->basic,   rom_config ? (const char**)rom_config->basic_rom_filenames   : nullptr, 8192, "BASIC" },
-        { this->kernal,  rom_config ? (const char**)rom_config->kernal_rom_filenames  : nullptr, 8192, "KERNAL" },
-        { this->charrom, rom_config ? (const char**)rom_config->chargen_rom_filenames : nullptr, 4096, "Character" },
+        { this->basic,   rom_config ? (const char**)rom_config->basic_rom_filenames   : nullptr, c64_constants::BASIC_ROM_SIZE, "BASIC" },
+        { this->kernal,  rom_config ? (const char**)rom_config->kernal_rom_filenames  : nullptr, c64_constants::KERNAL_ROM_SIZE, "KERNAL" },
+        { this->charrom, rom_config ? (const char**)rom_config->chargen_rom_filenames : nullptr, c64_constants::CHAR_ROM_SIZE, "Character" },
     };
 
     for (auto& r : roms) {
@@ -2000,10 +2001,10 @@ void C64System::memory_init() {
 
     // Cartridge ROMs: not loaded by default (filled with 0xFF if present)
     if (this->cartridge_roml && this->cartridge_roml->data()) {
-        memset(this->cartridge_roml->data(), 0xFF, 8192);
+        memset(this->cartridge_roml->data(), 0xFF, c64_constants::BASIC_ROM_SIZE);
     }
     if (this->cartridge_romh && this->cartridge_romh->data()) {
-        memset(this->cartridge_romh->data(), 0xFF, 8192);
+        memset(this->cartridge_romh->data(), 0xFF, c64_constants::BASIC_ROM_SIZE);
     }
 }
 

@@ -85,10 +85,7 @@
 //
 // Divisors match VICE's chspeed model (1 << chspeed):
 //   Bass=16, Alto=8, Soprano=4, Noise=2
-#define VIC_BASS_DIVISOR     16
-#define VIC_ALTO_DIVISOR     8
-#define VIC_SOPRANO_DIVISOR  4
-#define VIC_NOISE_DIVISOR    2
+
 
 // Noise LFSR — Fibonacci form, 16-bit, left-shifting
 // Taps at bits 3, 12, 14, 15 (matching VICE's decapped-die analysis)
@@ -101,9 +98,16 @@
 #define VIC_AUX_COLOR_SHIFT 4
 #define VIC_AUX_VOLUME_MASK 0x0F
 
-// Audio non-linear mix table scale (12-bit)
-// Derived from VIC hardware: quadratic volume DAC + compressed voice summing
-#define VIC_MIX_TABLE_MAX    4095
+// ============================================================================
+// VIC HARDWARE CONSTANTS
+// ============================================================================
+
+// Audio defaults
+#define VIC_DEFAULT_SAMPLE_RATE  22050     // Default output sample rate (Hz)
+#define VIC_AUDIO_SILENCE        128       // DC center for unsigned 8-bit audio
+
+// Memory sizes
+#define VIC_MAX_LINE_WIDTH       284       // Maximum visible pixels per raster line
 
 // Background register bit masks ($900F) per MOS 6561 VIC documentation
 // 900F XXXXYZZZ
@@ -163,7 +167,6 @@ typedef uint8_t (*vic_mem_read_fn_t)(void* user_data, uint16_t addr);
 // ============================================================================
 #define VIC_AUDIO_BUFFER_SIZE (1 << 11)                    // 2048 — ring buffer capacity (mono 8-bit samples)
 #define VIC_AUDIO_BUFFER_MASK (VIC_AUDIO_BUFFER_SIZE - 1)   // 0x7FF — index wrap mask
-#define VIC_NUM_TONE_VOICES   3
 #define VIC_NUM_VOICES        4      // 3 tones + 1 noise
 
 struct vic_audio_state_t {
@@ -233,7 +236,7 @@ struct vic_base_t : public ChipBase {
     // Video state
     uint8_t current_line[40] = {};
     uint8_t color_ram[1024] = {};
-    uint32_t pixel_line_buffer[284] = {};  // Max line width for rendering
+    uint32_t pixel_line_buffer[VIC_MAX_LINE_WIDTH] = {};  // Max line width for rendering
     int pixel_line_index = 0;
 
     // Framebuffer

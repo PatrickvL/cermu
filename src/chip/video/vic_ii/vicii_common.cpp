@@ -526,7 +526,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             // the previous character's 8 pixels have been fully shifted out
             // (pixel_in_char wraps to 0).  This decouples character pixel timing
             // from cycle boundaries, allowing columns to span across cycles.
-            if (seq->pixel_in_char == 0 && seq->display_vmli < 40) {
+            if (seq->pixel_in_char == 0 && seq->display_vmli < VICII_CHARS_PER_LINE) {
                 seq->shift_reg = seq->graphics_line[seq->display_vmli];
                 seq->active_display_column = seq->display_vmli;
                 seq->display_vmli++;
@@ -1331,7 +1331,7 @@ static inline void vicii_sprite_mcbase_update(vicii_t* vicii) {
         vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
         if (sprite->expansion_flip_flop) {
             sprite->mcbase = sprite->mc;  // MCBASE ← MC
-            if (sprite->mcbase == 63) {
+            if (sprite->mcbase == VICII_SPRITE_MC_MAX) {
                 sprite->dma_enabled = false;  // DMA off when all data consumed
             }
         }
@@ -1797,10 +1797,10 @@ bus_state_t vicii_t::tick_phi1(bus_state_t bus_state) {
         case VIC_ACCESS_S: {
             // S-access PHI1: Read sprite data byte 1 (second byte)
             if (vicii->bus.active_sprite && vicii->bus.active_sprite->dma_enabled) {
-                address = (uint16_t)vicii->bus.active_sprite->data_pointer * 64
+                address = (uint16_t)vicii->bus.active_sprite->data_pointer * VICII_SPRITE_DATA_BLOCK
                         + vicii->bus.active_sprite->mc + 1;
             } else {
-                address = 0x3fff;
+                address = VICII_IDLE_ADDRESS;
             }
             break;
         }
@@ -1810,7 +1810,7 @@ bus_state_t vicii_t::tick_phi1(bus_state_t bus_state) {
                 int sprite_idx = (int)(vicii->bus.active_sprite - &vicii->sprites.sprites[0]);
                 address = vicii->memory.vm_base | (0x3F8 + sprite_idx);
             } else {
-                address = 0x3fff;
+                address = VICII_IDLE_ADDRESS;
             }
             break;
         }
@@ -1838,11 +1838,11 @@ bus_state_t vicii_t::tick_phi1(bus_state_t bus_state) {
                 const uint8_t vmli = vicii->video_logic.vmli;
                 
                 // Bitmap mode (BMM bit set)?
-                if (vicii->sequencer.graphics_mode & VICII_BITMAP_MODE_MASK) {
+                if (vicii->sequencer.graphics_mode & 2) {
                     // Bitmap mode: CB13 provides bit 13, VC provides bits 3-12, RC provides bits 0-2
                     // Documentation section 3.7.3.3, line 1455: |CB13| VC9| VC8| VC7| VC6| VC5| VC4| VC3| VC2| VC1| VC0| RC2| RC1| RC0|
                     // Use VCBASE + VMLI to get the VC value for this column position
-                    const uint16_t vc_for_column = (vicii->video_logic.vcbase + vmli) & 0x3FF;
+                    const uint16_t vc_for_column = (vicii->video_logic.vcbase + vmli) & VICII_VC_MASK;
                     const uint16_t cb13_bit = vicii->memory.cb_base & (1 << 13);
 
                     address = cb13_bit | (vc_for_column << 3);
@@ -1861,7 +1861,7 @@ bus_state_t vicii_t::tick_phi1(bus_state_t bus_state) {
                 // This applies ONLY to g-access (character/bitmap data), NOT to
                 // p-access (sprite pointers), s-access (sprite data), c-access
                 // (screen RAM), or refresh accesses.
-                if (vicii->sequencer.graphics_mode & VICII_EXTENDED_COLOR_MODE_MASK) {
+                if (vicii->sequencer.graphics_mode & 4) {
                     address &= ~(0x03 << 9);
                 }
                 break;
@@ -1870,7 +1870,7 @@ bus_state_t vicii_t::tick_phi1(bus_state_t bus_state) {
             FALLTHROUGH;
         default: // VIC_ACCESS_IDLE or G with display_state==false
             // Idle address
-            address = 0x3fff;
+            address = VICII_IDLE_ADDRESS;
             break;
     }
 
@@ -1908,7 +1908,7 @@ bus_state_t vicii_t::tick_phi1(bus_state_t bus_state) {
         const uint8_t vmli = vicii->video_logic.vmli;
 
         // Store graphics data at the correct position in the line buffer (inlined)
-        if (vmli < 40) {
+        if (vmli < VICII_CHARS_PER_LINE) {
             vicii->sequencer.graphics_line[vmli] = graphics_data;
         }
         
@@ -1948,7 +1948,7 @@ bus_state_t vicii_t::tick_phi1(bus_state_t bus_state) {
     // Reference: VICE viciisc/vicii-fetch.c vicii_fetch_matrix() reads at post-increment
     // vmli/vc, and vicii_fetch_graphics() reads vbuf[vmli] then increments.
     if (access_type == VIC_ACCESS_C || access_type == VIC_ACCESS_REFRESH_C) {
-        const uint16_t vc = vicii->video_logic.vc & 0x3FF;
+        const uint16_t vc = vicii->video_logic.vc & VICII_VC_MASK;
         c_access_screen_addr = vicii->memory.vm_base | vc;
 
         // Color RAM read (separate data lines D8-D11, not on main bus)
@@ -1959,7 +1959,7 @@ bus_state_t vicii_t::tick_phi1(bus_state_t bus_state) {
         // cycles, so we still read color RAM here as normal (it gets overwritten later
         // for FLI bug columns).
         const uint8_t vmli = vicii->video_logic.vmli;
-        if (vmli < 40) {
+        if (vmli < VICII_CHARS_PER_LINE) {
             bus_state_t temp = bus_state;
             BUS_SET_ADDR(temp, vc);
             temp = MOS2114::bus_read(vicii->colorram, temp);
@@ -2031,7 +2031,7 @@ bus_state_t vicii_t::tick_phi1(bus_state_t bus_state) {
             // P PHI2: Set up read for sprite data byte 0 (first data byte)
             // Pointer was already read and stored during PHI1 (STEP 2)
             if (vicii->bus.active_sprite && vicii->bus.active_sprite->dma_enabled) {
-                address = (uint16_t)vicii->bus.active_sprite->data_pointer * 64
+                address = (uint16_t)vicii->bus.active_sprite->data_pointer * VICII_SPRITE_DATA_BLOCK
                         + vicii->bus.active_sprite->mc;
             } else {
                 // No DMA — no PHI2 data read needed
@@ -2041,7 +2041,7 @@ bus_state_t vicii_t::tick_phi1(bus_state_t bus_state) {
         case VIC_ACCESS_S:
             // S PHI2: Set up read for sprite data byte 2 (third/final data byte)
             if (vicii->bus.active_sprite && vicii->bus.active_sprite->dma_enabled) {
-                address = (uint16_t)vicii->bus.active_sprite->data_pointer * 64
+                address = (uint16_t)vicii->bus.active_sprite->data_pointer * VICII_SPRITE_DATA_BLOCK
                         + vicii->bus.active_sprite->mc + 2;
             } else {
                 return bus_state;
@@ -2093,7 +2093,7 @@ void vicii_t::tick_phi2(bus_state_t bus_state) {
                 vicii->bus.active_sprite->shift_reg |= (uint32_t)bus_data;
 
                 // Advance MC by 3 (all 3 bytes consumed across P+S cycle pair)
-                vicii->bus.active_sprite->mc = (vicii->bus.active_sprite->mc + 3) & 63;
+                vicii->bus.active_sprite->mc = (vicii->bus.active_sprite->mc + 3) & VICII_SPRITE_MC_MAX;
             }
             vicii->bus.active_sprite = NULL;
             break;
@@ -2101,7 +2101,7 @@ void vicii_t::tick_phi2(bus_state_t bus_state) {
             // C-access PHI2: screen RAM data — store at current vmli position
             // vmli was set during PHI1 (STEP 3/4) and is still valid here
             const uint8_t vmli = vicii->video_logic.vmli;
-            if (vicii->video_logic.display_state && vmli < 40) {
+            if (vicii->video_logic.display_state && vmli < VICII_CHARS_PER_LINE) {
                 // FLI bug modeling (Documentation section 3.14.6):
                 // "In the first three cycles after BA went low, the VIC reads $ff as
                 // character pointers and as color information the lower 4 bits of the

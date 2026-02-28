@@ -1,4 +1,5 @@
 #include "c16_system.h"
+#include "c16_constants.h"
 #include "c16_keyboard_matrix.h"
 #include "../../chip/input/emu_key_sdl_map.h"
 #include "../../core/storage/rom_loader.h"
@@ -31,10 +32,10 @@ HardwareTraits Commodore264System<V>::create_hardware_traits() {
     HardwareTraits traits = {};
     
     // Display traits - TED 7360
-    traits.display.native_width = 320;
-    traits.display.native_height = 200;
-    traits.display.visible_width = 320;
-    traits.display.visible_height = 200;
+    traits.display.native_width = c16_constants::DISPLAY_WIDTH;
+    traits.display.native_height = c16_constants::DISPLAY_HEIGHT;
+    traits.display.visible_width = c16_constants::DISPLAY_WIDTH;
+    traits.display.visible_height = c16_constants::DISPLAY_HEIGHT;
     traits.display.format = FramebufferFormat::RGBA8888;
     traits.display.palette_size = 128;      // 128 colors (luminance variations)
     traits.display.pixel_aspect_ratio = 1.0f;
@@ -57,31 +58,31 @@ HardwareTraits Commodore264System<V>::create_hardware_traits() {
     
     // Audio traits - TED has 2 channel sound
     traits.audio.format = AudioFormat::MONO_16BIT;
-    traits.audio.sample_rate_hz = 22050;
+    traits.audio.sample_rate_hz = c16_constants::AUDIO_SAMPLE_RATE;
     traits.audio.channels = 1;
     traits.audio.chip_name = "TED 7360";
     
     // Timing - PAL version
-    traits.timing.cpu_frequency_hz = 886724;    // ~0.89 MHz (PAL)
-    traits.timing.video_frequency_hz = 886724;  // Same as CPU
-    traits.timing.audio_sample_rate_hz = 22050;
-    traits.timing.target_fps = 50;              // PAL
-    traits.timing.cycles_per_frame = 17734;     // 886724 / 50
+    traits.timing.cpu_frequency_hz = c16_constants::CPU_FREQ_PAL;
+    traits.timing.video_frequency_hz = c16_constants::CPU_FREQ_PAL;
+    traits.timing.audio_sample_rate_hz = c16_constants::AUDIO_SAMPLE_RATE;
+    traits.timing.target_fps = 50;
+    traits.timing.cycles_per_frame = c16_constants::CYCLES_PER_FRAME_PAL;
     traits.timing.standard = VideoStandard::PAL;
     
     // Memory options — variant-specific
-    if constexpr (Traits::default_ram >= 65536) {
+    if constexpr (Traits::default_ram >= c16_constants::RAM_SIZE_PLUS4) {
         traits.memory_options.push_back({
             "64KB RAM",
-            65536,
-            32768,  // 32KB ROM
+            c16_constants::RAM_SIZE_PLUS4,
+            c16_constants::ROM_SIZE,
             true
         });
     } else {
         traits.memory_options.push_back({
             "16KB RAM",
-            16384,
-            32768,  // 32KB ROM
+            c16_constants::RAM_SIZE_C16,
+            c16_constants::ROM_SIZE,
             true
         });
     }
@@ -95,10 +96,10 @@ HardwareTraits Commodore264System<V>::create_hardware_traits() {
     });
     
     SystemTiming ntsc_timing = traits.timing;
-    ntsc_timing.cpu_frequency_hz = 894886;      // ~0.89 MHz (NTSC)
-    ntsc_timing.video_frequency_hz = 894886;
+    ntsc_timing.cpu_frequency_hz = c16_constants::CPU_FREQ_NTSC;
+    ntsc_timing.video_frequency_hz = c16_constants::CPU_FREQ_NTSC;
     ntsc_timing.target_fps = 60;
-    ntsc_timing.cycles_per_frame = 14914;       // 894886 / 60
+    ntsc_timing.cycles_per_frame = 14914;
     ntsc_timing.standard = VideoStandard::NTSC;
     
     traits.video_standard_configs.push_back({
@@ -128,7 +129,7 @@ SystemProbeResult Commodore264System<V>::probe_file_static(
     if (matched_format == &PRG_FORMAT_DESCRIPTOR) {
         if (size >= 2) {
             uint16_t load_addr = data[0] | (data[1] << 8);
-            if (load_addr == 0x1001)
+            if (load_addr == c16_constants::BASIC_START)
                 result.confidence = 0.6f;   // Moderate (could also be VIC-20)
             else
                 result.confidence = 0.4f;   // Lower for generic PRG
@@ -242,7 +243,7 @@ Commodore264System<V>::Commodore264System()
     , bus_state_(0)
     , initialized_(false)
 {
-    cycles_per_frame_ = 17734;
+    cycles_per_frame_ = c16_constants::CYCLES_PER_FRAME_PAL;
     hardware_traits_ = create_hardware_traits();
     current_palette_ = hardware_traits_.display.default_palette;
     
@@ -301,7 +302,7 @@ bool Commodore264System<V>::apply_configuration() {
         config_.memory_option_index < static_cast<int>(hardware_traits_.memory_options.size())) {
         ram_size_ = hardware_traits_.memory_options[config_.memory_option_index].ram_size;
     } else {
-        ram_size_ = 16384;  // Default C16
+        ram_size_ = c16_constants::RAM_SIZE_C16;  // Default C16
     }
     
     return true;
@@ -321,17 +322,17 @@ bool Commodore264System<V>::initialize() {
     
     // Create memory chips early — storage is ready for ROM loading
     auto ram_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"DRAM", "Various"}, 65536, MemoryChip::RAM, &bus_state_,
+        ChipInfo{"DRAM", "Various"}, c16_constants::RAM_SIZE_PLUS4, MemoryChip::RAM, &bus_state_,
         "RAM", 0x0000);
     ram_ = ram_chip.get();
 
     auto basic_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"ROM", "Commodore"}, 16384, MemoryChip::ROM, &bus_state_,
+        ChipInfo{"ROM", "Commodore"}, c16_constants::ROM_HALF_SIZE, MemoryChip::ROM, &bus_state_,
         "BASIC", 0x8000);
     basic_rom_ = basic_chip.get();
 
     auto kernal_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"ROM", "Commodore"}, 16384, MemoryChip::ROM, &bus_state_,
+        ChipInfo{"ROM", "Commodore"}, c16_constants::ROM_HALF_SIZE, MemoryChip::ROM, &bus_state_,
         "KERNAL", 0xC000);
     kernal_rom_ = kernal_chip.get();
     
@@ -553,7 +554,7 @@ bool Commodore264System<V>::load_file(const char* filepath) {
     ctx.mem_read        = c16_mem_read;
     ctx.mem_ctx         = ram_->data();
     ctx.basic_params    = &COMMODORE_BASIC_C16;
-    ctx.basic_start_addrs[0] = 0x1001;
+    ctx.basic_start_addrs[0] = c16_constants::BASIC_START;
     ctx.default_raw_addr = 0x4000;
     ctx.set_pc          = set_cpu_pc;
     ctx.pc_ctx          = this;
@@ -584,8 +585,8 @@ uint32_t* Commodore264System<V>::get_framebuffer() {
 
 template<C264SeriesVariant V>
 void Commodore264System<V>::get_display_dimensions(int* width, int* height) const {
-    *width = 320;
-    *height = 200;
+    *width = c16_constants::DISPLAY_WIDTH;
+    *height = c16_constants::DISPLAY_HEIGHT;
 }
 
 template<C264SeriesVariant V>

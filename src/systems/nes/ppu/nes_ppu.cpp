@@ -436,12 +436,12 @@ void PPU::clock() {
         }
         
         uint32_t color = get_pixel(palette_val, pixel);
-        screen[(scanline * nes_constants::SCREEN_WIDTH) + (cycle - 1)] = color;
+        screen[(scanline * 256) + (cycle - 1)] = color;
     }
     
     // VBlank
-    if (scanline >= 241 && scanline < (is_pal ? 311 : 261)) {
-        if (scanline == 241 && cycle == 1) {
+    if (scanline >= nes_constants::VBLANK_SCANLINE && scanline < (is_pal ? nes_constants::TOTAL_SCANLINES_PAL - 1 : nes_constants::TOTAL_SCANLINES_NTSC - 1)) {
+        if (scanline == nes_constants::VBLANK_SCANLINE && cycle == 1) {
             regs.status |= 0x80;
             if (regs.ctrl & 0x80) {
                 nmi = true;
@@ -454,10 +454,10 @@ void PPU::clock() {
 
     // Advance cycle
     cycle++;
-    if (cycle >= 341) {
+    if (cycle >= nes_constants::DOTS_PER_SCANLINE) {
         cycle = 0;
         scanline++;
-        if (scanline >= (is_pal ? 312 : 262)) {
+        if (scanline >= (is_pal ? nes_constants::TOTAL_SCANLINES_PAL : nes_constants::TOTAL_SCANLINES_NTSC)) {
             scanline = -1;
             frame_complete = true;
             frame_count++;

@@ -8,6 +8,7 @@
 #include "nes_cartridge.h"
 #include "nes_mapper_factory.h"
 #include "../bus/nes_bus.h"
+#include "../nes_system.h"
 
 #include <fstream>
 #include <iostream>
@@ -157,10 +158,10 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
     // Load CHR ROM/RAM
     if (chr_banks == 0) {
         // CHR RAM
-        chr_memory.resize(8192, 0);
+        chr_memory.resize(nes_constants::INES_CHR_BANK_SIZE, 0);
     } else {
         // CHR ROM
-        uint32_t chr_size = chr_banks * 8192;
+        uint32_t chr_size = chr_banks * nes_constants::INES_CHR_BANK_SIZE;
         if (offset + chr_size > data_size) {
             return false;
         }
@@ -169,7 +170,7 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
     }
 
     // Allocate PRG RAM (8KB, used by MMC1/MMC3 and others)
-    uint32_t prg_ram_size = header.prg_ram_size ? header.prg_ram_size * 8192 : 8192;
+    uint32_t prg_ram_size = header.prg_ram_size ? header.prg_ram_size * nes_constants::INES_PRG_RAM_DEFAULT : nes_constants::INES_PRG_RAM_DEFAULT;
     prg_ram.resize(prg_ram_size, 0);
 
     // Create appropriate mapper via factory

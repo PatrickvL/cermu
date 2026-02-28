@@ -70,7 +70,7 @@ static const uint8_t ted_lum_scale[8] = {
 };
 
 // Pre-computed 128-entry palette (RGBA, alpha=0xFF)
-static uint32_t ted_palette[TED_NUM_COLORS];
+static uint32_t ted_palette[128];
 static bool ted_palette_initialized = false;
 
 static void ted_init_palette(void) {
@@ -167,12 +167,12 @@ void ted7360_t::update_border_limits() {
     uint8_t cr1 = registers.data[TED_REG_CONTROL1];
     uint8_t cr2 = registers.data[TED_REG_CONTROL2];
     // Vertical: RSEL selects 25-row or 24-row display window
-    border.top    = (cr1 & TED_CR1_RSEL) ? TED_25ROW_START_LINE : TED_24ROW_START_LINE;
-    border.bottom = (cr1 & TED_CR1_RSEL) ? TED_25ROW_STOP_LINE  : TED_24ROW_STOP_LINE;
+    border.top    = (cr1 & TED_CR1_RSEL) ? 4    : 8;
+    border.bottom = (cr1 & TED_CR1_RSEL) ? 0xCB : 0xC7;
 
     // Horizontal: CSEL selects 40-column or 38-column display window
-    border.left  = (cr2 & TED_CR2_CSEL) ? TED_40COL_LEFT_BORDER_PX  : TED_38COL_LEFT_BORDER_PX;
-    border.right = (cr2 & TED_CR2_CSEL) ? TED_40COL_RIGHT_BORDER_PX : TED_38COL_RIGHT_BORDER_PX;
+    border.left  = (cr2 & TED_CR2_CSEL) ? 24  : 31;
+    border.right = (cr2 & TED_CR2_CSEL) ? 344 : 335;
 }
 
 // ============================================================================
@@ -195,7 +195,7 @@ void ted7360_t::update_dma_condition() {
     }
 
     // DMA lines only in the display range
-    if (raster <= TED_LAST_DMA_LINE && video_logic.den_latched) {
+    if (raster <= 0xCB && video_logic.den_latched) {
         uint8_t yscroll = cr1 & TED_CR1_YSCROLL_MASK;
         video_logic.is_dma_line = ((raster & 0x07) == yscroll);
 
@@ -241,7 +241,7 @@ void ted7360_t::tick_timers() {
     // Timer 2 — NO auto-reload, wraps to $FFFF
     if (timer2.counter == 0) {
         irq_status |= TED_IRQ_TIMER2;
-        timer2.counter = 0xFFFF;
+        timer2.counter = TED_TIMER_WRAP_VALUE;
     } else {
         timer2.counter--;
     }
@@ -249,7 +249,7 @@ void ted7360_t::tick_timers() {
     // Timer 3 — NO auto-reload, wraps to $FFFF
     if (timer3.counter == 0) {
         irq_status |= TED_IRQ_TIMER3;
-        timer3.counter = 0xFFFF;
+        timer3.counter = TED_TIMER_WRAP_VALUE;
     } else {
         timer3.counter--;
     }
@@ -401,7 +401,7 @@ void ted7360_t::pixel_sequencer() {
                 }
 
                 // Blink: attribute bit 7 → when flash phase is off, show BG0
-                bool blink_hide = (attr & 0x80) && !(flash_counter & 0x10);
+                bool blink_hide = (attr & 0x80) && !(flash_counter & TED_FLASH_PHASE_BIT);
 
                 if (blink_hide) {
                     color_idx = bg0_color;
@@ -586,7 +586,7 @@ void ted7360_t::timing_advance() {
         // --- End of frame ---
         timing.frame_count++;
         flash_counter = (flash_counter + 1) & 0x3F;
-        cursor_visible = (flash_counter & 0x10) != 0;
+        cursor_visible = (flash_counter & TED_FLASH_PHASE_BIT) != 0;
 
         // Reset video counters for new frame
         video_logic.vcbase = 0;
@@ -626,11 +626,11 @@ ted7360_t::ted7360_t(const ted7360_desc_t& desc) {
     bus.mem_read_user_data = desc.mem_read_user_data;
 
     if (timing.is_pal) {
-        timing.lines_per_frame = TED_PAL_LINES_PER_FRAME;
-        timing.cpu_cycles_per_line = TED_PAL_CPU_CYCLES_PER_LINE;
+        timing.lines_per_frame = 312;
+        timing.cpu_cycles_per_line = 57;
     } else {
-        timing.lines_per_frame = TED_NTSC_LINES_PER_FRAME;
-        timing.cpu_cycles_per_line = TED_NTSC_CPU_CYCLES_PER_LINE;
+        timing.lines_per_frame = 262;
+        timing.cpu_cycles_per_line = 57;
     }
 
     // Allocate line buffer for pixel color indices
@@ -692,12 +692,12 @@ void ted7360_t::reset() {
     registers.data[TED_REG_COLOR_BG0] = 0x00;  // Black background
 
     // Timers: reset to max
-    timer1.counter = 0xFFFF;
-    timer1.latch = 0xFFFF;
-    timer2.counter = 0xFFFF;
-    timer2.latch = 0xFFFF;
-    timer3.counter = 0xFFFF;
-    timer3.latch = 0xFFFF;
+    timer1.counter = TED_TIMER_WRAP_VALUE;
+    timer1.latch = TED_TIMER_WRAP_VALUE;
+    timer2.counter = TED_TIMER_WRAP_VALUE;
+    timer2.latch = TED_TIMER_WRAP_VALUE;
+    timer3.counter = TED_TIMER_WRAP_VALUE;
+    timer3.latch = TED_TIMER_WRAP_VALUE;
 
     // Raster
     timing.raster_counter = 0;
@@ -801,7 +801,7 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
 
         if (sequencer.graphics_mode & 2) {
             // Bitmap mode: address = bitmap_base | (VC << 3) | RC
-            uint16_t vc = (video_logic.vcbase + vmli) & 0x3FF;
+            uint16_t vc = (video_logic.vcbase + vmli) & TED_VC_MASK;
             address = memory.bitmap_base | (vc << 3) | rc;
         } else {
             // Text mode: address = char_base | (screen_code << 3) | RC
@@ -834,7 +834,7 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
 
         // Increment VC and VMLI after g-access
         video_logic.vmli++;
-        video_logic.vc = (video_logic.vc + 1) & 0x3FF;
+        video_logic.vc = (video_logic.vc + 1) & TED_VC_MASK;
     }
 
     // ===== STEP 3: DMA c-access preparation (screen + color fetch) =====
@@ -848,7 +848,7 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
     bool c_access_pending = false;
 
     if (dma_active && x >= TED_FETCH_CYCLE + TED_DMA_SETUP_CYCLES) {
-        uint16_t vc = video_logic.vc & 0x3FF;
+        uint16_t vc = video_logic.vc & TED_VC_MASK;
 
         // Screen code read via PHI2 bus: screen_base + $400 + VC
         c_access_address = (memory.screen_base + 0x0400) | vc;
@@ -859,7 +859,7 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
         if (bus.mem_read && video_logic.vmli <= TED_SCREEN_TEXTCOLS) {
             uint8_t vmli_for_color = video_logic.vmli - 1;
             if (vmli_for_color < TED_SCREEN_TEXTCOLS) {
-                uint16_t color_addr = memory.screen_base | ((video_logic.vcbase + vmli_for_color) & 0x3FF);
+                uint16_t color_addr = memory.screen_base | ((video_logic.vcbase + vmli_for_color) & TED_VC_MASK);
                 video_data.color_line[vmli_for_color] =
                     bus.mem_read(bus.mem_read_user_data, color_addr);
             }
@@ -980,13 +980,13 @@ void ted7360_t::tick() {
 
 bus_state_t ted7360_t::registers_read(bus_state_t bus_state) {
 
-    uint8_t reg = BUS_GET_ADDR(bus_state) & 0x3F;  // Handle mirroring in $FF00-$FF3F range
+    uint8_t reg = BUS_GET_ADDR(bus_state) & TED_REG_ADDR_MASK;  // Handle mirroring in $FF00-$FF3F range
 
     // Banking latches: $FF3E/$FF3F read as open bus
-    if (reg >= 0x20) {
-        if (reg == 0x3E || reg == 0x3F) { BUS_SET_DATA(bus_state, 0xFF); return bus_state; }
+    if (reg >= TED_REG_MIRROR_START) {
+        if (reg == TED_REG_ROM_LATCH || reg == TED_REG_RAM_LATCH) { BUS_SET_DATA(bus_state, 0xFF); return bus_state; }
         // Mirrored registers ($20-$3D map to $00-$1D)
-        reg &= 0x1F;
+        reg &= TED_REG_UNMIRROR_MASK;
     }
 
     uint8_t data;
@@ -1055,22 +1055,22 @@ bus_state_t ted7360_t::registers_read(bus_state_t bus_state) {
 
 bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
 
-    uint8_t reg = BUS_GET_ADDR(bus_state) & 0x3F;  // Handle mirroring
+    uint8_t reg = BUS_GET_ADDR(bus_state) & TED_REG_ADDR_MASK;  // Handle mirroring
     uint8_t data = BUS_GET_DATA(bus_state);
 
     // ROM/RAM banking latches (not mirrored)
-    if (reg == 0x3E) {
+    if (reg == TED_REG_ROM_LATCH) {
         rom_enabled = true;
         return bus_state;
     }
-    if (reg == 0x3F) {
+    if (reg == TED_REG_RAM_LATCH) {
         rom_enabled = false;
         return bus_state;
     }
 
     // Mirror writes above $1F to actual register range
-    if (reg >= 0x20) {
-        reg &= 0x1F;
+    if (reg >= TED_REG_MIRROR_START) {
+        reg &= TED_REG_UNMIRROR_MASK;
     }
 
     switch (reg) {

@@ -46,10 +46,10 @@ void vic_base_t::set_memory_callbacks(vic_mem_read_fn_t mem_read_fn, void* mem_u
 // Voice clock divisors (chip cycles per prescaler tick)
 // These match VICE's chspeed model: 1<<4, 1<<3, 1<<2, 1<<1
 static const uint32_t vic_voice_divisor[VIC_NUM_VOICES] = {
-    VIC_BASS_DIVISOR,       // Voice 0: Bass    — ÷16
-    VIC_ALTO_DIVISOR,       // Voice 1: Alto    — ÷8
-    VIC_SOPRANO_DIVISOR,    // Voice 2: Soprano — ÷4
-    VIC_NOISE_DIVISOR       // Voice 3: Noise   — ÷2
+    16,       // Voice 0: Bass    — ÷16
+    8,       // Voice 1: Alto    — ÷8
+    4,    // Voice 2: Soprano — ÷4
+    2       // Voice 3: Noise   — ÷2
 };
 
 // System reset function
@@ -109,7 +109,7 @@ void vic_base_t::reset() {
     audio.highpass_buf = 0.0f;
     audio.write_pos = 0;
     audio.read_pos = 0;
-    memset(audio.buffer, 128, sizeof(audio.buffer)); // silence = centre
+    memset(audio.buffer, VIC_AUDIO_SILENCE, sizeof(audio.buffer));
 
     // Initialize memory callbacks to NULL (system must set them)
     mem_read = NULL;
@@ -206,7 +206,7 @@ void vic_base_t::decode_all_registers() {
 
 // Emit a single pixel to the line buffer
 void vic_base_t::emit_pixel(uint8_t color_index) {
-    if (pixel_line_index < 284) {  // Max line width
+    if (pixel_line_index < VIC_MAX_LINE_WIDTH) {
         pixel_line_buffer[pixel_line_index++] = vic_palette[color_index & 0x0F];
     }
 }
@@ -316,7 +316,7 @@ void vic_base_t::audio_reset(uint32_t chip_clock_hz, uint32_t sample_rate_hz) {
     audio.highpass_buf = 0.0f;
     audio.write_pos = 0;
     audio.read_pos = 0;
-    memset(audio.buffer, 128, sizeof(audio.buffer));
+    memset(audio.buffer, VIC_AUDIO_SILENCE, sizeof(audio.buffer));
 }
 
 // Called once per chip cycle from tick()
@@ -337,7 +337,7 @@ void vic_base_t::audio_tick() {
                 if (period == 0) period = 128;
                 audio.counter[v] += period;  // += preserves phase accuracy
 
-                if (v < VIC_NUM_TONE_VOICES) {
+                if (v < 3) {
                     // ------ Tone voice: 8-bit shift register ------
                     // Shift left; the complement of the outgoing MSB re-enters
                     // at bit 0, gated by the enable bit.  When enabled, this
@@ -423,8 +423,8 @@ void vic_base_t::audio_tick() {
         float ac = audio.lowpass_buf - audio.highpass_buf;
         audio.highpass_buf += audio.highpass_alpha * (audio.lowpass_buf - audio.highpass_buf);
 
-        // Scale to unsigned 8-bit centered at 128
-        int32_t out = 128 + (int32_t)(ac * audio.output_gain);
+        // Scale to unsigned 8-bit centered at VIC_AUDIO_SILENCE
+        int32_t out = VIC_AUDIO_SILENCE + (int32_t)(ac * audio.output_gain);
         if (out < 0) out = 0;
         if (out > 255) out = 255;
 

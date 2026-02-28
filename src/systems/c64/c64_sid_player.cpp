@@ -4,6 +4,7 @@
 
 #include "c64_sid_player.h"
 #include "c64_screen_utils.h"
+#include "c64_constants.h"
 #include "../../chip/cpu/fam65xx/fam65xx.hpp"
 #include "../../chip/sound/mos6581.h"
 #include "asm6510.h"
@@ -157,7 +158,7 @@ static void build_irq_handler(uint8_t* ram, uint16_t play_addr,
     a.lda_imm(idle_banking);      // LDA #$35 — RAM at $E000+ for IRQ vector
     a.sta_zp(0x01);               // STA $01
 
-    a.lda_abs(0xDC0D);            // LDA $DC0D (acknowledge CIA1)
+    a.lda_abs(c64_constants::CIA1_ICR);            // LDA $DC0D (acknowledge CIA1)
 
     a.pla();
     a.tay();
@@ -206,10 +207,10 @@ static void build_init_stub(uint8_t* ram,
     // Disable ALL CIA interrupt sources and acknowledge any pending.
     // This prevents leftover KERNAL timer/keyboard IRQs from firing
     // before our handler is installed.
-    a.store_imm(0xDC0D, 0x7F);
-    a.store_imm(0xDD0D, 0x7F);
-    a.lda_abs(0xDC0D);            // ack CIA1
-    a.lda_abs(0xDD0D);            // ack CIA2
+    a.store_imm(c64_constants::CIA1_ICR, 0x7F);
+    a.store_imm(c64_constants::CIA2_ICR, 0x7F);
+    a.lda_abs(c64_constants::CIA1_ICR);            // ack CIA1
+    a.lda_abs(c64_constants::CIA2_ICR);            // ack CIA2
 
     if (needs_timer_irq) {
         // ---- PSID with play_addr != 0: we manage the playback IRQ ----
@@ -247,7 +248,7 @@ static void build_init_stub(uint8_t* ram,
         a.sta_abs(0xDC05);
 
         // Enable CIA1 Timer A interrupt
-        a.store_imm(0xDC0D, 0x81);
+        a.store_imm(c64_constants::CIA1_ICR, 0x81);
 
         // Start Timer A in continuous mode
         a.store_imm(0xDC0E, 0x11);
@@ -334,7 +335,7 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
            subtune + 1, use_cia_rate ? "CIA" : "VBI", timer_period, timing.cpu_frequency_hz);
 
     // ---- Step 4: Write SID info page to screen RAM ----
-    uint8_t* screen_ram = &ram[0x0400];
+    uint8_t* screen_ram = &ram[c64_constants::SCREEN_RAM_BASE];
     uint8_t* color_ram = c64->colorram ? c64->colorram->memory : nullptr;
     if (color_ram) {
         c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);
@@ -410,7 +411,7 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
     }
 
     // ---- Update info page ----
-    uint8_t* screen_ram = &ram[0x0400];
+    uint8_t* screen_ram = &ram[c64_constants::SCREEN_RAM_BASE];
     uint8_t* color_ram = c64->colorram ? c64->colorram->memory : nullptr;
     if (color_ram) {
         c64_write_sid_info_page(screen_ram, color_ram, sid, subtune, use_cia_rate);

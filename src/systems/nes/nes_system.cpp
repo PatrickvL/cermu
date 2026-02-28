@@ -70,22 +70,22 @@ static HardwareTraits create_nes_hardware_traits() {
     
     // Audio traits - NES APU (2A03)
     traits.audio.format = AudioFormat::MONO_16BIT;
-    traits.audio.sample_rate_hz = 44100;
+    traits.audio.sample_rate_hz = nes_constants::AUDIO_SAMPLE_RATE;
     traits.audio.channels = 1;
     traits.audio.chip_name = "RP2A03 APU";
     
     // Timing - NTSC version
-    traits.timing.cpu_frequency_hz = 1789773;   // ~1.79 MHz
-    traits.timing.video_frequency_hz = 5369318; // PPU is 3x CPU
-    traits.timing.audio_sample_rate_hz = 44100;
+    traits.timing.cpu_frequency_hz = nes_constants::CPU_FREQ_NTSC;
+    traits.timing.video_frequency_hz = 5369318;
+    traits.timing.audio_sample_rate_hz = nes_constants::AUDIO_SAMPLE_RATE;
     traits.timing.target_fps = 60;
-    traits.timing.cycles_per_frame = 29829;     // 1789773 / 60
+    traits.timing.cycles_per_frame = nes_constants::CYCLES_PER_FRAME_NTSC;
     traits.timing.standard = VideoStandard::NTSC;
     
     // Memory options (NES has fixed 2KB RAM)
     traits.memory_options.push_back({
         "2KB RAM (Standard)",
-        2048,
+        nes_constants::CPU_RAM_SIZE,
         0,
         true
     });
@@ -99,10 +99,10 @@ static HardwareTraits create_nes_hardware_traits() {
     });
     
     SystemTiming pal_timing = traits.timing;
-    pal_timing.cpu_frequency_hz = 1662607;      // ~1.66 MHz (PAL)
-    pal_timing.video_frequency_hz = 4987821;    // PPU is 3x CPU
+    pal_timing.cpu_frequency_hz = nes_constants::CPU_FREQ_PAL;
+    pal_timing.video_frequency_hz = 4987821;
     pal_timing.target_fps = 50;
-    pal_timing.cycles_per_frame = 33252;        // 1662607 / 50
+    pal_timing.cycles_per_frame = 33252;
     pal_timing.standard = VideoStandard::PAL;
     
     traits.video_standard_configs.push_back({
@@ -194,9 +194,9 @@ NintendoSystem<V>::NintendoSystem()
     , pins_(0)
     , is_pal_(false)
     , system_ready_(false)
-    , cycles_per_frame_(29829)
+    , cycles_per_frame_(nes_constants::CYCLES_PER_FRAME_NTSC)
     , initialized_(false)
-    , audio_sample_rate_(44100)
+    , audio_sample_rate_(nes_constants::AUDIO_SAMPLE_RATE)
     , audio_sample_counter_(0)
     , residual_time_(0.0)
 {
@@ -679,7 +679,7 @@ void NintendoSystem<V>::register_nes_chips() {
 
     // RAM — MemoryChip with layout rendering
     auto ram = std::make_unique<MemoryChip>(
-        ChipInfo{"SRAM", "Various"}, 2048, MemoryChip::SRAM, &pins_,
+        ChipInfo{"SRAM", "Various"}, nes_constants::CPU_RAM_SIZE, MemoryChip::SRAM, &pins_,
         "RAM", 0x0000);
     ram->bind(bus_.cpu_ram);  // Point at unified bus RAM for live debug view
     register_chip(std::move(ram));

@@ -1,4 +1,5 @@
 ﻿#include "vic20_system.h"
+#include "vic20_constants.h"
 #include "vic20_memory.h"
 #include "vic20_chips.h"
 #include "../../core/cermu.h"
@@ -49,10 +50,10 @@ static HardwareTraits create_vic20_hardware_traits() {
     // Display traits - VIC-20 uses MOS6560/6561 (VIC)
     // Full VIC output including borders: 63 cycles × 4 pixels = 252 pixels wide
     // Visible raster lines including borders: ~284 lines (PAL)
-    traits.display.native_width = 252;       // Full VIC horizontal output
-    traits.display.native_height = 284;      // Full VIC vertical output
-    traits.display.visible_width = 252;
-    traits.display.visible_height = 284;
+    traits.display.native_width = vic20_constants::DISPLAY_WIDTH;
+    traits.display.native_height = vic20_constants::DISPLAY_HEIGHT;
+    traits.display.visible_width = vic20_constants::DISPLAY_WIDTH;
+    traits.display.visible_height = vic20_constants::DISPLAY_HEIGHT;
     traits.display.format = FramebufferFormat::RGBA8888;
     traits.display.palette_size = 16;        // 16 colors
     traits.display.pixel_aspect_ratio = 1.0f;
@@ -76,28 +77,28 @@ static HardwareTraits create_vic20_hardware_traits() {
     
     // Audio traits - VIC-20 has simple sound from VIC chip
     traits.audio.format = AudioFormat::MONO_8BIT;
-    traits.audio.sample_rate_hz = 22050;
+    traits.audio.sample_rate_hz = vic20_constants::AUDIO_SAMPLE_RATE;
     traits.audio.channels = 1;
     traits.audio.chip_name = "VIC 6560/6561";
     
     // Timing - PAL version (NTSC differs)
-    traits.timing.cpu_frequency_hz = 1108405;   // ~1.1 MHz (PAL)
-    traits.timing.video_frequency_hz = 1108405; // Same as CPU
-    traits.timing.audio_sample_rate_hz = 22050;
-    traits.timing.target_fps = 50;              // PAL
-    traits.timing.cycles_per_frame = 22168;     // 1108405 / 50
+    traits.timing.cpu_frequency_hz = vic20_constants::CPU_FREQ_PAL;
+    traits.timing.video_frequency_hz = vic20_constants::CPU_FREQ_PAL;
+    traits.timing.audio_sample_rate_hz = vic20_constants::AUDIO_SAMPLE_RATE;
+    traits.timing.target_fps = 50;
+    traits.timing.cycles_per_frame = vic20_constants::CYCLES_PER_FRAME_PAL;
     traits.timing.standard = VideoStandard::PAL;
     
     // Memory options
     traits.memory_options.push_back({
         "Unexpanded (5KB RAM)",
-        5120,   // 5KB RAM
+        5120,
         0,
         true
     });
     traits.memory_options.push_back({
         "3KB Expansion (8KB total)",
-        8192,   // 5KB + 3KB
+        8192,
         0,
         false
     });
@@ -121,7 +122,7 @@ static HardwareTraits create_vic20_hardware_traits() {
     });
     traits.memory_options.push_back({
         "Full Expansion (32KB total)",
-        37888,  // 5KB + 32KB
+        37888,
         0,
         false
     });
@@ -135,10 +136,10 @@ static HardwareTraits create_vic20_hardware_traits() {
     });
     
     SystemTiming ntsc_timing = traits.timing;
-    ntsc_timing.cpu_frequency_hz = 1022727;     // ~1.0 MHz (NTSC)
-    ntsc_timing.video_frequency_hz = 1022727;
+    ntsc_timing.cpu_frequency_hz = vic20_constants::CPU_FREQ_NTSC;
+    ntsc_timing.video_frequency_hz = vic20_constants::CPU_FREQ_NTSC;
     ntsc_timing.target_fps = 60;
-    ntsc_timing.cycles_per_frame = 17045;       // 1022727 / 60
+    ntsc_timing.cycles_per_frame = 17045;
     ntsc_timing.standard = VideoStandard::NTSC;
     
     traits.video_standard_configs.push_back({
@@ -153,8 +154,13 @@ static HardwareTraits create_vic20_hardware_traits() {
 
 /** Check if load address is a VIC-20 address */
 static bool is_vic20_load_address(uint16_t addr) {
-    return addr == 0x1001 || addr == 0x0401 || addr == 0x1201 ||
-           addr == 0x2000 || addr == 0x4000 || addr == 0x6000 || addr == 0xA000;
+    return addr == vic20_constants::BASIC_START_UNEXPANDED ||
+           addr == vic20_constants::BASIC_START_3K ||
+           addr == vic20_constants::BASIC_START_8K ||
+           addr == vic20_constants::BLK1_START ||
+           addr == vic20_constants::BLK2_START ||
+           addr == vic20_constants::BLK3_START ||
+           addr == vic20_constants::BLK5_START;
 }
 
 // ============================================================================
@@ -172,30 +178,30 @@ static bool is_vic20_load_address(uint16_t addr) {
 static int vic20_memory_index_for_prg(uint16_t load_addr, uint32_t end_addr) {
     int mem = 0;
 
-    if (load_addr == 0x0401) {
+    if (load_addr == vic20_constants::BASIC_START_3K) {
         mem = 1;
         if (end_addr > 0x1FFF) mem = 2;
         if (end_addr > 0x5FFF) mem = 3;
         if (end_addr > 0x7FFF) mem = 5;
-    } else if (load_addr == 0x1201) {
+    } else if (load_addr == vic20_constants::BASIC_START_8K) {
         mem = 2;
         if (end_addr > 0x5FFF) mem = 3;
         if (end_addr > 0x7FFF) mem = 5;
-    } else if (load_addr == 0x1001) {
+    } else if (load_addr == vic20_constants::BASIC_START_UNEXPANDED) {
         mem = 0;
         if (end_addr > 0x1FFF) mem = 2;
         if (end_addr > 0x5FFF) mem = 3;
         if (end_addr > 0x7FFF) mem = 5;
     } else {
-        if (load_addr >= 0x0400 && load_addr < 0x1000) mem = 1;
-        if (load_addr >= 0x2000 && load_addr < 0x4000) mem = 3;
-        if ((load_addr >= 0x4000 && load_addr < 0x6000) ||
-            (end_addr > 0x4000 && end_addr <= 0x6000))
+        if (load_addr >= vic20_constants::BLK0_START && load_addr < vic20_constants::BLK0_END) mem = 1;
+        if (load_addr >= vic20_constants::BLK1_START && load_addr < vic20_constants::BLK1_END) mem = 3;
+        if ((load_addr >= vic20_constants::BLK2_START && load_addr < vic20_constants::BLK2_END) ||
+            (end_addr > vic20_constants::BLK2_START && end_addr <= vic20_constants::BLK2_END))
             { if (mem < 2) mem = 2; }
-        if ((load_addr >= 0x6000 && load_addr < 0x8000) ||
-            (end_addr > 0x6000 && end_addr <= 0x8000))
+        if ((load_addr >= vic20_constants::BLK3_START && load_addr < vic20_constants::BLK3_END) ||
+            (end_addr > vic20_constants::BLK3_START && end_addr <= vic20_constants::BLK3_END))
             { if (mem < 4) mem = 4; }
-        if (end_addr > 0x6000 && load_addr < 0x6000)
+        if (end_addr > vic20_constants::BLK3_START && load_addr < vic20_constants::BLK3_START)
             { if (mem < 4) mem = 4; }
     }
 
@@ -221,7 +227,7 @@ static SystemProbeResult vic20_probe_file(
             uint16_t load_addr = data[0] | (data[1] << 8);
             uint32_t end_addr  = (uint32_t)load_addr + (uint32_t)(size - 2);
 
-            if (load_addr == 0x1001)
+            if (load_addr == vic20_constants::BASIC_START_UNEXPANDED)
                 result.confidence = 0.85f;
             else if (is_vic20_load_address(load_addr))
                 result.confidence = 0.7f;
@@ -252,15 +258,15 @@ static SystemProbeResult vic20_probe_file(
                             if (is_vic20_load_address(addr)) found_vic20 = true;
 
                             // Accumulate memory expansion from each entry
-                            if (addr >= 0x0400 && addr < 0x1000)  { if (mem_index < 1) mem_index = 1; }
-                            if (addr >= 0x2000 && addr < 0x4000)  { if (mem_index < 3) mem_index = 3; }
-                            if ((addr >= 0x4000 && addr < 0x6000) || (ea > 0x4000 && ea <= 0x6000))
+                            if (addr >= vic20_constants::BLK0_START && addr < vic20_constants::BLK0_END)  { if (mem_index < 1) mem_index = 1; }
+                            if (addr >= vic20_constants::BLK1_START && addr < vic20_constants::BLK1_END)  { if (mem_index < 3) mem_index = 3; }
+                            if ((addr >= vic20_constants::BLK2_START && addr < vic20_constants::BLK2_END) || (ea > vic20_constants::BLK2_START && ea <= vic20_constants::BLK2_END))
                                 { if (mem_index < 2) mem_index = 2; }
-                            if ((addr >= 0x6000 && addr < 0x8000) || (ea > 0x6000 && ea <= 0x8000))
+                            if ((addr >= vic20_constants::BLK3_START && addr < vic20_constants::BLK3_END) || (ea > vic20_constants::BLK3_START && ea <= vic20_constants::BLK3_END))
                                 { if (mem_index < 4) mem_index = 4; }
-                            if (addr == 0x0401) { if (mem_index < 1) mem_index = 1; }
-                            if (addr == 0x1201) { if (mem_index < 2) mem_index = 2; }
-                            if (ea > 0x6000 && addr < 0x6000) { if (mem_index < 4) mem_index = 4; }
+                            if (addr == vic20_constants::BASIC_START_3K) { if (mem_index < 1) mem_index = 1; }
+                            if (addr == vic20_constants::BASIC_START_8K) { if (mem_index < 2) mem_index = 2; }
+                            if (ea > vic20_constants::BLK3_START && addr < vic20_constants::BLK3_START) { if (mem_index < 4) mem_index = 4; }
                         }
                     }
                 }
@@ -345,7 +351,7 @@ VIC20System::VIC20System()
     , expansion_flags_(VIC20_EXP_NONE)
     , autostart_delay_frames_(0)
 {
-    cycles_per_frame_ = 22168;
+    cycles_per_frame_ = vic20_constants::CYCLES_PER_FRAME_PAL;
     hardware_traits_ = create_vic20_hardware_traits();
     current_palette_ = hardware_traits_.display.default_palette;
     
@@ -803,10 +809,10 @@ bool VIC20System::load_file_into_memory(const char* filepath) {
     ctx.mem_read        = vic20_mem_read_for_load;
     ctx.mem_ctx         = memory_;
     ctx.basic_params    = &COMMODORE_BASIC_VIC20;
-    ctx.basic_start_addrs[0] = 0x0401;  // 3KB expansion
-    ctx.basic_start_addrs[1] = 0x1001;  // unexpanded
-    ctx.basic_start_addrs[2] = 0x1201;  // 8KB+ expansion
-    ctx.default_raw_addr = 0xA000;
+    ctx.basic_start_addrs[0] = vic20_constants::BASIC_START_3K;
+    ctx.basic_start_addrs[1] = vic20_constants::BASIC_START_UNEXPANDED;
+    ctx.basic_start_addrs[2] = vic20_constants::BASIC_START_8K;
+    ctx.default_raw_addr = vic20_constants::BLK5_START;
     ctx.set_pc          = nullptr;  // VIC-20 uses keyboard buffer injection
     ctx.try_sys_from_filename = true;
 
@@ -825,8 +831,8 @@ uint32_t* VIC20System::get_framebuffer() {
 }
 
 void VIC20System::get_display_dimensions(int* width, int* height) const {
-    *width = 252;   // Full VIC horizontal output (63 cycles × 4 pixels)
-    *height = 284;  // Full VIC vertical output including borders
+    *width = vic20_constants::DISPLAY_WIDTH;
+    *height = vic20_constants::DISPLAY_HEIGHT;
 }
 
 void VIC20System::set_framebuffer(uint32_t* buffer, int width, int height) {

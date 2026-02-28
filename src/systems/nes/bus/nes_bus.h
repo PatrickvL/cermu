@@ -34,6 +34,13 @@
 namespace nes_bus {
 
 // ============================================================================
+// BUS SIZING CONSTANTS
+// ============================================================================
+
+inline constexpr uint32_t CPU_PAGE_COUNT = 16;     // 16 × 4KB CPU pages
+inline constexpr uint32_t PPU_PAGE_COUNT = 16;     // 16 × 1KB PPU pages
+
+// ============================================================================
 // NES BUS STRUCTURE
 // ============================================================================
 
@@ -57,8 +64,8 @@ struct nes_bus_t {
     //        if (!ptr && page >= 8) → mapper register write
     //        if (!ptr && page < 8) → I/O dispatch
     //
-    alignas(64) const uint8_t* cpu_read_page[16];
-    alignas(64) uint8_t* cpu_write_page[16];
+    alignas(64) const uint8_t* cpu_read_page[CPU_PAGE_COUNT];
+    alignas(64) uint8_t* cpu_write_page[CPU_PAGE_COUNT];
 
     // ====================================================================
     // PPU page pointer tables — 16 × 1KB pages covering $0000-$3FFF
@@ -69,8 +76,8 @@ struct nes_bus_t {
     // Pages 12-15: Mirror of pages 8-11
     // Palette at $3F00-$3F1F is intercepted by PPU before page lookup.
     //
-    alignas(64) const uint8_t* ppu_read_page[16];
-    alignas(64) uint8_t* ppu_write_page[16];
+    alignas(64) const uint8_t* ppu_read_page[PPU_PAGE_COUNT];
+    alignas(64) uint8_t* ppu_write_page[PPU_PAGE_COUNT];
 
     // ====================================================================
     // OAM DMA controller state

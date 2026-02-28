@@ -31,5 +31,5 @@ void mos6560_t::init() {
     reset();
 
     // Initialise audio with NTSC clock and default sample rate
-    audio_reset(vic_config_ntsc.clock_frequency, 22050);
+    audio_reset(vic_config_ntsc.clock_frequency, VIC_DEFAULT_SAMPLE_RATE);
 }

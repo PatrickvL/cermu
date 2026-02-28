@@ -100,6 +100,20 @@
 
 #define TED_NUM_REGS         0x20   // 32 registers
 
+// Video counter / address masks
+#define TED_VC_MASK              0x3FF    // 10-bit video counter mask
+#define TED_TIMER_WRAP_VALUE     0xFFFF   // 16-bit timer wrap/initial value
+
+// Register mirror/latch constants
+#define TED_REG_ADDR_MASK        0x3F     // 64-register address space mask
+#define TED_REG_MIRROR_START     0x20     // Start of mirrored range ($FF20)
+#define TED_REG_ROM_LATCH        0x3E     // ROM banking latch ($FF3E)
+#define TED_REG_RAM_LATCH        0x3F     // RAM banking latch ($FF3F)
+#define TED_REG_UNMIRROR_MASK    0x1F     // Map $20+ back to $00+ range
+
+// Video rendering constants
+#define TED_FLASH_PHASE_BIT      0x10     // Flash phase toggle (bit 4)
+
 // ============================================================================
 // CONTROL REGISTER BITS
 // ============================================================================
@@ -154,38 +168,15 @@
 // CPU cycle), so x_cycle counts 0..56.
 
 // PAL timing
-#define TED_PAL_LINES_PER_FRAME     312
-#define TED_PAL_CPU_CYCLES_PER_LINE 57      // 114 TED clocks / 2
 #define TED_PAL_CLOCK_HZ            1773448 // TED master clock (2× CPU clock)
 #define TED_PAL_CPU_CLOCK_HZ        886724  // CPU clock
 
 // NTSC timing
-#define TED_NTSC_LINES_PER_FRAME    262
-#define TED_NTSC_CPU_CYCLES_PER_LINE 57     // Same cycles per line as PAL
 #define TED_NTSC_CLOCK_HZ           1789772 // TED master clock
 #define TED_NTSC_CPU_CLOCK_HZ       894886  // CPU clock
 
 // Display geometry
 #define TED_SCREEN_TEXTCOLS         40
-#define TED_SCREEN_TEXTLINES        25
-#define TED_SCREEN_XPIX             320
-#define TED_SCREEN_YPIX             200
-
-// Border limits (in TED raster counter coordinates)
-#define TED_25ROW_START_LINE        4
-#define TED_25ROW_STOP_LINE         0xCB    // 203
-#define TED_24ROW_START_LINE        8
-#define TED_24ROW_STOP_LINE         0xC7    // 199
-
-// Horizontal border limits (in pixel coordinates within a line)
-// The 320-pixel display window is centered in the 456-pixel visible area.
-// x_cycle 0 corresponds to the start of the line. Characters are displayed
-// starting at around CPU cycle 4..5 depending on horizontal scroll.
-// These values represent the pixel at which border opens/closes.
-#define TED_40COL_LEFT_BORDER_PX    24      // Pixel offset where 40-col display starts
-#define TED_40COL_RIGHT_BORDER_PX   344     // Pixel offset where 40-col display ends
-#define TED_38COL_LEFT_BORDER_PX    31      // 40-col + 7
-#define TED_38COL_RIGHT_BORDER_PX   335     // 40-col - 9
 
 // DMA fetch timing (in CPU cycles within a line)
 // DMA starts at CPU cycle 4 (TED_FETCH_CYCLE) and runs for 40+3=43 cycles
@@ -199,11 +190,6 @@
 
 // Visible area for framebuffer rendering
 #define TED_VISIBLE_WIDTH           384     // 320 + borders
-#define TED_VISIBLE_HEIGHT          288     // 200 + borders (PAL)
-
-// Number of colors: 16 hues × 8 luminances = 128 possible values
-// (hue 0 is luminance-independent black, so 121 unique colors)
-#define TED_NUM_COLORS              128
 
 // ============================================================================
 // LINE STATE MACHINE — driven by x_cycle position
