@@ -15,6 +15,7 @@
 #include "../../core/chip.h"
 #include "../../chip/input/cd4021.h"
 #include "../../chip/memory/memory_chip.h"
+#include "../../devices/input/nes_standard_controller.h"
 #include <fstream>
 #include <iostream>
 #include <cmath>
@@ -350,7 +351,20 @@ void NintendoSystem<V>::tick() {
 template<NintendoVariant V>
 void NintendoSystem<V>::run_frame() {
     if (!system_ready_ || !ppu_) return;
-    
+
+    // Sync peripheral device button state into legacy controllers
+    // (bus reads $4016/$4017 still use the Controller shift registers)
+    for (int p = 0; p < 2 && p < static_cast<int>(connector_ports_.size()); p++) {
+        auto* dev = connector_ports_[p]->get_attached_device();
+        if (auto* pad = dynamic_cast<NesStandardController*>(dev)) {
+            uint8_t state = pad->get_button_state();
+            for (int b = 0; b < 8; b++) {
+                auto btn = static_cast<Controller::Button>(1 << b);
+                controllers_[p].set_button_state(btn, (state >> b) & 1);
+            }
+        }
+    }
+
     ppu_->frame_complete = false;
     while (!ppu_->frame_complete) {
         clock();
@@ -525,31 +539,11 @@ void NintendoSystem<V>::set_framebuffer(uint32_t* buffer, int width, int height)
 template<NintendoVariant V>
 void NintendoSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 #ifdef IMGUI_VERSION
-    if (!cpu_) return;
-    
-    // Map keyboard to NES controller buttons
-    uint8_t button = 0;
-    bool mapped = true;
-    
-    switch (key) {
-        case SDLK_z:      button = 0x40; break;  // B
-        case SDLK_x:      button = 0x80; break;  // A
-        case SDLK_RETURN: button = 0x10; break;  // Start
-        case SDLK_RSHIFT: button = 0x20; break;  // Select
-        case SDLK_UP:     button = 0x08; break;  // Up
-        case SDLK_DOWN:   button = 0x04; break;  // Down
-        case SDLK_LEFT:   button = 0x02; break;  // Left
-        case SDLK_RIGHT:  button = 0x01; break;  // Right
-        default: mapped = false; break;
-    }
-    
-    if (mapped) {
-        if (pressed) {
-            press_button(0, static_cast<Controller::Button>(button));
-        } else {
-            release_button(0, static_cast<Controller::Button>(button));
-        }
-    }
+    // NES has no system keyboard — all keyboard input flows through
+    // the attached NesStandardController peripheral devices via
+    // process_sdl_event_for_devices().  Nothing to do here.
+    (void)key;
+    (void)pressed;
 #else
     (void)key;
     (void)pressed;
@@ -1130,6 +1124,22 @@ void NintendoSystem<V>::setup_connector_ports() {
         add_connector_port(NesConnectors::NES_CONTROLLER_2, 2);
         add_connector_port(NesConnectors::NES_EXPANSION, 0);
         printf("%s: Created %zu connector ports\n", Traits::name, connector_ports_.size());
+    }
+
+    // Attach default NES gamepads to controller ports 1 & 2.
+    // auto_bind_host_inputs() (called from attach_device_to_port) assigns
+    // connected host gamepads first; if none are available it falls back to
+    // keyboard.  We then override the keymaps for two-player keyboard play.
+    attach_device_to_port(0, "nes_gamepad");  // Controller Port 1
+    attach_device_to_port(1, "nes_gamepad");  // Controller Port 2
+
+    // Set per-player keyboard maps — WASD for P1, IJKL for P2.
+    // (Only effective when binding.type == KEYBOARD.)
+    for (int p = 0; p < 2 && p < static_cast<int>(connector_ports_.size()); p++) {
+        auto* dev = connector_ports_[p]->get_attached_device();
+        if (auto* pad = dynamic_cast<NesStandardController*>(dev)) {
+            pad->set_key_map(p == 0 ? nes_keymap_wasd() : nes_keymap_ijkl());
+        }
     }
 }
 

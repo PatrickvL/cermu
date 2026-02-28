@@ -113,15 +113,15 @@ bool NesStandardController::process_keyboard_event(const SDL_Event& event) {
     bool pressed = (event.type == SDL_KEYDOWN);
     SDL_Scancode sc = event.key.keysym.scancode;
 
-    // Default mapping: Arrows + Z=B, X=A, Enter=START, RShift=SELECT
-    if (sc == SDL_SCANCODE_UP)     { set_button_state(UP, pressed);     return true; }
-    if (sc == SDL_SCANCODE_DOWN)   { set_button_state(DOWN, pressed);   return true; }
-    if (sc == SDL_SCANCODE_LEFT)   { set_button_state(LEFT, pressed);   return true; }
-    if (sc == SDL_SCANCODE_RIGHT)  { set_button_state(RIGHT, pressed);  return true; }
-    if (sc == SDL_SCANCODE_Z)      { set_button_state(B, pressed);      return true; }
-    if (sc == SDL_SCANCODE_X)      { set_button_state(A, pressed);      return true; }
-    if (sc == SDL_SCANCODE_RETURN) { set_button_state(START, pressed);  return true; }
-    if (sc == SDL_SCANCODE_RSHIFT) { set_button_state(SELECT, pressed); return true; }
+    // Configurable mapping via NesKeyMap (default: Arrows + Z/X/Enter/RShift)
+    if (sc == keymap_.up)     { set_button_state(UP, pressed);     return true; }
+    if (sc == keymap_.down)   { set_button_state(DOWN, pressed);   return true; }
+    if (sc == keymap_.left)   { set_button_state(LEFT, pressed);   return true; }
+    if (sc == keymap_.right)  { set_button_state(RIGHT, pressed);  return true; }
+    if (sc == keymap_.b)      { set_button_state(B, pressed);      return true; }
+    if (sc == keymap_.a)      { set_button_state(A, pressed);      return true; }
+    if (sc == keymap_.start)  { set_button_state(START, pressed);  return true; }
+    if (sc == keymap_.select) { set_button_state(SELECT, pressed); return true; }
 
     return false;
 }

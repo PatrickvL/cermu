@@ -18,6 +18,59 @@
 #include "../../chip/input/cd4021.h"
 
 #include <cstdint>
+#include <SDL_scancode.h>
+
+// ============================================================================
+// NES KEYBOARD MAP
+// ============================================================================
+
+/**
+ * Maps host keyboard scancodes to NES controller buttons.
+ * Uses scancodes (layout-independent) like JoystickKeyMap.
+ */
+struct NesKeyMap {
+    SDL_Scancode up     = SDL_SCANCODE_UP;
+    SDL_Scancode down   = SDL_SCANCODE_DOWN;
+    SDL_Scancode left   = SDL_SCANCODE_LEFT;
+    SDL_Scancode right  = SDL_SCANCODE_RIGHT;
+    SDL_Scancode a      = SDL_SCANCODE_X;
+    SDL_Scancode b      = SDL_SCANCODE_Z;
+    SDL_Scancode start  = SDL_SCANCODE_RETURN;
+    SDL_Scancode select = SDL_SCANCODE_RSHIFT;
+};
+
+/// Preset: WASD + Space/LShift/Enter/Tab (Player 1).
+inline NesKeyMap nes_keymap_wasd() {
+    NesKeyMap m;
+    m.up     = SDL_SCANCODE_W;
+    m.down   = SDL_SCANCODE_S;
+    m.left   = SDL_SCANCODE_A;
+    m.right  = SDL_SCANCODE_D;
+    m.a      = SDL_SCANCODE_SPACE;
+    m.b      = SDL_SCANCODE_LSHIFT;
+    m.start  = SDL_SCANCODE_RETURN;
+    m.select = SDL_SCANCODE_TAB;
+    return m;
+}
+
+/// Preset: IJKL + Period/Comma/Semicolon/O (Player 2).
+inline NesKeyMap nes_keymap_ijkl() {
+    NesKeyMap m;
+    m.up     = SDL_SCANCODE_I;
+    m.down   = SDL_SCANCODE_K;
+    m.left   = SDL_SCANCODE_J;
+    m.right  = SDL_SCANCODE_L;
+    m.a      = SDL_SCANCODE_PERIOD;
+    m.b      = SDL_SCANCODE_COMMA;
+    m.start  = SDL_SCANCODE_SEMICOLON;
+    m.select = SDL_SCANCODE_O;
+    return m;
+}
+
+/// Preset: Arrow keys + Z/X/Enter/RShift (legacy default).
+inline NesKeyMap nes_keymap_arrows() {
+    return NesKeyMap{};  // defaults are arrows
+}
 
 class NesStandardController : public PeripheralDevice {
 public:
@@ -66,6 +119,10 @@ public:
     void set_button_state(Button button, bool pressed);
     uint8_t get_button_state() const { return button_state_; }
 
+    /// Set the keyboard-to-button mapping (default: arrows + Z/X/Enter/RShift).
+    void set_key_map(const NesKeyMap& map) { keymap_ = map; }
+    const NesKeyMap& get_key_map() const { return keymap_; }
+
 private:
     bool process_keyboard_event(const SDL_Event& event);
     bool process_gamepad_event(const SDL_Event& event);
@@ -75,4 +132,5 @@ private:
     bool latch_was_high_ = false;          // Edge detection for LATCH signal
     uint32_t output_signals_ = 0xFFFFFFFF; // Active-low output (all released)
     HostInputBinding binding_{};
+    NesKeyMap keymap_{};                   // Keyboard scancode → button mapping
 };
