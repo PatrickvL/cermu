@@ -1,4 +1,5 @@
 #include "chip8_system.h"
+#include "chip8_constants.h"
 #include "../../core/chip.h"
 #include "../../core/vfs/vfs.h"
 #include <fstream>
@@ -66,10 +67,10 @@ static HardwareTraits create_chip8_hardware_traits() {
     HardwareTraits traits = {};
     
     // Display traits — always 128×64 (lo-res is pixel-doubled)
-    traits.display.native_width = 128;
-    traits.display.native_height = 64;
-    traits.display.visible_width = 128;
-    traits.display.visible_height = 64;
+    traits.display.native_width = chip8_constants::HIRES_WIDTH;
+    traits.display.native_height = chip8_constants::HIRES_HEIGHT;
+    traits.display.visible_width = chip8_constants::HIRES_WIDTH;
+    traits.display.visible_height = chip8_constants::HIRES_HEIGHT;
     traits.display.format = FramebufferFormat::PALETTE_INDEXED_2;  // 2-bit for XO-CHIP dual-plane
     traits.display.palette_size = 4;  // 4 colors (XO-CHIP dual-plane)
     traits.display.pixel_aspect_ratio = 1.0f;
@@ -83,15 +84,15 @@ static HardwareTraits create_chip8_hardware_traits() {
     
     // Audio traits
     traits.audio.format = AudioFormat::MONO_8BIT;
-    traits.audio.sample_rate_hz = 4000;
+    traits.audio.sample_rate_hz = chip8_constants::AUDIO_SAMPLE_RATE;
     traits.audio.channels = 1;
     traits.audio.chip_name = "Beeper / XO-CHIP Audio";
     
     // Timing
     traits.timing.cpu_frequency_hz = 600;
-    traits.timing.video_frequency_hz = 60;
-    traits.timing.audio_sample_rate_hz = 4000;
-    traits.timing.target_fps = 60;
+    traits.timing.video_frequency_hz = chip8_constants::TIMER_HZ;
+    traits.timing.audio_sample_rate_hz = chip8_constants::AUDIO_SAMPLE_RATE;
+    traits.timing.target_fps = chip8_constants::TIMER_HZ;
     traits.timing.cycles_per_frame = 10;
     traits.timing.standard = VideoStandard::NTSC;
     
@@ -206,10 +207,10 @@ static SystemProbeResult chip8_probe_file(
     }
 
     // Auto-extend memory for large ROMs
-    if (size > 3584) {
+    if (size > chip8_constants::MAX_ROM_STANDARD) {
         detected = Chip8Mode::XOCHIP;
         result.configuration.memory_option_index = 1;  // 64KB
-        printf("CHIP8: ROM size %zu > 3584, selecting XO-CHIP mode with 64KB\n", size);
+        printf("CHIP8: ROM size %zu > %u, selecting XO-CHIP mode with 64KB\n", size, chip8_constants::MAX_ROM_STANDARD);
     }
 
     switch (detected) {
@@ -444,7 +445,7 @@ void Chip8System::reset() {
     memcpy(memory_.data() + 80, schip_font, sizeof(schip_font));
     
     I_ = 0;
-    PC_ = 0x200;
+    PC_ = chip8_constants::PROGRAM_START;
     SP_ = 0;
     delay_timer_ = 0;
     sound_timer_ = 0;
@@ -517,7 +518,7 @@ bool Chip8System::load_file(const char* filepath) {
     
     reset();
     
-    memcpy(memory_.data() + 0x200, file_data, size);
+    memcpy(memory_.data() + chip8_constants::PROGRAM_START, file_data, size);
     free(file_data);
 
     // Set program title to bare filename (VFS-aware)
@@ -612,7 +613,7 @@ void Chip8System::register_chip8_chips() {
     // CHIP-8 is a virtual machine — no discrete physical chips.
     // List logical functional blocks so the Hardware menu remains useful.
     register_chip(std::make_unique<ChipPlaceholder>(
-        ChipInfo{"CHIP-8", "COSMAC"}, "CHIP-8 Interpreter", "CPU", "CPU", 0x200));
+        ChipInfo{"CHIP-8", "COSMAC"}, "CHIP-8 Interpreter", "CPU", "CPU", chip8_constants::PROGRAM_START));
     register_chip(std::make_unique<ChipPlaceholder>(
         ChipInfo{"SRAM", "Various"}, "RAM (4KB)", "RAM", "Memory"));
     register_chip(std::make_unique<ChipPlaceholder>(

@@ -181,7 +181,7 @@ void voice_t::envelope_clock() {
     
     // Stage 1: Rate counter check
     if (envelope_rate_counter != envelope_rate_period) {
-        if (++envelope_rate_counter & ENVELOPE_RATE_OVERFLOW) {
+        if (++envelope_rate_counter & 0x8000) {
             ++envelope_rate_counter &= 0x7FFF;
         }
     } else {
@@ -199,7 +199,7 @@ void mos6581_t::filter_update_cutoff() {
     
     // Calculate cutoff frequency in Hz from the 11-bit register (0-2047).
     float fc = (float)filter_cutoff_frequency;
-    float normalized = fc / FILTER_CUTOFF_MAX;  // 0.0 .. 1.0
+    float normalized = fc / 2048.0f;  // 0.0 .. 1.0
     float cutoff_hz;
     
     if (revision <= SID_REVISION_6581_R4AR) {
@@ -218,7 +218,7 @@ void mos6581_t::filter_update_cutoff() {
     //
     // The filter is clocked every CPU cycle (~985 kHz PAL), so we use the
     // CPU clock as the effective sample rate for coefficient calculation.
-    float rate = cpu_clock > 0.0f ? cpu_clock : 985248.0f;
+    float rate = cpu_clock > 0.0f ? cpu_clock : SID_DEFAULT_CPU_CLOCK_PAL;
     
     // Clamp cutoff to just below Nyquist to avoid tan() blowing up
     float max_hz = rate * 0.499f;
@@ -421,7 +421,7 @@ static inline uint32_t voice_generate_triangle(uint32_t accumulator) {
     // Triangle wave: fold at MSB. XOR with max flips the ramp direction.
     uint32_t folded = (accumulator & WAVEFORM_ACCUMULATOR_MSB)
                     ? (accumulator ^ WAVEFORM_ACCUMULATOR_MAX) : accumulator;
-    return folded >> OSCILLATOR_SHIFT_TRI;
+    return folded >> 11;
 }
 
 // Extract noise DAC output from LFSR state.
@@ -474,7 +474,7 @@ void voice_t::reset() {
     
     // Reset noise state — reSID: shift_register = 0x7FFFFE after reset,
     // then clocked once. Latch noise_output immediately.
-    noise_lfsr = NOISE_LFSR_RESET;
+    noise_lfsr = 0x7FFFFE;
     noise_output = noise_lfsr_to_output(noise_lfsr);
     noise_clock_enable = false;
     shift_pipeline = 0;
@@ -516,7 +516,7 @@ void voice_t::clock_cycle() {
         // reSID: shift_register gradually fades to 0x7FFFFF over many cycles
         // via a countdown timer. We model the same countdown.
         if (shift_register_reset && !--shift_register_reset) {
-            noise_lfsr = NOISE_LFSR_TEST;  // All bits → 1
+            noise_lfsr = 0x7FFFFF;  // All bits → 1
             noise_output = noise_lfsr_to_output(noise_lfsr);
         }
         // Pulse output is forced high while test bit is set (reSID behavior)
@@ -627,7 +627,7 @@ void voice_t::set_waveform_output(voice_t* ring_source) {
     // When test bit is set, pulse output stays forced high (handled in clock_cycle).
     if (!(wf & VCREG_TEST)) {
         pulse_output = (wf & WAVEFORM_PULSE)
-            ? (((waveform_accumulator >> OSCILLATOR_SHIFT_SAW) >= pulse_waveform_width) ? OSCILLATOR_MAX : 0)
+            ? (((waveform_accumulator >> 12) >= pulse_waveform_width) ? OSCILLATOR_MAX : 0)
             : OSCILLATOR_MAX;
     }
 }
@@ -674,7 +674,7 @@ inline bus_state_t mos6581_t::advance_cycle(bus_state_t bus_state) {
     {
         // Compute instantaneous centred voice outputs (waveform × envelope).
         // 12-bit waveform centred to [-2048, +2047] × 8-bit envelope [0, 255].
-        static constexpr float inv_scale = 1.0f / (3.0f * float(OSCILLATOR_CENTER) * float(ENVELOPE_MAX));
+        static constexpr float inv_scale = 1.0f / (3.0f * float(OSCILLATOR_CENTER) * float(0xFF));
         float v1 = (float)((int32_t)voice1.oscillator_waveform - OSCILLATOR_CENTER)
                  * (float)voice1.envelope_amplitude * inv_scale;
         float v2 = (float)((int32_t)voice2.oscillator_waveform - OSCILLATOR_CENTER)
@@ -697,11 +697,11 @@ inline bus_state_t mos6581_t::advance_cycle(bus_state_t bus_state) {
 
         // 6581: add voice DC offset — each voice amplifier biases the mixer
         // line even when idle; volume modulates this DC to produce digi audio.
-        float voice_dc = (revision <= SID_REVISION_6581_R4AR) ? SID_6581_VOICE_DC : 0.0f;
+        float voice_dc = (revision <= SID_REVISION_6581_R4AR) ? 1.5f : 0.0f;
 
         // Apply master volume per-cycle: output = (voices + DC) × vol/15.
         // For digi playback, the DC is modulated by rapid volume changes.
-        float vol = (float)master_volume / SIGVOL_VOL_MAX;
+        float vol = (float)master_volume / 15.0f;
         float total = (unfiltered_output + filtered_output + voice_dc) * vol;
 
         // Accumulate post-filter mixed output for box-filter downsampling.
@@ -731,7 +731,7 @@ inline bus_state_t mos6581_t::advance_cycle(bus_state_t bus_state) {
         //   y[n] = x[n] - x[n-1] + α · y[n-1],  α = 0.997
         {
             float dc_out = mixed - dc_blocker_prev_in
-                         + DC_BLOCKER_ALPHA * dc_blocker_prev_out;
+                         + 0.997f * dc_blocker_prev_out;
             dc_blocker_prev_in = mixed;
             dc_blocker_prev_out = dc_out;
             mixed = dc_out;
@@ -839,7 +839,7 @@ uint32_t mos6581_t::calculate_envelope_time_ms(voice_t* v, envelope_cycle_t cycl
 // =============================================================================
 
 void voice_t::write_pulse_waveform_width(uint16_t value) {
-    pulse_waveform_width = value & PULSE_WIDTH_MAX;
+    pulse_waveform_width = value & 0xFFF;
 }
 
 // Number of cycles for shift register to fully reset to 0x7FFFFF.
@@ -942,7 +942,7 @@ bus_state_t mos6581_t::registers_write(void* context, bus_state_t bus_state) {
     uint8_t value = BUS_GET_DATA(bus_state);
     sid->bus_value = value; // Store for potential bus reads
     
-    if (r < SID_VOICE_REG_COUNT) { // Voice registers (0x00-0x14)
+    if (r < (3 * VOICE_REGS)) { // Voice registers (0x00-0x14)
         voice_t* voice = sid->voices[r / VOICE_REGS];
         
         switch (r % VOICE_REGS) {
@@ -1047,7 +1047,7 @@ bus_state_t mos6581_t::registers_read(void* context, bus_state_t bus_state) {
             
         case SID_REG_UNUSED_START:
         case SID_REG_UNUSED_START + 1:
-        case SID_REG_UNUSED_END:
+        case 0x1F:
             BUS_SET_DATA(bus_state, 0xFF);
             break;
             
@@ -1077,10 +1077,10 @@ void mos6581_t::init() {
     for (int i = 0; i < 3; i++) {
         voices[i]->voice_index = i;
         voices[i]->sid = this;
-        voices[i]->cpu_clock = 985248.0f; // PAL C64 default
+        voices[i]->cpu_clock = SID_DEFAULT_CPU_CLOCK_PAL; // PAL C64 default
         // Power-on values — only set here, NOT on reset (reSID behavior).
         // Real hardware: accumulator even bits high, envelope odd bits high.
-        voices[i]->waveform_accumulator = ACC_POWERUP_VALUE;  // 0x555555
+        voices[i]->waveform_accumulator = 0x555555;  // 0x555555
         voices[i]->envelope_amplitude = 0xAA;                 // Odd bits high
     }
     
@@ -1088,7 +1088,7 @@ void mos6581_t::init() {
     revision = SID_REVISION_6581_R4AR;
     pal_timing = true;
     sample_rate = 44100.0f;
-    cpu_clock = 985248.0f;   // PAL C64 default
+    cpu_clock = SID_DEFAULT_CPU_CLOCK_PAL;   // PAL C64 default
     enable_filter = true;
     enable_distortion = true;
     enable_digiboost = true;

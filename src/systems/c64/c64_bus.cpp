@@ -1,5 +1,6 @@
 #include "c64_bus.h"
 #include "c64_system.h"
+#include "c64_constants.h"
 #include "../../chip/io/mos6526.h"
 #include "../../chip/logic/pla.h"
 #include "../../core/cermu.h"
@@ -450,18 +451,18 @@ struct c64_chip_entry_t {
 
 // Sparse lookup table indexed by CHIP_* values (supports irregular numbering)
 static const c64_chip_entry_t c64_bus_chip_to_entry[] = {
-    /* [CHIP_ROML] = */     { 0x8000, 8*1024, "Cartridge ROM Low" },
+    /* [CHIP_ROML] = */     { c64_constants::ROML_BASE, 8*1024, "Cartridge ROM Low" },
     { 0, 0, nullptr }, // CHIP_1 unused
-    /* [CHIP_ROMH] = */     { 0xA000, 8*1024, "Cartridge ROM High" }, // Note: Can also map to 0xE000
+    /* [CHIP_ROMH] = */     { c64_constants::BASIC_ROM_BASE, 8*1024, "Cartridge ROM High" }, // Note: Can also map to 0xE000
     { 0, 0, nullptr }, // CHIP_3 unused
-    /* [CHIP_KERNAL] = */   { 0xE000, 8*1024, "KERNAL ROM" },
+    /* [CHIP_KERNAL] = */   { c64_constants::KERNAL_BASE, 8*1024, "KERNAL ROM" },
     { 0, 0, nullptr }, // CHIP_5 unused
-    /* [CHIP_BASIC] = */    { 0xA000, 8*1024, "BASIC ROM" },
-    /* [CHIP_CHARROM] = */  { 0xD000, 4*1024, "Character ROM" },
+    /* [CHIP_BASIC] = */    { c64_constants::BASIC_ROM_BASE, 8*1024, "BASIC ROM" },
+    /* [CHIP_CHARROM] = */  { c64_constants::CHAR_ROM_BASE, 4*1024, "Character ROM" },
     { 0, 0, nullptr }, // CHIP_8 unused
     /* [CHIP_RAM] = */      { 0x0000, 64*1024, "RAM" },
     /* [CHIP_UNMAPPED] = */ { 0x0000, 0, "Unmapped" },
-    /* [CHIP_IO] = */       { 0xD000, 4*1024, "I/O" },
+    /* [CHIP_IO] = */       { c64_constants::CHAR_ROM_BASE, 4*1024, "I/O" },
 };
 static const size_t CHIP_ENTRY_COUNT = sizeof(c64_bus_chip_to_entry) / sizeof(c64_bus_chip_to_entry[0]);
 

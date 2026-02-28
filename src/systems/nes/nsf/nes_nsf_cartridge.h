@@ -36,10 +36,10 @@ private:
     std::vector<uint8_t> nsf_rom_;
 
     // Work RAM at $6000-$7FFF (8KB)
-    uint8_t work_ram_[8192] = {};
+    uint8_t work_ram_[nes_constants::INES_PRG_RAM_DEFAULT] = {};
 
     // CHR-RAM for font tiles (8KB = pattern tables 0+1)
-    uint8_t chr_ram_[8192] = {};
+    uint8_t chr_ram_[nes_constants::INES_CHR_BANK_SIZE] = {};
 
     // Banking state
     bool bankswitched_;

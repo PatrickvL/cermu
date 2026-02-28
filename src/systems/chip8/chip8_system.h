@@ -1,5 +1,6 @@
 #pragma once
 
+#include "chip8_constants.h"
 #include "../../core/emulated_system.h"
 #include "../../core/framebuffer_renderer.h"
 #include <cstdint>
@@ -84,7 +85,7 @@ private:
     // Two 1-bit planes, each 128×64 pixels = 1024 bytes/plane.
     // Plane 0 and plane 1 are combined for XO-CHIP 4-color output.
     // In lo-res mode only the top-left 64×32 quadrant is active (doubled on output).
-    static constexpr int PLANE_SIZE = 128 * 64 / 8;  // 1024 bytes
+    static constexpr int PLANE_SIZE = chip8_constants::HIRES_WIDTH * chip8_constants::HIRES_HEIGHT / 8;  // 1024 bytes
     uint8_t planes_[2][PLANE_SIZE]; // plane 0, plane 1
     bool hires_;                     // true = 128×64, false = 64×32
     uint8_t active_plane_mask_;      // bitmask: bit0=plane0, bit1=plane1
@@ -116,8 +117,8 @@ private:
     void update_timers();
 
     // Display helpers
-    int display_width() const  { return hires_ ? 128 : 64; }
-    int display_height() const { return hires_ ? 64  : 32; }
+    int display_width() const  { return hires_ ? chip8_constants::HIRES_WIDTH  : 64; }
+    int display_height() const { return hires_ ? chip8_constants::HIRES_HEIGHT : 32; }
     int bytes_per_row() const  { return display_width() / 8; }
 
     void scroll_down(int n);

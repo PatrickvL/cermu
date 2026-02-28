@@ -52,26 +52,21 @@ namespace nes_constants {
     // Timing constants
     constexpr uint32_t CPU_FREQ_NTSC = 1789773;  // Hz
     constexpr uint32_t CPU_FREQ_PAL = 1662607;   // Hz
-    constexpr uint32_t PPU_FREQ_NTSC = 5369318;  // Hz (3x CPU)
-    constexpr uint32_t PPU_FREQ_PAL = 4987821;   // Hz (3x CPU)
+    constexpr uint32_t CYCLES_PER_FRAME_NTSC = 29829;   // CPU_FREQ_NTSC / 60
+    constexpr uint32_t AUDIO_SAMPLE_RATE = 44100;        // Hz
     
-    // Screen dimensions
-    constexpr uint32_t SCREEN_WIDTH = 256;
-    constexpr uint32_t SCREEN_HEIGHT = 240;
-    constexpr uint32_t TOTAL_SCANLINES_NTSC = 262;
-    constexpr uint32_t TOTAL_SCANLINES_PAL = 312;
-    
-    // Memory layout
-    constexpr uint16_t RAM_START = 0x0000;
-    constexpr uint16_t RAM_END = 0x07FF;
-    constexpr uint16_t RAM_MIRRORS_END = 0x1FFF;
-    constexpr uint16_t PPU_REGS_START = 0x2000;
-    constexpr uint16_t PPU_REGS_END = 0x2007;
-    constexpr uint16_t PPU_MIRRORS_END = 0x3FFF;
-    constexpr uint16_t APU_IO_REGS_START = 0x4000;
-    constexpr uint16_t APU_IO_REGS_END = 0x4017;
-    constexpr uint16_t CARTRIDGE_START = 0x4020;
-    constexpr uint16_t CARTRIDGE_END = 0xFFFF;
+    // Screen / scanline timing
+    constexpr int32_t  TOTAL_SCANLINES_NTSC = 262;
+    constexpr int32_t  TOTAL_SCANLINES_PAL = 312;
+    constexpr int32_t  VBLANK_SCANLINE = 241;           // first VBlank scanline
+    constexpr uint32_t DOTS_PER_SCANLINE = 341;          // PPU dots per scanline
+
+    // CPU / bus sizing
+    constexpr uint32_t CPU_RAM_SIZE = 2048;               // 2KB internal RAM
+
+    // iNES format sizes
+    constexpr uint32_t INES_CHR_BANK_SIZE = 8192;         // 8KB CHR-ROM/RAM bank
+    constexpr uint32_t INES_PRG_RAM_DEFAULT = 8192;       // default 8KB PRG-RAM
 }
 
 // PPU class now in ppu/nes_ppu.h (included above)

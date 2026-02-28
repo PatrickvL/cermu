@@ -33,5 +33,5 @@ void mos6561_t::init() {
     reset();
 
     // Initialise audio with PAL clock and default sample rate
-    audio_reset(vic_config_pal.clock_frequency, 22050);
+    audio_reset(vic_config_pal.clock_frequency, VIC_DEFAULT_SAMPLE_RATE);
 }

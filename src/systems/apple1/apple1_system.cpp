@@ -1,4 +1,5 @@
 #include "apple1_system.h"
+#include "apple1_constants.h"
 #include "../../core/chip.h"
 #include <cstring>
 #include <cstdio>
@@ -21,10 +22,10 @@ static HardwareTraits create_apple1_hardware_traits() {
     HardwareTraits traits = {};
     
     // Display traits - Apple 1 used terminal display (40x24 text)
-    traits.display.native_width = 320;      // 40 columns * 8 pixels
-    traits.display.native_height = 192;     // 24 rows * 8 pixels
-    traits.display.visible_width = 320;
-    traits.display.visible_height = 192;
+    traits.display.native_width = apple1_constants::DISPLAY_WIDTH;
+    traits.display.native_height = apple1_constants::DISPLAY_HEIGHT;
+    traits.display.visible_width = apple1_constants::DISPLAY_WIDTH;
+    traits.display.visible_height = apple1_constants::DISPLAY_HEIGHT;
     traits.display.format = FramebufferFormat::RGBA8888;
     traits.display.palette_size = 2;        // Monochrome (green on black typically)
     traits.display.pixel_aspect_ratio = 1.0f;
@@ -45,11 +46,11 @@ static HardwareTraits create_apple1_hardware_traits() {
     traits.audio.chip_name = "None";
     
     // Timing
-    traits.timing.cpu_frequency_hz = 1000000;   // 1 MHz
-    traits.timing.video_frequency_hz = 1000000; // Same as CPU
+    traits.timing.cpu_frequency_hz = apple1_constants::CPU_FREQ;
+    traits.timing.video_frequency_hz = apple1_constants::CPU_FREQ;
     traits.timing.audio_sample_rate_hz = 0;
-    traits.timing.target_fps = 60;              // Video refresh
-    traits.timing.cycles_per_frame = 16667;     // 1000000 / 60
+    traits.timing.target_fps = 60;
+    traits.timing.cycles_per_frame = apple1_constants::CYCLES_PER_FRAME;
     traits.timing.standard = VideoStandard::NTSC;
     
     // Memory options
@@ -61,13 +62,13 @@ static HardwareTraits create_apple1_hardware_traits() {
     });
     traits.memory_options.push_back({
         "8KB RAM",
-        8192,
+        apple1_constants::RAM_8K,
         0,
         true  // Default
     });
     traits.memory_options.push_back({
         "64KB RAM",
-        65536,
+        apple1_constants::RAM_64K,
         0,
         false
     });
@@ -113,8 +114,8 @@ Apple1System::Apple1System()
     : EmulatedSystem()
     , cpu_(nullptr)
     , terminal_(nullptr)
-    , cycles_per_frame_(16667)
-    , ram_size_(8192)  // Default 8KB
+    , cycles_per_frame_(apple1_constants::CYCLES_PER_FRAME)
+    , ram_size_(apple1_constants::RAM_8K)
     , has_basic_(false)
     , cursor_col_(0)
     , cursor_row_(0)
@@ -185,13 +186,13 @@ bool Apple1System::initialize() {
     // Create memory chips — registered later, storage is ready immediately
     // RAM chip — allocated at full 64KB but only ram_size_ is addressable
     auto ram_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"SRAM", "Various"}, 65536, MemoryChip::SRAM, &pins_,
+        ChipInfo{"SRAM", "Various"}, apple1_constants::RAM_64K, MemoryChip::SRAM, &pins_,
         "RAM", 0x0000);
     ram_ = ram_chip.get();
 
     auto monitor_chip = std::make_unique<MemoryChip>(
         ChipInfo{"PROM", "Various"}, 256, MemoryChip::PROM, &pins_,
-        "Monitor", 0xFF00);
+        "Monitor", apple1_constants::MONITOR_BASE);
     monitor_rom_ = monitor_chip.get();
 
     auto basic_chip = std::make_unique<MemoryChip>(
@@ -243,7 +244,7 @@ bool Apple1System::initialize() {
     register_chip(static_cast<ChipBase*>(cpu_),
         "MOS 6502 CPU", "6502", "CPU", 0x0000);
     register_chip(&pia_,
-        "PIA 6820 (Keyboard/Display)", "PIA", "I/O", 0xD010);
+        "PIA 6820 (Keyboard/Display)", "PIA", "I/O", apple1_constants::PIA_BASE);
     register_chip(std::make_unique<ChipPlaceholder>(
         ChipInfo{"Terminal", "Custom"}, "Text Terminal (40x24)", "Terminal", "Video"));
     register_chip(std::move(ram_chip));
@@ -326,8 +327,8 @@ uint32_t* Apple1System::get_framebuffer() {
 }
 
 void Apple1System::get_display_dimensions(int* width, int* height) const {
-    *width = 320;   // 40 columns * 8 pixels
-    *height = 192;  // 24 rows * 8 pixels
+    *width = apple1_constants::DISPLAY_WIDTH;
+    *height = apple1_constants::DISPLAY_HEIGHT;
 }
 
 void Apple1System::set_framebuffer(uint32_t* buffer, int width, int height) {
@@ -423,7 +424,7 @@ bus_state_t Apple1System::mem_tick(bus_state_t s) {
         uint8_t data = 0xFF;
 
         // PIA 6820 registers (0xD010-0xD013)
-        if (addr >= 0xD010 && addr <= 0xD013) {
+        if (addr >= apple1_constants::PIA_BASE && addr <= apple1_constants::PIA_BASE + 3) {
             data = pia_.read(addr);
         }
         // RAM (0x0000 to ram_size)
@@ -431,8 +432,8 @@ bus_state_t Apple1System::mem_tick(bus_state_t s) {
             data = (*ram_)[addr];
         }
         // Monitor ROM (0xFF00-0xFFFF = 256 bytes)
-        else if (addr >= 0xFF00) {
-            data = (*monitor_rom_)[addr - 0xFF00];
+        else if (addr >= apple1_constants::MONITOR_BASE) {
+            data = (*monitor_rom_)[addr - apple1_constants::MONITOR_BASE];
         }
         // TODO: Add BASIC ROM mapping if has_basic_ is true
 
@@ -442,7 +443,7 @@ bus_state_t Apple1System::mem_tick(bus_state_t s) {
         uint8_t data = BUS_GET_DATA(s);
 
         // PIA 6820 registers (0xD010-0xD013)
-        if (addr >= 0xD010 && addr <= 0xD013) {
+        if (addr >= apple1_constants::PIA_BASE && addr <= apple1_constants::PIA_BASE + 3) {
             pia_.write(addr, data);
         }
         // RAM (0x0000 to ram_size)

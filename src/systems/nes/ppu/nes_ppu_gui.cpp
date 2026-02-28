@@ -9,6 +9,7 @@
  */
 
 #include "nes_ppu.h"
+#include "../nes_system.h"
 #include "../../../core/chip_layout.h"
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
@@ -133,14 +134,14 @@ void nes_system::PPU::render_debug_content() {
         // Timing
         if (ImGui::CollapsingHeader("Timing", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::Text("Scanline:     %d", ppu->scanline);
-            ImGui::Text("Cycle:        %d / 341", ppu->cycle);
+            ImGui::Text("Cycle:        %d / %u", ppu->cycle, nes_constants::DOTS_PER_SCANLINE);
             ImGui::Text("Frame:        %llu", (unsigned long long)ppu->frame_count);
             ImGui::Text("Region:       %s", ppu->is_pal ? "PAL" : "NTSC");
             ImGui::Text("Frame Done:   %s", ppu->frame_complete ? "YES" : "NO");
             ImGui::Text("NMI Pending:  %s", ppu->nmi ? "YES" : "NO");
 
             // Scanline progress
-            int total_scanlines = ppu->is_pal ? 312 : 262;
+            int total_scanlines = ppu->is_pal ? nes_constants::TOTAL_SCANLINES_PAL : nes_constants::TOTAL_SCANLINES_NTSC;
             float scanline_progress = (float)(ppu->scanline + 1) / (float)total_scanlines;
             ImGui::ProgressBar(scanline_progress, ImVec2(-1, 0), NULL);
         }

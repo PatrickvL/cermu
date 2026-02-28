@@ -116,32 +116,23 @@ enum waveform_bits_t {
 // SID constants — accumulator
 #define WAVEFORM_ACCUMULATOR_MAX    0xFFFFFF   // 24-bit accumulator mask
 #define WAVEFORM_ACCUMULATOR_MSB    0x800000   // Bit 23 (MSB)
-#define ACC_POWERUP_VALUE           0x555555   // VICE: even bits high on power-up
 #define ACC_BIT19                   0x080000   // Bit 19: noise LFSR clock source
 
 // SID constants — oscillator output
 #define OSCILLATOR_MAX              0xFFF      // 12-bit oscillator DAC range
 #define OSCILLATOR_CENTER           2048       // Mid-point for signed centering
-#define OSCILLATOR_SHIFT_TRI        11         // 24-bit acc → 12-bit triangle
-#define OSCILLATOR_SHIFT_SAW        12         // 24-bit acc → 12-bit sawtooth
-
-// SID constants — envelope
-#define ENVELOPE_MAX                0xFF       // 8-bit envelope output
-#define ENVELOPE_RATE_TABLE_SIZE    16         // Rate lookup entries (0-15)
-#define ENVELOPE_RATE_OVERFLOW      0x8000     // 15-bit rate counter overflow
 
 // SID constants — pulse / noise
-#define PULSE_WIDTH_MAX             0xFFF      // 12-bit pulse width
 #define NOISE_LFSR_MASK             0x7FFFFF   // 23-bit LFSR mask
-#define NOISE_LFSR_RESET            0x7FFFFE   // LFSR value after chip reset
-#define NOISE_LFSR_TEST             0x7FFFFF   // LFSR value when test bit set
 
 // SID constants — sample buffer
 #define SAMPLE_BUFFER_SIZE          8192       // SPSC ring buffer size
 
 // SID constants — filter
-#define FILTER_CUTOFF_MAX           2048.0f
 #define FILTER_RESONANCE_MAX        15.0f
+
+// SID constants — default clock / sample rate
+#define SID_DEFAULT_CPU_CLOCK_PAL   985248.0f  // PAL C64 CPU clock (Hz)
 
 // SID constants — audio output
 // Voice DC offset for 6581 digi playback.  On real 6581 hardware each voice
@@ -161,16 +152,9 @@ enum waveform_bits_t {
 // model vs the real 6581's nonlinear op-amp saturation in the mixer/gain stage.
 // At 1.5, digi amplitude roughly equals voice amplitude after the DC blocker,
 // matching the perceptual balance on real hardware.
-#define SID_6581_VOICE_DC           1.5f       // Total 3-voice DC offset (6581)
-#define DC_BLOCKER_ALPHA            0.997f     // ~20 Hz high-pass coefficient
-#define SIGVOL_VOL_MAX              15.0f      // Maximum master volume (4-bit)
-
-// Voice register addressing helpers
-#define SID_VOICE_REG_COUNT         (3 * VOICE_REGS) // Total voice registers (21)
 
 // Unused/padding register range (reads as 0xFF)
 #define SID_REG_UNUSED_START        0x1D
-#define SID_REG_UNUSED_END          0x1F
 
 // Combined waveform lookup table size
 

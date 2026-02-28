@@ -178,8 +178,6 @@ namespace vicii_regs {
 
 // Mode bitmasks
 #define VICII_MULTICOLOR_MODE_MASK    1  // MCM=1
-#define VICII_BITMAP_MODE_MASK        2  // BMM=1
-#define VICII_EXTENDED_COLOR_MODE_MASK 4  // ECM=1
 
 // VIC-II Colors
 enum vicii_color_e {
@@ -244,6 +242,17 @@ constexpr uint16_t VICII_BORDER_RIGHT_CSEL1 = 344; // 0x158
 
 // Number of sprites
 #define VICII_NUM_SPRITES 8
+
+// Display geometry
+#define VICII_CHARS_PER_LINE        40       // Characters per screen line
+
+// Memory address constants
+#define VICII_IDLE_ADDRESS          0x3FFF   // Idle bus read target (top of bank)
+#define VICII_VC_MASK               0x3FF    // 10-bit Video Counter mask
+#define VICII_SPRITE_DATA_BLOCK     64       // Bytes per sprite data block
+#define VICII_SPRITE_MC_MAX         63       // Sprite MC final value (63 bytes)
+
+
 
 // ========================================================================================
 // CHIP CONFIGURATION STRUCTURE
@@ -324,8 +333,8 @@ struct vicii_video_logic_unit_t {
 
 // Video Data Unit - Character and color line buffers
 struct vicii_video_data_unit_t {
-    uint8_t video_matrix_line[40];
-    vicii_color_t video_color_line[40];
+    uint8_t video_matrix_line[VICII_CHARS_PER_LINE];
+    vicii_color_t video_color_line[VICII_CHARS_PER_LINE];
 };
 
 // Graphics Sequencer Unit - Graphics pixel generation state
@@ -334,7 +343,7 @@ struct vicii_sequencer_unit_t {
     uint8_t last_mode;        // Last graphics mode for change detection
     uint8_t shift_reg;        // Graphics shift register
     uint8_t xscroll_counter;  // XSCROLL delay counter
-    uint8_t graphics_line[40]; // Graphics data buffer for current scanline (40 characters)
+    uint8_t graphics_line[VICII_CHARS_PER_LINE]; // Graphics data buffer for current scanline (40 characters)
     uint8_t pixel_in_char;    // Current pixel within character (0-7), drives SR reload timing
     uint8_t current_vmli_for_display; // VMLI value from g-access (before increment)
     uint8_t display_vmli;     // Display-side column counter (0-39), next column to load into SR
