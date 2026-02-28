@@ -118,6 +118,7 @@ public:
 
 #ifdef CERMU_HAS_GUI
     void render_device_ui() override;
+    void render_input_source_settings_ui() override;
 #endif
 
     // --- Controller-specific API ---------------------------------------
