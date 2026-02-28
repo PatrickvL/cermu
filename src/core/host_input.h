@@ -115,3 +115,74 @@ inline JoystickKeyMap joystick_keymap_numpad() {
     return m;
 }
 
+// ============================================================================
+// SCANCODE BITSET — O(1) membership test for SDL scancode sets
+// ============================================================================
+
+/// Compact bitset covering all SDL scancodes (SDL_NUM_SCANCODES = 512).
+/// Uses 8 × uint64_t = 64 bytes.  All operations are branch-free bit ops.
+struct ScancodeBitset {
+    static constexpr int NUM_WORDS = 512 / 64;           // 8
+    uint64_t words[NUM_WORDS] = {};
+
+    void set(SDL_Scancode sc) {
+        auto idx = static_cast<unsigned>(sc);
+        if (idx < 512) words[idx >> 6] |= (uint64_t{1} << (idx & 63));
+    }
+
+    bool test(SDL_Scancode sc) const {
+        auto idx = static_cast<unsigned>(sc);
+        return idx < 512 && (words[idx >> 6] & (uint64_t{1} << (idx & 63))) != 0;
+    }
+
+    /// Bulk-add from a raw scancode array.
+    void add_from_array(const SDL_Scancode* keys, int count) {
+        for (int i = 0; i < count; i++) set(keys[i]);
+    }
+
+    /// Reset all bits to zero.
+    void clear() {
+        for (auto& w : words) w = 0;
+    }
+};
+
+// ============================================================================
+// CONTROLLER KEYBOARD MAP PRESETS (generic, cross-device)
+// ============================================================================
+
+/// Maximum scancodes in a single controller preset (8 = NES gamepad buttons).
+static constexpr int MAX_CONTROLLER_PRESET_KEYS = 8;
+
+/**
+ * A named keyboard-to-controller-button mapping preset.
+ *
+ * Each device type (joystick, NES gamepad, …) defines its own static array
+ * of presets.  The generic auto_assign_controller_keymaps() scores each
+ * preset against the guest keyboard scancodes and inter-device usage to
+ * pick the one with the fewest collisions.
+ */
+struct ControllerKeyMapPreset {
+    const char*  name;                                   ///< Short display name
+    SDL_Scancode keys[MAX_CONTROLLER_PRESET_KEYS];       ///< Scancodes used
+    int          key_count;                              ///< Valid entries in keys[]
+    bool         requires_numpad;                        ///< True if preset uses numpad keys
+
+    /// Add all keys of this preset into a bitset.
+    void add_to_bitset(ScancodeBitset& bs) const {
+        for (int i = 0; i < key_count; i++) bs.set(keys[i]);
+    }
+};
+
+/**
+ * Count collisions between a preset's keys and a scancode bitset.
+ * O(key_count) — each test is a single bit-check.
+ */
+inline int count_keymap_collisions(const ControllerKeyMapPreset& preset,
+                                   const ScancodeBitset& claimed) {
+    int collisions = 0;
+    for (int i = 0; i < preset.key_count; i++) {
+        if (claimed.test(preset.keys[i])) ++collisions;
+    }
+    return collisions;
+}
+

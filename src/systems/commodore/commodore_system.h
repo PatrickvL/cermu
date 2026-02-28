@@ -62,4 +62,10 @@ public:
     // C64System overrides to add SID player / disc-flip intercepts.
     void handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode,
                                   uint16_t mod, bool pressed, bool repeat) override;
+
+    // Returns all host scancodes that close a Commodore keyboard matrix
+    // contact.  Used by auto_assign_controller_keymaps() for collision
+    // detection — the returned array is the superset across C64, VIC-20,
+    // and C16/Plus4 keyboards.
+    int get_guest_keyboard_scancodes(const SDL_Scancode** out) const override;
 };

@@ -393,6 +393,23 @@ protected:
     /// then run auto_bind_host_inputs() once.  Typically the last call
     /// inside setup_connector_ports().
     void attach_default_peripherals();
+
+    // =========================================================================
+    // GUEST KEYBOARD COLLISION CONTEXT
+    // =========================================================================
+
+    /// Return host scancodes consumed by the guest keyboard matrix.
+    /// Used by auto_assign_controller_keymaps() to pick presets with the
+    /// fewest collisions.  Default: empty (system has no guest keyboard).
+    virtual int get_guest_keyboard_scancodes(const SDL_Scancode** out_scancodes) const {
+        if (out_scancodes) *out_scancodes = nullptr;
+        return 0;
+    }
+
+    /// Auto-assign keyboard presets to all controller devices, minimising
+    /// collisions with the guest keyboard and avoiding inter-device
+    /// key conflicts.  Called at the end of attach_default_peripherals().
+    void auto_assign_controller_keymaps();
     
 public:
     EmulatedSystem();

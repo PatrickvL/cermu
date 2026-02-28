@@ -342,6 +342,58 @@ void EmulatedSystem::attach_default_peripherals() {
     for (auto& dp : defaults) {
         attach_device_to_port(dp.port_index, dp.device_id);
     }
+    // After all devices are attached and auto_bind_host_inputs() has assigned
+    // bindings, pick collision-minimised keyboard presets for each controller.
+    auto_assign_controller_keymaps();
+}
+
+void EmulatedSystem::auto_assign_controller_keymaps() {
+    const SDL_Scancode* guest_keys = nullptr;
+    int guest_count = get_guest_keyboard_scancodes(&guest_keys);
+
+    // Build a bitset of "claimed" scancodes — starts with guest keyboard,
+    // accumulates each chosen preset.  O(1) per collision check.
+    ScancodeBitset claimed;
+    ScancodeBitset guest_bitset;   // guest-only, for per-device context
+    if (guest_keys && guest_count > 0) {
+        claimed.add_from_array(guest_keys, guest_count);
+        guest_bitset = claimed;    // snapshot before controller keys added
+    }
+
+    for (auto& dev : owned_devices_) {
+        int preset_count = dev->get_keymap_preset_count();
+        if (preset_count == 0) continue;
+
+        // Provide guest keyboard context for collision display in the UI
+        dev->set_guest_keyboard_context(guest_keys, guest_count);
+
+        // Score each preset: collision_count * 2 + requires_numpad.
+        // This prefers fewer collisions, breaking ties by preferring
+        // non-numpad presets (which work on laptops without a numpad).
+        int best = 0;
+        int best_score = INT_MAX;
+
+        for (int i = 0; i < preset_count; i++) {
+            const auto& preset = dev->get_keymap_preset(i);
+            int collisions = count_keymap_collisions(preset, claimed);
+            int score = collisions * 2 + (preset.requires_numpad ? 1 : 0);
+            if (score < best_score) {
+                best = i;
+                best_score = score;
+            }
+        }
+
+        dev->apply_keymap_preset(best);
+
+        // Add the chosen preset's keys to "claimed" so the next device
+        // avoids overlapping this one.
+        const auto& chosen = dev->get_keymap_preset(best);
+        chosen.add_to_bitset(claimed);
+
+        printf("Auto-keymap: %s -> '%s' (%d guest-keyboard collisions)\n",
+               dev->get_name(), chosen.name,
+               guest_count > 0 ? count_keymap_collisions(chosen, guest_bitset) : 0);
+    }
 }
 
 bool EmulatedSystem::attach_device_to_port(int port_index, const char* device_id) {

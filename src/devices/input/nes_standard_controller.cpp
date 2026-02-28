@@ -178,6 +178,54 @@ bool NesStandardController::process_gamepad_event(const SDL_Event& event) {
 }
 
 // ============================================================================
+// KEYMAP PRESETS
+// ============================================================================
+
+static const ControllerKeyMapPreset nes_presets[] = {
+    { "WASD + Space/LShift/Enter/Tab",
+      { SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_A, SDL_SCANCODE_D,
+        SDL_SCANCODE_SPACE, SDL_SCANCODE_LSHIFT, SDL_SCANCODE_RETURN, SDL_SCANCODE_TAB },
+      8, false },
+    { "IJKL + ./,/;/O",
+      { SDL_SCANCODE_I, SDL_SCANCODE_K, SDL_SCANCODE_J, SDL_SCANCODE_L,
+        SDL_SCANCODE_PERIOD, SDL_SCANCODE_COMMA, SDL_SCANCODE_SEMICOLON, SDL_SCANCODE_O },
+      8, false },
+    { "Arrows + X/Z/Enter/RShift",
+      { SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT,
+        SDL_SCANCODE_X, SDL_SCANCODE_Z, SDL_SCANCODE_RETURN, SDL_SCANCODE_RSHIFT },
+      8, false },
+};
+
+static constexpr int NES_PRESET_COUNT = static_cast<int>(
+    sizeof(nes_presets) / sizeof(nes_presets[0]));
+
+int NesStandardController::get_keymap_preset_count() const {
+    return NES_PRESET_COUNT;
+}
+
+const ControllerKeyMapPreset& NesStandardController::get_keymap_preset(int index) const {
+    if (index >= 0 && index < NES_PRESET_COUNT) return nes_presets[index];
+    static const ControllerKeyMapPreset empty{"None", {}, 0, false};
+    return empty;
+}
+
+void NesStandardController::apply_keymap_preset(int index) {
+    switch (index) {
+        case 0: keymap_ = nes_keymap_wasd();   break;
+        case 1: keymap_ = nes_keymap_ijkl();   break;
+        case 2: keymap_ = nes_keymap_arrows();  break;
+        default: break;
+    }
+}
+
+int NesStandardController::get_active_keymap_preset() const {
+    if (keymap_.up == SDL_SCANCODE_W)  return 0;
+    if (keymap_.up == SDL_SCANCODE_I)  return 1;
+    if (keymap_.up == SDL_SCANCODE_UP) return 2;
+    return -1;
+}
+
+// ============================================================================
 // GUI
 // ============================================================================
 
@@ -203,24 +251,30 @@ void NesStandardController::render_device_ui() {
         ImGui::SameLine();
         ImGui::TextDisabled("[Keys]");
 
-        // Key mapping preset selector (mirrors JoystickDevice pattern)
-        static const char* presets[] = {
-            "WASD + Space/LShift/Enter/Tab",
-            "IJKL + ./,/;/O",
-            "Arrows + X/Z/Enter/RShift"
-        };
-        int current_preset = -1;
-        if      (keymap_.up == SDL_SCANCODE_W)  current_preset = 0;
-        else if (keymap_.up == SDL_SCANCODE_I)  current_preset = 1;
-        else if (keymap_.up == SDL_SCANCODE_UP) current_preset = 2;
+        // Keymap preset selector with collision info
+        int active = get_active_keymap_preset();
+        const char* preview = (active >= 0) ? get_keymap_preset(active).name : "Custom";
 
-        int picked = current_preset;
-        if (ImGui::Combo("Key Map", &picked, presets, IM_ARRAYSIZE(presets))) {
-            switch (picked) {
-                case 0: keymap_ = nes_keymap_wasd();   break;
-                case 1: keymap_ = nes_keymap_ijkl();   break;
-                case 2: keymap_ = nes_keymap_arrows();  break;
+        if (ImGui::BeginCombo("Key Map", preview)) {
+            for (int i = 0; i < get_keymap_preset_count(); i++) {
+                const auto& preset = get_keymap_preset(i);
+                int collisions = count_keymap_collisions(preset, guest_keyboard_scancodes_);
+
+                char label[128];
+                if (collisions > 0) {
+                    snprintf(label, sizeof(label), "%s  (%d collision%s)",
+                             preset.name, collisions, collisions > 1 ? "s" : "");
+                } else {
+                    snprintf(label, sizeof(label), "%s", preset.name);
+                }
+
+                bool selected = (i == active);
+                if (ImGui::Selectable(label, selected)) {
+                    apply_keymap_preset(i);
+                }
+                if (selected) ImGui::SetItemDefaultFocus();
             }
+            ImGui::EndCombo();
         }
     } else if (binding_.type == HostInputType::SDL_GAMEPAD) {
         ImGui::SameLine();
