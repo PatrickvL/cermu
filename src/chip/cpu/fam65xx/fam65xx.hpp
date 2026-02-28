@@ -1191,18 +1191,6 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
         this->operation_handlers[this->opcode_entry.op_index];
   }
 
-  /// Transition to operation with zero-cycle chaining for JMP/JML.
-  /// These operations set PC = AB and transition to fetch immediately,
-  /// consuming no additional bus cycles after the addressing mode completes.
-  inline bus_state_t transition_to_operation(bus_state_t pins) {
-    transition_to_operation();
-    auto op = this->opcode_entry.op_index;
-    if (op == to_index(OP::JMP) || op == to_index(OP::JML)) {
-      return this->call_current_handler(pins);
-    }
-    return pins;
-  }
-
   // ========================================================================
   // PROCESSOR-SPECIFIC INITIALIZATION
   // ========================================================================

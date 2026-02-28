@@ -88,6 +88,9 @@ static TestResult run_nestest(NES& nes, int max_frames) {
     TestResult result;
     result.rom_path = "nestest.nes";
 
+    // Override PC to $C000 for automation mode (reset vector $C004 is interactive)
+    nes.set_cpu_pc(0xC000);
+
     auto t0 = std::chrono::steady_clock::now();
 
     // Run frames, watching for completion

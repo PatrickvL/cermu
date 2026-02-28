@@ -1218,6 +1218,11 @@ uint16_t NintendoSystem<V>::get_cpu_pc() const {
     return static_cast<uint16_t>(cpu_->get(REG_PC));
 }
 
+template<NintendoVariant V>
+void NintendoSystem<V>::set_cpu_pc(uint16_t addr) {
+    if (cpu_) cpu_->set(REG_PC, addr);
+}
+
 } // namespace nes_system
 
 // ============================================================================

@@ -248,6 +248,7 @@ public:
     uint8_t peek_memory(uint16_t addr) const;
     uint8_t peek_ppu_memory(uint16_t addr) const;
     uint16_t get_cpu_pc() const;
+    void set_cpu_pc(uint16_t addr);
     
 private:
     void setup_audio_timing();
