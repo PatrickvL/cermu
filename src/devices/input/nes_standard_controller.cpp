@@ -202,6 +202,26 @@ void NesStandardController::render_device_ui() {
     if (binding_.type == HostInputType::KEYBOARD) {
         ImGui::SameLine();
         ImGui::TextDisabled("[Keys]");
+
+        // Key mapping preset selector (mirrors JoystickDevice pattern)
+        static const char* presets[] = {
+            "WASD + Space/LShift/Enter/Tab",
+            "IJKL + ./,/;/O",
+            "Arrows + X/Z/Enter/RShift"
+        };
+        int current_preset = -1;
+        if      (keymap_.up == SDL_SCANCODE_W)  current_preset = 0;
+        else if (keymap_.up == SDL_SCANCODE_I)  current_preset = 1;
+        else if (keymap_.up == SDL_SCANCODE_UP) current_preset = 2;
+
+        int picked = current_preset;
+        if (ImGui::Combo("Key Map", &picked, presets, IM_ARRAYSIZE(presets))) {
+            switch (picked) {
+                case 0: keymap_ = nes_keymap_wasd();   break;
+                case 1: keymap_ = nes_keymap_ijkl();   break;
+                case 2: keymap_ = nes_keymap_arrows();  break;
+            }
+        }
     } else if (binding_.type == HostInputType::SDL_GAMEPAD) {
         ImGui::SameLine();
         ImGui::TextDisabled("[Pad]");

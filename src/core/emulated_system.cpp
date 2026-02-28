@@ -337,6 +337,13 @@ void EmulatedSystem::tick_peripherals() {
     }
 }
 
+void EmulatedSystem::attach_default_peripherals() {
+    auto defaults = get_default_peripherals();
+    for (auto& dp : defaults) {
+        attach_device_to_port(dp.port_index, dp.device_id);
+    }
+}
+
 bool EmulatedSystem::attach_device_to_port(int port_index, const char* device_id) {
     if (port_index < 0 || port_index >= static_cast<int>(connector_ports_.size())) {
         printf("System: Invalid port index %d\n", port_index);

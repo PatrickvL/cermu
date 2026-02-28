@@ -213,6 +213,7 @@ public:
 private:
     /// Create and wire up all C64 connector ports (CIA1 joystick callbacks etc).
     void setup_connector_ports();
+    std::vector<DefaultPeripheral> get_default_peripherals() const override;
 
     /// Register all C64 chips into registered_chips_ for the Hardware menu.
     void register_c64_chips();

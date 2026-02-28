@@ -1815,11 +1815,11 @@ void C64System::setup_connector_ports() {
     connector_ports_[kb_port]->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
-    // Default devices: mouse in Port 1, joystick in Port 2.
-    // Port 2 is the standard game port; Port 1 provides mouse for GEOS/etc.
-    // Users can manually swap these or attach a lightpen via the connector menu.
-    attach_device_to_port(PORT_CONTROL1, "mouse_1351");
-    attach_device_to_port(PORT_CONTROL2, "joystick");
+    // Default devices: mouse in Port 1, joystick in Port 2, 1541 on IEC,
+    // datasette on cassette port.  Port 2 is the standard game port;
+    // Port 1 provides mouse for GEOS/etc.
+    // Users can manually swap these via the connector menu.
+    attach_default_peripherals();
 
     // Wire joystick-aware CIA1 callbacks (replace the defaults set during initialize)
     if (initialized_ && this->cia1) {
@@ -1847,6 +1847,16 @@ void C64System::update_lightpen_display_rect() {
     if (!cached_lightpen_) return;
     const auto& rect = get_display_screen_rect();
     cached_lightpen_->set_display_screen_rect(rect.x, rect.y, rect.w, rect.h);
+}
+
+std::vector<EmulatedSystem::DefaultPeripheral>
+C64System::get_default_peripherals() const {
+    return {
+        { PORT_CONTROL1,   "mouse_1351" },  // Control Port 1 — mouse (GEOS, etc.)
+        { PORT_CONTROL2,   "joystick"   },  // Control Port 2 — standard game port
+        { PORT_IEC_SERIAL, "1541"       },  // IEC Serial Bus — 1541 disk drive
+        { PORT_CASSETTE,   "datasette"  },  // Cassette Port  — datasette (1530)
+    };
 }
 
 void C64System::on_port_device_changed(int port_index) {

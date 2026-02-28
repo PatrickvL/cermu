@@ -1118,10 +1118,19 @@ void VIC20System::setup_connector_ports() {
     connector_ports_[kb_port]->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
-    // Default: attach joystick to Control Port
-    attach_device_to_port(0, "joystick");
+    // Default: attach peripheral devices via declarative list
+    attach_default_peripherals();
 
     printf("VIC20: Created %zu connector ports\n", connector_ports_.size());
+}
+
+std::vector<EmulatedSystem::DefaultPeripheral>
+VIC20System::get_default_peripherals() const {
+    return {
+        { 0, "joystick"  },  // Control Port — joystick
+        { 1, "1541"      },  // IEC Serial Bus — 1541 disk drive
+        { 2, "datasette" },  // Cassette Port — datasette (1530)
+    };
 }
 
 // ============================================================================
