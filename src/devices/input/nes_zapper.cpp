@@ -15,13 +15,10 @@
 #include "nes_zapper.h"
 #include "../../core/device_registry.h"
 
+#include <cstdio>
 #include <SDL_events.h>
 
 using ConnectorSignals::NESControllerBit;
-
-#ifdef CERMU_HAS_GUI
-#include "imgui.h"
-#endif
 
 // ============================================================================
 // CONSTRUCTION / RESET
@@ -29,7 +26,7 @@ using ConnectorSignals::NESControllerBit;
 
 NesZapper::NesZapper() {
     binding_.type  = HostInputType::HOST_MOUSE;
-    binding_.label = "Mouse";
+    binding_.label = "Host Mouse";
 }
 
 void NesZapper::reset() {
@@ -37,6 +34,24 @@ void NesZapper::reset() {
     aim_y_          = 120;
     trigger_pulled_ = false;
     light_detected_ = false;
+    output_signals_ = 0xFFFFFFFF;
+}
+
+// ============================================================================
+// HOST INPUT BINDING
+// ============================================================================
+
+void NesZapper::set_host_input_binding(const HostInputBinding& binding) {
+    on_input_source_will_change();
+    binding_ = binding;
+    printf("NES Zapper: Input source changed to %s\n", binding_.label.c_str());
+}
+
+void NesZapper::on_input_source_will_change() {
+    trigger_pulled_ = false;
+    light_detected_ = false;
+    aim_x_ = 128;
+    aim_y_ = 120;
     output_signals_ = 0xFFFFFFFF;
 }
 
@@ -75,21 +90,15 @@ bool NesZapper::process_sdl_event(const SDL_Event& event) {
 
     // Mouse movement → aim position
     if (event.type == SDL_MOUSEMOTION) {
-        // The caller (system) is responsible for translating screen
-        // coordinates to NES pixel coordinates. We store raw coords
-        // and the system will map them when checking the framebuffer.
         aim_x_ = event.motion.x;
         aim_y_ = event.motion.y;
         return true;
     }
 
     // Left mouse button → trigger
-    if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
-        set_trigger(true);
-        return true;
-    }
-    if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
-        set_trigger(false);
+    bool pressed;
+    if (extract_mouse_button(event, SDL_BUTTON_LEFT, pressed)) {
+        set_trigger(pressed);
         return true;
     }
 

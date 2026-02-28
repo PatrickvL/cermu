@@ -23,9 +23,8 @@ public:
     HostInputType get_supported_input_type(int index) const override {
         return (index == 0) ? HostInputType::HOST_MOUSE : HostInputType::SDL_GAMEPAD;
     }
-    const HostInputBinding& get_host_input_binding() const override { return binding_; }
-    void set_host_input_binding(const HostInputBinding& binding) override;
     bool process_sdl_event(const SDL_Event& event) override;
+    void on_input_source_will_change() override;
 
 #ifdef CERMU_HAS_GUI
     void render_device_ui() override;
@@ -39,7 +38,4 @@ public:
     /// Fire buttons (active-low).
     void set_fire_x(bool pressed) { set_signal(ConnectorSignals::JOY_FIRE, pressed); }
     void set_fire_y(bool pressed) { set_signal(ConnectorSignals::JOY_UP, pressed); }
-
-private:
-    HostInputBinding binding_;
 };

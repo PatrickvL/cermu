@@ -31,14 +31,10 @@ public:
     HostInputType get_supported_input_type(int index) const override {
         (void)index; return HostInputType::KEYBOARD;
     }
-    const HostInputBinding& get_host_input_binding() const override { return binding_; }
-    void set_host_input_binding(const HostInputBinding& binding) override { binding_ = binding; }
-
     /// Set/get the underlying keyboard
     void set_keyboard(commodore_keyboard_t* kb) { keyboard_ = kb; }
     commodore_keyboard_t* get_keyboard() const   { return keyboard_; }
 
 private:
     commodore_keyboard_t* keyboard_;
-    HostInputBinding binding_;
 };

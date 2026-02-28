@@ -19,10 +19,6 @@
 
 using ConnectorSignals::NESControllerBit;
 
-#ifdef CERMU_HAS_GUI
-#include "imgui.h"
-#endif
-
 // ============================================================================
 // CONSTRUCTION / RESET
 // ============================================================================
@@ -38,6 +34,21 @@ void NesStandardController::reset() {
     latch_was_high_ = false;
     output_signals_ = 0xFFFFFFFF;  // All signals released (active-low)
     cd4021_.reset();
+}
+
+// ============================================================================
+// HOST INPUT BINDING
+// ============================================================================
+
+void NesStandardController::set_host_input_binding(const HostInputBinding& binding) {
+    on_input_source_will_change();
+    binding_ = binding;
+    printf("NES Controller: Input source changed to %s\n", binding_.label.c_str());
+}
+
+void NesStandardController::on_input_source_will_change() {
+    button_state_ = 0;
+    output_signals_ = 0xFFFFFFFF;
 }
 
 // ============================================================================
@@ -107,11 +118,9 @@ bool NesStandardController::process_sdl_event(const SDL_Event& event) {
 }
 
 bool NesStandardController::process_keyboard_event(const SDL_Event& event) {
-    if (event.type != SDL_KEYDOWN && event.type != SDL_KEYUP) return false;
-    if (event.type == SDL_KEYDOWN && event.key.repeat) return false;
-
-    bool pressed = (event.type == SDL_KEYDOWN);
-    SDL_Scancode sc = event.key.keysym.scancode;
+    SDL_Scancode sc;
+    bool pressed;
+    if (!extract_key_event(event, sc, pressed)) return false;
 
     // Configurable mapping via NesKeyMap (default: Arrows + Z/X/Enter/RShift)
     if (sc == keymap_.up)     { set_button_state(UP, pressed);     return true; }
@@ -127,19 +136,7 @@ bool NesStandardController::process_keyboard_event(const SDL_Event& event) {
 }
 
 bool NesStandardController::process_gamepad_event(const SDL_Event& event) {
-    auto get_instance_id = [&]() -> SDL_JoystickID {
-        if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP)
-            return event.cbutton.which;
-        if (event.type == SDL_CONTROLLERAXISMOTION)
-            return event.caxis.which;
-        return -1;
-    };
-
-    SDL_JoystickID eid = get_instance_id();
-    if (eid < 0) return false;
-
-    if (binding_.gamepad_instance_id >= 0 && eid != binding_.gamepad_instance_id)
-        return false;
+    if (!should_accept_gamepad_event(event)) return false;
 
     // Button events
     if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP) {
@@ -158,20 +155,13 @@ bool NesStandardController::process_gamepad_event(const SDL_Event& event) {
     }
 
     // Axis events (left stick → digital directions)
-    if (event.type == SDL_CONTROLLERAXISMOTION) {
-        const int16_t THRESHOLD = 16384;
-        int16_t value = event.caxis.value;
-
-        if (event.caxis.axis == SDL_CONTROLLER_AXIS_LEFTX) {
-            set_button_state(LEFT,  value < -THRESHOLD);
-            set_button_state(RIGHT, value > THRESHOLD);
-            return true;
-        }
-        if (event.caxis.axis == SDL_CONTROLLER_AXIS_LEFTY) {
-            set_button_state(UP,   value < -THRESHOLD);
-            set_button_state(DOWN, value > THRESHOLD);
-            return true;
-        }
+    DigitalAxes axes;
+    if (axis_to_digital(event, axes)) {
+        set_button_state(LEFT,  axes.left);
+        set_button_state(RIGHT, axes.right);
+        set_button_state(UP,    axes.up);
+        set_button_state(DOWN,  axes.down);
+        return true;
     }
 
     return false;
@@ -199,14 +189,12 @@ static const ControllerKeyMapPreset nes_presets[] = {
 static constexpr int NES_PRESET_COUNT = static_cast<int>(
     sizeof(nes_presets) / sizeof(nes_presets[0]));
 
-int NesStandardController::get_keymap_preset_count() const {
-    return NES_PRESET_COUNT;
+const ControllerKeyMapPreset* NesStandardController::get_keymap_presets_table() const {
+    return nes_presets;
 }
 
-const ControllerKeyMapPreset& NesStandardController::get_keymap_preset(int index) const {
-    if (index >= 0 && index < NES_PRESET_COUNT) return nes_presets[index];
-    static const ControllerKeyMapPreset empty{"None", {}, 0, false};
-    return empty;
+int NesStandardController::get_keymap_presets_table_size() const {
+    return NES_PRESET_COUNT;
 }
 
 void NesStandardController::apply_keymap_preset(int index) {
@@ -247,43 +235,7 @@ void NesStandardController::render_device_ui() {
                 sel   ? "Se" : "..", start ? "St" : "..",
                 b     ? "B" : ".", a     ? "A" : ".");
 
-    if (binding_.type == HostInputType::KEYBOARD) {
-        ImGui::SameLine();
-        ImGui::TextDisabled("[Keys]");
-    } else if (binding_.type == HostInputType::SDL_GAMEPAD) {
-        ImGui::SameLine();
-        ImGui::TextDisabled("[Pad]");
-    }
-}
-
-void NesStandardController::render_input_source_settings_ui() {
-    if (binding_.type != HostInputType::KEYBOARD) return;
-
-    // Keymap preset selector with collision info
-    int active = get_active_keymap_preset();
-    const char* preview = (active >= 0) ? get_keymap_preset(active).name : "Custom";
-
-    if (ImGui::BeginCombo("Key Map", preview)) {
-        for (int i = 0; i < get_keymap_preset_count(); i++) {
-            const auto& preset = get_keymap_preset(i);
-            int collisions = count_keymap_collisions(preset, guest_keyboard_scancodes_);
-
-            char label[128];
-            if (collisions > 0) {
-                snprintf(label, sizeof(label), "%s  (%d collision%s)",
-                         preset.name, collisions, collisions > 1 ? "s" : "");
-            } else {
-                snprintf(label, sizeof(label), "%s", preset.name);
-            }
-
-            bool selected = (i == active);
-            if (ImGui::Selectable(label, selected)) {
-                apply_keymap_preset(i);
-            }
-            if (selected) ImGui::SetItemDefaultFocus();
-        }
-        ImGui::EndCombo();
-    }
+    render_input_source_badge();
 }
 #endif
 

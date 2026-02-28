@@ -8,10 +8,6 @@
 #include <SDL_events.h>
 #include <SDL_gamecontroller.h>
 
-#ifdef CERMU_HAS_GUI
-#include "imgui.h"
-#endif
-
 // ============================================================================
 // CONSTRUCTION / RESET
 // ============================================================================
@@ -27,19 +23,6 @@ void JoystickDevice::reset() {
 }
 
 // ============================================================================
-// HOST INPUT BINDING
-// ============================================================================
-
-void JoystickDevice::set_host_input_binding(const HostInputBinding& binding) {
-    // Release all directions when switching input source
-    release_all_signals();
-    notify_port();
-
-    binding_ = binding;
-    printf("Joystick: Input source changed to %s\n", binding_.label.c_str());
-}
-
-// ============================================================================
 // SDL EVENT PROCESSING
 // ============================================================================
 
@@ -52,13 +35,9 @@ bool JoystickDevice::process_sdl_event(const SDL_Event& event) {
 }
 
 bool JoystickDevice::process_keyboard_event(const SDL_Event& event) {
-    if (event.type != SDL_KEYDOWN && event.type != SDL_KEYUP) return false;
-
-    // Ignore key repeats
-    if (event.type == SDL_KEYDOWN && event.key.repeat) return false;
-
-    bool pressed = (event.type == SDL_KEYDOWN);
-    SDL_Scancode sc = event.key.keysym.scancode;
+    SDL_Scancode sc;
+    bool pressed;
+    if (!extract_key_event(event, sc, pressed)) return false;
 
     if (sc == key_map_.up)         { set_up(pressed);   return true; }
     if (sc == key_map_.down)       { set_down(pressed);  return true; }
@@ -71,21 +50,7 @@ bool JoystickDevice::process_keyboard_event(const SDL_Event& event) {
 }
 
 bool JoystickDevice::process_gamepad_event(const SDL_Event& event) {
-    // Filter by gamepad instance ID if a specific one is bound
-    auto get_instance_id = [&]() -> SDL_JoystickID {
-        if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP)
-            return event.cbutton.which;
-        if (event.type == SDL_CONTROLLERAXISMOTION)
-            return event.caxis.which;
-        return -1;
-    };
-
-    SDL_JoystickID eid = get_instance_id();
-    if (eid < 0) return false;
-
-    // If bound to a specific gamepad, only accept events from it
-    if (binding_.gamepad_instance_id >= 0 && eid != binding_.gamepad_instance_id)
-        return false;
+    if (!should_accept_gamepad_event(event)) return false;
 
     // Button events
     if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP) {
@@ -102,20 +67,13 @@ bool JoystickDevice::process_gamepad_event(const SDL_Event& event) {
     }
 
     // Axis events (left stick → digital directions, threshold 50%)
-    if (event.type == SDL_CONTROLLERAXISMOTION) {
-        const int16_t THRESHOLD = 16384;  // 50% of max
-        int16_t value = event.caxis.value;
-
-        if (event.caxis.axis == SDL_CONTROLLER_AXIS_LEFTX) {
-            set_left(value < -THRESHOLD);
-            set_right(value > THRESHOLD);
-            return true;
-        }
-        if (event.caxis.axis == SDL_CONTROLLER_AXIS_LEFTY) {
-            set_up(value < -THRESHOLD);
-            set_down(value > THRESHOLD);
-            return true;
-        }
+    DigitalAxes axes;
+    if (axis_to_digital(event, axes)) {
+        set_left(axes.left);
+        set_right(axes.right);
+        set_up(axes.up);
+        set_down(axes.down);
+        return true;
     }
 
     return false;
@@ -143,14 +101,12 @@ static const ControllerKeyMapPreset joystick_presets[] = {
 static constexpr int JOYSTICK_PRESET_COUNT = static_cast<int>(
     sizeof(joystick_presets) / sizeof(joystick_presets[0]));
 
-int JoystickDevice::get_keymap_preset_count() const {
-    return JOYSTICK_PRESET_COUNT;
+const ControllerKeyMapPreset* JoystickDevice::get_keymap_presets_table() const {
+    return joystick_presets;
 }
 
-const ControllerKeyMapPreset& JoystickDevice::get_keymap_preset(int index) const {
-    if (index >= 0 && index < JOYSTICK_PRESET_COUNT) return joystick_presets[index];
-    static const ControllerKeyMapPreset empty{"None", {}, 0, false};
-    return empty;
+int JoystickDevice::get_keymap_presets_table_size() const {
+    return JOYSTICK_PRESET_COUNT;
 }
 
 void JoystickDevice::apply_keymap_preset(int index) {
@@ -186,44 +142,7 @@ void JoystickDevice::render_device_ui() {
                 up ? "U" : ".", down ? "D" : ".", left ? "L" : ".",
                 right ? "R" : ".", fire ? "F" : ".");
 
-    // Input source indicator
-    if (binding_.type == HostInputType::KEYBOARD) {
-        ImGui::SameLine();
-        ImGui::TextDisabled("[Keys]");
-    } else if (binding_.type == HostInputType::SDL_GAMEPAD) {
-        ImGui::SameLine();
-        ImGui::TextDisabled("[Pad]");
-    }
-}
-
-void JoystickDevice::render_input_source_settings_ui() {
-    if (binding_.type != HostInputType::KEYBOARD) return;
-
-    // Keymap preset selector with collision info
-    int active = get_active_keymap_preset();
-    const char* preview = (active >= 0) ? get_keymap_preset(active).name : "Custom";
-
-    if (ImGui::BeginCombo("Key Map", preview)) {
-        for (int i = 0; i < get_keymap_preset_count(); i++) {
-            const auto& preset = get_keymap_preset(i);
-            int collisions = count_keymap_collisions(preset, guest_keyboard_scancodes_);
-
-            char label[128];
-            if (collisions > 0) {
-                snprintf(label, sizeof(label), "%s  (%d collision%s)",
-                         preset.name, collisions, collisions > 1 ? "s" : "");
-            } else {
-                snprintf(label, sizeof(label), "%s", preset.name);
-            }
-
-            bool selected = (i == active);
-            if (ImGui::Selectable(label, selected)) {
-                apply_keymap_preset(i);
-            }
-            if (selected) ImGui::SetItemDefaultFocus();
-        }
-        ImGui::EndCombo();
-    }
+    render_input_source_badge();
 }
 #endif
 

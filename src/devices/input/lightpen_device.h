@@ -37,9 +37,8 @@ public:
     HostInputType get_supported_input_type(int index) const override {
         (void)index; return HostInputType::HOST_MOUSE;
     }
-    const HostInputBinding& get_host_input_binding() const override { return binding_; }
-    void set_host_input_binding(const HostInputBinding& binding) override;
     bool process_sdl_event(const SDL_Event& event) override;
+    void on_input_source_will_change() override;
 
 #ifdef CERMU_HAS_GUI
     void render_device_ui() override;
@@ -81,8 +80,6 @@ private:
     int  pen_sdl_x_ = -1;
     int  pen_sdl_y_ = -1;
     bool triggered_  = false;   // Mouse button held (pen touching screen)
-
-    HostInputBinding binding_;
 
     // Display rect in SDL window coordinates (updated each frame by GUI)
     float disp_rect_x_ = 0, disp_rect_y_ = 0;

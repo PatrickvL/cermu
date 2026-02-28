@@ -9,26 +9,17 @@
 #include "../../core/device_registry.h"
 #include <cstdio>
 #include <algorithm>
-#include <SDL_events.h>
-
-#ifdef CERMU_HAS_GUI
-#include "imgui.h"
-#endif
 
 NEOSMouse::NEOSMouse() {
     binding_.type = HostInputType::HOST_MOUSE;
     binding_.label = "Host Mouse";
 }
 
-void NEOSMouse::set_host_input_binding(const HostInputBinding& binding) {
-    release_all_signals();
+void NEOSMouse::on_input_source_will_change() {
     accum_dx_ = accum_dy_ = 0;
     latched_dx_ = latched_dy_ = 0;
     left_button_ = right_button_ = false;
     phase_ = 0;
-    notify_port();
-    binding_ = binding;
-    printf("NEOS Mouse: Input source changed to %s\n", binding_.label.c_str());
 }
 
 bool NEOSMouse::process_sdl_event(const SDL_Event& event) {

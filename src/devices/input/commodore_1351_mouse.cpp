@@ -5,22 +5,10 @@
 #include "commodore_1351_mouse.h"
 #include "../../core/device_registry.h"
 #include <cstdio>
-#include <SDL_events.h>
-
-#ifdef CERMU_HAS_GUI
-#include "imgui.h"
-#endif
 
 Commodore1351Mouse::Commodore1351Mouse() {
     binding_.type = HostInputType::HOST_MOUSE;
     binding_.label = "Host Mouse";
-}
-
-void Commodore1351Mouse::set_host_input_binding(const HostInputBinding& binding) {
-    release_all_signals();
-    notify_port();
-    binding_ = binding;
-    printf("1351 Mouse: Input source changed to %s\n", binding_.label.c_str());
 }
 
 bool Commodore1351Mouse::process_sdl_event(const SDL_Event& event) {

@@ -37,19 +37,14 @@ public:
         if (index == 1) return HostInputType::SDL_GAMEPAD;
         return HostInputType::NONE;
     }
-    const HostInputBinding& get_host_input_binding() const override { return binding_; }
-    void set_host_input_binding(const HostInputBinding& binding) override;
     bool process_sdl_event(const SDL_Event& event) override;
 
     // --- Keymap preset support -----------------------------------------
-    int get_keymap_preset_count() const override;
-    const ControllerKeyMapPreset& get_keymap_preset(int index) const override;
     void apply_keymap_preset(int index) override;
     int get_active_keymap_preset() const override;
 
 #ifdef CERMU_HAS_GUI
     void render_device_ui() override;
-    void render_input_source_settings_ui() override;
 #endif
 
     // --- Joystick-specific API -----------------------------------------
@@ -72,10 +67,12 @@ public:
     void set_key_map(const JoystickKeyMap& map) { key_map_ = map; }
 
 private:
-    HostInputBinding binding_;    ///< Current host input binding
     JoystickKeyMap key_map_;      ///< Keyboard scancode mapping
 
     // SDL event handlers for each input type
     bool process_keyboard_event(const SDL_Event& event);
     bool process_gamepad_event(const SDL_Event& event);
+
+    const ControllerKeyMapPreset* get_keymap_presets_table() const override;
+    int get_keymap_presets_table_size() const override;
 };
