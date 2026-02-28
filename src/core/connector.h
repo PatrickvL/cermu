@@ -278,6 +278,30 @@ public:
     /// Returns true if the event was consumed by this device.
     virtual bool process_sdl_event(const SDL_Event& /*event*/) { return false; }
 
+    // --- Controller keyboard preset selection --------------------------
+
+    /// Number of available keyboard-to-controller presets (0 = not configurable).
+    virtual int get_keymap_preset_count() const { return 0; }
+
+    /// Get a specific preset descriptor by index.
+    virtual const ControllerKeyMapPreset& get_keymap_preset(int /*index*/) const {
+        static const ControllerKeyMapPreset empty{"None", {}, 0, false};
+        return empty;
+    }
+
+    /// Apply a preset by index (device converts it into its own keymap struct).
+    virtual void apply_keymap_preset(int /*index*/) {}
+
+    /// Which preset index is currently active? Returns -1 if custom/unknown.
+    virtual int get_active_keymap_preset() const { return -1; }
+
+    /// Provide guest keyboard scancode context for collision UI display.
+    /// Called by EmulatedSystem::auto_assign_controller_keymaps().
+    void set_guest_keyboard_context(const SDL_Scancode* keys, int count) {
+        guest_keyboard_scancodes_.clear();
+        guest_keyboard_scancodes_.add_from_array(keys, count);
+    }
+
     // --- Activity indicator ------------------------------------------------
 
     /// Returns true when the device is performing data transfer or I/O
@@ -294,6 +318,10 @@ public:
 
 protected:
     ConnectorPort* port_ = nullptr;   ///< Port this device is attached to (set by on_attach)
+
+    /// Guest keyboard scancode bitset — set by the system for collision
+    /// display in the keymap preset UI.  O(1) per-key lookup.
+    ScancodeBitset guest_keyboard_scancodes_;
 };
 
 // ============================================================================

@@ -1129,17 +1129,10 @@ void NintendoSystem<V>::setup_connector_ports() {
     // Attach default peripherals declared by get_default_peripherals().
     // auto_bind_host_inputs() (called from attach_device_to_port) assigns
     // connected host gamepads first; if none are available it falls back to
-    // keyboard.
+    // keyboard.  auto_assign_controller_keymaps() (called at the end of
+    // attach_default_peripherals) picks WASD for P1, IJKL for P2 via the
+    // generic collision-scoring framework.
     attach_default_peripherals();
-
-    // Set per-player keyboard maps — WASD for P1, IJKL for P2.
-    // (Only effective when binding.type == KEYBOARD.)
-    for (int p = 0; p < 2 && p < static_cast<int>(connector_ports_.size()); p++) {
-        auto* dev = connector_ports_[p]->get_attached_device();
-        if (auto* pad = dynamic_cast<NesStandardController*>(dev)) {
-            pad->set_key_map(p == 0 ? nes_keymap_wasd() : nes_keymap_ijkl());
-        }
-    }
 }
 
 template<NintendoVariant V>

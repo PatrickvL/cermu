@@ -122,6 +122,54 @@ bool JoystickDevice::process_gamepad_event(const SDL_Event& event) {
 }
 
 // ============================================================================
+// KEYMAP PRESETS
+// ============================================================================
+
+static const ControllerKeyMapPreset joystick_presets[] = {
+    { "Numpad",
+      { SDL_SCANCODE_KP_8, SDL_SCANCODE_KP_2, SDL_SCANCODE_KP_4,
+        SDL_SCANCODE_KP_6, SDL_SCANCODE_KP_0, SDL_SCANCODE_KP_ENTER },
+      6, true },
+    { "Arrows + RCtrl",
+      { SDL_SCANCODE_UP, SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT,
+        SDL_SCANCODE_RIGHT, SDL_SCANCODE_RCTRL, SDL_SCANCODE_RSHIFT },
+      6, false },
+    { "WASD + Space",
+      { SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_A,
+        SDL_SCANCODE_D, SDL_SCANCODE_SPACE, SDL_SCANCODE_LCTRL },
+      6, false },
+};
+
+static constexpr int JOYSTICK_PRESET_COUNT = static_cast<int>(
+    sizeof(joystick_presets) / sizeof(joystick_presets[0]));
+
+int JoystickDevice::get_keymap_preset_count() const {
+    return JOYSTICK_PRESET_COUNT;
+}
+
+const ControllerKeyMapPreset& JoystickDevice::get_keymap_preset(int index) const {
+    if (index >= 0 && index < JOYSTICK_PRESET_COUNT) return joystick_presets[index];
+    static const ControllerKeyMapPreset empty{"None", {}, 0, false};
+    return empty;
+}
+
+void JoystickDevice::apply_keymap_preset(int index) {
+    switch (index) {
+        case 0:  key_map_ = joystick_keymap_numpad(); break;
+        case 1:  key_map_ = JoystickKeyMap();         break;  // Arrows+RCtrl (default)
+        case 2:  key_map_ = joystick_keymap_wasd();   break;
+        default: break;
+    }
+}
+
+int JoystickDevice::get_active_keymap_preset() const {
+    if (key_map_.up == SDL_SCANCODE_KP_8) return 0;
+    if (key_map_.up == SDL_SCANCODE_UP)   return 1;
+    if (key_map_.up == SDL_SCANCODE_W)    return 2;
+    return -1;
+}
+
+// ============================================================================
 // GUI
 // ============================================================================
 
@@ -143,21 +191,30 @@ void JoystickDevice::render_device_ui() {
         ImGui::SameLine();
         ImGui::TextDisabled("[Keys]");
 
-        // Key mapping preset selector
-        static const char* presets[] = { "Arrows + RCtrl", "WASD + Space", "Numpad" };
-        int current_preset = -1;
-        // Detect current preset by checking up scancode
-        if (key_map_.up == SDL_SCANCODE_UP)     current_preset = 0;
-        else if (key_map_.up == SDL_SCANCODE_W)  current_preset = 1;
-        else if (key_map_.up == SDL_SCANCODE_KP_8) current_preset = 2;
+        // Keymap preset selector with collision info
+        int active = get_active_keymap_preset();
+        const char* preview = (active >= 0) ? get_keymap_preset(active).name : "Custom";
 
-        int sel = current_preset;
-        if (ImGui::Combo("Key Map", &sel, presets, IM_ARRAYSIZE(presets))) {
-            switch (sel) {
-                case 0: key_map_ = JoystickKeyMap(); break;          // Arrows+RCtrl
-                case 1: key_map_ = joystick_keymap_wasd(); break;    // WASD+Space
-                case 2: key_map_ = joystick_keymap_numpad(); break;  // Numpad
+        if (ImGui::BeginCombo("Key Map", preview)) {
+            for (int i = 0; i < get_keymap_preset_count(); i++) {
+                const auto& preset = get_keymap_preset(i);
+                int collisions = count_keymap_collisions(preset, guest_keyboard_scancodes_);
+
+                char label[128];
+                if (collisions > 0) {
+                    snprintf(label, sizeof(label), "%s  (%d collision%s)",
+                             preset.name, collisions, collisions > 1 ? "s" : "");
+                } else {
+                    snprintf(label, sizeof(label), "%s", preset.name);
+                }
+
+                bool selected = (i == active);
+                if (ImGui::Selectable(label, selected)) {
+                    apply_keymap_preset(i);
+                }
+                if (selected) ImGui::SetItemDefaultFocus();
             }
+            ImGui::EndCombo();
         }
     } else if (binding_.type == HostInputType::SDL_GAMEPAD) {
         ImGui::SameLine();
