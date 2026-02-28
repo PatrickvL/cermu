@@ -10,10 +10,10 @@
  * does NOT handle SDL events directly.
  */
 
-#include "../../core/connector.h"
+#include "../../core/peripherals/input_peripheral_device.h"
 #include "../../chip/input/commodore_keyboard.h"
 
-class CommodoreKeyboardDevice : public PeripheralDevice {
+class CommodoreKeyboardDevice : public InputPeripheralDevice {
 public:
     explicit CommodoreKeyboardDevice(commodore_keyboard_t* keyboard = nullptr);
     ~CommodoreKeyboardDevice() override = default;
@@ -27,7 +27,6 @@ public:
     // This device accepts host keyboard input, but routing is handled
     // externally by the KeyboardMapper.  We report it here so the
     // peripheral UI can show "Host Keyboard" as the input source.
-    bool accepts_host_input() const override { return true; }
     int  get_supported_input_type_count() const override { return 1; }
     HostInputType get_supported_input_type(int index) const override {
         (void)index; return HostInputType::KEYBOARD;

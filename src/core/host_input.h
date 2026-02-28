@@ -10,7 +10,7 @@
  *   HostInputType::SDL_GAMEPAD  — Physical game controller via SDL GameController
  *   HostInputType::HOST_MOUSE   — Host mouse position + buttons
  *
- * The GUI layer routes SDL events to devices via PeripheralDevice::process_sdl_event().
+ * The GUI layer routes SDL events to devices via InputPeripheralDevice::process_sdl_event().
  * Each device interprets events according to its current binding.
  *
  * Joystick keyboard mappings default to cursor keys + Right Ctrl (fire),

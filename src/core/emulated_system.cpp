@@ -361,11 +361,14 @@ void EmulatedSystem::auto_assign_controller_keymaps() {
     }
 
     for (auto& dev : owned_devices_) {
-        int preset_count = dev->get_keymap_preset_count();
+        auto* input = dev->as_input_device();
+        if (!input) continue;
+
+        int preset_count = input->get_keymap_preset_count();
         if (preset_count == 0) continue;
 
         // Provide guest keyboard context for collision display in the UI
-        dev->set_guest_keyboard_context(guest_keys, guest_count);
+        input->set_guest_keyboard_context(guest_keys, guest_count);
 
         // Score each preset: collision_count * 2 + requires_numpad.
         // This prefers fewer collisions, breaking ties by preferring
@@ -374,7 +377,7 @@ void EmulatedSystem::auto_assign_controller_keymaps() {
         int best_score = INT_MAX;
 
         for (int i = 0; i < preset_count; i++) {
-            const auto& preset = dev->get_keymap_preset(i);
+            const auto& preset = input->get_keymap_preset(i);
             int collisions = count_keymap_collisions(preset, claimed);
             int score = collisions * 2 + (preset.requires_numpad ? 1 : 0);
             if (score < best_score) {
@@ -383,11 +386,11 @@ void EmulatedSystem::auto_assign_controller_keymaps() {
             }
         }
 
-        dev->apply_keymap_preset(best);
+        input->apply_keymap_preset(best);
 
         // Add the chosen preset's keys to "claimed" so the next device
         // avoids overlapping this one.
-        const auto& chosen = dev->get_keymap_preset(best);
+        const auto& chosen = input->get_keymap_preset(best);
         chosen.add_to_bitset(claimed);
 
         printf("Auto-keymap: %s -> '%s' (%d guest-keyboard collisions)\n",
@@ -479,8 +482,8 @@ void EmulatedSystem::detach_device_from_port(int port_index, PeripheralDevice* d
 bool EmulatedSystem::process_sdl_event_for_devices(const SDL_Event& event) {
     bool consumed = false;
     for (auto& device : owned_devices_) {
-        if (device->accepts_host_input()) {
-            if (device->process_sdl_event(event)) {
+        if (auto* input = device->as_input_device()) {
+            if (input->process_sdl_event(event)) {
                 consumed = true;
             }
         }
@@ -563,8 +566,8 @@ void EmulatedSystem::render_peripheral_connector_ui() {
                     // Device-specific UI
                     ImGui::Indent();
                     dev->render_device_ui();
-                    if (dev->accepts_host_input()) {
-                        render_host_input_binding_ui(dev);
+                    if (auto* input_dev = dev->as_input_device()) {
+                        render_host_input_binding_ui(input_dev);
                     }
                     ImGui::Unindent();
 
@@ -626,8 +629,8 @@ void EmulatedSystem::render_peripheral_connector_ui() {
                 attached->render_device_ui();
 
                 // Host input binding selector for input-accepting devices
-                if (attached->accepts_host_input()) {
-                    render_host_input_binding_ui(attached);
+                if (auto* input_attached = attached->as_input_device()) {
+                    render_host_input_binding_ui(input_attached);
                 }
 
                 ImGui::Unindent();
@@ -639,9 +642,9 @@ void EmulatedSystem::render_peripheral_connector_ui() {
 #endif
 }
 
-void EmulatedSystem::render_host_input_binding_ui(PeripheralDevice* device) {
+void EmulatedSystem::render_host_input_binding_ui(InputPeripheralDevice* device) {
 #ifdef CERMU_HAS_GUI
-    if (!device || !device->accepts_host_input()) return;
+    if (!device) return;
 
     const auto& binding = device->get_host_input_binding();
     int type_count = device->get_supported_input_type_count();
@@ -869,8 +872,8 @@ float EmulatedSystem::render_connector_menu_bar_icons() {
                             dev->render_device_ui();
 
                             // Host input binding
-                            if (dev->accepts_host_input()) {
-                                render_host_input_binding_ui(dev);
+                            if (auto* input_dev = dev->as_input_device()) {
+                                render_host_input_binding_ui(input_dev);
                             }
 
                             ImGui::TreePop();
@@ -912,9 +915,9 @@ float EmulatedSystem::render_connector_menu_bar_icons() {
                         ImGui::Separator();
                         attached->render_device_ui();
 
-                        if (attached->accepts_host_input()) {
+                        if (auto* input_attached = attached->as_input_device()) {
                             ImGui::Separator();
-                            render_host_input_binding_ui(attached);
+                            render_host_input_binding_ui(input_attached);
                         }
                     }
                 } else {
@@ -967,29 +970,30 @@ float EmulatedSystem::render_connector_menu_bar_icons() {
 
 void EmulatedSystem::auto_bind_host_inputs() {
     // Collect owned devices that accept host input
-    std::vector<PeripheralDevice*> gamepad_devices;   // devices that support SDL_GAMEPAD
-    std::vector<PeripheralDevice*> keyboard_devices;  // devices that support KEYBOARD (but not gamepad-assigned)
-    std::vector<PeripheralDevice*> mouse_devices;     // devices that support HOST_MOUSE
+    std::vector<InputPeripheralDevice*> gamepad_devices;   // devices that support SDL_GAMEPAD
+    std::vector<InputPeripheralDevice*> keyboard_devices;  // devices that support KEYBOARD (but not gamepad-assigned)
+    std::vector<InputPeripheralDevice*> mouse_devices;     // devices that support HOST_MOUSE
 
     for (auto& dev : owned_devices_) {
-        if (!dev || !dev->accepts_host_input()) continue;
+        auto* input = dev ? dev->as_input_device() : nullptr;
+        if (!input) continue;
 
         bool supports_gamepad  = false;
         bool supports_keyboard = false;
         bool supports_mouse    = false;
 
-        int type_count = dev->get_supported_input_type_count();
+        int type_count = input->get_supported_input_type_count();
         for (int t = 0; t < type_count; t++) {
-            HostInputType ht = dev->get_supported_input_type(t);
+            HostInputType ht = input->get_supported_input_type(t);
             if (ht == HostInputType::SDL_GAMEPAD) supports_gamepad = true;
             if (ht == HostInputType::KEYBOARD)    supports_keyboard = true;
             if (ht == HostInputType::HOST_MOUSE)  supports_mouse = true;
         }
 
-        if (supports_gamepad)       gamepad_devices.push_back(dev.get());
-        else if (supports_keyboard) keyboard_devices.push_back(dev.get());
+        if (supports_gamepad)       gamepad_devices.push_back(input);
+        else if (supports_keyboard) keyboard_devices.push_back(input);
 
-        if (supports_mouse)         mouse_devices.push_back(dev.get());
+        if (supports_mouse)         mouse_devices.push_back(input);
     }
 
     // --- Enumerate available SDL gamepads ---
@@ -1015,7 +1019,7 @@ void EmulatedSystem::auto_bind_host_inputs() {
 
     // --- Assign gamepads to gamepad-compatible devices (round-robin) ---
     int gp_idx = 0;
-    for (auto* dev : gamepad_devices) {
+    for (auto* input : gamepad_devices) {
         if (gp_idx < static_cast<int>(gamepads.size())) {
             // Assign a specific gamepad
             auto& gp = gamepads[gp_idx];
@@ -1025,15 +1029,15 @@ void EmulatedSystem::auto_bind_host_inputs() {
             char label[128];
             snprintf(label, sizeof(label), "Gamepad #%d: %s", gp.device_index, gp.name);
             b.label = label;
-            dev->set_host_input_binding(b);
-            printf("Auto-bind: %s -> %s\n", dev->get_name(), label);
+            input->set_host_input_binding(b);
+            printf("Auto-bind: %s -> %s\n", input->get_name(), label);
             gp_idx++;
         } else {
             // No more gamepads available; fall back to keyboard if supported
             bool supports_keyboard = false;
-            int type_count = dev->get_supported_input_type_count();
+            int type_count = input->get_supported_input_type_count();
             for (int t = 0; t < type_count; t++) {
-                if (dev->get_supported_input_type(t) == HostInputType::KEYBOARD) {
+                if (input->get_supported_input_type(t) == HostInputType::KEYBOARD) {
                     supports_keyboard = true;
                     break;
                 }
@@ -1042,32 +1046,32 @@ void EmulatedSystem::auto_bind_host_inputs() {
                 HostInputBinding b;
                 b.type = HostInputType::KEYBOARD;
                 b.label = "Keyboard";
-                dev->set_host_input_binding(b);
-                printf("Auto-bind: %s -> Keyboard (no gamepad available)\n", dev->get_name());
+                input->set_host_input_binding(b);
+                printf("Auto-bind: %s -> Keyboard (no gamepad available)\n", input->get_name());
             }
         }
     }
 
     // --- Keyboard-only devices (no gamepad support, e.g. paddles on KEYBOARD) ---
-    for (auto* dev : keyboard_devices) {
+    for (auto* input : keyboard_devices) {
         HostInputBinding b;
         b.type = HostInputType::KEYBOARD;
         b.label = "Keyboard";
-        dev->set_host_input_binding(b);
-        printf("Auto-bind: %s -> Keyboard\n", dev->get_name());
+        input->set_host_input_binding(b);
+        printf("Auto-bind: %s -> Keyboard\n", input->get_name());
     }
 
     // --- Mouse devices ---
-    for (auto* dev : mouse_devices) {
+    for (auto* input : mouse_devices) {
         // Only bind mouse if the device isn't already bound to a gamepad
-        const auto& current = dev->get_host_input_binding();
+        const auto& current = input->get_host_input_binding();
         if (current.type == HostInputType::SDL_GAMEPAD) continue;
 
         HostInputBinding b;
         b.type = HostInputType::HOST_MOUSE;
         b.label = "Host Mouse";
-        dev->set_host_input_binding(b);
-        printf("Auto-bind: %s -> Host Mouse\n", dev->get_name());
+        input->set_host_input_binding(b);
+        printf("Auto-bind: %s -> Host Mouse\n", input->get_name());
     }
 
     if (gamepads.empty() && gamepad_devices.empty() && mouse_devices.empty()

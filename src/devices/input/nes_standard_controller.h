@@ -14,7 +14,7 @@
  *   7  6    5       4     3    2     1      0
  */
 
-#include "../../core/connector.h"
+#include "../../core/peripherals/input_peripheral_device.h"
 #include "../../chip/input/cd4021.h"
 
 #include <cstdint>
@@ -72,7 +72,7 @@ inline NesKeyMap nes_keymap_arrows() {
     return NesKeyMap{};  // defaults are arrows
 }
 
-class NesStandardController : public PeripheralDevice {
+class NesStandardController : public InputPeripheralDevice {
 public:
     // Button bitmask — matches CD4021 parallel load bit order
     enum Button : uint8_t {
@@ -100,7 +100,6 @@ public:
     uint32_t get_output_signals() const override { return output_signals_; }
 
     // --- Host Input (keyboard / gamepad) -------------------------------
-    bool accepts_host_input() const override { return true; }
     int get_supported_input_type_count() const override { return 2; }
     HostInputType get_supported_input_type(int index) const override {
         if (index == 0) return HostInputType::KEYBOARD;
