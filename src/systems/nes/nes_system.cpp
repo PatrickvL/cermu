@@ -356,6 +356,10 @@ void NintendoSystem<V>::run_frame() {
         clock();
     }
 
+    // Copy PPU screen into the GUI-provided framebuffer so the emu
+    // thread's snapshot sees the rendered frame.
+    get_framebuffer();
+
     // Tick all attached peripheral devices
     tick_peripherals();
 }
