@@ -13,7 +13,7 @@
 
 #include "vic_common.h"
 #include "../../../core/chip_layout.h"
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #include "../../../gui/chip_visualization.h"
 #include "../../../gui/global_chip_style.h"
@@ -124,7 +124,7 @@ bool vic_base_t::has_layout_content()   const { return true; }
 void vic_base_t::render_debug_content() {
     vic_base_t* vic = this;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     // Two-column layout
     ImVec2 window_size = ImGui::GetContentRegionAvail();
 
@@ -240,7 +240,7 @@ void vic_base_t::render_debug_content() {
 void vic_base_t::render_settings_content() {
     vic_base_t* vic = this;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 
     ImGui::Text("Video Interface Chip - %s Configuration", get_vic_type_name(vic));
     ImGui::Separator();
@@ -274,7 +274,7 @@ void vic_base_t::render_settings_content() {
 void vic_base_t::render_layout_content() {
     vic_base_t* vic = this;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     const char* chip_name = get_vic_type_name(vic);
 
     ChipLayout& layout = get_vic_layout(vic->is_pal);

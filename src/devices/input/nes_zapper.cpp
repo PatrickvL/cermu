@@ -19,7 +19,7 @@
 
 using ConnectorSignals::NESControllerBit;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "imgui.h"
 #endif
 
@@ -100,7 +100,7 @@ bool NesZapper::process_sdl_event(const SDL_Event& event) {
 // GUI
 // ============================================================================
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 void NesZapper::render_device_ui() {
     ImGui::Text("Aim: (%d, %d)", aim_x_, aim_y_);
     ImGui::Text("Trigger: %s  Light: %s",

@@ -15,7 +15,7 @@
 // stb_image_write header (implementation lives in stb_impl.cpp)
 #include "../../external/stb_image_write.h"
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #include "../gui/connector_icons.h"
 #endif
@@ -148,7 +148,7 @@ void EmulatedSystem::render_debug_windows(void* gui_state, std::mutex& emu_mutex
     // the Hardware menu preview.  Each detached window shows layout + debug
     // + settings content in a standalone ImGui window.
     (void)gui_state;
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     for (auto& sc : registered_chips_) {
         if (!sc.show_detached || !sc.chip) continue;
         bool show = true;
@@ -437,7 +437,7 @@ bool EmulatedSystem::process_sdl_event_for_devices(const SDL_Event& event) {
 }
 
 void EmulatedSystem::render_peripheral_connector_ui() {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     if (connector_ports_.empty()) return;
 
     auto& registry = DeviceRegistry::instance();
@@ -588,7 +588,7 @@ void EmulatedSystem::render_peripheral_connector_ui() {
 }
 
 void EmulatedSystem::render_host_input_binding_ui(PeripheralDevice* device) {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     if (!device || !device->accepts_host_input()) return;
 
     const auto& binding = device->get_host_input_binding();
@@ -667,7 +667,7 @@ void EmulatedSystem::render_host_input_binding_ui(PeripheralDevice* device) {
 // ============================================================================
 
 float EmulatedSystem::render_connector_menu_bar_icons() {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     if (connector_ports_.empty()) return 0.0f;
 
     auto& registry = DeviceRegistry::instance();

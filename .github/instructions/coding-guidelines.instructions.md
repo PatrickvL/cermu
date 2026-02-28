@@ -57,7 +57,7 @@ System-specific code (system glue, tick loop, system-unique chips) stays under `
 ### GUI Separation
 
 - All ImGui rendering (chip layouts, debug windows, settings) lives in files with a `_gui` suffix (e.g. `nes_ppu_gui.cpp`, `cd4021_gui.cpp`).
-- Everything GUI-related is compiled only under `#ifdef IMGUI_VERSION`.
+- Everything GUI-related is compiled only under `#ifdef CERMU_HAS_GUI`.
 - Chip implementations own their rendering through `ChipBase` virtual hooks (`has_debug_content()`, `render_debug_content()`, etc.).
 - Non-GUI builds (test runners, headless) must compile cleanly without ImGui.
 
@@ -147,7 +147,7 @@ C++17. Use `if constexpr`, structured bindings, `std::string_view`, fold express
 | Principle | Rule |
 |-----------|------|
 | One chip = one header | Each hardware chip is a self-contained `ChipBase` subclass. |
-| Layouts in `_gui` files | `ChipLayout` definitions + pin rendering under `#ifdef IMGUI_VERSION`. |
+| Layouts in `_gui` files | `ChipLayout` definitions + pin rendering under `#ifdef CERMU_HAS_GUI`. |
 | Cross-system entities in shared folders | Chips, connectors, and peripherals used by >1 system go in `src/chip/`, `src/connectors/`, `src/devices/`. |
 | Edge detection via snapshot | Compare current bus against `bus_snapshot_`; no callbacks or state machines. |
 | No free functions | Everything is a static member or method. Namespace-level constants are `inline constexpr`. |
@@ -190,7 +190,7 @@ src/
 ## Connector / Peripheral Protocol
 
 - `ConnectorPort` models a physical jack with wired-AND signal propagation (active-low convention).
-- `PeripheralDevice` is the abstract base for anything plugged into a port: lifecycle hooks, signal I/O, host input binding, optional `#ifdef IMGUI_VERSION` rendering.
+- `PeripheralDevice` is the abstract base for anything plugged into a port: lifecycle hooks, signal I/O, host input binding, optional `#ifdef CERMU_HAS_GUI` rendering.
 - Systems drive connector signals via `ConnectorPort::write_system_signals()`; devices respond via `on_signal_change()` and update their output signals.
 - Devices are registered in `DeviceRegistry` with a `ConnectorType` so they auto-appear in the UI for compatible ports.
 
@@ -214,4 +214,4 @@ src/
 | CPU template | `fam65xx_t<CPUTraits>` | NTTP + `if constexpr` for zero-overhead variant dispatch |
 | C++ chip conversion | TED 7360 | ChipBase inheritance, callbacks via descriptor, proper encapsulation |
 | Chip debug/settings | MOS 6581 SID | Left panel (chip viz) + right panel (registers), collapsible sections |
-| Connector/peripheral | DB-9 `ControlPortInputDevice` + `JoystickDevice` | Signal protocol, host input binding, `#ifdef IMGUI_VERSION` |
+| Connector/peripheral | DB-9 `ControlPortInputDevice` + `JoystickDevice` | Signal protocol, host input binding, `#ifdef CERMU_HAS_GUI` |

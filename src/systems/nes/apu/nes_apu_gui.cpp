@@ -11,7 +11,7 @@
 #include "../../../chip/cpu/fam65xx/nes6502.h"
 #include "../../../core/chip_layout.h"
 #include "../../../core/pin_macros.h"
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #include "../../../gui/chip_visualization.h"
 #include "../../../gui/global_chip_style.h"
@@ -65,7 +65,7 @@ bool nes6502_apu::APU::has_debug_content()    const { return true; }
 bool nes6502_apu::APU::has_settings_content() const { return true; }
 bool nes6502_apu::APU::has_layout_content()   const { return true; }
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 
 // ============================================================================
 // PIN SIGNAL STATES
@@ -357,7 +357,7 @@ void nes6502_apu::APU::render_layout_content() {
     render_chip_layout(layout, pin_states, "RP2A03");
 }
 
-#else // !IMGUI_VERSION
+#else // !CERMU_HAS_GUI
 
 void nes6502_apu::APU::render_debug_content() {}
 void nes6502_apu::APU::render_settings_content() {}

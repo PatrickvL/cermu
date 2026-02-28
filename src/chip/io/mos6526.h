@@ -113,7 +113,7 @@ struct mos6526_t : public ChipBase {
     // Implements the required 1-cycle delay for interrupt assertion
     bus_state_t pending_bus_lines = 0;  // Lines to assert in NEXT cycle
     
-#ifndef IMGUI_VERSION
+#ifndef CERMU_HAS_GUI
     // Without GUI, ChipBase::bus_snapshot_ doesn't exist.
     // Provide a local field so edge detection can always use bus_snapshot_.
     bus_state_t bus_snapshot_ = 0;

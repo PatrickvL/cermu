@@ -13,7 +13,7 @@
 #include "ted7360.h"
 #include "../../../core/chip_layout.h"
 #include "../../../core/pin_macros.h"
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #include "../../../gui/chip_visualization.h"
 #include "../../../gui/global_chip_style.h"
@@ -135,7 +135,7 @@ bool ted7360_t::has_layout_content()   const { return true; }
 void ted7360_t::render_debug_content() {
     ted7360_t* ted = this;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     // Two-column layout
     ImVec2 window_size = ImGui::GetContentRegionAvail();
 
@@ -278,7 +278,7 @@ void ted7360_t::render_debug_content() {
 void ted7360_t::render_settings_content() {
     ted7360_t* ted = this;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 
     ImGui::Text("TED 7360 - Text Editing Device Configuration");
     ImGui::Separator();
@@ -315,7 +315,7 @@ void ted7360_t::render_settings_content() {
 void ted7360_t::render_layout_content() {
     ted7360_t* ted = this;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     ChipLayout& layout = get_ted_layout();
     std::vector<PinSignalState> pin_states = get_ted_pin_states(ted, &layout, ted->bus_snapshot_);
     render_chip_layout(layout, pin_states, "TED7360");

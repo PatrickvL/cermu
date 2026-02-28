@@ -8,7 +8,7 @@
 #include <SDL_events.h>
 #include <SDL_gamecontroller.h>
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "imgui.h"
 #endif
 
@@ -125,7 +125,7 @@ bool JoystickDevice::process_gamepad_event(const SDL_Event& event) {
 // GUI
 // ============================================================================
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 void JoystickDevice::render_device_ui() {
     // Joystick state display
     bool up    = is_signal_asserted(ConnectorSignals::JOY_UP);

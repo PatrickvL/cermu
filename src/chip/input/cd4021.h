@@ -71,7 +71,7 @@ public:
         shift_register_ = 0;
     }
 
-    // GUI virtuals are in cd4021_gui.cpp (#ifdef IMGUI_VERSION)
+    // GUI virtuals are in cd4021_gui.cpp (#ifdef CERMU_HAS_GUI)
     bool has_layout_content() const override;
     bool has_debug_content() const override;
     void render_layout_content() override;

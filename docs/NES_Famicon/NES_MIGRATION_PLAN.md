@@ -7,7 +7,7 @@ Restructure the NES/Famicom emulation from a monolithic `nes_system.cpp` + `nes_
 1. Each chip is a separate `ChipBase`-derived type in its own header
 2. Two `bus_state_t` words model the CPU bus and PPU bus independently (matching hardware)
 3. A unified memory buffer + bank map replaces cascading if-else dispatch (C64 pattern)
-4. Hardware-accurate pin layouts live in `_gui` files, compiled only when `IMGUI_VERSION` is defined
+4. Hardware-accurate pin layouts live in `_gui` files, compiled only when `CERMU_HAS_GUI` is defined
 5. Code is header-only where possible, with limited visibility (`private`/`protected`)
 6. No global or free functions — everything lives inside types
 7. Mapper implementations are individually compilable, not nested private classes
@@ -81,17 +81,17 @@ src/systems/nes/
 │   ├── nes_ppu.cpp                   #   clock(), bus tick, sprite eval, shifters
 │   ├── nes_ppu_palette.h             #   Static NES palette (64-color LUT, header-only)
 │   └── nes_ppu_gui.cpp               #   ImGui debug/settings/layout (ChipBase virtuals)
-│                                     #   RP2C02 40-pin DIP layout (#ifdef IMGUI_VERSION)
+│                                     #   RP2C02 40-pin DIP layout (#ifdef CERMU_HAS_GUI)
 │
 ├── apu/                              # APU (built into 2A03, GUI separate)
 │   └── nes_apu_gui.cpp               #   ImGui debug/settings/layout for APU chip
-│                                     #   RP2A03 APU-focused layout (#ifdef IMGUI_VERSION)
+│                                     #   RP2A03 APU-focused layout (#ifdef CERMU_HAS_GUI)
 │
 ├── cartridge/                        # Cartridge + mapper hierarchy
 │   ├── nes_cartridge.h               #   Cartridge : ChipBase — ROM/RAM buffers,
 │   │                                 #   iNES header, SRAM, mapper dispatch
 │   ├── nes_cartridge.cpp             #   load_from_buffer(), bus_tick(), SRAM I/O
-│   ├── nes_cartridge_gui.cpp         #   Cartridge debug/layout (#ifdef IMGUI_VERSION)
+│   ├── nes_cartridge_gui.cpp         #   Cartridge debug/layout (#ifdef CERMU_HAS_GUI)
 │   ├── nes_mapper.h                  #   Mapper base class (abstract interface)
 │   │
 │   ├── mappers/                      #   One header per mapper (header-only)
@@ -126,7 +126,7 @@ src/chip/input/                       # Cross-system input chips
 ├── cd4021.h                          #   CD4021 PISO shift register : ChipBase
 │                                     #   (header-only; used by NES, SNES, etc.)
 └── cd4021_gui.cpp                    #   CD4021 16-pin DIP layout + debug
-│                                     #   (#ifdef IMGUI_VERSION)
+│                                     #   (#ifdef CERMU_HAS_GUI)
 
 src/connectors/                       # Cross-system connector definitions
 └── nes_connectors.h                  #   NES 72-pin, FC 60-pin, controller 7-pin,
@@ -162,7 +162,7 @@ src/devices/input/                    # Cross-system peripheral devices
 | Principle | Rationale |
 |-----------|-----------|
 | **One chip = one header** | Each hardware chip (2A03, 2C02, cartridge) is a self-contained `ChipBase` subclass. The header defines the type and bus interface. Layouts are NOT in the chip header — they live in `_gui` files. |
-| **Layouts in `_gui` files, `IMGUI_VERSION` guarded** | All `ChipLayout` definitions and pin-state rendering live in files with a `_gui` suffix (e.g. `nes_ppu_gui.cpp`). Everything layout-related is compiled only when `#ifdef IMGUI_VERSION`. This keeps non-GUI builds (test runners, headless) free of ImGui dependencies. Matches the existing convention in VIC-II, TED, MOS6522, etc. |
+| **Layouts in `_gui` files, `CERMU_HAS_GUI` guarded** | All `ChipLayout` definitions and pin-state rendering live in files with a `_gui` suffix (e.g. `nes_ppu_gui.cpp`). Everything layout-related is compiled only when `#ifdef CERMU_HAS_GUI`. This keeps non-GUI builds (test runners, headless) free of ImGui dependencies. Matches the existing convention in VIC-II, TED, MOS6522, etc. |
 | **Cross-system entities in shared folders** | Any entity used by multiple systems lives in a shared folder: chips in `src/chip/<category>/`, connector definitions in `src/connectors/`, peripheral devices in `src/devices/<category>/`. Only system-specific chips (RP2C02, cartridge) stay in `src/systems/nes/`. |
 | **Header-only where side-effect-free** | Palette LUTs, bus signal definitions, mapper bank logic, controller shift register — all compile down to inline code or constexpr data. |
 | **`.cpp` only for rendering + I/O** | ImGui rendering, file I/O, and the system tick loop need translation units. The hot-path memory dispatch lives in the header via `inline` / `__attribute__((always_inline))`. |
@@ -524,7 +524,7 @@ public:
     // === Bank map integration ===
     void set_bus(nes_bus_t* bus);                      // PPU reads CHR via bus page pointers
 
-    // === ChipBase GUI (in nes_ppu_gui.cpp, #ifdef IMGUI_VERSION) ===
+    // === ChipBase GUI (in nes_ppu_gui.cpp, #ifdef CERMU_HAS_GUI) ===
     bool has_debug_content()   const override;
     bool has_layout_content()  const override;
     void render_debug_content()   override;
@@ -548,7 +548,7 @@ private:
 **Key changes**:
 - PPU reads CHR data through `bus_->ppu_read_page[]` instead of `cart->ppu_read()` (eliminates virtual dispatch on every tile fetch)
 - `ppu_bus_snapshot_` stores PPU bus state at end of each `clock()` for NMI edge detection
-- Layout definition lives in `nes_ppu_gui.cpp` under `#ifdef IMGUI_VERSION`, not in the chip header
+- Layout definition lives in `nes_ppu_gui.cpp` under `#ifdef CERMU_HAS_GUI`, not in the chip header
 
 ### 4.2 Cartridge (`nes_cartridge.h`)
 
@@ -667,7 +667,7 @@ public:
     // Serial read: shift out one bit (MSB first), returns D0
     uint8_t shift_out();
 
-    // === ChipBase GUI (in cd4021_gui.cpp, #ifdef IMGUI_VERSION) ===
+    // === ChipBase GUI (in cd4021_gui.cpp, #ifdef CERMU_HAS_GUI) ===
     bool has_layout_content() const override;
     void render_layout_content() override;  // 16-pin DIP layout
 
@@ -697,7 +697,7 @@ uint8_t read_controller(int port) {
 
 **Key changes**:
 - CD4021 lives in `src/chip/input/` — reusable across NES, SNES, etc.
-- Layout (16-pin DIP) is in `cd4021_gui.cpp` under `#ifdef IMGUI_VERSION`
+- Layout (16-pin DIP) is in `cd4021_gui.cpp` under `#ifdef CERMU_HAS_GUI`
 - NES system composes the chip, doesn't subclass it
 
 ### 4.5 NES CPU Wrapper (`nes_cpu.h`)
@@ -735,12 +735,12 @@ struct DMAState {
 ## Part 5 — Hardware-Accurate Pin Layouts Per Chip
 
 All layout definitions live in files with a `_gui` suffix and are compiled
-only when `IMGUI_VERSION` is defined. This matches the existing codebase
+only when `CERMU_HAS_GUI` is defined. This matches the existing codebase
 convention (`vic_gui.cpp`, `vicii_gui.cpp`, `ted7360_gui.cpp`, etc.).
 
 ```cpp
 // Example: nes_ppu_gui.cpp
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 
 static const ChipLayout& get_rp2c02_layout() {
     static const ChipLayout layout = { /* 40-pin DIP ... */ };
@@ -753,13 +753,13 @@ void PPU::render_layout_content() {
     render_chip_layout(layout, pin_states);
 }
 
-#endif // IMGUI_VERSION
+#endif // CERMU_HAS_GUI
 ```
 
 ### RP2C02 (PPU) — 40-pin DIP
 
 Already defined in current `nes_ppu_gui.cpp`. Migration keeps it in `ppu/nes_ppu_gui.cpp`
-under `#ifdef IMGUI_VERSION`:
+under `#ifdef CERMU_HAS_GUI`:
 
 ```
 Pin 1:  R/W             Pin 40: VDD (+5V)
@@ -786,11 +786,11 @@ Pin 20: VSS (GND)       Pin 21: VOUT (composite video)
 
 ### RP2A03 (CPU/APU) — 40-pin DIP
 
-Already defined in `ricoh_2a03.h` and `nes_apu_gui.cpp`. The CPU layout is canonical. The APU GUI file (`apu/nes_apu_gui.cpp`) keeps the APU-focused variant highlighting SND1/SND2, all under `#ifdef IMGUI_VERSION`.
+Already defined in `ricoh_2a03.h` and `nes_apu_gui.cpp`. The CPU layout is canonical. The APU GUI file (`apu/nes_apu_gui.cpp`) keeps the APU-focused variant highlighting SND1/SND2, all under `#ifdef CERMU_HAS_GUI`.
 
 ### CD4021 (Controller Shift Register) — 16-pin DIP
 
-Lives in `src/chip/input/cd4021_gui.cpp` (cross-system, `#ifdef IMGUI_VERSION`):
+Lives in `src/chip/input/cd4021_gui.cpp` (cross-system, `#ifdef CERMU_HAS_GUI`):
 
 ```
 Pin 1:  P5 (parallel in 5)  Pin 16: VDD
@@ -881,7 +881,7 @@ public:
     void set_host_input_binding(const HostInputBinding& binding) override;
     bool process_sdl_event(const SDL_Event& event) override;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     void render_device_ui() override;
 #endif
 
@@ -1023,15 +1023,15 @@ The migration is designed to be done in small, testable steps. Each step compile
 | 1.4 | Move PPU class declaration → `ppu/nes_ppu.h` (keep impl in `nes_system.cpp` for now) | `ppu/nes_ppu.h` | Low — header split |
 | 1.5 | Move PPU implementation → `ppu/nes_ppu.cpp` | `ppu/nes_ppu.cpp` | Low |
 | 1.6 | Move PPU palette → `ppu/nes_ppu_palette.h` | `ppu/nes_ppu_palette.h` | None |
-| 1.7 | Move PPU GUI (layout + debug + settings) → `ppu/nes_ppu_gui.cpp` (layout under `#ifdef IMGUI_VERSION`) | `ppu/nes_ppu_gui.cpp` | Low |
-| 1.8 | Move APU GUI (layout + debug + settings) → `apu/nes_apu_gui.cpp` (layout under `#ifdef IMGUI_VERSION`) | `apu/nes_apu_gui.cpp` | Low |
+| 1.7 | Move PPU GUI (layout + debug + settings) → `ppu/nes_ppu_gui.cpp` (layout under `#ifdef CERMU_HAS_GUI`) | `ppu/nes_ppu_gui.cpp` | Low |
+| 1.8 | Move APU GUI (layout + debug + settings) → `apu/nes_apu_gui.cpp` (layout under `#ifdef CERMU_HAS_GUI`) | `apu/nes_apu_gui.cpp` | Low |
 | 1.9 | Extract Cartridge class → `cartridge/nes_cartridge.h` + `.cpp` | 2 files | Medium |
-| 1.10 | Add Cartridge GUI → `cartridge/nes_cartridge_gui.cpp` (layout + debug, `#ifdef IMGUI_VERSION`) | 1 file | Low |
+| 1.10 | Add Cartridge GUI → `cartridge/nes_cartridge_gui.cpp` (layout + debug, `#ifdef CERMU_HAS_GUI`) | 1 file | Low |
 | 1.11 | Extract Mapper base → `cartridge/nes_mapper.h` | 1 file | Low |
 | 1.12 | Extract each mapper → `cartridge/mappers/mapper_NNN_name.h` (000, 001, 002, 003, 004) | 5 files | Medium |
 | 1.13 | Create mapper factory → `cartridge/nes_mapper_factory.h` | 1 file | Low |
 | 1.14 | Create CD4021 in cross-system location → `src/chip/input/cd4021.h` (header-only) | 1 file | Low |
-| 1.15 | Create CD4021 GUI → `src/chip/input/cd4021_gui.cpp` (16-pin DIP layout, `#ifdef IMGUI_VERSION`) | 1 file | Low |
+| 1.15 | Create CD4021 GUI → `src/chip/input/cd4021_gui.cpp` (16-pin DIP layout, `#ifdef CERMU_HAS_GUI`) | 1 file | Low |
 | 1.16 | Extract connector definitions → `src/connectors/nes_connectors.h` (shared, header-only) | 1 file | Low |
 | 1.17 | Create NES standard controller → `src/devices/input/nes_standard_controller.h` + `.cpp` | 2 files | Medium |
 | 1.18 | Create NES Zapper → `src/devices/input/nes_zapper.h` + `.cpp` | 2 files | Medium |
@@ -1085,7 +1085,7 @@ The migration is designed to be done in small, testable steps. Each step compile
 | 4.3 | Remove `ChipPlaceholder` for cartridge in chip registration | Low |
 | 4.4 | Add CIRAM (2KB VRAM) as `MemoryChip` with layout | Low |
 | 4.5 | Update `register_nes_chips()` to use new types | Low |
-| 4.6 | Verify Hardware menu shows all chips with layouts (requires `IMGUI_VERSION` build) | Gate |
+| 4.6 | Verify Hardware menu shows all chips with layouts (requires `CERMU_HAS_GUI` build) | Gate |
 
 ### Phase 5: Eliminate Global/Free Functions
 

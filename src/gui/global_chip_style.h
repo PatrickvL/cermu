@@ -8,8 +8,8 @@
 
 #pragma once
 
-#ifndef IMGUI_VERSION
-#error "global_chip_style.h requires IMGUI_VERSION to be defined. This header should only be included in GUI builds."
+#ifndef CERMU_HAS_GUI
+#error "global_chip_style.h requires CERMU_HAS_GUI to be defined. This header should only be included in GUI builds."
 #endif
 
 #include "chip_visualization.h"

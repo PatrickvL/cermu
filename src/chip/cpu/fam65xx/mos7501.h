@@ -7,7 +7,7 @@
  */
 
 #include "fam65xx.hpp"
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "fam65xx_pin_layout.h"
 #include "../../../core/system_lines.h"
 #endif
@@ -48,7 +48,7 @@ using CSG7501 = fam65xx_t<CSG7501Traits>;
 // Trait constants remain internal to namespace fam65xx.
 using CSG7501 = fam65xx::CSG7501;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 // ============================================================================
 // CSG 7501/8501 PIN LAYOUT (40-pin DIP, C16/Plus4 CPU)
 // ============================================================================
@@ -100,4 +100,4 @@ inline ChipLayout create_csg7501_layout() {
 template<> inline ChipLayout create_cpu_pin_layout<fam65xx::CSG7501Traits>() {
   return create_csg7501_layout();
 }
-#endif // IMGUI_VERSION
+#endif // CERMU_HAS_GUI

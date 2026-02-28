@@ -52,7 +52,7 @@ public:
     void set_host_input_binding(const HostInputBinding& binding) override;
     bool process_sdl_event(const SDL_Event& event) override;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     void render_device_ui() override;
 #endif
 

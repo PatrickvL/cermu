@@ -2,7 +2,7 @@
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #include "../../gui/chip_visualization.h"
 #include "../../gui/global_chip_style.h"
@@ -121,7 +121,7 @@ static ChipLayout& get_cia_layout() {
 
 void mos6526_t::render_debug_content() {
     
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     mos6526_t* cia = this;
     const char* cia_name = mos6526_get_cia_name(cia);
 
@@ -223,7 +223,7 @@ void mos6526_t::render_debug_content() {
 
 void mos6526_t::render_settings_content() {
     
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     mos6526_t* cia = this;
     const char* cia_name = mos6526_get_cia_name(cia);
 
@@ -348,7 +348,7 @@ static const char* mos6526_get_cia_name(mos6526_t* cia) {
 
 void mos6526_t::render_layout_content() {
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     mos6526_t* cia = this;
     const char* cia_name = mos6526_get_cia_name(cia);
 

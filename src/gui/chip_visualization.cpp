@@ -8,7 +8,7 @@
 #include <cstdio>
 
 // Only compile ImGui-dependent code when ImGui is available
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 
 // ============================================================================
 // COLOR DEFINITIONS AND VISUAL CONFIGURATION
@@ -912,4 +912,4 @@ ImVec2 ChipVisualization::calculate_bga_position(const ChipLayout& layout, ImVec
     return chip_center; // Simplified
 }
 
-#endif // IMGUI_VERSION
+#endif // CERMU_HAS_GUI

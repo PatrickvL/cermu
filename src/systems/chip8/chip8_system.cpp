@@ -8,7 +8,7 @@
 #include <cmath>
 
 // SDL is only needed for keyboard mapping in GUI builds
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include <SDL.h>
 #include "imgui.h"
 #endif
@@ -630,7 +630,7 @@ void Chip8System::register_chip8_chips() {
 // ============================================================================
 
 void Chip8System::render_system_menu_items() {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     if (ImGui::MenuItem("Reset CHIP-8")) {
         reset();
     }
@@ -638,7 +638,7 @@ void Chip8System::render_system_menu_items() {
 }
 
 void Chip8System::render_configuration_ui() {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     ImGui::Text("CHIP-8 Configuration");
     ImGui::Separator();
     
@@ -1143,7 +1143,7 @@ void Chip8System::update_timers() {
 }
 
 int Chip8System::map_sdl_key_to_chip8(int sdl_key) {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     switch (sdl_key) {
         case SDLK_1: return 0x1;
         case SDLK_2: return 0x2;

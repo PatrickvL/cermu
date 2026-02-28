@@ -3,7 +3,7 @@
 #include <cstring>
 #include <cstdio>
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "imgui.h"
 #endif
 
@@ -365,7 +365,7 @@ void Apple1System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 // ============================================================================
 
 void Apple1System::render_system_menu_items() {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     if (ImGui::MenuItem("Reset Apple 1")) {
         reset();
     }
@@ -373,7 +373,7 @@ void Apple1System::render_system_menu_items() {
 }
 
 void Apple1System::render_configuration_ui() {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     ImGui::Text("Apple 1 Configuration");
     ImGui::Separator();
     

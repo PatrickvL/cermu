@@ -13,8 +13,8 @@
 
 #pragma once
 
-#ifndef IMGUI_VERSION
-#error "chip_visualization.h requires IMGUI_VERSION to be defined. This header should only be included in GUI builds."
+#ifndef CERMU_HAS_GUI
+#error "chip_visualization.h requires CERMU_HAS_GUI to be defined. This header should only be included in GUI builds."
 #endif
 
 #include <cstdint>

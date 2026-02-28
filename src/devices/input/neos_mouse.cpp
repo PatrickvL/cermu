@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <SDL_events.h>
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "imgui.h"
 #endif
 
@@ -111,7 +111,7 @@ void NEOSMouse::output_nibble(uint8_t nibble) {
 // GUI
 // ============================================================================
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 void NEOSMouse::render_device_ui() {
     ImGui::Text("  Phase:%d  dX:%+4d dY:%+4d  LMB:%s RMB:%s",
                 phase_, (int)latched_dx_, (int)latched_dy_,

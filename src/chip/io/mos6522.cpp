@@ -308,7 +308,7 @@ bus_state_t mos6522_t::tick(bus_state_t bus_state) {
         ifr &= ~MOS6522_IFR_IRQ;
     }
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     bus_snapshot_ = bus_state;
 #endif
     return bus_state;

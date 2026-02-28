@@ -8,7 +8,7 @@
 #include <cstring>
 #include <cstdio>
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "imgui.h"
 #endif
 
@@ -871,7 +871,7 @@ void VIC20System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 // ============================================================================
 
 void VIC20System::render_system_menu_items() {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     if (ImGui::MenuItem("Reset VIC-20")) {
         reset();
     }
@@ -926,7 +926,7 @@ void VIC20System::register_vic20_chips() {
 }
 
 void VIC20System::render_configuration_ui() {
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     ImGui::Text("VIC-20 Configuration");
     ImGui::Separator();
     

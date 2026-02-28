@@ -16,7 +16,7 @@
 #include <cstdio>
 #include <SDL_events.h>
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "imgui.h"
 #endif
 
@@ -107,7 +107,7 @@ bool LightpenDevice::get_lp_pin_state(uint16_t beam_x, uint16_t beam_y) const {
 // GUI
 // ============================================================================
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 void LightpenDevice::render_device_ui() {
     int vic_x = -1, vic_y = -1;
     if (pen_sdl_x_ >= 0 && pen_sdl_y_ >= 0) {

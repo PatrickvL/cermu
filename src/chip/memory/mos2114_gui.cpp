@@ -2,7 +2,7 @@
 #include "../../core/chip_layout.h"
 #include "../../core/pin_macros.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include <imgui.h>
 #include "../../gui/chip_visualization.h"
 #include "../../gui/global_chip_style.h"
@@ -62,7 +62,7 @@ inline ChipLayout create_mos2114_layout() {
     return layout;
 }
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 // Helper function to get MOS2114 pin states for visualization
 static std::vector<PinSignalState> get_mos2114_pin_states(MOS2114* mos2114, const ChipLayout* layout, bus_state_t bus_state) {
     if (!mos2114 || !layout) return {};
@@ -100,7 +100,7 @@ static ChipLayout& get_mos2114_layout() {
 
 void MOS2114::render_debug_content() {
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     // Create two-column layout: chip visualization on left, debugging info on right
     ImVec2 window_size = ImGui::GetContentRegionAvail();
     
@@ -196,7 +196,7 @@ void MOS2114::render_debug_content() {
 
 void MOS2114::render_settings_content() {
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 
     ImGui::Text("MOS2114 Color RAM Settings");
     ImGui::Separator();
@@ -231,7 +231,7 @@ void MOS2114::render_settings_content() {
 
 void MOS2114::render_layout_content() {
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     ChipLayout& layout = get_mos2114_layout();
     std::vector<PinSignalState> pin_states = get_mos2114_pin_states(this, &layout, this->bus_snapshot_);
     render_chip_layout(layout, pin_states, "MOS2114");

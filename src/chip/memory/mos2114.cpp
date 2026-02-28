@@ -20,7 +20,7 @@ bool MOS2114::has_layout_content()   const { return true; }
 // ============================================================================
 bus_state_t MOS2114::bus_read(void* context, bus_state_t bus_state) {
     auto* self = static_cast<MOS2114*>(context);
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     self->bus_snapshot_ = bus_state;
 #endif
     // Color RAM is mapped at $D800–$DBFF (1024 bytes)
@@ -36,7 +36,7 @@ bus_state_t MOS2114::bus_read(void* context, bus_state_t bus_state) {
 
 bus_state_t MOS2114::bus_write(void* context, bus_state_t bus_state) {
     auto* self = static_cast<MOS2114*>(context);
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     self->bus_snapshot_ = bus_state;
 #endif
 

@@ -104,7 +104,7 @@ public:
 
     bool has_activity() const override { return drive_led_; }
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
     void render_device_ui() override;
 #endif
 

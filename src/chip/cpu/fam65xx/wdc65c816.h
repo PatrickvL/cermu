@@ -7,7 +7,7 @@
  */
 
 #include "fam65xx.hpp"
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "fam65xx_pin_layout.h"
 #include "../../../core/system_lines.h"
 #endif
@@ -33,7 +33,7 @@ using WDC_65C816 = fam65xx_t<WDC_65C816Traits>;
 // Trait constants remain internal to namespace fam65xx.
 using WDC_65C816 = fam65xx::WDC_65C816;
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 // ============================================================================
 // WDC 65C816 PIN LAYOUT (40-pin DIP)
 // ============================================================================
@@ -82,4 +82,4 @@ inline ChipLayout create_wdc_65c816_layout() {
 template<> inline ChipLayout create_cpu_pin_layout<fam65xx::WDC_65C816Traits>() {
   return create_wdc_65c816_layout();
 }
-#endif // IMGUI_VERSION
+#endif // CERMU_HAS_GUI

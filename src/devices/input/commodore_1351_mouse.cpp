@@ -7,7 +7,7 @@
 #include <cstdio>
 #include <SDL_events.h>
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 #include "imgui.h"
 #endif
 
@@ -58,7 +58,7 @@ void Commodore1351Mouse::move(int dx, int dy) {
 // GUI
 // ============================================================================
 
-#ifdef IMGUI_VERSION
+#ifdef CERMU_HAS_GUI
 void Commodore1351Mouse::render_device_ui() {
     bool lmb = is_signal_asserted(ConnectorSignals::JOY_FIRE);
     bool rmb = is_signal_asserted(ConnectorSignals::JOY_UP);
