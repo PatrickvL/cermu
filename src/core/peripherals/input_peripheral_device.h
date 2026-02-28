@@ -86,6 +86,13 @@ public:
         guest_keyboard_scancodes_.add_from_array(keys, count);
     }
 
+    // --- Input-source-dependent settings UI -----------------------------
+
+    /// Render settings that depend on the current input source (e.g. keyboard
+    /// key-map preset selector).  Called by EmulatedSystem after the Input
+    /// Source combo so that source-dependent controls appear below it.
+    virtual void render_input_source_settings_ui() {}
+
 protected:
     /// Guest keyboard scancode bitset — set by the system for collision
     /// display in the keymap preset UI.  O(1) per-key lookup.

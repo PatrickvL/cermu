@@ -3,6 +3,7 @@
 #include "formats/format_handler.h"
 #include "vfs/vfs.h"
 #include <cstring>
+#include <cctype>
 #include <cmath>
 #include <algorithm>
 #include <cstdio>
@@ -575,7 +576,7 @@ void EmulatedSystem::render_peripheral_connector_ui() {
                 }
 
                 // "Add device" combo
-                if (ImGui::BeginCombo("Add device...", nullptr, ImGuiComboFlags_NoPreview)) {
+                if (ImGui::BeginCombo("Add Device...", nullptr, ImGuiComboFlags_NoPreview)) {
                     for (const auto* desc : compatible) {
                         if (ImGui::Selectable(desc->name)) {
                             attach_device_to_port(i, desc->id);
@@ -711,10 +712,28 @@ void EmulatedSystem::render_host_input_binding_ui(InputPeripheralDevice* device)
         ImGui::EndCombo();
     }
 
+    // Input-source-dependent settings (e.g. keyboard key map) render
+    // below the Input Source combo so they disappear when source changes.
+    device->render_input_source_settings_ui();
+
     ImGui::PopID();
 #else
     (void)device;
 #endif
+}
+
+/// Return a context-appropriate noun for devices on this connector type.
+static const char* connector_device_noun(ConnectorType type) {
+    switch (type) {
+        case ConnectorType::CONTROLLER_NES:
+        case ConnectorType::CONTROLLER_SNES:
+        case ConnectorType::CONTROLLER_ATARI:
+            return "Controller";
+        case ConnectorType::CONTROL_PORT_DB9:
+            return "Peripheral";
+        default:
+            return "Device";
+    }
 }
 
 // ============================================================================
@@ -884,7 +903,7 @@ float EmulatedSystem::render_connector_menu_bar_icons() {
 
                 ImGui::Separator();
 
-                // "Add device" submenu
+                // "Add Device" submenu (bus ports allow multiple attached devices)
                 if (!compatible.empty() && ImGui::BeginMenu("Add Device...")) {
                     for (const auto* desc : compatible) {
                         if (ImGui::MenuItem(desc->name)) {
@@ -921,14 +940,21 @@ float EmulatedSystem::render_connector_menu_bar_icons() {
                         }
                     }
                 } else {
-                    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f),
-                                       "No device attached");
+                    const char* noun = connector_device_noun(def.type);
+                    char no_msg[64];
+                    snprintf(no_msg, sizeof(no_msg), "No %s attached", noun);
+                    no_msg[3] = static_cast<char>(tolower(no_msg[3]));
+                    ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%s", no_msg);
                 }
 
-                // Switch device submenu
+                // Switch / attach device submenu
                 if (!compatible.empty()) {
                     ImGui::Separator();
-                    if (ImGui::BeginMenu("Attach Device...")) {
+                    const char* noun = connector_device_noun(def.type);
+                    char submenu_label[64];
+                    snprintf(submenu_label, sizeof(submenu_label),
+                             attached ? "Swap %s..." : "Attach %s...", noun);
+                    if (ImGui::BeginMenu(submenu_label)) {
                         for (const auto* desc : compatible) {
                             bool is_current = (attached &&
                                                strcmp(attached->get_id(), desc->id) == 0);

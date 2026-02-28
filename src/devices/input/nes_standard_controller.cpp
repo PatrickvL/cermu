@@ -250,35 +250,39 @@ void NesStandardController::render_device_ui() {
     if (binding_.type == HostInputType::KEYBOARD) {
         ImGui::SameLine();
         ImGui::TextDisabled("[Keys]");
-
-        // Keymap preset selector with collision info
-        int active = get_active_keymap_preset();
-        const char* preview = (active >= 0) ? get_keymap_preset(active).name : "Custom";
-
-        if (ImGui::BeginCombo("Key Map", preview)) {
-            for (int i = 0; i < get_keymap_preset_count(); i++) {
-                const auto& preset = get_keymap_preset(i);
-                int collisions = count_keymap_collisions(preset, guest_keyboard_scancodes_);
-
-                char label[128];
-                if (collisions > 0) {
-                    snprintf(label, sizeof(label), "%s  (%d collision%s)",
-                             preset.name, collisions, collisions > 1 ? "s" : "");
-                } else {
-                    snprintf(label, sizeof(label), "%s", preset.name);
-                }
-
-                bool selected = (i == active);
-                if (ImGui::Selectable(label, selected)) {
-                    apply_keymap_preset(i);
-                }
-                if (selected) ImGui::SetItemDefaultFocus();
-            }
-            ImGui::EndCombo();
-        }
     } else if (binding_.type == HostInputType::SDL_GAMEPAD) {
         ImGui::SameLine();
         ImGui::TextDisabled("[Pad]");
+    }
+}
+
+void NesStandardController::render_input_source_settings_ui() {
+    if (binding_.type != HostInputType::KEYBOARD) return;
+
+    // Keymap preset selector with collision info
+    int active = get_active_keymap_preset();
+    const char* preview = (active >= 0) ? get_keymap_preset(active).name : "Custom";
+
+    if (ImGui::BeginCombo("Key Map", preview)) {
+        for (int i = 0; i < get_keymap_preset_count(); i++) {
+            const auto& preset = get_keymap_preset(i);
+            int collisions = count_keymap_collisions(preset, guest_keyboard_scancodes_);
+
+            char label[128];
+            if (collisions > 0) {
+                snprintf(label, sizeof(label), "%s  (%d collision%s)",
+                         preset.name, collisions, collisions > 1 ? "s" : "");
+            } else {
+                snprintf(label, sizeof(label), "%s", preset.name);
+            }
+
+            bool selected = (i == active);
+            if (ImGui::Selectable(label, selected)) {
+                apply_keymap_preset(i);
+            }
+            if (selected) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
     }
 }
 #endif
