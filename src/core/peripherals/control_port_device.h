@@ -20,10 +20,9 @@
  * inherit from PotInputDevice instead.
  */
 
-#include "../connector.h"
-#include "../host_input.h"
+#include "input_peripheral_device.h"
 
-class ControlPortInputDevice : public PeripheralDevice {
+class ControlPortInputDevice : public InputPeripheralDevice {
 public:
     ControlPortInputDevice() : signal_state_(0xFFFFFFFF) {}
     ~ControlPortInputDevice() override = default;

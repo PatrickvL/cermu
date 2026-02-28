@@ -10,6 +10,7 @@
 #include <SDL_keycode.h>
 #include "chip.h"     // VideoStandard, ChipBase, ChipInfo
 #include "connector.h"
+#include "peripherals/input_peripheral_device.h"
 #include "device_registry.h"
 
 // Forward-declare format descriptor so SystemDescriptor can reference it
@@ -483,7 +484,7 @@ public:
     float render_connector_menu_bar_icons();
 
     /// Render host input binding selector for a device (called from connector UI).
-    void render_host_input_binding_ui(PeripheralDevice* device);
+    void render_host_input_binding_ui(InputPeripheralDevice* device);
 
     /// Automatically bind available host input devices to attached peripherals.
     /// Assigns SDL gamepads to gamepad-compatible devices (round-robin), falls

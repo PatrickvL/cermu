@@ -19,7 +19,6 @@ public:
     const char* get_id() const override   { return "paddles_1312"; }
 
     // --- Host input support -------------------------------------------
-    bool accepts_host_input() const override { return true; }
     int  get_supported_input_type_count() const override { return 2; }
     HostInputType get_supported_input_type(int index) const override {
         return (index == 0) ? HostInputType::HOST_MOUSE : HostInputType::SDL_GAMEPAD;

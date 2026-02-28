@@ -15,11 +15,11 @@
  *   D4 (bit 4): Trigger — LOW when trigger is pulled
  */
 
-#include "../../core/connector.h"
+#include "../../core/peripherals/input_peripheral_device.h"
 
 #include <cstdint>
 
-class NesZapper : public PeripheralDevice {
+class NesZapper : public InputPeripheralDevice {
 public:
     NesZapper();
     ~NesZapper() override = default;
@@ -35,7 +35,6 @@ public:
     uint32_t get_output_signals() const override { return output_signals_; }
 
     // --- Host Input (mouse) --------------------------------------------
-    bool accepts_host_input() const override { return true; }
     int get_supported_input_type_count() const override { return 1; }
     HostInputType get_supported_input_type(int index) const override {
         return (index == 0) ? HostInputType::HOST_MOUSE : HostInputType::NONE;

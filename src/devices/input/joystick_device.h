@@ -31,7 +31,6 @@ public:
     void reset() override;
 
     // --- Host Input support --------------------------------------------
-    bool accepts_host_input() const override { return true; }
     int get_supported_input_type_count() const override { return 2; }
     HostInputType get_supported_input_type(int index) const override {
         if (index == 0) return HostInputType::KEYBOARD;

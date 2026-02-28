@@ -25,7 +25,6 @@ public:
     const char* get_id() const override   { return "mouse_1350"; }
 
     // --- Host input support -------------------------------------------
-    bool accepts_host_input() const override { return true; }
     int  get_supported_input_type_count() const override { return 1; }
     HostInputType get_supported_input_type(int index) const override {
         (void)index; return HostInputType::HOST_MOUSE;
