@@ -246,6 +246,7 @@ public:
 
     // Debug / test harness memory access (read-only, no side-effects)
     uint8_t peek_memory(uint16_t addr) const;
+    uint8_t peek_ppu_memory(uint16_t addr) const;
     uint16_t get_cpu_pc() const;
     
 private:

@@ -1191,6 +1191,28 @@ uint8_t NintendoSystem<V>::peek_memory(uint16_t addr) const {
 }
 
 template<NintendoVariant V>
+uint8_t NintendoSystem<V>::peek_ppu_memory(uint16_t addr) const {
+    addr &= 0x3FFF;
+
+    // Palette RAM ($3F00-$3F1F)
+    if (addr >= 0x3F00 && ppu_) {
+        uint16_t pa = addr & 0x001F;
+        if (pa == 0x0010) pa = 0x0000;
+        if (pa == 0x0014) pa = 0x0004;
+        if (pa == 0x0018) pa = 0x0008;
+        if (pa == 0x001C) pa = 0x000C;
+        return ppu_->palette[pa] & 0x3F;
+    }
+
+    // CHR + nametable via page pointers
+    const uint8_t* rp = bus_.ppu_read_page[addr >> 10];
+    if (rp != nullptr) {
+        return rp[addr & 0x03FF];
+    }
+    return 0;
+}
+
+template<NintendoVariant V>
 uint16_t NintendoSystem<V>::get_cpu_pc() const {
     if (!cpu_) return 0;
     return static_cast<uint16_t>(cpu_->get(REG_PC));

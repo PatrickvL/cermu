@@ -20,15 +20,10 @@
  */
 bus_state_t op_jmp(bus_state_t pins) {
   trace_operation(__func__);
-  switch (this->half_cycle) {
-    case 0: // PHI2: Dummy bus cycle
-      // Addressing mode has already set up AB register with target address
-      return pins;
-    case 1: // PHI1: Set PC and transition
-      this->set(REG_PC, this->get(REG_AB));
-      this->transition_to_fetch();
-      return pins;
-  }
+  // Zero-cycle operation: chained from addressing mode's PHI1 phase.
+  // Addressing mode already set AB to target address.
+  this->set(REG_PC, this->get(REG_AB));
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -39,15 +34,10 @@ bus_state_t op_jmp(bus_state_t pins) {
  */
 bus_state_t op_jml(bus_state_t pins) {
   trace_operation(__func__);
-  switch (this->half_cycle) {
-    case 0: // PHI2: Dummy bus cycle
-      // Addressing mode has already set up AB register with target address
-      return pins;
-    case 1: // PHI1: Set PC and transition
-      this->set(REG_PC, this->get(REG_AB));
-      this->transition_to_fetch();
-      return pins;
-  }
+  // Zero-cycle operation: chained from addressing mode's PHI1 phase.
+  // Addressing mode already set AB to target address.
+  this->set(REG_PC, this->get(REG_AB));
+  this->transition_to_fetch();
   return pins;
 }
 
@@ -329,9 +319,18 @@ bus_state_t op_brk(bus_state_t pins) {
   }
   
   // 6502/65C02/65C816 Emulation Mode: Standard 3-byte stack frame (7 cycles total)
+  //
+  // T0: Opcode fetch (handled by dispatch, not here)
+  // T1: Read signature byte, set interrupt type
+  // T2: Push PCH to stack
+  // T3: Push PCL to stack
+  // T4: Push P|B|U to stack
+  // T5: Read interrupt vector low byte
+  // T6: Read interrupt vector high byte
+  //
   switch (this->half_cycle) {
   case 0:
-    /* PHI2: Dummy read from PC+1 (BRK has optional signature byte) */
+    /* PHI2: T1 — Read signature byte (BRK has optional signature byte) */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
     return pins;
   case 1:
@@ -349,30 +348,22 @@ bus_state_t op_brk(bus_state_t pins) {
     /* Higher priority interrupts (NMI, RESET, IRQ) should NOT be overridden */
     this->half_cycle++;
     return pins;
-  case 2:
-    /* PHI2: Dummy internal operation cycle (stack pointer setup) */
-    pins = this->bus_setup_dummy<Addr::SP>(pins);
-    return pins;
-  case 3:
-    /* PHI1: Internal operation */
-    this->half_cycle++;
-    return pins;
 
-  case 4:
-    /* PHI2: Push PCH to stack */
+  case 2:
+    /* PHI2: T2 — Push PCH to stack */
     pins = this->bus_setup_write<Addr::SP>(pins, REG_PCH);
     return pins;
-  case 5:
+  case 3:
     /* PHI1: Decrement SP */
     this->dec_stack();
     this->half_cycle++;
     return pins;
 
-  case 6:
-    /* PHI2: Push PCL to stack */
+  case 4:
+    /* PHI2: T3 — Push PCL to stack */
     pins = this->bus_setup_write<Addr::SP>(pins, REG_PCL);
     return pins;
-  case 7: {
+  case 5: {
     /* PHI1: Decrement SP and prepare status register for stack push */
     this->dec_stack();
     /* CRITICAL FIX: B flag distinguishes BRK from hardware interrupts
@@ -392,11 +383,11 @@ bus_state_t op_brk(bus_state_t pins) {
     return pins;
   }
 
-  case 8:
-    /* PHI2: Push P|B|U to stack (B flag set for BRK) */
+  case 6:
+    /* PHI2: T4 — Push P|B|U to stack (B flag set for BRK) */
     pins = this->bus_setup_write<Addr::SP>(pins, REG_DL);
     return pins;
-  case 9:
+  case 7:
     /* PHI1: Decrement SP, set interrupt flags, get vector address */
     this->dec_stack();
     /* Set interrupt disable flag - processor specific behavior */
@@ -411,7 +402,7 @@ bus_state_t op_brk(bus_state_t pins) {
     
     // CRITICAL FIX: Clear interrupt shift register immediately after setting I flag
     // This prevents the shift register from accumulating more interrupt samples
-    // while we're reading the vector (cycles 10-13). Without this, IRQs sampled
+    // while we're reading the vector (cycles 8-11). Without this, IRQs sampled
     // during vector read will trigger immediately after BRK completes.
     this->interrupt_shift_register = 0;
     // Clear NMI edge latch ONLY when NMI is actually being serviced.
@@ -434,22 +425,22 @@ bus_state_t op_brk(bus_state_t pins) {
     this->half_cycle++;
     return pins;
 
-  case 10:
-    /* PHI2: Read interrupt vector low byte (always from bank 0 via ZBR for 65C816) */
+  case 8:
+    /* PHI2: T5 — Read interrupt vector low byte (always from bank 0 via ZBR for 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
-  case 11:
+  case 9:
     /* PHI1: Load vector low byte into PCL, then increment vector address in AB */
     this->bus_load_reg(REG_PCL, pins);
     this->inc(REG_AB);
     this->half_cycle++;
     return pins;
 
-  case 12:
-    /* PHI2: Read interrupt vector high byte (always from bank 0 via ZBR for 65C816) */
+  case 10:
+    /* PHI2: T6 — Read interrupt vector high byte (always from bank 0 via ZBR for 65C816) */
     pins = this->bus_setup_read<Addr::AB, Bank::ZBR>(pins);
     return pins;
-  case 13:
+  case 11:
     /* PHI1: Construct PC from vector bytes and clear PBR if needed */
     this->bus_load_reg(REG_PCH, pins);
     /* 65C816: Clear PBR for interrupt vectors in emulation mode */
