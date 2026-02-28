@@ -256,10 +256,10 @@ struct commodore_keyboard_t {
     uint16_t col_open_contacts[MAX_KEYBOARD_COLS];
 
     // Optimised EmuKey → {row, col} lookup
-    // Direct array for identity-mapped keys (0–511): constant-time lookup
-    key_position_t key_direct_lookup[512];
-    bool           key_direct_valid[512];
-    // Hash map for emulator-specific keys (512+): O(1) amortised
+    // Direct array for identity-mapped keys (0–EMUKEY_EMU_BASE-1): constant-time lookup
+    key_position_t key_direct_lookup[EMUKEY_EMU_BASE];
+    bool           key_direct_valid[EMUKEY_EMU_BASE];
+    // Hash map for emulator-specific keys (EMUKEY_EMU_BASE+): O(1) amortised
     std::unordered_map<emu_key_t, key_position_t> key_ext_lookup;
 
     // Current keyboard state

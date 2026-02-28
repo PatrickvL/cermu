@@ -122,17 +122,17 @@ inline JoystickKeyMap joystick_keymap_numpad() {
 /// Compact bitset covering all SDL scancodes (SDL_NUM_SCANCODES = 512).
 /// Uses 8 × uint64_t = 64 bytes.  All operations are branch-free bit ops.
 struct ScancodeBitset {
-    static constexpr int NUM_WORDS = 512 / 64;           // 8
+    static constexpr int NUM_WORDS = SDL_NUM_SCANCODES / 64;  // 8
     uint64_t words[NUM_WORDS] = {};
 
     void set(SDL_Scancode sc) {
         auto idx = static_cast<unsigned>(sc);
-        if (idx < 512) words[idx >> 6] |= (uint64_t{1} << (idx & 63));
+        if (idx < SDL_NUM_SCANCODES) words[idx >> 6] |= (uint64_t{1} << (idx & 63));
     }
 
     bool test(SDL_Scancode sc) const {
         auto idx = static_cast<unsigned>(sc);
-        return idx < 512 && (words[idx >> 6] & (uint64_t{1} << (idx & 63))) != 0;
+        return idx < SDL_NUM_SCANCODES && (words[idx >> 6] & (uint64_t{1} << (idx & 63))) != 0;
     }
 
     /// Bulk-add from a raw scancode array.

@@ -14,7 +14,7 @@ typedef uint32_t SDL_Scancode_t;  // SDL_Scancode is an enum; we use uint32_t
 // EmuKeySDLMap — Bidirectional mapping between EmuKey and SDL scancodes
 // ============================================================================
 //
-// For the 0–511 identity range a 512-bit bitset marks which values are
+// For the 0–(EMUKEY_EMU_BASE-1) identity range an EMUKEY_EMU_BASE-bit bitset marks which values are
 // identity-mapped (EmuKey == SDL_Scancode).  Only deviations (emulator-
 // specific keys that have a configured SDL equivalent) use the explicit
 // hash maps.
@@ -73,8 +73,8 @@ public:
 private:
     EmuKeySDLMap();
 
-    // 512-bit bitset: bit N set → EmuKey N == SDL_SCANCODE N (identity)
-    std::bitset<512> identity_;
+    // SDL_NUM_SCANCODES-bit bitset: bit N set → EmuKey N == SDL_SCANCODE N (identity)
+    std::bitset<EMUKEY_EMU_BASE> identity_;
 
     // Non-identity mappings (emulator-specific keys ↔ SDL scancodes)
     std::unordered_map<emu_key_t, SDL_Scancode_t>  emu_to_sdl_;

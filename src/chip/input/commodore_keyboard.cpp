@@ -105,7 +105,7 @@ void commodore_keyboard_t::reset() {
                     identity_count++;
                 }
             } else {
-                // Emulator-specific key (512+): hash map lookup
+                // Emulator-specific key (EMUKEY_EMU_BASE+): hash map lookup
                 if (key_ext_lookup.find(key) == key_ext_lookup.end()) {
                     key_ext_lookup[key] = pos;
                     ext_count++;
@@ -342,6 +342,6 @@ void commodore_keyboard_t::print_state() {
     printf("  RESTORE Key: %s\n", restore_key_pressed ? "PRESSED" : "RELEASED");
     printf("  CAPS LOCK: %s\n", caps_lock_active ? "ACTIVE" : "INACTIVE");
     printf("  Lookup: %d direct + %zu extended keys\n",
-           [&]{ int c=0; for(int i=0;i<512;i++) if(key_direct_valid[i]) c++; return c; }(),
+           [&]{ int c=0; for(int i=0;i<EMUKEY_EMU_BASE;i++) if(key_direct_valid[i]) c++; return c; }(),
            key_ext_lookup.size());
 }
