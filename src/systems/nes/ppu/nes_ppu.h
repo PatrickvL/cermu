@@ -23,6 +23,7 @@
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
 #include "../bus/nes_bus.h"
+#include "../bus/nes_bus_signals.h"
 
 // Forward declarations
 namespace nes_system {
@@ -95,7 +96,39 @@ public:
     uint16_t cycle = 0;       // Current cycle (0 to 340)
     uint64_t frame_count = 0; // Frame counter
     bool frame_complete = false;
-    bool nmi = false;
+    uint64_t total_dots_ = 0; // Total PPU dots since reset (debug)
+    uint64_t last_vbl_detect_dot_ = 0; // Total dots when last $2002 VBL detect
+
+    // PPU bus word — carries the PPU's output signal levels.
+    // The NMI bit is driven as a continuous level here; the CPU's
+    // internal edge-detect flip-flop handles the HIGH→LOW transition.
+    // Shared bits (/NMI, /IRQ, /RES) are at the same positions as the
+    // CPU bus_state_t, enabling zero-cost PPU_CPU_BITMIX transfer.
+    ppu_bus_state_t ppu_bus_ = PPU_BUS_DEFAULT_STATE;
+
+    // VBL internal/external split for accurate PPU-CPU timing.
+    //
+    // On real hardware the VBL flip-flop is set at dot 1 of scanline 241.
+    // NMI output asserts immediately (same PPU dot), but the flag doesn't
+    // appear in $2002 reads until one PPU clock later (dot 2), due to an
+    // internal propagation delay through the PPU status latch.
+    //
+    // We model this by keeping an internal state (`vbl_flag_internal_`)
+    // that drives NMI and a pending flag (`pending_vbl_set_`) that commits
+    // to `regs.status` bit 7 at the START of the next PPU::clock() call.
+    // The same 1-dot delay applies to VBL clear at pre-render dot 1.
+    bool     vbl_flag_internal_ = false;    // True = VBL active (drives NMI)
+    bool     pending_vbl_set_ = false;      // Commit regs.status |= 0x80 next dot
+    bool     pending_vbl_clear_ = false;    // Commit regs.status &= ~0x80 next dot
+
+    // VBL suppression — reading $2002 within a 1-PPU-dot window BEFORE
+    // VBL flag set (scanline 241, dot 1) prevents the flag from being set
+    // that frame and suppresses NMI.  Reading AT the VBL dot returns 0
+    // (flag not yet propagated) and suppresses the frame's VBL entirely.
+    // We track the total_dots_ value at the $2002 read to detect this at
+    // VBL set time.  UINT64_MAX means "no recent read".
+    uint64_t status_read_dot_ = UINT64_MAX;
+    bool     vbl_was_suppressed_ = false;   // true if VBL never set this frame
 
     // Open bus data latch — PPU data bus retains last value
     uint8_t ppu_data_bus_ = 0;
@@ -131,7 +164,13 @@ public:
         cycle = 0;
         frame_count = 0;
         frame_complete = false;
-        nmi = false;
+        total_dots_ = 0;
+        ppu_bus_ = PPU_BUS_DEFAULT_STATE;
+        status_read_dot_ = UINT64_MAX;
+        vbl_was_suppressed_ = false;
+        vbl_flag_internal_ = false;
+        pending_vbl_set_ = false;
+        pending_vbl_clear_ = false;
 
         // Clear memory
         std::fill(vram.begin(), vram.end(), 0);
@@ -167,8 +206,12 @@ public:
     // Get pattern tables (for debugging)
     const std::vector<uint32_t>& get_pattern_table(int i, uint8_t palette) const;
 
-    // NMI status
-    bool get_nmi() { bool temp = nmi; nmi = false; return temp; }
+    // NMI output level — true when /NMI is asserted (active LOW).
+    // The system tick transfers this onto the CPU bus via PPU_CPU_BITMIX;
+    // the CPU's own edge-detect flip-flop handles the rest.
+    bool nmi_output() const {
+        return !PPU_BUS_GET_BIT(ppu_bus_, BUS_NMI_BIT);
+    }
 
 private:
     std::shared_ptr<Cartridge> cart;
@@ -187,7 +230,6 @@ private:
 
     // Color generation
     uint32_t get_color_from_palette_ram(uint8_t palette, uint8_t pixel);
-    uint32_t nes2rgb(uint8_t nes_color);
 
     // Nametable mirroring helper
     uint16_t mirror_nametable_addr(uint16_t addr) const;
@@ -195,6 +237,22 @@ private:
     // Sprite evaluation
     void evaluate_sprites();
     void load_sprite_shifters();
+
+    // Update /NMI output level on ppu_bus_ based on current VBL state
+    // and NMI enable.  Called after any state change that affects NMI:
+    //   - clock() VBL set/clear
+    //   - $2002 read (clears VBL)
+    //   - $2000 write (changes NMI enable)
+    //
+    // Uses vbl_flag_internal_ (set at dot 1) rather than regs.status bit 7
+    // (visible at dot 2) so NMI asserts at the correct PPU clock.
+    inline void update_nmi_output() {
+        if (vbl_flag_internal_ && (regs.ctrl & 0x80)) {
+            PPU_BUS_CLR_BIT(ppu_bus_, BUS_NMI_BIT);  // active low = asserted
+        } else {
+            PPU_BUS_SET_BIT(ppu_bus_, BUS_NMI_BIT);  // inactive high
+        }
+    }
 
     // --- ChipBase interface ---
 public:

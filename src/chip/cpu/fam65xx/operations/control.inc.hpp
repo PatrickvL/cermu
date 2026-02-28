@@ -113,42 +113,51 @@ bus_state_t op_rts(bus_state_t pins) {
   trace_operation(__func__);
   switch (this->half_cycle) {
   case 0:
-    /* PHI2: Dummy read from PC */
+    /* PHI2 T1: Dummy read from PC+1 (discarded) */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
     return pins;
   case 1:
-    /* PHI1: Increment SP */
-    this->inc_stack();
+    /* PHI1 T1: No side effects */
     this->half_cycle++;
     return pins;
 
   case 2:
-    /* PHI2: Pull PCL from stack */
+    /* PHI2 T2: Read from $0100+S (dummy — value discarded, bus shows old SP) */
     pins = this->bus_setup_read<Addr::SP>(pins);
     return pins;
   case 3:
-    /* PHI1: Load PCL and increment SP */
-    this->bus_load_reg(REG_PCL, pins);
+    /* PHI1 T2: Increment SP */
     this->inc_stack();
     this->half_cycle++;
     return pins;
 
   case 4:
-    /* PHI2: Pull PCH from stack */
+    /* PHI2 T3: Pull PCL from stack ($0100+S) */
     pins = this->bus_setup_read<Addr::SP>(pins);
     return pins;
   case 5:
-    /* PHI1: Load PCH */
+    /* PHI1 T3: Load PCL and increment SP */
+    this->bus_load_reg(REG_PCL, pins);
+    this->inc_stack();
+    this->half_cycle++;
+    return pins;
+
+  case 6:
+    /* PHI2 T4: Pull PCH from stack ($0100+S) */
+    pins = this->bus_setup_read<Addr::SP>(pins);
+    return pins;
+  case 7:
+    /* PHI1 T4: Load PCH */
     this->bus_load_reg(REG_PCH, pins);
     this->half_cycle++;
     return pins;
-    
-  case 6:
-    /* PHI2: Dummy read from reconstructed address  */
+
+  case 8:
+    /* PHI2 T5: Dummy read from reconstructed PC address */
     pins = this->bus_setup_dummy<Addr::PC>(pins);
     return pins;
-  case 7:
-    /* PHI1: Increment PC and transition */
+  case 9:
+    /* PHI1 T5: Increment PC (fix JSR's PC-1 push) and transition */
     this->inc(REG_PC);
     this->transition_to_fetch();
     return pins;

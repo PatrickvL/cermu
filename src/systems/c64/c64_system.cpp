@@ -853,6 +853,9 @@ void C64System::system_tick() {
     // PHASE 3: Memory service (AEC determines CPU vs VIC-II bus ownership)
     s = bus_ptr->memory_tick(s);
 
+    // NMI edge detection — sample after bus dispatch (post-dispatch state)
+    cpu->sample_nmi_pin(s);
+
     // PHASE 3.1: VIC-II PHI2 — c/p/s-access data delivery
     vicii->tick_phi2(s);
 
