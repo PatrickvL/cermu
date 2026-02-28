@@ -1126,12 +1126,11 @@ void NintendoSystem<V>::setup_connector_ports() {
         printf("%s: Created %zu connector ports\n", Traits::name, connector_ports_.size());
     }
 
-    // Attach default NES gamepads to controller ports 1 & 2.
+    // Attach default peripherals declared by get_default_peripherals().
     // auto_bind_host_inputs() (called from attach_device_to_port) assigns
     // connected host gamepads first; if none are available it falls back to
-    // keyboard.  We then override the keymaps for two-player keyboard play.
-    attach_device_to_port(0, "nes_gamepad");  // Controller Port 1
-    attach_device_to_port(1, "nes_gamepad");  // Controller Port 2
+    // keyboard.
+    attach_default_peripherals();
 
     // Set per-player keyboard maps — WASD for P1, IJKL for P2.
     // (Only effective when binding.type == KEYBOARD.)
@@ -1141,6 +1140,15 @@ void NintendoSystem<V>::setup_connector_ports() {
             pad->set_key_map(p == 0 ? nes_keymap_wasd() : nes_keymap_ijkl());
         }
     }
+}
+
+template<NintendoVariant V>
+std::vector<EmulatedSystem::DefaultPeripheral>
+NintendoSystem<V>::get_default_peripherals() const {
+    return {
+        { 0, "nes_gamepad" },   // Controller Port 1
+        { 1, "nes_gamepad" },   // Controller Port 2
+    };
 }
 
 // ============================================================================

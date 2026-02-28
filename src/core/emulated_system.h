@@ -369,6 +369,30 @@ protected:
     /// Called after a device is attached to or detached from a port.
     /// Derived systems can override to update cached device pointers.
     virtual void on_port_device_changed(int /*port_index*/) {}
+
+    // =========================================================================
+    // DEFAULT PERIPHERAL ATTACHMENT (declarative, data-driven)
+    // =========================================================================
+
+    /// Describes a peripheral device to be attached to a connector port
+    /// on system start-up.  Systems declare their defaults by overriding
+    /// get_default_peripherals().
+    struct DefaultPeripheral {
+        int         port_index;   ///< Index into connector_ports_
+        const char* device_id;    ///< DeviceRegistry ID (e.g. "joystick")
+    };
+
+    /// Return the system's preferred start-up peripherals.
+    /// Called by attach_default_peripherals() after connector ports are
+    /// created. Default: empty (no auto-attached devices).
+    virtual std::vector<DefaultPeripheral> get_default_peripherals() const {
+        return {};
+    }
+
+    /// Attach every peripheral listed by get_default_peripherals() and
+    /// then run auto_bind_host_inputs() once.  Typically the last call
+    /// inside setup_connector_ports().
+    void attach_default_peripherals();
     
 public:
     EmulatedSystem();

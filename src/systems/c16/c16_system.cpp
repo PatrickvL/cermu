@@ -893,11 +893,22 @@ void Commodore264System<V>::setup_connector_ports() {
     connector_ports_[kb_port]->attach_device(kb_raw);
     owned_devices_.push_back(std::move(kb_device));
 
-    // Default: attach joystick to Joystick Port 1
-    attach_device_to_port(0, "joystick");
+    // Default: attach peripheral devices via declarative list
+    attach_default_peripherals();
 
     printf("%s: Created %zu connector ports\n",
            Traits::name, connector_ports_.size());
+}
+
+template<C264SeriesVariant V>
+std::vector<EmulatedSystem::DefaultPeripheral>
+Commodore264System<V>::get_default_peripherals() const {
+    return {
+        { 0, "joystick"  },  // Joystick Port 1
+        { 1, "joystick"  },  // Joystick Port 2
+        { 2, "1541"      },  // IEC Serial Bus — 1541 disk drive
+        { 3, "datasette" },  // Cassette Port  — datasette (1530)
+    };
 }
 
 // ============================================================================

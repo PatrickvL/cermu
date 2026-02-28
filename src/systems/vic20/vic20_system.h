@@ -126,6 +126,7 @@ private:
     
     // Connector port setup (registers VIC-20 connector ports with base class)
     void setup_connector_ports();
+    std::vector<DefaultPeripheral> get_default_peripherals() const override;
 
     /// Register all VIC-20 chips into registered_chips_ for the Hardware menu.
     void register_vic20_chips();

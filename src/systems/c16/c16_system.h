@@ -145,6 +145,7 @@ private:
     bool load_roms();
     bus_state_t mem_tick(bus_state_t s);
     void setup_connector_ports();
+    std::vector<DefaultPeripheral> get_default_peripherals() const override;
     static uint8_t io_port_in(void* user_data);
     static void io_port_out(uint8_t data, void* user_data);
     static uint8_t ted_keyboard_scan(void* user_data, uint8_t column);
