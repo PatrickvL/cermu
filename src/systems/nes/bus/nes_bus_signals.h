@@ -112,10 +112,13 @@ using ppu_bus_state_t = uint64_t;
 // ============================================================================
 
 // Mask covering all signals that bridge CPU ↔ PPU buses through the
-// cartridge 72-pin connector: /RES, /IRQ, /NMI
-#define PPU_CPU_SHARED_MASK ( \
+// PPU → CPU shared signals — NMI and RES only.
+// /IRQ is NOT included: the PPU never drives /IRQ (it's always HIGH on
+// ppu_bus_), so mixing it in would overwrite the cartridge's active-low
+// IRQ assertion every cycle, preventing the CPU from ever seeing mapper
+// IRQs (e.g. MMC3 scanline counter).
+#define PPU_CPU_TRANSFER_MASK ( \
     BUS_BIT(BUS_RES_BIT) |   \
-    BUS_BIT(BUS_IRQ_BIT) |   \
     BUS_BIT(BUS_NMI_BIT)     \
 )
 
@@ -125,7 +128,7 @@ using ppu_bus_state_t = uint64_t;
 // XOR-AND-XOR form (3 ops) — same pattern as bitmix() in cermu.h.
 // Zero bit shifting, zero conditionals.
 #define PPU_CPU_BITMIX(cpu, ppu) \
-    ((cpu) ^ (((cpu) ^ (ppu)) & PPU_CPU_SHARED_MASK))
+    ((cpu) ^ (((cpu) ^ (ppu)) & PPU_CPU_TRANSFER_MASK))
 
 // ============================================================================
 // PPU BUS DEFAULT STATE

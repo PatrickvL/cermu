@@ -17,7 +17,6 @@
 #include "../../chip/input/cd4021.h"
 #include "../../chip/memory/memory_chip.h"
 #include "../../devices/input/nes_standard_controller.h"
-#include "cartridge/mappers/mapper_004_mmc3.h"  // Debug: temporary for MMC3 diagnostics
 #include <fstream>
 #include <iostream>
 #include <cmath>
@@ -363,24 +362,6 @@ void NintendoSystem<V>::run_frame() {
     ppu_->frame_complete = false;
     while (!ppu_->frame_complete) {
         clock();
-    }
-
-    // Debug: MMC3 per-frame IRQ diagnostics (temporary)
-    if (cartridge_ && cartridge_->get_mapper()) {
-        auto* mmc3 = dynamic_cast<nes_system::Mapper004*>(cartridge_->get_mapper());
-        if (mmc3) mmc3->debug_frame_end();
-    }
-    // Debug: PPU mid-frame register write diagnostics (temporary)
-    if (ppu_) {
-        ppu_->dbg_ppu_frame_++;
-        if (ppu_->dbg_ppu_frame_ % 60 == 0) {
-            printf("PPU MID-FRAME: frame=%u  $2000=%u  $2005=%u  $2006=%u\n",
-                   ppu_->dbg_ppu_frame_, ppu_->dbg_midframe_2000_,
-                   ppu_->dbg_midframe_2005_, ppu_->dbg_midframe_2006_);
-        }
-        ppu_->dbg_midframe_2000_ = 0;
-        ppu_->dbg_midframe_2005_ = 0;
-        ppu_->dbg_midframe_2006_ = 0;
     }
 
     // Copy PPU screen into the GUI-provided framebuffer so the emu
