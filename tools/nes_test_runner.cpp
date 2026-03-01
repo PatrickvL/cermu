@@ -419,9 +419,11 @@ static TestResult run_test_rom(const std::string& filepath, int max_frames,
         return r;
     }
 
-    // Allocate a dummy framebuffer (256x240 RGBA)
-    std::vector<uint32_t> framebuffer(256 * 240, 0);
-    nes.set_framebuffer(framebuffer.data(), 256, 240);
+    // Allocate a dummy framebuffer using system's visible dimensions
+    int fb_w = 0, fb_h = 0;
+    nes.get_display_dimensions(&fb_w, &fb_h);
+    std::vector<uint32_t> framebuffer(fb_w * fb_h, 0);
+    nes.set_framebuffer(framebuffer.data(), fb_w, fb_h);
 
     // Load ROM
     if (!nes.load_file(filepath.c_str())) {
@@ -460,16 +462,16 @@ static TestResult run_test_rom(const std::string& filepath, int max_frames,
         // Show first 16 pixels for a few content-bearing scanlines
         printf("  First 16px of select scanlines:\n");
         int shown = 0;
-        for (int y = 0; y < 240 && shown < 15; y++) {
+        for (int y = 0; y < fb_h && shown < 15; y++) {
             // Check if this scanline has content in first 16 pixels
             bool has = false;
-            for (int x = 0; x < 16; x++) {
-                if ((framebuffer[y * 256 + x] & 0x00FFFFFF) != 0) { has = true; break; }
+            for (int x = 0; x < 16 && x < fb_w; x++) {
+                if ((framebuffer[y * fb_w + x] & 0x00FFFFFF) != 0) { has = true; break; }
             }
             if (!has) continue;
             printf("    SL %3d: ", y);
-            for (int x = 0; x < 16; x++) {
-                uint32_t px = framebuffer[y * 256 + x] & 0x00FFFFFF;
+            for (int x = 0; x < 16 && x < fb_w; x++) {
+                uint32_t px = framebuffer[y * fb_w + x] & 0x00FFFFFF;
                 printf("%06X ", px);
             }
             printf("\n");
