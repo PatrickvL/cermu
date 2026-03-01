@@ -257,11 +257,6 @@ void PPU::clock() {
         pending_vbl_clear_ = false;
     }
 
-    // Pixel color from palette — single LUT lookup, no indirection chain.
-    auto get_pixel = [this](uint8_t palette_idx, uint8_t pixel) -> uint32_t {
-        return pixel_lut_[((palette_idx << 2) | pixel) & 0x1F];
-    };
-    
     // Visible scanlines and pre-render scanline
     if (scanline >= -1 && scanline < 240) {
         
@@ -439,8 +434,7 @@ void PPU::clock() {
             }
         }
         
-        uint32_t color = get_pixel(palette_val, pixel);
-        screen[(scanline * 256) + (cycle - 1)] = color;
+        screen[(scanline * 256) + (cycle - 1)] = pixel_lut_[((palette_val << 2) | pixel) & 0x1F];
     }
 
     // VBlank flag set — (scanline 241, dot 1)
