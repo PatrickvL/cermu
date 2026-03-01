@@ -24,6 +24,7 @@
 #include "../../core/system_lines.h"
 #include "../bus/nes_bus.h"
 #include "../bus/nes_bus_signals.h"
+#include "nes_palette.h"
 
 // Forward declarations
 namespace nes_system {
@@ -138,6 +139,16 @@ public:
     // Region
     bool is_pal = false;
 
+    // Precalculated palette cache — 16 variants × 64 ABGR entries.
+    // Index: variant = ((PPUMASK >> 5) & 0x07) | ((PPUMASK & 0x01) << 3)
+    // Rebuilt on construction, reset, and PAL/NTSC change.
+    uint32_t palette_cache_[16][64] = {};
+
+    // Active palette variant — pointer into palette_cache_, latched on
+    // $2001 (PPUMASK) writes so lookup_color() avoids recomputing the
+    // variant index every pixel.
+    const uint32_t* active_palette_ = palette_cache_[0];
+
     // Frame buffer (RGB888)
     std::vector<uint32_t> screen;
 
@@ -156,6 +167,7 @@ public:
         pattern_table[1].resize(PATTERN_TABLE_DIM * PATTERN_TABLE_DIM, 0);
         internal.sprite_scanline.resize(8);
 
+        build_palette_cache(is_pal, palette_cache_);
         reset();
     }
 
@@ -178,6 +190,9 @@ public:
         std::fill(oam.begin(), oam.end(), 0);
         std::fill(palette.begin(), palette.end(), 0);
         std::fill(screen.begin(), screen.end(), 0);
+
+        build_palette_cache(is_pal, palette_cache_);
+        latch_palette_variant();
     }
 
     // CPU bus interface — the PPU is a bus device; it samples A0-A2, R/W
@@ -229,8 +244,15 @@ private:
     void load_background_shifters();
     void update_shifters();
 
-    // Color generation
+    // Color generation — uses precalculated palette cache
     uint32_t get_color_from_palette_ram(uint8_t palette, uint8_t pixel);
+
+    // Update active_palette_ pointer from current PPUMASK.
+    // Called on $2001 write and reset.
+    inline void latch_palette_variant() {
+        const uint8_t variant = ((regs.mask >> 5) & 0x07) | ((regs.mask & 0x01) << 3);
+        active_palette_ = palette_cache_[variant];
+    }
 
     // Nametable mirroring helper
     uint16_t mirror_nametable_addr(uint16_t addr) const;

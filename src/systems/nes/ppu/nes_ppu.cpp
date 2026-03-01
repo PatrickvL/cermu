@@ -76,9 +76,12 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
                 data = regs.data;
                 regs.data = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(internal.v)));
 
-                // Palette reads are immediate (no buffering delay)
+                // Palette reads are immediate (no buffering delay).
+                // Apply greyscale mask here for CPU visibility; the
+                // rendering path uses the precalculated palette cache
+                // which bakes greyscale into its variant entries.
                 if (internal.v >= 0x3F00) {
-                    data = regs.data;
+                    data = regs.data & (regs.mask & 0x01 ? 0x30 : 0x3F);
                 }
 
                 // Increment VRAM address
@@ -105,6 +108,7 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
                 break;
             case 0x2001: // Mask
                 regs.mask = data;
+                latch_palette_variant();
                 break;
             case 0x2002: // Status — read only (write is ignored, bus latch updated above)
                 break;
@@ -200,13 +204,16 @@ ppu_bus_state_t PPU::ppu_read(ppu_bus_state_t bus, bool read_only) {
     uint16_t addr = PPU_BUS_GET_ADDR(bus);
 
     // ---- Palette RAM ($3F00-$3FFF) — internal to PPU, no bus access ----
+    // Returns the raw palette byte.  Greyscale masking (PPUMASK bit 0) is
+    // handled by the precalculated palette cache for rendering, and applied
+    // explicitly in the $2007 CPU-read handler for CPU-visible reads.
     if (addr >= 0x3F00) {
         addr &= 0x001F;
         if (addr == 0x0010) addr = 0x0000;
         if (addr == 0x0014) addr = 0x0004;
         if (addr == 0x0018) addr = 0x0008;
         if (addr == 0x001C) addr = 0x000C;
-        PPU_BUS_SET_DATA(bus, palette[addr] & (regs.mask & 0x01 ? 0x30 : 0x3F));
+        PPU_BUS_SET_DATA(bus, palette[addr]);
         return bus;
     }
 
@@ -257,14 +264,6 @@ ppu_bus_state_t PPU::ppu_write(ppu_bus_state_t bus) {
 }
 
 // ============================================================================
-// PPU — Color conversion
-// ============================================================================
-
-inline uint32_t nes2rgb(uint8_t nes_color) {
-    return NES_COLOR_TABLE[nes_color & 0x3F];
-}
-
-// ============================================================================
 // PPU — Main clock (one PPU dot)
 // ============================================================================
 
@@ -300,9 +299,12 @@ void PPU::clock() {
         pending_vbl_clear_ = false;
     }
 
-    // Lambda to get pixel color from palette
+    // Lambda to get pixel color from palette (uses precalculated cache)
     auto get_pixel = [this](uint8_t palette_idx, uint8_t pixel) -> uint32_t {
-        return nes2rgb(PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(0x3F00 + (palette_idx << 2) + pixel))) & 0x3F);
+        // Fast color lookup from the precalculated cache.
+        // Uses the latched active_palette_ (set on $2001 write).
+        // Returns 0xFFBBGGRR (ABGR) directly.
+        return active_palette_[PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(0x3F00 + (palette_idx << 2) + pixel))) & 0x3F];
     };
     
     // Visible scanlines and pre-render scanline
@@ -762,10 +764,10 @@ const std::vector<uint32_t>& PPU::get_pattern_table(int i, uint8_t palette) cons
                     tile_lsb >>= 1;
                     tile_msb >>= 1;
                     
-                    // Get the color from the selected palette
+                    // Get the color from the selected palette (debug view — no emphasis)
                     uint8_t palette_index = PPU_BUS_GET_DATA(non_const_this->ppu_read(
                         PPU_BUS_WITH_ADDR(0x3F00 + (palette << 2) + pixel), true));
-                    uint32_t color = nes2rgb(palette_index);
+                    uint32_t color = NES_COLOR_TABLE[palette_index & 0x3F];
                     
                     // Calculate screen position
                     uint16_t x = tile_x * 8 + (7 - col);
