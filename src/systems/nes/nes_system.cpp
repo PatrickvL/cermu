@@ -23,6 +23,12 @@
 #include <algorithm>
 #include <cstring>
 
+#include "nes_profiling.h"
+
+#ifdef NES_PROFILING
+NesProfileCounters g_nes_profile;
+#endif
+
 #ifdef CERMU_HAS_GUI
 #include "imgui.h"
 #include <SDL.h>
@@ -780,16 +786,21 @@ void NintendoSystem<V>::eject_cartridge() {
 
 template<NintendoVariant V>
 void NintendoSystem<V>::clock() {
+    NES_PROF_TICK();
+
     // ====================================================================
     // PPU tick (runs at 3× CPU clock)
     // ppu_ is guaranteed valid during frame execution (run_frame gates it)
     // ====================================================================
+    NES_PROF_START(ppu);
     ppu_->clock();
+    NES_PROF_END(ppu_clock_cycles, ppu);
 
     // ====================================================================
     // OAM DMA controller — stalls CPU while transferring 256 bytes
     // ====================================================================
     if (unlikely(bus_.dma_transfer)) {
+        NES_PROF_START(dma);
         if (bus_.dma_dummy) {
             if (bus_.dma_odd_cycle_) {
                 bus_.dma_dummy = false;
@@ -811,6 +822,7 @@ void NintendoSystem<V>::clock() {
         bus_.dma_odd_cycle_ = !bus_.dma_odd_cycle_;
         bus_.system_clock_counter++;
         total_cycles_++;
+        NES_PROF_END(dma_cycles, dma);
         return;
     }
 
@@ -826,6 +838,8 @@ void NintendoSystem<V>::clock() {
     }
     bus_.cpu_div_ = 2;  // Reset countdown (next CPU tick in 3 PPU cycles)
 
+    NES_PROF_CPU_TICK();
+
     // Transfer PPU /NMI onto CPU bus BEFORE PHI2, so the CPU's
     // edge-detect flip-flop samples the current NMI level.
     //
@@ -836,7 +850,9 @@ void NintendoSystem<V>::clock() {
     pins_ = PPU_CPU_BITMIX(pins_, ppu_->ppu_bus_);
 
     // PHI2: CPU drives address bus and R/W signal
+    NES_PROF_START(phi2);
     pins_ = cpu_->tick<RICOH_2A03::Phase::PHI2>(pins_);
+    NES_PROF_END(cpu_phi2_cycles, phi2);
 
     const uint16_t addr = BUS_GET_ADDR(pins_);
     const bool is_read = BUS_GET_BIT(pins_, BUS_RW_BIT);
@@ -844,6 +860,7 @@ void NintendoSystem<V>::clock() {
     // ====================================================================
     // CPU bus dispatch — page-pointer fast path with I/O fallback
     // ====================================================================
+    NES_PROF_START(bus);
 
     if (is_read) {
         // ---- READ ----
@@ -930,6 +947,9 @@ void NintendoSystem<V>::clock() {
     // ====================================================================
     // Interrupt wire handling — post bus-dispatch update
     // ====================================================================
+    NES_PROF_END(bus_dispatch_cycles, bus);
+
+    NES_PROF_START(irq);
 
     // Re-transfer PPU /NMI after bus dispatch — cpu_bus_tick() may have
     // changed NMI state ($2002 read clears VBL, $2000 write toggles enable).
@@ -959,8 +979,10 @@ void NintendoSystem<V>::clock() {
     } else {
         BUS_SET_BIT(pins_, BUS_IRQ_BIT);
     }
+    NES_PROF_END(irq_nmi_cycles, irq);
 
     // PHI1: CPU internal operations (including APU clock)
+    NES_PROF_START(phi1);
     pins_ = cpu_->tick<RICOH_2A03::Phase::PHI1>(pins_);
 
     // ====================================================================
@@ -971,6 +993,7 @@ void NintendoSystem<V>::clock() {
         float sample = cpu_->generate_audio_sample();
         audio_buffer_.push_back(sample);
     }
+    NES_PROF_END(cpu_phi1_cycles, phi1);
 
     total_cycles_++;
 }
