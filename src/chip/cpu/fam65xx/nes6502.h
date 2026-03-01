@@ -58,6 +58,40 @@ constexpr uint8_t TRIANGLE_TABLE[32] = {
     15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5,  4,  3,  2,  1,  0,
     0,  1,  2,  3,  4,  5,  6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
 
+// ============================================================================
+// Mixer lookup tables (NESdev wiki: https://www.nesdev.org/wiki/APU_Mixer)
+//
+// Pulse:  pulse_table[p1 + p2]  (exact, 31 entries)
+//   pulse_table[n] = 95.52 / (8128.0 / n + 100.0)  for n>0, 0 for n=0
+//
+// TND:    tnd_table[3*tri + 2*noi + dmc]  (linear approximation, 203 entries)
+//   tnd_table[n] = 163.67 / (24329.0 / n + 100.0)   for n>0, 0 for n=0
+// ============================================================================
+namespace apu_mixer {
+
+inline constexpr auto make_pulse_table() {
+    std::array<float, 31> t{};
+    t[0] = 0.0f;
+    for (int n = 1; n < 31; n++) {
+        t[n] = 95.52f / (8128.0f / n + 100.0f);
+    }
+    return t;
+}
+
+inline constexpr auto make_tnd_table() {
+    std::array<float, 203> t{};
+    t[0] = 0.0f;
+    for (int n = 1; n < 203; n++) {
+        t[n] = 163.67f / (24329.0f / n + 100.0f);
+    }
+    return t;
+}
+
+inline constexpr auto pulse_table = make_pulse_table();
+inline constexpr auto tnd_table = make_tnd_table();
+
+} // namespace apu_mixer
+
 namespace nes6502_apu {
 
 // ============================================================================
@@ -524,6 +558,11 @@ public:
 
 // ============================================================================
 // Frame Counter / Sequencer
+//
+// Table-driven: pre-built event schedules reduce the per-tick hot path from
+// ~10 threshold comparisons to a single comparison against the next scheduled
+// event cycle.  Events fire ~4× per frame counter period (~30K CPU ticks),
+// so >99.98% of ticks take the fast path.
 // ============================================================================
 class FrameCounter {
 public:
@@ -542,95 +581,141 @@ private:
     uint8_t delay = 0;
   } write_buffer;
 
-  // Frame counter step thresholds (in CPU cycles)
-  // 4-step: quarter frames at steps 0-3, half frames at steps 1,3
-  // 5-step: quarter frames at steps 0-3, half frames at steps 1,3, no IRQ
-  static constexpr uint32_t STEP_NTSC_4[4] = {7457, 14913, 22371, 29829};
-  static constexpr uint32_t STEP_NTSC_5[5] = {7457, 14913, 22371, 29829, 37281};
-  static constexpr uint32_t STEP_PAL_4[4]  = {8313, 16627, 24939, 33253};
-  static constexpr uint32_t STEP_PAL_5[5]  = {8313, 16627, 24939, 33253, 41565};
+  // --- Event schedule tables ---
+  // Each entry: { cpu_cycle, flags }
+  // Flags: bit 0 = quarter frame, bit 1 = half frame,
+  //        bit 2 = IRQ trigger (conditional on !irq_inhibit),
+  //        bit 3 = cycle reset (wrap to 0)
+  static constexpr uint8_t EVT_QF    = 1;
+  static constexpr uint8_t EVT_HF    = 2;
+  static constexpr uint8_t EVT_IRQ   = 4;
+  static constexpr uint8_t EVT_RESET = 8;
+
+  struct Event { uint32_t cycle; uint8_t flags; };
+
+  // 4-step NTSC: QF/HF at standard steps, IRQ 3-cycle window, reset at step3+1
+  static constexpr Event SCHED_NTSC_4[] = {
+      {7457,  EVT_QF},
+      {14913, EVT_QF | EVT_HF},
+      {22371, EVT_QF},
+      {29828, EVT_IRQ},
+      {29829, EVT_QF | EVT_HF | EVT_IRQ},
+      {29830, EVT_IRQ | EVT_RESET},
+  };
+  // 5-step NTSC: QF/HF at steps 0,1,2,4; step 3 empty; no IRQ
+  static constexpr Event SCHED_NTSC_5[] = {
+      {7457,  EVT_QF},
+      {14913, EVT_QF | EVT_HF},
+      {22371, EVT_QF},
+      {37281, EVT_QF | EVT_HF | EVT_RESET},
+  };
+  // 4-step PAL
+  static constexpr Event SCHED_PAL_4[] = {
+      {8313,  EVT_QF},
+      {16627, EVT_QF | EVT_HF},
+      {24939, EVT_QF},
+      {33252, EVT_IRQ},
+      {33253, EVT_QF | EVT_HF | EVT_IRQ},
+      {33254, EVT_IRQ | EVT_RESET},
+  };
+  // 5-step PAL
+  static constexpr Event SCHED_PAL_5[] = {
+      {8313,  EVT_QF},
+      {16627, EVT_QF | EVT_HF},
+      {24939, EVT_QF},
+      {41565, EVT_QF | EVT_HF | EVT_RESET},
+  };
+
+  // Active schedule pointer and length
+  const Event* schedule_ = SCHED_NTSC_4;
+  uint8_t schedule_len_ = 6;
+  uint8_t event_index_ = 0;
+
+  // Select the active schedule based on mode and region
+  void select_schedule() {
+      if (mode) {
+          if (is_pal) { schedule_ = SCHED_PAL_5; schedule_len_ = 4; }
+          else        { schedule_ = SCHED_NTSC_5; schedule_len_ = 4; }
+      } else {
+          if (is_pal) { schedule_ = SCHED_PAL_4; schedule_len_ = 6; }
+          else        { schedule_ = SCHED_NTSC_4; schedule_len_ = 6; }
+      }
+      // Find the first event after the current cycle
+      event_index_ = 0;
+      for (uint8_t i = 0; i < schedule_len_; i++) {
+          if (schedule_[i].cycle > cycle) {
+              event_index_ = i;
+              return;
+          }
+      }
+      event_index_ = 0; // Wrapped — next event is the first
+  }
 
 public:
   void reset() {
-    cycle = 0;
-    irq_flag = false;
-    write_buffer.pending = false;
-    write_buffer.delay = 0;
-    write_buffer.value = 0;
+      cycle = 0;
+      irq_flag = false;
+      write_buffer.pending = false;
+      write_buffer.delay = 0;
+      write_buffer.value = 0;
+      select_schedule();
   }
 
   void write(uint8_t value) {
-    // Frame counter writes are delayed by 3-4 cycles
-    write_buffer.pending = true;
-    write_buffer.value = value;
-    write_buffer.delay = (cycle & 1) ? 4 : 3; // Depends on odd/even cycle
+      // Frame counter writes are delayed by 3-4 cycles
+      write_buffer.pending = true;
+      write_buffer.value = value;
+      write_buffer.delay = (cycle & 1) ? 4 : 3; // Depends on odd/even cycle
   }
 
   // Returns which events to trigger: bit 0 = quarter frame, bit 1 = half frame
   uint8_t clock() {
-    // Process delayed writes
-    if (write_buffer.pending) {
-      if (write_buffer.delay > 0) {
-        write_buffer.delay--;
+      // Process delayed writes
+      if (unlikely(write_buffer.pending)) {
+          if (write_buffer.delay > 0) {
+              write_buffer.delay--;
+          } else {
+              uint8_t value = write_buffer.value;
+              mode = (value >> 7) & 1;
+              irq_inhibit = (value >> 6) & 1;
+
+              if (irq_inhibit) {
+                  irq_flag = false;
+              }
+
+              cycle = 0;
+              write_buffer.pending = false;
+              select_schedule();
+
+              // 5-step mode: immediately clock quarter + half frame on write
+              if (mode) {
+                  return 3; // quarter + half frame
+              }
+              return 0;
+          }
+      }
+
+      cycle++;
+
+      // Fast path: not at the next scheduled event (~99.98% of ticks)
+      if (likely(cycle != schedule_[event_index_].cycle)) return 0;
+
+      // Process the scheduled event
+      uint8_t flags = schedule_[event_index_].flags;
+      uint8_t events = flags & (EVT_QF | EVT_HF);
+
+      if (flags & EVT_IRQ) {
+          if (!irq_inhibit) irq_flag = true;
+      }
+
+      if (flags & EVT_RESET) {
+          cycle = 0;
+          event_index_ = 0;
       } else {
-        uint8_t value = write_buffer.value;
-        mode = (value >> 7) & 1;
-        irq_inhibit = (value >> 6) & 1;
+          event_index_++;
+      }
 
-        if (irq_inhibit) {
-          irq_flag = false;
-        }
-
-        cycle = 0;
-        write_buffer.pending = false;
-
-        // 5-step mode: immediately clock quarter + half frame on write
-        if (mode) {
-          return 3; // quarter + half frame
-        }
-        return 0;
-      }
-    }
-
-    cycle++;
-
-    uint8_t events = 0;
-
-    if (mode) {
-      // 5-step mode: QF at steps 0,1,2,4; HF at steps 1,4; step 3 is empty
-      const uint32_t* steps = is_pal ? STEP_PAL_5 : STEP_NTSC_5;
-      if (cycle == steps[0] || cycle == steps[1] ||
-          cycle == steps[2] || cycle == steps[4]) {
-        events |= 1; // Quarter frame
-      }
-      if (cycle == steps[1] || cycle == steps[4]) {
-        events |= 2; // Half frame
-      }
-      if (cycle >= steps[4]) {
-        cycle = 0;
-      }
-    } else {
-      // 4-step mode
-      const uint32_t* steps = is_pal ? STEP_PAL_4 : STEP_NTSC_4;
-      if (cycle == steps[0] || cycle == steps[1] ||
-          cycle == steps[2] || cycle == steps[3]) {
-        events |= 1; // Quarter frame
-      }
-      if (cycle == steps[1] || cycle == steps[3]) {
-        events |= 2; // Half frame
-      }
-      // IRQ at step 3 (and step 3 - 1, step 3 + 1 for the 3-tick window)
-      if (!irq_inhibit) {
-        if (cycle == steps[3] - 1 || cycle == steps[3] || cycle == steps[3] + 1) {
-          irq_flag = true;
-        }
-      }
-      if (cycle >= steps[3] + 1) {
-        cycle = 0;
-      }
-    }
-
-    return events;
+      return events;
   }
 };
 
@@ -858,7 +943,7 @@ public:
     return bus_state;
   }
 
-  // Generate audio sample using NES non-linear mixing formulas
+  // Generate audio sample using precomputed NES mixer lookup tables
   // Reference: https://www.nesdev.org/wiki/APU_Mixer
   float sample() const {
     uint8_t p1 = pulse1.output();
@@ -867,19 +952,9 @@ public:
     uint8_t noi = noise.output();
     uint8_t dm = dmc.output();
 
-    // Non-linear mixing lookup (from NESdev wiki)
-    float pulse_out = 0.0f;
-    if (p1 + p2 > 0) {
-      pulse_out = 95.88f / ((8128.0f / (p1 + p2)) + 100.0f);
-    }
-
-    float tnd_out = 0.0f;
-    float tnd_sum = (tri / 8227.0f) + (noi / 12241.0f) + (dm / 22638.0f);
-    if (tnd_sum > 0.0f) {
-      tnd_out = 159.79f / ((1.0f / tnd_sum) + 100.0f);
-    }
-
-    float output = pulse_out + tnd_out;
+    // Lookup-table mixing: pulse_table[p1+p2] + tnd_table[3*tri + 2*noi + dmc]
+    float output = apu_mixer::pulse_table[p1 + p2]
+                 + apu_mixer::tnd_table[3 * tri + 2 * noi + dm];
 
     // Simple first-order high-pass filter for DC removal (~37 Hz at 1.789 MHz)
     // y[n] = x[n] - x[n-1] + R * y[n-1], R ≈ 0.9996

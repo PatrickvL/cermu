@@ -66,10 +66,6 @@ bool Cartridge::handle_mapper_write(uint16_t addr, uint8_t data) {
 // Cartridge IRQ / scanline / mirroring delegation
 // ============================================================================
 
-bool Cartridge::irq_state() const {
-    return mapper ? mapper->irq_state() : false;
-}
-
 void Cartridge::irq_clear() {
     if (mapper) mapper->irq_clear();
 }
