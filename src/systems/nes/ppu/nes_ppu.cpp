@@ -158,7 +158,7 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
                 break;
             case 0x2001: // Mask
                 regs.mask = data;
-                rebuild_pixel_lut();
+                active_palette_ = nullptr;  // Invalidate pixel LUT
                 break;
             case 0x2002: // Status — read only (write is ignored, bus latch updated above)
                 break;
@@ -254,7 +254,7 @@ ppu_bus_state_t PPU::ppu_write(ppu_bus_state_t bus) {
     // ---- Palette RAM ($3F00-$3FFF) — internal to PPU ----
     if (unlikely(addr >= 0x3F00)) {
         palette[pal_mirror_[addr & 0x1F]] = data;
-        rebuild_pixel_lut();
+        active_palette_ = nullptr;  // Invalidate pixel LUT
         return bus;
     }
 
@@ -510,7 +510,7 @@ void PPU::clock() {
         }
 
         // Lazy pixel LUT rebuild — coalesces rapid palette/mask writes
-        if (unlikely(!active_palette_)) do_rebuild_pixel_lut();
+        if (unlikely(!active_palette_)) rebuild_pixel_lut();
 
         screen[(scanline * 256) + x] = pixel_lut_[((palette_val << 2) | pixel) & 0x1F];
     }
