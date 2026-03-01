@@ -29,6 +29,8 @@ void nes_bus_t::init() {
     dma_transfer = false;
     dma_dummy = true;
     system_clock_counter = 0;
+    cpu_div_ = 0;
+    dma_odd_cycle_ = false;
 }
 
 // ============================================================================
@@ -43,6 +45,8 @@ void nes_bus_t::reset() {
     dma_transfer = false;
     dma_dummy = true;
     system_clock_counter = 0;
+    cpu_div_ = 0;
+    dma_odd_cycle_ = false;
 }
 
 // ============================================================================
