@@ -941,10 +941,13 @@ void NintendoSystem<V>::clock() {
     cpu_->sample_nmi_pin(pins_);
 
     // IRQ — level-sensitive (active low)
+    // Mapper IRQ (e.g. MMC3 scanline counter) stays asserted until the game
+    // explicitly acknowledges it by writing to the appropriate mapper register
+    // ($E000 for MMC3).  Do NOT auto-clear — the line must remain low so the
+    // CPU's level-sensitive detection can sample it reliably.
     bool irq_asserted = false;
     if (cartridge_ && cartridge_->irq_state()) {
         irq_asserted = true;
-        cartridge_->irq_clear();
     }
     if (cpu_->apu_irq()) {
         irq_asserted = true;
