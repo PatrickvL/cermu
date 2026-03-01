@@ -18,12 +18,15 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
+#include <cmath>
+#include <algorithm>
 #include <string>
 #include <vector>
 #include <chrono>
 #include <filesystem>
 
 #include "../src/systems/nes/nes_system.h"
+#include "../src/systems/nes/nes_profiling.h"
 
 using NES = nes_system::NESSystem;
 
@@ -489,21 +492,142 @@ static TestResult run_test_rom(const std::string& filepath, int max_frames,
 // Main
 // ============================================================================
 
+// ============================================================================
+// Benchmark mode — measure wall-clock ns/frame and ns/dot over many frames
+// ============================================================================
+
+static void run_benchmark(const std::string& filepath, int warmup_frames,
+                           int bench_frames) {
+    // Extract filename
+    std::string filename = filepath;
+    auto sep = filepath.rfind('/');
+    if (sep != std::string::npos) filename = filepath.substr(sep + 1);
+
+    printf("\n============================================================\n");
+    printf("  NES Benchmark: %s\n", filename.c_str());
+    printf("  Warmup: %d frames, Benchmark: %d frames\n",
+           warmup_frames, bench_frames);
+    printf("============================================================\n");
+
+    // Create and initialize NES
+    NES nes;
+    if (!nes.initialize()) {
+        fprintf(stderr, "Failed to initialize NES system\n");
+        return;
+    }
+
+    int fb_w = 0, fb_h = 0;
+    nes.get_display_dimensions(&fb_w, &fb_h);
+    std::vector<uint32_t> framebuffer(fb_w * fb_h, 0);
+    nes.set_framebuffer(framebuffer.data(), fb_w, fb_h);
+
+    if (!nes.load_file(filepath.c_str())) {
+        fprintf(stderr, "Failed to load ROM: %s\n", filepath.c_str());
+        return;
+    }
+
+    // Warmup phase — fill caches, let ROM reach steady-state rendering
+    printf("  Warming up (%d frames)...\n", warmup_frames);
+    for (int i = 0; i < warmup_frames; ++i) {
+        nes.run_frame();
+    }
+
+#ifdef NES_PROFILING
+    g_nes_profile.reset();
+#endif
+
+    // === Benchmark: measure per-frame wall-clock time ===
+    printf("  Benchmarking (%d frames)...\n", bench_frames);
+
+    // Collect per-frame timings for statistical analysis
+    std::vector<double> frame_ns(bench_frames);
+
+    auto bench_start = std::chrono::steady_clock::now();
+
+    for (int i = 0; i < bench_frames; ++i) {
+        auto t0 = std::chrono::steady_clock::now();
+        nes.run_frame();
+        auto t1 = std::chrono::steady_clock::now();
+        frame_ns[i] = std::chrono::duration<double, std::nano>(t1 - t0).count();
+    }
+
+    auto bench_end = std::chrono::steady_clock::now();
+    double total_bench_s = std::chrono::duration<double>(bench_end - bench_start).count();
+
+    // Sort for percentile analysis
+    std::sort(frame_ns.begin(), frame_ns.end());
+
+    double min_ns = frame_ns.front();
+    double max_ns = frame_ns.back();
+    double median_ns = frame_ns[bench_frames / 2];
+    double p95_ns = frame_ns[static_cast<int>(bench_frames * 0.95)];
+    double p99_ns = frame_ns[static_cast<int>(bench_frames * 0.99)];
+    double mean_ns = 0;
+    for (auto ns : frame_ns) mean_ns += ns;
+    mean_ns /= bench_frames;
+
+    // Compute standard deviation
+    double variance = 0;
+    for (auto ns : frame_ns) variance += (ns - mean_ns) * (ns - mean_ns);
+    variance /= bench_frames;
+    double stddev_ns = std::sqrt(variance);
+
+    // Derived metrics
+    constexpr double FRAME_NS_60FPS = 1e9 / 60.0;  // 16.67 ms
+    constexpr int DOTS_PER_FRAME_NTSC = 341 * 262;  // 89,342
+    constexpr int CPU_CYCLES_PER_FRAME_NTSC = 89342; // PPU ticks = system ticks
+    double ns_per_dot = mean_ns / DOTS_PER_FRAME_NTSC;
+    double fps = 1e9 / mean_ns;
+    double headroom_pct = (1.0 - mean_ns / FRAME_NS_60FPS) * 100.0;
+
+    printf("\n  === Frame Timing Results ===\n");
+    printf("  Total: %.3f seconds for %d frames\n", total_bench_s, bench_frames);
+    printf("  Mean:     %10.0f ns/frame  (%.2f ms)  %.1f FPS\n",
+           mean_ns, mean_ns / 1e6, fps);
+    printf("  Median:   %10.0f ns/frame  (%.2f ms)\n", median_ns, median_ns / 1e6);
+    printf("  Min:      %10.0f ns/frame  (%.2f ms)\n", min_ns, min_ns / 1e6);
+    printf("  Max:      %10.0f ns/frame  (%.2f ms)\n", max_ns, max_ns / 1e6);
+    printf("  P95:      %10.0f ns/frame  (%.2f ms)\n", p95_ns, p95_ns / 1e6);
+    printf("  P99:      %10.0f ns/frame  (%.2f ms)\n", p99_ns, p99_ns / 1e6);
+    printf("  StdDev:   %10.0f ns        (%.2f ms)\n", stddev_ns, stddev_ns / 1e6);
+    printf("\n  === Derived Metrics ===\n");
+    printf("  ns/PPU dot:      %.2f ns\n", ns_per_dot);
+    printf("  Budget (60 FPS): %.2f ms/frame\n", FRAME_NS_60FPS / 1e6);
+    printf("  Headroom:        %.1f%%\n", headroom_pct);
+    printf("  PPU dots/frame:  %d\n", DOTS_PER_FRAME_NTSC);
+
+#ifdef NES_PROFILING
+    g_nes_profile.report();
+#endif
+
+    printf("============================================================\n");
+
+    nes.shutdown();
+}
+
 static void print_usage(const char* argv0) {
     printf("Usage: %s [options] <rom_file.nes> [rom_file2.nes ...]\n", argv0);
     printf("       %s --all <directory>\n", argv0);
+    printf("       %s --benchmark <rom_file.nes>\n", argv0);
     printf("\nOptions:\n");
-    printf("  --max-frames N   Maximum frames to run (default: 7200)\n");
-    printf("  --verbose        Print detailed progress\n");
-    printf("  --all <dir>      Run all .nes files in directory\n");
-    printf("  --help           Show this help\n");
+    printf("  --max-frames N     Maximum frames to run (default: 7200)\n");
+    printf("  --verbose          Print detailed progress\n");
+    printf("  --all <dir>        Run all .nes files in directory\n");
+    printf("  --benchmark <rom>  Performance benchmark (default: 600 frames)\n");
+    printf("  --bench-frames N   Frames for benchmark measurement (default: 600)\n");
+    printf("  --warmup N         Warmup frames before benchmark (default: 120)\n");
+    printf("  --help             Show this help\n");
 }
 
 int main(int argc, char* argv[]) {
     int max_frames = 7200;  // ~2 minutes at 60fps
     bool verbose = false;
     bool run_all = false;
+    bool benchmark_mode = false;
+    int bench_frames = 600;
+    int warmup_frames = 120;
     std::string all_dir;
+    std::string benchmark_rom;
     std::vector<std::string> rom_files;
 
     // Parse arguments
@@ -515,12 +639,29 @@ int main(int argc, char* argv[]) {
         } else if (strcmp(argv[i], "--all") == 0 && i + 1 < argc) {
             run_all = true;
             all_dir = argv[++i];
+        } else if (strcmp(argv[i], "--benchmark") == 0 && i + 1 < argc) {
+            benchmark_mode = true;
+            benchmark_rom = argv[++i];
+        } else if (strcmp(argv[i], "--bench-frames") == 0 && i + 1 < argc) {
+            bench_frames = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--warmup") == 0 && i + 1 < argc) {
+            warmup_frames = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--help") == 0) {
             print_usage(argv[0]);
             return 0;
         } else if (argv[i][0] != '-') {
             rom_files.push_back(argv[i]);
         }
+    }
+
+    // Benchmark mode — run and exit
+    if (benchmark_mode) {
+        if (benchmark_rom.empty()) {
+            fprintf(stderr, "Error: --benchmark requires a ROM path\n");
+            return 1;
+        }
+        run_benchmark(benchmark_rom, warmup_frames, bench_frames);
+        return 0;
     }
 
     // Collect ROM files
