@@ -129,12 +129,6 @@ bus_state_t am_abs(bus_state_t pins) {
     this->bus_load_reg(REG_ABH, pins);
     this->inc(REG_PC);
     this->transition_to_operation();
-    // JMP/JML are zero-cycle operations: chain immediately from the
-    // addressing mode's PHI1 phase so no extra bus cycle is consumed.
-    if (this->opcode_entry.op_index == to_index(OP::JMP) ||
-        this->opcode_entry.op_index == to_index(OP::JML)) {
-      return this->call_current_handler(pins);
-    }
     return pins;
   }
   return pins;
@@ -311,8 +305,9 @@ bus_state_t am_ind(bus_state_t pins) {
     /* PHI1: Assemble final address from TMP (low) and bus data (high) */
     this->bus_load_reg(REG_ABH, pins);  // High byte to ABH
     this->set(REG_ABL, this->get(REG_DL)); // Low byte from DL to ABL
-    // Only JMP uses am_ind — chain immediately (zero-cycle operation).
+    // Only JMP uses am_ind — chain into op_jmp (skips ABS fetch).
     this->transition_to_operation();
+    this->half_cycle = 4;
     return this->call_current_handler(pins);
   }
   return pins;
@@ -589,8 +584,9 @@ bus_state_t am_abi(bus_state_t pins) {
       /* PHI1: Assemble final target address and transition */
       this->bus_load_reg(REG_ABH, pins);  // High byte to ABH
       this->set(REG_ABL, this->get(REG_SBR)); // Low byte from SBR to ABL
-      // Only JMP uses am_abi — chain immediately (zero-cycle operation).
+      // JMP/JML use am_abi — chain into op_jmp/op_jml (skips ABS fetch).
       this->transition_to_operation();
+      this->half_cycle = 4;
       return this->call_current_handler(pins);
   }
   return pins;

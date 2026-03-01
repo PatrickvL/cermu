@@ -122,7 +122,7 @@ generate_opcode_table_for_traits(const fam65xx::detail::CPUTraits &traits) {
   table[0x4A] = {OP::LSR, AM::ACC, OF::NONE};
   table[0x4B] = {OP::ASR, AM::IMM,
                  OF::NONE}; // ASR - AND then LSR (illegal) (also called ALR)
-  table[0x4C] = {OP::JMP, AM::ABS, OF::NONE};
+  table[0x4C] = {OP::JMP, AM::NON, OF::NONE};
   table[0x4D] = {OP::EOR, AM::ABS, OF::NONE};
   table[0x4E] = {OP::LSR, AM::ABS, OF::RMW};
   table[0x4F] = {OP::SRE, AM::ABS,
