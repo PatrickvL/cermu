@@ -298,12 +298,17 @@ void PPU::clock() {
         pending_vbl_clear_ = false;
     }
 
-    // Lambda to get pixel color from palette (uses precalculated cache)
+    // Pixel color from palette — direct array lookup, no bus round-trip.
+    // Palette RAM is internal to the PPU (32 bytes); routing through
+    // ppu_read() added 5+ function calls and 4 mirror branches per pixel.
+    // The static mirror LUT folds the $3F10/$3F14/$3F18/$3F1C → $3F00/04/08/0C
+    // aliases into a single table lookup.
+    static constexpr uint8_t pal_mirror[32] = {
+         0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,
+         0,17,18,19, 4,21,22,23, 8,25,26,27,12,29,30,31
+    };
     auto get_pixel = [this](uint8_t palette_idx, uint8_t pixel) -> uint32_t {
-        // Fast color lookup from the precalculated cache.
-        // Uses the latched active_palette_ (set on $2001 write).
-        // Returns 0xFFBBGGRR (ABGR) directly.
-        return active_palette_[PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(0x3F00 + (palette_idx << 2) + pixel))) & 0x3F];
+        return active_palette_[palette[pal_mirror[((palette_idx << 2) | pixel) & 0x1F]] & 0x3F];
     };
     
     // Visible scanlines and pre-render scanline
