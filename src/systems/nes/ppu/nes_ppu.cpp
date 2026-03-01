@@ -174,7 +174,7 @@ ppu_bus_state_t PPU::ppu_read(ppu_bus_state_t bus, bool read_only) {
     // Returns the raw palette byte.  Greyscale masking (PPUMASK bit 0) is
     // handled by the precalculated palette cache for rendering, and applied
     // explicitly in the $2007 CPU-read handler for CPU-visible reads.
-    if (addr >= 0x3F00) {
+    if (unlikely(addr >= 0x3F00)) {
         PPU_BUS_SET_DATA(bus, palette[pal_mirror_[addr & 0x1F]]);
         return bus;
     }
@@ -201,7 +201,7 @@ ppu_bus_state_t PPU::ppu_write(ppu_bus_state_t bus) {
     uint8_t data = PPU_BUS_GET_DATA(bus);
 
     // ---- Palette RAM ($3F00-$3FFF) — internal to PPU ----
-    if (addr >= 0x3F00) {
+    if (unlikely(addr >= 0x3F00)) {
         palette[pal_mirror_[addr & 0x1F]] = data;
         rebuild_pixel_lut();
         return bus;
@@ -229,7 +229,7 @@ void PPU::clock() {
     // ---- Commit pending VBL flag changes (1-dot propagation delay) ----
     // These were queued on the previous dot; now propagate to regs.status
     // so that $2002 reads reflect the updated value.
-    if (pending_vbl_set_) {
+    if (unlikely(pending_vbl_set_)) {
         // VBL suppression race condition (nesdev wiki):
         //   Reading $2002 1 PPU clock before the flag becomes VISIBLE in
         //   $2002 prevents VBL from being set that frame.
@@ -250,7 +250,7 @@ void PPU::clock() {
             pending_vbl_set_ = false;
         }
     }
-    if (pending_vbl_clear_) {
+    if (unlikely(pending_vbl_clear_)) {
         regs.status &= ~0x80;
         regs.status &= ~0x40; // Clear Sprite 0 Hit
         regs.status &= ~0x20; // Clear Sprite Overflow
