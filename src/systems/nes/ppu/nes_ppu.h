@@ -36,8 +36,6 @@ namespace nes_system {
 class PPU : public ChipBase {
 public:
     // Screen dimensions
-    // PPU memory sizes
-    static constexpr uint32_t PATTERN_TABLE_DIM = 128;       // 128×128 px debug tile grid
     // PPU registers (memory-mapped at $2000-$2007)
     struct Registers {
         uint8_t ctrl;       // $2000 - PPUCTRL
@@ -152,9 +150,6 @@ public:
     // Frame buffer (RGB888)
     std::vector<uint32_t> screen;
 
-    // Pattern tables (for debugging)
-    std::vector<uint32_t> pattern_table[2];
-
 public:
     PPU(bool pal = false) : is_pal(pal) {
         info_ = ChipInfo{pal ? "RP2C07" : "RP2C02", "Ricoh"};
@@ -163,8 +158,6 @@ public:
         oam.resize(256, 0);
         palette.resize(32, 0);
         screen.resize(256 * 240, 0);
-        pattern_table[0].resize(PATTERN_TABLE_DIM * PATTERN_TABLE_DIM, 0);
-        pattern_table[1].resize(PATTERN_TABLE_DIM * PATTERN_TABLE_DIM, 0);
         internal.sprite_scanline.resize(8);
 
         build_palette_cache(is_pal, palette_cache_);
@@ -218,9 +211,6 @@ public:
 
     // Get frame buffer
     const std::vector<uint32_t>& get_screen() const { return screen; }
-
-    // Get pattern tables (for debugging)
-    const std::vector<uint32_t>& get_pattern_table(int i, uint8_t palette) const;
 
     // NMI output level — true when /NMI is asserted (active LOW).
     // The system tick transfers this onto the CPU bus via PPU_CPU_BITMIX;

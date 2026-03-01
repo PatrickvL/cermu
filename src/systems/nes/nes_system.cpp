@@ -1008,12 +1008,6 @@ const std::vector<uint32_t>& NintendoSystem<V>::get_screen() const {
 }
 
 template<NintendoVariant V>
-const std::vector<uint32_t>& NintendoSystem<V>::get_pattern_table(int table, uint8_t palette) const {
-    static std::vector<uint32_t> empty_table;
-    return ppu_ ? ppu_->get_pattern_table(table, palette) : empty_table;
-}
-
-template<NintendoVariant V>
 void NintendoSystem<V>::set_audio_sample_rate(uint32_t rate) {
     audio_sample_rate_ = rate;
     setup_audio_timing();

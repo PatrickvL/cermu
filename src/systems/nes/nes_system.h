@@ -237,7 +237,6 @@ public:
     const std::vector<uint32_t>& get_screen() const;
     const std::vector<float>& get_audio_buffer() const { return audio_buffer_; }
     void clear_audio_buffer() { audio_buffer_.clear(); audio_sample_counter_ = 0; }
-    const std::vector<uint32_t>& get_pattern_table(int table, uint8_t palette) const;
     void set_audio_sample_rate(uint32_t rate);
     bool save_state(const std::string& filename) const;
     bool load_state(const std::string& filename);
