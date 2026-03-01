@@ -97,13 +97,18 @@ template <const CPUTraits &Traits> struct apu_mixin_t {
     uint8_t _padding[6];       // Align to 8 bytes
   } apu_state;
 
-  // Initialize APU
+  // Initialize APU (first-time creation only)
   void init_apu() {
-    apu_state.apu_instance = nullptr;       // CRITICAL: Initialize pointer first to prevent access violation
+    destroy_apu(); // Free any existing instance before creating a new one
     apu_state.is_pal = false;               // Default to NTSC
-    destroy_apu(); // Ensure no existing instance as we're creating a new one,
-                   // potentially with different region
     apu_state.apu_instance = new nes6502_apu::APU(apu_state.is_pal);
+  }
+
+  // Reset APU to power-up state (preserves the existing instance)
+  void reset_apu() {
+    if (apu_state.apu_instance) {
+      apu_state.apu_instance->reset_to_power_up_state();
+    }
   }
 
   // Cleanup APU

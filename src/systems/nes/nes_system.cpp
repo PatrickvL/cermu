@@ -340,6 +340,11 @@ void NintendoSystem<V>::reset() {
     residual_time_ = 0.0;
     audio_sample_period_ = is_pal_ ? 33 : 37;
     audio_sample_counter_ = audio_sample_period_;
+
+    // Flush any buffered audio samples so old game audio doesn't bleed
+    // into the new cartridge.  The ring buffer in the GUI layer is reset
+    // separately when the emulation thread restarts.
+    audio_buffer_.clear();
 }
 
 template<NintendoVariant V>

@@ -1209,6 +1209,21 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
     // Register initialization is handled by register mixin
   }
 
+  /// Reset processor-specific peripherals to power-up state.
+  /// Unlike init_conditional_features(), this preserves existing instances
+  /// (no new allocations) and avoids invalidating external pointers.
+  void reset_conditional_features() {
+    // Reset I/O port if present
+    if constexpr (has_io_port()) {
+      this->init_io_port();
+    }
+
+    // Reset APU if present (does not recreate the instance)
+    if constexpr (has_apu()) {
+      this->reset_apu();
+    }
+  }
+
   void init_opcode_table() {
     // Initialize operation handler lookup table with NOP as safe default
     operation_handlers.fill(&fam65xx_t::op_nop);
@@ -1519,8 +1534,8 @@ public:
     this->wait_for_interrupt = false;
     this->stopped = false;
 
-    // Reset processor-specific features
-    this->init_conditional_features();
+    // Reset processor-specific features (preserves existing APU instance)
+    this->reset_conditional_features();
 
     // Clear any active interrupt
     this->active_interrupt = FAM65XX_INT_NONE;
