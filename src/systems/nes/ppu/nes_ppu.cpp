@@ -594,7 +594,7 @@ void PPU::update_shifters() {
         internal.bg_shifter_attrib_hi <<= 1;
     }
     
-    if (regs.mask & 0x10 && cycle >= 1 && cycle < 258) {
+    if (regs.mask & 0x10 && cycle < 258) {
         for (uint8_t i = 0; i < internal.sprite_count; i++) {
             if (internal.sprite_scanline[i].x > 0) {
                 internal.sprite_scanline[i].x--;
