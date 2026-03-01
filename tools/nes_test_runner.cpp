@@ -455,6 +455,28 @@ static TestResult run_test_rom(const std::string& filepath, int max_frames,
             break;
     }
 
+    // Pixel diagnostics: dump leftmost pixel data from the framebuffer
+    if (verbose) {
+        // Show first 16 pixels for a few content-bearing scanlines
+        printf("  First 16px of select scanlines:\n");
+        int shown = 0;
+        for (int y = 0; y < 240 && shown < 15; y++) {
+            // Check if this scanline has content in first 16 pixels
+            bool has = false;
+            for (int x = 0; x < 16; x++) {
+                if ((framebuffer[y * 256 + x] & 0x00FFFFFF) != 0) { has = true; break; }
+            }
+            if (!has) continue;
+            printf("    SL %3d: ", y);
+            for (int x = 0; x < 16; x++) {
+                uint32_t px = framebuffer[y * 256 + x] & 0x00FFFFFF;
+                printf("%06X ", px);
+            }
+            printf("\n");
+            shown++;
+        }
+    }
+
     // Clean shutdown
     nes.shutdown();
 

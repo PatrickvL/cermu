@@ -99,6 +99,7 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
 
                 // Increment VRAM address
                 internal.v += (regs.ctrl & 0x04) ? 32 : 1;
+                internal.v &= 0x7FFF;  // v is 15 bits
                 break;
         }
 
@@ -132,18 +133,18 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
                 break;
             case 0x2005: // Scroll
                 if (!internal.w) {
-                    internal.t = (internal.t & 0xFFE0) | ((data & 0xF8) >> 3);
+                    internal.t = (internal.t & 0x7FE0) | ((data & 0xF8) >> 3);
                     internal.x = data & 0x07;
                     internal.w = true;
                 } else {
-                    internal.t = (internal.t & 0x8FFF) | ((data & 0x07) << 12);
-                    internal.t = (internal.t & 0xFC1F) | ((data & 0xF8) << 2);
+                    internal.t = (internal.t & 0x0FFF) | ((data & 0x07) << 12);
+                    internal.t = (internal.t & 0x7C1F) | ((data & 0xF8) << 2);
                     internal.w = false;
                 }
                 break;
             case 0x2006: // PPU Address
                 if (!internal.w) {
-                    internal.t = (internal.t & 0x80FF) | ((data & 0x3F) << 8);
+                    internal.t = (internal.t & 0x00FF) | ((data & 0x3F) << 8);
                     internal.w = true;
                 } else {
                     internal.t = (internal.t & 0xFF00) | data;
@@ -154,6 +155,7 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
             case 0x2007: // PPU Data
                 ppu_write(PPU_BUS_WITH_ADDR_DATA(internal.v, data));
                 internal.v += (regs.ctrl & 0x04) ? 32 : 1;
+                internal.v &= 0x7FFF;  // v is 15 bits
                 break;
         }
     }
@@ -377,13 +379,13 @@ void PPU::clock() {
                     internal.bg_lo_byte = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(
                         ((regs.ctrl & 0x10) << 8) +
                         ((uint16_t)internal.nt_byte << 4) +
-                        (internal.v >> 12) + 0)));
+                        ((internal.v >> 12) & 0x07) + 0)));
                     break;
                 case 7:
                     internal.bg_hi_byte = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(
                         ((regs.ctrl & 0x10) << 8) +
                         ((uint16_t)internal.nt_byte << 4) +
-                        (internal.v >> 12) + 8)));
+                        ((internal.v >> 12) & 0x07) + 8)));
                     increment_scroll_x();
                     break;
             }
