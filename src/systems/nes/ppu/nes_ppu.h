@@ -150,13 +150,9 @@ public:
     // Rebuilt on construction, reset, and PAL/NTSC change.
     uint32_t palette_cache_[16][64] = {};
 
-    // Active palette variant — pointer into palette_cache_, latched on
-    // $2001 (PPUMASK) writes so rebuild_pixel_lut() picks the right row.
-    const uint32_t* active_palette_ = palette_cache_[0];
-
     // Precomputed pixel LUT — 32 entries, one per palette slot.
     // Collapses the per-pixel triple indirection (pal_mirror_ → palette →
-    // active_palette_) into a single array lookup.  Rebuilt on palette RAM
+    // active_palette) into a single array lookup.  Rebuilt on palette RAM
     // writes ($2007 / DMA into $3F00+) and PPUMASK ($2001) writes.
     uint32_t pixel_lut_[32] = {};
 
@@ -250,9 +246,11 @@ private:
     // Subsumes the old latch_palette_variant() — both triggers converge here.
     inline void rebuild_pixel_lut() {
         const uint8_t variant = ((regs.mask >> 5) & 0x07) | ((regs.mask & 0x01) << 3);
-        active_palette_ = palette_cache_[variant];
+        // Active palette variant — pointer into palette_cache_, latched on
+        // $2001 (PPUMASK) writes so rebuild_pixel_lut() picks the right row.
+        const uint32_t* active_palette = palette_cache_[variant];
         for (int i = 0; i < 32; ++i)
-            pixel_lut_[i] = active_palette_[palette[pal_mirror_[i]] & 0x3F];
+            pixel_lut_[i] = active_palette[palette[pal_mirror_[i]] & 0x3F];
     }
 
     // Sprite evaluation
