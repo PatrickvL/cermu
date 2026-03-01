@@ -145,7 +145,7 @@ struct nes_bus_t {
     // Palette ($3F00-$3F1F) must be intercepted BEFORE calling these.
 
     inline ppu_bus_state_t ppu_read(ppu_bus_state_t bus) const {
-        uint16_t mapped = PPU_BUS_GET_ADDR(bus) & 0x3FFF;
+        uint16_t mapped = PPU_BUS_GET_ADDR(bus);
         const uint8_t* rp = ppu_read_page[mapped >> 10];
         if (likely(rp != nullptr)) {
             PPU_BUS_SET_DATA(bus, rp[mapped & 0x03FF]);
@@ -154,7 +154,7 @@ struct nes_bus_t {
     }
 
     inline ppu_bus_state_t ppu_write(ppu_bus_state_t bus) {
-        uint16_t mapped = PPU_BUS_GET_ADDR(bus) & 0x3FFF;
+        uint16_t mapped = PPU_BUS_GET_ADDR(bus);
         uint8_t* wp = ppu_write_page[mapped >> 10];
         if (likely(wp != nullptr)) {
             wp[mapped & 0x03FF] = PPU_BUS_GET_DATA(bus);
