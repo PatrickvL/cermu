@@ -437,7 +437,7 @@ void PPU::clock() {
             } else {
                 internal.sprite_zero_being_rendered = false;
                 
-                for (uint8_t i = 0; i < internal.sprite_scanline.size(); i++) {
+                for (uint8_t i = 0; i < internal.sprite_count; i++) {
                     if (internal.sprite_scanline[i].x == 0) {
                         uint8_t fg_pixel_lo = (internal.sprite_shifter_pattern_lo[i] & 0x80) > 0;
                         uint8_t fg_pixel_hi = (internal.sprite_shifter_pattern_hi[i] & 0x80) > 0;
@@ -613,7 +613,7 @@ void PPU::update_shifters() {
     }
     
     if (regs.mask & 0x10 && cycle >= 1 && cycle < 258) {
-        for (size_t i = 0; i < internal.sprite_scanline.size(); i++) {
+        for (uint8_t i = 0; i < internal.sprite_count; i++) {
             if (internal.sprite_scanline[i].x > 0) {
                 internal.sprite_scanline[i].x--;
             } else {
@@ -629,37 +629,39 @@ void PPU::evaluate_sprites() {
     // y=$FF places sprites offscreen; x=$FF ensures sprite counters
     // never reach 0 during visible dots, preventing unused slots
     // from rendering garbage tile-0 pixels at the left edge.
-    internal.sprite_scanline.assign(8, {0xFF, 0xFF, 0xFF, 0xFF});
+    internal.sprite_scanline.fill({0xFF, 0xFF, 0xFF, 0xFF});
+    internal.sprite_count = 0;
     
     internal.sprite_zero_hit_possible = false;
-    uint8_t sprite_count = 0;
+    uint8_t count = 0;
     
-    for (uint8_t i = 0; i < 64 && sprite_count < 9; i++) {
+    for (uint8_t i = 0; i < 64 && count < 9; i++) {
         uint8_t sprite_y = oam[i * 4 + 0];
         uint8_t sprite_height = (regs.ctrl & 0x20) ? 16 : 8;
         
         if ((scanline >= sprite_y) && (scanline < (sprite_y + sprite_height))) {
-            if (sprite_count < 8) {
+            if (count < 8) {
                 if (i == 0) {
                     internal.sprite_zero_hit_possible = true;
                 }
                 
-                internal.sprite_scanline[sprite_count].y = sprite_y;
-                internal.sprite_scanline[sprite_count].tile_id = oam[i * 4 + 1];
-                internal.sprite_scanline[sprite_count].attributes = oam[i * 4 + 2];
-                internal.sprite_scanline[sprite_count].x = oam[i * 4 + 3];
+                internal.sprite_scanline[count].y = sprite_y;
+                internal.sprite_scanline[count].tile_id = oam[i * 4 + 1];
+                internal.sprite_scanline[count].attributes = oam[i * 4 + 2];
+                internal.sprite_scanline[count].x = oam[i * 4 + 3];
             }
-            sprite_count++;
+            count++;
         }
     }
     
-    if (sprite_count > 8) {
+    internal.sprite_count = (count > 8) ? 8 : count;
+    if (count > 8) {
         regs.status |= 0x20; // Set sprite overflow
     }
 }
 
 void PPU::load_sprite_shifters() {
-    for (uint8_t i = 0; i < internal.sprite_scanline.size(); i++) {
+    for (uint8_t i = 0; i < internal.sprite_count; i++) {
         uint8_t sprite_pattern_bits_lo, sprite_pattern_bits_hi;
         uint16_t sprite_pattern_addr_lo, sprite_pattern_addr_hi;
         
