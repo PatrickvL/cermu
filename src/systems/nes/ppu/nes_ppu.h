@@ -233,6 +233,20 @@ private:
     // A12 edge detection — tracks last PPU address for mapper use
     uint16_t last_ppu_addr_ = 0;
 
+    // Fast inline CHR/nametable read — bypasses ppu_bus_state_t construction
+    // and palette range check.  For rendering-only reads where addr < $3F00.
+    // Equivalent to PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(addr))) but
+    // eliminates ~8 operations per call.
+    inline uint8_t fast_vram_read(uint16_t addr) const {
+        if (likely(bus_ptr_ != nullptr)) {
+            const uint8_t* rp = bus_ptr_->ppu_read_page[addr >> 10];
+            if (likely(rp != nullptr)) {
+                return rp[addr & 0x03FF];
+            }
+        }
+        return 0;  // open bus
+    }
+
     // Internal rendering functions
     void increment_scroll_x();
     void increment_scroll_y();

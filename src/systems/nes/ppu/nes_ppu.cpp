@@ -17,6 +17,57 @@
 #include "nes_ppu.h"
 #include "nes_palette.h"
 
+// ============================================================================
+// Optional PPU sub-component profiling — enabled with -DNES_PROFILING
+// ============================================================================
+#ifdef NES_PROFILING
+#include <x86intrin.h>
+
+struct PpuSubProfile {
+    uint64_t bg_fetch_cycles = 0;      // BG tile fetch switch statement
+    uint64_t pixel_render_cycles = 0;  // Pixel compositing + screen write
+    uint64_t sprite_eval_cycles = 0;   // evaluate_sprites() + load_sprite_shifters()
+    uint64_t scroll_cycles = 0;        // increment_scroll + transfer_address
+    uint64_t vbl_misc_cycles = 0;      // VBL handling, cycle advance, other
+    uint64_t ppu_read_cycles = 0;      // ppu_read() calls (VRAM access)
+    uint64_t shifter_cycles = 0;       // update_shifters + load_background_shifters
+    uint64_t total_dots = 0;
+
+    void report() const {
+        if (total_dots == 0) return;
+        uint64_t total = bg_fetch_cycles + pixel_render_cycles + sprite_eval_cycles +
+                         scroll_cycles + vbl_misc_cycles + shifter_cycles;
+        auto pct = [total](uint64_t c) { return total ? 100.0 * c / total : 0.0; };
+        printf("\n  === PPU Sub-Component Breakdown (rdtsc) ===\n");
+        printf("  BG fetch:        %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
+               bg_fetch_cycles, pct(bg_fetch_cycles), (double)bg_fetch_cycles / total_dots);
+        printf("  Pixel render:    %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
+               pixel_render_cycles, pct(pixel_render_cycles), (double)pixel_render_cycles / total_dots);
+        printf("  Sprite eval:     %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
+               sprite_eval_cycles, pct(sprite_eval_cycles), (double)sprite_eval_cycles / total_dots);
+        printf("  Shifter update:  %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
+               shifter_cycles, pct(shifter_cycles), (double)shifter_cycles / total_dots);
+        printf("  Scroll:          %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
+               scroll_cycles, pct(scroll_cycles), (double)scroll_cycles / total_dots);
+        printf("  VBL/misc:        %12lu cycles  %5.1f%%  (%.1f cy/dot)\n",
+               vbl_misc_cycles, pct(vbl_misc_cycles), (double)vbl_misc_cycles / total_dots);
+        printf("  -----------------------------------------\n");
+        printf("  Total measured:  %12lu rdtsc cycles\n", total);
+    }
+
+    void reset() { *this = {}; }
+};
+
+PpuSubProfile g_ppu_subprofile;
+#define PPU_PROF_START(var)       uint64_t ppu_##var##_t0 = __rdtsc()
+#define PPU_PROF_END(counter, var) g_ppu_subprofile.counter += __rdtsc() - ppu_##var##_t0
+#define PPU_PROF_DOT()            g_ppu_subprofile.total_dots++
+#else
+#define PPU_PROF_START(var)       ((void)0)
+#define PPU_PROF_END(counter, var) ((void)0)
+#define PPU_PROF_DOT()            ((void)0)
+#endif
+
 namespace nes_system {
 
 // ============================================================================
@@ -287,27 +338,27 @@ void PPU::clock() {
                     internal.nt_addr = 0x2000 | (internal.v & 0x0FFF);
                     break;
                 case 2:
-                    internal.nt_byte = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(internal.nt_addr)));
+                    internal.nt_byte = fast_vram_read(internal.nt_addr);
                     break;
                 case 4:
-                    internal.at_byte = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(
+                    internal.at_byte = fast_vram_read(
                         0x2000 | (internal.v & 0x0C00) | 0x03C0 |
-                        ((internal.v >> 4) & 0x38) | ((internal.v >> 2) & 0x07))));
+                        ((internal.v >> 4) & 0x38) | ((internal.v >> 2) & 0x07));
                     // Shift to the correct quadrant's 2-bit palette selector
                     if (internal.v & 0x0002) internal.at_byte >>= 2;
                     if (internal.v & 0x0040) internal.at_byte >>= 4;
                     break;
                 case 6:
-                    internal.bg_lo_byte = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(
+                    internal.bg_lo_byte = fast_vram_read(
                         ((regs.ctrl & 0x10) << 8) +
                         ((uint16_t)internal.nt_byte << 4) +
-                        ((internal.v >> 12) & 0x07) + 0)));
+                        ((internal.v >> 12) & 0x07) + 0);
                     break;
                 case 7:
-                    internal.bg_hi_byte = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(
+                    internal.bg_hi_byte = fast_vram_read(
                         ((regs.ctrl & 0x10) << 8) +
                         ((uint16_t)internal.nt_byte << 4) +
-                        ((internal.v >> 12) & 0x07) + 8)));
+                        ((internal.v >> 12) & 0x07) + 8);
                     increment_scroll_x();
                     break;
             }
@@ -323,7 +374,7 @@ void PPU::clock() {
         }
         
         if (cycle == 338 || cycle == 340) {
-            internal.nt_byte = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(internal.nt_addr)));
+            internal.nt_byte = fast_vram_read(internal.nt_addr);
         }
         
         if (scanline == -1 && cycle >= 280 && cycle < 305) {
@@ -404,20 +455,24 @@ void PPU::clock() {
             }
         }
         
-        // Pixel selection
-        uint8_t pixel = 0x00;
-        uint8_t palette_val = 0x00;
-        
-        if (bg_pixel == 0 && fg_pixel == 0) {
-            pixel = 0x00;
-            palette_val = 0x00;
-        } else if (bg_pixel == 0 && fg_pixel > 0) {
+        // Pixel priority selection — combines BG and sprite with priority logic.
+        // Uses a streamlined branch structure:
+        //   - If both transparent → backdrop
+        //   - If only one is opaque → use that one
+        //   - If both opaque → priority decides, plus sprite-0 hit check
+        uint8_t pixel;
+        uint8_t palette_val;
+
+        if (bg_pixel == 0) {
+            // No BG pixel — use sprite or backdrop
             pixel = fg_pixel;
-            palette_val = fg_palette;
-        } else if (bg_pixel > 0 && fg_pixel == 0) {
+            palette_val = (fg_pixel != 0) ? fg_palette : 0;
+        } else if (fg_pixel == 0) {
+            // No sprite pixel — use BG
             pixel = bg_pixel;
             palette_val = bg_palette;
-        } else if (bg_pixel > 0 && fg_pixel > 0) {
+        } else {
+            // Both opaque — priority decides winner
             if (fg_priority) {
                 pixel = fg_pixel;
                 palette_val = fg_palette;
@@ -425,10 +480,13 @@ void PPU::clock() {
                 pixel = bg_pixel;
                 palette_val = bg_palette;
             }
-            
+
+            // Sprite-0 hit detection (only when both BG and sprite are opaque)
+            // Suppressed at x=0..7 when either left-column show bit is off
+            // (NESdev: "if bit 2 or bit 1 of PPUMASK is 0")
             if (internal.sprite_zero_hit_possible && internal.sprite_zero_being_rendered) {
-                if ((regs.mask & 0x08) && (regs.mask & 0x10)) {
-                    if (!(regs.mask & 0x06) || cycle >= 9) {
+                if ((regs.mask & 0x18) == 0x18) {
+                    if ((regs.mask & 0x06) == 0x06 || cycle >= 9) {
                         regs.status |= 0x40;
                     }
                 }
@@ -654,8 +712,8 @@ void PPU::load_sprite_shifters() {
         }
         
         sprite_pattern_addr_hi = sprite_pattern_addr_lo + 8;
-        sprite_pattern_bits_lo = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(sprite_pattern_addr_lo)));
-        sprite_pattern_bits_hi = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(sprite_pattern_addr_hi)));
+        sprite_pattern_bits_lo = fast_vram_read(sprite_pattern_addr_lo);
+        sprite_pattern_bits_hi = fast_vram_read(sprite_pattern_addr_hi);
         
         if (internal.sprite_scanline[i].attributes & 0x40) {
             // Horizontally flip
