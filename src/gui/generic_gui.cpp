@@ -187,6 +187,9 @@ void GenericEmulatorGUI::run() {
     while (!should_quit_) {
         // Handle events (system-specific)
         handle_events();
+
+        // Auto-hide host mouse cursor after idle / in fullscreen with guest mouse
+        update_mouse_cursor_visibility();
         
         // Update emulation state (system-specific)
         update_frame();
@@ -201,7 +204,61 @@ void GenericEmulatorGUI::run() {
         }
     }
     
+    // Restore cursor before exiting (in case it was hidden)
+    if (cursor_hidden_) {
+        SDL_ShowCursor(SDL_ENABLE);
+        cursor_hidden_ = false;
+    }
+
     printf("Main loop ended\n");
+}
+
+// ============================================================================
+// Mouse Cursor Auto-Hide
+// ============================================================================
+
+void GenericEmulatorGUI::update_mouse_cursor_visibility() {
+    int mx, my;
+    SDL_GetMouseState(&mx, &my);
+
+    Uint32 now = SDL_GetTicks();
+
+    // Detect movement — reset idle timer and show cursor immediately.
+    if (mx != cursor_last_x_ || my != cursor_last_y_) {
+        cursor_last_x_    = mx;
+        cursor_last_y_    = my;
+        cursor_last_move_ = now;
+
+        if (cursor_hidden_) {
+            SDL_ShowCursor(SDL_ENABLE);
+            cursor_hidden_ = false;
+        }
+        return;
+    }
+
+    // Already hidden — nothing to do.
+    if (cursor_hidden_) return;
+
+    // Check whether the mouse is over our window at all.  Don't hide if
+    // the pointer left the window (the WM may still need it).
+    Uint32 wflags = SDL_GetWindowFlags(window_);
+    if (!(wflags & SDL_WINDOW_MOUSE_FOCUS)) return;
+
+    bool is_fullscreen = (wflags & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
+
+    // In fullscreen with a virtual mouse attached to the guest: hide
+    // immediately so the guest-rendered cursor is the only one visible.
+    if (is_fullscreen && has_virtual_mouse_attached()) {
+        SDL_ShowCursor(SDL_DISABLE);
+        cursor_hidden_ = true;
+        return;
+    }
+
+    // Otherwise hide after the idle timeout.
+    if (now - cursor_last_move_ >= CURSOR_HIDE_DELAY_MS) {
+        SDL_ShowCursor(SDL_DISABLE);
+        cursor_hidden_ = true;
+    }
 }
 
 // ============================================================================
