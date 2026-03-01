@@ -82,7 +82,8 @@ public:
             uint8_t x = 0;
         };
 
-        std::vector<Sprite> sprite_scanline;  // Sprites for current scanline
+        std::array<Sprite, 8> sprite_scanline;  // Sprites for current scanline
+        uint8_t sprite_count = 0;                  // Sprites found during evaluation
         uint8_t sprite_shifter_pattern_lo[8] = {};
         uint8_t sprite_shifter_pattern_hi[8] = {};
 
@@ -158,7 +159,8 @@ public:
         oam.resize(256, 0);
         palette.resize(32, 0);
         screen.resize(256 * 240, 0);
-        internal.sprite_scanline.resize(8);
+        internal.sprite_scanline.fill({0xFF, 0xFF, 0xFF, 0xFF});
+        internal.sprite_count = 0;
 
         build_palette_cache(is_pal, palette_cache_);
         reset();
