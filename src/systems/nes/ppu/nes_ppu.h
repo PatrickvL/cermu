@@ -272,13 +272,9 @@ private:
 
     // Invalidate pixel LUT — called on $2001 writes, palette RAM writes,
     // and reset.  The actual rebuild is deferred to the render path.
-    inline void rebuild_pixel_lut() {
-        active_palette_ = nullptr;
-    }
-
     // Lazily rebuild pixel_lut_ from current palette RAM and PPUMASK.
     // Only called when active_palette_ is null (i.e. after invalidation).
-    void do_rebuild_pixel_lut() {
+    void rebuild_pixel_lut() {
         const uint8_t variant = ((regs.mask >> 5) & 0x07) | ((regs.mask & 0x01) << 3);
         active_palette_ = palette_cache_[variant];
         for (int i = 0; i < 32; ++i)
