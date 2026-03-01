@@ -164,38 +164,6 @@ uint8_t PPU::cpu_peek(uint16_t addr) const {
 }
 
 // ============================================================================
-// PPU — Nametable mirroring
-// ============================================================================
-
-uint16_t PPU::mirror_nametable_addr(uint16_t addr) const {
-    addr &= 0x0FFF;
-    uint16_t table = addr >> 10;  // 0-3
-    uint16_t offset = addr & 0x03FF;
-
-    // Default horizontal mirroring lookup table
-    // H: [0,0,1,1]  V: [0,1,0,1]  1LO: [0,0,0,0]  1HI: [1,1,1,1]
-    static const uint16_t h_map[4] = {0, 0, 1, 1};
-    static const uint16_t v_map[4] = {0, 1, 0, 1};
-    static const uint16_t lo_map[4] = {0, 0, 0, 0};
-    static const uint16_t hi_map[4] = {1, 1, 1, 1};
-
-    const uint16_t* map = h_map;  // default
-
-    if (cart) {
-        switch (cart->get_mirror_mode()) {
-            case Cartridge::Mirror::HORIZONTAL:   map = h_map;  break;
-            case Cartridge::Mirror::VERTICAL:     map = v_map;  break;
-            case Cartridge::Mirror::ONESCREEN_LO: map = lo_map; break;
-            case Cartridge::Mirror::ONESCREEN_HI: map = hi_map; break;
-            case Cartridge::Mirror::FOUR_SCREEN:
-                return addr & 0x07FF;  // direct mapping (needs 4KB VRAM)
-        }
-    }
-
-    return map[table] * 0x0400 + offset;
-}
-
-// ============================================================================
 // PPU — VRAM read / write
 // ============================================================================
 

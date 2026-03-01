@@ -240,18 +240,12 @@ private:
     void load_background_shifters();
     void update_shifters();
 
-    // Color generation — uses precalculated palette cache
-    uint32_t get_color_from_palette_ram(uint8_t palette, uint8_t pixel);
-
     // Update active_palette_ pointer from current PPUMASK.
     // Called on $2001 write and reset.
     inline void latch_palette_variant() {
         const uint8_t variant = ((regs.mask >> 5) & 0x07) | ((regs.mask & 0x01) << 3);
         active_palette_ = palette_cache_[variant];
     }
-
-    // Nametable mirroring helper
-    uint16_t mirror_nametable_addr(uint16_t addr) const;
 
     // Sprite evaluation
     void evaluate_sprites();
