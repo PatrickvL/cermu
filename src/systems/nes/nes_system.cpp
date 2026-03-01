@@ -792,11 +792,11 @@ void NintendoSystem<V>::clock() {
     // ====================================================================
     if (unlikely(bus_.dma_transfer)) {
         if (bus_.dma_dummy) {
-            if (bus_.system_clock_counter % 2 == 1) {
+            if (bus_.dma_odd_cycle_) {
                 bus_.dma_dummy = false;
             }
         } else {
-            if (bus_.system_clock_counter % 2 == 0) {
+            if (!bus_.dma_odd_cycle_) {
                 // DMA read from CPU address space
                 uint16_t dma_src = (bus_.dma_page << 8) | bus_.dma_addr;
                 bus_.dma_data = bus_.cpu_read(dma_src);
@@ -809,6 +809,7 @@ void NintendoSystem<V>::clock() {
                 }
             }
         }
+        bus_.dma_odd_cycle_ = !bus_.dma_odd_cycle_;
         bus_.system_clock_counter++;
         total_cycles_++;
         return;
@@ -819,10 +820,12 @@ void NintendoSystem<V>::clock() {
     // ====================================================================
     // CPU tick — one PHI2/PHI1 cycle every 3 PPU ticks
     // ====================================================================
-    if (bus_.system_clock_counter % 3 != 0) {
+    if (bus_.cpu_div_ != 0) {
+        bus_.cpu_div_--;
         total_cycles_++;
         return;
     }
+    bus_.cpu_div_ = 2;  // Reset countdown (next CPU tick in 3 PPU cycles)
 
     // Transfer PPU /NMI onto CPU bus BEFORE PHI2, so the CPU's
     // edge-detect flip-flop samples the current NMI level.
@@ -1096,6 +1099,10 @@ bool NintendoSystem<V>::load_state(const std::string& filename) {
     bus_.dma_transfer = (dma_flags & 1) != 0;
     bus_.dma_dummy = (dma_flags & 2) != 0;
     f.read(reinterpret_cast<char*>(&bus_.system_clock_counter), sizeof(bus_.system_clock_counter));
+
+    // Derive fast-path dividers from restored system_clock_counter
+    bus_.cpu_div_ = static_cast<uint8_t>(bus_.system_clock_counter % 3);
+    bus_.dma_odd_cycle_ = (bus_.system_clock_counter & 1) != 0;
 
     // PRG RAM
     uint32_t ram_size = 0;

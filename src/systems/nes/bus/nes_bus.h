@@ -89,9 +89,11 @@ struct nes_bus_t {
     bool dma_dummy = true;
 
     // ====================================================================
-    // System clock counter (incremented every PPU tick)
+    // Clock dividers (replace modulo operations on hot path)
     // ====================================================================
-    uint32_t system_clock_counter = 0;
+    uint32_t system_clock_counter = 0;  // Total PPU ticks (saved to state)
+    uint8_t  cpu_div_ = 0;             // PPU→CPU countdown (0 = CPU tick this cycle)
+    bool     dma_odd_cycle_ = false;   // DMA even/odd toggle
 
     // ====================================================================
     // Initialization / reset
