@@ -371,19 +371,10 @@ void PPU::clock() {
         if (cycle == 257) {
             load_background_shifters();
             transfer_address_x();
-        }
-
-        if (cycle == 338 || cycle == 340) {
-            internal.nt_byte = fast_vram_read(internal.nt_addr);
-        }
-
-        if (scanline == -1 && cycle >= 280 && cycle < 305) {
-            transfer_address_y();
-        }
-
-        // Sprite evaluation for next scanline
-        if (cycle == 257 && scanline >= 0) {
-            evaluate_sprites();
+            // Sprite evaluation for next scanline
+            if (scanline >= 0) {
+                evaluate_sprites();
+            }
         }
 
         // Mapper scanline counter (MMC3) — clock once per scanline.
@@ -397,7 +388,16 @@ void PPU::clock() {
             if (cart) cart->scanline();
         }
 
+        if (scanline == -1 && cycle >= 280 && cycle < 305) {
+            transfer_address_y();
+        }
+
+        if (cycle == 338) {
+            internal.nt_byte = fast_vram_read(internal.nt_addr);
+        }
+
         if (cycle == 340) {
+            internal.nt_byte = fast_vram_read(internal.nt_addr);
             load_sprite_shifters();
         }
     }
@@ -413,15 +413,15 @@ void PPU::clock() {
         // Background rendering
         if (mask & 0x08) {
             if ((mask & 0x02) || cycle >= 9) {  // Hide leftmost 8 pixels unless bit set
-                const uint16_t bit_mux = 0x8000 >> internal.x;
+                // Extract BG pixel bits via shift-and-mask (avoids > 0 comparison)
+                const uint8_t shift = 15 - internal.x;
+                const uint8_t p0 = (internal.bg_shifter_pattern_lo >> shift) & 1;
+                const uint8_t p1 = (internal.bg_shifter_pattern_hi >> shift) & 1;
+                bg_pixel = (p1 << 1) | p0;
 
-                const uint8_t p0_pixel = (internal.bg_shifter_pattern_lo & bit_mux) > 0;
-                const uint8_t p1_pixel = (internal.bg_shifter_pattern_hi & bit_mux) > 0;
-                bg_pixel = (p1_pixel << 1) | p0_pixel;
-
-                const uint8_t bg_pal0 = (internal.bg_shifter_attrib_lo & bit_mux) > 0;
-                const uint8_t bg_pal1 = (internal.bg_shifter_attrib_hi & bit_mux) > 0;
-                bg_palette = (bg_pal1 << 1) | bg_pal0;
+                const uint8_t a0 = (internal.bg_shifter_attrib_lo >> shift) & 1;
+                const uint8_t a1 = (internal.bg_shifter_attrib_hi >> shift) & 1;
+                bg_palette = (a1 << 1) | a0;
             }
         }
 
@@ -430,14 +430,15 @@ void PPU::clock() {
         uint8_t fg_palette  = 0x00;
         uint8_t fg_priority = 0x00;
 
-        if (mask & 0x10) {
+        if ((mask & 0x10) && internal.sprite_count > 0) {
             if ((mask & 0x04) || cycle >= 9) {  // Hide leftmost 8 pixels unless bit set
                 internal.sprite_zero_being_rendered = false;
 
                 for (uint8_t i = 0; i < internal.sprite_count; i++) {
                     if (internal.sprite_scanline[i].x == 0) {
-                        const uint8_t fg_pixel_lo = (internal.sprite_shifter_pattern_lo[i] & 0x80) > 0;
-                        const uint8_t fg_pixel_hi = (internal.sprite_shifter_pattern_hi[i] & 0x80) > 0;
+                        // Shift-and-mask: bit 7 >> 7 gives 0 or 1
+                        const uint8_t fg_pixel_lo = (internal.sprite_shifter_pattern_lo[i] >> 7) & 1;
+                        const uint8_t fg_pixel_hi = (internal.sprite_shifter_pattern_hi[i] >> 7) & 1;
                         fg_pixel = (fg_pixel_hi << 1) | fg_pixel_lo;
 
                         fg_palette  = (internal.sprite_scanline[i].attributes & 0x03) + 0x04;
@@ -475,10 +476,9 @@ void PPU::clock() {
             palette_val = fg_wins ? fg_palette : bg_palette;
 
             // Sprite-0 hit detection (only when both BG and sprite are opaque).
-            // Suppressed at x=0..7 when either left-column show bit is off
-            // (NESdev: "if bit 2 or bit 1 of PPUMASK is 0").
-            // Flatten three nested ifs into a single compound predicate.
-            if (internal.sprite_zero_hit_possible &&
+            // Once detected (status bit 6 set), skip for rest of frame.
+            if (!(regs.status & 0x40) &&
+                internal.sprite_zero_hit_possible &&
                 internal.sprite_zero_being_rendered &&
                 (mask & 0x18) == 0x18 &&
                 ((mask & 0x06) == 0x06 || cycle >= 9)) {
@@ -526,8 +526,7 @@ void PPU::clock() {
     if (cycle >= nes_constants::DOTS_PER_SCANLINE) {
         cycle = 0;
         scanline++;
-        if (scanline >= (is_pal ? nes_constants::TOTAL_SCANLINES_PAL - 1
-                                : nes_constants::TOTAL_SCANLINES_NTSC - 1)) {
+        if (scanline >= total_scanlines_minus_one_) {
             scanline = -1;
             frame_complete = true;
             frame_count++;
@@ -592,11 +591,13 @@ void PPU::transfer_address_y() {
 void PPU::load_background_shifters() {
     internal.bg_shifter_pattern_lo = (internal.bg_shifter_pattern_lo & 0xFF00) | internal.bg_lo_byte;
     internal.bg_shifter_pattern_hi = (internal.bg_shifter_pattern_hi & 0xFF00) | internal.bg_hi_byte;
-    
+
+    // Branchless attribute expansion: -(bit & 1) yields 0x0000 or 0xFFFF
+    // (two's complement negate: 0→0, 1→0xFFFF, truncated to low byte = 0xFF)
     internal.bg_shifter_attrib_lo = (internal.bg_shifter_attrib_lo & 0xFF00) |
-                                   ((internal.at_byte & 0x01) ? 0xFF : 0x00);
+                                   (-(internal.at_byte & 0x01) & 0xFF);
     internal.bg_shifter_attrib_hi = (internal.bg_shifter_attrib_hi & 0xFF00) |
-                                   ((internal.at_byte & 0x02) ? 0xFF : 0x00);
+                                   (-((internal.at_byte >> 1) & 0x01) & 0xFF);
 }
 
 void PPU::update_shifters() {

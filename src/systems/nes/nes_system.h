@@ -23,27 +23,6 @@
 #include <vector>
 #include <string>
 
-#include "../../chip/cpu/fam65xx/ricoh_2a03.h"
-#include "../../core/chip.h"
-#include "../../core/system_lines.h"
-#include "../../core/emulated_system.h"
-#include "../../core/formats/nsf_format.h"
-#include "cartridge/nes_mapper.h"
-#include "cartridge/nes_cartridge.h"
-#include "ppu/nes_ppu.h"
-#include "bus/nes_bus.h"
-
-// NES default bus state — initial pin values before any chip asserts.
-// RW=1 (read mode), active-low signals NMI/IRQ/RES start HIGH (inactive).
-#define NES_BUS_DEFAULT_STATE \
-    (BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_RES_BIT))
-
-// Forward declarations
-namespace nes_system {
-    class Controller;
-    class NsfCartridge;
-}
-
 // ============================================================================
 // NES SYSTEM CONSTANTS
 // ============================================================================
@@ -67,6 +46,27 @@ namespace nes_constants {
     // iNES format sizes
     constexpr uint32_t INES_CHR_BANK_SIZE = 8192;         // 8KB CHR-ROM/RAM bank
     constexpr uint32_t INES_PRG_RAM_DEFAULT = 8192;       // default 8KB PRG-RAM
+}
+
+#include "../../chip/cpu/fam65xx/ricoh_2a03.h"
+#include "../../core/chip.h"
+#include "../../core/system_lines.h"
+#include "../../core/emulated_system.h"
+#include "../../core/formats/nsf_format.h"
+#include "cartridge/nes_mapper.h"
+#include "cartridge/nes_cartridge.h"
+#include "ppu/nes_ppu.h"
+#include "bus/nes_bus.h"
+
+// NES default bus state — initial pin values before any chip asserts.
+// RW=1 (read mode), active-low signals NMI/IRQ/RES start HIGH (inactive).
+#define NES_BUS_DEFAULT_STATE \
+    (BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_RES_BIT))
+
+// Forward declarations
+namespace nes_system {
+    class Controller;
+    class NsfCartridge;
 }
 
 // PPU class now in ppu/nes_ppu.h (included above)
