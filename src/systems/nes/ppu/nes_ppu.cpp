@@ -217,7 +217,7 @@ uint16_t PPU::mirror_nametable_addr(uint16_t addr) const {
 // ============================================================================
 
 ppu_bus_state_t PPU::ppu_read(ppu_bus_state_t bus, bool read_only) {
-    uint16_t addr = PPU_BUS_GET_ADDR(bus) & 0x3FFF;
+    uint16_t addr = PPU_BUS_GET_ADDR(bus);
 
     // ---- Palette RAM ($3F00-$3FFF) — internal to PPU, no bus access ----
     if (addr >= 0x3F00) {
@@ -251,7 +251,7 @@ ppu_bus_state_t PPU::ppu_read(ppu_bus_state_t bus, bool read_only) {
 }
 
 ppu_bus_state_t PPU::ppu_write(ppu_bus_state_t bus) {
-    uint16_t addr = PPU_BUS_GET_ADDR(bus) & 0x3FFF;
+    uint16_t addr = PPU_BUS_GET_ADDR(bus);
     uint8_t data = PPU_BUS_GET_DATA(bus);
 
     // ---- Palette RAM ($3F00-$3FFF) — internal to PPU ----
