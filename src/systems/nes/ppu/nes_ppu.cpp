@@ -207,12 +207,7 @@ ppu_bus_state_t PPU::ppu_read(ppu_bus_state_t bus, bool read_only) {
     // handled by the precalculated palette cache for rendering, and applied
     // explicitly in the $2007 CPU-read handler for CPU-visible reads.
     if (addr >= 0x3F00) {
-        addr &= 0x001F;
-        if (addr == 0x0010) addr = 0x0000;
-        if (addr == 0x0014) addr = 0x0004;
-        if (addr == 0x0018) addr = 0x0008;
-        if (addr == 0x001C) addr = 0x000C;
-        PPU_BUS_SET_DATA(bus, palette[addr]);
+        PPU_BUS_SET_DATA(bus, palette[pal_mirror_[addr & 0x1F]]);
         return bus;
     }
 
@@ -239,12 +234,7 @@ ppu_bus_state_t PPU::ppu_write(ppu_bus_state_t bus) {
 
     // ---- Palette RAM ($3F00-$3FFF) — internal to PPU ----
     if (addr >= 0x3F00) {
-        addr &= 0x001F;
-        if (addr == 0x0010) addr = 0x0000;
-        if (addr == 0x0014) addr = 0x0004;
-        if (addr == 0x0018) addr = 0x0008;
-        if (addr == 0x001C) addr = 0x000C;
-        palette[addr] = data;
+        palette[pal_mirror_[addr & 0x1F]] = data;
         return bus;
     }
 
@@ -299,16 +289,8 @@ void PPU::clock() {
     }
 
     // Pixel color from palette — direct array lookup, no bus round-trip.
-    // Palette RAM is internal to the PPU (32 bytes); routing through
-    // ppu_read() added 5+ function calls and 4 mirror branches per pixel.
-    // The static mirror LUT folds the $3F10/$3F14/$3F18/$3F1C → $3F00/04/08/0C
-    // aliases into a single table lookup.
-    static constexpr uint8_t pal_mirror[32] = {
-         0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,
-         0,17,18,19, 4,21,22,23, 8,25,26,27,12,29,30,31
-    };
     auto get_pixel = [this](uint8_t palette_idx, uint8_t pixel) -> uint32_t {
-        return active_palette_[palette[pal_mirror[((palette_idx << 2) | pixel) & 0x1F]] & 0x3F];
+        return active_palette_[palette[pal_mirror_[((palette_idx << 2) | pixel) & 0x1F]] & 0x3F];
     };
     
     // Visible scanlines and pre-render scanline

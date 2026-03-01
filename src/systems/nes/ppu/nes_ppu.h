@@ -138,6 +138,13 @@ public:
     // Region
     bool is_pal = false;
 
+    // Palette mirror LUT — folds $3F10/$3F14/$3F18/$3F1C → $3F00/04/08/0C.
+    // Shared by ppu_read(), ppu_write(), and the per-pixel compositor.
+    static constexpr uint8_t pal_mirror_[32] = {
+         0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,
+         0,17,18,19, 4,21,22,23, 8,25,26,27,12,29,30,31
+    };
+
     // Precalculated palette cache — 16 variants × 64 ABGR entries.
     // Index: variant = ((PPUMASK >> 5) & 0x07) | ((PPUMASK & 0x01) << 3)
     // Rebuilt on construction, reset, and PAL/NTSC change.
