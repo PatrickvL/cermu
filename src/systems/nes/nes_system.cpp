@@ -191,7 +191,7 @@ NintendoSystem<V>::NintendoSystem()
     , cycles_per_frame_(nes_constants::CYCLES_PER_FRAME_NTSC)
     , initialized_(false)
     , audio_sample_rate_(nes_constants::AUDIO_SAMPLE_RATE)
-    , audio_sample_counter_(0)
+    , audio_sample_counter_(37)  // NTSC default; reset() will recalculate
     , residual_time_(0.0)
 {
     hardware_traits_ = create_nes_hardware_traits();
@@ -331,7 +331,7 @@ void NintendoSystem<V>::reset() {
     
     total_cycles_ = 0;
     residual_time_ = 0.0;
-    audio_sample_counter_ = 0;
+    audio_sample_counter_ = is_pal_ ? 33 : 37;
 }
 
 template<NintendoVariant V>
@@ -970,11 +970,11 @@ void NintendoSystem<V>::clock() {
     // ====================================================================
     // Audio sample generation
     // ====================================================================
-    if (audio_sample_counter_ == 0) {
+    if (--audio_sample_counter_ == 0) {
+        audio_sample_counter_ = is_pal_ ? 33 : 37;
         float sample = cpu_->generate_audio_sample();
         audio_buffer_.push_back(sample);
     }
-    audio_sample_counter_ = (audio_sample_counter_ + 1) % (is_pal_ ? 33 : 37);
 
     total_cycles_++;
 }
