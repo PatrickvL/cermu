@@ -6,6 +6,7 @@
  */
 
 #include "nes_system.h"
+#include "ppu/nes_palette.h"
 #include "nsf/nes_nsf_player.h"
 #include "nsf/nes_nsf_cartridge.h"
 #include "../../core/formats/nsf_format.h"
@@ -16,6 +17,7 @@
 #include "../../chip/input/cd4021.h"
 #include "../../chip/memory/memory_chip.h"
 #include "../../devices/input/nes_standard_controller.h"
+#include "cartridge/mappers/mapper_004_mmc3.h"  // Debug: temporary for MMC3 diagnostics
 #include <fstream>
 #include <iostream>
 #include <cmath>
@@ -30,7 +32,7 @@
 namespace nes_system {
 
 // PPU implementation is now in ppu/nes_ppu.cpp
-// Palette LUT is now private to nes_ppu.cpp
+// Palette LUT is in ppu/nes_palette.h (shared header)
 // Cartridge implementation is now in cartridge/nes_cartridge.cpp
 // Mapper implementations are now in cartridge/mappers/ headers
 // MemoryBus removed in Phase 2 — dispatch is now inline in NintendoSystem::clock()
@@ -53,18 +55,11 @@ static HardwareTraits create_nes_hardware_traits() {
     traits.display.pixel_aspect_ratio = 8.0f / 7.0f;  // NTSC pixel aspect
     traits.display.has_overscan = true;
     
-    // NES palette (simplified - first 16 colors)
-    const uint32_t nes_colors[16] = {
-        0x7C7C7C, 0x0000FC, 0x0000BC, 0x4428BC,
-        0x940084, 0xA80020, 0xA81000, 0x881400,
-        0x503000, 0x007800, 0x006800, 0x005800,
-        0x004058, 0x000000, 0x000000, 0x000000
-    };
-    
-    for (int i = 0; i < 16; i++) {
-        uint32_t c = nes_colors[i];
+    // Full 64-color NES palette from NES_COLOR_TABLE (ABGR: 0xAABBGGRR)
+    for (int i = 0; i < 64; i++) {
+        uint32_t c = NES_COLOR_TABLE[i];
         traits.display.default_palette.push_back(
-            PaletteColor((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF, 255)
+            PaletteColor(c & 0xFF, (c >> 8) & 0xFF, (c >> 16) & 0xFF, (c >> 24) & 0xFF)
         );
     }
     
@@ -368,6 +363,24 @@ void NintendoSystem<V>::run_frame() {
     ppu_->frame_complete = false;
     while (!ppu_->frame_complete) {
         clock();
+    }
+
+    // Debug: MMC3 per-frame IRQ diagnostics (temporary)
+    if (cartridge_ && cartridge_->get_mapper()) {
+        auto* mmc3 = dynamic_cast<nes_system::Mapper004*>(cartridge_->get_mapper());
+        if (mmc3) mmc3->debug_frame_end();
+    }
+    // Debug: PPU mid-frame register write diagnostics (temporary)
+    if (ppu_) {
+        ppu_->dbg_ppu_frame_++;
+        if (ppu_->dbg_ppu_frame_ % 60 == 0) {
+            printf("PPU MID-FRAME: frame=%u  $2000=%u  $2005=%u  $2006=%u\n",
+                   ppu_->dbg_ppu_frame_, ppu_->dbg_midframe_2000_,
+                   ppu_->dbg_midframe_2005_, ppu_->dbg_midframe_2006_);
+        }
+        ppu_->dbg_midframe_2000_ = 0;
+        ppu_->dbg_midframe_2005_ = 0;
+        ppu_->dbg_midframe_2006_ = 0;
     }
 
     // Copy PPU screen into the GUI-provided framebuffer so the emu
