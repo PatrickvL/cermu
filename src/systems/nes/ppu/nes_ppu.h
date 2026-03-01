@@ -137,6 +137,7 @@ public:
 
     // Region
     bool is_pal = false;
+    int total_scanlines_minus_one_ = 261;  // NTSC: 262 - 1
 
     // Palette mirror LUT — folds $3F10/$3F14/$3F18/$3F1C → $3F00/04/08/0C.
     // Shared by ppu_read(), ppu_write(), and the per-pixel compositor.
@@ -160,7 +161,8 @@ public:
     std::vector<uint32_t> screen;
 
 public:
-    PPU(bool pal = false) : is_pal(pal) {
+    PPU(bool pal = false) : is_pal(pal),
+        total_scanlines_minus_one_(pal ? 311 : 261) {  // PAL: 312-1, NTSC: 262-1
         info_ = ChipInfo{pal ? "RP2C07" : "RP2C02", "Ricoh"};
         // Initialize PPU memory (std::array zero-initialized by {})
         screen.resize(256 * 240, 0);
