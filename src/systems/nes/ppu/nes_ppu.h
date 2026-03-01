@@ -216,7 +216,7 @@ private:
     std::shared_ptr<Cartridge> cart;
     nes_bus::nes_bus_t* bus_ptr_ = nullptr;   // Page-pointer bus for VRAM reads
 
-    // A12 edge detection — tracks last PPU address for mapper IRQ (MMC3)
+    // A12 edge detection — tracks last PPU address for mapper use
     uint16_t last_ppu_addr_ = 0;
 
     // Internal rendering functions

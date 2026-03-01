@@ -230,14 +230,11 @@ ppu_bus_state_t PPU::ppu_read(ppu_bus_state_t bus, bool read_only) {
         return bus;
     }
 
-    // ---- A12 edge detection (for MMC3 scanline counter) ----
-    // On real hardware, the mapper monitors PPU A12 rising edges.
-    // We detect 0→1 transitions on bit 12 of the PPU address.
+    // ---- A12 edge detection state update (for future mapper use) ----
+    // Track A12 state for mappers that need the actual edge.
+    // The MMC3 scanline counter is handled separately via the
+    // per-scanline cart->scanline() call in clock().
     if (!read_only) {
-        bool a12_rising = (addr & 0x1000) && !(last_ppu_addr_ & 0x1000);
-        if (a12_rising && cart) {
-            cart->scanline();
-        }
         last_ppu_addr_ = addr;
     }
 
@@ -407,6 +404,17 @@ void PPU::clock() {
         // Sprite evaluation for next scanline
         if (cycle == 257 && scanline >= 0) {
             evaluate_sprites();
+        }
+
+        // Mapper scanline counter (MMC3) — clock once per scanline.
+        // On real hardware, the MMC3 monitors PPU A12 rising edges and
+        // its internal filter ensures exactly one count during the
+        // BG→sprite pattern-fetch transition (~dot 260).  Since our
+        // sprite fetches are batched at dot 340 (after BG pre-fetch),
+        // the genuine A12 edge is not visible.  We call cart->scanline()
+        // directly at dot 260 when rendering is enabled.
+        if (cycle == 260 && (regs.mask & 0x18)) {
+            if (cart) cart->scanline();
         }
         
         if (cycle == 340) {
@@ -635,9 +643,12 @@ void PPU::update_shifters() {
 }
 
 void PPU::evaluate_sprites() {
-    // Clear sprites for next scanline
+    // Clear secondary OAM — on real hardware this fills with $FF.
+    // y=$FF places sprites offscreen; x=$FF ensures sprite counters
+    // never reach 0 during visible dots, preventing unused slots
+    // from rendering garbage tile-0 pixels at the left edge.
     internal.sprite_scanline.clear();
-    internal.sprite_scanline.resize(8);
+    internal.sprite_scanline.resize(8, {0xFF, 0xFF, 0xFF, 0xFF});
     
     internal.sprite_zero_hit_possible = false;
     uint8_t sprite_count = 0;
