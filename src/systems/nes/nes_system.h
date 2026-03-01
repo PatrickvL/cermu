@@ -176,6 +176,7 @@ private:
     uint32_t audio_sample_rate_;
     uint32_t audio_samples_per_frame_;
     uint32_t audio_sample_counter_;
+    uint32_t audio_sample_period_;      // cached: NTSC=37, PAL=33
     
     // Timing
     double residual_time_;
@@ -236,7 +237,7 @@ public:
     void release_button(int controller, Controller::Button button);
     const std::vector<uint32_t>& get_screen() const;
     const std::vector<float>& get_audio_buffer() const { return audio_buffer_; }
-    void clear_audio_buffer() { audio_buffer_.clear(); audio_sample_counter_ = is_pal_ ? 33 : 37; }
+    void clear_audio_buffer() { audio_buffer_.clear(); audio_sample_counter_ = audio_sample_period_; }
     void set_audio_sample_rate(uint32_t rate);
     bool save_state(const std::string& filename) const;
     bool load_state(const std::string& filename);

@@ -100,8 +100,8 @@ public:
     bool get_mirror_vertical() const { return mirror_mode == Mirror::VERTICAL; }
     Mirror get_mirror_mode() const { return mirror_mode; }
 
-    // Mapper IRQ (e.g. MMC3 scanline counter)
-    bool irq_state() const;
+    // Mapper IRQ (e.g. MMC3 scanline counter) — inlined for hot-path performance
+    inline bool irq_state() const { return mapper && mapper->irq_state(); }
     void irq_clear();
 
     // Scanline callback — the PPU calls this once per visible scanline
