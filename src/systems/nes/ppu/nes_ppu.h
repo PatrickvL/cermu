@@ -48,10 +48,10 @@ public:
         uint8_t data;       // $2007 - PPUDATA
     } regs = {};
 
-    // PPU memory
-    std::vector<uint8_t> vram;      // 2KB VRAM (CIRAM — nametable RAM)
-    std::vector<uint8_t> oam;       // 256 bytes OAM (Object Attribute Memory)
-    std::vector<uint8_t> palette;   // 32 bytes palette RAM
+    // PPU memory — fixed-size arrays (sizes are hardware constants)
+    alignas(64) std::array<uint8_t, 2048> vram{};    // 2KB VRAM (CIRAM — nametable RAM)
+    std::array<uint8_t, 256> oam{};                   // 256 bytes OAM (Object Attribute Memory)
+    std::array<uint8_t, 32> palette{};                // 32 bytes palette RAM
 
     // Internal state
     struct InternalState {
@@ -161,10 +161,7 @@ public:
 public:
     PPU(bool pal = false) : is_pal(pal) {
         info_ = ChipInfo{pal ? "RP2C07" : "RP2C02", "Ricoh"};
-        // Initialize PPU memory
-        vram.resize(2048, 0);
-        oam.resize(256, 0);
-        palette.resize(32, 0);
+        // Initialize PPU memory (std::array zero-initialized by {})
         screen.resize(256 * 240, 0);
         internal.sprite_scanline.fill({0xFF, 0xFF, 0xFF, 0xFF});
         internal.sprite_count = 0;
@@ -188,9 +185,9 @@ public:
         pending_vbl_clear_ = false;
 
         // Clear memory
-        std::fill(vram.begin(), vram.end(), 0);
-        std::fill(oam.begin(), oam.end(), 0);
-        std::fill(palette.begin(), palette.end(), 0);
+        vram.fill(0);
+        oam.fill(0);
+        palette.fill(0);
         std::fill(screen.begin(), screen.end(), 0);
 
         build_palette_cache(is_pal, palette_cache_);
