@@ -242,12 +242,8 @@ ppu_bus_state_t PPU::ppu_write(ppu_bus_state_t bus) {
         return bus;
     }
 
-    // ---- A12 edge detection (writes also put address on bus) ----
+    // ---- A12 state tracking (for potential future mapper use) ----
     {
-        bool a12_rising = (addr & 0x1000) && !(last_ppu_addr_ & 0x1000);
-        if (a12_rising && cart) {
-            cart->scanline();
-        }
         last_ppu_addr_ = addr;
     }
 
