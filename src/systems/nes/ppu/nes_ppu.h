@@ -96,7 +96,6 @@ public:
     uint16_t cycle = 0;       // Current cycle (0 to 340)
     uint64_t frame_count = 0; // Frame counter
     bool frame_complete = false;
-    uint64_t total_dots_ = 0; // Total PPU dots since reset (debug)
     uint64_t last_vbl_detect_dot_ = 0; // Total dots when last $2002 VBL detect
 
     // PPU bus word — carries the PPU's output signal levels.
@@ -125,9 +124,10 @@ public:
     // VBL flag set (scanline 241, dot 1) prevents the flag from being set
     // that frame and suppresses NMI.  Reading AT the VBL dot returns 0
     // (flag not yet propagated) and suppresses the frame's VBL entirely.
-    // We track the total_dots_ value at the $2002 read to detect this at
-    // VBL set time.  UINT64_MAX means "no recent read".
-    uint64_t status_read_dot_ = UINT64_MAX;
+    // Set true by cpu_bus_tick on $2002 read; consumed at the start of
+    // the next clock() call.  Replaces the old total_dots_/status_read_dot_
+    // pair, avoiding 16 bytes of storage and integer overflow concerns.
+    bool     status_read_last_dot_ = false;
     bool     vbl_was_suppressed_ = false;   // true if VBL never set this frame
 
     // Open bus data latch — PPU data bus retains last value
@@ -164,9 +164,8 @@ public:
         cycle = 0;
         frame_count = 0;
         frame_complete = false;
-        total_dots_ = 0;
         ppu_bus_ = PPU_BUS_DEFAULT_STATE;
-        status_read_dot_ = UINT64_MAX;
+        status_read_last_dot_ = false;
         vbl_was_suppressed_ = false;
         vbl_flag_internal_ = false;
         pending_vbl_set_ = false;
