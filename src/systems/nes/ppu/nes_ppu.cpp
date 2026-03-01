@@ -647,8 +647,7 @@ void PPU::evaluate_sprites() {
     // y=$FF places sprites offscreen; x=$FF ensures sprite counters
     // never reach 0 during visible dots, preventing unused slots
     // from rendering garbage tile-0 pixels at the left edge.
-    internal.sprite_scanline.clear();
-    internal.sprite_scanline.resize(8, {0xFF, 0xFF, 0xFF, 0xFF});
+    internal.sprite_scanline.assign(8, {0xFF, 0xFF, 0xFF, 0xFF});
     
     internal.sprite_zero_hit_possible = false;
     uint8_t sprite_count = 0;
