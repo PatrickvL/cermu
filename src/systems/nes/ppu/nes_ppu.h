@@ -139,6 +139,12 @@ public:
     bool is_pal = false;
     int total_scanlines_minus_one_ = 261;  // NTSC: 262 - 1
 
+    // Scanline event state machine — monotonically advances through
+    // per-scanline point events (scroll, sprite eval, mapper, NT reads).
+    // Replaces 6 individual cycle comparisons with a single switch dispatch.
+    // Reset to 0 at each scanline wrap.
+    uint8_t scanline_event_ = 0;
+
     // Palette mirror LUT — folds $3F10/$3F14/$3F18/$3F1C → $3F00/04/08/0C.
     // Shared by ppu_read(), ppu_write(), and the per-pixel compositor.
     static constexpr uint8_t pal_mirror_[32] = {
@@ -186,6 +192,7 @@ public:
         vbl_flag_internal_ = false;
         pending_vbl_set_ = false;
         pending_vbl_clear_ = false;
+        scanline_event_ = 0;
 
         // Clear memory
         vram.fill(0);

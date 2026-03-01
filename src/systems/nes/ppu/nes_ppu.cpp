@@ -364,41 +364,62 @@ void PPU::clock() {
             }
         }
 
-        if (cycle == 256) {
-            increment_scroll_y();
-        }
-
-        if (cycle == 257) {
-            load_background_shifters();
-            transfer_address_x();
-            // Sprite evaluation for next scanline
-            if (scanline >= 0) {
-                evaluate_sprites();
-            }
-        }
-
-        // Mapper scanline counter (MMC3) — clock once per scanline.
-        // On real hardware, the MMC3 monitors PPU A12 rising edges and
-        // its internal filter ensures exactly one count during the
-        // BG→sprite pattern-fetch transition (~dot 260).  Since our
-        // sprite fetches are batched at dot 340 (after BG pre-fetch),
-        // the genuine A12 edge is not visible.  We call cart->scanline()
-        // directly at dot 260 when rendering is enabled.
-        if (cycle == 260 && (mask & 0x18)) {
-            if (cart) cart->scanline();
-        }
-
-        if (scanline == -1 && cycle >= 280 && cycle < 305) {
-            transfer_address_y();
-        }
-
-        if (cycle == 338) {
-            internal.nt_byte = fast_vram_read(internal.nt_addr);
-        }
-
-        if (cycle == 340) {
-            internal.nt_byte = fast_vram_read(internal.nt_addr);
-            load_sprite_shifters();
+        // Point-event dispatch — one comparison per dot (whichever case is active).
+        // scanline_event_ advances monotonically through each scanline and is
+        // reset to 0 at the scanline wrap below.  On visible scanlines, case 3
+        // skips case 4 entirely (+= 2) since transfer_address_y is pre-render only.
+        switch (scanline_event_) {
+            case 0:
+                if (cycle == 256) { increment_scroll_y(); scanline_event_++; }
+                break;
+            case 1:
+                if (cycle == 257) {
+                    load_background_shifters();
+                    transfer_address_x();
+                    if (scanline >= 0) evaluate_sprites();  // Not on pre-render
+                    scanline_event_++;
+                }
+                break;
+            case 2:
+                // Mapper scanline counter (MMC3) — clock once per scanline.
+                // On real hardware, the MMC3 monitors PPU A12 rising edges and
+                // its internal filter ensures exactly one count during the
+                // BG→sprite pattern-fetch transition (~dot 260).  Since our
+                // sprite fetches are batched at dot 340 (after BG pre-fetch),
+                // the genuine A12 edge is not visible.  We call cart->scanline()
+                // directly at dot 260 when rendering is enabled.
+                if (cycle == 260) {
+                    if (mask & 0x18 && cart) cart->scanline();
+                    scanline_event_++;
+                }
+                break;
+            case 3:
+                // transfer_address_y window is pre-render only (scanline -1).
+                // Skip both case 3 and 4 immediately on visible scanlines.
+                if (scanline != -1) { scanline_event_ += 2; break; }
+                // Pre-render: fire once at dot 280 (window open), then hand
+                // off to case 4 which runs unconditionally through dot 304.
+                if (cycle == 280) { transfer_address_y(); scanline_event_++; }
+                break;
+            case 4:
+                // Only reachable on scanline -1 (pre-render).
+                // Fires unconditionally every dot 281–304; no cycle check needed.
+                transfer_address_y();
+                if (cycle == 304) scanline_event_++;
+                break;
+            case 5:
+                if (cycle == 338) {
+                    internal.nt_byte = fast_vram_read(internal.nt_addr);
+                    scanline_event_++;
+                }
+                break;
+            case 6:
+                if (cycle == 340) {
+                    internal.nt_byte = fast_vram_read(internal.nt_addr);
+                    load_sprite_shifters();
+                    scanline_event_++;  // case 7+ is empty — remaining dots cost only dispatch
+                }
+                break;
         }
     }
 
@@ -524,7 +545,8 @@ void PPU::clock() {
     }
 
     if (cycle >= nes_constants::DOTS_PER_SCANLINE) {
-        cycle = 0;
+        cycle           = 0;
+        scanline_event_ = 0;  // Reset event counter for new scanline
         scanline++;
         if (scanline >= total_scanlines_minus_one_) {
             scanline = -1;
