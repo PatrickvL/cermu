@@ -130,8 +130,10 @@ public:
     bool     status_read_last_dot_ = false;
     bool     vbl_was_suppressed_ = false;   // true if VBL never set this frame
 
-    // Open bus data latch — PPU data bus retains last value
-    uint8_t ppu_data_bus_ = 0;
+    // Open bus data latch is stored in the data bits (0-7) of ppu_bus_.
+    // These bits are otherwise unused — the rendering pipeline operates
+    // on local ppu_bus_state_t values, and only the shared NMI/IRQ/RES
+    // bits (32-34) are read externally via PPU_CPU_BITMIX.
 
     // Region
     bool is_pal = false;
