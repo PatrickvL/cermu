@@ -92,6 +92,11 @@ int fam65xx_disassemble_instruction(uint16_t pc, opcode_info_t entry, uint8_t op
                 uint16_t target = pc + 2 + offset;
                 pos += snprintf(buffer + pos, buffer_size - pos, " $%04X", target);
             }
+            // Self-addressed absolute jump/call (JMP/JSR use AM::NON with 16-bit operand)
+            else if (op_index == 49 || op_index == 50) {
+                uint16_t addr = operand1 | (operand2 << 8);
+                pos += snprintf(buffer + pos, buffer_size - pos, " $%04X", addr);
+            }
             break;
             
         case 1: // IMM - Immediate
@@ -179,9 +184,13 @@ int fam65xx_disassemble_vice_format(uint16_t pc, opcode_info_t entry, uint8_t op
     // Determine instruction length from addressing mode
     uint8_t length = am_lengths[entry.am_index];
     
-    // Special case: branches use am_index=0 (NON) but are 2 bytes
-    if (entry.am_index == 0 && entry.op_index >= 34 && entry.op_index <= 41) {
-        length = 2;
+    // Special cases: AM::NON ops that are not 1-byte
+    if (entry.am_index == 0) {
+        if (entry.op_index >= 34 && entry.op_index <= 41) {
+            length = 2;  // Branches: relative addressing (2 bytes)
+        } else if (entry.op_index == 49 || entry.op_index == 50) {
+            length = 3;  // JMP/JSR: self-addressed absolute (3 bytes)
+        }
     }
     
     // Format as VICE: ".,ADDR BYTES DISASM"

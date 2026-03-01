@@ -14,23 +14,49 @@
 // ============================================================================
 
 /* JMP - Jump
- * All addressing modes (ABS, IND, ABI) are now handled by proper addressing
- * mode handlers. This operation handler only performs the jump once addressing
- * is complete.
+ * Self-addressed (AM::NON) — cases 0-3 perform inline ABS address fetch
+ * to avoid adding per-tick overhead to all other opcodes using am_abs.
+ * The default case handles chaining from am_ind/am_abi where the target
+ * address is already resolved in AB.
  */
 bus_state_t op_jmp(bus_state_t pins) {
   trace_operation(__func__);
-  // Zero-cycle operation: chained from addressing mode's PHI1 phase.
-  // Addressing mode already set AB to target address.
+
+  // When chained from am_ind/am_abi the target address is already in AB.
+  // Only perform the inline ABS fetch (cases 0-3) for the AM::NON path
+  // (opcode $4C — absolute JMP with no separate addressing-mode handler).
+  if (this->opcode_entry.am_index == to_index(AM::NON)) {
+    switch (this->half_cycle) {
+    case 0:
+      /* PHI2: Read low byte of target address from PC */
+      pins = this->bus_setup_read<Addr::PC>(pins);
+      return pins;
+    case 1:
+      /* PHI1: Load low byte */
+      this->bus_load_reg(REG_ABL, pins);
+      this->inc(REG_PC);
+      this->half_cycle++;
+      return pins;
+
+    case 2:
+      /* PHI2: Read high byte of target address from PC */
+      pins = this->bus_setup_read<Addr::PC>(pins);
+      return pins;
+    case 3:
+      /* PHI1: Load high byte into AB, then jump */
+      this->bus_load_reg(REG_ABH, pins);
+      break;
+    }
+  }
+
   this->set(REG_PC, this->get(REG_AB));
   this->transition_to_fetch();
   return pins;
 }
 
 /* JML - Jump long
- * All addressing modes (ABS, IND, ABI) are now handled by proper addressing
- * mode handlers. This operation handler only performs the jump once addressing
- * is complete.
+ * Addressing modes ABL (0x5C) and ABI (0xDC) handle address calculation.
+ * This operation handler only performs the jump once addressing is complete.
  */
 bus_state_t op_jml(bus_state_t pins) {
   trace_operation(__func__);
