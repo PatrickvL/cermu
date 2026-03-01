@@ -266,6 +266,7 @@ void PPU::clock() {
         // committed at the start of the NEXT clock() call (dot 2 visibility).
         if (scanline == -1 && cycle == 1) {
             vbl_flag_internal_ = false;     // NMI de-asserts immediately
+            update_nmi_output();            // Drive /NMI HIGH immediately
             pending_vbl_clear_ = true;      // $2002 visible next dot
             vbl_was_suppressed_ = false;    // Reset suppression for new frame
             
@@ -280,7 +281,7 @@ void PPU::clock() {
             update_shifters();
             
             // Background rendering
-            switch ((cycle - 1) % 8) {
+            switch ((cycle - 1) & 7) {
                 case 0:
                     load_background_shifters();
                     internal.nt_addr = 0x2000 | (internal.v & 0x0FFF);
@@ -446,12 +447,10 @@ void PPU::clock() {
     // commit time — see the pending_vbl_set_ block at the top of clock().
     if (scanline == nes_constants::VBLANK_SCANLINE && cycle == 1) {
         vbl_flag_internal_ = true;     // NMI asserts immediately
+        update_nmi_output();           // Drive /NMI LOW immediately
         pending_vbl_set_ = true;       // $2002 visible next dot
         vbl_was_suppressed_ = false;
     }
-
-    // Drive /NMI output level (updated every dot for correctness)
-    update_nmi_output();
 
     // (A12 edge detection for mapper IRQ counters is now handled inside
     //  ppu_read() — see the rising-edge check on bit 12 of the address.)
