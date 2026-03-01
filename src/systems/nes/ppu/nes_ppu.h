@@ -159,9 +159,15 @@ public:
 
     // Precomputed pixel LUT — 32 entries, one per palette slot.
     // Collapses the per-pixel triple indirection (pal_mirror_ → palette →
-    // active_palette) into a single array lookup.  Rebuilt on palette RAM
-    // writes ($2007 / DMA into $3F00+) and PPUMASK ($2001) writes.
+    // active_palette) into a single array lookup.  Rebuilt lazily on first
+    // render-path access after palette RAM writes or PPUMASK changes.
     uint32_t pixel_lut_[32] = {};
+
+    // Active palette variant — pointer into palette_cache_.  Set to nullptr
+    // to mark pixel_lut_ as stale; the render path checks this once per dot
+    // with an unlikely branch and rebuilds on demand.  Coalesces rapid
+    // palette/mask writes (common during setup) into a single rebuild.
+    const uint32_t* active_palette_ = nullptr;
 
     // Frame buffer (RGB888)
     std::vector<uint32_t> screen;
@@ -264,16 +270,19 @@ private:
     void load_background_shifters();
     void update_shifters();
 
-    // Rebuild the 32-entry pixel LUT from current palette RAM and PPUMASK.
-    // Called on $2001 writes, palette RAM writes ($3F00+), and reset.
-    // Subsumes the old latch_palette_variant() — both triggers converge here.
+    // Invalidate pixel LUT — called on $2001 writes, palette RAM writes,
+    // and reset.  The actual rebuild is deferred to the render path.
     inline void rebuild_pixel_lut() {
+        active_palette_ = nullptr;
+    }
+
+    // Lazily rebuild pixel_lut_ from current palette RAM and PPUMASK.
+    // Only called when active_palette_ is null (i.e. after invalidation).
+    void do_rebuild_pixel_lut() {
         const uint8_t variant = ((regs.mask >> 5) & 0x07) | ((regs.mask & 0x01) << 3);
-        // Active palette variant — pointer into palette_cache_, latched on
-        // $2001 (PPUMASK) writes so rebuild_pixel_lut() picks the right row.
-        const uint32_t* active_palette = palette_cache_[variant];
+        active_palette_ = palette_cache_[variant];
         for (int i = 0; i < 32; ++i)
-            pixel_lut_[i] = active_palette[palette[pal_mirror_[i]] & 0x3F];
+            pixel_lut_[i] = active_palette_[palette[pal_mirror_[i]] & 0x3F];
     }
 
     // Sprite evaluation

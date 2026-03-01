@@ -509,6 +509,9 @@ void PPU::clock() {
             }
         }
 
+        // Lazy pixel LUT rebuild — coalesces rapid palette/mask writes
+        if (unlikely(!active_palette_)) do_rebuild_pixel_lut();
+
         screen[(scanline * 256) + x] = pixel_lut_[((palette_val << 2) | pixel) & 0x1F];
     }
 
