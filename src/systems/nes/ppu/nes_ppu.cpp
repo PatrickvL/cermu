@@ -107,7 +107,7 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
                 break;
             case 0x2001: // Mask
                 regs.mask = data;
-                latch_palette_variant();
+                rebuild_pixel_lut();
                 break;
             case 0x2002: // Status — read only (write is ignored, bus latch updated above)
                 break;
@@ -203,6 +203,7 @@ ppu_bus_state_t PPU::ppu_write(ppu_bus_state_t bus) {
     // ---- Palette RAM ($3F00-$3FFF) — internal to PPU ----
     if (addr >= 0x3F00) {
         palette[pal_mirror_[addr & 0x1F]] = data;
+        rebuild_pixel_lut();
         return bus;
     }
 
@@ -256,9 +257,9 @@ void PPU::clock() {
         pending_vbl_clear_ = false;
     }
 
-    // Pixel color from palette — direct array lookup, no bus round-trip.
+    // Pixel color from palette — single LUT lookup, no indirection chain.
     auto get_pixel = [this](uint8_t palette_idx, uint8_t pixel) -> uint32_t {
-        return active_palette_[palette[pal_mirror_[((palette_idx << 2) | pixel) & 0x1F]] & 0x3F];
+        return pixel_lut_[((palette_idx << 2) | pixel) & 0x1F];
     };
     
     // Visible scanlines and pre-render scanline
