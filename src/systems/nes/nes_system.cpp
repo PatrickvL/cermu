@@ -858,9 +858,7 @@ void NintendoSystem<V>::clock() {
                 BUS_SET_DATA(pins_, rp[addr & 0x0FFF]);
             } else if (page <= 3) {
                 // PPU registers ($2000-$3FFF, mirrored every 8 bytes)
-                if (ppu_) {
-                    pins_ = ppu_->cpu_bus_tick(pins_);
-                }
+                pins_ = ppu_->cpu_bus_tick(pins_);
             } else if (page == 4) {
                 // APU/IO registers ($4000-$4FFF)
                 if (addr == 0x4016) {
@@ -893,9 +891,7 @@ void NintendoSystem<V>::clock() {
                 wp[addr & 0x0FFF] = data;
             } else if (page <= 3) {
                 // PPU registers ($2000-$3FFF, mirrored every 8 bytes)
-                if (ppu_) {
-                    pins_ = ppu_->cpu_bus_tick(pins_);
-                }
+                pins_ = ppu_->cpu_bus_tick(pins_);
             } else if (page == 4) {
                 // APU/IO registers ($4000-$4FFF)
                 if (addr == 0x4014) {
