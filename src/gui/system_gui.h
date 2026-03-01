@@ -68,6 +68,9 @@ public:
     
     // Override frame delay - VSync handles display pacing, accumulator handles emulation
     uint32_t get_frame_delay_ms() const override { return 0; }
+
+    // Returns true when a virtual mouse device is plugged into the system
+    bool has_virtual_mouse_attached() const override;
     
 private:
     /// Open file dialog with system-appropriate filters.

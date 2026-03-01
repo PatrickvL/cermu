@@ -92,6 +92,17 @@ protected:
     float host_dpi_scale_;            // Host DPI scaling factor
 
     // ========================================================================
+    // Mouse cursor auto-hide
+    // ========================================================================
+    int    cursor_last_x_      = 0;     ///< Last observed mouse X position
+    int    cursor_last_y_      = 0;     ///< Last observed mouse Y position
+    Uint32 cursor_last_move_   = 0;     ///< SDL_GetTicks() of last mouse movement
+    bool   cursor_hidden_      = false; ///< True when the host cursor is hidden
+
+    /// Idle time (ms) before hiding the cursor over the main window.
+    static constexpr Uint32 CURSOR_HIDE_DELAY_MS = 2000;
+
+    // ========================================================================
     // Emulation state (generic)
     // ========================================================================
     std::atomic<bool> emulation_running_;
@@ -219,11 +230,29 @@ protected:
      * Override to customize frame rate limiting
      */
     virtual uint32_t get_frame_delay_ms() const { return 16; } // ~60 FPS default
+
+    /**
+     * Returns true when a virtual mouse device is attached to the emulated
+     * system (e.g. Commodore 1351 or NEOS mouse).  Used by the cursor
+     * auto-hide logic to hide the host cursor immediately in fullscreen,
+     * because the guest is expected to render its own cursor.
+     */
+    virtual bool has_virtual_mouse_attached() const { return false; }
     
     // ========================================================================
     // Generic helper functions for derived classes
     // ========================================================================
     
+    /**
+     * Update host mouse cursor visibility.
+     *
+     * Call once per frame (after event processing).  Hides the cursor when
+     * it has been idle over the main window for CURSOR_HIDE_DELAY_MS, or
+     * immediately when the window is fullscreen and a virtual mouse device
+     * is attached to the emulated system.
+     */
+    void update_mouse_cursor_visibility();
+
     /**
      * Begin ImGui frame - call at start of render_frame()
      */

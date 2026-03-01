@@ -158,6 +158,24 @@ void SystemGUI::handle_events() {
     }
 }
 
+// ============================================================================
+// Virtual Mouse Detection
+// ============================================================================
+
+bool SystemGUI::has_virtual_mouse_attached() const {
+    if (!system_) return false;
+
+    for (auto& port : system_->get_connector_ports()) {
+        for (auto* dev : port->get_attached_devices()) {
+            auto* input = dev->as_input_device();
+            if (!input) continue;
+            if (input->get_host_input_binding().type == HostInputType::HOST_MOUSE)
+                return true;
+        }
+    }
+    return false;
+}
+
 void SystemGUI::update_frame() {
     // Emulation now runs on a separate thread (emu_thread_func).
     // The GUI thread only updates the FPS counter from the atomic frame count.
