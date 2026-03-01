@@ -277,6 +277,9 @@ ppu_bus_state_t PPU::ppu_write(ppu_bus_state_t bus) {
 // ============================================================================
 
 void PPU::clock() {
+    // Cache mask register — accessed many times per dot; one read beats ten.
+    const uint8_t mask = regs.mask;
+
     // ---- Commit pending VBL flag changes (1-dot propagation delay) ----
     // These were queued on the previous dot; now propagate to regs.status
     // so that $2002 reads reflect the updated value.
@@ -302,15 +305,14 @@ void PPU::clock() {
         }
     }
     if (unlikely(pending_vbl_clear_)) {
-        regs.status &= ~0x80;
-        regs.status &= ~0x40; // Clear Sprite 0 Hit
-        regs.status &= ~0x20; // Clear Sprite Overflow
+        // Clear VBL (bit 7), Sprite 0 Hit (bit 6), Sprite Overflow (bit 5)
+        regs.status &= ~0xE0;
         pending_vbl_clear_ = false;
     }
 
     // Visible scanlines and pre-render scanline
     if (scanline >= -1 && scanline < 240) {
-        
+
         // Pre-render scanline setup — dot 1.
         // VBL internal flag is cleared immediately (de-asserts NMI at dot 1);
         // regs.status bit 7 clear is deferred via pending_vbl_clear_ and
@@ -320,17 +322,20 @@ void PPU::clock() {
             update_nmi_output();            // Drive /NMI HIGH immediately
             pending_vbl_clear_ = true;      // $2002 visible next dot
             vbl_was_suppressed_ = false;    // Reset suppression for new frame
-            
+
             // Clear sprite shifters
-            for (int i = 0; i < 8; i++) {
-                internal.sprite_shifter_pattern_lo[i] = 0;
-                internal.sprite_shifter_pattern_hi[i] = 0;
-            }
+            memset(internal.sprite_shifter_pattern_lo, 0, sizeof(internal.sprite_shifter_pattern_lo));
+            memset(internal.sprite_shifter_pattern_hi, 0, sizeof(internal.sprite_shifter_pattern_hi));
         }
-        
+
         if ((cycle >= 2 && cycle < 258) || (cycle >= 321 && cycle < 338)) {
             update_shifters();
-            
+
+            // Precompute values shared by BG pattern-byte fetches (cases 6 & 7)
+            const uint16_t bg_base  = (uint16_t)(regs.ctrl & 0x10) << 8;
+            const uint16_t fine_y   = (internal.v >> 12) & 0x07;
+            const uint16_t tile_row = (uint16_t)internal.nt_byte << 4;
+
             // Background rendering
             switch ((cycle - 1) & 7) {
                 case 0:
@@ -344,43 +349,38 @@ void PPU::clock() {
                     internal.at_byte = fast_vram_read(
                         0x2000 | (internal.v & 0x0C00) | 0x03C0 |
                         ((internal.v >> 4) & 0x38) | ((internal.v >> 2) & 0x07));
-                    // Shift to the correct quadrant's 2-bit palette selector
-                    if (internal.v & 0x0002) internal.at_byte >>= 2;
-                    if (internal.v & 0x0040) internal.at_byte >>= 4;
+                    // Shift to the correct quadrant's 2-bit palette selector.
+                    // Combine both conditional shifts into a single operation.
+                    internal.at_byte >>= ((internal.v & 0x0002) ? 2 : 0)
+                                      | ((internal.v & 0x0040) ? 4 : 0);
                     break;
                 case 6:
-                    internal.bg_lo_byte = fast_vram_read(
-                        ((regs.ctrl & 0x10) << 8) +
-                        ((uint16_t)internal.nt_byte << 4) +
-                        ((internal.v >> 12) & 0x07) + 0);
+                    internal.bg_lo_byte = fast_vram_read(bg_base + tile_row + fine_y);
                     break;
                 case 7:
-                    internal.bg_hi_byte = fast_vram_read(
-                        ((regs.ctrl & 0x10) << 8) +
-                        ((uint16_t)internal.nt_byte << 4) +
-                        ((internal.v >> 12) & 0x07) + 8);
+                    internal.bg_hi_byte = fast_vram_read(bg_base + tile_row + fine_y + 8);
                     increment_scroll_x();
                     break;
             }
         }
-        
+
         if (cycle == 256) {
             increment_scroll_y();
         }
-        
+
         if (cycle == 257) {
             load_background_shifters();
             transfer_address_x();
         }
-        
+
         if (cycle == 338 || cycle == 340) {
             internal.nt_byte = fast_vram_read(internal.nt_addr);
         }
-        
+
         if (scanline == -1 && cycle >= 280 && cycle < 305) {
             transfer_address_y();
         }
-        
+
         // Sprite evaluation for next scanline
         if (cycle == 257 && scanline >= 0) {
             evaluate_sprites();
@@ -393,68 +393,65 @@ void PPU::clock() {
         // sprite fetches are batched at dot 340 (after BG pre-fetch),
         // the genuine A12 edge is not visible.  We call cart->scanline()
         // directly at dot 260 when rendering is enabled.
-        if (cycle == 260 && (regs.mask & 0x18)) {
+        if (cycle == 260 && (mask & 0x18)) {
             if (cart) cart->scanline();
         }
-        
+
         if (cycle == 340) {
             load_sprite_shifters();
         }
     }
-    
+
     // Render pixel
     if (scanline >= 0 && scanline < 240 && cycle >= 1 && cycle < 257) {
-        uint8_t bg_pixel = 0x00;
+        // Precompute x once; used for array index and bit mux below.
+        const int x = cycle - 1;
+
+        uint8_t bg_pixel   = 0x00;
         uint8_t bg_palette = 0x00;
-        
+
         // Background rendering
-        if (regs.mask & 0x08) {
-            if (!(regs.mask & 0x02) && cycle < 9) {
-                // Hide leftmost 8 pixels
-            } else {
-                uint16_t bit_mux = 0x8000 >> internal.x;
-                
-                uint8_t p0_pixel = (internal.bg_shifter_pattern_lo & bit_mux) > 0;
-                uint8_t p1_pixel = (internal.bg_shifter_pattern_hi & bit_mux) > 0;
+        if (mask & 0x08) {
+            if ((mask & 0x02) || cycle >= 9) {  // Hide leftmost 8 pixels unless bit set
+                const uint16_t bit_mux = 0x8000 >> internal.x;
+
+                const uint8_t p0_pixel = (internal.bg_shifter_pattern_lo & bit_mux) > 0;
+                const uint8_t p1_pixel = (internal.bg_shifter_pattern_hi & bit_mux) > 0;
                 bg_pixel = (p1_pixel << 1) | p0_pixel;
-                
-                uint8_t bg_pal0 = (internal.bg_shifter_attrib_lo & bit_mux) > 0;
-                uint8_t bg_pal1 = (internal.bg_shifter_attrib_hi & bit_mux) > 0;
+
+                const uint8_t bg_pal0 = (internal.bg_shifter_attrib_lo & bit_mux) > 0;
+                const uint8_t bg_pal1 = (internal.bg_shifter_attrib_hi & bit_mux) > 0;
                 bg_palette = (bg_pal1 << 1) | bg_pal0;
             }
         }
-        
+
         // Sprite rendering
-        uint8_t fg_pixel = 0x00;
-        uint8_t fg_palette = 0x00;
+        uint8_t fg_pixel    = 0x00;
+        uint8_t fg_palette  = 0x00;
         uint8_t fg_priority = 0x00;
-        
-        if (regs.mask & 0x10) {
-            if (!(regs.mask & 0x04) && cycle < 9) {
-                // Hide leftmost 8 pixels
-            } else {
+
+        if (mask & 0x10) {
+            if ((mask & 0x04) || cycle >= 9) {  // Hide leftmost 8 pixels unless bit set
                 internal.sprite_zero_being_rendered = false;
-                
+
                 for (uint8_t i = 0; i < internal.sprite_count; i++) {
                     if (internal.sprite_scanline[i].x == 0) {
-                        uint8_t fg_pixel_lo = (internal.sprite_shifter_pattern_lo[i] & 0x80) > 0;
-                        uint8_t fg_pixel_hi = (internal.sprite_shifter_pattern_hi[i] & 0x80) > 0;
+                        const uint8_t fg_pixel_lo = (internal.sprite_shifter_pattern_lo[i] & 0x80) > 0;
+                        const uint8_t fg_pixel_hi = (internal.sprite_shifter_pattern_hi[i] & 0x80) > 0;
                         fg_pixel = (fg_pixel_hi << 1) | fg_pixel_lo;
-                        
-                        fg_palette = (internal.sprite_scanline[i].attributes & 0x03) + 0x04;
+
+                        fg_palette  = (internal.sprite_scanline[i].attributes & 0x03) + 0x04;
                         fg_priority = (internal.sprite_scanline[i].attributes & 0x20) == 0;
-                        
+
                         if (fg_pixel != 0) {
-                            if (i == 0) {
-                                internal.sprite_zero_being_rendered = true;
-                            }
+                            if (i == 0) internal.sprite_zero_being_rendered = true;
                             break;
                         }
                     }
                 }
             }
         }
-        
+
         // Pixel priority selection — combines BG and sprite with priority logic.
         // Uses a streamlined branch structure:
         //   - If both transparent → backdrop
@@ -465,35 +462,31 @@ void PPU::clock() {
 
         if (bg_pixel == 0) {
             // No BG pixel — use sprite or backdrop
-            pixel = fg_pixel;
+            pixel       = fg_pixel;
             palette_val = (fg_pixel != 0) ? fg_palette : 0;
         } else if (fg_pixel == 0) {
             // No sprite pixel — use BG
             pixel = bg_pixel;
             palette_val = bg_palette;
         } else {
-            // Both opaque — priority decides winner
-            if (fg_priority) {
-                pixel = fg_pixel;
-                palette_val = fg_palette;
-            } else {
-                pixel = bg_pixel;
-                palette_val = bg_palette;
-            }
+            // Both opaque — priority decides winner (ternary avoids branch pair)
+            const bool fg_wins = fg_priority;
+            pixel       = fg_wins ? fg_pixel   : bg_pixel;
+            palette_val = fg_wins ? fg_palette : bg_palette;
 
-            // Sprite-0 hit detection (only when both BG and sprite are opaque)
+            // Sprite-0 hit detection (only when both BG and sprite are opaque).
             // Suppressed at x=0..7 when either left-column show bit is off
-            // (NESdev: "if bit 2 or bit 1 of PPUMASK is 0")
-            if (internal.sprite_zero_hit_possible && internal.sprite_zero_being_rendered) {
-                if ((regs.mask & 0x18) == 0x18) {
-                    if ((regs.mask & 0x06) == 0x06 || cycle >= 9) {
-                        regs.status |= 0x40;
-                    }
-                }
+            // (NESdev: "if bit 2 or bit 1 of PPUMASK is 0").
+            // Flatten three nested ifs into a single compound predicate.
+            if (internal.sprite_zero_hit_possible &&
+                internal.sprite_zero_being_rendered &&
+                (mask & 0x18) == 0x18 &&
+                ((mask & 0x06) == 0x06 || cycle >= 9)) {
+                regs.status |= 0x40;
             }
         }
-        
-        screen[(scanline * 256) + (cycle - 1)] = pixel_lut_[((palette_val << 2) | pixel) & 0x1F];
+
+        screen[(scanline * 256) + x] = pixel_lut_[((palette_val << 2) | pixel) & 0x1F];
     }
 
     // VBlank flag set — (scanline 241, dot 1)
@@ -526,7 +519,7 @@ void PPU::clock() {
     // rendering-enabled check must see writes to $2001 that land at
     // dot 339 but NOT those at dot 340.
     if (!is_pal && scanline == -1 && cycle == 340 &&
-        (frame_count & 1) && (regs.mask & 0x18)) {
+        (frame_count & 1) && (mask & 0x18)) {
         cycle++;  // 340 → 341, caught by the >= check below
     }
 
@@ -534,7 +527,7 @@ void PPU::clock() {
         cycle = 0;
         scanline++;
         if (scanline >= (is_pal ? nes_constants::TOTAL_SCANLINES_PAL - 1
-                                    : nes_constants::TOTAL_SCANLINES_NTSC - 1)) {
+                                : nes_constants::TOTAL_SCANLINES_NTSC - 1)) {
             scanline = -1;
             frame_complete = true;
             frame_count++;
