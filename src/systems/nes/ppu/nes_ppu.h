@@ -245,9 +245,6 @@ private:
     std::shared_ptr<Cartridge> cart;
     nes_bus::nes_bus_t* bus_ptr_ = nullptr;   // Page-pointer bus for VRAM reads
 
-    // A12 edge detection — tracks last PPU address for mapper use
-    uint16_t last_ppu_addr_ = 0;
-
     // Fast inline CHR/nametable read — bypasses ppu_bus_state_t construction
     // and palette range check.  For rendering-only reads where addr < $3F00.
     // Equivalent to PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(addr))) but
