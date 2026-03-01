@@ -782,10 +782,9 @@ template<NintendoVariant V>
 void NintendoSystem<V>::clock() {
     // ====================================================================
     // PPU tick (runs at 3× CPU clock)
+    // ppu_ is guaranteed valid during frame execution (run_frame gates it)
     // ====================================================================
-    if (ppu_) {
-        ppu_->clock();
-    }
+    ppu_->clock();
 
     // ====================================================================
     // OAM DMA controller — stalls CPU while transferring 256 bytes
