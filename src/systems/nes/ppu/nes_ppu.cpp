@@ -49,7 +49,7 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
 
         // The PPU's internal data bus latch drives open-bus bits.
         // Only readable registers override the relevant bits.
-        data = ppu_data_bus_;
+        data = PPU_BUS_GET_DATA(ppu_bus_);
 
         switch (addr) {
             case 0x2000: // Control — write only (open bus)
@@ -58,7 +58,7 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
                 break;
             case 0x2002: // Status
                 // Top 3 bits from status, bottom 5 from PPU data bus latch
-                data = (regs.status & 0xE0) | (ppu_data_bus_ & 0x1F);
+                data = (regs.status & 0xE0) | (PPU_BUS_GET_DATA(ppu_bus_) & 0x1F);
                 // Flag that $2002 was read this dot, for VBL suppression
                 // race-condition detection at the next clock() commit point.
                 status_read_last_dot_ = true;
@@ -101,12 +101,12 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
                 break;
         }
 
-        ppu_data_bus_ = data;   // Update PPU-internal data bus latch
-        BUS_SET_DATA(bus, data); // Drive result onto shared system bus
+        PPU_BUS_SET_DATA(ppu_bus_, data);  // Update open-bus latch in ppu_bus_ data bits
+        BUS_SET_DATA(bus, data);             // Drive result onto shared system bus
     } else {
         // ---- WRITE ----
         uint8_t data = BUS_GET_DATA(bus);  // Sample data lines from CPU
-        ppu_data_bus_ = data;              // Every write updates the open-bus latch
+        PPU_BUS_SET_DATA(ppu_bus_, data);  // Every write updates the open-bus latch
 
         switch (addr) {
             case 0x2000: // Control
@@ -166,17 +166,11 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
 // ============================================================================
 
 uint8_t PPU::cpu_peek(uint16_t addr) const {
-    addr &= 0x2007;
-    switch (addr) {
-        case 0x2000: return ppu_data_bus_;
-        case 0x2001: return ppu_data_bus_;
-        case 0x2002: return (regs.status & 0xE0) | (ppu_data_bus_ & 0x1F);
-        case 0x2003: return ppu_data_bus_;
+    switch (addr & 0x2007) {
+        case 0x2002: return (regs.status & 0xE0) | (PPU_BUS_GET_DATA(ppu_bus_) & 0x1F);
         case 0x2004: return oam[regs.oam_addr];
-        case 0x2005: return ppu_data_bus_;
-        case 0x2006: return ppu_data_bus_;
-        case 0x2007: return regs.data;  // buffered value, don't trigger VRAM read
-        default:     return ppu_data_bus_;
+        case 0x2007: return regs.data;
+        default:     return PPU_BUS_GET_DATA(ppu_bus_);
     }
 }
 
