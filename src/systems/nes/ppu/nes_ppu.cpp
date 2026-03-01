@@ -230,14 +230,6 @@ ppu_bus_state_t PPU::ppu_read(ppu_bus_state_t bus, bool read_only) {
         return bus;
     }
 
-    // ---- A12 edge detection state update (for future mapper use) ----
-    // Track A12 state for mappers that need the actual edge.
-    // The MMC3 scanline counter is handled separately via the
-    // per-scanline cart->scanline() call in clock().
-    if (!read_only) {
-        last_ppu_addr_ = addr;
-    }
-
     // ---- CHR + nametable via page pointers ----
     if (bus_ptr_) {
         PPU_BUS_SET_ADDR(bus, addr);  // write back masked address
@@ -256,11 +248,6 @@ ppu_bus_state_t PPU::ppu_write(ppu_bus_state_t bus) {
         palette[pal_mirror_[addr & 0x1F]] = data;
         active_palette_ = nullptr;  // Invalidate pixel LUT
         return bus;
-    }
-
-    // ---- A12 state tracking (for potential future mapper use) ----
-    {
-        last_ppu_addr_ = addr;
     }
 
     // ---- CHR + nametable via page pointers ----
