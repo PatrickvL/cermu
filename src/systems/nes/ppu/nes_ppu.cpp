@@ -369,18 +369,20 @@ void PPU::clock() {
         // reset to 0 at the scanline wrap below.  On visible scanlines, case 3
         // skips case 4 entirely (+= 2) since transfer_address_y is pre-render only.
         switch (scanline_event_) {
-            case 0:
-                if (cycle == 256) { increment_scroll_y(); scanline_event_++; }
+            case 0: // cycle 0-255
+                scanline_event_ += (cycle == 256 - 1);
                 break;
-            case 1:
-                if (cycle == 257) {
-                    load_background_shifters();
-                    transfer_address_x();
-                    if (scanline >= 0) evaluate_sprites();  // Not on pre-render
-                    scanline_event_++;
-                }
+            case 1: // cycle 256
+                increment_scroll_y(); 
+                scanline_event_++;
                 break;
-            case 2:
+            case 2: // cycle == 257
+                load_background_shifters();
+                transfer_address_x();
+                if (scanline >= 0) evaluate_sprites();  // Not on pre-render
+                scanline_event_++;
+                break;
+            case 3: // cycle 258-260
                 // Mapper scanline counter (MMC3) — clock once per scanline.
                 // On real hardware, the MMC3 monitors PPU A12 rising edges and
                 // its internal filter ensures exactly one count during the
@@ -393,31 +395,31 @@ void PPU::clock() {
                     scanline_event_++;
                 }
                 break;
-            case 3:
+            case 4: // cycle 261-279
                 // transfer_address_y window is pre-render only (scanline -1).
                 // Skip both case 3 and 4 immediately on visible scanlines.
                 if (scanline != -1) { scanline_event_ += 2; break; }
-                // Pre-render: fire once at dot 280 (window open), then hand
-                // off to case 4 which runs unconditionally through dot 304.
-                if (cycle == 280) { transfer_address_y(); scanline_event_++; }
+                // Pre-render: advance one dot before the window opens so case 4
+                // handles the full 280–304 range unconditionally.
+                scanline_event_ += (cycle == 280 - 1);
                 break;
-            case 4:
+            case 5: // cycle 280-304
                 // Only reachable on scanline -1 (pre-render).
-                // Fires unconditionally every dot 281–304; no cycle check needed.
+                // Fires unconditionally every dot 280–304; no cycle check needed.
                 transfer_address_y();
-                if (cycle == 304) scanline_event_++;
+                scanline_event_ += (cycle == 304);
                 break;
-            case 5:
+            case 6: // cycle 305-338
                 if (cycle == 338) {
                     internal.nt_byte = fast_vram_read(internal.nt_addr);
                     scanline_event_++;
                 }
                 break;
-            case 6:
+            case 7: // cycle 339-340
                 if (cycle == 340) {
                     internal.nt_byte = fast_vram_read(internal.nt_addr);
                     load_sprite_shifters();
-                    scanline_event_++;  // case 7+ is empty — remaining dots cost only dispatch
+                    scanline_event_++;  // case 8+ is empty — remaining dots cost only dispatch
                 }
                 break;
         }
