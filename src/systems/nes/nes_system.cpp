@@ -46,7 +46,7 @@ static HardwareTraits create_nes_hardware_traits() {
     // Display traits - NES PPU
     traits.display.native_width = 256;
     traits.display.native_height = 240;
-    traits.display.visible_width = 256;
+    traits.display.visible_width = 248;   // Crop left 8px (CRT overscan)
     traits.display.visible_height = 240;
     traits.display.format = FramebufferFormat::RGBA8888;
     traits.display.palette_size = 64;       // 64 colors
@@ -513,11 +513,21 @@ template<NintendoVariant V>
 uint32_t* NintendoSystem<V>::get_framebuffer() {
     if (!ppu_ || !rgba_framebuffer_) return rgba_framebuffer_;
     
-    // Get NES screen buffer and copy to our framebuffer
+    // Copy PPU screen → framebuffer, cropping the left 8 pixels.
+    // The PPU renders full 256px internally; visible output is 248px
+    // (pixels 8–255).  On real hardware the left column is hidden by
+    // CRT overscan and often contains scroll-seam artifacts.
     const std::vector<uint32_t>& nes_screen = ppu_->get_screen();
     if (!nes_screen.empty() && rgba_framebuffer_) {
-        // NES screen is 256x240, copy directly
-        memcpy(rgba_framebuffer_, nes_screen.data(), 256 * 240 * sizeof(uint32_t));
+        constexpr int SRC_W  = 256;
+        constexpr int CROP_L = 8;     // pixels to crop from left
+        constexpr int DST_W  = SRC_W - CROP_L;  // 248
+        constexpr int H      = 240;
+        for (int y = 0; y < H; ++y) {
+            memcpy(&rgba_framebuffer_[y * DST_W],
+                   &nes_screen[y * SRC_W + CROP_L],
+                   DST_W * sizeof(uint32_t));
+        }
     }
     
     return rgba_framebuffer_;
@@ -525,7 +535,7 @@ uint32_t* NintendoSystem<V>::get_framebuffer() {
 
 template<NintendoVariant V>
 void NintendoSystem<V>::get_display_dimensions(int* width, int* height) const {
-    *width = 256;
+    *width = 248;   // 256 - 8 left overscan
     *height = 240;
 }
 
