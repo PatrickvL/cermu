@@ -59,11 +59,9 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
             case 0x2002: // Status
                 // Top 3 bits from status, bottom 5 from PPU data bus latch
                 data = (regs.status & 0xE0) | (ppu_data_bus_ & 0x1F);
-                // Record the PPU dot of this status read for VBL
-                // suppression race-condition detection.
-                // Use total_dots_ (which has been incremented by PPU::clock()
-                // for this tick) minus 1 to get the actual dot of this tick.
-                status_read_dot_ = total_dots_ - 1;
+                // Flag that $2002 was read this dot, for VBL suppression
+                // race-condition detection at the next clock() commit point.
+                status_read_last_dot_ = true;
 
 
                 // Clear VBL on read — both internal (NMI) and external ($2002).
@@ -309,9 +307,8 @@ void PPU::clock() {
         // The visible VBL time is NOW (the commit point, 1 dot after the
         // internal VBL was set).  "1 dot before visible" corresponds to
         // the previous dot — the same dot where vbl_flag_internal_ was set.
-        // status_read_dot_ recorded as total_dots_-1 by cpu_bus_tick will
-        // match total_dots_-1 here when the read was on the previous dot.
-        if (status_read_dot_ == total_dots_ - 1) {
+        // status_read_last_dot_ was set by cpu_bus_tick on that same dot.
+        if (status_read_last_dot_) {
             // $2002 was read on the internal VBL dot — suppress entirely.
             // Cancel the pending set AND clear internal state and NMI.
             pending_vbl_set_ = false;
@@ -346,7 +343,6 @@ void PPU::clock() {
             vbl_flag_internal_ = false;     // NMI de-asserts immediately
             pending_vbl_clear_ = true;      // $2002 visible next dot
             vbl_was_suppressed_ = false;    // Reset suppression for new frame
-            status_read_dot_ = UINT64_MAX;  // Reset stale reads
             
             // Clear sprite shifters
             for (int i = 0; i < 8; i++) {
@@ -552,7 +548,7 @@ void PPU::clock() {
             frame_count++;
         }
     }
-    total_dots_++;
+    status_read_last_dot_ = false;  // Consumed; clear for next dot
 }
 
 // ============================================================================

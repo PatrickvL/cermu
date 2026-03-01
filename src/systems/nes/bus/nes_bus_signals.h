@@ -49,17 +49,28 @@
 using ppu_bus_state_t = uint64_t;
 
 // ============================================================================
+// PPU BUS FIELD LAYOUT
+// ============================================================================
+
+#define PPU_BUS_DATA_WIDTH        8
+#define PPU_BUS_DATA_SHIFT        0
+#define PPU_BUS_DATA_BITS         ((1ULL << PPU_BUS_DATA_WIDTH) - 1ULL)
+#define PPU_BUS_DATA_MASK         (PPU_BUS_DATA_BITS << PPU_BUS_DATA_SHIFT)
+
+#define PPU_BUS_ADDR_WIDTH        14
+#define PPU_BUS_ADDR_SHIFT        (PPU_BUS_DATA_SHIFT + PPU_BUS_DATA_WIDTH)
+#define PPU_BUS_ADDR_BITS         ((1ULL << PPU_BUS_ADDR_WIDTH) - 1ULL)
+#define PPU_BUS_ADDR_MASK         (PPU_BUS_ADDR_BITS << PPU_BUS_ADDR_SHIFT)
+
+// ============================================================================
 // PPU BUS FIELD ACCESS MACROS
 // ============================================================================
 
-#define PPU_BUS_DATA_MASK         (0xFFULL)
-#define PPU_BUS_ADDR_MASK         (0x3FFFULL << 8)
+#define PPU_BUS_GET_DATA(b)       ((uint8_t)(((b) >> PPU_BUS_DATA_SHIFT) & PPU_BUS_DATA_BITS))
+#define PPU_BUS_SET_DATA(b, d)    ((b) = (b) ^ (((b) ^ ((uint64_t)(d) << PPU_BUS_DATA_SHIFT)) & PPU_BUS_DATA_MASK))
 
-#define PPU_BUS_GET_DATA(b)       ((uint8_t)((b) & 0xFFULL))
-#define PPU_BUS_SET_DATA(b, d)    ((b) = (b) ^ (((b) ^ (uint64_t)(d)) & PPU_BUS_DATA_MASK))
-
-#define PPU_BUS_GET_ADDR(b)       ((uint16_t)(((b) >> 8) & 0x3FFFULL))
-#define PPU_BUS_SET_ADDR(b, a)    ((b) = (b) ^ (((b) ^ ((uint64_t)(a) << 8)) & PPU_BUS_ADDR_MASK))
+#define PPU_BUS_GET_ADDR(b)       ((uint16_t)(((b) >> PPU_BUS_ADDR_SHIFT) & PPU_BUS_ADDR_BITS))
+#define PPU_BUS_SET_ADDR(b, a)    ((b) = (b) ^ (((b) ^ ((uint64_t)(a) << PPU_BUS_ADDR_SHIFT)) & PPU_BUS_ADDR_MASK))
 
 #define PPU_BUS_GET_BIT(b, bit)   (((b) & (1ULL << (bit))) != 0)
 #define PPU_BUS_SET_BIT(b, bit)   ((b) |=  (1ULL << (bit)))
@@ -71,8 +82,8 @@ using ppu_bus_state_t = uint64_t;
 // Build a ppu_bus_state_t from address (and optionally data) in one expression.
 // Useful at call sites that construct a bus transaction inline.
 
-#define PPU_BUS_WITH_ADDR(a)        ((ppu_bus_state_t)(((uint64_t)((a) & 0x3FFFULL)) << 8))
-#define PPU_BUS_WITH_ADDR_DATA(a,d) ((ppu_bus_state_t)((((uint64_t)((a) & 0x3FFFULL)) << 8) | ((uint64_t)(d) & 0xFFULL)))
+#define PPU_BUS_WITH_ADDR(a)        ((ppu_bus_state_t)(((uint64_t)((a) & PPU_BUS_ADDR_BITS)) << PPU_BUS_ADDR_SHIFT))
+#define PPU_BUS_WITH_ADDR_DATA(a,d) ((ppu_bus_state_t)((((uint64_t)((a) & PPU_BUS_ADDR_BITS)) << PPU_BUS_ADDR_SHIFT) | ((uint64_t)(d) & PPU_BUS_DATA_BITS)))
 
 // ============================================================================
 // PPU-ONLY PIN BIT POSITIONS (22-28)
