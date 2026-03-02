@@ -804,29 +804,38 @@ void NintendoSystem<V>::clock() {
     NES_PROF_END(ppu_clock_cycles, ppu);
 
     // ====================================================================
-    // OAM DMA controller — stalls CPU while transferring 256 bytes
+    // OAM DMA controller — stalls CPU while transferring 256 bytes.
+    // DMA operates at CPU clock rate: one read or write per CPU cycle.
+    // Only advance DMA state on the CPU clock edge (every 3 PPU cycles).
     // ====================================================================
     if (unlikely(bus_.dma_transfer)) {
         NES_PROF_START(dma);
-        if (bus_.dma_dummy) {
-            if (bus_.dma_odd_cycle_) {
-                bus_.dma_dummy = false;
-            }
+        if (bus_.cpu_div_ != 0) {
+            // Intermediate PPU cycle — just tick and wait for CPU edge
+            bus_.cpu_div_--;
         } else {
-            if (!bus_.dma_odd_cycle_) {
-                // DMA read from CPU address space
-                uint16_t dma_src = (bus_.dma_page << 8) | bus_.dma_addr;
-                bus_.dma_data = bus_.cpu_read(dma_src);
+            // CPU cycle boundary — advance DMA state machine
+            bus_.cpu_div_ = 2;
+            if (bus_.dma_dummy) {
+                if (bus_.dma_odd_cycle_) {
+                    bus_.dma_dummy = false;
+                }
             } else {
-                ppu_->oam[bus_.dma_addr] = bus_.dma_data;
-                bus_.dma_addr++;
-                if (bus_.dma_addr == 0x00) {
-                    bus_.dma_transfer = false;
-                    bus_.dma_dummy = true;
+                if (!bus_.dma_odd_cycle_) {
+                    // DMA read from CPU address space
+                    uint16_t dma_src = (bus_.dma_page << 8) | bus_.dma_addr;
+                    bus_.dma_data = bus_.cpu_read(dma_src);
+                } else {
+                    ppu_->oam[bus_.dma_addr] = bus_.dma_data;
+                    bus_.dma_addr++;
+                    if (bus_.dma_addr == 0x00) {
+                        bus_.dma_transfer = false;
+                        bus_.dma_dummy = true;
+                    }
                 }
             }
+            bus_.dma_odd_cycle_ = !bus_.dma_odd_cycle_;
         }
-        bus_.dma_odd_cycle_ = !bus_.dma_odd_cycle_;
         bus_.system_clock_counter++;
         total_cycles_++;
         NES_PROF_END(dma_cycles, dma);

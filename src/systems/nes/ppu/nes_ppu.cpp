@@ -328,9 +328,10 @@ void PPU::clock() {
             pending_vbl_clear_ = true;      // $2002 visible next dot
             vbl_was_suppressed_ = false;    // Reset suppression for new frame
 
-            // Clear sprite shifters
+            // Clear sprite shifters and stale sprite-0 hit flag from previous frame
             memset(internal.sprite_shifter_pattern_lo, 0, sizeof(internal.sprite_shifter_pattern_lo));
             memset(internal.sprite_shifter_pattern_hi, 0, sizeof(internal.sprite_shifter_pattern_hi));
+            internal.sprite_zero_hit_possible = false;
         }
 
         if ((cycle >= 2 && cycle < 258) || (cycle >= 321 && cycle < 338)) {
@@ -384,7 +385,7 @@ void PPU::clock() {
             case 2: // cycle == 257
                 load_background_shifters();
                 transfer_address_x();
-                if (scanline >= 0) evaluate_sprites();  // Not on pre-render
+                if (scanline >= 0) evaluate_sprites();
                 // Sprite 0, sub-cycle 0: garbage nametable read.
                 // Starts the 64-cycle sprite fetch window (257-320).
                 fast_vram_read(0x2000 | (internal.v & 0x0FFF));
@@ -535,10 +536,12 @@ void PPU::clock() {
 
             // Sprite-0 hit detection (only when both BG and sprite are opaque).
             // Once detected (status bit 6 set), skip for rest of frame.
+            // Hardware never sets hit at x=255 (cycle 256).
             if (!(regs[PPUSTATUS] & 0x40) &&
                 internal.sprite_zero_hit_possible &&
                 internal.sprite_zero_being_rendered &&
                 (mask & 0x18) == 0x18 &&
+                x != 255 &&
                 ((mask & 0x06) == 0x06 || cycle >= 9)) {
                 regs[PPUSTATUS] |= 0x40;
             }
