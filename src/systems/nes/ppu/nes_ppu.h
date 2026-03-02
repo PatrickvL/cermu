@@ -131,6 +131,17 @@ public:
     bool     status_read_last_dot_ = false;
     bool     vbl_was_suppressed_ = false;   // true if VBL never set this frame
 
+    // A12 edge tracking for mapper IRQ (MMC3 scanline counter, etc.).
+    // On real hardware the MMC3 monitors PPU address bus line A12 (bit 12)
+    // and clocks its IRQ counter on each rising edge, with a filter that
+    // requires A12 to have been low for >= ~16 PPU dots before a rising
+    // edge is counted.  We track A12 state here and call the mapper's
+    // clock_a12() through the cartridge on filtered rising edges.
+    bool     a12_last_ = false;             // Previous A12 state
+    uint64_t a12_low_since_ = 0;            // PPU dot when A12 last went low
+    uint64_t ppu_dot_count_ = 0;            // Monotonic PPU dot counter
+    static constexpr uint16_t A12_FILTER_DELAY = 16;  // Min dots A12 low before clock
+
     // Open bus data latch is stored in the data bits (0-7) of ppu_bus_.
     // These bits are otherwise unused — the rendering pipeline operates
     // on local ppu_bus_state_t values, and only the shared NMI/IRQ/RES
@@ -200,6 +211,9 @@ public:
         pending_vbl_set_ = false;
         pending_vbl_clear_ = false;
         scanline_event_ = 0;
+        a12_last_ = false;
+        a12_low_since_ = 0;
+        ppu_dot_count_ = 0;
 
         // Clear memory
         vram.fill(0);
@@ -250,7 +264,10 @@ private:
     // and palette range check.  For rendering-only reads where addr < $3F00.
     // Equivalent to PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(addr))) but
     // eliminates ~8 operations per call.
-    inline uint8_t fast_vram_read(uint16_t addr) const {
+    //
+    // Also drives A12 edge detection for mapper IRQ (MMC3).
+    inline uint8_t fast_vram_read(uint16_t addr) {
+        notify_a12(addr);
         if (likely(bus_ptr_ != nullptr)) {
             const uint8_t* rp = bus_ptr_->ppu_read_page[addr >> 10];
             if (likely(rp != nullptr)) {
@@ -259,6 +276,27 @@ private:
         }
         return 0;  // open bus
     }
+
+    // A12 rising-edge detection — called on every PPU address bus access.
+    // Detects 0→1 transitions on bit 12, applies the ~16-dot low-period
+    // filter, and calls the mapper's IRQ clock on qualified edges.
+    inline void notify_a12(uint16_t addr) {
+        const bool a12 = (addr & 0x1000) != 0;
+        if (a12 && !a12_last_) {
+            // Rising edge — clock mapper if A12 was low long enough
+            if (ppu_dot_count_ - a12_low_since_ >= A12_FILTER_DELAY) {
+                clock_a12_rising_edge();  // out-of-line, calls cart
+            }
+        } else if (!a12 && a12_last_) {
+            // Falling edge — mark start of low period
+            a12_low_since_ = ppu_dot_count_;
+        }
+        a12_last_ = a12;
+    }
+
+    // Out-of-line A12 clock — calls cart->clock_a12().
+    // Separated from notify_a12 to avoid including nes_cartridge.h here.
+    void clock_a12_rising_edge();
 
     // Internal rendering functions
     void increment_scroll_x();

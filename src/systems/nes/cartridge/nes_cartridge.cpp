@@ -83,6 +83,10 @@ void Cartridge::irq_clear() {
     if (mapper) mapper->irq_clear();
 }
 
+void Cartridge::clock_a12() {
+    if (mapper) mapper->clock_a12();
+}
+
 void Cartridge::scanline() {
     if (mapper) mapper->scanline();
 }

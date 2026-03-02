@@ -154,8 +154,12 @@ public:
     virtual bool irq_state() { return false; }
     virtual void irq_clear() {}
 
-    // Scanline notification — PPU calls this once per visible scanline.
-    // Used by MMC3 for A12-based IRQ counting.
+    // A12 rising-edge clock — called by the PPU on filtered 0→1
+    // transitions of PPU address bus bit 12.  Used by MMC3 for its
+    // scanline-counting IRQ.  Default: no action.
+    virtual void clock_a12() {}
+
+    // Scanline notification — legacy callback, prefer clock_a12().
     virtual void scanline() {}
 
 protected:

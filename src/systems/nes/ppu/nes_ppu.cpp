@@ -71,6 +71,14 @@ PpuSubProfile g_ppu_subprofile;
 namespace nes_system {
 
 // ============================================================================
+// PPU — A12 rising-edge clock (out-of-line to avoid Cartridge include in header)
+// ============================================================================
+
+void PPU::clock_a12_rising_edge() {
+    if (cart) cart->clock_a12();
+}
+
+// ============================================================================
 // PPU — CPU BUS INTERFACE
 // ============================================================================
 
@@ -137,6 +145,8 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
                 // Increment VRAM address
                 internal.v += (regs[PPUCTRL] & 0x04) ? 32 : 1;
                 internal.v &= 0x7FFF;  // v is 15 bits
+                // Post-increment address drives the PPU bus — A12 may change.
+                notify_a12(internal.v);
                 break;
         }
 
@@ -188,12 +198,18 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
                     internal.t = (internal.t & 0xFF00) | data;
                     internal.v = internal.t;
                     internal.w = false;
+                    // v now drives the PPU address bus — update A12 tracking.
+                    // Games (and test ROMs) can clock the MMC3 counter by
+                    // toggling A12 via $2006 writes.
+                    notify_a12(internal.v);
                 }
                 break;
             case 0x2007: // PPU Data
                 ppu_write(PPU_BUS_WITH_ADDR_DATA(internal.v, data));
                 internal.v += (regs[PPUCTRL] & 0x04) ? 32 : 1;
                 internal.v &= 0x7FFF;  // v is 15 bits
+                // Post-increment address drives the PPU bus — A12 may change.
+                notify_a12(internal.v);
                 break;
         }
     }
@@ -264,6 +280,8 @@ ppu_bus_state_t PPU::ppu_write(ppu_bus_state_t bus) {
 // ============================================================================
 
 void PPU::clock() {
+    ++ppu_dot_count_;  // Monotonic counter for A12 filter timing
+
     // Cache mask register — accessed many times per dot; one read beats ten.
     const uint8_t mask = regs[PPUMASK];
 
@@ -370,17 +388,9 @@ void PPU::clock() {
                 scanline_event_++;
                 break;
             case 3: // cycle 258-260
-                // Mapper scanline counter (MMC3) — clock once per scanline.
-                // On real hardware, the MMC3 monitors PPU A12 rising edges and
-                // its internal filter ensures exactly one count during the
-                // BG→sprite pattern-fetch transition (~dot 260).  Since our
-                // sprite fetches are batched at dot 340 (after BG pre-fetch),
-                // the genuine A12 edge is not visible.  We call cart->scanline()
-                // directly at dot 260 when rendering is enabled.
-                if (cycle == 260) {
-                    if (mask & 0x18 && cart) cart->scanline();
-                    scanline_event_++;
-                }
+                // (MMC3 scanline counter is now clocked by A12 rising-edge
+                // detection inside fast_vram_read() — see notify_a12().)
+                scanline_event_++;
                 break;
             case 4: // cycle 261-279
                 // transfer_address_y window is pre-render only (scanline -1).
@@ -515,9 +525,6 @@ void PPU::clock() {
         pending_vbl_set_ = true;       // $2002 visible next dot
         vbl_was_suppressed_ = false;
     }
-
-    // (A12 edge detection for mapper IRQ counters is now handled inside
-    //  ppu_read() — see the rising-edge check on bit 12 of the address.)
 
     // Advance cycle
     cycle++;
