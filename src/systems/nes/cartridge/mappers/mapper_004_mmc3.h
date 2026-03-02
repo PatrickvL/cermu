@@ -4,7 +4,7 @@
  *
  * Advanced PRG/CHR bank switching with a scanline-counting IRQ.
  * 8 bank registers (R0-R7) select 2×2KB + 4×1KB CHR and 2×8KB PRG windows.
- * PPU A12 rising edges (approximated via scanline callback) drive the IRQ.
+ * PPU A12 rising edges drive the IRQ counter (via clock_a12()).
  * Games: Super Mario Bros. 2/3, Kirby's Adventure, Mega Man 3-6, etc.
  */
 
@@ -182,7 +182,10 @@ public:
 
     void irq_clear() override { irq_active_ = false; }
 
-    void scanline() override {
+    // A12 rising-edge clock — called by the PPU on each filtered 0→1
+    // transition of PPU address bus bit 12.  Replaces the old scanline()
+    // callback for cycle-accurate IRQ counting.
+    void clock_a12() override {
         if (irq_counter_ == 0 || irq_reload_) {
             irq_counter_ = irq_reload_value_;
             irq_reload_ = false;
@@ -193,6 +196,10 @@ public:
         if (irq_counter_ == 0 && irq_enabled_) {
             irq_active_ = true;
         }
+    }
+
+    void scanline() override {
+        // Legacy — IRQ counting now handled by clock_a12().
     }
 
     void reset() override {
