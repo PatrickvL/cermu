@@ -1284,10 +1284,10 @@ uint8_t NintendoSystem<V>::peek_ppu_memory(uint16_t addr) const {
         return ppu_->palette[pa] & 0x3F;
     }
 
-    // CHR + nametable via page pointers
-    const uint8_t* rp = bus_.ppu_read_page[addr >> 10];
-    if (rp != nullptr) {
-        return rp[addr & 0x03FF];
+    // CHR + nametable via block dispatch
+    uint16_t block = bus_.ppu_read_block[addr >> nes_bus::PPU_PAGE_SHIFT];
+    if (block < nes_bus::BLOCK_SENTINEL_MIN) {
+        return bus_.ppu_block_read(block, addr);
     }
     return 0;
 }

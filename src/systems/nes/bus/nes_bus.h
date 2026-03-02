@@ -96,14 +96,7 @@ struct nes_bus_t {
     alignas(16) uint16_t ppu_read_block[PPU_PAGE_COUNT];
     alignas(16) uint16_t ppu_write_block[PPU_PAGE_COUNT];
 
-    // ====================================================================
-    // Legacy page pointer tables -- still used for dispatch until
-    // mem_read_tick / ppu_read_tick replace them (Phase C/D).
-    // ====================================================================
-    alignas(64) const uint8_t* cpu_read_page[CPU_PAGE_COUNT];
-    alignas(64) uint8_t* cpu_write_page[CPU_PAGE_COUNT];
-    alignas(64) const uint8_t* ppu_read_page[PPU_PAGE_COUNT];
-    alignas(64) uint8_t* ppu_write_page[PPU_PAGE_COUNT];
+    // (Legacy page pointer tables removed -- all dispatch uses block arrays.)
 
     // ====================================================================
     // OAM DMA controller state
@@ -196,25 +189,36 @@ struct nes_bus_t {
     }
 
     // ====================================================================
-    // Inline PPU read/write -- bus_state_t receiving/returning pattern
+    // Inline PPU read/write -- block-based dispatch
     // ====================================================================
     //
     // Palette ($3F00-$3F1F) must be intercepted BEFORE calling these.
 
+    /// PPU block read -- 1KB page from block number.
+    /// block must be < BLOCK_SENTINEL_MIN (caller checks).
+    inline uint8_t ppu_block_read(uint16_t block, uint16_t addr) const {
+        return unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) | (addr & PPU_PAGE_MASK)];
+    }
+
+    /// PPU block write -- 1KB page from block number.
+    inline void ppu_block_write(uint16_t block, uint16_t addr, uint8_t data) {
+        unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) | (addr & PPU_PAGE_MASK)] = data;
+    }
+
     inline ppu_bus_state_t ppu_read(ppu_bus_state_t bus) const {
         uint16_t mapped = PPU_BUS_GET_ADDR(bus);
-        const uint8_t* rp = ppu_read_page[mapped >> 10];
-        if (likely(rp != nullptr)) {
-            PPU_BUS_SET_DATA(bus, rp[mapped & 0x03FF]);
+        uint16_t block = ppu_read_block[mapped >> PPU_PAGE_SHIFT];
+        if (likely(block < BLOCK_SENTINEL_MIN)) {
+            PPU_BUS_SET_DATA(bus, ppu_block_read(block, mapped));
         }
         return bus;
     }
 
     inline ppu_bus_state_t ppu_write(ppu_bus_state_t bus) {
         uint16_t mapped = PPU_BUS_GET_ADDR(bus);
-        uint8_t* wp = ppu_write_page[mapped >> 10];
-        if (likely(wp != nullptr)) {
-            wp[mapped & 0x03FF] = PPU_BUS_GET_DATA(bus);
+        uint16_t block = ppu_write_block[mapped >> PPU_PAGE_SHIFT];
+        if (likely(block < BLOCK_SENTINEL_MIN)) {
+            ppu_block_write(block, mapped, PPU_BUS_GET_DATA(bus));
         }
         return bus;
     }

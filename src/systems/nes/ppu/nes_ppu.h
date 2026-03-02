@@ -329,9 +329,9 @@ private:
     inline uint8_t fast_vram_read(uint16_t addr, ppu_bus_state_t& ppu_bus) {
         notify_a12(addr, ppu_bus);
         if (likely(bus_ptr_ != nullptr)) {
-            const uint8_t* rp = bus_ptr_->ppu_read_page[addr >> 10];
-            if (likely(rp != nullptr)) {
-                return rp[addr & 0x03FF];
+            uint16_t block = bus_ptr_->ppu_read_block[addr >> nes_bus::PPU_PAGE_SHIFT];
+            if (likely(block < nes_bus::BLOCK_SENTINEL_MIN)) {
+                return bus_ptr_->ppu_block_read(block, addr);
             }
         }
         return 0;  // open bus
