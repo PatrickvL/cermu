@@ -159,7 +159,7 @@ class NintendoSystem : public EmulatedSystem {
 private:
     // Core components
     RICOH_2A03* cpu_;
-    bus_state_t pins_;  // Persistent CPU bus state across ticks
+    bus_state_t pins_;               // Persistent CPU bus state across ticks
     std::shared_ptr<PPU> ppu_;
     std::shared_ptr<Cartridge> cartridge_;
     nes_bus::nes_bus_t bus_;                     // Page-pointer bus (replaces MemoryBus)

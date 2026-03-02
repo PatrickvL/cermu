@@ -71,8 +71,8 @@ static std::vector<PinSignalState> get_ppu_pin_states(nes_system::PPU* ppu, cons
     auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
 
     // PPU specific: /INT (NMI) pin (pin 19, index 18) — PPU drives NMI
-    // Read directly from the PPU bus word (active-low: bit HIGH = not asserted)
-    pin_states[18].signal_level = PPU_BUS_GET_BIT(ppu->ppu_bus_, BUS_NMI_BIT);
+    // Read directly from the PPU bus snapshot (active-low: bit HIGH = not asserted)
+    pin_states[18].signal_level = PPU_BUS_GET_BIT(ppu->bus_snapshot_, BUS_NMI_BIT);
     pin_states[18].drive_direction = true;
     pin_states[18].high_impedance = false;
 
