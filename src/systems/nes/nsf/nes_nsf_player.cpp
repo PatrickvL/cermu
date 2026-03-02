@@ -14,11 +14,11 @@
  * Memory layout in NES RAM ($0000-$07FF):
  *   $0700-$074F  — Init/playback stub
  *   $0750-$076F  — NMI handler (play routine wrapper)
- *   $0770-$077F  — Vectors (mapped by NsfCartridge)
+ *   $0770-$077F  — IRQ handler
  */
 
 #include "nes_nsf_player.h"
-#include "nes_nsf_cartridge.h"
+#include "../cartridge/mappers/mapper_nsf.h"
 #include "../screen/nes_screen_utils.h"
 #include "../nes_system.h"
 #include "asm6510.h"
@@ -241,70 +241,78 @@ void NsfPlayer::build_init_stub(uint8_t* ram,
 }
 
 // ============================================================================
-// VECTOR TABLE — Written to NsfCartridge ROM at $FFFA-$FFFF
+// VECTOR TABLE — Written to PRG-ROM buffer at $FFFA-$FFFF
 // ============================================================================
 
-void NsfPlayer::write_vectors(NsfCartridge* cart) {
-    // NMI vector ($FFFA) → NMI handler in RAM
-    cart->write_rom_direct(VECTOR_NMI,     static_cast<uint8_t>(NMI_HANDLER & 0xFF));
-    cart->write_rom_direct(VECTOR_NMI + 1, static_cast<uint8_t>(NMI_HANDLER >> 8));
+int32_t NsfPlayer::map_vector_offset(
+        uint16_t addr,
+        bool bankswitched,
+        const uint8_t bank_regs[8],
+        uint16_t load_addr,
+        size_t prg_rom_size) {
+    if (addr < 0x8000) return -1;
 
-    // RESET vector ($FFFC) → init stub in RAM
-    cart->write_rom_direct(VECTOR_RESET,     static_cast<uint8_t>(STUB_BASE & 0xFF));
-    cart->write_rom_direct(VECTOR_RESET + 1, static_cast<uint8_t>(STUB_BASE >> 8));
+    if (bankswitched) {
+        int page = (addr - 0x8000) / 0x1000;  // 0-7
+        uint32_t offset = static_cast<uint32_t>(bank_regs[page]) * 0x1000
+                        + (addr & 0x0FFF);
+        return (offset < prg_rom_size) ? static_cast<int32_t>(offset) : -1;
+    } else {
+        if (addr < load_addr) return -1;
+        uint32_t offset = addr - load_addr;
+        return (offset < prg_rom_size) ? static_cast<int32_t>(offset) : -1;
+    }
+}
 
-    // IRQ vector ($FFFE) → IRQ handler in RAM
-    cart->write_rom_direct(VECTOR_IRQ,     static_cast<uint8_t>(IRQ_HANDLER & 0xFF));
-    cart->write_rom_direct(VECTOR_IRQ + 1, static_cast<uint8_t>(IRQ_HANDLER >> 8));
+void NsfPlayer::write_vectors(
+        uint8_t* prg_rom,
+        size_t prg_rom_size,
+        bool bankswitched,
+        const uint8_t bank_regs[8],
+        uint16_t load_addr) {
+    auto write_vec = [&](uint16_t vec_addr, uint16_t target) {
+        int32_t lo = map_vector_offset(vec_addr,     bankswitched, bank_regs, load_addr, prg_rom_size);
+        int32_t hi = map_vector_offset(vec_addr + 1, bankswitched, bank_regs, load_addr, prg_rom_size);
+        if (lo >= 0) prg_rom[lo] = static_cast<uint8_t>(target & 0xFF);
+        if (hi >= 0) prg_rom[hi] = static_cast<uint8_t>(target >> 8);
+    };
+
+    write_vec(VECTOR_NMI,   NMI_HANDLER);
+    write_vec(VECTOR_RESET, STUB_BASE);
+    write_vec(VECTOR_IRQ,   IRQ_HANDLER);
 }
 
 // ============================================================================
-// NSF LOAD — Full setup
+// CPU SETUP — Build stubs, write vectors, reset CPU
 // ============================================================================
 
-std::shared_ptr<NsfCartridge> NsfPlayer::apply_load(
-    RICOH_2A03* cpu,
-    PPU* ppu,
-    uint8_t* cpu_ram,
-    const nsf_header_t* nsf,
-    const program_data_t* prog,
-    uint16_t subtune,
-    bool is_pal) {
+void NsfPlayer::setup_cpu(
+        RICOH_2A03* cpu,
+        uint8_t* cpu_ram,
+        uint8_t* prg_rom,
+        size_t prg_rom_size,
+        bool bankswitched,
+        const uint8_t bank_regs[8],
+        uint16_t load_addr,
+        const nsf_header_t* nsf,
+        uint16_t subtune,
+        bool is_pal) {
+    if (!cpu || !cpu_ram || !nsf) return;
 
-    if (!cpu || !ppu || !cpu_ram || !nsf) return nullptr;
-
-    printf("NES NSF: Loading \"%s\" by %s\n", nsf->name, nsf->artist);
-    printf("NES NSF: load=$%04X init=$%04X play=$%04X songs=%d start=%d\n",
-           nsf->load_addr, nsf->init_addr, nsf->play_addr,
-           nsf->num_songs, nsf->start_song);
-
-    // ---- Step 1: Create NsfCartridge ----
-    auto nsf_cart = std::make_shared<NsfCartridge>(
-        prog->data, prog->data_size, nsf->load_addr, nsf->bankswitch);
-
-    // Write CPU vectors to the cartridge ROM space
-    write_vectors(nsf_cart.get());
-
-    // ---- Step 2: Build 6502 stubs in CPU RAM ----
-    // (Caller is responsible for resetting bus/RAM before calling)
+    // Build 6502 stubs in CPU RAM
     build_nmi_handler(cpu_ram, nsf->play_addr);
     build_irq_handler(cpu_ram);
     build_init_stub(cpu_ram, nsf, subtune, is_pal);
 
+    // Write CPU vectors to ROM buffer
+    write_vectors(prg_rom, prg_rom_size, bankswitched, bank_regs, load_addr);
+
     printf("NES NSF: Stub at $%04X, NMI handler at $%04X\n",
            STUB_BASE, NMI_HANDLER);
 
-    // ---- Step 3: Write info page to PPU nametable ----
-    write_info_page(ppu, nsf, subtune);
-
-    // ---- Step 4: Reset CPU to RESET vector ----
+    // Reset CPU to RESET vector
     bus_state_t pins = NES_BUS_DEFAULT_STATE;
     cpu->reset(pins);
-
-    printf("NES NSF: CPU reset — subtune %d/%d starting\n",
-           subtune + 1, nsf->num_songs);
-
-    return nsf_cart;
 }
 
 // ============================================================================
@@ -312,38 +320,54 @@ std::shared_ptr<NsfCartridge> NsfPlayer::apply_load(
 // ============================================================================
 
 void NsfPlayer::switch_subtune(
-    RICOH_2A03* cpu,
-    PPU* ppu,
-    uint8_t* cpu_ram,
-    NsfCartridge* nsf_cart,
-    const nsf_header_t* nsf,
-    const uint8_t* payload,
-    size_t payload_size,
-    uint16_t subtune,
-    bool is_pal) {
+        RICOH_2A03* cpu,
+        PPU* ppu,
+        uint8_t* cpu_ram,
+        uint8_t* prg_rom,
+        size_t prg_rom_size,
+        Mapper* mapper,
+        const nsf_header_t* nsf,
+        const uint8_t* payload,
+        size_t payload_size,
+        uint16_t subtune,
+        bool is_pal) {
+    if (!cpu || !ppu || !cpu_ram || !prg_rom || !nsf) return;
 
-    if (!cpu || !ppu || !cpu_ram || !nsf_cart || !nsf) return;
+    // Reload NSF data into unified buffer (in case tune self-modified)
+    if (payload && payload_size > 0) {
+        size_t copy_size = (payload_size < prg_rom_size) ? payload_size : prg_rom_size;
+        std::memset(prg_rom, 0, prg_rom_size);
+        std::memcpy(prg_rom, payload, copy_size);
+    }
 
-    // ---- Reload NSF data (in case tune self-modified) ----
-    nsf_cart->reload_nsf_data(payload, payload_size);
-    nsf_cart->set_bank_regs(nsf->bankswitch);
+    // Reset bank registers on mapper
+    if (mapper) {
+        auto* nsf_mapper = static_cast<MapperNsf*>(mapper);
+        nsf_mapper->set_bank_regs(nsf->bankswitch);
+    }
+
+    // Determine bankswitching state for vector mapping
+    bool bankswitched = false;
+    for (int i = 0; i < 8; i++) {
+        if (nsf->bankswitch[i] != 0) { bankswitched = true; break; }
+    }
 
     // Re-write vectors (reload may have cleared them)
-    write_vectors(nsf_cart);
+    write_vectors(prg_rom, prg_rom_size, bankswitched,
+                  nsf->bankswitch, nsf->load_addr);
 
-    // ---- Clear CPU RAM (except stack) and rebuild stubs ----
-    // Clear $0000-$00FF and $0200-$07FF, preserve stack $0100-$01FF
-    memset(cpu_ram, 0, 0x0100);
-    memset(cpu_ram + 0x0200, 0, 0x0600);
+    // Clear CPU RAM (except stack) and rebuild stubs
+    std::memset(cpu_ram, 0, 0x0100);
+    std::memset(cpu_ram + 0x0200, 0, 0x0600);
 
     build_nmi_handler(cpu_ram, nsf->play_addr);
     build_irq_handler(cpu_ram);
     build_init_stub(cpu_ram, nsf, subtune, is_pal);
 
-    // ---- Update info page ----
+    // Update info page
     write_info_page(ppu, nsf, subtune);
 
-    // ---- Reset CPU ----
+    // Reset CPU
     bus_state_t pins = NES_BUS_DEFAULT_STATE;
     cpu->reset(pins);
 

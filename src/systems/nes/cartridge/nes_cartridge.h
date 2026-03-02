@@ -16,7 +16,6 @@
 #include <vector>
 
 #include "../../../core/chip.h"           // ChipBase, ChipInfo
-#include "../../../core/system_lines.h"  // bus_state_t, BUS_* macros
 #include "nes_mapper.h"                  // Mirror, Mapper, MapperBankConfig, MapperChrConfig
 
 // Forward declaration for nes_bus_t
@@ -50,7 +49,8 @@ public:
     uint8_t chr_banks = 0;
     bool battery_backed = false;
 
-    /** Protected default constructor for subclasses (e.g. NsfCartridge). */
+    /** Protected default constructor — allows direct construction for
+     *  programmatic cartridge setup (e.g. NSF player). */
     Cartridge()
         : ChipBase(ChipInfo{"Cartridge", "iNES ROM Cartridge", "Various"}) {}
 
@@ -78,14 +78,13 @@ public:
     /// Get the mapper instance (for IRQ state, scanline, etc.)
     Mapper* get_mapper() const { return mapper.get(); }
 
-    // ====================================================================
-    // Legacy bus interfaces (used by NsfCartridge and fallback dispatch)
-    // ====================================================================
-
-    // CPU bus interface — fallback for unmapped addresses not handled by
-    // block dispatch.  Regular Cartridge returns bus unchanged;
-    // NsfCartridge overrides for its own address-space routing.
-    virtual bus_state_t cpu_bus_tick(bus_state_t bus);
+    /// Install a pre-configured mapper instance (used by NSF load path).
+    /// The caller must have already called set_memory_pointers() and
+    /// set_header_mirror() on the mapper before installing.
+    void install_mapper(std::unique_ptr<Mapper> m) {
+        mapper = std::move(m);
+        mirror_mode = mapper->mirror();
+    }
 
     // Nametable mirroring
     using Mirror = nes_system::Mirror;

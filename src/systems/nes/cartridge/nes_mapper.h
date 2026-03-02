@@ -37,9 +37,14 @@ enum class Mirror : uint8_t {
 
 /// PRG bank configuration for CPU address space $5000-$FFFF.
 struct MapperBankConfig {
-    // 8 × 4KB page pointers for CPU $8000-$FFFF
+    // 8 × 4KB page pointers for CPU $8000-$FFFF (read)
     // prg_pages[0] → $8000-$8FFF, prg_pages[7] → $F000-$FFFF
     const uint8_t* prg_pages[8] = {};
+
+    // Optional writable PRG pages (for self-modifying NSFs).
+    // When non-null, the corresponding $8000-$FFFF write block uses this pointer.
+    // When null, writes go to BLOCK_OPEN_BUS (normal mapper dispatch).
+    uint8_t* prg_write_pages[8] = {};
 
     // PRG-RAM at $6000-$7FFF
     uint8_t* prg_ram_base = nullptr;
