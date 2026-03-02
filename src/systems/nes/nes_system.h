@@ -170,6 +170,18 @@ private:
     bool system_ready_;
     uint32_t cycles_per_frame_;
     bool initialized_;
+
+    // OAM DMA controller state
+    uint8_t  dma_page_ = 0;
+    uint8_t  dma_addr_ = 0;
+    uint8_t  dma_data_ = 0;
+    bool     dma_transfer_ = false;
+    bool     dma_dummy_ = true;
+
+    // Clock dividers (PPU-tick granularity)
+    uint32_t system_clock_counter_ = 0;  // Total PPU ticks (saved to state)
+    uint8_t  cpu_div_ = 0;               // PPU->CPU countdown (0 = CPU tick this cycle)
+    bool     dma_odd_cycle_ = false;     // DMA even/odd toggle
     
     // Audio buffer
     std::vector<float> audio_buffer_;

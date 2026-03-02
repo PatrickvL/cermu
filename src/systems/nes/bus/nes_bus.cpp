@@ -59,15 +59,7 @@ void nes_bus_t::init() {
     std::fill(ppu_read_block,  ppu_read_block  + PPU_PAGE_COUNT, BLOCK_OPEN_BUS);
     std::fill(ppu_write_block, ppu_write_block + PPU_PAGE_COUNT, BLOCK_OPEN_BUS);
 
-    // DMA + clock state
-    dma_page = 0;
-    dma_addr = 0;
-    dma_data = 0;
-    dma_transfer = false;
-    dma_dummy = true;
-    system_clock_counter = 0;
-    cpu_div_ = 0;
-    dma_odd_cycle_ = false;
+    // (DMA + clock state now lives in NintendoSystem.)
 }
 
 // ============================================================================
@@ -138,14 +130,8 @@ void nes_bus_t::init_unified_buffer(const uint8_t* prg_rom_data, size_t prg_rom_
 // ============================================================================
 
 void nes_bus_t::reset() {
-    dma_page = 0;
-    dma_addr = 0;
-    dma_data = 0;
-    dma_transfer = false;
-    dma_dummy = true;
-    system_clock_counter = 0;
-    cpu_div_ = 0;
-    dma_odd_cycle_ = false;
+    // DMA + clock state now lives in NintendoSystem.
+    // Bus reset is a no-op; kept for future bank-map reset if needed.
 }
 
 // ============================================================================
