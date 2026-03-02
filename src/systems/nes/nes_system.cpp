@@ -903,21 +903,20 @@ void NintendoSystem<V>::tick() {
     if (is_read) {
         // ---- READ ----
         if (addr < 0x2000) {
-            // Fast path: WRAM ($0000-$1FFF) — 2KB mirrored
+            // Fast path: WRAM ($0000-$1FFF) -- 2KB mirrored
             BUS_SET_DATA(pins_, bus_.cpu_ram[addr & 0x07FF]);
         } else {
-            const uint8_t page = addr >> 12;
-            const uint8_t* rp = bus_.cpu_read_page[page];
-            if (likely(rp != nullptr)) {
-                // Page pointer hit: PRG-ROM, PRG-RAM, or expansion
-                BUS_SET_DATA(pins_, rp[addr & 0x0FFF]);
-            } else if (page <= 3) {
+            const uint16_t block = bus_.cpu_read_block[addr >> 12];
+            if (likely(block < nes_bus::BLOCK_SENTINEL_MIN)) {
+                // Block hit: PRG-ROM, PRG-RAM, or expansion
+                BUS_SET_DATA(pins_, bus_.cpu_block_read(block, addr));
+            } else if (block == nes_bus::BLOCK_PPU_REGS) {
                 // PPU registers ($2000-$3FFF, mirrored every 8 bytes)
                 auto [cpu_result, ppu_result] = ppu_->service_cpu_bus(
                     pins_, ppu_->bus_snapshot_);
                 pins_ = cpu_result;
                 ppu_->bus_snapshot_ = ppu_result;
-            } else if (page == 4) {
+            } else if (block == nes_bus::BLOCK_APU_IO) {
                 // APU/IO registers ($4000-$4FFF)
                 if (addr == 0x4016) {
                     BUS_SET_DATA(pins_, controllers_[0].read());
@@ -939,21 +938,20 @@ void NintendoSystem<V>::tick() {
         const uint8_t data = BUS_GET_DATA(pins_);
 
         if (addr < 0x2000) {
-            // Fast path: WRAM ($0000-$1FFF) — 2KB mirrored
+            // Fast path: WRAM ($0000-$1FFF) -- 2KB mirrored
             bus_.cpu_ram[addr & 0x07FF] = data;
         } else {
-            const uint8_t page = addr >> 12;
-            uint8_t* wp = bus_.cpu_write_page[page];
-            if (wp != nullptr) {
-                // Page pointer hit: PRG-RAM or expansion write
-                wp[addr & 0x0FFF] = data;
-            } else if (page <= 3) {
+            const uint16_t block = bus_.cpu_write_block[addr >> 12];
+            if (likely(block < nes_bus::BLOCK_SENTINEL_MIN)) {
+                // Block hit: PRG-RAM or expansion write
+                bus_.cpu_block_write(block, addr, data);
+            } else if (block == nes_bus::BLOCK_PPU_REGS) {
                 // PPU registers ($2000-$3FFF, mirrored every 8 bytes)
                 auto [cpu_result, ppu_result] = ppu_->service_cpu_bus(
                     pins_, ppu_->bus_snapshot_);
                 pins_ = cpu_result;
                 ppu_->bus_snapshot_ = ppu_result;
-            } else if (page == 4) {
+            } else if (block == nes_bus::BLOCK_APU_IO) {
                 // APU/IO registers ($4000-$4FFF)
                 if (addr == 0x4014) {
                     // OAM DMA trigger
@@ -965,22 +963,17 @@ void NintendoSystem<V>::tick() {
                     controllers_[1].write(data);
                 }
                 // Other APU writes ($4000-$4013, $4015, $4017) handled by CPU PHI1
-            } else if (page >= 8) {
-                // ROM region writes → mapper register dispatch
-                if (cartridge_) {
+            } else {
+                // BLOCK_OPEN_BUS — mapper register writes or unmapped expansion
+                if (addr >= 0x8000 && cartridge_) {
                     if (cartridge_->handle_mapper_write(addr, data)) {
                         cartridge_->update_bank_map(&bus_, bus_.ciram);
                     } else {
-                        // Mapper didn't claim — fall through to cartridge
-                        // bus tick (needed for NsfCartridge self-modifying writes)
                         bool handled = false;
                         pins_ = cartridge_->cpu_bus_tick(pins_, handled);
                     }
-                }
-            } else {
-                // Expansion writes ($5000-$7FFF) not covered by page pointers
-                // Fall through to cartridge cpu_bus_tick for NSF etc.
-                if (cartridge_) {
+                } else if (cartridge_) {
+                    // Expansion writes ($5000-$7FFF) not covered by block
                     bool handled = false;
                     pins_ = cartridge_->cpu_bus_tick(pins_, handled);
                 }
@@ -1243,12 +1236,12 @@ uint8_t NintendoSystem<V>::peek_memory(uint16_t addr) const {
         return ppu_->cpu_peek(addr);
     }
 
-    // $4000-$5FFF: APU/IO — no side-effect-free peek available
-    // Try page pointers for $6000+
+    // $4000-$5FFF: APU/IO -- no side-effect-free peek available
+    // Try block dispatch for $6000+
     if (addr >= 0x6000) {
-        const uint8_t* rp = bus_.cpu_read_page[addr >> 12];
-        if (rp != nullptr) {
-            return rp[addr & 0x0FFF];
+        uint16_t block = bus_.cpu_read_block[addr >> 12];
+        if (block < nes_bus::BLOCK_SENTINEL_MIN) {
+            return bus_.cpu_block_read(block, addr);
         }
     }
 
@@ -1267,11 +1260,11 @@ void NintendoSystem<V>::poke_memory(uint16_t addr, uint8_t value) {
         bus_.cpu_ram[addr & 0x07FF] = value;
         return;
     }
-    // $6000+: PRG-RAM via page pointers
+    // $6000+: PRG-RAM via block dispatch
     if (addr >= 0x6000) {
-        uint8_t* wp = bus_.cpu_write_page[addr >> 12];
-        if (wp != nullptr) {
-            wp[addr & 0x0FFF] = value;
+        uint16_t block = bus_.cpu_write_block[addr >> 12];
+        if (block < nes_bus::BLOCK_SENTINEL_MIN) {
+            bus_.cpu_block_write(block, addr, value);
             return;
         }
     }
