@@ -17,10 +17,11 @@ bus_state_t op_lax(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_illegal_opcodes()) {
     // LAX - Load A and X from memory
-    // Special case: LAX immediate has unstable behavior - uses (A | 0xEE) &
-    // operand
+    // LAX immediate has unstable behavior — uses (A | magic) & operand.
+    // The magic constant varies by chip (empirically observed):
+    //   0xEE on NMOS 6502/6510, 0xFF on Ricoh 2A03.
     if (this->opcode_entry.am_index == to_index(AM::IMM)) {
-      // LAX immediate - unstable behavior with magic constant
+      // LAX immediate — unstable behavior with chip-dependent magic
       switch (this->half_cycle) {
       case 0:
         // PHI2: Setup read from PC
@@ -30,9 +31,9 @@ bus_state_t op_lax(bus_state_t pins) {
         // PHI1: Load data, increment PC, and perform operation
         uint8_t operand = this->bus_get_data(pins);
         this->inc(REG_PC);
-        // Hardware quirk: LAX immediate uses unstable internal state
-        // Result is (A | 0xEE) & operand
-        uint8_t result = (this->get(REG_A) | 0xEE) & operand;
+        // The 2A03 empirically yields 0xFF; standard NMOS 6502 yields 0xEE.
+        constexpr uint8_t magic = has_apu() ? 0xFF : 0xEE;
+        uint8_t result = (this->get(REG_A) | magic) & operand;
         this->set(REG_A, result);
         this->set(REG_X, result);
 
@@ -415,7 +416,7 @@ bus_state_t op_xaa(bus_state_t pins) {
   trace_operation(__func__);
   if constexpr (has_illegal_opcodes()) {
     // XAA - Transfer X AND immediate to A (illegal)
-    // Hardware quirk: Uses unstable constant 0xEE like LAX immediate
+    // Uses same chip-dependent magic as LAX immediate.
     switch (this->half_cycle) {
     case 0:
       // PHI2: Setup read from PC
@@ -426,8 +427,9 @@ bus_state_t op_xaa(bus_state_t pins) {
       // PHI1: Load data, increment PC, and perform operation
       uint8_t operand = this->bus_get_data(pins);
       this->inc(REG_PC);
-      // Hardware behavior: (A | 0xEE) & X & operand
-      this->set(REG_A, (this->get(REG_A) | 0xEE) & this->get(REG_X) &
+      // (A | magic) & X & operand — same empirical magic as LAX immediate
+      constexpr uint8_t magic = has_apu() ? 0xFF : 0xEE;
+      this->set(REG_A, (this->get(REG_A) | magic) & this->get(REG_X) &
                            operand);
       this->update_nz_flags<REG_A>(this->get(REG_A));
       this->transition_to_fetch();
