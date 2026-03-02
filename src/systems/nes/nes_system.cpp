@@ -1268,15 +1268,15 @@ NintendoSystem<V>::get_default_peripherals() const {
 
 template<NintendoVariant V>
 uint8_t NintendoSystem<V>::peek_memory(uint16_t addr) const {
-    // $2000-$3FFF: PPU registers (read-only peek, no side-effects)
-    if (addr >= 0x2000 && addr <= 0x3FFF && ppu_) {
-        return ppu_->cpu_peek(addr);
-    }
-
-    // All other ranges: block dispatch (WRAM, PRG-ROM, PRG-RAM, expansion)
+    // Block dispatch first — consistent with the tick loop's read path.
     uint16_t block = bus_.cpu_read_block[addr >> 12];
     if (block < nes_bus::BLOCK_SENTINEL_MIN) {
         return bus_.cpu_block_read(block, addr);
+    }
+
+    // PPU registers ($2000-$3FFF): side-effect-free peek
+    if (block == nes_bus::BLOCK_PPU_REGS && ppu_) {
+        return ppu_->cpu_peek(addr);
     }
 
     return 0;
