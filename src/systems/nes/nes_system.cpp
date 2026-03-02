@@ -1305,14 +1305,9 @@ template<NintendoVariant V>
 uint8_t NintendoSystem<V>::peek_ppu_memory(uint16_t addr) const {
     addr &= 0x3FFF;
 
-    // Palette RAM ($3F00-$3F1F)
+    // Palette RAM ($3F00-$3F1F, mirrors above $3F20)
     if (addr >= 0x3F00 && ppu_) {
-        uint16_t pa = addr & 0x001F;
-        if (pa == 0x0010) pa = 0x0000;
-        if (pa == 0x0014) pa = 0x0004;
-        if (pa == 0x0018) pa = 0x0008;
-        if (pa == 0x001C) pa = 0x000C;
-        return ppu_->palette[pa] & 0x3F;
+        return ppu_->palette[PPU::pal_mirror_[addr & 0x1F]] & 0x3F;
     }
 
     // CHR + nametable via block dispatch
