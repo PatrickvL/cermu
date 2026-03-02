@@ -92,9 +92,9 @@ template <const CPUTraits &Traits> struct io_port_mixin_t {
 template <const CPUTraits &Traits> struct apu_mixin_t {
   // APU instance (aligned for performance)
   struct alignas(8) {
-    nes6502_apu::APU *apu_instance;
-    bool is_pal;
-    uint8_t _padding[6];       // Align to 8 bytes
+    nes6502_apu::APU *apu_instance = nullptr;
+    bool is_pal = false;
+    uint8_t _padding[6]{};     // Align to 8 bytes
   } apu_state;
 
   // Initialize APU (first-time creation only)
