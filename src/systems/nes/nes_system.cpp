@@ -279,8 +279,7 @@ bool NintendoSystem<V>::initialize() {
 
     // Connect bus to PPU for page-pointer VRAM access
     ppu_->connect_bus(&bus_);
-    
-    setup_audio_timing();
+
     setup_connector_ports();
 
     // Register chips for the Hardware menu and debug windows
@@ -850,12 +849,6 @@ uint32_t NintendoSystem<V>::get_audio_samples(float* buffer, uint32_t max_sample
 }
 
 template<NintendoVariant V>
-void NintendoSystem<V>::setup_audio_timing() {
-    uint32_t cpu_freq = is_pal_ ? nes_constants::CPU_FREQ_PAL : nes_constants::CPU_FREQ_NTSC;
-    audio_samples_per_frame_ = (audio_sample_rate_ * (is_pal_ ? 50 : 60)) / (is_pal_ ? 50 : 60);
-}
-
-template<NintendoVariant V>
 void NintendoSystem<V>::eject_cartridge() {
     // Save battery-backed SRAM before ejecting
     if (cartridge_ && cartridge_->battery_backed) {
@@ -1118,7 +1111,6 @@ const std::vector<uint32_t>& NintendoSystem<V>::get_screen() const {
 template<NintendoVariant V>
 void NintendoSystem<V>::set_audio_sample_rate(uint32_t rate) {
     audio_sample_rate_ = rate;
-    setup_audio_timing();
 }
 
 template<NintendoVariant V>
