@@ -91,6 +91,9 @@ void NesStandardController::on_signal_change(uint32_t signal_state) {
         // Button released → release D0 (set the bit)
         output_signals_ |= (1u << NESControllerBit::NES_D0);
     }
+
+    // Keep ConnectorPort cache in sync so read_signals() returns fresh D0
+    if (port_) port_->notify_device_output_changed(output_signals_);
 }
 
 // ============================================================================

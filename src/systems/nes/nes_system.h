@@ -18,7 +18,6 @@
  */
 
 #include <cstdint>
-#include <array>
 #include <memory>
 #include <vector>
 #include <string>
@@ -65,7 +64,6 @@ namespace nes_constants {
 
 // Forward declarations
 namespace nes_system {
-    class Controller;
     class NsfCartridge;
 }
 
@@ -75,52 +73,6 @@ namespace nes_system {
 // MemoryBus class removed in Phase 2 — replaced by nes_bus_t + inline dispatch
 
 namespace nes_system {
-
-// ============================================================================
-// CONTROLLER INPUT
-// ============================================================================
-
-class Controller {
-public:
-    enum Button {
-        RIGHT  = 0x01,
-        LEFT   = 0x02,
-        DOWN   = 0x04,
-        UP     = 0x08,
-        START  = 0x10,
-        SELECT = 0x20,
-        B      = 0x40,
-        A      = 0x80
-    };
-    
-private:
-    uint8_t controller_state = 0x00;
-    uint8_t controller_register = 0x00;
-    
-public:
-    Controller() = default;
-    
-    void write(uint8_t data) {
-        (void)data;
-        controller_register = controller_state;
-    }
-    
-    uint8_t read() {
-        uint8_t data = (controller_register & 0x80) > 0;
-        controller_register <<= 1;
-        return data;
-    }
-    
-    void set_button_state(Button button, bool pressed) {
-        if (pressed) {
-            controller_state |= button;
-        } else {
-            controller_state &= ~button;
-        }
-    }
-    
-    uint8_t get_state() const { return controller_state; }
-};
 
 // ============================================================================
 // Nintendo system variant (compile-time template parameter)
@@ -163,7 +115,6 @@ private:
     std::shared_ptr<PPU> ppu_;
     std::shared_ptr<Cartridge> cartridge_;
     nes_bus::nes_bus_t bus_;                     // Page-pointer bus (replaces MemoryBus)
-    std::array<Controller, 2> controllers_;     // Player 1 & 2 controllers
     
     // System state
     bool is_pal_;
@@ -245,8 +196,6 @@ public:
     void eject_cartridge();
     void power_cycle();
     void set_controller_state(int controller, uint8_t state);
-    void press_button(int controller, Controller::Button button);
-    void release_button(int controller, Controller::Button button);
     const std::vector<uint32_t>& get_screen() const;
     const std::vector<float>& get_audio_buffer() const { return audio_buffer_; }
     void clear_audio_buffer() { audio_buffer_.clear(); audio_sample_counter_ = audio_sample_period_; }
