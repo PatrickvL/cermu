@@ -1,27 +1,14 @@
 # AGENTS.md
 
-## Agent Behavioral Rules (Priority Enforcement)
+## Agent Behavioral Rules
 
-### Rule #1: Always Verify Tasks Against All Rules (HIGHEST PRIORITY)
-- Before any action, verify compliance with all behavioral rules
-- Prioritize rule adherence over task convenience
+### Meta-Rules (HIGHEST PRIORITY)
+1. **Verify first** — Before any action, check compliance with all rules below. Prioritize rule adherence over task convenience.
+2. **Extend on command** — When given explicit behavioral instructions, add them to this document immediately and maintain rule hierarchy.
 
-### Rule #2: Always Extend Rules When Given Explicit Behavioral Instructions
-- Immediately add new behavioral constraints to this document
-- Update and maintain rule hierarchy
-
-### Core Constraints
-
-#### NO SMALL TEST/DEBUG PROGRAMS
-- **NEVER** create individual small test or debug programs
-- **ALWAYS** use consolidated/unified programs for testing and debugging
-- **TREAT ALL TASKS HOLISTICALLY** - consider interconnections
-
-#### CONSOLIDATION MANDATE
-- When multiple files serve similar purposes, consolidate them immediately
-- Delete redundant files only AFTER successful consolidation
-- Preserve all functionality in consolidated form
-- Maintain working state throughout process
+### Project Constraints
+- **No small test/debug programs.** Always use consolidated/unified test runners. Treat all tasks holistically — consider interconnections.
+- **Consolidation mandate.** When multiple files serve similar purposes, consolidate immediately. Delete originals only after verified consolidation. Preserve all functionality. Maintain working state throughout.
 
 ---
-*Agent Rules Last Updated: 2025-09-26*
+*Last Updated: 2026-03-02*
