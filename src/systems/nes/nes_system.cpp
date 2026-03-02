@@ -324,8 +324,6 @@ void NintendoSystem<V>::reset() {
     if (ppu_) {
         ppu_->reset();
     }
-    
-    bus_.reset();
 
     // Reset DMA + clock state
     dma_page_ = 0;

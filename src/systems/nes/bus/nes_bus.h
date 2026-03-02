@@ -98,7 +98,7 @@ struct nes_bus_t {
     // (Legacy page pointer tables removed -- all dispatch uses block arrays.)
 
     // ====================================================================
-    // Initialization / reset
+    // Initialization
     // ====================================================================
 
     /// Allocate fixed-region buffer (WRAM, CIRAM, PRG-RAM space).
@@ -112,9 +112,6 @@ struct nes_bus_t {
                               const uint8_t* chr_data_in, size_t chr_sz,
                               bool chr_is_ram_in,
                               const uint8_t* prg_ram_data, size_t prg_ram_sz);
-
-    /// Reset DMA state (preserves page pointer / block configuration).
-    void reset();
 
     // ====================================================================
     // Bank map update -- called after mapper register writes
