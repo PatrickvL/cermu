@@ -28,6 +28,17 @@ enum class Mirror : uint8_t {
     FOUR_SCREEN,    // Four-screen (4KB on-cart RAM, no CIRAM sharing)
 };
 
+// Precalculated nametable page assignments per mirroring mode.
+// Indexed by static_cast<int>(Mirror).  Each entry holds the
+// CIRAM page (0 or 1) for nametable slots $2000/$2400/$2800/$2C00.
+inline constexpr uint8_t MIRROR_NT_PAGES[5][4] = {
+    {0, 0, 1, 1},  // HORIZONTAL
+    {0, 1, 0, 1},  // VERTICAL
+    {0, 0, 0, 0},  // ONESCREEN_LO
+    {1, 1, 1, 1},  // ONESCREEN_HI
+    {0, 1, 2, 3},  // FOUR_SCREEN (requires 4KB on-cart VRAM)
+};
+
 // ============================================================================
 // BANK CONFIGURATION STRUCTS (Phase 2)
 // ============================================================================

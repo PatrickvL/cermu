@@ -181,14 +181,8 @@ public:
             }
         }
 
-        // Mirroring
-        switch (mirror_mode_) {
-            case Mirror::HORIZONTAL:   config.nt_page[0] = 0; config.nt_page[1] = 0; config.nt_page[2] = 1; config.nt_page[3] = 1; break;
-            case Mirror::VERTICAL:     config.nt_page[0] = 0; config.nt_page[1] = 1; config.nt_page[2] = 0; config.nt_page[3] = 1; break;
-            case Mirror::ONESCREEN_LO: config.nt_page[0] = 0; config.nt_page[1] = 0; config.nt_page[2] = 0; config.nt_page[3] = 0; break;
-            case Mirror::ONESCREEN_HI: config.nt_page[0] = 1; config.nt_page[1] = 1; config.nt_page[2] = 1; config.nt_page[3] = 1; break;
-            default: break;
-        }
+        // Nametable mirroring is set by Cartridge::update_bank_map()
+        // from mapper->mirror() — no need to set nt_page here.
     }
 
     bool register_write(uint16_t addr, uint8_t data) override {

@@ -124,9 +124,8 @@ public:
             config.chr_pages[i] = chr_mem_ + (i * 0x0400);
             config.chr_writable[i] = true;
         }
-        // Horizontal mirroring
-        config.nt_page[0] = 0; config.nt_page[1] = 0;
-        config.nt_page[2] = 1; config.nt_page[3] = 1;
+        // Nametable mirroring is set by Cartridge::update_bank_map()
+        // from mapper->mirror() — no need to set nt_page here.
     }
 
     /// Handle writes to bank registers ($5FF8-$5FFF) and $8000+ mapper space.
