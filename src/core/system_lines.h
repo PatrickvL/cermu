@@ -66,9 +66,12 @@ typedef uint64_t bus_state_t;
 #define BUS_GET_ADDR(state)     ((uint16_t)(((state) & BUS_ADDR_MASK) >> BUS_ADDR_SHIFT))
 #define BUS_GET_BANK(state)     ((uint8_t) (((state) & BUS_BANK_MASK) >> BUS_BANK_SHIFT))
 
-#define BUS_SET_DATA(state, data)   ((state) = ((state) & ~BUS_DATA_MASK) | (((uint64_t)(data) & 0xFFULL) << BUS_DATA_SHIFT))
-#define BUS_SET_ADDR(state, addr)   ((state) = ((state) & ~BUS_ADDR_MASK) | (((uint64_t)(addr) & 0xFFFFULL) << BUS_ADDR_SHIFT))
-#define BUS_SET_BANK(state, bank)   ((state) = ((state) & ~BUS_BANK_MASK) | (((uint64_t)(bank) & 0xFFULL) << BUS_BANK_SHIFT))
+/* XOR-AND-XOR field write — 3 ops, no NOT, matches bitmix() convention.
+   The field mask isolates the target bits so excess bits in the value
+   argument are automatically discarded. */
+#define BUS_SET_DATA(state, data)   ((state) = (state) ^ (((state) ^ ((bus_state_t)(data) << BUS_DATA_SHIFT)) & BUS_DATA_MASK))
+#define BUS_SET_ADDR(state, addr)   ((state) = (state) ^ (((state) ^ ((bus_state_t)(addr) << BUS_ADDR_SHIFT)) & BUS_ADDR_MASK))
+#define BUS_SET_BANK(state, bank)   ((state) = (state) ^ (((state) ^ ((bus_state_t)(bank) << BUS_BANK_SHIFT)) & BUS_BANK_MASK)) 
 
 /* Legacy bus control line definitions (kept stable for callers) */
 #define BUS_LINE_IRQ    0 // Interrupt request line (legacy: 1 = asserted)
