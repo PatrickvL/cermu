@@ -180,6 +180,10 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
         prg_ram.data(), prg_ram.size()
     );
 
+    // Propagate iNES header mirroring to mapper (used by the default
+    // mirror() for mappers that don't dynamically change mirroring).
+    mapper->set_header_mirror(mirror_mode);
+
     // Store ROM path for SRAM persistence
     rom_filepath_ = filepath_for_sram;
 

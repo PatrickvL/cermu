@@ -271,9 +271,17 @@ static TestResult run_blargg_6000(NES& nes, const std::string& name,
         }
 
         if (status == 0x81) {
-            result.verdict = TestVerdict::ERROR;
-            result.detail = "Test requested reset ($81) — not supported";
-            break;
+            // Test requests a system reset.  Per Blargg protocol, clear
+            // $6000 status before resetting so the test's post-reset init
+            // can write its own status without us misreading the stale $81.
+            nes.poke_memory(0x6000, 0x80);  // mark "running"
+            nes.reset();
+            // Give the test ROM a few frames to re-initialize
+            for (int skip = 0; skip < 30 && frame < max_frames; ++skip, ++frame) {
+                nes.run_frame();
+                result.frames_run = frame + 1;
+            }
+            continue;
         }
 
         // Read result text from $6004+
