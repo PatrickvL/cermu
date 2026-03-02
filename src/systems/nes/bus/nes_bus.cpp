@@ -53,11 +53,22 @@ void nes_bus_t::init() {
     chr_base_block = 0;
     prg_rom_base_block = 0;
 
-    // Block arrays -- all open bus until cartridge is loaded
+    // Block arrays -- mapper-dependent pages default to open bus
     std::fill(cpu_read_block,  cpu_read_block  + CPU_PAGE_COUNT, BLOCK_OPEN_BUS);
     std::fill(cpu_write_block, cpu_write_block + CPU_PAGE_COUNT, BLOCK_OPEN_BUS);
     std::fill(ppu_read_block,  ppu_read_block  + PPU_PAGE_COUNT, BLOCK_OPEN_BUS);
     std::fill(ppu_write_block, ppu_write_block + PPU_PAGE_COUNT, BLOCK_OPEN_BUS);
+
+    // Hardware-invariant CPU pages (never change after init)
+    // Pages 0-1 ($0000-$1FFF): WRAM
+    cpu_read_block[0]  = BLOCK_WRAM;  cpu_read_block[1]  = BLOCK_WRAM;
+    cpu_write_block[0] = BLOCK_WRAM;  cpu_write_block[1] = BLOCK_WRAM;
+    // Pages 2-3 ($2000-$3FFF): PPU registers -> I/O dispatch
+    cpu_read_block[2]  = BLOCK_PPU_REGS;  cpu_read_block[3]  = BLOCK_PPU_REGS;
+    cpu_write_block[2] = BLOCK_PPU_REGS;  cpu_write_block[3] = BLOCK_PPU_REGS;
+    // Page 4 ($4000-$4FFF): APU/IO registers -> I/O dispatch
+    cpu_read_block[4]  = BLOCK_APU_IO;
+    cpu_write_block[4] = BLOCK_APU_IO;
 
     // (DMA + clock state now lives in NintendoSystem.)
 }
@@ -139,21 +150,7 @@ void nes_bus_t::reset() {
 // ============================================================================
 
 void nes_bus_t::update_cpu_banks(const nes_system::MapperBankConfig& config) {
-    // Pages 0-1 ($0000-$1FFF): WRAM (fast path handles mirroring in cpu_read)
-    cpu_read_block[0]  = BLOCK_WRAM;
-    cpu_read_block[1]  = BLOCK_WRAM;
-    cpu_write_block[0] = BLOCK_WRAM;
-    cpu_write_block[1] = BLOCK_WRAM;
-
-    // Pages 2-3 ($2000-$3FFF): PPU registers -> I/O dispatch
-    cpu_read_block[2]  = BLOCK_PPU_REGS;
-    cpu_read_block[3]  = BLOCK_PPU_REGS;
-    cpu_write_block[2] = BLOCK_PPU_REGS;
-    cpu_write_block[3] = BLOCK_PPU_REGS;
-
-    // Page 4 ($4000-$4FFF): APU/IO registers -> I/O dispatch
-    cpu_read_block[4]  = BLOCK_APU_IO;
-    cpu_write_block[4] = BLOCK_APU_IO;
+    // Pages 0-4 are hardware-invariant (set once in init()).
 
     // Page 5 ($5000-$5FFF): Expansion (mapper-dependent)
     cpu_read_block[5]  = ptr_to_block(config.expansion_read);
