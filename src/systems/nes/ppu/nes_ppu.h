@@ -17,7 +17,6 @@
 
 #include <cstdint>
 #include <cstring>
-#include <memory>
 #include <utility>
 #include <vector>
 #include <array>
@@ -258,7 +257,7 @@ public:
     ppu_bus_state_t clock(ppu_bus_state_t ppu_bus);
 
     // Connect cartridge for CHR data access and mapper interaction
-    void connect_cartridge(std::shared_ptr<Cartridge> cartridge);
+    void connect_cartridge(Cartridge* cartridge);
 
     // Connect bus for page-pointer VRAM access and CIRAM pointer
     void connect_bus(nes_bus::nes_bus_t* bus) {
@@ -277,7 +276,7 @@ public:
     }
 
 private:
-    std::shared_ptr<Cartridge> cart;
+    Cartridge* cart_ = nullptr;
     nes_bus::nes_bus_t* bus_ptr_ = nullptr;   // Page-pointer bus for VRAM reads
 
     // CPU data bus helpers — model the capacitive retention on the
@@ -358,7 +357,7 @@ private:
         }
     }
 
-    // Out-of-line A12 transition — calls cart->notify_a12().
+    // Out-of-line A12 transition — calls cart_->notify_a12().
     // Separated from notify_a12 to avoid including nes_cartridge.h here.
     void forward_a12_transition(bool a12_high);
 
