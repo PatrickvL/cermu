@@ -1224,6 +1224,23 @@ uint8_t NintendoSystem<V>::peek_memory(uint16_t addr) const {
 }
 
 template<NintendoVariant V>
+void NintendoSystem<V>::poke_memory(uint16_t addr, uint8_t value) {
+    // $0000-$1FFF: CPU RAM (mirrored every 2KB)
+    if (addr < 0x2000) {
+        bus_.cpu_ram[addr & 0x07FF] = value;
+        return;
+    }
+    // $6000+: PRG-RAM via page pointers
+    if (addr >= 0x6000) {
+        uint8_t* wp = bus_.cpu_write_page[addr >> 12];
+        if (wp != nullptr) {
+            wp[addr & 0x0FFF] = value;
+            return;
+        }
+    }
+}
+
+template<NintendoVariant V>
 uint8_t NintendoSystem<V>::peek_ppu_memory(uint16_t addr) const {
     addr &= 0x3FFF;
 

@@ -38,7 +38,8 @@ void nes_bus_t::init() {
 // ============================================================================
 
 void nes_bus_t::reset() {
-    std::memset(cpu_ram, 0, sizeof(cpu_ram));
+    // NOTE: Do NOT clear cpu_ram — real NES preserves RAM across soft reset.
+    // RAM is only zeroed on power-on (constructor).
     dma_page = 0;
     dma_addr = 0;
     dma_data = 0;

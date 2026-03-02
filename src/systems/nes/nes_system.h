@@ -244,8 +244,9 @@ public:
     bool is_cartridge_loaded() const { return cartridge_ != nullptr; }
     bool is_system_ready() const override { return system_ready_; }
 
-    // Debug / test harness memory access (read-only, no side-effects)
+    // Debug / test harness memory access (no side-effects)
     uint8_t peek_memory(uint16_t addr) const;
+    void poke_memory(uint16_t addr, uint8_t value);
     uint8_t peek_ppu_memory(uint16_t addr) const;
     uint16_t get_cpu_pc() const;
     void set_cpu_pc(uint16_t addr);

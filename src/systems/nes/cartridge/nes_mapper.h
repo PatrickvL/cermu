@@ -143,7 +143,12 @@ public:
     virtual void reset() = 0;
 
     // Dynamic mirroring — mappers like MMC1/MMC3 change this at runtime.
-    virtual Mirror mirror() { return Mirror::HORIZONTAL; }
+    // Default returns the header mirroring set by set_header_mirror().
+    virtual Mirror mirror() { return header_mirror_; }
+
+    /// Store the iNES header mirroring mode.  Called by Cartridge after
+    /// mapper creation so that the default mirror() returns the correct mode.
+    void set_header_mirror(Mirror m) { header_mirror_ = m; }
 
     // IRQ support (MMC3 scanline counter, etc.)
     virtual bool irq_state() { return false; }
@@ -162,6 +167,7 @@ protected:
     bool chr_is_ram_ = false;           // true when CHR is RAM (writable)
     uint8_t* prg_ram_ = nullptr;
     size_t prg_ram_size_ = 0;
+    Mirror header_mirror_ = Mirror::HORIZONTAL;
 };
 
 } // namespace nes_system
