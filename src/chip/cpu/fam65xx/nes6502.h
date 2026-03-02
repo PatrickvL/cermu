@@ -28,7 +28,7 @@ constexpr uint32_t CPU_FREQ_PAL = 1662607;
 // Length counter lookup table
 constexpr uint8_t APU_LENGTH_TABLE[32] = {
     10, 254, 20, 2,  40, 4,  80, 6,  160, 8,  60,  10, 14, 12, 26, 14,
-    30, 16,  12, 18, 24, 20, 48, 22, 96,  24, 192, 26, 72, 28, 16, 30};
+    12, 16,  24, 18, 48, 20, 96, 22, 192, 24, 72,  26, 16, 28, 32, 30};
 
 // Noise period tables
 constexpr uint16_t NOISE_PERIOD_NTSC[16] = {
