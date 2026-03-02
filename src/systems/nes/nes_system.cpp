@@ -326,7 +326,17 @@ void NintendoSystem<V>::reset() {
     }
     
     bus_.reset();
-    
+
+    // Reset DMA + clock state
+    dma_page_ = 0;
+    dma_addr_ = 0;
+    dma_data_ = 0;
+    dma_transfer_ = false;
+    dma_dummy_ = true;
+    system_clock_counter_ = 0;
+    cpu_div_ = 0;
+    dma_odd_cycle_ = false;
+
     if (cartridge_) {
         cartridge_->reset();
         cartridge_->update_bank_map(&bus_, bus_.ciram);
@@ -830,51 +840,51 @@ void NintendoSystem<V>::tick() {
     // DMA operates at CPU clock rate: one read or write per CPU cycle.
     // Only advance DMA state on the CPU clock edge (every 3 PPU cycles).
     // ====================================================================
-    if (unlikely(bus_.dma_transfer)) {
+    if (unlikely(dma_transfer_)) {
         NES_PROF_START(dma);
-        if (bus_.cpu_div_ != 0) {
+        if (cpu_div_ != 0) {
             // Intermediate PPU cycle — just tick and wait for CPU edge
-            bus_.cpu_div_--;
+            cpu_div_--;
         } else {
             // CPU cycle boundary — advance DMA state machine
-            bus_.cpu_div_ = 2;
-            if (bus_.dma_dummy) {
-                if (bus_.dma_odd_cycle_) {
-                    bus_.dma_dummy = false;
+            cpu_div_ = 2;
+            if (dma_dummy_) {
+                if (dma_odd_cycle_) {
+                    dma_dummy_ = false;
                 }
             } else {
-                if (!bus_.dma_odd_cycle_) {
+                if (!dma_odd_cycle_) {
                     // DMA read from CPU address space
-                    uint16_t dma_src = (bus_.dma_page << 8) | bus_.dma_addr;
-                    bus_.dma_data = bus_.cpu_read(dma_src);
+                    uint16_t dma_src = (dma_page_ << 8) | dma_addr_;
+                    dma_data_ = bus_.cpu_read(dma_src);
                 } else {
-                    ppu_->oam[bus_.dma_addr] = bus_.dma_data;
-                    bus_.dma_addr++;
-                    if (bus_.dma_addr == 0x00) {
-                        bus_.dma_transfer = false;
-                        bus_.dma_dummy = true;
+                    ppu_->oam[dma_addr_] = dma_data_;
+                    dma_addr_++;
+                    if (dma_addr_ == 0x00) {
+                        dma_transfer_ = false;
+                        dma_dummy_ = true;
                     }
                 }
             }
-            bus_.dma_odd_cycle_ = !bus_.dma_odd_cycle_;
+            dma_odd_cycle_ = !dma_odd_cycle_;
         }
-        bus_.system_clock_counter++;
+        system_clock_counter_++;
         total_cycles_++;
         NES_PROF_END(dma_cycles, dma);
         return;
     }
 
-    bus_.system_clock_counter++;
+    system_clock_counter_++;
 
     // ====================================================================
     // CPU tick — one PHI2/PHI1 cycle every 3 PPU ticks
     // ====================================================================
-    if (bus_.cpu_div_ != 0) {
-        bus_.cpu_div_--;
+    if (cpu_div_ != 0) {
+        cpu_div_--;
         total_cycles_++;
         return;
     }
-    bus_.cpu_div_ = 2;  // Reset countdown (next CPU tick in 3 PPU cycles)
+    cpu_div_ = 2;  // Reset countdown (next CPU tick in 3 PPU cycles)
 
     NES_PROF_CPU_TICK();
 
@@ -955,9 +965,9 @@ void NintendoSystem<V>::tick() {
                 // APU/IO registers ($4000-$4FFF)
                 if (addr == 0x4014) {
                     // OAM DMA trigger
-                    bus_.dma_page = data;
-                    bus_.dma_addr = 0x00;
-                    bus_.dma_transfer = true;
+                    dma_page_ = data;
+                    dma_addr_ = 0x00;
+                    dma_transfer_ = true;
                 } else if (addr == 0x4016) {
                     controllers_[0].write(data);
                     controllers_[1].write(data);
@@ -1097,12 +1107,12 @@ bool NintendoSystem<V>::save_state(const std::string& filename) const {
 
     // Bus state -- CPU RAM
     f.write(reinterpret_cast<const char*>(bus_.cpu_ram), nes_bus::WRAM_SIZE);
-    f.write(reinterpret_cast<const char*>(&bus_.dma_page), 1);
-    f.write(reinterpret_cast<const char*>(&bus_.dma_addr), 1);
-    f.write(reinterpret_cast<const char*>(&bus_.dma_data), 1);
-    uint8_t dma_flags = (bus_.dma_transfer ? 1 : 0) | (bus_.dma_dummy ? 2 : 0);
+    f.write(reinterpret_cast<const char*>(&dma_page_), 1);
+    f.write(reinterpret_cast<const char*>(&dma_addr_), 1);
+    f.write(reinterpret_cast<const char*>(&dma_data_), 1);
+    uint8_t dma_flags = (dma_transfer_ ? 1 : 0) | (dma_dummy_ ? 2 : 0);
     f.write(reinterpret_cast<const char*>(&dma_flags), 1);
-    f.write(reinterpret_cast<const char*>(&bus_.system_clock_counter), sizeof(bus_.system_clock_counter));
+    f.write(reinterpret_cast<const char*>(&system_clock_counter_), sizeof(system_clock_counter_));
 
     // PRG RAM (if present -- saved from unified buffer)
     if (bus_.prg_ram && bus_.prg_ram_size > 0) {
@@ -1147,17 +1157,17 @@ bool NintendoSystem<V>::load_state(const std::string& filename) {
 
     // Bus state
     f.read(reinterpret_cast<char*>(bus_.cpu_ram), nes_bus::WRAM_SIZE);
-    f.read(reinterpret_cast<char*>(&bus_.dma_page), 1);
-    f.read(reinterpret_cast<char*>(&bus_.dma_addr), 1);
-    f.read(reinterpret_cast<char*>(&bus_.dma_data), 1);
+    f.read(reinterpret_cast<char*>(&dma_page_), 1);
+    f.read(reinterpret_cast<char*>(&dma_addr_), 1);
+    f.read(reinterpret_cast<char*>(&dma_data_), 1);
     uint8_t dma_flags; f.read(reinterpret_cast<char*>(&dma_flags), 1);
-    bus_.dma_transfer = (dma_flags & 1) != 0;
-    bus_.dma_dummy = (dma_flags & 2) != 0;
-    f.read(reinterpret_cast<char*>(&bus_.system_clock_counter), sizeof(bus_.system_clock_counter));
+    dma_transfer_ = (dma_flags & 1) != 0;
+    dma_dummy_ = (dma_flags & 2) != 0;
+    f.read(reinterpret_cast<char*>(&system_clock_counter_), sizeof(system_clock_counter_));
 
     // Derive fast-path dividers from restored system_clock_counter
-    bus_.cpu_div_ = static_cast<uint8_t>(bus_.system_clock_counter % 3);
-    bus_.dma_odd_cycle_ = (bus_.system_clock_counter & 1) != 0;
+    cpu_div_ = static_cast<uint8_t>(system_clock_counter_ % 3);
+    dma_odd_cycle_ = (system_clock_counter_ & 1) != 0;
 
     // PRG RAM
     uint32_t ram_size = 0;

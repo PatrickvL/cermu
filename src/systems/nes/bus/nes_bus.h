@@ -99,22 +99,6 @@ struct nes_bus_t {
     // (Legacy page pointer tables removed -- all dispatch uses block arrays.)
 
     // ====================================================================
-    // OAM DMA controller state
-    // ====================================================================
-    uint8_t dma_page = 0;
-    uint8_t dma_addr = 0;
-    uint8_t dma_data = 0;
-    bool dma_transfer = false;
-    bool dma_dummy = true;
-
-    // ====================================================================
-    // Clock dividers (replace modulo operations on hot path)
-    // ====================================================================
-    uint32_t system_clock_counter = 0;  // Total PPU ticks (saved to state)
-    uint8_t  cpu_div_ = 0;             // PPU->CPU countdown (0 = CPU tick this cycle)
-    bool     dma_odd_cycle_ = false;   // DMA even/odd toggle
-
-    // ====================================================================
     // Initialization / reset
     // ====================================================================
 
