@@ -939,8 +939,7 @@ void NintendoSystem<V>::tick() {
                 // Unmapped expansion or cartridge I/O — fall through to
                 // cartridge cpu_bus_tick for NSF and unusual mappers
                 if (cartridge_) {
-                    bool handled = false;
-                    pins_ = cartridge_->cpu_bus_tick(pins_, handled);
+                    pins_ = cartridge_->cpu_bus_tick(pins_);
                 }
             }
         }
@@ -984,13 +983,11 @@ void NintendoSystem<V>::tick() {
                     if (cartridge_->handle_mapper_write(addr, data)) {
                         cartridge_->update_bank_map(&bus_, bus_.ciram);
                     } else {
-                        bool handled = false;
-                        pins_ = cartridge_->cpu_bus_tick(pins_, handled);
+                        pins_ = cartridge_->cpu_bus_tick(pins_);
                     }
                 } else if (cartridge_) {
                     // Expansion writes ($5000-$7FFF) not covered by block
-                    bool handled = false;
-                    pins_ = cartridge_->cpu_bus_tick(pins_, handled);
+                    pins_ = cartridge_->cpu_bus_tick(pins_);
                 }
             }
         }

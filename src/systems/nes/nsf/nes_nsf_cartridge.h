@@ -166,23 +166,20 @@ public:
 
     // ---- CPU bus interface (overrides Cartridge::cpu_bus_tick) ----
 
-    bus_state_t cpu_bus_tick(bus_state_t bus, bool& handled) override {
+    bus_state_t cpu_bus_tick(bus_state_t bus) override {
         const uint16_t addr   = BUS_GET_ADDR(bus);
         const bool     is_read = BUS_GET_BIT(bus, BUS_RW_BIT);
-        handled = false;
 
         if (is_read) {
             // Work RAM: $6000-$7FFF
             if (addr >= 0x6000 && addr <= 0x7FFF) {
                 BUS_SET_DATA(bus, work_ram_[addr - 0x6000]);
-                handled = true;
                 return bus;
             }
 
             // Bank-switch registers: $5FF8-$5FFF (readable)
             if (addr >= 0x5FF8 && addr <= 0x5FFF) {
                 BUS_SET_DATA(bus, bank_regs_[addr - 0x5FF8]);
-                handled = true;
                 return bus;
             }
 
@@ -194,7 +191,6 @@ public:
                 } else {
                     BUS_SET_DATA(bus, 0x00);  // unmapped reads return 0
                 }
-                handled = true;
                 return bus;
             }
         } else {
@@ -203,14 +199,12 @@ public:
             // Work RAM: $6000-$7FFF
             if (addr >= 0x6000 && addr <= 0x7FFF) {
                 work_ram_[addr - 0x6000] = data;
-                handled = true;
                 return bus;
             }
 
             // Bank-switch registers: $5FF8-$5FFF
             if (addr >= 0x5FF8 && addr <= 0x5FFF) {
                 bank_regs_[addr - 0x5FF8] = data;
-                handled = true;
                 return bus;
             }
 
@@ -220,7 +214,6 @@ public:
                 if (map_cpu_addr(addr, mapped)) {
                     nsf_rom_[mapped] = data;
                 }
-                handled = true;
                 return bus;
             }
         }

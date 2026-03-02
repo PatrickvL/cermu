@@ -205,11 +205,10 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
 // CPU Bus Interface
 // ============================================================================
 
-bus_state_t Cartridge::cpu_bus_tick(bus_state_t bus, bool& handled) {
+bus_state_t Cartridge::cpu_bus_tick(bus_state_t bus) {
     // Block dispatch handles all standard CPU reads/writes.
     // This fallback is only reached for truly unmapped addresses
     // (expansion $5000-$5FFF, open bus, etc.).  Return bus unchanged.
-    handled = false;
     return bus;
 }
 
