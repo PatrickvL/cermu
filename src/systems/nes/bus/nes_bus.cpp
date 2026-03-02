@@ -136,16 +136,6 @@ void nes_bus_t::init_unified_buffer(const uint8_t* prg_rom_data, size_t prg_rom_
 }
 
 // ============================================================================
-// Reset -- DMA state only; preserves page pointer / block configuration.
-// Does NOT clear cpu_ram -- real NES preserves RAM across soft reset.
-// ============================================================================
-
-void nes_bus_t::reset() {
-    // DMA + clock state now lives in NintendoSystem.
-    // Bus reset is a no-op; kept for future bank-map reset if needed.
-}
-
-// ============================================================================
 // CPU Bank Map Update
 // ============================================================================
 
