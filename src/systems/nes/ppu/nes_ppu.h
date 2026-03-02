@@ -247,9 +247,10 @@ public:
     // Read-only peek for debug/GUI (no side-effects on PPU state).
     uint8_t cpu_peek(uint16_t addr) const;
 
-    // PPU memory access — bus_state_t receiving/returning pattern
-    ppu_bus_state_t ppu_read(ppu_bus_state_t bus, bool read_only = false);
-    ppu_bus_state_t ppu_write(ppu_bus_state_t bus);
+    // PPU memory access — direct addr/data interface.
+    // Used by service_cpu_bus ($2007 handler) and setup utilities.
+    uint8_t ppu_read_byte(uint16_t addr) const;
+    void ppu_write_byte(uint16_t addr, uint8_t data);
 
     // Main PPU tick — one dot.  Receives the PPU bus state (snapshot
     // from end of previous tick), returns the updated PPU bus state.

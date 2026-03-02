@@ -241,16 +241,16 @@ void NesScreenUtils::init_font(PPU* ppu) {
 
         for (int row = 0; row < 8; row++) {
             // Plane 0 (low bits) = glyph row
-            ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(tile_addr + row, glyph[row]));
+            ppu->ppu_write_byte(tile_addr + row, glyph[row]);
             // Plane 1 (high bits) = 0 (single colour)
-            ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(tile_addr + row + 8, 0x00));
+            ppu->ppu_write_byte(tile_addr + row + 8, 0x00);
         }
     }
 
     // Also create a solid block at tile 0x01 (for horizontal bars)
     for (int row = 0; row < 8; row++) {
-        ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x0010 + row, 0xFF));       // Plane 0: all pixels set
-        ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x0010 + row + 8, 0x00));   // Plane 1: zero
+        ppu->ppu_write_byte(0x0010 + row, 0xFF);       // Plane 0: all pixels set
+        ppu->ppu_write_byte(0x0010 + row + 8, 0x00);   // Plane 1: zero
     }
 
     printf("NES: Uploaded 8x8 ASCII font to CHR-RAM (tiles 0x20-0x7F)\n");
@@ -268,28 +268,28 @@ void NesScreenUtils::set_palette(PPU* ppu,
     if (!ppu) return;
 
     // Background palette 0: bg_color, fg_color, accent_color, dim_color
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x3F00, bg_color));      // Universal background
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x3F01, fg_color));      // Palette 0, colour 1 (text)
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x3F02, accent_color));  // Palette 0, colour 2 (accent)
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x3F03, dim_color));     // Palette 0, colour 3 (dim)
+    ppu->ppu_write_byte(0x3F00, bg_color);      // Universal background
+    ppu->ppu_write_byte(0x3F01, fg_color);      // Palette 0, colour 1 (text)
+    ppu->ppu_write_byte(0x3F02, accent_color);  // Palette 0, colour 2 (accent)
+    ppu->ppu_write_byte(0x3F03, dim_color);     // Palette 0, colour 3 (dim)
 
     // Background palette 1: same bg, accent as fg (for headers/bars)
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x3F04, bg_color));
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x3F05, accent_color));  // Palette 1, colour 1
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x3F06, fg_color));      // Palette 1, colour 2
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x3F07, dim_color));     // Palette 1, colour 3
+    ppu->ppu_write_byte(0x3F04, bg_color);
+    ppu->ppu_write_byte(0x3F05, accent_color);  // Palette 1, colour 1
+    ppu->ppu_write_byte(0x3F06, fg_color);      // Palette 1, colour 2
+    ppu->ppu_write_byte(0x3F07, dim_color);     // Palette 1, colour 3
 
     // Background palette 2: same bg, dim as fg (for labels/dimmed text)
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x3F08, bg_color));
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x3F09, dim_color));     // Palette 2, colour 1
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x3F0A, fg_color));      // Palette 2, colour 2
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x3F0B, accent_color));  // Palette 2, colour 3
+    ppu->ppu_write_byte(0x3F08, bg_color);
+    ppu->ppu_write_byte(0x3F09, dim_color);     // Palette 2, colour 1
+    ppu->ppu_write_byte(0x3F0A, fg_color);      // Palette 2, colour 2
+    ppu->ppu_write_byte(0x3F0B, accent_color);  // Palette 2, colour 3
 
     // Background palette 3: highlight (for "NOW PLAYING" etc.)
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x3F0C, bg_color));
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x3F0D, 0x16));         // Red-ish accent
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x3F0E, fg_color));
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(0x3F0F, accent_color));
+    ppu->ppu_write_byte(0x3F0C, bg_color);
+    ppu->ppu_write_byte(0x3F0D, 0x16);         // Red-ish accent
+    ppu->ppu_write_byte(0x3F0E, fg_color);
+    ppu->ppu_write_byte(0x3F0F, accent_color);
 }
 
 // ============================================================================
@@ -301,12 +301,12 @@ void NesScreenUtils::clear(PPU* ppu) {
 
     // Fill nametable 0 ($2000-$23BF) with space tiles (0x20)
     for (uint16_t addr = 0x2000; addr < 0x23C0; addr++) {
-        ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(addr, 0x20));  // Space tile
+        ppu->ppu_write_byte(addr, 0x20);  // Space tile
     }
 
     // Clear attribute table ($23C0-$23FF) to palette 0
     for (uint16_t addr = 0x23C0; addr <= 0x23FF; addr++) {
-        ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(addr, 0x00));
+        ppu->ppu_write_byte(addr, 0x00);
     }
 }
 
@@ -328,7 +328,7 @@ void NesScreenUtils::write_text(PPU* ppu, int row, int col, const char* text) {
         // Clamp to printable range
         if (ch < 0x20 || ch > 0x7F) ch = 0x20;
 
-        ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(base + i, ch));
+        ppu->ppu_write_byte(base + i, ch);
     }
 }
 
@@ -346,7 +346,7 @@ void NesScreenUtils::write_text_n(PPU* ppu, int row, int col,
         uint8_t ch = static_cast<uint8_t>(text[i]);
         if (ch < 0x20 || ch > 0x7F) ch = 0x20;
 
-        ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(base + i, ch));
+        ppu->ppu_write_byte(base + i, ch);
     }
 }
 
@@ -359,7 +359,7 @@ void NesScreenUtils::fill_row(PPU* ppu, int row, uint8_t tile) {
 
     uint16_t base = 0x2000 + static_cast<uint16_t>(row * COLS);
     for (int c = 0; c < COLS; c++) {
-        ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(base + c, tile));
+        ppu->ppu_write_byte(base + c, tile);
     }
 }
 
@@ -406,10 +406,10 @@ void NesScreenUtils::set_attribute(PPU* ppu, int row, int col, uint8_t palette) 
     int quadrant = ((row / 2) & 1) * 2 + ((col / 2) & 1);
     int shift = quadrant * 2;
 
-    uint8_t current = PPU_BUS_GET_DATA(ppu->ppu_read(PPU_BUS_WITH_ADDR(attr_addr)));
+    uint8_t current = ppu->ppu_read_byte(attr_addr);
     current &= ~(0x03 << shift);              // Clear old palette bits
     current |= (palette & 0x03) << shift;     // Set new palette bits
-    ppu->ppu_write(PPU_BUS_WITH_ADDR_DATA(attr_addr, current));
+    ppu->ppu_write_byte(attr_addr, current);
 }
 
 void NesScreenUtils::set_row_attribute(PPU* ppu, int row, uint8_t palette) {
