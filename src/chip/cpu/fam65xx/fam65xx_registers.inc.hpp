@@ -359,14 +359,18 @@ inline void update_nz_flags_16bit(uint16_t value) {
 
 // === Register initialization ===
 void init_registers() {
-  // Clear all registers to zero
+  // Clear all registers to zero (power-on state is indeterminate, but
+  // zeroing is the conventional emulator choice).
   std::memset(&reg8, 0, sizeof(reg8));
 
-  // Initialize stack pointer to 0x01FF for all processors
-  // - 6502/6510/65C02: SP always on page 1 (0x0100-0x01FF)
-  // - 65C816 emulation mode: SP forced to page 1 for compatibility
-  // - 65C816 native mode: SP can be set anywhere, but starts at 0x01FF
-  set(REG_SP, 0x01FF);
+  // Stack pointer lives on page 1 ($0100-$01FF) for 8-bit CPUs.
+  // S itself starts at $00 — the reset sequence decrements it by 3 → $FD.
+  // 65C816 is special: SP starts at 0x01FF in emulation mode.
+  if constexpr (has_wide_registers()) {
+    set(REG_SP, 0x01FF);
+  } else {
+    set(REG_SP, 0x0100); // S=$00, page byte=$01
+  }
 
   // Initialize P register based on CPU type
   if constexpr (has_wide_registers()) {
