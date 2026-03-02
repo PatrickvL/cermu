@@ -154,13 +154,12 @@ public:
     virtual bool irq_state() { return false; }
     virtual void irq_clear() {}
 
-    // A12 rising-edge clock — called by the PPU on filtered 0→1
-    // transitions of PPU address bus bit 12.  Used by MMC3 for its
-    // scanline-counting IRQ.  Default: no action.
-    virtual void clock_a12() {}
-
-    // Scanline notification — legacy callback, prefer clock_a12().
-    virtual void scanline() {}
+    // A12 transition notification — called by the PPU on any 0→1 or 1→0
+    // change of PPU address bus bit 12.  The mapper receives the raw
+    // signal state and current PPU dot count, allowing it to implement
+    // hardware-specific filtering (e.g. MMC3's RC-delay requirement
+    // that A12 was low for >= ~16 dots before a rising edge counts).
+    virtual void notify_a12(bool /*a12_high*/, uint64_t /*ppu_cycle*/) {}
 
 protected:
     // ROM/RAM pointers — set by Cartridge via set_memory_pointers()

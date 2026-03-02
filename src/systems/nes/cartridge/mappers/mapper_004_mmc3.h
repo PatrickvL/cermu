@@ -4,7 +4,7 @@
  *
  * Advanced PRG/CHR bank switching with a scanline-counting IRQ.
  * 8 bank registers (R0-R7) select 2×2KB + 4×1KB CHR and 2×8KB PRG windows.
- * PPU A12 rising edges drive the IRQ counter (via clock_a12()).
+ * PPU A12 rising edges drive the IRQ counter (via notify_a12()).
  * Games: Super Mario Bros. 2/3, Kirby's Adventure, Mega Man 3-6, etc.
  */
 
@@ -37,6 +37,14 @@ private:
     bool irq_enabled_ = false;
     bool irq_active_ = false;
     bool irq_reload_ = false;
+
+    // A12 filter state — the MMC3's input monitoring circuit has an
+    // RC delay that requires A12 to have been low for >= ~16 PPU dots
+    // before a subsequent rising edge clocks the IRQ counter.  This
+    // prevents spurious counts from brief A12 dips during BG fetches
+    // when the BG pattern table is at $1xxx.
+    uint64_t a12_low_since_ = 0;
+    static constexpr uint16_t A12_FILTER_DELAY = 16;
 
     // Derived banks for fast lookup
     uint32_t prg_bank_[4] = {};  // 4 × 8KB PRG banks
@@ -182,10 +190,23 @@ public:
 
     void irq_clear() override { irq_active_ = false; }
 
-    // A12 rising-edge clock — called by the PPU on each filtered 0→1
-    // transition of PPU address bus bit 12.  Replaces the old scanline()
-    // callback for cycle-accurate IRQ counting.
-    void clock_a12() override {
+    // A12 transition notification — receives raw A12 signal changes from
+    // the PPU with the current PPU dot timestamp.  Implements the hardware
+    // filter: only clock the IRQ counter on a rising edge where A12 was
+    // low for at least A12_FILTER_DELAY PPU dots beforehand.
+    void notify_a12(bool a12_high, uint64_t ppu_cycle) override {
+        if (!a12_high) {
+            // Falling edge — record when A12 went low
+            a12_low_since_ = ppu_cycle;
+            return;
+        }
+
+        // Rising edge — apply filter
+        if (ppu_cycle - a12_low_since_ < A12_FILTER_DELAY) {
+            return;  // A12 was low too briefly; spurious transition
+        }
+
+        // Qualified rising edge — clock the IRQ counter
         if (irq_counter_ == 0 || irq_reload_) {
             irq_counter_ = irq_reload_value_;
             irq_reload_ = false;
@@ -196,10 +217,6 @@ public:
         if (irq_counter_ == 0 && irq_enabled_) {
             irq_active_ = true;
         }
-    }
-
-    void scanline() override {
-        // Legacy — IRQ counting now handled by clock_a12().
     }
 
     void reset() override {
@@ -214,6 +231,7 @@ public:
         irq_enabled_ = false;
         irq_active_ = false;
         irq_reload_ = false;
+        a12_low_since_ = 0;
         mirror_mode_ = Mirror::HORIZONTAL;
         update_prg_banks();
         update_chr_banks();

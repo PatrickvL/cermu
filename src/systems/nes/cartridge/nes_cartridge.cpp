@@ -83,12 +83,8 @@ void Cartridge::irq_clear() {
     if (mapper) mapper->irq_clear();
 }
 
-void Cartridge::clock_a12() {
-    if (mapper) mapper->clock_a12();
-}
-
-void Cartridge::scanline() {
-    if (mapper) mapper->scanline();
+void Cartridge::notify_a12(bool a12_high, uint64_t ppu_cycle) {
+    if (mapper) mapper->notify_a12(a12_high, ppu_cycle);
 }
 
 // ============================================================================
