@@ -149,37 +149,37 @@ void nes_system::PPU::render_debug_content() {
 
         // Registers
         if (ImGui::CollapsingHeader("Registers", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::Text("PPUCTRL   ($2000): $%02X", ppu->regs.ctrl);
+            ImGui::Text("PPUCTRL   ($2000): $%02X", ppu->regs[PPUCTRL]);
             ImGui::Indent(20.0f);
-            ImGui::Text("NMI Enable:       %d", (ppu->regs.ctrl >> 7) & 1);
-            ImGui::Text("Master/Slave:     %d", (ppu->regs.ctrl >> 6) & 1);
-            ImGui::Text("Sprite Size:      %s", (ppu->regs.ctrl & 0x20) ? "8x16" : "8x8");
-            ImGui::Text("BG Pattern Base:  $%04X", (ppu->regs.ctrl & 0x10) ? 0x1000 : 0x0000);
-            ImGui::Text("SPR Pattern Base: $%04X", (ppu->regs.ctrl & 0x08) ? 0x1000 : 0x0000);
-            ImGui::Text("VRAM Increment:   %d", (ppu->regs.ctrl & 0x04) ? 32 : 1);
-            ImGui::Text("Base Nametable:   $%04X", 0x2000 + (ppu->regs.ctrl & 0x03) * 0x400);
+            ImGui::Text("NMI Enable:       %d", (ppu->regs[PPUCTRL] >> 7) & 1);
+            ImGui::Text("Master/Slave:     %d", (ppu->regs[PPUCTRL] >> 6) & 1);
+            ImGui::Text("Sprite Size:      %s", (ppu->regs[PPUCTRL] & 0x20) ? "8x16" : "8x8");
+            ImGui::Text("BG Pattern Base:  $%04X", (ppu->regs[PPUCTRL] & 0x10) ? 0x1000 : 0x0000);
+            ImGui::Text("SPR Pattern Base: $%04X", (ppu->regs[PPUCTRL] & 0x08) ? 0x1000 : 0x0000);
+            ImGui::Text("VRAM Increment:   %d", (ppu->regs[PPUCTRL] & 0x04) ? 32 : 1);
+            ImGui::Text("Base Nametable:   $%04X", 0x2000 + (ppu->regs[PPUCTRL] & 0x03) * 0x400);
             ImGui::Unindent(20.0f);
 
-            ImGui::Text("PPUMASK   ($2001): $%02X", ppu->regs.mask);
+            ImGui::Text("PPUMASK   ($2001): $%02X", ppu->regs[PPUMASK]);
             ImGui::Indent(20.0f);
-            ImGui::Text("Emph Blue:        %d", (ppu->regs.mask >> 7) & 1);
-            ImGui::Text("Emph Green:       %d", (ppu->regs.mask >> 6) & 1);
-            ImGui::Text("Emph Red:         %d", (ppu->regs.mask >> 5) & 1);
-            ImGui::Text("Show Sprites:     %d", (ppu->regs.mask >> 4) & 1);
-            ImGui::Text("Show Background:  %d", (ppu->regs.mask >> 3) & 1);
-            ImGui::Text("Show Left SPR:    %d", (ppu->regs.mask >> 2) & 1);
-            ImGui::Text("Show Left BG:     %d", (ppu->regs.mask >> 1) & 1);
-            ImGui::Text("Greyscale:        %d", ppu->regs.mask & 1);
+            ImGui::Text("Emph Blue:        %d", (ppu->regs[PPUMASK] >> 7) & 1);
+            ImGui::Text("Emph Green:       %d", (ppu->regs[PPUMASK] >> 6) & 1);
+            ImGui::Text("Emph Red:         %d", (ppu->regs[PPUMASK] >> 5) & 1);
+            ImGui::Text("Show Sprites:     %d", (ppu->regs[PPUMASK] >> 4) & 1);
+            ImGui::Text("Show Background:  %d", (ppu->regs[PPUMASK] >> 3) & 1);
+            ImGui::Text("Show Left SPR:    %d", (ppu->regs[PPUMASK] >> 2) & 1);
+            ImGui::Text("Show Left BG:     %d", (ppu->regs[PPUMASK] >> 1) & 1);
+            ImGui::Text("Greyscale:        %d", ppu->regs[PPUMASK] & 1);
             ImGui::Unindent(20.0f);
 
-            ImGui::Text("PPUSTATUS ($2002): $%02X", ppu->regs.status);
+            ImGui::Text("PPUSTATUS ($2002): $%02X", ppu->regs[PPUSTATUS]);
             ImGui::Indent(20.0f);
-            ImGui::Text("VBlank:           %d", (ppu->regs.status >> 7) & 1);
-            ImGui::Text("Sprite 0 Hit:     %d", (ppu->regs.status >> 6) & 1);
-            ImGui::Text("Sprite Overflow:  %d", (ppu->regs.status >> 5) & 1);
+            ImGui::Text("VBlank:           %d", (ppu->regs[PPUSTATUS] >> 7) & 1);
+            ImGui::Text("Sprite 0 Hit:     %d", (ppu->regs[PPUSTATUS] >> 6) & 1);
+            ImGui::Text("Sprite Overflow:  %d", (ppu->regs[PPUSTATUS] >> 5) & 1);
             ImGui::Unindent(20.0f);
 
-            ImGui::Text("OAM Addr  ($2003): $%02X", ppu->regs.oam_addr);
+            ImGui::Text("OAM Addr  ($2003): $%02X", ppu->regs[OAMADDR]);
         }
 
         // Internal State
