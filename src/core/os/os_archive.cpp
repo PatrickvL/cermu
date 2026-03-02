@@ -12,6 +12,14 @@
 
 #include "os.h"
 
+#ifdef CERMU_NO_LIBARCHIVE
+// Stub implementations when libarchive is not available
+std::vector<OsArchiveEntry> os_archive_list(const char*) { return {}; }
+std::vector<OsArchiveEntry> os_archive_list_from_memory(const uint8_t*, size_t) { return {}; }
+uint8_t* os_archive_extract(const char*, const char*, size_t*) { return nullptr; }
+uint8_t* os_archive_extract_from_memory(const uint8_t*, size_t, const char*, size_t*) { return nullptr; }
+const char* const* os_archive_extensions() { static const char* e[] = { nullptr }; return e; }
+#else // !CERMU_NO_LIBARCHIVE
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -319,3 +327,5 @@ uint8_t* os_archive_extract_from_memory(const uint8_t* data, size_t data_size,
 const char* const* os_archive_extensions() {
     return s_archive_extensions;
 }
+
+#endif // !CERMU_NO_LIBARCHIVE

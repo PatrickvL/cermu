@@ -409,7 +409,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
     // Check for NSF by extension or header magic
     std::string ext_str = vfs_extension(filepath);
     const char* ext = ext_str.empty() ? nullptr : ext_str.c_str();
-    bool is_nsf = (ext && (strcasecmp(ext, ".nsf") == 0));
+    bool is_nsf = (ext && (cermu_strcasecmp(ext, ".nsf") == 0));
 
     if (!is_nsf && file_size >= 5) {
         if (file_data[0] == 'N' && file_data[1] == 'E' && file_data[2] == 'S' &&
