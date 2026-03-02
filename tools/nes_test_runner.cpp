@@ -228,11 +228,14 @@ static TestResult run_blargg_6000(NES& nes, const std::string& name,
                         result.detail = std::string(buf) + text;
                     }
                 } else {
-                    // No $6000 protocol — read nametable text
+                    // No $6000 protocol — read nametable text and check RAM $F0
                     std::string nt_text = read_nametable_text(nes);
                     if (verbose) {
                         printf("  Nametable text:\n%s\n", nt_text.c_str());
                     }
+                    // Old Blargg tests write result to RAM $F0:
+                    //   $01 = passed, other = fail code
+                    uint8_t ram_f0 = nes.peek_memory(0x00F0);
                     // Detect pass/fail from nametable content
                     if (nt_text.find("Passed") != std::string::npos ||
                         nt_text.find("PASSED") != std::string::npos ||
@@ -246,6 +249,16 @@ static TestResult run_blargg_6000(NES& nes, const std::string& name,
                                nt_text.find("Error") != std::string::npos) {
                         result.verdict = TestVerdict::FAIL;
                         result.detail = nt_text;
+                    } else if (ram_f0 == 0x01) {
+                        // Old Blargg protocol: $01 in $F0 = passed
+                        result.verdict = TestVerdict::PASS;
+                        result.detail = nt_text.empty() ? "Passed (RAM $F0=$01)" : nt_text;
+                    } else if (ram_f0 > 0x01 && ram_f0 < 0x80) {
+                        // Old Blargg protocol: non-zero/non-$01 = fail code
+                        result.verdict = TestVerdict::FAIL;
+                        char buf[32];
+                        snprintf(buf, sizeof(buf), "Error $%02X (RAM $F0): ", ram_f0);
+                        result.detail = std::string(buf) + nt_text;
                     } else {
                         // Can't determine — report nametable content
                         result.verdict = TestVerdict::FAIL;
@@ -702,8 +715,10 @@ int main(int argc, char* argv[]) {
             fprintf(stderr, "Error: %s is not a directory\n", all_dir.c_str());
             return 1;
         }
-        for (const auto& entry : fs::directory_iterator(all_dir)) {
-            if (entry.path().extension() == ".nes") {
+        for (const auto& entry : fs::recursive_directory_iterator(all_dir)) {
+            auto ext = entry.path().extension().string();
+            // Case-insensitive .nes check
+            if (ext.size() == 4 && (ext == ".nes" || ext == ".NES" || ext == ".Nes")) {
                 rom_files.push_back(entry.path().string());
             }
         }
