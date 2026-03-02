@@ -71,11 +71,11 @@ PpuSubProfile g_ppu_subprofile;
 namespace nes_system {
 
 // ============================================================================
-// PPU — A12 rising-edge clock (out-of-line to avoid Cartridge include in header)
+// PPU — A12 transition forwarding (out-of-line to avoid Cartridge include in header)
 // ============================================================================
 
-void PPU::clock_a12_rising_edge() {
-    if (cart) cart->clock_a12();
+void PPU::forward_a12_transition(bool a12_high) {
+    if (cart) cart->notify_a12(a12_high, ppu_dot_count_);
 }
 
 // ============================================================================
@@ -385,38 +385,76 @@ void PPU::clock() {
                 load_background_shifters();
                 transfer_address_x();
                 if (scanline >= 0) evaluate_sprites();  // Not on pre-render
+                // Sprite 0, sub-cycle 0: garbage nametable read.
+                // Starts the 64-cycle sprite fetch window (257-320).
+                fast_vram_read(0x2000 | (internal.v & 0x0FFF));
                 scanline_event_++;
                 break;
-            case 3: // cycle 258-260
-                // (MMC3 scanline counter is now clocked by A12 rising-edge
-                // detection inside fast_vram_read() — see notify_a12().)
-                scanline_event_++;
-                break;
-            case 4: // cycle 261-279
-                // transfer_address_y window is pre-render only (scanline -1).
-                // Skip both case 3 and 4 immediately on visible scanlines.
-                if (scanline != -1) { scanline_event_ += 2; break; }
-                // Pre-render: advance one dot before the window opens so case 4
-                // handles the full 280–304 range unconditionally.
-                scanline_event_ += (cycle == 280 - 1);
-                break;
-            case 5: // cycle 280-304
-                // Only reachable on scanline -1 (pre-render).
-                // Fires unconditionally every dot 280–304; no cycle check needed.
-                transfer_address_y();
-                scanline_event_ += (cycle == 304);
-                break;
-            case 6: // cycle 305-338
-                if (cycle == 338) {
-                    internal.nt_byte = fast_vram_read(internal.nt_addr);
-                    scanline_event_++;
+            case 3: // cycles 258-320 — per-cycle sprite pattern fetches
+            {
+                // Real hardware: 8 sprites × 8 cycles = 64 cycles (257-320).
+                // Each sprite's 8-cycle window has 4 memory reads:
+                //   +0 garbage NT  +2 garbage AT  +4 pattern lo  +6 pattern hi
+                // Sub-cycle 0 of sprite 0 was done in case 2 (cycle 257).
+                if (cycle <= 320) {
+                    const uint16_t fc  = cycle - 257;  // 1–63
+                    const uint8_t  idx = fc >> 3;      // sprite slot 0–7
+                    const uint8_t  sub = fc & 7;       // sub-cycle within slot
+
+                    switch (sub) {
+                        case 0: // Garbage nametable byte (A12 = 0)
+                            fast_vram_read(0x2000 | (internal.v & 0x0FFF));
+                            break;
+                        case 2: // Garbage attribute byte (A12 = 0)
+                            fast_vram_read(0x23C0 | (internal.v & 0x0C00) |
+                                           ((internal.v >> 4) & 0x38) |
+                                           ((internal.v >> 2) & 0x07));
+                            break;
+                        case 4: { // Sprite pattern table low byte
+                            uint16_t addr = compute_sprite_pattern_addr(idx);
+                            uint8_t  data = fast_vram_read(addr);
+                            if (idx < internal.sprite_count) {
+                                if (internal.sprite_scanline[idx].attributes & 0x40)
+                                    data = flip_byte(data);
+                                internal.sprite_shifter_pattern_lo[idx] = data;
+                            }
+                            break;
+                        }
+                        case 6: { // Sprite pattern table high byte
+                            uint16_t addr = compute_sprite_pattern_addr(idx) + 8;
+                            uint8_t  data = fast_vram_read(addr);
+                            if (idx < internal.sprite_count) {
+                                if (internal.sprite_scanline[idx].attributes & 0x40)
+                                    data = flip_byte(data);
+                                internal.sprite_shifter_pattern_hi[idx] = data;
+                            }
+                            break;
+                        }
+                    }
+
+                    // Pre-render: transfer_address_y overlaps with sprite
+                    // fetch window (cycles 280-304 ⊂ 258-320).
+                    if (scanline == -1 && cycle >= 280 && cycle <= 304) {
+                        transfer_address_y();
+                    }
+
+                    if (cycle == 320) scanline_event_++;
+                    break;
                 }
+                scanline_event_++;
+                [[fallthrough]];
+            }
+            case 4: // cycles 321-337 — BG prefetch handled by main fetch loop
+                scanline_event_ += (cycle == 337);
                 break;
-            case 7: // cycle 339-340
+            case 5: // cycle 338
+                internal.nt_byte = fast_vram_read(internal.nt_addr);
+                scanline_event_++;
+                break;
+            case 6: // cycles 339-340
                 if (cycle == 340) {
                     internal.nt_byte = fast_vram_read(internal.nt_addr);
-                    load_sprite_shifters();
-                    scanline_event_++;  // case 8+ is empty — remaining dots cost only dispatch
+                    scanline_event_++;  // case 7+ is empty
                 }
                 break;
         }
@@ -554,6 +592,9 @@ void PPU::clock() {
         }
     }
     status_read_last_dot_ = false;  // Consumed; clear for next dot
+
+    // Save PPU bus snapshot for next-dot edge detection (A12, etc.)
+    ppu_bus_snapshot_ = ppu_bus_;
 }
 
 // ============================================================================
@@ -677,75 +718,9 @@ void PPU::evaluate_sprites() {
     }
 }
 
-void PPU::load_sprite_shifters() {
-    for (uint8_t i = 0; i < internal.sprite_count; i++) {
-        uint8_t sprite_pattern_bits_lo, sprite_pattern_bits_hi;
-        uint16_t sprite_pattern_addr_lo, sprite_pattern_addr_hi;
-        
-        if (regs[PPUCTRL] & 0x20) {
-            // 8x16 sprites
-            if ((internal.sprite_scanline[i].attributes & 0x80) == 0) {
-                // Not vertically flipped
-                if (scanline - internal.sprite_scanline[i].y < 8) {
-                    // Top half
-                    sprite_pattern_addr_lo = ((internal.sprite_scanline[i].tile_id & 0x01) << 12) |
-                                           ((internal.sprite_scanline[i].tile_id & 0xFE) << 4) |
-                                           ((scanline - internal.sprite_scanline[i].y) & 0x07);
-                } else {
-                    // Bottom half
-                    sprite_pattern_addr_lo = ((internal.sprite_scanline[i].tile_id & 0x01) << 12) |
-                                           (((internal.sprite_scanline[i].tile_id & 0xFE) + 1) << 4) |
-                                           ((scanline - internal.sprite_scanline[i].y) & 0x07);
-                }
-            } else {
-                // Vertically flipped
-                if (scanline - internal.sprite_scanline[i].y < 8) {
-                    // Top half (flipped, so actually bottom)
-                    sprite_pattern_addr_lo = ((internal.sprite_scanline[i].tile_id & 0x01) << 12) |
-                                           (((internal.sprite_scanline[i].tile_id & 0xFE) + 1) << 4) |
-                                           ((7 - (scanline - internal.sprite_scanline[i].y)) & 0x07);
-                } else {
-                    // Bottom half (flipped, so actually top)
-                    sprite_pattern_addr_lo = ((internal.sprite_scanline[i].tile_id & 0x01) << 12) |
-                                           ((internal.sprite_scanline[i].tile_id & 0xFE) << 4) |
-                                           ((7 - (scanline - internal.sprite_scanline[i].y)) & 0x07);
-                }
-            }
-        } else {
-            // 8x8 sprites
-            if ((internal.sprite_scanline[i].attributes & 0x80) == 0) {
-                // Not vertically flipped
-                sprite_pattern_addr_lo = ((regs[PPUCTRL] & 0x08) << 9) |
-                                       (internal.sprite_scanline[i].tile_id << 4) |
-                                       (scanline - internal.sprite_scanline[i].y);
-            } else {
-                // Vertically flipped
-                sprite_pattern_addr_lo = ((regs[PPUCTRL] & 0x08) << 9) |
-                                       (internal.sprite_scanline[i].tile_id << 4) |
-                                       (7 - (scanline - internal.sprite_scanline[i].y));
-            }
-        }
-        
-        sprite_pattern_addr_hi = sprite_pattern_addr_lo + 8;
-        sprite_pattern_bits_lo = fast_vram_read(sprite_pattern_addr_lo);
-        sprite_pattern_bits_hi = fast_vram_read(sprite_pattern_addr_hi);
-        
-        if (internal.sprite_scanline[i].attributes & 0x40) {
-            // Horizontally flip
-            auto flip_byte = [](uint8_t b) {
-                b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
-                b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
-                b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
-                return b;
-            };
-            sprite_pattern_bits_lo = flip_byte(sprite_pattern_bits_lo);
-            sprite_pattern_bits_hi = flip_byte(sprite_pattern_bits_hi);
-        }
-        
-        internal.sprite_shifter_pattern_lo[i] = sprite_pattern_bits_lo;
-        internal.sprite_shifter_pattern_hi[i] = sprite_pattern_bits_hi;
-    }
-}
+// load_sprite_shifters() — removed; sprite pattern fetches are now
+// per-cycle during clock() cases 3 (cycles 258-320), matching real
+// hardware timing where each of 8 sprites takes 8 PPU cycles.
 
 // ============================================================================
 // PPU — Cartridge connection

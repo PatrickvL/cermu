@@ -131,16 +131,15 @@ public:
     bool     status_read_last_dot_ = false;
     bool     vbl_was_suppressed_ = false;   // true if VBL never set this frame
 
-    // A12 edge tracking for mapper IRQ (MMC3 scanline counter, etc.).
-    // On real hardware the MMC3 monitors PPU address bus line A12 (bit 12)
-    // and clocks its IRQ counter on each rising edge, with a filter that
-    // requires A12 to have been low for >= ~16 PPU dots before a rising
-    // edge is counted.  We track A12 state here and call the mapper's
-    // clock_a12() through the cartridge on filtered rising edges.
-    bool     a12_last_ = false;             // Previous A12 state
-    uint64_t a12_low_since_ = 0;            // PPU dot when A12 last went low
-    uint64_t ppu_dot_count_ = 0;            // Monotonic PPU dot counter
-    static constexpr uint16_t A12_FILTER_DELAY = 16;  // Min dots A12 low before clock
+    // PPU bus snapshot — stored at the end of each clock() for edge
+    // detection on the next tick (project bus-snapshot idiom).  PA12
+    // (bit 28) is the key signal: mappers like MMC3 monitor rising
+    // edges on A12 to clock their IRQ counters.
+    ppu_bus_state_t ppu_bus_snapshot_ = PPU_BUS_DEFAULT_STATE;
+
+    // Monotonic PPU dot counter — passed to the mapper on A12
+    // transitions so it can implement its own timing filter.
+    uint64_t ppu_dot_count_ = 0;
 
     // Open bus data latch is stored in the data bits (0-7) of ppu_bus_.
     // These bits are otherwise unused — the rendering pipeline operates
@@ -211,8 +210,7 @@ public:
         pending_vbl_set_ = false;
         pending_vbl_clear_ = false;
         scanline_event_ = 0;
-        a12_last_ = false;
-        a12_low_since_ = 0;
+        ppu_bus_snapshot_ = PPU_BUS_DEFAULT_STATE;
         ppu_dot_count_ = 0;
 
         // Clear memory
@@ -277,26 +275,33 @@ private:
         return 0;  // open bus
     }
 
-    // A12 rising-edge detection — called on every PPU address bus access.
-    // Detects 0→1 transitions on bit 12, applies the ~16-dot low-period
-    // filter, and calls the mapper's IRQ clock on qualified edges.
+    // A12 edge detection — compares current address bit 12 against the
+    // PA12 signal in ppu_bus_snapshot_ (bus-snapshot edge-detect idiom).
+    // On any transition, the mapper is notified with the new A12 state
+    // and the current PPU dot count so it can apply its own timing
+    // filter (e.g. MMC3's ~16-dot low-period requirement).
     inline void notify_a12(uint16_t addr) {
-        const bool a12 = (addr & 0x1000) != 0;
-        if (a12 && !a12_last_) {
-            // Rising edge — clock mapper if A12 was low long enough
-            if (ppu_dot_count_ - a12_low_since_ >= A12_FILTER_DELAY) {
-                clock_a12_rising_edge();  // out-of-line, calls cart
-            }
-        } else if (!a12 && a12_last_) {
-            // Falling edge — mark start of low period
-            a12_low_since_ = ppu_dot_count_;
+        const bool new_a12 = (addr & 0x1000) != 0;
+        const bool old_a12 = PPU_BUS_GET_BIT(ppu_bus_snapshot_, PPU_BUS_PA12_BIT);
+
+        // Update PA12 on current bus state
+        if (new_a12) PPU_BUS_SET_BIT(ppu_bus_, PPU_BUS_PA12_BIT);
+        else         PPU_BUS_CLR_BIT(ppu_bus_, PPU_BUS_PA12_BIT);
+
+        // Transition detected — compare current vs snapshot
+        if (new_a12 != old_a12) {
+            // Update snapshot PA12 for within-clock multi-access tracking
+            // (e.g. sprite shifter loading does multiple reads per dot)
+            if (new_a12) PPU_BUS_SET_BIT(ppu_bus_snapshot_, PPU_BUS_PA12_BIT);
+            else         PPU_BUS_CLR_BIT(ppu_bus_snapshot_, PPU_BUS_PA12_BIT);
+
+            forward_a12_transition(new_a12);  // out-of-line
         }
-        a12_last_ = a12;
     }
 
-    // Out-of-line A12 clock — calls cart->clock_a12().
+    // Out-of-line A12 transition — calls cart->notify_a12().
     // Separated from notify_a12 to avoid including nes_cartridge.h here.
-    void clock_a12_rising_edge();
+    void forward_a12_transition(bool a12_high);
 
     // Internal rendering functions
     void increment_scroll_x();
@@ -319,7 +324,35 @@ private:
 
     // Sprite evaluation
     void evaluate_sprites();
-    void load_sprite_shifters();
+
+    // Sprite pattern address calculation — returns the low-byte pattern
+    // table address for the given sprite slot.  High byte is addr + 8.
+    // Works for all 8 slots: unused slots ($FF OAM) produce valid PPU
+    // bus addresses for correct A12 transitions.
+    inline uint16_t compute_sprite_pattern_addr(uint8_t i) const {
+        const auto& spr = internal.sprite_scanline[i];
+        if (regs[PPUCTRL] & 0x20) {
+            // 8x16 sprites
+            int row = (scanline - spr.y) & 0x0F;
+            if (spr.attributes & 0x80) row = 15 - row;  // vertical flip
+            uint8_t tile_base = spr.tile_id & 0xFE;
+            if (row >= 8) { tile_base++; row -= 8; }
+            return ((spr.tile_id & 0x01) << 12) | (tile_base << 4) | row;
+        } else {
+            // 8x8 sprites
+            int row = (scanline - spr.y) & 0x07;
+            if (spr.attributes & 0x80) row = 7 - row;   // vertical flip
+            return ((regs[PPUCTRL] & 0x08) << 9) | (spr.tile_id << 4) | row;
+        }
+    }
+
+    // Horizontal bit-reverse for sprite rendering.
+    static inline uint8_t flip_byte(uint8_t b) {
+        b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
+        b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
+        b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
+        return b;
+    }
 
     // Update /NMI output level on ppu_bus_ based on current VBL state
     // and NMI enable.  Called after any state change that affects NMI:

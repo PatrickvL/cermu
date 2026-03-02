@@ -104,11 +104,8 @@ public:
     inline bool irq_state() const { return mapper && mapper->irq_state(); }
     void irq_clear();
 
-    // A12 rising-edge clock — delegates to mapper (MMC3 scanline counter)
-    void clock_a12();
-
-    // Scanline callback — legacy, prefer clock_a12() for A12-based IRQs
-    void scanline();
+    // A12 transition notification — delegates to mapper
+    void notify_a12(bool a12_high, uint64_t ppu_cycle);
 
     // Mapper interface
     virtual void reset();
