@@ -10,7 +10,7 @@
  * Extracted from the monolithic nes_system.cpp — behavior unchanged.
  */
 
-// Include nes_system.h for full Cartridge definition (cart->ppu_read, etc.)
+// Include nes_system.h for full Cartridge definition (cart_->notify_a12, etc.)
 #include "../nes_system.h"
 
 // nes_ppu.h is transitively included via nes_system.h but be explicit
@@ -75,7 +75,7 @@ namespace nes_system {
 // ============================================================================
 
 void PPU::forward_a12_transition(bool a12_high) {
-    if (cart) cart->notify_a12(a12_high, ppu_dot_count_);
+    if (cart_) cart_->notify_a12(a12_high, ppu_dot_count_);
 }
 
 // ============================================================================
@@ -726,8 +726,8 @@ void PPU::evaluate_sprites() {
 // PPU — Cartridge connection
 // ============================================================================
 
-void PPU::connect_cartridge(std::shared_ptr<Cartridge> cartridge) {
-    cart = cartridge;
+void PPU::connect_cartridge(Cartridge* cartridge) {
+    cart_ = cartridge;
 }
 
 } // namespace nes_system

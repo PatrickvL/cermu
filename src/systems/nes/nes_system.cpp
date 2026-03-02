@@ -474,7 +474,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         // reference the unified buffer copy.
 
         // ---- Allocate unified buffer ----
-        ppu_->connect_cartridge(cartridge_);
+        ppu_->connect_cartridge(cartridge_.get());
         bus_.init_unified_buffer(
             cartridge_->prg_memory.data(), cartridge_->prg_memory.size(),
             nullptr, 0,            // no CHR-ROM data
@@ -549,7 +549,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         free(file_data);
 
         // Connect cartridge to PPU and set up page-pointer bank maps
-        ppu_->connect_cartridge(cartridge_);
+        ppu_->connect_cartridge(cartridge_.get());
 
         // Allocate unified buffer with cartridge ROM/RAM data
         bus_.init_unified_buffer(
