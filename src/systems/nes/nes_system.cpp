@@ -800,7 +800,7 @@ void NintendoSystem<V>::clock() {
     // ppu_ is guaranteed valid during frame execution (run_frame gates it)
     // ====================================================================
     NES_PROF_START(ppu);
-    ppu_->clock();
+    ppu_->bus_snapshot_ = ppu_->clock(ppu_->bus_snapshot_);
     NES_PROF_END(ppu_clock_cycles, ppu);
 
     // ====================================================================
@@ -863,7 +863,7 @@ void NintendoSystem<V>::clock() {
     // (nmi_edge_latch) handles persistence.  Once latched, the NMI fires
     // was giving iteration 05 of blargg 06-suppression an extra NMI LOW
     // cycle, making NMI fire when it shouldn't.
-    pins_ = PPU_CPU_BITMIX(pins_, ppu_->ppu_bus_);
+    pins_ = PPU_CPU_BITMIX(pins_, ppu_->bus_snapshot_);
 
     // PHI2: CPU drives address bus and R/W signal
     NES_PROF_START(phi2);
@@ -891,7 +891,10 @@ void NintendoSystem<V>::clock() {
                 BUS_SET_DATA(pins_, rp[addr & 0x0FFF]);
             } else if (page <= 3) {
                 // PPU registers ($2000-$3FFF, mirrored every 8 bytes)
-                pins_ = ppu_->cpu_bus_tick(pins_);
+                auto [cpu_result, ppu_result] = ppu_->service_cpu_bus(
+                    pins_, ppu_->bus_snapshot_);
+                pins_ = cpu_result;
+                ppu_->bus_snapshot_ = ppu_result;
             } else if (page == 4) {
                 // APU/IO registers ($4000-$4FFF)
                 if (addr == 0x4016) {
@@ -924,7 +927,10 @@ void NintendoSystem<V>::clock() {
                 wp[addr & 0x0FFF] = data;
             } else if (page <= 3) {
                 // PPU registers ($2000-$3FFF, mirrored every 8 bytes)
-                pins_ = ppu_->cpu_bus_tick(pins_);
+                auto [cpu_result, ppu_result] = ppu_->service_cpu_bus(
+                    pins_, ppu_->bus_snapshot_);
+                pins_ = cpu_result;
+                ppu_->bus_snapshot_ = ppu_result;
             } else if (page == 4) {
                 // APU/IO registers ($4000-$4FFF)
                 if (addr == 0x4014) {
@@ -967,9 +973,9 @@ void NintendoSystem<V>::clock() {
 
     NES_PROF_START(irq);
 
-    // Re-transfer PPU /NMI after bus dispatch — cpu_bus_tick() may have
+    // Re-transfer PPU /NMI after bus dispatch — service_cpu_bus() may have
     // changed NMI state ($2002 read clears VBL, $2000 write toggles enable).
-    pins_ = PPU_CPU_BITMIX(pins_, ppu_->ppu_bus_);
+    pins_ = PPU_CPU_BITMIX(pins_, ppu_->bus_snapshot_);
 
     // Sample NMI pin AFTER bus dispatch so the CPU sees the post-operation
     // pin state.  End of PHI2 and start of PHI1 are the same clock edge;

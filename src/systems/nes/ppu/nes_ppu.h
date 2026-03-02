@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <utility>
 #include <vector>
 #include <array>
 
@@ -99,12 +100,25 @@ public:
     bool frame_complete = false;
     uint64_t last_vbl_detect_dot_ = 0; // Total dots when last $2002 VBL detect
 
-    // PPU bus word — carries the PPU's output signal levels.
-    // The NMI bit is driven as a continuous level here; the CPU's
-    // internal edge-detect flip-flop handles the HIGH→LOW transition.
-    // Shared bits (/NMI, /IRQ, /RES) are at the same positions as the
-    // CPU bus_state_t, enabling zero-cost PPU_CPU_BITMIX transfer.
-    ppu_bus_state_t ppu_bus_ = PPU_BUS_DEFAULT_STATE;
+    // PPU bus state flows through arguments.  bus_snapshot_ (inherited
+    // from ChipBase) stores the PPU bus state between ticks — the system
+    // reads it at tick entry and writes it back after clock() returns.
+    // The PPU never stores a separate ppu_bus_ member; each function
+    // receives the current state, modifies it, and returns it.
+
+    // Open bus decay — on real hardware, the PPU's CPU-side data pins
+    // have a capacitive latch (io_latch_) that retains whatever was last
+    // driven during a PPU register access.  Between accesses, the latch
+    // decays toward 0 due to parasitic capacitance discharging.
+    //
+    // We model only D0-D7 because those are the only decaying lines
+    // observable through software — reads of PPU registers return stale
+    // data bits for any bits the register doesn't actively drive.
+    //
+    // Per-bit decay period: ~600ms ≈ 3,221,590 PPU dots (NTSC).
+    static constexpr uint64_t OPEN_BUS_DECAY_DOTS = 3'221'590;
+    uint8_t io_latch_ = 0;                 // PPU internal data bus buffer
+    uint64_t open_bus_refresh_[8] = {};     // Per-bit: PPU dot when last driven
 
     // VBL internal/external split for accurate PPU-CPU timing.
     //
@@ -131,20 +145,15 @@ public:
     bool     status_read_last_dot_ = false;
     bool     vbl_was_suppressed_ = false;   // true if VBL never set this frame
 
-    // PPU bus snapshot — stored at the end of each clock() for edge
-    // detection on the next tick (project bus-snapshot idiom).  PA12
-    // (bit 28) is the key signal: mappers like MMC3 monitor rising
-    // edges on A12 to clock their IRQ counters.
-    ppu_bus_state_t ppu_bus_snapshot_ = PPU_BUS_DEFAULT_STATE;
-
     // Monotonic PPU dot counter — passed to the mapper on A12
     // transitions so it can implement its own timing filter.
     uint64_t ppu_dot_count_ = 0;
 
-    // Open bus data latch is stored in the data bits (0-7) of ppu_bus_.
-    // These bits are otherwise unused — the rendering pipeline operates
-    // on local ppu_bus_state_t values, and only the shared NMI/IRQ/RES
-    // bits (32-34) are read externally via PPU_CPU_BITMIX.
+    // NOTE: Bus snapshots live on each chip's bus_snapshot_ (inherited
+    // from ChipBase).  The PPU's bus_snapshot_ stores the PPU bus state
+    // between dots; the system reads it at tick entry and writes it back
+    // after clock() returns.  The PPU-side CPU data latch (io_latch_) is
+    // internal to the PPU — the system doesn't need to manage it.
 
     // Region
     bool is_pal = false;
@@ -203,15 +212,16 @@ public:
         cycle = 0;
         frame_count = 0;
         frame_complete = false;
-        ppu_bus_ = PPU_BUS_DEFAULT_STATE;
         status_read_last_dot_ = false;
         vbl_was_suppressed_ = false;
         vbl_flag_internal_ = false;
         pending_vbl_set_ = false;
         pending_vbl_clear_ = false;
         scanline_event_ = 0;
-        ppu_bus_snapshot_ = PPU_BUS_DEFAULT_STATE;
         ppu_dot_count_ = 0;
+        std::fill(std::begin(open_bus_refresh_), std::end(open_bus_refresh_), 0);
+        io_latch_ = 0;
+        bus_snapshot_ = PPU_BUS_DEFAULT_STATE;   // PPU bus (active-low signals HIGH)
 
         // Clear memory
         vram.fill(0);
@@ -223,20 +233,23 @@ public:
         rebuild_pixel_lut();
     }
 
-    // CPU bus interface — the PPU is a bus device; it samples A0-A2, R/W
-    // and drives/samples D0-D7 via the shared bus_state_t.  Open-bus behavior
-    // emerges naturally because the data lines retain their last value.
-    bus_state_t cpu_bus_tick(bus_state_t bus);
+    // Service a CPU bus cycle targeting the PPU register window ($2000-$2007).
+    // Receives: cpu_bus (current CPU bus), ppu_bus (for NMI output updates).
+    // Returns: {cpu_bus, ppu_bus} — caller stores both snapshots.
+    std::pair<bus_state_t, ppu_bus_state_t> service_cpu_bus(
+        bus_state_t cpu_bus, ppu_bus_state_t ppu_bus);
 
-    // Read-only peek for debug/GUI (no side-effects on PPU state)
+    // Read-only peek for debug/GUI (no side-effects on PPU state).
     uint8_t cpu_peek(uint16_t addr) const;
 
     // PPU memory access — bus_state_t receiving/returning pattern
     ppu_bus_state_t ppu_read(ppu_bus_state_t bus, bool read_only = false);
     ppu_bus_state_t ppu_write(ppu_bus_state_t bus);
 
-    // Main PPU tick - called 3 times per CPU cycle
-    void clock();
+    // Main PPU tick — one dot.  Receives the PPU bus state (snapshot
+    // from end of previous tick), returns the updated PPU bus state.
+    // The caller stores the returned value as the new PPU bus snapshot.
+    ppu_bus_state_t clock(ppu_bus_state_t ppu_bus);
 
     // Connect cartridge for CHR data access and mapper interaction
     void connect_cartridge(std::shared_ptr<Cartridge> cartridge);
@@ -248,15 +261,55 @@ public:
     const std::vector<uint32_t>& get_screen() const { return screen; }
 
     // NMI output level — true when /NMI is asserted (active LOW).
-    // The system tick transfers this onto the CPU bus via PPU_CPU_BITMIX;
-    // the CPU's own edge-detect flip-flop handles the rest.
-    bool nmi_output() const {
-        return !PPU_BUS_GET_BIT(ppu_bus_, BUS_NMI_BIT);
+    // Reads from the caller-provided ppu_bus; the system passes the
+    // current PPU bus state after clock() returns.
+    static bool nmi_output(ppu_bus_state_t ppu_bus) {
+        return !PPU_BUS_GET_BIT(ppu_bus, BUS_NMI_BIT);
     }
 
 private:
     std::shared_ptr<Cartridge> cart;
     nes_bus::nes_bus_t* bus_ptr_ = nullptr;   // Page-pointer bus for VRAM reads
+
+    // CPU data bus helpers — model the capacitive retention on the
+    // PPU's CPU-side data pins (io_latch_).  On real silicon every
+    // driven transaction (read or write) recharges the bits that are
+    // actively driven.  Address and control lines also decay but are
+    // not observable through software, so we omit them.
+    //
+    // apply_open_bus_decay(bus) loads io_latch_ with per-bit decay onto
+    // the bus's D0-D7, preserving address/R/W/control bits.
+    inline bus_state_t apply_open_bus_decay(bus_state_t bus) const {
+        uint8_t data = io_latch_;
+        for (int i = 0; i < 8; i++) {
+            if ((ppu_dot_count_ - open_bus_refresh_[i]) >= OPEN_BUS_DECAY_DOTS)
+                data &= ~(1 << i);
+        }
+        BUS_SET_DATA(bus, data);
+        return bus;
+    }
+
+    // Record that specific bits were actively driven this tick.
+    // Updates timestamps AND the io_latch_ from the current bus data.
+    inline void refresh_open_bus_timestamps(bus_state_t bus, uint8_t mask = 0xFF) {
+        const uint8_t data = BUS_GET_DATA(bus);
+        // Update latch: driven bits take new value, undriven bits retain
+        io_latch_ = (io_latch_ & ~mask) | (data & mask);
+        for (int i = 0; i < 8; i++) {
+            if (mask & (1 << i))
+                open_bus_refresh_[i] = ppu_dot_count_;
+        }
+    }
+
+    // Const accessor — returns decayed io_latch_ value.  Used by cpu_peek.
+    inline uint8_t decayed_latch_data() const {
+        uint8_t data = io_latch_;
+        for (int i = 0; i < 8; i++) {
+            if ((ppu_dot_count_ - open_bus_refresh_[i]) >= OPEN_BUS_DECAY_DOTS)
+                data &= ~(1 << i);
+        }
+        return data;
+    }
 
     // Fast inline CHR/nametable read — bypasses ppu_bus_state_t construction
     // and palette range check.  For rendering-only reads where addr < $3F00.
@@ -264,8 +317,9 @@ private:
     // eliminates ~8 operations per call.
     //
     // Also drives A12 edge detection for mapper IRQ (MMC3).
-    inline uint8_t fast_vram_read(uint16_t addr) {
-        notify_a12(addr);
+    // ppu_bus is passed by reference — updated with the new PA12 state.
+    inline uint8_t fast_vram_read(uint16_t addr, ppu_bus_state_t& ppu_bus) {
+        notify_a12(addr, ppu_bus);
         if (likely(bus_ptr_ != nullptr)) {
             const uint8_t* rp = bus_ptr_->ppu_read_page[addr >> 10];
             if (likely(rp != nullptr)) {
@@ -276,25 +330,21 @@ private:
     }
 
     // A12 edge detection — compares current address bit 12 against the
-    // PA12 signal in ppu_bus_snapshot_ (bus-snapshot edge-detect idiom).
+    // PA12 signal already on ppu_bus (which starts as the snapshot and
+    // gets updated with each VRAM access within the same dot).
     // On any transition, the mapper is notified with the new A12 state
     // and the current PPU dot count so it can apply its own timing
     // filter (e.g. MMC3's ~16-dot low-period requirement).
-    inline void notify_a12(uint16_t addr) {
+    inline void notify_a12(uint16_t addr, ppu_bus_state_t& ppu_bus) {
         const bool new_a12 = (addr & 0x1000) != 0;
-        const bool old_a12 = PPU_BUS_GET_BIT(ppu_bus_snapshot_, PPU_BUS_PA12_BIT);
+        const bool old_a12 = PPU_BUS_GET_BIT(ppu_bus, PPU_BUS_PA12_BIT);
 
         // Update PA12 on current bus state
-        if (new_a12) PPU_BUS_SET_BIT(ppu_bus_, PPU_BUS_PA12_BIT);
-        else         PPU_BUS_CLR_BIT(ppu_bus_, PPU_BUS_PA12_BIT);
+        if (new_a12) PPU_BUS_SET_BIT(ppu_bus, PPU_BUS_PA12_BIT);
+        else         PPU_BUS_CLR_BIT(ppu_bus, PPU_BUS_PA12_BIT);
 
-        // Transition detected — compare current vs snapshot
+        // Transition detected — compare current vs old
         if (new_a12 != old_a12) {
-            // Update snapshot PA12 for within-clock multi-access tracking
-            // (e.g. sprite shifter loading does multiple reads per dot)
-            if (new_a12) PPU_BUS_SET_BIT(ppu_bus_snapshot_, PPU_BUS_PA12_BIT);
-            else         PPU_BUS_CLR_BIT(ppu_bus_snapshot_, PPU_BUS_PA12_BIT);
-
             forward_a12_transition(new_a12);  // out-of-line
         }
     }
@@ -354,7 +404,7 @@ private:
         return b;
     }
 
-    // Update /NMI output level on ppu_bus_ based on current VBL state
+    // Update /NMI output level on ppu_bus based on current VBL state
     // and NMI enable.  Called after any state change that affects NMI:
     //   - clock() VBL set/clear
     //   - $2002 read (clears VBL)
@@ -362,11 +412,11 @@ private:
     //
     // Uses vbl_flag_internal_ (set at dot 1) rather than regs[PPUSTATUS] bit 7
     // (visible at dot 2) so NMI asserts at the correct PPU clock.
-    inline void update_nmi_output() {
+    inline void update_nmi_output(ppu_bus_state_t& ppu_bus) {
         if (vbl_flag_internal_ && (regs[PPUCTRL] & 0x80)) {
-            PPU_BUS_CLR_BIT(ppu_bus_, BUS_NMI_BIT);  // active low = asserted
+            PPU_BUS_CLR_BIT(ppu_bus, BUS_NMI_BIT);  // active low = asserted
         } else {
-            PPU_BUS_SET_BIT(ppu_bus_, BUS_NMI_BIT);  // inactive high
+            PPU_BUS_SET_BIT(ppu_bus, BUS_NMI_BIT);  // inactive high
         }
     }
 

@@ -427,13 +427,16 @@ void NesScreenUtils::set_row_attribute(PPU* ppu, int row, uint8_t palette) {
 void NesScreenUtils::enable_display(PPU* ppu) {
     if (!ppu) return;
 
-    // Helper: construct a CPU-bus write cycle for a PPU register
+    // Helper: construct a CPU-bus write cycle for a PPU register.
+    // Maintains a local PPU bus snapshot — setup-only.
+    ppu_bus_state_t ppu_bus = PPU_BUS_DEFAULT_STATE;
     auto ppu_reg_write = [&](uint16_t addr, uint8_t data) {
         bus_state_t bus = NES_BUS_DEFAULT_STATE;
         BUS_SET_ADDR(bus, addr);
         BUS_SET_DATA(bus, data);
         BUS_CLR_BIT(bus, BUS_RW_BIT);  // write
-        ppu->cpu_bus_tick(bus);
+        auto [cpu_result, ppu_result] = ppu->service_cpu_bus(bus, ppu_bus);
+        ppu_bus = ppu_result;
     };
 
     // PPUCTRL ($2000): NMI enable, pattern table 0 for background

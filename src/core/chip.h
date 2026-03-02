@@ -66,12 +66,10 @@ public:
     virtual void render_settings_content() {}
     virtual void render_layout_content() {}
 
-#ifdef CERMU_HAS_GUI
-    // Bus state snapshot for layout pin rendering.
-    // Assigned at the end of each system tick so that GUI code can read
-    // the most recent bus state without coupling to the emulation loop.
+    // Bus state snapshot — stores the bus state at the end of each tick.
+    // Used by the emulation loop for edge detection (A12, NMI) and
+    // open-bus decay, and by GUI code for layout pin rendering.
     bus_state_t bus_snapshot_ = 0;
-#endif
 
 protected:
     ChipInfo info_;

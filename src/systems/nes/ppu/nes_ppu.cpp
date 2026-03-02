@@ -82,80 +82,77 @@ void PPU::forward_a12_transition(bool a12_high) {
 // PPU — CPU BUS INTERFACE
 // ============================================================================
 
-bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
+std::pair<bus_state_t, ppu_bus_state_t> PPU::service_cpu_bus(
+        bus_state_t bus, ppu_bus_state_t ppu_bus) {
     const uint16_t addr = BUS_GET_ADDR(bus) & 0x2007;   // PPU mirrors every 8 bytes
     const bool is_read  = BUS_GET_BIT(bus, BUS_RW_BIT);
 
     if (is_read) {
         // ---- READ ----
-        // Start with the data already on the bus (floating/open-bus value)
-        uint8_t data = BUS_GET_DATA(bus);
-
-        // The PPU's internal data bus latch drives open-bus bits.
-        // Only readable registers override the relevant bits.
-        data = PPU_BUS_GET_DATA(ppu_bus_);
+        // CPU is not driving D0-D7.  Load the decayed PPU data latch
+        // onto the bus, preserving addr/control.
+        bus = apply_open_bus_decay(bus);
 
         switch (addr) {
-            case 0x2000: // Control — write only (open bus)
-                break;
-            case 0x2001: // Mask — write only (open bus)
+            case 0x2000: // Control — write only (decayed data carries through)
+            case 0x2001: // Mask — write only
+            case 0x2003: // OAM Address — write only
+            case 0x2005: // Scroll — write only
+            case 0x2006: // PPU Address — write only
                 break;
             case 0x2002: // Status
-                // Top 3 bits from status, bottom 5 from PPU data bus latch
-                data = (regs[PPUSTATUS] & 0xE0) | (PPU_BUS_GET_DATA(ppu_bus_) & 0x1F);
+                // PPU drives bits 7-5 from status; bits 4-0 carry through.
+                BUS_SET_DATA(bus, (regs[PPUSTATUS] & 0xE0) | (BUS_GET_DATA(bus) & 0x1F));
+                refresh_open_bus_timestamps(bus, 0xE0);
+
                 // Flag that $2002 was read this dot, for VBL suppression
                 // race-condition detection at the next clock() commit point.
                 status_read_last_dot_ = true;
 
-
                 // Clear VBL on read — both internal (NMI) and external ($2002).
                 // Also cancel any pending propagation since the read overtakes it.
-                // NMI suppression is handled naturally by the CPU's pin-state
-                // shift register: clearing vbl_flag_internal_ de-asserts NMI,
-                // which feeds 0s into the shift register, preventing the
-                // 3-consecutive-LOW condition.  The nmi_pending flag (set when
-                // the shift register WAS full) persists independently.
                 regs[PPUSTATUS] &= ~0x80;
                 vbl_flag_internal_ = false;
                 pending_vbl_set_ = false;
                 internal.w = false;   // Reset write toggle
-                update_nmi_output();  // NMI level changes (VBL cleared)
+                update_nmi_output(ppu_bus);  // NMI level changes (VBL cleared)
                 break;
-            case 0x2003: // OAM Address — write only (open bus)
+            case 0x2004: { // OAM Data
+                uint8_t data = oam[regs[OAMADDR]];
+                // Attribute byte (offset 2 in each 4-byte entry): bits 2-4
+                // are unimplemented in hardware and always read back as 0.
+                if ((regs[OAMADDR] & 3) == 2) data &= 0xE3;
+                BUS_SET_DATA(bus, data);
+                refresh_open_bus_timestamps(bus);
                 break;
-            case 0x2004: // OAM Data
-                data = oam[regs[OAMADDR]];
-                break;
-            case 0x2005: // Scroll — write only (open bus)
-                break;
-            case 0x2006: // PPU Address — write only (open bus)
-                break;
-            case 0x2007: // PPU Data
-                data = regs[PPUDATA];
+            }
+            case 0x2007: { // PPU Data
+                uint8_t data = regs[PPUDATA];
                 regs[PPUDATA] = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(internal.v)));
 
                 // Palette reads are immediate (no buffering delay).
-                // Apply greyscale mask here for CPU visibility; the
-                // rendering path uses the precalculated palette cache
-                // which bakes greyscale into its variant entries.
                 if (internal.v >= 0x3F00) {
                     data = regs[PPUDATA] & (regs[PPUMASK] & 0x01 ? 0x30 : 0x3F);
+                    // Palette read: PPU drives bits 5-0; bits 7-6 carry through.
+                    BUS_SET_DATA(bus, (BUS_GET_DATA(bus) & 0xC0) | (data & 0x3F));
+                    refresh_open_bus_timestamps(bus, 0x3F);
+                } else {
+                    BUS_SET_DATA(bus, data);
+                    refresh_open_bus_timestamps(bus);
                 }
 
                 // Increment VRAM address
                 internal.v += (regs[PPUCTRL] & 0x04) ? 32 : 1;
-                internal.v &= 0x7FFF;  // v is 15 bits
-                // Post-increment address drives the PPU bus — A12 may change.
-                notify_a12(internal.v);
+                internal.v &= 0x7FFF;
+                notify_a12(internal.v, ppu_bus);
                 break;
+            }
         }
-
-        PPU_BUS_SET_DATA(ppu_bus_, data);  // Update open-bus latch in ppu_bus_ data bits
-        BUS_SET_DATA(bus, data);             // Drive result onto shared system bus
     } else {
         // ---- WRITE ----
-        uint8_t data = BUS_GET_DATA(bus);  // Sample data lines from CPU
-        PPU_BUS_SET_DATA(ppu_bus_, data);  // Every write updates the open-bus latch
+        // CPU drives all 8 data lines — refresh latch + timestamps.
+        refresh_open_bus_timestamps(bus);
+        const uint8_t data = BUS_GET_DATA(bus);
 
         switch (addr) {
             case 0x2000: // Control
@@ -163,7 +160,7 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
                     uint8_t old_ctrl = regs[PPUCTRL];
                     regs[PPUCTRL] = data;
                     internal.t = (internal.t & 0xF3FF) | ((data & 0x03) << 10);
-                    update_nmi_output();  // NMI enable may have changed
+                    update_nmi_output(ppu_bus);  // NMI enable may have changed
                 }
                 break;
             case 0x2001: // Mask
@@ -201,7 +198,7 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
                     // v now drives the PPU address bus — update A12 tracking.
                     // Games (and test ROMs) can clock the MMC3 counter by
                     // toggling A12 via $2006 writes.
-                    notify_a12(internal.v);
+                    notify_a12(internal.v, ppu_bus);
                 }
                 break;
             case 0x2007: // PPU Data
@@ -209,12 +206,13 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
                 internal.v += (regs[PPUCTRL] & 0x04) ? 32 : 1;
                 internal.v &= 0x7FFF;  // v is 15 bits
                 // Post-increment address drives the PPU bus — A12 may change.
-                notify_a12(internal.v);
+                notify_a12(internal.v, ppu_bus);
                 break;
         }
     }
 
-    return bus;
+    // Return both bus states — the caller stores them as snapshots.
+    return {bus, ppu_bus};
 }
 
 // ============================================================================
@@ -222,11 +220,12 @@ bus_state_t PPU::cpu_bus_tick(bus_state_t bus) {
 // ============================================================================
 
 uint8_t PPU::cpu_peek(uint16_t addr) const {
+    const uint8_t decayed = decayed_latch_data();
     switch (addr & 0x2007) {
-        case 0x2002: return (regs[PPUSTATUS] & 0xE0) | (PPU_BUS_GET_DATA(ppu_bus_) & 0x1F);
+        case 0x2002: return (regs[PPUSTATUS] & 0xE0) | (decayed & 0x1F);
         case 0x2004: return oam[regs[OAMADDR]];
         case 0x2007: return regs[PPUDATA];
-        default:     return PPU_BUS_GET_DATA(ppu_bus_);
+        default:     return decayed;
     }
 }
 
@@ -279,7 +278,7 @@ ppu_bus_state_t PPU::ppu_write(ppu_bus_state_t bus) {
 // PPU — Main clock (one PPU dot)
 // ============================================================================
 
-void PPU::clock() {
+ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
     ++ppu_dot_count_;  // Monotonic counter for A12 filter timing
 
     // Cache mask register — accessed many times per dot; one read beats ten.
@@ -303,7 +302,7 @@ void PPU::clock() {
             pending_vbl_set_ = false;
             vbl_flag_internal_ = false;
             vbl_was_suppressed_ = true;
-            update_nmi_output();
+            update_nmi_output(ppu_bus);
         } else {
             regs[PPUSTATUS] |= 0x80;
             pending_vbl_set_ = false;
@@ -324,7 +323,7 @@ void PPU::clock() {
         // committed at the start of the NEXT clock() call (dot 2 visibility).
         if (scanline == -1 && cycle == 1) {
             vbl_flag_internal_ = false;     // NMI de-asserts immediately
-            update_nmi_output();            // Drive /NMI HIGH immediately
+            update_nmi_output(ppu_bus);            // Drive /NMI HIGH immediately
             pending_vbl_clear_ = true;      // $2002 visible next dot
             vbl_was_suppressed_ = false;    // Reset suppression for new frame
 
@@ -349,22 +348,22 @@ void PPU::clock() {
                     internal.nt_addr = 0x2000 | (internal.v & 0x0FFF);
                     break;
                 case 2:
-                    internal.nt_byte = fast_vram_read(internal.nt_addr);
+                    internal.nt_byte = fast_vram_read(internal.nt_addr, ppu_bus);
                     break;
                 case 4:
                     internal.at_byte = fast_vram_read(
                         0x2000 | (internal.v & 0x0C00) | 0x03C0 |
-                        ((internal.v >> 4) & 0x38) | ((internal.v >> 2) & 0x07));
+                        ((internal.v >> 4) & 0x38) | ((internal.v >> 2) & 0x07), ppu_bus);
                     // Shift to the correct quadrant's 2-bit palette selector.
                     // Combine both conditional shifts into a single operation.
                     internal.at_byte >>= ((internal.v & 0x0002) ? 2 : 0)
                                       | ((internal.v & 0x0040) ? 4 : 0);
                     break;
                 case 6:
-                    internal.bg_lo_byte = fast_vram_read(bg_base + tile_row + fine_y);
+                    internal.bg_lo_byte = fast_vram_read(bg_base + tile_row + fine_y, ppu_bus);
                     break;
                 case 7:
-                    internal.bg_hi_byte = fast_vram_read(bg_base + tile_row + fine_y + 8);
+                    internal.bg_hi_byte = fast_vram_read(bg_base + tile_row + fine_y + 8, ppu_bus);
                     increment_scroll_x();
                     break;
             }
@@ -391,7 +390,7 @@ void PPU::clock() {
                 if (scanline >= 0 && (regs[PPUMASK] & 0x18)) evaluate_sprites();
                 // Sprite 0, sub-cycle 0: garbage nametable read.
                 // Starts the 64-cycle sprite fetch window (257-320).
-                fast_vram_read(0x2000 | (internal.v & 0x0FFF));
+                fast_vram_read(0x2000 | (internal.v & 0x0FFF), ppu_bus);
                 scanline_event_++;
                 break;
             case 3: // cycles 258-320 — per-cycle sprite pattern fetches
@@ -407,16 +406,16 @@ void PPU::clock() {
 
                     switch (sub) {
                         case 0: // Garbage nametable byte (A12 = 0)
-                            fast_vram_read(0x2000 | (internal.v & 0x0FFF));
+                            fast_vram_read(0x2000 | (internal.v & 0x0FFF), ppu_bus);
                             break;
                         case 2: // Garbage attribute byte (A12 = 0)
                             fast_vram_read(0x23C0 | (internal.v & 0x0C00) |
                                            ((internal.v >> 4) & 0x38) |
-                                           ((internal.v >> 2) & 0x07));
+                                           ((internal.v >> 2) & 0x07), ppu_bus);
                             break;
                         case 4: { // Sprite pattern table low byte
                             uint16_t addr = compute_sprite_pattern_addr(idx);
-                            uint8_t  data = fast_vram_read(addr);
+                            uint8_t  data = fast_vram_read(addr, ppu_bus);
                             if (idx < internal.sprite_count) {
                                 if (internal.sprite_scanline[idx].attributes & 0x40)
                                     data = flip_byte(data);
@@ -426,7 +425,7 @@ void PPU::clock() {
                         }
                         case 6: { // Sprite pattern table high byte
                             uint16_t addr = compute_sprite_pattern_addr(idx) + 8;
-                            uint8_t  data = fast_vram_read(addr);
+                            uint8_t  data = fast_vram_read(addr, ppu_bus);
                             if (idx < internal.sprite_count) {
                                 if (internal.sprite_scanline[idx].attributes & 0x40)
                                     data = flip_byte(data);
@@ -452,12 +451,12 @@ void PPU::clock() {
                 scanline_event_ += (cycle == 337);
                 break;
             case 5: // cycle 338
-                internal.nt_byte = fast_vram_read(internal.nt_addr);
+                internal.nt_byte = fast_vram_read(internal.nt_addr, ppu_bus);
                 scanline_event_++;
                 break;
             case 6: // cycles 339-340
                 if (cycle == 340) {
-                    internal.nt_byte = fast_vram_read(internal.nt_addr);
+                    internal.nt_byte = fast_vram_read(internal.nt_addr, ppu_bus);
                     scanline_event_++;  // case 7+ is empty
                 }
                 break;
@@ -565,7 +564,7 @@ void PPU::clock() {
     // commit time — see the pending_vbl_set_ block at the top of clock().
     if (scanline == nes_constants::VBLANK_SCANLINE && cycle == 1) {
         vbl_flag_internal_ = true;     // NMI asserts immediately
-        update_nmi_output();           // Drive /NMI LOW immediately
+        update_nmi_output(ppu_bus);           // Drive /NMI LOW immediately
         pending_vbl_set_ = true;       // $2002 visible next dot
         vbl_was_suppressed_ = false;
     }
@@ -599,8 +598,7 @@ void PPU::clock() {
     }
     status_read_last_dot_ = false;  // Consumed; clear for next dot
 
-    // Save PPU bus snapshot for next-dot edge detection (A12, etc.)
-    ppu_bus_snapshot_ = ppu_bus_;
+    return ppu_bus;
 }
 
 // ============================================================================

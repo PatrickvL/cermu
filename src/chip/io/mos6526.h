@@ -112,12 +112,8 @@ struct mos6526_t : public ChipBase {
     // Updated at the END of the tick based on pending interrupts
     // Implements the required 1-cycle delay for interrupt assertion
     bus_state_t pending_bus_lines = 0;  // Lines to assert in NEXT cycle
-    
-#ifndef CERMU_HAS_GUI
-    // Without GUI, ChipBase::bus_snapshot_ doesn't exist.
-    // Provide a local field so edge detection can always use bus_snapshot_.
-    bus_state_t bus_snapshot_ = 0;
-#endif
+    // bus_snapshot_ is inherited from ChipBase — used for edge detection
+    // and GUI pin rendering.  No local shadow needed.
     
     // Callback for port A output changes (used by CIA2 for VIC-II bank switching)
     void (*port_a_change_callback)(void* context, uint8_t port_a_output) = nullptr;
