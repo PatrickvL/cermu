@@ -21,38 +21,10 @@ public:
     Mapper003(uint8_t prgBanks, uint8_t chrBanks)
         : prg_banks_(prgBanks), chr_banks_(chrBanks) {}
 
-    bool cpu_map_read(uint16_t addr, uint32_t& mapped_addr) override {
-        if (addr >= 0x8000) {
-            mapped_addr = addr & (prg_banks_ > 1 ? 0x7FFF : 0x3FFF);
-            return true;
-        }
-        return false;
-    }
-
-    bool cpu_map_write(uint16_t addr, uint32_t& mapped_addr, uint8_t data) override {
-        if (addr >= 0x8000) {
-            chr_bank_select_ = data & 0x03;
-        }
-        return false;  // No actual ROM write
-    }
-
-    bool ppu_map_read(uint16_t addr, uint32_t& mapped_addr) override {
-        if (addr <= 0x1FFF) {
-            mapped_addr = chr_bank_select_ * 0x2000 + addr;
-            return true;
-        }
-        return false;
-    }
-
-    bool ppu_map_write(uint16_t addr, uint32_t& mapped_addr) override {
-        // CNROM uses CHR ROM, no writes
-        return false;
-    }
-
     void reset() override { chr_bank_select_ = 0; }
 
     // =======================================================================
-    // Phase 2 — page-pointer bank configuration
+    // Bank configuration
     // =======================================================================
 
     void get_prg_bank_config(MapperBankConfig& config) const override {

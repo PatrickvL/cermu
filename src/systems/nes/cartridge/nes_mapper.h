@@ -3,15 +3,12 @@
  * nes_mapper.h — NES Mapper base class + bank configuration structs
  *
  * Defines the abstract Mapper interface that all NES mapper implementations
- * must satisfy.  Provides two dispatch mechanisms:
+ * must satisfy.
  *
- *   Phase 1 (legacy): cpu_map_read/write returning byte offsets — used by
- *       NsfCartridge and any code that hasn't been migrated yet.
- *
- *   Phase 2 (current): get_prg_bank_config / get_chr_bank_config returning
- *       direct page pointers into ROM/RAM.  The bus copies these into its
- *       page tables.  Mappers precompute translations once when registers
- *       change, not on every access.
+ * Each mapper's register_write() updates internal state; get_prg_bank_config()
+ * and get_chr_bank_config() produce page pointers that the bus copies into
+ * its block arrays.  Mappers precompute translations once when registers
+ * change, not on every access.
  *
  * Each concrete mapper lives in its own header under cartridge/mappers/.
  */
@@ -72,21 +69,13 @@ struct MapperChrConfig {
 // ============================================================================
 // MAPPER BASE CLASS
 // ============================================================================
-//
-// Two interfaces coexist during migration:
-//
-// Legacy (Phase 1): cpu_map_read/write, ppu_map_read/write
-//   — Still used by NsfCartridge and Cartridge::cpu_bus_tick fallback.
-//
-// Current (Phase 2): get_prg_bank_config, get_chr_bank_config, register_write
-//   — Used by nes_bus_t page pointer dispatch.
 
 class Mapper {
 public:
     virtual ~Mapper() = default;
 
     // =======================================================================
-    // Phase 2 interface — page-pointer bank configuration
+    // Bank configuration interface
     // =======================================================================
 
     /// Set ROM/RAM pointers from Cartridge after creation.
@@ -117,23 +106,6 @@ public:
     virtual bool register_write(uint16_t addr, uint8_t data) {
         (void)addr; (void)data; return false;
     }
-
-    // =======================================================================
-    // Legacy interface (Phase 1) — address-mapping approach
-    // =======================================================================
-
-    // --- CPU address mapping ---
-    // Returns true if the mapper claims this address.
-    // mapped_addr receives the byte offset into Cartridge's PRG memory.
-    // Special sentinel: 0xFFFFFFFF = PRG-RAM region.
-    virtual bool cpu_map_read(uint16_t addr, uint32_t& mapped_addr) = 0;
-    virtual bool cpu_map_write(uint16_t addr, uint32_t& mapped_addr, uint8_t data = 0) = 0;
-
-    // --- PPU address mapping ---
-    // Returns true if the mapper claims this address.
-    // mapped_addr receives the byte offset into Cartridge's CHR memory.
-    virtual bool ppu_map_read(uint16_t addr, uint32_t& mapped_addr) = 0;
-    virtual bool ppu_map_write(uint16_t addr, uint32_t& mapped_addr) = 0;
 
     // =======================================================================
     // Shared interface
