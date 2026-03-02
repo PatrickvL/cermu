@@ -19,7 +19,7 @@ struct NesProfileCounters {
     uint64_t cpu_phi1_cycles = 0;        // CPU PHI1 tick (includes APU)
     uint64_t irq_nmi_cycles = 0;         // NMI/IRQ handling
     uint64_t dma_cycles = 0;             // DMA transfer overhead
-    uint64_t total_ticks = 0;            // Total clock() invocations
+    uint64_t total_ticks = 0;            // Total tick() invocations
     uint64_t cpu_ticks = 0;              // Ticks where CPU actually ran
 
     void report() const {

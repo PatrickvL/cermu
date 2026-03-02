@@ -40,7 +40,7 @@ namespace nes_system {
 // Palette LUT is in ppu/nes_palette.h (shared header)
 // Cartridge implementation is now in cartridge/nes_cartridge.cpp
 // Mapper implementations are now in cartridge/mappers/ headers
-// MemoryBus removed in Phase 2 — dispatch is now inline in NintendoSystem::clock()
+// MemoryBus removed in Phase 2 — dispatch is now inline in NintendoSystem::tick()
 
 // ============================================================================
 // MAIN NES SYSTEM IMPLEMENTATION
@@ -348,14 +348,6 @@ void NintendoSystem<V>::reset() {
 }
 
 template<NintendoVariant V>
-void NintendoSystem<V>::tick() {
-    if (!cpu_) return;
-    
-    clock();
-    // total_cycles_ is updated in clock()
-}
-
-template<NintendoVariant V>
 void NintendoSystem<V>::run_frame() {
     if (!system_ready_ || !ppu_) return;
 
@@ -374,7 +366,7 @@ void NintendoSystem<V>::run_frame() {
 
     ppu_->frame_complete = false;
     while (!ppu_->frame_complete) {
-        clock();
+        tick();
     }
 
     // Copy PPU screen into the GUI-provided framebuffer so the emu
@@ -792,7 +784,9 @@ void NintendoSystem<V>::eject_cartridge() {
 }
 
 template<NintendoVariant V>
-void NintendoSystem<V>::clock() {
+void NintendoSystem<V>::tick() {
+    if (!cpu_) return;
+    
     NES_PROF_TICK();
 
     // ====================================================================

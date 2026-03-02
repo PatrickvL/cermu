@@ -258,7 +258,6 @@ private:
 
     /// Register all NES chips into registered_chips_ for the Hardware menu.
     void register_nes_chips();
-    void clock();
 
     // =========================================================================
     // NSF PLAYER STATE
