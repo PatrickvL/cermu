@@ -134,7 +134,6 @@ private:
     // Audio buffer
     std::vector<float> audio_buffer_;
     uint32_t audio_sample_rate_;
-    uint32_t audio_samples_per_frame_;
     uint32_t audio_sample_counter_;
     uint32_t audio_sample_period_;      // cached: NTSC=37, PAL=33
     
@@ -210,7 +209,6 @@ public:
     void set_cpu_pc(uint16_t addr);
     
 private:
-    void setup_audio_timing();
     void setup_connector_ports();
     std::vector<DefaultPeripheral> get_default_peripherals() const override;
 
