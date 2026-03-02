@@ -16,6 +16,7 @@
  */
 
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <vector>
 #include <array>
@@ -35,18 +36,18 @@ namespace nes_system {
 
 class PPU : public ChipBase {
 public:
-    // Screen dimensions
-    // PPU registers (memory-mapped at $2000-$2007)
-    struct Registers {
-        uint8_t ctrl;       // $2000 - PPUCTRL
-        uint8_t mask;       // $2001 - PPUMASK
-        uint8_t status;     // $2002 - PPUSTATUS
-        uint8_t oam_addr;   // $2003 - OAMADDR
-        uint8_t oam_data;   // $2004 - OAMDATA
-        uint8_t scroll;     // $2005 - PPUSCROLL
-        uint8_t addr;       // $2006 - PPUADDR
-        uint8_t data;       // $2007 - PPUDATA
-    } regs = {};
+    // PPU register indices (memory-mapped at $2000-$2007)
+    static constexpr uint8_t PPUCTRL   = 0;  // $2000
+    static constexpr uint8_t PPUMASK   = 1;  // $2001
+    static constexpr uint8_t PPUSTATUS = 2;  // $2002
+    static constexpr uint8_t OAMADDR   = 3;  // $2003
+    static constexpr uint8_t OAMDATA   = 4;  // $2004
+    static constexpr uint8_t PPUSCROLL = 5;  // $2005
+    static constexpr uint8_t PPUADDR   = 6;  // $2006
+    static constexpr uint8_t PPUDATA   = 7;  // $2007
+    static constexpr uint8_t REG_COUNT = 8;
+
+    uint8_t regs[REG_COUNT] = {};  // PPU register file
 
     // PPU memory — fixed-size arrays (sizes are hardware constants)
     alignas(64) std::array<uint8_t, 2048> vram{};    // 2KB VRAM (CIRAM — nametable RAM)
@@ -114,11 +115,11 @@ public:
     //
     // We model this by keeping an internal state (`vbl_flag_internal_`)
     // that drives NMI and a pending flag (`pending_vbl_set_`) that commits
-    // to `regs.status` bit 7 at the START of the next PPU::clock() call.
+    // to regs[PPUSTATUS] bit 7 at the START of the next PPU::clock() call.
     // The same 1-dot delay applies to VBL clear at pre-render dot 1.
     bool     vbl_flag_internal_ = false;    // True = VBL active (drives NMI)
-    bool     pending_vbl_set_ = false;      // Commit regs.status |= 0x80 next dot
-    bool     pending_vbl_clear_ = false;    // Commit regs.status &= ~0x80 next dot
+    bool     pending_vbl_set_ = false;      // Commit regs[PPUSTATUS] |= 0x80 next dot
+    bool     pending_vbl_clear_ = false;    // Commit regs[PPUSTATUS] &= ~0x80 next dot
 
     // VBL suppression — reading $2002 within a 1-PPU-dot window BEFORE
     // VBL flag set (scanline 241, dot 1) prevents the flag from being set
@@ -186,7 +187,7 @@ public:
     }
 
     void reset() {
-        regs = {};
+        std::memset(regs, 0, sizeof(regs));
         internal = {};
         scanline = -1;
         cycle = 0;
@@ -272,7 +273,7 @@ private:
     // Lazily rebuild pixel_lut_ from current palette RAM and PPUMASK.
     // Only called when active_palette_ is null (i.e. after invalidation).
     void rebuild_pixel_lut() {
-        const uint8_t variant = ((regs.mask >> 5) & 0x07) | ((regs.mask & 0x01) << 3);
+        const uint8_t variant = ((regs[PPUMASK] >> 5) & 0x07) | ((regs[PPUMASK] & 0x01) << 3);
         active_palette_ = palette_cache_[variant];
         for (int i = 0; i < 32; ++i)
             pixel_lut_[i] = active_palette_[palette[pal_mirror_[i]] & 0x3F];
@@ -288,10 +289,10 @@ private:
     //   - $2002 read (clears VBL)
     //   - $2000 write (changes NMI enable)
     //
-    // Uses vbl_flag_internal_ (set at dot 1) rather than regs.status bit 7
+    // Uses vbl_flag_internal_ (set at dot 1) rather than regs[PPUSTATUS] bit 7
     // (visible at dot 2) so NMI asserts at the correct PPU clock.
     inline void update_nmi_output() {
-        if (vbl_flag_internal_ && (regs.ctrl & 0x80)) {
+        if (vbl_flag_internal_ && (regs[PPUCTRL] & 0x80)) {
             PPU_BUS_CLR_BIT(ppu_bus_, BUS_NMI_BIT);  // active low = asserted
         } else {
             PPU_BUS_SET_BIT(ppu_bus_, BUS_NMI_BIT);  // inactive high
