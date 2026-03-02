@@ -26,6 +26,19 @@ void Cartridge::update_bank_map(nes_bus::nes_bus_t* bus, uint8_t* ciram) {
     MapperBankConfig prg_config;
     mapper->get_prg_bank_config(prg_config);
 
+    // Compatibility: if the mapper reports no PRG-RAM but we have an
+    // allocated buffer, wire it in anyway.  Many test ROMs and homebrews
+    // use the $6000 write-back protocol on cartridge types that lack
+    // battery-backed SRAM (NROM, UxROM, CNROM).  Real hardware returns
+    // open bus, but every major emulator (Mesen, FCEUX, Nestopia)
+    // provides RAM here unconditionally.  The mapper stays hardware-
+    // accurate; this shim lives at the cartridge/system layer.
+    if (!prg_config.prg_ram_enabled && !prg_ram.empty()) {
+        prg_config.prg_ram_base = prg_ram.data();
+        prg_config.prg_ram_size = static_cast<uint32_t>(prg_ram.size());
+        prg_config.prg_ram_enabled = true;
+    }
+
     // Apply mirroring from header or mapper for nametable config
     MapperChrConfig chr_config;
     mapper->get_chr_bank_config(chr_config);
