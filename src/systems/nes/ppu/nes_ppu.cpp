@@ -128,7 +128,7 @@ std::pair<bus_state_t, ppu_bus_state_t> PPU::service_cpu_bus(
             }
             case 0x2007: { // PPU Data
                 uint8_t data = regs[PPUDATA];
-                regs[PPUDATA] = PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(internal.v)));
+                regs[PPUDATA] = ppu_read_byte(internal.v);
 
                 // Palette reads are immediate (no buffering delay).
                 if (internal.v >= 0x3F00) {
@@ -202,7 +202,7 @@ std::pair<bus_state_t, ppu_bus_state_t> PPU::service_cpu_bus(
                 }
                 break;
             case 0x2007: // PPU Data
-                ppu_write(PPU_BUS_WITH_ADDR_DATA(internal.v, data));
+                ppu_write_byte(internal.v, data);
                 internal.v += (regs[PPUCTRL] & 0x04) ? 32 : 1;
                 internal.v &= 0x7FFF;  // v is 15 bits
                 // Post-increment address drives the PPU bus — A12 may change.
@@ -233,45 +233,41 @@ uint8_t PPU::cpu_peek(uint16_t addr) const {
 // PPU — VRAM read / write
 // ============================================================================
 
-ppu_bus_state_t PPU::ppu_read(ppu_bus_state_t bus, bool read_only) {
-    uint16_t addr = PPU_BUS_GET_ADDR(bus);
-
+uint8_t PPU::ppu_read_byte(uint16_t addr) const {
     // ---- Palette RAM ($3F00-$3FFF) — internal to PPU, no bus access ----
     // Returns the raw palette byte.  Greyscale masking (PPUMASK bit 0) is
     // handled by the precalculated palette cache for rendering, and applied
     // explicitly in the $2007 CPU-read handler for CPU-visible reads.
     if (unlikely(addr >= 0x3F00)) {
-        PPU_BUS_SET_DATA(bus, palette[pal_mirror_[addr & 0x1F]]);
-        return bus;
+        return palette[pal_mirror_[addr & 0x1F]];
     }
 
-    // ---- CHR + nametable via page pointers ----
+    // ---- CHR + nametable via block dispatch ----
     if (bus_ptr_) {
-        PPU_BUS_SET_ADDR(bus, addr);  // write back masked address
-        return bus_ptr_->ppu_read(bus);
+        uint16_t block = bus_ptr_->ppu_read_block[addr >> nes_bus::PPU_PAGE_SHIFT];
+        if (likely(block < nes_bus::BLOCK_SENTINEL_MIN)) {
+            return bus_ptr_->ppu_block_read(block, addr);
+        }
     }
 
-    return bus;
+    return 0;
 }
 
-ppu_bus_state_t PPU::ppu_write(ppu_bus_state_t bus) {
-    uint16_t addr = PPU_BUS_GET_ADDR(bus);
-    uint8_t data = PPU_BUS_GET_DATA(bus);
-
+void PPU::ppu_write_byte(uint16_t addr, uint8_t data) {
     // ---- Palette RAM ($3F00-$3FFF) — internal to PPU ----
     if (unlikely(addr >= 0x3F00)) {
         palette[pal_mirror_[addr & 0x1F]] = data;
         active_palette_ = nullptr;  // Invalidate pixel LUT
-        return bus;
+        return;
     }
 
-    // ---- CHR + nametable via page pointers ----
+    // ---- CHR + nametable via block dispatch ----
     if (bus_ptr_) {
-        PPU_BUS_SET_ADDR(bus, addr);  // write back masked address
-        return bus_ptr_->ppu_write(bus);
+        uint16_t block = bus_ptr_->ppu_write_block[addr >> nes_bus::PPU_PAGE_SHIFT];
+        if (likely(block < nes_bus::BLOCK_SENTINEL_MIN)) {
+            bus_ptr_->ppu_block_write(block, addr, data);
+        }
     }
-
-    return bus;
 }
 
 // ============================================================================
