@@ -111,9 +111,6 @@ public:
     std::string sram_path_for_rom(const std::string& rom_path) const;
     const std::string& get_rom_filepath() const { return rom_filepath_; }
 
-    // Debug read-only peek — no mapper side-effects, no bus modification
-    uint8_t peek(uint16_t addr) const;
-
 private:
     std::string rom_filepath_;  // stored for SRAM path derivation
 

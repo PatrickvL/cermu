@@ -216,12 +216,4 @@ void Cartridge::reset() {
     }
 }
 
-uint8_t Cartridge::peek(uint16_t addr) const {
-    // Block dispatch handles all standard reads via unified buffer.
-    // This method is only called as a fallback when block dispatch
-    // returns a sentinel.  In normal operation, PRG-ROM/RAM are block-mapped.
-    (void)addr;
-    return 0;
-}
-
 } // namespace nes_system
