@@ -17,8 +17,30 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(tomlplusplus)
 
 # Find libarchive (archive reading — ZIP, 7z, RAR, tar, etc.)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(LIBARCHIVE REQUIRED libarchive)
+# Try PkgConfig first, then CMake's FindLibArchive, then fall back to stubs.
+set(LIBARCHIVE_FOUND FALSE)
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(LIBARCHIVE QUIET libarchive)
+    if(LIBARCHIVE_FOUND)
+        message(STATUS "Found libarchive via pkg-config")
+    endif()
+endif()
+if(NOT LIBARCHIVE_FOUND)
+    find_package(LibArchive QUIET)
+    if(LibArchive_FOUND)
+        set(LIBARCHIVE_INCLUDE_DIRS ${LibArchive_INCLUDE_DIRS})
+        set(LIBARCHIVE_LIBRARIES ${LibArchive_LIBRARIES})
+        set(LIBARCHIVE_FOUND TRUE)
+        message(STATUS "Found libarchive via CMake find_package")
+    endif()
+endif()
+if(NOT LIBARCHIVE_FOUND)
+    message(STATUS "libarchive not found — archive support disabled (using stubs)")
+    set(LIBARCHIVE_INCLUDE_DIRS "")
+    set(LIBARCHIVE_LIBRARIES "")
+    add_compile_definitions(CERMU_NO_LIBARCHIVE)
+endif()
 
 # CRITICAL: Force all binaries to output to a single consistent location
 # This prevents confusion from multiple binary locations across different build methods
