@@ -7,18 +7,18 @@
  * to a single pointer dereference for the common case (RAM, ROM).
  *
  * CPU address space: 16 × 4KB pages ($0000-$FFFF)
- *   Pages 0-1 ($0000-$1FFF): WRAM handled by fast path (not page pointers)
- *   Pages 2-3 ($2000-$3FFF): nullptr → PPU register I/O dispatch
- *   Page 4   ($4000-$4FFF): nullptr → APU/IO register dispatch
- *   Page 5   ($5000-$5FFF): expansion (mapper-dependent, usually nullptr)
- *   Pages 6-7 ($6000-$7FFF): PRG-RAM (mapper-dependent)
+ *   Pages 0-1  ($0000-$1FFF): WRAM handled by fast path (not page pointers)
+ *   Pages 2-3  ($2000-$3FFF): nullptr → PPU register I/O dispatch
+ *   Page 4     ($4000-$4FFF): nullptr → APU/IO register dispatch
+ *   Page 5     ($5000-$5FFF): expansion (mapper-dependent, usually nullptr)
+ *   Pages 6-7  ($6000-$7FFF): PRG-RAM (mapper-dependent)
  *   Pages 8-15 ($8000-$FFFF): PRG-ROM banks (mapper-configured)
  *
  * PPU address space: 16 × 1KB pages ($0000-$3FFF)
- *   Pages 0-7  ($0000-$1FFF): CHR-ROM/RAM banks
- *   Pages 8-11 ($2000-$2FFF): Nametable (CIRAM) with mirroring
+ *   Pages 0-7   ($0000-$1FFF): CHR-ROM/RAM banks
+ *   Pages 8-11  ($2000-$2FFF): Nametable (CIRAM) with mirroring
  *   Pages 12-15 ($3000-$3FFF): Mirror of $2000-$2FFF
- *   Palette ($3F00-$3F1F): special-cased in PPU, not through page pointers
+ *   Palette     ($3F00-$3F1F): special-cased in PPU, not through page pointers
  *
  * See NES_MIGRATION_PLAN.md Part 2 for the full rationale.
  */
