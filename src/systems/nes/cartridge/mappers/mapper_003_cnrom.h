@@ -63,6 +63,7 @@ public:
         } else {
             for (int i = 0; i < 8; i++) config.prg_pages[i] = prg_rom_ + (i * 0x1000);
         }
+        // CNROM has no PRG-RAM on real hardware
         config.prg_ram_enabled = false;
     }
 

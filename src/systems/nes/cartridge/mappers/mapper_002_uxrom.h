@@ -77,7 +77,7 @@ public:
             uint32_t offset = last_base + i * 0x1000;
             config.prg_pages[4 + i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
         }
-        // UxROM has no PRG-RAM
+        // UxROM has no PRG-RAM on real hardware
         config.prg_ram_enabled = false;
     }
 
