@@ -62,10 +62,7 @@ namespace nes_constants {
 #define NES_BUS_DEFAULT_STATE \
     (BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_RES_BIT))
 
-// Forward declarations
-namespace nes_system {
-    class NsfCartridge;
-}
+// Forward declarations — none needed; all NES types included above.
 
 // PPU class now in ppu/nes_ppu.h (included above)
 // Cartridge class now in cartridge/nes_cartridge.h (included above)
@@ -231,7 +228,7 @@ private:
     nsf_header_t active_nsf_header_{};           ///< Copy of the loaded NSF header
     std::vector<uint8_t> active_nsf_data_;       ///< Copy of original payload bytes
     uint16_t active_nsf_subtune_ = 0;            ///< Current 0-based subtune index
-    std::shared_ptr<NsfCartridge> nsf_cartridge_; ///< NSF cartridge for bank/data management
+    bool nsf_bankswitched_ = false;              ///< True if the loaded NSF uses bank switching
 
     /** Handle NSF player keyboard shortcuts (subtune selection).
      *  Returns true if the key was consumed (should not be forwarded). */

@@ -8,7 +8,7 @@
 #include "nes_system.h"
 #include "ppu/nes_palette.h"
 #include "nsf/nes_nsf_player.h"
-#include "nsf/nes_nsf_cartridge.h"
+#include "cartridge/mappers/mapper_nsf.h"
 #include "../../core/formats/nsf_format.h"
 #include "../../core/formats/ines_format.h"
 #include "../../core/vfs/vfs.h"
@@ -414,7 +414,8 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
     }
 
     // =========================================================================
-    // NSF FILE — parse from buffer, then launch NSF player
+    // NSF FILE — parse from buffer, then launch NSF player via standard
+    // Cartridge + MapperNsf (same pipeline as iNES ROM loading).
     // =========================================================================
     if (is_nsf) {
         // Parse NSF header
@@ -429,41 +430,101 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         const uint8_t* payload = file_data + 128;
         size_t payload_size = file_size - 128;
 
-        program_data_t prog = {};
-        prog.data = const_cast<uint8_t*>(payload);  // Temporary, won't be freed
-        prog.data_size = payload_size;
-        prog.load_addr = header.load_addr;
-
         // Compute 0-based subtune index from 1-based start_song
         uint16_t subtune = header.start_song;
         if (subtune > 0) subtune--;
 
-        // Launch NSF player
-        bus_.reset();
-        nsf_cartridge_ = NsfPlayer::apply_load(
-            cpu_, ppu_.get(), bus_.cpu_ram,
-            &header, &prog, subtune, is_pal_);
-
-        if (!nsf_cartridge_) {
-            printf("%s: Failed to apply NSF load\n", Traits::name);
-            free(file_data);
-            return false;
+        // Detect bankswitching
+        bool bankswitched = false;
+        for (int i = 0; i < 8; i++) {
+            if (header.bankswitch[i] != 0) { bankswitched = true; break; }
         }
 
-        // Connect NSF cartridge to system
-        cartridge_ = nsf_cartridge_;
+        // ---- Build a standard Cartridge ----
+        cartridge_ = std::make_shared<Cartridge>();
+        cartridge_->mapper_id = MapperNsf::NSF_MAPPER_ID;
+        cartridge_->mirror_mode = Mirror::HORIZONTAL;
+
+        // Populate PRG-ROM: for bankswitched NSFs, round up to 4KB pages.
+        // For non-bankswitched, pad from load_addr to $FFFF.
+        if (bankswitched) {
+            size_t num_banks = (payload_size + 0x0FFF) / 0x1000;
+            cartridge_->prg_memory.resize(num_banks * 0x1000, 0);
+            std::memcpy(cartridge_->prg_memory.data(), payload, payload_size);
+        } else {
+            size_t rom_size = 0x10000 - header.load_addr;
+            cartridge_->prg_memory.resize(rom_size, 0);
+            std::memcpy(cartridge_->prg_memory.data(), payload, payload_size);
+        }
+        cartridge_->prg_banks = static_cast<uint8_t>(
+            (cartridge_->prg_memory.size() + 0x3FFF) / 0x4000);
+
+        // CHR-RAM (8KB for font tiles — no CHR-ROM)
+        cartridge_->chr_memory.clear();
+        cartridge_->chr_banks = 0;
+
+        // PRG-RAM (8KB work RAM at $6000-$7FFF)
+        cartridge_->prg_ram.resize(nes_constants::INES_PRG_RAM_DEFAULT, 0);
+
+        // Create MapperNsf and assign to cartridge
+        auto nsf_mapper = std::make_unique<MapperNsf>(
+            bankswitched, header.bankswitch, header.load_addr);
+
+        // Assign mapper via Cartridge's internal mechanism — we need to
+        // set it up the same way load_from_buffer does.  Since Cartridge
+        // doesn't have a public set_mapper(), we use update_bank_map
+        // after init_unified_buffer has been called and memory pointers
+        // reference the unified buffer copy.
+
+        // ---- Allocate unified buffer ----
         ppu_->connect_cartridge(cartridge_);
+        bus_.init_unified_buffer(
+            cartridge_->prg_memory.data(), cartridge_->prg_memory.size(),
+            nullptr, 0,            // no CHR-ROM data
+            true,                  // CHR is RAM
+            cartridge_->prg_ram.data(), cartridge_->prg_ram.size());
+
+        // Give mapper pointers into the unified buffer copy
+        nsf_mapper->set_memory_pointers(
+            bus_.prg_rom_ptr, bus_.prg_rom_size,
+            bus_.chr_data_ptr, bus_.chr_data_size,
+            true,  // CHR is RAM
+            bus_.prg_ram, bus_.prg_ram_size);
+        nsf_mapper->set_header_mirror(Mirror::HORIZONTAL);
+
+        // Install mapper into cartridge (access via friend-like helper)
+        cartridge_->install_mapper(std::move(nsf_mapper));
+
+        // Re-connect PPU to bus (ciram pointer may have changed)
+        ppu_->connect_bus(&bus_);
         cartridge_->update_bank_map(&bus_, bus_.ciram);
+
+        // ---- Write vectors and 6502 stubs ----
+        printf("NES NSF: Loading \"%s\" by %s\n", header.name, header.artist);
+        printf("NES NSF: load=$%04X init=$%04X play=$%04X songs=%d start=%d\n",
+               header.load_addr, header.init_addr, header.play_addr,
+               header.num_songs, header.start_song);
+
+        NsfPlayer::setup_cpu(
+            cpu_, bus_.cpu_ram,
+            bus_.prg_rom_ptr, bus_.prg_rom_size,
+            bankswitched, header.bankswitch, header.load_addr,
+            &header, subtune, is_pal_);
+
+        // Re-update bank map after vectors are written to ROM
+        cartridge_->update_bank_map(&bus_, bus_.ciram);
+
+        NsfPlayer::write_info_page(ppu_.get(), &header, subtune);
 
         // Save state for subtune switching
         active_nsf_header_ = header;
         active_nsf_data_.assign(payload, payload + payload_size);
         active_nsf_subtune_ = subtune;
+        nsf_bankswitched_ = bankswitched;
         nsf_player_active_ = true;
         system_ready_ = true;
 
-        // Set program title from NSF header (strings are already UTF-8
-        // after parsing — Latin-1→UTF-8 conversion happens in nsf_parse_header).
+        // Set program title from NSF header
         program_title_ = header.name;
         if (header.artist[0]) {
             program_title_ += " - ";
@@ -480,7 +541,6 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
     // STANDARD PATH — iNES ROM cartridge (load from already-read buffer)
     // =========================================================================
     nsf_player_active_ = false;
-    nsf_cartridge_.reset();
     
     try {
         cartridge_ = std::make_shared<Cartridge>();
@@ -657,9 +717,13 @@ bool NintendoSystem<V>::handle_nsf_player_key(SDL_Keycode key) {
 
     active_nsf_subtune_ = static_cast<uint16_t>(new_subtune);
     NsfPlayer::switch_subtune(cpu_, ppu_.get(), bus_.cpu_ram,
-                            nsf_cartridge_.get(), &active_nsf_header_,
+                            bus_.prg_rom_ptr, bus_.prg_rom_size,
+                            cartridge_->get_mapper(),
+                            &active_nsf_header_,
                             active_nsf_data_.data(), active_nsf_data_.size(),
                             active_nsf_subtune_, is_pal_);
+    // Re-update bank map after subtune switch resets bank regs
+    cartridge_->update_bank_map(&bus_, bus_.ciram);
     return true;
 }
 
@@ -933,11 +997,7 @@ void NintendoSystem<V>::tick() {
                 }
                 // Other APU reads ($4015 etc.) handled by CPU PHI1
             } else {
-                // Unmapped expansion or cartridge I/O — fall through to
-                // cartridge cpu_bus_tick for NSF and unusual mappers
-                if (cartridge_) {
-                    pins_ = cartridge_->cpu_bus_tick(pins_);
-                }
+                // Unmapped expansion or cartridge I/O — open bus
             }
         }
     } else {
@@ -972,16 +1032,12 @@ void NintendoSystem<V>::tick() {
                 }
                 // Other APU writes ($4000-$4013, $4015, $4017) handled by CPU PHI1
             } else {
-                // BLOCK_OPEN_BUS — mapper register writes or unmapped expansion
-                if (addr >= 0x8000 && cartridge_) {
+                // BLOCK_OPEN_BUS — mapper register write ($5xxx expansion
+                // or $8000+ PRG space).  Delegates to mapper->register_write.
+                if (cartridge_) {
                     if (cartridge_->handle_mapper_write(addr, data)) {
                         cartridge_->update_bank_map(&bus_, bus_.ciram);
-                    } else {
-                        pins_ = cartridge_->cpu_bus_tick(pins_);
                     }
-                } else if (cartridge_) {
-                    // Expansion writes ($5000-$7FFF) not covered by block
-                    pins_ = cartridge_->cpu_bus_tick(pins_);
                 }
             }
         }

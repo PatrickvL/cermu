@@ -291,7 +291,7 @@ ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         // The visible VBL time is NOW (the commit point, 1 dot after the
         // internal VBL was set).  "1 dot before visible" corresponds to
         // the previous dot — the same dot where vbl_flag_internal_ was set.
-        // status_read_last_dot_ was set by cpu_bus_tick on that same dot.
+        // status_read_last_dot_ was set by service_cpu_bus on that same dot.
         if (status_read_last_dot_) {
             // $2002 was read on the internal VBL dot — suppress entirely.
             // Cancel the pending set AND clear internal state and NMI.

@@ -11,7 +11,7 @@ add_library(nes_system
     screen/nes_screen_utils.h
     nsf/nes_nsf_player.cpp
     nsf/nes_nsf_player.h
-    nsf/nes_nsf_cartridge.h
+    cartridge/mappers/mapper_nsf.h
 )
 
 target_include_directories(nes_system PUBLIC

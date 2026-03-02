@@ -180,10 +180,13 @@ void nes_bus_t::update_cpu_banks(const nes_system::MapperBankConfig& config) {
     }
 
     // Pages 8-15 ($8000-$FFFF): PRG-ROM banks from mapper config
-    // Write blocks stay BLOCK_OPEN_BUS -- ROM writes go to mapper dispatch
+    // Write blocks default to BLOCK_OPEN_BUS (ROM writes go to mapper dispatch)
+    // unless prg_write_pages provides writable pointers (e.g. NSF self-modify).
     for (int i = 0; i < 8; i++) {
         cpu_read_block[8 + i]  = ptr_to_block(config.prg_pages[i]);
-        cpu_write_block[8 + i] = BLOCK_OPEN_BUS;
+        cpu_write_block[8 + i] = config.prg_write_pages[i]
+                                ? ptr_to_block(config.prg_write_pages[i])
+                                : BLOCK_OPEN_BUS;
     }
 }
 

@@ -67,7 +67,7 @@ struct nes_bus_t {
     uint8_t* ciram = nullptr;          // -> BLOCK_CIRAM  (CIRAM_SIZE bytes)
     uint8_t* prg_ram = nullptr;        // -> BLOCK_PRG_RAM (prg_ram_size bytes)
     uint8_t* chr_data_ptr = nullptr;   // -> dynamic CHR region
-    const uint8_t* prg_rom_ptr = nullptr; // -> dynamic PRG-ROM region (read-only)
+    uint8_t* prg_rom_ptr = nullptr;       // -> dynamic PRG-ROM region (unified buf copy)
 
     // Region sizes (set by init_unified_buffer)
     uint32_t prg_ram_size = 0;

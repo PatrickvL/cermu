@@ -144,7 +144,7 @@ public:
     // VBL flag set (scanline 241, dot 1) prevents the flag from being set
     // that frame and suppresses NMI.  Reading AT the VBL dot returns 0
     // (flag not yet propagated) and suppresses the frame's VBL entirely.
-    // Set true by cpu_bus_tick on $2002 read; consumed at the start of
+    // Set true by service_cpu_bus on $2002 read; consumed at the start of
     // the next clock() call.  Replaces the old total_dots_/status_read_dot_
     // pair, avoiding 16 bytes of storage and integer overflow concerns.
     bool     status_read_last_dot_ = false;
