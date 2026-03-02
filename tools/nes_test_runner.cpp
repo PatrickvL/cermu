@@ -236,12 +236,14 @@ static TestResult run_blargg_6000(NES& nes, const std::string& name,
                     // Detect pass/fail from nametable content
                     if (nt_text.find("Passed") != std::string::npos ||
                         nt_text.find("PASSED") != std::string::npos ||
-                        nt_text.find("passed") != std::string::npos) {
+                        nt_text.find("passed") != std::string::npos ||
+                        nt_text.find("All tests complete") != std::string::npos) {
                         result.verdict = TestVerdict::PASS;
                         result.detail = nt_text;
                     } else if (nt_text.find("Failed") != std::string::npos ||
                                nt_text.find("FAILED") != std::string::npos ||
-                               nt_text.find("failed") != std::string::npos) {
+                               nt_text.find("failed") != std::string::npos ||
+                               nt_text.find("Error") != std::string::npos) {
                         result.verdict = TestVerdict::FAIL;
                         result.detail = nt_text;
                     } else {
@@ -370,7 +372,28 @@ static TestProtocol detect_protocol(const std::string& filename) {
     }
 
     // All Blargg test ROMs use the $6000 PRG-RAM result protocol
-    if (filename.find("blargg") != std::string::npos) {
+    if (filename.find("blargg") != std::string::npos ||
+        filename.find("instr_test") != std::string::npos ||
+        filename.find("instr_misc") != std::string::npos ||
+        filename.find("instr_timing") != std::string::npos ||
+        filename.find("cpu_dummy") != std::string::npos ||
+        filename.find("cpu_interrupts") != std::string::npos ||
+        filename.find("cpu_timing") != std::string::npos ||
+        filename.find("cpu_reset") != std::string::npos ||
+        filename.find("cpu_exec_space") != std::string::npos ||
+        filename.find("branch_timing") != std::string::npos ||
+        filename.find("ppu_vbl_nmi") != std::string::npos ||
+        filename.find("ppu_open_bus") != std::string::npos ||
+        filename.find("ppu_read_buffer") != std::string::npos ||
+        filename.find("sprite_hit") != std::string::npos ||
+        filename.find("sprite_overflow") != std::string::npos ||
+        filename.find("apu_test") != std::string::npos ||
+        filename.find("apu_reset") != std::string::npos ||
+        filename.find("apu_mixer") != std::string::npos ||
+        filename.find("dmc_") != std::string::npos ||
+        filename.find("mmc3_") != std::string::npos ||
+        filename.find("oam_") != std::string::npos ||
+        filename.find("rom_singles") != std::string::npos) {
         return TestProtocol::BLARGG_6000;
     }
 
