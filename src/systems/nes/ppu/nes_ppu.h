@@ -50,8 +50,13 @@ public:
 
     uint8_t regs[REG_COUNT] = {};  // PPU register file
 
-    // PPU memory — fixed-size arrays (sizes are hardware constants)
-    alignas(64) std::array<uint8_t, 2048> vram{};    // 2KB VRAM (CIRAM — nametable RAM)
+    // PPU memory
+    //
+    // CIRAM (2KB nametable VRAM) now lives in the unified buffer (nes_bus_t).
+    // ciram_ is a non-owning pointer set by connect_bus().
+    static constexpr size_t CIRAM_SIZE = nes_bus::CIRAM_SIZE;
+    uint8_t* ciram_ = nullptr;
+
     std::array<uint8_t, 256> oam{};                   // 256 bytes OAM (Object Attribute Memory)
     std::array<uint8_t, 32> palette{};                // 32 bytes palette RAM
 
@@ -224,7 +229,7 @@ public:
         bus_snapshot_ = PPU_BUS_DEFAULT_STATE;   // PPU bus (active-low signals HIGH)
 
         // Clear memory
-        vram.fill(0);
+        if (ciram_) std::memset(ciram_, 0, CIRAM_SIZE);
         oam.fill(0);
         palette.fill(0);
         std::fill(screen.begin(), screen.end(), 0);
@@ -254,8 +259,11 @@ public:
     // Connect cartridge for CHR data access and mapper interaction
     void connect_cartridge(std::shared_ptr<Cartridge> cartridge);
 
-    // Connect bus for page-pointer VRAM access
-    void connect_bus(nes_bus::nes_bus_t* bus) { bus_ptr_ = bus; }
+    // Connect bus for page-pointer VRAM access and CIRAM pointer
+    void connect_bus(nes_bus::nes_bus_t* bus) {
+        bus_ptr_ = bus;
+        if (bus) ciram_ = bus->ciram;
+    }
 
     // Get frame buffer
     const std::vector<uint32_t>& get_screen() const { return screen; }
