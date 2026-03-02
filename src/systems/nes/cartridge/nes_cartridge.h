@@ -85,7 +85,7 @@ public:
     // CPU bus interface — fallback for unmapped addresses not handled by
     // block dispatch.  Regular Cartridge returns bus unchanged;
     // NsfCartridge overrides for its own address-space routing.
-    virtual bus_state_t cpu_bus_tick(bus_state_t bus, bool& handled);
+    virtual bus_state_t cpu_bus_tick(bus_state_t bus);
 
     // Nametable mirroring
     using Mirror = nes_system::Mirror;
