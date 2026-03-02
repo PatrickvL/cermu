@@ -385,7 +385,10 @@ void PPU::clock() {
             case 2: // cycle == 257
                 load_background_shifters();
                 transfer_address_x();
-                if (scanline >= 0) evaluate_sprites();
+                // Sprite evaluation only occurs when rendering is enabled.
+                // When rendering is off ($2001 & $18 == 0), no evaluation
+                // happens — overflow flag won't be set, sprite data stale.
+                if (scanline >= 0 && (regs[PPUMASK] & 0x18)) evaluate_sprites();
                 // Sprite 0, sub-cycle 0: garbage nametable read.
                 // Starts the 64-cycle sprite fetch window (257-320).
                 fast_vram_read(0x2000 | (internal.v & 0x0FFF));
