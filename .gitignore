@@ -48,29 +48,30 @@ cermu
 imgui.ini
 
 # Data files (ROMs, cartridges, disk images) - keep README files
-data/**/*.rom
+data/**/*.adf
 data/**/*.bin
-data/**/*.crt
 data/**/*.c64
+data/**/*.cmd
+data/**/*.crt
 data/**/*.d64
 data/**/*.d71
 data/**/*.d81
-data/**/*.tap
-data/**/*.t64
-data/**/*.prg
-data/**/*.p00
+data/**/*.gz
 data/**/*.img
-data/**/*.adf
-data/**/*.s
+data/**/*.jpg
+data/**/*.m3u
+data/**/*.nes
+data/**/*.nsf
+data/**/*.p00
 data/**/*.pdf
 data/**/*.png
-data/**/*.jpg
-data/**/*.txt
-data/**/*.cmd
-data/**/*.nsf
-data/**/*.nes
-data/**/*.m3u
+data/**/*.prg
+data/**/*.rom
+data/**/*.s
 data/**/*.sav
+data/**/*.t64
+data/**/*.tap
+data/**/*.txt
 data/**/*.zip
 !data/**/README.md
 
