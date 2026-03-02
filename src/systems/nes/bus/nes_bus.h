@@ -165,22 +165,34 @@ struct nes_bus_t {
         return static_cast<uint16_t>(offset >> BLOCK_SHIFT);
     }
 
+    /// CPU block read -- 4KB page from block number.
+    /// block must be < BLOCK_SENTINEL_MIN (caller checks).
+    inline uint8_t cpu_block_read(uint16_t block, uint16_t addr) const {
+        return unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) | (addr & CPU_PAGE_MASK)];
+    }
+
+    /// CPU block write -- 4KB page from block number.
+    /// block must be < BLOCK_SENTINEL_MIN (caller checks).
+    inline void cpu_block_write(uint16_t block, uint16_t addr, uint8_t data) {
+        unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) | (addr & CPU_PAGE_MASK)] = data;
+    }
+
     // ====================================================================
     // Inline CPU read helper -- for DMA and debug peek
     // ====================================================================
     //
     // Does NOT handle I/O dispatch (PPU regs, APU, controllers).
-    // Returns open bus (0xFF) for nullptr pages.
+    // Returns open bus (0xFF) for sentinel blocks.
 
     inline uint8_t cpu_read(uint16_t addr) const {
         if (addr < 0x2000) {
             return cpu_ram[addr & 0x07FF];
         }
-        const uint8_t* rp = cpu_read_page[addr >> 12];
-        if (likely(rp != nullptr)) {
-            return rp[addr & 0x0FFF];
+        uint16_t block = cpu_read_block[addr >> CPU_PAGE_SHIFT];
+        if (likely(block < BLOCK_SENTINEL_MIN)) {
+            return cpu_block_read(block, addr);
         }
-        return 0xFF;  // open bus
+        return 0xFF;  // open bus / I/O sentinel
     }
 
     // ====================================================================
