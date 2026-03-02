@@ -1521,8 +1521,14 @@ public:
   }
 
   bus_state_t reset(bus_state_t pins) {
-    // Reset registers properly (including emulation mode for 65C816)
-    this->init_registers();
+    // Hardware RESET sequence: the real 6502 does NOT clear registers.
+    // It only decrements S by 3 (3 dummy stack pushes with writes
+    // suppressed) and sets the I flag.  A, X, Y, and P (except I) are
+    // preserved across reset — only power-on randomises them.
+    this->dec_stack(); // dummy push PCH
+    this->dec_stack(); // dummy push PCL
+    this->dec_stack(); // dummy push P
+    this->set_flag(FLAG_I);
 
     // Reset interrupt state
     this->nmi_prev = 0;
