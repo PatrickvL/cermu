@@ -20,50 +20,10 @@ public:
     Mapper000(uint8_t prgBanks, uint8_t chrBanks)
         : prg_banks(prgBanks), chr_banks(chrBanks) {}
 
-    bool cpu_map_read(uint16_t addr, uint32_t& mapped_addr) override {
-        if (addr >= 0x6000 && addr <= 0x7FFF) {
-            mapped_addr = 0xFFFFFFFF;  // PRG RAM sentinel
-            return true;
-        }
-        if (addr >= 0x8000) {
-            mapped_addr = addr & (prg_banks > 1 ? 0x7FFF : 0x3FFF);
-            return true;
-        }
-        return false;
-    }
-
-    bool cpu_map_write(uint16_t addr, uint32_t& mapped_addr, uint8_t data) override {
-        if (addr >= 0x6000 && addr <= 0x7FFF) {
-            mapped_addr = 0xFFFFFFFF;  // PRG RAM sentinel
-            return true;
-        }
-        if (addr >= 0x8000) {
-            mapped_addr = addr & (prg_banks > 1 ? 0x7FFF : 0x3FFF);
-            return true;
-        }
-        return false;
-    }
-
-    bool ppu_map_read(uint16_t addr, uint32_t& mapped_addr) override {
-        if (addr <= 0x1FFF) {
-            mapped_addr = addr;
-            return true;
-        }
-        return false;
-    }
-
-    bool ppu_map_write(uint16_t addr, uint32_t& mapped_addr) override {
-        if (addr <= 0x1FFF && chr_banks == 0) {
-            mapped_addr = addr;
-            return true;
-        }
-        return false;
-    }
-
     void reset() override {}
 
     // =======================================================================
-    // Phase 2 — page-pointer bank configuration
+    // Bank configuration
     // =======================================================================
 
     void get_prg_bank_config(MapperBankConfig& config) const override {

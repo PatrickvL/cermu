@@ -82,14 +82,10 @@ public:
     // Legacy bus interfaces (used by NsfCartridge and fallback dispatch)
     // ====================================================================
 
-    // CPU bus interface — cartridge sits on the shared bus.
-    // Returns the bus with data lines driven (for reads) or absorbed (for writes).
-    // The bool return indicates whether the cartridge claimed the address.
+    // CPU bus interface — fallback for unmapped addresses not handled by
+    // block dispatch.  Regular Cartridge returns bus unchanged;
+    // NsfCartridge overrides for its own address-space routing.
     virtual bus_state_t cpu_bus_tick(bus_state_t bus, bool& handled);
-
-    // PPU bus interface (CHR ROM/RAM) — separate internal bus, not CPU data bus.
-    virtual bool ppu_read(uint16_t addr, uint8_t& data);
-    virtual bool ppu_write(uint16_t addr, uint8_t data);
 
     // Nametable mirroring
     using Mirror = nes_system::Mirror;
