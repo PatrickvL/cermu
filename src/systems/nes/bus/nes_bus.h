@@ -25,7 +25,6 @@
 
 #include "../../../core/cermu.h"         // likely/unlikely
 #include "../../../core/system_lines.h"  // bus_state_t, BUS_* macros
-#include "nes_bus_signals.h"             // ppu_bus_state_t, PPU_BUS_* macros
 #include "nes_bus_chips.h"               // BLOCK_*, unified buffer constants
 #include "../cartridge/nes_mapper.h"     // MapperBankConfig, MapperChrConfig
 
@@ -188,24 +187,6 @@ struct nes_bus_t {
     /// PPU block write -- 1KB page from block number.
     inline void ppu_block_write(uint16_t block, uint16_t addr, uint8_t data) {
         unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) | (addr & PPU_PAGE_MASK)] = data;
-    }
-
-    inline ppu_bus_state_t ppu_read(ppu_bus_state_t bus) const {
-        uint16_t mapped = PPU_BUS_GET_ADDR(bus);
-        uint16_t block = ppu_read_block[mapped >> PPU_PAGE_SHIFT];
-        if (likely(block < BLOCK_SENTINEL_MIN)) {
-            PPU_BUS_SET_DATA(bus, ppu_block_read(block, mapped));
-        }
-        return bus;
-    }
-
-    inline ppu_bus_state_t ppu_write(ppu_bus_state_t bus) {
-        uint16_t mapped = PPU_BUS_GET_ADDR(bus);
-        uint16_t block = ppu_write_block[mapped >> PPU_PAGE_SHIFT];
-        if (likely(block < BLOCK_SENTINEL_MIN)) {
-            ppu_block_write(block, mapped, PPU_BUS_GET_DATA(bus));
-        }
-        return bus;
     }
 };
 
