@@ -144,14 +144,18 @@ struct nes_bus_t {
 
     /// CPU block read -- 4KB page from block number.
     /// block must be < BLOCK_SENTINEL_MIN (caller checks).
+    /// WRAM (blocks 0-1) mirrors at 2KB; all other regions use 4KB pages.
+    /// Branchless: when block < BLOCK_CIRAM, XOR clears bit 11 → 0x07FF mask.
     inline uint8_t cpu_block_read(uint16_t block, uint16_t addr) const {
-        return unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) | (addr & CPU_PAGE_MASK)];
+        const uint16_t mask = CPU_PAGE_MASK ^ (0x0800u * (block < BLOCK_CIRAM));
+        return unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) | (addr & mask)];
     }
 
     /// CPU block write -- 4KB page from block number.
     /// block must be < BLOCK_SENTINEL_MIN (caller checks).
     inline void cpu_block_write(uint16_t block, uint16_t addr, uint8_t data) {
-        unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) | (addr & CPU_PAGE_MASK)] = data;
+        const uint16_t mask = CPU_PAGE_MASK ^ (0x0800u * (block < BLOCK_CIRAM));
+        unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) | (addr & mask)] = data;
     }
 
     // ====================================================================
@@ -162,9 +166,6 @@ struct nes_bus_t {
     // Returns open bus (0xFF) for sentinel blocks.
 
     inline uint8_t cpu_read(uint16_t addr) const {
-        if (addr < 0x2000) {
-            return cpu_ram[addr & 0x07FF];
-        }
         uint16_t block = cpu_read_block[addr >> CPU_PAGE_SHIFT];
         if (likely(block < BLOCK_SENTINEL_MIN)) {
             return cpu_block_read(block, addr);
