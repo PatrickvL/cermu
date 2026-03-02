@@ -898,13 +898,10 @@ void NintendoSystem<V>::tick() {
 
     if (is_read) {
         // ---- READ ----
-        if (addr < 0x2000) {
-            // Fast path: WRAM ($0000-$1FFF) -- 2KB mirrored
-            BUS_SET_DATA(pins_, bus_.cpu_ram[addr & 0x07FF]);
-        } else {
+        {
             const uint16_t block = bus_.cpu_read_block[addr >> 12];
             if (likely(block < nes_bus::BLOCK_SENTINEL_MIN)) {
-                // Block hit: PRG-ROM, PRG-RAM, or expansion
+                // Block hit: WRAM, PRG-ROM, PRG-RAM, or expansion
                 BUS_SET_DATA(pins_, bus_.cpu_block_read(block, addr));
             } else if (block == nes_bus::BLOCK_PPU_REGS) {
                 // PPU registers ($2000-$3FFF, mirrored every 8 bytes)
@@ -947,13 +944,10 @@ void NintendoSystem<V>::tick() {
         // ---- WRITE ----
         const uint8_t data = BUS_GET_DATA(pins_);
 
-        if (addr < 0x2000) {
-            // Fast path: WRAM ($0000-$1FFF) -- 2KB mirrored
-            bus_.cpu_ram[addr & 0x07FF] = data;
-        } else {
+        {
             const uint16_t block = bus_.cpu_write_block[addr >> 12];
             if (likely(block < nes_bus::BLOCK_SENTINEL_MIN)) {
-                // Block hit: PRG-RAM or expansion write
+                // Block hit: WRAM, PRG-RAM, or expansion write
                 bus_.cpu_block_write(block, addr, data);
             } else if (block == nes_bus::BLOCK_PPU_REGS) {
                 // PPU registers ($2000-$3FFF, mirrored every 8 bytes)
@@ -1228,28 +1222,15 @@ NintendoSystem<V>::get_default_peripherals() const {
 
 template<NintendoVariant V>
 uint8_t NintendoSystem<V>::peek_memory(uint16_t addr) const {
-    // $0000-$1FFF: CPU RAM (mirrored every 2KB)
-    if (addr < 0x2000) {
-        return bus_.cpu_ram[addr & 0x07FF];
-    }
-
-    // $2000-$3FFF: PPU registers (read-only peek)
+    // $2000-$3FFF: PPU registers (read-only peek, no side-effects)
     if (addr >= 0x2000 && addr <= 0x3FFF && ppu_) {
         return ppu_->cpu_peek(addr);
     }
 
-    // $4000-$5FFF: APU/IO -- no side-effect-free peek available
-    // Try block dispatch for $6000+
-    if (addr >= 0x6000) {
-        uint16_t block = bus_.cpu_read_block[addr >> 12];
-        if (block < nes_bus::BLOCK_SENTINEL_MIN) {
-            return bus_.cpu_block_read(block, addr);
-        }
-    }
-
-    // Fall through to cartridge for unmapped ranges
-    if (addr >= 0x6000 && cartridge_) {
-        return cartridge_->peek(addr);
+    // All other ranges: block dispatch (WRAM, PRG-ROM, PRG-RAM, expansion)
+    uint16_t block = bus_.cpu_read_block[addr >> 12];
+    if (block < nes_bus::BLOCK_SENTINEL_MIN) {
+        return bus_.cpu_block_read(block, addr);
     }
 
     return 0;
@@ -1257,18 +1238,10 @@ uint8_t NintendoSystem<V>::peek_memory(uint16_t addr) const {
 
 template<NintendoVariant V>
 void NintendoSystem<V>::poke_memory(uint16_t addr, uint8_t value) {
-    // $0000-$1FFF: CPU RAM (mirrored every 2KB)
-    if (addr < 0x2000) {
-        bus_.cpu_ram[addr & 0x07FF] = value;
-        return;
-    }
-    // $6000+: PRG-RAM via block dispatch
-    if (addr >= 0x6000) {
-        uint16_t block = bus_.cpu_write_block[addr >> 12];
-        if (block < nes_bus::BLOCK_SENTINEL_MIN) {
-            bus_.cpu_block_write(block, addr, value);
-            return;
-        }
+    // All writable ranges: block dispatch (WRAM, PRG-RAM, expansion)
+    uint16_t block = bus_.cpu_write_block[addr >> 12];
+    if (block < nes_bus::BLOCK_SENTINEL_MIN) {
+        bus_.cpu_block_write(block, addr, value);
     }
 }
 
