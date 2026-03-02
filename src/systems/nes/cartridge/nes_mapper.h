@@ -161,6 +161,9 @@ public:
     // that A12 was low for >= ~16 dots before a rising edge counts).
     virtual void notify_a12(bool /*a12_high*/, uint64_t /*ppu_cycle*/) {}
 
+    /// Whether CHR memory is RAM (writable by PPU) vs ROM (read-only).
+    bool chr_is_ram() const { return chr_is_ram_; }
+
 protected:
     // ROM/RAM pointers — set by Cartridge via set_memory_pointers()
     const uint8_t* prg_rom_ = nullptr;

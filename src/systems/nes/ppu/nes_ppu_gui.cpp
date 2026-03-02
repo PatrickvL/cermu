@@ -223,7 +223,7 @@ void nes_system::PPU::render_settings_content() {
 
     // Memory summary
     if (ImGui::CollapsingHeader("Memory", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Text("VRAM:    %zu bytes", ppu->vram.size());
+        ImGui::Text("VRAM:    %zu bytes", PPU::CIRAM_SIZE);
         ImGui::Text("OAM:     %zu bytes", ppu->oam.size());
         ImGui::Text("Palette: %zu bytes", ppu->palette.size());
     }

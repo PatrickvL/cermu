@@ -295,6 +295,12 @@ template<NintendoVariant V>
 void NintendoSystem<V>::shutdown() {
     // Save battery-backed SRAM before shutdown
     if (cartridge_ && cartridge_->battery_backed) {
+        // Sync PRG-RAM from unified buffer back to cartridge vector for save
+        if (bus_.prg_ram && bus_.prg_ram_size > 0 && !cartridge_->prg_ram.empty()) {
+            std::memcpy(cartridge_->prg_ram.data(), bus_.prg_ram,
+                        std::min(static_cast<size_t>(bus_.prg_ram_size),
+                                 cartridge_->prg_ram.size()));
+        }
         cartridge_->save_sram(cartridge_->sram_path_for_rom(cartridge_->get_rom_filepath()));
     }
     if (cpu_) {
@@ -323,7 +329,7 @@ void NintendoSystem<V>::reset() {
     
     if (cartridge_) {
         cartridge_->reset();
-        cartridge_->update_bank_map(&bus_, ppu_->vram.data());
+        cartridge_->update_bank_map(&bus_, bus_.ciram);
     }
     
     // Read reset vector from $FFFC/$FFFD and set CPU PC
@@ -450,7 +456,7 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
         // Connect NSF cartridge to system
         cartridge_ = nsf_cartridge_;
         ppu_->connect_cartridge(cartridge_);
-        cartridge_->update_bank_map(&bus_, ppu_->vram.data());
+        cartridge_->update_bank_map(&bus_, bus_.ciram);
 
         // Save state for subtune switching
         active_nsf_header_ = header;
@@ -490,7 +496,29 @@ bool NintendoSystem<V>::load_file(const char* filepath) {
 
         // Connect cartridge to PPU and set up page-pointer bank maps
         ppu_->connect_cartridge(cartridge_);
-        cartridge_->update_bank_map(&bus_, ppu_->vram.data());
+
+        // Allocate unified buffer with cartridge ROM/RAM data
+        bus_.init_unified_buffer(
+            cartridge_->prg_memory.data(), cartridge_->prg_memory.size(),
+            cartridge_->chr_memory.data(), cartridge_->chr_memory.size(),
+            cartridge_->chr_memory.size() == 0 ||
+                (cartridge_->get_mapper() && cartridge_->get_mapper()->chr_is_ram()),
+            cartridge_->prg_ram.data(), cartridge_->prg_ram.size());
+
+        // Re-set mapper memory pointers to reference the unified buffer copy
+        // so that bank configs return pointers the bus can convert to block numbers.
+        if (auto* m = cartridge_->get_mapper()) {
+            m->set_memory_pointers(
+                bus_.prg_rom_ptr, bus_.prg_rom_size,
+                bus_.chr_data_ptr, bus_.chr_data_size,
+                bus_.chr_is_ram,
+                bus_.prg_ram, bus_.prg_ram_size);
+        }
+
+        // Re-connect PPU to bus (ciram pointer may have changed)
+        ppu_->connect_bus(&bus_);
+
+        cartridge_->update_bank_map(&bus_, bus_.ciram);
         
         // Reset system with new cartridge
         reset();
@@ -697,7 +725,7 @@ void NintendoSystem<V>::register_nes_chips() {
     auto ciram = std::make_unique<MemoryChip>(
         ChipInfo{"SRAM", "Various"}, 2048, MemoryChip::SRAM, &pins_,
         "CIRAM", 0x2000);
-    ciram->bind(ppu_->vram.data());  // Point at PPU's CIRAM for live debug view
+    ciram->bind(bus_.ciram);  // Point at unified buffer CIRAM for live debug view
     register_chip(std::move(ciram));
 
     // Cartridge — now a proper ChipBase subclass
@@ -941,7 +969,7 @@ void NintendoSystem<V>::tick() {
                 // ROM region writes → mapper register dispatch
                 if (cartridge_) {
                     if (cartridge_->handle_mapper_write(addr, data)) {
-                        cartridge_->update_bank_map(&bus_, ppu_->vram.data());
+                        cartridge_->update_bank_map(&bus_, bus_.ciram);
                     } else {
                         // Mapper didn't claim — fall through to cartridge
                         // bus tick (needed for NsfCartridge self-modifying writes)
@@ -1066,7 +1094,7 @@ bool NintendoSystem<V>::save_state(const std::string& filename) const {
 
     // PPU state
     f.write(reinterpret_cast<const char*>(&ppu_->regs), sizeof(ppu_->regs));
-    f.write(reinterpret_cast<const char*>(ppu_->vram.data()), ppu_->vram.size());
+    f.write(reinterpret_cast<const char*>(bus_.ciram), nes_bus::CIRAM_SIZE);
     f.write(reinterpret_cast<const char*>(ppu_->oam.data()), ppu_->oam.size());
     f.write(reinterpret_cast<const char*>(ppu_->palette.data()), ppu_->palette.size());
     f.write(reinterpret_cast<const char*>(&ppu_->internal), sizeof(ppu_->internal));
@@ -1074,8 +1102,8 @@ bool NintendoSystem<V>::save_state(const std::string& filename) const {
     uint16_t cy = ppu_->cycle;   f.write(reinterpret_cast<const char*>(&cy), sizeof(cy));
     uint64_t fc = ppu_->frame_count; f.write(reinterpret_cast<const char*>(&fc), sizeof(fc));
 
-    // Bus state — CPU RAM
-    f.write(reinterpret_cast<const char*>(bus_.cpu_ram), sizeof(bus_.cpu_ram));
+    // Bus state -- CPU RAM
+    f.write(reinterpret_cast<const char*>(bus_.cpu_ram), nes_bus::WRAM_SIZE);
     f.write(reinterpret_cast<const char*>(&bus_.dma_page), 1);
     f.write(reinterpret_cast<const char*>(&bus_.dma_addr), 1);
     f.write(reinterpret_cast<const char*>(&bus_.dma_data), 1);
@@ -1083,11 +1111,11 @@ bool NintendoSystem<V>::save_state(const std::string& filename) const {
     f.write(reinterpret_cast<const char*>(&dma_flags), 1);
     f.write(reinterpret_cast<const char*>(&bus_.system_clock_counter), sizeof(bus_.system_clock_counter));
 
-    // PRG RAM (if present)
-    if (cartridge_ && !cartridge_->prg_ram.empty()) {
-        uint32_t ram_size = static_cast<uint32_t>(cartridge_->prg_ram.size());
+    // PRG RAM (if present -- saved from unified buffer)
+    if (bus_.prg_ram && bus_.prg_ram_size > 0) {
+        uint32_t ram_size = bus_.prg_ram_size;
         f.write(reinterpret_cast<const char*>(&ram_size), sizeof(ram_size));
-        f.write(reinterpret_cast<const char*>(cartridge_->prg_ram.data()), ram_size);
+        f.write(reinterpret_cast<const char*>(bus_.prg_ram), ram_size);
     } else {
         uint32_t zero = 0;
         f.write(reinterpret_cast<const char*>(&zero), sizeof(zero));
@@ -1116,7 +1144,7 @@ bool NintendoSystem<V>::load_state(const std::string& filename) {
 
     // PPU state
     f.read(reinterpret_cast<char*>(&ppu_->regs), sizeof(ppu_->regs));
-    f.read(reinterpret_cast<char*>(ppu_->vram.data()), ppu_->vram.size());
+    f.read(reinterpret_cast<char*>(bus_.ciram), nes_bus::CIRAM_SIZE);
     f.read(reinterpret_cast<char*>(ppu_->oam.data()), ppu_->oam.size());
     f.read(reinterpret_cast<char*>(ppu_->palette.data()), ppu_->palette.size());
     f.read(reinterpret_cast<char*>(&ppu_->internal), sizeof(ppu_->internal));
@@ -1125,7 +1153,7 @@ bool NintendoSystem<V>::load_state(const std::string& filename) {
     uint64_t fc; f.read(reinterpret_cast<char*>(&fc), sizeof(fc)); ppu_->frame_count = fc;
 
     // Bus state
-    f.read(reinterpret_cast<char*>(bus_.cpu_ram), sizeof(bus_.cpu_ram));
+    f.read(reinterpret_cast<char*>(bus_.cpu_ram), nes_bus::WRAM_SIZE);
     f.read(reinterpret_cast<char*>(&bus_.dma_page), 1);
     f.read(reinterpret_cast<char*>(&bus_.dma_addr), 1);
     f.read(reinterpret_cast<char*>(&bus_.dma_data), 1);
@@ -1141,8 +1169,8 @@ bool NintendoSystem<V>::load_state(const std::string& filename) {
     // PRG RAM
     uint32_t ram_size = 0;
     f.read(reinterpret_cast<char*>(&ram_size), sizeof(ram_size));
-    if (ram_size > 0 && cartridge_ && cartridge_->prg_ram.size() >= ram_size) {
-        f.read(reinterpret_cast<char*>(cartridge_->prg_ram.data()), ram_size);
+    if (ram_size > 0 && bus_.prg_ram && bus_.prg_ram_size >= ram_size) {
+        f.read(reinterpret_cast<char*>(bus_.prg_ram), ram_size);
     }
 
     printf("%s: Loaded state from %s\n", Traits::name, filename.c_str());
