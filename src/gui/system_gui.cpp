@@ -425,12 +425,12 @@ void SystemGUI::render_menu_bar() {
         ImGui::EndDisabled();
         
         // System-specific menu items (if system is loaded)
+        // Rendered without holding emu_mutex_ so they never flicker;
+        // actions triggered on click (reset, eject, …) are brief and
+        // safe to call from the GUI thread.
         if (system_) {
             ImGui::Separator();
-            std::unique_lock<std::mutex> lock(emu_mutex_, std::try_to_lock);
-            if (lock.owns_lock()) {
-                system_->render_system_menu_items();
-            }
+            system_->render_system_menu_items();
         }
         
         ImGui::EndMenu();
