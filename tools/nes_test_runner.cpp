@@ -515,8 +515,44 @@ static TestResult run_test_rom(const std::string& filepath, int max_frames,
         printf("\n--- Running: %s ---\n", filename.c_str());
     }
 
-    // Create NES system
+    // Detect PAL/NTSC from iNES header before creating the system
+    bool is_pal = false;
+    {
+        FILE* f = fopen(filepath.c_str(), "rb");
+        if (f) {
+            uint8_t hdr[16];
+            if (fread(hdr, 1, 16, f) == 16 &&
+                hdr[0] == 'N' && hdr[1] == 'E' && hdr[2] == 'S' && hdr[3] == 0x1A) {
+                bool is_ines2 = ((hdr[7] & 0x0C) == 0x08);
+                if (is_ines2) {
+                    is_pal = (hdr[12] & 0x03) == 1;  // byte 12 bits 0-1: 1=PAL
+                } else {
+                    is_pal = (hdr[9] & 0x01) != 0;   // byte 9 bit 0: 1=PAL
+                }
+            }
+            fclose(f);
+        }
+        // Fallback: detect PAL from directory path (many PAL test ROMs
+        // don't set the header flag).
+        if (!is_pal) {
+            std::string lower_path = filepath;
+            std::transform(lower_path.begin(), lower_path.end(),
+                           lower_path.begin(), ::tolower);
+            if (lower_path.find("pal_") != std::string::npos ||
+                lower_path.find("pal/") != std::string::npos ||
+                lower_path.find("pal\\") != std::string::npos) {
+                is_pal = true;
+            }
+        }
+    }
+
+    // Create NES system (PAL or NTSC based on ROM header)
     NES nes;
+    if (is_pal) {
+        SystemConfiguration config;
+        config.region_option_index = 1;  // PAL
+        nes.set_configuration(config);
+    }
     if (!nes.initialize()) {
         TestResult r;
         r.rom_path = filename;
