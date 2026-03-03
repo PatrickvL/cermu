@@ -384,8 +384,12 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             // (no wrap within a single cycle).
             const int16_t base = vicii_fetch_x_to_buffer_pos(vicii, x_coord);
             if (base >= 0) {
-                memset(&vicii->pixel.pixel_line_priority[base], vicii->border.border_pixel.priority, 8);
-                memset(&vicii->pixel.pixel_line_color[base], (uint8_t)vicii->border.border_pixel.color, 8);
+                // Clamp count: visible_pixels_per_line (403 PAL) is not a multiple
+                // of 8, so the last visible cycle may only have a partial span.
+                const int16_t vp = vicii->cached_visible_pixels;
+                const int count = (base + 8 <= vp) ? 8 : (vp - base);
+                memset(&vicii->pixel.pixel_line_priority[base], vicii->border.border_pixel.priority, count);
+                memset(&vicii->pixel.pixel_line_color[base], (uint8_t)vicii->border.border_pixel.color, count);
             }
         } else if (!vicii->video_logic.display_state) {
             // Content area in idle mode: emit background color with BACKGROUND priority.
@@ -394,8 +398,10 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             // graphics in this state, but we approximate with background color for now.
             const int16_t base = vicii_fetch_x_to_buffer_pos(vicii, x_coord);
             if (base >= 0) {
-                memset(&vicii->pixel.pixel_line_priority[base], VICII_PRIORITY_BACKGROUND, 8);
-                memset(&vicii->pixel.pixel_line_color[base], vicii->registers.data[VICII_B0C] & 0x0F, 8);
+                const int16_t vp = vicii->cached_visible_pixels;
+                const int count = (base + 8 <= vp) ? 8 : (vp - base);
+                memset(&vicii->pixel.pixel_line_priority[base], VICII_PRIORITY_BACKGROUND, count);
+                memset(&vicii->pixel.pixel_line_color[base], vicii->registers.data[VICII_B0C] & 0x0F, count);
             }
         }
     } else {
