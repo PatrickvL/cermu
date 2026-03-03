@@ -5,6 +5,7 @@
 
 #include "../../core/cermu.h"
 #include "../../core/system_lines.h"
+#include "../../chip/cpu/fam65xx/mos6510.h"
 #include "c64_chips.h"
 
 // =============================
@@ -15,20 +16,11 @@
 #define SYS_MASK_EXROM (1 << 0)   // EXROM signal (bit 0)
 #define SYS_MASK_GAME  (1 << 1)   // GAME signal (bit 1)
 
-// C64 default bus state with pull-up resistors
-// This represents the hardware state at the start of each cycle before any chip asserts lines:
-// - Data bus: 0xFF (pull-ups on all 8 data lines)
-// - IRQ, NMI: HIGH via pull-ups (inactive, active-low signals)
-// - RDY: HIGH via pull-up (CPU ready)
-// - BA: HIGH via pull-up (bus available, VIC-II pulls LOW during badlines)
-// - AEC: HIGH via pull-up (CPU controls address bus, VIC-II pulls LOW to take control)
-// - RW: HIGH (READ mode, pull-up on R/W line defaults to read)
-// - RES: HIGH (not in reset, active-low signal)
-//
-// CRITICAL FIX: IRQ/NMI/RES are at bits 32-34, NOT in the 8-bit lines field!
-// Must use BUS_BIT() to set them directly, not BUS_MASK_* which are for the legacy lines field.
+// C64 default bus state — derived from CPU + system extras.
+// MOS6510 provides: RW, RDY, IRQ, NMI, AEC.  System adds: RES, BA, CNT, FLAG, data 0xFF.
 #define C64_BUS_DEFAULT_STATE() \
-    (BUS_STATE(0, 0xFF, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY | BUS_MASK_RW) | BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_CNT_BIT) | BUS_BIT(BUS_FLAG_BIT))
+    (MOS6510::default_bus_state() | BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_BA_BIT) | \
+     BUS_BIT(BUS_CNT_BIT) | BUS_BIT(BUS_FLAG_BIT) | BUS_DATA_MASK)
 
 // Forward declaration to avoid circular dependency with c64_system.h
 class C64System;

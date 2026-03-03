@@ -784,6 +784,7 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
     } else {
         bus.ba_low_count = 0;
         BUS_SET_BIT(bus_state, BUS_BA_BIT);
+        BUS_SET_BIT(bus_state, BUS_AEC_BIT);
         BUS_SET_BIT(bus_state, BUS_RDY_BIT);
     }
 

@@ -4,12 +4,13 @@
 
 #include "../../core/bus_cycle_interface.h"
 #include "../../core/system_lines.h"
+#include "../../chip/cpu/fam65xx/mos6502.h"
 
-// VIC-20 default bus state with pull-up resistors.
-// Data bus: 0xFF (pull-ups), BA/AEC/RDY/RW HIGH, active-low IRQ/NMI/RES HIGH (inactive).
+// VIC-20 default bus state — derived from CPU + system extras.
+// MOS6502 provides: RW, RDY, IRQ, NMI.  System adds: RES, BA, AEC, data 0xFF.
 #define VIC20_BUS_DEFAULT_STATE \
-    (BUS_STATE(0, 0xFF, BUS_MASK_BA | BUS_MASK_AEC | BUS_MASK_RDY | BUS_MASK_RW) | \
-     BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT))
+    (MOS6502::default_bus_state() | BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_BA_BIT) | \
+     BUS_BIT(BUS_AEC_BIT) | BUS_DATA_MASK)
 
 // VIC-20 bus structure
 struct vic20_bus_t {

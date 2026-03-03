@@ -138,6 +138,22 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
     return Traits.has_io_port();
   }
 
+  /// Minimum viable bus state for this CPU to function correctly.
+  /// Returns bus_state_t with all CPU-required pull-up signals HIGH:
+  ///  - RW (read mode), RDY (ready)
+  ///  - IRQ (inactive, active-low) — unless NO_IRQ_LINE
+  ///  - NMI (inactive, active-low) — unless NO_NMI_LINE
+  ///  - AEC (CPU has bus) — only for CPUs with I/O port (6510/7501/8502)
+  /// Systems should OR in additional system-specific signals (RES, BA,
+  /// CNT, FLAG, data bus pull-ups, etc.).
+  static constexpr bus_state_t default_bus_state() {
+    bus_state_t s = BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT);
+    if constexpr (has_irq_line()) { s |= BUS_BIT(BUS_IRQ_BIT); }
+    if constexpr (has_nmi_line()) { s |= BUS_BIT(BUS_NMI_BIT); }
+    if constexpr (has_aec_pin()) { s |= BUS_BIT(BUS_AEC_BIT); }
+    return s;
+  }
+
   // Identity / addressing helpers — let consumers query the CPU type without
   // depending on CPUTraits directly.
   static constexpr uint32_t address_mask() { return Traits.address_mask(); }

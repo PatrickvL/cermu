@@ -57,10 +57,10 @@ namespace nes_constants {
 #include "ppu/nes_ppu.h"
 #include "bus/nes_bus.h"
 
-// NES default bus state — initial pin values before any chip asserts.
-// RW=1 (read mode), active-low signals NMI/IRQ/RES start HIGH (inactive).
+// NES default bus state — derived from CPU + system extras.
+// RICOH_2A03 provides: RW, RDY, IRQ, NMI.  System adds: RES.
 #define NES_BUS_DEFAULT_STATE \
-    (BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_RES_BIT))
+    (RICOH_2A03::default_bus_state() | BUS_BIT(BUS_RES_BIT))
 
 // Forward declarations — none needed; all NES types included above.
 
@@ -125,6 +125,12 @@ private:
     uint8_t  dma_data_ = 0;
     bool     dma_transfer_ = false;
     bool     dma_dummy_ = true;
+
+    // DMC DMA cycle stealing during OAM DMA.
+    // On real hardware, DMC sample fetches "steal" cycles from an
+    // in-progress OAM DMA: 1 halt cycle + 1 read cycle = 2 extra cycles
+    // (plus 0-1 alignment wait depending on OAM DMA read/write phase).
+    uint8_t  dmc_steal_phase_ = 0;   // 0=none, 1=halt, 2=read
 
     // Clock dividers (PPU-tick granularity)
     uint32_t system_clock_counter_ = 0;  // Total PPU ticks (saved to state)
