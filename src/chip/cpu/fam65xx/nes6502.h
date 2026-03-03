@@ -147,18 +147,53 @@ public:
 private:
   uint8_t counter = 0;
 
+  // The halt flag used for the length clock is from the PREVIOUS cycle.
+  // On real hardware, the half-frame clock fires on the leading edge of
+  // φ1 and uses the latch state from the previous cycle, while register
+  // writes (which update halt) complete later on the same φ1 cycle.
+  // Result: "changes to halt occur after clocking length" (blargg test 10).
+  bool prev_halt_ = false;
+
+  // Pending reload: when a write to the length register ($4003/$4007/
+  // $400B/$400F) occurs, the reload is buffered.  APU::tick() resolves
+  // it after the half-frame clock (if any).  On a half-frame cycle, the
+  // reload is silently dropped when the post-clock counter is > 0
+  // (blargg test 11 #5).  On non-half-frame cycles, the reload always
+  // takes effect.
+  bool pending_reload_ = false;
+  uint8_t pending_reload_index_ = 0;
+
 public:
   void load(uint8_t index) {
-    if (enabled) {
-      counter = APU_LENGTH_TABLE[index];
-    }
+    if (!enabled) return;
+    // Buffer the reload — APU::tick() will resolve it with knowledge
+    // of whether a half-frame clock happened this cycle.
+    pending_reload_ = true;
+    pending_reload_index_ = index;
   }
 
   void clock() {
-    if (!halt && counter > 0) {
+    // Use PREVIOUS cycle's halt for the clock decision
+    if (!prev_halt_ && counter > 0) {
       counter--;
     }
   }
+
+  // Resolve any pending reload.  Called by APU::tick() at the end of
+  // every cycle.  On half-frame cycles, the reload is dropped if the
+  // counter is still > 0 after the clock.
+  void resolve_pending_reload(bool had_half_frame) {
+    if (pending_reload_) {
+      if (!had_half_frame || counter == 0) {
+        counter = APU_LENGTH_TABLE[pending_reload_index_];
+      }
+      // If had_half_frame && counter > 0: reload silently dropped
+      pending_reload_ = false;
+    }
+  }
+
+  // Called at the end of APU::tick() to latch halt for next cycle's clock.
+  void update_prev_halt() { prev_halt_ = halt; }
 
   void set_enabled(bool enable) {
     enabled = enable;
@@ -1025,6 +1060,7 @@ public:
   bus_state_t tick(bus_state_t bus_state) {
     // Frame counter events
     uint8_t events = frame.clock();
+    bool had_half_frame = false;
 
     if (events & 1) { // Quarter frame
       pulse1.envelope.clock();
@@ -1034,6 +1070,8 @@ public:
     }
 
     if (events & 2) { // Half frame
+      had_half_frame = true;
+
       pulse1.length.clock();
       pulse2.length.clock();
       triangle.length.clock();
@@ -1042,6 +1080,14 @@ public:
       pulse1.sweep.clock(pulse1.timer_period);
       pulse2.sweep.clock(pulse2.timer_period);
     }
+
+    // Resolve any pending length reloads.  On half-frame cycles, a
+    // reload is dropped if the post-clock counter is still > 0.
+    // On other cycles, reloads always succeed.
+    pulse1.length.resolve_pending_reload(had_half_frame);
+    pulse2.length.resolve_pending_reload(had_half_frame);
+    triangle.length.resolve_pending_reload(had_half_frame);
+    noise.length.resolve_pending_reload(had_half_frame);
 
     // Triangle clocks every CPU cycle
     triangle.clock();
@@ -1057,6 +1103,14 @@ public:
     }
 
     cycle_counter++;
+
+    // Latch halt flags for next cycle.  The length counter clock uses
+    // prev_halt_ so that writes to halt on the SAME cycle as a half-frame
+    // event take effect AFTER the clock (real hardware behavior).
+    pulse1.length.update_prev_halt();
+    pulse2.length.update_prev_halt();
+    triangle.length.update_prev_halt();
+    noise.length.update_prev_halt();
 
     return bus_state;
   }
