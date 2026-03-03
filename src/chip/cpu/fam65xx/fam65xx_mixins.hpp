@@ -107,7 +107,7 @@ template <const CPUTraits &Traits> struct apu_mixin_t {
   // Reset APU to power-up state (preserves the existing instance)
   void reset_apu() {
     if (apu_state.apu_instance) {
-      apu_state.apu_instance->reset_to_power_up_state();
+      apu_state.apu_instance->reset_to_soft_state();
     }
   }
 

@@ -652,20 +652,63 @@ private:
   }
 
 public:
-  void reset() {
-      cycle = 0;
+  // On real hardware the APU frame counter begins running several cycles
+  // before the CPU reset sequence finishes.  By the time the first user
+  // instruction executes the counter has advanced 9-12 cycles past the
+  // implicit $4017 write (the exact value varies per power-on; Blargg
+  // tests report "usually 9").  Our CPU reset is instantaneous, so we
+  // pre-seed the counter to compensate.
+  //
+  // Measured relationship: STARTUP_OFFSET = N  →  Blargg count = N + 3.
+  // Acceptable count range: [6, 12]  →  OFFSET range: [3, 9].
+  // "Usually 9" → OFFSET = 6.
+  static constexpr uint32_t STARTUP_OFFSET = 6;
+
+  /// Full reset (power-on): clears everything including write buffer.
+  void power_on_reset() {
+      cycle = STARTUP_OFFSET;
       irq_flag = false;
       write_buffer.pending = false;
       write_buffer.delay = 0;
       write_buffer.value = 0;
+      mode = false;
+      irq_inhibit = false;
       select_schedule();
   }
 
-  void write(uint8_t value) {
-      // Frame counter writes are delayed by 3-4 cycles
+  /// Soft reset: restarts the frame counter with the same hardware
+  /// startup offset as power-on (the real chip re-writes $4017 with
+  /// the previously latched value and delays 9-12 cycles).
+  void soft_reset() {
+      cycle = STARTUP_OFFSET;
+      irq_flag = false;
+      write_buffer.pending = false;
+      write_buffer.delay = 0;
+      select_schedule();
+  }
+
+  /// Legacy alias — defaults to power-on reset for backward compat.
+  void reset() { power_on_reset(); }
+
+  void write(uint8_t value, bool apu_odd_cycle) {
+      // Frame counter writes are delayed by 3-4 CPU cycles.
+      // The delay depends on the APU's even/odd cycle, NOT the frame
+      // counter's internal cycle.  Even APU cycle → 3 cycle delay,
+      // odd → 4 cycle delay.
+      //
+      // Implementation note: frame.write() is called during PHI1
+      // and clock() runs later in the SAME PHI1.  That first clock()
+      // decrements the delay once before any new CPU cycle passes.
+      // To get N actual CPU-cycle delays we set delay = N+0 because:
+      //   tick 0 (same cycle): delay N→N-1, not zero yet
+      //   tick 1: delay N-1→N-2
+      //   ...
+      //   tick N-1: delay 1→0, write takes effect
+      // Total: N-1 additional CPU cycles after the write cycle, PLUS
+      //        the write cycle itself = N CPU cycles from STA to effect.
       write_buffer.pending = true;
       write_buffer.value = value;
-      write_buffer.delay = (cycle & 1) ? 4 : 3; // Depends on odd/even cycle
+      write_buffer.delay = apu_odd_cycle ? 4 : 3;
   }
 
   // Returns which events to trigger: bit 0 = quarter frame, bit 1 = half frame
@@ -674,7 +717,10 @@ public:
       if (unlikely(write_buffer.pending)) {
           if (write_buffer.delay > 0) {
               write_buffer.delay--;
-          } else {
+          }
+          // Check == 0 AFTER decrement so write takes effect on the
+          // correct cycle (fixes off-by-one that made all events 1 cycle late).
+          if (write_buffer.delay == 0 && write_buffer.pending) {
               uint8_t value = write_buffer.value;
               mode = (value >> 7) & 1;
               irq_inhibit = (value >> 6) & 1;
@@ -748,9 +794,9 @@ public:
     reset_to_power_up_state();
   }
 
+  /// Power-on reset: disables all channels, writes $00 to $4017 with delay.
   void reset_to_power_up_state() {
-
-    // All channels start disabled
+    // All channels start disabled at power-on
     pulse1.length.set_enabled(false);
     pulse2.length.set_enabled(false);
     triangle.length.set_enabled(false);
@@ -763,12 +809,6 @@ public:
     // DMC starts silent with proper reset
     dmc.reset();
 
-    // Frame counter starts in 4-step mode
-    frame.mode = false;
-    frame.irq_inhibit = false;
-    frame.irq_flag = false;
-    frame.reset();
-
     // Noise LFSR properly initialized
     noise.shift_register = 1;
 
@@ -777,6 +817,37 @@ public:
     hp_prev_out = 0.0f;
 
     cycle_counter = 0;
+
+    // Frame counter: full power-on reset.  The startup offset inside
+    // power_on_reset() accounts for the hardware delay between the
+    // implicit $4017=$00 write and the first user instruction.
+    frame.power_on_reset();
+  }
+
+  /// Soft reset: preserves length counter enables, re-triggers $4017 write.
+  void reset_to_soft_state() {
+    // Length counter enable flags are PRESERVED across soft reset.
+    // Triangle linear counter state is preserved.
+
+    pulse1.sweep.reset();
+    pulse2.sweep.reset();
+
+    // DMC: clear output, stop playback
+    dmc.bytes_remaining = 0;
+    dmc.irq_flag = false;
+
+    // Noise LFSR preserved across reset on real hardware, but
+    // re-seeding to 1 is harmless and avoids stuck-at-0 bugs.
+    noise.shift_register = 1;
+
+    // Reset filter state
+    hp_prev_in = 0.0f;
+    hp_prev_out = 0.0f;
+
+    cycle_counter = 0;
+
+    // Frame counter soft reset: preserves mode/inhibit, resets cycle.
+    frame.soft_reset();
   }
 
   // MMIO Write Handler ($4000-$4017) with bus state support
@@ -871,7 +942,7 @@ public:
 
     // Frame counter
     case 0x4017:
-      frame.write(value);
+      frame.write(value, cycle_counter & 1);
       break;
     }
 
