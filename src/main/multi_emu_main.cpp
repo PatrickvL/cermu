@@ -7,6 +7,41 @@
 #include <memory>
 #include <cstring>
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <io.h>
+#include <fcntl.h>
+#ifndef ATTACH_TO_PARENT_PROCESS
+#define ATTACH_TO_PARENT_PROCESS ((DWORD)-1)
+#endif
+
+// When built as a WIN32 (GUI) app, stdout/stderr are not connected to any
+// console. If we were launched from a terminal, reattach to the parent
+// console so printf / fprintf output appears there as expected.
+static void win32_attach_parent_console() {
+    if (AttachConsole(ATTACH_TO_PARENT_PROCESS)) {
+        // Redirect stdout
+        FILE* fp = nullptr;
+        if (_fileno(stdout) < 0 || _get_osfhandle(_fileno(stdout)) == -1) {
+            freopen_s(&fp, "CONOUT$", "w", stdout);
+            if (fp) setvbuf(fp, nullptr, _IONBF, 0);
+        }
+        // Redirect stderr
+        if (_fileno(stderr) < 0 || _get_osfhandle(_fileno(stderr)) == -1) {
+            freopen_s(&fp, "CONOUT$", "w", stderr);
+            if (fp) setvbuf(fp, nullptr, _IONBF, 0);
+        }
+        // Redirect stdin
+        if (_fileno(stdin) < 0 || _get_osfhandle(_fileno(stdin)) == -1) {
+            freopen_s(&fp, "CONIN$", "r", stdin);
+        }
+    }
+}
+#endif
+
 // Force linker to include system registrations
 // Systems self-register during static initialization via REGISTER_SYSTEM macro
 // We just need to ensure the system object files are linked
@@ -17,6 +52,9 @@
 // MAIN FUNCTION - Multi-System Emulator with Automatic Detection
 // ============================================================================
 int main(int argc, char** argv) {
+#ifdef _WIN32
+    win32_attach_parent_console();
+#endif
     const char* file_path = nullptr;
     const char* system_name = nullptr;
     bool vicii_test_mode = false;
