@@ -13,6 +13,7 @@
  */
 
 #include "../nes_mapper.h"
+#include "mapper_helpers.h"
 
 namespace nes_system {
 
@@ -33,12 +34,7 @@ public:
     }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
-        // Fixed PRG — mirror if < 32KB
-        for (int i = 0; i < 8; i++) {
-            uint32_t offset = (i * 0x1000) % prg_rom_size_;
-            config.prg_pages[i] = prg_rom_ + offset;
-        }
-        config.prg_ram_enabled = false;
+        mapper_helpers::set_prg_fixed(config, prg_rom_, prg_rom_size_);
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {

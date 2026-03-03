@@ -8,6 +8,7 @@
  */
 
 #include "../nes_mapper.h"
+#include "mapper_helpers.h"
 
 namespace nes_system {
 
@@ -29,24 +30,11 @@ public:
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
         // Fixed PRG — same as NROM
-        if (prg_banks_ <= 1) {
-            for (int i = 0; i < 4; i++) config.prg_pages[i] = prg_rom_ + (i * 0x1000);
-            for (int i = 0; i < 4; i++) config.prg_pages[4 + i] = prg_rom_ + (i * 0x1000);
-        } else {
-            for (int i = 0; i < 8; i++) config.prg_pages[i] = prg_rom_ + (i * 0x1000);
-        }
-        // CNROM has no PRG-RAM on real hardware
-        config.prg_ram_enabled = false;
+        mapper_helpers::set_prg_fixed(config, prg_rom_, prg_rom_size_);
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
-        // Switchable 8KB CHR bank
-        uint32_t chr_base = chr_bank_select_ * 0x2000;
-        for (int i = 0; i < 8; i++) {
-            uint32_t offset = chr_base + i * 0x0400;
-            config.chr_pages[i] = (offset < chr_mem_size_) ? chr_mem_ + offset : nullptr;
-            config.chr_writable[i] = false;  // CNROM uses CHR-ROM
-        }
+        mapper_helpers::set_chr_8k(config, chr_mem_, chr_mem_size_, false, chr_bank_select_);
     }
 
     bool register_write(uint16_t addr, uint8_t data) override {

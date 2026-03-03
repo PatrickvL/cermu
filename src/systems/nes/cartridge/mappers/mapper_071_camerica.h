@@ -12,6 +12,7 @@
  */
 
 #include "../nes_mapper.h"
+#include "mapper_helpers.h"
 
 namespace nes_system {
 
@@ -36,32 +37,11 @@ public:
     Mirror mirror() override { return mirror_mode_; }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
-        uint32_t total_16k = static_cast<uint32_t>(prg_rom_size_ / 0x4000);
-        if (total_16k == 0) total_16k = 1;
-
-        // Switchable 16KB at $8000
-        uint32_t bank = prg_bank_select_ % total_16k;
-        uint32_t base = bank * 0x4000;
-        for (int i = 0; i < 4; i++) {
-            uint32_t offset = base + i * 0x1000;
-            config.prg_pages[i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
-        }
-        // Fixed last 16KB at $C000
-        uint32_t last = (total_16k - 1) * 0x4000;
-        for (int i = 0; i < 4; i++) {
-            uint32_t offset = last + i * 0x1000;
-            config.prg_pages[4 + i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
-        }
-        config.prg_ram_enabled = false;
+        mapper_helpers::set_prg_16k_lo(config, prg_rom_, prg_rom_size_, prg_bank_select_);
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
-        // 8KB CHR-RAM (no switching)
-        for (int i = 0; i < 8; i++) {
-            uint32_t offset = i * 0x0400;
-            config.chr_pages[i] = (offset < chr_mem_size_) ? chr_mem_ + offset : chr_mem_;
-            config.chr_writable[i] = true;
-        }
+        mapper_helpers::set_chr_8k_fixed(config, chr_mem_, chr_mem_size_, true);
     }
 
     bool register_write(uint16_t addr, uint8_t data) override {

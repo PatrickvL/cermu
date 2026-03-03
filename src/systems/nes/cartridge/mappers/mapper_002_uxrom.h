@@ -8,6 +8,7 @@
  */
 
 #include "../nes_mapper.h"
+#include "mapper_helpers.h"
 
 namespace nes_system {
 
@@ -28,28 +29,11 @@ public:
     // =======================================================================
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
-        // Switchable 16KB at $8000
-        uint32_t bank_base = prg_bank_select_ * 0x4000;
-        for (int i = 0; i < 4; i++) {
-            uint32_t offset = bank_base + i * 0x1000;
-            config.prg_pages[i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
-        }
-        // Fixed last 16KB at $C000
-        uint32_t last_base = (prg_banks_ - 1) * 0x4000;
-        for (int i = 0; i < 4; i++) {
-            uint32_t offset = last_base + i * 0x1000;
-            config.prg_pages[4 + i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
-        }
-        // UxROM has no PRG-RAM on real hardware
-        config.prg_ram_enabled = false;
+        mapper_helpers::set_prg_16k_lo(config, prg_rom_, prg_rom_size_, prg_bank_select_);
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
-        // 8KB CHR direct (ROM or RAM)
-        for (int i = 0; i < 8; i++) {
-            config.chr_pages[i] = chr_mem_ + (i * 0x0400);
-            config.chr_writable[i] = chr_is_ram_;
-        }
+        mapper_helpers::set_chr_8k_fixed(config, chr_mem_, chr_mem_size_, chr_is_ram_);
     }
 
     bool register_write(uint16_t addr, uint8_t data) override {

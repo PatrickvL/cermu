@@ -13,6 +13,7 @@
  */
 
 #include "../nes_mapper.h"
+#include "mapper_helpers.h"
 
 namespace nes_system {
 
@@ -39,23 +40,11 @@ public:
     // =======================================================================
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
-        // Switchable 32KB PRG bank
-        uint32_t bank_base = prg_bank_select_ * 0x8000;
-        for (int i = 0; i < 8; i++) {
-            uint32_t offset = bank_base + i * 0x1000;
-            config.prg_pages[i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
-        }
-        // AxROM has no PRG-RAM
-        config.prg_ram_enabled = false;
+        mapper_helpers::set_prg_32k(config, prg_rom_, prg_rom_size_, prg_bank_select_);
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
-        // 8KB CHR-RAM (no switching)
-        for (int i = 0; i < 8; i++) {
-            uint32_t offset = i * 0x0400;
-            config.chr_pages[i] = (offset < chr_mem_size_) ? chr_mem_ + offset : chr_mem_;
-            config.chr_writable[i] = true;  // Always CHR-RAM
-        }
+        mapper_helpers::set_chr_8k_fixed(config, chr_mem_, chr_mem_size_, true);
     }
 
     bool register_write(uint16_t addr, uint8_t data) override {
