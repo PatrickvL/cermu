@@ -79,6 +79,33 @@ bool GenericEmulatorGUI::init(const char* window_title, int width, int height) {
         printf("Failed to initialize SDL: %s\n", SDL_GetError());
         return false;
     }
+
+    // Disable Windows accessibility shortcut hotkeys (Sticky Keys, Toggle Keys,
+    // Filter Keys) so that repeatedly pressing Shift / Ctrl for emulated buttons
+    // does not trigger the OS popup.  Original settings are restored in cleanup().
+#ifdef _WIN32
+    {
+        SystemParametersInfo(SPI_GETSTICKYKEYS, sizeof(STICKYKEYS), &saved_sticky_keys_, 0);
+        SystemParametersInfo(SPI_GETTOGGLEKEYS, sizeof(TOGGLEKEYS), &saved_toggle_keys_, 0);
+        SystemParametersInfo(SPI_GETFILTERKEYS, sizeof(FILTERKEYS), &saved_filter_keys_, 0);
+        saved_access_keys_ = true;
+
+        STICKYKEYS sk = saved_sticky_keys_;
+        sk.dwFlags &= ~SKF_HOTKEYACTIVE;
+        sk.dwFlags &= ~SKF_CONFIRMHOTKEY;
+        SystemParametersInfo(SPI_SETSTICKYKEYS, sizeof(STICKYKEYS), &sk, 0);
+
+        TOGGLEKEYS tk = saved_toggle_keys_;
+        tk.dwFlags &= ~TKF_HOTKEYACTIVE;
+        tk.dwFlags &= ~TKF_CONFIRMHOTKEY;
+        SystemParametersInfo(SPI_SETTOGGLEKEYS, sizeof(TOGGLEKEYS), &tk, 0);
+
+        FILTERKEYS fk = saved_filter_keys_;
+        fk.dwFlags &= ~FKF_HOTKEYACTIVE;
+        fk.dwFlags &= ~FKF_CONFIRMHOTKEY;
+        SystemParametersInfo(SPI_SETFILTERKEYS, sizeof(FILTERKEYS), &fk, 0);
+    }
+#endif
     
     // GL 3.0 + GLSL 130
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
@@ -165,6 +192,16 @@ void GenericEmulatorGUI::cleanup() {
         ImGui::DestroyContext();
     }
     
+    // Restore Windows accessibility shortcut hotkeys to their original state
+#ifdef _WIN32
+    if (saved_access_keys_) {
+        SystemParametersInfo(SPI_SETSTICKYKEYS, sizeof(STICKYKEYS), &saved_sticky_keys_, 0);
+        SystemParametersInfo(SPI_SETTOGGLEKEYS, sizeof(TOGGLEKEYS), &saved_toggle_keys_, 0);
+        SystemParametersInfo(SPI_SETFILTERKEYS, sizeof(FILTERKEYS), &saved_filter_keys_, 0);
+        saved_access_keys_ = false;
+    }
+#endif
+
     // Cleanup SDL
     if (gl_context_) {
         SDL_GL_DeleteContext(gl_context_);

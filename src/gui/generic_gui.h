@@ -10,6 +10,10 @@
 #include <atomic>
 #include <vector>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include "../utils/ring_buffer.hpp"
 
 // Forward declarations
@@ -98,6 +102,16 @@ protected:
     int    cursor_last_y_      = 0;     ///< Last observed mouse Y position
     Uint32 cursor_last_move_   = 0;     ///< SDL_GetTicks() of last mouse movement
     bool   cursor_hidden_      = false; ///< True when the host cursor is hidden
+
+    // ========================================================================
+    // Windows accessibility shortcut suppression
+    // ========================================================================
+#ifdef _WIN32
+    STICKYKEYS  saved_sticky_keys_  = {sizeof(STICKYKEYS),  0};
+    TOGGLEKEYS  saved_toggle_keys_  = {sizeof(TOGGLEKEYS),  0};
+    FILTERKEYS  saved_filter_keys_  = {sizeof(FILTERKEYS),  0};
+    bool        saved_access_keys_  = false; ///< True if original settings were captured
+#endif
 
     /// Idle time (ms) before hiding the cursor over the main window.
     static constexpr Uint32 CURSOR_HIDE_DELAY_MS = 2000;
