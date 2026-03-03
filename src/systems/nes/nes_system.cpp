@@ -921,7 +921,9 @@ void NintendoSystem<V>::tick() {
                     uint16_t dma_src = (dma_page_ << 8) | dma_addr_;
                     dma_data_ = bus_.cpu_read(dma_src);
                 } else {
-                    ppu_->oam[dma_addr_] = dma_data_;
+                    // DMA write to OAM — destination starts at current
+                    // OAMADDR and wraps.  OAMADDR itself is NOT modified.
+                    ppu_->oam[(ppu_->regs[PPU::OAMADDR] + dma_addr_) & 0xFF] = dma_data_;
                     dma_addr_++;
                     if (dma_addr_ == 0x00) {
                         dma_transfer_ = false;
