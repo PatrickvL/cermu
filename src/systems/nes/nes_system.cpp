@@ -1065,6 +1065,8 @@ void NintendoSystem<V>::tick() {
                 if (addr == 0x4016 || addr == 0x4017) {
                     // Controller read via ConnectorPort signal protocol.
                     // Read D0 from device, then pulse CLK to shift next bit.
+                    // Hardware returns controller data in D0-D4, open bus
+                    // (last value on data bus) in D5-D7.
                     const int p = addr & 1;  // 0 for $4016, 1 for $4017
                     uint8_t result = 0;
                     if (p < static_cast<int>(connector_ports_.size())) {
@@ -1080,7 +1082,9 @@ void NintendoSystem<V>::tick() {
                         connector_ports_[p]->write_system_signals(clk_mask, clk_mask);
                         connector_ports_[p]->write_system_signals(clk_mask, 0);
                     }
-                    BUS_SET_DATA(pins_, result);
+                    // D0-D4: controller/expansion data, D5-D7: open bus
+                    uint8_t open_bus = BUS_GET_DATA(pins_);
+                    BUS_SET_DATA(pins_, (open_bus & 0xE0) | (result & 0x1F));
                 }
                 // Other APU reads ($4015 etc.) handled by CPU PHI1
             } else {
