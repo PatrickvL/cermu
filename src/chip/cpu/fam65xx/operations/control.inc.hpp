@@ -272,9 +272,11 @@ bus_state_t op_brk(bus_state_t pins) {
          * Hardware IRQ/NMI must NOT advance PC - the interrupted instruction
          * must re-execute after RTI
          */
-        if (this->active_interrupt == FAM65XX_INT_NONE) {
-          this->active_interrupt = FAM65XX_INT_BRK;
+        if (this->brk_is_software_) {
           this->inc(REG_PC); // BRK only: skip signature byte
+          if (this->active_interrupt == FAM65XX_INT_NONE) {
+            this->active_interrupt = FAM65XX_INT_BRK;
+          }
         }
         this->half_cycle++;
         return pins;
@@ -367,9 +369,14 @@ bus_state_t op_brk(bus_state_t pins) {
      * Hardware IRQ/NMI must NOT advance PC - the interrupted instruction
      * must re-execute after RTI
      */
-    if (this->active_interrupt == FAM65XX_INT_NONE) {
-      this->active_interrupt = FAM65XX_INT_BRK;
+    if (this->brk_is_software_) {
       this->inc(REG_PC); // BRK only: skip signature byte
+      // Set active_interrupt to BRK only if NMI hasn't already hijacked
+      // the vector.  If NMI overrode active_interrupt between dispatch and
+      // here (case 0 PHI2), we keep NMI so the NMI vector is used.
+      if (this->active_interrupt == FAM65XX_INT_NONE) {
+        this->active_interrupt = FAM65XX_INT_BRK;
+      }
     }
     /* Higher priority interrupts (NMI, RESET, IRQ) should NOT be overridden */
     this->half_cycle++;
@@ -400,7 +407,7 @@ bus_state_t op_brk(bus_state_t pins) {
      * - B flag CLEAR: JMP ($0314) - IRQ handler
      */
     uint8_t status_flags = this->get(REG_P) | FLAG_U;  // U flag always set
-    if (this->active_interrupt == FAM65XX_INT_BRK) {
+    if (this->brk_is_software_) {
       status_flags |= FLAG_B;  // Set B flag only for actual BRK instruction
     }
     // For hardware IRQ/NMI: B flag remains clear (not set)
@@ -431,6 +438,39 @@ bus_state_t op_brk(bus_state_t pins) {
     // while we're reading the vector (cycles 8-11). Without this, IRQs sampled
     // during vector read will trigger immediately after BRK completes.
     this->interrupt_shift_register = 0;
+
+    // NMI VECTOR HIJACKING — check at vector-determination cycle.
+    //
+    // On real 6502 hardware the vector address MUX checks the NMI internal
+    // edge-detect flip-flop directly at T4 (the cycle where the vector
+    // address is loaded).  An NMI edge detected at or before T4 redirects
+    // the vector from $FFFE (IRQ/BRK) to $FFFA (NMI).
+    //
+    // The check uses two different latches depending on BRK type:
+    //
+    //   Software BRK: nmi_output_latch_ (1-cycle pipeline).
+    //     Software BRK goes through transition_to_opcode which has an
+    //     extra opcode-fetch cycle not present in hardware interrupts.
+    //     The 1-cycle pipeline compensates, giving 5 in-BRK hijack cycles
+    //     (T0-T4 window).
+    //
+    //   Hardware interrupt: nmi_edge_latch (direct flip-flop check).
+    //     Hardware interrupts use deferred hijacking which correctly adds
+    //     the T0 dummy-fetch cycle, making the BRK 7 cycles (T0-T6).
+    //     The edge latch matches real 6502 behaviour: the flip-flop IS
+    //     the signal checked by the vector MUX.  sample_nmi_pin() runs
+    //     between PHI2 and PHI1 (prior to case 7), so an NMI edge
+    //     detected in the same cycle is visible — giving the correct
+    //     T0-T4 = 5 in-BRK hijack window.
+    if constexpr (has_nmi_line()) {
+      bool nmi_pending = this->brk_is_software_
+        ? (this->nmi_output_latch_ != false)  // software BRK: 1-cycle pipeline
+        : (this->nmi_edge_latch != 0);        // hardware BRK: direct flip-flop
+      if (nmi_pending && this->active_interrupt != FAM65XX_INT_NMI) {
+        this->active_interrupt = FAM65XX_INT_NMI;
+      }
+    }
+
     // Clear NMI edge latch ONLY when NMI is actually being serviced.
     // On real 6502 hardware the edge-detect flip-flop is cleared during the
     // NMI vector fetch — NOT during IRQ or BRK sequences.  Clearing it
@@ -441,6 +481,7 @@ bus_state_t op_brk(bus_state_t pins) {
     if constexpr (has_nmi_line()) {
       if (this->active_interrupt == FAM65XX_INT_NMI) {
         this->nmi_edge_latch = 0;
+        this->nmi_output_latch_ = false;
       }
     }
     // Reset NMI edge detection using INVERTED convention:
@@ -481,6 +522,17 @@ bus_state_t op_brk(bus_state_t pins) {
     // 3. Properly nest interrupt handling
     // The I flag (set at cycle 9) blocks new IRQs, but not NMI or software BRK.
     this->active_interrupt = FAM65XX_INT_NONE;
+    
+    // Reset the NMI serviceability pipeline.  The edge latch is PRESERVED so a
+    // pending NMI will still fire, but the output latch is cleared to add one
+    // fresh pipeline cycle before NMI becomes serviceable.  Without this, an NMI
+    // edge detected during the vector-read cycles (T5/T6) would have already
+    // propagated through the pipeline and fire immediately at the next fetch
+    // boundary — 1 cycle too early.  On real hardware, NMI detected at T5 of
+    // BRK fires after the FIRST instruction of the handler, not before it.
+    if constexpr (has_nmi_line()) {
+      this->nmi_output_latch_ = false;
+    }
     
     // NOTE: Shift register was already cleared at cycle 9 after setting I flag
     
