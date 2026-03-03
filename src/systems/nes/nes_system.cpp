@@ -1004,6 +1004,14 @@ void NintendoSystem<V>::tick() {
                     pins_, ppu_->bus_snapshot_);
                 pins_ = cpu_result;
                 ppu_->bus_snapshot_ = ppu_result;
+                // service_cpu_bus may have placed a new address on the PPU
+                // bus ($2006 second write, $2007 read/write post-increment).
+                // Run ppu_memory_tick to let the cartridge observe it —
+                // handles A12 edge detection and mapper hooks.
+                if (cartridge_) {
+                    ppu_->bus_snapshot_ = cartridge_->ppu_memory_tick(
+                        ppu_->bus_snapshot_, &bus_, ppu_->ppu_dot_count_);
+                }
             } else if (block == nes_bus::BLOCK_APU_IO) {
                 // APU/IO registers ($4000-$4FFF)
                 if (addr == 0x4016 || addr == 0x4017) {
@@ -1046,6 +1054,12 @@ void NintendoSystem<V>::tick() {
                     pins_, ppu_->bus_snapshot_);
                 pins_ = cpu_result;
                 ppu_->bus_snapshot_ = ppu_result;
+                // service_cpu_bus may have placed a new address on the PPU
+                // bus ($2006/$2007).  Let the cartridge observe it.
+                if (cartridge_) {
+                    ppu_->bus_snapshot_ = cartridge_->ppu_memory_tick(
+                        ppu_->bus_snapshot_, &bus_, ppu_->ppu_dot_count_);
+                }
             } else if (block == nes_bus::BLOCK_APU_IO) {
                 // APU/IO registers ($4000-$4FFF)
                 if (addr == 0x4014) {
