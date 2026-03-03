@@ -121,9 +121,24 @@ public:
         return false;
     }
 
-    /// Called by PPU after reading CHR data. Updates latch state
-    /// based on the tile index that was fetched.
-    /// addr is the PPU address that was accessed.
+    // ----------------------------------------------------------------
+    // PPU bus read hook — called by ppu_memory_tick on every
+    // rendering read.  Detects pattern-table address ranges that
+    // trigger the MMC2 CHR latch mechanism ($FD/$FE tile indices).
+    //
+    // Returns true if a latch switched, signalling the caller to
+    // rebuild the bank map so subsequent reads use the new CHR page.
+    // ----------------------------------------------------------------
+    bool ppu_bus_read(uint16_t addr) override {
+        const bool old_l0 = latch_0_;
+        const bool old_l1 = latch_1_;
+        chr_read_hook(addr);
+        return (latch_0_ != old_l0) || (latch_1_ != old_l1);
+    }
+
+private:
+    /// Internal latch update — shared between ppu_bus_read and any
+    /// future direct callers.
     void chr_read_hook(uint16_t addr) {
         // Latches trigger on specific tile pattern addresses
         if (addr >= 0x0FD8 && addr <= 0x0FDF) {

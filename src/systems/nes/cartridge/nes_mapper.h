@@ -149,6 +149,27 @@ public:
     // that A12 was low for >= ~16 dots before a rising edge counts).
     virtual void notify_a12(bool /*a12_high*/, uint64_t /*ppu_cycle*/) {}
 
+    // ====================================================================
+    // Bus-mediated PPU memory access hooks
+    // ====================================================================
+    //
+    // Mappers that need to intercept PPU bus transactions override these.
+    // Called by Cartridge::ppu_memory_tick() on every PPU dot.
+    //
+    // ppu_bus_read: Called AFTER default block dispatch has placed data
+    // on the bus.  The mapper can inspect the address (e.g. $0FD8-$0FEF
+    // for MMC2/MMC4 latch switching) and return true if it changed CHR
+    // banking (triggers an update_bank_map).  The data has already been
+    // read from the current page pointers, so the latch switch takes
+    // effect on the NEXT fetch — matching real hardware behavior.
+    //
+    // ppu_bus_write: Called when the PPU bus has /WR asserted (CPU $2007
+    // write that targeted CHR or nametable space).  The mapper can
+    // intercept the write for bus-conflict mappers or special behavior.
+    // Returns true if banking changed.
+    virtual bool ppu_bus_read(uint16_t /*addr*/) { return false; }
+    virtual bool ppu_bus_write(uint16_t /*addr*/, uint8_t /*data*/) { return false; }
+
     /// Whether CHR memory is RAM (writable by PPU) vs ROM (read-only).
     bool chr_is_ram() const { return chr_is_ram_; }
 

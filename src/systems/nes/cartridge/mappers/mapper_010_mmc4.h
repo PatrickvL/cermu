@@ -98,6 +98,16 @@ public:
         return false;
     }
 
+    // PPU bus read hook — CHR latch switching (same mechanism as MMC2).
+    // Returns true if a latch switched → triggers bank map rebuild.
+    bool ppu_bus_read(uint16_t addr) override {
+        const bool old_l0 = latch_0_;
+        const bool old_l1 = latch_1_;
+        chr_read_hook(addr);
+        return (latch_0_ != old_l0) || (latch_1_ != old_l1);
+    }
+
+private:
     void chr_read_hook(uint16_t addr) {
         if (addr >= 0x0FD8 && addr <= 0x0FDF) latch_0_ = false;
         else if (addr >= 0x0FE8 && addr <= 0x0FEF) latch_0_ = true;

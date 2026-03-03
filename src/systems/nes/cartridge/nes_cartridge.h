@@ -102,20 +102,29 @@ public:
     // Bus-mediated PPU memory access
     // ====================================================================
     //
-    // Called by the system tick after PPU::clock() returns.  Reads the
-    // 14-bit address the PPU placed on the bus, performs A12 edge
-    // detection (mapper IRQ) and block dispatch (CHR/nametable read),
-    // then places the result on the bus data lines.
+    // Called by the system tick after PPU::clock() returns.  Services the
+    // PPU bus transaction for each dot:
     //
-    // This replaces the old fast_vram_read() path where the PPU did
-    // block dispatch + A12 detection internally.  Now the cartridge
-    // — which physically sits on the PPU bus — owns both operations.
+    // READ (default):  Reads the 14-bit address the PPU placed on the bus,
+    //     performs A12 edge detection (mapper IRQ) and block dispatch
+    //     (CHR/nametable read), then places the result on the bus data
+    //     lines.  The PPU captures the data at the start of the next
+    //     clock() call.  After default dispatch, the mapper's
+    //     ppu_bus_read() hook is called — mappers like MMC2/MMC4 use
+    //     this to detect pattern-table address ranges and switch CHR
+    //     bank latches.
+    //
+    // WRITE (/WR low):  When the PPU wrote to $2007 targeting CHR or
+    //     nametable space, the address + data + /WR flag are on the bus.
+    //     Default dispatch writes to the block.  The mapper's
+    //     ppu_bus_write() hook is called for bus-conflict detection or
+    //     special behavior.
     //
     // ppu_dot_count is passed for the mapper's A12 timing filter
     // (e.g. MMC3's requirement that A12 was low for ≥16 dots).
     inline ppu_bus_state_t ppu_memory_tick(
             ppu_bus_state_t ppu_bus,
-            const nes_bus::nes_bus_t* bus,
+            nes_bus::nes_bus_t* bus,
             uint64_t ppu_dot_count) {
         const uint16_t addr = PPU_BUS_GET_ADDR(ppu_bus);
 
@@ -128,11 +137,37 @@ public:
             notify_a12(new_a12, ppu_dot_count);
         }
 
-        // Block dispatch — CHR + nametable read
-        if (likely(bus != nullptr)) {
-            const uint16_t block = bus->ppu_read_block[addr >> nes_bus::PPU_PAGE_SHIFT];
-            if (likely(block < nes_bus::BLOCK_SENTINEL_MIN)) {
-                PPU_BUS_SET_DATA(ppu_bus, bus->ppu_block_read(block, addr));
+        const bool is_write = !PPU_BUS_GET_BIT(ppu_bus, PPU_BUS_WR_BIT);
+
+        if (unlikely(is_write)) {
+            // ---- WRITE transaction (from CPU $2007 write) ----
+            if (likely(bus != nullptr)) {
+                const uint16_t block = bus->ppu_write_block[addr >> nes_bus::PPU_PAGE_SHIFT];
+                if (likely(block < nes_bus::BLOCK_SENTINEL_MIN)) {
+                    bus->ppu_block_write(block, addr, PPU_BUS_GET_DATA(ppu_bus));
+                }
+            }
+            // Mapper write hook (bus-conflict, special behavior)
+            bool banking_changed = false;
+            if (mapper) banking_changed = mapper->ppu_bus_write(addr, PPU_BUS_GET_DATA(ppu_bus));
+            if (unlikely(banking_changed) && bus) {
+                update_bank_map(bus, bus->ciram);
+            }
+            // Clear /WR — transaction complete, return to idle (read) state
+            PPU_BUS_SET_BIT(ppu_bus, PPU_BUS_WR_BIT);
+        } else {
+            // ---- READ transaction (default: rendering fetch) ----
+            if (likely(bus != nullptr)) {
+                const uint16_t block = bus->ppu_read_block[addr >> nes_bus::PPU_PAGE_SHIFT];
+                if (likely(block < nes_bus::BLOCK_SENTINEL_MIN)) {
+                    PPU_BUS_SET_DATA(ppu_bus, bus->ppu_block_read(block, addr));
+                }
+            }
+            // Mapper read hook (MMC2/MMC4 CHR latch switching)
+            bool banking_changed = false;
+            if (unlikely(mapper != nullptr)) banking_changed = mapper->ppu_bus_read(addr);
+            if (unlikely(banking_changed) && bus) {
+                update_bank_map(bus, bus->ciram);
             }
         }
 

@@ -71,14 +71,6 @@ PpuSubProfile g_ppu_subprofile;
 namespace nes_system {
 
 // ============================================================================
-// PPU — A12 transition forwarding (out-of-line to avoid Cartridge include in header)
-// ============================================================================
-
-void PPU::forward_a12_transition(bool a12_high) {
-    if (cart_) cart_->notify_a12(a12_high, ppu_dot_count_);
-}
-
-// ============================================================================
 // PPU — CPU BUS INTERFACE
 // ============================================================================
 
@@ -144,7 +136,17 @@ std::pair<bus_state_t, ppu_bus_state_t> PPU::service_cpu_bus(
                 // Increment VRAM address
                 internal.v += (regs[PPUCTRL] & 0x04) ? 32 : 1;
                 internal.v &= 0x7FFF;
-                notify_a12(internal.v, ppu_bus);
+
+                // Post-increment address drives the PPU bus — track
+                // PA12 and forward any edge to the cartridge/mapper.
+                {
+                    const bool new_a12 = (internal.v & 0x1000) != 0;
+                    const bool old_a12 = PPU_BUS_GET_BIT(ppu_bus, PPU_BUS_PA12_BIT);
+                    if (new_a12) PPU_BUS_SET_BIT(ppu_bus, PPU_BUS_PA12_BIT);
+                    else         PPU_BUS_CLR_BIT(ppu_bus, PPU_BUS_PA12_BIT);
+                    if (new_a12 != old_a12 && cart_)
+                        cart_->notify_a12(new_a12, ppu_dot_count_);
+                }
                 break;
             }
         }
@@ -195,18 +197,33 @@ std::pair<bus_state_t, ppu_bus_state_t> PPU::service_cpu_bus(
                     internal.t = (internal.t & 0xFF00) | data;
                     internal.v = internal.t;
                     internal.w = false;
-                    // v now drives the PPU address bus — update A12 tracking.
-                    // Games (and test ROMs) can clock the MMC3 counter by
-                    // toggling A12 via $2006 writes.
-                    notify_a12(internal.v, ppu_bus);
+                    // v now drives the PPU address bus — update PA12
+                    // tracking.  Games (and test ROMs) can clock the
+                    // MMC3 counter by toggling A12 via $2006 writes.
+                    {
+                        const bool new_a12 = (internal.v & 0x1000) != 0;
+                        const bool old_a12 = PPU_BUS_GET_BIT(ppu_bus, PPU_BUS_PA12_BIT);
+                        if (new_a12) PPU_BUS_SET_BIT(ppu_bus, PPU_BUS_PA12_BIT);
+                        else         PPU_BUS_CLR_BIT(ppu_bus, PPU_BUS_PA12_BIT);
+                        if (new_a12 != old_a12 && cart_)
+                            cart_->notify_a12(new_a12, ppu_dot_count_);
+                    }
                 }
                 break;
             case 0x2007: // PPU Data
                 ppu_write_byte(internal.v, data);
                 internal.v += (regs[PPUCTRL] & 0x04) ? 32 : 1;
                 internal.v &= 0x7FFF;  // v is 15 bits
-                // Post-increment address drives the PPU bus — A12 may change.
-                notify_a12(internal.v, ppu_bus);
+                // Post-increment address drives the PPU bus — track
+                // PA12 and forward any edge to the cartridge/mapper.
+                {
+                    const bool new_a12 = (internal.v & 0x1000) != 0;
+                    const bool old_a12 = PPU_BUS_GET_BIT(ppu_bus, PPU_BUS_PA12_BIT);
+                    if (new_a12) PPU_BUS_SET_BIT(ppu_bus, PPU_BUS_PA12_BIT);
+                    else         PPU_BUS_CLR_BIT(ppu_bus, PPU_BUS_PA12_BIT);
+                    if (new_a12 != old_a12 && cart_)
+                        cart_->notify_a12(new_a12, ppu_dot_count_);
+                }
                 break;
         }
     }
