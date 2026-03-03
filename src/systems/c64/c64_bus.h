@@ -17,9 +17,9 @@
 #define SYS_MASK_GAME  (1 << 1)   // GAME signal (bit 1)
 
 // C64 default bus state — derived from CPU + system extras.
-// MOS6510 provides: RW, RDY, IRQ, NMI, AEC.  System adds: RES, BA, CNT, FLAG, data 0xFF.
+// MOS6510 provides: RW, RDY, IRQ, NMI, AEC, RES.  System adds: BA, CNT, FLAG, data 0xFF.
 #define C64_BUS_DEFAULT_STATE() \
-    (MOS6510::default_bus_state() | BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_BA_BIT) | \
+    (MOS6510::default_bus_state() | BUS_BIT(BUS_BA_BIT) | \
      BUS_BIT(BUS_CNT_BIT) | BUS_BIT(BUS_FLAG_BIT) | BUS_DATA_MASK)
 
 // Forward declaration to avoid circular dependency with c64_system.h

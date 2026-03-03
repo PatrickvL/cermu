@@ -57,10 +57,10 @@ namespace nes_constants {
 #include "ppu/nes_ppu.h"
 #include "bus/nes_bus.h"
 
-// NES default bus state — derived from CPU + system extras.
-// RICOH_2A03 provides: RW, RDY, IRQ, NMI.  System adds: RES.
+// NES default bus state — derived from CPU.
+// RICOH_2A03 provides: RW, RDY, IRQ, NMI, RES.
 #define NES_BUS_DEFAULT_STATE \
-    (RICOH_2A03::default_bus_state() | BUS_BIT(BUS_RES_BIT))
+    (RICOH_2A03::default_bus_state())
 
 // Forward declarations — none needed; all NES types included above.
 

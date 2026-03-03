@@ -144,10 +144,11 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
   ///  - IRQ (inactive, active-low) — unless NO_IRQ_LINE
   ///  - NMI (inactive, active-low) — unless NO_NMI_LINE
   ///  - AEC (CPU has bus) — only for CPUs with I/O port (6510/7501/8502)
-  /// Systems should OR in additional system-specific signals (RES, BA,
+  ///  - RES (inactive, active-low) — prevents continuous reset detection
+  /// Systems should OR in additional system-specific signals (BA,
   /// CNT, FLAG, data bus pull-ups, etc.).
   static constexpr bus_state_t default_bus_state() {
-    bus_state_t s = BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT);
+    bus_state_t s = BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) | BUS_BIT(BUS_RES_BIT);
     if constexpr (has_irq_line()) { s |= BUS_BIT(BUS_IRQ_BIT); }
     if constexpr (has_nmi_line()) { s |= BUS_BIT(BUS_NMI_BIT); }
     if constexpr (has_aec_pin()) { s |= BUS_BIT(BUS_AEC_BIT); }
