@@ -328,31 +328,6 @@ private:
         return data;
     }
 
-    // A12 edge detection for CPU register paths ($2006 second write,
-    // $2007 read/write post-increment).  The rendering path uses the
-    // bus-mediated model (Cartridge::ppu_memory_tick handles A12 there).
-    //
-    // Compares the new address bit 12 against the PA12 signal already
-    // on ppu_bus.  On any transition, the mapper is notified via the
-    // out-of-line forward_a12_transition helper.
-    inline void notify_a12(uint16_t addr, ppu_bus_state_t& ppu_bus) {
-        const bool new_a12 = (addr & 0x1000) != 0;
-        const bool old_a12 = PPU_BUS_GET_BIT(ppu_bus, PPU_BUS_PA12_BIT);
-
-        // Update PA12 on current bus state
-        if (new_a12) PPU_BUS_SET_BIT(ppu_bus, PPU_BUS_PA12_BIT);
-        else         PPU_BUS_CLR_BIT(ppu_bus, PPU_BUS_PA12_BIT);
-
-        // Transition detected — compare current vs old
-        if (new_a12 != old_a12) {
-            forward_a12_transition(new_a12);  // out-of-line
-        }
-    }
-
-    // Out-of-line A12 transition — calls cart_->notify_a12().
-    // Separated from notify_a12 to avoid including nes_cartridge.h here.
-    void forward_a12_transition(bool a12_high);
-
     // Internal rendering functions
     void increment_scroll_x();
     void increment_scroll_y();
