@@ -21,8 +21,36 @@
 // When built as a WIN32 (GUI) app, stdout/stderr are not connected to any
 // console. If we were launched from a terminal, reattach to the parent
 // console so printf / fprintf output appears there as expected.
+static bool s_attached_parent_console = false;
+
+// On exit, send a synthetic Enter keypress to the parent console so the
+// shell re-displays its prompt (it won't wait for a GUI-subsystem process).
+static void win32_detach_console() {
+    if (!s_attached_parent_console) return;
+
+    HANDLE hInput = GetStdHandle(STD_INPUT_HANDLE);
+    if (hInput != INVALID_HANDLE_VALUE) {
+        INPUT_RECORD ir = {};
+        ir.EventType = KEY_EVENT;
+        ir.Event.KeyEvent.bKeyDown = TRUE;
+        ir.Event.KeyEvent.wRepeatCount = 1;
+        ir.Event.KeyEvent.wVirtualKeyCode = VK_RETURN;
+        ir.Event.KeyEvent.wVirtualScanCode = static_cast<WORD>(
+            MapVirtualKey(VK_RETURN, MAPVK_VK_TO_VSC));
+        ir.Event.KeyEvent.uChar.AsciiChar = '\r';
+        ir.Event.KeyEvent.dwControlKeyState = 0;
+        DWORD written = 0;
+        WriteConsoleInputA(hInput, &ir, 1, &written);
+    }
+    FreeConsole();
+    s_attached_parent_console = false;
+}
+
 static void win32_attach_parent_console() {
     if (AttachConsole(ATTACH_TO_PARENT_PROCESS)) {
+        s_attached_parent_console = true;
+        atexit(win32_detach_console);
+
         // Redirect stdout
         FILE* fp = nullptr;
         if (_fileno(stdout) < 0 || _get_osfhandle(_fileno(stdout)) == -1) {
