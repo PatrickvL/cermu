@@ -973,6 +973,15 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
       // This is the 1-cycle-before-acting delay.
       nmi_serviceable = this->nmi_output_latch_;
 
+      // Cache the 2-cycle pipelined value for op_brk case 7 (vector
+      // determination).  case 7 runs at PHI1, after PHI2 has already
+      // updated nmi_output_latch_ with the latest edge_latch.  Reading
+      // nmi_output_latch_ directly at case 7 would give a 1-cycle
+      // pipeline (output was just updated this PHI2), which is 1 cycle
+      // faster than the instruction-boundary check.  Using the cached
+      // value ensures both paths use the same 2-cycle pipeline.
+      this->nmi_hijack_latch_ = nmi_serviceable;
+
       // Feed current NMI pin state into shift register for debug visibility
       shift_reg |= ((int_pins >> NMI_OFFSET) & 0x1) << INT_NMI_START_BIT;
 
@@ -1122,6 +1131,10 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
 
   inline bus_state_t transition_to_opcode(bus_state_t pins, const opcode_info_t entry) {
     this->opcode_entry = entry;
+    // Track whether this is a software BRK (for B flag in pushed P register).
+    // Must be set here (at dispatch time) because NMI vector hijacking can
+    // override active_interrupt before op_brk case 1 gets to check it.
+    this->brk_is_software_ = (entry.op_index == to_index(OP::BRK));
     // Set up first instruction cycle handler
     this->current_handler = this->get_instruction_handler();
     
@@ -1160,6 +1173,20 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
       return pins;
     case 1: {
       // PHI1: ALL side effects happen here (safe from RDY retry)
+
+      // DEFERRED INTERRUPT HIJACK: If an interrupt was detected at PHI2,
+      // the pending flag is set and fetch_opcode case 0 ran normally
+      // (the T0 dummy opcode read).  Now redirect to op_brk for T1+.
+      // DON'T increment PC: hardware interrupts preserve the return
+      // address so the interrupted instruction re-executes after RTI.
+      if (this->interrupt_hijack_pending_) {
+        this->interrupt_hijack_pending_ = false;
+        this->current_handler = &fam65xx_t::op_brk;
+        this->half_cycle = 0;
+        pins &= ~FAM65XX_SYNC;
+        return pins;
+      }
+
       // Copy PC to AB and increment PC
       this->set(REG_AB, this->get(REG_PC));
       this->inc(REG_PC);
@@ -1538,8 +1565,11 @@ public:
     this->nmi_prev = 0;
     this->nmi_edge_latch = 0;
     this->nmi_output_latch_ = false;
+    this->nmi_hijack_latch_ = false;
     this->interrupt_shift_register = 0;
     this->irq_i_flag_sample_ = 1;  // Reset sets I flag; pipeline starts masked
+    this->brk_is_software_ = 0;     // No BRK in progress
+    this->interrupt_hijack_pending_ = false; // No deferred hijack
 
     // Reset 65C02 extended state
     this->wait_for_interrupt = false;
@@ -1679,35 +1709,44 @@ public:
         if (this->can_hijack_for_interrupt()) {
           // Should we service this specific interrupt? (I flag check for IRQ)
           if (this->should_service_interrupt(this->active_interrupt)) {
-            // Hijack to BRK handler
-            this->current_handler = &fam65xx_t::op_brk;
+            // DEFERRED HIJACK: Don't redirect handler yet.
+            // Let fetch_opcode run its PHI2 bus read (the T0 dummy opcode
+            // read). The actual redirect to op_brk happens at PHI1 in
+            // fetch_opcode case 1.  This gives hardware interrupts the
+            // correct 7-cycle count (T0-T6), matching software BRK which
+            // already has the fetch cycle built in.
+            //
+            // Without this, hardware interrupts compress T0 and T1 into
+            // one cycle, making them 6 cycles instead of 7.  This causes
+            // op_brk case 7 (vector determination) to occur 1 cycle too
+            // early, giving NMI 1 fewer cycle to propagate through the
+            // pipeline — breaking nmi_and_irq test row 9+.
+            this->interrupt_hijack_pending_ = true;
+            this->brk_is_software_ = 0;  // Hardware interrupt, not software BRK
             
             // Clear shift register to prevent immediate re-trigger
-            // Once interrupt acknowledged, stop sampling until I flag is set then cleared
             this->interrupt_shift_register = 0;
             // Reset NMI edge detection using INVERTED convention:
             // Pin HIGH (inactive) → inverted = 0, Pin LOW (asserted) → inverted = 1
             this->nmi_prev = (pins & FAM65XX_NMI) ? 0 : 1;
             // Clear NMI edge latch when NMI is serviced.
-            // On real 6502 hardware the internal edge-detect flip-flop is cleared
-            // during the NMI vector fetch.  Without this, the stale latch feeds 1s
-            // into the shift register continuously, causing infinite spurious NMIs
-            // that starve the digi playback routine (e.g. CIA2 NMI-driven $D418
-            // sample output in Rob Hubbard tunes).
             if constexpr (has_nmi_line()) {
               if (this->active_interrupt == FAM65XX_INT_NMI) {
                 this->nmi_edge_latch = 0;
                 this->nmi_output_latch_ = false;
               }
             }
+            // DON'T change current_handler — fetch_opcode will run T0
           } else {
             // I flag set - don't service IRQ, keep it pending in shift register
             // Restore active_interrupt to what it was before detection
             this->active_interrupt = prev_interrupt;
           }
         } else {
-          // Can't hijack (mid-instruction) - restore active_interrupt
-          // Keep interrupt pending in shift register for later
+          // Can't hijack (mid-instruction) — restore active_interrupt.
+          // NMI vector hijacking during BRK/IRQ is handled separately by the
+          // direct nmi_output_latch_ check at op_brk case 7 (the vector-
+          // determination cycle), so we don't need to persist NMI here.
           this->active_interrupt = prev_interrupt;
         }
       }
@@ -1849,7 +1888,9 @@ public:
     nmi_prev = 0;
     nmi_edge_latch = 0;
     nmi_output_latch_ = false;
+    nmi_hijack_latch_ = false;
     interrupt_shift_register = 0;
+    interrupt_hijack_pending_ = false;
     wait_for_interrupt = false;
     stopped = false;
     trace_indent = 0;
@@ -1904,6 +1945,10 @@ public:
   bool nmi_output_latch_;        /* 1-cycle pipeline output: reflects nmi_edge_latch from the
                                    PREVIOUS cycle.  NMI is serviceable when this is true.
                                    Implements the "sample at N, act after N+1" delay. */
+  bool nmi_hijack_latch_;         /* 2-cycle pipelined NMI serviceable snapshot, cached each
+                                   PHI2 from nmi_output_latch_ BEFORE it is updated.  Used
+                                   by op_brk case 7 for vector hijacking to ensure the same
+                                   pipeline delay as instruction-boundary detection. */
   uint32_t interrupt_shift_register; /* Combined shift register for all
                                         interrupt types */
   uint8_t irq_i_flag_sample_;  /* I flag snapshot from the START of the current
@@ -1913,6 +1958,20 @@ public:
                                   pipeline delay — CLI/SEI/PLP/RTI effects on
                                   interrupt masking are deferred until the
                                   NEXT instruction boundary. */
+  uint8_t brk_is_software_;     /* Set in op_brk case 1 when the instruction is
+                                  a software BRK (active_interrupt was NONE).
+                                  Used for the B flag decision in the pushed P
+                                  register.  Separate from active_interrupt so
+                                  that NMI vector hijacking can change the vector
+                                  without losing the B flag information. */
+  bool interrupt_hijack_pending_; /* Deferred interrupt hijack flag.
+                                    Set at PHI2 when an interrupt is detected at
+                                    the fetch boundary; the actual redirect to
+                                    op_brk happens at PHI1 in fetch_opcode case 1.
+                                    This lets the dummy opcode read (T0) occur
+                                    first, matching real 6502 timing where both
+                                    software BRK and hardware interrupts take 7
+                                    cycles. */
 
   /* 65C02 extended state */
   bool wait_for_interrupt; /* WAI instruction state */
