@@ -22,14 +22,14 @@
 // RICOH 2C02 PPU LAYOUT (40-pin DIP)
 // ============================================================================
 
-inline ChipLayout create_ricoh_2c02_layout() {
+inline ChipLayout create_ppu_layout(bool pal) {
     ChipLayout layout = create_dip40_layout();
 
     layout.left_pins.clear();
     layout.right_pins.clear();
 
     layout.markings = {
-        "RP2C02",
+        pal ? "RP2C07" : "RP2C02",
         "Ricoh",
         {}, {}, {}, {},
         true, true, false, false
@@ -84,8 +84,13 @@ static std::vector<PinSignalState> get_ppu_pin_states(nes_system::PPU* ppu, cons
     return pin_states;
 }
 
-static ChipLayout& get_ppu_layout() {
-    static ChipLayout layout = create_ricoh_2c02_layout();
+static ChipLayout& get_ppu_layout(bool pal) {
+    static bool cached_pal = pal;
+    static ChipLayout layout = create_ppu_layout(pal);
+    if (cached_pal != pal) {
+        cached_pal = pal;
+        layout = create_ppu_layout(pal);
+    }
     return layout;
 }
 
@@ -119,9 +124,9 @@ void nes_system::PPU::render_debug_content() {
         chip_center.y += 200.0f;
 
         ChipVisualization& renderer = GetGlobalChipRenderer();
-        ChipLayout& layout = get_ppu_layout();
+        ChipLayout& layout = get_ppu_layout(ppu->is_pal);
         std::vector<PinSignalState> pin_states = get_ppu_pin_states(ppu, &layout, ppu->bus_snapshot_);
-        renderer.render(layout, chip_center, pin_states, "RP2C02");
+        renderer.render(layout, chip_center, pin_states, ppu->is_pal ? "RP2C07" : "RP2C02");
     }
     ImGui::EndChild();
 
@@ -129,7 +134,7 @@ void nes_system::PPU::render_debug_content() {
 
     ImVec2 right_column_size = ImVec2(window_size.x - 270.0f, 0);
     if (ImGui::BeginChild("DebugInfo", right_column_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
-        ImGui::Text("Ricoh 2C02 PPU (Picture Processing Unit)");
+        ImGui::Text("Ricoh %s PPU (Picture Processing Unit)", ppu->is_pal ? "2C07" : "2C02");
         ImGui::Separator();
 
         // Timing
@@ -213,9 +218,9 @@ void nes_system::PPU::render_settings_content() {
 
 #ifdef CERMU_HAS_GUI
 
-    ImGui::Text("Ricoh 2C02 PPU Configuration");
+    ImGui::Text("Ricoh %s PPU Configuration", ppu->is_pal ? "2C07" : "2C02");
     ImGui::Separator();
-    ImGui::Text("Chip Type: Ricoh RP2C02 (40-pin DIP)");
+    ImGui::Text("Chip Type: Ricoh %s (40-pin DIP)", ppu->is_pal ? "RP2C07" : "RP2C02");
     ImGui::Text("Region: %s", ppu->is_pal ? "PAL (2C07)" : "NTSC (2C02)");
     ImGui::Text("PPU Clock: %s", ppu->is_pal ? "5.32 MHz" : "5.37 MHz");
 
@@ -238,8 +243,8 @@ void nes_system::PPU::render_layout_content() {
     auto* ppu = this;
 
 #ifdef CERMU_HAS_GUI
-    ChipLayout& layout = get_ppu_layout();
+    ChipLayout& layout = get_ppu_layout(ppu->is_pal);
     std::vector<PinSignalState> pin_states = get_ppu_pin_states(ppu, &layout, ppu->bus_snapshot_);
-    render_chip_layout(layout, pin_states, "RP2C02");
+    render_chip_layout(layout, pin_states, ppu->is_pal ? "RP2C07" : "RP2C02");
 #endif
 }
