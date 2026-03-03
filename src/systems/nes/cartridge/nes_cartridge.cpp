@@ -129,6 +129,32 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
         return false;
     }
 
+    // ====================================================================
+    // Archaic iNES header sanitization
+    // ====================================================================
+    // Many older ROM dumps have garbage in bytes 7-15 (DiskDude!, various
+    // copier tool signatures).  The standard heuristic used by FCEUX,
+    // Mesen, and Nestopia: if ANY of bytes 12-15 are non-zero, the upper
+    // nibble of the mapper (from byte 7) cannot be trusted.  Zero out
+    // bytes 7-15 so only byte 6 contributes to the mapper ID.
+    //
+    // NES 2.0 is identified by (flags7 & 0x0C) == 0x08 and is exempt.
+    bool archaic_ines = false;
+    if ((header.mapper2 & 0x0C) != 0x08) {
+        if (header.unused[1] != 0 || header.unused[2] != 0 ||
+            header.unused[3] != 0 || header.unused[4] != 0) {
+            archaic_ines = true;
+            printf("NES: Archaic iNES header detected (garbage in bytes 12-15) — "
+                   "sanitizing mapper from %d", ((header.mapper2 >> 4) << 4) | (header.mapper1 >> 4));
+            header.mapper2 = 0;
+            header.prg_ram_size = 0;
+            header.tv_system1 = 0;
+            header.tv_system2 = 0;
+            memset(header.unused, 0, sizeof(header.unused));
+            printf(" to %d\n", (header.mapper1 >> 4));
+        }
+    }
+
     // Extract mapper ID
     mapper_id = ((header.mapper2 >> 4) << 4) | (header.mapper1 >> 4);
     mirror_mode = (header.mapper1 & 0x01) ? Mirror::VERTICAL : Mirror::HORIZONTAL;
@@ -136,6 +162,19 @@ bool Cartridge::load_from_buffer(const uint8_t* data, size_t data_size,
 
     prg_banks = header.prg_rom_chunks;
     chr_banks = header.chr_rom_chunks;
+
+    // ====================================================================
+    // Mapper inference heuristics for sanitized headers
+    // ====================================================================
+    // After archaic header cleanup, some ROMs end up as mapper 0 (NROM) but
+    // have CHR sizes incompatible with NROM (max 8KB).  Infer the correct
+    // mapper from ROM geometry:
+    //   - Mapper 0 + CHR > 8KB → Mapper 3 (CNROM, simple CHR bank switch)
+    if (archaic_ines && mapper_id == 0 && chr_banks > 1) {
+        printf("NES: Mapper 0 with %dKB CHR — inferring mapper 3 (CNROM)\n",
+               chr_banks * 8);
+        mapper_id = 3;
+    }
 
     // Skip trainer if present
     if (header.mapper1 & 0x04) {
