@@ -459,7 +459,7 @@ message(STATUS "Console executable cermu_console will be built")
 
 # GUI executable
 if(BUILD_GUI)
-    add_executable(cermu
+    add_executable(cermu WIN32
         src/main/multi_emu_main.cpp
         ${CORE_SOURCES}
         ${CHIP_SOURCES}
@@ -511,6 +511,12 @@ if(BUILD_GUI)
     # Platform-specific libraries
     if(WIN32)
         target_link_libraries(cermu imm32)
+        # Use WINDOWS subsystem (no console window) but keep main() as entry point
+        if(MSVC)
+            set_target_properties(cermu PROPERTIES LINK_FLAGS "/ENTRY:mainCRTStartup")
+        else()
+            target_link_options(cermu PRIVATE -mwindows)
+        endif()
     endif()
     
     if(NOT WIN32 AND NOT MSVC)
