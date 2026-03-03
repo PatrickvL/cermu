@@ -403,10 +403,22 @@ ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         // skips case 4 entirely (+= 2) since transfer_address_y is pre-render only.
         switch (scanline_event_) {
             case 0: // cycle 0-255
+                // Sprite evaluation state machine — initialize at cycle 0,
+                // step on even cycles 66-254.  Real hardware evaluates during
+                // cycles 65-256 with one read/write pair per 2 PPU cycles.
+                if (scanline >= 0 && (mask & 0x18)) {
+                    if (cycle == 0) {
+                        internal.sprite_eval = {0, 0, 0, 0, 1};  // phase=1
+                    } else if (cycle >= 66 && (cycle & 1) == 0) {
+                        sprite_eval_step();
+                    }
+                }
                 scanline_event_ += (cycle == 256 - 1);
                 break;
             case 1: // cycle 256
-                increment_scroll_y(); 
+                increment_scroll_y();
+                // Last sprite evaluation step at cycle 256
+                if (scanline >= 0 && (mask & 0x18)) sprite_eval_step();
                 scanline_event_++;
                 break;
             case 2: // cycle == 257
@@ -736,28 +748,101 @@ void PPU::evaluate_sprites() {
     internal.sprite_zero_hit_possible = false;
     uint8_t count = 0;
     
-    for (uint8_t i = 0; i < 64 && count < 9; i++) {
+    for (uint8_t i = 0; i < 64 && count < 8; i++) {
         uint8_t sprite_y = oam[i * 4 + 0];
         uint8_t sprite_height = (regs[PPUCTRL] & 0x20) ? 16 : 8;
         
         if ((scanline >= sprite_y) && (scanline < (sprite_y + sprite_height))) {
-            if (count < 8) {
-                if (i == 0) {
-                    internal.sprite_zero_hit_possible = true;
-                }
-                
-                internal.sprite_scanline[count].y = sprite_y;
-                internal.sprite_scanline[count].tile_id = oam[i * 4 + 1];
-                internal.sprite_scanline[count].attributes = oam[i * 4 + 2];
-                internal.sprite_scanline[count].x = oam[i * 4 + 3];
+            if (i == 0) {
+                internal.sprite_zero_hit_possible = true;
             }
+            
+            internal.sprite_scanline[count].y = sprite_y;
+            internal.sprite_scanline[count].tile_id = oam[i * 4 + 1];
+            internal.sprite_scanline[count].attributes = oam[i * 4 + 2];
+            internal.sprite_scanline[count].x = oam[i * 4 + 3];
             count++;
         }
     }
     
-    internal.sprite_count = (count > 8) ? 8 : count;
-    if (count > 8) {
-        regs[PPUSTATUS] |= 0x20; // Set sprite overflow
+    internal.sprite_count = count;
+    // NOTE: Overflow flag is set by sprite_eval_step() during cycles 65-256,
+    // not here.  This function only populates secondary OAM for rendering.
+}
+
+// ----------------------------------------------------------------------------
+// Sprite evaluation state machine — one step per 2 PPU cycles.
+//
+// On real hardware, sprite evaluation runs during cycles 65-256 (192 PPU
+// cycles = 96 read/write pairs).  Odd cycles read from primary OAM; even
+// cycles write to secondary OAM or perform the comparison.  We advance
+// the state machine on even cycles so the overflow flag is set at the
+// correct dot.
+//
+// Phase 1: Finding sprites for secondary OAM (up to 8).
+//   - Compare sprite Y with scanline; in-range means 4 steps (Y + 3 copy).
+//   - Not in range: 1 step, advance to next sprite.
+//   - When 8 sprites found → Phase 2.
+//
+// Phase 2: Overflow check with PPU hardware bug.
+//   - Compare OAM[n*4+m] with scanline (m starts at 0).
+//   - In range → set overflow flag, → Phase 3.
+//   - Not in range → increment n AND m (the sprite overflow bug!).
+//
+// Phase 3: Done.  Dummy reads until cycles 257.
+// ----------------------------------------------------------------------------
+void PPU::sprite_eval_step() {
+    auto& ev = internal.sprite_eval;
+
+    if (ev.phase >= 3) return;  // Done — no work
+
+    const uint8_t sprite_height = (regs[PPUCTRL] & 0x20) ? 16 : 8;
+
+    if (ev.phase == 1) {
+        // ---- Phase 1: finding sprites ----
+        if (ev.copy_step > 0) {
+            // Continue copying the remaining bytes of an in-range sprite.
+            // We just burn cycles here — the actual data copy happens in
+            // evaluate_sprites() at cycle 257.  But we must count 4 steps
+            // per in-range sprite for correct overflow timing.
+            ev.copy_step++;
+            if (ev.copy_step > 3) {
+                ev.copy_step = 0;
+                ev.found++;
+                ev.n++;
+                if (ev.n >= 64)      { ev.phase = 3; return; }
+                if (ev.found >= 8)   { ev.phase = 2; ev.m = 0; return; }
+            }
+            return;
+        }
+
+        // Compare Y of sprite n with current scanline
+        const uint8_t sprite_y = oam[ev.n * 4];
+
+        if (scanline >= sprite_y &&
+            scanline < (uint16_t)(sprite_y + sprite_height)) {
+            // In range — begin 4-step "copy" (Y compare was step 0)
+            ev.copy_step = 1;
+        } else {
+            // Not in range — 1-step skip
+            ev.n++;
+            if (ev.n >= 64) ev.phase = 3;
+        }
+    } else {
+        // ---- Phase 2: overflow check with buggy m offset ----
+        const uint8_t byte = oam[ev.n * 4 + ev.m];
+
+        if (scanline >= byte &&
+            scanline < (uint16_t)(byte + sprite_height)) {
+            // In range — set overflow flag
+            regs[PPUSTATUS] |= 0x20;
+            ev.phase = 3;
+        } else {
+            // Not in range — bug: increment both n AND m
+            ev.n++;
+            ev.m = (ev.m + 1) & 3;
+            if (ev.n >= 64) ev.phase = 3;
+        }
     }
 }
 

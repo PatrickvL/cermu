@@ -95,6 +95,17 @@ public:
 
         bool sprite_zero_hit_possible = false;
         bool sprite_zero_being_rendered = false;
+
+        // Sprite evaluation state machine — models per-cycle evaluation
+        // during dots 65-256 on visible scanlines for accurate overflow
+        // flag timing and the PPU's buggy overflow byte-offset behavior.
+        struct SpriteEval {
+            uint8_t n         = 0;  // Primary OAM sprite index (0-63)
+            uint8_t m         = 0;  // Byte offset for overflow bug (0-3)
+            uint8_t found     = 0;  // In-range sprites found (0-8)
+            uint8_t copy_step = 0;  // 0=comparing, 1-3=copying remaining bytes
+            uint8_t phase     = 0;  // 0=idle, 1=finding, 2=overflow check, 3=done
+        } sprite_eval;
     } internal = {};
 
     // Timing
@@ -347,8 +358,11 @@ private:
             pixel_lut_[i] = active_palette_[palette[pal_mirror_[i]] & 0x3F];
     }
 
-    // Sprite evaluation
+    // Sprite evaluation — monolithic (finds first 8 in-range sprites for
+    // secondary OAM at cycle 257) + per-cycle state machine (sets overflow
+    // flag at the correct dot during cycles 65-256 with buggy behavior).
     void evaluate_sprites();
+    void sprite_eval_step();
 
     // Sprite pattern address calculation — returns the low-byte pattern
     // table address for the given sprite slot.  High byte is addr + 8.
