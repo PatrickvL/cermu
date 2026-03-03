@@ -1576,25 +1576,39 @@ public:
     }
   }
 
+  /**
+   * Hardware RESET — enter the 7-cycle reset sequence.
+   *
+   * Resets internal CPU state (interrupt pipeline, WAI/STP, conditional
+   * features) then routes the processor into the BRK/interrupt handler
+   * via the deferred-hijack mechanism.  The first 7 ticks after reset()
+   * execute the hardware-accurate RESET sequence:
+   *
+   *   T0  fetch_opcode (dummy opcode read — byte discarded)
+   *   T1  op_brk case 0+1 (dummy operand read)
+   *   T2  op_brk case 2+3 (suppressed push PCH, dec S)
+   *   T3  op_brk case 4+5 (suppressed push PCL, dec S)
+   *   T4  op_brk case 6+7 (suppressed push P,   dec S, set I)
+   *   T5  op_brk case 8+9 (read vector low  — $FFFC)
+   *   T6  op_brk case 10+11 (read vector high — $FFFD, load PC)
+   *
+   * The vector words are fetched through the normal bus, so the system's
+   * memory map services the reads — no manual load_reset_vector() needed.
+   *
+   * A, X, Y, and P (except I) are preserved across reset; only power-on
+   * randomises them.  The stack pointer decrements by 3 (the three
+   * suppressed pushes) and the I flag is set — both handled by op_brk.
+   */
   bus_state_t reset(bus_state_t pins) {
-    // Hardware RESET sequence: the real 6502 does NOT clear registers.
-    // It only decrements S by 3 (3 dummy stack pushes with writes
-    // suppressed) and sets the I flag.  A, X, Y, and P (except I) are
-    // preserved across reset — only power-on randomises them.
-    this->dec_stack(); // dummy push PCH
-    this->dec_stack(); // dummy push PCL
-    this->dec_stack(); // dummy push P
-    this->set_flag(FLAG_I);
-
     // Reset interrupt state
     this->nmi_prev = 0;
     this->nmi_edge_latch = 0;
     this->nmi_output_latch_ = false;
     this->interrupt_shift_register = 0;
     this->irq_i_flag_sample_ = 1;  // Reset sets I flag; pipeline starts masked
-    this->brk_is_software_ = 0;     // No BRK in progress
-    this->interrupt_hijack_pending_ = false; // No deferred hijack
-    this->branch_irq_suppression_ = false;   // No branch suppression
+    this->brk_is_software_ = 0;     // Hardware interrupt, not software BRK
+    this->interrupt_hijack_pending_ = true; // Deferred hijack → fetch T0 then op_brk
+    this->branch_irq_suppression_ = false;
     this->branch_poll_shift_reg_ = 0;
     this->branch_nmi_pending_at_poll_ = false;
 
@@ -1605,46 +1619,27 @@ public:
     // Reset processor-specific features (preserves existing APU instance)
     this->reset_conditional_features();
 
-    // Clear any active interrupt
-    this->active_interrupt = FAM65XX_INT_NONE;
-
-    // Set up for instruction fetch - CPU ready to execute from the reset vector
-    // NOTE: Call load_reset_vector() after reset() to set PC from the vector.
+    // Route through the standard interrupt/BRK sequence.
+    // fetch_opcode T0 runs one dummy read, then the deferred hijack
+    // redirects to op_brk which executes the RESET sequence with writes
+    // suppressed and reads the vector from $FFFC/$FFFD via the bus.
+    this->active_interrupt = FAM65XX_INT_RESET;
     this->transition_to_fetch();
 
     return pins;
   }
 
   /**
-   * Load the reset vector into PC and AB.
+   * Load the reset vector into PC and AB directly (no bus sequence).
    *
-   * After reset(), the CPU is ready to execute but PC is unset.  Systems call
-   * this to point the CPU at the correct entry point.
+   * Used by test harnesses that call bootstrap() and need to set an
+   * arbitrary start address without running the 7-cycle reset sequence.
    *
-   * @param reset_vector  The 16-bit address read from $FFFC/$FFFD.
+   * @param reset_vector  The 16-bit address to load into PC and AB.
    */
   void load_reset_vector(uint16_t reset_vector) {
     this->set(REG_PC, reset_vector);
     this->set(REG_AB, reset_vector);
-  }
-
-  /**
-   * Read the reset vector via a caller-supplied peek function and load it.
-   *
-   * Convenience overload that reads $FFFC (low) and $FFFD (high), combines
-   * them, and calls load_reset_vector(uint16_t).
-   *
-   * @tparam PeekFn  Callable with signature uint8_t(uint16_t addr).
-   * @param  peek    Memory-read callback (must not trigger side-effects).
-   * @return The 16-bit reset vector that was loaded.
-   */
-  template <typename PeekFn>
-  uint16_t load_reset_vector(PeekFn peek) {
-    uint8_t lo = peek(static_cast<uint16_t>(0xFFFC));
-    uint8_t hi = peek(static_cast<uint16_t>(0xFFFD));
-    uint16_t vec = lo | (hi << 8);
-    load_reset_vector(vec);
-    return vec;
   }
 
   bus_state_t bootstrap(bus_state_t pins) {

@@ -283,7 +283,11 @@ bus_state_t op_brk(bus_state_t pins) {
 
       case 2:
         // PHI2: Push program bank register
-        pins = this->bus_setup_write<Addr::SP>(pins, REG_PBR);
+        // RESET suppresses writes — R/W held high (read) during stack pushes
+        if (this->active_interrupt == FAM65XX_INT_RESET)
+          pins = this->bus_setup_dummy<Addr::SP>(pins);
+        else
+          pins = this->bus_setup_write<Addr::SP>(pins, REG_PBR);
         return pins;
       case 3:
         this->dec_stack();
@@ -292,7 +296,10 @@ bus_state_t op_brk(bus_state_t pins) {
 
       case 4:
         // PHI2: Push PC high byte
-        pins = this->bus_setup_write<Addr::SP>(pins, REG_PCH);
+        if (this->active_interrupt == FAM65XX_INT_RESET)
+          pins = this->bus_setup_dummy<Addr::SP>(pins);
+        else
+          pins = this->bus_setup_write<Addr::SP>(pins, REG_PCH);
         return pins;
       case 5:
         this->dec_stack();
@@ -301,7 +308,10 @@ bus_state_t op_brk(bus_state_t pins) {
 
       case 6:
         // PHI2: Push PC low byte
-        pins = this->bus_setup_write<Addr::SP>(pins, REG_PCL);
+        if (this->active_interrupt == FAM65XX_INT_RESET)
+          pins = this->bus_setup_dummy<Addr::SP>(pins);
+        else
+          pins = this->bus_setup_write<Addr::SP>(pins, REG_PCL);
         return pins;
       case 7:
         this->dec_stack();
@@ -310,7 +320,10 @@ bus_state_t op_brk(bus_state_t pins) {
 
       case 8:
         // PHI2: Push processor status register (no B flag in native mode)
-        pins = this->bus_setup_write<Addr::SP>(pins, REG_P);
+        if (this->active_interrupt == FAM65XX_INT_RESET)
+          pins = this->bus_setup_dummy<Addr::SP>(pins);
+        else
+          pins = this->bus_setup_write<Addr::SP>(pins, REG_P);
         return pins;
       case 9:
         this->dec_stack();
@@ -384,7 +397,11 @@ bus_state_t op_brk(bus_state_t pins) {
 
   case 2:
     /* PHI2: T2 — Push PCH to stack */
-    pins = this->bus_setup_write<Addr::SP>(pins, REG_PCH);
+    /* RESET suppresses writes — R/W held high (read) during stack pushes */
+    if (this->active_interrupt == FAM65XX_INT_RESET)
+      pins = this->bus_setup_dummy<Addr::SP>(pins);
+    else
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_PCH);
     return pins;
   case 3:
     /* PHI1: Decrement SP */
@@ -394,7 +411,10 @@ bus_state_t op_brk(bus_state_t pins) {
 
   case 4:
     /* PHI2: T3 — Push PCL to stack */
-    pins = this->bus_setup_write<Addr::SP>(pins, REG_PCL);
+    if (this->active_interrupt == FAM65XX_INT_RESET)
+      pins = this->bus_setup_dummy<Addr::SP>(pins);
+    else
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_PCL);
     return pins;
   case 5: {
     /* PHI1: Decrement SP and prepare status register for stack push */
@@ -418,7 +438,10 @@ bus_state_t op_brk(bus_state_t pins) {
 
   case 6:
     /* PHI2: T4 — Push P|B|U to stack (B flag set for BRK) */
-    pins = this->bus_setup_write<Addr::SP>(pins, REG_DL);
+    if (this->active_interrupt == FAM65XX_INT_RESET)
+      pins = this->bus_setup_dummy<Addr::SP>(pins);
+    else
+      pins = this->bus_setup_write<Addr::SP>(pins, REG_DL);
     return pins;
   case 7:
     /* PHI1: Decrement SP, set interrupt flags, get vector address */

@@ -454,12 +454,17 @@ bool C64System::initialize() {
     cpu->bank_change_fn = cpu_banking_callback;
     cpu->bank_change_ctx = this;
 
-    uint16_t reset_vector = this->bus.read_kernal_reset_vector();
-    cpu->load_reset_vector(reset_vector);
-    printf("C64: CPU reset vector $%04X loaded\n", reset_vector);
+    // Reset the CPU to start the hardware-accurate 7-cycle RESET sequence.
+    // The deferred hijack will fetch the KERNAL reset vector ($FFFC/$FFFD)
+    // through the bus, routing through the PLA — no manual load needed.
+    cpu->reset(0);
 
-    // NOTE: VIC-II bus.bus is already wired above. SID bus_interface is unused.
-    // No legacy bus_attach iteration needed.
+    // Sync PLA banking with the freshly-reset IO port so KERNAL ROM is
+    // visible during the vector fetch ticks.
+    uint8_t banking_bits = cpu->io_port_regs.data
+                         & cpu->io_port_regs.ddr
+                         & 0x07;
+    cpu_banking_callback(this, banking_bits);
 
     // =========================================================================
     // Phase 5: System-level initialization
@@ -568,9 +573,6 @@ void C64System::reset() {
                                  & cpu->io_port_regs.ddr
                                  & 0x07;
             cpu_banking_callback(this, banking_bits);
-
-            uint16_t reset_vector = this->bus.read_kernal_reset_vector();
-            cpu->load_reset_vector(reset_vector);
         }
 
         // Reset keyboard
