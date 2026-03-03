@@ -211,103 +211,127 @@ void SystemGUI::render_frame() {
     }
     
 #ifdef HAS_IMGUIFILEDIALOG
-    // Display file dialog and handle results
-    if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey")) {
-        if (ImGuiFileDialog::Instance()->IsOk()) {
-            std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
-            printf("User selected file: %s\n", filePathName.c_str());
+    // Display file dialog wrapped in our own window for the close (X) button.
+    // The NoDialog flag makes Display() render content without its own Begin/End,
+    // so we provide our own ImGui::Begin() with p_open to get the title-bar X.
+    if (ImGuiFileDialog::Instance()->IsOpened("ChooseFileDlgKey")) {
+        bool dlg_open = true;
+        ImGui::SetNextWindowSizeConstraints(ImVec2(800, 450), ImVec2(FLT_MAX, FLT_MAX));
+        ImGui::Begin("Choose File##ChooseFileDlgKey", &dlg_open,
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
+        bool result = ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey",
+            ImGuiWindowFlags_NoCollapse);
+        ImGui::End();
 
-            // =================================================================
-            // Archive resolution — if user selected a .zip (or other archive),
-            // scan its contents and resolve to the loadable file inside.
-            // =================================================================
-            std::string resolved_path = filePathName;
-            {
-                std::string ext = vfs_extension(filePathName.c_str());
-                if (vfs_is_archive_extension(ext.c_str())) {
-                    printf("Archive selected — scanning for loadable content...\n");
-                    auto scan = scan_archive(filePathName.c_str());
-                    if (scan.loadable_files.size() == 1) {
-                        // Exactly one loadable file — auto-select it
-                        resolved_path = scan.loadable_files[0].full_path;
-                        printf("Auto-selected: %s (system: %s, conf: %.2f)\n",
-                               resolved_path.c_str(),
-                               scan.suggested_system.c_str(), scan.confidence);
-                    } else if (scan.loadable_files.size() > 1) {
-                        // Multiple loadable files — pick the first one for now.
-                        // TODO: show a chooser popup for multi-file archives
-                        resolved_path = scan.loadable_files[0].full_path;
-                        printf("Archive contains %zu loadable files, "
-                               "auto-selected first: %s\n",
-                               scan.loadable_files.size(),
-                               resolved_path.c_str());
-                    } else {
-                        printf("No loadable files found in archive\n");
-                    }
-                }
-            }
-            
-            // Save the last selected file path for next time
-            last_file_path_ = filePathName;
-            
-            // Stop emulation thread while loading for exclusive system access
-            bool was_running = emulation_running_.load() && !emulation_paused_.load();
-            stop_emu_thread();
-            
-            // Auto-detect optimal configuration (e.g. memory expansion) from file.
-            // Never downgrades from the user's current selection — only increases.
-            if (system_) {
-                system_->apply_file_configuration(resolved_path.c_str());
-            }
-
-            // Reset system before loading file for clean state
-            if (system_) {
-                system_->reset();
-            }
-            
-            // Load the file (VFS-aware — handles archive paths transparently)
-            if (system_ && system_->load_file(resolved_path.c_str())) {
-                printf("File loaded successfully: %s\n", resolved_path.c_str());
-                
-                // Update window title with loaded program name
-                update_window_title();
-                
-                // Ensure emulation is running after successful file load
-                emulation_running_.store(true);
-                emulation_paused_.store(false);
-            } else {
-                printf("Failed to load file: %s\n", resolved_path.c_str());
-                
-                // Resume previous state if load failed
-                if (was_running) {
-                    emulation_running_.store(true);
-                    emulation_paused_.store(false);
-                }
-            }
-            
-            // Restart emulation thread
-            start_emu_thread();
-        } else {
-            // User canceled - save the current path they were browsing
+        if (!dlg_open) {
+            // Close (X) button clicked — treat as cancel
             std::string currentPath = ImGuiFileDialog::Instance()->GetCurrentPath();
             if (!currentPath.empty()) {
                 last_file_path_ = currentPath;
             }
+            ImGuiFileDialog::Instance()->Close();
+        } else if (result) {
+            if (ImGuiFileDialog::Instance()->IsOk()) {
+                std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
+                printf("User selected file: %s\n", filePathName.c_str());
+
+                // =============================================================
+                // Archive resolution — if user selected a .zip (or other
+                // archive), scan its contents and resolve to the loadable file
+                // inside.
+                // =============================================================
+                std::string resolved_path = filePathName;
+                {
+                    std::string ext = vfs_extension(filePathName.c_str());
+                    if (vfs_is_archive_extension(ext.c_str())) {
+                        printf("Archive selected — scanning for loadable content...\n");
+                        auto scan = scan_archive(filePathName.c_str());
+                        if (scan.loadable_files.size() == 1) {
+                            resolved_path = scan.loadable_files[0].full_path;
+                            printf("Auto-selected: %s (system: %s, conf: %.2f)\n",
+                                   resolved_path.c_str(),
+                                   scan.suggested_system.c_str(), scan.confidence);
+                        } else if (scan.loadable_files.size() > 1) {
+                            resolved_path = scan.loadable_files[0].full_path;
+                            printf("Archive contains %zu loadable files, "
+                                   "auto-selected first: %s\n",
+                                   scan.loadable_files.size(),
+                                   resolved_path.c_str());
+                        } else {
+                            printf("No loadable files found in archive\n");
+                        }
+                    }
+                }
+
+                // Save the last selected file path for next time
+                last_file_path_ = filePathName;
+
+                // Stop emulation thread while loading for exclusive system access
+                bool was_running = emulation_running_.load() && !emulation_paused_.load();
+                stop_emu_thread();
+
+                // Auto-detect optimal configuration (e.g. memory expansion) from
+                // file. Never downgrades from the user's current selection.
+                if (system_) {
+                    system_->apply_file_configuration(resolved_path.c_str());
+                }
+
+                // Reset system before loading file for clean state
+                if (system_) {
+                    system_->reset();
+                }
+
+                // Load the file (VFS-aware — handles archive paths transparently)
+                if (system_ && system_->load_file(resolved_path.c_str())) {
+                    printf("File loaded successfully: %s\n", resolved_path.c_str());
+                    update_window_title();
+                    emulation_running_.store(true);
+                    emulation_paused_.store(false);
+                } else {
+                    printf("Failed to load file: %s\n", resolved_path.c_str());
+                    if (was_running) {
+                        emulation_running_.store(true);
+                        emulation_paused_.store(false);
+                    }
+                }
+
+                // Restart emulation thread
+                start_emu_thread();
+            } else {
+                // User canceled via Cancel button
+                std::string currentPath = ImGuiFileDialog::Instance()->GetCurrentPath();
+                if (!currentPath.empty()) {
+                    last_file_path_ = currentPath;
+                }
+            }
+            ImGuiFileDialog::Instance()->Close();
         }
-        ImGuiFileDialog::Instance()->Close();
     }
 
-    // Display drive insert disk dialog and handle results
-    if (ImGuiFileDialog::Instance()->Display("DriveInsertDiskKey")) {
-        if (ImGuiFileDialog::Instance()->IsOk() && pending_drive_insert_) {
-            std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
-            printf("Drive insert: user selected file: %s\n", filePathName.c_str());
+    // Display drive insert disk dialog (also wrapped for close button)
+    if (ImGuiFileDialog::Instance()->IsOpened("DriveInsertDiskKey")) {
+        bool dlg_open = true;
+        ImGui::SetNextWindowSizeConstraints(ImVec2(800, 450), ImVec2(FLT_MAX, FLT_MAX));
+        ImGui::Begin("Insert Disk##DriveInsertDiskKey", &dlg_open,
+                     ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
+        bool result = ImGuiFileDialog::Instance()->Display("DriveInsertDiskKey",
+            ImGuiWindowFlags_NoCollapse);
+        ImGui::End();
 
-            // Save the last selected file path for next time
-            last_file_path_ = filePathName;
+        if (!dlg_open) {
+            // Close (X) button clicked — treat as cancel
+            std::string currentPath = ImGuiFileDialog::Instance()->GetCurrentPath();
+            if (!currentPath.empty()) {
+                last_file_path_ = currentPath;
+            }
+            pending_drive_insert_ = nullptr;
+            ImGuiFileDialog::Instance()->Close();
+        } else if (result) {
+            if (ImGuiFileDialog::Instance()->IsOk() && pending_drive_insert_) {
+                std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
+                printf("Drive insert: user selected file: %s\n", filePathName.c_str());
+                last_file_path_ = filePathName;
 
-            // Insert disk into the drive (this auto-populates the fliplist)
-            {
                 std::lock_guard<std::mutex> lock(emu_mutex_);
                 if (pending_drive_insert_->insert_disk(filePathName.c_str())) {
                     printf("Disk inserted successfully into drive %d: %s\n",
@@ -316,16 +340,16 @@ void SystemGUI::render_frame() {
                     printf("Failed to insert disk into drive %d: %s\n",
                            pending_drive_insert_->get_device_number(), filePathName.c_str());
                 }
+            } else {
+                // User canceled
+                std::string currentPath = ImGuiFileDialog::Instance()->GetCurrentPath();
+                if (!currentPath.empty()) {
+                    last_file_path_ = currentPath;
+                }
             }
-        } else {
-            // User canceled - save the current path they were browsing
-            std::string currentPath = ImGuiFileDialog::Instance()->GetCurrentPath();
-            if (!currentPath.empty()) {
-                last_file_path_ = currentPath;
-            }
+            pending_drive_insert_ = nullptr;
+            ImGuiFileDialog::Instance()->Close();
         }
-        pending_drive_insert_ = nullptr;
-        ImGuiFileDialog::Instance()->Close();
     }
 
     // Poll attached drives for file dialog requests
@@ -1130,11 +1154,14 @@ void SystemGUI::open_file_dialog(const char* dialog_key, const char* title) {
         }
     }
     
-    // Open the dialog with case-insensitive extension filtering
+    // Open the dialog with case-insensitive extension filtering.
+    // NoDialog flag lets us wrap Display() in our own ImGui::Begin/End
+    // so we can pass p_open for the close (X) button.
     IGFD::FileDialogConfig config;
     config.path = default_path;
     config.fileName = default_filename;
-    config.flags = ImGuiFileDialogFlags_CaseInsensitiveExtentionFiltering;
+    config.flags = ImGuiFileDialogFlags_CaseInsensitiveExtentionFiltering
+                 | ImGuiFileDialogFlags_NoDialog;
     ImGuiFileDialog::Instance()->OpenDialog(dialog_key, title, filter_str.c_str(), config);
 #else
     (void)dialog_key;
