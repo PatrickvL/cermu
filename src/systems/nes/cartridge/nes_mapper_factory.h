@@ -17,6 +17,12 @@
 #include "mappers/mapper_002_uxrom.h"
 #include "mappers/mapper_003_cnrom.h"
 #include "mappers/mapper_004_mmc3.h"
+#include "mappers/mapper_005_mmc5.h"
+#include "mappers/mapper_007_axrom.h"
+#include "mappers/mapper_011_color_dreams.h"
+#include "mappers/mapper_022_vrc2a.h"
+#include "mappers/mapper_028_action53.h"
+#include "mappers/mapper_034_bnrom.h"
 
 #include <memory>
 #include <iostream>
@@ -36,6 +42,12 @@ struct MapperFactory {
             case 2:  return std::make_unique<Mapper002>(prg_banks, chr_banks);
             case 3:  return std::make_unique<Mapper003>(prg_banks, chr_banks);
             case 4:  return std::make_unique<Mapper004>(prg_banks, chr_banks);
+            case 5:  return std::make_unique<Mapper005>(prg_banks, chr_banks);
+            case 7:  return std::make_unique<Mapper007>(prg_banks, chr_banks);
+            case 11: return std::make_unique<Mapper011>(prg_banks, chr_banks);
+            case 22: return std::make_unique<Mapper022>(prg_banks, chr_banks);
+            case 28: return std::make_unique<Mapper028>(prg_banks, chr_banks);
+            case 34: return std::make_unique<Mapper034>(prg_banks, chr_banks);
             default:
                 std::cout << "Warning: Unsupported mapper " << (int)mapper_id
                           << ", falling back to NROM" << std::endl;
