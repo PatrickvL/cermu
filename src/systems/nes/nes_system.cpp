@@ -352,13 +352,6 @@ void NintendoSystem<V>::reset() {
         cartridge_->update_bank_map(&bus_, bus_.ciram);
     }
     
-    // Read reset vector from $FFFC/$FFFD and set CPU PC
-    {
-        uint16_t reset_vector = cpu_->load_reset_vector(
-            [this](uint16_t addr) -> uint8_t { return peek_memory(addr); });
-        printf("%s: Reset vector $%04X\n", Traits::name, reset_vector);
-    }
-    
     total_cycles_ = 0;
     residual_time_ = 0.0;
     audio_sample_period_ = is_pal_ ? 33 : 37;

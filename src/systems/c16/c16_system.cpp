@@ -353,16 +353,13 @@ bool Commodore264System<V>::initialize() {
     auto* cpu = cpu_;
     cpu->init();
     cpu->init_io_port();
+
+    // Reset the CPU to start the hardware-accurate RESET sequence.
+    // The deferred hijack fetches $FFFC/$FFFD through the bus on first tick.
+    cpu->reset(0);
     
     // Note: C16 doesn't use the io_port_mixin bank_change path.
     // Banking is handled by TED register writes.
-    
-    // Read reset vector from KERNAL ROM and set CPU PC
-    if (roms_loaded) {
-        uint16_t reset_vector = (*kernal_rom_)[0xFFFC - 0xC000] | ((*kernal_rom_)[0xFFFD - 0xC000] << 8);
-        cpu->load_reset_vector(reset_vector);
-        printf("%s: CPU reset vector = $%04X\n", Traits::name, reset_vector);
-    }
     
     // Initialize bus state with default pin levels
     bus_state_ = C264_BUS_DEFAULT_STATE;
@@ -448,11 +445,6 @@ void Commodore264System<V>::reset() {
     // with an inconsistent pipeline.
     if (cpu_) {
         cpu_->reset(0);
-        
-        // Re-read reset vector from KERNAL ROM
-        uint16_t reset_vector = (*kernal_rom_)[0xFFFC - 0xC000] | ((*kernal_rom_)[0xFFFD - 0xC000] << 8);
-        cpu_->load_reset_vector(reset_vector);
-        printf("%s: CPU reset (PC=$%04X)\n", Traits::name, reset_vector);
     }
     
     // Reset TED 7360
