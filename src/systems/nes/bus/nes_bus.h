@@ -142,16 +142,18 @@ struct nes_bus_t {
     /// block must be < BLOCK_SENTINEL_MIN (caller checks).
     /// WRAM (blocks 0-1) mirrors at 2KB; all other regions use 4KB pages.
     /// Branchless: when block < BLOCK_CIRAM, XOR clears bit 11 → 0x07FF mask.
+    /// Uses addition (not OR) because block numbers may not be 4-aligned,
+    /// so bits 10-11 of sub_addr can overlap with the block field.
     inline uint8_t cpu_block_read(uint16_t block, uint16_t addr) const {
         const uint16_t mask = CPU_PAGE_MASK ^ (0x0800u * (block < BLOCK_CIRAM));
-        return unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) | (addr & mask)];
+        return unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) + (addr & mask)];
     }
 
     /// CPU block write -- 4KB page from block number.
     /// block must be < BLOCK_SENTINEL_MIN (caller checks).
     inline void cpu_block_write(uint16_t block, uint16_t addr, uint8_t data) {
         const uint16_t mask = CPU_PAGE_MASK ^ (0x0800u * (block < BLOCK_CIRAM));
-        unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) | (addr & mask)] = data;
+        unified_buf[(static_cast<uint32_t>(block) << BLOCK_SHIFT) + (addr & mask)] = data;
     }
 
     // ====================================================================
