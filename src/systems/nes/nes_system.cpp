@@ -1083,6 +1083,18 @@ void NintendoSystem<V>::tick() {
         float sample = cpu_->generate_audio_sample();
         audio_buffer_.push_back(sample);
     }
+
+    // ====================================================================
+    // DMC DMA — service sample fetch requests from the APU's DMC channel.
+    // On real hardware this steals 1-4 CPU cycles; for now we do an
+    // instantaneous read to get the DMC functionally working.
+    // ====================================================================
+    if (unlikely(cpu_->apu_needs_dma())) {
+        uint16_t dmc_addr = cpu_->apu_dma_address();
+        uint8_t sample = bus_.cpu_read(dmc_addr);
+        cpu_->apu_load_dma_sample(sample);
+    }
+
     NES_PROF_END(cpu_phi1_cycles, phi1);
 
     total_cycles_++;

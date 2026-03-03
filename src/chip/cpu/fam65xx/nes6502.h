@@ -453,6 +453,7 @@ private:
   uint8_t shift_register = 0;
   uint8_t bits_remaining = 0;
   bool silence = true;
+  bool initial_fetch_ = false;
 
 public:
   void write_control(uint8_t value) {
@@ -480,18 +481,46 @@ public:
 
     if (bytes_remaining > 0 && sample_buffer_empty) {
       needs_sample = true;
+      initial_fetch_ = true;  // First fetch gets special handling
     }
   }
 
+  /// Called when DMA fetches a sample byte from memory.
+  /// The initial fetch (triggered by start()) decrements bytes_remaining
+  /// immediately so $4015 reports the correct state right away.
+  /// The address counter is NOT advanced here — clock() handles that
+  /// when the output unit consumes the buffer and requests the next fetch.
   void load_sample(uint8_t data) {
     sample_buffer = data;
     sample_buffer_empty = false;
     needs_sample = false;
+
+    if (initial_fetch_) {
+      initial_fetch_ = false;
+      // Decrement bytes_remaining immediately so $4015 bit 4 reflects
+      // the correct state right after start() (required for 1-byte
+      // samples to show as inactive immediately).
+      // NOTE: do NOT increment current_address here — clock() will
+      // handle the address advance when the output unit consumes this
+      // byte and requests the next fetch.
+      if (bytes_remaining > 0) {
+        bytes_remaining--;
+      }
+      if (bytes_remaining == 0) {
+        if (loop) {
+          start();
+        } else if (irq_enabled) {
+          irq_flag = true;
+        }
+      }
+    }
   }
 
   void clock() {
     if (timer == 0) {
-      timer = is_pal ? DMC_PERIOD_PAL[rate_index] : DMC_PERIOD_NTSC[rate_index];
+      // Table values are actual periods; reload with period-1 since
+      // the counter counts from reload down to 0 (inclusive).
+      timer = (is_pal ? DMC_PERIOD_PAL[rate_index] : DMC_PERIOD_NTSC[rate_index]) - 1;
 
       if (!silence) {
         if (shift_register & 1) {
@@ -515,9 +544,13 @@ public:
           shift_register = sample_buffer;
           sample_buffer_empty = true;
 
+          // Request next byte and advance memory reader state.
+          // bytes_remaining is decremented here for output-driven
+          // fetches (not the initial fetch which is handled in
+          // load_sample).
           if (bytes_remaining > 0) {
             needs_sample = true;
-            current_address = (current_address + 1) | 0x8000; // Wrap to $8000-$FFFF
+            current_address = (current_address + 1) | 0x8000;
             bytes_remaining--;
 
             if (bytes_remaining == 0) {
@@ -542,12 +575,13 @@ public:
   bool active() const { return bytes_remaining > 0; }
 
   void reset() {
-    timer = is_pal ? DMC_PERIOD_PAL[0] : DMC_PERIOD_NTSC[0];
+    timer = (is_pal ? DMC_PERIOD_PAL[0] : DMC_PERIOD_NTSC[0]) - 1;
     sample_buffer = 0;
     sample_buffer_empty = true;
     shift_register = 0;
     bits_remaining = 8;
     silence = true;
+    initial_fetch_ = false;
     output_level = 0;
     irq_flag = false;
     needs_sample = false;
@@ -603,11 +637,15 @@ private:
       {29830, EVT_IRQ | EVT_RESET},
   };
   // 5-step NTSC: QF/HF at steps 0,1,2,4; step 3 empty; no IRQ
+  // Note: RESET is split to a separate cycle (37282) from the HF (37281)
+  // so that post-reset events align correctly (same as mode 0's separate
+  // HF at 29829 / RESET at 29830).
   static constexpr Event SCHED_NTSC_5[] = {
       {7457,  EVT_QF},
       {14913, EVT_QF | EVT_HF},
       {22371, EVT_QF},
-      {37281, EVT_QF | EVT_HF | EVT_RESET},
+      {37281, EVT_QF | EVT_HF},
+      {37282, EVT_RESET},
   };
   // 4-step PAL
   static constexpr Event SCHED_PAL_4[] = {
@@ -623,7 +661,8 @@ private:
       {8313,  EVT_QF},
       {16627, EVT_QF | EVT_HF},
       {24939, EVT_QF},
-      {41565, EVT_QF | EVT_HF | EVT_RESET},
+      {41565, EVT_QF | EVT_HF},
+      {41566, EVT_RESET},
   };
 
   // Active schedule pointer and length
@@ -634,8 +673,8 @@ private:
   // Select the active schedule based on mode and region
   void select_schedule() {
       if (mode) {
-          if (is_pal) { schedule_ = SCHED_PAL_5; schedule_len_ = 4; }
-          else        { schedule_ = SCHED_NTSC_5; schedule_len_ = 4; }
+          if (is_pal) { schedule_ = SCHED_PAL_5; schedule_len_ = 5; }
+          else        { schedule_ = SCHED_NTSC_5; schedule_len_ = 5; }
       } else {
           if (is_pal) { schedule_ = SCHED_PAL_4; schedule_len_ = 6; }
           else        { schedule_ = SCHED_NTSC_4; schedule_len_ = 6; }
@@ -824,10 +863,18 @@ public:
     frame.power_on_reset();
   }
 
-  /// Soft reset: preserves length counter enables, re-triggers $4017 write.
+  /// Soft reset: re-triggers $4017 write, clears $4015.
   void reset_to_soft_state() {
-    // Length counter enable flags are PRESERVED across soft reset.
-    // Triangle linear counter state is preserved.
+    // Hardware reset internally writes $00 to $4015, disabling all
+    // channels and zeroing their length counters.  Individual channel
+    // register contents (duty, halt flags, envelopes, etc.) are
+    // preserved — they can be re-activated by the reset handler.
+    pulse1.length.set_enabled(false);
+    pulse2.length.set_enabled(false);
+    triangle.length.set_enabled(false);
+    noise.length.set_enabled(false);
+
+    // Triangle linear counter state is preserved across reset.
 
     pulse1.sweep.reset();
     pulse2.sweep.reset();
