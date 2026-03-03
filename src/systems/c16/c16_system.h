@@ -6,10 +6,9 @@
 #include "../../chip/video/ted/ted7360.h"
 #include "../../chip/cpu/fam65xx/mos7501.h"
 
-// C264 series (C16/C116/Plus4) default bus state — initial pin values.
-// RW=1 (read mode), active-low IRQ/NMI HIGH (inactive), RDY HIGH (CPU ready).
-#define C264_BUS_DEFAULT_STATE \
-    (BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT) | BUS_BIT(BUS_RDY_BIT))
+// C264 series (C16/C116/Plus4) default bus state — derived from CPU.
+// CSG7501 provides: RW, RDY, IRQ, AEC.  (No NMI — NO_NMI_LINE flag.)
+#define C264_BUS_DEFAULT_STATE  CSG7501::default_bus_state()
 
 #include <cstdint>
 

@@ -8,11 +8,10 @@
 #include "../../chip/memory/memory_chip.h"
 #include <cstdint>
 
-// Apple 1 default bus state — initial pin values.
-// RW=1 (read mode), active-low IRQ/RES HIGH (inactive).
-// Apple 1 has no NMI line connected.
+// Apple 1 default bus state — derived from CPU + system extras.
+// MOS6502 provides: RW, RDY, IRQ, NMI.  System adds: RES.
 #define APPLE1_BUS_DEFAULT_STATE \
-    (BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_RES_BIT))
+    (MOS6502::default_bus_state() | BUS_BIT(BUS_RES_BIT))
 #include <memory>
 
 /**
