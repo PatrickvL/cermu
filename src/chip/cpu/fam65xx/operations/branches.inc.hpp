@@ -33,6 +33,22 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
       return pins;
     }
 
+    /* Branch taken: save interrupt state at this penultimate cycle.
+     * The shift register reflects what process_interrupt_detection found
+     * during the preceding PHI2 (case 0).  On NMOS 6502 hardware the
+     * penultimate cycle is the last cycle that polls interrupts — the fixup
+     * cycle (T2) does NOT poll.  We compare the snapshot at the fetch
+     * boundary to allow interrupts that were already detectable, while
+     * suppressing those that first become detectable during the fixup.
+     *
+     * We use a 2-bit check (not 3-bit) because the snapshot is taken 1
+     * cycle before the fetch boundary, so there's 1 fewer accumulated
+     * sample than the main 3-bit detection path uses. */
+    this->branch_poll_shift_reg_ = this->interrupt_shift_register;
+    if constexpr (has_nmi_line()) {
+      this->branch_nmi_pending_at_poll_ = this->nmi_output_latch_;
+    }
+
     /* Branch taken: calculate correct target address */
     /* Branch offset is relative to PC after incrementing past the offset byte */
     /* PC was already incremented on line 26, so it now points past the 2-byte instruction */
@@ -51,7 +67,12 @@ bus_state_t branch_helper(bus_state_t pins, uint8_t flag_mask,
     bool page_cross = this->page_crossed(this->get(REG_PC), this->get(REG_AB));
     if (!page_cross) {
       /* No page cross: set final PC and complete after 3 cycles */
+      /* 6502 quirk: the fixup cycle of a taken branch without page cross
+       * does NOT poll interrupts.  Set suppression flag so the next fetch
+       * boundary skips interrupt hijacking, allowing one more instruction
+       * to execute before the interrupt is serviced. */
       this->set(REG_PC, this->get(REG_AB));
+      this->branch_irq_suppression_ = true;
       this->transition_to_fetch();
       return pins;
     }
