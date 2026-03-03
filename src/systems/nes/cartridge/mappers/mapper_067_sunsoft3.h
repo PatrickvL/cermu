@@ -17,6 +17,7 @@
  */
 
 #include "../nes_mapper.h"
+#include "mapper_helpers.h"
 
 namespace nes_system {
 
@@ -65,22 +66,7 @@ public:
     }
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
-        uint32_t total_16k = static_cast<uint32_t>(prg_rom_size_ / 0x4000);
-        if (total_16k == 0) total_16k = 1;
-
-        uint32_t bank = prg_bank_select_ % total_16k;
-        uint32_t base = bank * 0x4000;
-        for (int i = 0; i < 4; i++) {
-            uint32_t offset = base + i * 0x1000;
-            config.prg_pages[i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
-        }
-
-        uint32_t last = (total_16k - 1) * 0x4000;
-        for (int i = 0; i < 4; i++) {
-            uint32_t offset = last + i * 0x1000;
-            config.prg_pages[4 + i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
-        }
-        config.prg_ram_enabled = false;
+        mapper_helpers::set_prg_16k_lo(config, prg_rom_, prg_rom_size_, prg_bank_select_);
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {

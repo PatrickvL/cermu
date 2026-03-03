@@ -17,6 +17,7 @@
  */
 
 #include "../nes_mapper.h"
+#include "mapper_helpers.h"
 
 namespace nes_system {
 
@@ -45,17 +46,7 @@ public:
     // =======================================================================
 
     void get_prg_bank_config(MapperBankConfig& config) const override {
-        // Switchable 32KB PRG bank
-        uint32_t max_prg_banks = static_cast<uint32_t>(prg_rom_size_ / 0x8000);
-        uint32_t bank = (max_prg_banks > 0) ? (prg_bank_select_ % max_prg_banks) : 0;
-        uint32_t bank_base = bank * 0x8000;
-        for (int i = 0; i < 8; i++) {
-            uint32_t offset = bank_base + i * 0x1000;
-            config.prg_pages[i] = (offset < prg_rom_size_) ? prg_rom_ + offset : nullptr;
-        }
-        // BNROM has no PRG-RAM; NINA-001 uses $7FFD-$7FFF for registers
-        // but we don't expose PRG-RAM to the bus
-        config.prg_ram_enabled = false;
+        mapper_helpers::set_prg_32k(config, prg_rom_, prg_rom_size_, prg_bank_select_);
     }
 
     void get_chr_bank_config(MapperChrConfig& config) const override {
