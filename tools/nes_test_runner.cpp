@@ -87,7 +87,7 @@ static std::string read_nametable_text(NES& nes) {
 // Both zero = PASS.
 // ============================================================================
 
-static TestResult run_nestest(NES& nes, int max_frames) {
+static TestResult run_nestest(NES& nes, int max_frames, double wall_timeout_sec = 0) {
     TestResult result;
     result.rom_path = "nestest.nes";
 
@@ -95,6 +95,7 @@ static TestResult run_nestest(NES& nes, int max_frames) {
     nes.set_cpu_pc(0xC000);
 
     auto t0 = std::chrono::steady_clock::now();
+    const bool has_wall_timeout = wall_timeout_sec > 0;
 
     // Run frames, watching for completion
     uint16_t prev_pc = 0;
@@ -103,6 +104,13 @@ static TestResult run_nestest(NES& nes, int max_frames) {
     for (int frame = 0; frame < max_frames; ++frame) {
         nes.run_frame();
         result.frames_run = frame + 1;
+
+        // Wall-clock timeout check (every 64 frames to amortise clock reads)
+        if (has_wall_timeout && (frame & 63) == 63) {
+            auto now = std::chrono::steady_clock::now();
+            if (std::chrono::duration<double>(now - t0).count() >= wall_timeout_sec)
+                break;
+        }
 
         uint16_t pc = nes.get_cpu_pc();
 
@@ -156,11 +164,13 @@ static TestResult run_nestest(NES& nes, int max_frames) {
 // ============================================================================
 
 static TestResult run_blargg_6000(NES& nes, const std::string& name,
-                                   int max_frames, bool verbose = false) {
+                                   int max_frames, bool verbose = false,
+                                   double wall_timeout_sec = 0) {
     TestResult result;
     result.rom_path = name;
 
     auto t0 = std::chrono::steady_clock::now();
+    const bool has_wall_timeout = wall_timeout_sec > 0;
 
     uint16_t prev_pc = 0;
     int stuck_count = 0;
@@ -169,6 +179,13 @@ static TestResult run_blargg_6000(NES& nes, const std::string& name,
     for (int frame = 0; frame < max_frames; ++frame) {
         nes.run_frame();
         result.frames_run = frame + 1;
+
+        // Wall-clock timeout check (every 16 frames to amortise clock reads)
+        if (has_wall_timeout && (frame & 15) == 15) {
+            auto now = std::chrono::steady_clock::now();
+            if (std::chrono::duration<double>(now - t0).count() >= wall_timeout_sec)
+                break;
+        }
 
         // Check magic signature first (PRG RAM must be present)
         uint8_t m1 = nes.peek_memory(0x6001);
@@ -339,11 +356,12 @@ static TestResult run_blargg_6000(NES& nes, const std::string& name,
 // ============================================================================
 
 static TestResult run_generic(NES& nes, const std::string& name,
-                               int max_frames) {
+                               int max_frames, double wall_timeout_sec = 0) {
     TestResult result;
     result.rom_path = name;
 
     auto t0 = std::chrono::steady_clock::now();
+    const bool has_wall_timeout = wall_timeout_sec > 0;
 
     uint16_t prev_pc = 0;
     int stuck_count = 0;
@@ -352,6 +370,13 @@ static TestResult run_generic(NES& nes, const std::string& name,
     for (int frame = 0; frame < max_frames; ++frame) {
         nes.run_frame();
         result.frames_run = frame + 1;
+
+        // Wall-clock timeout check (every 16 frames to amortise clock reads)
+        if (has_wall_timeout && (frame & 15) == 15) {
+            auto now = std::chrono::steady_clock::now();
+            if (std::chrono::duration<double>(now - t0).count() >= wall_timeout_sec)
+                break;
+        }
 
         uint16_t pc = nes.get_cpu_pc();
         if (pc == prev_pc) {
@@ -446,7 +471,7 @@ static void print_result(const TestResult& r) {
 // ============================================================================
 
 static TestResult run_test_rom(const std::string& filepath, int max_frames,
-                                bool verbose) {
+                                bool verbose, double wall_timeout_sec = 0) {
     // Extract filename for display
     std::string filename = filepath;
     auto sep = filepath.rfind('/');
@@ -494,13 +519,13 @@ static TestResult run_test_rom(const std::string& filepath, int max_frames,
     TestResult result;
     switch (protocol) {
         case TestProtocol::NESTEST:
-            result = run_nestest(nes, max_frames);
+            result = run_nestest(nes, max_frames, wall_timeout_sec);
             break;
         case TestProtocol::BLARGG_6000:
-            result = run_blargg_6000(nes, filename, max_frames, verbose);
+            result = run_blargg_6000(nes, filename, max_frames, verbose, wall_timeout_sec);
             break;
         case TestProtocol::GENERIC:
-            result = run_generic(nes, filename, max_frames);
+            result = run_generic(nes, filename, max_frames, wall_timeout_sec);
             break;
     }
 
@@ -655,6 +680,8 @@ static void print_usage(const char* argv0) {
     printf("       %s --benchmark <rom_file.nes>\n", argv0);
     printf("\nOptions:\n");
     printf("  --max-frames N     Maximum frames to run (default: 7200)\n");
+    printf("  --timeout N        Wall-clock timeout per ROM in seconds (default: 8)\n");
+    printf("  --full             Full run: 3-pass escalating timeouts (2s/10s/60s)\n");
     printf("  --verbose          Print detailed progress\n");
     printf("  --all <dir>        Run all .nes files in directory\n");
     printf("  --benchmark <rom>  Performance benchmark (default: 600 frames)\n");
@@ -665,8 +692,10 @@ static void print_usage(const char* argv0) {
 
 int main(int argc, char* argv[]) {
     int max_frames = 7200;  // ~2 minutes at 60fps
+    double wall_timeout_sec = 8.0;  // default wall-clock timeout per ROM
     bool verbose = false;
     bool run_all = false;
+    bool full_mode = false;
     bool benchmark_mode = false;
     int bench_frames = 600;
     int warmup_frames = 120;
@@ -678,6 +707,10 @@ int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "--max-frames") == 0 && i + 1 < argc) {
             max_frames = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--timeout") == 0 && i + 1 < argc) {
+            wall_timeout_sec = atof(argv[++i]);
+        } else if (strcmp(argv[i], "--full") == 0) {
+            full_mode = true;
         } else if (strcmp(argv[i], "--verbose") == 0) {
             verbose = true;
         } else if (strcmp(argv[i], "--all") == 0 && i + 1 < argc) {
@@ -731,30 +764,82 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Run tests
+    // ================================================================
+    // Multi-pass execution strategy
+    //
+    // Pass 1: quick timeout — catches the majority of PASS/FAIL results.
+    // Pass 2: medium timeout — retries only TIMEOUT results.
+    // Pass 3 (--full only): long timeout — gives slow tests a real chance.
+    //
+    // Without --full, only passes 1 and 2 run.
+    // When running a single ROM (not --all), no multi-pass — use the
+    // user-specified --timeout directly.
+    // ================================================================
+
+    struct PassConfig {
+        const char* label;
+        double timeout;
+    };
+
+    // Build pass list
+    std::vector<PassConfig> passes;
+    if (run_all) {
+        passes.push_back({"quick", 2.0});
+        passes.push_back({"medium", 10.0});
+        if (full_mode) {
+            passes.push_back({"full", 60.0});
+        }
+    } else {
+        // Single-ROM mode: one pass with user's timeout
+        passes.push_back({"single", wall_timeout_sec});
+    }
+
     printf("============================================================\n");
     printf("  NES Test ROM Validation Runner\n");
-    printf("  %zu test ROM(s), max %d frames each\n",
-           rom_files.size(), max_frames);
+    printf("  %zu test ROM(s), max %d frames, %zu pass(es)\n",
+           rom_files.size(), max_frames, passes.size());
     printf("============================================================\n");
 
-    std::vector<TestResult> results;
+    // Track per-ROM best result
+    std::vector<TestResult> results(rom_files.size());
+    for (size_t i = 0; i < rom_files.size(); i++) {
+        results[i].rom_path = rom_files[i];
+        results[i].verdict = TestVerdict::TIMEOUT;
+    }
+
+    for (size_t pass_idx = 0; pass_idx < passes.size(); ++pass_idx) {
+        const auto& pc = passes[pass_idx];
+
+        // Count how many ROMs need this pass
+        int need_run = 0;
+        for (auto& r : results) {
+            if (r.verdict == TestVerdict::TIMEOUT) need_run++;
+        }
+        if (need_run == 0) break;
+
+        printf("\n--- Pass %zu/%zu [%s] timeout=%.1fs, %d ROM(s) ---\n",
+               pass_idx + 1, passes.size(), pc.label, pc.timeout, need_run);
+
+        for (size_t i = 0; i < rom_files.size(); i++) {
+            // Only retry TIMEOUTs
+            if (results[i].verdict != TestVerdict::TIMEOUT) continue;
+
+            TestResult r = run_test_rom(rom_files[i], max_frames, verbose, pc.timeout);
+            print_result(r);
+            results[i] = std::move(r);
+        }
+    }
+
+    // Summary
     int pass = 0, fail = 0, timeout = 0, error = 0;
-
-    for (const auto& rom : rom_files) {
-        TestResult r = run_test_rom(rom, max_frames, verbose);
-        print_result(r);
-
+    for (auto& r : results) {
         switch (r.verdict) {
             case TestVerdict::PASS:    ++pass;    break;
             case TestVerdict::FAIL:    ++fail;    break;
             case TestVerdict::TIMEOUT: ++timeout; break;
             case TestVerdict::ERROR:   ++error;   break;
         }
-        results.push_back(std::move(r));
     }
-
-    // Summary
     printf("\n============================================================\n");
     printf("  Results: %d passed, %d failed, %d timeout, %d error\n",
            pass, fail, timeout, error);
