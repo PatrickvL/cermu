@@ -226,6 +226,26 @@ static TestResult run_blargg_6000(NES& nes, const std::string& name,
         if (is_jmp_self) {
             stuck_count++;
             if (stuck_count >= 3) {
+                // Check if this is a reset request (JMP-self in wait_reset + $81)
+                if (m1 == 0xDE && m2 == 0xB0 && m3 == 0x61) {
+                    uint8_t status = nes.peek_memory(0x6000);
+                    if (status == 0x81) {
+                        // Test requests a system reset.  The test ROM
+                        // enters wait_reset (JMP-self) after writing
+                        // pre-reset APU/channel setup.  Now it's safe
+                        // to reset — all setup writes have completed.
+                        nes.poke_memory(0x6000, 0x80);  // mark "running"
+                        nes.reset();
+                        stuck_count = 0;
+                        // Give the test ROM frames to re-initialize
+                        for (int skip = 0; skip < 30 && frame < max_frames; ++skip, ++frame) {
+                            nes.run_frame();
+                            result.frames_run = frame + 1;
+                        }
+                        continue;
+                    }
+                }
+
                 // ROM completed — check $6000 first, then nametable
                 if (m1 == 0xDE && m2 == 0xB0 && m3 == 0x61) {
                     uint8_t status = nes.peek_memory(0x6000);
@@ -323,16 +343,8 @@ static TestResult run_blargg_6000(NES& nes, const std::string& name,
         }
 
         if (status == 0x81) {
-            // Test requests a system reset.  Per Blargg protocol, clear
-            // $6000 status before resetting so the test's post-reset init
-            // can write its own status without us misreading the stale $81.
-            nes.poke_memory(0x6000, 0x80);  // mark "running"
-            nes.reset();
-            // Give the test ROM a few frames to re-initialize
-            for (int skip = 0; skip < 30 && frame < max_frames; ++skip, ++frame) {
-                nes.run_frame();
-                result.frames_run = frame + 1;
-            }
+            // Test requests reset — but wait for JMP-self detection
+            // (handled above in the is_jmp_self block).
             continue;
         }
 
