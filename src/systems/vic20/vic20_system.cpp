@@ -501,13 +501,12 @@ bool VIC20System::initialize() {
     // Reset CPU to initialize state
     cpu_->reset(0);
     
-    // Manually load the reset vector since automatic reset doesn't work with callback-only CPU
-    // KERNAL is at $E000-$FFFF (8KB), reset vector is at $FFFC-$FFFD
+    // Load the reset vector from KERNAL ROM ($E000-$FFFF)
     uint8_t* kernal_ptr = vic20_memory_get_rom_ptr(memory_, VIC20_BASE_KERNAL);
     if (kernal_ptr) {
         uint16_t reset_vector = kernal_ptr[0xFFFC - 0xE000] | (kernal_ptr[0xFFFD - 0xE000] << 8);
-        cpu_->set(REG_PC, reset_vector);
-        printf("VIC20: CPU reset complete - PC = $%04X\n", (unsigned)cpu_->get(REG_PC));
+        cpu_->load_reset_vector(reset_vector);
+        printf("VIC20: CPU reset complete - PC = $%04X\n", reset_vector);
     }
     
     // Create VIC chip — region-aware: MOS6561 for PAL, MOS6560 for NTSC
@@ -645,7 +644,7 @@ void VIC20System::reset() {
         uint8_t* kernal_ptr = vic20_memory_get_rom_ptr(memory_, VIC20_BASE_KERNAL);
         if (kernal_ptr) {
             uint16_t reset_vector = kernal_ptr[0xFFFC - 0xE000] | (kernal_ptr[0xFFFD - 0xE000] << 8);
-            cpu->set(REG_PC, reset_vector);
+            cpu->load_reset_vector(reset_vector);
         }
     }
     

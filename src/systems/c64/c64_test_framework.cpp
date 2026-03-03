@@ -648,8 +648,8 @@ bool TestFramework::execute_kernal_boot(C64System* c64) {
         printf("  KERNAL reset vector: $%04X\n", reset_vector);
     }
     
-    // Set PC to reset vector
-    cpu->set(REG_PC, reset_vector);
+    // Load reset vector into CPU
+    cpu->load_reset_vector(reset_vector);
     
     // Enable interrupts for KERNAL (it needs them for initialization)
     uint8_t status = cpu->get(REG_P);

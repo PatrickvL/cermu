@@ -455,8 +455,7 @@ bool C64System::initialize() {
     cpu->bank_change_ctx = this;
 
     uint16_t reset_vector = this->bus.read_kernal_reset_vector();
-    cpu->set(REG_PC, reset_vector);
-    cpu->set(REG_AB, reset_vector);
+    cpu->load_reset_vector(reset_vector);
     printf("C64: CPU reset vector $%04X loaded\n", reset_vector);
 
     // NOTE: VIC-II bus.bus is already wired above. SID bus_interface is unused.
@@ -571,8 +570,7 @@ void C64System::reset() {
             cpu_banking_callback(this, banking_bits);
 
             uint16_t reset_vector = this->bus.read_kernal_reset_vector();
-            cpu->set(REG_PC, reset_vector);
-            cpu->set(REG_AB, reset_vector);
+            cpu->load_reset_vector(reset_vector);
         }
 
         // Reset keyboard

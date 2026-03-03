@@ -1608,13 +1608,43 @@ public:
     // Clear any active interrupt
     this->active_interrupt = FAM65XX_INT_NONE;
 
-    // NOTE: PC must be set externally after reset by reading the reset vector
-    // This matches the C64 boot sequence where PC is set directly from KERNAL ROM
-    
     // Set up for instruction fetch - CPU ready to execute from the reset vector
+    // NOTE: Call load_reset_vector() after reset() to set PC from the vector.
     this->transition_to_fetch();
 
     return pins;
+  }
+
+  /**
+   * Load the reset vector into PC and AB.
+   *
+   * After reset(), the CPU is ready to execute but PC is unset.  Systems call
+   * this to point the CPU at the correct entry point.
+   *
+   * @param reset_vector  The 16-bit address read from $FFFC/$FFFD.
+   */
+  void load_reset_vector(uint16_t reset_vector) {
+    this->set(REG_PC, reset_vector);
+    this->set(REG_AB, reset_vector);
+  }
+
+  /**
+   * Read the reset vector via a caller-supplied peek function and load it.
+   *
+   * Convenience overload that reads $FFFC (low) and $FFFD (high), combines
+   * them, and calls load_reset_vector(uint16_t).
+   *
+   * @tparam PeekFn  Callable with signature uint8_t(uint16_t addr).
+   * @param  peek    Memory-read callback (must not trigger side-effects).
+   * @return The 16-bit reset vector that was loaded.
+   */
+  template <typename PeekFn>
+  uint16_t load_reset_vector(PeekFn peek) {
+    uint8_t lo = peek(static_cast<uint16_t>(0xFFFC));
+    uint8_t hi = peek(static_cast<uint16_t>(0xFFFD));
+    uint16_t vec = lo | (hi << 8);
+    load_reset_vector(vec);
+    return vec;
   }
 
   bus_state_t bootstrap(bus_state_t pins) {

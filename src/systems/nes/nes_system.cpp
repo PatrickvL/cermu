@@ -354,11 +354,8 @@ void NintendoSystem<V>::reset() {
     
     // Read reset vector from $FFFC/$FFFD and set CPU PC
     {
-        uint8_t lo = peek_memory(0xFFFC);
-        uint8_t hi = peek_memory(0xFFFD);
-        uint16_t reset_vector = lo | (hi << 8);
-        cpu_->set(REG_PC, reset_vector);
-        cpu_->set(REG_AB, reset_vector);
+        uint16_t reset_vector = cpu_->load_reset_vector(
+            [this](uint16_t addr) -> uint8_t { return peek_memory(addr); });
         printf("%s: Reset vector $%04X\n", Traits::name, reset_vector);
     }
     
@@ -932,6 +929,55 @@ void NintendoSystem<V>::tick() {
                 }
             }
             dma_odd_cycle_ = !dma_odd_cycle_;
+
+            // ============================================================
+            // Keep APU and interrupt detection running during DMA.
+            // On real hardware the APU clock continues and the NMI
+            // edge-detect flip-flop remains active while the bus is
+            // hijacked by DMA.  The IRQ shift register (part of the
+            // CPU pipeline) is stalled — NOT fed during DMA.  When
+            // DMA ends, the CPU re-samples IRQ from scratch, giving
+            // the normal 3-cycle detection latency.
+            // ============================================================
+
+            // Clock APU — advances frame counter, timers, DMC
+            pins_ = cpu_->clock_apu(pins_);
+
+            // Transfer PPU /NMI onto CPU bus
+            pins_ = PPU_CPU_BITMIX(pins_, ppu_->bus_snapshot_);
+
+            // Sample NMI edge — the edge-detect flip-flop continues
+            // during DMA (confirmed by hardware tests)
+            cpu_->sample_nmi_pin(pins_);
+
+            // Update IRQ wire on pins_ so the state is current when
+            // the CPU resumes.  Do NOT call process_interrupt_detection
+            // — the CPU's IRQ shift register is stalled during DMA.
+            {
+                bool irq_asserted = false;
+                if (cartridge_ && cartridge_->irq_state()) irq_asserted = true;
+                if (cpu_->apu_irq()) irq_asserted = true;
+                if (irq_asserted) {
+                    BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
+                } else {
+                    BUS_SET_BIT(pins_, BUS_IRQ_BIT);
+                }
+            }
+
+            // Service DMC sample fetch during OAM DMA (real HW allows
+            // the DMC to steal cycles from an in-progress OAM DMA)
+            if (unlikely(cpu_->apu_needs_dma())) {
+                uint16_t dmc_addr = cpu_->apu_dma_address();
+                uint8_t sample = bus_.cpu_read(dmc_addr);
+                cpu_->apu_load_dma_sample(sample);
+            }
+
+            // Audio sample generation (keep sample rate steady during DMA)
+            if (--audio_sample_counter_ == 0) {
+                audio_sample_counter_ = audio_sample_period_;
+                float sample = cpu_->generate_audio_sample();
+                audio_buffer_.push_back(sample);
+            }
         }
         system_clock_counter_++;
         total_cycles_++;

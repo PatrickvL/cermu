@@ -360,8 +360,7 @@ bool Commodore264System<V>::initialize() {
     // Read reset vector from KERNAL ROM and set CPU PC
     if (roms_loaded) {
         uint16_t reset_vector = (*kernal_rom_)[0xFFFC - 0xC000] | ((*kernal_rom_)[0xFFFD - 0xC000] << 8);
-        cpu->set(REG_PC, reset_vector);
-        cpu->set(REG_AB, reset_vector);
+        cpu->load_reset_vector(reset_vector);
         printf("%s: CPU reset vector = $%04X\n", Traits::name, reset_vector);
     }
     
@@ -452,8 +451,7 @@ void Commodore264System<V>::reset() {
         
         // Re-read reset vector from KERNAL ROM
         uint16_t reset_vector = (*kernal_rom_)[0xFFFC - 0xC000] | ((*kernal_rom_)[0xFFFD - 0xC000] << 8);
-        cpu_->set(REG_PC, reset_vector);
-        cpu_->set(REG_AB, reset_vector);
+        cpu_->load_reset_vector(reset_vector);
         printf("%s: CPU reset (PC=$%04X)\n", Traits::name, reset_vector);
     }
     
