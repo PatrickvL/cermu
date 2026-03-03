@@ -442,30 +442,21 @@ bus_state_t op_brk(bus_state_t pins) {
     // NMI VECTOR HIJACKING — check at vector-determination cycle.
     //
     // On real 6502 hardware the vector address MUX checks the NMI internal
-    // edge-detect flip-flop directly at T4 (the cycle where the vector
-    // address is loaded).  An NMI edge detected at or before T4 redirects
-    // the vector from $FFFE (IRQ/BRK) to $FFFA (NMI).
+    // edge-detect flip-flop at T4 (the cycle where the vector address is
+    // loaded).  However, the flip-flop state visible to the MUX is sampled
+    // from the PREVIOUS cycle's edge detector output — edges detected
+    // during T4 itself are too late.
     //
-    // The check uses two different latches depending on BRK type:
-    //
-    //   Software BRK: nmi_output_latch_ (1-cycle pipeline).
-    //     Software BRK goes through transition_to_opcode which has an
-    //     extra opcode-fetch cycle not present in hardware interrupts.
-    //     The 1-cycle pipeline compensates, giving 5 in-BRK hijack cycles
-    //     (T0-T4 window).
-    //
-    //   Hardware interrupt: nmi_edge_latch (direct flip-flop check).
-    //     Hardware interrupts use deferred hijacking which correctly adds
-    //     the T0 dummy-fetch cycle, making the BRK 7 cycles (T0-T6).
-    //     The edge latch matches real 6502 behaviour: the flip-flop IS
-    //     the signal checked by the vector MUX.  sample_nmi_pin() runs
-    //     between PHI2 and PHI1 (prior to case 7), so an NMI edge
-    //     detected in the same cycle is visible — giving the correct
-    //     T0-T4 = 5 in-BRK hijack window.
+    // In our model, sample_nmi_pin() runs between PHI2 and PHI1 of each
+    // cycle (including T4).  nmi_edge_latch is updated immediately, so it
+    // reflects T4's edge.  nmi_output_latch_ is updated at each PHI2 from
+    // the current nmi_edge_latch, giving it a 1-cycle pipeline delay.
+    // At case 7 (T4 PHI1), nmi_output_latch_ was last written at case 6
+    // (T4 PHI2) using the edge_latch set by T3's sample_nmi_pin — matching
+    // the real hardware's T0-T3 detection window (5 in-BRK cycles total
+    // with deferred hijack's T0 dummy fetch).
     if constexpr (has_nmi_line()) {
-      bool nmi_pending = this->brk_is_software_
-        ? (this->nmi_output_latch_ != false)  // software BRK: 1-cycle pipeline
-        : (this->nmi_edge_latch != 0);        // hardware BRK: direct flip-flop
+      bool nmi_pending = (this->nmi_output_latch_ != false);
       if (nmi_pending && this->active_interrupt != FAM65XX_INT_NMI) {
         this->active_interrupt = FAM65XX_INT_NMI;
       }

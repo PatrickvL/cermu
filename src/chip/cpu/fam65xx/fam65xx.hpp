@@ -973,15 +973,6 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
       // This is the 1-cycle-before-acting delay.
       nmi_serviceable = this->nmi_output_latch_;
 
-      // Cache the 2-cycle pipelined value for op_brk case 7 (vector
-      // determination).  case 7 runs at PHI1, after PHI2 has already
-      // updated nmi_output_latch_ with the latest edge_latch.  Reading
-      // nmi_output_latch_ directly at case 7 would give a 1-cycle
-      // pipeline (output was just updated this PHI2), which is 1 cycle
-      // faster than the instruction-boundary check.  Using the cached
-      // value ensures both paths use the same 2-cycle pipeline.
-      this->nmi_hijack_latch_ = nmi_serviceable;
-
       // Feed current NMI pin state into shift register for debug visibility
       shift_reg |= ((int_pins >> NMI_OFFSET) & 0x1) << INT_NMI_START_BIT;
 
@@ -1064,7 +1055,35 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
     // the CPU runs op_brk (not fetch_opcode), so this naturally returns false.
     // NOTE: Do NOT check active_interrupt here - process_interrupt_detection()
     // has already set it, so checking == NONE would always fail.
-    return (this->current_handler == &fam65xx_t::fetch_opcode && this->half_cycle == 0);
+    if (this->current_handler != &fam65xx_t::fetch_opcode || this->half_cycle != 0)
+      return false;
+
+    // Branch fixup cycle suppression: on the 6502, a taken branch that
+    // doesn't cross a page has a fixup cycle (T2) that does NOT poll
+    // interrupts.  If an interrupt was already pending at the penultimate
+    // cycle (T1), it IS serviced.  Only interrupts that first become
+    // pending at T2 are suppressed until the next instruction.
+    if (this->branch_irq_suppression_) {
+      // Check if IRQ pin was asserted at the branch's penultimate cycle.
+      // Check if IRQ was detectable at the branch's penultimate cycle using
+      // a 2-bit shift register check (not 3-bit).  The snapshot is taken 1
+      // cycle before the fetch boundary, so it has 1 fewer accumulated sample
+      // than the main detection path.  2 consecutive LOW samples at the poll
+      // means IRQ was pending before the fixup → service it now.
+      if constexpr (has_irq_line()) {
+        constexpr uint32_t TWO_BIT_IRQ = 3u << INT_IRQ_START_BIT;
+        if ((this->branch_poll_shift_reg_ & TWO_BIT_IRQ) == TWO_BIT_IRQ)
+          return true;  // IRQ was detectable at penultimate → service it
+      }
+      // Check if NMI was already pending at the branch's penultimate cycle
+      if constexpr (has_nmi_line()) {
+        if (this->branch_nmi_pending_at_poll_)
+          return true;  // NMI was already pending — service it
+      }
+      return false;  // Interrupt first detected during fixup — suppress
+    }
+
+    return true;
   }
 
   /**
@@ -1175,17 +1194,23 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
       // PHI1: ALL side effects happen here (safe from RDY retry)
 
       // DEFERRED INTERRUPT HIJACK: If an interrupt was detected at PHI2,
-      // the pending flag is set and fetch_opcode case 0 ran normally
+      // the pending flag was set and fetch_opcode case 0 ran normally
       // (the T0 dummy opcode read).  Now redirect to op_brk for T1+.
       // DON'T increment PC: hardware interrupts preserve the return
       // address so the interrupted instruction re-executes after RTI.
       if (this->interrupt_hijack_pending_) {
         this->interrupt_hijack_pending_ = false;
+        this->branch_irq_suppression_ = false;
         this->current_handler = &fam65xx_t::op_brk;
         this->half_cycle = 0;
         pins &= ~FAM65XX_SYNC;
         return pins;
       }
+
+      // Clear branch IRQ suppression after one boundary has passed.
+      // The suppression prevented hijack at this boundary's PHI2;
+      // the next boundary will allow normal interrupt detection.
+      this->branch_irq_suppression_ = false;
 
       // Copy PC to AB and increment PC
       this->set(REG_AB, this->get(REG_PC));
@@ -1565,11 +1590,13 @@ public:
     this->nmi_prev = 0;
     this->nmi_edge_latch = 0;
     this->nmi_output_latch_ = false;
-    this->nmi_hijack_latch_ = false;
     this->interrupt_shift_register = 0;
     this->irq_i_flag_sample_ = 1;  // Reset sets I flag; pipeline starts masked
     this->brk_is_software_ = 0;     // No BRK in progress
     this->interrupt_hijack_pending_ = false; // No deferred hijack
+    this->branch_irq_suppression_ = false;   // No branch suppression
+    this->branch_poll_shift_reg_ = 0;
+    this->branch_nmi_pending_at_poll_ = false;
 
     // Reset 65C02 extended state
     this->wait_for_interrupt = false;
@@ -1710,28 +1737,31 @@ public:
           // Should we service this specific interrupt? (I flag check for IRQ)
           if (this->should_service_interrupt(this->active_interrupt)) {
             // DEFERRED HIJACK: Don't redirect handler yet.
-            // Let fetch_opcode run its PHI2 bus read (the T0 dummy opcode
-            // read). The actual redirect to op_brk happens at PHI1 in
+            // Let fetch_opcode case 0 run its PHI2 bus read — this IS
+            // the T0 dummy opcode fetch that real 6502 hardware performs.
+            // The actual redirect to op_brk happens at PHI1 in
             // fetch_opcode case 1.  This gives hardware interrupts the
-            // correct 7-cycle count (T0-T6), matching software BRK which
-            // already has the fetch cycle built in.
+            // correct 7-cycle count:
+            //   T0: fetch_opcode case 0+1 (dummy opcode fetch, byte discarded)
+            //   T1-T6: op_brk cases 0-11 (push PC/P, read vector, jump)
             //
-            // Without this, hardware interrupts compress T0 and T1 into
-            // one cycle, making them 6 cycles instead of 7.  This causes
-            // op_brk case 7 (vector determination) to occur 1 cycle too
-            // early, giving NMI 1 fewer cycle to propagate through the
-            // pipeline — breaking nmi_and_irq test row 9+.
+            // With immediate hijack, T0 is skipped → only 6 cycles,
+            // causing IRQ to fire 1 cycle too early (branch_delays_irq).
             this->interrupt_hijack_pending_ = true;
             this->brk_is_software_ = 0;  // Hardware interrupt, not software BRK
             
             // Clear shift register to prevent immediate re-trigger
             this->interrupt_shift_register = 0;
-            // Reset NMI edge detection using INVERTED convention:
-            // Pin HIGH (inactive) → inverted = 0, Pin LOW (asserted) → inverted = 1
-            this->nmi_prev = (pins & FAM65XX_NMI) ? 0 : 1;
-            // Clear NMI edge latch when NMI is serviced.
+            // Clear NMI edge latch and reset edge detection only when NMI is
+            // being serviced.  For IRQ, do NOT touch nmi_prev — if NMI went
+            // LOW at the same cycle as IRQ detection, the pending edge must
+            // survive so sample_nmi_pin can latch it and op_brk case 7 can
+            // hijack the vector from IRQ to NMI.
             if constexpr (has_nmi_line()) {
               if (this->active_interrupt == FAM65XX_INT_NMI) {
+                // Reset NMI edge detection using INVERTED convention:
+                // Pin HIGH (inactive) → inverted = 0, Pin LOW (asserted) → inverted = 1
+                this->nmi_prev = (pins & FAM65XX_NMI) ? 0 : 1;
                 this->nmi_edge_latch = 0;
                 this->nmi_output_latch_ = false;
               }
@@ -1888,9 +1918,11 @@ public:
     nmi_prev = 0;
     nmi_edge_latch = 0;
     nmi_output_latch_ = false;
-    nmi_hijack_latch_ = false;
     interrupt_shift_register = 0;
     interrupt_hijack_pending_ = false;
+    branch_irq_suppression_ = false;
+    branch_poll_shift_reg_ = 0;
+    branch_nmi_pending_at_poll_ = false;
     wait_for_interrupt = false;
     stopped = false;
     trace_indent = 0;
@@ -1945,10 +1977,6 @@ public:
   bool nmi_output_latch_;        /* 1-cycle pipeline output: reflects nmi_edge_latch from the
                                    PREVIOUS cycle.  NMI is serviceable when this is true.
                                    Implements the "sample at N, act after N+1" delay. */
-  bool nmi_hijack_latch_;         /* 2-cycle pipelined NMI serviceable snapshot, cached each
-                                   PHI2 from nmi_output_latch_ BEFORE it is updated.  Used
-                                   by op_brk case 7 for vector hijacking to ensure the same
-                                   pipeline delay as instruction-boundary detection. */
   uint32_t interrupt_shift_register; /* Combined shift register for all
                                         interrupt types */
   uint8_t irq_i_flag_sample_;  /* I flag snapshot from the START of the current
@@ -1972,6 +2000,20 @@ public:
                                     first, matching real 6502 timing where both
                                     software BRK and hardware interrupts take 7
                                     cycles. */
+  bool branch_irq_suppression_;   /* Set when a taken branch without page cross
+                                    completes.  Suppresses interrupt hijacking
+                                    at the next fetch boundary UNLESS the
+                                    interrupt was already detectable at the
+                                    branch's penultimate cycle (2-bit shift
+                                    register snapshot).  Models the 6502 quirk
+                                    where the fixup cycle doesn't poll.
+                                    Cleared at the first fetch_opcode PHI1. */
+  uint32_t branch_poll_shift_reg_; /* Shift register snapshot at the branch's
+                                     penultimate cycle (taken path, case 1 PHI1).
+                                     Used with a 2-bit check (not 3-bit) to
+                                     detect if IRQ was already pending. */
+  bool branch_nmi_pending_at_poll_; /* NMI output latch at the branch's
+                                      penultimate cycle. */
 
   /* 65C02 extended state */
   bool wait_for_interrupt; /* WAI instruction state */
