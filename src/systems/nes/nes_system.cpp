@@ -887,6 +887,15 @@ void NintendoSystem<V>::tick() {
     // ====================================================================
     NES_PROF_START(ppu);
     ppu_->bus_snapshot_ = ppu_->clock(ppu_->bus_snapshot_);
+
+    // Cartridge services the PPU bus — reads the address the PPU placed
+    // on the bus, performs block dispatch (CHR/nametable read) and A12
+    // edge detection (mapper IRQ), then places data on the bus.  The
+    // PPU captures the data at the start of the next clock() call.
+    if (cartridge_) {
+        ppu_->bus_snapshot_ = cartridge_->ppu_memory_tick(
+            ppu_->bus_snapshot_, &bus_, ppu_->ppu_dot_count_);
+    }
     NES_PROF_END(ppu_clock_cycles, ppu);
 
     // ====================================================================
@@ -950,6 +959,24 @@ void NintendoSystem<V>::tick() {
     // was giving iteration 05 of blargg 06-suppression an extra NMI LOW
     // cycle, making NMI fire when it shouldn't.
     pins_ = PPU_CPU_BITMIX(pins_, ppu_->bus_snapshot_);
+
+    // IRQ wire update BEFORE PHI2 — ensures the CPU's interrupt shift
+    // register samples the current IRQ state.  On real 2A03 hardware the
+    // APU IRQ line is driven combinationally: when the frame counter sets
+    // irq_flag the /IRQ line goes LOW within the same clock cycle.  Our
+    // split-phase model (PHI2 before PHI1) needs this pre-PHI2 update to
+    // make the pin state visible to process_interrupt_detection without
+    // an extra cycle of pipeline delay.
+    {
+        bool irq_asserted = false;
+        if (cartridge_ && cartridge_->irq_state()) irq_asserted = true;
+        if (cpu_->apu_irq()) irq_asserted = true;
+        if (irq_asserted) {
+            BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
+        } else {
+            BUS_SET_BIT(pins_, BUS_IRQ_BIT);
+        }
+    }
 
     // PHI2: CPU drives address bus and R/W signal
     NES_PROF_START(phi2);

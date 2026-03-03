@@ -124,6 +124,14 @@ public:
     uint8_t io_latch_ = 0;                 // PPU internal data bus buffer
     uint64_t open_bus_refresh_[8] = {};     // Per-bit: PPU dot when last driven
 
+    // VRAM data latch — bus-mediated rendering model.
+    // Captures PPU bus data at the start of each clock() call.  Between
+    // dots, the cartridge's ppu_memory_tick() reads the address the PPU
+    // placed on the bus, performs block dispatch + A12 edge detection,
+    // and places the result on the bus data lines.  The PPU captures
+    // that data here and uses it on odd sub-cycles (1, 3, 5, 7).
+    uint8_t vram_data_latch_ = 0;
+
     // VBL internal/external split for accurate PPU-CPU timing.
     //
     // On real hardware the VBL flip-flop is set at dot 1 of scanline 241.
@@ -223,6 +231,7 @@ public:
         pending_vbl_clear_ = false;
         scanline_event_ = 0;
         ppu_dot_count_ = 0;
+        vram_data_latch_ = 0;
         std::fill(std::begin(open_bus_refresh_), std::end(open_bus_refresh_), 0);
         io_latch_ = 0;
         bus_snapshot_ = PPU_BUS_DEFAULT_STATE;   // PPU bus (active-low signals HIGH)
@@ -319,30 +328,13 @@ private:
         return data;
     }
 
-    // Fast inline CHR/nametable read — bypasses ppu_bus_state_t construction
-    // and palette range check.  For rendering-only reads where addr < $3F00.
-    // Equivalent to PPU_BUS_GET_DATA(ppu_read(PPU_BUS_WITH_ADDR(addr))) but
-    // eliminates ~8 operations per call.
+    // A12 edge detection for CPU register paths ($2006 second write,
+    // $2007 read/write post-increment).  The rendering path uses the
+    // bus-mediated model (Cartridge::ppu_memory_tick handles A12 there).
     //
-    // Also drives A12 edge detection for mapper IRQ (MMC3).
-    // ppu_bus is passed by reference — updated with the new PA12 state.
-    inline uint8_t fast_vram_read(uint16_t addr, ppu_bus_state_t& ppu_bus) {
-        notify_a12(addr, ppu_bus);
-        if (likely(bus_ptr_ != nullptr)) {
-            uint16_t block = bus_ptr_->ppu_read_block[addr >> nes_bus::PPU_PAGE_SHIFT];
-            if (likely(block < nes_bus::BLOCK_SENTINEL_MIN)) {
-                return bus_ptr_->ppu_block_read(block, addr);
-            }
-        }
-        return 0;  // open bus
-    }
-
-    // A12 edge detection — compares current address bit 12 against the
-    // PA12 signal already on ppu_bus (which starts as the snapshot and
-    // gets updated with each VRAM access within the same dot).
-    // On any transition, the mapper is notified with the new A12 state
-    // and the current PPU dot count so it can apply its own timing
-    // filter (e.g. MMC3's ~16-dot low-period requirement).
+    // Compares the new address bit 12 against the PA12 signal already
+    // on ppu_bus.  On any transition, the mapper is notified via the
+    // out-of-line forward_a12_transition helper.
     inline void notify_a12(uint16_t addr, ppu_bus_state_t& ppu_bus) {
         const bool new_a12 = (addr & 0x1000) != 0;
         const bool old_a12 = PPU_BUS_GET_BIT(ppu_bus, PPU_BUS_PA12_BIT);

@@ -277,6 +277,11 @@ void PPU::ppu_write_byte(uint16_t addr, uint8_t data) {
 ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
     ++ppu_dot_count_;  // Monotonic counter for A12 filter timing
 
+    // Capture data from PPU bus — placed by cartridge's ppu_memory_tick()
+    // between this dot and the previous one.  Used on odd sub-cycles
+    // (1, 3, 5, 7) to latch tile/sprite pattern data.
+    vram_data_latch_ = PPU_BUS_GET_DATA(ppu_bus);
+
     // Cache mask register — accessed many times per dot; one read beats ten.
     const uint8_t mask = regs[PPUMASK];
 
@@ -332,34 +337,57 @@ ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         if ((cycle >= 2 && cycle < 258) || (cycle >= 321 && cycle < 338)) {
             update_shifters();
 
-            // Precompute values shared by BG pattern-byte fetches (cases 6 & 7)
-            const uint16_t bg_base  = (uint16_t)(regs[PPUCTRL] & 0x10) << 8;
-            const uint16_t fine_y   = (internal.v >> 12) & 0x07;
-            const uint16_t tile_row = (uint16_t)internal.nt_byte << 4;
-
-            // Background rendering
+            // Background tile fetch — bus-mediated pipeline.
+            // Even sub-cycles (0,2,4,6): output address on PPU bus.
+            // Odd sub-cycles (1,3,5,7): capture data from VRAM data latch.
+            // The cartridge services the bus between dots (ppu_memory_tick),
+            // performing block dispatch + A12 edge detection.
             switch ((cycle - 1) & 7) {
                 case 0:
                     load_background_shifters();
+                    // Output nametable address for this tile
                     internal.nt_addr = 0x2000 | (internal.v & 0x0FFF);
+                    PPU_BUS_SET_ADDR(ppu_bus, internal.nt_addr);
+                    break;
+                case 1:
+                    // Capture nametable byte from bus
+                    internal.nt_byte = vram_data_latch_;
                     break;
                 case 2:
-                    internal.nt_byte = fast_vram_read(internal.nt_addr, ppu_bus);
-                    break;
-                case 4:
-                    internal.at_byte = fast_vram_read(
+                    // Output attribute table address
+                    PPU_BUS_SET_ADDR(ppu_bus,
                         0x2000 | (internal.v & 0x0C00) | 0x03C0 |
-                        ((internal.v >> 4) & 0x38) | ((internal.v >> 2) & 0x07), ppu_bus);
-                    // Shift to the correct quadrant's 2-bit palette selector.
-                    // Combine both conditional shifts into a single operation.
+                        ((internal.v >> 4) & 0x38) | ((internal.v >> 2) & 0x07));
+                    break;
+                case 3:
+                    // Capture attribute byte + quadrant shift
+                    internal.at_byte = vram_data_latch_;
                     internal.at_byte >>= ((internal.v & 0x0002) ? 2 : 0)
                                       | ((internal.v & 0x0040) ? 4 : 0);
                     break;
-                case 6:
-                    internal.bg_lo_byte = fast_vram_read(bg_base + tile_row + fine_y, ppu_bus);
+                case 4: {
+                    // Output BG pattern table low byte address
+                    const uint16_t bg_base  = (uint16_t)(regs[PPUCTRL] & 0x10) << 8;
+                    const uint16_t fine_y   = (internal.v >> 12) & 0x07;
+                    const uint16_t tile_row = (uint16_t)internal.nt_byte << 4;
+                    PPU_BUS_SET_ADDR(ppu_bus, bg_base + tile_row + fine_y);
                     break;
+                }
+                case 5:
+                    // Capture BG pattern low byte from bus
+                    internal.bg_lo_byte = vram_data_latch_;
+                    break;
+                case 6: {
+                    // Output BG pattern table high byte address (low + 8)
+                    const uint16_t bg_base  = (uint16_t)(regs[PPUCTRL] & 0x10) << 8;
+                    const uint16_t fine_y   = (internal.v >> 12) & 0x07;
+                    const uint16_t tile_row = (uint16_t)internal.nt_byte << 4;
+                    PPU_BUS_SET_ADDR(ppu_bus, bg_base + tile_row + fine_y + 8);
+                    break;
+                }
                 case 7:
-                    internal.bg_hi_byte = fast_vram_read(bg_base + tile_row + fine_y + 8, ppu_bus);
+                    // Capture BG pattern high byte from bus
+                    internal.bg_hi_byte = vram_data_latch_;
                     increment_scroll_x();
                     break;
             }
@@ -384,16 +412,19 @@ ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                 // When rendering is off ($2001 & $18 == 0), no evaluation
                 // happens — overflow flag won't be set, sprite data stale.
                 if (scanline >= 0 && (regs[PPUMASK] & 0x18)) evaluate_sprites();
-                // Sprite 0, sub-cycle 0: garbage nametable read.
+                // Sprite 0, sub-cycle 0: output garbage nametable address (A12 = 0).
                 // Starts the 64-cycle sprite fetch window (257-320).
-                fast_vram_read(0x2000 | (internal.v & 0x0FFF), ppu_bus);
+                PPU_BUS_SET_ADDR(ppu_bus, 0x2000 | (internal.v & 0x0FFF));
                 scanline_event_++;
                 break;
             case 3: // cycles 258-320 — per-cycle sprite pattern fetches
             {
                 // Real hardware: 8 sprites × 8 cycles = 64 cycles (257-320).
-                // Each sprite's 8-cycle window has 4 memory reads:
-                //   +0 garbage NT  +2 garbage AT  +4 pattern lo  +6 pattern hi
+                // Bus-mediated pipeline — same even/odd pattern as BG fetch:
+                //   +0 output garbage NT addr   +1 (capture, discard)
+                //   +2 output garbage AT addr   +3 (capture, discard)
+                //   +4 output pattern lo addr   +5 capture pattern lo
+                //   +6 output pattern hi addr   +7 capture pattern hi
                 // Sub-cycle 0 of sprite 0 was done in case 2 (cycle 257).
                 if (cycle <= 320) {
                     const uint16_t fc  = cycle - 257;  // 1–63
@@ -401,17 +432,20 @@ ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                     const uint8_t  sub = fc & 7;       // sub-cycle within slot
 
                     switch (sub) {
-                        case 0: // Garbage nametable byte (A12 = 0)
-                            fast_vram_read(0x2000 | (internal.v & 0x0FFF), ppu_bus);
+                        case 0: // Output garbage nametable address (A12 = 0)
+                            PPU_BUS_SET_ADDR(ppu_bus, 0x2000 | (internal.v & 0x0FFF));
                             break;
-                        case 2: // Garbage attribute byte (A12 = 0)
-                            fast_vram_read(0x23C0 | (internal.v & 0x0C00) |
-                                           ((internal.v >> 4) & 0x38) |
-                                           ((internal.v >> 2) & 0x07), ppu_bus);
+                        case 2: // Output garbage attribute address (A12 = 0)
+                            PPU_BUS_SET_ADDR(ppu_bus,
+                                0x23C0 | (internal.v & 0x0C00) |
+                                ((internal.v >> 4) & 0x38) |
+                                ((internal.v >> 2) & 0x07));
                             break;
-                        case 4: { // Sprite pattern table low byte
-                            uint16_t addr = compute_sprite_pattern_addr(idx);
-                            uint8_t  data = fast_vram_read(addr, ppu_bus);
+                        case 4: // Output sprite pattern table low byte address
+                            PPU_BUS_SET_ADDR(ppu_bus, compute_sprite_pattern_addr(idx));
+                            break;
+                        case 5: { // Capture sprite pattern low byte
+                            uint8_t data = vram_data_latch_;
                             if (idx < internal.sprite_count) {
                                 if (internal.sprite_scanline[idx].attributes & 0x40)
                                     data = flip_byte(data);
@@ -419,9 +453,11 @@ ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
                             }
                             break;
                         }
-                        case 6: { // Sprite pattern table high byte
-                            uint16_t addr = compute_sprite_pattern_addr(idx) + 8;
-                            uint8_t  data = fast_vram_read(addr, ppu_bus);
+                        case 6: // Output sprite pattern table high byte address
+                            PPU_BUS_SET_ADDR(ppu_bus, compute_sprite_pattern_addr(idx) + 8);
+                            break;
+                        case 7: { // Capture sprite pattern high byte
+                            uint8_t data = vram_data_latch_;
                             if (idx < internal.sprite_count) {
                                 if (internal.sprite_scanline[idx].attributes & 0x40)
                                     data = flip_byte(data);
@@ -446,13 +482,16 @@ ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
             case 4: // cycles 321-337 — BG prefetch handled by main fetch loop
                 scanline_event_ += (cycle == 337);
                 break;
-            case 5: // cycle 338
-                internal.nt_byte = fast_vram_read(internal.nt_addr, ppu_bus);
+            case 5: // cycle 338 — first dummy NT fetch
+                // Capture data from the nametable read output at cycle 337
+                internal.nt_byte = vram_data_latch_;
+                // Output nametable address for the second dummy read
+                PPU_BUS_SET_ADDR(ppu_bus, internal.nt_addr);
                 scanline_event_++;
                 break;
-            case 6: // cycles 339-340
+            case 6: // cycles 339-340 — second dummy NT fetch
                 if (cycle == 340) {
-                    internal.nt_byte = fast_vram_read(internal.nt_addr, ppu_bus);
+                    internal.nt_byte = vram_data_latch_;
                     scanline_event_++;  // case 7+ is empty
                 }
                 break;
