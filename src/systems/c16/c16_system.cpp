@@ -3,6 +3,7 @@
 #include "c16_keyboard_matrix.h"
 #include "../../chip/input/emu_key_sdl_map.h"
 #include "../../core/storage/rom_loader.h"
+#include "../../core/config/path_discovery.h"
 #include "../../core/formats/format_registry.h"
 #include "../../core/formats/prg_format.h"
 #include "../../core/formats/d64_format.h"
@@ -677,8 +678,13 @@ void Commodore264System<V>::render_configuration_ui() {
 
 template<C264SeriesVariant V>
 bool Commodore264System<V>::load_roms() {
-    // Try to load C16/Plus4 ROMs from standard locations
-    const char* rom_root = "data/c16/roms";  // Default ROM path
+    // Discover ROM root path using the standard path discovery mechanism
+    char rom_root[1024];
+    bool rom_root_found = system_config_discover_rom_root("c16", rom_root, sizeof(rom_root));
+    if (!rom_root_found) {
+        printf("%s: ROM root not found — cannot load ROMs\n", Traits::name);
+        return false;
+    }
     
     // Load KERNAL ROM (16KB at $C000-$FFFF)
     const char* kernal_files[] = {
