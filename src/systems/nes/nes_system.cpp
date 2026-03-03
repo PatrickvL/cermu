@@ -121,7 +121,7 @@ static HardwareTraits create_nes_hardware_traits() {
 
 static SystemProbeResult nes_probe_file(
     const format_descriptor_t* matched_format,
-    const char* /*filepath*/,
+    const char* filepath,
     const uint8_t* data, size_t size)
 {
     SystemProbeResult result;
@@ -145,6 +145,19 @@ static SystemProbeResult nes_probe_file(
                 // iNES 1.0: byte 9, bit 0
                 if (data[9] & 0x01)
                     result.configuration.region_option_index = 1;  // PAL
+            }
+
+            // Path-based fallback: many PAL test/homebrew ROMs don't set
+            // the header flag.  If the file lives under a directory whose
+            // name starts with "pal" we assume PAL.
+            if (result.configuration.region_option_index == 0 && filepath) {
+                std::string lp(filepath);
+                std::transform(lp.begin(), lp.end(), lp.begin(), ::tolower);
+                if (lp.find("pal_") != std::string::npos ||
+                    lp.find("pal/") != std::string::npos ||
+                    lp.find("pal\\") != std::string::npos) {
+                    result.configuration.region_option_index = 1;  // PAL
+                }
             }
         } else {
             result.confidence = 0.9f;  // Extension match, no header
