@@ -123,8 +123,14 @@ std::pair<bus_state_t, ppu_bus_state_t> PPU::service_cpu_bus(
                 regs[PPUDATA] = ppu_read_byte(internal.v);
 
                 // Palette reads are immediate (no buffering delay).
+                // However, the read buffer must be filled with the
+                // underlying nametable VRAM at the mirrored address
+                // (addr & 0x2FFF), not the palette value itself.
+                // Test: blargg vram_access test $06.
                 if (internal.v >= 0x3F00) {
                     data = regs[PPUDATA] & (regs[PPUMASK] & 0x01 ? 0x30 : 0x3F);
+                    // Backfill read buffer with nametable data behind palette
+                    regs[PPUDATA] = ppu_read_byte(internal.v & 0x2FFF);
                     // Palette read: PPU drives bits 5-0; bits 7-6 carry through.
                     BUS_SET_DATA(bus, (BUS_GET_DATA(bus) & 0xC0) | (data & 0x3F));
                     refresh_open_bus_timestamps(bus, 0x3F);
