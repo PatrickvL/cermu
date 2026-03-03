@@ -134,7 +134,7 @@ public:
         if (new_a12) PPU_BUS_SET_BIT(ppu_bus, PPU_BUS_PA12_BIT);
         else         PPU_BUS_CLR_BIT(ppu_bus, PPU_BUS_PA12_BIT);
         if (unlikely(new_a12 != old_a12)) {
-            notify_a12(new_a12, ppu_dot_count);
+            if (mapper) mapper->notify_a12(new_a12, ppu_dot_count);
         }
 
         const bool is_write = !PPU_BUS_GET_BIT(ppu_bus, PPU_BUS_WR_BIT);
@@ -173,9 +173,6 @@ public:
 
         return ppu_bus;
     }
-
-    // A12 transition notification — delegates to mapper
-    void notify_a12(bool a12_high, uint64_t ppu_cycle);
 
     // Mapper interface
     virtual void reset();
