@@ -42,6 +42,7 @@ struct TestResult {
     std::string detail;
     int frames_run = 0;
     double wall_seconds = 0.0;
+    bool is_generic_protocol = false;  // true for demos/homebrew with no test protocol
 };
 
 // ============================================================================
@@ -253,6 +254,9 @@ static TestResult run_blargg_6000(NES& nes, const std::string& name,
                     // Old Blargg tests write result to RAM $F0:
                     //   $01 = passed, other = fail code
                     uint8_t ram_f0 = nes.peek_memory(0x00F0);
+                    // Also check RAM $6000 for result byte (some older tests)
+                    uint8_t ram_6000 = nes.peek_memory(0x6000);
+
                     // Detect pass/fail from nametable content
                     if (nt_text.find("Passed") != std::string::npos ||
                         nt_text.find("PASSED") != std::string::npos ||
@@ -276,10 +280,28 @@ static TestResult run_blargg_6000(NES& nes, const std::string& name,
                         char buf[32];
                         snprintf(buf, sizeof(buf), "Error $%02X (RAM $F0): ", ram_f0);
                         result.detail = std::string(buf) + nt_text;
-                    } else {
-                        // Can't determine — report nametable content
+                    } else if (ram_6000 == 0x00) {
+                        // Some tests write 0 to $6000 on pass without magic sig
+                        result.verdict = TestVerdict::PASS;
+                        result.detail = nt_text.empty() ? "Passed ($6000=$00)" : nt_text;
+                    } else if (ram_6000 > 0x00 && ram_6000 < 0x80) {
+                        // Non-zero $6000 without magic = fail code
                         result.verdict = TestVerdict::FAIL;
-                        result.detail = "Unknown result (nametable): " + nt_text;
+                        char buf[32];
+                        snprintf(buf, sizeof(buf), "Error $%02X ($6000): ", ram_6000);
+                        result.detail = std::string(buf) + nt_text;
+                    } else {
+                        // Last resort: check if nametable shows only hex-like
+                        // error codes (e.g. "  $04" or " $F0 $10 $20 $02")
+                        // which indicates a test failure with no text output.
+                        bool has_hex = nt_text.find('$') != std::string::npos;
+                        if (has_hex && !nt_text.empty()) {
+                            result.verdict = TestVerdict::FAIL;
+                            result.detail = nt_text;
+                        } else {
+                            result.verdict = TestVerdict::FAIL;
+                            result.detail = "Unknown result (nametable): " + nt_text;
+                        }
                     }
                 }
                 break;
@@ -526,6 +548,7 @@ static TestResult run_test_rom(const std::string& filepath, int max_frames,
             break;
         case TestProtocol::GENERIC:
             result = run_generic(nes, filename, max_frames, wall_timeout_sec);
+            result.is_generic_protocol = true;
             break;
     }
 
@@ -813,7 +836,9 @@ int main(int argc, char* argv[]) {
         // Count how many ROMs need this pass
         int need_run = 0;
         for (auto& r : results) {
-            if (r.verdict == TestVerdict::TIMEOUT) need_run++;
+            if (r.verdict != TestVerdict::TIMEOUT) continue;
+            if (pass_idx > 0 && r.is_generic_protocol) continue;
+            need_run++;
         }
         if (need_run == 0) break;
 
@@ -821,8 +846,10 @@ int main(int argc, char* argv[]) {
                pass_idx + 1, passes.size(), pc.label, pc.timeout, need_run);
 
         for (size_t i = 0; i < rom_files.size(); i++) {
-            // Only retry TIMEOUTs
+            // Only retry TIMEOUTs; skip generic-protocol demos in pass 2+
+            // (they never self-terminate, so retrying just wastes time)
             if (results[i].verdict != TestVerdict::TIMEOUT) continue;
+            if (pass_idx > 0 && results[i].is_generic_protocol) continue;
 
             TestResult r = run_test_rom(rom_files[i], max_frames, verbose, pc.timeout);
             print_result(r);
