@@ -516,44 +516,6 @@ void Commodore264System<V>::run_frame() {
 
     // Tick all attached peripheral devices
     tick_peripherals();
-
-    // === TEMPORARY DIAGNOSTIC: dump TED/CPU state after first few frames ===
-    static int diag_frame = 0;
-    diag_frame++;
-    if (diag_frame == 50) {
-        printf("=== C16 DIAGNOSTIC (frame %d, total_cycles=%llu) ===\n",
-               diag_frame, (unsigned long long)total_cycles_);
-        printf("CPU: PC=$%04X A=$%02X X=$%02X Y=$%02X SP=$%02X\n",
-               cpu_->get(REG_PC), cpu_->get(REG_A),
-               cpu_->get(REG_X), cpu_->get(REG_Y), cpu_->get(REG_SP));
-        printf("TED: FF06=$%02X FF07=$%02X FF12=$%02X FF13=$%02X FF14=$%02X\n",
-               ted_->registers.data[TED_REG_CONTROL1],
-               ted_->registers.data[TED_REG_CONTROL2],
-               ted_->registers.data[TED_REG_MEM_CTRL],
-               ted_->registers.data[TED_REG_CHAR_HI],
-               ted_->registers.data[TED_REG_BITMAP_ADDR]);
-        printf("TED: FF15(BG0)=$%02X FF19(border)=$%02X rom_enabled=%d\n",
-               ted_->registers.data[TED_REG_COLOR_BG0],
-               ted_->registers.data[TED_REG_BORDER],
-               ted_->rom_enabled ? 1 : 0);
-        printf("TED: raster=%d x_cycle=%d display_state=%d den_latched=%d\n",
-               ted_->timing.raster_counter, ted_->timing.x_cycle,
-               ted_->video_logic.display_state ? 1 : 0,
-               ted_->video_logic.den_latched ? 1 : 0);
-        printf("TED: screen_base=$%04X char_base=$%04X\n",
-               ted_->memory.screen_base, ted_->memory.char_base);
-        printf("TED: framebuffer=%p fb_width=%d fb_height=%d\n",
-               (void*)ted_->pixel.framebuffer, ted_->pixel.fb_width, ted_->pixel.fb_height);
-        // Check first few bytes of screen RAM
-        uint16_t sb = ted_->memory.screen_base;
-        printf("Screen RAM @ $%04X: %02X %02X %02X %02X  codes @ $%04X: %02X %02X %02X %02X\n",
-               sb, (*ram_)[sb], (*ram_)[sb+1], (*ram_)[sb+2], (*ram_)[sb+3],
-               sb+0x400, (*ram_)[sb+0x400], (*ram_)[sb+0x400+1], (*ram_)[sb+0x400+2], (*ram_)[sb+0x400+3]);
-        // Check KERNAL reset vector
-        printf("KERNAL reset vector: $%02X%02X\n",
-               (*kernal_rom_)[0x3FFD], (*kernal_rom_)[0x3FFC]);
-        printf("=== END DIAGNOSTIC ===\n");
-    }
 }
 
 // ============================================================================

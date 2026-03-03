@@ -8,10 +8,10 @@
 #include "../../chip/memory/memory_chip.h"
 #include <cstdint>
 
-// Apple 1 default bus state — derived from CPU + system extras.
-// MOS6502 provides: RW, RDY, IRQ, NMI.  System adds: RES.
+// Apple 1 default bus state — derived from CPU.
+// MOS6502 provides: RW, RDY, IRQ, NMI, RES.
 #define APPLE1_BUS_DEFAULT_STATE \
-    (MOS6502::default_bus_state() | BUS_BIT(BUS_RES_BIT))
+    (MOS6502::default_bus_state())
 #include <memory>
 
 /**

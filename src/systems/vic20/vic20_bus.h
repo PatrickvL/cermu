@@ -7,9 +7,9 @@
 #include "../../chip/cpu/fam65xx/mos6502.h"
 
 // VIC-20 default bus state — derived from CPU + system extras.
-// MOS6502 provides: RW, RDY, IRQ, NMI.  System adds: RES, BA, AEC, data 0xFF.
+// MOS6502 provides: RW, RDY, IRQ, NMI, RES.  System adds: BA, AEC, data 0xFF.
 #define VIC20_BUS_DEFAULT_STATE \
-    (MOS6502::default_bus_state() | BUS_BIT(BUS_RES_BIT) | BUS_BIT(BUS_BA_BIT) | \
+    (MOS6502::default_bus_state() | BUS_BIT(BUS_BA_BIT) | \
      BUS_BIT(BUS_AEC_BIT) | BUS_DATA_MASK)
 
 // VIC-20 bus structure
