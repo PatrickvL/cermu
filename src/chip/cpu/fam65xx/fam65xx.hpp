@@ -1069,8 +1069,12 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
       return true;
     }
     
-    // IRQ: only service if I flag is clear (interrupts enabled)
-    return !(this->get(REG_P) & FLAG_I);
+    // IRQ: only service if I flag was clear at the START of the
+    // most recently executed instruction.  This implements the 6502's
+    // 1-instruction pipeline delay for CLI/SEI/PLP/RTI — the effect
+    // of an I flag change doesn't mask/unmask IRQs until the next
+    // instruction boundary.
+    return !(this->irq_i_flag_sample_);
   }
 
   // Template-dependent function pointer type
@@ -1535,6 +1539,7 @@ public:
     this->nmi_edge_latch = 0;
     this->nmi_output_latch_ = false;
     this->interrupt_shift_register = 0;
+    this->irq_i_flag_sample_ = 1;  // Reset sets I flag; pipeline starts masked
 
     // Reset 65C02 extended state
     this->wait_for_interrupt = false;
@@ -1751,6 +1756,19 @@ public:
         return pins;
       }
 
+      // Snapshot the I flag at the START of every PHI1, BEFORE any
+      // instruction logic executes.  This is used by the interrupt
+      // masking check at the next instruction boundary (fetch PHI2).
+      //
+      // Why every PHI1, not just at instruction start (fetch)?
+      //   - For CLI/SEI (2-cycle): the save at the penultimate (cycle 1)
+      //     PHI1 captures I BEFORE CLI clears it, giving the correct
+      //     1-instruction delay.
+      //   - For RTI (6-cycle): I is restored from the stack in cycle 4.
+      //     The save at cycle 5 PHI1 captures the RESTORED value,
+      //     so RTI takes effect immediately — no spurious delay.
+      this->irq_i_flag_sample_ = (this->get(REG_P) & FLAG_I);
+
       // Handle I/O port and APU memory accesses BEFORE calling handler
       // These functions intercept memory operations for internal CPU features
       // Note: When PROCESSOR_TESTS is defined, these handlers return false immediately
@@ -1888,6 +1906,13 @@ public:
                                    Implements the "sample at N, act after N+1" delay. */
   uint32_t interrupt_shift_register; /* Combined shift register for all
                                         interrupt types */
+  uint8_t irq_i_flag_sample_;  /* I flag snapshot from the START of the current
+                                  instruction (taken in fetch_opcode PHI1).
+                                  Used for IRQ masking instead of the live I
+                                  flag to implement the 6502's 1-instruction
+                                  pipeline delay — CLI/SEI/PLP/RTI effects on
+                                  interrupt masking are deferred until the
+                                  NEXT instruction boundary. */
 
   /* 65C02 extended state */
   bool wait_for_interrupt; /* WAI instruction state */
