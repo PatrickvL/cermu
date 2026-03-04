@@ -790,7 +790,9 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
     bool     c_access_pending = false;
 
     if (dma_active && x >= TED_FETCH_CYCLE + TED_DMA_SETUP_CYCLES) {
-        const uint16_t vc = video_logic.vc & TED_VC_MASK;
+        // Use pre-increment vc: the g-access already incremented vc by 1,
+        // but the c-access targets the same column that was just g-accessed.
+        const uint16_t vc = (video_logic.vc - 1u) & TED_VC_MASK;
 
         // Screen code read via PHI2 bus: offset $400 into screen block
         c_access_address = static_cast<uint16_t>(memory.screen_base + 0x0400u + vc);
@@ -844,6 +846,13 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
             } else {
                 video_logic.rc = (video_logic.rc + 1u) & 7u;
             }
+            // Reset VC and VMLI for next line's g-access.  The VIC-II loads
+            // VC from VCBASE at cycle 14 of every line; the TED must do the
+            // same or g-access fails for character rows RC >= 2 (vmli stays
+            // at 40+ from the previous line and the < TED_SCREEN_TEXTCOLS
+            // guard prevents char_data updates).
+            video_logic.vc   = video_logic.vcbase;
+            video_logic.vmli = 0;
         }
         if (video_logic.is_dma_line) {
             video_logic.rc   = 0;
