@@ -275,6 +275,60 @@ static bool d64_load(const uint8_t* data, size_t size, format_load_result_t* out
 // Format Descriptor
 // ============================================================================
 
+/// D64 file-type byte → extension suffix for display in file dialogs.
+static const char* d64_type_extension(uint8_t file_type) {
+    switch (file_type & D64_FTYPE_MASK) {
+        case D64_FTYPE_PRG: return ".prg";
+        case D64_FTYPE_SEQ: return ".seq";
+        case D64_FTYPE_USR: return ".usr";
+        case D64_FTYPE_REL: return ".rel";
+        default:            return ".prg";
+    }
+}
+
+/// List directory entries in a D64 image.  Returns entry count, or -1 on error.
+static int d64_list_entries(const uint8_t* data, size_t size,
+                            format_container_entry_t* entries, int max_entries) {
+    commodore_d64_t d64{};
+    if (!d64.open_mem(data, size)) return -1;
+
+    commodore_d64_directory_t dir{};
+    if (!d64.read_directory(&dir)) { d64.close(); return -1; }
+
+    int count = 0;
+    for (int i = 0; i < dir.count && count < max_entries; ++i) {
+        const auto& de = dir.entries[i];
+        if ((de.file_type & D64_FTYPE_MASK) == D64_FTYPE_DEL) continue;
+
+        // PETSCII → ASCII filename
+        char name_buf[17]{};
+        memcpy(name_buf, de.filename, 16);
+        for (int j = 0; j < 16 && name_buf[j]; ++j)
+            name_buf[j] = petscii_to_ascii(static_cast<uint8_t>(name_buf[j]));
+
+        auto& entry = entries[count];
+        snprintf(entry.display_name, sizeof(entry.display_name),
+                 "%s%s", name_buf, d64_type_extension(de.file_type));
+        entry.size  = static_cast<size_t>(de.size_blocks) * 254;
+        entry.index = i;
+        ++count;
+    }
+
+    d64.close();
+    return count;
+}
+
+/// Extract a D64 entry by directory index.  Returns PRG data with load address header.
+static bool d64_extract_entry(const uint8_t* data, size_t size,
+                              int entry_index, uint8_t** out_data, size_t* out_size) {
+    commodore_d64_t d64{};
+    if (!d64.open_mem(data, size)) return false;
+
+    bool ok = d64.extract_file(entry_index, out_data, out_size);
+    d64.close();
+    return ok;
+}
+
 static const char* d64_extensions[] = { ".d64", NULL };
 
 const format_descriptor_t D64_FORMAT_DESCRIPTOR = {
@@ -283,7 +337,9 @@ const format_descriptor_t D64_FORMAT_DESCRIPTOR = {
     d64_extensions,
     FORMAT_CAP_LOADABLE | FORMAT_CAP_CONTAINER | FORMAT_CAP_VOLUME,
     d64_identify,
-    d64_load
+    d64_load,
+    d64_list_entries,
+    d64_extract_entry
 };
 
 // ============================================================================

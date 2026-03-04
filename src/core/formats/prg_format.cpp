@@ -106,7 +106,9 @@ const format_descriptor_t PRG_FORMAT_DESCRIPTOR = {
     prg_extensions,
     FORMAT_CAP_LOADABLE,
     prg_identify,
-    prg_load
+    prg_load,
+    nullptr,  // list_entries
+    nullptr   // extract_entry
 };
 
 const format_descriptor_t BIN_FORMAT_DESCRIPTOR = {
@@ -115,7 +117,9 @@ const format_descriptor_t BIN_FORMAT_DESCRIPTOR = {
     bin_extensions,
     FORMAT_CAP_LOADABLE,
     bin_identify,
-    bin_load
+    bin_load,
+    nullptr,  // list_entries
+    nullptr   // extract_entry
 };
 
 // ============================================================================

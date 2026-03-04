@@ -209,6 +209,8 @@ const format_descriptor_t NSF_FORMAT_DESCRIPTOR = {
     FORMAT_CAP_LOADABLE | FORMAT_CAP_METADATA,  // capabilities
     nsf_identify,                           // identify
     nsf_load,                               // load
+    nullptr,                                // list_entries
+    nullptr,                                // extract_entry
 };
 
 REGISTER_FORMAT(NSF, &NSF_FORMAT_DESCRIPTOR)

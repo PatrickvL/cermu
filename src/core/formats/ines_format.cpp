@@ -42,6 +42,8 @@ const format_descriptor_t INES_FORMAT_DESCRIPTOR = {
     FORMAT_CAP_METADATA,                 // capabilities (identify only)
     ines_identify,                       // identify
     nullptr,                             // load — handled by NES Cartridge class
+    nullptr,                             // list_entries
+    nullptr,                             // extract_entry
 };
 
 REGISTER_FORMAT(INES, &INES_FORMAT_DESCRIPTOR)

@@ -33,6 +33,28 @@ enum format_capability_t {
 };
 
 // ============================================================================
+// Container Directory Entry — generic entry for container format browsing
+// ============================================================================
+
+/** Maximum display name length for a container entry (including null). */
+#define FORMAT_CONTAINER_NAME_MAX   64
+
+/** Maximum number of entries from a single container. */
+#define FORMAT_CONTAINER_MAX_ENTRIES 512
+
+/**
+ * A single entry inside a container format (D64, T64, LNX, etc.).
+ * Returned by the format's list_entries() callback.  The display_name
+ * is already converted to ASCII with a file-type extension appended
+ * (e.g. "GAME.prg", "DATA.seq") for use in file dialogs.
+ */
+struct format_container_entry_t {
+    char   display_name[FORMAT_CONTAINER_NAME_MAX]; /**< ASCII name + type ext */
+    size_t size;                                     /**< Entry size in bytes */
+    int    index;                                    /**< Extraction index */
+};
+
+// ============================================================================
 // Program Data — Generic loadable program (address + bytes)
 // ============================================================================
 
@@ -120,6 +142,27 @@ struct format_descriptor_t {
 
     /** Load from an already-read buffer and fill the result.  NULL if format doesn't support direct loading. */
     bool  (*load)(const uint8_t* data, size_t size, format_load_result_t* out);
+
+    /**
+     * List entries inside a container image loaded into memory.
+     * Only meaningful when capabilities includes FORMAT_CAP_CONTAINER.
+     * Returns the number of entries written to @p entries (up to @p max_entries),
+     * or -1 on parse error.  NULL if the format doesn't support directory listing.
+     *
+     * Display names are ASCII with a type-extension suffix (e.g. "GAME.prg").
+     */
+    int (*list_entries)(const uint8_t* data, size_t size,
+                        format_container_entry_t* entries, int max_entries);
+
+    /**
+     * Extract a single entry from a container by index.
+     * Writes a heap-allocated buffer to *out_data and its size to *out_size.
+     * For PRG-like formats, the buffer includes the 2-byte load address header.
+     * Caller must free(*out_data).  Returns true on success.
+     * NULL if the format doesn't support extraction.
+     */
+    bool (*extract_entry)(const uint8_t* data, size_t size,
+                          int entry_index, uint8_t** out_data, size_t* out_size);
 };
 
 // ============================================================================
