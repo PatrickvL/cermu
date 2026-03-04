@@ -185,9 +185,58 @@ static SystemProbeResult chip8_probe_file(
         else if (strcmp(ext, ".xo8") == 0)  result.confidence = 0.95f;
     }
 
-    // Heuristic fallback for unknown extensions
-    if (result.confidence == 0.0f && size >= 10 && size <= 65024) {
-        result.confidence = 0.5f;
+    // Heuristic fallback for unknown extensions — require CHIP-8 opcode
+    // validation to avoid claiming every small binary (especially PRG files
+    // extracted from Commodore containers where the extension may be lost).
+    if (result.confidence == 0.0f && data && size >= 10 && size <= 65024) {
+        // A valid CHIP-8 ROM starts at $200.  Scan the first N words for
+        // valid CHIP-8 opcodes; if the ratio is high, claim it.
+        size_t check = std::min(size, (size_t)256);
+        int valid = 0, total = 0;
+        for (size_t i = 0; i + 1 < check; i += 2) {
+            uint16_t op = (data[i] << 8) | data[i + 1];
+            uint8_t hi = (op >> 12) & 0xF;
+            uint8_t lo = op & 0xFF;
+            bool ok = false;
+            switch (hi) {
+                case 0x0: ok = (op == 0x00E0 || op == 0x00EE ||         // CLS, RET
+                                (op & 0xFFF0) == 0x00C0 ||              // SCD (SCHIP)
+                                op == 0x00FB || op == 0x00FC ||         // SCR/SCL
+                                op == 0x00FD || op == 0x00FE ||         // EXIT/LORES
+                                op == 0x00FF ||                          // HIRES
+                                (op & 0xFFF0) == 0x00D0);               // SCU (XO-CHIP)
+                          break;
+                case 0x1: ok = true; break;  // JP addr
+                case 0x2: ok = true; break;  // CALL addr
+                case 0x3: ok = true; break;  // SE Vx, byte
+                case 0x4: ok = true; break;  // SNE Vx, byte
+                case 0x5: ok = (lo & 0x0F) <= 3; break;  // SE Vx, Vy + XO-CHIP
+                case 0x6: ok = true; break;  // LD Vx, byte
+                case 0x7: ok = true; break;  // ADD Vx, byte
+                case 0x8: ok = (lo & 0x0F) <= 7 || (lo & 0x0F) == 0xE; break;  // ALU
+                case 0x9: ok = (lo & 0x0F) == 0; break;  // SNE Vx, Vy
+                case 0xA: ok = true; break;  // LD I, addr
+                case 0xB: ok = true; break;  // JP V0, addr
+                case 0xC: ok = true; break;  // RND Vx, byte
+                case 0xD: ok = true; break;  // DRW Vx, Vy, n
+                case 0xE: ok = (lo == 0x9E || lo == 0xA1); break;  // SKP/SKNP
+                case 0xF: ok = (lo == 0x07 || lo == 0x0A || lo == 0x15 ||
+                                lo == 0x18 || lo == 0x1E || lo == 0x29 ||
+                                lo == 0x30 || lo == 0x33 || lo == 0x55 ||
+                                lo == 0x65 || lo == 0x75 || lo == 0x85 ||
+                                lo == 0x00 || lo == 0x01 || lo == 0x02 ||
+                                lo == 0x3A); break;
+                default: break;
+            }
+            total++;
+            if (ok) valid++;
+        }
+        float ratio = total > 0 ? (float)valid / (float)total : 0.0f;
+        if (ratio >= 0.75f)
+            result.confidence = 0.50f;
+        else if (ratio >= 0.50f)
+            result.confidence = 0.30f;
+        // else: too many invalid opcodes — not CHIP-8
     }
 
     if (result.confidence == 0.0f) return result;
