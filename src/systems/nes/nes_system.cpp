@@ -53,7 +53,7 @@ static HardwareTraits create_nes_hardware_traits() {
     // Display traits - NES PPU
     traits.display.native_width = 256;
     traits.display.native_height = 240;
-    traits.display.visible_width = 248;   // Crop left 8px (CRT overscan)
+    traits.display.visible_width = 256;   // Full PPU output (PPUMASK handles left-column hiding)
     traits.display.visible_height = 240;
     traits.display.format = FramebufferFormat::RGBA8888;
     traits.display.palette_size = 64;       // 64 colors
@@ -147,15 +147,24 @@ static SystemProbeResult nes_probe_file(
                     result.configuration.region_option_index = 1;  // PAL
             }
 
-            // Path-based fallback: many PAL test/homebrew ROMs don't set
-            // the header flag.  If the file lives under a directory whose
-            // name starts with "pal" we assume PAL.
+            // Path-based fallback: many PAL ROMs don't set the header
+            // flag.  Check directory names ("pal/", "pal_") and common
+            // GoodNES/No-Intro naming conventions ("(Europe)", "(PAL)").
             if (result.configuration.region_option_index == 0 && filepath) {
                 std::string lp(filepath);
                 std::transform(lp.begin(), lp.end(), lp.begin(), ::tolower);
                 if (lp.find("pal_") != std::string::npos ||
                     lp.find("pal/") != std::string::npos ||
-                    lp.find("pal\\") != std::string::npos) {
+                    lp.find("pal\\") != std::string::npos ||
+                    lp.find("(europe)") != std::string::npos ||
+                    lp.find("(pal)") != std::string::npos ||
+                    lp.find("(australia)") != std::string::npos ||
+                    lp.find("(germany)") != std::string::npos ||
+                    lp.find("(france)") != std::string::npos ||
+                    lp.find("(italy)") != std::string::npos ||
+                    lp.find("(spain)") != std::string::npos ||
+                    lp.find("(sweden)") != std::string::npos ||
+                    lp.find("(scandinavia)") != std::string::npos) {
                     result.configuration.region_option_index = 1;  // PAL
                 }
             }
@@ -597,21 +606,15 @@ template<NintendoVariant V>
 uint32_t* NintendoSystem<V>::get_framebuffer() {
     if (!ppu_ || !rgba_framebuffer_) return rgba_framebuffer_;
     
-    // Copy PPU screen → framebuffer, cropping the left 8 pixels.
-    // The PPU renders full 256px internally; visible output is 248px
-    // (pixels 8–255).  On real hardware the left column is hidden by
-    // CRT overscan and often contains scroll-seam artifacts.
+    // Copy full 256×240 PPU screen into the GUI framebuffer.
+    // The PPU handles PPUMASK-based left-column hiding internally
+    // (rendering backdrop color when sprites/BG are masked), so no
+    // additional cropping is needed here.
     const std::vector<uint32_t>& nes_screen = ppu_->get_screen();
     if (!nes_screen.empty() && rgba_framebuffer_) {
-        constexpr int SRC_W  = 256;
-        constexpr int CROP_L = 8;     // pixels to crop from left
-        constexpr int DST_W  = SRC_W - CROP_L;  // 248
-        constexpr int H      = 240;
-        for (int y = 0; y < H; ++y) {
-            memcpy(&rgba_framebuffer_[y * DST_W],
-                   &nes_screen[y * SRC_W + CROP_L],
-                   DST_W * sizeof(uint32_t));
-        }
+        constexpr int W = 256;
+        constexpr int H = 240;
+        std::memcpy(rgba_framebuffer_, nes_screen.data(), W * H * sizeof(uint32_t));
     }
     
     return rgba_framebuffer_;
@@ -619,7 +622,7 @@ uint32_t* NintendoSystem<V>::get_framebuffer() {
 
 template<NintendoVariant V>
 void NintendoSystem<V>::get_display_dimensions(int* width, int* height) const {
-    *width = 248;   // 256 - 8 left overscan
+    *width = 256;   // Full PPU output
     *height = 240;
 }
 
