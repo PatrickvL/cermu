@@ -541,7 +541,7 @@ void ted7360_t::timing_advance() {
 
         // --- End of frame ---
         ++timing.frame_count;
-        flash_counter  = (flash_counter + 1u) & 0x3Fu;
+        flash_counter  = (flash_counter + 1u) & 0x1Fu; // 5-bit: bits [3:0] counter, bit 4 visibility
         cursor_visible = (flash_counter & TED_FLASH_PHASE_BIT) != 0;
 
         // Reset video counters
@@ -962,32 +962,43 @@ bus_state_t ted7360_t::registers_read(bus_state_t bus_state) {
             break;
 
         case TED_REG_IRQ_MASK:
-            // Bit 0 = raster compare bit 8 (not an IRQ mask bit);
-            // bits 1-6 = IRQ enable flags.  Return full register value.
-            data = registers.data[reg];
-            break;
-
-        case TED_REG_RASTER_LO:
-            data = static_cast<uint8_t>(timing.raster_counter);
+            // Bits [6:1] = IRQ enable flags; bit 0 = raster compare bit 8.
+            // Bits 5, 7 are unused and read as 1 (per VICE: | 0xA0).
+            data = (registers.data[reg] & 0x5Fu) | 0xA0u;
             break;
 
         case TED_REG_CHARPOS_HI:
-            // Bit 0 = raster counter bit 8; remaining bits from register
-            data = (registers.data[reg] & 0xFEu)
-                 | static_cast<uint8_t>((timing.raster_counter >> 8) & 0x01u);
+            // $FF1A read: character counter (VC) bit 8 in bit 0; bits [7:2] = 1
+            data = static_cast<uint8_t>(((video_logic.vc >> 8) & 0x01u) | 0xFCu);
             break;
 
-        case TED_REG_HPOS:
-            // Horizontal position returned as TED single-clock cycles (2 per CPU cycle)
-            data = static_cast<uint8_t>((timing.x_cycle * 2u) & 0xFFu);
+        case TED_REG_CHARPOS_LO:
+            // $FF1B read: character counter (VC) low byte
+            data = static_cast<uint8_t>(video_logic.vc & 0xFFu);
             break;
 
-        case TED_REG_VPOS:
-            data = static_cast<uint8_t>(timing.raster_counter);
+        case TED_REG_RASTER_HI:
+            // $FF1C read: raster counter bit 8 in bit 0; bits [7:1] = 1
+            data = static_cast<uint8_t>(((timing.raster_counter >> 8) & 0x01u) | 0xFEu);
             break;
 
-        case TED_REG_FLASH:
-            data = static_cast<uint8_t>((flash_counter << 1) | (registers.data[reg] & 0x01u));
+        case TED_REG_RASTER_LO:
+            // $FF1D read: raster counter low byte
+            data = static_cast<uint8_t>(timing.raster_counter & 0xFFu);
+            break;
+
+        case TED_REG_HPOS: {
+            // $FF1E read: horizontal position from cycle within line.
+            // VICE formula: ((cycle - 16) * 4) / 2 & 0xFE, with negative wrap.
+            int hpos = (static_cast<int>(timing.x_cycle) - 16) * 2;
+            if (hpos < 0) hpos += timing.cpu_cycles_per_line * 2;
+            data = static_cast<uint8_t>(hpos & 0xFEu);
+            break;
+        }
+
+        case TED_REG_FLASH_RC:
+            // $FF1F read: bit 7 = 1, bits [6:3] = flash counter [3:0], bits [2:0] = RC
+            data = static_cast<uint8_t>(0x80u | ((flash_counter & 0x0Fu) << 3) | (video_logic.rc & 0x07u));
             break;
 
         default:
@@ -1091,19 +1102,55 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
             break;
 
         case TED_REG_CHARPOS_HI:
+            // $FF1A write: data bit 0 → VC bit 8, preserve VC low byte
             registers.data[reg] = data;
+            video_logic.vc = static_cast<uint16_t>(((data & 0x01u) << 8) | (video_logic.vc & 0xFFu));
             break;
+
+        case TED_REG_CHARPOS_LO:
+            // $FF1B write: data → VC low byte, preserve VC bit 8
+            registers.data[reg] = data;
+            video_logic.vc = static_cast<uint16_t>((video_logic.vc & 0x100u) | data);
+            break;
+
+        case TED_REG_RASTER_HI:
+            // $FF1C write: data bit 0 → raster counter bit 8 (force raster position)
+            registers.data[reg] = data;
+            timing.raster_counter = static_cast<uint16_t>(
+                ((data & 0x01u) << 8) | (timing.raster_counter & 0xFFu));
+            break;
+
+        case TED_REG_RASTER_LO:
+            // $FF1D write: data → raster counter low byte (force raster position)
+            registers.data[reg] = data;
+            timing.raster_counter = static_cast<uint16_t>(
+                (timing.raster_counter & 0x100u) | data);
+            break;
+
+        case TED_REG_HPOS:
+            // $FF1E write: horizontal counter is not writable on real hardware
+            break;
+
+        case TED_REG_FLASH_RC: {
+            // $FF1F write: bits [6:3] → flash counter [3:0]; bits [2:0] → RC
+            // When flash counter transitions away from 0x0F, visibility bit toggles.
+            registers.data[reg] = data;
+            uint8_t new_count = (data >> 3) & 0x0Fu;
+            uint8_t phase_bit = flash_counter & 0x10u;
+            if ((flash_counter & 0x0Fu) == 0x0Fu && new_count != 0x0Fu) {
+                phase_bit ^= 0x10u;
+            }
+            flash_counter  = phase_bit | new_count;
+            cursor_visible = (flash_counter & TED_FLASH_PHASE_BIT) != 0;
+            video_logic.rc = data & 0x07u;
+            break;
+        }
 
         case TED_REG_MEM_CTRL:
         case TED_REG_CHAR_HI:
         case TED_REG_BITMAP_ADDR:
             registers.data[reg] = data;
             update_memory_addresses();
-            break;
-
-        case TED_REG_ROM_RAM:
-            registers.data[reg] = data;
-            // Bit 1: single-clock mode; remaining bits for banking / clock select.
             break;
 
         default:
