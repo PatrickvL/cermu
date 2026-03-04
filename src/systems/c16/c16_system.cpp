@@ -476,6 +476,16 @@ void Commodore264System<V>::tick() {
     // UNIFIED TIMING MODEL (matching C64 phi1/phi2 pattern)
     // =========================================================================
     
+    // Start each cycle with pull-up resistors on signal lines.
+    // Carry forward only address and data from previous cycle;
+    // IRQ, NMI, BA, AEC, RDY are re-derived from chip outputs each tick.
+    {
+        bus_state_t def = C264_BUS_DEFAULT_STATE;
+        BUS_SET_ADDR(def, BUS_GET_ADDR(s));
+        BUS_SET_DATA(def, BUS_GET_DATA(s));
+        s = def;
+    }
+    
     // PHASE 1: TED PHI1
     s = ted_->tick_phi1(s);
     

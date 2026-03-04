@@ -122,8 +122,8 @@ uint8_t ted7360_t::get_graphics_mode() const {
 
 uint16_t ted7360_t::get_raster_compare() const {
     return static_cast<uint16_t>(
-        ((registers.data[TED_REG_CHARPOS_HI] & 0x01u) << 8)
-      |  registers.data[TED_REG_RASTER_LO]);
+        ((registers.data[TED_REG_IRQ_MASK] & 0x01u) << 8)
+      |  registers.data[TED_REG_RASTER_CMP]);
 }
 
 // ============================================================================
@@ -201,11 +201,15 @@ void ted7360_t::check_raster_interrupt() {
 // ============================================================================
 // TIMER TICK — all three timers share the same decrement/underflow pattern
 // ============================================================================
-// All TED timers count down at the CPU clock rate.
+// TED timers count down at the TED single-clock rate, which is 2× the CPU
+// clock.  VICE models this as an internal counter of (value × 2) that
+// decrements once per CPU cycle, with reads returning internal / 2.
+//
+// We use a simpler equivalent: a phase toggle that gates decrement to every
+// other CPU cycle.  The visible counter value matches the real hardware.
+//
 // Timer 1 auto-reloads from its latch on underflow.
 // Timers 2 and 3 do NOT auto-reload — they wrap to $FFFF and continue.
-// (Source: cbmmuseum — "Der erste Timer lädt seinen Startwert wieder wenn er
-//  0 erreicht, die anderen 2 laufen einfach so weiter.")
 
 static inline void tick_one_timer(ted_timer_unit_t& t, uint32_t irq_flag,
                                    uint8_t& irq_status, bool auto_reload) noexcept {
@@ -218,6 +222,10 @@ static inline void tick_one_timer(ted_timer_unit_t& t, uint32_t irq_flag,
 }
 
 void ted7360_t::tick_timers() {
+    // Toggle phase — timers only decrement on one phase (every other CPU cycle).
+    timer_tick_phase = !timer_tick_phase;
+    if (!timer_tick_phase) return;
+
     tick_one_timer(timer1, TED_IRQ_TIMER1, irq_status, true);
     tick_one_timer(timer2, TED_IRQ_TIMER2, irq_status, false);
     tick_one_timer(timer3, TED_IRQ_TIMER3, irq_status, false);
@@ -677,9 +685,9 @@ void ted7360_t::reset() {
     keyboard_latch = 0xFF;
 
     // Flash / cursor / mode
-    flash_counter  = 0;
-    cursor_visible = false;
-    reverse_mode   = false;
+    flash_counter   = 0;
+    cursor_visible  = false;
+    reverse_mode    = false;
 
     // Derive memory addresses from default register values
     update_memory_addresses();
@@ -778,6 +786,18 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
         uint8_t gdata = 0xFF;
         if (bus.mem_read) {
             gdata = bus.mem_read(bus.mem_read_user_data, address);
+        }
+
+        // Hardware cursor: XOR the fetched pattern byte at g-access time.
+        // The cursor position register holds a 10-bit index into the screen
+        // matrix.  The absolute VC for this column is (vcbase + vmli); when
+        // it matches and the cursor blink phase is active, invert the byte
+        // before it reaches the shift register.
+        if (cursor_visible) {
+            const uint16_t abs_vc = (video_logic.vcbase + vmli) & TED_VC_MASK;
+            if (abs_vc == get_cursor_position()) {
+                gdata ^= 0xFFu;
+            }
         }
 
         if (vmli < TED_SCREEN_TEXTCOLS) {
@@ -942,7 +962,9 @@ bus_state_t ted7360_t::registers_read(bus_state_t bus_state) {
             break;
 
         case TED_REG_IRQ_MASK:
-            data = irq_mask;
+            // Bit 0 = raster compare bit 8 (not an IRQ mask bit);
+            // bits 1-6 = IRQ enable flags.  Return full register value.
+            data = registers.data[reg];
             break;
 
         case TED_REG_RASTER_LO:
@@ -1052,17 +1074,24 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
             break;
 
         case TED_REG_IRQ_MASK:
+            registers.data[reg] = data;
             irq_mask = data & TED_IRQ_CLEARABLE;
+            // Bit 0 is raster compare bit 8 — update compare value.
+            timing.raster_compare = get_raster_compare();
+            break;
+
+        case TED_REG_RASTER_CMP:
+            registers.data[reg]   = data;
+            timing.raster_compare = get_raster_compare();
+            break;
+
+        case TED_REG_CURSOR_HI:
+        case TED_REG_CURSOR_LO:
+            registers.data[reg] = data;
             break;
 
         case TED_REG_CHARPOS_HI:
-            registers.data[reg]   = data;
-            timing.raster_compare = get_raster_compare();
-            break;
-
-        case TED_REG_RASTER_LO:
-            registers.data[reg]   = data;
-            timing.raster_compare = get_raster_compare();
+            registers.data[reg] = data;
             break;
 
         case TED_REG_MEM_CTRL:
