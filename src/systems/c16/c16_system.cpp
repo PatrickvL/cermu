@@ -456,6 +456,9 @@ void Commodore264System<V>::reset() {
     // Reset bus state
     bus_state_ = C264_BUS_DEFAULT_STATE;
     
+    // Reset PIO2 (keyboard row select — all deselected)
+    pio2_kbd_ = 0xFF;
+    
     // Reset keyboard matrix
     if (keyboard_) {
         keyboard_->reset();
@@ -757,6 +760,16 @@ bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
                 data = BUS_GET_DATA(ted_state);
             }
         }
+        // I/O area $FD00-$FDFF (always visible — PIO2, ACIA, ROM banking)
+        else if (addr >= 0xFD00 && addr <= 0xFDFF) {
+            if (addr >= 0xFD30 && addr <= 0xFD3F) {
+                // PIO2 (6529B) — keyboard row select register
+                data = pio2_kbd_;
+            } else {
+                // Other I/O ports not yet implemented (ACIA, PIO1, ROM banking)
+                data = 0xFF;
+            }
+        }
         // KERNAL ROM (0xC000-0xFEFF when ROM visible, $FF40-$FFFF always KERNAL)
         else if (addr >= 0xC000) {
             bool rom_visible = ted_ ? ted_->rom_enabled : true;
@@ -801,6 +814,14 @@ bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
                 ted_->registers_write(ted_state);
             }
         }
+        // I/O area $FD00-$FDFF (always writable — PIO2, ACIA, ROM banking)
+        else if (addr >= 0xFD00 && addr <= 0xFDFF) {
+            if (addr >= 0xFD30 && addr <= 0xFD3F) {
+                // PIO2 (6529B) — keyboard row select register
+                pio2_kbd_ = data;
+            }
+            // Other I/O ports not yet implemented (ACIA, PIO1, ROM banking)
+        }
         // Writes always go to RAM (ROM is read-only, writes pass through)
         else if (ram_size >= 65536 && addr < 0xFF00) {
             (*ram_)[addr] = data;
@@ -842,12 +863,16 @@ template<C264SeriesVariant V>
 uint8_t Commodore264System<V>::ted_keyboard_scan(void* user_data, uint8_t column) {
     auto* sys = static_cast<Commodore264System<V>*>(user_data);
     if (!sys->keyboard_) return 0xFF;
-    
-    // Active-low: 0 bits select columns, 0 bits in result = key pressed.
+
+    // On real hardware, PIO2 ($FD30) selects which keyboard rows to drive
+    // (active-low).  The value written to $FF08 (the 'column' parameter)
+    // only controls joystick port selection — the keyboard row select comes
+    // from PIO2.  See VICE ted-mem.c ted08_store() for reference.
+    uint8_t row_select = sys->pio2_kbd_;
     uint8_t result = 0xFF;
-    for (int col = 0; col < 8; col++) {
-        if (!(column & (1 << col))) {
-            result &= sys->keyboard_->row_open_contacts[col];
+    for (int row = 0; row < 8; row++) {
+        if (!(row_select & (1 << row))) {
+            result &= sys->keyboard_->row_open_contacts[row];
         }
     }
     return result;

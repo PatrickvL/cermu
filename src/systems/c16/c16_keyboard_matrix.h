@@ -6,9 +6,10 @@
 // TED 7360 integrated keyboard scanning:
 //   PIO2 ($FD30) = row select (output) — active-low row drive
 //   TED  ($FF08) = column read (input)  — active-low column sense
-// Array convention: array[row][col]
-//   Row 0 = bit 0 of row select, Row 7 = bit 7 of row select
-//   Col 0 = bit 0 of column sense, Col 7 = bit 7 of column sense
+// Array convention: array[7 - row_bit][7 - col_bit]
+//   Same reversed-bit convention as the C64 CIA matrix.
+//   This ensures the shared key_down/key_up bit-reversal maps
+//   array indices back to the correct hardware bit positions.
 //
 // Key differences from C64:
 //   - Dedicated cursor keys (UP, DOWN, LEFT, RIGHT) — no SHIFT required

@@ -6,11 +6,25 @@
 // TED PIO2 ($FD30) selects which row(s) to scan (active-low output).
 // TED register $FF08 reads the column result (active-low input).
 //
-// Matrix layout verified against VICE emulator (data/PLUS4/gtk3_pos.vkm)
-// and Commodore 264 Hardware Specification.
+// Array convention: array[7 - row_bit][7 - col_bit]
+// Same reversed-bit convention as the C64 CIA matrix.  The shared
+// key_down/key_up bit-reversal maps array indices back to the correct
+// hardware bit positions so that row_open_contacts[hw_row] contains
+// column bitmask data suitable for direct use by the scan callback.
+//
+// Hardware matrix (VICE Plus4 gtk3_pos.vkm reference):
+//       col 0       col 1      col 2      col 3    col 4    col 5    col 6     col 7
+// row 0: INST/DEL   RETURN     POUND      HELP/F7  F1       F2       F3        @
+// row 1: 3          W          A          4        Z        S        E         SHIFTs
+// row 2: 5          R          D          6        C        F        T         X
+// row 3: 7          Y          G          8        B        H        U         V
+// row 4: 9          I          J          0        M        K        O         N
+// row 5: CRSR↓      P          L          CRSR↑    .        :        -         ,
+// row 6: CRSR←      *          ;          CRSR→    ESC      =        +         /
+// row 7: 1          HOME       CTRL       2        SPACE    C=       Q         RUN/STOP
 //
 // Key differences from C64:
-//   - Dedicated cursor keys: UP (5,3), DOWN (5,0), LEFT (6,0), RIGHT (6,3)
+//   - Dedicated cursor keys (UP, DOWN, LEFT, RIGHT — no SHIFT required)
 //   - ESC key at (6,4)
 //   - Both SHIFT keys wired to same position (1,7)
 //   - Function keys: F1/F4 (0,4), F2/F5 (0,5), F3/F6 (0,6), HELP/F7 (0,3)
@@ -24,67 +38,69 @@
 //   '+' key → EMUKEY_BACKSLASH
 
 static const emu_key_t c16_keys[C16_KEYBOARD_ROWS * C16_KEYBOARD_COLS] = {
-    // Row 0: DEL, RETURN, POUND, HELP(F7), F1, F2, F3, @
-    EMUKEY_BACKSPACE,  EMUKEY_RETURN,  EMUKEY_CBM_POUND,  EMUKEY_F7,  EMUKEY_F1,  EMUKEY_F2,  EMUKEY_F3,  EMUKEY_LEFTBRACKET,
-    // Row 1: 3, W, A, 4, Z, S, E, SHIFT (both L/R share this position)
-    EMUKEY_3,  EMUKEY_W,  EMUKEY_A,  EMUKEY_4,  EMUKEY_Z,  EMUKEY_S,  EMUKEY_E,  EMUKEY_LSHIFT,
-    // Row 2: 5, R, D, 6, C, F, T, X
-    EMUKEY_5,  EMUKEY_R,  EMUKEY_D,  EMUKEY_6,  EMUKEY_C,  EMUKEY_F,  EMUKEY_T,  EMUKEY_X,
-    // Row 3: 7, Y, G, 8, B, H, U, V
-    EMUKEY_7,  EMUKEY_Y,  EMUKEY_G,  EMUKEY_8,  EMUKEY_B,  EMUKEY_H,  EMUKEY_U,  EMUKEY_V,
-    // Row 4: 9, I, J, 0, M, K, O, N
-    EMUKEY_9,  EMUKEY_I,  EMUKEY_J,  EMUKEY_0,  EMUKEY_M,  EMUKEY_K,  EMUKEY_O,  EMUKEY_N,
-    // Row 5: CRSR↓, P, L, CRSR↑, ., :, -, ,
-    EMUKEY_DOWN,  EMUKEY_P,  EMUKEY_L,  EMUKEY_UP,  EMUKEY_PERIOD,  EMUKEY_SEMICOLON,  EMUKEY_MINUS,  EMUKEY_COMMA,
-    // Row 6: CRSR←, *, ;, CRSR→, ESC, =, +, /
-    EMUKEY_LEFT,  EMUKEY_RIGHTBRACKET,  EMUKEY_APOSTROPHE,  EMUKEY_RIGHT,  EMUKEY_ESCAPE,  EMUKEY_EQUALS,  EMUKEY_BACKSLASH,  EMUKEY_SLASH,
-    // Row 7: 1, HOME, CTRL, 2, SPACE, COMMODORE, Q, RUN/STOP
-    EMUKEY_1,  EMUKEY_HOME,  EMUKEY_LCTRL,  EMUKEY_2,  EMUKEY_SPACE,  EMUKEY_LGUI,  EMUKEY_Q,  EMUKEY_TAB,
+    // array[0] = row 7 reversed: RUN/STOP, Q, C=, SPACE, 2, CTRL, HOME, 1
+    EMUKEY_TAB,  EMUKEY_Q,  EMUKEY_LGUI,  EMUKEY_SPACE,  EMUKEY_2,  EMUKEY_LCTRL,  EMUKEY_HOME,  EMUKEY_1,
+    // array[1] = row 6 reversed: /, +, =, ESC, CRSR→, ;, *, CRSR←
+    EMUKEY_SLASH,  EMUKEY_BACKSLASH,  EMUKEY_EQUALS,  EMUKEY_ESCAPE,  EMUKEY_RIGHT,  EMUKEY_APOSTROPHE,  EMUKEY_RIGHTBRACKET,  EMUKEY_LEFT,
+    // array[2] = row 5 reversed: ,, -, :, ., CRSR↑, L, P, CRSR↓
+    EMUKEY_COMMA,  EMUKEY_MINUS,  EMUKEY_SEMICOLON,  EMUKEY_PERIOD,  EMUKEY_UP,  EMUKEY_L,  EMUKEY_P,  EMUKEY_DOWN,
+    // array[3] = row 4 reversed: N, O, K, M, 0, J, I, 9
+    EMUKEY_N,  EMUKEY_O,  EMUKEY_K,  EMUKEY_M,  EMUKEY_0,  EMUKEY_J,  EMUKEY_I,  EMUKEY_9,
+    // array[4] = row 3 reversed: V, U, H, B, 8, G, Y, 7
+    EMUKEY_V,  EMUKEY_U,  EMUKEY_H,  EMUKEY_B,  EMUKEY_8,  EMUKEY_G,  EMUKEY_Y,  EMUKEY_7,
+    // array[5] = row 2 reversed: X, T, F, C, 6, D, R, 5
+    EMUKEY_X,  EMUKEY_T,  EMUKEY_F,  EMUKEY_C,  EMUKEY_6,  EMUKEY_D,  EMUKEY_R,  EMUKEY_5,
+    // array[6] = row 1 reversed: SHIFT, E, S, Z, 4, A, W, 3
+    EMUKEY_LSHIFT,  EMUKEY_E,  EMUKEY_S,  EMUKEY_Z,  EMUKEY_4,  EMUKEY_A,  EMUKEY_W,  EMUKEY_3,
+    // array[7] = row 0 reversed: @, F3, F2, F1, HELP(F7), POUND, RETURN, DEL
+    EMUKEY_LEFTBRACKET,  EMUKEY_F3,  EMUKEY_F2,  EMUKEY_F1,  EMUKEY_F7,  EMUKEY_CBM_POUND,  EMUKEY_RETURN,  EMUKEY_BACKSPACE,
 };
 
 // Unshifted character decode table — PETSCII codes per matrix position.
+// Same reversed-bit convention as c16_keys[] above.
 // 0 = non-character key (modifier, function key, cursor key, RETURN, DEL).
 // C16/Plus4: £ = $5C.  No ← or ↑ dedicated keys in the matrix.
 static const petscii_t c16_unshifted_chars[C16_KEYBOARD_ROWS * C16_KEYBOARD_COLS] = {
-    // Row 0: (DEL), (RETURN), £($5C), (HELP/F7), (F1), (F2), (F3), @
-    0, 0, 0x5C, 0, 0, 0, 0, '@',
-    // Row 1: 3, W, A, 4, Z, S, E, (SHIFT)
-    '3', 'W', 'A', '4', 'Z', 'S', 'E', 0,
-    // Row 2: 5, R, D, 6, C, F, T, X
-    '5', 'R', 'D', '6', 'C', 'F', 'T', 'X',
-    // Row 3: 7, Y, G, 8, B, H, U, V
-    '7', 'Y', 'G', '8', 'B', 'H', 'U', 'V',
-    // Row 4: 9, I, J, 0, M, K, O, N
-    '9', 'I', 'J', '0', 'M', 'K', 'O', 'N',
-    // Row 5: (CRSR↓), P, L, (CRSR↑), ., :, -, ,
-    0, 'P', 'L', 0, '.', ':', '-', ',',
-    // Row 6: (CRSR←), *, ;, (CRSR→), (ESC), =, +, /
-    0, '*', ';', 0, 0, '=', '+', '/',
-    // Row 7: 1, (HOME), (CTRL), 2, SPACE, (C=), Q, (RUN/STOP)
-    '1', 0, 0, '2', ' ', 0, 'Q', 0,
+    // array[0] = row 7 reversed: (RUN/STOP), Q, (C=), SPACE, 2, (CTRL), (HOME), 1
+    0, 'Q', 0, ' ', '2', 0, 0, '1',
+    // array[1] = row 6 reversed: /, +, =, (ESC), (CRSR→), ;, *, (CRSR←)
+    '/', '+', '=', 0, 0, ';', '*', 0,
+    // array[2] = row 5 reversed: ,, -, :, ., (CRSR↑), L, P, (CRSR↓)
+    ',', '-', ':', '.', 0, 'L', 'P', 0,
+    // array[3] = row 4 reversed: N, O, K, M, 0, J, I, 9
+    'N', 'O', 'K', 'M', '0', 'J', 'I', '9',
+    // array[4] = row 3 reversed: V, U, H, B, 8, G, Y, 7
+    'V', 'U', 'H', 'B', '8', 'G', 'Y', '7',
+    // array[5] = row 2 reversed: X, T, F, C, 6, D, R, 5
+    'X', 'T', 'F', 'C', '6', 'D', 'R', '5',
+    // array[6] = row 1 reversed: (SHIFT), E, S, Z, 4, A, W, 3
+    0, 'E', 'S', 'Z', '4', 'A', 'W', '3',
+    // array[7] = row 0 reversed: @, (F3), (F2), (F1), (HELP/F7), £($5C), (RETURN), (DEL)
+    '@', 0, 0, 0, 0, 0x5C, 0, 0,
 };
 
 // Shifted character decode table — PETSCII codes per matrix position.
+// Same reversed-bit convention as c16_keys[] above.
 // Letters use PETSCII lowercase ($C1–$DA) for character-accurate mapping.
 // 0 = no distinct character (modifier key, function key, cursor key,
 //     or same character as unshifted — handled by KERNAL/TED at runtime).
 static const petscii_t c16_shifted_chars[C16_KEYBOARD_ROWS * C16_KEYBOARD_COLS] = {
-    // Row 0: (INST), (RETURN), (£), (HELP), (F4), (F5), (F6), (@)
+    // array[0] = row 7 reversed: (RUN/STOP), q($D1), (C=), (SPACE), ", (CTRL), (CLR), !
+    0, 0xD1, 0, 0, '"', 0, 0, '!',
+    // array[1] = row 6 reversed: ?, (+), (=), (ESC), (CRSR→), ], (*), (CRSR←)
+    '?', 0, 0, 0, 0, ']', 0, 0,
+    // array[2] = row 5 reversed: <, (-), [, >, (CRSR↑), l($CC), p($D0), (CRSR↓)
+    '<', 0, '[', '>', 0, 0xCC, 0xD0, 0,
+    // array[3] = row 4 reversed: n($CE), o($CF), k($CB), m($CD), (0), j($CA), i($C9), )
+    0xCE, 0xCF, 0xCB, 0xCD, 0, 0xCA, 0xC9, ')',
+    // array[4] = row 3 reversed: v($D6), u($D5), h($C8), b($C2), (, g($C7), y($D9), '
+    0xD6, 0xD5, 0xC8, 0xC2, '(', 0xC7, 0xD9, '\'',
+    // array[5] = row 2 reversed: x($D8), t($D4), f($C6), c($C3), &, d($C4), r($D2), %
+    0xD8, 0xD4, 0xC6, 0xC3, '&', 0xC4, 0xD2, '%',
+    // array[6] = row 1 reversed: (SHIFT), e($C5), s($D3), z($DA), $, a($C1), w($D7), #
+    0, 0xC5, 0xD3, 0xDA, '$', 0xC1, 0xD7, '#',
+    // array[7] = row 0 reversed: (@), (F6), (F5), (F4), (HELP), (£), (RETURN), (INST)
     0, 0, 0, 0, 0, 0, 0, 0,
-    // Row 1: #, w($D7), a($C1), $, z($DA), s($D3), e($C5), (SHIFT)
-    '#', 0xD7, 0xC1, '$', 0xDA, 0xD3, 0xC5, 0,
-    // Row 2: %, r($D2), d($C4), &, c($C3), f($C6), t($D4), x($D8)
-    '%', 0xD2, 0xC4, '&', 0xC3, 0xC6, 0xD4, 0xD8,
-    // Row 3: ', y($D9), g($C7), (, b($C2), h($C8), u($D5), v($D6)
-    '\'', 0xD9, 0xC7, '(', 0xC2, 0xC8, 0xD5, 0xD6,
-    // Row 4: ), i($C9), j($CA), (0), m($CD), k($CB), o($CF), n($CE)
-    ')', 0xC9, 0xCA, 0, 0xCD, 0xCB, 0xCF, 0xCE,
-    // Row 5: (CRSR↓), p($D0), l($CC), (CRSR↑), >, [, (-), <
-    0, 0xD0, 0xCC, 0, '>', '[', 0, '<',
-    // Row 6: (CRSR←), (*), ], (CRSR→), (ESC), (=), (+), ?
-    0, 0, ']', 0, 0, 0, 0, '?',
-    // Row 7: !, (CLR), (CTRL), ", (SPACE), (C=), q($D1), (RUN/STOP)
-    '!', 0, 0, '"', 0, 0, 0xD1, 0,
 };
 
 static const keyboard_decode_table_t c16_decode_tables[] = {
