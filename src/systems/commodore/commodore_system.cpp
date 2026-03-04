@@ -1,4 +1,9 @@
 #include "commodore_system.h"
+#include "../../devices/storage/drive_1541.h"
+#include "../../devices/storage/datasette_1530.h"
+#include "../../core/formats/format_registry.h"
+#include <cstring>
+#include <cstdio>
 
 // ============================================================================
 // CommodoreSystem — shared Commodore 8-bit base class implementation
@@ -102,4 +107,191 @@ int CommodoreSystem::get_guest_keyboard_scancodes(const SDL_Scancode** out) cons
 
     if (out) *out = scancodes;
     return static_cast<int>(sizeof(scancodes) / sizeof(scancodes[0]));
+}
+
+// ============================================================================
+// Deferred Loading — shared load_file / apply / check infrastructure
+// ============================================================================
+
+bool CommodoreSystem::load_file(const char* filepath) {
+    const char* name = get_descriptor().short_name;
+
+    if (!is_system_initialized()) {
+        printf("%s: System not initialized, initializing now...\n", name);
+        if (!initialize()) {
+            printf("%s: Failed to initialize system for file loading\n", name);
+            return false;
+        }
+    }
+
+    printf("%s: Loading file: %s\n", name, filepath);
+
+    // Clear any previous pending load
+    clear_pending_load();
+
+    // Parse the file into a format result
+    format_load_result_t result = {};
+    if (!format_load_file(filepath, &result)) {
+        printf("%s: Failed to load file: %s\n", name, result.error_msg);
+        result.release();
+        return false;
+    }
+
+    // Let the derived system inspect/modify the result (e.g. SID handling)
+    if (!on_file_parsed(result, filepath)) {
+        result.release();
+        return false;
+    }
+
+    // Determine load mode based on format type
+    LoadMode mode = LoadMode::DIRECT;
+    if (result.format) {
+        const char* fmt = result.format->name;
+        if (fmt && strcmp(fmt, "D64") == 0) {
+            mode = LoadMode::DISK_FAST;
+        } else if (fmt && strcmp(fmt, "TAP") == 0) {
+            mode = LoadMode::TAPE_INSERTED;
+        }
+    }
+
+    // Defer loading until KERNAL/BASIC boot completes
+    pending_load_.result = result;
+    pending_load_.filepath = filepath;
+    pending_load_.active = true;
+    pending_load_.mode = mode;
+
+    // Set program title to bare filename (on_file_parsed may have already
+    // set a richer title from metadata — only overwrite if still empty)
+    if (program_title_.empty()) {
+        const char* bare = filepath;
+        const char* sep = strrchr(filepath, '/');
+        if (!sep) sep = strrchr(filepath, '\\');
+        if (sep) bare = sep + 1;
+        program_title_ = bare;
+    }
+
+    printf("%s: File parsed (mode=%s) — deferred until BASIC READY\n",
+           name,
+           mode == LoadMode::DISK_FAST ? "DISK_FAST" :
+           mode == LoadMode::TAPE_INSERTED ? "TAPE_INSERTED" : "DIRECT");
+    return true;
+}
+
+void CommodoreSystem::check_deferred_load() {
+    if (pending_load_.active && is_basic_ready()) {
+        apply_pending_load();
+    }
+}
+
+void CommodoreSystem::clear_pending_load() {
+    if (pending_load_.active) {
+        pending_load_.result.release();
+        pending_load_.active = false;
+    }
+}
+
+void CommodoreSystem::apply_pending_load() {
+    if (!pending_load_.active || !is_system_initialized()) return;
+
+    const char* name = get_descriptor().short_name;
+
+    // Let derived system handle special cases (e.g. SID player)
+    if (pre_apply_pending_load()) {
+        pending_load_.result.release();
+        pending_load_.active = false;
+        boot_completed_ = true;
+        return;
+    }
+
+    // =========================================================================
+    // DISK_FAST PATH — D64: Insert disk into 1541 + extract first PRG to RAM
+    // =========================================================================
+    if (pending_load_.mode == LoadMode::DISK_FAST) {
+        printf("%s: BASIC READY — DISK_FAST load\n", name);
+
+        int iec_port = get_iec_port_index();
+        Drive1541Device* drive = nullptr;
+
+        if (iec_port >= 0) {
+            auto* port = get_connector_port(iec_port);
+            if (port) {
+                for (auto* dev : port->get_attached_devices()) {
+                    drive = dynamic_cast<Drive1541Device*>(dev);
+                    if (drive) break;
+                }
+            }
+
+            if (!drive) {
+                // Auto-attach a 1541 drive
+                if (port && attach_device_to_port(iec_port, "1541")) {
+                    for (auto* dev : port->get_attached_devices()) {
+                        drive = dynamic_cast<Drive1541Device*>(dev);
+                        if (drive) break;
+                    }
+                    if (drive) {
+                        printf("%s: Auto-attached 1541 drive #8\n", name);
+                    }
+                }
+            }
+
+            if (drive) {
+                drive->insert_disk(pending_load_.filepath.c_str());
+                printf("%s: D64 inserted into drive #%d\n", name,
+                       drive->get_device_number());
+            } else {
+                printf("%s: No IEC serial port available — D64 not mounted\n", name);
+            }
+        }
+
+        // Hybrid: also write the first extracted PRG to RAM for fast load
+        if (pending_load_.result.type == FORMAT_LOAD_PROGRAM &&
+            pending_load_.result.program.data) {
+            auto ctx = build_load_context();
+            commodore_apply_load_result(&ctx, &pending_load_.result,
+                                        pending_load_.filepath.c_str());
+        } else if (drive) {
+            inject_keys("LOAD\"*\",8,1\r");
+            printf("%s: Injected LOAD\"*\",8,1 for disk loading\n", name);
+        }
+    }
+    // =========================================================================
+    // TAPE_INSERTED PATH — TAP: Insert tape + inject LOAD
+    // =========================================================================
+    else if (pending_load_.mode == LoadMode::TAPE_INSERTED) {
+        printf("%s: BASIC READY — TAPE_INSERTED load\n", name);
+
+        int cass_port = get_cassette_port_index();
+        Datasette1530Device* datasette = nullptr;
+
+        if (cass_port >= 0) {
+            auto* port = get_connector_port(cass_port);
+            if (port) {
+                datasette = dynamic_cast<Datasette1530Device*>(
+                    port->get_attached_device());
+            }
+        }
+
+        if (datasette) {
+            datasette->load_tap(pending_load_.filepath.c_str());
+            datasette->press_play();
+            printf("%s: TAP loaded into datasette, PLAY pressed\n", name);
+            inject_keys("LOAD\r");
+        } else {
+            printf("%s: No datasette attached — TAP not loaded\n", name);
+        }
+    }
+    // =========================================================================
+    // STANDARD PATH — PRG / T64 / LNX / BIN: Write to RAM + auto-run
+    // =========================================================================
+    else {
+        printf("%s: BASIC READY — applying deferred load\n", name);
+
+        auto ctx = build_load_context();
+        commodore_apply_load_result(&ctx, &pending_load_.result,
+                                    pending_load_.filepath.c_str());
+    }
+
+    pending_load_.result.release();
+    pending_load_.active = false;
+    boot_completed_ = true;
 }

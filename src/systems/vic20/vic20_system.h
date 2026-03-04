@@ -66,9 +66,6 @@ public:
     void tick() override;
     void run_frame() override;
     
-    // File loading
-    bool load_file(const char* filepath) override;
-    
     // Display
     uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
@@ -99,16 +96,13 @@ private:
     // System state
     uint8_t expansion_flags_;        // Expansion RAM configuration
 
-    // Deferred autostart — file loading and keyboard buffer injection
-    // must wait until the KERNAL boot sequence completes, because boot
-    // clears zero-page ($2B-$32 BASIC pointers, $C6 keyboard count)
-    // and initializes RAM.  We store the filepath and load directly
-    // into system memory from run_frame() after boot reaches READY.
-    std::string pending_filepath_;       // File to load after boot (empty = none)
-    int  autostart_delay_frames_;        // Frames remaining before deferred load
-    
-    // Internal: load file directly into system memory (called after boot)
-    bool load_file_into_memory(const char* filepath);
+    // ---- CommodoreSystem loading hooks ----
+    bool is_basic_ready() const override;
+    commodore_load_context_t build_load_context() override;
+    void inject_keys(const char* str) override;
+    bool is_system_initialized() const override { return memory_ != nullptr && cpu_ != nullptr; }
+    int get_iec_port_index() const override { return 1; }       // IEC Serial Bus
+    int get_cassette_port_index() const override { return 2; }  // Cassette Port
     
     // ROM loading
     bool load_roms();

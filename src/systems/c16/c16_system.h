@@ -100,9 +100,6 @@ public:
     void tick() override;
     void run_frame() override;
 
-    // File loading
-    bool load_file(const char* filepath) override;
-
     // Display
     uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
@@ -145,38 +142,13 @@ private:
     // System state
     bool initialized_;
 
-    // =========================================================================
-    // DEFERRED LOADING — wait for BASIC READY before writing program to RAM
-    //
-    // Same design as C64System: files are parsed immediately but not written
-    // to RAM until BASIC's cold-start sequence completes (including NEW,
-    // which zeroes $1001/$1002).  This prevents program corruption.
-    // =========================================================================
-
-    /** How the deferred load should be applied after BASIC READY. */
-    enum class LoadMode {
-        DIRECT,         ///< Standard: write program data to RAM, inject RUN
-        DISK_FAST,      ///< D64: disk inserted in 1541 + fast PRG extraction to RAM
-        TAPE_INSERTED   ///< TAP: tape loaded in datasette, inject LOAD + press play
-    };
-
-    struct PendingLoad {
-        format_load_result_t result;  // Parsed file data (owns heap allocations)
-        std::string filepath;         // Original filepath for SYS-from-filename
-        bool active = false;          // Whether a deferred load is pending
-        LoadMode mode = LoadMode::DIRECT;  // How to apply the load
-    };
-    PendingLoad pending_load_;
-    bool boot_completed_ = false;  // Set after first deferred load; skips VARTAB check
-
-    /** Check if BASIC 3.5 has reached its READY state (safe to inject program). */
-    bool is_basic_ready() const;
-
-    /** Apply the pending load result to RAM and inject auto-run. */
-    void apply_pending_load();
-
-    /** C16-specific keyboard buffer injection ($0527, count at $EF, max 8 bytes). */
-    static void c16_inject_keys(void* ctx, const char* str);
+    // ---- CommodoreSystem loading hooks ----
+    bool is_basic_ready() const override;
+    commodore_load_context_t build_load_context() override;
+    void inject_keys(const char* str) override;
+    bool is_system_initialized() const override { return initialized_; }
+    int get_iec_port_index() const override { return 2; }   // IEC Serial Bus
+    int get_cassette_port_index() const override { return 3; }  // Cassette Port
 
     // Helper methods
     bool load_roms();

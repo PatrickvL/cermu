@@ -27,6 +27,14 @@ namespace vic20_constants {
     inline constexpr uint16_t BASIC_START_3K         = 0x0401;     // 3 KB expansion
     inline constexpr uint16_t BASIC_START_8K         = 0x1201;     // 8 KB+ expansion
 
+    // BASIC warm-start vector (written to $0302/$0303 after boot)
+    inline constexpr uint8_t  BASIC_WARMSTART_LO     = 0x74;       // Low byte of $C474
+    inline constexpr uint8_t  BASIC_WARMSTART_HI     = 0xC4;       // High byte of $C474
+
+    // KERNAL keyboard buffer
+    inline constexpr uint16_t KBD_BUFFER_BASE        = 0x0277;     // 10-byte keyboard buffer
+    inline constexpr uint8_t  KBD_BUFFER_COUNT       = 0xC6;       // Keyboard buffer count (ZP)
+
     // VIC-20 memory block boundaries
     inline constexpr uint16_t BLK0_START             = 0x0400;     // Block 0: 3 KB expansion RAM
     inline constexpr uint16_t BLK0_END               = 0x1000;     // End of block 0

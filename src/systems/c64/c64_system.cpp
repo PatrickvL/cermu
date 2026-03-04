@@ -537,10 +537,7 @@ void C64System::shutdown() {
 
 void C64System::reset() {
     // Clear any pending deferred load (will be re-set by the next load_file call)
-    if (pending_load_.active) {
-        pending_load_.result.release();
-        pending_load_.active = false;
-    }
+    clear_pending_load();
     boot_completed_ = false;
     sid_player_active_ = false;
     active_sid_data_.clear();
@@ -891,9 +888,7 @@ void C64System::tick() {
         system_tick();
 
         // Check if a deferred file load is waiting for BASIC to reach READY
-        if (pending_load_.active && is_basic_ready()) {
-            apply_pending_load();
-        }
+        check_deferred_load();
     }
 }
 
@@ -910,9 +905,7 @@ void C64System::run_frame() {
         }
 
         // Check deferred load once per frame (only active during boot)
-        if (pending_load_.active && is_basic_ready()) {
-            apply_pending_load();
-        }
+        check_deferred_load();
 
         // Tick all attached peripheral devices (datasette timing, 1541 IEC, etc.)
         tick_peripherals();
@@ -939,104 +932,17 @@ static void c64_mem_write_block(void* ctx, uint16_t addr,
     memcpy(&ram->data()[addr], data, len);
 }
 
-bool C64System::load_file(const char* filepath) {
-    if (!initialized_) {
-        printf("C64: System not initialized\n");
-        return false;
-    }
-
-    printf("C64: Loading file: %s\n", filepath);
-
-    // Clear any previous pending load
-    if (pending_load_.active) {
-        pending_load_.result.release();
-        pending_load_.active = false;
-    }
-    sid_player_active_ = false;
-    active_sid_data_.clear();
-
-    // Parse the file into a format result
-    format_load_result_t result = {};
-    if (!format_load_file(filepath, &result)) {
-        printf("C64: Failed to load file: %s\n", result.error_msg);
-        result.release();
-        return false;
-    }
-
-    // For SID files: ensure the C64 is configured with the correct region
-    // (PAL/NTSC) and SID revision, reset for clean state, and patch KERNAL
-    // to skip the RAMTAS memory test for near-instant boot.
-    const sid_header_t* sid_check = sid_get_metadata(&result);
-    if (sid_check) {
-        ensure_compatible_for_sid(sid_check);
-    }
-
-    // Determine load mode based on format type
-    LoadMode mode = LoadMode::DIRECT;
-    if (result.format) {
-        const char* fmt = result.format->name;
-        if (fmt && strcmp(fmt, "D64") == 0) {
-            mode = LoadMode::DISK_FAST;
-        } else if (fmt && strcmp(fmt, "TAP") == 0) {
-            mode = LoadMode::TAPE_INSERTED;
-        }
-    }
-
-    // Defer loading until KERNAL/BASIC boot completes.
-    // The CPU starts at $FCE2 (KERNAL reset vector) and must complete its
-    // full boot sequence — IOINIT, RAMTAS, RESTOR, screen init, BASIC cold
-    // start — before we write program data to RAM. This prevents BASIC's
-    // NEW routine from zeroing $0801/$0802 and corrupting the loaded program.
-    pending_load_.result = result;  // Transfer ownership (don't free yet)
-    pending_load_.filepath = filepath;
-    pending_load_.active = true;
-    pending_load_.mode = mode;
-
-    // Set window title from file content (strings are already UTF-8
-    // after parsing — Latin-1→UTF-8 conversion happens in sid_parse_header).
-    if (sid_check && sid_check->name[0]) {
-        program_title_ = sid_check->name;
-        if (sid_check->author[0]) {
-            program_title_ += " - ";
-            program_title_ += sid_check->author;
-        }
-    } else {
-        // Use bare filename (strip directory path)
-        const char* name = filepath;
-        const char* sep = strrchr(filepath, '/');
-        if (!sep) sep = strrchr(filepath, '\\');
-        if (sep) name = sep + 1;
-        program_title_ = name;
-    }
-
-    printf("C64: File parsed (mode=%s) — deferred until BASIC READY\n",
-           mode == LoadMode::DISK_FAST ? "DISK_FAST" :
-           mode == LoadMode::TAPE_INSERTED ? "TAPE_INSERTED" : "DIRECT");
-    return true;
-}
+// ============================================================================
+// CommodoreSystem virtual hook implementations — C64
+// ============================================================================
 
 bool C64System::is_basic_ready() const {
     if (!initialized_ || !this->ram) return false;
 
     const uint8_t* ram = this->ram->data();
 
-    // The BASIC warm-start vector at $0302/$0303 is set to $A483 by the
-    // very first subroutine of the cold-start sequence (JSR $E453, which
-    // copies the vector table to $0300-$030B).  However, BASIC's NEW
-    // routine — which zeros $0801/$0802 — doesn't run until the THIRD
-    // subroutine (JSR $E422 → JMP $A644).  If we inject program data
-    // after the vector is set but BEFORE NEW runs, NEW will overwrite
-    // our first two bytes at $0801/$0802 with $00, making BASIC think
-    // no program exists.
-    //
-    // To avoid this, we also check VARTAB ($2D).  During cold boot,
-    // RAMTAS clears all of zero page ($2D = $00).  The BASIC cold-start
-    // code at $E3BF does NOT touch $2D.  Only NEW (at $A651) sets it to
-    // TXTTAB+2 = $03.  So $2D != $00 guarantees NEW has already run.
-    //
-    // After the first boot completes, we skip the VARTAB check because
-    // a program could legitimately set VARTAB to an address whose low
-    // byte is $00 (e.g. $1000).
+    // BASIC warm-start vector at $0302/$0303 = $A483.  NEW must also have
+    // run (VARTAB $2D != 0) to avoid $0801/$0802 corruption on first boot.
     if (ram[0x0302] != 0x83 || ram[0x0303] != 0xA4)
         return false;
     if (ram[c64_constants::KBD_BUFFER_COUNT] != 0)
@@ -1047,163 +953,7 @@ bool C64System::is_basic_ready() const {
     return true;
 }
 
-void C64System::apply_pending_load() {
-    if (!pending_load_.active || !initialized_) return;
-
-    // =========================================================================
-    // SID FILE PATH — Inject 6502 player stub instead of BASIC auto-run
-    // =========================================================================
-    const sid_header_t* sid = sid_get_metadata(&pending_load_.result);
-    if (sid) {
-        // RSID with init_addr=0: BASIC program SID.
-        // These are full BASIC programs that play music — they must be loaded
-        // at $0801 and RUN via BASIC like any normal .prg file.  We skip the
-        // player stub entirely and fall through to the standard BASIC load
-        // path, but still track the SID metadata for UI/title display.
-        bool is_basic_sid = (sid->type == SID_TYPE_RSID && sid->init_addr == 0);
-
-        if (!is_basic_sid) {
-            // Compute 0-based subtune index from the 1-based start_song
-            uint16_t subtune = sid->start_song;
-            if (subtune > 0) subtune--;
-
-            c64_apply_sid_load(this, sid, &pending_load_.result.program, subtune);
-
-            // Keep a copy of the SID header and payload for subtune switching
-            active_sid_header_ = *sid;
-            const auto& prog = pending_load_.result.program;
-            if (prog.data && prog.data_size > 0) {
-                active_sid_data_.assign(prog.data, prog.data + prog.data_size);
-            } else {
-                active_sid_data_.clear();
-            }
-            active_subtune_ = subtune;
-            sid_player_active_ = true;
-
-            // Track the SID revision that was applied so the GUI stays in sync
-            if (sid->version >= 2 && sid->sid_model != SID_MODEL_UNKNOWN) {
-                pending_sid_revision_ = (sid->sid_model == SID_MODEL_8580)
-                                        ? SID_REVISION_8580_R5
-                                        : SID_REVISION_6581_R4AR;
-            }
-            pending_load_.result.release();
-            pending_load_.active = false;
-            boot_completed_ = true;
-            return;
-        }
-
-        // BASIC SID: log and fall through to standard BASIC load path
-        printf("C64: RSID BASIC program — loading as standard BASIC PRG\n");
-    }
-
-    // =========================================================================
-    // DISK_FAST PATH — D64: Insert disk into 1541 + extract first PRG to RAM
-    // =========================================================================
-    if (pending_load_.mode == LoadMode::DISK_FAST) {
-        printf("C64: BASIC READY — DISK_FAST load\n");
-
-        // Find a 1541 drive on the IEC serial bus
-        auto* iec_port = get_connector_port(PORT_IEC_SERIAL);
-        Drive1541Device* drive = nullptr;
-        if (iec_port) {
-            for (auto* dev : iec_port->get_attached_devices()) {
-                drive = dynamic_cast<Drive1541Device*>(dev);
-                if (drive) break;  // Use the first available 1541
-            }
-        }
-
-        if (drive) {
-            drive->insert_disk(pending_load_.filepath.c_str());
-            printf("C64: D64 inserted into drive %d\n", drive->get_device_number());
-        } else {
-            // Auto-attach a 1541 drive to the IEC bus
-            if (iec_port && attach_device_to_port(PORT_IEC_SERIAL, "1541")) {
-                // Find the newly attached drive
-                for (auto* dev : iec_port->get_attached_devices()) {
-                    drive = dynamic_cast<Drive1541Device*>(dev);
-                    if (drive) break;
-                }
-                if (drive) {
-                    drive->insert_disk(pending_load_.filepath.c_str());
-                    printf("C64: Auto-attached 1541 drive #8, D64 inserted\n");
-                }
-            } else {
-                printf("C64: No IEC serial port available — D64 not mounted\n");
-            }
-        }
-
-        // Also fast-load the extracted PRG into RAM for instant start
-        if (pending_load_.result.type == FORMAT_LOAD_PROGRAM &&
-            pending_load_.result.program.data) {
-            commodore_load_context_t ctx = {};
-            ctx.system_name     = "C64";
-            ctx.write_byte      = c64_mem_write_byte;
-            ctx.write_block     = c64_mem_write_block;
-            ctx.mem_read        = c64_mem_read;
-            ctx.mem_ctx         = this->ram;
-            ctx.basic_params    = &COMMODORE_BASIC_C64;
-            ctx.basic_start_addrs[0] = c64_constants::BASIC_START;
-            ctx.default_raw_addr = 0xC000;
-
-            commodore_apply_load_result(&ctx, &pending_load_.result,
-                                        pending_load_.filepath.c_str());
-        } else if (drive) {
-            // No PRG extracted — inject LOAD"*",8,1 + RUN for native disk load
-            const char* load_cmd = "LOAD\"*\",8,1\r";
-            int len = (int)strlen(load_cmd);
-            if (len > 10) len = 10;
-            for (int i = 0; i < len; i++) {
-                c64_mem_write_byte(this->ram, (uint16_t)(c64_constants::KBD_BUFFER_BASE + i), (uint8_t)load_cmd[i]);
-            }
-            c64_mem_write_byte(this->ram, c64_constants::KBD_BUFFER_COUNT, (uint8_t)len);
-        }
-
-        pending_load_.result.release();
-        pending_load_.active = false;
-        boot_completed_ = true;
-        return;
-    }
-
-    // =========================================================================
-    // TAPE_INSERTED PATH — TAP: Load tape into datasette + inject LOAD
-    // =========================================================================
-    if (pending_load_.mode == LoadMode::TAPE_INSERTED) {
-        printf("C64: BASIC READY — TAPE_INSERTED load\n");
-
-        // Find the datasette on the cassette port
-        auto* cass_port = get_connector_port(PORT_CASSETTE);
-        Datasette1530Device* datasette = nullptr;
-        if (cass_port) {
-            datasette = dynamic_cast<Datasette1530Device*>(cass_port->get_attached_device());
-        }
-
-        if (datasette) {
-            datasette->load_tap(pending_load_.filepath.c_str());
-            datasette->press_play();
-            printf("C64: TAP loaded into datasette, PLAY pressed\n");
-
-            // Inject LOAD + RETURN to start tape loading
-            const char* load_cmd = "LOAD\r";
-            int len = (int)strlen(load_cmd);
-            for (int i = 0; i < len; i++) {
-                c64_mem_write_byte(this->ram, (uint16_t)(c64_constants::KBD_BUFFER_BASE + i), (uint8_t)load_cmd[i]);
-            }
-            c64_mem_write_byte(this->ram, c64_constants::KBD_BUFFER_COUNT, (uint8_t)len);
-        } else {
-            printf("C64: No datasette attached — TAP not loaded\n");
-        }
-
-        pending_load_.result.release();
-        pending_load_.active = false;
-        boot_completed_ = true;
-        return;
-    }
-
-    // =========================================================================
-    // STANDARD PATH — PRG / T64 / CRT / LNX / BIN
-    // =========================================================================
-    printf("C64: BASIC READY — applying deferred load\n");
-
+commodore_load_context_t C64System::build_load_context() {
     commodore_load_context_t ctx = {};
     ctx.system_name     = "C64";
     ctx.write_byte      = c64_mem_write_byte;
@@ -1213,17 +963,86 @@ void C64System::apply_pending_load() {
     ctx.basic_params    = &COMMODORE_BASIC_C64;
     ctx.basic_start_addrs[0] = c64_constants::BASIC_START;
     ctx.default_raw_addr = 0xC000;
-    // No set_pc for deferred loads — BASIC programs use RUN injection,
-    // and even ML programs benefit from full KERNAL init already done.
     ctx.set_pc          = nullptr;
     ctx.pc_ctx          = nullptr;
+    return ctx;
+}
 
-    commodore_apply_load_result(&ctx, &pending_load_.result,
-                                pending_load_.filepath.c_str());
+void C64System::inject_keys(const char* str) {
+    if (!this->ram) return;
+    int len = static_cast<int>(strlen(str));
+    if (len > 10) len = 10;  // C64 keyboard buffer capacity
+    for (int i = 0; i < len; i++) {
+        this->ram->data()[c64_constants::KBD_BUFFER_BASE + i] =
+            static_cast<uint8_t>(str[i]);
+    }
+    this->ram->data()[c64_constants::KBD_BUFFER_COUNT] =
+        static_cast<uint8_t>(len);
+}
 
-    pending_load_.result.release();
-    pending_load_.active = false;
-    boot_completed_ = true;
+bool C64System::on_file_parsed(format_load_result_t& result,
+                               const char* filepath) {
+    (void)filepath;
+
+    // Clear SID player state from any previous load
+    sid_player_active_ = false;
+    active_sid_data_.clear();
+
+    // For SID files: ensure the C64 is configured with the correct region
+    // (PAL/NTSC) and SID revision, reset for clean state, and patch KERNAL
+    // to skip the RAMTAS memory test for near-instant boot.
+    const sid_header_t* sid = sid_get_metadata(&result);
+    if (sid) {
+        ensure_compatible_for_sid(sid);
+
+        // Set rich program title from SID metadata
+        if (sid->name[0]) {
+            program_title_ = sid->name;
+            if (sid->author[0]) {
+                program_title_ += " - ";
+                program_title_ += sid->author;
+            }
+        }
+    }
+
+    return true;
+}
+
+bool C64System::pre_apply_pending_load() {
+    const sid_header_t* sid = sid_get_metadata(&pending_load_.result);
+    if (!sid) return false;
+
+    // RSID with init_addr=0: BASIC program SID — fall through to standard path
+    bool is_basic_sid = (sid->type == SID_TYPE_RSID && sid->init_addr == 0);
+    if (is_basic_sid) {
+        printf("C64: RSID BASIC program — loading as standard BASIC PRG\n");
+        return false;
+    }
+
+    // Inject 6502 SID player stub
+    uint16_t subtune = sid->start_song;
+    if (subtune > 0) subtune--;
+
+    c64_apply_sid_load(this, sid, &pending_load_.result.program, subtune);
+
+    // Keep SID header and payload for interactive subtune switching
+    active_sid_header_ = *sid;
+    const auto& prog = pending_load_.result.program;
+    if (prog.data && prog.data_size > 0) {
+        active_sid_data_.assign(prog.data, prog.data + prog.data_size);
+    } else {
+        active_sid_data_.clear();
+    }
+    active_subtune_ = subtune;
+    sid_player_active_ = true;
+
+    if (sid->version >= 2 && sid->sid_model != SID_MODEL_UNKNOWN) {
+        pending_sid_revision_ = (sid->sid_model == SID_MODEL_8580)
+                                ? SID_REVISION_8580_R5
+                                : SID_REVISION_6581_R4AR;
+    }
+
+    return true;  // Handled — skip DISK_FAST/TAPE/STANDARD paths
 }
 
 // ============================================================================

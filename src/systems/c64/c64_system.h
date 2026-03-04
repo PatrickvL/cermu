@@ -39,7 +39,6 @@ public:
     void reset() override;
     void tick() override;
     void run_frame() override;
-    bool load_file(const char* filepath) override;
     uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
     void set_framebuffer(uint32_t* buffer, int width, int height) override;
@@ -102,52 +101,15 @@ private:
     vicii_standard_t created_vicii_standard_ = VIC_PAL;  // Actual VIC-II standard at creation time
     sid_revision_t pending_sid_revision_ = SID_REVISION_6581_R4AR;  // Applied after SID creation
 
-    // =========================================================================
-    // DEFERRED LOADING
-    // =========================================================================
-    // File loading is deferred until KERNAL/BASIC boot completes. This avoids
-    // the problem where BASIC's cold-start NEW routine zeros $0801/$0802,
-    // corrupting program data loaded before boot. The system stores the
-    // parsed format result and applies it only after BASIC reaches its READY
-    // state (warm-start vector set, keyboard buffer empty).
-    //
-    // MEDIA ATTACHMENT: For D64 and TAP files, the media is inserted into the
-    // appropriate storage device (1541 drive or datasette). D64 files also
-    // extract the first PRG for fast direct-load (hybrid approach: disk is
-    // available for directory listing AND the first program auto-runs). TAP
-    // files are loaded into the datasette; full tape loading requires KERNAL
-    // cassette I/O integration (CASS_READ signal wiring to CPU I/O port).
-    //
-    // FUTURE OPTIMIZATION: Some files (e.g. raw ML at $C000, or programs
-    // that never touch KERNAL/BASIC-initialized memory) could be loaded
-    // earlier — even before BASIC or KERNAL init completes. This would
-    // reduce the perceived startup latency. Combined with techniques like
-    // patching out KERNAL's memory test/clear loops, this could allow
-    // near-instant startup for many programs. Not yet implemented; the
-    // current approach prioritizes correctness over speed.
-    // =========================================================================
-
-    /** How the deferred load should be applied after BASIC READY. */
-    enum class LoadMode {
-        DIRECT,         ///< Standard: write program data to RAM, inject RUN
-        DISK_FAST,      ///< D64: disk inserted in 1541 + fast PRG extraction to RAM
-        TAPE_INSERTED   ///< TAP: tape loaded in datasette, inject LOAD + press play
-    };
-
-    struct PendingLoad {
-        format_load_result_t result;  // Parsed file data (owns heap allocations)
-        std::string filepath;         // Original filepath for SYS-from-filename
-        bool active = false;          // Whether a deferred load is pending
-        LoadMode mode = LoadMode::DIRECT;  // How to apply the load
-    };
-    PendingLoad pending_load_;
-    bool boot_completed_ = false;  // Set after first deferred load; skips VARTAB check
-
-    /** Check if BASIC has reached its READY state (safe to inject program). */
-    bool is_basic_ready() const;
-
-    /** Apply the pending load result to RAM and inject auto-run. */
-    void apply_pending_load();
+    // ---- CommodoreSystem loading hooks ----
+    bool is_basic_ready() const override;
+    commodore_load_context_t build_load_context() override;
+    void inject_keys(const char* str) override;
+    bool is_system_initialized() const override { return initialized_; }
+    bool on_file_parsed(format_load_result_t& result, const char* filepath) override;
+    bool pre_apply_pending_load() override;
+    int get_iec_port_index() const override { return PORT_IEC_SERIAL; }
+    int get_cassette_port_index() const override { return PORT_CASSETTE; }
 
     /** Single system tick — ticks all chips in correct phase order. */
     void system_tick();
