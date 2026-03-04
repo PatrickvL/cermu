@@ -853,7 +853,11 @@ uint8_t Commodore264System<V>::ted_mem_read(void* user_data, uint16_t address) {
 
     // Video ROM select ($FF12 bit 2) — controls TED's own memory reads
     // (character generator, bitmap data).  When set, addresses >= $8000
-    // read from ROM; addresses < $8000 return open bus ($FF).
+    // read from ROM; addresses < $8000 fall through to RAM.
+    // On real hardware, ROMSEL only remaps the upper 32KB (A15=1) to ROM;
+    // the lower 32KB (A15=0) always reads RAM regardless of ROMSEL state.
+    // This matters for color/screen attribute fetches whose addresses are
+    // typically below $8000.
     bool video_romsel = (sys->ted_->registers.data[TED_REG_MEM_CTRL] & 0x04) != 0;
 
     if (video_romsel) {
@@ -861,9 +865,8 @@ uint8_t Commodore264System<V>::ted_mem_read(void* user_data, uint16_t address) {
             return (*sys->kernal_rom_)[address - 0xC000];
         } else if (address >= 0x8000) {
             return (*sys->basic_rom_)[address - 0x8000];
-        } else {
-            return 0xFF;  // Open bus — ROM select but address below ROM range
         }
+        // A15=0: fall through to RAM read below
     }
 
     // RAM access (mirror for 16KB models: address & 0x3FFF)
