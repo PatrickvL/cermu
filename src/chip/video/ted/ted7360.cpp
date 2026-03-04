@@ -154,8 +154,12 @@ void ted7360_t::update_border_limits() {
     border.top    = (cr1 & TED_CR1_RSEL) ?    4u :    8u;
     border.bottom = (cr1 & TED_CR1_RSEL) ? 0xCBu : 0xC7u;
     // Horizontal: CSEL — 40-column (1) or 38-column (0) display window
-    border.left   = (cr2 & TED_CR2_CSEL) ?  24u :  31u;
-    border.right  = (cr2 & TED_CR2_CSEL) ? 344u : 335u;
+    // Pixel positions derived from VICE: TED_40COL_START_PIXEL = screen_leftborderwidth (32),
+    // TED_40COL_STOP_PIXEL = screen_leftborderwidth + 320 (352).
+    // TED_38COL_START_PIXEL = screen_leftborderwidth + 7 (39),
+    // TED_38COL_STOP_PIXEL  = screen_leftborderwidth + 311 (343).
+    border.left   = (cr2 & TED_CR2_CSEL) ?  32u :  39u;
+    border.right  = (cr2 & TED_CR2_CSEL) ? 352u : 343u;
 }
 
 // ============================================================================
@@ -163,8 +167,13 @@ void ted7360_t::update_border_limits() {
 // ============================================================================
 // A DMA line occurs when:
 //   1. Raster counter is in the display range (0 to $CB)
-//   2. Lower 3 bits of raster counter match YSCROLL
+//   2. Lower 3 bits of raster counter match (YSCROLL + 1) & 7
 //   3. DEN has been set (latched for the frame)
+//
+// The +1 offset matches VICE's do_matrix_fetch() condition:
+//   (ted_raster_counter & 7) == ((ysmooth + 1) & 7)
+// This ensures RC=0 aligns with the border opening (border.top=4 with
+// KERNAL default yscroll=3 → DMA at raster & 7 == 4).
 //
 // Once triggered, display_state and dma_line_occurred are set for the line.
 
@@ -178,8 +187,17 @@ void ted7360_t::update_dma_condition() {
 
     if (raster <= 0xCBu && video_logic.den_latched) {
         const uint8_t yscroll = cr1 & TED_CR1_YSCROLL_MASK;
-        video_logic.is_dma_line = ((raster & 0x07u) == yscroll);
+        video_logic.is_dma_line = ((raster & 0x07u) == ((yscroll + 1u) & 7u));
         if (video_logic.is_dma_line) {
+            // On FIRST detection of the DMA line (before g-access runs),
+            // reset RC=0 and reload VC from VCBASE.  This matches VICE's
+            // do_matrix_fetch() which resets ycounter and mem_counter at
+            // the start of the DMA fetch, not at end-of-line.
+            if (!video_logic.dma_line_occurred) {
+                video_logic.rc   = 0;
+                video_logic.vc   = video_logic.vcbase;
+                video_logic.vmli = 0;
+            }
             video_logic.display_state     = true;
             video_logic.dma_line_occurred = true;
         }
@@ -751,10 +769,13 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
 
     // ===== STEP 2: PHI1 g-access (chargen / bitmap read) =====
     // During display state, TED reads character or bitmap data for each column.
-    // The first TED_DMA_SETUP_CYCLES cycles of the DMA window are setup
-    // (BA is asserted but no g-access occurs yet).
-    const bool in_display_window = (x >= TED_FETCH_CYCLE + TED_DMA_SETUP_CYCLES)
-                                && (x <= TED_FETCH_END_CYCLE);
+    // g-access starts at TED_FETCH_CYCLE (cycle 4) — the same cycle at which
+    // the display area begins (pixel 32 = cycle 4 × 8).  This ensures the
+    // pixel_sequencer reads freshly-fetched char_data on the same cycle, not
+    // stale data from the previous line.  BA goes low 3 cycles earlier for
+    // bus arbitration, but PHI1 g-access does not need the stolen bus.
+    const bool in_display_window = (x >= TED_FETCH_CYCLE)
+                                && (x <  TED_FETCH_CYCLE + TED_SCREEN_TEXTCOLS);
 
     if (video_logic.display_state && in_display_window) {
         uint16_t address;
@@ -818,7 +839,7 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
     uint16_t c_access_address = 0;
     bool     c_access_pending = false;
 
-    if (dma_active && x >= TED_FETCH_CYCLE + TED_DMA_SETUP_CYCLES) {
+    if (dma_active && in_display_window) {
         // Use pre-increment vc: the g-access already incremented vc by 1,
         // but the c-access targets the same column that was just g-accessed.
         const uint16_t vc = (video_logic.vc - 1u) & TED_VC_MASK;
@@ -883,11 +904,8 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
             video_logic.vc   = video_logic.vcbase;
             video_logic.vmli = 0;
         }
-        if (video_logic.is_dma_line) {
-            video_logic.rc   = 0;
-            video_logic.vc   = video_logic.vcbase;
-            video_logic.vmli = 0;
-        }
+        // NOTE: DMA line RC=0 reset is handled in update_dma_condition() at
+        // first detection (before g-access).  No separate DMA block needed here.
     }
 
     // ===== STEP 9: Drive bus address for c-access PHI2 delivery =====
