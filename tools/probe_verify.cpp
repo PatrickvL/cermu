@@ -12,6 +12,7 @@
 
 #include "../src/core/emulated_system.h"
 #include "../src/core/system_registry.h"
+#include "../src/core/formats/format_handler.h"
 #include "../src/core/formats/format_registry.h"
 #include "../src/core/vfs/vfs.h"
 #include <cstdio>
@@ -21,6 +22,7 @@
 #include <vector>
 #include <map>
 #include <algorithm>
+#include <functional>
 #include <dirent.h>
 #include <sys/stat.h>
 
@@ -178,6 +180,143 @@ int main(int argc, char** argv) {
     };
     std::map<std::string, SystemStats> stats;
 
+    // ----------------------------------------------------------------
+    // probe_one — probe a single blob of data against expected systems.
+    // `id_path` is the path hint passed to identify_system (used for
+    //  extension/keyword extraction).  `display` is what we print.
+    // ----------------------------------------------------------------
+    auto probe_one = [&](const std::string& id_path,
+                         const std::string& display,
+                         const uint8_t* data, size_t size,
+                         const FolderSystemMapping* mapping,
+                         SystemStats& st) {
+        total_files++;
+
+        auto match = registry.identify_system(id_path.c_str(), data, size);
+
+        bool is_acceptable = false;
+        for (const auto& sys : mapping->acceptable_systems) {
+            if (match.system_name == sys) { is_acceptable = true; break; }
+        }
+
+        if (match.system_name.empty() || match.confidence < 0.5f) {
+            total_unknown++;
+            st.unknown++;
+            printf("  UNKNOWN (%.2f %s): %s\n",
+                   match.confidence,
+                   match.system_name.empty() ? "none" : match.system_name.c_str(),
+                   display.c_str());
+        } else if (is_acceptable) {
+            total_pass++;
+            st.pass++;
+        } else {
+            total_fail++;
+            st.fail++;
+            mismatches.push_back({ display,
+                mapping->acceptable_systems[0],
+                match.system_name, match.confidence });
+            printf("  MISMATCH: %s -> %s (%.2f) expected %s\n",
+                   display.c_str(), match.system_name.c_str(),
+                   match.confidence,
+                   mapping->acceptable_systems[0].c_str());
+        }
+    };
+
+    // ----------------------------------------------------------------
+    // probe_container_entries — probe individual entries inside a
+    // container format (D64, T64, LNX, …) using list/extract callbacks.
+    // ----------------------------------------------------------------
+    auto probe_container_entries = [&](const format_descriptor_t* fmt,
+                                       const uint8_t* data, size_t size,
+                                       const std::string& display_prefix,
+                                       const FolderSystemMapping* mapping,
+                                       SystemStats& st) {
+        if (!fmt->list_entries || !fmt->extract_entry) return;
+
+        static constexpr int MAX_ENTRIES = 512;
+        format_container_entry_t entries[MAX_ENTRIES];
+        int count = fmt->list_entries(data, size, entries, MAX_ENTRIES);
+        if (count <= 0) return;
+
+        for (int i = 0; i < count; ++i) {
+            uint8_t* entry_data = nullptr;
+            size_t entry_size = 0;
+            if (!fmt->extract_entry(data, size, entries[i].index,
+                                    &entry_data, &entry_size))
+                continue;
+
+            std::string entry_display = display_prefix + "!/" + entries[i].display_name;
+            // Use the full display path as id_path so that Phase 3 keyword
+            // matching can leverage ancestor folder/archive names.
+            probe_one(entry_display, entry_display,
+                      entry_data, entry_size, mapping, st);
+            free(entry_data);
+        }
+    };
+
+    // ----------------------------------------------------------------
+    // Forward-declare probe_vfs_entry for recursive archive scanning.
+    // ----------------------------------------------------------------
+    std::function<void(const std::string& vfs_path,
+                       const std::string& display_prefix,
+                       const FolderSystemMapping* mapping,
+                       SystemStats& st, int depth)> probe_vfs_entry;
+
+    // ----------------------------------------------------------------
+    // probe_archive — list entries in an archive via VFS, probe each.
+    // ----------------------------------------------------------------
+    probe_vfs_entry = [&](const std::string& vfs_path,
+                          const std::string& display_prefix,
+                          const FolderSystemMapping* mapping,
+                          SystemStats& st, int depth) {
+        if (depth > 3) return;  // nesting limit
+
+        auto entries = vfs_list_entries(vfs_path.c_str());
+        for (const auto& ve : entries) {
+            if (ve.type == VfsEntryType::Directory) continue;
+            if (ve.name == "." || ve.name == "..") continue;
+
+            std::string entry_ext = get_extension(ve.name);
+            std::string entry_vfs = vfs_join_path(vfs_path, ve.name);
+            std::string entry_display = display_prefix + "!/" + ve.name;
+
+            // Read the entry data
+            size_t entry_size = 0;
+            uint8_t* data = vfs_read_file(entry_vfs.c_str(), &entry_size);
+            if (!data) {
+                printf("  SKIP (read failed): %s\n", entry_display.c_str());
+                total_skipped++;
+                st.skipped++;
+                continue;
+            }
+
+            // If this entry is itself an archive, recurse
+            if (vfs_is_archive_extension(entry_ext.c_str())) {
+                probe_vfs_entry(entry_vfs, entry_display, mapping, st, depth + 1);
+                free(data);
+                continue;
+            }
+
+            // Probe the entry itself (container or regular file)
+            if (is_loadable_extension(entry_ext)) {
+                probe_one(entry_vfs, entry_display, data, entry_size, mapping, st);
+
+                // If it's a container, also probe its internal entries
+                const auto* fmt = FormatRegistry::instance().find_by_extension(entry_ext.c_str());
+                if (fmt && (fmt->capabilities & FORMAT_CAP_CONTAINER) &&
+                    fmt->list_entries && fmt->extract_entry) {
+                    probe_container_entries(fmt, data, entry_size,
+                                           entry_display, mapping, st);
+                }
+            }
+
+            free(data);
+        }
+    };
+
+    // ----------------------------------------------------------------
+    // Main scan loop
+    // ----------------------------------------------------------------
     for (const auto& folder : test_folders) {
         printf("\n=== Scanning: %s (expect: ", folder.name.c_str());
         for (size_t i = 0; i < folder.mapping->acceptable_systems.size(); i++) {
@@ -193,17 +332,16 @@ int main(int argc, char** argv) {
         auto& st = stats[folder.name];
 
         for (const auto& filepath : files) {
-            total_files++;
-
             std::string ext = get_extension(filepath);
 
-            // Archives (.zip, .7z) can't be identified without extracting —
-            // the VFS layer would handle this in the actual UI flow, but
-            // for a batch probe test we skip them since identify_system
-            // expects the raw file data, not an archive wrapper.
-            if (ext == ".zip" || ext == ".7z") {
-                total_skipped++;
-                st.skipped++;
+            // Strip the data_dir prefix for display
+            std::string display = filepath;
+            if (filepath.find(data_dir) == 0)
+                display = filepath.substr(data_dir.size() + 1);
+
+            // Archives — scan their contents via VFS
+            if (vfs_is_archive_extension(ext.c_str())) {
+                probe_vfs_entry(filepath, display, folder.mapping, st, 0);
                 continue;
             }
 
@@ -211,46 +349,24 @@ int main(int argc, char** argv) {
             size_t file_size = 0;
             uint8_t* data = vfs_read_file(filepath.c_str(), &file_size);
             if (!data) {
-                printf("  SKIP (read failed): %s\n", filepath.c_str());
+                printf("  SKIP (read failed): %s\n", display.c_str());
                 total_skipped++;
                 st.skipped++;
                 continue;
             }
 
-            auto match = registry.identify_system(filepath.c_str(), data, file_size);
+            // Probe the file
+            probe_one(filepath, display, data, file_size, folder.mapping, st);
+
+            // If it's a container, also probe individual entries
+            const auto* fmt = FormatRegistry::instance().find_by_extension(ext.c_str());
+            if (fmt && (fmt->capabilities & FORMAT_CAP_CONTAINER) &&
+                fmt->list_entries && fmt->extract_entry) {
+                probe_container_entries(fmt, data, file_size,
+                                       display, folder.mapping, st);
+            }
+
             free(data);
-
-            // Strip the data_dir prefix from display path
-            std::string display = filepath;
-            if (filepath.find(data_dir) == 0)
-                display = filepath.substr(data_dir.size() + 1);
-
-            bool is_acceptable = false;
-            for (const auto& sys : folder.mapping->acceptable_systems) {
-                if (match.system_name == sys) { is_acceptable = true; break; }
-            }
-
-            if (match.system_name.empty() || match.confidence < 0.5f) {
-                total_unknown++;
-                st.unknown++;
-                printf("  UNKNOWN (%.2f %s): %s\n",
-                       match.confidence,
-                       match.system_name.empty() ? "none" : match.system_name.c_str(),
-                       display.c_str());
-            } else if (is_acceptable) {
-                total_pass++;
-                st.pass++;
-            } else {
-                total_fail++;
-                st.fail++;
-                mismatches.push_back({ display,
-                    folder.mapping->acceptable_systems[0],
-                    match.system_name, match.confidence });
-                printf("  MISMATCH: %s -> %s (%.2f) expected %s\n",
-                       display.c_str(), match.system_name.c_str(),
-                       match.confidence,
-                       folder.mapping->acceptable_systems[0].c_str());
-            }
         }
 
         printf("  Results: %d pass, %d fail, %d unknown, %d skipped\n",
@@ -265,7 +381,7 @@ int main(int argc, char** argv) {
     printf("  Pass:        %d\n", total_pass);
     printf("  Mismatch:    %d\n", total_fail);
     printf("  Unknown:     %d (confidence < 0.5)\n", total_unknown);
-    printf("  Skipped:     %d (archives)\n", total_skipped);
+    printf("  Skipped:     %d (read failures)\n", total_skipped);
 
     if (!mismatches.empty()) {
         printf("\n--- MISMATCHES ---\n");
