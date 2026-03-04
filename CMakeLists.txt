@@ -632,6 +632,32 @@ set_target_properties(vfs_smoke_test PROPERTIES
 
 message(STATUS "VFS smoke test tool will be built")
 
+# Probe verification tool — batch tests system identification across data folders
+add_executable(probe_verify
+    tools/probe_verify.cpp
+    ${CORE_SOURCES}
+    ${CHIP_SOURCES}
+    ${SYSTEM_SOURCES}
+    ${CORE_UTIL_SOURCES}
+    ${GUI_STUB_SOURCES}
+)
+
+target_link_libraries(probe_verify
+    fam65xx_decoder
+    ${LIBARCHIVE_LIBRARIES}
+    ${SDL2_LIBRARIES}
+)
+
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(probe_verify m)
+endif()
+
+set_target_properties(probe_verify PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+message(STATUS "Probe verification tool will be built")
+
 # Link toml++ library (commented out - toml_test target not defined)
 # target_link_libraries(toml_test
 #     tomlplusplus::tomlplusplus

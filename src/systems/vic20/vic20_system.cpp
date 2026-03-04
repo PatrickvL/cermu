@@ -8,6 +8,8 @@
 #include "vic20_keyboard_matrix.h" // VIC-20 keyboard matrix data
 #include <cstring>
 #include <cstdio>
+#include <cctype>
+#include <algorithm>
 
 #ifdef CERMU_HAS_GUI
 #include "imgui.h"
@@ -157,6 +159,7 @@ static bool is_vic20_load_address(uint16_t addr) {
     return addr == vic20_constants::BASIC_START_UNEXPANDED ||
            addr == vic20_constants::BASIC_START_3K ||
            addr == vic20_constants::BASIC_START_8K ||
+           addr == 0x1000 ||                               // Default screen RAM start / ML
            addr == vic20_constants::BLK1_START ||
            addr == vic20_constants::BLK2_START ||
            addr == vic20_constants::BLK3_START ||
@@ -214,7 +217,7 @@ static int vic20_memory_index_for_prg(uint16_t load_addr, uint32_t end_addr) {
 
 static SystemProbeResult vic20_probe_file(
     const format_descriptor_t* matched_format,
-    const char* /*filepath*/,
+    const char* filepath,
     const uint8_t* data, size_t size)
 {
     SystemProbeResult result;
@@ -227,12 +230,23 @@ static SystemProbeResult vic20_probe_file(
             uint16_t load_addr = data[0] | (data[1] << 8);
             uint32_t end_addr  = (uint32_t)load_addr + (uint32_t)(size - 2);
 
-            if (load_addr == vic20_constants::BASIC_START_UNEXPANDED)
-                result.confidence = 0.85f;
-            else if (is_vic20_load_address(load_addr))
+            if (load_addr == vic20_constants::BASIC_START_UNEXPANDED) {
+                // Unexpanded VIC-20 has screen at $1E00 → ~3 KB for BASIC.
+                // Programs starting at $1001 that extend far beyond that are
+                // almost certainly C16/Plus4 (which shares the $1001 address).
+                if (end_addr > 0x8000)
+                    result.confidence = 0.30f;      // Way beyond any VIC-20 config
+                else if (end_addr > 0x4000)
+                    result.confidence = 0.45f;      // Exceeds expanded VIC-20 BASIC area
+                else if (end_addr > 0x2000)
+                    result.confidence = 0.60f;      // Larger than unexpanded can hold
+                else
+                    result.confidence = 0.85f;      // Fits in unexpanded VIC-20
+            } else if (is_vic20_load_address(load_addr)) {
                 result.confidence = 0.7f;
-            else
+            } else {
                 result.confidence = 0.5f;
+            }
 
             result.configuration.memory_option_index =
                 vic20_memory_index_for_prg(load_addr, end_addr);
@@ -284,14 +298,28 @@ static SystemProbeResult vic20_probe_file(
             result.confidence = 0.5f;
         }
 
-    // --- D64: extract first PRG, check load address + memory ---
+    // --- D64: extract first PRG, check load address + size + memory ---
     } else if (matched_format == &D64_FORMAT_DESCRIPTOR) {
         commodore_d64_t d64;
         if (d64.open_mem(data, size)) {
             commodore_prg_t prg = {};
             if (d64.extract_first_prg(&prg)) {
                 uint32_t end_addr = (uint32_t)prg.load_addr + (uint32_t)prg.data_size;
-                result.confidence = is_vic20_load_address(prg.load_addr) ? 0.90f : 0.4f;
+
+                if (prg.load_addr == vic20_constants::BASIC_START_UNEXPANDED) {
+                    // Same size-aware logic as standalone PRG
+                    if (end_addr > 0x8000)
+                        result.confidence = 0.30f;
+                    else if (end_addr > 0x4000)
+                        result.confidence = 0.45f;
+                    else if (end_addr > 0x2000)
+                        result.confidence = 0.60f;
+                    else
+                        result.confidence = 0.90f;
+                } else {
+                    result.confidence = is_vic20_load_address(prg.load_addr) ? 0.90f : 0.4f;
+                }
+
                 result.configuration.memory_option_index =
                     vic20_memory_index_for_prg(prg.load_addr, end_addr);
                 commodore_prg_free(&prg);
@@ -317,6 +345,27 @@ static SystemProbeResult vic20_probe_file(
     // --- BIN: generic binary ---
     } else if (matched_format == &BIN_FORMAT_DESCRIPTOR) {
         result.confidence = 0.3f;
+    }
+
+    // =================================================================
+    // Filepath heuristics — scan the ENTIRE path (including archive
+    // names in VFS paths) for system keywords.  Raises confidence
+    // but never lowers it.
+    // =================================================================
+    if (filepath) {
+        std::string lower(filepath);
+        for (auto& c : lower) c = static_cast<char>(tolower(c));
+
+        if (lower.find("vic20")  != std::string::npos ||
+            lower.find("vic-20") != std::string::npos ||
+            lower.find("vic 20") != std::string::npos ||
+            lower.find("vic_20") != std::string::npos) {
+            result.confidence = std::max(result.confidence, 0.90f);
+        }
+
+        // Region hint
+        if (lower.find("ntsc") != std::string::npos)
+            result.configuration.region_option_index = 1;   // NTSC
     }
 
     return result;
