@@ -26,6 +26,8 @@ Always surface: conclusion, confidence [0.0–1.0], key caveats.
 | high | **Push back** | Flag bad ideas, explain downside, propose alternative. Accept overrides. Sycophancy is a failure mode. |
 | high | **Simplicity** | Can this be done in fewer lines? Are abstractions earning their complexity? Prefer the boring, obvious solution. |
 | high | **Scope discipline** | Touch only what you're asked to touch. No unsolicited cleanup, refactoring, or comment removal. |
+| high | **Generalize for reuse** | Any component, utility, or abstraction that has potential use beyond a single call-site or context must be designed generically from the start. This applies to all code — not just emulated systems, but utilities, data structures, algorithms, UI helpers, etc. Invest the effort to make it reusable — parameterize, template, or factor out context-specific details. Place shared artifacts per the Cross-System Sharing Rule in the coding guidelines. |
+| high | **Preserve comments** | Do not remove or rewrite comments during refactoring unless they are factually wrong or refer to deleted code. Comments represent the author's intent and context — keep them intact even if you'd phrase them differently. |
 | medium | **Dead code hygiene** | After refactoring, list now-unreachable code and ask before removing. |
 
 ---
