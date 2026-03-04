@@ -402,9 +402,6 @@ struct ted7360_t : public ChipBase {
      */
     void tick_phi2(bus_state_t bus_state);
 
-    /** Tick one TED cycle — legacy wrapper, calls phi1+phi2 internally. */
-    void tick();
-
     // ========================================================================
     // Public API — Register I/O
     // ========================================================================
@@ -489,9 +486,6 @@ private:
 
     uint8_t get_graphics_mode() const;
     uint16_t get_raster_compare() const;
-
-    // Legacy tick subcycle tracker
-    int legacy_subcycle_ = 0;
 
     // --- ChipBase interface ---
     bool has_debug_content()    const override;
