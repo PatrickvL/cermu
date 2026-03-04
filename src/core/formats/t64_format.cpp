@@ -184,6 +184,59 @@ static bool t64_load(const uint8_t* data, size_t size, format_load_result_t* out
 // Format Descriptor
 // ============================================================================
 
+/// List directory entries in a T64 archive.  Returns entry count, or -1 on error.
+static int t64_list_entries(const uint8_t* data, size_t size,
+                            format_container_entry_t* entries, int max_entries) {
+    commodore_t64_t t64{};
+    if (!t64.open_mem(data, size)) return -1;
+
+    commodore_t64_directory_t dir{};
+    if (!t64.read_directory(&dir)) { t64.close(); return -1; }
+
+    int count = 0;
+    for (int i = 0; i < dir.count && count < max_entries; ++i) {
+        const auto& te = dir.entries[i];
+
+        char name_buf[17]{};
+        memcpy(name_buf, te.filename, 16);
+        for (int j = 0; j < 16 && name_buf[j]; ++j)
+            name_buf[j] = petscii_to_ascii(static_cast<uint8_t>(name_buf[j]));
+
+        auto& entry = entries[count];
+        snprintf(entry.display_name, sizeof(entry.display_name), "%s.prg", name_buf);
+        entry.size  = te.data_size;
+        entry.index = i;
+        ++count;
+    }
+
+    t64.close();
+    return count;
+}
+
+/// Extract a T64 entry by index.  Returns PRG data with 2-byte load address header.
+static bool t64_extract_entry(const uint8_t* data, size_t size,
+                              int entry_index, uint8_t** out_data, size_t* out_size) {
+    commodore_t64_t t64{};
+    if (!t64.open_mem(data, size)) return false;
+
+    commodore_prg_t prg{};
+    bool ok = t64.extract_file(entry_index, &prg);
+    t64.close();
+
+    if (!ok) return false;
+
+    // Build PRG-format buffer: 2-byte load address + data
+    *out_size = 2 + prg.data_size;
+    *out_data = static_cast<uint8_t*>(malloc(*out_size));
+    if (!*out_data) { commodore_prg_free(&prg); return false; }
+
+    (*out_data)[0] = static_cast<uint8_t>(prg.load_addr & 0xFF);
+    (*out_data)[1] = static_cast<uint8_t>(prg.load_addr >> 8);
+    memcpy(*out_data + 2, prg.data, prg.data_size);
+    commodore_prg_free(&prg);
+    return true;
+}
+
 static const char* t64_extensions[] = { ".t64", NULL };
 
 const format_descriptor_t T64_FORMAT_DESCRIPTOR = {
@@ -192,7 +245,9 @@ const format_descriptor_t T64_FORMAT_DESCRIPTOR = {
     t64_extensions,
     FORMAT_CAP_LOADABLE | FORMAT_CAP_CONTAINER,
     t64_identify,
-    t64_load
+    t64_load,
+    t64_list_entries,
+    t64_extract_entry
 };
 
 // ============================================================================

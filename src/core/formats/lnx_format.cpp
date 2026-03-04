@@ -16,6 +16,7 @@
 
 #include "lnx_format.h"
 #include "format_registry.h"
+#include "../encoding/petscii.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -283,6 +284,76 @@ static bool lnx_load(const uint8_t* data, size_t size, format_load_result_t* out
 // Format Descriptor
 // ============================================================================
 
+/// LNX file-type char → extension suffix for display.
+static const char* lnx_type_extension(char file_type) {
+    switch (file_type) {
+        case 'P': case 'p': return ".prg";
+        case 'S': case 's': return ".seq";
+        case 'U': case 'u': return ".usr";
+        case 'R': case 'r': return ".rel";
+        case 'D': case 'd': return "";     // DEL — no extension suffix
+        default:            return ".prg";
+    }
+}
+
+/// List directory entries in a Lynx archive.  Returns entry count, or -1 on error.
+static int lnx_list_entries(const uint8_t* data, size_t size,
+                            format_container_entry_t* entries, int max_entries) {
+    commodore_lynx_t lnx{};
+    if (!lnx.open_mem(data, size)) return -1;
+
+    commodore_lynx_directory_t dir{};
+    if (!lnx.read_directory(&dir)) { lnx.close(); return -1; }
+
+    int count = 0;
+    for (unsigned i = 0; i < dir.file_count && count < max_entries; ++i) {
+        const auto& le = dir.entries[i];
+
+        // Lynx filenames are PETSCII — convert to ASCII
+        char name_buf[17]{};
+        memcpy(name_buf, le.filename, 16);
+        for (int j = 0; j < 16 && name_buf[j]; ++j)
+            name_buf[j] = petscii_to_ascii(static_cast<uint8_t>(name_buf[j]));
+
+        auto& entry = entries[count];
+        snprintf(entry.display_name, sizeof(entry.display_name),
+                 "%s%s", name_buf, lnx_type_extension(le.file_type));
+        entry.size  = le.data_length;
+        entry.index = static_cast<int>(i);
+        ++count;
+    }
+
+    lnx.close();
+    return count;
+}
+
+/// Extract a Lynx entry by index.  Returns PRG data with 2-byte load address header.
+static bool lnx_extract_entry(const uint8_t* data, size_t size,
+                               int entry_index, uint8_t** out_data, size_t* out_size) {
+    commodore_lynx_t lnx{};
+    if (!lnx.open_mem(data, size)) return false;
+
+    commodore_lynx_directory_t dir{};
+    if (!lnx.read_directory(&dir)) { lnx.close(); return false; }
+
+    commodore_prg_t prg{};
+    bool ok = lnx.extract_file(&dir, entry_index, &prg);
+    lnx.close();
+
+    if (!ok) return false;
+
+    // Build PRG-format buffer: 2-byte load address + data
+    *out_size = 2 + prg.data_size;
+    *out_data = static_cast<uint8_t*>(malloc(*out_size));
+    if (!*out_data) { commodore_prg_free(&prg); return false; }
+
+    (*out_data)[0] = static_cast<uint8_t>(prg.load_addr & 0xFF);
+    (*out_data)[1] = static_cast<uint8_t>(prg.load_addr >> 8);
+    memcpy(*out_data + 2, prg.data, prg.data_size);
+    commodore_prg_free(&prg);
+    return true;
+}
+
 static const char* lnx_extensions[] = { ".lnx", NULL };
 
 const format_descriptor_t LNX_FORMAT_DESCRIPTOR = {
@@ -291,7 +362,9 @@ const format_descriptor_t LNX_FORMAT_DESCRIPTOR = {
     lnx_extensions,
     FORMAT_CAP_LOADABLE | FORMAT_CAP_CONTAINER,
     lnx_identify,
-    lnx_load
+    lnx_load,
+    lnx_list_entries,
+    lnx_extract_entry
 };
 
 // ============================================================================

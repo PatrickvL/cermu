@@ -80,7 +80,9 @@ const format_descriptor_t CRT_FORMAT_DESCRIPTOR = {
     crt_extensions,
     FORMAT_CAP_METADATA,
     crt_identify,
-    crt_load
+    crt_load,
+    nullptr,  // list_entries
+    nullptr   // extract_entry
 };
 
 // ============================================================================

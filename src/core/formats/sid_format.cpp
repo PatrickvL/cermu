@@ -261,7 +261,9 @@ const format_descriptor_t SID_FORMAT_DESCRIPTOR = {
     sid_extensions,
     FORMAT_CAP_LOADABLE | FORMAT_CAP_METADATA,
     sid_identify,
-    sid_load
+    sid_load,
+    nullptr,  // list_entries
+    nullptr   // extract_entry
 };
 
 // ============================================================================

@@ -85,7 +85,9 @@ const format_descriptor_t TAP_FORMAT_DESCRIPTOR = {
     tap_extensions,
     FORMAT_CAP_STREAMABLE | FORMAT_CAP_METADATA,
     tap_identify,
-    tap_load
+    tap_load,
+    nullptr,  // list_entries
+    nullptr   // extract_entry
 };
 
 // ============================================================================
