@@ -21,6 +21,8 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include <cctype>
+#include <algorithm>
 
 #ifdef CERMU_HAS_GUI
 #include "imgui.h"
@@ -116,45 +118,249 @@ HardwareTraits Commodore264System<V>::create_hardware_traits() {
 }
 
 // ============================================================================
+// File Detection helpers (shared across all TED variants)
+// ============================================================================
+
+/**
+ * Check whether a load address is characteristic of the C264 series.
+ * 0x1001 is the BASIC 3.5 start (shared with VIC-20 unexpanded); other
+ * addresses suggest machine-language programs targeting the C16/Plus4
+ * memory map.
+ */
+static bool is_c264_load_address(uint16_t addr) {
+    return addr == c16_constants::BASIC_START  // $1001 — BASIC 3.5 start
+        || addr == 0x4000                      // Common ML origin (below ROM)
+        || addr == 0x8000                      // ROM overlay / ML start
+        || addr == 0xC000;                     // ML in upper RAM
+}
+
+/**
+ * Scan a tokenized BASIC 3.5 program for tokens exclusive to BASIC 3.5.
+ * Tokens 0xCC–0xFE only exist in BASIC 3.5 (C16/Plus4).  BASIC 2.0
+ * (C64/VIC-20) ends at 0xCB.
+ *
+ * Properly follows the line-link structure and tracks string literals
+ * (delimited by 0x22) so that embedded quote bytes don't produce false
+ * positives.
+ */
+static bool has_basic35_tokens(const uint8_t* basic, size_t len) {
+    size_t pos = 0;
+    while (pos + 4 < len) {
+        uint16_t next_line = basic[pos] | (basic[pos + 1] << 8);
+        if (next_line == 0) break;              // End of BASIC program
+        pos += 4;                               // Skip link pointer + line number
+        bool in_string = false;
+        while (pos < len && basic[pos] != 0x00) {
+            uint8_t b = basic[pos];
+            if (b == 0x22)                      // Toggle string mode on quote
+                in_string = !in_string;
+            else if (!in_string && b >= 0xCC && b <= 0xFE)
+                return true;                    // BASIC 3.5 exclusive token
+            pos++;
+        }
+        if (pos < len) pos++;                   // Skip 0x00 terminator
+    }
+    return false;
+}
+
+/**
+ * Compute C264-series confidence from a PRG's load address and payload size.
+ *
+ * The key discriminator vs. VIC-20 0x1001 programs is *size*:
+ * - Unexpanded VIC-20 has screen RAM at $1E00, so only ~3 KB of BASIC space.
+ * - VIC-20 (fully expanded, 8K+ config) moves BASIC start to $1201.
+ * - C16/Plus4 has up to $FD00 for programs starting at $1001.
+ *
+ * Returns a raw content-based confidence score (before filepath heuristics).
+ */
+static float c264_prg_confidence(uint16_t load_addr, size_t prg_data_size) {
+    uint32_t end_addr = (uint32_t)load_addr + (uint32_t)prg_data_size;
+
+    if (load_addr == c16_constants::BASIC_START) {          // $1001
+        if (end_addr > 0x8000)  return 0.95f;              // Way beyond any VIC-20 config
+        if (end_addr > 0x4000)  return 0.90f;              // Exceeds VIC-20 expanded BASIC area
+        if (end_addr > 0x2000)  return 0.80f;              // Exceeds unexpanded VIC-20
+        return 0.55f;                                       // Small: ambiguous C16 vs VIC-20
+    }
+    if (load_addr == 0x4000 || load_addr == 0xC000 || load_addr == 0x8000)
+        return 0.60f;                                       // Plausible ML address
+    return 0.40f;                                           // No strong C264 signal
+}
+
+// ============================================================================
 // File Detection (shared across all TED variants)
 // ============================================================================
 
 template<C264SeriesVariant V>
 SystemProbeResult Commodore264System<V>::probe_file_static(
     const format_descriptor_t* matched_format,
-    const char* /*filepath*/,
+    const char* filepath,
     const uint8_t* data, size_t size)
 {
     SystemProbeResult result;
 
     if (!matched_format) return result;
 
+    // ----- PRG: load address + program size + BASIC 3.5 token scan -----
     if (matched_format == &PRG_FORMAT_DESCRIPTOR) {
         if (size >= 2) {
             uint16_t load_addr = data[0] | (data[1] << 8);
-            if (load_addr == c16_constants::BASIC_START)
-                result.confidence = 0.6f;   // Moderate (could also be VIC-20)
-            else
-                result.confidence = 0.4f;   // Lower for generic PRG
+            result.confidence = c264_prg_confidence(load_addr, size - 2);
+
+            // BASIC 3.5 tokens are a near-definitive C264 marker
+            if (load_addr == c16_constants::BASIC_START && size > 6) {
+                if (has_basic35_tokens(data + 2, size - 2))
+                    result.confidence = std::max(result.confidence, 0.95f);
+            }
+
+            // Memory-capacity gate: penalise if the program overshoots this
+            // variant's RAM.  Plus/4 (64 KB) can run anything that fits;
+            // C16/C116 (16 KB) cannot run programs ending above $4000.
+            uint32_t end_addr = (uint32_t)load_addr + (uint32_t)(size - 2);
+            if constexpr (Traits::default_ram < c16_constants::RAM_SIZE_PLUS4) {
+                if (end_addr > Traits::default_ram)
+                    result.confidence *= 0.50f;     // Doesn't fit in 16 KB
+            } else {
+                // Plus/4: give a small extra nudge when >16 KB is needed
+                if (end_addr > c16_constants::RAM_SIZE_C16)
+                    result.confidence = std::max(result.confidence,
+                                                 result.confidence + 0.02f);
+            }
         }
 
+    // ----- TAP: platform byte in header is definitive -----
     } else if (matched_format == &TAP_FORMAT_DESCRIPTOR) {
         int platform = commodore_tap_identify_platform_mem(data, size);
         if (platform == 2)      result.confidence = 0.95f;  // C16 TAP
         else if (platform == 0) result.confidence = 0.2f;   // C64 TAP
         else                    result.confidence = 0.4f;
 
+    // ----- D64: extract first PRG, apply address + size analysis -----
     } else if (matched_format == &D64_FORMAT_DESCRIPTOR) {
-        result.confidence = 0.4f;
+        commodore_d64_t d64;
+        if (d64.open_mem(data, size)) {
+            commodore_prg_t prg = {};
+            if (d64.extract_first_prg(&prg)) {
+                result.confidence = c264_prg_confidence(prg.load_addr, prg.data_size);
 
+                if (prg.load_addr == c16_constants::BASIC_START && prg.data_size > 4)
+                    if (has_basic35_tokens(prg.data, prg.data_size))
+                        result.confidence = std::max(result.confidence, 0.95f);
+
+                commodore_prg_free(&prg);
+            } else {
+                result.confidence = 0.45f;  // Valid D64, no PRG extracted
+            }
+            d64.close();
+        } else {
+            result.confidence = 0.35f;
+        }
+
+    // ----- T64: extract first PRG, apply same heuristics -----
     } else if (matched_format == &T64_FORMAT_DESCRIPTOR) {
-        result.confidence = 0.4f;   // Usually C64, but can contain C16
+        commodore_t64_t t64;
+        if (t64.open_mem(data, size)) {
+            commodore_prg_t prg = {};
+            if (t64.extract_first_prg(&prg)) {
+                result.confidence = c264_prg_confidence(prg.load_addr, prg.data_size);
 
+                if (prg.load_addr == c16_constants::BASIC_START && prg.data_size > 4)
+                    if (has_basic35_tokens(prg.data, prg.data_size))
+                        result.confidence = std::max(result.confidence, 0.95f);
+
+                commodore_prg_free(&prg);
+            } else {
+                result.confidence = 0.35f;
+            }
+            t64.close();
+        } else {
+            result.confidence = 0.35f;
+        }
+
+    // ----- LNX: inspect contained files for C264 addresses -----
     } else if (matched_format == &LNX_FORMAT_DESCRIPTOR) {
-        result.confidence = 0.4f;
+        commodore_lynx_t lynx;
+        if (lynx.open_mem(data, size)) {
+            commodore_lynx_directory_t dir;
+            if (lynx.read_directory(&dir)) {
+                bool found_c264 = false;
+                bool found_any  = false;
+                for (unsigned i = 0; i < dir.file_count; i++) {
+                    if (dir.entries[i].file_type == 'P' && dir.entries[i].data_length >= 2) {
+                        size_t off = dir.entries[i].data_offset;
+                        if (off + 1 < lynx.data_size) {
+                            uint16_t addr = lynx.data[off] | ((uint16_t)lynx.data[off + 1] << 8);
+                            found_any = true;
+                            if (is_c264_load_address(addr)) found_c264 = true;
+                        }
+                    }
+                }
+                lynx.close();
+                result.confidence = found_c264 ? 0.85f : (found_any ? 0.45f : 0.50f);
+            } else {
+                lynx.close();
+                result.confidence = 0.40f;
+            }
+        } else {
+            result.confidence = 0.40f;
+        }
 
+    // ----- BIN: generic binary -----
     } else if (matched_format == &BIN_FORMAT_DESCRIPTOR) {
         result.confidence = 0.3f;
+    }
+
+    // =================================================================
+    // Filepath heuristics — scan the ENTIRE path (including archive
+    // names in VFS paths) for system keywords.  This runs *after*
+    // content analysis so that it can only raise, never lower, the
+    // score determined above.
+    // =================================================================
+    if (filepath) {
+        std::string lower(filepath);
+        for (auto& c : lower) c = static_cast<char>(tolower(c));
+
+        // --- Variant-specific path signals (strongest) ---
+        bool specific_match = false;
+        if constexpr (V == C264SeriesVariant::PLUS4) {
+            if (lower.find("plus4")  != std::string::npos ||
+                lower.find("plus/4") != std::string::npos ||
+                lower.find("plus-4") != std::string::npos ||
+                lower.find("(plus4)") != std::string::npos) {
+                result.confidence = std::max(result.confidence, 0.90f);
+                specific_match = true;
+            }
+        } else if constexpr (V == C264SeriesVariant::C16) {
+            // Match "c16" but avoid "c116" (handled by C116 branch)
+            auto p = lower.find("c16");
+            if (p != std::string::npos &&
+                (p == 0 || lower[p - 1] != '1')) {
+                result.confidence = std::max(result.confidence, 0.90f);
+                specific_match = true;
+            }
+        } else if constexpr (V == C264SeriesVariant::C116) {
+            if (lower.find("c116") != std::string::npos) {
+                result.confidence = std::max(result.confidence, 0.90f);
+                specific_match = true;
+            }
+        }
+
+        // --- General TED/C264 family signals (weaker than specific) ---
+        if (!specific_match) {
+            if (lower.find("plus4")  != std::string::npos ||
+                lower.find("plus/4") != std::string::npos ||
+                lower.find("plus-4") != std::string::npos ||
+                lower.find("c16")    != std::string::npos ||
+                lower.find("c116")   != std::string::npos ||
+                lower.find("c264")   != std::string::npos ||
+                lower.find("264 series") != std::string::npos) {
+                result.confidence = std::max(result.confidence, 0.75f);
+            }
+        }
+
+        // --- Region hint ---
+        if (lower.find("ntsc") != std::string::npos)
+            result.configuration.region_option_index = 1;   // NTSC
     }
 
     return result;

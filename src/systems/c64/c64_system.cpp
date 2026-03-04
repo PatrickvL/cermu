@@ -39,6 +39,7 @@
 #include <cstring>
 #include <cstdio>
 #include <cctype>
+#include <algorithm>
 #include "c64_constants.h"
 
 /**
@@ -175,13 +176,21 @@ static SystemProbeResult c64_probe_file(
         result.confidence = 0.4f;
     }
 
-    // --- Filename heuristic: "ntsc" in name suggests NTSC region ---
+    // =================================================================
+    // Filepath heuristics — scan the ENTIRE path (including archive
+    // names in VFS paths) for system keywords.  Raises confidence
+    // but never lowers it.
+    // =================================================================
     if (filepath) {
-        const char* name = strrchr(filepath, '/');
-        if (!name) name = strrchr(filepath, '\\');
-        if (!name) name = filepath; else name++;
-        std::string lower(name);
+        std::string lower(filepath);
         for (auto& c : lower) c = static_cast<char>(tolower(c));
+
+        if (lower.find("c64") != std::string::npos ||
+            lower.find("c-64") != std::string::npos) {
+            result.confidence = std::max(result.confidence, 0.90f);
+        }
+
+        // Region hint
         if (lower.find("ntsc") != std::string::npos)
             result.configuration.region_option_index = 1;
     }
