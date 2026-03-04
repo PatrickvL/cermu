@@ -8,9 +8,8 @@
 
 #include "vfs_file_system.h"
 #include "../core/vfs/vfs.h"
-#include "../core/formats/d64_format.h"
-#include "../core/formats/t64_format.h"
-#include "../core/encoding/petscii.h"
+#include "../core/formats/format_handler.h"
+#include "../core/formats/format_registry.h"
 
 #include <dirent.h>
 #include <sys/stat.h>
@@ -26,6 +25,7 @@
 // ============================================================================
 
 bool VfsFileSystem::s_browse_containers_ = true;
+const format_descriptor_t* const* VfsFileSystem::s_active_formats_ = nullptr;
 
 // ============================================================================
 // Lifecycle
@@ -57,7 +57,9 @@ bool VfsFileSystem::has_archive_extension(const std::string& path_or_name) {
 
 bool VfsFileSystem::has_container_extension(const std::string& path_or_name) {
     std::string ext = get_extension(path_or_name);
-    return ext == ".d64" || ext == ".t64";
+    if (ext.empty()) return false;
+    const auto* fmt = FormatRegistry::instance().find_by_extension(ext.c_str());
+    return fmt && (fmt->capabilities & FORMAT_CAP_CONTAINER) && fmt->list_entries;
 }
 
 bool VfsFileSystem::is_browsable(const std::string& path_or_name) {
@@ -316,6 +318,16 @@ void VfsFileSystem::GetFileDateAndSize(const std::string& vFilePathName,
 // IFileSystem — ScanDirectory  (the main entry point)
 // ============================================================================
 
+/// Find the container format descriptor for a given path/name, or nullptr.
+static const format_descriptor_t* find_container_format(const std::string& path_or_name) {
+    std::string ext = VfsFileSystem::get_extension(path_or_name);
+    if (ext.empty()) return nullptr;
+    const auto* fmt = FormatRegistry::instance().find_by_extension(ext.c_str());
+    if (fmt && (fmt->capabilities & FORMAT_CAP_CONTAINER) && fmt->list_entries)
+        return fmt;
+    return nullptr;
+}
+
 std::vector<IGFD::FileInfos> VfsFileSystem::ScanDirectory(const std::string& vPath) {
     cached_sizes_.clear();
 
@@ -326,13 +338,13 @@ std::vector<IGFD::FileInfos> VfsFileSystem::ScanDirectory(const std::string& vPa
     // --- Case 1: path IS a real browsable file (archive/container at leaf) ---
     struct stat sb;
     if (stat(path.c_str(), &sb) == 0 && S_ISREG(sb.st_mode) && is_browsable(path)) {
-        std::string ext = get_extension(path);
-        if (has_container_extension(ext)) {
-            // D64/T64 — read the whole file and parse its directory.
+        const format_descriptor_t* fmt = find_container_format(path);
+        if (fmt) {
+            // Container format — read and parse its directory.
             size_t data_size = 0;
             uint8_t* data = vfs_read_file(path.c_str(), &data_size);
             if (data) {
-                auto res = scan_container_entries(data, data_size, ext, path);
+                auto res = scan_container_entries(fmt, data, data_size, path);
                 free(data);
                 return res;
             }
@@ -347,17 +359,17 @@ std::vector<IGFD::FileInfos> VfsFileSystem::ScanDirectory(const std::string& vPa
     if (split.has_boundary) {
         std::string vfs_path = to_vfs_path(path);
 
-        // Check whether the leaf of the VFS path is a D64/T64 that needs
+        // Check whether the leaf of the VFS path is a container that needs
         // format-specific scanning.
         size_t last_delim = vfs_path.rfind("!/");
         if (last_delim != std::string::npos) {
             std::string leaf = vfs_path.substr(last_delim + 2);
-            if (has_container_extension(leaf) && s_browse_containers_) {
+            const format_descriptor_t* fmt = find_container_format(leaf);
+            if (fmt && s_browse_containers_) {
                 size_t data_size = 0;
                 uint8_t* data = vfs_read_file(vfs_path.c_str(), &data_size);
                 if (data) {
-                    auto res = scan_container_entries(data, data_size,
-                                                      get_extension(leaf), path);
+                    auto res = scan_container_entries(fmt, data, data_size, path);
                     free(data);
                     return res;
                 }
@@ -480,23 +492,13 @@ std::vector<IGFD::FileInfos> VfsFileSystem::scan_vfs_entries(
 }
 
 // ============================================================================
-// Scanning — D64/T64 containers
+// Scanning — container formats (D64, T64, LNX, …)
 // ============================================================================
 
-/// D64 file-type byte → extension suffix for filter matching.
-static const char* d64_type_extension(uint8_t file_type) {
-    switch (file_type & D64_FTYPE_MASK) {
-        case D64_FTYPE_PRG: return ".prg";
-        case D64_FTYPE_SEQ: return ".seq";
-        case D64_FTYPE_USR: return ".usr";
-        case D64_FTYPE_REL: return ".rel";
-        default:            return ".prg";
-    }
-}
-
 std::vector<IGFD::FileInfos> VfsFileSystem::scan_container_entries(
+    const format_descriptor_t* fmt,
     const uint8_t* data, size_t size,
-    const std::string& ext, const std::string& dialog_dir) {
+    const std::string& dialog_dir) {
 
     std::vector<IGFD::FileInfos> res;
 
@@ -509,66 +511,46 @@ std::vector<IGFD::FileInfos> VfsFileSystem::scan_container_entries(
         res.push_back(dd);
     }
 
-    if (ext == ".d64") {
-        commodore_d64_t d64{};
-        if (!d64.open_mem(const_cast<uint8_t*>(data), size)) return res;
+    if (!fmt || !fmt->list_entries) return res;
 
-        commodore_d64_directory_t dir{};
-        if (!d64.read_directory(&dir)) { d64.close(); return res; }
+    // Ask the format to list its directory entries.
+    static constexpr int MAX_ENTRIES = 512;
+    format_container_entry_t entries[MAX_ENTRIES];
+    int count = fmt->list_entries(data, size, entries, MAX_ENTRIES);
+    if (count < 0) return res;
 
-        for (int i = 0; i < dir.count; ++i) {
-            const auto& de = dir.entries[i];
-            if ((de.file_type & D64_FTYPE_MASK) == D64_FTYPE_DEL) continue;
+    for (int i = 0; i < count; ++i) {
+        const auto& entry = entries[i];
 
-            // PETSCII → ASCII filename.
-            char name_buf[17]{};
-            memcpy(name_buf, de.filename, 16);
-            for (int j = 0; j < 16 && name_buf[j]; ++j)
-                name_buf[j] = petscii_to_ascii(static_cast<uint8_t>(name_buf[j]));
+        IGFD::FileInfos info;
+        info.filePath    = dialog_dir;
+        info.fileNameExt = entry.display_name;
+        info.fileType.SetContent(IGFD::FileType::ContentType::File);
 
-            std::string display = std::string(name_buf) + d64_type_extension(de.file_type);
-
-            IGFD::FileInfos info;
-            info.filePath    = dialog_dir;
-            info.fileNameExt = display;
-            info.fileType.SetContent(IGFD::FileType::ContentType::File);
-
-            size_t entry_size = static_cast<size_t>(de.size_blocks) * 254;
-            cached_sizes_[dialog_dir + "/" + display] = entry_size;
-
-            res.push_back(info);
-        }
-
-        d64.close();
-    } else if (ext == ".t64") {
-        commodore_t64_t t64{};
-        if (!t64.open_mem(const_cast<uint8_t*>(data), size)) return res;
-
-        commodore_t64_directory_t dir{};
-        if (!t64.read_directory(&dir)) { t64.close(); return res; }
-
-        for (int i = 0; i < dir.count; ++i) {
-            const auto& te = dir.entries[i];
-
-            char name_buf[17]{};
-            memcpy(name_buf, te.filename, 16);
-            for (int j = 0; j < 16 && name_buf[j]; ++j)
-                name_buf[j] = petscii_to_ascii(static_cast<uint8_t>(name_buf[j]));
-
-            std::string display = std::string(name_buf) + ".prg";
-
-            IGFD::FileInfos info;
-            info.filePath    = dialog_dir;
-            info.fileNameExt = display;
-            info.fileType.SetContent(IGFD::FileType::ContentType::File);
-
-            cached_sizes_[dialog_dir + "/" + display] = te.data_size;
-
-            res.push_back(info);
-        }
-
-        t64.close();
+        cached_sizes_[dialog_dir + "/" + entry.display_name] = entry.size;
+        res.push_back(info);
     }
 
     return res;
+}
+
+// ============================================================================
+// Active format filtering
+// ============================================================================
+
+bool VfsFileSystem::is_active_format_ext(const std::string& ext) {
+    if (!s_active_formats_ || !s_active_formats_[0]) return true;  // no filter
+    if (ext.empty()) return false;
+
+    for (const format_descriptor_t* const* p = s_active_formats_; *p; ++p) {
+        const format_descriptor_t* fmt = *p;
+        for (const char* const* e = fmt->extensions; e && *e; ++e) {
+            if (strcasecmp(ext.c_str(), *e) == 0)
+                return true;
+        }
+    }
+    // Archives are always visible (they may contain supported files).
+    if (vfs_is_archive_extension(ext.c_str()))
+        return true;
+    return false;
 }
