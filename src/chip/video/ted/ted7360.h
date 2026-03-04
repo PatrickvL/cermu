@@ -75,14 +75,14 @@
 #define TED_REG_CONTROL2     0x07   // $FF07
 #define TED_REG_KEYBOARD     0x08   // $FF08
 #define TED_REG_IRQ_STATUS   0x09   // $FF09
-#define TED_REG_IRQ_MASK     0x0A   // $FF0A
-#define TED_REG_CURSOR_LO    0x0B
-#define TED_REG_CURSOR_HI    0x0C
-#define TED_REG_SOUND1_LO    0x0D
-#define TED_REG_SOUND1_HI    0x0E
-#define TED_REG_SOUND2_LO    0x0F
-#define TED_REG_SOUND2_HI    0x10
-#define TED_REG_SOUND_CTRL   0x11
+#define TED_REG_IRQ_MASK     0x0A   // $FF0A — also raster compare bit 8 (bit 0)
+#define TED_REG_RASTER_CMP   0x0B   // $FF0B — raster compare bits 0-7
+#define TED_REG_CURSOR_HI    0x0C   // $FF0C — cursor position bits 8-9 (bits 0-1)
+#define TED_REG_CURSOR_LO    0x0D   // $FF0D — cursor position bits 0-7
+#define TED_REG_SOUND1_LO    0x0E   // $FF0E — sound 1 frequency low
+#define TED_REG_SOUND1_HI    0x0F   // $FF0F — sound 1 frequency high
+#define TED_REG_SOUND2_LO    0x10   // $FF10 — sound 2 frequency low
+#define TED_REG_SOUND_CTRL   0x11   // $FF11 — sound control
 #define TED_REG_MEM_CTRL     0x12   // $FF12
 #define TED_REG_CHAR_HI      0x13   // $FF13
 #define TED_REG_BITMAP_ADDR  0x14   // $FF14
@@ -474,8 +474,20 @@ struct ted7360_t : public ChipBase {
     uint8_t flash_counter = 0;           // 6-bit flash counter (incremented each frame)
     bool    cursor_visible = false;      // Current cursor blink phase
 
+    // 10-bit hardware cursor position derived from $FF0C/$FF0D on access.
+    [[nodiscard]] uint16_t get_cursor_position() const noexcept {
+        return static_cast<uint16_t>(
+            registers.data[TED_REG_CURSOR_LO]
+          | ((registers.data[TED_REG_CURSOR_HI] & 0x03u) << 8));
+    }
+
     // Reverse mode
     bool reverse_mode = false;           // RVS bit from $FF07
+
+    // Timer phase — TED timers count at TED single-clock rate (2× CPU clock).
+    // We toggle a phase flag each CPU cycle and only decrement on one phase,
+    // effectively halving the decrement rate to match the real hardware.
+    bool timer_tick_phase = false;
 
 private:
     // ========================================================================
