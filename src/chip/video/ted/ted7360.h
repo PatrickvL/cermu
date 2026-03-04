@@ -36,10 +36,11 @@
  *   $FF07        Control register 2 (MCM, CSEL, XSCROLL, FREEZE, PAL/NTSC, RVS)
  *   $FF08        Keyboard latch
  *   $FF09        IRQ status register
- *   $FF0A        IRQ mask register
- *   $FF0B-$FF0C  Cursor position (low/high)
- *   $FF0D-$FF0E  Sound channel 1 frequency (low/high)
- *   $FF0F-$FF10  Sound channel 2 frequency (low/high)
+ *   $FF0A        IRQ mask register (bit 0 = raster compare bit 8)
+ *   $FF0B        Raster compare low 8 bits
+ *   $FF0C-$FF0D  Cursor position (high/low)
+ *   $FF0E-$FF0F  Sound channel 1 frequency (low/high)
+ *   $FF10        Sound channel 2 frequency low
  *   $FF11        Sound control
  *   $FF12        Memory control (character/screen base, ROM bank)
  *   $FF13        Character base address high nibble
