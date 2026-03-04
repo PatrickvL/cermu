@@ -36,6 +36,7 @@
 #include "../../devices/storage/drive_1541.h"
 #include "../../devices/storage/datasette_1530.h"
 #include "../../devices/keyboard/commodore_keyboard_device.h"
+#include "../../utils/prg_content_analysis.h"
 #include <cstring>
 #include <cstdio>
 #include <cctype>
@@ -77,7 +78,7 @@ static SystemProbeResult c64_probe_file(
     const char* filepath,
     const uint8_t* data, size_t size)
 {
-    SystemProbeResult result;
+    SystemProbeResult result{};
 
     if (!matched_format) return result;
 
@@ -94,6 +95,27 @@ static SystemProbeResult c64_probe_file(
                 result.confidence = 0.6f;               // VIC-20 / C16 territory
             else
                 result.confidence = 0.7f;               // Generic PRG (C64 most common)
+
+            // Content analysis: BASIC version + MMIO references
+            if (size > 6) {
+                // BASIC 3.5 tokens are exclusive to C16/Plus4 — not a C64 program
+                if ((load_addr == c64_constants::BASIC_START || load_addr == 0x1001)
+                    && has_basic35_tokens(data + 2, size - 2))
+                    result.confidence *= 0.30f;
+
+                // Scan for system-specific I/O access patterns in code
+                uint32_t mmio = scan_6502_mmio_references(data + 2, size - 2);
+                int c64_hits   = count_mmio_flags(mmio & MMIO_ANY_C64);
+                int vic20_hits = count_mmio_flags(mmio & MMIO_ANY_VIC20);
+                int c16_hits   = count_mmio_flags(mmio & MMIO_ANY_C16);
+
+                if (c64_hits >= 2)
+                    result.confidence = std::max(result.confidence, 0.90f);
+                if (vic20_hits >= 2 && c64_hits == 0)
+                    result.confidence *= 0.50f;
+                if (c16_hits >= 1 && c64_hits == 0)
+                    result.confidence *= 0.40f;
+            }
         }
 
     } else if (matched_format == &LNX_FORMAT_DESCRIPTOR) {

@@ -6,6 +6,7 @@
 #include "../../chip/input/commodore_keyboard.h"
 #include "../../chip/input/emu_key_sdl_map.h"
 #include "vic20_keyboard_matrix.h" // VIC-20 keyboard matrix data
+#include "../../utils/prg_content_analysis.h"
 #include <cstring>
 #include <cstdio>
 #include <cctype>
@@ -220,7 +221,7 @@ static SystemProbeResult vic20_probe_file(
     const char* filepath,
     const uint8_t* data, size_t size)
 {
-    SystemProbeResult result;
+    SystemProbeResult result{};
 
     if (!matched_format) return result;
 
@@ -246,6 +247,29 @@ static SystemProbeResult vic20_probe_file(
                 result.confidence = 0.7f;
             } else {
                 result.confidence = 0.5f;
+            }
+
+            // Content analysis: BASIC version + MMIO references
+            if (size > 6) {
+                // BASIC 3.5 tokens are exclusive to C16/Plus4 — not VIC-20
+                if ((load_addr == vic20_constants::BASIC_START_UNEXPANDED ||
+                     load_addr == vic20_constants::BASIC_START_3K ||
+                     load_addr == vic20_constants::BASIC_START_8K)
+                    && has_basic35_tokens(data + 2, size - 2))
+                    result.confidence *= 0.30f;
+
+                // Scan for system-specific I/O access patterns in code
+                uint32_t mmio = scan_6502_mmio_references(data + 2, size - 2);
+                int vic20_hits = count_mmio_flags(mmio & MMIO_ANY_VIC20);
+                int c64_hits   = count_mmio_flags(mmio & MMIO_ANY_C64);
+                int c16_hits   = count_mmio_flags(mmio & MMIO_ANY_C16);
+
+                if (vic20_hits >= 2)
+                    result.confidence = std::max(result.confidence, 0.90f);
+                if (c64_hits >= 2 && vic20_hits == 0)
+                    result.confidence *= 0.50f;
+                if (c16_hits >= 1 && vic20_hits == 0)
+                    result.confidence *= 0.40f;
             }
 
             result.configuration.memory_option_index =

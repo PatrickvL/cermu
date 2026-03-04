@@ -194,8 +194,8 @@ struct SystemConfiguration {
  * separate can_load_file and detect_optimal_configuration passes.
  */
 struct SystemProbeResult {
-    float               confidence;     /**< 0.0-1.0: how well this file matches this system */
-    SystemConfiguration configuration;  /**< Optimal config (memory, region, custom settings) */
+    float               confidence = 0.0f; /**< 0.0-1.0: how well this file matches this system */
+    SystemConfiguration configuration;     /**< Optimal config (memory, region, custom settings) */
 };
 
 /**

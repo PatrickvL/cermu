@@ -18,6 +18,7 @@
 // CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
 #include "../../core/chip.h"
 #include "../../chip/memory/memory_chip.h"
+#include "../../utils/prg_content_analysis.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -134,34 +135,7 @@ static bool is_c264_load_address(uint16_t addr) {
         || addr == 0xC000;                     // ML in upper RAM
 }
 
-/**
- * Scan a tokenized BASIC 3.5 program for tokens exclusive to BASIC 3.5.
- * Tokens 0xCC–0xFE only exist in BASIC 3.5 (C16/Plus4).  BASIC 2.0
- * (C64/VIC-20) ends at 0xCB.
- *
- * Properly follows the line-link structure and tracks string literals
- * (delimited by 0x22) so that embedded quote bytes don't produce false
- * positives.
- */
-static bool has_basic35_tokens(const uint8_t* basic, size_t len) {
-    size_t pos = 0;
-    while (pos + 4 < len) {
-        uint16_t next_line = basic[pos] | (basic[pos + 1] << 8);
-        if (next_line == 0) break;              // End of BASIC program
-        pos += 4;                               // Skip link pointer + line number
-        bool in_string = false;
-        while (pos < len && basic[pos] != 0x00) {
-            uint8_t b = basic[pos];
-            if (b == 0x22)                      // Toggle string mode on quote
-                in_string = !in_string;
-            else if (!in_string && b >= 0xCC && b <= 0xFE)
-                return true;                    // BASIC 3.5 exclusive token
-            pos++;
-        }
-        if (pos < len) pos++;                   // Skip 0x00 terminator
-    }
-    return false;
-}
+// has_basic35_tokens() moved to shared utility: src/utils/prg_content_analysis.h
 
 /**
  * Compute C264-series confidence from a PRG's load address and payload size.
@@ -197,7 +171,7 @@ SystemProbeResult Commodore264System<V>::probe_file_static(
     const char* filepath,
     const uint8_t* data, size_t size)
 {
-    SystemProbeResult result;
+    SystemProbeResult result{};
 
     if (!matched_format) return result;
 
@@ -211,6 +185,21 @@ SystemProbeResult Commodore264System<V>::probe_file_static(
             if (load_addr == c16_constants::BASIC_START && size > 6) {
                 if (has_basic35_tokens(data + 2, size - 2))
                     result.confidence = std::max(result.confidence, 0.95f);
+            }
+
+            // MMIO scanning: TED references boost C264, foreign I/O lowers it
+            if (size > 6) {
+                uint32_t mmio = scan_6502_mmio_references(data + 2, size - 2);
+                int c16_hits   = count_mmio_flags(mmio & MMIO_ANY_C16);
+                int c64_hits   = count_mmio_flags(mmio & MMIO_ANY_C64);
+                int vic20_hits = count_mmio_flags(mmio & MMIO_ANY_VIC20);
+
+                if (c16_hits >= 1)
+                    result.confidence = std::max(result.confidence, 0.90f);
+                if (c64_hits >= 2 && c16_hits == 0)
+                    result.confidence *= 0.50f;
+                if (vic20_hits >= 2 && c16_hits == 0)
+                    result.confidence *= 0.50f;
             }
 
             // Memory-capacity gate: penalise if the program overshoots this
