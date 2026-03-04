@@ -492,14 +492,19 @@ void ted7360_t::pixel_sequencer() {
 
 void ted7360_t::flush_line(uint16_t raster_line) {
     if (!pixel.framebuffer || !pixel.color_line) return;
-    if (raster_line >= static_cast<uint16_t>(pixel.fb_height)) return;
+
+    // Map TED raster counter to framebuffer row via visible-area offset.
+    // Rasters wrap: PAL first_visible=275, so raster 275→row 0, 0→row 37, etc.
+    const int fb_row = (raster_line + timing.lines_per_frame
+                        - timing.first_visible_line) % timing.lines_per_frame;
+    if (fb_row >= pixel.fb_height) return;
 
     const uint32_t* const palette = TED_PALETTE.data();
-    uint32_t* const fb_row = pixel.framebuffer + raster_line * pixel.fb_width;
+    uint32_t* const fb_row_ptr = pixel.framebuffer + fb_row * pixel.fb_width;
     const int width = std::min(pixel.fb_width, static_cast<int>(TED_VISIBLE_WIDTH));
 
     for (int x = 0; x < width; ++x) {
-        fb_row[x] = palette[pixel.color_line[x]];
+        fb_row_ptr[x] = palette[pixel.color_line[x]];
     }
 }
 
@@ -572,9 +577,11 @@ ted7360_t::ted7360_t(const ted7360_desc_t& desc) {
 
     if (timing.is_pal) {
         timing.lines_per_frame      = 312;
+        timing.first_visible_line   = TED_FIRST_VISIBLE_LINE_PAL;
         timing.cpu_cycles_per_line  = 57;
     } else {
         timing.lines_per_frame      = 262;
+        timing.first_visible_line   = TED_FIRST_VISIBLE_LINE_NTSC;
         timing.cpu_cycles_per_line  = 57;
     }
 
@@ -594,6 +601,7 @@ void ted7360_t::reset() {
     // that contain function pointers (memset is undefined behavior on non-POD).
     const bool                 is_pal   = timing.is_pal;
     const uint16_t             lines    = timing.lines_per_frame;
+    const uint16_t             fvl      = timing.first_visible_line;
     const uint8_t              cycles   = timing.cpu_cycles_per_line;
     const ted_keyboard_scan_fn kb       = keyboard_scan;
     void* const                kb_data  = keyboard_user_data;
@@ -619,6 +627,7 @@ void ted7360_t::reset() {
     // Restore construction-time configuration
     timing.is_pal              = is_pal;
     timing.lines_per_frame     = lines;
+    timing.first_visible_line  = fvl;
     timing.cpu_cycles_per_line = cycles;
     keyboard_scan              = kb;
     keyboard_user_data         = kb_data;
@@ -812,9 +821,9 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
     }
 
     // ===== STEP 4: Pixel sequencer (8 pixels) =====
-    if (pixel.framebuffer && raster < static_cast<uint16_t>(pixel.fb_height)) {
-        pixel_sequencer();
-    }
+    // Always run — border flip-flop state must stay consistent across all lines.
+    // flush_line() handles the visible-range clip when writing to the framebuffer.
+    pixel_sequencer();
 
     // ===== STEP 5: Timer countdown =====
     tick_timers();

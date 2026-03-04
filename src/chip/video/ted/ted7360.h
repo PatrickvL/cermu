@@ -190,6 +190,12 @@
 
 // Visible area for framebuffer rendering
 #define TED_VISIBLE_WIDTH           384     // 320 + borders
+#define TED_VISIBLE_HEIGHT_PAL      288     // PAL normal-border visible area
+#define TED_VISIBLE_HEIGHT_NTSC     242     // NTSC normal-border visible area
+
+// First TED raster line mapped to framebuffer row 0 (derived from VICE timing)
+#define TED_FIRST_VISIBLE_LINE_PAL  275
+#define TED_FIRST_VISIBLE_LINE_NTSC 19
 
 // ============================================================================
 // LINE STATE MACHINE — driven by x_cycle position
@@ -269,6 +275,7 @@ struct ted_timing_unit_t {
     uint16_t x_pixel;               // Pixel X position within line (= x_cycle * 8)
     uint32_t frame_count;           // Frame counter (for flash timing)
     uint16_t lines_per_frame;       // PAL=312, NTSC=262
+    uint16_t first_visible_line;    // First TED raster mapped to fb row 0
     uint8_t  cpu_cycles_per_line;   // Always 57
     bool     is_pal;
 };
