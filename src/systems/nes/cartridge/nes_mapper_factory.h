@@ -56,6 +56,7 @@
 #include "mappers/mapper_133_sachen.h"
 #include "mappers/mapper_151_vrc1_vs.h"
 #include "mappers/mapper_152_bandai.h"
+#include "mappers/mapper_156_dis_ic32.h"
 #include "mappers/mapper_180_unrom_reverse.h"
 #include "mappers/mapper_184_sunsoft1.h"
 #include "mappers/mapper_185_cnrom_protect.h"
@@ -161,7 +162,9 @@ struct MapperFactory {
             // missing: 134–150 — misc rare/pirate mappers (140=Jaleco JF-11, 148/149=Sachen)
             case 151: return std::make_unique<Mapper151>(prg_banks, chr_banks);
             case 152: return std::make_unique<Mapper152>(prg_banks, chr_banks);
-            // missing: 153–179 — misc (154=Namco 3453, 159=Bandai LZ93D50)
+            // missing: 153–155 — misc (154=Namco 3453)
+            case 156: return std::make_unique<Mapper156>(prg_banks, chr_banks);
+            // missing: 157–179 — misc (159=Bandai LZ93D50)
             case 180: return std::make_unique<Mapper180>(prg_banks, chr_banks);
             // missing: 181–183 — misc rare
             case 184: return std::make_unique<Mapper184>(prg_banks, chr_banks);
