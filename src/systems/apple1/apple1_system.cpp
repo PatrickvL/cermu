@@ -102,6 +102,8 @@ static SystemDescriptor apple1_descriptor = {
     "Apple 1",
     "APPLE1",
     "Apple 1 (1976) - Woz's first computer, 8KB RAM, terminal display",
+    "apple1",
+    {"Apple1", "Apple-1", "Apple 1"},
     nullptr,  // supported_formats: Apple 1 does not use format handler system
     create_apple1_hardware_traits(),
     apple1_probe_file

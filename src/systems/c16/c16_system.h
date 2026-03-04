@@ -32,6 +32,8 @@ template<> struct C264SeriesVariantTraits<C264SeriesVariant::C16> {
     static constexpr const char* name    = "C16";
     static constexpr const char* full_name = "Commodore 16";
     static constexpr const char* short_id = "C16";
+    static constexpr const char* data_folder = "c16";
+    static std::vector<const char*> get_aliases() { return {"C16"}; }
     static constexpr const char* description =
         "Commodore 16 (1984) - 16KB RAM, TED 7360 graphics and sound";
 };
@@ -42,6 +44,8 @@ template<> struct C264SeriesVariantTraits<C264SeriesVariant::C116> {
     static constexpr const char* name    = "C116";
     static constexpr const char* full_name = "Commodore 116";
     static constexpr const char* short_id = "C116";
+    static constexpr const char* data_folder = "c16";
+    static std::vector<const char*> get_aliases() { return {"C116"}; }
     static constexpr const char* description =
         "Commodore 116 (1984) - 16KB RAM, TED 7360, chiclet keyboard variant of C16";
 };
@@ -52,6 +56,8 @@ template<> struct C264SeriesVariantTraits<C264SeriesVariant::PLUS4> {
     static constexpr const char* name    = "Plus/4";
     static constexpr const char* full_name = "Commodore Plus/4";
     static constexpr const char* short_id = "PLUS4";
+    static constexpr const char* data_folder = "c16";
+    static std::vector<const char*> get_aliases() { return {"Plus4", "Plus/4", "Plus-4"}; }
     static constexpr const char* description =
         "Commodore Plus/4 (1984) - 64KB RAM, TED 7360, built-in 3-PLUS-1 software";
 };

@@ -202,6 +202,8 @@ const SystemDescriptor& NintendoSystem<V>::static_descriptor() {
         Traits::full_name,
         Traits::short_id,
         Traits::description,
+        Traits::data_folder,
+        Traits::get_aliases(),
         formats,
         create_nes_hardware_traits(),
         nes_probe_file

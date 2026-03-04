@@ -84,6 +84,8 @@ template<> struct NintendoVariantTraits<NintendoVariant::NES> {
     static constexpr const char* name   = "NES";
     static constexpr const char* full_name = "Nintendo Entertainment System";
     static constexpr const char* short_id = "NES";
+    static constexpr const char* data_folder = "nes";
+    static std::vector<const char*> get_aliases() { return {"NES"}; }
     static constexpr const char* description =
         "Nintendo Entertainment System (1985)";
 };
@@ -93,6 +95,8 @@ template<> struct NintendoVariantTraits<NintendoVariant::FAMICOM> {
     static constexpr const char* name   = "Famicom";
     static constexpr const char* full_name = "Nintendo Famicom";
     static constexpr const char* short_id = "FC";
+    static constexpr const char* data_folder = "nes";
+    static std::vector<const char*> get_aliases() { return {"Famicom", "FC"}; }
     static constexpr const char* description =
         "Nintendo Family Computer (1983) \u2014 expansion audio, hardwired controllers, microphone";
 };
