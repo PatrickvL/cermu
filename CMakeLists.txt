@@ -414,6 +414,7 @@ if(BUILD_GUI)
         src/gui/system_gui.cpp
         src/gui/system_selection_dialog.cpp
         src/gui/connector_icons.cpp
+        src/gui/archive_browser.cpp
     )
 endif()
 

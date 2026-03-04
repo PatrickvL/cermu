@@ -6,12 +6,17 @@
 #include "../core/config/path_discovery.h"
 #include "../core/archive_scanner.h"
 #include "../core/formats/format_handler.h"
+#include "../core/formats/d64_format.h"
+#include "../core/formats/t64_format.h"
+#include "../core/formats/prg_format.h"
 #include "../core/vfs/vfs.h"
 #include "../devices/storage/drive_1541.h"
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include <chrono>
 #include <ctime>
+#include <unistd.h>
 
 #ifdef __has_include
 #if __has_include("ImGuiFileDialog.h")
@@ -19,6 +24,133 @@
 #define HAS_IMGUIFILEDIALOG 1
 #endif
 #endif
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Returns true if the given extension identifies a browsable archive or
+ * container — i.e. something the archive browser can show a directory
+ * listing for.  Covers both generic archives (VFS) and Commodore disk/tape
+ * container formats.
+ */
+static bool is_browsable_container(const char* ext) {
+    if (!ext) return false;
+    if (vfs_is_archive_extension(ext)) return true;
+
+    // Commodore container formats
+    std::string lower = ext;
+    for (auto& c : lower) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+    return lower == ".d64" || lower == ".t64";
+}
+
+/**
+ * Extract a specific file from a D64 disk image by directory-entry index.
+ * Returns the raw file data (including 2-byte load address for PRGs).
+ * Caller must free the returned buffer.
+ */
+static bool extract_d64_entry(const char* d64_path, int entry_index,
+                              uint8_t** out_data, size_t* out_size) {
+    size_t disk_size = 0;
+    uint8_t* disk_data = vfs_read_file(d64_path, &disk_size);
+    if (!disk_data) return false;
+
+    commodore_d64_t d64{};
+    if (!d64.open_mem(disk_data, disk_size)) {
+        free(disk_data);
+        return false;
+    }
+
+    bool ok = d64.extract_file(entry_index, out_data, out_size);
+    d64.close();
+    free(disk_data);
+    return ok;
+}
+
+/**
+ * Extract a specific file from a T64 tape archive by entry index.
+ * Returns the file as a raw PRG (2-byte load address + data).
+ * Caller must free the returned buffer.
+ */
+static bool extract_t64_entry(const char* t64_path, int entry_index,
+                              uint8_t** out_data, size_t* out_size) {
+    size_t tape_size = 0;
+    uint8_t* tape_data = vfs_read_file(t64_path, &tape_size);
+    if (!tape_data) return false;
+
+    commodore_t64_t t64{};
+    if (!t64.open_mem(tape_data, tape_size)) {
+        free(tape_data);
+        return false;
+    }
+
+    commodore_prg_t prg{};
+    if (!t64.extract_file(entry_index, &prg)) {
+        t64.close();
+        free(tape_data);
+        return false;
+    }
+    t64.close();
+    free(tape_data);
+
+    // Build raw PRG: [lo(load_addr), hi(load_addr)] + data
+    size_t buf_size = 2 + prg.data_size;
+    uint8_t* buf = static_cast<uint8_t*>(malloc(buf_size));
+    if (!buf) {
+        commodore_prg_free(&prg);
+        return false;
+    }
+    buf[0] = static_cast<uint8_t>(prg.load_addr & 0xFF);
+    buf[1] = static_cast<uint8_t>(prg.load_addr >> 8);
+    memcpy(buf + 2, prg.data, prg.data_size);
+    commodore_prg_free(&prg);
+
+    *out_data = buf;
+    *out_size = buf_size;
+    return true;
+}
+
+/**
+ * Extract an entry from a D64 or T64 container, write it to a temp file,
+ * and return the temp file path.  Returns empty string on failure.
+ * The caller should unlink() the temp file after loading.
+ */
+static std::string extract_container_entry_to_temp(
+    const std::string& container_path, int entry_index,
+    const std::string& ext_lower)
+{
+    uint8_t* data = nullptr;
+    size_t size = 0;
+    bool ok = false;
+
+    if (ext_lower == ".d64") {
+        ok = extract_d64_entry(container_path.c_str(), entry_index, &data, &size);
+    } else if (ext_lower == ".t64") {
+        ok = extract_t64_entry(container_path.c_str(), entry_index, &data, &size);
+    }
+
+    if (!ok || !data) return {};
+
+    // Write to a temp file with .prg extension for format identification
+    char tmp_path[] = "/tmp/cermu_XXXXXX.prg";
+    int fd = mkstemps(tmp_path, 4);
+    if (fd < 0) {
+        free(data);
+        return {};
+    }
+
+    ssize_t written = write(fd, data, size);
+    close(fd);
+    free(data);
+
+    if (written < 0 || static_cast<size_t>(written) != size) {
+        unlink(tmp_path);
+        return {};
+    }
+
+    return tmp_path;
+}
 
 // ============================================================================
 // Constructor / Destructor
@@ -235,68 +367,21 @@ void SystemGUI::render_frame() {
                 std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
                 printf("User selected file: %s\n", filePathName.c_str());
 
-                // =============================================================
-                // Archive resolution — if user selected a .zip (or other
-                // archive), scan its contents and resolve to the loadable file
-                // inside.
-                // =============================================================
-                std::string resolved_path = filePathName;
-                {
-                    std::string ext = vfs_extension(filePathName.c_str());
-                    if (vfs_is_archive_extension(ext.c_str())) {
-                        printf("Archive selected — scanning for loadable content...\n");
-                        auto scan = scan_archive(filePathName.c_str());
-                        if (scan.loadable_files.size() == 1) {
-                            resolved_path = scan.loadable_files[0].full_path;
-                            printf("Auto-selected: %s (system: %s, conf: %.2f)\n",
-                                   resolved_path.c_str(),
-                                   scan.suggested_system.c_str(), scan.confidence);
-                        } else if (scan.loadable_files.size() > 1) {
-                            resolved_path = scan.loadable_files[0].full_path;
-                            printf("Archive contains %zu loadable files, "
-                                   "auto-selected first: %s\n",
-                                   scan.loadable_files.size(),
-                                   resolved_path.c_str());
-                        } else {
-                            printf("No loadable files found in archive\n");
-                        }
-                    }
-                }
-
                 // Save the last selected file path for next time
                 last_file_path_ = filePathName;
 
-                // Stop emulation thread while loading for exclusive system access
-                bool was_running = emulation_running_.load() && !emulation_paused_.load();
-                stop_emu_thread();
-
-                // Auto-detect optimal configuration (e.g. memory expansion) from
-                // file. Never downgrades from the user's current selection.
-                if (system_) {
-                    system_->apply_file_configuration(resolved_path.c_str());
-                }
-
-                // Reset system before loading file for clean state
-                if (system_) {
-                    system_->reset();
-                }
-
-                // Load the file (VFS-aware — handles archive paths transparently)
-                if (system_ && system_->load_file(resolved_path.c_str())) {
-                    printf("File loaded successfully: %s\n", resolved_path.c_str());
-                    update_window_title();
-                    emulation_running_.store(true);
-                    emulation_paused_.store(false);
+                // =============================================================
+                // Browsable container — open the archive browser popup instead
+                // of loading immediately.
+                // =============================================================
+                std::string ext = vfs_extension(filePathName.c_str());
+                if (is_browsable_container(ext.c_str())) {
+                    printf("Browsable container selected — opening archive browser\n");
+                    archive_browser_.open(filePathName);
                 } else {
-                    printf("Failed to load file: %s\n", resolved_path.c_str());
-                    if (was_running) {
-                        emulation_running_.store(true);
-                        emulation_paused_.store(false);
-                    }
+                    // Regular file — load directly
+                    load_selected_file(filePathName);
                 }
-
-                // Restart emulation thread
-                start_emu_thread();
             } else {
                 // User canceled via Cancel button
                 std::string currentPath = ImGuiFileDialog::Instance()->GetCurrentPath();
@@ -354,6 +439,41 @@ void SystemGUI::render_frame() {
 
     // Poll attached drives for file dialog requests
     poll_drive_file_dialog_requests();
+
+    // =====================================================================
+    // Archive / container browser — renders when the user selected a
+    // browsable file (.zip, .d64, .t64, …) from the file dialog.
+    // =====================================================================
+    if (archive_browser_.is_open()) {
+        if (archive_browser_.render()) {
+            // Browser finished — user confirmed or canceled
+            if (!archive_browser_.was_canceled()) {
+                const auto& entry = archive_browser_.get_selected_entry();
+                printf("Archive browser: selected \"%s\" (index %d)\n",
+                       entry.display_name.c_str(), entry.source_index);
+
+                if (archive_browser_.is_container_source() && entry.source_index >= 0) {
+                    // D64/T64 container — extract the specific entry to a temp
+                    // PRG file, then load it through the normal path.
+                    std::string container_path = archive_browser_.get_archive_path();
+                    std::string ext = vfs_extension(container_path.c_str());
+                    for (auto& c : ext) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+
+                    std::string tmp = extract_container_entry_to_temp(
+                        container_path, entry.source_index, ext);
+                    if (!tmp.empty()) {
+                        load_selected_file(tmp, container_path.c_str());
+                        unlink(tmp.c_str());
+                    } else {
+                        printf("Archive browser: failed to extract entry\n");
+                    }
+                } else {
+                    // VFS archive — the path is directly loadable
+                    load_selected_file(archive_browser_.get_selected_path());
+                }
+            }
+        }
+    }
 #endif
     
     // Render screen (full-screen background)
@@ -1168,6 +1288,46 @@ void SystemGUI::open_file_dialog(const char* dialog_key, const char* title) {
     (void)title;
     printf("ImGuiFileDialog not available - file loading disabled\n");
 #endif
+}
+
+// ============================================================================
+// Load a Selected File
+// ============================================================================
+
+void SystemGUI::load_selected_file(const std::string& resolved_path,
+                                   const char* display_path) {
+    if (!system_) return;
+    (void)display_path;  // TODO: use for window title when loading from containers
+
+    printf("Loading file: %s\n", resolved_path.c_str());
+
+    // Stop emulation thread while loading for exclusive system access
+    bool was_running = emulation_running_.load() && !emulation_paused_.load();
+    stop_emu_thread();
+
+    // Auto-detect optimal configuration (e.g. memory expansion) from file.
+    // Never downgrades from the user's current selection.
+    system_->apply_file_configuration(resolved_path.c_str());
+
+    // Reset system before loading file for clean state
+    system_->reset();
+
+    // Load the file (VFS-aware — handles archive paths transparently)
+    if (system_->load_file(resolved_path.c_str())) {
+        printf("File loaded successfully: %s\n", resolved_path.c_str());
+        update_window_title();
+        emulation_running_.store(true);
+        emulation_paused_.store(false);
+    } else {
+        printf("Failed to load file: %s\n", resolved_path.c_str());
+        if (was_running) {
+            emulation_running_.store(true);
+            emulation_paused_.store(false);
+        }
+    }
+
+    // Restart emulation thread
+    start_emu_thread();
 }
 
 // ============================================================================
