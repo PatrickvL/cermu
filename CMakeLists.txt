@@ -227,6 +227,10 @@ if(BUILD_GUI)
             ${IMGUIFILEDIALOG_ROOT}
             ${IMGUI_DIR}
         )
+        # Let ImGuiFileDialog find the custom VFS filesystem header
+        target_include_directories(ImGuiFileDialog PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/gui
+        )
         
         # Link ImGuiFileDialog with ImGui
         target_link_libraries(ImGuiFileDialog imgui)
@@ -414,7 +418,7 @@ if(BUILD_GUI)
         src/gui/system_gui.cpp
         src/gui/system_selection_dialog.cpp
         src/gui/connector_icons.cpp
-        src/gui/archive_browser.cpp
+        src/gui/vfs_file_system.cpp
     )
 endif()
 
