@@ -73,12 +73,13 @@ public:
     // Find best system for a file (returns nullptr if no suitable system found)
     std::unique_ptr<EmulatedSystem> create_system_for_file(const char* filepath);
     
-    // Create a specific system by short name (e.g., "C64", "CHIP8")
-    std::unique_ptr<EmulatedSystem> create_system_by_name(const char* short_name);
+    // Create a system by name — matches against short_name and aliases
+    // (case-insensitive).  E.g., "c64", "VIC-20", "plus/4" all work.
+    std::unique_ptr<EmulatedSystem> create_system_by_name(const char* name);
     
     // Alias for consistency
-    std::unique_ptr<EmulatedSystem> create_system(const char* short_name) {
-        return create_system_by_name(short_name);
+    std::unique_ptr<EmulatedSystem> create_system(const char* name) {
+        return create_system_by_name(name);
     }
     
 private:

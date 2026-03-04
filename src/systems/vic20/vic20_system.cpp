@@ -348,20 +348,14 @@ static SystemProbeResult vic20_probe_file(
     }
 
     // =================================================================
-    // Filepath heuristics — scan the ENTIRE path (including archive
-    // names in VFS paths) for system keywords.  Raises confidence
-    // but never lowers it.
+    // =================================================================
+    // Filepath heuristics — variant-specific keyword boost is now
+    // handled generically by SystemRegistry::identify_system() using
+    // aliases.  Only configuration hints (region) remain here.
     // =================================================================
     if (filepath) {
         std::string lower(filepath);
         for (auto& c : lower) c = static_cast<char>(tolower(c));
-
-        if (lower.find("vic20")  != std::string::npos ||
-            lower.find("vic-20") != std::string::npos ||
-            lower.find("vic 20") != std::string::npos ||
-            lower.find("vic_20") != std::string::npos) {
-            result.confidence = std::max(result.confidence, 0.90f);
-        }
 
         // Region hint
         if (lower.find("ntsc") != std::string::npos)
@@ -382,6 +376,8 @@ static SystemDescriptor vic20_descriptor = {
     "Commodore VIC-20",
     "VIC20",
     "Commodore VIC-20 (1980) - 5KB RAM, 22-column display",
+    "vic20",
+    {"VIC20", "VIC-20", "VIC 20", "VIC_20"},
     vic20_formats,
     create_vic20_hardware_traits(),
     vic20_probe_file

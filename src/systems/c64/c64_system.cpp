@@ -177,18 +177,14 @@ static SystemProbeResult c64_probe_file(
     }
 
     // =================================================================
-    // Filepath heuristics — scan the ENTIRE path (including archive
-    // names in VFS paths) for system keywords.  Raises confidence
-    // but never lowers it.
+    // =================================================================
+    // Filepath heuristics — variant-specific keyword boost is now
+    // handled generically by SystemRegistry::identify_system() using
+    // aliases.  Only configuration hints (region) remain here.
     // =================================================================
     if (filepath) {
         std::string lower(filepath);
         for (auto& c : lower) c = static_cast<char>(tolower(c));
-
-        if (lower.find("c64") != std::string::npos ||
-            lower.find("c-64") != std::string::npos) {
-            result.confidence = std::max(result.confidence, 0.90f);
-        }
 
         // Region hint
         if (lower.find("ntsc") != std::string::npos)
@@ -275,6 +271,8 @@ static SystemDescriptor c64_descriptor = {
     "Commodore 64",
     "C64",
     "8-bit home computer with VIC-II graphics and SID sound chip (1982)",
+    "c64",
+    {"C64", "C-64", "Commodore 64"},
     c64_formats,
     create_c64_hardware_traits(),
     c64_probe_file

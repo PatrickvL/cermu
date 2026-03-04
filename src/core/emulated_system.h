@@ -208,6 +208,33 @@ struct SystemDescriptor {
     const char* description;             // Brief description
 
     /**
+     * Data folder name under the top-level data/ directory.
+     * Systems that share a hardware family (e.g. C16, C116, Plus/4)
+     * all point to the same folder (e.g. "c16").  Used by the probe
+     * verification tool to map folder → acceptable systems.
+     * May be nullptr for systems with no data folder (e.g. CHIP-8).
+     */
+    const char* data_folder;
+
+    /**
+     * System name aliases for identification and selection.
+     *
+     * Serves multiple purposes:
+     * - Command-line --system selection (case-insensitive matching)
+     * - Filepath heuristic matching (directory names, archive names)
+     * - UI system picker / search
+     *
+     * The first entry is the canonical/default name for this system
+     * variant and should match short_name.  All comparisons are
+     * case-insensitive, so casing-only variants (e.g. "C64" vs "c64")
+     * must NOT be included — store each alias in its natural casing.
+     *
+     * Example: VIC-20 → {"VIC20", "VIC-20", "VIC 20", "VIC_20"}
+     * Example: Plus/4 → {"Plus4", "Plus/4", "Plus-4"}
+     */
+    std::vector<const char*> aliases;
+
+    /**
      * NULL-terminated array of pointers to format descriptors that
      * this system can load.  Used both for file-dialog filters and
      * as a generic gatekeeper during system identification: the

@@ -238,6 +238,8 @@ static SystemDescriptor chip8_descriptor = {
     "CHIP-8 / SCHIP / XO-CHIP",
     "CHIP8",
     "CHIP-8 interpreter with Super-CHIP and XO-CHIP extensions",
+    nullptr,  // no data folder
+    {"CHIP8", "CHIP-8", "SCHIP", "XO-CHIP"},
     nullptr,
     create_chip8_hardware_traits(),
     chip8_probe_file

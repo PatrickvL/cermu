@@ -11,7 +11,8 @@
  */
 
 #include "../src/core/emulated_system.h"
-#include "../src/core/formats/format_handler.h"
+#include "../src/core/system_registry.h"
+#include "../src/core/formats/format_registry.h"
 #include "../src/core/vfs/vfs.h"
 #include <cstdio>
 #include <cstring>
@@ -39,11 +40,14 @@ static std::string get_extension(const std::string& path) {
     return to_lower(path.substr(dot));
 }
 
-/** Extensions we attempt to probe (loadable formats in any system). */
+/** Check if a file extension is loadable via the format registry or is an archive. */
 static bool is_loadable_extension(const std::string& ext) {
-    return ext == ".prg" || ext == ".d64" || ext == ".t64" || ext == ".tap" ||
-           ext == ".crt" || ext == ".sid" || ext == ".lnx" || ext == ".bin" ||
-           ext == ".zip" || ext == ".7z"  || ext == ".nes" || ext == ".nsf";
+    if (ext.empty()) return false;
+    if (FormatRegistry::instance().find_by_extension(ext.c_str()) != nullptr)
+        return true;
+    if (vfs_is_archive_extension(ext.c_str()))
+        return true;
+    return false;
 }
 
 /** Recursively collect files from a directory. */
@@ -70,25 +74,34 @@ static void collect_files(const std::string& dir, std::vector<std::string>& out,
 }
 
 // ============================================================================
-// Mapping from folder name to expected system short names
+// Build folder → acceptable systems mapping from the SystemRegistry.
+// Each system's data_folder declares which directory it lives under;
+// multiple systems can share the same folder (e.g. C16, C116, Plus/4
+// all declare data_folder = "c16").
 // ============================================================================
 
 struct FolderSystemMapping {
-    const char* folder;
-    std::vector<std::string> acceptable_systems;  // Any of these is OK
+    std::string folder;
+    std::vector<std::string> acceptable_systems;
 };
 
-static const FolderSystemMapping folder_map[] = {
-    { "c64",    { "C64" } },
-    { "c16",    { "C16", "C116", "PLUS4" } },    // 264 series — any variant is OK
-    { "vic20",  { "VIC20" } },
-    { "nes",    { "NES" } },
-    { "apple1", { "APPLE1" } },
-};
+static std::vector<FolderSystemMapping> build_folder_map() {
+    std::map<std::string, std::vector<std::string>> map;
+    for (const auto& [desc, factory] : SystemRegistry::instance().get_systems()) {
+        if (!desc.data_folder) continue;
+        map[desc.data_folder].push_back(desc.short_name);
+    }
+    std::vector<FolderSystemMapping> result;
+    for (auto& [folder, systems] : map)
+        result.push_back({ folder, std::move(systems) });
+    return result;
+}
 
-static const FolderSystemMapping* find_mapping(const std::string& folder) {
+static const FolderSystemMapping* find_mapping(
+    const std::vector<FolderSystemMapping>& mappings,
+    const std::string& folder) {
     std::string low = to_lower(folder);
-    for (const auto& m : folder_map) {
+    for (const auto& m : mappings) {
         if (low == m.folder) return &m;
     }
     return nullptr;
@@ -103,6 +116,18 @@ int main(int argc, char** argv) {
 
     auto& registry = SystemRegistry::instance();
     printf("Registered systems: %zu\n", registry.get_systems().size());
+
+    // Build folder → system mapping from the registry
+    auto folder_mappings = build_folder_map();
+    printf("Data folder mappings:\n");
+    for (const auto& m : folder_mappings) {
+        printf("  %s -> ", m.folder.c_str());
+        for (size_t i = 0; i < m.acceptable_systems.size(); i++) {
+            if (i > 0) printf(", ");
+            printf("%s", m.acceptable_systems[i].c_str());
+        }
+        printf("\n");
+    }
 
     // Discover system folders
     DIR* top = opendir(data_dir.c_str());
@@ -124,7 +149,7 @@ int main(int argc, char** argv) {
         std::string full = data_dir + "/" + ent->d_name;
         struct stat st;
         if (stat(full.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) continue;
-        auto* mapping = find_mapping(ent->d_name);
+        auto* mapping = find_mapping(folder_mappings, ent->d_name);
         if (mapping)
             test_folders.push_back({ full, ent->d_name, mapping });
     }

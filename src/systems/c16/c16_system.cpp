@@ -311,54 +311,30 @@ SystemProbeResult Commodore264System<V>::probe_file_static(
     }
 
     // =================================================================
-    // Filepath heuristics — scan the ENTIRE path (including archive
-    // names in VFS paths) for system keywords.  This runs *after*
-    // content analysis so that it can only raise, never lower, the
-    // score determined above.
+    // =================================================================
+    // Filepath heuristics — variant-specific alias boost is now
+    // handled generically by SystemRegistry::identify_system() using
+    // aliases.  Only family-level and configuration hints remain.
     // =================================================================
     if (filepath) {
         std::string lower(filepath);
         for (auto& c : lower) c = static_cast<char>(tolower(c));
 
-        // --- Variant-specific path signals (strongest) ---
-        bool specific_match = false;
-        if constexpr (V == C264SeriesVariant::PLUS4) {
-            if (lower.find("plus4")  != std::string::npos ||
-                lower.find("plus/4") != std::string::npos ||
-                lower.find("plus-4") != std::string::npos ||
-                lower.find("(plus4)") != std::string::npos) {
-                result.confidence = std::max(result.confidence, 0.90f);
-                specific_match = true;
-            }
-        } else if constexpr (V == C264SeriesVariant::C16) {
-            // Match "c16" but avoid "c116" (handled by C116 branch)
-            auto p = lower.find("c16");
-            if (p != std::string::npos &&
-                (p == 0 || lower[p - 1] != '1')) {
-                result.confidence = std::max(result.confidence, 0.90f);
-                specific_match = true;
-            }
-        } else if constexpr (V == C264SeriesVariant::C116) {
-            if (lower.find("c116") != std::string::npos) {
-                result.confidence = std::max(result.confidence, 0.90f);
-                specific_match = true;
-            }
+        // General TED/C264 family signals — weaker than variant-specific
+        // keywords (which are applied at 0.90 by the registry).  These
+        // ensure that any C264-family file in a shared directory (e.g.
+        // "c264/" or "264 series/") still gets a reasonable score.
+        if (lower.find("plus4")  != std::string::npos ||
+            lower.find("plus/4") != std::string::npos ||
+            lower.find("plus-4") != std::string::npos ||
+            lower.find("c16")    != std::string::npos ||
+            lower.find("c116")   != std::string::npos ||
+            lower.find("c264")   != std::string::npos ||
+            lower.find("264 series") != std::string::npos) {
+            result.confidence = std::max(result.confidence, 0.75f);
         }
 
-        // --- General TED/C264 family signals (weaker than specific) ---
-        if (!specific_match) {
-            if (lower.find("plus4")  != std::string::npos ||
-                lower.find("plus/4") != std::string::npos ||
-                lower.find("plus-4") != std::string::npos ||
-                lower.find("c16")    != std::string::npos ||
-                lower.find("c116")   != std::string::npos ||
-                lower.find("c264")   != std::string::npos ||
-                lower.find("264 series") != std::string::npos) {
-                result.confidence = std::max(result.confidence, 0.75f);
-            }
-        }
-
-        // --- Region hint ---
+        // Region hint
         if (lower.find("ntsc") != std::string::npos)
             result.configuration.region_option_index = 1;   // NTSC
     }
@@ -480,6 +456,8 @@ const SystemDescriptor& Commodore264System<V>::static_descriptor() {
         Traits::full_name,
         Traits::short_id,
         Traits::description,
+        Traits::data_folder,
+        Traits::get_aliases(),
         formats,
         create_hardware_traits(),
         probe_file_static

@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <cctype>
+#include <string>
 
 // ============================================================================
 // SystemRegistry Implementation
@@ -64,6 +66,48 @@ SystemMatch SystemRegistry::identify_system(const char* filepath,
         // Phase 2: system-specific probe
         SystemProbeResult probe = descriptor.probe_file(matched_format, filepath, data, size);
 
+        // Phase 3: generic filepath alias boost — if the lowercased
+        // file path contains any of this system's aliases, raise
+        // confidence to at least 0.90.  This ensures directory structure
+        // and archive names aid identification without duplicating the
+        // alias lists in every system's probe callback.
+        //
+        // Uses word-boundary-aware matching: the character immediately
+        // before the match must not be alphanumeric (prevents "c116"
+        // from matching the alias "C16").
+        if (filepath && !descriptor.aliases.empty()) {
+            // Compute lowercased path once, outside the per-system loop
+            // would be ideal, but it's done here to keep locality.
+            // The thread_local avoids repeated allocation.
+            static thread_local std::string lower_path;
+            lower_path.assign(filepath);
+            for (auto& c : lower_path)
+                c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+
+            for (const char* alias : descriptor.aliases) {
+                // Lowercase the alias for case-insensitive matching
+                thread_local std::string lower_alias;
+                lower_alias.assign(alias);
+                for (auto& c : lower_alias)
+                    c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+
+                size_t kw_len = lower_alias.size();
+                size_t pos = 0;
+                while ((pos = lower_path.find(lower_alias, pos)) != std::string::npos) {
+                    // Check left boundary: start of string or non-alnum
+                    bool left_ok = (pos == 0) ||
+                                   !isalnum(static_cast<unsigned char>(lower_path[pos - 1]));
+                    if (left_ok) {
+                        if (probe.confidence < 0.90f)
+                            probe.confidence = 0.90f;
+                        break;
+                    }
+                    pos += kw_len;
+                }
+                if (probe.confidence >= 0.90f) break;
+            }
+        }
+
         if (probe.confidence > best.confidence) {
             best.confidence     = probe.confidence;
             best.system_name    = descriptor.short_name;
@@ -121,14 +165,30 @@ std::unique_ptr<EmulatedSystem> SystemRegistry::create_system_for_file(const cha
     return nullptr;
 }
 
-std::unique_ptr<EmulatedSystem> SystemRegistry::create_system_by_name(const char* short_name) {
-    if (!short_name) {
+std::unique_ptr<EmulatedSystem> SystemRegistry::create_system_by_name(const char* name) {
+    if (!name) {
         return nullptr;
     }
 
+    // Case-insensitive comparison helper
+    auto iequals = [](const char* a, const char* b) -> bool {
+        for (; *a && *b; ++a, ++b) {
+            if (tolower(static_cast<unsigned char>(*a)) !=
+                tolower(static_cast<unsigned char>(*b)))
+                return false;
+        }
+        return *a == '\0' && *b == '\0';
+    };
+
     for (const auto& [descriptor, factory] : systems_) {
-        if (strcmp(descriptor.short_name, short_name) == 0) {
+        // Match against short_name
+        if (iequals(descriptor.short_name, name))
             return factory();
+
+        // Match against any alias
+        for (const char* alias : descriptor.aliases) {
+            if (iequals(alias, name))
+                return factory();
         }
     }
 
