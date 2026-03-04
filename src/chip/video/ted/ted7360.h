@@ -26,35 +26,54 @@
  * is enabled (DEN=1), the TED takes over the bus for 40+3 cycles to fetch
  * screen matrix and color attribute data.
  *
- * Register map: 32 registers at $FF00-$FF1F (mirrored in $FF20-$FF3F),
+ * Register map: 32 registers at $FF00-$FF1F (mirrored at $FF20-$FF3F),
  * plus banking latches at $FF3E/$FF3F.
+ *
+ * NOTE on $FF1A/$FF1B (raster compare / raster counter):
+ *   Following the VIC-II model, these registers serve a dual role:
+ *     Write → sets the raster line compare value (triggers IRQ on match)
+ *     Read  → returns the current live raster counter value
+ *   $FF1A bit 0 carries the 9th bit (MSB) of both compare and counter.
+ *   $FF1B carries bits [7:0].
+ *
+ * NOTE on $FF0B (TED_REG_RASTER_CMP):
+ *   Some hardware documentation places the raster compare registers at
+ *   $FF0A bit 0 + $FF0B, with $FF0A doubling as the IRQ mask.
+ *   This implementation uses the $FF1A/$FF1B pair instead (VIC-II style),
+ *   and TED_REG_RASTER_CMP at $FF0B is currently dead — see the define.
  *
  *   $FF00-$FF01  Timer 1 (low/high)
  *   $FF02-$FF03  Timer 2 (low/high)
  *   $FF04-$FF05  Timer 3 (low/high)
- *   $FF06        Control register 1 (DEN, BMM, ECM, RSEL, YSCROLL)
- *   $FF07        Control register 2 (MCM, CSEL, XSCROLL, FREEZE, PAL/NTSC, RVS)
+ *   $FF06        Control register 1 (YSCROLL, RSEL, DEN, BMM, ECM)
+ *   $FF07        Control register 2 (XSCROLL, CSEL, MCM, FREEZE, PAL/NTSC, RVS)
  *   $FF08        Keyboard latch
  *   $FF09        IRQ status register
- *   $FF0A        IRQ mask register (bit 0 = raster compare bit 8)
- *   $FF0B        Raster compare low 8 bits
- *   $FF0C-$FF0D  Cursor position (high/low)
- *   $FF0E-$FF0F  Sound channel 1 frequency (low/high)
- *   $FF10        Sound channel 2 frequency low
- *   $FF11        Sound control
- *   $FF12        Memory control (character/screen base, ROM bank)
- *   $FF13        Character base address high nibble
- *   $FF14        Screen/bitmap base address
- *   $FF15-$FF18  Background colors 0-3
+ *   $FF0A        IRQ mask register
+ *   $FF0B        Raster compare low [7:0] (some hardware docs) — see note above
+ *   $FF0C        Cursor position high bits [9:8]
+ *   $FF0D        Cursor position low bits [7:0]
+ *   $FF0E        Sound channel 1 frequency low [7:0]
+ *   $FF0F        Sound channel 1 frequency high [9:8]
+ *   $FF10        Sound channel 2 frequency [7:0] (8-bit only — no high register)
+ *   $FF11        Sound control (noise mode, channel enables, volume)
+ *   $FF12        Memory control (character base, ROM bank select)
+ *   $FF13        Character generator base address high bits
+ *   $FF14        Screen / bitmap base address
+ *   $FF15        Background color 0
+ *   $FF16        Background color 1
+ *   $FF17        Background color 2
+ *   $FF18        Background color 3
  *   $FF19        Border color
- *   $FF1A        Character position high / raster bit 8
- *   $FF1B        Raster counter low 8 bits
- *   $FF1C        Cursor blink position / vertical sub-address
- *   $FF1D        Horizontal position
- *   $FF1E        Flash counter / raster compare high bits
- *   $FF1F        ROM/RAM banking + CPU clock
- *   $FF3E        Write = switch to ROM mode
- *   $FF3F        Write = switch to RAM mode
+ *   $FF1A        Raster compare bit 8 / current raster bit 8 (write=compare, read=counter)
+ *   $FF1B        Raster compare [7:0] / current raster [7:0] (write=compare, read=counter)
+ *   $FF1C        ⚠ Unresolved — docs suggest cursor-blink / vertical sub-counter;
+ *                  currently implemented as a mirror of $FF1B (placeholder)
+ *   $FF1D        Horizontal position (current TED clock within line, read-only)
+ *   $FF1E        Flash counter (read-only)
+ *   $FF1F        ROM/RAM banking + CPU clock control
+ *   $FF3E        Write-only latch — switch to ROM mode
+ *   $FF3F        Write-only latch — switch to RAM mode
  */
 
 #include <cstdint>
@@ -66,137 +85,151 @@
 // REGISTER INDICES ($FF00-$FF1F)
 // ============================================================================
 
-#define TED_REG_TIMER1_LO    0x00
-#define TED_REG_TIMER1_HI    0x01
-#define TED_REG_TIMER2_LO    0x02
-#define TED_REG_TIMER2_HI    0x03
-#define TED_REG_TIMER3_LO    0x04
-#define TED_REG_TIMER3_HI    0x05
-#define TED_REG_CONTROL1     0x06   // $FF06
-#define TED_REG_CONTROL2     0x07   // $FF07
-#define TED_REG_KEYBOARD     0x08   // $FF08
-#define TED_REG_IRQ_STATUS   0x09   // $FF09
-#define TED_REG_IRQ_MASK     0x0A   // $FF0A — also raster compare bit 8 (bit 0)
-#define TED_REG_RASTER_CMP   0x0B   // $FF0B — raster compare bits 0-7
-#define TED_REG_CURSOR_HI    0x0C   // $FF0C — cursor position bits 8-9 (bits 0-1)
-#define TED_REG_CURSOR_LO    0x0D   // $FF0D — cursor position bits 0-7
-#define TED_REG_SOUND1_LO    0x0E   // $FF0E — sound 1 frequency low
-#define TED_REG_SOUND1_HI    0x0F   // $FF0F — sound 1 frequency high
-#define TED_REG_SOUND2_LO    0x10   // $FF10 — sound 2 frequency low
-#define TED_REG_SOUND_CTRL   0x11   // $FF11 — sound control
-#define TED_REG_MEM_CTRL     0x12   // $FF12
-#define TED_REG_CHAR_HI      0x13   // $FF13
-#define TED_REG_BITMAP_ADDR  0x14   // $FF14
-#define TED_REG_COLOR_BG0    0x15
-#define TED_REG_COLOR_BG1    0x16
-#define TED_REG_COLOR_BG2    0x17
-#define TED_REG_COLOR_BG3    0x18
-#define TED_REG_BORDER       0x19
-#define TED_REG_CHARPOS_HI   0x1A   // Also raster bit 8
-#define TED_REG_RASTER_LO    0x1B
-#define TED_REG_VPOS         0x1C
-#define TED_REG_HPOS         0x1D
-#define TED_REG_FLASH        0x1E   // Flash counter / raster compare
-#define TED_REG_ROM_RAM      0x1F   // ROM/RAM banking + CPU clock
+#define TED_REG_TIMER1_LO    0x00   // $FF00 — Timer 1 counter/latch low byte [7:0]
+#define TED_REG_TIMER1_HI    0x01   // $FF01 — Timer 1 counter/latch high byte [15:8]; write loads counter
+#define TED_REG_TIMER2_LO    0x02   // $FF02 — Timer 2 counter/latch low byte [7:0]
+#define TED_REG_TIMER2_HI    0x03   // $FF03 — Timer 2 counter/latch high byte [15:8]; write loads counter
+#define TED_REG_TIMER3_LO    0x04   // $FF04 — Timer 3 counter/latch low byte [7:0]
+#define TED_REG_TIMER3_HI    0x05   // $FF05 — Timer 3 counter/latch high byte [15:8]; write loads counter
+#define TED_REG_CONTROL1     0x06   // $FF06 — Control 1: YSCROLL[2:0], RSEL, DEN, BMM, ECM, TEST
+#define TED_REG_CONTROL2     0x07   // $FF07 — Control 2: XSCROLL[2:0], CSEL, MCM, FREEZE, PAL/NTSC, RVS
+#define TED_REG_KEYBOARD     0x08   // $FF08 — Keyboard latch: write column select, read row state (active LOW)
+#define TED_REG_IRQ_STATUS   0x09   // $FF09 — IRQ status; write 1-bits to acknowledge/clear (see TED_IRQ_*)
+#define TED_REG_IRQ_MASK     0x0A   // $FF0A — IRQ enable mask; set bits to enable sources (see TED_IRQ_*)
+// ⚠ NOTE: some hardware documentation describes $FF0A bit 0 as raster compare bit 8,
+// with $FF0B as raster compare [7:0].  This implementation uses $FF1A/$FF1B instead
+// (VIC-II style: write=compare, read=live counter).  TED_REG_RASTER_CMP below is
+// therefore currently dead — not referenced by any .cpp logic.
+#define TED_REG_RASTER_CMP   0x0B   // $FF0B — ⚠ UNUSED: raster compare [7:0] per some hardware docs; see note above
+#define TED_REG_CURSOR_HI    0x0C   // $FF0C — Cursor position bits [9:8] (bits [1:0] of byte); 10-bit index into screen matrix
+#define TED_REG_CURSOR_LO    0x0D   // $FF0D — Cursor position bits [7:0]; combined with CURSOR_HI → 0..999
+#define TED_REG_SOUND1_LO    0x0E   // $FF0E — Sound channel 1 frequency bits [7:0]
+#define TED_REG_SOUND1_HI    0x0F   // $FF0F — Sound channel 1 frequency bits [9:8] (bits [1:0] of byte)
+#define TED_REG_SOUND2_LO    0x10   // $FF10 — Sound channel 2 frequency [7:0]; 8-bit only — no high register
+#define TED_REG_SOUND_CTRL   0x11   // $FF11 — Sound control: noise mode, ch1/ch2 enable, volume [3:0]
+#define TED_REG_MEM_CTRL     0x12   // $FF12 — Memory control: character/bitmap base, ROM bank select
+#define TED_REG_CHAR_HI      0x13   // $FF13 — Character generator base address bits [15:10] (bits [7:2] of byte)
+#define TED_REG_BITMAP_ADDR  0x14   // $FF14 — Screen/bitmap base address bits [14:10] (bits [7:3]); bit 3 = bitmap toggle
+#define TED_REG_COLOR_BG0    0x15   // $FF15 — Background color 0 (7-bit: lum[6:4] | hue[3:0])
+#define TED_REG_COLOR_BG1    0x16   // $FF16 — Background color 1 (ECM text BG1, MCM pixel 01)
+#define TED_REG_COLOR_BG2    0x17   // $FF17 — Background color 2 (ECM text BG2, MCM pixel 10 — not used in all modes)
+#define TED_REG_COLOR_BG3    0x18   // $FF18 — Background color 3 (ECM text BG3)
+#define TED_REG_BORDER       0x19   // $FF19 — Border color (7-bit: lum[6:4] | hue[3:0])
+// ⚠ NOTE on $FF1A/$FF1B: these follow the VIC-II dual-use model.
+//   Write → latches raster compare value (9-bit across $FF1A bit 0 + $FF1B)
+//   Read  → returns live raster counter (same bit layout)
+//   The name CHARPOS_HI is inherited from ambiguous hardware documentation; the
+//   register also encodes bits of the current video matrix address on reads, but
+//   bit 0 carries raster bit 8 in both read and write directions.
+#define TED_REG_CHARPOS_HI   0x1A   // $FF1A — Write: raster compare bit 8 (bit 0); Read: raster counter bit 8 (bit 0) + video matrix addr bits
+#define TED_REG_RASTER_LO    0x1B   // $FF1B — Write: raster compare [7:0]; Read: current raster counter [7:0]
+// ⚠ NOTE on $FF1C: hardware documentation describes this as cursor-blink related
+// or a vertical sub-counter (row within character cell).  Currently implemented
+// as a mirror of the raster counter low byte ($FF1B) — this is a placeholder.
+#define TED_REG_VPOS         0x1C   // $FF1C — ⚠ PLACEHOLDER: likely cursor-blink / vertical sub-counter (RC); currently mirrors $FF1B
+#define TED_REG_HPOS         0x1D   // $FF1D — Horizontal position: current TED single-clock cycle within line (0-113, read-only)
+#define TED_REG_FLASH        0x1E   // $FF1E — Flash counter [7:2] (6-bit, frame-rate blink, read-only); bit 0: reserved
+#define TED_REG_ROM_RAM      0x1F   // $FF1F — ROM/RAM banking select + CPU single-clock control
 
-#define TED_NUM_REGS         0x20   // 32 registers
+#define TED_NUM_REGS         0x20   // 32 registers in the primary range ($FF00-$FF1F)
 
 // Video counter / address masks
-#define TED_VC_MASK              0x3FF    // 10-bit video counter mask
-#define TED_TIMER_WRAP_VALUE     0xFFFF   // 16-bit timer wrap/initial value
+#define TED_VC_MASK              0x3FF    // 10-bit video counter (VC/VCBASE) mask: 0..1023 (40×25 = 1000 char positions)
+#define TED_TIMER_WRAP_VALUE     0xFFFF   // 16-bit initial value for timers 2/3 (no auto-reload: wrap to $FFFF on underflow)
 
 // Register mirror/latch constants
-#define TED_REG_ADDR_MASK        0x3F     // 64-register address space mask
-#define TED_REG_MIRROR_START     0x20     // Start of mirrored range ($FF20)
-#define TED_REG_ROM_LATCH        0x3E     // ROM banking latch ($FF3E)
-#define TED_REG_RAM_LATCH        0x3F     // RAM banking latch ($FF3F)
-#define TED_REG_UNMIRROR_MASK    0x1F     // Map $20+ back to $00+ range
+#define TED_REG_ADDR_MASK        0x3F     // 6-bit address mask: TED occupies 64 locations $FF00-$FF3F
+#define TED_REG_MIRROR_START     0x20     // Registers $FF20-$FF3D mirror $FF00-$FF1D (except $FF3E/$FF3F)
+#define TED_REG_ROM_LATCH        0x3E     // $FF3E — write-only banking latch: switch to ROM mode
+#define TED_REG_RAM_LATCH        0x3F     // $FF3F — write-only banking latch: switch to RAM mode
+#define TED_REG_UNMIRROR_MASK    0x1F     // Mask to fold mirrored address ($20-$3D) back into primary range ($00-$1D)
 
 // Video rendering constants
-#define TED_FLASH_PHASE_BIT      0x10     // Flash phase toggle (bit 4)
+#define TED_FLASH_PHASE_BIT      0x10     // Bit 4 of flash_counter: 0=cursor/blink off, 1=on (toggles at ~1 Hz)
 
 // ============================================================================
 // CONTROL REGISTER BITS
 // ============================================================================
 
 // Control register 1 ($FF06)
-#define TED_CR1_YSCROLL_MASK 0x07   // Y scroll (3 bits)
-#define TED_CR1_RSEL         0x08   // 25 rows (1) vs 24 rows (0)
-#define TED_CR1_DEN          0x10   // Display Enable
-#define TED_CR1_BMM          0x20   // Bitmap mode
-#define TED_CR1_ECM          0x40   // Extended color mode
-#define TED_CR1_TEST         0x80   // Test bit (active low on real HW)
+#define TED_CR1_YSCROLL_MASK 0x07   // Y scroll offset bits [2:0]: fine-scroll display window down by 0-7 pixels
+#define TED_CR1_RSEL         0x08   // Row select: 1 = 25-row display window (raster 4-203), 0 = 24-row (8-199)
+#define TED_CR1_DEN          0x10   // Display Enable: 1 = video output active; must be set by raster line 48 to enable DMA lines
+#define TED_CR1_BMM          0x20   // Bitmap Mode: 1 = bitmap graphics, 0 = character mode
+#define TED_CR1_ECM          0x40   // Extended Color Mode: 1 = ECM text (4 backgrounds via screen code bits [7:6])
+#define TED_CR1_TEST         0x80   // Test bit: active-low on real hardware; do not set in normal operation
 
 // Control register 2 ($FF07)
-#define TED_CR2_XSCROLL_MASK 0x07   // X scroll (3 bits)
-#define TED_CR2_CSEL         0x08   // 40 columns (1) vs 38 columns (0)
-#define TED_CR2_MCM          0x10   // Multi-color mode
-#define TED_CR2_FREEZE       0x20   // Freeze TED (stop video, single-clock)
-#define TED_CR2_PAL_NTSC     0x40   // 0 = PAL, 1 = NTSC (read-only on real HW)
-#define TED_CR2_RVS          0x80   // Reverse screen mode
+#define TED_CR2_XSCROLL_MASK 0x07   // X scroll offset bits [2:0]: fine-scroll display window right by 0-7 pixels
+#define TED_CR2_CSEL         0x08   // Column select: 1 = 40-column window (pixels 24-344), 0 = 38-column (31-335)
+#define TED_CR2_MCM          0x10   // Multi-Color Mode: 1 = 2 bits/pixel double-width (text or bitmap)
+#define TED_CR2_FREEZE       0x20   // Freeze: 1 = stop TED video logic (single-clock CPU mode); no pixel output
+#define TED_CR2_PAL_NTSC     0x40   // PAL/NTSC select (read-only on real hardware): 0 = PAL, 1 = NTSC
+#define TED_CR2_RVS          0x80   // Reverse screen: 1 = bit 7 of screen code selects per-character pixel inversion
 
 // ============================================================================
 // IRQ STATUS/MASK BITS ($FF09/$FF0A)
 // ============================================================================
 
-#define TED_IRQ_RASTER       0x02   // Raster compare IRQ
-#define TED_IRQ_LIGHTPEN     0x04   // Light pen IRQ (active low input)
-#define TED_IRQ_TIMER1       0x08   // Timer 1 underflow IRQ
-#define TED_IRQ_TIMER2       0x10   // Timer 2 underflow IRQ
-#define TED_IRQ_TIMER3       0x40   // Timer 3 underflow IRQ
-#define TED_IRQ_ANY          0x80   // Any IRQ active (ORed status & mask)
-#define TED_IRQ_CLEARABLE    0x5E   // Bits clearable by writing 1s
+#define TED_IRQ_RASTER       0x02   // Raster compare match (raster counter == raster compare value)
+#define TED_IRQ_LIGHTPEN     0x04   // Light pen trigger (active-low input; latches H/V position on falling edge)
+#define TED_IRQ_TIMER1       0x08   // Timer 1 underflow (counter reached 0; auto-reloads from latch)
+#define TED_IRQ_TIMER2       0x10   // Timer 2 underflow (counter reached 0; wraps to $FFFF, no reload)
+#define TED_IRQ_TIMER3       0x40   // Timer 3 underflow (counter reached 0; wraps to $FFFF, no reload)
+#define TED_IRQ_ANY          0x80   // Any IRQ active: set in status read when (irq_status & irq_mask) != 0
+#define TED_IRQ_CLEARABLE    0x5E   // Mask of status bits clearable by writing 1s to $FF09
+                                    // (bits 1,2,3,4,6 — bit 0 unused, bit 5 unused, bit 7 = ANY is read-only)
 
 // ============================================================================
 // GRAPHICS MODES (ECM|BMM|MCM encoding, matching VIC-II convention)
 // ============================================================================
 
-#define TED_GM_STANDARD_TEXT       0  // ECM/BMM/MCM=0/0/0
-#define TED_GM_MULTICOLOR_TEXT     1  // ECM/BMM/MCM=0/0/1
-#define TED_GM_STANDARD_BITMAP     2  // ECM/BMM/MCM=0/1/0
-#define TED_GM_MULTICOLOR_BITMAP   3  // ECM/BMM/MCM=0/1/1
-#define TED_GM_ECM_TEXT            4  // ECM/BMM/MCM=1/0/0
-#define TED_GM_INVALID1            5  // ECM/BMM/MCM=1/0/1
-#define TED_GM_INVALID2            6  // ECM/BMM/MCM=1/1/0
-#define TED_GM_INVALID3            7  // ECM/BMM/MCM=1/1/1
+#define TED_GM_STANDARD_TEXT       0  // ECM=0 BMM=0 MCM=0: standard 1bpp text; 2 colors per char from attribute
+#define TED_GM_MULTICOLOR_TEXT     1  // ECM=0 BMM=0 MCM=1: 2bpp text when attr bit 3 set; double-width pixels
+#define TED_GM_STANDARD_BITMAP     2  // ECM=0 BMM=1 MCM=0: hires 1bpp bitmap; per-cell hue+lum from screen block
+#define TED_GM_MULTICOLOR_BITMAP   3  // ECM=0 BMM=1 MCM=1: 2bpp bitmap; double-width pixels, 4-color cells
+#define TED_GM_ECM_TEXT            4  // ECM=1 BMM=0 MCM=0: extended color text; screen code [7:6] selects BG0-BG3
+#define TED_GM_INVALID1            5  // ECM=1 BMM=0 MCM=1: invalid — outputs black (ECM+MCM combination)
+#define TED_GM_INVALID2            6  // ECM=1 BMM=1 MCM=0: invalid — outputs black (ECM+BMM combination)
+#define TED_GM_INVALID3            7  // ECM=1 BMM=1 MCM=1: invalid — outputs black (all three set)
 
 // ============================================================================
 // TIMING CONSTANTS
 // ============================================================================
 
 // The TED line consists of 114 TED single-clock cycles = 57 CPU cycles.
-// Our tick model operates per CPU cycle (calling ted7360_tick_phi1 once per
-// CPU cycle), so x_cycle counts 0..56.
+// Our tick model operates per CPU cycle (calling tick_phi1 once per cycle),
+// so x_cycle counts 0..56.
 
 // PAL timing
-#define TED_PAL_CLOCK_HZ            1773448 // TED master clock (2× CPU clock)
-#define TED_PAL_CPU_CLOCK_HZ        886724  // CPU clock
+#define TED_PAL_CLOCK_HZ            1773448 // TED master clock frequency (= 2 × CPU clock)
+#define TED_PAL_CPU_CLOCK_HZ        886724  // CPU clock derived from TED master (÷2)
 
 // NTSC timing
-#define TED_NTSC_CLOCK_HZ           1789772 // TED master clock
-#define TED_NTSC_CPU_CLOCK_HZ       894886  // CPU clock
+#define TED_NTSC_CLOCK_HZ           1789772 // TED master clock frequency (= 2 × CPU clock)
+#define TED_NTSC_CPU_CLOCK_HZ       894886  // CPU clock derived from TED master (÷2)
 
 // Display geometry
-#define TED_SCREEN_TEXTCOLS         40
+#define TED_SCREEN_TEXTCOLS         40      // Visible character columns per text row
 
-// DMA fetch timing (in CPU cycles within a line)
-// DMA starts at CPU cycle 4 (TED_FETCH_CYCLE) and runs for 40+3=43 cycles
-#define TED_FETCH_CYCLE             4       // CPU cycle at which DMA begins
+// DMA fetch timing (CPU cycles within a line, x_cycle 0..56)
+// The DMA window is 43 cycles: 3 setup (BA low, AEC still follows PHI2) + 40 data fetches.
+#define TED_FETCH_CYCLE             4       // First DMA CPU cycle (BA goes LOW here)
 #define TED_FETCH_END_CYCLE         46      // Last DMA CPU cycle (4 + 3 setup + 40 data - 1)
-#define TED_DMA_SETUP_CYCLES        3       // Cycles to take over bus before char fetch
+#define TED_DMA_SETUP_CYCLES        3       // BA-low warning cycles before first g-access (AEC still high)
 
 // DMA line range (TED raster counter values where DMA can occur)
-#define TED_FIRST_DMA_LINE          0
-#define TED_LAST_DMA_LINE           0xCB
+#define TED_FIRST_DMA_LINE          0       // First raster line where DMA is possible
+#define TED_LAST_DMA_LINE           0xCB    // Last raster line where DMA is possible (203 decimal)
 
 // Visible area for framebuffer rendering
-#define TED_VISIBLE_WIDTH           384     // 320 + borders
-#define TED_VISIBLE_HEIGHT_PAL      288     // PAL normal-border visible area
-#define TED_VISIBLE_HEIGHT_NTSC     242     // NTSC normal-border visible area
+#define TED_VISIBLE_WIDTH           384     // Framebuffer width in pixels (320 active + left/right borders)
+#define TED_VISIBLE_HEIGHT_PAL      288     // PAL framebuffer height (normal border, derived from VICE timing)
+#define TED_VISIBLE_HEIGHT_NTSC     242     // NTSC framebuffer height (normal border, derived from VICE timing)
 
-// First TED raster line mapped to framebuffer row 0 (derived from VICE timing)
-#define TED_FIRST_VISIBLE_LINE_PAL  275
-#define TED_FIRST_VISIBLE_LINE_NTSC 19
+// First TED raster line mapped to framebuffer row 0
+#define TED_FIRST_VISIBLE_LINE_PAL  275     // PAL: TED raster 275 → fb row 0 (wraps: last frame lines first)
+#define TED_FIRST_VISIBLE_LINE_NTSC 19      // NTSC: TED raster 19 → fb row 0
 
 // ============================================================================
 // LINE STATE MACHINE — driven by x_cycle position
@@ -206,21 +239,21 @@
 // transitions happen at specific x_cycle values.
 
 enum ted_line_state_e {
-    TED_STATE_HBLANK,           // Horizontal blanking / retrace region
-    TED_STATE_LEFT_BORDER,      // Left border (before display window)
-    TED_STATE_DISPLAY,          // Active display area (40 characters)
-    TED_STATE_RIGHT_BORDER,     // Right border (after display window)
-    TED_STATE_IDLE,             // Idle cycles (outside display + border)
+    TED_STATE_HBLANK,           // Horizontal blanking / retrace region (no pixel output)
+    TED_STATE_LEFT_BORDER,      // Left border (between retrace end and display window left edge)
+    TED_STATE_DISPLAY,          // Active display area (40 character columns)
+    TED_STATE_RIGHT_BORDER,     // Right border (between display window right edge and retrace)
+    TED_STATE_IDLE,             // Idle cycles outside display and border (output bg color)
 };
 
 // ============================================================================
 // TED MEMORY ACCESS TYPES (adapted from VIC-II model)
 // ============================================================================
 
-#define TED_ACCESS_IDLE        0   // PHI1: idle access to $FFFF
-#define TED_ACCESS_REFRESH     1   // PHI1: DRAM refresh
-#define TED_ACCESS_G           2   // PHI1: g-access — character generator / bitmap data
-#define TED_ACCESS_C           3   // PHI2: c-access — screen matrix + color (DMA lines)
+#define TED_ACCESS_IDLE        0   // PHI1: idle access to $FFFF (no useful data)
+#define TED_ACCESS_REFRESH     1   // PHI1: DRAM refresh cycle
+#define TED_ACCESS_G           2   // PHI1: g-access — fetch character generator or bitmap pixel data
+#define TED_ACCESS_C           3   // PHI2: c-access — fetch screen matrix + color attribute (DMA lines only)
 
 // ============================================================================
 // CALLBACK TYPES
@@ -252,11 +285,11 @@ typedef uint8_t (*ted_mem_read_fn)(void* user_data, uint16_t address);
 // ============================================================================
 
 struct ted7360_desc_t {
-    bool is_pal;                        // true = PAL, false = NTSC
-    ted_keyboard_scan_fn keyboard_scan; // Keyboard scanning callback
-    void* keyboard_user_data;           // Context for keyboard callback
-    ted_mem_read_fn mem_read;           // Memory read callback for TED's own accesses
-    void* mem_read_user_data;           // Context for memory read
+    bool is_pal;                        // true = PAL (312 lines), false = NTSC (262 lines)
+    ted_keyboard_scan_fn keyboard_scan; // Keyboard matrix scan callback (may be nullptr)
+    void* keyboard_user_data;           // Context pointer passed to keyboard_scan
+    ted_mem_read_fn mem_read;           // Memory read callback for TED's own PHI1 accesses
+    void* mem_read_user_data;           // Context pointer passed to mem_read
 };
 
 // ============================================================================
@@ -265,102 +298,106 @@ struct ted7360_desc_t {
 
 // Register Unit — raw register file
 struct ted_registers_unit_t {
-    uint8_t data[TED_NUM_REGS];
+    uint8_t data[TED_NUM_REGS];         // Shadow copy of TED registers ($FF00-$FF1F)
 };
 
 // Timing Unit — horizontal/vertical counters
 struct ted_timing_unit_t {
-    uint16_t raster_counter;        // 9-bit vertical raster counter (0-311 PAL / 0-261 NTSC)
-    uint16_t raster_compare;        // Raster line IRQ trigger value (9-bit)
-    uint8_t  x_cycle;               // CPU-cycle counter within line (0-56)
-    uint16_t x_pixel;               // Pixel X position within line (= x_cycle * 8)
-    uint32_t frame_count;           // Frame counter (for flash timing)
-    uint16_t lines_per_frame;       // PAL=312, NTSC=262
-    uint16_t first_visible_line;    // First TED raster mapped to fb row 0
-    uint8_t  cpu_cycles_per_line;   // Always 57
-    bool     is_pal;
+    uint16_t raster_counter;            // 9-bit vertical raster counter (0-311 PAL / 0-261 NTSC)
+    uint16_t raster_compare;            // Cached 9-bit raster IRQ trigger value (from $FF1A bit 0 + $FF1B)
+    uint8_t  x_cycle;                   // CPU-cycle counter within current line (0-56)
+    uint16_t x_pixel;                   // Pixel X position = x_cycle × 8 (0-456)
+    uint32_t frame_count;               // Monotonically increasing frame counter
+    uint16_t lines_per_frame;           // Total raster lines per frame: PAL=312, NTSC=262
+    uint16_t first_visible_line;        // First TED raster line mapped to framebuffer row 0
+    uint8_t  cpu_cycles_per_line;       // Always 57 (114 TED clocks ÷ 2)
+    bool     is_pal;                    // true = PAL timing; false = NTSC timing
 };
 
 // Video Logic Unit — display state and DMA line detection
 struct ted_video_logic_unit_t {
-    bool     display_state;         // true = display mode, false = idle
-    bool     is_dma_line;           // Current line is a DMA line (YSCROLL match + DEN)
-    bool     dma_line_occurred;     // Latch: DMA triggered at some point this line
-    bool     den_latched;           // DEN was set, enabling DMA line detection
-    uint16_t vcbase;                // VCBASE — video counter base (10-bit)
-    uint16_t vc;                    // VC — video counter (10-bit)
-    uint8_t  rc;                    // RC — row counter (3-bit)
-    uint8_t  vmli;                  // VMLI — video matrix line index (0-39)
-    uint8_t  refresh_counter;       // 8-bit DRAM refresh counter
+    bool     display_state;             // true = display window active; false = idle (background color)
+    bool     is_dma_line;               // Current line is a DMA line (YSCROLL match + DEN asserted)
+    bool     dma_line_occurred;         // Latch: DMA was triggered this line (cleared at end of line)
+    bool     den_latched;               // DEN was seen set; gates DMA line detection for the frame
+    uint16_t vcbase;                    // VCBASE — video counter base latched at end of each character row
+    uint16_t vc;                        // VC — video counter, increments once per g-access (10-bit)
+    uint8_t  rc;                        // RC — row counter within character cell (3-bit, 0-7)
+    uint8_t  vmli;                      // VMLI — video matrix line index, increments during DMA (0-39)
+    uint8_t  refresh_counter;           // 8-bit DRAM refresh counter (decrements each refresh cycle)
 };
 
 // Video Data Unit — character and color line buffers (filled during DMA)
 struct ted_video_data_unit_t {
-    uint8_t screen_line[TED_SCREEN_TEXTCOLS];   // Screen codes (character indices)
-    uint8_t color_line[TED_SCREEN_TEXTCOLS];    // Color attributes
+    uint8_t screen_line[TED_SCREEN_TEXTCOLS];   // Screen codes (char indices or bitmap hue data)
+    uint8_t color_line[TED_SCREEN_TEXTCOLS];    // Color attributes (hue + lum + blink flag)
 };
 
 // Graphics Sequencer Unit — shift register and mode-dependent pixel production
 struct ted_sequencer_unit_t {
-    uint8_t graphics_mode;                       // Current mode (ECM|BMM|MCM)
-    uint8_t shift_reg;                           // 8-bit graphics shift register
-    uint8_t xscroll;                             // XSCROLL delay counter
-    uint8_t char_data[TED_SCREEN_TEXTCOLS];     // g-access data for current line (chargen/bitmap)
-    uint8_t pixel_in_char;                       // Pixel within current character (0-7)
-    uint8_t display_vmli;                        // Display-side column counter (0-39)
-    uint8_t active_display_column;               // Column whose data is in the shift register
+    uint8_t graphics_mode;                      // Cached mode bits (ECM|BMM|MCM) from CR1/CR2; see TED_GM_*
+    uint8_t shift_reg;                          // 8-bit graphics shift register (loaded per character cell)
+    uint8_t xscroll;                            // XSCROLL delay countdown (pixels remaining before display opens)
+    uint8_t char_data[TED_SCREEN_TEXTCOLS];     // g-access pattern data for current character row (chargen or bitmap)
+    uint8_t pixel_in_char;                      // Pixel position within current character cell (0-7)
+    uint8_t display_vmli;                       // Display-side column counter: which char_data[] slot to show (0-39)
+    uint8_t active_display_column;              // Column index whose data is currently in shift_reg
 };
 
 // Border Unit — border flip-flops and comparison limits
 struct ted_border_unit_t {
-    uint16_t top;                    // First display row (raster counter)
-    uint16_t bottom;                 // Last display row + 1
-    uint16_t left;                   // Left border pixel position
-    uint16_t right;                  // Right border pixel position
-    bool     main_ff;                // Main (horizontal) border flip-flop
-    bool     vert_ff;                // Vertical border flip-flop
+    uint16_t top;                       // First display raster line (RSEL=1: 4, RSEL=0: 8)
+    uint16_t bottom;                    // Last display raster line (RSEL=1: 0xCB, RSEL=0: 0xC7)
+    uint16_t left;                      // Left display pixel (CSEL=1: 24, CSEL=0: 31)
+    uint16_t right;                     // Right border open pixel (CSEL=1: 344, CSEL=0: 335)
+    bool     main_ff;                   // Main (horizontal) border flip-flop: true = border active
+    bool     vert_ff;                   // Vertical border flip-flop: true = border active for entire line
 };
 
 // Memory Mapping Unit — address calculation for screen/char/bitmap
 struct ted_memory_unit_t {
-    uint16_t screen_base;            // Screen matrix base address ($FF14 derived)
-    uint16_t char_base;              // Character generator base address ($FF13 derived)
-    uint16_t bitmap_base;            // Bitmap base address ($FF12/$FF14 derived)
+    uint16_t screen_base;               // Screen matrix base address (derived from $FF14 bits [7:3])
+    uint16_t char_base;                 // Character generator base address (derived from $FF13 bits [7:2])
+    uint16_t bitmap_base;               // Bitmap base: 0x0000 ($FF14 bit 3 = 0) or 0x2000 (bit 3 = 1)
 };
 
 // Timer Unit — single 16-bit countdown timer with latch
-struct ted_timer_unit_t {
-    uint16_t counter;                // Current 16-bit counter value
-    uint16_t latch;                  // Reload latch value (written via register)
+struct ted_timer_unit_t {               // Timer counts down once per CPU cycle
+    uint16_t counter;                   // Current 16-bit counter (decrements each CPU cycle)
+    uint16_t latch;                     // Reload value written by software (timer 1 auto-reloads; 2/3 do not)
 };
+// Note: typedef TedTimer used by tick_one_timer helper in .cpp
 
 // Pixel Output Unit — line buffer and framebuffer target
 struct ted_pixel_unit_t {
-    uint8_t*  color_line;            // Per-pixel color index line buffer
-    uint32_t* framebuffer;           // Output framebuffer (RGBA)
-    int       fb_width;
-    int       fb_height;
+    uint8_t*  color_line;               // Per-pixel 7-bit palette index line buffer (TED_VISIBLE_WIDTH bytes)
+    uint32_t* framebuffer;              // RGBA output framebuffer (set via set_framebuffer())
+    int       fb_width;                 // Framebuffer width in pixels
+    int       fb_height;                // Framebuffer height in pixels (raster lines)
 };
 
 // Bus Interface Unit — pending DMA access and BA/AEC state
 struct ted_bus_unit_t {
-    ted_mem_read_fn mem_read;        // Memory read callback
-    void* mem_read_user_data;        // Context for memory read
-    uint8_t pending_access;          // TED_ACCESS_* for current PHI2 delivery
-    uint16_t pending_address;        // Address set up for PHI2 read
-    bool ba_low;                     // BA signal state (true = TED has bus control)
-    uint8_t ba_low_count;            // Consecutive CPU cycles BA has been LOW
+    ted_mem_read_fn mem_read;           // Memory read callback for TED PHI1 accesses
+    void* mem_read_user_data;           // Context pointer for mem_read
+    uint8_t pending_access;             // TED_ACCESS_* type set in PHI1 for delivery in PHI2
+    uint16_t pending_address;           // Address driven onto bus for PHI2 c-access
+    bool ba_low;                        // BA signal state: true = TED asserting BA (CPU warning)
+    uint8_t ba_low_count;               // Consecutive CPU cycles BA has been LOW (AEC stolen after 3)
 };
 
 // Sound Unit (placeholder — sound not yet implemented)
 struct ted_sound_unit_t {
-    uint16_t freq1;                  // Channel 1 frequency (10-bit)
-    uint16_t freq2;                  // Channel 2 frequency (10-bit)
-    uint8_t  volume;                 // Volume (4 bits)
-    bool     ch1_enabled;
-    bool     ch2_enabled;
-    bool     noise_enabled;          // Channel 2 noise mode
+    uint16_t freq1;                     // Channel 1 frequency (10-bit, from $FF0E/$FF0F)
+    uint16_t freq2;                     // Channel 2 frequency (8-bit only, from $FF10)
+    uint8_t  volume;                    // Output volume (4-bit, from $FF11 bits [3:0])
+    bool     ch1_enabled;               // Channel 1 output enable
+    bool     ch2_enabled;               // Channel 2 output enable
+    bool     noise_enabled;             // Channel 2 noise mode (square wave when false)
 };
+
+// Alias used by tick_one_timer() in ted7360.cpp
+using TedTimer = ted_timer_unit_t;
 
 // ============================================================================
 // TED 7360 MAIN STRUCTURE
@@ -374,14 +411,14 @@ struct ted7360_t : public ChipBase {
     /** Construct and initialize a TED 7360 instance. */
     explicit ted7360_t(const ted7360_desc_t& desc);
 
-    /** Destructor — frees internal line buffer. */
+    /** Destructor — frees internal color index line buffer. */
     ~ted7360_t();
 
-    // Non-copyable, non-movable
+    // Non-copyable, non-movable (owns pixel.color_line allocation)
     ted7360_t(const ted7360_t&) = delete;
     ted7360_t& operator=(const ted7360_t&) = delete;
 
-    /** Reset TED to power-on state (preserving configuration). */
+    /** Reset TED to power-on state (preserves callbacks and framebuffer). */
     void reset();
 
     // ========================================================================
@@ -389,24 +426,25 @@ struct ted7360_t : public ChipBase {
     // ========================================================================
 
     /**
-     * PHI1 phase — performs one full CPU cycle of TED processing.
+     * PHI1 phase — one full CPU cycle of TED processing.
      *
-     * Handles: timing advance, raster compare, DMA detection, g-access,
-     * pixel sequencing (8 pixels per cycle), border logic, timer countdown,
-     * IRQ generation, and sets up PHI2 address for DMA lines.
+     * Handles: DMA window detection, BA/AEC/RDY signaling, g-access memory read,
+     * c-access address setup, pixel sequencing (8 pixels per call), border
+     * flip-flop update, timer countdown, IRQ generation, timing advance,
+     * RC/VCBASE update, and PHI2 bus address drive for c-access.
      *
-     * @param bus_state  Current bus state (from system default state)
-     * @return Updated bus state with TED's IRQ/BA signals and PHI2 address
+     * @param bus_state  System bus state entering PHI1
+     * @return           Updated bus state with TED signals (IRQ, BA, AEC, RDY, PHI2 addr)
      */
     bus_state_t tick_phi1(bus_state_t bus_state);
 
     /**
-     * PHI2 delivery — processes data from memory tick.
+     * PHI2 delivery — receives memory data fetched for c-access.
      *
-     * On DMA lines, reads the memory tick result (screen matrix / color data)
-     * and stores it in the video line buffer.  On non-DMA lines, this is a no-op.
+     * On DMA lines: reads bus data (screen matrix code delivered by memory system)
+     * and stores it in video_data.screen_line[].  No-op on non-DMA lines.
      *
-     * @param bus_state  Bus state after memory service (contains read data)
+     * @param bus_state  Bus state after memory service (DATA field contains fetched byte)
      */
     void tick_phi2(bus_state_t bus_state);
 
@@ -414,35 +452,35 @@ struct ted7360_t : public ChipBase {
     // Public API — Register I/O
     // ========================================================================
 
-    /** Read a TED register (addr encodes $FF00-$FF3F offset). */
+    /** Read a TED register; address encodes offset within $FF00-$FF3F. */
     bus_state_t registers_read(bus_state_t bus_state);
 
-    /** Write a TED register (addr encodes $FF00-$FF3F offset). */
+    /** Write a TED register; address encodes offset within $FF00-$FF3F. */
     bus_state_t registers_write(bus_state_t bus_state);
 
     // ========================================================================
     // Public API — IRQ query
     // ========================================================================
 
-    /** Check if TED has a pending IRQ (true = IRQ line asserted). */
-    bool irq_pending() const;
+    /** Returns true if any enabled IRQ source is currently pending. */
+    [[nodiscard]] bool irq_pending() const;
 
     // ========================================================================
     // Public API — Framebuffer
     // ========================================================================
 
-    /** Set the output framebuffer for pixel rendering. */
+    /** Attach an RGBA output framebuffer for pixel rendering. */
     void set_framebuffer(uint32_t* buffer, int width, int height);
 
     // ========================================================================
-    // Public API — Color palette (static)
+    // Public API — Color palette (compile-time computed, rodata)
     // ========================================================================
 
-    /** Get the 128-entry TED color palette (RGBA format). */
-    static const uint32_t* get_palette();
+    /** Returns pointer to the 128-entry TED RGBA palette (16 hues × 8 luminances). */
+    [[nodiscard]] static const uint32_t* get_palette();
 
     // ========================================================================
-    // Public data — Unit structures (following VIC-II decomposition)
+    // Public data — Unit structures
     // ========================================================================
 
     ted_registers_unit_t   registers;
@@ -452,42 +490,46 @@ struct ted7360_t : public ChipBase {
     ted_sequencer_unit_t   sequencer;
     ted_border_unit_t      border;
     ted_memory_unit_t      memory;
-    ted_timer_unit_t       timer1;
-    ted_timer_unit_t       timer2;
-    ted_timer_unit_t       timer3;
+    TedTimer               timer1;      // Auto-reload on underflow from latch
+    TedTimer               timer2;      // No auto-reload: wraps to $FFFF on underflow
+    TedTimer               timer3;      // No auto-reload: wraps to $FFFF on underflow
     ted_sound_unit_t       sound;
     ted_pixel_unit_t       pixel;
     ted_bus_unit_t         bus;
 
-    // IRQ state
-    uint8_t irq_status = 0;              // Pending IRQ sources (latched)
-    uint8_t irq_mask = 0;                // Enabled IRQ sources
+    // IRQ state (mirrors register file but kept separate for quick access)
+    uint8_t irq_status = 0;             // Latched IRQ source bits (see TED_IRQ_*)
+    uint8_t irq_mask   = 0;             // Enabled IRQ source bits (see TED_IRQ_*)
 
     // Memory banking
-    bool rom_enabled = false;            // true = ROM visible, false = RAM visible
+    bool rom_enabled = false;           // true = ROM bank visible; false = RAM visible
 
     // Keyboard
-    ted_keyboard_scan_fn keyboard_scan = nullptr;
-    void* keyboard_user_data = nullptr;
-    uint8_t keyboard_latch = 0;          // Last value written to $FF08
+    ted_keyboard_scan_fn keyboard_scan      = nullptr; // Keyboard matrix scan callback
+    void*                keyboard_user_data = nullptr; // Context for keyboard_scan
+    uint8_t              keyboard_latch     = 0;       // Last value written to $FF08 (column select)
 
     // Flash / cursor blink
-    uint8_t flash_counter = 0;           // 6-bit flash counter (incremented each frame)
-    bool    cursor_visible = false;      // Current cursor blink phase
+    uint8_t flash_counter  = 0;         // 6-bit frame counter (wraps at 64); drives text blink and cursor blink
+    bool    cursor_visible = false;     // true when flash phase is active (cursor and blink-text visible)
 
-    // 10-bit hardware cursor position derived from $FF0C/$FF0D on access.
+    /**
+     * Compute the 10-bit hardware cursor position from register state.
+     * Bits [9:8] from $FF0C bits [1:0], bits [7:0] from $FF0D.
+     * Valid range: 0..999 (40 columns × 25 rows).
+     */
     [[nodiscard]] uint16_t get_cursor_position() const noexcept {
         return static_cast<uint16_t>(
-            registers.data[TED_REG_CURSOR_LO]
-          | ((registers.data[TED_REG_CURSOR_HI] & 0x03u) << 8));
+             registers.data[TED_REG_CURSOR_LO]
+           | ((registers.data[TED_REG_CURSOR_HI] & 0x03u) << 8));
     }
 
     // Reverse mode
-    bool reverse_mode = false;           // RVS bit from $FF07
+    bool reverse_mode = false;          // RVS bit ($FF07 bit 7): bit 7 of screen code inverts per-char pixels
 
     // Timer phase — TED timers count at TED single-clock rate (2× CPU clock).
     // We toggle a phase flag each CPU cycle and only decrement on one phase,
-    // effectively halving the decrement rate to match the real hardware.
+    // effectively halving the decrement rate to match real hardware.
     bool timer_tick_phase = false;
 
 private:
@@ -495,17 +537,21 @@ private:
     // Internal helpers
     // ========================================================================
 
-    void update_memory_addresses();
-    void update_border_limits();
-    void update_dma_condition();
-    void check_raster_interrupt();
-    void tick_timers();
-    void pixel_sequencer();
-    void flush_line(uint16_t raster_line);
-    void timing_advance();
+    void    update_memory_addresses();  // Recompute screen_base/char_base/bitmap_base from $FF12-$FF14
+    void    update_border_limits();     // Recompute border top/bottom/left/right from CR1/CR2 RSEL/CSEL bits
+    void    update_dma_condition();     // Evaluate whether current raster line is a DMA line
+    void    check_raster_interrupt();   // Fire TED_IRQ_RASTER if raster_counter == raster_compare
+    void    tick_timers();              // Decrement all three timers; fire IRQs on underflow
+    void    pixel_sequencer();          // Produce 8 pixels for current x_cycle; update border flip-flops
+    void    flush_line(uint16_t raster_line); // Resolve color_line[] indices to RGBA in framebuffer
+    void    timing_advance();           // Advance x_cycle; handle end-of-line and end-of-frame
 
-    uint8_t get_graphics_mode() const;
-    uint16_t get_raster_compare() const;
+    uint8_t  get_graphics_mode() const; // Extract current ECM|BMM|MCM mode from CR1/CR2
+    uint16_t get_raster_compare() const;// Read 9-bit raster compare from $FF1A bit 0 + $FF1B
+
+    // Legacy single-tick wrapper (alternates PHI1/PHI2 for callers using 2× clock rate)
+    void tick();
+    uint8_t legacy_subcycle_ = 0;       // 0 = PHI1, 1 = PHI2
 
     // --- ChipBase interface ---
     bool has_debug_content()    const override;
@@ -514,4 +560,8 @@ private:
     void render_debug_content()    override;
     void render_settings_content() override;
     void render_layout_content()   override;
+
+#ifdef CERMU_HAS_GUI
+    bus_state_t bus_snapshot_ = {};     // Last bus state captured at end of PHI2 (for debugger)
+#endif
 };

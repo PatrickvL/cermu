@@ -137,6 +137,9 @@ private:
     MemoryChip* kernal_rom_  = nullptr;  // Kernal ROM $C000-$FFFF (16KB)
     size_t  ram_size_ = 16384;           // Cached configured RAM size (updated in apply_configuration)
 
+    // PIO2 ($FD30) — keyboard row select (active-low)
+    uint8_t pio2_kbd_ = 0xFF;            // All rows deselected on reset
+
     // System state
     bool initialized_;
 
