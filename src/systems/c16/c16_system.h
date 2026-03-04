@@ -10,6 +10,8 @@
 // CSG7501 provides: RW, RDY, IRQ, AEC.  (No NMI — NO_NMI_LINE flag.)
 #define C264_BUS_DEFAULT_STATE  CSG7501::default_bus_state()
 
+#include "../../core/formats/format_handler.h"
+#include <string>
 #include <cstdint>
 
 // ============================================================================
@@ -142,6 +144,39 @@ private:
 
     // System state
     bool initialized_;
+
+    // =========================================================================
+    // DEFERRED LOADING — wait for BASIC READY before writing program to RAM
+    //
+    // Same design as C64System: files are parsed immediately but not written
+    // to RAM until BASIC's cold-start sequence completes (including NEW,
+    // which zeroes $1001/$1002).  This prevents program corruption.
+    // =========================================================================
+
+    /** How the deferred load should be applied after BASIC READY. */
+    enum class LoadMode {
+        DIRECT,         ///< Standard: write program data to RAM, inject RUN
+        DISK_FAST,      ///< D64: disk inserted in 1541 + fast PRG extraction to RAM
+        TAPE_INSERTED   ///< TAP: tape loaded in datasette, inject LOAD + press play
+    };
+
+    struct PendingLoad {
+        format_load_result_t result;  // Parsed file data (owns heap allocations)
+        std::string filepath;         // Original filepath for SYS-from-filename
+        bool active = false;          // Whether a deferred load is pending
+        LoadMode mode = LoadMode::DIRECT;  // How to apply the load
+    };
+    PendingLoad pending_load_;
+    bool boot_completed_ = false;  // Set after first deferred load; skips VARTAB check
+
+    /** Check if BASIC 3.5 has reached its READY state (safe to inject program). */
+    bool is_basic_ready() const;
+
+    /** Apply the pending load result to RAM and inject auto-run. */
+    void apply_pending_load();
+
+    /** C16-specific keyboard buffer injection ($0527, count at $EF, max 8 bytes). */
+    static void c16_inject_keys(void* ctx, const char* str);
 
     // Helper methods
     bool load_roms();

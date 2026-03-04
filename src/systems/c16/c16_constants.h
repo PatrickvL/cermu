@@ -30,4 +30,13 @@ namespace c16_constants {
 
     // BASIC start address
     inline constexpr uint16_t BASIC_START            = 0x1001;
+
+    // Keyboard buffer — C16/Plus4 uses different addresses than C64/VIC-20
+    inline constexpr uint16_t KBD_BUFFER_BASE        = 0x0527;      // Keyboard buffer ($0527-$052E)
+    inline constexpr uint16_t KBD_BUFFER_COUNT       = 0x00EF;      // Keyboard buffer count (ZP)
+    inline constexpr uint8_t  KBD_BUFFER_SIZE        = 8;           // Buffer capacity (8 bytes)
+
+    // BASIC 3.5 warm-start vector (written to $0302/$0303 during cold-start)
+    inline constexpr uint8_t  BASIC_WARMSTART_LO     = 0x12;        // Low byte of $8712
+    inline constexpr uint8_t  BASIC_WARMSTART_HI     = 0x87;        // High byte of $8712
 }
