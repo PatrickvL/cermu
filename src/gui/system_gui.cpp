@@ -1,5 +1,6 @@
 #include "system_gui.h"
 #include "connector_icons.h"
+#include "vfs_file_system.h"
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
@@ -9,6 +10,7 @@
 #include "../core/formats/d64_format.h"
 #include "../core/formats/t64_format.h"
 #include "../core/formats/prg_format.h"
+#include "../core/encoding/petscii.h"
 #include "../core/vfs/vfs.h"
 #include "../devices/storage/drive_1541.h"
 #include <cstdio>
@@ -30,121 +32,121 @@
 // ============================================================================
 
 /**
- * Returns true if the given extension identifies a browsable archive or
- * container — i.e. something the archive browser can show a directory
- * listing for.  Covers both generic archives (VFS) and Commodore disk/tape
- * container formats.
+ * Given a VFS path that may pass through a D64 or T64 container, find the
+ * container boundary and split the path.  Returns true when a container
+ * boundary was found.
+ *
+ *   "/path/archive.zip!/disk.d64!/GAME.prg"
+ *     → container_vfs_path = "/path/archive.zip!/disk.d64"
+ *     → entry_name         = "GAME.prg"
  */
-static bool is_browsable_container(const char* ext) {
-    if (!ext) return false;
-    if (vfs_is_archive_extension(ext)) return true;
-
-    // Commodore container formats
-    std::string lower = ext;
-    for (auto& c : lower) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
-    return lower == ".d64" || lower == ".t64";
+static bool split_container_boundary(const std::string& vfs_path,
+                                      std::string& container_vfs_path,
+                                      std::string& entry_name) {
+    size_t pos = 0;
+    while ((pos = vfs_path.find("!/", pos)) != std::string::npos) {
+        std::string before = vfs_path.substr(0, pos);
+        std::string ext = vfs_extension(before.c_str());
+        for (auto& c : ext) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+        if (ext == ".d64" || ext == ".t64") {
+            container_vfs_path = before;
+            entry_name = vfs_path.substr(pos + 2);
+            return true;
+        }
+        pos += 2;
+    }
+    return false;
 }
 
 /**
- * Extract a specific file from a D64 disk image by directory-entry index.
- * Returns the raw file data (including 2-byte load address for PRGs).
- * Caller must free the returned buffer.
+ * Load a D64/T64 container from the given VFS path, find the entry whose
+ * ASCII name matches @p entry_display_name (minus the extension we appended
+ * for filtering), extract it, and write it to a temp PRG file.
+ * Returns the temp file path, or empty string on failure.
  */
-static bool extract_d64_entry(const char* d64_path, int entry_index,
-                              uint8_t** out_data, size_t* out_size) {
-    size_t disk_size = 0;
-    uint8_t* disk_data = vfs_read_file(d64_path, &disk_size);
-    if (!disk_data) return false;
+static std::string extract_container_entry_by_name(
+    const std::string& container_vfs_path,
+    const std::string& entry_display_name) {
 
-    commodore_d64_t d64{};
-    if (!d64.open_mem(disk_data, disk_size)) {
-        free(disk_data);
-        return false;
+    size_t data_size = 0;
+    uint8_t* data = vfs_read_file(container_vfs_path.c_str(), &data_size);
+    if (!data) return {};
+
+    std::string ext = vfs_extension(container_vfs_path.c_str());
+    for (auto& c : ext) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+
+    // Strip the type extension we appended during scanning (e.g. ".prg").
+    std::string base_name = entry_display_name;
+    {
+        size_t dot = base_name.rfind('.');
+        if (dot != std::string::npos) base_name = base_name.substr(0, dot);
     }
 
-    bool ok = d64.extract_file(entry_index, out_data, out_size);
-    d64.close();
-    free(disk_data);
-    return ok;
-}
-
-/**
- * Extract a specific file from a T64 tape archive by entry index.
- * Returns the file as a raw PRG (2-byte load address + data).
- * Caller must free the returned buffer.
- */
-static bool extract_t64_entry(const char* t64_path, int entry_index,
-                              uint8_t** out_data, size_t* out_size) {
-    size_t tape_size = 0;
-    uint8_t* tape_data = vfs_read_file(t64_path, &tape_size);
-    if (!tape_data) return false;
-
-    commodore_t64_t t64{};
-    if (!t64.open_mem(tape_data, tape_size)) {
-        free(tape_data);
-        return false;
-    }
-
-    commodore_prg_t prg{};
-    if (!t64.extract_file(entry_index, &prg)) {
-        t64.close();
-        free(tape_data);
-        return false;
-    }
-    t64.close();
-    free(tape_data);
-
-    // Build raw PRG: [lo(load_addr), hi(load_addr)] + data
-    size_t buf_size = 2 + prg.data_size;
-    uint8_t* buf = static_cast<uint8_t*>(malloc(buf_size));
-    if (!buf) {
-        commodore_prg_free(&prg);
-        return false;
-    }
-    buf[0] = static_cast<uint8_t>(prg.load_addr & 0xFF);
-    buf[1] = static_cast<uint8_t>(prg.load_addr >> 8);
-    memcpy(buf + 2, prg.data, prg.data_size);
-    commodore_prg_free(&prg);
-
-    *out_data = buf;
-    *out_size = buf_size;
-    return true;
-}
-
-/**
- * Extract an entry from a D64 or T64 container, write it to a temp file,
- * and return the temp file path.  Returns empty string on failure.
- * The caller should unlink() the temp file after loading.
- */
-static std::string extract_container_entry_to_temp(
-    const std::string& container_path, int entry_index,
-    const std::string& ext_lower)
-{
-    uint8_t* data = nullptr;
-    size_t size = 0;
+    uint8_t* entry_data = nullptr;
+    size_t   entry_size = 0;
     bool ok = false;
 
-    if (ext_lower == ".d64") {
-        ok = extract_d64_entry(container_path.c_str(), entry_index, &data, &size);
-    } else if (ext_lower == ".t64") {
-        ok = extract_t64_entry(container_path.c_str(), entry_index, &data, &size);
+    if (ext == ".d64") {
+        commodore_d64_t d64{};
+        if (d64.open_mem(data, data_size)) {
+            commodore_d64_directory_t dir{};
+            if (d64.read_directory(&dir)) {
+                for (int i = 0; i < dir.count; ++i) {
+                    char name_buf[17]{};
+                    memcpy(name_buf, dir.entries[i].filename, 16);
+                    for (int j = 0; j < 16 && name_buf[j]; ++j)
+                        name_buf[j] = petscii_to_ascii(static_cast<uint8_t>(name_buf[j]));
+                    if (base_name == name_buf) {
+                        ok = d64.extract_file(i, &entry_data, &entry_size);
+                        break;
+                    }
+                }
+            }
+            d64.close();
+        }
+    } else if (ext == ".t64") {
+        commodore_t64_t t64{};
+        if (t64.open_mem(data, data_size)) {
+            commodore_t64_directory_t dir{};
+            if (t64.read_directory(&dir)) {
+                for (int i = 0; i < dir.count; ++i) {
+                    char name_buf[17]{};
+                    memcpy(name_buf, dir.entries[i].filename, 16);
+                    for (int j = 0; j < 16 && name_buf[j]; ++j)
+                        name_buf[j] = petscii_to_ascii(static_cast<uint8_t>(name_buf[j]));
+                    if (base_name == name_buf) {
+                        commodore_prg_t prg{};
+                        if (t64.extract_file(i, &prg)) {
+                            entry_size = 2 + prg.data_size;
+                            entry_data = static_cast<uint8_t*>(malloc(entry_size));
+                            if (entry_data) {
+                                entry_data[0] = static_cast<uint8_t>(prg.load_addr & 0xFF);
+                                entry_data[1] = static_cast<uint8_t>(prg.load_addr >> 8);
+                                memcpy(entry_data + 2, prg.data, prg.data_size);
+                                ok = true;
+                            }
+                            commodore_prg_free(&prg);
+                        }
+                        break;
+                    }
+                }
+            }
+            t64.close();
+        }
     }
 
-    if (!ok || !data) return {};
+    free(data);
+    if (!ok || !entry_data) return {};
 
-    // Write to a temp file with .prg extension for format identification
     char tmp_path[] = "/tmp/cermu_XXXXXX.prg";
     int fd = mkstemps(tmp_path, 4);
-    if (fd < 0) {
-        free(data);
-        return {};
-    }
+    if (fd < 0) { free(entry_data); return {}; }
 
-    ssize_t written = write(fd, data, size);
+    ssize_t written = write(fd, entry_data, entry_size);
     close(fd);
-    free(data);
+    free(entry_data);
 
-    if (written < 0 || static_cast<size_t>(written) != size) {
+    if (written < 0 || static_cast<size_t>(written) != entry_size) {
         unlink(tmp_path);
         return {};
     }
@@ -371,16 +373,28 @@ void SystemGUI::render_frame() {
                 last_file_path_ = filePathName;
 
                 // =============================================================
-                // Browsable container — open the archive browser popup instead
-                // of loading immediately.
+                // Translate the dialog path to a VFS path.  Archives and
+                // containers are navigated as virtual folders inside the
+                // dialog, so the selected path may pass through one or
+                // more archive boundaries.
                 // =============================================================
-                std::string ext = vfs_extension(filePathName.c_str());
-                if (is_browsable_container(ext.c_str())) {
-                    printf("Browsable container selected — opening archive browser\n");
-                    archive_browser_.open(filePathName);
+                std::string vfs_path = VfsFileSystem::to_vfs_path(filePathName);
+                printf("VFS path: %s\n", vfs_path.c_str());
+
+                // If the VFS path passes through a D64/T64 container, we need
+                // to extract the entry to a temp file before loading.
+                std::string container_path, entry_name;
+                if (split_container_boundary(vfs_path, container_path, entry_name)) {
+                    std::string tmp = extract_container_entry_by_name(container_path, entry_name);
+                    if (!tmp.empty()) {
+                        load_selected_file(tmp, filePathName.c_str());
+                        unlink(tmp.c_str());
+                    } else {
+                        printf("Failed to extract entry from container\n");
+                    }
                 } else {
-                    // Regular file — load directly
-                    load_selected_file(filePathName);
+                    // Regular file (possibly inside a VFS archive) — load directly.
+                    load_selected_file(vfs_path);
                 }
             } else {
                 // User canceled via Cancel button
@@ -439,41 +453,6 @@ void SystemGUI::render_frame() {
 
     // Poll attached drives for file dialog requests
     poll_drive_file_dialog_requests();
-
-    // =====================================================================
-    // Archive / container browser — renders when the user selected a
-    // browsable file (.zip, .d64, .t64, …) from the file dialog.
-    // =====================================================================
-    if (archive_browser_.is_open()) {
-        if (archive_browser_.render()) {
-            // Browser finished — user confirmed or canceled
-            if (!archive_browser_.was_canceled()) {
-                const auto& entry = archive_browser_.get_selected_entry();
-                printf("Archive browser: selected \"%s\" (index %d)\n",
-                       entry.display_name.c_str(), entry.source_index);
-
-                if (archive_browser_.is_container_source() && entry.source_index >= 0) {
-                    // D64/T64 container — extract the specific entry to a temp
-                    // PRG file, then load it through the normal path.
-                    std::string container_path = archive_browser_.get_archive_path();
-                    std::string ext = vfs_extension(container_path.c_str());
-                    for (auto& c : ext) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
-
-                    std::string tmp = extract_container_entry_to_temp(
-                        container_path, entry.source_index, ext);
-                    if (!tmp.empty()) {
-                        load_selected_file(tmp, container_path.c_str());
-                        unlink(tmp.c_str());
-                    } else {
-                        printf("Archive browser: failed to extract entry\n");
-                    }
-                } else {
-                    // VFS archive — the path is directly loadable
-                    load_selected_file(archive_browser_.get_selected_path());
-                }
-            }
-        }
-    }
 #endif
     
     // Render screen (full-screen background)
@@ -1219,6 +1198,11 @@ void SystemGUI::open_file_dialog(const char* dialog_key, const char* title) {
     if (!system_) return;
     
 #ifdef HAS_IMGUIFILEDIALOG
+    // For the main "choose file" dialog, D64/T64 containers are navigable
+    // virtual folders.  For the drive-insert dialog, they are selectable files.
+    bool is_drive_dialog = (strcmp(dialog_key, "DriveInsertDiskKey") == 0);
+    VfsFileSystem::set_browse_containers(!is_drive_dialog);
+
     // Build filter from system descriptor using ImGuiFileDialog collection syntax
     // Collection format: "Title{.ext1,.ext2,...}" shows ALL matching files at once
     // Individual filters separated by commas create separate dropdown entries

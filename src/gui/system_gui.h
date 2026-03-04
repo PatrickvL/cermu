@@ -2,7 +2,6 @@
 
 #include "generic_gui.h"
 #include "system_selection_dialog.h"
-#include "archive_browser.h"
 #include "../core/emulated_system.h"
 #include <memory>
 #include <string>
@@ -34,11 +33,6 @@ private:
     
     // Pending file to load after system selection (from command line)
     std::string pending_file_path_;
-
-#ifdef CERMU_HAS_GUI
-    // Archive browser — shown when user selects an archive or container
-    ArchiveBrowser archive_browser_;
-#endif
     
 public:
     /**
