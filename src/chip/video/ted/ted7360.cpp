@@ -782,6 +782,25 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
         const uint8_t vmli = video_logic.vmli;
         const uint8_t rc   = video_logic.rc;
 
+        // On DMA lines, fetch screen code + color attribute directly here
+        // (PHI1 time) rather than waiting for PHI2 c-access delivery.
+        // The real TED reads both screen code and chargen in the same stolen
+        // cycle.  If we relied on screen_line[] here, we'd use stale data
+        // from the previous character row (PHI2 hasn't delivered yet), causing
+        // RC=0 to render the wrong character.
+        if (video_logic.is_dma_line && bus.mem_read && vmli < TED_SCREEN_TEXTCOLS) {
+            const uint16_t vc = static_cast<uint16_t>(
+                (video_logic.vcbase + vmli) & TED_VC_MASK);
+            // Screen code: screen_base + $400 + VC
+            video_data.screen_line[vmli] =
+                bus.mem_read(bus.mem_read_user_data,
+                             static_cast<uint16_t>(memory.screen_base + 0x0400u + vc));
+            // Color/attribute: screen_base + VC
+            video_data.color_line[vmli] =
+                bus.mem_read(bus.mem_read_user_data,
+                             static_cast<uint16_t>(memory.screen_base + vc));
+        }
+
         if (sequencer.graphics_mode & 2u) {
             // Bitmap mode: bitmap_base | (VC << 3) | RC
             const uint16_t vc = static_cast<uint16_t>(
