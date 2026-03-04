@@ -45,11 +45,19 @@ public:
 
     // ---- Configuration ---------------------------------------------------
 
-    /// Enable/disable treating emulator containers (.d64, .t64) as navigable
-    /// folders.  Standard archives (.zip, .7z, …) are always virtual folders.
-    /// Set this before opening a dialog so subsequent scans apply the mode.
+    /// Enable/disable treating container formats (D64, T64, LNX, …) as
+    /// navigable folders.  Standard archives (.zip, .7z, …) are always
+    /// virtual folders.  Set before opening a dialog.
     static void set_browse_containers(bool enabled) { s_browse_containers_ = enabled; }
     static bool browse_containers() { return s_browse_containers_; }
+
+    /// Set the active system's supported formats for extension filtering.
+    /// When set, scan results only include files matching these formats
+    /// (plus archives, which are always visible).  Pass nullptr to disable
+    /// filtering and show all files.
+    static void set_active_formats(const struct format_descriptor_t* const* formats) {
+        s_active_formats_ = formats;
+    }
 
     // ---- Path translation utilities (public for use by loading code) -----
 
@@ -66,7 +74,9 @@ public:
     /// True if an extension identifies a standard archive (.zip, .7z, …).
     static bool has_archive_extension(const std::string& path_or_name);
 
-    /// True if an extension identifies a Commodore container (.d64, .t64).
+    /// True if an extension identifies a browsable container format
+    /// (FORMAT_CAP_CONTAINER).  Queries the format registry — no hardcoded
+    /// extension list.
     static bool has_container_extension(const std::string& path_or_name);
 
     /// True if the path/name should be browsed as a virtual folder (taking
@@ -75,6 +85,7 @@ public:
 
 private:
     static bool s_browse_containers_;
+    static const struct format_descriptor_t* const* s_active_formats_;
 
     /// Cached sizes from the latest ScanDirectory call so that
     /// GetFileDateAndSize doesn't need to re-open the archive.
@@ -90,9 +101,11 @@ private:
     /// Find the first real‐file archive/container boundary in a path.
     static PathSplit split_at_archive(const std::string& path);
 
+public:
     /// Lowercase file extension (with leading dot) from a path or name.
     static std::string get_extension(const std::string& path);
 
+private:
     /// Scan a real filesystem directory (archives/containers appear as dirs).
     std::vector<IGFD::FileInfos> scan_real_directory(const std::string& path);
 
@@ -100,10 +113,16 @@ private:
     std::vector<IGFD::FileInfos> scan_vfs_entries(const std::string& vfs_path,
                                                    const std::string& dialog_dir);
 
-    /// Scan entries inside a D64/T64 container loaded into memory.
-    std::vector<IGFD::FileInfos> scan_container_entries(const uint8_t* data, size_t size,
-                                                         const std::string& ext,
-                                                         const std::string& dialog_dir);
+    /// Scan entries inside a container format (D64, T64, LNX, …) loaded into
+    /// memory.  Uses the format descriptor's list_entries() callback.
+    std::vector<IGFD::FileInfos> scan_container_entries(
+        const struct format_descriptor_t* fmt,
+        const uint8_t* data, size_t size,
+        const std::string& dialog_dir);
+
+    /// True if the given extension (with dot) matches the active system's
+    /// formats, or if no active formats are set (show everything).
+    static bool is_active_format_ext(const std::string& ext);
 };
 
 #define FILE_SYSTEM_OVERRIDE VfsFileSystem
