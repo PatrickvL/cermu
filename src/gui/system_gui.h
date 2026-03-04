@@ -2,6 +2,7 @@
 
 #include "generic_gui.h"
 #include "system_selection_dialog.h"
+#include "archive_browser.h"
 #include "../core/emulated_system.h"
 #include <memory>
 #include <string>
@@ -33,6 +34,11 @@ private:
     
     // Pending file to load after system selection (from command line)
     std::string pending_file_path_;
+
+#ifdef CERMU_HAS_GUI
+    // Archive browser — shown when user selects an archive or container
+    ArchiveBrowser archive_browser_;
+#endif
     
 public:
     /**
@@ -80,6 +86,12 @@ private:
     
     /// Check attached 1541 drives for pending file dialog requests.
     void poll_drive_file_dialog_requests();
+
+    /// Load a file into the current system (stop emu, configure, reset, load, restart).
+    /// @param resolved_path  VFS-aware path to the file (may be archive inner path)
+    /// @param display_path   Optional human-readable path for window title (e.g. container path)
+    void load_selected_file(const std::string& resolved_path,
+                            const char* display_path = nullptr);
     
     // Helper functions
     void update_window_title();
