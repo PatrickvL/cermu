@@ -27,53 +27,8 @@
  * screen matrix and color attribute data.
  *
  * Register map: 32 registers at $FF00-$FF1F (mirrored at $FF20-$FF3F),
- * plus banking latches at $FF3E/$FF3F.
- *
- * NOTE on $FF1A/$FF1B (raster compare / raster counter):
- *   Following the VIC-II model, these registers serve a dual role:
- *     Write → sets the raster line compare value (triggers IRQ on match)
- *     Read  → returns the current live raster counter value
- *   $FF1A bit 0 carries the 9th bit (MSB) of both compare and counter.
- *   $FF1B carries bits [7:0].
- *
- * NOTE on $FF0B (TED_REG_RASTER_CMP):
- *   Some hardware documentation places the raster compare registers at
- *   $FF0A bit 0 + $FF0B, with $FF0A doubling as the IRQ mask.
- *   This implementation uses the $FF1A/$FF1B pair instead (VIC-II style),
- *   and TED_REG_RASTER_CMP at $FF0B is currently dead — see the define.
- *
- *   $FF00-$FF01  Timer 1 (low/high)
- *   $FF02-$FF03  Timer 2 (low/high)
- *   $FF04-$FF05  Timer 3 (low/high)
- *   $FF06        Control register 1 (YSCROLL, RSEL, DEN, BMM, ECM)
- *   $FF07        Control register 2 (XSCROLL, CSEL, MCM, FREEZE, PAL/NTSC, RVS)
- *   $FF08        Keyboard latch
- *   $FF09        IRQ status register
- *   $FF0A        IRQ mask register
- *   $FF0B        Raster compare low [7:0] (some hardware docs) — see note above
- *   $FF0C        Cursor position high bits [9:8]
- *   $FF0D        Cursor position low bits [7:0]
- *   $FF0E        Sound channel 1 frequency low [7:0]
- *   $FF0F        Sound channel 1 frequency high [9:8]
- *   $FF10        Sound channel 2 frequency [7:0] (8-bit only — no high register)
- *   $FF11        Sound control (noise mode, channel enables, volume)
- *   $FF12        Memory control (character base, ROM bank select)
- *   $FF13        Character generator base address high bits
- *   $FF14        Screen / bitmap base address
- *   $FF15        Background color 0
- *   $FF16        Background color 1
- *   $FF17        Background color 2
- *   $FF18        Background color 3
- *   $FF19        Border color
- *   $FF1A        Raster compare bit 8 / current raster bit 8 (write=compare, read=counter)
- *   $FF1B        Raster compare [7:0] / current raster [7:0] (write=compare, read=counter)
- *   $FF1C        ⚠ Unresolved — docs suggest cursor-blink / vertical sub-counter;
- *                  currently implemented as a mirror of $FF1B (placeholder)
- *   $FF1D        Horizontal position (current TED clock within line, read-only)
- *   $FF1E        Flash counter (read-only)
- *   $FF1F        ROM/RAM banking + CPU clock control
- *   $FF3E        Write-only latch — switch to ROM mode
- *   $FF3F        Write-only latch — switch to RAM mode
+ * plus banking latches at $FF3E/$FF3F.  See TED_REG_* defines below for
+ * individual register descriptions and address notes.
  */
 
 #include <cstdint>
@@ -95,12 +50,8 @@
 #define TED_REG_CONTROL2     0x07   // $FF07 — Control 2: XSCROLL[2:0], CSEL, MCM, FREEZE, PAL/NTSC, RVS
 #define TED_REG_KEYBOARD     0x08   // $FF08 — Keyboard latch: write column select, read row state (active LOW)
 #define TED_REG_IRQ_STATUS   0x09   // $FF09 — IRQ status; write 1-bits to acknowledge/clear (see TED_IRQ_*)
-#define TED_REG_IRQ_MASK     0x0A   // $FF0A — IRQ enable mask; set bits to enable sources (see TED_IRQ_*)
-// ⚠ NOTE: some hardware documentation describes $FF0A bit 0 as raster compare bit 8,
-// with $FF0B as raster compare [7:0].  This implementation uses $FF1A/$FF1B instead
-// (VIC-II style: write=compare, read=live counter).  TED_REG_RASTER_CMP below is
-// therefore currently dead — not referenced by any .cpp logic.
-#define TED_REG_RASTER_CMP   0x0B   // $FF0B — ⚠ UNUSED: raster compare [7:0] per some hardware docs; see note above
+#define TED_REG_IRQ_MASK     0x0A   // $FF0A — IRQ enable mask; bits [6:1] enable IRQ sources. Bit 0 = raster compare bit 8.
+#define TED_REG_RASTER_CMP   0x0B   // $FF0B — Raster compare [7:0]; combined with $FF0A bit 0 → 9-bit compare value
 #define TED_REG_CURSOR_HI    0x0C   // $FF0C — Cursor position bits [9:8] (bits [1:0] of byte); 10-bit index into screen matrix
 #define TED_REG_CURSOR_LO    0x0D   // $FF0D — Cursor position bits [7:0]; combined with CURSOR_HI → 0..999
 #define TED_REG_SOUND1_LO    0x0E   // $FF0E — Sound channel 1 frequency bits [7:0]
@@ -115,21 +66,12 @@
 #define TED_REG_COLOR_BG2    0x17   // $FF17 — Background color 2 (ECM text BG2, MCM pixel 10 — not used in all modes)
 #define TED_REG_COLOR_BG3    0x18   // $FF18 — Background color 3 (ECM text BG3)
 #define TED_REG_BORDER       0x19   // $FF19 — Border color (7-bit: lum[6:4] | hue[3:0])
-// ⚠ NOTE on $FF1A/$FF1B: these follow the VIC-II dual-use model.
-//   Write → latches raster compare value (9-bit across $FF1A bit 0 + $FF1B)
-//   Read  → returns live raster counter (same bit layout)
-//   The name CHARPOS_HI is inherited from ambiguous hardware documentation; the
-//   register also encodes bits of the current video matrix address on reads, but
-//   bit 0 carries raster bit 8 in both read and write directions.
-#define TED_REG_CHARPOS_HI   0x1A   // $FF1A — Write: raster compare bit 8 (bit 0); Read: raster counter bit 8 (bit 0) + video matrix addr bits
-#define TED_REG_RASTER_LO    0x1B   // $FF1B — Write: raster compare [7:0]; Read: current raster counter [7:0]
-// ⚠ NOTE on $FF1C: hardware documentation describes this as cursor-blink related
-// or a vertical sub-counter (row within character cell).  Currently implemented
-// as a mirror of the raster counter low byte ($FF1B) — this is a placeholder.
-#define TED_REG_VPOS         0x1C   // $FF1C — ⚠ PLACEHOLDER: likely cursor-blink / vertical sub-counter (RC); currently mirrors $FF1B
-#define TED_REG_HPOS         0x1D   // $FF1D — Horizontal position: current TED single-clock cycle within line (0-113, read-only)
-#define TED_REG_FLASH        0x1E   // $FF1E — Flash counter [7:2] (6-bit, frame-rate blink, read-only); bit 0: reserved
-#define TED_REG_ROM_RAM      0x1F   // $FF1F — ROM/RAM banking select + CPU single-clock control
+#define TED_REG_CHARPOS_HI   0x1A   // $FF1A — Character counter bit 8 in bit 0; Read: bit 0 = VC[8], bits [7:2] = 1. Write: sets VC bit 8.
+#define TED_REG_CHARPOS_LO   0x1B   // $FF1B — Character counter [7:0]; Read: VC low byte. Write: sets VC low byte.
+#define TED_REG_RASTER_HI    0x1C   // $FF1C — Raster counter bit 8 in bit 0; Read: bit 0 = raster[8], bits [7:1] = 1. Write: forces raster bit 8.
+#define TED_REG_RASTER_LO    0x1D   // $FF1D — Raster counter [7:0]; Read: live raster low byte. Write: forces raster low byte.
+#define TED_REG_HPOS         0x1E   // $FF1E — Horizontal position; Read: (cycle-16)*2 & 0xFE. Write: no-op on real hardware.
+#define TED_REG_FLASH_RC     0x1F   // $FF1F — Read: 0x80 | flash[3:0]<<3 | RC[2:0]. Write: sets flash counter + RC (row counter).
 
 #define TED_NUM_REGS         0x20   // 32 registers in the primary range ($FF00-$FF1F)
 
@@ -509,9 +451,9 @@ struct ted7360_t : public ChipBase {
     void*                keyboard_user_data = nullptr; // Context for keyboard_scan
     uint8_t              keyboard_latch     = 0;       // Last value written to $FF08 (column select)
 
-    // Flash / cursor blink
-    uint8_t flash_counter  = 0;         // 6-bit frame counter (wraps at 64); drives text blink and cursor blink
-    bool    cursor_visible = false;     // true when flash phase is active (cursor and blink-text visible)
+    // Flash / cursor blink (5-bit cursor_phase, same as VICE)
+    uint8_t flash_counter  = 0;         // Bits [3:0] = 4-bit counter (increments per frame); bit 4 = visibility toggle
+    bool    cursor_visible = false;     // true when flash phase bit 4 is set (cursor and blink-text visible)
 
     /**
      * Compute the 10-bit hardware cursor position from register state.
