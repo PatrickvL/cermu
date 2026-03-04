@@ -349,7 +349,6 @@ VIC20System::VIC20System()
     , via1_(nullptr)
     , via2_(nullptr)
     , expansion_flags_(VIC20_EXP_NONE)
-    , autostart_delay_frames_(0)
 {
     cycles_per_frame_ = vic20_constants::CYCLES_PER_FRAME_PAL;
     hardware_traits_ = create_vic20_hardware_traits();
@@ -637,8 +636,7 @@ void VIC20System::reset() {
     bus_.state = bus_.default_state;
     
     total_cycles_ = 0;
-    autostart_delay_frames_ = 0;
-    // Don't clear pending_filepath_ here — reset() is called by the GUI
+    // Don't clear pending_load_ here — reset() is called by the GUI
     // *before* load_file(), so clearing would lose the deferred load.
 }
 
@@ -709,18 +707,8 @@ void VIC20System::tick() {
 }
 
 void VIC20System::run_frame() {
-    // Deferred autostart: load file into memory and inject RUN command
-    // after the KERNAL boot sequence completes and BASIC is at READY.
-    if (autostart_delay_frames_ > 0) {
-        if (--autostart_delay_frames_ == 0 && !pending_filepath_.empty()) {
-            if (load_file_into_memory(pending_filepath_.c_str())) {
-                printf("VIC20: Deferred load complete\n");
-            } else {
-                printf("VIC20: Deferred load FAILED for: %s\n", pending_filepath_.c_str());
-            }
-            pending_filepath_.clear();
-        }
-    }
+    // Check if a deferred file load is waiting for BASIC to reach READY
+    check_deferred_load();
 
     uint32_t adjusted_cycles = static_cast<uint32_t>(cycles_per_frame_ * speed_multiplier_);
     for (uint32_t i = 0; i < adjusted_cycles; i++) {
@@ -732,41 +720,7 @@ void VIC20System::run_frame() {
 }
 
 // ============================================================================
-// File Loading
-// ============================================================================
-
-bool VIC20System::load_file(const char* filepath) {
-    if (!memory_ || !cpu_) {
-        printf("VIC20: System not initialized, initializing now...\n");
-        if (!initialize()) {
-            printf("VIC20: Failed to initialize system for file loading\n");
-            return false;
-        }
-    }
-
-    printf("VIC20: Scheduling deferred load: %s\n", filepath);
-
-    // Store the filepath for deferred loading.  We cannot load into
-    // system memory immediately because the KERNAL boot sequence
-    // ($FD22) clears zero-page — wiping BASIC pointers ($2B-$32) and
-    // keyboard buffer count ($C6) — and BASIC init reinitializes the
-    // program area.  Instead, run_frame() calls load_file_into_memory()
-    // after enough frames for boot to reach the READY prompt.
-    pending_filepath_ = filepath;
-    autostart_delay_frames_ = 120;  // ~2 seconds at 60fps
-
-    // Set program title to bare filename
-    const char* name = filepath;
-    const char* sep = strrchr(filepath, '/');
-    if (!sep) sep = strrchr(filepath, '\\');
-    if (sep) name = sep + 1;
-    program_title_ = name;
-
-    return true;
-}
-
-// ============================================================================
-// Commodore Load Helper Callbacks -- VIC-20 specific
+// CommodoreSystem Loading Hooks -- VIC-20 specific
 // ============================================================================
 
 static uint8_t vic20_mem_read_for_load(void* ctx, uint16_t addr) {
@@ -779,16 +733,28 @@ static void vic20_mem_write_byte_cb(void* ctx, uint16_t addr, uint8_t val) {
     vic20_memory_write_byte(mem, addr, val);
 }
 
-bool VIC20System::load_file_into_memory(const char* filepath) {
-    printf("VIC20: Loading file into memory: %s\n", filepath);
+bool VIC20System::is_basic_ready() const {
+    if (!memory_ || !cpu_) return false;
 
-    format_load_result_t result = {};
-    if (!format_load_file(filepath, &result)) {
-        printf("VIC20: Failed to load file: %s\n", result.error_msg);
-        result.release();
+    const uint8_t* ram = memory_->buffer;
+
+    // BASIC warm-start vector at $0302/$0303 = $C474
+    if (ram[0x0302] != vic20_constants::BASIC_WARMSTART_LO ||
+        ram[0x0303] != vic20_constants::BASIC_WARMSTART_HI)
         return false;
-    }
 
+    // Keyboard buffer must be empty (no in-flight characters)
+    if (ram[vic20_constants::KBD_BUFFER_COUNT] != 0)
+        return false;
+
+    // First boot: wait until BASIC's NEW has run (VARTAB $2D != 0)
+    if (!boot_completed_ && ram[0x002D] == 0)
+        return false;
+
+    return true;
+}
+
+commodore_load_context_t VIC20System::build_load_context() {
     commodore_load_context_t ctx = {};
     ctx.system_name     = "VIC20";
     ctx.write_byte      = vic20_mem_write_byte_cb;
@@ -802,11 +768,18 @@ bool VIC20System::load_file_into_memory(const char* filepath) {
     ctx.default_raw_addr = vic20_constants::BLK5_START;
     ctx.set_pc          = nullptr;  // VIC-20 uses keyboard buffer injection
     ctx.try_sys_from_filename = true;
+    return ctx;
+}
 
-    bool success = commodore_apply_load_result(&ctx, &result, filepath);
-
-    result.release();
-    return success;
+void VIC20System::inject_keys(const char* str) {
+    if (!memory_) return;
+    uint8_t* ram = memory_->buffer;
+    int len = static_cast<int>(strlen(str));
+    if (len > 10) len = 10;  // VIC-20 keyboard buffer capacity
+    for (int i = 0; i < len; i++) {
+        ram[vic20_constants::KBD_BUFFER_BASE + i] = static_cast<uint8_t>(str[i]);
+    }
+    ram[vic20_constants::KBD_BUFFER_COUNT] = static_cast<uint8_t>(len);
 }
 
 // ============================================================================

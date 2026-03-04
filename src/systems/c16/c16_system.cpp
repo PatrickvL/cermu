@@ -468,10 +468,7 @@ void Commodore264System<V>::reset() {
     
     // Reset deferred loading state — boot_completed_ stays true so that
     // subsequent loads skip the VARTAB zero-page check (see is_basic_ready)
-    if (pending_load_.active) {
-        pending_load_.result.release();
-        pending_load_.active = false;
-    }
+    clear_pending_load();
     
     total_cycles_ = 0;
 }
@@ -537,80 +534,14 @@ void Commodore264System<V>::run_frame() {
     }
 
     // Check deferred load once per frame (only active during boot)
-    if (pending_load_.active && is_basic_ready()) {
-        apply_pending_load();
-    }
+    check_deferred_load();
 
     // Tick all attached peripheral devices
     tick_peripherals();
 }
 
 // ============================================================================
-// File Loading
-// ============================================================================
-
-template<C264SeriesVariant V>
-bool Commodore264System<V>::load_file(const char* filepath) {
-    if (!initialized_) {
-        printf("%s: System not initialized, initializing now...\n", Traits::name);
-        if (!initialize()) {
-            printf("%s: Failed to initialize system for file loading\n", Traits::name);
-            return false;
-        }
-    }
-    
-    printf("%s: Loading file: %s\n", Traits::name, filepath);
-
-    // Clear any previous pending load
-    if (pending_load_.active) {
-        pending_load_.result.release();
-        pending_load_.active = false;
-    }
-
-    format_load_result_t result = {};
-    if (!format_load_file(filepath, &result)) {
-        printf("%s: Failed to load file: %s\n", Traits::name, result.error_msg);
-        result.release();
-        return false;
-    }
-
-    // Determine load mode based on format type
-    LoadMode mode = LoadMode::DIRECT;
-    if (result.format) {
-        const char* fmt = result.format->name;
-        if (fmt && strcmp(fmt, "D64") == 0) {
-            mode = LoadMode::DISK_FAST;
-        } else if (fmt && strcmp(fmt, "TAP") == 0) {
-            mode = LoadMode::TAPE_INSERTED;
-        }
-    }
-
-    // Defer loading until KERNAL/BASIC boot completes.
-    // The CPU starts from the KERNAL reset vector and must complete its
-    // full boot sequence before we write program data to RAM.  This prevents
-    // BASIC 3.5's NEW routine from zeroing $1001/$1002 and corrupting the
-    // loaded program.
-    pending_load_.result = result;  // Transfer ownership (don't free yet)
-    pending_load_.filepath = filepath;
-    pending_load_.active = true;
-    pending_load_.mode = mode;
-
-    // Set window title to bare filename
-    const char* name = filepath;
-    const char* sep = strrchr(filepath, '/');
-    if (!sep) sep = strrchr(filepath, '\\');
-    if (sep) name = sep + 1;
-    program_title_ = name;
-
-    printf("%s: File parsed (mode=%s) \u2014 deferred until BASIC READY\n",
-           Traits::name,
-           mode == LoadMode::DISK_FAST ? "DISK_FAST" :
-           mode == LoadMode::TAPE_INSERTED ? "TAPE_INSERTED" : "DIRECT");
-    return true;
-}
-
-// ============================================================================
-// Deferred Loading — BASIC READY Detection & Application
+// CommodoreSystem virtual hook implementations — C16/Plus4
 // ============================================================================
 
 template<C264SeriesVariant V>
@@ -619,28 +550,15 @@ bool Commodore264System<V>::is_basic_ready() const {
 
     const uint8_t* ram = ram_->data();
 
-    // BASIC 3.5 warm-start vector at $0302/$0303 is set to $8712 by the
-    // vector copy routine at $8117 (called early in cold-start via JSR $8117).
-    // However, BASIC's NEW routine — which zeroes $1001/$1002 — runs later.
-    // If we inject program data after the vector is set but BEFORE NEW runs,
-    // NEW will overwrite our first two bytes at $1001/$1002 with $00.
-    //
-    // To avoid this, we also check VARTAB ($2D).  During cold boot, RAMTAS
-    // clears all of zero page ($2D = $00).  Only NEW sets VARTAB to
-    // TXTTAB+2, so $2D != $00 guarantees NEW has already run.
-    //
-    // After the first boot completes, we skip the VARTAB check because
-    // a program could legitimately set VARTAB to an address whose low
-    // byte is $00.
+    // BASIC 3.5 warm-start vector at $0302/$0303 = $8712.
+    // Also check VARTAB ($2D) on first boot to ensure NEW has run.
     if (ram[0x0302] != c16_constants::BASIC_WARMSTART_LO ||
         ram[0x0303] != c16_constants::BASIC_WARMSTART_HI)
         return false;
 
-    // Keyboard buffer must be empty (nothing pending in input)
     if (ram[c16_constants::KBD_BUFFER_COUNT] != 0)
         return false;
 
-    // First boot: VARTAB low byte must be non-zero (NEW has run)
     if (!boot_completed_ && ram[0x002D] == 0)
         return false;
 
@@ -648,131 +566,39 @@ bool Commodore264System<V>::is_basic_ready() const {
 }
 
 template<C264SeriesVariant V>
-void Commodore264System<V>::apply_pending_load() {
-    if (!pending_load_.active || !initialized_) return;
-
-    // =========================================================================
-    // DISK_FAST PATH — D64: Insert disk into 1541 + extract first PRG to RAM
-    // =========================================================================
-    if (pending_load_.mode == LoadMode::DISK_FAST) {
-        printf("%s: BASIC READY \u2014 DISK_FAST load\n", Traits::name);
-
-        // Find a 1541 drive on the IEC serial bus (port 2)
-        auto* iec_port = get_connector_port(2);
-        Drive1541Device* drive = nullptr;
-        if (iec_port) {
-            for (auto* dev : iec_port->get_attached_devices()) {
-                drive = dynamic_cast<Drive1541Device*>(dev);
-                if (drive) break;
-            }
+commodore_load_context_t Commodore264System<V>::build_load_context() {
+    commodore_load_context_t ctx = {};
+    ctx.system_name     = Traits::name;
+    ctx.write_byte      = c16_mem_write_byte;
+    ctx.write_block     = c16_mem_write_block;
+    ctx.mem_read        = c16_mem_read;
+    ctx.mem_ctx         = ram_->data();
+    ctx.basic_params    = &COMMODORE_BASIC_C16;
+    ctx.basic_start_addrs[0] = c16_constants::BASIC_START;
+    ctx.default_raw_addr = 0x4000;
+    ctx.set_pc          = set_cpu_pc;
+    ctx.pc_ctx          = this;
+    // inject_keys is left as nullptr — commodore_load_helpers uses the
+    // default $0277/$C6, but C16 needs $0527/$EF.  We set the custom
+    // callback so commodore_apply_load_result uses our inject_keys override.
+    ctx.inject_keys     = [](void* kctx, const char* str) {
+        auto* ram = static_cast<uint8_t*>(kctx);
+        int len = static_cast<int>(strlen(str));
+        if (len > c16_constants::KBD_BUFFER_SIZE)
+            len = c16_constants::KBD_BUFFER_SIZE;
+        for (int i = 0; i < len; i++) {
+            ram[c16_constants::KBD_BUFFER_BASE + i] = static_cast<uint8_t>(str[i]);
         }
-
-        if (drive) {
-            drive->insert_disk(pending_load_.filepath.c_str());
-            printf("%s: D64 inserted into drive #%d\n", Traits::name, drive->get_device_number());
-        } else {
-            // Auto-attach a 1541 drive to the IEC bus
-            if (iec_port && attach_device_to_port(2, "1541")) {
-                for (auto* dev : iec_port->get_attached_devices()) {
-                    drive = dynamic_cast<Drive1541Device*>(dev);
-                    if (drive) break;
-                }
-                if (drive) {
-                    drive->insert_disk(pending_load_.filepath.c_str());
-                    printf("%s: Auto-attached 1541 drive #8, D64 inserted\n", Traits::name);
-                }
-            } else {
-                printf("%s: No IEC serial port available \u2014 D64 not mounted\n", Traits::name);
-            }
-        }
-
-        // Hybrid approach: also write the first extracted PRG to RAM for fast load
-        if (pending_load_.result.type == FORMAT_LOAD_PROGRAM &&
-            pending_load_.result.program.data) {
-            commodore_load_context_t ctx = {};
-            ctx.system_name     = Traits::name;
-            ctx.write_byte      = c16_mem_write_byte;
-            ctx.write_block     = c16_mem_write_block;
-            ctx.mem_read        = c16_mem_read;
-            ctx.mem_ctx         = ram_->data();
-            ctx.basic_params    = &COMMODORE_BASIC_C16;
-            ctx.basic_start_addrs[0] = c16_constants::BASIC_START;
-            ctx.default_raw_addr = 0x4000;
-            ctx.set_pc          = set_cpu_pc;
-            ctx.pc_ctx          = this;
-            ctx.inject_keys     = c16_inject_keys;
-            ctx.keys_ctx        = ram_->data();
-
-            commodore_apply_load_result(&ctx, &pending_load_.result,
-                                        pending_load_.filepath.c_str());
-        } else if (drive) {
-            // No PRG extracted \u2014 inject LOAD"*",8,1 for native disk load
-            c16_inject_keys(ram_->data(), "LOAD\"*\",8,1\r");
-            printf("%s: Injected LOAD\"*\",8,1 for disk loading\n", Traits::name);
-        }
-    }
-    // =========================================================================
-    // TAPE PATH — TAP: Insert tape into datasette, inject LOAD
-    // =========================================================================
-    else if (pending_load_.mode == LoadMode::TAPE_INSERTED) {
-        printf("%s: BASIC READY \u2014 TAPE_INSERTED load\n", Traits::name);
-
-        // Find datasette on cassette port (port 3)
-        auto* cass_port = get_connector_port(3);
-        Datasette1530Device* datasette = nullptr;
-        if (cass_port) {
-            datasette = dynamic_cast<Datasette1530Device*>(cass_port->get_attached_device());
-        }
-
-        if (datasette) {
-            datasette->load_tap(pending_load_.filepath.c_str());
-            datasette->press_play();
-            printf("%s: TAP loaded into datasette, PLAY pressed\n", Traits::name);
-
-            // Inject LOAD command into keyboard buffer
-            c16_inject_keys(ram_->data(), "LOAD\r");
-        } else {
-            printf("%s: No datasette attached \u2014 TAP not loaded\n", Traits::name);
-        }
-    }
-    // =========================================================================
-    // STANDARD PATH — PRG/T64/LNX/BIN: Write to RAM + auto-run
-    // =========================================================================
-    else {
-        printf("%s: BASIC READY \u2014 applying deferred load\n", Traits::name);
-
-        commodore_load_context_t ctx = {};
-        ctx.system_name     = Traits::name;
-        ctx.write_byte      = c16_mem_write_byte;
-        ctx.write_block     = c16_mem_write_block;
-        ctx.mem_read        = c16_mem_read;
-        ctx.mem_ctx         = ram_->data();
-        ctx.basic_params    = &COMMODORE_BASIC_C16;
-        ctx.basic_start_addrs[0] = c16_constants::BASIC_START;
-        ctx.default_raw_addr = 0x4000;
-        ctx.set_pc          = set_cpu_pc;
-        ctx.pc_ctx          = this;
-        ctx.inject_keys     = c16_inject_keys;
-        ctx.keys_ctx        = ram_->data();
-
-        commodore_apply_load_result(&ctx, &pending_load_.result,
-                                    pending_load_.filepath.c_str());
-    }
-
-    pending_load_.result.release();
-    pending_load_.active = false;
-    boot_completed_ = true;
+        ram[c16_constants::KBD_BUFFER_COUNT] = static_cast<uint8_t>(len);
+    };
+    ctx.keys_ctx        = ram_->data();
+    return ctx;
 }
 
-// ============================================================================
-// C16-specific keyboard buffer injection
-// ============================================================================
-
 template<C264SeriesVariant V>
-void Commodore264System<V>::c16_inject_keys(void* ctx, const char* str) {
-    // C16/Plus4 keyboard buffer is at $0527-$052E (8 bytes), count at $00EF
-    // This differs from the C64/VIC-20 which uses $0277/$C6.
-    auto* ram = static_cast<uint8_t*>(ctx);
+void Commodore264System<V>::inject_keys(const char* str) {
+    if (!ram_) return;
+    auto* ram = ram_->data();
     int len = static_cast<int>(strlen(str));
     if (len > c16_constants::KBD_BUFFER_SIZE)
         len = c16_constants::KBD_BUFFER_SIZE;
