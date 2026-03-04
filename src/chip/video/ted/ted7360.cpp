@@ -894,10 +894,9 @@ void ted7360_t::tick_phi2(bus_state_t bus_state) {
 bus_state_t ted7360_t::registers_read(bus_state_t bus_state) {
     uint8_t reg = BUS_GET_ADDR(bus_state) & TED_REG_ADDR_MASK;
 
-    // Banking latches $FF3E/$FF3F: read as open bus ($FF)
+    // Banking latches $FF3E/$FF3F: open bus — leave data field untouched
     if (reg >= TED_REG_MIRROR_START) {
         if (reg == TED_REG_ROM_LATCH || reg == TED_REG_RAM_LATCH) {
-            BUS_SET_DATA(bus_state, 0xFF);
             return bus_state;
         }
         reg &= TED_REG_UNMIRROR_MASK;
