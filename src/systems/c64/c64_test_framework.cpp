@@ -5,7 +5,13 @@
 #include "../../chip/memory/memory_chip.h"
 #include "../../chip/cpu/fam65xx/fam65xx.hpp"
 #include "../../chip/video/vic_ii/vicii_common.h"
-#include "../../utils/platform_fs.h"
+#include "../../core/os/os.h"
+#ifdef CERMU_USE_STD_FILESYSTEM
+    #include <filesystem>
+    namespace cermu_fs = std::filesystem;
+#else
+    #include <dirent.h>
+#endif
 #include <cstdio>
 #include <cstring>
 #include <sys/stat.h>
@@ -1419,11 +1425,11 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
     std::string output_png = output_dir + "/" + test_name + ".png";
     
     // Normalize path separators for current platform
-    cermu_normalize_path(output_dir);
-    cermu_normalize_path(output_png);
+    os_normalize_path(output_dir);
+    os_normalize_path(output_png);
     
     // Create output directory if needed
-    cermu_mkdir_p(output_dir);
+    os_mkdir_p(output_dir);
     
     // Save framebuffer to PNG using base class screenshot method
     if (!c64->save_screenshot(output_png.c_str())) {

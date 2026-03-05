@@ -18,7 +18,7 @@
 // CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
 #include "../../core/chip.h"
 #include "../../chip/memory/memory_chip.h"
-#include "../../utils/prg_content_analysis.h"
+#include "../../core/analysis/prg_content_analysis.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -135,7 +135,7 @@ static bool is_c264_load_address(uint16_t addr) {
         || addr == 0xC000;                     // ML in upper RAM
 }
 
-// has_basic35_tokens() moved to shared utility: src/utils/prg_content_analysis.h
+// has_basic35_tokens() moved to shared utility: src/core/analysis/prg_content_analysis.h
 
 /**
  * Compute C264-series confidence from a PRG's load address and payload size.
@@ -181,25 +181,69 @@ SystemProbeResult Commodore264System<V>::probe_file_static(
             uint16_t load_addr = data[0] | (data[1] << 8);
             result.confidence = c264_prg_confidence(load_addr, size - 2);
 
-            // BASIC 3.5 tokens are a near-definitive C264 marker
-            if (load_addr == c16_constants::BASIC_START && size > 6) {
-                if (has_basic35_tokens(data + 2, size - 2))
-                    result.confidence = std::max(result.confidence, 0.95f);
-            }
-
-            // MMIO scanning: TED references boost C264, foreign I/O lowers it
+            // Content analysis: BASIC version + MMIO references
             if (size > 6) {
-                uint32_t mmio = scan_6502_mmio_references(data + 2, size - 2);
-                int c16_hits   = count_mmio_flags(mmio & MMIO_ANY_C16);
-                int c64_hits   = count_mmio_flags(mmio & MMIO_ANY_C64);
-                int vic20_hits = count_mmio_flags(mmio & MMIO_ANY_VIC20);
+                const uint8_t* payload = data + 2;
+                size_t payload_len = size - 2;
+                float basic_conf = basic_program_confidence(payload, payload_len, load_addr);
 
-                if (c16_hits >= 1)
-                    result.confidence = std::max(result.confidence, 0.90f);
-                if (c64_hits >= 2 && c16_hits == 0)
-                    result.confidence *= 0.50f;
-                if (vic20_hits >= 2 && c16_hits == 0)
-                    result.confidence *= 0.50f;
+                // Determine what region to scan for MMIO references
+                const uint8_t* scan_data = nullptr;
+                size_t scan_len = 0;
+                bool sys_based = false;
+
+                if (basic_conf >= 0.5f) {
+                    // Looks like BASIC — BASIC 3.5 tokens are a near-definitive
+                    // C264 marker
+                    if (load_addr == c16_constants::BASIC_START
+                        && has_basic35_tokens(payload, payload_len))
+                        result.confidence = std::max(result.confidence, 0.95f);
+
+                    // BASIC stub: extract SYS target, scan ML from there.
+                    // Limit to first 512 bytes — init code touches MMIO early;
+                    // data segments further out cause false positives.
+                    uint16_t sys_addr = extract_sys_address(payload, payload_len, load_addr);
+                    if (sys_addr != 0 && sys_addr >= load_addr) {
+                        uint32_t ml_off = (uint32_t)sys_addr - (uint32_t)load_addr;
+                        if (ml_off < payload_len) {
+                            scan_data = payload + ml_off;
+                            size_t remaining = payload_len - ml_off;
+                            scan_len  = remaining < 512 ? remaining : 512;
+                            sys_based = true;
+                        }
+                    }
+                } else {
+                    // Pure machine language — scan everything
+                    scan_data = payload;
+                    scan_len  = payload_len;
+                }
+
+                if (scan_data && scan_len > 8) {
+                    uint32_t mmio = scan_6502_mmio_references(scan_data, scan_len);
+                    int c16_hits = count_mmio_flags(mmio & MMIO_ANY_C16);
+
+                    // TED $FF00-$FF1F is a very narrow range (0.05 % of the
+                    // address space) so even SYS-based scans are reliable.
+                    // Suppress boost if multiple strong VIC-20 MMIO hits
+                    // are present — a program hitting both $9000-$912F (VIC/VIA)
+                    // and $FFxx is likely VIC-20 with coincidental TED match.
+                    // A single VIC-20 hit is too weak a signal (0.02 % range).
+                    int vic20_strong = count_mmio_flags(mmio & MMIO_VIC20_STRONG);
+                    if (c16_hits >= 1 && vic20_strong < 2)
+                        result.confidence = std::max(result.confidence, 0.92f);
+
+                    // Cross-system penalties only for pure ML — SYS-based
+                    // scans misinterpret data segments as instructions,
+                    // producing false SID/CIA/VIA hits.
+                    if (!sys_based) {
+                        int c64_strong = count_mmio_flags(mmio & MMIO_C64_STRONG);
+                        int vic20_hits = count_mmio_flags(mmio & MMIO_ANY_VIC20);
+                        if (c64_strong >= 1 && c16_hits == 0)
+                            result.confidence *= 0.50f;
+                        else if (vic20_hits >= 2 && c16_hits == 0)
+                            result.confidence *= 0.50f;
+                    }
+                }
             }
 
             // Memory-capacity gate: penalise if the program overshoots this

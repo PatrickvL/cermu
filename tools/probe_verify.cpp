@@ -239,6 +239,11 @@ int main(int argc, char** argv) {
         if (count <= 0) return;
 
         for (int i = 0; i < count; ++i) {
+            // Skip non-loadable extensions (SEQ, REL, USR, etc.)
+            std::string entry_ext = get_extension(entries[i].display_name);
+            if (!entry_ext.empty() && !is_loadable_extension(entry_ext))
+                continue;
+
             uint8_t* entry_data = nullptr;
             size_t entry_size = 0;
             if (!fmt->extract_entry(data, size, entries[i].index,

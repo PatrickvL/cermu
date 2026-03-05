@@ -84,6 +84,18 @@ const char* os_find_extension(const char* path);
  */
 bool os_extension_match(const char* a, const char* b);
 
+/**
+ * Normalise all path separators to the platform's native separator in-place.
+ * On Windows: '/' → '\\'.  On Unix: '\\' → '/'.
+ */
+void os_normalize_path(std::string& path);
+
+/**
+ * Create a directory (and all parent directories) in a cross-platform way.
+ * @return 0 on success or if the directory already exists.
+ */
+int os_mkdir_p(const std::string& dir);
+
 // ============================================================================
 // Archive Reading
 // ============================================================================

@@ -6,7 +6,7 @@
 #include "../../chip/input/commodore_keyboard.h"
 #include "../../chip/input/emu_key_sdl_map.h"
 #include "vic20_keyboard_matrix.h" // VIC-20 keyboard matrix data
-#include "../../utils/prg_content_analysis.h"
+#include "../../core/analysis/prg_content_analysis.h"
 #include <cstring>
 #include <cstdio>
 #include <cctype>
@@ -251,25 +251,67 @@ static SystemProbeResult vic20_probe_file(
 
             // Content analysis: BASIC version + MMIO references
             if (size > 6) {
-                // BASIC 3.5 tokens are exclusive to C16/Plus4 — not VIC-20
-                if ((load_addr == vic20_constants::BASIC_START_UNEXPANDED ||
-                     load_addr == vic20_constants::BASIC_START_3K ||
-                     load_addr == vic20_constants::BASIC_START_8K)
-                    && has_basic35_tokens(data + 2, size - 2))
-                    result.confidence *= 0.30f;
+                const uint8_t* payload = data + 2;
+                size_t payload_len = size - 2;
+                float basic_conf = basic_program_confidence(payload, payload_len, load_addr);
 
-                // Scan for system-specific I/O access patterns in code
-                uint32_t mmio = scan_6502_mmio_references(data + 2, size - 2);
-                int vic20_hits = count_mmio_flags(mmio & MMIO_ANY_VIC20);
-                int c64_hits   = count_mmio_flags(mmio & MMIO_ANY_C64);
-                int c16_hits   = count_mmio_flags(mmio & MMIO_ANY_C16);
+                // Determine what region to scan for MMIO references
+                const uint8_t* scan_data = nullptr;
+                size_t scan_len = 0;
+                bool sys_based = false;
 
-                if (vic20_hits >= 2)
-                    result.confidence = std::max(result.confidence, 0.90f);
-                if (c64_hits >= 2 && vic20_hits == 0)
-                    result.confidence *= 0.50f;
-                if (c16_hits >= 1 && vic20_hits == 0)
-                    result.confidence *= 0.40f;
+                if (basic_conf >= 0.5f) {
+                    // Looks like BASIC — penalise if BASIC 3.5 tokens found
+                    if ((load_addr == vic20_constants::BASIC_START_UNEXPANDED ||
+                         load_addr == vic20_constants::BASIC_START_3K ||
+                         load_addr == vic20_constants::BASIC_START_8K)
+                        && has_basic35_tokens(payload, payload_len))
+                        result.confidence *= 0.30f;  // BASIC 3.5 → not VIC-20
+
+                    // BASIC stub: extract SYS target, scan ML from there.
+                    // Limit to first 512 bytes — init code touches MMIO early;
+                    // data segments further out cause false positives.
+                    uint16_t sys_addr = extract_sys_address(payload, payload_len, load_addr);
+                    if (sys_addr != 0 && sys_addr >= load_addr) {
+                        uint32_t ml_off = (uint32_t)sys_addr - (uint32_t)load_addr;
+                        if (ml_off < payload_len) {
+                            scan_data = payload + ml_off;
+                            size_t remaining = payload_len - ml_off;
+                            scan_len  = remaining < 512 ? remaining : 512;
+                            sys_based = true;
+                        }
+                    }
+                } else {
+                    // Pure machine language — scan everything
+                    scan_data = payload;
+                    scan_len  = payload_len;
+                }
+
+                if (scan_data && scan_len > 8) {
+                    uint32_t mmio = scan_6502_mmio_references(scan_data, scan_len);
+                    int vic20_hits = count_mmio_flags(mmio & MMIO_ANY_VIC20);
+
+                    if (sys_based) {
+                        // SYS-based: require narrow VIC/VIA registers
+                        // (0.07 % of address space) — Color RAM ($9400-$97FF)
+                        // is too broad and triggers data-as-code false positives.
+                        int vic20_strong = count_mmio_flags(mmio & MMIO_VIC20_STRONG);
+                        if (vic20_strong >= 2)
+                            result.confidence = std::max(result.confidence, 0.92f);
+                    } else {
+                        // Pure ML: full classification with penalties
+                        if (vic20_hits >= 2)
+                            result.confidence = std::max(result.confidence, 0.92f);
+                        else {
+                            int c64_strong = count_mmio_flags(mmio & MMIO_C64_STRONG);
+                            int c16_hits   = count_mmio_flags(mmio & MMIO_ANY_C16);
+                            if (c64_strong >= 1 && vic20_hits == 0)
+                                result.confidence *= 0.50f;
+                            else if (c16_hits >= 1 && vic20_hits == 0)
+                                result.confidence *= 0.50f;
+                        }
+                    }
+                }
             }
 
             result.configuration.memory_option_index =
@@ -331,7 +373,9 @@ static SystemProbeResult vic20_probe_file(
                 uint32_t end_addr = (uint32_t)prg.load_addr + (uint32_t)prg.data_size;
 
                 if (prg.load_addr == vic20_constants::BASIC_START_UNEXPANDED) {
-                    // Same size-aware logic as standalone PRG
+                    // $1001 is shared by VIC-20 (unexpanded) and C16/Plus4.
+                    // Use size to estimate, but stay below alias-boost
+                    // threshold (0.90) so filepath context can disambiguate.
                     if (end_addr > 0x8000)
                         result.confidence = 0.30f;
                     else if (end_addr > 0x4000)
@@ -339,7 +383,11 @@ static SystemProbeResult vic20_probe_file(
                     else if (end_addr > 0x2000)
                         result.confidence = 0.60f;
                     else
-                        result.confidence = 0.90f;
+                        result.confidence = 0.80f;  // Fits unexpanded, but ambiguous with C16
+
+                    // BASIC 3.5 tokens → definitely C16/Plus4, not VIC-20
+                    if (prg.data_size > 4 && has_basic35_tokens(prg.data, prg.data_size))
+                        result.confidence *= 0.30f;
                 } else {
                     result.confidence = is_vic20_load_address(prg.load_addr) ? 0.90f : 0.4f;
                 }
