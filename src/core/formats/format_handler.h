@@ -17,8 +17,8 @@
  */
 
 #include <cstdint>
-
 #include <cstddef>
+#include <string>
 // ============================================================================
 // Format Capability Flags
 // ============================================================================
@@ -171,6 +171,14 @@ struct format_descriptor_t {
 
 /** Read entire file into heap-allocated buffer.  Caller frees.  Returns NULL on failure. */
 uint8_t* format_read_entire_file(const char* filepath, size_t* out_size);
+
+/**
+ * Returns the effective file extension for format identification.
+ * For ordinary files this is the same as vfs_extension().  For files inside
+ * Commodore container formats (D64, T64, LNX) that have no filename
+ * extension, the function infers ".prg" from the parent container type.
+ */
+std::string format_effective_extension(const char* filepath);
 
 /** Case-insensitive file extension comparison (includes the dot). */
 bool format_ext_match(const char* ext, const char* target);

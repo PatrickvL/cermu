@@ -35,8 +35,10 @@ SystemMatch SystemRegistry::identify_system(const char* filepath,
                                             const uint8_t* data, size_t size) const {
     SystemMatch best;
 
-    // Extract extension once for all format identify() calls
-    std::string ext_str = filepath ? vfs_extension(filepath) : "";
+    // Extract extension once for all format identify() calls.
+    // Uses format_effective_extension() which infers .prg for files inside
+    // Commodore containers (D64, T64, LNX) that lack filename extensions.
+    std::string ext_str = filepath ? format_effective_extension(filepath) : "";
     const char* ext = ext_str.empty() ? nullptr : ext_str.c_str();
 
     for (const auto& [descriptor, factory] : systems_) {
@@ -130,9 +132,10 @@ std::unique_ptr<EmulatedSystem> SystemRegistry::create_system_for_file(const cha
 
     printf("SystemRegistry: %zu systems registered\n", systems_.size());
 
-    // Read file content via VFS (handles both filesystem and archive paths)
+    // Read file content via format layer — handles both VFS archive paths
+    // and Commodore container paths (e.g. "archive.zip!/disk.d64!/GAME")
     size_t file_size = 0;
-    uint8_t* data = vfs_read_file(filepath, &file_size);
+    uint8_t* data = format_read_entire_file(filepath, &file_size);
     if (!data) {
         printf("SystemRegistry: Failed to open file: %s\n", filepath);
         return nullptr;
