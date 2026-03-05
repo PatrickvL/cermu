@@ -17,8 +17,9 @@ bool commodore_crt_read_header_mem(const uint8_t* data, size_t data_size, commod
 
     const uint8_t* raw = data;
 
-    /* Validate signature */
-    if (memcmp(raw, "C64 CARTRIDGE   ", 16) != 0) {
+    /* Validate signature — accept both C64 and VIC-20 */
+    if (memcmp(raw, "C64 CARTRIDGE   ", 16) != 0 &&
+        memcmp(raw, "VIC20 CARTRIDGE ", 16) != 0) {
         printf("CRTFormat: Invalid CRT signature\n");
         return false;
     }
@@ -44,8 +45,10 @@ bool commodore_crt_read_header_mem(const uint8_t* data, size_t data_size, commod
 // ============================================================================
 
 static float crt_identify(const uint8_t* data, size_t file_size, const char* extension) {
-    if (data && file_size >= 64 && memcmp(data, "C64 CARTRIDGE   ", 16) == 0)
-        return 0.95f;
+    if (data && file_size >= 64) {
+        if (memcmp(data, "C64 CARTRIDGE   ", 16) == 0) return 0.95f;
+        if (memcmp(data, "VIC20 CARTRIDGE ", 16) == 0) return 0.95f;
+    }
     if (extension && format_ext_match(extension, ".crt")) return 0.8f;
     return 0.0f;
 }
@@ -66,6 +69,61 @@ static bool crt_load(const uint8_t* data, size_t size, format_load_result_t* out
              "Failed to read CRT header from memory");
     out->type = FORMAT_LOAD_ERROR;
     return false;
+}
+
+// ============================================================================
+// CHIP Packet Iterator
+// ============================================================================
+
+int commodore_crt_iterate_chips(
+    const uint8_t* data, size_t data_size,
+    const commodore_crt_header_t* header,
+    commodore_crt_chip_callback_t callback,
+    void* user_data)
+{
+    if (!data || !header || !callback) return -1;
+
+    size_t offset = header->header_length;
+    int count = 0;
+
+    while (offset + 16 <= data_size) {
+        // Validate CHIP signature
+        if (memcmp(data + offset, "CHIP", 4) != 0) break;
+
+        // Parse CHIP packet header (all fields big-endian)
+        commodore_crt_chip_t chip;
+        memcpy(chip.signature, data + offset, 4);
+        chip.packet_length = format_read_be32(data + offset + 4);
+        chip.chip_type     = format_read_be16(data + offset + 8);
+        chip.bank_number   = format_read_be16(data + offset + 10);
+        chip.load_address  = format_read_be16(data + offset + 12);
+        chip.rom_size      = format_read_be16(data + offset + 14);
+
+        // Validate packet bounds
+        if (chip.packet_length < 16 || offset + chip.packet_length > data_size) {
+            printf("CRTFormat: CHIP packet %d: invalid length %u at offset %zu\n",
+                   count, chip.packet_length, offset);
+            break;
+        }
+
+        // ROM payload starts immediately after the 16-byte CHIP header
+        const uint8_t* rom_data = data + offset + 16;
+
+        // Ensure rom_size doesn't exceed the packet payload
+        uint32_t payload_size = chip.packet_length - 16;
+        if (chip.rom_size > payload_size) {
+            printf("CRTFormat: CHIP packet %d: rom_size %u > payload %u\n",
+                   count, chip.rom_size, payload_size);
+            break;
+        }
+
+        if (!callback(&chip, rom_data, user_data)) break;
+
+        count++;
+        offset += chip.packet_length;
+    }
+
+    return count;
 }
 
 // ============================================================================
