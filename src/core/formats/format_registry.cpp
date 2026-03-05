@@ -6,6 +6,7 @@
  */
 
 #include "format_registry.h"
+#include "format_handler.h"
 #include "vfs/vfs.h"
 #include <cstring>
 #include <algorithm>
@@ -90,9 +91,11 @@ bool FormatRegistry::load_file(const char* filepath, format_load_result_t* out) 
     memset(out, 0, sizeof(*out));
     out->type = FORMAT_LOAD_ERROR;
 
-    /* Determine the file extension — use VFS-aware extraction for archive paths.
-     * For "game.zip!/rom.nes", we want ".nes" not ".zip".  */
-    std::string ext_str = vfs_extension(filepath);
+    /* Determine the file extension — for archive paths "game.zip!/rom.nes"
+     * we want ".nes" not ".zip".  format_effective_extension() also infers
+     * .prg for files inside Commodore containers (D64/T64/LNX) that have
+     * no filename extension. */
+    std::string ext_str = format_effective_extension(filepath);
     const char* ext = ext_str.empty() ? nullptr : ext_str.c_str();
 
     /* Read the file once — all subsequent operations use this buffer. */

@@ -7,10 +7,6 @@
 #include "../core/config/path_discovery.h"
 #include "../core/archive_scanner.h"
 #include "../core/formats/format_handler.h"
-#include "../core/formats/d64_format.h"
-#include "../core/formats/t64_format.h"
-#include "../core/formats/prg_format.h"
-#include "../systems/commodore/petscii.h"
 #include "../core/vfs/vfs.h"
 #include "../devices/storage/drive_1541.h"
 #include <cstdio>
@@ -18,7 +14,6 @@
 #include <cstdlib>
 #include <chrono>
 #include <ctime>
-#include <unistd.h>
 
 #ifdef __has_include
 #if __has_include("ImGuiFileDialog.h")
@@ -30,129 +25,6 @@
 // ============================================================================
 // Helpers
 // ============================================================================
-
-/**
- * Given a VFS path that may pass through a D64 or T64 container, find the
- * container boundary and split the path.  Returns true when a container
- * boundary was found.
- *
- *   "/path/archive.zip!/disk.d64!/GAME.prg"
- *     → container_vfs_path = "/path/archive.zip!/disk.d64"
- *     → entry_name         = "GAME.prg"
- */
-static bool split_container_boundary(const std::string& vfs_path,
-                                      std::string& container_vfs_path,
-                                      std::string& entry_name) {
-    size_t pos = 0;
-    while ((pos = vfs_path.find("!/", pos)) != std::string::npos) {
-        std::string before = vfs_path.substr(0, pos);
-        std::string ext = vfs_extension(before.c_str());
-        for (auto& c : ext) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
-        if (ext == ".d64" || ext == ".t64") {
-            container_vfs_path = before;
-            entry_name = vfs_path.substr(pos + 2);
-            return true;
-        }
-        pos += 2;
-    }
-    return false;
-}
-
-/**
- * Load a D64/T64 container from the given VFS path, find the entry whose
- * ASCII name matches @p entry_display_name (minus the extension we appended
- * for filtering), extract it, and write it to a temp PRG file.
- * Returns the temp file path, or empty string on failure.
- */
-static std::string extract_container_entry_by_name(
-    const std::string& container_vfs_path,
-    const std::string& entry_display_name) {
-
-    size_t data_size = 0;
-    uint8_t* data = vfs_read_file(container_vfs_path.c_str(), &data_size);
-    if (!data) return {};
-
-    std::string ext = vfs_extension(container_vfs_path.c_str());
-    for (auto& c : ext) c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
-
-    // Strip the type extension we appended during scanning (e.g. ".prg").
-    std::string base_name = entry_display_name;
-    {
-        size_t dot = base_name.rfind('.');
-        if (dot != std::string::npos) base_name = base_name.substr(0, dot);
-    }
-
-    uint8_t* entry_data = nullptr;
-    size_t   entry_size = 0;
-    bool ok = false;
-
-    if (ext == ".d64") {
-        commodore_d64_t d64{};
-        if (d64.open_mem(data, data_size)) {
-            commodore_d64_directory_t dir{};
-            if (d64.read_directory(&dir)) {
-                for (int i = 0; i < dir.count; ++i) {
-                    char name_buf[17]{};
-                    memcpy(name_buf, dir.entries[i].filename, 16);
-                    for (int j = 0; j < 16 && name_buf[j]; ++j)
-                        name_buf[j] = petscii_to_ascii(static_cast<uint8_t>(name_buf[j]));
-                    if (base_name == name_buf) {
-                        ok = d64.extract_file(i, &entry_data, &entry_size);
-                        break;
-                    }
-                }
-            }
-            d64.close();
-        }
-    } else if (ext == ".t64") {
-        commodore_t64_t t64{};
-        if (t64.open_mem(data, data_size)) {
-            commodore_t64_directory_t dir{};
-            if (t64.read_directory(&dir)) {
-                for (int i = 0; i < dir.count; ++i) {
-                    char name_buf[17]{};
-                    memcpy(name_buf, dir.entries[i].filename, 16);
-                    for (int j = 0; j < 16 && name_buf[j]; ++j)
-                        name_buf[j] = petscii_to_ascii(static_cast<uint8_t>(name_buf[j]));
-                    if (base_name == name_buf) {
-                        commodore_prg_t prg{};
-                        if (t64.extract_file(i, &prg)) {
-                            entry_size = 2 + prg.data_size;
-                            entry_data = static_cast<uint8_t*>(malloc(entry_size));
-                            if (entry_data) {
-                                entry_data[0] = static_cast<uint8_t>(prg.load_addr & 0xFF);
-                                entry_data[1] = static_cast<uint8_t>(prg.load_addr >> 8);
-                                memcpy(entry_data + 2, prg.data, prg.data_size);
-                                ok = true;
-                            }
-                            commodore_prg_free(&prg);
-                        }
-                        break;
-                    }
-                }
-            }
-            t64.close();
-        }
-    }
-
-    free(data);
-    if (!ok || !entry_data) return {};
-
-    char tmp_path[] = "/tmp/cermu_XXXXXX.prg";
-    int fd = mkstemps(tmp_path, 4);
-    if (fd < 0) { free(entry_data); return {}; }
-
-    ssize_t written = write(fd, entry_data, entry_size);
-    close(fd);
-    free(entry_data);
-
-    if (written < 0 || static_cast<size_t>(written) != entry_size) {
-        unlink(tmp_path);
-        return {};
-    }
-
-    return tmp_path;
-}
 
 // ============================================================================
 // Constructor / Destructor
@@ -369,33 +241,21 @@ void SystemGUI::render_frame() {
                 std::string filePathName = cermu::FileDialogInstance()->GetFilePathName();
                 printf("User selected file: %s\n", filePathName.c_str());
 
-                // Save the last selected file path for next time
-                last_file_path_ = filePathName;
+                // Save the dialog's current directory for next time.
+                std::string currentPath = cermu::FileDialogInstance()->GetCurrentPath();
+                if (!currentPath.empty()) {
+                    last_file_path_ = currentPath;
+                }
 
-                // =============================================================
                 // Translate the dialog path to a VFS path.  Archives and
                 // containers are navigated as virtual folders inside the
                 // dialog, so the selected path may pass through one or
-                // more archive boundaries.
-                // =============================================================
+                // more archive boundaries (e.g. .zip → .d64 → .prg).
+                // The format layer's format_read_entire_file() handles
+                // container extraction transparently.
                 std::string vfs_path = VfsFileSystem::to_vfs_path(filePathName);
                 printf("VFS path: %s\n", vfs_path.c_str());
-
-                // If the VFS path passes through a D64/T64 container, we need
-                // to extract the entry to a temp file before loading.
-                std::string container_path, entry_name;
-                if (split_container_boundary(vfs_path, container_path, entry_name)) {
-                    std::string tmp = extract_container_entry_by_name(container_path, entry_name);
-                    if (!tmp.empty()) {
-                        load_selected_file(tmp, filePathName.c_str());
-                        unlink(tmp.c_str());
-                    } else {
-                        printf("Failed to extract entry from container\n");
-                    }
-                } else {
-                    // Regular file (possibly inside a VFS archive) — load directly.
-                    load_selected_file(vfs_path);
-                }
+                load_selected_file(vfs_path);
             } else {
                 // User canceled via Cancel button
                 std::string currentPath = cermu::FileDialogInstance()->GetCurrentPath();
@@ -1080,6 +940,9 @@ void SystemGUI::switch_system(const char* system_name, int memory_option, int re
     
     printf("Switching to system: %s (memory=%d, region=%d)\n", system_name, memory_option, region_option);
     
+    // Reset remembered dialog directory so it defaults to the new system's data folder
+    last_file_path_.clear();
+    
     // Teardown current system
     teardown_current_system();
     
@@ -1236,12 +1099,9 @@ void SystemGUI::open_file_dialog(const char* dialog_key, const char* title) {
     std::string default_filename;
     
     if (!last_file_path_.empty()) {
-        // Find the last path separator
-        size_t last_sep = last_file_path_.find_last_of("/\\");
-        if (last_sep != std::string::npos) {
-            default_path = last_file_path_.substr(0, last_sep);
-            default_filename = last_file_path_.substr(last_sep + 1);
-        }
+        // last_file_path_ stores the dialog's current directory from the
+        // previous session — use it directly as the starting path.
+        default_path = last_file_path_;
     } else if (system_) {
         // Default to the system-specific data folder (where ROMs live)
         const char* short_name = system_->get_descriptor().short_name;
