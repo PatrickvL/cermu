@@ -125,4 +125,35 @@ private:
     static bool is_active_format_ext(const std::string& ext);
 };
 
+// ---------------------------------------------------------------------------
+// realpath() shim for ImGuiFileDialog
+//
+// SetCurrentDir() calls realpath() to canonicalize the directory path.
+// Virtual paths (inside archives presented as folders by VfsFileSystem)
+// don't exist on the real filesystem, so realpath() fails and the dialog
+// silently refuses to navigate in.  This inline wrapper falls back to the
+// original path string when realpath() returns nullptr but the custom
+// IFileSystem has already confirmed the path is a valid directory.
+//
+// The macro is only active inside ImGuiFileDialog.cpp (compiled with
+// USE_CUSTOM_FILESYSTEM); it does not leak into other translation units
+// because this header is guarded by #pragma once and the define is scoped
+// to the IGFD_UNIX_ platform.
+// ---------------------------------------------------------------------------
+#if defined(_IGFD_UNIX_) && defined(USE_CUSTOM_FILESYSTEM)
+#include <climits>   // PATH_MAX
+#include <cstring>   // strncpy
+inline char* igfd_realpath_vfs(const char* path, char* resolved) {
+    char* result = realpath(path, resolved);
+    if (!result && path) {
+        // Virtual path — copy as-is so SetCurrentDir can proceed.
+        strncpy(resolved, path, PATH_MAX - 1);
+        resolved[PATH_MAX - 1] = '\0';
+        result = resolved;
+    }
+    return result;
+}
+#define realpath(p, r) igfd_realpath_vfs(p, r)
+#endif
+
 #define FILE_SYSTEM_OVERRIDE VfsFileSystem
