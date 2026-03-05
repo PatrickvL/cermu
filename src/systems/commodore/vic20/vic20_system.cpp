@@ -417,6 +417,14 @@ static SystemProbeResult vic20_probe_file(
     // --- BIN: generic binary ---
     } else if (matched_format == &BIN_FORMAT_DESCRIPTOR) {
         result.confidence = 0.3f;
+
+    // --- CRT: VIC-20 cartridge image ---
+    } else if (matched_format == &CRT_FORMAT_DESCRIPTOR) {
+        if (size >= 64 && memcmp(data, "VIC20 CARTRIDGE ", 16) == 0)
+            result.confidence = 1.0f;
+        // C64 CRT files are not ours
+        else if (size >= 64 && memcmp(data, "C64 CARTRIDGE   ", 16) == 0)
+            result.confidence = 0.0f;
     }
 
     // =================================================================
@@ -440,7 +448,8 @@ static SystemProbeResult vic20_probe_file(
 /** Formats the VIC-20 can load — used by SystemDescriptor and file dialogs. */
 static const format_descriptor_t* const vic20_formats[] = {
     &PRG_FORMAT_DESCRIPTOR, &TAP_FORMAT_DESCRIPTOR, &D64_FORMAT_DESCRIPTOR,
-    &T64_FORMAT_DESCRIPTOR, &LNX_FORMAT_DESCRIPTOR, &BIN_FORMAT_DESCRIPTOR,
+    &T64_FORMAT_DESCRIPTOR, &LNX_FORMAT_DESCRIPTOR, &CRT_FORMAT_DESCRIPTOR,
+    &BIN_FORMAT_DESCRIPTOR,
     nullptr
 };
 
@@ -897,6 +906,121 @@ void VIC20System::inject_keys(const char* str) {
         ram[vic20_constants::KBD_BUFFER_BASE + i] = static_cast<uint8_t>(str[i]);
     }
     ram[vic20_constants::KBD_BUFFER_COUNT] = static_cast<uint8_t>(len);
+}
+
+// ============================================================================
+// CRT Cartridge Loading
+// ============================================================================
+
+bool VIC20System::on_file_parsed(format_load_result_t& result,
+                                 const char* filepath) {
+    (void)filepath;
+
+    // For CRT files: set program title from the cartridge name
+    if (result.format && strcmp(result.format->name, "CRT") == 0 &&
+        result.type == FORMAT_LOAD_METADATA &&
+        result.metadata_size >= sizeof(commodore_crt_header_t)) {
+        const auto* hdr = reinterpret_cast<const commodore_crt_header_t*>(result.metadata);
+        if (hdr->name[0]) {
+            program_title_ = hdr->name;
+        }
+    }
+
+    return true;
+}
+
+/// Callback context for CRT CHIP packet loading into VIC-20 memory.
+struct vic20_crt_load_ctx {
+    vic20_memory_t* memory;
+    int chips_loaded;
+};
+
+/// CHIP packet callback — loads ROM data into the unified buffer.
+static bool vic20_crt_chip_loader(const commodore_crt_chip_t* chip,
+                                  const uint8_t* rom_data,
+                                  void* user_data) {
+    auto* ctx = static_cast<vic20_crt_load_ctx*>(user_data);
+
+    printf("VIC20: CRT CHIP bank=%u type=%u addr=$%04X size=%u\n",
+           chip->bank_number, chip->chip_type,
+           chip->load_address, chip->rom_size);
+
+    // Load ROM data into the unified buffer at the specified address
+    if (!vic20_memory_load_rom(ctx->memory, chip->load_address,
+                               rom_data, chip->rom_size)) {
+        printf("VIC20: Failed to load CHIP bank %u at $%04X\n",
+               chip->bank_number, chip->load_address);
+        return false;
+    }
+
+    ctx->chips_loaded++;
+    return true;  // Continue iterating
+}
+
+bool VIC20System::pre_apply_pending_load() {
+    if (!pending_load_.active) return false;
+
+    // Only handle CRT files
+    const auto& result = pending_load_.result;
+    if (!result.format || strcmp(result.format->name, "CRT") != 0)
+        return false;
+
+    if (result.metadata_size < sizeof(commodore_crt_header_t)) return false;
+
+    const auto* hdr = reinterpret_cast<const commodore_crt_header_t*>(result.metadata);
+
+    // Verify this is a VIC-20 CRT
+    if (commodore_crt_machine(hdr->signature) != CRT_MACHINE_VIC20) {
+        printf("VIC20: CRT file is not a VIC-20 cartridge (signature: %.16s)\n",
+               hdr->signature);
+        return false;
+    }
+
+    printf("VIC20: Loading CRT cartridge \"%s\" (hw_type=%u)\n",
+           hdr->name, hdr->hardware_type);
+
+    // Re-read the raw file to iterate CHIP packets
+    // (the format handler only stores the header as metadata)
+    size_t file_size = 0;
+    uint8_t* file_data = format_read_entire_file(
+        pending_load_.filepath.c_str(), &file_size);
+    if (!file_data) {
+        printf("VIC20: Failed to re-read CRT file: %s\n",
+               pending_load_.filepath.c_str());
+        return false;
+    }
+
+    // Enable cartridge in the memory banking system
+    memory_->cartridge_present = true;
+    vic20_bank_map_init(&memory_->cpu_bank_map, expansion_flags_, true);
+    vic20_bank_map_init_vic(&memory_->vic_bank_map, expansion_flags_);
+
+    // Iterate CHIP packets and load ROM data into the unified buffer
+    vic20_crt_load_ctx load_ctx = { memory_, 0 };
+    int chip_count = commodore_crt_iterate_chips(
+        file_data, file_size, hdr,
+        vic20_crt_chip_loader, &load_ctx);
+
+    free(file_data);
+
+    if (chip_count <= 0) {
+        printf("VIC20: No valid CHIP packets found in CRT file\n");
+        // Revert cartridge state
+        memory_->cartridge_present = false;
+        vic20_bank_map_init(&memory_->cpu_bank_map, expansion_flags_, false);
+        return false;
+    }
+
+    printf("VIC20: Loaded %d CHIP packet(s) — resetting CPU for cartridge boot\n",
+           chip_count);
+
+    // Reset the system so the CPU picks up the new RESET vector
+    // from the cartridge ROM (typically at $A000 with autostart header)
+    reset();
+
+    // Mark load as handled — skip the standard BASIC injection path
+    boot_completed_ = true;
+    return true;
 }
 
 // ============================================================================

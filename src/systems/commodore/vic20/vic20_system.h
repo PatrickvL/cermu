@@ -103,6 +103,10 @@ private:
     bool is_system_initialized() const override { return memory_ != nullptr && cpu_ != nullptr; }
     int get_iec_port_index() const override { return 1; }       // IEC Serial Bus
     int get_cassette_port_index() const override { return 2; }  // Cassette Port
+
+    // ---- CRT cartridge loading hooks ----
+    bool on_file_parsed(format_load_result_t& result, const char* filepath) override;
+    bool pre_apply_pending_load() override;
     
     // ROM loading
     bool load_roms();
