@@ -22,7 +22,7 @@
 
 #ifdef __has_include
 #if __has_include("ImGuiFileDialog.h")
-#include "ImGuiFileDialog.h"
+#include "cermu_file_dialog.h"
 #define HAS_IMGUIFILEDIALOG 1
 #endif
 #endif
@@ -348,25 +348,25 @@ void SystemGUI::render_frame() {
     // Display file dialog wrapped in our own window for the close (X) button.
     // The NoDialog flag makes Display() render content without its own Begin/End,
     // so we provide our own ImGui::Begin() with p_open to get the title-bar X.
-    if (ImGuiFileDialog::Instance()->IsOpened("ChooseFileDlgKey")) {
+    if (cermu::FileDialogInstance()->IsOpened("ChooseFileDlgKey")) {
         bool dlg_open = true;
         ImGui::SetNextWindowSizeConstraints(ImVec2(800, 450), ImVec2(FLT_MAX, FLT_MAX));
         ImGui::Begin("Choose File##ChooseFileDlgKey", &dlg_open,
                      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
-        bool result = ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey",
+        bool result = cermu::FileDialogInstance()->Display("ChooseFileDlgKey",
             ImGuiWindowFlags_NoCollapse);
         ImGui::End();
 
         if (!dlg_open) {
             // Close (X) button clicked — treat as cancel
-            std::string currentPath = ImGuiFileDialog::Instance()->GetCurrentPath();
+            std::string currentPath = cermu::FileDialogInstance()->GetCurrentPath();
             if (!currentPath.empty()) {
                 last_file_path_ = currentPath;
             }
-            ImGuiFileDialog::Instance()->Close();
+            cermu::FileDialogInstance()->Close();
         } else if (result) {
-            if (ImGuiFileDialog::Instance()->IsOk()) {
-                std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
+            if (cermu::FileDialogInstance()->IsOk()) {
+                std::string filePathName = cermu::FileDialogInstance()->GetFilePathName();
                 printf("User selected file: %s\n", filePathName.c_str());
 
                 // Save the last selected file path for next time
@@ -398,36 +398,36 @@ void SystemGUI::render_frame() {
                 }
             } else {
                 // User canceled via Cancel button
-                std::string currentPath = ImGuiFileDialog::Instance()->GetCurrentPath();
+                std::string currentPath = cermu::FileDialogInstance()->GetCurrentPath();
                 if (!currentPath.empty()) {
                     last_file_path_ = currentPath;
                 }
             }
-            ImGuiFileDialog::Instance()->Close();
+            cermu::FileDialogInstance()->Close();
         }
     }
 
     // Display drive insert disk dialog (also wrapped for close button)
-    if (ImGuiFileDialog::Instance()->IsOpened("DriveInsertDiskKey")) {
+    if (cermu::FileDialogInstance()->IsOpened("DriveInsertDiskKey")) {
         bool dlg_open = true;
         ImGui::SetNextWindowSizeConstraints(ImVec2(800, 450), ImVec2(FLT_MAX, FLT_MAX));
         ImGui::Begin("Insert Disk##DriveInsertDiskKey", &dlg_open,
                      ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
-        bool result = ImGuiFileDialog::Instance()->Display("DriveInsertDiskKey",
+        bool result = cermu::FileDialogInstance()->Display("DriveInsertDiskKey",
             ImGuiWindowFlags_NoCollapse);
         ImGui::End();
 
         if (!dlg_open) {
             // Close (X) button clicked — treat as cancel
-            std::string currentPath = ImGuiFileDialog::Instance()->GetCurrentPath();
+            std::string currentPath = cermu::FileDialogInstance()->GetCurrentPath();
             if (!currentPath.empty()) {
                 last_file_path_ = currentPath;
             }
             pending_drive_insert_ = nullptr;
-            ImGuiFileDialog::Instance()->Close();
+            cermu::FileDialogInstance()->Close();
         } else if (result) {
-            if (ImGuiFileDialog::Instance()->IsOk() && pending_drive_insert_) {
-                std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
+            if (cermu::FileDialogInstance()->IsOk() && pending_drive_insert_) {
+                std::string filePathName = cermu::FileDialogInstance()->GetFilePathName();
                 printf("Drive insert: user selected file: %s\n", filePathName.c_str());
                 last_file_path_ = filePathName;
 
@@ -441,13 +441,13 @@ void SystemGUI::render_frame() {
                 }
             } else {
                 // User canceled
-                std::string currentPath = ImGuiFileDialog::Instance()->GetCurrentPath();
+                std::string currentPath = cermu::FileDialogInstance()->GetCurrentPath();
                 if (!currentPath.empty()) {
                     last_file_path_ = currentPath;
                 }
             }
             pending_drive_insert_ = nullptr;
-            ImGuiFileDialog::Instance()->Close();
+            cermu::FileDialogInstance()->Close();
         }
     }
 
@@ -1266,7 +1266,7 @@ void SystemGUI::open_file_dialog(const char* dialog_key, const char* title) {
     config.fileName = default_filename;
     config.flags = ImGuiFileDialogFlags_CaseInsensitiveExtentionFiltering
                  | ImGuiFileDialogFlags_NoDialog;
-    ImGuiFileDialog::Instance()->OpenDialog(dialog_key, title, filter_str.c_str(), config);
+    cermu::FileDialogInstance()->OpenDialog(dialog_key, title, filter_str.c_str(), config);
 #else
     (void)dialog_key;
     (void)title;

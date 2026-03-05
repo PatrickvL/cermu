@@ -233,6 +233,12 @@ if(BUILD_GUI)
         target_include_directories(ImGuiFileDialog PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src/gui
         )
+
+        # cermu customizations: VFS integration
+        target_compile_definitions(ImGuiFileDialog PRIVATE
+            USE_CUSTOM_FILESYSTEM
+            CUSTOM_FILESYSTEM_INCLUDE="vfs_file_system.h"
+        )
         
         # Link ImGuiFileDialog with ImGui
         target_link_libraries(ImGuiFileDialog imgui)
