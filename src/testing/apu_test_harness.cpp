@@ -46,7 +46,7 @@ void write_reg(harness_t* h, uint16_t addr, uint8_t value) {
 uint8_t read_status(harness_t* h) {
     bus_state_t bs = 0;
     bs = h->apu->read(0x4015, bs);
-    return FAM65XX_GET_DATA(bs);
+    return BUS_GET_DATA(bs);
 }
 
 void clock_cycles(harness_t* h, uint32_t n) {

@@ -9,7 +9,7 @@
 
 #include "fam65xx_processor_traits.hpp"
 #include "fam65xx_types.h" // For bus_state_t
-#include "nes6502.h"       // For nes6502_apu::APU class
+#include "../../sound/nes_apu.h"  // For nes6502_apu::APU class
 #include "../../core/ioport.h" // For io_port<Mask> and io_port_state
 #include <cstdint>
 #include <cstdio>          // For printf in debug output

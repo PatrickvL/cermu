@@ -8,7 +8,7 @@
 // =============================================================================
 
 #include "vicii_test_harness.h"
-#include "../systems/c64/c64_kernal_patches.h"
+#include "../systems/commodore/c64/c64_kernal_patches.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>

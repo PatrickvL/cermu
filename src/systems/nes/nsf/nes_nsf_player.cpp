@@ -19,7 +19,7 @@
 
 #include "nes_nsf_player.h"
 #include "../cartridge/mappers/mapper_nsf.h"
-#include "../screen/nes_screen_utils.h"
+#include "../nes_screen_utils.h"
 #include "../nes_system.h"
 #include "asm6510.h"
 #include <cstdio>

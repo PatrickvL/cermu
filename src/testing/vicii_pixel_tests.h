@@ -15,7 +15,7 @@
 // This catches bugs where registers read back correctly but rendering is wrong.
 // =============================================================================
 
-#include "../systems/c64/c64_system.h"
+#include "../systems/commodore/c64/c64_system.h"
 #include "../core/emulated_system.h"
 #include <cstdint>
 

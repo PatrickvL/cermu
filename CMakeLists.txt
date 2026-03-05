@@ -156,6 +156,7 @@ endif()
 # LIBARCHIVE include dirs added because os_archive.cpp needs <archive.h>.
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/input
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/fam65xx
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/input
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/io
@@ -163,7 +164,8 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/memory
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/sound
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/video
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/systems/c64
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/systems/commodore/c64
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/systems/commodore
     ${CMAKE_CURRENT_SOURCE_DIR}/src/main
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui
     ${SDL2_INCLUDE_DIRS}
@@ -250,7 +252,7 @@ set(CORE_SOURCES
     src/core/chip_layout.cpp
     src/core/pin_labels.cpp
     src/core/emulated_system.cpp
-    src/core/stb_impl.cpp
+    src/utils/stb_impl.cpp
     src/core/system_registry.cpp
     src/core/framebuffer_renderer.cpp
     src/core/text_terminal.cpp
@@ -287,10 +289,12 @@ set(CHIP_SOURCES
 )
 # Always include other chip sources
 list(APPEND CHIP_SOURCES
-    # Input
+    # Input chips
     src/chip/input/commodore_keyboard.cpp
-    src/chip/input/keyboard_mapper.cpp
-    src/chip/input/emu_key_sdl_map.cpp
+
+    # Input pipeline (host input abstractions)
+    src/core/input/keyboard_mapper.cpp
+    src/core/input/emu_key_sdl_map.cpp
 
     # I/O
     src/chip/io/mos6526.cpp
@@ -324,41 +328,37 @@ list(APPEND CHIP_SOURCES
 # System sources
 set(SYSTEM_SOURCES
     # C64 system
-    src/systems/c64/c64_bus.cpp
-    src/systems/c64/c64_chips.cpp
-    src/systems/c64/c64_config.cpp
-    src/systems/c64/c64_test_loader.cpp
-    src/systems/c64/c64_banking_verify.cpp
-    src/systems/c64/c64_test_framework.cpp
-    src/systems/c64/c64_screenshot.cpp
-    src/systems/c64/c64_system.cpp
-    src/systems/c64/c64_kernal_patches.cpp
-    src/systems/c64/c64_screen_utils.cpp
-    src/systems/c64/c64_sid_player.cpp
-    src/systems/c64/c64_keyboard_matrix.cpp
+    src/systems/commodore/c64/c64_bus.cpp
+    src/systems/commodore/c64/c64_chips.cpp
+    src/systems/commodore/c64/c64_config.cpp
+    src/systems/commodore/c64/c64_system.cpp
+    src/systems/commodore/c64/c64_kernal_patches.cpp
+    src/systems/commodore/c64/c64_screen_utils.cpp
+    src/systems/commodore/c64/c64_sid_player.cpp
+    src/systems/commodore/c64/c64_keyboard_matrix.cpp
     
     # CHIP-8 system
     src/systems/chip8/chip8_system.cpp
     
     # VIC-20 system (clean CHIP-8-style implementation)
-    src/systems/vic20/vic20_system.cpp
-    src/systems/vic20/vic20_keyboard_matrix.cpp
-    src/systems/vic20/vic20_memory.cpp
+    src/systems/commodore/vic20/vic20_system.cpp
+    src/systems/commodore/vic20/vic20_keyboard_matrix.cpp
+    src/systems/commodore/vic20/vic20_memory.cpp
     
     # Commodore shared base class (keyboard mapper, config, speed control)
     src/systems/commodore/commodore_system.cpp
     
     # NES system (clean EmulatedSystem implementation)
     src/systems/nes/nes_system.cpp
-    src/systems/nes/ppu/nes_ppu.cpp
+    src/chip/video/nes_ppu/nes_ppu.cpp
     src/systems/nes/bus/nes_bus.cpp
     src/systems/nes/cartridge/nes_cartridge.cpp
-    src/systems/nes/screen/nes_screen_utils.cpp
+    src/systems/nes/nes_screen_utils.cpp
     src/systems/nes/nsf/nes_nsf_player.cpp
     
     # Commodore 264 series (C16/C116/Plus4 — TED 7360 family)
-    src/systems/c16/c16_system.cpp
-    src/systems/c16/c16_keyboard_matrix.cpp
+    src/systems/commodore/c16/c16_system.cpp
+    src/systems/commodore/c16/c16_keyboard_matrix.cpp
     
     # Apple 1 system (clean EmulatedSystem implementation)
     src/systems/apple1/apple1_system.cpp
@@ -368,6 +368,9 @@ set(SYSTEM_SOURCES
 set(TESTING_SOURCES
     src/testing/vicii_test_harness.cpp
     src/testing/vicii_pixel_tests.cpp
+    src/testing/c64_test_framework.cpp
+    src/testing/c64_test_loader.cpp
+    src/testing/c64_screenshot.cpp
 )
 
 # Core utility sources (generic functionality)
@@ -386,12 +389,12 @@ set(CORE_UTIL_SOURCES
     src/core/formats/sid_format.cpp
     src/core/formats/nsf_format.cpp
     src/core/formats/ines_format.cpp
-    src/core/formats/commodore_load_helpers.cpp
+    src/systems/commodore/commodore_load_helpers.cpp
     src/core/os/os_filesystem.cpp
     src/core/os/os_archive.cpp
     src/core/vfs/vfs.cpp
-    src/core/encoding/petscii.cpp
-    src/core/analysis/basic_parser.cpp
+    src/systems/commodore/petscii.cpp
+    src/systems/commodore/basic_parser.cpp
 )
 # GUI sources
 if(BUILD_GUI)
@@ -401,14 +404,14 @@ if(BUILD_GUI)
         src/chip/video/vic_ii/vicii_gui.cpp
         src/chip/video/vic/vic_gui.cpp
         src/chip/video/ted/ted7360_gui.cpp
-        src/systems/c64/c64_pla_chip.cpp
+        src/systems/commodore/c64/c64_pla_chip.cpp
         src/chip/cpu/fam65xx/fam65xx_gui.cpp
         src/chip/io/mos6526_gui.cpp
         src/chip/io/mos6522_gui.cpp
         src/chip/memory/mos2114_gui.cpp
         src/chip/sound/mos6581_gui.cpp
-        src/systems/nes/ppu/nes_ppu_gui.cpp
-        src/systems/nes/apu/nes_apu_gui.cpp
+        src/chip/sound/nes_apu_gui.cpp
+        src/chip/video/nes_ppu/nes_ppu_gui.cpp
         src/chip/input/cd4021_gui.cpp
     )
     
@@ -434,9 +437,9 @@ set(GUI_STUB_SOURCES
     src/chip/video/vic_ii/vicii_gui.cpp
     src/chip/video/vic/vic_gui.cpp
     src/chip/video/ted/ted7360_gui.cpp
-    src/systems/c64/c64_pla_chip.cpp
-    src/systems/nes/ppu/nes_ppu_gui.cpp
-    src/systems/nes/apu/nes_apu_gui.cpp
+    src/systems/commodore/c64/c64_pla_chip.cpp
+    src/chip/video/nes_ppu/nes_ppu_gui.cpp
+    src/chip/sound/nes_apu_gui.cpp
     src/chip/input/cd4021_gui.cpp
 )
 
@@ -562,10 +565,11 @@ add_subdirectory(tests)
 
 # Test runner tool
 add_executable(c64_test_runner
-    tools/c64_test_runner.cpp
+    tests/c64_test_runner.cpp
     ${CORE_SOURCES}
     ${CHIP_SOURCES}
     ${SYSTEM_SOURCES}
+    ${TESTING_SOURCES}
     ${CORE_UTIL_SOURCES}
     ${GUI_STUB_SOURCES}
 )
@@ -585,7 +589,7 @@ message(STATUS "Test runner c64_test_runner will be built")
 
 # NES test ROM validation runner
 add_executable(nes_test_runner
-    tools/nes_test_runner.cpp
+    tests/nes_test_runner.cpp
     ${CORE_SOURCES}
     ${CHIP_SOURCES}
     ${SYSTEM_SOURCES}
@@ -611,7 +615,7 @@ message(STATUS "Test runner nes_test_runner will be built")
 
 # VFS smoke test tool
 add_executable(vfs_smoke_test
-    tools/vfs_smoke_test.cpp
+    tests/vfs_smoke_test.cpp
     src/core/os/os_filesystem.cpp
     src/core/os/os_archive.cpp
     src/core/vfs/vfs.cpp
@@ -634,7 +638,7 @@ message(STATUS "VFS smoke test tool will be built")
 
 # Probe verification tool — batch tests system identification across data folders
 add_executable(probe_verify
-    tools/probe_verify.cpp
+    tests/probe_verify.cpp
     ${CORE_SOURCES}
     ${CHIP_SOURCES}
     ${SYSTEM_SOURCES}

@@ -74,7 +74,7 @@ static void win32_attach_parent_console() {
 // Systems self-register during static initialization via REGISTER_SYSTEM macro
 // We just need to ensure the system object files are linked
 #include "../systems/chip8/chip8_system.h"
-#include "../systems/c64/c64_system.h"
+#include "../systems/commodore/c64/c64_system.h"
 
 // ============================================================================
 // MAIN FUNCTION - Multi-System Emulator with Automatic Detection

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../commodore/commodore_system.h"
+#include "../commodore_system.h"
 #include "../../core/connector.h"
 #include "../../core/device_registry.h"
 #include "../../core/formats/format_handler.h"

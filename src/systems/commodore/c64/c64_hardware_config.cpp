@@ -1,5 +1,5 @@
 #include "c64_hardware_config.h"
-#include "c64_test_framework.h"
+#include "../../testing/c64_test_framework.h"
 #include <cstdio>
 #include <cstring>
 

@@ -11,7 +11,7 @@
  */
 
 // Include nes_system.h for full type definitions (Cartridge, etc.)
-#include "../nes_system.h"
+#include "../../../systems/nes/nes_system.h"
 
 // nes_ppu.h is transitively included via nes_system.h but be explicit
 #include "nes_ppu.h"

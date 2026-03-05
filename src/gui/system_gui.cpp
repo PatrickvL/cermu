@@ -10,7 +10,7 @@
 #include "../core/formats/d64_format.h"
 #include "../core/formats/t64_format.h"
 #include "../core/formats/prg_format.h"
-#include "../core/encoding/petscii.h"
+#include "../systems/commodore/petscii.h"
 #include "../core/vfs/vfs.h"
 #include "../devices/storage/drive_1541.h"
 #include <cstdio>

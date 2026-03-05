@@ -6,7 +6,7 @@
  */
 
 #include "nes_system.h"
-#include "ppu/nes_palette.h"
+#include "../../chip/video/nes_ppu/nes_palette.h"
 #include "nsf/nes_nsf_player.h"
 #include "cartridge/mappers/mapper_nsf.h"
 #include "../../core/formats/nsf_format.h"
@@ -37,7 +37,7 @@ NesProfileCounters g_nes_profile;
 namespace nes_system {
 
 // PPU implementation is now in ppu/nes_ppu.cpp
-// Palette LUT is in ppu/nes_palette.h (shared header)
+// Palette LUT is in chip/video/nes_ppu/nes_palette.h (shared header)
 // Cartridge implementation is now in cartridge/nes_cartridge.cpp
 // Mapper implementations are now in cartridge/mappers/ headers
 // MemoryBus removed in Phase 2 — dispatch is now inline in NintendoSystem::tick()

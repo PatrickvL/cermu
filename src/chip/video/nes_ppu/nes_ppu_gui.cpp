@@ -9,7 +9,7 @@
  */
 
 #include "nes_ppu.h"
-#include "../nes_system.h"
+#include "../../../systems/nes/nes_system.h"
 #include "../../../core/chip_layout.h"
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>

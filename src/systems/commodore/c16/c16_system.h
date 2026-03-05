@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../commodore/commodore_system.h"
+#include "../commodore_system.h"
 #include "../../core/system_lines.h"
 #include "../../chip/memory/memory_chip.h"
 #include "../../chip/video/ted/ted7360.h"

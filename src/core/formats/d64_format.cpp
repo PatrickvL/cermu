@@ -4,7 +4,7 @@
 
 #include "d64_format.h"
 #include "format_registry.h"
-#include "../encoding/petscii.h"
+#include "../../systems/commodore/petscii.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

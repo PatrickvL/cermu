@@ -12,7 +12,7 @@
 // (~1.2M cycles → ~8K cycles for the page-clear portion only).
 // =============================================================================
 
-#include "../systems/c64/c64_system.h"
+#include "../systems/commodore/c64/c64_system.h"
 #include <cstdint>
 #include <cstdio>
 

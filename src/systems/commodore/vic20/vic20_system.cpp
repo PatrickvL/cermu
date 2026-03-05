@@ -4,9 +4,9 @@
 #include "vic20_chips.h"
 #include "../../core/cermu.h"
 #include "../../chip/input/commodore_keyboard.h"
-#include "../../chip/input/emu_key_sdl_map.h"
+#include "../../core/input/emu_key_sdl_map.h"
 #include "vic20_keyboard_matrix.h" // VIC-20 keyboard matrix data
-#include "../../core/analysis/prg_content_analysis.h"
+#include "../prg_content_analysis.h"
 #include <cstring>
 #include <cstdio>
 #include <cctype>
@@ -40,7 +40,7 @@
 #include "../../core/formats/tap_format.h"
 #include "../../core/formats/crt_format.h"
 #include "../../core/formats/lnx_format.h"
-#include "../../core/formats/commodore_load_helpers.h"
+#include "../commodore_load_helpers.h"
 #include "../../devices/keyboard/commodore_keyboard_device.h"
 
 // ============================================================================

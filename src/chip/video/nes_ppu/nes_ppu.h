@@ -23,8 +23,8 @@
 
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
-#include "../bus/nes_bus.h"
-#include "../bus/nes_bus_signals.h"
+#include "../../../systems/nes/bus/nes_bus.h"
+#include "../../../systems/nes/bus/nes_bus_signals.h"
 #include "nes_palette.h"
 
 // Forward declarations
