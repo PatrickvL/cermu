@@ -2,7 +2,7 @@
 #include "c64_kernal_patches.h"
 #include "c64_sid_player.h"
 #include "../../chip/input/commodore_keyboard.h"
-#include "../../chip/input/emu_key_sdl_map.h"
+#include "../../core/input/emu_key_sdl_map.h"
 // gui_state_t dependency eliminated — chip debug uses base class,
 // system menu items are inlined, test binary dialog removed.
 #ifdef CERMU_HAS_GUI
@@ -16,7 +16,7 @@
 #include "../../core/formats/crt_format.h"
 #include "../../core/formats/lnx_format.h"
 #include "../../core/formats/sid_format.h"
-#include "../../core/formats/commodore_load_helpers.h"
+#include "../commodore_load_helpers.h"
 #include "../../chip/cpu/fam65xx/mos6510.h"
 // CPU (fam65xx) is a native C++ ChipBase — no separate GUI header needed
 #include "../../chip/video/vic_ii/vicii_common.h"
@@ -36,7 +36,7 @@
 #include "../../devices/storage/drive_1541.h"
 #include "../../devices/storage/datasette_1530.h"
 #include "../../devices/keyboard/commodore_keyboard_device.h"
-#include "../../core/analysis/prg_content_analysis.h"
+#include "../prg_content_analysis.h"
 #include <cstring>
 #include <cstdio>
 #include <cctype>

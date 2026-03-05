@@ -1,5 +1,5 @@
-#include "../src/systems/c64/c64_test_framework.h"
-#include "../src/systems/c64/c64_system.h"
+#include "../src/testing/c64_test_framework.h"
+#include "../src/systems/commodore/c64/c64_system.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>

@@ -6,8 +6,8 @@
  */
 
 #include "commodore_load_helpers.h"
-#include "tap_format.h"
-#include "crt_format.h"
+#include "../../core/formats/tap_format.h"
+#include "../../core/formats/crt_format.h"
 
 #include <cstdio>
 #include <cstring>

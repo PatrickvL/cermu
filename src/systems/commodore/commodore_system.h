@@ -2,9 +2,9 @@
 
 #include "../../core/emulated_system.h"
 #include "../../core/formats/format_handler.h"
-#include "../../core/formats/commodore_load_helpers.h"
+#include "commodore_load_helpers.h"
 #include "../../chip/input/commodore_keyboard.h"
-#include "../../chip/input/keyboard_mapper.h"
+#include "../../core/input/keyboard_mapper.h"
 #include <memory>
 #include <string>
 

@@ -54,7 +54,7 @@ namespace nes_constants {
 #include "../../core/formats/nsf_format.h"
 #include "cartridge/nes_mapper.h"
 #include "cartridge/nes_cartridge.h"
-#include "ppu/nes_ppu.h"
+#include "../../chip/video/nes_ppu/nes_ppu.h"
 #include "bus/nes_bus.h"
 
 // NES default bus state — derived from CPU.
@@ -64,7 +64,7 @@ namespace nes_constants {
 
 // Forward declarations — none needed; all NES types included above.
 
-// PPU class now in ppu/nes_ppu.h (included above)
+// PPU class now in chip/video/nes_ppu/nes_ppu.h (included above)
 // Cartridge class now in cartridge/nes_cartridge.h (included above)
 // Bus struct now in bus/nes_bus.h (included above)
 // MemoryBus class removed in Phase 2 — replaced by nes_bus_t + inline dispatch

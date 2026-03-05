@@ -1,7 +1,7 @@
 #include "c16_system.h"
 #include "c16_constants.h"
 #include "c16_keyboard_matrix.h"
-#include "../../chip/input/emu_key_sdl_map.h"
+#include "../../core/input/emu_key_sdl_map.h"
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
 #include "../../core/formats/format_registry.h"
@@ -11,14 +11,14 @@
 #include "../../core/formats/tap_format.h"
 #include "../../core/formats/crt_format.h"
 #include "../../core/formats/lnx_format.h"
-#include "../../core/formats/commodore_load_helpers.h"
+#include "../commodore_load_helpers.h"
 #include "../../devices/keyboard/commodore_keyboard_device.h"
 #include "../../devices/storage/drive_1541.h"
 #include "../../devices/storage/datasette_1530.h"
 // CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
 #include "../../core/chip.h"
 #include "../../chip/memory/memory_chip.h"
-#include "../../core/analysis/prg_content_analysis.h"
+#include "../prg_content_analysis.h"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -135,7 +135,7 @@ static bool is_c264_load_address(uint16_t addr) {
         || addr == 0xC000;                     // ML in upper RAM
 }
 
-// has_basic35_tokens() moved to shared utility: src/core/analysis/prg_content_analysis.h
+// has_basic35_tokens() moved to shared utility: src/systems/commodore/prg_content_analysis.h
 
 /**
  * Compute C264-series confidence from a PRG's load address and payload size.

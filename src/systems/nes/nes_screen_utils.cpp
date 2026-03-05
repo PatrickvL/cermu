@@ -7,7 +7,7 @@
  */
 
 #include "nes_screen_utils.h"
-#include "../nes_system.h"
+#include "nes_system.h"
 #include <cstring>
 #include <cstdio>
 

@@ -1,10 +1,13 @@
 #pragma once
 /*
- * nes6502.h - NES APU (Audio Processing Unit) Implementation
+ * nes_apu.h - NES APU (Audio Processing Unit) Implementation
  *
- * Contains the APU class used by the NES 6502 CPU template (RICOH_2A03Traits).
- * The APU is integrated into the CPU via the apu_mixin in fam65xx_mixins.hpp.
- * The CPU type itself is fam65xx::RICOH_2A03 defined in fam65xx.hpp.
+ * Contains the APU class (ChipBase subclass) modelling the audio subsystem
+ * integrated into the Ricoh 2A03 (NTSC) / 2A07 (PAL) CPU package.
+ * Five channels: 2 pulse, 1 triangle, 1 noise, 1 DMC (delta modulation).
+ *
+ * The CPU integrates the APU via the apu_mixin in fam65xx_mixins.hpp.
+ * GUI rendering lives in nes_apu_gui.cpp (same directory).
  */
 
 #include <array>
@@ -13,50 +16,54 @@
 
 #include <cstdint>
 
-#include "../../../core/chip.h"
-#include "../../../core/system_lines.h"
-#include "fam65xx_types.h"
+#include "../../core/chip.h"
+#include "../../core/system_lines.h"
 
 // ============================================================================
 // INTEGRATED APU IMPLEMENTATION (C++)
 // ============================================================================
 
+namespace nes6502_apu {
+
 // APU Constants
 constexpr uint32_t CPU_FREQ_NTSC = 1789773;
 constexpr uint32_t CPU_FREQ_PAL = 1662607;
 
+} // namespace nes6502_apu
+
 // Length counter lookup table
 constexpr uint8_t APU_LENGTH_TABLE[32] = {
     10, 254, 20, 2,  40, 4,  80, 6,  160, 8,  60,  10, 14, 12, 26, 14,
-    12, 16,  24, 18, 48, 20, 96, 22, 192, 24, 72,  26, 16, 28, 32, 30};
-
-// Noise period tables
-constexpr uint16_t NOISE_PERIOD_NTSC[16] = {
-    4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068};
-
-constexpr uint16_t NOISE_PERIOD_PAL[16] = {
-    4, 8, 14, 30, 60, 88, 118, 148, 188, 236, 354, 472, 708, 944, 1890, 3778};
-
-// DMC period tables
-constexpr uint16_t DMC_PERIOD_NTSC[16] = {428, 380, 340, 320, 286, 254,
-                                          226, 214, 190, 160, 142, 128,
-                                          106, 84,  72,  54};
-
-constexpr uint16_t DMC_PERIOD_PAL[16] = {398, 354, 316, 298, 276, 236, 210, 198,
-                                         176, 148, 132, 118, 98,  78,  66,  50};
-
-// Duty cycle sequences (8 steps each)
-constexpr uint8_t DUTY_TABLE[4][8] = {
-    {0, 1, 0, 0, 0, 0, 0, 0}, // 12.5%
-    {0, 1, 1, 0, 0, 0, 0, 0}, // 25%
-    {0, 1, 1, 1, 1, 0, 0, 0}, // 50%
-    {1, 0, 0, 1, 1, 1, 1, 1}  // 25% negated
+    12, 16,  24, 18, 48, 20, 96, 22, 192, 24, 72,  26, 16, 28, 32, 30,
 };
 
-// Triangle sequence (32 steps)
-constexpr uint8_t TRIANGLE_TABLE[32] = {
-    15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5,  4,  3,  2,  1,  0,
-    0,  1,  2,  3,  4,  5,  6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+// Noise channel period lookup tables
+constexpr uint16_t NOISE_PERIOD_NTSC[16] = {4,   8,   16,  32,  64,  96,
+                                            128, 160, 202, 254, 380, 508,
+                                            762, 1016, 2034, 4068};
+constexpr uint16_t NOISE_PERIOD_PAL[16] = {4,   8,   14,  30,  60,   88,
+                                           118, 148, 188, 236, 354,  472,
+                                           708, 944, 1890, 3778};
+
+// DMC channel rate lookup tables
+constexpr uint16_t DMC_PERIOD_NTSC[16] = {428, 380, 340, 320, 286, 254, 226, 214,
+                                          190, 160, 142, 128, 106,  84,  72,  54};
+constexpr uint16_t DMC_PERIOD_PAL[16] = {398, 354, 316, 298, 276, 236, 210, 198,
+                                         176, 148, 132, 118,  98,  78,  66,  50};
+
+// Duty cycle sequences for pulse channels
+constexpr uint8_t DUTY_TABLE[4][8] = {
+    {0, 0, 0, 0, 0, 0, 0, 1}, // 12.5%
+    {0, 0, 0, 0, 0, 0, 1, 1}, // 25%
+    {0, 0, 0, 0, 1, 1, 1, 1}, // 50%
+    {1, 1, 1, 1, 1, 1, 0, 0}, // 75% (negated 25%)
+};
+
+// Triangle channel waveform
+constexpr uint8_t TRIANGLE_TABLE[32] = {15, 14, 13, 12, 11, 10, 9,  8,
+                                        7,  6,  5,  4,  3,  2,  1,  0,
+                                        0,  1,  2,  3,  4,  5,  6,  7,
+                                        8,  9,  10, 11, 12, 13, 14, 15};
 
 // ============================================================================
 // Mixer lookup tables (NESdev wiki: https://www.nesdev.org/wiki/APU_Mixer)
@@ -1029,7 +1036,7 @@ public:
     }
 
     // Update bus state with current data for open bus behavior
-    FAM65XX_SET_DATA(bus_state, value);
+    BUS_SET_DATA(bus_state, value);
     return bus_state;
   }
 
@@ -1049,7 +1056,7 @@ public:
       // Reading $4015 clears frame IRQ flag
       frame.irq_flag = false;
 
-      FAM65XX_SET_DATA(bus_state, status);
+      BUS_SET_DATA(bus_state, status);
     }
     // Other addresses return open bus (previous data on bus)
 
@@ -1157,13 +1164,3 @@ public:
 };
 
 } // namespace nes6502_apu
-
-// ============================================================================
-// Convenience re-exports — include this header to get the NES CPU type
-// without pulling in fam65xx.hpp directly.
-// NOTE: fam65xx.hpp must be included separately since this header is
-// also included by fam65xx_mixins.hpp (avoid circular dependency).
-// ============================================================================
-// Usage:  #include "nes6502.h"
-//         #include "fam65xx.hpp"   // provides fam65xx::RICOH_2A03
-// Or include fam65xx.hpp first and this header for APU only.
