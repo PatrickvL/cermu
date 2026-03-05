@@ -203,3 +203,19 @@ bool os_extension_match(const char* a, const char* b) {
     }
     return *a == *b;
 }
+
+void os_normalize_path(std::string& path) {
+#ifdef _WIN32
+    for (auto& c : path) { if (c == '/') c = '\\'; }
+#else
+    for (auto& c : path) { if (c == '\\') c = '/'; }
+#endif
+}
+
+int os_mkdir_p(const std::string& dir) {
+#ifdef _WIN32
+    return system(("if not exist \"" + dir + "\" mkdir \"" + dir + "\"").c_str());
+#else
+    return system(("mkdir -p " + dir).c_str());
+#endif
+}

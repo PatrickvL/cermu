@@ -232,11 +232,22 @@ static SystemProbeResult chip8_probe_file(
             if (ok) valid++;
         }
         float ratio = total > 0 ? (float)valid / (float)total : 0.0f;
-        if (ratio >= 0.75f)
-            result.confidence = 0.50f;
-        else if (ratio >= 0.50f)
+
+        // Require the first instruction to look like CHIP-8 entry point
+        // (JP, CALL, or CLS).  This filters out 6502 ML blobs.
+        bool valid_entry = false;
+        if (size >= 2) {
+            uint8_t hi = (data[0] >> 4) & 0xF;
+            valid_entry = (hi == 0x1 || hi == 0x2 ||     // JP addr, CALL addr
+                           hi == 0x6 || hi == 0xA ||     // LD Vx,byte  LD I,addr
+                           (data[0] == 0x00 && data[1] == 0xE0));  // CLS
+        }
+
+        if (ratio >= 0.80f && valid_entry)
+            result.confidence = 0.45f;
+        else if (ratio >= 0.60f && valid_entry)
             result.confidence = 0.30f;
-        // else: too many invalid opcodes — not CHIP-8
+        // else: not convincing enough for CHIP-8
     }
 
     if (result.confidence == 0.0f) return result;

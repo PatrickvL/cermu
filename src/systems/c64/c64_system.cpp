@@ -36,7 +36,7 @@
 #include "../../devices/storage/drive_1541.h"
 #include "../../devices/storage/datasette_1530.h"
 #include "../../devices/keyboard/commodore_keyboard_device.h"
-#include "../../utils/prg_content_analysis.h"
+#include "../../core/analysis/prg_content_analysis.h"
 #include <cstring>
 #include <cstdio>
 #include <cctype>
@@ -98,23 +98,40 @@ static SystemProbeResult c64_probe_file(
 
             // Content analysis: BASIC version + MMIO references
             if (size > 6) {
-                // BASIC 3.5 tokens are exclusive to C16/Plus4 — not a C64 program
-                if ((load_addr == c64_constants::BASIC_START || load_addr == 0x1001)
-                    && has_basic35_tokens(data + 2, size - 2))
-                    result.confidence *= 0.30f;
+                const uint8_t* payload = data + 2;
+                size_t payload_len = size - 2;
+                float basic_conf = basic_program_confidence(payload, payload_len, load_addr);
 
-                // Scan for system-specific I/O access patterns in code
-                uint32_t mmio = scan_6502_mmio_references(data + 2, size - 2);
-                int c64_hits   = count_mmio_flags(mmio & MMIO_ANY_C64);
-                int vic20_hits = count_mmio_flags(mmio & MMIO_ANY_VIC20);
-                int c16_hits   = count_mmio_flags(mmio & MMIO_ANY_C16);
+                if (basic_conf >= 0.5f) {
+                    // Looks like BASIC — penalise if BASIC 3.5 tokens found
+                    if ((load_addr == c64_constants::BASIC_START || load_addr == 0x1001)
+                        && has_basic35_tokens(payload, payload_len))
+                        result.confidence *= 0.30f;  // BASIC 3.5 → not C64
+                    // Note: we intentionally do NOT scan SYS-stub ML for MMIO
+                    // here.  The C64 I/O ranges ($D400-$DFFF SID/CIA) are too
+                    // broad (~2.3 % of the address space) — data segments after
+                    // the SYS entry point create abundant false positives.
+                } else {
+                    // Pure machine language — scan entire payload for MMIO
+                    uint32_t mmio = scan_6502_mmio_references(payload, payload_len);
+                    int c64_hits   = count_mmio_flags(mmio & MMIO_ANY_C64);
+                    int c64_strong = count_mmio_flags(mmio & MMIO_C64_STRONG);
+                    int vic20_hits = count_mmio_flags(mmio & MMIO_ANY_VIC20);
+                    int c16_hits   = count_mmio_flags(mmio & MMIO_ANY_C16);
 
-                if (c64_hits >= 2)
-                    result.confidence = std::max(result.confidence, 0.90f);
-                if (vic20_hits >= 2 && c64_hits == 0)
-                    result.confidence *= 0.50f;
-                if (c16_hits >= 1 && c64_hits == 0)
-                    result.confidence *= 0.40f;
+                    // Require at least two "strong" C64 hits (2 of SID/CIA1/CIA2)
+                    // and 3+ total C64 ranges.  Fewer is not enough: SID alone
+                    // ($D400-$D7FF = 1.6 %) plus one CIA is readily hit by random
+                    // data in long binaries interpreted as code.
+                    // Suppress if TED ($FF00-$FF1F) references also present —
+                    // those addresses are C16-specific, C64-impossible (kernal ROM).
+                    if (c64_hits >= 3 && c64_strong >= 2 && c16_hits == 0)
+                        result.confidence = std::max(result.confidence, 0.91f);
+                    else if (vic20_hits >= 2 && c64_hits == 0)
+                        result.confidence *= 0.50f;
+                    else if (c16_hits >= 1 && c64_hits == 0)
+                        result.confidence *= 0.50f;
+                }
             }
         }
 
