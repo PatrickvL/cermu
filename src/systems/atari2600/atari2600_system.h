@@ -19,6 +19,7 @@
 #include "../../chip/cpu/fam65xx/mos6507.h"
 #include "../../chip/video/tia.h"
 #include "../../chip/io/pia6532.h"
+#include "mappers/a2600_mapper.h"
 #include "atari2600_constants.h"
 #include <cstdint>
 #include <memory>
@@ -86,10 +87,10 @@ private:
     // CARTRIDGE ROM
     // ========================================================================
 
-    std::vector<uint8_t> cart_rom_;     // Cartridge ROM data
-    uint32_t cart_size_ = 0;            // Actual ROM size in bytes
-    uint8_t  bank_select_ = 0;         // Current bank for bank-switched carts (F8, F6, etc.)
-    uint8_t  bank_count_ = 1;          // Number of 4KB banks
+    std::vector<uint8_t> cart_rom_;         // Cartridge ROM data
+    uint32_t cart_size_ = 0;                // Actual ROM size in bytes
+    std::unique_ptr<A2600Mapper> mapper_;   // Bank-switching mapper
+    bool mapper_snoop_ = false;             // Cached: mapper needs bus_snoop() calls
 
     // ========================================================================
     // SYSTEM STATE
@@ -130,7 +131,5 @@ private:
     // Read joystick signals from connector ports into RIOT/TIA
     void update_joystick_state();
 
-    // Bank switching detection / hotspot handling
-    uint8_t cart_read(uint16_t addr);
-    void    cart_write(uint16_t addr, uint8_t data);
+
 };

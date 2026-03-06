@@ -15,12 +15,12 @@
  *   A12=0, A7=1, A9=1    → RIOT I/O ($0280-$02FF)
  *   A12=1                 → Cart ROM ($1000-$1FFF)
  *
- * Bank switching (F8 scheme for 8KB carts):
- *   Access $1FF8 → select bank 0
- *   Access $1FF9 → select bank 1
+ * Bank switching is delegated to A2600Mapper subclasses, auto-detected
+ * by ROM size and content analysis in a2600_mapper_factory.
  */
 
 #include "atari2600_system.h"
+#include "mappers/a2600_mapper_factory.h"
 #include "../../core/system_registry.h"
 #include "../../core/connector.h"
 #include "../../core/vfs/vfs.h"
@@ -94,7 +94,9 @@ static SystemProbeResult atari2600_probe_file(
     } else if (strcmp(ext, ".bin") == 0 || strcmp(ext, ".BIN") == 0) {
         // .bin is generic — check size for typical cart sizes
         if (size == 2048 || size == 4096 || size == 8192 ||
-            size == 16384 || size == 32768) {
+            size == 12288 || size == 16384 || size == 32768 ||
+            size == 65536 || size == 131072 || size == 262144 ||
+            size == 524288) {
             result.confidence = 0.3f;  // Could be 2600, but ambiguous
         }
     }
@@ -222,8 +224,9 @@ void Atari2600System::reset() {
     frame_complete_ = false;
     in_vsync_ = false;
 
-    // Re-setup bank switching for cart
-    bank_select_ = 0;
+    // Reset mapper to initial bank state
+    if (mapper_)
+        mapper_->reset();
 }
 
 // ============================================================================
@@ -313,8 +316,8 @@ bus_state_t Atari2600System::mem_tick(bus_state_t s) {
         uint8_t data = 0x00;
 
         if (addr & 0x1000) {
-            // A12=1: Cartridge ROM
-            data = cart_read(addr);
+            // A12=1: Cartridge ROM (through mapper)
+            data = mapper_->read(addr & 0x0FFF);
         } else if (addr & 0x0080) {
             if (addr & 0x0200) {
                 // A12=0, A7=1, A9=1: RIOT I/O registers
@@ -329,13 +332,18 @@ bus_state_t Atari2600System::mem_tick(bus_state_t s) {
         }
 
         BUS_SET_DATA(s, data);
+
+        // Bus snooping for mappers that monitor accesses outside cart space
+        // (e.g. 3F watches TIA writes, FE watches stack at $01FE)
+        if (mapper_snoop_)
+            mapper_->bus_snoop(addr, data, false);
     } else {
         // ---- WRITE CYCLE ----
         uint8_t data = BUS_GET_DATA(s);
 
         if (addr & 0x1000) {
             // A12=1: Cartridge write (bank switching hotspots)
-            cart_write(addr, data);
+            mapper_->write(addr & 0x0FFF, data);
         } else if (addr & 0x0080) {
             if (addr & 0x0200) {
                 // RIOT I/O registers
@@ -348,68 +356,13 @@ bus_state_t Atari2600System::mem_tick(bus_state_t s) {
             // TIA write registers
             tia_.write(addr, data);
         }
+
+        // Bus snooping on write cycles
+        if (mapper_snoop_)
+            mapper_->bus_snoop(addr, data, true);
     }
 
     return s;
-}
-
-// ============================================================================
-// CARTRIDGE ACCESS
-// ============================================================================
-
-uint8_t Atari2600System::cart_read(uint16_t addr) {
-    uint16_t offset = addr & 0x0FFF;  // Offset within 4KB window
-
-    // Check for bank switching hotspots (F8 scheme: 8KB, 2 banks)
-    if (bank_count_ > 1) {
-        // F8 bank switching: $1FF8 = bank 0, $1FF9 = bank 1
-        if (offset == 0x0FF8) {
-            bank_select_ = 0;
-        } else if (offset == 0x0FF9 && bank_count_ >= 2) {
-            bank_select_ = 1;
-        }
-        // F6 bank switching: $1FF6-$1FF9 for 16KB (4 banks)
-        else if (bank_count_ >= 4) {
-            if (offset >= 0x0FF6 && offset <= 0x0FF9) {
-                bank_select_ = static_cast<uint8_t>(offset - 0x0FF6);
-            }
-        }
-    }
-
-    // Calculate ROM offset with bank selection
-    uint32_t rom_offset;
-    if (cart_size_ <= 2048) {
-        // 2KB cart: mirror into 4KB window
-        rom_offset = offset & 0x07FF;
-    } else if (cart_size_ <= 4096) {
-        // 4KB cart: direct mapping
-        rom_offset = offset;
-    } else {
-        // Banked cart: offset into selected bank
-        rom_offset = (static_cast<uint32_t>(bank_select_) * 0x1000) + offset;
-    }
-
-    if (rom_offset < cart_rom_.size()) {
-        return cart_rom_[rom_offset];
-    }
-    return 0xFF;
-}
-
-void Atari2600System::cart_write(uint16_t addr, uint8_t /*data*/) {
-    uint16_t offset = addr & 0x0FFF;
-
-    // Bank switching hotspots (same as read side — reads also trigger)
-    if (bank_count_ > 1) {
-        if (offset == 0x0FF8) {
-            bank_select_ = 0;
-        } else if (offset == 0x0FF9 && bank_count_ >= 2) {
-            bank_select_ = 1;
-        } else if (bank_count_ >= 4) {
-            if (offset >= 0x0FF6 && offset <= 0x0FF9) {
-                bank_select_ = static_cast<uint8_t>(offset - 0x0FF6);
-            }
-        }
-    }
 }
 
 // ============================================================================
@@ -434,7 +387,7 @@ bool Atari2600System::load_file(const char* filepath) {
         return false;
     }
 
-    if (file_size == 0 || file_size > 65536) {
+    if (file_size == 0 || file_size > 524288) {
         printf("Atari2600: Invalid file size: %zu bytes\n", file_size);
         free(file_data);
         return false;
@@ -445,19 +398,12 @@ bool Atari2600System::load_file(const char* filepath) {
 
     cart_size_ = static_cast<uint32_t>(file_size);
 
-    // Determine bank switching scheme based on size
-    if (cart_size_ <= 4096) {
-        bank_count_ = 1;
-    } else if (cart_size_ <= 8192) {
-        bank_count_ = 2;     // F8 bank switching
-    } else if (cart_size_ <= 16384) {
-        bank_count_ = 4;     // F6 bank switching
-    } else {
-        bank_count_ = static_cast<uint8_t>(cart_size_ / 4096);
-    }
-    bank_select_ = bank_count_ - 1;  // Start in last bank (where reset vector is)
+    // Auto-detect banking scheme and create mapper
+    mapper_ = a2600_mapper_factory::create(cart_rom_.data(), cart_size_);
+    mapper_snoop_ = mapper_->needs_bus_snoop();
 
-    printf("Atari2600: Loaded %u bytes, %d bank(s)\n", cart_size_, bank_count_);
+    printf("Atari2600: Loaded %u bytes, mapper=%s, %d bank(s)\n",
+           cart_size_, mapper_->name(), mapper_->bank_count());
 
     // Set program title from filename
     const char* name = strrchr(filepath, '/');
@@ -665,9 +611,12 @@ void Atari2600System::render_configuration_ui() {
     ImGui::Separator();
     ImGui::Text("Cartridge: %s",
         system_ready_ ? program_title_.c_str() : "No cartridge loaded");
-    if (system_ready_) {
-        ImGui::Text("ROM Size: %u bytes (%d bank%s)",
-            cart_size_, bank_count_, bank_count_ > 1 ? "s" : "");
+    if (system_ready_ && mapper_) {
+        ImGui::Text("ROM Size: %u bytes", cart_size_);
+        ImGui::Text("Mapper: %s (%d bank%s, current: %d)",
+            mapper_->name(), mapper_->bank_count(),
+            mapper_->bank_count() > 1 ? "s" : "",
+            mapper_->current_bank());
     }
     ImGui::Separator();
     ImGui::Text("Console Switches:");
