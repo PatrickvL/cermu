@@ -80,6 +80,91 @@ static ChipLayout& get_mc6845_layout() {
     return layout;
 }
 
+// Helper: derive MC6845 pin states from bus snapshot + chip internals
+static std::vector<PinSignalState> get_mc6845_pin_states(
+        mc6845_t* crtc, const ChipLayout* layout, bus_state_t bus_state) {
+    if (!crtc || !layout) return {};
+
+    // Generic bus-derived states (data bus, power, clock, R/W, /RES)
+    auto ps = populate_pin_states_from_bus(*layout, bus_state);
+
+    // --- LPSTB (pin 3, idx 2) — light pen strobe, input ---
+    ps[2].signal_level    = crtc->light_pen_latched;
+    ps[2].drive_direction = false;
+    ps[2].high_impedance  = false;
+    ps[2].signal_valid    = true;
+
+    // --- MA0-MA13 (pins 4-17, indices 3-16) — CRTC-generated output addresses ---
+    // These are OUTPUT address lines from the CRTC, NOT bus address inputs.
+    // Override the generic bus-address handler with the actual linear_address.
+    for (int i = 0; i < 14; i++) {
+        ps[3 + i].signal_level    = (crtc->linear_address >> i) & 1;
+        ps[3 + i].drive_direction = true;  // output
+        ps[3 + i].high_impedance  = false;
+        ps[3 + i].signal_valid    = true;
+    }
+
+    // --- RA0-RA4 (pins 18-20 = idx 17-19, pins 21-22 = idx 20-21) ---
+    // Row address outputs from scanline counter
+    for (int i = 0; i < 5; i++) {
+        int idx;
+        if (i < 3) idx = 17 + i;      // RA0-RA2: pins 18-20, indices 17-19
+        else       idx = 17 + i + 1;  // RA3-RA4: pins 21-22, indices 20-21
+        // Wait — DIP-40 indices: pin N has index N-1.
+        // RA0=pin18→idx17, RA1=pin19→idx18, RA2=pin20→idx19
+        // RA3=pin21→idx20, RA4=pin22→idx21
+        idx = 17 + i; // RA0 at idx 17 .. RA4 at idx 21
+        ps[idx].signal_level    = (crtc->v_scanline_counter >> i) & 1;
+        ps[idx].drive_direction = true;
+        ps[idx].high_impedance  = false;
+        ps[idx].signal_valid    = true;
+    }
+
+    // --- CURSOR (pin 31, idx 30) — cursor output ---
+    ps[30].signal_level    = crtc->cursor_visible;
+    ps[30].drive_direction = true;
+    ps[30].high_impedance  = false;
+    ps[30].signal_valid    = true;
+
+    // --- DE (pin 32, idx 31) — display enable output ---
+    ps[31].signal_level    = crtc->h_display_active && crtc->v_display_active;
+    ps[31].drive_direction = true;
+    ps[31].high_impedance  = false;
+    ps[31].signal_valid    = true;
+
+    // --- HSYNC (pin 33, idx 32) — horizontal sync output ---
+    ps[32].signal_level    = crtc->h_sync_active;
+    ps[32].drive_direction = true;
+    ps[32].high_impedance  = false;
+    ps[32].signal_valid    = true;
+
+    // --- VSYNC (pin 34, idx 33) — vertical sync output ---
+    ps[33].signal_level    = crtc->v_sync_active;
+    ps[33].drive_direction = true;
+    ps[33].high_impedance  = false;
+    ps[33].signal_valid    = true;
+
+    // --- ENABLE (pin 36, idx 35) — clock enable input ---
+    ps[35].signal_level    = true; // typically connected to system clock
+    ps[35].drive_direction = false;
+    ps[35].high_impedance  = false;
+    ps[35].signal_valid    = true;
+
+    // --- RS (pin 37, idx 36) — register select input ---
+    ps[36].signal_level    = BUS_GET_ADDR(bus_state) & 1;
+    ps[36].drive_direction = false;
+    ps[36].high_impedance  = false;
+    ps[36].signal_valid    = true;
+
+    // --- /CS (pin 38, idx 37) — chip select (active low) input ---
+    ps[37].signal_level    = true;  // default: deselected
+    ps[37].drive_direction = false;
+    ps[37].high_impedance  = false;
+    ps[37].signal_valid    = true;
+
+    return ps;
+}
+
 // ============================================================================
 // Register names for debug display
 // ============================================================================
@@ -106,7 +191,7 @@ bool mc6845_t::has_debug_content()  const { return true; }
 void mc6845_t::render_layout_content() {
 #ifdef CERMU_HAS_GUI
     ChipLayout& layout = get_mc6845_layout();
-    std::vector<PinSignalState> pin_states;
+    std::vector<PinSignalState> pin_states = get_mc6845_pin_states(this, &layout, bus_snapshot_);
     render_chip_layout(layout, pin_states, "MC6845");
 #endif
 }

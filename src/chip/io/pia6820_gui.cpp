@@ -80,6 +80,111 @@ static ChipLayout& get_pia6820_layout() {
     return layout;
 }
 
+// Helper: derive PIA6820 pin states from bus snapshot + chip internals
+static std::vector<PinSignalState> get_pia6820_pin_states(
+        pia6820_t* pia, const ChipLayout* layout, bus_state_t bus_state) {
+    if (!pia || !layout) return {};
+
+    // Generic bus-derived states (data bus, power, R/W, /RES)
+    auto ps = populate_pin_states_from_bus(*layout, bus_state);
+
+    // --- PA0-PA7 (pins 2-9, indices 1-8) — Port A I/O ---
+    for (int i = 0; i < 8; i++) {
+        bool is_output = (pia->port_a_direction >> i) & 1;
+        bool data_val  = (pia->port_a_data >> i) & 1;
+        ps[1 + i].signal_level    = data_val;
+        ps[1 + i].drive_direction = is_output;
+        ps[1 + i].high_impedance  = false;
+        ps[1 + i].signal_valid    = true;
+    }
+
+    // --- PB0-PB7 (pins 10-17, indices 9-16) — Port B I/O ---
+    for (int i = 0; i < 8; i++) {
+        bool is_output = (pia->port_b_direction >> i) & 1;
+        bool data_val  = (pia->port_b_data >> i) & 1;
+        ps[9 + i].signal_level    = data_val;
+        ps[9 + i].drive_direction = is_output;
+        ps[9 + i].high_impedance  = false;
+        ps[9 + i].signal_valid    = true;
+    }
+
+    // --- CB1 (pin 18, idx 17) — always input ---
+    ps[17].signal_level    = pia->cb1_state;
+    ps[17].drive_direction = false;
+    ps[17].high_impedance  = false;
+    ps[17].signal_valid    = true;
+
+    // --- CB2 (pin 19, idx 18) — direction depends on control register bit 5 ---
+    bool cb2_is_output = (pia->port_b_control >> 5) & 1;
+    ps[18].signal_level    = pia->cb2_state;
+    ps[18].drive_direction = cb2_is_output;
+    ps[18].high_impedance  = false;
+    ps[18].signal_valid    = true;
+
+    // --- CS0 (pin 22, idx 21) — chip select ---
+    ps[21].signal_level    = true;
+    ps[21].drive_direction = false;
+    ps[21].high_impedance  = false;
+    ps[21].signal_valid    = true;
+
+    // --- /CS2 (pin 23, idx 22) — chip select (active low) ---
+    ps[22].signal_level    = false; // asserted (selected)
+    ps[22].drive_direction = false;
+    ps[22].high_impedance  = false;
+    ps[22].signal_valid    = true;
+
+    // --- CS1 (pin 24, idx 23) — chip select ---
+    ps[23].signal_level    = true;
+    ps[23].drive_direction = false;
+    ps[23].high_impedance  = false;
+    ps[23].signal_valid    = true;
+
+    // --- ENABLE (pin 25, idx 24) — clock enable input ---
+    ps[24].signal_level    = true;
+    ps[24].drive_direction = false;
+    ps[24].high_impedance  = false;
+    ps[24].signal_valid    = true;
+
+    // --- RS0 (pin 36, idx 35), RS1 (pin 35, idx 34) — register select ---
+    ps[35].signal_level    = BUS_GET_ADDR(bus_state) & 1;        // RS0 = A0
+    ps[35].drive_direction = false;
+    ps[35].high_impedance  = false;
+    ps[35].signal_valid    = true;
+    ps[34].signal_level    = (BUS_GET_ADDR(bus_state) >> 1) & 1; // RS1 = A1
+    ps[34].drive_direction = false;
+    ps[34].high_impedance  = false;
+    ps[34].signal_valid    = true;
+
+    // --- /IRQB (pin 37, idx 36) — active low, open-drain ---
+    bool irqb_asserted = pia->irq_b1 || pia->irq_b2;
+    ps[36].signal_level    = !irqb_asserted;
+    ps[36].drive_direction = true;
+    ps[36].high_impedance  = !irqb_asserted;
+    ps[36].signal_valid    = true;
+
+    // --- /IRQA (pin 38, idx 37) — active low, open-drain ---
+    bool irqa_asserted = pia->irq_a1 || pia->irq_a2;
+    ps[37].signal_level    = !irqa_asserted;
+    ps[37].drive_direction = true;
+    ps[37].high_impedance  = !irqa_asserted;
+    ps[37].signal_valid    = true;
+
+    // --- CA2 (pin 39, idx 38) — direction depends on control register bit 5 ---
+    bool ca2_is_output = (pia->port_a_control >> 5) & 1;
+    ps[38].signal_level    = pia->ca2_state;
+    ps[38].drive_direction = ca2_is_output;
+    ps[38].high_impedance  = false;
+    ps[38].signal_valid    = true;
+
+    // --- CA1 (pin 40, idx 39) — always input ---
+    ps[39].signal_level    = pia->ca1_state;
+    ps[39].drive_direction = false;
+    ps[39].high_impedance  = false;
+    ps[39].signal_valid    = true;
+
+    return ps;
+}
+
 // ============================================================================
 // ChipBase GUI Overrides
 // ============================================================================
@@ -90,7 +195,7 @@ bool pia6820_t::has_debug_content()  const { return true; }
 void pia6820_t::render_layout_content() {
 #ifdef CERMU_HAS_GUI
     ChipLayout& layout = get_pia6820_layout();
-    std::vector<PinSignalState> pin_states;
+    std::vector<PinSignalState> pin_states = get_pia6820_pin_states(this, &layout, bus_snapshot_);
     render_chip_layout(layout, pin_states, "PIA");
 #endif
 }
