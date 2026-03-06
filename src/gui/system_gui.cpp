@@ -765,33 +765,34 @@ void SystemGUI::render_settings() {
     }
     
     if (system_) {
-        std::unique_lock<std::mutex> lock(emu_mutex_, std::try_to_lock);
-        if (lock.owns_lock()) {
-            ImGui::Text("System: %s", system_->get_descriptor().name);
-            ImGui::Text("Description: %s", system_->get_descriptor().description);
-            ImGui::Separator();
-            
-            // Hardware information
-            const auto& traits = system_->get_hardware_traits();
-            ImGui::Text("Display: %dx%d", 
-                       traits.display.visible_width,
-                       traits.display.visible_height);
-            ImGui::Text("Format: %s",
-                       traits.display.format == FramebufferFormat::MONOCHROME_1 ? "1-bit Monochrome" :
-                       traits.display.format == FramebufferFormat::PALETTE_INDEXED_8 ? "8-bit Indexed" :
-                       traits.display.format == FramebufferFormat::RGBA8888 ? "RGBA8888" : "Unknown");
-            ImGui::Text("Palette Size: %d colors", (int)traits.display.palette_size);
-            ImGui::Separator();
-            
-            // System-specific configuration UI
-            ImGui::Text("System Configuration:");
-            system_->render_configuration_ui();
+        // Blocking lock — the emu thread releases emu_mutex_ between frames
+        // (and rapidly during its idle spin loop), so this typically acquires
+        // within microseconds.  A try_to_lock here caused the window content
+        // to flash on/off every frame.
+        std::lock_guard<std::mutex> lock(emu_mutex_);
 
-            // Generic peripheral connector UI (available for all systems)
-            system_->render_peripheral_connector_ui();
-        } else {
-            ImGui::TextDisabled("(emulation busy)");
-        }
+        ImGui::Text("System: %s", system_->get_descriptor().name);
+        ImGui::Text("Description: %s", system_->get_descriptor().description);
+        ImGui::Separator();
+        
+        // Hardware information
+        const auto& traits = system_->get_hardware_traits();
+        ImGui::Text("Display: %dx%d", 
+                   traits.display.visible_width,
+                   traits.display.visible_height);
+        ImGui::Text("Format: %s",
+                   traits.display.format == FramebufferFormat::MONOCHROME_1 ? "1-bit Monochrome" :
+                   traits.display.format == FramebufferFormat::PALETTE_INDEXED_8 ? "8-bit Indexed" :
+                   traits.display.format == FramebufferFormat::RGBA8888 ? "RGBA8888" : "Unknown");
+        ImGui::Text("Palette Size: %d colors", (int)traits.display.palette_size);
+        ImGui::Separator();
+        
+        // System-specific configuration UI
+        ImGui::Text("System Configuration:");
+        system_->render_configuration_ui();
+
+        // Generic peripheral connector UI (available for all systems)
+        system_->render_peripheral_connector_ui();
     }
     
     ImGui::End();
