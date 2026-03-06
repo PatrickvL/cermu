@@ -131,10 +131,7 @@ Apple1System::Apple1System()
     pia_.user_data = this;
     pia_.on_port_a_read = pia_keyboard_read;  // Port A: keyboard input
     pia_.on_port_b_write = pia_display_write; // Port B: display output
-    
-    // Configure PIA direction: Port A = input, Port B = output (Apple 1 convention)
-    pia_.port_a_direction = 0x00;  // All inputs (keyboard)
-    pia_.port_b_direction = 0xFF;  // All outputs (display)
+    // DDR left at 0x00 — Woz Monitor configures PIA during boot.
 }
 
 Apple1System::~Apple1System() {
@@ -237,8 +234,8 @@ bool Apple1System::initialize() {
     pia_.user_data = this;
     pia_.on_port_a_read = pia_keyboard_read;
     pia_.on_port_b_write = pia_display_write;
-    pia_.port_a_direction = 0x00;  // Port A = input (keyboard)
-    pia_.port_b_direction = 0xFF;  // Port B = output (display)
+    // DDR left at 0x00 after init — the Woz Monitor sets DDRB = $7F
+    // via STY $D012 during its boot sequence (control bit 2 = 0 → DDR mode).
     
     setup_connector_ports();
 
@@ -266,6 +263,21 @@ void Apple1System::shutdown() {
 
 void Apple1System::reset() {
     printf("Apple1: Resetting system\n");
+    
+    // Reset PIA to power-on state (control regs = 0, DDR mode selected)
+    pia_.reset();
+    pia_.user_data = this;
+    pia_.on_port_a_read = pia_keyboard_read;
+    pia_.on_port_b_write = pia_display_write;
+    
+    // Clear terminal
+    if (terminal_) {
+        terminal_->clear(0xFF000000);
+        cursor_col_ = 0;
+        cursor_row_ = 0;
+        terminal_->set_cursor(0, 0);
+    }
+    
     if (cpu_) {
         cpu_->reset(0);
     }
@@ -466,6 +478,7 @@ void Apple1System::tick_cpu() {
     if (cpu_) {
         pins_ = cpu_->tick<MOS6502::Phase::PHI2>(pins_);
         pins_ = mem_tick(pins_);
+        pins_ = cpu_->tick<MOS6502::Phase::PHI1>(pins_);
         cpu_->sample_nmi_pin(pins_);
     }
 }
@@ -488,7 +501,7 @@ uint8_t Apple1System::pia_keyboard_read(void* user_data) {
 // PIA display write callback (Port B)
 void Apple1System::pia_display_write(void* user_data, uint8_t data) {
     Apple1System* sys = static_cast<Apple1System*>(user_data);
-    sys->display_char(data & 0x7F);  // 7-bit ASCII
+    sys->display_char(data & 0x7F);
 }
 
 // Display character on terminal
@@ -537,7 +550,10 @@ void Apple1System::set_keyboard_data(uint8_t key_code) {
     // Apple 1 convention: Set bit 7 (strobe) and key code in bits 0-6
     pia_.set_port_a_input(0x80 | (key_code & 0x7F));
     
-    // Trigger CA1 to signal key press (for interrupt-driven input)
+    // Simulate MM5740 keyboard encoder strobe pulse:
+    // Ensure CA1 is low first so the rising edge is always detected,
+    // even if a previous key press left CA1 high.
+    pia_.set_ca1(false);
     pia_.set_ca1(true);
 }
 
@@ -622,34 +638,37 @@ bool Apple1System::load_roms() {
     return monitor_ok;  // Only monitor ROM is required
 }
 
-// Convert Signetics 2513 character ROM (5x7 in 8 bytes) to 8x8 font
+// Convert Signetics 2513 character ROM to 8x8 font for TextTerminal
 void Apple1System::convert_2513_to_8x8_font(const uint8_t* char_rom, uint8_t* font_8x8) {
-    // The 2513 ROM contains 64 characters (uppercase ASCII 0x20-0x5F)
-    // Each character is 8 bytes, with 5x7 pixel data in the upper bits
-    
+    // The 2513N ROM contains 64 characters, 8 bytes each (512 bytes total).
+    // Pixel data is 6 bits wide in bits 5-0 of each byte (bit 5 = leftmost).
+    //
+    // Character mapping in the ROM:
+    //   ROM index  0-31  →  ASCII 0x40-0x5F  (@, A-Z, [, \, ], ^, _)
+    //   ROM index 32-63  →  ASCII 0x20-0x3F  (space, !, ", ... 9, :, ;, ... ?)
+    //
+    // The TextTerminal renderer uses (0x80 >> px) to test pixels from left,
+    // so we left-align the 6-bit data by shifting << 2.
+
+    // Clear entire font table first
+    memset(font_8x8, 0, 256 * 8);
+
     for (int ch = 0; ch < 64; ch++) {
         int src_offset = ch * 8;
-        int dst_offset = (0x20 + ch) * 8;  // Map to ASCII 0x20-0x5F
-        
-        // Copy and shift the 5-bit wide characters to left-align in 8-bit bytes
-        for (int row = 0; row < 7; row++) {
-            // 2513 stores 5-bit data in upper 5 bits, shift left by 1 for better centering
-            font_8x8[dst_offset + row] = (char_rom[src_offset + row] >> 1) & 0xF8;
+
+        // Map ROM index to ASCII code
+        int ascii;
+        if (ch < 32) {
+            ascii = 0x40 + ch;   // @, A-Z, [, \, ], ^, _
+        } else {
+            ascii = 0x20 + (ch - 32);  // space through ?
         }
-        font_8x8[dst_offset + 7] = 0x00;  // Bottom row blank
-    }
-    
-    // Fill in control characters (0x00-0x1F) with blanks or simple patterns
-    for (int ch = 0; ch < 0x20; ch++) {
+
+        int dst_offset = ascii * 8;
+
+        // Copy all 8 rows, left-aligning the 6-bit pixel data into bits 7-2
         for (int row = 0; row < 8; row++) {
-            font_8x8[ch * 8 + row] = 0x00;
-        }
-    }
-    
-    // Fill in extended ASCII (0x60-0xFF) by duplicating or leaving blank
-    for (int ch = 0x60; ch < 256; ch++) {
-        for (int row = 0; row < 8; row++) {
-            font_8x8[ch * 8 + row] = 0x00;
+            font_8x8[dst_offset + row] = (char_rom[src_offset + row] & 0x3F) << 2;
         }
     }
 }

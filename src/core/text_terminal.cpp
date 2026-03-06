@@ -185,6 +185,7 @@ TextTerminal::TextTerminal(int cols, int rows, int char_width, int char_height)
     , fg_color_(0xFF33FF33)  // Green (Apple 1 style)
     , bg_color_(0xFF000000)  // Black
     , font_data_(nullptr)
+    , custom_font_(nullptr)
 {
     // Allocate text buffer
     text_buffer_ = new char[cols_ * rows_];
@@ -201,6 +202,7 @@ TextTerminal::TextTerminal(int cols, int rows, int char_width, int char_height)
 
 TextTerminal::~TextTerminal() {
     delete[] text_buffer_;
+    delete[] custom_font_;
     if (fg_color_buffer_) delete[] fg_color_buffer_;
     if (bg_color_buffer_) delete[] bg_color_buffer_;
 }
@@ -352,7 +354,12 @@ const uint8_t* TextTerminal::get_default_font() {
 }
 
 void TextTerminal::set_font(const uint8_t* font_data) {
-    font_data_ = font_data;
+    static constexpr size_t FONT_SIZE = 256 * 8;
+    if (!custom_font_) {
+        custom_font_ = new uint8_t[FONT_SIZE];
+    }
+    memcpy(custom_font_, font_data, FONT_SIZE);
+    font_data_ = custom_font_;
 }
 
 void TextTerminal::render_char(uint32_t* framebuffer, int fb_width, int x, int y,
