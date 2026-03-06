@@ -125,6 +125,22 @@ public:
     // Hardware traits (compile-time variant-specific)
     static HardwareTraits create_hardware_traits();
 
+    // --- Test / debug accessors ---
+    CSG7501*     cpu()       { return cpu_; }
+    ted7360_t*   ted()       { return ted_; }
+    MemoryChip*  ram()       { return ram_; }
+    const CSG7501*    cpu() const { return cpu_; }
+    const ted7360_t*  ted() const { return ted_; }
+    const MemoryChip* ram() const { return ram_; }
+
+    // Debug cart ($FDCF) — VICE convention for Plus4 test programs.
+    // When enabled, writes to $FDCF are captured instead of being silently ignored.
+    // $00 = test passed, $FF = test failed (matching C64 $D7FF convention).
+    void    enable_debug_cart(bool enable) { debug_cart_enabled_ = enable; }
+    bool    debug_cart_written() const     { return debug_cart_written_; }
+    uint8_t debug_cart_value() const       { return debug_cart_value_; }
+    void    clear_debug_cart()             { debug_cart_written_ = false; debug_cart_value_ = 0; }
+
     // File probe — returns confidence + optimal configuration for this TED variant
     static SystemProbeResult probe_file_static(
         const format_descriptor_t* matched_format,
@@ -148,6 +164,11 @@ private:
 
     // PIO2 ($FD30) — keyboard row select (active-low)
     uint8_t pio2_kbd_ = 0xFF;            // All rows deselected on reset
+
+    // Debug cart state (enabled by test framework, captures writes to $FDCF)
+    bool    debug_cart_enabled_ = false;
+    bool    debug_cart_written_ = false;
+    uint8_t debug_cart_value_   = 0;
 
     // System state
     bool initialized_;
