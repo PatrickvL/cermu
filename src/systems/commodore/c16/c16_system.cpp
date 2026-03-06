@@ -686,8 +686,22 @@ void Commodore264System<V>::reset() {
         keyboard_->reset();
     }
     
-    // Reset deferred loading state — boot_completed_ stays true so that
-    // subsequent loads skip the VARTAB zero-page check (see is_basic_ready)
+    // Clear the memory locations that is_basic_ready() checks, so stale
+    // values from the previous session don't cause premature detection.
+    // KERNAL boot will set these properly: RAMTAS clears zero page
+    // (including $2D), the vector copy writes $0302/$0303, and NEW sets
+    // VARTAB ($2D) to TXTTAB+2.
+    if (ram_) {
+        ram_->data()[0x0302] = 0;
+        ram_->data()[0x0303] = 0;
+        ram_->data()[0x002D] = 0;
+        // Clear the keyboard buffer count so is_basic_ready() doesn't
+        // get stuck waiting for a stale non-zero $EF left by a
+        // previously running program.
+        ram_->data()[c16_constants::KBD_BUFFER_COUNT] = 0;
+    }
+
+    // Reset deferred loading state
     clear_pending_load();
     
     total_cycles_ = 0;
