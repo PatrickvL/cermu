@@ -56,6 +56,77 @@ static ChipLayout& get_cd4021_layout() {
     return layout;
 }
 
+// Helper: derive CD4021 pin states from shift register internals.
+// The CD4021 is not on the main system bus — it lives in the controller.
+// bus_state_t is unused; all signals come from the shift register state.
+static std::vector<PinSignalState> get_cd4021_pin_states(
+        CD4021* chip, const ChipLayout* layout) {
+    if (!chip || !layout) return {};
+
+    // Start with generic handler (sets POWER, CLOCK, NC correctly)
+    auto ps = populate_pin_states_from_bus(*layout, 0);
+
+    uint8_t sr = chip->get_shift_register();
+
+    // --- Parallel inputs P0-P7 (directly from shift register latched state) ---
+    // P5 (pin 1, idx 0)
+    ps[0].signal_level = (sr >> 5) & 1; ps[0].drive_direction = false;
+    ps[0].high_impedance = false;       ps[0].signal_valid = true;
+    // P6 (pin 2, idx 1)
+    ps[1].signal_level = (sr >> 6) & 1; ps[1].drive_direction = false;
+    ps[1].high_impedance = false;       ps[1].signal_valid = true;
+    // P1 (pin 4, idx 3)
+    ps[3].signal_level = (sr >> 1) & 1; ps[3].drive_direction = false;
+    ps[3].high_impedance = false;       ps[3].signal_valid = true;
+    // P0 (pin 5, idx 4)
+    ps[4].signal_level = (sr >> 0) & 1; ps[4].drive_direction = false;
+    ps[4].high_impedance = false;       ps[4].signal_valid = true;
+    // P7 (pin 6, idx 5)
+    ps[5].signal_level = (sr >> 7) & 1; ps[5].drive_direction = false;
+    ps[5].high_impedance = false;       ps[5].signal_valid = true;
+    // P4 (pin 13, idx 12)
+    ps[12].signal_level = (sr >> 4) & 1; ps[12].drive_direction = false;
+    ps[12].high_impedance = false;       ps[12].signal_valid = true;
+    // P3 (pin 12, idx 11)
+    ps[11].signal_level = (sr >> 3) & 1; ps[11].drive_direction = false;
+    ps[11].high_impedance = false;       ps[11].signal_valid = true;
+    // P2 (pin 10, idx 9)
+    ps[9].signal_level = (sr >> 2) & 1; ps[9].drive_direction = false;
+    ps[9].high_impedance = false;       ps[9].signal_valid = true;
+
+    // --- Q7 serial output (pin 3, idx 2) — MSB of shift register ---
+    ps[2].signal_level    = (sr >> 7) & 1;
+    ps[2].drive_direction = true;
+    ps[2].high_impedance  = false;
+    ps[2].signal_valid    = true;
+
+    // --- /Q7 complement output (pin 7, idx 6) ---
+    ps[6].signal_level    = !((sr >> 7) & 1);
+    ps[6].drive_direction = true;
+    ps[6].high_impedance  = false;
+    ps[6].signal_valid    = true;
+
+    // --- Q6 stage 6 output (pin 9, idx 8) ---
+    ps[8].signal_level    = (sr >> 6) & 1;
+    ps[8].drive_direction = true;
+    ps[8].high_impedance  = false;
+    ps[8].signal_valid    = true;
+
+    // --- DS serial data input (pin 11, idx 10) — grounded in NES ---
+    ps[10].signal_level    = false;
+    ps[10].drive_direction = false;
+    ps[10].high_impedance  = false;
+    ps[10].signal_valid    = true;
+
+    // --- P/S latch control (pin 15, idx 14) — input ---
+    ps[14].signal_level    = false; // LOW = serial mode (default readout state)
+    ps[14].drive_direction = false;
+    ps[14].high_impedance  = false;
+    ps[14].signal_valid    = true;
+
+    return ps;
+}
+
 // ============================================================================
 // ChipBase GUI Overrides
 // ============================================================================
@@ -66,7 +137,7 @@ bool CD4021::has_debug_content()  const { return true; }
 void CD4021::render_layout_content() {
 #ifdef CERMU_HAS_GUI
     ChipLayout& layout = get_cd4021_layout();
-    std::vector<PinSignalState> pin_states; // Empty — no live signal mapping yet
+    std::vector<PinSignalState> pin_states = get_cd4021_pin_states(this, &layout);
     render_chip_layout(layout, pin_states, "CD4021");
 #endif
 }
