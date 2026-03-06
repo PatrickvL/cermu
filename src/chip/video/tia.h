@@ -163,6 +163,12 @@ struct tia_t : public ChipBase {
     // WSYNC — halt CPU until end of scanline
     bool wsync_pending = false;
 
+    // Visible row tracking for framebuffer mapping.
+    // Increments only during non-VBLANK scanlines, so the first visible
+    // line maps to framebuffer row 0 regardless of VBLANK duration.
+    int visible_row = -1;        // -1 = not yet in visible area
+    bool prev_vblank = false;    // Edge detection for VBLANK→visible transition
+
     // ========================================================================
     // GRAPHICS REGISTERS
     // ========================================================================
