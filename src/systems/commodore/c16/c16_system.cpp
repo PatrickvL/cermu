@@ -702,7 +702,7 @@ void Commodore264System<V>::reset() {
     }
 
     // Reset deferred loading state
-    clear_pending_load();
+    reset_load_state();
     
     total_cycles_ = 0;
 }

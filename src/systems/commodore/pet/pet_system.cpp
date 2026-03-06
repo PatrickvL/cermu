@@ -380,6 +380,9 @@ void PETSystem::reset() {
 
     bus_.state = bus_.default_state;
     total_cycles_ = 0;
+
+    // Reset deferred loading state
+    reset_load_state();
 }
 
 // ============================================================================

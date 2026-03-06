@@ -191,6 +191,11 @@ void CommodoreSystem::clear_pending_load() {
     }
 }
 
+void CommodoreSystem::reset_load_state() {
+    boot_completed_ = false;
+    clear_pending_load();
+}
+
 void CommodoreSystem::apply_pending_load() {
     if (!pending_load_.active || !is_system_initialized()) return;
 

@@ -762,8 +762,9 @@ void VIC20System::reset() {
     bus_.state = bus_.default_state;
     
     total_cycles_ = 0;
-    // Don't clear pending_load_ here — reset() is called by the GUI
-    // *before* load_file(), so clearing would lose the deferred load.
+
+    // Reset deferred loading state
+    reset_load_state();
 }
 
 // ============================================================================
