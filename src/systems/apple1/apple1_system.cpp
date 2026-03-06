@@ -12,6 +12,7 @@
 
 // Include ROM loader
 #include "../../core/storage/rom_loader.h"
+#include "../../core/config/path_discovery.h"
 #include "../../core/system_registry.h"
 
 // ============================================================================
@@ -570,8 +571,13 @@ void Apple1System::clear_keyboard_strobe() {
 }
 
 bool Apple1System::load_roms() {
-    // Try to load Apple 1 ROMs from standard locations
-    const char* rom_root = "data/apple1/roms";  // Default ROM path
+    // Discover ROM root using the same upward-search from executable/CWD
+    // that other systems (C64, C16) use — avoids CWD dependency.
+    char rom_root[1024];
+    if (!system_config_discover_rom_root("apple1", rom_root, sizeof(rom_root))) {
+        printf("Apple1: Could not find ROM root folder\n");
+        return false;
+    }
     
     // Load Woz Monitor ROM (256 bytes at $FF00-$FFFF)
     const char* monitor_files[] = {
