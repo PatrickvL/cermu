@@ -75,6 +75,7 @@ enum class PinLabel {
     _ML,          // /ML — memory lock (65C02/65C816)
     _NMI,         // /NMI — non-maskable interrupt
     _OE,          // /OE — output enable
+    _Q7,          // /Q7 — complement output (shift register)
     _RAS,         // /RAS — row address strobe
     _RD,          // /RD — read strobe
     _RES,         // /RES — reset
@@ -133,6 +134,7 @@ enum class PinLabel {
     LPSTB,        // Light Pen STroBe (MC6845 CRTC)
     MUX,          // Address multiplexer
     OE,           // Output Enable (active-high form)
+    P_S,          // Parallel/Serial control (shift register latch)
     RAS,          // Row Address Strobe (active-high form)
     RD,           // Read strobe (active-high form)
     RDY,          // Ready input/output
@@ -205,6 +207,8 @@ enum class PinLabel {
     OSC1,         // Oscillator output 1
     OSC2,         // Oscillator output 2
     OSC3,         // Oscillator output 3
+    SND1,         // Sound output 1 (Ricoh 2A03)
+    SND2,         // Sound output 2 (Ricoh 2A03)
     SOUND,        // Sound output (VIC-I/II composite audio)
 
     // CIA/Timer chip pins
@@ -270,6 +274,9 @@ enum class PinLabel {
     OUT0,         // Controller strobe 0 (2A03)
     OUT1,         // Controller strobe 1 (2A03)
     OUT2,         // Controller strobe 2 (2A03)
+
+    // Shift register pins
+    DS,           // Data Serial input (shift register)
 
     // Logic chip pins (must remain sequential within sub-groups)
     G,            // Gate/Enable

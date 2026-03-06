@@ -33,13 +33,13 @@ inline ChipLayout create_ricoh_2a03_apu_layout() {
 
     // Left column  (pins 1-20, top to bottom)
     // Right column (pins 40-21, top to bottom)
-    PIN_LR(layout,  1, AD1,    VCC,   40); // mux addr / +5V
-    PIN_LR(layout,  2, AD2,    PHI2,  39); // mux addr / clock out
+    PIN_LR(layout,  1, AD1,    VCC,   40); // audio delta-sigma 1 / +5V
+    PIN_LR(layout,  2, AD2,    CLK,   39); // audio delta-sigma 2 / master clock in
     PIN_LR(layout,  3, _RES,   _NMI,  38); // reset / NMI
     PIN_LR(layout,  4, A0,     _IRQ,  37); // addr lo / interrupt
     PIN_LR(layout,  5, A1,     M2,    36); // / CPU clock out
-    PIN_LR(layout,  6, A2,     SOUND, 35); // / SND1
-    PIN_LR(layout,  7, A3,     SOUND, 34); // / SND2
+    PIN_LR(layout,  6, A2,     SND1,  35); // / sound output 1
+    PIN_LR(layout,  7, A3,     SND2,  34); // / sound output 2
     PIN_LR(layout,  8, A4,     IN0,   33); // / controller 1
     PIN_LR(layout,  9, A5,     IN1,   32); // / controller 2
     PIN_LR(layout, 10, A6,     D0,    31); // / data lo
