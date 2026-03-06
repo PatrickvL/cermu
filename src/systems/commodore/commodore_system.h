@@ -131,6 +131,9 @@ protected:
     /// Release any active pending load and reset state.
     void clear_pending_load();
 
+    /// Reset all deferred-loading state.  Called from derived reset().
+    void reset_load_state();
+
 public:
     CommodoreSystem() = default;
     ~CommodoreSystem() override = default;

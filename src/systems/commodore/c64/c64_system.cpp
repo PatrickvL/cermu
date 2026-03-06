@@ -583,8 +583,7 @@ void C64System::shutdown() {
 
 void C64System::reset() {
     // Clear any pending deferred load (will be re-set by the next load_file call)
-    clear_pending_load();
-    boot_completed_ = false;
+    reset_load_state();
     sid_player_active_ = false;
     active_sid_data_.clear();
     if (initialized_) {
