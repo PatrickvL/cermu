@@ -304,11 +304,15 @@ void SystemGUI::render_frame() {
         } else if (result) {
             if (cermu::FileDialogInstance()->IsOk() && pending_drive_insert_) {
                 std::string filePathName = cermu::FileDialogInstance()->GetFilePathName();
+                std::string vfs_path = VfsFileSystem::to_vfs_path(filePathName);
                 printf("Drive insert: user selected file: %s\n", filePathName.c_str());
+                if (vfs_path != filePathName) {
+                    printf("Drive insert VFS path: %s\n", vfs_path.c_str());
+                }
                 last_file_path_ = filePathName;
 
                 std::lock_guard<std::mutex> lock(emu_mutex_);
-                if (pending_drive_insert_->insert_disk(filePathName.c_str())) {
+                if (pending_drive_insert_->insert_disk(vfs_path.c_str())) {
                     printf("Disk inserted successfully into drive %d: %s\n",
                            pending_drive_insert_->get_device_number(), filePathName.c_str());
                 } else {
