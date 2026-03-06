@@ -26,9 +26,11 @@
 #include "mappers/mapper_015_100in1.h"
 #include "mappers/mapper_vrc24.h"
 #include "mappers/mapper_028_action53.h"
+#include "mappers/mapper_030_unrom512.h"
 #include "mappers/mapper_032_irem_g101.h"
 #include "mappers/mapper_033_taito_tc0190.h"
 #include "mappers/mapper_034_bnrom.h"
+#include "mappers/mapper_038_crime_busters.h"
 #include "mappers/mapper_041_caltron.h"
 #include "mappers/mapper_064_rambo1.h"
 #include "mappers/mapper_065_irem_h3001.h"
@@ -41,6 +43,7 @@
 #include "mappers/mapper_072_jaleco_jf17.h"
 #include "mappers/mapper_073_vrc3.h"
 #include "mappers/mapper_075_vrc1.h"
+#include "mappers/mapper_077_irem_early.h"
 #include "mappers/mapper_078_jaleco_jf16.h"
 #include "mappers/mapper_079_nina.h"
 #include "mappers/mapper_086_jaleco_jf13.h"
@@ -54,6 +57,7 @@
 #include "mappers/mapper_118_txsrom.h"
 #include "mappers/mapper_119_tqrom.h"
 #include "mappers/mapper_133_sachen.h"
+#include "mappers/mapper_140_jaleco_jf11.h"
 #include "mappers/mapper_151_vrc1_vs.h"
 #include "mappers/mapper_152_bandai.h"
 #include "mappers/mapper_156_dis_ic32.h"
@@ -70,6 +74,7 @@
 #include "mappers/mapper_230_multicart22.h"
 #include "mappers/mapper_231_multicart20.h"
 #include "mappers/mapper_232_camerica_bf9096.h"
+#include "mappers/mapper_240_multicart.h"
 #include "mappers/mapper_245_waixing.h"
 
 #include <memory>
@@ -116,12 +121,14 @@ struct MapperFactory {
             // missing: 27 — VRC4 (pirate variant, rare)
             case 28:  return std::make_unique<Mapper028>(prg_banks, chr_banks);
             // missing: 29 — Sealie Computing (homebrew, rare)
-            // missing: 30 — UNROM 512 (homebrew flash cart)
+            case 30:  return std::make_unique<Mapper030>(prg_banks, chr_banks);
             // missing: 31 — NSF-only (homebrew)
             case 32:  return std::make_unique<Mapper032>(prg_banks, chr_banks);
             case 33:  return std::make_unique<Mapper033>(prg_banks, chr_banks);
             case 34:  return std::make_unique<Mapper034>(prg_banks, chr_banks);
-            // missing: 35–40 — rare/pirate/FDS-conversion mappers
+            // missing: 35–37 — rare/pirate/FDS-conversion mappers
+            case 38:  return std::make_unique<Mapper038>(prg_banks, chr_banks);
+            // missing: 39–40 — rare/pirate/FDS-conversion mappers
             case 41:  return std::make_unique<Mapper041>(prg_banks, chr_banks);
             // missing: 42–63 — misc rare/pirate mappers (42=FDS hack, 46/47=multicarts, 48=Taito TC0690)
             case 64:  return std::make_unique<Mapper064>(prg_banks, chr_banks);
@@ -137,7 +144,7 @@ struct MapperFactory {
             // missing: 74 — Waixing (MMC3 variant, CHR-RAM pages, Chinese pirate)
             case 75:  return std::make_unique<Mapper075>(prg_banks, chr_banks);
             // missing: 76 — Namco 3446 (NAMCOT-3446, rare)
-            // missing: 77 — Irem (Napoleon Senki only)
+            case 77:  return std::make_unique<Mapper077>(prg_banks, chr_banks);
             case 78:  return std::make_unique<Mapper078>(prg_banks, chr_banks);
             case 79:  return std::make_unique<Mapper079>(prg_banks, chr_banks);
             // missing: 80 — Taito X1-005 (PRG-RAM + CHR banking, moderate)
@@ -159,7 +166,9 @@ struct MapperFactory {
             case 119: return std::make_unique<Mapper119>(prg_banks, chr_banks);
             // missing: 120–132 — misc rare/pirate mappers
             case 133: return std::make_unique<Mapper133>(prg_banks, chr_banks);
-            // missing: 134–150 — misc rare/pirate mappers (140=Jaleco JF-11, 148/149=Sachen)
+            // missing: 134–139 — misc rare/pirate mappers
+            case 140: return std::make_unique<Mapper140>(prg_banks, chr_banks);
+            // missing: 141–150 — misc rare/pirate mappers (148/149=Sachen)
             case 151: return std::make_unique<Mapper151>(prg_banks, chr_banks);
             case 152: return std::make_unique<Mapper152>(prg_banks, chr_banks);
             // missing: 153–155 — misc (154=Namco 3453)
@@ -184,7 +193,9 @@ struct MapperFactory {
             case 230: return std::make_unique<Mapper230>(prg_banks, chr_banks);
             case 231: return std::make_unique<Mapper231>(prg_banks, chr_banks);
             case 232: return std::make_unique<Mapper232>(prg_banks, chr_banks);
-            // missing: 233–244 — misc multicarts/rare (234=Maxi 15, 240–243=various simple/pirate)
+            // missing: 233–239 — misc multicarts/rare (234=Maxi 15)
+            case 240: return std::make_unique<Mapper240>(prg_banks, chr_banks);
+            // missing: 241–244 — misc multicarts/pirate
             case 245: return std::make_unique<Mapper245>(prg_banks, chr_banks);
             // missing: 246–255 — misc rare
             default:
