@@ -46,39 +46,41 @@ inline ChipLayout create_ricoh_2a03_layout() {
   ChipLayout layout = create_dip40_layout();
 
   layout.markings = {
-      "RP2A03", // part_number
-      "Ricoh",  // manufacturer
+      "RP2A03",   // part_number
+      "Ricoh",    // manufacturer
       {},  // package_variant
       {},  // date_code
       {},  // lot_number
       {},  // custom_text
-      true,     // show_part_number
-      true,     // show_manufacturer
-      false,    // show_package_variant
-      false     // show_date_code
+      true,       // show_part_number
+      true,       // show_manufacturer
+      false,      // show_package_variant
+      false       // show_date_code
   };
 
-  // Pin assignments for Ricoh 2A03 (40-pin DIP)
-  PIN_LR(layout, 1, VSS, VSS, 21)
-  PIN_LR(layout, 2, RDY, A12, 22)    // Ready (tied high in some revisions)
-  PIN_LR(layout, 3, PHI1, A13, 23)
-  PIN_LR(layout, 4, _IRQ, A14, 24)   // Interrupt Request
-  PIN_LR(layout, 5, NC, A15, 25)
-  PIN_LR(layout, 6, _NMI, D7, 26)    // Non-Maskable Interrupt
-  PIN_LR(layout, 7, SYNC, D6, 27)    // Instruction fetch indicator
-  PIN_LR(layout, 8, VDD, D5, 28)
-  PIN_LR(layout, 9, A0, D4, 29)
-  PIN_LR(layout, 10, A1, D3, 30)
-  PIN_LR(layout, 11, A2, D2, 31)
-  PIN_LR(layout, 12, A3, D1, 32)
-  PIN_LR(layout, 13, A4, D0, 33)
-  PIN_LR(layout, 14, A5, RW, 34)     // Read/Write
-  PIN_LR(layout, 15, A6, NC, 35)
-  PIN_LR(layout, 16, A7, NC, 36)     // No Bus Enable on 2A03
-  PIN_LR(layout, 17, A8, PHI0, 37)
-  PIN_LR(layout, 18, A9, _SO, 38)    // Set Overflow flag
-  PIN_LR(layout, 19, A10, PHI2, 39)
-  PIN_LR(layout, 20, A11, _RES, 40)  // Reset
+  // Hardware-accurate Ricoh RP2A03G pinout (40-pin DIP)
+  // The 2A03 integrates a modified 6502 CPU core (no BCD) with an APU,
+  // DMA controller, and controller I/O ports on a single die.
+  PIN_LR(layout,  1, AD1,   VCC,   40);  // audio delta-sigma 1 / +5V
+  PIN_LR(layout,  2, AD2,   CLK,   39);  // audio delta-sigma 2 / master clock in
+  PIN_LR(layout,  3, _RES,  _NMI,  38);  // reset / NMI
+  PIN_LR(layout,  4, A0,    _IRQ,  37);  // address bus / interrupt
+  PIN_LR(layout,  5, A1,    M2,    36);  // address bus / CPU clock out
+  PIN_LR(layout,  6, A2,    SND1,  35);  // address bus / sound output 1
+  PIN_LR(layout,  7, A3,    SND2,  34);  // address bus / sound output 2
+  PIN_LR(layout,  8, A4,    IN0,   33);  // address bus / controller 1 data
+  PIN_LR(layout,  9, A5,    IN1,   32);  // address bus / controller 2 data
+  PIN_LR(layout, 10, A6,    D0,    31);  // address bus / data bus
+  PIN_LR(layout, 11, A7,    D1,    30);
+  PIN_LR(layout, 12, A8,    D2,    29);
+  PIN_LR(layout, 13, A9,    D3,    28);
+  PIN_LR(layout, 14, A10,   D4,    27);
+  PIN_LR(layout, 15, A11,   D5,    26);
+  PIN_LR(layout, 16, A12,   D6,    25);
+  PIN_LR(layout, 17, A13,   D7,    24);  // address hi / data hi
+  PIN_LR(layout, 18, A14,   OUT0,  23);  // address bus / ctrl latch strobe
+  PIN_LR(layout, 19, RW,    OUT1,  22);  // R/W / ctrl strobe 1
+  PIN_LR(layout, 20, VSS,   OUT2,  21);  // GND / ctrl strobe 2
 
   return layout;
 }

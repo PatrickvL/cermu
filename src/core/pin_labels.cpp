@@ -37,6 +37,7 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::_ML: return "ML";
         case PinLabel::_NMI: return "NMI";
         case PinLabel::_OE: return "OE";
+        case PinLabel::_Q7: return "Q7";
         case PinLabel::_RAS: return "RAS";
         case PinLabel::_RD: return "RD";
         case PinLabel::_RES: return "RES";
@@ -195,6 +196,7 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::ENABLE: return "E";
         case PinLabel::LPSTB: return "LPSTB";
         case PinLabel::OE: return "OE";
+        case PinLabel::P_S: return "P/S";
         case PinLabel::WE: return "WE";
         case PinLabel::RD: return "RD";
         case PinLabel::RS: return "RS";
@@ -298,6 +300,8 @@ const char* pin_label_to_string(PinLabel label) {
         
         // VIC-II specific
         case PinLabel::COLOR: return "COLOR";
+        case PinLabel::SND1: return "SND1";
+        case PinLabel::SND2: return "SND2";
         case PinLabel::SOUND: return "SOUND";
         
         // PLA specific pins
@@ -341,6 +345,9 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::EXT2: return "EXT2";
         case PinLabel::EXT3: return "EXT3";
         
+        // Shift register pins
+        case PinLabel::DS: return "DS";
+
         // Logic chip pins
         case PinLabel::Q0: return "Q0";
         case PinLabel::Q1: return "Q1";
@@ -453,6 +460,7 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::_KERNAL:
         case PinLabel::_LORAM:
         case PinLabel::_OE:
+        case PinLabel::_Q7:
         case PinLabel::_RAS:
         case PinLabel::_RD:
         case PinLabel::_ROMH:
@@ -534,6 +542,7 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::ENABLE:
         case PinLabel::LPSTB:
         case PinLabel::OE:
+        case PinLabel::P_S:
         case PinLabel::WE:
         case PinLabel::RD:
         case PinLabel::RS:
@@ -611,6 +620,7 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::AUD0: case PinLabel::AUD1:
         case PinLabel::AUDIO_OUT:
         case PinLabel::AUDIO_IN:
+        case PinLabel::SND1: case PinLabel::SND2:
         case PinLabel::SOUND:
         case PinLabel::OSC1: case PinLabel::OSC2: case PinLabel::OSC3:
         case PinLabel::NOISE:
@@ -636,6 +646,7 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::Y4: case PinLabel::Y5: case PinLabel::Y6: case PinLabel::Y7:
         case PinLabel::S0: case PinLabel::S1: case PinLabel::S2: case PinLabel::S3:
         case PinLabel::G:
+        case PinLabel::DS:
             return PinType::DATA;
             
         // Special pins

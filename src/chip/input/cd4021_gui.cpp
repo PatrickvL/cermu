@@ -40,12 +40,12 @@ static ChipLayout create_cd4021_layout() {
 
     //                  LEFT                        RIGHT
     PIN_LR(layout,  1, P5,         VDD,         16);
-    PIN_LR(layout,  2, P6,         CLK,         15);  // P/S̅ labeled as CLK for layout
-    PIN_LR(layout,  3, Q7,         CLK,         14);
+    PIN_LR(layout,  2, P6,         P_S,         15);  // P/S̅ (latch control)
+    PIN_LR(layout,  3, Q7,         CLK,         14);  // serial out / clock
     PIN_LR(layout,  4, P1,         P4,          13);
     PIN_LR(layout,  5, P0,         P3,          12);
-    PIN_LR(layout,  6, P7,         NC,          11);  // DS (serial in)
-    PIN_LR(layout,  7, Q7,         P2,          10);  // Q̅7 (complement)
+    PIN_LR(layout,  6, P7,         DS,          11);  // serial data in
+    PIN_LR(layout,  7, _Q7,        P2,          10);  // Q̅7 (complement out)
     PIN_LR(layout,  8, VSS,        Q6,           9);
 
     return layout;
