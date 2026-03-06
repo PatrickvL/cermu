@@ -138,6 +138,11 @@ public:
     // ---- File loading (shared implementation) ----
     bool load_file(const char* filepath) override;
 
+    /// Attach a container/streamable media to the appropriate storage device.
+    /// D64 → IEC serial bus → 1541 drive; TAP → cassette port → datasette.
+    /// Auto-attaches the device if not yet connected.
+    bool attach_media(const char* filepath) override;
+
     // ---- Identical across all Commodore systems ----
 
     bool set_configuration(const SystemConfiguration& config) override;

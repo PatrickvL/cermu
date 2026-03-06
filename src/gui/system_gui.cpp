@@ -7,6 +7,7 @@
 #include "../core/config/path_discovery.h"
 #include "../core/archive_scanner.h"
 #include "../core/formats/format_handler.h"
+#include "../core/formats/format_registry.h"
 #include "../core/vfs/vfs.h"
 #include "../devices/storage/drive_1541.h"
 #include <cstdio>
@@ -114,6 +115,13 @@ void SystemGUI::handle_events() {
              event.window.windowID == SDL_GetWindowID(get_window()))) {
             should_quit_ = true;
         }
+
+        // Handle drag-and-drop — store the path for processing next frame.
+        // Deferred to update_frame() to avoid heavy work inside the event loop.
+        if (event.type == SDL_DROPFILE && event.drop.file) {
+            pending_drop_path_ = event.drop.file;
+            SDL_free(event.drop.file);
+        }
         
         // Release all keys on window focus loss to prevent stuck keys
         if (event.type == SDL_WINDOWEVENT &&
@@ -186,6 +194,13 @@ void SystemGUI::update_frame() {
     // Emulation now runs on a separate thread (emu_thread_func).
     // The GUI thread only updates the FPS counter from the atomic frame count.
     update_fps();
+
+    // Process a pending drag-and-drop file (captured in handle_events).
+    if (!pending_drop_path_.empty()) {
+        std::string path = std::move(pending_drop_path_);
+        pending_drop_path_.clear();
+        handle_dropped_file(path);
+    }
 
     // Refresh window title periodically — systems may update program_title_,
     // mode label, or subtitle info asynchronously (e.g. subtune switches).
@@ -1057,6 +1072,103 @@ void SystemGUI::load_file_dialog() {
     open_file_dialog("ChooseFileDlgKey", "Choose File");
 }
 
+// ============================================================================
+// handle_dropped_file — process a file path received via drag-and-drop
+//
+// 1. Identify the file’s system and format.
+// 2. If no system is running, or the file belongs to a different system:
+//    → full switch_system() with the file as pending (same as CLI launch).
+// 3. If the same system is already running:
+//    a) Container/streamable (D64, TAP) → swap-attach to storage device.
+//    b) Everything else (PRG, CRT, NES, NSF, …) → load_selected_file().
+// ============================================================================
+
+void SystemGUI::handle_dropped_file(const std::string& filepath) {
+    printf("Drop received: %s\n", filepath.c_str());
+
+    // Resolve archives: if the dropped file is a .zip/.7z/etc., find the
+    // first loadable file inside it — same logic as switch_system().
+    std::string resolved = filepath;
+    std::string ext = vfs_extension(filepath.c_str());
+    if (vfs_is_archive_extension(ext.c_str())) {
+        auto scan = scan_archive(filepath.c_str());
+        if (!scan.loadable_files.empty()) {
+            resolved = scan.loadable_files[0].full_path;
+            printf("Archive resolved to: %s\n", resolved.c_str());
+        } else {
+            printf("WARNING: Archive contains no loadable files: %s\n",
+                   filepath.c_str());
+            return;
+        }
+    }
+
+    // Read file content for system identification
+    size_t file_size = 0;
+    uint8_t* data = format_read_entire_file(resolved.c_str(), &file_size);
+    if (!data) {
+        printf("WARNING: Failed to read dropped file: %s\n", resolved.c_str());
+        return;
+    }
+
+    auto match = SystemRegistry::instance().identify_system(
+        resolved.c_str(), data, file_size);
+    free(data);
+
+    if (match.confidence < 0.5f) {
+        printf("WARNING: Could not identify system for dropped file: %s\n",
+               resolved.c_str());
+        return;
+    }
+
+    printf("Identified system: %s (confidence: %.2f)\n",
+           match.system_name.c_str(), match.confidence);
+
+    // --- No system running, or different system: full switch ---
+    if (!system_ ||
+        match.system_name != system_->get_descriptor().short_name) {
+        if (system_) {
+            printf("Switching from %s to %s for dropped file\n",
+                   system_->get_descriptor().short_name,
+                   match.system_name.c_str());
+        }
+        switch_system(match.system_name.c_str(),
+                      match.configuration.memory_option_index,
+                      match.configuration.region_option_index,
+                      nullptr, resolved.c_str());
+        return;
+    }
+
+    // --- Same system, already running ---
+
+    // Log configuration mismatches (region, memory) as warnings but
+    // do NOT reset — the user explicitly dropped onto the running system.
+    const auto& cur_cfg = system_->get_configuration();
+    if (match.configuration.memory_option_index != cur_cfg.memory_option_index) {
+        const auto& traits = system_->get_hardware_traits();
+        const char* cur_mem = (cur_cfg.memory_option_index < (int)traits.memory_options.size())
+            ? traits.memory_options[cur_cfg.memory_option_index].name : "?";
+        const char* req_mem = (match.configuration.memory_option_index < (int)traits.memory_options.size())
+            ? traits.memory_options[match.configuration.memory_option_index].name : "?";
+        printf("WARNING: Dropped file expects memory config '%s' but system is "
+               "configured as '%s' — continuing with current config\n",
+               req_mem, cur_mem);
+    }
+    if (match.configuration.region_option_index != cur_cfg.region_option_index) {
+        const auto& traits = system_->get_hardware_traits();
+        const char* cur_rgn = (cur_cfg.region_option_index < (int)traits.video_standard_configs.size())
+            ? traits.video_standard_configs[cur_cfg.region_option_index].name : "?";
+        const char* req_rgn = (match.configuration.region_option_index < (int)traits.video_standard_configs.size())
+            ? traits.video_standard_configs[match.configuration.region_option_index].name : "?";
+        printf("WARNING: Dropped file expects region '%s' but system is "
+               "configured as '%s' — continuing with current config\n",
+               req_rgn, cur_rgn);
+    }
+
+    // Route to load_selected_file which handles both containers and
+    // non-container formats.
+    load_selected_file(resolved);
+}
+
 void SystemGUI::open_file_dialog(const char* dialog_key, const char* title) {
     if (!system_) return;
     
@@ -1144,6 +1256,25 @@ void SystemGUI::load_selected_file(const std::string& resolved_path,
     (void)display_path;  // TODO: use for window title when loading from containers
 
     printf("Loading file: %s\n", resolved_path.c_str());
+
+    // Check if this is a container/streamable format that should be
+    // swap-attached to a storage device rather than loaded into RAM.
+    // This handles both drag-and-drop of whole containers and (if the
+    // file dialog ever allows selecting a container as a file) menu
+    // selection of containers.
+    std::string ext = vfs_extension(resolved_path.c_str());
+    const auto* fmt = FormatRegistry::instance().find_by_extension(ext.c_str());
+    if (fmt && (fmt->capabilities & (FORMAT_CAP_VOLUME | FORMAT_CAP_STREAMABLE))) {
+        std::lock_guard<std::mutex> lock(emu_mutex_);
+        if (system_->attach_media(resolved_path.c_str())) {
+            printf("Media swap-attached: %s\n", resolved_path.c_str());
+            update_window_title();
+            return;
+        }
+        // attach_media returned false — fall through to full load path
+        // (e.g. system has no matching storage device)
+        printf("No storage device accepted the media — falling through to full load\n");
+    }
 
     // Stop emulation thread while loading for exclusive system access
     bool was_running = emulation_running_.load() && !emulation_paused_.load();
