@@ -104,16 +104,11 @@ static std::vector<PinSignalState> get_mc6845_pin_states(
         ps[3 + i].signal_valid    = true;
     }
 
-    // --- RA0-RA4 (pins 18-20 = idx 17-19, pins 21-22 = idx 20-21) ---
-    // Row address outputs from scanline counter
+    // --- RA0-RA4 (pins 18-22, indices 17-21) ---
+    // Row address outputs from scanline counter.
+    // DIP-40: pin N → index N-1, so RA0=pin18→idx17 .. RA4=pin22→idx21.
     for (int i = 0; i < 5; i++) {
-        int idx;
-        if (i < 3) idx = 17 + i;      // RA0-RA2: pins 18-20, indices 17-19
-        else       idx = 17 + i + 1;  // RA3-RA4: pins 21-22, indices 20-21
-        // Wait — DIP-40 indices: pin N has index N-1.
-        // RA0=pin18→idx17, RA1=pin19→idx18, RA2=pin20→idx19
-        // RA3=pin21→idx20, RA4=pin22→idx21
-        idx = 17 + i; // RA0 at idx 17 .. RA4 at idx 21
+        int idx = 17 + i;
         ps[idx].signal_level    = (crtc->v_scanline_counter >> i) & 1;
         ps[idx].drive_direction = true;
         ps[idx].high_impedance  = false;
@@ -198,50 +193,83 @@ void mc6845_t::render_layout_content() {
 
 void mc6845_t::render_debug_content() {
 #ifdef CERMU_HAS_GUI
-    // --- Registers ---
-    if (ImGui::CollapsingHeader("Registers", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Text("Addr Reg: R%d", address_register);
+    // Two-column layout: chip visualization on left, debugging info on right
+    ImVec2 window_size = ImGui::GetContentRegionAvail();
+
+    // Left column: Chip Visualization (fixed width ~250px)
+    ImVec2 chip_viz_size = ImVec2(250.0f, 0);
+    if (ImGui::BeginChild("ChipVisualization", chip_viz_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImGui::Text("Chip Visualization");
         ImGui::Separator();
-        for (int i = 0; i < MC6845_NUM_REGISTERS; i++) {
-            ImGui::Text("%-20s = $%02X (%3d)", mc6845_reg_names[i], regs[i], regs[i]);
+
+        // Calculate chip center for visualization
+        ImVec2 chip_center = ImGui::GetCursorScreenPos();
+        ImVec2 content_region = ImGui::GetContentRegionAvail();
+        chip_center.x += content_region.x * 0.5f;
+        chip_center.y += 200.0f;
+
+        ChipVisualization& renderer = GetGlobalChipRenderer();
+        ChipLayout& layout = get_mc6845_layout();
+
+        std::vector<PinSignalState> pin_states = get_mc6845_pin_states(this, &layout, bus_snapshot_);
+        renderer.render(layout, chip_center, pin_states, "MC6845");
+    }
+    ImGui::EndChild();
+
+    ImGui::SameLine(0, 5.0f);
+
+    // Right column: All debugging information
+    ImVec2 right_column_size = ImVec2(window_size.x - 270.0f, 0);
+    if (ImGui::BeginChild("DebugInfo", right_column_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImGui::Text("MC6845 CRT Controller");
+        ImGui::Separator();
+
+        // --- Registers ---
+        if (ImGui::CollapsingHeader("Registers", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text("Addr Reg: R%d", address_register);
+            ImGui::Separator();
+            for (int i = 0; i < MC6845_NUM_REGISTERS; i++) {
+                ImGui::Text("%-20s = $%02X (%3d)", mc6845_reg_names[i], regs[i], regs[i]);
+            }
         }
-    }
 
-    // --- Counters ---
-    if (ImGui::CollapsingHeader("Counters")) {
-        ImGui::Text("H Char Counter:   %3d / %3d", h_char_counter, chars_per_line() - 1);
-        ImGui::Text("V Row Counter:    %3d / %3d", v_row_counter, rows_per_frame() - 1);
-        ImGui::Text("V Scanline:       %3d / %3d", v_scanline_counter, scanlines_per_row() - 1);
-        ImGui::Text("V Adjust Counter: %3d", v_adjust_counter);
-    }
+        // --- Counters ---
+        if (ImGui::CollapsingHeader("Counters")) {
+            ImGui::Text("H Char Counter:   %3d / %3d", h_char_counter, chars_per_line() - 1);
+            ImGui::Text("V Row Counter:    %3d / %3d", v_row_counter, rows_per_frame() - 1);
+            ImGui::Text("V Scanline:       %3d / %3d", v_scanline_counter, scanlines_per_row() - 1);
+            ImGui::Text("V Adjust Counter: %3d", v_adjust_counter);
+        }
 
-    // --- Sync & Display ---
-    if (ImGui::CollapsingHeader("Sync & Display")) {
-        ImGui::Text("HSYNC: %s   VSYNC: %s",
-                     h_sync_active ? "ACTIVE" : "off",
-                     v_sync_active ? "ACTIVE" : "off");
-        ImGui::Text("H Display: %s  V Display: %s",
-                     h_display_active ? "ON" : "off",
-                     v_display_active ? "ON" : "off");
-        ImGui::Text("In Adjust: %s", in_adjust ? "yes" : "no");
-    }
+        // --- Sync & Display ---
+        if (ImGui::CollapsingHeader("Sync & Display")) {
+            ImGui::Text("HSYNC: %s   VSYNC: %s",
+                         h_sync_active ? "ACTIVE" : "off",
+                         v_sync_active ? "ACTIVE" : "off");
+            ImGui::Text("H Display: %s  V Display: %s",
+                         h_display_active ? "ON" : "off",
+                         v_display_active ? "ON" : "off");
+            ImGui::Text("In Adjust: %s", in_adjust ? "yes" : "no");
+        }
 
-    // --- Address ---
-    if (ImGui::CollapsingHeader("Address")) {
-        ImGui::Text("Linear Addr:  $%04X", linear_address);
-        ImGui::Text("Row Start:    $%04X", row_start_address);
-        ImGui::Text("Start Addr:   $%04X", start_address());
-        ImGui::Text("Cursor Addr:  $%04X", cursor_address());
-        ImGui::Text("Cursor Vis:   %s", cursor_visible ? "yes" : "no");
-    }
+        // --- Address ---
+        if (ImGui::CollapsingHeader("Address")) {
+            ImGui::Text("Linear Addr:  $%04X", linear_address);
+            ImGui::Text("Row Start:    $%04X", row_start_address);
+            ImGui::Text("Start Addr:   $%04X", start_address());
+            ImGui::Text("Cursor Addr:  $%04X", cursor_address());
+            ImGui::Text("Cursor Vis:   %s", cursor_visible ? "yes" : "no");
+        }
 
-    // --- Light Pen ---
-    if (ImGui::CollapsingHeader("Light Pen")) {
-        ImGui::Text("Latched: %s  Addr: $%04X",
-                     light_pen_latched ? "yes" : "no", light_pen_address);
-    }
+        // --- Light Pen ---
+        if (ImGui::CollapsingHeader("Light Pen")) {
+            ImGui::Text("Latched: %s  Addr: $%04X",
+                         light_pen_latched ? "yes" : "no", light_pen_address);
+        }
 
-    // --- Frame ---
-    ImGui::Text("Frame: %u", frame_count);
+        // --- Frame ---
+        ImGui::Text("Frame: %u", frame_count);
+    }
+    ImGui::EndChild();
 #endif
 }
