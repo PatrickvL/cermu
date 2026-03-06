@@ -313,3 +313,35 @@ void MemoryChip::render_layout_content() {
     render_chip_layout(*cached_layout, pin_states, info_.part_number.data());
 #endif
 }
+
+void MemoryChip::render_debug_content() {
+#ifdef CERMU_HAS_GUI
+    // --- Chip identity ---
+    ImGui::Text("Type:  %s", type_label(type_));
+    ImGui::Text("Size:  %s", format_bytes(size_bytes_).c_str());
+    if (base_address_ != 0) {
+        ImGui::Text("Base:  $%04X", base_address_);
+    }
+    ImGui::Text("Bound: %s   Owned: %s",
+                 is_bound() ? "yes" : "no",
+                 owns_data() ? "yes" : "no");
+
+    // --- Hex dump (first 256 bytes) ---
+    if (data_ && size_bytes_ > 0) {
+        ImGui::Separator();
+        size_t show = (size_bytes_ < 256) ? size_bytes_ : 256;
+        int rows = static_cast<int>((show + 15) / 16);
+        for (int r = 0; r < rows; r++) {
+            uint16_t addr = static_cast<uint16_t>(base_address_ + r * 16);
+            ImGui::Text("$%04X:", addr);
+            for (int c = 0; c < 16 && (r * 16 + c) < static_cast<int>(show); c++) {
+                ImGui::SameLine();
+                ImGui::Text("%02X", data_[r * 16 + c]);
+            }
+        }
+        if (size_bytes_ > 256) {
+            ImGui::Text("... (%s total)", format_bytes(size_bytes_).c_str());
+        }
+    }
+#endif
+}

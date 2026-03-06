@@ -63,6 +63,8 @@ public:
     // --- ChipBase interface ---
     bool has_layout_content()   const override { return true; }
     void render_layout_content()       override;
+    bool has_debug_content()    const override { return true; }
+    void render_debug_content()        override;
 
     // --- Data access -------------------------------------------------
     uint8_t*       data()       { return data_; }
