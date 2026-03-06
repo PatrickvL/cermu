@@ -1,0 +1,360 @@
+# =============================================================================
+# TED 7360 Demo Test Corpus — Curated reference demos for regression testing
+# =============================================================================
+# ~28 demos/programs that collectively exercise every TED rendering mode,
+# raster timing edge case, audio trick, and memory banking behavior.
+#
+# The "features" list uses canonical names:
+#   evb         = Extended Vertical Borders (top/bottom border opening)
+#   ehb         = Extended Horizontal Borders (sideborder graphics)
+#   fli         = Flexible Line Interpretation (HFLI/MFLI/DFLI variants)
+#   mcm         = Multicolor Mode
+#   bitmap      = Bitmap mode
+#   ecm         = Extended Color Mode
+#   charmode    = Character mode tricks
+#   raster      = Raster timing / per-line register changes
+#   irq         = IRQ timing (interrupt-driven effects)
+#   timer       = TED Timer 1/2/3 driven effects
+#   digi        = TED+Digi audio (volume register sample playback)
+#   colorram    = Color RAM manipulation
+#   dma         = DMA timing / badline behavior
+#   scroll      = Smooth scrolling (fine scroll registers)
+#   blanking    = Screen blanking tricks
+#   banking     = ROM banking / memory configuration
+#   zoom4       = Zoom4 / QFLI mode (attribute reload every 4 lines)
+#   fpp         = Freeline / FPP (multi-register per-scanline updates)
+#   hsp         = Horizontal Scroll Position tricks ($FF1E)
+#   fld         = Flexible Line Distance
+#
+# Each entry's "source" is a plus4world URL or "vice-testprogs" for local tests.
+# =============================================================================
+
+[corpus]
+name = "TED 7360 Demo Test Corpus"
+version = "1.0"
+description = "Curated Plus/4 demos and test programs for TED emulator regression testing"
+
+# =============================================================================
+# Category A: Heavyweight Trackmos (stress many TED features simultaneously)
+# =============================================================================
+
+[[demo]]
+name = "Rocket Science"
+author = "Mad & Degauss / BKN + TEK"
+features = ["mcm", "bitmap", "raster", "fpp", "colorram", "scroll", "dma"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/Rocket_Science"
+notes = "#1 rated megademo. 25+ parts exercising nearly every TED rendering mode."
+priority = 1
+
+[[demo]]
+name = "Metamerism"
+author = "Mad & Degauss / BKN + TEK"
+features = ["fli", "mcm", "raster", "dma", "colorram"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/Metamerism"
+notes = "Interlaced MFLI opener. Tests per-line DMA timing extensively."
+priority = 1
+
+[[demo]]
+name = "Questionmark"
+author = "BSZ / NST"
+features = ["hsp", "raster", "irq", "digi", "dma", "blanking", "scroll", "fpp"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/Questionmark"
+notes = "CRITICAL: Freeline tech + digi playback. Tests cycle-exact TED register timing."
+priority = 1
+
+[[demo]]
+name = "False Idols"
+author = "BSZ, bubis, Lavina, Murphy, Oswald / GOTU + EXD + MB + RSC + MX"
+features = ["fld", "raster", "colorram", "bitmap", "mcm", "scroll"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/False_Idols"
+notes = "#1 at Árok 2023. Per-line $FF16 manipulation tests attribute register timing."
+priority = 2
+
+[[demo]]
+name = "Promised Land"
+author = "Lavina / GOTU"
+features = ["mcm", "bitmap", "raster", "dma", "colorram", "scroll"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/Promised_Land"
+notes = "#1 at Árok 2018. Displacement mapping, complex MCM bitmap manipulation."
+priority = 2
+
+[[demo]]
+name = "Crackers' Demo 5"
+author = "Csabo, Mad, Ninja, Degauss, Luca, TMR et al."
+features = ["mcm", "raster", "bitmap", "ecm", "digi", "scroll", "dma"]
+region = "both"
+source = "https://plus4world.powweb.com/software/Crackers_Demo_5"
+notes = "20-part cooperation megademo. Rare PAL+NTSC. Tests ECM, MCM, standard modes."
+priority = 1
+
+# =============================================================================
+# Category B: FLI / DFLI Stress Tests
+# =============================================================================
+
+[[demo]]
+name = "Plus 4 FLI"
+author = "bubis, Murphy"
+features = ["fli", "dma", "colorram", "raster"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/Plus_4_FLI"
+notes = "4 converted FLI pictures. Good static screenshot comparison target."
+priority = 2
+screenshot_compare = true
+
+[[demo]]
+name = "Zenith Of Puberty"
+author = "Degauss / TEK"
+features = ["fli", "bitmap", "raster", "dma"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/Zenith_Of_Puberty"
+notes = "#1 at Oxyron Party 2007. Interlaced MFLI, rotozoomer, twisters."
+priority = 2
+
+[[demo]]
+name = "Color Dolor"
+author = "Csio / MHY"
+features = ["fli", "raster", "colorram", "evb"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/Color_Dolor"
+notes = "DFLI with rasterized border. Tests border+DFLI combination."
+priority = 2
+screenshot_compare = true
+
+[[demo]]
+name = "Drea-M-time XXXII"
+author = "Larry"
+features = ["fli", "dma", "colorram", "raster"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/Drea-M-time_XXXII"
+notes = "Classic DFLI picture show. Static images -- excellent screenshot targets."
+priority = 2
+screenshot_compare = true
+
+# =============================================================================
+# Category C: Raster Timing / Per-Line Register Tricks
+# =============================================================================
+
+[[demo]]
+name = "Ikaruga"
+author = "TMR / Cosine"
+features = ["raster", "charmode", "scroll", "colorram"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/Ikaruga"
+notes = "16K demo. Kefrens bars, copper plasma, vertical rasterbars."
+priority = 2
+
+[[demo]]
+name = "TED Storm"
+author = "4-Mat / Cosine"
+features = ["raster", "colorram", "charmode"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/TED_Storm"
+notes = "16K music box with Kefrens bars. Simple per-line raster color test."
+priority = 3
+
+[[demo]]
+name = "Fixed Points"
+author = "Murphy / EXD"
+features = ["raster", "zoom4", "charmode", "colorram"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/Fixed_Points"
+notes = "Uses Zoom4 (QFLI). Tests both standard and transparent Kefrens."
+priority = 2
+
+# =============================================================================
+# Category D: 4K Intros (tight timing, minimal code)
+# =============================================================================
+
+[[demo]]
+name = "Chromatic Admiration"
+author = "edhellon, Oswald / RSC + Logicoma"
+features = ["ecm", "raster", "colorram", "dma"]
+region = "both"
+source = "https://plus4world.powweb.com/software/Chromatic_Admiration"
+notes = "4K intro. ECM-heavy (plasma, tunnel, metaballs). PAL+NTSC."
+priority = 2
+
+[[demo]]
+name = "Chromatic Distortion"
+author = "edhellon, Oswald / RSC + Logicoma"
+features = ["zoom4", "raster", "dma", "colorram"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/Chromatic_Distortion"
+notes = "4K intro. #1 at Revision 2023 Oldskool Intro. Zoom4 distortion maps."
+priority = 2
+
+[[demo]]
+name = "Phosphorizer"
+author = "Blueberry / Loonies + Logicoma"
+features = ["raster", "colorram", "dma"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/Phosphorizer"
+notes = "4K intro. #1 at Revision 2021 Oldskool 4K. Tight raster timing."
+priority = 2
+
+# =============================================================================
+# Category E: Extended Border Effects
+# =============================================================================
+
+[[demo]]
+name = "Rockstar Ate My Border"
+author = "Csabo / LOD"
+features = ["ehb", "charmode", "blanking"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/Rockstar_Ate_My_Border"
+notes = "CRITICAL: First sideborder graphics on Plus/4. 508 bytes. $FF1E exploitation."
+priority = 1
+
+[[demo]]
+name = "Pets Rescue"
+author = "TCFS"
+features = ["evb", "bitmap", "scroll", "raster", "colorram"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/Pets_Rescue"
+notes = "Top-rated Plus/4 game. Vertical border opening for gameplay area."
+priority = 3
+
+# =============================================================================
+# Category F: Audio (TED+Digi and TED Sound Tests)
+# =============================================================================
+
+[[demo]]
+name = "VolBass"
+author = "Csabo / LOD"
+features = ["digi", "timer"]
+region = "both"
+source = "https://plus4world.powweb.com/software/VolBass"
+notes = "CRITICAL: 3 channels on stock Plus/4 via volume register modulation. PAL+NTSC."
+priority = 1
+
+[[demo]]
+name = "TED Vibes"
+author = "Murphy / EXD + Singular"
+features = ["digi", "timer", "raster", "evb", "colorram"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/TED_Vibes"
+notes = "Music box featuring multiple TED sound techniques."
+priority = 2
+
+[[demo]]
+name = "Cyberpunk 2077"
+author = "Csabo / LOD + ACE"
+features = ["digi", "timer"]
+region = "both"
+source = "https://plus4world.powweb.com/software/Cyberpunk_2077"
+notes = "Digi demo. 5.5 KHz, 4-bit resolution. PAL+NTSC."
+priority = 2
+
+# =============================================================================
+# Category G: VICE Test Programs (emulator regression tests, locally available)
+# =============================================================================
+
+[[demo]]
+name = "ted-open"
+author = "VICE team"
+features = ["bitmap", "banking", "blanking"]
+region = "both"
+source = "vice-testprogs"
+local_path = "Plus4/openmem/ted-open.prg"
+notes = "CRITICAL: TED bitmap from ROM fetch. Tests bus behavior on ROM reads."
+priority = 1
+
+[[demo]]
+name = "Turbo Outrun I/O Test"
+author = "VICE team"
+features = ["banking"]
+region = "both"
+source = "vice-testprogs"
+local_path = "Plus4/openio/outrun.prg"
+notes = "Tests reads from unconnected I/O space. Emulator detection from Turbo Outrun."
+priority = 1
+
+[[demo]]
+name = "Turbo Outrun I/O Test 2"
+author = "VICE team"
+features = ["banking"]
+region = "both"
+source = "vice-testprogs"
+local_path = "Plus4/openio/outrun2.prg"
+notes = "Second I/O space test variant."
+priority = 1
+
+[[demo]]
+name = "HannesTest"
+author = "Hannes Sommer"
+features = ["banking"]
+region = "both"
+source = "vice-testprogs"
+local_path = "Plus4/HannesTest/HannesTest.prg"
+notes = "Tests TED memory banking with Hannes 256K expansion."
+priority = 3
+
+[[demo]]
+name = "Cartridge Bus Test"
+author = "Marko Šolajić, Žarko Živanov"
+features = ["banking"]
+region = "both"
+source = "vice-testprogs"
+local_path = "Plus4/openbus/carttest.prg"
+notes = "Tests unconnected cartridge/I/O space bus behavior."
+priority = 2
+
+# =============================================================================
+# Category H: Classic Demos (historical / comprehensive)
+# =============================================================================
+
+[[demo]]
+name = "Chaos"
+author = "Larry, DCD / ACE + WLS"
+features = ["zoom4", "fld", "fli", "mcm", "raster", "dma"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/Chaos"
+notes = "Tests multiple FLI modes + Zoom4 in a single production."
+priority = 2
+
+[[demo]]
+name = "8 Shades Of Black"
+author = "Csabo, Ati, Skoro, bubis, DCD, Murphy, Degauss et al."
+features = ["raster", "bitmap", "charmode", "colorram", "scroll"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/8_Shades_Of_Black"
+notes = "16K trackmo, 9+ parts from different coders. Tests varied TED approaches."
+priority = 3
+
+[[demo]]
+name = "Genetic Faulty"
+author = "Murphy / GS"
+features = ["ecm", "bitmap", "raster", "colorram"]
+region = "pal"
+source = "https://plus4world.powweb.com/software/Genetic_Faulty"
+notes = "Classic 1995 demo. ECM plasma, filled vectors. Tests Extended Color Mode."
+priority = 3
+
+# =============================================================================
+# Feature Coverage Summary
+# =============================================================================
+# evb:      Color Dolor, Pets Rescue, TED Vibes
+# ehb:      Rockstar Ate My Border
+# fli:      Plus 4 FLI, Zenith Of Puberty, Color Dolor, Metamerism, Drea-M-time XXXII, Chaos
+# mcm:      Rocket Science, Crackers' Demo 5, Promised Land, False Idols, Chaos
+# bitmap:   Rocket Science, Promised Land, ted-open, Genetic Faulty, 8 Shades Of Black
+# ecm:      Chromatic Admiration, Genetic Faulty, Crackers' Demo 5
+# charmode: Ikaruga, TED Storm, Rockstar Ate My Border, 8 Shades Of Black
+# raster:   Questionmark, Ikaruga, TED Storm, Fixed Points, Crackers' Demo 5 + many more
+# irq:      Questionmark
+# timer:    VolBass, Cyberpunk 2077, TED Vibes
+# digi:     VolBass, Cyberpunk 2077, TED Vibes, Crackers' Demo 5
+# colorram: Fixed Points, False Idols, Ikaruga, Promised Land + many more
+# dma:      Questionmark, FLI programs, Chaos, Chromatic Admiration + many more
+# scroll:   Rocket Science, Crackers' Demo 5, Promised Land, Pets Rescue
+# blanking: Rockstar Ate My Border, ted-open
+# banking:  ted-open, outrun, outrun2, HannesTest, carttest
+# zoom4:    Chaos, Chromatic Distortion, Fixed Points
+# fpp:      Questionmark, Rocket Science
+# hsp:      Questionmark
+# fld:      False Idols, Chaos
