@@ -554,6 +554,13 @@ public:
     virtual void run_frame() = 0;
     virtual bool load_file(const char* filepath) = 0;
 
+    /// Try to attach a container/streamable media file to the appropriate
+    /// storage device (e.g. D64 → 1541 drive, TAP → datasette).  If the
+    /// required device is not yet connected, auto-attaches it.
+    /// Returns true if the file was accepted by a storage device.
+    /// Default: returns false (system has no storage devices).
+    virtual bool attach_media(const char* filepath) { return false; }
+
     /// Title of the currently loaded program (set by load_file()).
     /// Empty string if nothing is loaded.
     const std::string& get_program_title() const { return program_title_; }

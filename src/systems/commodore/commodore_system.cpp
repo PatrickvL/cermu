@@ -2,6 +2,7 @@
 #include "../../devices/storage/drive_1541.h"
 #include "../../devices/storage/datasette_1530.h"
 #include "../../core/formats/format_registry.h"
+#include "../../core/vfs/vfs.h"
 #include <cstring>
 #include <cstdio>
 
@@ -294,4 +295,98 @@ void CommodoreSystem::apply_pending_load() {
     pending_load_.result.release();
     pending_load_.active = false;
     boot_completed_ = true;
+}
+
+// ============================================================================
+// attach_media — swap-attach a container/streamable file to storage device
+//
+// Handles D64 → 1541 drive (IEC bus) and TAP → datasette (cassette port).
+// Auto-attaches the required device if not yet connected — this is safe
+// on a running system (just plugging in a peripheral).
+// ============================================================================
+
+bool CommodoreSystem::attach_media(const char* filepath) {
+    if (!filepath) return false;
+
+    const char* sysname = get_descriptor().short_name;
+
+    // Determine format from file extension
+    std::string ext = vfs_extension(filepath);
+    const auto* fmt = FormatRegistry::instance().find_by_extension(ext.c_str());
+    if (!fmt) return false;
+
+    // D64 → IEC serial bus → 1541 drive
+    if (fmt->capabilities & FORMAT_CAP_VOLUME) {
+        int iec_port = get_iec_port_index();
+        if (iec_port < 0) {
+            printf("%s: No IEC serial port defined — cannot attach media\n", sysname);
+            return false;
+        }
+
+        auto* port = get_connector_port(iec_port);
+        if (!port) return false;
+
+        Drive1541Device* drive = nullptr;
+        for (auto* dev : port->get_attached_devices()) {
+            drive = dynamic_cast<Drive1541Device*>(dev);
+            if (drive) break;
+        }
+
+        // Auto-attach a 1541 if none is connected
+        if (!drive) {
+            if (attach_device_to_port(iec_port, "1541")) {
+                for (auto* dev : port->get_attached_devices()) {
+                    drive = dynamic_cast<Drive1541Device*>(dev);
+                    if (drive) break;
+                }
+                if (drive) {
+                    printf("%s: Auto-attached 1541 drive #%d for media insert\n",
+                           sysname, drive->get_device_number());
+                }
+            }
+        }
+
+        if (drive) {
+            if (drive->swap_disk(filepath)) {
+                printf("%s: Disk swapped in drive #%d: %s\n",
+                       sysname, drive->get_device_number(), filepath);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // TAP → Cassette port → Datasette
+    if (fmt->capabilities & FORMAT_CAP_STREAMABLE) {
+        int cass_port = get_cassette_port_index();
+        if (cass_port < 0) {
+            printf("%s: No cassette port defined — cannot attach media\n", sysname);
+            return false;
+        }
+
+        auto* port = get_connector_port(cass_port);
+        if (!port) return false;
+
+        auto* datasette = dynamic_cast<Datasette1530Device*>(port->get_attached_device());
+
+        // Auto-attach a datasette if none is connected
+        if (!datasette) {
+            if (attach_device_to_port(cass_port, "datasette")) {
+                datasette = dynamic_cast<Datasette1530Device*>(port->get_attached_device());
+                if (datasette) {
+                    printf("%s: Auto-attached datasette for tape insert\n", sysname);
+                }
+            }
+        }
+
+        if (datasette) {
+            if (datasette->load_tap(filepath)) {
+                printf("%s: Tape inserted: %s\n", sysname, filepath);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    return false;
 }

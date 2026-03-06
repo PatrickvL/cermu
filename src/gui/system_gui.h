@@ -33,6 +33,9 @@ private:
     
     // Pending file to load after system selection (from command line)
     std::string pending_file_path_;
+
+    // Filepath received via SDL drag-and-drop, processed next frame
+    std::string pending_drop_path_;
     
 public:
     /**
@@ -65,6 +68,10 @@ public:
     
     // File loading
     void load_file_dialog();
+
+    /// Process a file path received by drag-and-drop or any external source.
+    /// Identifies the system, switches if needed, and loads or swap-attaches.
+    void handle_dropped_file(const std::string& filepath);
     
     // Override frame delay - VSync handles display pacing, accumulator handles emulation
     uint32_t get_frame_delay_ms() const override { return 0; }
