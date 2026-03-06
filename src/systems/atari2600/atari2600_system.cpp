@@ -23,6 +23,7 @@
 #include "atari2600_system.h"
 #include "../../core/system_registry.h"
 #include "../../core/connector.h"
+#include "../../core/vfs/vfs.h"
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
@@ -424,32 +425,23 @@ bool Atari2600System::load_file(const char* filepath) {
 
     printf("Atari2600: Loading file: %s\n", filepath);
 
-    // Read the ROM file
-    FILE* f = fopen(filepath, "rb");
-    if (!f) {
+    // Read the ROM file (VFS-aware — handles archive paths like
+    // "roms.7z!/Atari 2600/G/Galaxian.a26" transparently).
+    size_t file_size = 0;
+    uint8_t* file_data = vfs_read_file(filepath, &file_size);
+    if (!file_data) {
         printf("Atari2600: Failed to open file: %s\n", filepath);
         return false;
     }
 
-    fseek(f, 0, SEEK_END);
-    long file_size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    if (file_size <= 0 || file_size > 65536) {
-        printf("Atari2600: Invalid file size: %ld bytes\n", file_size);
-        fclose(f);
+    if (file_size == 0 || file_size > 65536) {
+        printf("Atari2600: Invalid file size: %zu bytes\n", file_size);
+        free(file_data);
         return false;
     }
 
-    cart_rom_.resize(static_cast<size_t>(file_size));
-    size_t bytes_read = fread(cart_rom_.data(), 1, static_cast<size_t>(file_size), f);
-    fclose(f);
-
-    if (bytes_read != static_cast<size_t>(file_size)) {
-        printf("Atari2600: Failed to read complete file\n");
-        cart_rom_.clear();
-        return false;
-    }
+    cart_rom_.assign(file_data, file_data + file_size);
+    free(file_data);
 
     cart_size_ = static_cast<uint32_t>(file_size);
 
