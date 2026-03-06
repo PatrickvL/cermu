@@ -942,6 +942,9 @@ void SystemGUI::teardown_current_system() {
         system_->shutdown();
         system_.reset();
     }
+
+    // Release cached archive data (no point keeping it across system switches)
+    vfs_cache_flush();
     
     // Free framebuffer
     free_framebuffer();

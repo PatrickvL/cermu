@@ -191,3 +191,16 @@ std::string vfs_extension(const char* path);
  * join_vfs_path("/data/roms.zip", "game.nes") → "/data/roms.zip!/game.nes"
  */
 std::string vfs_join_path(const std::string& base, const std::string& entry);
+
+// ============================================================================
+// Archive Cache
+// ============================================================================
+
+/**
+ * Flush the VFS archive cache, freeing all cached data.
+ *
+ * Normally the cache is managed automatically (single-slot MRU — one
+ * archive's data is kept resident until a different archive is accessed).
+ * Call this to force-release the memory, e.g. on system switch.
+ */
+void vfs_cache_flush();
