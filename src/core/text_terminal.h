@@ -88,6 +88,7 @@ private:
     
     // Font data
     const uint8_t* font_data_;
+    uint8_t* custom_font_;       // Owned copy when set_font() is called
     
     // Helper methods
     int get_buffer_index(int col, int row) const;

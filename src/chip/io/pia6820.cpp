@@ -30,11 +30,11 @@
 void pia6820_t::init() {
     // Explicitly zero all fields (no memset — must preserve vtable)
     port_a_data = 0;
-    port_a_control = PIA_CTRL_DDR_SELECT;  // Select data register
+    port_a_control = 0x00;  // Power-on: DDR mode selected (bit 2 clear)
     port_a_direction = 0x00;  // All inputs
 
     port_b_data = 0;
-    port_b_control = PIA_CTRL_DDR_SELECT;  // Select data register
+    port_b_control = 0x00;  // Power-on: DDR mode selected (bit 2 clear)
     port_b_direction = 0x00;  // All inputs
 
     irq_a1 = false;
