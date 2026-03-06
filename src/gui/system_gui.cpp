@@ -115,10 +115,65 @@ bool SystemGUI::init(const char* window_title, int width, int height) {
 // ============================================================================
 
 void SystemGUI::handle_events() {
+    // Dynamically toggle keyboard navigation based on whether any GUI
+    // overlay is active (menus, popups, dialogs, settings windows).
+    // When enabled, ImGui reports WantCaptureKeyboard=true for focused
+    // widgets / nav-active windows, and the event routing below naturally
+    // keeps those keys from reaching the emulated system.  When disabled
+    // (the common case — just the screen + menu bar), WantCaptureKeyboard
+    // stays false so all keys go to emulation.
+    {
+        ImGuiIO& io = ImGui::GetIO();
+        bool gui_wants_kbd = false;
+
+        // Any popup or menu open (menus are popups in ImGui)
+        if (ImGui::IsPopupOpen((const char*)nullptr,
+                               ImGuiPopupFlags_AnyPopupId |
+                               ImGuiPopupFlags_AnyPopupLevel))
+            gui_wants_kbd = true;
+
+#ifdef HAS_IMGUIFILEDIALOG
+        // File dialogs are regular windows, not popups
+        if (cermu::FileDialogInstance()->IsOpened("ChooseFileDlgKey") ||
+            cermu::FileDialogInstance()->IsOpened("DriveInsertDiskKey"))
+            gui_wants_kbd = true;
+#endif
+
+        // Auxiliary windows (settings, memory viewer, about)
+        if (show_settings_ || show_memory_viewer_ || show_about_)
+            gui_wants_kbd = true;
+
+        if (gui_wants_kbd)
+            io.ConfigFlags |=  ImGuiConfigFlags_NavEnableKeyboard;
+        else
+            io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableKeyboard;
+    }
+
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
         ImGui_ImplSDL2_ProcessEvent(&event);
-        
+
+        // When a GUI overlay is active, treat Enter/Return as a left mouse
+        // click so the user can confirm hovered items without reaching for
+        // the mouse.  ImGui's nav system handles Enter for nav-focused
+        // items, but when the user hovers with the mouse no nav focus
+        // exists — the synthesized click covers that gap.
+        {
+            ImGuiIO& io = ImGui::GetIO();
+            if (io.WantCaptureKeyboard &&
+                (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP)) {
+                SDL_Keycode sym = event.key.keysym.sym;
+                if (sym == SDLK_RETURN || sym == SDLK_KP_ENTER) {
+                    bool pressed = (event.type == SDL_KEYDOWN) && !event.key.repeat;
+                    bool released = (event.type == SDL_KEYUP);
+                    if (pressed)
+                        io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+                    else if (released)
+                        io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+                }
+            }
+        }
+
         // Consume F11 — fullscreen toggle (filter repeats; don't forward to emulation).
         // Match on scancode (physical key position) rather than keysym so that
         // keyboards whose F-row defaults to media functions still toggle
