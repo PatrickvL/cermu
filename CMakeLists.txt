@@ -393,6 +393,7 @@ set(TESTING_SOURCES
     src/testing/c64_test_framework.cpp
     src/testing/c64_test_loader.cpp
     src/testing/c64_screenshot.cpp
+    src/testing/c16_test_framework.cpp
 )
 
 # Core utility sources (generic functionality)
@@ -642,6 +643,33 @@ set_target_properties(nes_test_runner PROPERTIES
 )
 
 message(STATUS "Test runner nes_test_runner will be built")
+
+# C16/Plus4 test runner (VICE-testprogs TED/Plus4 regression tests)
+add_executable(c16_test_runner
+    tests/c16_test_runner.cpp
+    ${CORE_SOURCES}
+    ${CHIP_SOURCES}
+    ${SYSTEM_SOURCES}
+    ${TESTING_SOURCES}
+    ${CORE_UTIL_SOURCES}
+    ${GUI_STUB_SOURCES}
+)
+
+target_link_libraries(c16_test_runner
+    fam65xx_decoder
+    ${LIBARCHIVE_LIBRARIES}
+    ${SDL2_LIBRARIES}
+)
+
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(c16_test_runner m)
+endif()
+
+set_target_properties(c16_test_runner PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+message(STATUS "Test runner c16_test_runner will be built")
 
 # VFS smoke test tool
 add_executable(vfs_smoke_test
