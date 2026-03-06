@@ -412,6 +412,7 @@ set(CORE_UTIL_SOURCES
     src/core/formats/sid_format.cpp
     src/core/formats/nsf_format.cpp
     src/core/formats/ines_format.cpp
+    src/core/formats/a26_format.cpp
     src/systems/commodore/commodore_load_helpers.cpp
     src/core/os/os_filesystem.cpp
     src/core/os/os_archive.cpp
