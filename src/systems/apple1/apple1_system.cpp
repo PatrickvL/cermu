@@ -293,6 +293,9 @@ void Apple1System::reset() {
 void Apple1System::tick() {
     tick_cpu();
     total_cycles_++;
+    
+    // Feed queued keystrokes into PIA at a realistic rate
+    pump_paste_queue();
 }
 
 void Apple1System::run_frame() {
@@ -363,20 +366,33 @@ void Apple1System::set_framebuffer(uint32_t* buffer, int width, int height) {
 void Apple1System::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     if (!pressed) return;  // Only handle key press, not release
     
-    // Convert to uppercase (Apple 1 was uppercase only)
-    if (key >= 'a' && key <= 'z') {
-        key = key - 'a' + 'A';
-    }
-    
-    // Apple 1 uses 7-bit ASCII
-    if (key >= 0x20 && key < 0x7F) {
-        set_keyboard_data(key & 0x7F);
-    } else if (key == '\r' || key == '\n') {
+    // Non-printable keys that don't come through SDL_TEXTINPUT
+    if (key == '\r' || key == '\n' || key == SDLK_RETURN || key == SDLK_KP_ENTER) {
         set_keyboard_data(0x0D);  // Carriage return
-    } else if (key == '\b' || key == 127) {
-        set_keyboard_data(0x08);  // Backspace
-    } else if (key == 27) {
+    } else if (key == '\b' || key == 127 || key == SDLK_BACKSPACE) {
+        set_keyboard_data(0x08);  // Backspace (Apple 1: rubout)
+    } else if (key == 27 || key == SDLK_ESCAPE) {
         set_keyboard_data(0x1B);  // Escape
+    }
+}
+
+void Apple1System::handle_text_input(const char* text) {
+    if (!text) return;
+    
+    // SDL_TEXTINPUT delivers the actual typed character (including shifted
+    // symbols like !, @, #, etc.).  Process each character in the string.
+    for (const char* p = text; *p; ++p) {
+        uint8_t ch = static_cast<uint8_t>(*p);
+        
+        // Apple 1 uses 7-bit ASCII; ignore anything outside printable range
+        if (ch < 0x20 || ch >= 0x7F) continue;
+        
+        // Convert lowercase to uppercase (Apple 1 was uppercase only)
+        if (ch >= 'a' && ch <= 'z') {
+            ch = ch - 'a' + 'A';
+        }
+        
+        set_keyboard_data(ch);
     }
 }
 
@@ -388,6 +404,23 @@ void Apple1System::render_system_menu_items() {
 #ifdef CERMU_HAS_GUI
     if (ImGui::MenuItem("Reset Apple 1")) {
         reset();
+    }
+    ImGui::Separator();
+    if (has_basic_ && ImGui::MenuItem("Start BASIC")) {
+        queue_text("E000R\r");
+    }
+    if (has_basic_ && ImGui::MenuItem("Run BASIC Demo")) {
+        // Enter BASIC, then type a small test program and RUN it
+        queue_text(
+            "E000R\r"
+            // Wait for BASIC prompt, then type the program
+            "10 PRINT \"HELLO APPLE 1!\"\r"
+            "20 FOR I = 1 TO 10\r"
+            "30 PRINT I, I*I\r"
+            "40 NEXT I\r"
+            "50 PRINT \"DONE\"\r"
+            "RUN\r"
+        );
     }
 #endif
 }
@@ -442,19 +475,22 @@ bus_state_t Apple1System::mem_tick(bus_state_t s) {
         // ---- Read cycle ----
         uint8_t data = 0xFF;
 
-        // PIA 6820 registers (0xD010-0xD013)
+        // PIA 6820 registers (0xD010-0xD013) — highest priority I/O
         if (addr >= apple1_constants::PIA_BASE && addr <= apple1_constants::PIA_BASE + 3) {
             data = pia_.read(addr);
-        }
-        // RAM (0x0000 to ram_size)
-        else if (addr < ram_size_) {
-            data = (*ram_)[addr];
         }
         // Monitor ROM (0xFF00-0xFFFF = 256 bytes)
         else if (addr >= apple1_constants::MONITOR_BASE) {
             data = (*monitor_rom_)[addr - apple1_constants::MONITOR_BASE];
         }
-        // TODO: Add BASIC ROM mapping if has_basic_ is true
+        // BASIC ROM (0xE000-0xEFFF = 4KB, optional)
+        else if (has_basic_ && addr >= 0xE000 && addr < 0xF000) {
+            data = (*basic_rom_)[addr - 0xE000];
+        }
+        // RAM — for 64KB configurations, skip ROM/IO regions already handled above
+        else if (addr < ram_size_) {
+            data = (*ram_)[addr];
+        }
 
         BUS_SET_DATA(s, data);
     } else {
@@ -465,11 +501,17 @@ bus_state_t Apple1System::mem_tick(bus_state_t s) {
         if (addr >= apple1_constants::PIA_BASE && addr <= apple1_constants::PIA_BASE + 3) {
             pia_.write(addr, data);
         }
-        // RAM (0x0000 to ram_size)
+        // ROM areas are read-only — writes to Monitor/BASIC ROM are ignored
+        else if (addr >= apple1_constants::MONITOR_BASE) {
+            // Ignore writes to Monitor ROM region
+        }
+        else if (has_basic_ && addr >= 0xE000 && addr < 0xF000) {
+            // Ignore writes to BASIC ROM region
+        }
+        // RAM
         else if (addr < ram_size_) {
             (*ram_)[addr] = data;
         }
-        // ROM areas are read-only, writes are ignored
     }
 
     return s;
@@ -568,6 +610,49 @@ void Apple1System::clear_keyboard_strobe() {
     // when the CPU reads Port A. This is NOT PIA behavior - it's the external
     // keyboard hardware responding to the PIA's read signal.
     pia_.port_a_data &= 0x7F;
+}
+
+// ============================================================================
+// Keystroke Injection (paste / auto-type)
+// ============================================================================
+
+void Apple1System::queue_text(const char* text) {
+    if (!text) return;
+    paste_queue_ += text;
+}
+
+void Apple1System::pump_paste_queue() {
+    if (paste_queue_.empty()) return;
+    
+    // Wait between keystrokes — the PIA needs time to process each character.
+    // ~20000 cycles ≈ 20 ms at 1 MHz gives the Woz Monitor / BASIC enough
+    // time to read, echo, and process each keystroke.
+    if (paste_delay_cycles_ > 0) {
+        paste_delay_cycles_--;
+        return;
+    }
+    
+    // Only inject when the PIA shows the previous key has been consumed
+    // (bit 7 of port A is clear = strobe consumed by CPU read)
+    if (keyboard_ready()) return;
+    
+    // Pop the next character
+    char ch = paste_queue_.front();
+    paste_queue_.erase(paste_queue_.begin());
+    
+    uint8_t key = static_cast<uint8_t>(ch);
+    
+    // Convert \r and \n to Apple 1 carriage return
+    if (key == '\r' || key == '\n') {
+        key = 0x0D;
+    }
+    // Convert lowercase to uppercase (Apple 1 is uppercase only)
+    else if (key >= 'a' && key <= 'z') {
+        key = key - 'a' + 'A';
+    }
+    
+    set_keyboard_data(key);
+    paste_delay_cycles_ = 20000;  // Delay before next character
 }
 
 bool Apple1System::load_roms() {

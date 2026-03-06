@@ -57,6 +57,7 @@ public:
     
     // Input
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
+    void handle_text_input(const char* text) override;
     
     // GUI integration
     void render_system_menu_items() override;
@@ -107,4 +108,10 @@ private:
     // Display helpers
     void display_char(uint8_t ch);
     void convert_2513_to_8x8_font(const uint8_t* char_rom, uint8_t* font_8x8);
+    
+    // Keystroke injection (paste / auto-type)
+    void queue_text(const char* text);  // Queue text to be auto-typed
+    void pump_paste_queue();            // Feed next char from queue → PIA
+    std::string paste_queue_;           // Pending characters to inject
+    uint32_t paste_delay_cycles_ = 0;   // Countdown between injected keystrokes
 };
