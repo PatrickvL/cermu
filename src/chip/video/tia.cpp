@@ -92,6 +92,8 @@ void tia_t::reset() {
     vsync_active = false;
     vblank_active = false;
     wsync_pending = false;
+    visible_row = -1;
+    prev_vblank = false;
 
     pf0 = pf1 = pf2 = 0;
     ctrlpf = 0;
@@ -354,11 +356,9 @@ void tia_t::render_pixel() {
     if (x < 0 || x >= tia_constants::DISPLAY_WIDTH) return;
     if (!framebuffer) return;
 
-    // Determine what scanline row to render into
-    // Row calculation: the visible area typically starts around scanline 40
-    // and ends around scanline 232, but games vary wildly.
-    // We render based on scanline offset.
-    int row = scanline;  // System will manage the mapping
+    // Use visible_row (tracks only non-VBLANK lines) so the first
+    // visible scanline maps to framebuffer row 0.
+    int row = visible_row;
     if (row < 0 || row >= fb_height) return;
 
     // Determine which objects are present at this pixel
@@ -461,6 +461,18 @@ void tia_t::tick_color_clock() {
 
         // Release WSYNC at end of scanline
         wsync_pending = false;
+
+        // Track visible row: detect VBLANK off → start counting visible rows
+        if (prev_vblank && !vblank_active) {
+            // VBLANK just turned off — start of visible area
+            visible_row = 0;
+        } else if (!vblank_active && visible_row >= 0) {
+            visible_row++;
+        } else if (vblank_active) {
+            // During VBLANK, visible_row stays invalid
+            visible_row = -1;
+        }
+        prev_vblank = vblank_active;
 
         // Advance scanline
         scanline++;
