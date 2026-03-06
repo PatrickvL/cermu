@@ -20,6 +20,7 @@
 #include "mos6510.h"
 #include "mos7501.h"
 #include "ricoh_2a03.h"
+#include "mos6507.h"
 #include "wdc65c02.h"
 #include "synertek65c02.h"
 #include "rockwell65c02.h"
@@ -489,6 +490,10 @@ template void fam65xx_t<RICOH_2A03Traits>::render_debug_content();
 template void fam65xx_t<RICOH_2A03Traits>::render_settings_content();
 template void fam65xx_t<RICOH_2A03Traits>::render_layout_content();
 
+template void fam65xx_t<MOS6507Traits>::render_debug_content();
+template void fam65xx_t<MOS6507Traits>::render_settings_content();
+template void fam65xx_t<MOS6507Traits>::render_layout_content();
+
 template void fam65xx_t<SYNERTEK_65C02Traits>::render_debug_content();
 template void fam65xx_t<SYNERTEK_65C02Traits>::render_settings_content();
 template void fam65xx_t<SYNERTEK_65C02Traits>::render_layout_content();
@@ -546,6 +551,10 @@ template void fam65xx_t<CSG7501Traits>::render_layout_content();
 template void fam65xx_t<RICOH_2A03Traits>::render_debug_content();
 template void fam65xx_t<RICOH_2A03Traits>::render_settings_content();
 template void fam65xx_t<RICOH_2A03Traits>::render_layout_content();
+
+template void fam65xx_t<MOS6507Traits>::render_debug_content();
+template void fam65xx_t<MOS6507Traits>::render_settings_content();
+template void fam65xx_t<MOS6507Traits>::render_layout_content();
 
 template void fam65xx_t<SYNERTEK_65C02Traits>::render_debug_content();
 template void fam65xx_t<SYNERTEK_65C02Traits>::render_settings_content();
