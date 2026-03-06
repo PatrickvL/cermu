@@ -1092,6 +1092,11 @@ bus_state_t Commodore264System<V>::mem_tick(bus_state_t s) {
                 // PIO2 (6529B) — keyboard row select register
                 pio2_kbd_ = data;
             }
+            // Debug cart register at $FDCF (VICE convention for Plus4 test programs)
+            else if (unlikely(debug_cart_enabled_ && addr == 0xFDCF)) {
+                debug_cart_value_ = data;
+                debug_cart_written_ = true;
+            }
             // Other I/O ports not yet implemented (ACIA, PIO1, ROM banking)
         }
         // Writes always go to RAM (ROM is read-only, writes pass through)
