@@ -99,14 +99,18 @@ void SystemGUI::handle_events() {
     while (SDL_PollEvent(&event)) {
         ImGui_ImplSDL2_ProcessEvent(&event);
         
-        // Handle F11 for fullscreen toggle (before other processing)
-        if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_F11) {
-            Uint32 flags = SDL_GetWindowFlags(get_window());
-            if (flags & SDL_WINDOW_FULLSCREEN_DESKTOP) {
-                SDL_SetWindowFullscreen(get_window(), 0);
-            } else {
-                SDL_SetWindowFullscreen(get_window(), SDL_WINDOW_FULLSCREEN_DESKTOP);
+        // Consume F11 — fullscreen toggle (filter repeats; don't forward to emulation)
+        if ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) &&
+            event.key.keysym.sym == SDLK_F11) {
+            if (event.type == SDL_KEYDOWN && !event.key.repeat) {
+                Uint32 flags = SDL_GetWindowFlags(get_window());
+                if (flags & SDL_WINDOW_FULLSCREEN_DESKTOP) {
+                    SDL_SetWindowFullscreen(get_window(), 0);
+                } else {
+                    SDL_SetWindowFullscreen(get_window(), SDL_WINDOW_FULLSCREEN_DESKTOP);
+                }
             }
+            continue;
         }
         
         // Handle quit events
