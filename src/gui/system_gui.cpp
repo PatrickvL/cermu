@@ -1217,18 +1217,22 @@ void SystemGUI::open_file_dialog(const char* dialog_key, const char* title) {
         // previous session — use it directly as the starting path.
         default_path = last_file_path_;
     } else if (system_) {
-        // Default to the system-specific data folder (where ROMs live)
-        const char* short_name = system_->get_descriptor().short_name;
-        if (short_name) {
-            // Convert to lowercase for data folder lookup (e.g. "VIC20" -> "vic20")
-            std::string sys_lower;
-            for (const char* p = short_name; *p; ++p)
-                sys_lower += (char)tolower((unsigned char)*p);
-            char data_root[1024];
-            if (system_config_discover_data_root(sys_lower.c_str(), data_root, sizeof(data_root))) {
-                default_path = data_root;
-                printf("File dialog defaulting to data folder: %s\n", data_root);
-            }
+        // Default to the system-specific data folder (where ROMs live).
+        // Try the canonical data_folder name first, then each alias so
+        // that user-created folders named after common system names
+        // (e.g. "Atari 2600", "VCS") are also discovered.
+        const auto& desc = system_->get_descriptor();
+        std::vector<const char*> candidates;
+        if (desc.data_folder)
+            candidates.push_back(desc.data_folder);
+        for (const char* alias : desc.aliases)
+            candidates.push_back(alias);
+        candidates.push_back(nullptr);  // sentinel
+
+        char data_root[1024];
+        if (system_config_discover_data_root(candidates.data(), data_root, sizeof(data_root))) {
+            default_path = data_root;
+            printf("File dialog defaulting to data folder: %s\n", data_root);
         }
     }
     

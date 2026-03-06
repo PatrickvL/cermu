@@ -237,11 +237,12 @@ bool VfsFileSystem::IsDirectory(const std::string& vFilePathName) {
     if (stat(vFilePathName.c_str(), &sb) == 0 && S_ISREG(sb.st_mode))
         if (is_browsable(vFilePathName)) return true;
 
-    // Virtual path through an archive — check if the leaf is itself a
-    // browsable container (e.g. ".../archive.zip/disk.d64" where the D64
-    // is inside the ZIP and should be navigable as a directory).
-    auto sp = split_at_archive(vFilePathName);
-    if (sp.has_boundary && !sp.virtual_part.empty() && is_browsable(sp.virtual_part))
+    // Virtual path through an archive — any path that passes through an
+    // archive boundary is treated as a directory.  This covers both plain
+    // directories within the archive (e.g. ".../roms.7z/G") and browsable
+    // containers nested inside (e.g. ".../archive.zip/disk.d64").
+    // Consistent with IsDirectoryCanBeOpened / IsDirectoryExist.
+    if (split_at_archive(vFilePathName).has_boundary)
         return true;
 
     return false;

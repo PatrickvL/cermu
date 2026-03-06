@@ -155,6 +155,15 @@ bool system_config_discover_data_root(const char* system_name, char* out_path, s
     return false;
 }
 
+bool system_config_discover_data_root(const char* const* names, char* out_path, size_t path_size) {
+    if (!names || !out_path || path_size < 256) return false;
+    for (const char* const* p = names; *p; ++p) {
+        if (system_config_discover_data_root(*p, out_path, path_size))
+            return true;
+    }
+    return false;
+}
+
 bool system_config_discover_rom_root(const char* system_name, char* out_path, size_t path_size) {
     if (!system_name || !out_path || path_size < 256) {
         return false;
@@ -175,6 +184,15 @@ bool system_config_discover_rom_root(const char* system_name, char* out_path, si
     }
 
     printf("Warning: Could not find ROM root folder for system '%s'\n", system_name);
+    return false;
+}
+
+bool system_config_discover_rom_root(const char* const* names, char* out_path, size_t path_size) {
+    if (!names || !out_path || path_size < 256) return false;
+    for (const char* const* p = names; *p; ++p) {
+        if (system_config_discover_rom_root(*p, out_path, path_size))
+            return true;
+    }
     return false;
 }
 

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-
 #include <cstddef>
 
 /**
@@ -16,6 +15,18 @@
 bool system_config_discover_data_root(const char* system_name, char* out_path, size_t path_size);
 
 /**
+ * Discover the data root folder, trying multiple candidate folder names.
+ * Each name is tried in order; the first match wins.  Useful for trying
+ * the canonical data_folder name followed by system aliases.
+ *
+ * @param names     NULL-terminated array of candidate folder names
+ * @param out_path  Buffer to store the discovered data root path
+ * @param path_size Size of the output buffer
+ * @return true if data root folder was found, false otherwise
+ */
+bool system_config_discover_data_root(const char* const* names, char* out_path, size_t path_size);
+
+/**
  * Discover the ROM root folder by searching upwards from executable location.
  * Searches for 'data/system_name/roms' folder.
  * 
@@ -25,3 +36,14 @@ bool system_config_discover_data_root(const char* system_name, char* out_path, s
  * @return true if ROM root folder was found, false otherwise
  */
 bool system_config_discover_rom_root(const char* system_name, char* out_path, size_t path_size);
+
+/**
+ * Discover the ROM root folder, trying multiple candidate folder names.
+ * Each name is tried in order; the first match wins.
+ *
+ * @param names     NULL-terminated array of candidate folder names
+ * @param out_path  Buffer to store the discovered ROM root path
+ * @param path_size Size of the output buffer
+ * @return true if ROM root folder was found, false otherwise
+ */
+bool system_config_discover_rom_root(const char* const* names, char* out_path, size_t path_size);
