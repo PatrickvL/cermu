@@ -332,6 +332,9 @@ list(APPEND CHIP_SOURCES
     
     # Video - TED (C16/Plus4)
     src/chip/video/ted/ted7360.cpp
+    
+    # Video - MC6845 CRTC (PET, BBC Micro, Amstrad CPC, ...)
+    src/chip/video/mc6845.cpp
 )
 # System sources
 set(SYSTEM_SOURCES
@@ -370,6 +373,10 @@ set(SYSTEM_SOURCES
     
     # Apple 1 system (clean EmulatedSystem implementation)
     src/systems/apple1/apple1_system.cpp
+    
+    # Commodore PET system
+    src/systems/commodore/pet/pet_system.cpp
+    src/systems/commodore/pet/pet_keyboard_matrix.cpp
 )
 
 # Testing sources
