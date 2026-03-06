@@ -56,6 +56,10 @@ public:
 public:
     virtual ~Cartridge() = default;
 
+    // -- ChipBase GUI overrides (implemented in nes_cartridge_gui.cpp) --
+    bool has_debug_content() const override { return true; }
+    void render_debug_content() override;
+
     /** Parse iNES ROM from an already-loaded buffer.
      *  filepath_for_sram is stored for battery-backed SRAM persistence. */
     bool load_from_buffer(const uint8_t* data, size_t data_size,
