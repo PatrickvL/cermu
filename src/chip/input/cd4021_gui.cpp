@@ -144,23 +144,55 @@ void CD4021::render_layout_content() {
 
 void CD4021::render_debug_content() {
 #ifdef CERMU_HAS_GUI
-    uint8_t sr = get_shift_register();
+    // Two-column layout: chip visualization on left, debugging info on right
+    ImVec2 window_size = ImGui::GetContentRegionAvail();
 
-    ImGui::Text("Shift Register: $%02X (%d)", sr, sr);
-    ImGui::Separator();
+    // Left column: Chip Visualization (fixed width ~250px)
+    ImVec2 chip_viz_size = ImVec2(250.0f, 0);
+    if (ImGui::BeginChild("ChipVisualization", chip_viz_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImGui::Text("Chip Visualization");
+        ImGui::Separator();
 
-    // Show individual bits as a visual bit display
-    ImGui::Text("Bits: ");
-    ImGui::SameLine();
-    for (int i = 7; i >= 0; i--) {
-        bool bit = (sr >> i) & 1;
-        if (bit)
-            ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "%d", bit);
-        else
-            ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%d", bit);
-        if (i > 0) ImGui::SameLine();
+        ImVec2 chip_center = ImGui::GetCursorScreenPos();
+        ImVec2 content_region = ImGui::GetContentRegionAvail();
+        chip_center.x += content_region.x * 0.5f;
+        chip_center.y += 200.0f;
+
+        ChipVisualization& renderer = GetGlobalChipRenderer();
+        ChipLayout& layout = get_cd4021_layout();
+
+        std::vector<PinSignalState> pin_states = get_cd4021_pin_states(this, &layout);
+        renderer.render(layout, chip_center, pin_states, "CD4021");
     }
+    ImGui::EndChild();
 
-    ImGui::Text("       P7 P6 P5 P4 P3 P2 P1 P0");
+    ImGui::SameLine(0, 5.0f);
+
+    // Right column: All debugging information
+    ImVec2 right_column_size = ImVec2(window_size.x - 270.0f, 0);
+    if (ImGui::BeginChild("DebugInfo", right_column_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImGui::Text("CD4021B Shift Register");
+        ImGui::Separator();
+
+        uint8_t sr = get_shift_register();
+
+        ImGui::Text("Shift Register: $%02X (%d)", sr, sr);
+        ImGui::Separator();
+
+        // Show individual bits as a visual bit display
+        ImGui::Text("Bits: ");
+        ImGui::SameLine();
+        for (int i = 7; i >= 0; i--) {
+            bool bit = (sr >> i) & 1;
+            if (bit)
+                ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "%d", bit);
+            else
+                ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%d", bit);
+            if (i > 0) ImGui::SameLine();
+        }
+
+        ImGui::Text("       P7 P6 P5 P4 P3 P2 P1 P0");
+    }
+    ImGui::EndChild();
 #endif
 }
