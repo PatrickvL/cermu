@@ -46,6 +46,12 @@ static constexpr uint16_t RIOT_TIM1024T = 0x17;   // Divide by 1024
 struct pia6532_t : public ChipBase {
     pia6532_t() : ChipBase(ChipInfo{"PIA6532", "MOS Technology"}) {}
 
+    // --- ChipBase GUI interface ---
+    bool has_layout_content() const override;
+    void render_layout_content()    override;
+    bool has_debug_content()  const override;
+    void render_debug_content()     override;
+
     // ========================================================================
     // RAM — 128 bytes ($80-$FF)
     // ========================================================================

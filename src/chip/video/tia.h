@@ -146,6 +146,12 @@ struct tia_audio_channel_t {
 struct tia_t : public ChipBase {
     tia_t() : ChipBase(ChipInfo{"TIA", "Atari"}) {}
 
+    // --- ChipBase GUI interface ---
+    bool has_layout_content() const override;
+    void render_layout_content()    override;
+    bool has_debug_content()  const override;
+    void render_debug_content()     override;
+
     // ========================================================================
     // DISPLAY STATE
     // ========================================================================

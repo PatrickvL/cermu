@@ -71,6 +71,12 @@ static constexpr int MC6845_NUM_REGISTERS = 18;
 struct mc6845_t : public ChipBase {
     mc6845_t() : ChipBase(ChipInfo{"MC6845", "Motorola"}) {}
 
+    // --- ChipBase GUI interface ---
+    bool has_layout_content() const override;
+    void render_layout_content()    override;
+    bool has_debug_content()  const override;
+    void render_debug_content()     override;
+
     // ========================================================================
     // REGISTERS
     // ========================================================================

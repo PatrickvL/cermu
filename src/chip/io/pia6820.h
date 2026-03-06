@@ -23,6 +23,12 @@
 struct pia6820_t : public ChipBase {
     pia6820_t() : ChipBase(ChipInfo{"PIA6820", "Motorola"}) {}
 
+    // --- ChipBase GUI interface ---
+    bool has_layout_content() const override;
+    void render_layout_content()    override;
+    bool has_debug_content()  const override;
+    void render_debug_content()     override;
+
     // Port A registers
     uint8_t port_a_data;        // Data register (output latch)
     uint8_t port_a_control;     // Control register
