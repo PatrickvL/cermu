@@ -883,17 +883,35 @@ bool PETSystem::load_roms() {
 
     printf("PET: ROM root discovered: %s\n", rom_root);
 
-    // Character ROM (4KB — loaded into separate buffer, not main address space)
+    // Character ROM — loaded into separate buffer, not main address space.
+    // PET 4032 uses a 2KB character ROM (901447-10); we mirror it to fill 4KB.
+    // PET 8032 uses a 4KB character ROM (901640-01).
     uint8_t char_buf[4096];
-    const char* char_files[] = {
-        "characters.901447-10.bin",
-        "chargen",
-        "chargen.rom",
-        "901447-10.bin",
+    const char* char_files_4k[] = {
+        "characters.901640-01.bin",         // 4KB (8032/SuperPET)
         nullptr
     };
-    bool char_ok = rom_loader_load_from_root(rom_root, char_files,
-                                              sizeof(char_buf), char_buf, sizeof(char_buf));
+    bool char_ok = rom_loader_load_from_root(rom_root, char_files_4k,
+                                              4096, char_buf, sizeof(char_buf));
+    if (!char_ok) {
+        // Try 2KB character ROM (PET 4032 and earlier)
+        uint8_t char_buf_2k[2048];
+        const char* char_files_2k[] = {
+            "characters-2.901447-10.bin",   // VICE naming
+            "characters.901447-10.bin",
+            "chargen",
+            "chargen.rom",
+            "901447-10.bin",
+            nullptr
+        };
+        char_ok = rom_loader_load_from_root(rom_root, char_files_2k,
+                                             2048, char_buf_2k, sizeof(char_buf_2k));
+        if (char_ok) {
+            // Mirror 2KB ROM into 4KB buffer
+            memcpy(char_buf, char_buf_2k, 2048);
+            memcpy(char_buf + 2048, char_buf_2k, 2048);
+        }
+    }
     if (char_ok) {
         memcpy(char_rom_, char_buf, sizeof(char_rom_));
         printf("PET: Character ROM loaded\n");
@@ -901,43 +919,45 @@ bool PETSystem::load_roms() {
         printf("PET: Failed to load Character ROM\n");
     }
 
-    // BASIC 4.0 ROM (8KB at $C000-$DFFF)
-    uint8_t basic_buf[8192];
+    // BASIC 4.0 ROM (12KB at $B000-$DFFF)
+    // Consists of three 4KB chips: 901465-23 ($B000), 901465-20 ($C000), 901465-21 ($D000)
+    uint8_t basic_buf[12288];
     const char* basic_files[] = {
-        "basic-4-b000.901465-23.bin",  // Combined 8KB BASIC 4.0
-        "basic4.rom",
-        "901465-23.bin",
+        "basic-4.901465-23-20-21.bin",      // VICE combined 12KB
         nullptr
     };
     bool basic_ok = rom_loader_load_from_root(rom_root, basic_files,
                                                sizeof(basic_buf), basic_buf, sizeof(basic_buf));
     if (basic_ok) {
         memcpy(memory_ + pet_constants::BASIC_ROM_START, basic_buf, sizeof(basic_buf));
-        printf("PET: BASIC 4.0 ROM loaded\n");
+        printf("PET: BASIC 4.0 ROM loaded (12KB combined)\n");
     } else {
-        // Try loading as two 4KB halves
-        uint8_t basic_lo[4096], basic_hi[4096];
-        const char* basic_lo_files[] = {
-            "basic-4-b000.901465-23.bin",
-            "901465-23.bin",
-            nullptr
-        };
-        const char* basic_hi_files[] = {
-            "basic-4-d000.901465-20.bin",
-            "901465-20.bin",
-            nullptr
-        };
-        bool lo_ok = rom_loader_load_from_root(rom_root, basic_lo_files,
-                                                sizeof(basic_lo), basic_lo, sizeof(basic_lo));
-        bool hi_ok = rom_loader_load_from_root(rom_root, basic_hi_files,
-                                                sizeof(basic_hi), basic_hi, sizeof(basic_hi));
-        if (lo_ok && hi_ok) {
-            memcpy(memory_ + pet_constants::BASIC_ROM_START, basic_lo, 4096);
-            memcpy(memory_ + pet_constants::BASIC_ROM_START + 4096, basic_hi, 4096);
-            printf("PET: BASIC 4.0 ROM loaded (split)\n");
+        // Try loading as three 4KB ROMs
+        uint8_t rom_b[4096], rom_c[4096], rom_d[4096];
+        const char* rom_b_files[] = { "basic-4-b000.901465-23.bin", "901465-23.bin", nullptr };
+        const char* rom_c_files[] = { "basic-4-c000.901465-20.bin", "901465-20.bin", nullptr };
+        const char* rom_d_files[] = { "basic-4-d000.901465-21.bin", "901465-21.bin", nullptr };
+        bool b_ok = rom_loader_load_from_root(rom_root, rom_b_files, 4096, rom_b, sizeof(rom_b));
+        bool c_ok = rom_loader_load_from_root(rom_root, rom_c_files, 4096, rom_c, sizeof(rom_c));
+        bool d_ok = rom_loader_load_from_root(rom_root, rom_d_files, 4096, rom_d, sizeof(rom_d));
+        if (b_ok && c_ok && d_ok) {
+            memcpy(memory_ + 0xB000, rom_b, 4096);
+            memcpy(memory_ + 0xC000, rom_c, 4096);
+            memcpy(memory_ + 0xD000, rom_d, 4096);
+            printf("PET: BASIC 4.0 ROM loaded (3 × 4KB)\n");
             basic_ok = true;
         } else {
-            printf("PET: Failed to load BASIC ROM\n");
+            // Last resort: try 8KB combined at $C000 (missing $B000 bank)
+            uint8_t basic8k[8192];
+            const char* basic8k_files[] = { "basic4.rom", nullptr };
+            bool ok8 = rom_loader_load_from_root(rom_root, basic8k_files, 8192, basic8k, sizeof(basic8k));
+            if (ok8) {
+                memcpy(memory_ + 0xC000, basic8k, 8192);
+                printf("PET: BASIC ROM loaded (8KB fallback at $C000)\n");
+                basic_ok = true;
+            } else {
+                printf("PET: Failed to load BASIC ROM\n");
+            }
         }
     }
 
@@ -963,7 +983,7 @@ bool PETSystem::load_roms() {
     // Kernal ROM (4KB at $F000-$FFFF)
     uint8_t kernal_buf[4096];
     const char* kernal_files[] = {
-        "kernal-4.901465-22.bin",
+        "kernal-4.901465-22.bin",           // VICE naming ✓
         "kernal4.rom",
         "kernal.rom",
         "901465-22.bin",
