@@ -11,6 +11,7 @@
 
 #include <cstring>
 #include <algorithm>
+#include <mutex>
 
 // ============================================================================
 // Internal Helpers
@@ -113,6 +114,92 @@ std::vector<VfsEntry> build_filtered_listing(
     return result;
 }
 
+// ============================================================================
+// Archive Cache
+//
+// Single-slot MRU cache: keeps one archive's raw bytes and entry listing
+// in memory so that repeated accesses (browsing directories, extracting
+// multiple files) don't re-open and re-parse the archive from disk.
+//
+// Thread-safe: the GUI thread browses archives while the emulation thread
+// may load files concurrently.
+// ============================================================================
+
+struct ArchiveCache {
+    std::mutex              mutex;
+    std::string             archive_path;   // Key: real filesystem path
+    std::vector<uint8_t>    raw_data;       // Archive file contents
+    std::vector<OsArchiveEntry> entries;    // Pre-scanned flat entry list
+    bool                    entries_valid = false;  // entries populated?
+
+    /**
+     * Ensure the cache is populated for the given archive path.
+     * If already cached, this is a no-op.  Otherwise reads the archive
+     * from disk and replaces any previously cached data.
+     *
+     * Returns true if the cache is now valid for `path`.
+     */
+    bool ensure(const char* path) {
+        if (archive_path == path && !raw_data.empty())
+            return true;
+
+        // Evict previous
+        archive_path.clear();
+        raw_data.clear();
+        entries.clear();
+        entries_valid = false;
+
+        // Read archive file from disk into memory
+        size_t file_size = 0;
+        uint8_t* file_data = os_read_file(path, &file_size);
+        if (!file_data || file_size == 0) {
+            if (file_data) free(file_data);
+            return false;
+        }
+
+        archive_path = path;
+        raw_data.assign(file_data, file_data + file_size);
+        free(file_data);
+        return true;
+    }
+
+    /**
+     * Get the flat entry listing, scanning lazily on first access.
+     */
+    const std::vector<OsArchiveEntry>& get_entries() {
+        if (!entries_valid && !raw_data.empty()) {
+            entries = os_archive_list_from_memory(raw_data.data(),
+                                                   raw_data.size());
+            entries_valid = true;
+        }
+        return entries;
+    }
+
+    /**
+     * Extract an entry from the cached archive data.
+     * Caller must free() the returned buffer.
+     */
+    uint8_t* extract(const char* entry_name, size_t* out_size) {
+        if (raw_data.empty()) return nullptr;
+        return os_archive_extract_from_memory(raw_data.data(), raw_data.size(),
+                                               entry_name, out_size);
+    }
+
+    /**
+     * Flush all cached data.
+     */
+    void flush() {
+        archive_path.clear();
+        raw_data.clear();
+        raw_data.shrink_to_fit();
+        entries.clear();
+        entries.shrink_to_fit();
+        entries_valid = false;
+    }
+};
+
+static ArchiveCache s_cache;
+
 } // anonymous namespace
 
 // ============================================================================
@@ -163,11 +250,21 @@ uint8_t* vfs_read_file(const char* path, size_t* out_size) {
         std::string inner_archive_name(parts.archive_path.c_str(), nested_delim);
         std::string remaining(nested_delim + VFS_ARCHIVE_DELIMITER_LEN);
 
-        // Extract the inner archive from the outer archive
+        // Extract the inner archive from the outer (via cache)
         size_t inner_size = 0;
-        uint8_t* inner_data = os_archive_extract(parts.real_path.c_str(),
-                                                  inner_archive_name.c_str(),
-                                                  &inner_size);
+        uint8_t* inner_data = nullptr;
+        {
+            std::lock_guard<std::mutex> lock(s_cache.mutex);
+            if (s_cache.ensure(parts.real_path.c_str())) {
+                inner_data = s_cache.extract(inner_archive_name.c_str(), &inner_size);
+            }
+        }
+        if (!inner_data) {
+            // Cache miss or load failed — fall back to direct disk read
+            inner_data = os_archive_extract(parts.real_path.c_str(),
+                                             inner_archive_name.c_str(),
+                                             &inner_size);
+        }
         if (!inner_data) return nullptr;
 
         // Check if remaining still has nesting
@@ -194,7 +291,15 @@ uint8_t* vfs_read_file(const char* path, size_t* out_size) {
         return result;
     }
 
-    // Simple case: archive.zip!/file.nes
+    // Simple case: archive.zip!/file.nes — use cache
+    {
+        std::lock_guard<std::mutex> lock(s_cache.mutex);
+        if (s_cache.ensure(parts.real_path.c_str())) {
+            return s_cache.extract(parts.archive_path.c_str(), out_size);
+        }
+    }
+
+    // Fallback: direct disk extraction
     return os_archive_extract(parts.real_path.c_str(),
                                parts.archive_path.c_str(),
                                out_size);
@@ -228,9 +333,19 @@ std::vector<VfsEntry> vfs_list_entries(const char* path) {
             std::string inner_name(parts.archive_path.c_str(), nested);
             std::string remaining(nested + VFS_ARCHIVE_DELIMITER_LEN);
 
+            // Extract the inner archive via cache
             size_t inner_size = 0;
-            uint8_t* inner_data = os_archive_extract(
-                parts.real_path.c_str(), inner_name.c_str(), &inner_size);
+            uint8_t* inner_data = nullptr;
+            {
+                std::lock_guard<std::mutex> lock(s_cache.mutex);
+                if (s_cache.ensure(parts.real_path.c_str())) {
+                    inner_data = s_cache.extract(inner_name.c_str(), &inner_size);
+                }
+            }
+            if (!inner_data) {
+                inner_data = os_archive_extract(
+                    parts.real_path.c_str(), inner_name.c_str(), &inner_size);
+            }
             if (!inner_data) return {};
 
             auto result = vfs_list_entries_from_memory(
@@ -246,7 +361,16 @@ std::vector<VfsEntry> vfs_list_entries(const char* path) {
             return result;
         }
 
-        // Non-nested: list from archive on disk with subpath filter
+        // Non-nested: list from cached entry listing
+        {
+            std::lock_guard<std::mutex> lock(s_cache.mutex);
+            if (s_cache.ensure(parts.real_path.c_str())) {
+                const auto& raw = s_cache.get_entries();
+                return build_filtered_listing(raw, parts.archive_path.c_str(),
+                                               parts.real_path.c_str());
+            }
+        }
+        // Fallback
         auto raw = os_archive_list(parts.real_path.c_str());
         return build_filtered_listing(raw, parts.archive_path.c_str(),
                                        parts.real_path.c_str());
@@ -256,6 +380,14 @@ std::vector<VfsEntry> vfs_list_entries(const char* path) {
     if (os_is_regular_file(path)) {
         const char* ext = os_find_extension(path);
         if (ext && vfs_is_archive_extension(ext)) {
+            // Listing archive root — use cache
+            {
+                std::lock_guard<std::mutex> lock(s_cache.mutex);
+                if (s_cache.ensure(path)) {
+                    const auto& raw = s_cache.get_entries();
+                    return build_filtered_listing(raw, nullptr, path);
+                }
+            }
             auto raw = os_archive_list(path);
             return build_filtered_listing(raw, nullptr, path);
         }
@@ -394,4 +526,13 @@ std::string vfs_join_path(const std::string& base, const std::string& entry) {
     if (result.back() != '/' && result.back() != '\\') result += '/';
     result += entry;
     return result;
+}
+
+// ============================================================================
+// Public API — Archive Cache
+// ============================================================================
+
+void vfs_cache_flush() {
+    std::lock_guard<std::mutex> lock(s_cache.mutex);
+    s_cache.flush();
 }
