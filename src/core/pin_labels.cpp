@@ -30,6 +30,8 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::_HIRAM: return "HIRAM";
         case PinLabel::_IO: return "I/O";
         case PinLabel::_IRQ: return "IRQ";
+        case PinLabel::_IRQA: return "IRQA";
+        case PinLabel::_IRQB: return "IRQB";
         case PinLabel::_KERNAL: return "KERNAL";
         case PinLabel::_LORAM: return "LORAM";
         case PinLabel::_ML: return "ML";
@@ -186,17 +188,28 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::CS0: return "CS0";
         case PinLabel::CS1: return "CS1";
         case PinLabel::CS2: return "CS2";
+        case PinLabel::CS3: return "CS3";
+        case PinLabel::CURSOR: return "CURSOR";
+        case PinLabel::DE: return "DE";
+        case PinLabel::DUMP: return "DUMP";
+        case PinLabel::ENABLE: return "E";
+        case PinLabel::LPSTB: return "LPSTB";
         case PinLabel::OE: return "OE";
         case PinLabel::WE: return "WE";
         case PinLabel::RD: return "RD";
+        case PinLabel::RS: return "RS";
+        case PinLabel::RS0: return "RS0";
+        case PinLabel::RS1: return "RS1";
         case PinLabel::ALE: return "ALE";
         
         // Video chip pins
         case PinLabel::LUMA: return "LUMA";
+        case PinLabel::COLU: return "COLU";
         case PinLabel::CHROMA: return "CHROMA";
         case PinLabel::HSYNC: return "HSYNC";
         case PinLabel::VSYNC: return "VSYNC";
         case PinLabel::CSYNC: return "CSYNC";
+        case PinLabel::COMP_BLK: return "BLK";
         case PinLabel::DOT_CLK: return "DOT CLK";
         case PinLabel::COLOR_CLK: return "COLOR CLK";
         case PinLabel::LIGHT_PEN: return "LP";
@@ -204,8 +217,15 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::RAS: return "RAS";
         case PinLabel::MUX: return "MUX";
         case PinLabel::VOUT: return "VOUT";
+        case PinLabel::RA0: return "RA0";
+        case PinLabel::RA1: return "RA1";
+        case PinLabel::RA2: return "RA2";
+        case PinLabel::RA3: return "RA3";
+        case PinLabel::RA4: return "RA4";
         
         // Audio chip pins
+        case PinLabel::AUD0: return "AUD0";
+        case PinLabel::AUD1: return "AUD1";
         case PinLabel::AUDIO_OUT: return "AUDIO OUT";
         case PinLabel::AUDIO_IN: return "AUDIO IN";
         case PinLabel::FILTER_OUT: return "FILT OUT";
@@ -264,6 +284,17 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::POTX: return "POTX";
         case PinLabel::POTY: return "POTY";
         case PinLabel::EXT_IN: return "EXT IN";
+
+        // TIA-specific input pins
+        case PinLabel::INPT0: return "INPT0";
+        case PinLabel::INPT1: return "INPT1";
+        case PinLabel::INPT2: return "INPT2";
+        case PinLabel::INPT3: return "INPT3";
+        case PinLabel::INPT4: return "INPT4";
+        case PinLabel::INPT5: return "INPT5";
+
+        // TIA power
+        case PinLabel::VTIA: return "Vtia";
         
         // VIC-II specific
         case PinLabel::COLOR: return "COLOR";
@@ -398,6 +429,8 @@ PinType pin_label_to_pin_type(PinLabel label) {
         // Active-low interrupt pins
         case PinLabel::_ABORT:
         case PinLabel::_IRQ:
+        case PinLabel::_IRQA:
+        case PinLabel::_IRQB:
         case PinLabel::_NMI:
         case PinLabel::_RES:
             return PinType::INTERRUPT;
@@ -470,6 +503,8 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::MA4: case PinLabel::MA5: case PinLabel::MA6: case PinLabel::MA7:
         case PinLabel::MA8: case PinLabel::MA9: case PinLabel::MA10: case PinLabel::MA11:
         case PinLabel::MA12: case PinLabel::MA13: case PinLabel::MA14: case PinLabel::MA15:
+        case PinLabel::RA0: case PinLabel::RA1: case PinLabel::RA2: case PinLabel::RA3:
+        case PinLabel::RA4:
             return PinType::ADDRESS;
             
         // Data bus pins
@@ -492,9 +527,18 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::CS0:
         case PinLabel::CS1:
         case PinLabel::CS2:
+        case PinLabel::CS3:
+        case PinLabel::CURSOR:
+        case PinLabel::DE:
+        case PinLabel::DUMP:
+        case PinLabel::ENABLE:
+        case PinLabel::LPSTB:
         case PinLabel::OE:
         case PinLabel::WE:
         case PinLabel::RD:
+        case PinLabel::RS:
+        case PinLabel::RS0:
+        case PinLabel::RS1:
         case PinLabel::ALE:
         case PinLabel::CAS:
         case PinLabel::RAS:
@@ -536,6 +580,8 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::EXT0: case PinLabel::EXT1: case PinLabel::EXT2: case PinLabel::EXT3:
         case PinLabel::POTX: case PinLabel::POTY:
         case PinLabel::LIGHT_PEN:
+        case PinLabel::INPT0: case PinLabel::INPT1: case PinLabel::INPT2:
+        case PinLabel::INPT3: case PinLabel::INPT4: case PinLabel::INPT5:
             return PinType::IO_PORT;
             
         // Analog pins
@@ -546,25 +592,29 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::CAP1A: case PinLabel::CAP1B: case PinLabel::CAP2A: case PinLabel::CAP2B:
         case PinLabel::FILTER_OUT: case PinLabel::FILTER_IN:
         case PinLabel::EXT_IN:
+        case PinLabel::VTIA:
             return PinType::ANALOG;
             
         // Video output pins
         case PinLabel::LUMA:
+        case PinLabel::COLU:
         case PinLabel::CHROMA:
         case PinLabel::HSYNC:
         case PinLabel::VSYNC:
         case PinLabel::CSYNC:
+        case PinLabel::COMP_BLK:
         case PinLabel::COLOR:
         case PinLabel::VOUT:
-            return PinType::SPECIAL;
+            return PinType::VIDEO;
             
         // Audio output pins
+        case PinLabel::AUD0: case PinLabel::AUD1:
         case PinLabel::AUDIO_OUT:
         case PinLabel::AUDIO_IN:
         case PinLabel::SOUND:
         case PinLabel::OSC1: case PinLabel::OSC2: case PinLabel::OSC3:
         case PinLabel::NOISE:
-            return PinType::SPECIAL;
+            return PinType::AUDIO;
             
         // PLA/ROM select pins
         case PinLabel::BASIC: case PinLabel::KERNAL: case PinLabel::CHAROM:

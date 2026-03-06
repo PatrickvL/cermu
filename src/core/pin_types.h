@@ -68,6 +68,8 @@ enum class PinLabel {
     _HIRAM,       // /HIRAM — high RAM
     _IO,          // /I/O — I/O area select
     _IRQ,         // /IRQ — interrupt request
+    _IRQA,        // /IRQA — interrupt request A (PIA 6820/6821)
+    _IRQB,        // /IRQB — interrupt request B (PIA 6820/6821)
     _KERNAL,      // /KERNAL — KERNAL ROM select
     _LORAM,       // /LORAM — low RAM
     _ML,          // /ML — memory lock (65C02/65C816)
@@ -123,11 +125,20 @@ enum class PinLabel {
     CS0,          // Chip Select 0 (active-high form)
     CS1,          // Chip Select 1 (active-high form)
     CS2,          // Chip Select 2 (active-high form)
+    CS3,          // Chip Select 3 (active-high form, TIA)
+    CURSOR,       // Cursor output (MC6845 CRTC)
+    DE,           // Display Enable (MC6845 CRTC)
+    DUMP,         // Paddle dump/discharge (TIA)
+    ENABLE,       // Enable clock input (6800 bus family)
+    LPSTB,        // Light Pen STroBe (MC6845 CRTC)
     MUX,          // Address multiplexer
     OE,           // Output Enable (active-high form)
     RAS,          // Row Address Strobe (active-high form)
     RD,           // Read strobe (active-high form)
     RDY,          // Ready input/output
+    RS,           // Register Select
+    RS0,          // Register Select 0 (PIA 6820/6821)
+    RS1,          // Register Select 1 (PIA 6820/6821)
     RW,           // Read/Write control
     SYNC,         // Synchronization output
     WE,           // Write Enable (active-high form)
@@ -168,8 +179,10 @@ enum class PinLabel {
 
     // Video chip pins
     CHROMA,       // Chrominance output
+    COLU,         // Color/Luminance output (TIA)
     COLOR,        // Color signal output (VIC-II)
     COLOR_CLK,    // Color clock
+    COMP_BLK,     // Composite blank (TIA)
     CSYNC,        // Composite sync
     DOT_CLK,      // Dot clock
     HSYNC,        // Horizontal sync
@@ -178,7 +191,12 @@ enum class PinLabel {
     VOUT,         // Composite video output
     VSYNC,        // Vertical sync
 
+    // Raster address pins (MC6845 CRTC, must remain sequential)
+    RA0, RA1, RA2, RA3, RA4,
+
     // Audio chip pins
+    AUD0,         // Audio output 0 (TIA)
+    AUD1,         // Audio output 1 (TIA)
     AUDIO_IN,     // Audio input
     AUDIO_OUT,    // Audio output
     FILTER_IN,    // Filter input
@@ -217,6 +235,9 @@ enum class PinLabel {
     EXT_IN,       // External audio input
     POTX,         // Paddle X input
     POTY,         // Paddle Y input
+
+    // TIA-specific input pins (must remain sequential)
+    INPT0, INPT1, INPT2, INPT3, INPT4, INPT5,
 
     // PLA specific pins (active-high forms; PLA outputs often
     // active-low — use _-prefixed labels for those)
@@ -272,6 +293,9 @@ enum class PinLabel {
     OSC_OUT,      // Oscillator output
     XTAL1,        // Crystal 1
     XTAL2,        // Crystal 2
+
+    // Power variant (TIA analog section)
+    VTIA,         // TIA-specific analog supply voltage
 
     // Unknown/custom pin — must be last
     UNKNOWN
