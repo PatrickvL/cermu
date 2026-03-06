@@ -111,6 +111,10 @@ public:
     void get_display_dimensions(int* width, int* height) const override;
     void set_framebuffer(uint32_t* buffer, int width, int height) override;
 
+    // Audio
+    uint32_t get_audio_samples(float* buffer, uint32_t max_samples) override;
+    void set_audio_sample_rate(int sample_rate_hz) override;
+
     // Input
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
 
