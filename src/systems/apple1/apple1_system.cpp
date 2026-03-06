@@ -290,6 +290,10 @@ void Apple1System::run_frame() {
 
     // Tick all attached peripheral devices
     tick_peripherals();
+
+    // Render terminal to RGBA framebuffer so the emu thread snapshot
+    // picks up the latest display state.
+    get_framebuffer();
 }
 
 // ============================================================================

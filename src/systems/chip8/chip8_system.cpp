@@ -549,6 +549,10 @@ void Chip8System::run_frame() {
         tick();
     }
     update_timers();
+
+    // Convert planes_ to RGBA framebuffer so the emu thread snapshot
+    // picks up the latest display state.
+    get_framebuffer();
 }
 
 // ============================================================================
