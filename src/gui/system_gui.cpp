@@ -28,6 +28,26 @@
 // Helpers
 // ============================================================================
 
+/**
+ * Normalize a keysym from its scancode when the physical key is a function key.
+ *
+ * On keyboards whose F-row defaults to media functions, SDL reports the media
+ * keycode (e.g. SDLK_AUDIOMUTE) as keysym while the scancode still reflects
+ * the physical F-key position.  This helper detects that mismatch and returns
+ * the correct SDLK_F* keysym so that all system handlers and the fullscreen
+ * toggle see function keys regardless of the Fn-lock state.
+ *
+ * For non-function-key scancodes, the original keysym is returned unchanged.
+ */
+static SDL_Keycode normalize_fkey_keysym(SDL_Keycode sym, SDL_Scancode sc) {
+    if (sc >= SDL_SCANCODE_F1 && sc <= SDL_SCANCODE_F12) {
+        SDL_Keycode expected = SDL_SCANCODE_TO_KEYCODE(sc);
+        if (sym != expected)
+            return expected;
+    }
+    return sym;
+}
+
 // ============================================================================
 // Constructor / Destructor
 // ============================================================================
@@ -1398,14 +1418,20 @@ void SystemGUI::emu_thread_func() {
                     system_->release_all_keys();
                     continue;
                 }
-                // Keyboard events → system keyboard handler + device routing
+                // Keyboard events → system keyboard handler + device routing.
+                // Normalize function-key keysyms from scancode so media-key
+                // keyboards still deliver SDLK_F1–F12 to all systems.
                 if (evt.type == SDL_KEYDOWN) {
+                    SDL_Keycode key = normalize_fkey_keysym(
+                        evt.key.keysym.sym, evt.key.keysym.scancode);
                     system_->handle_keyboard_event_ex(
-                        evt.key.keysym.sym, evt.key.keysym.scancode,
+                        key, evt.key.keysym.scancode,
                         evt.key.keysym.mod, true, evt.key.repeat != 0);
                 } else if (evt.type == SDL_KEYUP) {
+                    SDL_Keycode key = normalize_fkey_keysym(
+                        evt.key.keysym.sym, evt.key.keysym.scancode);
                     system_->handle_keyboard_event_ex(
-                        evt.key.keysym.sym, evt.key.keysym.scancode,
+                        key, evt.key.keysym.scancode,
                         evt.key.keysym.mod, false, false);
                 } else if (evt.type == SDL_TEXTINPUT) {
                     system_->handle_text_input(evt.text.text);
