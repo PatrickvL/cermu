@@ -596,6 +596,9 @@ bool Commodore264System<V>::initialize() {
         ted_ = new ted7360_t(ted_desc);
         if (ted_) {
             printf("%s: Created TED 7360 (%s)\n", Traits::name, is_pal_region ? "PAL" : "NTSC");
+            // Initialize sound subsystem: TED master clock is 2× CPU clock
+            uint32_t ted_clock = is_pal_region ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
+            ted_->audio_reset(ted_clock, c16_constants::AUDIO_SAMPLE_RATE);
         } else {
             printf("%s: Warning - TED 7360 creation failed\n", Traits::name);
         }
@@ -850,6 +853,31 @@ void Commodore264System<V>::set_framebuffer(uint32_t* buffer, int width, int hei
     if (ted_) {
         ted_->set_framebuffer(buffer, width, height);
     }
+}
+
+// ============================================================================
+// Audio
+// ============================================================================
+
+template<C264SeriesVariant V>
+uint32_t Commodore264System<V>::get_audio_samples(float* buffer, uint32_t max_samples) {
+    if (!ted_ || !buffer || max_samples == 0) return 0;
+
+    uint32_t avail = ted_->audio_available();
+    uint32_t to_read = (avail < max_samples) ? avail : max_samples;
+    if (to_read == 0) return 0;
+
+    return ted_->audio_read(buffer, to_read);
+}
+
+template<C264SeriesVariant V>
+void Commodore264System<V>::set_audio_sample_rate(int sample_rate_hz) {
+    if (!ted_ || sample_rate_hz <= 0) return;
+
+    // Re-initialize TED audio with the new sample rate
+    bool is_pal = (config_.region_option_index <= 0);
+    uint32_t ted_clock = is_pal ? TED_PAL_CLOCK_HZ : TED_NTSC_CLOCK_HZ;
+    ted_->audio_reset(ted_clock, static_cast<uint32_t>(sample_rate_hz));
 }
 
 // ============================================================================

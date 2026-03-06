@@ -217,14 +217,23 @@ void ted7360_t::render_debug_content() {
 
         // Sound
         if (ImGui::CollapsingHeader("Sound", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::Text("Channel 1: %s  Freq: $%04X (%d)",
+            ImGui::Text("Channel 1: %s  Freq: $%03X (%d)  Output: %s",
                         ted->sound.ch1_enabled ? "ON " : "OFF",
-                        ted->sound.freq1, ted->sound.freq1);
-            ImGui::Text("Channel 2: %s  Freq: $%04X (%d)  Noise: %s",
+                        ted->sound.freq1, ted->sound.freq1,
+                        ted->sound.ch1_output ? "HIGH" : "LOW");
+            ImGui::Text("Channel 2: %s  Freq: $%03X (%d)  Noise: %s",
                         ted->sound.ch2_enabled ? "ON " : "OFF",
                         ted->sound.freq2, ted->sound.freq2,
                         ted->sound.noise_enabled ? "YES" : "NO");
-            ImGui::Text("Volume:    %d", ted->sound.volume);
+            if (ted->sound.noise_enabled) {
+                ImGui::Text("  LFSR: $%02X  Output: %s",
+                            ted->sound.noise_shift_reg,
+                            (ted->sound.noise_shift_reg & 1) ? "LOW" : "HIGH");
+            }
+            ImGui::Text("Volume:    %d  DA Mode: %s",
+                        ted->sound.volume,
+                        ted->sound.da_mode ? "YES" : "NO");
+            ImGui::Text("Ring buf:  %u samples", ted->audio_available());
         }
 
         // IRQ

@@ -55,10 +55,10 @@
 #define TED_REG_CURSOR_HI    0x0C   // $FF0C — Cursor position bits [9:8] (bits [1:0] of byte); 10-bit index into screen matrix
 #define TED_REG_CURSOR_LO    0x0D   // $FF0D — Cursor position bits [7:0]; combined with CURSOR_HI → 0..999
 #define TED_REG_SOUND1_LO    0x0E   // $FF0E — Sound channel 1 frequency bits [7:0]
-#define TED_REG_SOUND1_HI    0x0F   // $FF0F — Sound channel 1 frequency bits [9:8] (bits [1:0] of byte)
-#define TED_REG_SOUND2_LO    0x10   // $FF10 — Sound channel 2 frequency [7:0]; 8-bit only — no high register
-#define TED_REG_SOUND_CTRL   0x11   // $FF11 — Sound control: noise mode, ch1/ch2 enable, volume [3:0]
-#define TED_REG_MEM_CTRL     0x12   // $FF12 — Memory control: character/bitmap base, ROM bank select
+#define TED_REG_SOUND2_LO    0x0F   // $FF0F — Sound channel 2 frequency bits [7:0]
+#define TED_REG_SOUND2_HI    0x10   // $FF10 — Sound channel 2 frequency bits [9:8] (bits [1:0] of byte)
+#define TED_REG_SOUND_CTRL   0x11   // $FF11 — Sound control: DA mode, noise, ch1/ch2 enable, volume [3:0]
+#define TED_REG_MEM_CTRL     0x12   // $FF12 — bits [1:0]: Sound ch1 frequency bits [9:8]; bits [7:2]: memory control
 #define TED_REG_CHAR_HI      0x13   // $FF13 — Character generator base address bits [15:10] (bits [7:2] of byte)
 #define TED_REG_BITMAP_ADDR  0x14   // $FF14 — Screen/bitmap base address bits [14:10] (bits [7:3]); bit 3 = bitmap toggle
 #define TED_REG_COLOR_BG0    0x15   // $FF15 — Background color 0 (7-bit: lum[6:4] | hue[3:0])
@@ -328,14 +328,77 @@ struct ted_bus_unit_t {
     uint8_t ba_low_count;               // Consecutive CPU cycles BA has been LOW (AEC stolen after 3)
 };
 
-// Sound Unit (placeholder — sound not yet implemented)
+// ============================================================================
+// SOUND UNIT — TED 2-channel audio (square wave + noise)
+// ============================================================================
+//
+// The TED Sound Unit contains two voices:
+//   Channel 1: 10-bit frequency counter, square wave output.
+//              Freq low byte from $FF0E, high bits [9:8] from $FF12 bits [1:0].
+//   Channel 2: 10-bit frequency counter, square wave OR noise output.
+//              Freq low byte from $FF0F, high bits [9:8] from $FF10 bits [1:0].
+//
+// Counters decrement at the TED master clock rate (= 2 × CPU clock).
+// On underflow the counter reloads from (1024 - freq_value) and the output
+// toggles (square wave) or the 8-bit LFSR is clocked (noise mode).
+//
+// Control register ($FF11):
+//   bits [3:0] — volume (0-8; values 9-15 clamp to 8)
+//   bit 4      — channel 1 enable
+//   bit 5      — channel 2 enable
+//   bit 6      — noise mode: channel 2 outputs LFSR instead of square wave
+//                (noise is active when bit 6 set AND bit 5 clear; if both
+//                 bit 5 and bit 6 are set, channel 2 outputs square wave)
+//   bit 7      — DA converter mode (voices hold high, volume acts as DAC)
+//
+// LFSR: 8-bit, left-shifting, taps at bits 7,5,4,1 (matching VICE/YAPE
+//       analysis).  Clocked by channel 2's counter underflow.  When noise
+//       is active, bit 0 of the shift register drives the output.
+
+#define TED_AUDIO_BUFFER_SIZE  (1 << 11)                    // 2048 — ring buffer capacity (float samples)
+#define TED_AUDIO_BUFFER_MASK  (TED_AUDIO_BUFFER_SIZE - 1)   // 0x7FF — wrap mask
+
+// Sound control register bit masks ($FF11)
+#define TED_SND_VOLUME_MASK    0x0F   // bits [3:0]: volume (0-8, 9-15 same as 8)
+#define TED_SND_CH1_ENABLE     0x10   // bit 4: channel 1 (square wave) enable
+#define TED_SND_CH2_ENABLE     0x20   // bit 5: channel 2 enable
+#define TED_SND_NOISE_ENABLE   0x40   // bit 6: noise mode for channel 2
+#define TED_SND_DA_MODE        0x80   // bit 7: DA converter mode
+
 struct ted_sound_unit_t {
-    uint16_t freq1;                     // Channel 1 frequency (10-bit, from $FF0E/$FF0F)
-    uint16_t freq2;                     // Channel 2 frequency (8-bit only, from $FF10)
+    // --- Decoded register state (updated on register write) ---
+    uint16_t freq1;                     // Channel 1 frequency (10-bit: $FF0E + $FF12 bits [1:0])
+    uint16_t freq2;                     // Channel 2 frequency (10-bit: $FF0F + $FF10 bits [1:0])
     uint8_t  volume;                    // Output volume (4-bit, from $FF11 bits [3:0])
-    bool     ch1_enabled;               // Channel 1 output enable
-    bool     ch2_enabled;               // Channel 2 output enable
-    bool     noise_enabled;             // Channel 2 noise mode (square wave when false)
+    bool     ch1_enabled;               // Channel 1 output enable ($FF11 bit 4)
+    bool     ch2_enabled;               // Channel 2 output enable ($FF11 bit 5)
+    bool     noise_enabled;             // Channel 2 noise mode ($FF11 bit 6 set, bit 5 clear)
+    bool     da_mode;                   // DA converter mode ($FF11 bit 7)
+
+    // --- Runtime oscillator state ---
+    uint16_t ch1_counter;               // Channel 1 period counter (10-bit, counts down at TED clock)
+    uint16_t ch2_counter;               // Channel 2 period counter (10-bit, counts down at TED clock)
+    bool     ch1_output;                // Channel 1 current square wave level (toggled on underflow)
+    bool     ch2_output;                // Channel 2 current square wave level (toggled on underflow)
+    uint8_t  noise_shift_reg;           // 8-bit LFSR for noise generation
+
+    // --- Downsampling state ---
+    uint32_t sample_accum;              // Accumulated mix table values between output samples
+    uint32_t sample_tick_count;         // TED clock ticks accumulated
+    uint32_t cycles_per_sample_fp;      // Fixed-point 16.16: TED clocks per output sample
+    uint32_t sample_frac;               // Fractional accumulator for sample timing (16.16)
+
+    // --- Analog output stage (first-order IIR filters) ---
+    float    lowpass_buf;               // Lowpass filter state
+    float    highpass_buf;              // Highpass filter state
+    float    lowpass_alpha;             // Lowpass coefficient
+    float    highpass_alpha;            // Highpass coefficient
+    float    output_gain;               // Maps filtered output to float range
+
+    // --- Output ring buffer (mono float, -1.0..+1.0) ---
+    float    buffer[TED_AUDIO_BUFFER_SIZE];
+    uint32_t write_pos;
+    uint32_t read_pos;
 };
 
 // Alias used by tick_one_timer() in ted7360.cpp
@@ -422,6 +485,19 @@ struct ted7360_t : public ChipBase {
     [[nodiscard]] static const uint32_t* get_palette();
 
     // ========================================================================
+    // Public API — Audio
+    // ========================================================================
+
+    /** Initialize audio subsystem.  Call once after construction or when sample rate changes. */
+    void audio_reset(uint32_t ted_clock_hz, uint32_t sample_rate_hz);
+
+    /** Returns number of audio samples available in the ring buffer. */
+    [[nodiscard]] uint32_t audio_available() const;
+
+    /** Read up to max_samples float samples from the ring buffer.  Returns actual count. */
+    uint32_t audio_read(float* dest, uint32_t max_samples);
+
+    // ========================================================================
     // Public data — Unit structures
     // ========================================================================
 
@@ -484,6 +560,7 @@ private:
     void    update_dma_condition();     // Evaluate whether current raster line is a DMA line
     void    check_raster_interrupt();   // Fire TED_IRQ_RASTER if raster_counter == raster_compare
     void    tick_timers();              // Decrement all three timers; fire IRQs on underflow
+    void    audio_tick();               // Clock sound oscillators (2 ticks per CPU cycle) and downsample
     void    pixel_sequencer();          // Produce 8 pixels for current x_cycle; update border flip-flops
     void    flush_line(uint16_t raster_line); // Resolve color_line[] indices to RGBA in framebuffer
     void    timing_advance();           // Advance x_cycle; handle end-of-line and end-of-frame

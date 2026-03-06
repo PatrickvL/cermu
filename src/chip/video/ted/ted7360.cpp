@@ -250,6 +250,193 @@ void ted7360_t::tick_timers() {
 }
 
 // ============================================================================
+// SOUND — TED 2-channel audio (square wave + noise)
+// ============================================================================
+// The TED sound unit has two voices, each with a 10-bit frequency counter:
+//   Channel 1: square wave only
+//   Channel 2: square wave OR noise (8-bit LFSR)
+//
+// Counters decrement at the TED master clock rate (2 × CPU clock).
+// Each call to audio_tick() processes 2 TED clock ticks (= 1 CPU cycle).
+//
+// Volume table derived from SDL-YAPE measurements (Csaba Czető).
+// Index: (voice1_high << 1) | voice0_high, × 16 volume levels.
+// Values 0–0x4E08 (int16 range), normalized to float in audio_reset().
+//
+// The volume table encodes the non-linear output of the TED DAC including
+// the interaction when both voices are active simultaneously (compression).
+
+static const int16_t ted_volume_table[4 * 16] = {
+    // Neither voice active (both low)
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    // Voice 0 (ch1) high only
+    0x0000, 0x024a, 0x064a, 0x0a4a, 0x0e4a, 0x124a, 0x164a, 0x1a4a,
+    0x1e4a, 0x1e4a, 0x1e4a, 0x1e4a, 0x1e4a, 0x1e4a, 0x1e4a, 0x1e4a,
+    // Voice 1 (ch2) high only
+    0x0000, 0x024a, 0x064a, 0x0a4a, 0x0e4a, 0x124a, 0x164a, 0x1a4a,
+    0x1e4a, 0x1e4a, 0x1e4a, 0x1e4a, 0x1e4a, 0x1e4a, 0x1e4a, 0x1e4a,
+    // Both voices high
+    0x0000, 0x0494, 0x0cd4, 0x1596, 0x1f30, 0x29a2, 0x34ec, 0x410e,
+    0x4e08, 0x4e08, 0x4e08, 0x4e08, 0x4e08, 0x4e08, 0x4e08, 0x4e08
+};
+
+static inline void ted_clock_noise_lfsr(uint8_t& sr) noexcept {
+    // 8-bit Fibonacci LFSR, left-shifting, taps at bits 7,5,4,1
+    // Feedback: new bit 0 = ~(bit7 ^ bit5 ^ bit4 ^ bit1)
+    uint8_t feedback = ((sr >> 7) ^ (sr >> 5) ^ (sr >> 4) ^ (sr >> 1)) & 1;
+    sr = static_cast<uint8_t>((sr << 1) | (feedback ^ 1));
+}
+
+void ted7360_t::audio_reset(uint32_t ted_clock_hz, uint32_t sample_rate_hz) {
+    if (sample_rate_hz == 0) return;
+
+    // Fixed-point 16.16: TED clocks per output sample
+    // Note: ted_clock_hz is the TED master clock (2 × CPU clock)
+    sound.cycles_per_sample_fp =
+        static_cast<uint32_t>(((uint64_t)ted_clock_hz << 16) / sample_rate_hz);
+
+    // First-order IIR filter coefficients for analog output stage:
+    //   Lowpass:  ~1600 Hz (smooths square wave harmonics)
+    //   Highpass: ~160 Hz  (removes DC offset)
+    float dt = 1.0f / static_cast<float>(sample_rate_hz);
+    sound.lowpass_alpha  = dt / (dt + 1.0e-4f);   // RC ≈ 100µs → fc ≈ 1592 Hz
+    sound.highpass_alpha = dt / (dt + 1.0e-3f);    // RC ≈ 1ms   → fc ≈  159 Hz
+
+    // Scale: max table value (both voices, vol=8) is 0x4E08 = 19976.
+    // Map to roughly ±0.8 float range for comfortable headroom.
+    sound.output_gain = 0.8f / static_cast<float>(ted_volume_table[3 * 16 + 8]);
+
+    // Zero runtime state (preserving decoded register values)
+    sound.ch1_counter    = 0;
+    sound.ch2_counter    = 0;
+    sound.ch1_output     = false;
+    sound.ch2_output     = false;
+    sound.noise_shift_reg = 0xFF;   // VICE/YAPE: initial shift register state
+
+    sound.sample_accum     = 0;
+    sound.sample_tick_count = 0;
+    sound.sample_frac      = 0;
+
+    sound.lowpass_buf  = 0.0f;
+    sound.highpass_buf = 0.0f;
+
+    sound.write_pos = 0;
+    sound.read_pos  = 0;
+    for (auto& s : sound.buffer) s = 0.0f;
+}
+
+void ted7360_t::audio_tick() {
+    // Skip if audio not initialized (cycles_per_sample_fp == 0)
+    if (sound.cycles_per_sample_fp == 0) return;
+
+    // Process 2 TED clock ticks per CPU cycle (TED master clock = 2 × CPU)
+    for (int half = 0; half < 2; ++half) {
+        // --- Channel 1: square wave ---
+        if (sound.ch1_counter == 0) {
+            // Reload: period = 1024 - freq_value (10-bit counter)
+            uint16_t period = static_cast<uint16_t>(1024 - sound.freq1);
+            sound.ch1_counter = (period > 0) ? period : 1u;
+            sound.ch1_output = !sound.ch1_output;
+        } else {
+            --sound.ch1_counter;
+        }
+
+        // --- Channel 2: square wave or noise ---
+        if (sound.ch2_counter == 0) {
+            uint16_t period = static_cast<uint16_t>(1024 - sound.freq2);
+            sound.ch2_counter = (period > 0) ? period : 1u;
+            if (sound.noise_enabled) {
+                // Clock the LFSR; output is bit 0 of shift register
+                ted_clock_noise_lfsr(sound.noise_shift_reg);
+            } else {
+                sound.ch2_output = !sound.ch2_output;
+            }
+        } else {
+            --sound.ch2_counter;
+        }
+
+        // --- Mix voices using volume table ---
+        // Determine each voice's digital output level
+        bool v0_high, v1_high;
+
+        if (sound.da_mode) {
+            // DA mode: both voices held high, volume register acts as DAC
+            v0_high = true;
+            v1_high = true;
+        } else {
+            v0_high = sound.ch1_enabled && sound.ch1_output;
+            if (sound.noise_enabled) {
+                // Noise mode: channel 2 output from LFSR bit 0 (inverted per VICE)
+                v1_high = sound.ch2_enabled && !(sound.noise_shift_reg & 1);
+            } else {
+                v1_high = sound.ch2_enabled && sound.ch2_output;
+            }
+        }
+
+        uint8_t table_index = static_cast<uint8_t>(
+            (v1_high ? 2u : 0u) | (v0_high ? 1u : 0u));
+        uint8_t vol = sound.volume;
+        if (vol > 8) vol = 8;   // Hardware clamp: volumes 9-15 = same as 8
+
+        sound.sample_accum += static_cast<uint32_t>(
+            ted_volume_table[table_index * 16 + vol]);
+        sound.sample_tick_count++;
+
+        // --- Downsample: emit one output sample when enough TED clocks elapsed ---
+        sound.sample_frac += (1u << 16);
+        if (sound.sample_frac >= sound.cycles_per_sample_fp) {
+            sound.sample_frac -= sound.cycles_per_sample_fp;
+
+            // Average accumulated table values over this sample window
+            float raw = 0.0f;
+            if (sound.sample_tick_count > 0) {
+                raw = static_cast<float>(sound.sample_accum)
+                    / static_cast<float>(sound.sample_tick_count);
+            }
+
+            // Lowpass: smooths square-wave harmonics
+            sound.lowpass_buf += sound.lowpass_alpha * (raw - sound.lowpass_buf);
+
+            // Highpass: removes DC offset (coupling capacitor model)
+            float ac = sound.lowpass_buf - sound.highpass_buf;
+            sound.highpass_buf += sound.highpass_alpha
+                                * (sound.lowpass_buf - sound.highpass_buf);
+
+            // Scale to float range and clamp
+            float out = ac * sound.output_gain;
+            if (out > 1.0f) out = 1.0f;
+            if (out < -1.0f) out = -1.0f;
+
+            // Write to ring buffer (drop sample if full)
+            uint32_t next_write = (sound.write_pos + 1) & TED_AUDIO_BUFFER_MASK;
+            if (next_write != sound.read_pos) {
+                sound.buffer[sound.write_pos] = out;
+                sound.write_pos = next_write;
+            }
+
+            sound.sample_accum = 0;
+            sound.sample_tick_count = 0;
+        }
+    }
+}
+
+uint32_t ted7360_t::audio_available() const {
+    return (sound.write_pos + TED_AUDIO_BUFFER_SIZE - sound.read_pos)
+         & TED_AUDIO_BUFFER_MASK;
+}
+
+uint32_t ted7360_t::audio_read(float* dest, uint32_t max_samples) {
+    if (!dest || max_samples == 0) return 0;
+    uint32_t count = 0;
+    while (count < max_samples && sound.read_pos != sound.write_pos) {
+        dest[count++] = sound.buffer[sound.read_pos];
+        sound.read_pos = (sound.read_pos + 1) & TED_AUDIO_BUFFER_MASK;
+    }
+    return count;
+}
+
+// ============================================================================
 // PIXEL SEQUENCER — 8 pixels per CPU cycle
 // ============================================================================
 // Handles border flip-flops, XSCROLL delay, shift register, and per-mode color
@@ -638,6 +825,12 @@ void ted7360_t::reset() {
     const int                  fb_w     = pixel.fb_width;
     const int                  fb_h     = pixel.fb_height;
 
+    // Preserve audio configuration (set by audio_reset(), survives chip reset)
+    const uint32_t             snd_cps  = sound.cycles_per_sample_fp;
+    const float                snd_lpa  = sound.lowpass_alpha;
+    const float                snd_hpa  = sound.highpass_alpha;
+    const float                snd_gain = sound.output_gain;
+
     // Zero all mutable state using aggregate initialization (well-defined in C++).
     registers   = {};
     timing      = {};
@@ -663,6 +856,13 @@ void ted7360_t::reset() {
     pixel.framebuffer          = fb;
     pixel.fb_width             = fb_w;
     pixel.fb_height            = fb_h;
+
+    // Restore audio configuration and initial shift register
+    sound.cycles_per_sample_fp = snd_cps;
+    sound.lowpass_alpha        = snd_lpa;
+    sound.highpass_alpha       = snd_hpa;
+    sound.output_gain          = snd_gain;
+    sound.noise_shift_reg      = 0xFF;
 
     // Default register values after reset
     registers.data[TED_REG_CONTROL1]   = 0x00;   // Display disabled
@@ -887,6 +1087,9 @@ bus_state_t ted7360_t::tick_phi1(bus_state_t bus_state) {
 
     // ===== STEP 5: Timer countdown =====
     tick_timers();
+
+    // ===== STEP 5.1: Sound oscillators =====
+    audio_tick();
 
     // ===== STEP 6: IRQ signaling =====
     // TED IRQ is active-LOW; assert by clearing the IRQ bit.
@@ -1138,6 +1341,55 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
             registers.data[reg] = data;
             break;
 
+        // ---- Sound registers ----
+
+        case TED_REG_SOUND1_LO:
+            // $FF0E: Channel 1 frequency low byte [7:0]
+            registers.data[reg] = data;
+            sound.freq1 = static_cast<uint16_t>(
+                data | ((registers.data[TED_REG_MEM_CTRL] & 0x03u) << 8));
+            break;
+
+        case TED_REG_SOUND2_LO:
+            // $FF0F: Channel 2 frequency low byte [7:0]
+            registers.data[reg] = data;
+            sound.freq2 = static_cast<uint16_t>(
+                data | ((registers.data[TED_REG_SOUND2_HI] & 0x03u) << 8));
+            break;
+
+        case TED_REG_SOUND2_HI:
+            // $FF10: Channel 2 frequency high bits [9:8] in data bits [1:0]
+            registers.data[reg] = data;
+            sound.freq2 = static_cast<uint16_t>(
+                registers.data[TED_REG_SOUND2_LO] | ((data & 0x03u) << 8));
+            break;
+
+        case TED_REG_SOUND_CTRL: {
+            // $FF11: Sound control register
+            //   bits [3:0] = volume (0-8; 9-15 clamp to 8 in audio_tick)
+            //   bit 4 = channel 1 enable
+            //   bit 5 = channel 2 enable
+            //   bit 6 = noise mode (active when bit 6 set, bit 5 clear)
+            //   bit 7 = DA converter mode
+            registers.data[reg] = data;
+            sound.volume       = data & TED_SND_VOLUME_MASK;
+            sound.ch1_enabled  = (data & TED_SND_CH1_ENABLE) != 0;
+            sound.ch2_enabled  = (data & TED_SND_CH2_ENABLE) != 0;
+            sound.noise_enabled = ((data & (TED_SND_NOISE_ENABLE | TED_SND_CH2_ENABLE))
+                                    == TED_SND_NOISE_ENABLE);
+            sound.da_mode      = (data & TED_SND_DA_MODE) != 0;
+
+            // In DA mode: reset oscillators, shift register, hold output high
+            if (sound.da_mode) {
+                sound.ch1_output    = true;
+                sound.ch2_output    = true;
+                sound.ch1_counter   = 0;
+                sound.ch2_counter   = 0;
+                sound.noise_shift_reg = 0xFF;
+            }
+            break;
+        }
+
         case TED_REG_CHARPOS_HI:
             // $FF1A write: data bit 0 → VC bit 8, preserve VC low byte
             registers.data[reg] = data;
@@ -1184,6 +1436,14 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
         }
 
         case TED_REG_MEM_CTRL:
+            // $FF12: bits [1:0] = channel 1 frequency high bits [9:8]
+            //        bits [7:2] = memory control (character/bitmap base, ROM bank)
+            registers.data[reg] = data;
+            sound.freq1 = static_cast<uint16_t>(
+                registers.data[TED_REG_SOUND1_LO] | ((data & 0x03u) << 8));
+            update_memory_addresses();
+            break;
+
         case TED_REG_CHAR_HI:
         case TED_REG_BITMAP_ADDR:
             registers.data[reg] = data;
