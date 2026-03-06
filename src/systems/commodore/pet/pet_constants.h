@@ -51,9 +51,9 @@ inline constexpr uint16_t SCREEN_RAM_START  = 0x8000;   // Screen RAM (1000 byte
 inline constexpr uint16_t SCREEN_RAM_END    = 0x8400;   // $8000-$83E7 used for 40×25
 
 inline constexpr uint16_t EXPANSION_ROM_A   = 0xA000;   // $A000-$AFFF expansion ROM
-inline constexpr uint16_t EXPANSION_ROM_B   = 0xB000;   // $B000-$BFFF expansion ROM
+// Note: $B000-$BFFF is BASIC ROM on PET 4032 (BASIC 4.0), expansion ROM on earlier models
 
-inline constexpr uint16_t BASIC_ROM_START   = 0xC000;   // $C000-$DFFF BASIC ROM (8KB)
+inline constexpr uint16_t BASIC_ROM_START   = 0xB000;   // $B000-$DFFF BASIC 4.0 ROM (12KB)
 inline constexpr uint16_t BASIC_ROM_END     = 0xE000;
 
 inline constexpr uint16_t EDITOR_ROM_START  = 0xE000;   // $E000-$E7FF Editor ROM (2KB)
