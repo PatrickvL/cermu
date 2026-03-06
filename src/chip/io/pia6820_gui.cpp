@@ -202,24 +202,56 @@ void pia6820_t::render_layout_content() {
 
 void pia6820_t::render_debug_content() {
 #ifdef CERMU_HAS_GUI
-    // --- Port A ---
-    if (ImGui::CollapsingHeader("Port A", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Text("Data:    $%02X", port_a_data);
-        ImGui::Text("DDR:     $%02X", port_a_direction);
-        ImGui::Text("Control: $%02X", port_a_control);
-        ImGui::Text("CA1: %d  CA2: %d", ca1_state ? 1 : 0, ca2_state ? 1 : 0);
-        ImGui::Text("IRQ A1: %s  A2: %s",
-                     irq_a1 ? "SET" : "clr", irq_a2 ? "SET" : "clr");
-    }
+    // Two-column layout: chip visualization on left, debugging info on right
+    ImVec2 window_size = ImGui::GetContentRegionAvail();
 
-    // --- Port B ---
-    if (ImGui::CollapsingHeader("Port B", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Text("Data:    $%02X", port_b_data);
-        ImGui::Text("DDR:     $%02X", port_b_direction);
-        ImGui::Text("Control: $%02X", port_b_control);
-        ImGui::Text("CB1: %d  CB2: %d", cb1_state ? 1 : 0, cb2_state ? 1 : 0);
-        ImGui::Text("IRQ B1: %s  B2: %s",
-                     irq_b1 ? "SET" : "clr", irq_b2 ? "SET" : "clr");
+    // Left column: Chip Visualization (fixed width ~250px)
+    ImVec2 chip_viz_size = ImVec2(250.0f, 0);
+    if (ImGui::BeginChild("ChipVisualization", chip_viz_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImGui::Text("Chip Visualization");
+        ImGui::Separator();
+
+        ImVec2 chip_center = ImGui::GetCursorScreenPos();
+        ImVec2 content_region = ImGui::GetContentRegionAvail();
+        chip_center.x += content_region.x * 0.5f;
+        chip_center.y += 200.0f;
+
+        ChipVisualization& renderer = GetGlobalChipRenderer();
+        ChipLayout& layout = get_pia6820_layout();
+
+        std::vector<PinSignalState> pin_states = get_pia6820_pin_states(this, &layout, bus_snapshot_);
+        renderer.render(layout, chip_center, pin_states, "PIA");
     }
+    ImGui::EndChild();
+
+    ImGui::SameLine(0, 5.0f);
+
+    // Right column: All debugging information
+    ImVec2 right_column_size = ImVec2(window_size.x - 270.0f, 0);
+    if (ImGui::BeginChild("DebugInfo", right_column_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImGui::Text("MC6821 PIA");
+        ImGui::Separator();
+
+        // --- Port A ---
+        if (ImGui::CollapsingHeader("Port A", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text("Data:    $%02X", port_a_data);
+            ImGui::Text("DDR:     $%02X", port_a_direction);
+            ImGui::Text("Control: $%02X", port_a_control);
+            ImGui::Text("CA1: %d  CA2: %d", ca1_state ? 1 : 0, ca2_state ? 1 : 0);
+            ImGui::Text("IRQ A1: %s  A2: %s",
+                         irq_a1 ? "SET" : "clr", irq_a2 ? "SET" : "clr");
+        }
+
+        // --- Port B ---
+        if (ImGui::CollapsingHeader("Port B", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text("Data:    $%02X", port_b_data);
+            ImGui::Text("DDR:     $%02X", port_b_direction);
+            ImGui::Text("Control: $%02X", port_b_control);
+            ImGui::Text("CB1: %d  CB2: %d", cb1_state ? 1 : 0, cb2_state ? 1 : 0);
+            ImGui::Text("IRQ B1: %s  B2: %s",
+                         irq_b1 ? "SET" : "clr", irq_b2 ? "SET" : "clr");
+        }
+    }
+    ImGui::EndChild();
 #endif
 }

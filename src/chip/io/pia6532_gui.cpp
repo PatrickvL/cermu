@@ -169,34 +169,66 @@ void pia6532_t::render_layout_content() {
 
 void pia6532_t::render_debug_content() {
 #ifdef CERMU_HAS_GUI
-    // --- I/O Ports ---
-    if (ImGui::CollapsingHeader("I/O Ports", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Text("Port A: Data=$%02X  DDR=$%02X  Input=$%02X  Effective=$%02X",
-                     port_a_data, port_a_ddr, port_a_input, read_port_a());
-        ImGui::Text("Port B: Data=$%02X  DDR=$%02X  Input=$%02X  Effective=$%02X",
-                     port_b_data, port_b_ddr, port_b_input, read_port_b());
-    }
+    // Two-column layout: chip visualization on left, debugging info on right
+    ImVec2 window_size = ImGui::GetContentRegionAvail();
 
-    // --- Timer ---
-    if (ImGui::CollapsingHeader("Timer", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Text("Value: $%02X (%3d)   %s",
-                     timer_value, timer_value, divider_label(timer_divider));
-        ImGui::Text("Sub-counter: %d / %d", timer_counter, timer_divider);
-        ImGui::Text("Underflow: %s  IRQ Enable: %s",
-                     timer_underflow ? "YES" : "no",
-                     timer_interrupt_enabled ? "yes" : "no");
-    }
+    // Left column: Chip Visualization (fixed width ~250px)
+    ImVec2 chip_viz_size = ImVec2(250.0f, 0);
+    if (ImGui::BeginChild("ChipVisualization", chip_viz_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImGui::Text("Chip Visualization");
+        ImGui::Separator();
 
-    // --- RAM (first 16 bytes as hex dump) ---
-    if (ImGui::CollapsingHeader("RAM (128 bytes)")) {
-        for (int row = 0; row < 8; row++) {
-            ImGui::Text("$%02X:", row * 16);
-            ImGui::SameLine();
-            for (int col = 0; col < 16; col++) {
+        ImVec2 chip_center = ImGui::GetCursorScreenPos();
+        ImVec2 content_region = ImGui::GetContentRegionAvail();
+        chip_center.x += content_region.x * 0.5f;
+        chip_center.y += 200.0f;
+
+        ChipVisualization& renderer = GetGlobalChipRenderer();
+        ChipLayout& layout = get_pia6532_layout();
+
+        std::vector<PinSignalState> pin_states = get_pia6532_pin_states(this, &layout, bus_snapshot_);
+        renderer.render(layout, chip_center, pin_states, "6532");
+    }
+    ImGui::EndChild();
+
+    ImGui::SameLine(0, 5.0f);
+
+    // Right column: All debugging information
+    ImVec2 right_column_size = ImVec2(window_size.x - 270.0f, 0);
+    if (ImGui::BeginChild("DebugInfo", right_column_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImGui::Text("MOS 6532 RIOT");
+        ImGui::Separator();
+
+        // --- I/O Ports ---
+        if (ImGui::CollapsingHeader("I/O Ports", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text("Port A: Data=$%02X  DDR=$%02X  Input=$%02X  Effective=$%02X",
+                         port_a_data, port_a_ddr, port_a_input, read_port_a());
+            ImGui::Text("Port B: Data=$%02X  DDR=$%02X  Input=$%02X  Effective=$%02X",
+                         port_b_data, port_b_ddr, port_b_input, read_port_b());
+        }
+
+        // --- Timer ---
+        if (ImGui::CollapsingHeader("Timer", ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::Text("Value: $%02X (%3d)   %s",
+                         timer_value, timer_value, divider_label(timer_divider));
+            ImGui::Text("Sub-counter: %d / %d", timer_counter, timer_divider);
+            ImGui::Text("Underflow: %s  IRQ Enable: %s",
+                         timer_underflow ? "YES" : "no",
+                         timer_interrupt_enabled ? "yes" : "no");
+        }
+
+        // --- RAM (first 16 bytes as hex dump) ---
+        if (ImGui::CollapsingHeader("RAM (128 bytes)")) {
+            for (int row = 0; row < 8; row++) {
+                ImGui::Text("$%02X:", row * 16);
                 ImGui::SameLine();
-                ImGui::Text("%02X", ram[row * 16 + col]);
+                for (int col = 0; col < 16; col++) {
+                    ImGui::SameLine();
+                    ImGui::Text("%02X", ram[row * 16 + col]);
+                }
             }
         }
     }
+    ImGui::EndChild();
 #endif
 }
