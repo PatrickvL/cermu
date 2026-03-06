@@ -150,8 +150,8 @@ struct ScancodeBitset {
 // CONTROLLER KEYBOARD MAP PRESETS (generic, cross-device)
 // ============================================================================
 
-/// Maximum scancodes in a single controller preset (8 = NES gamepad buttons).
-static constexpr int MAX_CONTROLLER_PRESET_KEYS = 8;
+/// Maximum scancodes in a single controller preset (12 = SNES gamepad buttons).
+static constexpr int MAX_CONTROLLER_PRESET_KEYS = 12;
 
 /**
  * A named keyboard-to-controller-button mapping preset.
