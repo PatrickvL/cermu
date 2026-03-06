@@ -466,134 +466,245 @@ void SystemGUI::render_menu_bar() {
         ImGui::EndMenu();
     }
     
-    // Hardware menu — chip submenus with live preview + detach-to-window
+    // Hardware menu — grouped by entity type (Chips, Connectors, Peripherals)
+    // with chip category prefixes (e.g. "CPU: MOS 6510 CPU").
+    //
+    // When only chips are present, the menu is flat.
+    // When connectors and/or peripherals also exist, entity types are grouped
+    // into submenus (2+ entries) or shown as prefixed items (1 entry).
     if (system_) {
         auto& chips = system_->get_registered_chips();
-        if (!chips.empty()) {
-            if (ImGui::BeginMenu("Hardware")) {
-                for (size_t i = 0; i < chips.size(); i++) {
-                    auto& sc = chips[i];
-                    bool has_content = sc.chip && (
-                        sc.chip->has_debug_content() ||
-                        sc.chip->has_layout_content() ||
-                        sc.chip->has_settings_content());
+        auto& ports = system_->get_connector_ports();
+        auto& devices = system_->get_owned_devices();
 
-                    if (!has_content) {
-                        ImGui::TextDisabled("%s", sc.display_name);
-                        continue;
+        // Count non-internal connector ports (only external ports are shown)
+        int ext_port_count = 0;
+        for (auto& p : ports) {
+            if (!p->get_definition().is_internal)
+                ext_port_count++;
+        }
+
+        bool has_entities = !chips.empty() || ext_port_count > 0 || !devices.empty();
+        bool needs_grouping = has_entities && (ext_port_count > 0 || !devices.empty());
+
+        // Helper lambda — renders a single chip submenu entry (pin button,
+        // debug/layout/settings content, width lock).  Reused by both the
+        // flat and grouped code paths.
+        auto render_chip_entry = [&](size_t idx, const char* label) {
+            auto& sc = chips[idx];
+            bool has_content = sc.chip && (
+                sc.chip->has_debug_content() ||
+                sc.chip->has_layout_content() ||
+                sc.chip->has_settings_content());
+
+            if (!has_content) {
+                ImGui::TextDisabled("%s", label);
+                return;
+            }
+
+            ImGui::PushID(static_cast<int>(idx));
+
+            // Lock the width after first render so it doesn't jitter
+            // as register values change; height auto-sizes freely.
+            {
+                float min_w = sc.submenu_locked_w > 0.0f
+                            ? sc.submenu_locked_w : 600.0f;
+                ImGui::SetNextWindowSizeConstraints(
+                    ImVec2(min_w, 0.0f),
+                    ImVec2(min_w, FLT_MAX));
+            }
+            if (ImGui::BeginMenu(label)) {
+                // Pin button at top-right to detach into a standalone window
+                {
+                    float avail = ImGui::GetContentRegionAvail().x;
+                    float btn_h = ImGui::GetFrameHeight();
+                    float btn_w = btn_h; // square
+                    ImVec2 cursor = ImGui::GetCursorPos();
+                    ImGui::SetCursorPosX(cursor.x + avail - btn_w);
+
+                    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered));
+
+                    // Draw a pin/thumbtack shape via the draw list
+                    ImVec2 btn_pos = ImGui::GetCursorScreenPos();
+                    bool already = sc.show_detached != 0;
+                    if (ImGui::InvisibleButton("##pin", ImVec2(btn_w, btn_h)) && !already) {
+                        sc.show_detached = 1;
+                        ImGui::CloseCurrentPopup();
+                    }
+                    bool hovered = ImGui::IsItemHovered();
+
+                    // Highlight on hover
+                    if (hovered && !already) {
+                        ImDrawList* dl = ImGui::GetWindowDrawList();
+                        dl->AddRectFilled(btn_pos,
+                            ImVec2(btn_pos.x + btn_w, btn_pos.y + btn_h),
+                            ImGui::GetColorU32(ImGuiCol_HeaderHovered),
+                            ImGui::GetStyle().FrameRounding);
                     }
 
-                    ImGui::PushID(static_cast<int>(i));
-
-                    // Each chip with content opens as a submenu on hover,
-                    // showing combined layout+debug+settings inline.
-                    // Lock the width after first render so it doesn't
-                    // jitter as register values change, but let the
-                    // height auto-size freely so tall layouts always fit.
+                    // Draw pin icon
                     {
-                        float min_w = sc.submenu_locked_w > 0.0f
-                                    ? sc.submenu_locked_w : 600.0f;
-                        ImGui::SetNextWindowSizeConstraints(
-                            ImVec2(min_w, 0.0f),
-                            ImVec2(min_w, FLT_MAX));
-                    }
-                    if (ImGui::BeginMenu(sc.display_name)) {
-                        // Pin button at top-right to detach into a standalone window
-                        {
-                            float avail = ImGui::GetContentRegionAvail().x;
-                            float btn_h = ImGui::GetFrameHeight();
-                            float btn_w = btn_h; // square
-                            ImVec2 cursor = ImGui::GetCursorPos();
-                            ImGui::SetCursorPosX(cursor.x + avail - btn_w);
+                        ImDrawList* dl = ImGui::GetWindowDrawList();
+                        ImVec2 center(btn_pos.x + btn_w * 0.5f, btn_pos.y + btn_h * 0.5f);
+                        float r = btn_h * 0.28f;
+                        ImU32 col = already
+                            ? ImGui::GetColorU32(ImGuiCol_TextDisabled)
+                            : (hovered
+                                ? ImGui::GetColorU32(ImGuiCol_Text)
+                                : ImGui::GetColorU32(ImGuiCol_TextDisabled));
 
-                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0, 0, 0, 0));
-                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered));
-
-                            // Draw a pin/thumbtack shape via the draw list
-                            ImVec2 btn_pos = ImGui::GetCursorScreenPos();
-                            bool already = sc.show_detached != 0;
-                            if (ImGui::InvisibleButton("##pin", ImVec2(btn_w, btn_h)) && !already) {
-                                sc.show_detached = 1;
-                                ImGui::CloseCurrentPopup();
-                            }
-                            bool hovered = ImGui::IsItemHovered();
-
-                            // Highlight on hover
-                            if (hovered && !already) {
-                                ImDrawList* dl = ImGui::GetWindowDrawList();
-                                dl->AddRectFilled(btn_pos,
-                                    ImVec2(btn_pos.x + btn_w, btn_pos.y + btn_h),
-                                    ImGui::GetColorU32(ImGuiCol_HeaderHovered),
-                                    ImGui::GetStyle().FrameRounding);
-                            }
-
-                            // Draw pin icon
-                            {
-                                ImDrawList* dl = ImGui::GetWindowDrawList();
-                                ImVec2 center(btn_pos.x + btn_w * 0.5f, btn_pos.y + btn_h * 0.5f);
-                                float r = btn_h * 0.28f;
-                                ImU32 col = already
-                                    ? ImGui::GetColorU32(ImGuiCol_TextDisabled)
-                                    : (hovered
-                                        ? ImGui::GetColorU32(ImGuiCol_Text)
-                                        : ImGui::GetColorU32(ImGuiCol_TextDisabled));
-
-                                // Pin head (circle)
-                                dl->AddCircleFilled(ImVec2(center.x, center.y - r * 0.3f), r, col);
-                                // Pin needle (line down from head)
-                                dl->AddLine(
-                                    ImVec2(center.x, center.y - r * 0.3f + r),
-                                    ImVec2(center.x, center.y + r * 1.4f),
-                                    col, 2.0f);
-                            }
-
-                            ImGui::PopStyleColor(2);
-                            if (hovered) {
-                                ImGui::SetTooltip(already ? "Already detached" : "Detach to window");
-                            }
-                            ImGui::SetCursorPos(cursor); // restore so content renders from top-left
-                        }
-
-                        // Blocking lock — the emu thread releases emu_mutex_
-                        // between frames (and rapidly during its idle spin
-                        // loop), so this typically acquires within
-                        // microseconds.  During frame simulation it may
-                        // block for a few ms, which is imperceptible for a
-                        // debug popup.  A try_to_lock here caused content to
-                        // flash on/off every frame.
-                        {
-                            std::lock_guard<std::mutex> chip_lock(emu_mutex_);
-                            if (sc.chip->has_debug_content()) {
-                                sc.chip->render_debug_content();
-                            } else if (sc.chip->has_layout_content()) {
-                                sc.chip->render_layout_content();
-                            }
-
-                            if (sc.chip->has_settings_content()) {
-                                ImGui::Separator();
-                                if (ImGui::CollapsingHeader("Settings")) {
-                                    sc.chip->render_settings_content();
-                                }
-                            }
-                        }
-
-                        // Capture the auto-sized width after first render
-                        // so it stays locked on subsequent frames.
-                        if (sc.submenu_locked_w <= 0.0f) {
-                            ImVec2 sz = ImGui::GetWindowSize();
-                            if (sz.x > 0.0f) {
-                                sc.submenu_locked_w = sz.x;
-                            }
-                        }
-
-                        ImGui::EndMenu();
+                        // Pin head (circle)
+                        dl->AddCircleFilled(ImVec2(center.x, center.y - r * 0.3f), r, col);
+                        // Pin needle (line down from head)
+                        dl->AddLine(
+                            ImVec2(center.x, center.y - r * 0.3f + r),
+                            ImVec2(center.x, center.y + r * 1.4f),
+                            col, 2.0f);
                     }
 
-                    ImGui::PopID();
+                    ImGui::PopStyleColor(2);
+                    if (hovered) {
+                        ImGui::SetTooltip(already ? "Already detached" : "Detach to window");
+                    }
+                    ImGui::SetCursorPos(cursor); // restore so content renders from top-left
+                }
+
+                // Blocking lock — the emu thread releases emu_mutex_
+                // between frames so this typically acquires within
+                // microseconds.
+                {
+                    std::lock_guard<std::mutex> chip_lock(emu_mutex_);
+                    if (sc.chip->has_debug_content()) {
+                        sc.chip->render_debug_content();
+                    } else if (sc.chip->has_layout_content()) {
+                        sc.chip->render_layout_content();
+                    }
+
+                    if (sc.chip->has_settings_content()) {
+                        ImGui::Separator();
+                        if (ImGui::CollapsingHeader("Settings")) {
+                            sc.chip->render_settings_content();
+                        }
+                    }
+                }
+
+                // Capture the auto-sized width after first render
+                if (sc.submenu_locked_w <= 0.0f) {
+                    ImVec2 sz = ImGui::GetWindowSize();
+                    if (sz.x > 0.0f) {
+                        sc.submenu_locked_w = sz.x;
+                    }
                 }
 
                 ImGui::EndMenu();
             }
+
+            ImGui::PopID();
+        };
+
+        // Helper — build a category-prefixed label for a chip.
+        // Returns pointer to a thread-local buffer (valid until next call).
+        auto chip_label = [](const SystemChip& sc) -> const char* {
+            static thread_local char buf[256];
+            const char* cat = sc.category;
+            if (cat && cat[0] != '\0') {
+                snprintf(buf, sizeof(buf), "%s: %s", cat, sc.display_name);
+            } else {
+                snprintf(buf, sizeof(buf), "%s", sc.display_name);
+            }
+            return buf;
+        };
+
+        // Helper — render connector port info as a menu item.
+        auto render_connector_entry = [](const ConnectorPort& port) {
+            const auto& def = port.get_definition();
+            auto* dev = port.get_attached_device();
+            if (dev) {
+                ImGui::MenuItem(def.name, dev->get_name(), false, false);
+            } else {
+                ImGui::TextDisabled("%s", def.name);
+            }
+        };
+
+        // Helper — render peripheral device info as a menu item.
+        auto render_peripheral_entry = [](const PeripheralDevice& dev) {
+            ImGui::TextDisabled("%s", dev.get_name());
+        };
+
+        if (has_entities && ImGui::BeginMenu("Hardware")) {
+            if (!needs_grouping) {
+                // =========================================================
+                // FLAT MODE — chips only, with category prefix
+                // =========================================================
+                for (size_t i = 0; i < chips.size(); i++) {
+                    render_chip_entry(i, chip_label(chips[i]));
+                }
+            } else {
+                // =========================================================
+                // GROUPED MODE — Chips / Connectors / Peripherals
+                // =========================================================
+
+                // --- Chips ---
+                if (chips.size() >= 2) {
+                    if (ImGui::BeginMenu("Chips")) {
+                        for (size_t i = 0; i < chips.size(); i++) {
+                            render_chip_entry(i, chip_label(chips[i]));
+                        }
+                        ImGui::EndMenu();
+                    }
+                } else if (chips.size() == 1) {
+                    char buf[280];
+                    snprintf(buf, sizeof(buf), "Chip: %s", chip_label(chips[0]));
+                    render_chip_entry(0, buf);
+                }
+
+                // --- Connectors ---
+                if (ext_port_count >= 2) {
+                    if (ImGui::BeginMenu("Connectors")) {
+                        for (auto& p : ports) {
+                            if (!p->get_definition().is_internal)
+                                render_connector_entry(*p);
+                        }
+                        ImGui::EndMenu();
+                    }
+                } else if (ext_port_count == 1) {
+                    for (auto& p : ports) {
+                        if (!p->get_definition().is_internal) {
+                            const auto& def = p->get_definition();
+                            auto* dev = p->get_attached_device();
+                            if (dev) {
+                                char buf[256];
+                                snprintf(buf, sizeof(buf), "Connector: %s", def.name);
+                                ImGui::MenuItem(buf, dev->get_name(), false, false);
+                            } else {
+                                char buf[256];
+                                snprintf(buf, sizeof(buf), "Connector: %s", def.name);
+                                ImGui::TextDisabled("%s", buf);
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                // --- Peripherals ---
+                if (!devices.empty()) {
+                    if (devices.size() >= 2) {
+                        if (ImGui::BeginMenu("Peripherals")) {
+                            for (auto& dev : devices) {
+                                render_peripheral_entry(*dev);
+                            }
+                            ImGui::EndMenu();
+                        }
+                    } else {
+                        char buf[256];
+                        snprintf(buf, sizeof(buf), "Peripheral: %s", devices[0]->get_name());
+                        ImGui::TextDisabled("%s", buf);
+                    }
+                }
+            }
+
+            ImGui::EndMenu();
         }
     }
     
