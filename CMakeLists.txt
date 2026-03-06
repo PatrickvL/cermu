@@ -272,6 +272,7 @@ set(CORE_SOURCES
     src/devices/input/neos_mouse.cpp
     src/devices/input/lightpen_device.cpp
     src/devices/input/nes_standard_controller.cpp
+    src/devices/input/nes_four_score.cpp
     src/devices/input/nes_zapper.cpp
     src/devices/input/snes_standard_controller.cpp
     # Devices — storage
