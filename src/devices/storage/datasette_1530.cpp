@@ -8,6 +8,7 @@
 
 #include "datasette_1530.h"
 #include "../../core/device_registry.h"
+#include "../../core/vfs/vfs.h"
 #include <cstdio>
 #include <cstring>
 
@@ -70,37 +71,42 @@ void Datasette1530Device::on_signal_change(uint32_t signals) {
 // ============================================================================
 
 bool Datasette1530Device::load_tap(const char* filepath) {
-    FILE* f = fopen(filepath, "rb");
-    if (!f) {
+    size_t file_size = 0;
+    uint8_t* file_data = vfs_read_file(filepath, &file_size);
+    if (!file_data) {
         printf("Datasette: Cannot open '%s'\n", filepath);
         return false;
     }
 
-    TAPHeader header;
-    if (fread(&header, sizeof(header), 1, f) != 1) {
-        fclose(f);
-        printf("Datasette: Failed to read TAP header from '%s'\n", filepath);
+    if (file_size < sizeof(TAPHeader)) {
+        free(file_data);
+        printf("Datasette: File too small for TAP header in '%s'\n", filepath);
         return false;
     }
 
+    TAPHeader header;
+    memcpy(&header, file_data, sizeof(header));
+
     // Verify signature
     if (memcmp(header.signature, "C64-TAPE-RAW", 12) != 0) {
-        fclose(f);
+        free(file_data);
         printf("Datasette: Invalid TAP signature in '%s'\n", filepath);
         return false;
     }
 
     tap_version_ = header.version;
 
-    // Read pulse data
-    tap_data_.resize(header.data_length);
-    size_t read = fread(tap_data_.data(), 1, header.data_length, f);
-    fclose(f);
+    // Read pulse data (everything after the header)
+    size_t pulse_available = file_size - sizeof(TAPHeader);
+    size_t pulse_length = (pulse_available < header.data_length)
+                          ? pulse_available : header.data_length;
+    tap_data_.assign(file_data + sizeof(TAPHeader),
+                     file_data + sizeof(TAPHeader) + pulse_length);
+    free(file_data);
 
-    if (read != header.data_length) {
+    if (pulse_length != header.data_length) {
         printf("Datasette: Warning — read %zu of %u bytes from '%s'\n",
-               read, header.data_length, filepath);
-        tap_data_.resize(read);
+               pulse_length, header.data_length, filepath);
     }
 
     media_loaded_ = true;

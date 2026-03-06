@@ -24,6 +24,7 @@
 
 #include "drive_1541.h"
 #include "../../core/device_registry.h"
+#include "../../core/vfs/vfs.h"
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
@@ -474,32 +475,23 @@ static std::vector<std::string> detect_disc_set(const std::string& filepath) {
 // ============================================================================
 
 bool Drive1541Device::insert_disk(const char* filepath) {
-    FILE* f = fopen(filepath, "rb");
-    if (!f) {
+    size_t size = 0;
+    uint8_t* data = vfs_read_file(filepath, &size);
+    if (!data) {
         printf("1541: Cannot open disk image '%s'\n", filepath);
         return false;
     }
 
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
     // Validate D64 size
     if (size != DRIVE_D64_STD_SIZE && size != DRIVE_D64_STD_SIZE_ERR &&
         size != DRIVE_D64_EXT_SIZE && size != DRIVE_D64_EXT_SIZE_ERR) {
-        printf("1541: Invalid D64 size %ld for '%s'\n", size, filepath);
-        fclose(f);
+        printf("1541: Invalid D64 size %zu for '%s'\n", size, filepath);
+        free(data);
         return false;
     }
 
-    disk_image_.resize(static_cast<size_t>(size));
-    if (fread(disk_image_.data(), 1, static_cast<size_t>(size), f) != static_cast<size_t>(size)) {
-        printf("1541: Failed to read disk image '%s'\n", filepath);
-        fclose(f);
-        disk_image_.clear();
-        return false;
-    }
-    fclose(f);
+    disk_image_.assign(data, data + size);
+    free(data);
 
     media_path_ = filepath;
     media_loaded_ = true;
@@ -550,32 +542,22 @@ bool Drive1541Device::swap_disk(const char* filepath) {
     // Only the disc media changes — IEC protocol state, uploaded fastloader
     // code, and VIA state are all preserved (like physically swapping a floppy).
 
-    FILE* f = fopen(filepath, "rb");
-    if (!f) {
+    size_t size = 0;
+    uint8_t* data = vfs_read_file(filepath, &size);
+    if (!data) {
         printf("1541: Cannot open disk image '%s' for swap\n", filepath);
         return false;
     }
 
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
     if (size != DRIVE_D64_STD_SIZE && size != DRIVE_D64_STD_SIZE_ERR &&
         size != DRIVE_D64_EXT_SIZE && size != DRIVE_D64_EXT_SIZE_ERR) {
-        printf("1541: Invalid D64 size %ld for swap '%s'\n", size, filepath);
-        fclose(f);
+        printf("1541: Invalid D64 size %zu for swap '%s'\n", size, filepath);
+        free(data);
         return false;
     }
 
-    disk_image_.resize(static_cast<size_t>(size));
-    if (fread(disk_image_.data(), 1, static_cast<size_t>(size), f) != static_cast<size_t>(size)) {
-        printf("1541: Failed to read disk image '%s' for swap\n", filepath);
-        fclose(f);
-        disk_image_.clear();
-        media_loaded_ = false;
-        return false;
-    }
-    fclose(f);
+    disk_image_.assign(data, data + size);
+    free(data);
 
     // Invalidate open channels — file references are stale after swap
     for (auto& ch : channels_) ch.clear();
