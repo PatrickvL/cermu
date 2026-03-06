@@ -84,6 +84,16 @@ const uint32_t tia_t::ntsc_palette[128] = {
 
 void tia_t::init() {
     reset();
+
+    // Convert ARGB palette to ABGR (GL_RGBA little-endian convention).
+    // The static ntsc_palette[] stores 0xAARRGGBB; the GL texture pipeline
+    // expects 0xAABBGGRR so that byte order on little-endian == R,G,B,A.
+    for (int i = 0; i < 128; ++i) {
+        uint32_t c = ntsc_palette[i];
+        palette_rgba_[i] = (c & 0xFF00FF00u)
+                         | ((c >> 16) & 0x000000FFu)
+                         | ((c << 16) & 0x00FF0000u);
+    }
 }
 
 void tia_t::reset() {
@@ -438,9 +448,9 @@ void tia_t::render_pixel() {
         }
     }
 
-    // Write pixel to framebuffer — color register upper 7 bits select palette entry
-    uint32_t argb = ntsc_palette[(color >> 1) & 0x7F];
-    framebuffer[row * fb_width + x] = argb;
+    // Write pixel to framebuffer — color register upper 7 bits select palette entry.
+    // palette_rgba_[] is pre-swizzled from ARGB to ABGR (GL_RGBA LE convention).
+    framebuffer[row * fb_width + x] = palette_rgba_[(color >> 1) & 0x7F];
 }
 
 // ============================================================================
@@ -462,17 +472,19 @@ void tia_t::tick_color_clock() {
         // Release WSYNC at end of scanline
         wsync_pending = false;
 
-        // Track visible row: detect VBLANK off → start counting visible rows
-        if (prev_vblank && !vblank_active) {
-            // VBLANK just turned off — start of visible area
-            visible_row = 0;
-        } else if (!vblank_active && visible_row >= 0) {
-            visible_row++;
-        } else if (vblank_active) {
-            // During VBLANK, visible_row stays invalid
-            visible_row = -1;
+        // Track visible row for framebuffer mapping.
+        // No VBLANK on→off transition required — if VBLANK is off and
+        // visible_row hasn't started, begin at row 0.  This handles games
+        // that never (or late) enable VBLANK.
+        if (!vblank_active) {
+            if (visible_row < 0) {
+                visible_row = 0;   // First visible line after VBLANK (or cold start)
+            } else {
+                visible_row++;     // Advance to next visible row
+            }
+        } else {
+            visible_row = -1;      // In VBLANK — no visible row
         }
-        prev_vblank = vblank_active;
 
         // Advance scanline
         scanline++;
@@ -524,11 +536,18 @@ void tia_t::write(uint16_t addr, uint8_t data) {
             vsync_active = (data & 0x02) != 0;
             break;
 
-        case TIA_VBLANK:
-            vblank_active = (data & 0x02) != 0;
+        case TIA_VBLANK: {
+            bool new_vblank = (data & 0x02) != 0;
+            // Detect VBLANK off transition mid-scanline so the rest of the
+            // current scanline renders to the framebuffer immediately.
+            if (vblank_active && !new_vblank && visible_row < 0) {
+                visible_row = 0;
+            }
+            vblank_active = new_vblank;
             input_latch_enabled = (data & 0x40) != 0;
             // Bit 7: dump paddle capacitors (INPT0-3) — not implemented
             break;
+        }
 
         case TIA_WSYNC:
             wsync_pending = true;
@@ -592,11 +611,11 @@ void tia_t::write(uint16_t addr, uint8_t data) {
 
         // Graphics
         case TIA_GRP0:
-            grp0_old = grp0;    // Old GRP0 is saved when new GRP0 is written
+            grp1_old = grp1;    // Writing GRP0 latches current GRP1 into GRP1-OLD
             grp0 = data;
             break;
         case TIA_GRP1:
-            grp1_old = grp1;    // Old GRP1 is saved when new GRP1 is written
+            grp0_old = grp0;    // Writing GRP1 latches current GRP0 into GRP0-OLD
             grp1 = data;
             // Writing GRP1 also updates the old ball enable
             enabl_old = enabl;

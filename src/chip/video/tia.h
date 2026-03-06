@@ -287,6 +287,10 @@ struct tia_t : public ChipBase {
     int       fb_width  = 0;
     int       fb_height = 0;
 
+    // Pre-swizzled palette in ABGR format (GL_RGBA little-endian convention).
+    // Built from ntsc_palette (ARGB) during init().
+    uint32_t palette_rgba_[128] = {};
+
     // ========================================================================
     // NTSC PALETTE
     // ========================================================================
