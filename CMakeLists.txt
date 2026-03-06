@@ -308,6 +308,7 @@ list(APPEND CHIP_SOURCES
     src/chip/io/mos6526.cpp
     src/chip/io/mos6522.cpp
     src/chip/io/pia6820.cpp
+    src/chip/io/pia6532.cpp
 
     # Logic
     src/chip/logic/pla.cpp
@@ -335,6 +336,9 @@ list(APPEND CHIP_SOURCES
     
     # Video - MC6845 CRTC (PET, BBC Micro, Amstrad CPC, ...)
     src/chip/video/mc6845.cpp
+    
+    # Video - TIA (Atari 2600)
+    src/chip/video/tia.cpp
 )
 # System sources
 set(SYSTEM_SOURCES
@@ -377,6 +381,9 @@ set(SYSTEM_SOURCES
     # Commodore PET system
     src/systems/commodore/pet/pet_system.cpp
     src/systems/commodore/pet/pet_keyboard_matrix.cpp
+    
+    # Atari 2600 system
+    src/systems/atari2600/atari2600_system.cpp
 )
 
 # Testing sources
