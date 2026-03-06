@@ -99,9 +99,12 @@ void SystemGUI::handle_events() {
     while (SDL_PollEvent(&event)) {
         ImGui_ImplSDL2_ProcessEvent(&event);
         
-        // Consume F11 — fullscreen toggle (filter repeats; don't forward to emulation)
+        // Consume F11 — fullscreen toggle (filter repeats; don't forward to emulation).
+        // Match on scancode (physical key position) rather than keysym so that
+        // keyboards whose F-row defaults to media functions still toggle
+        // fullscreen without requiring the Fn-lock key.
         if ((event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) &&
-            event.key.keysym.sym == SDLK_F11) {
+            event.key.keysym.scancode == SDL_SCANCODE_F11) {
             if (event.type == SDL_KEYDOWN && !event.key.repeat) {
                 Uint32 flags = SDL_GetWindowFlags(get_window());
                 if (flags & SDL_WINDOW_FULLSCREEN_DESKTOP) {
