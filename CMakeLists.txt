@@ -435,6 +435,10 @@ if(BUILD_GUI)
         src/chip/sound/nes_apu_gui.cpp
         src/chip/video/nes_ppu/nes_ppu_gui.cpp
         src/chip/input/cd4021_gui.cpp
+        src/chip/video/tia_gui.cpp
+        src/chip/video/mc6845_gui.cpp
+        src/chip/io/pia6532_gui.cpp
+        src/chip/io/pia6820_gui.cpp
     )
     
     # Generic GUI sources for multi-system support
@@ -463,6 +467,10 @@ set(GUI_STUB_SOURCES
     src/chip/video/nes_ppu/nes_ppu_gui.cpp
     src/chip/sound/nes_apu_gui.cpp
     src/chip/input/cd4021_gui.cpp
+    src/chip/video/tia_gui.cpp
+    src/chip/video/mc6845_gui.cpp
+    src/chip/io/pia6532_gui.cpp
+    src/chip/io/pia6820_gui.cpp
 )
 
 # Console executable (no GUI dependencies)
