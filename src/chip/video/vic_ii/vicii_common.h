@@ -534,10 +534,8 @@ struct vicii_t : public ChipBase {
     ~vicii_t() override;
 
     // ChipBase interface
-    bool has_debug_content() const override { return true; }
     bool has_settings_content() const override { return true; }
     bool has_layout_content() const override { return true; }
-    void render_debug_content() override;
     void render_settings_content() override;
     void render_layout_content() override;
 
@@ -564,4 +562,7 @@ struct vicii_t : public ChipBase {
     static const uint32_t* get_default_palette();
     uint16_t get_raster_counter() const;
     uint16_t get_x_coordinate() const;
+
+private:
+    void register_debug_fields();
 };

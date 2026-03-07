@@ -2591,6 +2591,7 @@ void vicii_t::init(const vicii_chip_config_t* config, void (*bank_change)(void*,
     info_ = ChipInfo{pal ? "MOS6569" : "MOS6567", "MOS Technology"};
     vicii_initialize(this);
     vicii_initialize_timing(this, config);
+    register_debug_fields();
 }
 
 // Destructor — clean up dynamically allocated pixel line buffers
@@ -2648,4 +2649,73 @@ void vicii_t::set_framebuffer(uint32_t* framebuffer, int width, int height) {
         memset(pixel.pixel_line_priority, VICII_PRIORITY_BORDER, config->visible_pixels_per_line);
         memset(pixel.pixel_line_color, border_color, config->visible_pixels_per_line);
     }
+}
+
+// ============================================================================
+// Debug field registration (populates ChipDebugRegistry for the default
+// two-column debug layout provided by ChipBase)
+// ============================================================================
+
+void vicii_t::register_debug_fields() {
+    auto& r = debug_registry_;
+    r.set_registers(registers.data, 66);
+
+    // Screen mode names indexed by (ECM<<2 | BMM<<1 | MCM)
+    static constexpr const char* screen_mode_names[] = {
+        "Standard Text", "Multicolor Text", "Standard Bitmap",
+        "Multicolor Bitmap", "Extended Color Text", "Invalid Mode",
+        "Invalid Mode", "Invalid Mode"
+    };
+
+    // ---- Chip Information ----
+    r.category("Chip Information")
+     .value("Cycles/Line", [this]() -> uint32_t { return config->cycles_per_line; }, 8)
+     .value("Total Lines", [this]() -> uint32_t { return config->total_lines; }, 16)
+     .value("Current Bank", [this]() -> uint32_t { return memory.bank_base / 0x4000; }, 8);
+
+    // ---- Raster Information ----
+    r.category("Raster Information")
+     .raster_position("Position",
+         std::function<uint32_t()>([this]() -> uint32_t { return timing.raster_counter; }),
+         std::function<uint32_t()>([this]() -> uint32_t { return timing.x_cycle; }),
+         std::function<uint32_t()>([this]() -> uint32_t { return config->total_lines; }),
+         std::function<uint32_t()>([this]() -> uint32_t { return config->cycles_per_line; }))
+     .flag("Badline", [this]() -> uint32_t { return video_logic.is_bad_line; })
+     .value("X Coordinate", [this]() -> uint32_t { return timing.x_coordinate; }, 16);
+
+    // ---- Control Registers ----
+    r.category("Control Registers")
+     .value("$D011 Control 1", vicii_regs::C1)
+     .indent(1)
+     .flag("RST8", vicii_regs::C1, 7)
+     .flag("ECM", vicii_regs::C1, 6)
+     .flag("BMM", vicii_regs::C1, 5)
+     .flag("DEN", vicii_regs::C1, 4)
+     .flag("RSEL", vicii_regs::C1, 3)
+     .value("YSCROLL", [this]() -> uint32_t { return registers.data[vicii_regs::C1] & 0x07; }, 8)
+     .indent(0)
+     .value("$D016 Control 2", vicii_regs::C2)
+     .indent(1)
+     .flag("RES", vicii_regs::C2, 5)
+     .flag("MCM", vicii_regs::C2, 4)
+     .flag("CSEL", vicii_regs::C2, 3)
+     .value("XSCROLL", [this]() -> uint32_t { return registers.data[vicii_regs::C2] & 0x07; }, 8)
+     .indent(0)
+     .value("$D018 Memory Setup", vicii_regs::MP)
+     .indent(1)
+     .address("Video Matrix Base", [this]() -> uint32_t {
+         return ((registers.data[vicii_regs::MP] >> 4) & 0x0F) * 0x400;
+     }, 16)
+     .address("Character Base", [this]() -> uint32_t {
+         return ((registers.data[vicii_regs::MP] >> 1) & 0x07) * 0x800;
+     }, 16)
+     .indent(0)
+     .state("Screen Mode", [this]() -> uint32_t {
+         uint8_t cr1 = registers.data[vicii_regs::C1];
+         uint8_t cr2 = registers.data[vicii_regs::C2];
+         uint8_t ecm = (cr1 >> 6) & 1;
+         uint8_t bmm = (cr1 >> 5) & 1;
+         uint8_t mcm = (cr2 >> 4) & 1;
+         return (ecm << 2) | (bmm << 1) | mcm;
+     }, screen_mode_names, 8);
 }
