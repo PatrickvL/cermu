@@ -286,8 +286,10 @@ add_executable(a2600_test_runner
     ${IO_DIR}/pia6532_gui.cpp
     ${CORE_DIR}/chip.cpp
     ${CORE_DIR}/chip_layout.cpp
+    ${CORE_DIR}/chip_debug_registry.cpp
     ${CORE_DIR}/pin_labels.cpp
     ${CORE_DIR}/ioport.cpp
+    ${SRC_DIR}/gui/chip_debug_registry_gui.cpp
 )
 target_include_directories(a2600_test_runner PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../src

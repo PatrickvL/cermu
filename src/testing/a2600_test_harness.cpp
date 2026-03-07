@@ -1696,6 +1696,1045 @@ int test_frame_cycle_count(harness_t* h) {
 }
 
 // =============================================================================
+// ███████╗ EXTENDED HARDWARE ACCURACY TESTS ███████╗
+// =============================================================================
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: All 8 NUSIZ modes (player copies and widths)
+// ─────────────────────────────────────────────────────────────────────────────
+// NUSIZ bits 0-2 control number of copies and spacing:
+//   0: one copy        1: two close       2: two medium   3: three close
+//   4: two wide        5: double width    6: three medium  7: quad width
+
+int test_tia_nusiz_all_modes(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // For each NUSIZ mode, render a full scanline and verify the expected
+    // pixel pattern at the copy positions and in between.
+    struct nusiz_test {
+        uint8_t nusiz;
+        int copy_positions[3];  // -1 = no copy
+        int pixel_width;        // Width of each copy in pixels
+        const char* desc;
+    };
+
+    static const nusiz_test tests[] = {
+        { 0, {40, -1, -1}, 8,  "one copy" },
+        { 1, {40, 56, -1}, 8,  "two close" },
+        { 2, {40, 72, -1}, 8,  "two medium" },
+        { 3, {40, 56, 72}, 8,  "three close" },
+        { 4, {40, 104, -1}, 8, "two wide" },
+        { 5, {40, -1, -1}, 16, "double width" },
+        { 6, {40, 72, 104}, 8, "three medium" },
+        { 7, {40, -1, -1}, 32, "quad width" },
+    };
+
+    uint32_t p0_color = h->tia.palette_rgba_[(0x1A >> 1) & 0x7F];
+    uint32_t bg_color = h->tia.palette_rgba_[0];
+
+    for (const auto& t : tests) {
+        reset(h);
+        tia_write(h, TIA_W_GRP0, 0xFF);      // Full 8-pixel bar
+        tia_write(h, TIA_W_COLUP0, 0x1A);
+        tia_write(h, TIA_W_COLUBK, 0x00);
+        tia_write(h, TIA_W_NUSIZ0, t.nusiz);
+        h->tia.pos_p0 = 40;
+        tia_write(h, TIA_W_VBLANK, 0x00);
+        h->tia.scanline = 40;
+        h->tia.visible_row = 0;
+        clock_cpu_cycles(h, 76);
+
+        // Verify first copy at expected position
+        A26_ASSERT_EQ32(h, "NUSIZ_ALL", h->framebuffer[0 * harness_t::FB_W + t.copy_positions[0]],
+                        p0_color, "NUSIZ=%d (%s): copy 0 present", t.nusiz, t.desc);
+
+        // Verify copy width
+        if (t.copy_positions[0] + t.pixel_width < 160) {
+            A26_ASSERT_EQ32(h, "NUSIZ_ALL",
+                            h->framebuffer[0 * harness_t::FB_W + t.copy_positions[0] + t.pixel_width],
+                            bg_color, "NUSIZ=%d (%s): copy 0 ends after %d px",
+                            t.nusiz, t.desc, t.pixel_width);
+        }
+
+        // Verify second copy if present
+        if (t.copy_positions[1] >= 0) {
+            A26_ASSERT_EQ32(h, "NUSIZ_ALL",
+                            h->framebuffer[0 * harness_t::FB_W + t.copy_positions[1]],
+                            p0_color, "NUSIZ=%d (%s): copy 1 present", t.nusiz, t.desc);
+        }
+
+        // Verify third copy if present
+        if (t.copy_positions[2] >= 0) {
+            A26_ASSERT_EQ32(h, "NUSIZ_ALL",
+                            h->framebuffer[0 * harness_t::FB_W + t.copy_positions[2]],
+                            p0_color, "NUSIZ=%d (%s): copy 2 present", t.nusiz, t.desc);
+        }
+    }
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Missile widths (1×, 2×, 4×, 8×)
+// ─────────────────────────────────────────────────────────────────────────────
+// NUSIZ bits 4-5 control missile width: 0=1px, 1=2px, 2=4px, 3=8px
+
+int test_tia_missile_widths(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    uint32_t m_color = h->tia.palette_rgba_[(0x1A >> 1) & 0x7F];
+    uint32_t bg_color = h->tia.palette_rgba_[0];
+
+    for (uint8_t size_bits = 0; size_bits < 4; size_bits++) {
+        reset(h);
+        int expected_width = 1 << size_bits;
+
+        tia_write(h, TIA_W_ENAM0, 0x02);
+        tia_write(h, TIA_W_NUSIZ0, static_cast<uint8_t>(size_bits << 4));
+        tia_write(h, TIA_W_COLUP0, 0x1A);
+        tia_write(h, TIA_W_COLUBK, 0x00);
+        h->tia.pos_m0 = 80;
+        tia_write(h, TIA_W_VBLANK, 0x00);
+        h->tia.scanline = 40;
+        h->tia.visible_row = 0;
+        clock_cpu_cycles(h, 76);
+
+        // First pixel should be missile color
+        A26_ASSERT_EQ32(h, "M_WIDTH", h->framebuffer[0 * harness_t::FB_W + 80],
+                        m_color, "Missile width %d: first pixel", expected_width);
+
+        // Pixel at position + width should be background
+        int end_pos = 80 + expected_width;
+        if (end_pos < 160) {
+            A26_ASSERT_EQ32(h, "M_WIDTH", h->framebuffer[0 * harness_t::FB_W + end_pos],
+                            bg_color, "Missile width %d: ends at x=%d", expected_width, end_pos);
+        }
+
+        // Verify last missile pixel is still colored
+        A26_ASSERT_EQ32(h, "M_WIDTH",
+                        h->framebuffer[0 * harness_t::FB_W + 80 + expected_width - 1],
+                        m_color, "Missile width %d: last pixel", expected_width);
+    }
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Ball sizes (1×, 2×, 4×, 8×)
+// ─────────────────────────────────────────────────────────────────────────────
+// CTRLPF bits 4-5 control ball width: 0=1px, 1=2px, 2=4px, 3=8px
+
+int test_tia_ball_sizes(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    uint32_t bl_color = h->tia.palette_rgba_[(0x2A >> 1) & 0x7F];
+    uint32_t bg_color = h->tia.palette_rgba_[0];
+
+    for (uint8_t size_bits = 0; size_bits < 4; size_bits++) {
+        reset(h);
+        int expected_width = 1 << size_bits;
+
+        tia_write(h, TIA_W_ENABL, 0x02);
+        tia_write(h, TIA_W_CTRLPF, static_cast<uint8_t>(size_bits << 4));
+        tia_write(h, TIA_W_COLUPF, 0x2A);
+        tia_write(h, TIA_W_COLUBK, 0x00);
+        h->tia.pos_bl = 100;
+        tia_write(h, TIA_W_VBLANK, 0x00);
+        h->tia.scanline = 40;
+        h->tia.visible_row = 0;
+        clock_cpu_cycles(h, 76);
+
+        A26_ASSERT_EQ32(h, "BL_SIZE", h->framebuffer[0 * harness_t::FB_W + 100],
+                        bl_color, "Ball size %d: first pixel", expected_width);
+
+        int end_pos = 100 + expected_width;
+        if (end_pos < 160) {
+            A26_ASSERT_EQ32(h, "BL_SIZE", h->framebuffer[0 * harness_t::FB_W + end_pos],
+                            bg_color, "Ball size %d: ends at x=%d", expected_width, end_pos);
+        }
+
+        A26_ASSERT_EQ32(h, "BL_SIZE",
+                        h->framebuffer[0 * harness_t::FB_W + 100 + expected_width - 1],
+                        bl_color, "Ball size %d: last pixel", expected_width);
+    }
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Score mode (playfield uses player colors)
+// ─────────────────────────────────────────────────────────────────────────────
+// When CTRLPF bit 1 is set, the left half of the playfield uses COLUP0
+// and the right half uses COLUP1, creating a score display effect.
+
+int test_tia_score_mode(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Full playfield ON on both halves
+    tia_write(h, TIA_W_PF0, 0xF0);
+    tia_write(h, TIA_W_PF1, 0xFF);
+    tia_write(h, TIA_W_PF2, 0xFF);
+    tia_write(h, TIA_W_COLUP0, 0x34);   // Red player 0
+    tia_write(h, TIA_W_COLUP1, 0x84);   // Blue player 1
+    tia_write(h, TIA_W_COLUPF, 0x0E);   // White PF (should NOT be used in score mode)
+    tia_write(h, TIA_W_COLUBK, 0x00);   // Black background
+    tia_write(h, TIA_W_CTRLPF, 0x02);   // Score mode enabled
+    tia_write(h, TIA_W_VBLANK, 0x00);
+
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    uint32_t p0_color = h->tia.palette_rgba_[(0x34 >> 1) & 0x7F];
+    uint32_t p1_color = h->tia.palette_rgba_[(0x84 >> 1) & 0x7F];
+
+    // Left half (x=0-79): PF should use COLUP0
+    A26_ASSERT_EQ32(h, "SCORE", h->framebuffer[0 * harness_t::FB_W + 0],
+                    p0_color, "Score mode left half x=0 uses COLUP0");
+    A26_ASSERT_EQ32(h, "SCORE", h->framebuffer[0 * harness_t::FB_W + 40],
+                    p0_color, "Score mode left half x=40 uses COLUP0");
+
+    // Right half (x=80-159): PF should use COLUP1
+    A26_ASSERT_EQ32(h, "SCORE", h->framebuffer[0 * harness_t::FB_W + 80],
+                    p1_color, "Score mode right half x=80 uses COLUP1");
+    A26_ASSERT_EQ32(h, "SCORE", h->framebuffer[0 * harness_t::FB_W + 120],
+                    p1_color, "Score mode right half x=120 uses COLUP1");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: HMOVE all 16 motion values
+// ─────────────────────────────────────────────────────────────────────────────
+// Horizontal motion register is 4-bit signed (upper nibble of HMxx).
+// Values: $70 → +7 (move left 7), $00 → 0, $80 → -8 (move right 8),
+//         $F0 → -1 (move right 1).
+// HMOVE subtracts the value, so positive moves left, negative moves right.
+
+int test_tia_hmove_all_values(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Test all 16 signed motion values
+    static const struct { uint8_t hm_val; int8_t motion; } hm_tests[] = {
+        { 0x00,  0 }, { 0x10, +1 }, { 0x20, +2 }, { 0x30, +3 },
+        { 0x40, +4 }, { 0x50, +5 }, { 0x60, +6 }, { 0x70, +7 },
+        { 0x80, -8 }, { 0x90, -7 }, { 0xA0, -6 }, { 0xB0, -5 },
+        { 0xC0, -4 }, { 0xD0, -3 }, { 0xE0, -2 }, { 0xF0, -1 },
+    };
+
+    for (const auto& t : hm_tests) {
+        h->tia.pos_p0 = 80;
+        tia_write(h, TIA_W_HMP0, t.hm_val);
+        tia_write(h, TIA_W_HMOVE, 0x00);
+
+        int expected = 80 - t.motion;
+        while (expected < 0) expected += 160;
+        while (expected >= 160) expected -= 160;
+
+        A26_ASSERT_EQ(h, "HMOVE_ALL", h->tia.pos_p0, static_cast<uint8_t>(expected),
+                      "HMP0=$%02X (motion=%d): pos 80→%d", t.hm_val, t.motion, expected);
+    }
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: HMOVE wrapping at position boundaries
+// ─────────────────────────────────────────────────────────────────────────────
+// Verify position wraps correctly around 0 and 159.
+
+int test_tia_hmove_wrap_boundaries(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Move from position 2 left by 7 → should wrap to 155 (2 - (-7) = 9... wait
+    // HMOVE subtracts: new_pos = pos - motion. motion = +7 → new_pos = 2 - 7 = -5 → 155
+    h->tia.pos_p0 = 2;
+    tia_write(h, TIA_W_HMP0, 0x70);   // motion = +7
+    tia_write(h, TIA_W_HMOVE, 0x00);
+    A26_ASSERT_EQ(h, "HMOVE_WRAP", h->tia.pos_p0, 155,
+                  "Wrap left: pos 2, motion +7 → 155");
+
+    // Move from position 158 right by 5 → 158 - (-5) = 163 → 3
+    h->tia.pos_p0 = 158;
+    tia_write(h, TIA_W_HMP0, 0xB0);   // motion = -5
+    tia_write(h, TIA_W_HMOVE, 0x00);
+    A26_ASSERT_EQ(h, "HMOVE_WRAP", h->tia.pos_p0, 3,
+                  "Wrap right: pos 158, motion -5 → 3");
+
+    // Move from position 0 right by 1 → 0 - (-1) = 1
+    h->tia.pos_p0 = 0;
+    tia_write(h, TIA_W_HMP0, 0xF0);   // motion = -1
+    tia_write(h, TIA_W_HMOVE, 0x00);
+    A26_ASSERT_EQ(h, "HMOVE_WRAP", h->tia.pos_p0, 1,
+                  "Edge: pos 0, motion -1 → 1");
+
+    // Move from position 159 left by 1 → 159 - 1 = 158
+    h->tia.pos_p0 = 159;
+    tia_write(h, TIA_W_HMP0, 0x10);   // motion = +1
+    tia_write(h, TIA_W_HMOVE, 0x00);
+    A26_ASSERT_EQ(h, "HMOVE_WRAP", h->tia.pos_p0, 158,
+                  "Edge: pos 159, motion +1 → 158");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Playfield PF1 bit ordering (reversed vs PF0/PF2)
+// ─────────────────────────────────────────────────────────────────────────────
+// PF1 bits are displayed in reverse order: D7 first (leftmost), D0 last.
+// This is the opposite of PF2 which displays D0 first, D7 last.
+
+int test_tia_playfield_pf1_bit_order(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // PF0=0, PF1=$80 (only D7 set), PF2=0
+    // PF1 D7 is the first bit of PF1 section → pixels 16-19
+    tia_write(h, TIA_W_PF0, 0x00);
+    tia_write(h, TIA_W_PF1, 0x80);
+    tia_write(h, TIA_W_PF2, 0x00);
+    tia_write(h, TIA_W_COLUPF, 0x0E);
+    tia_write(h, TIA_W_COLUBK, 0x00);
+    tia_write(h, TIA_W_CTRLPF, 0x00);
+    tia_write(h, TIA_W_VBLANK, 0x00);
+
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    uint32_t pf_color = h->tia.palette_rgba_[(0x0E >> 1) & 0x7F];
+    uint32_t bg_color = h->tia.palette_rgba_[0];
+
+    // PF0 occupies pixels 0-15 (bits 4-7, each 4 px wide) — all 0
+    A26_ASSERT_EQ32(h, "PF1_ORD", h->framebuffer[0 * harness_t::FB_W + 0],
+                    bg_color, "PF0 empty at x=0");
+
+    // PF1 D7 → pixel 16-19 (first PF1 pixel group)
+    A26_ASSERT_EQ32(h, "PF1_ORD", h->framebuffer[0 * harness_t::FB_W + 16],
+                    pf_color, "PF1 D7 at x=16 (ON)");
+
+    // PF1 D6-D0 → pixels 20-47 — all empty
+    A26_ASSERT_EQ32(h, "PF1_ORD", h->framebuffer[0 * harness_t::FB_W + 20],
+                    bg_color, "PF1 D6 at x=20 (OFF)");
+
+    // Now set PF1=$01 (only D0 set) — should be the LAST PF1 pixel group (pixels 44-47)
+    reset(h);
+    tia_write(h, TIA_W_PF0, 0x00);
+    tia_write(h, TIA_W_PF1, 0x01);
+    tia_write(h, TIA_W_PF2, 0x00);
+    tia_write(h, TIA_W_COLUPF, 0x0E);
+    tia_write(h, TIA_W_COLUBK, 0x00);
+    tia_write(h, TIA_W_CTRLPF, 0x00);
+    tia_write(h, TIA_W_VBLANK, 0x00);
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    A26_ASSERT_EQ32(h, "PF1_ORD", h->framebuffer[0 * harness_t::FB_W + 44],
+                    pf_color, "PF1 D0 at x=44 (ON)");
+    A26_ASSERT_EQ32(h, "PF1_ORD", h->framebuffer[0 * harness_t::FB_W + 16],
+                    bg_color, "PF1 D7 at x=16 (OFF with PF1=$01)");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Playfield PF2 all individual bits
+// ─────────────────────────────────────────────────────────────────────────────
+// PF2 bits are displayed D0 first, D7 last (same order as written).
+// Pixel range: 48-79 for PF2 (bits 12-19 of the 20-bit playfield pattern).
+
+int test_tia_playfield_pf2_all_bits(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    uint32_t pf_color = h->tia.palette_rgba_[(0x0E >> 1) & 0x7F];
+
+    // Test each PF2 bit individually
+    for (int bit = 0; bit < 8; bit++) {
+        reset(h);
+        tia_write(h, TIA_W_PF0, 0x00);
+        tia_write(h, TIA_W_PF1, 0x00);
+        tia_write(h, TIA_W_PF2, static_cast<uint8_t>(1 << bit));
+        tia_write(h, TIA_W_COLUPF, 0x0E);
+        tia_write(h, TIA_W_COLUBK, 0x00);
+        tia_write(h, TIA_W_CTRLPF, 0x00);
+        tia_write(h, TIA_W_VBLANK, 0x00);
+        h->tia.scanline = 40;
+        h->tia.visible_row = 0;
+        clock_cpu_cycles(h, 76);
+
+        // PF2 D0 at pixel 48, D1 at 52, ..., D7 at 76
+        int expected_x = 48 + bit * 4;
+        A26_ASSERT_EQ32(h, "PF2_BITS", h->framebuffer[0 * harness_t::FB_W + expected_x],
+                        pf_color, "PF2 D%d at x=%d", bit, expected_x);
+    }
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Collision suppression during VBLANK
+// ─────────────────────────────────────────────────────────────────────────────
+// On real hardware, collisions are not detected during VBLANK because the
+// priority encoder doesn't see any active pixels. Our render_pixel() outputs
+// black during VBLANK which means objects shouldn't produce collision bits.
+
+int test_tia_collision_vblank_suppression(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Setup two overlapping players
+    tia_write(h, TIA_W_GRP0, 0xFF);
+    tia_write(h, TIA_W_GRP1, 0xFF);
+    tia_write(h, TIA_W_COLUP0, 0x0E);
+    tia_write(h, TIA_W_COLUP1, 0x1E);
+    h->tia.pos_p0 = 40;
+    h->tia.pos_p1 = 40;
+
+    // Enable VBLANK
+    tia_write(h, TIA_W_VBLANK, 0x02);
+
+    h->tia.scanline = 10;
+    h->tia.visible_row = -1;
+    clock_cpu_cycles(h, 76);
+
+    // Collisions should NOT be detected during VBLANK
+    A26_ASSERT_TRUE(h, "CX_VBLNK", (h->tia.collision & tia_t::CX_P0P1) == 0,
+                    "No P0-P1 collision during VBLANK");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Multiple simultaneous collisions
+// ─────────────────────────────────────────────────────────────────────────────
+// Place all 5 graphics objects at the same position. All possible collision
+// pairs should be detected.
+
+int test_tia_multi_collision(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Enable all objects at position 50
+    tia_write(h, TIA_W_GRP0, 0xFF);
+    tia_write(h, TIA_W_GRP1, 0xFF);
+    tia_write(h, TIA_W_ENAM0, 0x02);
+    tia_write(h, TIA_W_ENAM1, 0x02);
+    tia_write(h, TIA_W_ENABL, 0x02);
+    tia_write(h, TIA_W_PF0, 0xF0);    // PF bits ON in left half
+    tia_write(h, TIA_W_PF1, 0xFF);
+    tia_write(h, TIA_W_PF2, 0xFF);
+
+    // Assign colors
+    tia_write(h, TIA_W_COLUP0, 0x0E);
+    tia_write(h, TIA_W_COLUP1, 0x1E);
+    tia_write(h, TIA_W_COLUPF, 0x2E);
+    tia_write(h, TIA_W_COLUBK, 0x00);
+
+    h->tia.pos_p0 = 50;
+    h->tia.pos_p1 = 50;
+    h->tia.pos_m0 = 50;
+    h->tia.pos_m1 = 50;
+    h->tia.pos_bl = 50;
+
+    tia_write(h, TIA_W_VBLANK, 0x00);
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    // Verify all pairwise collisions
+    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_P0P1) != 0,
+                    "P0-P1 collision");
+    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M0M1) != 0,
+                    "M0-M1 collision");
+    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M0P0) != 0,
+                    "M0-P0 collision");
+    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M0P1) != 0,
+                    "M0-P1 collision");
+    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M1P0) != 0,
+                    "M1-P0 collision");
+    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M1P1) != 0,
+                    "M1-P1 collision");
+    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_P0PF) != 0,
+                    "P0-PF collision");
+    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_P1PF) != 0,
+                    "P1-PF collision");
+    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M0PF) != 0,
+                    "M0-PF collision");
+    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M1PF) != 0,
+                    "M1-PF collision");
+    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_P0BL) != 0,
+                    "P0-BL collision");
+    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_P1BL) != 0,
+                    "P1-BL collision");
+    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M0BL) != 0,
+                    "M0-BL collision");
+    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M1BL) != 0,
+                    "M1-BL collision");
+    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_BLPF) != 0,
+                    "BL-PF collision");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: RESMP (missile locked to player position)
+// ─────────────────────────────────────────────────────────────────────────────
+// When RESMP0 bit 1 is set, missile 0 is locked to player 0's position
+// and missile rendering is disabled until RESMP0 is cleared.
+
+int test_tia_resmp_lock(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Enable missile and place it away from the player
+    tia_write(h, TIA_W_ENAM0, 0x02);
+    tia_write(h, TIA_W_COLUP0, 0x1A);
+    tia_write(h, TIA_W_COLUBK, 0x00);
+    h->tia.pos_p0 = 60;
+    h->tia.pos_m0 = 100;
+
+    // Lock missile to player
+    tia_write(h, TIA_W_RESMP0, 0x02);
+    A26_ASSERT_TRUE(h, "RESMP", h->tia.resmp0, "RESMP0 set");
+
+    // Render — missile should NOT appear (disabled while locked)
+    tia_write(h, TIA_W_VBLANK, 0x00);
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    uint32_t bg_color = h->tia.palette_rgba_[0];
+    A26_ASSERT_EQ32(h, "RESMP", h->framebuffer[0 * harness_t::FB_W + 100],
+                    bg_color, "Missile hidden while RESMP0 set (old pos 100)");
+
+    // Release lock — missile should now be at player position
+    tia_write(h, TIA_W_RESMP0, 0x00);
+    A26_ASSERT_TRUE(h, "RESMP", !h->tia.resmp0, "RESMP0 cleared");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: NUSIZ register bit masking
+// ─────────────────────────────────────────────────────────────────────────────
+// NUSIZ0/1 stores bits 0-2 (player size/copies) and bits 4-5 (missile size).
+// Bits 3, 6, 7 should be masked off.
+
+int test_tia_nusiz_masking(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    tia_write(h, TIA_W_NUSIZ0, 0xFF);
+    // Expected: bits 0-2 and 4-5 only → 0x37
+    A26_ASSERT_EQ(h, "NUSIZ_MASK", h->tia.nusiz0, 0x37,
+                  "NUSIZ0 masks to bits 0-2,4-5 ($37)");
+
+    tia_write(h, TIA_W_NUSIZ1, 0xC8);
+    // 0xC8 & 0x37 = 0x00
+    A26_ASSERT_EQ(h, "NUSIZ_MASK", h->tia.nusiz1, 0x00,
+                  "NUSIZ1 $C8 masked to $00");
+
+    tia_write(h, TIA_W_NUSIZ0, 0x15);
+    // 0x15 & 0x37 = 0x15
+    A26_ASSERT_EQ(h, "NUSIZ_MASK", h->tia.nusiz0, 0x15,
+                  "NUSIZ0 $15 masked to $15");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: CTRLPF register bit masking
+// ─────────────────────────────────────────────────────────────────────────────
+// CTRLPF uses: bit 0 (reflect), bit 1 (score), bit 2 (priority),
+// bits 4-5 (ball size). Bits 3, 6, 7 should be masked off.
+
+int test_tia_ctrlpf_masking(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    tia_write(h, TIA_W_CTRLPF, 0xFF);
+    // Expected mask: 0x37 (bits 0-2, 4-5)
+    A26_ASSERT_EQ(h, "CTRLPF_MASK", h->tia.ctrlpf, 0x37,
+                  "CTRLPF $FF masked to $37");
+
+    tia_write(h, TIA_W_CTRLPF, 0x25);
+    A26_ASSERT_EQ(h, "CTRLPF_MASK", h->tia.ctrlpf, 0x25,
+                  "CTRLPF $25 passes through");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: RESP positioning at known h_counter value
+// ─────────────────────────────────────────────────────────────────────────────
+// When RESPx is strobed, the object's position is set to the current visible
+// pixel position (h_counter - HBLANK). If in HBLANK, position clamps to 0.
+
+int test_tia_resp_positioning(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Position during visible area: h_counter = 100 → visible pixel = 100 - 68 = 32
+    h->tia.h_counter = 100;
+    tia_write(h, TIA_W_RESP0, 0x00);
+    A26_ASSERT_EQ(h, "RESP", h->tia.pos_p0, 32, "RESP0 at h=100 → pos=32");
+
+    // Position at start of visible: h_counter = 68 → visible pixel = 0
+    h->tia.h_counter = 68;
+    tia_write(h, TIA_W_RESP1, 0x00);
+    A26_ASSERT_EQ(h, "RESP", h->tia.pos_p1, 0, "RESP1 at h=68 → pos=0");
+
+    // Position during HBLANK: h_counter = 30 → clamp to 0
+    h->tia.h_counter = 30;
+    tia_write(h, TIA_W_RESM0, 0x00);
+    A26_ASSERT_EQ(h, "RESP", h->tia.pos_m0, 0, "RESM0 during HBLANK → pos=0");
+
+    // Position at end of visible area: h_counter = 227 → visible pixel = 159
+    h->tia.h_counter = 227;
+    tia_write(h, TIA_W_RESBL, 0x00);
+    A26_ASSERT_EQ(h, "RESP", h->tia.pos_bl, 159, "RESBL at h=227 → pos=159");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: RSYNC register resets horizontal counter
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_rsync_reset(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Advance to mid-scanline
+    clock_color_clocks(h, 100);
+    A26_ASSERT_TRUE(h, "RSYNC", h->tia.h_counter > 0, "h_counter > 0 after clocking");
+
+    // Write RSYNC should reset h_counter to 0
+    tia_write(h, 0x03, 0x00);  // RSYNC = register $03
+    A26_ASSERT_EQ(h, "RSYNC", (uint8_t)h->tia.h_counter, 0, "RSYNC resets h_counter to 0");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Player double and quad width rendering
+// ─────────────────────────────────────────────────────────────────────────────
+// NUSIZ=5: each pixel is 2 color clocks wide (16 total)
+// NUSIZ=7: each pixel is 4 color clocks wide (32 total)
+
+int test_tia_player_double_quad_width(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    uint32_t p0_color = h->tia.palette_rgba_[(0x1A >> 1) & 0x7F];
+    uint32_t bg_color = h->tia.palette_rgba_[0];
+
+    // Double width: GRP0=$80 (only bit 7), NUSIZ=5
+    // Bit 7 should display at pixels 0-1 (2 pixels wide)
+    reset(h);
+    tia_write(h, TIA_W_GRP0, 0x80);
+    tia_write(h, TIA_W_COLUP0, 0x1A);
+    tia_write(h, TIA_W_COLUBK, 0x00);
+    tia_write(h, TIA_W_NUSIZ0, 0x05);
+    h->tia.pos_p0 = 40;
+    tia_write(h, TIA_W_VBLANK, 0x00);
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    A26_ASSERT_EQ32(h, "DBL_QUAD", h->framebuffer[0 * harness_t::FB_W + 40],
+                    p0_color, "Double width: pixel 40 ON (bit 7, px 0)");
+    A26_ASSERT_EQ32(h, "DBL_QUAD", h->framebuffer[0 * harness_t::FB_W + 41],
+                    p0_color, "Double width: pixel 41 ON (bit 7, px 1)");
+    A26_ASSERT_EQ32(h, "DBL_QUAD", h->framebuffer[0 * harness_t::FB_W + 42],
+                    bg_color, "Double width: pixel 42 OFF (bit 6=0)");
+
+    // Quad width: GRP0=$80 (only bit 7), NUSIZ=7
+    // Bit 7 should display at pixels 0-3 (4 pixels wide)
+    reset(h);
+    tia_write(h, TIA_W_GRP0, 0x80);
+    tia_write(h, TIA_W_COLUP0, 0x1A);
+    tia_write(h, TIA_W_COLUBK, 0x00);
+    tia_write(h, TIA_W_NUSIZ0, 0x07);
+    h->tia.pos_p0 = 40;
+    tia_write(h, TIA_W_VBLANK, 0x00);
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    A26_ASSERT_EQ32(h, "DBL_QUAD", h->framebuffer[0 * harness_t::FB_W + 40],
+                    p0_color, "Quad width: pixel 40 ON (bit 7, px 0)");
+    A26_ASSERT_EQ32(h, "DBL_QUAD", h->framebuffer[0 * harness_t::FB_W + 43],
+                    p0_color, "Quad width: pixel 43 ON (bit 7, px 3)");
+    A26_ASSERT_EQ32(h, "DBL_QUAD", h->framebuffer[0 * harness_t::FB_W + 44],
+                    bg_color, "Quad width: pixel 44 OFF (bit 6=0)");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Ball vertical delay (VDELBL via GRP1 latch)
+// ─────────────────────────────────────────────────────────────────────────────
+// When VDELBL is set, the ball uses ENABL_OLD (latched when GRP1 is written)
+// instead of the current ENABL.
+
+int test_tia_vdelbl_ball_delay(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    tia_write(h, TIA_W_COLUPF, 0x2A);
+    tia_write(h, TIA_W_COLUBK, 0x00);
+    h->tia.pos_bl = 80;
+
+    // Enable ball vertical delay
+    tia_write(h, TIA_W_VDELBL, 0x01);
+
+    // Enable ball — current ENABL = true
+    tia_write(h, TIA_W_ENABL, 0x02);
+
+    // ENABL_OLD is still false (from reset)
+    A26_ASSERT_TRUE(h, "VDELBL", !h->tia.enabl_old, "ENABL_OLD still false");
+
+    // Write GRP1 to latch ENABL → ENABL_OLD
+    tia_write(h, TIA_W_GRP1, 0x00);
+    A26_ASSERT_TRUE(h, "VDELBL", h->tia.enabl_old, "ENABL_OLD latched to true after GRP1 write");
+
+    // Now disable ball in current register
+    tia_write(h, TIA_W_ENABL, 0x00);
+
+    // With VDELBL, rendering should use ENABL_OLD (true), so ball should appear
+    tia_write(h, TIA_W_VBLANK, 0x00);
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    uint32_t bl_color = h->tia.palette_rgba_[(0x2A >> 1) & 0x7F];
+    A26_ASSERT_EQ32(h, "VDELBL", h->framebuffer[0 * harness_t::FB_W + 80],
+                    bl_color, "Ball visible via VDELBL (ENABL_OLD=true)");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: 48-pixel sprite sequence (GRP0/GRP1 cross-latch)
+// ─────────────────────────────────────────────────────────────────────────────
+// Many games use the GRP0/GRP1 cross-latch behavior to display 48-pixel
+// wide sprites. The sequence:
+//   Write GRP0 = A → latches previous GRP1 into GRP1_OLD
+//   Write GRP1 = B → latches current GRP0 (A) into GRP0_OLD
+//   Write GRP0 = C → latches current GRP1 (B) into GRP1_OLD
+// Result: GRP0_OLD=A, GRP1_OLD=B, GRP0 current=C
+
+int test_tia_grp_48pixel_sequence(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Enable vertical delay for both players
+    tia_write(h, TIA_W_VDELP0, 0x01);
+    tia_write(h, TIA_W_VDELP1, 0x01);
+
+    // 48-pixel sequence
+    tia_write(h, TIA_W_GRP0, 0xAA);   // GRP0=AA, GRP1_OLD latched=0x00 (prev GRP1)
+    tia_write(h, TIA_W_GRP1, 0xBB);   // GRP1=BB, GRP0_OLD latched=0xAA (current GRP0)
+    tia_write(h, TIA_W_GRP0, 0xCC);   // GRP0=CC, GRP1_OLD latched=0xBB (current GRP1)
+
+    // Now: GRP0=CC, GRP0_OLD=AA, GRP1=BB, GRP1_OLD=BB
+    //       Wait — let me trace carefully:
+    // After reset: GRP0=0, GRP1=0, GRP0_OLD=0, GRP1_OLD=0
+    // Write GRP0=AA:  GRP1_OLD = GRP1(0x00) → GRP1_OLD=0x00. GRP0=0xAA
+    // Write GRP1=BB:  GRP0_OLD = GRP0(0xAA) → GRP0_OLD=0xAA. GRP1=0xBB. ENABL_OLD=ENABL.
+    // Write GRP0=CC:  GRP1_OLD = GRP1(0xBB) → GRP1_OLD=0xBB. GRP0=0xCC
+
+    A26_ASSERT_EQ(h, "48PIX", h->tia.grp0, 0xCC, "GRP0 current = CC");
+    A26_ASSERT_EQ(h, "48PIX", h->tia.grp0_old, 0xAA, "GRP0_OLD = AA");
+    A26_ASSERT_EQ(h, "48PIX", h->tia.grp1, 0xBB, "GRP1 current = BB");
+    A26_ASSERT_EQ(h, "48PIX", h->tia.grp1_old, 0xBB, "GRP1_OLD = BB");
+
+    // With VDEL enabled:
+    //   P0 displays GRP0_OLD = 0xAA
+    //   P1 displays GRP1_OLD = 0xBB
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Mid-scanline color change
+// ─────────────────────────────────────────────────────────────────────────────
+// Verify that changing a color register mid-scanline takes effect immediately
+// for subsequently rendered pixels.
+
+int test_tia_mid_scanline_color_change(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Set background to red
+    tia_write(h, TIA_W_COLUBK, 0x34);
+    tia_write(h, TIA_W_VBLANK, 0x00);
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+
+    // Clock through first 40 visible pixels (40/3 ≈ 14 CPU cycles from HBLANK)
+    // Need to clock past HBLANK first: 68 color clocks = 22.67 CPU cycles ≈ 23
+    // Then 40 more visible pixels = 13.3 more CPU cycles  
+    // Let's clock 36 CPU cycles = 108 color clocks. h_counter = 108.
+    // Visible pixel = 108 - 68 = 40.
+    clock_cpu_cycles(h, 36);
+
+    // Change background color mid-scanline
+    tia_write(h, TIA_W_COLUBK, 0x84);
+
+    // Clock rest of scanline (76 - 36 = 40 cycles)
+    clock_cpu_cycles(h, 40);
+
+    uint32_t red_color  = h->tia.palette_rgba_[(0x34 >> 1) & 0x7F];
+    uint32_t blue_color = h->tia.palette_rgba_[(0x84 >> 1) & 0x7F];
+
+    // First pixel should be the red color
+    A26_ASSERT_EQ32(h, "MID_COLOR", h->framebuffer[0 * harness_t::FB_W + 0],
+                    red_color, "Background color red at x=0");
+
+    // Pixel after change point should be blue.
+    // h_counter was at 108 after 36 CPU cycles. Visible pixel = 40.
+    // After writing COLUBK, the next rendered pixel (x=40+) uses the new color.
+    // The write happens at the start of the CPU cycle, before color clocks,
+    // so pixel 40 might be old or new depending on sub-cycle timing.
+    // Pixels well after the change should definitely be blue.
+    A26_ASSERT_EQ32(h, "MID_COLOR", h->framebuffer[0 * harness_t::FB_W + 80],
+                    blue_color, "Background color blue at x=80 (after mid-line change)");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: HMOVE after HMCLR applies zero motion
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_hmove_clears_after_hmclr(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Set large motion values for all objects
+    h->tia.pos_p0 = 50;
+    h->tia.pos_p1 = 60;
+    h->tia.pos_m0 = 70;
+    h->tia.pos_m1 = 80;
+    h->tia.pos_bl = 90;
+
+    tia_write(h, TIA_W_HMP0, 0x70);
+    tia_write(h, TIA_W_HMP1, 0x70);
+    tia_write(h, TIA_W_HMM0, 0x70);
+    tia_write(h, TIA_W_HMM1, 0x70);
+    tia_write(h, TIA_W_HMBL, 0x70);
+
+    // Clear all motion
+    tia_write(h, TIA_W_HMCLR, 0x00);
+
+    // Apply — should have no effect since motion is zero
+    tia_write(h, TIA_W_HMOVE, 0x00);
+
+    A26_ASSERT_EQ(h, "HMCLR_MOVE", h->tia.pos_p0, 50, "P0 unchanged after HMCLR+HMOVE");
+    A26_ASSERT_EQ(h, "HMCLR_MOVE", h->tia.pos_p1, 60, "P1 unchanged after HMCLR+HMOVE");
+    A26_ASSERT_EQ(h, "HMCLR_MOVE", h->tia.pos_m0, 70, "M0 unchanged after HMCLR+HMOVE");
+    A26_ASSERT_EQ(h, "HMCLR_MOVE", h->tia.pos_m1, 80, "M1 unchanged after HMCLR+HMOVE");
+    A26_ASSERT_EQ(h, "HMCLR_MOVE", h->tia.pos_bl, 90, "BL unchanged after HMCLR+HMOVE");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Input latch mode (VBLANK bit 6)
+// ─────────────────────────────────────────────────────────────────────────────
+// When bit 6 of VBLANK is set, input latching is enabled for INPT4/INPT5.
+
+int test_tia_input_latch_mode(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Enable input latch mode
+    tia_write(h, TIA_W_VBLANK, 0x42);   // Bit 6 set, bit 1 set (VBLANK ON)
+    A26_ASSERT_TRUE(h, "LATCH_IN", h->tia.input_latch_enabled,
+                    "Input latch enabled via VBLANK bit 6");
+
+    // Disable input latch mode
+    tia_write(h, TIA_W_VBLANK, 0x02);   // Bit 6 clear
+    A26_ASSERT_TRUE(h, "LATCH_IN", !h->tia.input_latch_enabled,
+                    "Input latch disabled");
+
+    return h->fail_count - prev_fail;
+}
+
+// =============================================================================
+// ███████╗ EXTENDED RIOT TESTS ███████╗
+// =============================================================================
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIOT: Timer reload during active countdown
+// ─────────────────────────────────────────────────────────────────────────────
+// Writing a new timer value during an active countdown should reset the timer
+// and clear the underflow flag.
+
+int test_riot_timer_reload_during_countdown(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Start a timer
+    riot_write_io(h, RIOT_TIM64T, 10);
+
+    // Tick partway
+    for (int i = 0; i < 128; i++) h->riot.tick();  // 2 decrements at div64
+    A26_ASSERT_EQ(h, "TIM_RELOAD", h->riot.timer_value, 8, "Timer at 8 after 128 ticks");
+
+    // Reload with new value using different divider
+    riot_write_io(h, RIOT_TIM8T, 20);
+
+    A26_ASSERT_EQ(h, "TIM_RELOAD", h->riot.timer_value, 20, "Timer reloaded to 20");
+    A26_ASSERT_EQ(h, "TIM_RELOAD", (uint8_t)(h->riot.timer_divider & 0xFF), 8,
+                  "Divider changed to 8");
+    A26_ASSERT_TRUE(h, "TIM_RELOAD", !h->riot.timer_underflow,
+                    "Underflow cleared on reload");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIOT: INSTAT flag persistence (reads INSTAT without clearing underflow)
+// ─────────────────────────────────────────────────────────────────────────────
+// Reading INSTAT ($0285) should report the underflow flag but NOT clear it.
+// Only reading INTIM ($0284) clears the underflow flag.
+
+int test_riot_instat_flag_persistence(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Set timer to 1, let it underflow
+    riot_write_io(h, RIOT_TIM1T, 1);
+    h->riot.tick();   // timer → 0
+    h->riot.tick();   // underflow!
+
+    A26_ASSERT_TRUE(h, "INSTAT", h->riot.timer_underflow, "Underflow set");
+
+    // Read INSTAT — should show underflow (bit 7) but NOT clear it
+    uint8_t instat = riot_read_io(h, RIOT_INSTAT);
+    A26_ASSERT_MASKED(h, "INSTAT", instat, 0x80, 0x80, "INSTAT bit 7 set (underflow)");
+    A26_ASSERT_TRUE(h, "INSTAT", h->riot.timer_underflow,
+                    "Underflow still set after reading INSTAT");
+
+    // Read INTIM — should clear underflow
+    riot_read_io(h, RIOT_INTIM);
+    A26_ASSERT_TRUE(h, "INSTAT", !h->riot.timer_underflow,
+                    "Underflow cleared after reading INTIM");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIOT: Timer underflow countdown behavior
+// ─────────────────────────────────────────────────────────────────────────────
+// After underflow, the timer reloads to $FF and counts down at divide-by-1,
+// regardless of the original divider setting.
+
+int test_riot_timer_underflow_countdown(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Use div-64 timer, let it underflow
+    riot_write_io(h, RIOT_TIM64T, 1);
+
+    // Tick 64 ticks → timer value decrements from 1 to 0
+    for (int i = 0; i < 64; i++) h->riot.tick();
+    A26_ASSERT_EQ(h, "UF_COUNT", h->riot.timer_value, 0, "Timer reached 0");
+
+    // Tick 64 more → underflow (value 0 still uses active divider for its interval)
+    for (int i = 0; i < 64; i++) h->riot.tick();
+    A26_ASSERT_EQ(h, "UF_COUNT", h->riot.timer_value, 0xFF, "Timer reloaded to $FF");
+    A26_ASSERT_TRUE(h, "UF_COUNT", h->riot.timer_underflow, "Underflow flag set");
+
+    // After underflow, timer should count down at div-by-1
+    h->riot.tick();
+    A26_ASSERT_EQ(h, "UF_COUNT", h->riot.timer_value, 0xFE,
+                  "Post-underflow: $FF → $FE in 1 tick (div-by-1)");
+
+    h->riot.tick();
+    A26_ASSERT_EQ(h, "UF_COUNT", h->riot.timer_value, 0xFD,
+                  "Post-underflow: $FE → $FD in 1 tick");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIOT: Port A read through I/O register interface
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_riot_port_a_read_via_io(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Set up Port A: DDR = $F0 (high nibble output, low nibble input)
+    h->riot.port_a_ddr = 0xF0;
+    h->riot.port_a_data = 0xA0;    // Output latch
+    h->riot.port_a_input = 0x05;   // External input
+
+    // Read SWCHA ($0280) — should return (output & DDR) | (input & ~DDR)
+    // = ($A0 & $F0) | ($05 & $0F) = $A0 | $05 = $A5
+    uint8_t swcha = riot_read_io(h, RIOT_SWCHA);
+    A26_ASSERT_EQ(h, "PORTA_IO", swcha, 0xA5,
+                  "SWCHA read via I/O: (A0&F0)|(05&0F)=A5");
+
+    // Read SWACNT ($0281) — should return DDR value
+    uint8_t swacnt = riot_read_io(h, RIOT_SWACNT);
+    A26_ASSERT_EQ(h, "PORTA_IO", swacnt, 0xF0, "SWACNT returns DDR = $F0");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIOT: Port B console switch bits
+// ─────────────────────────────────────────────────────────────────────────────
+// Verify individual console switch bits from Port B.
+
+int test_riot_port_b_console_switches(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    h->riot.port_b_ddr = 0x00;   // All input
+
+    // All switches released (active-low: all bits high)
+    h->riot.port_b_input = 0xFF;
+    A26_ASSERT_EQ(h, "SWITCHES", riot_read_io(h, RIOT_SWCHB), 0xFF,
+                  "All switches released ($FF)");
+
+    // Press RESET (bit 0 low)
+    h->riot.port_b_input = 0xFE;
+    A26_ASSERT_MASKED(h, "SWITCHES", riot_read_io(h, RIOT_SWCHB), 0x00, 0x01,
+                      "RESET pressed (bit 0 = 0)");
+
+    // Press SELECT (bit 1 low)
+    h->riot.port_b_input = 0xFD;
+    A26_ASSERT_MASKED(h, "SWITCHES", riot_read_io(h, RIOT_SWCHB), 0x00, 0x02,
+                      "SELECT pressed (bit 1 = 0)");
+
+    // B/W switch (bit 3 low)
+    h->riot.port_b_input = 0xF7;
+    A26_ASSERT_MASKED(h, "SWITCHES", riot_read_io(h, RIOT_SWCHB), 0x00, 0x08,
+                      "B/W switch (bit 3 = 0)");
+
+    // P0 difficulty A (bit 6 high)
+    h->riot.port_b_input = 0xFF;
+    A26_ASSERT_MASKED(h, "SWITCHES", riot_read_io(h, RIOT_SWCHB), 0x40, 0x40,
+                      "P0 difficulty A (bit 6 = 1)");
+
+    return h->fail_count - prev_fail;
+}
+
+// =============================================================================
 // ███████╗ RUN ALL TESTS ███████╗
 // =============================================================================
 
@@ -1777,6 +2816,36 @@ int run_all_builtin_tests(harness_t* h, bool verbose) {
     RUN_TEST(test_address_decoding,            "Address decoding");
     RUN_TEST(test_cpu_tia_sync_timing,         "CPU-TIA sync timing");
     RUN_TEST(test_frame_cycle_count,           "Frame cycle count");
+
+    printf("\n─── TIA Extended Accuracy ───────────────────────────────────\n");
+    RUN_TEST(test_tia_nusiz_all_modes,         "NUSIZ all 8 modes");
+    RUN_TEST(test_tia_missile_widths,          "Missile widths (1-8px)");
+    RUN_TEST(test_tia_ball_sizes,              "Ball sizes (1-8px)");
+    RUN_TEST(test_tia_score_mode,              "Score mode colors");
+    RUN_TEST(test_tia_hmove_all_values,        "HMOVE all 16 values");
+    RUN_TEST(test_tia_hmove_wrap_boundaries,   "HMOVE wrap boundaries");
+    RUN_TEST(test_tia_playfield_pf1_bit_order, "PF1 bit ordering (rev)");
+    RUN_TEST(test_tia_playfield_pf2_all_bits,  "PF2 all individual bits");
+    RUN_TEST(test_tia_collision_vblank_suppression, "Collision VBLANK suppression");
+    RUN_TEST(test_tia_multi_collision,         "Multi-object collision");
+    RUN_TEST(test_tia_resmp_lock,              "RESMP missile lock");
+    RUN_TEST(test_tia_nusiz_masking,           "NUSIZ bit masking");
+    RUN_TEST(test_tia_ctrlpf_masking,          "CTRLPF bit masking");
+    RUN_TEST(test_tia_resp_positioning,        "RESP strobe positioning");
+    RUN_TEST(test_tia_rsync_reset,             "RSYNC counter reset");
+    RUN_TEST(test_tia_player_double_quad_width, "Player double/quad width");
+    RUN_TEST(test_tia_vdelbl_ball_delay,       "Ball vertical delay");
+    RUN_TEST(test_tia_grp_48pixel_sequence,    "GRP 48-pixel sequence");
+    RUN_TEST(test_tia_mid_scanline_color_change, "Mid-scanline color change");
+    RUN_TEST(test_tia_hmove_clears_after_hmclr, "HMOVE after HMCLR");
+    RUN_TEST(test_tia_input_latch_mode,        "Input latch mode");
+
+    printf("\n─── RIOT Extended Accuracy ──────────────────────────────────\n");
+    RUN_TEST(test_riot_timer_reload_during_countdown, "Timer reload mid-count");
+    RUN_TEST(test_riot_instat_flag_persistence, "INSTAT flag persistence");
+    RUN_TEST(test_riot_timer_underflow_countdown, "Timer underflow countdown");
+    RUN_TEST(test_riot_port_a_read_via_io,     "Port A read via I/O");
+    RUN_TEST(test_riot_port_b_console_switches, "Port B console switches");
 
     #undef RUN_TEST
 

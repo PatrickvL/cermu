@@ -303,4 +303,36 @@ int test_address_decoding(harness_t* h);
 int test_cpu_tia_sync_timing(harness_t* h);
 int test_frame_cycle_count(harness_t* h);
 
+// ─── Extended hardware accuracy tests ───────────────────────────────────────
+
+// --- TIA extended ---
+int test_tia_nusiz_all_modes(harness_t* h);
+int test_tia_missile_widths(harness_t* h);
+int test_tia_ball_sizes(harness_t* h);
+int test_tia_score_mode(harness_t* h);
+int test_tia_hmove_all_values(harness_t* h);
+int test_tia_hmove_wrap_boundaries(harness_t* h);
+int test_tia_playfield_pf1_bit_order(harness_t* h);
+int test_tia_playfield_pf2_all_bits(harness_t* h);
+int test_tia_collision_vblank_suppression(harness_t* h);
+int test_tia_multi_collision(harness_t* h);
+int test_tia_resmp_lock(harness_t* h);
+int test_tia_nusiz_masking(harness_t* h);
+int test_tia_ctrlpf_masking(harness_t* h);
+int test_tia_resp_positioning(harness_t* h);
+int test_tia_rsync_reset(harness_t* h);
+int test_tia_player_double_quad_width(harness_t* h);
+int test_tia_vdelbl_ball_delay(harness_t* h);
+int test_tia_grp_48pixel_sequence(harness_t* h);
+int test_tia_mid_scanline_color_change(harness_t* h);
+int test_tia_hmove_clears_after_hmclr(harness_t* h);
+int test_tia_input_latch_mode(harness_t* h);
+
+// --- RIOT extended ---
+int test_riot_timer_reload_during_countdown(harness_t* h);
+int test_riot_instat_flag_persistence(harness_t* h);
+int test_riot_timer_underflow_countdown(harness_t* h);
+int test_riot_port_a_read_via_io(harness_t* h);
+int test_riot_port_b_console_switches(harness_t* h);
+
 } // namespace a2600_test
