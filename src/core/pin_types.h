@@ -75,17 +75,22 @@ enum class PinLabel {
     _ML,          // /ML — memory lock (65C02/65C816)
     _NMI,         // /NMI — non-maskable interrupt
     _OE,          // /OE — output enable
+    _PARD,        // /PARD — peripheral address read (Ricoh 5A22 B-bus)
+    _PAWR,        // /PAWR — peripheral address write (Ricoh 5A22 B-bus)
     _Q7,          // /Q7 — complement output (shift register)
     _RAS,         // /RAS — row address strobe
     _RD,          // /RD — read strobe
     _RES,         // /RES — reset
     _ROMH,        // /ROMH — ROM high
     _ROML,        // /ROML — ROM low
+    _ROMSEL,      // /ROMSEL — ROM select (Ricoh 5A22 cartridge chip select)
     _SO,          // /SO — set overflow
     _VA14,        // /VA14 — video address 14 (inverted form)
     _VP,          // /VP — vector pull (active-low)
     _VPB,         // /VPB — vector pull bar (active-low)
     _WE,          // /WE — write enable
+    _WR,          // /WR — write strobe (Ricoh 5A22 A-bus)
+    _WRAM,        // /WRAM — work RAM chip select (Ricoh 5A22)
 
     // Sentinel — all labels below this point are active-high.
     ACTIVE_LOW_END,
@@ -102,10 +107,12 @@ enum class PinLabel {
 
     // Clock pins
     CLK,          // Generic clock input
+    CPUCLK,       // CPU clock output (Ricoh 5A22)
     M2,           // Derived clock output (2A03)
     PHI0,         // Φ0 — clock input
     PHI1,         // Φ1 — inverted clock output
     PHI2,         // Φ2 — primary clock output
+    SYSCLK,       // System master clock input (Ricoh 5A22, 21.477 MHz)
 
     // Address bus pins (A0-A23, must remain sequential)
     A0, A1, A2, A3, A4, A5, A6, A7,
@@ -274,6 +281,16 @@ enum class PinLabel {
     OUT0,         // Controller strobe 0 (2A03)
     OUT1,         // Controller strobe 1 (2A03)
     OUT2,         // Controller strobe 2 (2A03)
+
+    // SNES-specific pins (Ricoh 5A22)
+    HBLANK,       // Horizontal blank output (5A22)
+    JOY1,         // Joypad 1 serial data input (5A22)
+    JOY2,         // Joypad 2 serial data input (5A22)
+    JOYCLK,       // Joypad clock output (5A22)
+    JOYLAT,       // Joypad latch output (5A22)
+    JOYRD,        // Joypad auto-read strobe (5A22)
+    REFRESH,      // WRAM refresh output (5A22)
+    VBLANK,       // Vertical blank output (5A22)
 
     // Shift register pins
     DS,           // Data Serial input (shift register)
