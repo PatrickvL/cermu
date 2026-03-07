@@ -169,6 +169,9 @@ struct tia_t : public ChipBase {
     // WSYNC — halt CPU until end of scanline
     bool wsync_pending = false;
 
+    // HMOVE blanking — first 8 visible pixels blanked after HMOVE strobe during HBLANK
+    bool hmove_blank_active = false;
+
     // Visible row tracking for framebuffer mapping.
     // Increments only during non-VBLANK scanlines, so the first visible
     // line maps to framebuffer row 0 regardless of VBLANK duration.
@@ -347,6 +350,9 @@ private:
     /// Get player graphics bit at the given pixel position.
     bool get_player_pixel(int x, uint8_t grp, uint8_t pos, uint8_t nusiz, bool reflect) const;
 
-    /// Get missile/ball pixel.
-    bool get_missile_pixel(int x, uint8_t pos, uint8_t nusiz_or_ctrlpf, bool enabled) const;
+    /// Get missile/ball pixel (single copy, used for ball).
+    bool get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool enabled) const;
+
+    /// Get missile pixel with copy positions from NUSIZ register.
+    bool get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool enabled, uint8_t nusiz) const;
 };

@@ -102,6 +102,7 @@ void tia_t::reset() {
     vsync_active = false;
     vblank_active = false;
     wsync_pending = false;
+    hmove_blank_active = false;
     visible_row = -1;
     prev_vblank = false;
 
@@ -345,16 +346,41 @@ bool tia_t::get_player_pixel(int x, uint8_t grp, uint8_t pos, uint8_t nusiz, boo
 // ============================================================================
 
 bool tia_t::get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool enabled) const {
+    return get_missile_pixel(x, pos, size_bits, enabled, 0);
+}
+
+bool tia_t::get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool enabled, uint8_t nusiz) const {
     if (!enabled) return false;
 
     // Size: 1, 2, 4, or 8 pixels wide (encoded in 2 bits)
     int width = 1 << size_bits;
 
-    int rel = x - static_cast<int>(pos);
-    if (rel < 0) rel += 160;
-    if (rel >= 160) rel -= 160;
+    // Missile copies follow the same copy positions as the associated player,
+    // determined by the low 3 bits of the NUSIZ register.
+    int copy_mode = nusiz & 0x07;
+    static constexpr int copy_offsets[8][3] = {
+        {0, -1, -1},   // 0: one copy
+        {0, 16, -1},   // 1: two close
+        {0, 32, -1},   // 2: two medium
+        {0, 16, 32},   // 3: three close
+        {0, 64, -1},   // 4: two wide
+        {0, -1, -1},   // 5: double-width player (one copy missile)
+        {0, 32, 64},   // 6: three medium
+        {0, -1, -1},   // 7: quad-width player (one copy missile)
+    };
 
-    return (rel >= 0 && rel < width);
+    for (int c = 0; c < 3; ++c) {
+        int offset = copy_offsets[copy_mode][c];
+        if (offset < 0) continue;
+
+        int rel = x - static_cast<int>(pos) - offset;
+        if (rel < 0) rel += 160;
+        if (rel >= 160) rel -= 160;
+
+        if (rel >= 0 && rel < width) return true;
+    }
+
+    return false;
 }
 
 // ============================================================================
@@ -382,14 +408,14 @@ void tia_t::render_pixel() {
     // Missile 0 — locked to player 0 if RESMP0 set
     uint8_t m0_pos = resmp0 ? pos_p0 : pos_m0;
     uint8_t m0_size = (nusiz0 >> 4) & 0x03;
-    bool m0_pixel = get_missile_pixel(x, m0_pos, m0_size, enam0 && !resmp0);
+    bool m0_pixel = get_missile_pixel(x, m0_pos, m0_size, enam0 && !resmp0, nusiz0);
 
     // Missile 1 — locked to player 1 if RESMP1 set
     uint8_t m1_pos = resmp1 ? pos_p1 : pos_m1;
     uint8_t m1_size = (nusiz1 >> 4) & 0x03;
-    bool m1_pixel = get_missile_pixel(x, m1_pos, m1_size, enam1 && !resmp1);
+    bool m1_pixel = get_missile_pixel(x, m1_pos, m1_size, enam1 && !resmp1, nusiz1);
 
-    // Ball
+    // Ball — uses simple single-position check (no copies)
     bool bl_enabled = vdelbl ? enabl_old : enabl;
     uint8_t bl_size = (ctrlpf >> 4) & 0x03;
     bool bl_pixel = get_missile_pixel(x, pos_bl, bl_size, bl_enabled);
@@ -419,10 +445,18 @@ void tia_t::render_pixel() {
     if (vblank_active) {
         // During VBLANK, output black
         color = 0;
+    } else if (hmove_blank_active && x < 8) {
+        // HMOVE blanking: first 8 pixels blanked to background after HMOVE strobe
+        color = colubk;
     } else if (priority) {
         // Playfield/Ball priority over players
         if (pf_pixel || bl_pixel) {
-            color = colupf;
+            if (score_mode) {
+                // Score mode overrides PF color even with priority flag
+                color = (x < 80) ? colup0 : colup1;
+            } else {
+                color = colupf;
+            }
         } else if (p0_pixel || m0_pixel) {
             color = colup0;
         } else if (p1_pixel || m1_pixel) {
@@ -458,6 +492,12 @@ void tia_t::render_pixel() {
 // ============================================================================
 
 void tia_t::tick_color_clock() {
+    // Detect VBLANK→visible transition before first pixel is rendered.
+    // This ensures visible_row=0 is available for the first visible scanline.
+    if (!vblank_active && visible_row < 0) {
+        visible_row = 0;
+    }
+
     // Render visible pixel
     if (h_counter >= tia_constants::HBLANK_CLOCKS) {
         render_pixel();
@@ -472,16 +512,14 @@ void tia_t::tick_color_clock() {
         // Release WSYNC at end of scanline
         wsync_pending = false;
 
+        // Clear HMOVE blanking at start of new scanline
+        hmove_blank_active = false;
+
         // Track visible row for framebuffer mapping.
-        // No VBLANK on→off transition required — if VBLANK is off and
-        // visible_row hasn't started, begin at row 0.  This handles games
-        // that never (or late) enable VBLANK.
         if (!vblank_active) {
-            if (visible_row < 0) {
-                visible_row = 0;   // First visible line after VBLANK (or cold start)
-            } else {
-                visible_row++;     // Advance to next visible row
-            }
+            // Row was already set to 0 before first pixel (see above).
+            // At end of each visible scanline, advance to next row.
+            visible_row++;
         } else {
             visible_row = -1;      // In VBLANK — no visible row
         }
@@ -654,6 +692,11 @@ void tia_t::write(uint16_t addr, uint8_t data) {
             apply_motion(pos_m0, hm_m0);
             apply_motion(pos_m1, hm_m1);
             apply_motion(pos_bl, hm_bl);
+
+            // HMOVE blanking: if strobed during HBLANK, blank first 8 visible pixels
+            if (h_counter < tia_constants::HBLANK_CLOCKS) {
+                hmove_blank_active = true;
+            }
             break;
         }
 
