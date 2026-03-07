@@ -9,6 +9,8 @@
 #include <cstdio>
 #include <cstring>
 
+#ifdef CERMU_HAS_GUI
+
 // ============================================================================
 // COMMON VIC-II GUI RENDERING FUNCTIONS
 // ============================================================================
@@ -27,19 +29,6 @@ static const char* get_video_standard(vicii_t* vicii) {
         return "PAL 50Hz";
     }
     return "Unknown";
-}
-
-static const char* get_screen_mode(uint8_t cr1, uint8_t cr2) {
-    bool ecm = (cr1 & 0x40) != 0;  // Extended Color Mode
-    bool bmm = (cr1 & 0x20) != 0;  // Bitmap Mode
-    bool mcm = (cr2 & 0x10) != 0;  // Multicolor Mode
-    
-    if (!ecm && !bmm && !mcm) return "Standard Text";
-    if (!ecm && !bmm && mcm)  return "Multicolor Text";
-    if (!ecm && bmm && !mcm)  return "Standard Bitmap";
-    if (!ecm && bmm && mcm)   return "Multicolor Bitmap";
-    if (ecm && !bmm && !mcm)  return "Extended Color Text";
-    return "Invalid Mode";
 }
 
 // ============================================================================
@@ -127,6 +116,8 @@ static ChipLayout& get_vicii_layout() {
     static ChipLayout layout = create_vicii_layout();
     return layout;
 }
+
+#endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // Class method implementation
 void vicii_t::render_settings_content() {

@@ -10,77 +10,11 @@
 #include <cstdio>
 #include <memory>
 
-static const char* waveform_names[] = {
-    "None",
-    "Triangle", 
-    "Sawtooth",
-    "Sawtooth+Triangle",
-    "Pulse",
-    "Pulse+Triangle", 
-    "Pulse+Sawtooth",
-    "Pulse+Sawtooth+Triangle",
-    "Noise"
-};
-
-static const char* envelope_cycle_names[] = {
-    "Attack",
-    "Decay", 
-    "Sustain",
-    "Release",
-    "Off"
-};
-
-#ifdef CERMU_HAS_GUI
-static void render_voice_debug(voice_t* voice, int voice_num) {
-    ImGui::PushID(voice_num);
-    
-    char voice_header[32];
-    snprintf(voice_header, sizeof(voice_header), "Voice %d", voice_num);
-    
-    if (ImGui::CollapsingHeader(voice_header)) {
-        ImGui::Indent(16.0f);
-        
-        // Write-only voice register values :
-        ImGui::Text("Frequency: $%04X (%d)", voice->frequency, voice->frequency);
-        ImGui::Text("Pulse Waveform Width: $%04X (%d)", voice->pulse_waveform_width, voice->pulse_waveform_width);
-        
-        // Values updated by WriteVoiceControlRegisterValue()
-        ImGui::Text("Gated: %s", (voice->control_reg & VCREG_GATE) ? "Yes" : "No");
-        ImGui::Text("Synchronize: %s", (voice->control_reg & VCREG_SYNC) ? "Yes" : "No");
-        ImGui::Text("Ring Modulation: %s", (voice->control_reg & VCREG_RING) ? "Yes" : "No");
-        ImGui::Text("Test: %s", (voice->control_reg & VCREG_TEST) ? "Yes" : "No");
-        int wf_index = (voice->control_reg >> 4) & 0x0F;
-        const char* waveform_name = (wf_index < 9) ? waveform_names[wf_index] : "Unknown";
-        ImGui::Text("Waveform: %s (%d)", waveform_name, wf_index);
-        
-        ImGui::Separator();
-        
-        // Outside readable variables (albeit after shifting)
-        ImGui::Text("Envelope Amplitude: $%02X (%d)", voice->envelope_amplitude, voice->envelope_amplitude);
-        ImGui::Text("Oscillator Waveform: $%04X (%d)", voice->oscillator_waveform, voice->oscillator_waveform);
-        ImGui::Text("Result: %d", voice->result);
-        
-        ImGui::Separator();
-        
-        // Internal state
-        ImGui::Text("Waveform Accumulator: $%06X (%d)", voice->waveform_accumulator, voice->waveform_accumulator);
-        const char* cycle_name = ((int)voice->envelope_cycle < 5) ? envelope_cycle_names[(int)voice->envelope_cycle] : "Unknown";
-        ImGui::Text("Envelope Cycle: %s (%d)", cycle_name, (int)voice->envelope_cycle);
-        ImGui::Text("Exp Counter: %d / %d", voice->exponential_counter, voice->exponential_counter_period);
-        ImGui::Text("Sustain Level: 0x%02X (%d)", voice->sustain_level, voice->sustain_level);
-        
-        ImGui::Text("CPU Clock: %.0f Hz", voice->cpu_clock);
-
-        ImGui::Unindent(16.0f);
-    }
-    
-    ImGui::PopID();
-}
-#endif
-
 // ============================================================================
 // MOS6581 SID LAYOUT (28-pin DIP)
 // ============================================================================
+
+#ifdef CERMU_HAS_GUI
 
 inline ChipLayout create_mos6581_layout() {
     // Start with DIP-28 base layout
@@ -148,6 +82,8 @@ static ChipLayout& get_sid_layout() {
     static ChipLayout layout = create_mos6581_layout();
     return layout;
 }
+
+#endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // ============================================================================
 // MOS6581 SID GUI SETTINGS WINDOW

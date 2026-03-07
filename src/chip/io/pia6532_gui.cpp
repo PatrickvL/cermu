@@ -43,6 +43,8 @@
 //   Pin 20: A4            Pin 21: A5
 //
 
+#ifdef CERMU_HAS_GUI
+
 static ChipLayout create_pia6532_layout() {
     ChipLayout layout = create_dip40_layout();
 
@@ -138,19 +140,7 @@ static std::vector<PinSignalState> get_pia6532_pin_states(
     return ps;
 }
 
-// ============================================================================
-// Timer divider labels
-// ============================================================================
-
-static const char* divider_label(uint16_t div) {
-    switch (div) {
-        case 1:    return "TIM1T (÷1)";
-        case 8:    return "TIM8T (÷8)";
-        case 64:   return "TIM64T (÷64)";
-        case 1024: return "TIM1024T (÷1024)";
-        default:   return "???";
-    }
-}
+#endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // ============================================================================
 // ChipBase GUI Overrides

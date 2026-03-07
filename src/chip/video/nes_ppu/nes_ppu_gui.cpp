@@ -22,6 +22,8 @@
 // RICOH 2C02 PPU LAYOUT (40-pin DIP)
 // ============================================================================
 
+#ifdef CERMU_HAS_GUI
+
 inline ChipLayout create_ppu_layout(bool pal) {
     ChipLayout layout = create_dip40_layout();
 
@@ -93,6 +95,8 @@ static ChipLayout& get_ppu_layout(bool pal) {
     }
     return layout;
 }
+
+#endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // ============================================================================
 // ChipBase interface implementation

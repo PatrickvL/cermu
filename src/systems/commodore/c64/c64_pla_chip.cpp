@@ -12,6 +12,8 @@
 #include <cstdio>
 #include <cstring>
 
+#ifdef CERMU_HAS_GUI
+
 // Helper function to get PLA mode description
 static const char* get_pla_mode_cpu_description(uint8_t mode) {
     static char mode_desc[256];
@@ -210,6 +212,8 @@ static ChipLayout& get_pla_layout() {
     static ChipLayout layout = create_pla_layout();
     return layout;
 }
+
+#endif // CERMU_HAS_GUI (helper functions)
 
 void PlaChip::render_debug_content() {
     C64System* c64 = c64_;

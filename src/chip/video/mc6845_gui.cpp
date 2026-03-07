@@ -43,6 +43,8 @@
 //   Pin 20: RA2           Pin 21: RA3
 //
 
+#ifdef CERMU_HAS_GUI
+
 static ChipLayout create_mc6845_layout() {
     ChipLayout layout = create_dip40_layout();
 
@@ -159,6 +161,8 @@ static std::vector<PinSignalState> get_mc6845_pin_states(
 
     return ps;
 }
+
+#endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // ============================================================================
 // ChipBase GUI Overrides

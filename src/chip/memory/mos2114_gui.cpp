@@ -11,6 +11,8 @@
 #include <memory>
 #include <cstring>  // For memset
 
+#ifdef CERMU_HAS_GUI
+
 // ============================================================================
 // MOS2114 1K x 4-bit SRAM LAYOUT (18-pin DIP)
 // Hardware-accurate pinout from datasheet
@@ -62,7 +64,6 @@ inline ChipLayout create_mos2114_layout() {
     return layout;
 }
 
-#ifdef CERMU_HAS_GUI
 // Helper function to get MOS2114 pin states for visualization
 static std::vector<PinSignalState> get_mos2114_pin_states(MOS2114* mos2114, const ChipLayout* layout, bus_state_t bus_state) {
     if (!mos2114 || !layout) return {};

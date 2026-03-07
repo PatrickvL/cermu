@@ -43,6 +43,8 @@
 //   Pin 20: VCC           Pin 21: R/W
 //
 
+#ifdef CERMU_HAS_GUI
+
 static ChipLayout create_pia6820_layout() {
     ChipLayout layout = create_dip40_layout();
 
@@ -184,6 +186,8 @@ static std::vector<PinSignalState> get_pia6820_pin_states(
 
     return ps;
 }
+
+#endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // ============================================================================
 // ChipBase GUI Overrides
