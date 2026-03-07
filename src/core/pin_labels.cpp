@@ -37,17 +37,22 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::_ML: return "ML";
         case PinLabel::_NMI: return "NMI";
         case PinLabel::_OE: return "OE";
+        case PinLabel::_PARD: return "PARD";
+        case PinLabel::_PAWR: return "PAWR";
         case PinLabel::_Q7: return "Q7";
         case PinLabel::_RAS: return "RAS";
         case PinLabel::_RD: return "RD";
         case PinLabel::_RES: return "RES";
         case PinLabel::_ROMH: return "ROMH";
         case PinLabel::_ROML: return "ROML";
+        case PinLabel::_ROMSEL: return "ROMSEL";
         case PinLabel::_SO: return "SO";
         case PinLabel::_VA14: return "VA14";
         case PinLabel::_VP: return "VP";
         case PinLabel::_VPB: return "VPB";
         case PinLabel::_WE: return "WE";
+        case PinLabel::_WR: return "WR";
+        case PinLabel::_WRAM: return "WRAM";
 
         // Power pins
         case PinLabel::VDD: return "VDD";
@@ -345,6 +350,16 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::EXT2: return "EXT2";
         case PinLabel::EXT3: return "EXT3";
         
+        // SNES-specific pins
+        case PinLabel::HBLANK: return "HBLANK";
+        case PinLabel::JOY1: return "JOY1";
+        case PinLabel::JOY2: return "JOY2";
+        case PinLabel::JOYCLK: return "JOYCLK";
+        case PinLabel::JOYLAT: return "JOYLAT";
+        case PinLabel::JOYRD: return "JOYRD";
+        case PinLabel::REFRESH: return "REFRESH";
+        case PinLabel::VBLANK: return "VBLANK";
+        
         // Shift register pins
         case PinLabel::DS: return "DS";
 
@@ -404,7 +419,9 @@ const char* pin_label_to_string(PinLabel label) {
         
         // Clock pins
         case PinLabel::CLK: return "CLK";
+        case PinLabel::CPUCLK: return "CPUCLK";
         case PinLabel::M2: return "M2";
+        case PinLabel::SYSCLK: return "SYSCLK";
         
         // Unknown/custom pin
         case PinLabel::UNKNOWN:
@@ -491,7 +508,9 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::PHI1:
         case PinLabel::PHI2:
         case PinLabel::CLK:
+        case PinLabel::CPUCLK:
         case PinLabel::M2:
+        case PinLabel::SYSCLK:
         case PinLabel::DOT_CLK:
         case PinLabel::COLOR_CLK:
         case PinLabel::XTAL1:
@@ -587,6 +606,10 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::IN0: case PinLabel::IN1:
         case PinLabel::OUT0: case PinLabel::OUT1: case PinLabel::OUT2:
         case PinLabel::EXT0: case PinLabel::EXT1: case PinLabel::EXT2: case PinLabel::EXT3:
+        case PinLabel::HBLANK: case PinLabel::VBLANK:
+        case PinLabel::JOY1: case PinLabel::JOY2:
+        case PinLabel::JOYCLK: case PinLabel::JOYLAT: case PinLabel::JOYRD:
+        case PinLabel::REFRESH:
         case PinLabel::POTX: case PinLabel::POTY:
         case PinLabel::LIGHT_PEN:
         case PinLabel::INPT0: case PinLabel::INPT1: case PinLabel::INPT2:
