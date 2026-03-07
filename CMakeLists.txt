@@ -254,6 +254,7 @@ endif()
 # Core library sources
 set(CORE_SOURCES
     src/core/chip.cpp
+    src/core/chip_debug_registry.cpp
     src/core/ioport.cpp
     src/core/chip_layout.cpp
     src/core/pin_labels.cpp
@@ -424,6 +425,7 @@ set(CORE_UTIL_SOURCES
 if(BUILD_GUI)
     set(GUI_SOURCES
         src/gui/chip_visualization.cpp
+        src/gui/chip_debug_registry_gui.cpp
         src/gui/global_chip_style.cpp
         src/chip/video/vic_ii/vicii_gui.cpp
         src/chip/video/vic/vic_gui.cpp
@@ -458,6 +460,7 @@ endif()
 # to empty bodies when CERMU_HAS_GUI is not defined.  Required by any
 # non-GUI executable that links CHIP_SOURCES / SYSTEM_SOURCES.
 set(GUI_STUB_SOURCES
+    src/gui/chip_debug_registry_gui.cpp
     src/chip/cpu/fam65xx/fam65xx_gui.cpp
     src/chip/io/mos6526_gui.cpp
     src/chip/io/mos6522_gui.cpp
