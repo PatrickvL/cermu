@@ -1100,6 +1100,72 @@ void mos6581_t::init() {
     filter_init();
     
     reset();
+    register_debug_fields();
+}
+
+// ============================================================================
+// Debug field registration (ChipDebugRegistry)
+// ============================================================================
+
+void mos6581_t::register_debug_fields() {
+    auto& r = debug_registry_;
+    r.set_registers(regs, SID_REGS_SIZE);
+
+    static constexpr const char* wf_names[] = {
+        "None", "Triangle", "Sawtooth", "Saw+Tri",
+        "Pulse", "Pulse+Tri", "Pulse+Saw", "Pulse+Saw+Tri", "Noise"
+    };
+    static constexpr const char* env_names[] = {
+        "Attack", "Decay", "Sustain", "Release", "Off"
+    };
+
+    // Helper: register per-voice fields
+    auto voice_fields = [&](const char* name, voice_t& v) {
+        r.category(name, false);
+        r.value("Frequency", [&v]() -> uint32_t { return v.frequency; }, 16);
+        r.value("Pulse Width", [&v]() -> uint32_t { return v.pulse_waveform_width; }, 12);
+        // Control register flags
+        r.flag("Gate", [&v]() -> uint32_t { return v.control_reg & VCREG_GATE; });
+        r.flag("Sync", [&v]() -> uint32_t { return v.control_reg & VCREG_SYNC; });
+        r.flag("Ring Mod", [&v]() -> uint32_t { return v.control_reg & VCREG_RING; });
+        r.flag("Test", [&v]() -> uint32_t { return v.control_reg & VCREG_TEST; });
+        r.state("Waveform", [&v]() -> uint32_t {
+            return (v.control_reg >> 4) & 0x0F;
+        }, wf_names, 9);
+        // Outputs
+        r.value("Envelope Amp", [&v]() -> uint32_t { return v.envelope_amplitude; }, 8);
+        r.value("Oscillator", [&v]() -> uint32_t { return v.oscillator_waveform; }, 12);
+        r.signed_value("Result", [&v]() -> int32_t { return static_cast<int32_t>(v.result); }, 24);
+        // Internal state
+        r.value("Accumulator", [&v]() -> uint32_t { return v.waveform_accumulator; }, 24);
+        r.state("Env Cycle", [&v]() -> uint32_t {
+            return static_cast<uint32_t>(v.envelope_cycle);
+        }, env_names, 5);
+        r.value("Exp Counter", [&v]() -> uint32_t { return v.exponential_counter; }, 8);
+        r.value("Sustain Level", [&v]() -> uint32_t { return v.sustain_level; }, 8);
+    };
+
+    voice_fields("Voice 1", voice1);
+    voice_fields("Voice 2", voice2);
+    voice_fields("Voice 3", voice3);
+
+    // ---- Filter & Global ----
+    r.category("Filter & Global");
+    r.value("Filter Cutoff", [this]() -> uint32_t { return filter_cutoff_frequency; }, 11);
+    r.flag("Filter Voice 1", uint16_t(SID_REG_RESON), 0);
+    r.flag("Filter Voice 2", uint16_t(SID_REG_RESON), 1);
+    r.flag("Filter Voice 3", uint16_t(SID_REG_RESON), 2);
+    r.flag("Filter External", uint16_t(SID_REG_RESON), 3);
+    r.value("Resonance", [this]() -> uint32_t {
+        return (regs[SID_REG_RESON] >> RESON_RES_SHIFT) & 0x0F;
+    }, 4);
+    r.counter("Volume", [this]() -> uint32_t {
+        return regs[SID_REG_SIGVOL] & SIGVOL_VOL_MASK;
+    }, 15);
+    r.flag("Low Pass", [this]() -> uint32_t { return filter_lp; });
+    r.flag("Band Pass", [this]() -> uint32_t { return filter_bp; });
+    r.flag("High Pass", [this]() -> uint32_t { return filter_hp; });
+    r.flag("Voice 3 Off", [this]() -> uint32_t { return voice3_off; });
 }
 
 void mos6581_t::reset() {
