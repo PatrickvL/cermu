@@ -123,7 +123,6 @@ void mos6526_t::reset() {
     }
 }
 
-bool mos6526_t::has_debug_content()    const { return true; }
 bool mos6526_t::has_settings_content() const { return true; }
 bool mos6526_t::has_layout_content()   const { return true; }
 
