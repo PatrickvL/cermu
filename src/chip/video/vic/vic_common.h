@@ -297,12 +297,13 @@ struct vic_base_t : public ChipBase {
     uint32_t audio_read(uint8_t* dest, uint32_t max_samples);
 
     // --- ChipBase interface ---
-    bool has_debug_content()    const override;
     bool has_settings_content() const override;
     bool has_layout_content()   const override;
-    void render_debug_content()    override;
     void render_settings_content() override;
     void render_layout_content()   override;
+
+protected:
+    void register_debug_fields();
 
 private:
     void emit_pixel(uint8_t color_index);

@@ -594,3 +594,73 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
 #endif
     return bus_state;
 }
+
+// ============================================================================
+// Debug field registration (populates ChipDebugRegistry for the default
+// two-column debug layout provided by ChipBase)
+// ============================================================================
+
+void vic_base_t::register_debug_fields() {
+    auto& r = debug_registry_;
+    r.set_registers(registers, 16);
+    uint32_t* palette = get_default_palette();
+
+    // ---- Raster Information ----
+    r.category("Raster Information")
+     .raster_position("Position",
+         std::function<uint32_t()>([this]() -> uint32_t { return raster_counter; }),
+         std::function<uint32_t()>([this]() -> uint32_t { return current_cycle % cycles_per_line; }),
+         std::function<uint32_t()>([this]() -> uint32_t { return total_lines; }),
+         std::function<uint32_t()>([this]() -> uint32_t { return cycles_per_line; }))
+     .flag("PAL Mode", [this]() -> uint32_t { return is_pal; });
+
+    // ---- Screen Configuration ----
+    r.category("Screen Configuration")
+     .value("Control 1 ($9000)", VIC_REG_CONTROL1)
+     .indent(1)
+     .flag("Interlace", VIC_REG_CONTROL1, 7)
+     .value("Screen Origin X", [this]() -> uint32_t { return registers[VIC_REG_CONTROL1] & VIC_C1_SCREEN_ORIGIN_X_MASK; }, 8)
+     .indent(0)
+     .value("Control 2 ($9001)", VIC_REG_CONTROL2)
+     .indent(1)
+     .value("Screen Origin Y", [this]() -> uint32_t { return (uint32_t)registers[VIC_REG_CONTROL2]; }, 8)
+     .indent(0)
+     .value("Columns", [this]() -> uint32_t { return registers[VIC_REG_VIDEO_MATRIX] & VIC_VM_COLUMNS_MASK; }, 8)
+     .value("Rows", [this]() -> uint32_t { return (registers[VIC_REG_ROWS] & VIC_ROWS_ROWS_MASK) >> VIC_ROWS_ROWS_SHIFT; }, 8)
+     .flag("Double Height", VIC_REG_ROWS, 0)
+     .address("Video Matrix Base", [this]() -> uint32_t { return cached_base_video; }, 16)
+     .address("Character Base", [this]() -> uint32_t { return cached_base_char; }, 16);
+
+    // ---- Audio ----
+    r.category("Audio")
+     .value("Volume", [this]() -> uint32_t { return registers[VIC_REG_AUX_COLOR] & VIC_AUX_VOLUME_MASK; }, 8)
+     .separator()
+     .audio_channel("Bass",
+         RegSource{VIC_REG_BASS_FREQ, 7, 1},
+         RegSource{VIC_REG_BASS_FREQ, 0, 7},
+         RegSource{VIC_REG_AUX_COLOR, 0, 4})
+     .audio_channel("Alto",
+         RegSource{VIC_REG_ALTO_FREQ, 7, 1},
+         RegSource{VIC_REG_ALTO_FREQ, 0, 7},
+         RegSource{VIC_REG_AUX_COLOR, 0, 4})
+     .audio_channel("Soprano",
+         RegSource{VIC_REG_SOPRANO_FREQ, 7, 1},
+         RegSource{VIC_REG_SOPRANO_FREQ, 0, 7},
+         RegSource{VIC_REG_AUX_COLOR, 0, 4})
+     .audio_channel("Noise",
+         RegSource{VIC_REG_NOISE_FREQ, 7, 1},
+         RegSource{VIC_REG_NOISE_FREQ, 0, 7},
+         RegSource{VIC_REG_AUX_COLOR, 0, 4});
+
+    // ---- Colors ----
+    r.category("Colors", false)
+     .value("Background Reg ($900F)", VIC_REG_BACKGROUND)
+     .indent(1)
+     .color("Border", [this]() -> uint32_t { return registers[VIC_REG_BACKGROUND] & VIC_BG_BORDER_MASK; }, palette, 16)
+     .color("Background", [this]() -> uint32_t { return (registers[VIC_REG_BACKGROUND] & VIC_BG_BACKGROUND_MASK) >> VIC_BG_BACKGROUND_SHIFT; }, palette, 16)
+     .flag("Reverse", VIC_REG_BACKGROUND, 3)
+     .indent(0)
+     .value("Aux Color Reg ($900E)", VIC_REG_AUX_COLOR)
+     .indent(1)
+     .color("Aux Color", [this]() -> uint32_t { return (registers[VIC_REG_AUX_COLOR] & VIC_AUX_COLOR_MASK) >> VIC_AUX_COLOR_SHIFT; }, palette, 16);
+}
