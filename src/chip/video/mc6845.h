@@ -69,13 +69,13 @@ static constexpr int MC6845_NUM_REGISTERS = 18;
 // ============================================================================
 
 struct mc6845_t : public ChipBase {
-    mc6845_t() : ChipBase(ChipInfo{"MC6845", "Motorola"}) {}
+    mc6845_t() : ChipBase(ChipInfo{"MC6845", "Motorola"}) {
+        register_debug_fields();
+    }
 
     // --- ChipBase GUI interface ---
     bool has_layout_content() const override;
     void render_layout_content()    override;
-    bool has_debug_content()  const override;
-    void render_debug_content()     override;
 
     // ========================================================================
     // REGISTERS
@@ -186,5 +186,64 @@ struct mc6845_t : public ChipBase {
     /// Is the display currently in the active (visible) area?
     inline bool is_display_active() const {
         return h_display_active && v_display_active;
+    }
+
+private:
+    void register_debug_fields() {
+        static constexpr const char* reg_names[MC6845_NUM_REGISTERS] = {
+            "R0  H Total",        "R1  H Displayed",
+            "R2  H Sync Pos",     "R3  Sync Widths",
+            "R4  V Total",        "R5  V Adjust",
+            "R6  V Displayed",    "R7  V Sync Pos",
+            "R8  Mode Ctrl",      "R9  Max Scanline",
+            "R10 Cursor Start",   "R11 Cursor End",
+            "R12 Start Addr Hi",  "R13 Start Addr Lo",
+            "R14 Cursor Hi",      "R15 Cursor Lo",
+            "R16 LPen Hi (RO)",   "R17 LPen Lo (RO)",
+        };
+
+        debug_registry_.set_registers(regs, MC6845_NUM_REGISTERS);
+
+        // --- Registers ---
+        debug_registry_.category("Registers")
+            .value("Addr Reg", [this]() -> uint32_t { return address_register; });
+        for (int i = 0; i < MC6845_NUM_REGISTERS; i++) {
+            debug_registry_.value(reg_names[i], static_cast<uint16_t>(i));
+        }
+
+        // --- Counters ---
+        debug_registry_.category("Counters", false)
+            .counter("H Char Counter",   [this]() -> uint32_t { return h_char_counter; },
+                     [this]() -> uint32_t { return static_cast<uint32_t>(chars_per_line() - 1); })
+            .counter("V Row Counter",    [this]() -> uint32_t { return v_row_counter; },
+                     [this]() -> uint32_t { return static_cast<uint32_t>(rows_per_frame() - 1); })
+            .counter("V Scanline",       [this]() -> uint32_t { return v_scanline_counter; },
+                     [this]() -> uint32_t { return static_cast<uint32_t>(scanlines_per_row() - 1); })
+            .value("V Adjust Counter",   [this]() -> uint32_t { return v_adjust_counter; });
+
+        // --- Sync & Display ---
+        debug_registry_.category("Sync & Display", false)
+            .flag("HSYNC",       [this]() -> uint32_t { return h_sync_active; })
+            .flag("VSYNC",       [this]() -> uint32_t { return v_sync_active; })
+            .flag("H Display",   [this]() -> uint32_t { return h_display_active; })
+            .flag("V Display",   [this]() -> uint32_t { return v_display_active; })
+            .flag("In Adjust",   [this]() -> uint32_t { return in_adjust; });
+
+        // --- Address ---
+        debug_registry_.category("Address", false)
+            .address("Linear Addr", [this]() -> uint32_t { return linear_address; })
+            .address("Row Start",   [this]() -> uint32_t { return row_start_address; })
+            .address("Start Addr",  [this]() -> uint32_t { return start_address(); })
+            .address("Cursor Addr", [this]() -> uint32_t { return cursor_address(); })
+            .flag("Cursor Vis",     [this]() -> uint32_t { return cursor_visible; });
+
+        // --- Light Pen ---
+        debug_registry_.category("Light Pen", false)
+            .flag("Latched",        [this]() -> uint32_t { return light_pen_latched; })
+            .address("Address",     [this]() -> uint32_t { return light_pen_address; });
+
+        // --- Frame ---
+        debug_registry_.category("Frame", false)
+            .value("Frame Count",   [this]() -> uint32_t { return frame_count; }, 32);
     }
 };
