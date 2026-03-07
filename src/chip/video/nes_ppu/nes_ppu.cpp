@@ -858,4 +858,88 @@ void PPU::connect_cartridge(Cartridge* cartridge) {
     cart_ = cartridge;
 }
 
+// ============================================================================
+// PPU — Debug field registration (ChipDebugRegistry)
+// ============================================================================
+
+void PPU::register_debug_fields() {
+    auto& r = debug_registry_;
+    r.set_registers(regs, REG_COUNT);
+
+    // ---- Timing ----
+    r.category("Timing");
+    r.raster_position("Raster",
+        std::function<uint32_t()>([this]() -> uint32_t {
+            return static_cast<uint32_t>(scanline + 1);
+        }),
+        std::function<uint32_t()>([this]() -> uint32_t {
+            return cycle;
+        }),
+        std::function<uint32_t()>([this]() -> uint32_t {
+            return static_cast<uint32_t>(total_scanlines_minus_one_ + 1);
+        }),
+        uint32_t(nes_constants::DOTS_PER_SCANLINE));
+    r.value("Frame", [this]() -> uint32_t {
+        return static_cast<uint32_t>(frame_count);
+    }, 32);
+    r.state("Region", [this]() -> uint32_t { return is_pal ? 1u : 0u; },
+        (const char* const[]){"NTSC", "PAL"}, 2);
+    r.flag("Frame Complete", [this]() -> uint32_t { return frame_complete; });
+    r.flag("NMI Internal", [this]() -> uint32_t { return vbl_flag_internal_; });
+
+    // ---- PPUCTRL ($2000) ----
+    r.category("PPUCTRL ($2000)");
+    r.value("PPUCTRL", uint16_t(PPUCTRL));
+    r.flag("NMI Enable", uint16_t(PPUCTRL), 7);
+    r.flag("Master/Slave", uint16_t(PPUCTRL), 6);
+    r.state("Sprite Size", uint16_t(PPUCTRL), 1, 5,
+        (const char* const[]){"8x8", "8x16"}, 2);
+    r.address("BG Pattern Base", [this]() -> uint32_t {
+        return (regs[PPUCTRL] & 0x10) ? 0x1000u : 0x0000u;
+    }, 16);
+    r.address("SPR Pattern Base", [this]() -> uint32_t {
+        return (regs[PPUCTRL] & 0x08) ? 0x1000u : 0x0000u;
+    }, 16);
+    r.state("VRAM Increment", [this]() -> uint32_t {
+        return (regs[PPUCTRL] & 0x04) ? 1u : 0u;
+    }, (const char* const[]){"1", "32"}, 2);
+    r.address("Base Nametable", [this]() -> uint32_t {
+        return 0x2000u + (regs[PPUCTRL] & 0x03) * 0x400u;
+    }, 16);
+
+    // ---- PPUMASK ($2001) ----
+    r.category("PPUMASK ($2001)");
+    r.value("PPUMASK", uint16_t(PPUMASK));
+    r.flag("Emph Blue", uint16_t(PPUMASK), 7);
+    r.flag("Emph Green", uint16_t(PPUMASK), 6);
+    r.flag("Emph Red", uint16_t(PPUMASK), 5);
+    r.flag("Show Sprites", uint16_t(PPUMASK), 4);
+    r.flag("Show Background", uint16_t(PPUMASK), 3);
+    r.flag("Show Left SPR", uint16_t(PPUMASK), 2);
+    r.flag("Show Left BG", uint16_t(PPUMASK), 1);
+    r.flag("Greyscale", uint16_t(PPUMASK), 0);
+
+    // ---- PPUSTATUS ($2002) ----
+    r.category("PPUSTATUS ($2002)");
+    r.value("PPUSTATUS", uint16_t(PPUSTATUS));
+    r.flag("VBlank", uint16_t(PPUSTATUS), 7);
+    r.flag("Sprite 0 Hit", uint16_t(PPUSTATUS), 6);
+    r.flag("Sprite Overflow", uint16_t(PPUSTATUS), 5);
+    r.value("OAM Addr", uint16_t(OAMADDR));
+
+    // ---- Internal State ----
+    r.category("Internal State", false);
+    r.address("VRAM Addr (v)", [this]() -> uint32_t { return internal.v; }, 15);
+    r.address("Temp Addr (t)", [this]() -> uint32_t { return internal.t; }, 15);
+    r.value("Fine X Scroll", [this]() -> uint32_t { return internal.x; }, 3);
+    r.flag("Write Toggle (w)", [this]() -> uint32_t { return internal.w ? 1u : 0u; });
+    r.value("Fine Y", [this]() -> uint32_t { return internal.fine_y; }, 3);
+
+    // ---- Palette RAM ----
+    r.category("Palette RAM", false);
+    r.memory("Palette", [this]() -> std::pair<const uint8_t*, size_t> {
+        return {palette.data(), palette.size()};
+    }, 0x3F00, 32);
+}
+
 } // namespace nes_system
