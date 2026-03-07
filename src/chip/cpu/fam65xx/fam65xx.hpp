@@ -1977,6 +1977,8 @@ public:
 
     // Initialize registers
     this->init_registers();
+
+    register_debug_fields();
   }
 
   ~fam65xx_t() override {
@@ -1990,14 +1992,53 @@ public:
   // ChipBase VIRTUAL METHOD IMPLEMENTATIONS
   // ========================================================================
 
-  bool has_debug_content() const override { return true; }
   bool has_settings_content() const override { return true; }
   bool has_layout_content() const override { return true; }
 
   // Declared here, defined in fam65xx_gui.cpp with explicit instantiations
-  void render_debug_content() override;
   void render_settings_content() override;
   void render_layout_content() override;
+
+private:
+  void register_debug_fields() {
+    auto& r = debug_registry_;
+
+    // ---- CPU Registers ----
+    r.category("CPU Registers");
+    r.value("A", [this]() -> uint32_t { return get(REG_A); }, 8);
+    r.value("X", [this]() -> uint32_t { return get(REG_X); }, 8);
+    r.value("Y", [this]() -> uint32_t { return get(REG_Y); }, 8);
+    r.address("SP", [this]() -> uint32_t { return get(REG_SP); }, 16);
+    r.address("PC", [this]() -> uint32_t { return get(REG_PC); }, 16);
+    r.flag_string("P", [this]() -> uint32_t { return get(REG_P); },
+        "NVuBDIZC", "nvubdizc", 8);
+
+    if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
+      r.address("Direct Page", [this]() -> uint32_t { return 0; }, 16);
+      r.value("Data Bank", [this]() -> uint32_t { return 0; }, 8);
+      r.value("Program Bank", [this]() -> uint32_t { return 0; }, 8);
+    }
+
+    // ---- Internal State ----
+    r.category("Internal State");
+    r.value("IR", [this]() -> uint32_t { return get(REG_IR); }, 8);
+    r.value("Data Latch", [this]() -> uint32_t { return get(REG_DL); }, 8);
+    r.address("Address Bus", [this]() -> uint32_t { return get(REG_AB); },
+        Traits.address_bits);
+    r.value("Half Cycle", [this]() -> uint32_t { return half_cycle; }, 8);
+    r.flag("Op Done", [this]() -> uint32_t { return opdone(); });
+
+    // ---- Interrupt State ----
+    r.category("Interrupt State", false);
+    r.flag("IRQ Disabled", [this]() -> uint32_t { return (get(REG_P) & FLAG_I) ? 1u : 0u; });
+
+    if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE)) {
+      r.flag("Wait for IRQ", [this]() -> uint32_t { return wait_for_interrupt; });
+      r.flag("Stopped", [this]() -> uint32_t { return stopped; });
+    }
+  }
+
+public:
 
   // ========================================================================
   // CPU STATE
