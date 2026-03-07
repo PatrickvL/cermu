@@ -370,6 +370,11 @@ bus_state_t Atari2600System::mem_tick(bus_state_t s) {
 // ============================================================================
 
 bool Atari2600System::load_file(const char* filepath) {
+    // If a cartridge was already loaded, perform a full cold-boot reset so
+    // that no stale CPU register values, framebuffer pixels, or audio
+    // samples leak from the previous program into the new one.
+    bool cold_boot = system_ready_;
+
     if (!cpu_) {
         if (!initialize()) {
             return false;
@@ -413,6 +418,26 @@ bool Atari2600System::load_file(const char* filepath) {
     // Reset system to start executing
     system_ready_ = true;
     reset();
+
+    // Cold boot: zero CPU registers and clear framebuffer/audio so nothing
+    // from the previous program bleeds through.
+    if (cold_boot && cpu_) {
+        cpu_->set(REG_A,   0);
+        cpu_->set(REG_X,   0);
+        cpu_->set(REG_Y,   0);
+        cpu_->set(REG_SPL, 0xFD);  // Power-on stack pointer
+        cpu_->set(REG_P,   0x24);  // I flag set, unused bit 5 set
+
+        if (rgba_framebuffer_) {
+            memset(rgba_framebuffer_,
+                   0,
+                   static_cast<size_t>(rgba_width_) * rgba_height_ * sizeof(uint32_t));
+        }
+
+        // Flush stale audio from the ring buffer
+        tia_.audio_write_pos = 0;
+        tia_.audio_read_pos  = 0;
+    }
 
     return true;
 }
