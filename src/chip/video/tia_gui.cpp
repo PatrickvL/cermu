@@ -191,115 +191,11 @@ static std::vector<PinSignalState> get_tia_pin_states(
 // ============================================================================
 
 bool tia_t::has_layout_content() const { return true; }
-bool tia_t::has_debug_content()  const { return true; }
 
 void tia_t::render_layout_content() {
 #ifdef CERMU_HAS_GUI
     ChipLayout& layout = get_tia_layout();
     std::vector<PinSignalState> pin_states = get_tia_pin_states(this, &layout, bus_snapshot_);
     render_chip_layout(layout, pin_states, "TIA");
-#endif
-}
-
-void tia_t::render_debug_content() {
-#ifdef CERMU_HAS_GUI
-    // Two-column layout: chip visualization on left, debugging info on right
-    ImVec2 window_size = ImGui::GetContentRegionAvail();
-
-    // Left column: Chip Visualization (fixed width ~250px)
-    ImVec2 chip_viz_size = ImVec2(250.0f, 0);
-    if (ImGui::BeginChild("ChipVisualization", chip_viz_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
-        ImGui::Text("Chip Visualization");
-        ImGui::Separator();
-
-        ImVec2 chip_center = ImGui::GetCursorScreenPos();
-        ImVec2 content_region = ImGui::GetContentRegionAvail();
-        chip_center.x += content_region.x * 0.5f;
-        chip_center.y += 200.0f;
-
-        ChipVisualization& renderer = GetGlobalChipRenderer();
-        ChipLayout& layout = get_tia_layout();
-
-        std::vector<PinSignalState> pin_states = get_tia_pin_states(this, &layout, bus_snapshot_);
-        renderer.render(layout, chip_center, pin_states, "TIA");
-    }
-    ImGui::EndChild();
-
-    ImGui::SameLine(0, 5.0f);
-
-    // Right column: All debugging information
-    ImVec2 right_column_size = ImVec2(window_size.x - 270.0f, 0);
-    if (ImGui::BeginChild("DebugInfo", right_column_size, true, ImGuiWindowFlags_HorizontalScrollbar)) {
-        ImGui::Text("Atari TIA (CO10444)");
-        ImGui::Separator();
-
-        // --- Timing ---
-        if (ImGui::CollapsingHeader("Timing", ImGuiTreeNodeFlags_DefaultOpen)) {
-            ImGui::Text("H Counter:  %3d / 227", h_counter);
-            ImGui::Text("Scanline:   %3d", scanline);
-            ImGui::Text("Visible Row: %d", visible_row);
-            ImGui::Text("VSYNC: %s  VBLANK: %s  WSYNC: %s",
-                         vsync_active ? "ON" : "off",
-                         vblank_active ? "ON" : "off",
-                         wsync_pending ? "HALT" : "ok");
-        }
-
-        // --- Colors ---
-        if (ImGui::CollapsingHeader("Colors")) {
-            ImGui::Text("COLUP0: $%02X  COLUP1: $%02X", colup0, colup1);
-            ImGui::Text("COLUPF: $%02X  COLUBK: $%02X", colupf, colubk);
-        }
-
-        // --- Players ---
-        if (ImGui::CollapsingHeader("Players")) {
-            ImGui::Text("GRP0: $%02X  GRP1: $%02X", grp0, grp1);
-            ImGui::Text("NUSIZ0: $%02X  NUSIZ1: $%02X", nusiz0, nusiz1);
-            ImGui::Text("POS P0: %3d  P1: %3d", pos_p0, pos_p1);
-            ImGui::Text("HM  P0: %+2d  P1: %+2d", (int)hm_p0, (int)hm_p1);
-            ImGui::Text("REF P0: %s  P1: %s",
-                         refp0 ? "yes" : "no", refp1 ? "yes" : "no");
-        }
-
-        // --- Missiles & Ball ---
-        if (ImGui::CollapsingHeader("Missiles & Ball")) {
-            ImGui::Text("M0: %s pos=%3d  M1: %s pos=%3d",
-                         enam0 ? "ON" : "off", pos_m0,
-                         enam1 ? "ON" : "off", pos_m1);
-            ImGui::Text("Ball: %s pos=%3d", enabl ? "ON" : "off", pos_bl);
-            ImGui::Text("HM  M0: %+2d  M1: %+2d  BL: %+2d",
-                         (int)hm_m0, (int)hm_m1, (int)hm_bl);
-        }
-
-        // --- Playfield ---
-        if (ImGui::CollapsingHeader("Playfield")) {
-            ImGui::Text("PF0: $%02X  PF1: $%02X  PF2: $%02X", pf0, pf1, pf2);
-            ImGui::Text("CTRLPF: $%02X (REF=%d SCORE=%d PRI=%d)",
-                         ctrlpf,
-                         ctrlpf & 1, (ctrlpf >> 1) & 1, (ctrlpf >> 2) & 1);
-        }
-
-        // --- Collision ---
-        if (ImGui::CollapsingHeader("Collision")) {
-            ImGui::Text("Collision: $%04X", collision);
-        }
-
-        // --- Audio ---
-        if (ImGui::CollapsingHeader("Audio")) {
-            for (int ch = 0; ch < 2; ch++) {
-                ImGui::Text("CH%d: CTRL=$%X FREQ=$%02X VOL=$%X",
-                             ch, audio[ch].control, audio[ch].frequency, audio[ch].volume);
-            }
-        }
-
-        // --- Input ---
-        if (ImGui::CollapsingHeader("Input Ports")) {
-            ImGui::Text("INPT4: %d  INPT5: %d", inpt4 ? 1 : 0, inpt5 ? 1 : 0);
-            ImGui::Text("INPT0: %d  INPT1: %d  INPT2: %d  INPT3: %d",
-                         inpt0 ? 1 : 0, inpt1 ? 1 : 0,
-                         inpt2 ? 1 : 0, inpt3 ? 1 : 0);
-            ImGui::Text("Latch: %s", input_latch_enabled ? "ON" : "off");
-        }
-    }
-    ImGui::EndChild();
 #endif
 }

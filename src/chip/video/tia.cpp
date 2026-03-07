@@ -84,6 +84,7 @@ const uint32_t tia_t::ntsc_palette[128] = {
 
 void tia_t::init() {
     reset();
+    register_debug_fields();
 
     // Convert ARGB palette to ABGR (GL_RGBA little-endian convention).
     // The static ntsc_palette[] stores 0xAARRGGBB; the GL texture pipeline
@@ -764,4 +765,89 @@ uint8_t tia_t::read(uint16_t addr) {
         default:
             return 0;
     }
+}
+
+// ============================================================================
+// ChipDebugRegistry
+// ============================================================================
+
+void tia_t::register_debug_fields() {
+    debug_registry_
+        // ---- Timing ----
+        .category("Timing")
+        .counter("H Counter", [this]() -> uint32_t { return h_counter; },
+                 tia_constants::CLOCKS_PER_LINE)
+        .counter("Scanline", [this]() -> uint32_t { return scanline; },
+                 tia_constants::LINES_PER_FRAME_NTSC)
+        .value("Visible Row", [this]() -> uint32_t {
+            return static_cast<uint32_t>(visible_row < 0 ? 0 : visible_row);
+        })
+        .flag("VSYNC Active", [this]() { return vsync_active; })
+        .flag("VBLANK Active", [this]() { return vblank_active; })
+        .flag("WSYNC Pending", [this]() { return wsync_pending; })
+
+        // ---- Colors ----
+        .category("Colors")
+        .value("COLUP0", [this]() -> uint32_t { return colup0; })
+        .value("COLUP1", [this]() -> uint32_t { return colup1; })
+        .value("COLUPF", [this]() -> uint32_t { return colupf; })
+        .value("COLUBK", [this]() -> uint32_t { return colubk; })
+
+        // ---- Players ----
+        .category("Players")
+        .value("GRP0", [this]() -> uint32_t { return grp0; })
+        .value("GRP1", [this]() -> uint32_t { return grp1; })
+        .value("NUSIZ0", [this]() -> uint32_t { return nusiz0; })
+        .value("NUSIZ1", [this]() -> uint32_t { return nusiz1; })
+        .value("Pos P0", [this]() -> uint32_t { return pos_p0; })
+        .value("Pos P1", [this]() -> uint32_t { return pos_p1; })
+        .signed_value("HM P0", [this]() -> int32_t { return hm_p0; })
+        .signed_value("HM P1", [this]() -> int32_t { return hm_p1; })
+        .flag("Reflect P0", [this]() { return refp0; })
+        .flag("Reflect P1", [this]() { return refp1; })
+
+        // ---- Missiles & Ball ----
+        .category("Missiles & Ball")
+        .flag("Enable M0", [this]() { return enam0; })
+        .flag("Enable M1", [this]() { return enam1; })
+        .value("Pos M0", [this]() -> uint32_t { return pos_m0; })
+        .value("Pos M1", [this]() -> uint32_t { return pos_m1; })
+        .flag("Enable Ball", [this]() { return enabl; })
+        .value("Pos Ball", [this]() -> uint32_t { return pos_bl; })
+        .signed_value("HM M0", [this]() -> int32_t { return hm_m0; })
+        .signed_value("HM M1", [this]() -> int32_t { return hm_m1; })
+        .signed_value("HM Ball", [this]() -> int32_t { return hm_bl; })
+
+        // ---- Playfield ----
+        .category("Playfield")
+        .value("PF0", [this]() -> uint32_t { return pf0; })
+        .value("PF1", [this]() -> uint32_t { return pf1; })
+        .value("PF2", [this]() -> uint32_t { return pf2; })
+        .value("CTRLPF", [this]() -> uint32_t { return ctrlpf; })
+        .flag("PF Reflect", [this]() { return (ctrlpf & 0x01) != 0; })
+        .flag("PF Score", [this]() { return (ctrlpf & 0x02) != 0; })
+        .flag("PF Priority", [this]() { return (ctrlpf & 0x04) != 0; })
+
+        // ---- Collision ----
+        .category("Collision")
+        .value("Collision Reg", [this]() -> uint32_t { return collision; })
+
+        // ---- Audio ----
+        .category("Audio")
+        .value("Ch0 Control", [this]() -> uint32_t { return audio[0].control; })
+        .value("Ch0 Frequency", [this]() -> uint32_t { return audio[0].frequency; })
+        .value("Ch0 Volume", [this]() -> uint32_t { return audio[0].volume; })
+        .value("Ch1 Control", [this]() -> uint32_t { return audio[1].control; })
+        .value("Ch1 Frequency", [this]() -> uint32_t { return audio[1].frequency; })
+        .value("Ch1 Volume", [this]() -> uint32_t { return audio[1].volume; })
+
+        // ---- Input Ports ----
+        .category("Input Ports")
+        .flag("INPT4 (Joy0 Fire)", [this]() { return inpt4; })
+        .flag("INPT5 (Joy1 Fire)", [this]() { return inpt5; })
+        .flag("INPT0 (Paddle 0)", [this]() { return inpt0; })
+        .flag("INPT1 (Paddle 1)", [this]() { return inpt1; })
+        .flag("INPT2 (Paddle 2)", [this]() { return inpt2; })
+        .flag("INPT3 (Paddle 3)", [this]() { return inpt3; })
+        .flag("Input Latch", [this]() { return input_latch_enabled; });
 }

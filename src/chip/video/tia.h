@@ -149,8 +149,6 @@ struct tia_t : public ChipBase {
     // --- ChipBase GUI interface ---
     bool has_layout_content() const override;
     void render_layout_content()    override;
-    bool has_debug_content()  const override;
-    void render_debug_content()     override;
 
     // ========================================================================
     // DISPLAY STATE
@@ -355,4 +353,6 @@ private:
 
     /// Get missile pixel with copy positions from NUSIZ register.
     bool get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool enabled, uint8_t nusiz) const;
+
+    void register_debug_fields();
 };
