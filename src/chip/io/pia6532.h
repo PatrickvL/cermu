@@ -44,13 +44,13 @@ static constexpr uint16_t RIOT_TIM64T  = 0x16;   // Divide by 64
 static constexpr uint16_t RIOT_TIM1024T = 0x17;   // Divide by 1024
 
 struct pia6532_t : public ChipBase {
-    pia6532_t() : ChipBase(ChipInfo{"PIA6532", "MOS Technology"}) {}
+    pia6532_t() : ChipBase(ChipInfo{"PIA6532", "MOS Technology"}) {
+        register_debug_fields();
+    }
 
     // --- ChipBase GUI interface ---
     bool has_layout_content() const override;
     void render_layout_content()    override;
-    bool has_debug_content()  const override;
-    void render_debug_content()     override;
 
     // ========================================================================
     // RAM — 128 bytes ($80-$FF)
@@ -112,4 +112,46 @@ struct pia6532_t : public ChipBase {
     /// Read a port with data direction masking.
     uint8_t read_port_a() const;
     uint8_t read_port_b() const;
+
+private:
+    void register_debug_fields() {
+        debug_registry_
+            .category("I/O Ports")
+            .port("Port A",
+                  std::function<uint32_t()>([this]() -> uint32_t { return port_a_data; }),
+                  std::function<uint32_t()>([this]() -> uint32_t { return port_a_ddr; }))
+            .value("Port A Input", [this]() -> uint32_t { return port_a_input; })
+            .value("Port A Effective", [this]() -> uint32_t { return read_port_a(); })
+            .port("Port B",
+                  std::function<uint32_t()>([this]() -> uint32_t { return port_b_data; }),
+                  std::function<uint32_t()>([this]() -> uint32_t { return port_b_ddr; }))
+            .value("Port B Input", [this]() -> uint32_t { return port_b_input; })
+            .value("Port B Effective", [this]() -> uint32_t { return read_port_b(); })
+
+            .category("Timer")
+            .value("Value", [this]() -> uint32_t { return timer_value; })
+            .state("Divider", [this]() -> uint32_t {
+                switch (timer_divider) {
+                    case 1:    return 0;
+                    case 8:    return 1;
+                    case 64:   return 2;
+                    case 1024: return 3;
+                    default:   return 0;
+                }
+            }, divider_names_, 4)
+            .counter("Sub-counter", [this]() -> uint32_t { return timer_counter; },
+                     [this]() -> uint32_t { return timer_divider; })
+            .flag("Underflow", [this]() -> uint32_t { return timer_underflow; })
+            .flag("IRQ Enable", [this]() -> uint32_t { return timer_interrupt_enabled; })
+
+            .category("RAM (128 bytes)", false)
+            .memory("RAM", [this]() -> std::pair<const uint8_t*, size_t> {
+                return {ram, 128};
+            }, 0x0080, 128);
+    }
+
+    static constexpr const char* divider_names_[] = {
+        "TIM1T (\xC3\xB71)", "TIM8T (\xC3\xB78)",
+        "TIM64T (\xC3\xB764)", "TIM1024T (\xC3\xB71024)"
+    };
 };
