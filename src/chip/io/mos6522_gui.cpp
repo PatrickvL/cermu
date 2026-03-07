@@ -20,6 +20,8 @@
 #include <cstdio>
 #include <memory>
 
+#ifdef CERMU_HAS_GUI
+
 // Forward declarations
 static const char* mos6522_get_via_name(mos6522_t* via);
 
@@ -112,6 +114,22 @@ static ChipLayout& get_via_layout() {
 }
 
 // ============================================================================
+// HELPER: VIA IDENTIFICATION
+// ============================================================================
+
+static const char* mos6522_get_via_name(mos6522_t* via) {
+    // The VIC-20 has two VIAs distinguished by their interrupt line
+    if (via->interrupt_bit == BUS_NMI_BIT) {
+        return "VIA 1 ($9110)";  // VIA1 at $9110 drives NMI
+    } else if (via->interrupt_bit == BUS_IRQ_BIT) {
+        return "VIA 2 ($9120)";  // VIA2 at $9120 drives IRQ
+    }
+    return "VIA";
+}
+
+#endif // CERMU_HAS_GUI (layout/pin helpers)
+
+// ============================================================================
 // MOS6522 VIA GUI SETTINGS
 // ============================================================================
 
@@ -154,20 +172,6 @@ void mos6522_t::render_settings_content() {
         }
     }
 #endif
-}
-
-// ============================================================================
-// HELPER: VIA IDENTIFICATION
-// ============================================================================
-
-static const char* mos6522_get_via_name(mos6522_t* via) {
-    // The VIC-20 has two VIAs distinguished by their interrupt line
-    if (via->interrupt_bit == BUS_NMI_BIT) {
-        return "VIA 1 ($9110)";  // VIA1 at $9110 drives NMI
-    } else if (via->interrupt_bit == BUS_IRQ_BIT) {
-        return "VIA 2 ($9120)";  // VIA2 at $9120 drives IRQ
-    }
-    return "VIA";
 }
 
 // ============================================================================

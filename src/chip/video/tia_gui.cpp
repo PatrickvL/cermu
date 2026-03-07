@@ -43,6 +43,8 @@
 //   Pin 20: BLK           Pin 21: CSYNC
 //
 
+#ifdef CERMU_HAS_GUI
+
 static ChipLayout create_tia_layout() {
     ChipLayout layout = create_dip40_layout();
 
@@ -185,6 +187,8 @@ static std::vector<PinSignalState> get_tia_pin_states(
 
     return ps;
 }
+
+#endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // ============================================================================
 // ChipBase GUI Overrides

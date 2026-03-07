@@ -31,6 +31,8 @@
 //   Pin 8:  VSS  (GND)               Pin  9: Q6   (stage 6 out)
 //
 
+#ifdef CERMU_HAS_GUI
+
 static ChipLayout create_cd4021_layout() {
     ChipLayout layout = create_dip16_layout();
 
@@ -126,6 +128,8 @@ static std::vector<PinSignalState> get_cd4021_pin_states(
 
     return ps;
 }
+
+#endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // ============================================================================
 // ChipBase GUI Overrides

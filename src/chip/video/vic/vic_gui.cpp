@@ -20,6 +20,8 @@
 #endif
 #include <cstdio>
 
+#ifdef CERMU_HAS_GUI
+
 // ============================================================================
 // MOS 6560/6561 VIC LAYOUT (40-pin DIP)
 // ============================================================================
@@ -108,6 +110,8 @@ static const char* get_vic_type_name(vic_base_t* vic) {
     if (vic->is_pal) return "MOS 6561 (PAL)";
     return "MOS 6560 (NTSC)";
 }
+
+#endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // ============================================================================
 // ChipBase interface implementation

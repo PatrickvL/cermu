@@ -21,6 +21,8 @@
 #include <cstdio>
 #include <memory>
 
+#ifdef CERMU_HAS_GUI
+
 // ============================================================================
 // TED 7360 LAYOUT (48-pin DIP)
 // ============================================================================
@@ -109,16 +111,7 @@ static ChipLayout& get_ted_layout() {
     return layout;
 }
 
-static const char* get_screen_mode_name(uint8_t mode) {
-    switch (mode) {
-        case TED_GM_STANDARD_TEXT:      return "Standard Text";
-        case TED_GM_MULTICOLOR_TEXT:    return "Multicolor Text";
-        case TED_GM_STANDARD_BITMAP:    return "Standard Bitmap";
-        case TED_GM_MULTICOLOR_BITMAP:  return "Multicolor Bitmap";
-        case TED_GM_ECM_TEXT:           return "Extended Color Text";
-        default:                        return "Invalid Mode";
-    }
-}
+#endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // ============================================================================
 // ChipBase interface implementation

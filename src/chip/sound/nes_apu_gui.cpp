@@ -19,6 +19,8 @@
 #include <cstdio>
 #include <memory>
 
+#ifdef CERMU_HAS_GUI
+
 // ============================================================================
 // RICOH 2A03 LAYOUT (40-pin DIP) — APU-focused view
 // ============================================================================
@@ -60,6 +62,8 @@ inline ChipLayout create_ricoh_2a03_apu_layout() {
 // ============================================================================
 // ChipBase interface implementation
 // ============================================================================
+
+#endif // CERMU_HAS_GUI (layout helpers)
 
 bool nes6502_apu::APU::has_settings_content() const { return true; }
 bool nes6502_apu::APU::has_layout_content()   const { return true; }
