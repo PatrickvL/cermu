@@ -573,12 +573,12 @@ private:
     uint8_t legacy_subcycle_ = 0;       // 0 = PHI1, 1 = PHI2
 
     // --- ChipBase interface ---
-    bool has_debug_content()    const override;
     bool has_settings_content() const override;
     bool has_layout_content()   const override;
-    void render_debug_content()    override;
     void render_settings_content() override;
     void render_layout_content()   override;
+
+    void register_debug_fields();
 
 #ifdef CERMU_HAS_GUI
     bus_state_t bus_snapshot_ = {};     // Last bus state captured at end of PHI2 (for debugger)

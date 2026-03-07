@@ -801,6 +801,7 @@ ted7360_t::ted7360_t(const ted7360_desc_t& desc) {
     pixel.color_line = new uint8_t[TED_VISIBLE_WIDTH]();
 
     reset();
+    register_debug_fields();
 }
 
 ted7360_t::~ted7360_t() {
@@ -1473,4 +1474,122 @@ void ted7360_t::set_framebuffer(uint32_t* buffer, int width, int height) {
     pixel.framebuffer = buffer;
     pixel.fb_width    = width;
     pixel.fb_height   = height;
+}
+
+// ============================================================================
+// Debug field registration (populates ChipDebugRegistry for the default
+// two-column debug layout provided by ChipBase)
+// ============================================================================
+
+void ted7360_t::register_debug_fields() {
+    auto& r = debug_registry_;
+    r.set_registers(registers.data, TED_NUM_REGS);
+    const uint32_t* palette = get_palette();
+
+    static constexpr const char* gfx_mode_names[] = {
+        "Standard Text", "Multicolor Text", "Standard Bitmap",
+        "Multicolor Bitmap", "ECM Text", "Invalid", "Invalid", "Invalid"
+    };
+
+    // ---- Raster Information ----
+    r.category("Raster Information")
+     .raster_position("Position",
+         std::function<uint32_t()>([this]() -> uint32_t { return timing.raster_counter; }),
+         std::function<uint32_t()>([this]() -> uint32_t { return timing.x_cycle; }),
+         std::function<uint32_t()>([this]() -> uint32_t { return timing.lines_per_frame; }),
+         std::function<uint32_t()>([this]() -> uint32_t { return timing.cpu_cycles_per_line; }))
+     .value("Frame Count", [this]() -> uint32_t { return timing.frame_count; }, 32)
+     .flag("PAL Mode", [this]() -> uint32_t { return timing.is_pal; })
+     .flag("DMA Line", [this]() -> uint32_t { return video_logic.is_dma_line; })
+     .flag("BA Low", [this]() -> uint32_t { return bus.ba_low; });
+
+    // ---- Control Registers ----
+    r.category("Control Registers")
+     .value("$FF06 Control 1", TED_REG_CONTROL1)
+     .indent(1)
+     .flag("DEN", TED_REG_CONTROL1, 4)
+     .flag("BMM", TED_REG_CONTROL1, 5)
+     .flag("ECM", TED_REG_CONTROL1, 6)
+     .flag("RSEL", TED_REG_CONTROL1, 3)
+     .value("YSCROLL", [this]() -> uint32_t { return registers.data[TED_REG_CONTROL1] & TED_CR1_YSCROLL_MASK; }, 8)
+     .indent(0)
+     .value("$FF07 Control 2", TED_REG_CONTROL2)
+     .indent(1)
+     .flag("MCM", TED_REG_CONTROL2, 4)
+     .flag("CSEL", TED_REG_CONTROL2, 3)
+     .flag("FREEZE", TED_REG_CONTROL2, 5)
+     .flag("PAL/NTSC", TED_REG_CONTROL2, 6)
+     .flag("RVS", TED_REG_CONTROL2, 7)
+     .value("XSCROLL", [this]() -> uint32_t { return registers.data[TED_REG_CONTROL2] & TED_CR2_XSCROLL_MASK; }, 8)
+     .indent(0)
+     .state("Graphics Mode", [this]() -> uint32_t { return sequencer.graphics_mode; },
+            gfx_mode_names, 8);
+
+    // ---- Timers ----
+    r.category("Timers")
+     .timer("Timer 1",
+         std::function<uint32_t()>([this]() -> uint32_t { return timer1.counter; }),
+         std::function<uint32_t()>([this]() -> uint32_t { return timer1.latch; }),
+         std::function<uint32_t()>([]() -> uint32_t { return 1; }))
+     .timer("Timer 2",
+         std::function<uint32_t()>([this]() -> uint32_t { return timer2.counter; }),
+         std::function<uint32_t()>([this]() -> uint32_t { return timer2.latch; }),
+         std::function<uint32_t()>([]() -> uint32_t { return 1; }))
+     .timer("Timer 3",
+         std::function<uint32_t()>([this]() -> uint32_t { return timer3.counter; }),
+         std::function<uint32_t()>([this]() -> uint32_t { return timer3.latch; }),
+         std::function<uint32_t()>([]() -> uint32_t { return 1; }));
+
+    // ---- Sound ----
+    r.category("Sound")
+     .audio_channel("Channel 1",
+         std::function<uint32_t()>([this]() -> uint32_t { return sound.ch1_enabled; }),
+         std::function<uint32_t()>([this]() -> uint32_t { return sound.freq1; }),
+         std::function<uint32_t()>([this]() -> uint32_t { return sound.volume; }))
+     .audio_channel("Channel 2",
+         std::function<uint32_t()>([this]() -> uint32_t { return sound.ch2_enabled; }),
+         std::function<uint32_t()>([this]() -> uint32_t { return sound.freq2; }),
+         std::function<uint32_t()>([this]() -> uint32_t { return sound.volume; }))
+     .flag("Noise Enabled", [this]() -> uint32_t { return sound.noise_enabled; })
+     .value("Noise LFSR", [this]() -> uint32_t { return sound.noise_shift_reg; }, 8)
+     .value("Volume", [this]() -> uint32_t { return sound.volume; }, 8)
+     .flag("DA Mode", [this]() -> uint32_t { return sound.da_mode; })
+     .value("Buffer Samples", [this]() -> uint32_t { return audio_available(); }, 16);
+
+    // ---- Interrupts ----
+    r.category("Interrupts")
+     .value("IRQ Status ($FF09)", [this]() -> uint32_t { return irq_status; }, 8)
+     .value("IRQ Mask ($FF0A)", [this]() -> uint32_t { return irq_mask; }, 8)
+     .flag("IRQ Pending", [this]() -> uint32_t { return irq_pending(); })
+     .indent(1)
+     .flag("Raster", [this]() -> uint32_t { return irq_status & TED_IRQ_RASTER; })
+     .flag("Timer 1", [this]() -> uint32_t { return irq_status & TED_IRQ_TIMER1; })
+     .flag("Timer 2", [this]() -> uint32_t { return irq_status & TED_IRQ_TIMER2; })
+     .flag("Timer 3", [this]() -> uint32_t { return irq_status & TED_IRQ_TIMER3; })
+     .indent(0);
+
+    // ---- Memory Mapping ----
+    r.category("Memory Mapping", false)
+     .address("Screen Base", [this]() -> uint32_t { return memory.screen_base; }, 16)
+     .address("Char Base", [this]() -> uint32_t { return memory.char_base; }, 16)
+     .address("Bitmap Base", [this]() -> uint32_t { return memory.bitmap_base; }, 16)
+     .flag("ROM Enabled", [this]() -> uint32_t { return rom_enabled; });
+
+    // ---- Video Logic ----
+    r.category("Video Logic", false)
+     .flag("Display State", [this]() -> uint32_t { return video_logic.display_state; })
+     .value("VC", [this]() -> uint32_t { return video_logic.vc; }, 16)
+     .value("VCBASE", [this]() -> uint32_t { return video_logic.vcbase; }, 16)
+     .value("RC", [this]() -> uint32_t { return video_logic.rc; }, 8)
+     .value("VMLI", [this]() -> uint32_t { return video_logic.vmli; }, 8)
+     .flag("Border Main FF", [this]() -> uint32_t { return border.main_ff; })
+     .flag("Border Vert FF", [this]() -> uint32_t { return border.vert_ff; });
+
+    // ---- Colors ----
+    r.category("Colors", false)
+     .color("BG0 ($FF15)", TED_REG_COLOR_BG0, palette, 128)
+     .color("BG1 ($FF16)", TED_REG_COLOR_BG1, palette, 128)
+     .color("BG2 ($FF17)", TED_REG_COLOR_BG2, palette, 128)
+     .color("BG3 ($FF18)", TED_REG_COLOR_BG3, palette, 128)
+     .color("Border ($FF19)", TED_REG_BORDER, palette, 128);
 }
