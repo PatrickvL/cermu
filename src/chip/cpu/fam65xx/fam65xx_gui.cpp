@@ -381,59 +381,6 @@ void render_interrupt_state(fam65xx_t<Traits> *cpu) {
 namespace fam65xx {
 
 template <const CPUTraits &Traits>
-void fam65xx_t<Traits>::render_debug_content() {
-    // Create two-column layout: chip visualization on left, debugging info on
-    // right
-    ImVec2 window_size = ImGui::GetContentRegionAvail();
-
-    // Left column: Chip Visualization (fixed width ~250px, 25% wider)
-    ImVec2 chip_viz_size = ImVec2(250.0f, 0);
-    if (ImGui::BeginChild("ChipVisualization", chip_viz_size, true,
-                          ImGuiWindowFlags_HorizontalScrollbar)) {
-      ImGui::Text("Chip Visualization");
-      ImGui::Separator();
-
-      // Calculate chip center for visualization
-      ImVec2 chip_center = ImGui::GetCursorScreenPos();
-      ImVec2 content_region = ImGui::GetContentRegionAvail();
-      chip_center.x += content_region.x * 0.5f;
-      chip_center.y += 200.0f; // Space for the chip
-
-      // Compute bus state from registers if not externally set
-      bus_state_t bus_state = this->bus_snapshot_;
-      if (bus_state == 0) {
-        bus_state = FAM65XX_GUI_DEFAULT_STATE;
-        BUS_SET_ADDR(bus_state, this->get(REG_AB));
-        BUS_SET_DATA(bus_state, this->get(REG_DL));
-      }
-
-      // Show chip visualization with bus state
-      render_chip_visualization<Traits>(this, chip_center, bus_state);
-    }
-    ImGui::EndChild();
-
-    ImGui::SameLine(0, 5.0f); // Small gap between columns
-
-    // Right column: All debugging information
-    ImVec2 right_column_size = ImVec2(
-        window_size.x - 270.0f, 0); // Remaining width minus left column and gap
-    if (ImGui::BeginChild("DebugInfo", right_column_size, true,
-                          ImGuiWindowFlags_HorizontalScrollbar)) {
-      render_cpu_registers<Traits>(this);
-      ImGui::Separator();
-
-      render_internal_state<Traits>(this);
-      ImGui::Separator();
-
-      render_interrupt_state<Traits>(this);
-      ImGui::Separator();
-
-      render_processor_features<Traits>(this);
-    }
-    ImGui::EndChild();
-}
-
-template <const CPUTraits &Traits>
 void fam65xx_t<Traits>::render_settings_content() {
     ImGui::Text("%s %s Configuration", Traits.get_vendor(), Traits.get_chip_id());
     ImGui::Separator();
@@ -474,43 +421,33 @@ void fam65xx_t<Traits>::render_layout_content() {
 }
 
 // Explicit template instantiations for all CPU variants
-template void fam65xx_t<MOS6502Traits>::render_debug_content();
 template void fam65xx_t<MOS6502Traits>::render_settings_content();
 template void fam65xx_t<MOS6502Traits>::render_layout_content();
 
-template void fam65xx_t<MOS6510Traits>::render_debug_content();
 template void fam65xx_t<MOS6510Traits>::render_settings_content();
 template void fam65xx_t<MOS6510Traits>::render_layout_content();
 
-template void fam65xx_t<CSG7501Traits>::render_debug_content();
 template void fam65xx_t<CSG7501Traits>::render_settings_content();
 template void fam65xx_t<CSG7501Traits>::render_layout_content();
 
-template void fam65xx_t<RICOH_2A03Traits>::render_debug_content();
 template void fam65xx_t<RICOH_2A03Traits>::render_settings_content();
 template void fam65xx_t<RICOH_2A03Traits>::render_layout_content();
 
-template void fam65xx_t<MOS6507Traits>::render_debug_content();
 template void fam65xx_t<MOS6507Traits>::render_settings_content();
 template void fam65xx_t<MOS6507Traits>::render_layout_content();
 
-template void fam65xx_t<SYNERTEK_65C02Traits>::render_debug_content();
 template void fam65xx_t<SYNERTEK_65C02Traits>::render_settings_content();
 template void fam65xx_t<SYNERTEK_65C02Traits>::render_layout_content();
 
-template void fam65xx_t<WDC_65C02_EARLYTraits>::render_debug_content();
 template void fam65xx_t<WDC_65C02_EARLYTraits>::render_settings_content();
 template void fam65xx_t<WDC_65C02_EARLYTraits>::render_layout_content();
 
-template void fam65xx_t<WDC_W65C02STraits>::render_debug_content();
 template void fam65xx_t<WDC_W65C02STraits>::render_settings_content();
 template void fam65xx_t<WDC_W65C02STraits>::render_layout_content();
 
-template void fam65xx_t<ROCKWELL_R65C02Traits>::render_debug_content();
 template void fam65xx_t<ROCKWELL_R65C02Traits>::render_settings_content();
 template void fam65xx_t<ROCKWELL_R65C02Traits>::render_layout_content();
 
-template void fam65xx_t<WDC_65C816Traits>::render_debug_content();
 template void fam65xx_t<WDC_65C816Traits>::render_settings_content();
 template void fam65xx_t<WDC_65C816Traits>::render_layout_content();
 
@@ -527,52 +464,39 @@ template void fam65xx_t<WDC_65C816Traits>::render_layout_content();
 namespace fam65xx {
 
 template <const CPUTraits &Traits>
-void fam65xx_t<Traits>::render_debug_content() {}
-
-template <const CPUTraits &Traits>
 void fam65xx_t<Traits>::render_settings_content() {}
 
 template <const CPUTraits &Traits>
 void fam65xx_t<Traits>::render_layout_content() {}
 
 // Explicit template instantiations for non-GUI builds
-template void fam65xx_t<MOS6502Traits>::render_debug_content();
 template void fam65xx_t<MOS6502Traits>::render_settings_content();
 template void fam65xx_t<MOS6502Traits>::render_layout_content();
 
-template void fam65xx_t<MOS6510Traits>::render_debug_content();
 template void fam65xx_t<MOS6510Traits>::render_settings_content();
 template void fam65xx_t<MOS6510Traits>::render_layout_content();
 
-template void fam65xx_t<CSG7501Traits>::render_debug_content();
 template void fam65xx_t<CSG7501Traits>::render_settings_content();
 template void fam65xx_t<CSG7501Traits>::render_layout_content();
 
-template void fam65xx_t<RICOH_2A03Traits>::render_debug_content();
 template void fam65xx_t<RICOH_2A03Traits>::render_settings_content();
 template void fam65xx_t<RICOH_2A03Traits>::render_layout_content();
 
-template void fam65xx_t<MOS6507Traits>::render_debug_content();
 template void fam65xx_t<MOS6507Traits>::render_settings_content();
 template void fam65xx_t<MOS6507Traits>::render_layout_content();
 
-template void fam65xx_t<SYNERTEK_65C02Traits>::render_debug_content();
 template void fam65xx_t<SYNERTEK_65C02Traits>::render_settings_content();
 template void fam65xx_t<SYNERTEK_65C02Traits>::render_layout_content();
 
-template void fam65xx_t<WDC_65C02_EARLYTraits>::render_debug_content();
 template void fam65xx_t<WDC_65C02_EARLYTraits>::render_settings_content();
 template void fam65xx_t<WDC_65C02_EARLYTraits>::render_layout_content();
 
-template void fam65xx_t<WDC_W65C02STraits>::render_debug_content();
 template void fam65xx_t<WDC_W65C02STraits>::render_settings_content();
 template void fam65xx_t<WDC_W65C02STraits>::render_layout_content();
 
-template void fam65xx_t<ROCKWELL_R65C02Traits>::render_debug_content();
 template void fam65xx_t<ROCKWELL_R65C02Traits>::render_settings_content();
 template void fam65xx_t<ROCKWELL_R65C02Traits>::render_layout_content();
 
-template void fam65xx_t<WDC_65C816Traits>::render_debug_content();
 template void fam65xx_t<WDC_65C816Traits>::render_settings_content();
 template void fam65xx_t<WDC_65C816Traits>::render_layout_content();
 
