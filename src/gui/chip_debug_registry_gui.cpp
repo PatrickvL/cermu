@@ -10,10 +10,11 @@
  * The non-GUI stub is at the bottom of this file.
  */
 
-#include "../core/chip_debug_registry.h"
+#include "../core/chip.h"
 
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
+#include "chip_visualization.h"
 #include <cstdio>
 #include <algorithm>
 
@@ -500,9 +501,43 @@ void ChipDebugRegistry::render() const {
     }
 }
 
+// ============================================================================
+// PUBLIC: ChipBase::render_debug_content()  — default two-column layout
+// ============================================================================
+
+void ChipBase::render_debug_content() {
+    ImVec2 window_size = ImGui::GetContentRegionAvail();
+
+    if (has_layout_content()) {
+        // Left column: Chip Visualization (fixed width ~250px)
+        ImVec2 chip_viz_size = ImVec2(250.0f, 0);
+        if (ImGui::BeginChild("ChipVisualization", chip_viz_size, true,
+                              ImGuiWindowFlags_HorizontalScrollbar)) {
+            ImGui::Text("Chip Visualization");
+            ImGui::Separator();
+            render_layout_content();
+        }
+        ImGui::EndChild();
+
+        ImGui::SameLine(0, 5.0f);
+
+        // Right column: registry-driven debug info
+        ImVec2 right_column_size = ImVec2(window_size.x - 270.0f, 0);
+        if (ImGui::BeginChild("DebugInfo", right_column_size, true,
+                              ImGuiWindowFlags_HorizontalScrollbar)) {
+            debug_registry_.render();
+        }
+        ImGui::EndChild();
+    } else {
+        // No chip layout — render fields directly
+        debug_registry_.render();
+    }
+}
+
 #else // !CERMU_HAS_GUI
 
-// Non-GUI stub — the registry exists but rendering is a no-op.
+// Non-GUI stubs — the registry exists but rendering is a no-op.
 void ChipDebugRegistry::render() const {}
+void ChipBase::render_debug_content() {}
 
 #endif // CERMU_HAS_GUI
