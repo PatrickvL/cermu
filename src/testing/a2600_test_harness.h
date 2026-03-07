@@ -335,4 +335,32 @@ int test_riot_timer_underflow_countdown(harness_t* h);
 int test_riot_port_a_read_via_io(harness_t* h);
 int test_riot_port_b_console_switches(harness_t* h);
 
+// ─── Cycle-level accuracy tests ─────────────────────────────────────────────
+
+// --- TIA cycle-level ---
+int test_tia_hmove_blanking(harness_t* h);
+int test_tia_score_mode_priority_interaction(harness_t* h);
+int test_tia_missile_copies(harness_t* h);
+int test_tia_visible_row_tracking(harness_t* h);
+int test_tia_scanline_228_clocks(harness_t* h);
+int test_tia_wsync_release_timing(harness_t* h);
+int test_tia_vblank_transition_mid_scanline(harness_t* h);
+int test_tia_color_clock_rendering_window(harness_t* h);
+int test_tia_hmove_motion_sign_convention(harness_t* h);
+int test_tia_playfield_score_mode_with_priority(harness_t* h);
+int test_tia_collision_during_hblank(harness_t* h);
+int test_tia_player_copy_positions_exact(harness_t* h);
+int test_tia_resp_during_hblank(harness_t* h);
+int test_tia_audio_div_counter_reload(harness_t* h);
+int test_tia_palette_swizzle(harness_t* h);
+int test_tia_grp_vdel_cross_latch_sequence(harness_t* h);
+int test_tia_collision_read_bit_mapping(harness_t* h);
+int test_tia_enam_bit1_only(harness_t* h);
+int test_tia_enabl_write_updates_old_on_grp1(harness_t* h);
+
+// --- RIOT cycle-level ---
+int test_riot_timer_exact_divider_counting(harness_t* h);
+int test_riot_io_address_decoding_bits(harness_t* h);
+int test_riot_ram_address_range(harness_t* h);
+
 } // namespace a2600_test
