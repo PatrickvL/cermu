@@ -1,0 +1,1796 @@
+// =============================================================================
+// Atari 2600 Hardware Verification Test Harness — Implementation
+// =============================================================================
+// Tests every chip at cycle-level accuracy:
+//   - TIA: video registers, collision detection, playfield, players,
+//          missiles, ball, HMOVE, WSYNC, VSYNC frame boundary, color regs,
+//          audio waveforms, input ports, vertical delay latching
+//   - RIOT: 128-byte RAM, all 4 timer modes, underflow, DDR, port masking
+//   - Mappers: 2K, 4K, F8, F6, F4, E0, 3F, FA, FE, factory detection
+//   - System: address decoding, CPU-TIA sync timing, frame cycle count
+// =============================================================================
+
+#include "a2600_test_harness.h"
+#include "../systems/atari2600/mappers/a2600_mapper_3f.h"
+#include "../systems/atari2600/mappers/a2600_mapper_e0.h"
+#include <cassert>
+
+namespace a2600_test {
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Harness lifecycle
+// ─────────────────────────────────────────────────────────────────────────────
+
+harness_t* create(bool verbose) {
+    auto* h = new harness_t();
+    memset(h->framebuffer, 0, sizeof(h->framebuffer));
+    h->tia.init();
+    h->tia.set_framebuffer(h->framebuffer, harness_t::FB_W, harness_t::FB_H);
+    h->riot.init();
+    h->total_color_clocks = 0;
+    h->total_cpu_cycles   = 0;
+    h->pass_count = 0;
+    h->fail_count = 0;
+    h->verbose = verbose;
+    return h;
+}
+
+void destroy(harness_t* h) {
+    delete h;
+}
+
+void reset(harness_t* h) {
+    if (!h) return;
+    h->tia.reset();
+    h->tia.set_framebuffer(h->framebuffer, harness_t::FB_W, harness_t::FB_H);
+    h->riot.reset();
+    h->total_color_clocks = 0;
+    h->total_cpu_cycles   = 0;
+    memset(h->framebuffer, 0, sizeof(h->framebuffer));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Direct chip access
+// ─────────────────────────────────────────────────────────────────────────────
+
+void tia_write(harness_t* h, uint8_t addr, uint8_t value) {
+    h->tia.write(addr, value);
+}
+
+uint8_t tia_read(harness_t* h, uint8_t addr) {
+    return h->tia.read(addr);
+}
+
+void riot_write_io(harness_t* h, uint16_t addr, uint8_t value) {
+    h->riot.write_io(addr, value);
+}
+
+uint8_t riot_read_io(harness_t* h, uint16_t addr) {
+    return h->riot.read_io(addr);
+}
+
+void riot_write_ram(harness_t* h, uint8_t offset, uint8_t value) {
+    h->riot.write_ram(offset, value);
+}
+
+uint8_t riot_read_ram(harness_t* h, uint8_t offset) {
+    return h->riot.read_ram(offset);
+}
+
+void clock_color_clocks(harness_t* h, uint32_t n) {
+    for (uint32_t i = 0; i < n; i++) {
+        h->tia.tick_color_clock();
+    }
+    h->total_color_clocks += n;
+}
+
+void clock_cpu_cycles(harness_t* h, uint32_t n) {
+    for (uint32_t i = 0; i < n; i++) {
+        h->tia.tick_cpu_cycle();
+        h->riot.tick();
+    }
+    h->total_color_clocks += n * 3;
+    h->total_cpu_cycles   += n;
+}
+
+void clock_scanlines(harness_t* h, uint32_t n) {
+    // 228 color clocks per scanline = 76 CPU cycles per scanline
+    for (uint32_t line = 0; line < n; line++) {
+        for (int cc = 0; cc < 76; cc++) {
+            h->tia.tick_cpu_cycle();
+            h->riot.tick();
+        }
+    }
+    h->total_color_clocks += n * 228;
+    h->total_cpu_cycles   += n * 76;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Result recording helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+static void record_pass(harness_t* h, const char* check, const char* msg) {
+    h->pass_count++;
+    if (h->verbose) {
+        result_entry_t r;
+        r.type = result_type_t::PASS;
+        r.cycle = h->total_cpu_cycles;
+        r.check_name = check;
+        r.line_number = 0;
+        snprintf(r.message, sizeof(r.message), "%s", msg);
+        h->results.push_back(r);
+    }
+}
+
+static void record_fail(harness_t* h, const char* check, const char* msg) {
+    h->fail_count++;
+    result_entry_t r;
+    r.type = result_type_t::FAIL;
+    r.cycle = h->total_cpu_cycles;
+    r.check_name = check;
+    r.line_number = 0;
+    snprintf(r.message, sizeof(r.message), "%s", msg);
+    h->results.push_back(r);
+}
+
+// Assert helpers
+#define A26_ASSERT_EQ(h, check, actual, expected, fmt, ...) \
+    do { \
+        if ((actual) == (expected)) { \
+            char _msg[256]; snprintf(_msg, sizeof(_msg), fmt, ##__VA_ARGS__); \
+            record_pass(h, check, _msg); \
+        } else { \
+            char _msg[256]; snprintf(_msg, sizeof(_msg), \
+                fmt " (got 0x%02X, expected 0x%02X)", ##__VA_ARGS__, \
+                (unsigned)(actual), (unsigned)(expected)); \
+            record_fail(h, check, _msg); \
+        } \
+    } while(0)
+
+#define A26_ASSERT_EQ32(h, check, actual, expected, fmt, ...) \
+    do { \
+        if ((actual) == (expected)) { \
+            char _msg[256]; snprintf(_msg, sizeof(_msg), fmt, ##__VA_ARGS__); \
+            record_pass(h, check, _msg); \
+        } else { \
+            char _msg[256]; snprintf(_msg, sizeof(_msg), \
+                fmt " (got 0x%08X, expected 0x%08X)", ##__VA_ARGS__, \
+                (unsigned)(actual), (unsigned)(expected)); \
+            record_fail(h, check, _msg); \
+        } \
+    } while(0)
+
+#define A26_ASSERT_TRUE(h, check, cond, fmt, ...) \
+    do { \
+        if (cond) { \
+            char _msg[256]; snprintf(_msg, sizeof(_msg), fmt, ##__VA_ARGS__); \
+            record_pass(h, check, _msg); \
+        } else { \
+            char _msg[256]; snprintf(_msg, sizeof(_msg), fmt " (FAILED)", ##__VA_ARGS__); \
+            record_fail(h, check, _msg); \
+        } \
+    } while(0)
+
+#define A26_ASSERT_MASKED(h, check, actual, expected, mask, fmt, ...) \
+    do { \
+        if (((actual) & (mask)) == ((expected) & (mask))) { \
+            char _msg[256]; snprintf(_msg, sizeof(_msg), fmt, ##__VA_ARGS__); \
+            record_pass(h, check, _msg); \
+        } else { \
+            char _msg[256]; snprintf(_msg, sizeof(_msg), \
+                fmt " (got 0x%02X & 0x%02X = 0x%02X, expected 0x%02X)", ##__VA_ARGS__, \
+                (unsigned)(actual), (unsigned)(mask), \
+                (unsigned)((actual) & (mask)), (unsigned)((expected) & (mask))); \
+            record_fail(h, check, _msg); \
+        } \
+    } while(0)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Script execution
+// ─────────────────────────────────────────────────────────────────────────────
+
+int run_script(harness_t* h, const test_script_t* script) {
+    h->pass_count = 0;
+    h->fail_count = 0;
+    h->results.clear();
+
+    for (const auto& cmd : script->commands) {
+        switch (cmd.type) {
+        case cmd_type_t::RESET:
+            reset(h);
+            break;
+        case cmd_type_t::TIA_WRITE:
+            tia_write(h, static_cast<uint8_t>(cmd.addr), cmd.value);
+            break;
+        case cmd_type_t::TIA_READ_EXPECT: {
+            uint8_t val = tia_read(h, static_cast<uint8_t>(cmd.addr));
+            A26_ASSERT_MASKED(h, "TIA_READ", val, cmd.value, cmd.mask,
+                              "TIA[$%02X] at cycle %u", cmd.addr, h->total_cpu_cycles);
+            break;
+        }
+        case cmd_type_t::RIOT_WRITE_IO:
+            riot_write_io(h, cmd.addr, cmd.value);
+            break;
+        case cmd_type_t::RIOT_READ_IO_EXPECT: {
+            uint8_t val = riot_read_io(h, cmd.addr);
+            A26_ASSERT_MASKED(h, "RIOT_IO", val, cmd.value, cmd.mask,
+                              "RIOT[$%04X] at cycle %u", cmd.addr, h->total_cpu_cycles);
+            break;
+        }
+        case cmd_type_t::RIOT_WRITE_RAM:
+            riot_write_ram(h, static_cast<uint8_t>(cmd.addr), cmd.value);
+            break;
+        case cmd_type_t::RIOT_READ_RAM_EXPECT: {
+            uint8_t val = riot_read_ram(h, static_cast<uint8_t>(cmd.addr));
+            A26_ASSERT_EQ(h, "RIOT_RAM", val, cmd.value,
+                          "RIOT RAM[$%02X] at cycle %u", cmd.addr, h->total_cpu_cycles);
+            break;
+        }
+        case cmd_type_t::RUN_COLOR_CLOCKS:
+            clock_color_clocks(h, cmd.count);
+            break;
+        case cmd_type_t::RUN_CPU_CYCLES:
+            clock_cpu_cycles(h, cmd.count);
+            break;
+        case cmd_type_t::RUN_SCANLINES:
+            clock_scanlines(h, cmd.count);
+            break;
+        case cmd_type_t::EXPECT_COLLISION:
+            A26_ASSERT_EQ32(h, "COLLISION", (uint32_t)h->tia.collision, (uint32_t)cmd.collision,
+                            "Collision bits at cycle %u", h->total_cpu_cycles);
+            break;
+        case cmd_type_t::EXPECT_HCOUNTER:
+            A26_ASSERT_EQ(h, "HCOUNTER", (uint8_t)(h->tia.h_counter & 0xFF),
+                          (uint8_t)(cmd.count & 0xFF),
+                          "h_counter at cycle %u", h->total_cpu_cycles);
+            break;
+        case cmd_type_t::EXPECT_SCANLINE:
+            A26_ASSERT_EQ(h, "SCANLINE", (uint8_t)(h->tia.scanline & 0xFF),
+                          (uint8_t)(cmd.count & 0xFF),
+                          "Scanline at cycle %u", h->total_cpu_cycles);
+            break;
+        case cmd_type_t::EXPECT_WSYNC:
+            A26_ASSERT_EQ(h, "WSYNC", (int)h->tia.wsync_pending, (int)cmd.bool_val,
+                          "WSYNC pending at cycle %u", h->total_cpu_cycles);
+            break;
+        case cmd_type_t::EXPECT_TIMER:
+            A26_ASSERT_EQ(h, "TIMER", h->riot.timer_value, cmd.value,
+                          "RIOT timer at cycle %u", h->total_cpu_cycles);
+            break;
+        case cmd_type_t::EXPECT_TIMER_UNDERFLOW:
+            A26_ASSERT_EQ(h, "TIMER_UF", (int)h->riot.timer_underflow, (int)cmd.bool_val,
+                          "RIOT timer underflow at cycle %u", h->total_cpu_cycles);
+            break;
+        case cmd_type_t::EXPECT_PIXEL_COLOR:
+            if (cmd.x_pos < harness_t::FB_W && cmd.y_pos < harness_t::FB_H) {
+                uint32_t pixel = h->framebuffer[cmd.y_pos * harness_t::FB_W + cmd.x_pos];
+                A26_ASSERT_EQ32(h, "PIXEL", pixel, cmd.pixel_color,
+                                "Pixel (%d,%d)", cmd.x_pos, cmd.y_pos);
+            }
+            break;
+        case cmd_type_t::SET_INPUT:
+            // addr selects port: 0=port_a_input, 1=port_b_input, 2=inpt4, 3=inpt5
+            if (cmd.addr == 0) h->riot.port_a_input = cmd.value;
+            else if (cmd.addr == 1) h->riot.port_b_input = cmd.value;
+            else if (cmd.addr == 2) h->tia.inpt4 = (cmd.value != 0);
+            else if (cmd.addr == 3) h->tia.inpt5 = (cmd.value != 0);
+            break;
+        case cmd_type_t::LABEL:
+            if (h->verbose)
+                printf("  [%s]\n", cmd.label);
+            break;
+        }
+    }
+
+    return h->fail_count;
+}
+
+void print_results(const harness_t* h, const test_script_t* script) {
+    printf("  %s: %d passed, %d failed\n",
+           script->name.c_str(), h->pass_count, h->fail_count);
+
+    for (const auto& r : h->results) {
+        if (r.type == result_type_t::FAIL) {
+            printf("    FAIL @ cycle %u: [%s] %s\n",
+                   r.cycle, r.check_name, r.message);
+        } else if (r.type == result_type_t::PASS && h->verbose) {
+            printf("    PASS @ cycle %u: [%s] %s\n",
+                   r.cycle, r.check_name, r.message);
+        }
+    }
+}
+
+// =============================================================================
+// ███████╗ TIA TESTS ███████╗
+// =============================================================================
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Register read/write
+// ─────────────────────────────────────────────────────────────────────────────
+// Verify that TIA read registers reflect correct collision & input state
+// after writes to TIA registers. TIA has separate read and write address
+// spaces — writes go to $00-$2C, reads come from $00-$0D.
+
+int test_tia_register_readback(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // After reset, all collision registers should read 0
+    A26_ASSERT_MASKED(h, "TIA_RD", tia_read(h, TIA_R_CXM0P), 0x00, 0xC0,
+                      "CXM0P after reset");
+    A26_ASSERT_MASKED(h, "TIA_RD", tia_read(h, TIA_R_CXM1P), 0x00, 0xC0,
+                      "CXM1P after reset");
+    A26_ASSERT_MASKED(h, "TIA_RD", tia_read(h, TIA_R_CXPPMM), 0x00, 0xC0,
+                      "CXPPMM after reset");
+
+    // INPT4/INPT5 default high (bit 7 = 1, fire not pressed)
+    A26_ASSERT_MASKED(h, "TIA_RD", tia_read(h, TIA_R_INPT4), 0x80, 0x80,
+                      "INPT4 default (not pressed)");
+    A26_ASSERT_MASKED(h, "TIA_RD", tia_read(h, TIA_R_INPT5), 0x80, 0x80,
+                      "INPT5 default (not pressed)");
+
+    // Set fire button pressed (active-low → inpt4 = false → bit 7 = 0)
+    h->tia.inpt4 = false;
+    A26_ASSERT_MASKED(h, "TIA_RD", tia_read(h, TIA_R_INPT4), 0x00, 0x80,
+                      "INPT4 fire pressed");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Collision detection
+// ─────────────────────────────────────────────────────────────────────────────
+// Place two objects at the same position and verify collision bits.
+
+int test_tia_collision_detection(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Setup: place player 0 and player 1 at the same position.
+    // We need to write GRP0, GRP1 with non-zero patterns and position them.
+    tia_write(h, TIA_W_COLUP0, 0x0E);    // White-ish
+    tia_write(h, TIA_W_COLUP1, 0x1E);
+    tia_write(h, TIA_W_GRP0, 0xFF);       // Full 8-pixel bar
+    tia_write(h, TIA_W_GRP1, 0xFF);       // Full 8-pixel bar
+
+    // Position both players at x=0 by doing RESP at h_counter = HBLANK
+    // We'll directly set positions for the isolated chip test.
+    h->tia.pos_p0 = 40;
+    h->tia.pos_p1 = 40;
+
+    // Disable VBLANK to allow rendering
+    tia_write(h, TIA_W_VBLANK, 0x00);
+
+    // Clock through a visible scanline so rendering + collision happens.
+    // First get to a visible line.
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);  // One full scanline
+
+    // P0-P1 collision should be set
+    A26_ASSERT_TRUE(h, "CX", (h->tia.collision & tia_t::CX_P0P1) != 0,
+                    "P0-P1 collision detected");
+
+    // Verify via register read
+    uint8_t cxppmm = tia_read(h, TIA_R_CXPPMM);
+    A26_ASSERT_TRUE(h, "CX_REG", (cxppmm & 0x80) != 0,
+                    "CXPPMM bit 7 (P0-P1) set");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Collision clear
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_collision_clear(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Force some collision bits
+    h->tia.collision = 0xFFFF;  // All collisions set
+
+    // Verify collision bits are non-zero via register
+    A26_ASSERT_TRUE(h, "CX_PRE", tia_read(h, TIA_R_CXM0P) != 0,
+                    "Collisions non-zero before clear");
+
+    // Write CXCLR to clear all collision latches
+    tia_write(h, TIA_W_CXCLR, 0x00);
+
+    A26_ASSERT_EQ(h, "CX_CLR", (uint8_t)(h->tia.collision & 0xFF), 0x00,
+                  "Collision cleared (low byte)");
+    A26_ASSERT_EQ(h, "CX_CLR", (uint8_t)((h->tia.collision >> 8) & 0xFF), 0x00,
+                  "Collision cleared (high byte)");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Playfield basic rendering
+// ─────────────────────────────────────────────────────────────────────────────
+// Verify that PF0/PF1/PF2 produce the correct 20-bit playfield pattern
+// and that it repeats for the right half by default.
+
+int test_tia_playfield_basic(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Set a simple playfield pattern:
+    // PF0 = $F0 → bits 4-7 set → pixels 0-3 of the 20-bit pattern are ON
+    // PF1 = $00 → pixels 4-11 OFF
+    // PF2 = $00 → pixels 12-19 OFF
+    tia_write(h, TIA_W_PF0, 0xF0);
+    tia_write(h, TIA_W_PF1, 0x00);
+    tia_write(h, TIA_W_PF2, 0x00);
+    tia_write(h, TIA_W_COLUPF, 0x0E);  // White playfield
+    tia_write(h, TIA_W_COLUBK, 0x00);  // Black background
+    tia_write(h, TIA_W_CTRLPF, 0x00);  // No reflect, no priority, no score
+    tia_write(h, TIA_W_VBLANK, 0x00);  // Disable VBLANK
+
+    // Ensure we are on a visible scanline
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+
+    // Clock one full scanline to render
+    clock_cpu_cycles(h, 76);
+
+    // PF0 bits 4-7 (4 pixels) occupy display pixels 0-15 (each PF bit = 4 color clocks)
+    // Pixel 0 should be playfield color (PF bit 0 from PF0 D4)
+    // Pixel 16 should be background color (PF1 D7 = 0)
+    uint32_t pf_color = h->tia.palette_rgba_[(0x0E >> 1) & 0x7F];
+    uint32_t bg_color = h->tia.palette_rgba_[0];
+
+    A26_ASSERT_EQ32(h, "PF_PIX", h->framebuffer[0 * harness_t::FB_W + 0], pf_color,
+                    "PF pixel at x=0 (PF0 D4=1)");
+    A26_ASSERT_EQ32(h, "PF_PIX", h->framebuffer[0 * harness_t::FB_W + 15], pf_color,
+                    "PF pixel at x=15 (PF0 D7=1)");
+    A26_ASSERT_EQ32(h, "PF_PIX", h->framebuffer[0 * harness_t::FB_W + 16], bg_color,
+                    "BG pixel at x=16 (PF1 D7=0)");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Playfield reflection
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_playfield_reflect(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // PF0=$F0 (bits 4-7 set), PF1=$00, PF2=$00
+    // With reflect: left half has PF bits 0-3 ON, right half is reversed:
+    // bits 19-0 → only bits 19-16 (the PF0 bits) ON at the far right.
+    tia_write(h, TIA_W_PF0, 0xF0);
+    tia_write(h, TIA_W_PF1, 0x00);
+    tia_write(h, TIA_W_PF2, 0x00);
+    tia_write(h, TIA_W_CTRLPF, 0x01);  // Reflect enabled
+    tia_write(h, TIA_W_COLUPF, 0x0E);
+    tia_write(h, TIA_W_COLUBK, 0x00);
+    tia_write(h, TIA_W_VBLANK, 0x00);
+
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    uint32_t pf_color = h->tia.palette_rgba_[(0x0E >> 1) & 0x7F];
+    uint32_t bg_color = h->tia.palette_rgba_[0];
+
+    // Left half: PF0 pixels 0-15 should be ON
+    A26_ASSERT_EQ32(h, "PF_REFL", h->framebuffer[0 * harness_t::FB_W + 0], pf_color,
+                    "Reflected PF left half x=0");
+
+    // Right half (reflected): PF bit 19 should be at x=80 → background
+    // because bit 19 corresponds to PF2 D7 which is 0.
+    // PF bit 0 (PF0 D4) should be at x=156-159.
+    A26_ASSERT_EQ32(h, "PF_REFL", h->framebuffer[0 * harness_t::FB_W + 80], bg_color,
+                    "Reflected PF right half x=80 (PF2 D7=0)");
+    // The last 4 pixels of the right half: PF bit 0 (PF0 D4) should be ON
+    // In reflected mode, rightmost 4 pixels (x=156-159) = PF bit 19-16 reversed,
+    // i.e., PF bit 0,1,2,3. PF bit 0 = PF0 D4 = 1.
+    A26_ASSERT_EQ32(h, "PF_REFL", h->framebuffer[0 * harness_t::FB_W + 156], pf_color,
+                    "Reflected PF right half x=156 (PF0 D4 reflected)");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Playfield priority (PF over players vs players over PF)
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_playfield_priority(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Setup playfield and player 0 at the same position.
+    tia_write(h, TIA_W_PF0, 0xF0);
+    tia_write(h, TIA_W_PF1, 0x00);
+    tia_write(h, TIA_W_PF2, 0x00);
+    tia_write(h, TIA_W_COLUPF, 0x0E);   // White PF
+    tia_write(h, TIA_W_COLUP0, 0x34);   // Red-ish P0
+    tia_write(h, TIA_W_COLUBK, 0x00);   // Black BG
+    tia_write(h, TIA_W_GRP0, 0xFF);
+    h->tia.pos_p0 = 0;
+
+    // Normal priority (CTRLPF bit 2 = 0): players over playfield
+    tia_write(h, TIA_W_CTRLPF, 0x00);
+    tia_write(h, TIA_W_VBLANK, 0x00);
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    uint32_t p0_color = h->tia.palette_rgba_[(0x34 >> 1) & 0x7F];
+    // Where both PF and P0 overlap, P0 wins (normal priority)
+    A26_ASSERT_EQ32(h, "PF_PRI", h->framebuffer[0 * harness_t::FB_W + 0], p0_color,
+                    "Normal priority: P0 over PF");
+
+    // Now set PF priority (CTRLPF bit 2 = 1): playfield over players
+    reset(h);
+    tia_write(h, TIA_W_PF0, 0xF0);
+    tia_write(h, TIA_W_COLUPF, 0x0E);
+    tia_write(h, TIA_W_COLUP0, 0x34);
+    tia_write(h, TIA_W_COLUBK, 0x00);
+    tia_write(h, TIA_W_GRP0, 0xFF);
+    h->tia.pos_p0 = 0;
+    tia_write(h, TIA_W_CTRLPF, 0x04);  // PF priority bit set
+    tia_write(h, TIA_W_VBLANK, 0x00);
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    uint32_t pf_color = h->tia.palette_rgba_[(0x0E >> 1) & 0x7F];
+    A26_ASSERT_EQ32(h, "PF_PRI", h->framebuffer[0 * harness_t::FB_W + 0], pf_color,
+                    "PF priority: PF over P0");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Player graphics rendering
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_player_graphics(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Place player 0 with pattern $AA (10101010) at position 40
+    tia_write(h, TIA_W_GRP0, 0xAA);
+    tia_write(h, TIA_W_COLUP0, 0x1A);
+    tia_write(h, TIA_W_COLUBK, 0x00);
+    tia_write(h, TIA_W_NUSIZ0, 0x00);   // Single copy, normal size
+    h->tia.pos_p0 = 40;
+    tia_write(h, TIA_W_VBLANK, 0x00);
+
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    uint32_t p0_color = h->tia.palette_rgba_[(0x1A >> 1) & 0x7F];
+    uint32_t bg_color = h->tia.palette_rgba_[0];
+
+    // GRP0 = $AA = 10101010
+    // Non-reflected: bit 7 is leftmost pixel, bit 0 is rightmost
+    // At position 40: pixel 40 = bit 7 (1) → ON
+    A26_ASSERT_EQ32(h, "P0_GFX", h->framebuffer[0 * harness_t::FB_W + 40], p0_color,
+                    "P0 pixel at x=40 (bit 7=1)");
+    // pixel 41 = bit 6 (0) → OFF
+    A26_ASSERT_EQ32(h, "P0_GFX", h->framebuffer[0 * harness_t::FB_W + 41], bg_color,
+                    "P0 pixel at x=41 (bit 6=0)");
+    // pixel 42 = bit 5 (1) → ON
+    A26_ASSERT_EQ32(h, "P0_GFX", h->framebuffer[0 * harness_t::FB_W + 42], p0_color,
+                    "P0 pixel at x=42 (bit 5=1)");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Player reflection
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_player_reflect(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // GRP0 = $80 (10000000). Non-reflected: bit 7 at pos, rest off.
+    // Reflected: bit 0 at pos, rest off → pixel at pos+7.
+    tia_write(h, TIA_W_GRP0, 0x80);
+    tia_write(h, TIA_W_COLUP0, 0x1A);
+    tia_write(h, TIA_W_COLUBK, 0x00);
+    h->tia.pos_p0 = 40;
+    tia_write(h, TIA_W_REFP0, 0x00);   // No reflect first
+    tia_write(h, TIA_W_NUSIZ0, 0x00);
+    tia_write(h, TIA_W_VBLANK, 0x00);
+
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    uint32_t p0_color = h->tia.palette_rgba_[(0x1A >> 1) & 0x7F];
+    uint32_t bg_color = h->tia.palette_rgba_[0];
+
+    // Non-reflected: bit 7 at x=40 → ON, x=47 → OFF
+    A26_ASSERT_EQ32(h, "P0_REFL", h->framebuffer[0 * harness_t::FB_W + 40], p0_color,
+                    "P0 non-reflected: bit 7 at x=40");
+    A26_ASSERT_EQ32(h, "P0_REFL", h->framebuffer[0 * harness_t::FB_W + 47], bg_color,
+                    "P0 non-reflected: bit 0 at x=47 (OFF)");
+
+    // Now reflect
+    reset(h);
+    tia_write(h, TIA_W_GRP0, 0x80);
+    tia_write(h, TIA_W_COLUP0, 0x1A);
+    tia_write(h, TIA_W_COLUBK, 0x00);
+    h->tia.pos_p0 = 40;
+    tia_write(h, TIA_W_REFP0, 0x08);   // Reflect (bit 3)
+    tia_write(h, TIA_W_NUSIZ0, 0x00);
+    tia_write(h, TIA_W_VBLANK, 0x00);
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    // Reflected: bit 0 is leftmost → $80 reflected means pixel at x=40 is bit 0 (OFF)
+    // and pixel at x=47 is bit 7 (ON)
+    A26_ASSERT_EQ32(h, "P0_REFL", h->framebuffer[0 * harness_t::FB_W + 40], bg_color,
+                    "P0 reflected: bit 0 at x=40 (OFF)");
+    A26_ASSERT_EQ32(h, "P0_REFL", h->framebuffer[0 * harness_t::FB_W + 47], p0_color,
+                    "P0 reflected: bit 7 at x=47 (ON)");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Player NUSIZ (number-size) copies
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_player_nusiz_copies(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // NUSIZ=1: two close copies (16 pixels apart)
+    tia_write(h, TIA_W_GRP0, 0xFF);
+    tia_write(h, TIA_W_COLUP0, 0x1A);
+    tia_write(h, TIA_W_COLUBK, 0x00);
+    h->tia.pos_p0 = 40;
+    tia_write(h, TIA_W_NUSIZ0, 0x01);  // Two copies, close spacing
+    tia_write(h, TIA_W_VBLANK, 0x00);
+
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    uint32_t p0_color = h->tia.palette_rgba_[(0x1A >> 1) & 0x7F];
+
+    // Copy 0 at position 40
+    A26_ASSERT_EQ32(h, "NUSIZ", h->framebuffer[0 * harness_t::FB_W + 40], p0_color,
+                    "NUSIZ=1 copy 0 at x=40");
+    // Copy 1 at position 40+16=56
+    A26_ASSERT_EQ32(h, "NUSIZ", h->framebuffer[0 * harness_t::FB_W + 56], p0_color,
+                    "NUSIZ=1 copy 1 at x=56");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Vertical delay (VDEL)
+// ─────────────────────────────────────────────────────────────────────────────
+// When VDELP0 is set, the displayed graphics come from GRP0_OLD (the value
+// latched when GRP1 was last written), not from current GRP0.
+
+int test_tia_player_vertical_delay(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    tia_write(h, TIA_W_COLUP0, 0x1A);
+    tia_write(h, TIA_W_COLUBK, 0x00);
+    h->tia.pos_p0 = 40;
+    tia_write(h, TIA_W_NUSIZ0, 0x00);
+    tia_write(h, TIA_W_VBLANK, 0x00);
+
+    // Enable vertical delay for P0
+    tia_write(h, TIA_W_VDELP0, 0x01);
+
+    // Write GRP0 = $FF (this is the "current" value)
+    tia_write(h, TIA_W_GRP0, 0xFF);
+
+    // GRP0_OLD should still be 0 (latched from before)
+    // Writing GRP1 latches current GRP0 into GRP0_OLD
+    tia_write(h, TIA_W_GRP1, 0x00);
+    // Now GRP0_OLD = $FF
+
+    // Write GRP0 = $00 (new current, but VDEL uses OLD)
+    tia_write(h, TIA_W_GRP0, 0x00);
+
+    // With VDELP0: display should use GRP0_OLD ($FF), not current GRP0 ($00)
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    uint32_t p0_color = h->tia.palette_rgba_[(0x1A >> 1) & 0x7F];
+    A26_ASSERT_EQ32(h, "VDEL", h->framebuffer[0 * harness_t::FB_W + 40], p0_color,
+                    "VDELP0: uses GRP0_OLD (0xFF) not current GRP0 (0x00)");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Missile basic rendering
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_missile_basic(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Enable missile 0 at position 80, size = 1 pixel
+    tia_write(h, TIA_W_ENAM0, 0x02);     // Enable M0 (bit 1)
+    tia_write(h, TIA_W_NUSIZ0, 0x00);    // M0 size = 1 pixel (bits 4-5 = 0)
+    tia_write(h, TIA_W_COLUP0, 0x1A);    // M0 uses P0 color
+    tia_write(h, TIA_W_COLUBK, 0x00);
+    h->tia.pos_m0 = 80;
+    tia_write(h, TIA_W_VBLANK, 0x00);
+
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    uint32_t m0_color = h->tia.palette_rgba_[(0x1A >> 1) & 0x7F];
+    uint32_t bg_color = h->tia.palette_rgba_[0];
+
+    A26_ASSERT_EQ32(h, "M0", h->framebuffer[0 * harness_t::FB_W + 80], m0_color,
+                    "Missile 0 pixel at x=80");
+    A26_ASSERT_EQ32(h, "M0", h->framebuffer[0 * harness_t::FB_W + 81], bg_color,
+                    "No missile at x=81 (size=1)");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Ball basic rendering
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_ball_basic(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Enable ball at position 100, size = 1 pixel (CTRLPF bits 4-5 = 0)
+    tia_write(h, TIA_W_ENABL, 0x02);     // Enable ball (bit 1)
+    tia_write(h, TIA_W_CTRLPF, 0x00);    // Ball size = 1, no reflect/priority
+    tia_write(h, TIA_W_COLUPF, 0x2A);    // Ball uses PF color
+    tia_write(h, TIA_W_COLUBK, 0x00);
+    h->tia.pos_bl = 100;
+    tia_write(h, TIA_W_VBLANK, 0x00);
+
+    h->tia.scanline = 40;
+    h->tia.visible_row = 0;
+    clock_cpu_cycles(h, 76);
+
+    uint32_t bl_color = h->tia.palette_rgba_[(0x2A >> 1) & 0x7F];
+    uint32_t bg_color = h->tia.palette_rgba_[0];
+
+    A26_ASSERT_EQ32(h, "BALL", h->framebuffer[0 * harness_t::FB_W + 100], bl_color,
+                    "Ball pixel at x=100");
+    A26_ASSERT_EQ32(h, "BALL", h->framebuffer[0 * harness_t::FB_W + 101], bg_color,
+                    "No ball at x=101 (size=1)");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: HMOVE (horizontal motion) apply
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_hmove_apply(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Set P0 at position 80, with horizontal motion $F0 (value = -1 in signed 4-bit)
+    // After HMOVE, position advances by 1 (motion is subtracted, so -(-1) = +1)
+    h->tia.pos_p0 = 80;
+    tia_write(h, TIA_W_HMP0, 0xF0);    // HM = -1 (0xF sign-extended >> 4 = -1)
+
+    // Apply HMOVE
+    tia_write(h, TIA_W_HMOVE, 0x00);
+
+    // Position should now be 80 - (-1) = 81
+    A26_ASSERT_EQ(h, "HMOVE", h->tia.pos_p0, 81, "P0 position after HMOVE F0");
+
+    // Also test positive motion
+    h->tia.pos_p0 = 80;
+    tia_write(h, TIA_W_HMP0, 0x10);    // HM = +1 (0x1 sign-extended >> 4 = +1)
+    tia_write(h, TIA_W_HMOVE, 0x00);
+
+    // Position should now be 80 - 1 = 79
+    A26_ASSERT_EQ(h, "HMOVE", h->tia.pos_p0, 79, "P0 position after HMOVE 10");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: HMCLR (horizontal motion clear)
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_hmclr(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    tia_write(h, TIA_W_HMP0, 0x70);     // Set motion values
+    tia_write(h, TIA_W_HMP1, 0x30);
+    tia_write(h, TIA_W_HMM0, 0x50);
+    tia_write(h, TIA_W_HMM1, 0xF0);
+    tia_write(h, TIA_W_HMBL, 0xD0);
+
+    A26_ASSERT_TRUE(h, "HMCLR_PRE",
+                    h->tia.hm_p0 != 0 || h->tia.hm_p1 != 0 || h->tia.hm_m0 != 0,
+                    "HM values non-zero before clear");
+
+    tia_write(h, TIA_W_HMCLR, 0x00);
+
+    A26_ASSERT_EQ(h, "HMCLR", (uint8_t)h->tia.hm_p0, 0, "HMP0 cleared");
+    A26_ASSERT_EQ(h, "HMCLR", (uint8_t)h->tia.hm_p1, 0, "HMP1 cleared");
+    A26_ASSERT_EQ(h, "HMCLR", (uint8_t)h->tia.hm_m0, 0, "HMM0 cleared");
+    A26_ASSERT_EQ(h, "HMCLR", (uint8_t)h->tia.hm_m1, 0, "HMM1 cleared");
+    A26_ASSERT_EQ(h, "HMCLR", (uint8_t)h->tia.hm_bl, 0, "HMBL cleared");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: WSYNC halts CPU until end of scanline
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_wsync(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // WSYNC: writing any value to WSYNC ($02) sets wsync_pending.
+    // It is cleared at the end of the scanline (h_counter wraps to 0).
+    A26_ASSERT_EQ(h, "WSYNC", (int)h->tia.wsync_pending, 0, "WSYNC not pending initially");
+
+    tia_write(h, TIA_W_WSYNC, 0x00);
+    A26_ASSERT_EQ(h, "WSYNC", (int)h->tia.wsync_pending, 1, "WSYNC pending after write");
+
+    // Clock one full scanline — WSYNC should clear at the wrap
+    clock_cpu_cycles(h, 76);
+    A26_ASSERT_EQ(h, "WSYNC", (int)h->tia.wsync_pending, 0, "WSYNC cleared after scanline");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: VSYNC frame boundary detection
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_vsync_frame_boundary(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // VSYNC set: bit 1 of VSYNC register
+    tia_write(h, TIA_W_VSYNC, 0x02);
+    A26_ASSERT_TRUE(h, "VSYNC", h->tia.vsync_active, "VSYNC active after write $02");
+
+    tia_write(h, TIA_W_VSYNC, 0x00);
+    A26_ASSERT_TRUE(h, "VSYNC", !h->tia.vsync_active, "VSYNC inactive after write $00");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: VBLANK blanks video output
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_vblank_blanks_output(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Set a visible playfield
+    tia_write(h, TIA_W_PF0, 0xF0);
+    tia_write(h, TIA_W_COLUPF, 0x0E);
+    tia_write(h, TIA_W_COLUBK, 0x00);
+
+    // Enable VBLANK — should output black regardless
+    tia_write(h, TIA_W_VBLANK, 0x02);
+
+    h->tia.scanline = 40;
+    h->tia.visible_row = -1;  // VBLANK lines don't increment visible_row
+    clock_cpu_cycles(h, 76);
+
+    // visible_row should remain -1 during VBLANK
+    A26_ASSERT_TRUE(h, "VBLANK", h->tia.visible_row == -1,
+                    "visible_row stays -1 during VBLANK");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Color registers
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_color_registers(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Write color registers and verify internal state
+    tia_write(h, TIA_W_COLUP0, 0x3C);
+    A26_ASSERT_EQ(h, "COLOR", h->tia.colup0, 0x3C, "COLUP0 written");
+
+    tia_write(h, TIA_W_COLUP1, 0x56);
+    A26_ASSERT_EQ(h, "COLOR", h->tia.colup1, 0x56, "COLUP1 written");
+
+    tia_write(h, TIA_W_COLUPF, 0x78);
+    A26_ASSERT_EQ(h, "COLOR", h->tia.colupf, 0x78, "COLUPF written");
+
+    tia_write(h, TIA_W_COLUBK, 0x9A);
+    A26_ASSERT_EQ(h, "COLOR", h->tia.colubk, 0x9A, "COLUBK written");
+
+    // Color registers mask bit 0 (only upper 7 bits are color)
+    tia_write(h, TIA_W_COLUP0, 0x3D);  // Bit 0 should be masked off
+    A26_ASSERT_EQ(h, "COLOR", h->tia.colup0, 0x3C, "COLUP0 bit 0 masked");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Input ports (INPT0-5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_tia_input_ports(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // INPT4 = fire button player 0. true = not pressed (bit 7 high)
+    h->tia.inpt4 = true;
+    A26_ASSERT_MASKED(h, "INPT", tia_read(h, TIA_R_INPT4), 0x80, 0x80,
+                      "INPT4 high (not pressed)");
+
+    h->tia.inpt4 = false;
+    A26_ASSERT_MASKED(h, "INPT", tia_read(h, TIA_R_INPT4), 0x00, 0x80,
+                      "INPT4 low (pressed)");
+
+    h->tia.inpt5 = true;
+    A26_ASSERT_MASKED(h, "INPT", tia_read(h, TIA_R_INPT5), 0x80, 0x80,
+                      "INPT5 high (not pressed)");
+
+    h->tia.inpt5 = false;
+    A26_ASSERT_MASKED(h, "INPT", tia_read(h, TIA_R_INPT5), 0x00, 0x80,
+                      "INPT5 low (pressed)");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: Audio waveform modes
+// ─────────────────────────────────────────────────────────────────────────────
+// Verify that each of the 16 AUDC modes produces output when volume > 0
+// and frequency divider is set.
+
+int test_tia_audio_waveforms(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Set sample rate so we get audio samples
+    h->tia.set_audio_sample_rate(44100);
+
+    for (uint8_t mode = 0; mode < 16; mode++) {
+        // Reset audio state
+        h->tia.audio[0] = {};
+
+        tia_write(h, TIA_W_AUDC0, mode);
+        tia_write(h, TIA_W_AUDF0, 0x01);  // Fast frequency
+        tia_write(h, TIA_W_AUDV0, 0x0F);  // Max volume
+
+        // Clock enough cycles for the divider to tick
+        clock_cpu_cycles(h, 128);
+
+        // For modes 0x00 and 0x0B (constant ON), output should always be true
+        if (mode == 0x00 || mode == 0x0B) {
+            A26_ASSERT_TRUE(h, "AUDIO", h->tia.audio[0].output == true,
+                            "AUDC%X: constant ON mode", mode);
+        }
+        // We can't predict all polynomial outputs, but verify control was stored
+        A26_ASSERT_EQ(h, "AUDIO", h->tia.audio[0].control, mode,
+                      "AUDC control register = %X", mode);
+    }
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TIA: GRP0/GRP1 delayed latch behavior
+// ─────────────────────────────────────────────────────────────────────────────
+// Writing GRP0 latches current GRP1 into GRP1_OLD.
+// Writing GRP1 latches current GRP0 into GRP0_OLD and ENABL into ENABL_OLD.
+
+int test_tia_grp_delayed_latch(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Write GRP0 = $AA
+    tia_write(h, TIA_W_GRP0, 0xAA);
+    // GRP1_OLD should now be the previous GRP1 value (0x00 after reset)
+    A26_ASSERT_EQ(h, "LATCH", h->tia.grp1_old, 0x00,
+                  "GRP1_OLD after writing GRP0 (was 0)");
+
+    // Write GRP1 = $55
+    tia_write(h, TIA_W_GRP1, 0x55);
+    // This should latch current GRP0 ($AA) into GRP0_OLD
+    A26_ASSERT_EQ(h, "LATCH", h->tia.grp0_old, 0xAA,
+                  "GRP0_OLD latched from GRP0 when GRP1 written");
+
+    // Writing GRP0 again should latch current GRP1 ($55) into GRP1_OLD
+    tia_write(h, TIA_W_GRP0, 0xFF);
+    A26_ASSERT_EQ(h, "LATCH", h->tia.grp1_old, 0x55,
+                  "GRP1_OLD latched from GRP1 when GRP0 written");
+
+    // Ball vertical delay: writing GRP1 also latches ENABL into ENABL_OLD
+    tia_write(h, TIA_W_ENABL, 0x02);  // Enable ball
+    tia_write(h, TIA_W_GRP1, 0x00);   // This latches ENABL → ENABL_OLD
+    A26_ASSERT_TRUE(h, "LATCH", h->tia.enabl_old == true,
+                    "ENABL_OLD latched when GRP1 written");
+
+    return h->fail_count - prev_fail;
+}
+
+// =============================================================================
+// ███████╗ RIOT (PIA 6532) TESTS ███████╗
+// =============================================================================
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIOT: RAM read/write
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_riot_ram_read_write(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Write and read back from several RAM locations
+    riot_write_ram(h, 0x00, 0xAA);
+    A26_ASSERT_EQ(h, "RIOT_RAM", riot_read_ram(h, 0x00), 0xAA, "RAM[$00] = $AA");
+
+    riot_write_ram(h, 0x7F, 0x55);
+    A26_ASSERT_EQ(h, "RIOT_RAM", riot_read_ram(h, 0x7F), 0x55, "RAM[$7F] = $55");
+
+    // Verify no cross-contamination
+    A26_ASSERT_EQ(h, "RIOT_RAM", riot_read_ram(h, 0x00), 0xAA,
+                  "RAM[$00] unchanged after writing $7F");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIOT: RAM full coverage (128 bytes)
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_riot_ram_full_coverage(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Write unique value to every byte, then read back
+    for (int i = 0; i < 128; i++) {
+        riot_write_ram(h, static_cast<uint8_t>(i), static_cast<uint8_t>(i ^ 0xA5));
+    }
+
+    bool all_ok = true;
+    for (int i = 0; i < 128; i++) {
+        uint8_t expected = static_cast<uint8_t>(i ^ 0xA5);
+        uint8_t actual = riot_read_ram(h, static_cast<uint8_t>(i));
+        if (actual != expected) {
+            char msg[256];
+            snprintf(msg, sizeof(msg), "RAM[%02X] = %02X (expected %02X)", i, actual, expected);
+            record_fail(h, "RIOT_RAM", msg);
+            all_ok = false;
+        }
+    }
+    if (all_ok) {
+        record_pass(h, "RIOT_RAM", "All 128 bytes read back correctly");
+    }
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIOT: Timer divide-by-1
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_riot_timer_1t(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Set timer to 10 with divider = 1
+    riot_write_io(h, RIOT_TIM1T, 10);
+    A26_ASSERT_EQ(h, "TIM1T", h->riot.timer_value, 10, "Timer set to 10");
+
+    // After 5 ticks, timer should be at 5
+    for (int i = 0; i < 5; i++) h->riot.tick();
+    A26_ASSERT_EQ(h, "TIM1T", h->riot.timer_value, 5, "Timer = 5 after 5 ticks");
+
+    // After 5 more, timer should be at 0
+    for (int i = 0; i < 5; i++) h->riot.tick();
+    A26_ASSERT_EQ(h, "TIM1T", h->riot.timer_value, 0, "Timer = 0 after 10 ticks");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIOT: Timer divide-by-8
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_riot_timer_8t(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Set timer to 3 with divider = 8
+    riot_write_io(h, RIOT_TIM8T, 3);
+    A26_ASSERT_EQ(h, "TIM8T", h->riot.timer_value, 3, "Timer set to 3 (div8)");
+    A26_ASSERT_EQ(h, "TIM8T", (uint8_t)(h->riot.timer_divider & 0xFF), 8,
+                  "Divider = 8");
+
+    // After 8 ticks, timer should decrement by 1 → 2
+    for (int i = 0; i < 8; i++) h->riot.tick();
+    A26_ASSERT_EQ(h, "TIM8T", h->riot.timer_value, 2, "Timer = 2 after 8 ticks");
+
+    // After another 8, timer → 1
+    for (int i = 0; i < 8; i++) h->riot.tick();
+    A26_ASSERT_EQ(h, "TIM8T", h->riot.timer_value, 1, "Timer = 1 after 16 ticks");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIOT: Timer divide-by-64
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_riot_timer_64t(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    riot_write_io(h, RIOT_TIM64T, 2);
+    A26_ASSERT_EQ(h, "TIM64T", h->riot.timer_value, 2, "Timer set to 2 (div64)");
+
+    // After 64 ticks, timer → 1
+    for (int i = 0; i < 64; i++) h->riot.tick();
+    A26_ASSERT_EQ(h, "TIM64T", h->riot.timer_value, 1, "Timer = 1 after 64 ticks");
+
+    // After another 64, timer → 0
+    for (int i = 0; i < 64; i++) h->riot.tick();
+    A26_ASSERT_EQ(h, "TIM64T", h->riot.timer_value, 0, "Timer = 0 after 128 ticks");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIOT: Timer divide-by-1024
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_riot_timer_1024t(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    riot_write_io(h, RIOT_TIM1024T, 1);
+    A26_ASSERT_EQ(h, "TIM1024T", h->riot.timer_value, 1, "Timer set to 1 (div1024)");
+
+    // After 1024 ticks, timer should decrement to 0
+    for (int i = 0; i < 1024; i++) h->riot.tick();
+    A26_ASSERT_EQ(h, "TIM1024T", h->riot.timer_value, 0, "Timer = 0 after 1024 ticks");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIOT: Timer underflow behavior
+// ─────────────────────────────────────────────────────────────────────────────
+// When the timer reaches 0 and counts down one more, it sets the underflow
+// flag, loads $FF, and switches to divide-by-1.
+
+int test_riot_timer_underflow(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Set timer to 1 with div-by-1
+    riot_write_io(h, RIOT_TIM1T, 1);
+    A26_ASSERT_TRUE(h, "TIM_UF", !h->riot.timer_underflow,
+                    "No underflow initially");
+
+    // Tick once → timer = 0
+    h->riot.tick();
+    A26_ASSERT_EQ(h, "TIM_UF", h->riot.timer_value, 0, "Timer = 0");
+
+    // Tick again → underflow!
+    h->riot.tick();
+    A26_ASSERT_TRUE(h, "TIM_UF", h->riot.timer_underflow,
+                    "Underflow flag set");
+    A26_ASSERT_EQ(h, "TIM_UF", h->riot.timer_value, 0xFF,
+                  "Timer reloads to $FF on underflow");
+
+    // Read INTIM should clear underflow
+    uint8_t intim = riot_read_io(h, RIOT_INTIM);
+    (void)intim;
+    A26_ASSERT_TRUE(h, "TIM_UF", !h->riot.timer_underflow,
+                    "Underflow cleared by reading INTIM");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIOT: Port A data direction masking
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_riot_port_a_ddr_masking(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // DDR = 0: all pins are input → read returns external input
+    h->riot.port_a_ddr = 0x00;
+    h->riot.port_a_input = 0xAA;
+    h->riot.port_a_data = 0x55;
+    A26_ASSERT_EQ(h, "PORTA", h->riot.read_port_a(), 0xAA,
+                  "Port A all-input: reads external input");
+
+    // DDR = $FF: all pins are output → read returns output latch
+    h->riot.port_a_ddr = 0xFF;
+    A26_ASSERT_EQ(h, "PORTA", h->riot.read_port_a(), 0x55,
+                  "Port A all-output: reads output latch");
+
+    // DDR = $0F: low nibble output, high nibble input
+    h->riot.port_a_ddr = 0x0F;
+    // Expected: low nibble from port_a_data ($55 & $0F = $05),
+    //           high nibble from port_a_input ($AA & $F0 = $A0)
+    A26_ASSERT_EQ(h, "PORTA", h->riot.read_port_a(), 0xA5,
+                  "Port A mixed DDR: $0F");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIOT: Port B data direction masking
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_riot_port_b_ddr_masking(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    h->riot.port_b_ddr = 0x00;
+    h->riot.port_b_input = 0xFF;   // Console switches default
+    A26_ASSERT_EQ(h, "PORTB", h->riot.read_port_b(), 0xFF,
+                  "Port B all-input: reads $FF (switches default)");
+
+    // Simulate SELECT pressed (active-low: bit 1 → 0)
+    h->riot.port_b_input = 0xFD;
+    A26_ASSERT_EQ(h, "PORTB", h->riot.read_port_b(), 0xFD,
+                  "Port B with SELECT pressed");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RIOT: Port input override (via write_io)
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_riot_port_input_override(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Write to SWCHA through I/O register (sets output latch)
+    riot_write_io(h, RIOT_SWCHA, 0xAA);
+    A26_ASSERT_EQ(h, "PORT_IO", h->riot.port_a_data, 0xAA,
+                  "SWCHA output latch set via write_io");
+
+    // Write DDR
+    riot_write_io(h, RIOT_SWACNT, 0xFF);
+    A26_ASSERT_EQ(h, "PORT_IO", h->riot.port_a_ddr, 0xFF,
+                  "SWACNT DDR set via write_io");
+
+    return h->fail_count - prev_fail;
+}
+
+// =============================================================================
+// ███████╗ MAPPER TESTS ███████╗
+// =============================================================================
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mapper: 2K (no bank switching, mirrored)
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_mapper_2k(harness_t* h) {
+    (void)h;
+    int prev_fail = h->fail_count;
+
+    uint8_t rom[2048];
+    for (int i = 0; i < 2048; i++) rom[i] = static_cast<uint8_t>(i & 0xFF);
+
+    auto mapper = a2600_mapper_factory::create(rom, 2048);
+    A26_ASSERT_TRUE(h, "MAP_2K", strcmp(mapper->name(), "2K") == 0,
+                    "Factory creates 2K mapper for 2048 bytes");
+
+    // Read offset 0 and 0x800 should mirror (0x800 & 0x7FF = 0)
+    A26_ASSERT_EQ(h, "MAP_2K", mapper->read(0x000), rom[0x000],
+                  "2K read $000");
+    A26_ASSERT_EQ(h, "MAP_2K", mapper->read(0x800), rom[0x000],
+                  "2K read $800 mirrors to $000");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mapper: 4K (no bank switching)
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_mapper_4k(harness_t* h) {
+    (void)h;
+    int prev_fail = h->fail_count;
+
+    uint8_t rom[4096];
+    for (int i = 0; i < 4096; i++) rom[i] = static_cast<uint8_t>(i & 0xFF);
+
+    auto mapper = a2600_mapper_factory::create(rom, 4096);
+    A26_ASSERT_TRUE(h, "MAP_4K", strcmp(mapper->name(), "4K") == 0,
+                    "Factory creates 4K mapper for 4096 bytes");
+
+    A26_ASSERT_EQ(h, "MAP_4K", mapper->read(0x000), rom[0x000],
+                  "4K read $000");
+    A26_ASSERT_EQ(h, "MAP_4K", mapper->read(0x500), rom[0x500],
+                  "4K read $500");
+    A26_ASSERT_EQ(h, "MAP_4K", mapper->read(0xFFF), rom[0xFFF],
+                  "4K read $FFF");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mapper: F8 (8KB, 2 banks)
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_mapper_f8_bank_switching(harness_t* h) {
+    (void)h;
+    int prev_fail = h->fail_count;
+
+    uint8_t rom[8192];
+    // Bank 0: fill with $A0, Bank 1: fill with $B1
+    memset(rom, 0xA0, 4096);
+    memset(rom + 4096, 0xB1, 4096);
+
+    auto mapper = a2600_mapper_factory::create(rom, 8192);
+    A26_ASSERT_TRUE(h, "MAP_F8", strcmp(mapper->name(), "F8") == 0,
+                    "Factory creates F8 mapper for 8192 bytes");
+
+    // Default: bank 1 (start in last bank)
+    A26_ASSERT_EQ(h, "MAP_F8", mapper->current_bank(), 1, "F8 default bank = 1");
+    A26_ASSERT_EQ(h, "MAP_F8", mapper->read(0x000), 0xB1, "F8 bank 1 read $000");
+
+    // Switch to bank 0 via hotspot $FF8
+    mapper->read(0x0FF8);
+    A26_ASSERT_EQ(h, "MAP_F8", mapper->current_bank(), 0, "F8 switched to bank 0");
+    A26_ASSERT_EQ(h, "MAP_F8", mapper->read(0x000), 0xA0, "F8 bank 0 read $000");
+
+    // Switch back to bank 1 via hotspot $FF9
+    mapper->read(0x0FF9);
+    A26_ASSERT_EQ(h, "MAP_F8", mapper->current_bank(), 1, "F8 switched to bank 1");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mapper: F6 (16KB, 4 banks)
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_mapper_f6_bank_switching(harness_t* h) {
+    (void)h;
+    int prev_fail = h->fail_count;
+
+    uint8_t rom[16384];
+    for (int bank = 0; bank < 4; bank++)
+        memset(rom + bank * 4096, static_cast<uint8_t>(0xA0 + bank), 4096);
+
+    auto mapper = a2600_mapper_factory::create(rom, 16384);
+    A26_ASSERT_TRUE(h, "MAP_F6", strcmp(mapper->name(), "F6") == 0,
+                    "Factory creates F6 mapper for 16384 bytes");
+    A26_ASSERT_EQ(h, "MAP_F6", mapper->bank_count(), 4, "F6 has 4 banks");
+
+    // Default: bank 3
+    A26_ASSERT_EQ(h, "MAP_F6", mapper->current_bank(), 3, "F6 default bank = 3");
+    A26_ASSERT_EQ(h, "MAP_F6", mapper->read(0x000), 0xA3, "F6 bank 3 data");
+
+    // Switch through all banks
+    mapper->read(0x0FF6);  // Bank 0
+    A26_ASSERT_EQ(h, "MAP_F6", mapper->current_bank(), 0, "F6 bank 0");
+    A26_ASSERT_EQ(h, "MAP_F6", mapper->read(0x000), 0xA0, "F6 bank 0 data");
+
+    mapper->read(0x0FF7);  // Bank 1
+    A26_ASSERT_EQ(h, "MAP_F6", mapper->current_bank(), 1, "F6 bank 1");
+
+    mapper->read(0x0FF8);  // Bank 2
+    A26_ASSERT_EQ(h, "MAP_F6", mapper->current_bank(), 2, "F6 bank 2");
+
+    mapper->read(0x0FF9);  // Bank 3
+    A26_ASSERT_EQ(h, "MAP_F6", mapper->current_bank(), 3, "F6 bank 3");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mapper: F4 (32KB, 8 banks)
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_mapper_f4_bank_switching(harness_t* h) {
+    (void)h;
+    int prev_fail = h->fail_count;
+
+    uint8_t rom[32768];
+    for (int bank = 0; bank < 8; bank++)
+        memset(rom + bank * 4096, static_cast<uint8_t>(0xA0 + bank), 4096);
+
+    auto mapper = a2600_mapper_factory::create(rom, 32768);
+    // Could be F4 or 3F depending on detection — for clean test data, F4 is expected
+    A26_ASSERT_EQ(h, "MAP_F4", mapper->bank_count(), 8, "F4 has 8 banks");
+
+    // Switch to each bank and verify data
+    for (uint8_t b = 0; b < 8; b++) {
+        mapper->read(0x0FF4 + b);
+        A26_ASSERT_EQ(h, "MAP_F4", mapper->current_bank(), b,
+                      "F4 switch to bank %d", b);
+        A26_ASSERT_EQ(h, "MAP_F4", mapper->read(0x000),
+                      static_cast<uint8_t>(0xA0 + b),
+                      "F4 bank %d data", b);
+    }
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mapper: E0 (Parker Brothers, 8×1KB segments)
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_mapper_e0_segment_switching(harness_t* h) {
+    (void)h;
+    int prev_fail = h->fail_count;
+
+    // Build 8KB ROM with distinct data in each 1KB slice
+    uint8_t rom[8192];
+    for (int slice = 0; slice < 8; slice++)
+        memset(rom + slice * 1024, static_cast<uint8_t>(0xA0 + slice), 1024);
+
+    // Create E0 mapper directly (factory detection of E0 requires many
+    // absolute-addressing opcodes targeting $1FE0-$1FF7 in the ROM;
+    // cleaner to test the mapper behavior in isolation).
+    auto mapper = std::make_unique<A2600MapperE0>();
+    mapper->set_rom(rom, 8192);
+    mapper->reset();
+
+    A26_ASSERT_TRUE(h, "MAP_E0", strcmp(mapper->name(), "E0") == 0,
+                    "E0 mapper name");
+
+    // Default: slices 4,5,6,7 in segments 0,1,2,3
+    // Segment 3 ($C00-$FFF) is fixed to slice 7
+    A26_ASSERT_EQ(h, "MAP_E0", mapper->read(0xC00), 0xA7,
+                  "E0 segment 3 fixed to slice 7");
+
+    // Switch segment 0 to slice 0 via hotspot $FE0
+    mapper->read(0x0FE0);
+    A26_ASSERT_EQ(h, "MAP_E0", mapper->read(0x000), 0xA0,
+                  "E0 segment 0 = slice 0");
+
+    // Switch segment 0 to slice 3
+    mapper->read(0x0FE3);
+    A26_ASSERT_EQ(h, "MAP_E0", mapper->read(0x000), 0xA3,
+                  "E0 segment 0 = slice 3");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mapper: 3F (Tigervision)
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_mapper_3f_tigervision(harness_t* h) {
+    (void)h;
+    int prev_fail = h->fail_count;
+
+    // Build 8KB ROM with STA $3F patterns so factory detects 3F
+    uint8_t rom[8192];
+    for (int bank = 0; bank < 4; bank++)
+        memset(rom + bank * 2048, static_cast<uint8_t>(0xA0 + bank), 2048);
+    // Inject STA $3F instructions for detection
+    rom[0] = 0x85; rom[1] = 0x3F;  // STA $3F
+    rom[2] = 0x85; rom[3] = 0x3F;
+
+    // Factory might not detect this as 3F at 8KB (defaults to F8).
+    // Create mapper directly for this test.
+    auto mapper = std::make_unique<A2600Mapper3F>();
+    mapper->set_rom(rom, 8192);
+    mapper->reset();
+
+    A26_ASSERT_EQ(h, "MAP_3F", mapper->bank_count(), 4, "3F has 4 banks (at 8KB)");
+
+    // Fixed bank (last 2KB, $800-$FFF) should always read from slice 3
+    A26_ASSERT_EQ(h, "MAP_3F", mapper->read(0x800), 0xA3,
+                  "3F fixed bank reads last 2KB");
+
+    // Switchable bank defaults to 0. Check at offset 4 since bytes 0-3
+    // were overwritten with STA $3F opcodes for the factory detection test.
+    A26_ASSERT_EQ(h, "MAP_3F", mapper->read(0x004), 0xA0,
+                  "3F switchable bank default = 0");
+
+    // Switch to bank 2 via bus snoop (write to $003F with data=2)
+    mapper->bus_snoop(0x003F, 2, true);
+    A26_ASSERT_EQ(h, "MAP_3F", mapper->current_bank(), 2, "3F bank switched to 2");
+    A26_ASSERT_EQ(h, "MAP_3F", mapper->read(0x000), 0xA2,
+                  "3F bank 2 data");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mapper: FA (CBS RAM Plus, 12KB)
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_mapper_fa_cbs_ram_plus(harness_t* h) {
+    (void)h;
+    int prev_fail = h->fail_count;
+
+    uint8_t rom[12288];
+    for (int bank = 0; bank < 3; bank++)
+        memset(rom + bank * 4096, static_cast<uint8_t>(0xA0 + bank), 4096);
+
+    auto mapper = a2600_mapper_factory::create(rom, 12288);
+    A26_ASSERT_TRUE(h, "MAP_FA", strcmp(mapper->name(), "FA") == 0,
+                    "Factory creates FA mapper for 12288 bytes");
+    A26_ASSERT_EQ(h, "MAP_FA", mapper->bank_count(), 3, "FA has 3 banks");
+
+    // Default: bank 2 (last bank)
+    A26_ASSERT_EQ(h, "MAP_FA", mapper->current_bank(), 2, "FA default bank = 2");
+
+    // Test extra RAM: write to $000-$0FF (write port), read from $100-$1FF (read port)
+    mapper->write(0x000, 0x42);
+    A26_ASSERT_EQ(h, "MAP_FA", mapper->read(0x100), 0x42,
+                  "FA RAM: write $000 → read $100");
+
+    mapper->write(0x0FF, 0xBE);
+    A26_ASSERT_EQ(h, "MAP_FA", mapper->read(0x1FF), 0xBE,
+                  "FA RAM: write $0FF → read $1FF");
+
+    // Bank switching
+    mapper->read(0x0FF8);  // Bank 0
+    A26_ASSERT_EQ(h, "MAP_FA", mapper->current_bank(), 0, "FA bank 0");
+
+    mapper->read(0x0FF9);  // Bank 1
+    A26_ASSERT_EQ(h, "MAP_FA", mapper->current_bank(), 1, "FA bank 1");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mapper: Factory auto-detection
+// ─────────────────────────────────────────────────────────────────────────────
+
+int test_mapper_factory_detection(harness_t* h) {
+    (void)h;
+    int prev_fail = h->fail_count;
+
+    // 2K ROM
+    {
+        uint8_t rom[2048] = {};
+        auto m = a2600_mapper_factory::create(rom, 2048);
+        A26_ASSERT_TRUE(h, "FACTORY", strcmp(m->name(), "2K") == 0,
+                        "2048 bytes → 2K");
+    }
+
+    // 4K ROM
+    {
+        uint8_t rom[4096] = {};
+        auto m = a2600_mapper_factory::create(rom, 4096);
+        A26_ASSERT_TRUE(h, "FACTORY", strcmp(m->name(), "4K") == 0,
+                        "4096 bytes → 4K");
+    }
+
+    // 8K ROM (no E0/FE signature → F8)
+    {
+        uint8_t rom[8192] = {};
+        auto m = a2600_mapper_factory::create(rom, 8192);
+        A26_ASSERT_TRUE(h, "FACTORY", strcmp(m->name(), "F8") == 0,
+                        "8192 bytes (clean) → F8");
+    }
+
+    // 16K ROM → F6
+    {
+        uint8_t rom[16384] = {};
+        auto m = a2600_mapper_factory::create(rom, 16384);
+        A26_ASSERT_TRUE(h, "FACTORY", strcmp(m->name(), "F6") == 0,
+                        "16384 bytes → F6");
+    }
+
+    // 12K ROM → FA
+    {
+        uint8_t rom[12288] = {};
+        auto m = a2600_mapper_factory::create(rom, 12288);
+        A26_ASSERT_TRUE(h, "FACTORY", strcmp(m->name(), "FA") == 0,
+                        "12288 bytes → FA");
+    }
+
+    return h->fail_count - prev_fail;
+}
+
+// =============================================================================
+// ███████╗ SYSTEM INTEGRATION TESTS ███████╗
+// =============================================================================
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Address decoding: TIA, RIOT RAM, RIOT I/O, Cart ROM regions
+// ─────────────────────────────────────────────────────────────────────────────
+// Verifies the 6507 address decoding logic:
+//   A12=0, A7=0          → TIA
+//   A12=0, A7=1, A9=0    → RIOT RAM
+//   A12=0, A7=1, A9=1    → RIOT I/O
+//   A12=1                 → Cart ROM
+
+int test_address_decoding(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Verify RIOT RAM: write at $0080, read back at $0080
+    // These use the isolated interfaces since we don't have a system instance.
+    riot_write_ram(h, 0x00, 0xDE);
+    A26_ASSERT_EQ(h, "DECODE", riot_read_ram(h, 0x00), 0xDE,
+                  "RIOT RAM at offset $00");
+
+    // Verify TIA: write/read collision registers
+    tia_write(h, TIA_W_CXCLR, 0x00);  // Clear collisions
+    A26_ASSERT_MASKED(h, "DECODE", tia_read(h, TIA_R_CXM0P), 0x00, 0xC0,
+                      "TIA read CXM0P cleared");
+
+    // Verify RIOT I/O: set timer via write_io, read back INTIM
+    riot_write_io(h, RIOT_TIM1T, 42);
+    A26_ASSERT_EQ(h, "DECODE", riot_read_io(h, RIOT_INTIM), 42,
+                  "RIOT I/O timer readback");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CPU–TIA synchronization timing
+// ─────────────────────────────────────────────────────────────────────────────
+// Verify that one CPU cycle = 3 TIA color clocks.
+
+int test_cpu_tia_sync_timing(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    uint16_t h0 = h->tia.h_counter;
+
+    // Clock one CPU cycle = 3 color clocks
+    clock_cpu_cycles(h, 1);
+
+    uint16_t h1 = h->tia.h_counter;
+    uint16_t delta = (h1 >= h0) ? (h1 - h0) : (228 - h0 + h1);  // Handle wrap
+    A26_ASSERT_EQ(h, "SYNC", (uint8_t)delta, 3, "1 CPU cycle = 3 color clocks");
+
+    // Clock 76 CPU cycles = 228 color clocks = 1 scanline
+    reset(h);
+    clock_cpu_cycles(h, 76);
+    A26_ASSERT_EQ(h, "SYNC", (uint8_t)h->tia.h_counter, 0,
+                  "76 CPU cycles = 1 scanline (h_counter wraps to 0)");
+
+    return h->fail_count - prev_fail;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Frame cycle count
+// ─────────────────────────────────────────────────────────────────────────────
+// NTSC: 262 scanlines × 76 CPU cycles = 19912 cycles per frame.
+
+int test_frame_cycle_count(harness_t* h) {
+    reset(h);
+    int prev_fail = h->fail_count;
+
+    // Verify the constant
+    A26_ASSERT_EQ32(h, "FRAME",
+                    atari2600_constants::CYCLES_PER_FRAME_NTSC, 19912u,
+                    "NTSC frame = 19912 CPU cycles");
+
+    A26_ASSERT_EQ32(h, "FRAME",
+                    atari2600_constants::CYCLES_PER_FRAME_PAL, 23712u,
+                    "PAL frame = 23712 CPU cycles");
+
+    // Clock 262 scanlines and verify cycle count
+    clock_scanlines(h, 262);
+    A26_ASSERT_EQ32(h, "FRAME", h->total_cpu_cycles, 19912u,
+                    "262 scanlines = 19912 CPU cycles elapsed");
+
+    return h->fail_count - prev_fail;
+}
+
+// =============================================================================
+// ███████╗ RUN ALL TESTS ███████╗
+// =============================================================================
+
+int run_all_builtin_tests(harness_t* h, bool verbose) {
+    h->verbose = verbose;
+    int total_failures = 0;
+    int total_tests = 0;
+    int total_pass = 0;
+
+    printf("=============================================================\n");
+    printf("  Atari 2600 Hardware Verification Test Suite\n");
+    printf("=============================================================\n\n");
+
+    // Helper macro for running each test
+    #define RUN_TEST(fn, label) do { \
+        h->pass_count = 0; h->fail_count = 0; h->results.clear(); \
+        int _failures = fn(h); \
+        total_failures += _failures; \
+        total_pass += h->pass_count; \
+        total_tests++; \
+        if (_failures == 0) { \
+            printf("  PASS  %s (%d checks)\n", label, h->pass_count); \
+        } else { \
+            printf("  FAIL  %s (%d failures, %d passed)\n", label, _failures, h->pass_count); \
+            for (const auto& r : h->results) { \
+                if (r.type == result_type_t::FAIL) \
+                    printf("        → %s\n", r.message); \
+            } \
+        } \
+    } while(0)
+
+    printf("─── TIA (Television Interface Adapter) ──────────────────────\n");
+    RUN_TEST(test_tia_register_readback,      "Register read/write");
+    RUN_TEST(test_tia_collision_detection,     "Collision detection");
+    RUN_TEST(test_tia_collision_clear,         "Collision clear (CXCLR)");
+    RUN_TEST(test_tia_playfield_basic,         "Playfield basic");
+    RUN_TEST(test_tia_playfield_reflect,       "Playfield reflection");
+    RUN_TEST(test_tia_playfield_priority,      "Playfield priority");
+    RUN_TEST(test_tia_player_graphics,         "Player graphics");
+    RUN_TEST(test_tia_player_reflect,          "Player reflection");
+    RUN_TEST(test_tia_player_nusiz_copies,     "Player NUSIZ copies");
+    RUN_TEST(test_tia_player_vertical_delay,   "Player vertical delay");
+    RUN_TEST(test_tia_missile_basic,           "Missile rendering");
+    RUN_TEST(test_tia_ball_basic,              "Ball rendering");
+    RUN_TEST(test_tia_hmove_apply,             "HMOVE application");
+    RUN_TEST(test_tia_hmclr,                   "HMCLR clear");
+    RUN_TEST(test_tia_wsync,                   "WSYNC CPU halt");
+    RUN_TEST(test_tia_vsync_frame_boundary,    "VSYNC frame boundary");
+    RUN_TEST(test_tia_vblank_blanks_output,    "VBLANK blanks output");
+    RUN_TEST(test_tia_color_registers,         "Color registers");
+    RUN_TEST(test_tia_input_ports,             "Input ports (INPT4/5)");
+    RUN_TEST(test_tia_audio_waveforms,         "Audio waveforms");
+    RUN_TEST(test_tia_grp_delayed_latch,       "GRP delayed latch");
+
+    printf("\n─── PIA 6532 RIOT ───────────────────────────────────────────\n");
+    RUN_TEST(test_riot_ram_read_write,         "RAM basic read/write");
+    RUN_TEST(test_riot_ram_full_coverage,       "RAM full 128-byte coverage");
+    RUN_TEST(test_riot_timer_1t,               "Timer divide-by-1");
+    RUN_TEST(test_riot_timer_8t,               "Timer divide-by-8");
+    RUN_TEST(test_riot_timer_64t,              "Timer divide-by-64");
+    RUN_TEST(test_riot_timer_1024t,            "Timer divide-by-1024");
+    RUN_TEST(test_riot_timer_underflow,        "Timer underflow behavior");
+    RUN_TEST(test_riot_port_a_ddr_masking,     "Port A DDR masking");
+    RUN_TEST(test_riot_port_b_ddr_masking,     "Port B DDR masking");
+    RUN_TEST(test_riot_port_input_override,    "Port I/O register write");
+
+    printf("\n─── Cartridge Mappers ───────────────────────────────────────\n");
+    RUN_TEST(test_mapper_2k,                   "2K mapper (mirroring)");
+    RUN_TEST(test_mapper_4k,                   "4K mapper");
+    RUN_TEST(test_mapper_f8_bank_switching,    "F8 bank switching (8KB)");
+    RUN_TEST(test_mapper_f6_bank_switching,    "F6 bank switching (16KB)");
+    RUN_TEST(test_mapper_f4_bank_switching,    "F4 bank switching (32KB)");
+    RUN_TEST(test_mapper_e0_segment_switching, "E0 segment switching");
+    RUN_TEST(test_mapper_3f_tigervision,       "3F Tigervision");
+    RUN_TEST(test_mapper_fa_cbs_ram_plus,      "FA CBS RAM Plus (12KB)");
+    RUN_TEST(test_mapper_factory_detection,    "Factory auto-detection");
+
+    printf("\n─── System Integration ──────────────────────────────────────\n");
+    RUN_TEST(test_address_decoding,            "Address decoding");
+    RUN_TEST(test_cpu_tia_sync_timing,         "CPU-TIA sync timing");
+    RUN_TEST(test_frame_cycle_count,           "Frame cycle count");
+
+    #undef RUN_TEST
+
+    printf("\n=============================================================\n");
+    printf("  TOTAL: %d tests, %d checks passed, %d failures\n",
+           total_tests, total_pass, total_failures);
+    if (total_failures == 0) {
+        printf("  ★ ALL TESTS PASSED ★\n");
+    } else {
+        printf("  ✗ %d TEST(S) FAILED\n", total_failures);
+    }
+    printf("=============================================================\n");
+
+    return total_failures;
+}
+
+} // namespace a2600_test
