@@ -35,6 +35,7 @@ public:
     CD4021()
         : ChipBase(ChipInfo{"CD4021", "8-Bit Static Shift Register", "Texas Instruments"}) {
         reset();
+        register_debug_fields();
     }
 
     // ---------------------------------------------------------------
@@ -73,10 +74,18 @@ public:
 
     // GUI virtuals are in cd4021_gui.cpp (#ifdef CERMU_HAS_GUI)
     bool has_layout_content() const override;
-    bool has_debug_content() const override;
     void render_layout_content() override;
-    void render_debug_content() override;
 
 private:
     uint8_t shift_register_ = 0;
+
+    void register_debug_fields() {
+        static const char* const bit_labels[] = {
+            "P7", "P6", "P5", "P4", "P3", "P2", "P1", "P0"
+        };
+        debug_registry_
+            .category("CD4021B Shift Register")
+            .value("Shift Register", [this]() -> uint32_t { return shift_register_; })
+            .bitfield("Bits", [this]() -> uint32_t { return shift_register_; }, 8, bit_labels);
+    }
 };
