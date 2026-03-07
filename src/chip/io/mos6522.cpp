@@ -3,7 +3,6 @@
 #include <cstdlib>
 #include <cstdio>
 
-bool mos6522_t::has_debug_content()    const { return true; }
 bool mos6522_t::has_settings_content() const { return true; }
 bool mos6522_t::has_layout_content()   const { return true; }
 
