@@ -226,6 +226,7 @@ public:
 
         build_palette_cache(is_pal, palette_cache_);
         reset();
+        register_debug_fields();
     }
 
     void reset() {
@@ -411,12 +412,13 @@ private:
 
     // --- ChipBase interface ---
 public:
-    bool has_debug_content()    const override;
     bool has_settings_content() const override;
     bool has_layout_content()   const override;
-    void render_debug_content()    override;
     void render_settings_content() override;
     void render_layout_content()   override;
+
+private:
+    void register_debug_fields();
 };
 
 } // namespace nes_system
