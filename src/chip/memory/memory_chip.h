@@ -63,8 +63,6 @@ public:
     // --- ChipBase interface ---
     bool has_layout_content()   const override { return true; }
     void render_layout_content()       override;
-    bool has_debug_content()    const override { return true; }
-    void render_debug_content()        override;
 
     // --- Data access -------------------------------------------------
     uint8_t*       data()       { return data_; }
@@ -104,4 +102,6 @@ private:
     MemoryType         type_;
     const bus_state_t* system_bus_;           // Borrowed pointer to system bus state
     std::string        display_name_buf_;     // Owned storage for auto-generated display name
+
+    void register_debug_fields();
 };

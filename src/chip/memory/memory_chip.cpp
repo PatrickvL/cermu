@@ -70,6 +70,8 @@ MemoryChip::MemoryChip(ChipInfo     info,
         display_name_buf_ = pn + " " + label + " (" + size_str + ")";
     }
     display_name_ = display_name_buf_.c_str();
+
+    register_debug_fields();
 }
 
 MemoryChip::~MemoryChip() {
@@ -314,34 +316,26 @@ void MemoryChip::render_layout_content() {
 #endif
 }
 
-void MemoryChip::render_debug_content() {
-#ifdef CERMU_HAS_GUI
-    // --- Chip identity ---
-    ImGui::Text("Type:  %s", type_label(type_));
-    ImGui::Text("Size:  %s", format_bytes(size_bytes_).c_str());
-    if (base_address_ != 0) {
-        ImGui::Text("Base:  $%04X", base_address_);
-    }
-    ImGui::Text("Bound: %s   Owned: %s",
-                 is_bound() ? "yes" : "no",
-                 owns_data() ? "yes" : "no");
+void MemoryChip::register_debug_fields() {
+    static const char* const type_names[] = {"RAM", "ROM", "PROM", "EPROM", "SRAM"};
 
-    // --- Hex dump (first 256 bytes) ---
-    if (data_ && size_bytes_ > 0) {
-        ImGui::Separator();
-        size_t show = (size_bytes_ < 256) ? size_bytes_ : 256;
-        int rows = static_cast<int>((show + 15) / 16);
-        for (int r = 0; r < rows; r++) {
-            uint16_t addr = static_cast<uint16_t>(base_address_ + r * 16);
-            ImGui::Text("$%04X:", addr);
-            for (int c = 0; c < 16 && (r * 16 + c) < static_cast<int>(show); c++) {
-                ImGui::SameLine();
-                ImGui::Text("%02X", data_[r * 16 + c]);
-            }
-        }
-        if (size_bytes_ > 256) {
-            ImGui::Text("... (%s total)", format_bytes(size_bytes_).c_str());
-        }
+    debug_registry_
+        .category("Identity")
+        .state("Type", [this]() -> uint32_t { return static_cast<uint32_t>(type_); },
+               type_names, 5)
+        .value("Size (bytes)", [this]() -> uint32_t { return static_cast<uint32_t>(size_bytes_); })
+        .flag("Bound", [this]() { return is_bound(); })
+        .flag("Owns Data", [this]() { return owns_data(); });
+
+    if (base_address_ != 0) {
+        debug_registry_.address("Base Address", [this]() -> uint32_t { return base_address_; });
     }
-#endif
+
+    debug_registry_
+        .category("Contents")
+        .memory("Data",
+                [this]() -> std::pair<const uint8_t*, size_t> {
+                    return {data_, size_bytes_};
+                },
+                base_address_, 256);
 }
