@@ -655,3 +655,33 @@ void PlaChip::render_layout_content() {
     render_chip_layout(layout, pin_states, "906114-01");
 #endif
 }
+
+// ============================================================================
+// ChipDebugRegistry — basic PLA state
+// ============================================================================
+// Note: The full interactive banking tables remain in render_debug_content()
+// because they require ImGui controls (checkboxes, tabs, tables) that the
+// registry cannot represent.
+
+void PlaChip::register_debug_fields() {
+    debug_registry_
+        .category("PLA State")
+        .value("Banking Mode", [this]() -> uint32_t {
+            return c64_ ? c64_->bus.pla_banking_mode : 0;
+        })
+        .flag("#LORAM", [this]() {
+            return c64_ && (c64_->bus.pla_banking_mode & 0x01) == 0;
+        })
+        .flag("#HIRAM", [this]() {
+            return c64_ && (c64_->bus.pla_banking_mode & 0x02) == 0;
+        })
+        .flag("#CHAREN", [this]() {
+            return c64_ && (c64_->bus.pla_banking_mode & 0x04) == 0;
+        })
+        .flag("#EXROM", [this]() {
+            return c64_ && (c64_->bus.pla_banking_mode & 0x08) == 0;
+        })
+        .flag("#GAME", [this]() {
+            return c64_ && (c64_->bus.pla_banking_mode & 0x10) == 0;
+        });
+}

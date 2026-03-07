@@ -23,13 +23,16 @@ public:
         display_name_ = "PLA / Address Decoder";
         short_name_   = "PLA";
         category_     = "Bus";
+        register_debug_fields();
     }
 
-    bool has_debug_content() const override { return true; }
     bool has_settings_content() const override { return true; }
     bool has_layout_content() const override { return true; }
 
-    void render_debug_content() override;
+    void render_debug_content() override;  // Complex interactive banking tables — kept as override
     void render_settings_content() override;
     void render_layout_content() override;
+
+private:
+    void register_debug_fields();
 };
