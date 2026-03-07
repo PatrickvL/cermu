@@ -222,8 +222,8 @@ add_custom_target(run_sid_tests
 # Update run_all_tests to include SID + APU tests
 add_custom_target(run_all_tests_full
     COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} --verbose
-    DEPENDS fam65xx_klaus_test_runner fam65xx_processor_tests_runner sid_test_runner apu_test_runner
-    COMMENT "Running all tests (CPU + SID + APU)"
+    DEPENDS fam65xx_klaus_test_runner fam65xx_processor_tests_runner sid_test_runner apu_test_runner a2600_test_runner
+    COMMENT "Running all tests (CPU + SID + APU + A2600)"
 )
 
 # =============================================================================
@@ -269,6 +269,57 @@ add_custom_target(run_apu_tests
     COMMENT "Running NES APU digital verification tests"
 )
 
+# =============================================================================
+# Atari 2600 Hardware Verification Tests
+# =============================================================================
+
+set(A2600_DIR ${SRC_DIR}/systems/atari2600)
+set(VIDEO_DIR ${SRC_DIR}/chip/video)
+set(IO_DIR ${SRC_DIR}/chip/io)
+
+add_executable(a2600_test_runner
+    a2600_test_runner.cpp
+    ${TESTING_DIR}/a2600_test_harness.cpp
+    ${VIDEO_DIR}/tia.cpp
+    ${VIDEO_DIR}/tia_gui.cpp
+    ${IO_DIR}/pia6532.cpp
+    ${IO_DIR}/pia6532_gui.cpp
+    ${CORE_DIR}/chip.cpp
+    ${CORE_DIR}/chip_layout.cpp
+    ${CORE_DIR}/pin_labels.cpp
+    ${CORE_DIR}/ioport.cpp
+)
+target_include_directories(a2600_test_runner PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/video
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/io
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/systems/atari2600
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/systems/atari2600/mappers
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/testing
+)
+target_compile_definitions(a2600_test_runner PRIVATE CERMU_IMPL)
+set_property(TARGET a2600_test_runner PROPERTY CXX_STANDARD 20)
+set_property(TARGET a2600_test_runner PROPERTY CXX_STANDARD_REQUIRED ON)
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(a2600_test_runner m)
+endif()
+
+# A2600 test CTest integration
+add_test(NAME a2600_hardware_verification
+    COMMAND a2600_test_runner
+)
+set_tests_properties(a2600_hardware_verification PROPERTIES
+    TIMEOUT 60
+)
+
+# Custom target for running A2600 tests
+add_custom_target(run_a2600_tests
+    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -R a2600 --verbose
+    DEPENDS a2600_test_runner
+    COMMENT "Running Atari 2600 hardware verification tests"
+)
+
 # Install targets (optional)
 
 # Install fam65xx test runner
@@ -297,6 +348,7 @@ message(STATUS "  fam65xx Klaus Test Runner: Built")
 message(STATUS "  fam65xx Lorenz Test Harness: Built")
 message(STATUS "  SID Test Runner: Built")
 message(STATUS "  APU Test Runner: Built")
+message(STATUS "  A2600 Test Runner: Built")
 
 # =============================================================================
 # SID Reference Comparison Runner (cermu vs reSID)
