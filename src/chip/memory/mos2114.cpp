@@ -9,11 +9,21 @@ MOS2114::MOS2114()
     : ChipBase(ChipInfo{"MOS2114", "MOS Technology"})
 {
     std::memset(memory, 0, sizeof(memory));
+    register_debug_fields();
 }
 
-bool MOS2114::has_debug_content()    const { return true; }
 bool MOS2114::has_settings_content() const { return true; }
 bool MOS2114::has_layout_content()   const { return true; }
+
+void MOS2114::register_debug_fields() {
+    debug_registry_
+        .category("Color RAM")
+        .memory("RAM Contents",
+                [this]() -> std::pair<const uint8_t*, size_t> {
+                    return {memory, sizeof(memory)};
+                },
+                0xD800, 1024);
+}
 
 // ============================================================================
 // Bus interface — static methods for I/O handler table

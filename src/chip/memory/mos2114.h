@@ -28,14 +28,15 @@ public:
     ~MOS2114() override = default;
 
     // --- ChipBase interface ---
-    bool has_debug_content()    const override;
     bool has_settings_content() const override;
     bool has_layout_content()   const override;
-    void render_debug_content()    override;
     void render_settings_content() override;
     void render_layout_content()   override;
 
     // --- Bus interface (static methods matching I/O handler table signature) ---
     static bus_state_t bus_read(void* context, bus_state_t bus_state);
     static bus_state_t bus_write(void* context, bus_state_t bus_state);
+
+private:
+    void register_debug_fields();
 };
