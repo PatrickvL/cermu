@@ -259,32 +259,39 @@ void Cartridge::register_debug_fields() {
         "One-Screen (Hi)", "Four-Screen"
     };
 
+    using C = const Cartridge;
     debug_registry_
         .category("Cartridge Info")
-        .value("Mapper", [this]() -> uint32_t { return mapper_id; })
-        .value("PRG Banks", [this]() -> uint32_t { return prg_banks; })
-        .value("CHR Banks", [this]() -> uint32_t { return chr_banks; })
-        .flag("Battery Backed", [this]() { return battery_backed; })
+        .value("Mapper", +[](const ChipBase* c) -> uint32_t { return static_cast<C*>(c)->mapper_id; })
+        .value("PRG Banks", +[](const ChipBase* c) -> uint32_t { return static_cast<C*>(c)->prg_banks; })
+        .value("CHR Banks", +[](const ChipBase* c) -> uint32_t { return static_cast<C*>(c)->chr_banks; })
+        .flag("Battery Backed", +[](const ChipBase* c) -> uint32_t { return static_cast<C*>(c)->battery_backed; })
 
         .category("Memory")
-        .value("PRG ROM (bytes)", [this]() -> uint32_t {
-            return static_cast<uint32_t>(prg_memory.size());
+        .value("PRG ROM (bytes)", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<uint32_t>(static_cast<C*>(c)->prg_memory.size());
         })
-        .value("CHR Size (bytes)", [this]() -> uint32_t {
-            return static_cast<uint32_t>(chr_memory.size());
+        .value("CHR Size (bytes)", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<uint32_t>(static_cast<C*>(c)->chr_memory.size());
         })
-        .value("PRG RAM (bytes)", [this]() -> uint32_t {
-            return static_cast<uint32_t>(prg_ram.size());
+        .value("PRG RAM (bytes)", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<uint32_t>(static_cast<C*>(c)->prg_ram.size());
         })
 
         .category("Mirroring")
-        .state("Mode", [this]() -> uint32_t {
-            return static_cast<uint32_t>(mirror_mode);
+        .state("Mode", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<uint32_t>(static_cast<C*>(c)->mirror_mode);
         }, mirror_names, 5)
 
         .category("Mapper State")
-        .flag("IRQ Active", [this]() { return mapper && mapper->irq_state(); })
-        .flag("CHR is RAM", [this]() { return mapper && mapper->chr_is_ram(); });
+        .flag("IRQ Active", +[](const ChipBase* c) -> uint32_t {
+            auto* self = static_cast<C*>(c);
+            return self->mapper && self->mapper->irq_state();
+        })
+        .flag("CHR is RAM", +[](const ChipBase* c) -> uint32_t {
+            auto* self = static_cast<C*>(c);
+            return self->mapper && self->mapper->chr_is_ram();
+        });
 }
 
 } // namespace nes_system

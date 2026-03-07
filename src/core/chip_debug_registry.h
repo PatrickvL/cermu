@@ -18,11 +18,12 @@
 #pragma once
 
 #include <cstdint>
-#include <functional>
 #include <string>
 #include <utility>
 #include <variant>
 #include <vector>
+
+class ChipBase;  // forward — callbacks receive the owning chip at render time
 
 // ============================================================================
 // SEMANTIC DATA KINDS — what the field IS, NOT how to draw it
@@ -77,9 +78,17 @@ struct RegSource {
     uint8_t  byte_count  = 1;
 };
 
+/// Function pointer types — callbacks receive the owning chip instance at render time.
+/// The chip pointer is supplied by the renderer at paint time, never stored per-field.
+using UIntFn      = uint32_t (*)(const ChipBase*);
+using FloatFn     = float (*)(const ChipBase*);
+using StringFn    = const char* (*)(const ChipBase*);
+using VoidFn      = void (*)(const ChipBase*);
+using ByteDataFn  = std::pair<const uint8_t*, size_t> (*)(const ChipBase*);
+using FloatDataFn = std::pair<const float*, size_t> (*)(const ChipBase*);
+
 /// Value source: either a compile-time register reference or a runtime callback.
-using UIntSource  = std::variant<RegSource, std::function<uint32_t()>>;
-using FloatSource = std::function<float()>;
+using UIntSource  = std::variant<RegSource, UIntFn>;
 
 // ============================================================================
 // KIND-SPECIFIC METADATA — structured payload per DataKind
@@ -93,7 +102,7 @@ struct StateMeta {
 
 /// Metadata for DataKind::Counter — max value (static or dynamic).
 struct CounterMeta {
-    std::variant<uint32_t, std::function<uint32_t()>> max;
+    std::variant<uint32_t, UIntFn> max;
 };
 
 /// Metadata for DataKind::Bitfield — per-bit label array.
@@ -116,7 +125,7 @@ struct TimerMeta {
     UIntSource latch_src;
     UIntSource running_src;     // bool: nonzero = running
     const char* mode_label = nullptr;   // optional: e.g. "Free-running"
-    std::function<const char*()> mode_fn;  // dynamic mode string
+    StringFn mode_fn = nullptr;  // dynamic mode string
 };
 
 /// Metadata for DataKind::AudioChannel — per-channel sub-fields.
@@ -128,12 +137,12 @@ struct AudioChannelMeta {
     uint8_t     waveform_count = 0;
     UIntSource  waveform_src;         // index into waveform_names
     // Optional extra sub-fields (envelope, sweep, etc.) via custom callback
-    std::function<void()> extra_render_fn;
+    VoidFn extra_render_fn = nullptr;
 };
 
 /// Metadata for DataKind::Palette — color array.
 struct PaletteMeta {
-    std::function<std::pair<const uint8_t*, size_t>()> data_fn;
+    ByteDataFn data_fn = nullptr;
     uint16_t entries      = 0;
     uint8_t  bits_per_entry = 8;   // 8 = indexed, 24 = RGB, 32 = RGBA
     // Optional: system palette lookup.  The renderer uses this to show
@@ -144,14 +153,14 @@ struct PaletteMeta {
 
 /// Metadata for DataKind::Memory — byte array.
 struct MemoryMeta {
-    std::function<std::pair<const uint8_t*, size_t>()> data_fn;
+    ByteDataFn data_fn = nullptr;
     uint16_t base_address = 0;
     size_t   max_display  = 256;
 };
 
 /// Metadata for DataKind::PatternTile — sprite/character pixel data.
 struct PatternTileMeta {
-    std::function<std::pair<const uint8_t*, size_t>()> data_fn;
+    ByteDataFn data_fn = nullptr;
     uint8_t  width       = 8;
     uint8_t  height      = 8;
     uint8_t  bpp         = 1;
@@ -161,7 +170,7 @@ struct PatternTileMeta {
 
 /// Metadata for DataKind::WaveformBuffer — audio sample ring buffer.
 struct WaveformBufferMeta {
-    std::function<std::pair<const float*, size_t>()> data_fn;
+    FloatDataFn data_fn = nullptr;
     uint32_t sample_rate = 44100;
 };
 
@@ -169,8 +178,8 @@ struct WaveformBufferMeta {
 struct RasterPositionMeta {
     UIntSource scanline_src;
     UIntSource cycle_src;
-    std::variant<uint32_t, std::function<uint32_t()>> total_lines;
-    std::variant<uint32_t, std::function<uint32_t()>> total_cycles;
+    std::variant<uint32_t, UIntFn> total_lines;
+    std::variant<uint32_t, UIntFn> total_cycles;
 };
 
 /// Metadata for DataKind::FlagString — processor status flags.
@@ -188,7 +197,7 @@ struct ColorMeta {
 
 /// Custom rendering callback — the escape hatch.
 struct CustomMeta {
-    std::function<void()> render_fn;
+    VoidFn render_fn = nullptr;
 };
 
 // ============================================================================
@@ -224,8 +233,8 @@ struct DebugField {
 
     // Primary value source — used for atomic scalar kinds
     UIntSource  uint_src;
-    FloatSource float_src;
-    std::function<const char*()> string_src;  // For dynamic label text
+    FloatFn     float_src = nullptr;
+    StringFn    string_src = nullptr;  // For dynamic label text
 
     // Kind-specific metadata
     KindMeta    meta;
@@ -281,53 +290,50 @@ public:
 
     /// Generic numeric value — registers.
     ChipDebugRegistry& value(const char* label, uint16_t reg_offset, uint8_t bits = 8);
-    /// Generic numeric value — 16-bit register (lo, hi bytes).
-    ChipDebugRegistry& value16(const char* label, uint16_t reg_lo, uint16_t reg_hi);
     /// Generic numeric value — callback source.
-    ChipDebugRegistry& value(const char* label, std::function<uint32_t()> fn, uint8_t bits = 8);
+    ChipDebugRegistry& value(const char* label, UIntFn fn, uint8_t bits = 8);
     /// Generic numeric value — callback source, explicit display bits.
-    ChipDebugRegistry& value(const char* label, std::function<uint32_t()> fn, uint8_t bits, uint8_t indent);
+    ChipDebugRegistry& value(const char* label, UIntFn fn, uint8_t bits, uint8_t indent);
 
     /// Boolean flag — register bit.
     ChipDebugRegistry& flag(const char* label, uint16_t reg_offset, uint8_t bit);
     /// Boolean flag — callback source.
-    ChipDebugRegistry& flag(const char* label, std::function<uint32_t()> fn);
+    ChipDebugRegistry& flag(const char* label, UIntFn fn);
 
     /// Enumerated state — register bits.
     ChipDebugRegistry& state(const char* label, uint16_t reg_offset,
                              uint8_t bit_count, uint8_t bit_offset,
                              const char* const* names, uint8_t name_count);
     /// Enumerated state — callback source.
-    ChipDebugRegistry& state(const char* label, std::function<uint32_t()> fn,
+    ChipDebugRegistry& state(const char* label, UIntFn fn,
                              const char* const* names, uint8_t name_count);
 
     /// Memory address — register source.
     ChipDebugRegistry& address(const char* label, uint16_t reg_offset, uint8_t bits = 16);
     /// Memory address — callback source.
-    ChipDebugRegistry& address(const char* label, std::function<uint32_t()> fn, uint8_t bits = 16);
+    ChipDebugRegistry& address(const char* label, UIntFn fn, uint8_t bits = 16);
 
     /// Counter within a range — callback + static max.
-    ChipDebugRegistry& counter(const char* label, std::function<uint32_t()> fn, uint32_t max);
+    ChipDebugRegistry& counter(const char* label, UIntFn fn, uint32_t max);
     /// Counter within a range — callback + dynamic max.
-    ChipDebugRegistry& counter(const char* label, std::function<uint32_t()> fn,
-                               std::function<uint32_t()> max_fn);
+    ChipDebugRegistry& counter(const char* label, UIntFn fn, UIntFn max_fn);
 
     /// Normalized 0.0–1.0 level (volume, amplitude, duty cycle).
-    ChipDebugRegistry& level(const char* label, std::function<float()> fn);
+    ChipDebugRegistry& level(const char* label, FloatFn fn);
 
     /// Color value — register source + optional system palette.
     ChipDebugRegistry& color(const char* label, uint16_t reg_offset,
                              const uint32_t* palette = nullptr, uint16_t palette_size = 0);
     /// Color value — callback source + optional system palette.
-    ChipDebugRegistry& color(const char* label, std::function<uint32_t()> fn,
+    ChipDebugRegistry& color(const char* label, UIntFn fn,
                              const uint32_t* palette = nullptr, uint16_t palette_size = 0);
 
     /// Frequency value — register or callback.
     ChipDebugRegistry& frequency(const char* label, uint16_t reg_offset, uint8_t bits = 8);
-    ChipDebugRegistry& frequency(const char* label, std::function<uint32_t()> fn, uint8_t bits = 16);
+    ChipDebugRegistry& frequency(const char* label, UIntFn fn, uint8_t bits = 16);
 
     /// Signed integer value — callback.
-    ChipDebugRegistry& signed_value(const char* label, std::function<int32_t()> fn, uint8_t bits = 8);
+    ChipDebugRegistry& signed_value(const char* label, UIntFn fn, uint8_t bits = 8);
 
     // -- Structured / composite kinds --
 
@@ -335,7 +341,7 @@ public:
     ChipDebugRegistry& bitfield(const char* label, uint16_t reg_offset,
                                 uint8_t bit_count, const char* const* labels);
     /// Bitfield — callback source.
-    ChipDebugRegistry& bitfield(const char* label, std::function<uint32_t()> fn,
+    ChipDebugRegistry& bitfield(const char* label, UIntFn fn,
                                 uint8_t bit_count, const char* const* labels);
 
     /// I/O port (data + DDR, pin-by-pin display).
@@ -352,7 +358,7 @@ public:
     ChipDebugRegistry& timer(const char* label,
                              UIntSource counter_src, UIntSource latch_src,
                              UIntSource running_src,
-                             std::function<const char*()> mode_fn);
+                             StringFn mode_fn);
 
     /// Audio channel composite.
     ChipDebugRegistry& audio_channel(const char* label,
@@ -362,37 +368,37 @@ public:
                                      const char* const* waveform_names = nullptr,
                                      uint8_t waveform_count = 0,
                                      UIntSource waveform_src = RegSource{},
-                                     std::function<void()> extra_fn = nullptr);
+                                     VoidFn extra_fn = nullptr);
 
     /// Palette data — array of color entries.
     ChipDebugRegistry& palette(const char* label,
-                               std::function<std::pair<const uint8_t*, size_t>()> data_fn,
+                               ByteDataFn data_fn,
                                uint16_t entries, uint8_t bits_per_entry = 8,
                                const uint32_t* sys_palette = nullptr,
                                uint16_t sys_palette_size = 0);
 
     /// Memory region (hex dump).
     ChipDebugRegistry& memory(const char* label,
-                              std::function<std::pair<const uint8_t*, size_t>()> data_fn,
+                              ByteDataFn data_fn,
                               uint16_t base_address = 0, size_t max_display = 256);
 
     /// Pattern tile (sprite/character pixel data).
     ChipDebugRegistry& pattern_tile(const char* label,
-                                    std::function<std::pair<const uint8_t*, size_t>()> data_fn,
+                                    ByteDataFn data_fn,
                                     uint8_t width, uint8_t height, uint8_t bpp,
                                     const uint32_t* palette = nullptr,
                                     uint16_t palette_size = 0);
 
     /// Waveform buffer (audio sample ring buffer).
     ChipDebugRegistry& waveform_buffer(const char* label,
-                                       std::function<std::pair<const float*, size_t>()> data_fn,
+                                       FloatDataFn data_fn,
                                        uint32_t sample_rate = 44100);
 
     /// Raster position (scanline + cycle within frame bounds).
     ChipDebugRegistry& raster_position(const char* label,
                                        UIntSource scanline_src, UIntSource cycle_src,
-                                       std::variant<uint32_t, std::function<uint32_t()>> total_lines,
-                                       std::variant<uint32_t, std::function<uint32_t()>> total_cycles);
+                                       std::variant<uint32_t, UIntFn> total_lines,
+                                       std::variant<uint32_t, UIntFn> total_cycles);
 
     /// Processor status flag string (NVUBDIZc style).
     ChipDebugRegistry& flag_string(const char* label, UIntSource value_src,
@@ -400,8 +406,8 @@ public:
                                    uint8_t bit_count = 8);
 
     /// Custom rendering callback — the escape hatch.
-    /// The callback receives full ImGui context and can draw anything.
-    ChipDebugRegistry& custom(std::function<void()> fn);
+    /// The callback receives the chip instance and full ImGui context.
+    ChipDebugRegistry& custom(VoidFn fn);
 
     // -- Indentation helpers --
 
@@ -415,20 +421,20 @@ public:
     /// Add a static text line (e.g. chip description header).
     ChipDebugRegistry& text(const char* static_text);
     /// Add a dynamic text line.
-    ChipDebugRegistry& text(std::function<const char*()> fn);
+    ChipDebugRegistry& text(StringFn fn);
 
     // ---- Rendering (implemented in chip_debug_registry_gui.cpp) ----
     // Renders all categories and fields using ImGui.
     // No-op when CERMU_HAS_GUI is not defined.
-    void render() const;
+    void render(const ChipBase* chip) const;
 
     // ---- Resolve a UIntSource to a value ----
-    uint32_t read(const UIntSource& src) const;
+    uint32_t read(const UIntSource& src, const ChipBase* chip) const;
 
     // ---- Resolve a variant<uint32_t, fn> ----
-    static uint32_t resolve(const std::variant<uint32_t, std::function<uint32_t()>>& v) {
+    static uint32_t resolve(const std::variant<uint32_t, UIntFn>& v, const ChipBase* chip) {
         if (auto* val = std::get_if<uint32_t>(&v)) return *val;
-        return std::get<std::function<uint32_t()>>(v)();
+        return std::get<UIntFn>(v)(chip);
     }
 
 private:

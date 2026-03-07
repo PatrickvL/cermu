@@ -873,7 +873,9 @@ public:
     dmc.is_pal = pal;
     frame.is_pal = pal;
     reset_to_power_up_state();
+#ifdef CERMU_HAS_GUI
     register_debug_fields();
+#endif
   }
 
   /// Power-on reset: disables all channels, writes $00 to $4017 with delay.
@@ -1163,97 +1165,120 @@ public:
 
 private:
   void register_debug_fields() {
+    using AP = const APU;
     auto& r = debug_registry_;
-
-    // Helper: register pulse channel fields
-    auto pulse_fields = [&](const char* name, PulseChannel& p) {
-        r.category(name);
-        r.value("Output", [&p]() -> uint32_t { return p.output(); }, 4);
-        static constexpr const char* duty_names[] = {"12.5%", "25%", "50%", "75%"};
-        r.state("Duty", [&p]() -> uint32_t { return p.duty; }, duty_names, 4);
-        r.value("Timer Period", [&p]() -> uint32_t { return p.timer_period; }, 11);
-        r.flag("Length Active", [&p]() -> uint32_t { return p.length.active(); });
-        r.counter("Length Counter", [&p]() -> uint32_t { return p.length.value(); }, 255);
-        // Envelope
-        r.flag("Env Constant", [&p]() -> uint32_t { return p.envelope.constant_volume; });
-        r.value("Env Volume", [&p]() -> uint32_t { return p.envelope.volume(); }, 4);
-        r.flag("Env Loop", [&p]() -> uint32_t { return p.envelope.loop; });
-        // Sweep
-        r.flag("Sweep Enable", [&p]() -> uint32_t { return p.sweep.enabled; });
-        r.value("Sweep Period", [&p]() -> uint32_t { return p.sweep.period; }, 3);
-        r.flag("Sweep Negate", [&p]() -> uint32_t { return p.sweep.negate; });
-        r.value("Sweep Shift", [&p]() -> uint32_t { return p.sweep.shift; }, 3);
-        r.flag("Sweep Muting", [&p]() -> uint32_t {
-            return p.sweep.is_muting(p.timer_period);
-        });
-        r.value("Sweep Target", [&p]() -> uint32_t {
-            return static_cast<uint32_t>(p.sweep.calculate_target(p.timer_period));
-        }, 11);
-    };
 
     // ---- Status ($4015) ----
     r.category("Status ($4015)");
-    r.flag("Pulse 1 Active", [this]() -> uint32_t { return pulse1.length.active(); });
-    r.flag("Pulse 2 Active", [this]() -> uint32_t { return pulse2.length.active(); });
-    r.flag("Triangle Active", [this]() -> uint32_t { return triangle.length.active(); });
-    r.flag("Noise Active", [this]() -> uint32_t { return noise.length.active(); });
-    r.flag("DMC Active", [this]() -> uint32_t { return dmc.active(); });
-    r.flag("Frame IRQ", [this]() -> uint32_t { return frame.irq_flag; });
-    r.flag("DMC IRQ", [this]() -> uint32_t { return dmc.irq_flag; });
+    r.flag("Pulse 1 Active", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse1.length.active(); });
+    r.flag("Pulse 2 Active", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse2.length.active(); });
+    r.flag("Triangle Active", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->triangle.length.active(); });
+    r.flag("Noise Active", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->noise.length.active(); });
+    r.flag("DMC Active", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->dmc.active(); });
+    r.flag("Frame IRQ", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->frame.irq_flag; });
+    r.flag("DMC IRQ", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->dmc.irq_flag; });
 
-    // ---- Pulse channels ----
-    pulse_fields("Pulse 1 ($4000-$4003)", pulse1);
-    pulse_fields("Pulse 2 ($4004-$4007)", pulse2);
+    // ---- Pulse 1 ($4000-$4003) ----
+    {
+        static constexpr const char* duty_names[] = {"12.5%", "25%", "50%", "75%"};
+        r.category("Pulse 1 ($4000-$4003)");
+        r.value("Output", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse1.output(); }, 4);
+        r.state("Duty", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse1.duty; }, duty_names, 4);
+        r.value("Timer Period", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse1.timer_period; }, 11);
+        r.flag("Length Active", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse1.length.active(); });
+        r.counter("Length Counter", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse1.length.value(); }, 255);
+        // Envelope
+        r.flag("Env Constant", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse1.envelope.constant_volume; });
+        r.value("Env Volume", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse1.envelope.volume(); }, 4);
+        r.flag("Env Loop", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse1.envelope.loop; });
+        // Sweep
+        r.flag("Sweep Enable", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse1.sweep.enabled; });
+        r.value("Sweep Period", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse1.sweep.period; }, 3);
+        r.flag("Sweep Negate", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse1.sweep.negate; });
+        r.value("Sweep Shift", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse1.sweep.shift; }, 3);
+        r.flag("Sweep Muting", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<AP*>(c)->pulse1.sweep.is_muting(static_cast<AP*>(c)->pulse1.timer_period);
+        });
+        r.value("Sweep Target", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<uint32_t>(static_cast<AP*>(c)->pulse1.sweep.calculate_target(static_cast<AP*>(c)->pulse1.timer_period));
+        }, 11);
+    }
+
+    // ---- Pulse 2 ($4004-$4007) ----
+    {
+        static constexpr const char* duty_names[] = {"12.5%", "25%", "50%", "75%"};
+        r.category("Pulse 2 ($4004-$4007)");
+        r.value("Output", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse2.output(); }, 4);
+        r.state("Duty", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse2.duty; }, duty_names, 4);
+        r.value("Timer Period", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse2.timer_period; }, 11);
+        r.flag("Length Active", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse2.length.active(); });
+        r.counter("Length Counter", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse2.length.value(); }, 255);
+        // Envelope
+        r.flag("Env Constant", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse2.envelope.constant_volume; });
+        r.value("Env Volume", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse2.envelope.volume(); }, 4);
+        r.flag("Env Loop", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse2.envelope.loop; });
+        // Sweep
+        r.flag("Sweep Enable", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse2.sweep.enabled; });
+        r.value("Sweep Period", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse2.sweep.period; }, 3);
+        r.flag("Sweep Negate", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse2.sweep.negate; });
+        r.value("Sweep Shift", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->pulse2.sweep.shift; }, 3);
+        r.flag("Sweep Muting", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<AP*>(c)->pulse2.sweep.is_muting(static_cast<AP*>(c)->pulse2.timer_period);
+        });
+        r.value("Sweep Target", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<uint32_t>(static_cast<AP*>(c)->pulse2.sweep.calculate_target(static_cast<AP*>(c)->pulse2.timer_period));
+        }, 11);
+    }
 
     // ---- Triangle ($4008-$400B) ----
     r.category("Triangle ($4008-$400B)");
-    r.value("Output", [this]() -> uint32_t { return triangle.output(); }, 4);
-    r.value("Timer Period", [this]() -> uint32_t { return triangle.timer_period; }, 11);
-    r.flag("Length Active", [this]() -> uint32_t { return triangle.length.active(); });
-    r.counter("Length Counter", [this]() -> uint32_t { return triangle.length.value(); }, 255);
-    r.value("Linear Counter Load", [this]() -> uint32_t { return triangle.linear_counter_load; }, 7);
-    r.flag("Control Flag", [this]() -> uint32_t { return triangle.control_flag; });
+    r.value("Output", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->triangle.output(); }, 4);
+    r.value("Timer Period", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->triangle.timer_period; }, 11);
+    r.flag("Length Active", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->triangle.length.active(); });
+    r.counter("Length Counter", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->triangle.length.value(); }, 255);
+    r.value("Linear Counter Load", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->triangle.linear_counter_load; }, 7);
+    r.flag("Control Flag", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->triangle.control_flag; });
 
     // ---- Noise ($400C-$400F) ----
     r.category("Noise ($400C-$400F)");
-    r.value("Output", [this]() -> uint32_t { return noise.output(); }, 4);
+    r.value("Output", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->noise.output(); }, 4);
     static constexpr const char* noise_mode_names[] = {"15-bit", "6-bit"};
-    r.state("Mode", [this]() -> uint32_t { return noise.mode ? 1u : 0u; },
+    r.state("Mode", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->noise.mode ? 1u : 0u; },
         noise_mode_names, 2);
-    r.value("Period Index", [this]() -> uint32_t { return noise.period_index; }, 4);
-    r.flag("Length Active", [this]() -> uint32_t { return noise.length.active(); });
-    r.counter("Length Counter", [this]() -> uint32_t { return noise.length.value(); }, 255);
-    r.flag("Env Constant", [this]() -> uint32_t { return noise.envelope.constant_volume; });
-    r.value("Env Volume", [this]() -> uint32_t { return noise.envelope.volume(); }, 4);
-    r.flag("Env Loop", [this]() -> uint32_t { return noise.envelope.loop; });
-    r.value("Shift Register", [this]() -> uint32_t { return noise.shift_register; }, 16);
+    r.value("Period Index", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->noise.period_index; }, 4);
+    r.flag("Length Active", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->noise.length.active(); });
+    r.counter("Length Counter", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->noise.length.value(); }, 255);
+    r.flag("Env Constant", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->noise.envelope.constant_volume; });
+    r.value("Env Volume", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->noise.envelope.volume(); }, 4);
+    r.flag("Env Loop", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->noise.envelope.loop; });
+    r.value("Shift Register", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->noise.shift_register; }, 16);
 
     // ---- DMC ($4010-$4013) ----
     r.category("DMC ($4010-$4013)");
-    r.flag("IRQ Enable", [this]() -> uint32_t { return dmc.irq_enabled; });
-    r.flag("Loop", [this]() -> uint32_t { return dmc.loop; });
-    r.value("Rate Index", [this]() -> uint32_t { return dmc.rate_index; }, 4);
-    r.counter("Output Level", [this]() -> uint32_t { return dmc.output_level; }, 127);
-    r.address("Sample Address", [this]() -> uint32_t { return dmc.sample_address; }, 16);
-    r.value("Sample Length", [this]() -> uint32_t { return dmc.sample_length; }, 16);
-    r.address("Current Address", [this]() -> uint32_t { return dmc.current_address; }, 16);
-    r.value("Bytes Remaining", [this]() -> uint32_t { return dmc.bytes_remaining; }, 16);
-    r.flag("Active", [this]() -> uint32_t { return dmc.active(); });
-    r.flag("IRQ Flag", [this]() -> uint32_t { return dmc.irq_flag; });
-    r.flag("Needs Sample", [this]() -> uint32_t { return dmc.needs_sample; });
+    r.flag("IRQ Enable", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->dmc.irq_enabled; });
+    r.flag("Loop", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->dmc.loop; });
+    r.value("Rate Index", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->dmc.rate_index; }, 4);
+    r.counter("Output Level", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->dmc.output_level; }, 127);
+    r.address("Sample Address", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->dmc.sample_address; }, 16);
+    r.value("Sample Length", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->dmc.sample_length; }, 16);
+    r.address("Current Address", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->dmc.current_address; }, 16);
+    r.value("Bytes Remaining", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->dmc.bytes_remaining; }, 16);
+    r.flag("Active", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->dmc.active(); });
+    r.flag("IRQ Flag", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->dmc.irq_flag; });
+    r.flag("Needs Sample", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->dmc.needs_sample; });
 
     // ---- Frame Counter ($4017) ----
     r.category("Frame Counter ($4017)");
     static constexpr const char* frame_mode_names[] = {"4-step", "5-step"};
-    r.state("Mode", [this]() -> uint32_t { return frame.mode ? 1u : 0u; },
+    r.state("Mode", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->frame.mode ? 1u : 0u; },
         frame_mode_names, 2);
-    r.flag("IRQ Inhibit", [this]() -> uint32_t { return frame.irq_inhibit; });
-    r.flag("IRQ Flag", [this]() -> uint32_t { return frame.irq_flag; });
+    r.flag("IRQ Inhibit", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->frame.irq_inhibit; });
+    r.flag("IRQ Flag", +[](const ChipBase* c) -> uint32_t { return static_cast<AP*>(c)->frame.irq_flag; });
 
     // ---- Mixer ----
     r.category("Mixer Output", false);
-    r.level("Mixed Output", [this]() -> float {
-        float s = sample();
+    r.level("Mixed Output", +[](const ChipBase* c) -> float {
+        float s = static_cast<AP*>(c)->sample();
         return s < 0.0f ? -s : s;
     });
   }

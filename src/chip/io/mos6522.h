@@ -69,7 +69,9 @@
 
 struct mos6522_t : public ChipBase {
     mos6522_t() : ChipBase(ChipInfo{"MOS6522", "MOS Technology"}) {
+#ifdef CERMU_HAS_GUI
         register_debug_fields();
+#endif
     }
 
     void* bus = nullptr;
@@ -143,6 +145,7 @@ struct mos6522_t : public ChipBase {
 
 private:
     void register_debug_fields() {
+        using VI = const mos6522_t;
         static constexpr const char* ifr_labels[] = {
             "IRQ", "T1", "T2", "CB1", "CB2", "SR", "CA1", "CA2"
         };
@@ -152,51 +155,51 @@ private:
         // --- Data Ports ---
         debug_registry_.category("Data Ports")
             .port("Port A",
-                  std::function<uint32_t()>([this]() -> uint32_t { return port_a_regs.data; }),
-                  std::function<uint32_t()>([this]() -> uint32_t { return port_a_regs.ddr; }))
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->port_a_regs.data; },
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->port_a_regs.ddr; })
             .port("Port B",
-                  std::function<uint32_t()>([this]() -> uint32_t { return port_b_regs.data; }),
-                  std::function<uint32_t()>([this]() -> uint32_t { return port_b_regs.ddr; }));
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->port_b_regs.data; },
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->port_b_regs.ddr; });
 
         // --- Timers ---
         debug_registry_.category("Timers")
             .timer("Timer 1",
-                   std::function<uint32_t()>([this]() -> uint32_t { return timer1_counter; }),
-                   std::function<uint32_t()>([this]() -> uint32_t { return timer1_latch; }),
-                   std::function<uint32_t()>([this]() -> uint32_t { return timer1_running; }),
-                   [this]() -> const char* {
-                       return (acr & MOS6522_ACR_T1_CONT) ? "Free-running" : "One-shot";
+                   +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->timer1_counter; },
+                   +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->timer1_latch; },
+                   +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->timer1_running; },
+                   +[](const ChipBase* c) -> const char* {
+                       return (static_cast<VI*>(c)->acr & MOS6522_ACR_T1_CONT) ? "Free-running" : "One-shot";
                    })
             .timer("Timer 2",
-                   std::function<uint32_t()>([this]() -> uint32_t { return timer2_counter; }),
-                   std::function<uint32_t()>([this]() -> uint32_t { return timer2_latch; }),
-                   std::function<uint32_t()>([this]() -> uint32_t { return timer2_running; }));
+                   +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->timer2_counter; },
+                   +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->timer2_latch; },
+                   +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->timer2_running; });
 
         // --- Control Registers ---
         debug_registry_.category("Control Registers")
-            .value("ACR", [this]() -> uint32_t { return acr; })
-            .state("T1 Control", [this]() -> uint32_t { return (acr & MOS6522_ACR_T1_CONT) ? 1u : 0u; },
+            .value("ACR", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->acr; })
+            .state("T1 Control", +[](const ChipBase* c) -> uint32_t { return (static_cast<VI*>(c)->acr & MOS6522_ACR_T1_CONT) ? 1u : 0u; },
                    t1_mode_names, 2)
-            .flag("T1 PB7 Output", [this]() -> uint32_t { return (acr & MOS6522_ACR_T1_PB7) ? 1u : 0u; })
-            .value("SR Mode", [this]() -> uint32_t { return (acr & MOS6522_ACR_SR_MODE) >> 2; })
-            .value("PCR", [this]() -> uint32_t { return pcr; })
-            .state("CA1 Control", [this]() -> uint32_t { return pcr & 0x01u; },
+            .flag("T1 PB7 Output", +[](const ChipBase* c) -> uint32_t { return (static_cast<VI*>(c)->acr & MOS6522_ACR_T1_PB7) ? 1u : 0u; })
+            .value("SR Mode", +[](const ChipBase* c) -> uint32_t { return (static_cast<VI*>(c)->acr & MOS6522_ACR_SR_MODE) >> 2; })
+            .value("PCR", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->pcr; })
+            .state("CA1 Control", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->pcr & 0x01u; },
                    ca1_edge_names, 2)
-            .value("CA2 Control", [this]() -> uint32_t { return (pcr >> 1) & 0x07u; })
-            .state("CB1 Control", [this]() -> uint32_t { return (pcr & 0x10u) ? 1u : 0u; },
+            .value("CA2 Control", +[](const ChipBase* c) -> uint32_t { return (static_cast<VI*>(c)->pcr >> 1) & 0x07u; })
+            .state("CB1 Control", +[](const ChipBase* c) -> uint32_t { return (static_cast<VI*>(c)->pcr & 0x10u) ? 1u : 0u; },
                    ca1_edge_names, 2)
-            .value("CB2 Control", [this]() -> uint32_t { return (pcr >> 5) & 0x07u; });
+            .value("CB2 Control", +[](const ChipBase* c) -> uint32_t { return (static_cast<VI*>(c)->pcr >> 5) & 0x07u; });
 
         // --- Interrupt Control ---
         debug_registry_.category("Interrupt Control")
-            .bitfield("IFR", [this]() -> uint32_t { return ifr; }, 8, ifr_labels)
-            .bitfield("IER", [this]() -> uint32_t { return ier; }, 8, ifr_labels)
-            .flag("IRQ Active", [this]() -> uint32_t { return interrupt_active; });
+            .bitfield("IFR", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->ifr; }, 8, ifr_labels)
+            .bitfield("IER", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->ier; }, 8, ifr_labels)
+            .flag("IRQ Active", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->interrupt_active; });
 
         // --- Shift Register ---
         debug_registry_.category("Shift Register", false)
-            .value("Shift Register", [this]() -> uint32_t { return shift_register; })
-            .value("Shift Counter", [this]() -> uint32_t { return shift_counter; });
+            .value("Shift Register", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->shift_register; })
+            .value("Shift Counter", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->shift_counter; });
     }
 };
 

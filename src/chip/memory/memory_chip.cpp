@@ -71,7 +71,9 @@ MemoryChip::MemoryChip(ChipInfo     info,
     }
     display_name_ = display_name_buf_.c_str();
 
+#ifdef CERMU_HAS_GUI
     register_debug_fields();
+#endif
 }
 
 MemoryChip::~MemoryChip() {
@@ -318,24 +320,26 @@ void MemoryChip::render_layout_content() {
 
 void MemoryChip::register_debug_fields() {
     static const char* const type_names[] = {"RAM", "ROM", "PROM", "EPROM", "SRAM"};
+    using M = const MemoryChip;
 
     debug_registry_
         .category("Identity")
-        .state("Type", [this]() -> uint32_t { return static_cast<uint32_t>(type_); },
+        .state("Type", +[](const ChipBase* c) -> uint32_t { return static_cast<uint32_t>(static_cast<M*>(c)->type_); },
                type_names, 5)
-        .value("Size (bytes)", [this]() -> uint32_t { return static_cast<uint32_t>(size_bytes_); })
-        .flag("Bound", [this]() { return is_bound(); })
-        .flag("Owns Data", [this]() { return owns_data(); });
+        .value("Size (bytes)", +[](const ChipBase* c) -> uint32_t { return static_cast<uint32_t>(static_cast<M*>(c)->size_bytes_); })
+        .flag("Bound", +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->is_bound(); })
+        .flag("Owns Data", +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->owns_data(); });
 
     if (base_address_ != 0) {
-        debug_registry_.address("Base Address", [this]() -> uint32_t { return base_address_; });
+        debug_registry_.address("Base Address", +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->base_address_; });
     }
 
     debug_registry_
         .category("Contents")
         .memory("Data",
-                [this]() -> std::pair<const uint8_t*, size_t> {
-                    return {data_, size_bytes_};
+                +[](const ChipBase* c) -> std::pair<const uint8_t*, size_t> {
+                    auto* self = static_cast<M*>(c);
+                    return {self->data_, self->size_bytes_};
                 },
                 base_address_, 256);
 }

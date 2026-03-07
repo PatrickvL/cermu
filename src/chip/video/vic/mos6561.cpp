@@ -35,5 +35,7 @@ void mos6561_t::init() {
     // Initialise audio with PAL clock and default sample rate
     audio_reset(vic_config_pal.clock_frequency, VIC_DEFAULT_SAMPLE_RATE);
 
+#ifdef CERMU_HAS_GUI
     register_debug_fields();
+#endif
 }

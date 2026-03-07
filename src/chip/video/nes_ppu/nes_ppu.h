@@ -226,7 +226,9 @@ public:
 
         build_palette_cache(is_pal, palette_cache_);
         reset();
+#ifdef CERMU_HAS_GUI
         register_debug_fields();
+#endif
     }
 
     void reset() {

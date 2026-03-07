@@ -1100,7 +1100,9 @@ void mos6581_t::init() {
     filter_init();
     
     reset();
+#ifdef CERMU_HAS_GUI
     register_debug_fields();
+#endif
 }
 
 // ============================================================================
@@ -1108,6 +1110,7 @@ void mos6581_t::init() {
 // ============================================================================
 
 void mos6581_t::register_debug_fields() {
+    using S = const mos6581_t;
     auto& r = debug_registry_;
     r.set_registers(regs, SID_REGS_SIZE);
 
@@ -1119,53 +1122,86 @@ void mos6581_t::register_debug_fields() {
         "Attack", "Decay", "Sustain", "Release", "Off"
     };
 
-    // Helper: register per-voice fields
-    auto voice_fields = [&](const char* name, voice_t& v) {
-        r.category(name, false);
-        r.value("Frequency", [&v]() -> uint32_t { return v.frequency; }, 16);
-        r.value("Pulse Width", [&v]() -> uint32_t { return v.pulse_waveform_width; }, 12);
-        // Control register flags
-        r.flag("Gate", [&v]() -> uint32_t { return v.control_reg & VCREG_GATE; });
-        r.flag("Sync", [&v]() -> uint32_t { return v.control_reg & VCREG_SYNC; });
-        r.flag("Ring Mod", [&v]() -> uint32_t { return v.control_reg & VCREG_RING; });
-        r.flag("Test", [&v]() -> uint32_t { return v.control_reg & VCREG_TEST; });
-        r.state("Waveform", [&v]() -> uint32_t {
-            return (v.control_reg >> 4) & 0x0F;
-        }, wf_names, 9);
-        // Outputs
-        r.value("Envelope Amp", [&v]() -> uint32_t { return v.envelope_amplitude; }, 8);
-        r.value("Oscillator", [&v]() -> uint32_t { return v.oscillator_waveform; }, 12);
-        r.signed_value("Result", [&v]() -> int32_t { return static_cast<int32_t>(v.result); }, 24);
-        // Internal state
-        r.value("Accumulator", [&v]() -> uint32_t { return v.waveform_accumulator; }, 24);
-        r.state("Env Cycle", [&v]() -> uint32_t {
-            return static_cast<uint32_t>(v.envelope_cycle);
-        }, env_names, 5);
-        r.value("Exp Counter", [&v]() -> uint32_t { return v.exponential_counter; }, 8);
-        r.value("Sustain Level", [&v]() -> uint32_t { return v.sustain_level; }, 8);
-    };
+    // ---- Voice 1 ----
+    r.category("Voice 1", false);
+    r.value("Frequency", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice1.frequency; }, 16);
+    r.value("Pulse Width", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice1.pulse_waveform_width; }, 12);
+    r.flag("Gate", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice1.control_reg & VCREG_GATE; });
+    r.flag("Sync", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice1.control_reg & VCREG_SYNC; });
+    r.flag("Ring Mod", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice1.control_reg & VCREG_RING; });
+    r.flag("Test", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice1.control_reg & VCREG_TEST; });
+    r.state("Waveform", +[](const ChipBase* c) -> uint32_t {
+        return (static_cast<S*>(c)->voice1.control_reg >> 4) & 0x0F;
+    }, wf_names, 9);
+    r.value("Envelope Amp", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice1.envelope_amplitude; }, 8);
+    r.value("Oscillator", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice1.oscillator_waveform; }, 12);
+    r.signed_value("Result", +[](const ChipBase* c) -> uint32_t { return static_cast<uint32_t>(static_cast<S*>(c)->voice1.result); }, 24);
+    r.value("Accumulator", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice1.waveform_accumulator; }, 24);
+    r.state("Env Cycle", +[](const ChipBase* c) -> uint32_t {
+        return static_cast<uint32_t>(static_cast<S*>(c)->voice1.envelope_cycle);
+    }, env_names, 5);
+    r.value("Exp Counter", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice1.exponential_counter; }, 8);
+    r.value("Sustain Level", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice1.sustain_level; }, 8);
 
-    voice_fields("Voice 1", voice1);
-    voice_fields("Voice 2", voice2);
-    voice_fields("Voice 3", voice3);
+    // ---- Voice 2 ----
+    r.category("Voice 2", false);
+    r.value("Frequency", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice2.frequency; }, 16);
+    r.value("Pulse Width", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice2.pulse_waveform_width; }, 12);
+    r.flag("Gate", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice2.control_reg & VCREG_GATE; });
+    r.flag("Sync", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice2.control_reg & VCREG_SYNC; });
+    r.flag("Ring Mod", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice2.control_reg & VCREG_RING; });
+    r.flag("Test", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice2.control_reg & VCREG_TEST; });
+    r.state("Waveform", +[](const ChipBase* c) -> uint32_t {
+        return (static_cast<S*>(c)->voice2.control_reg >> 4) & 0x0F;
+    }, wf_names, 9);
+    r.value("Envelope Amp", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice2.envelope_amplitude; }, 8);
+    r.value("Oscillator", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice2.oscillator_waveform; }, 12);
+    r.signed_value("Result", +[](const ChipBase* c) -> uint32_t { return static_cast<uint32_t>(static_cast<S*>(c)->voice2.result); }, 24);
+    r.value("Accumulator", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice2.waveform_accumulator; }, 24);
+    r.state("Env Cycle", +[](const ChipBase* c) -> uint32_t {
+        return static_cast<uint32_t>(static_cast<S*>(c)->voice2.envelope_cycle);
+    }, env_names, 5);
+    r.value("Exp Counter", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice2.exponential_counter; }, 8);
+    r.value("Sustain Level", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice2.sustain_level; }, 8);
+
+    // ---- Voice 3 ----
+    r.category("Voice 3", false);
+    r.value("Frequency", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice3.frequency; }, 16);
+    r.value("Pulse Width", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice3.pulse_waveform_width; }, 12);
+    r.flag("Gate", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice3.control_reg & VCREG_GATE; });
+    r.flag("Sync", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice3.control_reg & VCREG_SYNC; });
+    r.flag("Ring Mod", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice3.control_reg & VCREG_RING; });
+    r.flag("Test", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice3.control_reg & VCREG_TEST; });
+    r.state("Waveform", +[](const ChipBase* c) -> uint32_t {
+        return (static_cast<S*>(c)->voice3.control_reg >> 4) & 0x0F;
+    }, wf_names, 9);
+    r.value("Envelope Amp", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice3.envelope_amplitude; }, 8);
+    r.value("Oscillator", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice3.oscillator_waveform; }, 12);
+    r.signed_value("Result", +[](const ChipBase* c) -> uint32_t { return static_cast<uint32_t>(static_cast<S*>(c)->voice3.result); }, 24);
+    r.value("Accumulator", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice3.waveform_accumulator; }, 24);
+    r.state("Env Cycle", +[](const ChipBase* c) -> uint32_t {
+        return static_cast<uint32_t>(static_cast<S*>(c)->voice3.envelope_cycle);
+    }, env_names, 5);
+    r.value("Exp Counter", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice3.exponential_counter; }, 8);
+    r.value("Sustain Level", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice3.sustain_level; }, 8);
 
     // ---- Filter & Global ----
     r.category("Filter & Global");
-    r.value("Filter Cutoff", [this]() -> uint32_t { return filter_cutoff_frequency; }, 11);
+    r.value("Filter Cutoff", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->filter_cutoff_frequency; }, 11);
     r.flag("Filter Voice 1", uint16_t(SID_REG_RESON), 0);
     r.flag("Filter Voice 2", uint16_t(SID_REG_RESON), 1);
     r.flag("Filter Voice 3", uint16_t(SID_REG_RESON), 2);
     r.flag("Filter External", uint16_t(SID_REG_RESON), 3);
-    r.value("Resonance", [this]() -> uint32_t {
-        return (regs[SID_REG_RESON] >> RESON_RES_SHIFT) & 0x0F;
+    r.value("Resonance", +[](const ChipBase* c) -> uint32_t {
+        return (static_cast<S*>(c)->regs[SID_REG_RESON] >> RESON_RES_SHIFT) & 0x0F;
     }, 4);
-    r.counter("Volume", [this]() -> uint32_t {
-        return regs[SID_REG_SIGVOL] & SIGVOL_VOL_MASK;
+    r.counter("Volume", +[](const ChipBase* c) -> uint32_t {
+        return static_cast<S*>(c)->regs[SID_REG_SIGVOL] & SIGVOL_VOL_MASK;
     }, 15);
-    r.flag("Low Pass", [this]() -> uint32_t { return filter_lp; });
-    r.flag("Band Pass", [this]() -> uint32_t { return filter_bp; });
-    r.flag("High Pass", [this]() -> uint32_t { return filter_hp; });
-    r.flag("Voice 3 Off", [this]() -> uint32_t { return voice3_off; });
+    r.flag("Low Pass", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->filter_lp; });
+    r.flag("Band Pass", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->filter_bp; });
+    r.flag("High Pass", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->filter_hp; });
+    r.flag("Voice 3 Off", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice3_off; });
 }
 
 void mos6581_t::reset() {

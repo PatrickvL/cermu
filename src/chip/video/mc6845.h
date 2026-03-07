@@ -70,7 +70,9 @@ static constexpr int MC6845_NUM_REGISTERS = 18;
 
 struct mc6845_t : public ChipBase {
     mc6845_t() : ChipBase(ChipInfo{"MC6845", "Motorola"}) {
+#ifdef CERMU_HAS_GUI
         register_debug_fields();
+#endif
     }
 
     // --- ChipBase GUI interface ---
@@ -190,6 +192,7 @@ struct mc6845_t : public ChipBase {
 
 private:
     void register_debug_fields() {
+        using M = const mc6845_t;
         static constexpr const char* reg_names[MC6845_NUM_REGISTERS] = {
             "R0  H Total",        "R1  H Displayed",
             "R2  H Sync Pos",     "R3  Sync Widths",
@@ -206,44 +209,44 @@ private:
 
         // --- Registers ---
         debug_registry_.category("Registers")
-            .value("Addr Reg", [this]() -> uint32_t { return address_register; });
+            .value("Addr Reg", +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->address_register; });
         for (int i = 0; i < MC6845_NUM_REGISTERS; i++) {
             debug_registry_.value(reg_names[i], static_cast<uint16_t>(i));
         }
 
         // --- Counters ---
         debug_registry_.category("Counters", false)
-            .counter("H Char Counter",   [this]() -> uint32_t { return h_char_counter; },
-                     [this]() -> uint32_t { return static_cast<uint32_t>(chars_per_line() - 1); })
-            .counter("V Row Counter",    [this]() -> uint32_t { return v_row_counter; },
-                     [this]() -> uint32_t { return static_cast<uint32_t>(rows_per_frame() - 1); })
-            .counter("V Scanline",       [this]() -> uint32_t { return v_scanline_counter; },
-                     [this]() -> uint32_t { return static_cast<uint32_t>(scanlines_per_row() - 1); })
-            .value("V Adjust Counter",   [this]() -> uint32_t { return v_adjust_counter; });
+            .counter("H Char Counter",   +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->h_char_counter; },
+                     +[](const ChipBase* c) -> uint32_t { return static_cast<uint32_t>(static_cast<M*>(c)->chars_per_line() - 1); })
+            .counter("V Row Counter",    +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->v_row_counter; },
+                     +[](const ChipBase* c) -> uint32_t { return static_cast<uint32_t>(static_cast<M*>(c)->rows_per_frame() - 1); })
+            .counter("V Scanline",       +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->v_scanline_counter; },
+                     +[](const ChipBase* c) -> uint32_t { return static_cast<uint32_t>(static_cast<M*>(c)->scanlines_per_row() - 1); })
+            .value("V Adjust Counter",   +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->v_adjust_counter; });
 
         // --- Sync & Display ---
         debug_registry_.category("Sync & Display", false)
-            .flag("HSYNC",       [this]() -> uint32_t { return h_sync_active; })
-            .flag("VSYNC",       [this]() -> uint32_t { return v_sync_active; })
-            .flag("H Display",   [this]() -> uint32_t { return h_display_active; })
-            .flag("V Display",   [this]() -> uint32_t { return v_display_active; })
-            .flag("In Adjust",   [this]() -> uint32_t { return in_adjust; });
+            .flag("HSYNC",       +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->h_sync_active; })
+            .flag("VSYNC",       +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->v_sync_active; })
+            .flag("H Display",   +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->h_display_active; })
+            .flag("V Display",   +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->v_display_active; })
+            .flag("In Adjust",   +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->in_adjust; });
 
         // --- Address ---
         debug_registry_.category("Address", false)
-            .address("Linear Addr", [this]() -> uint32_t { return linear_address; })
-            .address("Row Start",   [this]() -> uint32_t { return row_start_address; })
-            .address("Start Addr",  [this]() -> uint32_t { return start_address(); })
-            .address("Cursor Addr", [this]() -> uint32_t { return cursor_address(); })
-            .flag("Cursor Vis",     [this]() -> uint32_t { return cursor_visible; });
+            .address("Linear Addr", +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->linear_address; })
+            .address("Row Start",   +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->row_start_address; })
+            .address("Start Addr",  +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->start_address(); })
+            .address("Cursor Addr", +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->cursor_address(); })
+            .flag("Cursor Vis",     +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->cursor_visible; });
 
         // --- Light Pen ---
         debug_registry_.category("Light Pen", false)
-            .flag("Latched",        [this]() -> uint32_t { return light_pen_latched; })
-            .address("Address",     [this]() -> uint32_t { return light_pen_address; });
+            .flag("Latched",        +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->light_pen_latched; })
+            .address("Address",     +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->light_pen_address; });
 
         // --- Frame ---
         debug_registry_.category("Frame", false)
-            .value("Frame Count",   [this]() -> uint32_t { return frame_count; }, 32);
+            .value("Frame Count",   +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->frame_count; }, 32);
     }
 };
