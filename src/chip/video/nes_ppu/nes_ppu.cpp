@@ -863,29 +863,30 @@ void PPU::connect_cartridge(Cartridge* cartridge) {
 // ============================================================================
 
 void PPU::register_debug_fields() {
+    using P = const PPU;
     auto& r = debug_registry_;
     r.set_registers(regs, REG_COUNT);
 
     // ---- Timing ----
     r.category("Timing");
     r.raster_position("Raster",
-        std::function<uint32_t()>([this]() -> uint32_t {
-            return static_cast<uint32_t>(scanline + 1);
-        }),
-        std::function<uint32_t()>([this]() -> uint32_t {
-            return cycle;
-        }),
-        std::function<uint32_t()>([this]() -> uint32_t {
-            return static_cast<uint32_t>(total_scanlines_minus_one_ + 1);
-        }),
+        +[](const ChipBase* c) -> uint32_t {
+            return static_cast<uint32_t>(static_cast<P*>(c)->scanline + 1);
+        },
+        +[](const ChipBase* c) -> uint32_t {
+            return static_cast<P*>(c)->cycle;
+        },
+        +[](const ChipBase* c) -> uint32_t {
+            return static_cast<uint32_t>(static_cast<P*>(c)->total_scanlines_minus_one_ + 1);
+        },
         uint32_t(nes_constants::DOTS_PER_SCANLINE));
-    r.value("Frame", [this]() -> uint32_t {
-        return static_cast<uint32_t>(frame_count);
+    r.value("Frame", +[](const ChipBase* c) -> uint32_t {
+        return static_cast<uint32_t>(static_cast<P*>(c)->frame_count);
     }, 32);
-    r.state("Region", [this]() -> uint32_t { return is_pal ? 1u : 0u; },
+    r.state("Region", +[](const ChipBase* c) -> uint32_t { return static_cast<P*>(c)->is_pal ? 1u : 0u; },
         (const char* const[]){"NTSC", "PAL"}, 2);
-    r.flag("Frame Complete", [this]() -> uint32_t { return frame_complete; });
-    r.flag("NMI Internal", [this]() -> uint32_t { return vbl_flag_internal_; });
+    r.flag("Frame Complete", +[](const ChipBase* c) -> uint32_t { return static_cast<P*>(c)->frame_complete; });
+    r.flag("NMI Internal", +[](const ChipBase* c) -> uint32_t { return static_cast<P*>(c)->vbl_flag_internal_; });
 
     // ---- PPUCTRL ($2000) ----
     r.category("PPUCTRL ($2000)");
@@ -894,17 +895,17 @@ void PPU::register_debug_fields() {
     r.flag("Master/Slave", uint16_t(PPUCTRL), 6);
     r.state("Sprite Size", uint16_t(PPUCTRL), 1, 5,
         (const char* const[]){"8x8", "8x16"}, 2);
-    r.address("BG Pattern Base", [this]() -> uint32_t {
-        return (regs[PPUCTRL] & 0x10) ? 0x1000u : 0x0000u;
+    r.address("BG Pattern Base", +[](const ChipBase* c) -> uint32_t {
+        return (static_cast<P*>(c)->regs[PPUCTRL] & 0x10) ? 0x1000u : 0x0000u;
     }, 16);
-    r.address("SPR Pattern Base", [this]() -> uint32_t {
-        return (regs[PPUCTRL] & 0x08) ? 0x1000u : 0x0000u;
+    r.address("SPR Pattern Base", +[](const ChipBase* c) -> uint32_t {
+        return (static_cast<P*>(c)->regs[PPUCTRL] & 0x08) ? 0x1000u : 0x0000u;
     }, 16);
-    r.state("VRAM Increment", [this]() -> uint32_t {
-        return (regs[PPUCTRL] & 0x04) ? 1u : 0u;
+    r.state("VRAM Increment", +[](const ChipBase* c) -> uint32_t {
+        return (static_cast<P*>(c)->regs[PPUCTRL] & 0x04) ? 1u : 0u;
     }, (const char* const[]){"1", "32"}, 2);
-    r.address("Base Nametable", [this]() -> uint32_t {
-        return 0x2000u + (regs[PPUCTRL] & 0x03) * 0x400u;
+    r.address("Base Nametable", +[](const ChipBase* c) -> uint32_t {
+        return 0x2000u + (static_cast<P*>(c)->regs[PPUCTRL] & 0x03) * 0x400u;
     }, 16);
 
     // ---- PPUMASK ($2001) ----
@@ -929,16 +930,16 @@ void PPU::register_debug_fields() {
 
     // ---- Internal State ----
     r.category("Internal State", false);
-    r.address("VRAM Addr (v)", [this]() -> uint32_t { return internal.v; }, 15);
-    r.address("Temp Addr (t)", [this]() -> uint32_t { return internal.t; }, 15);
-    r.value("Fine X Scroll", [this]() -> uint32_t { return internal.x; }, 3);
-    r.flag("Write Toggle (w)", [this]() -> uint32_t { return internal.w ? 1u : 0u; });
-    r.value("Fine Y", [this]() -> uint32_t { return internal.fine_y; }, 3);
+    r.address("VRAM Addr (v)", +[](const ChipBase* c) -> uint32_t { return static_cast<P*>(c)->internal.v; }, 15);
+    r.address("Temp Addr (t)", +[](const ChipBase* c) -> uint32_t { return static_cast<P*>(c)->internal.t; }, 15);
+    r.value("Fine X Scroll", +[](const ChipBase* c) -> uint32_t { return static_cast<P*>(c)->internal.x; }, 3);
+    r.flag("Write Toggle (w)", +[](const ChipBase* c) -> uint32_t { return static_cast<P*>(c)->internal.w ? 1u : 0u; });
+    r.value("Fine Y", +[](const ChipBase* c) -> uint32_t { return static_cast<P*>(c)->internal.fine_y; }, 3);
 
     // ---- Palette RAM ----
     r.category("Palette RAM", false);
-    r.memory("Palette", [this]() -> std::pair<const uint8_t*, size_t> {
-        return {palette.data(), palette.size()};
+    r.memory("Palette", +[](const ChipBase* c) -> std::pair<const uint8_t*, size_t> {
+        return {static_cast<P*>(c)->palette.data(), static_cast<P*>(c)->palette.size()};
     }, 0x3F00, 32);
 }
 

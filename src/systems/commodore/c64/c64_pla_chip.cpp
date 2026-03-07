@@ -668,24 +668,31 @@ void PlaChip::render_layout_content() {
 // registry cannot represent.
 
 void PlaChip::register_debug_fields() {
+    using P = const PlaChip;
     debug_registry_
         .category("PLA State")
-        .value("Banking Mode", [this]() -> uint32_t {
-            return c64_ ? c64_->bus.pla_banking_mode : 0;
+        .value("Banking Mode", +[](const ChipBase* c) -> uint32_t {
+            auto* self = static_cast<P*>(c);
+            return self->c64_ ? self->c64_->bus.pla_banking_mode : 0;
         })
-        .flag("#LORAM", [this]() {
-            return c64_ && (c64_->bus.pla_banking_mode & 0x01) == 0;
+        .flag("#LORAM", +[](const ChipBase* c) -> uint32_t {
+            auto* self = static_cast<P*>(c);
+            return self->c64_ && (self->c64_->bus.pla_banking_mode & 0x01) == 0;
         })
-        .flag("#HIRAM", [this]() {
-            return c64_ && (c64_->bus.pla_banking_mode & 0x02) == 0;
+        .flag("#HIRAM", +[](const ChipBase* c) -> uint32_t {
+            auto* self = static_cast<P*>(c);
+            return self->c64_ && (self->c64_->bus.pla_banking_mode & 0x02) == 0;
         })
-        .flag("#CHAREN", [this]() {
-            return c64_ && (c64_->bus.pla_banking_mode & 0x04) == 0;
+        .flag("#CHAREN", +[](const ChipBase* c) -> uint32_t {
+            auto* self = static_cast<P*>(c);
+            return self->c64_ && (self->c64_->bus.pla_banking_mode & 0x04) == 0;
         })
-        .flag("#EXROM", [this]() {
-            return c64_ && (c64_->bus.pla_banking_mode & 0x08) == 0;
+        .flag("#EXROM", +[](const ChipBase* c) -> uint32_t {
+            auto* self = static_cast<P*>(c);
+            return self->c64_ && (self->c64_->bus.pla_banking_mode & 0x08) == 0;
         })
-        .flag("#GAME", [this]() {
-            return c64_ && (c64_->bus.pla_banking_mode & 0x10) == 0;
+        .flag("#GAME", +[](const ChipBase* c) -> uint32_t {
+            auto* self = static_cast<P*>(c);
+            return self->c64_ && (self->c64_->bus.pla_banking_mode & 0x10) == 0;
         });
 }

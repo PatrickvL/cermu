@@ -2591,7 +2591,9 @@ void vicii_t::init(const vicii_chip_config_t* config, void (*bank_change)(void*,
     info_ = ChipInfo{pal ? "MOS6569" : "MOS6567", "MOS Technology"};
     vicii_initialize(this);
     vicii_initialize_timing(this, config);
+#ifdef CERMU_HAS_GUI
     register_debug_fields();
+#endif
 }
 
 // Destructor — clean up dynamically allocated pixel line buffers
@@ -2657,6 +2659,7 @@ void vicii_t::set_framebuffer(uint32_t* framebuffer, int width, int height) {
 // ============================================================================
 
 void vicii_t::register_debug_fields() {
+    using VI = const vicii_t;
     auto& r = debug_registry_;
     r.set_registers(registers.data, 66);
 
@@ -2669,19 +2672,19 @@ void vicii_t::register_debug_fields() {
 
     // ---- Chip Information ----
     r.category("Chip Information")
-     .value("Cycles/Line", [this]() -> uint32_t { return config->cycles_per_line; }, 8)
-     .value("Total Lines", [this]() -> uint32_t { return config->total_lines; }, 16)
-     .value("Current Bank", [this]() -> uint32_t { return memory.bank_base / 0x4000; }, 8);
+     .value("Cycles/Line", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->config->cycles_per_line; }, 8)
+     .value("Total Lines", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->config->total_lines; }, 16)
+     .value("Current Bank", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->memory.bank_base / 0x4000; }, 8);
 
     // ---- Raster Information ----
     r.category("Raster Information")
      .raster_position("Position",
-         std::function<uint32_t()>([this]() -> uint32_t { return timing.raster_counter; }),
-         std::function<uint32_t()>([this]() -> uint32_t { return timing.x_cycle; }),
-         std::function<uint32_t()>([this]() -> uint32_t { return config->total_lines; }),
-         std::function<uint32_t()>([this]() -> uint32_t { return config->cycles_per_line; }))
-     .flag("Badline", [this]() -> uint32_t { return video_logic.is_bad_line; })
-     .value("X Coordinate", [this]() -> uint32_t { return timing.x_coordinate; }, 16);
+         +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->timing.raster_counter; },
+         +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->timing.x_cycle; },
+         +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->config->total_lines; },
+         +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->config->cycles_per_line; })
+     .flag("Badline", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->video_logic.is_bad_line; })
+     .value("X Coordinate", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->timing.x_coordinate; }, 16);
 
     // ---- Control Registers ----
     r.category("Control Registers")
@@ -2692,27 +2695,28 @@ void vicii_t::register_debug_fields() {
      .flag("BMM", vicii_regs::C1, 5)
      .flag("DEN", vicii_regs::C1, 4)
      .flag("RSEL", vicii_regs::C1, 3)
-     .value("YSCROLL", [this]() -> uint32_t { return registers.data[vicii_regs::C1] & 0x07; }, 8)
+     .value("YSCROLL", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->registers.data[vicii_regs::C1] & 0x07; }, 8)
      .indent(0)
      .value("$D016 Control 2", vicii_regs::C2)
      .indent(1)
      .flag("RES", vicii_regs::C2, 5)
      .flag("MCM", vicii_regs::C2, 4)
      .flag("CSEL", vicii_regs::C2, 3)
-     .value("XSCROLL", [this]() -> uint32_t { return registers.data[vicii_regs::C2] & 0x07; }, 8)
+     .value("XSCROLL", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->registers.data[vicii_regs::C2] & 0x07; }, 8)
      .indent(0)
      .value("$D018 Memory Setup", vicii_regs::MP)
      .indent(1)
-     .address("Video Matrix Base", [this]() -> uint32_t {
-         return ((registers.data[vicii_regs::MP] >> 4) & 0x0F) * 0x400;
+     .address("Video Matrix Base", +[](const ChipBase* c) -> uint32_t {
+         return ((static_cast<VI*>(c)->registers.data[vicii_regs::MP] >> 4) & 0x0F) * 0x400;
      }, 16)
-     .address("Character Base", [this]() -> uint32_t {
-         return ((registers.data[vicii_regs::MP] >> 1) & 0x07) * 0x800;
+     .address("Character Base", +[](const ChipBase* c) -> uint32_t {
+         return ((static_cast<VI*>(c)->registers.data[vicii_regs::MP] >> 1) & 0x07) * 0x800;
      }, 16)
      .indent(0)
-     .state("Screen Mode", [this]() -> uint32_t {
-         uint8_t cr1 = registers.data[vicii_regs::C1];
-         uint8_t cr2 = registers.data[vicii_regs::C2];
+     .state("Screen Mode", +[](const ChipBase* c) -> uint32_t {
+         auto* s = static_cast<VI*>(c);
+         uint8_t cr1 = s->registers.data[vicii_regs::C1];
+         uint8_t cr2 = s->registers.data[vicii_regs::C2];
          uint8_t ecm = (cr1 >> 6) & 1;
          uint8_t bmm = (cr1 >> 5) & 1;
          uint8_t mcm = (cr2 >> 4) & 1;

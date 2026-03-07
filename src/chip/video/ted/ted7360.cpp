@@ -801,7 +801,9 @@ ted7360_t::ted7360_t(const ted7360_desc_t& desc) {
     pixel.color_line = new uint8_t[TED_VISIBLE_WIDTH]();
 
     reset();
+#ifdef CERMU_HAS_GUI
     register_debug_fields();
+#endif
 }
 
 ted7360_t::~ted7360_t() {
@@ -1482,6 +1484,7 @@ void ted7360_t::set_framebuffer(uint32_t* buffer, int width, int height) {
 // ============================================================================
 
 void ted7360_t::register_debug_fields() {
+    using TD = const ted7360_t;
     auto& r = debug_registry_;
     r.set_registers(registers.data, TED_NUM_REGS);
     const uint32_t* palette = get_palette();
@@ -1494,14 +1497,14 @@ void ted7360_t::register_debug_fields() {
     // ---- Raster Information ----
     r.category("Raster Information")
      .raster_position("Position",
-         std::function<uint32_t()>([this]() -> uint32_t { return timing.raster_counter; }),
-         std::function<uint32_t()>([this]() -> uint32_t { return timing.x_cycle; }),
-         std::function<uint32_t()>([this]() -> uint32_t { return timing.lines_per_frame; }),
-         std::function<uint32_t()>([this]() -> uint32_t { return timing.cpu_cycles_per_line; }))
-     .value("Frame Count", [this]() -> uint32_t { return timing.frame_count; }, 32)
-     .flag("PAL Mode", [this]() -> uint32_t { return timing.is_pal; })
-     .flag("DMA Line", [this]() -> uint32_t { return video_logic.is_dma_line; })
-     .flag("BA Low", [this]() -> uint32_t { return bus.ba_low; });
+         +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->timing.raster_counter; },
+         +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->timing.x_cycle; },
+         +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->timing.lines_per_frame; },
+         +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->timing.cpu_cycles_per_line; })
+     .value("Frame Count", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->timing.frame_count; }, 32)
+     .flag("PAL Mode", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->timing.is_pal; })
+     .flag("DMA Line", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->video_logic.is_dma_line; })
+     .flag("BA Low", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->bus.ba_low; });
 
     // ---- Control Registers ----
     r.category("Control Registers")
@@ -1511,7 +1514,7 @@ void ted7360_t::register_debug_fields() {
      .flag("BMM", TED_REG_CONTROL1, 5)
      .flag("ECM", TED_REG_CONTROL1, 6)
      .flag("RSEL", TED_REG_CONTROL1, 3)
-     .value("YSCROLL", [this]() -> uint32_t { return registers.data[TED_REG_CONTROL1] & TED_CR1_YSCROLL_MASK; }, 8)
+     .value("YSCROLL", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->registers.data[TED_REG_CONTROL1] & TED_CR1_YSCROLL_MASK; }, 8)
      .indent(0)
      .value("$FF07 Control 2", TED_REG_CONTROL2)
      .indent(1)
@@ -1520,70 +1523,70 @@ void ted7360_t::register_debug_fields() {
      .flag("FREEZE", TED_REG_CONTROL2, 5)
      .flag("PAL/NTSC", TED_REG_CONTROL2, 6)
      .flag("RVS", TED_REG_CONTROL2, 7)
-     .value("XSCROLL", [this]() -> uint32_t { return registers.data[TED_REG_CONTROL2] & TED_CR2_XSCROLL_MASK; }, 8)
+     .value("XSCROLL", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->registers.data[TED_REG_CONTROL2] & TED_CR2_XSCROLL_MASK; }, 8)
      .indent(0)
-     .state("Graphics Mode", [this]() -> uint32_t { return sequencer.graphics_mode; },
+     .state("Graphics Mode", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sequencer.graphics_mode; },
             gfx_mode_names, 8);
 
     // ---- Timers ----
     r.category("Timers")
      .timer("Timer 1",
-         std::function<uint32_t()>([this]() -> uint32_t { return timer1.counter; }),
-         std::function<uint32_t()>([this]() -> uint32_t { return timer1.latch; }),
-         std::function<uint32_t()>([]() -> uint32_t { return 1; }))
+         +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->timer1.counter; },
+         +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->timer1.latch; },
+         +[](const ChipBase*) -> uint32_t { return 1; })
      .timer("Timer 2",
-         std::function<uint32_t()>([this]() -> uint32_t { return timer2.counter; }),
-         std::function<uint32_t()>([this]() -> uint32_t { return timer2.latch; }),
-         std::function<uint32_t()>([]() -> uint32_t { return 1; }))
+         +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->timer2.counter; },
+         +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->timer2.latch; },
+         +[](const ChipBase*) -> uint32_t { return 1; })
      .timer("Timer 3",
-         std::function<uint32_t()>([this]() -> uint32_t { return timer3.counter; }),
-         std::function<uint32_t()>([this]() -> uint32_t { return timer3.latch; }),
-         std::function<uint32_t()>([]() -> uint32_t { return 1; }));
+         +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->timer3.counter; },
+         +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->timer3.latch; },
+         +[](const ChipBase*) -> uint32_t { return 1; });
 
     // ---- Sound ----
     r.category("Sound")
      .audio_channel("Channel 1",
-         std::function<uint32_t()>([this]() -> uint32_t { return sound.ch1_enabled; }),
-         std::function<uint32_t()>([this]() -> uint32_t { return sound.freq1; }),
-         std::function<uint32_t()>([this]() -> uint32_t { return sound.volume; }))
+         +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.ch1_enabled; },
+         +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.freq1; },
+         +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.volume; })
      .audio_channel("Channel 2",
-         std::function<uint32_t()>([this]() -> uint32_t { return sound.ch2_enabled; }),
-         std::function<uint32_t()>([this]() -> uint32_t { return sound.freq2; }),
-         std::function<uint32_t()>([this]() -> uint32_t { return sound.volume; }))
-     .flag("Noise Enabled", [this]() -> uint32_t { return sound.noise_enabled; })
-     .value("Noise LFSR", [this]() -> uint32_t { return sound.noise_shift_reg; }, 8)
-     .value("Volume", [this]() -> uint32_t { return sound.volume; }, 8)
-     .flag("DA Mode", [this]() -> uint32_t { return sound.da_mode; })
-     .value("Buffer Samples", [this]() -> uint32_t { return audio_available(); }, 16);
+         +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.ch2_enabled; },
+         +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.freq2; },
+         +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.volume; })
+     .flag("Noise Enabled", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.noise_enabled; })
+     .value("Noise LFSR", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.noise_shift_reg; }, 8)
+     .value("Volume", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.volume; }, 8)
+     .flag("DA Mode", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.da_mode; })
+     .value("Buffer Samples", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->audio_available(); }, 16);
 
     // ---- Interrupts ----
     r.category("Interrupts")
-     .value("IRQ Status ($FF09)", [this]() -> uint32_t { return irq_status; }, 8)
-     .value("IRQ Mask ($FF0A)", [this]() -> uint32_t { return irq_mask; }, 8)
-     .flag("IRQ Pending", [this]() -> uint32_t { return irq_pending(); })
+     .value("IRQ Status ($FF09)", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->irq_status; }, 8)
+     .value("IRQ Mask ($FF0A)", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->irq_mask; }, 8)
+     .flag("IRQ Pending", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->irq_pending(); })
      .indent(1)
-     .flag("Raster", [this]() -> uint32_t { return irq_status & TED_IRQ_RASTER; })
-     .flag("Timer 1", [this]() -> uint32_t { return irq_status & TED_IRQ_TIMER1; })
-     .flag("Timer 2", [this]() -> uint32_t { return irq_status & TED_IRQ_TIMER2; })
-     .flag("Timer 3", [this]() -> uint32_t { return irq_status & TED_IRQ_TIMER3; })
+     .flag("Raster", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->irq_status & TED_IRQ_RASTER; })
+     .flag("Timer 1", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->irq_status & TED_IRQ_TIMER1; })
+     .flag("Timer 2", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->irq_status & TED_IRQ_TIMER2; })
+     .flag("Timer 3", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->irq_status & TED_IRQ_TIMER3; })
      .indent(0);
 
     // ---- Memory Mapping ----
     r.category("Memory Mapping", false)
-     .address("Screen Base", [this]() -> uint32_t { return memory.screen_base; }, 16)
-     .address("Char Base", [this]() -> uint32_t { return memory.char_base; }, 16)
-     .address("Bitmap Base", [this]() -> uint32_t { return memory.bitmap_base; }, 16)
-     .flag("ROM Enabled", [this]() -> uint32_t { return rom_enabled; });
+     .address("Screen Base", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->memory.screen_base; }, 16)
+     .address("Char Base", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->memory.char_base; }, 16)
+     .address("Bitmap Base", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->memory.bitmap_base; }, 16)
+     .flag("ROM Enabled", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->rom_enabled; });
 
     // ---- Video Logic ----
     r.category("Video Logic", false)
-     .flag("Display State", [this]() -> uint32_t { return video_logic.display_state; })
-     .value("VC", [this]() -> uint32_t { return video_logic.vc; }, 16)
-     .value("VCBASE", [this]() -> uint32_t { return video_logic.vcbase; }, 16)
-     .value("RC", [this]() -> uint32_t { return video_logic.rc; }, 8)
-     .value("VMLI", [this]() -> uint32_t { return video_logic.vmli; }, 8)
-     .flag("Border Main FF", [this]() -> uint32_t { return border.main_ff; })
-     .flag("Border Vert FF", [this]() -> uint32_t { return border.vert_ff; });
+     .flag("Display State", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->video_logic.display_state; })
+     .value("VC", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->video_logic.vc; }, 16)
+     .value("VCBASE", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->video_logic.vcbase; }, 16)
+     .value("RC", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->video_logic.rc; }, 8)
+     .value("VMLI", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->video_logic.vmli; }, 8)
+     .flag("Border Main FF", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->border.main_ff; })
+     .flag("Border Vert FF", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->border.vert_ff; });
 
     // ---- Colors ----
     r.category("Colors", false)

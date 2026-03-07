@@ -66,23 +66,23 @@ inline void format_value(char* buf, size_t buf_size, uint32_t val, uint8_t bits)
 
 namespace {
 
-void render_value(const DebugField& f, const ChipDebugRegistry& reg) {
+void render_value(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
     // Text-only field (label but no value source)
-    auto* fn_ptr = std::get_if<std::function<uint32_t()>>(&f.uint_src);
+    auto* fn_ptr = std::get_if<UIntFn>(&f.uint_src);
     if (fn_ptr && !(*fn_ptr)) {
         // No value callback — just a text label
         if (f.label) ImGui::TextUnformatted(f.label);
         return;
     }
 
-    uint32_t val = reg.read(f.uint_src);
+    uint32_t val = reg.read(f.uint_src, chip);
     char buf[32];
     format_value(buf, sizeof(buf), val, f.display_bits);
     label_text(f.label, "%s", buf);
 }
 
-void render_flag(const DebugField& f, const ChipDebugRegistry& reg) {
-    uint32_t val = reg.read(f.uint_src);
+void render_flag(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
+    uint32_t val = reg.read(f.uint_src, chip);
     bool set = val != 0;
     if (set)
         ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "%-22s  1 (SET)", f.label);
@@ -90,15 +90,15 @@ void render_flag(const DebugField& f, const ChipDebugRegistry& reg) {
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%-22s  0", f.label);
 }
 
-void render_state(const DebugField& f, const ChipDebugRegistry& reg) {
-    uint32_t val = reg.read(f.uint_src);
+void render_state(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
+    uint32_t val = reg.read(f.uint_src, chip);
     auto& sm = std::get<StateMeta>(f.meta);
     const char* name = (val < sm.count && sm.names) ? sm.names[val] : "?";
     label_text(f.label, "%s (%u)", name, val);
 }
 
-void render_address(const DebugField& f, const ChipDebugRegistry& reg) {
-    uint32_t val = reg.read(f.uint_src);
+void render_address(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
+    uint32_t val = reg.read(f.uint_src, chip);
     char buf[16];
     if (f.display_bits <= 16)
         snprintf(buf, sizeof(buf), "$%04X", val & 0xFFFF);
@@ -107,10 +107,10 @@ void render_address(const DebugField& f, const ChipDebugRegistry& reg) {
     label_text(f.label, "%s", buf);
 }
 
-void render_counter(const DebugField& f, const ChipDebugRegistry& reg) {
-    uint32_t val = reg.read(f.uint_src);
+void render_counter(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
+    uint32_t val = reg.read(f.uint_src, chip);
     auto& cm = std::get<CounterMeta>(f.meta);
-    uint32_t max = ChipDebugRegistry::resolve(cm.max);
+    uint32_t max = ChipDebugRegistry::resolve(cm.max, chip);
     label_text(f.label, "%u / %u", val, max);
     // Progress bar
     float progress = (max > 0) ? (float)val / (float)max : 0.0f;
@@ -118,15 +118,15 @@ void render_counter(const DebugField& f, const ChipDebugRegistry& reg) {
     ImGui::ProgressBar(progress, ImVec2(-1, 0), nullptr);
 }
 
-void render_level(const DebugField& f, const ChipDebugRegistry& /*reg*/) {
-    float val = f.float_src ? f.float_src() : 0.0f;
+void render_level(const DebugField& f, const ChipBase* chip) {
+    float val = f.float_src ? f.float_src(chip) : 0.0f;
     val = std::clamp(val, 0.0f, 1.0f);
     label_text(f.label, "%.2f", val);
     ImGui::ProgressBar(val, ImVec2(-1, 0), nullptr);
 }
 
-void render_color(const DebugField& f, const ChipDebugRegistry& reg) {
-    uint32_t val = reg.read(f.uint_src);
+void render_color(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
+    uint32_t val = reg.read(f.uint_src, chip);
     auto& cm = std::get<ColorMeta>(f.meta);
 
     char buf[32];
@@ -150,15 +150,15 @@ void render_color(const DebugField& f, const ChipDebugRegistry& reg) {
     }
 }
 
-void render_frequency(const DebugField& f, const ChipDebugRegistry& reg) {
-    uint32_t val = reg.read(f.uint_src);
+void render_frequency(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
+    uint32_t val = reg.read(f.uint_src, chip);
     char buf[32];
     format_value(buf, sizeof(buf), val, f.display_bits);
     label_text(f.label, "%s", buf);
 }
 
-void render_signed_value(const DebugField& f, const ChipDebugRegistry& reg) {
-    uint32_t raw = reg.read(f.uint_src);
+void render_signed_value(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
+    uint32_t raw = reg.read(f.uint_src, chip);
     int32_t val = static_cast<int32_t>(raw);
     // Sign-extend based on display bits
     if (f.display_bits < 32) {
@@ -170,8 +170,8 @@ void render_signed_value(const DebugField& f, const ChipDebugRegistry& reg) {
     label_text(f.label, "%d", val);
 }
 
-void render_bitfield(const DebugField& f, const ChipDebugRegistry& reg) {
-    uint32_t val = reg.read(f.uint_src);
+void render_bitfield(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
+    uint32_t val = reg.read(f.uint_src, chip);
     auto& bm = std::get<BitfieldMeta>(f.meta);
 
     // Header: label + hex value
@@ -205,10 +205,10 @@ void render_bitfield(const DebugField& f, const ChipDebugRegistry& reg) {
     }
 }
 
-void render_port(const DebugField& f, const ChipDebugRegistry& reg) {
+void render_port(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
     auto& pm = std::get<PortMeta>(f.meta);
-    uint32_t data = reg.read(pm.data_src);
-    uint32_t ddr  = reg.read(pm.ddr_src);
+    uint32_t data = reg.read(pm.data_src, chip);
+    uint32_t ddr  = reg.read(pm.ddr_src, chip);
 
     char data_buf[16], ddr_buf[16];
     snprintf(data_buf, sizeof(data_buf), "$%02X", data & 0xFF);
@@ -243,11 +243,11 @@ void render_port(const DebugField& f, const ChipDebugRegistry& reg) {
     }
 }
 
-void render_timer(const DebugField& f, const ChipDebugRegistry& reg) {
+void render_timer(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
     auto& tm = std::get<TimerMeta>(f.meta);
-    uint32_t counter = reg.read(tm.counter_src);
-    uint32_t latch   = reg.read(tm.latch_src);
-    uint32_t running = reg.read(tm.running_src);
+    uint32_t counter = reg.read(tm.counter_src, chip);
+    uint32_t latch   = reg.read(tm.latch_src, chip);
+    uint32_t running = reg.read(tm.running_src, chip);
 
     ImGui::TextUnformatted(f.label);
     ImGui::Indent(20.0f);
@@ -255,16 +255,16 @@ void render_timer(const DebugField& f, const ChipDebugRegistry& reg) {
     label_text("Latch:",   "$%04X (%u)", latch, latch);
     label_text("Running:", "%s", running ? "YES" : "NO");
     if (tm.mode_fn) {
-        label_text("Mode:", "%s", tm.mode_fn());
+        label_text("Mode:", "%s", tm.mode_fn(chip));
     } else if (tm.mode_label) {
         label_text("Mode:", "%s", tm.mode_label);
     }
     ImGui::Unindent(20.0f);
 }
 
-void render_audio_channel(const DebugField& f, const ChipDebugRegistry& reg) {
+void render_audio_channel(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
     auto& ac = std::get<AudioChannelMeta>(f.meta);
-    uint32_t enabled = reg.read(ac.enabled_src);
+    uint32_t enabled = reg.read(ac.enabled_src, chip);
 
     // Channel header with colored active indicator
     if (enabled)
@@ -273,26 +273,26 @@ void render_audio_channel(const DebugField& f, const ChipDebugRegistry& reg) {
         ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%s [OFF]", f.label);
 
     ImGui::Indent(20.0f);
-    uint32_t freq = reg.read(ac.frequency_src);
-    uint32_t vol  = reg.read(ac.volume_src);
+    uint32_t freq = reg.read(ac.frequency_src, chip);
+    uint32_t vol  = reg.read(ac.volume_src, chip);
     label_text("Frequency:", "$%04X (%u)", freq, freq);
     label_text("Volume:",    "%u", vol);
 
     if (ac.waveform_names && ac.waveform_count > 0) {
-        uint32_t wf = reg.read(ac.waveform_src);
+        uint32_t wf = reg.read(ac.waveform_src, chip);
         const char* name = (wf < ac.waveform_count) ? ac.waveform_names[wf] : "?";
         label_text("Waveform:", "%s (%u)", name, wf);
     }
 
-    if (ac.extra_render_fn) ac.extra_render_fn();
+    if (ac.extra_render_fn) ac.extra_render_fn(chip);
     ImGui::Unindent(20.0f);
 }
 
-void render_palette(const DebugField& f, const ChipDebugRegistry& /*reg*/) {
+void render_palette(const DebugField& f, const ChipBase* chip) {
     auto& pm = std::get<PaletteMeta>(f.meta);
     if (!pm.data_fn) return;
 
-    auto [data, size] = pm.data_fn();
+    auto [data, size] = pm.data_fn(chip);
     if (!data || size == 0) return;
 
     ImGui::TextUnformatted(f.label);
@@ -340,11 +340,11 @@ void render_palette(const DebugField& f, const ChipDebugRegistry& /*reg*/) {
     }
 }
 
-void render_memory(const DebugField& f, const ChipDebugRegistry& /*reg*/) {
+void render_memory(const DebugField& f, const ChipBase* chip) {
     auto& mm = std::get<MemoryMeta>(f.meta);
     if (!mm.data_fn) return;
 
-    auto [data, size] = mm.data_fn();
+    auto [data, size] = mm.data_fn(chip);
     if (!data || size == 0) return;
 
     size_t display = std::min(size, mm.max_display);
@@ -360,11 +360,11 @@ void render_memory(const DebugField& f, const ChipDebugRegistry& /*reg*/) {
     }
 }
 
-void render_pattern_tile(const DebugField& f, const ChipDebugRegistry& /*reg*/) {
+void render_pattern_tile(const DebugField& f, const ChipBase* chip) {
     auto& pt = std::get<PatternTileMeta>(f.meta);
     if (!pt.data_fn) return;
 
-    auto [data, size] = pt.data_fn();
+    auto [data, size] = pt.data_fn(chip);
     if (!data || size == 0) return;
 
     // For now: hex dump.  Future: render as actual pixel image.
@@ -380,11 +380,11 @@ void render_pattern_tile(const DebugField& f, const ChipDebugRegistry& /*reg*/) 
     }
 }
 
-void render_waveform_buffer(const DebugField& f, const ChipDebugRegistry& /*reg*/) {
+void render_waveform_buffer(const DebugField& f, const ChipBase* chip) {
     auto& wm = std::get<WaveformBufferMeta>(f.meta);
     if (!wm.data_fn) return;
 
-    auto [data, size] = wm.data_fn();
+    auto [data, size] = wm.data_fn(chip);
     if (!data || size == 0) return;
 
     ImGui::TextUnformatted(f.label);
@@ -393,12 +393,12 @@ void render_waveform_buffer(const DebugField& f, const ChipDebugRegistry& /*reg*
                      0, nullptr, -1.0f, 1.0f, ImVec2(-1, 80));
 }
 
-void render_raster_position(const DebugField& f, const ChipDebugRegistry& reg) {
+void render_raster_position(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
     auto& rp = std::get<RasterPositionMeta>(f.meta);
-    uint32_t scanline     = reg.read(rp.scanline_src);
-    uint32_t cycle        = reg.read(rp.cycle_src);
-    uint32_t total_lines  = ChipDebugRegistry::resolve(rp.total_lines);
-    uint32_t total_cycles = ChipDebugRegistry::resolve(rp.total_cycles);
+    uint32_t scanline     = reg.read(rp.scanline_src, chip);
+    uint32_t cycle        = reg.read(rp.cycle_src, chip);
+    uint32_t total_lines  = ChipDebugRegistry::resolve(rp.total_lines, chip);
+    uint32_t total_cycles = ChipDebugRegistry::resolve(rp.total_cycles, chip);
 
     ImGui::TextUnformatted(f.label);
     ImGui::Indent(20.0f);
@@ -410,8 +410,8 @@ void render_raster_position(const DebugField& f, const ChipDebugRegistry& reg) {
     ImGui::Unindent(20.0f);
 }
 
-void render_flag_string(const DebugField& f, const ChipDebugRegistry& reg) {
-    uint32_t val = reg.read(f.uint_src);
+void render_flag_string(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
+    uint32_t val = reg.read(f.uint_src, chip);
     auto& fs = std::get<FlagStringMeta>(f.meta);
 
     char buf[33] = {};
@@ -433,13 +433,13 @@ void render_flag_string(const DebugField& f, const ChipDebugRegistry& reg) {
     }
 }
 
-void render_custom(const DebugField& f, const ChipDebugRegistry& /*reg*/) {
+void render_custom(const DebugField& f, const ChipBase* chip) {
     auto& cm = std::get<CustomMeta>(f.meta);
     if (!f.label) {
         // Separator sentinel
         ImGui::Separator();
     } else if (cm.render_fn) {
-        cm.render_fn();
+        cm.render_fn(chip);
     }
 }
 
@@ -447,38 +447,38 @@ void render_custom(const DebugField& f, const ChipDebugRegistry& /*reg*/) {
 // MAIN DISPATCHER
 // ============================================================================
 
-void render_field(const DebugField& f, const ChipDebugRegistry& reg) {
+void render_field(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
     apply_indent(f.indent);
 
     // Dynamic text label (no value)
     if (f.string_src && !f.label) {
-        const char* txt = f.string_src();
+        const char* txt = f.string_src(chip);
         if (txt) ImGui::TextUnformatted(txt);
         undo_indent(f.indent);
         return;
     }
 
     switch (f.kind) {
-        case DataKind::Value:           render_value(f, reg);           break;
-        case DataKind::Flag:            render_flag(f, reg);            break;
-        case DataKind::State:           render_state(f, reg);           break;
-        case DataKind::Address:         render_address(f, reg);         break;
-        case DataKind::Counter:         render_counter(f, reg);         break;
-        case DataKind::Level:           render_level(f, reg);           break;
-        case DataKind::Color:           render_color(f, reg);           break;
-        case DataKind::Frequency:       render_frequency(f, reg);       break;
-        case DataKind::SignedValue:     render_signed_value(f, reg);    break;
-        case DataKind::Bitfield:        render_bitfield(f, reg);        break;
-        case DataKind::Port:            render_port(f, reg);            break;
-        case DataKind::Timer:           render_timer(f, reg);           break;
-        case DataKind::AudioChannel:    render_audio_channel(f, reg);   break;
-        case DataKind::Palette:         render_palette(f, reg);         break;
-        case DataKind::Memory:          render_memory(f, reg);          break;
-        case DataKind::PatternTile:     render_pattern_tile(f, reg);    break;
-        case DataKind::WaveformBuffer:  render_waveform_buffer(f, reg); break;
-        case DataKind::RasterPosition:  render_raster_position(f, reg); break;
-        case DataKind::FlagString:      render_flag_string(f, reg);     break;
-        case DataKind::Custom:          render_custom(f, reg);          break;
+        case DataKind::Value:           render_value(f, reg, chip);           break;
+        case DataKind::Flag:            render_flag(f, reg, chip);            break;
+        case DataKind::State:           render_state(f, reg, chip);           break;
+        case DataKind::Address:         render_address(f, reg, chip);         break;
+        case DataKind::Counter:         render_counter(f, reg, chip);         break;
+        case DataKind::Level:           render_level(f, chip);                break;
+        case DataKind::Color:           render_color(f, reg, chip);           break;
+        case DataKind::Frequency:       render_frequency(f, reg, chip);       break;
+        case DataKind::SignedValue:     render_signed_value(f, reg, chip);    break;
+        case DataKind::Bitfield:        render_bitfield(f, reg, chip);        break;
+        case DataKind::Port:            render_port(f, reg, chip);            break;
+        case DataKind::Timer:           render_timer(f, reg, chip);           break;
+        case DataKind::AudioChannel:    render_audio_channel(f, reg, chip);   break;
+        case DataKind::Palette:         render_palette(f, chip);              break;
+        case DataKind::Memory:          render_memory(f, chip);               break;
+        case DataKind::PatternTile:     render_pattern_tile(f, chip);         break;
+        case DataKind::WaveformBuffer:  render_waveform_buffer(f, chip);      break;
+        case DataKind::RasterPosition:  render_raster_position(f, reg, chip); break;
+        case DataKind::FlagString:      render_flag_string(f, reg, chip);     break;
+        case DataKind::Custom:          render_custom(f, chip);               break;
     }
 
     undo_indent(f.indent);
@@ -490,12 +490,12 @@ void render_field(const DebugField& f, const ChipDebugRegistry& reg) {
 // PUBLIC: ChipDebugRegistry::render()
 // ============================================================================
 
-void ChipDebugRegistry::render() const {
+void ChipDebugRegistry::render(const ChipBase* chip) const {
     for (auto& cat : categories_) {
         ImGuiTreeNodeFlags flags = cat.default_open ? ImGuiTreeNodeFlags_DefaultOpen : 0;
         if (ImGui::CollapsingHeader(cat.name.c_str(), flags)) {
             for (auto& field : cat.fields) {
-                render_field(field, *this);
+                render_field(field, *this, chip);
             }
         }
     }
@@ -525,19 +525,19 @@ void ChipBase::render_debug_content() {
         ImVec2 right_column_size = ImVec2(window_size.x - 270.0f, 0);
         if (ImGui::BeginChild("DebugInfo", right_column_size, true,
                               ImGuiWindowFlags_HorizontalScrollbar)) {
-            debug_registry_.render();
+            debug_registry_.render(this);
         }
         ImGui::EndChild();
     } else {
         // No chip layout — render fields directly
-        debug_registry_.render();
+        debug_registry_.render(this);
     }
 }
 
 #else // !CERMU_HAS_GUI
 
 // Non-GUI stubs — the registry exists but rendering is a no-op.
-void ChipDebugRegistry::render() const {}
+void ChipDebugRegistry::render(const ChipBase* /*chip*/) const {}
 void ChipBase::render_debug_content() {}
 
 #endif // CERMU_HAS_GUI

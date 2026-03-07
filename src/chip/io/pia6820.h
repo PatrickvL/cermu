@@ -22,7 +22,9 @@
 
 struct pia6820_t : public ChipBase {
     pia6820_t() : ChipBase(ChipInfo{"PIA6820", "Motorola"}) {
+#ifdef CERMU_HAS_GUI
         register_debug_fields();
+#endif
     }
 
     // --- ChipBase GUI interface ---
@@ -90,25 +92,26 @@ private:
                                             uint8_t (*read_cb)(void*), void* ud);
 
     void register_debug_fields() {
+        using PI = const pia6820_t;
         debug_registry_
             .category("Port A")
             .port("Port A",
-                  std::function<uint32_t()>([this]() -> uint32_t { return port_a_data; }),
-                  std::function<uint32_t()>([this]() -> uint32_t { return port_a_direction; }))
-            .value("Control", [this]() -> uint32_t { return port_a_control; })
-            .flag("CA1", [this]() -> uint32_t { return ca1_state; })
-            .flag("CA2", [this]() -> uint32_t { return ca2_state; })
-            .flag("IRQ A1", [this]() -> uint32_t { return irq_a1; })
-            .flag("IRQ A2", [this]() -> uint32_t { return irq_a2; })
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_a_data; },
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_a_direction; })
+            .value("Control", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_a_control; })
+            .flag("CA1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->ca1_state; })
+            .flag("CA2", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->ca2_state; })
+            .flag("IRQ A1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->irq_a1; })
+            .flag("IRQ A2", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->irq_a2; })
 
             .category("Port B")
             .port("Port B",
-                  std::function<uint32_t()>([this]() -> uint32_t { return port_b_data; }),
-                  std::function<uint32_t()>([this]() -> uint32_t { return port_b_direction; }))
-            .value("Control", [this]() -> uint32_t { return port_b_control; })
-            .flag("CB1", [this]() -> uint32_t { return cb1_state; })
-            .flag("CB2", [this]() -> uint32_t { return cb2_state; })
-            .flag("IRQ B1", [this]() -> uint32_t { return irq_b1; })
-            .flag("IRQ B2", [this]() -> uint32_t { return irq_b2; });
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_b_data; },
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_b_direction; })
+            .value("Control", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_b_control; })
+            .flag("CB1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->cb1_state; })
+            .flag("CB2", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->cb2_state; })
+            .flag("IRQ B1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->irq_b1; })
+            .flag("IRQ B2", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->irq_b2; });
     }
 };

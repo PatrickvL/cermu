@@ -1978,7 +1978,9 @@ public:
     // Initialize registers
     this->init_registers();
 
+#ifdef CERMU_HAS_GUI
     register_debug_fields();
+#endif
   }
 
   ~fam65xx_t() override {
@@ -2001,40 +2003,41 @@ public:
 
 private:
   void register_debug_fields() {
+    using CPU = const fam65xx_t;
     auto& r = debug_registry_;
 
     // ---- CPU Registers ----
     r.category("CPU Registers");
-    r.value("A", [this]() -> uint32_t { return get(REG_A); }, 8);
-    r.value("X", [this]() -> uint32_t { return get(REG_X); }, 8);
-    r.value("Y", [this]() -> uint32_t { return get(REG_Y); }, 8);
-    r.address("SP", [this]() -> uint32_t { return get(REG_SP); }, 16);
-    r.address("PC", [this]() -> uint32_t { return get(REG_PC); }, 16);
-    r.flag_string("P", [this]() -> uint32_t { return get(REG_P); },
+    r.value("A", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_A); }, 8);
+    r.value("X", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_X); }, 8);
+    r.value("Y", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_Y); }, 8);
+    r.address("SP", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_SP); }, 16);
+    r.address("PC", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_PC); }, 16);
+    r.flag_string("P", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_P); },
         "NVuBDIZC", "nvubdizc", 8);
 
     if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-      r.address("Direct Page", [this]() -> uint32_t { return 0; }, 16);
-      r.value("Data Bank", [this]() -> uint32_t { return 0; }, 8);
-      r.value("Program Bank", [this]() -> uint32_t { return 0; }, 8);
+      r.address("Direct Page", +[](const ChipBase* c) -> uint32_t { return 0; }, 16);
+      r.value("Data Bank", +[](const ChipBase* c) -> uint32_t { return 0; }, 8);
+      r.value("Program Bank", +[](const ChipBase* c) -> uint32_t { return 0; }, 8);
     }
 
     // ---- Internal State ----
     r.category("Internal State");
-    r.value("IR", [this]() -> uint32_t { return get(REG_IR); }, 8);
-    r.value("Data Latch", [this]() -> uint32_t { return get(REG_DL); }, 8);
-    r.address("Address Bus", [this]() -> uint32_t { return get(REG_AB); },
+    r.value("IR", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_IR); }, 8);
+    r.value("Data Latch", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_DL); }, 8);
+    r.address("Address Bus", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_AB); },
         Traits.address_bits);
-    r.value("Half Cycle", [this]() -> uint32_t { return half_cycle; }, 8);
-    r.flag("Op Done", [this]() -> uint32_t { return opdone(); });
+    r.value("Half Cycle", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->half_cycle; }, 8);
+    r.flag("Op Done", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->opdone(); });
 
     // ---- Interrupt State ----
     r.category("Interrupt State", false);
-    r.flag("IRQ Disabled", [this]() -> uint32_t { return (get(REG_P) & FLAG_I) ? 1u : 0u; });
+    r.flag("IRQ Disabled", +[](const ChipBase* c) -> uint32_t { return (static_cast<CPU*>(c)->get(REG_P) & FLAG_I) ? 1u : 0u; });
 
     if constexpr (Traits.has(CPUCoreFlags::CMOS_BASE)) {
-      r.flag("Wait for IRQ", [this]() -> uint32_t { return wait_for_interrupt; });
-      r.flag("Stopped", [this]() -> uint32_t { return stopped; });
+      r.flag("Wait for IRQ", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->wait_for_interrupt; });
+      r.flag("Stopped", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->stopped; });
     }
   }
 

@@ -45,7 +45,9 @@ static constexpr uint16_t RIOT_TIM1024T = 0x17;   // Divide by 1024
 
 struct pia6532_t : public ChipBase {
     pia6532_t() : ChipBase(ChipInfo{"PIA6532", "MOS Technology"}) {
+#ifdef CERMU_HAS_GUI
         register_debug_fields();
+#endif
     }
 
     // --- ChipBase GUI interface ---
@@ -115,23 +117,24 @@ struct pia6532_t : public ChipBase {
 
 private:
     void register_debug_fields() {
+        using PI = const pia6532_t;
         debug_registry_
             .category("I/O Ports")
             .port("Port A",
-                  std::function<uint32_t()>([this]() -> uint32_t { return port_a_data; }),
-                  std::function<uint32_t()>([this]() -> uint32_t { return port_a_ddr; }))
-            .value("Port A Input", [this]() -> uint32_t { return port_a_input; })
-            .value("Port A Effective", [this]() -> uint32_t { return read_port_a(); })
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_a_data; },
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_a_ddr; })
+            .value("Port A Input", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_a_input; })
+            .value("Port A Effective", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->read_port_a(); })
             .port("Port B",
-                  std::function<uint32_t()>([this]() -> uint32_t { return port_b_data; }),
-                  std::function<uint32_t()>([this]() -> uint32_t { return port_b_ddr; }))
-            .value("Port B Input", [this]() -> uint32_t { return port_b_input; })
-            .value("Port B Effective", [this]() -> uint32_t { return read_port_b(); })
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_b_data; },
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_b_ddr; })
+            .value("Port B Input", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_b_input; })
+            .value("Port B Effective", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->read_port_b(); })
 
             .category("Timer")
-            .value("Value", [this]() -> uint32_t { return timer_value; })
-            .state("Divider", [this]() -> uint32_t {
-                switch (timer_divider) {
+            .value("Value", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->timer_value; })
+            .state("Divider", +[](const ChipBase* c) -> uint32_t {
+                switch (static_cast<PI*>(c)->timer_divider) {
                     case 1:    return 0;
                     case 8:    return 1;
                     case 64:   return 2;
@@ -139,14 +142,14 @@ private:
                     default:   return 0;
                 }
             }, divider_names_, 4)
-            .counter("Sub-counter", [this]() -> uint32_t { return timer_counter; },
-                     [this]() -> uint32_t { return timer_divider; })
-            .flag("Underflow", [this]() -> uint32_t { return timer_underflow; })
-            .flag("IRQ Enable", [this]() -> uint32_t { return timer_interrupt_enabled; })
+            .counter("Sub-counter", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->timer_counter; },
+                     +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->timer_divider; })
+            .flag("Underflow", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->timer_underflow; })
+            .flag("IRQ Enable", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->timer_interrupt_enabled; })
 
             .category("RAM (128 bytes)", false)
-            .memory("RAM", [this]() -> std::pair<const uint8_t*, size_t> {
-                return {ram, 128};
+            .memory("RAM", +[](const ChipBase* c) -> std::pair<const uint8_t*, size_t> {
+                return {static_cast<PI*>(c)->ram, 128};
             }, 0x0080, 128);
     }
 

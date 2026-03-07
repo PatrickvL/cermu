@@ -52,7 +52,9 @@ public:
      *  programmatic cartridge setup (e.g. NSF player). */
     Cartridge()
         : ChipBase(ChipInfo{"Cartridge", "iNES ROM Cartridge", "Various"}) {
+#ifdef CERMU_HAS_GUI
         register_debug_fields();
+#endif
     }
 
 public:

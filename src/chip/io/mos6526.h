@@ -55,7 +55,9 @@ enum mos6526_pin_t {
 
 struct mos6526_t : public ChipBase {
     mos6526_t() : ChipBase(ChipInfo{"MOS6526", "MOS Technology"}) {
+#ifdef CERMU_HAS_GUI
         register_debug_fields();
+#endif
     }
 
     uint8_t configured_interrupt_bit = 0; // BUS_IRQ_BIT for CIA1, BUS_NMI_BIT for CIA2
@@ -178,6 +180,7 @@ private:
     void process_sdr_pipeline();  // Process SDR delay pipeline each tick
 
     void register_debug_fields() {
+        using CI = const mos6526_t;
         static constexpr const char* icr_labels[] = {
             "IRQ", "unused", "unused", "FLG", "SP", "ALRM", "TB", "TA"
         };
@@ -188,25 +191,25 @@ private:
         // PRA=reg[0], PRB=reg[1], DDRA=reg[2], DDRB=reg[3]
         debug_registry_.category("Data Ports")
             .port("Port A",
-                  std::function<uint32_t()>([this]() -> uint32_t { return reg[0]; }),
-                  std::function<uint32_t()>([this]() -> uint32_t { return reg[2]; }))
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[0]; },
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[2]; })
             .port("Port B",
-                  std::function<uint32_t()>([this]() -> uint32_t { return reg[1]; }),
-                  std::function<uint32_t()>([this]() -> uint32_t { return reg[3]; }));
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[1]; },
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[3]; });
 
         // --- Timers ---
         // Timer latches: TIMER_OFFSET = 16 - 4 = 12, so latch A at reg[16..17], latch B at reg[18..19]
         debug_registry_.category("Timers")
             .timer("Timer A",
-                   std::function<uint32_t()>([this]() -> uint32_t { return timer_counter_[0]; }),
-                   std::function<uint32_t()>([this]() -> uint32_t {
-                       return (reg[17] << 8) | reg[16]; }),
-                   std::function<uint32_t()>([this]() -> uint32_t { return reg[14] & 0x01; }))
+                   +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->timer_counter_[0]; },
+                   +[](const ChipBase* c) -> uint32_t {
+                       return (static_cast<CI*>(c)->reg[17] << 8) | static_cast<CI*>(c)->reg[16]; },
+                   +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[14] & 0x01; })
             .timer("Timer B",
-                   std::function<uint32_t()>([this]() -> uint32_t { return timer_counter_[1]; }),
-                   std::function<uint32_t()>([this]() -> uint32_t {
-                       return (reg[19] << 8) | reg[18]; }),
-                   std::function<uint32_t()>([this]() -> uint32_t { return reg[15] & 0x01; }));
+                   +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->timer_counter_[1]; },
+                   +[](const ChipBase* c) -> uint32_t {
+                       return (static_cast<CI*>(c)->reg[19] << 8) | static_cast<CI*>(c)->reg[18]; },
+                   +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[15] & 0x01; });
 
         // --- TOD Clock ---
         // TOD_10THS=8, TOD_SEC=9, TOD_MIN=10, TOD_HR=11
@@ -219,9 +222,9 @@ private:
         // --- Interrupt Control ---
         // ICR=reg[13]
         debug_registry_.category("Interrupt Control")
-            .bitfield("ICR", [this]() -> uint32_t { return reg[13]; }, 8, icr_labels)
-            .value("Interrupt Mask", [this]() -> uint32_t { return interrupt_mask; })
-            .flag("IRQ Active", [this]() -> uint32_t { return (reg[13] & 0x80) ? 1u : 0u; });
+            .bitfield("ICR", +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[13]; }, 8, icr_labels)
+            .value("Interrupt Mask", +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->interrupt_mask; })
+            .flag("IRQ Active", +[](const ChipBase* c) -> uint32_t { return (static_cast<CI*>(c)->reg[13] & 0x80) ? 1u : 0u; });
 
         // --- Serial Data ---
         // SDR=reg[12]

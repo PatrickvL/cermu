@@ -23,7 +23,9 @@ public:
         display_name_ = "PLA / Address Decoder";
         short_name_   = "PLA";
         category_     = "Bus";
+#ifdef CERMU_HAS_GUI
         register_debug_fields();
+#endif
     }
 
     bool has_settings_content() const override { return true; }
