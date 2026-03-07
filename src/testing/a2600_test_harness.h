@@ -363,4 +363,30 @@ int test_riot_timer_exact_divider_counting(harness_t* h);
 int test_riot_io_address_decoding_bits(harness_t* h);
 int test_riot_ram_address_range(harness_t* h);
 
+// ─── Advanced accuracy tests ────────────────────────────────────────────────
+
+// --- TIA advanced ---
+int test_tia_late_hmove_no_blanking(harness_t* h);
+int test_tia_write_address_mirroring(harness_t* h);
+int test_tia_read_address_mirroring(harness_t* h);
+int test_tia_playfield_all_40_pixels(harness_t* h);
+int test_tia_collision_persistence_across_scanlines(harness_t* h);
+int test_tia_multiple_hmove_same_scanline(harness_t* h);
+int test_tia_audio_poly4_cycle_length(harness_t* h);
+int test_tia_audio_poly5_cycle_length(harness_t* h);
+int test_tia_audio_poly9_cycle_length(harness_t* h);
+int test_tia_grp_immediate_effect_on_scanline(harness_t* h);
+int test_tia_color_register_bit0_ignored(harness_t* h);
+int test_tia_ball_color_in_score_mode(harness_t* h);
+int test_tia_missile_width_all_copies(harness_t* h);
+int test_tia_hmove_blanking_clears_each_scanline(harness_t* h);
+int test_tia_resp_visible_exact_position(harness_t* h);
+int test_tia_vblank_dump_paddle_capacitors(harness_t* h);
+int test_tia_collision_all_15_pairs(harness_t* h);
+
+// --- RIOT advanced ---
+int test_riot_address_mirror_aliasing(harness_t* h);
+int test_riot_timer_write_clears_underflow(harness_t* h);
+int test_riot_ram_read_write_via_io(harness_t* h);
+
 } // namespace a2600_test
