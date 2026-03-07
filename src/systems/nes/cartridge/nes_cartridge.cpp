@@ -249,4 +249,42 @@ void Cartridge::reset() {
     }
 }
 
+// ============================================================================
+// ChipDebugRegistry
+// ============================================================================
+
+void Cartridge::register_debug_fields() {
+    static const char* const mirror_names[] = {
+        "Horizontal", "Vertical", "One-Screen (Lo)",
+        "One-Screen (Hi)", "Four-Screen"
+    };
+
+    debug_registry_
+        .category("Cartridge Info")
+        .value("Mapper", [this]() -> uint32_t { return mapper_id; })
+        .value("PRG Banks", [this]() -> uint32_t { return prg_banks; })
+        .value("CHR Banks", [this]() -> uint32_t { return chr_banks; })
+        .flag("Battery Backed", [this]() { return battery_backed; })
+
+        .category("Memory")
+        .value("PRG ROM (bytes)", [this]() -> uint32_t {
+            return static_cast<uint32_t>(prg_memory.size());
+        })
+        .value("CHR Size (bytes)", [this]() -> uint32_t {
+            return static_cast<uint32_t>(chr_memory.size());
+        })
+        .value("PRG RAM (bytes)", [this]() -> uint32_t {
+            return static_cast<uint32_t>(prg_ram.size());
+        })
+
+        .category("Mirroring")
+        .state("Mode", [this]() -> uint32_t {
+            return static_cast<uint32_t>(mirror_mode);
+        }, mirror_names, 5)
+
+        .category("Mapper State")
+        .flag("IRQ Active", [this]() { return mapper && mapper->irq_state(); })
+        .flag("CHR is RAM", [this]() { return mapper && mapper->chr_is_ram(); });
+}
+
 } // namespace nes_system

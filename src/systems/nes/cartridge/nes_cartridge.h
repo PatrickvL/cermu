@@ -51,14 +51,14 @@ public:
     /** Protected default constructor — allows direct construction for
      *  programmatic cartridge setup (e.g. NSF player). */
     Cartridge()
-        : ChipBase(ChipInfo{"Cartridge", "iNES ROM Cartridge", "Various"}) {}
+        : ChipBase(ChipInfo{"Cartridge", "iNES ROM Cartridge", "Various"}) {
+        register_debug_fields();
+    }
 
 public:
     virtual ~Cartridge() = default;
 
     // -- ChipBase GUI overrides (implemented in nes_cartridge_gui.cpp) --
-    bool has_debug_content() const override { return true; }
-    void render_debug_content() override;
 
     /** Parse iNES ROM from an already-loaded buffer.
      *  filepath_for_sram is stored for battery-backed SRAM persistence. */
@@ -191,6 +191,8 @@ private:
     std::string rom_filepath_;  // stored for SRAM path derivation
 
     std::unique_ptr<Mapper> mapper;
+
+    void register_debug_fields();
 };
 
 } // namespace nes_system
