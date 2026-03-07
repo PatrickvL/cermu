@@ -63,7 +63,7 @@ public:
     virtual bool has_debug_content() const { return !debug_registry_.empty(); }
     virtual bool has_settings_content() const { return false; }
     virtual bool has_layout_content() const { return false; }
-    virtual void render_debug_content() { debug_registry_.render(); }
+    virtual void render_debug_content();   // default: two-column layout + registry
     virtual void render_settings_content() {}
     virtual void render_layout_content() {}
 
