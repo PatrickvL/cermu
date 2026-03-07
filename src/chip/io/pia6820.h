@@ -21,13 +21,13 @@
  */
 
 struct pia6820_t : public ChipBase {
-    pia6820_t() : ChipBase(ChipInfo{"PIA6820", "Motorola"}) {}
+    pia6820_t() : ChipBase(ChipInfo{"PIA6820", "Motorola"}) {
+        register_debug_fields();
+    }
 
     // --- ChipBase GUI interface ---
     bool has_layout_content() const override;
     void render_layout_content()    override;
-    bool has_debug_content()  const override;
-    void render_debug_content()     override;
 
     // Port A registers
     uint8_t port_a_data;        // Data register (output latch)
@@ -88,4 +88,27 @@ private:
     void update_cb2_output_state();
     static uint8_t read_port_with_direction(uint8_t output_reg, uint8_t ddr,
                                             uint8_t (*read_cb)(void*), void* ud);
+
+    void register_debug_fields() {
+        debug_registry_
+            .category("Port A")
+            .port("Port A",
+                  std::function<uint32_t()>([this]() -> uint32_t { return port_a_data; }),
+                  std::function<uint32_t()>([this]() -> uint32_t { return port_a_direction; }))
+            .value("Control", [this]() -> uint32_t { return port_a_control; })
+            .flag("CA1", [this]() -> uint32_t { return ca1_state; })
+            .flag("CA2", [this]() -> uint32_t { return ca2_state; })
+            .flag("IRQ A1", [this]() -> uint32_t { return irq_a1; })
+            .flag("IRQ A2", [this]() -> uint32_t { return irq_a2; })
+
+            .category("Port B")
+            .port("Port B",
+                  std::function<uint32_t()>([this]() -> uint32_t { return port_b_data; }),
+                  std::function<uint32_t()>([this]() -> uint32_t { return port_b_direction; }))
+            .value("Control", [this]() -> uint32_t { return port_b_control; })
+            .flag("CB1", [this]() -> uint32_t { return cb1_state; })
+            .flag("CB2", [this]() -> uint32_t { return cb2_state; })
+            .flag("IRQ B1", [this]() -> uint32_t { return irq_b1; })
+            .flag("IRQ B2", [this]() -> uint32_t { return irq_b2; });
+    }
 };
