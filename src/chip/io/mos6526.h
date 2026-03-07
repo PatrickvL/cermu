@@ -54,7 +54,9 @@ enum mos6526_pin_t {
 #define IDDRB_OFFSET 29 // Internal Data Direction of Port B (a version of DDRB which includes the PBON mask)
 
 struct mos6526_t : public ChipBase {
-    mos6526_t() : ChipBase(ChipInfo{"MOS6526", "MOS Technology"}) {}
+    mos6526_t() : ChipBase(ChipInfo{"MOS6526", "MOS Technology"}) {
+        register_debug_fields();
+    }
 
     uint8_t configured_interrupt_bit = 0; // BUS_IRQ_BIT for CIA1, BUS_NMI_BIT for CIA2
     
@@ -137,10 +139,8 @@ struct mos6526_t : public ChipBase {
     DelayLine delay_line;
 
     // --- ChipBase interface ---
-    bool has_debug_content()    const override;
     bool has_settings_content() const override;
     bool has_layout_content()   const override;
-    void render_debug_content()    override;
     void render_settings_content() override;
     void render_layout_content()   override;
 
@@ -176,6 +176,64 @@ private:
     void increase_tod_and_check_alarm();
     void write_serial_data_register(uint8_t v);
     void process_sdr_pipeline();  // Process SDR delay pipeline each tick
+
+    void register_debug_fields() {
+        static constexpr const char* icr_labels[] = {
+            "IRQ", "unused", "unused", "FLG", "SP", "ALRM", "TB", "TA"
+        };
+
+        debug_registry_.set_registers(reg, CIA_REGS_SIZE);
+
+        // --- Data Ports ---
+        // PRA=reg[0], PRB=reg[1], DDRA=reg[2], DDRB=reg[3]
+        debug_registry_.category("Data Ports")
+            .port("Port A",
+                  std::function<uint32_t()>([this]() -> uint32_t { return reg[0]; }),
+                  std::function<uint32_t()>([this]() -> uint32_t { return reg[2]; }))
+            .port("Port B",
+                  std::function<uint32_t()>([this]() -> uint32_t { return reg[1]; }),
+                  std::function<uint32_t()>([this]() -> uint32_t { return reg[3]; }));
+
+        // --- Timers ---
+        // Timer latches: TIMER_OFFSET = 16 - 4 = 12, so latch A at reg[16..17], latch B at reg[18..19]
+        debug_registry_.category("Timers")
+            .timer("Timer A",
+                   std::function<uint32_t()>([this]() -> uint32_t { return timer_counter_[0]; }),
+                   std::function<uint32_t()>([this]() -> uint32_t {
+                       return (reg[17] << 8) | reg[16]; }),
+                   std::function<uint32_t()>([this]() -> uint32_t { return reg[14] & 0x01; }))
+            .timer("Timer B",
+                   std::function<uint32_t()>([this]() -> uint32_t { return timer_counter_[1]; }),
+                   std::function<uint32_t()>([this]() -> uint32_t {
+                       return (reg[19] << 8) | reg[18]; }),
+                   std::function<uint32_t()>([this]() -> uint32_t { return reg[15] & 0x01; }));
+
+        // --- TOD Clock ---
+        // TOD_10THS=8, TOD_SEC=9, TOD_MIN=10, TOD_HR=11
+        debug_registry_.category("Time of Day Clock", false)
+            .value("TOD 10ths",   static_cast<uint16_t>(8))
+            .value("TOD Seconds", static_cast<uint16_t>(9))
+            .value("TOD Minutes", static_cast<uint16_t>(10))
+            .value("TOD Hours",   static_cast<uint16_t>(11));
+
+        // --- Interrupt Control ---
+        // ICR=reg[13]
+        debug_registry_.category("Interrupt Control")
+            .bitfield("ICR", [this]() -> uint32_t { return reg[13]; }, 8, icr_labels)
+            .value("Interrupt Mask", [this]() -> uint32_t { return interrupt_mask; })
+            .flag("IRQ Active", [this]() -> uint32_t { return (reg[13] & 0x80) ? 1u : 0u; });
+
+        // --- Serial Data ---
+        // SDR=reg[12]
+        debug_registry_.category("Serial Data", false)
+            .value("SDR", static_cast<uint16_t>(12));
+
+        // --- Control Registers ---
+        // CRA=reg[14], CRB=reg[15]
+        debug_registry_.category("Control Registers", false)
+            .value("CRA", static_cast<uint16_t>(14))
+            .value("CRB", static_cast<uint16_t>(15));
+    }
 };
 
 namespace MOS6526 {
