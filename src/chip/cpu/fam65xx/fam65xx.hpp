@@ -2017,9 +2017,9 @@ private:
         "NVuBDIZC", "nvubdizc", 8);
 
     if constexpr (Traits.has(CPUCoreFlags::C816_16BIT)) {
-      r.address("Direct Page", +[](const ChipBase* c) -> uint32_t { return 0; }, 16);
-      r.value("Data Bank", +[](const ChipBase* c) -> uint32_t { return 0; }, 8);
-      r.value("Program Bank", +[](const ChipBase* c) -> uint32_t { return 0; }, 8);
+      r.address("Direct Page", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_D); }, 16);
+      r.value("Data Bank", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_DBR); }, 8);
+      r.value("Program Bank", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->get(REG_PBR); }, 8);
     }
 
     // ---- Internal State ----

@@ -1529,6 +1529,8 @@ void ted7360_t::register_debug_fields() {
             gfx_mode_names, 8);
 
     // ---- Timers ----
+    // TED timers have no enable/disable bit — they always decrement every CPU cycle.
+    // The running_src lambda returns a constant 1 to reflect this hardware behavior.
     r.category("Timers")
      .timer("Timer 1",
          +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->timer1.counter; },
