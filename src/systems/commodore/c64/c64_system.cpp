@@ -549,6 +549,8 @@ void C64System::shutdown() {
     }
     owned_devices_.clear();
     connector_ports_.clear();
+    registered_chips_.clear();
+    owned_chip_adapters_.clear();
 
     // Free any pending load that was never applied
     if (pending_load_.active) {

@@ -344,6 +344,10 @@ bool PETSystem::initialize() {
 
 void PETSystem::shutdown() {
     printf("PET: Shutting down system\n");
+    registered_chips_.clear();
+    owned_chip_adapters_.clear();
+    connector_ports_.clear();
+    owned_devices_.clear();
 }
 
 void PETSystem::reset() {
