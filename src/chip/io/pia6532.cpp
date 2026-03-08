@@ -13,13 +13,9 @@ void pia6532_t::init() {
 
 void pia6532_t::reset() {
     memset(ram, 0, sizeof(ram));
+    memset(regs_, 0, sizeof(regs_));
 
-    port_a_data  = 0x00;
-    port_a_ddr   = 0x00;
     port_a_input = 0xFF;
-
-    port_b_data  = 0x00;
-    port_b_ddr   = 0x00;
     port_b_input = 0xFF;
 
     timer_value   = 0xFF;
