@@ -139,8 +139,7 @@ void tia_t::reset() {
     audio[0] = {};
     audio[1] = {};
 
-    audio_write_pos = 0;
-    audio_read_pos = 0;
+    audio_buffer_.reset();
     audio_cycle_counter = 0;
 }
 
@@ -164,17 +163,11 @@ void tia_t::set_audio_sample_rate(int sample_rate_hz) {
 }
 
 uint32_t tia_t::audio_available() const {
-    return (audio_write_pos - audio_read_pos) & 4095;
+    return static_cast<uint32_t>(audio_buffer_.available());
 }
 
 uint32_t tia_t::audio_read(float* buffer, uint32_t max_samples) {
-    uint32_t available = audio_available();
-    uint32_t count = std::min(available, max_samples);
-    for (uint32_t i = 0; i < count; ++i) {
-        buffer[i] = audio_ring_buffer[audio_read_pos & 4095];
-        audio_read_pos = (audio_read_pos + 1) & 4095;
-    }
-    return count;
+    return static_cast<uint32_t>(audio_buffer_.read(buffer, max_samples));
 }
 
 void tia_t::tick_audio_channel(int ch_idx) {
@@ -582,8 +575,7 @@ void tia_t::tick_cpu_cycle() {
             sample *= 0.5f;  // Average the two channels
             sample = std::max(-1.0f, std::min(1.0f, sample));
 
-            audio_ring_buffer[audio_write_pos & 4095] = sample;
-            audio_write_pos = (audio_write_pos + 1) & 4095;
+            audio_buffer_.write(&sample, 1);
         }
     }
 }
