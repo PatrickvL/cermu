@@ -83,8 +83,8 @@ const uint32_t tia_t::ntsc_palette[128] = {
 // ============================================================================
 
 bool tia_t::has_collision(uint8_t px_a, uint8_t px_b) const {
-    // px_a and px_b are single PX_* bits; __builtin_ctz gives the bit index.
-    return (cx[__builtin_ctz(px_a)] & px_b) != 0;
+    // px_a and px_b are single PX_* bits; cermu_ctz gives the bit index.
+    return (cx[cermu_ctz(px_a)] & px_b) != 0;
 }
 
 // ============================================================================

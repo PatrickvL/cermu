@@ -207,30 +207,30 @@ struct tia_t : public ChipBase {
     // ========================================================================
 
     // Per-object pixel bitmask constants.
+    // Per-object collision accumulators (one per graphical object).
+    // cx[i] records the OR of all pixel_bits values seen when object i was
+    // active. Testing a collision pair (A, B) is: cx[cermu_ctz(A)] & B.
+    // Replaces the old 15-bit collision word + 64-entry LUT.
+    static constexpr int CX_M0 = 0; // Missile 0
+    static constexpr int CX_M1 = 1; // Missile 1
+    static constexpr int CX_P0 = 2; // Player 0
+    static constexpr int CX_P1 = 3; // Player 1
+    static constexpr int CX_BL = 4; // Ball
+    static constexpr int CX_PF = 5; // Playfield
+    uint8_t cx[6] = {};
+
     // Pixel test functions return these directly (or 0), so the caller
     // can OR return values together into a single pixel_bits byte.
     // Bit positions are chosen so that collision read registers for the
     // four "FB" pairs (P0-PF/BL, P1-PF/BL, M0-PF/BL, M1-PF/BL) can be
     // extracted with a single (cx[i] & 0x30) << 2, and CXM0P uses
     // (cx[0] & 0x0C) << 4.
-    static constexpr uint8_t PX_M0 = 1 << 0; // Missile 0
-    static constexpr uint8_t PX_M1 = 1 << 1; // Missile 1
-    static constexpr uint8_t PX_P0 = 1 << 2; // Player 0
-    static constexpr uint8_t PX_P1 = 1 << 3; // Player 1
-    static constexpr uint8_t PX_BL = 1 << 4; // Ball
-    static constexpr uint8_t PX_PF = 1 << 5; // Playfield
-
-    // Per-object collision accumulators (one per PX_* bit position).
-    // cx[i] records the OR of all pixel_bits values seen when object i was
-    // active. Testing a collision pair (A, B) is: cx[bit_index(A)] & B.
-    // Replaces the old 15-bit collision word + 64-entry LUT.
-    static constexpr int CX_M0 = 0;
-    static constexpr int CX_M1 = 1;
-    static constexpr int CX_P0 = 2;
-    static constexpr int CX_P1 = 3;
-    static constexpr int CX_BL = 4;
-    static constexpr int CX_PF = 5;
-    uint8_t cx[6] = {};
+    static constexpr uint8_t PX_M0 = 1 << CX_M0; // Missile 0 mask
+    static constexpr uint8_t PX_M1 = 1 << CX_M1; // Missile 1 mask
+    static constexpr uint8_t PX_P0 = 1 << CX_P0; // Player 0 mask
+    static constexpr uint8_t PX_P1 = 1 << CX_P1; // Player 1 mask
+    static constexpr uint8_t PX_BL = 1 << CX_BL; // Ball mask
+    static constexpr uint8_t PX_PF = 1 << CX_PF; // Playfield mask
 
     /// Test whether two objects have collided.
     bool has_collision(uint8_t px_a, uint8_t px_b) const;

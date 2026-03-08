@@ -190,6 +190,33 @@
 #endif
 
 /* ========================================================================== */
+/* COUNT TRAILING ZEROS */
+/* ========================================================================== */
+
+/* Cross-platform count-trailing-zeros for unsigned 32-bit values.
+ * Undefined when x == 0 (matches hardware CTZ behavior). */
+#if defined(_MSC_VER)
+    #include <intrin.h>
+    static inline int cermu_ctz(unsigned int x) {
+        unsigned long idx;
+        _BitScanForward(&idx, x);
+        return (int)idx;
+    }
+#elif defined(__GNUC__) || defined(__clang__)
+    #define cermu_ctz(x) __builtin_ctz(x)
+#else
+    static inline int cermu_ctz(unsigned int x) {
+        int n = 0;
+        if (!(x & 0x0000FFFF)) { n += 16; x >>= 16; }
+        if (!(x & 0x000000FF)) { n +=  8; x >>=  8; }
+        if (!(x & 0x0000000F)) { n +=  4; x >>=  4; }
+        if (!(x & 0x00000003)) { n +=  2; x >>=  2; }
+        if (!(x & 0x00000001)) { n +=  1; }
+        return n;
+    }
+#endif
+
+/* ========================================================================== */
 /* REGISTER CALLING CONVENTIONS */
 /* ========================================================================== */
 
