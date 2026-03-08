@@ -1,7 +1,9 @@
 #pragma once
 
 #include "cermu.h"  // Compiler compatibility macros
+#ifdef CERMU_HAS_CHIP_DEBUG
 #include "chip_debug_registry.h"
+#endif
 #include "component_info.h"
 #include <cstdint>
 #include <memory>
@@ -65,6 +67,7 @@ public:
     // --- GUI content rendering (optional — defaults to nothing) ---
     // Content-only: renders chip info WITHOUT ImGui::Begin/End window framing.
     // The caller (Hardware menu submenu or detached window) provides the window.
+#ifdef CERMU_HAS_GUI
     virtual bool has_debug_content() const { return !debug_registry_.empty(); }
     virtual bool has_settings_content() const { return false; }
     virtual void render_debug_content();   // default: two-column layout + registry
@@ -79,10 +82,13 @@ public:
     virtual const char* get_layout_chip_name() const;
     bool has_layout_content() const { return get_chip_layout() != nullptr; }
     virtual void render_layout_content();
+#endif
 
     // --- Debug field registry (semantic data description) ---
     // Chips populate this at construction time.  The renderer reads it.
+#ifdef CERMU_HAS_CHIP_DEBUG
     ChipDebugRegistry debug_registry_;
+#endif
 
     // Bus state snapshot — stores the bus state at the end of each tick.
     // Used by the emulation loop for edge detection (A12, NMI) and

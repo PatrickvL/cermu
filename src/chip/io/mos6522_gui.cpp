@@ -134,10 +134,9 @@ static const char* mos6522_get_via_name(const mos6522_t* via) {
 // MOS6522 VIA GUI SETTINGS
 // ============================================================================
 
+#ifdef CERMU_HAS_GUI
 void mos6522_t::render_settings_content() {
     mos6522_t* via = this;
-
-#ifdef CERMU_HAS_GUI
     const char* via_name = mos6522_get_via_name(via);
 
     ImGui::Text("Versatile Interface Adapter - %s Configuration", via_name);
@@ -172,8 +171,8 @@ void mos6522_t::render_settings_content() {
                         is_output ? "OUT" : "IN");
         }
     }
-#endif
 }
+#endif // CERMU_HAS_GUI
 
 // ============================================================================
 // MOS6522 VIA layout virtuals

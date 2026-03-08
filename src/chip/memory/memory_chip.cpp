@@ -71,7 +71,7 @@ MemoryChip::MemoryChip(ChipInfo     info,
     }
     display_name_ = display_name_buf_.c_str();
 
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
     register_debug_fields();
 #endif
 }
@@ -323,6 +323,7 @@ std::vector<PinSignalState> MemoryChip::get_layout_pin_states(ChipLayout& layout
 
 #endif // CERMU_HAS_GUI
 
+#ifdef CERMU_HAS_CHIP_DEBUG
 void MemoryChip::register_debug_fields() {
     static const char* const type_names[] = {"RAM", "ROM", "PROM", "EPROM", "SRAM"};
     using M = const MemoryChip;
@@ -348,3 +349,4 @@ void MemoryChip::register_debug_fields() {
                 },
                 base_address_, 256);
 }
+#endif // CERMU_HAS_CHIP_DEBUG

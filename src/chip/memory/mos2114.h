@@ -28,9 +28,9 @@ public:
     ~MOS2114() override = default;
 
     // --- ChipBase interface ---
+#ifdef CERMU_HAS_GUI
     bool has_settings_content() const override;
     void render_settings_content() override;
-#ifdef CERMU_HAS_GUI
     ChipLayout* get_chip_layout() const override;
     std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
 #endif
@@ -40,5 +40,7 @@ public:
     static bus_state_t bus_write(void* context, bus_state_t bus_state);
 
 private:
+#ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields();
+#endif
 };

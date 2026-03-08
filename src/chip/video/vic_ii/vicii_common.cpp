@@ -2591,7 +2591,7 @@ void vicii_t::init(const vicii_chip_config_t* config, void (*bank_change)(void*,
     info_ = ChipInfo{pal ? "MOS6569" : "MOS6567", "MOS Technology"};
     vicii_initialize(this);
     vicii_initialize_timing(this, config);
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
     register_debug_fields();
 #endif
 }
@@ -2658,6 +2658,7 @@ void vicii_t::set_framebuffer(uint32_t* framebuffer, int width, int height) {
 // two-column debug layout provided by ChipBase)
 // ============================================================================
 
+#ifdef CERMU_HAS_CHIP_DEBUG
 void vicii_t::register_debug_fields() {
     using VI = const vicii_t;
     auto& r = debug_registry_;
@@ -2723,3 +2724,4 @@ void vicii_t::register_debug_fields() {
          return (ecm << 2) | (bmm << 1) | mcm;
      }, screen_mode_names, 8);
 }
+#endif // CERMU_HAS_CHIP_DEBUG

@@ -215,11 +215,11 @@ static ChipLayout& get_pla_layout() {
 
 #endif // CERMU_HAS_GUI (helper functions)
 
+#ifdef CERMU_HAS_GUI
 void PlaChip::render_debug_content() {
     C64System* c64 = c64_;
     if (!c64) return;
 
-#ifdef CERMU_HAS_GUI
     // PLA is combinational logic — no tick function — snapshot bus state at render time
     bus_snapshot_ = c64->bus.state;
     // Create two-column layout: chip visualization on left, debugging info on right
@@ -596,18 +596,18 @@ void PlaChip::render_debug_content() {
         }
     }
     ImGui::EndChild();
-#endif
 }
+#endif // CERMU_HAS_GUI
 
 // ============================================================================
 // PLA GUI SETTINGS WINDOW
 // ============================================================================
 
+#ifdef CERMU_HAS_GUI
 void PlaChip::render_settings_content() {
     C64System* c64 = c64_;
     if (!c64) return;
 
-#ifdef CERMU_HAS_GUI
 
     // Show PLA information
     ImGui::Text("Programmable Logic Array - C64 PLA Configuration");
@@ -634,8 +634,8 @@ void PlaChip::render_settings_content() {
     ImGui::Text("CHAREN: %s", (current_mode & 0x04) ? "High" : "Low");
     ImGui::Text("EXROM: %s", (current_mode & 0x08) ? "High" : "Low");
     ImGui::Text("GAME: %s", (current_mode & 0x10) ? "High" : "Low");
-#endif
 }
+#endif // CERMU_HAS_GUI
 
 // ============================================================================
 // PLA layout virtuals
@@ -670,6 +670,7 @@ std::vector<PinSignalState> PlaChip::get_layout_pin_states(ChipLayout& layout) {
 // because they require ImGui controls (checkboxes, tabs, tables) that the
 // registry cannot represent.
 
+#ifdef CERMU_HAS_CHIP_DEBUG
 void PlaChip::register_debug_fields() {
     using P = const PlaChip;
     debug_registry_
@@ -699,3 +700,4 @@ void PlaChip::register_debug_fields() {
             return self->c64_ && (self->c64_->bus.pla_banking_mode & 0x10) == 0;
         });
 }
+#endif // CERMU_HAS_CHIP_DEBUG

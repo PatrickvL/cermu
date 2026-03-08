@@ -801,7 +801,7 @@ ted7360_t::ted7360_t(const ted7360_desc_t& desc) {
     pixel.color_line = new uint8_t[TED_VISIBLE_WIDTH]();
 
     reset();
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
     register_debug_fields();
 #endif
 }
@@ -1483,6 +1483,7 @@ void ted7360_t::set_framebuffer(uint32_t* buffer, int width, int height) {
 // two-column debug layout provided by ChipBase)
 // ============================================================================
 
+#ifdef CERMU_HAS_CHIP_DEBUG
 void ted7360_t::register_debug_fields() {
     using TD = const ted7360_t;
     auto& r = debug_registry_;
@@ -1598,3 +1599,4 @@ void ted7360_t::register_debug_fields() {
      .color("BG3 ($FF18)", TED_REG_COLOR_BG3, palette, 128)
      .color("Border ($FF19)", TED_REG_BORDER, palette, 128);
 }
+#endif // CERMU_HAS_CHIP_DEBUG

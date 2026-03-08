@@ -873,7 +873,7 @@ public:
     dmc.is_pal = pal;
     frame.is_pal = pal;
     reset_to_power_up_state();
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
     register_debug_fields();
 #endif
   }
@@ -1158,14 +1158,15 @@ public:
   bool irq() const { return frame.irq_flag || dmc.irq_flag; }
 
   // --- ChipBase interface ---
+#ifdef CERMU_HAS_GUI
   bool has_settings_content() const override;
   void render_settings_content() override;
-#ifdef CERMU_HAS_GUI
   ChipLayout* get_chip_layout() const override;
   std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
 #endif
 
 private:
+#ifdef CERMU_HAS_CHIP_DEBUG
   void register_debug_fields() {
     using AP = const APU;
     auto& r = debug_registry_;
@@ -1284,6 +1285,7 @@ private:
         return s < 0.0f ? -s : s;
     });
   }
+#endif
 };
 
 } // namespace nes6502_apu

@@ -102,9 +102,9 @@ static ChipLayout& get_ppu_layout(bool pal) {
 // ChipBase interface implementation
 // ============================================================================
 
-bool nes_system::PPU::has_settings_content() const { return true; }
-
 #ifdef CERMU_HAS_GUI
+
+bool nes_system::PPU::has_settings_content() const { return true; }
 
 ChipLayout* nes_system::PPU::get_chip_layout() const {
     return &get_ppu_layout(is_pal);
@@ -124,10 +124,9 @@ const char* nes_system::PPU::get_layout_chip_name() const {
 // NES PPU GUI SETTINGS
 // ============================================================================
 
+#ifdef CERMU_HAS_GUI
 void nes_system::PPU::render_settings_content() {
     auto* ppu = this;
-
-#ifdef CERMU_HAS_GUI
 
     ImGui::Text("Ricoh %s PPU Configuration", ppu->is_pal ? "2C07" : "2C02");
     ImGui::Separator();
@@ -143,5 +142,5 @@ void nes_system::PPU::render_settings_content() {
         ImGui::Text("OAM:     %zu bytes", ppu->oam.size());
         ImGui::Text("Palette: %zu bytes", ppu->palette.size());
     }
-#endif
 }
+#endif // CERMU_HAS_GUI

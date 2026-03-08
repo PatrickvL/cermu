@@ -89,10 +89,9 @@ static ChipLayout& get_sid_layout() {
 // MOS6581 SID GUI SETTINGS WINDOW
 // ============================================================================
 // Class method implementation
+#ifdef CERMU_HAS_GUI
 void mos6581_t::render_settings_content() {
     mos6581_t* sid = this;
-    
-#ifdef CERMU_HAS_GUI
 
     ImGui::Text("SID Configuration");
     ImGui::Separator();
@@ -208,8 +207,8 @@ void mos6581_t::render_settings_content() {
 
     // Reset to single column at the end
     ImGui::Columns(1, nullptr, false);
-#endif
 }
+#endif // CERMU_HAS_GUI
 
 // ============================================================================
 // MOS6581 SID layout virtuals

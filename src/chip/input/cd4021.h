@@ -35,7 +35,7 @@ public:
     CD4021()
         : ChipBase(ChipInfo{"CD4021", "8-Bit Static Shift Register", "Texas Instruments"}) {
         reset();
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
     }
@@ -83,6 +83,7 @@ public:
 private:
     uint8_t shift_register_ = 0;
 
+#ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
         using CD = const CD4021;
         static const char* const bit_labels[] = {
@@ -93,4 +94,5 @@ private:
             .value("Shift Register", +[](const ChipBase* c) -> uint32_t { return static_cast<CD*>(c)->shift_register_; })
             .bitfield("Bits", +[](const ChipBase* c) -> uint32_t { return static_cast<CD*>(c)->shift_register_; }, 8, bit_labels);
     }
+#endif
 };

@@ -862,6 +862,7 @@ void PPU::connect_cartridge(Cartridge* cartridge) {
 // PPU — Debug field registration (ChipDebugRegistry)
 // ============================================================================
 
+#ifdef CERMU_HAS_CHIP_DEBUG
 void PPU::register_debug_fields() {
     using P = const PPU;
     auto& r = debug_registry_;
@@ -942,5 +943,6 @@ void PPU::register_debug_fields() {
         return {static_cast<P*>(c)->palette.data(), static_cast<P*>(c)->palette.size()};
     }, 0x3F00, 32);
 }
+#endif // CERMU_HAS_CHIP_DEBUG
 
 } // namespace nes_system

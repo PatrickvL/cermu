@@ -600,6 +600,7 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
 // two-column debug layout provided by ChipBase)
 // ============================================================================
 
+#ifdef CERMU_HAS_CHIP_DEBUG
 void vic_base_t::register_debug_fields() {
     using V = const vic_base_t;
     auto& r = debug_registry_;
@@ -665,3 +666,4 @@ void vic_base_t::register_debug_fields() {
      .indent(1)
      .color("Aux Color", +[](const ChipBase* c) -> uint32_t { return (static_cast<V*>(c)->registers[VIC_REG_AUX_COLOR] & VIC_AUX_COLOR_MASK) >> VIC_AUX_COLOR_SHIFT; }, palette, 16);
 }
+#endif // CERMU_HAS_CHIP_DEBUG

@@ -282,3 +282,13 @@ static inline uint8_t bitmix(uint8_t a, uint8_t b, uint8_t mask) {
     return b ^ ((a ^ b) & mask);
 }
 #endif
+
+/* ========================================================================== */
+/* FEATURE FLAGS — AUTOMATIC IMPLICATIONS                                     */
+/* ========================================================================== */
+
+/* GUI builds always include chip-debug instrumentation (registry, fields).
+   Headless-debug builds may define CERMU_HAS_CHIP_DEBUG independently. */
+#if defined(CERMU_HAS_GUI) && !defined(CERMU_HAS_CHIP_DEBUG)
+    #define CERMU_HAS_CHIP_DEBUG
+#endif

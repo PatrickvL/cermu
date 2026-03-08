@@ -70,7 +70,7 @@ static constexpr int MC6845_NUM_REGISTERS = 18;
 
 struct mc6845_t : public ChipBase {
     mc6845_t() : ChipBase(ChipInfo{"MC6845", "Motorola"}) {
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
     }
@@ -193,6 +193,7 @@ struct mc6845_t : public ChipBase {
     }
 
 private:
+#ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
         using M = const mc6845_t;
         static constexpr const char* reg_names[MC6845_NUM_REGISTERS] = {
@@ -251,4 +252,5 @@ private:
         debug_registry_.category("Frame", false)
             .value("Frame Count",   +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->frame_count; }, 32);
     }
+#endif
 };

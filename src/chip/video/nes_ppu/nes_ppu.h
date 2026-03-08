@@ -226,7 +226,7 @@ public:
 
         build_palette_cache(is_pal, palette_cache_);
         reset();
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
     }
@@ -414,16 +414,18 @@ private:
 
     // --- ChipBase interface ---
 public:
+#ifdef CERMU_HAS_GUI
     bool has_settings_content() const override;
     void render_settings_content() override;
-#ifdef CERMU_HAS_GUI
     ChipLayout* get_chip_layout() const override;
     std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
     const char* get_layout_chip_name() const override;
 #endif
 
 private:
+#ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields();
+#endif
 };
 
 } // namespace nes_system
