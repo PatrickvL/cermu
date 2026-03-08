@@ -103,5 +103,6 @@ private:
     // ── Internal helpers ─────────────────────────────────────────────────
     bus_state_t mem_tick(bus_state_t pins);
     bus_state_t io_tick(bus_state_t pins);
-    bool load_roms();
+    void        render_frame();   // Render one complete video frame to framebuffer_
+    bool        load_roms();
 };
