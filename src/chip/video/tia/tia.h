@@ -24,6 +24,7 @@
  */
 
 #include "../../core/chip.h"
+#include "../../utils/ring_buffer.hpp"
 #include "../video_pixel_unit.h"
 #include <cstdint>
 
@@ -242,9 +243,7 @@ struct tia_t : public ChipBase {
     tia_audio_channel_t audio[2];
 
     // Audio output ring buffer (float [-1, 1])
-    float    audio_ring_buffer[4096] = {};
-    uint32_t audio_write_pos = 0;
-    uint32_t audio_read_pos  = 0;
+    AudioRingBuffer audio_buffer_{4096};
     uint32_t audio_cycle_counter = 0;
     uint32_t audio_cycles_per_sample = 0;     // CPU cycles per audio sample
 

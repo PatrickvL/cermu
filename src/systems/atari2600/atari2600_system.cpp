@@ -437,8 +437,7 @@ bool Atari2600System::load_file(const char* filepath) {
         }
 
         // Flush stale audio from the ring buffer
-        tia_.audio_write_pos = 0;
-        tia_.audio_read_pos  = 0;
+        tia_.audio_buffer_.reset();
     }
 
     return true;
