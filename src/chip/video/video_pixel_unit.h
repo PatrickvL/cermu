@@ -61,15 +61,4 @@ struct VideoPixelUnit {
             row_ptr[x] = palette[color_line[x]];
         }
     }
-
-    // Fill an entire framebuffer row with a solid RGBA color.
-    inline void fill_line(int row, uint32_t color) const {
-        if (!framebuffer) return;
-        if (row < 0 || row >= fb_height) return;
-
-        uint32_t* const row_ptr = framebuffer + row * fb_width;
-        for (int x = 0; x < fb_width; ++x) {
-            row_ptr[x] = color;
-        }
-    }
 };

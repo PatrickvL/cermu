@@ -689,19 +689,11 @@ static inline int vicii_raster_to_fb_row(const vicii_t* vicii, uint16_t raster) 
 void vicii_pixel_flush_line(vicii_t* vicii, const uint32_t* palette, int y) {
     if (!palette) return;
     
-    vicii_pixel_unit_t* pixel = &vicii->pixel;
-    const uint8_t border_color_index = vicii->registers.data[VICII_EC]; // Already masked to 4 bits on write
-    const uint32_t border_color = palette[border_color_index];
-    
-    // Fill entire line with border color first (safety fallback if color_line is null/short)
-    pixel->fill_line(y, border_color);
-    
-    // VIC-II writes directly to its framebuffer without any offset.
-    // The GUI layer handles centering by copying vicii_buffer (403x284)
-    // to the centered position in screen_buffer (512x384).
-    // VIC-II fb_width should match visible_pixels_per_line (403 for PAL).
-    pixel->flush_indexed_line(y, palette,
-                              vicii->config->visible_pixels_per_line);
+    // color_line is pre-filled with border_color_index at line start
+    // (vicii_line_buffer_reset), then overwritten by per-cycle rendering
+    // for content/sprite pixels.  Flush the full visible width.
+    vicii->pixel.flush_indexed_line(y, palette,
+                                    vicii->config->visible_pixels_per_line);
 }
 
 static inline void vicii_pixel_set_framebuffer(vicii_pixel_unit_t* pixel, uint32_t* framebuffer, 
