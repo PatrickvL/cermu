@@ -332,6 +332,15 @@ void NintendoSystem<V>::shutdown() {
         cpu_ = nullptr;
     }
 
+    // Release shared chips before base clears registered_chips_ — the
+    // PPU and Cartridge are registered as borrowed ChipBase* pointers,
+    // so they must outlive the registration entries or be released first.
+    // Cartridge's mapper pointers reference the unified buffer which
+    // bus_.init() will reallocate on re-initialize, so the cartridge is
+    // stale anyway.
+    ppu_.reset();
+    cartridge_.reset();
+
     initialized_ = false;
     system_ready_ = false;
 
