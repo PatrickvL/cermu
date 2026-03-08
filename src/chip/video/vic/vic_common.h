@@ -4,6 +4,7 @@
 
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
+#include "../video_pixel_unit.h"
 
 // VIC Register indices
 #define VIC_REG_CONTROL1 0x00         // Interlace | ScreenOriginX
@@ -236,13 +237,11 @@ struct vic_base_t : public ChipBase {
     // Video state
     uint8_t current_line[40] = {};
     uint8_t color_ram[1024] = {};
-    uint32_t pixel_line_buffer[VIC_MAX_LINE_WIDTH] = {};  // Max line width for rendering
+    uint8_t color_line_buffer[VIC_MAX_LINE_WIDTH] = {};  // Per-pixel palette index buffer
     int pixel_line_index = 0;
 
-    // Framebuffer
-    uint32_t* framebuffer = nullptr;
-    int framebuffer_width = 0;
-    int framebuffer_height = 0;
+    // Pixel output unit (framebuffer + shared flush)
+    VideoPixelUnit pixel;
 
     // Configuration
     bool is_pal = false;

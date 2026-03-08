@@ -332,8 +332,8 @@ int main(int argc, char** argv) {
             
             // ===== FRAMEBUFFER SCAN =====
             // Scan entire framebuffer to find non-black rows
-            int fb_w = c64->vicii->pixel.framebuffer_width;
-            int fb_h = c64->vicii->pixel.framebuffer_height;
+            int fb_w = c64->vicii->pixel.fb_width;
+            int fb_h = c64->vicii->pixel.fb_height;
             printf("\nFramebuffer size: %dx%d\n", fb_w, fb_h);
             printf("Scanning for non-black rows (showing first non-bg pixel per row):\n");
             int shown_rows = 0;

@@ -710,15 +710,9 @@ void ted7360_t::flush_line(uint16_t raster_line) {
     // Rasters wrap: PAL first_visible=275, so raster 275→row 0, 0→row 37, etc.
     const int fb_row = (raster_line + timing.lines_per_frame
                         - timing.first_visible_line) % timing.lines_per_frame;
-    if (fb_row >= pixel.fb_height) return;
 
-    const uint32_t* const palette = TED_PALETTE.data();
-    uint32_t* const fb_row_ptr = pixel.framebuffer + fb_row * pixel.fb_width;
-    const int width = std::min(pixel.fb_width, static_cast<int>(TED_VISIBLE_WIDTH));
-
-    for (int x = 0; x < width; ++x) {
-        fb_row_ptr[x] = palette[pixel.color_line[x]];
-    }
+    pixel.flush_indexed_line(fb_row, TED_PALETTE.data(),
+                             static_cast<int>(TED_VISIBLE_WIDTH));
 }
 
 // ============================================================================
@@ -1473,9 +1467,7 @@ bus_state_t ted7360_t::registers_write(bus_state_t bus_state) {
 // ============================================================================
 
 void ted7360_t::set_framebuffer(uint32_t* buffer, int width, int height) {
-    pixel.framebuffer = buffer;
-    pixel.fb_width    = width;
-    pixel.fb_height   = height;
+    pixel.set_framebuffer(buffer, width, height);
 }
 
 // ============================================================================

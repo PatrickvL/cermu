@@ -603,7 +603,15 @@ ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
         // Lazy pixel LUT rebuild — coalesces rapid palette/mask writes
         if (unlikely(!active_palette_)) rebuild_pixel_lut();
 
-        screen[(scanline * 256) + x] = pixel_lut_[((palette_val << 2) | pixel) & 0x1F];
+        // Store palette index in scanline buffer — deferred to flush at cycle 257.
+        scanline_color_line_[x] = ((palette_val << 2) | pixel) & 0x1F;
+    }
+
+    // Flush completed visible scanline to screen buffer.
+    // All 256 pixels (cycles 1-256) are now in scanline_color_line_.
+    if (scanline >= 0 && scanline < 240 && cycle == 257) {
+        if (unlikely(!active_palette_)) rebuild_pixel_lut();
+        scanline_pixel_.flush_indexed_line(scanline, pixel_lut_, 256);
     }
 
     // VBlank flag set — (scanline 241, dot 1)

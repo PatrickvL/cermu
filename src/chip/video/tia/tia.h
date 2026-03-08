@@ -24,6 +24,7 @@
  */
 
 #include "../../core/chip.h"
+#include "../video_pixel_unit.h"
 #include <cstdint>
 
 // ============================================================================
@@ -292,9 +293,8 @@ struct tia_t : public ChipBase {
     // FRAMEBUFFER
     // ========================================================================
 
-    uint32_t* framebuffer = nullptr;
-    int       fb_width  = 0;
-    int       fb_height = 0;
+    VideoPixelUnit pixel;
+    uint8_t color_line_buffer[tia_constants::DISPLAY_WIDTH] = {};
 
     // Pre-swizzled palette in ABGR format (GL_RGBA little-endian convention).
     // Built from ntsc_palette (ARGB) during init().

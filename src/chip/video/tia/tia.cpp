@@ -152,9 +152,8 @@ void tia_t::reset() {
 // ============================================================================
 
 void tia_t::set_framebuffer(uint32_t* buf, int w, int h) {
-    framebuffer = buf;
-    fb_width = w;
-    fb_height = h;
+    pixel.set_framebuffer(buf, w, h);
+    pixel.color_line = color_line_buffer;
 }
 
 // ============================================================================
@@ -393,12 +392,12 @@ bool tia_t::get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool enable
 void tia_t::render_pixel() {
     int x = h_counter - tia_constants::HBLANK_CLOCKS;
     if (x < 0 || x >= tia_constants::DISPLAY_WIDTH) return;
-    if (!framebuffer) return;
+    if (!pixel.framebuffer) return;
 
     // Use visible_row (tracks only non-VBLANK lines) so the first
     // visible scanline maps to framebuffer row 0.
     int row = visible_row;
-    if (row < 0 || row >= fb_height) return;
+    if (row < 0 || row >= pixel.fb_height) return;
 
     // Determine which objects are present at this pixel
     bool pf_pixel = get_playfield_pixel(x);
@@ -485,9 +484,9 @@ void tia_t::render_pixel() {
         }
     }
 
-    // Write pixel to framebuffer — color register upper 7 bits select palette entry.
-    // palette_rgba_[] is pre-swizzled from ARGB to ABGR (GL_RGBA LE convention).
-    framebuffer[row * fb_width + x] = palette_rgba_[(color >> 1) & 0x7F];
+    // Store palette index in scanline buffer — deferred to flush at end of scanline.
+    // Color register upper 7 bits select palette entry.
+    color_line_buffer[x] = (color >> 1) & 0x7F;
 }
 
 // ============================================================================
@@ -517,6 +516,12 @@ void tia_t::tick_color_clock() {
 
         // Clear HMOVE blanking at start of new scanline
         hmove_blank_active = false;
+
+        // Flush indexed scanline to framebuffer at end of visible line
+        if (!vblank_active && visible_row >= 0) {
+            pixel.flush_indexed_line(visible_row, palette_rgba_,
+                                     tia_constants::DISPLAY_WIDTH);
+        }
 
         // Track visible row for framebuffer mapping.
         if (!vblank_active) {
