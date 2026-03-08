@@ -37,6 +37,10 @@
 
 namespace spectrum_ula {
 
+    // ULA I/O register (port $FE is the only addressable register)
+    inline constexpr uint8_t PORT_FE        = 0x00;
+    inline constexpr uint8_t REG_COUNT      = 1;
+
     // Display dimensions
     inline constexpr int SCREEN_WIDTH      = 256;
     inline constexpr int SCREEN_HEIGHT     = 192;
@@ -91,6 +95,9 @@ public:
         : ChipBase(ChipInfo("6C001E-7", "Ferranti"))
     {
         category_ = "Video";
+#ifdef CERMU_HAS_CHIP_DEBUG
+        register_debug_fields();
+#endif
     }
 
     void init() {
@@ -105,6 +112,7 @@ public:
         ear_input_ = false;
         frame_int_pending_ = false;
         std::memset(keyboard_state_, 0xFF, sizeof(keyboard_state_));
+        regs_[spectrum_ula::PORT_FE] = 0x07;  // White border
     }
 
     void reset() { init(); }
@@ -113,6 +121,7 @@ public:
 
     /// Write to ULA I/O port ($FE)
     void write_port_fe(uint8_t data) {
+        regs_[spectrum_ula::PORT_FE] = data;
         border_color_ = data & spectrum_ula::BORDER_MASK;
         mic_output_   = (data & spectrum_ula::MIC_BIT) != 0;
         ear_output_   = (data & spectrum_ula::EAR_BIT) != 0;
@@ -196,6 +205,12 @@ public:
     int      scanline()      const { return scanline_; }
     int      t_state_pos()   const { return t_state_; }
 
+    // === ChipBase GUI virtuals ===
+#ifdef CERMU_HAS_GUI
+    ChipLayout* create_chip_layout() const override;
+    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+#endif
+
 private:
     uint8_t   border_color_ = 7;
     bool      flash_state_ = false;
@@ -214,4 +229,46 @@ private:
 
     // Keyboard matrix (8 half-rows × 5 keys, active-low)
     uint8_t   keyboard_state_[8]{};
+
+    // Register mirror
+    uint8_t   regs_[spectrum_ula::REG_COUNT]{};
+
+#ifdef CERMU_HAS_CHIP_DEBUG
+    void register_debug_fields() {
+        using S = const ferranti_ula_t;
+        auto& r = debug_registry_;
+        r.set_registers(regs_, spectrum_ula::REG_COUNT);
+
+        r.category("Port $FE Output");
+        r.value("Border Color", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<S*>(c)->border_color_;
+        }, 3);
+        r.flag("MIC", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<S*>(c)->mic_output_;
+        });
+        r.flag("EAR Out", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<S*>(c)->ear_output_;
+        });
+        r.flag("EAR In", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<S*>(c)->ear_input_;
+        });
+
+        r.category("Video Timing");
+        r.value("Scanline", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<S*>(c)->scanline_;
+        }, 9);
+        r.value("T-state", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<S*>(c)->t_state_;
+        }, 8);
+        r.value("Frame", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<S*>(c)->frame_counter_;
+        }, 32);
+        r.flag("Flash", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<S*>(c)->flash_state_;
+        });
+        r.flag("INT Pending", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<S*>(c)->frame_int_pending_;
+        });
+    }
+#endif
 };
