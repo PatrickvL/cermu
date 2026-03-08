@@ -17,7 +17,7 @@
 
 #include "../../core/emulated_system.h"
 #include "../../chip/cpu/fam65xx/mos6507.h"
-#include "../../chip/video/tia.h"
+#include "../../chip/video/tia/tia.h"
 #include "../../chip/io/pia6532.h"
 #include "mappers/a2600_mapper.h"
 #include "atari2600_constants.h"

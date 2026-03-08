@@ -280,8 +280,8 @@ set(IO_DIR ${SRC_DIR}/chip/io)
 add_executable(a2600_test_runner
     a2600_test_runner.cpp
     ${TESTING_DIR}/a2600_test_harness.cpp
-    ${VIDEO_DIR}/tia.cpp
-    ${VIDEO_DIR}/tia_gui.cpp
+    ${VIDEO_DIR}/tia/tia.cpp
+    ${VIDEO_DIR}/tia/tia_gui.cpp
     ${IO_DIR}/pia6532.cpp
     ${IO_DIR}/pia6532_gui.cpp
     ${CORE_DIR}/chip.cpp
