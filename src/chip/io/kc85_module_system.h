@@ -26,6 +26,24 @@
 #include "../../core/chip.h"
 #include <cstdint>
 #include <cstring>
+#include <cstdio>
+
+// ============================================================================
+// KC85 Module System Register Indices (slot control bytes)
+// ============================================================================
+
+namespace kc85_mod_regs {
+    // One control byte per slot
+    constexpr uint8_t SLOT0_CTRL = 0x00;
+    constexpr uint8_t SLOT1_CTRL = 0x01;
+    constexpr uint8_t SLOT2_CTRL = 0x02;
+    constexpr uint8_t SLOT3_CTRL = 0x03;
+    constexpr uint8_t SLOT4_CTRL = 0x04;
+    constexpr uint8_t SLOT5_CTRL = 0x05;
+    constexpr uint8_t SLOT6_CTRL = 0x06;
+    constexpr uint8_t SLOT7_CTRL = 0x07;
+    constexpr uint8_t REG_COUNT  = 8;
+} // namespace kc85_mod_regs
 
 // ============================================================================
 // KC85 Module Types
@@ -68,12 +86,16 @@ public:
         : ChipBase(ChipInfo("Module System", "VEB Mikroelektronik"))
     {
         category_ = "I/O";
+#ifdef CERMU_HAS_CHIP_DEBUG
+        register_debug_fields();
+#endif
     }
 
     void init() {
         for (auto& slot : slots_) {
             slot = {};
         }
+        update_regs();
     }
 
     void reset() {
@@ -115,6 +137,7 @@ public:
     void write_slot_control(int slot_idx, uint8_t data) {
         if (slot_idx >= MAX_SLOTS) return;
         slots_[slot_idx].control = data;
+        update_regs();
     }
 
     /// Get a slot (for address-space mapping by the system).
@@ -124,4 +147,61 @@ public:
 
 private:
     kc85_module_slot_t slots_[MAX_SLOTS]{};
+
+    // Register file mirror (slot control bytes)
+    uint8_t regs_[kc85_mod_regs::REG_COUNT]{};
+
+    void update_regs() {
+        for (int i = 0; i < MAX_SLOTS; ++i) {
+            regs_[i] = slots_[i].control;
+        }
+    }
+
+#ifdef CERMU_HAS_CHIP_DEBUG
+    void register_debug_fields() {
+        auto& r = debug_registry_;
+        r.set_registers(regs_, kc85_mod_regs::REG_COUNT);
+
+        // Use register offsets for slot control bytes + flag bits
+        r.category("Slot 0");
+        r.value("Control", static_cast<uint16_t>(kc85_mod_regs::SLOT0_CTRL), 8);
+        r.flag("Active", static_cast<uint16_t>(kc85_mod_regs::SLOT0_CTRL), 0);
+        r.flag("Write Prot", static_cast<uint16_t>(kc85_mod_regs::SLOT0_CTRL), 1);
+
+        r.category("Slot 1");
+        r.value("Control", static_cast<uint16_t>(kc85_mod_regs::SLOT1_CTRL), 8);
+        r.flag("Active", static_cast<uint16_t>(kc85_mod_regs::SLOT1_CTRL), 0);
+        r.flag("Write Prot", static_cast<uint16_t>(kc85_mod_regs::SLOT1_CTRL), 1);
+
+        r.category("Slot 2");
+        r.value("Control", static_cast<uint16_t>(kc85_mod_regs::SLOT2_CTRL), 8);
+        r.flag("Active", static_cast<uint16_t>(kc85_mod_regs::SLOT2_CTRL), 0);
+        r.flag("Write Prot", static_cast<uint16_t>(kc85_mod_regs::SLOT2_CTRL), 1);
+
+        r.category("Slot 3");
+        r.value("Control", static_cast<uint16_t>(kc85_mod_regs::SLOT3_CTRL), 8);
+        r.flag("Active", static_cast<uint16_t>(kc85_mod_regs::SLOT3_CTRL), 0);
+        r.flag("Write Prot", static_cast<uint16_t>(kc85_mod_regs::SLOT3_CTRL), 1);
+
+        r.category("Slot 4");
+        r.value("Control", static_cast<uint16_t>(kc85_mod_regs::SLOT4_CTRL), 8);
+        r.flag("Active", static_cast<uint16_t>(kc85_mod_regs::SLOT4_CTRL), 0);
+        r.flag("Write Prot", static_cast<uint16_t>(kc85_mod_regs::SLOT4_CTRL), 1);
+
+        r.category("Slot 5");
+        r.value("Control", static_cast<uint16_t>(kc85_mod_regs::SLOT5_CTRL), 8);
+        r.flag("Active", static_cast<uint16_t>(kc85_mod_regs::SLOT5_CTRL), 0);
+        r.flag("Write Prot", static_cast<uint16_t>(kc85_mod_regs::SLOT5_CTRL), 1);
+
+        r.category("Slot 6");
+        r.value("Control", static_cast<uint16_t>(kc85_mod_regs::SLOT6_CTRL), 8);
+        r.flag("Active", static_cast<uint16_t>(kc85_mod_regs::SLOT6_CTRL), 0);
+        r.flag("Write Prot", static_cast<uint16_t>(kc85_mod_regs::SLOT6_CTRL), 1);
+
+        r.category("Slot 7");
+        r.value("Control", static_cast<uint16_t>(kc85_mod_regs::SLOT7_CTRL), 8);
+        r.flag("Active", static_cast<uint16_t>(kc85_mod_regs::SLOT7_CTRL), 0);
+        r.flag("Write Prot", static_cast<uint16_t>(kc85_mod_regs::SLOT7_CTRL), 1);
+    }
+#endif
 };
