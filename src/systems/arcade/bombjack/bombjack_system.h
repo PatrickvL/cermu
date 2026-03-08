@@ -52,6 +52,8 @@ public:
     void render_configuration_ui() override;
     void set_speed_multiplier(float multiplier) override;
 
+    bool is_system_ready() const override { return system_ready_; }
+
 private:
     // ── CPUs ─────────────────────────────────────────────────────────────
     ZilogZ80A*  main_cpu_  = nullptr;    // Z80A @ 4 MHz (main)
@@ -96,6 +98,7 @@ private:
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t main_pins_  = BOMBJACK_BUS_DEFAULT_STATE;
     bus_state_t sound_pins_ = BOMBJACK_BUS_DEFAULT_STATE;
+    bool        system_ready_ = false;
     uint64_t total_cycles_  = 0;
     int audio_sample_rate_  = bombjack_constants::DEFAULT_SAMPLE_RATE;
     float speed_multiplier_ = 1.0f;

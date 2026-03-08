@@ -24,7 +24,6 @@ static SystemDescriptor bombjack_descriptor = {
 
 BombJackSystem::BombJackSystem()
     : EmulatedSystem()
-    , ay_{{AYVariant::AY_3_8910}, {AYVariant::AY_3_8910}, {AYVariant::AY_3_8910}}
     , main_pins_(BOMBJACK_BUS_DEFAULT_STATE)
     , sound_pins_(BOMBJACK_BUS_DEFAULT_STATE)
 {

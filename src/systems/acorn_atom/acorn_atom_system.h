@@ -69,6 +69,8 @@ public:
     void render_configuration_ui() override;
     void set_speed_multiplier(float multiplier) override;
 
+    bool is_system_ready() const override { return system_ready_; }
+
 private:
     // ── Chips ────────────────────────────────────────────────────────────
     MOS6502*    cpu_  = nullptr;     // MOS 6502 @ 1 MHz
@@ -92,6 +94,7 @@ private:
 
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t pins_      = ATOM_BUS_DEFAULT_STATE;
+    bool        system_ready_ = false;
     uint64_t total_cycles_ = 0;
     uint32_t ram_size_kb_  = 2;          // configurable: 2, 5, 8, 12
     int audio_sample_rate_ = acorn_atom_constants::DEFAULT_SAMPLE_RATE;
