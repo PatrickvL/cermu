@@ -41,13 +41,23 @@ struct VideoPixelUnit {
     // performing palette lookup.  The palette array must cover the full
     // index range stored in color_line (e.g. 16 for VIC-II, 128 for TED).
     inline void flush_indexed_line(int row, const uint32_t* palette, int line_width) const {
+        flush_indexed_line_range(row, palette, 0, line_width);
+    }
+
+    // Flush a sub-range [x_start, x_end) of color_line into a framebuffer
+    // row, performing palette lookup.  Useful when palette changes mid-
+    // scanline and pixels already emitted must be flushed with the old LUT
+    // before rebuilding.  x_start/x_end are clamped to [0, fb_width).
+    inline void flush_indexed_line_range(int row, const uint32_t* palette,
+                                         int x_start, int x_end) const {
         if (!framebuffer || !color_line || !palette) return;
         if (row < 0 || row >= fb_height) return;
 
-        uint32_t* const row_ptr = framebuffer + row * fb_width;
-        const int width = std::min(fb_width, line_width);
+        x_start = std::max(x_start, 0);
+        x_end   = std::min(x_end, fb_width);
 
-        for (int x = 0; x < width; ++x) {
+        uint32_t* const row_ptr = framebuffer + row * fb_width;
+        for (int x = x_start; x < x_end; ++x) {
             row_ptr[x] = palette[color_line[x]];
         }
     }

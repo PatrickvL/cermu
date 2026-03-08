@@ -209,7 +209,10 @@ public:
 
     // Per-scanline palette index buffer — stores 5-bit pixel_lut_ offsets.
     // Flushed to screen[] at end of each visible scanline (cycle 257).
+    // Mid-scanline palette/mask changes trigger partial flushes so that
+    // pixels already rendered use the palette in effect when they were drawn.
     uint8_t scanline_color_line_[256] = {};
+    int     scanline_flush_x_ = 0;          // Next x to flush (0–256)
 
     // Scanline pixel unit — wraps screen vector and provides shared flush.
     VideoPixelUnit scanline_pixel_;
@@ -254,6 +257,7 @@ public:
         pending_vbl_set_ = false;
         pending_vbl_clear_ = false;
         scanline_event_ = 0;
+        scanline_flush_x_ = 0;
         ppu_dot_count_ = 0;
         vram_data_latch_ = 0;
         std::fill(std::begin(open_bus_refresh_), std::end(open_bus_refresh_), 0);
@@ -359,6 +363,20 @@ private:
     void transfer_address_y();
     void load_background_shifters();
     void update_shifters();
+
+    // Flush already-rendered pixels [scanline_flush_x_, cycle-1) with the
+    // current pixel_lut_ before a palette or mask change invalidates it.
+    // Called from service_cpu_bus when a write to $2001 or palette RAM
+    // occurs during visible rendering.  No-op outside the visible window.
+    inline void flush_scanline_segment() {
+        if (scanline < 0 || scanline >= 240) return;
+        const int x_end = cycle - 1;  // last rendered pixel = cycle-2, range is [flush_x, cycle-1)
+        if (x_end <= scanline_flush_x_) return;
+        if (!active_palette_) rebuild_pixel_lut();
+        scanline_pixel_.flush_indexed_line_range(
+            scanline, pixel_lut_, scanline_flush_x_, x_end);
+        scanline_flush_x_ = x_end;
+    }
 
     // Invalidate pixel LUT — called on $2001 writes, palette RAM writes,
     // and reset.  The actual rebuild is deferred to the render path.
