@@ -115,12 +115,6 @@ static std::vector<PinSignalState> get_cia_pin_states(mos6526_t* cia, const Chip
     return pin_states;
 }
 
-// Use global renderer for CIA chip visualization
-static ChipLayout& get_cia_layout() {
-    static ChipLayout layout = create_mos6526_layout();
-    return layout;
-}
-
 // Helper function to determine CIA type based on interrupt line
 static const char* mos6526_get_cia_name(const mos6526_t* cia) {
     // Determine CIA type based on which interrupt line it raises
@@ -254,7 +248,8 @@ void mos6526_t::render_settings_content() {
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* mos6526_t::create_chip_layout() const {
-    return &get_cia_layout();
+    static ChipLayout layout = create_mos6526_layout();
+    return &layout;
 }
 
 std::vector<PinSignalState> mos6526_t::get_layout_pin_states(ChipLayout& layout) {

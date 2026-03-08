@@ -106,11 +106,6 @@ static std::vector<PinSignalState> get_ted_pin_states(ted7360_t* ted, const Chip
     return pin_states;
 }
 
-static ChipLayout& get_ted_layout() {
-    static ChipLayout layout = create_ted7360_layout();
-    return layout;
-}
-
 #endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // ============================================================================
@@ -122,7 +117,8 @@ static ChipLayout& get_ted_layout() {
 bool ted7360_t::has_settings_content() const { return true; }
 
 ChipLayout* ted7360_t::create_chip_layout() const {
-    return &get_ted_layout();
+    static ChipLayout layout = create_ted7360_layout();
+    return &layout;
 }
 
 std::vector<PinSignalState> ted7360_t::get_layout_pin_states(ChipLayout& layout) {

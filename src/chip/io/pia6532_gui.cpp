@@ -77,11 +77,6 @@ static ChipLayout create_pia6532_layout() {
     return layout;
 }
 
-static ChipLayout& get_pia6532_layout() {
-    static ChipLayout layout = create_pia6532_layout();
-    return layout;
-}
-
 // Helper: derive PIA6532 pin states from bus snapshot + chip internals
 static std::vector<PinSignalState> get_pia6532_pin_states(
         pia6532_t* riot, const ChipLayout* layout, bus_state_t bus_state) {
@@ -149,7 +144,8 @@ static std::vector<PinSignalState> get_pia6532_pin_states(
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* pia6532_t::create_chip_layout() const {
-    return &get_pia6532_layout();
+    static ChipLayout layout = create_pia6532_layout();
+    return &layout;
 }
 
 std::vector<PinSignalState> pia6532_t::get_layout_pin_states(ChipLayout& layout) {

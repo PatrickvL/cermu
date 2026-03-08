@@ -89,11 +89,6 @@ static std::vector<PinSignalState> get_mos2114_pin_states(MOS2114* mos2114, cons
     return pin_states;
 }
 
-// Use global renderer for MOS2114 chip visualization
-static ChipLayout& get_mos2114_layout() {
-    static ChipLayout layout = create_mos2114_layout();
-    return layout;
-}
 #endif
 
 // ============================================================================
@@ -137,7 +132,8 @@ void MOS2114::render_settings_content() {
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* MOS2114::create_chip_layout() const {
-    return &get_mos2114_layout();
+    static ChipLayout layout = create_mos2114_layout();
+    return &layout;
 }
 
 std::vector<PinSignalState> MOS2114::get_layout_pin_states(ChipLayout& layout) {

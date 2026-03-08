@@ -111,12 +111,6 @@ static std::vector<PinSignalState> get_vicii_pin_states(vicii_t* vicii, const Ch
     return pin_states;
 }
 
-// Use global renderer for VIC-II chip visualization
-static ChipLayout& get_vicii_layout() {
-    static ChipLayout layout = create_vicii_layout();
-    return layout;
-}
-
 #endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // Class method implementation
@@ -146,7 +140,8 @@ void vicii_t::render_settings_content() {
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* vicii_t::create_chip_layout() const {
-    return &get_vicii_layout();
+    static ChipLayout layout = create_vicii_layout();
+    return &layout;
 }
 
 std::vector<PinSignalState> vicii_t::get_layout_pin_states(ChipLayout& layout) {

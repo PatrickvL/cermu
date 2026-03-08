@@ -100,12 +100,6 @@ static std::vector<PinSignalState> get_vic_pin_states(vic_base_t* vic, const Chi
     return pin_states;
 }
 
-static ChipLayout& get_vic_layout(bool is_pal) {
-    static ChipLayout layout_ntsc = create_vic_layout("MOS6560");
-    static ChipLayout layout_pal  = create_vic_layout("MOS6561");
-    return is_pal ? layout_pal : layout_ntsc;
-}
-
 static const char* get_vic_type_name(const vic_base_t* vic) {
     if (vic->is_pal) return "MOS 6561 (PAL)";
     return "MOS 6560 (NTSC)";
@@ -126,7 +120,9 @@ bool vic_base_t::has_settings_content() const { return true; }
 // ============================================================================
 
 ChipLayout* vic_base_t::create_chip_layout() const {
-    return &get_vic_layout(is_pal);
+    static ChipLayout layout_ntsc = create_vic_layout("MOS6560");
+    static ChipLayout layout_pal  = create_vic_layout("MOS6561");
+    return is_pal ? &layout_pal : &layout_ntsc;
 }
 
 std::vector<PinSignalState> vic_base_t::get_layout_pin_states(ChipLayout& layout) {

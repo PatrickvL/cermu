@@ -207,11 +207,6 @@ static void tick_pla_for_rendering(pla_906114_01_t& pla, bus_state_t bus_state, 
     pla_906114_01_tick(&pla, bus_state);
 }
 
-// Use global renderer for PLA chip visualization
-static ChipLayout& get_pla_layout() {
-    static ChipLayout layout = create_pla_layout();
-    return layout;
-}
 
 #endif // CERMU_HAS_GUI (helper functions)
 
@@ -239,7 +234,7 @@ void PlaChip::render_debug_content() {
         
         // Get global renderer and chip layout
         ChipVisualization& renderer = GetGlobalChipRenderer();
-        ChipLayout& layout = get_pla_layout();
+        ChipLayout& layout = *get_chip_layout();
         
         // Tick PLA with current bus state and banking mode
         pla_906114_01_t pla;
@@ -644,7 +639,8 @@ void PlaChip::render_settings_content() {
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* PlaChip::create_chip_layout() const {
-    return &get_pla_layout();
+    static ChipLayout layout = create_pla_layout();
+    return &layout;
 }
 
 std::vector<PinSignalState> PlaChip::get_layout_pin_states(ChipLayout& layout) {

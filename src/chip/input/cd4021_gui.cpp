@@ -39,11 +39,6 @@ static ChipLayout create_cd4021_layout() {
     return layout;
 }
 
-static ChipLayout& get_cd4021_layout() {
-    static ChipLayout layout = create_cd4021_layout();
-    return layout;
-}
-
 // Helper: derive CD4021 pin states from shift register internals.
 // The CD4021 is not on the main system bus — it lives in the controller.
 // bus_state_t is unused; all signals come from the shift register state.
@@ -124,7 +119,8 @@ static std::vector<PinSignalState> get_cd4021_pin_states(
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* CD4021::create_chip_layout() const {
-    return &get_cd4021_layout();
+    static ChipLayout layout = create_cd4021_layout();
+    return &layout;
 }
 
 std::vector<PinSignalState> CD4021::get_layout_pin_states(ChipLayout& layout) {
