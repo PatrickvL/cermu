@@ -102,6 +102,9 @@ public:
         , variant_(variant)
     {
         category_ = "Sound";
+#ifdef CERMU_HAS_CHIP_DEBUG
+        register_debug_fields();
+#endif
     }
 
     void init() {
@@ -166,6 +169,12 @@ public:
 
     AYVariant variant() const { return variant_; }
 
+    // === ChipBase GUI virtuals ===
+#ifdef CERMU_HAS_GUI
+    ChipLayout* create_chip_layout() const override;
+    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+#endif
+
 private:
     AYVariant variant_;
     uint8_t   regs_[ay_regs::REG_COUNT]{};
@@ -187,4 +196,8 @@ private:
     // I/O ports
     uint8_t   io_port_a_ = 0xFF;
     uint8_t   io_port_b_ = 0xFF;
+
+#ifdef CERMU_HAS_CHIP_DEBUG
+    void register_debug_fields();
+#endif
 };
