@@ -23,7 +23,7 @@ inline constexpr uint32_t CPU_FREQ_HZ          = 2000000;   // 2 MHz
 // ── Memory ──────────────────────────────────────────────────────────────
 inline constexpr uint16_t RAM_BASE             = 0x0000;
 inline constexpr uint16_t RAM_SIZE_16K         = 0x4000;    // 16 KB standard
-inline constexpr uint16_t RAM_SIZE_64K         = 0x10000;   // 64 KB expanded
+inline constexpr uint32_t RAM_SIZE_64K         = 0x10000;   // 64 KB expanded
 
 inline constexpr uint16_t MONITOR_ROM_BASE     = 0xF000;
 inline constexpr uint16_t MONITOR_ROM_SIZE     = 0x0800;    // 2 KB
