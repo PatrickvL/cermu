@@ -17,20 +17,6 @@
 #include "../../gui/global_chip_style.h"
 #endif
 
-// ============================================================================
-// 16-pin DIP Layout (per TI CD4021B datasheet SCHS054E)
-// ============================================================================
-//
-//   Pin 1:  P0   (parallel in 0)     Pin 16: VDD
-//   Pin 2:  Q6   (stage 6 out)       Pin 15: Q̅7   (complement out)
-//   Pin 3:  P4   (parallel in 4)     Pin 14: DS   (serial in)
-//   Pin 4:  P3   (parallel in 3)     Pin 13: P5   (parallel in 5)
-//   Pin 5:  P6   (parallel in 6)     Pin 12: P7   (parallel in 7)
-//   Pin 6:  P2   (parallel in 2)     Pin 11: Q7   (serial out)
-//   Pin 7:  P1   (parallel in 1)     Pin 10: CLK
-//   Pin 8:  VSS  (GND)               Pin  9: P/S̅  (LATCH)
-//
-
 #ifdef CERMU_HAS_GUI
 
 static ChipLayout create_cd4021_layout() {
