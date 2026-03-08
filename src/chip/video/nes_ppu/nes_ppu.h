@@ -23,6 +23,7 @@
 
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
+#include "../video_pixel_unit.h"
 #include "../../../systems/nes/bus/nes_bus.h"
 #include "../../../systems/nes/bus/nes_bus_signals.h"
 #include "nes_palette.h"
@@ -206,6 +207,13 @@ public:
     // render-path access after palette RAM writes or PPUMASK changes.
     uint32_t pixel_lut_[32] = {};
 
+    // Per-scanline palette index buffer — stores 5-bit pixel_lut_ offsets.
+    // Flushed to screen[] at end of each visible scanline (cycle 257).
+    uint8_t scanline_color_line_[256] = {};
+
+    // Scanline pixel unit — wraps screen vector and provides shared flush.
+    VideoPixelUnit scanline_pixel_;
+
     // Active palette variant — pointer into palette_cache_.  Set to nullptr
     // to mark pixel_lut_ as stale; the render path checks this once per dot
     // with an unlikely branch and rebuilds on demand.  Coalesces rapid
@@ -221,6 +229,8 @@ public:
         info_ = ChipInfo{pal ? "RP2C07" : "RP2C02", "Ricoh"};
         // Initialize PPU memory (std::array zero-initialized by {})
         screen.resize(256 * 240, 0);
+        scanline_pixel_.color_line = scanline_color_line_;
+        scanline_pixel_.set_framebuffer(screen.data(), 256, 240);
         internal.sprite_scanline.fill({0xFF, 0xFF, 0xFF, 0xFF});
         internal.sprite_count = 0;
 

@@ -1,4 +1,5 @@
 #include "vic_common.h"
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
@@ -120,9 +121,8 @@ void vic_base_t::reset() {
 
 // Set framebuffer function
 void vic_base_t::set_framebuffer(uint32_t* fb, int width, int height) {
-    framebuffer = fb;
-    framebuffer_width = width;
-    framebuffer_height = height;
+    pixel.set_framebuffer(fb, width, height);
+    pixel.color_line = color_line_buffer;
 }
 
 // Register read function
@@ -204,32 +204,28 @@ void vic_base_t::decode_all_registers() {
     decode_register(VIC_REG_BACKGROUND);
 }
 
-// Emit a single pixel to the line buffer
+// Emit a single pixel to the line buffer (stores palette index)
 void vic_base_t::emit_pixel(uint8_t color_index) {
     if (pixel_line_index < VIC_MAX_LINE_WIDTH) {
-        pixel_line_buffer[pixel_line_index++] = vic_palette[color_index & 0x0F];
+        color_line_buffer[pixel_line_index++] = color_index & 0x0F;
     }
 }
 
 // Flush accumulated pixel line to framebuffer
 void vic_base_t::flush_pixel_line(int raster_line) {
-    if (!framebuffer) return;
-    if (raster_line < 0 || raster_line >= framebuffer_height) return;
+    if (!pixel.framebuffer) return;
+    if (raster_line < 0 || raster_line >= pixel.fb_height) return;
 
-    // Copy pixel line buffer to framebuffer
-    int pixels_to_copy = pixel_line_index;
-    if (pixels_to_copy > framebuffer_width) {
-        pixels_to_copy = framebuffer_width;
-    }
+    // Flush indexed pixels via palette lookup
+    pixel.flush_indexed_line(raster_line, vic_palette,
+                             std::min(pixel_line_index, pixel.fb_width));
 
-    uint32_t* dest = framebuffer + (raster_line * framebuffer_width);
-    memcpy(dest, pixel_line_buffer, pixels_to_copy * sizeof(uint32_t));
-    
     // Fill remaining pixels with border color if line is shorter
-    if (pixels_to_copy < framebuffer_width) {
-        uint32_t border_pixel = vic_palette[cached_border_color];
-        for (int i = pixels_to_copy; i < framebuffer_width; i++) {
-            dest[i] = border_pixel;
+    if (pixel_line_index < pixel.fb_width) {
+        uint32_t border_rgba = vic_palette[cached_border_color];
+        uint32_t* dest = pixel.framebuffer + (raster_line * pixel.fb_width);
+        for (int i = pixel_line_index; i < pixel.fb_width; i++) {
+            dest[i] = border_rgba;
         }
     }
 

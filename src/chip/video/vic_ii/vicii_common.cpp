@@ -121,7 +121,7 @@ static inline void vicii_pixel_emit_at_x(vicii_t* vicii, const vicii_pixel_t* pi
     
     if (pixel_line_x >= 0) {
         vicii->pixel.pixel_line_priority[pixel_line_x] = pixel_data->priority;
-        vicii->pixel.pixel_line_color[pixel_line_x] = pixel_data->color;
+        vicii->pixel.color_line[pixel_line_x] = pixel_data->color;
     }
 }
 
@@ -294,7 +294,7 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
                 sprite_color = sprite_own_color;
             }
             
-            vicii->pixel.pixel_line_color[pixel_line_x] = sprite_color;
+            vicii->pixel.color_line[pixel_line_x] = sprite_color;
         }
     } // end 8-pixel loop
 }
@@ -389,7 +389,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                 const int16_t vp = vicii->cached_visible_pixels;
                 const int count = (base + 8 <= vp) ? 8 : (vp - base);
                 memset(&vicii->pixel.pixel_line_priority[base], vicii->border.border_pixel.priority, count);
-                memset(&vicii->pixel.pixel_line_color[base], (uint8_t)vicii->border.border_pixel.color, count);
+                memset(&vicii->pixel.color_line[base], (uint8_t)vicii->border.border_pixel.color, count);
             }
         } else if (!vicii->video_logic.display_state) {
             // Content area in idle mode: emit background color with BACKGROUND priority.
@@ -401,7 +401,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                 const int16_t vp = vicii->cached_visible_pixels;
                 const int count = (base + 8 <= vp) ? 8 : (vp - base);
                 memset(&vicii->pixel.pixel_line_priority[base], VICII_PRIORITY_BACKGROUND, count);
-                memset(&vicii->pixel.pixel_line_color[base], vicii->registers.data[VICII_B0C] & 0x0F, count);
+                memset(&vicii->pixel.color_line[base], vicii->registers.data[VICII_B0C] & 0x0F, count);
             }
         }
     } else {
@@ -644,7 +644,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             const int16_t buf_pos = vicii_fetch_x_to_buffer_pos(vicii, pixel_x);
             if (buf_pos >= 0) {
                 vicii->pixel.pixel_line_priority[buf_pos] = pixel_data.priority;
-                vicii->pixel.pixel_line_color[buf_pos] = pixel_data.color;
+                vicii->pixel.color_line[buf_pos] = pixel_data.color;
                 
                 // Track raw graphics foreground output for sprite-data collision
                 // detection.  Independent of the display priority buffer — collisions
@@ -687,36 +687,26 @@ static inline int vicii_raster_to_fb_row(const vicii_t* vicii, uint16_t raster) 
 }
 
 void vicii_pixel_flush_line(vicii_t* vicii, const uint32_t* palette, int y) {
-    if (!vicii->pixel.framebuffer || !palette || y >= vicii->pixel.framebuffer_height) return;
+    if (!palette) return;
     
     vicii_pixel_unit_t* pixel = &vicii->pixel;
-    uint32_t* row_ptr = &pixel->framebuffer[y * pixel->framebuffer_width];
     const uint8_t border_color_index = vicii->registers.data[VICII_EC]; // Already masked to 4 bits on write
     const uint32_t border_color = palette[border_color_index];
     
-    // Fill entire line with border color first
-    for (int x = 0; x < pixel->framebuffer_width; x++) {
-        row_ptr[x] = border_color;
-    }
+    // Fill entire line with border color first (safety fallback if color_line is null/short)
+    pixel->fill_line(y, border_color);
     
     // VIC-II writes directly to its framebuffer without any offset.
     // The GUI layer handles centering by copying vicii_buffer (403x284)
     // to the centered position in screen_buffer (512x384).
-    // VIC-II framebuffer_width should match visible_pixels_per_line (403 for PAL).
-    if (pixel->pixel_line_color) {
-        // Copy pixels from line buffer directly to framebuffer (no offset)
-        for (int x = 0; x < vicii->config->visible_pixels_per_line && x < pixel->framebuffer_width; x++) {
-            const uint8_t color_index = pixel->pixel_line_color[x] & 0x0F;
-            row_ptr[x] = palette[color_index];
-        }
-    }
+    // VIC-II fb_width should match visible_pixels_per_line (403 for PAL).
+    pixel->flush_indexed_line(y, palette,
+                              vicii->config->visible_pixels_per_line);
 }
 
 static inline void vicii_pixel_set_framebuffer(vicii_pixel_unit_t* pixel, uint32_t* framebuffer, 
                                              int width, int height) {
-    pixel->framebuffer = framebuffer;
-    pixel->framebuffer_width = width;
-    pixel->framebuffer_height = height;
+    pixel->set_framebuffer(framebuffer, width, height);
 }
 
 // ========================================================================================
@@ -1141,13 +1131,13 @@ static inline void vicii_perform_line0_raster_irq_operations(vicii_t* vicii) {
 // Helper: Reset line buffers for a new scanline
 // Initializes pixel/priority/collision buffers to default border state
 static inline void vicii_line_buffer_reset(vicii_t* vicii) {
-    if (!vicii->pixel.pixel_line_color) return;
+    if (!vicii->pixel.color_line) return;
     
     const uint16_t width = vicii->config->visible_pixels_per_line;
     const uint8_t border_color = vicii->registers.data[VICII_EC] & 0x0F;
     
     memset(vicii->pixel.pixel_line_priority, VICII_PRIORITY_BORDER, width);
-    memset(vicii->pixel.pixel_line_color, border_color, width);
+    memset(vicii->pixel.color_line, border_color, width);
     // Clear collision detection buffers for the new line
     memset(vicii->pixel.sprite_collision_line, 0, width);
     memset(vicii->pixel.graphics_fg_line, 0, width * sizeof(bool));
@@ -1167,7 +1157,7 @@ void vicii_timing_advance(vicii_t* vicii) {
     // at the correct Y position (which is still the OLD raster_counter value).
     const uint16_t completed_raster = vicii->timing.raster_counter;
     const int fb_row = vicii_raster_to_fb_row(vicii, completed_raster);
-    if (vicii->pixel.framebuffer && fb_row < vicii->pixel.framebuffer_height) {
+    if (vicii->pixel.framebuffer && fb_row < vicii->pixel.fb_height) {
         vicii_pixel_flush_line(vicii, vicii_t::get_default_palette(), fb_row);
     }
     
@@ -1979,7 +1969,7 @@ bus_state_t vicii_t::tick_phi1(bus_state_t bus_state) {
     // This uses the graphics data that was JUST loaded above AND the border flip-flop state updated above
     {
         const int fb_row = vicii_raster_to_fb_row(vicii, vicii->timing.raster_counter);
-        if (vicii->pixel.framebuffer && fb_row < vicii->pixel.framebuffer_height) {
+        if (vicii->pixel.framebuffer && fb_row < vicii->pixel.fb_height) {
             vicii_pixel_sequencer(vicii);
         }
     }
@@ -2435,7 +2425,7 @@ static inline void vicii_initialize(vicii_t* vicii) {
     memset(&vicii->border, 0, sizeof(vicii_border_unit_t));
     memset(&vicii->memory, 0, sizeof(vicii_memory_unit_t));
     memset(&vicii->sprites, 0, sizeof(vicii_sprites_unit_t));
-    memset(&vicii->pixel, 0, sizeof(vicii_pixel_unit_t));
+    vicii->pixel = vicii_pixel_unit_t{};
     memset(&vicii->bus, 0, sizeof(vicii_bus_unit_t));
     
     // Set default register values - Enable DEN to match real hardware behavior
@@ -2539,13 +2529,13 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
     if (config->visible_pixels_per_line > 0) {
         // Free any existing buffers
         free(vicii->pixel.pixel_line_priority);
-        free(vicii->pixel.pixel_line_color);
+        free(vicii->pixel.color_line);
         free(vicii->pixel.sprite_collision_line);
         free(vicii->pixel.graphics_fg_line);
         
         // Allocate single line buffers
         vicii->pixel.pixel_line_priority = static_cast<vicii_priority_t*>(malloc(config->visible_pixels_per_line * sizeof(vicii_priority_t)));
-        vicii->pixel.pixel_line_color = static_cast<uint8_t*>(malloc(config->visible_pixels_per_line * sizeof(uint8_t)));
+        vicii->pixel.color_line = static_cast<uint8_t*>(malloc(config->visible_pixels_per_line * sizeof(uint8_t)));
         // Collision detection buffers (independent of display)
         vicii->pixel.sprite_collision_line = static_cast<uint8_t*>(calloc(config->visible_pixels_per_line, sizeof(uint8_t)));
         vicii->pixel.graphics_fg_line = static_cast<bool*>(calloc(config->visible_pixels_per_line, sizeof(bool)));
@@ -2553,7 +2543,7 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
         // Initialize buffer with current border color
         const uint8_t border_color = vicii->registers.data[VICII_EC] & 0x0F;
         memset(vicii->pixel.pixel_line_priority, VICII_PRIORITY_BORDER, config->visible_pixels_per_line);
-        memset(vicii->pixel.pixel_line_color, border_color, config->visible_pixels_per_line);
+        memset(vicii->pixel.color_line, border_color, config->visible_pixels_per_line);
     }
     
     vicii_set_x_cycle(vicii, 0);
@@ -2599,7 +2589,7 @@ void vicii_t::init(const vicii_chip_config_t* config, void (*bank_change)(void*,
 // Destructor — clean up dynamically allocated pixel line buffers
 vicii_t::~vicii_t() {
     free(pixel.pixel_line_priority);
-    free(pixel.pixel_line_color);
+    free(pixel.color_line);
     free(pixel.sprite_collision_line);
     free(pixel.graphics_fg_line);
 }
@@ -2611,8 +2601,8 @@ void vicii_t::reset() {
     const vicii_chip_config_t* saved_config = config;
     const vicii_bus_unit_t saved_bus = bus;       // entire bus unit (mem_read, bank_change, etc.)
     uint32_t* saved_framebuffer = pixel.framebuffer;
-    int saved_fb_width = pixel.framebuffer_width;
-    int saved_fb_height = pixel.framebuffer_height;
+    int saved_fb_width = pixel.fb_width;
+    int saved_fb_height = pixel.fb_height;
     MOS2114* saved_colorram = colorram;
 
     // Re-initialize all state (zeroes + defaults)
@@ -2630,8 +2620,8 @@ void vicii_t::reset() {
     bus.ba_low_count = 0;
     bus.bus_line_mask = 0;
     pixel.framebuffer = saved_framebuffer;
-    pixel.framebuffer_width = saved_fb_width;
-    pixel.framebuffer_height = saved_fb_height;
+    pixel.fb_width = saved_fb_width;
+    pixel.fb_height = saved_fb_height;
     colorram = saved_colorram;
 }
 
@@ -2645,11 +2635,11 @@ void vicii_t::set_framebuffer(uint32_t* framebuffer, int width, int height) {
     // Border color should come from register, not hardcoded
     border.border_pixel.priority = VICII_PRIORITY_BORDER;
     border.border_pixel.color = static_cast<vicii_color_t>(registers.data[VICII_EC]);
-    if (pixel.pixel_line_color && config->visible_pixels_per_line > 0) {
+    if (pixel.color_line && config->visible_pixels_per_line > 0) {
         // Initialize buffer with current border color
         const uint8_t border_color = registers.data[VICII_EC] & 0x0F;
         memset(pixel.pixel_line_priority, VICII_PRIORITY_BORDER, config->visible_pixels_per_line);
-        memset(pixel.pixel_line_color, border_color, config->visible_pixels_per_line);
+        memset(pixel.color_line, border_color, config->visible_pixels_per_line);
     }
 }
 

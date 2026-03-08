@@ -35,6 +35,7 @@
 
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
+#include "../video_pixel_unit.h"
 
 // ============================================================================
 // REGISTER INDICES ($FF00-$FF1F)
@@ -310,14 +311,6 @@ struct ted_timer_unit_t {               // Timer counts down once per CPU cycle
 };
 // Note: typedef TedTimer used by tick_one_timer helper in .cpp
 
-// Pixel Output Unit — line buffer and framebuffer target
-struct ted_pixel_unit_t {
-    uint8_t*  color_line;               // Per-pixel 7-bit palette index line buffer (TED_VISIBLE_WIDTH bytes)
-    uint32_t* framebuffer;              // RGBA output framebuffer (set via set_framebuffer())
-    int       fb_width;                 // Framebuffer width in pixels
-    int       fb_height;                // Framebuffer height in pixels (raster lines)
-};
-
 // Bus Interface Unit — pending DMA access and BA/AEC state
 struct ted_bus_unit_t {
     ted_mem_read_fn mem_read;           // Memory read callback for TED PHI1 accesses
@@ -512,7 +505,7 @@ struct ted7360_t : public ChipBase {
     TedTimer               timer2;      // No auto-reload: wraps to $FFFF on underflow
     TedTimer               timer3;      // No auto-reload: wraps to $FFFF on underflow
     ted_sound_unit_t       sound;
-    ted_pixel_unit_t       pixel;
+    VideoPixelUnit         pixel;
     ted_bus_unit_t         bus;
 
     // IRQ state (mirrors register file but kept separate for quick access)

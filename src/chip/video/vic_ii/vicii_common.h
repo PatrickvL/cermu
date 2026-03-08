@@ -4,6 +4,7 @@
 #include <cstdint>
 #include "../../../core/system_lines.h" // For bus_state_t
 #include "../../../chip/memory/mos2114.h"  // For MOS2114
+#include "../video_pixel_unit.h"
 // VIC-II Register Constants - Modern C++ constexpr
 namespace vicii_regs {
     constexpr uint8_t SIZE = 64;
@@ -452,10 +453,10 @@ struct vicii_sprites_unit_t {
 };
 
 // Pixel Output Unit - Pixel line generation and framebuffer
-struct vicii_pixel_unit_t {
+struct vicii_pixel_unit_t : VideoPixelUnit {
     // Single line buffers for pixel generation
-    vicii_priority_t* pixel_line_priority;
-    uint8_t* pixel_line_color;  // Stores color INDICES (0-15), not RGB values
+    vicii_priority_t* pixel_line_priority = nullptr;
+    // color_line is inherited from VideoPixelUnit — stores color INDICES (0-15)
     
     // Collision detection buffers (independent of display priority)
     // The VIC-II detects collisions based on raw sequencer output, not display.
@@ -463,12 +464,8 @@ struct vicii_pixel_unit_t {
     //   MxM: "two or more sprite data sequencers output a non-transparent pixel"
     //   MxD: "sprite non-transparent AND graphics data sequencer outputs foreground"
     // These are parallel, independent circuits from the display priority multiplexer.
-    uint8_t* sprite_collision_line;  // Per-pixel bitmask: which sprites have non-transparent pixels
-    bool* graphics_fg_line;          // Per-pixel: whether graphics sequencer output foreground
-    
-    uint32_t* framebuffer;
-    int framebuffer_width;
-    int framebuffer_height;
+    uint8_t* sprite_collision_line = nullptr;
+    bool* graphics_fg_line = nullptr;
 };
 
 // Lightpen Unit - LP pin edge detection and latch state

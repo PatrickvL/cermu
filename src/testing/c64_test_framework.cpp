@@ -1460,13 +1460,13 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
         
         // Check if we need to resave screenshot with exact reference dimensions
         // This handles cases where reference has different crop than our default
-        if (ref_info.width != vicii->pixel.framebuffer_width ||
-            ref_info.height != vicii->pixel.framebuffer_height) {
+        if (ref_info.width != vicii->pixel.fb_width ||
+            ref_info.height != vicii->pixel.fb_height) {
             
             if (verbose_) {
                 printf("  Reference dimensions (%dx%d) differ from framebuffer (%dx%d)\n",
                        ref_info.width, ref_info.height,
-                       vicii->pixel.framebuffer_width, vicii->pixel.framebuffer_height);
+                       vicii->pixel.fb_width, vicii->pixel.fb_height);
             }
             
             // Use VICE-aligned crop offsets to extract the correct display window.
@@ -1478,8 +1478,8 @@ TestResult TestFramework::run_screenshot_test(const TestDescriptor& test, C64Sys
             int crop_h = ref_info.height;
             int crop_x, crop_y;
             
-            int fb_w = vicii->pixel.framebuffer_width;
-            int fb_h = vicii->pixel.framebuffer_height;
+            int fb_w = vicii->pixel.fb_width;
+            int fb_h = vicii->pixel.fb_height;
             
             // VICE PAL: first_displayed_line=16, display is 384x272
             if (ref_info.width == 384 && ref_info.height == 272) {
