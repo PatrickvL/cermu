@@ -388,6 +388,25 @@ set(SYSTEM_SOURCES
     
     # BBC Micro system
     src/systems/bbc/bbc_micro_system.cpp
+
+    # ZX Spectrum 48K/128K
+    src/systems/spectrum/spectrum_system.cpp
+
+    # Amstrad CPC 464/664/6128
+    src/systems/amstrad_cpc/amstrad_cpc_system.cpp
+
+    # Acorn Atom
+    src/systems/acorn_atom/acorn_atom_system.cpp
+
+    # DDR computers
+    src/systems/ddr/lc80/lc80_system.cpp
+    src/systems/ddr/z1013/z1013_system.cpp
+    src/systems/ddr/z9001/z9001_system.cpp
+    src/systems/ddr/kc85/kc85_system.cpp
+
+    # Arcade systems
+    src/systems/arcade/bombjack/bombjack_system.cpp
+    src/systems/arcade/namco/namco_arcade_system.cpp
 )
 
 # Testing sources

@@ -3,7 +3,7 @@
  */
 
 #include "z1013_system.h"
-#include "../../core/system_registry.h"
+#include "../../../core/system_registry.h"
 #include <cstring>
 #include <cstdio>
 

@@ -10,12 +10,12 @@
 
 
 #include "kc85_constants.h"
-#include "../../core/emulated_system.h"
-#include "../../core/system_lines.h"
-#include "../../chip/cpu/z80/u880.h"
-#include "../../chip/io/z80_pio.h"
-#include "../../chip/io/z80_ctc.h"
-#include "../../chip/io/kc85_module_system.h"
+#include "../../../core/emulated_system.h"
+#include "../../../core/system_lines.h"
+#include "../../../chip/cpu/z80/u880.h"
+#include "../../../chip/io/z80_pio.h"
+#include "../../../chip/io/z80_ctc.h"
+#include "../../../chip/io/kc85_module_system.h"
 #include <cstdint>
 #include <vector>
 
@@ -89,6 +89,8 @@ public:
     void render_configuration_ui() override;
     void set_speed_multiplier(float multiplier) override;
 
+    bool is_system_ready() const override { return system_ready_; }
+
 private:
     // ── Chips ────────────────────────────────────────────────────────────
     U880*                cpu_  = nullptr;     // U880 @ 1.7734 MHz
@@ -128,6 +130,7 @@ private:
 
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t pins_       = KC85_BUS_DEFAULT_STATE;
+    bool        system_ready_ = false;
     uint64_t total_cycles_  = 0;
     int audio_sample_rate_  = kc85_constants::DEFAULT_SAMPLE_RATE;
     float speed_multiplier_ = 1.0f;
