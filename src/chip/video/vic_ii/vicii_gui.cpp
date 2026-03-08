@@ -12,84 +12,8 @@
 #ifdef CERMU_HAS_GUI
 
 // ============================================================================
-// COMMON VIC-II GUI RENDERING FUNCTIONS
+// ChipBase interface implementation
 // ============================================================================
-
-static const char* get_vicii_type_name(const vicii_t* vicii) {
-    if (vicii && vicii->config && vicii->config->chip_name) {
-        return vicii->config->chip_name;
-    }
-    return "Unknown VIC-II";
-}
-
-static const char* get_video_standard(vicii_t* vicii) {
-    if (vicii->config->cycles_per_line == 65 && vicii->config->total_lines == 262) {
-        return "NTSC 60Hz";
-    } else if (vicii->config->cycles_per_line == 63 && vicii->config->total_lines == 312) {
-        return "PAL 50Hz";
-    }
-    return "Unknown";
-}
-
-// ============================================================================
-// MOS6567/6569 VIC-II LAYOUT (40-pin DIP)
-// ============================================================================
-
-// Helper function to get VIC-II pin states for visualization
-static std::vector<PinSignalState> get_vicii_pin_states(vicii_t* vicii, const ChipLayout* layout, bus_state_t bus_state) {
-    if (!vicii || !layout) return {};
-
-    // Generic bus-derived pin states (address, data, power, clock, control)
-    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
-
-    // VIC-II specific: IRQ driven by VIC-II (override direction from generic)
-    if (vicii->registers.data[0x19] & 0x80) {
-        pin_states[5].signal_level = false; // IRQ (pin 6) - active low, asserted
-        pin_states[5].drive_direction = true;
-        pin_states[5].high_impedance = false;
-    }
-
-    // Video output pins (always driven by VIC-II)
-    pin_states[16].signal_level = true; // LUMA (pin 17)
-    pin_states[16].drive_direction = true;
-    pin_states[16].high_impedance = false;
-    pin_states[17].signal_level = true; // CHROMA (pin 18)
-    pin_states[17].drive_direction = true;
-    pin_states[17].high_impedance = false;
-    pin_states[18].signal_level = true; // CSYNC (pin 19)
-    pin_states[18].drive_direction = true;
-    pin_states[18].high_impedance = false;
-
-    return pin_states;
-}
-
-#endif // CERMU_HAS_GUI (layout/pin helpers)
-
-// Class method implementation
-#ifdef CERMU_HAS_GUI
-void vicii_t::render_settings_content() {
-    vicii_t* vicii = this;
-
-    ImGui::Text("VIC-II Configuration");
-    ImGui::Separator();
-    
-    ImGui::Text("Chip Type: %s", get_vicii_type_name(vicii));
-    ImGui::Text("Video Standard: %s", get_video_standard(vicii));
-    ImGui::Text("Timing: %d cycles/line, %d lines/frame", vicii->config->cycles_per_line, vicii->config->total_lines);
-    
-    ImGui::Separator();
-    
-    ImGui::Text("Display Settings");
-    // Add interactive controls here later if needed
-    ImGui::Text("(Settings controls will be added here)");
-}
-#endif // CERMU_HAS_GUI
-
-// ============================================================================
-// VIC-II layout virtuals
-// ============================================================================
-
-#ifdef CERMU_HAS_GUI
 
 ChipLayout* vicii_t::create_chip_layout() const {
     static ChipLayout layout = [] {
@@ -142,12 +66,85 @@ ChipLayout* vicii_t::create_chip_layout() const {
     return &layout;
 }
 
+// ============================================================================
+// COMMON VIC-II GUI RENDERING FUNCTIONS
+// ============================================================================
+
+static const char* get_vicii_type_name(const vicii_t* vicii) {
+    if (vicii && vicii->config && vicii->config->chip_name) {
+        return vicii->config->chip_name;
+    }
+    return "Unknown VIC-II";
+}
+
+static const char* get_video_standard(vicii_t* vicii) {
+    if (vicii->config->cycles_per_line == 65 && vicii->config->total_lines == 262) {
+        return "NTSC 60Hz";
+    } else if (vicii->config->cycles_per_line == 63 && vicii->config->total_lines == 312) {
+        return "PAL 50Hz";
+    }
+    return "Unknown";
+}
+
+// ============================================================================
+// VIC-II PIN STATES
+// ============================================================================
+
+// Helper function to get VIC-II pin states for visualization
+static std::vector<PinSignalState> get_vicii_pin_states(vicii_t* vicii, const ChipLayout* layout, bus_state_t bus_state) {
+    if (!vicii || !layout) return {};
+
+    // Generic bus-derived pin states (address, data, power, clock, control)
+    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
+
+    // VIC-II specific: IRQ driven by VIC-II (override direction from generic)
+    if (vicii->registers.data[0x19] & 0x80) {
+        pin_states[5].signal_level = false; // IRQ (pin 6) - active low, asserted
+        pin_states[5].drive_direction = true;
+        pin_states[5].high_impedance = false;
+    }
+
+    // Video output pins (always driven by VIC-II)
+    pin_states[16].signal_level = true; // LUMA (pin 17)
+    pin_states[16].drive_direction = true;
+    pin_states[16].high_impedance = false;
+    pin_states[17].signal_level = true; // CHROMA (pin 18)
+    pin_states[17].drive_direction = true;
+    pin_states[17].high_impedance = false;
+    pin_states[18].signal_level = true; // CSYNC (pin 19)
+    pin_states[18].drive_direction = true;
+    pin_states[18].high_impedance = false;
+
+    return pin_states;
+}
+
 std::vector<PinSignalState> vicii_t::get_layout_pin_states(ChipLayout& layout) {
     return get_vicii_pin_states(this, &layout, bus_snapshot_);
 }
 
 const char* vicii_t::get_layout_chip_name() const {
     return get_vicii_type_name(this);
+}
+
+// ============================================================================
+// VIC-II GUI SETTINGS
+// ============================================================================
+
+void vicii_t::render_settings_content() {
+    vicii_t* vicii = this;
+
+    ImGui::Text("VIC-II Configuration");
+    ImGui::Separator();
+    
+    ImGui::Text("Chip Type: %s", get_vicii_type_name(vicii));
+    ImGui::Text("Video Standard: %s", get_video_standard(vicii));
+    ImGui::Text("Timing: %d cycles/line, %d lines/frame", vicii->config->cycles_per_line, vicii->config->total_lines);
+    
+    ImGui::Separator();
+    
+    ImGui::Text("Display Settings");
+    // Add interactive controls here later if needed
+    ImGui::Text("(Settings controls will be added here)");
 }
 
 #endif // CERMU_HAS_GUI

@@ -22,119 +22,9 @@
 
 #ifdef CERMU_HAS_GUI
 
-// Forward declarations
-static const char* mos6522_get_via_name(const mos6522_t* via);
-
-// ============================================================================
-// MOS6522 VIA LAYOUT (40-pin DIP)
-// ============================================================================
-
-// ============================================================================
-// MOS6522 VIA PIN STATES
-// ============================================================================
-
-static std::vector<PinSignalState> get_via_pin_states(mos6522_t* via, const ChipLayout* layout, bus_state_t bus_state) {
-    if (!via || !layout) return {};
-
-    // Generic bus-derived pin states (address, data, power, clock, control)
-    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
-    int total_pins = static_cast<int>(pin_states.size());
-
-    // VIA specific: Port A pins (PA0-PA7, pins 2-9)
-    for (int i = 0; i < 8; i++) {
-        int pin_idx = i + 1; // PA0 is pin 2, index 1
-        if (pin_idx < total_pins) {
-            pin_states[pin_idx].signal_level = (via->port_a_regs.pins & (1 << i)) != 0;
-            pin_states[pin_idx].drive_direction = (via->port_a_regs.ddr & (1 << i)) != 0;
-            pin_states[pin_idx].high_impedance = !(via->port_a_regs.ddr & (1 << i));
-        }
-    }
-
-    // Port B pins (PB0-PB7, pins 10-17)
-    for (int i = 0; i < 8; i++) {
-        int pin_idx = i + 9; // PB0 is pin 10, index 9
-        if (pin_idx < total_pins) {
-            pin_states[pin_idx].signal_level = (via->port_b_regs.pins & (1 << i)) != 0;
-            pin_states[pin_idx].drive_direction = (via->port_b_regs.ddr & (1 << i)) != 0;
-            pin_states[pin_idx].high_impedance = !(via->port_b_regs.ddr & (1 << i));
-        }
-    }
-
-    // IRQ pin (pin 21, index 20) — VIA drives IRQ as output
-    if (20 < total_pins) {
-        pin_states[20].signal_level = !via->interrupt_active; // Active low
-        pin_states[20].drive_direction = true;
-        pin_states[20].high_impedance = false;
-    }
-
-    return pin_states;
-}
-
-// ============================================================================
-// HELPER: VIA IDENTIFICATION
-// ============================================================================
-
-static const char* mos6522_get_via_name(const mos6522_t* via) {
-    // The VIC-20 has two VIAs distinguished by their interrupt line
-    if (via->interrupt_bit == BUS_NMI_BIT) {
-        return "VIA 1 ($9110)";  // VIA1 at $9110 drives NMI
-    } else if (via->interrupt_bit == BUS_IRQ_BIT) {
-        return "VIA 2 ($9120)";  // VIA2 at $9120 drives IRQ
-    }
-    return "VIA";
-}
-
-#endif // CERMU_HAS_GUI (layout/pin helpers)
-
-// ============================================================================
-// MOS6522 VIA GUI SETTINGS
-// ============================================================================
-
-#ifdef CERMU_HAS_GUI
-void mos6522_t::render_settings_content() {
-    mos6522_t* via = this;
-    const char* via_name = mos6522_get_via_name(via);
-
-    ImGui::Text("Versatile Interface Adapter - %s Configuration", via_name);
-    ImGui::Separator();
-    ImGui::Text("Chip Type: MOS 6522 VIA");
-
-    // Extended register view
-    if (ImGui::CollapsingHeader("Raw Registers ($00-$0F)", ImGuiTreeNodeFlags_DefaultOpen)) {
-        for (int i = 0; i < 16; i++) {
-            ImGui::Text("$%02X: $%02X", i, via->registers[i]);
-        }
-    }
-
-    if (ImGui::CollapsingHeader("Port Details")) {
-        // Port A pin-by-pin
-        ImGui::Text("Port A (pin by pin):");
-        for (int i = 0; i < 8; i++) {
-            bool is_output = (via->port_a_regs.ddr & (1 << i)) != 0;
-            bool pin_level = (via->port_a_regs.pins & (1 << i)) != 0;
-            ImGui::Text("  PA%d: %s  Dir: %s", i, pin_level ? "HIGH" : "LOW",
-                        is_output ? "OUT" : "IN");
-        }
-
-        ImGui::Separator();
-
-        // Port B pin-by-pin
-        ImGui::Text("Port B (pin by pin):");
-        for (int i = 0; i < 8; i++) {
-            bool is_output = (via->port_b_regs.ddr & (1 << i)) != 0;
-            bool pin_level = (via->port_b_regs.pins & (1 << i)) != 0;
-            ImGui::Text("  PB%d: %s  Dir: %s", i, pin_level ? "HIGH" : "LOW",
-                        is_output ? "OUT" : "IN");
-        }
-    }
-}
-#endif // CERMU_HAS_GUI
-
 // ============================================================================
 // MOS6522 VIA layout virtuals
 // ============================================================================
-
-#ifdef CERMU_HAS_GUI
 
 ChipLayout* mos6522_t::create_chip_layout() const {
     static ChipLayout layout = [] {
@@ -178,12 +68,109 @@ ChipLayout* mos6522_t::create_chip_layout() const {
     return &layout;
 }
 
+// ============================================================================
+// MOS6522 VIA PIN STATES
+// ============================================================================
+
+static std::vector<PinSignalState> get_via_pin_states(mos6522_t* via, const ChipLayout* layout, bus_state_t bus_state) {
+    if (!via || !layout) return {};
+
+    // Generic bus-derived pin states (address, data, power, clock, control)
+    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
+    int total_pins = static_cast<int>(pin_states.size());
+
+    // VIA specific: Port A pins (PA0-PA7, pins 2-9)
+    for (int i = 0; i < 8; i++) {
+        int pin_idx = i + 1; // PA0 is pin 2, index 1
+        if (pin_idx < total_pins) {
+            pin_states[pin_idx].signal_level = (via->port_a_regs.pins & (1 << i)) != 0;
+            pin_states[pin_idx].drive_direction = (via->port_a_regs.ddr & (1 << i)) != 0;
+            pin_states[pin_idx].high_impedance = !(via->port_a_regs.ddr & (1 << i));
+        }
+    }
+
+    // Port B pins (PB0-PB7, pins 10-17)
+    for (int i = 0; i < 8; i++) {
+        int pin_idx = i + 9; // PB0 is pin 10, index 9
+        if (pin_idx < total_pins) {
+            pin_states[pin_idx].signal_level = (via->port_b_regs.pins & (1 << i)) != 0;
+            pin_states[pin_idx].drive_direction = (via->port_b_regs.ddr & (1 << i)) != 0;
+            pin_states[pin_idx].high_impedance = !(via->port_b_regs.ddr & (1 << i));
+        }
+    }
+
+    // IRQ pin (pin 21, index 20) — VIA drives IRQ as output
+    if (20 < total_pins) {
+        pin_states[20].signal_level = !via->interrupt_active; // Active low
+        pin_states[20].drive_direction = true;
+        pin_states[20].high_impedance = false;
+    }
+
+    return pin_states;
+}
+
 std::vector<PinSignalState> mos6522_t::get_layout_pin_states(ChipLayout& layout) {
     return get_via_pin_states(this, &layout, bus_snapshot_);
 }
 
+// ============================================================================
+// HELPER: VIA IDENTIFICATION
+// ============================================================================
+
+static const char* mos6522_get_via_name(const mos6522_t* via) {
+    // The VIC-20 has two VIAs distinguished by their interrupt line
+    if (via->interrupt_bit == BUS_NMI_BIT) {
+        return "VIA 1 ($9110)";  // VIA1 at $9110 drives NMI
+    } else if (via->interrupt_bit == BUS_IRQ_BIT) {
+        return "VIA 2 ($9120)";  // VIA2 at $9120 drives IRQ
+    }
+    return "VIA";
+}
+
 const char* mos6522_t::get_layout_chip_name() const {
     return mos6522_get_via_name(this);
+}
+
+// ============================================================================
+// MOS6522 VIA GUI SETTINGS
+// ============================================================================
+
+void mos6522_t::render_settings_content() {
+    mos6522_t* via = this;
+    const char* via_name = mos6522_get_via_name(via);
+
+    ImGui::Text("Versatile Interface Adapter - %s Configuration", via_name);
+    ImGui::Separator();
+    ImGui::Text("Chip Type: MOS 6522 VIA");
+
+    // Extended register view
+    if (ImGui::CollapsingHeader("Raw Registers ($00-$0F)", ImGuiTreeNodeFlags_DefaultOpen)) {
+        for (int i = 0; i < 16; i++) {
+            ImGui::Text("$%02X: $%02X", i, via->registers[i]);
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Port Details")) {
+        // Port A pin-by-pin
+        ImGui::Text("Port A (pin by pin):");
+        for (int i = 0; i < 8; i++) {
+            bool is_output = (via->port_a_regs.ddr & (1 << i)) != 0;
+            bool pin_level = (via->port_a_regs.pins & (1 << i)) != 0;
+            ImGui::Text("  PA%d: %s  Dir: %s", i, pin_level ? "HIGH" : "LOW",
+                        is_output ? "OUT" : "IN");
+        }
+
+        ImGui::Separator();
+
+        // Port B pin-by-pin
+        ImGui::Text("Port B (pin by pin):");
+        for (int i = 0; i < 8; i++) {
+            bool is_output = (via->port_b_regs.ddr & (1 << i)) != 0;
+            bool pin_level = (via->port_b_regs.pins & (1 << i)) != 0;
+            ImGui::Text("  PB%d: %s  Dir: %s", i, pin_level ? "HIGH" : "LOW",
+                        is_output ? "OUT" : "IN");
+        }
+    }
 }
 
 #endif // CERMU_HAS_GUI
