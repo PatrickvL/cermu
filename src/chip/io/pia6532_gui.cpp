@@ -45,6 +45,45 @@
 
 #ifdef CERMU_HAS_GUI
 
+// ============================================================================
+// ChipBase layout virtuals
+// ============================================================================
+
+ChipLayout* pia6532_t::create_chip_layout() const {
+    static ChipLayout layout = [] {
+        ChipLayout layout = create_dip40_layout();
+
+        layout.markings.part_number  = "MOS 6532";
+        layout.markings.manufacturer = "MOS Technology";
+        layout.markings.custom_text  = "RIOT";
+
+        //                  LEFT                         RIGHT
+        PIN_LR(layout,  1, VSS,         VCC,         40);
+        PIN_LR(layout,  2, A6,          _CS2,        39);
+        PIN_LR(layout,  3, PHI2,        CS1,         38);
+        PIN_LR(layout,  4, RS,          PB7,         37);
+        PIN_LR(layout,  5, RW,          PB6,         36);
+        PIN_LR(layout,  6, _RES,        PB5,         35);
+        PIN_LR(layout,  7, _IRQ,        PB4,         34);
+        PIN_LR(layout,  8, D7,          PB3,         33);
+        PIN_LR(layout,  9, D6,          PB2,         32);
+        PIN_LR(layout, 10, D5,          PB1,         31);
+        PIN_LR(layout, 11, D4,          PB0,         30);
+        PIN_LR(layout, 12, D3,          PA7,         29);
+        PIN_LR(layout, 13, D2,          PA6,         28);
+        PIN_LR(layout, 14, D1,          PA5,         27);
+        PIN_LR(layout, 15, D0,          PA4,         26);
+        PIN_LR(layout, 16, A0,          PA3,         25);
+        PIN_LR(layout, 17, A1,          PA2,         24);
+        PIN_LR(layout, 18, A2,          PA1,         23);
+        PIN_LR(layout, 19, A3,          PA0,         22);
+        PIN_LR(layout, 20, A4,          A5,          21);
+
+        return layout;
+    }();
+    return &layout;
+}
+
 // Helper: derive PIA6532 pin states from bus snapshot + chip internals
 static std::vector<PinSignalState> get_pia6532_pin_states(
         pia6532_t* riot, const ChipLayout* layout, bus_state_t bus_state) {
@@ -101,49 +140,6 @@ static std::vector<PinSignalState> get_pia6532_pin_states(
     ps[38].signal_valid    = true;
 
     return ps;
-}
-
-#endif // CERMU_HAS_GUI (layout/pin helpers)
-
-// ============================================================================
-// ChipBase layout virtuals
-// ============================================================================
-
-#ifdef CERMU_HAS_GUI
-
-ChipLayout* pia6532_t::create_chip_layout() const {
-    static ChipLayout layout = [] {
-        ChipLayout layout = create_dip40_layout();
-
-        layout.markings.part_number  = "MOS 6532";
-        layout.markings.manufacturer = "MOS Technology";
-        layout.markings.custom_text  = "RIOT";
-
-        //                  LEFT                         RIGHT
-        PIN_LR(layout,  1, VSS,         VCC,         40);
-        PIN_LR(layout,  2, A6,          _CS2,        39);
-        PIN_LR(layout,  3, PHI2,        CS1,         38);
-        PIN_LR(layout,  4, RS,          PB7,         37);
-        PIN_LR(layout,  5, RW,          PB6,         36);
-        PIN_LR(layout,  6, _RES,        PB5,         35);
-        PIN_LR(layout,  7, _IRQ,        PB4,         34);
-        PIN_LR(layout,  8, D7,          PB3,         33);
-        PIN_LR(layout,  9, D6,          PB2,         32);
-        PIN_LR(layout, 10, D5,          PB1,         31);
-        PIN_LR(layout, 11, D4,          PB0,         30);
-        PIN_LR(layout, 12, D3,          PA7,         29);
-        PIN_LR(layout, 13, D2,          PA6,         28);
-        PIN_LR(layout, 14, D1,          PA5,         27);
-        PIN_LR(layout, 15, D0,          PA4,         26);
-        PIN_LR(layout, 16, A0,          PA3,         25);
-        PIN_LR(layout, 17, A1,          PA2,         24);
-        PIN_LR(layout, 18, A2,          PA1,         23);
-        PIN_LR(layout, 19, A3,          PA0,         22);
-        PIN_LR(layout, 20, A4,          A5,          21);
-
-        return layout;
-    }();
-    return &layout;
 }
 
 std::vector<PinSignalState> pia6532_t::get_layout_pin_states(ChipLayout& layout) {

@@ -45,6 +45,45 @@
 
 #ifdef CERMU_HAS_GUI
 
+// ============================================================================
+// ChipBase layout virtuals
+// ============================================================================
+
+ChipLayout* tia_t::create_chip_layout() const {
+    static ChipLayout layout = [] {
+        ChipLayout layout = create_dip40_layout();
+
+        layout.markings.part_number  = "CO10444";
+        layout.markings.manufacturer = "Atari";
+        layout.markings.custom_text  = "TIA";
+
+        //                  LEFT                         RIGHT
+        PIN_LR(layout,  1, VSS,         VTIA,        40);
+        PIN_LR(layout,  2, COLOR_CLK,   PHI2,        39);
+        PIN_LR(layout,  3, _CS1,        RDY,         38);
+        PIN_LR(layout,  4, CS0,         DUMP,        37);
+        PIN_LR(layout,  5, CS3,         INPT0,       36);
+        PIN_LR(layout,  6, RW,          INPT1,       35);
+        PIN_LR(layout,  7, PHI0,        INPT2,       34);
+        PIN_LR(layout,  8, D0,          INPT3,       33);
+        PIN_LR(layout,  9, D1,          INPT4,       32);
+        PIN_LR(layout, 10, D2,          INPT5,       31);
+        PIN_LR(layout, 11, D3,          OSC_IN,      30);
+        PIN_LR(layout, 12, D4,          OSC_OUT,     29);
+        PIN_LR(layout, 13, D5,          A0,          28);
+        PIN_LR(layout, 14, D6,          A1,          27);
+        PIN_LR(layout, 15, D7,          A2,          26);
+        PIN_LR(layout, 16, AUD0,        A3,          25);
+        PIN_LR(layout, 17, AUD1,        A4,          24);
+        PIN_LR(layout, 18, COLU,        A5,          23);
+        PIN_LR(layout, 19, LUMA,        VCC,         22);
+        PIN_LR(layout, 20, COMP_BLK,    CSYNC,       21);
+
+        return layout;
+    }();
+    return &layout;
+}
+
 // Helper: derive TIA pin states from bus snapshot + chip internals
 static std::vector<PinSignalState> get_tia_pin_states(
         tia_t* tia, const ChipLayout* layout, bus_state_t bus_state) {
@@ -149,49 +188,6 @@ static std::vector<PinSignalState> get_tia_pin_states(
     ps[39].analog_voltage  = 5.0f;
 
     return ps;
-}
-
-#endif // CERMU_HAS_GUI (layout/pin helpers)
-
-// ============================================================================
-// ChipBase layout virtuals
-// ============================================================================
-
-#ifdef CERMU_HAS_GUI
-
-ChipLayout* tia_t::create_chip_layout() const {
-    static ChipLayout layout = [] {
-        ChipLayout layout = create_dip40_layout();
-
-        layout.markings.part_number  = "CO10444";
-        layout.markings.manufacturer = "Atari";
-        layout.markings.custom_text  = "TIA";
-
-        //                  LEFT                         RIGHT
-        PIN_LR(layout,  1, VSS,         VTIA,        40);
-        PIN_LR(layout,  2, COLOR_CLK,   PHI2,        39);
-        PIN_LR(layout,  3, _CS1,        RDY,         38);
-        PIN_LR(layout,  4, CS0,         DUMP,        37);
-        PIN_LR(layout,  5, CS3,         INPT0,       36);
-        PIN_LR(layout,  6, RW,          INPT1,       35);
-        PIN_LR(layout,  7, PHI0,        INPT2,       34);
-        PIN_LR(layout,  8, D0,          INPT3,       33);
-        PIN_LR(layout,  9, D1,          INPT4,       32);
-        PIN_LR(layout, 10, D2,          INPT5,       31);
-        PIN_LR(layout, 11, D3,          OSC_IN,      30);
-        PIN_LR(layout, 12, D4,          OSC_OUT,     29);
-        PIN_LR(layout, 13, D5,          A0,          28);
-        PIN_LR(layout, 14, D6,          A1,          27);
-        PIN_LR(layout, 15, D7,          A2,          26);
-        PIN_LR(layout, 16, AUD0,        A3,          25);
-        PIN_LR(layout, 17, AUD1,        A4,          24);
-        PIN_LR(layout, 18, COLU,        A5,          23);
-        PIN_LR(layout, 19, LUMA,        VCC,         22);
-        PIN_LR(layout, 20, COMP_BLK,    CSYNC,       21);
-
-        return layout;
-    }();
-    return &layout;
 }
 
 std::vector<PinSignalState> tia_t::get_layout_pin_states(ChipLayout& layout) {

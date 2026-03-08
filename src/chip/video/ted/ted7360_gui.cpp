@@ -24,53 +24,8 @@
 #ifdef CERMU_HAS_GUI
 
 // ============================================================================
-// TED 7360 LAYOUT (48-pin DIP)
-// ============================================================================
-
-// ============================================================================
-// TED PIN STATES
-// ============================================================================
-
-static std::vector<PinSignalState> get_ted_pin_states(ted7360_t* ted, const ChipLayout* layout, bus_state_t bus_state) {
-    if (!ted || !layout) return {};
-
-    // Generic bus-derived pin states (address, data, power, clock, control)
-    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
-
-    // TED specific: IRQ (pin 43, index 42) — driven by TED
-    pin_states[42].signal_level = !ted->irq_pending();
-    pin_states[42].drive_direction = true;
-    pin_states[42].high_impedance = false;
-
-    // BA pin (pin 44, index 43) — high when CPU has bus
-    pin_states[43].signal_level = !ted->bus.ba_low;
-    pin_states[43].drive_direction = true;
-    pin_states[43].high_impedance = false;
-
-    // Video output pins (always driven)
-    pin_states[21].signal_level = true; // LUMA (pin 22)
-    pin_states[21].drive_direction = true;
-    pin_states[21].high_impedance = false;
-    pin_states[22].signal_level = true; // CHROMA (pin 23)
-    pin_states[22].drive_direction = true;
-    pin_states[22].high_impedance = false;
-
-    // Sound output (pin 27, index 26) — active if any channel enabled
-    bool sound_active = ted->sound.ch1_enabled || ted->sound.ch2_enabled || ted->sound.noise_enabled;
-    pin_states[26].signal_level = sound_active;
-    pin_states[26].drive_direction = true;
-    pin_states[26].high_impedance = false;
-
-    return pin_states;
-}
-
-#endif // CERMU_HAS_GUI (layout/pin helpers)
-
-// ============================================================================
 // ChipBase interface implementation
 // ============================================================================
-
-#ifdef CERMU_HAS_GUI
 
 bool ted7360_t::has_settings_content() const { return true; }
 
@@ -119,17 +74,51 @@ ChipLayout* ted7360_t::create_chip_layout() const {
     return &layout;
 }
 
+// ============================================================================
+// TED PIN STATES
+// ============================================================================
+
+static std::vector<PinSignalState> get_ted_pin_states(ted7360_t* ted, const ChipLayout* layout, bus_state_t bus_state) {
+    if (!ted || !layout) return {};
+
+    // Generic bus-derived pin states (address, data, power, clock, control)
+    auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
+
+    // TED specific: IRQ (pin 43, index 42) — driven by TED
+    pin_states[42].signal_level = !ted->irq_pending();
+    pin_states[42].drive_direction = true;
+    pin_states[42].high_impedance = false;
+
+    // BA pin (pin 44, index 43) — high when CPU has bus
+    pin_states[43].signal_level = !ted->bus.ba_low;
+    pin_states[43].drive_direction = true;
+    pin_states[43].high_impedance = false;
+
+    // Video output pins (always driven)
+    pin_states[21].signal_level = true; // LUMA (pin 22)
+    pin_states[21].drive_direction = true;
+    pin_states[21].high_impedance = false;
+    pin_states[22].signal_level = true; // CHROMA (pin 23)
+    pin_states[22].drive_direction = true;
+    pin_states[22].high_impedance = false;
+
+    // Sound output (pin 27, index 26) — active if any channel enabled
+    bool sound_active = ted->sound.ch1_enabled || ted->sound.ch2_enabled || ted->sound.noise_enabled;
+    pin_states[26].signal_level = sound_active;
+    pin_states[26].drive_direction = true;
+    pin_states[26].high_impedance = false;
+
+    return pin_states;
+}
+
 std::vector<PinSignalState> ted7360_t::get_layout_pin_states(ChipLayout& layout) {
     return get_ted_pin_states(this, &layout, bus_snapshot_);
 }
-
-#endif // CERMU_HAS_GUI
 
 // ============================================================================
 // TED 7360 GUI SETTINGS WINDOW
 // ============================================================================
 
-#ifdef CERMU_HAS_GUI
 void ted7360_t::render_settings_content() {
     ted7360_t* ted = this;
 

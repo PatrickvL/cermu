@@ -24,6 +24,10 @@
 
 #ifdef CERMU_HAS_GUI
 
+// ============================================================================
+// RICOH 2C02 PPU LAYOUT (40-pin DIP)
+// ============================================================================
+
 inline ChipLayout create_ppu_layout(bool pal) {
     ChipLayout layout = create_dip40_layout();
 
@@ -63,6 +67,18 @@ inline ChipLayout create_ppu_layout(bool pal) {
 }
 
 // ============================================================================
+// ChipBase interface implementation
+// ============================================================================
+
+bool nes_system::PPU::has_settings_content() const { return true; }
+
+ChipLayout* nes_system::PPU::create_chip_layout() const {
+    static ChipLayout layout_ntsc = create_ppu_layout(false);
+    static ChipLayout layout_pal  = create_ppu_layout(true);
+    return is_pal ? &layout_pal : &layout_ntsc;
+}
+
+// ============================================================================
 // PPU PIN STATES
 // ============================================================================
 
@@ -86,22 +102,6 @@ static std::vector<PinSignalState> get_ppu_pin_states(nes_system::PPU* ppu, cons
     return pin_states;
 }
 
-#endif // CERMU_HAS_GUI (layout/pin helpers)
-
-// ============================================================================
-// ChipBase interface implementation
-// ============================================================================
-
-#ifdef CERMU_HAS_GUI
-
-bool nes_system::PPU::has_settings_content() const { return true; }
-
-ChipLayout* nes_system::PPU::create_chip_layout() const {
-    static ChipLayout layout_ntsc = create_ppu_layout(false);
-    static ChipLayout layout_pal  = create_ppu_layout(true);
-    return is_pal ? &layout_pal : &layout_ntsc;
-}
-
 std::vector<PinSignalState> nes_system::PPU::get_layout_pin_states(ChipLayout& layout) {
     return get_ppu_pin_states(this, &layout, bus_snapshot_);
 }
@@ -110,13 +110,10 @@ const char* nes_system::PPU::get_layout_chip_name() const {
     return is_pal ? "RP2C07" : "RP2C02";
 }
 
-#endif // CERMU_HAS_GUI
-
 // ============================================================================
 // NES PPU GUI SETTINGS
 // ============================================================================
 
-#ifdef CERMU_HAS_GUI
 void nes_system::PPU::render_settings_content() {
     auto* ppu = this;
 

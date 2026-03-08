@@ -60,6 +60,38 @@ static constexpr bus_state_t FAM65XX_GUI_DEFAULT_STATE =
     BUS_BIT(BUS_RW_BIT) | BUS_BIT(BUS_RDY_BIT) | BUS_BIT(BUS_RES_BIT) |
     BUS_BIT(BUS_IRQ_BIT) | BUS_BIT(BUS_NMI_BIT);
 
+// ============================================================================
+// ChipBase VIRTUAL METHOD IMPLEMENTATIONS (template definitions)
+// Must be inside namespace fam65xx for proper linkage of explicit instantiations
+// ============================================================================
+
+namespace fam65xx {
+
+template <const CPUTraits &Traits>
+ChipLayout* fam65xx_t<Traits>::create_chip_layout() const {
+    static ChipLayout layout = create_cpu_pin_layout<Traits>();
+    return &layout;
+}
+
+template <const CPUTraits &Traits>
+std::vector<PinSignalState> fam65xx_t<Traits>::get_layout_pin_states(ChipLayout& layout) {
+    bus_state_t bus_state = this->bus_snapshot_;
+    if (bus_state == 0) {
+      bus_state = FAM65XX_GUI_DEFAULT_STATE;
+      BUS_SET_ADDR(bus_state, this->get(REG_AB));
+      BUS_SET_DATA(bus_state, this->get(REG_DL));
+    }
+    return get_cpu_pin_states<Traits>(this, &layout, bus_state);
+}
+
+template <const CPUTraits &Traits>
+const char* fam65xx_t<Traits>::get_layout_chip_name() const {
+    return get_processor_name<Traits>();
+}
+
+// ============================================================================
+// SETTINGS
+// ============================================================================
 
 template <const CPUTraits &Traits>
 void render_processor_features(fam65xx_t<Traits> *cpu) {
@@ -151,13 +183,6 @@ void render_processor_features(fam65xx_t<Traits> *cpu) {
   }
 }
 
-// ============================================================================
-// ChipBase VIRTUAL METHOD IMPLEMENTATIONS (template definitions)
-// Must be inside namespace fam65xx for proper linkage of explicit instantiations
-// ============================================================================
-
-namespace fam65xx {
-
 template <const CPUTraits &Traits>
 void fam65xx_t<Traits>::render_settings_content() {
     ImGui::Text("%s %s Configuration", Traits.get_vendor(), Traits.get_chip_id());
@@ -182,28 +207,6 @@ void fam65xx_t<Traits>::render_settings_content() {
 
     // Show processor-specific configuration options
     render_processor_features<Traits>(this);
-}
-
-template <const CPUTraits &Traits>
-ChipLayout* fam65xx_t<Traits>::create_chip_layout() const {
-    static ChipLayout layout = create_cpu_pin_layout<Traits>();
-    return &layout;
-}
-
-template <const CPUTraits &Traits>
-std::vector<PinSignalState> fam65xx_t<Traits>::get_layout_pin_states(ChipLayout& layout) {
-    bus_state_t bus_state = this->bus_snapshot_;
-    if (bus_state == 0) {
-      bus_state = FAM65XX_GUI_DEFAULT_STATE;
-      BUS_SET_ADDR(bus_state, this->get(REG_AB));
-      BUS_SET_DATA(bus_state, this->get(REG_DL));
-    }
-    return get_cpu_pin_states<Traits>(this, &layout, bus_state);
-}
-
-template <const CPUTraits &Traits>
-const char* fam65xx_t<Traits>::get_layout_chip_name() const {
-    return get_processor_name<Traits>();
 }
 
 // Explicit template instantiations for all CPU variants
