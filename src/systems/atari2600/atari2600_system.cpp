@@ -254,12 +254,13 @@ void Atari2600System::tick() {
     // Frame boundary detection:
     // When TIA VSYNC transitions from active to inactive, a new frame starts.
     // We detect this by watching the TIA's vsync flag.
-    if (in_vsync_ && !tia_.vsync_active) {
+    bool vsync_active = (tia_.write_regs[TIA_VSYNC] & 0x02) != 0;
+    if (in_vsync_ && !vsync_active) {
         // VSYNC just ended — frame is complete
         frame_complete_ = true;
         tia_.scanline = 0;  // Reset scanline counter for new frame
     }
-    in_vsync_ = tia_.vsync_active;
+    in_vsync_ = vsync_active;
 }
 
 void Atari2600System::run_frame() {
@@ -544,7 +545,7 @@ void Atari2600System::update_joystick_state() {
         if (!(sig0 & (1u << ConnectorSignals::JOY_LEFT)))  joystick_state_ &= ~0x40;
         if (!(sig0 & (1u << ConnectorSignals::JOY_RIGHT))) joystick_state_ &= ~0x80;
         // Fire button → TIA INPT4 (active-low: 0=pressed, 1=not pressed)
-        tia_.inpt4 = (sig0 & (1u << ConnectorSignals::JOY_FIRE)) != 0;
+        tia_.read_regs[TIA_INPT4] = (sig0 & (1u << ConnectorSignals::JOY_FIRE)) ? 0x80 : 0x00;
     }
 
     // Player 1 (connector port 1)
@@ -554,7 +555,7 @@ void Atari2600System::update_joystick_state() {
         if (!(sig1 & (1u << ConnectorSignals::JOY_DOWN)))  joystick_state_ &= ~0x02;
         if (!(sig1 & (1u << ConnectorSignals::JOY_LEFT)))  joystick_state_ &= ~0x04;
         if (!(sig1 & (1u << ConnectorSignals::JOY_RIGHT))) joystick_state_ &= ~0x08;
-        tia_.inpt5 = (sig1 & (1u << ConnectorSignals::JOY_FIRE)) != 0;
+        tia_.read_regs[TIA_INPT5] = (sig1 & (1u << ConnectorSignals::JOY_FIRE)) ? 0x80 : 0x00;
     }
 
     // Write joystick state to RIOT Port A and console switches to Port B

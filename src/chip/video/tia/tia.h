@@ -127,11 +127,7 @@ namespace tia_constants {
 // ============================================================================
 
 struct tia_audio_channel_t {
-    uint8_t  control  = 0;    // AUDC (waveform type, 4 bits)
-    uint8_t  frequency = 0;   // AUDF (frequency divider, 5 bits)
-    uint8_t  volume   = 0;    // AUDV (volume, 4 bits)
-
-    // Internal state
+    // Internal state only — register values live in tia_t::write_regs[]
     uint8_t  div_counter = 0; // Frequency divider counter
     uint8_t  poly4  = 0x0F;   // 4-bit polynomial counter (LFSR)
     uint8_t  poly5  = 0x1F;   // 5-bit polynomial counter
@@ -154,7 +150,22 @@ struct tia_t : public ChipBase {
 #endif
 
     // ========================================================================
-    // DISPLAY STATE
+    // REGISTER ARRAYS
+    // ========================================================================
+
+    // Write registers ($00-$2C) — raw byte as written by CPU.
+    // Strobe registers (RESPx, HMOVE, HMCLR, CXCLR, WSYNC, RSYNC) store
+    // the data written, though only the side-effect matters.
+    static constexpr int WRITE_REG_COUNT = 0x2D;  // 45 registers
+    uint8_t write_regs[WRITE_REG_COUNT] = {};
+
+    // Read registers ($00-$0D) — collision + input ports.
+    // Updated lazily in read().
+    static constexpr int READ_REG_COUNT = 0x0E;   // 14 registers
+    uint8_t read_regs[READ_REG_COUNT] = {};
+
+    // ========================================================================
+    // DISPLAY / TIMING STATE
     // ========================================================================
 
     // Horizontal position (0-227, in color clocks)
@@ -162,10 +173,6 @@ struct tia_t : public ChipBase {
 
     // Vertical position (scanline number, managed by system — TIA doesn't count them)
     uint16_t scanline = 0;
-
-    // VSYNC/VBLANK state
-    bool vsync_active  = false;
-    bool vblank_active = false;
 
     // WSYNC — halt CPU until end of scanline
     bool wsync_pending = false;
@@ -180,60 +187,20 @@ struct tia_t : public ChipBase {
     bool prev_vblank = false;    // Edge detection for VBLANK→visible transition
 
     // ========================================================================
-    // GRAPHICS REGISTERS
+    // GRAPHICS INTERNAL STATE (not directly register values)
     // ========================================================================
 
-    // Playfield (40-bit pattern: PF0[4:7] + PF1[0:7] + PF2[0:7] = 20 bits, reflected/repeated)
-    uint8_t pf0 = 0;
-    uint8_t pf1 = 0;
-    uint8_t pf2 = 0;
-    uint8_t ctrlpf = 0;    // D0=reflect, D1=score, D2=priority, D4-D5=ball size
-
-    // Player 0 and 1
-    uint8_t grp0 = 0;      // Graphics data for player 0
-    uint8_t grp1 = 0;      // Graphics data for player 1
+    // Latched graphics copies (vertical delay mechanism)
     uint8_t grp0_old = 0;  // Previous GRP0 (for vertical delay)
     uint8_t grp1_old = 0;  // Previous GRP1 (for vertical delay)
-    uint8_t nusiz0 = 0;    // Number-Size player/missile 0
-    uint8_t nusiz1 = 0;    // Number-Size player/missile 1
-    bool    refp0 = false;  // Reflect player 0
-    bool    refp1 = false;  // Reflect player 1
-    bool    vdelp0 = false; // Vertical delay player 0
-    bool    vdelp1 = false; // Vertical delay player 1
+    bool    enabl_old = false; // Previous ENABL (for vertical delay)
 
-    // Missiles
-    bool enam0 = false;
-    bool enam1 = false;
-    bool resmp0 = false;    // Lock M0 to P0
-    bool resmp1 = false;    // Lock M1 to P1
-
-    // Ball
-    bool enabl = false;
-    bool enabl_old = false; // Previous ENABL (for vertical delay)
-    bool vdelbl = false;
-
-    // Object positions (reset by RESPx, adjusted by HMxx)
+    // Object positions (reset by RESPx strobes, adjusted by HMxx via HMOVE)
     uint8_t pos_p0 = 0;
     uint8_t pos_p1 = 0;
     uint8_t pos_m0 = 0;
     uint8_t pos_m1 = 0;
     uint8_t pos_bl = 0;
-
-    // Horizontal motion registers (signed 4-bit: -8 to +7)
-    int8_t hm_p0 = 0;
-    int8_t hm_p1 = 0;
-    int8_t hm_m0 = 0;
-    int8_t hm_m1 = 0;
-    int8_t hm_bl = 0;
-
-    // ========================================================================
-    // COLORS
-    // ========================================================================
-
-    uint8_t colup0 = 0;    // Player 0 / Missile 0 color
-    uint8_t colup1 = 0;    // Player 1 / Missile 1 color
-    uint8_t colupf = 0;    // Playfield / Ball color
-    uint8_t colubk = 0;    // Background color
 
     // ========================================================================
     // COLLISION
@@ -273,23 +240,6 @@ struct tia_t : public ChipBase {
     // Each entry holds the pre-computed OR of all CX_* collision flags
     // for that combination of active objects.
     static const uint16_t collision_lut[64];
-
-    // ========================================================================
-    // INPUT PORTS
-    // ========================================================================
-
-    // Joystick fire buttons (active-low, directly readable)
-    bool inpt4 = true;      // Joystick 0 fire (1 = not pressed)
-    bool inpt5 = true;      // Joystick 1 fire
-
-    // Paddle inputs (not implemented yet — return high)
-    bool inpt0 = true;
-    bool inpt1 = true;
-    bool inpt2 = true;
-    bool inpt3 = true;
-
-    // Input latch mode (bit 6 of VBLANK)
-    bool input_latch_enabled = false;
 
     // ========================================================================
     // AUDIO
@@ -356,8 +306,8 @@ private:
     /// Render one pixel at the current h_counter position.
     void render_pixel();
 
-    /// Tick one audio channel.
-    void tick_audio_channel(tia_audio_channel_t& ch);
+    /// Tick one audio channel (0 or 1).
+    void tick_audio_channel(int ch_idx);
 
     /// Get playfield pixel bitmask at the given pixel position (0-159).
     /// Returns PX_PF if playfield is set, 0 otherwise.
