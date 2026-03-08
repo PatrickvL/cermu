@@ -4,6 +4,8 @@
 
 #include "z1013_system.h"
 #include "../../../core/system_registry.h"
+#include "../../../core/storage/rom_loader.h"
+#include "../../../core/config/path_discovery.h"
 #include <cstring>
 #include <cstdio>
 
@@ -78,7 +80,11 @@ bool Z1013System<V>::initialize() {
     if constexpr (Traits::has_basic_rom) {
         basic_rom_.resize(z1013_constants::BASIC_ROM_SIZE, 0xFF);
     }
-    load_roms();
+    std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
+    keyboard_column_select_ = 0xFF;
+    if (!load_roms()) {
+        printf("%s: Warning — ROMs not loaded\n", Traits::name);
+    }
     system_ready_ = true;
     return true;
 }
@@ -88,18 +94,39 @@ template<Z1013Variant V> void Z1013System<V>::reset() {
     if (!cpu_) return;
     pins_ = cpu_->reset(pins_);
     pio_.init();
+    std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
+    keyboard_column_select_ = 0xFF;
 }
 
 template<Z1013Variant V>
 void Z1013System<V>::tick() {
     if (!cpu_) return;
+
+    // CPU tick (one T-state)
     pins_ = cpu_->tick(pins_);
-    // TODO: Memory dispatch, PIO keyboard scanning, video refresh
+
+    // Bus dispatch — check Z80-specific MREQ/IORQ signals
+    bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
+    bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);
+
+    if (mreq) {
+        pins_ = mem_tick(pins_);
+    } else if (iorq) {
+        pins_ = io_tick(pins_);
+    }
+
     total_cycles_++;
+
+    // Refresh display once per frame
+    if (total_cycles_ % z1013_constants::TSTATES_PER_FRAME == 0) {
+        render_frame();
+    }
 }
 
 template<Z1013Variant V> void Z1013System<V>::run_frame() {
-    for (uint32_t i = 0; i < z1013_constants::TSTATES_PER_FRAME; ++i) tick();
+    const uint32_t cycles = static_cast<uint32_t>(
+        z1013_constants::TSTATES_PER_FRAME * speed_multiplier_);
+    for (uint32_t i = 0; i < cycles; ++i) tick();
 }
 
 template<Z1013Variant V> bool Z1013System<V>::load_file(const char*) { return false; }
@@ -110,14 +137,265 @@ template<Z1013Variant V> void Z1013System<V>::get_display_dimensions(int* w, int
 template<Z1013Variant V> void Z1013System<V>::set_framebuffer(uint32_t*, int, int) {}
 template<Z1013Variant V> uint32_t Z1013System<V>::get_audio_samples(float*, uint32_t) { return 0; }
 template<Z1013Variant V> void Z1013System<V>::set_audio_sample_rate(int hz) { audio_sample_rate_ = hz; }
-template<Z1013Variant V> void Z1013System<V>::handle_keyboard_event(SDL_Keycode, bool) {}
 template<Z1013Variant V> void Z1013System<V>::render_system_menu_items() {}
 template<Z1013Variant V> void Z1013System<V>::render_configuration_ui() {}
 template<Z1013Variant V> void Z1013System<V>::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
-template<Z1013Variant V> bus_state_t Z1013System<V>::mem_tick(bus_state_t pins) { return pins; }
-template<Z1013Variant V> bus_state_t Z1013System<V>::io_tick(bus_state_t pins) { return pins; }
-template<Z1013Variant V> bool Z1013System<V>::load_roms() { return false; }
+// ============================================================================
+// KEYBOARD HANDLING
+// ============================================================================
+//
+// Z1013 keyboard matrix (8 rows × 4 columns), scanned through the Z80 PIO:
+//   Port A (input):  column data (active-low when key pressed)
+//   I/O port $08:    row select (one bit high = scan that row)
+//
+// Matrix layout (Z1013.01 membrane keyboard):
+//   Row/Col:  3       2       1       0
+//   0:       DEL     P       O       N
+//   1:       M       L       K       J
+//   2:       I       H       G       F
+//   3:       E       D       C       B
+//   4:       A       9       8       7
+//   5:       6       5       4       3
+//   6:       2       1       0       SPACE
+//   7:       CTRL    SHIFT   ENTER   BACK
+// ============================================================================
+
+template<Z1013Variant V>
+void Z1013System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
+    auto set_key = [&](int row, int col) {
+        if (row < 0 || row >= z1013_constants::KEYBOARD_ROWS) return;
+        if (pressed)
+            keyboard_matrix_[row] &= ~(uint8_t)(1 << col);
+        else
+            keyboard_matrix_[row] |=  (uint8_t)(1 << col);
+    };
+
+    switch (key) {
+    // Row 4
+    case SDLK_a: set_key(4,3); break;
+    case SDLK_9: set_key(4,2); break;
+    case SDLK_8: set_key(4,1); break;
+    case SDLK_7: set_key(4,0); break;
+    // Row 5
+    case SDLK_6: set_key(5,3); break;
+    case SDLK_5: set_key(5,2); break;
+    case SDLK_4: set_key(5,1); break;
+    case SDLK_3: set_key(5,0); break;
+    // Row 6
+    case SDLK_2:     set_key(6,3); break;
+    case SDLK_1:     set_key(6,2); break;
+    case SDLK_0:     set_key(6,1); break;
+    case SDLK_SPACE: set_key(6,0); break;
+    // Row 7
+    case SDLK_LCTRL:
+    case SDLK_RCTRL:  set_key(7,3); break;
+    case SDLK_LSHIFT:
+    case SDLK_RSHIFT: set_key(7,2); break;
+    case SDLK_RETURN: set_key(7,1); break;
+    case SDLK_BACKSPACE:
+    case SDLK_DELETE: set_key(7,0); break;
+    // Row 0
+    case SDLK_p: set_key(0,2); break;
+    case SDLK_o: set_key(0,1); break;
+    case SDLK_n: set_key(0,0); break;
+    // Row 1
+    case SDLK_m: set_key(1,3); break;
+    case SDLK_l: set_key(1,2); break;
+    case SDLK_k: set_key(1,1); break;
+    case SDLK_j: set_key(1,0); break;
+    // Row 2
+    case SDLK_i: set_key(2,3); break;
+    case SDLK_h: set_key(2,2); break;
+    case SDLK_g: set_key(2,1); break;
+    case SDLK_f: set_key(2,0); break;
+    // Row 3
+    case SDLK_e: set_key(3,3); break;
+    case SDLK_d: set_key(3,2); break;
+    case SDLK_c: set_key(3,1); break;
+    case SDLK_b: set_key(3,0); break;
+    default: break;
+    }
+}
+
+// ============================================================================
+// MEMORY BUS DISPATCH
+// ============================================================================
+
+template<Z1013Variant V>
+bus_state_t Z1013System<V>::mem_tick(bus_state_t pins) {
+    uint16_t addr  = BUS_GET_ADDR(pins);
+    bool     is_rd = BUS_GET_BIT(pins, BUS_RW_BIT);
+
+    if (is_rd) {
+        uint8_t data = 0xFF;
+
+        if (static_cast<size_t>(addr) < ram_.size()) {
+            // $0000–$3FFF (16K) or $0000–$FFFF (64K): RAM
+            data = ram_[addr];
+        }
+        // Priority overrides — ROM and special memory areas shadow the RAM
+        if constexpr (Traits::has_basic_rom) {
+            if (addr >= z1013_constants::BASIC_ROM_BASE &&
+                addr <  z1013_constants::BASIC_ROM_BASE + z1013_constants::BASIC_ROM_SIZE) {
+                data = basic_rom_[addr - z1013_constants::BASIC_ROM_BASE];
+            }
+        }
+        if (addr >= z1013_constants::VIDEO_RAM_BASE &&
+            addr <  z1013_constants::VIDEO_RAM_BASE + z1013_constants::VIDEO_RAM_SIZE) {
+            data = video_ram_[addr - z1013_constants::VIDEO_RAM_BASE];
+        }
+        if (addr >= z1013_constants::MONITOR_ROM_BASE &&
+            addr <  z1013_constants::MONITOR_ROM_BASE + z1013_constants::MONITOR_ROM_SIZE) {
+            data = monitor_rom_[addr - z1013_constants::MONITOR_ROM_BASE];
+        }
+
+        BUS_SET_DATA(pins, data);
+    } else {
+        uint8_t data = BUS_GET_DATA(pins);
+
+        if (addr >= z1013_constants::VIDEO_RAM_BASE &&
+            addr <  z1013_constants::VIDEO_RAM_BASE + z1013_constants::VIDEO_RAM_SIZE) {
+            video_ram_[addr - z1013_constants::VIDEO_RAM_BASE] = data;
+        } else if (static_cast<size_t>(addr) < ram_.size()) {
+            ram_[addr] = data;
+        }
+        // Monitor ROM / BASIC ROM: writes silently ignored
+    }
+
+    return pins;
+}
+
+// ============================================================================
+// I/O BUS DISPATCH
+// ============================================================================
+
+template<Z1013Variant V>
+bus_state_t Z1013System<V>::io_tick(bus_state_t pins) {
+    uint8_t port  = static_cast<uint8_t>(BUS_GET_ADDR(pins) & 0xFF);
+    bool    is_rd = BUS_GET_BIT(pins, BUS_RW_BIT);
+
+    if (port <= z1013_constants::PIO_CTRL_B) {
+        // $00–$03: Z80 PIO (keyboard + cassette)
+        // Address bits: A0=port select (0=Port A, 1=Port B); A1=type (0=data, 1=control)
+        int  port_sel = port & 0x01;     // 0=Port A, 1=Port B
+        bool is_ctrl  = (port & 0x02) != 0;
+        if (is_rd) {
+            // Before reading Port A, update column data from keyboard matrix.
+            // keyboard_column_select_ holds the active row bitmask.
+            if (port_sel == 0) {
+                uint8_t cols = 0xFF;
+                for (int r = 0; r < z1013_constants::KEYBOARD_ROWS; r++) {
+                    if (keyboard_column_select_ & (1u << r)) {
+                        cols &= keyboard_matrix_[r];
+                    }
+                }
+                pio_.set_input(0, cols);
+            }
+            uint8_t data = pio_.read_data(port_sel);
+            BUS_SET_DATA(pins, data);
+        } else {
+            uint8_t data = BUS_GET_DATA(pins);
+            if (is_ctrl) {
+                pio_.write_control(port_sel, data);
+            } else {
+                pio_.write_data(port_sel, data);
+            }
+        }
+    } else if (port == z1013_constants::KEYBOARD_SEL_PORT) {
+        // $08: keyboard row select register
+        if (!is_rd) {
+            keyboard_column_select_ = BUS_GET_DATA(pins);
+        }
+    }
+
+    return pins;
+}
+
+// ============================================================================
+// DISPLAY RENDERING
+// ============================================================================
+//
+// The Z1013 has a 32×32 character display. Each screen position maps to one
+// byte in video RAM ($EC00–$EFFF). The character ROM provides 8×8 bitmaps
+// for 256 characters (2 KB ROM). Each character is rendered as 8×8 pixels.
+//
+// If the character ROM has not been loaded, all characters render as blank.
+// ============================================================================
+
+template<Z1013Variant V>
+void Z1013System<V>::render_frame() {
+    static constexpr int COLS = z1013_constants::TEXT_COLS;
+    static constexpr int ROWS = z1013_constants::TEXT_ROWS;
+    static constexpr int CW   = 8;
+    static constexpr int CH   = 8;
+
+    static constexpr uint32_t FG = 0xFFFFFFFF;  // White text
+    static constexpr uint32_t BG = 0xFF000000;  // Black background
+
+    for (int row = 0; row < ROWS; row++) {
+        for (int col = 0; col < COLS; col++) {
+            uint8_t chr = video_ram_[row * COLS + col];
+            int fb_x = col * CW;
+            int fb_y = row * CH;
+
+            for (int gy = 0; gy < CH; gy++) {
+                // char ROM: 256 chars × 8 bytes. Each byte = one row of 8 pixels.
+                uint8_t bits = char_rom_[chr * 8 + gy];
+                for (int gx = 0; gx < CW; gx++) {
+                    int    px  = fb_x + gx;
+                    int    py  = fb_y + gy;
+                    bool   set = (bits & (0x80u >> gx)) != 0;
+                    framebuffer_[py * z1013_constants::FB_WIDTH + px] = set ? FG : BG;
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// ROM LOADING
+// ============================================================================
+
+template<Z1013Variant V>
+bool Z1013System<V>::load_roms() {
+    char rom_root[512];
+    const char* names[] = {"z1013", "Z1013", nullptr};
+    if (!system_config_discover_rom_root(names, rom_root, sizeof(rom_root))) {
+        printf("%s: ROM path not found\n", Traits::name);
+        return false;
+    }
+
+    bool ok = true;
+
+    // Monitor ROM (2 KB at $F000)
+    const char* mon_names[] = {"z1013_mon.rom", "monitor.rom", "MON.ROM", nullptr};
+    if (!rom_loader_load_from_root(rom_root, mon_names,
+                                   z1013_constants::MONITOR_ROM_SIZE,
+                                   monitor_rom_.data(), monitor_rom_.size())) {
+        printf("%s: Monitor ROM not loaded\n", Traits::name);
+        ok = false;
+    }
+
+    // Character ROM (2 KB)
+    const char* char_names[] = {"z1013_char.rom", "charrom.bin", "CHAR.ROM", nullptr};
+    rom_loader_load_from_root(rom_root, char_names,
+                              z1013_constants::CHAR_ROM_SIZE,
+                              char_rom_.data(), char_rom_.size());  // optional
+
+    // BASIC ROM (10 KB, Z1013.64 only)
+    if constexpr (Traits::has_basic_rom) {
+        const char* basic_names[] = {"z1013_basic.rom", "BASIC.ROM", nullptr};
+        if (!rom_loader_load_from_root(rom_root, basic_names,
+                                       z1013_constants::BASIC_ROM_SIZE,
+                                       basic_rom_.data(), basic_rom_.size())) {
+            printf("%s: BASIC ROM not loaded\n", Traits::name);
+            ok = false;
+        }
+    }
+
+    return ok;
+}
 
 // ============================================================================
 // EXPLICIT INSTANTIATIONS
