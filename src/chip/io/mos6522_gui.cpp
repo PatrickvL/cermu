@@ -23,7 +23,7 @@
 #ifdef CERMU_HAS_GUI
 
 // Forward declarations
-static const char* mos6522_get_via_name(mos6522_t* via);
+static const char* mos6522_get_via_name(const mos6522_t* via);
 
 // ============================================================================
 // MOS6522 VIA LAYOUT (40-pin DIP)
@@ -43,21 +43,22 @@ inline ChipLayout create_mos6522_layout() {
     };
 
     // Hardware-accurate MOS6522 VIA pinout (40-pin DIP)
+    // Per MOS Technology MOS 6522 Versatile Interface Adapter datasheet (1977)
     PIN_LR(layout,  1, VSS,     CA1, 40)        // gnd / handshake in
     PIN_LR(layout,  2, PA0,     CA2, 39)        // port A lo / handshake I/O
-    PIN_LR(layout,  3, PA1,     A3, 38)         // / reg sel 3
-    PIN_LR(layout,  4, PA2,     A2, 37)         // / reg sel 2
-    PIN_LR(layout,  5, PA3,     A1, 36)         // / reg sel 1
-    PIN_LR(layout,  6, PA4,     A0, 35)         // / reg sel 0
+    PIN_LR(layout,  3, PA1,     A3, 38)         // / RS3
+    PIN_LR(layout,  4, PA2,     A2, 37)         // / RS2
+    PIN_LR(layout,  5, PA3,     A1, 36)         // / RS1
+    PIN_LR(layout,  6, PA4,     A0, 35)         // / RS0
     PIN_LR(layout,  7, PA5,     _RES, 34)       // / reset
-    PIN_LR(layout,  8, PA6,     D7, 33)         // / data hi
-    PIN_LR(layout,  9, PA7,     D6, 32)         // port A hi
-    PIN_LR(layout, 10, PB0,     D5, 31)         // port B lo
-    PIN_LR(layout, 11, PB1,     D4, 30)
-    PIN_LR(layout, 12, PB2,     D3, 29)
-    PIN_LR(layout, 13, PB3,     D2, 28)
-    PIN_LR(layout, 14, PB4,     D1, 27)
-    PIN_LR(layout, 15, PB5,     D0, 26)         // / data lo
+    PIN_LR(layout,  8, PA6,     D0, 33)         // / data lo
+    PIN_LR(layout,  9, PA7,     D1, 32)         // port A hi
+    PIN_LR(layout, 10, PB0,     D2, 31)         // port B lo
+    PIN_LR(layout, 11, PB1,     D3, 30)
+    PIN_LR(layout, 12, PB2,     D4, 29)
+    PIN_LR(layout, 13, PB3,     D5, 28)
+    PIN_LR(layout, 14, PB4,     D6, 27)
+    PIN_LR(layout, 15, PB5,     D7, 26)         // / data hi
     PIN_LR(layout, 16, PB6,     PHI2, 25)       // / clock
     PIN_LR(layout, 17, PB7,     CS1, 24)        // port B hi / chip sel 1
     PIN_LR(layout, 18, CB1,     _CS2, 23)       // handshake / chip sel 2
@@ -117,7 +118,7 @@ static ChipLayout& get_via_layout() {
 // HELPER: VIA IDENTIFICATION
 // ============================================================================
 
-static const char* mos6522_get_via_name(mos6522_t* via) {
+static const char* mos6522_get_via_name(const mos6522_t* via) {
     // The VIC-20 has two VIAs distinguished by their interrupt line
     if (via->interrupt_bit == BUS_NMI_BIT) {
         return "VIA 1 ($9110)";  // VIA1 at $9110 drives NMI
@@ -175,17 +176,21 @@ void mos6522_t::render_settings_content() {
 }
 
 // ============================================================================
-// MOS6522 VIA LAYOUT WINDOW (standalone pinout diagram)
+// MOS6522 VIA layout virtuals
 // ============================================================================
 
-void mos6522_t::render_layout_content() {
-    mos6522_t* via = this;
-
 #ifdef CERMU_HAS_GUI
-    const char* via_name = mos6522_get_via_name(via);
 
-    ChipLayout& layout = get_via_layout();
-    std::vector<PinSignalState> pin_states = get_via_pin_states(via, &layout, via->bus_snapshot_);
-    render_chip_layout(layout, pin_states, via_name);
-#endif
+ChipLayout* mos6522_t::get_chip_layout() const {
+    return &get_via_layout();
 }
+
+std::vector<PinSignalState> mos6522_t::get_layout_pin_states(ChipLayout& layout) {
+    return get_via_pin_states(this, &layout, bus_snapshot_);
+}
+
+const char* mos6522_t::get_layout_chip_name() const {
+    return mos6522_get_via_name(this);
+}
+
+#endif // CERMU_HAS_GUI
