@@ -1,11 +1,10 @@
 #pragma once
 
 /**
- * PRG Format Handler — Program Files and Raw Binaries
+ * PRG Format Handler — Program Files
  *
  * The PRG format is the universal program file format for Commodore 8-bit
  * systems: 2-byte little-endian load address followed by raw program data.
- * BIN is a headerless variant (load address = 0).
  *
  * program_data_t (defined in format_handler.h) is the generic exchange type.
  * commodore_prg_t is a backward-compatible alias used by container format
@@ -35,9 +34,8 @@ void commodore_prg_free(commodore_prg_t* prg);
 bool commodore_prg_parse(const uint8_t* buffer, size_t size, commodore_prg_t* out_prg);
 
 // ============================================================================
-// Format Descriptors
+// Format Descriptor
 // ============================================================================
 
 extern const format_descriptor_t PRG_FORMAT_DESCRIPTOR;
-extern const format_descriptor_t BIN_FORMAT_DESCRIPTOR;
 

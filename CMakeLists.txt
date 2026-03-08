@@ -405,6 +405,7 @@ set(CORE_UTIL_SOURCES
     src/core/formats/format_handler.cpp
     src/core/formats/format_registry.cpp
     src/core/formats/prg_format.cpp
+    src/core/formats/bin_format.cpp
     src/core/formats/d64_format.cpp
     src/core/formats/t64_format.cpp
     src/core/formats/tap_format.cpp

@@ -10,6 +10,7 @@
 #endif
 #include "../../core/formats/format_registry.h"
 #include "../../core/formats/prg_format.h"
+#include "../../core/formats/bin_format.h"
 #include "../../core/formats/d64_format.h"
 #include "../../core/formats/t64_format.h"
 #include "../../core/formats/tap_format.h"
