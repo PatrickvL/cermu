@@ -242,6 +242,12 @@ public:
     uint8_t  noise_register() const { return noise_reg_; }
     uint16_t noise_shift() const { return noise_shift_; }
 
+    // === ChipBase GUI virtuals ===
+#ifdef CERMU_HAS_GUI
+    ChipLayout* create_chip_layout() const override;
+    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+#endif
+
 private:
     SN76489Variant variant_;
 
