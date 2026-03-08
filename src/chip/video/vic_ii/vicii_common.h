@@ -425,7 +425,6 @@ struct vicii_memory_unit_t {
 struct vicii_sprite_unit_t {
     uint8_t x_pos;
     uint8_t y_pos;
-    bool enabled;
     bool multicolor;
     bool x_expand;
     bool y_expand;

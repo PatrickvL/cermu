@@ -259,6 +259,21 @@ struct tia_t : public ChipBase {
     static constexpr uint16_t CX_P0P1 = 1 << 13;
     static constexpr uint16_t CX_M0M1 = 1 << 14;
 
+    // Per-object pixel bitmask constants.
+    // Pixel test functions return these directly (or 0), so the caller
+    // can OR return values together and index the collision LUT with no shifts.
+    static constexpr uint8_t PX_M0 = 1 << 0;
+    static constexpr uint8_t PX_M1 = 1 << 1;
+    static constexpr uint8_t PX_P0 = 1 << 2;
+    static constexpr uint8_t PX_P1 = 1 << 3;
+    static constexpr uint8_t PX_PF = 1 << 4;
+    static constexpr uint8_t PX_BL = 1 << 5;
+
+    // Collision lookup table: indexed by pixel_bits (6 bits, 64 entries).
+    // Each entry holds the pre-computed OR of all CX_* collision flags
+    // for that combination of active objects.
+    static const uint16_t collision_lut[64];
+
     // ========================================================================
     // INPUT PORTS
     // ========================================================================
@@ -344,17 +359,21 @@ private:
     /// Tick one audio channel.
     void tick_audio_channel(tia_audio_channel_t& ch);
 
-    /// Get playfield bit at the given pixel position (0-159).
-    bool get_playfield_pixel(int x) const;
+    /// Get playfield pixel bitmask at the given pixel position (0-159).
+    /// Returns PX_PF if playfield is set, 0 otherwise.
+    uint8_t get_playfield_pixel(int x) const;
 
-    /// Get player graphics bit at the given pixel position.
-    bool get_player_pixel(int x, uint8_t grp, uint8_t pos, uint8_t nusiz, bool reflect) const;
+    /// Get player graphics pixel bitmask at the given pixel position.
+    /// Returns px_bit (PX_P0 or PX_P1) if player is present, 0 otherwise.
+    uint8_t get_player_pixel(int x, uint8_t grp, uint8_t pos, uint8_t nusiz, bool reflect, uint8_t px_bit) const;
 
-    /// Get missile/ball pixel (single copy, used for ball).
-    bool get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool enabled) const;
+    /// Get missile/ball pixel bitmask (single copy, used for ball).
+    /// Returns px_bit if object is present, 0 otherwise.
+    uint8_t get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool enabled, uint8_t px_bit) const;
 
-    /// Get missile pixel with copy positions from NUSIZ register.
-    bool get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool enabled, uint8_t nusiz) const;
+    /// Get missile pixel bitmask with copy positions from NUSIZ register.
+    /// Returns px_bit if object is present, 0 otherwise.
+    uint8_t get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool enabled, uint8_t nusiz, uint8_t px_bit) const;
 
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields();
