@@ -643,7 +643,7 @@ void PlaChip::render_settings_content() {
 
 #ifdef CERMU_HAS_GUI
 
-ChipLayout* PlaChip::get_chip_layout() const {
+ChipLayout* PlaChip::create_chip_layout() const {
     return &get_pla_layout();
 }
 

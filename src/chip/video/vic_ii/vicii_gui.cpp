@@ -145,7 +145,7 @@ void vicii_t::render_settings_content() {
 
 #ifdef CERMU_HAS_GUI
 
-ChipLayout* vicii_t::get_chip_layout() const {
+ChipLayout* vicii_t::create_chip_layout() const {
     return &get_vicii_layout();
 }
 

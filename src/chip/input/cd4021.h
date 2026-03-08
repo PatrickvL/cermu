@@ -66,7 +66,7 @@ public:
 
     // Layout virtuals — defined in cd4021_gui.cpp (GUI builds only)
 #ifdef CERMU_HAS_GUI
-    ChipLayout* get_chip_layout() const override;
+    ChipLayout* create_chip_layout() const override;
     std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
 #endif
 

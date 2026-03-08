@@ -106,7 +106,7 @@ static ChipLayout& get_ppu_layout(bool pal) {
 
 bool nes_system::PPU::has_settings_content() const { return true; }
 
-ChipLayout* nes_system::PPU::get_chip_layout() const {
+ChipLayout* nes_system::PPU::create_chip_layout() const {
     return &get_ppu_layout(is_pal);
 }
 

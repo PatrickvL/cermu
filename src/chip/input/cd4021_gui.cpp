@@ -123,7 +123,7 @@ static std::vector<PinSignalState> get_cd4021_pin_states(
 
 #ifdef CERMU_HAS_GUI
 
-ChipLayout* CD4021::get_chip_layout() const {
+ChipLayout* CD4021::create_chip_layout() const {
     return &get_cd4021_layout();
 }
 

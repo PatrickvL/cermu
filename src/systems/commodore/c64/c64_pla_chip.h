@@ -33,7 +33,7 @@ public:
 
     void render_debug_content() override;  // Complex interactive banking tables — kept as override
     void render_settings_content() override;
-    ChipLayout* get_chip_layout() const override;
+    ChipLayout* create_chip_layout() const override;
     std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
 #endif
 

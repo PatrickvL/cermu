@@ -378,7 +378,7 @@ struct mos6581_t : public ChipBase {
 #ifdef CERMU_HAS_GUI
     bool has_settings_content() const override { return true; }
     void render_settings_content() override;
-    ChipLayout* get_chip_layout() const override;
+    ChipLayout* create_chip_layout() const override;
     std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
 #endif
 

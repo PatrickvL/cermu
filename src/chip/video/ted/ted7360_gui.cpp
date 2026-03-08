@@ -121,7 +121,7 @@ static ChipLayout& get_ted_layout() {
 
 bool ted7360_t::has_settings_content() const { return true; }
 
-ChipLayout* ted7360_t::get_chip_layout() const {
+ChipLayout* ted7360_t::create_chip_layout() const {
     return &get_ted_layout();
 }
 

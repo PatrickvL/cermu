@@ -253,7 +253,7 @@ void mos6526_t::render_settings_content() {
 
 #ifdef CERMU_HAS_GUI
 
-ChipLayout* mos6526_t::get_chip_layout() const {
+ChipLayout* mos6526_t::create_chip_layout() const {
     return &get_cia_layout();
 }
 

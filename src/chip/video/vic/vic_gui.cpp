@@ -125,7 +125,7 @@ bool vic_base_t::has_settings_content() const { return true; }
 // VIC layout virtuals
 // ============================================================================
 
-ChipLayout* vic_base_t::get_chip_layout() const {
+ChipLayout* vic_base_t::create_chip_layout() const {
     return &get_vic_layout(is_pal);
 }
 

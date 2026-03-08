@@ -1999,7 +1999,7 @@ public:
 
   // Declared here, defined in fam65xx_gui.cpp with explicit instantiations
   void render_settings_content() override;
-  ChipLayout* get_chip_layout() const override;
+  ChipLayout* create_chip_layout() const override;
   std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
   const char* get_layout_chip_name() const override;
 #endif

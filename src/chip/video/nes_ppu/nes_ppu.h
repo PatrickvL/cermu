@@ -445,7 +445,7 @@ public:
 #ifdef CERMU_HAS_GUI
     bool has_settings_content() const override;
     void render_settings_content() override;
-    ChipLayout* get_chip_layout() const override;
+    ChipLayout* create_chip_layout() const override;
     std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
     const char* get_layout_chip_name() const override;
 #endif
