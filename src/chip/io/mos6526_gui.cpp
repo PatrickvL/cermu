@@ -20,54 +20,6 @@ static const char* mos6526_get_cia_name(const mos6526_t* cia);
 // MOS6526 CIA LAYOUT (40-pin DIP)
 // ============================================================================
 
-inline ChipLayout create_mos6526_layout() {
-    // Start with DIP-40 base layout
-    ChipLayout layout = create_dip40_layout();
-    
-    // Clear default pins from create_dip40_layout() and add hardware-accurate MOS6526 pins
-    layout.left_pins.clear();
-    layout.right_pins.clear();
-    
-    // Update package info for MOS6526 CIA
-    layout.markings = {
-        "MOS6526",                   // part_number
-        "MOS Technology",            // manufacturer
-        {},                     // package_variant
-        {},                     // date_code
-        {},                     // lot_number
-        {},                     // custom_text
-        true,                        // show_part_number
-        true,                        // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
-    
-    // Hardware-accurate MOS6526 CIA pinout (40-pin DIP)
-    // Per MOS 6526 Complex Interface Adapter datasheet
-    PIN_LR(layout,  1, VSS,  _RES, 40)   // gnd / reset
-    PIN_LR(layout,  2, PA0,  CNT, 39)    // port A lo / counter in
-    PIN_LR(layout,  3, PA1,  SP, 38)     // / serial port
-    PIN_LR(layout,  4, PA2,  A0, 37)     // / reg sel lo
-    PIN_LR(layout,  5, PA3,  A1, 36)
-    PIN_LR(layout,  6, PA4,  A2, 35)
-    PIN_LR(layout,  7, PA5,  A3, 34)     // / reg sel hi
-    PIN_LR(layout,  8, PA6,  D0, 33)     // / data lo
-    PIN_LR(layout,  9, PA7,  D1, 32)     // port A hi
-    PIN_LR(layout, 10, PB0,  D2, 31)     // port B lo
-    PIN_LR(layout, 11, PB1,  D3, 30)
-    PIN_LR(layout, 12, PB2,  D4, 29)
-    PIN_LR(layout, 13, PB3,  D5, 28)
-    PIN_LR(layout, 14, PB4,  D6, 27)
-    PIN_LR(layout, 15, PB5,  D7, 26)     // / data hi
-    PIN_LR(layout, 16, PB6,  PHI2, 25)   // / clock
-    PIN_LR(layout, 17, PB7,  FLAG, 24)   // port B hi / flag in
-    PIN_LR(layout, 18, PC,   _CS, 23)    // periph ctrl / chip sel
-    PIN_LR(layout, 19, TOD,  RW, 22)     // TOD clock / R/W
-    PIN_LR(layout, 20, VDD,  _IRQ, 21)   // +5V / interrupt
-    
-    return layout;
-}
-
 // ============================================================================
 // MOS6526 CIA GUI DEBUG WINDOW
 // ============================================================================
@@ -248,7 +200,53 @@ void mos6526_t::render_settings_content() {
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* mos6526_t::create_chip_layout() const {
-    static ChipLayout layout = create_mos6526_layout();
+    static ChipLayout layout = [] {
+        // Start with DIP-40 base layout
+        ChipLayout layout = create_dip40_layout();
+
+        // Clear default pins and add hardware-accurate MOS6526 pins
+        layout.left_pins.clear();
+        layout.right_pins.clear();
+
+        // Update package info for MOS6526 CIA
+        layout.markings = {
+            "MOS6526",                   // part_number
+            "MOS Technology",            // manufacturer
+            {},                     // package_variant
+            {},                     // date_code
+            {},                     // lot_number
+            {},                     // custom_text
+            true,                        // show_part_number
+            true,                        // show_manufacturer
+            false,                       // show_package_variant
+            false                        // show_date_code
+        };
+
+        // Hardware-accurate MOS6526 CIA pinout (40-pin DIP)
+        // Per MOS 6526 Complex Interface Adapter datasheet
+        PIN_LR(layout,  1, VSS,  _RES, 40)   // gnd / reset
+        PIN_LR(layout,  2, PA0,  CNT, 39)    // port A lo / counter in
+        PIN_LR(layout,  3, PA1,  SP, 38)     // / serial port
+        PIN_LR(layout,  4, PA2,  A0, 37)     // / reg sel lo
+        PIN_LR(layout,  5, PA3,  A1, 36)
+        PIN_LR(layout,  6, PA4,  A2, 35)
+        PIN_LR(layout,  7, PA5,  A3, 34)     // / reg sel hi
+        PIN_LR(layout,  8, PA6,  D0, 33)     // / data lo
+        PIN_LR(layout,  9, PA7,  D1, 32)     // port A hi
+        PIN_LR(layout, 10, PB0,  D2, 31)     // port B lo
+        PIN_LR(layout, 11, PB1,  D3, 30)
+        PIN_LR(layout, 12, PB2,  D4, 29)
+        PIN_LR(layout, 13, PB3,  D5, 28)
+        PIN_LR(layout, 14, PB4,  D6, 27)
+        PIN_LR(layout, 15, PB5,  D7, 26)     // / data hi
+        PIN_LR(layout, 16, PB6,  PHI2, 25)   // / clock
+        PIN_LR(layout, 17, PB7,  FLAG, 24)   // port B hi / flag in
+        PIN_LR(layout, 18, PC,   _CS, 23)    // periph ctrl / chip sel
+        PIN_LR(layout, 19, TOD,  RW, 22)     // TOD clock / R/W
+        PIN_LR(layout, 20, VDD,  _IRQ, 21)   // +5V / interrupt
+
+        return layout;
+    }();
     return &layout;
 }
 

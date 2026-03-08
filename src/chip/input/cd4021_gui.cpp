@@ -19,26 +19,6 @@
 
 #ifdef CERMU_HAS_GUI
 
-static ChipLayout create_cd4021_layout() {
-    ChipLayout layout = create_dip16_layout();
-
-    layout.markings.part_number  = "CD4021B";
-    layout.markings.manufacturer = "Texas Instruments";
-    layout.markings.custom_text  = "CMOS Shift Register";
-
-    //                  LEFT                        RIGHT
-    PIN_LR(layout,  1, P0,         VDD,         16);
-    PIN_LR(layout,  2, Q6,         _Q7,         15);  // stage 6 out / Q̅7 complement
-    PIN_LR(layout,  3, P4,         DS,          14);  // serial data in
-    PIN_LR(layout,  4, P3,         P5,          13);
-    PIN_LR(layout,  5, P6,         P7,          12);
-    PIN_LR(layout,  6, P2,         Q7,          11);  // serial out
-    PIN_LR(layout,  7, P1,         CLK,         10);
-    PIN_LR(layout,  8, VSS,        P_S,          9);  // P/S̅ (latch control)
-
-    return layout;
-}
-
 // Helper: derive CD4021 pin states from shift register internals.
 // The CD4021 is not on the main system bus — it lives in the controller.
 // bus_state_t is unused; all signals come from the shift register state.
@@ -119,7 +99,25 @@ static std::vector<PinSignalState> get_cd4021_pin_states(
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* CD4021::create_chip_layout() const {
-    static ChipLayout layout = create_cd4021_layout();
+    static ChipLayout layout = [] {
+        ChipLayout layout = create_dip16_layout();
+
+        layout.markings.part_number  = "CD4021B";
+        layout.markings.manufacturer = "Texas Instruments";
+        layout.markings.custom_text  = "CMOS Shift Register";
+
+        //                  LEFT                        RIGHT
+        PIN_LR(layout,  1, P0,         VDD,         16);
+        PIN_LR(layout,  2, Q6,         _Q7,         15);  // stage 6 out / Q̅7 complement
+        PIN_LR(layout,  3, P4,         DS,          14);  // serial data in
+        PIN_LR(layout,  4, P3,         P5,          13);
+        PIN_LR(layout,  5, P6,         P7,          12);
+        PIN_LR(layout,  6, P2,         Q7,          11);  // serial out
+        PIN_LR(layout,  7, P1,         CLK,         10);
+        PIN_LR(layout,  8, VSS,        P_S,          9);  // P/S̅ (latch control)
+
+        return layout;
+    }();
     return &layout;
 }
 

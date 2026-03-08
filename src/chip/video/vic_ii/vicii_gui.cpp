@@ -35,54 +35,6 @@ static const char* get_video_standard(vicii_t* vicii) {
 // MOS6567/6569 VIC-II LAYOUT (40-pin DIP)
 // ============================================================================
 
-inline ChipLayout create_vicii_layout() {
-    // Start with DIP-40 base layout
-    ChipLayout layout = create_dip40_layout();
-    
-    // Clear default pins from create_dip40_layout() and add hardware-accurate VIC-II pins
-    layout.left_pins.clear();
-    layout.right_pins.clear();
-    
-    // Update package info for VIC-II
-    layout.markings = {
-        "MOS6567/6569",              // part_number
-        "MOS Technology",            // manufacturer
-        {},                     // package_variant
-        {},                     // date_code
-        {},                     // lot_number
-        {},                     // custom_text
-        true,                        // show_part_number
-        true,                        // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
-    
-    // Hardware-accurate MOS6567/6569 VIC-II pinout (40-pin DIP)
-    // Right-hand pins (21-40) are numbered bottom-up, not top-down
-    PIN_LR(layout,  1, VDD,     VCC, 40)    // +5V supply
-    PIN_LR(layout,  2, PHI0,    SOUND, 39)  // clock in / audio
-    PIN_LR(layout,  3, AEC,     _CS, 38)    // addr enable / chip sel
-    PIN_LR(layout,  4, BA,      COLOR, 37)  // bus avail / color out
-    PIN_LR(layout,  5, RW,      PHI2, 36)   // R/W / clock out
-    PIN_LR(layout,  6, _IRQ,    D0, 35)     // interrupt / data lo
-    PIN_LR(layout,  7, A6,      D1, 34)     // addr lo
-    PIN_LR(layout,  8, A7,      D2, 33)
-    PIN_LR(layout,  9, A8,      D3, 32)
-    PIN_LR(layout, 10, A9,      D4, 31)
-    PIN_LR(layout, 11, A10,     D5, 30)
-    PIN_LR(layout, 12, A11,     D6, 29)
-    PIN_LR(layout, 13, A12,     D7, 28)     // / data hi
-    PIN_LR(layout, 14, A13,     A0, 27)     // addr hi / addr lo
-    PIN_LR(layout, 15, _CAS,    A1, 26)     // DRAM col strobe
-    PIN_LR(layout, 16, _RAS,    A2, 25)     // DRAM row strobe
-    PIN_LR(layout, 17, LUMA,    A3, 24)     // luminance / addr
-    PIN_LR(layout, 18, CHROMA,  A4, 23)     // chrominance / addr
-    PIN_LR(layout, 19, CSYNC,   A5, 22)     // comp sync / addr hi
-    PIN_LR(layout, 20, VSS,     VSS, 21)    // gnd
-    
-    return layout;
-}
-
 // Helper function to get VIC-II pin states for visualization
 static std::vector<PinSignalState> get_vicii_pin_states(vicii_t* vicii, const ChipLayout* layout, bus_state_t bus_state) {
     if (!vicii || !layout) return {};
@@ -140,7 +92,53 @@ void vicii_t::render_settings_content() {
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* vicii_t::create_chip_layout() const {
-    static ChipLayout layout = create_vicii_layout();
+    static ChipLayout layout = [] {
+        // Start with DIP-40 base layout
+        ChipLayout layout = create_dip40_layout();
+
+        // Clear default pins and add hardware-accurate VIC-II pins
+        layout.left_pins.clear();
+        layout.right_pins.clear();
+
+        // Update package info for VIC-II
+        layout.markings = {
+            "MOS6567/6569",              // part_number
+            "MOS Technology",            // manufacturer
+            {},                     // package_variant
+            {},                     // date_code
+            {},                     // lot_number
+            {},                     // custom_text
+            true,                        // show_part_number
+            true,                        // show_manufacturer
+            false,                       // show_package_variant
+            false                        // show_date_code
+        };
+
+        // Hardware-accurate MOS6567/6569 VIC-II pinout (40-pin DIP)
+        // Right-hand pins (21-40) are numbered bottom-up, not top-down
+        PIN_LR(layout,  1, VDD,     VCC, 40)    // +5V supply
+        PIN_LR(layout,  2, PHI0,    SOUND, 39)  // clock in / audio
+        PIN_LR(layout,  3, AEC,     _CS, 38)    // addr enable / chip sel
+        PIN_LR(layout,  4, BA,      COLOR, 37)  // bus avail / color out
+        PIN_LR(layout,  5, RW,      PHI2, 36)   // R/W / clock out
+        PIN_LR(layout,  6, _IRQ,    D0, 35)     // interrupt / data lo
+        PIN_LR(layout,  7, A6,      D1, 34)     // addr lo
+        PIN_LR(layout,  8, A7,      D2, 33)
+        PIN_LR(layout,  9, A8,      D3, 32)
+        PIN_LR(layout, 10, A9,      D4, 31)
+        PIN_LR(layout, 11, A10,     D5, 30)
+        PIN_LR(layout, 12, A11,     D6, 29)
+        PIN_LR(layout, 13, A12,     D7, 28)     // / data hi
+        PIN_LR(layout, 14, A13,     A0, 27)     // addr hi / addr lo
+        PIN_LR(layout, 15, _CAS,    A1, 26)     // DRAM col strobe
+        PIN_LR(layout, 16, _RAS,    A2, 25)     // DRAM row strobe
+        PIN_LR(layout, 17, LUMA,    A3, 24)     // luminance / addr
+        PIN_LR(layout, 18, CHROMA,  A4, 23)     // chrominance / addr
+        PIN_LR(layout, 19, CSYNC,   A5, 22)     // comp sync / addr hi
+        PIN_LR(layout, 20, VSS,     VSS, 21)    // gnd
+
+        return layout;
+    }();
     return &layout;
 }
 

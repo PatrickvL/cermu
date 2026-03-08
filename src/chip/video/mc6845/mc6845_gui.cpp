@@ -45,38 +45,6 @@
 
 #ifdef CERMU_HAS_GUI
 
-static ChipLayout create_mc6845_layout() {
-    ChipLayout layout = create_dip40_layout();
-
-    layout.markings.part_number  = "MC6845";
-    layout.markings.manufacturer = "Motorola";
-    layout.markings.custom_text  = "CRT Controller";
-
-    //                  LEFT                         RIGHT
-    PIN_LR(layout,  1, VSS,         VCC,         40);
-    PIN_LR(layout,  2, _RES,        CLK,         39);
-    PIN_LR(layout,  3, LPSTB,       _CS,         38);
-    PIN_LR(layout,  4, MA0,         RS,          37);
-    PIN_LR(layout,  5, MA1,         ENABLE,      36);
-    PIN_LR(layout,  6, MA2,         RW,          35);
-    PIN_LR(layout,  7, MA3,         VSYNC,       34);
-    PIN_LR(layout,  8, MA4,         HSYNC,       33);
-    PIN_LR(layout,  9, MA5,         DE,          32);
-    PIN_LR(layout, 10, MA6,         CURSOR,      31);
-    PIN_LR(layout, 11, MA7,         D7,          30);
-    PIN_LR(layout, 12, MA8,         D6,          29);
-    PIN_LR(layout, 13, MA9,         D5,          28);
-    PIN_LR(layout, 14, MA10,        D4,          27);
-    PIN_LR(layout, 15, MA11,        D3,          26);
-    PIN_LR(layout, 16, MA12,        D2,          25);
-    PIN_LR(layout, 17, MA13,        D1,          24);
-    PIN_LR(layout, 18, RA0,         D0,          23);
-    PIN_LR(layout, 19, RA1,         RA4,         22);
-    PIN_LR(layout, 20, RA2,         RA3,         21);
-
-    return layout;
-}
-
 // Helper: derive MC6845 pin states from bus snapshot + chip internals
 static std::vector<PinSignalState> get_mc6845_pin_states(
         mc6845_t* crtc, const ChipLayout* layout, bus_state_t bus_state) {
@@ -166,7 +134,37 @@ static std::vector<PinSignalState> get_mc6845_pin_states(
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* mc6845_t::create_chip_layout() const {
-    static ChipLayout layout = create_mc6845_layout();
+    static ChipLayout layout = [] {
+        ChipLayout layout = create_dip40_layout();
+
+        layout.markings.part_number  = "MC6845";
+        layout.markings.manufacturer = "Motorola";
+        layout.markings.custom_text  = "CRT Controller";
+
+        //                  LEFT                         RIGHT
+        PIN_LR(layout,  1, VSS,         VCC,         40);
+        PIN_LR(layout,  2, _RES,        CLK,         39);
+        PIN_LR(layout,  3, LPSTB,       _CS,         38);
+        PIN_LR(layout,  4, MA0,         RS,          37);
+        PIN_LR(layout,  5, MA1,         ENABLE,      36);
+        PIN_LR(layout,  6, MA2,         RW,          35);
+        PIN_LR(layout,  7, MA3,         VSYNC,       34);
+        PIN_LR(layout,  8, MA4,         HSYNC,       33);
+        PIN_LR(layout,  9, MA5,         DE,          32);
+        PIN_LR(layout, 10, MA6,         CURSOR,      31);
+        PIN_LR(layout, 11, MA7,         D7,          30);
+        PIN_LR(layout, 12, MA8,         D6,          29);
+        PIN_LR(layout, 13, MA9,         D5,          28);
+        PIN_LR(layout, 14, MA10,        D4,          27);
+        PIN_LR(layout, 15, MA11,        D3,          26);
+        PIN_LR(layout, 16, MA12,        D2,          25);
+        PIN_LR(layout, 17, MA13,        D1,          24);
+        PIN_LR(layout, 18, RA0,         D0,          23);
+        PIN_LR(layout, 19, RA1,         RA4,         22);
+        PIN_LR(layout, 20, RA2,         RA3,         21);
+
+        return layout;
+    }();
     return &layout;
 }
 
