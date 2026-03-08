@@ -12,6 +12,7 @@
 #include "../../../core/emulated_system.h"
 #include "../../../core/system_lines.h"
 #include "../../../chip/cpu/z80/u880.h"
+#include "../../../chip/cpu/z80/z80.hpp"   // Z80_MREQ_BIT / Z80_IORQ_BIT
 #include "../../../chip/io/z80_pio.h"
 #include "../../../chip/io/z80_ctc.h"
 #include <cstdint>
@@ -109,5 +110,6 @@ private:
     // ── Internal helpers ─────────────────────────────────────────────────
     bus_state_t mem_tick(bus_state_t pins);
     bus_state_t io_tick(bus_state_t pins);
-    bool load_roms();
+    void        render_frame();   // Render one complete video frame to framebuffer_
+    bool        load_roms();
 };
