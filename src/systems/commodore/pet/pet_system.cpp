@@ -34,7 +34,7 @@
 #include "../../chip/cpu/fam65xx/mos6502.h"
 #include "../../chip/io/pia6820.h"
 #include "../../chip/io/mos6522.h"
-#include "../../chip/video/mc6845.h"
+#include "../../chip/video/mc6845/mc6845.h"
 #include "../../core/chip.h"
 
 // Include bus interface

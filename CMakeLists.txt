@@ -336,7 +336,7 @@ list(APPEND CHIP_SOURCES
     src/chip/video/ted/ted7360.cpp
     
     # Video - MC6845 CRTC (PET, BBC Micro, Amstrad CPC, ...)
-    src/chip/video/mc6845.cpp
+    src/chip/video/mc6845/mc6845.cpp
     
     # Video - TIA (Atari 2600)
     src/chip/video/tia/tia.cpp
@@ -441,7 +441,7 @@ if(BUILD_GUI)
         src/chip/video/nes_ppu/nes_ppu_gui.cpp
         src/chip/input/cd4021_gui.cpp
         src/chip/video/tia/tia_gui.cpp
-        src/chip/video/mc6845_gui.cpp
+        src/chip/video/mc6845/mc6845_gui.cpp
         src/chip/io/pia6532_gui.cpp
         src/chip/io/pia6820_gui.cpp
         src/systems/nes/cartridge/nes_cartridge_gui.cpp
@@ -475,7 +475,7 @@ set(GUI_STUB_SOURCES
     src/chip/sound/nes_apu_gui.cpp
     src/chip/input/cd4021_gui.cpp
     src/chip/video/tia/tia_gui.cpp
-    src/chip/video/mc6845_gui.cpp
+    src/chip/video/mc6845/mc6845_gui.cpp
     src/chip/io/pia6532_gui.cpp
     src/chip/io/pia6820_gui.cpp
     src/systems/nes/cartridge/nes_cartridge_gui.cpp
