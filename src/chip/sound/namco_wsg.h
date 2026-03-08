@@ -27,6 +27,7 @@
 
 #include "../../core/chip.h"
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 
 // ============================================================================
@@ -37,6 +38,27 @@ enum class WSGVariant : uint8_t {
     WSG3,   // 3-channel (Pac-Man, Pengo)
     WSG8,   // 8-channel (Galaga, etc.)
 };
+
+// ============================================================================
+// Namco WSG Register Addresses (memory-mapped)
+// ============================================================================
+
+namespace wsg_regs {
+    // Voice 1 frequency (5 × 4-bit nibbles)
+    constexpr uint8_t V1_FREQ0    = 0x00;
+    constexpr uint8_t V1_FREQ4    = 0x04;
+    // Voice 2 frequency
+    constexpr uint8_t V2_FREQ0    = 0x05;
+    constexpr uint8_t V2_FREQ4    = 0x09;
+    // Voice 3 frequency
+    constexpr uint8_t V3_FREQ0    = 0x0A;
+    constexpr uint8_t V3_FREQ4    = 0x0E;
+    // Waveform + volume per voice
+    constexpr uint8_t V1_WAVEVOL  = 0x0F;
+    constexpr uint8_t V2_WAVEVOL  = 0x10;
+    constexpr uint8_t V3_WAVEVOL  = 0x14;
+    constexpr uint8_t REG_COUNT   = 0x15;
+} // namespace wsg_regs
 
 // ============================================================================
 // Namco WSG Sound Generator
@@ -52,12 +74,16 @@ public:
         , num_channels_(variant == WSGVariant::WSG3 ? 3 : 8)
     {
         category_ = "Sound";
+#ifdef CERMU_HAS_CHIP_DEBUG
+        register_debug_fields();
+#endif
     }
 
     void init() {
         for (auto& ch : channels_) {
             ch = {};
         }
+        std::memset(regs_, 0, sizeof(regs_));
         std::memset(waveform_rom_, 0, sizeof(waveform_rom_));
     }
 
@@ -77,6 +103,9 @@ public:
     void write_freq(int channel, int byte_idx, uint8_t data) {
         if (channel >= num_channels_ || byte_idx >= 5) return;
         channels_[channel].freq[byte_idx] = data & 0x0F;
+        // Mirror to register array
+        uint8_t reg_idx = static_cast<uint8_t>(channel * 5 + byte_idx);
+        if (reg_idx < wsg_regs::REG_COUNT) regs_[reg_idx] = data & 0x0F;
     }
 
     /// Set waveform select and volume for a channel.
@@ -84,6 +113,11 @@ public:
         if (channel >= num_channels_) return;
         channels_[channel].waveform = waveform & 0x07;
         channels_[channel].volume   = volume & 0x0F;
+        // Mirror to register array
+        static constexpr uint8_t wavevol_regs[] = {
+            wsg_regs::V1_WAVEVOL, wsg_regs::V2_WAVEVOL, wsg_regs::V3_WAVEVOL
+        };
+        if (channel < 3) regs_[wavevol_regs[channel]] = ((waveform & 0x07) << 4) | (volume & 0x0F);
     }
 
     // === Audio tick ===
@@ -134,5 +168,56 @@ private:
     WSGVariant variant_;
     int        num_channels_;
     Channel    channels_[8]{};        // Max 8 channels (WSG8)
+    uint8_t    regs_[wsg_regs::REG_COUNT]{};  // Register mirror
     uint8_t    waveform_rom_[256]{};  // 8 waveforms × 32 nibble-samples (packed)
+
+#ifdef CERMU_HAS_CHIP_DEBUG
+    void register_debug_fields() {
+        using S = const namco_wsg_t;
+        auto& r = debug_registry_;
+        r.set_registers(regs_, wsg_regs::REG_COUNT);
+
+        r.category("Voice 1");
+        r.value("Frequency", +[](const ChipBase* c) -> uint32_t {
+            auto* s = static_cast<S*>(c);
+            uint32_t f = 0;
+            for (int b = 4; b >= 0; --b) f = (f << 4) | s->channels_[0].freq[b];
+            return f;
+        }, 20);
+        r.value("Waveform", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<S*>(c)->channels_[0].waveform;
+        }, 3);
+        r.value("Volume", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<S*>(c)->channels_[0].volume;
+        }, 4);
+
+        r.category("Voice 2");
+        r.value("Frequency", +[](const ChipBase* c) -> uint32_t {
+            auto* s = static_cast<S*>(c);
+            uint32_t f = 0;
+            for (int b = 4; b >= 0; --b) f = (f << 4) | s->channels_[1].freq[b];
+            return f;
+        }, 20);
+        r.value("Waveform", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<S*>(c)->channels_[1].waveform;
+        }, 3);
+        r.value("Volume", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<S*>(c)->channels_[1].volume;
+        }, 4);
+
+        r.category("Voice 3");
+        r.value("Frequency", +[](const ChipBase* c) -> uint32_t {
+            auto* s = static_cast<S*>(c);
+            uint32_t f = 0;
+            for (int b = 4; b >= 0; --b) f = (f << 4) | s->channels_[2].freq[b];
+            return f;
+        }, 20);
+        r.value("Waveform", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<S*>(c)->channels_[2].waveform;
+        }, 3);
+        r.value("Volume", +[](const ChipBase* c) -> uint32_t {
+            return static_cast<S*>(c)->channels_[2].volume;
+        }, 4);
+    }
+#endif
 };
