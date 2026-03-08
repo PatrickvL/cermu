@@ -77,12 +77,6 @@ static std::vector<PinSignalState> get_sid_pin_states(mos6581_t* sid, const Chip
     return pin_states;
 }
 
-// Use global renderer for SID chip visualization
-static ChipLayout& get_sid_layout() {
-    static ChipLayout layout = create_mos6581_layout();
-    return layout;
-}
-
 #endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // ============================================================================
@@ -217,7 +211,8 @@ void mos6581_t::render_settings_content() {
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* mos6581_t::create_chip_layout() const {
-    return &get_sid_layout();
+    static ChipLayout layout = create_mos6581_layout();
+    return &layout;
 }
 
 std::vector<PinSignalState> mos6581_t::get_layout_pin_states(ChipLayout& layout) {

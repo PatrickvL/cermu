@@ -86,16 +86,6 @@ static std::vector<PinSignalState> get_ppu_pin_states(nes_system::PPU* ppu, cons
     return pin_states;
 }
 
-static ChipLayout& get_ppu_layout(bool pal) {
-    static bool cached_pal = pal;
-    static ChipLayout layout = create_ppu_layout(pal);
-    if (cached_pal != pal) {
-        cached_pal = pal;
-        layout = create_ppu_layout(pal);
-    }
-    return layout;
-}
-
 #endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // ============================================================================
@@ -107,7 +97,9 @@ static ChipLayout& get_ppu_layout(bool pal) {
 bool nes_system::PPU::has_settings_content() const { return true; }
 
 ChipLayout* nes_system::PPU::create_chip_layout() const {
-    return &get_ppu_layout(is_pal);
+    static ChipLayout layout_ntsc = create_ppu_layout(false);
+    static ChipLayout layout_pal  = create_ppu_layout(true);
+    return is_pal ? &layout_pal : &layout_ntsc;
 }
 
 std::vector<PinSignalState> nes_system::PPU::get_layout_pin_states(ChipLayout& layout) {

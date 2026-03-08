@@ -77,11 +77,6 @@ static ChipLayout create_tia_layout() {
     return layout;
 }
 
-static ChipLayout& get_tia_layout() {
-    static ChipLayout layout = create_tia_layout();
-    return layout;
-}
-
 // Helper: derive TIA pin states from bus snapshot + chip internals
 static std::vector<PinSignalState> get_tia_pin_states(
         tia_t* tia, const ChipLayout* layout, bus_state_t bus_state) {
@@ -197,7 +192,8 @@ static std::vector<PinSignalState> get_tia_pin_states(
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* tia_t::create_chip_layout() const {
-    return &get_tia_layout();
+    static ChipLayout layout = create_tia_layout();
+    return &layout;
 }
 
 std::vector<PinSignalState> tia_t::get_layout_pin_states(ChipLayout& layout) {

@@ -77,11 +77,6 @@ static ChipLayout create_mc6845_layout() {
     return layout;
 }
 
-static ChipLayout& get_mc6845_layout() {
-    static ChipLayout layout = create_mc6845_layout();
-    return layout;
-}
-
 // Helper: derive MC6845 pin states from bus snapshot + chip internals
 static std::vector<PinSignalState> get_mc6845_pin_states(
         mc6845_t* crtc, const ChipLayout* layout, bus_state_t bus_state) {
@@ -171,7 +166,8 @@ static std::vector<PinSignalState> get_mc6845_pin_states(
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* mc6845_t::create_chip_layout() const {
-    return &get_mc6845_layout();
+    static ChipLayout layout = create_mc6845_layout();
+    return &layout;
 }
 
 std::vector<PinSignalState> mc6845_t::get_layout_pin_states(ChipLayout& layout) {

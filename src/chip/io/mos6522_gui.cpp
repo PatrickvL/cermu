@@ -109,11 +109,6 @@ static std::vector<PinSignalState> get_via_pin_states(mos6522_t* via, const Chip
     return pin_states;
 }
 
-static ChipLayout& get_via_layout() {
-    static ChipLayout layout = create_mos6522_layout();
-    return layout;
-}
-
 // ============================================================================
 // HELPER: VIA IDENTIFICATION
 // ============================================================================
@@ -181,7 +176,8 @@ void mos6522_t::render_settings_content() {
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* mos6522_t::create_chip_layout() const {
-    return &get_via_layout();
+    static ChipLayout layout = create_mos6522_layout();
+    return &layout;
 }
 
 std::vector<PinSignalState> mos6522_t::get_layout_pin_states(ChipLayout& layout) {
