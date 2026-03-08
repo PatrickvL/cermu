@@ -17,9 +17,6 @@ void mos6522_t::set_port_b_read_callback(uint8_t (*callback)(void*, uint8_t), vo
     port_b_read_context = context;
 }
 void mos6522_t::reset() {
-    // Reset registers
-    memset(registers, 0, sizeof(registers));
-
     // Reset ports via io_port (sets DDR=0, ORA/ORB=0xFF, pins=0xFF)
     port_a.reset(0x00, 0xFF, 0xFF);
     port_b.reset(0x00, 0xFF, 0xFF);

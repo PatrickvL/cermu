@@ -76,9 +76,6 @@ struct mos6522_t : public ChipBase {
 
     void* bus = nullptr;
 
-    // Registers
-    uint8_t registers[16] = {};
-
     // I/O Ports — io_port_state owns DDR/ORA/ORB/pin storage, io_port<0xFF> provides view
     // data initialized to 0xFF to match existing pull-up behavior (all HIGH after reset)
     io_port_state port_a_regs{0x00, 0xFF, 0xFF};
