@@ -45,7 +45,7 @@ static constexpr uint16_t RIOT_TIM1024T = 0x17;   // Divide by 1024
 
 struct pia6532_t : public ChipBase {
     pia6532_t() : ChipBase(ChipInfo{"PIA6532", "MOS Technology"}) {
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
     }
@@ -118,6 +118,7 @@ struct pia6532_t : public ChipBase {
     uint8_t read_port_b() const;
 
 private:
+#ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
         using PI = const pia6532_t;
         debug_registry_
@@ -154,6 +155,7 @@ private:
                 return {static_cast<PI*>(c)->ram, 128};
             }, 0x0080, 128);
     }
+#endif
 
     static constexpr const char* divider_names_[] = {
         "TIM1T (\xC3\xB71)", "TIM8T (\xC3\xB78)",

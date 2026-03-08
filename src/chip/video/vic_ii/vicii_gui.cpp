@@ -120,10 +120,9 @@ static ChipLayout& get_vicii_layout() {
 #endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // Class method implementation
+#ifdef CERMU_HAS_GUI
 void vicii_t::render_settings_content() {
     vicii_t* vicii = this;
-    
-#ifdef CERMU_HAS_GUI
 
     ImGui::Text("VIC-II Configuration");
     ImGui::Separator();
@@ -137,8 +136,8 @@ void vicii_t::render_settings_content() {
     ImGui::Text("Display Settings");
     // Add interactive controls here later if needed
     ImGui::Text("(Settings controls will be added here)");
-#endif
 }
+#endif // CERMU_HAS_GUI
 
 // ============================================================================
 // VIC-II layout virtuals

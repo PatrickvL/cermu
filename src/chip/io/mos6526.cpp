@@ -123,7 +123,9 @@ void mos6526_t::reset() {
     }
 }
 
+#ifdef CERMU_HAS_GUI
 bool mos6526_t::has_settings_content() const { return true; }
+#endif
 
 // INTERRUPT CONTROL REGISTER (ICR) handling
 

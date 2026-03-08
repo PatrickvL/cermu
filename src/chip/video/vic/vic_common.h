@@ -297,16 +297,18 @@ struct vic_base_t : public ChipBase {
     uint32_t audio_read(uint8_t* dest, uint32_t max_samples);
 
     // --- ChipBase interface ---
+#ifdef CERMU_HAS_GUI
     bool has_settings_content() const override;
     void render_settings_content() override;
-#ifdef CERMU_HAS_GUI
     ChipLayout* get_chip_layout() const override;
     std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
     const char* get_layout_chip_name() const override;
 #endif
 
 protected:
+#ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields();
+#endif
 
 private:
     void emit_pixel(uint8_t color_index);

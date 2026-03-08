@@ -534,9 +534,9 @@ struct vicii_t : public ChipBase {
     ~vicii_t() override;
 
     // ChipBase interface
+#ifdef CERMU_HAS_GUI
     bool has_settings_content() const override { return true; }
     void render_settings_content() override;
-#ifdef CERMU_HAS_GUI
     ChipLayout* get_chip_layout() const override;
     std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
     const char* get_layout_chip_name() const override;
@@ -567,5 +567,7 @@ struct vicii_t : public ChipBase {
     uint16_t get_x_coordinate() const;
 
 private:
+#ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields();
+#endif
 };

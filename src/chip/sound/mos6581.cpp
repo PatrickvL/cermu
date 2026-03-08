@@ -1100,7 +1100,7 @@ void mos6581_t::init() {
     filter_init();
     
     reset();
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
     register_debug_fields();
 #endif
 }
@@ -1109,6 +1109,7 @@ void mos6581_t::init() {
 // Debug field registration (ChipDebugRegistry)
 // ============================================================================
 
+#ifdef CERMU_HAS_CHIP_DEBUG
 void mos6581_t::register_debug_fields() {
     using S = const mos6581_t;
     auto& r = debug_registry_;
@@ -1203,6 +1204,7 @@ void mos6581_t::register_debug_fields() {
     r.flag("High Pass", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->filter_hp; });
     r.flag("Voice 3 Off", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->voice3_off; });
 }
+#endif // CERMU_HAS_CHIP_DEBUG
 
 void mos6581_t::reset() {
     // Reset all registers

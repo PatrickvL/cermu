@@ -69,7 +69,7 @@
 
 struct mos6522_t : public ChipBase {
     mos6522_t() : ChipBase(ChipInfo{"MOS6522", "MOS Technology"}) {
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
     }
@@ -123,9 +123,9 @@ struct mos6522_t : public ChipBase {
     int interrupt_bit = 0;  // Bus pin bit index (BUS_IRQ_BIT or BUS_NMI_BIT); 0 = not wired
 
     // --- ChipBase interface ---
+#ifdef CERMU_HAS_GUI
     bool has_settings_content() const override;
     void render_settings_content() override;
-#ifdef CERMU_HAS_GUI
     ChipLayout* get_chip_layout() const override;
     std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
     const char* get_layout_chip_name() const override;
@@ -147,6 +147,7 @@ struct mos6522_t : public ChipBase {
     void set_port_b_read_callback(uint8_t (*callback)(void*, uint8_t), void* context);
 
 private:
+#ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
         using VI = const mos6522_t;
         static constexpr const char* ifr_labels[] = {
@@ -204,6 +205,7 @@ private:
             .value("Shift Register", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->shift_register; })
             .value("Shift Counter", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->shift_counter; });
     }
+#endif
 };
 
 // Function declarations

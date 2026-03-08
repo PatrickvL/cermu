@@ -140,9 +140,8 @@ static const char* mos6526_get_cia_name(const mos6526_t* cia) {
 // MOS6526 CIA GUI SETTINGS
 // ============================================================================
 
-void mos6526_t::render_settings_content() {
-    
 #ifdef CERMU_HAS_GUI
+void mos6526_t::render_settings_content() {
     mos6526_t* cia = this;
     const char* cia_name = mos6526_get_cia_name(cia);
 
@@ -245,8 +244,8 @@ void mos6526_t::render_settings_content() {
     
     // Reset to single column at the end
     ImGui::Columns(1, NULL, false);
-#endif
 }
+#endif // CERMU_HAS_GUI
 
 // ============================================================================
 // MOS6526 CIA layout virtuals

@@ -356,5 +356,7 @@ private:
     /// Get missile pixel with copy positions from NUSIZ register.
     bool get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool enabled, uint8_t nusiz) const;
 
+#ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields();
+#endif
 };

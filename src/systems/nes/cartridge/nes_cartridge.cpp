@@ -253,6 +253,7 @@ void Cartridge::reset() {
 // ChipDebugRegistry
 // ============================================================================
 
+#ifdef CERMU_HAS_CHIP_DEBUG
 void Cartridge::register_debug_fields() {
     static const char* const mirror_names[] = {
         "Horizontal", "Vertical", "One-Screen (Lo)",
@@ -293,5 +294,6 @@ void Cartridge::register_debug_fields() {
             return self->mapper && self->mapper->chr_is_ram();
         });
 }
+#endif // CERMU_HAS_CHIP_DEBUG
 
 } // namespace nes_system

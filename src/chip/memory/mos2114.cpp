@@ -9,13 +9,16 @@ MOS2114::MOS2114()
     : ChipBase(ChipInfo{"MOS2114", "MOS Technology"})
 {
     std::memset(memory, 0, sizeof(memory));
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
     register_debug_fields();
 #endif
 }
 
+#ifdef CERMU_HAS_GUI
 bool MOS2114::has_settings_content() const { return true; }
+#endif
 
+#ifdef CERMU_HAS_CHIP_DEBUG
 void MOS2114::register_debug_fields() {
     debug_registry_
         .category("Color RAM")
@@ -26,6 +29,7 @@ void MOS2114::register_debug_fields() {
                 },
                 0xD800, 1024);
 }
+#endif // CERMU_HAS_CHIP_DEBUG
 
 // ============================================================================
 // Bus interface — static methods for I/O handler table

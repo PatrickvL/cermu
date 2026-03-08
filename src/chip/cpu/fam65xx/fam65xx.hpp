@@ -1978,7 +1978,7 @@ public:
     // Initialize registers
     this->init_registers();
 
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
     register_debug_fields();
 #endif
   }
@@ -1994,17 +1994,18 @@ public:
   // ChipBase VIRTUAL METHOD IMPLEMENTATIONS
   // ========================================================================
 
+#ifdef CERMU_HAS_GUI
   bool has_settings_content() const override { return true; }
 
   // Declared here, defined in fam65xx_gui.cpp with explicit instantiations
   void render_settings_content() override;
-#ifdef CERMU_HAS_GUI
   ChipLayout* get_chip_layout() const override;
   std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
   const char* get_layout_chip_name() const override;
 #endif
 
 private:
+#ifdef CERMU_HAS_CHIP_DEBUG
   void register_debug_fields() {
     using CPU = const fam65xx_t;
     auto& r = debug_registry_;
@@ -2043,6 +2044,7 @@ private:
       r.flag("Stopped", +[](const ChipBase* c) -> uint32_t { return static_cast<CPU*>(c)->stopped; });
     }
   }
+#endif
 
 public:
 

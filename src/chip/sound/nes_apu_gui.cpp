@@ -65,9 +65,9 @@ inline ChipLayout create_ricoh_2a03_apu_layout() {
 
 #endif // CERMU_HAS_GUI (layout helpers)
 
-bool nes6502_apu::APU::has_settings_content() const { return true; }
-
 #ifdef CERMU_HAS_GUI
+
+bool nes6502_apu::APU::has_settings_content() const { return true; }
 
 // ============================================================================
 // PIN SIGNAL STATES
@@ -169,8 +169,4 @@ std::vector<PinSignalState> nes6502_apu::APU::get_layout_pin_states(ChipLayout& 
     return get_apu_pin_states(this, &layout, bus_snapshot_);
 }
 
-#else // !CERMU_HAS_GUI
-
-void nes6502_apu::APU::render_settings_content() {}
-
-#endif
+#endif // CERMU_HAS_GUI

@@ -117,13 +117,13 @@ static const char* get_vic_type_name(const vic_base_t* vic) {
 // ChipBase interface implementation
 // ============================================================================
 
+#ifdef CERMU_HAS_GUI
+
 bool vic_base_t::has_settings_content() const { return true; }
 
 // ============================================================================
 // VIC layout virtuals
 // ============================================================================
-
-#ifdef CERMU_HAS_GUI
 
 ChipLayout* vic_base_t::get_chip_layout() const {
     return &get_vic_layout(is_pal);
@@ -143,10 +143,9 @@ const char* vic_base_t::get_layout_chip_name() const {
 // VIC GUI SETTINGS
 // ============================================================================
 
+#ifdef CERMU_HAS_GUI
 void vic_base_t::render_settings_content() {
     vic_base_t* vic = this;
-
-#ifdef CERMU_HAS_GUI
 
     ImGui::Text("Video Interface Chip - %s Configuration", get_vic_type_name(vic));
     ImGui::Separator();
@@ -170,5 +169,5 @@ void vic_base_t::render_settings_content() {
                         reg_names[i], vic->registers[i]);
         }
     }
-#endif
 }
+#endif // CERMU_HAS_GUI

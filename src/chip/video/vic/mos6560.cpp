@@ -33,7 +33,7 @@ void mos6560_t::init() {
     // Initialise audio with NTSC clock and default sample rate
     audio_reset(vic_config_ntsc.clock_frequency, VIC_DEFAULT_SAMPLE_RATE);
 
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
     register_debug_fields();
 #endif
 }

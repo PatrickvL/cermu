@@ -260,39 +260,3 @@ template const char* fam65xx_t<WDC_65C816Traits>::get_layout_chip_name() const;
 } // namespace fam65xx
 
 #endif // CERMU_HAS_GUI
-
-// ============================================================================
-// Stub implementations when ImGui is not available
-// ============================================================================
-
-#ifndef CERMU_HAS_GUI
-
-namespace fam65xx {
-
-template <const CPUTraits &Traits>
-void fam65xx_t<Traits>::render_settings_content() {}
-
-// Explicit template instantiations for non-GUI builds
-template void fam65xx_t<MOS6502Traits>::render_settings_content();
-
-template void fam65xx_t<MOS6510Traits>::render_settings_content();
-
-template void fam65xx_t<CSG7501Traits>::render_settings_content();
-
-template void fam65xx_t<RICOH_2A03Traits>::render_settings_content();
-
-template void fam65xx_t<MOS6507Traits>::render_settings_content();
-
-template void fam65xx_t<SYNERTEK_65C02Traits>::render_settings_content();
-
-template void fam65xx_t<WDC_65C02_EARLYTraits>::render_settings_content();
-
-template void fam65xx_t<WDC_W65C02STraits>::render_settings_content();
-
-template void fam65xx_t<ROCKWELL_R65C02Traits>::render_settings_content();
-
-template void fam65xx_t<WDC_65C816Traits>::render_settings_content();
-
-} // namespace fam65xx
-
-#endif // !CERMU_HAS_GUI

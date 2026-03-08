@@ -105,5 +105,7 @@ private:
     const bus_state_t* system_bus_;           // Borrowed pointer to system bus state
     std::string        display_name_buf_;     // Owned storage for auto-generated display name
 
+#ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields();
+#endif
 };

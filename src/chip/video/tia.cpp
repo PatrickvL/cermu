@@ -84,7 +84,7 @@ const uint32_t tia_t::ntsc_palette[128] = {
 
 void tia_t::init() {
     reset();
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
     register_debug_fields();
 #endif
 
@@ -773,6 +773,7 @@ uint8_t tia_t::read(uint16_t addr) {
 // ChipDebugRegistry
 // ============================================================================
 
+#ifdef CERMU_HAS_CHIP_DEBUG
 void tia_t::register_debug_fields() {
     using T = const tia_t;
     debug_registry_
@@ -855,3 +856,4 @@ void tia_t::register_debug_fields() {
         .flag("INPT3 (Paddle 3)", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->inpt3; })
         .flag("Input Latch", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->input_latch_enabled; });
 }
+#endif // CERMU_HAS_CHIP_DEBUG

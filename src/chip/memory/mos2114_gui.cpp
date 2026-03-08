@@ -100,9 +100,8 @@ static ChipLayout& get_mos2114_layout() {
 // MOS2114 GUI METHODS (ChipBase overrides)
 // ============================================================================
 
-void MOS2114::render_settings_content() {
-
 #ifdef CERMU_HAS_GUI
+void MOS2114::render_settings_content() {
 
     ImGui::Text("MOS2114 Color RAM Settings");
     ImGui::Separator();
@@ -128,8 +127,8 @@ void MOS2114::render_settings_content() {
     ImGui::Separator();
     ImGui::Text("Color RAM contains 4-bit values (0-15)");
     ImGui::Text("representing C64 text color information.");
-#endif
 }
+#endif // CERMU_HAS_GUI
 
 // ============================================================================
 // ChipBase layout virtuals

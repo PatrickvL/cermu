@@ -52,7 +52,7 @@ public:
      *  programmatic cartridge setup (e.g. NSF player). */
     Cartridge()
         : ChipBase(ChipInfo{"Cartridge", "iNES ROM Cartridge", "Various"}) {
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
     }
@@ -194,7 +194,9 @@ private:
 
     std::unique_ptr<Mapper> mapper;
 
+#ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields();
+#endif
 };
 
 } // namespace nes_system

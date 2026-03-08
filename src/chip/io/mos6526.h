@@ -55,7 +55,7 @@ enum mos6526_pin_t {
 
 struct mos6526_t : public ChipBase {
     mos6526_t() : ChipBase(ChipInfo{"MOS6526", "MOS Technology"}) {
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
     }
@@ -141,9 +141,9 @@ struct mos6526_t : public ChipBase {
     DelayLine delay_line;
 
     // --- ChipBase interface ---
+#ifdef CERMU_HAS_GUI
     bool has_settings_content() const override;
     void render_settings_content() override;
-#ifdef CERMU_HAS_GUI
     ChipLayout* get_chip_layout() const override;
     std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
     const char* get_layout_chip_name() const override;
@@ -182,6 +182,7 @@ private:
     void write_serial_data_register(uint8_t v);
     void process_sdr_pipeline();  // Process SDR delay pipeline each tick
 
+#ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
         using CI = const mos6526_t;
         static constexpr const char* icr_labels[] = {
@@ -240,6 +241,7 @@ private:
             .value("CRA", static_cast<uint16_t>(14))
             .value("CRB", static_cast<uint16_t>(15));
     }
+#endif
 };
 
 namespace MOS6526 {

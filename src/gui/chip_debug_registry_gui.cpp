@@ -549,11 +549,9 @@ void ChipBase::render_layout_content() {
     render_chip_layout(*layout, pin_states, get_layout_chip_name());
 }
 
-#else // !CERMU_HAS_GUI
+#elif defined(CERMU_HAS_CHIP_DEBUG) // !CERMU_HAS_GUI but registry exists
 
-// Non-GUI stubs — the registry exists but rendering is a no-op.
+// Non-GUI builds: registry exists but rendering is a no-op.
 void ChipDebugRegistry::render(const ChipBase* /*chip*/) const {}
-void ChipBase::render_debug_content() {}
-void ChipBase::render_layout_content() {}
 
 #endif // CERMU_HAS_GUI

@@ -22,7 +22,7 @@
 
 struct pia6820_t : public ChipBase {
     pia6820_t() : ChipBase(ChipInfo{"PIA6820", "Motorola"}) {
-#ifdef CERMU_HAS_GUI
+#ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
     }
@@ -93,6 +93,7 @@ private:
     static uint8_t read_port_with_direction(uint8_t output_reg, uint8_t ddr,
                                             uint8_t (*read_cb)(void*), void* ud);
 
+#ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
         using PI = const pia6820_t;
         debug_registry_
@@ -116,4 +117,5 @@ private:
             .flag("IRQ B1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->irq_b1; })
             .flag("IRQ B2", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->irq_b2; });
     }
+#endif
 };

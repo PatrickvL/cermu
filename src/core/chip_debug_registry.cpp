@@ -7,6 +7,9 @@
  */
 
 #include "chip_debug_registry.h"
+#include "cermu.h"
+
+#ifdef CERMU_HAS_CHIP_DEBUG
 
 // ============================================================================
 // Helpers
@@ -426,3 +429,5 @@ ChipDebugRegistry& ChipDebugRegistry::custom(VoidFn fn) {
     return *this;
 }
 
+
+#endif // CERMU_HAS_CHIP_DEBUG

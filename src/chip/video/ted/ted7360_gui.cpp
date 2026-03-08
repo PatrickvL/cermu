@@ -117,9 +117,9 @@ static ChipLayout& get_ted_layout() {
 // ChipBase interface implementation
 // ============================================================================
 
-bool ted7360_t::has_settings_content() const { return true; }
-
 #ifdef CERMU_HAS_GUI
+
+bool ted7360_t::has_settings_content() const { return true; }
 
 ChipLayout* ted7360_t::get_chip_layout() const {
     return &get_ted_layout();
@@ -135,10 +135,9 @@ std::vector<PinSignalState> ted7360_t::get_layout_pin_states(ChipLayout& layout)
 // TED 7360 GUI SETTINGS WINDOW
 // ============================================================================
 
+#ifdef CERMU_HAS_GUI
 void ted7360_t::render_settings_content() {
     ted7360_t* ted = this;
-
-#ifdef CERMU_HAS_GUI
 
     ImGui::Text("TED 7360 - Text Editing Device Configuration");
     ImGui::Separator();
@@ -165,5 +164,5 @@ void ted7360_t::render_settings_content() {
             ImGui::Text("$FF%02X %-12s: $%02X", i, reg_names[i], ted->registers.data[i]);
         }
     }
-#endif
 }
+#endif // CERMU_HAS_GUI
