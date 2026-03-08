@@ -230,7 +230,7 @@ void Z9001System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
     case SDLK_LSHIFT:
     case SDLK_RSHIFT:     set_key(7,2); break;
     case SDLK_RETURN:     set_key(7,0); break;
-    case SDLK_SPACE:      set_key(2,7); break;  // mapped to NL (new line) position
+    case SDLK_SPACE:      set_key(2,7); break;  // row 2, col 7 = Space/NL key position
     default: break;
     }
 }
@@ -247,10 +247,10 @@ bus_state_t Z9001System<V>::mem_tick(bus_state_t pins) {
     if (is_rd) {
         uint8_t data = 0xFF;
 
-        if (addr < (uint32_t)ram_.size()) {
+        if (static_cast<size_t>(addr) < ram_.size()) {
             data = ram_[addr];
         }
-        // Video RAM and color RAM overlay the RAM range for some addresses
+        // Video RAM and color RAM override the underlying RAM for their address ranges
         if (addr >= z9001_constants::VIDEO_RAM_BASE &&
             addr <  z9001_constants::VIDEO_RAM_BASE + z9001_constants::VIDEO_RAM_SIZE) {
             data = video_ram_[addr - z9001_constants::VIDEO_RAM_BASE];
@@ -284,7 +284,7 @@ bus_state_t Z9001System<V>::mem_tick(bus_state_t pins) {
                 color_ram_[addr - z9001_constants::COLOR_RAM_BASE] = data;
             }
         }
-        if (addr < (uint32_t)ram_.size()) {
+        if (static_cast<size_t>(addr) < ram_.size()) {
             // Do not shadow video/color RAM writes to main RAM
             bool in_vram = addr >= z9001_constants::VIDEO_RAM_BASE &&
                            addr <  z9001_constants::VIDEO_RAM_BASE + z9001_constants::VIDEO_RAM_SIZE;

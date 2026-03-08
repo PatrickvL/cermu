@@ -493,8 +493,9 @@ void AcornAtomSystem::render_frame() {
 
             if (sem) {
                 // Semigraphics-4: 4 quadrants, 2 colours
-                uint8_t color_idx = (byte >> 4) & 0x03;
-                (void)color_idx;  // colour set expansion reserved for later
+                // Bits 5–4 select the color set (CSS=0: green/yellow/blue/red,
+                // CSS=1: buff/cyan/magenta/orange).  Full color expansion is
+                // reserved for a future update; for now, render in green.
                 uint32_t fg = kMC6847Green;
                 uint32_t bg = kMC6847Black;
                 // Quadrant bits: bit3=TL, bit2=TR, bit1=BL, bit0=BR

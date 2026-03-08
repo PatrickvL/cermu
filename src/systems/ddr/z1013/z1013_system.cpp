@@ -230,8 +230,8 @@ bus_state_t Z1013System<V>::mem_tick(bus_state_t pins) {
     if (is_rd) {
         uint8_t data = 0xFF;
 
-        if (addr < (uint32_t)ram_.size()) {
-            // RAM: $0000–$3FFF (16K) or $0000–$FFFF (64K)
+        if (static_cast<size_t>(addr) < ram_.size()) {
+            // $0000–$3FFF (16K) or $0000–$FFFF (64K): RAM
             data = ram_[addr];
         }
         // Priority overrides — ROM and special memory areas shadow the RAM
@@ -257,7 +257,7 @@ bus_state_t Z1013System<V>::mem_tick(bus_state_t pins) {
         if (addr >= z1013_constants::VIDEO_RAM_BASE &&
             addr <  z1013_constants::VIDEO_RAM_BASE + z1013_constants::VIDEO_RAM_SIZE) {
             video_ram_[addr - z1013_constants::VIDEO_RAM_BASE] = data;
-        } else if (addr < (uint32_t)ram_.size()) {
+        } else if (static_cast<size_t>(addr) < ram_.size()) {
             ram_[addr] = data;
         }
         // Monitor ROM / BASIC ROM: writes silently ignored
