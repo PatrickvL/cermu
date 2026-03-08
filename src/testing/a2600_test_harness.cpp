@@ -3099,7 +3099,9 @@ int test_tia_hmove_motion_sign_convention(harness_t* h) {
 
     // HMP0 = $70 (= +7 when decoded as signed nibble, should move LEFT by 7)
     h->tia.write(TIA_HMP0, 0x70);
-    A26_ASSERT_EQ(h, "HM_SIGN", h->tia.write_regs[TIA_HMP0], 7,
+    // Upper nibble is the 4-bit signed motion value
+    auto decode_hm = [](uint8_t reg) -> int { return static_cast<int8_t>(reg) >> 4; };
+    A26_ASSERT_EQ(h, "HM_SIGN", decode_hm(h->tia.write_regs[TIA_HMP0]), 7,
                   "HMP0=$70 → motion value +7");
 
     h->tia.write(TIA_HMOVE, 0);
@@ -3110,7 +3112,7 @@ int test_tia_hmove_motion_sign_convention(harness_t* h) {
     // HMP0 = $80 (= -8 when decoded, should move RIGHT by 8)
     h->tia.pos_p0 = 80;
     h->tia.write(TIA_HMP0, 0x80);
-    A26_ASSERT_EQ(h, "HM_SIGN", h->tia.write_regs[TIA_HMP0], -8,
+    A26_ASSERT_EQ(h, "HM_SIGN", decode_hm(h->tia.write_regs[TIA_HMP0]), -8,
                   "HMP0=$80 → motion value -8");
 
     h->tia.write(TIA_HMOVE, 0);
@@ -3121,7 +3123,7 @@ int test_tia_hmove_motion_sign_convention(harness_t* h) {
     // HMP0 = $F0 (= -1, move right by 1)
     h->tia.pos_p0 = 80;
     h->tia.write(TIA_HMP0, 0xF0);
-    A26_ASSERT_EQ(h, "HM_SIGN", h->tia.write_regs[TIA_HMP0], -1,
+    A26_ASSERT_EQ(h, "HM_SIGN", decode_hm(h->tia.write_regs[TIA_HMP0]), -1,
                   "HMP0=$F0 → motion value -1");
 
     h->tia.write(TIA_HMOVE, 0);
@@ -3664,8 +3666,8 @@ int test_tia_late_hmove_no_blanking(harness_t* h) {
     h->tia.pos_p0 = 0;
     h->tia.write_regs[TIA_NUSIZ0] = 0;  // Single copy
 
-    // Set motion registers
-    h->tia.write_regs[TIA_HMP0] = -2;  // Move right 2
+    // Set motion register: upper nibble 0xE = -2 → move right 2
+    h->tia.write_regs[TIA_HMP0] = 0xE0;
 
     // Tick to the visible area (past HBLANK)
     h->tia.h_counter = 0;
@@ -3867,7 +3869,7 @@ int test_tia_multiple_hmove_same_scanline(harness_t* h) {
     int prev_fail = h->fail_count;
 
     h->tia.pos_p0 = 80;
-    h->tia.write_regs[TIA_HMP0] = -2;  // Right 2
+    h->tia.write_regs[TIA_HMP0] = 0xE0;  // Upper nibble 0xE = -2 → right 2
 
     // First HMOVE during HBLANK
     h->tia.h_counter = 10;
@@ -3996,15 +3998,18 @@ int test_tia_grp_immediate_effect_on_scanline(harness_t* h) {
     while (h->tia.h_counter <= tia_constants::HBLANK_CLOCKS + 40)
         h->tia.tick_color_clock();
 
-    // Pixel 40 should be background (GRP0 = 0)
+    // Now write GRP0 mid-scanline — pixels 41+ should reflect the new value
+    h->tia.write_regs[TIA_GRP0] = 0xFF;
+
+    // Complete the scanline to flush color_line_buffer to framebuffer
+    while (h->tia.h_counter != 0)
+        h->tia.tick_color_clock();
+
+    // Pixel 40 should be background (GRP0 was 0 when it was rendered)
     A26_ASSERT_EQ32(h, "GRP_IMM", h->framebuffer[40], bk_rgba,
                   "Pixel 40 = BK before GRP0 write");
 
-    // Now write GRP0 mid-scanline
-    h->tia.write_regs[TIA_GRP0] = 0xFF;
-
-    // Continue rendering — pixel 41+ should show P0
-    h->tia.tick_color_clock();  // pixel 41
+    // Pixel 41 should show P0 (GRP0 was set to $FF before it was rendered)
     A26_ASSERT_EQ32(h, "GRP_IMM", h->framebuffer[41], p0_rgba,
                   "Pixel 41 = P0 immediately after GRP0 write");
 
