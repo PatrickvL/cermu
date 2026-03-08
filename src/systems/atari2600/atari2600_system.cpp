@@ -205,6 +205,10 @@ bool Atari2600System::initialize() {
 
 void Atari2600System::shutdown() {
     printf("Atari2600: Shutting down\n");
+    registered_chips_.clear();
+    owned_chip_adapters_.clear();
+    connector_ports_.clear();
+    owned_devices_.clear();
 }
 
 void Atari2600System::reset() {

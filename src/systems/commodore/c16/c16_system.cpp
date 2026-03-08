@@ -654,6 +654,11 @@ void Commodore264System<V>::shutdown() {
         delete keyboard_;
         keyboard_ = nullptr;
     }
+
+    registered_chips_.clear();
+    owned_chip_adapters_.clear();
+    connector_ports_.clear();
+    owned_devices_.clear();
     
     initialized_ = false;
 }
