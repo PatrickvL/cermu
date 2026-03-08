@@ -31,6 +31,23 @@
 #include <cstring>
 
 // ============================================================================
+// Z80 CTC Register Indices (flattened view of internal state)
+// ============================================================================
+
+namespace z80_ctc_regs {
+    constexpr uint8_t CH0_CTRL  = 0x00;
+    constexpr uint8_t CH1_CTRL  = 0x01;
+    constexpr uint8_t CH2_CTRL  = 0x02;
+    constexpr uint8_t CH3_CTRL  = 0x03;
+    constexpr uint8_t CH0_TC    = 0x04;
+    constexpr uint8_t CH1_TC    = 0x05;
+    constexpr uint8_t CH2_TC    = 0x06;
+    constexpr uint8_t CH3_TC    = 0x07;
+    constexpr uint8_t INT_VEC   = 0x08;
+    constexpr uint8_t REG_COUNT = 9;
+} // namespace z80_ctc_regs
+
+// ============================================================================
 // Z80 CTC Channel Control Bits
 // ============================================================================
 
@@ -56,6 +73,9 @@ public:
                              is_u857 ? "VEB MME Erfurt" : "Zilog"))
     {
         category_ = "I/O";
+#ifdef CERMU_HAS_CHIP_DEBUG
+        register_debug_fields();
+#endif
     }
 
     void init() {
@@ -63,6 +83,7 @@ public:
             ch_[i] = {};
         }
         int_vector_base_ = 0x00;
+        update_regs();
     }
 
     void reset() { init(); }
@@ -101,6 +122,7 @@ public:
             ch.counter = ch.time_constant;
             ch.prescale_counter = 0;
         }
+        update_regs();
     }
 
     /// Read counter value from a CTC channel.
@@ -172,6 +194,12 @@ public:
         return zc;
     }
 
+    // === ChipBase GUI virtuals ===
+#ifdef CERMU_HAS_GUI
+    ChipLayout* create_chip_layout() const override;
+    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+#endif
+
 private:
     struct Channel {
         uint8_t  control = 0;
@@ -191,4 +219,19 @@ private:
 
     Channel ch_[4]{};
     uint8_t int_vector_base_ = 0x00;
+
+    // Register file mirror (flattened view for debug inspection)
+    uint8_t regs_[z80_ctc_regs::REG_COUNT]{};
+
+    void update_regs() {
+        for (int i = 0; i < 4; ++i) {
+            regs_[z80_ctc_regs::CH0_CTRL + i] = ch_[i].control;
+            regs_[z80_ctc_regs::CH0_TC + i]   = static_cast<uint8_t>(ch_[i].time_constant & 0xFF);
+        }
+        regs_[z80_ctc_regs::INT_VEC] = int_vector_base_;
+    }
+
+#ifdef CERMU_HAS_CHIP_DEBUG
+    void register_debug_fields();
+#endif
 };
