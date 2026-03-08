@@ -45,38 +45,6 @@
 
 #ifdef CERMU_HAS_GUI
 
-static ChipLayout create_pia6820_layout() {
-    ChipLayout layout = create_dip40_layout();
-
-    layout.markings.part_number  = "MC6821";
-    layout.markings.manufacturer = "Motorola";
-    layout.markings.custom_text  = "PIA";
-
-    //                  LEFT                         RIGHT
-    PIN_LR(layout,  1, VSS,         CA1,         40);
-    PIN_LR(layout,  2, PA0,         CA2,         39);
-    PIN_LR(layout,  3, PA1,         _IRQA,       38);
-    PIN_LR(layout,  4, PA2,         _IRQB,       37);
-    PIN_LR(layout,  5, PA3,         RS0,         36);
-    PIN_LR(layout,  6, PA4,         RS1,         35);
-    PIN_LR(layout,  7, PA5,         _RES,        34);
-    PIN_LR(layout,  8, PA6,         D0,          33);
-    PIN_LR(layout,  9, PA7,         D1,          32);
-    PIN_LR(layout, 10, PB0,         D2,          31);
-    PIN_LR(layout, 11, PB1,         D3,          30);
-    PIN_LR(layout, 12, PB2,         D4,          29);
-    PIN_LR(layout, 13, PB3,         D5,          28);
-    PIN_LR(layout, 14, PB4,         D6,          27);
-    PIN_LR(layout, 15, PB5,         D7,          26);
-    PIN_LR(layout, 16, PB6,         ENABLE,      25);
-    PIN_LR(layout, 17, PB7,         CS1,         24);
-    PIN_LR(layout, 18, CB1,         _CS2,        23);
-    PIN_LR(layout, 19, CB2,         CS0,         22);
-    PIN_LR(layout, 20, VCC,         RW,          21);
-
-    return layout;
-}
-
 // Helper: derive PIA6820 pin states from bus snapshot + chip internals
 static std::vector<PinSignalState> get_pia6820_pin_states(
         pia6820_t* pia, const ChipLayout* layout, bus_state_t bus_state) {
@@ -191,7 +159,37 @@ static std::vector<PinSignalState> get_pia6820_pin_states(
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* pia6820_t::create_chip_layout() const {
-    static ChipLayout layout = create_pia6820_layout();
+    static ChipLayout layout = [] {
+        ChipLayout layout = create_dip40_layout();
+
+        layout.markings.part_number  = "MC6821";
+        layout.markings.manufacturer = "Motorola";
+        layout.markings.custom_text  = "PIA";
+
+        //                  LEFT                         RIGHT
+        PIN_LR(layout,  1, VSS,         CA1,         40);
+        PIN_LR(layout,  2, PA0,         CA2,         39);
+        PIN_LR(layout,  3, PA1,         _IRQA,       38);
+        PIN_LR(layout,  4, PA2,         _IRQB,       37);
+        PIN_LR(layout,  5, PA3,         RS0,         36);
+        PIN_LR(layout,  6, PA4,         RS1,         35);
+        PIN_LR(layout,  7, PA5,         _RES,        34);
+        PIN_LR(layout,  8, PA6,         D0,          33);
+        PIN_LR(layout,  9, PA7,         D1,          32);
+        PIN_LR(layout, 10, PB0,         D2,          31);
+        PIN_LR(layout, 11, PB1,         D3,          30);
+        PIN_LR(layout, 12, PB2,         D4,          29);
+        PIN_LR(layout, 13, PB3,         D5,          28);
+        PIN_LR(layout, 14, PB4,         D6,          27);
+        PIN_LR(layout, 15, PB5,         D7,          26);
+        PIN_LR(layout, 16, PB6,         ENABLE,      25);
+        PIN_LR(layout, 17, PB7,         CS1,         24);
+        PIN_LR(layout, 18, CB1,         _CS2,        23);
+        PIN_LR(layout, 19, CB2,         CS0,         22);
+        PIN_LR(layout, 20, VCC,         RW,          21);
+
+        return layout;
+    }();
     return &layout;
 }
 

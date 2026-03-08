@@ -96,48 +96,6 @@ static const char* get_memory_bank_notes(int bank) {
 // C64 PLA LAYOUT (28-pin DIP)
 // ============================================================================
 
-inline ChipLayout create_pla_layout() {
-    // Start with DIP-28 base layout
-    ChipLayout layout = create_dip28_layout();
-    
-    // Clear default pins from create_dip28_layout() and add hardware-accurate C64 PLA pins
-    layout.left_pins.clear();
-    layout.right_pins.clear();
-    
-    // Update package info for C64 PLA
-    layout.markings = {
-        "906114-01",                 // part_number
-        "Commodore",                 // manufacturer
-        {},                     // package_variant
-        {},                     // date_code
-        {},                     // lot_number
-        {},                     // custom_text
-        true,                        // show_part_number
-        true,                        // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
-    
-    // Hardware-accurate C64 PLA pinout (28-pin DIP)
-    // I0-I15 = inputs, F0-F7 = outputs, active-low signals marked
-    PIN_LR(layout,  1, NC,        VCC, 28);       // prog / +5V
-    PIN_LR(layout,  2, A13,       A12, 27);       // I7 / I8
-    PIN_LR(layout,  3, A14,       BA, 26);        // I6 / I9
-    PIN_LR(layout,  4, A15,       _AEC, 25);      // I5 / I10
-    PIN_LR(layout,  5, _VA14,     RW, 24);        // I4 / I11 (R/W)
-    PIN_LR(layout,  6, _CHAREN,   _EXROM, 23);    // I3 / I12
-    PIN_LR(layout,  7, _HIRAM,    _GAME, 22);     // I2 / I13
-    PIN_LR(layout,  8, _LORAM,    VA13, 21);      // I1 / I14
-    PIN_LR(layout,  9, _CAS,      VA12, 20);      // I0 / I15
-    PIN_LR(layout, 10, _ROMH,     _CS, 19);       // F7 / chip enable
-    PIN_LR(layout, 11, _ROML,     _CASRAM_PLA, 18); // F6 / F0
-    PIN_LR(layout, 12, _IO,       _BASIC, 17);    // F5 / F1
-    PIN_LR(layout, 13, GRW,       _KERNAL, 16);   // F4 (GR/W) / F2
-    PIN_LR(layout, 14, VSS,       _CHAROM, 15);   // gnd / F3
-    
-    return layout;
-}
-
 // ============================================================================
 // PLA GUI DEBUG WINDOW
 // ============================================================================
@@ -639,7 +597,47 @@ void PlaChip::render_settings_content() {
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* PlaChip::create_chip_layout() const {
-    static ChipLayout layout = create_pla_layout();
+    static ChipLayout layout = [] {
+        // Start with DIP-28 base layout
+        ChipLayout layout = create_dip28_layout();
+
+        // Clear default pins and add hardware-accurate C64 PLA pins
+        layout.left_pins.clear();
+        layout.right_pins.clear();
+
+        // Update package info for C64 PLA
+        layout.markings = {
+            "906114-01",                 // part_number
+            "Commodore",                 // manufacturer
+            {},                     // package_variant
+            {},                     // date_code
+            {},                     // lot_number
+            {},                     // custom_text
+            true,                        // show_part_number
+            true,                        // show_manufacturer
+            false,                       // show_package_variant
+            false                        // show_date_code
+        };
+
+        // Hardware-accurate C64 PLA pinout (28-pin DIP)
+        // I0-I15 = inputs, F0-F7 = outputs, active-low signals marked
+        PIN_LR(layout,  1, NC,        VCC, 28);       // prog / +5V
+        PIN_LR(layout,  2, A13,       A12, 27);       // I7 / I8
+        PIN_LR(layout,  3, A14,       BA, 26);        // I6 / I9
+        PIN_LR(layout,  4, A15,       _AEC, 25);      // I5 / I10
+        PIN_LR(layout,  5, _VA14,     RW, 24);        // I4 / I11 (R/W)
+        PIN_LR(layout,  6, _CHAREN,   _EXROM, 23);    // I3 / I12
+        PIN_LR(layout,  7, _HIRAM,    _GAME, 22);     // I2 / I13
+        PIN_LR(layout,  8, _LORAM,    VA13, 21);      // I1 / I14
+        PIN_LR(layout,  9, _CAS,      VA12, 20);      // I0 / I15
+        PIN_LR(layout, 10, _ROMH,     _CS, 19);       // F7 / chip enable
+        PIN_LR(layout, 11, _ROML,     _CASRAM_PLA, 18); // F6 / F0
+        PIN_LR(layout, 12, _IO,       _BASIC, 17);    // F5 / F1
+        PIN_LR(layout, 13, GRW,       _KERNAL, 16);   // F4 (GR/W) / F2
+        PIN_LR(layout, 14, VSS,       _CHAROM, 15);   // gnd / F3
+
+        return layout;
+    }();
     return &layout;
 }
 

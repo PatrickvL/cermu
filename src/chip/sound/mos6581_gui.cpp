@@ -16,48 +16,6 @@
 
 #ifdef CERMU_HAS_GUI
 
-inline ChipLayout create_mos6581_layout() {
-    // Start with DIP-28 base layout
-    ChipLayout layout = create_dip28_layout();
-    
-    // Clear default pins from create_dip28_layout() and add hardware-accurate MOS6581 pins
-    layout.left_pins.clear();
-    layout.right_pins.clear();
-    
-    // Update package info for MOS6581 SID
-    layout.markings = {
-        "MOS6581",                   // part_number
-        "MOS Technology",            // manufacturer
-        {},                     // package_variant
-        {},                     // date_code
-        {},                     // lot_number
-        {},                     // custom_text
-        true,                        // show_part_number
-        true,                        // show_manufacturer
-        false,                       // show_package_variant
-        false                        // show_date_code
-    };
-    
-    // Hardware-accurate MOS6581 SID pinout (28-pin DIP)
-    // Right-hand pins (15-28) are numbered bottom-up, not top-down
-    PIN_LR(layout,  1, CAP1A,  VDD, 28);      // filter cap 1A / +12V
-    PIN_LR(layout,  2, CAP1B,  AUDIO_OUT, 27);// filter cap 1B / audio
-    PIN_LR(layout,  3, CAP2A,  EXT_IN, 26);   // filter cap 2A / ext in
-    PIN_LR(layout,  4, CAP2B,  VCC, 25);      // filter cap 2B / +5V
-    PIN_LR(layout,  5, _RES,   POTX, 24);     // reset / paddle X
-    PIN_LR(layout,  6, PHI2,   POTY, 23);     // clock / paddle Y
-    PIN_LR(layout,  7, RW,     D7, 22);       // R/W / data hi
-    PIN_LR(layout,  8, _CS,    D6, 21);       // chip sel
-    PIN_LR(layout,  9, A0,     D5, 20);       // addr lo / data
-    PIN_LR(layout, 10, A1,     D4, 19);
-    PIN_LR(layout, 11, A2,     D3, 18);
-    PIN_LR(layout, 12, A3,     D2, 17);
-    PIN_LR(layout, 13, A4,     D1, 16);       // addr hi
-    PIN_LR(layout, 14, VSS,    D0, 15);       // gnd / data lo
-    
-    return layout;
-}
-
 // ============================================================================
 // MOS6581 SID GUI DEBUG WINDOW
 // ============================================================================
@@ -211,7 +169,47 @@ void mos6581_t::render_settings_content() {
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* mos6581_t::create_chip_layout() const {
-    static ChipLayout layout = create_mos6581_layout();
+    static ChipLayout layout = [] {
+        // Start with DIP-28 base layout
+        ChipLayout layout = create_dip28_layout();
+
+        // Clear default pins and add hardware-accurate MOS6581 pins
+        layout.left_pins.clear();
+        layout.right_pins.clear();
+
+        // Update package info for MOS6581 SID
+        layout.markings = {
+            "MOS6581",                   // part_number
+            "MOS Technology",            // manufacturer
+            {},                     // package_variant
+            {},                     // date_code
+            {},                     // lot_number
+            {},                     // custom_text
+            true,                        // show_part_number
+            true,                        // show_manufacturer
+            false,                       // show_package_variant
+            false                        // show_date_code
+        };
+
+        // Hardware-accurate MOS6581 SID pinout (28-pin DIP)
+        // Right-hand pins (15-28) are numbered bottom-up, not top-down
+        PIN_LR(layout,  1, CAP1A,  VDD, 28);      // filter cap 1A / +12V
+        PIN_LR(layout,  2, CAP1B,  AUDIO_OUT, 27);// filter cap 1B / audio
+        PIN_LR(layout,  3, CAP2A,  EXT_IN, 26);   // filter cap 2A / ext in
+        PIN_LR(layout,  4, CAP2B,  VCC, 25);      // filter cap 2B / +5V
+        PIN_LR(layout,  5, _RES,   POTX, 24);     // reset / paddle X
+        PIN_LR(layout,  6, PHI2,   POTY, 23);     // clock / paddle Y
+        PIN_LR(layout,  7, RW,     D7, 22);       // R/W / data hi
+        PIN_LR(layout,  8, _CS,    D6, 21);       // chip sel
+        PIN_LR(layout,  9, A0,     D5, 20);       // addr lo / data
+        PIN_LR(layout, 10, A1,     D4, 19);
+        PIN_LR(layout, 11, A2,     D3, 18);
+        PIN_LR(layout, 12, A3,     D2, 17);
+        PIN_LR(layout, 13, A4,     D1, 16);       // addr hi
+        PIN_LR(layout, 14, VSS,    D0, 15);       // gnd / data lo
+
+        return layout;
+    }();
     return &layout;
 }
 

@@ -29,45 +29,6 @@ static const char* mos6522_get_via_name(const mos6522_t* via);
 // MOS6522 VIA LAYOUT (40-pin DIP)
 // ============================================================================
 
-inline ChipLayout create_mos6522_layout() {
-    ChipLayout layout = create_dip40_layout();
-
-    layout.left_pins.clear();
-    layout.right_pins.clear();
-
-    layout.markings = {
-        "MOS6522",
-        "MOS Technology",
-        {}, {}, {}, {},
-        true, true, false, false
-    };
-
-    // Hardware-accurate MOS6522 VIA pinout (40-pin DIP)
-    // Per MOS Technology MOS 6522 Versatile Interface Adapter datasheet (1977)
-    PIN_LR(layout,  1, VSS,     CA1, 40)        // gnd / handshake in
-    PIN_LR(layout,  2, PA0,     CA2, 39)        // port A lo / handshake I/O
-    PIN_LR(layout,  3, PA1,     A3, 38)         // / RS3
-    PIN_LR(layout,  4, PA2,     A2, 37)         // / RS2
-    PIN_LR(layout,  5, PA3,     A1, 36)         // / RS1
-    PIN_LR(layout,  6, PA4,     A0, 35)         // / RS0
-    PIN_LR(layout,  7, PA5,     _RES, 34)       // / reset
-    PIN_LR(layout,  8, PA6,     D0, 33)         // / data lo
-    PIN_LR(layout,  9, PA7,     D1, 32)         // port A hi
-    PIN_LR(layout, 10, PB0,     D2, 31)         // port B lo
-    PIN_LR(layout, 11, PB1,     D3, 30)
-    PIN_LR(layout, 12, PB2,     D4, 29)
-    PIN_LR(layout, 13, PB3,     D5, 28)
-    PIN_LR(layout, 14, PB4,     D6, 27)
-    PIN_LR(layout, 15, PB5,     D7, 26)         // / data hi
-    PIN_LR(layout, 16, PB6,     PHI2, 25)       // / clock
-    PIN_LR(layout, 17, PB7,     CS1, 24)        // port B hi / chip sel 1
-    PIN_LR(layout, 18, CB1,     _CS2, 23)       // handshake / chip sel 2
-    PIN_LR(layout, 19, CB2,     RW, 22)         // handshake / R/W
-    PIN_LR(layout, 20, VDD,     _IRQ, 21)       // +5V / interrupt
-
-    return layout;
-}
-
 // ============================================================================
 // MOS6522 VIA PIN STATES
 // ============================================================================
@@ -176,7 +137,44 @@ void mos6522_t::render_settings_content() {
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* mos6522_t::create_chip_layout() const {
-    static ChipLayout layout = create_mos6522_layout();
+    static ChipLayout layout = [] {
+        ChipLayout layout = create_dip40_layout();
+
+        layout.left_pins.clear();
+        layout.right_pins.clear();
+
+        layout.markings = {
+            "MOS6522",
+            "MOS Technology",
+            {}, {}, {}, {},
+            true, true, false, false
+        };
+
+        // Hardware-accurate MOS6522 VIA pinout (40-pin DIP)
+        // Per MOS Technology MOS 6522 Versatile Interface Adapter datasheet (1977)
+        PIN_LR(layout,  1, VSS,     CA1, 40)        // gnd / handshake in
+        PIN_LR(layout,  2, PA0,     CA2, 39)        // port A lo / handshake I/O
+        PIN_LR(layout,  3, PA1,     A3, 38)         // / RS3
+        PIN_LR(layout,  4, PA2,     A2, 37)         // / RS2
+        PIN_LR(layout,  5, PA3,     A1, 36)         // / RS1
+        PIN_LR(layout,  6, PA4,     A0, 35)         // / RS0
+        PIN_LR(layout,  7, PA5,     _RES, 34)       // / reset
+        PIN_LR(layout,  8, PA6,     D0, 33)         // / data lo
+        PIN_LR(layout,  9, PA7,     D1, 32)         // port A hi
+        PIN_LR(layout, 10, PB0,     D2, 31)         // port B lo
+        PIN_LR(layout, 11, PB1,     D3, 30)
+        PIN_LR(layout, 12, PB2,     D4, 29)
+        PIN_LR(layout, 13, PB3,     D5, 28)
+        PIN_LR(layout, 14, PB4,     D6, 27)
+        PIN_LR(layout, 15, PB5,     D7, 26)         // / data hi
+        PIN_LR(layout, 16, PB6,     PHI2, 25)       // / clock
+        PIN_LR(layout, 17, PB7,     CS1, 24)        // port B hi / chip sel 1
+        PIN_LR(layout, 18, CB1,     _CS2, 23)       // handshake / chip sel 2
+        PIN_LR(layout, 19, CB2,     RW, 22)         // handshake / R/W
+        PIN_LR(layout, 20, VDD,     _IRQ, 21)       // +5V / interrupt
+
+        return layout;
+    }();
     return &layout;
 }
 

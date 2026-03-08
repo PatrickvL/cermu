@@ -18,53 +18,6 @@
 // Hardware-accurate pinout from datasheet
 // ============================================================================
 
-inline ChipLayout create_mos2114_layout() {
-    // Start with DIP-18 base layout (provides package dimensions only)
-    ChipLayout layout = create_dip18_layout();
-    
-    // Update package info for MOS2114
-    layout.markings = {
-        "MOS2114",                   // part_number
-        "MOS Technology",            // manufacturer
-        "1K x 4-bit SRAM",          // package_variant
-        {},                     // date_code
-        {},                     // lot_number
-        {},                     // custom_text
-        true,                        // show_part_number
-        true,                        // show_manufacturer
-        true,                        // show_package_variant
-        false                        // show_date_code
-    };
-
-    // Clear default pins from create_dip18_layout() and add hardware-accurate MOS2114 pins
-    layout.left_pins.clear();
-    layout.right_pins.clear();
-
-    // Hardware-accurate MOS2114 pinout (18-pin DIP) from Intel/MOS 2114 datasheet
-    // Pin layout exactly as specified in the datasheet:
-    // Pins 1-4: A6-A3 (Address bits 6 to 3, descending)
-    // Pins 5-7: A0-A2 (Address bits 0 to 2, ascending)
-    // Pin 8: /CS (Chip Select)
-    // Pin 9: GND (Ground)
-    // Pin 10: /WE (Write Enable)
-    // Pins 11-14: I/O4-I/O1 (Data bits 4 to 1)
-    // Pins 15-17: A9-A7 (Address bits 9 to 7, descending)
-    // Pin 18: Vcc (Supply voltage)
-    //
-    // Right-hand pins (10-18) are numbered bottom-up as per DIP standard
-    PIN_LR(layout,  1, A6,    VDD, 18)   // addr 6 / +5V
-    PIN_LR(layout,  2, A5,    A7,  17)   // addr 5 / addr 7
-    PIN_LR(layout,  3, A4,    A8,  16)   // addr 4 / addr 8
-    PIN_LR(layout,  4, A3,    A9,  15)   // addr 3 / addr 9
-    PIN_LR(layout,  5, A0,    D1,  14)   // addr 0 / I/O 1
-    PIN_LR(layout,  6, A1,    D2,  13)   // addr 1 / I/O 2
-    PIN_LR(layout,  7, A2,    D3,  12)   // addr 2 / I/O 3
-    PIN_LR(layout,  8, _CS,   D4,  11)   // chip sel / I/O 4
-    PIN_LR(layout,  9, VSS,   _WE, 10)   // gnd / write enable
-    
-    return layout;
-}
-
 // Helper function to get MOS2114 pin states for visualization
 static std::vector<PinSignalState> get_mos2114_pin_states(MOS2114* mos2114, const ChipLayout* layout, bus_state_t bus_state) {
     if (!mos2114 || !layout) return {};
@@ -132,7 +85,52 @@ void MOS2114::render_settings_content() {
 #ifdef CERMU_HAS_GUI
 
 ChipLayout* MOS2114::create_chip_layout() const {
-    static ChipLayout layout = create_mos2114_layout();
+    static ChipLayout layout = [] {
+        // Start with DIP-18 base layout (provides package dimensions only)
+        ChipLayout layout = create_dip18_layout();
+
+        // Update package info for MOS2114
+        layout.markings = {
+            "MOS2114",                   // part_number
+            "MOS Technology",            // manufacturer
+            "1K x 4-bit SRAM",          // package_variant
+            {},                     // date_code
+            {},                     // lot_number
+            {},                     // custom_text
+            true,                        // show_part_number
+            true,                        // show_manufacturer
+            true,                        // show_package_variant
+            false                        // show_date_code
+        };
+
+        // Clear default pins and add hardware-accurate MOS2114 pins
+        layout.left_pins.clear();
+        layout.right_pins.clear();
+
+        // Hardware-accurate MOS2114 pinout (18-pin DIP) from Intel/MOS 2114 datasheet
+        // Pin layout exactly as specified in the datasheet:
+        // Pins 1-4: A6-A3 (Address bits 6 to 3, descending)
+        // Pins 5-7: A0-A2 (Address bits 0 to 2, ascending)
+        // Pin 8: /CS (Chip Select)
+        // Pin 9: GND (Ground)
+        // Pin 10: /WE (Write Enable)
+        // Pins 11-14: I/O4-I/O1 (Data bits 4 to 1)
+        // Pins 15-17: A9-A7 (Address bits 9 to 7, descending)
+        // Pin 18: Vcc (Supply voltage)
+        //
+        // Right-hand pins (10-18) are numbered bottom-up as per DIP standard
+        PIN_LR(layout,  1, A6,    VDD, 18)   // addr 6 / +5V
+        PIN_LR(layout,  2, A5,    A7,  17)   // addr 5 / addr 7
+        PIN_LR(layout,  3, A4,    A8,  16)   // addr 4 / addr 8
+        PIN_LR(layout,  4, A3,    A9,  15)   // addr 3 / addr 9
+        PIN_LR(layout,  5, A0,    D1,  14)   // addr 0 / I/O 1
+        PIN_LR(layout,  6, A1,    D2,  13)   // addr 1 / I/O 2
+        PIN_LR(layout,  7, A2,    D3,  12)   // addr 2 / I/O 3
+        PIN_LR(layout,  8, _CS,   D4,  11)   // chip sel / I/O 4
+        PIN_LR(layout,  9, VSS,   _WE, 10)   // gnd / write enable
+
+        return layout;
+    }();
     return &layout;
 }
 
