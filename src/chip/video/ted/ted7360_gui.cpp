@@ -118,7 +118,18 @@ static ChipLayout& get_ted_layout() {
 // ============================================================================
 
 bool ted7360_t::has_settings_content() const { return true; }
-bool ted7360_t::has_layout_content()   const { return true; }
+
+#ifdef CERMU_HAS_GUI
+
+ChipLayout* ted7360_t::get_chip_layout() const {
+    return &get_ted_layout();
+}
+
+std::vector<PinSignalState> ted7360_t::get_layout_pin_states(ChipLayout& layout) {
+    return get_ted_pin_states(this, &layout, bus_snapshot_);
+}
+
+#endif // CERMU_HAS_GUI
 
 // ============================================================================
 // TED 7360 GUI SETTINGS WINDOW
@@ -154,19 +165,5 @@ void ted7360_t::render_settings_content() {
             ImGui::Text("$FF%02X %-12s: $%02X", i, reg_names[i], ted->registers.data[i]);
         }
     }
-#endif
-}
-
-// ============================================================================
-// TED 7360 LAYOUT (standalone pinout diagram)
-// ============================================================================
-
-void ted7360_t::render_layout_content() {
-    ted7360_t* ted = this;
-
-#ifdef CERMU_HAS_GUI
-    ChipLayout& layout = get_ted_layout();
-    std::vector<PinSignalState> pin_states = get_ted_pin_states(ted, &layout, ted->bus_snapshot_);
-    render_chip_layout(layout, pin_states, "TED7360");
 #endif
 }

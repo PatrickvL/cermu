@@ -74,9 +74,11 @@ public:
         shift_register_ = 0;
     }
 
-    // GUI virtuals are in cd4021_gui.cpp (#ifdef CERMU_HAS_GUI)
-    bool has_layout_content() const override;
-    void render_layout_content() override;
+    // Layout virtuals — defined in cd4021_gui.cpp (GUI builds only)
+#ifdef CERMU_HAS_GUI
+    ChipLayout* get_chip_layout() const override;
+    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+#endif
 
 private:
     uint8_t shift_register_ = 0;

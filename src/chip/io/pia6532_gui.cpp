@@ -143,15 +143,17 @@ static std::vector<PinSignalState> get_pia6532_pin_states(
 #endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // ============================================================================
-// ChipBase GUI Overrides
+// ChipBase layout virtuals
 // ============================================================================
 
-bool pia6532_t::has_layout_content() const { return true; }
-
-void pia6532_t::render_layout_content() {
 #ifdef CERMU_HAS_GUI
-    ChipLayout& layout = get_pia6532_layout();
-    std::vector<PinSignalState> pin_states = get_pia6532_pin_states(this, &layout, bus_snapshot_);
-    render_chip_layout(layout, pin_states, "6532");
-#endif
+
+ChipLayout* pia6532_t::get_chip_layout() const {
+    return &get_pia6532_layout();
 }
+
+std::vector<PinSignalState> pia6532_t::get_layout_pin_states(ChipLayout& layout) {
+    return get_pia6532_pin_states(this, &layout, bus_snapshot_);
+}
+
+#endif // CERMU_HAS_GUI

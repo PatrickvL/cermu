@@ -15,7 +15,7 @@
 // COMMON VIC-II GUI RENDERING FUNCTIONS
 // ============================================================================
 
-static const char* get_vicii_type_name(vicii_t* vicii) {
+static const char* get_vicii_type_name(const vicii_t* vicii) {
     if (vicii && vicii->config && vicii->config->chip_name) {
         return vicii->config->chip_name;
     }
@@ -141,18 +141,21 @@ void vicii_t::render_settings_content() {
 }
 
 // ============================================================================
-// VIC-II LAYOUT (standalone pinout diagram)
+// VIC-II layout virtuals
 // ============================================================================
 
-// Class method implementation
-void vicii_t::render_layout_content() {
-    vicii_t* vicii = this;
-
 #ifdef CERMU_HAS_GUI
-    const char* chip_name = get_vicii_type_name(vicii);
 
-    ChipLayout& layout = get_vicii_layout();
-    std::vector<PinSignalState> pin_states = get_vicii_pin_states(vicii, &layout, vicii->bus_snapshot_);
-    render_chip_layout(layout, pin_states, chip_name);
-#endif
+ChipLayout* vicii_t::get_chip_layout() const {
+    return &get_vicii_layout();
 }
+
+std::vector<PinSignalState> vicii_t::get_layout_pin_states(ChipLayout& layout) {
+    return get_vicii_pin_states(this, &layout, bus_snapshot_);
+}
+
+const char* vicii_t::get_layout_chip_name() const {
+    return get_vicii_type_name(this);
+}
+
+#endif // CERMU_HAS_GUI

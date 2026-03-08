@@ -638,27 +638,30 @@ void PlaChip::render_settings_content() {
 }
 
 // ============================================================================
-// PLA LAYOUT (standalone pinout diagram)
+// PLA layout virtuals
 // ============================================================================
 
-void PlaChip::render_layout_content() {
-    if (!c64_) return;
-
 #ifdef CERMU_HAS_GUI
+
+ChipLayout* PlaChip::get_chip_layout() const {
+    return &get_pla_layout();
+}
+
+std::vector<PinSignalState> PlaChip::get_layout_pin_states(ChipLayout& layout) {
+    if (!c64_) return {};
+
     // PLA is combinational logic — no tick function — snapshot bus state at render time
     bus_snapshot_ = c64_->bus.state;
-
-    ChipLayout& layout = get_pla_layout();
 
     // Tick PLA with current bus state and banking mode
     pla_906114_01_t pla;
     tick_pla_for_rendering(pla, bus_snapshot_, c64_->bus.pla_banking_mode);
 
     // Get pin states using generic bus population + PLA overlay
-    std::vector<PinSignalState> pin_states = get_pla_pin_states(layout, pla, bus_snapshot_);
-    render_chip_layout(layout, pin_states, "906114-01");
-#endif
+    return get_pla_pin_states(layout, pla, bus_snapshot_);
 }
+
+#endif // CERMU_HAS_GUI
 
 // ============================================================================
 // ChipDebugRegistry — basic PLA state

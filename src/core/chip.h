@@ -5,7 +5,12 @@
 #include "component_info.h"
 #include <cstdint>
 #include <memory>
+#include <vector>
 #include "system_lines.h"
+
+// Forward declarations for layout support
+struct ChipLayout;
+struct PinSignalState;
 
 // ============================================================================
 // VIDEO STANDARD — TV broadcast standard affecting system timing
@@ -62,10 +67,18 @@ public:
     // The caller (Hardware menu submenu or detached window) provides the window.
     virtual bool has_debug_content() const { return !debug_registry_.empty(); }
     virtual bool has_settings_content() const { return false; }
-    virtual bool has_layout_content() const { return false; }
     virtual void render_debug_content();   // default: two-column layout + registry
     virtual void render_settings_content() {}
-    virtual void render_layout_content() {}
+
+    // --- Chip layout support ---
+    // Override get_chip_layout() and get_layout_pin_states() to enable chip
+    // visualization.  The base render_layout_content() calls these virtuals —
+    // individual chips no longer need to override it.
+    virtual ChipLayout* get_chip_layout() const { return nullptr; }
+    virtual std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout);
+    virtual const char* get_layout_chip_name() const;
+    bool has_layout_content() const { return get_chip_layout() != nullptr; }
+    virtual void render_layout_content();
 
     // --- Debug field registry (semantic data description) ---
     // Chips populate this at construction time.  The renderer reads it.

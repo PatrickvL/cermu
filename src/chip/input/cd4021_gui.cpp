@@ -132,15 +132,17 @@ static std::vector<PinSignalState> get_cd4021_pin_states(
 #endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // ============================================================================
-// ChipBase GUI Overrides
+// ChipBase layout virtuals
 // ============================================================================
 
-bool CD4021::has_layout_content() const { return true; }
-
-void CD4021::render_layout_content() {
 #ifdef CERMU_HAS_GUI
-    ChipLayout& layout = get_cd4021_layout();
-    std::vector<PinSignalState> pin_states = get_cd4021_pin_states(this, &layout);
-    render_chip_layout(layout, pin_states, "CD4021");
-#endif
+
+ChipLayout* CD4021::get_chip_layout() const {
+    return &get_cd4021_layout();
 }
+
+std::vector<PinSignalState> CD4021::get_layout_pin_states(ChipLayout& layout) {
+    return get_cd4021_pin_states(this, &layout);
+}
+
+#endif // CERMU_HAS_GUI

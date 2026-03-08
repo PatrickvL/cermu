@@ -15,7 +15,6 @@ MOS2114::MOS2114()
 }
 
 bool MOS2114::has_settings_content() const { return true; }
-bool MOS2114::has_layout_content()   const { return true; }
 
 void MOS2114::register_debug_fields() {
     debug_registry_

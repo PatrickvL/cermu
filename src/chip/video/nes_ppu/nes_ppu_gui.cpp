@@ -103,7 +103,22 @@ static ChipLayout& get_ppu_layout(bool pal) {
 // ============================================================================
 
 bool nes_system::PPU::has_settings_content() const { return true; }
-bool nes_system::PPU::has_layout_content()   const { return true; }
+
+#ifdef CERMU_HAS_GUI
+
+ChipLayout* nes_system::PPU::get_chip_layout() const {
+    return &get_ppu_layout(is_pal);
+}
+
+std::vector<PinSignalState> nes_system::PPU::get_layout_pin_states(ChipLayout& layout) {
+    return get_ppu_pin_states(this, &layout, bus_snapshot_);
+}
+
+const char* nes_system::PPU::get_layout_chip_name() const {
+    return is_pal ? "RP2C07" : "RP2C02";
+}
+
+#endif // CERMU_HAS_GUI
 
 // ============================================================================
 // NES PPU GUI SETTINGS
@@ -128,19 +143,5 @@ void nes_system::PPU::render_settings_content() {
         ImGui::Text("OAM:     %zu bytes", ppu->oam.size());
         ImGui::Text("Palette: %zu bytes", ppu->palette.size());
     }
-#endif
-}
-
-// ============================================================================
-// NES PPU LAYOUT (standalone pinout diagram)
-// ============================================================================
-
-void nes_system::PPU::render_layout_content() {
-    auto* ppu = this;
-
-#ifdef CERMU_HAS_GUI
-    ChipLayout& layout = get_ppu_layout(ppu->is_pal);
-    std::vector<PinSignalState> pin_states = get_ppu_pin_states(ppu, &layout, ppu->bus_snapshot_);
-    render_chip_layout(layout, pin_states, ppu->is_pal ? "RP2C07" : "RP2C02");
 #endif
 }

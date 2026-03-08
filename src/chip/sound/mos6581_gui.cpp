@@ -212,16 +212,17 @@ void mos6581_t::render_settings_content() {
 }
 
 // ============================================================================
-// MOS6581 SID LAYOUT (standalone pinout diagram)
+// MOS6581 SID layout virtuals
 // ============================================================================
 
-// Class method implementation
-void mos6581_t::render_layout_content() {
-    mos6581_t* sid = this;
-
 #ifdef CERMU_HAS_GUI
-    ChipLayout& layout = get_sid_layout();
-    std::vector<PinSignalState> pin_states = get_sid_pin_states(sid, &layout, sid->bus_snapshot_);
-    render_chip_layout(layout, pin_states, "MOS6581");
-#endif
+
+ChipLayout* mos6581_t::get_chip_layout() const {
+    return &get_sid_layout();
 }
+
+std::vector<PinSignalState> mos6581_t::get_layout_pin_states(ChipLayout& layout) {
+    return get_sid_pin_states(this, &layout, bus_snapshot_);
+}
+
+#endif // CERMU_HAS_GUI

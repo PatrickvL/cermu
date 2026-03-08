@@ -29,11 +29,13 @@ public:
     }
 
     bool has_settings_content() const override { return true; }
-    bool has_layout_content() const override { return true; }
 
     void render_debug_content() override;  // Complex interactive banking tables — kept as override
     void render_settings_content() override;
-    void render_layout_content() override;
+#ifdef CERMU_HAS_GUI
+    ChipLayout* get_chip_layout() const override;
+    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+#endif
 
 private:
     void register_debug_fields();

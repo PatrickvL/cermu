@@ -288,15 +288,12 @@ static ChipLayout create_memory_layout(size_t size_bytes,
 }
 
 // ============================================================================
-// Layout content rendering — generic memory chip DIP diagram
+// Layout virtuals — generic memory chip DIP diagram
 // ============================================================================
-void MemoryChip::render_layout_content() {
-#ifdef CERMU_HAS_GUI
-    // Snapshot bus state at render time (passive chip, no tick)
-    if (system_bus_) {
-        bus_snapshot_ = *system_bus_;
-    }
 
+#ifdef CERMU_HAS_GUI
+
+ChipLayout* MemoryChip::get_chip_layout() const {
     static thread_local ChipLayout* cached_layout = nullptr;
     static thread_local size_t cached_size = 0;
     static thread_local MemoryType cached_type = RAM;
@@ -312,11 +309,19 @@ void MemoryChip::render_layout_content() {
         cached_type = type_;
     }
 
-    auto pin_states = populate_pin_states_from_bus(*cached_layout, bus_snapshot_);
-
-    render_chip_layout(*cached_layout, pin_states, info_.part_number.data());
-#endif
+    return cached_layout;
 }
+
+std::vector<PinSignalState> MemoryChip::get_layout_pin_states(ChipLayout& layout) {
+    // Snapshot bus state at render time (passive chip, no tick)
+    if (system_bus_) {
+        bus_snapshot_ = *system_bus_;
+    }
+
+    return populate_pin_states_from_bus(layout, bus_snapshot_);
+}
+
+#endif // CERMU_HAS_GUI
 
 void MemoryChip::register_debug_fields() {
     static const char* const type_names[] = {"RAM", "ROM", "PROM", "EPROM", "SRAM"};
