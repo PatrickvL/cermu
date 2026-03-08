@@ -385,6 +385,9 @@ set(SYSTEM_SOURCES
     
     # Atari 2600 system
     src/systems/atari2600/atari2600_system.cpp
+    
+    # BBC Micro system
+    src/systems/bbc/bbc_micro_system.cpp
 )
 
 # Testing sources
