@@ -79,6 +79,58 @@ const uint32_t tia_t::ntsc_palette[128] = {
 };
 
 // ============================================================================
+// COLLISION LOOKUP TABLE (64 entries, one per combination of active objects)
+// ============================================================================
+//
+// Indexed by (PX_BL<<5 | PX_PF<<4 | PX_P1<<3 | PX_P0<<2 | PX_M1<<1 | PX_M0).
+// Each entry is the OR of all CX_* collision flags for that set of active objects.
+// Generated at compile time via constexpr helper.
+static constexpr uint16_t build_collision_entry(uint8_t bits) {
+    const bool m0 = bits & tia_t::PX_M0;
+    const bool m1 = bits & tia_t::PX_M1;
+    const bool p0 = bits & tia_t::PX_P0;
+    const bool p1 = bits & tia_t::PX_P1;
+    const bool pf = bits & tia_t::PX_PF;
+    const bool bl = bits & tia_t::PX_BL;
+    uint16_t cx = 0;
+    if (m0 && p1) cx |= tia_t::CX_M0P1;
+    if (m0 && p0) cx |= tia_t::CX_M0P0;
+    if (m1 && p0) cx |= tia_t::CX_M1P0;
+    if (m1 && p1) cx |= tia_t::CX_M1P1;
+    if (p0 && pf) cx |= tia_t::CX_P0PF;
+    if (p0 && bl) cx |= tia_t::CX_P0BL;
+    if (p1 && pf) cx |= tia_t::CX_P1PF;
+    if (p1 && bl) cx |= tia_t::CX_P1BL;
+    if (m0 && pf) cx |= tia_t::CX_M0PF;
+    if (m0 && bl) cx |= tia_t::CX_M0BL;
+    if (m1 && pf) cx |= tia_t::CX_M1PF;
+    if (m1 && bl) cx |= tia_t::CX_M1BL;
+    if (bl && pf) cx |= tia_t::CX_BLPF;
+    if (p0 && p1) cx |= tia_t::CX_P0P1;
+    if (m0 && m1) cx |= tia_t::CX_M0M1;
+    return cx;
+}
+
+const uint16_t tia_t::collision_lut[64] = {
+    build_collision_entry( 0), build_collision_entry( 1), build_collision_entry( 2), build_collision_entry( 3),
+    build_collision_entry( 4), build_collision_entry( 5), build_collision_entry( 6), build_collision_entry( 7),
+    build_collision_entry( 8), build_collision_entry( 9), build_collision_entry(10), build_collision_entry(11),
+    build_collision_entry(12), build_collision_entry(13), build_collision_entry(14), build_collision_entry(15),
+    build_collision_entry(16), build_collision_entry(17), build_collision_entry(18), build_collision_entry(19),
+    build_collision_entry(20), build_collision_entry(21), build_collision_entry(22), build_collision_entry(23),
+    build_collision_entry(24), build_collision_entry(25), build_collision_entry(26), build_collision_entry(27),
+    build_collision_entry(28), build_collision_entry(29), build_collision_entry(30), build_collision_entry(31),
+    build_collision_entry(32), build_collision_entry(33), build_collision_entry(34), build_collision_entry(35),
+    build_collision_entry(36), build_collision_entry(37), build_collision_entry(38), build_collision_entry(39),
+    build_collision_entry(40), build_collision_entry(41), build_collision_entry(42), build_collision_entry(43),
+    build_collision_entry(44), build_collision_entry(45), build_collision_entry(46), build_collision_entry(47),
+    build_collision_entry(48), build_collision_entry(49), build_collision_entry(50), build_collision_entry(51),
+    build_collision_entry(52), build_collision_entry(53), build_collision_entry(54), build_collision_entry(55),
+    build_collision_entry(56), build_collision_entry(57), build_collision_entry(58), build_collision_entry(59),
+    build_collision_entry(60), build_collision_entry(61), build_collision_entry(62), build_collision_entry(63),
+};
+
+// ============================================================================
 // INIT / RESET
 // ============================================================================
 
@@ -255,7 +307,7 @@ void tia_t::tick_audio_channel(tia_audio_channel_t& ch) {
 // PLAYFIELD PIXEL LOOKUP
 // ============================================================================
 
-bool tia_t::get_playfield_pixel(int x) const {
+uint8_t tia_t::get_playfield_pixel(int x) const {
     // Playfield is 40 pixels wide (20 pixels repeated or reflected)
     // PF0: bits 4-7 (4 pixels, displayed left to right: D4, D5, D6, D7)
     // PF1: bits 7-0 (8 pixels, displayed left to right: D7, D6, D5, D4, D3, D2, D1, D0)
@@ -278,25 +330,27 @@ bool tia_t::get_playfield_pixel(int x) const {
         }
     }
 
-    // Look up the bit
+    // Look up the bit — return PX_PF bitmask if set, 0 otherwise
+    uint8_t bit;
     if (pfx < 4) {
         // PF0: bits 4-7 (pfx 0 = D4, pfx 3 = D7)
-        return (pf0 >> (4 + pfx)) & 1;
+        bit = (pf0 >> (4 + pfx)) & 1;
     } else if (pfx < 12) {
         // PF1: bits 7-0 (pfx 4 = D7, pfx 11 = D0)
-        return (pf1 >> (11 - pfx)) & 1;
+        bit = (pf1 >> (11 - pfx)) & 1;
     } else {
         // PF2: bits 0-7 (pfx 12 = D0, pfx 19 = D7)
-        return (pf2 >> (pfx - 12)) & 1;
+        bit = (pf2 >> (pfx - 12)) & 1;
     }
+    return bit ? PX_PF : 0;
 }
 
 // ============================================================================
 // PLAYER PIXEL LOOKUP
 // ============================================================================
 
-bool tia_t::get_player_pixel(int x, uint8_t grp, uint8_t pos, uint8_t nusiz, bool reflect) const {
-    if (grp == 0) return false;
+uint8_t tia_t::get_player_pixel(int x, uint8_t grp, uint8_t pos, uint8_t nusiz, bool reflect, uint8_t px_bit) const {
+    if (grp == 0) return 0;
 
     int size = nusiz & 0x07;   // Player number-size field
 
@@ -333,26 +387,26 @@ bool tia_t::get_player_pixel(int x, uint8_t grp, uint8_t pos, uint8_t nusiz, boo
         if (rel >= 0 && rel < pixel_width) {
             int bit_index = rel / stretch;
             if (reflect) {
-                if ((grp >> bit_index) & 1) return true;
+                if ((grp >> bit_index) & 1) return px_bit;
             } else {
-                if ((grp >> (7 - bit_index)) & 1) return true;
+                if ((grp >> (7 - bit_index)) & 1) return px_bit;
             }
         }
     }
 
-    return false;
+    return 0;
 }
 
 // ============================================================================
 // MISSILE / BALL PIXEL LOOKUP
 // ============================================================================
 
-bool tia_t::get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool enabled) const {
-    return get_missile_pixel(x, pos, size_bits, enabled, 0);
+uint8_t tia_t::get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool enabled, uint8_t px_bit) const {
+    return get_missile_pixel(x, pos, size_bits, enabled, 0, px_bit);
 }
 
-bool tia_t::get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool enabled, uint8_t nusiz) const {
-    if (!enabled) return false;
+uint8_t tia_t::get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool enabled, uint8_t nusiz, uint8_t px_bit) const {
+    if (!enabled) return 0;
 
     // Size: 1, 2, 4, or 8 pixels wide (encoded in 2 bits)
     int width = 1 << size_bits;
@@ -379,10 +433,10 @@ bool tia_t::get_missile_pixel(int x, uint8_t pos, uint8_t size_bits, bool enable
         if (rel < 0) rel += 160;
         if (rel >= 160) rel -= 160;
 
-        if (rel >= 0 && rel < width) return true;
+        if (rel >= 0 && rel < width) return px_bit;
     }
 
-    return false;
+    return 0;
 }
 
 // ============================================================================
@@ -399,47 +453,34 @@ void tia_t::render_pixel() {
     int row = visible_row;
     if (row < 0 || row >= pixel.fb_height) return;
 
-    // Determine which objects are present at this pixel
-    bool pf_pixel = get_playfield_pixel(x);
+    // Determine which objects are present at this pixel.
+    // Each function returns its bitmask constant (PX_*) or 0.
+    uint8_t pixel_bits = get_playfield_pixel(x);
 
     uint8_t p0_grp = vdelp0 ? grp0_old : grp0;
     uint8_t p1_grp = vdelp1 ? grp1_old : grp1;
-    bool p0_pixel = get_player_pixel(x, p0_grp, pos_p0, nusiz0, refp0);
-    bool p1_pixel = get_player_pixel(x, p1_grp, pos_p1, nusiz1, refp1);
+    pixel_bits |= get_player_pixel(x, p0_grp, pos_p0, nusiz0, refp0, PX_P0);
+    pixel_bits |= get_player_pixel(x, p1_grp, pos_p1, nusiz1, refp1, PX_P1);
 
     // Missile 0 — locked to player 0 if RESMP0 set
     uint8_t m0_pos = resmp0 ? pos_p0 : pos_m0;
     uint8_t m0_size = (nusiz0 >> 4) & 0x03;
-    bool m0_pixel = get_missile_pixel(x, m0_pos, m0_size, enam0 && !resmp0, nusiz0);
+    pixel_bits |= get_missile_pixel(x, m0_pos, m0_size, enam0 && !resmp0, nusiz0, PX_M0);
 
     // Missile 1 — locked to player 1 if RESMP1 set
     uint8_t m1_pos = resmp1 ? pos_p1 : pos_m1;
     uint8_t m1_size = (nusiz1 >> 4) & 0x03;
-    bool m1_pixel = get_missile_pixel(x, m1_pos, m1_size, enam1 && !resmp1, nusiz1);
+    pixel_bits |= get_missile_pixel(x, m1_pos, m1_size, enam1 && !resmp1, nusiz1, PX_M1);
 
     // Ball — uses simple single-position check (no copies)
     bool bl_enabled = vdelbl ? enabl_old : enabl;
     uint8_t bl_size = (ctrlpf >> 4) & 0x03;
-    bool bl_pixel = get_missile_pixel(x, pos_bl, bl_size, bl_enabled);
+    pixel_bits |= get_missile_pixel(x, pos_bl, bl_size, bl_enabled, PX_BL);
 
-    // Update collision register
-    if (m0_pixel && p1_pixel) collision |= CX_M0P1;
-    if (m0_pixel && p0_pixel) collision |= CX_M0P0;
-    if (m1_pixel && p0_pixel) collision |= CX_M1P0;
-    if (m1_pixel && p1_pixel) collision |= CX_M1P1;
-    if (p0_pixel && pf_pixel) collision |= CX_P0PF;
-    if (p0_pixel && bl_pixel) collision |= CX_P0BL;
-    if (p1_pixel && pf_pixel) collision |= CX_P1PF;
-    if (p1_pixel && bl_pixel) collision |= CX_P1BL;
-    if (m0_pixel && pf_pixel) collision |= CX_M0PF;
-    if (m0_pixel && bl_pixel) collision |= CX_M0BL;
-    if (m1_pixel && pf_pixel) collision |= CX_M1PF;
-    if (m1_pixel && bl_pixel) collision |= CX_M1BL;
-    if (bl_pixel && pf_pixel) collision |= CX_BLPF;
-    if (p0_pixel && p1_pixel) collision |= CX_P0P1;
-    if (m0_pixel && m1_pixel) collision |= CX_M0M1;
+    // Update collision register — single LUT lookup replaces 15 branches
+    collision |= collision_lut[pixel_bits];
 
-    // Priority-based color selection
+    // Priority-based color selection using bitmask tests
     uint8_t color;
     bool priority = (ctrlpf & 0x04) != 0;
     bool score_mode = (ctrlpf & 0x02) != 0;
@@ -452,27 +493,27 @@ void tia_t::render_pixel() {
         color = colubk;
     } else if (priority) {
         // Playfield/Ball priority over players
-        if (pf_pixel || bl_pixel) {
+        if (pixel_bits & (PX_PF | PX_BL)) {
             if (score_mode) {
                 // Score mode overrides PF color even with priority flag
                 color = (x < 80) ? colup0 : colup1;
             } else {
                 color = colupf;
             }
-        } else if (p0_pixel || m0_pixel) {
+        } else if (pixel_bits & (PX_P0 | PX_M0)) {
             color = colup0;
-        } else if (p1_pixel || m1_pixel) {
+        } else if (pixel_bits & (PX_P1 | PX_M1)) {
             color = colup1;
         } else {
             color = colubk;
         }
     } else {
         // Players have priority over playfield
-        if (p0_pixel || m0_pixel) {
+        if (pixel_bits & (PX_P0 | PX_M0)) {
             color = colup0;
-        } else if (p1_pixel || m1_pixel) {
+        } else if (pixel_bits & (PX_P1 | PX_M1)) {
             color = colup1;
-        } else if (pf_pixel || bl_pixel) {
+        } else if (pixel_bits & (PX_PF | PX_BL)) {
             if (score_mode) {
                 // Score mode: left half uses P0 color, right half uses P1 color
                 color = (x < 80) ? colup0 : colup1;

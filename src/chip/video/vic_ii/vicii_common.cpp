@@ -173,7 +173,7 @@ static inline uint16_t vicii_sprite_get_x(const vicii_t* vicii, int sprite_num) 
 static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num) {
     vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[param_sprite_num];
     
-    if (!sprite->enabled || !sprite->display_state) return;
+    if (!(vicii->registers.data[VICII_MXE] & (1 << param_sprite_num)) || !sprite->display_state) return;
     
     const uint8_t sprite_bit = (1 << param_sprite_num);
     const uint16_t sprite_x = vicii_sprite_get_x(vicii, param_sprite_num);
@@ -938,11 +938,6 @@ bus_state_t vicii_t::registers_write(void* context, bus_state_t bus_state) {
             vicii->timing.prev_raster_compare = vicii_get_raster_compare(vicii);
             break;
         case VICII_MXE: // $d015 Sprite enabled x
-            // Update sprite enabled state
-            for (int i = 0; i < VICII_NUM_SPRITES; i++) {
-                vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
-                sprite->enabled = (value & (1 << i)) != 0;
-            }
             break;
         case VICII_MXYE: // $d017 Sprite Y expansion
             // VICE reference (viciisc/vicii-mem.c d017_store):
