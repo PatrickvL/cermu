@@ -20,9 +20,19 @@
  * using the Data Direction Register (0=input, 1=output).
  */
 
+// Register indices within regs_[]
+static constexpr uint8_t PIA_REG_PORTA_DATA = 0;  // PRA  — Port A output latch
+static constexpr uint8_t PIA_REG_PORTA_DDR  = 1;  // DDRA — Port A data direction
+static constexpr uint8_t PIA_REG_PORTA_CTRL = 2;  // CRA  — Port A control
+static constexpr uint8_t PIA_REG_PORTB_DATA = 3;  // PRB  — Port B output latch
+static constexpr uint8_t PIA_REG_PORTB_DDR  = 4;  // DDRB — Port B data direction
+static constexpr uint8_t PIA_REG_PORTB_CTRL = 5;  // CRB  — Port B control
+static constexpr uint8_t PIA_NUM_REGS       = 6;
+
 struct pia6820_t : public ChipBase {
     pia6820_t() : ChipBase(ChipInfo{"PIA6820", "Motorola"}) {
 #ifdef CERMU_HAS_CHIP_DEBUG
+        debug_registry_.set_registers(regs_, PIA_NUM_REGS);
         register_debug_fields();
 #endif
     }
@@ -33,15 +43,20 @@ struct pia6820_t : public ChipBase {
     std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
 #endif
 
+    // ========================================================================
+    // REGISTERS — flat array + named accessors
+    // ========================================================================
+    uint8_t regs_[PIA_NUM_REGS] = {};
+
     // Port A registers
-    uint8_t port_a_data;        // Data register (output latch)
-    uint8_t port_a_control;     // Control register
-    uint8_t port_a_direction;   // Data direction register (0=input, 1=output)
-    
+    uint8_t& port_a_data      = regs_[PIA_REG_PORTA_DATA];   // Data register (output latch)
+    uint8_t& port_a_direction  = regs_[PIA_REG_PORTA_DDR];    // Data direction register (0=input, 1=output)
+    uint8_t& port_a_control   = regs_[PIA_REG_PORTA_CTRL];   // Control register
+
     // Port B registers
-    uint8_t port_b_data;        // Data register (output latch)
-    uint8_t port_b_control;     // Control register
-    uint8_t port_b_direction;   // Data direction register
+    uint8_t& port_b_data      = regs_[PIA_REG_PORTB_DATA];   // Data register (output latch)
+    uint8_t& port_b_direction  = regs_[PIA_REG_PORTB_DDR];    // Data direction register
+    uint8_t& port_b_control   = regs_[PIA_REG_PORTB_CTRL];   // Control register
     
     // Interrupt flags (read in bits 7-6 of control registers)
     bool irq_a1;                // CA1 interrupt flag (bit 7 of CRA)
@@ -99,9 +114,9 @@ private:
         debug_registry_
             .category("Port A")
             .port("Port A",
-                  +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_a_data; },
-                  +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_a_direction; })
-            .value("Control", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_a_control; })
+                  RegSource{PIA_REG_PORTA_DATA},
+                  RegSource{PIA_REG_PORTA_DDR})
+            .value("Control", PIA_REG_PORTA_CTRL)
             .flag("CA1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->ca1_state; })
             .flag("CA2", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->ca2_state; })
             .flag("IRQ A1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->irq_a1; })
@@ -109,9 +124,9 @@ private:
 
             .category("Port B")
             .port("Port B",
-                  +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_b_data; },
-                  +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_b_direction; })
-            .value("Control", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_b_control; })
+                  RegSource{PIA_REG_PORTB_DATA},
+                  RegSource{PIA_REG_PORTB_DDR})
+            .value("Control", PIA_REG_PORTB_CTRL)
             .flag("CB1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->cb1_state; })
             .flag("CB2", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->cb2_state; })
             .flag("IRQ B1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->irq_b1; })

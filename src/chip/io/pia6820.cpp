@@ -1,4 +1,5 @@
 #include "pia6820.h"
+#include <cstring>
 
 // PIA 6820 Register offsets
 #define PIA_REG_A_DATA      0x00
@@ -28,14 +29,8 @@
 #define IRQ2_ENABLED(cr)        (!IS_CA2_OUTPUT(cr) && ((cr) & PIA_CTRL_CA2_CTRL))
 
 void pia6820_t::init() {
-    // Explicitly zero all fields (no memset — must preserve vtable)
-    port_a_data = 0;
-    port_a_control = 0x00;  // Power-on: DDR mode selected (bit 2 clear)
-    port_a_direction = 0x00;  // All inputs
-
-    port_b_data = 0;
-    port_b_control = 0x00;  // Power-on: DDR mode selected (bit 2 clear)
-    port_b_direction = 0x00;  // All inputs
+    // Zero all registers (data, DDR, control for both ports)
+    memset(regs_, 0, sizeof(regs_));
 
     irq_a1 = false;
     irq_a2 = false;
@@ -60,10 +55,7 @@ void pia6820_t::init() {
 
 void pia6820_t::reset() {
     // Reset all registers to power-on state
-    port_a_data = 0x00;
-    port_b_data = 0x00;
-    port_a_control = 0x00;
-    port_b_control = 0x00;
+    memset(regs_, 0, sizeof(regs_));
 
     // Clear all interrupt flags
     irq_a1 = false;
@@ -76,10 +68,6 @@ void pia6820_t::reset() {
     ca2_state = false;
     cb1_state = false;
     cb2_state = false;
-
-    // Reset to DDR mode
-    port_a_direction = 0x00;
-    port_b_direction = 0x00;
 
     update_irq();
 }
