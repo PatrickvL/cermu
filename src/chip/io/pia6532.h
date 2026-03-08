@@ -43,9 +43,17 @@ static constexpr uint16_t RIOT_TIM8T   = 0x15;   // Divide by 8
 static constexpr uint16_t RIOT_TIM64T  = 0x16;   // Divide by 64
 static constexpr uint16_t RIOT_TIM1024T = 0x17;   // Divide by 1024
 
+// Register indices within regs_[]
+static constexpr uint8_t RIOT_REG_PORTA_DATA = 0;  // SWCHA  — Port A output latch
+static constexpr uint8_t RIOT_REG_PORTA_DDR  = 1;  // SWACNT — Port A data direction
+static constexpr uint8_t RIOT_REG_PORTB_DATA = 2;  // SWCHB  — Port B output latch
+static constexpr uint8_t RIOT_REG_PORTB_DDR  = 3;  // SWBCNT — Port B data direction
+static constexpr uint8_t RIOT_NUM_REGS       = 4;
+
 struct pia6532_t : public ChipBase {
     pia6532_t() : ChipBase(ChipInfo{"PIA6532", "MOS Technology"}) {
 #ifdef CERMU_HAS_CHIP_DEBUG
+        debug_registry_.set_registers(regs_, RIOT_NUM_REGS);
         register_debug_fields();
 #endif
     }
@@ -62,16 +70,14 @@ struct pia6532_t : public ChipBase {
     uint8_t ram[128] = {};
 
     // ========================================================================
-    // I/O PORTS
+    // I/O PORTS — flat register array + named accessors
     // ========================================================================
+    uint8_t regs_[RIOT_NUM_REGS] = {};
 
-    // Port A — direction lines and data
-    uint8_t port_a_data = 0x00;       // Output latch
-    uint8_t port_a_ddr  = 0x00;       // Data direction (0=input, 1=output)
-
-    // Port B — direction lines and data
-    uint8_t port_b_data = 0x00;       // Output latch
-    uint8_t port_b_ddr  = 0x00;       // Data direction
+    uint8_t& port_a_data = regs_[RIOT_REG_PORTA_DATA];   // Output latch
+    uint8_t& port_a_ddr  = regs_[RIOT_REG_PORTA_DDR];    // Data direction (0=input, 1=output)
+    uint8_t& port_b_data = regs_[RIOT_REG_PORTB_DATA];   // Output latch
+    uint8_t& port_b_ddr  = regs_[RIOT_REG_PORTB_DDR];    // Data direction
 
     // External port inputs (set by system)
     uint8_t port_a_input = 0xFF;      // Input pins (active-low for joystick lines)
@@ -124,13 +130,13 @@ private:
         debug_registry_
             .category("I/O Ports")
             .port("Port A",
-                  +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_a_data; },
-                  +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_a_ddr; })
+                  RegSource{RIOT_REG_PORTA_DATA},
+                  RegSource{RIOT_REG_PORTA_DDR})
             .value("Port A Input", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_a_input; })
             .value("Port A Effective", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->read_port_a(); })
             .port("Port B",
-                  +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_b_data; },
-                  +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_b_ddr; })
+                  RegSource{RIOT_REG_PORTB_DATA},
+                  RegSource{RIOT_REG_PORTB_DDR})
             .value("Port B Input", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->port_b_input; })
             .value("Port B Effective", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->read_port_b(); })
 
