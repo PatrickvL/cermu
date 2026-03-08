@@ -79,56 +79,13 @@ const uint32_t tia_t::ntsc_palette[128] = {
 };
 
 // ============================================================================
-// COLLISION LOOKUP TABLE (64 entries, one per combination of active objects)
+// COLLISION HELPER
 // ============================================================================
-//
-// Indexed by (PX_BL<<5 | PX_PF<<4 | PX_P1<<3 | PX_P0<<2 | PX_M1<<1 | PX_M0).
-// Each entry is the OR of all CX_* collision flags for that set of active objects.
-// Generated at compile time via constexpr helper.
-static constexpr uint16_t build_collision_entry(uint8_t bits) {
-    const bool m0 = bits & tia_t::PX_M0;
-    const bool m1 = bits & tia_t::PX_M1;
-    const bool p0 = bits & tia_t::PX_P0;
-    const bool p1 = bits & tia_t::PX_P1;
-    const bool pf = bits & tia_t::PX_PF;
-    const bool bl = bits & tia_t::PX_BL;
-    uint16_t cx = 0;
-    if (m0 && p1) cx |= tia_t::CX_M0P1;
-    if (m0 && p0) cx |= tia_t::CX_M0P0;
-    if (m1 && p0) cx |= tia_t::CX_M1P0;
-    if (m1 && p1) cx |= tia_t::CX_M1P1;
-    if (p0 && pf) cx |= tia_t::CX_P0PF;
-    if (p0 && bl) cx |= tia_t::CX_P0BL;
-    if (p1 && pf) cx |= tia_t::CX_P1PF;
-    if (p1 && bl) cx |= tia_t::CX_P1BL;
-    if (m0 && pf) cx |= tia_t::CX_M0PF;
-    if (m0 && bl) cx |= tia_t::CX_M0BL;
-    if (m1 && pf) cx |= tia_t::CX_M1PF;
-    if (m1 && bl) cx |= tia_t::CX_M1BL;
-    if (bl && pf) cx |= tia_t::CX_BLPF;
-    if (p0 && p1) cx |= tia_t::CX_P0P1;
-    if (m0 && m1) cx |= tia_t::CX_M0M1;
-    return cx;
-}
 
-const uint16_t tia_t::collision_lut[64] = {
-    build_collision_entry( 0), build_collision_entry( 1), build_collision_entry( 2), build_collision_entry( 3),
-    build_collision_entry( 4), build_collision_entry( 5), build_collision_entry( 6), build_collision_entry( 7),
-    build_collision_entry( 8), build_collision_entry( 9), build_collision_entry(10), build_collision_entry(11),
-    build_collision_entry(12), build_collision_entry(13), build_collision_entry(14), build_collision_entry(15),
-    build_collision_entry(16), build_collision_entry(17), build_collision_entry(18), build_collision_entry(19),
-    build_collision_entry(20), build_collision_entry(21), build_collision_entry(22), build_collision_entry(23),
-    build_collision_entry(24), build_collision_entry(25), build_collision_entry(26), build_collision_entry(27),
-    build_collision_entry(28), build_collision_entry(29), build_collision_entry(30), build_collision_entry(31),
-    build_collision_entry(32), build_collision_entry(33), build_collision_entry(34), build_collision_entry(35),
-    build_collision_entry(36), build_collision_entry(37), build_collision_entry(38), build_collision_entry(39),
-    build_collision_entry(40), build_collision_entry(41), build_collision_entry(42), build_collision_entry(43),
-    build_collision_entry(44), build_collision_entry(45), build_collision_entry(46), build_collision_entry(47),
-    build_collision_entry(48), build_collision_entry(49), build_collision_entry(50), build_collision_entry(51),
-    build_collision_entry(52), build_collision_entry(53), build_collision_entry(54), build_collision_entry(55),
-    build_collision_entry(56), build_collision_entry(57), build_collision_entry(58), build_collision_entry(59),
-    build_collision_entry(60), build_collision_entry(61), build_collision_entry(62), build_collision_entry(63),
-};
+bool tia_t::has_collision(uint8_t px_a, uint8_t px_b) const {
+    // px_a and px_b are single PX_* bits; __builtin_ctz gives the bit index.
+    return (cx[__builtin_ctz(px_a)] & px_b) != 0;
+}
 
 // ============================================================================
 // INIT / RESET
@@ -169,7 +126,7 @@ void tia_t::reset() {
     pos_m0 = pos_m1 = 0;
     pos_bl = 0;
 
-    collision = 0;
+    memset(cx, 0, sizeof(cx));
 
     // Input ports default to not-pressed (bit 7 high)
     read_regs[TIA_INPT0] = 0x80;
@@ -482,8 +439,16 @@ void tia_t::render_pixel() {
     uint8_t bl_size = (ctrlpf >> 4) & 0x03;
     pixel_bits |= get_missile_pixel(x, pos_bl, bl_size, bl_enabled, PX_BL);
 
-    // Update collision register — single LUT lookup replaces 15 branches
-    collision |= collision_lut[pixel_bits];
+    // Update per-object collision accumulators.
+    // Only meaningful when 2+ objects overlap at this pixel.
+    if (pixel_bits & (pixel_bits - 1)) {
+        if (pixel_bits & PX_M0) cx[CX_M0] |= pixel_bits;
+        if (pixel_bits & PX_M1) cx[CX_M1] |= pixel_bits;
+        if (pixel_bits & PX_P0) cx[CX_P0] |= pixel_bits;
+        if (pixel_bits & PX_P1) cx[CX_P1] |= pixel_bits;
+        if (pixel_bits & PX_BL) cx[CX_BL] |= pixel_bits;
+        if (pixel_bits & PX_PF) cx[CX_PF] |= pixel_bits;
+    }
 
     // Priority-based color selection using bitmask tests
     uint8_t color;
@@ -741,7 +706,7 @@ void tia_t::write(uint16_t addr, uint8_t data) {
 
         case TIA_CXCLR:
             write_regs[addr] = data;
-            collision = 0;
+            memset(cx, 0, sizeof(cx));
             break;
 
         // All other registers store raw value (VSYNC, REFP0, REFP1, PF0-2,
@@ -762,36 +727,35 @@ uint8_t tia_t::read(uint16_t addr) {
 
     // Rebuild read register from internal state
     switch (addr) {
+        // Collision registers — extract from per-object cx[] accumulators.
+        // PX_* bit layout: M0(0) M1(1) P0(2) P1(3) BL(4) PF(5)
+        // For FB registers: PF=bit5, BL=bit4 → (cx & 0x30) << 2 maps to D7,D6
+        // For CXM0P: P1=bit3, P0=bit2 → (cx & 0x0C) << 4 maps to D7,D6
         case TIA_CXM0P:
-            read_regs[addr] = ((collision & CX_M0P1) ? 0x80 : 0) |
-                              ((collision & CX_M0P0) ? 0x40 : 0);
+            read_regs[addr] = (cx[CX_M0] & (PX_P1 | PX_P0)) << 4;
             break;
         case TIA_CXM1P:
-            read_regs[addr] = ((collision & CX_M1P0) ? 0x80 : 0) |
-                              ((collision & CX_M1P1) ? 0x40 : 0);
+            read_regs[addr] = ((cx[CX_M1] & PX_P0) << 5) |
+                              ((cx[CX_M1] & PX_P1) << 3);
             break;
         case TIA_CXP0FB:
-            read_regs[addr] = ((collision & CX_P0PF) ? 0x80 : 0) |
-                              ((collision & CX_P0BL) ? 0x40 : 0);
+            read_regs[addr] = (cx[CX_P0] & (PX_PF | PX_BL)) << 2;
             break;
         case TIA_CXP1FB:
-            read_regs[addr] = ((collision & CX_P1PF) ? 0x80 : 0) |
-                              ((collision & CX_P1BL) ? 0x40 : 0);
+            read_regs[addr] = (cx[CX_P1] & (PX_PF | PX_BL)) << 2;
             break;
         case TIA_CXM0FB:
-            read_regs[addr] = ((collision & CX_M0PF) ? 0x80 : 0) |
-                              ((collision & CX_M0BL) ? 0x40 : 0);
+            read_regs[addr] = (cx[CX_M0] & (PX_PF | PX_BL)) << 2;
             break;
         case TIA_CXM1FB:
-            read_regs[addr] = ((collision & CX_M1PF) ? 0x80 : 0) |
-                              ((collision & CX_M1BL) ? 0x40 : 0);
+            read_regs[addr] = (cx[CX_M1] & (PX_PF | PX_BL)) << 2;
             break;
         case TIA_CXBLPF:
-            read_regs[addr] = (collision & CX_BLPF) ? 0x80 : 0;
+            read_regs[addr] = (cx[CX_BL] & PX_PF) << 2;
             break;
         case TIA_CXPPMM:
-            read_regs[addr] = ((collision & CX_P0P1) ? 0x80 : 0) |
-                              ((collision & CX_M0M1) ? 0x40 : 0);
+            read_regs[addr] = ((cx[CX_P0] & PX_P1) << 4) |
+                              ((cx[CX_M0] & PX_M1) << 5);
             break;
         case TIA_INPT0:
         case TIA_INPT1:
@@ -870,7 +834,12 @@ void tia_t::register_debug_fields() {
 
         // ---- Collision ----
         .category("Collision")
-        .value("Collision Reg", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->collision; })
+        .value("CX M0", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_M0]; })
+        .value("CX M1", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_M1]; })
+        .value("CX P0", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_P0]; })
+        .value("CX P1", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_P1]; })
+        .value("CX BL", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_BL]; })
+        .value("CX PF", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_PF]; })
 
         // ---- Audio ----
         .category("Audio")

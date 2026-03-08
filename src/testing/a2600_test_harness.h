@@ -144,7 +144,6 @@ struct command_t {
     uint8_t    value;       // Value for write / expected value
     uint8_t    mask;        // Bit mask for read assertions (0xFF = exact match)
     uint32_t   count;       // Cycle/scanline count for RUN commands
-    uint16_t   collision;   // Expected collision bits
     uint16_t   x_pos;       // Pixel x position
     uint16_t   y_pos;       // Pixel y position / visible row
     uint32_t   pixel_color; // Expected RGBA pixel value
