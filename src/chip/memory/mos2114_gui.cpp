@@ -40,14 +40,15 @@ inline ChipLayout create_mos2114_layout() {
     layout.left_pins.clear();
     layout.right_pins.clear();
 
-    // Hardware-accurate MOS2114 pinout (18-pin DIP) from datasheet
+    // Hardware-accurate MOS2114 pinout (18-pin DIP) from Intel/MOS 2114 datasheet
     // Pin layout exactly as specified in the datasheet:
-    // Pins 1-7: A6-A0 (Address bits 6 to 0)
+    // Pins 1-4: A6-A3 (Address bits 6 to 3, descending)
+    // Pins 5-7: A0-A2 (Address bits 0 to 2, ascending)
     // Pin 8: /CS (Chip Select)
     // Pin 9: GND (Ground)
     // Pin 10: /WE (Write Enable)
-    // Pins 11-14: D1-D4 (Data bits 1 to 4)
-    // Pins 15-17: A7-A9 (Address bits 7 to 9)
+    // Pins 11-14: I/O4-I/O1 (Data bits 4 to 1)
+    // Pins 15-17: A9-A7 (Address bits 9 to 7, descending)
     // Pin 18: Vcc (Supply voltage)
     //
     // Right-hand pins (10-18) are numbered bottom-up as per DIP standard
@@ -55,10 +56,10 @@ inline ChipLayout create_mos2114_layout() {
     PIN_LR(layout,  2, A5,    A7,  17)   // addr 5 / addr 7
     PIN_LR(layout,  3, A4,    A8,  16)   // addr 4 / addr 8
     PIN_LR(layout,  4, A3,    A9,  15)   // addr 3 / addr 9
-    PIN_LR(layout,  5, A2,    D4,  14)   // addr 2 / data 4
-    PIN_LR(layout,  6, A1,    D3,  13)   // addr 1 / data 3
-    PIN_LR(layout,  7, A0,    D2,  12)   // addr 0 / data 2
-    PIN_LR(layout,  8, _CS,   D1,  11)   // chip sel / data 1
+    PIN_LR(layout,  5, A0,    D1,  14)   // addr 0 / I/O 1
+    PIN_LR(layout,  6, A1,    D2,  13)   // addr 1 / I/O 2
+    PIN_LR(layout,  7, A2,    D3,  12)   // addr 2 / I/O 3
+    PIN_LR(layout,  8, _CS,   D4,  11)   // chip sel / I/O 4
     PIN_LR(layout,  9, VSS,   _WE, 10)   // gnd / write enable
     
     return layout;
@@ -131,14 +132,17 @@ void MOS2114::render_settings_content() {
 }
 
 // ============================================================================
-// MOS2114 LAYOUT (standalone pinout diagram)
+// ChipBase layout virtuals
 // ============================================================================
 
-void MOS2114::render_layout_content() {
-
 #ifdef CERMU_HAS_GUI
-    ChipLayout& layout = get_mos2114_layout();
-    std::vector<PinSignalState> pin_states = get_mos2114_pin_states(this, &layout, this->bus_snapshot_);
-    render_chip_layout(layout, pin_states, "MOS2114");
-#endif
+
+ChipLayout* MOS2114::get_chip_layout() const {
+    return &get_mos2114_layout();
 }
+
+std::vector<PinSignalState> MOS2114::get_layout_pin_states(ChipLayout& layout) {
+    return get_mos2114_pin_states(this, &layout, this->bus_snapshot_);
+}
+
+#endif // CERMU_HAS_GUI
