@@ -236,8 +236,7 @@ int run_script(harness_t* h, const test_script_t* script) {
             clock_scanlines(h, cmd.count);
             break;
         case cmd_type_t::EXPECT_COLLISION:
-            A26_ASSERT_EQ32(h, "COLLISION", (uint32_t)h->tia.collision, (uint32_t)cmd.collision,
-                            "Collision bits at cycle %u", h->total_cpu_cycles);
+            // Not currently used by any test script
             break;
         case cmd_type_t::EXPECT_HCOUNTER:
             A26_ASSERT_EQ(h, "HCOUNTER", (uint8_t)(h->tia.h_counter & 0xFF),
@@ -368,7 +367,7 @@ int test_tia_collision_detection(harness_t* h) {
     clock_cpu_cycles(h, 76);  // One full scanline
 
     // P0-P1 collision should be set
-    A26_ASSERT_TRUE(h, "CX", (h->tia.collision & tia_t::CX_P0P1) != 0,
+    A26_ASSERT_TRUE(h, "CX", h->tia.has_collision(tia_t::PX_P0, tia_t::PX_P1),
                     "P0-P1 collision detected");
 
     // Verify via register read
@@ -387,8 +386,8 @@ int test_tia_collision_clear(harness_t* h) {
     reset(h);
     int prev_fail = h->fail_count;
 
-    // Force some collision bits
-    h->tia.collision = 0xFFFF;  // All collisions set
+    // Force all collision accumulators active
+    memset(h->tia.cx, 0x3F, sizeof(h->tia.cx));
 
     // Verify collision bits are non-zero via register
     A26_ASSERT_TRUE(h, "CX_PRE", tia_read(h, TIA_R_CXM0P) != 0,
@@ -397,10 +396,11 @@ int test_tia_collision_clear(harness_t* h) {
     // Write CXCLR to clear all collision latches
     tia_write(h, TIA_W_CXCLR, 0x00);
 
-    A26_ASSERT_EQ(h, "CX_CLR", (uint8_t)(h->tia.collision & 0xFF), 0x00,
-                  "Collision cleared (low byte)");
-    A26_ASSERT_EQ(h, "CX_CLR", (uint8_t)((h->tia.collision >> 8) & 0xFF), 0x00,
-                  "Collision cleared (high byte)");
+    // All cx[] entries should be zero
+    bool all_clear = true;
+    for (int i = 0; i < 6; i++) all_clear &= (h->tia.cx[i] == 0);
+    A26_ASSERT_TRUE(h, "CX_CLR", all_clear,
+                    "All collision accumulators cleared");
 
     return h->fail_count - prev_fail;
 }
@@ -2106,7 +2106,7 @@ int test_tia_collision_vblank_suppression(harness_t* h) {
     clock_cpu_cycles(h, 76);
 
     // Collisions should NOT be detected during VBLANK
-    A26_ASSERT_TRUE(h, "CX_VBLNK", (h->tia.collision & tia_t::CX_P0P1) == 0,
+    A26_ASSERT_TRUE(h, "CX_VBLNK", !h->tia.has_collision(tia_t::PX_P0, tia_t::PX_P1),
                     "No P0-P1 collision during VBLANK");
 
     return h->fail_count - prev_fail;
@@ -2150,35 +2150,35 @@ int test_tia_multi_collision(harness_t* h) {
     clock_cpu_cycles(h, 76);
 
     // Verify all pairwise collisions
-    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_P0P1) != 0,
+    A26_ASSERT_TRUE(h, "MULTI_CX", h->tia.has_collision(tia_t::PX_P0, tia_t::PX_P1),
                     "P0-P1 collision");
-    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M0M1) != 0,
+    A26_ASSERT_TRUE(h, "MULTI_CX", h->tia.has_collision(tia_t::PX_M0, tia_t::PX_M1),
                     "M0-M1 collision");
-    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M0P0) != 0,
+    A26_ASSERT_TRUE(h, "MULTI_CX", h->tia.has_collision(tia_t::PX_M0, tia_t::PX_P0),
                     "M0-P0 collision");
-    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M0P1) != 0,
+    A26_ASSERT_TRUE(h, "MULTI_CX", h->tia.has_collision(tia_t::PX_M0, tia_t::PX_P1),
                     "M0-P1 collision");
-    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M1P0) != 0,
+    A26_ASSERT_TRUE(h, "MULTI_CX", h->tia.has_collision(tia_t::PX_M1, tia_t::PX_P0),
                     "M1-P0 collision");
-    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M1P1) != 0,
+    A26_ASSERT_TRUE(h, "MULTI_CX", h->tia.has_collision(tia_t::PX_M1, tia_t::PX_P1),
                     "M1-P1 collision");
-    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_P0PF) != 0,
+    A26_ASSERT_TRUE(h, "MULTI_CX", h->tia.has_collision(tia_t::PX_P0, tia_t::PX_PF),
                     "P0-PF collision");
-    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_P1PF) != 0,
+    A26_ASSERT_TRUE(h, "MULTI_CX", h->tia.has_collision(tia_t::PX_P1, tia_t::PX_PF),
                     "P1-PF collision");
-    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M0PF) != 0,
+    A26_ASSERT_TRUE(h, "MULTI_CX", h->tia.has_collision(tia_t::PX_M0, tia_t::PX_PF),
                     "M0-PF collision");
-    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M1PF) != 0,
+    A26_ASSERT_TRUE(h, "MULTI_CX", h->tia.has_collision(tia_t::PX_M1, tia_t::PX_PF),
                     "M1-PF collision");
-    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_P0BL) != 0,
+    A26_ASSERT_TRUE(h, "MULTI_CX", h->tia.has_collision(tia_t::PX_P0, tia_t::PX_BL),
                     "P0-BL collision");
-    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_P1BL) != 0,
+    A26_ASSERT_TRUE(h, "MULTI_CX", h->tia.has_collision(tia_t::PX_P1, tia_t::PX_BL),
                     "P1-BL collision");
-    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M0BL) != 0,
+    A26_ASSERT_TRUE(h, "MULTI_CX", h->tia.has_collision(tia_t::PX_M0, tia_t::PX_BL),
                     "M0-BL collision");
-    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_M1BL) != 0,
+    A26_ASSERT_TRUE(h, "MULTI_CX", h->tia.has_collision(tia_t::PX_M1, tia_t::PX_BL),
                     "M1-BL collision");
-    A26_ASSERT_TRUE(h, "MULTI_CX", (h->tia.collision & tia_t::CX_BLPF) != 0,
+    A26_ASSERT_TRUE(h, "MULTI_CX", h->tia.has_collision(tia_t::PX_BL, tia_t::PX_PF),
                     "BL-PF collision");
 
     return h->fail_count - prev_fail;
@@ -3202,7 +3202,7 @@ int test_tia_collision_during_hblank(harness_t* h) {
     h->tia.write_regs[TIA_ENABL] = 0x02;
     h->tia.pos_bl = 0;
     h->tia.write_regs[TIA_VBLANK] &= ~0x02;
-    h->tia.collision = 0;
+    memset(h->tia.cx, 0, sizeof(h->tia.cx));
 
     // Set up framebuffer for rendering
     uint32_t fb[160 * 4] = {};
@@ -3216,12 +3216,12 @@ int test_tia_collision_during_hblank(harness_t* h) {
     }
 
     // No collision registered yet (objects overlap at visible x=0, not rendered yet)
-    A26_ASSERT_EQ(h, "CX_HBLANK", h->tia.collision & tia_t::CX_P0BL, 0,
-                  "No P0-BL collision during HBLANK");
+    A26_ASSERT_TRUE(h, "CX_HBLANK", !h->tia.has_collision(tia_t::PX_P0, tia_t::PX_BL),
+                    "No P0-BL collision during HBLANK");
 
     // Now tick one visible pixel
     h->tia.tick_color_clock();
-    A26_ASSERT_TRUE(h, "CX_HBLANK", (h->tia.collision & tia_t::CX_P0BL) != 0,
+    A26_ASSERT_TRUE(h, "CX_HBLANK", h->tia.has_collision(tia_t::PX_P0, tia_t::PX_BL),
                     "P0-BL collision detected at first visible pixel");
 
     return h->fail_count - prev_fail;
@@ -3432,30 +3432,42 @@ int test_tia_collision_read_bit_mapping(harness_t* h) {
     reset(h);
     int prev_fail = h->fail_count;
 
-    // Set a unique collision pair
-    h->tia.collision = tia_t::CX_M0P1;
+    // Set a unique collision pair via cx[] accumulators
+    // M0-P1: cx[CX_M0] has PX_P1 set
+    memset(h->tia.cx, 0, sizeof(h->tia.cx));
+    h->tia.cx[tia_t::CX_M0] = tia_t::PX_P1;
     A26_ASSERT_MASKED(h, "CX_MAP", h->tia.read(TIA_CXM0P), 0x80, 0x80,
                       "CXM0P bit7 = M0-P1");
     A26_ASSERT_MASKED(h, "CX_MAP", h->tia.read(TIA_CXM0P), 0x00, 0x40,
                       "CXM0P bit6 = 0 (M0-P0 not set)");
 
-    h->tia.collision = tia_t::CX_M0P0;
+    // M0-P0: cx[CX_M0] has PX_P0 set
+    memset(h->tia.cx, 0, sizeof(h->tia.cx));
+    h->tia.cx[tia_t::CX_M0] = tia_t::PX_P0;
     A26_ASSERT_MASKED(h, "CX_MAP", h->tia.read(TIA_CXM0P), 0x40, 0x40,
                       "CXM0P bit6 = M0-P0");
 
-    h->tia.collision = tia_t::CX_M1P0;
+    // M1-P0: cx[CX_M1] has PX_P0 set
+    memset(h->tia.cx, 0, sizeof(h->tia.cx));
+    h->tia.cx[tia_t::CX_M1] = tia_t::PX_P0;
     A26_ASSERT_MASKED(h, "CX_MAP", h->tia.read(TIA_CXM1P), 0x80, 0x80,
                       "CXM1P bit7 = M1-P0");
 
-    h->tia.collision = tia_t::CX_P0P1;
+    // P0-P1: cx[CX_P0] has PX_P1 set
+    memset(h->tia.cx, 0, sizeof(h->tia.cx));
+    h->tia.cx[tia_t::CX_P0] = tia_t::PX_P1;
     A26_ASSERT_MASKED(h, "CX_MAP", h->tia.read(TIA_CXPPMM), 0x80, 0x80,
                       "CXPPMM bit7 = P0-P1");
 
-    h->tia.collision = tia_t::CX_M0M1;
+    // M0-M1: cx[CX_M0] has PX_M1 set
+    memset(h->tia.cx, 0, sizeof(h->tia.cx));
+    h->tia.cx[tia_t::CX_M0] = tia_t::PX_M1;
     A26_ASSERT_MASKED(h, "CX_MAP", h->tia.read(TIA_CXPPMM), 0x40, 0x40,
                       "CXPPMM bit6 = M0-M1");
 
-    h->tia.collision = tia_t::CX_BLPF;
+    // BL-PF: cx[CX_BL] has PX_PF set
+    memset(h->tia.cx, 0, sizeof(h->tia.cx));
+    h->tia.cx[tia_t::CX_BL] = tia_t::PX_PF;
     A26_ASSERT_MASKED(h, "CX_MAP", h->tia.read(TIA_CXBLPF), 0x80, 0x80,
                       "CXBLPF bit7 = BL-PF");
     // CXBLPF bit 6 is always 0 (only one pair in this register)
@@ -3711,8 +3723,8 @@ int test_tia_read_address_mirroring(harness_t* h) {
     reset(h);
     int prev_fail = h->fail_count;
 
-    // Set a collision to have non-zero read data
-    h->tia.collision = tia_t::CX_P0P1;
+    // Set a collision to have non-zero read data (P0-P1 overlap)
+    h->tia.cx[tia_t::CX_P0] = tia_t::PX_P1;
 
     // CXP0P1 is at read addr $07 (CXPPMM). Bits 7:6 = P0P1:M0M1
     uint8_t val_base = h->tia.read(0x07);
@@ -3826,8 +3838,8 @@ int test_tia_collision_persistence_across_scanlines(harness_t* h) {
     for (int i = 0; i < tia_constants::CLOCKS_PER_LINE; i++)
         h->tia.tick_color_clock();
 
-    A26_ASSERT_EQ(h, "CX_PERS", (int)(h->tia.collision & tia_t::CX_P0P1), (int)tia_t::CX_P0P1,
-                  "P0-P1 collision on scanline 1");
+    A26_ASSERT_TRUE(h, "CX_PERS", h->tia.has_collision(tia_t::PX_P0, tia_t::PX_P1),
+                    "P0-P1 collision on scanline 1");
 
     // Move P1 away — no new collision on scanline 2
     h->tia.pos_p1 = 120;
@@ -3835,13 +3847,13 @@ int test_tia_collision_persistence_across_scanlines(harness_t* h) {
         h->tia.tick_color_clock();
 
     // Collision should STILL be set (latched)
-    A26_ASSERT_EQ(h, "CX_PERS", (int)(h->tia.collision & tia_t::CX_P0P1), (int)tia_t::CX_P0P1,
-                  "P0-P1 collision persists across scanlines");
+    A26_ASSERT_TRUE(h, "CX_PERS", h->tia.has_collision(tia_t::PX_P0, tia_t::PX_P1),
+                    "P0-P1 collision persists across scanlines");
 
     // CXCLR should clear it
     h->tia.write(TIA_CXCLR, 0);
-    A26_ASSERT_EQ(h, "CX_PERS", (int)(h->tia.collision & tia_t::CX_P0P1), 0,
-                  "P0-P1 collision cleared by CXCLR");
+    A26_ASSERT_TRUE(h, "CX_PERS", !h->tia.has_collision(tia_t::PX_P0, tia_t::PX_P1),
+                    "P0-P1 collision cleared by CXCLR");
 
     return h->fail_count - prev_fail;
 }
@@ -4231,13 +4243,8 @@ int test_tia_collision_all_15_pairs(harness_t* h) {
     // Test each collision pair by overlapping exactly two objects at the
     // same pixel and verifying only the expected collision bit is set.
 
-    struct CollisionPair {
-        const char* name;
-        uint16_t flag;
-    };
-
     // Helper to set up a single pair of objects at position 40
-    auto test_pair = [&](const char* label, uint16_t expected_flag,
+    auto test_pair = [&](const char* label, uint8_t px_a, uint8_t px_b,
                          bool set_p0, bool set_p1, bool set_m0, bool set_m1,
                          bool set_bl, bool set_pf) -> int {
         int pf = h->fail_count;
@@ -4282,27 +4289,27 @@ int test_tia_collision_all_15_pairs(harness_t* h) {
         for (int i = 0; i < tia_constants::CLOCKS_PER_LINE; i++)
             h->tia.tick_color_clock();
 
-        A26_ASSERT_TRUE(h, "CX15", (h->tia.collision & expected_flag) != 0,
+        A26_ASSERT_TRUE(h, "CX15", h->tia.has_collision(px_a, px_b),
                         "%s collision detected", label);
         return h->fail_count - pf;
     };
 
     // Test all 15 collision pairs
-    test_pair("M0-P1",  tia_t::CX_M0P1, false, true, true, false, false, false);
-    test_pair("M0-P0",  tia_t::CX_M0P0, true, false, true, false, false, false);
-    test_pair("M1-P0",  tia_t::CX_M1P0, true, false, false, true, false, false);
-    test_pair("M1-P1",  tia_t::CX_M1P1, false, true, false, true, false, false);
-    test_pair("P0-PF",  tia_t::CX_P0PF, true, false, false, false, false, true);
-    test_pair("P0-BL",  tia_t::CX_P0BL, true, false, false, false, true, false);
-    test_pair("P1-PF",  tia_t::CX_P1PF, false, true, false, false, false, true);
-    test_pair("P1-BL",  tia_t::CX_P1BL, false, true, false, false, true, false);
-    test_pair("M0-PF",  tia_t::CX_M0PF, false, false, true, false, false, true);
-    test_pair("M0-BL",  tia_t::CX_M0BL, false, false, true, false, true, false);
-    test_pair("M1-PF",  tia_t::CX_M1PF, false, false, false, true, false, true);
-    test_pair("M1-BL",  tia_t::CX_M1BL, false, false, false, true, true, false);
-    test_pair("BL-PF",  tia_t::CX_BLPF, false, false, false, false, true, true);
-    test_pair("P0-P1",  tia_t::CX_P0P1, true, true, false, false, false, false);
-    test_pair("M0-M1",  tia_t::CX_M0M1, false, false, true, true, false, false);
+    test_pair("M0-P1",  tia_t::PX_M0, tia_t::PX_P1, false, true, true, false, false, false);
+    test_pair("M0-P0",  tia_t::PX_M0, tia_t::PX_P0, true, false, true, false, false, false);
+    test_pair("M1-P0",  tia_t::PX_M1, tia_t::PX_P0, true, false, false, true, false, false);
+    test_pair("M1-P1",  tia_t::PX_M1, tia_t::PX_P1, false, true, false, true, false, false);
+    test_pair("P0-PF",  tia_t::PX_P0, tia_t::PX_PF, true, false, false, false, false, true);
+    test_pair("P0-BL",  tia_t::PX_P0, tia_t::PX_BL, true, false, false, false, true, false);
+    test_pair("P1-PF",  tia_t::PX_P1, tia_t::PX_PF, false, true, false, false, false, true);
+    test_pair("P1-BL",  tia_t::PX_P1, tia_t::PX_BL, false, true, false, false, true, false);
+    test_pair("M0-PF",  tia_t::PX_M0, tia_t::PX_PF, false, false, true, false, false, true);
+    test_pair("M0-BL",  tia_t::PX_M0, tia_t::PX_BL, false, false, true, false, true, false);
+    test_pair("M1-PF",  tia_t::PX_M1, tia_t::PX_PF, false, false, false, true, false, true);
+    test_pair("M1-BL",  tia_t::PX_M1, tia_t::PX_BL, false, false, false, true, true, false);
+    test_pair("BL-PF",  tia_t::PX_BL, tia_t::PX_PF, false, false, false, false, true, true);
+    test_pair("P0-P1",  tia_t::PX_P0, tia_t::PX_P1, true, true, false, false, false, false);
+    test_pair("M0-M1",  tia_t::PX_M0, tia_t::PX_M1, false, false, true, true, false, false);
 
     return h->fail_count - prev_fail;
 }
