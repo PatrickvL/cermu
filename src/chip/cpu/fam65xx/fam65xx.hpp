@@ -82,6 +82,44 @@ constexpr std::array<opcode_info_t, 256> generate_opcode_table() {
 }
 
 // ============================================================================
+// SHARED OPCODE TABLE (deduplicated across compatible CPU variants)
+// ============================================================================
+// The opcode table content depends only on instruction-set flags (CMOS_BASE,
+// ROCKWELL_BITS, WAI_STP, C816_16BIT, CE02_EXTENDED, HUC6280_EXTENDED).
+// Non-instruction-set flags (HAS_IO_PORT, NO_IRQ_LINE, HAS_DECIMAL_MODE, etc.)
+// do NOT affect which opcodes appear in the table — those differences are
+// handled at runtime by the operation handlers.
+//
+// By keying the table on only the relevant flags, all NMOS CPUs (MOS6502,
+// MOS6510, MOS6507, CSG7501, RICOH_2A03) share a single static table instead
+// of carrying 5 identical copies.
+
+// Bitmask of core_flags bits that affect opcode table content
+inline constexpr uint32_t OPCODE_TABLE_FLAGS_MASK =
+    CPUCoreFlags::CMOS_BASE | CPUCoreFlags::ROCKWELL_BITS |
+    CPUCoreFlags::WAI_STP | CPUCoreFlags::CE02_EXTENDED |
+    CPUCoreFlags::C816_16BIT | CPUCoreFlags::HUC6280_EXTENDED;
+
+constexpr uint32_t opcode_table_key(const CPUTraits &t) {
+  return t.core_flags & OPCODE_TABLE_FLAGS_MASK;
+}
+
+// Shared table holder — one instantiation per unique key value.
+// A canonical CPUTraits is synthesized with only the relevant flags so that
+// generate_opcode_table_for_traits produces the correct table.
+template <uint32_t Key> struct SharedOpcodeTable {
+  static constexpr CPUTraits canonical_traits_{
+      "",
+      "",
+      Key,
+      16,
+      0,
+      BankingType::NONE,
+      {SoundChip::NONE, DMAController::NONE, false}};
+  static constexpr auto table = generate_opcode_table_for_traits(canonical_traits_);
+};
+
+// ============================================================================
 // MAIN CPU TEMPLATE CLASS
 // ============================================================================
 
@@ -1510,8 +1548,9 @@ class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_bas
   }
 
   opcode_info_t get_opcode_info(uint8_t opcode) const {
-    static constexpr auto table = generate_opcode_table<Traits>();
-    return table[opcode];
+    // Use shared table keyed by instruction-set-relevant flags only.
+    // All NMOS variants (6502/6510/6507/7501/2A03) share one table.
+    return SharedOpcodeTable<opcode_table_key(Traits)>::table[opcode];
   }
 
 public:
