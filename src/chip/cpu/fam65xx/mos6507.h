@@ -33,22 +33,6 @@ using MOS6507 = fam65xx::fam65xx_t<fam65xx::MOS6507Traits>;
 // ============================================================================
 // MOS 6507 PIN LAYOUT (28-pin DIP)
 // ============================================================================
-//
-//   Pin  1: /RES                  Pin 28: PHI0 (CLK IN)
-//   Pin  2: VSS (GND)            Pin 27: R/W
-//   Pin  3: RDY                  Pin 26: D0
-//   Pin  4: PHI2 (CLK OUT)       Pin 25: D1
-//   Pin  5: A0                   Pin 24: D2
-//   Pin  6: A1                   Pin 23: D3
-//   Pin  7: A2                   Pin 22: D4
-//   Pin  8: A3                   Pin 21: D5
-//   Pin  9: A4                   Pin 20: D6
-//   Pin 10: A5                   Pin 19: D7
-//   Pin 11: A6                   Pin 18: A12
-//   Pin 12: A7                   Pin 17: A11
-//   Pin 13: A8                   Pin 16: A10
-//   Pin 14: VCC                  Pin 15: A9
-//
 
 inline ChipLayout create_mos6507_layout() {
     ChipLayout layout = create_dip28_layout();
