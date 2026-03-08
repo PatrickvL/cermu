@@ -31,6 +31,24 @@
 #include <cstring>
 
 // ============================================================================
+// Z80 PIO Register Indices (flattened view of internal state)
+// ============================================================================
+
+namespace z80_pio_regs {
+    constexpr uint8_t PORT_A_DATA   = 0x00;
+    constexpr uint8_t PORT_B_DATA   = 0x01;
+    constexpr uint8_t PORT_A_CTRL   = 0x02;
+    constexpr uint8_t PORT_B_CTRL   = 0x03;
+    constexpr uint8_t PORT_A_IOSEL  = 0x04;
+    constexpr uint8_t PORT_B_IOSEL  = 0x05;
+    constexpr uint8_t PORT_A_IVEC   = 0x06;
+    constexpr uint8_t PORT_B_IVEC   = 0x07;
+    constexpr uint8_t PORT_A_IMASK  = 0x08;
+    constexpr uint8_t PORT_B_IMASK  = 0x09;
+    constexpr uint8_t REG_COUNT     = 10;
+} // namespace z80_pio_regs
+
+// ============================================================================
 // Z80 PIO Port Mode
 // ============================================================================
 
@@ -52,6 +70,9 @@ public:
                              is_u855 ? "VEB MME Erfurt" : "Zilog"))
     {
         category_ = "I/O";
+#ifdef CERMU_HAS_CHIP_DEBUG
+        register_debug_fields();
+#endif
     }
 
     void init() {
@@ -67,6 +88,7 @@ public:
             port_[i].ready = false;
             port_[i].strobe = false;
         }
+        update_regs();
     }
 
     void reset() { init(); }
@@ -78,6 +100,7 @@ public:
         auto& p = port_[port_idx & 1];
         p.output = data;
         p.ready = true;
+        update_regs();
     }
 
     /// Read port data register.
@@ -96,6 +119,7 @@ public:
         //       I/O select mask for mode 3, interrupt mask)
         (void)port_idx;
         (void)data;
+        update_regs();
     }
 
     /// Set external input lines (from connected device/system).
@@ -124,6 +148,12 @@ public:
         return port_[port_idx & 1].int_vector;
     }
 
+    // === ChipBase GUI virtuals ===
+#ifdef CERMU_HAS_GUI
+    ChipLayout* create_chip_layout() const override;
+    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+#endif
+
 private:
     struct Port {
         PIOMode  mode = PIOMode::INPUT;
@@ -140,4 +170,21 @@ private:
     };
 
     Port port_[2]{};
+
+    // Register file mirror (flattened view for debug inspection)
+    uint8_t regs_[z80_pio_regs::REG_COUNT]{};
+
+    void update_regs() {
+        for (int i = 0; i < 2; ++i) {
+            regs_[z80_pio_regs::PORT_A_DATA  + i] = port_[i].output;
+            regs_[z80_pio_regs::PORT_A_CTRL  + i] = port_[i].int_control;
+            regs_[z80_pio_regs::PORT_A_IOSEL + i] = port_[i].io_select;
+            regs_[z80_pio_regs::PORT_A_IVEC  + i] = port_[i].int_vector;
+            regs_[z80_pio_regs::PORT_A_IMASK + i] = port_[i].int_mask;
+        }
+    }
+
+#ifdef CERMU_HAS_CHIP_DEBUG
+    void register_debug_fields();
+#endif
 };
