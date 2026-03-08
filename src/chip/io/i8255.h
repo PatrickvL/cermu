@@ -22,12 +22,27 @@
 #include <cstdint>
 #include <cstring>
 
+// ============================================================================
+// i8255 Register Addresses
+// ============================================================================
+
+namespace i8255_regs {
+    constexpr uint8_t PORT_A  = 0x00;
+    constexpr uint8_t PORT_B  = 0x01;
+    constexpr uint8_t PORT_C  = 0x02;
+    constexpr uint8_t CONTROL = 0x03;
+    constexpr uint8_t REG_COUNT = 4;
+} // namespace i8255_regs
+
 class i8255_t : public ChipBase {
 public:
     i8255_t()
         : ChipBase(ChipInfo("8255", "Intel"))
     {
         category_ = "I/O";
+#ifdef CERMU_HAS_CHIP_DEBUG
+        register_debug_fields();
+#endif
     }
 
     void init() {
@@ -38,6 +53,7 @@ public:
         port_a_in_ = 0xFF;
         port_b_in_ = 0xFF;
         port_c_in_ = 0xFF;
+        update_regs();
     }
 
     void reset() { init(); }
@@ -72,6 +88,7 @@ public:
             }
             break;
         }
+        update_regs();
     }
 
     uint8_t read(uint8_t addr) const {
@@ -100,6 +117,12 @@ public:
     bool port_c_upper_input() const { return (control_ & 0x08) != 0; }
     bool port_c_lower_input() const { return (control_ & 0x01) != 0; }
 
+    // === ChipBase GUI virtuals ===
+#ifdef CERMU_HAS_GUI
+    ChipLayout* create_chip_layout() const override;
+    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+#endif
+
 private:
     uint8_t read_port_c() const {
         uint8_t result = 0;
@@ -123,4 +146,18 @@ private:
     uint8_t port_a_in_ = 0xFF;
     uint8_t port_b_in_ = 0xFF;
     uint8_t port_c_in_ = 0xFF;
+
+    // Register file mirror (for debug inspection)
+    uint8_t regs_[i8255_regs::REG_COUNT]{};
+
+    void update_regs() {
+        regs_[i8255_regs::PORT_A]  = port_a_out_;
+        regs_[i8255_regs::PORT_B]  = port_b_out_;
+        regs_[i8255_regs::PORT_C]  = port_c_out_;
+        regs_[i8255_regs::CONTROL] = control_;
+    }
+
+#ifdef CERMU_HAS_CHIP_DEBUG
+    void register_debug_fields();
+#endif
 };
