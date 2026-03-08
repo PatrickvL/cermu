@@ -145,8 +145,27 @@ void mos6522_t::render_settings_content() {
 
     // Extended register view
     if (ImGui::CollapsingHeader("Raw Registers ($00-$0F)", ImGuiTreeNodeFlags_DefaultOpen)) {
+        // Reconstruct register values from named fields (canonical source of truth)
+        const uint8_t regs[16] = {
+            via->port_b.read(),                              // $00 PORTB
+            via->port_a.read(),                              // $01 PORTA
+            *via->port_b.ddr,                                // $02 DDRB
+            *via->port_a.ddr,                                // $03 DDRA
+            (uint8_t)(via->timer1_counter & 0xFF),           // $04 T1CL
+            (uint8_t)(via->timer1_counter >> 8),             // $05 T1CH
+            (uint8_t)(via->timer1_latch & 0xFF),             // $06 T1LL
+            (uint8_t)(via->timer1_latch >> 8),               // $07 T1LH
+            (uint8_t)(via->timer2_counter & 0xFF),           // $08 T2CL
+            (uint8_t)(via->timer2_counter >> 8),             // $09 T2CH
+            via->shift_register,                             // $0A SR
+            via->acr,                                        // $0B ACR
+            via->pcr,                                        // $0C PCR
+            via->ifr,                                        // $0D IFR
+            (uint8_t)(via->ier | 0x80),                      // $0E IER
+            via->port_a.read(),                              // $0F PORTA_NH
+        };
         for (int i = 0; i < 16; i++) {
-            ImGui::Text("$%02X: $%02X", i, via->registers[i]);
+            ImGui::Text("$%02X: $%02X", i, regs[i]);
         }
     }
 
