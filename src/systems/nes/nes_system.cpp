@@ -332,15 +332,10 @@ void NintendoSystem<V>::shutdown() {
         cpu_ = nullptr;
     }
 
-    // Clear registered chips/connectors/devices so re-initialization
-    // doesn't accumulate stale entries with dangling pointers.
-    registered_chips_.clear();
-    owned_chip_adapters_.clear();
-    connector_ports_.clear();
-    owned_devices_.clear();
-
     initialized_ = false;
     system_ready_ = false;
+
+    EmulatedSystem::shutdown();
 }
 
 template<NintendoVariant V>

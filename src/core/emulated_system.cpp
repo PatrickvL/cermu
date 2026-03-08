@@ -134,7 +134,14 @@ bool EmulatedSystem::initialize() {
 }
 
 void EmulatedSystem::shutdown() {
-    // Default: nothing to clean up
+    // Detach all devices from ports before clearing (clean teardown)
+    for (auto& port : connector_ports_) {
+        port->detach_device();
+    }
+    owned_devices_.clear();
+    connector_ports_.clear();
+    registered_chips_.clear();
+    owned_chip_adapters_.clear();
 }
 
 void EmulatedSystem::handle_controller_event(int controller, int button, bool pressed) {

@@ -543,15 +543,6 @@ bool C64System::initialize() {
 }
 
 void C64System::shutdown() {
-    // Detach all devices before destroying the system
-    for (auto& port : connector_ports_) {
-        port->detach_device();
-    }
-    owned_devices_.clear();
-    connector_ports_.clear();
-    registered_chips_.clear();
-    owned_chip_adapters_.clear();
-
     // Free any pending load that was never applied
     if (pending_load_.active) {
         pending_load_.result.release();
@@ -582,6 +573,8 @@ void C64System::shutdown() {
         // Zero the embedded struct for clean re-initialization
         // Chip pointers already nulled above
     }
+
+    EmulatedSystem::shutdown();
 }
 
 void C64System::reset() {
