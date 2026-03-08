@@ -106,7 +106,7 @@ static ChipLayout& get_vic_layout(bool is_pal) {
     return is_pal ? layout_pal : layout_ntsc;
 }
 
-static const char* get_vic_type_name(vic_base_t* vic) {
+static const char* get_vic_type_name(const vic_base_t* vic) {
     if (vic->is_pal) return "MOS 6561 (PAL)";
     return "MOS 6560 (NTSC)";
 }
@@ -118,7 +118,26 @@ static const char* get_vic_type_name(vic_base_t* vic) {
 // ============================================================================
 
 bool vic_base_t::has_settings_content() const { return true; }
-bool vic_base_t::has_layout_content()   const { return true; }
+
+// ============================================================================
+// VIC layout virtuals
+// ============================================================================
+
+#ifdef CERMU_HAS_GUI
+
+ChipLayout* vic_base_t::get_chip_layout() const {
+    return &get_vic_layout(is_pal);
+}
+
+std::vector<PinSignalState> vic_base_t::get_layout_pin_states(ChipLayout& layout) {
+    return get_vic_pin_states(this, &layout, bus_snapshot_);
+}
+
+const char* vic_base_t::get_layout_chip_name() const {
+    return get_vic_type_name(this);
+}
+
+#endif // CERMU_HAS_GUI
 
 // ============================================================================
 // VIC GUI SETTINGS
@@ -151,21 +170,5 @@ void vic_base_t::render_settings_content() {
                         reg_names[i], vic->registers[i]);
         }
     }
-#endif
-}
-
-// ============================================================================
-// VIC LAYOUT (standalone pinout diagram)
-// ============================================================================
-
-void vic_base_t::render_layout_content() {
-    vic_base_t* vic = this;
-
-#ifdef CERMU_HAS_GUI
-    const char* chip_name = get_vic_type_name(vic);
-
-    ChipLayout& layout = get_vic_layout(vic->is_pal);
-    std::vector<PinSignalState> pin_states = get_vic_pin_states(vic, &layout, vic->bus_snapshot_);
-    render_chip_layout(layout, pin_states, chip_name);
 #endif
 }

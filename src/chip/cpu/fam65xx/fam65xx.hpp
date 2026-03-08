@@ -1995,11 +1995,14 @@ public:
   // ========================================================================
 
   bool has_settings_content() const override { return true; }
-  bool has_layout_content() const override { return true; }
 
   // Declared here, defined in fam65xx_gui.cpp with explicit instantiations
   void render_settings_content() override;
-  void render_layout_content() override;
+#ifdef CERMU_HAS_GUI
+  ChipLayout* get_chip_layout() const override;
+  std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+  const char* get_layout_chip_name() const override;
+#endif
 
 private:
   void register_debug_fields() {

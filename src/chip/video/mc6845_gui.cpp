@@ -165,15 +165,17 @@ static std::vector<PinSignalState> get_mc6845_pin_states(
 #endif // CERMU_HAS_GUI (layout/pin helpers)
 
 // ============================================================================
-// ChipBase GUI Overrides
+// ChipBase layout virtuals
 // ============================================================================
 
-bool mc6845_t::has_layout_content() const { return true; }
-
-void mc6845_t::render_layout_content() {
 #ifdef CERMU_HAS_GUI
-    ChipLayout& layout = get_mc6845_layout();
-    std::vector<PinSignalState> pin_states = get_mc6845_pin_states(this, &layout, bus_snapshot_);
-    render_chip_layout(layout, pin_states, "MC6845");
-#endif
+
+ChipLayout* mc6845_t::get_chip_layout() const {
+    return &get_mc6845_layout();
 }
+
+std::vector<PinSignalState> mc6845_t::get_layout_pin_states(ChipLayout& layout) {
+    return get_mc6845_pin_states(this, &layout, bus_snapshot_);
+}
+
+#endif // CERMU_HAS_GUI

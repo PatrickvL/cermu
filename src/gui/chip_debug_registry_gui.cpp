@@ -534,10 +534,26 @@ void ChipBase::render_debug_content() {
     }
 }
 
+// ============================================================================
+// PUBLIC: ChipBase::render_layout_content() — consolidated layout rendering
+// ============================================================================
+//
+// Calls the three layout virtuals (get_chip_layout, get_layout_pin_states,
+// get_layout_chip_name) and renders via the global chip visualization helper.
+// Individual chips override those virtuals — not this method.
+
+void ChipBase::render_layout_content() {
+    ChipLayout* layout = get_chip_layout();
+    if (!layout) return;
+    auto pin_states = get_layout_pin_states(*layout);
+    render_chip_layout(*layout, pin_states, get_layout_chip_name());
+}
+
 #else // !CERMU_HAS_GUI
 
 // Non-GUI stubs — the registry exists but rendering is a no-op.
 void ChipDebugRegistry::render(const ChipBase* /*chip*/) const {}
 void ChipBase::render_debug_content() {}
+void ChipBase::render_layout_content() {}
 
 #endif // CERMU_HAS_GUI

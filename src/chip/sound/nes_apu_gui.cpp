@@ -66,7 +66,6 @@ inline ChipLayout create_ricoh_2a03_apu_layout() {
 #endif // CERMU_HAS_GUI (layout helpers)
 
 bool nes6502_apu::APU::has_settings_content() const { return true; }
-bool nes6502_apu::APU::has_layout_content()   const { return true; }
 
 #ifdef CERMU_HAS_GUI
 
@@ -158,20 +157,20 @@ void nes6502_apu::APU::render_settings_content() {
 }
 
 // ============================================================================
-// NES APU LAYOUT (standalone pinout diagram)
+// NES APU layout virtuals
 // ============================================================================
 
-void nes6502_apu::APU::render_layout_content() {
-    auto* apu = this;
-
+ChipLayout* nes6502_apu::APU::get_chip_layout() const {
     static ChipLayout layout = create_ricoh_2a03_apu_layout();
-    auto pin_states = get_apu_pin_states(apu, &layout, apu->bus_snapshot_);
-    render_chip_layout(layout, pin_states, "RP2A03");
+    return &layout;
+}
+
+std::vector<PinSignalState> nes6502_apu::APU::get_layout_pin_states(ChipLayout& layout) {
+    return get_apu_pin_states(this, &layout, bus_snapshot_);
 }
 
 #else // !CERMU_HAS_GUI
 
 void nes6502_apu::APU::render_settings_content() {}
-void nes6502_apu::APU::render_layout_content() {}
 
 #endif

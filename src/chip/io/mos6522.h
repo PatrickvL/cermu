@@ -124,9 +124,12 @@ struct mos6522_t : public ChipBase {
 
     // --- ChipBase interface ---
     bool has_settings_content() const override;
-    bool has_layout_content()   const override;
     void render_settings_content() override;
-    void render_layout_content()   override;
+#ifdef CERMU_HAS_GUI
+    ChipLayout* get_chip_layout() const override;
+    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+    const char* get_layout_chip_name() const override;
+#endif
 
     // Lifecycle
     void reset();

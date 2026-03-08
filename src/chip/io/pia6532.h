@@ -51,8 +51,10 @@ struct pia6532_t : public ChipBase {
     }
 
     // --- ChipBase GUI interface ---
-    bool has_layout_content() const override;
-    void render_layout_content()    override;
+#ifdef CERMU_HAS_GUI
+    ChipLayout* get_chip_layout() const override;
+    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+#endif
 
     // ========================================================================
     // RAM — 128 bytes ($80-$FF)

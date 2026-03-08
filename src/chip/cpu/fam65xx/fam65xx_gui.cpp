@@ -185,49 +185,77 @@ void fam65xx_t<Traits>::render_settings_content() {
 }
 
 template <const CPUTraits &Traits>
-void fam65xx_t<Traits>::render_layout_content() {
+ChipLayout* fam65xx_t<Traits>::get_chip_layout() const {
     static ChipLayout layout = create_cpu_pin_layout<Traits>();
+    return &layout;
+}
+
+template <const CPUTraits &Traits>
+std::vector<PinSignalState> fam65xx_t<Traits>::get_layout_pin_states(ChipLayout& layout) {
     bus_state_t bus_state = this->bus_snapshot_;
     if (bus_state == 0) {
       bus_state = FAM65XX_GUI_DEFAULT_STATE;
       BUS_SET_ADDR(bus_state, this->get(REG_AB));
       BUS_SET_DATA(bus_state, this->get(REG_DL));
     }
-    std::vector<PinSignalState> pin_states =
-        get_cpu_pin_states<Traits>(this, &layout, bus_state);
-    render_chip_layout(layout, pin_states, get_processor_name<Traits>());
+    return get_cpu_pin_states<Traits>(this, &layout, bus_state);
+}
+
+template <const CPUTraits &Traits>
+const char* fam65xx_t<Traits>::get_layout_chip_name() const {
+    return get_processor_name<Traits>();
 }
 
 // Explicit template instantiations for all CPU variants
 template void fam65xx_t<MOS6502Traits>::render_settings_content();
-template void fam65xx_t<MOS6502Traits>::render_layout_content();
+template ChipLayout* fam65xx_t<MOS6502Traits>::get_chip_layout() const;
+template std::vector<PinSignalState> fam65xx_t<MOS6502Traits>::get_layout_pin_states(ChipLayout&);
+template const char* fam65xx_t<MOS6502Traits>::get_layout_chip_name() const;
 
 template void fam65xx_t<MOS6510Traits>::render_settings_content();
-template void fam65xx_t<MOS6510Traits>::render_layout_content();
+template ChipLayout* fam65xx_t<MOS6510Traits>::get_chip_layout() const;
+template std::vector<PinSignalState> fam65xx_t<MOS6510Traits>::get_layout_pin_states(ChipLayout&);
+template const char* fam65xx_t<MOS6510Traits>::get_layout_chip_name() const;
 
 template void fam65xx_t<CSG7501Traits>::render_settings_content();
-template void fam65xx_t<CSG7501Traits>::render_layout_content();
+template ChipLayout* fam65xx_t<CSG7501Traits>::get_chip_layout() const;
+template std::vector<PinSignalState> fam65xx_t<CSG7501Traits>::get_layout_pin_states(ChipLayout&);
+template const char* fam65xx_t<CSG7501Traits>::get_layout_chip_name() const;
 
 template void fam65xx_t<RICOH_2A03Traits>::render_settings_content();
-template void fam65xx_t<RICOH_2A03Traits>::render_layout_content();
+template ChipLayout* fam65xx_t<RICOH_2A03Traits>::get_chip_layout() const;
+template std::vector<PinSignalState> fam65xx_t<RICOH_2A03Traits>::get_layout_pin_states(ChipLayout&);
+template const char* fam65xx_t<RICOH_2A03Traits>::get_layout_chip_name() const;
 
 template void fam65xx_t<MOS6507Traits>::render_settings_content();
-template void fam65xx_t<MOS6507Traits>::render_layout_content();
+template ChipLayout* fam65xx_t<MOS6507Traits>::get_chip_layout() const;
+template std::vector<PinSignalState> fam65xx_t<MOS6507Traits>::get_layout_pin_states(ChipLayout&);
+template const char* fam65xx_t<MOS6507Traits>::get_layout_chip_name() const;
 
 template void fam65xx_t<SYNERTEK_65C02Traits>::render_settings_content();
-template void fam65xx_t<SYNERTEK_65C02Traits>::render_layout_content();
+template ChipLayout* fam65xx_t<SYNERTEK_65C02Traits>::get_chip_layout() const;
+template std::vector<PinSignalState> fam65xx_t<SYNERTEK_65C02Traits>::get_layout_pin_states(ChipLayout&);
+template const char* fam65xx_t<SYNERTEK_65C02Traits>::get_layout_chip_name() const;
 
 template void fam65xx_t<WDC_65C02_EARLYTraits>::render_settings_content();
-template void fam65xx_t<WDC_65C02_EARLYTraits>::render_layout_content();
+template ChipLayout* fam65xx_t<WDC_65C02_EARLYTraits>::get_chip_layout() const;
+template std::vector<PinSignalState> fam65xx_t<WDC_65C02_EARLYTraits>::get_layout_pin_states(ChipLayout&);
+template const char* fam65xx_t<WDC_65C02_EARLYTraits>::get_layout_chip_name() const;
 
 template void fam65xx_t<WDC_W65C02STraits>::render_settings_content();
-template void fam65xx_t<WDC_W65C02STraits>::render_layout_content();
+template ChipLayout* fam65xx_t<WDC_W65C02STraits>::get_chip_layout() const;
+template std::vector<PinSignalState> fam65xx_t<WDC_W65C02STraits>::get_layout_pin_states(ChipLayout&);
+template const char* fam65xx_t<WDC_W65C02STraits>::get_layout_chip_name() const;
 
 template void fam65xx_t<ROCKWELL_R65C02Traits>::render_settings_content();
-template void fam65xx_t<ROCKWELL_R65C02Traits>::render_layout_content();
+template ChipLayout* fam65xx_t<ROCKWELL_R65C02Traits>::get_chip_layout() const;
+template std::vector<PinSignalState> fam65xx_t<ROCKWELL_R65C02Traits>::get_layout_pin_states(ChipLayout&);
+template const char* fam65xx_t<ROCKWELL_R65C02Traits>::get_layout_chip_name() const;
 
 template void fam65xx_t<WDC_65C816Traits>::render_settings_content();
-template void fam65xx_t<WDC_65C816Traits>::render_layout_content();
+template ChipLayout* fam65xx_t<WDC_65C816Traits>::get_chip_layout() const;
+template std::vector<PinSignalState> fam65xx_t<WDC_65C816Traits>::get_layout_pin_states(ChipLayout&);
+template const char* fam65xx_t<WDC_65C816Traits>::get_layout_chip_name() const;
 
 } // namespace fam65xx
 
@@ -244,39 +272,26 @@ namespace fam65xx {
 template <const CPUTraits &Traits>
 void fam65xx_t<Traits>::render_settings_content() {}
 
-template <const CPUTraits &Traits>
-void fam65xx_t<Traits>::render_layout_content() {}
-
 // Explicit template instantiations for non-GUI builds
 template void fam65xx_t<MOS6502Traits>::render_settings_content();
-template void fam65xx_t<MOS6502Traits>::render_layout_content();
 
 template void fam65xx_t<MOS6510Traits>::render_settings_content();
-template void fam65xx_t<MOS6510Traits>::render_layout_content();
 
 template void fam65xx_t<CSG7501Traits>::render_settings_content();
-template void fam65xx_t<CSG7501Traits>::render_layout_content();
 
 template void fam65xx_t<RICOH_2A03Traits>::render_settings_content();
-template void fam65xx_t<RICOH_2A03Traits>::render_layout_content();
 
 template void fam65xx_t<MOS6507Traits>::render_settings_content();
-template void fam65xx_t<MOS6507Traits>::render_layout_content();
 
 template void fam65xx_t<SYNERTEK_65C02Traits>::render_settings_content();
-template void fam65xx_t<SYNERTEK_65C02Traits>::render_layout_content();
 
 template void fam65xx_t<WDC_65C02_EARLYTraits>::render_settings_content();
-template void fam65xx_t<WDC_65C02_EARLYTraits>::render_layout_content();
 
 template void fam65xx_t<WDC_W65C02STraits>::render_settings_content();
-template void fam65xx_t<WDC_W65C02STraits>::render_layout_content();
 
 template void fam65xx_t<ROCKWELL_R65C02Traits>::render_settings_content();
-template void fam65xx_t<ROCKWELL_R65C02Traits>::render_layout_content();
 
 template void fam65xx_t<WDC_65C816Traits>::render_settings_content();
-template void fam65xx_t<WDC_65C816Traits>::render_layout_content();
 
 } // namespace fam65xx
 

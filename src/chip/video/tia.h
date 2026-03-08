@@ -147,8 +147,10 @@ struct tia_t : public ChipBase {
     tia_t() : ChipBase(ChipInfo{"TIA", "Atari"}) {}
 
     // --- ChipBase GUI interface ---
-    bool has_layout_content() const override;
-    void render_layout_content()    override;
+#ifdef CERMU_HAS_GUI
+    ChipLayout* get_chip_layout() const override;
+    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+#endif
 
     // ========================================================================
     // DISPLAY STATE
