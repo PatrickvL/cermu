@@ -17,8 +17,11 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::_ABORT: return "ABORT";
         case PinLabel::_AEC: return "AEC";
         case PinLabel::_BASIC: return "BASIC";
+        case PinLabel::_BUSAK: return "BUSAK";
+        case PinLabel::_BUSRQ: return "BUSRQ";
         case PinLabel::_CAS: return "CAS";
         case PinLabel::_CASRAM_PLA: return "CASRAM";
+        case PinLabel::_CE: return "CE";
         case PinLabel::_CHAREN: return "CHAREN";
         case PinLabel::_CHAROM: return "CHAROM";
         case PinLabel::_CS: return "CS";
@@ -27,14 +30,19 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::_CS2: return "CS2";
         case PinLabel::_EXROM: return "EXROM";
         case PinLabel::_GAME: return "GAME";
+        case PinLabel::_HALT: return "HALT";
         case PinLabel::_HIRAM: return "HIRAM";
+        case PinLabel::_INT: return "INT";
         case PinLabel::_IO: return "I/O";
+        case PinLabel::_IORQ: return "IORQ";
         case PinLabel::_IRQ: return "IRQ";
         case PinLabel::_IRQA: return "IRQA";
         case PinLabel::_IRQB: return "IRQB";
         case PinLabel::_KERNAL: return "KERNAL";
         case PinLabel::_LORAM: return "LORAM";
+        case PinLabel::_M1: return "M1";
         case PinLabel::_ML: return "ML";
+        case PinLabel::_MREQ: return "MREQ";
         case PinLabel::_NMI: return "NMI";
         case PinLabel::_OE: return "OE";
         case PinLabel::_PARD: return "PARD";
@@ -43,6 +51,7 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::_RAS: return "RAS";
         case PinLabel::_RD: return "RD";
         case PinLabel::_RES: return "RES";
+        case PinLabel::_RFSH: return "RFSH";
         case PinLabel::_ROMH: return "ROMH";
         case PinLabel::_ROML: return "ROML";
         case PinLabel::_ROMSEL: return "ROMSEL";
@@ -50,6 +59,7 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::_VA14: return "VA14";
         case PinLabel::_VP: return "VP";
         case PinLabel::_VPB: return "VPB";
+        case PinLabel::_WAIT: return "WAIT";
         case PinLabel::_WE: return "WE";
         case PinLabel::_WR: return "WR";
         case PinLabel::_WRAM: return "WRAM";
@@ -116,12 +126,22 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::AEC: return "AEC";
         case PinLabel::BE: return "BE";
         case PinLabel::BA: return "BA";
+        case PinLabel::B_ASEL: return "B/\u0305A";
+        case PinLabel::ARDY: return "ARDY";
+        case PinLabel::ASTB: return "ASTB";
+        case PinLabel::BC1: return "BC1";
+        case PinLabel::BC2: return "BC2";
+        case PinLabel::BDIR: return "BDIR";
+        case PinLabel::BRDY: return "BRDY";
+        case PinLabel::BSTB: return "BSTB";
         
         // Interrupt pins
         case PinLabel::IRQ: return "IRQ";
         case PinLabel::NMI: return "NMI";
         case PinLabel::RES: return "RES";
         case PinLabel::ABORT: return "ABORT";
+        case PinLabel::IEI: return "IEI";
+        case PinLabel::IEO: return "IEO";
         
         // Special pins
         case PinLabel::SO: return "SO";
@@ -195,6 +215,7 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::CS1: return "CS1";
         case PinLabel::CS2: return "CS2";
         case PinLabel::CS3: return "CS3";
+        case PinLabel::C_DSEL: return "C/\u0305D";
         case PinLabel::CURSOR: return "CURSOR";
         case PinLabel::DE: return "DE";
         case PinLabel::DUMP: return "DUMP";
@@ -241,6 +262,12 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::OSC2: return "OSC2";
         case PinLabel::OSC3: return "OSC3";
         case PinLabel::NOISE: return "NOISE";
+        case PinLabel::CHANNEL_A: return "CH A";
+        case PinLabel::CHANNEL_B: return "CH B";
+        case PinLabel::CHANNEL_C: return "CH C";
+        case PinLabel::EAR: return "EAR";
+        case PinLabel::MIC: return "MIC";
+        case PinLabel::SPEAKER: return "SPKR";
         
         // CIA/Timer chip pins
         case PinLabel::CNT: return "CNT";
@@ -255,6 +282,14 @@ const char* pin_label_to_string(PinLabel label) {
         case PinLabel::CA2: return "CA2";
         case PinLabel::CB1: return "CB1";
         case PinLabel::CB2: return "CB2";
+        case PinLabel::CLK_TRG0: return "CLK/TRG0";
+        case PinLabel::CLK_TRG1: return "CLK/TRG1";
+        case PinLabel::CLK_TRG2: return "CLK/TRG2";
+        case PinLabel::CLK_TRG3: return "CLK/TRG3";
+        case PinLabel::ZC_TO0: return "ZC/TO0";
+        case PinLabel::ZC_TO1: return "ZC/TO1";
+        case PinLabel::ZC_TO2: return "ZC/TO2";
+        case PinLabel::ZC_TO3: return "ZC/TO3";
         
         // Memory chip pins
         case PinLabel::DQ0: return "DQ0";
@@ -362,6 +397,17 @@ const char* pin_label_to_string(PinLabel label) {
         
         // Shift register pins
         case PinLabel::DS: return "DS";
+
+        // MC6847 VDG pins
+        case PinLabel::AG: return "AG";
+        case PinLabel::AS: return "A/S";
+        case PinLabel::CSS: return "CSS";
+        case PinLabel::FS: return "FS";
+        case PinLabel::GM0: return "GM0";
+        case PinLabel::GM1: return "GM1";
+        case PinLabel::GM2: return "GM2";
+        case PinLabel::INV: return "INV";
+        case PinLabel::INTEXT: return "INT/EXT";
 
         // Logic chip pins
         case PinLabel::Q0: return "Q0";
@@ -550,11 +596,13 @@ PinType pin_label_to_pin_type(PinLabel label) {
         case PinLabel::AEC:
         case PinLabel::BE:
         case PinLabel::BA:
+        case PinLabel::B_ASEL:
         case PinLabel::CS:
         case PinLabel::CS0:
         case PinLabel::CS1:
         case PinLabel::CS2:
         case PinLabel::CS3:
+        case PinLabel::C_DSEL:
         case PinLabel::CURSOR:
         case PinLabel::DE:
         case PinLabel::DUMP:

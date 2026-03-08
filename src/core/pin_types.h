@@ -55,8 +55,11 @@ enum class PinLabel {
     _ABORT,       // /ABORT — abort (65C816)
     _AEC,         // /AEC — address enable control (active-low form)
     _BASIC,       // /BASIC — BASIC ROM select
+    _BUSAK,       // /BUSAK — bus acknowledge (Z80)
+    _BUSRQ,       // /BUSRQ — bus request (Z80)
     _CAS,         // /CAS — column address strobe
     _CASRAM_PLA,  // /CASRAM — CAS RAM (PLA output F0)
+    _CE,          // /CE — chip enable
     _CHAREN,      // /CHAREN — character ROM enable
     _CHAROM,      // /CHAROM — character ROM select
     _CS,          // /CS — chip select
@@ -65,14 +68,19 @@ enum class PinLabel {
     _CS2,         // /CS2 — chip select 2
     _EXROM,       // /EXROM — external ROM
     _GAME,        // /GAME — game line
+    _HALT,        // /HALT — halt (Z80)
     _HIRAM,       // /HIRAM — high RAM
+    _INT,         // /INT — interrupt (Z80)
     _IO,          // /I/O — I/O area select
+    _IORQ,        // /IORQ — I/O request (Z80)
     _IRQ,         // /IRQ — interrupt request
     _IRQA,        // /IRQA — interrupt request A (PIA 6820/6821)
     _IRQB,        // /IRQB — interrupt request B (PIA 6820/6821)
     _KERNAL,      // /KERNAL — KERNAL ROM select
     _LORAM,       // /LORAM — low RAM
+    _M1,          // /M1 — machine cycle 1 (Z80)
     _ML,          // /ML — memory lock (65C02/65C816)
+    _MREQ,        // /MREQ — memory request (Z80)
     _NMI,         // /NMI — non-maskable interrupt
     _OE,          // /OE — output enable
     _PARD,        // /PARD — peripheral address read (Ricoh 5A22 B-bus)
@@ -81,6 +89,7 @@ enum class PinLabel {
     _RAS,         // /RAS — row address strobe
     _RD,          // /RD — read strobe
     _RES,         // /RES — reset
+    _RFSH,        // /RFSH — refresh (Z80)
     _ROMH,        // /ROMH — ROM high
     _ROML,        // /ROML — ROM low
     _ROMSEL,      // /ROMSEL — ROM select (Ricoh 5A22 cartridge chip select)
@@ -88,6 +97,7 @@ enum class PinLabel {
     _VA14,        // /VA14 — video address 14 (inverted form)
     _VP,          // /VP — vector pull (active-low)
     _VPB,         // /VPB — vector pull bar (active-low)
+    _WAIT,        // /WAIT — wait (Z80)
     _WE,          // /WE — write enable
     _WR,          // /WR — write strobe (Ricoh 5A22 A-bus)
     _WRAM,        // /WRAM — work RAM chip select (Ricoh 5A22)
@@ -126,14 +136,23 @@ enum class PinLabel {
     // Control signals
     AEC,          // Address Enable Control (6510)
     ALE,          // Address Latch Enable
+    ARDY,         // Port A Ready output (Z80 PIO)
+    ASTB,         // Port A Strobe input (Z80 PIO)
     BA,           // Bus Available
+    B_ASEL,       // B/A̅ select — port select (Z80 PIO)
+    BC1,          // Bus Control 1 (AY-3-8910)
+    BC2,          // Bus Control 2 (AY-3-8910)
+    BDIR,         // Bus Direction (AY-3-8910)
     BE,           // Bus Enable (65C02/65C816)
+    BRDY,         // Port B Ready output (Z80 PIO)
+    BSTB,         // Port B Strobe input (Z80 PIO)
     CAS,          // Column Address Strobe (active-high form)
     CS,           // Chip Select (active-high form)
     CS0,          // Chip Select 0 (active-high form)
     CS1,          // Chip Select 1 (active-high form)
     CS2,          // Chip Select 2 (active-high form)
     CS3,          // Chip Select 3 (active-high form, TIA)
+    C_DSEL,       // C/D̅ select — control/data (Z80 PIO/CTC)
     CURSOR,       // Cursor output (MC6845 CRTC)
     DE,           // Display Enable (MC6845 CRTC)
     DUMP,         // Paddle dump/discharge (TIA)
@@ -154,6 +173,8 @@ enum class PinLabel {
 
     // Interrupt pins (active-high forms — active-low in _-prefixed)
     ABORT,        // Abort (65C816, active-high form)
+    IEI,          // Interrupt Enable In (Z80 daisy chain)
+    IEO,          // Interrupt Enable Out (Z80 daisy chain)
     IRQ,          // Interrupt Request (active-high form)
     NMI,          // Non-Maskable Interrupt (active-high form)
     RES,          // Reset (active-high form)
@@ -218,6 +239,16 @@ enum class PinLabel {
     SND2,         // Sound output 2 (Ricoh 2A03)
     SOUND,        // Sound output (VIC-I/II composite audio)
 
+    // AY-3-8910 audio output pins
+    CHANNEL_A,    // Analog Channel A output (AY-3-8910)
+    CHANNEL_B,    // Analog Channel B output (AY-3-8910)
+    CHANNEL_C,    // Analog Channel C output (AY-3-8910)
+
+    // Spectrum/general audio pins
+    EAR,          // Tape EAR input
+    MIC,          // Tape MIC output
+    SPEAKER,      // Speaker output
+
     // CIA/Timer chip pins
     CNT,          // Counter input
     FLAG,         // Flag input
@@ -231,6 +262,16 @@ enum class PinLabel {
     CA2,          // Port A control line 2
     CB1,          // Port B control line 1
     CB2,          // Port B control line 2
+
+    // Z80 CTC pins (must remain sequential within sub-groups)
+    CLK_TRG0,     // Clock/Trigger 0 input (Z80 CTC)
+    CLK_TRG1,     // Clock/Trigger 1 input (Z80 CTC)
+    CLK_TRG2,     // Clock/Trigger 2 input (Z80 CTC)
+    CLK_TRG3,     // Clock/Trigger 3 input (Z80 CTC)
+    ZC_TO0,       // Zero Count/Timer Output 0 (Z80 CTC)
+    ZC_TO1,       // Zero Count/Timer Output 1 (Z80 CTC)
+    ZC_TO2,       // Zero Count/Timer Output 2 (Z80 CTC)
+    ZC_TO3,       // Zero Count/Timer Output 3 (Z80 CTC)
 
     // Memory chip pins (DQ/MA must remain sequential)
     CASRAM,       // CAS for RAM
@@ -291,6 +332,17 @@ enum class PinLabel {
     JOYRD,        // Joypad auto-read strobe (5A22)
     REFRESH,      // WRAM refresh output (5A22)
     VBLANK,       // Vertical blank output (5A22)
+
+    // MC6847 VDG pins
+    AG,           // Alpha/Graphics mode select (MC6847)
+    AS,           // Alpha/Semigraphics mode select (MC6847)
+    CSS,          // Color Set Select (MC6847)
+    FS,           // Field Sync output (MC6847)
+    GM0,          // Graphics Mode 0 (MC6847)
+    GM1,          // Graphics Mode 1 (MC6847)
+    GM2,          // Graphics Mode 2 (MC6847)
+    INV,          // Invert (MC6847)
+    INTEXT,       // Internal/External character generator (MC6847)
 
     // Shift register pins
     DS,           // Data Serial input (shift register)
