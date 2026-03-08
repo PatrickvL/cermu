@@ -75,6 +75,8 @@ public:
     void render_configuration_ui() override;
     void set_speed_multiplier(float multiplier) override;
 
+    bool is_system_ready() const override { return system_ready_; }
+
 private:
     // ── Chips ────────────────────────────────────────────────────────────
     ZilogZ80A*       cpu_ = nullptr;     // Z80A @ 3.072 MHz
@@ -107,6 +109,7 @@ private:
 
     // ── System state ─────────────────────────────────────────────────────
     bus_state_t pins_       = NAMCO_BUS_DEFAULT_STATE;
+    bool        system_ready_ = false;
     uint32_t scanline_      = 0;
     uint64_t total_cycles_  = 0;
     int audio_sample_rate_  = namco_arcade_constants::DEFAULT_SAMPLE_RATE;
