@@ -180,7 +180,7 @@ void mos6522_t::render_settings_content() {
 
 #ifdef CERMU_HAS_GUI
 
-ChipLayout* mos6522_t::get_chip_layout() const {
+ChipLayout* mos6522_t::create_chip_layout() const {
     return &get_via_layout();
 }
 

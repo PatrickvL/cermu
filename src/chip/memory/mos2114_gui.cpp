@@ -136,7 +136,7 @@ void MOS2114::render_settings_content() {
 
 #ifdef CERMU_HAS_GUI
 
-ChipLayout* MOS2114::get_chip_layout() const {
+ChipLayout* MOS2114::create_chip_layout() const {
     return &get_mos2114_layout();
 }
 

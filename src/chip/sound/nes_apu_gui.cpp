@@ -160,7 +160,7 @@ void nes6502_apu::APU::render_settings_content() {
 // NES APU layout virtuals
 // ============================================================================
 
-ChipLayout* nes6502_apu::APU::get_chip_layout() const {
+ChipLayout* nes6502_apu::APU::create_chip_layout() const {
     static ChipLayout layout = create_ricoh_2a03_apu_layout();
     return &layout;
 }

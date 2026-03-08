@@ -148,7 +148,7 @@ static std::vector<PinSignalState> get_pia6532_pin_states(
 
 #ifdef CERMU_HAS_GUI
 
-ChipLayout* pia6532_t::get_chip_layout() const {
+ChipLayout* pia6532_t::create_chip_layout() const {
     return &get_pia6532_layout();
 }
 

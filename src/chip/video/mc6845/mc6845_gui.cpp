@@ -170,7 +170,7 @@ static std::vector<PinSignalState> get_mc6845_pin_states(
 
 #ifdef CERMU_HAS_GUI
 
-ChipLayout* mc6845_t::get_chip_layout() const {
+ChipLayout* mc6845_t::create_chip_layout() const {
     return &get_mc6845_layout();
 }
 

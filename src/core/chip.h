@@ -74,10 +74,14 @@ public:
     virtual void render_settings_content() {}
 
     // --- Chip layout support ---
-    // Override get_chip_layout() and get_layout_pin_states() to enable chip
+    // Override create_chip_layout() and get_layout_pin_states() to enable chip
     // visualization.  The base render_layout_content() calls these virtuals —
     // individual chips no longer need to override it.
-    virtual ChipLayout* get_chip_layout() const { return nullptr; }
+    //
+    // get_chip_layout() is a lazy-init accessor: it calls create_chip_layout()
+    // once and caches the result.  Chips that need dynamic layouts (e.g.
+    // MemoryChip with varying pin count) can override get_chip_layout() directly.
+    virtual ChipLayout* get_chip_layout() const;
     virtual std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout);
     virtual const char* get_layout_chip_name() const;
     bool has_layout_content() const { return get_chip_layout() != nullptr; }
@@ -98,11 +102,25 @@ public:
 protected:
     ChipInfo info_;
 
+#ifdef CERMU_HAS_GUI
+    // Override to create the chip's package layout (pin diagram).
+    // Called once by get_chip_layout() and cached.  For variant-aware chips
+    // (PAL/NTSC), call invalidate_layout() when the variant changes.
+    virtual ChipLayout* create_chip_layout() const { return nullptr; }
+    void invalidate_layout() const { layout_initialized_ = false; layout_ = nullptr; }
+#endif
+
     // Registration metadata — set by derived constructors or by register_chip()
     const char* display_name_ = nullptr;  // "VIA 1 (MOS 6522)" — full UI label
     const char* short_name_   = nullptr;  // "VIA 1" — compact label
     const char* category_     = nullptr;  // "CPU", "Video", "Audio", "I/O", "Memory"
     uint16_t    base_address_ = 0;        // Memory-mapped base address (0 if N/A)
+
+private:
+#ifdef CERMU_HAS_GUI
+    mutable ChipLayout* layout_ = nullptr;
+    mutable bool layout_initialized_ = false;
+#endif
 };
 
 // ============================================================================

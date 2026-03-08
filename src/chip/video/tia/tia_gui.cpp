@@ -196,7 +196,7 @@ static std::vector<PinSignalState> get_tia_pin_states(
 
 #ifdef CERMU_HAS_GUI
 
-ChipLayout* tia_t::get_chip_layout() const {
+ChipLayout* tia_t::create_chip_layout() const {
     return &get_tia_layout();
 }
 
