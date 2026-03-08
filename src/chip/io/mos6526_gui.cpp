@@ -14,7 +14,7 @@
 #ifdef CERMU_HAS_GUI
 
 // Forward declarations
-static const char* mos6526_get_cia_name(mos6526_t* cia);
+static const char* mos6526_get_cia_name(const mos6526_t* cia);
 
 // ============================================================================
 // MOS6526 CIA LAYOUT (40-pin DIP)
@@ -43,22 +43,22 @@ inline ChipLayout create_mos6526_layout() {
     };
     
     // Hardware-accurate MOS6526 CIA pinout (40-pin DIP)
-    // Right-hand pins (21-40) are numbered bottom-up, not top-down
+    // Per MOS 6526 Complex Interface Adapter datasheet
     PIN_LR(layout,  1, VSS,  _RES, 40)   // gnd / reset
-    PIN_LR(layout,  2, PA0,  D7, 39)     // port A lo / data hi
-    PIN_LR(layout,  3, PA1,  D6, 38)
-    PIN_LR(layout,  4, PA2,  D5, 37)
-    PIN_LR(layout,  5, PA3,  D4, 36)
-    PIN_LR(layout,  6, PA4,  D3, 35)
-    PIN_LR(layout,  7, PA5,  D2, 34)
-    PIN_LR(layout,  8, PA6,  D1, 33)
-    PIN_LR(layout,  9, PA7,  D0, 32)     // port A hi / data lo
-    PIN_LR(layout, 10, PB0,  A3, 31)     // port B lo / reg sel hi
-    PIN_LR(layout, 11, PB1,  A2, 30)
-    PIN_LR(layout, 12, PB2,  A1, 29)
-    PIN_LR(layout, 13, PB3,  A0, 28)     // / reg sel lo
-    PIN_LR(layout, 14, PB4,  CNT, 27)    // / counter in
-    PIN_LR(layout, 15, PB5,  SP, 26)     // / serial port
+    PIN_LR(layout,  2, PA0,  CNT, 39)    // port A lo / counter in
+    PIN_LR(layout,  3, PA1,  SP, 38)     // / serial port
+    PIN_LR(layout,  4, PA2,  A0, 37)     // / reg sel lo
+    PIN_LR(layout,  5, PA3,  A1, 36)
+    PIN_LR(layout,  6, PA4,  A2, 35)
+    PIN_LR(layout,  7, PA5,  A3, 34)     // / reg sel hi
+    PIN_LR(layout,  8, PA6,  D0, 33)     // / data lo
+    PIN_LR(layout,  9, PA7,  D1, 32)     // port A hi
+    PIN_LR(layout, 10, PB0,  D2, 31)     // port B lo
+    PIN_LR(layout, 11, PB1,  D3, 30)
+    PIN_LR(layout, 12, PB2,  D4, 29)
+    PIN_LR(layout, 13, PB3,  D5, 28)
+    PIN_LR(layout, 14, PB4,  D6, 27)
+    PIN_LR(layout, 15, PB5,  D7, 26)     // / data hi
     PIN_LR(layout, 16, PB6,  PHI2, 25)   // / clock
     PIN_LR(layout, 17, PB7,  FLAG, 24)   // port B hi / flag in
     PIN_LR(layout, 18, PC,   _CS, 23)    // periph ctrl / chip sel
@@ -122,7 +122,7 @@ static ChipLayout& get_cia_layout() {
 }
 
 // Helper function to determine CIA type based on interrupt line
-static const char* mos6526_get_cia_name(mos6526_t* cia) {
+static const char* mos6526_get_cia_name(const mos6526_t* cia) {
     // Determine CIA type based on which interrupt line it raises
     // CIA1 raises IRQ (BUS_MASK_IRQ), CIA2 raises NMI (BUS_MASK_NMI)
     if (cia->configured_interrupt_bit == BUS_IRQ_BIT) {
@@ -249,17 +249,21 @@ void mos6526_t::render_settings_content() {
 }
 
 // ============================================================================
-// MOS6526 CIA LAYOUT WINDOW (standalone pinout diagram)
+// MOS6526 CIA layout virtuals
 // ============================================================================
 
-void mos6526_t::render_layout_content() {
-
 #ifdef CERMU_HAS_GUI
-    mos6526_t* cia = this;
-    const char* cia_name = mos6526_get_cia_name(cia);
 
-    ChipLayout& layout = get_cia_layout();
-    std::vector<PinSignalState> pin_states = get_cia_pin_states(cia, &layout, cia->bus_snapshot_);
-    render_chip_layout(layout, pin_states, cia_name);
-#endif
+ChipLayout* mos6526_t::get_chip_layout() const {
+    return &get_cia_layout();
 }
+
+std::vector<PinSignalState> mos6526_t::get_layout_pin_states(ChipLayout& layout) {
+    return get_cia_pin_states(this, &layout, bus_snapshot_);
+}
+
+const char* mos6526_t::get_layout_chip_name() const {
+    return mos6526_get_cia_name(this);
+}
+
+#endif // CERMU_HAS_GUI
