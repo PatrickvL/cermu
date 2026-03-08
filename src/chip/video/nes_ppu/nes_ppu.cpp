@@ -166,6 +166,7 @@ std::pair<bus_state_t, ppu_bus_state_t> PPU::service_cpu_bus(
                 }
                 break;
             case 0x2001: // Mask
+                flush_scanline_segment();   // Flush pixels rendered with old mask
                 regs[PPUMASK] = data;
                 active_palette_ = nullptr;  // Invalidate pixel LUT
                 break;
@@ -260,6 +261,7 @@ uint8_t PPU::ppu_read_byte(uint16_t addr) const {
 void PPU::ppu_write_byte(uint16_t addr, uint8_t data) {
     // ---- Palette RAM ($3F00-$3FFF) — internal to PPU ----
     if (unlikely(addr >= 0x3F00)) {
+        flush_scanline_segment();   // Flush pixels rendered with old palette
         palette[pal_mirror_[addr & 0x1F]] = data;
         active_palette_ = nullptr;  // Invalidate pixel LUT
         return;
@@ -600,18 +602,18 @@ ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
             }
         }
 
-        // Lazy pixel LUT rebuild — coalesces rapid palette/mask writes
-        if (unlikely(!active_palette_)) rebuild_pixel_lut();
-
         // Store palette index in scanline buffer — deferred to flush at cycle 257.
         scanline_color_line_[x] = ((palette_val << 2) | pixel) & 0x1F;
     }
 
-    // Flush completed visible scanline to screen buffer.
-    // All 256 pixels (cycles 1-256) are now in scanline_color_line_.
+    // Flush remaining pixels of the visible scanline to screen buffer.
+    // Pixels [0, scanline_flush_x_) were already flushed by mid-scanline
+    // palette/mask changes; flush the tail [scanline_flush_x_, 256).
     if (scanline >= 0 && scanline < 240 && cycle == 257) {
         if (unlikely(!active_palette_)) rebuild_pixel_lut();
-        scanline_pixel_.flush_indexed_line(scanline, pixel_lut_, 256);
+        scanline_pixel_.flush_indexed_line_range(
+            scanline, pixel_lut_, scanline_flush_x_, 256);
+        scanline_flush_x_ = 256;  // Prevent re-flush from HBlank palette writes
     }
 
     // VBlank flag set — (scanline 241, dot 1)
@@ -646,8 +648,9 @@ ppu_bus_state_t PPU::clock(ppu_bus_state_t ppu_bus) {
     }
 
     if (cycle >= nes_constants::DOTS_PER_SCANLINE) {
-        cycle           = 0;
-        scanline_event_ = 0;  // Reset event counter for new scanline
+        cycle            = 0;
+        scanline_event_  = 0;  // Reset event counter for new scanline
+        scanline_flush_x_ = 0; // Reset partial-flush cursor for new scanline
         scanline++;
         if (scanline >= total_scanlines_minus_one_) {
             scanline = -1;
