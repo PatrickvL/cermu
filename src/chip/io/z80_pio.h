@@ -25,7 +25,7 @@
  * 40-pin DIP package.
  */
 
-#include "../../core/chip.h"
+#include "io_chip_base.h"
 #include "../../core/system_lines.h"
 #include <cstdint>
 #include <cstring>
@@ -73,13 +73,12 @@ enum class PIOMode : uint8_t {
 // Z80 PIO
 // ============================================================================
 
-class z80_pio_t : public ChipBase {
+class z80_pio_t : public IoChipBase {
 public:
     explicit z80_pio_t(bool is_u855 = false)
-        : ChipBase(ChipInfo(is_u855 ? "U855" : "Z80 PIO",
+        : IoChipBase(ChipInfo(is_u855 ? "U855" : "Z80 PIO",
                              is_u855 ? "VEB MME Erfurt" : "Zilog"))
     {
-        category_ = "I/O";
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif

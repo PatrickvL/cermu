@@ -17,7 +17,7 @@
  * 40-pin DIP package.
  */
 
-#include "../../core/chip.h"
+#include "io_chip_base.h"
 #include "../../core/system_lines.h"
 #include <cstdint>
 #include <cstring>
@@ -44,12 +44,11 @@ namespace i8255_regs {
 static constexpr RegEntry I8255_REG_INFO[] = { I8255_REG_TABLE(I8255_X_INFO_) };
 #undef I8255_X_INFO_
 
-class i8255_t : public ChipBase {
+class i8255_t : public IoChipBase {
 public:
     i8255_t()
-        : ChipBase(ChipInfo("8255", "Intel"))
+        : IoChipBase(ChipInfo("8255", "Intel"))
     {
-        category_ = "I/O";
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif

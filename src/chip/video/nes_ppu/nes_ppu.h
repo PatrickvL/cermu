@@ -21,7 +21,7 @@
 #include <vector>
 #include <array>
 
-#include "../../core/chip.h"
+#include "../video_chip_base.h"
 #include "../../core/system_lines.h"
 #include "../video_pixel_unit.h"
 #include "../../../systems/nes/bus/nes_bus.h"
@@ -54,7 +54,7 @@ static constexpr RegEntry NES_PPU_REG_INFO[] = { NES_PPU_REG_TABLE(NES_PPU_X_INF
 
 namespace nes_system {
 
-class PPU : public ChipBase {
+class PPU : public VideoChipBase {
 public:
     // PPU register indices (memory-mapped at $2000-$2007)
     #define NES_PPU_X_CONST_(a, s, l) static constexpr uint8_t s = a;
@@ -253,7 +253,6 @@ public:
 
         build_palette_cache(is_pal, palette_cache_);
         reset();
-        category_ = "Video";
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif

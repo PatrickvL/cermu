@@ -35,7 +35,7 @@
  *     11 = Latch address
  */
 
-#include "../../core/chip.h"
+#include "sound_chip_base.h"
 #include "../../core/system_lines.h"
 #include <cstdint>
 #include <cstring>
@@ -103,15 +103,14 @@ static constexpr RegEntry AY_REG_INFO[] = { AY_REG_TABLE(AY_X_INFO_) };
 // AY-3-8910 Sound Chip
 // ============================================================================
 
-class ay_3_8910_t : public ChipBase {
+class ay_3_8910_t : public SoundChipBase {
 public:
     explicit ay_3_8910_t(AYVariant variant = AYVariant::AY_3_8910)
-        : ChipBase(ChipInfo(
+        : SoundChipBase(ChipInfo(
               ay_variant_traits[static_cast<int>(variant)].part_number,
               ay_variant_traits[static_cast<int>(variant)].manufacturer))
         , variant_(variant)
     {
-        category_ = "Sound";
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif

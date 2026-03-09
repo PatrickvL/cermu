@@ -15,15 +15,15 @@
  * Header-only — no side effects, suitable for inline use.
  */
 
-#include "../../core/chip.h"
+#include "input_chip_base.h"
 
 #include <cstdint>
 #include <cstring>
 
-class CD4021 : public ChipBase {
+class CD4021 : public InputChipBase {
 public:
     CD4021()
-        : ChipBase(ChipInfo{"CD4021", "8-Bit Static Shift Register", "Texas Instruments"}) {
+        : InputChipBase(ChipInfo{"CD4021", "8-Bit Static Shift Register", "Texas Instruments"}) {
         reset();
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();

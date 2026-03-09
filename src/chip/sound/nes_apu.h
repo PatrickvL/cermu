@@ -16,7 +16,7 @@
 
 #include <cstdint>
 
-#include "../../core/chip.h"
+#include "sound_chip_base.h"
 #include "../../core/system_lines.h"
 
 // ============================================================================
@@ -849,7 +849,7 @@ public:
 // ============================================================================
 // Main APU
 // ============================================================================
-class APU : public ChipBase {
+class APU : public SoundChipBase {
 public:
   PulseChannel pulse1{true};
   PulseChannel pulse2{false};
@@ -869,7 +869,6 @@ private:
 public:
   APU(bool pal = false) : is_pal(pal) {
     info_ = ChipInfo{pal ? "RP2A07-APU" : "RP2A03-APU", "Ricoh"};
-    category_ = "Sound";
     noise.is_pal = pal;
     dmc.is_pal = pal;
     frame.is_pal = pal;

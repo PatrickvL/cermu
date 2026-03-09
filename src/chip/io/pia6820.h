@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../core/chip.h"
+#include "io_chip_base.h"
 #include <cstdint>
 
 /**
@@ -44,9 +44,8 @@ static constexpr uint8_t PIA_NUM_REGS = 6;
 static constexpr RegEntry PIA_REG_INFO[] = { PIA_REG_TABLE(PIA_X_INFO_) };
 #undef PIA_X_INFO_
 
-struct pia6820_t : public ChipBase {
-    pia6820_t() : ChipBase(ChipInfo{"PIA6820", "Motorola"}) {
-        category_ = "I/O";
+struct pia6820_t : public IoChipBase {
+    pia6820_t() : IoChipBase(ChipInfo{"PIA6820", "Motorola"}) {
 #ifdef CERMU_HAS_CHIP_DEBUG
         debug_registry_.set_registers(regs_, PIA_NUM_REGS, PIA_REG_INFO);
         register_debug_fields();

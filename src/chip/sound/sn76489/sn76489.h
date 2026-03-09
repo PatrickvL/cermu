@@ -42,7 +42,7 @@
  *   Attenuation: 0 = full volume, 15 = silence.  Each step ≈ 2 dB.
  */
 
-#include "../../../core/chip.h"
+#include "../sound_chip_base.h"
 #include "../../../utils/ring_buffer.hpp"
 #include <cstdint>
 #include <cstring>
@@ -76,16 +76,15 @@ inline constexpr SN76489VariantTraits sn76489_variant_traits[] = {
 // SN76489 Sound Chip
 // ============================================================================
 
-class sn76489_t : public ChipBase {
+class sn76489_t : public SoundChipBase {
 public:
     explicit sn76489_t(SN76489Variant variant = SN76489Variant::SN76489)
-        : ChipBase(ChipInfo(
+        : SoundChipBase(ChipInfo(
               sn76489_variant_traits[static_cast<int>(variant)].part_number,
               sn76489_variant_traits[static_cast<int>(variant)].manufacturer))
         , variant_(variant)
         , audio_buffer_(4096)
     {
-        category_ = "Sound";
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif

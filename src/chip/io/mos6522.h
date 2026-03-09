@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include "../../core/chip.h"
+#include "io_chip_base.h"
 #include "../../core/bus_cycle_interface.h"
 #include "../../core/system_lines.h"
 #include "../../core/ioport.h"       // For io_port<Mask> and io_port_state
@@ -78,9 +78,8 @@ static constexpr RegEntry MOS6522_REG_INFO[] = { MOS6522_REG_TABLE(MOS6522_X_INF
 
 static constexpr uint8_t MOS6522_NUM_REGS = 16;
 
-struct mos6522_t : public ChipBase {
-    mos6522_t() : ChipBase(ChipInfo{"MOS6522", "MOS Technology"}) {
-        category_ = "I/O";
+struct mos6522_t : public IoChipBase {
+    mos6522_t() : IoChipBase(ChipInfo{"MOS6522", "MOS Technology"}) {
 #ifdef CERMU_HAS_CHIP_DEBUG
         debug_registry_.set_registers(regs_, MOS6522_NUM_REGS, MOS6522_REG_INFO);
         register_debug_fields();

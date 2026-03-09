@@ -25,7 +25,7 @@
  *          Galaga, Dig Dug, Pole Position, Xevious (WSG8 variant)
  */
 
-#include "../../core/chip.h"
+#include "sound_chip_base.h"
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -82,16 +82,15 @@ static constexpr RegEntry WSG_REG_INFO[] = { WSG_REG_TABLE(WSG_X_INFO_) };
 // Namco WSG Sound Generator
 // ============================================================================
 
-class namco_wsg_t : public ChipBase {
+class namco_wsg_t : public SoundChipBase {
 public:
     explicit namco_wsg_t(WSGVariant variant = WSGVariant::WSG3)
-        : ChipBase(ChipInfo(
+        : SoundChipBase(ChipInfo(
               variant == WSGVariant::WSG3 ? "WSG3" : "WSG8",
               "Namco"))
         , variant_(variant)
         , num_channels_(variant == WSGVariant::WSG3 ? 3 : 8)
     {
-        category_ = "Sound";
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif

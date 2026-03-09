@@ -777,7 +777,6 @@ static constexpr uint8_t TED_RC_UPDATE_CYCLE = 55u;
 ted7360_t::ted7360_t(const ted7360_desc_t& desc) {
     timing.is_pal          = desc.is_pal;
     info_                  = ChipInfo{"TED7360", "Commodore"};
-    category_              = "Video";
     keyboard_scan          = desc.keyboard_scan;
     keyboard_user_data     = desc.keyboard_user_data;
     bus.mem_read           = desc.mem_read;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../../../core/chip.h"
-#include "../../../core/video_chip_base.h"
+#include "../video_chip_base.h"
 #include <cstdint>
 #include "../../../core/system_lines.h" // For bus_state_t
 #include "../../../chip/memory/mos2114.h"  // For MOS2114

@@ -12,7 +12,7 @@
 
 // Include system-wide bus definitions
 #include "../../../core/cermu.h"
-#include "../../../core/chip.h"
+#include "../cpu_chip_base.h"
 #include "../../../core/system_lines.h"
 
 // ============================================================================

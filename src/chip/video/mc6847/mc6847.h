@@ -22,7 +22,7 @@
  * 40-pin DIP package.
  */
 
-#include "../../core/chip.h"
+#include "../video_chip_base.h"
 #include "../../core/system_lines.h"
 #include <cstdint>
 #include <cstring>
@@ -80,12 +80,11 @@ static constexpr RegEntry MC6847_REG_INFO[] = { MC6847_REG_TABLE(MC6847_X_INFO_)
 // MC6847 Video Display Generator
 // ============================================================================
 
-class mc6847_t : public ChipBase {
+class mc6847_t : public VideoChipBase {
 public:
     mc6847_t()
-        : ChipBase(ChipInfo("MC6847", "Motorola"))
+        : VideoChipBase(ChipInfo("MC6847", "Motorola"))
     {
-        category_ = "Video";
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif

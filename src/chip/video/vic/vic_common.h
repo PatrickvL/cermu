@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#include "../../core/chip.h"
+#include "../video_chip_base.h"
 #include "../../core/system_lines.h"
 #include "../video_pixel_unit.h"
 
@@ -239,7 +239,7 @@ struct vic_audio_state_t {
 };
 
 // VIC chip structure (common base — inherits ChipBase for GUI integration)
-struct vic_base_t : public ChipBase {
+struct vic_base_t : public VideoChipBase {
     void* bus = nullptr;
 
     // Registers

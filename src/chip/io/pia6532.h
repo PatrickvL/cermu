@@ -30,7 +30,7 @@
  *   RIOT I/O: $0280-$02FF (A12=0, A7=1, A9=1)
  */
 
-#include "../../core/chip.h"
+#include "io_chip_base.h"
 #include <cstdint>
 
 // ============================================================================
@@ -61,9 +61,8 @@ static constexpr uint8_t RIOT_NUM_REGS = 4;
 static constexpr RegEntry RIOT_REG_INFO[] = { RIOT_REG_TABLE(RIOT_X_INFO_) };
 #undef RIOT_X_INFO_
 
-struct pia6532_t : public ChipBase {
-    pia6532_t() : ChipBase(ChipInfo{"PIA6532", "MOS Technology"}) {
-        category_ = "I/O";
+struct pia6532_t : public IoChipBase {
+    pia6532_t() : IoChipBase(ChipInfo{"PIA6532", "MOS Technology"}) {
 #ifdef CERMU_HAS_CHIP_DEBUG
         debug_registry_.set_registers(regs_, RIOT_NUM_REGS, RIOT_REG_INFO);
         register_debug_fields();

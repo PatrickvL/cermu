@@ -33,7 +33,7 @@
 
 #include <cstdint>
 
-#include "../../core/chip.h"
+#include "../video_chip_base.h"
 #include "../../core/system_lines.h"
 #include "../video_pixel_unit.h"
 
@@ -414,7 +414,7 @@ using TedTimer = ted_timer_unit_t;
 // TED 7360 MAIN STRUCTURE
 // ============================================================================
 
-struct ted7360_t : public ChipBase {
+struct ted7360_t : public VideoChipBase {
     // ========================================================================
     // Public API — Lifecycle
     // ========================================================================

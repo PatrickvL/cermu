@@ -23,7 +23,7 @@
  *   Port+1: slot control write
  */
 
-#include "../../core/chip.h"
+#include "io_chip_base.h"
 #include <cstdint>
 #include <cstring>
 #include <cstdio>
@@ -87,14 +87,13 @@ struct kc85_module_slot_t {
 // KC85 Module System Controller
 // ============================================================================
 
-class kc85_module_system_t : public ChipBase {
+class kc85_module_system_t : public IoChipBase {
 public:
     static constexpr int MAX_SLOTS = 8;
 
     kc85_module_system_t()
-        : ChipBase(ChipInfo("Module System", "VEB Mikroelektronik"))
+        : IoChipBase(ChipInfo("Module System", "VEB Mikroelektronik"))
     {
-        category_ = "I/O";
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif

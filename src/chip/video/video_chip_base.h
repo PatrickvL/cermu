@@ -1,6 +1,6 @@
 #pragma once
 
-#include "chip.h"
+#include "../../core/chip.h"
 #include <cstdint>
 
 // ============================================================================
@@ -19,8 +19,6 @@
 
 class VideoChipBase : public ChipBase {
 public:
-    using ChipBase::ChipBase;  // Inherit constructors
-
     VideoChipBase() { category_ = "Video"; }
     explicit VideoChipBase(ChipInfo info) : ChipBase(std::move(info)) { category_ = "Video"; }
 

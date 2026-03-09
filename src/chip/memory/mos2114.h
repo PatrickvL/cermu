@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include "../../core/chip.h"
+#include "memory_chip_base.h"
 
 // ============================================================================
 // MOS Technology 2114 Static RAM — 1K × 4-bit
@@ -20,7 +20,7 @@
 //   - CPU is reading, not writing
 //   - Memory banking prevents I/O access
 //
-class MOS2114 : public ChipBase {
+class MOS2114 : public MemoryChipBase {
 public:
     uint8_t memory[1024];  // 1K × 4-bit Color RAM (public for VIC-II access)
 
