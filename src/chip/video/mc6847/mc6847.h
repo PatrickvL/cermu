@@ -49,9 +49,6 @@
       FLD(REG_MODE, CSS,    4:4, "Color set select",   Flag, 0, 0)            \
       FLD(REG_MODE, GM,     7:5, "Graphics mode",      Value, 0, 0)
 
-// Backward compat: old REG_TABLE is just the REG rows from the DECL
-#define MC6847_REG_TABLE(X) MC6847_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 namespace mc6847_const {
 
     inline constexpr int DISPLAY_WIDTH  = 256;

@@ -66,12 +66,9 @@ namespace nes_system {
     REG(6, PPUADDR,   "VRAM address")                                            \
     REG(7, PPUDATA,   "VRAM data R/W")
 
-// Backward compat: old REG_TABLE is just the REG rows from the DECL
-#define NES_PPU_REG_TABLE(X) NES_PPU_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 // File-scope address constants for DECL extractors
 #define NES_PPU_X_FLD_CONST_(a, s, l) static constexpr uint8_t NES_PPU_REG_##s = a;
-NES_PPU_REG_TABLE(NES_PPU_X_FLD_CONST_)
+NES_PPU_DECL(NES_PPU_X_FLD_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 #undef NES_PPU_X_FLD_CONST_
 
 DECL_EXTRACT_ALL(NES_PPU, NES_PPU_DECL)
@@ -82,7 +79,7 @@ class PPU : public VideoChipBase {
 public:
     // PPU register indices (memory-mapped at $2000-$2007)
     #define NES_PPU_X_CONST_(a, s, l) static constexpr uint8_t s = a;
-    NES_PPU_REG_TABLE(NES_PPU_X_CONST_)
+    NES_PPU_DECL(NES_PPU_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     #undef NES_PPU_X_CONST_
     static constexpr uint8_t REG_COUNT = 8;
 

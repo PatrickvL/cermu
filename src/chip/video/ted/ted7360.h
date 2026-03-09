@@ -99,12 +99,9 @@
     REG(0x1E, HPOS,       "Horizontal position")                                 \
     REG(0x1F, FLASH_RC,   "Flash counter/row ctr")
 
-// Backward compat: old REG_TABLE is just the REG rows from the DECL
-#define TED_REG_TABLE(X) TED_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 // --- Extract address constants (prefix TED_REG_ added by macro) ---
 #define TED_X_CONST_(a, s, l) static constexpr uint8_t TED_REG_##s = a;
-TED_REG_TABLE(TED_X_CONST_)
+TED_DECL(TED_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 #undef TED_X_CONST_
 
 DECL_EXTRACT_ALL(TED, TED_DECL)

@@ -50,9 +50,6 @@
       FLD(BACKGROUND, REVERSE,  3:3, "Reverse screen",       Flag,  0, 0)          \
       FLD(BACKGROUND, BORDER,   2:0, "Border color",         Color, 0, 0)
 
-// Backward compat: old REG_TABLE is just the REG rows from the DECL
-#define VIC_REG_TABLE(X) VIC_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 // Audio / waveform registers ($900A-$900E)
 // The MOS 6560/6561 contains three square-wave tone generators and one
 // white-noise generator.  Each voice register has a 7-bit frequency value
@@ -65,16 +62,10 @@
 
 // --- Extract address constants (prefix VIC_REG_ added by macro) ---
 #define VIC_X_CONST_(a, s, l) static constexpr uint8_t VIC_REG_##s = a;
-VIC_REG_TABLE(VIC_X_CONST_)
+VIC_DECL(VIC_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 #undef VIC_X_CONST_
 
 DECL_EXTRACT_ALL(VIC, VIC_DECL)
-
-// Backward-compatible aliases for the old generic names
-#define VIC_REG_OSC1_FREQ    VIC_REG_BASS_FREQ
-#define VIC_REG_OSC2_FREQ    VIC_REG_ALTO_FREQ
-#define VIC_REG_OSC3_FREQ    VIC_REG_SOPRANO_FREQ
-#define VIC_REG_OSC4_FREQ    VIC_REG_NOISE_FREQ
 
 // Control register 1 bit masks
 #define VIC_C1_INTERLACE 0x80
@@ -102,10 +93,6 @@ DECL_EXTRACT_ALL(VIC, VIC_DECL)
 // Voice register bit masks (shared by all four sound registers $900A-$900D)
 #define VIC_VOICE_ENABLE     0x80     // Bit 7: voice enable
 #define VIC_VOICE_FREQ_MASK  0x7F     // Bits 0-6: frequency value
-
-// Backward-compatible aliases
-#define VIC_OSC_ENABLE       VIC_VOICE_ENABLE
-#define VIC_OSC_FREQ_MASK    VIC_VOICE_FREQ_MASK
 
 // Per-voice clock divisors (chip cycles per prescaler tick)
 // The internal oscillator uses an 8-bit shift register, NOT a simple

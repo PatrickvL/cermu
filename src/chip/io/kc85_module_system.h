@@ -59,9 +59,6 @@
       FLD(SLOT7_CTRL, ACTIVE_7, 0:0, "Active",        Flag, 0, 0) \
       FLD(SLOT7_CTRL, WPROT_7,  1:1, "Write protect", Flag, 0, 0)
 
-// Backward compat: old REG_TABLE is just the REG rows from the DECL
-#define KC85_MOD_REG_TABLE(X) KC85_MOD_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 namespace kc85_mod_regs {
     KC85_MOD_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 8;

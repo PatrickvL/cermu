@@ -146,9 +146,6 @@
     REG(64, MXM_2,  "Sprite-sprite shd")                                       \
     REG(65, MXD_2,  "Sprite-data shd")
 
-// ---- Backward-compatible REG-only view of the DECL table ----
-#define VICII_REG_TABLE(X) VICII_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 // ============================================================================
 // VIC-II REGISTER TRAITS
 // ============================================================================
@@ -216,59 +213,6 @@ static constexpr CompoundInfo VICII_COMPOUND_INFO[] = {
 #undef VICII_X_CMP_INFO_
 
 static constexpr size_t VICII_NUM_COMPOUND_INFO = sizeof(VICII_COMPOUND_INFO) / sizeof(VICII_COMPOUND_INFO[0]);
-
-// Legacy macro compatibility - can be removed once all code is updated
-#define VICII_REGS_SIZE vicii_regs::SIZE
-#define VICII_REGS_MASK vicii_regs::MASK
-#define VICII_M0X     vicii_regs::M0X
-#define VICII_M0Y     vicii_regs::M0Y
-#define VICII_M1X     vicii_regs::M1X
-#define VICII_M1Y     vicii_regs::M1Y
-#define VICII_M2X     vicii_regs::M2X
-#define VICII_M2Y     vicii_regs::M2Y
-#define VICII_M3X     vicii_regs::M3X
-#define VICII_M3Y     vicii_regs::M3Y
-#define VICII_M4X     vicii_regs::M4X
-#define VICII_M4Y     vicii_regs::M4Y
-#define VICII_M5X     vicii_regs::M5X
-#define VICII_M5Y     vicii_regs::M5Y
-#define VICII_M6X     vicii_regs::M6X
-#define VICII_M6Y     vicii_regs::M6Y
-#define VICII_M7X     vicii_regs::M7X
-#define VICII_M7Y     vicii_regs::M7Y
-#define VICII_MX8     vicii_regs::MX8
-#define VICII_C1      vicii_regs::C1
-#define VICII_RASTER  vicii_regs::RASTER
-#define VICII_LPX     vicii_regs::LPX
-#define VICII_LPY     vicii_regs::LPY
-#define VICII_MXE     vicii_regs::MXE
-#define VICII_C2      vicii_regs::C2
-#define VICII_MXYE    vicii_regs::MXYE
-#define VICII_MP      vicii_regs::MP
-#define VICII_IR      vicii_regs::IR
-#define VICII_IE      vicii_regs::IE
-#define VICII_MXDP    vicii_regs::MXDP
-#define VICII_MXMC    vicii_regs::MXMC
-#define VICII_MXXE    vicii_regs::MXXE
-#define VICII_MXM     vicii_regs::MXM
-#define VICII_MXD     vicii_regs::MXD
-#define VICII_EC      vicii_regs::EC
-#define VICII_B0C     vicii_regs::B0C
-#define VICII_B1C     vicii_regs::B1C
-#define VICII_B2C     vicii_regs::B2C
-#define VICII_B3C     vicii_regs::B3C
-#define VICII_MM0     vicii_regs::MM0
-#define VICII_MM1     vicii_regs::MM1
-#define VICII_M0C     vicii_regs::M0C
-#define VICII_M1C     vicii_regs::M1C
-#define VICII_M2C     vicii_regs::M2C
-#define VICII_M3C     vicii_regs::M3C
-#define VICII_M4C     vicii_regs::M4C
-#define VICII_M5C     vicii_regs::M5C
-#define VICII_M6C     vicii_regs::M6C
-#define VICII_M7C     vicii_regs::M7C
-#define VICII_MXM_2   vicii_regs::MXM_2
-#define VICII_MXD_2   vicii_regs::MXD_2
 
 // Control register 1 ($d011) bit masks
 #define VICII_C1_YSCROLL  0x07  // Smooth Scroll to Y Pos
@@ -440,7 +384,7 @@ struct vicii_cycle_entry_t {
 
 // Register Unit - All VIC-II register state
 struct vicii_registers_unit_t {
-    uint8_t data[VICII_REGS_SIZE + 2];  // +2 for shadow collision registers
+    uint8_t data[vicii_regs::SIZE + 2];  // +2 for shadow collision registers
 };
 
 // Timing Unit - All timing-related state

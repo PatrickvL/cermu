@@ -50,9 +50,6 @@ static constexpr uint16_t RIOT_TIM1024T = 0x17;   // Divide by 1024
     REG(2, PORTB_DATA, "Port B output (SWCHB)")        \
     REG(3, PORTB_DDR,  "Port B direction (SWBCNT)")
 
-// Backward compat: old REG_TABLE is just the REG rows from the DECL
-#define RIOT_REG_TABLE(X) RIOT_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 // --- Extract address constants (prefix RIOT_REG_ added by macro) ---
 #define RIOT_X_CONST_(a, s, l) static constexpr uint8_t RIOT_REG_##s = a;
 RIOT_DECL(RIOT_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)

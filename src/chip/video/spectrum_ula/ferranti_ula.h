@@ -46,9 +46,6 @@
       FLD(PORT_FE, MIC,    3:3, "MIC output",       Flag, 0, 0)               \
       FLD(PORT_FE, EAR,    4:4, "EAR/speaker out",  Flag, 0, 0)
 
-// Backward compat
-#define SPECTRUM_ULA_REG_TABLE(X) SPECTRUM_ULA_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 namespace spectrum_ula {
 
     // Register constants from DECL

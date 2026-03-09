@@ -97,9 +97,6 @@ enum mos6526_pin_t {
       FLD(CRB, CRB_PBON_B,    1:1, "PB7 output enable",   Flag, 0, 0)          \
       FLD(CRB, CRB_START_B,   0:0, "Timer B start",       Flag, 0, 0)
 
-// Backward compat: old REG_TABLE is just the REG rows from the DECL
-#define CIA_REG_TABLE(X) CIA_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 // --- Extract file-scope address constants for FLD extractors ---
 #define CIA_X_REG_CONST_(a, s, l) static constexpr uint8_t CIA_REG_##s = a;
 CIA_DECL(CIA_X_REG_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
@@ -291,7 +288,7 @@ namespace MOS6526 {
 
     // MOS6526 CIA Register Definitions — address constants from X-macro
     #define CIA_X_CONST_(a, s, l) constexpr uint8_t s = a;
-    CIA_REG_TABLE(CIA_X_CONST_)
+    CIA_DECL(CIA_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     #undef CIA_X_CONST_
 
     // Bitmask constants (not part of the X-macro address table)

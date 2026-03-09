@@ -106,9 +106,6 @@ inline constexpr AYVariantTraits ay_variant_traits[] = {
     REG(0x0E, IO_PORT_A,     "I/O port A data")                                  \
     REG(0x0F, IO_PORT_B,     "I/O port B data")
 
-// Backward compat: old REG_TABLE is just the REG rows from the DECL
-#define AY_REG_TABLE(X) AY_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 namespace ay_regs {
     AY_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 16;
