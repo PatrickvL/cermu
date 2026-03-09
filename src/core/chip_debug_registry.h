@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <type_traits>
@@ -127,11 +128,11 @@ enum class DataKind : uint8_t {
 // Use these as no-op callbacks when extracting specific row types from a
 // unified CHIP_DECL(REG, FLD, CMP) table.  Each swallows its row's args.
 //   REG(offset, symbol, description)
-//   FLD(reg_sym, field_sym, hi:lo, description, kind)
-//   CMP(symbol, description, kind, total_bits, reg1, hilo1, dst1, reg2, hilo2, dst2)
+//   FLD(reg_sym, field_sym, hi:lo, description, kind, display_shift, display_scale)
+//   CMP(symbol, description, kind, total_bits, display_shift, display_scale, reg1, hilo1, dst1, reg2, hilo2, dst2)
 #define DECL_REG_NOP(a, s, d)
-#define DECL_FLD_NOP(r, f, hilo, d, k)
-#define DECL_CMP_NOP(s, d, k, b, r1, h1, d1, r2, h2, d2)
+#define DECL_FLD_NOP(r, f, hilo, d, k, ds, dm)
+#define DECL_CMP_NOP(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)
 
 // ============================================================================
 // FIELD ENTRY — bitfield within a register (from FLD X-macro)
@@ -140,8 +141,8 @@ enum class DataKind : uint8_t {
 // Produced by a FLD extractor macro.  Describes a named bit range inside a
 // single register, with a semantic DataKind for the debug renderer.
 //
-// Example FLD row:  FLD(CONTROL1, INTERLACE, 7:7, "Interlace", Flag)
-//   → FieldEntry { "INTERLACE", "Interlace", 17, 7, 1, DataKind::Flag }
+// Example FLD row:  FLD(CONTROL1, INTERLACE, 7:7, "Interlace", Flag, 0, 0)
+//   → FieldEntry { "INTERLACE", "Interlace", 17, 7, 1, DataKind::Flag, 0, 0 }
 
 struct FieldEntry {
     const char* label;       // Field symbol name (stringified)
@@ -150,6 +151,8 @@ struct FieldEntry {
     uint8_t     shift;       // LSB position within the register
     uint8_t     width;       // Bit count (1..32)
     DataKind    kind;        // Semantic type
+    uint8_t     display_shift = 0;  // Left-shift applied to extracted value for display
+    uint16_t    display_scale = 0;  // Multiplier for display (0 = 1, no scaling)
 };
 
 // ============================================================================
@@ -205,6 +208,58 @@ static inline uint32_t compound_get(const uint8_t* regs,
         uint8_t  width = f.src_hi - f.src_lo + 1;
         uint32_t mask  = ((1u << width) - 1u) << f.src_lo;
         result |= ((reg_val & mask) >> f.src_lo) << f.dst_lo;
+    }
+    return result;
+}
+
+// ============================================================================
+// DECLARATION ORDER — type-erased walk for renderers
+// ============================================================================
+//
+// The DECL(REG, FLD, CMP) table interleaves three row types.  Each chip
+// extracts a DeclOrderEntry[] that preserves the declaration order, allowing
+// the renderer to walk registers, their bitfields, and compound values in
+// the exact order the hardware programmer defined them.
+//
+// The order array pairs each entry with an index into the typed array for
+// that row type (REG_INFO, FLD_INFO, COMPOUND_INFO).
+
+enum class DeclRowType : uint8_t { Reg, Field, Compound };
+
+struct DeclOrderEntry {
+    DeclRowType type;
+    uint16_t    index;   // REG: register offset, FLD: into FLD_INFO[], CMP: into COMPOUND_INFO[]
+};
+
+// Non-templated compound metadata — enough for the renderer to display
+// a compound value without knowing the ChipRegTraits template parameter.
+struct CompoundInfo {
+    const char* label;
+    const char* desc;
+    DataKind    kind;
+    uint8_t     total_bits;
+    uint8_t     display_shift = 0;  // Left-shift applied to assembled value for display
+    uint16_t    display_scale = 0;  // Multiplier for display (0 = 1, no scaling)
+};
+
+// Type-erased compound value reader.  The chip provides a function that
+// calls compound_get<T>() internally.
+using CompoundReadFn = uint32_t (*)(const uint8_t* regs, uint16_t compound_index);
+
+// constexpr helper: assign sequential FLD/CMP indices to a raw order array.
+// REG rows keep their register offset (set by the macro); FLD and CMP rows
+// get placeholder 0 in the macro expansion and are sequentially numbered here.
+template<size_t N>
+constexpr std::array<DeclOrderEntry, N> assign_decl_indices(const DeclOrderEntry (&raw)[N]) {
+    std::array<DeclOrderEntry, N> result{};
+    uint16_t fld_idx = 0, cmp_idx = 0;
+    for (size_t i = 0; i < N; ++i) {
+        result[i] = raw[i];
+        switch (raw[i].type) {
+            case DeclRowType::Reg:      break;
+            case DeclRowType::Field:    result[i].index = fld_idx++; break;
+            case DeclRowType::Compound: result[i].index = cmp_idx++; break;
+        }
     }
     return result;
 }
@@ -577,6 +632,40 @@ public:
     /// Add a dynamic text line.
     ChipDebugRegistry& text(StringFn fn);
 
+    // ---- Declaration-order rendering (DECL table walk) ----
+    // Chips with a unified DECL(REG, FLD, CMP) table call this once after
+    // set_registers().  The renderer walks the order array instead of
+    // showing a flat register dump, rendering fields and compounds inline.
+    void set_decl_order(const DeclOrderEntry* order, size_t order_count,
+                        const FieldEntry* fields, size_t field_count,
+                        const CompoundInfo* compounds, size_t compound_count,
+                        CompoundReadFn compound_reader) {
+        decl_order_           = order;
+        decl_order_count_     = order_count;
+        decl_fields_          = fields;
+        decl_field_count_     = field_count;
+        decl_compounds_       = compounds;
+        decl_compound_count_  = compound_count;
+        decl_compound_reader_ = compound_reader;
+    }
+
+    bool              has_decl_order()      const { return decl_order_ != nullptr; }
+    const DeclOrderEntry* decl_order()      const { return decl_order_; }
+    size_t            decl_order_count()    const { return decl_order_count_; }
+    const FieldEntry* decl_fields()         const { return decl_fields_; }
+    size_t            decl_field_count()    const { return decl_field_count_; }
+    const CompoundInfo* decl_compounds()    const { return decl_compounds_; }
+    size_t            decl_compound_count() const { return decl_compound_count_; }
+    CompoundReadFn    decl_compound_reader() const { return decl_compound_reader_; }
+
+    // ---- System palette (for Color kind rendering) ----
+    void set_palette(const uint32_t* palette, uint16_t palette_size) {
+        palette_      = palette;
+        palette_size_ = palette_size;
+    }
+    const uint32_t* palette()      const { return palette_; }
+    uint16_t        palette_size() const { return palette_size_; }
+
     // ---- Rendering (implemented in chip_debug_registry_gui.cpp) ----
     // Renders all categories and fields using ImGui.
     // No-op when CERMU_HAS_GUI is not defined.
@@ -598,6 +687,19 @@ private:
     const RegEntry*             reg_info_  = nullptr;
     std::vector<DebugCategory>  categories_;
     uint8_t                     current_indent_ = 0;
+
+    // Declaration-order walk data (set via set_decl_order)
+    const DeclOrderEntry*       decl_order_           = nullptr;
+    size_t                      decl_order_count_     = 0;
+    const FieldEntry*           decl_fields_          = nullptr;
+    size_t                      decl_field_count_     = 0;
+    const CompoundInfo*         decl_compounds_       = nullptr;
+    size_t                      decl_compound_count_  = 0;
+    CompoundReadFn              decl_compound_reader_ = nullptr;
+
+    // System palette for Color kind rendering
+    const uint32_t*             palette_              = nullptr;
+    uint16_t                    palette_size_         = 0;
 
     // Get or create the current (last) category.  If none exists, creates "General".
     DebugCategory& current_category();

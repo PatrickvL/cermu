@@ -58,6 +58,68 @@ inline void format_value(char* buf, size_t buf_size, uint32_t val, uint8_t bits)
     }
 }
 
+// ============================================================================
+// SHARED VALUE-RENDERING PRIMITIVES
+// ============================================================================
+//
+// Each emit_*_row() function takes a pre-formatted label prefix and a raw
+// value, then renders the value portion.  Both the DECL-walk renderer and
+// the legacy render_field() dispatch use these, keeping visual style in one
+// place.  The prefix carries layout differences (DECL indent + label + desc
+// vs. legacy label-only column).
+
+/// Flag: green "SET" if true, grey "-" if false.  Entire line is colored.
+inline void emit_flag_row(const char* prefix, bool set) {
+    if (set)
+        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "%s SET", prefix);
+    else
+        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%s -", prefix);
+}
+
+/// Address: hex-formatted value with auto-width ($XX / $XXXX / $XXXXXX).
+inline void emit_address_row(const char* prefix, uint32_t val) {
+    if (val <= 0xFF)
+        ImGui::Text("%s $%02X", prefix, val);
+    else if (val <= 0xFFFF)
+        ImGui::Text("%s $%04X", prefix, val);
+    else
+        ImGui::Text("%s $%06X", prefix, val);
+}
+
+/// Color: numeric index + filled swatch box from palette.
+inline void emit_color_row(const char* prefix, uint32_t val,
+                           const uint32_t* palette, uint16_t palette_size) {
+    if (palette && val < palette_size) {
+        uint32_t rgb = palette[val];
+        float r = ((rgb >> 16) & 0xFF) / 255.0f;
+        float g = ((rgb >>  8) & 0xFF) / 255.0f;
+        float b = ((rgb >>  0) & 0xFF) / 255.0f;
+        ImGui::Text("%s %u", prefix, val);
+        ImGui::SameLine();
+        ImVec4 col(r, g, b, 1.0f);
+        ImGui::ColorButton("##csw", col,
+            ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoBorder,
+            ImVec2(14, 14));
+    } else {
+        ImGui::Text("%s %u", prefix, val);
+    }
+}
+
+/// Counter: decimal first, hex in parentheses — auto-width by total_bits.
+inline void emit_counter_row(const char* prefix, uint32_t val, uint8_t total_bits) {
+    if (total_bits <= 8)
+        ImGui::Text("%s %u ($%02X)", prefix, val, val);
+    else if (total_bits <= 12)
+        ImGui::Text("%s %u ($%03X)", prefix, val, val);
+    else
+        ImGui::Text("%s %u ($%04X)", prefix, val, val);
+}
+
+/// Generic numeric value (decimal).
+inline void emit_value_row(const char* prefix, uint32_t val) {
+    ImGui::Text("%s %u", prefix, val);
+}
+
 } // anonymous namespace
 
 // ============================================================================
@@ -83,11 +145,9 @@ void render_value(const DebugField& f, const ChipDebugRegistry& reg, const ChipB
 
 void render_flag(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
     uint32_t val = reg.read(f.uint_src, chip);
-    bool set = val != 0;
-    if (set)
-        ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "%-22s  1 (SET)", f.label);
-    else
-        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%-22s  0", f.label);
+    char prefix[32];
+    snprintf(prefix, sizeof(prefix), "%-22s ", f.label);
+    emit_flag_row(prefix, val != 0);
 }
 
 void render_state(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
@@ -128,26 +188,9 @@ void render_level(const DebugField& f, const ChipBase* chip) {
 void render_color(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
     uint32_t val = reg.read(f.uint_src, chip);
     auto& cm = std::get<ColorMeta>(f.meta);
-
-    char buf[32];
-    snprintf(buf, sizeof(buf), "$%02X", val & 0xFF);
-
-    // If we have a system palette, show a color swatch
-    if (cm.system_palette && val < cm.system_palette_size) {
-        uint32_t rgb = cm.system_palette[val];
-        float r = ((rgb >> 16) & 0xFF) / 255.0f;
-        float g = ((rgb >>  8) & 0xFF) / 255.0f;
-        float b = ((rgb >>  0) & 0xFF) / 255.0f;
-        ImVec4 color(r, g, b, 1.0f);
-        ImGui::Text("%-22s", f.label);
-        ImGui::SameLine(LABEL_WIDTH);
-        ImGui::ColorButton("##swatch", color, ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoBorder,
-                           ImVec2(14, 14));
-        ImGui::SameLine();
-        ImGui::Text("%s", buf);
-    } else {
-        label_text(f.label, "%s", buf);
-    }
+    char prefix[32];
+    snprintf(prefix, sizeof(prefix), "%-22s ", f.label);
+    emit_color_row(prefix, val, cm.system_palette, cm.system_palette_size);
 }
 
 void render_frequency(const DebugField& f, const ChipDebugRegistry& reg, const ChipBase* chip) {
@@ -484,6 +527,92 @@ void render_field(const DebugField& f, const ChipDebugRegistry& reg, const ChipB
     undo_indent(f.indent);
 }
 
+// ============================================================================
+// DECL-ORDER FIELD/COMPOUND RENDERERS
+// ============================================================================
+
+// Indented field line within a register — delegates to shared emit_*_row()
+void render_decl_field(const FieldEntry& fld, uint32_t val,
+                       const uint32_t* palette, uint16_t palette_size) {
+    // Apply display transform
+    uint32_t display_val = val;
+    if (fld.display_shift) display_val <<= fld.display_shift;
+    if (fld.display_scale) display_val *= fld.display_scale;
+
+    char prefix[64];
+    snprintf(prefix, sizeof(prefix), "       %-14s %-22s", fld.label, fld.desc);
+
+    switch (fld.kind) {
+        case DataKind::Flag:    emit_flag_row(prefix, val != 0);                       return;
+        case DataKind::Address: emit_address_row(prefix, display_val);                 return;
+        case DataKind::Color:   emit_color_row(prefix, val, palette, palette_size);    return;
+        default:                emit_value_row(prefix, display_val);                   return;
+    }
+}
+
+// Indented compound value line — delegates to shared emit_*_row()
+void render_decl_compound(const CompoundInfo& cmp, uint32_t val) {
+    // Apply display transform
+    uint32_t display_val = val;
+    if (cmp.display_shift) display_val <<= cmp.display_shift;
+    if (cmp.display_scale) display_val *= cmp.display_scale;
+
+    char prefix[64];
+    snprintf(prefix, sizeof(prefix), "       %-14s %-22s", cmp.label, cmp.desc);
+
+    switch (cmp.kind) {
+        case DataKind::Counter: emit_counter_row(prefix, display_val, cmp.total_bits); return;
+        case DataKind::Address: emit_address_row(prefix, display_val);                 return;
+        default:                emit_value_row(prefix, display_val);                   return;
+    }
+}
+
+// Walk the DECL order array and render each entry in declaration order
+void render_decl_walk(const ChipDebugRegistry& reg, const ChipBase* /*chip*/) {
+    const auto* order      = reg.decl_order();
+    size_t      count      = reg.decl_order_count();
+    const auto* reg_info   = reg.reg_info();
+    const auto* reg_data   = reg.reg_data();
+    uint16_t    base_addr  = reg.reg_base_address();
+    const auto* fields     = reg.decl_fields();
+    const auto* compounds  = reg.decl_compounds();
+    auto        cmp_reader = reg.decl_compound_reader();
+    const auto* palette    = reg.palette();
+    uint16_t    pal_size   = reg.palette_size();
+
+    for (size_t i = 0; i < count; ++i) {
+        const auto& e = order[i];
+        switch (e.type) {
+            case DeclRowType::Reg: {
+                const auto& ri = reg_info[e.index];
+                if (!ri.desc || ri.desc[0] == '-') continue;  // skip unnamed slots
+                char line[128];
+                if (base_addr)
+                    snprintf(line, sizeof(line), "$%04X  %-14s %-22s $%02X",
+                             (unsigned)(base_addr + e.index), ri.label, ri.desc, reg_data[e.index]);
+                else
+                    snprintf(line, sizeof(line), "  $%02X  %-14s %-22s $%02X",
+                             (unsigned)e.index, ri.label, ri.desc, reg_data[e.index]);
+                ImGui::TextUnformatted(line);
+                break;
+            }
+            case DeclRowType::Field: {
+                const auto& fld = fields[e.index];
+                uint32_t reg_val = reg_data[fld.reg_index];
+                uint32_t val = (reg_val >> fld.shift) & ((1u << fld.width) - 1u);
+                render_decl_field(fld, val, palette, pal_size);
+                break;
+            }
+            case DeclRowType::Compound: {
+                const auto& cmp = compounds[e.index];
+                uint32_t val = cmp_reader(reg_data, e.index);
+                render_decl_compound(cmp, val);
+                break;
+            }
+        }
+    }
+}
+
 } // anonymous namespace
 
 // ============================================================================
@@ -491,8 +620,15 @@ void render_field(const DebugField& f, const ChipDebugRegistry& reg, const ChipB
 // ============================================================================
 
 void ChipDebugRegistry::render(const ChipBase* chip) const {
-    // Auto-generated register dump for chips with set_registers()
-    if (reg_data_ && reg_size_ > 0) {
+    // Declaration-order register view — walks the DECL table in the order
+    // the hardware programmer defined it, showing fields and compounds inline.
+    if (has_decl_order() && reg_data_ && reg_info_) {
+        if (ImGui::CollapsingHeader("Registers")) {
+            render_decl_walk(*this, chip);
+        }
+    }
+    // Fallback: flat register dump for chips without DECL tables
+    else if (reg_data_ && reg_size_ > 0) {
         if (ImGui::CollapsingHeader("Registers")) {
             if (reg_info_) {
                 // Named register list — symbol label + description + value
