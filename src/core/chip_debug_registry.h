@@ -134,6 +134,26 @@ enum class DataKind : uint8_t {
 #define DECL_FLD_NOP(r, f, hilo, d, k, ds, dm)
 #define DECL_CMP_NOP(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)
 
+// ---- Shared DECL extraction callbacks ----
+// Pre-defined callbacks for X-macro walks.  Each chip invokes these
+// directly instead of defining per-chip variants.
+
+// Register constant extractor — use inside a namespace block
+#define DECL_X_CONST_(a, s, l)  constexpr uint8_t s = a;
+
+// Register info extractor — produces RegEntry initializers
+#define DECL_X_REG_INFO_(a, s, l)  { #s, l },
+
+// Field info extractor — produces FieldEntry initializers with reg_index=0
+// (resolved later by assign_field_reg_indices from the DECL order)
+#define DECL_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
+    { #fld, desc, 0, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
+
+// Declaration order extractors
+#define DECL_X_ORD_REG_(a, s, l)                                     { DeclRowType::Reg, (uint16_t)(a) },
+#define DECL_X_ORD_FLD_(r, s, hilo, d, k, ds, dm)                    { DeclRowType::Field, 0 },
+#define DECL_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)  { DeclRowType::Compound, 0 },
+
 // ============================================================================
 // FIELD ENTRY — bitfield within a register (from FLD X-macro)
 // ============================================================================
@@ -264,9 +284,81 @@ constexpr std::array<DeclOrderEntry, N> assign_decl_indices(const DeclOrderEntry
     return result;
 }
 
+// constexpr helper: assign reg_index to FieldEntry items based on the
+// declaration order.  FLD rows produced by DECL_X_FLD_INFO_ have reg_index=0;
+// this function resolves them from the preceding REG row's register offset.
+template<size_t NO, size_t NF>
+constexpr std::array<FieldEntry, NF> assign_field_reg_indices(
+    const DeclOrderEntry (&order)[NO],
+    const FieldEntry (&raw)[NF])
+{
+    std::array<FieldEntry, NF> result{};
+    for (size_t i = 0; i < NF; ++i) result[i] = raw[i];
+    uint16_t cur_reg = 0;
+    size_t fld_idx = 0;
+    for (size_t i = 0; i < NO; ++i) {
+        if (order[i].type == DeclRowType::Reg)
+            cur_reg = order[i].index;
+        else if (order[i].type == DeclRowType::Field && fld_idx < NF)
+            result[fld_idx++].reg_index = cur_reg;
+    }
+    return result;
+}
+
 // ============================================================================
-// VALUE SOURCES — how the registry reads a field's current value
+// DECL_EXTRACT_ALL — one-macro extraction for chip headers
 // ============================================================================
+//
+// Usage (chip header):
+//   #define CHIP_DECL(REG, FLD, CMP) ...   // unique DECL table
+//   DECL_EXTRACT_ALL(CHIP, CHIP_DECL)
+//
+// Generates (all static constexpr, header-safe):
+//   CHIP_REG_INFO[]     — RegEntry array
+//   CHIP_NUM_REGS       — uint16_t register count
+//   CHIP_FLD_INFO       — const FieldEntry* (nullptr if no fields)
+//   CHIP_NUM_FIELDS     — uint16_t field count
+//   CHIP_DECL_ORDER     — std::array<DeclOrderEntry, N>
+//
+// Constants namespace and backward-compat REG_TABLE are NOT generated;
+// define those per-chip as needed.
+//
+// For chips with CMP (compound) entries, add the CMP extraction manually
+// after DECL_EXTRACT_ALL — the compound read function is chip-specific.
+//
+// Requires ≥1 FLD entry in the DECL table.  For REG-only chips (no FLD),
+// use DECL_EXTRACT_REGS_ONLY instead.
+
+#define DECL_EXTRACT_ALL(PREFIX, DECL)                                         \
+    static constexpr RegEntry PREFIX##_REG_INFO[] =                            \
+        { DECL(DECL_X_REG_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };              \
+    constexpr uint16_t PREFIX##_NUM_REGS =                                     \
+        sizeof(PREFIX##_REG_INFO) / sizeof(PREFIX##_REG_INFO[0]);              \
+    static constexpr DeclOrderEntry PREFIX##_DECL_ORD_RAW_[] =                 \
+        { DECL(DECL_X_ORD_REG_, DECL_X_ORD_FLD_, DECL_X_ORD_CMP_) };         \
+    static constexpr auto PREFIX##_DECL_ORDER =                                \
+        assign_decl_indices(PREFIX##_DECL_ORD_RAW_);                           \
+    static constexpr FieldEntry PREFIX##_FLD_RAW_[] =                          \
+        { DECL(DECL_REG_NOP, DECL_X_FLD_INFO_, DECL_CMP_NOP) };              \
+    static constexpr auto PREFIX##_FLD_ARR_ =                                  \
+        assign_field_reg_indices(PREFIX##_DECL_ORD_RAW_, PREFIX##_FLD_RAW_);   \
+    static constexpr const FieldEntry* PREFIX##_FLD_INFO =                     \
+        PREFIX##_FLD_ARR_.data();                                              \
+    constexpr uint16_t PREFIX##_NUM_FIELDS =                                   \
+        (uint16_t)PREFIX##_FLD_ARR_.size();
+
+// Variant for chips with only REG entries (no FLD or CMP).
+#define DECL_EXTRACT_REGS_ONLY(PREFIX, DECL)                                   \
+    static constexpr RegEntry PREFIX##_REG_INFO[] =                            \
+        { DECL(DECL_X_REG_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };              \
+    constexpr uint16_t PREFIX##_NUM_REGS =                                     \
+        sizeof(PREFIX##_REG_INFO) / sizeof(PREFIX##_REG_INFO[0]);              \
+    static constexpr DeclOrderEntry PREFIX##_DECL_ORD_RAW_[] =                 \
+        { DECL(DECL_X_ORD_REG_, DECL_X_ORD_FLD_, DECL_X_ORD_CMP_) };         \
+    static constexpr auto PREFIX##_DECL_ORDER =                                \
+        assign_decl_indices(PREFIX##_DECL_ORD_RAW_);                           \
+    static constexpr const FieldEntry* PREFIX##_FLD_INFO = nullptr;            \
+    constexpr uint16_t PREFIX##_NUM_FIELDS = 0;
 
 /// Read from a contiguous register array:
 ///   byte_offset  = byte index into the array

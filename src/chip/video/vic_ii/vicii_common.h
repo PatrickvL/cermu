@@ -169,9 +169,7 @@ namespace vicii_regs {
     constexpr uint8_t MASK = 63;
 
     // Register indices from DECL
-    #define VICII_X_CONST_(a, s, l) constexpr uint8_t s = a;
-    VICII_DECL(VICII_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-    #undef VICII_X_CONST_
+    VICII_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
     // Absolute memory-mapped I/O addresses (C64: $D000-based)
     constexpr uint16_t ADDR_D011 = 0xD011;  // Control register 1
@@ -184,12 +182,7 @@ namespace vicii_regs {
     constexpr uint16_t ADDR_D021 = 0xD021;  // Background color 0
 }
 
-// --- Extract register info array (66 entries) ---
-#define VICII_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry VICII_REG_INFO[] = {
-    VICII_DECL(VICII_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP)
-};
-#undef VICII_X_INFO_
+DECL_EXTRACT_ALL(VICII, VICII_DECL)
 
 // --- Extract FLD constants ---
 // Produces: VICII_C1_YSCROLL_SHIFT, VICII_C1_YSCROLL_WIDTH, VICII_C1_YSCROLL_MASK
@@ -199,16 +192,6 @@ static constexpr RegEntry VICII_REG_INFO[] = {
     static constexpr uint32_t VICII_##reg##_##fld##_MASK  = BF_MASK(hilo);
 VICII_DECL(DECL_REG_NOP, VICII_X_FLD_CONST_, DECL_CMP_NOP)
 #undef VICII_X_FLD_CONST_
-
-// --- Extract FLD info array ---
-#define VICII_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
-    { #fld, desc, vicii_regs::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
-static constexpr FieldEntry VICII_FLD_INFO[] = {
-    VICII_DECL(DECL_REG_NOP, VICII_X_FLD_INFO_, DECL_CMP_NOP)
-};
-#undef VICII_X_FLD_INFO_
-
-static constexpr size_t VICII_NUM_FIELDS = sizeof(VICII_FLD_INFO) / sizeof(VICII_FLD_INFO[0]);
 
 // --- Extract CMP compound array ---
 #define VICII_X_CMP_(sym, desc, kind, bits, ds, dm, r1, hilo1, dst1, r2, hilo2, dst2) \
@@ -222,18 +205,6 @@ static constexpr CompoundEntry<vicii_reg_traits> VICII_COMPOUNDS[] = {
 
 static constexpr size_t VICII_NUM_COMPOUNDS = sizeof(VICII_COMPOUNDS) / sizeof(VICII_COMPOUNDS[0]);
 
-// --- Extract declaration order (preserves REG/FLD/CMP interleaving) ---
-#define VICII_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
-#define VICII_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                              { DeclRowType::Field, 0 },
-#define VICII_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)          { DeclRowType::Compound, 0 },
-static constexpr DeclOrderEntry VICII_DECL_ORDER_RAW[] = {
-    VICII_DECL(VICII_X_ORD_REG_, VICII_X_ORD_FLD_, VICII_X_ORD_CMP_)
-};
-#undef VICII_X_ORD_REG_
-#undef VICII_X_ORD_FLD_
-#undef VICII_X_ORD_CMP_
-
-static constexpr auto VICII_DECL_ORDER = assign_decl_indices(VICII_DECL_ORDER_RAW);
 static constexpr size_t VICII_DECL_ORDER_COUNT = VICII_DECL_ORDER.size();
 
 // --- Extract compound info (non-templated metadata for renderer) ---

@@ -105,30 +105,7 @@ enum mos6526_pin_t {
 CIA_DECL(CIA_X_REG_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 #undef CIA_X_REG_CONST_
 
-#define CIA_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry CIA_REG_INFO[] = { CIA_DECL(CIA_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };
-#undef CIA_X_INFO_
-
-// --- Extract field info array ---
-#define CIA_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
-    { #fld, desc, CIA_REG_##reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
-static constexpr FieldEntry CIA_FLD_INFO[] = {
-    CIA_DECL(DECL_REG_NOP, CIA_X_FLD_INFO_, DECL_CMP_NOP)
-};
-#undef CIA_X_FLD_INFO_
-static constexpr size_t CIA_NUM_FIELDS = sizeof(CIA_FLD_INFO) / sizeof(CIA_FLD_INFO[0]);
-
-// --- Extract declaration order array ---
-#define CIA_X_ORD_REG_(a, s, l)                                                { DeclRowType::Reg, (uint16_t)(a) },
-#define CIA_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                              { DeclRowType::Field, 0 },
-#define CIA_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)           { DeclRowType::Compound, 0 },
-static constexpr DeclOrderEntry CIA_DECL_ORDER_RAW[] = {
-    CIA_DECL(CIA_X_ORD_REG_, CIA_X_ORD_FLD_, CIA_X_ORD_CMP_)
-};
-#undef CIA_X_ORD_REG_
-#undef CIA_X_ORD_FLD_
-#undef CIA_X_ORD_CMP_
-static constexpr auto CIA_DECL_ORDER = assign_decl_indices(CIA_DECL_ORDER_RAW);
+DECL_EXTRACT_ALL(CIA, CIA_DECL)
 
 struct mos6526_t : public IoChipBase {
     mos6526_t() : IoChipBase(ChipInfo{"MOS6526", "MOS Technology"}) {

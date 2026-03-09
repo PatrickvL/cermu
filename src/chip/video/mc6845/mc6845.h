@@ -78,31 +78,7 @@ MC6845_REG_TABLE(MC6845_X_CONST_)
 
 static constexpr int MC6845_NUM_REGISTERS = 18;
 
-// --- RegEntry ---
-#define MC6845_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry MC6845_REG_INFO[] = { MC6845_REG_TABLE(MC6845_X_INFO_) };
-#undef MC6845_X_INFO_
-
-// --- FieldEntry ---
-#define MC6845_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
-    { #fld, desc, MC6845_##reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
-static constexpr FieldEntry MC6845_FLD_INFO[] = {
-    MC6845_DECL(DECL_REG_NOP, MC6845_X_FLD_INFO_, DECL_CMP_NOP)
-};
-#undef MC6845_X_FLD_INFO_
-static constexpr size_t MC6845_NUM_FIELDS = sizeof(MC6845_FLD_INFO) / sizeof(MC6845_FLD_INFO[0]);
-
-// --- DeclOrder ---
-#define MC6845_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
-#define MC6845_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                            { DeclRowType::Field, 0 },
-#define MC6845_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)         { DeclRowType::Compound, 0 },
-static constexpr DeclOrderEntry MC6845_DECL_ORDER_RAW[] = {
-    MC6845_DECL(MC6845_X_ORD_REG_, MC6845_X_ORD_FLD_, MC6845_X_ORD_CMP_)
-};
-#undef MC6845_X_ORD_REG_
-#undef MC6845_X_ORD_FLD_
-#undef MC6845_X_ORD_CMP_
-static constexpr auto MC6845_DECL_ORDER = assign_decl_indices(MC6845_DECL_ORDER_RAW);
+DECL_EXTRACT_ALL(MC6845, MC6845_DECL)
 
 // ============================================================================
 // MC6845 CHIP STRUCTURE

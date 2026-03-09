@@ -68,33 +68,7 @@
 VIC_REG_TABLE(VIC_X_CONST_)
 #undef VIC_X_CONST_
 
-// --- Extract register info array ---
-#define VIC_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry VIC_REG_INFO[] = { VIC_REG_TABLE(VIC_X_INFO_) };
-#undef VIC_X_INFO_
-
-static constexpr uint8_t VIC_NUM_REGS = 16;
-
-// --- FieldEntry ---
-#define VIC_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
-    { #fld, desc, VIC_REG_##reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
-static constexpr FieldEntry VIC_FLD_INFO[] = {
-    VIC_DECL(DECL_REG_NOP, VIC_X_FLD_INFO_, DECL_CMP_NOP)
-};
-#undef VIC_X_FLD_INFO_
-static constexpr size_t VIC_NUM_FIELDS = sizeof(VIC_FLD_INFO) / sizeof(VIC_FLD_INFO[0]);
-
-// --- DeclOrder ---
-#define VIC_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
-#define VIC_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                            { DeclRowType::Field, 0 },
-#define VIC_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)         { DeclRowType::Compound, 0 },
-static constexpr DeclOrderEntry VIC_DECL_ORDER_RAW[] = {
-    VIC_DECL(VIC_X_ORD_REG_, VIC_X_ORD_FLD_, VIC_X_ORD_CMP_)
-};
-#undef VIC_X_ORD_REG_
-#undef VIC_X_ORD_FLD_
-#undef VIC_X_ORD_CMP_
-static constexpr auto VIC_DECL_ORDER = assign_decl_indices(VIC_DECL_ORDER_RAW);
+DECL_EXTRACT_ALL(VIC, VIC_DECL)
 
 // Backward-compatible aliases for the old generic names
 #define VIC_REG_OSC1_FREQ    VIC_REG_BASS_FREQ

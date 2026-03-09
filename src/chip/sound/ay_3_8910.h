@@ -110,37 +110,11 @@ inline constexpr AYVariantTraits ay_variant_traits[] = {
 #define AY_REG_TABLE(X) AY_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 namespace ay_regs {
-    #define AY_X_CONST_(a, s, l) constexpr uint8_t s = a;
-    AY_REG_TABLE(AY_X_CONST_)
-    #undef AY_X_CONST_
+    AY_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 16;
 } // namespace ay_regs
 
-// --- RegEntry ---
-#define AY_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry AY_REG_INFO[] = { AY_REG_TABLE(AY_X_INFO_) };
-#undef AY_X_INFO_
-
-// --- FieldEntry ---
-#define AY_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
-    { #fld, desc, ay_regs::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
-static constexpr FieldEntry AY_FLD_INFO[] = {
-    AY_DECL(DECL_REG_NOP, AY_X_FLD_INFO_, DECL_CMP_NOP)
-};
-#undef AY_X_FLD_INFO_
-static constexpr size_t AY_NUM_FIELDS = sizeof(AY_FLD_INFO) / sizeof(AY_FLD_INFO[0]);
-
-// --- DeclOrder ---
-#define AY_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
-#define AY_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                            { DeclRowType::Field, 0 },
-#define AY_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)         { DeclRowType::Compound, 0 },
-static constexpr DeclOrderEntry AY_DECL_ORDER_RAW[] = {
-    AY_DECL(AY_X_ORD_REG_, AY_X_ORD_FLD_, AY_X_ORD_CMP_)
-};
-#undef AY_X_ORD_REG_
-#undef AY_X_ORD_FLD_
-#undef AY_X_ORD_CMP_
-static constexpr auto AY_DECL_ORDER = assign_decl_indices(AY_DECL_ORDER_RAW);
+DECL_EXTRACT_ALL(AY, AY_DECL)
 
 // ============================================================================
 // AY-3-8910 Sound Chip

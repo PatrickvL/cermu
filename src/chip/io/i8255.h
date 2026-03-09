@@ -45,37 +45,11 @@
 #define I8255_REG_TABLE(X) I8255_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 namespace i8255_regs {
-    #define I8255_X_CONST_(a, s, l) constexpr uint8_t s = a;
-    I8255_DECL(I8255_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-    #undef I8255_X_CONST_
+    I8255_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 4;
 } // namespace i8255_regs
 
-// --- Extract register info array ---
-#define I8255_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry I8255_REG_INFO[] = { I8255_DECL(I8255_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };
-#undef I8255_X_INFO_
-
-// --- Extract field info array ---
-#define I8255_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
-    { #fld, desc, i8255_regs::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
-static constexpr FieldEntry I8255_FLD_INFO[] = {
-    I8255_DECL(DECL_REG_NOP, I8255_X_FLD_INFO_, DECL_CMP_NOP)
-};
-#undef I8255_X_FLD_INFO_
-static constexpr size_t I8255_NUM_FIELDS = sizeof(I8255_FLD_INFO) / sizeof(I8255_FLD_INFO[0]);
-
-// --- Extract declaration order array ---
-#define I8255_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
-#define I8255_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                            { DeclRowType::Field, 0 },
-#define I8255_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)         { DeclRowType::Compound, 0 },
-static constexpr DeclOrderEntry I8255_DECL_ORDER_RAW[] = {
-    I8255_DECL(I8255_X_ORD_REG_, I8255_X_ORD_FLD_, I8255_X_ORD_CMP_)
-};
-#undef I8255_X_ORD_REG_
-#undef I8255_X_ORD_FLD_
-#undef I8255_X_ORD_CMP_
-static constexpr auto I8255_DECL_ORDER = assign_decl_indices(I8255_DECL_ORDER_RAW);
+DECL_EXTRACT_ALL(I8255, I8255_DECL)
 
 class i8255_t : public IoChipBase {
 public:

@@ -64,31 +64,7 @@
 MOS6522_DECL(MOS6522_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 #undef MOS6522_X_CONST_
 
-// --- Extract register info array (label from #symbol, desc from string) ---
-#define MOS6522_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry MOS6522_REG_INFO[] = { MOS6522_DECL(MOS6522_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };
-#undef MOS6522_X_INFO_
-
-// --- Extract field info array ---
-#define MOS6522_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
-    { #fld, desc, MOS6522_##reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
-static constexpr FieldEntry MOS6522_FLD_INFO[] = {
-    MOS6522_DECL(DECL_REG_NOP, MOS6522_X_FLD_INFO_, DECL_CMP_NOP)
-};
-#undef MOS6522_X_FLD_INFO_
-static constexpr size_t MOS6522_NUM_FIELDS = sizeof(MOS6522_FLD_INFO) / sizeof(MOS6522_FLD_INFO[0]);
-
-// --- Extract declaration order array ---
-#define MOS6522_X_ORD_REG_(a, s, l)                                            { DeclRowType::Reg, (uint16_t)(a) },
-#define MOS6522_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                          { DeclRowType::Field, 0 },
-#define MOS6522_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)       { DeclRowType::Compound, 0 },
-static constexpr DeclOrderEntry MOS6522_DECL_ORDER_RAW[] = {
-    MOS6522_DECL(MOS6522_X_ORD_REG_, MOS6522_X_ORD_FLD_, MOS6522_X_ORD_CMP_)
-};
-#undef MOS6522_X_ORD_REG_
-#undef MOS6522_X_ORD_FLD_
-#undef MOS6522_X_ORD_CMP_
-static constexpr auto MOS6522_DECL_ORDER = assign_decl_indices(MOS6522_DECL_ORDER_RAW);
+DECL_EXTRACT_ALL(MOS6522, MOS6522_DECL)
 
 // Interrupt flags
 #define MOS6522_IFR_IRQ      0x80
@@ -126,8 +102,6 @@ static constexpr auto MOS6522_DECL_ORDER = assign_decl_indices(MOS6522_DECL_ORDE
 // ============================================================================
 // MOS 6522 VIA (Versatile Interface Adapter) chip structure
 // ============================================================================
-
-static constexpr uint8_t MOS6522_NUM_REGS = 16;
 
 struct mos6522_t : public IoChipBase {
     mos6522_t() : IoChipBase(ChipInfo{"MOS6522", "MOS Technology"}) {

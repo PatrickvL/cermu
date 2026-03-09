@@ -51,23 +51,11 @@
 #define Z80_PIO_REG_TABLE(X) Z80_PIO_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 namespace z80_pio_regs {
-    #define Z80_PIO_X_CONST_(a, s, l) constexpr uint8_t s = a;
-    Z80_PIO_DECL(Z80_PIO_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-    #undef Z80_PIO_X_CONST_
+    Z80_PIO_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 10;
 } // namespace z80_pio_regs
 
-#define Z80_PIO_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry Z80_PIO_REG_INFO[] = { Z80_PIO_DECL(Z80_PIO_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };
-#undef Z80_PIO_X_INFO_
-
-// --- Extract declaration order array (no fields or compounds) ---
-#define Z80_PIO_X_ORD_REG_(a, s, l) { DeclRowType::Reg, (uint16_t)(a) },
-static constexpr DeclOrderEntry Z80_PIO_DECL_ORDER_RAW[] = {
-    Z80_PIO_DECL(Z80_PIO_X_ORD_REG_, DECL_FLD_NOP, DECL_CMP_NOP)
-};
-#undef Z80_PIO_X_ORD_REG_
-static constexpr auto Z80_PIO_DECL_ORDER = assign_decl_indices(Z80_PIO_DECL_ORDER_RAW);
+DECL_EXTRACT_REGS_ONLY(Z80_PIO, Z80_PIO_DECL)
 
 // ============================================================================
 // Z80 PIO Port Mode

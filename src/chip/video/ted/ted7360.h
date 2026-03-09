@@ -102,33 +102,7 @@
 TED_REG_TABLE(TED_X_CONST_)
 #undef TED_X_CONST_
 
-#define TED_NUM_REGS 0x20  // 32 registers in the primary range ($FF00-$FF1F)
-
-// --- RegEntry ---
-#define TED_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry TED_REG_INFO[] = { TED_REG_TABLE(TED_X_INFO_) };
-#undef TED_X_INFO_
-
-// --- FieldEntry ---
-#define TED_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
-    { #fld, desc, TED_REG_##reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
-static constexpr FieldEntry TED_FLD_INFO[] = {
-    TED_DECL(DECL_REG_NOP, TED_X_FLD_INFO_, DECL_CMP_NOP)
-};
-#undef TED_X_FLD_INFO_
-static constexpr size_t TED_NUM_FIELDS = sizeof(TED_FLD_INFO) / sizeof(TED_FLD_INFO[0]);
-
-// --- DeclOrder ---
-#define TED_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
-#define TED_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                            { DeclRowType::Field, 0 },
-#define TED_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)         { DeclRowType::Compound, 0 },
-static constexpr DeclOrderEntry TED_DECL_ORDER_RAW[] = {
-    TED_DECL(TED_X_ORD_REG_, TED_X_ORD_FLD_, TED_X_ORD_CMP_)
-};
-#undef TED_X_ORD_REG_
-#undef TED_X_ORD_FLD_
-#undef TED_X_ORD_CMP_
-static constexpr auto TED_DECL_ORDER = assign_decl_indices(TED_DECL_ORDER_RAW);
+DECL_EXTRACT_ALL(TED, TED_DECL)
 
 // Video counter / address masks
 #define TED_VC_MASK              0x3FF    // 10-bit video counter (VC/VCBASE) mask: 0..1023 (40×25 = 1000 char positions)

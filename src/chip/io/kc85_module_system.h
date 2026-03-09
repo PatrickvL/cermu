@@ -63,37 +63,11 @@
 #define KC85_MOD_REG_TABLE(X) KC85_MOD_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 namespace kc85_mod_regs {
-    #define KC85_X_CONST_(a, s, l) constexpr uint8_t s = a;
-    KC85_MOD_REG_TABLE(KC85_X_CONST_)
-    #undef KC85_X_CONST_
+    KC85_MOD_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 8;
 } // namespace kc85_mod_regs
 
-// --- RegEntry ---
-#define KC85_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry KC85_MOD_REG_INFO[] = { KC85_MOD_REG_TABLE(KC85_X_INFO_) };
-#undef KC85_X_INFO_
-
-// --- FieldEntry ---
-#define KC85_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
-    { #fld, desc, kc85_mod_regs::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
-static constexpr FieldEntry KC85_MOD_FLD_INFO[] = {
-    KC85_MOD_DECL(DECL_REG_NOP, KC85_X_FLD_INFO_, DECL_CMP_NOP)
-};
-#undef KC85_X_FLD_INFO_
-static constexpr size_t KC85_MOD_NUM_FIELDS = sizeof(KC85_MOD_FLD_INFO) / sizeof(KC85_MOD_FLD_INFO[0]);
-
-// --- DeclOrder ---
-#define KC85_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
-#define KC85_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                            { DeclRowType::Field, 0 },
-#define KC85_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)         { DeclRowType::Compound, 0 },
-static constexpr DeclOrderEntry KC85_MOD_DECL_ORDER_RAW[] = {
-    KC85_MOD_DECL(KC85_X_ORD_REG_, KC85_X_ORD_FLD_, KC85_X_ORD_CMP_)
-};
-#undef KC85_X_ORD_REG_
-#undef KC85_X_ORD_FLD_
-#undef KC85_X_ORD_CMP_
-static constexpr auto KC85_MOD_DECL_ORDER = assign_decl_indices(KC85_MOD_DECL_ORDER_RAW);
+DECL_EXTRACT_ALL(KC85_MOD, KC85_MOD_DECL)
 
 // ============================================================================
 // KC85 Module Types
