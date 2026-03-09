@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../../../core/chip.h"
+#include "../../../core/video_chip_base.h"
 #include <cstdint>
 #include "../../../core/system_lines.h" // For bus_state_t
 #include "../../../chip/memory/mos2114.h"  // For MOS2114
@@ -14,8 +15,9 @@
 // row types it needs and ignores the rest via DECL_*_NOP swallower macros.
 //
 //   REG(offset, symbol, description)
-//   FLD(reg_sym, field_sym, hi:lo, description, kind)
-//   CMP(symbol, description, kind, total_bits, reg1, hilo1, dst1, reg2, hilo2, dst2)
+//   FLD(reg_sym, field_sym, hi:lo, description, kind, display_shift, display_scale)
+//   CMP(symbol, description, kind, total_bits, display_shift, display_scale,
+//       reg1, hilo1, dst1, reg2, hilo2, dst2)
 
 #define VICII_DECL(REG, FLD, CMP) \
     /* ---- Sprite position registers ---- */ \
@@ -37,35 +39,35 @@
     REG(15, M7Y,    "Sprite 7 Y pos")                                          \
     /* ---- Sprite X MSB ($D010) — per-sprite high bits ---- */ \
     REG(16, MX8,    "Sprite X pos MSB")                                        \
-      FLD(MX8,  M0_MSB,  0:0, "Sprite 0 X bit 8",    Flag)                    \
-      FLD(MX8,  M1_MSB,  1:1, "Sprite 1 X bit 8",    Flag)                    \
-      FLD(MX8,  M2_MSB,  2:2, "Sprite 2 X bit 8",    Flag)                    \
-      FLD(MX8,  M3_MSB,  3:3, "Sprite 3 X bit 8",    Flag)                    \
-      FLD(MX8,  M4_MSB,  4:4, "Sprite 4 X bit 8",    Flag)                    \
-      FLD(MX8,  M5_MSB,  5:5, "Sprite 5 X bit 8",    Flag)                    \
-      FLD(MX8,  M6_MSB,  6:6, "Sprite 6 X bit 8",    Flag)                    \
-      FLD(MX8,  M7_MSB,  7:7, "Sprite 7 X bit 8",    Flag)                    \
+      FLD(MX8,  M0_MSB,  0:0, "Sprite 0 X bit 8",    Flag, 0, 0)              \
+      FLD(MX8,  M1_MSB,  1:1, "Sprite 1 X bit 8",    Flag, 0, 0)              \
+      FLD(MX8,  M2_MSB,  2:2, "Sprite 2 X bit 8",    Flag, 0, 0)              \
+      FLD(MX8,  M3_MSB,  3:3, "Sprite 3 X bit 8",    Flag, 0, 0)              \
+      FLD(MX8,  M4_MSB,  4:4, "Sprite 4 X bit 8",    Flag, 0, 0)              \
+      FLD(MX8,  M5_MSB,  5:5, "Sprite 5 X bit 8",    Flag, 0, 0)              \
+      FLD(MX8,  M6_MSB,  6:6, "Sprite 6 X bit 8",    Flag, 0, 0)              \
+      FLD(MX8,  M7_MSB,  7:7, "Sprite 7 X bit 8",    Flag, 0, 0)              \
       /* 9-bit sprite X positions: M0X..M7X[7:0] | MX8[N] << 8 */ \
-      CMP(SPR0_X, "Sprite 0 X pos", Counter, 9,  M0X, 7:0, 0,  MX8, 0:0, 8)  \
-      CMP(SPR1_X, "Sprite 1 X pos", Counter, 9,  M1X, 7:0, 0,  MX8, 1:1, 8)  \
-      CMP(SPR2_X, "Sprite 2 X pos", Counter, 9,  M2X, 7:0, 0,  MX8, 2:2, 8)  \
-      CMP(SPR3_X, "Sprite 3 X pos", Counter, 9,  M3X, 7:0, 0,  MX8, 3:3, 8)  \
-      CMP(SPR4_X, "Sprite 4 X pos", Counter, 9,  M4X, 7:0, 0,  MX8, 4:4, 8)  \
-      CMP(SPR5_X, "Sprite 5 X pos", Counter, 9,  M5X, 7:0, 0,  MX8, 5:5, 8)  \
-      CMP(SPR6_X, "Sprite 6 X pos", Counter, 9,  M6X, 7:0, 0,  MX8, 6:6, 8)  \
-      CMP(SPR7_X, "Sprite 7 X pos", Counter, 9,  M7X, 7:0, 0,  MX8, 7:7, 8)  \
+      CMP(SPR0_X, "Sprite 0 X pos", Counter, 9, 0, 0,  M0X, 7:0, 0,  MX8, 0:0, 8) \
+      CMP(SPR1_X, "Sprite 1 X pos", Counter, 9, 0, 0,  M1X, 7:0, 0,  MX8, 1:1, 8) \
+      CMP(SPR2_X, "Sprite 2 X pos", Counter, 9, 0, 0,  M2X, 7:0, 0,  MX8, 2:2, 8) \
+      CMP(SPR3_X, "Sprite 3 X pos", Counter, 9, 0, 0,  M3X, 7:0, 0,  MX8, 3:3, 8) \
+      CMP(SPR4_X, "Sprite 4 X pos", Counter, 9, 0, 0,  M4X, 7:0, 0,  MX8, 4:4, 8) \
+      CMP(SPR5_X, "Sprite 5 X pos", Counter, 9, 0, 0,  M5X, 7:0, 0,  MX8, 5:5, 8) \
+      CMP(SPR6_X, "Sprite 6 X pos", Counter, 9, 0, 0,  M6X, 7:0, 0,  MX8, 6:6, 8) \
+      CMP(SPR7_X, "Sprite 7 X pos", Counter, 9, 0, 0,  M7X, 7:0, 0,  MX8, 7:7, 8) \
     /* ---- Control Register 1 ($D011) ---- */ \
     REG(17, C1,     "Y-scroll/DEN/BMM/ECM")                                    \
-      FLD(C1,   YSCROLL,  2:0, "Y scroll",             Value)                  \
-      FLD(C1,   RSEL,     3:3, "Row select 24/25",     Flag)                   \
-      FLD(C1,   DEN,      4:4, "Display enable",       Flag)                   \
-      FLD(C1,   BMM,      5:5, "Bitmap mode",          Flag)                   \
-      FLD(C1,   ECM,      6:6, "Extended color mode",  Flag)                   \
-      FLD(C1,   RST8,     7:7, "Raster bit 8",         Flag)                   \
+      FLD(C1,   YSCROLL,  2:0, "Y scroll",             Value, 0, 0)            \
+      FLD(C1,   RSEL,     3:3, "Row select 24/25",     Flag, 0, 0)             \
+      FLD(C1,   DEN,      4:4, "Display enable",       Flag, 0, 0)             \
+      FLD(C1,   BMM,      5:5, "Bitmap mode",          Flag, 0, 0)             \
+      FLD(C1,   ECM,      6:6, "Extended color mode",  Flag, 0, 0)             \
+      FLD(C1,   RST8,     7:7, "Raster bit 8",         Flag, 0, 0)             \
     /* ---- Raster Counter ($D012) ---- */ \
     REG(18, RASTER, "Raster counter")                                          \
       /* 9-bit raster: RASTER[7:0] | C1.RST8 << 8 */ \
-      CMP(RASTER9, "Full raster pos", Counter, 9,                             \
+      CMP(RASTER9, "Full raster pos", Counter, 9, 0, 0,                       \
           RASTER, 7:0, 0,  C1, 7:7, 8)                                        \
     /* ---- Light Pen ---- */ \
     REG(19, LPX,    "Light pen X")                                             \
@@ -74,28 +76,28 @@
     REG(21, MXE,    "Sprite enable")                                           \
     /* ---- Control Register 2 ($D016) ---- */ \
     REG(22, C2,     "X-scroll/CSEL/MCM")                                       \
-      FLD(C2,   XSCROLL,  2:0, "X scroll",             Value)                  \
-      FLD(C2,   CSEL,     3:3, "Column select 38/40",  Flag)                   \
-      FLD(C2,   MCM,      4:4, "Multi-color mode",     Flag)                   \
+      FLD(C2,   XSCROLL,  2:0, "X scroll",             Value, 0, 0)            \
+      FLD(C2,   CSEL,     3:3, "Column select 38/40",  Flag, 0, 0)             \
+      FLD(C2,   MCM,      4:4, "Multi-color mode",     Flag, 0, 0)             \
     /* ---- Sprite Y Expand ($D017) ---- */ \
     REG(23, MXYE,   "Sprite Y expand")                                         \
     /* ---- Memory Pointers ($D018) ---- */ \
     REG(24, MP,     "Memory pointers")                                         \
-      FLD(MP,   CB,       3:1, "Char base (<<11)",     Address)                \
-      FLD(MP,   VM,       7:4, "Video matrix (<<10)",  Address)                \
+      FLD(MP,   CB,       3:1, "Char base",            Address, 11, 0)         \
+      FLD(MP,   VM,       7:4, "Video matrix",         Address, 10, 0)         \
     /* ---- Interrupt Register ($D019) ---- */ \
     REG(25, IR,     "Interrupt request")                                        \
-      FLD(IR,   IRST,     0:0, "Raster IRQ",           Flag)                   \
-      FLD(IR,   IMBC,     1:1, "Sprite-data coll IRQ", Flag)                   \
-      FLD(IR,   IMMC,     2:2, "Sprite-sprite IRQ",    Flag)                   \
-      FLD(IR,   ILP,      3:3, "Light pen IRQ",        Flag)                   \
-      FLD(IR,   IRQ,      7:7, "Any IRQ active",       Flag)                   \
+      FLD(IR,   IRST,     0:0, "Raster IRQ",           Flag, 0, 0)             \
+      FLD(IR,   IMBC,     1:1, "Sprite-data coll IRQ", Flag, 0, 0)             \
+      FLD(IR,   IMMC,     2:2, "Sprite-sprite IRQ",    Flag, 0, 0)             \
+      FLD(IR,   ILP,      3:3, "Light pen IRQ",        Flag, 0, 0)             \
+      FLD(IR,   IRQ,      7:7, "Any IRQ active",       Flag, 0, 0)             \
     /* ---- Interrupt Enable ($D01A) ---- */ \
     REG(26, IE,     "Interrupt enable")                                         \
-      FLD(IE,   ERST,     0:0, "Raster IRQ enable",    Flag)                   \
-      FLD(IE,   EMBC,     1:1, "Spr-data coll enable", Flag)                   \
-      FLD(IE,   EMMC,     2:2, "Spr-spr coll enable",  Flag)                   \
-      FLD(IE,   ELP,      3:3, "Light pen IRQ enable",  Flag)                  \
+      FLD(IE,   ERST,     0:0, "Raster IRQ enable",    Flag, 0, 0)             \
+      FLD(IE,   EMBC,     1:1, "Spr-data coll enable", Flag, 0, 0)             \
+      FLD(IE,   EMMC,     2:2, "Spr-spr coll enable",  Flag, 0, 0)             \
+      FLD(IE,   ELP,      3:3, "Light pen IRQ enable",  Flag, 0, 0)            \
     /* ---- Sprite attribute registers ---- */ \
     REG(27, MXDP,   "Sprite data priority")                                    \
     REG(28, MXMC,   "Sprite multicolor")                                       \
@@ -105,20 +107,35 @@
     REG(31, MXD,    "Sprite-data coll")                                        \
     /* ---- Color registers ---- */ \
     REG(32, EC,     "Border color")                                            \
+      FLD(EC,  COLOR,     3:0, "Border",               Color, 0, 0)            \
     REG(33, B0C,    "Background color 0")                                      \
+      FLD(B0C, COLOR,     3:0, "Background 0",         Color, 0, 0)            \
     REG(34, B1C,    "Background color 1")                                      \
+      FLD(B1C, COLOR,     3:0, "Background 1",         Color, 0, 0)            \
     REG(35, B2C,    "Background color 2")                                      \
+      FLD(B2C, COLOR,     3:0, "Background 2",         Color, 0, 0)            \
     REG(36, B3C,    "Background color 3")                                      \
+      FLD(B3C, COLOR,     3:0, "Background 3",         Color, 0, 0)            \
     REG(37, MM0,    "Sprite mcolor 0")                                         \
+      FLD(MM0, COLOR,     3:0, "Multicolor 0",         Color, 0, 0)            \
     REG(38, MM1,    "Sprite mcolor 1")                                         \
+      FLD(MM1, COLOR,     3:0, "Multicolor 1",         Color, 0, 0)            \
     REG(39, M0C,    "Sprite 0 color")                                          \
+      FLD(M0C, COLOR,     3:0, "Sprite 0",             Color, 0, 0)            \
     REG(40, M1C,    "Sprite 1 color")                                          \
+      FLD(M1C, COLOR,     3:0, "Sprite 1",             Color, 0, 0)            \
     REG(41, M2C,    "Sprite 2 color")                                          \
+      FLD(M2C, COLOR,     3:0, "Sprite 2",             Color, 0, 0)            \
     REG(42, M3C,    "Sprite 3 color")                                          \
+      FLD(M3C, COLOR,     3:0, "Sprite 3",             Color, 0, 0)            \
     REG(43, M4C,    "Sprite 4 color")                                          \
+      FLD(M4C, COLOR,     3:0, "Sprite 4",             Color, 0, 0)            \
     REG(44, M5C,    "Sprite 5 color")                                          \
+      FLD(M5C, COLOR,     3:0, "Sprite 5",             Color, 0, 0)            \
     REG(45, M6C,    "Sprite 6 color")                                          \
+      FLD(M6C, COLOR,     3:0, "Sprite 6",             Color, 0, 0)            \
     REG(46, M7C,    "Sprite 7 color")                                          \
+      FLD(M7C, COLOR,     3:0, "Sprite 7",             Color, 0, 0)            \
     /* ---- Unused registers ($D02F-$D03F) ---- */ \
     REG(47, R47, "-") REG(48, R48, "-") REG(49, R49, "-") REG(50, R50, "-") \
     REG(51, R51, "-") REG(52, R52, "-") REG(53, R53, "-") REG(54, R54, "-") \
@@ -176,7 +193,7 @@ static constexpr RegEntry VICII_REG_INFO[] = {
 
 // --- Extract FLD constants ---
 // Produces: VICII_C1_YSCROLL_SHIFT, VICII_C1_YSCROLL_WIDTH, VICII_C1_YSCROLL_MASK
-#define VICII_X_FLD_CONST_(reg, fld, hilo, desc, kind) \
+#define VICII_X_FLD_CONST_(reg, fld, hilo, desc, kind, ds, dm) \
     static constexpr uint8_t  VICII_##reg##_##fld##_SHIFT = BF_LO(hilo); \
     static constexpr uint8_t  VICII_##reg##_##fld##_WIDTH = BF_WIDTH(hilo); \
     static constexpr uint32_t VICII_##reg##_##fld##_MASK  = BF_MASK(hilo);
@@ -184,8 +201,8 @@ VICII_DECL(DECL_REG_NOP, VICII_X_FLD_CONST_, DECL_CMP_NOP)
 #undef VICII_X_FLD_CONST_
 
 // --- Extract FLD info array ---
-#define VICII_X_FLD_INFO_(reg, fld, hilo, desc, kind) \
-    { #fld, desc, vicii_regs::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind },
+#define VICII_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
+    { #fld, desc, vicii_regs::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
 static constexpr FieldEntry VICII_FLD_INFO[] = {
     VICII_DECL(DECL_REG_NOP, VICII_X_FLD_INFO_, DECL_CMP_NOP)
 };
@@ -194,7 +211,7 @@ static constexpr FieldEntry VICII_FLD_INFO[] = {
 static constexpr size_t VICII_NUM_FIELDS = sizeof(VICII_FLD_INFO) / sizeof(VICII_FLD_INFO[0]);
 
 // --- Extract CMP compound array ---
-#define VICII_X_CMP_(sym, desc, kind, bits, r1, hilo1, dst1, r2, hilo2, dst2) \
+#define VICII_X_CMP_(sym, desc, kind, bits, ds, dm, r1, hilo1, dst1, r2, hilo2, dst2) \
     { #sym, desc, DataKind::kind, bits, 2, \
       {{ vicii_regs::r1, (uint8_t)BF_HI(hilo1), (uint8_t)BF_LO(hilo1), (uint8_t)(dst1) }, \
        { vicii_regs::r2, (uint8_t)BF_HI(hilo2), (uint8_t)BF_LO(hilo2), (uint8_t)(dst2) }} },
@@ -204,6 +221,30 @@ static constexpr CompoundEntry<vicii_reg_traits> VICII_COMPOUNDS[] = {
 #undef VICII_X_CMP_
 
 static constexpr size_t VICII_NUM_COMPOUNDS = sizeof(VICII_COMPOUNDS) / sizeof(VICII_COMPOUNDS[0]);
+
+// --- Extract declaration order (preserves REG/FLD/CMP interleaving) ---
+#define VICII_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
+#define VICII_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                              { DeclRowType::Field, 0 },
+#define VICII_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)          { DeclRowType::Compound, 0 },
+static constexpr DeclOrderEntry VICII_DECL_ORDER_RAW[] = {
+    VICII_DECL(VICII_X_ORD_REG_, VICII_X_ORD_FLD_, VICII_X_ORD_CMP_)
+};
+#undef VICII_X_ORD_REG_
+#undef VICII_X_ORD_FLD_
+#undef VICII_X_ORD_CMP_
+
+static constexpr auto VICII_DECL_ORDER = assign_decl_indices(VICII_DECL_ORDER_RAW);
+static constexpr size_t VICII_DECL_ORDER_COUNT = VICII_DECL_ORDER.size();
+
+// --- Extract compound info (non-templated metadata for renderer) ---
+#define VICII_X_CMP_INFO_(sym, desc, kind, bits, ds, dm, r1, h1, d1, r2, h2, d2) \
+    { #sym, desc, DataKind::kind, (uint8_t)(bits), (uint8_t)(ds), (uint16_t)(dm) },
+static constexpr CompoundInfo VICII_COMPOUND_INFO[] = {
+    VICII_DECL(DECL_REG_NOP, DECL_FLD_NOP, VICII_X_CMP_INFO_)
+};
+#undef VICII_X_CMP_INFO_
+
+static constexpr size_t VICII_NUM_COMPOUND_INFO = sizeof(VICII_COMPOUND_INFO) / sizeof(VICII_COMPOUND_INFO[0]);
 
 // Legacy macro compatibility - can be removed once all code is updated
 #define VICII_REGS_SIZE vicii_regs::SIZE
@@ -629,7 +670,7 @@ struct vicii_bus_unit_t {
 };
 
 // Main VIC-II structure composed of units
-struct vicii_t : public ChipBase {
+struct vicii_t : public VideoChipBase {
     MOS2114* colorram = nullptr;
 
     // Chip configuration (set at initialization)

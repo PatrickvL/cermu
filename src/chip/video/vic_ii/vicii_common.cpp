@@ -2566,9 +2566,10 @@ void vicii_t::init(const vicii_chip_config_t* config, void (*bank_change)(void*,
     this->bus.bank_change = bank_change;
     bool pal = config && config->total_lines > 300;
     info_ = ChipInfo{pal ? "MOS6569" : "MOS6567", "MOS Technology"};
-    category_ = "Video";
     vicii_initialize(this);
     vicii_initialize_timing(this, config);
+    system_palette_ = get_default_palette();
+    palette_size_   = 16;
 #ifdef CERMU_HAS_CHIP_DEBUG
     register_debug_fields();
 #endif
@@ -2637,10 +2638,21 @@ void vicii_t::set_framebuffer(uint32_t* framebuffer, int width, int height) {
 // ============================================================================
 
 #ifdef CERMU_HAS_CHIP_DEBUG
+
+// Type-erased compound reader for the DECL-order renderer
+static uint32_t vicii_read_compound(const uint8_t* regs, uint16_t idx) {
+    return compound_get<vicii_reg_traits>(regs, VICII_COMPOUNDS[idx]);
+}
+
 void vicii_t::register_debug_fields() {
     using VI = const vicii_t;
     auto& r = debug_registry_;
     r.set_registers(registers.data, 66, VICII_REG_INFO, 0xD000);
+    r.set_decl_order(VICII_DECL_ORDER.data(), VICII_DECL_ORDER.size(),
+                     VICII_FLD_INFO, VICII_NUM_FIELDS,
+                     VICII_COMPOUND_INFO, VICII_NUM_COMPOUND_INFO,
+                     vicii_read_compound);
+    r.set_palette(get_default_palette(), 16);
 
     // Screen mode names indexed by (ECM<<2 | BMM<<1 | MCM)
     static constexpr const char* screen_mode_names[] = {
@@ -2665,33 +2677,8 @@ void vicii_t::register_debug_fields() {
      .flag("Badline", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->video_logic.is_bad_line; })
      .value("X Coordinate", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->timing.x_coordinate; }, 16);
 
-    // ---- Control Registers ----
-    r.category("Control Registers")
-     .value("$D011 Control 1", vicii_regs::C1)
-     .indent(1)
-     .flag("RST8", vicii_regs::C1, 7)
-     .flag("ECM", vicii_regs::C1, 6)
-     .flag("BMM", vicii_regs::C1, 5)
-     .flag("DEN", vicii_regs::C1, 4)
-     .flag("RSEL", vicii_regs::C1, 3)
-     .value("YSCROLL", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->registers.data[vicii_regs::C1] & 0x07; }, 8)
-     .indent(0)
-     .value("$D016 Control 2", vicii_regs::C2)
-     .indent(1)
-     .flag("RES", vicii_regs::C2, 5)
-     .flag("MCM", vicii_regs::C2, 4)
-     .flag("CSEL", vicii_regs::C2, 3)
-     .value("XSCROLL", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->registers.data[vicii_regs::C2] & 0x07; }, 8)
-     .indent(0)
-     .value("$D018 Memory Setup", vicii_regs::MP)
-     .indent(1)
-     .address("Video Matrix Base", +[](const ChipBase* c) -> uint32_t {
-         return ((static_cast<VI*>(c)->registers.data[vicii_regs::MP] >> 4) & 0x0F) * 0x400;
-     }, 16)
-     .address("Character Base", +[](const ChipBase* c) -> uint32_t {
-         return ((static_cast<VI*>(c)->registers.data[vicii_regs::MP] >> 1) & 0x07) * 0x800;
-     }, 16)
-     .indent(0)
+    // ---- Display Mode (derived from multiple control registers) ----
+    r.category("Display Mode")
      .state("Screen Mode", +[](const ChipBase* c) -> uint32_t {
          auto* s = static_cast<VI*>(c);
          uint8_t cr1 = s->registers.data[vicii_regs::C1];
