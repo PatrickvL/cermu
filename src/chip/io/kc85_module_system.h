@@ -33,7 +33,7 @@
 // ============================================================================
 
 // DECL(REG, FLD, CMP) — 8 registers, 16 fields (Active + WriteProtect per slot)
-#define KC85_MOD_DECL(REG, FLD, CMP, REGK) \
+#define KC85_MOD_DECL(REG, FLD, CMP) \
     REG(0x00, SLOT0_CTRL, "Slot 0 control") \
       FLD(SLOT0_CTRL, ACTIVE_0, 0:0, "Active",        Flag, 0, 0) \
       FLD(SLOT0_CTRL, WPROT_0,  1:1, "Write protect", Flag, 0, 0) \
@@ -60,7 +60,7 @@
       FLD(SLOT7_CTRL, WPROT_7,  1:1, "Write protect", Flag, 0, 0)
 
 namespace kc85_mod_regs {
-    KC85_MOD_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
+    KC85_MOD_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 8;
 } // namespace kc85_mod_regs
 

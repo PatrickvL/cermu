@@ -43,7 +43,7 @@
 // ============================================================================
 
 // DECL(REG, FLD, CMP) — 32 registers, 17 fields (CONTROL1/2, SOUND_CTRL)
-#define TED_DECL(REG, FLD, CMP, REGK) \
+#define TED_DECL(REG, FLD, CMP) \
     REG(0x00, TIMER1_LO,  "Timer 1 low byte")                                   \
     REG(0x01, TIMER1_HI,  "Timer 1 high byte")                                  \
     REG(0x02, TIMER2_LO,  "Timer 2 low byte")                                   \
@@ -82,11 +82,11 @@
     REG(0x12, MEM_CTRL,   "Sound1 hi + memory map")                              \
     REG(0x13, CHAR_HI,    "Char generator base")                                 \
     REG(0x14, BITMAP_ADDR,"Screen/bitmap base")                                  \
-    REGK(0x15, COLOR_BG0,  "Background color 0",  Color, 6:0)                   \
-    REGK(0x16, COLOR_BG1,  "Background color 1",  Color, 6:0)                   \
-    REGK(0x17, COLOR_BG2,  "Background color 2",  Color, 6:0)                   \
-    REGK(0x18, COLOR_BG3,  "Background color 3",  Color, 6:0)                   \
-    REGK(0x19, BORDER,     "Border color",         Color, 6:0)                   \
+    REG(0x15, COLOR_BG0,  "Background color 0",  Color, 6:0)                   \
+    REG(0x16, COLOR_BG1,  "Background color 1",  Color, 6:0)                   \
+    REG(0x17, COLOR_BG2,  "Background color 2",  Color, 6:0)                   \
+    REG(0x18, COLOR_BG3,  "Background color 3",  Color, 6:0)                   \
+    REG(0x19, BORDER,     "Border color",         Color, 6:0)                   \
     REG(0x1A, CHARPOS_HI, "Char counter hi")                                     \
     REG(0x1B, CHARPOS_LO, "Char counter lo")                                     \
     REG(0x1C, RASTER_HI,  "Raster counter hi")                                   \
@@ -95,11 +95,9 @@
     REG(0x1F, FLASH_RC,   "Flash counter/row ctr")
 
 // --- Extract address constants (prefix TED_REG_ added by macro) ---
-#define TED_X_CONST_(a, s, l) static constexpr uint8_t TED_REG_##s = a;
-#define TED_X_REGK_CONST_(a, s, d, k, hilo) static constexpr uint8_t TED_REG_##s = a;
-TED_DECL(TED_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, TED_X_REGK_CONST_)
+#define TED_X_CONST_(a, s, l, ...) static constexpr uint8_t TED_REG_##s = a;
+TED_DECL(TED_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 #undef TED_X_CONST_
-#undef TED_X_REGK_CONST_
 
 DECL_EXTRACT_ALL(TED, TED_DECL)
 

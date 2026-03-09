@@ -102,7 +102,7 @@ enum waveform_bits_t {
 
 // REG(addr, symbol, description)
 // FLD(parent_reg, symbol, hi:lo, description, kind, display_shift, display_scale)
-#define SID_DECL(REG, FLD, CMP, REGK)                                         \
+#define SID_DECL(REG, FLD, CMP)                                         \
     REG(0x00, V1_FRELO,  "Voice 1 freq lo")                                  \
     REG(0x01, V1_FREHI,  "Voice 1 freq hi")                                  \
     REG(0x02, V1_PWLO,   "Voice 1 pulse W lo")                               \
@@ -172,7 +172,7 @@ enum waveform_bits_t {
 
 // --- Extract register constants ---
 namespace sid_regs {
-    SID_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
+    SID_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 }
 
 DECL_EXTRACT_ALL(SID, SID_DECL)

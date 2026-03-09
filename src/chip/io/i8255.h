@@ -28,7 +28,7 @@
 
 // REG(offset, symbol, description)
 // FLD(reg_sym, field_sym, hi:lo, description, kind, display_shift, display_scale)
-#define I8255_DECL(REG, FLD, CMP, REGK) \
+#define I8255_DECL(REG, FLD, CMP) \
     REG(0x00, PORT_A,  "Port A data")                                           \
     REG(0x01, PORT_B,  "Port B data")                                           \
     REG(0x02, PORT_C,  "Port C data")                                           \
@@ -42,7 +42,7 @@
       FLD(CONTROL, PC_LO_DIR,  0:0, "Port C lo dir (1=in)",  Flag,  0, 0)
 
 namespace i8255_regs {
-    I8255_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
+    I8255_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 4;
 } // namespace i8255_regs
 

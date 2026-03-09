@@ -44,7 +44,7 @@ static constexpr uint16_t RIOT_TIM1024T = 0x17;   // Divide by 1024
 // ============================================================================
 
 // REG(offset, symbol, description)
-#define RIOT_DECL(REG, FLD, CMP, REGK) \
+#define RIOT_DECL(REG, FLD, CMP) \
     REG(0, PORTA_DATA, "Port A output (SWCHA)")        \
     REG(1, PORTA_DDR,  "Port A direction (SWACNT)")    \
     REG(2, PORTB_DATA, "Port B output (SWCHB)")        \
@@ -52,7 +52,7 @@ static constexpr uint16_t RIOT_TIM1024T = 0x17;   // Divide by 1024
 
 // --- Extract address constants (prefix RIOT_REG_ added by macro) ---
 #define RIOT_X_CONST_(a, s, l) static constexpr uint8_t RIOT_REG_##s = a;
-RIOT_DECL(RIOT_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
+RIOT_DECL(RIOT_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 #undef RIOT_X_CONST_
 
 DECL_EXTRACT_REGS_ONLY(RIOT, RIOT_DECL)
