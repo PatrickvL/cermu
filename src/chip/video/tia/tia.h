@@ -23,7 +23,7 @@
  *   262 lines/frame @ ~60 Hz
  */
 
-#include "../../core/chip.h"
+#include "../video_chip_base.h"
 #include "../../utils/ring_buffer.hpp"
 #include "../video_pixel_unit.h"
 #include <cstdint>
@@ -141,9 +141,8 @@ struct tia_audio_channel_t {
 // TIA CHIP STRUCTURE
 // ============================================================================
 
-struct tia_t : public ChipBase {
-    tia_t() : ChipBase(ChipInfo{"TIA", "Atari"}) {
-        category_ = "Video";  
+struct tia_t : public VideoChipBase {
+    tia_t() : VideoChipBase(ChipInfo{"TIA", "Atari"}) {
     }
 
     // --- ChipBase GUI interface ---

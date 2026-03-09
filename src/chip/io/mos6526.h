@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../core/chip.h"
+#include "io_chip_base.h"
 //#include "../../core/bus_cycle_interface.h"
 #include <cstdint>
 #include "../../core/system_lines.h" // For bus_state_t
@@ -81,9 +81,8 @@ enum mos6526_pin_t {
 static constexpr RegEntry CIA_REG_INFO[] = { CIA_REG_TABLE(CIA_X_INFO_) };
 #undef CIA_X_INFO_
 
-struct mos6526_t : public ChipBase {
-    mos6526_t() : ChipBase(ChipInfo{"MOS6526", "MOS Technology"}) {
-        category_ = "I/O";
+struct mos6526_t : public IoChipBase {
+    mos6526_t() : IoChipBase(ChipInfo{"MOS6526", "MOS Technology"}) {
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif

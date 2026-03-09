@@ -45,7 +45,7 @@
 
 #include "z80_traits.hpp"
 #include "z80_types.h"
-#include "../../../core/chip.h"
+#include "../cpu_chip_base.h"
 #include "../../../core/system_lines.h"
 
 namespace z80 {
@@ -76,7 +76,7 @@ namespace z80 {
 // ============================================================================
 
 template <const Z80Traits& Traits>
-class z80_t : public ChipBase {
+class z80_t : public CpuChipBase {
 public:
     // === Phase for split-phase tick (maps to Z80 T-state boundaries) ===
     enum class Phase {
@@ -107,10 +107,9 @@ public:
     }
 
     // === Chip identity ===
-    z80_t() : ChipBase(ChipInfo(Traits.chip_id, Traits.vendor)) {
+    z80_t() : CpuChipBase(ChipInfo(Traits.chip_id, Traits.vendor)) {
         display_name_ = Traits.chip_id;
         short_name_   = Traits.chip_id;
-        category_     = "CPU";
     }
 
     // === Lifecycle ===

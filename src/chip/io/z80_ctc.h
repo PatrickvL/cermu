@@ -25,7 +25,7 @@
  * 28-pin DIP package.
  */
 
-#include "../../core/chip.h"
+#include "io_chip_base.h"
 #include "../../core/system_lines.h"
 #include <cstdint>
 #include <cstring>
@@ -76,13 +76,12 @@ namespace ctc_ctrl {
 // Z80 CTC
 // ============================================================================
 
-class z80_ctc_t : public ChipBase {
+class z80_ctc_t : public IoChipBase {
 public:
     explicit z80_ctc_t(bool is_u857 = false)
-        : ChipBase(ChipInfo(is_u857 ? "U857" : "Z80 CTC",
+        : IoChipBase(ChipInfo(is_u857 ? "U857" : "Z80 CTC",
                              is_u857 ? "VEB MME Erfurt" : "Zilog"))
     {
-        category_ = "I/O";
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif

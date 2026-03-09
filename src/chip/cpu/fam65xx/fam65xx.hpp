@@ -124,7 +124,7 @@ template <uint32_t Key> struct SharedOpcodeTable {
 // ============================================================================
 
 template <const CPUTraits &Traits>
-class fam65xx_t : public ChipBase, public io_port_base_t<Traits>, public apu_base_t<Traits> {
+class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_base_t<Traits> {
 // Include register declarations and accessors
 #include "fam65xx_registers.inc.hpp"
 
@@ -1989,9 +1989,8 @@ public:
   }
 
   fam65xx_t()
-    : ChipBase(ChipInfo{Traits.get_chip_id(), Traits.get_vendor()})
+    : CpuChipBase(ChipInfo{Traits.get_chip_id(), Traits.get_vendor()})
   {
-    category_ = "CPU";  
     // Initialize CPU state to zero
     opcode_entry = {};
     current_handler = &fam65xx_t::fetch_opcode; // Always initialize to valid handler

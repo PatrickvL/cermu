@@ -42,13 +42,12 @@ MemoryChip::MemoryChip(ChipInfo     info,
                        const bus_state_t* system_bus,
                        const char*  short_name,
                        uint16_t     base_address)
-    : ChipBase(std::move(info))
+    : MemoryChipBase(std::move(info))
     , size_bytes_(size_bytes)
     , type_(type)
     , system_bus_(system_bus)
 {
     short_name_   = short_name;
-    category_     = "Memory";
     base_address_ = base_address;
 
     // Allocate zero-filled storage
@@ -84,7 +83,7 @@ MemoryChip::~MemoryChip() {
 }
 
 MemoryChip::MemoryChip(MemoryChip&& other) noexcept
-    : ChipBase(std::move(other))
+    : MemoryChipBase(std::move(other))
     , data_(other.data_)
     , owns_data_(other.owns_data_)
     , size_bytes_(other.size_bytes_)
@@ -101,7 +100,7 @@ MemoryChip& MemoryChip::operator=(MemoryChip&& other) noexcept {
     if (this != &other) {
         if (owns_data_) free(data_);
 
-        ChipBase::operator=(std::move(other));
+        MemoryChipBase::operator=(std::move(other));
         data_             = other.data_;
         owns_data_        = other.owns_data_;
         size_bytes_       = other.size_bytes_;

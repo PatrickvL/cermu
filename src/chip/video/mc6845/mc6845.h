@@ -35,7 +35,7 @@
  * I/O interface: two registers at base+0 (address) and base+1 (data).
  */
 
-#include "../core/chip.h"
+#include "../video_chip_base.h"
 #include <cstdint>
 #include <functional>
 
@@ -80,9 +80,8 @@ static constexpr RegEntry MC6845_REG_INFO[] = { MC6845_REG_TABLE(MC6845_X_INFO_)
 // MC6845 CHIP STRUCTURE
 // ============================================================================
 
-struct mc6845_t : public ChipBase {
-    mc6845_t() : ChipBase(ChipInfo{"MC6845", "Motorola"}) {
-        category_ = "Video";
+struct mc6845_t : public VideoChipBase {
+    mc6845_t() : VideoChipBase(ChipInfo{"MC6845", "Motorola"}) {
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif

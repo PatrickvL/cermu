@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../core/chip.h"
+#include "sound_chip_base.h"
 #include "../../core/bus_cycle_interface.h"
 #include "../../core/system_lines.h" // For bus_state_t
 #include <atomic>
@@ -338,9 +338,8 @@ private:
 };
 
 // Main SID chip structure - Enhanced (C++ class inheriting ChipBase)
-struct mos6581_t : public ChipBase {
-    mos6581_t() : ChipBase(ChipInfo{"MOS6581", "MOS Technology"}) {
-        category_ = "Sound";
+struct mos6581_t : public SoundChipBase {
+    mos6581_t() : SoundChipBase(ChipInfo{"MOS6581", "MOS Technology"}) {
     }
 
     // Bus interface

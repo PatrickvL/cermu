@@ -26,7 +26,7 @@
  * is the defining component of multiple Spectrum variants (48K, 128K, +2, +3).
  */
 
-#include "../../core/chip.h"
+#include "../video_chip_base.h"
 #include "../../core/system_lines.h"
 #include <cstdint>
 #include <cstring>
@@ -99,12 +99,11 @@ static constexpr RegEntry SPECTRUM_ULA_REG_INFO[] = { SPECTRUM_ULA_REG_TABLE(SPE
 // Ferranti ULA Chip
 // ============================================================================
 
-class ferranti_ula_t : public ChipBase {
+class ferranti_ula_t : public VideoChipBase {
 public:
     ferranti_ula_t()
-        : ChipBase(ChipInfo("6C001E-7", "Ferranti"))
+        : VideoChipBase(ChipInfo("6C001E-7", "Ferranti"))
     {
-        category_ = "Video";
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif

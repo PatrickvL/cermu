@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../core/chip.h"
+#include "memory_chip_base.h"
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -32,7 +32,7 @@
 //   ram->data()[0] = 0xEA;           // write a byte
 //   bus.bind_region(ram->data());     // redirect into unified buffer
 //
-class MemoryChip : public ChipBase {
+class MemoryChip : public MemoryChipBase {
 public:
     enum MemoryType { RAM, ROM, PROM, EPROM, SRAM };
 
