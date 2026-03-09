@@ -102,7 +102,7 @@ enum waveform_bits_t {
 
 // REG(addr, symbol, description)
 // FLD(parent_reg, symbol, hi:lo, description, kind, display_shift, display_scale)
-#define SID_DECL(REG, FLD, CMP)                                               \
+#define SID_DECL(REG, FLD, CMP, REGK)                                         \
     REG(0x00, V1_FRELO,  "Voice 1 freq lo")                                  \
     REG(0x01, V1_FREHI,  "Voice 1 freq hi")                                  \
     REG(0x02, V1_PWLO,   "Voice 1 pulse W lo")                               \
@@ -172,7 +172,7 @@ enum waveform_bits_t {
 
 // --- Extract register constants ---
 namespace sid_regs {
-    SID_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
+    SID_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
 }
 
 DECL_EXTRACT_ALL(SID, SID_DECL)
@@ -280,6 +280,25 @@ struct filter_state_t {
     
     // Nonlinear distortion state (6581 specific)
     bool enable_distortion;
+};
+
+// Output-stage analog low-pass filter (2nd-order Butterworth biquad).
+// Models the bandwidth limitation of the SID's output buffer and the C64's
+// audio path.  Clocked every CPU cycle (~985 kHz), this attenuates ultrasonic
+// content from the pulse waveform's sharp transitions before box-filter
+// downsampling — preventing aliasing artifacts not present on real hardware.
+// Critical for accurate PWM digi playback (e.g. Swallow/Censor Design's
+// Wonderland XII technique).
+struct output_stage_lpf_t {
+    // Transposed Direct Form II state
+    float s1 = 0.0f;
+    float s2 = 0.0f;
+    // Biquad coefficients (bilinear-transformed 2nd-order Butterworth)
+    float b0 = 0.0f;
+    float b1 = 0.0f;
+    float b2 = 0.0f;
+    float a1 = 0.0f;
+    float a2 = 0.0f;
 };
 
 // Forward declaration (voice_t references parent mos6581_t)
@@ -443,6 +462,10 @@ struct mos6581_t : public SoundChipBase {
     float dc_blocker_prev_in = 0.0f;  // Previous input to DC blocker
     float dc_blocker_prev_out = 0.0f; // Previous output from DC blocker
     
+    // Output-stage analog model — suppresses ultrasonic pulse harmonics
+    // before box-filter downsampling for alias-free PWM digi playback.
+    output_stage_lpf_t output_stage_lpf;
+    
     // Statistics and debugging
     uint32_t total_cycles = 0;        // Total cycles processed
     uint32_t samples_generated = 0;   // Total samples generated
@@ -483,6 +506,8 @@ private:
     void filter_reset();
     void filter_init();
     void write_resonance_control_register_value(uint8_t value);
+    void output_stage_update_coefficients();
+    float output_stage_process(float x);
     bus_state_t advance_cycle(bus_state_t bus_state);
     uint32_t calculate_envelope_time_ms(voice_t* v, envelope_cycle_t cycle, uint8_t rate_index);
     
