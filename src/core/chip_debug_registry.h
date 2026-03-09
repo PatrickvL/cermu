@@ -123,6 +123,16 @@ enum class DataKind : uint8_t {
 #define BF_SET(val, hilo, fval) \
     (((val) & ~BF_MASK(hilo)) | (((fval) << BF_LO(hilo)) & BF_MASK(hilo)))
 
+// ---- DECL row-type swallower macros ----
+// Use these as no-op callbacks when extracting specific row types from a
+// unified CHIP_DECL(REG, FLD, CMP) table.  Each swallows its row's args.
+//   REG(offset, symbol, description)
+//   FLD(reg_sym, field_sym, hi:lo, description, kind)
+//   CMP(symbol, description, kind, total_bits, reg1, hilo1, dst1, reg2, hilo2, dst2)
+#define DECL_REG_NOP(a, s, d)
+#define DECL_FLD_NOP(r, f, hilo, d, k)
+#define DECL_CMP_NOP(s, d, k, b, r1, h1, d1, r2, h2, d2)
+
 // ============================================================================
 // FIELD ENTRY — bitfield within a register (from FLD X-macro)
 // ============================================================================

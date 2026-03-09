@@ -6,75 +6,154 @@
 #include "../../../chip/memory/mos2114.h"  // For MOS2114
 #include "../video_pixel_unit.h"
 // ============================================================================
-// VIC-II REGISTER TABLE — single source of truth
-// 66 entries: 47 named (0-46) + 17 unused (47-63) + 2 shadows (64-65)
+// VIC-II UNIFIED DECLARATION TABLE — single source of truth
+// ============================================================================
+//
+// Three row types, interspersed: registers, their bitfields, and compound
+// values assembled from multiple registers.  Every extractor selects the
+// row types it needs and ignores the rest via DECL_*_NOP swallower macros.
+//
+//   REG(offset, symbol, description)
+//   FLD(reg_sym, field_sym, hi:lo, description, kind)
+//   CMP(symbol, description, kind, total_bits, reg1, hilo1, dst1, reg2, hilo2, dst2)
+
+#define VICII_DECL(REG, FLD, CMP) \
+    /* ---- Sprite position registers ---- */ \
+    REG( 0, M0X,    "Sprite 0 X pos")                                          \
+    REG( 1, M0Y,    "Sprite 0 Y pos")                                          \
+    REG( 2, M1X,    "Sprite 1 X pos")                                          \
+    REG( 3, M1Y,    "Sprite 1 Y pos")                                          \
+    REG( 4, M2X,    "Sprite 2 X pos")                                          \
+    REG( 5, M2Y,    "Sprite 2 Y pos")                                          \
+    REG( 6, M3X,    "Sprite 3 X pos")                                          \
+    REG( 7, M3Y,    "Sprite 3 Y pos")                                          \
+    REG( 8, M4X,    "Sprite 4 X pos")                                          \
+    REG( 9, M4Y,    "Sprite 4 Y pos")                                          \
+    REG(10, M5X,    "Sprite 5 X pos")                                          \
+    REG(11, M5Y,    "Sprite 5 Y pos")                                          \
+    REG(12, M6X,    "Sprite 6 X pos")                                          \
+    REG(13, M6Y,    "Sprite 6 Y pos")                                          \
+    REG(14, M7X,    "Sprite 7 X pos")                                          \
+    REG(15, M7Y,    "Sprite 7 Y pos")                                          \
+    /* ---- Sprite X MSB ($D010) — per-sprite high bits ---- */ \
+    REG(16, MX8,    "Sprite X pos MSB")                                        \
+      FLD(MX8,  M0_MSB,  0:0, "Sprite 0 X bit 8",    Flag)                    \
+      FLD(MX8,  M1_MSB,  1:1, "Sprite 1 X bit 8",    Flag)                    \
+      FLD(MX8,  M2_MSB,  2:2, "Sprite 2 X bit 8",    Flag)                    \
+      FLD(MX8,  M3_MSB,  3:3, "Sprite 3 X bit 8",    Flag)                    \
+      FLD(MX8,  M4_MSB,  4:4, "Sprite 4 X bit 8",    Flag)                    \
+      FLD(MX8,  M5_MSB,  5:5, "Sprite 5 X bit 8",    Flag)                    \
+      FLD(MX8,  M6_MSB,  6:6, "Sprite 6 X bit 8",    Flag)                    \
+      FLD(MX8,  M7_MSB,  7:7, "Sprite 7 X bit 8",    Flag)                    \
+      /* 9-bit sprite X positions: M0X..M7X[7:0] | MX8[N] << 8 */ \
+      CMP(SPR0_X, "Sprite 0 X pos", Counter, 9,  M0X, 7:0, 0,  MX8, 0:0, 8)  \
+      CMP(SPR1_X, "Sprite 1 X pos", Counter, 9,  M1X, 7:0, 0,  MX8, 1:1, 8)  \
+      CMP(SPR2_X, "Sprite 2 X pos", Counter, 9,  M2X, 7:0, 0,  MX8, 2:2, 8)  \
+      CMP(SPR3_X, "Sprite 3 X pos", Counter, 9,  M3X, 7:0, 0,  MX8, 3:3, 8)  \
+      CMP(SPR4_X, "Sprite 4 X pos", Counter, 9,  M4X, 7:0, 0,  MX8, 4:4, 8)  \
+      CMP(SPR5_X, "Sprite 5 X pos", Counter, 9,  M5X, 7:0, 0,  MX8, 5:5, 8)  \
+      CMP(SPR6_X, "Sprite 6 X pos", Counter, 9,  M6X, 7:0, 0,  MX8, 6:6, 8)  \
+      CMP(SPR7_X, "Sprite 7 X pos", Counter, 9,  M7X, 7:0, 0,  MX8, 7:7, 8)  \
+    /* ---- Control Register 1 ($D011) ---- */ \
+    REG(17, C1,     "Y-scroll/DEN/BMM/ECM")                                    \
+      FLD(C1,   YSCROLL,  2:0, "Y scroll",             Value)                  \
+      FLD(C1,   RSEL,     3:3, "Row select 24/25",     Flag)                   \
+      FLD(C1,   DEN,      4:4, "Display enable",       Flag)                   \
+      FLD(C1,   BMM,      5:5, "Bitmap mode",          Flag)                   \
+      FLD(C1,   ECM,      6:6, "Extended color mode",  Flag)                   \
+      FLD(C1,   RST8,     7:7, "Raster bit 8",         Flag)                   \
+    /* ---- Raster Counter ($D012) ---- */ \
+    REG(18, RASTER, "Raster counter")                                          \
+      /* 9-bit raster: RASTER[7:0] | C1.RST8 << 8 */ \
+      CMP(RASTER9, "Full raster pos", Counter, 9,                             \
+          RASTER, 7:0, 0,  C1, 7:7, 8)                                        \
+    /* ---- Light Pen ---- */ \
+    REG(19, LPX,    "Light pen X")                                             \
+    REG(20, LPY,    "Light pen Y")                                             \
+    /* ---- Sprite Enable ($D015) ---- */ \
+    REG(21, MXE,    "Sprite enable")                                           \
+    /* ---- Control Register 2 ($D016) ---- */ \
+    REG(22, C2,     "X-scroll/CSEL/MCM")                                       \
+      FLD(C2,   XSCROLL,  2:0, "X scroll",             Value)                  \
+      FLD(C2,   CSEL,     3:3, "Column select 38/40",  Flag)                   \
+      FLD(C2,   MCM,      4:4, "Multi-color mode",     Flag)                   \
+    /* ---- Sprite Y Expand ($D017) ---- */ \
+    REG(23, MXYE,   "Sprite Y expand")                                         \
+    /* ---- Memory Pointers ($D018) ---- */ \
+    REG(24, MP,     "Memory pointers")                                         \
+      FLD(MP,   CB,       3:1, "Char base (<<11)",     Address)                \
+      FLD(MP,   VM,       7:4, "Video matrix (<<10)",  Address)                \
+    /* ---- Interrupt Register ($D019) ---- */ \
+    REG(25, IR,     "Interrupt request")                                        \
+      FLD(IR,   IRST,     0:0, "Raster IRQ",           Flag)                   \
+      FLD(IR,   IMBC,     1:1, "Sprite-data coll IRQ", Flag)                   \
+      FLD(IR,   IMMC,     2:2, "Sprite-sprite IRQ",    Flag)                   \
+      FLD(IR,   ILP,      3:3, "Light pen IRQ",        Flag)                   \
+      FLD(IR,   IRQ,      7:7, "Any IRQ active",       Flag)                   \
+    /* ---- Interrupt Enable ($D01A) ---- */ \
+    REG(26, IE,     "Interrupt enable")                                         \
+      FLD(IE,   ERST,     0:0, "Raster IRQ enable",    Flag)                   \
+      FLD(IE,   EMBC,     1:1, "Spr-data coll enable", Flag)                   \
+      FLD(IE,   EMMC,     2:2, "Spr-spr coll enable",  Flag)                   \
+      FLD(IE,   ELP,      3:3, "Light pen IRQ enable",  Flag)                  \
+    /* ---- Sprite attribute registers ---- */ \
+    REG(27, MXDP,   "Sprite data priority")                                    \
+    REG(28, MXMC,   "Sprite multicolor")                                       \
+    REG(29, MXXE,   "Sprite X expand")                                         \
+    /* ---- Sprite collision ---- */ \
+    REG(30, MXM,    "Sprite-sprite coll")                                      \
+    REG(31, MXD,    "Sprite-data coll")                                        \
+    /* ---- Color registers ---- */ \
+    REG(32, EC,     "Border color")                                            \
+    REG(33, B0C,    "Background color 0")                                      \
+    REG(34, B1C,    "Background color 1")                                      \
+    REG(35, B2C,    "Background color 2")                                      \
+    REG(36, B3C,    "Background color 3")                                      \
+    REG(37, MM0,    "Sprite mcolor 0")                                         \
+    REG(38, MM1,    "Sprite mcolor 1")                                         \
+    REG(39, M0C,    "Sprite 0 color")                                          \
+    REG(40, M1C,    "Sprite 1 color")                                          \
+    REG(41, M2C,    "Sprite 2 color")                                          \
+    REG(42, M3C,    "Sprite 3 color")                                          \
+    REG(43, M4C,    "Sprite 4 color")                                          \
+    REG(44, M5C,    "Sprite 5 color")                                          \
+    REG(45, M6C,    "Sprite 6 color")                                          \
+    REG(46, M7C,    "Sprite 7 color")                                          \
+    /* ---- Unused registers ($D02F-$D03F) ---- */ \
+    REG(47, R47, "-") REG(48, R48, "-") REG(49, R49, "-") REG(50, R50, "-") \
+    REG(51, R51, "-") REG(52, R52, "-") REG(53, R53, "-") REG(54, R54, "-") \
+    REG(55, R55, "-") REG(56, R56, "-") REG(57, R57, "-") REG(58, R58, "-") \
+    REG(59, R59, "-") REG(60, R60, "-") REG(61, R61, "-") REG(62, R62, "-") \
+    REG(63, R63, "-")                                                          \
+    /* ---- Shadow registers ---- */ \
+    REG(64, MXM_2,  "Sprite-sprite shd")                                       \
+    REG(65, MXD_2,  "Sprite-data shd")
+
+// ---- Backward-compatible REG-only view of the DECL table ----
+#define VICII_REG_TABLE(X) VICII_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
+
+// ============================================================================
+// VIC-II REGISTER TRAITS
 // ============================================================================
 
-// X(addr, symbol, description)
-#define VICII_REG_TABLE(X) \
-    X( 0, M0X,    "Sprite 0 X pos")       \
-    X( 1, M0Y,    "Sprite 0 Y pos")       \
-    X( 2, M1X,    "Sprite 1 X pos")       \
-    X( 3, M1Y,    "Sprite 1 Y pos")       \
-    X( 4, M2X,    "Sprite 2 X pos")       \
-    X( 5, M2Y,    "Sprite 2 Y pos")       \
-    X( 6, M3X,    "Sprite 3 X pos")       \
-    X( 7, M3Y,    "Sprite 3 Y pos")       \
-    X( 8, M4X,    "Sprite 4 X pos")       \
-    X( 9, M4Y,    "Sprite 4 Y pos")       \
-    X(10, M5X,    "Sprite 5 X pos")       \
-    X(11, M5Y,    "Sprite 5 Y pos")       \
-    X(12, M6X,    "Sprite 6 X pos")       \
-    X(13, M6Y,    "Sprite 6 Y pos")       \
-    X(14, M7X,    "Sprite 7 X pos")       \
-    X(15, M7Y,    "Sprite 7 Y pos")       \
-    X(16, MX8,    "Sprite X pos MSB")     \
-    X(17, C1,     "Y-scroll/DEN/BMM/ECM") \
-    X(18, RASTER, "Raster counter")       \
-    X(19, LPX,    "Light pen X")          \
-    X(20, LPY,    "Light pen Y")          \
-    X(21, MXE,    "Sprite enable")        \
-    X(22, C2,     "X-scroll/CSEL/MCM")    \
-    X(23, MXYE,   "Sprite Y expand")      \
-    X(24, MP,     "Memory pointers")      \
-    X(25, IR,     "Interrupt request")     \
-    X(26, IE,     "Interrupt enable")      \
-    X(27, MXDP,   "Sprite data priority") \
-    X(28, MXMC,   "Sprite multicolor")    \
-    X(29, MXXE,   "Sprite X expand")      \
-    X(30, MXM,    "Sprite-sprite coll")   \
-    X(31, MXD,    "Sprite-data coll")     \
-    X(32, EC,     "Border color")         \
-    X(33, B0C,    "Background color 0")   \
-    X(34, B1C,    "Background color 1")   \
-    X(35, B2C,    "Background color 2")   \
-    X(36, B3C,    "Background color 3")   \
-    X(37, MM0,    "Sprite mcolor 0")      \
-    X(38, MM1,    "Sprite mcolor 1")      \
-    X(39, M0C,    "Sprite 0 color")       \
-    X(40, M1C,    "Sprite 1 color")       \
-    X(41, M2C,    "Sprite 2 color")       \
-    X(42, M3C,    "Sprite 3 color")       \
-    X(43, M4C,    "Sprite 4 color")       \
-    X(44, M5C,    "Sprite 5 color")       \
-    X(45, M6C,    "Sprite 6 color")       \
-    X(46, M7C,    "Sprite 7 color")       \
-    X(47, R47,    "-") X(48, R48, "-") X(49, R49, "-") X(50, R50, "-") \
-    X(51, R51,    "-") X(52, R52, "-") X(53, R53, "-") X(54, R54, "-") \
-    X(55, R55,    "-") X(56, R56, "-") X(57, R57, "-") X(58, R58, "-") \
-    X(59, R59,    "-") X(60, R60, "-") X(61, R61, "-") X(62, R62, "-") \
-    X(63, R63,    "-") \
-    X(64, MXM_2,  "Sprite-sprite shd")    \
-    X(65, MXD_2,  "Sprite-data shd")
+inline constexpr ChipRegTraits vicii_reg_traits = {
+    .num_registers  = 66,
+    .register_width = 1,
+    .base_address   = 0xD000,
+};
+
+// ============================================================================
+// EXTRACTORS — all derived from the single VICII_DECL table
+// ============================================================================
 
 // VIC-II Register Constants - Modern C++ constexpr
 namespace vicii_regs {
     constexpr uint8_t SIZE = 64;
     constexpr uint8_t MASK = 63;
 
-    // Register indices from X-macro
+    // Register indices from DECL
     #define VICII_X_CONST_(a, s, l) constexpr uint8_t s = a;
-    VICII_REG_TABLE(VICII_X_CONST_)
+    VICII_DECL(VICII_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     #undef VICII_X_CONST_
 
     // Absolute memory-mapped I/O addresses (C64: $D000-based)
@@ -90,8 +169,41 @@ namespace vicii_regs {
 
 // --- Extract register info array (66 entries) ---
 #define VICII_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry VICII_REG_INFO[] = { VICII_REG_TABLE(VICII_X_INFO_) };
+static constexpr RegEntry VICII_REG_INFO[] = {
+    VICII_DECL(VICII_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP)
+};
 #undef VICII_X_INFO_
+
+// --- Extract FLD constants ---
+// Produces: VICII_C1_YSCROLL_SHIFT, VICII_C1_YSCROLL_WIDTH, VICII_C1_YSCROLL_MASK
+#define VICII_X_FLD_CONST_(reg, fld, hilo, desc, kind) \
+    static constexpr uint8_t  VICII_##reg##_##fld##_SHIFT = BF_LO(hilo); \
+    static constexpr uint8_t  VICII_##reg##_##fld##_WIDTH = BF_WIDTH(hilo); \
+    static constexpr uint32_t VICII_##reg##_##fld##_MASK  = BF_MASK(hilo);
+VICII_DECL(DECL_REG_NOP, VICII_X_FLD_CONST_, DECL_CMP_NOP)
+#undef VICII_X_FLD_CONST_
+
+// --- Extract FLD info array ---
+#define VICII_X_FLD_INFO_(reg, fld, hilo, desc, kind) \
+    { #fld, desc, vicii_regs::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind },
+static constexpr FieldEntry VICII_FLD_INFO[] = {
+    VICII_DECL(DECL_REG_NOP, VICII_X_FLD_INFO_, DECL_CMP_NOP)
+};
+#undef VICII_X_FLD_INFO_
+
+static constexpr size_t VICII_NUM_FIELDS = sizeof(VICII_FLD_INFO) / sizeof(VICII_FLD_INFO[0]);
+
+// --- Extract CMP compound array ---
+#define VICII_X_CMP_(sym, desc, kind, bits, r1, hilo1, dst1, r2, hilo2, dst2) \
+    { #sym, desc, DataKind::kind, bits, 2, \
+      {{ vicii_regs::r1, (uint8_t)BF_HI(hilo1), (uint8_t)BF_LO(hilo1), (uint8_t)(dst1) }, \
+       { vicii_regs::r2, (uint8_t)BF_HI(hilo2), (uint8_t)BF_LO(hilo2), (uint8_t)(dst2) }} },
+static constexpr CompoundEntry<vicii_reg_traits> VICII_COMPOUNDS[] = {
+    VICII_DECL(DECL_REG_NOP, DECL_FLD_NOP, VICII_X_CMP_)
+};
+#undef VICII_X_CMP_
+
+static constexpr size_t VICII_NUM_COMPOUNDS = sizeof(VICII_COMPOUNDS) / sizeof(VICII_COMPOUNDS[0]);
 
 // Legacy macro compatibility - can be removed once all code is updated
 #define VICII_REGS_SIZE vicii_regs::SIZE
@@ -145,108 +257,6 @@ static constexpr RegEntry VICII_REG_INFO[] = { VICII_REG_TABLE(VICII_X_INFO_) };
 #define VICII_M7C     vicii_regs::M7C
 #define VICII_MXM_2   vicii_regs::MXM_2
 #define VICII_MXD_2   vicii_regs::MXD_2
-
-// ============================================================================
-// VIC-II REGISTER TRAITS
-// ============================================================================
-
-inline constexpr ChipRegTraits vicii_reg_traits = {
-    .num_registers  = 66,
-    .register_width = 1,
-    .base_address   = 0xD000,
-};
-
-// ============================================================================
-// VIC-II BITFIELD TABLE — field-level single source of truth
-// ============================================================================
-//
-// FLD(reg_sym, field_sym, hi:lo, desc, kind)
-//
-// reg_sym  = register symbol from VICII_REG_TABLE (resolved via vicii_regs::)
-// hi:lo    = bit range within the register (NV ternary trick)
-// kind     = DataKind semantic type
-
-#define VICII_FLD_TABLE(X) \
-    /* Control Register 1 ($D011) */ \
-    X(C1,     YSCROLL,  2:0, "Y scroll",             Value)     \
-    X(C1,     RSEL,     3:3, "Row select 24/25",     Flag)      \
-    X(C1,     DEN,      4:4, "Display enable",        Flag)      \
-    X(C1,     BMM,      5:5, "Bitmap mode",           Flag)      \
-    X(C1,     ECM,      6:6, "Extended color mode",   Flag)      \
-    X(C1,     RST8,     7:7, "Raster bit 8",          Flag)      \
-    /* Control Register 2 ($D016) */ \
-    X(C2,     XSCROLL,  2:0, "X scroll",             Value)     \
-    X(C2,     CSEL,     3:3, "Column select 38/40",  Flag)      \
-    X(C2,     MCM,      4:4, "Multi-color mode",     Flag)      \
-    /* Memory Pointers ($D018) */ \
-    X(MP,     CB,       3:1, "Char base (<<11)",     Address)   \
-    X(MP,     VM,       7:4, "Video matrix (<<10)",  Address)   \
-    /* Interrupt Register ($D019) */ \
-    X(IR,     IRST,     0:0, "Raster IRQ",           Flag)      \
-    X(IR,     IMBC,     1:1, "Sprite-data coll IRQ", Flag)      \
-    X(IR,     IMMC,     2:2, "Sprite-sprite IRQ",    Flag)      \
-    X(IR,     ILP,      3:3, "Light pen IRQ",        Flag)      \
-    X(IR,     IRQ,      7:7, "Any IRQ active",       Flag)      \
-    /* Interrupt Enable ($D01A) */ \
-    X(IE,     ERST,     0:0, "Raster IRQ enable",    Flag)      \
-    X(IE,     EMBC,     1:1, "Spr-data coll enable", Flag)      \
-    X(IE,     EMMC,     2:2, "Spr-spr coll enable",  Flag)      \
-    X(IE,     ELP,      3:3, "Light pen IRQ enable",  Flag)      \
-    /* Sprite X MSB ($D010) — per-sprite high bits */ \
-    X(MX8,    M0_MSB,   0:0, "Sprite 0 X bit 8",    Flag)      \
-    X(MX8,    M1_MSB,   1:1, "Sprite 1 X bit 8",    Flag)      \
-    X(MX8,    M2_MSB,   2:2, "Sprite 2 X bit 8",    Flag)      \
-    X(MX8,    M3_MSB,   3:3, "Sprite 3 X bit 8",    Flag)      \
-    X(MX8,    M4_MSB,   4:4, "Sprite 4 X bit 8",    Flag)      \
-    X(MX8,    M5_MSB,   5:5, "Sprite 5 X bit 8",    Flag)      \
-    X(MX8,    M6_MSB,   6:6, "Sprite 6 X bit 8",    Flag)      \
-    X(MX8,    M7_MSB,   7:7, "Sprite 7 X bit 8",    Flag)
-
-// --- Extract FLD constants ---
-// Produces: VICII_C1_YSCROLL_SHIFT, VICII_C1_YSCROLL_WIDTH, VICII_C1_YSCROLL_MASK
-#define VICII_X_FLD_CONST_(reg, fld, hilo, desc, kind) \
-    static constexpr uint8_t  VICII_##reg##_##fld##_SHIFT = BF_LO(hilo); \
-    static constexpr uint8_t  VICII_##reg##_##fld##_WIDTH = BF_WIDTH(hilo); \
-    static constexpr uint32_t VICII_##reg##_##fld##_MASK  = BF_MASK(hilo);
-VICII_FLD_TABLE(VICII_X_FLD_CONST_)
-#undef VICII_X_FLD_CONST_
-
-// --- Extract FLD info array ---
-#define VICII_X_FLD_INFO_(reg, fld, hilo, desc, kind) \
-    { #fld, desc, vicii_regs::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind },
-static constexpr FieldEntry VICII_FLD_INFO[] = { VICII_FLD_TABLE(VICII_X_FLD_INFO_) };
-#undef VICII_X_FLD_INFO_
-
-static constexpr size_t VICII_NUM_FIELDS = sizeof(VICII_FLD_INFO) / sizeof(VICII_FLD_INFO[0]);
-
-// ============================================================================
-// VIC-II COMPOUND VALUES — 9-bit sprite X positions
-// ============================================================================
-//
-// Each sprite's X coordinate is 9 bits: 8 bits from M0X..M7X registers
-// plus 1 bit from the shared MX8 register (bit N for sprite N).
-// This is the canonical example of a scattered compound value.
-
-static constexpr CompoundEntry<vicii_reg_traits> VICII_SPRITE_X[] = {
-    { "SPR0_X", "Sprite 0 X position", DataKind::Counter, 9, 2,
-      {{ vicii_regs::M0X, 7, 0, 0 }, { vicii_regs::MX8, 0, 0, 8 }} },
-    { "SPR1_X", "Sprite 1 X position", DataKind::Counter, 9, 2,
-      {{ vicii_regs::M1X, 7, 0, 0 }, { vicii_regs::MX8, 1, 1, 8 }} },
-    { "SPR2_X", "Sprite 2 X position", DataKind::Counter, 9, 2,
-      {{ vicii_regs::M2X, 7, 0, 0 }, { vicii_regs::MX8, 2, 2, 8 }} },
-    { "SPR3_X", "Sprite 3 X position", DataKind::Counter, 9, 2,
-      {{ vicii_regs::M3X, 7, 0, 0 }, { vicii_regs::MX8, 3, 3, 8 }} },
-    { "SPR4_X", "Sprite 4 X position", DataKind::Counter, 9, 2,
-      {{ vicii_regs::M4X, 7, 0, 0 }, { vicii_regs::MX8, 4, 4, 8 }} },
-    { "SPR5_X", "Sprite 5 X position", DataKind::Counter, 9, 2,
-      {{ vicii_regs::M5X, 7, 0, 0 }, { vicii_regs::MX8, 5, 5, 8 }} },
-    { "SPR6_X", "Sprite 6 X position", DataKind::Counter, 9, 2,
-      {{ vicii_regs::M6X, 7, 0, 0 }, { vicii_regs::MX8, 6, 6, 8 }} },
-    { "SPR7_X", "Sprite 7 X position", DataKind::Counter, 9, 2,
-      {{ vicii_regs::M7X, 7, 0, 0 }, { vicii_regs::MX8, 7, 7, 8 }} },
-};
-
-static constexpr size_t VICII_NUM_SPRITE_COMPOUNDS = 8;
 
 // Control register 1 ($d011) bit masks
 #define VICII_C1_YSCROLL  0x07  // Smooth Scroll to Y Pos
