@@ -1,8 +1,6 @@
 #pragma once
 
 #include <cstdint>
-
-#include <cstdint>
 #include "../../core/chip.h"
 #include "../../core/bus_cycle_interface.h"
 #include "../../core/system_lines.h"
@@ -67,21 +65,34 @@
 // MOS 6522 VIA (Versatile Interface Adapter) chip structure
 // ============================================================================
 
+static constexpr uint8_t MOS6522_NUM_REGS = 16;
+
 struct mos6522_t : public ChipBase {
     mos6522_t() : ChipBase(ChipInfo{"MOS6522", "MOS Technology"}) {
 #ifdef CERMU_HAS_CHIP_DEBUG
+        debug_registry_.set_registers(regs_, MOS6522_NUM_REGS);
         register_debug_fields();
 #endif
     }
 
     void* bus = nullptr;
 
-    // I/O Ports — io_port_state owns DDR/ORA/ORB/pin storage, io_port<0xFF> provides view
-    // data initialized to 0xFF to match existing pull-up behavior (all HIGH after reset)
-    io_port_state port_a_regs{0x00, 0xFF, 0xFF};
-    io_port_state port_b_regs{0x00, 0xFF, 0xFF};
-    io_port<0xFF> port_a{port_a_regs};
-    io_port<0xFF> port_b{port_b_regs};
+    // ========================================================================
+    // REGISTERS — flat array matching the VIA register map ($00-$0F)
+    // ========================================================================
+    // Timer counter/latch bytes (indices 4-9) are NOT live here — timers use
+    // separate uint16_t fields for hot-path performance.  The regs_[] slots
+    // at 4-9 remain zero and are not authoritative.
+    uint8_t regs_[MOS6522_NUM_REGS] = {};
+
+    // Physical pin state (not CPU-visible registers — separate from regs_[])
+    uint8_t port_a_pins_ = 0xFF;   // Pull-ups default HIGH
+    uint8_t port_b_pins_ = 0xFF;
+
+    // I/O Ports — io_port views over DDR/data bytes in regs_[] + separate pin bytes
+    // CIA pattern: io_port(ddr_ref, data_ref, pins_ref)
+    io_port<0xFF> port_a{regs_[MOS6522_DDRA], regs_[MOS6522_PORTA], port_a_pins_};
+    io_port<0xFF> port_b{regs_[MOS6522_DDRB], regs_[MOS6522_PORTB], port_b_pins_};
 
     // Callbacks for port input reads (used for keyboard matrix scanning)
     // These callbacks allow external devices (keyboard, joystick) to pull port lines LOW
@@ -98,18 +109,14 @@ struct mos6522_t : public ChipBase {
     uint16_t timer2_counter = 0xFFFF;
 
     // Shift register
-    uint8_t shift_register = 0;
+    uint8_t& shift_register = regs_[MOS6522_SR];
     uint8_t shift_counter = 0;
 
-    // Interrupt flags
-    uint8_t interrupt_flags = 0;
-    uint8_t interrupt_enable = 0;
-
-    // Control registers
-    uint8_t acr = 0;   // Auxiliary Control Register
-    uint8_t pcr = 0;   // Peripheral Control Register
-    uint8_t ifr = 0;   // Interrupt Flag Register
-    uint8_t ier = 0;   // Interrupt Enable Register
+    // Control registers — reference aliases into regs_[]
+    uint8_t& acr = regs_[MOS6522_ACR];   // Auxiliary Control Register
+    uint8_t& pcr = regs_[MOS6522_PCR];   // Peripheral Control Register
+    uint8_t& ifr = regs_[MOS6522_IFR];   // Interrupt Flag Register
+    uint8_t& ier = regs_[MOS6522_IER];   // Interrupt Enable Register
 
     // Timer control
     bool timer1_running = false;
@@ -156,11 +163,11 @@ private:
         // --- Data Ports ---
         debug_registry_.category("Data Ports")
             .port("Port A",
-                  +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->port_a_regs.data; },
-                  +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->port_a_regs.ddr; })
+                  RegSource{MOS6522_PORTA},
+                  RegSource{MOS6522_DDRA})
             .port("Port B",
-                  +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->port_b_regs.data; },
-                  +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->port_b_regs.ddr; });
+                  RegSource{MOS6522_PORTB},
+                  RegSource{MOS6522_DDRB});
 
         // --- Timers ---
         debug_registry_.category("Timers")
@@ -178,12 +185,12 @@ private:
 
         // --- Control Registers ---
         debug_registry_.category("Control Registers")
-            .value("ACR", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->acr; })
+            .value("ACR", MOS6522_ACR)
             .state("T1 Control", +[](const ChipBase* c) -> uint32_t { return (static_cast<VI*>(c)->acr & MOS6522_ACR_T1_CONT) ? 1u : 0u; },
                    t1_mode_names, 2)
             .flag("T1 PB7 Output", +[](const ChipBase* c) -> uint32_t { return (static_cast<VI*>(c)->acr & MOS6522_ACR_T1_PB7) ? 1u : 0u; })
             .value("SR Mode", +[](const ChipBase* c) -> uint32_t { return (static_cast<VI*>(c)->acr & MOS6522_ACR_SR_MODE) >> 2; })
-            .value("PCR", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->pcr; })
+            .value("PCR", MOS6522_PCR)
             .state("CA1 Control", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->pcr & 0x01u; },
                    ca1_edge_names, 2)
             .value("CA2 Control", +[](const ChipBase* c) -> uint32_t { return (static_cast<VI*>(c)->pcr >> 1) & 0x07u; })
@@ -193,13 +200,13 @@ private:
 
         // --- Interrupt Control ---
         debug_registry_.category("Interrupt Control")
-            .bitfield("IFR", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->ifr; }, 8, ifr_labels)
-            .bitfield("IER", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->ier; }, 8, ifr_labels)
+            .bitfield("IFR", MOS6522_IFR, 8, ifr_labels)
+            .bitfield("IER", MOS6522_IER, 8, ifr_labels)
             .flag("IRQ Active", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->interrupt_active; });
 
         // --- Shift Register ---
         debug_registry_.category("Shift Register", false)
-            .value("Shift Register", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->shift_register; })
+            .value("Shift Register", MOS6522_SR)
             .value("Shift Counter", +[](const ChipBase* c) -> uint32_t { return static_cast<VI*>(c)->shift_counter; });
     }
 #endif
