@@ -11,7 +11,7 @@
 // ============================================================================
 
 // DECL(REG, FLD, CMP) — 16 registers, 21 fields
-#define VIC_DECL(REG, FLD, CMP, REGK) \
+#define VIC_DECL(REG, FLD, CMP) \
     REG(0x00, CONTROL1,     "Horiz origin/interlace")                              \
       FLD(CONTROL1, INTERLACE,   7:7, "Interlace",           Flag,  0, 0)          \
     REG(0x01, CONTROL2,     "Vert origin")                                         \
@@ -62,7 +62,7 @@
 
 // --- Extract address constants (prefix VIC_REG_ added by macro) ---
 #define VIC_X_CONST_(a, s, l) static constexpr uint8_t VIC_REG_##s = a;
-VIC_DECL(VIC_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
+VIC_DECL(VIC_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 #undef VIC_X_CONST_
 
 DECL_EXTRACT_ALL(VIC, VIC_DECL)

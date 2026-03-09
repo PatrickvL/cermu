@@ -60,7 +60,7 @@ enum mos6526_pin_t {
 
 // REG(offset, symbol, description)
 // FLD(reg_sym, field_sym, hi:lo, description, kind, display_shift, display_scale)
-#define CIA_DECL(REG, FLD, CMP, REGK) \
+#define CIA_DECL(REG, FLD, CMP) \
     REG(0x00, PRA,       "Port A data")                                         \
     REG(0x01, PRB,       "Port B data")                                         \
     REG(0x02, DDRA,      "Port A direction")                                    \
@@ -99,7 +99,7 @@ enum mos6526_pin_t {
 
 // --- Extract file-scope address constants for FLD extractors ---
 #define CIA_X_REG_CONST_(a, s, l) static constexpr uint8_t CIA_REG_##s = a;
-CIA_DECL(CIA_X_REG_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
+CIA_DECL(CIA_X_REG_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 #undef CIA_X_REG_CONST_
 
 DECL_EXTRACT_ALL(CIA, CIA_DECL)
@@ -288,7 +288,7 @@ namespace MOS6526 {
 
     // MOS6526 CIA Register Definitions — address constants from X-macro
     #define CIA_X_CONST_(a, s, l) constexpr uint8_t s = a;
-    CIA_DECL(CIA_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
+    CIA_DECL(CIA_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     #undef CIA_X_CONST_
 
     // Bitmask constants (not part of the X-macro address table)

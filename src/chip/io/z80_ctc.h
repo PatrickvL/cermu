@@ -35,7 +35,7 @@
 // ============================================================================
 
 // REG(offset, symbol, description)
-#define Z80_CTC_DECL(REG, FLD, CMP, REGK) \
+#define Z80_CTC_DECL(REG, FLD, CMP) \
     REG(0x00, CH0_CTRL, "Channel 0 control")        \
     REG(0x01, CH1_CTRL, "Channel 1 control")        \
     REG(0x02, CH2_CTRL, "Channel 2 control")        \
@@ -47,7 +47,7 @@
     REG(0x08, INT_VEC,  "Interrupt base vector")
 
 namespace z80_ctc_regs {
-    Z80_CTC_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
+    Z80_CTC_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 9;
 } // namespace z80_ctc_regs
 

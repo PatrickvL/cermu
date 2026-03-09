@@ -44,7 +44,7 @@
 // ============================================================================
 
 // DECL(REG, FLD, CMP) — 18 registers, 4 fields (R3 sync widths, R10 cursor mode)
-#define MC6845_DECL(REG, FLD, CMP, REGK) \
+#define MC6845_DECL(REG, FLD, CMP) \
     REG( 0, R0_HTOTAL,         "Horiz total chars-1")                            \
     REG( 1, R1_HDISPLAYED,     "Horiz displayed chars")                          \
     REG( 2, R2_HSYNC_POS,      "Horiz sync position")                           \
@@ -70,7 +70,7 @@
 
 // --- Extract address constants (prefix MC6845_ added by macro) ---
 #define MC6845_X_CONST_(a, s, l) static constexpr uint8_t MC6845_##s = a;
-MC6845_DECL(MC6845_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
+MC6845_DECL(MC6845_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 #undef MC6845_X_CONST_
 
 static constexpr int MC6845_NUM_REGISTERS = 18;

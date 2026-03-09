@@ -44,7 +44,7 @@ enum class WSGVariant : uint8_t {
 // ============================================================================
 
 // DECL(REG, FLD, CMP) — 21 registers, 6 fields (WAVEVOL registers)
-#define WSG_DECL(REG, FLD, CMP, REGK) \
+#define WSG_DECL(REG, FLD, CMP) \
     REG(0x00, V1_FREQ0,   "Voice 1 freq bits 0-3")    \
     REG(0x01, V1_FREQ1,   "Voice 1 freq bits 4-7")    \
     REG(0x02, V1_FREQ2,   "Voice 1 freq bits 8-11")   \
@@ -74,7 +74,7 @@ enum class WSGVariant : uint8_t {
       FLD(V3_WAVEVOL, V3_VOL,  3:0, "Volume",   Value, 0, 0)
 
 namespace wsg_regs {
-    WSG_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
+    WSG_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 0x15;
 } // namespace wsg_regs
 
