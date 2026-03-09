@@ -499,6 +499,20 @@ void ChipDebugRegistry::render(const ChipBase* chip) const {
             }
         }
     }
+
+    // Auto-generated register hex dump for chips with set_registers()
+    if (reg_data_ && reg_size_ > 0) {
+        if (ImGui::CollapsingHeader("Registers")) {
+            for (size_t i = 0; i < reg_size_; i += 16) {
+                char line[128];
+                int offset = snprintf(line, sizeof(line), "  $%02X:", (unsigned)i);
+                for (size_t j = 0; j < 16 && (i + j) < reg_size_; j++) {
+                    offset += snprintf(line + offset, sizeof(line) - offset, " %02X", reg_data_[i + j]);
+                }
+                ImGui::TextUnformatted(line);
+            }
+        }
+    }
 }
 
 // ============================================================================
