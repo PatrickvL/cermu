@@ -68,12 +68,9 @@
     REG(16, R16_LPEN_HI,       "Light pen hi (RO)")                              \
     REG(17, R17_LPEN_LO,       "Light pen lo (RO)")
 
-// Backward compat: old REG_TABLE is just the REG rows from the DECL
-#define MC6845_REG_TABLE(X) MC6845_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 // --- Extract address constants (prefix MC6845_ added by macro) ---
 #define MC6845_X_CONST_(a, s, l) static constexpr uint8_t MC6845_##s = a;
-MC6845_REG_TABLE(MC6845_X_CONST_)
+MC6845_DECL(MC6845_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 #undef MC6845_X_CONST_
 
 static constexpr int MC6845_NUM_REGISTERS = 18;

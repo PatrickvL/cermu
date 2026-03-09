@@ -325,7 +325,7 @@ int main(int argc, char** argv) {
             printf("\nSprite internal state (emulator):\n");
             for (int s = 0; s < 8; s++) {
                 auto& spr = c64->vicii->sprites.sprites[s];
-                bool enabled = (c64->vicii->registers.data[VICII_MXE] & (1 << s)) != 0;
+                bool enabled = (c64->vicii->registers.data[vicii_regs::MXE] & (1 << s)) != 0;
                 printf("  Spr%d: enabled=%d dma=%d display=%d dp=$%02X mc=%d shift=$%06X\n",
                        s, enabled, spr.dma_enabled, spr.display_state,
                        spr.data_pointer, spr.mc, spr.shift_reg);

@@ -41,9 +41,6 @@
       FLD(CONTROL, PB_DIR,     1:1, "Port B dir (1=in)",     Flag,  0, 0)       \
       FLD(CONTROL, PC_LO_DIR,  0:0, "Port C lo dir (1=in)",  Flag,  0, 0)
 
-// Backward compat: old REG_TABLE is just the REG rows from the DECL
-#define I8255_REG_TABLE(X) I8255_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 namespace i8255_regs {
     I8255_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 4;

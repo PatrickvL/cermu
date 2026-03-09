@@ -40,9 +40,6 @@
       FLD(PORTB_CTRL, DDR_SEL_B, 2:2, "DDR select",   Flag,  0, 0)             \
       FLD(PORTB_CTRL, CB1_CTRL,  1:0, "CB1 control",  Value, 0, 0)
 
-// Backward compat: old REG_TABLE is just the REG rows from the DECL
-#define PIA_REG_TABLE(X) PIA_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 // --- Extract address constants (prefix PIA_REG_ added by macro) ---
 #define PIA_X_CONST_(a, s, l) static constexpr uint8_t PIA_REG_##s = a;
 PIA_DECL(PIA_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)

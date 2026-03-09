@@ -46,9 +46,6 @@
     REG(0x07, CH3_TC,   "Channel 3 time constant")  \
     REG(0x08, INT_VEC,  "Interrupt base vector")
 
-// Backward compat: old REG_TABLE is just the REG rows from the DECL
-#define Z80_CTC_REG_TABLE(X) Z80_CTC_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 namespace z80_ctc_regs {
     Z80_CTC_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 9;

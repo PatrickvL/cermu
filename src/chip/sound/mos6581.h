@@ -30,12 +30,8 @@ enum mos6581_pin_t {
 namespace sid_constants {
     constexpr uint8_t REGS_BITS = 5;
     constexpr uint8_t REGS_SIZE = (1 << REGS_BITS); // 32
+    constexpr uint8_t REGS_MASK = REGS_SIZE - 1;    // 31
 }
-
-// Legacy macro compatibility
-#define SID_REGS_BITS sid_constants::REGS_BITS
-#define SID_REGS_SIZE sid_constants::REGS_SIZE
-#define SID_REGS_MASK (SID_REGS_SIZE - 1) // 31
 
 // SID chip revisions — only revisions that produce different emulation
 // behaviour are active.  The rest are commented out until per-revision
@@ -173,9 +169,6 @@ enum waveform_bits_t {
     REG(0x1D, R1D,       "-")                                                 \
     REG(0x1E, R1E,       "-")                                                 \
     REG(0x1F, R1F,       "-")
-
-// Backward compatibility — expose the old REG-only walk
-#define SID_REG_TABLE(X) SID_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 // --- Extract register constants ---
 namespace sid_regs {
@@ -386,7 +379,7 @@ struct mos6581_t : public SoundChipBase {
     bus_cycle_ops_t bus_interface = {};
 
     // SID register array
-    uint8_t regs[SID_REGS_SIZE] = {};
+    uint8_t regs[sid_constants::REGS_SIZE] = {};
     uint8_t bus_value = 0;            // Last bus value for read-only registers
 
     // Three voices with cross-references

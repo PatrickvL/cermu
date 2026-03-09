@@ -73,9 +73,6 @@ enum class WSGVariant : uint8_t {
       FLD(V3_WAVEVOL, V3_WAVE, 6:4, "Waveform", Value, 0, 0) \
       FLD(V3_WAVEVOL, V3_VOL,  3:0, "Volume",   Value, 0, 0)
 
-// Backward compat: old REG_TABLE is just the REG rows from the DECL
-#define WSG_REG_TABLE(X) WSG_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 namespace wsg_regs {
     WSG_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 0x15;

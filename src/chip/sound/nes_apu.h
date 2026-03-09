@@ -768,9 +768,6 @@ public:
       select_schedule();
   }
 
-  /// Legacy alias — defaults to power-on reset for backward compat.
-  void reset() { power_on_reset(); }
-
   void write(uint8_t value, bool apu_odd_cycle) {
       // Frame counter writes are delayed by 3-4 CPU cycles.
       // The delay depends on the APU's even/odd cycle, NOT the frame

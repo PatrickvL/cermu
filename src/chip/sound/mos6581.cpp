@@ -938,7 +938,7 @@ bus_state_t mos6581_t::registers_write(void* context, bus_state_t bus_state) {
     mos6581_t* sid = (mos6581_t*)context;
     if (!sid) return bus_state;
     
-    uint32_t r = BUS_GET_ADDR(bus_state) & SID_REGS_MASK;
+    uint32_t r = BUS_GET_ADDR(bus_state) & sid_constants::REGS_MASK;
     uint8_t value = BUS_GET_DATA(bus_state);
     sid->bus_value = value; // Store for potential bus reads
     
@@ -1012,7 +1012,7 @@ bus_state_t mos6581_t::registers_write(void* context, bus_state_t bus_state) {
     }
     
     // Store register value for debugging
-    if (r < SID_REGS_SIZE) {
+    if (r < sid_constants::REGS_SIZE) {
         sid->regs[r] = value;
     }
     
@@ -1023,7 +1023,7 @@ bus_state_t mos6581_t::registers_read(void* context, bus_state_t bus_state) {
     mos6581_t* sid = (mos6581_t*)context;
     if (!sid) return bus_state;
     
-    uint32_t r = BUS_GET_ADDR(bus_state) & SID_REGS_MASK;
+    uint32_t r = BUS_GET_ADDR(bus_state) & sid_constants::REGS_MASK;
     
     switch (r) {
         case SID_REG_POTX:
@@ -1113,7 +1113,7 @@ void mos6581_t::init() {
 void mos6581_t::register_debug_fields() {
     using S = const mos6581_t;
     auto& r = debug_registry_;
-    r.set_registers(regs, SID_REGS_SIZE, SID_REG_INFO, 0xD400);
+    r.set_registers(regs, sid_constants::REGS_SIZE, SID_REG_INFO, 0xD400);
     r.set_decl_order(SID_DECL_ORDER.data(), SID_DECL_ORDER.size(),
                      SID_FLD_INFO, SID_NUM_FIELDS,
                      nullptr, 0, nullptr);
@@ -1190,7 +1190,7 @@ void mos6581_t::register_debug_fields() {
 
 void mos6581_t::reset() {
     // Reset all registers
-    memset(regs, 0, SID_REGS_SIZE);
+    memset(regs, 0, sid_constants::REGS_SIZE);
     bus_value = 0;
     
     // Reset voices

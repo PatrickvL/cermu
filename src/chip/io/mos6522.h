@@ -56,9 +56,6 @@
       FLD(IER, CA2_IE,  0:0, "CA2",         Flag, 0, 0)                         \
     REG(0x0F, PORTA_NH, "Port A no handshake")
 
-// Backward compat: old REG_TABLE is just the REG rows from the DECL
-#define MOS6522_REG_TABLE(X) MOS6522_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 // --- Extract address constants (prefix MOS6522_ added by macro) ---
 #define MOS6522_X_CONST_(a, s, l) static constexpr uint8_t MOS6522_##s = a;
 MOS6522_DECL(MOS6522_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)

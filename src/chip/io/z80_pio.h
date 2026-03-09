@@ -47,9 +47,6 @@
     REG(0x08, PORT_A_IMASK, "Port A interrupt mask")   \
     REG(0x09, PORT_B_IMASK, "Port B interrupt mask")
 
-// Backward compat: old REG_TABLE is just the REG rows from the DECL
-#define Z80_PIO_REG_TABLE(X) Z80_PIO_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
-
 namespace z80_pio_regs {
     Z80_PIO_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 10;
