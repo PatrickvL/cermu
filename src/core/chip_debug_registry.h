@@ -28,44 +28,6 @@
 class ChipBase;  // forward — callbacks receive the owning chip at render time
 
 // ============================================================================
-// REGISTER ENTRY — label (from X-macro #symbol) + description string
-// ============================================================================
-
-struct RegEntry {
-    const char* label;   // Short technical label (stringified symbol name)
-    const char* desc;    // Human-readable description
-};
-
-// ============================================================================
-// CHIP REGISTER TRAITS — per-chip register bank metadata (NTTP)
-// ============================================================================
-//
-// Each chip declares one constexpr ChipRegTraits instance.  This struct is
-// used as an NTTP (non-type template parameter) to derive types and generate
-// infrastructure with zero per-chip boilerplate.
-//
-// Example:
-//   inline constexpr ChipRegTraits vicii_reg_traits = {
-//       .num_registers  = 66,
-//       .register_width = 1,
-//       .base_address   = 0xD000,
-//   };
-
-struct ChipRegTraits {
-    uint16_t num_registers  = 0;     // Total register count
-    uint8_t  register_width = 1;     // Bytes per register (1, 2, 4)
-    uint16_t base_address   = 0;     // I/O base address for debug display
-};
-
-// Derive the offset type from the register count — chips with ≤256 registers
-// use uint8_t (zero overhead for 8-bit era chips), larger chips get uint16_t
-// or uint32_t automatically.
-template<const ChipRegTraits& T>
-using reg_offset_t = std::conditional_t<(T.num_registers <= 256), uint8_t,
-                     std::conditional_t<(T.num_registers <= 65536), uint16_t,
-                     uint32_t>>;
-
-// ============================================================================
 // SEMANTIC DATA KINDS — what the field IS, NOT how to draw it
 // ============================================================================
 //
@@ -103,6 +65,46 @@ enum class DataKind : uint8_t {
 };
 
 // ============================================================================
+// REGISTER ENTRY — label (from X-macro #symbol) + description string
+// ============================================================================
+
+struct RegEntry {
+    const char* label;                      // Short technical label (stringified symbol name)
+    const char* desc;                       // Human-readable description
+    DataKind    kind       = DataKind::Value; // Register-level semantic kind (for pre-masked regs)
+    uint8_t     value_bits = 0;             // Meaningful bits (0 = full register width)
+};
+
+// ============================================================================
+// CHIP REGISTER TRAITS — per-chip register bank metadata (NTTP)
+// ============================================================================
+//
+// Each chip declares one constexpr ChipRegTraits instance.  This struct is
+// used as an NTTP (non-type template parameter) to derive types and generate
+// infrastructure with zero per-chip boilerplate.
+//
+// Example:
+//   inline constexpr ChipRegTraits vicii_reg_traits = {
+//       .num_registers  = 66,
+//       .register_width = 1,
+//       .base_address   = 0xD000,
+//   };
+
+struct ChipRegTraits {
+    uint16_t num_registers  = 0;     // Total register count
+    uint8_t  register_width = 1;     // Bytes per register (1, 2, 4)
+    uint16_t base_address   = 0;     // I/O base address for debug display
+};
+
+// Derive the offset type from the register count — chips with ≤256 registers
+// use uint8_t (zero overhead for 8-bit era chips), larger chips get uint16_t
+// or uint32_t automatically.
+template<const ChipRegTraits& T>
+using reg_offset_t = std::conditional_t<(T.num_registers <= 256), uint8_t,
+                     std::conditional_t<(T.num_registers <= 65536), uint16_t,
+                     uint32_t>>;
+
+// ============================================================================
 // BITFIELD ACCESSOR MACROS — NV-style hi:lo ternary trick
 // ============================================================================
 //
@@ -126,13 +128,15 @@ enum class DataKind : uint8_t {
 
 // ---- DECL row-type swallower macros ----
 // Use these as no-op callbacks when extracting specific row types from a
-// unified CHIP_DECL(REG, FLD, CMP) table.  Each swallows its row's args.
+// unified CHIP_DECL(REG, FLD, CMP, REGK) table.  Each swallows its row's args.
 //   REG(offset, symbol, description)
 //   FLD(reg_sym, field_sym, hi:lo, description, kind, display_shift, display_scale)
 //   CMP(symbol, description, kind, total_bits, display_shift, display_scale, reg1, hilo1, dst1, reg2, hilo2, dst2)
+//   REGK(offset, symbol, description, kind, hi:lo)
 #define DECL_REG_NOP(a, s, d)
 #define DECL_FLD_NOP(r, f, hilo, d, k, ds, dm)
 #define DECL_CMP_NOP(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)
+#define DECL_REGK_NOP(a, s, d, k, hilo)
 
 // ---- Shared DECL extraction callbacks ----
 // Pre-defined callbacks for X-macro walks.  Each chip invokes these
@@ -153,6 +157,15 @@ enum class DataKind : uint8_t {
 #define DECL_X_ORD_REG_(a, s, l)                                     { DeclRowType::Reg, (uint16_t)(a) },
 #define DECL_X_ORD_FLD_(r, s, hilo, d, k, ds, dm)                    { DeclRowType::Field, 0 },
 #define DECL_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)  { DeclRowType::Compound, 0 },
+
+// ---- Kind-annotated register (REGK) extractors ----
+// REGK entries are registers whose pre-masked value carries a semantic
+// DataKind directly (e.g. color registers masked to palette range).
+// They produce RegEntry items with kind+value_bits populated, and appear
+// as Reg rows in the declaration order — no FLD entry generated.
+#define DECL_X_REGK_AS_CONST_(a, s, d, k, hilo)  constexpr uint8_t s = a;
+#define DECL_X_REGK_AS_REG_(a, s, d, k, hilo)    { #s, d, DataKind::k, BF_WIDTH(hilo) },
+#define DECL_X_REGK_AS_ORD_(a, s, d, k, hilo)    { DeclRowType::Reg, (uint16_t)(a) },
 
 // ============================================================================
 // FIELD ENTRY — bitfield within a register (from FLD X-macro)
@@ -331,15 +344,18 @@ constexpr std::array<FieldEntry, NF> assign_field_reg_indices(
 
 #define DECL_EXTRACT_ALL(PREFIX, DECL)                                         \
     static constexpr RegEntry PREFIX##_REG_INFO[] =                            \
-        { DECL(DECL_X_REG_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };              \
+        { DECL(DECL_X_REG_INFO_, DECL_FLD_NOP, DECL_CMP_NOP,                 \
+               DECL_X_REGK_AS_REG_) };                                        \
     constexpr uint16_t PREFIX##_NUM_REGS =                                     \
         sizeof(PREFIX##_REG_INFO) / sizeof(PREFIX##_REG_INFO[0]);              \
     static constexpr DeclOrderEntry PREFIX##_DECL_ORD_RAW_[] =                 \
-        { DECL(DECL_X_ORD_REG_, DECL_X_ORD_FLD_, DECL_X_ORD_CMP_) };         \
+        { DECL(DECL_X_ORD_REG_, DECL_X_ORD_FLD_, DECL_X_ORD_CMP_,            \
+               DECL_X_REGK_AS_ORD_) };                                        \
     static constexpr auto PREFIX##_DECL_ORDER =                                \
         assign_decl_indices(PREFIX##_DECL_ORD_RAW_);                           \
     static constexpr FieldEntry PREFIX##_FLD_RAW_[] =                          \
-        { DECL(DECL_REG_NOP, DECL_X_FLD_INFO_, DECL_CMP_NOP) };              \
+        { DECL(DECL_REG_NOP, DECL_X_FLD_INFO_, DECL_CMP_NOP,                 \
+               DECL_REGK_NOP) };                                              \
     static constexpr auto PREFIX##_FLD_ARR_ =                                  \
         assign_field_reg_indices(PREFIX##_DECL_ORD_RAW_, PREFIX##_FLD_RAW_);   \
     static constexpr const FieldEntry* PREFIX##_FLD_INFO =                     \
@@ -350,11 +366,13 @@ constexpr std::array<FieldEntry, NF> assign_field_reg_indices(
 // Variant for chips with only REG entries (no FLD or CMP).
 #define DECL_EXTRACT_REGS_ONLY(PREFIX, DECL)                                   \
     static constexpr RegEntry PREFIX##_REG_INFO[] =                            \
-        { DECL(DECL_X_REG_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };              \
+        { DECL(DECL_X_REG_INFO_, DECL_FLD_NOP, DECL_CMP_NOP,                 \
+               DECL_X_REGK_AS_REG_) };                                        \
     constexpr uint16_t PREFIX##_NUM_REGS =                                     \
         sizeof(PREFIX##_REG_INFO) / sizeof(PREFIX##_REG_INFO[0]);              \
     static constexpr DeclOrderEntry PREFIX##_DECL_ORD_RAW_[] =                 \
-        { DECL(DECL_X_ORD_REG_, DECL_X_ORD_FLD_, DECL_X_ORD_CMP_) };         \
+        { DECL(DECL_X_ORD_REG_, DECL_X_ORD_FLD_, DECL_X_ORD_CMP_,            \
+               DECL_X_REGK_AS_ORD_) };                                        \
     static constexpr auto PREFIX##_DECL_ORDER =                                \
         assign_decl_indices(PREFIX##_DECL_ORD_RAW_);                           \
     static constexpr const FieldEntry* PREFIX##_FLD_INFO = nullptr;            \

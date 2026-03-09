@@ -26,7 +26,7 @@
 
 // REG(offset, symbol, description)
 // FLD(reg_sym, field_sym, hi:lo, description, kind, display_shift, display_scale)
-#define PIA_DECL(REG, FLD, CMP) \
+#define PIA_DECL(REG, FLD, CMP, REGK) \
     REG(0, PORTA_DATA, "Port A output latch")                                   \
     REG(1, PORTA_DDR,  "Port A direction")                                      \
     REG(2, PORTA_CTRL, "Port A control")                                        \
@@ -42,7 +42,7 @@
 
 // --- Extract address constants (prefix PIA_REG_ added by macro) ---
 #define PIA_X_CONST_(a, s, l) static constexpr uint8_t PIA_REG_##s = a;
-PIA_DECL(PIA_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
+PIA_DECL(PIA_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
 #undef PIA_X_CONST_
 
 DECL_EXTRACT_ALL(PIA, PIA_DECL)

@@ -40,7 +40,7 @@
 //   CMP(symbol, description, kind, total_bits, display_shift, display_scale,
 //       reg1, hilo1, dst1, reg2, hilo2, dst2)
 
-#define SPECTRUM_ULA_DECL(REG, FLD, CMP) \
+#define SPECTRUM_ULA_DECL(REG, FLD, CMP, REGK) \
     REG(0x00, PORT_FE, "Border/speaker/mic I/O")                               \
       FLD(PORT_FE, BORDER, 2:0, "Border color",     Color, 0, 0)              \
       FLD(PORT_FE, MIC,    3:3, "MIC output",       Flag, 0, 0)               \
@@ -49,7 +49,7 @@
 namespace spectrum_ula {
 
     // Register constants from DECL
-    SPECTRUM_ULA_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
+    SPECTRUM_ULA_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
     inline constexpr uint8_t REG_COUNT = 1;
 
     // Display dimensions

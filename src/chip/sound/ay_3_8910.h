@@ -70,7 +70,7 @@ inline constexpr AYVariantTraits ay_variant_traits[] = {
 // ============================================================================
 
 // DECL(REG, FLD, CMP) — 16 registers, 18 fields (MIXER/AMP/ENV_SHAPE bits)
-#define AY_DECL(REG, FLD, CMP) \
+#define AY_DECL(REG, FLD, CMP, REGK) \
     REG(0x00, TONE_A_FINE,   "Ch A tone period fine")                            \
     REG(0x01, TONE_A_COARSE, "Ch A tone period coarse")                          \
     REG(0x02, TONE_B_FINE,   "Ch B tone period fine")                            \
@@ -107,7 +107,7 @@ inline constexpr AYVariantTraits ay_variant_traits[] = {
     REG(0x0F, IO_PORT_B,     "I/O port B data")
 
 namespace ay_regs {
-    AY_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
+    AY_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
     constexpr uint8_t REG_COUNT = 16;
 } // namespace ay_regs
 

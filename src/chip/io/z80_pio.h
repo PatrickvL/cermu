@@ -35,7 +35,7 @@
 // ============================================================================
 
 // REG(offset, symbol, description)
-#define Z80_PIO_DECL(REG, FLD, CMP) \
+#define Z80_PIO_DECL(REG, FLD, CMP, REGK) \
     REG(0x00, PORT_A_DATA,  "Port A data")            \
     REG(0x01, PORT_B_DATA,  "Port B data")            \
     REG(0x02, PORT_A_CTRL,  "Port A control")         \
@@ -48,7 +48,7 @@
     REG(0x09, PORT_B_IMASK, "Port B interrupt mask")
 
 namespace z80_pio_regs {
-    Z80_PIO_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
+    Z80_PIO_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
     constexpr uint8_t REG_COUNT = 10;
 } // namespace z80_pio_regs
 

@@ -40,7 +40,7 @@
 //   CMP(symbol, description, kind, total_bits, display_shift, display_scale,
 //       reg1, hilo1, dst1, reg2, hilo2, dst2)
 
-#define MC6847_DECL(REG, FLD, CMP) \
+#define MC6847_DECL(REG, FLD, CMP, REGK) \
     REG(0x00, REG_MODE, "Mode pin state mirror")                               \
       FLD(REG_MODE, AG,     0:0, "Graphics mode",     Flag, 0, 0)             \
       FLD(REG_MODE, AS,     1:1, "Alphanum/Semigraph", Flag, 0, 0)            \
@@ -75,7 +75,7 @@ namespace mc6847_const {
     inline constexpr uint8_t MODE_GM2    = 0x80;
 
     // Register constants from DECL
-    MC6847_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
+    MC6847_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
     inline constexpr uint8_t REG_COUNT = 1;
 
 } // namespace mc6847_const
