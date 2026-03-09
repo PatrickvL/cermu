@@ -1113,7 +1113,7 @@ void mos6581_t::init() {
 void mos6581_t::register_debug_fields() {
     using S = const mos6581_t;
     auto& r = debug_registry_;
-    r.set_registers(regs, SID_REGS_SIZE);
+    r.set_registers(regs, SID_REGS_SIZE, SID_REG_INFO, 0xD400);
 
     static constexpr const char* wf_names[] = {
         "None", "Triangle", "Sawtooth", "Saw+Tri",

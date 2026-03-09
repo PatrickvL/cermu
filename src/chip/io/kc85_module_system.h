@@ -29,21 +29,30 @@
 #include <cstdio>
 
 // ============================================================================
-// KC85 Module System Register Indices (slot control bytes)
+// KC85 Module System REGISTER TABLE — single source of truth
 // ============================================================================
 
+// X(addr, symbol, description)
+#define KC85_MOD_REG_TABLE(X) \
+    X(0x00, SLOT0_CTRL, "Slot 0 control") \
+    X(0x01, SLOT1_CTRL, "Slot 1 control") \
+    X(0x02, SLOT2_CTRL, "Slot 2 control") \
+    X(0x03, SLOT3_CTRL, "Slot 3 control") \
+    X(0x04, SLOT4_CTRL, "Slot 4 control") \
+    X(0x05, SLOT5_CTRL, "Slot 5 control") \
+    X(0x06, SLOT6_CTRL, "Slot 6 control") \
+    X(0x07, SLOT7_CTRL, "Slot 7 control")
+
 namespace kc85_mod_regs {
-    // One control byte per slot
-    constexpr uint8_t SLOT0_CTRL = 0x00;
-    constexpr uint8_t SLOT1_CTRL = 0x01;
-    constexpr uint8_t SLOT2_CTRL = 0x02;
-    constexpr uint8_t SLOT3_CTRL = 0x03;
-    constexpr uint8_t SLOT4_CTRL = 0x04;
-    constexpr uint8_t SLOT5_CTRL = 0x05;
-    constexpr uint8_t SLOT6_CTRL = 0x06;
-    constexpr uint8_t SLOT7_CTRL = 0x07;
-    constexpr uint8_t REG_COUNT  = 8;
+    #define KC85_X_CONST_(a, s, l) constexpr uint8_t s = a;
+    KC85_MOD_REG_TABLE(KC85_X_CONST_)
+    #undef KC85_X_CONST_
+    constexpr uint8_t REG_COUNT = 8;
 } // namespace kc85_mod_regs
+
+#define KC85_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry KC85_MOD_REG_INFO[] = { KC85_MOD_REG_TABLE(KC85_X_INFO_) };
+#undef KC85_X_INFO_
 
 // ============================================================================
 // KC85 Module Types
@@ -160,7 +169,7 @@ private:
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
         auto& r = debug_registry_;
-        r.set_registers(regs_, kc85_mod_regs::REG_COUNT);
+        r.set_registers(regs_, kc85_mod_regs::REG_COUNT, KC85_MOD_REG_INFO);
 
         // Use register offsets for slot control bytes + flag bits
         r.category("Slot 0");

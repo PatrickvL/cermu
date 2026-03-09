@@ -128,24 +128,5 @@ void ted7360_t::render_settings_content() {
     ImGui::Text("Standard: %s", ted->timing.is_pal ? "PAL" : "NTSC");
     ImGui::Text("Lines/frame: %d", ted->timing.lines_per_frame);
     ImGui::Text("CPU cycles/line: %d", ted->timing.cpu_cycles_per_line);
-
-    ImGui::Separator();
-
-    // Raw register dump
-    if (ImGui::CollapsingHeader("Raw Registers ($FF00-$FF1F)", ImGuiTreeNodeFlags_DefaultOpen)) {
-        static const char* reg_names[] = {
-            "Timer1 Lo",  "Timer1 Hi",  "Timer2 Lo",  "Timer2 Hi",
-            "Timer3 Lo",  "Timer3 Hi",  "Control 1",  "Control 2",
-            "Keyboard",   "IRQ Status", "IRQ Mask",   "Cursor Lo",
-            "Cursor Hi",  "Sound1 Lo",  "Sound1 Hi",  "Sound2 Lo",
-            "Sound2 Hi",  "Sound Ctrl", "Mem Ctrl",   "Char Hi",
-            "Bitmap Addr","Color BG0",  "Color BG1",  "Color BG2",
-            "Color BG3",  "Border",     "CharPos Hi", "Raster Lo",
-            "VPos",       "HPos",       "Flash",      "ROM/RAM"
-        };
-        for (int i = 0; i < TED_NUM_REGS; i++) {
-            ImGui::Text("$FF%02X %-12s: $%02X", i, reg_names[i], ted->registers.data[i]);
-        }
-    }
 }
 #endif // CERMU_HAS_GUI

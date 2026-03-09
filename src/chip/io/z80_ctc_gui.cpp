@@ -26,7 +26,7 @@
 void z80_ctc_t::register_debug_fields() {
     using S = const z80_ctc_t;
     auto& r = debug_registry_;
-    r.set_registers(regs_, z80_ctc_regs::REG_COUNT);
+    r.set_registers(regs_, z80_ctc_regs::REG_COUNT, Z80_CTC_REG_INFO);
 
     r.category("Channel 0");
     r.value("Control", static_cast<uint16_t>(z80_ctc_regs::CH0_CTRL), 8);

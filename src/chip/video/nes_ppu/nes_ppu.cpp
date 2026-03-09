@@ -877,7 +877,7 @@ void PPU::connect_cartridge(Cartridge* cartridge) {
 void PPU::register_debug_fields() {
     using P = const PPU;
     auto& r = debug_registry_;
-    r.set_registers(regs, REG_COUNT);
+    r.set_registers(regs, REG_COUNT, NES_PPU_REG_INFO, 0x2000);
 
     // ---- Timing ----
     r.category("Timing");

@@ -25,7 +25,7 @@
 void z80_pio_t::register_debug_fields() {
     using S = const z80_pio_t;
     auto& r = debug_registry_;
-    r.set_registers(regs_, z80_pio_regs::REG_COUNT);
+    r.set_registers(regs_, z80_pio_regs::REG_COUNT, Z80_PIO_REG_INFO);
 
     r.category("Port A");
     r.value("Output Latch", +[](const ChipBase* c) -> uint32_t {

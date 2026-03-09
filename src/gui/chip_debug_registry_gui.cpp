@@ -491,25 +491,42 @@ void render_field(const DebugField& f, const ChipDebugRegistry& reg, const ChipB
 // ============================================================================
 
 void ChipDebugRegistry::render(const ChipBase* chip) const {
+    // Auto-generated register dump for chips with set_registers()
+    if (reg_data_ && reg_size_ > 0) {
+        if (ImGui::CollapsingHeader("Registers")) {
+            if (reg_info_) {
+                // Named register list — symbol label + description + value
+                for (size_t i = 0; i < reg_size_; i++) {
+                    const auto& entry = reg_info_[i];
+                    if (!entry.desc || entry.desc[0] == '-') continue;  // skip unnamed slots
+                    char line[128];
+                    if (reg_base_address_)
+                        snprintf(line, sizeof(line), "$%04X  %-14s %-22s $%02X",
+                                 (unsigned)(reg_base_address_ + i), entry.label, entry.desc, reg_data_[i]);
+                    else
+                        snprintf(line, sizeof(line), "  $%02X  %-14s %-22s $%02X",
+                                 (unsigned)i, entry.label, entry.desc, reg_data_[i]);
+                    ImGui::TextUnformatted(line);
+                }
+            } else {
+                // Fallback: unnamed hex dump — 16 bytes per row
+                for (size_t i = 0; i < reg_size_; i += 16) {
+                    char line[128];
+                    int offset = snprintf(line, sizeof(line), "  $%02X:", (unsigned)i);
+                    for (size_t j = 0; j < 16 && (i + j) < reg_size_; j++) {
+                        offset += snprintf(line + offset, sizeof(line) - offset, " %02X", reg_data_[i + j]);
+                    }
+                    ImGui::TextUnformatted(line);
+                }
+            }
+        }
+    }
+
     for (auto& cat : categories_) {
         ImGuiTreeNodeFlags flags = cat.default_open ? ImGuiTreeNodeFlags_DefaultOpen : 0;
         if (ImGui::CollapsingHeader(cat.name.c_str(), flags)) {
             for (auto& field : cat.fields) {
                 render_field(field, *this, chip);
-            }
-        }
-    }
-
-    // Auto-generated register hex dump for chips with set_registers()
-    if (reg_data_ && reg_size_ > 0) {
-        if (ImGui::CollapsingHeader("Registers")) {
-            for (size_t i = 0; i < reg_size_; i += 16) {
-                char line[128];
-                int offset = snprintf(line, sizeof(line), "  $%02X:", (unsigned)i);
-                for (size_t j = 0; j < 16 && (i + j) < reg_size_; j++) {
-                    offset += snprintf(line + offset, sizeof(line) - offset, " %02X", reg_data_[i + j]);
-                }
-                ImGui::TextUnformatted(line);
             }
         }
     }

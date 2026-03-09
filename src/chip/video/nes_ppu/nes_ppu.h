@@ -33,19 +33,33 @@ namespace nes_system {
     class Cartridge;
 }
 
+// ============================================================================
+// NES PPU REGISTER TABLE — single source of truth
+// ============================================================================
+
+// X(addr, symbol, description)
+#define NES_PPU_REG_TABLE(X) \
+    X(0, PPUCTRL,   "NMI/sprite sz/BG base") \
+    X(1, PPUMASK,   "Render/grayscale")      \
+    X(2, PPUSTATUS, "VBlank/spr0/overflow")  \
+    X(3, OAMADDR,   "OAM address")           \
+    X(4, OAMDATA,   "OAM data R/W")          \
+    X(5, PPUSCROLL, "Fine scroll X/Y")       \
+    X(6, PPUADDR,   "VRAM address")          \
+    X(7, PPUDATA,   "VRAM data R/W")
+
+#define NES_PPU_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry NES_PPU_REG_INFO[] = { NES_PPU_REG_TABLE(NES_PPU_X_INFO_) };
+#undef NES_PPU_X_INFO_
+
 namespace nes_system {
 
 class PPU : public ChipBase {
 public:
     // PPU register indices (memory-mapped at $2000-$2007)
-    static constexpr uint8_t PPUCTRL   = 0;  // $2000
-    static constexpr uint8_t PPUMASK   = 1;  // $2001
-    static constexpr uint8_t PPUSTATUS = 2;  // $2002
-    static constexpr uint8_t OAMADDR   = 3;  // $2003
-    static constexpr uint8_t OAMDATA   = 4;  // $2004
-    static constexpr uint8_t PPUSCROLL = 5;  // $2005
-    static constexpr uint8_t PPUADDR   = 6;  // $2006
-    static constexpr uint8_t PPUDATA   = 7;  // $2007
+    #define NES_PPU_X_CONST_(a, s, l) static constexpr uint8_t s = a;
+    NES_PPU_REG_TABLE(NES_PPU_X_CONST_)
+    #undef NES_PPU_X_CONST_
     static constexpr uint8_t REG_COUNT = 8;
 
     uint8_t regs[REG_COUNT] = {};  // PPU register file
@@ -239,6 +253,7 @@ public:
 
         build_palette_cache(is_pal, palette_cache_);
         reset();
+        category_ = "Video";
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif

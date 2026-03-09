@@ -6,17 +6,29 @@
 #include "../../core/system_lines.h"
 #include "../video_pixel_unit.h"
 
-// VIC Register indices
-#define VIC_REG_CONTROL1 0x00         // Interlace | ScreenOriginX
-#define VIC_REG_CONTROL2 0x01         // ScreenOriginY / 2
-#define VIC_REG_VIDEO_MATRIX 0x02     // BaseVideo bit 9 | NoOfColumns
-#define VIC_REG_ROWS 0x03             // RasterLine bit 0 | NoOfRows | DoubleHeight
-#define VIC_REG_RASTER 0x04           // RasterLine bits 8-1
-#define VIC_REG_CHAR_BASE 0x05        // BaseVideo bits 13-10 | BaseChar bits 13-10
-#define VIC_REG_LIGHTPEN_X 0x06
-#define VIC_REG_LIGHTPEN_Y 0x07
-#define VIC_REG_PADDLE_X 0x08
-#define VIC_REG_PADDLE_Y 0x09
+// ============================================================================
+// VIC 6560/6561 REGISTER TABLE — single source of truth
+// ============================================================================
+
+// X(addr, symbol, description)
+#define VIC_REG_TABLE(X) \
+    X(0x00, CONTROL1,     "Horiz origin/interlace") \
+    X(0x01, CONTROL2,     "Vert origin")            \
+    X(0x02, VIDEO_MATRIX, "Video base/columns")     \
+    X(0x03, ROWS,         "Raster b0/rows/2x-H")   \
+    X(0x04, RASTER,       "Raster counter hi")      \
+    X(0x05, CHAR_BASE,    "Video/char base addr")   \
+    X(0x06, LIGHTPEN_X,   "Light pen X")            \
+    X(0x07, LIGHTPEN_Y,   "Light pen Y")            \
+    X(0x08, PADDLE_X,     "Paddle X")               \
+    X(0x09, PADDLE_Y,     "Paddle Y")               \
+    X(0x0A, BASS_FREQ,    "Voice 1 bass freq")      \
+    X(0x0B, ALTO_FREQ,    "Voice 2 alto freq")      \
+    X(0x0C, SOPRANO_FREQ, "Voice 3 soprano freq")   \
+    X(0x0D, NOISE_FREQ,   "Voice 4 noise freq")     \
+    X(0x0E, AUX_COLOR,    "Aux color / volume")     \
+    X(0x0F, BACKGROUND,   "BG/reverse/border")
+
 // Audio / waveform registers ($900A-$900E)
 // The MOS 6560/6561 contains three square-wave tone generators and one
 // white-noise generator.  Each voice register has a 7-bit frequency value
@@ -26,12 +38,18 @@
 //   Soprano freq = Phi2 / (32  * (32  - N))   (highest octave)
 //   Noise   freq = Phi2 / (32  * (32  - N))   (LFSR clocked at same rate as soprano)
 // where Phi2 = chip master clock and N = 7-bit register value.
-#define VIC_REG_BASS_FREQ    0x0A     // Voice 1 – Bass square wave   (bit 7 = on, bits 0-6 = freq)
-#define VIC_REG_ALTO_FREQ    0x0B     // Voice 2 – Alto square wave   (bit 7 = on, bits 0-6 = freq)
-#define VIC_REG_SOPRANO_FREQ 0x0C     // Voice 3 – Soprano square wave(bit 7 = on, bits 0-6 = freq)
-#define VIC_REG_NOISE_FREQ   0x0D     // Voice 4 – Noise (LFSR)       (bit 7 = on, bits 0-6 = freq)
-#define VIC_REG_AUX_COLOR    0x0E     // bits 4-7 = auxiliary colour, bits 0-3 = master volume
-#define VIC_REG_BACKGROUND   0x0F     // bits 4-7 = background colour, bit 3 = reverse, bits 0-2 = border colour
+
+// --- Extract address constants (prefix VIC_REG_ added by macro) ---
+#define VIC_X_CONST_(a, s, l) static constexpr uint8_t VIC_REG_##s = a;
+VIC_REG_TABLE(VIC_X_CONST_)
+#undef VIC_X_CONST_
+
+// --- Extract register info array ---
+#define VIC_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry VIC_REG_INFO[] = { VIC_REG_TABLE(VIC_X_INFO_) };
+#undef VIC_X_INFO_
+
+static constexpr uint8_t VIC_NUM_REGS = 16;
 
 // Backward-compatible aliases for the old generic names
 #define VIC_REG_OSC1_FREQ    VIC_REG_BASS_FREQ

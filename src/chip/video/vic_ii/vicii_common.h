@@ -5,63 +5,77 @@
 #include "../../../core/system_lines.h" // For bus_state_t
 #include "../../../chip/memory/mos2114.h"  // For MOS2114
 #include "../video_pixel_unit.h"
+// ============================================================================
+// VIC-II REGISTER TABLE — single source of truth
+// 66 entries: 47 named (0-46) + 17 unused (47-63) + 2 shadows (64-65)
+// ============================================================================
+
+// X(addr, symbol, description)
+#define VICII_REG_TABLE(X) \
+    X( 0, M0X,    "Sprite 0 X pos")       \
+    X( 1, M0Y,    "Sprite 0 Y pos")       \
+    X( 2, M1X,    "Sprite 1 X pos")       \
+    X( 3, M1Y,    "Sprite 1 Y pos")       \
+    X( 4, M2X,    "Sprite 2 X pos")       \
+    X( 5, M2Y,    "Sprite 2 Y pos")       \
+    X( 6, M3X,    "Sprite 3 X pos")       \
+    X( 7, M3Y,    "Sprite 3 Y pos")       \
+    X( 8, M4X,    "Sprite 4 X pos")       \
+    X( 9, M4Y,    "Sprite 4 Y pos")       \
+    X(10, M5X,    "Sprite 5 X pos")       \
+    X(11, M5Y,    "Sprite 5 Y pos")       \
+    X(12, M6X,    "Sprite 6 X pos")       \
+    X(13, M6Y,    "Sprite 6 Y pos")       \
+    X(14, M7X,    "Sprite 7 X pos")       \
+    X(15, M7Y,    "Sprite 7 Y pos")       \
+    X(16, MX8,    "Sprite X pos MSB")     \
+    X(17, C1,     "Y-scroll/DEN/BMM/ECM") \
+    X(18, RASTER, "Raster counter")       \
+    X(19, LPX,    "Light pen X")          \
+    X(20, LPY,    "Light pen Y")          \
+    X(21, MXE,    "Sprite enable")        \
+    X(22, C2,     "X-scroll/CSEL/MCM")    \
+    X(23, MXYE,   "Sprite Y expand")      \
+    X(24, MP,     "Memory pointers")      \
+    X(25, IR,     "Interrupt request")     \
+    X(26, IE,     "Interrupt enable")      \
+    X(27, MXDP,   "Sprite data priority") \
+    X(28, MXMC,   "Sprite multicolor")    \
+    X(29, MXXE,   "Sprite X expand")      \
+    X(30, MXM,    "Sprite-sprite coll")   \
+    X(31, MXD,    "Sprite-data coll")     \
+    X(32, EC,     "Border color")         \
+    X(33, B0C,    "Background color 0")   \
+    X(34, B1C,    "Background color 1")   \
+    X(35, B2C,    "Background color 2")   \
+    X(36, B3C,    "Background color 3")   \
+    X(37, MM0,    "Sprite mcolor 0")      \
+    X(38, MM1,    "Sprite mcolor 1")      \
+    X(39, M0C,    "Sprite 0 color")       \
+    X(40, M1C,    "Sprite 1 color")       \
+    X(41, M2C,    "Sprite 2 color")       \
+    X(42, M3C,    "Sprite 3 color")       \
+    X(43, M4C,    "Sprite 4 color")       \
+    X(44, M5C,    "Sprite 5 color")       \
+    X(45, M6C,    "Sprite 6 color")       \
+    X(46, M7C,    "Sprite 7 color")       \
+    X(47, R47,    "-") X(48, R48, "-") X(49, R49, "-") X(50, R50, "-") \
+    X(51, R51,    "-") X(52, R52, "-") X(53, R53, "-") X(54, R54, "-") \
+    X(55, R55,    "-") X(56, R56, "-") X(57, R57, "-") X(58, R58, "-") \
+    X(59, R59,    "-") X(60, R60, "-") X(61, R61, "-") X(62, R62, "-") \
+    X(63, R63,    "-") \
+    X(64, MXM_2,  "Sprite-sprite shd")    \
+    X(65, MXD_2,  "Sprite-data shd")
+
 // VIC-II Register Constants - Modern C++ constexpr
 namespace vicii_regs {
     constexpr uint8_t SIZE = 64;
     constexpr uint8_t MASK = 63;
 
-    // Register indices
-    constexpr uint8_t M0X = 0;   // $d000 X coordinate sprite 0
-    constexpr uint8_t M0Y = 1;   // $d001 Y coordinate sprite 0
-    constexpr uint8_t M1X = 2;   // $d002 X coordinate sprite 1
-    constexpr uint8_t M1Y = 3;   // $d003 Y coordinate sprite 1
-    constexpr uint8_t M2X = 4;   // $d004 X coordinate sprite 2
-    constexpr uint8_t M2Y = 5;   // $d005 Y coordinate sprite 2
-    constexpr uint8_t M3X = 6;   // $d006 X coordinate sprite 3
-    constexpr uint8_t M3Y = 7;   // $d007 Y coordinate sprite 3
-    constexpr uint8_t M4X = 8;   // $d008 X coordinate sprite 4
-    constexpr uint8_t M4Y = 9;   // $d009 Y coordinate sprite 4
-    constexpr uint8_t M5X = 10;  // $d00a X coordinate sprite 5
-    constexpr uint8_t M5Y = 11;  // $d00b Y coordinate sprite 5
-    constexpr uint8_t M6X = 12;  // $d00c X coordinate sprite 6
-    constexpr uint8_t M6Y = 13;  // $d00d Y coordinate sprite 6
-    constexpr uint8_t M7X = 14;  // $d00e X coordinate sprite 7
-    constexpr uint8_t M7Y = 15;  // $d00f Y coordinate sprite 7
-    constexpr uint8_t MX8 = 16;  // $d010 MSB X coordinate sprite i
-    constexpr uint8_t C1 = 17;   // $d011 Control register 1
-    constexpr uint8_t RASTER = 18; // $d012 Raster counter
-    constexpr uint8_t LPX = 19;  // $d013 Light pen X
-    constexpr uint8_t LPY = 20;  // $d014 Light pen Y
-    constexpr uint8_t MXE = 21;  // $d015 Sprite enabled x
-    constexpr uint8_t C2 = 22;   // $d016 Control register 2
-    constexpr uint8_t MXYE = 23; // $d017 Sprite Y expansion x
-    constexpr uint8_t MP = 24;   // $d018 Memory pointers
-    constexpr uint8_t IR = 25;   // $d019 Interrupt Register
-    constexpr uint8_t IE = 26;   // $d01a Interrupt Enabled
-    constexpr uint8_t MXDP = 27; // $d01b Sprite data priority x
-    constexpr uint8_t MXMC = 28; // $d01c Sprite multicolor x select
-    constexpr uint8_t MXXE = 29; // $d01d Sprite X expansion x
-    constexpr uint8_t MXM = 30;  // $d01e Sprite-sprite collision x
-    constexpr uint8_t MXD = 31;  // $d01f Sprite-data collision x
-    constexpr uint8_t EC = 32;   // $d020 Exterior color (Border)
-    constexpr uint8_t B0C = 33;  // $d021 Background color 0
-    constexpr uint8_t B1C = 34;  // $d022 Background color 1
-    constexpr uint8_t B2C = 35;  // $d023 Background color 2
-    constexpr uint8_t B3C = 36;  // $d024 Background color 3
-    constexpr uint8_t MM0 = 37;  // $d025 Sprite multicolor 0
-    constexpr uint8_t MM1 = 38;  // $d026 Sprite multicolor 1
-    constexpr uint8_t M0C = 39;  // $d027 Color sprite 0
-    constexpr uint8_t M1C = 40;  // $d028 Color sprite 1
-    constexpr uint8_t M2C = 41;  // $d029 Color sprite 2
-    constexpr uint8_t M3C = 42;  // $d02a Color sprite 3
-    constexpr uint8_t M4C = 43;  // $d02b Color sprite 4
-    constexpr uint8_t M5C = 44;  // $d02c Color sprite 5
-    constexpr uint8_t M6C = 45;  // $d02d Color sprite 6
-    constexpr uint8_t M7C = 46;  // $d02e Color sprite 7
-
-    // MxM and MxD storage is moved outside the 0..63 range
-    constexpr uint8_t MXM_2 = 64; // Shadow register for MxM $d01e Sprite-sprite collision x
-    constexpr uint8_t MXD_2 = 65; // Shadow register for MxD $d01f Sprite-data collision x
+    // Register indices from X-macro
+    #define VICII_X_CONST_(a, s, l) constexpr uint8_t s = a;
+    VICII_REG_TABLE(VICII_X_CONST_)
+    #undef VICII_X_CONST_
 
     // Absolute memory-mapped I/O addresses (C64: $D000-based)
     constexpr uint16_t ADDR_D011 = 0xD011;  // Control register 1
@@ -73,6 +87,11 @@ namespace vicii_regs {
     constexpr uint16_t ADDR_D020 = 0xD020;  // Border color
     constexpr uint16_t ADDR_D021 = 0xD021;  // Background color 0
 }
+
+// --- Extract register info array (66 entries) ---
+#define VICII_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry VICII_REG_INFO[] = { VICII_REG_TABLE(VICII_X_INFO_) };
+#undef VICII_X_INFO_
 
 // Legacy macro compatibility - can be removed once all code is updated
 #define VICII_REGS_SIZE vicii_regs::SIZE

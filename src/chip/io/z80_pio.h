@@ -31,22 +31,32 @@
 #include <cstring>
 
 // ============================================================================
-// Z80 PIO Register Indices (flattened view of internal state)
+// Z80 PIO REGISTER TABLE — single source of truth
 // ============================================================================
 
+// X(addr, symbol, description)
+#define Z80_PIO_REG_TABLE(X) \
+    X(0x00, PORT_A_DATA,  "Port A data")            \
+    X(0x01, PORT_B_DATA,  "Port B data")            \
+    X(0x02, PORT_A_CTRL,  "Port A control")         \
+    X(0x03, PORT_B_CTRL,  "Port B control")         \
+    X(0x04, PORT_A_IOSEL, "Port A I/O select")      \
+    X(0x05, PORT_B_IOSEL, "Port B I/O select")      \
+    X(0x06, PORT_A_IVEC,  "Port A interrupt vec")    \
+    X(0x07, PORT_B_IVEC,  "Port B interrupt vec")    \
+    X(0x08, PORT_A_IMASK, "Port A interrupt mask")   \
+    X(0x09, PORT_B_IMASK, "Port B interrupt mask")
+
 namespace z80_pio_regs {
-    constexpr uint8_t PORT_A_DATA   = 0x00;
-    constexpr uint8_t PORT_B_DATA   = 0x01;
-    constexpr uint8_t PORT_A_CTRL   = 0x02;
-    constexpr uint8_t PORT_B_CTRL   = 0x03;
-    constexpr uint8_t PORT_A_IOSEL  = 0x04;
-    constexpr uint8_t PORT_B_IOSEL  = 0x05;
-    constexpr uint8_t PORT_A_IVEC   = 0x06;
-    constexpr uint8_t PORT_B_IVEC   = 0x07;
-    constexpr uint8_t PORT_A_IMASK  = 0x08;
-    constexpr uint8_t PORT_B_IMASK  = 0x09;
-    constexpr uint8_t REG_COUNT     = 10;
+    #define Z80_PIO_X_CONST_(a, s, l) constexpr uint8_t s = a;
+    Z80_PIO_REG_TABLE(Z80_PIO_X_CONST_)
+    #undef Z80_PIO_X_CONST_
+    constexpr uint8_t REG_COUNT = 10;
 } // namespace z80_pio_regs
+
+#define Z80_PIO_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry Z80_PIO_REG_INFO[] = { Z80_PIO_REG_TABLE(Z80_PIO_X_INFO_) };
+#undef Z80_PIO_X_INFO_
 
 // ============================================================================
 // Z80 PIO Port Mode

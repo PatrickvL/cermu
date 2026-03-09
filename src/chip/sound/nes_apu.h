@@ -869,6 +869,7 @@ private:
 public:
   APU(bool pal = false) : is_pal(pal) {
     info_ = ChipInfo{pal ? "RP2A07-APU" : "RP2A03-APU", "Ricoh"};
+    category_ = "Sound";
     noise.is_pal = pal;
     dmc.is_pal = pal;
     frame.is_pal = pal;

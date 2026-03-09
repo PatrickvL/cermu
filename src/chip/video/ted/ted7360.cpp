@@ -777,6 +777,7 @@ static constexpr uint8_t TED_RC_UPDATE_CYCLE = 55u;
 ted7360_t::ted7360_t(const ted7360_desc_t& desc) {
     timing.is_pal          = desc.is_pal;
     info_                  = ChipInfo{"TED7360", "Commodore"};
+    category_              = "Video";
     keyboard_scan          = desc.keyboard_scan;
     keyboard_user_data     = desc.keyboard_user_data;
     bus.mem_read           = desc.mem_read;
@@ -1479,7 +1480,7 @@ void ted7360_t::set_framebuffer(uint32_t* buffer, int width, int height) {
 void ted7360_t::register_debug_fields() {
     using TD = const ted7360_t;
     auto& r = debug_registry_;
-    r.set_registers(registers.data, TED_NUM_REGS);
+    r.set_registers(registers.data, TED_NUM_REGS, TED_REG_INFO, 0xFF00);
     const uint32_t* palette = get_palette();
 
     static constexpr const char* gfx_mode_names[] = {

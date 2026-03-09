@@ -1991,6 +1991,7 @@ public:
   fam65xx_t()
     : ChipBase(ChipInfo{Traits.get_chip_id(), Traits.get_vendor()})
   {
+    category_ = "CPU";  
     // Initialize CPU state to zero
     opcode_entry = {};
     current_handler = &fam65xx_t::fetch_opcode; // Always initialize to valid handler

@@ -34,25 +34,25 @@ Chips split into two camps for register storage. Only the flat-array camp gets a
 | MOS6581 (SID) | `uint8_t regs[SID_REGS_SIZE]` | 32 B | `src/chip/sound/mos6581.h` |
 | MOS6526 (CIA) | `uint8_t reg[CIA_REGS_SIZE + 14]` | 31 B | `src/chip/io/mos6526.h` |
 | MC6845 (CRTC) | `uint8_t regs[MC6845_NUM_REGISTERS]` | 18 B | `src/chip/video/mc6845/mc6845.h` |
+| PIA6532 (RIOT) | `uint8_t regs_[4]` + ref aliases | 4 B | `src/chip/io/pia6532.h` | ✅ Migrated |
+| PIA6820 | `uint8_t regs_[6]` + ref aliases | 6 B | `src/chip/io/pia6820.h` | ✅ Migrated |
+| MOS6522 (VIA) | `uint8_t regs_[16]` + ref aliases + `io_port` views | 16 B | `src/chip/io/mos6522.h` | ✅ Migrated |
 
 ### Pattern B: Individual member fields — uses `UIntFn` callbacks
 
 | Chip | Regs | File | Notes |
 |------|------|------|-------|
-| MOS6522 (VIA) | 16 | `src/chip/io/mos6522.h` | `uint8_t registers[16]` exists but no `set_registers()` call |
-| PIA6532 (RIOT) | 4 + 128B RAM | `src/chip/io/pia6532.h` | Individual fields: `port_a_data`, `timer_value`, etc. |
-| PIA6820 | 4 + control | `src/chip/io/pia6820.h` | Individual fields: `port_a_data`, `port_a_direction`, etc. |
 | NES APU | 24 (5 channels) | `src/chip/sound/nes_apu.h` | Channel objects with per-member state |
 | TIA | 45 write + 14 read | `src/chip/video/tia/tia.h` | `write_regs[45]`, `read_regs[14]` + scattered state |
 
 ### Opportunity
 
-- [ ] Refactor VIA, RIOT, PIA6820 to back CPU-visible registers with `uint8_t regs_[N]` while keeping named accessors as `inline` wrappers.
-- [ ] Call `set_registers()` in their constructors so `RegSource` offsets "just work" for the debug registry.
-- [ ] This enables a single generic "Registers" hex-dump category to render automatically for all chips.
-- [ ] Reduces per-chip debug registration boilerplate (~30 lines of `UIntFn` lambdas each).
+- [x] ~~Refactor VIA, RIOT, PIA6820~~ → All three migrated to flat arrays with reference aliases for zero external churn. VIA uses `regs_[16]` with `io_port` views mapped over the DDR/data bytes in the array (same pattern as CIA). Timer counters remain as `uint16_t` for hot-path performance. Dead fields (`interrupt_flags`, `interrupt_enable`) removed.
+- [x] Call `set_registers()` in their constructors so `RegSource` offsets "just work" for the debug registry.
+- [x] Debug registration simplified: port data/DDR fields now use `RegSource` offsets instead of `UIntFn` lambdas.
+- [x] A single generic "Registers" hex-dump section is now auto-generated for all chips with `set_registers()` — collapsed by default, 16-bytes-per-row hex dump appended to the debug panel.
 
-**Effort:** Low-medium per chip. VIA (16 regs) and RIOT (4 regs + 128B RAM) are the easiest candidates.
+**Status:** ✅ Completed (RIOT: `c36cc6fc`, PIA6820: `64dbacd0`, VIA: `7f47c596`, hex-dump: `20a586fc`).
 
 ---
 
@@ -64,12 +64,14 @@ Three different audio buffering strategies coexist:
 |--------|----------|----------|
 | C64 / VIC-20 | `AudioRingBuffer` (shared utility) | `src/utils/ring_buffer.hpp` |
 | NES | `std::vector<float>` (collect-then-drain) | `src/systems/nes/nes_system.h:145` |
-| Atari 2600 (TIA) | `float[4096]` static array + manual read/write pos | `src/chip/video/tia/tia.h:245` |
+| ~~Atari 2600 (TIA)~~ | ~~`float[4096]` static array~~ → `AudioRingBuffer` | `src/chip/video/tia/tia.h` | ✅ Migrated |
 
 ### Opportunity
 
-- [ ] Migrate TIA to `AudioRingBuffer` — saves 16 KB static allocation, gets lock-free SPSC for free.
+- [x] Migrate TIA to `AudioRingBuffer` — saved 16 KB static allocation, unified interface.
 - [ ] NES could also migrate but its vector-append pattern is functional for the "collect then drain" model — lower priority.
+
+**Status:** ✅ Completed.
 
 ---
 
@@ -86,9 +88,10 @@ Four chips independently implement countdown timer logic with ~95% overlap:
 
 ### Opportunity
 
-- [ ] Extract a `CountdownTimer<BITS>` template in `src/utils/` with configurable latch/reload behavior.
+- [x] ~~Extract a `CountdownTimer<BITS>` template~~ → **Skipped.** Analysis showed timer implementations differ too much in reload semantics, interrupt behavior, and chip-specific quirks (CIA force-load, VIA one-shot vs free-run, RIOT divider switching, TED raster-sync) to justify a shared abstraction. The overhead of parameterizing all variants would negate the savings.
 - [ ] The `TimerMeta` struct in `ChipDebugRegistry` already exists — a generic timer plugs right in.
-- [ ] Estimated savings: ~100 lines per chip, ~400 lines total.
+
+**Status:** ⏭️ Skipped with justification — timer implementations are more different than alike.
 
 ---
 
@@ -222,9 +225,9 @@ The `fam65xx` traits system defines CPU variants that would enable new platforms
 
 | Area | Details | Saving |
 |------|---------|--------|
-| **TIA static audio buffer** | 16 KB `float[4096]` → `AudioRingBuffer` (heap, SPSC) | 16 KB per TIA instance |
+| ~~**TIA static audio buffer**~~ | ~~16 KB `float[4096]`~~ → `AudioRingBuffer` | ✅ Done — 16 KB saved |
 | **NES PPU sprite eval state** | ~250 bytes of evaluation temporaries could be bit-packed | 30–50 bytes |
-| **CPU decode tables** | Each `fam65xx_t<>` instantiation carries decode tables; could be shared `static constexpr` | ~1 KB per duplicate variant |
+| ~~**CPU decode tables**~~ | ~~Each `fam65xx_t<>` instantiation carries decode tables~~ → `SharedOpcodeTable<Key>` keyed on instruction-set-relevant flags | ✅ Done — all 5 NMOS variants share one table (`7bddaa2a`) |
 
 **Note:** Hot paths (bus dispatch, CPU execution) are already well-optimized with page-pointer tables, block dispatch, branchless arithmetic, and `LIKELY()`/`UNLIKELY()` hints. No major inefficiencies found on critical paths.
 
@@ -311,6 +314,7 @@ The `fam65xx` traits system defines CPU variants that would enable new platforms
 | **C64** | ✅ Production | ~95% | 1541 SAVE, TAP loading, CRT types |
 | **NES** | ✅ Production | ~80% | 51/256 mappers; expansion audio (MMC5, 5B, VRC6/7) |
 | **CHIP-8** | ✅ Production | ~90% | CHIP8/SCHIP/XO-CHIP all working |
+| **BBC Micro** | ✅ New | ~60% | Model B emulation; 6502 + MC6845 + SN76489 + system glue | ✅ Added |
 | **VIC-20** | ⚠️ Functional | ~70% | Core working; some ROM config TODOs |
 | **Atari 2600** | ⚠️ Functional | ~70% | 11/256 mappers; TIA functional |
 | **Apple 1** | ⚠️ Functional | ~65% | Binary loading missing; clean architecture |
@@ -321,19 +325,28 @@ The `fam65xx` traits system defines CPU variants that would enable new platforms
 
 ## 10. Top 10 Actionable Items
 
-| # | Action | Category | Effort | Impact |
+| # | Action | Category | Effort | Status |
 |---|--------|----------|--------|--------|
-| 1 | Unify register storage → `uint8_t regs_[]` + named accessors in VIA, RIOT, PIA6820 | Consistency | Medium | Cleaner debug display, less boilerplate |
-| 2 | Standardize TIA audio on `AudioRingBuffer` | Memory / consistency | Low | −16 KB, unified interface |
-| 3 | Extract `CountdownTimer<>` template to `src/utils/` | Code reuse | Medium | −400 lines across 4 chips |
-| 4 | Wire PET CRTC→framebuffer pipeline | Incomplete emulation | Medium | PET becomes visual |
-| 5 | Implement NES MMC5 expansion audio ($5000–$5015) | Incomplete emulation | Medium | 20+ games fixed |
-| 6 | Implement 1541 SAVE channel | Incomplete emulation | Medium | Disk save works |
-| 7 | Add TAP tape format loading | Incomplete emulation | Low–Medium | Tape images loadable |
-| 8 | C16/Plus4 TED 7360 wire-up | New system | High | Two platforms unlocked |
-| 9 | BBC Micro system (6502 + MC6845 + SN76489) | New system | Medium | New platform with existing chips |
-| 10 | Commodore 128 system (reuse VIC-II/SID/CIA + MMU) | New system | Medium–High | Huge library, minimal new silicon |
+| 1 | Unify register storage → `uint8_t regs_[]` + named accessors in RIOT, PIA6820, VIA | Consistency | Medium | ✅ Done (RIOT: `c36cc6fc`, PIA6820: `64dbacd0`, VIA: `7f47c596`). VIA uses `io_port` views over `regs_[]` bytes — same pattern as CIA. |
+| 2 | Standardize TIA audio on `AudioRingBuffer` | Memory / consistency | Low | ✅ Done — saved 16 KB |
+| 3 | Extract `CountdownTimer<>` template to `src/utils/` | Code reuse | Medium | ⏭️ Skipped — timer impls too different to abstract |
+| 4 | Wire PET CRTC→framebuffer pipeline | Incomplete emulation | Medium | ⬚ Not started |
+| 5 | Implement NES MMC5 expansion audio ($5000–$5015) | Incomplete emulation | Medium | ⬚ Not started |
+| 6 | Implement 1541 SAVE channel | Incomplete emulation | Medium | ⬚ Not started |
+| 7 | Add TAP tape format loading | Incomplete emulation | Low–Medium | ⬚ Not started |
+| 8 | C16/Plus4 TED 7360 wire-up | New system | High | ⬚ Not started |
+| 9 | BBC Micro system (6502 + MC6845 + SN76489) | New system | Medium | ✅ Done — full Model B emulation |
+| 10 | Commodore 128 system (reuse VIC-II/SID/CIA + MMU) | New system | Medium–High | ⬚ Not started |
+
+### Additional Completed Work (outside Top 10)
+
+| Action | Category | Commit |
+|--------|----------|--------|
+| Deduplicate fam65xx opcode tables via `SharedOpcodeTable<Key>` | Optimization | `7bddaa2a` |
+| VIA: migrate to `regs_[16]` with `io_port` views over register array | Consistency | `7f47c596` |
+| Auto-generate Registers hex-dump for all chips with `set_registers()` | Debug / consistency | `20a586fc` |
 
 ---
 
-*Generated: 2026-03-08. Confidence: 0.85 — based on thorough automated code inspection. Line numbers verified at time of writing; may drift with future commits.*
+*Generated: 2026-03-08. Last updated: 2026-03-09. Confidence: 0.85 — based on thorough automated code inspection. Line numbers verified at time of writing; may drift with future commits.*
+*VIA migration + register hex-dump: 2026-03-09.*

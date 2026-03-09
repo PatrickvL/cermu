@@ -24,7 +24,7 @@
 void i8255_t::register_debug_fields() {
     using S = const i8255_t;
     auto& r = debug_registry_;
-    r.set_registers(regs_, i8255_regs::REG_COUNT);
+    r.set_registers(regs_, i8255_regs::REG_COUNT, I8255_REG_INFO);
 
     r.category("Port A");
     r.value("Output Latch", +[](const ChipBase* c) -> uint32_t {

@@ -66,28 +66,38 @@ inline constexpr AYVariantTraits ay_variant_traits[] = {
 };
 
 // ============================================================================
-// AY-3-8910 Register Addresses
+// AY-3-8910 REGISTER TABLE — single source of truth
 // ============================================================================
 
+// X(addr, symbol, description)
+#define AY_REG_TABLE(X) \
+    X(0x00, TONE_A_FINE,   "Ch A tone period fine")    \
+    X(0x01, TONE_A_COARSE, "Ch A tone period coarse")  \
+    X(0x02, TONE_B_FINE,   "Ch B tone period fine")    \
+    X(0x03, TONE_B_COARSE, "Ch B tone period coarse")  \
+    X(0x04, TONE_C_FINE,   "Ch C tone period fine")    \
+    X(0x05, TONE_C_COARSE, "Ch C tone period coarse")  \
+    X(0x06, NOISE_PERIOD,  "Noise generator period")   \
+    X(0x07, MIXER,         "Tone/noise mixer control") \
+    X(0x08, AMP_A,         "Ch A amplitude")           \
+    X(0x09, AMP_B,         "Ch B amplitude")           \
+    X(0x0A, AMP_C,         "Ch C amplitude")           \
+    X(0x0B, ENV_FINE,      "Envelope period fine")     \
+    X(0x0C, ENV_COARSE,    "Envelope period coarse")   \
+    X(0x0D, ENV_SHAPE,     "Envelope shape/cycle")     \
+    X(0x0E, IO_PORT_A,     "I/O port A data")          \
+    X(0x0F, IO_PORT_B,     "I/O port B data")
+
 namespace ay_regs {
-    constexpr uint8_t TONE_A_FINE    = 0x00;
-    constexpr uint8_t TONE_A_COARSE  = 0x01;
-    constexpr uint8_t TONE_B_FINE    = 0x02;
-    constexpr uint8_t TONE_B_COARSE  = 0x03;
-    constexpr uint8_t TONE_C_FINE    = 0x04;
-    constexpr uint8_t TONE_C_COARSE  = 0x05;
-    constexpr uint8_t NOISE_PERIOD   = 0x06;
-    constexpr uint8_t MIXER          = 0x07;
-    constexpr uint8_t AMP_A          = 0x08;
-    constexpr uint8_t AMP_B          = 0x09;
-    constexpr uint8_t AMP_C          = 0x0A;
-    constexpr uint8_t ENV_FINE       = 0x0B;
-    constexpr uint8_t ENV_COARSE     = 0x0C;
-    constexpr uint8_t ENV_SHAPE      = 0x0D;
-    constexpr uint8_t IO_PORT_A      = 0x0E;
-    constexpr uint8_t IO_PORT_B      = 0x0F;
-    constexpr uint8_t REG_COUNT      = 16;
+    #define AY_X_CONST_(a, s, l) constexpr uint8_t s = a;
+    AY_REG_TABLE(AY_X_CONST_)
+    #undef AY_X_CONST_
+    constexpr uint8_t REG_COUNT = 16;
 } // namespace ay_regs
+
+#define AY_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry AY_REG_INFO[] = { AY_REG_TABLE(AY_X_INFO_) };
+#undef AY_X_INFO_
 
 // ============================================================================
 // AY-3-8910 Sound Chip

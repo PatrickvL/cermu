@@ -31,21 +31,31 @@
 #include <cstring>
 
 // ============================================================================
-// Z80 CTC Register Indices (flattened view of internal state)
+// Z80 CTC REGISTER TABLE — single source of truth
 // ============================================================================
 
+// X(addr, symbol, description)
+#define Z80_CTC_REG_TABLE(X) \
+    X(0x00, CH0_CTRL, "Channel 0 control")        \
+    X(0x01, CH1_CTRL, "Channel 1 control")        \
+    X(0x02, CH2_CTRL, "Channel 2 control")        \
+    X(0x03, CH3_CTRL, "Channel 3 control")        \
+    X(0x04, CH0_TC,   "Channel 0 time constant")  \
+    X(0x05, CH1_TC,   "Channel 1 time constant")  \
+    X(0x06, CH2_TC,   "Channel 2 time constant")  \
+    X(0x07, CH3_TC,   "Channel 3 time constant")  \
+    X(0x08, INT_VEC,  "Interrupt base vector")
+
 namespace z80_ctc_regs {
-    constexpr uint8_t CH0_CTRL  = 0x00;
-    constexpr uint8_t CH1_CTRL  = 0x01;
-    constexpr uint8_t CH2_CTRL  = 0x02;
-    constexpr uint8_t CH3_CTRL  = 0x03;
-    constexpr uint8_t CH0_TC    = 0x04;
-    constexpr uint8_t CH1_TC    = 0x05;
-    constexpr uint8_t CH2_TC    = 0x06;
-    constexpr uint8_t CH3_TC    = 0x07;
-    constexpr uint8_t INT_VEC   = 0x08;
+    #define Z80_CTC_X_CONST_(a, s, l) constexpr uint8_t s = a;
+    Z80_CTC_REG_TABLE(Z80_CTC_X_CONST_)
+    #undef Z80_CTC_X_CONST_
     constexpr uint8_t REG_COUNT = 9;
 } // namespace z80_ctc_regs
+
+#define Z80_CTC_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry Z80_CTC_REG_INFO[] = { Z80_CTC_REG_TABLE(Z80_CTC_X_INFO_) };
+#undef Z80_CTC_X_INFO_
 
 // ============================================================================
 // Z80 CTC Channel Control Bits

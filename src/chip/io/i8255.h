@@ -23,16 +23,26 @@
 #include <cstring>
 
 // ============================================================================
-// i8255 Register Addresses
+// i8255 REGISTER TABLE — single source of truth
 // ============================================================================
 
+// X(addr, symbol, description)
+#define I8255_REG_TABLE(X) \
+    X(0x00, PORT_A,  "Port A data")    \
+    X(0x01, PORT_B,  "Port B data")    \
+    X(0x02, PORT_C,  "Port C data")    \
+    X(0x03, CONTROL, "Mode control word")
+
 namespace i8255_regs {
-    constexpr uint8_t PORT_A  = 0x00;
-    constexpr uint8_t PORT_B  = 0x01;
-    constexpr uint8_t PORT_C  = 0x02;
-    constexpr uint8_t CONTROL = 0x03;
+    #define I8255_X_CONST_(a, s, l) constexpr uint8_t s = a;
+    I8255_REG_TABLE(I8255_X_CONST_)
+    #undef I8255_X_CONST_
     constexpr uint8_t REG_COUNT = 4;
 } // namespace i8255_regs
+
+#define I8255_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry I8255_REG_INFO[] = { I8255_REG_TABLE(I8255_X_INFO_) };
+#undef I8255_X_INFO_
 
 class i8255_t : public ChipBase {
 public:

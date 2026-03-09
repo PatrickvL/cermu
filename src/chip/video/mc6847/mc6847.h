@@ -31,6 +31,14 @@
 // MC6847 Constants
 // ============================================================================
 
+// ============================================================================
+// MC6847 REGISTER TABLE — single source of truth
+// ============================================================================
+
+// X(addr, symbol, description)
+#define MC6847_REG_TABLE(X) \
+    X(0x00, REG_MODE, "Mode pin state mirror")
+
 namespace mc6847_const {
 
     inline constexpr int DISPLAY_WIDTH  = 256;
@@ -56,11 +64,17 @@ namespace mc6847_const {
     inline constexpr uint8_t MODE_GM1    = 0x40;
     inline constexpr uint8_t MODE_GM2    = 0x80;
 
-    // Register layout: single mode byte + padding for consistency
-    inline constexpr uint8_t REG_MODE    = 0x00;
-    inline constexpr uint8_t REG_COUNT   = 1;
+    // Register layout: single mode byte
+    #define MC6847_X_CONST_(a, s, l) inline constexpr uint8_t s = a;
+    MC6847_REG_TABLE(MC6847_X_CONST_)
+    #undef MC6847_X_CONST_
+    inline constexpr uint8_t REG_COUNT = 1;
 
 } // namespace mc6847_const
+
+#define MC6847_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry MC6847_REG_INFO[] = { MC6847_REG_TABLE(MC6847_X_INFO_) };
+#undef MC6847_X_INFO_
 
 // ============================================================================
 // MC6847 Video Display Generator
@@ -178,7 +192,7 @@ private:
     void register_debug_fields() {
         using S = const mc6847_t;
         auto& r = debug_registry_;
-        r.set_registers(regs_, mc6847_const::REG_COUNT);
+        r.set_registers(regs_, mc6847_const::REG_COUNT, MC6847_REG_INFO);
 
         r.category("Mode Pins");
         r.flag("AG (Graphics)", +[](const ChipBase* c) -> uint32_t {

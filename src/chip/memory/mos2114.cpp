@@ -8,6 +8,7 @@
 MOS2114::MOS2114()
     : ChipBase(ChipInfo{"MOS2114", "MOS Technology"})
 {
+    category_ = "Memory";
     std::memset(memory, 0, sizeof(memory));
 #ifdef CERMU_HAS_CHIP_DEBUG
     register_debug_fields();
