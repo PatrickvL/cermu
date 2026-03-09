@@ -83,10 +83,15 @@
     REG(0x13, CHAR_HI,    "Char generator base")                                 \
     REG(0x14, BITMAP_ADDR,"Screen/bitmap base")                                  \
     REG(0x15, COLOR_BG0,  "Background color 0")                                  \
+      FLD(COLOR_BG0, COLOR0, 6:0, "Color",  Color, 0, 0)                        \
     REG(0x16, COLOR_BG1,  "Background color 1")                                  \
+      FLD(COLOR_BG1, COLOR1, 6:0, "Color",  Color, 0, 0)                        \
     REG(0x17, COLOR_BG2,  "Background color 2")                                  \
+      FLD(COLOR_BG2, COLOR2, 6:0, "Color",  Color, 0, 0)                        \
     REG(0x18, COLOR_BG3,  "Background color 3")                                  \
+      FLD(COLOR_BG3, COLOR3, 6:0, "Color",  Color, 0, 0)                        \
     REG(0x19, BORDER,     "Border color")                                        \
+      FLD(BORDER, BCOLOR,   6:0, "Color",  Color, 0, 0)                                        \
     REG(0x1A, CHARPOS_HI, "Char counter hi")                                     \
     REG(0x1B, CHARPOS_LO, "Char counter lo")                                     \
     REG(0x1C, RASTER_HI,  "Raster counter hi")                                   \

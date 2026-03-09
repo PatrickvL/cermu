@@ -43,12 +43,12 @@
       FLD(NOISE_FREQ, NOISE_EN, 7:7, "Noise enable",         Flag,  0, 0)          \
       FLD(NOISE_FREQ, NOISE_F,  6:0, "Noise frequency",      Value, 0, 0)          \
     REG(0x0E, AUX_COLOR,    "Aux color / volume")                                  \
-      FLD(AUX_COLOR, AUX_COL,   7:4, "Auxiliary color",      Value, 0, 0)          \
+      FLD(AUX_COLOR, AUX_COL,   7:4, "Auxiliary color",      Color, 0, 0)          \
       FLD(AUX_COLOR, VOLUME,    3:0, "Volume",               Value, 0, 0)          \
     REG(0x0F, BACKGROUND,   "BG/reverse/border")                                   \
-      FLD(BACKGROUND, BG_COL,   7:4, "Background color",     Value, 0, 0)          \
+      FLD(BACKGROUND, BG_COL,   7:4, "Background color",     Color, 0, 0)          \
       FLD(BACKGROUND, REVERSE,  3:3, "Reverse screen",       Flag,  0, 0)          \
-      FLD(BACKGROUND, BORDER,   2:0, "Border color",         Value, 0, 0)
+      FLD(BACKGROUND, BORDER,   2:0, "Border color",         Color, 0, 0)
 
 // Backward compat: old REG_TABLE is just the REG rows from the DECL
 #define VIC_REG_TABLE(X) VIC_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
