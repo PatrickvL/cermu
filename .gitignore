@@ -71,6 +71,7 @@ data/**/*.prg
 data/**/*.rom
 data/**/*.s
 data/**/*.sav
+data/**/*.sid
 data/**/*.t64
 data/**/*.tap
 data/**/*.txt
