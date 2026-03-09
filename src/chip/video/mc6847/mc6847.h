@@ -78,38 +78,12 @@ namespace mc6847_const {
     inline constexpr uint8_t MODE_GM2    = 0x80;
 
     // Register constants from DECL
-    #define MC6847_X_CONST_(a, s, l) inline constexpr uint8_t s = a;
-    MC6847_DECL(MC6847_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-    #undef MC6847_X_CONST_
+    MC6847_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     inline constexpr uint8_t REG_COUNT = 1;
 
 } // namespace mc6847_const
 
-// --- Extract register info array ---
-#define MC6847_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry MC6847_REG_INFO[] = { MC6847_DECL(MC6847_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };
-#undef MC6847_X_INFO_
-
-// --- Extract field info array ---
-#define MC6847_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
-    { #fld, desc, mc6847_const::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
-static constexpr FieldEntry MC6847_FLD_INFO[] = {
-    MC6847_DECL(DECL_REG_NOP, MC6847_X_FLD_INFO_, DECL_CMP_NOP)
-};
-#undef MC6847_X_FLD_INFO_
-static constexpr size_t MC6847_NUM_FIELDS = sizeof(MC6847_FLD_INFO) / sizeof(MC6847_FLD_INFO[0]);
-
-// --- Extract declaration order array ---
-#define MC6847_X_ORD_REG_(a, s, l)                                             { DeclRowType::Reg, (uint16_t)(a) },
-#define MC6847_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                           { DeclRowType::Field, 0 },
-#define MC6847_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)        { DeclRowType::Compound, 0 },
-static constexpr DeclOrderEntry MC6847_DECL_ORDER_RAW[] = {
-    MC6847_DECL(MC6847_X_ORD_REG_, MC6847_X_ORD_FLD_, MC6847_X_ORD_CMP_)
-};
-#undef MC6847_X_ORD_REG_
-#undef MC6847_X_ORD_FLD_
-#undef MC6847_X_ORD_CMP_
-static constexpr auto MC6847_DECL_ORDER = assign_decl_indices(MC6847_DECL_ORDER_RAW);
+DECL_EXTRACT_ALL(MC6847, MC6847_DECL)
 
 // ============================================================================
 // MC6847 Video Display Generator

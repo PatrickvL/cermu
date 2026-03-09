@@ -77,37 +77,11 @@ enum class WSGVariant : uint8_t {
 #define WSG_REG_TABLE(X) WSG_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 namespace wsg_regs {
-    #define WSG_X_CONST_(a, s, l) constexpr uint8_t s = a;
-    WSG_REG_TABLE(WSG_X_CONST_)
-    #undef WSG_X_CONST_
+    WSG_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 0x15;
 } // namespace wsg_regs
 
-// --- RegEntry ---
-#define WSG_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry WSG_REG_INFO[] = { WSG_REG_TABLE(WSG_X_INFO_) };
-#undef WSG_X_INFO_
-
-// --- FieldEntry ---
-#define WSG_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
-    { #fld, desc, wsg_regs::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
-static constexpr FieldEntry WSG_FLD_INFO[] = {
-    WSG_DECL(DECL_REG_NOP, WSG_X_FLD_INFO_, DECL_CMP_NOP)
-};
-#undef WSG_X_FLD_INFO_
-static constexpr size_t WSG_NUM_FIELDS = sizeof(WSG_FLD_INFO) / sizeof(WSG_FLD_INFO[0]);
-
-// --- DeclOrder ---
-#define WSG_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
-#define WSG_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                            { DeclRowType::Field, 0 },
-#define WSG_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)         { DeclRowType::Compound, 0 },
-static constexpr DeclOrderEntry WSG_DECL_ORDER_RAW[] = {
-    WSG_DECL(WSG_X_ORD_REG_, WSG_X_ORD_FLD_, WSG_X_ORD_CMP_)
-};
-#undef WSG_X_ORD_REG_
-#undef WSG_X_ORD_FLD_
-#undef WSG_X_ORD_CMP_
-static constexpr auto WSG_DECL_ORDER = assign_decl_indices(WSG_DECL_ORDER_RAW);
+DECL_EXTRACT_ALL(WSG, WSG_DECL)
 
 // ============================================================================
 // Namco WSG Sound Generator

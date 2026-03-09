@@ -52,9 +52,7 @@
 namespace spectrum_ula {
 
     // Register constants from DECL
-    #define SPECTRUM_ULA_X_CONST_(a, s, l) inline constexpr uint8_t s = a;
-    SPECTRUM_ULA_DECL(SPECTRUM_ULA_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-    #undef SPECTRUM_ULA_X_CONST_
+    SPECTRUM_ULA_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     inline constexpr uint8_t REG_COUNT = 1;
 
     // Display dimensions
@@ -101,31 +99,7 @@ namespace spectrum_ula {
 
 } // namespace spectrum_ula
 
-// --- Extract register info array ---
-#define SPECTRUM_ULA_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry SPECTRUM_ULA_REG_INFO[] = { SPECTRUM_ULA_DECL(SPECTRUM_ULA_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };
-#undef SPECTRUM_ULA_X_INFO_
-
-// --- Extract field info array ---
-#define SPECTRUM_ULA_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
-    { #fld, desc, spectrum_ula::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
-static constexpr FieldEntry SPECTRUM_ULA_FLD_INFO[] = {
-    SPECTRUM_ULA_DECL(DECL_REG_NOP, SPECTRUM_ULA_X_FLD_INFO_, DECL_CMP_NOP)
-};
-#undef SPECTRUM_ULA_X_FLD_INFO_
-static constexpr size_t SPECTRUM_ULA_NUM_FIELDS = sizeof(SPECTRUM_ULA_FLD_INFO) / sizeof(SPECTRUM_ULA_FLD_INFO[0]);
-
-// --- Extract declaration order array ---
-#define SPECTRUM_ULA_X_ORD_REG_(a, s, l)                                       { DeclRowType::Reg, (uint16_t)(a) },
-#define SPECTRUM_ULA_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                      { DeclRowType::Field, 0 },
-#define SPECTRUM_ULA_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)   { DeclRowType::Compound, 0 },
-static constexpr DeclOrderEntry SPECTRUM_ULA_DECL_ORDER_RAW[] = {
-    SPECTRUM_ULA_DECL(SPECTRUM_ULA_X_ORD_REG_, SPECTRUM_ULA_X_ORD_FLD_, SPECTRUM_ULA_X_ORD_CMP_)
-};
-#undef SPECTRUM_ULA_X_ORD_REG_
-#undef SPECTRUM_ULA_X_ORD_FLD_
-#undef SPECTRUM_ULA_X_ORD_CMP_
-static constexpr auto SPECTRUM_ULA_DECL_ORDER = assign_decl_indices(SPECTRUM_ULA_DECL_ORDER_RAW);
+DECL_EXTRACT_ALL(SPECTRUM_ULA, SPECTRUM_ULA_DECL)
 
 // ============================================================================
 // Ferranti ULA Chip

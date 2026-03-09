@@ -47,33 +47,8 @@
 #define PIA_X_CONST_(a, s, l) static constexpr uint8_t PIA_REG_##s = a;
 PIA_DECL(PIA_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 #undef PIA_X_CONST_
-static constexpr uint8_t PIA_NUM_REGS = 6;
 
-// --- Extract register info array ---
-#define PIA_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry PIA_REG_INFO[] = { PIA_DECL(PIA_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };
-#undef PIA_X_INFO_
-
-// --- Extract field info array ---
-#define PIA_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
-    { #fld, desc, PIA_REG_##reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
-static constexpr FieldEntry PIA_FLD_INFO[] = {
-    PIA_DECL(DECL_REG_NOP, PIA_X_FLD_INFO_, DECL_CMP_NOP)
-};
-#undef PIA_X_FLD_INFO_
-static constexpr size_t PIA_NUM_FIELDS = sizeof(PIA_FLD_INFO) / sizeof(PIA_FLD_INFO[0]);
-
-// --- Extract declaration order array ---
-#define PIA_X_ORD_REG_(a, s, l)                                                { DeclRowType::Reg, (uint16_t)(a) },
-#define PIA_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                              { DeclRowType::Field, 0 },
-#define PIA_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)           { DeclRowType::Compound, 0 },
-static constexpr DeclOrderEntry PIA_DECL_ORDER_RAW[] = {
-    PIA_DECL(PIA_X_ORD_REG_, PIA_X_ORD_FLD_, PIA_X_ORD_CMP_)
-};
-#undef PIA_X_ORD_REG_
-#undef PIA_X_ORD_FLD_
-#undef PIA_X_ORD_CMP_
-static constexpr auto PIA_DECL_ORDER = assign_decl_indices(PIA_DECL_ORDER_RAW);
+DECL_EXTRACT_ALL(PIA, PIA_DECL)
 
 struct pia6820_t : public IoChipBase {
     pia6820_t() : IoChipBase(ChipInfo{"PIA6820", "Motorola"}) {

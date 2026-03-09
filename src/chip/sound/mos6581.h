@@ -179,35 +179,10 @@ enum waveform_bits_t {
 
 // --- Extract register constants ---
 namespace sid_regs {
-    #define SID_X_CONST_(a, s, l) static constexpr uint8_t s = a;
-    SID_DECL(SID_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-    #undef SID_X_CONST_
+    SID_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 }
 
-// --- Extract register info array ---
-#define SID_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry SID_REG_INFO[] = { SID_REG_TABLE(SID_X_INFO_) };
-#undef SID_X_INFO_
-constexpr uint16_t SID_NUM_REGS = sizeof(SID_REG_INFO) / sizeof(SID_REG_INFO[0]);
-
-// --- Extract field info array ---
-#define SID_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
-    { #fld, desc, static_cast<uint16_t>(sid_regs::reg), BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
-static constexpr FieldEntry SID_FLD_INFO[] = {
-    SID_DECL(DECL_REG_NOP, SID_X_FLD_INFO_, DECL_CMP_NOP)
-};
-#undef SID_X_FLD_INFO_
-constexpr uint16_t SID_NUM_FIELDS = sizeof(SID_FLD_INFO) / sizeof(SID_FLD_INFO[0]);
-
-// --- Interleaved declaration order ---
-#define SID_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
-#define SID_X_ORD_FLD_(r, s, hilo, d, k, ds, dm)                             { DeclRowType::Field, 0 },
-static constexpr auto SID_DECL_ORDER = [] {
-    constexpr DeclOrderEntry raw[] = { SID_DECL(SID_X_ORD_REG_, SID_X_ORD_FLD_, DECL_CMP_NOP) };
-    return assign_decl_indices(raw);
-}();
-#undef SID_X_ORD_REG_
-#undef SID_X_ORD_FLD_
+DECL_EXTRACT_ALL(SID, SID_DECL)
 
 // RESON register (0x17) bit fields
 #define RESON_FILT1     0x01  // Route voice 1 through filter

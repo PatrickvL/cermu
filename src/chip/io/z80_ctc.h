@@ -50,23 +50,11 @@
 #define Z80_CTC_REG_TABLE(X) Z80_CTC_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 namespace z80_ctc_regs {
-    #define Z80_CTC_X_CONST_(a, s, l) constexpr uint8_t s = a;
-    Z80_CTC_DECL(Z80_CTC_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-    #undef Z80_CTC_X_CONST_
+    Z80_CTC_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     constexpr uint8_t REG_COUNT = 9;
 } // namespace z80_ctc_regs
 
-#define Z80_CTC_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry Z80_CTC_REG_INFO[] = { Z80_CTC_DECL(Z80_CTC_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };
-#undef Z80_CTC_X_INFO_
-
-// --- Extract declaration order array (no fields or compounds) ---
-#define Z80_CTC_X_ORD_REG_(a, s, l) { DeclRowType::Reg, (uint16_t)(a) },
-static constexpr DeclOrderEntry Z80_CTC_DECL_ORDER_RAW[] = {
-    Z80_CTC_DECL(Z80_CTC_X_ORD_REG_, DECL_FLD_NOP, DECL_CMP_NOP)
-};
-#undef Z80_CTC_X_ORD_REG_
-static constexpr auto Z80_CTC_DECL_ORDER = assign_decl_indices(Z80_CTC_DECL_ORDER_RAW);
+DECL_EXTRACT_REGS_ONLY(Z80_CTC, Z80_CTC_DECL)
 
 // ============================================================================
 // Z80 CTC Channel Control Bits

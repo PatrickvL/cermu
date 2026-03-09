@@ -57,20 +57,8 @@ static constexpr uint16_t RIOT_TIM1024T = 0x17;   // Divide by 1024
 #define RIOT_X_CONST_(a, s, l) static constexpr uint8_t RIOT_REG_##s = a;
 RIOT_DECL(RIOT_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 #undef RIOT_X_CONST_
-static constexpr uint8_t RIOT_NUM_REGS = 4;
 
-// --- Extract register info array ---
-#define RIOT_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry RIOT_REG_INFO[] = { RIOT_DECL(RIOT_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };
-#undef RIOT_X_INFO_
-
-// --- Extract declaration order array (no fields or compounds) ---
-#define RIOT_X_ORD_REG_(a, s, l) { DeclRowType::Reg, (uint16_t)(a) },
-static constexpr DeclOrderEntry RIOT_DECL_ORDER_RAW[] = {
-    RIOT_DECL(RIOT_X_ORD_REG_, DECL_FLD_NOP, DECL_CMP_NOP)
-};
-#undef RIOT_X_ORD_REG_
-static constexpr auto RIOT_DECL_ORDER = assign_decl_indices(RIOT_DECL_ORDER_RAW);
+DECL_EXTRACT_REGS_ONLY(RIOT, RIOT_DECL)
 
 struct pia6532_t : public IoChipBase {
     pia6532_t() : IoChipBase(ChipInfo{"PIA6532", "MOS Technology"}) {

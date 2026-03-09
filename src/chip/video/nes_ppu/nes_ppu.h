@@ -74,31 +74,7 @@ namespace nes_system {
 NES_PPU_REG_TABLE(NES_PPU_X_FLD_CONST_)
 #undef NES_PPU_X_FLD_CONST_
 
-// --- RegEntry ---
-#define NES_PPU_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry NES_PPU_REG_INFO[] = { NES_PPU_REG_TABLE(NES_PPU_X_INFO_) };
-#undef NES_PPU_X_INFO_
-
-// --- FieldEntry ---
-#define NES_PPU_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
-    { #fld, desc, NES_PPU_REG_##reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
-static constexpr FieldEntry NES_PPU_FLD_INFO[] = {
-    NES_PPU_DECL(DECL_REG_NOP, NES_PPU_X_FLD_INFO_, DECL_CMP_NOP)
-};
-#undef NES_PPU_X_FLD_INFO_
-static constexpr size_t NES_PPU_NUM_FIELDS = sizeof(NES_PPU_FLD_INFO) / sizeof(NES_PPU_FLD_INFO[0]);
-
-// --- DeclOrder ---
-#define NES_PPU_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
-#define NES_PPU_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                            { DeclRowType::Field, 0 },
-#define NES_PPU_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)         { DeclRowType::Compound, 0 },
-static constexpr DeclOrderEntry NES_PPU_DECL_ORDER_RAW[] = {
-    NES_PPU_DECL(NES_PPU_X_ORD_REG_, NES_PPU_X_ORD_FLD_, NES_PPU_X_ORD_CMP_)
-};
-#undef NES_PPU_X_ORD_REG_
-#undef NES_PPU_X_ORD_FLD_
-#undef NES_PPU_X_ORD_CMP_
-static constexpr auto NES_PPU_DECL_ORDER = assign_decl_indices(NES_PPU_DECL_ORDER_RAW);
+DECL_EXTRACT_ALL(NES_PPU, NES_PPU_DECL)
 
 namespace nes_system {
 
