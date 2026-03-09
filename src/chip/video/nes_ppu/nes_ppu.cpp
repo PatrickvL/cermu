@@ -878,6 +878,12 @@ void PPU::register_debug_fields() {
     using P = const PPU;
     auto& r = debug_registry_;
     r.set_registers(regs, REG_COUNT, NES_PPU_REG_INFO, 0x2000);
+    r.set_decl_order(NES_PPU_DECL_ORDER.data(), NES_PPU_DECL_ORDER.size(),
+                     NES_PPU_FLD_INFO, NES_PPU_NUM_FIELDS,
+                     nullptr, 0, nullptr);
+
+    // Control/mask/status register values and bitfields are in the DECL walk.
+    // Timing, internal state, and palette RAM remain as categories.
 
     // ---- Timing ----
     r.category("Timing");
@@ -899,46 +905,6 @@ void PPU::register_debug_fields() {
         (const char* const[]){"NTSC", "PAL"}, 2);
     r.flag("Frame Complete", +[](const ChipBase* c) -> uint32_t { return static_cast<P*>(c)->frame_complete; });
     r.flag("NMI Internal", +[](const ChipBase* c) -> uint32_t { return static_cast<P*>(c)->vbl_flag_internal_; });
-
-    // ---- PPUCTRL ($2000) ----
-    r.category("PPUCTRL ($2000)");
-    r.value("PPUCTRL", uint16_t(PPUCTRL));
-    r.flag("NMI Enable", uint16_t(PPUCTRL), 7);
-    r.flag("Master/Slave", uint16_t(PPUCTRL), 6);
-    r.state("Sprite Size", uint16_t(PPUCTRL), 1, 5,
-        (const char* const[]){"8x8", "8x16"}, 2);
-    r.address("BG Pattern Base", +[](const ChipBase* c) -> uint32_t {
-        return (static_cast<P*>(c)->regs[PPUCTRL] & 0x10) ? 0x1000u : 0x0000u;
-    }, 16);
-    r.address("SPR Pattern Base", +[](const ChipBase* c) -> uint32_t {
-        return (static_cast<P*>(c)->regs[PPUCTRL] & 0x08) ? 0x1000u : 0x0000u;
-    }, 16);
-    r.state("VRAM Increment", +[](const ChipBase* c) -> uint32_t {
-        return (static_cast<P*>(c)->regs[PPUCTRL] & 0x04) ? 1u : 0u;
-    }, (const char* const[]){"1", "32"}, 2);
-    r.address("Base Nametable", +[](const ChipBase* c) -> uint32_t {
-        return 0x2000u + (static_cast<P*>(c)->regs[PPUCTRL] & 0x03) * 0x400u;
-    }, 16);
-
-    // ---- PPUMASK ($2001) ----
-    r.category("PPUMASK ($2001)");
-    r.value("PPUMASK", uint16_t(PPUMASK));
-    r.flag("Emph Blue", uint16_t(PPUMASK), 7);
-    r.flag("Emph Green", uint16_t(PPUMASK), 6);
-    r.flag("Emph Red", uint16_t(PPUMASK), 5);
-    r.flag("Show Sprites", uint16_t(PPUMASK), 4);
-    r.flag("Show Background", uint16_t(PPUMASK), 3);
-    r.flag("Show Left SPR", uint16_t(PPUMASK), 2);
-    r.flag("Show Left BG", uint16_t(PPUMASK), 1);
-    r.flag("Greyscale", uint16_t(PPUMASK), 0);
-
-    // ---- PPUSTATUS ($2002) ----
-    r.category("PPUSTATUS ($2002)");
-    r.value("PPUSTATUS", uint16_t(PPUSTATUS));
-    r.flag("VBlank", uint16_t(PPUSTATUS), 7);
-    r.flag("Sprite 0 Hit", uint16_t(PPUSTATUS), 6);
-    r.flag("Sprite Overflow", uint16_t(PPUSTATUS), 5);
-    r.value("OAM Addr", uint16_t(OAMADDR));
 
     // ---- Internal State ----
     r.category("Internal State", false);

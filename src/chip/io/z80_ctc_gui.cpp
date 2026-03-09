@@ -27,10 +27,13 @@ void z80_ctc_t::register_debug_fields() {
     using S = const z80_ctc_t;
     auto& r = debug_registry_;
     r.set_registers(regs_, z80_ctc_regs::REG_COUNT, Z80_CTC_REG_INFO);
+    r.set_decl_order(Z80_CTC_DECL_ORDER.data(), Z80_CTC_DECL_ORDER.size(),
+                     nullptr, 0,
+                     nullptr, 0, nullptr);
 
+    // Control word and time constant values are in the DECL walk.
+    // Live counters and internal state flags remain as builder chains.
     r.category("Channel 0");
-    r.value("Control", static_cast<uint16_t>(z80_ctc_regs::CH0_CTRL), 8);
-    r.value("Time Const", static_cast<uint16_t>(z80_ctc_regs::CH0_TC), 8);
     r.counter("Counter", +[](const ChipBase* c) -> uint32_t {
         return static_cast<S*>(c)->ch_[0].counter;
     }, 256);
@@ -40,8 +43,6 @@ void z80_ctc_t::register_debug_fields() {
     r.flag("Int Pending", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->ch_[0].int_pending; });
 
     r.category("Channel 1");
-    r.value("Control", static_cast<uint16_t>(z80_ctc_regs::CH1_CTRL), 8);
-    r.value("Time Const", static_cast<uint16_t>(z80_ctc_regs::CH1_TC), 8);
     r.counter("Counter", +[](const ChipBase* c) -> uint32_t {
         return static_cast<S*>(c)->ch_[1].counter;
     }, 256);
@@ -51,8 +52,6 @@ void z80_ctc_t::register_debug_fields() {
     r.flag("Int Pending", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->ch_[1].int_pending; });
 
     r.category("Channel 2");
-    r.value("Control", static_cast<uint16_t>(z80_ctc_regs::CH2_CTRL), 8);
-    r.value("Time Const", static_cast<uint16_t>(z80_ctc_regs::CH2_TC), 8);
     r.counter("Counter", +[](const ChipBase* c) -> uint32_t {
         return static_cast<S*>(c)->ch_[2].counter;
     }, 256);
@@ -62,8 +61,6 @@ void z80_ctc_t::register_debug_fields() {
     r.flag("Int Pending", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->ch_[2].int_pending; });
 
     r.category("Channel 3");
-    r.value("Control", static_cast<uint16_t>(z80_ctc_regs::CH3_CTRL), 8);
-    r.value("Time Const", static_cast<uint16_t>(z80_ctc_regs::CH3_TC), 8);
     r.counter("Counter", +[](const ChipBase* c) -> uint32_t {
         return static_cast<S*>(c)->ch_[3].counter;
     }, 256);
@@ -71,9 +68,6 @@ void z80_ctc_t::register_debug_fields() {
     r.flag("Running", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->ch_[3].running; });
     r.flag("Int Enabled", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->ch_[3].int_enabled; });
     r.flag("Int Pending", +[](const ChipBase* c) -> uint32_t { return static_cast<S*>(c)->ch_[3].int_pending; });
-
-    r.category("Interrupt");
-    r.value("Vector Base", static_cast<uint16_t>(z80_ctc_regs::INT_VEC), 8);
 }
 #endif
 

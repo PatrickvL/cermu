@@ -43,29 +43,38 @@ enum class WSGVariant : uint8_t {
 // Namco WSG REGISTER TABLE — single source of truth
 // ============================================================================
 
-// X(addr, symbol, description)
-#define WSG_REG_TABLE(X) \
-    X(0x00, V1_FREQ0,   "Voice 1 freq bits 0-3")  \
-    X(0x01, V1_FREQ1,   "Voice 1 freq bits 4-7")  \
-    X(0x02, V1_FREQ2,   "Voice 1 freq bits 8-11") \
-    X(0x03, V1_FREQ3,   "Voice 1 freq bits 12-15") \
-    X(0x04, V1_FREQ4,   "Voice 1 freq bits 16-19") \
-    X(0x05, V2_FREQ0,   "Voice 2 freq bits 0-3")  \
-    X(0x06, V2_FREQ1,   "Voice 2 freq bits 4-7")  \
-    X(0x07, V2_FREQ2,   "Voice 2 freq bits 8-11") \
-    X(0x08, V2_FREQ3,   "Voice 2 freq bits 12-15") \
-    X(0x09, V2_FREQ4,   "Voice 2 freq bits 16-19") \
-    X(0x0A, V3_FREQ0,   "Voice 3 freq bits 0-3")  \
-    X(0x0B, V3_FREQ1,   "Voice 3 freq bits 4-7")  \
-    X(0x0C, V3_FREQ2,   "Voice 3 freq bits 8-11") \
-    X(0x0D, V3_FREQ3,   "Voice 3 freq bits 12-15") \
-    X(0x0E, V3_FREQ4,   "Voice 3 freq bits 16-19") \
-    X(0x0F, V1_WAVEVOL, "Voice 1 wave/volume")    \
-    X(0x10, V2_WAVEVOL, "Voice 2 wave/volume")    \
-    X(0x11, WSG_R11,    "-")                       \
-    X(0x12, WSG_R12,    "-")                       \
-    X(0x13, WSG_R13,    "-")                       \
-    X(0x14, V3_WAVEVOL, "Voice 3 wave/volume")
+// DECL(REG, FLD, CMP) — 21 registers, 6 fields (WAVEVOL registers)
+#define WSG_DECL(REG, FLD, CMP) \
+    REG(0x00, V1_FREQ0,   "Voice 1 freq bits 0-3")    \
+    REG(0x01, V1_FREQ1,   "Voice 1 freq bits 4-7")    \
+    REG(0x02, V1_FREQ2,   "Voice 1 freq bits 8-11")   \
+    REG(0x03, V1_FREQ3,   "Voice 1 freq bits 12-15")  \
+    REG(0x04, V1_FREQ4,   "Voice 1 freq bits 16-19")  \
+    REG(0x05, V2_FREQ0,   "Voice 2 freq bits 0-3")    \
+    REG(0x06, V2_FREQ1,   "Voice 2 freq bits 4-7")    \
+    REG(0x07, V2_FREQ2,   "Voice 2 freq bits 8-11")   \
+    REG(0x08, V2_FREQ3,   "Voice 2 freq bits 12-15")  \
+    REG(0x09, V2_FREQ4,   "Voice 2 freq bits 16-19")  \
+    REG(0x0A, V3_FREQ0,   "Voice 3 freq bits 0-3")    \
+    REG(0x0B, V3_FREQ1,   "Voice 3 freq bits 4-7")    \
+    REG(0x0C, V3_FREQ2,   "Voice 3 freq bits 8-11")   \
+    REG(0x0D, V3_FREQ3,   "Voice 3 freq bits 12-15")  \
+    REG(0x0E, V3_FREQ4,   "Voice 3 freq bits 16-19")  \
+    REG(0x0F, V1_WAVEVOL, "Voice 1 wave/volume")      \
+      FLD(V1_WAVEVOL, V1_WAVE, 6:4, "Waveform", Value, 0, 0) \
+      FLD(V1_WAVEVOL, V1_VOL,  3:0, "Volume",   Value, 0, 0) \
+    REG(0x10, V2_WAVEVOL, "Voice 2 wave/volume")      \
+      FLD(V2_WAVEVOL, V2_WAVE, 6:4, "Waveform", Value, 0, 0) \
+      FLD(V2_WAVEVOL, V2_VOL,  3:0, "Volume",   Value, 0, 0) \
+    REG(0x11, WSG_R11,    "-")                         \
+    REG(0x12, WSG_R12,    "-")                         \
+    REG(0x13, WSG_R13,    "-")                         \
+    REG(0x14, V3_WAVEVOL, "Voice 3 wave/volume")      \
+      FLD(V3_WAVEVOL, V3_WAVE, 6:4, "Waveform", Value, 0, 0) \
+      FLD(V3_WAVEVOL, V3_VOL,  3:0, "Volume",   Value, 0, 0)
+
+// Backward compat: old REG_TABLE is just the REG rows from the DECL
+#define WSG_REG_TABLE(X) WSG_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 namespace wsg_regs {
     #define WSG_X_CONST_(a, s, l) constexpr uint8_t s = a;
@@ -74,9 +83,31 @@ namespace wsg_regs {
     constexpr uint8_t REG_COUNT = 0x15;
 } // namespace wsg_regs
 
+// --- RegEntry ---
 #define WSG_X_INFO_(a, s, l) { #s, l },
 static constexpr RegEntry WSG_REG_INFO[] = { WSG_REG_TABLE(WSG_X_INFO_) };
 #undef WSG_X_INFO_
+
+// --- FieldEntry ---
+#define WSG_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
+    { #fld, desc, wsg_regs::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
+static constexpr FieldEntry WSG_FLD_INFO[] = {
+    WSG_DECL(DECL_REG_NOP, WSG_X_FLD_INFO_, DECL_CMP_NOP)
+};
+#undef WSG_X_FLD_INFO_
+static constexpr size_t WSG_NUM_FIELDS = sizeof(WSG_FLD_INFO) / sizeof(WSG_FLD_INFO[0]);
+
+// --- DeclOrder ---
+#define WSG_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
+#define WSG_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                            { DeclRowType::Field, 0 },
+#define WSG_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)         { DeclRowType::Compound, 0 },
+static constexpr DeclOrderEntry WSG_DECL_ORDER_RAW[] = {
+    WSG_DECL(WSG_X_ORD_REG_, WSG_X_ORD_FLD_, WSG_X_ORD_CMP_)
+};
+#undef WSG_X_ORD_REG_
+#undef WSG_X_ORD_FLD_
+#undef WSG_X_ORD_CMP_
+static constexpr auto WSG_DECL_ORDER = assign_decl_indices(WSG_DECL_ORDER_RAW);
 
 // ============================================================================
 // Namco WSG Sound Generator
@@ -193,6 +224,12 @@ private:
         using S = const namco_wsg_t;
         auto& r = debug_registry_;
         r.set_registers(regs_, wsg_regs::REG_COUNT, WSG_REG_INFO);
+        r.set_decl_order(WSG_DECL_ORDER.data(), WSG_DECL_ORDER.size(),
+                         WSG_FLD_INFO, WSG_NUM_FIELDS,
+                         nullptr, 0, nullptr);
+
+        // Waveform/volume fields are in the DECL walk (WAVEVOL FLDs).
+        // Combined 20-bit frequency values from 5 registers remain.
 
         r.category("Voice 1");
         r.value("Frequency", +[](const ChipBase* c) -> uint32_t {
@@ -201,12 +238,6 @@ private:
             for (int b = 4; b >= 0; --b) f = (f << 4) | s->channels_[0].freq[b];
             return f;
         }, 20);
-        r.value("Waveform", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->channels_[0].waveform;
-        }, 3);
-        r.value("Volume", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->channels_[0].volume;
-        }, 4);
 
         r.category("Voice 2");
         r.value("Frequency", +[](const ChipBase* c) -> uint32_t {
@@ -215,12 +246,6 @@ private:
             for (int b = 4; b >= 0; --b) f = (f << 4) | s->channels_[1].freq[b];
             return f;
         }, 20);
-        r.value("Waveform", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->channels_[1].waveform;
-        }, 3);
-        r.value("Volume", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->channels_[1].volume;
-        }, 4);
 
         r.category("Voice 3");
         r.value("Frequency", +[](const ChipBase* c) -> uint32_t {
@@ -229,12 +254,6 @@ private:
             for (int b = 4; b >= 0; --b) f = (f << 4) | s->channels_[2].freq[b];
             return f;
         }, 20);
-        r.value("Waveform", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->channels_[2].waveform;
-        }, 3);
-        r.value("Volume", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->channels_[2].volume;
-        }, 4);
     }
 #endif
 };

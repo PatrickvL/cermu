@@ -26,11 +26,13 @@ void z80_pio_t::register_debug_fields() {
     using S = const z80_pio_t;
     auto& r = debug_registry_;
     r.set_registers(regs_, z80_pio_regs::REG_COUNT, Z80_PIO_REG_INFO);
+    r.set_decl_order(Z80_PIO_DECL_ORDER.data(), Z80_PIO_DECL_ORDER.size(),
+                     nullptr, 0,
+                     nullptr, 0, nullptr);
 
+    // Register values (output latch, I/O select, int vector) are in the DECL walk.
+    // Internal port state (input, mode, int flags, ready) remains as builder chains.
     r.category("Port A");
-    r.value("Output Latch", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->port_[0].output;
-    }, 8);
     r.value("Input", +[](const ChipBase* c) -> uint32_t {
         return static_cast<S*>(c)->port_[0].input;
     }, 8);
@@ -38,44 +40,29 @@ void z80_pio_t::register_debug_fields() {
     r.state("Mode", +[](const ChipBase* c) -> uint32_t {
         return static_cast<uint32_t>(static_cast<S*>(c)->port_[0].mode);
     }, pio_mode_names, 4);
-    r.value("I/O Select", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->port_[0].io_select;
-    }, 8);
     r.flag("Int Enabled", +[](const ChipBase* c) -> uint32_t {
         return static_cast<S*>(c)->port_[0].int_enabled;
     });
     r.flag("Int Pending", +[](const ChipBase* c) -> uint32_t {
         return static_cast<S*>(c)->port_[0].int_pending;
     });
-    r.value("Int Vector", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->port_[0].int_vector;
-    }, 8);
     r.flag("ARDY", +[](const ChipBase* c) -> uint32_t {
         return static_cast<S*>(c)->port_[0].ready;
     });
 
     r.category("Port B");
-    r.value("Output Latch", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->port_[1].output;
-    }, 8);
     r.value("Input", +[](const ChipBase* c) -> uint32_t {
         return static_cast<S*>(c)->port_[1].input;
     }, 8);
     r.state("Mode", +[](const ChipBase* c) -> uint32_t {
         return static_cast<uint32_t>(static_cast<S*>(c)->port_[1].mode);
     }, pio_mode_names, 4);
-    r.value("I/O Select", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->port_[1].io_select;
-    }, 8);
     r.flag("Int Enabled", +[](const ChipBase* c) -> uint32_t {
         return static_cast<S*>(c)->port_[1].int_enabled;
     });
     r.flag("Int Pending", +[](const ChipBase* c) -> uint32_t {
         return static_cast<S*>(c)->port_[1].int_pending;
     });
-    r.value("Int Vector", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->port_[1].int_vector;
-    }, 8);
     r.flag("BRDY", +[](const ChipBase* c) -> uint32_t {
         return static_cast<S*>(c)->port_[1].ready;
     });

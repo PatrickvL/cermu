@@ -99,50 +99,115 @@ enum waveform_bits_t {
 #define SID_REG_ENV3    0x1C  // Envelope 3 output (read-only)
 
 // ============================================================================
-// SID REGISTER TABLE — single source of truth for register info (32 entries)
+// SID DECLARATION TABLE — registers + derived fields (32 REG + 34 FLD)
 // Voices 1-3 each occupy 7 registers; global filter/misc at $15-$1C;
 // $1D-$1F are unused/unmapped.
 // ============================================================================
 
-// X(addr, symbol, description)
-#define SID_REG_TABLE(X) \
-    X(0x00, V1_FRELO,  "Voice 1 freq lo")     \
-    X(0x01, V1_FREHI,  "Voice 1 freq hi")     \
-    X(0x02, V1_PWLO,   "Voice 1 pulse W lo")  \
-    X(0x03, V1_PWHI,   "Voice 1 pulse W hi")  \
-    X(0x04, V1_VCREG,  "Voice 1 control")     \
-    X(0x05, V1_ATDCY,  "Voice 1 atk/decay")   \
-    X(0x06, V1_SUREL,  "Voice 1 sus/release") \
-    X(0x07, V2_FRELO,  "Voice 2 freq lo")     \
-    X(0x08, V2_FREHI,  "Voice 2 freq hi")     \
-    X(0x09, V2_PWLO,   "Voice 2 pulse W lo")  \
-    X(0x0A, V2_PWHI,   "Voice 2 pulse W hi")  \
-    X(0x0B, V2_VCREG,  "Voice 2 control")     \
-    X(0x0C, V2_ATDCY,  "Voice 2 atk/decay")   \
-    X(0x0D, V2_SUREL,  "Voice 2 sus/release") \
-    X(0x0E, V3_FRELO,  "Voice 3 freq lo")     \
-    X(0x0F, V3_FREHI,  "Voice 3 freq hi")     \
-    X(0x10, V3_PWLO,   "Voice 3 pulse W lo")  \
-    X(0x11, V3_PWHI,   "Voice 3 pulse W hi")  \
-    X(0x12, V3_VCREG,  "Voice 3 control")     \
-    X(0x13, V3_ATDCY,  "Voice 3 atk/decay")   \
-    X(0x14, V3_SUREL,  "Voice 3 sus/release") \
-    X(0x15, CUTLO,     "Filter cutoff lo")     \
-    X(0x16, CUTHI,     "Filter cutoff hi")     \
-    X(0x17, RESON,     "Filter reso/routing")  \
-    X(0x18, SIGVOL,    "Filter mode/volume")   \
-    X(0x19, POTX,      "Paddle X (read)")      \
-    X(0x1A, POTY,      "Paddle Y (read)")      \
-    X(0x1B, OSC3,      "Osc 3 output (read)")  \
-    X(0x1C, ENV3,      "Env 3 output (read)")  \
-    X(0x1D, R1D,       "-")                    \
-    X(0x1E, R1E,       "-")                    \
-    X(0x1F, R1F,       "-")
+// REG(addr, symbol, description)
+// FLD(parent_reg, symbol, hi:lo, description, kind, display_shift, display_scale)
+#define SID_DECL(REG, FLD, CMP)                                               \
+    REG(0x00, V1_FRELO,  "Voice 1 freq lo")                                  \
+    REG(0x01, V1_FREHI,  "Voice 1 freq hi")                                  \
+    REG(0x02, V1_PWLO,   "Voice 1 pulse W lo")                               \
+    REG(0x03, V1_PWHI,   "Voice 1 pulse W hi")                               \
+    REG(0x04, V1_VCREG,  "Voice 1 control")                                  \
+        FLD(V1_VCREG, V1_GATE, 0:0, "Gate",  Flag, 0, 0)                     \
+        FLD(V1_VCREG, V1_SYNC, 1:1, "Sync",  Flag, 0, 0)                     \
+        FLD(V1_VCREG, V1_RING, 2:2, "Ring",  Flag, 0, 0)                     \
+        FLD(V1_VCREG, V1_TEST, 3:3, "Test",  Flag, 0, 0)                     \
+    REG(0x05, V1_ATDCY,  "Voice 1 atk/decay")                                \
+        FLD(V1_ATDCY, V1_ATK, 7:4, "Attack", Value, 0, 0)                    \
+        FLD(V1_ATDCY, V1_DCY, 3:0, "Decay",  Value, 0, 0)                    \
+    REG(0x06, V1_SUREL,  "Voice 1 sus/release")                              \
+        FLD(V1_SUREL, V1_SUS, 7:4, "Sustain", Value, 0, 0)                   \
+        FLD(V1_SUREL, V1_REL, 3:0, "Release", Value, 0, 0)                   \
+    REG(0x07, V2_FRELO,  "Voice 2 freq lo")                                  \
+    REG(0x08, V2_FREHI,  "Voice 2 freq hi")                                  \
+    REG(0x09, V2_PWLO,   "Voice 2 pulse W lo")                               \
+    REG(0x0A, V2_PWHI,   "Voice 2 pulse W hi")                               \
+    REG(0x0B, V2_VCREG,  "Voice 2 control")                                  \
+        FLD(V2_VCREG, V2_GATE, 0:0, "Gate",  Flag, 0, 0)                     \
+        FLD(V2_VCREG, V2_SYNC, 1:1, "Sync",  Flag, 0, 0)                     \
+        FLD(V2_VCREG, V2_RING, 2:2, "Ring",  Flag, 0, 0)                     \
+        FLD(V2_VCREG, V2_TEST, 3:3, "Test",  Flag, 0, 0)                     \
+    REG(0x0C, V2_ATDCY,  "Voice 2 atk/decay")                                \
+        FLD(V2_ATDCY, V2_ATK, 7:4, "Attack", Value, 0, 0)                    \
+        FLD(V2_ATDCY, V2_DCY, 3:0, "Decay",  Value, 0, 0)                    \
+    REG(0x0D, V2_SUREL,  "Voice 2 sus/release")                              \
+        FLD(V2_SUREL, V2_SUS, 7:4, "Sustain", Value, 0, 0)                   \
+        FLD(V2_SUREL, V2_REL, 3:0, "Release", Value, 0, 0)                   \
+    REG(0x0E, V3_FRELO,  "Voice 3 freq lo")                                  \
+    REG(0x0F, V3_FREHI,  "Voice 3 freq hi")                                  \
+    REG(0x10, V3_PWLO,   "Voice 3 pulse W lo")                               \
+    REG(0x11, V3_PWHI,   "Voice 3 pulse W hi")                               \
+    REG(0x12, V3_VCREG,  "Voice 3 control")                                  \
+        FLD(V3_VCREG, V3_GATE, 0:0, "Gate",  Flag, 0, 0)                     \
+        FLD(V3_VCREG, V3_SYNC, 1:1, "Sync",  Flag, 0, 0)                     \
+        FLD(V3_VCREG, V3_RING, 2:2, "Ring",  Flag, 0, 0)                     \
+        FLD(V3_VCREG, V3_TEST, 3:3, "Test",  Flag, 0, 0)                     \
+    REG(0x13, V3_ATDCY,  "Voice 3 atk/decay")                                \
+        FLD(V3_ATDCY, V3_ATK, 7:4, "Attack", Value, 0, 0)                    \
+        FLD(V3_ATDCY, V3_DCY, 3:0, "Decay",  Value, 0, 0)                    \
+    REG(0x14, V3_SUREL,  "Voice 3 sus/release")                              \
+        FLD(V3_SUREL, V3_SUS, 7:4, "Sustain", Value, 0, 0)                   \
+        FLD(V3_SUREL, V3_REL, 3:0, "Release", Value, 0, 0)                   \
+    REG(0x15, CUTLO,     "Filter cutoff lo")                                  \
+    REG(0x16, CUTHI,     "Filter cutoff hi")                                  \
+    REG(0x17, RESON,     "Filter reso/routing")                               \
+        FLD(RESON,  FILT1,  0:0, "Filt Voice 1",  Flag,  0, 0)               \
+        FLD(RESON,  FILT2,  1:1, "Filt Voice 2",  Flag,  0, 0)               \
+        FLD(RESON,  FILT3,  2:2, "Filt Voice 3",  Flag,  0, 0)               \
+        FLD(RESON,  FILTEX, 3:3, "Filt External", Flag,  0, 0)               \
+        FLD(RESON,  RES,    7:4, "Resonance",     Value, 0, 0)               \
+    REG(0x18, SIGVOL,    "Filter mode/volume")                                \
+        FLD(SIGVOL, VOLUME, 3:0, "Volume",      Value, 0, 0)                 \
+        FLD(SIGVOL, LP,     4:4, "Low Pass",    Flag,  0, 0)                 \
+        FLD(SIGVOL, BP,     5:5, "Band Pass",   Flag,  0, 0)                 \
+        FLD(SIGVOL, HP,     6:6, "High Pass",   Flag,  0, 0)                 \
+        FLD(SIGVOL, V3OFF,  7:7, "Voice 3 Off", Flag,  0, 0)                 \
+    REG(0x19, POTX,      "Paddle X (read)")                                   \
+    REG(0x1A, POTY,      "Paddle Y (read)")                                   \
+    REG(0x1B, OSC3,      "Osc 3 output (read)")                               \
+    REG(0x1C, ENV3,      "Env 3 output (read)")                               \
+    REG(0x1D, R1D,       "-")                                                 \
+    REG(0x1E, R1E,       "-")                                                 \
+    REG(0x1F, R1F,       "-")
 
-// --- Extract register info array (32 entries) ---
+// Backward compatibility — expose the old REG-only walk
+#define SID_REG_TABLE(X) SID_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
+
+// --- Extract register constants ---
+namespace sid_regs {
+    #define SID_X_CONST_(a, s, l) static constexpr uint8_t s = a;
+    SID_DECL(SID_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
+    #undef SID_X_CONST_
+}
+
+// --- Extract register info array ---
 #define SID_X_INFO_(a, s, l) { #s, l },
 static constexpr RegEntry SID_REG_INFO[] = { SID_REG_TABLE(SID_X_INFO_) };
 #undef SID_X_INFO_
+constexpr uint16_t SID_NUM_REGS = sizeof(SID_REG_INFO) / sizeof(SID_REG_INFO[0]);
+
+// --- Extract field info array ---
+#define SID_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
+    { #fld, desc, static_cast<uint16_t>(sid_regs::reg), BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
+static constexpr FieldEntry SID_FLD_INFO[] = {
+    SID_DECL(DECL_REG_NOP, SID_X_FLD_INFO_, DECL_CMP_NOP)
+};
+#undef SID_X_FLD_INFO_
+constexpr uint16_t SID_NUM_FIELDS = sizeof(SID_FLD_INFO) / sizeof(SID_FLD_INFO[0]);
+
+// --- Interleaved declaration order ---
+#define SID_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
+#define SID_X_ORD_FLD_(r, s, hilo, d, k, ds, dm)                             { DeclRowType::Field, 0 },
+static constexpr auto SID_DECL_ORDER = [] {
+    constexpr DeclOrderEntry raw[] = { SID_DECL(SID_X_ORD_REG_, SID_X_ORD_FLD_, DECL_CMP_NOP) };
+    return assign_decl_indices(raw);
+}();
+#undef SID_X_ORD_REG_
+#undef SID_X_ORD_FLD_
 
 // RESON register (0x17) bit fields
 #define RESON_FILT1     0x01  // Route voice 1 through filter
@@ -221,7 +286,7 @@ struct ring_buffer_t {
     void write(float sample);
     float read();
     bool empty();
-    uint32_t available();
+    uint32_t available() const;
 };
 
 // Filter state structure

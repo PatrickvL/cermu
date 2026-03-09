@@ -25,53 +25,22 @@ void i8255_t::register_debug_fields() {
     using S = const i8255_t;
     auto& r = debug_registry_;
     r.set_registers(regs_, i8255_regs::REG_COUNT, I8255_REG_INFO);
+    r.set_decl_order(I8255_DECL_ORDER.data(), I8255_DECL_ORDER.size(),
+                     I8255_FLD_INFO, I8255_NUM_FIELDS,
+                     nullptr, 0, nullptr);
 
-    r.category("Port A");
-    r.value("Output Latch", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->regs_[i8255_regs::PORT_A];
-    }, 8);
-    r.value("Input", +[](const ChipBase* c) -> uint32_t {
+    // Port output latches and control bitfields are now in the DECL walk.
+    // Only external input pins (not in the register mirror) remain as builder chains.
+    r.category("External Inputs");
+    r.value("Port A", +[](const ChipBase* c) -> uint32_t {
         return static_cast<S*>(c)->port_a_in_;
     }, 8);
-    r.flag("Direction (In)", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->port_a_input();
-    });
-
-    r.category("Port B");
-    r.value("Output Latch", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->regs_[i8255_regs::PORT_B];
-    }, 8);
-    r.value("Input", +[](const ChipBase* c) -> uint32_t {
+    r.value("Port B", +[](const ChipBase* c) -> uint32_t {
         return static_cast<S*>(c)->port_b_in_;
     }, 8);
-    r.flag("Direction (In)", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->port_b_input();
-    });
-
-    r.category("Port C");
-    r.value("Output Latch", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->regs_[i8255_regs::PORT_C];
-    }, 8);
-    r.value("Input", +[](const ChipBase* c) -> uint32_t {
+    r.value("Port C", +[](const ChipBase* c) -> uint32_t {
         return static_cast<S*>(c)->port_c_in_;
     }, 8);
-    r.flag("Upper (In)", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->port_c_upper_input();
-    });
-    r.flag("Lower (In)", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->port_c_lower_input();
-    });
-
-    r.category("Control");
-    r.value("Control Reg", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->regs_[i8255_regs::CONTROL];
-    }, 8);
-    r.value("Group A Mode", +[](const ChipBase* c) -> uint32_t {
-        return (static_cast<S*>(c)->regs_[i8255_regs::CONTROL] >> 5) & 0x03;
-    }, 2);
-    r.value("Group B Mode", +[](const ChipBase* c) -> uint32_t {
-        return (static_cast<S*>(c)->regs_[i8255_regs::CONTROL] >> 2) & 0x01;
-    }, 1);
 }
 #endif
 

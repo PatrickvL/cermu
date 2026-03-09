@@ -69,24 +69,45 @@ inline constexpr AYVariantTraits ay_variant_traits[] = {
 // AY-3-8910 REGISTER TABLE — single source of truth
 // ============================================================================
 
-// X(addr, symbol, description)
-#define AY_REG_TABLE(X) \
-    X(0x00, TONE_A_FINE,   "Ch A tone period fine")    \
-    X(0x01, TONE_A_COARSE, "Ch A tone period coarse")  \
-    X(0x02, TONE_B_FINE,   "Ch B tone period fine")    \
-    X(0x03, TONE_B_COARSE, "Ch B tone period coarse")  \
-    X(0x04, TONE_C_FINE,   "Ch C tone period fine")    \
-    X(0x05, TONE_C_COARSE, "Ch C tone period coarse")  \
-    X(0x06, NOISE_PERIOD,  "Noise generator period")   \
-    X(0x07, MIXER,         "Tone/noise mixer control") \
-    X(0x08, AMP_A,         "Ch A amplitude")           \
-    X(0x09, AMP_B,         "Ch B amplitude")           \
-    X(0x0A, AMP_C,         "Ch C amplitude")           \
-    X(0x0B, ENV_FINE,      "Envelope period fine")     \
-    X(0x0C, ENV_COARSE,    "Envelope period coarse")   \
-    X(0x0D, ENV_SHAPE,     "Envelope shape/cycle")     \
-    X(0x0E, IO_PORT_A,     "I/O port A data")          \
-    X(0x0F, IO_PORT_B,     "I/O port B data")
+// DECL(REG, FLD, CMP) — 16 registers, 18 fields (MIXER/AMP/ENV_SHAPE bits)
+#define AY_DECL(REG, FLD, CMP) \
+    REG(0x00, TONE_A_FINE,   "Ch A tone period fine")                            \
+    REG(0x01, TONE_A_COARSE, "Ch A tone period coarse")                          \
+    REG(0x02, TONE_B_FINE,   "Ch B tone period fine")                            \
+    REG(0x03, TONE_B_COARSE, "Ch B tone period coarse")                          \
+    REG(0x04, TONE_C_FINE,   "Ch C tone period fine")                            \
+    REG(0x05, TONE_C_COARSE, "Ch C tone period coarse")                          \
+    REG(0x06, NOISE_PERIOD,  "Noise generator period")                           \
+    REG(0x07, MIXER,         "Tone/noise mixer control")                         \
+      FLD(MIXER, IOB_DIR,   7:7, "I/O port B dir (1=out)",   Flag, 0, 0)        \
+      FLD(MIXER, IOA_DIR,   6:6, "I/O port A dir (1=out)",   Flag, 0, 0)        \
+      FLD(MIXER, NOISE_C,   5:5, "Noise C disable",          Flag, 0, 0)        \
+      FLD(MIXER, NOISE_B,   4:4, "Noise B disable",          Flag, 0, 0)        \
+      FLD(MIXER, NOISE_A,   3:3, "Noise A disable",          Flag, 0, 0)        \
+      FLD(MIXER, TONE_C,    2:2, "Tone C disable",           Flag, 0, 0)        \
+      FLD(MIXER, TONE_B,    1:1, "Tone B disable",           Flag, 0, 0)        \
+      FLD(MIXER, TONE_A,    0:0, "Tone A disable",           Flag, 0, 0)        \
+    REG(0x08, AMP_A,         "Ch A amplitude")                                   \
+      FLD(AMP_A, ENV_A,     4:4, "Envelope mode",            Flag, 0, 0)        \
+      FLD(AMP_A, VOL_A,     3:0, "Amplitude",                Value, 0, 0)       \
+    REG(0x09, AMP_B,         "Ch B amplitude")                                   \
+      FLD(AMP_B, ENV_B,     4:4, "Envelope mode",            Flag, 0, 0)        \
+      FLD(AMP_B, VOL_B,     3:0, "Amplitude",                Value, 0, 0)       \
+    REG(0x0A, AMP_C,         "Ch C amplitude")                                   \
+      FLD(AMP_C, ENV_C,     4:4, "Envelope mode",            Flag, 0, 0)        \
+      FLD(AMP_C, VOL_C,     3:0, "Amplitude",                Value, 0, 0)       \
+    REG(0x0B, ENV_FINE,      "Envelope period fine")                             \
+    REG(0x0C, ENV_COARSE,    "Envelope period coarse")                           \
+    REG(0x0D, ENV_SHAPE,     "Envelope shape/cycle")                             \
+      FLD(ENV_SHAPE, CONT,  3:3, "Continue",                 Flag, 0, 0)        \
+      FLD(ENV_SHAPE, ATT,   2:2, "Attack",                   Flag, 0, 0)        \
+      FLD(ENV_SHAPE, ALT,   1:1, "Alternate",                Flag, 0, 0)        \
+      FLD(ENV_SHAPE, HOLD,  0:0, "Hold",                     Flag, 0, 0)        \
+    REG(0x0E, IO_PORT_A,     "I/O port A data")                                  \
+    REG(0x0F, IO_PORT_B,     "I/O port B data")
+
+// Backward compat: old REG_TABLE is just the REG rows from the DECL
+#define AY_REG_TABLE(X) AY_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 namespace ay_regs {
     #define AY_X_CONST_(a, s, l) constexpr uint8_t s = a;
@@ -95,9 +116,31 @@ namespace ay_regs {
     constexpr uint8_t REG_COUNT = 16;
 } // namespace ay_regs
 
+// --- RegEntry ---
 #define AY_X_INFO_(a, s, l) { #s, l },
 static constexpr RegEntry AY_REG_INFO[] = { AY_REG_TABLE(AY_X_INFO_) };
 #undef AY_X_INFO_
+
+// --- FieldEntry ---
+#define AY_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
+    { #fld, desc, ay_regs::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
+static constexpr FieldEntry AY_FLD_INFO[] = {
+    AY_DECL(DECL_REG_NOP, AY_X_FLD_INFO_, DECL_CMP_NOP)
+};
+#undef AY_X_FLD_INFO_
+static constexpr size_t AY_NUM_FIELDS = sizeof(AY_FLD_INFO) / sizeof(AY_FLD_INFO[0]);
+
+// --- DeclOrder ---
+#define AY_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
+#define AY_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                            { DeclRowType::Field, 0 },
+#define AY_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)         { DeclRowType::Compound, 0 },
+static constexpr DeclOrderEntry AY_DECL_ORDER_RAW[] = {
+    AY_DECL(AY_X_ORD_REG_, AY_X_ORD_FLD_, AY_X_ORD_CMP_)
+};
+#undef AY_X_ORD_REG_
+#undef AY_X_ORD_FLD_
+#undef AY_X_ORD_CMP_
+static constexpr auto AY_DECL_ORDER = assign_decl_indices(AY_DECL_ORDER_RAW);
 
 // ============================================================================
 // AY-3-8910 Sound Chip

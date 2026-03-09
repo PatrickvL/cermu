@@ -32,12 +32,25 @@
 // ============================================================================
 
 // ============================================================================
-// MC6847 REGISTER TABLE — single source of truth
+// MC6847 UNIFIED DECLARATION TABLE — single source of truth
 // ============================================================================
+//
+//   REG(offset, symbol, description)
+//   FLD(reg_sym, field_sym, hi:lo, description, kind, display_shift, display_scale)
+//   CMP(symbol, description, kind, total_bits, display_shift, display_scale,
+//       reg1, hilo1, dst1, reg2, hilo2, dst2)
 
-// X(addr, symbol, description)
-#define MC6847_REG_TABLE(X) \
-    X(0x00, REG_MODE, "Mode pin state mirror")
+#define MC6847_DECL(REG, FLD, CMP) \
+    REG(0x00, REG_MODE, "Mode pin state mirror")                               \
+      FLD(REG_MODE, AG,     0:0, "Graphics mode",     Flag, 0, 0)             \
+      FLD(REG_MODE, AS,     1:1, "Alphanum/Semigraph", Flag, 0, 0)            \
+      FLD(REG_MODE, INTEXT, 2:2, "Internal/External",  Flag, 0, 0)            \
+      FLD(REG_MODE, INV,    3:3, "Invert",             Flag, 0, 0)            \
+      FLD(REG_MODE, CSS,    4:4, "Color set select",   Flag, 0, 0)            \
+      FLD(REG_MODE, GM,     7:5, "Graphics mode",      Value, 0, 0)
+
+// Backward compat: old REG_TABLE is just the REG rows from the DECL
+#define MC6847_REG_TABLE(X) MC6847_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 namespace mc6847_const {
 
@@ -64,17 +77,39 @@ namespace mc6847_const {
     inline constexpr uint8_t MODE_GM1    = 0x40;
     inline constexpr uint8_t MODE_GM2    = 0x80;
 
-    // Register layout: single mode byte
+    // Register constants from DECL
     #define MC6847_X_CONST_(a, s, l) inline constexpr uint8_t s = a;
-    MC6847_REG_TABLE(MC6847_X_CONST_)
+    MC6847_DECL(MC6847_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     #undef MC6847_X_CONST_
     inline constexpr uint8_t REG_COUNT = 1;
 
 } // namespace mc6847_const
 
+// --- Extract register info array ---
 #define MC6847_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry MC6847_REG_INFO[] = { MC6847_REG_TABLE(MC6847_X_INFO_) };
+static constexpr RegEntry MC6847_REG_INFO[] = { MC6847_DECL(MC6847_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };
 #undef MC6847_X_INFO_
+
+// --- Extract field info array ---
+#define MC6847_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
+    { #fld, desc, mc6847_const::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
+static constexpr FieldEntry MC6847_FLD_INFO[] = {
+    MC6847_DECL(DECL_REG_NOP, MC6847_X_FLD_INFO_, DECL_CMP_NOP)
+};
+#undef MC6847_X_FLD_INFO_
+static constexpr size_t MC6847_NUM_FIELDS = sizeof(MC6847_FLD_INFO) / sizeof(MC6847_FLD_INFO[0]);
+
+// --- Extract declaration order array ---
+#define MC6847_X_ORD_REG_(a, s, l)                                             { DeclRowType::Reg, (uint16_t)(a) },
+#define MC6847_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                           { DeclRowType::Field, 0 },
+#define MC6847_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)        { DeclRowType::Compound, 0 },
+static constexpr DeclOrderEntry MC6847_DECL_ORDER_RAW[] = {
+    MC6847_DECL(MC6847_X_ORD_REG_, MC6847_X_ORD_FLD_, MC6847_X_ORD_CMP_)
+};
+#undef MC6847_X_ORD_REG_
+#undef MC6847_X_ORD_FLD_
+#undef MC6847_X_ORD_CMP_
+static constexpr auto MC6847_DECL_ORDER = assign_decl_indices(MC6847_DECL_ORDER_RAW);
 
 // ============================================================================
 // MC6847 Video Display Generator
@@ -192,26 +227,9 @@ private:
         using S = const mc6847_t;
         auto& r = debug_registry_;
         r.set_registers(regs_, mc6847_const::REG_COUNT, MC6847_REG_INFO);
-
-        r.category("Mode Pins");
-        r.flag("AG (Graphics)", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->mode_ag_;
-        });
-        r.value("GM0-GM2", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->mode_gm_;
-        }, 3);
-        r.flag("CSS", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->mode_css_;
-        });
-        r.flag("A/S", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->mode_as_;
-        });
-        r.flag("INT/EXT", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->mode_intext_;
-        });
-        r.flag("INV", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->mode_inv_;
-        });
+        r.set_decl_order(MC6847_DECL_ORDER.data(), MC6847_DECL_ORDER.size(),
+                         MC6847_FLD_INFO, MC6847_NUM_FIELDS,
+                         nullptr, 0, nullptr);
 
         r.category("Video Timing");
         r.value("Scanline", +[](const ChipBase* c) -> uint32_t {

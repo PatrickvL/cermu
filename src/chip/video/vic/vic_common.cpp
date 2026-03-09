@@ -601,7 +601,14 @@ void vic_base_t::register_debug_fields() {
     using V = const vic_base_t;
     auto& r = debug_registry_;
     r.set_registers(registers, VIC_NUM_REGS, VIC_REG_INFO, 0x9000);
+    r.set_decl_order(VIC_DECL_ORDER.data(), VIC_DECL_ORDER.size(),
+                     VIC_FLD_INFO, VIC_NUM_FIELDS,
+                     nullptr, 0, nullptr);
     uint32_t* palette = get_default_palette();
+
+    // Register values, control bitfields, audio enables/freq, and volume
+    // are all in the DECL walk.  Raster timing, computed base addresses,
+    // and color palette swatches remain as categories.
 
     // ---- Raster Information ----
     r.category("Raster Information")
@@ -612,54 +619,15 @@ void vic_base_t::register_debug_fields() {
          +[](const ChipBase* c) -> uint32_t { return static_cast<V*>(c)->cycles_per_line; })
      .flag("PAL Mode", +[](const ChipBase* c) -> uint32_t { return static_cast<V*>(c)->is_pal; });
 
-    // ---- Screen Configuration ----
+    // ---- Screen Configuration (computed base addresses) ----
     r.category("Screen Configuration")
-     .value("Control 1 ($9000)", static_cast<uint16_t>(VIC_REG_CONTROL1))
-     .indent(1)
-     .flag("Interlace", VIC_REG_CONTROL1, 7)
-     .value("Screen Origin X", +[](const ChipBase* c) -> uint32_t { return static_cast<V*>(c)->registers[VIC_REG_CONTROL1] & VIC_C1_SCREEN_ORIGIN_X_MASK; }, 8)
-     .indent(0)
-     .value("Control 2 ($9001)", static_cast<uint16_t>(VIC_REG_CONTROL2))
-     .indent(1)
-     .value("Screen Origin Y", +[](const ChipBase* c) -> uint32_t { return (uint32_t)static_cast<V*>(c)->registers[VIC_REG_CONTROL2]; }, 8)
-     .indent(0)
-     .value("Columns", +[](const ChipBase* c) -> uint32_t { return static_cast<V*>(c)->registers[VIC_REG_VIDEO_MATRIX] & VIC_VM_COLUMNS_MASK; }, 8)
-     .value("Rows", +[](const ChipBase* c) -> uint32_t { return (static_cast<V*>(c)->registers[VIC_REG_ROWS] & VIC_ROWS_ROWS_MASK) >> VIC_ROWS_ROWS_SHIFT; }, 8)
-     .flag("Double Height", VIC_REG_ROWS, 0)
      .address("Video Matrix Base", +[](const ChipBase* c) -> uint32_t { return static_cast<V*>(c)->cached_base_video; }, 16)
      .address("Character Base", +[](const ChipBase* c) -> uint32_t { return static_cast<V*>(c)->cached_base_char; }, 16);
 
-    // ---- Audio ----
-    r.category("Audio")
-     .value("Volume", +[](const ChipBase* c) -> uint32_t { return static_cast<V*>(c)->registers[VIC_REG_AUX_COLOR] & VIC_AUX_VOLUME_MASK; }, 8)
-     .separator()
-     .audio_channel("Bass",
-         RegSource{VIC_REG_BASS_FREQ, 7, 1},
-         RegSource{VIC_REG_BASS_FREQ, 0, 7},
-         RegSource{VIC_REG_AUX_COLOR, 0, 4})
-     .audio_channel("Alto",
-         RegSource{VIC_REG_ALTO_FREQ, 7, 1},
-         RegSource{VIC_REG_ALTO_FREQ, 0, 7},
-         RegSource{VIC_REG_AUX_COLOR, 0, 4})
-     .audio_channel("Soprano",
-         RegSource{VIC_REG_SOPRANO_FREQ, 7, 1},
-         RegSource{VIC_REG_SOPRANO_FREQ, 0, 7},
-         RegSource{VIC_REG_AUX_COLOR, 0, 4})
-     .audio_channel("Noise",
-         RegSource{VIC_REG_NOISE_FREQ, 7, 1},
-         RegSource{VIC_REG_NOISE_FREQ, 0, 7},
-         RegSource{VIC_REG_AUX_COLOR, 0, 4});
-
-    // ---- Colors ----
+    // ---- Colors (palette swatches — DataKind::Color deferred) ----
     r.category("Colors", false)
-     .value("Background Reg ($900F)", static_cast<uint16_t>(VIC_REG_BACKGROUND))
-     .indent(1)
      .color("Border", +[](const ChipBase* c) -> uint32_t { return static_cast<V*>(c)->registers[VIC_REG_BACKGROUND] & VIC_BG_BORDER_MASK; }, palette, 16)
      .color("Background", +[](const ChipBase* c) -> uint32_t { return (static_cast<V*>(c)->registers[VIC_REG_BACKGROUND] & VIC_BG_BACKGROUND_MASK) >> VIC_BG_BACKGROUND_SHIFT; }, palette, 16)
-     .flag("Reverse", VIC_REG_BACKGROUND, 3)
-     .indent(0)
-     .value("Aux Color Reg ($900E)", static_cast<uint16_t>(VIC_REG_AUX_COLOR))
-     .indent(1)
      .color("Aux Color", +[](const ChipBase* c) -> uint32_t { return (static_cast<V*>(c)->registers[VIC_REG_AUX_COLOR] & VIC_AUX_COLOR_MASK) >> VIC_AUX_COLOR_SHIFT; }, palette, 16);
 }
 #endif // CERMU_HAS_CHIP_DEBUG

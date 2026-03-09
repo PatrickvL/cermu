@@ -28,74 +28,36 @@ void ay_3_8910_t::register_debug_fields() {
     using S = const ay_3_8910_t;
     auto& r = debug_registry_;
     r.set_registers(regs_, ay_regs::REG_COUNT, AY_REG_INFO);
+    r.set_decl_order(AY_DECL_ORDER.data(), AY_DECL_ORDER.size(),
+                     AY_FLD_INFO, AY_NUM_FIELDS,
+                     nullptr, 0, nullptr);
+
+    // Mixer enables, amplitude/env-mode bits, and envelope shape are in the DECL walk.
+    // Combined multi-register values (tone periods, envelope period) remain.
 
     r.category("Channel A");
     r.value("Tone Period", +[](const ChipBase* c) -> uint32_t {
         auto* s = static_cast<S*>(c);
         return s->regs_[ay_regs::TONE_A_FINE] | (uint16_t(s->regs_[ay_regs::TONE_A_COARSE] & 0x0F) << 8);
     }, 12);
-    r.value("Amplitude", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->regs_[ay_regs::AMP_A] & 0x0F;
-    }, 4);
-    r.flag("Env Mode", +[](const ChipBase* c) -> uint32_t {
-        return (static_cast<S*>(c)->regs_[ay_regs::AMP_A] & 0x10) != 0;
-    });
 
     r.category("Channel B");
     r.value("Tone Period", +[](const ChipBase* c) -> uint32_t {
         auto* s = static_cast<S*>(c);
         return s->regs_[ay_regs::TONE_B_FINE] | (uint16_t(s->regs_[ay_regs::TONE_B_COARSE] & 0x0F) << 8);
     }, 12);
-    r.value("Amplitude", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->regs_[ay_regs::AMP_B] & 0x0F;
-    }, 4);
-    r.flag("Env Mode", +[](const ChipBase* c) -> uint32_t {
-        return (static_cast<S*>(c)->regs_[ay_regs::AMP_B] & 0x10) != 0;
-    });
 
     r.category("Channel C");
     r.value("Tone Period", +[](const ChipBase* c) -> uint32_t {
         auto* s = static_cast<S*>(c);
         return s->regs_[ay_regs::TONE_C_FINE] | (uint16_t(s->regs_[ay_regs::TONE_C_COARSE] & 0x0F) << 8);
     }, 12);
-    r.value("Amplitude", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->regs_[ay_regs::AMP_C] & 0x0F;
-    }, 4);
-    r.flag("Env Mode", +[](const ChipBase* c) -> uint32_t {
-        return (static_cast<S*>(c)->regs_[ay_regs::AMP_C] & 0x10) != 0;
-    });
-
-    r.category("Noise & Mixer");
-    r.value("Noise Period", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->regs_[ay_regs::NOISE_PERIOD] & 0x1F;
-    }, 5);
-    r.flag("Tone A On", +[](const ChipBase* c) -> uint32_t {
-        return !(static_cast<S*>(c)->regs_[ay_regs::MIXER] & 0x01);
-    });
-    r.flag("Tone B On", +[](const ChipBase* c) -> uint32_t {
-        return !(static_cast<S*>(c)->regs_[ay_regs::MIXER] & 0x02);
-    });
-    r.flag("Tone C On", +[](const ChipBase* c) -> uint32_t {
-        return !(static_cast<S*>(c)->regs_[ay_regs::MIXER] & 0x04);
-    });
-    r.flag("Noise A On", +[](const ChipBase* c) -> uint32_t {
-        return !(static_cast<S*>(c)->regs_[ay_regs::MIXER] & 0x08);
-    });
-    r.flag("Noise B On", +[](const ChipBase* c) -> uint32_t {
-        return !(static_cast<S*>(c)->regs_[ay_regs::MIXER] & 0x10);
-    });
-    r.flag("Noise C On", +[](const ChipBase* c) -> uint32_t {
-        return !(static_cast<S*>(c)->regs_[ay_regs::MIXER] & 0x20);
-    });
 
     r.category("Envelope");
     r.value("Env Period", +[](const ChipBase* c) -> uint32_t {
         auto* s = static_cast<S*>(c);
         return s->regs_[ay_regs::ENV_FINE] | (uint16_t(s->regs_[ay_regs::ENV_COARSE]) << 8);
     }, 16);
-    r.value("Env Shape", +[](const ChipBase* c) -> uint32_t {
-        return static_cast<S*>(c)->regs_[ay_regs::ENV_SHAPE] & 0x0F;
-    }, 4);
 }
 #endif // CERMU_HAS_CHIP_DEBUG
 

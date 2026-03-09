@@ -10,24 +10,48 @@
 // VIC 6560/6561 REGISTER TABLE — single source of truth
 // ============================================================================
 
-// X(addr, symbol, description)
-#define VIC_REG_TABLE(X) \
-    X(0x00, CONTROL1,     "Horiz origin/interlace") \
-    X(0x01, CONTROL2,     "Vert origin")            \
-    X(0x02, VIDEO_MATRIX, "Video base/columns")     \
-    X(0x03, ROWS,         "Raster b0/rows/2x-H")   \
-    X(0x04, RASTER,       "Raster counter hi")      \
-    X(0x05, CHAR_BASE,    "Video/char base addr")   \
-    X(0x06, LIGHTPEN_X,   "Light pen X")            \
-    X(0x07, LIGHTPEN_Y,   "Light pen Y")            \
-    X(0x08, PADDLE_X,     "Paddle X")               \
-    X(0x09, PADDLE_Y,     "Paddle Y")               \
-    X(0x0A, BASS_FREQ,    "Voice 1 bass freq")      \
-    X(0x0B, ALTO_FREQ,    "Voice 2 alto freq")      \
-    X(0x0C, SOPRANO_FREQ, "Voice 3 soprano freq")   \
-    X(0x0D, NOISE_FREQ,   "Voice 4 noise freq")     \
-    X(0x0E, AUX_COLOR,    "Aux color / volume")     \
-    X(0x0F, BACKGROUND,   "BG/reverse/border")
+// DECL(REG, FLD, CMP) — 16 registers, 21 fields
+#define VIC_DECL(REG, FLD, CMP) \
+    REG(0x00, CONTROL1,     "Horiz origin/interlace")                              \
+      FLD(CONTROL1, INTERLACE,   7:7, "Interlace",           Flag,  0, 0)          \
+    REG(0x01, CONTROL2,     "Vert origin")                                         \
+    REG(0x02, VIDEO_MATRIX, "Video base/columns")                                  \
+      FLD(VIDEO_MATRIX, VID_B9,  7:7, "Video base bit 9",    Flag,  0, 0)          \
+      FLD(VIDEO_MATRIX, COLUMNS, 6:0, "Display columns",     Value, 0, 0)          \
+    REG(0x03, ROWS,         "Raster b0/rows/2x-H")                                \
+      FLD(ROWS, RASTER_B0,      7:7, "Raster counter bit 0", Flag,  0, 0)          \
+      FLD(ROWS, ROW_COUNT,      6:1, "Display rows",         Value, 0, 0)          \
+      FLD(ROWS, DBL_H,          0:0, "Double height chars",  Flag,  0, 0)          \
+    REG(0x04, RASTER,       "Raster counter hi")                                   \
+    REG(0x05, CHAR_BASE,    "Video/char base addr")                                \
+      FLD(CHAR_BASE, VID_BASE,  7:4, "Video base address",   Value, 0, 0)          \
+      FLD(CHAR_BASE, CHR_BASE,  3:0, "Char base address",    Value, 0, 0)          \
+    REG(0x06, LIGHTPEN_X,   "Light pen X")                                         \
+    REG(0x07, LIGHTPEN_Y,   "Light pen Y")                                         \
+    REG(0x08, PADDLE_X,     "Paddle X")                                            \
+    REG(0x09, PADDLE_Y,     "Paddle Y")                                            \
+    REG(0x0A, BASS_FREQ,    "Voice 1 bass freq")                                   \
+      FLD(BASS_FREQ, BASS_EN,   7:7, "Bass enable",          Flag,  0, 0)          \
+      FLD(BASS_FREQ, BASS_F,    6:0, "Bass frequency",       Value, 0, 0)          \
+    REG(0x0B, ALTO_FREQ,    "Voice 2 alto freq")                                   \
+      FLD(ALTO_FREQ, ALTO_EN,   7:7, "Alto enable",          Flag,  0, 0)          \
+      FLD(ALTO_FREQ, ALTO_F,    6:0, "Alto frequency",       Value, 0, 0)          \
+    REG(0x0C, SOPRANO_FREQ, "Voice 3 soprano freq")                                \
+      FLD(SOPRANO_FREQ, SOP_EN, 7:7, "Soprano enable",       Flag,  0, 0)          \
+      FLD(SOPRANO_FREQ, SOP_F,  6:0, "Soprano frequency",    Value, 0, 0)          \
+    REG(0x0D, NOISE_FREQ,   "Voice 4 noise freq")                                  \
+      FLD(NOISE_FREQ, NOISE_EN, 7:7, "Noise enable",         Flag,  0, 0)          \
+      FLD(NOISE_FREQ, NOISE_F,  6:0, "Noise frequency",      Value, 0, 0)          \
+    REG(0x0E, AUX_COLOR,    "Aux color / volume")                                  \
+      FLD(AUX_COLOR, AUX_COL,   7:4, "Auxiliary color",      Value, 0, 0)          \
+      FLD(AUX_COLOR, VOLUME,    3:0, "Volume",               Value, 0, 0)          \
+    REG(0x0F, BACKGROUND,   "BG/reverse/border")                                   \
+      FLD(BACKGROUND, BG_COL,   7:4, "Background color",     Value, 0, 0)          \
+      FLD(BACKGROUND, REVERSE,  3:3, "Reverse screen",       Flag,  0, 0)          \
+      FLD(BACKGROUND, BORDER,   2:0, "Border color",         Value, 0, 0)
+
+// Backward compat: old REG_TABLE is just the REG rows from the DECL
+#define VIC_REG_TABLE(X) VIC_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 // Audio / waveform registers ($900A-$900E)
 // The MOS 6560/6561 contains three square-wave tone generators and one
@@ -50,6 +74,27 @@ static constexpr RegEntry VIC_REG_INFO[] = { VIC_REG_TABLE(VIC_X_INFO_) };
 #undef VIC_X_INFO_
 
 static constexpr uint8_t VIC_NUM_REGS = 16;
+
+// --- FieldEntry ---
+#define VIC_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
+    { #fld, desc, VIC_REG_##reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
+static constexpr FieldEntry VIC_FLD_INFO[] = {
+    VIC_DECL(DECL_REG_NOP, VIC_X_FLD_INFO_, DECL_CMP_NOP)
+};
+#undef VIC_X_FLD_INFO_
+static constexpr size_t VIC_NUM_FIELDS = sizeof(VIC_FLD_INFO) / sizeof(VIC_FLD_INFO[0]);
+
+// --- DeclOrder ---
+#define VIC_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
+#define VIC_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                            { DeclRowType::Field, 0 },
+#define VIC_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)         { DeclRowType::Compound, 0 },
+static constexpr DeclOrderEntry VIC_DECL_ORDER_RAW[] = {
+    VIC_DECL(VIC_X_ORD_REG_, VIC_X_ORD_FLD_, VIC_X_ORD_CMP_)
+};
+#undef VIC_X_ORD_REG_
+#undef VIC_X_ORD_FLD_
+#undef VIC_X_ORD_CMP_
+static constexpr auto VIC_DECL_ORDER = assign_decl_indices(VIC_DECL_ORDER_RAW);
 
 // Backward-compatible aliases for the old generic names
 #define VIC_REG_OSC1_FREQ    VIC_REG_BASS_FREQ

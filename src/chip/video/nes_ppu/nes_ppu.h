@@ -37,20 +37,68 @@ namespace nes_system {
 // NES PPU REGISTER TABLE — single source of truth
 // ============================================================================
 
-// X(addr, symbol, description)
-#define NES_PPU_REG_TABLE(X) \
-    X(0, PPUCTRL,   "NMI/sprite sz/BG base") \
-    X(1, PPUMASK,   "Render/grayscale")      \
-    X(2, PPUSTATUS, "VBlank/spr0/overflow")  \
-    X(3, OAMADDR,   "OAM address")           \
-    X(4, OAMDATA,   "OAM data R/W")          \
-    X(5, PPUSCROLL, "Fine scroll X/Y")       \
-    X(6, PPUADDR,   "VRAM address")          \
-    X(7, PPUDATA,   "VRAM data R/W")
+// DECL(REG, FLD, CMP) — 8 registers, 18 fields (PPUCTRL/PPUMASK/PPUSTATUS bits)
+#define NES_PPU_DECL(REG, FLD, CMP) \
+    REG(0, PPUCTRL,   "NMI/sprite sz/BG base")                                  \
+      FLD(PPUCTRL, NMI_EN,      7:7, "NMI enable",                   Flag, 0,0) \
+      FLD(PPUCTRL, PPU_SELECT,  6:6, "PPU master/slave",             Flag, 0,0) \
+      FLD(PPUCTRL, SPRITE_SZ,   5:5, "Sprite size (1=8x16)",        Flag, 0,0) \
+      FLD(PPUCTRL, BG_PT_BASE,  4:4, "BG pattern base (1=$1000)",   Flag, 0,0) \
+      FLD(PPUCTRL, SPR_PT_BASE, 3:3, "SPR pattern base (1=$1000)",  Flag, 0,0) \
+      FLD(PPUCTRL, VRAM_INC,    2:2, "VRAM increment (1=+32)",      Flag, 0,0) \
+      FLD(PPUCTRL, NT_SELECT,   1:0, "Base nametable",              Value,0,0) \
+    REG(1, PPUMASK,   "Render/grayscale")                                        \
+      FLD(PPUMASK, EMPH_B,      7:7, "Emphasize blue",              Flag, 0,0) \
+      FLD(PPUMASK, EMPH_G,      6:6, "Emphasize green",             Flag, 0,0) \
+      FLD(PPUMASK, EMPH_R,      5:5, "Emphasize red",               Flag, 0,0) \
+      FLD(PPUMASK, SHOW_SPR,    4:4, "Show sprites",                Flag, 0,0) \
+      FLD(PPUMASK, SHOW_BG,     3:3, "Show background",             Flag, 0,0) \
+      FLD(PPUMASK, LEFT_SPR,    2:2, "Show sprites left 8px",       Flag, 0,0) \
+      FLD(PPUMASK, LEFT_BG,     1:1, "Show BG left 8px",            Flag, 0,0) \
+      FLD(PPUMASK, GREYSCALE,   0:0, "Greyscale",                   Flag, 0,0) \
+    REG(2, PPUSTATUS, "VBlank/spr0/overflow")                                    \
+      FLD(PPUSTATUS, VBLANK,    7:7, "In VBlank",                   Flag, 0,0) \
+      FLD(PPUSTATUS, SPR0_HIT,  6:6, "Sprite 0 hit",               Flag, 0,0) \
+      FLD(PPUSTATUS, SPR_OVF,   5:5, "Sprite overflow",             Flag, 0,0) \
+    REG(3, OAMADDR,   "OAM address")                                             \
+    REG(4, OAMDATA,   "OAM data R/W")                                            \
+    REG(5, PPUSCROLL, "Fine scroll X/Y")                                         \
+    REG(6, PPUADDR,   "VRAM address")                                            \
+    REG(7, PPUDATA,   "VRAM data R/W")
 
+// Backward compat: old REG_TABLE is just the REG rows from the DECL
+#define NES_PPU_REG_TABLE(X) NES_PPU_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
+
+// File-scope address constants for DECL extractors
+#define NES_PPU_X_FLD_CONST_(a, s, l) static constexpr uint8_t NES_PPU_REG_##s = a;
+NES_PPU_REG_TABLE(NES_PPU_X_FLD_CONST_)
+#undef NES_PPU_X_FLD_CONST_
+
+// --- RegEntry ---
 #define NES_PPU_X_INFO_(a, s, l) { #s, l },
 static constexpr RegEntry NES_PPU_REG_INFO[] = { NES_PPU_REG_TABLE(NES_PPU_X_INFO_) };
 #undef NES_PPU_X_INFO_
+
+// --- FieldEntry ---
+#define NES_PPU_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
+    { #fld, desc, NES_PPU_REG_##reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
+static constexpr FieldEntry NES_PPU_FLD_INFO[] = {
+    NES_PPU_DECL(DECL_REG_NOP, NES_PPU_X_FLD_INFO_, DECL_CMP_NOP)
+};
+#undef NES_PPU_X_FLD_INFO_
+static constexpr size_t NES_PPU_NUM_FIELDS = sizeof(NES_PPU_FLD_INFO) / sizeof(NES_PPU_FLD_INFO[0]);
+
+// --- DeclOrder ---
+#define NES_PPU_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
+#define NES_PPU_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                            { DeclRowType::Field, 0 },
+#define NES_PPU_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)         { DeclRowType::Compound, 0 },
+static constexpr DeclOrderEntry NES_PPU_DECL_ORDER_RAW[] = {
+    NES_PPU_DECL(NES_PPU_X_ORD_REG_, NES_PPU_X_ORD_FLD_, NES_PPU_X_ORD_CMP_)
+};
+#undef NES_PPU_X_ORD_REG_
+#undef NES_PPU_X_ORD_FLD_
+#undef NES_PPU_X_ORD_CMP_
+static constexpr auto NES_PPU_DECL_ORDER = assign_decl_indices(NES_PPU_DECL_ORDER_RAW);
 
 namespace nes_system {
 
