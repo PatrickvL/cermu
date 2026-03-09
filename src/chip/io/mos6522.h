@@ -12,7 +12,7 @@
 
 // REG(offset, symbol, description)
 // FLD(reg_sym, field_sym, hi:lo, description, kind, display_shift, display_scale)
-#define MOS6522_DECL(REG, FLD, CMP) \
+#define MOS6522_DECL(REG, FLD, CMP, REGK) \
     REG(0x00, PORTB,    "Port B data/latch")                                    \
     REG(0x01, PORTA,    "Port A data/latch")                                    \
     REG(0x02, DDRB,     "Port B direction")                                     \
@@ -58,7 +58,7 @@
 
 // --- Extract address constants (prefix MOS6522_ added by macro) ---
 #define MOS6522_X_CONST_(a, s, l) static constexpr uint8_t MOS6522_##s = a;
-MOS6522_DECL(MOS6522_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
+MOS6522_DECL(MOS6522_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_REGK_NOP)
 #undef MOS6522_X_CONST_
 
 DECL_EXTRACT_ALL(MOS6522, MOS6522_DECL)

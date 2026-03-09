@@ -19,7 +19,7 @@
 //   CMP(symbol, description, kind, total_bits, display_shift, display_scale,
 //       reg1, hilo1, dst1, reg2, hilo2, dst2)
 
-#define VICII_DECL(REG, FLD, CMP) \
+#define VICII_DECL(REG, FLD, CMP, REGK) \
     /* ---- Sprite position registers ---- */ \
     REG( 0, M0X,    "Sprite 0 X pos")                                          \
     REG( 1, M0Y,    "Sprite 0 Y pos")                                          \
@@ -105,37 +105,22 @@
     /* ---- Sprite collision ---- */ \
     REG(30, MXM,    "Sprite-sprite coll")                                      \
     REG(31, MXD,    "Sprite-data coll")                                        \
-    /* ---- Color registers ---- */ \
-    REG(32, EC,     "Border color")                                            \
-      FLD(EC,  COLOR,     3:0, "Border",               Color, 0, 0)            \
-    REG(33, B0C,    "Background color 0")                                      \
-      FLD(B0C, COLOR,     3:0, "Background 0",         Color, 0, 0)            \
-    REG(34, B1C,    "Background color 1")                                      \
-      FLD(B1C, COLOR,     3:0, "Background 1",         Color, 0, 0)            \
-    REG(35, B2C,    "Background color 2")                                      \
-      FLD(B2C, COLOR,     3:0, "Background 2",         Color, 0, 0)            \
-    REG(36, B3C,    "Background color 3")                                      \
-      FLD(B3C, COLOR,     3:0, "Background 3",         Color, 0, 0)            \
-    REG(37, MM0,    "Sprite mcolor 0")                                         \
-      FLD(MM0, COLOR,     3:0, "Multicolor 0",         Color, 0, 0)            \
-    REG(38, MM1,    "Sprite mcolor 1")                                         \
-      FLD(MM1, COLOR,     3:0, "Multicolor 1",         Color, 0, 0)            \
-    REG(39, M0C,    "Sprite 0 color")                                          \
-      FLD(M0C, COLOR,     3:0, "Sprite 0",             Color, 0, 0)            \
-    REG(40, M1C,    "Sprite 1 color")                                          \
-      FLD(M1C, COLOR,     3:0, "Sprite 1",             Color, 0, 0)            \
-    REG(41, M2C,    "Sprite 2 color")                                          \
-      FLD(M2C, COLOR,     3:0, "Sprite 2",             Color, 0, 0)            \
-    REG(42, M3C,    "Sprite 3 color")                                          \
-      FLD(M3C, COLOR,     3:0, "Sprite 3",             Color, 0, 0)            \
-    REG(43, M4C,    "Sprite 4 color")                                          \
-      FLD(M4C, COLOR,     3:0, "Sprite 4",             Color, 0, 0)            \
-    REG(44, M5C,    "Sprite 5 color")                                          \
-      FLD(M5C, COLOR,     3:0, "Sprite 5",             Color, 0, 0)            \
-    REG(45, M6C,    "Sprite 6 color")                                          \
-      FLD(M6C, COLOR,     3:0, "Sprite 6",             Color, 0, 0)            \
-    REG(46, M7C,    "Sprite 7 color")                                          \
-      FLD(M7C, COLOR,     3:0, "Sprite 7",             Color, 0, 0)            \
+    /* ---- Color registers (pre-masked to 4 bits) ---- */ \
+    REGK(32, EC,     "Border color",         Color, 3:0)                       \
+    REGK(33, B0C,    "Background color 0",   Color, 3:0)                       \
+    REGK(34, B1C,    "Background color 1",   Color, 3:0)                       \
+    REGK(35, B2C,    "Background color 2",   Color, 3:0)                       \
+    REGK(36, B3C,    "Background color 3",   Color, 3:0)                       \
+    REGK(37, MM0,    "Sprite mcolor 0",      Color, 3:0)                       \
+    REGK(38, MM1,    "Sprite mcolor 1",      Color, 3:0)                       \
+    REGK(39, M0C,    "Sprite 0 color",       Color, 3:0)                       \
+    REGK(40, M1C,    "Sprite 1 color",       Color, 3:0)                       \
+    REGK(41, M2C,    "Sprite 2 color",       Color, 3:0)                       \
+    REGK(42, M3C,    "Sprite 3 color",       Color, 3:0)                       \
+    REGK(43, M4C,    "Sprite 4 color",       Color, 3:0)                       \
+    REGK(44, M5C,    "Sprite 5 color",       Color, 3:0)                       \
+    REGK(45, M6C,    "Sprite 6 color",       Color, 3:0)                       \
+    REGK(46, M7C,    "Sprite 7 color",       Color, 3:0)                       \
     /* ---- Unused registers ($D02F-$D03F) ---- */ \
     REG(47, R47, "-") REG(48, R48, "-") REG(49, R49, "-") REG(50, R50, "-") \
     REG(51, R51, "-") REG(52, R52, "-") REG(53, R53, "-") REG(54, R54, "-") \
@@ -166,7 +151,7 @@ namespace vicii_regs {
     constexpr uint8_t MASK = 63;
 
     // Register indices from DECL
-    VICII_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
+    VICII_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP, DECL_X_REGK_AS_CONST_)
 
     // Absolute memory-mapped I/O addresses (C64: $D000-based)
     constexpr uint16_t ADDR_D011 = 0xD011;  // Control register 1
@@ -187,7 +172,7 @@ DECL_EXTRACT_ALL(VICII, VICII_DECL)
     static constexpr uint8_t  VICII_##reg##_##fld##_SHIFT = BF_LO(hilo); \
     static constexpr uint8_t  VICII_##reg##_##fld##_WIDTH = BF_WIDTH(hilo); \
     static constexpr uint32_t VICII_##reg##_##fld##_MASK  = BF_MASK(hilo);
-VICII_DECL(DECL_REG_NOP, VICII_X_FLD_CONST_, DECL_CMP_NOP)
+VICII_DECL(DECL_REG_NOP, VICII_X_FLD_CONST_, DECL_CMP_NOP, DECL_REGK_NOP)
 #undef VICII_X_FLD_CONST_
 
 // --- Extract CMP compound array ---
@@ -196,7 +181,7 @@ VICII_DECL(DECL_REG_NOP, VICII_X_FLD_CONST_, DECL_CMP_NOP)
       {{ vicii_regs::r1, (uint8_t)BF_HI(hilo1), (uint8_t)BF_LO(hilo1), (uint8_t)(dst1) }, \
        { vicii_regs::r2, (uint8_t)BF_HI(hilo2), (uint8_t)BF_LO(hilo2), (uint8_t)(dst2) }} },
 static constexpr CompoundEntry<vicii_reg_traits> VICII_COMPOUNDS[] = {
-    VICII_DECL(DECL_REG_NOP, DECL_FLD_NOP, VICII_X_CMP_)
+    VICII_DECL(DECL_REG_NOP, DECL_FLD_NOP, VICII_X_CMP_, DECL_REGK_NOP)
 };
 #undef VICII_X_CMP_
 
@@ -208,7 +193,7 @@ static constexpr size_t VICII_DECL_ORDER_COUNT = VICII_DECL_ORDER.size();
 #define VICII_X_CMP_INFO_(sym, desc, kind, bits, ds, dm, r1, h1, d1, r2, h2, d2) \
     { #sym, desc, DataKind::kind, (uint8_t)(bits), (uint8_t)(ds), (uint16_t)(dm) },
 static constexpr CompoundInfo VICII_COMPOUND_INFO[] = {
-    VICII_DECL(DECL_REG_NOP, DECL_FLD_NOP, VICII_X_CMP_INFO_)
+    VICII_DECL(DECL_REG_NOP, DECL_FLD_NOP, VICII_X_CMP_INFO_, DECL_REGK_NOP)
 };
 #undef VICII_X_CMP_INFO_
 

@@ -596,6 +596,22 @@ void render_decl_walk(const ChipDebugRegistry& reg, const ChipBase* /*chip*/) {
                     snprintf(line, sizeof(line), "  $%02X  %-14s %-22s $%02X",
                              (unsigned)e.index, ri.label, ri.desc, reg_data[e.index]);
                 ImGui::TextUnformatted(line);
+                // Inline DataKind visualization for kind-annotated registers (REGK)
+                if (ri.kind == DataKind::Color && palette && ri.value_bits > 0) {
+                    uint32_t val = reg_data[e.index] & ((1u << ri.value_bits) - 1u);
+                    if (val < pal_size) {
+                        uint32_t rgb = palette[val];
+                        ImGui::SameLine();
+                        ImVec4 col(((rgb >> 16) & 0xFF) / 255.0f,
+                                   ((rgb >>  8) & 0xFF) / 255.0f,
+                                   ((rgb >>  0) & 0xFF) / 255.0f, 1.0f);
+                        ImGui::PushID((int)e.index);
+                        ImGui::ColorButton("##rcsw", col,
+                            ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoBorder,
+                            ImVec2(14, 14));
+                        ImGui::PopID();
+                    }
+                }
                 break;
             }
             case DeclRowType::Field: {
