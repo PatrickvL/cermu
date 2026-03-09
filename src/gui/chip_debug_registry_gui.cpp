@@ -68,12 +68,12 @@ inline void format_value(char* buf, size_t buf_size, uint32_t val, uint8_t bits)
 // place.  The prefix carries layout differences (DECL indent + label + desc
 // vs. legacy label-only column).
 
-/// Flag: green "SET" if true, grey "-" if false.  Entire line is colored.
+/// Flag: green "SET" if true, default "CLR" if false.
 inline void emit_flag_row(const char* prefix, bool set) {
     if (set)
         ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "%s SET", prefix);
     else
-        ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1.0f), "%s -", prefix);
+        ImGui::Text("%s CLR", prefix);
 }
 
 /// Address: hex-formatted value with auto-width ($XX / $XXXX / $XXXXXX).
@@ -96,10 +96,12 @@ inline void emit_color_row(const char* prefix, uint32_t val,
         float b = ((rgb >>  0) & 0xFF) / 255.0f;
         ImGui::Text("%s %u", prefix, val);
         ImGui::SameLine();
+        ImGui::PushID(prefix);
         ImVec4 col(r, g, b, 1.0f);
         ImGui::ColorButton("##csw", col,
             ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoBorder,
             ImVec2(14, 14));
+        ImGui::PopID();
     } else {
         ImGui::Text("%s %u", prefix, val);
     }
