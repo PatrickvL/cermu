@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -33,6 +34,35 @@ struct RegEntry {
     const char* label;   // Short technical label (stringified symbol name)
     const char* desc;    // Human-readable description
 };
+
+// ============================================================================
+// CHIP REGISTER TRAITS — per-chip register bank metadata (NTTP)
+// ============================================================================
+//
+// Each chip declares one constexpr ChipRegTraits instance.  This struct is
+// used as an NTTP (non-type template parameter) to derive types and generate
+// infrastructure with zero per-chip boilerplate.
+//
+// Example:
+//   inline constexpr ChipRegTraits vicii_reg_traits = {
+//       .num_registers  = 66,
+//       .register_width = 1,
+//       .base_address   = 0xD000,
+//   };
+
+struct ChipRegTraits {
+    uint16_t num_registers  = 0;     // Total register count
+    uint8_t  register_width = 1;     // Bytes per register (1, 2, 4)
+    uint16_t base_address   = 0;     // I/O base address for debug display
+};
+
+// Derive the offset type from the register count — chips with ≤256 registers
+// use uint8_t (zero overhead for 8-bit era chips), larger chips get uint16_t
+// or uint32_t automatically.
+template<const ChipRegTraits& T>
+using reg_offset_t = std::conditional_t<(T.num_registers <= 256), uint8_t,
+                     std::conditional_t<(T.num_registers <= 65536), uint16_t,
+                     uint32_t>>;
 
 // ============================================================================
 // SEMANTIC DATA KINDS — what the field IS, NOT how to draw it
@@ -70,6 +100,104 @@ enum class DataKind : uint8_t {
     // ---- Escape hatch ----
     Custom,             // Chip-provided rendering callback
 };
+
+// ============================================================================
+// BITFIELD ACCESSOR MACROS — NV-style hi:lo ternary trick
+// ============================================================================
+//
+// The token "7:0" is NOT valid C++ alone, but IS valid in a ternary:
+//   (1 ? 7:0) = 7 (hi)    (0 ? 7:0) = 0 (lo)
+// This lets a single hi:lo token produce both bounds at compile time.
+// Used by FLD X-macro extractors to turn field declarations into constants.
+
+#define BF_HI(hilo)     (1 ? hilo)
+#define BF_LO(hilo)     (0 ? hilo)
+#define BF_WIDTH(hilo)  (BF_HI(hilo) - BF_LO(hilo) + 1)
+#define BF_MASK(hilo)   (((1u << BF_WIDTH(hilo)) - 1u) << BF_LO(hilo))
+
+// Extract bitfield from a register value
+#define BF_GET(val, hilo) \
+    (((val) & BF_MASK(hilo)) >> BF_LO(hilo))
+
+// Set bitfield in a register value (returns modified value)
+#define BF_SET(val, hilo, fval) \
+    (((val) & ~BF_MASK(hilo)) | (((fval) << BF_LO(hilo)) & BF_MASK(hilo)))
+
+// ============================================================================
+// FIELD ENTRY — bitfield within a register (from FLD X-macro)
+// ============================================================================
+//
+// Produced by a FLD extractor macro.  Describes a named bit range inside a
+// single register, with a semantic DataKind for the debug renderer.
+//
+// Example FLD row:  FLD(CONTROL1, INTERLACE, 7:7, "Interlace", Flag)
+//   → FieldEntry { "INTERLACE", "Interlace", 17, 7, 1, DataKind::Flag }
+
+struct FieldEntry {
+    const char* label;       // Field symbol name (stringified)
+    const char* desc;        // Human-readable description
+    uint16_t    reg_index;   // Register index in the bank (for renderer association)
+    uint8_t     shift;       // LSB position within the register
+    uint8_t     width;       // Bit count (1..32)
+    DataKind    kind;        // Semantic type
+};
+
+// ============================================================================
+// COMPOUND VALUE — assembled from bit ranges across multiple registers
+// ============================================================================
+//
+// For values like VIC-II sprite X (9-bit: 8 bits from M0X + 1 bit from MX8),
+// where the logical value is scattered across multiple physical registers.
+// The fragment list describes how to assemble the result from pieces.
+//
+// Template parameter T (ChipRegTraits NTTP) determines the offset type, so
+// 8-bit era chips pay zero storage overhead while future chips with large
+// register files get wider offsets automatically.
+
+static constexpr size_t COMPOUND_MAX_FRAGMENTS = 4;
+
+template<const ChipRegTraits& T>
+struct CompoundFragment {
+    reg_offset_t<T> reg_index;    // Register index in the bank (NOT byte offset)
+    uint8_t         src_hi;       // High bit position in source register
+    uint8_t         src_lo;       // Low bit position in source register
+    uint8_t         dst_lo;       // Destination bit position in assembled result
+};
+
+template<const ChipRegTraits& T>
+struct CompoundEntry {
+    const char*           label;
+    const char*           desc;
+    DataKind              kind;            // Semantic type of the assembled value
+    uint8_t               total_bits;      // Width of assembled result (e.g. 9)
+    uint8_t               fragment_count;
+    CompoundFragment<T>   fragments[COMPOUND_MAX_FRAGMENTS];
+};
+
+// Generic extraction — assembles a compound value from register fragments.
+// Handles multi-byte registers via T.register_width.
+template<const ChipRegTraits& T>
+static inline uint32_t compound_get(const uint8_t* regs,
+                                    const CompoundEntry<T>& c) {
+    uint32_t result = 0;
+    for (uint8_t i = 0; i < c.fragment_count; i++) {
+        const auto& f = c.fragments[i];
+        // Read the full register value (1–4 bytes, little-endian)
+        uint32_t reg_val = 0;
+        if constexpr (T.register_width == 1) {
+            reg_val = regs[f.reg_index];
+        } else {
+            size_t byte_idx = static_cast<size_t>(f.reg_index) * T.register_width;
+            for (uint8_t b = 0; b < T.register_width; b++)
+                reg_val |= static_cast<uint32_t>(regs[byte_idx + b]) << (b * 8);
+        }
+        // Extract the bitfield and place it at the destination position
+        uint8_t  width = f.src_hi - f.src_lo + 1;
+        uint32_t mask  = ((1u << width) - 1u) << f.src_lo;
+        result |= ((reg_val & mask) >> f.src_lo) << f.dst_lo;
+    }
+    return result;
+}
 
 // ============================================================================
 // VALUE SOURCES — how the registry reads a field's current value
