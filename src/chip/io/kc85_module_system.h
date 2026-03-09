@@ -32,16 +32,35 @@
 // KC85 Module System REGISTER TABLE — single source of truth
 // ============================================================================
 
-// X(addr, symbol, description)
-#define KC85_MOD_REG_TABLE(X) \
-    X(0x00, SLOT0_CTRL, "Slot 0 control") \
-    X(0x01, SLOT1_CTRL, "Slot 1 control") \
-    X(0x02, SLOT2_CTRL, "Slot 2 control") \
-    X(0x03, SLOT3_CTRL, "Slot 3 control") \
-    X(0x04, SLOT4_CTRL, "Slot 4 control") \
-    X(0x05, SLOT5_CTRL, "Slot 5 control") \
-    X(0x06, SLOT6_CTRL, "Slot 6 control") \
-    X(0x07, SLOT7_CTRL, "Slot 7 control")
+// DECL(REG, FLD, CMP) — 8 registers, 16 fields (Active + WriteProtect per slot)
+#define KC85_MOD_DECL(REG, FLD, CMP) \
+    REG(0x00, SLOT0_CTRL, "Slot 0 control") \
+      FLD(SLOT0_CTRL, ACTIVE_0, 0:0, "Active",        Flag, 0, 0) \
+      FLD(SLOT0_CTRL, WPROT_0,  1:1, "Write protect", Flag, 0, 0) \
+    REG(0x01, SLOT1_CTRL, "Slot 1 control") \
+      FLD(SLOT1_CTRL, ACTIVE_1, 0:0, "Active",        Flag, 0, 0) \
+      FLD(SLOT1_CTRL, WPROT_1,  1:1, "Write protect", Flag, 0, 0) \
+    REG(0x02, SLOT2_CTRL, "Slot 2 control") \
+      FLD(SLOT2_CTRL, ACTIVE_2, 0:0, "Active",        Flag, 0, 0) \
+      FLD(SLOT2_CTRL, WPROT_2,  1:1, "Write protect", Flag, 0, 0) \
+    REG(0x03, SLOT3_CTRL, "Slot 3 control") \
+      FLD(SLOT3_CTRL, ACTIVE_3, 0:0, "Active",        Flag, 0, 0) \
+      FLD(SLOT3_CTRL, WPROT_3,  1:1, "Write protect", Flag, 0, 0) \
+    REG(0x04, SLOT4_CTRL, "Slot 4 control") \
+      FLD(SLOT4_CTRL, ACTIVE_4, 0:0, "Active",        Flag, 0, 0) \
+      FLD(SLOT4_CTRL, WPROT_4,  1:1, "Write protect", Flag, 0, 0) \
+    REG(0x05, SLOT5_CTRL, "Slot 5 control") \
+      FLD(SLOT5_CTRL, ACTIVE_5, 0:0, "Active",        Flag, 0, 0) \
+      FLD(SLOT5_CTRL, WPROT_5,  1:1, "Write protect", Flag, 0, 0) \
+    REG(0x06, SLOT6_CTRL, "Slot 6 control") \
+      FLD(SLOT6_CTRL, ACTIVE_6, 0:0, "Active",        Flag, 0, 0) \
+      FLD(SLOT6_CTRL, WPROT_6,  1:1, "Write protect", Flag, 0, 0) \
+    REG(0x07, SLOT7_CTRL, "Slot 7 control") \
+      FLD(SLOT7_CTRL, ACTIVE_7, 0:0, "Active",        Flag, 0, 0) \
+      FLD(SLOT7_CTRL, WPROT_7,  1:1, "Write protect", Flag, 0, 0)
+
+// Backward compat: old REG_TABLE is just the REG rows from the DECL
+#define KC85_MOD_REG_TABLE(X) KC85_MOD_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 namespace kc85_mod_regs {
     #define KC85_X_CONST_(a, s, l) constexpr uint8_t s = a;
@@ -50,9 +69,31 @@ namespace kc85_mod_regs {
     constexpr uint8_t REG_COUNT = 8;
 } // namespace kc85_mod_regs
 
+// --- RegEntry ---
 #define KC85_X_INFO_(a, s, l) { #s, l },
 static constexpr RegEntry KC85_MOD_REG_INFO[] = { KC85_MOD_REG_TABLE(KC85_X_INFO_) };
 #undef KC85_X_INFO_
+
+// --- FieldEntry ---
+#define KC85_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
+    { #fld, desc, kc85_mod_regs::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
+static constexpr FieldEntry KC85_MOD_FLD_INFO[] = {
+    KC85_MOD_DECL(DECL_REG_NOP, KC85_X_FLD_INFO_, DECL_CMP_NOP)
+};
+#undef KC85_X_FLD_INFO_
+static constexpr size_t KC85_MOD_NUM_FIELDS = sizeof(KC85_MOD_FLD_INFO) / sizeof(KC85_MOD_FLD_INFO[0]);
+
+// --- DeclOrder ---
+#define KC85_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
+#define KC85_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                            { DeclRowType::Field, 0 },
+#define KC85_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)         { DeclRowType::Compound, 0 },
+static constexpr DeclOrderEntry KC85_MOD_DECL_ORDER_RAW[] = {
+    KC85_MOD_DECL(KC85_X_ORD_REG_, KC85_X_ORD_FLD_, KC85_X_ORD_CMP_)
+};
+#undef KC85_X_ORD_REG_
+#undef KC85_X_ORD_FLD_
+#undef KC85_X_ORD_CMP_
+static constexpr auto KC85_MOD_DECL_ORDER = assign_decl_indices(KC85_MOD_DECL_ORDER_RAW);
 
 // ============================================================================
 // KC85 Module Types
@@ -167,49 +208,11 @@ private:
 
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
-        auto& r = debug_registry_;
-        r.set_registers(regs_, kc85_mod_regs::REG_COUNT, KC85_MOD_REG_INFO);
-
-        // Use register offsets for slot control bytes + flag bits
-        r.category("Slot 0");
-        r.value("Control", static_cast<uint16_t>(kc85_mod_regs::SLOT0_CTRL), 8);
-        r.flag("Active", static_cast<uint16_t>(kc85_mod_regs::SLOT0_CTRL), 0);
-        r.flag("Write Prot", static_cast<uint16_t>(kc85_mod_regs::SLOT0_CTRL), 1);
-
-        r.category("Slot 1");
-        r.value("Control", static_cast<uint16_t>(kc85_mod_regs::SLOT1_CTRL), 8);
-        r.flag("Active", static_cast<uint16_t>(kc85_mod_regs::SLOT1_CTRL), 0);
-        r.flag("Write Prot", static_cast<uint16_t>(kc85_mod_regs::SLOT1_CTRL), 1);
-
-        r.category("Slot 2");
-        r.value("Control", static_cast<uint16_t>(kc85_mod_regs::SLOT2_CTRL), 8);
-        r.flag("Active", static_cast<uint16_t>(kc85_mod_regs::SLOT2_CTRL), 0);
-        r.flag("Write Prot", static_cast<uint16_t>(kc85_mod_regs::SLOT2_CTRL), 1);
-
-        r.category("Slot 3");
-        r.value("Control", static_cast<uint16_t>(kc85_mod_regs::SLOT3_CTRL), 8);
-        r.flag("Active", static_cast<uint16_t>(kc85_mod_regs::SLOT3_CTRL), 0);
-        r.flag("Write Prot", static_cast<uint16_t>(kc85_mod_regs::SLOT3_CTRL), 1);
-
-        r.category("Slot 4");
-        r.value("Control", static_cast<uint16_t>(kc85_mod_regs::SLOT4_CTRL), 8);
-        r.flag("Active", static_cast<uint16_t>(kc85_mod_regs::SLOT4_CTRL), 0);
-        r.flag("Write Prot", static_cast<uint16_t>(kc85_mod_regs::SLOT4_CTRL), 1);
-
-        r.category("Slot 5");
-        r.value("Control", static_cast<uint16_t>(kc85_mod_regs::SLOT5_CTRL), 8);
-        r.flag("Active", static_cast<uint16_t>(kc85_mod_regs::SLOT5_CTRL), 0);
-        r.flag("Write Prot", static_cast<uint16_t>(kc85_mod_regs::SLOT5_CTRL), 1);
-
-        r.category("Slot 6");
-        r.value("Control", static_cast<uint16_t>(kc85_mod_regs::SLOT6_CTRL), 8);
-        r.flag("Active", static_cast<uint16_t>(kc85_mod_regs::SLOT6_CTRL), 0);
-        r.flag("Write Prot", static_cast<uint16_t>(kc85_mod_regs::SLOT6_CTRL), 1);
-
-        r.category("Slot 7");
-        r.value("Control", static_cast<uint16_t>(kc85_mod_regs::SLOT7_CTRL), 8);
-        r.flag("Active", static_cast<uint16_t>(kc85_mod_regs::SLOT7_CTRL), 0);
-        r.flag("Write Prot", static_cast<uint16_t>(kc85_mod_regs::SLOT7_CTRL), 1);
+        debug_registry_.set_registers(regs_, kc85_mod_regs::REG_COUNT, KC85_MOD_REG_INFO);
+        debug_registry_.set_decl_order(KC85_MOD_DECL_ORDER.data(), KC85_MOD_DECL_ORDER.size(),
+                                       KC85_MOD_FLD_INFO, KC85_MOD_NUM_FIELDS,
+                                       nullptr, 0, nullptr);
+        // All slot control values and Active/WProt flags are in the DECL walk.
     }
 #endif
 };

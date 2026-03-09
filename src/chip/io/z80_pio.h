@@ -31,32 +31,43 @@
 #include <cstring>
 
 // ============================================================================
-// Z80 PIO REGISTER TABLE — single source of truth
+// Z80 PIO UNIFIED DECLARATION TABLE — single source of truth
 // ============================================================================
 
-// X(addr, symbol, description)
-#define Z80_PIO_REG_TABLE(X) \
-    X(0x00, PORT_A_DATA,  "Port A data")            \
-    X(0x01, PORT_B_DATA,  "Port B data")            \
-    X(0x02, PORT_A_CTRL,  "Port A control")         \
-    X(0x03, PORT_B_CTRL,  "Port B control")         \
-    X(0x04, PORT_A_IOSEL, "Port A I/O select")      \
-    X(0x05, PORT_B_IOSEL, "Port B I/O select")      \
-    X(0x06, PORT_A_IVEC,  "Port A interrupt vec")    \
-    X(0x07, PORT_B_IVEC,  "Port B interrupt vec")    \
-    X(0x08, PORT_A_IMASK, "Port A interrupt mask")   \
-    X(0x09, PORT_B_IMASK, "Port B interrupt mask")
+// REG(offset, symbol, description)
+#define Z80_PIO_DECL(REG, FLD, CMP) \
+    REG(0x00, PORT_A_DATA,  "Port A data")            \
+    REG(0x01, PORT_B_DATA,  "Port B data")            \
+    REG(0x02, PORT_A_CTRL,  "Port A control")         \
+    REG(0x03, PORT_B_CTRL,  "Port B control")         \
+    REG(0x04, PORT_A_IOSEL, "Port A I/O select")      \
+    REG(0x05, PORT_B_IOSEL, "Port B I/O select")      \
+    REG(0x06, PORT_A_IVEC,  "Port A interrupt vec")    \
+    REG(0x07, PORT_B_IVEC,  "Port B interrupt vec")    \
+    REG(0x08, PORT_A_IMASK, "Port A interrupt mask")   \
+    REG(0x09, PORT_B_IMASK, "Port B interrupt mask")
+
+// Backward compat: old REG_TABLE is just the REG rows from the DECL
+#define Z80_PIO_REG_TABLE(X) Z80_PIO_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 namespace z80_pio_regs {
     #define Z80_PIO_X_CONST_(a, s, l) constexpr uint8_t s = a;
-    Z80_PIO_REG_TABLE(Z80_PIO_X_CONST_)
+    Z80_PIO_DECL(Z80_PIO_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     #undef Z80_PIO_X_CONST_
     constexpr uint8_t REG_COUNT = 10;
 } // namespace z80_pio_regs
 
 #define Z80_PIO_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry Z80_PIO_REG_INFO[] = { Z80_PIO_REG_TABLE(Z80_PIO_X_INFO_) };
+static constexpr RegEntry Z80_PIO_REG_INFO[] = { Z80_PIO_DECL(Z80_PIO_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };
 #undef Z80_PIO_X_INFO_
+
+// --- Extract declaration order array (no fields or compounds) ---
+#define Z80_PIO_X_ORD_REG_(a, s, l) { DeclRowType::Reg, (uint16_t)(a) },
+static constexpr DeclOrderEntry Z80_PIO_DECL_ORDER_RAW[] = {
+    Z80_PIO_DECL(Z80_PIO_X_ORD_REG_, DECL_FLD_NOP, DECL_CMP_NOP)
+};
+#undef Z80_PIO_X_ORD_REG_
+static constexpr auto Z80_PIO_DECL_ORDER = assign_decl_indices(Z80_PIO_DECL_ORDER_RAW);
 
 // ============================================================================
 // Z80 PIO Port Mode

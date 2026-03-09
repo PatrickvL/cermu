@@ -21,28 +21,59 @@
  */
 
 // ============================================================================
-// PIA6820 REGISTER TABLE — single source of truth
+// PIA6820 UNIFIED DECLARATION TABLE — single source of truth
 // ============================================================================
 
-// X(addr, symbol, description)
-#define PIA_REG_TABLE(X) \
-    X(0, PORTA_DATA, "Port A output latch") \
-    X(1, PORTA_DDR,  "Port A direction")    \
-    X(2, PORTA_CTRL, "Port A control")      \
-    X(3, PORTB_DATA, "Port B output latch") \
-    X(4, PORTB_DDR,  "Port B direction")    \
-    X(5, PORTB_CTRL, "Port B control")
+// REG(offset, symbol, description)
+// FLD(reg_sym, field_sym, hi:lo, description, kind, display_shift, display_scale)
+#define PIA_DECL(REG, FLD, CMP) \
+    REG(0, PORTA_DATA, "Port A output latch")                                   \
+    REG(1, PORTA_DDR,  "Port A direction")                                      \
+    REG(2, PORTA_CTRL, "Port A control")                                        \
+      FLD(PORTA_CTRL, CA2_MODE,  5:3, "CA2 control",  Value, 0, 0)             \
+      FLD(PORTA_CTRL, DDR_SEL_A, 2:2, "DDR select",   Flag,  0, 0)             \
+      FLD(PORTA_CTRL, CA1_CTRL,  1:0, "CA1 control",  Value, 0, 0)             \
+    REG(3, PORTB_DATA, "Port B output latch")                                   \
+    REG(4, PORTB_DDR,  "Port B direction")                                      \
+    REG(5, PORTB_CTRL, "Port B control")                                        \
+      FLD(PORTB_CTRL, CB2_MODE,  5:3, "CB2 control",  Value, 0, 0)             \
+      FLD(PORTB_CTRL, DDR_SEL_B, 2:2, "DDR select",   Flag,  0, 0)             \
+      FLD(PORTB_CTRL, CB1_CTRL,  1:0, "CB1 control",  Value, 0, 0)
+
+// Backward compat: old REG_TABLE is just the REG rows from the DECL
+#define PIA_REG_TABLE(X) PIA_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 // --- Extract address constants (prefix PIA_REG_ added by macro) ---
 #define PIA_X_CONST_(a, s, l) static constexpr uint8_t PIA_REG_##s = a;
-PIA_REG_TABLE(PIA_X_CONST_)
+PIA_DECL(PIA_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 #undef PIA_X_CONST_
 static constexpr uint8_t PIA_NUM_REGS = 6;
 
 // --- Extract register info array ---
 #define PIA_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry PIA_REG_INFO[] = { PIA_REG_TABLE(PIA_X_INFO_) };
+static constexpr RegEntry PIA_REG_INFO[] = { PIA_DECL(PIA_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };
 #undef PIA_X_INFO_
+
+// --- Extract field info array ---
+#define PIA_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
+    { #fld, desc, PIA_REG_##reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
+static constexpr FieldEntry PIA_FLD_INFO[] = {
+    PIA_DECL(DECL_REG_NOP, PIA_X_FLD_INFO_, DECL_CMP_NOP)
+};
+#undef PIA_X_FLD_INFO_
+static constexpr size_t PIA_NUM_FIELDS = sizeof(PIA_FLD_INFO) / sizeof(PIA_FLD_INFO[0]);
+
+// --- Extract declaration order array ---
+#define PIA_X_ORD_REG_(a, s, l)                                                { DeclRowType::Reg, (uint16_t)(a) },
+#define PIA_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                              { DeclRowType::Field, 0 },
+#define PIA_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)           { DeclRowType::Compound, 0 },
+static constexpr DeclOrderEntry PIA_DECL_ORDER_RAW[] = {
+    PIA_DECL(PIA_X_ORD_REG_, PIA_X_ORD_FLD_, PIA_X_ORD_CMP_)
+};
+#undef PIA_X_ORD_REG_
+#undef PIA_X_ORD_FLD_
+#undef PIA_X_ORD_CMP_
+static constexpr auto PIA_DECL_ORDER = assign_decl_indices(PIA_DECL_ORDER_RAW);
 
 struct pia6820_t : public IoChipBase {
     pia6820_t() : IoChipBase(ChipInfo{"PIA6820", "Motorola"}) {
@@ -127,11 +158,17 @@ private:
     void register_debug_fields() {
         using PI = const pia6820_t;
         debug_registry_
+            .set_decl_order(PIA_DECL_ORDER.data(), PIA_DECL_ORDER.size(),
+                            PIA_FLD_INFO, PIA_NUM_FIELDS,
+                            nullptr, 0, nullptr);
+
+        // Control register bitfields are now in the DECL walk.
+        // Port visualization (.port) and external state flags remain as builder chains.
+        debug_registry_
             .category("Port A")
             .port("Port A",
                   RegSource{PIA_REG_PORTA_DATA},
                   RegSource{PIA_REG_PORTA_DDR})
-            .value("Control", PIA_REG_PORTA_CTRL)
             .flag("CA1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->ca1_state; })
             .flag("CA2", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->ca2_state; })
             .flag("IRQ A1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->irq_a1; })
@@ -141,7 +178,6 @@ private:
             .port("Port B",
                   RegSource{PIA_REG_PORTB_DATA},
                   RegSource{PIA_REG_PORTB_DDR})
-            .value("Control", PIA_REG_PORTB_CTRL)
             .flag("CB1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->cb1_state; })
             .flag("CB2", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->cb2_state; })
             .flag("IRQ B1", +[](const ChipBase* c) -> uint32_t { return static_cast<PI*>(c)->irq_b1; })

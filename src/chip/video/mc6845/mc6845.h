@@ -43,26 +43,33 @@
 // MC6845 REGISTER TABLE — single source of truth
 // ============================================================================
 
-// X(addr, symbol, description)
-#define MC6845_REG_TABLE(X) \
-    X( 0, R0_HTOTAL,         "Horiz total chars-1")  \
-    X( 1, R1_HDISPLAYED,     "Horiz displayed chars") \
-    X( 2, R2_HSYNC_POS,      "Horiz sync position")  \
-    X( 3, R3_SYNC_WIDTHS,    "H/V sync widths")      \
-    X( 4, R4_VTOTAL,         "Vert total rows-1")    \
-    X( 5, R5_VADJUST,        "Vert fine adjust")     \
-    X( 6, R6_VDISPLAYED,     "Vert displayed rows")  \
-    X( 7, R7_VSYNC_POS,      "Vert sync position")   \
-    X( 8, R8_MODE_CTRL,      "Mode/interlace")       \
-    X( 9, R9_MAX_SCANLINE,   "Max raster address")   \
-    X(10, R10_CURSOR_START,  "Cursor start scan")    \
-    X(11, R11_CURSOR_END,    "Cursor end scan")      \
-    X(12, R12_START_ADDR_HI, "Display start hi")     \
-    X(13, R13_START_ADDR_LO, "Display start lo")     \
-    X(14, R14_CURSOR_HI,     "Cursor position hi")   \
-    X(15, R15_CURSOR_LO,     "Cursor position lo")   \
-    X(16, R16_LPEN_HI,       "Light pen hi (RO)")    \
-    X(17, R17_LPEN_LO,       "Light pen lo (RO)")
+// DECL(REG, FLD, CMP) — 18 registers, 4 fields (R3 sync widths, R10 cursor mode)
+#define MC6845_DECL(REG, FLD, CMP) \
+    REG( 0, R0_HTOTAL,         "Horiz total chars-1")                            \
+    REG( 1, R1_HDISPLAYED,     "Horiz displayed chars")                          \
+    REG( 2, R2_HSYNC_POS,      "Horiz sync position")                           \
+    REG( 3, R3_SYNC_WIDTHS,    "H/V sync widths")                               \
+      FLD(R3_SYNC_WIDTHS, HSYNC_W, 3:0, "HSYNC width (chars)", Value, 0, 0)     \
+      FLD(R3_SYNC_WIDTHS, VSYNC_W, 7:4, "VSYNC width (rows)",  Value, 0, 0)     \
+    REG( 4, R4_VTOTAL,         "Vert total rows-1")                              \
+    REG( 5, R5_VADJUST,        "Vert fine adjust")                               \
+    REG( 6, R6_VDISPLAYED,     "Vert displayed rows")                            \
+    REG( 7, R7_VSYNC_POS,      "Vert sync position")                            \
+    REG( 8, R8_MODE_CTRL,      "Mode/interlace")                                 \
+    REG( 9, R9_MAX_SCANLINE,   "Max raster address")                             \
+    REG(10, R10_CURSOR_START,  "Cursor start scan")                              \
+      FLD(R10_CURSOR_START, CURSOR_MODE, 6:5, "Cursor blink mode", Value, 0, 0) \
+      FLD(R10_CURSOR_START, CURSOR_SL,   4:0, "Cursor scan line",  Value, 0, 0) \
+    REG(11, R11_CURSOR_END,    "Cursor end scan")                                \
+    REG(12, R12_START_ADDR_HI, "Display start hi")                               \
+    REG(13, R13_START_ADDR_LO, "Display start lo")                               \
+    REG(14, R14_CURSOR_HI,     "Cursor position hi")                             \
+    REG(15, R15_CURSOR_LO,     "Cursor position lo")                             \
+    REG(16, R16_LPEN_HI,       "Light pen hi (RO)")                              \
+    REG(17, R17_LPEN_LO,       "Light pen lo (RO)")
+
+// Backward compat: old REG_TABLE is just the REG rows from the DECL
+#define MC6845_REG_TABLE(X) MC6845_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 // --- Extract address constants (prefix MC6845_ added by macro) ---
 #define MC6845_X_CONST_(a, s, l) static constexpr uint8_t MC6845_##s = a;
@@ -71,10 +78,31 @@ MC6845_REG_TABLE(MC6845_X_CONST_)
 
 static constexpr int MC6845_NUM_REGISTERS = 18;
 
-// --- Extract register info array ---
+// --- RegEntry ---
 #define MC6845_X_INFO_(a, s, l) { #s, l },
 static constexpr RegEntry MC6845_REG_INFO[] = { MC6845_REG_TABLE(MC6845_X_INFO_) };
 #undef MC6845_X_INFO_
+
+// --- FieldEntry ---
+#define MC6845_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
+    { #fld, desc, MC6845_##reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
+static constexpr FieldEntry MC6845_FLD_INFO[] = {
+    MC6845_DECL(DECL_REG_NOP, MC6845_X_FLD_INFO_, DECL_CMP_NOP)
+};
+#undef MC6845_X_FLD_INFO_
+static constexpr size_t MC6845_NUM_FIELDS = sizeof(MC6845_FLD_INFO) / sizeof(MC6845_FLD_INFO[0]);
+
+// --- DeclOrder ---
+#define MC6845_X_ORD_REG_(a, s, l)                                              { DeclRowType::Reg, (uint16_t)(a) },
+#define MC6845_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                            { DeclRowType::Field, 0 },
+#define MC6845_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)         { DeclRowType::Compound, 0 },
+static constexpr DeclOrderEntry MC6845_DECL_ORDER_RAW[] = {
+    MC6845_DECL(MC6845_X_ORD_REG_, MC6845_X_ORD_FLD_, MC6845_X_ORD_CMP_)
+};
+#undef MC6845_X_ORD_REG_
+#undef MC6845_X_ORD_FLD_
+#undef MC6845_X_ORD_CMP_
+static constexpr auto MC6845_DECL_ORDER = assign_decl_indices(MC6845_DECL_ORDER_RAW);
 
 // ============================================================================
 // MC6845 CHIP STRUCTURE
@@ -210,13 +238,15 @@ private:
         using M = const mc6845_t;
 
         debug_registry_.set_registers(regs, MC6845_NUM_REGISTERS, MC6845_REG_INFO);
+        debug_registry_.set_decl_order(MC6845_DECL_ORDER.data(), MC6845_DECL_ORDER.size(),
+                                       MC6845_FLD_INFO, MC6845_NUM_FIELDS,
+                                       nullptr, 0, nullptr);
 
-        // --- Registers ---
+        // All 18 register values and R3/R10 bitfields are in the DECL walk.
+        // Selected register index, counters, sync state, and addresses remain.
+
         debug_registry_.category("Registers")
             .value("Addr Reg", +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->address_register; });
-        for (int i = 0; i < MC6845_NUM_REGISTERS; i++) {
-            debug_registry_.value(MC6845_REG_INFO[i].label, static_cast<uint16_t>(i));
-        }
 
         // --- Counters ---
         debug_registry_.category("Counters", false)

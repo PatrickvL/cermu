@@ -33,33 +33,44 @@
 #include "io_chip_base.h"
 #include <cstdint>
 
-// ============================================================================
-// RIOT REGISTER TABLE — single source of truth
-// ============================================================================
-
 // Timer divider values (set via address bits A4:A3)
 static constexpr uint16_t RIOT_TIM1T   = 0x14;   // Divide by 1
 static constexpr uint16_t RIOT_TIM8T   = 0x15;   // Divide by 8
 static constexpr uint16_t RIOT_TIM64T  = 0x16;   // Divide by 64
 static constexpr uint16_t RIOT_TIM1024T = 0x17;   // Divide by 1024
 
-// X(addr, symbol, description)
-#define RIOT_REG_TABLE(X) \
-    X(0, PORTA_DATA, "Port A output (SWCHA)")  \
-    X(1, PORTA_DDR,  "Port A direction (SWACNT)") \
-    X(2, PORTB_DATA, "Port B output (SWCHB)")  \
-    X(3, PORTB_DDR,  "Port B direction (SWBCNT)")
+// ============================================================================
+// RIOT UNIFIED DECLARATION TABLE — single source of truth
+// ============================================================================
+
+// REG(offset, symbol, description)
+#define RIOT_DECL(REG, FLD, CMP) \
+    REG(0, PORTA_DATA, "Port A output (SWCHA)")        \
+    REG(1, PORTA_DDR,  "Port A direction (SWACNT)")    \
+    REG(2, PORTB_DATA, "Port B output (SWCHB)")        \
+    REG(3, PORTB_DDR,  "Port B direction (SWBCNT)")
+
+// Backward compat: old REG_TABLE is just the REG rows from the DECL
+#define RIOT_REG_TABLE(X) RIOT_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 // --- Extract address constants (prefix RIOT_REG_ added by macro) ---
 #define RIOT_X_CONST_(a, s, l) static constexpr uint8_t RIOT_REG_##s = a;
-RIOT_REG_TABLE(RIOT_X_CONST_)
+RIOT_DECL(RIOT_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 #undef RIOT_X_CONST_
 static constexpr uint8_t RIOT_NUM_REGS = 4;
 
 // --- Extract register info array ---
 #define RIOT_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry RIOT_REG_INFO[] = { RIOT_REG_TABLE(RIOT_X_INFO_) };
+static constexpr RegEntry RIOT_REG_INFO[] = { RIOT_DECL(RIOT_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };
 #undef RIOT_X_INFO_
+
+// --- Extract declaration order array (no fields or compounds) ---
+#define RIOT_X_ORD_REG_(a, s, l) { DeclRowType::Reg, (uint16_t)(a) },
+static constexpr DeclOrderEntry RIOT_DECL_ORDER_RAW[] = {
+    RIOT_DECL(RIOT_X_ORD_REG_, DECL_FLD_NOP, DECL_CMP_NOP)
+};
+#undef RIOT_X_ORD_REG_
+static constexpr auto RIOT_DECL_ORDER = assign_decl_indices(RIOT_DECL_ORDER_RAW);
 
 struct pia6532_t : public IoChipBase {
     pia6532_t() : IoChipBase(ChipInfo{"PIA6532", "MOS Technology"}) {
@@ -138,6 +149,13 @@ private:
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
         using PI = const pia6532_t;
+        debug_registry_
+            .set_decl_order(RIOT_DECL_ORDER.data(), RIOT_DECL_ORDER.size(),
+                            nullptr, 0,
+                            nullptr, 0, nullptr);
+
+        // Register values are shown in the DECL walk.
+        // Port visualization, external inputs, timer, and RAM remain as builder chains.
         debug_registry_
             .category("I/O Ports")
             .port("Port A",

@@ -39,14 +39,14 @@
     REG(15, M7Y,    "Sprite 7 Y pos")                                          \
     /* ---- Sprite X MSB ($D010) — per-sprite high bits ---- */ \
     REG(16, MX8,    "Sprite X pos MSB")                                        \
-      FLD(MX8,  M0_MSB,  0:0, "Sprite 0 X bit 8",    Flag, 0, 0)              \
-      FLD(MX8,  M1_MSB,  1:1, "Sprite 1 X bit 8",    Flag, 0, 0)              \
-      FLD(MX8,  M2_MSB,  2:2, "Sprite 2 X bit 8",    Flag, 0, 0)              \
-      FLD(MX8,  M3_MSB,  3:3, "Sprite 3 X bit 8",    Flag, 0, 0)              \
-      FLD(MX8,  M4_MSB,  4:4, "Sprite 4 X bit 8",    Flag, 0, 0)              \
-      FLD(MX8,  M5_MSB,  5:5, "Sprite 5 X bit 8",    Flag, 0, 0)              \
-      FLD(MX8,  M6_MSB,  6:6, "Sprite 6 X bit 8",    Flag, 0, 0)              \
-      FLD(MX8,  M7_MSB,  7:7, "Sprite 7 X bit 8",    Flag, 0, 0)              \
+      FLD(MX8,  M0_MSB,  0:0, "Sprite 0 X bit 8",    Value, 0, 0)             \
+      FLD(MX8,  M1_MSB,  1:1, "Sprite 1 X bit 8",    Value, 0, 0)             \
+      FLD(MX8,  M2_MSB,  2:2, "Sprite 2 X bit 8",    Value, 0, 0)             \
+      FLD(MX8,  M3_MSB,  3:3, "Sprite 3 X bit 8",    Value, 0, 0)             \
+      FLD(MX8,  M4_MSB,  4:4, "Sprite 4 X bit 8",    Value, 0, 0)             \
+      FLD(MX8,  M5_MSB,  5:5, "Sprite 5 X bit 8",    Value, 0, 0)             \
+      FLD(MX8,  M6_MSB,  6:6, "Sprite 6 X bit 8",    Value, 0, 0)             \
+      FLD(MX8,  M7_MSB,  7:7, "Sprite 7 X bit 8",    Value, 0, 0)             \
       /* 9-bit sprite X positions: M0X..M7X[7:0] | MX8[N] << 8 */ \
       CMP(SPR0_X, "Sprite 0 X pos", Counter, 9, 0, 0,  M0X, 7:0, 0,  MX8, 0:0, 8) \
       CMP(SPR1_X, "Sprite 1 X pos", Counter, 9, 0, 0,  M1X, 7:0, 0,  MX8, 1:1, 8) \
@@ -63,7 +63,7 @@
       FLD(C1,   DEN,      4:4, "Display enable",       Flag, 0, 0)             \
       FLD(C1,   BMM,      5:5, "Bitmap mode",          Flag, 0, 0)             \
       FLD(C1,   ECM,      6:6, "Extended color mode",  Flag, 0, 0)             \
-      FLD(C1,   RST8,     7:7, "Raster bit 8",         Flag, 0, 0)             \
+      FLD(C1,   RST8,     7:7, "Raster bit 8",         Value, 0, 0)            \
     /* ---- Raster Counter ($D012) ---- */ \
     REG(18, RASTER, "Raster counter")                                          \
       /* 9-bit raster: RASTER[7:0] | C1.RST8 << 8 */ \

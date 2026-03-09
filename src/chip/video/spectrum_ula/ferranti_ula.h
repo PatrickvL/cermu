@@ -32,18 +32,28 @@
 #include <cstring>
 
 // ============================================================================
-// Spectrum ULA REGISTER TABLE — single source of truth
+// Spectrum ULA UNIFIED DECLARATION TABLE — single source of truth
 // ============================================================================
+//
+//   REG(offset, symbol, description)
+//   FLD(reg_sym, field_sym, hi:lo, description, kind, display_shift, display_scale)
+//   CMP(symbol, description, kind, total_bits, display_shift, display_scale,
+//       reg1, hilo1, dst1, reg2, hilo2, dst2)
 
-// X(addr, symbol, description)
-#define SPECTRUM_ULA_REG_TABLE(X) \
-    X(0x00, PORT_FE, "Border/speaker/mic I/O")
+#define SPECTRUM_ULA_DECL(REG, FLD, CMP) \
+    REG(0x00, PORT_FE, "Border/speaker/mic I/O")                               \
+      FLD(PORT_FE, BORDER, 2:0, "Border color",     Color, 0, 0)              \
+      FLD(PORT_FE, MIC,    3:3, "MIC output",       Flag, 0, 0)               \
+      FLD(PORT_FE, EAR,    4:4, "EAR/speaker out",  Flag, 0, 0)
+
+// Backward compat
+#define SPECTRUM_ULA_REG_TABLE(X) SPECTRUM_ULA_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 namespace spectrum_ula {
 
-    // ULA I/O register (port $FE is the only addressable register)
+    // Register constants from DECL
     #define SPECTRUM_ULA_X_CONST_(a, s, l) inline constexpr uint8_t s = a;
-    SPECTRUM_ULA_REG_TABLE(SPECTRUM_ULA_X_CONST_)
+    SPECTRUM_ULA_DECL(SPECTRUM_ULA_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     #undef SPECTRUM_ULA_X_CONST_
     inline constexpr uint8_t REG_COUNT = 1;
 
@@ -91,9 +101,31 @@ namespace spectrum_ula {
 
 } // namespace spectrum_ula
 
+// --- Extract register info array ---
 #define SPECTRUM_ULA_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry SPECTRUM_ULA_REG_INFO[] = { SPECTRUM_ULA_REG_TABLE(SPECTRUM_ULA_X_INFO_) };
+static constexpr RegEntry SPECTRUM_ULA_REG_INFO[] = { SPECTRUM_ULA_DECL(SPECTRUM_ULA_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };
 #undef SPECTRUM_ULA_X_INFO_
+
+// --- Extract field info array ---
+#define SPECTRUM_ULA_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
+    { #fld, desc, spectrum_ula::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
+static constexpr FieldEntry SPECTRUM_ULA_FLD_INFO[] = {
+    SPECTRUM_ULA_DECL(DECL_REG_NOP, SPECTRUM_ULA_X_FLD_INFO_, DECL_CMP_NOP)
+};
+#undef SPECTRUM_ULA_X_FLD_INFO_
+static constexpr size_t SPECTRUM_ULA_NUM_FIELDS = sizeof(SPECTRUM_ULA_FLD_INFO) / sizeof(SPECTRUM_ULA_FLD_INFO[0]);
+
+// --- Extract declaration order array ---
+#define SPECTRUM_ULA_X_ORD_REG_(a, s, l)                                       { DeclRowType::Reg, (uint16_t)(a) },
+#define SPECTRUM_ULA_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                      { DeclRowType::Field, 0 },
+#define SPECTRUM_ULA_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)   { DeclRowType::Compound, 0 },
+static constexpr DeclOrderEntry SPECTRUM_ULA_DECL_ORDER_RAW[] = {
+    SPECTRUM_ULA_DECL(SPECTRUM_ULA_X_ORD_REG_, SPECTRUM_ULA_X_ORD_FLD_, SPECTRUM_ULA_X_ORD_CMP_)
+};
+#undef SPECTRUM_ULA_X_ORD_REG_
+#undef SPECTRUM_ULA_X_ORD_FLD_
+#undef SPECTRUM_ULA_X_ORD_CMP_
+static constexpr auto SPECTRUM_ULA_DECL_ORDER = assign_decl_indices(SPECTRUM_ULA_DECL_ORDER_RAW);
 
 // ============================================================================
 // Ferranti ULA Chip
@@ -247,17 +279,12 @@ private:
         using S = const ferranti_ula_t;
         auto& r = debug_registry_;
         r.set_registers(regs_, spectrum_ula::REG_COUNT, SPECTRUM_ULA_REG_INFO);
+        r.set_decl_order(SPECTRUM_ULA_DECL_ORDER.data(), SPECTRUM_ULA_DECL_ORDER.size(),
+                         SPECTRUM_ULA_FLD_INFO, SPECTRUM_ULA_NUM_FIELDS,
+                         nullptr, 0, nullptr);
+        r.set_palette(spectrum_ula::PALETTE, 16);
 
-        r.category("Port $FE Output");
-        r.value("Border Color", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->border_color_;
-        }, 3);
-        r.flag("MIC", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->mic_output_;
-        });
-        r.flag("EAR Out", +[](const ChipBase* c) -> uint32_t {
-            return static_cast<S*>(c)->ear_output_;
-        });
+        r.category("Port $FE Input");
         r.flag("EAR In", +[](const ChipBase* c) -> uint32_t {
             return static_cast<S*>(c)->ear_input_;
         });

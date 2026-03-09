@@ -54,32 +54,81 @@ enum mos6526_pin_t {
 #define IDDRB_OFFSET 29 // Internal Data Direction of Port B (a version of DDRB which includes the PBON mask)
 
 // ============================================================================
-// MOS6526 CIA REGISTER TABLE — single source of truth (address constants only)
-// Bitmask constants remain separate below.
+// MOS6526 CIA UNIFIED DECLARATION TABLE — single source of truth
+// Bitmask constants remain separate below (in MOS6526 namespace).
 // ============================================================================
 
-// X(addr, symbol, description)
-#define CIA_REG_TABLE(X) \
-    X(0x00, PRA,       "Port A data")           \
-    X(0x01, PRB,       "Port B data")           \
-    X(0x02, DDRA,      "Port A direction")      \
-    X(0x03, DDRB,      "Port B direction")      \
-    X(0x04, TA_LO,     "Timer A low")           \
-    X(0x05, TA_HI,     "Timer A high")          \
-    X(0x06, TB_LO,     "Timer B low")           \
-    X(0x07, TB_HI,     "Timer B high")          \
-    X(0x08, TOD_10THS, "TOD tenths of sec")     \
-    X(0x09, TOD_SEC,   "TOD seconds")           \
-    X(0x0A, TOD_MIN,   "TOD minutes")           \
-    X(0x0B, TOD_HR,    "TOD hours")             \
-    X(0x0C, SDR,       "Serial data")           \
-    X(0x0D, ICR,       "Interrupt control")     \
-    X(0x0E, CRA,       "Control reg A")         \
-    X(0x0F, CRB,       "Control reg B")
+// REG(offset, symbol, description)
+// FLD(reg_sym, field_sym, hi:lo, description, kind, display_shift, display_scale)
+#define CIA_DECL(REG, FLD, CMP) \
+    REG(0x00, PRA,       "Port A data")                                         \
+    REG(0x01, PRB,       "Port B data")                                         \
+    REG(0x02, DDRA,      "Port A direction")                                    \
+    REG(0x03, DDRB,      "Port B direction")                                    \
+    REG(0x04, TA_LO,     "Timer A low")                                         \
+    REG(0x05, TA_HI,     "Timer A high")                                        \
+    REG(0x06, TB_LO,     "Timer B low")                                         \
+    REG(0x07, TB_HI,     "Timer B high")                                        \
+    REG(0x08, TOD_10THS, "TOD tenths of sec")                                   \
+    REG(0x09, TOD_SEC,   "TOD seconds")                                         \
+    REG(0x0A, TOD_MIN,   "TOD minutes")                                         \
+    REG(0x0B, TOD_HR,    "TOD hours")                                           \
+    REG(0x0C, SDR,       "Serial data")                                         \
+    REG(0x0D, ICR,       "Interrupt control")                                   \
+      FLD(ICR, ICR_IRQ_BIT,  7:7, "IRQ active",    Flag, 0, 0)                 \
+      FLD(ICR, ICR_FLG_BIT,  4:4, "FLAG pin",      Flag, 0, 0)                 \
+      FLD(ICR, ICR_SP_BIT,   3:3, "Serial",        Flag, 0, 0)                 \
+      FLD(ICR, ICR_ALRM_BIT, 2:2, "Alarm",         Flag, 0, 0)                 \
+      FLD(ICR, ICR_TB_BIT,   1:1, "Timer B",       Flag, 0, 0)                 \
+      FLD(ICR, ICR_TA_BIT,   0:0, "Timer A",       Flag, 0, 0)                 \
+    REG(0x0E, CRA,       "Control reg A")                                       \
+      FLD(CRA, CRA_TODIN_B,   7:7, "TOD freq (1=50Hz)",   Flag, 0, 0)          \
+      FLD(CRA, CRA_SPMODE_B,  6:6, "SP mode (1=out)",     Flag, 0, 0)          \
+      FLD(CRA, CRA_INMODE_A,  5:5, "TA input (1=CNT)",    Flag, 0, 0)          \
+      FLD(CRA, CRA_RUNMODE_A, 3:3, "Run mode (1=oneshot)", Flag, 0, 0)         \
+      FLD(CRA, CRA_OUTMODE_A, 2:2, "Out mode (1=toggle)",  Flag, 0, 0)         \
+      FLD(CRA, CRA_PBON_A,    1:1, "PB6 output enable",   Flag, 0, 0)          \
+      FLD(CRA, CRA_START_A,   0:0, "Timer A start",       Flag, 0, 0)          \
+    REG(0x0F, CRB,       "Control reg B")                                       \
+      FLD(CRB, CRB_ALARM_B,   7:7, "TOD alarm mode",      Flag, 0, 0)          \
+      FLD(CRB, CRB_INMODE_B,  6:5, "TB input mode",       Value, 0, 0)         \
+      FLD(CRB, CRB_RUNMODE_B, 3:3, "Run mode (1=oneshot)", Flag, 0, 0)         \
+      FLD(CRB, CRB_OUTMODE_B, 2:2, "Out mode (1=toggle)",  Flag, 0, 0)         \
+      FLD(CRB, CRB_PBON_B,    1:1, "PB7 output enable",   Flag, 0, 0)          \
+      FLD(CRB, CRB_START_B,   0:0, "Timer B start",       Flag, 0, 0)
+
+// Backward compat: old REG_TABLE is just the REG rows from the DECL
+#define CIA_REG_TABLE(X) CIA_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
+
+// --- Extract file-scope address constants for FLD extractors ---
+#define CIA_X_REG_CONST_(a, s, l) static constexpr uint8_t CIA_REG_##s = a;
+CIA_DECL(CIA_X_REG_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
+#undef CIA_X_REG_CONST_
 
 #define CIA_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry CIA_REG_INFO[] = { CIA_REG_TABLE(CIA_X_INFO_) };
+static constexpr RegEntry CIA_REG_INFO[] = { CIA_DECL(CIA_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };
 #undef CIA_X_INFO_
+
+// --- Extract field info array ---
+#define CIA_X_FLD_INFO_(reg, fld, hilo, desc, kind, ds, dm) \
+    { #fld, desc, CIA_REG_##reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind, (uint8_t)(ds), (uint16_t)(dm) },
+static constexpr FieldEntry CIA_FLD_INFO[] = {
+    CIA_DECL(DECL_REG_NOP, CIA_X_FLD_INFO_, DECL_CMP_NOP)
+};
+#undef CIA_X_FLD_INFO_
+static constexpr size_t CIA_NUM_FIELDS = sizeof(CIA_FLD_INFO) / sizeof(CIA_FLD_INFO[0]);
+
+// --- Extract declaration order array ---
+#define CIA_X_ORD_REG_(a, s, l)                                                { DeclRowType::Reg, (uint16_t)(a) },
+#define CIA_X_ORD_FLD_(r, f, hilo, d, k, ds, dm)                              { DeclRowType::Field, 0 },
+#define CIA_X_ORD_CMP_(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)           { DeclRowType::Compound, 0 },
+static constexpr DeclOrderEntry CIA_DECL_ORDER_RAW[] = {
+    CIA_DECL(CIA_X_ORD_REG_, CIA_X_ORD_FLD_, CIA_X_ORD_CMP_)
+};
+#undef CIA_X_ORD_REG_
+#undef CIA_X_ORD_FLD_
+#undef CIA_X_ORD_CMP_
+static constexpr auto CIA_DECL_ORDER = assign_decl_indices(CIA_DECL_ORDER_RAW);
 
 struct mos6526_t : public IoChipBase {
     mos6526_t() : IoChipBase(ChipInfo{"MOS6526", "MOS Technology"}) {
@@ -213,14 +262,16 @@ private:
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
         using CI = const mos6526_t;
-        static constexpr const char* icr_labels[] = {
-            "IRQ", "unused", "unused", "FLG", "SP", "ALRM", "TB", "TA"
-        };
 
         debug_registry_.set_registers(reg, CIA_REGS_SIZE, CIA_REG_INFO);
+        debug_registry_.set_decl_order(CIA_DECL_ORDER.data(), CIA_DECL_ORDER.size(),
+                                       CIA_FLD_INFO, CIA_NUM_FIELDS,
+                                       nullptr, 0, nullptr);
+
+        // ICR/CRA/CRB bitfields and TOD/SDR register values are in the DECL walk.
+        // Port visualization, live timers, and internal interrupt mask remain.
 
         // --- Data Ports ---
-        // PRA=reg[0], PRB=reg[1], DDRA=reg[2], DDRB=reg[3]
         debug_registry_.category("Data Ports")
             .port("Port A",
                   +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[0]; },
@@ -229,8 +280,7 @@ private:
                   +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[1]; },
                   +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[3]; });
 
-        // --- Timers ---
-        // Timer latches: TIMER_OFFSET = 16 - 4 = 12, so latch A at reg[16..17], latch B at reg[18..19]
+        // --- Timers (live counters/latches — not in register mirror) ---
         debug_registry_.category("Timers")
             .timer("Timer A",
                    +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->timer_counter_[0]; },
@@ -243,31 +293,9 @@ private:
                        return (static_cast<CI*>(c)->reg[19] << 8) | static_cast<CI*>(c)->reg[18]; },
                    +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[15] & 0x01; });
 
-        // --- TOD Clock ---
-        // TOD_10THS=8, TOD_SEC=9, TOD_MIN=10, TOD_HR=11
-        debug_registry_.category("Time of Day Clock", false)
-            .value("TOD 10ths",   static_cast<uint16_t>(8))
-            .value("TOD Seconds", static_cast<uint16_t>(9))
-            .value("TOD Minutes", static_cast<uint16_t>(10))
-            .value("TOD Hours",   static_cast<uint16_t>(11));
-
-        // --- Interrupt Control ---
-        // ICR=reg[13]
+        // --- Interrupt (internal delayed mask not in register) ---
         debug_registry_.category("Interrupt Control")
-            .bitfield("ICR", +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[13]; }, 8, icr_labels)
-            .value("Interrupt Mask", +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->interrupt_mask; })
-            .flag("IRQ Active", +[](const ChipBase* c) -> uint32_t { return (static_cast<CI*>(c)->reg[13] & 0x80) ? 1u : 0u; });
-
-        // --- Serial Data ---
-        // SDR=reg[12]
-        debug_registry_.category("Serial Data", false)
-            .value("SDR", static_cast<uint16_t>(12));
-
-        // --- Control Registers ---
-        // CRA=reg[14], CRB=reg[15]
-        debug_registry_.category("Control Registers", false)
-            .value("CRA", static_cast<uint16_t>(14))
-            .value("CRB", static_cast<uint16_t>(15));
+            .value("Interrupt Mask", +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->interrupt_mask; });
     }
 #endif
 };

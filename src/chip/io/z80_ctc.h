@@ -31,31 +31,42 @@
 #include <cstring>
 
 // ============================================================================
-// Z80 CTC REGISTER TABLE — single source of truth
+// Z80 CTC UNIFIED DECLARATION TABLE — single source of truth
 // ============================================================================
 
-// X(addr, symbol, description)
-#define Z80_CTC_REG_TABLE(X) \
-    X(0x00, CH0_CTRL, "Channel 0 control")        \
-    X(0x01, CH1_CTRL, "Channel 1 control")        \
-    X(0x02, CH2_CTRL, "Channel 2 control")        \
-    X(0x03, CH3_CTRL, "Channel 3 control")        \
-    X(0x04, CH0_TC,   "Channel 0 time constant")  \
-    X(0x05, CH1_TC,   "Channel 1 time constant")  \
-    X(0x06, CH2_TC,   "Channel 2 time constant")  \
-    X(0x07, CH3_TC,   "Channel 3 time constant")  \
-    X(0x08, INT_VEC,  "Interrupt base vector")
+// REG(offset, symbol, description)
+#define Z80_CTC_DECL(REG, FLD, CMP) \
+    REG(0x00, CH0_CTRL, "Channel 0 control")        \
+    REG(0x01, CH1_CTRL, "Channel 1 control")        \
+    REG(0x02, CH2_CTRL, "Channel 2 control")        \
+    REG(0x03, CH3_CTRL, "Channel 3 control")        \
+    REG(0x04, CH0_TC,   "Channel 0 time constant")  \
+    REG(0x05, CH1_TC,   "Channel 1 time constant")  \
+    REG(0x06, CH2_TC,   "Channel 2 time constant")  \
+    REG(0x07, CH3_TC,   "Channel 3 time constant")  \
+    REG(0x08, INT_VEC,  "Interrupt base vector")
+
+// Backward compat: old REG_TABLE is just the REG rows from the DECL
+#define Z80_CTC_REG_TABLE(X) Z80_CTC_DECL(X, DECL_FLD_NOP, DECL_CMP_NOP)
 
 namespace z80_ctc_regs {
     #define Z80_CTC_X_CONST_(a, s, l) constexpr uint8_t s = a;
-    Z80_CTC_REG_TABLE(Z80_CTC_X_CONST_)
+    Z80_CTC_DECL(Z80_CTC_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
     #undef Z80_CTC_X_CONST_
     constexpr uint8_t REG_COUNT = 9;
 } // namespace z80_ctc_regs
 
 #define Z80_CTC_X_INFO_(a, s, l) { #s, l },
-static constexpr RegEntry Z80_CTC_REG_INFO[] = { Z80_CTC_REG_TABLE(Z80_CTC_X_INFO_) };
+static constexpr RegEntry Z80_CTC_REG_INFO[] = { Z80_CTC_DECL(Z80_CTC_X_INFO_, DECL_FLD_NOP, DECL_CMP_NOP) };
 #undef Z80_CTC_X_INFO_
+
+// --- Extract declaration order array (no fields or compounds) ---
+#define Z80_CTC_X_ORD_REG_(a, s, l) { DeclRowType::Reg, (uint16_t)(a) },
+static constexpr DeclOrderEntry Z80_CTC_DECL_ORDER_RAW[] = {
+    Z80_CTC_DECL(Z80_CTC_X_ORD_REG_, DECL_FLD_NOP, DECL_CMP_NOP)
+};
+#undef Z80_CTC_X_ORD_REG_
+static constexpr auto Z80_CTC_DECL_ORDER = assign_decl_indices(Z80_CTC_DECL_ORDER_RAW);
 
 // ============================================================================
 // Z80 CTC Channel Control Bits

@@ -1480,12 +1480,19 @@ void ted7360_t::register_debug_fields() {
     using TD = const ted7360_t;
     auto& r = debug_registry_;
     r.set_registers(registers.data, TED_NUM_REGS, TED_REG_INFO, 0xFF00);
+    r.set_decl_order(TED_DECL_ORDER.data(), TED_DECL_ORDER.size(),
+                     TED_FLD_INFO, TED_NUM_FIELDS,
+                     nullptr, 0, nullptr);
     const uint32_t* palette = get_palette();
 
     static constexpr const char* gfx_mode_names[] = {
         "Standard Text", "Multicolor Text", "Standard Bitmap",
         "Multicolor Bitmap", "ECM Text", "Invalid", "Invalid", "Invalid"
     };
+
+    // Control register bitfields and sound control bits are in the DECL walk.
+    // Raster timing, graphics mode, timers, internal sound state, IRQ state,
+    // memory mapping, video logic, and color palette swatches remain.
 
     // ---- Raster Information ----
     r.category("Raster Information")
@@ -1499,31 +1506,12 @@ void ted7360_t::register_debug_fields() {
      .flag("DMA Line", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->video_logic.is_dma_line; })
      .flag("BA Low", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->bus.ba_low; });
 
-    // ---- Control Registers ----
+    // ---- Control Registers (only derived graphics mode) ----
     r.category("Control Registers")
-     .value("$FF06 Control 1", TED_REG_CONTROL1)
-     .indent(1)
-     .flag("DEN", TED_REG_CONTROL1, 4)
-     .flag("BMM", TED_REG_CONTROL1, 5)
-     .flag("ECM", TED_REG_CONTROL1, 6)
-     .flag("RSEL", TED_REG_CONTROL1, 3)
-     .value("YSCROLL", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->registers.data[TED_REG_CONTROL1] & TED_CR1_YSCROLL_MASK; }, 8)
-     .indent(0)
-     .value("$FF07 Control 2", TED_REG_CONTROL2)
-     .indent(1)
-     .flag("MCM", TED_REG_CONTROL2, 4)
-     .flag("CSEL", TED_REG_CONTROL2, 3)
-     .flag("FREEZE", TED_REG_CONTROL2, 5)
-     .flag("PAL/NTSC", TED_REG_CONTROL2, 6)
-     .flag("RVS", TED_REG_CONTROL2, 7)
-     .value("XSCROLL", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->registers.data[TED_REG_CONTROL2] & TED_CR2_XSCROLL_MASK; }, 8)
-     .indent(0)
      .state("Graphics Mode", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sequencer.graphics_mode; },
             gfx_mode_names, 8);
 
     // ---- Timers ----
-    // TED timers have no enable/disable bit — they always decrement every CPU cycle.
-    // The running_src lambda returns a constant 1 to reflect this hardware behavior.
     r.category("Timers")
      .timer("Timer 1",
          +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->timer1.counter; },
@@ -1538,7 +1526,7 @@ void ted7360_t::register_debug_fields() {
          +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->timer3.latch; },
          +[](const ChipBase*) -> uint32_t { return 1; });
 
-    // ---- Sound ----
+    // ---- Sound (internal state — combined frequencies not in DECL) ----
     r.category("Sound")
      .audio_channel("Channel 1",
          +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.ch1_enabled; },
@@ -1548,13 +1536,10 @@ void ted7360_t::register_debug_fields() {
          +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.ch2_enabled; },
          +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.freq2; },
          +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.volume; })
-     .flag("Noise Enabled", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.noise_enabled; })
      .value("Noise LFSR", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.noise_shift_reg; }, 8)
-     .value("Volume", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.volume; }, 8)
-     .flag("DA Mode", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->sound.da_mode; })
      .value("Buffer Samples", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->audio_available(); }, 16);
 
-    // ---- Interrupts ----
+    // ---- Interrupts (reads internal irq_status/irq_mask, not register mirror) ----
     r.category("Interrupts")
      .value("IRQ Status ($FF09)", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->irq_status; }, 8)
      .value("IRQ Mask ($FF0A)", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->irq_mask; }, 8)
@@ -1583,7 +1568,7 @@ void ted7360_t::register_debug_fields() {
      .flag("Border Main FF", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->border.main_ff; })
      .flag("Border Vert FF", +[](const ChipBase* c) -> uint32_t { return static_cast<TD*>(c)->border.vert_ff; });
 
-    // ---- Colors ----
+    // ---- Colors (palette swatches — DataKind::Color deferred) ----
     r.category("Colors", false)
      .color("BG0 ($FF15)", TED_REG_COLOR_BG0, palette, 128)
      .color("BG1 ($FF16)", TED_REG_COLOR_BG1, palette, 128)
