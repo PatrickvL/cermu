@@ -142,7 +142,9 @@ struct tia_audio_channel_t {
 // ============================================================================
 
 struct tia_t : public ChipBase {
-    tia_t() : ChipBase(ChipInfo{"TIA", "Atari"}) {}
+    tia_t() : ChipBase(ChipInfo{"TIA", "Atari"}) {
+        category_ = "Video";  
+    }
 
     // --- ChipBase GUI interface ---
 #ifdef CERMU_HAS_GUI

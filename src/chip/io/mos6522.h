@@ -7,26 +7,37 @@
 #include "../../core/ioport.h"       // For io_port<Mask> and io_port_state
 
 // ============================================================================
-// MOS6522 REGISTER ADDRESSES
+// MOS6522 REGISTER TABLE — single source of truth
 // ============================================================================
 
-// Register addresses
-#define MOS6522_PORTB  0x00
-#define MOS6522_PORTA  0x01
-#define MOS6522_DDRB   0x02
-#define MOS6522_DDRA   0x03
-#define MOS6522_T1CL   0x04
-#define MOS6522_T1CH   0x05
-#define MOS6522_T1LL   0x06
-#define MOS6522_T1LH   0x07
-#define MOS6522_T2CL   0x08
-#define MOS6522_T2CH   0x09
-#define MOS6522_SR     0x0A
-#define MOS6522_ACR    0x0B
-#define MOS6522_PCR    0x0C
-#define MOS6522_IFR    0x0D
-#define MOS6522_IER    0x0E
-#define MOS6522_PORTA_NH 0x0F  // PORTA without handshake
+// X(addr, symbol, description)
+#define MOS6522_REG_TABLE(X) \
+    X(0x00, PORTB,    "Port B data/latch")    \
+    X(0x01, PORTA,    "Port A data/latch")    \
+    X(0x02, DDRB,     "Port B direction")     \
+    X(0x03, DDRA,     "Port A direction")     \
+    X(0x04, T1CL,     "Timer 1 counter lo")   \
+    X(0x05, T1CH,     "Timer 1 counter hi")   \
+    X(0x06, T1LL,     "Timer 1 latch lo")     \
+    X(0x07, T1LH,     "Timer 1 latch hi")     \
+    X(0x08, T2CL,     "Timer 2 counter lo")   \
+    X(0x09, T2CH,     "Timer 2 counter hi")   \
+    X(0x0A, SR,       "Shift register")       \
+    X(0x0B, ACR,      "Auxiliary control")     \
+    X(0x0C, PCR,      "Peripheral control")   \
+    X(0x0D, IFR,      "Interrupt flags")      \
+    X(0x0E, IER,      "Interrupt enable")     \
+    X(0x0F, PORTA_NH, "Port A no handshake")
+
+// --- Extract address constants (prefix MOS6522_ added by macro) ---
+#define MOS6522_X_CONST_(a, s, l) static constexpr uint8_t MOS6522_##s = a;
+MOS6522_REG_TABLE(MOS6522_X_CONST_)
+#undef MOS6522_X_CONST_
+
+// --- Extract register info array (label from #symbol, desc from string) ---
+#define MOS6522_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry MOS6522_REG_INFO[] = { MOS6522_REG_TABLE(MOS6522_X_INFO_) };
+#undef MOS6522_X_INFO_
 
 // Interrupt flags
 #define MOS6522_IFR_IRQ      0x80
@@ -69,8 +80,9 @@ static constexpr uint8_t MOS6522_NUM_REGS = 16;
 
 struct mos6522_t : public ChipBase {
     mos6522_t() : ChipBase(ChipInfo{"MOS6522", "MOS Technology"}) {
+        category_ = "I/O";
 #ifdef CERMU_HAS_CHIP_DEBUG
-        debug_registry_.set_registers(regs_, MOS6522_NUM_REGS);
+        debug_registry_.set_registers(regs_, MOS6522_NUM_REGS, MOS6522_REG_INFO);
         register_debug_fields();
 #endif
     }

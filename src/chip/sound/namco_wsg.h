@@ -40,25 +40,43 @@ enum class WSGVariant : uint8_t {
 };
 
 // ============================================================================
-// Namco WSG Register Addresses (memory-mapped)
+// Namco WSG REGISTER TABLE — single source of truth
 // ============================================================================
 
+// X(addr, symbol, description)
+#define WSG_REG_TABLE(X) \
+    X(0x00, V1_FREQ0,   "Voice 1 freq bits 0-3")  \
+    X(0x01, V1_FREQ1,   "Voice 1 freq bits 4-7")  \
+    X(0x02, V1_FREQ2,   "Voice 1 freq bits 8-11") \
+    X(0x03, V1_FREQ3,   "Voice 1 freq bits 12-15") \
+    X(0x04, V1_FREQ4,   "Voice 1 freq bits 16-19") \
+    X(0x05, V2_FREQ0,   "Voice 2 freq bits 0-3")  \
+    X(0x06, V2_FREQ1,   "Voice 2 freq bits 4-7")  \
+    X(0x07, V2_FREQ2,   "Voice 2 freq bits 8-11") \
+    X(0x08, V2_FREQ3,   "Voice 2 freq bits 12-15") \
+    X(0x09, V2_FREQ4,   "Voice 2 freq bits 16-19") \
+    X(0x0A, V3_FREQ0,   "Voice 3 freq bits 0-3")  \
+    X(0x0B, V3_FREQ1,   "Voice 3 freq bits 4-7")  \
+    X(0x0C, V3_FREQ2,   "Voice 3 freq bits 8-11") \
+    X(0x0D, V3_FREQ3,   "Voice 3 freq bits 12-15") \
+    X(0x0E, V3_FREQ4,   "Voice 3 freq bits 16-19") \
+    X(0x0F, V1_WAVEVOL, "Voice 1 wave/volume")    \
+    X(0x10, V2_WAVEVOL, "Voice 2 wave/volume")    \
+    X(0x11, WSG_R11,    "-")                       \
+    X(0x12, WSG_R12,    "-")                       \
+    X(0x13, WSG_R13,    "-")                       \
+    X(0x14, V3_WAVEVOL, "Voice 3 wave/volume")
+
 namespace wsg_regs {
-    // Voice 1 frequency (5 × 4-bit nibbles)
-    constexpr uint8_t V1_FREQ0    = 0x00;
-    constexpr uint8_t V1_FREQ4    = 0x04;
-    // Voice 2 frequency
-    constexpr uint8_t V2_FREQ0    = 0x05;
-    constexpr uint8_t V2_FREQ4    = 0x09;
-    // Voice 3 frequency
-    constexpr uint8_t V3_FREQ0    = 0x0A;
-    constexpr uint8_t V3_FREQ4    = 0x0E;
-    // Waveform + volume per voice
-    constexpr uint8_t V1_WAVEVOL  = 0x0F;
-    constexpr uint8_t V2_WAVEVOL  = 0x10;
-    constexpr uint8_t V3_WAVEVOL  = 0x14;
-    constexpr uint8_t REG_COUNT   = 0x15;
+    #define WSG_X_CONST_(a, s, l) constexpr uint8_t s = a;
+    WSG_REG_TABLE(WSG_X_CONST_)
+    #undef WSG_X_CONST_
+    constexpr uint8_t REG_COUNT = 0x15;
 } // namespace wsg_regs
+
+#define WSG_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry WSG_REG_INFO[] = { WSG_REG_TABLE(WSG_X_INFO_) };
+#undef WSG_X_INFO_
 
 // ============================================================================
 // Namco WSG Sound Generator
@@ -175,7 +193,7 @@ private:
     void register_debug_fields() {
         using S = const namco_wsg_t;
         auto& r = debug_registry_;
-        r.set_registers(regs_, wsg_regs::REG_COUNT);
+        r.set_registers(regs_, wsg_regs::REG_COUNT, WSG_REG_INFO);
 
         r.category("Voice 1");
         r.value("Frequency", +[](const ChipBase* c) -> uint32_t {

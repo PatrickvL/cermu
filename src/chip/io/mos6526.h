@@ -53,8 +53,37 @@ enum mos6526_pin_t {
 #define SHIFT_OFFSET 28 // Delta on SDR so Serial Data Shift register resides at 28
 #define IDDRB_OFFSET 29 // Internal Data Direction of Port B (a version of DDRB which includes the PBON mask)
 
+// ============================================================================
+// MOS6526 CIA REGISTER TABLE — single source of truth (address constants only)
+// Bitmask constants remain separate below.
+// ============================================================================
+
+// X(addr, symbol, description)
+#define CIA_REG_TABLE(X) \
+    X(0x00, PRA,       "Port A data")           \
+    X(0x01, PRB,       "Port B data")           \
+    X(0x02, DDRA,      "Port A direction")      \
+    X(0x03, DDRB,      "Port B direction")      \
+    X(0x04, TA_LO,     "Timer A low")           \
+    X(0x05, TA_HI,     "Timer A high")          \
+    X(0x06, TB_LO,     "Timer B low")           \
+    X(0x07, TB_HI,     "Timer B high")          \
+    X(0x08, TOD_10THS, "TOD tenths of sec")     \
+    X(0x09, TOD_SEC,   "TOD seconds")           \
+    X(0x0A, TOD_MIN,   "TOD minutes")           \
+    X(0x0B, TOD_HR,    "TOD hours")             \
+    X(0x0C, SDR,       "Serial data")           \
+    X(0x0D, ICR,       "Interrupt control")     \
+    X(0x0E, CRA,       "Control reg A")         \
+    X(0x0F, CRB,       "Control reg B")
+
+#define CIA_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry CIA_REG_INFO[] = { CIA_REG_TABLE(CIA_X_INFO_) };
+#undef CIA_X_INFO_
+
 struct mos6526_t : public ChipBase {
     mos6526_t() : ChipBase(ChipInfo{"MOS6526", "MOS Technology"}) {
+        category_ = "I/O";
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -189,7 +218,7 @@ private:
             "IRQ", "unused", "unused", "FLG", "SP", "ALRM", "TB", "TA"
         };
 
-        debug_registry_.set_registers(reg, CIA_REGS_SIZE);
+        debug_registry_.set_registers(reg, CIA_REGS_SIZE, CIA_REG_INFO);
 
         // --- Data Ports ---
         // PRA=reg[0], PRB=reg[1], DDRA=reg[2], DDRB=reg[3]
@@ -256,38 +285,26 @@ namespace MOS6526 {
     inline constexpr mos6526_t::DelayLine::Pipe<6> cnt_switch_a_pipe;
     inline constexpr mos6526_t::DelayLine::Pipe<7> cnt_switch_b_pipe;
 
-    // MOS6526 CIA Register Definitions
-    
-    // Technical register indices (in decimal) and masks (in hexadecimal)
-    constexpr uint8_t PRA = 0;             // $dc00 Peripheral Data Reg A Monitoring/control of the 8 data lines of Port A.
-    constexpr uint8_t PRB = 1;             // $dc01 Peripheral Data Reg B Monitoring/control of the 8 data lines of Port B.
-    constexpr uint8_t DDRA = 2;            // $dc02 Data Direction Register A Bit X: 0=Input (read only), 1=Output (read and write)
-    constexpr uint8_t DDRB = 3;            // $dc03 Data Direction Register B Bit X: 0=Input (read only), 1=Output (read and write)
-    constexpr uint8_t TA_LO = 4;           // $dc04 Timer A Low Register Read: actual value Timer A (Low Byte) Writing: Set latch of Timer A (Low Byte)
-    constexpr uint8_t TA_HI = 5;           // $dc05 Timer A High Register Read: actual value Timer A (High Byte) Writing: Set latch of timer A (High Byte) - if the timer is stopped, the high-byte will automatically be re-set as well
-    constexpr uint8_t TB_LO = 6;           // $dc06 Timer B Low Register Read: actual value Timer B (Low Byte) Writing: Set latch of Timer B (Low Byte)
-    constexpr uint8_t TB_HI = 7;           // $dc07 Timer B High Register Read: actual value Timer B (High Byte) Writing: Set latch of timer B (High Byte) - if the timer is stopped, the high-byte will automatically be re-set as well
-    constexpr uint8_t TOD_10THS = 8;       // $dc08 Real Time Clock 10ths Of Seconds
-    constexpr uint8_t TOD_10THS_MASK = 0x0F; // $dc08 Real Time Clock 10ths Of Seconds Bit 0..3: Tenth seconds in BCD-format($0-$9) Bit 4..7: always 0
-    constexpr uint8_t TOD_SEC = 9;         // $dc09 Real Time Clock Seconds
-    constexpr uint8_t TOD_SEC_MASK = 0x7F; // $dc0a Real Time Clock Seconds Bit 0..3: Single seconds in BCD-format( $0-$9) Bit 4..6: Ten seconds in BCD-format ($0-$5) Bit 7: always 0
-    constexpr uint8_t TOD_MIN = 10;        // $dc0a Real Time Clock Minutes
-    constexpr uint8_t TOD_MIN_MASK = 0x7F; // $dc0a Real Time Clock Minutes Bit 0..3: Single minutes in BCD-format( $0-$9) Bit 4..6: Ten minutes in BCD-format ($0-$5) Bit 7: always 0
-    constexpr uint8_t TOD_HR = 11;         // $dc0b Real Time Clock Hours
-    constexpr uint8_t TOD_HR_PM = 0x80;    // $dc0b Real Time Clock Hours - Bit 7 Read: Differentiation AM/PM, 0=AM, 1=PM Writing into this register stops TOD, until register 8 (TOD 10THS) will be read.
-    constexpr uint8_t TOD_HR_MASK = 0x1F;  // $dc0b Real Time Clock Hours - Bit 0..3: Single hours in BCD-format($0-$9) Bit 4..6: Ten hours in BCD-format ($0-$5)
-    constexpr uint8_t SDR = 12;            // $dc0c Serial Data Register
-    constexpr uint8_t ICR = 13;            // $dc0d Interrupt Control Register
-    constexpr uint8_t ICR_IRQ = 0x80;      // $dc0d Interrupt Control Register Bit 7 Read: 1= IRQ An interrupt occurred, so at least one bit of INT MASK and INT DATA is set in both registers.
-    constexpr uint8_t ICR_S_C = 0x80;      // $dc0d Interrupt Control Register Bit 7 Write: Source bit. 0 = set bits 0..4 are clearing the according mask bit. 1 = set bits 0..4 are setting the according mask bit. If all bits 0..4 are cleared, there will be no change to the mask.
-    constexpr uint8_t ICR_UNUSED = 0x60;   // $dc0d Interrupt Control Register Bit 5..6: Always 0
-    constexpr uint8_t ICR_FLG = 0x10;      // $dc0d Interrupt Control Register Bit 4: 1 = IRQ Signal occurred at FLAG-pin (cassette port Data input, serial bus SRQ IN)
-    constexpr uint8_t ICR_SP = 0x08;       // $dc0d Interrupt Control Register Bit 3: 1 = SDR full or empty, so full byte was transferred, depending of operating mode serial bus
-    constexpr uint8_t ICR_ALRM = 0x04;     // $dc0d Interrupt Control Register Bit 2: 1 = Time of day and alarm time is equal
-    constexpr uint8_t ICR_TB = 0x02;       // $dc0d Interrupt Control Register Bit 1: 1 = Underflow Timer B
-    constexpr uint8_t ICR_TA = 0x01;       // $dc0d Interrupt Control Register Bit 0: 1 = Underflow Timer A
-    constexpr uint8_t CRA = 14;            // $dc0e Control Register A
-    constexpr uint8_t CRB = 15;            // $dc0f Control Register B
+    // MOS6526 CIA Register Definitions — address constants from X-macro
+    #define CIA_X_CONST_(a, s, l) constexpr uint8_t s = a;
+    CIA_REG_TABLE(CIA_X_CONST_)
+    #undef CIA_X_CONST_
+
+    // Bitmask constants (not part of the X-macro address table)
+    constexpr uint8_t TOD_10THS_MASK = 0x0F; // TOD 10ths: BCD mask
+    constexpr uint8_t TOD_SEC_MASK = 0x7F;   // TOD Seconds: BCD mask
+    constexpr uint8_t TOD_MIN_MASK = 0x7F;   // TOD Minutes: BCD mask
+    constexpr uint8_t TOD_HR_PM = 0x80;      // TOD Hours: AM/PM bit
+    constexpr uint8_t TOD_HR_MASK = 0x1F;    // TOD Hours: BCD mask
+
+    constexpr uint8_t ICR_IRQ = 0x80;        // ICR bit 7: IRQ occurred
+    constexpr uint8_t ICR_S_C = 0x80;        // ICR bit 7 write: source bit
+    constexpr uint8_t ICR_UNUSED = 0x60;     // ICR bits 5-6: always 0
+    constexpr uint8_t ICR_FLG = 0x10;        // ICR bit 4: FLAG pin
+    constexpr uint8_t ICR_SP = 0x08;         // ICR bit 3: serial data
+    constexpr uint8_t ICR_ALRM = 0x04;       // ICR bit 2: alarm
+    constexpr uint8_t ICR_TB = 0x02;         // ICR bit 1: Timer B underflow
+    constexpr uint8_t ICR_TA = 0x01;         // ICR bit 0: Timer A underflow
     
     // Generic Control Register bit definitions (shared between CRA and CRB)
     constexpr uint8_t CR_LOAD = 0x10;      // Bit 4: 1 = Load latch into the timer once (strobe)

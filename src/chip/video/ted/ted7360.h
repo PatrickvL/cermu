@@ -38,43 +38,56 @@
 #include "../video_pixel_unit.h"
 
 // ============================================================================
-// REGISTER INDICES ($FF00-$FF1F)
+// TED REGISTER TABLE — single source of truth
+// Register map: $FF00-$FF1F (mirrored at $FF20-$FF3F)
 // ============================================================================
 
-#define TED_REG_TIMER1_LO    0x00   // $FF00 — Timer 1 counter/latch low byte [7:0]
-#define TED_REG_TIMER1_HI    0x01   // $FF01 — Timer 1 counter/latch high byte [15:8]; write loads counter
-#define TED_REG_TIMER2_LO    0x02   // $FF02 — Timer 2 counter/latch low byte [7:0]
-#define TED_REG_TIMER2_HI    0x03   // $FF03 — Timer 2 counter/latch high byte [15:8]; write loads counter
-#define TED_REG_TIMER3_LO    0x04   // $FF04 — Timer 3 counter/latch low byte [7:0]
-#define TED_REG_TIMER3_HI    0x05   // $FF05 — Timer 3 counter/latch high byte [15:8]; write loads counter
-#define TED_REG_CONTROL1     0x06   // $FF06 — Control 1: YSCROLL[2:0], RSEL, DEN, BMM, ECM, TEST
-#define TED_REG_CONTROL2     0x07   // $FF07 — Control 2: XSCROLL[2:0], CSEL, MCM, FREEZE, PAL/NTSC, RVS
-#define TED_REG_KEYBOARD     0x08   // $FF08 — Keyboard latch: write column select, read row state (active LOW)
-#define TED_REG_IRQ_STATUS   0x09   // $FF09 — IRQ status; write 1-bits to acknowledge/clear (see TED_IRQ_*)
-#define TED_REG_IRQ_MASK     0x0A   // $FF0A — IRQ enable mask; bits [6:1] enable IRQ sources. Bit 0 = raster compare bit 8.
-#define TED_REG_RASTER_CMP   0x0B   // $FF0B — Raster compare [7:0]; combined with $FF0A bit 0 → 9-bit compare value
-#define TED_REG_CURSOR_HI    0x0C   // $FF0C — Cursor position bits [9:8] (bits [1:0] of byte); 10-bit index into screen matrix
-#define TED_REG_CURSOR_LO    0x0D   // $FF0D — Cursor position bits [7:0]; combined with CURSOR_HI → 0..999
-#define TED_REG_SOUND1_LO    0x0E   // $FF0E — Sound channel 1 frequency bits [7:0]
-#define TED_REG_SOUND2_LO    0x0F   // $FF0F — Sound channel 2 frequency bits [7:0]
-#define TED_REG_SOUND2_HI    0x10   // $FF10 — Sound channel 2 frequency bits [9:8] (bits [1:0] of byte)
-#define TED_REG_SOUND_CTRL   0x11   // $FF11 — Sound control: DA mode, noise, ch1/ch2 enable, volume [3:0]
-#define TED_REG_MEM_CTRL     0x12   // $FF12 — bits [1:0]: Sound ch1 frequency bits [9:8]; bits [7:2]: memory control
-#define TED_REG_CHAR_HI      0x13   // $FF13 — Character generator base address bits [15:10] (bits [7:2] of byte)
-#define TED_REG_BITMAP_ADDR  0x14   // $FF14 — Screen/bitmap base address bits [14:10] (bits [7:3]); bit 3 = bitmap toggle
-#define TED_REG_COLOR_BG0    0x15   // $FF15 — Background color 0 (7-bit: lum[6:4] | hue[3:0])
-#define TED_REG_COLOR_BG1    0x16   // $FF16 — Background color 1 (ECM text BG1, MCM pixel 01)
-#define TED_REG_COLOR_BG2    0x17   // $FF17 — Background color 2 (ECM text BG2, MCM pixel 10 — not used in all modes)
-#define TED_REG_COLOR_BG3    0x18   // $FF18 — Background color 3 (ECM text BG3)
-#define TED_REG_BORDER       0x19   // $FF19 — Border color (7-bit: lum[6:4] | hue[3:0])
-#define TED_REG_CHARPOS_HI   0x1A   // $FF1A — Character counter bit 8 in bit 0; Read: bit 0 = VC[8], bits [7:2] = 1. Write: sets VC bit 8.
-#define TED_REG_CHARPOS_LO   0x1B   // $FF1B — Character counter [7:0]; Read: VC low byte. Write: sets VC low byte.
-#define TED_REG_RASTER_HI    0x1C   // $FF1C — Raster counter bit 8 in bit 0; Read: bit 0 = raster[8], bits [7:1] = 1. Write: forces raster bit 8.
-#define TED_REG_RASTER_LO    0x1D   // $FF1D — Raster counter [7:0]; Read: live raster low byte. Write: forces raster low byte.
-#define TED_REG_HPOS         0x1E   // $FF1E — Horizontal position; Read: (cycle-16)*2 & 0xFE. Write: no-op on real hardware.
-#define TED_REG_FLASH_RC     0x1F   // $FF1F — Read: 0x80 | flash[3:0]<<3 | RC[2:0]. Write: sets flash counter + RC (row counter).
+// X(addr, symbol, description)
+#define TED_REG_TABLE(X) \
+    X(0x00, TIMER1_LO,  "Timer 1 low byte")      \
+    X(0x01, TIMER1_HI,  "Timer 1 high byte")     \
+    X(0x02, TIMER2_LO,  "Timer 2 low byte")      \
+    X(0x03, TIMER2_HI,  "Timer 2 high byte")     \
+    X(0x04, TIMER3_LO,  "Timer 3 low byte")      \
+    X(0x05, TIMER3_HI,  "Timer 3 high byte")     \
+    X(0x06, CONTROL1,   "Y-scroll/DEN/BMM/ECM")  \
+    X(0x07, CONTROL2,   "X-scroll/CSEL/MCM")     \
+    X(0x08, KEYBOARD,   "Keyboard col/row latch") \
+    X(0x09, IRQ_STATUS, "IRQ status/acknowledge") \
+    X(0x0A, IRQ_MASK,   "IRQ enable mask")        \
+    X(0x0B, RASTER_CMP, "Raster compare lo")      \
+    X(0x0C, CURSOR_HI,  "Cursor position hi")     \
+    X(0x0D, CURSOR_LO,  "Cursor position lo")     \
+    X(0x0E, SOUND1_LO,  "Sound 1 freq lo")        \
+    X(0x0F, SOUND2_LO,  "Sound 2 freq lo")        \
+    X(0x10, SOUND2_HI,  "Sound 2 freq hi")        \
+    X(0x11, SOUND_CTRL, "DA/noise/enable/volume") \
+    X(0x12, MEM_CTRL,   "Sound1 hi + memory map") \
+    X(0x13, CHAR_HI,    "Char generator base")    \
+    X(0x14, BITMAP_ADDR,"Screen/bitmap base")     \
+    X(0x15, COLOR_BG0,  "Background color 0")     \
+    X(0x16, COLOR_BG1,  "Background color 1")     \
+    X(0x17, COLOR_BG2,  "Background color 2")     \
+    X(0x18, COLOR_BG3,  "Background color 3")     \
+    X(0x19, BORDER,     "Border color")           \
+    X(0x1A, CHARPOS_HI, "Char counter hi")        \
+    X(0x1B, CHARPOS_LO, "Char counter lo")        \
+    X(0x1C, RASTER_HI,  "Raster counter hi")      \
+    X(0x1D, RASTER_LO,  "Raster counter lo")      \
+    X(0x1E, HPOS,       "Horizontal position")    \
+    X(0x1F, FLASH_RC,   "Flash counter/row ctr")
 
-#define TED_NUM_REGS         0x20   // 32 registers in the primary range ($FF00-$FF1F)
+// --- Extract address constants (prefix TED_REG_ added by macro) ---
+#define TED_X_CONST_(a, s, l) static constexpr uint8_t TED_REG_##s = a;
+TED_REG_TABLE(TED_X_CONST_)
+#undef TED_X_CONST_
+
+#define TED_NUM_REGS 0x20  // 32 registers in the primary range ($FF00-$FF1F)
+
+// --- Extract register info array ---
+#define TED_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry TED_REG_INFO[] = { TED_REG_TABLE(TED_X_INFO_) };
+#undef TED_X_INFO_
 
 // Video counter / address masks
 #define TED_VC_MASK              0x3FF    // 10-bit video counter (VC/VCBASE) mask: 0..1023 (40×25 = 1000 char positions)

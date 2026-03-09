@@ -20,19 +20,35 @@
  * using the Data Direction Register (0=input, 1=output).
  */
 
-// Register indices within regs_[]
-static constexpr uint8_t PIA_REG_PORTA_DATA = 0;  // PRA  — Port A output latch
-static constexpr uint8_t PIA_REG_PORTA_DDR  = 1;  // DDRA — Port A data direction
-static constexpr uint8_t PIA_REG_PORTA_CTRL = 2;  // CRA  — Port A control
-static constexpr uint8_t PIA_REG_PORTB_DATA = 3;  // PRB  — Port B output latch
-static constexpr uint8_t PIA_REG_PORTB_DDR  = 4;  // DDRB — Port B data direction
-static constexpr uint8_t PIA_REG_PORTB_CTRL = 5;  // CRB  — Port B control
-static constexpr uint8_t PIA_NUM_REGS       = 6;
+// ============================================================================
+// PIA6820 REGISTER TABLE — single source of truth
+// ============================================================================
+
+// X(addr, symbol, description)
+#define PIA_REG_TABLE(X) \
+    X(0, PORTA_DATA, "Port A output latch") \
+    X(1, PORTA_DDR,  "Port A direction")    \
+    X(2, PORTA_CTRL, "Port A control")      \
+    X(3, PORTB_DATA, "Port B output latch") \
+    X(4, PORTB_DDR,  "Port B direction")    \
+    X(5, PORTB_CTRL, "Port B control")
+
+// --- Extract address constants (prefix PIA_REG_ added by macro) ---
+#define PIA_X_CONST_(a, s, l) static constexpr uint8_t PIA_REG_##s = a;
+PIA_REG_TABLE(PIA_X_CONST_)
+#undef PIA_X_CONST_
+static constexpr uint8_t PIA_NUM_REGS = 6;
+
+// --- Extract register info array ---
+#define PIA_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry PIA_REG_INFO[] = { PIA_REG_TABLE(PIA_X_INFO_) };
+#undef PIA_X_INFO_
 
 struct pia6820_t : public ChipBase {
     pia6820_t() : ChipBase(ChipInfo{"PIA6820", "Motorola"}) {
+        category_ = "I/O";
 #ifdef CERMU_HAS_CHIP_DEBUG
-        debug_registry_.set_registers(regs_, PIA_NUM_REGS);
+        debug_registry_.set_registers(regs_, PIA_NUM_REGS, PIA_REG_INFO);
         register_debug_fields();
 #endif
     }

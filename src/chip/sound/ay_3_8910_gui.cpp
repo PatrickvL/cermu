@@ -27,7 +27,7 @@
 void ay_3_8910_t::register_debug_fields() {
     using S = const ay_3_8910_t;
     auto& r = debug_registry_;
-    r.set_registers(regs_, ay_regs::REG_COUNT);
+    r.set_registers(regs_, ay_regs::REG_COUNT, AY_REG_INFO);
 
     r.category("Channel A");
     r.value("Tone Period", +[](const ChipBase* c) -> uint32_t {

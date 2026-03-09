@@ -138,21 +138,5 @@ void vic_base_t::render_settings_content() {
     ImGui::Text("Clock: %u Hz", vic->clock_frequency);
     ImGui::Text("Lines: %u lines/frame", vic->total_lines);
     ImGui::Text("Cycles/line: %u", vic->cycles_per_line);
-
-    ImGui::Separator();
-
-    // Raw register dump
-    if (ImGui::CollapsingHeader("Raw Registers ($9000-$900F)", ImGuiTreeNodeFlags_DefaultOpen)) {
-        static const char* reg_names[] = {
-            "Control 1", "Control 2", "Video Matrix", "Rows",
-            "Raster", "Char Base", "Light Pen X", "Light Pen Y",
-            "Paddle X", "Paddle Y", "Bass Freq", "Alto Freq",
-            "Soprano Freq", "Noise Freq", "Aux Color", "Background"
-        };
-        for (int i = 0; i < 16; i++) {
-            ImGui::Text("$%04X ($%02X) %-13s: $%02X", 0x9000 + i, i,
-                        reg_names[i], vic->registers[i]);
-        }
-    }
 }
 #endif // CERMU_HAS_GUI

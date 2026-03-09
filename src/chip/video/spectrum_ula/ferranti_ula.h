@@ -32,14 +32,20 @@
 #include <cstring>
 
 // ============================================================================
-// Spectrum ULA Constants
+// Spectrum ULA REGISTER TABLE — single source of truth
 // ============================================================================
+
+// X(addr, symbol, description)
+#define SPECTRUM_ULA_REG_TABLE(X) \
+    X(0x00, PORT_FE, "Border/speaker/mic I/O")
 
 namespace spectrum_ula {
 
     // ULA I/O register (port $FE is the only addressable register)
-    inline constexpr uint8_t PORT_FE        = 0x00;
-    inline constexpr uint8_t REG_COUNT      = 1;
+    #define SPECTRUM_ULA_X_CONST_(a, s, l) inline constexpr uint8_t s = a;
+    SPECTRUM_ULA_REG_TABLE(SPECTRUM_ULA_X_CONST_)
+    #undef SPECTRUM_ULA_X_CONST_
+    inline constexpr uint8_t REG_COUNT = 1;
 
     // Display dimensions
     inline constexpr int SCREEN_WIDTH      = 256;
@@ -84,6 +90,10 @@ namespace spectrum_ula {
     inline constexpr uint8_t EAR_IN_BIT    = 0x40;  // Bit 6: EAR input (read)
 
 } // namespace spectrum_ula
+
+#define SPECTRUM_ULA_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry SPECTRUM_ULA_REG_INFO[] = { SPECTRUM_ULA_REG_TABLE(SPECTRUM_ULA_X_INFO_) };
+#undef SPECTRUM_ULA_X_INFO_
 
 // ============================================================================
 // Ferranti ULA Chip
@@ -237,7 +247,7 @@ private:
     void register_debug_fields() {
         using S = const ferranti_ula_t;
         auto& r = debug_registry_;
-        r.set_registers(regs_, spectrum_ula::REG_COUNT);
+        r.set_registers(regs_, spectrum_ula::REG_COUNT, SPECTRUM_ULA_REG_INFO);
 
         r.category("Port $FE Output");
         r.value("Border Color", +[](const ChipBase* c) -> uint32_t {

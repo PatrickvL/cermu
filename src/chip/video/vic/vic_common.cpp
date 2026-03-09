@@ -600,7 +600,7 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
 void vic_base_t::register_debug_fields() {
     using V = const vic_base_t;
     auto& r = debug_registry_;
-    r.set_registers(registers, 16);
+    r.set_registers(registers, VIC_NUM_REGS, VIC_REG_INFO, 0x9000);
     uint32_t* palette = get_default_palette();
 
     // ---- Raster Information ----

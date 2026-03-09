@@ -26,6 +26,15 @@
 class ChipBase;  // forward — callbacks receive the owning chip at render time
 
 // ============================================================================
+// REGISTER ENTRY — label (from X-macro #symbol) + description string
+// ============================================================================
+
+struct RegEntry {
+    const char* label;   // Short technical label (stringified symbol name)
+    const char* desc;    // Human-readable description
+};
+
+// ============================================================================
 // SEMANTIC DATA KINDS — what the field IS, NOT how to draw it
 // ============================================================================
 //
@@ -268,13 +277,20 @@ public:
     // ---- Register backing store ----
     // Chips with a flat register array call this once.
     // Fields using RegSource read from this pointer.
-    void set_registers(const uint8_t* data, size_t size) {
-        reg_data_ = data;
+    // Optional: pass per-register info (label + description) and a mapped base address.
+    void set_registers(const uint8_t* data, size_t size,
+                       const RegEntry* info = nullptr,
+                       uint16_t base_address = 0) {
+        reg_base_address_ = base_address;
         reg_size_ = size;
+        reg_data_ = data;
+        reg_info_ = info;
     }
 
-    const uint8_t* reg_data() const { return reg_data_; }
-    size_t         reg_size() const { return reg_size_; }
+    uint16_t            reg_base_address() const { return reg_base_address_; }
+    size_t              reg_size()         const { return reg_size_; }
+    const uint8_t*      reg_data()         const { return reg_data_; }
+    const RegEntry*     reg_info()         const { return reg_info_; }
 
     // ---- Query ----
     bool empty() const { return categories_.empty(); }
@@ -438,8 +454,10 @@ public:
     }
 
 private:
-    const uint8_t*              reg_data_ = nullptr;
+    uint16_t                    reg_base_address_ = 0;
     size_t                      reg_size_ = 0;
+    const uint8_t*              reg_data_ = nullptr;
+    const RegEntry*             reg_info_  = nullptr;
     std::vector<DebugCategory>  categories_;
     uint8_t                     current_indent_ = 0;
 

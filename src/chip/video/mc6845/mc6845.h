@@ -40,29 +40,41 @@
 #include <functional>
 
 // ============================================================================
-// MC6845 REGISTER INDICES
+// MC6845 REGISTER TABLE — single source of truth
 // ============================================================================
 
-static constexpr uint8_t MC6845_R0_HTOTAL          = 0;
-static constexpr uint8_t MC6845_R1_HDISPLAYED      = 1;
-static constexpr uint8_t MC6845_R2_HSYNC_POS       = 2;
-static constexpr uint8_t MC6845_R3_SYNC_WIDTHS     = 3;
-static constexpr uint8_t MC6845_R4_VTOTAL          = 4;
-static constexpr uint8_t MC6845_R5_VADJUST         = 5;
-static constexpr uint8_t MC6845_R6_VDISPLAYED      = 6;
-static constexpr uint8_t MC6845_R7_VSYNC_POS       = 7;
-static constexpr uint8_t MC6845_R8_MODE_CTRL       = 8;
-static constexpr uint8_t MC6845_R9_MAX_SCANLINE    = 9;
-static constexpr uint8_t MC6845_R10_CURSOR_START   = 10;
-static constexpr uint8_t MC6845_R11_CURSOR_END     = 11;
-static constexpr uint8_t MC6845_R12_START_ADDR_HI  = 12;
-static constexpr uint8_t MC6845_R13_START_ADDR_LO  = 13;
-static constexpr uint8_t MC6845_R14_CURSOR_HI      = 14;
-static constexpr uint8_t MC6845_R15_CURSOR_LO      = 15;
-static constexpr uint8_t MC6845_R16_LPEN_HI        = 16;
-static constexpr uint8_t MC6845_R17_LPEN_LO        = 17;
+// X(addr, symbol, description)
+#define MC6845_REG_TABLE(X) \
+    X( 0, R0_HTOTAL,         "Horiz total chars-1")  \
+    X( 1, R1_HDISPLAYED,     "Horiz displayed chars") \
+    X( 2, R2_HSYNC_POS,      "Horiz sync position")  \
+    X( 3, R3_SYNC_WIDTHS,    "H/V sync widths")      \
+    X( 4, R4_VTOTAL,         "Vert total rows-1")    \
+    X( 5, R5_VADJUST,        "Vert fine adjust")     \
+    X( 6, R6_VDISPLAYED,     "Vert displayed rows")  \
+    X( 7, R7_VSYNC_POS,      "Vert sync position")   \
+    X( 8, R8_MODE_CTRL,      "Mode/interlace")       \
+    X( 9, R9_MAX_SCANLINE,   "Max raster address")   \
+    X(10, R10_CURSOR_START,  "Cursor start scan")    \
+    X(11, R11_CURSOR_END,    "Cursor end scan")      \
+    X(12, R12_START_ADDR_HI, "Display start hi")     \
+    X(13, R13_START_ADDR_LO, "Display start lo")     \
+    X(14, R14_CURSOR_HI,     "Cursor position hi")   \
+    X(15, R15_CURSOR_LO,     "Cursor position lo")   \
+    X(16, R16_LPEN_HI,       "Light pen hi (RO)")    \
+    X(17, R17_LPEN_LO,       "Light pen lo (RO)")
+
+// --- Extract address constants (prefix MC6845_ added by macro) ---
+#define MC6845_X_CONST_(a, s, l) static constexpr uint8_t MC6845_##s = a;
+MC6845_REG_TABLE(MC6845_X_CONST_)
+#undef MC6845_X_CONST_
 
 static constexpr int MC6845_NUM_REGISTERS = 18;
+
+// --- Extract register info array ---
+#define MC6845_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry MC6845_REG_INFO[] = { MC6845_REG_TABLE(MC6845_X_INFO_) };
+#undef MC6845_X_INFO_
 
 // ============================================================================
 // MC6845 CHIP STRUCTURE
@@ -70,6 +82,7 @@ static constexpr int MC6845_NUM_REGISTERS = 18;
 
 struct mc6845_t : public ChipBase {
     mc6845_t() : ChipBase(ChipInfo{"MC6845", "Motorola"}) {
+        category_ = "Video";
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -196,25 +209,14 @@ private:
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
         using M = const mc6845_t;
-        static constexpr const char* reg_names[MC6845_NUM_REGISTERS] = {
-            "R0  H Total",        "R1  H Displayed",
-            "R2  H Sync Pos",     "R3  Sync Widths",
-            "R4  V Total",        "R5  V Adjust",
-            "R6  V Displayed",    "R7  V Sync Pos",
-            "R8  Mode Ctrl",      "R9  Max Scanline",
-            "R10 Cursor Start",   "R11 Cursor End",
-            "R12 Start Addr Hi",  "R13 Start Addr Lo",
-            "R14 Cursor Hi",      "R15 Cursor Lo",
-            "R16 LPen Hi (RO)",   "R17 LPen Lo (RO)",
-        };
 
-        debug_registry_.set_registers(regs, MC6845_NUM_REGISTERS);
+        debug_registry_.set_registers(regs, MC6845_NUM_REGISTERS, MC6845_REG_INFO);
 
         // --- Registers ---
         debug_registry_.category("Registers")
             .value("Addr Reg", +[](const ChipBase* c) -> uint32_t { return static_cast<M*>(c)->address_register; });
         for (int i = 0; i < MC6845_NUM_REGISTERS; i++) {
-            debug_registry_.value(reg_names[i], static_cast<uint16_t>(i));
+            debug_registry_.value(MC6845_REG_INFO[i].label, static_cast<uint16_t>(i));
         }
 
         // --- Counters ---

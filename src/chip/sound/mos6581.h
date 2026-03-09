@@ -98,6 +98,52 @@ enum waveform_bits_t {
 #define SID_REG_OSC3    0x1B  // Oscillator 3 output (read-only)
 #define SID_REG_ENV3    0x1C  // Envelope 3 output (read-only)
 
+// ============================================================================
+// SID REGISTER TABLE — single source of truth for register info (32 entries)
+// Voices 1-3 each occupy 7 registers; global filter/misc at $15-$1C;
+// $1D-$1F are unused/unmapped.
+// ============================================================================
+
+// X(addr, symbol, description)
+#define SID_REG_TABLE(X) \
+    X(0x00, V1_FRELO,  "Voice 1 freq lo")     \
+    X(0x01, V1_FREHI,  "Voice 1 freq hi")     \
+    X(0x02, V1_PWLO,   "Voice 1 pulse W lo")  \
+    X(0x03, V1_PWHI,   "Voice 1 pulse W hi")  \
+    X(0x04, V1_VCREG,  "Voice 1 control")     \
+    X(0x05, V1_ATDCY,  "Voice 1 atk/decay")   \
+    X(0x06, V1_SUREL,  "Voice 1 sus/release") \
+    X(0x07, V2_FRELO,  "Voice 2 freq lo")     \
+    X(0x08, V2_FREHI,  "Voice 2 freq hi")     \
+    X(0x09, V2_PWLO,   "Voice 2 pulse W lo")  \
+    X(0x0A, V2_PWHI,   "Voice 2 pulse W hi")  \
+    X(0x0B, V2_VCREG,  "Voice 2 control")     \
+    X(0x0C, V2_ATDCY,  "Voice 2 atk/decay")   \
+    X(0x0D, V2_SUREL,  "Voice 2 sus/release") \
+    X(0x0E, V3_FRELO,  "Voice 3 freq lo")     \
+    X(0x0F, V3_FREHI,  "Voice 3 freq hi")     \
+    X(0x10, V3_PWLO,   "Voice 3 pulse W lo")  \
+    X(0x11, V3_PWHI,   "Voice 3 pulse W hi")  \
+    X(0x12, V3_VCREG,  "Voice 3 control")     \
+    X(0x13, V3_ATDCY,  "Voice 3 atk/decay")   \
+    X(0x14, V3_SUREL,  "Voice 3 sus/release") \
+    X(0x15, CUTLO,     "Filter cutoff lo")     \
+    X(0x16, CUTHI,     "Filter cutoff hi")     \
+    X(0x17, RESON,     "Filter reso/routing")  \
+    X(0x18, SIGVOL,    "Filter mode/volume")   \
+    X(0x19, POTX,      "Paddle X (read)")      \
+    X(0x1A, POTY,      "Paddle Y (read)")      \
+    X(0x1B, OSC3,      "Osc 3 output (read)")  \
+    X(0x1C, ENV3,      "Env 3 output (read)")  \
+    X(0x1D, R1D,       "-")                    \
+    X(0x1E, R1E,       "-")                    \
+    X(0x1F, R1F,       "-")
+
+// --- Extract register info array (32 entries) ---
+#define SID_X_INFO_(a, s, l) { #s, l },
+static constexpr RegEntry SID_REG_INFO[] = { SID_REG_TABLE(SID_X_INFO_) };
+#undef SID_X_INFO_
+
 // RESON register (0x17) bit fields
 #define RESON_FILT1     0x01  // Route voice 1 through filter
 #define RESON_FILT2     0x02  // Route voice 2 through filter
@@ -293,7 +339,9 @@ private:
 
 // Main SID chip structure - Enhanced (C++ class inheriting ChipBase)
 struct mos6581_t : public ChipBase {
-    mos6581_t() : ChipBase(ChipInfo{"MOS6581", "MOS Technology"}) {}
+    mos6581_t() : ChipBase(ChipInfo{"MOS6581", "MOS Technology"}) {
+        category_ = "Sound";
+    }
 
     // Bus interface
     bus_cycle_ops_t bus_interface = {};
