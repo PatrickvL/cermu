@@ -146,6 +146,108 @@ static constexpr RegEntry VICII_REG_INFO[] = { VICII_REG_TABLE(VICII_X_INFO_) };
 #define VICII_MXM_2   vicii_regs::MXM_2
 #define VICII_MXD_2   vicii_regs::MXD_2
 
+// ============================================================================
+// VIC-II REGISTER TRAITS
+// ============================================================================
+
+inline constexpr ChipRegTraits vicii_reg_traits = {
+    .num_registers  = 66,
+    .register_width = 1,
+    .base_address   = 0xD000,
+};
+
+// ============================================================================
+// VIC-II BITFIELD TABLE — field-level single source of truth
+// ============================================================================
+//
+// FLD(reg_sym, field_sym, hi:lo, desc, kind)
+//
+// reg_sym  = register symbol from VICII_REG_TABLE (resolved via vicii_regs::)
+// hi:lo    = bit range within the register (NV ternary trick)
+// kind     = DataKind semantic type
+
+#define VICII_FLD_TABLE(X) \
+    /* Control Register 1 ($D011) */ \
+    X(C1,     YSCROLL,  2:0, "Y scroll",             Value)     \
+    X(C1,     RSEL,     3:3, "Row select 24/25",     Flag)      \
+    X(C1,     DEN,      4:4, "Display enable",        Flag)      \
+    X(C1,     BMM,      5:5, "Bitmap mode",           Flag)      \
+    X(C1,     ECM,      6:6, "Extended color mode",   Flag)      \
+    X(C1,     RST8,     7:7, "Raster bit 8",          Flag)      \
+    /* Control Register 2 ($D016) */ \
+    X(C2,     XSCROLL,  2:0, "X scroll",             Value)     \
+    X(C2,     CSEL,     3:3, "Column select 38/40",  Flag)      \
+    X(C2,     MCM,      4:4, "Multi-color mode",     Flag)      \
+    /* Memory Pointers ($D018) */ \
+    X(MP,     CB,       3:1, "Char base (<<11)",     Address)   \
+    X(MP,     VM,       7:4, "Video matrix (<<10)",  Address)   \
+    /* Interrupt Register ($D019) */ \
+    X(IR,     IRST,     0:0, "Raster IRQ",           Flag)      \
+    X(IR,     IMBC,     1:1, "Sprite-data coll IRQ", Flag)      \
+    X(IR,     IMMC,     2:2, "Sprite-sprite IRQ",    Flag)      \
+    X(IR,     ILP,      3:3, "Light pen IRQ",        Flag)      \
+    X(IR,     IRQ,      7:7, "Any IRQ active",       Flag)      \
+    /* Interrupt Enable ($D01A) */ \
+    X(IE,     ERST,     0:0, "Raster IRQ enable",    Flag)      \
+    X(IE,     EMBC,     1:1, "Spr-data coll enable", Flag)      \
+    X(IE,     EMMC,     2:2, "Spr-spr coll enable",  Flag)      \
+    X(IE,     ELP,      3:3, "Light pen IRQ enable",  Flag)      \
+    /* Sprite X MSB ($D010) — per-sprite high bits */ \
+    X(MX8,    M0_MSB,   0:0, "Sprite 0 X bit 8",    Flag)      \
+    X(MX8,    M1_MSB,   1:1, "Sprite 1 X bit 8",    Flag)      \
+    X(MX8,    M2_MSB,   2:2, "Sprite 2 X bit 8",    Flag)      \
+    X(MX8,    M3_MSB,   3:3, "Sprite 3 X bit 8",    Flag)      \
+    X(MX8,    M4_MSB,   4:4, "Sprite 4 X bit 8",    Flag)      \
+    X(MX8,    M5_MSB,   5:5, "Sprite 5 X bit 8",    Flag)      \
+    X(MX8,    M6_MSB,   6:6, "Sprite 6 X bit 8",    Flag)      \
+    X(MX8,    M7_MSB,   7:7, "Sprite 7 X bit 8",    Flag)
+
+// --- Extract FLD constants ---
+// Produces: VICII_C1_YSCROLL_SHIFT, VICII_C1_YSCROLL_WIDTH, VICII_C1_YSCROLL_MASK
+#define VICII_X_FLD_CONST_(reg, fld, hilo, desc, kind) \
+    static constexpr uint8_t  VICII_##reg##_##fld##_SHIFT = BF_LO(hilo); \
+    static constexpr uint8_t  VICII_##reg##_##fld##_WIDTH = BF_WIDTH(hilo); \
+    static constexpr uint32_t VICII_##reg##_##fld##_MASK  = BF_MASK(hilo);
+VICII_FLD_TABLE(VICII_X_FLD_CONST_)
+#undef VICII_X_FLD_CONST_
+
+// --- Extract FLD info array ---
+#define VICII_X_FLD_INFO_(reg, fld, hilo, desc, kind) \
+    { #fld, desc, vicii_regs::reg, BF_LO(hilo), BF_WIDTH(hilo), DataKind::kind },
+static constexpr FieldEntry VICII_FLD_INFO[] = { VICII_FLD_TABLE(VICII_X_FLD_INFO_) };
+#undef VICII_X_FLD_INFO_
+
+static constexpr size_t VICII_NUM_FIELDS = sizeof(VICII_FLD_INFO) / sizeof(VICII_FLD_INFO[0]);
+
+// ============================================================================
+// VIC-II COMPOUND VALUES — 9-bit sprite X positions
+// ============================================================================
+//
+// Each sprite's X coordinate is 9 bits: 8 bits from M0X..M7X registers
+// plus 1 bit from the shared MX8 register (bit N for sprite N).
+// This is the canonical example of a scattered compound value.
+
+static constexpr CompoundEntry<vicii_reg_traits> VICII_SPRITE_X[] = {
+    { "SPR0_X", "Sprite 0 X position", DataKind::Counter, 9, 2,
+      {{ vicii_regs::M0X, 7, 0, 0 }, { vicii_regs::MX8, 0, 0, 8 }} },
+    { "SPR1_X", "Sprite 1 X position", DataKind::Counter, 9, 2,
+      {{ vicii_regs::M1X, 7, 0, 0 }, { vicii_regs::MX8, 1, 1, 8 }} },
+    { "SPR2_X", "Sprite 2 X position", DataKind::Counter, 9, 2,
+      {{ vicii_regs::M2X, 7, 0, 0 }, { vicii_regs::MX8, 2, 2, 8 }} },
+    { "SPR3_X", "Sprite 3 X position", DataKind::Counter, 9, 2,
+      {{ vicii_regs::M3X, 7, 0, 0 }, { vicii_regs::MX8, 3, 3, 8 }} },
+    { "SPR4_X", "Sprite 4 X position", DataKind::Counter, 9, 2,
+      {{ vicii_regs::M4X, 7, 0, 0 }, { vicii_regs::MX8, 4, 4, 8 }} },
+    { "SPR5_X", "Sprite 5 X position", DataKind::Counter, 9, 2,
+      {{ vicii_regs::M5X, 7, 0, 0 }, { vicii_regs::MX8, 5, 5, 8 }} },
+    { "SPR6_X", "Sprite 6 X position", DataKind::Counter, 9, 2,
+      {{ vicii_regs::M6X, 7, 0, 0 }, { vicii_regs::MX8, 6, 6, 8 }} },
+    { "SPR7_X", "Sprite 7 X position", DataKind::Counter, 9, 2,
+      {{ vicii_regs::M7X, 7, 0, 0 }, { vicii_regs::MX8, 7, 7, 8 }} },
+};
+
+static constexpr size_t VICII_NUM_SPRITE_COMPOUNDS = 8;
+
 // Control register 1 ($d011) bit masks
 #define VICII_C1_YSCROLL  0x07  // Smooth Scroll to Y Pos
 #define VICII_C1_RSEL     0x08  // Select 24/25 Row Text Display
