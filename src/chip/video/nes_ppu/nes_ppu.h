@@ -83,7 +83,7 @@ public:
     #undef NES_PPU_X_CONST_
     static constexpr uint8_t REG_COUNT = 8;
 
-    uint8_t regs[REG_COUNT] = {};  // PPU register file
+    // PPU register file stored in ChipBase::regs_[]
 
     // PPU memory
     //
@@ -188,11 +188,11 @@ public:
     //
     // We model this by keeping an internal state (`vbl_flag_internal_`)
     // that drives NMI and a pending flag (`pending_vbl_set_`) that commits
-    // to regs[PPUSTATUS] bit 7 at the START of the next PPU::clock() call.
+    // to regs_[PPUSTATUS] bit 7 at the START of the next PPU::clock() call.
     // The same 1-dot delay applies to VBL clear at pre-render dot 1.
     bool     vbl_flag_internal_ = false;    // True = VBL active (drives NMI)
-    bool     pending_vbl_set_ = false;      // Commit regs[PPUSTATUS] |= 0x80 next dot
-    bool     pending_vbl_clear_ = false;    // Commit regs[PPUSTATUS] &= ~0x80 next dot
+    bool     pending_vbl_set_ = false;      // Commit regs_[PPUSTATUS] |= 0x80 next dot
+    bool     pending_vbl_clear_ = false;    // Commit regs_[PPUSTATUS] &= ~0x80 next dot
 
     // VBL suppression — reading $2002 within a 1-PPU-dot window BEFORE
     // VBL flag set (scanline 241, dot 1) prevents the flag from being set
@@ -264,6 +264,7 @@ public:
 public:
     PPU(bool pal = false) : is_pal(pal),
         total_scanlines_minus_one_(pal ? 311 : 261) {  // PAL: 312-1, NTSC: 262-1
+        init_regs(REG_COUNT);
         info_ = ChipInfo{pal ? "RP2C07" : "RP2C02", "Ricoh"};
         // Initialize PPU memory (std::array zero-initialized by {})
         screen.resize(256 * 240, 0);
@@ -280,7 +281,7 @@ public:
     }
 
     void reset() {
-        std::memset(regs, 0, sizeof(regs));
+        std::memset(regs_, 0, num_regs_);
         internal = {};
         scanline = -1;
         cycle = 0;
@@ -418,7 +419,7 @@ private:
     // Lazily rebuild pixel_lut_ from current palette RAM and PPUMASK.
     // Only called when active_palette_ is null (i.e. after invalidation).
     void rebuild_pixel_lut() {
-        const uint8_t variant = ((regs[PPUMASK] >> 5) & 0x07) | ((regs[PPUMASK] & 0x01) << 3);
+        const uint8_t variant = ((regs_[PPUMASK] >> 5) & 0x07) | ((regs_[PPUMASK] & 0x01) << 3);
         active_palette_ = palette_cache_[variant];
         for (int i = 0; i < 32; ++i)
             pixel_lut_[i] = active_palette_[palette[pal_mirror_[i]] & 0x3F];
@@ -436,7 +437,7 @@ private:
     // bus addresses for correct A12 transitions.
     inline uint16_t compute_sprite_pattern_addr(uint8_t i) const {
         const auto& spr = internal.sprite_scanline[i];
-        if (regs[PPUCTRL] & 0x20) {
+        if (regs_[PPUCTRL] & 0x20) {
             // 8x16 sprites
             int row = (scanline - spr.y) & 0x0F;
             if (spr.attributes & 0x80) row = 15 - row;  // vertical flip
@@ -447,7 +448,7 @@ private:
             // 8x8 sprites
             int row = (scanline - spr.y) & 0x07;
             if (spr.attributes & 0x80) row = 7 - row;   // vertical flip
-            return ((regs[PPUCTRL] & 0x08) << 9) | (spr.tile_id << 4) | row;
+            return ((regs_[PPUCTRL] & 0x08) << 9) | (spr.tile_id << 4) | row;
         }
     }
 
@@ -465,10 +466,10 @@ private:
     //   - $2002 read (clears VBL)
     //   - $2000 write (changes NMI enable)
     //
-    // Uses vbl_flag_internal_ (set at dot 1) rather than regs[PPUSTATUS] bit 7
+    // Uses vbl_flag_internal_ (set at dot 1) rather than regs_[PPUSTATUS] bit 7
     // (visible at dot 2) so NMI asserts at the correct PPU clock.
     inline void update_nmi_output(ppu_bus_state_t& ppu_bus) {
-        if (vbl_flag_internal_ && (regs[PPUCTRL] & 0x80)) {
+        if (vbl_flag_internal_ && (regs_[PPUCTRL] & 0x80)) {
             PPU_BUS_CLR_BIT(ppu_bus, BUS_NMI_BIT);  // active low = asserted
         } else {
             PPU_BUS_SET_BIT(ppu_bus, BUS_NMI_BIT);  // inactive high
