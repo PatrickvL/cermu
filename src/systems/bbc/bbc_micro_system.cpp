@@ -216,7 +216,7 @@ bool BBCMicroSystem::initialize() {
     // Program CRTC with Mode 7 register values (the MOS does this too, but
     // we prime them so the display works even before the ROM runs)
     for (int i = 0; i < 14; i++) {
-        crtc_->regs[i] = bbc_constants::MODE7_CRTC_REGS[i];
+        crtc_->regs_[i] = bbc_constants::MODE7_CRTC_REGS[i];
     }
 
     // Wire CRTC callbacks
@@ -703,7 +703,7 @@ int BBCMicroSystem::get_display_mode() const {
     //
     // For now, detect Mode 7 by checking CRTC R9 (max scanline):
     // Mode 7 uses 18 scanlines per row; other modes use 7.
-    if (crtc_ && crtc_->regs[MC6845_R9_MAX_SCANLINE] >= 18) {
+    if (crtc_ && crtc_->regs_[MC6845_R9_MAX_SCANLINE] >= 18) {
         return 7;
     }
     // Use bits 4-6 of video ULA control for other modes
