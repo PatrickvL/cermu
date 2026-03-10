@@ -1345,18 +1345,65 @@ static int run_log_comparison(const char* log_path, bool verbose, bool no_filter
     printf("  Replay complete: %zu cermu samples, %zu reSID samples\n",
            cermu_samples.size(), resid_samples.size());
 
+    // ── Skip leading silence ────────────────────────────────────────────
+    // Many demos (e.g. AWE) have a long silent intro.  Comparing silence
+    // dilutes the correlation and spectral metrics.  Scan forward for the
+    // first sustained non-silent section: require SUSTAIN consecutive active
+    // windows before committing to a skip point.  This ignores brief initial
+    // transients (e.g. register setup noise) followed by true silence.
+    // Uses AC-coupled RMS to ignore DC offset from SID bias.
+    size_t n_full = std::min(cermu_samples.size(), resid_samples.size());
+    size_t skip = 0;
+    {
+        constexpr size_t WIN = 4410;  // 100 ms window @ 44.1 kHz
+        constexpr double THRESHOLD = 0.005;  // ~-46 dBFS RMS
+        constexpr int SUSTAIN = 5;  // require 500ms of sustained audio
+        size_t n_windows = n_full / WIN;
+        int active_run = 0;
+        for (size_t wi = 0; wi < n_windows; wi++) {
+            size_t w = wi * WIN;
+            double sum = 0;
+            for (size_t i = w; i < w + WIN; i++)
+                sum += (double)resid_samples[i];
+            double mean = sum / WIN;
+            double sum_sq = 0;
+            for (size_t i = w; i < w + WIN; i++) {
+                double d = (double)resid_samples[i] - mean;
+                sum_sq += d * d;
+            }
+            bool active = sqrt(sum_sq / WIN) > THRESHOLD;
+            if (active) {
+                if (++active_run >= SUSTAIN) {
+                    // Found sustained audio — skip up to start of this run
+                    skip = (wi + 1 - SUSTAIN) * WIN;
+                    break;
+                }
+            } else {
+                active_run = 0;
+            }
+        }
+        // Only skip if there's a meaningful silent prefix (> 1 second)
+        if (skip < (size_t)SAMPLE_RATE) {
+            skip = 0;
+        }
+    }
+
     // ── Compute comparison metrics ──────────────────────────────────────
     audio_stats_t sample_stats;
     sample_stats.name = "Final audio samples";
 
-    size_t n = std::min(cermu_samples.size(), resid_samples.size());
+    size_t n = n_full - skip;
     for (size_t i = 0; i < n; i++) {
-        sample_stats.record(cermu_samples[i], resid_samples[i]);
+        sample_stats.record(cermu_samples[skip + i], resid_samples[skip + i]);
     }
 
     printf("\n── Log Replay Results ──\n");
     printf("  Total entries replayed: %zu\n", log.entries.size());
     printf("  Total cycles: %u\n", current_cycle);
+    if (skip > 0) {
+        printf("  Skipped leading silence: %zu samples (%.1f s)\n",
+               skip, (double)skip / SAMPLE_RATE);
+    }
     printf("  cermu samples: %zu, reSID samples: %zu (compared: %zu)\n",
            cermu_samples.size(), resid_samples.size(), n);
     printf("  ┌──────────────────────────────────────────────────────────────────────────┐\n");
@@ -1368,6 +1415,10 @@ static int run_log_comparison(const char* log_path, bool verbose, bool no_filter
     // constant phase offset that kills sample-by-sample correlation even when
     // both outputs are perceptually identical.  Search lags ±50 samples to
     // find the optimal alignment and report both raw and compensated metrics.
+    //
+    // Use skip-adjusted pointers so silence is excluded from all metrics.
+    const float* c_ptr = cermu_samples.data() + skip;
+    const float* r_ptr = resid_samples.data() + skip;
     {
         constexpr int MAX_LAG = 50;
         double best_r = -2.0;
@@ -1376,8 +1427,8 @@ static int run_log_comparison(const char* log_path, bool verbose, bool no_filter
         // Compute mean-subtracted norms (for Pearson correlation with lag)
         double sum_c = 0, sum_r = 0;
         for (size_t i = 0; i < n; i++) {
-            sum_c += cermu_samples[i];
-            sum_r += resid_samples[i];
+            sum_c += c_ptr[i];
+            sum_r += r_ptr[i];
         }
         double mean_c = sum_c / n;
         double mean_r = sum_r / n;
@@ -1387,8 +1438,8 @@ static int run_log_comparison(const char* log_path, bool verbose, bool no_filter
             size_t start = (lag >= 0) ? (size_t)lag : 0;
             size_t end   = (lag >= 0) ? n : n + lag;
             for (size_t i = start; i < end; i++) {
-                double c = cermu_samples[i] - mean_c;
-                double r = resid_samples[i - lag] - mean_r;
+                double c = c_ptr[i] - mean_c;
+                double r = r_ptr[i - lag] - mean_r;
                 cross += c * r;
                 ssq_c += c * c;
                 ssq_r += r * r;
@@ -1414,9 +1465,9 @@ static int run_log_comparison(const char* log_path, bool verbose, bool no_filter
             size_t start = (best_lag >= 0) ? (size_t)best_lag : 0;
             size_t end   = (best_lag >= 0) ? n : n + best_lag;
             for (size_t i = start; i < end; i++) {
-                double e = cermu_samples[i] - resid_samples[i - best_lag];
+                double e = c_ptr[i] - r_ptr[i - best_lag];
                 sum_sq_err += e * e;
-                double b = resid_samples[i - best_lag];
+                double b = r_ptr[i - best_lag];
                 sum_ref += b * b;
             }
             size_t cnt = end - start;
@@ -1433,13 +1484,13 @@ static int run_log_comparison(const char* log_path, bool verbose, bool no_filter
     {
         uint32_t fft_size = (uint32_t)SAMPLE_RATE;  // 1-second windows
 
-        // Find the loudest 4-second segment in reSID output (skip first 1s)
-        size_t best_start = fft_size;
+        // Find the loudest 4-second segment in reSID output
+        size_t best_start = 0;
         double best_energy = 0;
-        for (size_t s = fft_size; s + fft_size * 4 < n; s += fft_size) {
+        for (size_t s = 0; s + fft_size * 4 < n; s += fft_size) {
             double energy = 0;
             for (size_t i = s; i < s + fft_size * 4; i++)
-                energy += (double)resid_samples[i] * resid_samples[i];
+                energy += (double)r_ptr[i] * r_ptr[i];
             if (energy > best_energy) {
                 best_energy = energy;
                 best_start = s;
@@ -1449,7 +1500,7 @@ static int run_log_comparison(const char* log_path, bool verbose, bool no_filter
         size_t goertzel_n = std::min((size_t)fft_size * 4, n - best_start);
         if (goertzel_n > fft_size && best_energy > 1e-10) {
             printf("\n  Spectral band comparison (loudest 4s segment at %.1fs):\n",
-                   (double)best_start / SAMPLE_RATE);
+                   (double)(skip + best_start) / SAMPLE_RATE);
             double band_edges[] = {20, 100, 500, 1000, 2000, 5000, 10000, 20000};
             constexpr int NUM_BANDS = 7;
             for (int b = 0; b < NUM_BANDS; b++) {
@@ -1459,9 +1510,9 @@ static int run_log_comparison(const char* log_path, bool verbose, bool no_filter
                 double s1_c = 0, s2_c = 0, s1_r = 0, s2_r = 0;
                 for (size_t i = 0; i < goertzel_n; i++) {
                     double t;
-                    t = cermu_samples[best_start + i] + coeff * s1_c - s2_c;
+                    t = c_ptr[best_start + i] + coeff * s1_c - s2_c;
                     s2_c = s1_c; s1_c = t;
-                    t = resid_samples[best_start + i] + coeff * s1_r - s2_r;
+                    t = r_ptr[best_start + i] + coeff * s1_r - s2_r;
                     s2_r = s1_r; s1_r = t;
                 }
                 double pow_c = s1_c*s1_c + s2_c*s2_c - coeff*s1_c*s2_c;
