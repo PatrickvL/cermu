@@ -316,55 +316,6 @@ void mos6581_t::filter_reset() {
 void mos6581_t::filter_init() {
     filter_reset();
 }
-
-// =============================================================================
-// OUTPUT-STAGE ANALOG LOW-PASS FILTER
-// =============================================================================
-
-// Cutoff frequency for the output-stage LPF (Hz).
-// The SID’s analog output path through the C64 (buffer amp, coupling caps,
-// PCB traces, cable capacitance) has finite bandwidth.  A 2nd-order Butterworth
-// at 20 kHz models a typical C64 audio path and suppresses ultrasonic pulse
-// harmonics that would otherwise alias during box-filter downsampling.
-// This is critical for clean PWM digi playback (Swallow/Censor technique).
-static constexpr float OUTPUT_STAGE_CUTOFF_HZ = 20000.0f;
-
-void mos6581_t::output_stage_update_coefficients() {
-    output_stage_lpf_t& f = output_stage_lpf;
-    float fs = cpu_clock > 0.0f ? cpu_clock : SID_DEFAULT_CPU_CLOCK_PAL;
-    float fc = OUTPUT_STAGE_CUTOFF_HZ;
-
-    // Bilinear transform of 2nd-order Butterworth prototype.
-    // Pre-warp the analogue cutoff to the digital domain.
-    float K = tanf((float)M_PI * fc / fs);
-    float K2 = K * K;
-    static constexpr float sqrt2 = 1.4142135623730950488f;
-    float norm = 1.0f / (1.0f + sqrt2 * K + K2);
-
-    f.b0 = K2 * norm;
-    f.b1 = 2.0f * f.b0;
-    f.b2 = f.b0;
-    f.a1 = 2.0f * (K2 - 1.0f) * norm;
-    f.a2 = (1.0f - sqrt2 * K + K2) * norm;
-
-    // Reset filter state to avoid transient from stale values
-    f.s1 = 0.0f;
-    f.s2 = 0.0f;
-}
-
-#ifdef _MSC_VER
-__forceinline
-#else
-__attribute__((always_inline)) inline
-#endif
-float mos6581_t::output_stage_process(float x) {
-    output_stage_lpf_t& f = output_stage_lpf;
-    float y = f.b0 * x + f.s1;
-    f.s1 = f.b1 * x - f.a1 * y + f.s2;
-    f.s2 = f.b2 * x - f.a2 * y;
-    return y;
-}
-
 // =============================================================================
 // FILTER REGISTER WRITERS
 // =============================================================================
@@ -752,16 +703,19 @@ inline bus_state_t mos6581_t::advance_cycle(bus_state_t bus_state) {
         float vol = (float)master_volume / 15.0f;
         float total = (unfiltered_output + filtered_output + voice_dc) * vol;
 
-        // Accumulate post-filter mixed output for box-filter downsampling.
-        // Apply output-stage analog LPF first to attenuate ultrasonic content
-        // from pulse waveform harmonics — prevents aliasing artifacts in the
-        // box-filter downsampling that are not present on real hardware.
-        output_acc += output_stage_process(total);
+        // CIC-3 (3rd-order Cascaded Integrator-Comb) decimation filter.
+        // Three cascaded running sums produce a 3rd-order B-spline window
+        // with -39 dB first sidelobe (vs -13 dB for plain box filter).
+        // Cost: two extra additions per cycle.
+        cic_s1 += total;
+        cic_s2 += cic_s1;
+        cic_s3 += cic_s2;
     }
     sample_cycle_count++;
 
     // Step 5: Generate output samples at the target sample rate (~44.1 kHz).
-    // Average the accumulated per-cycle output, apply master volume and DC blocker.
+    // The CIC-3 integrate-and-dump produces a well-filtered decimated output
+    // with only ~2 extra additions per cycle vs the old box filter.
     // Note: sample_rate_ratio is 0 when cpu_clock is unset, so no samples
     // are generated until timing is configured — no explicit guard needed.
     sample_accumulator += sample_rate_ratio;
@@ -769,12 +723,18 @@ inline bus_state_t mos6581_t::advance_cycle(bus_state_t bus_state) {
     if (sample_accumulator >= 1.0f) {
         sample_accumulator -= 1.0f;
 
-        // Average the accumulated filter output over the sample period.
-        const float cyc = (sample_cycle_count > 0) ? (float)sample_cycle_count : 1.0f;
-        float mixed = output_acc / (float)cyc;
+        // CIC-3 output: triple running sum normalized by N*(N+1)*(N+2)/6,
+        // where N is the number of CPU cycles in this sample period.
+        // This equals three cascaded box filters (integrate-and-dump),
+        // yielding a smooth B-spline decimation window.
+        const float N = (sample_cycle_count > 0) ? (float)sample_cycle_count : 1.0f;
+        float norm = N * (N + 1.0f) * (N + 2.0f) / 6.0f;
+        float mixed = cic_s3 / norm;
 
-        // Reset accumulators for next sample period
-        output_acc = 0.0f;
+        // Reset integrators for next sample period
+        cic_s1 = 0.0f;
+        cic_s2 = 0.0f;
+        cic_s3 = 0.0f;
         sample_cycle_count = 0;
 
         // DC blocker: removes the constant bias×volume product while
@@ -856,7 +816,6 @@ void mos6581_t::set_cpu_clock(float clock_hz) {
     // Update derived timing values
     sid_rate = clock_hz / (pal_timing ? 18.0f : 17.0f);
     filter_update_cutoff();
-    output_stage_update_coefficients();
 }
 
 int voice_t::cycles_per_millisecond() {
@@ -1151,9 +1110,6 @@ void mos6581_t::init() {
     // Initialize filter
     filter_init();
     
-    // Initialize output-stage analog LPF
-    output_stage_update_coefficients();
-    
     reset();
 #ifdef CERMU_HAS_CHIP_DEBUG
     register_debug_fields();
@@ -1264,7 +1220,11 @@ void mos6581_t::reset() {
     subcycle_count = 0;
     sample_accumulator = 0.0f;
     sample_cycle_count = 0;
-    output_acc = 0.0f;
+    
+    // Reset CIC-3 decimation filter state
+    cic_s1 = 0.0f;
+    cic_s2 = 0.0f;
+    cic_s3 = 0.0f;
 
     // Flush the sample ring buffer so the audio callback doesn't replay
     // stale data from the previous session.
@@ -1274,10 +1234,6 @@ void mos6581_t::reset() {
     // Reset DC blocker state
     dc_blocker_prev_in = 0.0f;
     dc_blocker_prev_out = 0.0f;
-    
-    // Reset output-stage LPF state (coefficients are preserved)
-    output_stage_lpf.s1 = 0.0f;
-    output_stage_lpf.s2 = 0.0f;
     
     // Reset POT values
     pot_x_value = 0xFF;

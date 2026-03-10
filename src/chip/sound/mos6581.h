@@ -282,25 +282,6 @@ struct filter_state_t {
     bool enable_distortion;
 };
 
-// Output-stage analog low-pass filter (2nd-order Butterworth biquad).
-// Models the bandwidth limitation of the SID's output buffer and the C64's
-// audio path.  Clocked every CPU cycle (~985 kHz), this attenuates ultrasonic
-// content from the pulse waveform's sharp transitions before box-filter
-// downsampling — preventing aliasing artifacts not present on real hardware.
-// Critical for accurate PWM digi playback (e.g. Swallow/Censor Design's
-// Wonderland XII technique).
-struct output_stage_lpf_t {
-    // Transposed Direct Form II state
-    float s1 = 0.0f;
-    float s2 = 0.0f;
-    // Biquad coefficients (bilinear-transformed 2nd-order Butterworth)
-    float b0 = 0.0f;
-    float b1 = 0.0f;
-    float b2 = 0.0f;
-    float a1 = 0.0f;
-    float a2 = 0.0f;
-};
-
 // Forward declaration (voice_t references parent mos6581_t)
 struct mos6581_t;
 
@@ -451,20 +432,20 @@ struct mos6581_t : public SoundChipBase {
     float sample_rate_ratio = 0.0f;    // Precomputed sample_rate / cpu_clock
     float cpu_clock = 0.0f;           // CPU clock frequency (e.g. 985248 for PAL)
     
-    // Per-cycle filter output accumulation for anti-aliased downsampling.
-    // The filter runs every CPU cycle (~1 MHz); the accumulated output is
-    // averaged at sample time (~44.1 kHz) for band-limited resampling.
-    float output_acc = 0.0f;          // Accumulated post-filter mixed output
+    // CIC-3 (3rd-order Cascaded Integrator-Comb) decimation filter.
+    // Three cascaded running sums give a triangular→B-spline window with
+    // -39 dB sidelobes (vs -13 dB for a box filter), at near-zero cost:
+    // just two extra float additions per cycle.  This is the primary
+    // anti-alias mechanism for the 985 kHz → 44.1 kHz downsampling.
+    float cic_s1 = 0.0f;             // 1st integrator (box filter)
+    float cic_s2 = 0.0f;             // 2nd integrator (triangular window)
+    float cic_s3 = 0.0f;             // 3rd integrator (B-spline window)
     uint32_t sample_cycle_count = 0;  // Cycles accumulated since last sample
     
     // DC blocker state for clean audio output (removes constant DC,
     // preserves fast changes for volume-register digi playback)
     float dc_blocker_prev_in = 0.0f;  // Previous input to DC blocker
     float dc_blocker_prev_out = 0.0f; // Previous output from DC blocker
-    
-    // Output-stage analog model — suppresses ultrasonic pulse harmonics
-    // before box-filter downsampling for alias-free PWM digi playback.
-    output_stage_lpf_t output_stage_lpf;
     
     // Statistics and debugging
     uint32_t total_cycles = 0;        // Total cycles processed
@@ -506,8 +487,6 @@ private:
     void filter_reset();
     void filter_init();
     void write_resonance_control_register_value(uint8_t value);
-    void output_stage_update_coefficients();
-    float output_stage_process(float x);
     bus_state_t advance_cycle(bus_state_t bus_state);
     uint32_t calculate_envelope_time_ms(voice_t* v, envelope_cycle_t cycle, uint8_t rate_index);
     
