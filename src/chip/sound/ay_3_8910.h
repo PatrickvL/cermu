@@ -125,13 +125,14 @@ public:
               ay_variant_traits[static_cast<int>(variant)].manufacturer))
         , variant_(variant)
     {
+        init_regs(ay_regs::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
     }
 
     void init() {
-        std::memset(regs_, 0, sizeof(regs_));
+        std::memset(regs_, 0, num_regs_);
         latch_addr_ = 0;
         for (auto& ch : tone_counter_) ch = 0;
         for (auto& ch : tone_output_)  ch = 0;
@@ -200,7 +201,7 @@ public:
 
 private:
     AYVariant variant_;
-    uint8_t   regs_[ay_regs::REG_COUNT]{};
+
     uint8_t   latch_addr_ = 0;
 
     // Tone generators (3 channels)
