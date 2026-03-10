@@ -103,6 +103,14 @@ bool AmstradCPCSystem<M>::initialize() {
     cpu_ = new ZilogZ80A();
     pins_ = cpu_->init();
     crtc_.init();
+    // Gate array drives interrupts from CRTC HSYNC (every 52 HSYNCs)
+    crtc_.on_hsync = [this]() {
+        gate_array_.interrupt_counter++;
+        if (gate_array_.interrupt_counter >= 52) {
+            gate_array_.interrupt_counter = 0;
+            gate_array_.interrupt_pending = true;
+        }
+    };
     ppi_.init();
     ay_.init();
     gate_array_.reset();
@@ -127,8 +135,31 @@ template<CPCModel M> void AmstradCPCSystem<M>::reset() {
 template<CPCModel M>
 void AmstradCPCSystem<M>::tick() {
     if (!cpu_) return;
+
+    // CPU tick
     pins_ = cpu_->tick(pins_);
-    // TODO: Bus dispatch, gate array interrupt, CRTC timing, AY clocking
+
+    // Bus dispatch
+    bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);  // Active-low
+    bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);  // Active-low
+
+    if (mreq) {
+        pins_ = mem_tick(pins_);
+    } else if (iorq) {
+        pins_ = io_tick(pins_);
+    }
+
+    // Gate array interrupt: IRQ is level-sensitive, keep asserted while pending
+    if (gate_array_.interrupt_pending) {
+        BUS_CLR_BIT(pins_, BUS_IRQ_BIT);
+    }
+
+    // CRTC + AY tick at 1 MHz (CPU clock / 4)
+    if ((total_cycles_ & 3) == 0) {
+        crtc_.tick();
+        ay_.tick();
+    }
+
     total_cycles_++;
 }
 
@@ -149,8 +180,130 @@ template<CPCModel M> void AmstradCPCSystem<M>::render_system_menu_items() {}
 template<CPCModel M> void AmstradCPCSystem<M>::render_configuration_ui() {}
 template<CPCModel M> void AmstradCPCSystem<M>::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
-template<CPCModel M> bus_state_t AmstradCPCSystem<M>::mem_tick(bus_state_t pins) { return pins; }
-template<CPCModel M> bus_state_t AmstradCPCSystem<M>::io_tick(bus_state_t pins) { return pins; }
+template<CPCModel M>
+bus_state_t AmstradCPCSystem<M>::mem_tick(bus_state_t pins) {
+    uint16_t addr = BUS_GET_ADDR(pins);
+    bool is_read = BUS_GET_BIT(pins, BUS_RW_BIT);
+
+    // CPC6128 RAM banking — map address to physical RAM offset
+    auto ram_offset = [&](uint16_t a) -> uint32_t {
+        if constexpr (Traits::ram_size_kb == 128) {
+            // 8 banking configurations: each maps 4 × 16KB pages to 8 × 16KB banks
+            static constexpr uint8_t bank_table[8][4] = {
+                {0, 1, 2, 3}, {0, 1, 2, 7}, {4, 5, 6, 7}, {0, 3, 2, 7},
+                {0, 4, 2, 3}, {0, 5, 2, 3}, {0, 6, 2, 3}, {0, 7, 2, 3}
+            };
+            int page = a >> 14;
+            int bank = bank_table[gate_array_.ram_config & 7][page];
+            return static_cast<uint32_t>(bank) * 0x4000 + (a & 0x3FFF);
+        } else {
+            return a;
+        }
+    };
+
+    if (is_read) {
+        uint8_t data;
+        if (addr < 0x4000) {
+            // Lower ROM (BIOS) / RAM — ROM overlays RAM when enabled
+            data = gate_array_.lower_rom_enabled ? lower_rom_[addr] : ram_[ram_offset(addr)];
+        } else if (addr >= 0xC000) {
+            // Upper ROM (BASIC) / RAM
+            data = gate_array_.upper_rom_enabled ? upper_rom_[addr - 0xC000] : ram_[ram_offset(addr)];
+        } else {
+            data = ram_[ram_offset(addr)];
+        }
+        BUS_SET_DATA(pins, data);
+    } else {
+        // Writes always go to RAM (ROMs are read-only overlays)
+        uint8_t data = BUS_GET_DATA(pins);
+        ram_[ram_offset(addr)] = data;
+    }
+
+    return pins;
+}
+template<CPCModel M>
+bus_state_t AmstradCPCSystem<M>::io_tick(bus_state_t pins) {
+    // Interrupt acknowledge: IORQ + M1 asserted simultaneously
+    if (!BUS_GET_BIT(pins, Z80_M1_BIT)) {
+        gate_array_.interrupt_pending = false;
+        BUS_SET_BIT(pins, BUS_IRQ_BIT);  // Deassert INT
+        BUS_SET_DATA(pins, 0xFF);
+        return pins;
+    }
+
+    uint16_t addr = BUS_GET_ADDR(pins);
+    bool is_read = BUS_GET_BIT(pins, BUS_RW_BIT);
+    uint8_t data = BUS_GET_DATA(pins);
+
+    // CPC uses partial address-line decoding for I/O
+
+    // Gate Array (active when A15=0) — write-only
+    if (!is_read && !(addr & 0x8000)) {
+        switch (data >> 6) {
+            case 0:  // Pen select
+                gate_array_.pen_select = data & 0x1F;
+                break;
+            case 1:  // Set color for current pen
+                if (gate_array_.pen_select < amstrad_cpc_constants::GA_PEN_COUNT)
+                    gate_array_.ink[gate_array_.pen_select] = data & 0x1F;
+                break;
+            case 2:  // Screen mode + ROM control + interrupt reset
+                gate_array_.screen_mode = data & 0x03;
+                gate_array_.lower_rom_enabled = !(data & 0x04);
+                gate_array_.upper_rom_enabled = !(data & 0x08);
+                if (data & 0x10) {
+                    gate_array_.interrupt_counter = 0;
+                    gate_array_.interrupt_pending = false;
+                    BUS_SET_BIT(pins, BUS_IRQ_BIT);
+                }
+                break;
+            case 3:  // RAM banking (CPC6128 only)
+                if constexpr (Traits::ram_size_kb == 128) {
+                    gate_array_.ram_config = data & 0x3F;
+                }
+                break;
+        }
+    }
+
+    // CRTC 6845 (active when A14=0)
+    if (!(addr & 0x4000)) {
+        // A9:A8 selects function: 00=reg select, 01=data write, 10=status read, 11=data read
+        uint8_t crtc_func = (addr >> 8) & 0x03;
+        if (is_read) {
+            if (crtc_func >= 2) {
+                BUS_SET_DATA(pins, crtc_.read(crtc_func & 1));
+            }
+        } else {
+            if (crtc_func < 2) {
+                crtc_.write(crtc_func & 1, data);
+            }
+        }
+    }
+
+    // PPI 8255 (active when A11=0)
+    if (!(addr & 0x0800)) {
+        uint8_t ppi_reg = addr & 0x03;
+        if (is_read) {
+            BUS_SET_DATA(pins, ppi_.read(ppi_reg));
+        } else {
+            ppi_.write(ppi_reg, data);
+            // AY-3-8912 is controlled via PPI Port C bits 7:6 (BDIR/BC1)
+            // and Port A carries the data bus
+            uint8_t port_c = ppi_.get_port_c_output();
+            bool bdir = (port_c >> 7) & 1;
+            bool bc1  = (port_c >> 6) & 1;
+            if (bdir && bc1) {
+                ay_.latch_address(ppi_.get_port_a_output());
+            } else if (bdir && !bc1) {
+                ay_.write_register(ppi_.get_port_a_output());
+            } else if (!bdir && bc1) {
+                ppi_.set_port_a_input(ay_.read_register());
+            }
+        }
+    }
+
+    return pins;
+}
 template<CPCModel M> bool AmstradCPCSystem<M>::load_roms() { return false; }
 
 // ============================================================================
