@@ -264,10 +264,7 @@ struct ted7360_desc_t {
 // UNIT STRUCTURES (following VIC-II unit-based decomposition)
 // ============================================================================
 
-// Register Unit — raw register file
-struct ted_registers_unit_t {
-    uint8_t data[TED_NUM_REGS];         // Shadow copy of TED registers ($FF00-$FF1F)
-};
+// Register storage is provided by ChipBase::regs_[] (TED_NUM_REGS bytes)
 
 // Timing Unit — horizontal/vertical counters
 struct ted_timing_unit_t {
@@ -519,7 +516,6 @@ struct ted7360_t : public VideoChipBase {
     // Public data — Unit structures
     // ========================================================================
 
-    ted_registers_unit_t   registers;
     ted_timing_unit_t      timing;
     ted_video_logic_unit_t video_logic;
     ted_video_data_unit_t  video_data;
@@ -556,8 +552,8 @@ struct ted7360_t : public VideoChipBase {
      */
     [[nodiscard]] uint16_t get_cursor_position() const noexcept {
         return static_cast<uint16_t>(
-             registers.data[TED_REG_CURSOR_LO]
-           | ((registers.data[TED_REG_CURSOR_HI] & 0x03u) << 8));
+             regs_[TED_REG_CURSOR_LO]
+           | ((regs_[TED_REG_CURSOR_HI] & 0x03u) << 8));
     }
 
     // Reverse mode

@@ -1187,7 +1187,7 @@ uint8_t Commodore264System<V>::ted_mem_read(void* user_data, uint16_t address) {
     // the lower 32KB (A15=0) always reads RAM regardless of ROMSEL state.
     // This matters for color/screen attribute fetches whose addresses are
     // typically below $8000.
-    bool video_romsel = (sys->ted_->registers.data[TED_REG_MEM_CTRL] & 0x04) != 0;
+    bool video_romsel = (sys->ted_->regs_[TED_REG_MEM_CTRL] & 0x04) != 0;
 
     if (video_romsel) {
         if (address >= 0xC000) {
