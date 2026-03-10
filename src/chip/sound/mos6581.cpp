@@ -194,19 +194,100 @@ void voice_t::envelope_clock() {
 // FILTER IMPLEMENTATION
 // =============================================================================
 
+// 6581 filter cutoff lookup table — maps the 11-bit register (0–2047) to Hz.
+// Built once at first use from the MOS 6581's R-2R DAC transfer function.
+// The 6581 DAC has a non-ideal 2R/R ratio of ~2.20 and no termination at bit 0,
+// creating the chip's characteristic nonlinear filter sweep curve.
+// Table values are: f_min + dac_normalized * (f_max - f_min), where the
+// DAC normalization captures the hardware's stepped response.
+static float f0_6581[2048];
+static bool  f0_6581_ready = false;
+
+static void build_f0_6581() {
+    if (f0_6581_ready) return;
+
+    // Build an 11-bit R-2R DAC table with MOS 6581 characteristics.
+    // Ported from reSID's dac.cc build_dac_table() (Dag Lem, GPLv2+).
+    constexpr int BITS = 11;
+    constexpr double _2R_div_R = 2.20;   // Non-ideal 6581 resistor ratio
+    constexpr bool   TERM = false;        // Missing termination at bit 0
+    constexpr double LEAKAGE = 0.0075;    // Subthreshold MOSFET leakage
+
+    double R  = 1.0;
+    double _2R = _2R_div_R * R;
+    double vbit[BITS];
+
+    for (int set_bit = 0; set_bit < BITS; set_bit++) {
+        double Vn = 1.0;
+        double Rn = TERM ? _2R : 1e30;     // No termination → infinite R
+
+        // DAC "tail" resistance by repeated parallel substitution
+        for (int bit = 0; bit < set_bit; bit++) {
+            if (Rn >= 1e29)
+                Rn = R + _2R;
+            else
+                Rn = R + _2R * Rn / (_2R + Rn);  // R + (2R ∥ Rn)
+        }
+
+        // Source transformation for this bit's voltage contribution
+        if (Rn >= 1e29) {
+            Rn = _2R;
+        } else {
+            Rn = _2R * Rn / (_2R + Rn);          // 2R ∥ Rn
+            Vn = Vn * Rn / _2R;
+        }
+
+        // Propagate through remaining bits above this one
+        for (int bit = set_bit + 1; bit < BITS; bit++) {
+            Rn += R;
+            double I = Vn / Rn;
+            Rn = _2R * Rn / (_2R + Rn);          // 2R ∥ Rn
+            Vn = Rn * I;
+        }
+        vbit[set_bit] = Vn;
+    }
+
+    // Frequency endpoints calibrated to typical 6581 (R4AR 0687 14).
+    // These can be tuned per-chip; the DAC shape is the important part.
+    constexpr float F_MIN =  220.0f;   // fc=0: ~220 Hz
+    constexpr float F_MAX = 12000.0f;  // fc=2047: ~12 kHz
+
+    // Build superposition table and map to frequency
+    double dac_max = 0;
+    double dac_raw[1 << BITS];
+    for (int fc = 0; fc < (1 << BITS); fc++) {
+        double Vo = 0;
+        int x = fc;
+        for (int j = 0; j < BITS; j++) {
+            Vo += ((x & 1) ? 1.0 : LEAKAGE) * vbit[j];
+            x >>= 1;
+        }
+        dac_raw[fc] = Vo;
+        if (Vo > dac_max) dac_max = Vo;
+    }
+
+    for (int fc = 0; fc < (1 << BITS); fc++) {
+        float norm = (dac_max > 1e-30) ? (float)(dac_raw[fc] / dac_max) : 0.0f;
+        f0_6581[fc] = F_MIN + norm * (F_MAX - F_MIN);
+    }
+
+    f0_6581_ready = true;
+}
+
 void mos6581_t::filter_update_cutoff() {
     filter_state_t* f = &filter_state;
     
     // Calculate cutoff frequency in Hz from the 11-bit register (0-2047).
-    float fc = (float)filter_cutoff_frequency;
-    float normalized = fc / 2048.0f;  // 0.0 .. 1.0
+    uint16_t fc = filter_cutoff_frequency;
     float cutoff_hz;
     
     if (revision <= SID_REVISION_6581_R4AR) {
-        // 6581: roughly 220 Hz to ~12 kHz (non-linear / quadratic)
-        cutoff_hz = 220.0f + normalized * normalized * 11780.0f;
+        // 6581: use the DAC-accurate lookup table
+        build_f0_6581();
+        cutoff_hz = f0_6581[fc & 0x7FF];
     } else {
-        // 8580: roughly 30 Hz to ~12.5 kHz (more linear)
+        // 8580: roughly 30 Hz to ~12.5 kHz (more linear DAC, correct termination)
+        float normalized = (float)fc / 2048.0f;
         cutoff_hz = 30.0f + normalized * 12470.0f;
     }
     
@@ -672,13 +753,16 @@ inline bus_state_t mos6581_t::advance_cycle(bus_state_t bus_state) {
     // works.  The accumulated post-filter output is averaged at sample time.
     {
         // Compute instantaneous centred voice outputs (waveform × envelope).
-        // 12-bit waveform centred to [-2048, +2047] × 8-bit envelope [0, 255].
+        // 12-bit waveform offset by wave_zero_ (revision-dependent) × 8-bit envelope.
+        // 6581: wave_zero=0x380 → asymmetric centering, large positive DC bias.
+        // 8580: wave_zero=0x800 → symmetric centering, no DC offset.
+        // inv_scale normalises 3 voices at peak excursion to ~[-1, +1].
         static constexpr float inv_scale = 1.0f / (3.0f * float(OSCILLATOR_CENTER) * float(0xFF));
-        float v1 = (float)((int32_t)voice1.oscillator_waveform - OSCILLATOR_CENTER)
+        float v1 = (float)((int32_t)voice1.oscillator_waveform - wave_zero_)
                  * (float)voice1.envelope_amplitude * inv_scale;
-        float v2 = (float)((int32_t)voice2.oscillator_waveform - OSCILLATOR_CENTER)
+        float v2 = (float)((int32_t)voice2.oscillator_waveform - wave_zero_)
                  * (float)voice2.envelope_amplitude * inv_scale;
-        float v3 = (float)((int32_t)voice3.oscillator_waveform - OSCILLATOR_CENTER)
+        float v3 = (float)((int32_t)voice3.oscillator_waveform - wave_zero_)
                  * (float)voice3.envelope_amplitude * inv_scale;
 
         // Route voices to filtered / unfiltered paths (cached on register write).
@@ -694,14 +778,12 @@ inline bus_state_t mos6581_t::advance_cycle(bus_state_t bus_state) {
         // Clock the ZDF SVF filter at CPU rate.
         float filtered_output = filter_process(filtered_input);
 
-        // 6581: add voice DC offset — each voice amplifier biases the mixer
-        // line even when idle; volume modulates this DC to produce digi audio.
-        float voice_dc = (revision <= SID_REVISION_6581_R4AR) ? 1.5f : 0.0f;
-
-        // Apply master volume per-cycle: output = (voices + DC) × vol/15.
-        // For digi playback, the DC is modulated by rapid volume changes.
+        // Apply master volume per-cycle: output = (voices + DC) × vol/15 × gain.
+        // voice_dc_: 6581 mixer DC bias for digi playback (see header comments).
+        // output_gain_: models 6581 op-amp output compression (~33% of max).
         float vol = (float)master_volume / 15.0f;
-        float total = (unfiltered_output + filtered_output + voice_dc) * vol;
+        float total = (unfiltered_output + filtered_output + voice_dc_)
+                    * vol * output_gain_;
 
         // CIC-3 (3rd-order Cascaded Integrator-Comb) decimation filter.
         // Three cascaded running sums produce a 3rd-order B-spline window
@@ -781,8 +863,12 @@ void mos6581_t::generate_samples(float* output, uint32_t sample_count) {
 void mos6581_t::set_revision(sid_revision_t rev) {
     revision = rev;
     enable_distortion = (rev <= SID_REVISION_6581_R4AR);
+    bool is_6581 = (rev <= SID_REVISION_6581_R4AR);
+    wave_zero_ = is_6581 ? 0x380 : 0x800;
+    voice_dc_ = is_6581 ? 1.5f : 0.0f;
+    output_gain_ = is_6581 ? 0.33f : 1.0f;
     // Cache model index in each voice for per-cycle waveform table lookup
-    int mi = (rev > SID_REVISION_6581_R4AR) ? 1 : 0;
+    int mi = is_6581 ? 0 : 1;
     voice1.model_index = mi;
     voice2.model_index = mi;
     voice3.model_index = mi;
