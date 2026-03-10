@@ -66,11 +66,6 @@ namespace nes_system {
     REG(6, PPUADDR,   "VRAM address")                                            \
     REG(7, PPUDATA,   "VRAM data R/W")
 
-// File-scope address constants for DECL extractors
-#define NES_PPU_X_FLD_CONST_(a, s, l) static constexpr uint8_t NES_PPU_REG_##s = a;
-NES_PPU_DECL(NES_PPU_X_FLD_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-#undef NES_PPU_X_FLD_CONST_
-
 DECL_EXTRACT_ALL(NES_PPU, NES_PPU_DECL)
 
 namespace nes_system {
