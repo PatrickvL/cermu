@@ -39,6 +39,35 @@
 #endif
 
 /* ========================================================================== */
+/* PREPROCESSOR CAPABILITIES                                                  */
+/* ========================================================================== */
+
+/* __VA_OPT__ is available in C++20, and as an extension in C++17 mode on
+   GCC 8+, Clang 6+, and MSVC with /Zc:preprocessor.  MSVC's traditional
+   preprocessor (the default before VS 2022 17.0) does NOT support it. */
+#if defined(_MSVC_TRADITIONAL) && _MSVC_TRADITIONAL
+    /* MSVC traditional preprocessor — no __VA_OPT__ */
+#else
+    #define CERMU_HAS_VA_OPT 1
+#endif
+
+/* Portable preprocessor utilities for variadic-macro overloading.
+   Required for MSVC's traditional preprocessor where __VA_OPT__ is absent;
+   available unconditionally for convenience.
+
+   CERMU_PP_EXPAND_    — identity that forces a rescan (fixes MSVC __VA_ARGS__)
+   CERMU_PP_CAT_       — token paste with forced expansion of both operands
+   CERMU_PP_NARGS_     — count variadic arguments (1..5)
+   CERMU_PP_OVERLOAD_  — call prefix##N(...) where N = arg count */
+#define CERMU_PP_EXPAND_(...)  __VA_ARGS__
+#define CERMU_PP_CAT_(a, b)    CERMU_PP_CAT_I_(a, b)
+#define CERMU_PP_CAT_I_(a, b)  a##b
+#define CERMU_PP_NARGS_(...)   CERMU_PP_EXPAND_(CERMU_PP_NARGS_I_(__VA_ARGS__, 5, 4, 3, 2, 1))
+#define CERMU_PP_NARGS_I_(_1, _2, _3, _4, _5, N, ...)  N
+#define CERMU_PP_OVERLOAD_(prefix, ...) \
+    CERMU_PP_EXPAND_(CERMU_PP_CAT_(prefix, CERMU_PP_NARGS_(__VA_ARGS__))(__VA_ARGS__))
+
+/* ========================================================================== */
 /* PATH SEPARATOR */
 /* ========================================================================== */
 
