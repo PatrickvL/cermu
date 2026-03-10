@@ -128,7 +128,7 @@ namespace tia_constants {
 // ============================================================================
 
 struct tia_audio_channel_t {
-    // Internal state only — register values live in tia_t::write_regs[]
+    // Internal state only — register values live in ChipBase::regs_[]
     uint8_t  div_counter = 0; // Frequency divider counter
     uint8_t  poly4  = 0x0F;   // 4-bit polynomial counter (LFSR)
     uint8_t  poly5  = 0x1F;   // 5-bit polynomial counter
@@ -143,6 +143,7 @@ struct tia_audio_channel_t {
 
 struct tia_t : public VideoChipBase {
     tia_t() : VideoChipBase(ChipInfo{"TIA", "Atari"}) {
+        init_split_regs(WRITE_REG_COUNT, READ_REG_COUNT);
     }
 
     // --- ChipBase GUI interface ---
@@ -152,19 +153,19 @@ struct tia_t : public VideoChipBase {
 #endif
 
     // ========================================================================
-    // REGISTER ARRAYS
+    // REGISTER ARRAYS (storage in ChipBase::regs_[])
     // ========================================================================
 
     // Write registers ($00-$2C) — raw byte as written by CPU.
     // Strobe registers (RESPx, HMOVE, HMCLR, CXCLR, WSYNC, RSYNC) store
     // the data written, though only the side-effect matters.
+    // Accessed via regs_[0..WRITE_REG_COUNT-1].
     static constexpr int WRITE_REG_COUNT = 0x2D;  // 45 registers
-    uint8_t write_regs[WRITE_REG_COUNT] = {};
 
     // Read registers ($00-$0D) — collision + input ports.
     // Updated lazily in read().
+    // Accessed via read_regs_[0..READ_REG_COUNT-1].
     static constexpr int READ_REG_COUNT = 0x0E;   // 14 registers
-    uint8_t read_regs[READ_REG_COUNT] = {};
 
     // ========================================================================
     // DISPLAY / TIMING STATE
