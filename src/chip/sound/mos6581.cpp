@@ -95,7 +95,7 @@ void voice_t::envelope_state_change() {
         if (state_pipeline == 0) {
             envelope_cycle = CYCLE_ATTACK;
             // The attack register is correctly activated during second cycle of attack phase
-            uint8_t attack_rate = (sid->regs[voice_index * VOICE_REGS + VOICE_ATDCY] >> 4) & 0x0F;
+            uint8_t attack_rate = (sid->regs_[voice_index * VOICE_REGS + VOICE_ATDCY] >> 4) & 0x0F;
             envelope_rate_period = rate_to_period(attack_rate);
             envelope_hold_zero = false;
         }
@@ -107,7 +107,7 @@ void voice_t::envelope_state_change() {
         if ((envelope_cycle == CYCLE_ATTACK && state_pipeline == 0) ||
             (envelope_cycle == CYCLE_DECAY && state_pipeline == 1)) {
             envelope_cycle = CYCLE_RELEASE;
-            uint8_t release_rate = sid->regs[voice_index * VOICE_REGS + VOICE_SUREL] & 0x0F;
+            uint8_t release_rate = sid->regs_[voice_index * VOICE_REGS + VOICE_SUREL] & 0x0F;
             envelope_rate_period = rate_to_period(release_rate);
         }
         break;
@@ -143,7 +143,7 @@ void voice_t::envelope_clock() {
                 envelope_amplitude = (envelope_amplitude + 1) & 0xFF;
                 if (envelope_amplitude == 0xFF) {
                     envelope_cycle = CYCLE_DECAY;
-                    uint8_t decay_rate = sid->regs[voice_index * VOICE_REGS + VOICE_ATDCY] & 0x0F;
+                    uint8_t decay_rate = sid->regs_[voice_index * VOICE_REGS + VOICE_ATDCY] & 0x0F;
                     envelope_rate_period = rate_to_period(decay_rate);
                 }
             } else if (envelope_cycle == CYCLE_DECAY || envelope_cycle == CYCLE_RELEASE) {
@@ -1044,7 +1044,7 @@ void voice_t::write_control_register_value(uint8_t value) {
             // The decay register is "accidentally" activated during first cycle of attack phase.
             envelope_next_state = CYCLE_ATTACK;
             envelope_cycle = CYCLE_DECAY;  // "Accidentally" activate decay state first
-            uint8_t decay_rate = sid->regs[voice_index * VOICE_REGS + VOICE_ATDCY] & 0x0F;
+            uint8_t decay_rate = sid->regs_[voice_index * VOICE_REGS + VOICE_ATDCY] & 0x0F;
             envelope_rate_period = rate_to_period(decay_rate);
             state_pipeline = 2;
             if (reset_rate_counter || exponential_pipeline == 2) {
@@ -1175,7 +1175,7 @@ bus_state_t mos6581_t::registers_write(void* context, bus_state_t bus_state) {
     
     // Store register value for debugging
     if (r < sid_constants::REGS_SIZE) {
-        sid->regs[r] = value;
+        sid->regs_[r] = value;
     }
 
     // Write-capture callback (for SID register logging / test harnesses)
@@ -1284,7 +1284,7 @@ void mos6581_t::init() {
 void mos6581_t::register_debug_fields() {
     using S = const mos6581_t;
     auto& r = debug_registry_;
-    r.set_registers(regs, sid_constants::REGS_SIZE, SID_REG_INFO, 0xD400);
+    r.set_registers(regs_, sid_constants::REGS_SIZE, SID_REG_INFO, 0xD400);
     r.set_decl_order(SID_DECL_ORDER.data(), SID_DECL_ORDER.size(),
                      SID_FLD_INFO, SID_NUM_FIELDS,
                      nullptr, 0, nullptr);
@@ -1361,7 +1361,7 @@ void mos6581_t::register_debug_fields() {
 
 void mos6581_t::reset() {
     // Reset all registers
-    memset(regs, 0, sid_constants::REGS_SIZE);
+    memset(regs_, 0, num_regs_);
     bus_value = 0;
     
     // Reset voices

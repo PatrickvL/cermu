@@ -375,13 +375,13 @@ private:
 // Main SID chip structure - Enhanced (C++ class inheriting ChipBase)
 struct mos6581_t : public SoundChipBase {
     mos6581_t() : SoundChipBase(ChipInfo{"MOS6581", "MOS Technology"}) {
+        init_regs(sid_constants::REGS_SIZE);
     }
 
     // Bus interface
     bus_cycle_ops_t bus_interface = {};
 
-    // SID register array
-    uint8_t regs[sid_constants::REGS_SIZE] = {};
+    // SID register array stored in ChipBase::regs_[]
     uint8_t bus_value = 0;            // Last bus value for read-only registers
 
     // Three voices with cross-references
