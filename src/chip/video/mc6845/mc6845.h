@@ -12,26 +12,6 @@
  *
  * Used in: Commodore PET/CBM, BBC Micro, Amstrad CPC, many S-100 systems.
  *
- * Register map (accent on PET-relevant subset):
- *   R0  — Horizontal Total         (chars per line - 1)
- *   R1  — Horizontal Displayed     (visible chars per line)
- *   R2  — Horizontal Sync Position (char count when HSYNC starts)
- *   R3  — Sync Widths              ([3:0] = HSYNC width, [7:4] = VSYNC width)
- *   R4  — Vertical Total           (char rows per frame - 1)
- *   R5  — Vertical Adjust          (extra scan lines for fine frame timing)
- *   R6  — Vertical Displayed       (visible char rows)
- *   R7  — Vertical Sync Position   (char row when VSYNC starts)
- *   R8  — Mode Control             (interlace/skew)
- *   R9  — Max Scan Line Address    (scan lines per char row - 1)
- *   R10 — Cursor Start             (scan line + blink mode)
- *   R11 — Cursor End               (scan line)
- *   R12 — Start Address High       (display start address MSB)
- *   R13 — Start Address Low        (display start address LSB)
- *   R14 — Cursor Address High      (cursor position MSB)
- *   R15 — Cursor Address Low       (cursor position LSB)
- *   R16 — Light Pen High (read-only)
- *   R17 — Light Pen Low  (read-only)
- *
  * I/O interface: two registers at base+0 (address) and base+1 (data).
  */
 
@@ -47,19 +27,19 @@
 #define MC6845_DECL(REG, FLD, CMP) \
     REG( 0, R0_HTOTAL,         "Horiz total chars-1")                            \
     REG( 1, R1_HDISPLAYED,     "Horiz displayed chars")                          \
-    REG( 2, R2_HSYNC_POS,      "Horiz sync position")                           \
-    REG( 3, R3_SYNC_WIDTHS,    "H/V sync widths")                               \
-      FLD(R3_SYNC_WIDTHS, HSYNC_W, 3:0, "HSYNC width (chars)", Value, 0, 0)     \
-      FLD(R3_SYNC_WIDTHS, VSYNC_W, 7:4, "VSYNC width (rows)",  Value, 0, 0)     \
+    REG( 2, R2_HSYNC_POS,      "Horiz sync position")                            \
+    REG( 3, R3_SYNC_WIDTHS,    "H/V sync widths")                                \
+      FLD(R3_SYNC_WIDTHS, HSYNC_W, 3:0, "HSYNC width (chars)", Value, 0, 0)      \
+      FLD(R3_SYNC_WIDTHS, VSYNC_W, 7:4, "VSYNC width (rows)",  Value, 0, 0)      \
     REG( 4, R4_VTOTAL,         "Vert total rows-1")                              \
     REG( 5, R5_VADJUST,        "Vert fine adjust")                               \
     REG( 6, R6_VDISPLAYED,     "Vert displayed rows")                            \
-    REG( 7, R7_VSYNC_POS,      "Vert sync position")                            \
+    REG( 7, R7_VSYNC_POS,      "Vert sync position")                             \
     REG( 8, R8_MODE_CTRL,      "Mode/interlace")                                 \
     REG( 9, R9_MAX_SCANLINE,   "Max raster address")                             \
     REG(10, R10_CURSOR_START,  "Cursor start scan")                              \
-      FLD(R10_CURSOR_START, CURSOR_MODE, 6:5, "Cursor blink mode", Value, 0, 0) \
-      FLD(R10_CURSOR_START, CURSOR_SL,   4:0, "Cursor scan line",  Value, 0, 0) \
+      FLD(R10_CURSOR_START, CURSOR_MODE, 6:5, "Cursor blink mode", Value, 0, 0)  \
+      FLD(R10_CURSOR_START, CURSOR_SL,   4:0, "Cursor scan line",  Value, 0, 0)  \
     REG(11, R11_CURSOR_END,    "Cursor end scan")                                \
     REG(12, R12_START_ADDR_HI, "Display start hi")                               \
     REG(13, R13_START_ADDR_LO, "Display start lo")                               \
