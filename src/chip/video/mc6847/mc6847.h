@@ -91,6 +91,7 @@ public:
     mc6847_t()
         : VideoChipBase(ChipInfo("MC6847", "Motorola"))
     {
+        init_regs(mc6847_const::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -178,8 +179,7 @@ private:
     bool     fs_ = false;
     bool     hs_ = false;
 
-    // Register mirror (packed mode pins)
-    uint8_t  regs_[mc6847_const::REG_COUNT]{};
+    // Register mirror (packed mode pins — backed by ChipBase::regs_)
 
     void update_mode_reg() {
         regs_[mc6847_const::REG_MODE] =

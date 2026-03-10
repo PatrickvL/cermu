@@ -107,6 +107,7 @@ public:
     ferranti_ula_t()
         : VideoChipBase(ChipInfo("6C001E-7", "Ferranti"))
     {
+        init_regs(spectrum_ula::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -242,8 +243,7 @@ private:
     // Keyboard matrix (8 half-rows × 5 keys, active-low)
     uint8_t   keyboard_state_[8]{};
 
-    // Register mirror
-    uint8_t   regs_[spectrum_ula::REG_COUNT]{};
+    // Register mirror (backed by ChipBase::regs_)
 
 #ifdef CERMU_HAS_CHIP_DEBUG
     void register_debug_fields() {
