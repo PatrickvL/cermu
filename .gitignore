@@ -93,6 +93,7 @@ external/**
 !external/stb_image_write.h
 !external/resid/
 !external/resid/siddefs.h
+!external/resid/resid_probe.h
 
 # Downloaded test suites (contents ignored, READMEs kept above)
 # external/6502-tests/  external/65c02-tests/  external/lorenz-tests/
