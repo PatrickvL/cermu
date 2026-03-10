@@ -71,8 +71,23 @@ void LC80System::reset() {
 
 void LC80System::tick() {
     if (!cpu_) return;
+
+    // CPU tick
     pins_ = cpu_->tick(pins_);
-    // TODO: Bus dispatch → ROM/RAM, I/O decode → PIO1/PIO2/CTC, speaker
+
+    // Bus dispatch
+    bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);  // Active-low
+    bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);  // Active-low
+
+    if (mreq) {
+        pins_ = mem_tick(pins_);
+    } else if (iorq) {
+        pins_ = io_tick(pins_);
+    }
+
+    // CTC tick (speaker on channel 2)
+    ctc_.tick();
+
     total_cycles_++;
 }
 
@@ -91,8 +106,91 @@ void LC80System::render_system_menu_items() {}
 void LC80System::render_configuration_ui() {}
 void LC80System::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
-bus_state_t LC80System::mem_tick(bus_state_t pins) { return pins; }
-bus_state_t LC80System::io_tick(bus_state_t pins) { return pins; }
+bus_state_t LC80System::mem_tick(bus_state_t pins) {
+    uint16_t addr = BUS_GET_ADDR(pins);
+    bool is_read = BUS_GET_BIT(pins, BUS_RW_BIT);
+
+    if (is_read) {
+        uint8_t data = 0xFF;
+        if (addr < 0x2000) {
+            // ROM (2 KB, mirrored through $0000-$1FFF)
+            data = rom_[addr & (lc80_constants::ROM_SIZE - 1)];
+        } else if (addr < 0x4000) {
+            // RAM (1 KB at $2000, mirrored through $2000-$3FFF)
+            data = ram_[(addr - 0x2000) & (ram_.size() - 1)];
+        }
+        BUS_SET_DATA(pins, data);
+    } else {
+        uint8_t data = BUS_GET_DATA(pins);
+        if (addr >= 0x2000 && addr < 0x4000) {
+            // RAM write (ROM is read-only)
+            ram_[(addr - 0x2000) & (ram_.size() - 1)] = data;
+        }
+    }
+
+    return pins;
+}
+bus_state_t LC80System::io_tick(bus_state_t pins) {
+    // Interrupt acknowledge: IORQ + M1
+    if (!BUS_GET_BIT(pins, Z80_M1_BIT)) {
+        if (ctc_.interrupt_pending()) {
+            BUS_SET_DATA(pins, ctc_.interrupt_vector());
+        } else {
+            BUS_SET_DATA(pins, 0xFF);
+        }
+        return pins;
+    }
+
+    uint8_t port = static_cast<uint8_t>(BUS_GET_ADDR(pins));
+    bool is_read = BUS_GET_BIT(pins, BUS_RW_BIT);
+    uint8_t data = BUS_GET_DATA(pins);
+
+    // PIO 1 at $F4-$F7 (LED display + keyboard)
+    // Bit 0: port (0=A, 1=B), Bit 1: data/control (0=data, 1=control)
+    if ((port & 0xFC) == lc80_constants::PIO1_PORT_A) {
+        int port_idx = port & 0x01;
+        bool is_ctrl = (port >> 1) & 0x01;
+        if (is_read) {
+            BUS_SET_DATA(pins, pio1_.read_data(port_idx));
+        } else {
+            if (is_ctrl) {
+                pio1_.write_control(port_idx, data);
+            } else {
+                pio1_.write_data(port_idx, data);
+            }
+        }
+        return pins;
+    }
+
+    // PIO 2 at $F8-$FB (keyboard scan + cassette)
+    if ((port & 0xFC) == lc80_constants::PIO2_PORT_A) {
+        int port_idx = port & 0x01;
+        bool is_ctrl = (port >> 1) & 0x01;
+        if (is_read) {
+            BUS_SET_DATA(pins, pio2_.read_data(port_idx));
+        } else {
+            if (is_ctrl) {
+                pio2_.write_control(port_idx, data);
+            } else {
+                pio2_.write_data(port_idx, data);
+            }
+        }
+        return pins;
+    }
+
+    // CTC at $EC-$EF (4 channels, speaker on ch2)
+    if ((port & 0xFC) == lc80_constants::CTC_CH0) {
+        int channel = port & 0x03;
+        if (is_read) {
+            BUS_SET_DATA(pins, ctc_.read(channel));
+        } else {
+            ctc_.write(channel, data);
+        }
+        return pins;
+    }
+
+    return pins;
+}
 bool LC80System::load_roms() { return false; }
 
 // ============================================================================
