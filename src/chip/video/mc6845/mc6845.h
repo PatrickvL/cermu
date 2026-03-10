@@ -83,6 +83,7 @@ DECL_EXTRACT_ALL(MC6845, MC6845_DECL)
 
 struct mc6845_t : public VideoChipBase {
     mc6845_t() : VideoChipBase(ChipInfo{"MC6845", "Motorola"}) {
+        init_regs(MC6845_NUM_REGISTERS);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -99,7 +100,7 @@ struct mc6845_t : public VideoChipBase {
     // ========================================================================
 
     uint8_t address_register = 0;               // Currently selected register
-    uint8_t regs[MC6845_NUM_REGISTERS] = {};    // R0–R17
+    // R0–R17 register file stored in ChipBase::regs_[]
 
     // ========================================================================
     // COUNTERS (runtime state)
@@ -174,30 +175,30 @@ struct mc6845_t : public VideoChipBase {
     // --- Derived state queries ------------------------------------------
 
     /// Total characters per line (R0 + 1).
-    inline uint8_t chars_per_line() const { return regs[MC6845_R0_HTOTAL] + 1; }
+    inline uint8_t chars_per_line() const { return regs_[MC6845_R0_HTOTAL] + 1; }
 
     /// Visible characters per line (R1).
-    inline uint8_t visible_chars() const { return regs[MC6845_R1_HDISPLAYED]; }
+    inline uint8_t visible_chars() const { return regs_[MC6845_R1_HDISPLAYED]; }
 
     /// Total character rows per frame (R4 + 1).
-    inline uint8_t rows_per_frame() const { return regs[MC6845_R4_VTOTAL] + 1; }
+    inline uint8_t rows_per_frame() const { return regs_[MC6845_R4_VTOTAL] + 1; }
 
     /// Visible character rows (R6).
-    inline uint8_t visible_rows() const { return regs[MC6845_R6_VDISPLAYED]; }
+    inline uint8_t visible_rows() const { return regs_[MC6845_R6_VDISPLAYED]; }
 
     /// Scan lines per character row (R9 + 1).
-    inline uint8_t scanlines_per_row() const { return regs[MC6845_R9_MAX_SCANLINE] + 1; }
+    inline uint8_t scanlines_per_row() const { return regs_[MC6845_R9_MAX_SCANLINE] + 1; }
 
     /// Display start address from R12:R13.
     inline uint16_t start_address() const {
-        return (static_cast<uint16_t>(regs[MC6845_R12_START_ADDR_HI]) << 8) |
-               regs[MC6845_R13_START_ADDR_LO];
+        return (static_cast<uint16_t>(regs_[MC6845_R12_START_ADDR_HI]) << 8) |
+               regs_[MC6845_R13_START_ADDR_LO];
     }
 
     /// Cursor address from R14:R15.
     inline uint16_t cursor_address() const {
-        return (static_cast<uint16_t>(regs[MC6845_R14_CURSOR_HI]) << 8) |
-               regs[MC6845_R15_CURSOR_LO];
+        return (static_cast<uint16_t>(regs_[MC6845_R14_CURSOR_HI]) << 8) |
+               regs_[MC6845_R15_CURSOR_LO];
     }
 
     /// Is the display currently in the active (visible) area?
@@ -210,7 +211,7 @@ private:
     void register_debug_fields() {
         using M = const mc6845_t;
 
-        debug_registry_.set_registers(regs, MC6845_NUM_REGISTERS, MC6845_REG_INFO);
+        debug_registry_.set_registers(regs_, MC6845_NUM_REGISTERS, MC6845_REG_INFO);
         debug_registry_.set_decl_order(MC6845_DECL_ORDER.data(), MC6845_DECL_ORDER.size(),
                                        MC6845_FLD_INFO, MC6845_NUM_FIELDS,
                                        nullptr, 0, nullptr);
