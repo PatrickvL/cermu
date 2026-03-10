@@ -80,8 +80,8 @@ static std::vector<PinSignalState> get_cia_pin_states(mos6526_t* cia, const Chip
     for (int i = 0; i < 8; i++) {
         int pin_idx = i + 1; // PA0 is pin 2, so index 1
         if (pin_idx < total_pins) {
-            bool pin_active = (cia->regs_[PRA] & (1 << i)) != 0;
-            bool drive_dir = (cia->regs_[DDRA] & (1 << i)) != 0;
+            bool pin_active = (cia->regs_[CIA_REG_PRA] & (1 << i)) != 0;
+            bool drive_dir = (cia->regs_[CIA_REG_DDRA] & (1 << i)) != 0;
             pin_states[pin_idx].signal_level = pin_active;
             pin_states[pin_idx].drive_direction = drive_dir;
             pin_states[pin_idx].high_impedance = !drive_dir;
@@ -92,8 +92,8 @@ static std::vector<PinSignalState> get_cia_pin_states(mos6526_t* cia, const Chip
     for (int i = 0; i < 8; i++) {
         int pin_idx = i + 9; // PB0 is pin 10, so index 9
         if (pin_idx < total_pins) {
-            bool pin_active = (cia->regs_[PRB] & (1 << i)) != 0;
-            bool drive_dir = (cia->regs_[DDRB] & (1 << i)) != 0;
+            bool pin_active = (cia->regs_[CIA_REG_PRB] & (1 << i)) != 0;
+            bool drive_dir = (cia->regs_[CIA_REG_DDRB] & (1 << i)) != 0;
             pin_states[pin_idx].signal_level = pin_active;
             pin_states[pin_idx].drive_direction = drive_dir;
             pin_states[pin_idx].high_impedance = !drive_dir;
@@ -102,7 +102,7 @@ static std::vector<PinSignalState> get_cia_pin_states(mos6526_t* cia, const Chip
 
     // IRQ pin (pin 21, index 20) — CIA drives IRQ as output
     if (20 < total_pins) {
-        bool irq_active = (cia->regs_[ICR] & 0x80) != 0;
+        bool irq_active = (cia->regs_[CIA_REG_ICR] & 0x80) != 0;
         pin_states[20].signal_level = !irq_active; // Active low
         pin_states[20].drive_direction = true;
         pin_states[20].high_impedance = false;
@@ -153,13 +153,13 @@ void mos6526_t::render_settings_content() {
     ImGui::Text("Data Ports (Detailed)");
     ImGui::Separator();
     
-    ImGui::Text("Port A Data (PRA): $%02X", cia->regs_[PRA]);
-    ImGui::Text("Port A DDR (DDRA): $%02X", cia->regs_[DDRA]);
+    ImGui::Text("Port A Data (CIA_REG_PRA): $%02X", cia->regs_[CIA_REG_PRA]);
+    ImGui::Text("Port A DDR (CIA_REG_DDRA): $%02X", cia->regs_[CIA_REG_DDRA]);
     ImGui::Text("Port A Value: $%02X", cia->port_a_value);
     ImGui::Separator();
     
-    ImGui::Text("Port B Data (PRB): $%02X", cia->regs_[PRB]);
-    ImGui::Text("Port B DDR (DDRB): $%02X", cia->regs_[DDRB]);
+    ImGui::Text("Port B Data (CIA_REG_PRB): $%02X", cia->regs_[CIA_REG_PRB]);
+    ImGui::Text("Port B DDR (CIA_REG_DDRB): $%02X", cia->regs_[CIA_REG_DDRB]);
     ImGui::Text("Port B Internal DDR: $%02X", cia->regs_[IDDRB_OFFSET]);
     ImGui::Text("Port B Value: $%02X", cia->port_b_value);
     
@@ -169,17 +169,17 @@ void mos6526_t::render_settings_content() {
     ImGui::Text("Timers (with Latches)");
     ImGui::Separator();
     
-    uint16_t timer_a_latch = (cia->regs_[TIMER_OFFSET + TA_HI] << 8) | cia->regs_[TIMER_OFFSET + TA_LO];
+    uint16_t timer_a_latch = (cia->regs_[TIMER_OFFSET + CIA_REG_TA_HI] << 8) | cia->regs_[TIMER_OFFSET + CIA_REG_TA_LO];
     ImGui::Text("Timer A: $%04X", cia->timer_counter_[A]);
     ImGui::Text("Timer A Latch: $%04X", timer_a_latch);
-    ImGui::Text("Timer A Control: $%02X", cia->regs_[CRA]);
-    ImGui::Text("Timer A Running: %s", (cia->regs_[CRA] & CRA_START) ? "YES" : "NO");
+    ImGui::Text("Timer A Control: $%02X", cia->regs_[CIA_REG_CRA]);
+    ImGui::Text("Timer A Running: %s", (cia->regs_[CIA_REG_CRA] & CRA_START) ? "YES" : "NO");
     
-    uint16_t timer_b_latch = (cia->regs_[TIMER_OFFSET + TB_HI] << 8) | cia->regs_[TIMER_OFFSET + TB_LO];
+    uint16_t timer_b_latch = (cia->regs_[TIMER_OFFSET + CIA_REG_TB_HI] << 8) | cia->regs_[TIMER_OFFSET + CIA_REG_TB_LO];
     ImGui::Text("Timer B: $%04X", cia->timer_counter_[B]);
     ImGui::Text("Timer B Latch: $%04X", timer_b_latch);
-    ImGui::Text("Timer B Control: $%02X", cia->regs_[CRB]);
-    ImGui::Text("Timer B Running: %s", (cia->regs_[CRB] & CRB_START) ? "YES" : "NO");
+    ImGui::Text("Timer B Control: $%02X", cia->regs_[CIA_REG_CRB]);
+    ImGui::Text("Timer B Running: %s", (cia->regs_[CIA_REG_CRB] & CRB_START) ? "YES" : "NO");
     
     ImGui::Separator();
     
@@ -187,10 +187,10 @@ void mos6526_t::render_settings_content() {
     ImGui::Text("Time of Day Clock (Detailed)");
     ImGui::Separator();
     
-    ImGui::Text("TOD 10ths: $%02X", cia->regs_[TOD_10THS]);
-    ImGui::Text("TOD Seconds: $%02X", cia->regs_[TOD_SEC]);
-    ImGui::Text("TOD Minutes: $%02X", cia->regs_[TOD_MIN]);
-    ImGui::Text("TOD Hours: $%02X", cia->regs_[TOD_HR]);
+    ImGui::Text("TOD 10ths: $%02X", cia->regs_[CIA_REG_TOD_10THS]);
+    ImGui::Text("TOD Seconds: $%02X", cia->regs_[CIA_REG_TOD_SEC]);
+    ImGui::Text("TOD Minutes: $%02X", cia->regs_[CIA_REG_TOD_MIN]);
+    ImGui::Text("TOD Hours: $%02X", cia->regs_[CIA_REG_TOD_HR]);
     ImGui::Text("TOD Running: %s", cia->is_running_tod ? "YES" : "NO");
     ImGui::Text("TOD Cycles: %d", cia->tod_cycles);
     ImGui::Text("TOD Read Delta: %u", cia->read_tod_delta);
@@ -202,10 +202,10 @@ void mos6526_t::render_settings_content() {
     ImGui::Text("Alarm Registers");
     ImGui::Separator();
     
-    ImGui::Text("Alarm 10ths: $%02X", cia->regs_[ALARM_OFFSET + TOD_10THS]);
-    ImGui::Text("Alarm Seconds: $%02X", cia->regs_[ALARM_OFFSET + TOD_SEC]);
-    ImGui::Text("Alarm Minutes: $%02X", cia->regs_[ALARM_OFFSET + TOD_MIN]);
-    ImGui::Text("Alarm Hours: $%02X", cia->regs_[ALARM_OFFSET + TOD_HR]);
+    ImGui::Text("Alarm 10ths: $%02X", cia->regs_[ALARM_OFFSET + CIA_REG_TOD_10THS]);
+    ImGui::Text("Alarm Seconds: $%02X", cia->regs_[ALARM_OFFSET + CIA_REG_TOD_SEC]);
+    ImGui::Text("Alarm Minutes: $%02X", cia->regs_[ALARM_OFFSET + CIA_REG_TOD_MIN]);
+    ImGui::Text("Alarm Hours: $%02X", cia->regs_[ALARM_OFFSET + CIA_REG_TOD_HR]);
     
     ImGui::Separator();
     
@@ -213,14 +213,14 @@ void mos6526_t::render_settings_content() {
     ImGui::Text("Interrupt Control (Detailed)");
     ImGui::Separator();
     
-    ImGui::Text("ICR: $%02X", cia->regs_[ICR]);
+    ImGui::Text("CIA_REG_ICR: $%02X", cia->regs_[CIA_REG_ICR]);
     ImGui::Text("Interrupt Mask: $%02X", cia->interrupt_mask);
-    ImGui::Text("IRQ Active: %s", (cia->regs_[ICR] & ICR_IRQ) ? "YES" : "NO");
-    ImGui::Text("Timer A IRQ: %s", (cia->regs_[ICR] & ICR_TA) ? "YES" : "NO");
-    ImGui::Text("Timer B IRQ: %s", (cia->regs_[ICR] & ICR_TB) ? "YES" : "NO");
-    ImGui::Text("Alarm IRQ: %s", (cia->regs_[ICR] & ICR_ALRM) ? "YES" : "NO");
-    ImGui::Text("Serial IRQ: %s", (cia->regs_[ICR] & ICR_SP) ? "YES" : "NO");
-    ImGui::Text("Flag IRQ: %s", (cia->regs_[ICR] & ICR_FLG) ? "YES" : "NO");
+    ImGui::Text("IRQ Active: %s", (cia->regs_[CIA_REG_ICR] & ICR_IRQ) ? "YES" : "NO");
+    ImGui::Text("Timer A IRQ: %s", (cia->regs_[CIA_REG_ICR] & ICR_TA) ? "YES" : "NO");
+    ImGui::Text("Timer B IRQ: %s", (cia->regs_[CIA_REG_ICR] & ICR_TB) ? "YES" : "NO");
+    ImGui::Text("Alarm IRQ: %s", (cia->regs_[CIA_REG_ICR] & ICR_ALRM) ? "YES" : "NO");
+    ImGui::Text("Serial IRQ: %s", (cia->regs_[CIA_REG_ICR] & ICR_SP) ? "YES" : "NO");
+    ImGui::Text("Flag IRQ: %s", (cia->regs_[CIA_REG_ICR] & ICR_FLG) ? "YES" : "NO");
     
     ImGui::Separator();
     
@@ -228,14 +228,14 @@ void mos6526_t::render_settings_content() {
     ImGui::Text("Serial Data (Detailed)");
     ImGui::Separator();
     
-    ImGui::Text("SDR: $%02X", cia->regs_[SDR]);
+    ImGui::Text("CIA_REG_SDR: $%02X", cia->regs_[CIA_REG_SDR]);
     ImGui::Text("Shifter: $%04X", cia->shifter);
     ImGui::Text("SR Bits: %d", cia->sr_bits);
-    ImGui::Text("SDR Valid: %s", cia->sdr_valid ? "YES" : "NO");
-    ImGui::Text("SDR Delay: $%05X", cia->sdr_delay);
+    ImGui::Text("CIA_REG_SDR Valid: %s", cia->sdr_valid ? "YES" : "NO");
+    ImGui::Text("CIA_REG_SDR Delay: $%05X", cia->sdr_delay);
     ImGui::Text("CNT Output: %s", cia->cnt_output_state ? "HIGH" : "LOW");
     ImGui::Text("SP Output: %d", cia->sp_output_bit ? 1 : 0);
-    ImGui::Text("SPMODE: %s", (cia->regs_[CRA] & CRA_SPMODE) ? "Output" : "Input");
+    ImGui::Text("SPMODE: %s", (cia->regs_[CIA_REG_CRA] & CRA_SPMODE) ? "Output" : "Input");
     
     // Reset to single column at the end
     ImGui::Columns(1, NULL, false);

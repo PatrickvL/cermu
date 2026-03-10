@@ -47,9 +47,9 @@ enum mos6526_pin_t {
 #define MASK5 0x1F
 
 // Additional Reg offsets above the 0..15 register range:
-#define TIMER_OFFSET (16 - TA_LO) // Delta on TA_LO to TB_HI so Timer write latch resides at 16..19
-#define CLOCK_OFFSET (20 - TOD_10THS) // Delta on TOD_10THS to TOD_HR so TOD read latch resides at 20..23
-#define ALARM_OFFSET (24 - TOD_10THS) // Delta on TOD_10THS to TOD_HR so Alarm write latch resides at 24..27
+#define TIMER_OFFSET (16 - CIA_REG_TA_LO) // Delta on CIA_REG_TA_LO to TB_HI so Timer write latch resides at 16..19
+#define CLOCK_OFFSET (20 - CIA_REG_TOD_10THS) // Delta on CIA_REG_TOD_10THS to TOD_HR so TOD read latch resides at 20..23
+#define ALARM_OFFSET (24 - CIA_REG_TOD_10THS) // Delta on CIA_REG_TOD_10THS to TOD_HR so Alarm write latch resides at 24..27
 #define SHIFT_OFFSET 28 // Delta on SDR so Serial Data Shift register resides at 28
 #define IDDRB_OFFSET 29 // Internal Data Direction of Port B (a version of DDRB which includes the PBON mask)
 
@@ -61,46 +61,41 @@ enum mos6526_pin_t {
 // REG(offset, symbol, description)
 // FLD(reg_sym, field_sym, hi:lo, description, kind, display_shift, display_scale)
 #define CIA_DECL(REG, FLD, CMP) \
-    REG(0x00, PRA,       "Port A data")                                         \
-    REG(0x01, PRB,       "Port B data")                                         \
-    REG(0x02, DDRA,      "Port A direction")                                    \
-    REG(0x03, DDRB,      "Port B direction")                                    \
-    REG(0x04, TA_LO,     "Timer A low")                                         \
-    REG(0x05, TA_HI,     "Timer A high")                                        \
-    REG(0x06, TB_LO,     "Timer B low")                                         \
-    REG(0x07, TB_HI,     "Timer B high")                                        \
-    REG(0x08, TOD_10THS, "TOD tenths of sec")                                   \
-    REG(0x09, TOD_SEC,   "TOD seconds")                                         \
-    REG(0x0A, TOD_MIN,   "TOD minutes")                                         \
-    REG(0x0B, TOD_HR,    "TOD hours")                                           \
-    REG(0x0C, SDR,       "Serial data")                                         \
-    REG(0x0D, ICR,       "Interrupt control")                                   \
-      FLD(ICR, ICR_IRQ_BIT,  7:7, "IRQ active",    Flag, 0, 0)                 \
-      FLD(ICR, ICR_FLG_BIT,  4:4, "FLAG pin",      Flag, 0, 0)                 \
-      FLD(ICR, ICR_SP_BIT,   3:3, "Serial",        Flag, 0, 0)                 \
-      FLD(ICR, ICR_ALRM_BIT, 2:2, "Alarm",         Flag, 0, 0)                 \
-      FLD(ICR, ICR_TB_BIT,   1:1, "Timer B",       Flag, 0, 0)                 \
-      FLD(ICR, ICR_TA_BIT,   0:0, "Timer A",       Flag, 0, 0)                 \
-    REG(0x0E, CRA,       "Control reg A")                                       \
-      FLD(CRA, CRA_TODIN_B,   7:7, "TOD freq (1=50Hz)",   Flag, 0, 0)          \
-      FLD(CRA, CRA_SPMODE_B,  6:6, "SP mode (1=out)",     Flag, 0, 0)          \
-      FLD(CRA, CRA_INMODE_A,  5:5, "TA input (1=CNT)",    Flag, 0, 0)          \
-      FLD(CRA, CRA_RUNMODE_A, 3:3, "Run mode (1=oneshot)", Flag, 0, 0)         \
-      FLD(CRA, CRA_OUTMODE_A, 2:2, "Out mode (1=toggle)",  Flag, 0, 0)         \
-      FLD(CRA, CRA_PBON_A,    1:1, "PB6 output enable",   Flag, 0, 0)          \
-      FLD(CRA, CRA_START_A,   0:0, "Timer A start",       Flag, 0, 0)          \
-    REG(0x0F, CRB,       "Control reg B")                                       \
-      FLD(CRB, CRB_ALARM_B,   7:7, "TOD alarm mode",      Flag, 0, 0)          \
-      FLD(CRB, CRB_INMODE_B,  6:5, "TB input mode",       Value, 0, 0)         \
-      FLD(CRB, CRB_RUNMODE_B, 3:3, "Run mode (1=oneshot)", Flag, 0, 0)         \
-      FLD(CRB, CRB_OUTMODE_B, 2:2, "Out mode (1=toggle)",  Flag, 0, 0)         \
-      FLD(CRB, CRB_PBON_B,    1:1, "PB7 output enable",   Flag, 0, 0)          \
-      FLD(CRB, CRB_START_B,   0:0, "Timer B start",       Flag, 0, 0)
-
-// --- Extract file-scope address constants for FLD extractors ---
-#define CIA_X_REG_CONST_(a, s, l) static constexpr uint8_t CIA_REG_##s = a;
-CIA_DECL(CIA_X_REG_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-#undef CIA_X_REG_CONST_
+    REG(0x00, CIA_REG_PRA,       "Port A data")                                 \
+    REG(0x01, CIA_REG_PRB,       "Port B data")                                 \
+    REG(0x02, CIA_REG_DDRA,      "Port A direction")                            \
+    REG(0x03, CIA_REG_DDRB,      "Port B direction")                            \
+    REG(0x04, CIA_REG_TA_LO,     "Timer A low")                                 \
+    REG(0x05, CIA_REG_TA_HI,     "Timer A high")                                \
+    REG(0x06, CIA_REG_TB_LO,     "Timer B low")                                 \
+    REG(0x07, CIA_REG_TB_HI,     "Timer B high")                                \
+    REG(0x08, CIA_REG_TOD_10THS, "TOD tenths of sec")                           \
+    REG(0x09, CIA_REG_TOD_SEC,   "TOD seconds")                                 \
+    REG(0x0A, CIA_REG_TOD_MIN,   "TOD minutes")                                 \
+    REG(0x0B, CIA_REG_TOD_HR,    "TOD hours")                                   \
+    REG(0x0C, CIA_REG_SDR,       "Serial data")                                 \
+    REG(0x0D, CIA_REG_ICR,       "Interrupt control")                           \
+      FLD(CIA_REG_ICR, ICR_IRQ_BIT,  7:7, "IRQ active",    Flag, 0, 0)         \
+      FLD(CIA_REG_ICR, ICR_FLG_BIT,  4:4, "FLAG pin",      Flag, 0, 0)         \
+      FLD(CIA_REG_ICR, ICR_SP_BIT,   3:3, "Serial",        Flag, 0, 0)         \
+      FLD(CIA_REG_ICR, ICR_ALRM_BIT, 2:2, "Alarm",         Flag, 0, 0)         \
+      FLD(CIA_REG_ICR, ICR_TB_BIT,   1:1, "Timer B",       Flag, 0, 0)         \
+      FLD(CIA_REG_ICR, ICR_TA_BIT,   0:0, "Timer A",       Flag, 0, 0)         \
+    REG(0x0E, CIA_REG_CRA,       "Control reg A")                               \
+      FLD(CIA_REG_CRA, CRA_TODIN_B,   7:7, "TOD freq (1=50Hz)",   Flag, 0, 0)  \
+      FLD(CIA_REG_CRA, CRA_SPMODE_B,  6:6, "SP mode (1=out)",     Flag, 0, 0)  \
+      FLD(CIA_REG_CRA, CRA_INMODE_A,  5:5, "TA input (1=CNT)",    Flag, 0, 0)  \
+      FLD(CIA_REG_CRA, CRA_RUNMODE_A, 3:3, "Run mode (1=oneshot)", Flag, 0, 0) \
+      FLD(CIA_REG_CRA, CRA_OUTMODE_A, 2:2, "Out mode (1=toggle)",  Flag, 0, 0) \
+      FLD(CIA_REG_CRA, CRA_PBON_A,    1:1, "PB6 output enable",   Flag, 0, 0)  \
+      FLD(CIA_REG_CRA, CRA_START_A,   0:0, "Timer A start",       Flag, 0, 0)  \
+    REG(0x0F, CIA_REG_CRB,       "Control reg B")                               \
+      FLD(CIA_REG_CRB, CRB_ALARM_B,   7:7, "TOD alarm mode",      Flag, 0, 0)  \
+      FLD(CIA_REG_CRB, CRB_INMODE_B,  6:5, "TB input mode",       Value, 0, 0) \
+      FLD(CIA_REG_CRB, CRB_RUNMODE_B, 3:3, "Run mode (1=oneshot)", Flag, 0, 0) \
+      FLD(CIA_REG_CRB, CRB_OUTMODE_B, 2:2, "Out mode (1=toggle)",  Flag, 0, 0) \
+      FLD(CIA_REG_CRB, CRB_PBON_B,    1:1, "PB7 output enable",   Flag, 0, 0)  \
+      FLD(CIA_REG_CRB, CRB_START_B,   0:0, "Timer B start",       Flag, 0, 0)
 
 DECL_EXTRACT_ALL(CIA, CIA_DECL)
 
@@ -287,9 +282,7 @@ namespace MOS6526 {
     inline constexpr mos6526_t::DelayLine::Pipe<7> cnt_switch_b_pipe;
 
     // MOS6526 CIA Register Definitions — address constants from X-macro
-    #define CIA_X_CONST_(a, s, l) constexpr uint8_t s = a;
-    CIA_DECL(CIA_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-    #undef CIA_X_CONST_
+    CIA_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
     // Bitmask constants (not part of the X-macro address table)
     constexpr uint8_t TOD_10THS_MASK = 0x0F; // TOD 10ths: BCD mask
