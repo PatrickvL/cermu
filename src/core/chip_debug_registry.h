@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include "cermu.h"          // CERMU_HAS_VA_OPT, CERMU_PP_OVERLOAD_
+
 #include <array>
 #include <cstdint>
 #include <string>
@@ -71,7 +73,7 @@ enum class DataKind : uint8_t {
 struct RegEntry {
     const char* label;                      // Short technical label (stringified symbol name)
     const char* desc;                       // Human-readable description
-    DataKind    kind       = DataKind::Value; // Register-level semantic kind (for pre-masked regs)
+    DataKind    kind = DataKind::Value;     // Register-level semantic kind (for pre-masked regs)
     uint8_t     value_bits = 0;             // Meaningful bits (0 = full register width)
 };
 
@@ -141,17 +143,25 @@ using reg_offset_t = std::conditional_t<(T.num_registers <= 256), uint8_t,
 // directly instead of defining per-chip variants.
 
 // Helper macros to split the optional kind+hilo suffix of a REG row.
-#define REGK_KIND_(k, hilo) k
-#define REGK_HILO_(k, hilo) hilo
+#define REG_KIND_(kind, hilo) kind
+#define REG_HILO_(kind, hilo) hilo
 
 // Register constant extractor — use inside a namespace block
 #define DECL_X_CONST_(a, s, l, ...)  constexpr uint8_t s = a;
 
 // Register info extractor — produces RegEntry initializers.
 // Optional trailing args (kind, hi:lo) populate the kind and value_bits
-// fields via __VA_OPT__; plain REG rows get the defaults (Value, 0).
+// fields; plain REG rows get the defaults (Value, 0).
+#ifdef CERMU_HAS_VA_OPT
+// GCC, Clang, MSVC /Zc:preprocessor — use __VA_OPT__.
 #define DECL_X_REG_INFO_(a, s, l, ...)  \
-    { #s, l __VA_OPT__(, DataKind::REGK_KIND_(__VA_ARGS__), BF_WIDTH(REGK_HILO_(__VA_ARGS__))) },
+    { #s, l __VA_OPT__(, DataKind::REG_KIND_(__VA_ARGS__), BF_WIDTH(REG_HILO_(__VA_ARGS__))) },
+#else
+// MSVC traditional preprocessor — arg-count dispatch via CERMU_PP_OVERLOAD_.
+#define DECL_X_REG_INFO_3(a, s, l)          { #s, l },
+#define DECL_X_REG_INFO_5(a, s, l, k, hilo) { #s, l, DataKind::k, BF_WIDTH(hilo) },
+#define DECL_X_REG_INFO_(...)  CERMU_PP_OVERLOAD_(DECL_X_REG_INFO_, __VA_ARGS__)
+#endif
 
 // Field info extractor — produces FieldEntry initializers with reg_index=0
 // (resolved later by assign_field_reg_indices from the DECL order)
