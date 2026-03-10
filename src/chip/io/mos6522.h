@@ -102,6 +102,7 @@ DECL_EXTRACT_ALL(MOS6522, MOS6522_DECL)
 
 struct mos6522_t : public IoChipBase {
     mos6522_t() : IoChipBase(ChipInfo{"MOS6522", "MOS Technology"}) {
+        init_regs(MOS6522_NUM_REGS);
 #ifdef CERMU_HAS_CHIP_DEBUG
         debug_registry_.set_registers(regs_, MOS6522_NUM_REGS, MOS6522_REG_INFO);
         register_debug_fields();
@@ -110,13 +111,9 @@ struct mos6522_t : public IoChipBase {
 
     void* bus = nullptr;
 
-    // ========================================================================
-    // REGISTERS — flat array matching the VIA register map ($00-$0F)
-    // ========================================================================
     // Timer counter/latch bytes (indices 4-9) are NOT live here — timers use
     // separate uint16_t fields for hot-path performance.  The regs_[] slots
     // at 4-9 remain zero and are not authoritative.
-    uint8_t regs_[MOS6522_NUM_REGS] = {};
 
     // Physical pin state (not CPU-visible registers — separate from regs_[])
     uint8_t port_a_pins_ = 0xFF;   // Pull-ups default HIGH

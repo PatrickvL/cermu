@@ -13,7 +13,7 @@ void pia6532_t::init() {
 
 void pia6532_t::reset() {
     memset(ram, 0, sizeof(ram));
-    memset(regs_, 0, sizeof(regs_));
+    memset(regs_, 0, num_regs_);
 
     port_a_input = 0xFF;
     port_b_input = 0xFF;
