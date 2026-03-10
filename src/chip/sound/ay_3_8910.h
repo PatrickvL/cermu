@@ -15,18 +15,6 @@
  * Used in: ZX Spectrum 128K, Amstrad CPC (via PPI), MSX, Atari ST (YM2149),
  *          Intellivision, many arcade machines (Bomb Jack, etc.)
  *
- * Register map ($00-$0F):
- *   $00-$01: Channel A tone period (12-bit)
- *   $02-$03: Channel B tone period (12-bit)
- *   $04-$05: Channel C tone period (12-bit)
- *   $06:     Noise period (5-bit)
- *   $07:     Mixer control (tone/noise enable per channel, I/O direction)
- *   $08-$0A: Channel A/B/C amplitude (4-bit + envelope mode bit)
- *   $0B-$0C: Envelope period (16-bit)
- *   $0D:     Envelope shape
- *   $0E:     I/O Port A data
- *   $0F:     I/O Port B data
- *
  * Bus interface:
  *   BDIR + BC1 select the bus operation:
  *     00 = Inactive

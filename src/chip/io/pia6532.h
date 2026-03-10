@@ -9,21 +9,10 @@
  *
  * Used in: Atari 2600 (VCS), Atari 7800, various arcade boards.
  *
- * Register map (active when A9=1, addr bits 0-4 are meaningful):
- *   Read:
- *     A2=0, A0=0: Port A data (SWCHA)
- *     A2=0, A0=1: Port A DDR
- *     A2=1, A0=0: Port B data (SWCHB — console switches)
- *     A2=1, A0=1: Port B DDR
- *     A0=0: Read INTIM (timer value)
- *     A0=1: Read interrupt flag (bit 7 = timer underflow)
- *
- *   Write:
- *     A2=0, A0=0: Port A data
- *     A2=0, A0=1: Port A DDR
- *     A2=1, A0=0: Port B data
- *     A2=1, A0=1: Port B DDR
- *     A4:A3 + A0=0: Set timer interval (divider from A4:A3)
+ * Address decoding (active when A9=1, addr bits 0-4 are meaningful):
+ *   I/O port registers (A2 selects port A/B, A0 selects data/DDR)
+ *   Timer read: A0=0 → INTIM value, A0=1 → interrupt flag (bit 7 = underflow)
+ *   Timer write: A4:A3 selects divider (1/8/64/1024), A0=0
  *
  * In the 2600:
  *   RIOT RAM: $0080-$00FF (A12=0, A7=1, A9=0)
