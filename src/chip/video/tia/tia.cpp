@@ -767,89 +767,51 @@ uint8_t tia_t::read(uint16_t addr) {
 #ifdef CERMU_HAS_CHIP_DEBUG
 void tia_t::register_debug_fields() {
     using T = const tia_t;
-    debug_registry_
-        // ---- Timing ----
-        .category("Timing")
-        .counter("H Counter", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->h_counter; },
-                 tia_constants::CLOCKS_PER_LINE)
-        .counter("Scanline", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->scanline; },
-                 tia_constants::LINES_PER_FRAME_NTSC)
-        .value("Visible Row", +[](const ChipBase* c) -> uint32_t {
-            auto row = static_cast<T*>(c)->visible_row;
-            return static_cast<uint32_t>(row < 0 ? 0 : row);
-        })
-        .flag("VSYNC Active", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->regs_[TIA_VSYNC] & 0x02) != 0; })
-        .flag("VBLANK Active", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->regs_[TIA_VBLANK] & 0x02) != 0; })
-        .flag("WSYNC Pending", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->wsync_pending; })
+    auto& r = debug_registry_;
+    r.set_registers(regs_, TIA_W_NUM_REGS, TIA_W_REG_INFO, 0x00);
+    r.set_decl_order(TIA_W_DECL_ORDER.data(), TIA_W_DECL_ORDER.size(),
+                     TIA_W_FLD_INFO, TIA_W_NUM_FIELDS,
+                     nullptr, 0, nullptr);
 
-        // ---- Colors ----
-        .category("Colors")
-        .value("COLUP0", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_COLUP0]; })
-        .value("COLUP1", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_COLUP1]; })
-        .value("COLUPF", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_COLUPF]; })
-        .value("COLUBK", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_COLUBK]; })
+    // Write register values, control bitfields, audio, etc. are all in
+    // the DECL walk above.  Categories below cover non-register state.
 
-        // ---- Players ----
-        .category("Players")
-        .value("GRP0", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_GRP0]; })
-        .value("GRP1", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_GRP1]; })
-        .value("NUSIZ0", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_NUSIZ0]; })
-        .value("NUSIZ1", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_NUSIZ1]; })
-        .value("Pos P0", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->pos_p0; })
-        .value("Pos P1", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->pos_p1; })
-        .value("HM P0", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_HMP0]; })
-        .value("HM P1", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_HMP1]; })
-        .flag("Reflect P0", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->regs_[TIA_REFP0] & 0x08) != 0; })
-        .flag("Reflect P1", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->regs_[TIA_REFP1] & 0x08) != 0; })
+    // ---- Timing (internal state, not register values) ----
+    r.category("Timing")
+     .counter("H Counter", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->h_counter; },
+              tia_constants::CLOCKS_PER_LINE)
+     .counter("Scanline", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->scanline; },
+              tia_constants::LINES_PER_FRAME_NTSC)
+     .value("Visible Row", +[](const ChipBase* c) -> uint32_t {
+         auto row = static_cast<T*>(c)->visible_row;
+         return static_cast<uint32_t>(row < 0 ? 0 : row);
+     })
+     .flag("WSYNC Pending", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->wsync_pending; });
 
-        // ---- Missiles & Ball ----
-        .category("Missiles & Ball")
-        .flag("Enable M0", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->regs_[TIA_ENAM0] & 0x02) != 0; })
-        .flag("Enable M1", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->regs_[TIA_ENAM1] & 0x02) != 0; })
-        .value("Pos M0", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->pos_m0; })
-        .value("Pos M1", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->pos_m1; })
-        .flag("Enable Ball", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->regs_[TIA_ENABL] & 0x02) != 0; })
-        .value("Pos Ball", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->pos_bl; })
-        .value("HM M0", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_HMM0]; })
-        .value("HM M1", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_HMM1]; })
-        .value("HM Ball", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_HMBL]; })
+    // ---- Object Positions (internal, set by RESPx strobes + HMOVE) ----
+    r.category("Object Positions")
+     .value("Pos P0", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->pos_p0; })
+     .value("Pos P1", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->pos_p1; })
+     .value("Pos M0", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->pos_m0; })
+     .value("Pos M1", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->pos_m1; })
+     .value("Pos Ball", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->pos_bl; });
 
-        // ---- Playfield ----
-        .category("Playfield")
-        .value("PF0", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_PF0]; })
-        .value("PF1", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_PF1]; })
-        .value("PF2", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_PF2]; })
-        .value("CTRLPF", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_CTRLPF]; })
-        .flag("PF Reflect", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->regs_[TIA_CTRLPF] & 0x01) != 0; })
-        .flag("PF Score", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->regs_[TIA_CTRLPF] & 0x02) != 0; })
-        .flag("PF Priority", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->regs_[TIA_CTRLPF] & 0x04) != 0; })
+    // ---- Collision (internal accumulators, not register values) ----
+    r.category("Collision")
+     .value("CX M0", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_M0]; })
+     .value("CX M1", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_M1]; })
+     .value("CX P0", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_P0]; })
+     .value("CX P1", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_P1]; })
+     .value("CX BL", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_BL]; })
+     .value("CX PF", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_PF]; });
 
-        // ---- Collision ----
-        .category("Collision")
-        .value("CX M0", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_M0]; })
-        .value("CX M1", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_M1]; })
-        .value("CX P0", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_P0]; })
-        .value("CX P1", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_P1]; })
-        .value("CX BL", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_BL]; })
-        .value("CX PF", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->cx[CX_PF]; })
-
-        // ---- Audio ----
-        .category("Audio")
-        .value("Ch0 Control", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_AUDC0]; })
-        .value("Ch0 Frequency", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_AUDF0]; })
-        .value("Ch0 Volume", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_AUDV0]; })
-        .value("Ch1 Control", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_AUDC1]; })
-        .value("Ch1 Frequency", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_AUDF1]; })
-        .value("Ch1 Volume", +[](const ChipBase* c) -> uint32_t { return static_cast<T*>(c)->regs_[TIA_AUDV1]; })
-
-        // ---- Input Ports ----
-        .category("Input Ports")
-        .flag("INPT4 (Joy0 Fire)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT4] & 0x80) != 0; })
-        .flag("INPT5 (Joy1 Fire)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT5] & 0x80) != 0; })
-        .flag("INPT0 (Paddle 0)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT0] & 0x80) != 0; })
-        .flag("INPT1 (Paddle 1)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT1] & 0x80) != 0; })
-        .flag("INPT2 (Paddle 2)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT2] & 0x80) != 0; })
-        .flag("INPT3 (Paddle 3)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT3] & 0x80) != 0; })
-        .flag("Input Latch", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->regs_[TIA_VBLANK] & 0x40) != 0; });
+    // ---- Read Registers (separate address space via read_regs_[]) ----
+    r.category("Input Ports")
+     .flag("INPT4 (Joy0 Fire)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT4] & 0x80) != 0; })
+     .flag("INPT5 (Joy1 Fire)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT5] & 0x80) != 0; })
+     .flag("INPT0 (Paddle 0)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT0] & 0x80) != 0; })
+     .flag("INPT1 (Paddle 1)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT1] & 0x80) != 0; })
+     .flag("INPT2 (Paddle 2)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT2] & 0x80) != 0; })
+     .flag("INPT3 (Paddle 3)", +[](const ChipBase* c) -> uint32_t { return (static_cast<T*>(c)->read_regs_[TIA_INPT3] & 0x80) != 0; });
 }
 #endif // CERMU_HAS_CHIP_DEBUG
