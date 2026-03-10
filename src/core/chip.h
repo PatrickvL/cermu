@@ -1,18 +1,11 @@
 #pragma once
 
 #include "cermu.h"  // Compiler compatibility macros
-#ifdef CERMU_HAS_CHIP_DEBUG
-#include "chip_debug_registry.h"
-#endif
-
-// Lightweight fallbacks so DECL X-macro walks can always extract constexpr
-// register-address constants, even in non-debug builds where
-// chip_debug_registry.h is not included.
-#ifndef DECL_X_CONST_
-#define DECL_X_CONST_(a, s, l, ...)              constexpr uint8_t s = a;
-#define DECL_FLD_NOP(r, f, hilo, d, k, ds, dm)
-#define DECL_CMP_NOP(s, d, k, b, ds, dm, r1, h1, d1, r2, h2, d2)
-#endif
+#include "chip_debug_registry.h"  // Always included: DECL_EXTRACT_ALL/REGS_ONLY
+                                  // macros are used at file scope in chip headers
+                                  // and need RegEntry/FieldEntry types even in
+                                  // non-debug builds.  All data is constexpr —
+                                  // zero runtime overhead.
 
 #include "component_info.h"
 #include <cstdint>
