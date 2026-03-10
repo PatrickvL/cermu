@@ -250,7 +250,7 @@ static void build_f0_6581() {
     // Frequency endpoints calibrated to typical 6581 (R4AR 0687 14).
     // These can be tuned per-chip; the DAC shape is the important part.
     constexpr float F_MIN =  220.0f;   // fc=0: ~220 Hz
-    constexpr float F_MAX = 12000.0f;  // fc=2047: ~12 kHz
+    constexpr float F_MAX = 14000.0f;  // fc=2047: ~14 kHz
 
     // Build superposition table and map to frequency
     double dac_max = 0;
@@ -332,32 +332,53 @@ float mos6581_t::filter_process(float input) {
     // at any cutoff frequency and resonance setting.  The filter is
     // clocked every CPU cycle (~985 kHz PAL), matching reSID's approach
     // for accurate cutoff tracking during rapid filter sweeps.
-    //
-    // Coefficients a1, a2, a3 are precomputed when cutoff/resonance change.
+    
+    // 6581 VCR conductance modulation: the real MOS transistor VCR's
+    // conductance is signal-dependent — it drops as the integrator
+    // voltage departs from the working point.  This effectively lowers
+    // the cutoff frequency during resonant peaks, providing natural
+    // amplitude limiting on top of the op-amp saturation.
+    // Approximate as g_eff = g / (1 + α·V²) where V is the peak
+    // integrator state.
+    float g, a1, a2, a3;
+    if (f->enable_distortion) {
+        constexpr float VCR_MOD = 20.0f;
+        float p1 = f->ic1eq > 0 ? f->ic1eq : -f->ic1eq;
+        float p2 = f->ic2eq > 0 ? f->ic2eq : -f->ic2eq;
+        float peak = p1 > p2 ? p1 : p2;
+        g = f->g / (1.0f + VCR_MOD * peak * peak);
+        float k = f->k;
+        a1 = 1.0f / (1.0f + g * (g + k));
+        a2 = g * a1;
+        a3 = g * a2;
+    } else {
+        g = f->g;
+        a1 = f->a1;
+        a2 = f->a2;
+        a3 = f->a3;
+    }
     
     float v3 = input - f->ic2eq;
-    float v1 = f->a1 * f->ic1eq + f->a2 * v3;
-    float v2 = f->ic2eq + f->a2 * f->ic1eq + f->a3 * v3;
+    float v1 = a1 * f->ic1eq + a2 * v3;
+    float v2 = f->ic2eq + a2 * f->ic1eq + a3 * v3;
     
     // Update integrator states
     f->ic1eq = 2.0f * v1 - f->ic1eq;
     f->ic2eq = 2.0f * v2 - f->ic2eq;
     
-    // 6581 op-amp saturation: the real NMOS inverters saturate when the
-    // internal node voltage departs from the working point (~4.54V out of
-    // 0-10.3V range).  This naturally limits resonant peaks and prevents
-    // infinite oscillation at high Q (res=15, k≈0).
-    // Model this by soft-clipping the integrator states INSIDE the feedback
-    // loop — each cycle's clipped state feeds back into the next cycle's
-    // computation, matching how the real op-amp limits gain.
-    // Both integrator op-amps are the same NMOS type on the 6581 die,
-    // so they share the same saturation characteristics.
-    // Scale factor 0.33 maps ±3.0 integrator range to ±1.0 tanh input;
-    // multiply by 3.0 to restore the original range.  Net effect: linear
-    // below ~1.5, soft-clips above ~3.0.
+    // 6581 op-amp saturation: the real NMOS inverters clip when the node
+    // voltage departs far from the working point (~4.54 V out of 0–10.3 V).
+    // Soft-clipping the integrator states INSIDE the feedback loop gives each
+    // cycle a naturally bounded input, matching how the real op-amp limits
+    // gain and preventing infinite oscillation at high Q.
+    // SAT_DRIVE maps the integrator range into tanh's ±1 active zone;
+    // SAT_MAKEUP restores the peak swing.  Net effect: linear below ~1.5,
+    // soft-clips above ~3.0.
+    constexpr float SAT_DRIVE  = 0.33f;
+    constexpr float SAT_MAKEUP = 3.0f;
     if (f->enable_distortion) {
-        f->ic1eq = fast_tanh(f->ic1eq * 0.33f) * 3.0f;
-        f->ic2eq = fast_tanh(f->ic2eq * 0.33f) * 3.0f;
+        f->ic1eq = fast_tanh(f->ic1eq * SAT_DRIVE) * SAT_MAKEUP;
+        f->ic2eq = fast_tanh(f->ic2eq * SAT_DRIVE) * SAT_MAKEUP;
     }
     
     // Filter outputs
