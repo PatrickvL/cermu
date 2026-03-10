@@ -93,6 +93,7 @@ public:
         , variant_(variant)
         , num_channels_(variant == WSGVariant::WSG3 ? 3 : 8)
     {
+        init_regs(wsg_regs::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -102,7 +103,7 @@ public:
         for (auto& ch : channels_) {
             ch = {};
         }
-        std::memset(regs_, 0, sizeof(regs_));
+        std::memset(regs_, 0, num_regs_);
         std::memset(waveform_rom_, 0, sizeof(waveform_rom_));
     }
 
@@ -187,7 +188,7 @@ private:
     WSGVariant variant_;
     int        num_channels_;
     Channel    channels_[8]{};        // Max 8 channels (WSG8)
-    uint8_t    regs_[wsg_regs::REG_COUNT]{};  // Register mirror
+
     uint8_t    waveform_rom_[256]{};  // 8 waveforms × 32 nibble-samples (packed)
 
 #ifdef CERMU_HAS_CHIP_DEBUG
