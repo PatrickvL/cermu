@@ -292,6 +292,14 @@ target_include_directories(fam65xx_decoder PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/fam65xx
 )
 
+# Z80 Decoder - standalone library for instruction decoding
+add_library(z80_decoder STATIC
+    src/chip/cpu/z80/z80_decoder.cpp
+)
+target_include_directories(z80_decoder PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/z80
+)
+
 # Chip library sources
 set(CHIP_SOURCES
     # CPU - fam65xx is header-only (template-based); no .cpp wrappers needed
@@ -529,6 +537,7 @@ add_executable(cermu_console
 
 target_link_libraries(cermu_console
     fam65xx_decoder
+    z80_decoder
     ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
@@ -578,6 +587,7 @@ if(BUILD_GUI)
     set(CERMU_LINK_LIBS
         imgui
         fam65xx_decoder
+        z80_decoder
         ${LIBARCHIVE_LIBRARIES}
         ${SDL2_LIBRARIES}
         ${OPENGL_LIBRARIES}
@@ -651,6 +661,7 @@ add_executable(c64_test_runner
 # Link required libraries for test runner
 target_link_libraries(c64_test_runner
     fam65xx_decoder
+    z80_decoder
     ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
@@ -673,6 +684,7 @@ add_executable(nes_test_runner
 
 target_link_libraries(nes_test_runner
     fam65xx_decoder
+    z80_decoder
     ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
@@ -700,6 +712,7 @@ add_executable(c16_test_runner
 
 target_link_libraries(c16_test_runner
     fam65xx_decoder
+    z80_decoder
     ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
@@ -749,6 +762,7 @@ add_executable(probe_verify
 
 target_link_libraries(probe_verify
     fam65xx_decoder
+    z80_decoder
     ${LIBARCHIVE_LIBRARIES}
     ${SDL2_LIBRARIES}
 )
