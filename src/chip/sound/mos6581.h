@@ -453,6 +453,13 @@ struct mos6581_t : public SoundChipBase {
     uint32_t total_cycles = 0;        // Total cycles processed
     uint32_t samples_generated = 0;   // Total samples generated
 
+    // Optional write-capture callback — called for each register write.
+    // Signature: callback(context, cycle, register, value)
+    // When non-null, registers_write() invokes this after updating state.
+    // Caller owns the context; SID does not allocate or free.
+    void (*write_capture_fn)(void*, uint32_t, uint8_t, uint8_t) = nullptr;
+    void* write_capture_ctx = nullptr;
+
     // Destructor — cleans up ring buffer
     ~mos6581_t() override;
 
