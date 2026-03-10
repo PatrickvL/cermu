@@ -246,10 +246,11 @@ struct vic_audio_state_t {
 
 // VIC chip structure (common base — inherits ChipBase for GUI integration)
 struct vic_base_t : public VideoChipBase {
-    void* bus = nullptr;
+    vic_base_t() {
+        init_regs(16);  // VIC has 16 registers
+    }
 
-    // Registers
-    uint8_t registers[16] = {};
+    void* bus = nullptr;
 
     // Timing
     uint16_t raster_counter = 0;
