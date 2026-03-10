@@ -33,6 +33,9 @@
 // reSID headers — we compile against the VICE copy with our standalone siddefs.h
 #include "resid_probe.h"
 
+// SID register write log (binary capture/replay format)
+#include "../src/testing/sid_write_log.h"
+
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -1175,6 +1178,85 @@ static int audio_test_multi_voice_filtered(AudioDualSID& dual, bool verbose) {
     return result.pass(3.0) ? 0 : 1;
 }
 
+// =============================================================================
+// SID Write Log Replay — replay captured register writes against both SIDs
+// =============================================================================
+
+static int run_log_comparison(const char* log_path, bool verbose) {
+    sid_log::write_log_t log;
+    if (!sid_log::read_file(log_path, log)) {
+        printf("ERROR: Failed to read SID log: %s\n", log_path);
+        return 1;
+    }
+
+    bool is_8580 = (log.chip_model != 0);
+    printf("\n╔══════════════════════════════════════════════════╗\n");
+    printf("║  SID Log Replay Comparison: cermu vs reSID       ║\n");
+    printf("║  Model: %s  Clock: %u Hz                    ║\n",
+           is_8580 ? "8580" : "6581", log.cpu_clock);
+    printf("║  Entries: %zu                                     ║\n", log.entries.size());
+    printf("╚══════════════════════════════════════════════════╝\n\n");
+
+    if (log.entries.empty()) {
+        printf("WARNING: Log file is empty — nothing to replay\n");
+        return 0;
+    }
+
+    // Create dual SID with matching clock/sample rate
+    AudioDualSID dual(is_8580);
+    audio_comparison_result_t result;
+    dual.reset();
+
+    // Override clock/sample rate to match the log's CPU clock
+    float cpu_clock = (float)log.cpu_clock;
+    dual.harness()->sid->set_cpu_clock(cpu_clock);
+    dual.harness()->sid->set_sample_rate(AudioDualSID::SAMPLE_RATE);
+
+    dual.resid().set_sampling_parameters(
+        (double)cpu_clock,
+        reSID::SAMPLE_RESAMPLE,
+        (double)AudioDualSID::SAMPLE_RATE
+    );
+
+    uint32_t current_cycle = 0;
+    size_t progress_interval = log.entries.size() / 10;
+    if (progress_interval == 0) progress_interval = 1;
+
+    for (size_t i = 0; i < log.entries.size(); i++) {
+        const auto& entry = log.entries[i];
+
+        // Clock forward to this entry's cycle
+        if (entry.cycle > current_cycle) {
+            uint32_t delta = entry.cycle - current_cycle;
+            dual.clock(delta, result);
+            current_cycle = entry.cycle;
+        }
+
+        // Apply the register write to both SIDs
+        dual.write(entry.reg, entry.value);
+
+        // Progress report
+        if (verbose && (i % progress_interval == 0)) {
+            printf("  Replay: %zu/%zu entries (cycle %u)\n",
+                   i, log.entries.size(), current_cycle);
+        }
+    }
+
+    // Clock a bit more to let the last writes ring out
+    dual.clock(44100, result);
+
+    dual.finalise_sample_comparison(result);
+
+    printf("\n── Log Replay Results ──\n");
+    printf("  Total entries replayed: %zu\n", log.entries.size());
+    printf("  Total cycles: %u + 44100 tail\n", current_cycle);
+    result.print_summary();
+
+    // Log replay uses a relaxed threshold — real-world demos stress
+    // filter and edge cases that may differ between models
+    return result.pass(3.0) ? 0 : 1;
+}
+
 static int run_all_audio_tests(bool is_8580, bool verbose) {
     printf("\n╔══════════════════════════════════════════════════╗\n");
     printf("║  SID Audio Pipeline Comparison: cermu vs reSID   ║\n");
@@ -1225,12 +1307,14 @@ static void print_usage(const char* argv0) {
     printf("  --revision <type>      Set chip revision: 6581 (default) or 8580\n");
     printf("  --resid-only           Only compare reSID against hardware (skip cermu)\n");
     printf("  --all-dat <dir>        Run all .dat files in the given directory\n");
+    printf("  --log <file>           Replay a SID write log against both SIDs\n");
     printf("  --help                 Show this help\n\n");
     printf("Examples:\n");
     printf("  %s                                     # Run built-in dual tests\n", argv0);
     printf("  %s --dat oscsample0-6581wf20.dat --waveform 0x20\n", argv0);
     printf("  %s --script tests/sid_scripts/11_resid_test_normal_adsr.sid_test\n", argv0);
     printf("  %s --all-dat ../VICE-testprogs/SID/resid-test/\n", argv0);
+    printf("  %s --log captured_demo.sidlog\n", argv0);
 }
 
 int main(int argc, char* argv[]) {
@@ -1241,6 +1325,7 @@ int main(int argc, char* argv[]) {
     const char* script_path = nullptr;
     const char* dat_path = nullptr;
     const char* all_dat_dir = nullptr;
+    const char* log_path = nullptr;
     uint8_t waveform = 0x20;  // Default: sawtooth
 
     for (int i = 1; i < argc; i++) {
@@ -1261,6 +1346,8 @@ int main(int argc, char* argv[]) {
             resid_only = true;
         } else if (strcmp(argv[i], "--all-dat") == 0 && i + 1 < argc) {
             all_dat_dir = argv[++i];
+        } else if (strcmp(argv[i], "--log") == 0 && i + 1 < argc) {
+            log_path = argv[++i];
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             print_usage(argv[0]);
             return 0;
@@ -1273,7 +1360,10 @@ int main(int argc, char* argv[]) {
 
     int total_failures = 0;
 
-    if (dat_path) {
+    if (log_path) {
+        // Replay a captured SID write log
+        total_failures += run_log_comparison(log_path, verbose);
+    } else if (dat_path) {
         // Single .dat file comparison
         total_failures += compare_dat_file(dat_path, waveform, is_8580, verbose, resid_only);
     } else if (all_dat_dir) {
