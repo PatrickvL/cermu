@@ -1050,6 +1050,17 @@ private:
 
     // Bus state snapshot for edge detection (NMI, etc.)
     bus_state_t bus_prev_ = 0;
+
+    // ========================================================================
+    // ChipBase VIRTUAL METHOD IMPLEMENTATIONS
+    // ========================================================================
+
+#ifdef CERMU_HAS_GUI
+    // Declared here, defined in z80_gui.cpp with explicit instantiations
+    ChipLayout* create_chip_layout() const override;
+    std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
+    const char* get_layout_chip_name() const override;
+#endif
 };
 
 } // namespace z80

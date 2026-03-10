@@ -463,6 +463,7 @@ if(BUILD_GUI)
         src/chip/video/ted/ted7360_gui.cpp
         src/systems/commodore/c64/c64_pla_chip.cpp
         src/chip/cpu/fam65xx/fam65xx_gui.cpp
+        src/chip/cpu/z80/z80_gui.cpp
         src/chip/io/mos6526_gui.cpp
         src/chip/io/mos6522_gui.cpp
         src/chip/memory/mos2114_gui.cpp
@@ -500,6 +501,7 @@ endif()
 set(GUI_STUB_SOURCES
     src/gui/chip_debug_registry_gui.cpp
     src/chip/cpu/fam65xx/fam65xx_gui.cpp
+    src/chip/cpu/z80/z80_gui.cpp
     src/chip/io/mos6526_gui.cpp
     src/chip/io/mos6522_gui.cpp
     src/chip/memory/mos2114_gui.cpp
