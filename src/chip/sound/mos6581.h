@@ -421,6 +421,19 @@ struct mos6581_t : public SoundChipBase {
     bool enable_filter = false;       // Filter enable flag
     bool enable_distortion = false;   // Distortion enable (6581 specific)
     bool enable_digiboost = false;    // Digital boost for 4-bit samples
+
+    // Cached revision-dependent audio constants (set in set_revision()).
+    // wave_zero: waveform output value representing "zero signal".
+    //   6581: 0x380 (896) — waveforms ride at ~5V with ~1.5V pk-pk swing.
+    //   8580: 0x800 (2048) — symmetric centering, no DC offset.
+    //   Measured by Dag Lem on MOS 6581R4AR 0687 14 (reSID).
+    // voice_dc: mixer DC bias for 6581 digi playback.
+    // output_gain: models the 6581's ~33% output stage gain due to nonlinear
+    //   op-amp compression (measured from real silicon, confirmed by reSID).
+    //   8580 has a cleaner output stage reaching near-full scale.
+    int wave_zero_ = 0x380;            // 6581: 0x380, 8580: 0x800
+    float voice_dc_ = 1.5f;            // 6581: 1.5, 8580: 0.0
+    float output_gain_ = 0.33f;       // 6581: 0.33, 8580: 1.0
     
     // External input
     float external_input = 0.0f;      // External audio input level
