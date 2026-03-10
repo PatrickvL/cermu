@@ -36,94 +36,92 @@
 // Strobe registers (RESxx, HMOVE, HMCLR, CXCLR, WSYNC, RSYNC) trigger
 // side-effects on write; stored value is informational only.
 #define TIA_WRITE_DECL(REG, FLD, CMP) \
-    REG(0x00, VSYNC,    "Vertical sync set/clear")                              \
-      FLD(VSYNC,  VSYNC_EN,   1:1, "VSYNC enable",         Flag, 0, 0)          \
-    REG(0x01, VBLANK,   "Vertical blank / input control")                       \
-      FLD(VBLANK, VBLANK_EN,  1:1, "VBLANK enable",        Flag, 0, 0)          \
-      FLD(VBLANK, INP_LATCH,  6:6, "Latch input ports",    Flag, 0, 0)          \
-      FLD(VBLANK, INP_DUMP,   7:7, "Dump paddle caps",     Flag, 0, 0)          \
-    REG(0x02, WSYNC,    "Wait for horiz sync (strobe)")                         \
-    REG(0x03, RSYNC,    "Reset horiz sync counter (strobe)")                    \
-    REG(0x04, NUSIZ0,   "Number-size player/missile 0")                         \
-      FLD(NUSIZ0, PM_MODE0,   2:0, "Player/missile mode",  Value, 0, 0)         \
-      FLD(NUSIZ0, MISSIL_SZ0, 5:4, "Missile width (2^n)",  Value, 0, 0)         \
-    REG(0x05, NUSIZ1,   "Number-size player/missile 1")                         \
-      FLD(NUSIZ1, PM_MODE1,   2:0, "Player/missile mode",  Value, 0, 0)         \
-      FLD(NUSIZ1, MISSIL_SZ1, 5:4, "Missile width (2^n)",  Value, 0, 0)         \
-    REG(0x06, COLUP0,   "Color-luminance player 0")                             \
-      FLD(COLUP0, COL_P0,     7:1, "Color-lum index",      Color, 0, 0)         \
-    REG(0x07, COLUP1,   "Color-luminance player 1")                             \
-      FLD(COLUP1, COL_P1,     7:1, "Color-lum index",      Color, 0, 0)         \
-    REG(0x08, COLUPF,   "Color-luminance playfield")                            \
-      FLD(COLUPF, COL_PF,     7:1, "Color-lum index",      Color, 0, 0)         \
-    REG(0x09, COLUBK,   "Color-luminance background")                           \
-      FLD(COLUBK, COL_BK,     7:1, "Color-lum index",      Color, 0, 0)         \
-    REG(0x0A, CTRLPF,   "Playfield control / ball size")                        \
-      FLD(CTRLPF, PF_REFLECT, 0:0, "Playfield reflect",    Flag, 0, 0)          \
-      FLD(CTRLPF, PF_SCORE,   1:1, "Score mode coloring",  Flag, 0, 0)          \
-      FLD(CTRLPF, PF_PRIO,    2:2, "PF/BL priority",       Flag, 0, 0)          \
-      FLD(CTRLPF, BALL_SZ,    5:4, "Ball width (2^n)",     Value, 0, 0)         \
-    REG(0x0B, REFP0,    "Reflect player 0")                                     \
-      FLD(REFP0,  REFLECT_P0, 3:3, "Reflect",              Flag, 0, 0)          \
-    REG(0x0C, REFP1,    "Reflect player 1")                                     \
-      FLD(REFP1,  REFLECT_P1, 3:3, "Reflect",              Flag, 0, 0)          \
-    REG(0x0D, PF0,      "Playfield bits 4-7")                                   \
-      FLD(PF0,    PF0_BITS,   7:4, "PF bits 0-3 (reversed)",Value, 0, 0)        \
-    REG(0x0E, PF1,      "Playfield bits 0-7")                                   \
-    REG(0x0F, PF2,      "Playfield bits 0-7 (reversed)")                        \
-    REG(0x10, RESP0,    "Reset player 0 position (strobe)")                     \
-    REG(0x11, RESP1,    "Reset player 1 position (strobe)")                     \
-    REG(0x12, RESM0,    "Reset missile 0 position (strobe)")                    \
-    REG(0x13, RESM1,    "Reset missile 1 position (strobe)")                    \
-    REG(0x14, RESBL,    "Reset ball position (strobe)")                         \
-    REG(0x15, AUDC0,    "Audio control 0")                                      \
-      FLD(AUDC0,  AUD_MODE0,  3:0, "Control mode",         Value, 0, 0)         \
-    REG(0x16, AUDC1,    "Audio control 1")                                      \
-      FLD(AUDC1,  AUD_MODE1,  3:0, "Control mode",         Value, 0, 0)         \
-    REG(0x17, AUDF0,    "Audio frequency divider 0")                            \
-      FLD(AUDF0,  AUD_FREQ0,  4:0, "Frequency divider",    Value, 0, 0)         \
-    REG(0x18, AUDF1,    "Audio frequency divider 1")                            \
-      FLD(AUDF1,  AUD_FREQ1,  4:0, "Frequency divider",    Value, 0, 0)         \
-    REG(0x19, AUDV0,    "Audio volume 0")                                       \
-      FLD(AUDV0,  AUD_VOL0,   3:0, "Volume",               Value, 0, 0)         \
-    REG(0x1A, AUDV1,    "Audio volume 1")                                       \
-      FLD(AUDV1,  AUD_VOL1,   3:0, "Volume",               Value, 0, 0)         \
-    REG(0x1B, GRP0,     "Graphics player 0")                                    \
-    REG(0x1C, GRP1,     "Graphics player 1")                                    \
-    REG(0x1D, ENAM0,    "Enable missile 0")                                     \
-      FLD(ENAM0,  EN_M0,      1:1, "Missile 0 enable",     Flag, 0, 0)          \
-    REG(0x1E, ENAM1,    "Enable missile 1")                                     \
-      FLD(ENAM1,  EN_M1,      1:1, "Missile 1 enable",     Flag, 0, 0)          \
-    REG(0x1F, ENABL,    "Enable ball")                                          \
-      FLD(ENABL,  EN_BL,      1:1, "Ball enable",          Flag, 0, 0)          \
-    REG(0x20, HMP0,     "Horiz motion player 0")                                \
-      FLD(HMP0,   HM_P0,      7:4, "Motion value (signed)",Value, 0, 0)         \
-    REG(0x21, HMP1,     "Horiz motion player 1")                                \
-      FLD(HMP1,   HM_P1,      7:4, "Motion value (signed)",Value, 0, 0)         \
-    REG(0x22, HMM0,     "Horiz motion missile 0")                               \
-      FLD(HMM0,   HM_M0,      7:4, "Motion value (signed)",Value, 0, 0)         \
-    REG(0x23, HMM1,     "Horiz motion missile 1")                               \
-      FLD(HMM1,   HM_M1,      7:4, "Motion value (signed)",Value, 0, 0)         \
-    REG(0x24, HMBL,     "Horiz motion ball")                                    \
-      FLD(HMBL,   HM_BL,      7:4, "Motion value (signed)",Value, 0, 0)         \
-    REG(0x25, VDELP0,   "Vertical delay player 0")                              \
-      FLD(VDELP0, VD_P0,      0:0, "Delay P0",             Flag, 0, 0)          \
-    REG(0x26, VDELP1,   "Vertical delay player 1")                              \
-      FLD(VDELP1, VD_P1,      0:0, "Delay P1",             Flag, 0, 0)          \
-    REG(0x27, VDELBL,   "Vertical delay ball")                                  \
-      FLD(VDELBL, VD_BL,      0:0, "Delay ball",           Flag, 0, 0)          \
-    REG(0x28, RESMP0,   "Reset missile 0 to player 0")                          \
-      FLD(RESMP0, RST_M0,     1:1, "Lock M0 to P0",        Flag, 0, 0)          \
-    REG(0x29, RESMP1,   "Reset missile 1 to player 1")                          \
-      FLD(RESMP1, RST_M1,     1:1, "Lock M1 to P1",        Flag, 0, 0)          \
-    REG(0x2A, HMOVE,    "Apply horiz motion (strobe)")                          \
-    REG(0x2B, HMCLR,    "Clear horiz motion regs (strobe)")                     \
-    REG(0x2C, CXCLR,    "Clear collision latches (strobe)")
+    REG(0x00, TIA_VSYNC,    "Vertical sync set/clear")                          \
+      FLD(TIA_VSYNC,  VSYNC_EN,   1:1, "VSYNC enable",         Flag, 0, 0)      \
+    REG(0x01, TIA_VBLANK,   "Vertical blank / input control")                   \
+      FLD(TIA_VBLANK, VBLANK_EN,  1:1, "VBLANK enable",        Flag, 0, 0)      \
+      FLD(TIA_VBLANK, INP_LATCH,  6:6, "Latch input ports",    Flag, 0, 0)      \
+      FLD(TIA_VBLANK, INP_DUMP,   7:7, "Dump paddle caps",     Flag, 0, 0)      \
+    REG(0x02, TIA_WSYNC,    "Wait for horiz sync (strobe)")                     \
+    REG(0x03, TIA_RSYNC,    "Reset horiz sync counter (strobe)")                \
+    REG(0x04, TIA_NUSIZ0,   "Number-size player/missile 0")                     \
+      FLD(TIA_NUSIZ0, PM_MODE0,   2:0, "Player/missile mode",  Value, 0, 0)     \
+      FLD(TIA_NUSIZ0, MISSIL_SZ0, 5:4, "Missile width (2^n)",  Value, 0, 0)     \
+    REG(0x05, TIA_NUSIZ1,   "Number-size player/missile 1")                     \
+      FLD(TIA_NUSIZ1, PM_MODE1,   2:0, "Player/missile mode",  Value, 0, 0)     \
+      FLD(TIA_NUSIZ1, MISSIL_SZ1, 5:4, "Missile width (2^n)",  Value, 0, 0)     \
+    REG(0x06, TIA_COLUP0,   "Color-luminance player 0")                         \
+      FLD(TIA_COLUP0, COL_P0,     7:1, "Color-lum index",      Color, 0, 0)     \
+    REG(0x07, TIA_COLUP1,   "Color-luminance player 1")                         \
+      FLD(TIA_COLUP1, COL_P1,     7:1, "Color-lum index",      Color, 0, 0)     \
+    REG(0x08, TIA_COLUPF,   "Color-luminance playfield")                        \
+      FLD(TIA_COLUPF, COL_PF,     7:1, "Color-lum index",      Color, 0, 0)     \
+    REG(0x09, TIA_COLUBK,   "Color-luminance background")                       \
+      FLD(TIA_COLUBK, COL_BK,     7:1, "Color-lum index",      Color, 0, 0)     \
+    REG(0x0A, TIA_CTRLPF,   "Playfield control / ball size")                    \
+      FLD(TIA_CTRLPF, PF_REFLECT, 0:0, "Playfield reflect",    Flag, 0, 0)      \
+      FLD(TIA_CTRLPF, PF_SCORE,   1:1, "Score mode coloring",  Flag, 0, 0)      \
+      FLD(TIA_CTRLPF, PF_PRIO,    2:2, "PF/BL priority",       Flag, 0, 0)      \
+      FLD(TIA_CTRLPF, BALL_SZ,    5:4, "Ball width (2^n)",     Value, 0, 0)     \
+    REG(0x0B, TIA_REFP0,    "Reflect player 0")                                 \
+      FLD(TIA_REFP0,  REFLECT_P0, 3:3, "Reflect",              Flag, 0, 0)      \
+    REG(0x0C, TIA_REFP1,    "Reflect player 1")                                 \
+      FLD(TIA_REFP1,  REFLECT_P1, 3:3, "Reflect",              Flag, 0, 0)      \
+    REG(0x0D, TIA_PF0,      "Playfield bits 4-7")                               \
+      FLD(TIA_PF0,    PF0_BITS,   7:4, "PF bits 0-3 (reversed)",Value, 0, 0)    \
+    REG(0x0E, TIA_PF1,      "Playfield bits 0-7")                               \
+    REG(0x0F, TIA_PF2,      "Playfield bits 0-7 (reversed)")                    \
+    REG(0x10, TIA_RESP0,    "Reset player 0 position (strobe)")                 \
+    REG(0x11, TIA_RESP1,    "Reset player 1 position (strobe)")                 \
+    REG(0x12, TIA_RESM0,    "Reset missile 0 position (strobe)")                \
+    REG(0x13, TIA_RESM1,    "Reset missile 1 position (strobe)")                \
+    REG(0x14, TIA_RESBL,    "Reset ball position (strobe)")                     \
+    REG(0x15, TIA_AUDC0,    "Audio control 0")                                  \
+      FLD(TIA_AUDC0,  AUD_MODE0,  3:0, "Control mode",         Value, 0, 0)     \
+    REG(0x16, TIA_AUDC1,    "Audio control 1")                                  \
+      FLD(TIA_AUDC1,  AUD_MODE1,  3:0, "Control mode",         Value, 0, 0)     \
+    REG(0x17, TIA_AUDF0,    "Audio frequency divider 0")                        \
+      FLD(TIA_AUDF0,  AUD_FREQ0,  4:0, "Frequency divider",    Value, 0, 0)     \
+    REG(0x18, TIA_AUDF1,    "Audio frequency divider 1")                        \
+      FLD(TIA_AUDF1,  AUD_FREQ1,  4:0, "Frequency divider",    Value, 0, 0)     \
+    REG(0x19, TIA_AUDV0,    "Audio volume 0")                                   \
+      FLD(TIA_AUDV0,  AUD_VOL0,   3:0, "Volume",               Value, 0, 0)     \
+    REG(0x1A, TIA_AUDV1,    "Audio volume 1")                                   \
+      FLD(TIA_AUDV1,  AUD_VOL1,   3:0, "Volume",               Value, 0, 0)     \
+    REG(0x1B, TIA_GRP0,     "Graphics player 0")                                \
+    REG(0x1C, TIA_GRP1,     "Graphics player 1")                                \
+    REG(0x1D, TIA_ENAM0,    "Enable missile 0")                                 \
+      FLD(TIA_ENAM0,  EN_M0,      1:1, "Missile 0 enable",     Flag, 0, 0)      \
+    REG(0x1E, TIA_ENAM1,    "Enable missile 1")                                 \
+      FLD(TIA_ENAM1,  EN_M1,      1:1, "Missile 1 enable",     Flag, 0, 0)      \
+    REG(0x1F, TIA_ENABL,    "Enable ball")                                      \
+      FLD(TIA_ENABL,  EN_BL,      1:1, "Ball enable",          Flag, 0, 0)      \
+    REG(0x20, TIA_HMP0,     "Horiz motion player 0")                            \
+      FLD(TIA_HMP0,   HM_P0,      7:4, "Motion value (signed)",Value, 0, 0)     \
+    REG(0x21, TIA_HMP1,     "Horiz motion player 1")                            \
+      FLD(TIA_HMP1,   HM_P1,      7:4, "Motion value (signed)",Value, 0, 0)     \
+    REG(0x22, TIA_HMM0,     "Horiz motion missile 0")                           \
+      FLD(TIA_HMM0,   HM_M0,      7:4, "Motion value (signed)",Value, 0, 0)     \
+    REG(0x23, TIA_HMM1,     "Horiz motion missile 1")                           \
+      FLD(TIA_HMM1,   HM_M1,      7:4, "Motion value (signed)",Value, 0, 0)     \
+    REG(0x24, TIA_HMBL,     "Horiz motion ball")                                \
+      FLD(TIA_HMBL,   HM_BL,      7:4, "Motion value (signed)",Value, 0, 0)     \
+    REG(0x25, TIA_VDELP0,   "Vertical delay player 0")                          \
+      FLD(TIA_VDELP0, VD_P0,      0:0, "Delay P0",             Flag, 0, 0)      \
+    REG(0x26, TIA_VDELP1,   "Vertical delay player 1")                          \
+      FLD(TIA_VDELP1, VD_P1,      0:0, "Delay P1",             Flag, 0, 0)      \
+    REG(0x27, TIA_VDELBL,   "Vertical delay ball")                              \
+      FLD(TIA_VDELBL, VD_BL,      0:0, "Delay ball",           Flag, 0, 0)      \
+    REG(0x28, TIA_RESMP0,   "Reset missile 0 to player 0")                      \
+      FLD(TIA_RESMP0, RST_M0,     1:1, "Lock M0 to P0",        Flag, 0, 0)      \
+    REG(0x29, TIA_RESMP1,   "Reset missile 1 to player 1")                      \
+      FLD(TIA_RESMP1, RST_M1,     1:1, "Lock M1 to P1",        Flag, 0, 0)      \
+    REG(0x2A, TIA_HMOVE,    "Apply horiz motion (strobe)")                      \
+    REG(0x2B, TIA_HMCLR,    "Clear horiz motion regs (strobe)")                 \
+    REG(0x2C, TIA_CXCLR,    "Clear collision latches (strobe)")
 
-// --- Extract write register constants (prefix TIA_ added by macro) ---
-#define TIA_W_X_CONST_(a, s, l) static constexpr uint8_t TIA_##s = a;
-TIA_WRITE_DECL(TIA_W_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-#undef TIA_W_X_CONST_
+// --- Extract write register constants ---
+TIA_WRITE_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
 DECL_EXTRACT_ALL(TIA_W, TIA_WRITE_DECL)
 
@@ -134,46 +132,44 @@ DECL_EXTRACT_ALL(TIA_W, TIA_WRITE_DECL)
 // TIA_READ_DECL(REG, FLD, CMP) — 14 read registers
 // Collision latches in bits 7:6, input ports in bit 7.
 #define TIA_READ_DECL(REG, FLD, CMP) \
-    REG(0x00, CXM0P,   "Collision M0-P1, M0-P0")                               \
-      FLD(CXM0P,  CX_M0P1,    7:7, "M0-P1 collision",     Flag, 0, 0)          \
-      FLD(CXM0P,  CX_M0P0,    6:6, "M0-P0 collision",     Flag, 0, 0)          \
-    REG(0x01, CXM1P,   "Collision M1-P0, M1-P1")                               \
-      FLD(CXM1P,  CX_M1P0,    7:7, "M1-P0 collision",     Flag, 0, 0)          \
-      FLD(CXM1P,  CX_M1P1,    6:6, "M1-P1 collision",     Flag, 0, 0)          \
-    REG(0x02, CXP0FB,  "Collision P0-PF, P0-BL")                               \
-      FLD(CXP0FB, CX_P0PF,    7:7, "P0-PF collision",     Flag, 0, 0)          \
-      FLD(CXP0FB, CX_P0BL,    6:6, "P0-BL collision",     Flag, 0, 0)          \
-    REG(0x03, CXP1FB,  "Collision P1-PF, P1-BL")                               \
-      FLD(CXP1FB, CX_P1PF,    7:7, "P1-PF collision",     Flag, 0, 0)          \
-      FLD(CXP1FB, CX_P1BL,    6:6, "P1-BL collision",     Flag, 0, 0)          \
-    REG(0x04, CXM0FB,  "Collision M0-PF, M0-BL")                               \
-      FLD(CXM0FB, CX_M0PF,    7:7, "M0-PF collision",     Flag, 0, 0)          \
-      FLD(CXM0FB, CX_M0BL,    6:6, "M0-BL collision",     Flag, 0, 0)          \
-    REG(0x05, CXM1FB,  "Collision M1-PF, M1-BL")                               \
-      FLD(CXM1FB, CX_M1PF,    7:7, "M1-PF collision",     Flag, 0, 0)          \
-      FLD(CXM1FB, CX_M1BL,    6:6, "M1-BL collision",     Flag, 0, 0)          \
-    REG(0x06, CXBLPF,  "Collision BL-PF")                                      \
-      FLD(CXBLPF, CX_BLPF,    7:7, "BL-PF collision",     Flag, 0, 0)          \
-    REG(0x07, CXPPMM,  "Collision P0-P1, M0-M1")                               \
-      FLD(CXPPMM, CX_P0P1,    7:7, "P0-P1 collision",     Flag, 0, 0)          \
-      FLD(CXPPMM, CX_M0M1,    6:6, "M0-M1 collision",     Flag, 0, 0)          \
-    REG(0x08, INPT0,   "Pot port 0 (paddle)")                                  \
-      FLD(INPT0,  POT0,       7:7, "Pot 0 input",          Flag, 0, 0)         \
-    REG(0x09, INPT1,   "Pot port 1")                                           \
-      FLD(INPT1,  POT1,       7:7, "Pot 1 input",          Flag, 0, 0)         \
-    REG(0x0A, INPT2,   "Pot port 2")                                           \
-      FLD(INPT2,  POT2,       7:7, "Pot 2 input",          Flag, 0, 0)         \
-    REG(0x0B, INPT3,   "Pot port 3")                                           \
-      FLD(INPT3,  POT3,       7:7, "Pot 3 input",          Flag, 0, 0)         \
-    REG(0x0C, INPT4,   "Joystick fire P0")                                     \
-      FLD(INPT4,  FIRE_P0,    7:7, "P0 fire button",       Flag, 0, 0)         \
-    REG(0x0D, INPT5,   "Joystick fire P1")                                     \
-      FLD(INPT5,  FIRE_P1,    7:7, "P1 fire button",       Flag, 0, 0)
+    REG(0x00, TIA_CXM0P,   "Collision M0-P1, M0-P0")                           \
+      FLD(TIA_CXM0P,  CX_M0P1,    7:7, "M0-P1 collision",     Flag, 0, 0)      \
+      FLD(TIA_CXM0P,  CX_M0P0,    6:6, "M0-P0 collision",     Flag, 0, 0)      \
+    REG(0x01, TIA_CXM1P,   "Collision M1-P0, M1-P1")                           \
+      FLD(TIA_CXM1P,  CX_M1P0,    7:7, "M1-P0 collision",     Flag, 0, 0)      \
+      FLD(TIA_CXM1P,  CX_M1P1,    6:6, "M1-P1 collision",     Flag, 0, 0)      \
+    REG(0x02, TIA_CXP0FB,  "Collision P0-PF, P0-BL")                           \
+      FLD(TIA_CXP0FB, CX_P0PF,    7:7, "P0-PF collision",     Flag, 0, 0)      \
+      FLD(TIA_CXP0FB, CX_P0BL,    6:6, "P0-BL collision",     Flag, 0, 0)      \
+    REG(0x03, TIA_CXP1FB,  "Collision P1-PF, P1-BL")                           \
+      FLD(TIA_CXP1FB, CX_P1PF,    7:7, "P1-PF collision",     Flag, 0, 0)      \
+      FLD(TIA_CXP1FB, CX_P1BL,    6:6, "P1-BL collision",     Flag, 0, 0)      \
+    REG(0x04, TIA_CXM0FB,  "Collision M0-PF, M0-BL")                           \
+      FLD(TIA_CXM0FB, CX_M0PF,    7:7, "M0-PF collision",     Flag, 0, 0)      \
+      FLD(TIA_CXM0FB, CX_M0BL,    6:6, "M0-BL collision",     Flag, 0, 0)      \
+    REG(0x05, TIA_CXM1FB,  "Collision M1-PF, M1-BL")                           \
+      FLD(TIA_CXM1FB, CX_M1PF,    7:7, "M1-PF collision",     Flag, 0, 0)      \
+      FLD(TIA_CXM1FB, CX_M1BL,    6:6, "M1-BL collision",     Flag, 0, 0)      \
+    REG(0x06, TIA_CXBLPF,  "Collision BL-PF")                                  \
+      FLD(TIA_CXBLPF, CX_BLPF,    7:7, "BL-PF collision",     Flag, 0, 0)      \
+    REG(0x07, TIA_CXPPMM,  "Collision P0-P1, M0-M1")                           \
+      FLD(TIA_CXPPMM, CX_P0P1,    7:7, "P0-P1 collision",     Flag, 0, 0)      \
+      FLD(TIA_CXPPMM, CX_M0M1,    6:6, "M0-M1 collision",     Flag, 0, 0)      \
+    REG(0x08, TIA_INPT0,   "Pot port 0 (paddle)")                              \
+      FLD(TIA_INPT0,  POT0,       7:7, "Pot 0 input",          Flag, 0, 0)     \
+    REG(0x09, TIA_INPT1,   "Pot port 1")                                       \
+      FLD(TIA_INPT1,  POT1,       7:7, "Pot 1 input",          Flag, 0, 0)     \
+    REG(0x0A, TIA_INPT2,   "Pot port 2")                                       \
+      FLD(TIA_INPT2,  POT2,       7:7, "Pot 2 input",          Flag, 0, 0)     \
+    REG(0x0B, TIA_INPT3,   "Pot port 3")                                       \
+      FLD(TIA_INPT3,  POT3,       7:7, "Pot 3 input",          Flag, 0, 0)     \
+    REG(0x0C, TIA_INPT4,   "Joystick fire P0")                                 \
+      FLD(TIA_INPT4,  FIRE_P0,    7:7, "P0 fire button",       Flag, 0, 0)     \
+    REG(0x0D, TIA_INPT5,   "Joystick fire P1")                                 \
+      FLD(TIA_INPT5,  FIRE_P1,    7:7, "P1 fire button",       Flag, 0, 0)
 
-// --- Extract read register constants (prefix TIA_ added by macro) ---
-#define TIA_R_X_CONST_(a, s, l) static constexpr uint8_t TIA_##s = a;
-TIA_READ_DECL(TIA_R_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-#undef TIA_R_X_CONST_
+// --- Extract read register constants ---
+TIA_READ_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
 DECL_EXTRACT_ALL(TIA_R, TIA_READ_DECL)
 
