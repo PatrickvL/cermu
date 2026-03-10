@@ -175,7 +175,9 @@ namespace sid_regs {
     SID_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 }
 
+#ifdef CERMU_HAS_CHIP_DEBUG
 DECL_EXTRACT_ALL(SID, SID_DECL)
+#endif
 
 // RESON register (0x17) bit fields
 #define RESON_FILT1     0x01  // Route voice 1 through filter
