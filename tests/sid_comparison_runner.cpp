@@ -1181,8 +1181,60 @@ static int audio_test_multi_voice_filtered(AudioDualSID& dual, bool verbose) {
 // =============================================================================
 // SID Write Log Replay — replay captured register writes against both SIDs
 // =============================================================================
+// Runs cermu SID and reSID independently with identical register writes from
+// a captured binary log.  Both produce decimated audio samples at 44.1 kHz:
+//   cermu: CIC-3 decimation + DC blocker → ring buffer
+//   reSID: FIR sinc resampler (SAMPLE_RESAMPLE)
+// The final samples are compared for RMS error, SNR, and correlation.
+// Optionally writes WAV files for auditory comparison.
+// =============================================================================
 
-static int run_log_comparison(const char* log_path, bool verbose) {
+// Minimal WAV header writer (16-bit mono PCM)
+static bool write_wav(const char* path, const std::vector<float>& samples,
+                      uint32_t sample_rate) {
+    FILE* f = fopen(path, "wb");
+    if (!f) return false;
+
+    uint32_t data_size = (uint32_t)(samples.size() * 2);  // 16-bit
+    uint32_t file_size = 36 + data_size;
+
+    // RIFF header
+    fwrite("RIFF", 1, 4, f);
+    fwrite(&file_size, 4, 1, f);
+    fwrite("WAVE", 1, 4, f);
+
+    // fmt chunk
+    fwrite("fmt ", 1, 4, f);
+    uint32_t fmt_size = 16;
+    uint16_t audio_format = 1;  // PCM
+    uint16_t channels = 1;
+    uint16_t bits_per_sample = 16;
+    uint32_t byte_rate = sample_rate * 2;
+    uint16_t block_align = 2;
+    fwrite(&fmt_size, 4, 1, f);
+    fwrite(&audio_format, 2, 1, f);
+    fwrite(&channels, 2, 1, f);
+    fwrite(&sample_rate, 4, 1, f);
+    fwrite(&byte_rate, 4, 1, f);
+    fwrite(&block_align, 2, 1, f);
+    fwrite(&bits_per_sample, 2, 1, f);
+
+    // data chunk
+    fwrite("data", 1, 4, f);
+    fwrite(&data_size, 4, 1, f);
+    for (float s : samples) {
+        float clamped = s;
+        if (clamped > 1.0f) clamped = 1.0f;
+        if (clamped < -1.0f) clamped = -1.0f;
+        int16_t pcm = (int16_t)(clamped * 32767.0f);
+        fwrite(&pcm, 2, 1, f);
+    }
+
+    fclose(f);
+    return true;
+}
+
+static int run_log_comparison(const char* log_path, bool verbose, bool no_filter = false) {
     sid_log::write_log_t log;
     if (!sid_log::read_file(log_path, log)) {
         printf("ERROR: Failed to read SID log: %s\n", log_path);
@@ -1190,11 +1242,14 @@ static int run_log_comparison(const char* log_path, bool verbose) {
     }
 
     bool is_8580 = (log.chip_model != 0);
+    float cpu_clock = (float)log.cpu_clock;
+    constexpr float SAMPLE_RATE = 44100.0f;
+
     printf("\n╔══════════════════════════════════════════════════╗\n");
     printf("║  SID Log Replay Comparison: cermu vs reSID       ║\n");
     printf("║  Model: %s  Clock: %u Hz                    ║\n",
            is_8580 ? "8580" : "6581", log.cpu_clock);
-    printf("║  Entries: %zu                                     ║\n", log.entries.size());
+    printf("║  Entries: %-10zu                              ║\n", log.entries.size());
     printf("╚══════════════════════════════════════════════════╝\n\n");
 
     if (log.entries.empty()) {
@@ -1202,25 +1257,64 @@ static int run_log_comparison(const char* log_path, bool verbose) {
         return 0;
     }
 
-    // Create dual SID with matching clock/sample rate
-    AudioDualSID dual(is_8580);
-    audio_comparison_result_t result;
-    dual.reset();
+    // ── Set up cermu SID ────────────────────────────────────────────────
+    auto* harness = sid_test::create(false);
+    if (is_8580) harness->sid->set_revision(SID_REVISION_8580_R5);
+    harness->sid->set_cpu_clock(cpu_clock);
+    harness->sid->set_sample_rate(SAMPLE_RATE);
+    harness->sid->enable_filter = !no_filter;
 
-    // Override clock/sample rate to match the log's CPU clock
-    float cpu_clock = (float)log.cpu_clock;
-    dual.harness()->sid->set_cpu_clock(cpu_clock);
-    dual.harness()->sid->set_sample_rate(AudioDualSID::SAMPLE_RATE);
-
-    dual.resid().set_sampling_parameters(
+    // ── Set up reSID with FIR sinc resampler ────────────────────────────
+    resid_probe::InstrumentedSID resid;
+    resid.set_chip_model(is_8580 ? reSID::MOS8580 : reSID::MOS6581);
+    resid.enable_filter(!no_filter);
+    resid.enable_external_filter(!no_filter);
+    resid.set_sampling_parameters(
         (double)cpu_clock,
         reSID::SAMPLE_RESAMPLE,
-        (double)AudioDualSID::SAMPLE_RATE
+        (double)SAMPLE_RATE
     );
+    resid.reset();
+
+    // ── Replay writes and collect samples ───────────────────────────────
+    std::vector<float> cermu_samples;
+    std::vector<float> resid_samples;
+    cermu_samples.reserve(log.cpu_clock * 2 / 22);  // ~rough estimate
+    resid_samples.reserve(log.cpu_clock * 2 / 22);
+
+    // reSID sample buffer (generous: max samples per batch)
+    constexpr int RESID_BUF_SIZE = 8192;
+    short resid_buf[RESID_BUF_SIZE];
 
     uint32_t current_cycle = 0;
     size_t progress_interval = log.entries.size() / 10;
     if (progress_interval == 0) progress_interval = 1;
+
+    // Helper: clock both SIDs forward by delta cycles, collecting samples
+    auto clock_both = [&](uint32_t delta) {
+        // Clock cermu cycle-by-cycle
+        for (uint32_t c = 0; c < delta; c++) {
+            bus_state_t bs = BUS_STATE(0, 0, 0);
+            harness->sid->tick(bs);
+            harness->total_cycles++;
+
+            // Drain cermu ring buffer
+            while (!harness->sid->sample_buffer.empty()) {
+                cermu_samples.push_back(harness->sid->sample_buffer.read());
+            }
+        }
+
+        // Clock reSID in bulk — generate resampled output
+        reSID::cycle_count remaining = (reSID::cycle_count)delta;
+        while (remaining > 0) {
+            int n = resid.generate_samples(remaining, resid_buf, RESID_BUF_SIZE);
+            for (int i = 0; i < n; i++) {
+                resid_samples.push_back((float)resid_buf[i] / 32768.0f);
+            }
+        }
+    };
+
+    printf("  Replaying %zu register writes...\n", log.entries.size());
 
     for (size_t i = 0; i < log.entries.size(); i++) {
         const auto& entry = log.entries[i];
@@ -1228,33 +1322,177 @@ static int run_log_comparison(const char* log_path, bool verbose) {
         // Clock forward to this entry's cycle
         if (entry.cycle > current_cycle) {
             uint32_t delta = entry.cycle - current_cycle;
-            dual.clock(delta, result);
+            clock_both(delta);
             current_cycle = entry.cycle;
         }
 
         // Apply the register write to both SIDs
-        dual.write(entry.reg, entry.value);
+        sid_test::write_reg(harness, entry.reg, entry.value);
+        resid.write(entry.reg, entry.value);
 
         // Progress report
-        if (verbose && (i % progress_interval == 0)) {
-            printf("  Replay: %zu/%zu entries (cycle %u)\n",
-                   i, log.entries.size(), current_cycle);
+        if ((i % progress_interval == 0)) {
+            printf("  Replay: %zu/%zu entries (cycle %u, cermu=%zu resid=%zu samples)\n",
+                   i, log.entries.size(), current_cycle,
+                   cermu_samples.size(), resid_samples.size());
         }
     }
 
-    // Clock a bit more to let the last writes ring out
-    dual.clock(44100, result);
+    // Clock 1 second of tail to let the last writes ring out
+    clock_both(log.cpu_clock);
+    current_cycle += log.cpu_clock;
 
-    dual.finalise_sample_comparison(result);
+    printf("  Replay complete: %zu cermu samples, %zu reSID samples\n",
+           cermu_samples.size(), resid_samples.size());
+
+    // ── Compute comparison metrics ──────────────────────────────────────
+    audio_stats_t sample_stats;
+    sample_stats.name = "Final audio samples";
+
+    size_t n = std::min(cermu_samples.size(), resid_samples.size());
+    for (size_t i = 0; i < n; i++) {
+        sample_stats.record(cermu_samples[i], resid_samples[i]);
+    }
 
     printf("\n── Log Replay Results ──\n");
     printf("  Total entries replayed: %zu\n", log.entries.size());
-    printf("  Total cycles: %u + 44100 tail\n", current_cycle);
-    result.print_summary();
+    printf("  Total cycles: %u\n", current_cycle);
+    printf("  cermu samples: %zu, reSID samples: %zu (compared: %zu)\n",
+           cermu_samples.size(), resid_samples.size(), n);
+    printf("  ┌──────────────────────────────────────────────────────────────────────────┐\n");
+    sample_stats.print();
+    printf("  └──────────────────────────────────────────────────────────────────────────┘\n");
 
-    // Log replay uses a relaxed threshold — real-world demos stress
-    // filter and edge cases that may differ between models
-    return result.pass(3.0) ? 0 : 1;
+    // ── Phase-compensated cross-correlation ──────────────────────────────
+    // CIC-3 and FIR sinc resamplers have different group delays, creating a
+    // constant phase offset that kills sample-by-sample correlation even when
+    // both outputs are perceptually identical.  Search lags ±50 samples to
+    // find the optimal alignment and report both raw and compensated metrics.
+    {
+        constexpr int MAX_LAG = 50;
+        double best_r = -2.0;
+        int best_lag = 0;
+
+        // Compute mean-subtracted norms (for Pearson correlation with lag)
+        double sum_c = 0, sum_r = 0;
+        for (size_t i = 0; i < n; i++) {
+            sum_c += cermu_samples[i];
+            sum_r += resid_samples[i];
+        }
+        double mean_c = sum_c / n;
+        double mean_r = sum_r / n;
+
+        for (int lag = -MAX_LAG; lag <= MAX_LAG; lag++) {
+            double cross = 0, ssq_c = 0, ssq_r = 0;
+            size_t start = (lag >= 0) ? (size_t)lag : 0;
+            size_t end   = (lag >= 0) ? n : n + lag;
+            for (size_t i = start; i < end; i++) {
+                double c = cermu_samples[i] - mean_c;
+                double r = resid_samples[i - lag] - mean_r;
+                cross += c * r;
+                ssq_c += c * c;
+                ssq_r += r * r;
+            }
+            double denom = sqrt(ssq_c * ssq_r);
+            double r_val = (denom > 1e-30) ? cross / denom : 0.0;
+            if (r_val > best_r) {
+                best_r = r_val;
+                best_lag = lag;
+            }
+        }
+
+        printf("\n  Phase-compensated comparison:\n");
+        printf("    Optimal lag: %d samples (%.3f ms, cermu %s reSID by %d samples)\n",
+               best_lag, fabs(best_lag) * 1000.0 / SAMPLE_RATE,
+               best_lag > 0 ? "leads" : "lags", abs(best_lag));
+        printf("    Raw correlation (lag=0): r=%.6f\n", sample_stats.correlation());
+        printf("    Best correlation (lag=%d): r=%.6f\n", best_lag, best_r);
+
+        // Compute RMS and SNR at optimal lag
+        if (best_lag != 0) {
+            double sum_sq_err = 0, sum_ref = 0;
+            size_t start = (best_lag >= 0) ? (size_t)best_lag : 0;
+            size_t end   = (best_lag >= 0) ? n : n + best_lag;
+            for (size_t i = start; i < end; i++) {
+                double e = cermu_samples[i] - resid_samples[i - best_lag];
+                sum_sq_err += e * e;
+                double b = resid_samples[i - best_lag];
+                sum_ref += b * b;
+            }
+            size_t cnt = end - start;
+            double rms = sqrt(sum_sq_err / cnt);
+            double snr = (sum_sq_err > 1e-30) ? 10.0 * log10(sum_ref / sum_sq_err) : 999.0;
+            printf("    Phase-aligned RMS=%.6f  SNR=%.1f dB\n", rms, snr);
+        }
+    }
+
+    // ── Spectral magnitude comparison ───────────────────────────────────
+    // Compare frequency content independent of phase — this measures whether
+    // both implementations produce the same spectral energy distribution.
+    // Uses Goertzel to probe band-center frequencies over the LOUDEST section.
+    {
+        uint32_t fft_size = (uint32_t)SAMPLE_RATE;  // 1-second windows
+
+        // Find the loudest 4-second segment in reSID output (skip first 1s)
+        size_t best_start = fft_size;
+        double best_energy = 0;
+        for (size_t s = fft_size; s + fft_size * 4 < n; s += fft_size) {
+            double energy = 0;
+            for (size_t i = s; i < s + fft_size * 4; i++)
+                energy += (double)resid_samples[i] * resid_samples[i];
+            if (energy > best_energy) {
+                best_energy = energy;
+                best_start = s;
+            }
+        }
+
+        size_t goertzel_n = std::min((size_t)fft_size * 4, n - best_start);
+        if (goertzel_n > fft_size && best_energy > 1e-10) {
+            printf("\n  Spectral band comparison (loudest 4s segment at %.1fs):\n",
+                   (double)best_start / SAMPLE_RATE);
+            double band_edges[] = {20, 100, 500, 1000, 2000, 5000, 10000, 20000};
+            constexpr int NUM_BANDS = 7;
+            for (int b = 0; b < NUM_BANDS; b++) {
+                double f_center = (band_edges[b] + band_edges[b + 1]) / 2.0;
+                double omega = 2.0 * M_PI * f_center / SAMPLE_RATE;
+                double coeff = 2.0 * cos(omega);
+                double s1_c = 0, s2_c = 0, s1_r = 0, s2_r = 0;
+                for (size_t i = 0; i < goertzel_n; i++) {
+                    double t;
+                    t = cermu_samples[best_start + i] + coeff * s1_c - s2_c;
+                    s2_c = s1_c; s1_c = t;
+                    t = resid_samples[best_start + i] + coeff * s1_r - s2_r;
+                    s2_r = s1_r; s1_r = t;
+                }
+                double pow_c = s1_c*s1_c + s2_c*s2_c - coeff*s1_c*s2_c;
+                double pow_r = s1_r*s1_r + s2_r*s2_r - coeff*s1_r*s2_r;
+                double ratio_db = (pow_r > 1e-30 && pow_c > 1e-30)
+                    ? 10.0 * log10(pow_c / pow_r) : -99.0;
+                printf("    %5.0f-%5.0fHz: cermu/reSID = %+5.1f dB\n",
+                       band_edges[b], band_edges[b + 1], ratio_db);
+            }
+        }
+    }
+
+    // ── Write WAV files for auditory comparison ─────────────────────────
+    {
+        std::string base(log_path);
+        // Strip extension if any
+        auto dot = base.rfind('.');
+        if (dot != std::string::npos) base = base.substr(0, dot);
+
+        std::string cermu_wav = base + "_cermu.wav";
+        std::string resid_wav = base + "_resid.wav";
+
+        if (write_wav(cermu_wav.c_str(), cermu_samples, (uint32_t)SAMPLE_RATE))
+            printf("\n  WAV: %s (%zu samples)\n", cermu_wav.c_str(), cermu_samples.size());
+        if (write_wav(resid_wav.c_str(), resid_samples, (uint32_t)SAMPLE_RATE))
+            printf("  WAV: %s (%zu samples)\n", resid_wav.c_str(), resid_samples.size());
+    }
+
+    sid_test::destroy(harness);
+
+    return (sample_stats.snr_db() >= 3.0) ? 0 : 1;
 }
 
 static int run_all_audio_tests(bool is_8580, bool verbose) {
@@ -1322,6 +1560,7 @@ int main(int argc, char* argv[]) {
     bool is_8580 = false;
     bool resid_only = false;
     bool audio_mode = false;
+    bool no_filter = false;
     const char* script_path = nullptr;
     const char* dat_path = nullptr;
     const char* all_dat_dir = nullptr;
@@ -1348,6 +1587,8 @@ int main(int argc, char* argv[]) {
             all_dat_dir = argv[++i];
         } else if (strcmp(argv[i], "--log") == 0 && i + 1 < argc) {
             log_path = argv[++i];
+        } else if (strcmp(argv[i], "--no-filter") == 0) {
+            no_filter = true;
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             print_usage(argv[0]);
             return 0;
@@ -1362,7 +1603,7 @@ int main(int argc, char* argv[]) {
 
     if (log_path) {
         // Replay a captured SID write log
-        total_failures += run_log_comparison(log_path, verbose);
+        total_failures += run_log_comparison(log_path, verbose, no_filter);
     } else if (dat_path) {
         // Single .dat file comparison
         total_failures += compare_dat_file(dat_path, waveform, is_8580, verbose, resid_only);
