@@ -271,8 +271,8 @@ int run_script(harness_t* h, const test_script_t* script) {
             // addr selects port: 0=port_a_input, 1=port_b_input, 2=inpt4, 3=inpt5
             if (cmd.addr == 0) h->riot.port_a_input = cmd.value;
             else if (cmd.addr == 1) h->riot.port_b_input = cmd.value;
-            else if (cmd.addr == 2) h->tia.read_regs[TIA_INPT4] = cmd.value ? 0x80 : 0x00;
-            else if (cmd.addr == 3) h->tia.read_regs[TIA_INPT5] = cmd.value ? 0x80 : 0x00;
+            else if (cmd.addr == 2) h->tia.read_regs_[TIA_INPT4] = cmd.value ? 0x80 : 0x00;
+            else if (cmd.addr == 3) h->tia.read_regs_[TIA_INPT5] = cmd.value ? 0x80 : 0x00;
             break;
         case cmd_type_t::LABEL:
             if (h->verbose)
@@ -329,7 +329,7 @@ int test_tia_register_readback(harness_t* h) {
                       "INPT5 default (not pressed)");
 
     // Set fire button pressed (active-low → bit 7 = 0)
-    h->tia.read_regs[TIA_INPT4] = 0x00;
+    h->tia.read_regs_[TIA_INPT4] = 0x00;
     A26_ASSERT_MASKED(h, "TIA_RD", tia_read(h, TIA_R_INPT4), 0x00, 0x80,
                       "INPT4 fire pressed");
 
@@ -936,19 +936,19 @@ int test_tia_input_ports(harness_t* h) {
     int prev_fail = h->fail_count;
 
     // INPT4 = fire button player 0. true = not pressed (bit 7 high)
-    h->tia.read_regs[TIA_INPT4] = 0x80;
+    h->tia.read_regs_[TIA_INPT4] = 0x80;
     A26_ASSERT_MASKED(h, "INPT", tia_read(h, TIA_R_INPT4), 0x80, 0x80,
                       "INPT4 high (not pressed)");
 
-    h->tia.read_regs[TIA_INPT4] = 0x00;
+    h->tia.read_regs_[TIA_INPT4] = 0x00;
     A26_ASSERT_MASKED(h, "INPT", tia_read(h, TIA_R_INPT4), 0x00, 0x80,
                       "INPT4 low (pressed)");
 
-    h->tia.read_regs[TIA_INPT5] = 0x80;
+    h->tia.read_regs_[TIA_INPT5] = 0x80;
     A26_ASSERT_MASKED(h, "INPT", tia_read(h, TIA_R_INPT5), 0x80, 0x80,
                       "INPT5 high (not pressed)");
 
-    h->tia.read_regs[TIA_INPT5] = 0x00;
+    h->tia.read_regs_[TIA_INPT5] = 0x00;
     A26_ASSERT_MASKED(h, "INPT", tia_read(h, TIA_R_INPT5), 0x00, 0x80,
                       "INPT5 low (pressed)");
 
@@ -3739,7 +3739,7 @@ int test_tia_read_address_mirroring(harness_t* h) {
                   "CXPPMM at mirror $17");
 
     // INPT4 at $0C and mirror $1C
-    h->tia.read_regs[TIA_INPT4] = 0x80;
+    h->tia.read_regs_[TIA_INPT4] = 0x80;
     A26_ASSERT_EQ(h, "RD_MIR", (int)(h->tia.read(0x0C) & 0x80), 0x80,
                   "INPT4 at $0C");
     A26_ASSERT_EQ(h, "RD_MIR", (int)(h->tia.read(0x1C) & 0x80), 0x80,
@@ -4215,10 +4215,10 @@ int test_tia_vblank_dump_paddle_capacitors(harness_t* h) {
     int prev_fail = h->fail_count;
 
     // Paddles default to high
-    h->tia.read_regs[TIA_INPT0] = 0x80;
-    h->tia.read_regs[TIA_INPT1] = 0x80;
-    h->tia.read_regs[TIA_INPT2] = 0x80;
-    h->tia.read_regs[TIA_INPT3] = 0x80;
+    h->tia.read_regs_[TIA_INPT0] = 0x80;
+    h->tia.read_regs_[TIA_INPT1] = 0x80;
+    h->tia.read_regs_[TIA_INPT2] = 0x80;
+    h->tia.read_regs_[TIA_INPT3] = 0x80;
 
     // Setting VBLANK bit 7 should dump (ground) paddle capacitors
     // This sets INPT0-3 to 0 (discharged)
@@ -4231,7 +4231,7 @@ int test_tia_vblank_dump_paddle_capacitors(harness_t* h) {
 
     // This test verifies the interface works without crashing.
     // The actual paddle charge timing is analog and not fully modeled.
-    A26_ASSERT_EQ(h, "PADDLE", (int)(inpt0_val & 0x80), (int)(h->tia.read_regs[TIA_INPT0] & 0x80),
+    A26_ASSERT_EQ(h, "PADDLE", (int)(inpt0_val & 0x80), (int)(h->tia.read_regs_[TIA_INPT0] & 0x80),
                   "INPT0 read returns port state");
 
     return h->fail_count - prev_fail;
