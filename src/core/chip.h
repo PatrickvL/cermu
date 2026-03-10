@@ -109,8 +109,41 @@ public:
     // open-bus decay, and by GUI code for layout pin rendering.
     bus_state_t bus_snapshot_ = 0;
 
+    // ========================================================================
+    // CONSOLIDATED REGISTER STORAGE
+    // ========================================================================
+    // All register-bearing chips use this inline array instead of declaring
+    // their own.  Derived constructors call init_regs() or init_split_regs()
+    // to set num_regs_.  Chips with separate read/write address spaces
+    // (e.g. TIA) store write registers in regs_[0..num_regs_-1] and read
+    // registers in regs_[num_regs_..num_regs_+num_read_regs_-1], with
+    // read_regs_ pointing to the read region.
+    //
+    // 128 bytes covers all current chips (max: VIC-II at 66 + TIA at 59).
+    static constexpr uint16_t MAX_CHIP_REGS = 128;
+    uint8_t  regs_[MAX_CHIP_REGS] = {};     // Primary register file
+    uint16_t num_regs_ = 0;                 // Active write-register count
+    uint8_t* read_regs_ = nullptr;          // Separate read register view (nullptr → reads from regs_)
+    uint16_t num_read_regs_ = 0;            // Read register count (0 if shared with regs_)
+
 protected:
     ChipInfo info_;
+
+    // --- Register storage initializers (call from derived constructors) ---
+
+    /// Configure a single register file (most chips).
+    void init_regs(uint16_t count) {
+        num_regs_ = count;
+    }
+
+    /// Configure split read/write register files (e.g. TIA).
+    /// Write registers occupy regs_[0..write_count-1],
+    /// read registers occupy regs_[write_count..write_count+read_count-1].
+    void init_split_regs(uint16_t write_count, uint16_t read_count) {
+        num_regs_      = write_count;
+        num_read_regs_ = read_count;
+        read_regs_     = &regs_[write_count];
+    }
 
 #ifdef CERMU_HAS_GUI
     // Override to create the chip's package layout (pin diagram).
