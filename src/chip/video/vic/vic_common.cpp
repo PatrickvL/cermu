@@ -56,7 +56,7 @@ static const uint32_t vic_voice_divisor[VIC_NUM_VOICES] = {
 // System reset function
 void vic_base_t::reset() {
     // Reset registers to default values matching C# initialization
-    memset(registers, 0, sizeof(registers));
+    memset(regs_, 0, num_regs_);
     raster_counter = 0;
     current_cycle = 0;
 
@@ -64,24 +64,24 @@ void vic_base_t::reset() {
     // Based on VIC-I (6560/6561) hardware specifications (usual values from datasheet)
     // Standard VIC-20 screen setup: screen at CPU $1E00 = VIC $3E00
     // Default $9005 = $F0 puts screen at VIC $3C00-$3DFF, char ROM at VIC $0000
-    registers[VIC_REG_CONTROL1] = 12;   // $9000: CR0 usual value=12 (Horizontal centering, PAL: 12, NTSC: 5)
-    registers[VIC_REG_CONTROL2] = 38;   // $9001: CR1 usual value=38 (Vertical centering)
-    registers[VIC_REG_VIDEO_MATRIX] = 0x96;  // $9002: CR2 (bits 6-0: 22 columns, bit 7: video matrix bit 9 = 1 for $3E00)
-    registers[VIC_REG_ROWS] = 46;  // $9003: CR3 usual value=46 (23 rows, 8x8 chars)
-    registers[VIC_REG_RASTER] = 0;  // $9004: CR4 (TV raster counter, read-only)
-    registers[VIC_REG_CHAR_BASE] = 0xF0;  // $9005: CR5 (bits 7-4: $F for screen at VIC $3C00, bits 3-0: $0 for char ROM)
-    registers[VIC_REG_LIGHTPEN_X] = 0;  // $9006: CR6 usual value=0 (Light pen X)
-    registers[VIC_REG_LIGHTPEN_Y] = 1;  // $9007: CR7 usual value=1 (Light pen Y)
-    registers[VIC_REG_PADDLE_X] = 255;  // $9008: CR8 usual value=255 (Paddle 1)
-    registers[VIC_REG_PADDLE_Y] = 255;  // $9009: CR9 usual value=255 (Paddle 2)
-    registers[VIC_REG_BASS_FREQ] = 0;     // $900A: Voice 1 bass (off)
-    registers[VIC_REG_ALTO_FREQ] = 0;     // $900B: Voice 2 alto (off)
-    registers[VIC_REG_SOPRANO_FREQ] = 0;  // $900C: Voice 3 soprano (off)
-    registers[VIC_REG_NOISE_FREQ] = 0;    // $900D: Noise generator (off)
-    registers[VIC_REG_AUX_COLOR] = 0;     // $900E: Volume=0, Aux color=black
+    regs_[VIC_REG_CONTROL1] = 12;   // $9000: CR0 usual value=12 (Horizontal centering, PAL: 12, NTSC: 5)
+    regs_[VIC_REG_CONTROL2] = 38;   // $9001: CR1 usual value=38 (Vertical centering)
+    regs_[VIC_REG_VIDEO_MATRIX] = 0x96;  // $9002: CR2 (bits 6-0: 22 columns, bit 7: video matrix bit 9 = 1 for $3E00)
+    regs_[VIC_REG_ROWS] = 46;  // $9003: CR3 usual value=46 (23 rows, 8x8 chars)
+    regs_[VIC_REG_RASTER] = 0;  // $9004: CR4 (TV raster counter, read-only)
+    regs_[VIC_REG_CHAR_BASE] = 0xF0;  // $9005: CR5 (bits 7-4: $F for screen at VIC $3C00, bits 3-0: $0 for char ROM)
+    regs_[VIC_REG_LIGHTPEN_X] = 0;  // $9006: CR6 usual value=0 (Light pen X)
+    regs_[VIC_REG_LIGHTPEN_Y] = 1;  // $9007: CR7 usual value=1 (Light pen Y)
+    regs_[VIC_REG_PADDLE_X] = 255;  // $9008: CR8 usual value=255 (Paddle 1)
+    regs_[VIC_REG_PADDLE_Y] = 255;  // $9009: CR9 usual value=255 (Paddle 2)
+    regs_[VIC_REG_BASS_FREQ] = 0;     // $900A: Voice 1 bass (off)
+    regs_[VIC_REG_ALTO_FREQ] = 0;     // $900B: Voice 2 alto (off)
+    regs_[VIC_REG_SOPRANO_FREQ] = 0;  // $900C: Voice 3 soprano (off)
+    regs_[VIC_REG_NOISE_FREQ] = 0;    // $900D: Noise generator (off)
+    regs_[VIC_REG_AUX_COLOR] = 0;     // $900E: Volume=0, Aux color=black
     // $900F: CRF power-on default (Border=Cyan(3), Reverse=OFF, Background=Blue(6))
     // VIC-20 powers up with blue background, KERNAL will configure as needed
-    registers[VIC_REG_BACKGROUND] = VIC_COLOR_CYAN | (VIC_COLOR_BLUE << VIC_BG_BACKGROUND_SHIFT);
+    regs_[VIC_REG_BACKGROUND] = VIC_COLOR_CYAN | (VIC_COLOR_BLUE << VIC_BG_BACKGROUND_SHIFT);
 
     // Reset video generation state
     in_display_area = false;
@@ -133,13 +133,13 @@ bus_state_t vic_base_t::registers_read(bus_state_t bus_state) {
     // Handle special registers that require computed values from tick state
     switch (r) {
         case VIC_REG_ROWS: // RasterLine bit 0 | NoOfVideoMatrixRows | DoubleHeight
-            data = ((raster_counter << 7) & VIC_ROWS_RASTER_BIT0) | (registers[r] & 0x7F);
+            data = ((raster_counter << 7) & VIC_ROWS_RASTER_BIT0) | (regs_[r] & 0x7F);
             break;
         case VIC_REG_RASTER: // RasterLine bits 8-1
             data = (uint8_t)(raster_counter >> 1);
             break;
         default:
-            data = registers[r];
+            data = regs_[r];
             break;
     }
     BUS_SET_DATA(bus_state, data);
@@ -149,7 +149,7 @@ bus_state_t vic_base_t::registers_read(bus_state_t bus_state) {
 // Register write function
 bus_state_t vic_base_t::registers_write(bus_state_t bus_state) {
     uint8_t r = BUS_GET_ADDR(bus_state) & 0x0F;
-    registers[r] = BUS_GET_DATA(bus_state);
+    regs_[r] = BUS_GET_DATA(bus_state);
     decode_register(r);
     return bus_state;
 }
@@ -158,35 +158,35 @@ bus_state_t vic_base_t::registers_write(bus_state_t bus_state) {
 void vic_base_t::decode_register(uint8_t reg_index) {
     switch (reg_index) {
         case VIC_REG_CONTROL1:
-            cached_screen_origin_x = registers[VIC_REG_CONTROL1] & VIC_C1_SCREEN_ORIGIN_X_MASK;
+            cached_screen_origin_x = regs_[VIC_REG_CONTROL1] & VIC_C1_SCREEN_ORIGIN_X_MASK;
             break;
         case VIC_REG_CONTROL2:
-            cached_screen_origin_y = registers[VIC_REG_CONTROL2] << 1;
+            cached_screen_origin_y = regs_[VIC_REG_CONTROL2] << 1;
             break;
         case VIC_REG_VIDEO_MATRIX:
-            cached_columns = registers[VIC_REG_VIDEO_MATRIX] & VIC_VM_COLUMNS_MASK;
+            cached_columns = regs_[VIC_REG_VIDEO_MATRIX] & VIC_VM_COLUMNS_MASK;
             // base_video depends on this register too
-            cached_base_video = ((registers[VIC_REG_VIDEO_MATRIX] & VIC_VM_BASE_VIDEO_BIT9) << 2) |
-                               ((registers[VIC_REG_CHAR_BASE] & VIC_CB_BASE_VIDEO_MASK) << VIC_CB_BASE_VIDEO_SHIFT);
+            cached_base_video = ((regs_[VIC_REG_VIDEO_MATRIX] & VIC_VM_BASE_VIDEO_BIT9) << 2) |
+                               ((regs_[VIC_REG_CHAR_BASE] & VIC_CB_BASE_VIDEO_MASK) << VIC_CB_BASE_VIDEO_SHIFT);
             break;
         case VIC_REG_ROWS:
-            cached_char_height = (registers[VIC_REG_ROWS] & VIC_ROWS_DOUBLE_HEIGHT) ? 16 : 8;
-            cached_num_rows = (registers[VIC_REG_ROWS] & VIC_ROWS_ROWS_MASK) >> VIC_ROWS_ROWS_SHIFT;
+            cached_char_height = (regs_[VIC_REG_ROWS] & VIC_ROWS_DOUBLE_HEIGHT) ? 16 : 8;
+            cached_num_rows = (regs_[VIC_REG_ROWS] & VIC_ROWS_ROWS_MASK) >> VIC_ROWS_ROWS_SHIFT;
             break;
         case VIC_REG_CHAR_BASE:
             // Both base_video and base_char depend on this register
-            cached_base_video = ((registers[VIC_REG_VIDEO_MATRIX] & VIC_VM_BASE_VIDEO_BIT9) << 2) |
-                               ((registers[VIC_REG_CHAR_BASE] & VIC_CB_BASE_VIDEO_MASK) << VIC_CB_BASE_VIDEO_SHIFT);
-            cached_base_char = (registers[VIC_REG_CHAR_BASE] & VIC_CB_BASE_CHAR_MASK) << VIC_CB_BASE_CHAR_SHIFT;
+            cached_base_video = ((regs_[VIC_REG_VIDEO_MATRIX] & VIC_VM_BASE_VIDEO_BIT9) << 2) |
+                               ((regs_[VIC_REG_CHAR_BASE] & VIC_CB_BASE_VIDEO_MASK) << VIC_CB_BASE_VIDEO_SHIFT);
+            cached_base_char = (regs_[VIC_REG_CHAR_BASE] & VIC_CB_BASE_CHAR_MASK) << VIC_CB_BASE_CHAR_SHIFT;
             break;
         case VIC_REG_AUX_COLOR:
-            cached_volume = registers[VIC_REG_AUX_COLOR] & VIC_AUX_VOLUME_MASK;
-            cached_auxiliary_color = (registers[VIC_REG_AUX_COLOR] & VIC_AUX_COLOR_MASK) >> VIC_AUX_COLOR_SHIFT;
+            cached_volume = regs_[VIC_REG_AUX_COLOR] & VIC_AUX_VOLUME_MASK;
+            cached_auxiliary_color = (regs_[VIC_REG_AUX_COLOR] & VIC_AUX_COLOR_MASK) >> VIC_AUX_COLOR_SHIFT;
             break;
         case VIC_REG_BACKGROUND:
-            cached_border_color = registers[VIC_REG_BACKGROUND] & VIC_BG_BORDER_MASK;
-            cached_background_color = (registers[VIC_REG_BACKGROUND] & VIC_BG_BACKGROUND_MASK) >> VIC_BG_BACKGROUND_SHIFT;
-            cached_reversed = (registers[VIC_REG_BACKGROUND] & VIC_BG_REVERSE) == 0;
+            cached_border_color = regs_[VIC_REG_BACKGROUND] & VIC_BG_BORDER_MASK;
+            cached_background_color = (regs_[VIC_REG_BACKGROUND] & VIC_BG_BACKGROUND_MASK) >> VIC_BG_BACKGROUND_SHIFT;
+            cached_reversed = (regs_[VIC_REG_BACKGROUND] & VIC_BG_REVERSE) == 0;
             break;
         default:
             break;
@@ -322,7 +322,7 @@ void vic_base_t::audio_tick() {
         if (--audio.prescaler[v] == 0) {
             audio.prescaler[v] = vic_voice_divisor[v]; // reload prescaler
 
-            uint8_t reg_val = registers[VIC_REG_BASS_FREQ + v];
+            uint8_t reg_val = regs_[VIC_REG_BASS_FREQ + v];
             uint8_t enabled = (reg_val & VIC_VOICE_ENABLE) >> 7;  // 0 or 1
 
             audio.counter[v]--;
@@ -600,7 +600,7 @@ bus_state_t vic_base_t::tick(bus_state_t bus_state) {
 void vic_base_t::register_debug_fields() {
     using V = const vic_base_t;
     auto& r = debug_registry_;
-    r.set_registers(registers, VIC_NUM_REGS, VIC_REG_INFO, 0x9000);
+    r.set_registers(regs_, VIC_NUM_REGS, VIC_REG_INFO, 0x9000);
     r.set_decl_order(VIC_DECL_ORDER.data(), VIC_DECL_ORDER.size(),
                      VIC_FLD_INFO, VIC_NUM_FIELDS,
                      nullptr, 0, nullptr);
@@ -626,8 +626,8 @@ void vic_base_t::register_debug_fields() {
 
     // ---- Colors (palette swatches — DataKind::Color deferred) ----
     r.category("Colors", false)
-     .color("Border", +[](const ChipBase* c) -> uint32_t { return static_cast<V*>(c)->registers[VIC_REG_BACKGROUND] & VIC_BG_BORDER_MASK; }, palette, 16)
-     .color("Background", +[](const ChipBase* c) -> uint32_t { return (static_cast<V*>(c)->registers[VIC_REG_BACKGROUND] & VIC_BG_BACKGROUND_MASK) >> VIC_BG_BACKGROUND_SHIFT; }, palette, 16)
-     .color("Aux Color", +[](const ChipBase* c) -> uint32_t { return (static_cast<V*>(c)->registers[VIC_REG_AUX_COLOR] & VIC_AUX_COLOR_MASK) >> VIC_AUX_COLOR_SHIFT; }, palette, 16);
+     .color("Border", +[](const ChipBase* c) -> uint32_t { return static_cast<V*>(c)->regs_[VIC_REG_BACKGROUND] & VIC_BG_BORDER_MASK; }, palette, 16)
+     .color("Background", +[](const ChipBase* c) -> uint32_t { return (static_cast<V*>(c)->regs_[VIC_REG_BACKGROUND] & VIC_BG_BACKGROUND_MASK) >> VIC_BG_BACKGROUND_SHIFT; }, palette, 16)
+     .color("Aux Color", +[](const ChipBase* c) -> uint32_t { return (static_cast<V*>(c)->regs_[VIC_REG_AUX_COLOR] & VIC_AUX_COLOR_MASK) >> VIC_AUX_COLOR_SHIFT; }, palette, 16);
 }
 #endif // CERMU_HAS_CHIP_DEBUG
