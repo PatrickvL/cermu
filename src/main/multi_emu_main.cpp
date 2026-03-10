@@ -3,6 +3,7 @@
 #include "../gui/system_gui.h"
 #include "../testing/vicii_test_harness.h"
 #include "../testing/vicii_pixel_tests.h"
+#include "../testing/sid_write_log.h"
 #include <cstdio>
 #include <memory>
 #include <cstring>
@@ -88,6 +89,8 @@ int main(int argc, char** argv) {
     bool vicii_test_mode = false;
     bool vicii_dump_mode = false;
     bool skip_memtest = false;
+    const char* sid_log_path = nullptr;
+    int sid_log_seconds = 60;
     
     // Parse command-line arguments
     for (int i = 1; i < argc; i++) {
@@ -110,11 +113,30 @@ int main(int argc, char** argv) {
         } else if (strcmp(argv[i], "--skip-memtest") == 0) {
             skip_memtest = true;
             printf("KERNAL memory test skip enabled\n");
+        } else if (strcmp(argv[i], "--sid-log") == 0) {
+            if (i + 1 < argc) {
+                sid_log_path = argv[++i];
+                system_name = "C64";
+                printf("SID log capture mode → %s\n", sid_log_path);
+            } else {
+                printf("ERROR: --sid-log requires an output file path\n");
+                return 1;
+            }
+        } else if (strcmp(argv[i], "--seconds") == 0) {
+            if (i + 1 < argc) {
+                sid_log_seconds = atoi(argv[++i]);
+                if (sid_log_seconds <= 0) sid_log_seconds = 60;
+            } else {
+                printf("ERROR: --seconds requires a value\n");
+                return 1;
+            }
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             printf("Usage: %s [options] [file]\n", argv[0]);
             printf("\nOptions:\n");
             printf("  --system, -s <name>   Select system by short name (e.g., C64, CHIP8)\n");
             printf("  --vicii-test          Run VIC-II register test suite (headless)\n");
+            printf("  --sid-log <file>      Capture SID register writes to binary log (headless)\n");
+            printf("  --seconds <N>         Duration for --sid-log capture (default: 60)\n");
             printf("  --skip-memtest        Patch C64 KERNAL to skip RAMTAS memory test\n");
             printf("  --help, -h            Show this help message\n");
             printf("\nAvailable systems:\n");
@@ -218,6 +240,72 @@ int main(int argc, char** argv) {
         } else {
             printf("WARNING: --skip-memtest is only supported for C64 systems\n");
         }
+    }
+
+    // =========================================================================
+    // SID LOG CAPTURE MODE — headless register write recording
+    // =========================================================================
+    if (sid_log_path && system) {
+        C64System* c64 = dynamic_cast<C64System*>(system.get());
+        if (!c64) { printf("ERROR: --sid-log requires C64\n"); return 1; }
+        if (!file_path) { printf("ERROR: --sid-log requires a PRG/SID file\n"); system->shutdown(); return 1; }
+
+        // Skip KERNAL memory test for faster boot
+        c64->patch_skip_memtest();
+
+        // Allocate headless framebuffer (required for run_frame)
+        int fb_width, fb_height;
+        system->get_display_dimensions(&fb_width, &fb_height);
+        std::unique_ptr<uint32_t[]> fb(new uint32_t[fb_width * fb_height]());
+        system->set_framebuffer(fb.get(), fb_width, fb_height);
+
+        // Set up write-capture callback
+        sid_log::write_log_t log;
+        log.chip_model = (c64->sid->revision == SID_REVISION_8580_R5) ? 1 : 0;
+        log.cpu_clock  = system->get_current_timing().cpu_frequency_hz;
+        log.entries.reserve(256 * 1024);  // Pre-allocate ~1.5 MB
+
+        c64->sid->write_capture_fn  = sid_log::capture_callback;
+        c64->sid->write_capture_ctx = &log;
+
+        uint32_t target_fps = system->get_target_fps();
+        uint32_t total_frames = static_cast<uint32_t>(sid_log_seconds) * target_fps;
+
+        printf("SID-LOG: Capturing %d seconds (%u frames) → %s\n",
+               sid_log_seconds, total_frames, sid_log_path);
+        printf("SID-LOG: Model %s, clock %u Hz\n",
+               log.chip_model ? "8580" : "6581", log.cpu_clock);
+
+        float drain[4096];
+        for (uint32_t frame = 0; frame < total_frames; frame++) {
+            system->run_frame();
+            system->get_audio_samples(drain, 4096);
+
+            // Progress every 10 seconds
+            if (frame > 0 && frame % (target_fps * 10) == 0) {
+                printf("SID-LOG: %u/%u frames, %zu writes so far\n",
+                       frame, total_frames, log.entries.size());
+            }
+        }
+
+        // Detach callback
+        c64->sid->write_capture_fn  = nullptr;
+        c64->sid->write_capture_ctx = nullptr;
+
+        printf("SID-LOG: Capture complete — %zu register writes\n", log.entries.size());
+
+        // Write to file
+        if (sid_log::write_file(sid_log_path, log)) {
+            printf("SID-LOG: Saved to %s (%zu bytes)\n", sid_log_path,
+                   sizeof(sid_log::header_t) + log.entries.size() * sizeof(sid_log::entry_t));
+        } else {
+            printf("ERROR: Failed to write %s\n", sid_log_path);
+            system->shutdown();
+            return 1;
+        }
+
+        system->shutdown();
+        return 0;
     }
 
     // =========================================================================
