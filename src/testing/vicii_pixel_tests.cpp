@@ -1726,11 +1726,11 @@ static void diagnostic_dump_boot(C64System* c64, EmulatedSystem* sys, check_ctx_
     run_frames(sys, 200);
     
     // Read VIC-II register state
-    uint8_t d011 = c64->vicii->registers.data[0x11];
-    uint8_t d016 = c64->vicii->registers.data[0x16];
-    uint8_t d018 = c64->vicii->registers.data[0x18];
-    uint8_t d020 = c64->vicii->registers.data[0x20];
-    uint8_t d021 = c64->vicii->registers.data[0x21];
+    uint8_t d011 = c64->vicii->regs_[0x11];
+    uint8_t d016 = c64->vicii->regs_[0x16];
+    uint8_t d018 = c64->vicii->regs_[0x18];
+    uint8_t d020 = c64->vicii->regs_[0x20];
+    uint8_t d021 = c64->vicii->regs_[0x21];
     printf("VIC regs: $D011=$%02X $D016=$%02X $D018=$%02X $D020=$%02X $D021=$%02X\n",
            d011, d016, d018, d020, d021);
     printf("YSCROLL=%d XSCROLL=%d CSEL=%d RSEL=%d DEN=%d\n",

@@ -367,10 +367,7 @@ struct vicii_cycle_entry_t {
 // TOPIC-SPECIFIC UNIT STRUCTURES
 // ========================================================================================
 
-// Register Unit - All VIC-II register state
-struct vicii_registers_unit_t {
-    uint8_t data[vicii_regs::SIZE + 2];  // +2 for shadow collision registers
-};
+// Register storage is provided by ChipBase::regs_[] (66 bytes = 64 standard + 2 shadow collision)
 
 // Timing Unit - All timing-related state
 struct vicii_timing_unit_t {
@@ -571,6 +568,10 @@ struct vicii_bus_unit_t {
 
 // Main VIC-II structure composed of units
 struct vicii_t : public VideoChipBase {
+    vicii_t() {
+        init_regs(vicii_regs::SIZE + 2);  // 64 standard + 2 shadow collision
+    }
+
     MOS2114* colorram = nullptr;
 
     // Chip configuration (set at initialization)
@@ -586,7 +587,6 @@ struct vicii_t : public VideoChipBase {
     uint16_t cached_first_x_coord = 0;           // config->first_x_coord (X at cycle 0)
 
     // Topic-specific units
-    vicii_registers_unit_t registers = {};
     vicii_timing_unit_t timing = {};
     vicii_video_logic_unit_t video_logic = {};
     vicii_video_data_unit_t video_data = {};

@@ -345,9 +345,9 @@ void c64_apply_sid_load(C64System* c64, const sid_header_t* sid,
     // text renders in mixed case.  $D018=$16 → screen at $0400,
     // charset at ROM $1800 (upper/lower).  Default $14 uses $1000 (upper/graphics).
     // Must update both the register byte AND the internal memory mapping that
-    // the VIC-II rendering actually uses (registers.data[] is just storage).
+    // the VIC-II rendering actually uses (regs_[] is just storage).
     if (c64->vicii) {
-        c64->vicii->registers.data[0x18] = 0x16;
+        c64->vicii->regs_[0x18] = 0x16;
         c64->vicii->memory.vm_base = ((uint16_t)0x16 & 0xF0) << 6;   // $0400
         c64->vicii->memory.cb_base = ((uint16_t)0x16 & 0x0E) << 10;  // $1800
     }
@@ -421,9 +421,9 @@ void c64_sid_switch_subtune(C64System* c64, const sid_header_t* sid,
     // text renders in mixed case.  $D018=$16 → screen at $0400,
     // charset at ROM $1800 (upper/lower).  Default $14 uses $1000 (upper/graphics).
     // Must update both the register byte AND the internal memory mapping that
-    // the VIC-II rendering actually uses (registers.data[] is just storage).
+    // the VIC-II rendering actually uses (regs_[] is just storage).
     if (c64->vicii) {
-        c64->vicii->registers.data[0x18] = 0x16;
+        c64->vicii->regs_[0x18] = 0x16;
         c64->vicii->memory.vm_base = ((uint16_t)0x16 & 0xF0) << 6;   // $0400
         c64->vicii->memory.cb_base = ((uint16_t)0x16 & 0x0E) << 10;  // $1800
     }
