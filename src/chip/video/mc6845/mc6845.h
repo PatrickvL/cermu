@@ -25,33 +25,31 @@
 
 // DECL(REG, FLD, CMP) — 18 registers, 4 fields (R3 sync widths, R10 cursor mode)
 #define MC6845_DECL(REG, FLD, CMP) \
-    REG( 0, R0_HTOTAL,         "Horiz total chars-1")                            \
-    REG( 1, R1_HDISPLAYED,     "Horiz displayed chars")                          \
-    REG( 2, R2_HSYNC_POS,      "Horiz sync position")                            \
-    REG( 3, R3_SYNC_WIDTHS,    "H/V sync widths")                                \
-      FLD(R3_SYNC_WIDTHS, HSYNC_W, 3:0, "HSYNC width (chars)", Value, 0, 0)      \
-      FLD(R3_SYNC_WIDTHS, VSYNC_W, 7:4, "VSYNC width (rows)",  Value, 0, 0)      \
-    REG( 4, R4_VTOTAL,         "Vert total rows-1")                              \
-    REG( 5, R5_VADJUST,        "Vert fine adjust")                               \
-    REG( 6, R6_VDISPLAYED,     "Vert displayed rows")                            \
-    REG( 7, R7_VSYNC_POS,      "Vert sync position")                             \
-    REG( 8, R8_MODE_CTRL,      "Mode/interlace")                                 \
-    REG( 9, R9_MAX_SCANLINE,   "Max raster address")                             \
-    REG(10, R10_CURSOR_START,  "Cursor start scan")                              \
-      FLD(R10_CURSOR_START, CURSOR_MODE, 6:5, "Cursor blink mode", Value, 0, 0)  \
-      FLD(R10_CURSOR_START, CURSOR_SL,   4:0, "Cursor scan line",  Value, 0, 0)  \
-    REG(11, R11_CURSOR_END,    "Cursor end scan")                                \
-    REG(12, R12_START_ADDR_HI, "Display start hi")                               \
-    REG(13, R13_START_ADDR_LO, "Display start lo")                               \
-    REG(14, R14_CURSOR_HI,     "Cursor position hi")                             \
-    REG(15, R15_CURSOR_LO,     "Cursor position lo")                             \
-    REG(16, R16_LPEN_HI,       "Light pen hi (RO)")                              \
-    REG(17, R17_LPEN_LO,       "Light pen lo (RO)")
+    REG( 0, MC6845_R0_HTOTAL,         "Horiz total chars-1")                     \
+    REG( 1, MC6845_R1_HDISPLAYED,     "Horiz displayed chars")                   \
+    REG( 2, MC6845_R2_HSYNC_POS,      "Horiz sync position")                     \
+    REG( 3, MC6845_R3_SYNC_WIDTHS,    "H/V sync widths")                         \
+      FLD(MC6845_R3_SYNC_WIDTHS, HSYNC_W, 3:0, "HSYNC width (chars)", Value, 0, 0) \
+      FLD(MC6845_R3_SYNC_WIDTHS, VSYNC_W, 7:4, "VSYNC width (rows)",  Value, 0, 0) \
+    REG( 4, MC6845_R4_VTOTAL,         "Vert total rows-1")                       \
+    REG( 5, MC6845_R5_VADJUST,        "Vert fine adjust")                        \
+    REG( 6, MC6845_R6_VDISPLAYED,     "Vert displayed rows")                     \
+    REG( 7, MC6845_R7_VSYNC_POS,      "Vert sync position")                      \
+    REG( 8, MC6845_R8_MODE_CTRL,      "Mode/interlace")                          \
+    REG( 9, MC6845_R9_MAX_SCANLINE,   "Max raster address")                      \
+    REG(10, MC6845_R10_CURSOR_START,  "Cursor start scan")                       \
+      FLD(MC6845_R10_CURSOR_START, CURSOR_MODE, 6:5, "Cursor blink mode", Value, 0, 0) \
+      FLD(MC6845_R10_CURSOR_START, CURSOR_SL,   4:0, "Cursor scan line",  Value, 0, 0) \
+    REG(11, MC6845_R11_CURSOR_END,    "Cursor end scan")                         \
+    REG(12, MC6845_R12_START_ADDR_HI, "Display start hi")                        \
+    REG(13, MC6845_R13_START_ADDR_LO, "Display start lo")                        \
+    REG(14, MC6845_R14_CURSOR_HI,     "Cursor position hi")                      \
+    REG(15, MC6845_R15_CURSOR_LO,     "Cursor position lo")                      \
+    REG(16, MC6845_R16_LPEN_HI,       "Light pen hi (RO)")                       \
+    REG(17, MC6845_R17_LPEN_LO,       "Light pen lo (RO)")
 
-// --- Extract address constants (prefix MC6845_ added by macro) ---
-#define MC6845_X_CONST_(a, s, l) static constexpr uint8_t MC6845_##s = a;
-MC6845_DECL(MC6845_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-#undef MC6845_X_CONST_
+// --- Extract address constants ---
+MC6845_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
 static constexpr int MC6845_NUM_REGISTERS = 18;
 

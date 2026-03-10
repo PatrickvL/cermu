@@ -13,53 +13,51 @@
 // REG(offset, symbol, description)
 // FLD(reg_sym, field_sym, hi:lo, description, kind, display_shift, display_scale)
 #define MOS6522_DECL(REG, FLD, CMP) \
-    REG(0x00, PORTB,    "Port B data/latch")                                    \
-    REG(0x01, PORTA,    "Port A data/latch")                                    \
-    REG(0x02, DDRB,     "Port B direction")                                     \
-    REG(0x03, DDRA,     "Port A direction")                                     \
-    REG(0x04, T1CL,     "Timer 1 counter lo")                                   \
-    REG(0x05, T1CH,     "Timer 1 counter hi")                                   \
-    REG(0x06, T1LL,     "Timer 1 latch lo")                                     \
-    REG(0x07, T1LH,     "Timer 1 latch hi")                                     \
-    REG(0x08, T2CL,     "Timer 2 counter lo")                                   \
-    REG(0x09, T2CH,     "Timer 2 counter hi")                                   \
-    REG(0x0A, SR,       "Shift register")                                       \
-    REG(0x0B, ACR,      "Auxiliary control")                                     \
-      FLD(ACR, T1_PB7,      7:7, "T1 PB7 output",        Flag,  0, 0)          \
-      FLD(ACR, T1_FREERUN,  6:6, "T1 free-run",           Flag,  0, 0)          \
-      FLD(ACR, T2_COUNTPB6, 5:5, "T2 count PB6",          Flag,  0, 0)          \
-      FLD(ACR, SR_CTRL,     4:2, "Shift register control", Value, 0, 0)          \
-      FLD(ACR, PB_LATCH,    1:1, "Port B latch enable",   Flag,  0, 0)          \
-      FLD(ACR, PA_LATCH,    0:0, "Port A latch enable",   Flag,  0, 0)          \
-    REG(0x0C, PCR,      "Peripheral control")                                    \
-      FLD(PCR, CB2_CTRL,    7:5, "CB2 control",           Value, 0, 0)          \
-      FLD(PCR, CB1_EDGE,    4:4, "CB1 edge (1=pos)",      Flag,  0, 0)          \
-      FLD(PCR, CA2_CTRL,    3:1, "CA2 control",           Value, 0, 0)          \
-      FLD(PCR, CA1_EDGE,    0:0, "CA1 edge (1=pos)",      Flag,  0, 0)          \
-    REG(0x0D, IFR,      "Interrupt flags")                                       \
-      FLD(IFR, IRQ,     7:7, "IRQ active",  Flag, 0, 0)                         \
-      FLD(IFR, T1_IF,   6:6, "Timer 1",     Flag, 0, 0)                         \
-      FLD(IFR, T2_IF,   5:5, "Timer 2",     Flag, 0, 0)                         \
-      FLD(IFR, CB1_IF,  4:4, "CB1",         Flag, 0, 0)                         \
-      FLD(IFR, CB2_IF,  3:3, "CB2",         Flag, 0, 0)                         \
-      FLD(IFR, SR_IF,   2:2, "Shift reg",   Flag, 0, 0)                         \
-      FLD(IFR, CA1_IF,  1:1, "CA1",         Flag, 0, 0)                         \
-      FLD(IFR, CA2_IF,  0:0, "CA2",         Flag, 0, 0)                         \
-    REG(0x0E, IER,      "Interrupt enable")                                      \
-      FLD(IER, IE_SC,   7:7, "Set/clear",   Flag, 0, 0)                         \
-      FLD(IER, T1_IE,   6:6, "Timer 1",     Flag, 0, 0)                         \
-      FLD(IER, T2_IE,   5:5, "Timer 2",     Flag, 0, 0)                         \
-      FLD(IER, CB1_IE,  4:4, "CB1",         Flag, 0, 0)                         \
-      FLD(IER, CB2_IE,  3:3, "CB2",         Flag, 0, 0)                         \
-      FLD(IER, SR_IE,   2:2, "Shift reg",   Flag, 0, 0)                         \
-      FLD(IER, CA1_IE,  1:1, "CA1",         Flag, 0, 0)                         \
-      FLD(IER, CA2_IE,  0:0, "CA2",         Flag, 0, 0)                         \
-    REG(0x0F, PORTA_NH, "Port A no handshake")
+    REG(0x00, MOS6522_PORTB,    "Port B data/latch")                            \
+    REG(0x01, MOS6522_PORTA,    "Port A data/latch")                            \
+    REG(0x02, MOS6522_DDRB,     "Port B direction")                             \
+    REG(0x03, MOS6522_DDRA,     "Port A direction")                             \
+    REG(0x04, MOS6522_T1CL,     "Timer 1 counter lo")                           \
+    REG(0x05, MOS6522_T1CH,     "Timer 1 counter hi")                           \
+    REG(0x06, MOS6522_T1LL,     "Timer 1 latch lo")                             \
+    REG(0x07, MOS6522_T1LH,     "Timer 1 latch hi")                             \
+    REG(0x08, MOS6522_T2CL,     "Timer 2 counter lo")                           \
+    REG(0x09, MOS6522_T2CH,     "Timer 2 counter hi")                           \
+    REG(0x0A, MOS6522_SR,       "Shift register")                               \
+    REG(0x0B, MOS6522_ACR,      "Auxiliary control")                             \
+      FLD(MOS6522_ACR, T1_PB7,      7:7, "T1 PB7 output",        Flag,  0, 0)  \
+      FLD(MOS6522_ACR, T1_FREERUN,  6:6, "T1 free-run",           Flag,  0, 0)  \
+      FLD(MOS6522_ACR, T2_COUNTPB6, 5:5, "T2 count PB6",          Flag,  0, 0)  \
+      FLD(MOS6522_ACR, SR_CTRL,     4:2, "Shift register control", Value, 0, 0)  \
+      FLD(MOS6522_ACR, PB_LATCH,    1:1, "Port B latch enable",   Flag,  0, 0)  \
+      FLD(MOS6522_ACR, PA_LATCH,    0:0, "Port A latch enable",   Flag,  0, 0)  \
+    REG(0x0C, MOS6522_PCR,      "Peripheral control")                            \
+      FLD(MOS6522_PCR, CB2_CTRL,    7:5, "CB2 control",           Value, 0, 0)  \
+      FLD(MOS6522_PCR, CB1_EDGE,    4:4, "CB1 edge (1=pos)",      Flag,  0, 0)  \
+      FLD(MOS6522_PCR, CA2_CTRL,    3:1, "CA2 control",           Value, 0, 0)  \
+      FLD(MOS6522_PCR, CA1_EDGE,    0:0, "CA1 edge (1=pos)",      Flag,  0, 0)  \
+    REG(0x0D, MOS6522_IFR,      "Interrupt flags")                               \
+      FLD(MOS6522_IFR, IRQ,     7:7, "IRQ active",  Flag, 0, 0)                 \
+      FLD(MOS6522_IFR, T1_IF,   6:6, "Timer 1",     Flag, 0, 0)                 \
+      FLD(MOS6522_IFR, T2_IF,   5:5, "Timer 2",     Flag, 0, 0)                 \
+      FLD(MOS6522_IFR, CB1_IF,  4:4, "CB1",         Flag, 0, 0)                 \
+      FLD(MOS6522_IFR, CB2_IF,  3:3, "CB2",         Flag, 0, 0)                 \
+      FLD(MOS6522_IFR, SR_IF,   2:2, "Shift reg",   Flag, 0, 0)                 \
+      FLD(MOS6522_IFR, CA1_IF,  1:1, "CA1",         Flag, 0, 0)                 \
+      FLD(MOS6522_IFR, CA2_IF,  0:0, "CA2",         Flag, 0, 0)                 \
+    REG(0x0E, MOS6522_IER,      "Interrupt enable")                              \
+      FLD(MOS6522_IER, IE_SC,   7:7, "Set/clear",   Flag, 0, 0)                 \
+      FLD(MOS6522_IER, T1_IE,   6:6, "Timer 1",     Flag, 0, 0)                 \
+      FLD(MOS6522_IER, T2_IE,   5:5, "Timer 2",     Flag, 0, 0)                 \
+      FLD(MOS6522_IER, CB1_IE,  4:4, "CB1",         Flag, 0, 0)                 \
+      FLD(MOS6522_IER, CB2_IE,  3:3, "CB2",         Flag, 0, 0)                 \
+      FLD(MOS6522_IER, SR_IE,   2:2, "Shift reg",   Flag, 0, 0)                 \
+      FLD(MOS6522_IER, CA1_IE,  1:1, "CA1",         Flag, 0, 0)                 \
+      FLD(MOS6522_IER, CA2_IE,  0:0, "CA2",         Flag, 0, 0)                 \
+    REG(0x0F, MOS6522_PORTA_NH, "Port A no handshake")
 
-// --- Extract address constants (prefix MOS6522_ added by macro) ---
-#define MOS6522_X_CONST_(a, s, l) static constexpr uint8_t MOS6522_##s = a;
-MOS6522_DECL(MOS6522_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-#undef MOS6522_X_CONST_
+// --- Extract address constants ---
+MOS6522_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
 DECL_EXTRACT_ALL(MOS6522, MOS6522_DECL)
 

@@ -12,43 +12,43 @@
 
 // DECL(REG, FLD, CMP) — 16 registers, 21 fields
 #define VIC_DECL(REG, FLD, CMP) \
-    REG(0x00, CONTROL1,     "Horiz origin/interlace")                              \
-      FLD(CONTROL1, INTERLACE,   7:7, "Interlace",           Flag,  0, 0)          \
-    REG(0x01, CONTROL2,     "Vert origin")                                         \
-    REG(0x02, VIDEO_MATRIX, "Video base/columns")                                  \
-      FLD(VIDEO_MATRIX, VID_B9,  7:7, "Video base bit 9",    Flag,  0, 0)          \
-      FLD(VIDEO_MATRIX, COLUMNS, 6:0, "Display columns",     Value, 0, 0)          \
-    REG(0x03, ROWS,         "Raster b0/rows/2x-H")                                \
-      FLD(ROWS, RASTER_B0,      7:7, "Raster counter bit 0", Flag,  0, 0)          \
-      FLD(ROWS, ROW_COUNT,      6:1, "Display rows",         Value, 0, 0)          \
-      FLD(ROWS, DBL_H,          0:0, "Double height chars",  Flag,  0, 0)          \
-    REG(0x04, RASTER,       "Raster counter hi")                                   \
-    REG(0x05, CHAR_BASE,    "Video/char base addr")                                \
-      FLD(CHAR_BASE, VID_BASE,  7:4, "Video base address",   Value, 0, 0)          \
-      FLD(CHAR_BASE, CHR_BASE,  3:0, "Char base address",    Value, 0, 0)          \
-    REG(0x06, LIGHTPEN_X,   "Light pen X")                                         \
-    REG(0x07, LIGHTPEN_Y,   "Light pen Y")                                         \
-    REG(0x08, PADDLE_X,     "Paddle X")                                            \
-    REG(0x09, PADDLE_Y,     "Paddle Y")                                            \
-    REG(0x0A, BASS_FREQ,    "Voice 1 bass freq")                                   \
-      FLD(BASS_FREQ, BASS_EN,   7:7, "Bass enable",          Flag,  0, 0)          \
-      FLD(BASS_FREQ, BASS_F,    6:0, "Bass frequency",       Value, 0, 0)          \
-    REG(0x0B, ALTO_FREQ,    "Voice 2 alto freq")                                   \
-      FLD(ALTO_FREQ, ALTO_EN,   7:7, "Alto enable",          Flag,  0, 0)          \
-      FLD(ALTO_FREQ, ALTO_F,    6:0, "Alto frequency",       Value, 0, 0)          \
-    REG(0x0C, SOPRANO_FREQ, "Voice 3 soprano freq")                                \
-      FLD(SOPRANO_FREQ, SOP_EN, 7:7, "Soprano enable",       Flag,  0, 0)          \
-      FLD(SOPRANO_FREQ, SOP_F,  6:0, "Soprano frequency",    Value, 0, 0)          \
-    REG(0x0D, NOISE_FREQ,   "Voice 4 noise freq")                                  \
-      FLD(NOISE_FREQ, NOISE_EN, 7:7, "Noise enable",         Flag,  0, 0)          \
-      FLD(NOISE_FREQ, NOISE_F,  6:0, "Noise frequency",      Value, 0, 0)          \
-    REG(0x0E, AUX_COLOR,    "Aux color / volume")                                  \
-      FLD(AUX_COLOR, AUX_COL,   7:4, "Auxiliary color",      Color, 0, 0)          \
-      FLD(AUX_COLOR, VOLUME,    3:0, "Volume",               Value, 0, 0)          \
-    REG(0x0F, BACKGROUND,   "BG/reverse/border")                                   \
-      FLD(BACKGROUND, BG_COL,   7:4, "Background color",     Color, 0, 0)          \
-      FLD(BACKGROUND, REVERSE,  3:3, "Reverse screen",       Flag,  0, 0)          \
-      FLD(BACKGROUND, BORDER,   2:0, "Border color",         Color, 0, 0)
+    REG(0x00, VIC_REG_CONTROL1,     "Horiz origin/interlace")                      \
+      FLD(VIC_REG_CONTROL1, INTERLACE,   7:7, "Interlace",           Flag,  0, 0)  \
+    REG(0x01, VIC_REG_CONTROL2,     "Vert origin")                                 \
+    REG(0x02, VIC_REG_VIDEO_MATRIX, "Video base/columns")                          \
+      FLD(VIC_REG_VIDEO_MATRIX, VID_B9,  7:7, "Video base bit 9",    Flag,  0, 0)  \
+      FLD(VIC_REG_VIDEO_MATRIX, COLUMNS, 6:0, "Display columns",     Value, 0, 0)  \
+    REG(0x03, VIC_REG_ROWS,         "Raster b0/rows/2x-H")                        \
+      FLD(VIC_REG_ROWS, RASTER_B0,      7:7, "Raster counter bit 0", Flag,  0, 0)  \
+      FLD(VIC_REG_ROWS, ROW_COUNT,      6:1, "Display rows",         Value, 0, 0)  \
+      FLD(VIC_REG_ROWS, DBL_H,          0:0, "Double height chars",  Flag,  0, 0)  \
+    REG(0x04, VIC_REG_RASTER,       "Raster counter hi")                           \
+    REG(0x05, VIC_REG_CHAR_BASE,    "Video/char base addr")                        \
+      FLD(VIC_REG_CHAR_BASE, VID_BASE,  7:4, "Video base address",   Value, 0, 0)  \
+      FLD(VIC_REG_CHAR_BASE, CHR_BASE,  3:0, "Char base address",    Value, 0, 0)  \
+    REG(0x06, VIC_REG_LIGHTPEN_X,   "Light pen X")                                 \
+    REG(0x07, VIC_REG_LIGHTPEN_Y,   "Light pen Y")                                 \
+    REG(0x08, VIC_REG_PADDLE_X,     "Paddle X")                                    \
+    REG(0x09, VIC_REG_PADDLE_Y,     "Paddle Y")                                    \
+    REG(0x0A, VIC_REG_BASS_FREQ,    "Voice 1 bass freq")                           \
+      FLD(VIC_REG_BASS_FREQ, BASS_EN,   7:7, "Bass enable",          Flag,  0, 0)  \
+      FLD(VIC_REG_BASS_FREQ, BASS_F,    6:0, "Bass frequency",       Value, 0, 0)  \
+    REG(0x0B, VIC_REG_ALTO_FREQ,    "Voice 2 alto freq")                           \
+      FLD(VIC_REG_ALTO_FREQ, ALTO_EN,   7:7, "Alto enable",          Flag,  0, 0)  \
+      FLD(VIC_REG_ALTO_FREQ, ALTO_F,    6:0, "Alto frequency",       Value, 0, 0)  \
+    REG(0x0C, VIC_REG_SOPRANO_FREQ, "Voice 3 soprano freq")                        \
+      FLD(VIC_REG_SOPRANO_FREQ, SOP_EN, 7:7, "Soprano enable",       Flag,  0, 0)  \
+      FLD(VIC_REG_SOPRANO_FREQ, SOP_F,  6:0, "Soprano frequency",    Value, 0, 0)  \
+    REG(0x0D, VIC_REG_NOISE_FREQ,   "Voice 4 noise freq")                          \
+      FLD(VIC_REG_NOISE_FREQ, NOISE_EN, 7:7, "Noise enable",         Flag,  0, 0)  \
+      FLD(VIC_REG_NOISE_FREQ, NOISE_F,  6:0, "Noise frequency",      Value, 0, 0)  \
+    REG(0x0E, VIC_REG_AUX_COLOR,    "Aux color / volume")                          \
+      FLD(VIC_REG_AUX_COLOR, AUX_COL,   7:4, "Auxiliary color",      Color, 0, 0)  \
+      FLD(VIC_REG_AUX_COLOR, VOLUME,    3:0, "Volume",               Value, 0, 0)  \
+    REG(0x0F, VIC_REG_BACKGROUND,   "BG/reverse/border")                           \
+      FLD(VIC_REG_BACKGROUND, BG_COL,   7:4, "Background color",     Color, 0, 0)  \
+      FLD(VIC_REG_BACKGROUND, REVERSE,  3:3, "Reverse screen",       Flag,  0, 0)  \
+      FLD(VIC_REG_BACKGROUND, BORDER,   2:0, "Border color",         Color, 0, 0)
 
 // Audio / waveform registers ($900A-$900E)
 // The MOS 6560/6561 contains three square-wave tone generators and one
@@ -60,10 +60,8 @@
 //   Noise   freq = Phi2 / (32  * (32  - N))   (LFSR clocked at same rate as soprano)
 // where Phi2 = chip master clock and N = 7-bit register value.
 
-// --- Extract address constants (prefix VIC_REG_ added by macro) ---
-#define VIC_X_CONST_(a, s, l) static constexpr uint8_t VIC_REG_##s = a;
-VIC_DECL(VIC_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-#undef VIC_X_CONST_
+// --- Extract address constants ---
+VIC_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
 DECL_EXTRACT_ALL(VIC, VIC_DECL)
 

@@ -27,23 +27,21 @@
 // REG(offset, symbol, description)
 // FLD(reg_sym, field_sym, hi:lo, description, kind, display_shift, display_scale)
 #define PIA_DECL(REG, FLD, CMP) \
-    REG(0, PORTA_DATA, "Port A output latch")                                   \
-    REG(1, PORTA_DDR,  "Port A direction")                                      \
-    REG(2, PORTA_CTRL, "Port A control")                                        \
-      FLD(PORTA_CTRL, CA2_MODE,  5:3, "CA2 control",  Value, 0, 0)             \
-      FLD(PORTA_CTRL, DDR_SEL_A, 2:2, "DDR select",   Flag,  0, 0)             \
-      FLD(PORTA_CTRL, CA1_CTRL,  1:0, "CA1 control",  Value, 0, 0)             \
-    REG(3, PORTB_DATA, "Port B output latch")                                   \
-    REG(4, PORTB_DDR,  "Port B direction")                                      \
-    REG(5, PORTB_CTRL, "Port B control")                                        \
-      FLD(PORTB_CTRL, CB2_MODE,  5:3, "CB2 control",  Value, 0, 0)             \
-      FLD(PORTB_CTRL, DDR_SEL_B, 2:2, "DDR select",   Flag,  0, 0)             \
-      FLD(PORTB_CTRL, CB1_CTRL,  1:0, "CB1 control",  Value, 0, 0)
+    REG(0, PIA_REG_PORTA_DATA, "Port A output latch")                           \
+    REG(1, PIA_REG_PORTA_DDR,  "Port A direction")                              \
+    REG(2, PIA_REG_PORTA_CTRL, "Port A control")                                \
+      FLD(PIA_REG_PORTA_CTRL, CA2_MODE,  5:3, "CA2 control",  Value, 0, 0)     \
+      FLD(PIA_REG_PORTA_CTRL, DDR_SEL_A, 2:2, "DDR select",   Flag,  0, 0)     \
+      FLD(PIA_REG_PORTA_CTRL, CA1_CTRL,  1:0, "CA1 control",  Value, 0, 0)     \
+    REG(3, PIA_REG_PORTB_DATA, "Port B output latch")                           \
+    REG(4, PIA_REG_PORTB_DDR,  "Port B direction")                              \
+    REG(5, PIA_REG_PORTB_CTRL, "Port B control")                                \
+      FLD(PIA_REG_PORTB_CTRL, CB2_MODE,  5:3, "CB2 control",  Value, 0, 0)     \
+      FLD(PIA_REG_PORTB_CTRL, DDR_SEL_B, 2:2, "DDR select",   Flag,  0, 0)     \
+      FLD(PIA_REG_PORTB_CTRL, CB1_CTRL,  1:0, "CB1 control",  Value, 0, 0)
 
-// --- Extract address constants (prefix PIA_REG_ added by macro) ---
-#define PIA_X_CONST_(a, s, l) static constexpr uint8_t PIA_REG_##s = a;
-PIA_DECL(PIA_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
-#undef PIA_X_CONST_
+// --- Extract address constants ---
+PIA_DECL(DECL_X_CONST_, DECL_FLD_NOP, DECL_CMP_NOP)
 
 DECL_EXTRACT_ALL(PIA, PIA_DECL)
 
