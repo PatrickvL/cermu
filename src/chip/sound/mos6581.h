@@ -431,9 +431,14 @@ struct mos6581_t : public SoundChipBase {
     // output_gain: models the 6581's ~33% output stage gain due to nonlinear
     //   op-amp compression (measured from real silicon, confirmed by reSID).
     //   8580 has a cleaner output stage reaching near-full scale.
+    // inv_scale: normalises 3 voices at peak excursion to ~[-1,+1].
+    //   Always uses OSCILLATOR_CENTER regardless of wave_zero_ — the
+    //   calibrated parameters (voice_dc_, output_gain_) assume this base.
     int wave_zero_ = 0x380;            // 6581: 0x380, 8580: 0x800
     float voice_dc_ = 1.5f;            // 6581: 1.5, 8580: 0.0
-    float output_gain_ = 0.33f;       // 6581: 0.33, 8580: 1.0
+    float output_gain_ = 0.33f;        // 6581: 0.33, 8580: 1.0
+    float inv_scale_ = 0.0f;           // 1 / (3 * OSCILLATOR_CENTER * 255)
+    float vol_scaled_ = 0.0f;          // (master_volume / 15) * output_gain_
     
     // External input
     float external_input = 0.0f;      // External audio input level
@@ -457,10 +462,12 @@ struct mos6581_t : public SoundChipBase {
     float cic_s3 = 0.0f;             // 3rd integrator (B-spline window)
     uint32_t sample_cycle_count = 0;  // Cycles accumulated since last sample
     
-    // DC blocker state for clean audio output (removes constant DC,
-    // preserves fast changes for volume-register digi playback)
-    float dc_blocker_prev_in = 0.0f;  // Previous input to DC blocker
-    float dc_blocker_prev_out = 0.0f; // Previous output from DC blocker
+    // DC blocker: ~20 Hz high-pass to remove mixer DC bias.
+    // Note: The real C64 has an external RC filter (LP@16kHz + HP@16Hz)
+    // but the CIC-3 decimator's sinc³ rolloff already attenuates ~-6dB at
+    // 16kHz (more than the real LP's -3dB), so only DC removal is needed.
+    float dc_blocker_prev_in = 0.0f;
+    float dc_blocker_prev_out = 0.0f;
     
     // Statistics and debugging
     uint32_t total_cycles = 0;        // Total cycles processed
@@ -509,6 +516,7 @@ private:
     void filter_reset();
     void filter_init();
     void write_resonance_control_register_value(uint8_t value);
+    void update_cached_audio_constants(); // Recompute inv_scale_, vol_scaled_ etc.
     bus_state_t advance_cycle(bus_state_t bus_state);
     uint32_t calculate_envelope_time_ms(voice_t* v, envelope_cycle_t cycle, uint8_t rate_index);
     

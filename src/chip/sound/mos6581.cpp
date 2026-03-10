@@ -397,6 +397,22 @@ void mos6581_t::filter_reset() {
 void mos6581_t::filter_init() {
     filter_reset();
 }
+
+void mos6581_t::update_cached_audio_constants() {
+    // inv_scale: normalise 3 voices at peak excursion to ~±1.
+    // Always uses OSCILLATOR_CENTER (half the DAC range) as the reference,
+    // regardless of wave_zero_. The wave_zero_ offset creates the correct
+    // DC shift within this normalization. This matches how all the calibrated
+    // parameters (voice_dc_, output_gain_) were tuned.
+    // With 6581's wave_zero=0x380, individual voices can exceed ±0.333 on the
+    // positive side (up to ~0.52), but output_gain_=0.33 and final clamp ensure
+    // the output stays in [-1, +1].
+    inv_scale_ = 1.0f / (3.0f * (float)OSCILLATOR_CENTER * 255.0f);
+
+    // vol_scaled_ combines master_volume/15 with output_gain_ to avoid
+    // per-cycle integer→float conversion and multiplication.
+    vol_scaled_ = ((float)master_volume / 15.0f) * output_gain_;
+}
 // =============================================================================
 // FILTER REGISTER WRITERS
 // =============================================================================
@@ -756,14 +772,14 @@ inline bus_state_t mos6581_t::advance_cycle(bus_state_t bus_state) {
         // 12-bit waveform offset by wave_zero_ (revision-dependent) × 8-bit envelope.
         // 6581: wave_zero=0x380 → asymmetric centering, large positive DC bias.
         // 8580: wave_zero=0x800 → symmetric centering, no DC offset.
-        // inv_scale normalises 3 voices at peak excursion to ~[-1, +1].
-        static constexpr float inv_scale = 1.0f / (3.0f * float(OSCILLATOR_CENTER) * float(0xFF));
+        // inv_scale_ normalises 3 voices at peak excursion to ~[-1, +1],
+        // accounting for the asymmetric range when wave_zero ≠ 0x800.
         float v1 = (float)((int32_t)voice1.oscillator_waveform - wave_zero_)
-                 * (float)voice1.envelope_amplitude * inv_scale;
+                 * (float)voice1.envelope_amplitude * inv_scale_;
         float v2 = (float)((int32_t)voice2.oscillator_waveform - wave_zero_)
-                 * (float)voice2.envelope_amplitude * inv_scale;
+                 * (float)voice2.envelope_amplitude * inv_scale_;
         float v3 = (float)((int32_t)voice3.oscillator_waveform - wave_zero_)
-                 * (float)voice3.envelope_amplitude * inv_scale;
+                 * (float)voice3.envelope_amplitude * inv_scale_;
 
         // Route voices to filtered / unfiltered paths (cached on register write).
         float filtered_input = 0.0f;
@@ -778,12 +794,11 @@ inline bus_state_t mos6581_t::advance_cycle(bus_state_t bus_state) {
         // Clock the ZDF SVF filter at CPU rate.
         float filtered_output = filter_process(filtered_input);
 
-        // Apply master volume per-cycle: output = (voices + DC) × vol/15 × gain.
+        // Apply master volume per-cycle using cached vol_scaled_.
+        // vol_scaled_ = (master_volume / 15) * output_gain_, updated on register write.
         // voice_dc_: 6581 mixer DC bias for digi playback (see header comments).
-        // output_gain_: models 6581 op-amp output compression (~33% of max).
-        float vol = (float)master_volume / 15.0f;
         float total = (unfiltered_output + filtered_output + voice_dc_)
-                    * vol * output_gain_;
+                    * vol_scaled_;
 
         // CIC-3 (3rd-order Cascaded Integrator-Comb) decimation filter.
         // Three cascaded running sums produce a 3rd-order B-spline window
@@ -867,6 +882,7 @@ void mos6581_t::set_revision(sid_revision_t rev) {
     wave_zero_ = is_6581 ? 0x380 : 0x800;
     voice_dc_ = is_6581 ? 1.5f : 0.0f;
     output_gain_ = is_6581 ? 0.33f : 1.0f;
+    update_cached_audio_constants();
     // Cache model index in each voice for per-cycle waveform table lookup
     int mi = is_6581 ? 0 : 1;
     voice1.model_index = mi;
@@ -1095,6 +1111,8 @@ bus_state_t mos6581_t::registers_write(void* context, bus_state_t bus_state) {
                 sid->filter_bp    = (value & SIGVOL_BP) != 0;
                 sid->filter_hp    = (value & SIGVOL_HP) != 0;
                 sid->master_volume = value & SIGVOL_VOL_MASK;
+                sid->vol_scaled_ = ((float)sid->master_volume / 15.0f)
+                                 * sid->output_gain_;
                 break;
                 
             case SID_REG_POTX:
@@ -1201,6 +1219,9 @@ void mos6581_t::init() {
     
     // Initialize filter
     filter_init();
+    
+    // Precompute cached audio constants
+    update_cached_audio_constants();
     
     reset();
 #ifdef CERMU_HAS_CHIP_DEBUG
@@ -1323,6 +1344,14 @@ void mos6581_t::reset() {
     sample_buffer.write_pos.store(0, std::memory_order_relaxed);
     sample_buffer.read_pos.store(0, std::memory_order_relaxed);
     
+    // Reset decoded SIGVOL fields + cached volume
+    voice3_off = false;
+    filter_lp = false;
+    filter_bp = false;
+    filter_hp = false;
+    master_volume = 0;
+    vol_scaled_ = 0.0f;
+
     // Reset DC blocker state
     dc_blocker_prev_in = 0.0f;
     dc_blocker_prev_out = 0.0f;
