@@ -343,24 +343,27 @@ float mos6581_t::filter_process(float input) {
     f->ic1eq = 2.0f * v1 - f->ic1eq;
     f->ic2eq = 2.0f * v2 - f->ic2eq;
     
+    // 6581 op-amp saturation: the real NMOS inverters saturate when the
+    // internal node voltage departs from the working point (~4.54V out of
+    // 0-10.3V range).  This naturally limits resonant peaks and prevents
+    // infinite oscillation at high Q (res=15, k≈0).
+    // Model this by soft-clipping the integrator states INSIDE the feedback
+    // loop — each cycle's clipped state feeds back into the next cycle's
+    // computation, matching how the real op-amp limits gain.
+    // Both integrator op-amps are the same NMOS type on the 6581 die,
+    // so they share the same saturation characteristics.
+    // Scale factor 0.33 maps ±3.0 integrator range to ±1.0 tanh input;
+    // multiply by 3.0 to restore the original range.  Net effect: linear
+    // below ~1.5, soft-clips above ~3.0.
+    if (f->enable_distortion) {
+        f->ic1eq = fast_tanh(f->ic1eq * 0.33f) * 3.0f;
+        f->ic2eq = fast_tanh(f->ic2eq * 0.33f) * 3.0f;
+    }
+    
     // Filter outputs
     float lp = v2;
     float bp = v1;
     float hp = input - f->k * v1 - v2;
-    
-    // Apply soft-clipping distortion for 6581 (models NMOS op-amp non-linearity).
-    // Applied outside the feedback loop to preserve filter stability while
-    // still providing the characteristic 6581 "grit."
-    if (f->enable_distortion && revision <= SID_REVISION_6581_R4AR) {
-        float res_norm = f->resonance / FILTER_RESONANCE_MAX;
-        float distortion_amount = res_norm * 0.5f;
-        if (distortion_amount > 1e-6f) {
-            float inv_k = 1.0f / distortion_amount;
-            lp = fast_tanh(lp * distortion_amount) * inv_k;
-            bp = fast_tanh(bp * distortion_amount) * inv_k;
-            hp = fast_tanh(hp * distortion_amount) * inv_k;
-        }
-    }
     
     // Store outputs
     f->low_pass_output = lp;
@@ -385,7 +388,9 @@ void mos6581_t::filter_reset() {
     f->band_pass_output = 0.0f;
     f->high_pass_output = 0.0f;
     f->g = 0.0f;
-    f->k = 1.0f / 0.707f; // ~1.414 — Butterworth (no resonance)
+    f->k = 1.0f / 0.707f; // ~1.414 — Butterworth (res=0 default, both models)
+    // Note: 6581 at res=0 should be 15/8=1.875, but filter_reset() is followed
+    // by a register write that sets the correct revision-dependent k value.
     f->a1 = 0.0f;
     f->a2 = 0.0f;
     f->a3 = 0.0f;
@@ -427,17 +432,38 @@ void mos6581_t::write_resonance_control_register_value(uint8_t value) {
     // Extract resonance nibble for the float computation.
     filter_state.resonance = (float)((value >> RESON_RES_SHIFT) & 0x0F);
     
-    // Recompute k and derived SVF coefficients.
-    // The 6581's resonance is controlled by a VCR (voltage-controlled resistor)
-    // whose nonlinear characteristics limit the effective Q factor to ~10-20.
-    // reSID models this through circuit-level simulation; we approximate with
-    // a direct Q mapping: Q_min ≈ 0.707 (Butterworth) to Q_max ≈ 15.
-    // Previous mapping (k = 1.7*(1-res/15), clamped to 0.01) gave Q_max = 100,
-    // which caused enormous resonant gain (+40 dB) on filter sweeps → "pieuw".
+    // Recompute k (damping = 1/Q) and derived SVF coefficients.
+    //
+    // 6581: The feedback gain in the real SID is set by a resistor network
+    // controlled by the resonance bits.  reSID encodes this as:
+    //   _8_div_Q = ~res & 0x0f      (inverted 4-bit nibble)
+    // giving k = _8_div_Q / 8.  This yields:
+    //   res=0  → k=15/8=1.875  (Q≈0.533, heavily damped)
+    //   res=8  → k=7/8=0.875   (Q≈1.14)
+    //   res=14 → k=1/8=0.125   (Q=8)
+    //   res=15 → k=0            (self-oscillation)
+    // The real chip's op-amp saturation naturally limits the resonant peak
+    // at high Q.  We model this by soft-clipping the integrator states in
+    // filter_process() (see below).
+    //
+    // 8580: A different resistor ladder gives an exponential Q curve:
+    //   1/Q = 2^((4 - res)/8)
+    //   res=0  → k≈1.414  (Q≈0.707, Butterworth)
+    //   res=15 → k≈0.386  (Q≈2.59, moderate resonance)
+    // No self-oscillation, no op-amp saturation needed.
     filter_state_t* f = &filter_state;
-    float res_norm = f->resonance / FILTER_RESONANCE_MAX;
-    float Q = 0.707f + res_norm * 14.3f;  // Q range [0.707, 15.0]
-    f->k = 1.0f / Q;
+    int res_int = (int)f->resonance;  // 0-15
+    
+    if (revision <= SID_REVISION_6581_R4AR) {
+        // 6581: linear resistor ladder model.  Clamp k to a small minimum
+        // so the ZDF SVF doesn't produce infinite output when res=15.
+        // The saturation model in filter_process() provides the real limiting.
+        f->k = (float)(15 - res_int) / 8.0f;
+        if (f->k < 0.02f) f->k = 0.02f;  // Q_max ≈ 50
+    } else {
+        // 8580: exponential resistor ladder, matches reSID's lookup table.
+        f->k = powf(2.0f, (4.0f - (float)res_int) / 8.0f);
+    }
     
     float g = f->g;
     float k = f->k;
