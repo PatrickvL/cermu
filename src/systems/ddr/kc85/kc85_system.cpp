@@ -115,8 +115,23 @@ template<KC85Variant V> void KC85System<V>::reset() {
 template<KC85Variant V>
 void KC85System<V>::tick() {
     if (!cpu_) return;
+
+    // CPU tick
     pins_ = cpu_->tick(pins_);
-    // TODO: Bus dispatch, PIO system control, CTC timing/sound, video rendering
+
+    // Bus dispatch
+    bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);  // Active-low
+    bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);  // Active-low
+
+    if (mreq) {
+        pins_ = mem_tick(pins_);
+    } else if (iorq) {
+        pins_ = io_tick(pins_);
+    }
+
+    // CTC tick (drives timing and sound)
+    ctc_.tick();
+
     total_cycles_++;
 }
 
@@ -137,9 +152,166 @@ template<KC85Variant V> void KC85System<V>::render_system_menu_items() {}
 template<KC85Variant V> void KC85System<V>::render_configuration_ui() {}
 template<KC85Variant V> void KC85System<V>::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
-template<KC85Variant V> bus_state_t KC85System<V>::mem_tick(bus_state_t pins) { return pins; }
-template<KC85Variant V> bus_state_t KC85System<V>::io_tick(bus_state_t pins) { return pins; }
-template<KC85Variant V> void KC85System<V>::update_bank_state() {}
+template<KC85Variant V>
+bus_state_t KC85System<V>::mem_tick(bus_state_t pins) {
+    uint16_t addr = BUS_GET_ADDR(pins);
+    bool is_read = BUS_GET_BIT(pins, BUS_RW_BIT);
+
+    if (is_read) {
+        uint8_t data = 0xFF;
+        if (addr < 0x4000) {
+            // Base RAM (always present)
+            if (addr < ram_.size()) data = ram_[addr];
+        } else if (addr < 0x8000) {
+            // KC85/4: extended RAM; KC85/2+3: expansion modules (open bus)
+            if constexpr (Traits::has_extended_video) {
+                if (addr < ram_.size()) data = ram_[addr];
+            }
+        } else if (addr < 0xC000) {
+            // IRM (video RAM) — accessible only when enabled
+            if (irm_enabled_) {
+                uint16_t offset = addr - 0x8000;
+                if constexpr (Traits::has_extended_video) {
+                    // KC85/4: bank_ctrl_ selects plane and pixel/color
+                    bool is_color = bank_ctrl_ & 0x02;
+                    bool plane1   = bank_ctrl_ & 0x01;
+                    if (is_color) {
+                        data = plane1 ? color_ram_2_[offset] : color_ram_[offset];
+                    } else {
+                        data = plane1 ? pixel_ram_2_[offset] : pixel_ram_[offset];
+                    }
+                } else {
+                    // KC85/2+3: single interleaved plane
+                    data = pixel_ram_[offset];
+                }
+            }
+        } else if (addr < 0xE000) {
+            // BASIC ROM (KC85/3, /4) or open bus
+            if constexpr (Traits::has_basic_rom) {
+                if (basic_rom_on_ && static_cast<size_t>(addr - 0xC000) < basic_rom_.size())
+                    data = basic_rom_[addr - 0xC000];
+            }
+        } else {
+            // CAOS (OS) ROM
+            if (caos_rom_on_ && static_cast<size_t>(addr - 0xE000) < os_rom_.size())
+                data = os_rom_[addr - 0xE000];
+        }
+        BUS_SET_DATA(pins, data);
+    } else {
+        uint8_t data = BUS_GET_DATA(pins);
+        if (addr < 0x4000) {
+            if (addr < ram_.size()) ram_[addr] = data;
+        } else if (addr < 0x8000) {
+            if constexpr (Traits::has_extended_video) {
+                if (addr < ram_.size()) ram_[addr] = data;
+            }
+        } else if (addr < 0xC000) {
+            // IRM write
+            if (irm_enabled_) {
+                uint16_t offset = addr - 0x8000;
+                if constexpr (Traits::has_extended_video) {
+                    bool is_color = bank_ctrl_ & 0x02;
+                    bool plane1   = bank_ctrl_ & 0x01;
+                    if (is_color) {
+                        (plane1 ? color_ram_2_ : color_ram_)[offset] = data;
+                    } else {
+                        (plane1 ? pixel_ram_2_ : pixel_ram_)[offset] = data;
+                    }
+                } else {
+                    pixel_ram_[offset] = data;
+                }
+            }
+        }
+        // ROM regions ($C000-$FFFF) are read-only
+    }
+
+    return pins;
+}
+template<KC85Variant V>
+bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
+    // Interrupt acknowledge: IORQ + M1
+    if (!BUS_GET_BIT(pins, Z80_M1_BIT)) {
+        // CTC provides the interrupt vector in daisy chain
+        if (ctc_.interrupt_pending()) {
+            BUS_SET_DATA(pins, ctc_.interrupt_vector());
+        } else {
+            BUS_SET_DATA(pins, 0xFF);
+        }
+        return pins;
+    }
+
+    uint8_t port = static_cast<uint8_t>(BUS_GET_ADDR(pins));
+    bool is_read = BUS_GET_BIT(pins, BUS_RW_BIT);
+    uint8_t data = BUS_GET_DATA(pins);
+
+    // PIO 1 at $88-$8B (system + keyboard)
+    // Bit 0: port (0=A, 1=B), Bit 1: data/control (0=data, 1=control)
+    if ((port & 0xFC) == kc85_constants::PIO_A_DATA) {
+        int port_idx = port & 0x01;
+        bool is_ctrl = (port >> 1) & 0x01;
+        if (is_read) {
+            BUS_SET_DATA(pins, pio1_.read_data(port_idx));
+        } else {
+            if (is_ctrl) {
+                pio1_.write_control(port_idx, data);
+            } else {
+                pio1_.write_data(port_idx, data);
+            }
+            // PIO 1 Port B controls memory banking
+            if (!is_ctrl && port_idx == 1) {
+                update_bank_state();
+            }
+        }
+        return pins;
+    }
+
+    // CTC at $8C-$8F (4 channels)
+    if ((port & 0xFC) == kc85_constants::CTC_CH0) {
+        int channel = port & 0x03;
+        if (is_read) {
+            BUS_SET_DATA(pins, ctc_.read(channel));
+        } else {
+            ctc_.write(channel, data);
+        }
+        return pins;
+    }
+
+    // Module system at $80-$81
+    if (port == kc85_constants::MODULE_PORT || port == kc85_constants::MODULE_DATA_PORT) {
+        if (is_read) {
+            BUS_SET_DATA(pins, 0xFF);
+        }
+        return pins;
+    }
+
+    // KC85/4: additional banking control ports
+    if constexpr (Traits::has_extended_video) {
+        if (port == kc85_constants::KC4_CTRL_PORT && !is_read) {
+            bank_ctrl_ = data;
+            update_bank_state();
+            return pins;
+        }
+        if (port == kc85_constants::KC4_CTRL2_PORT && !is_read) {
+            bank_ctrl2_ = data;
+            update_bank_state();
+            return pins;
+        }
+    }
+
+    return pins;
+}
+template<KC85Variant V>
+void KC85System<V>::update_bank_state() {
+    uint8_t pio_b = pio1_.get_output(1);
+    caos_rom_on_  = pio_b & 0x01;    // Bit 0: CAOS ROM enable
+    irm_enabled_  = pio_b & 0x04;    // Bit 2: IRM (video RAM) enable
+    basic_rom_on_ = pio_b & 0x40;    // Bit 6: BASIC ROM enable
+
+    if constexpr (Traits::has_extended_video) {
+        // KC85/4: bank_ctrl_ selects video plane and type
+        active_plane_ = bank_ctrl_ & 0x01;
+    }
+}
 template<KC85Variant V> bool KC85System<V>::load_roms() { return false; }
 
 // ============================================================================
