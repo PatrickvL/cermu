@@ -452,7 +452,7 @@ static TickLoopResult tick_loop_protected(C64System* c64, uint32_t max_cycles, i
                             // Get border color
                             if (c64->vicii) {
                                 vicii_t* vicii = static_cast<vicii_t*>(c64->vicii);
-                                r.border_color = vicii->registers.data[vicii_regs::EC] & 0x0F;
+                                r.border_color = vicii->regs_[vicii_regs::EC] & 0x0F;
                             }
                             return r;
                         }
@@ -995,7 +995,7 @@ uint8_t TestFramework::get_border_color(C64System* c64) {
     
     vicii_t* vicii = static_cast<vicii_t*>(c64->vicii);
     // Border color is at register $D020 (vicii_regs::EC = register 32)
-    return vicii->registers.data[vicii_regs::EC] & 0x0F;  // Only lower 4 bits are color
+    return vicii->regs_[vicii_regs::EC] & 0x0F;  // Only lower 4 bits are color
 }
 
 // Enhanced exitcode test with multi-protocol support

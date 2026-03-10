@@ -53,7 +53,7 @@ static inline void vicii_border_update_limits(vicii_border_unit_t* border, uint8
 // Inputs: raster_counter, DEN bit, border_top, border_bottom.
 static inline void vicii_check_vertical_border(vicii_t* vicii) {
     const uint16_t raster = vicii->timing.raster_counter;
-    const bool den_set = (vicii->registers.data[vicii_regs::C1] & VICII_C1_DEN) != 0;
+    const bool den_set = (vicii->regs_[vicii_regs::C1] & VICII_C1_DEN) != 0;
     
     // check_vborder_top: top border + DEN → clear both immediately
     if (raster == vicii->border.border_top && den_set) {
@@ -142,15 +142,15 @@ static inline void vicii_pixel_emit_at_x(vicii_t* vicii, const vicii_pixel_t* pi
 // processor."
 static inline void vicii_set_interrupt(vicii_t* vicii, uint8_t interrupt_mask) {
     // Set the interrupt latch bit(s)
-    vicii->registers.data[vicii_regs::IR] |= interrupt_mask;
+    vicii->regs_[vicii_regs::IR] |= interrupt_mask;
     
     // Check if this interrupt is enabled and update IRQ flag
-    const uint8_t latched_interrupts = vicii->registers.data[vicii_regs::IR] & VICII_INTERRUPTS_MASK;
-    const uint8_t enabled_interrupts = vicii->registers.data[vicii_regs::IE] & VICII_INTERRUPTS_MASK;
+    const uint8_t latched_interrupts = vicii->regs_[vicii_regs::IR] & VICII_INTERRUPTS_MASK;
+    const uint8_t enabled_interrupts = vicii->regs_[vicii_regs::IE] & VICII_INTERRUPTS_MASK;
     
     // Set IRQ flag if any enabled interrupt is latched
     if (latched_interrupts & enabled_interrupts) {
-        vicii->registers.data[vicii_regs::IR] |= VICII_IR_IRQ;
+        vicii->regs_[vicii_regs::IR] |= VICII_IR_IRQ;
     }
     
     // NOTE: IRQ line will be updated in vicii_tick() based on register state
@@ -166,14 +166,14 @@ static inline void vicii_set_interrupt(vicii_t* vicii, uint8_t interrupt_mask) {
 static inline uint16_t vicii_sprite_get_x(const vicii_t* vicii, int sprite_num) {
     // Combine 8-bit base register with 9th bit from MX8 register
     // Uses bitwise operations for maximum performance
-    return vicii->registers.data[vicii_regs::M0X + sprite_num * 2] |
-         ((vicii->registers.data[vicii_regs::MX8] & (1 << sprite_num)) << (8 - sprite_num));
+    return vicii->regs_[vicii_regs::M0X + sprite_num * 2] |
+         ((vicii->regs_[vicii_regs::MX8] & (1 << sprite_num)) << (8 - sprite_num));
 }
 
 static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num) {
     vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[param_sprite_num];
     
-    if (!(vicii->registers.data[vicii_regs::MXE] & (1 << param_sprite_num)) || !sprite->display_state) return;
+    if (!(vicii->regs_[vicii_regs::MXE] & (1 << param_sprite_num)) || !sprite->display_state) return;
     
     const uint8_t sprite_bit = (1 << param_sprite_num);
     const uint16_t sprite_x = vicii_sprite_get_x(vicii, param_sprite_num);
@@ -191,9 +191,9 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
     
     // Hoist color register reads before the 8-pixel loop to prevent
     // aliasing-induced reloads after writes to pixel/collision buffers.
-    const uint8_t sprite_own_color = vicii->registers.data[vicii_regs::M0C + param_sprite_num];
-    const uint8_t mm0 = vicii->registers.data[vicii_regs::MM0];
-    const uint8_t mm1 = vicii->registers.data[vicii_regs::MM1];
+    const uint8_t sprite_own_color = vicii->regs_[vicii_regs::M0C + param_sprite_num];
+    const uint8_t mm0 = vicii->regs_[vicii_regs::MM0];
+    const uint8_t mm1 = vicii->regs_[vicii_regs::MM1];
     
     // Process all 8 pixels in this cycle (matching the graphics sequencer)
     for (int pixel = 0; pixel < 8; pixel++) {
@@ -242,8 +242,8 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
                 // Documentation (section 3.12): "only the first collision will trigger
                 // an interrupt (i.e. if the collision register contained zero before the
                 // collision)". The latch bit is always set; the IE register only gates IRQ.
-                const bool was_zero = (vicii->registers.data[vicii_regs::MXM_2] == 0);
-                vicii->registers.data[vicii_regs::MXM_2] |= collision_mask;
+                const bool was_zero = (vicii->regs_[vicii_regs::MXM_2] == 0);
+                vicii->regs_[vicii_regs::MXM_2] |= collision_mask;
                 if (was_zero) {
                     vicii_set_interrupt(vicii, VICII_IR_IMMC);
                 }
@@ -253,8 +253,8 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
             // Uses separate graphics_fg_line buffer that tracks raw graphics sequencer output,
             // independent of any sprite overwrites in the display priority buffer.
             if (vicii->pixel.graphics_fg_line[pixel_line_x]) {
-                const bool was_zero = (vicii->registers.data[vicii_regs::MXD_2] == 0);
-                vicii->registers.data[vicii_regs::MXD_2] |= sprite_bit;
+                const bool was_zero = (vicii->regs_[vicii_regs::MXD_2] == 0);
+                vicii->regs_[vicii_regs::MXD_2] |= sprite_bit;
                 if (was_zero) {
                     vicii_set_interrupt(vicii, VICII_IR_IMBC);
                 }
@@ -303,7 +303,7 @@ static inline void vicii_sprite_emit_pixels(vicii_t* vicii, int param_sprite_num
 // Early-out when no sprites are enabled (MXE == 0) saves ~8 function calls per cycle
 // on sprite-free frames (the common case for many programs).
 void vicii_sprite_sequencer(vicii_t* vicii) {
-    if (vicii->registers.data[vicii_regs::MXE] == 0) return;
+    if (vicii->regs_[vicii_regs::MXE] == 0) return;
     for (int i = VICII_NUM_SPRITES - 1; i >= 0; i--) {
         vicii_sprite_emit_pixels(vicii, i);
     }
@@ -401,7 +401,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                 const int16_t vp = vicii->cached_visible_pixels;
                 const int count = (base + 8 <= vp) ? 8 : (vp - base);
                 memset(&vicii->pixel.pixel_line_priority[base], VICII_PRIORITY_BACKGROUND, count);
-                memset(&vicii->pixel.color_line[base], vicii->registers.data[vicii_regs::B0C] & 0x0F, count);
+                memset(&vicii->pixel.color_line[base], vicii->regs_[vicii_regs::B0C] & 0x0F, count);
             }
         }
     } else {
@@ -439,7 +439,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
                 if (!vicii->border.vertical_border_flip_flop) {
                     // Detect main border opening transition for XSCROLL initialization.
                     if (vicii->border.main_border_flip_flop) {
-                        seq->xscroll_counter = vicii->registers.data[vicii_regs::C2] & VICII_C2_XSCROLL;
+                        seq->xscroll_counter = vicii->regs_[vicii_regs::C2] & VICII_C2_XSCROLL;
                         seq->pixel_in_char = 0;
                         seq->display_vmli = 0;
                     }
@@ -457,7 +457,7 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
             } else if (!vicii->video_logic.display_state) {
                 // Content area idle mode: background color with BACKGROUND priority
                 vicii_pixel_t idle_pixel;
-                idle_pixel.color = (vicii_color_t)(vicii->registers.data[vicii_regs::B0C] & 0x0F);
+                idle_pixel.color = (vicii_color_t)(vicii->regs_[vicii_regs::B0C] & 0x0F);
                 idle_pixel.priority = VICII_PRIORITY_BACKGROUND;
                 vicii_pixel_emit_at_x(vicii, &idle_pixel, pixel_x);
             }
@@ -492,10 +492,10 @@ static void vicii_pixel_sequencer(vicii_t* vicii) {
         // after vicii_pixel_emit_at_x() writes through uint8_t* pointers.
         // Safe within a single cycle: pixel sequencer runs during PHI1; CPU color
         // register writes happen during PHI2, so B0C-B3C cannot change mid-cycle.
-        const uint8_t bg0 = vicii->registers.data[vicii_regs::B0C];
-        const uint8_t bg1 = vicii->registers.data[vicii_regs::B1C];
-        const uint8_t bg2 = vicii->registers.data[vicii_regs::B2C];
-        const uint8_t bg3 = vicii->registers.data[vicii_regs::B3C];
+        const uint8_t bg0 = vicii->regs_[vicii_regs::B0C];
+        const uint8_t bg1 = vicii->regs_[vicii_regs::B1C];
+        const uint8_t bg2 = vicii->regs_[vicii_regs::B2C];
+        const uint8_t bg3 = vicii->regs_[vicii_regs::B3C];
         
         // Sequence exactly 8 pixels from shift register
         for (int pixel = 0; pixel < 8; pixel++) {
@@ -715,8 +715,8 @@ void vicii_lightpen_set_pin(vicii_t* vicii, bool pin_high) {
         if (!vicii->lightpen.triggered) {
             vicii->lightpen.triggered = true;
             // Latch current raster position
-            vicii->registers.data[vicii_regs::LPX] = (uint8_t)(vicii->timing.x_coordinate >> 1);
-            vicii->registers.data[vicii_regs::LPY] = (uint8_t)vicii->timing.raster_counter;
+            vicii->regs_[vicii_regs::LPX] = (uint8_t)(vicii->timing.x_coordinate >> 1);
+            vicii->regs_[vicii_regs::LPY] = (uint8_t)vicii->timing.raster_counter;
             // Signal the lightpen interrupt
             vicii_set_interrupt(vicii, VICII_IR_ILP);
         }
@@ -814,12 +814,12 @@ void vicii_update_badline_condition(vicii_t* vicii) {
         if (raster == 0x30) {
             if (!vicii->video_logic.was_den_set_during_raster_30) {
                 vicii->video_logic.was_den_set_during_raster_30 =
-                    (vicii->registers.data[vicii_regs::C1] & VICII_C1_DEN) != 0;
+                    (vicii->regs_[vicii_regs::C1] & VICII_C1_DEN) != 0;
             }
         }
         
         vicii->video_logic.is_bad_line = vicii->video_logic.was_den_set_during_raster_30 &&
-                                 ((raster & 0x07) == (vicii->registers.data[vicii_regs::C1] & VICII_C1_YSCROLL));
+                                 ((raster & 0x07) == (vicii->regs_[vicii_regs::C1] & VICII_C1_YSCROLL));
         
         // CRITICAL: The VIC-II latches display_state to true IMMEDIATELY when a bad line
         // condition is detected, at ANY cycle — not just at cycle 58.
@@ -844,15 +844,15 @@ void vicii_update_badline_condition(vicii_t* vicii) {
 // Helper function: Get 9-bit raster compare value from registers
 // Bits 0-7 from $d012, bit 8 from $d011 bit 7
 static inline uint16_t vicii_get_raster_compare(const vicii_t* vicii) {
-    return (vicii->registers.data[vicii_regs::RASTER] & 0xFF) |
-           ((vicii->registers.data[vicii_regs::C1] & VICII_C1_RST8) ? 0x100 : 0);
+    return (vicii->regs_[vicii_regs::RASTER] & 0xFF) |
+           ((vicii->regs_[vicii_regs::C1] & VICII_C1_RST8) ? 0x100 : 0);
 }
 
-static inline void vicii_registers_write_interrupt(vicii_registers_unit_t* regs, uint8_t value) {
+static inline void vicii_registers_write_interrupt(uint8_t* regs, uint8_t value) {
     // Only consider the 4 actually supported interrupt bits (IRST/IMBC/IMMC/ILP)
     value &= VICII_INTERRUPTS_MASK;
     // Fetch the current Interrupt Register value
-    uint8_t ir = regs->data[vicii_regs::IR];
+    uint8_t ir = regs[vicii_regs::IR];
     // Clear all '1' bits in the Interrupt Register that were written as '1'
     // Writing 1 to an interrupt bit acknowledges (clears) that interrupt
     ir &= ~value;
@@ -862,7 +862,7 @@ static inline void vicii_registers_write_interrupt(vicii_registers_unit_t* regs,
     // "The bit 7 in the latch $d019 reflects the inverted state of the IRQ output of the VIC."
     // The IRQ line is held low when ANY enabled interrupt is latched.
     const uint8_t latched_interrupts = ir & VICII_INTERRUPTS_MASK;
-    const uint8_t enabled_interrupts = regs->data[vicii_regs::IE] & VICII_INTERRUPTS_MASK;
+    const uint8_t enabled_interrupts = regs[vicii_regs::IE] & VICII_INTERRUPTS_MASK;
     
     // Set IRQ flag if any enabled interrupt remains latched
     if (latched_interrupts & enabled_interrupts) {
@@ -872,7 +872,7 @@ static inline void vicii_registers_write_interrupt(vicii_registers_unit_t* regs,
     }
     
     // Store the resulting bits (no need to set unused bits - they're only for reads)
-    regs->data[vicii_regs::IR] = ir;
+    regs[vicii_regs::IR] = ir;
     
     // NOTE: IRQ line will be updated in vicii_tick() based on register state
     // We don't update it here to avoid side-effects on bus_state
@@ -895,7 +895,7 @@ bus_state_t vicii_t::registers_write(void* context, bus_state_t bus_state) {
 
     if (reg == vicii_regs::IR) { // $d019 Interrupt Register
         // Treat the latching Interrupt Register differently from the other registers
-        vicii_registers_write_interrupt(&vicii->registers, value);
+        vicii_registers_write_interrupt(vicii->regs_, value);
         return bus_state; // No further processing needed for IR
     }
     
@@ -912,7 +912,7 @@ bus_state_t vicii_t::registers_write(void* context, bus_state_t bus_state) {
         value &= 0x0F; // $d020 and up are colors - keep only lowest 4 bits
     }
     
-    vicii->registers.data[reg] = value;
+    vicii->regs_[reg] = value;
     
     // Unit-specific update handlers
     switch (reg) {
@@ -927,8 +927,8 @@ bus_state_t vicii_t::registers_write(void* context, bus_state_t bus_state) {
             // vicii_regs::C2 only changes CSEL (horizontal borders), so no vborder check needed.
             FALLTHROUGH; // to C2 case
         case vicii_regs::C2: // $d016 Control register 2
-            vicii_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[vicii_regs::C1], vicii->registers.data[vicii_regs::C2]);
-            vicii_border_update_limits(&vicii->border, vicii->registers.data[vicii_regs::C1], vicii->registers.data[vicii_regs::C2]);
+            vicii_sequencer_update_mode(&vicii->sequencer, vicii->regs_[vicii_regs::C1], vicii->regs_[vicii_regs::C2]);
+            vicii_border_update_limits(&vicii->border, vicii->regs_[vicii_regs::C1], vicii->regs_[vicii_regs::C2]);
             if (reg == vicii_regs::C1) {
                 vicii_check_vertical_border(vicii);
             }
@@ -1010,17 +1010,17 @@ bus_state_t vicii_t::registers_read(void* context, bus_state_t bus_state) {
     vicii_t* vicii = (vicii_t*)context;
     uint8_t reg = BUS_GET_ADDR(bus_state) & vicii_regs::MASK;
     uint8_t bus_data = BUS_GET_DATA(bus_state);
-    uint8_t reg_val = vicii->registers.data[reg];
+    uint8_t reg_val = vicii->regs_[reg];
 
     // Single test — one branch, predicted not-taken
     if (unlikely((VICII_SPECIAL_REGS >> reg) & 1)) {
         switch (reg) {
             case vicii_regs::C1:     reg_val = (reg_val & 0x7F) | ((vicii->timing.raster_counter >> 1) & VICII_C1_RST8); break;
             case vicii_regs::RASTER: reg_val = vicii->timing.raster_counter & 0xFF; break;
-            case vicii_regs::MXM:    reg_val = vicii->registers.data[vicii_regs::MXM_2];
-                               vicii->registers.data[vicii_regs::MXM_2] = 0; break;
-            case vicii_regs::MXD:    reg_val = vicii->registers.data[vicii_regs::MXD_2];
-                               vicii->registers.data[vicii_regs::MXD_2] = 0; break;
+            case vicii_regs::MXM:    reg_val = vicii->regs_[vicii_regs::MXM_2];
+                               vicii->regs_[vicii_regs::MXM_2] = 0; break;
+            case vicii_regs::MXD:    reg_val = vicii->regs_[vicii_regs::MXD_2];
+                               vicii->regs_[vicii_regs::MXD_2] = 0; break;
             case vicii_regs::C2:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_C2_UNUSED); break;
             case vicii_regs::MP:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_MP_UNUSED); break;
             case vicii_regs::IR:     reg_val = bitmix(reg_val, bus_data, (uint8_t)~VICII_IR_UNUSED); break;
@@ -1121,7 +1121,7 @@ static inline void vicii_line_buffer_reset(vicii_t* vicii) {
     if (!vicii->pixel.color_line) return;
     
     const uint16_t width = vicii->config->visible_pixels_per_line;
-    const uint8_t border_color = vicii->registers.data[vicii_regs::EC] & 0x0F;
+    const uint8_t border_color = vicii->regs_[vicii_regs::EC] & 0x0F;
     
     memset(vicii->pixel.pixel_line_priority, VICII_PRIORITY_BORDER, width);
     memset(vicii->pixel.color_line, border_color, width);
@@ -1413,14 +1413,14 @@ static uint8_t vicii_cycle_sprite_p_0_ntsc(vicii_t* vicii, int param) {
 //   For each sprite: if enabled($D015) AND Y matches AND !dma → turn on DMA
 //   turn_sprite_dma_on: sprite_dma |= bit, mcbase=0, exp_flop=1
 static void vicii_sprite_y_coordinate_check(vicii_t* vicii) {
-    uint8_t mxe_reg = vicii->registers.data[vicii_regs::MXE];
+    uint8_t mxe_reg = vicii->regs_[vicii_regs::MXE];
     uint16_t raster = vicii->timing.raster_counter;
     for (int i = 0; i < VICII_NUM_SPRITES; i++) {
         vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
         
         // Cycles 55 and 56: Check Y-coordinate match
         if ((mxe_reg & (1 << i)) && !sprite->dma_enabled) {
-            uint8_t sprite_y = vicii->registers.data[vicii_regs::M0Y + i * 2];
+            uint8_t sprite_y = vicii->regs_[vicii_regs::M0Y + i * 2];
             if ((raster & 0xFF) == sprite_y) {
                 // VICE: turn_sprite_dma_on() — DMA on, mcbase=0, exp_flop=1
                 // exp_flop is ALWAYS set to 1 (true), regardless of Y-expansion.
@@ -1437,7 +1437,7 @@ static void vicii_sprite_y_coordinate_check(vicii_t* vicii) {
 // VICE reference (viciisc/vicii-cycle.c check_exp):
 //   For each sprite: if DMA active AND Y-expanded → toggle exp_flop
 static void vicii_sprite_expansion_toggle(vicii_t* vicii) {
-    uint8_t mxye_reg = vicii->registers.data[vicii_regs::MXYE];
+    uint8_t mxye_reg = vicii->regs_[vicii_regs::MXYE];
     for (int i = 0; i < VICII_NUM_SPRITES; i++) {
         vicii_sprite_unit_t* sprite = &vicii->sprites.sprites[i];
         if (sprite->dma_enabled && (mxye_reg & (1 << i))) {
@@ -1990,7 +1990,7 @@ bus_state_t vicii_t::tick_phi1(bus_state_t bus_state) {
     // The pull-up resistor model (system bus default state) already sets
     // IRQ high at the start of each cycle. If we set it here, we would overwrite any IRQ
     // assertion by CIA or other chips. VIC-II should ONLY assert, never explicitly release.
-    if (vicii->registers.data[vicii_regs::IR] & VICII_IR_IRQ) {
+    if (vicii->regs_[vicii_regs::IR] & VICII_IR_IRQ) {
         // IRQ flag is set - assert IRQ line (active-low, clear bit)
         BUS_CLR_BIT(bus_state, BUS_IRQ_BIT);
     }
@@ -2404,7 +2404,7 @@ static const vicii_chip_config_t MOS6569_config = {
 
 static inline void vicii_initialize(vicii_t* vicii) {
     // Zero all units
-    memset(&vicii->registers, 0, sizeof(vicii_registers_unit_t));
+    memset(vicii->regs_, 0, vicii->num_regs_);
     memset(&vicii->timing, 0, sizeof(vicii_timing_unit_t));
     memset(&vicii->video_logic, 0, sizeof(vicii_video_logic_unit_t));
     memset(&vicii->video_data, 0, sizeof(vicii_video_data_unit_t));
@@ -2417,38 +2417,38 @@ static inline void vicii_initialize(vicii_t* vicii) {
     
     // Set default register values - Enable DEN to match real hardware behavior
     // The VIC-II starts with display enabled, allowing immediate character data display
-    vicii->registers.data[vicii_regs::C1] = VICII_C1_RST8 | VICII_C1_DEN | VICII_C1_RSEL |
+    vicii->regs_[vicii_regs::C1] = VICII_C1_RST8 | VICII_C1_DEN | VICII_C1_RSEL |
                             (VICII_C1_YSCROLL & 3); // DEN=1, YSCROLL=3, RSEL=1, RST8=1
-    vicii->registers.data[vicii_regs::MXE] = 0;  // All sprites disabled
-    vicii->registers.data[vicii_regs::C2] = VICII_C2_CSEL; // 8: XSCROLL:0, no MultiColorMode, 40-column display, no RESET
-    vicii->registers.data[vicii_regs::MP] = VICII_MP_CB12 | VICII_MP_VM10; // 0x14: "address of Character Dot-Data area to 4096 ($1000)"
-    vicii->registers.data[vicii_regs::RASTER] = 0; // Raster compare bits 0-7
-    vicii->registers.data[vicii_regs::IR] = 0; // No interrupts latched at startup
+    vicii->regs_[vicii_regs::MXE] = 0;  // All sprites disabled
+    vicii->regs_[vicii_regs::C2] = VICII_C2_CSEL; // 8: XSCROLL:0, no MultiColorMode, 40-column display, no RESET
+    vicii->regs_[vicii_regs::MP] = VICII_MP_CB12 | VICII_MP_VM10; // 0x14: "address of Character Dot-Data area to 4096 ($1000)"
+    vicii->regs_[vicii_regs::RASTER] = 0; // Raster compare bits 0-7
+    vicii->regs_[vicii_regs::IR] = 0; // No interrupts latched at startup
     // CRITICAL FIX: Disable VIC-II interrupts at startup to prevent boot disruption
     // The KERNAL will enable raster interrupts after initialization is complete
     // Starting with interrupts enabled causes repeated CINT calls that corrupt zero-page
-    vicii->registers.data[vicii_regs::IE] = 0; // No interrupts enabled at startup
+    vicii->regs_[vicii_regs::IE] = 0; // No interrupts enabled at startup
 
     // Initialize lightpen: LP pin starts HIGH (released), not triggered
     vicii->lightpen.lp_pin_prev = true;
     vicii->lightpen.triggered = false;
 
     // Set default colors
-    vicii->registers.data[vicii_regs::EC] = VICII_COLOR_LIGHT_BLUE; // 14: Border Color
-    vicii->registers.data[vicii_regs::B0C] = VICII_COLOR_BLUE; // 6: Background Color 0
-    vicii->registers.data[vicii_regs::B1C] = VICII_COLOR_WHITE; // 1: Background Color 1
-    vicii->registers.data[vicii_regs::B2C] = VICII_COLOR_RED; // 2: Background Color 2
-    vicii->registers.data[vicii_regs::B3C] = VICII_COLOR_CYAN; // 3: Background Color 3
-    vicii->registers.data[vicii_regs::MM0] = VICII_COLOR_PURPLE; // 4: Sprite Multicolor 0
-    vicii->registers.data[vicii_regs::MM1] = VICII_COLOR_BLACK; // 0: Sprite Multicolor 1
-    vicii->registers.data[vicii_regs::M0C] = VICII_COLOR_WHITE; // 1: Sprite Color 0
-    vicii->registers.data[vicii_regs::M1C] = VICII_COLOR_RED; // 2: Sprite Color 1
-    vicii->registers.data[vicii_regs::M2C] = VICII_COLOR_CYAN; // 3: Sprite Color 2
-    vicii->registers.data[vicii_regs::M3C] = VICII_COLOR_PURPLE; // 4: Sprite Color 3
-    vicii->registers.data[vicii_regs::M4C] = VICII_COLOR_GREEN; // 5: Sprite Color 4
-    vicii->registers.data[vicii_regs::M5C] = VICII_COLOR_BLUE; // 6: Sprite Color 5
-    vicii->registers.data[vicii_regs::M6C] = VICII_COLOR_YELLOW; // 7: Sprite Color 6
-    vicii->registers.data[vicii_regs::M7C] = VICII_COLOR_MEDIUM_GREY; // 12: Sprite Color 7
+    vicii->regs_[vicii_regs::EC] = VICII_COLOR_LIGHT_BLUE; // 14: Border Color
+    vicii->regs_[vicii_regs::B0C] = VICII_COLOR_BLUE; // 6: Background Color 0
+    vicii->regs_[vicii_regs::B1C] = VICII_COLOR_WHITE; // 1: Background Color 1
+    vicii->regs_[vicii_regs::B2C] = VICII_COLOR_RED; // 2: Background Color 2
+    vicii->regs_[vicii_regs::B3C] = VICII_COLOR_CYAN; // 3: Background Color 3
+    vicii->regs_[vicii_regs::MM0] = VICII_COLOR_PURPLE; // 4: Sprite Multicolor 0
+    vicii->regs_[vicii_regs::MM1] = VICII_COLOR_BLACK; // 0: Sprite Multicolor 1
+    vicii->regs_[vicii_regs::M0C] = VICII_COLOR_WHITE; // 1: Sprite Color 0
+    vicii->regs_[vicii_regs::M1C] = VICII_COLOR_RED; // 2: Sprite Color 1
+    vicii->regs_[vicii_regs::M2C] = VICII_COLOR_CYAN; // 3: Sprite Color 2
+    vicii->regs_[vicii_regs::M3C] = VICII_COLOR_PURPLE; // 4: Sprite Color 3
+    vicii->regs_[vicii_regs::M4C] = VICII_COLOR_GREEN; // 5: Sprite Color 4
+    vicii->regs_[vicii_regs::M5C] = VICII_COLOR_BLUE; // 6: Sprite Color 5
+    vicii->regs_[vicii_regs::M6C] = VICII_COLOR_YELLOW; // 7: Sprite Color 6
+    vicii->regs_[vicii_regs::M7C] = VICII_COLOR_MEDIUM_GREY; // 12: Sprite Color 7
     
     // Initialize sprite display priorities from default $D01B = 0 (all sprites in front)
     // CRITICAL: memset zeroed sprite structs → priority=0 (BACKGROUND), which prevents
@@ -2465,18 +2465,18 @@ static inline void vicii_initialize(vicii_t* vicii) {
     vicii->sequencer.xscroll_counter = 0;
     
     // Update units based on register values
-    vicii_sequencer_update_mode(&vicii->sequencer, vicii->registers.data[vicii_regs::C1], vicii->registers.data[vicii_regs::C2]);
-    vicii_border_update_limits(&vicii->border, vicii->registers.data[vicii_regs::C1], vicii->registers.data[vicii_regs::C2]);
+    vicii_sequencer_update_mode(&vicii->sequencer, vicii->regs_[vicii_regs::C1], vicii->regs_[vicii_regs::C2]);
+    vicii_border_update_limits(&vicii->border, vicii->regs_[vicii_regs::C1], vicii->regs_[vicii_regs::C2]);
     
     // Initialize border pixel from register value (EC was set to LIGHT_BLUE at line 1815)
     vicii->border.border_pixel.priority = VICII_PRIORITY_BORDER;
-    vicii->border.border_pixel.color = static_cast<vicii_color_t>(vicii->registers.data[vicii_regs::EC]);
+    vicii->border.border_pixel.color = static_cast<vicii_color_t>(vicii->regs_[vicii_regs::EC]);
     // Initialize border flip-flops (Documentation section 3.9)
     vicii->border.main_border_flip_flop = true;      // Start with border on
     vicii->border.vertical_border_flip_flop = true;  // Start with vertical border on
     vicii->border.set_vertical_border_flip_flop = true; // Staged latch also starts on
     vicii->border.deferred_right_border = false;      // No pending right border
-    vicii_memory_update_mapping(&vicii->memory, vicii->registers.data[vicii_regs::MP]);
+    vicii_memory_update_mapping(&vicii->memory, vicii->regs_[vicii_regs::MP]);
     
     // Initialize refresh counter (Documentation section 3.13)
     vicii->video_logic.refresh_counter = 0xFF;
@@ -2528,7 +2528,7 @@ static inline void vicii_initialize_timing(vicii_t* vicii, const vicii_chip_conf
         vicii->pixel.graphics_fg_line = static_cast<bool*>(calloc(config->visible_pixels_per_line, sizeof(bool)));
         
         // Initialize buffer with current border color
-        const uint8_t border_color = vicii->registers.data[vicii_regs::EC] & 0x0F;
+        const uint8_t border_color = vicii->regs_[vicii_regs::EC] & 0x0F;
         memset(vicii->pixel.pixel_line_priority, VICII_PRIORITY_BORDER, config->visible_pixels_per_line);
         memset(vicii->pixel.color_line, border_color, config->visible_pixels_per_line);
     }
@@ -2623,10 +2623,10 @@ void vicii_t::set_framebuffer(uint32_t* framebuffer, int width, int height) {
     vicii_pixel_set_framebuffer(&pixel, framebuffer, width, height);
     // Border color should come from register, not hardcoded
     border.border_pixel.priority = VICII_PRIORITY_BORDER;
-    border.border_pixel.color = static_cast<vicii_color_t>(registers.data[vicii_regs::EC]);
+    border.border_pixel.color = static_cast<vicii_color_t>(regs_[vicii_regs::EC]);
     if (pixel.color_line && config->visible_pixels_per_line > 0) {
         // Initialize buffer with current border color
-        const uint8_t border_color = registers.data[vicii_regs::EC] & 0x0F;
+        const uint8_t border_color = regs_[vicii_regs::EC] & 0x0F;
         memset(pixel.pixel_line_priority, VICII_PRIORITY_BORDER, config->visible_pixels_per_line);
         memset(pixel.color_line, border_color, config->visible_pixels_per_line);
     }
@@ -2647,7 +2647,7 @@ static uint32_t vicii_read_compound(const uint8_t* regs, uint16_t idx) {
 void vicii_t::register_debug_fields() {
     using VI = const vicii_t;
     auto& r = debug_registry_;
-    r.set_registers(registers.data, 66, VICII_REG_INFO, 0xD000);
+    r.set_registers(regs_, 66, VICII_REG_INFO, 0xD000);
     r.set_decl_order(VICII_DECL_ORDER.data(), VICII_DECL_ORDER.size(),
                      VICII_FLD_INFO, VICII_NUM_FIELDS,
                      VICII_COMPOUND_INFO, VICII_NUM_COMPOUND_INFO,
@@ -2681,8 +2681,8 @@ void vicii_t::register_debug_fields() {
     r.category("Display Mode")
      .state("Screen Mode", +[](const ChipBase* c) -> uint32_t {
          auto* s = static_cast<VI*>(c);
-         uint8_t cr1 = s->registers.data[vicii_regs::C1];
-         uint8_t cr2 = s->registers.data[vicii_regs::C2];
+         uint8_t cr1 = s->regs_[vicii_regs::C1];
+         uint8_t cr2 = s->regs_[vicii_regs::C2];
          uint8_t ecm = (cr1 >> 6) & 1;
          uint8_t bmm = (cr1 >> 5) & 1;
          uint8_t mcm = (cr2 >> 4) & 1;

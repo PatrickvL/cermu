@@ -98,7 +98,7 @@ static std::vector<PinSignalState> get_vicii_pin_states(vicii_t* vicii, const Ch
     auto pin_states = populate_pin_states_from_bus(*layout, bus_state);
 
     // VIC-II specific: IRQ driven by VIC-II (override direction from generic)
-    if (vicii->registers.data[0x19] & 0x80) {
+    if (vicii->regs_[0x19] & 0x80) {
         pin_states[5].signal_level = false; // IRQ (pin 6) - active low, asserted
         pin_states[5].drive_direction = true;
         pin_states[5].high_impedance = false;
