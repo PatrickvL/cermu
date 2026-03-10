@@ -106,6 +106,7 @@ public:
     kc85_module_system_t()
         : IoChipBase(ChipInfo("Module System", "VEB Mikroelektronik"))
     {
+        init_regs(kc85_mod_regs::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -168,8 +169,7 @@ public:
 private:
     kc85_module_slot_t slots_[MAX_SLOTS]{};
 
-    // Register file mirror (slot control bytes)
-    uint8_t regs_[kc85_mod_regs::REG_COUNT]{};
+    // Register file mirror (slot control bytes — backed by ChipBase::regs_)
 
     void update_regs() {
         for (int i = 0; i < MAX_SLOTS; ++i) {

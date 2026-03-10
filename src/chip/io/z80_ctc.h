@@ -78,6 +78,7 @@ public:
         : IoChipBase(ChipInfo(is_u857 ? "U857" : "Z80 CTC",
                              is_u857 ? "VEB MME Erfurt" : "Zilog"))
     {
+        init_regs(z80_ctc_regs::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -225,8 +226,7 @@ private:
     Channel ch_[4]{};
     uint8_t int_vector_base_ = 0x00;
 
-    // Register file mirror (flattened view for debug inspection)
-    uint8_t regs_[z80_ctc_regs::REG_COUNT]{};
+    // Register file mirror (flattened view for debug inspection — backed by ChipBase::regs_)
 
     void update_regs() {
         for (int i = 0; i < 4; ++i) {

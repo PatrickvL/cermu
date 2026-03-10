@@ -53,6 +53,7 @@ public:
     i8255_t()
         : IoChipBase(ChipInfo("8255", "Intel"))
     {
+        init_regs(i8255_regs::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -160,8 +161,7 @@ private:
     uint8_t port_b_in_ = 0xFF;
     uint8_t port_c_in_ = 0xFF;
 
-    // Register file mirror (for debug inspection)
-    uint8_t regs_[i8255_regs::REG_COUNT]{};
+    // Register file mirror (for debug inspection — backed by ChipBase::regs_)
 
     void update_regs() {
         regs_[i8255_regs::PORT_A]  = port_a_out_;

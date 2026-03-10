@@ -59,6 +59,7 @@ DECL_EXTRACT_REGS_ONLY(RIOT, RIOT_DECL)
 
 struct pia6532_t : public IoChipBase {
     pia6532_t() : IoChipBase(ChipInfo{"PIA6532", "MOS Technology"}) {
+        init_regs(RIOT_NUM_REGS);
 #ifdef CERMU_HAS_CHIP_DEBUG
         debug_registry_.set_registers(regs_, RIOT_NUM_REGS, RIOT_REG_INFO);
         register_debug_fields();
@@ -76,10 +77,7 @@ struct pia6532_t : public IoChipBase {
     // ========================================================================
     uint8_t ram[128] = {};
 
-    // ========================================================================
-    // I/O PORTS — flat register array + named accessors
-    // ========================================================================
-    uint8_t regs_[RIOT_NUM_REGS] = {};
+    // I/O port named accessors (backed by ChipBase::regs_)
 
     uint8_t& port_a_data = regs_[RIOT_REG_PORTA_DATA];   // Output latch
     uint8_t& port_a_ddr  = regs_[RIOT_REG_PORTA_DDR];    // Data direction (0=input, 1=output)

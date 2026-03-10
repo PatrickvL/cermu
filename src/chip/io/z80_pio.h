@@ -75,6 +75,7 @@ public:
         : IoChipBase(ChipInfo(is_u855 ? "U855" : "Z80 PIO",
                              is_u855 ? "VEB MME Erfurt" : "Zilog"))
     {
+        init_regs(z80_pio_regs::REG_COUNT);
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -176,8 +177,7 @@ private:
 
     Port port_[2]{};
 
-    // Register file mirror (flattened view for debug inspection)
-    uint8_t regs_[z80_pio_regs::REG_COUNT]{};
+    // Register file mirror (flattened view for debug inspection — backed by ChipBase::regs_)
 
     void update_regs() {
         for (int i = 0; i < 2; ++i) {

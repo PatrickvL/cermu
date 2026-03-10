@@ -49,6 +49,7 @@ DECL_EXTRACT_ALL(PIA, PIA_DECL)
 
 struct pia6820_t : public IoChipBase {
     pia6820_t() : IoChipBase(ChipInfo{"PIA6820", "Motorola"}) {
+        init_regs(PIA_NUM_REGS);
 #ifdef CERMU_HAS_CHIP_DEBUG
         debug_registry_.set_registers(regs_, PIA_NUM_REGS, PIA_REG_INFO);
         register_debug_fields();
@@ -61,10 +62,7 @@ struct pia6820_t : public IoChipBase {
     std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
 #endif
 
-    // ========================================================================
-    // REGISTERS — flat array + named accessors
-    // ========================================================================
-    uint8_t regs_[PIA_NUM_REGS] = {};
+    // Register named accessors (backed by ChipBase::regs_)
 
     // Port A registers
     uint8_t& port_a_data      = regs_[PIA_REG_PORTA_DATA];   // Data register (output latch)
