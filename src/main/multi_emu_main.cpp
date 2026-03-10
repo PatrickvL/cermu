@@ -355,11 +355,11 @@ int main(int argc, char** argv) {
                 frame_count++;
             }
             printf("\n=== Frame %d ===\n", frame_count);
-            uint8_t d011 = c64->vicii->registers.data[0x11];
-            uint8_t d016 = c64->vicii->registers.data[0x16];
-            uint8_t d018 = c64->vicii->registers.data[0x18];
-            uint8_t d020 = c64->vicii->registers.data[0x20];
-            uint8_t d021 = c64->vicii->registers.data[0x21];
+            uint8_t d011 = c64->vicii->regs_[0x11];
+            uint8_t d016 = c64->vicii->regs_[0x16];
+            uint8_t d018 = c64->vicii->regs_[0x18];
+            uint8_t d020 = c64->vicii->regs_[0x20];
+            uint8_t d021 = c64->vicii->regs_[0x21];
             uint8_t yscroll = d011 & 0x07;
             uint8_t xscroll = d016 & 0x07;
             uint16_t bank_base = c64->vicii->memory.bank_base;
@@ -372,20 +372,20 @@ int main(int argc, char** argv) {
                    bank_base / 0x4000, bank_base, vm_base, bank_base | vm_base, cb_base, bank_base | cb_base);
             
             // ===== SPRITE STATE =====
-            uint8_t d015 = c64->vicii->registers.data[0x15]; // enable
-            uint8_t d010 = c64->vicii->registers.data[0x10]; // X bit 8
-            uint8_t d017 = c64->vicii->registers.data[0x17]; // Y expand
-            uint8_t d01b = c64->vicii->registers.data[0x1B]; // priority
-            uint8_t d01c = c64->vicii->registers.data[0x1C]; // multicolor
-            uint8_t d01d = c64->vicii->registers.data[0x1D]; // X expand
+            uint8_t d015 = c64->vicii->regs_[0x15]; // enable
+            uint8_t d010 = c64->vicii->regs_[0x10]; // X bit 8
+            uint8_t d017 = c64->vicii->regs_[0x17]; // Y expand
+            uint8_t d01b = c64->vicii->regs_[0x1B]; // priority
+            uint8_t d01c = c64->vicii->regs_[0x1C]; // multicolor
+            uint8_t d01d = c64->vicii->regs_[0x1D]; // X expand
             printf("\nSPRITE STATE:\n");
             printf("$D015=$%02X(enable) $D01C=$%02X(mc) $D01D=$%02X(xexp) $D017=$%02X(yexp) $D01B=$%02X(pri) $D010=$%02X(x8)\n",
                    d015, d01c, d01d, d017, d01b, d010);
             
             for (int s = 0; s < 8; s++) {
-                uint16_t sx = c64->vicii->registers.data[0x00 + s*2] | ((d010 & (1<<s)) ? 256 : 0);
-                uint8_t sy = c64->vicii->registers.data[0x01 + s*2];
-                uint8_t sc = c64->vicii->registers.data[0x27 + s]; // color
+                uint16_t sx = c64->vicii->regs_[0x00 + s*2] | ((d010 & (1<<s)) ? 256 : 0);
+                uint8_t sy = c64->vicii->regs_[0x01 + s*2];
+                uint8_t sc = c64->vicii->regs_[0x27 + s]; // color
                 bool en = (d015 & (1<<s)) != 0;
                 bool xexp = (d01d & (1<<s)) != 0;
                 bool yexp = (d017 & (1<<s)) != 0;
@@ -413,7 +413,7 @@ int main(int argc, char** argv) {
             printf("\nSprite internal state (emulator):\n");
             for (int s = 0; s < 8; s++) {
                 auto& spr = c64->vicii->sprites.sprites[s];
-                bool enabled = (c64->vicii->registers.data[vicii_regs::MXE] & (1 << s)) != 0;
+                bool enabled = (c64->vicii->regs_[vicii_regs::MXE] & (1 << s)) != 0;
                 printf("  Spr%d: enabled=%d dma=%d display=%d dp=$%02X mc=%d shift=$%06X\n",
                        s, enabled, spr.dma_enabled, spr.display_state,
                        spr.data_pointer, spr.mc, spr.shift_reg);
@@ -480,7 +480,7 @@ int main(int argc, char** argv) {
             // Check CIA2 DD00 for bank config
             printf("\nCIA2 $DD00 port A value: $%02X\n", c64->ram->data()[0xDD00]);
             // Actually read from CIA2 register directly
-            printf("CIA2 PRA register: $%02X\n", c64->cia2->reg[0] & 0x03);
+            printf("CIA2 PRA register: $%02X\n", c64->cia2->regs_[0] & 0x03);
             
             // ===== BITMAP MODE DATA =====
             if (bmm) {
@@ -520,8 +520,8 @@ int main(int argc, char** argv) {
             printf("IRQ vector: $%04X, NMI vector: $%04X, HW IRQ ($0314): $%04X\n", 
                    irq_lo, nmi_lo, hw_irq);
             printf("CIA1 ICR mask: $%02X, VIC $D01A: $%02X\n",
-                   c64->vicii->registers.data[0x1A],
-                   c64->vicii->registers.data[0x1A]);
+                   c64->vicii->regs_[0x1A],
+                   c64->vicii->regs_[0x1A]);
         }
         
         system->shutdown();

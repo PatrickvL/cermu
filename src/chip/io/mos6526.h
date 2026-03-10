@@ -106,6 +106,7 @@ DECL_EXTRACT_ALL(CIA, CIA_DECL)
 
 struct mos6526_t : public IoChipBase {
     mos6526_t() : IoChipBase(ChipInfo{"MOS6526", "MOS Technology"}) {
+        init_regs(CIA_REGS_SIZE + 4 + 4 + 4 + 1 + 1); // Registers, plus TIMER, CLOCK, ALARM, SDR and DDRB latches
 #ifdef CERMU_HAS_CHIP_DEBUG
         register_debug_fields();
 #endif
@@ -117,12 +118,11 @@ struct mos6526_t : public IoChipBase {
     uint8_t port_a_value = 0;
     uint8_t port_b_value = 0;
     int cycles_tod[2] = {}; // Assigned once in constructor
-    uint8_t reg[CIA_REGS_SIZE + 4 + 4 + 4 + 1 + 1] = {}; // Registers, plus TIMER, CLOCK, ALARM, SDR and DDRB latches
 
     // Generic IO port views for DDR/data/pins mechanics
     // Register indices: PRA=0, PRB=1, DDRA=2, DDRB=3 (constants defined in MOS6526 namespace below)
-    io_port<0xFF> port_a{reg[2], reg[0], port_a_value};  // DDR→DDRA, data→PRA, pins→port_a_value
-    io_port<0xFF> port_b{reg[3], reg[1], port_b_value};  // DDR→DDRB, data→PRB, pins→port_b_value
+    io_port<0xFF> port_a{regs_[2], regs_[0], port_a_value};  // DDR→DDRA, data→PRA, pins→port_a_value
+    io_port<0xFF> port_b{regs_[3], regs_[1], port_b_value};  // DDR→DDRB, data→PRB, pins→port_b_value
 
     uint32_t read_tod_delta = 0;
     uint32_t write_tod_delta = 0;
@@ -237,7 +237,7 @@ private:
     void register_debug_fields() {
         using CI = const mos6526_t;
 
-        debug_registry_.set_registers(reg, CIA_REGS_SIZE, CIA_REG_INFO);
+        debug_registry_.set_registers(regs_, CIA_REGS_SIZE, CIA_REG_INFO);
         debug_registry_.set_decl_order(CIA_DECL_ORDER.data(), CIA_DECL_ORDER.size(),
                                        CIA_FLD_INFO, CIA_NUM_FIELDS,
                                        nullptr, 0, nullptr);
@@ -248,24 +248,24 @@ private:
         // --- Data Ports ---
         debug_registry_.category("Data Ports")
             .port("Port A",
-                  +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[0]; },
-                  +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[2]; })
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->regs_[0]; },
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->regs_[2]; })
             .port("Port B",
-                  +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[1]; },
-                  +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[3]; });
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->regs_[1]; },
+                  +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->regs_[3]; });
 
         // --- Timers (live counters/latches — not in register mirror) ---
         debug_registry_.category("Timers")
             .timer("Timer A",
                    +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->timer_counter_[0]; },
                    +[](const ChipBase* c) -> uint32_t {
-                       return (static_cast<CI*>(c)->reg[17] << 8) | static_cast<CI*>(c)->reg[16]; },
-                   +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[14] & 0x01; })
+                       return (static_cast<CI*>(c)->regs_[17] << 8) | static_cast<CI*>(c)->regs_[16]; },
+                   +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->regs_[14] & 0x01; })
             .timer("Timer B",
                    +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->timer_counter_[1]; },
                    +[](const ChipBase* c) -> uint32_t {
-                       return (static_cast<CI*>(c)->reg[19] << 8) | static_cast<CI*>(c)->reg[18]; },
-                   +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->reg[15] & 0x01; });
+                       return (static_cast<CI*>(c)->regs_[19] << 8) | static_cast<CI*>(c)->regs_[18]; },
+                   +[](const ChipBase* c) -> uint32_t { return static_cast<CI*>(c)->regs_[15] & 0x01; });
 
         // --- Interrupt (internal delayed mask not in register) ---
         debug_registry_.category("Interrupt Control")
