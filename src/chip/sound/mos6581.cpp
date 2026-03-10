@@ -1026,6 +1026,12 @@ bus_state_t mos6581_t::registers_write(void* context, bus_state_t bus_state) {
     if (r < sid_constants::REGS_SIZE) {
         sid->regs[r] = value;
     }
+
+    // Write-capture callback (for SID register logging / test harnesses)
+    if (unlikely(sid->write_capture_fn != nullptr)) {
+        sid->write_capture_fn(sid->write_capture_ctx,
+                              sid->total_cycles, (uint8_t)r, value);
+    }
     
     return bus_state;
 }
