@@ -71,44 +71,16 @@ template<Z1013Variant V>
 bool Z1013System<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
 
-    // ── Create RAMChip wrappers ──────────────────────────────────────
-    auto ram = std::make_unique<RAMChip>(
-        ChipInfo{"DRAM", "VEB"}, Traits::ram_size,
-        RAMChip::RAM, &pins_, "RAM", 0x0000);
-    ram_chip_ = ram.get();
+    // ── Create memory chips from manifest and wire bus ────────────────────
+    bus_mem_.create_chips(&pins_);
+    bus_mem_.apply(bus_);
 
-    auto video_ram = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "VEB"}, z1013_constants::VIDEO_RAM_SIZE,
-        RAMChip::RAM, &pins_, "Video RAM", z1013_constants::VIDEO_RAM_BASE);
-    video_ram_chip_ = video_ram.get();
-
-    auto monitor_rom = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "VEB"}, z1013_constants::MONITOR_ROM_SIZE,
-        ROMChip::ROM, &pins_, "Monitor ROM", z1013_constants::MONITOR_ROM_BASE);
-    monitor_rom_chip_ = monitor_rom.get();
-
-    std::unique_ptr<ROMChip> basic_rom_lo;
-    std::unique_ptr<ROMChip> basic_rom_hi;
+    // Retain pointers for post-init access (rendering, ROM loading)
+    video_ram_chip_   = bus_mem_.template chip_as<RAMChip>(Traits::kVideoRamSlot);
+    monitor_rom_chip_ = bus_mem_.template chip_as<ROMChip>(Traits::kMonitorRomSlot);
     if constexpr (Traits::has_basic_rom) {
-        basic_rom_lo = std::make_unique<ROMChip>(
-            ChipInfo{"ROM", "VEB"}, 8192,
-            ROMChip::ROM, &pins_, "BASIC ROM lo", z1013_constants::BASIC_ROM_BASE);
-        basic_rom_lo_chip_ = basic_rom_lo.get();
-
-        basic_rom_hi = std::make_unique<ROMChip>(
-            ChipInfo{"ROM", "VEB"}, 2048,
-            ROMChip::ROM, &pins_, "BASIC ROM hi", 0xE000);
-        basic_rom_hi_chip_ = basic_rom_hi.get();
-    }
-
-    // ── Bind manifest slots, wire the bus ───────────────────────────────
-    if constexpr (Traits::has_basic_rom) {
-        bus_mem_.initialize(bus_, ram_chip_, basic_rom_lo_chip_,
-                            basic_rom_hi_chip_, video_ram_chip_,
-                            monitor_rom_chip_);
-    } else {
-        bus_mem_.initialize(bus_, ram_chip_, video_ram_chip_,
-                            monitor_rom_chip_);
+        basic_rom_lo_chip_ = bus_mem_.template chip_as<ROMChip>(Traits::kBasicRomLoSlot);
+        basic_rom_hi_chip_ = bus_mem_.template chip_as<ROMChip>(Traits::kBasicRomHiSlot);
     }
 
     // ── Init chips ──────────────────────────────────────────────────────
@@ -131,13 +103,7 @@ bool Z1013System<V>::initialize() {
         "U880 CPU", "U880", "CPU", 0x0000);
     register_chip(&pio_,
         "U855 PIO", "U855", "I/O", z1013_constants::PIO_PORT_A);
-    register_chip(std::move(ram));
-    register_chip(std::move(video_ram));
-    register_chip(std::move(monitor_rom));
-    if constexpr (Traits::has_basic_rom) {
-        register_chip(std::move(basic_rom_lo));
-        register_chip(std::move(basic_rom_hi));
-    }
+    register_bus_chips(bus_mem_);
 
     system_ready_ = true;
     return true;

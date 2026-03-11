@@ -31,6 +31,9 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_01> {
     static constexpr const char* description     = "Robotron Z1013.01 — U880 @ 2MHz, 16KB RAM, 32×32 text (1985)";
     static constexpr uint32_t    ram_size        = z1013_constants::RAM_SIZE_16K;
     static constexpr bool        has_basic_rom   = false;
+    // Slot indices into kZ1013_16K_Chips
+    static constexpr size_t kVideoRamSlot   = 1;
+    static constexpr size_t kMonitorRomSlot = 2;
 };
 
 template<> struct Z1013VariantTraits<Z1013Variant::Z1013_16> {
@@ -39,6 +42,8 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_16> {
     static constexpr const char* description     = "Robotron Z1013.16 — U880 @ 2MHz, 16KB RAM, membrane keyboard (1987)";
     static constexpr uint32_t    ram_size        = z1013_constants::RAM_SIZE_16K;
     static constexpr bool        has_basic_rom   = false;
+    static constexpr size_t kVideoRamSlot   = 1;
+    static constexpr size_t kMonitorRomSlot = 2;
 };
 
 template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
@@ -47,6 +52,10 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
     static constexpr const char* description     = "Robotron Z1013.64 — U880 @ 2MHz, 64KB RAM, ROM BASIC (1988)";
     static constexpr uint32_t    ram_size        = z1013_constants::RAM_SIZE_64K;
     static constexpr bool        has_basic_rom   = true;
+    static constexpr size_t kBasicRomLoSlot = 1;
+    static constexpr size_t kBasicRomHiSlot = 2;
+    static constexpr size_t kVideoRamSlot   = 3;
+    static constexpr size_t kMonitorRomSlot = 4;
 };
 
 // ============================================================================
@@ -74,17 +83,17 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
 // RAM reads, then Video RAM and Monitor ROM overlay the remaining gaps.
 //
 inline constexpr auto kZ1013_16K_Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 16384},         // RAM: 16 KB
-    Slot<RAMChip>{0xEC00,  1024},         // Video RAM: 1 KB
-    Slot<ROMChip>{0xF000,  2048}          // Monitor ROM: 2 KB
+    Slot<RAMChip>{0x0000, 16384, 0, "RAM"},            // Slot 0: RAM 16 KB
+    Slot<RAMChip>{0xEC00,  1024, 0, "Video RAM"},      // Slot 1: Video RAM 1 KB
+    Slot<ROMChip>{0xF000,  2048, 0, "Monitor ROM"}     // Slot 2: Monitor ROM 2 KB
 );
 
 inline constexpr auto kZ1013_64K_Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536},         // RAM: 64 KB
-    Slot<ROMChip>{0xC000,  8192},         // BASIC ROM lo: 8 KB ($C000-$DFFF)
-    Slot<ROMChip>{0xE000,  2048},         // BASIC ROM hi: 2 KB ($E000-$E7FF)
-    Slot<RAMChip>{0xEC00,  1024},         // Video RAM: 1 KB
-    Slot<ROMChip>{0xF000,  2048}          // Monitor ROM: 2 KB
+    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},            // Slot 0: RAM 64 KB
+    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM lo"},   // Slot 1: BASIC ROM lo 8 KB
+    Slot<ROMChip>{0xE000,  2048, 0, "BASIC ROM hi"},   // Slot 2: BASIC ROM hi 2 KB
+    Slot<RAMChip>{0xEC00,  1024, 0, "Video RAM"},      // Slot 3: Video RAM 1 KB
+    Slot<ROMChip>{0xF000,  2048, 0, "Monitor ROM"}     // Slot 4: Monitor ROM 2 KB
 );
 
 // BusTraits — selects the correct manifest per variant
@@ -145,8 +154,7 @@ private:
     U880*       cpu_  = nullptr;     // U880 (Z80A clone) @ 2 MHz
     z80_pio_t   pio_;                // U855 PIO (keyboard + cassette)
 
-    // ── Memory — owned by registered_chips_, managed via BusMemory ──────
-    RAMChip* ram_chip_             = nullptr;
+    // ── Memory — chip pointers for post-init access (owned by BusMemory) ─
     ROMChip* basic_rom_lo_chip_    = nullptr;  // Z1013.64 only
     ROMChip* basic_rom_hi_chip_    = nullptr;  // Z1013.64 only
     RAMChip* video_ram_chip_       = nullptr;
