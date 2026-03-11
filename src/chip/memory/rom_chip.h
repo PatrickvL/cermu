@@ -2,6 +2,8 @@
 
 #include "memory_chip_base.h"
 
+struct ChipSlot;  // Forward declaration for factory
+
 // ============================================================================
 // ROMChip — read-only memory (ROM, PROM, EPROM)
 // ============================================================================
@@ -18,4 +20,10 @@ class ROMChip : public MemoryChipBase {
 public:
     using MemoryChipBase::MemoryChipBase;
     bool is_read_only() const override { return true; }
+
+    /// Factory for BusMemory::create_chips() — creates a ROMChip from a
+    /// manifest slot, binds it to the unified buffer, and returns it.
+    static ChipBase* create_from_slot(const ChipSlot& slot,
+                                      const bus_state_t* system_bus,
+                                      uint8_t* buffer);
 };

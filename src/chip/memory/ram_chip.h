@@ -2,6 +2,8 @@
 
 #include "memory_chip_base.h"
 
+struct ChipSlot;  // Forward declaration for factory
+
 // ============================================================================
 // RAMChip — read/write memory (DRAM, SRAM)
 // ============================================================================
@@ -17,4 +19,10 @@
 class RAMChip : public MemoryChipBase {
 public:
     using MemoryChipBase::MemoryChipBase;
+
+    /// Factory for BusMemory::create_chips() — creates a RAMChip from a
+    /// manifest slot, binds it to the unified buffer, and returns it.
+    static ChipBase* create_from_slot(const ChipSlot& slot,
+                                      const bus_state_t* system_bus,
+                                      uint8_t* buffer);
 };
