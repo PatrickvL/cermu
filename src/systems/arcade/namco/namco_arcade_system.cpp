@@ -71,30 +71,9 @@ template<NamcoGame G>
 bool NamcoArcadeSystem<G>::initialize() {
     printf("%s: Initializing arcade system\n", Traits::name);
 
-    // ── Create chip wrappers ─────────────────────────────────────────
-    auto rom = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Namco"}, Traits::rom_size,
-        ROMChip::ROM, &pins_, "Program ROM", 0x0000);
-    rom_chip_ = rom.get();
-
-    auto video_ram = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "Namco"}, namco_arcade_constants::VIDEO_RAM_SIZE,
-        RAMChip::RAM, &pins_, "Video RAM", Traits::vram_base);
-    video_ram_chip_ = video_ram.get();
-
-    auto color_ram = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "Namco"}, namco_arcade_constants::COLOR_RAM_SIZE,
-        RAMChip::RAM, &pins_, "Color RAM", Traits::cram_base);
-    color_ram_chip_ = color_ram.get();
-
-    auto work_ram = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "Namco"}, namco_arcade_constants::RAM_SIZE,
-        RAMChip::RAM, &pins_, "Work RAM", Traits::wram_base);
-    work_ram_chip_ = work_ram.get();
-
-    // ── Bind manifest slots, wire the bus ───────────────────────────────
-    bus_mem_.initialize(bus_, rom_chip_, video_ram_chip_,
-                        color_ram_chip_, work_ram_chip_);
+    // ── Create memory chips from manifest and wire bus ────────────────
+    bus_mem_.create_chips(&pins_);
+    bus_mem_.apply(bus_);
 
     // ── Init CPU + sound ────────────────────────────────────────────────
     cpu_ = new ZilogZ80A();
@@ -113,10 +92,7 @@ bool NamcoArcadeSystem<G>::initialize() {
     // ── Register chips for Hardware menu ────────────────────────────────
     register_chip(static_cast<ChipBase*>(cpu_),
         "Z80A CPU", "Z80A", "CPU", 0x0000);
-    register_chip(std::move(rom));
-    register_chip(std::move(video_ram));
-    register_chip(std::move(color_ram));
-    register_chip(std::move(work_ram));
+    register_bus_chips(bus_mem_);
 
     printf("%s: System initialized (ROM: %d KB)\n",
            Traits::name, Traits::rom_size / 1024);
