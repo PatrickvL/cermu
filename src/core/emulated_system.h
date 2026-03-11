@@ -379,6 +379,24 @@ protected:
                        const char* display_name, const char* short_name,
                        const char* category, uint16_t base_address = 0);
 
+    /// Register all factory-created chips from a BusMemory instance.
+    /// Each chip is registered as a borrowed pointer (BusMemory owns them).
+    /// Uses the self-describing register_chip(ChipBase*) path — chips carry
+    /// their own display_name, short_name, category, and base_address.
+    template<typename BusMem>
+    void register_bus_chips(BusMem& mem) {
+        for (const auto& chip : mem.owned_chips()) {
+            SystemChip sc;
+            sc.chip = chip.get();
+            sc.display_name  = chip->display_name();
+            sc.short_name    = chip->short_name();
+            sc.category      = chip->category();
+            sc.base_address  = chip->base_address();
+            sc.show_detached = 0;
+            registered_chips_.push_back(std::move(sc));
+        }
+    }
+
     // =========================================================================
     // CONNECTOR PORTS & PERIPHERAL DEVICES (generic for all systems)
     // =========================================================================

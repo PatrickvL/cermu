@@ -47,8 +47,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
 #include <span>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include "chip.h"
@@ -76,6 +78,21 @@ struct ChipSlot {
     size_t   size_bytes = 0;
     uint32_t addr_mask  = 0;
 
+    // Factory — creates a chip of the type declared in the corresponding
+    // Slot<T>.  Stored by make_chip_manifest() and called by
+    // BusMemory::create_chips().  nullptr means the slot must be manually
+    // bound before create_chips() (e.g. for chips that need system-specific
+    // initialization).
+    using FactoryFn = ChipBase* (*)(const ChipSlot& slot,
+                                    const bus_state_t* system_bus,
+                                    uint8_t* buffer);
+    FactoryFn factory = nullptr;
+
+    // Human-readable role label — becomes the chip's short_name in the
+    // Hardware menu (e.g. "Work RAM", "KERNAL", "PIA").  nullptr is fine;
+    // the chip's own part_number is used as fallback.
+    const char* label = nullptr;
+
     // Page count for a given page size (size_bytes >> page_bits).
     [[nodiscard]] constexpr size_t pages(size_t page_bits) const noexcept {
         return size_bytes >> page_bits;
@@ -88,14 +105,59 @@ struct ChipSlot {
 };
 
 // Typed slot wrapper — carries a chip type for expressive manifest declarations.
-// The type is visible in the source and available for compile-time automation
-// (e.g. auto-calling MemoryChipBase::bind()) but is NOT stored in the manifest.
+// The type parameter provides:
+//   - Compile-time automation (auto MemoryChipBase::bind() detection)
+//   - Factory resolution: make_chip_manifest() stores a factory function
+//     pointer derived from T via the SlotCreatable concept.
 template<typename T>
 struct Slot {
-    uint32_t base_addr  = 0;
-    size_t   size_bytes = 0;
-    uint32_t addr_mask  = 0;
+    uint32_t    base_addr  = 0;
+    size_t      size_bytes = 0;
+    uint32_t    addr_mask  = 0;
+    const char* label      = nullptr;
 };
+
+
+// =============================================================================
+// §1.1  Slot factory resolution
+// =============================================================================
+//
+// Each chip type can opt into automatic creation by providing a static
+// create_from_slot() method (the SlotCreatable concept).  Types without it
+// fall back to default construction (if available); otherwise the factory is
+// nullptr and the slot must be manually bound.
+//
+// The resolved factory pointer is stored in ChipSlot::factory by
+// make_chip_manifest() — a constexpr-compatible function pointer.
+//
+
+/// Concept: T provides a static factory suitable for ChipSlot::FactoryFn.
+template<typename T>
+concept SlotCreatable = requires(const ChipSlot& s, const bus_state_t* b, uint8_t* buf) {
+    { T::create_from_slot(s, b, buf) } -> std::convertible_to<ChipBase*>;
+};
+
+/// Default factory for types without create_from_slot — default-constructs T.
+template<typename T>
+    requires std::is_default_constructible_v<T>
+ChipBase* default_slot_factory(const ChipSlot& /*slot*/,
+                               const bus_state_t* /*system_bus*/,
+                               uint8_t* /*buffer*/) {
+    return new T();
+}
+
+/// Resolve the factory function pointer for a given chip type T.
+/// Priority: T::create_from_slot > default construction > nullptr.
+template<typename T>
+constexpr ChipSlot::FactoryFn resolve_slot_factory() {
+    if constexpr (SlotCreatable<T>) {
+        return &T::create_from_slot;
+    } else if constexpr (std::is_default_constructible_v<T>) {
+        return &default_slot_factory<T>;
+    } else {
+        return nullptr;
+    }
+}
 
 
 // =============================================================================
@@ -279,7 +341,11 @@ make_chip_manifest(Slot<Chips>... slots) noexcept
     ChipManifest<sizeof...(Chips)> manifest{};
     size_t i = 0;
     ((assert(slots.size_bytes == 0 || (slots.size_bytes & (slots.size_bytes - 1)) == 0),
-      manifest.chips[i++] = ChipSlot{slots.base_addr, slots.size_bytes, slots.addr_mask}), ...);
+      manifest.chips[i++] = ChipSlot{
+          slots.base_addr, slots.size_bytes, slots.addr_mask,
+          resolve_slot_factory<Chips>(),
+          slots.label
+      }), ...);
     return manifest;
 }
 
@@ -366,6 +432,11 @@ public:
         ChipBase*        chip       = nullptr; // Bound chip instance
         int              mmio_idx   = -1;     // Assigned MMIO handler index (-1 = none)
         int              sub_table_idx = -1;  // Assigned MaskedSubTable index (-1 = none)
+
+        // Factory and label — copied from ChipSlot at construction time.
+        // Used by create_chips() to auto-create chip instances.
+        ChipSlot::FactoryFn factory = nullptr;
+        const char*         label   = nullptr;
     };
 
     // =====================================================================
@@ -395,6 +466,8 @@ public:
                 nullptr,                        // chip
                 -1,                             // mmio_idx
                 -1,                             // sub_table_idx
+                s.factory,
+                s.label,
             });
         }
 
@@ -559,6 +632,70 @@ public:
         size_t idx = 0;
         (bind_one_(idx++, chips), ...);
         apply(bus);
+    }
+
+    // =====================================================================
+    // §4.4a  Factory-driven chip creation
+    // =====================================================================
+    //
+    // Iterates all manifest slots and calls each slot's factory function to
+    // create the chip, bind it to the unified buffer, and take ownership.
+    // Slots that are already bound (via bind_chip() or initialize()) are
+    // skipped — this allows systems to pre-bind MMIO chips that need
+    // custom initialization before calling create_chips().
+    //
+    // After create_chips(), call apply(bus) to wire page tables + MMIO.
+    //
+    // Usage:
+    //   bus_mem_.bind_chip(kPiaSlot, &pia_);   // pre-bind custom chip
+    //   bus_mem_.create_chips(&pins_);          // auto-create the rest
+    //   bus_mem_.apply(bus_);
+    //
+
+    void create_chips(const bus_state_t* system_bus) {
+        for (size_t i = 0; i < slots_.size(); ++i) {
+            auto& rec = slots_[i];
+            if (rec.chip) continue;        // Already manually bound
+            if (!rec.factory) continue;    // No factory (must be bound manually)
+
+            uint8_t* buf = rec.num_pages > 0 ? chip_buffer(rec.base_id) : nullptr;
+            ChipBase* chip = rec.factory(rec, system_bus, buf);
+
+            // Apply placement metadata from the manifest slot.
+            if (rec.label) chip->set_short_name(rec.label);
+            chip->set_base_address(static_cast<uint16_t>(rec.base_addr));
+
+            bind_chip(i, chip);
+            owned_chips_.emplace_back(chip);
+        }
+    }
+
+    // =====================================================================
+    // §4.4b  Typed chip access
+    // =====================================================================
+    //
+    // Returns the chip bound to a manifest slot, cast to the requested type.
+    // The caller is responsible for ensuring the slot index and type match.
+    //
+
+    template<typename T>
+    [[nodiscard]] T* chip_as(size_t slot_index) noexcept {
+        assert(slot_index < slots_.size());
+        return static_cast<T*>(slots_[slot_index].chip);
+    }
+
+    template<typename T>
+    [[nodiscard]] const T* chip_as(size_t slot_index) const noexcept {
+        assert(slot_index < slots_.size());
+        return static_cast<const T*>(slots_[slot_index].chip);
+    }
+
+    // =====================================================================
+    // §4.4c  Owned chip access (for registration / lifetime)
+    // =====================================================================
+
+    [[nodiscard]] std::span<const std::unique_ptr<ChipBase>> owned_chips() const noexcept {
+        return owned_chips_;
     }
 
     // =====================================================================
@@ -793,6 +930,9 @@ private:
 
     std::vector<uint8_t>     buffer_;
     std::vector<SlotRecord>  slots_;
+
+    // Chips created by create_chips() — owned here for lifetime management.
+    std::vector<std::unique_ptr<ChipBase>> owned_chips_;
 
     size_t               dynamic_base_ = 0;
     std::vector<FreeRun> free_list_;

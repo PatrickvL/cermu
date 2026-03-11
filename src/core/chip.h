@@ -101,6 +101,10 @@ public:
     uint16_t bus_chip_id() const { return bus_chip_id_; }
     void set_bus_chip_id(uint16_t id) { bus_chip_id_ = id; }
 
+    // --- Placement metadata setters (used by BusMemory::create_chips) ---
+    void set_short_name(const char* name) { short_name_ = name; }
+    void set_base_address(uint16_t addr) { base_address_ = addr; }
+
     // --- Bus MMIO interface (opt-in via override) ---
     // Chips that handle register-file access on the memory bus override these.
     // The default returns false / passes bus through unchanged.
