@@ -45,17 +45,17 @@
 // Graphics ROMs (char, sprite, bg) are NOT bus-mapped.
 //
 inline constexpr auto kBombJackMainChips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 32768, 0, "Program ROM"},   // Slot 0: 32 KB
-    Slot<RAMChip>{0x8000,  4096, 0, "Work RAM"},      // Slot 1: 4 KB
-    Slot<RAMChip>{0x9000,  1024, 0, "FG Tilemap"},    // Slot 2: 1 KB
-    Slot<RAMChip>{0x9400,  1024, 0, "FG Attributes"}, // Slot 3: 1 KB
-    Slot<RAMChip>{0x9800,   256, 0, "Sprite Area"},   // Slot 4: 256 bytes
-    Slot<RAMChip>{0x9C00,   256, 0, "Palette RAM"}    // Slot 5: 256 bytes
+    Slot<ROMChip>{0x0000, 32768, 0, "Program ROM"},
+    Slot<RAMChip>{0x8000,  4096, 0, "Work RAM"},
+    Slot<RAMChip>{0x9000,  1024, 0, "FG Tilemap"},
+    Slot<RAMChip>{0x9400,  1024, 0, "FG Attributes"},
+    Slot<RAMChip>{0x9800,   256, 0, "Sprite Area"},
+    Slot<RAMChip>{0x9C00,   256, 0, "Palette RAM"}
 );
 
 inline constexpr auto kBombJackSoundChips = make_chip_manifest(
-    Slot<ROMChip>{0x0000,  8192, 0, "Sound ROM"},     // Slot 0: 8 KB
-    Slot<RAMChip>{0x4000,  1024, 0, "Sound RAM"}      // Slot 1: 1 KB
+    Slot<ROMChip>{0x0000,  8192, 0, "Sound ROM"},
+    Slot<RAMChip>{0x4000,  1024, 0, "Sound RAM"}
 );
 
 namespace bj_main {

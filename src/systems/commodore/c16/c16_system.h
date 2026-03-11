@@ -82,9 +82,9 @@ template<> struct C264SeriesVariantTraits<C264SeriesVariant::PLUS4> {
 // Page $FD and TED registers are dispatched before the bus in mem_tick().
 //
 inline constexpr auto kC264Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},             // Slot 0: 64 KB (max)
-    Slot<ROMChip>{0x8000, 16384, 0, "BASIC ROM"},       // Slot 1: 16 KB
-    Slot<ROMChip>{0xC000, 16384, 0, "KERNAL ROM"}       // Slot 2: 16 KB
+    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
+    Slot<ROMChip>{0x8000, 16384, 0, "BASIC ROM"},
+    Slot<ROMChip>{0xC000, 16384, 0, "KERNAL ROM"}
 );
 
 namespace c264_slot {

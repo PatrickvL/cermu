@@ -57,13 +57,13 @@
 // Video RAM is 8 KB (power of 2); only $8000–$97FF is used by the MC6847.
 //
 inline constexpr auto kAcornAtomChips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 32768, 0, "RAM"},           // RAM: 32 KB at $0000
-    Slot<RAMChip>{0x8000,  8192, 0, "Video RAM"},     // Video RAM: 8 KB at $8000
-    Slot<ROMChip>{0xC000,  4096, 0, "BASIC"},         // BASIC ROM: 4 KB at $C000
-    Slot<ROMChip>{0xD000,  2048, 0, "FP ROM"},        // FP ROM: 2 KB at $D000
-    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"},        // OS ROM: 4 KB at $F000
-    Slot<i8255_t>   {0xB000,     0, 0xFFFC},           // PPI: MMIO-only, 4-byte window
-    Slot<mos6522_t> {0xB800,     0, 0xFFF0}            // VIA: MMIO-only, 16-byte window
+    Slot<RAMChip>{0x0000, 32768, 0, "RAM"},
+    Slot<RAMChip>{0x8000,  8192, 0, "Video RAM"},
+    Slot<ROMChip>{0xC000,  4096, 0, "BASIC"},
+    Slot<ROMChip>{0xD000,  2048, 0, "FP ROM"},
+    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"},
+    Slot<i8255_t>   {0xB000,     0, 0xFFFC},           // MMIO-only, 4-byte window
+    Slot<mos6522_t> {0xB800,     0, 0xFFF0}            // MMIO-only, 16-byte window
 );
 
 // BusSpec auto-derived from the manifest

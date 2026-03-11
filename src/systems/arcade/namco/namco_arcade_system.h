@@ -75,17 +75,17 @@ template<> struct NamcoGameTraits<NamcoGame::Pengo> {
 // Graphics ROMs (char, sprite, palette, waveform) are NOT bus-mapped.
 //
 inline constexpr auto kPacManChips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 16384, 0, "Program ROM"},  // ROM: 16 KB
-    Slot<RAMChip>{0x4000,  1024, 0, "Video RAM"},    // Video RAM: 1 KB
-    Slot<RAMChip>{0x4400,  1024, 0, "Color RAM"},    // Color RAM: 1 KB
-    Slot<RAMChip>{0x4C00,  1024, 0, "Work RAM"}      // Work RAM: 1 KB
+    Slot<ROMChip>{0x0000, 16384, 0, "Program ROM"},
+    Slot<RAMChip>{0x4000,  1024, 0, "Video RAM"},
+    Slot<RAMChip>{0x4400,  1024, 0, "Color RAM"},
+    Slot<RAMChip>{0x4C00,  1024, 0, "Work RAM"}
 );
 
 inline constexpr auto kPengoChips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 32768, 0, "Program ROM"},  // ROM: 32 KB
-    Slot<RAMChip>{0x8000,  1024, 0, "Video RAM"},    // Video RAM: 1 KB
-    Slot<RAMChip>{0x8400,  1024, 0, "Color RAM"},    // Color RAM: 1 KB
-    Slot<RAMChip>{0x8C00,  1024, 0, "Work RAM"}      // Work RAM: 1 KB
+    Slot<ROMChip>{0x0000, 32768, 0, "Program ROM"},
+    Slot<RAMChip>{0x8000,  1024, 0, "Video RAM"},
+    Slot<RAMChip>{0x8400,  1024, 0, "Color RAM"},
+    Slot<RAMChip>{0x8C00,  1024, 0, "Work RAM"}
 );
 
 // BusTraits — selects the correct manifest per game
