@@ -313,8 +313,7 @@ template<const auto& Manifest,
          size_t PgBits   = 8,
          size_t NViewers = 1>
 struct ManifestBusSpec {
-    using AddrType = std::conditional_t<AddrBits <= 8, uint8_t,
-                     std::conditional_t<AddrBits <= 16, uint16_t, uint32_t>>;
+    using AddrType = uint_least_bits_t<AddrBits>;
 
     static constexpr size_t AddressBits    = AddrBits;
     static constexpr size_t PageBits       = PgBits;
