@@ -1,6 +1,5 @@
 ﻿#include "vic20_system.h"
 #include "vic20_constants.h"
-#include "vic20_memory.h"
 #include "vic20_chips.h"
 #include "../../core/cermu.h"
 #include "../../chip/input/commodore_keyboard.h"
@@ -23,7 +22,6 @@
 #include "../../chip/video/vic/vic_common.h"  // For VIC_COLOR_* constants
 #include "../../chip/io/mos6522.h"
 #include "../../core/chip.h"
-#include "../../chip/memory/memory_chip.h"
 
 // Include bus interface
 #include "../../core/bus_cycle_interface.h"
@@ -470,7 +468,6 @@ static SystemDescriptor vic20_descriptor = {
 // ============================================================================
 VIC20System::VIC20System()
     : CommodoreSystem()
-    , memory_(nullptr)
     , cpu_(nullptr)
     , vic_(nullptr)
     , via1_(nullptr)
@@ -516,12 +513,7 @@ VIC20System::~VIC20System() {
         keyboard_ = nullptr;
     }
     
-    // Destroy memory system
-    if (memory_) {
-        vic20_memory_destroy(memory_);
-        memory_ = nullptr;
-    }
-    
+    // Memory chips are owned by bus_mem_ and cleaned up automatically
 }
 
 // ============================================================================
@@ -573,9 +565,9 @@ bool VIC20System::apply_configuration() {
                 break;
         }
         
-        // Update memory system if already created
-        if (memory_) {
-            vic20_memory_set_expansion(memory_, expansion_flags_);
+        // Update memory system if already initialized
+        if (initialized_) {
+            setup_expansion_map();
         }
         
         printf("VIC20: Expansion configuration: $%02X\n", expansion_flags_);
@@ -589,26 +581,25 @@ bool VIC20System::apply_configuration() {
 // System Lifecycle
 // ============================================================================
 bool VIC20System::initialize() {
+    if (initialized_) return true;
+    
     printf("VIC20: Initializing system\n");
     
-    // Create the memory banking system
-    memory_ = vic20_memory_create(expansion_flags_, false);  // No cartridge by default
-    if (!memory_) {
-        printf("VIC20: Failed to create memory system\n");
-        return false;
-    }
-    
-    // Attach system to memory
-    vic20_memory_attach_system(memory_, this);
+    // ── Create memory chips from manifest and wire bus ───────────────────
+    bus_mem_.create_chips(&bus_.state);
+    bus_mem_.apply(mem_bus_);
+
+    // Convenience pointers for direct buffer access (ROM loading, VIC callbacks, etc.)
+    ram_        = bus_mem_.chip_as<RAMChip>(vic20_slot::kRam);
+    charrom_    = bus_mem_.chip_as<ROMChip>(vic20_slot::kCharRom);
+    basic_rom_  = bus_mem_.chip_as<ROMChip>(vic20_slot::kBasicRom);
+    kernal_rom_ = bus_mem_.chip_as<ROMChip>(vic20_slot::kKernalRom);
     
     // Initialize Color RAM to cyan (color 3) for proper text visibility
-    // This matches the VIC-20 boot screen: cyan text on blue background
-    uint8_t* colorram = vic20_memory_get_colorram_ptr(memory_);
-    if (colorram) {
-        memset(colorram, VIC_COLOR_CYAN, 1024);
-    }
+    // Color RAM lives in the RAM buffer at $9400 (within the I/O-handled region)
+    memset(ram_->data() + VIC20_BASE_COLOR_RAM, VIC_COLOR_CYAN, 1024);
     
-    // Load ROMs into memory system
+    // Load ROMs into ROMChip buffers
     bool roms_loaded = load_roms();
     if (!roms_loaded) {
         printf("VIC20: Warning - ROMs not loaded, system may not function correctly\n");
@@ -645,9 +636,6 @@ bool VIC20System::initialize() {
         return false;
     }
     
-    // Store VIC chip pointer in memory system for I/O handling
-    memory_->vic_chip = vic_;
-    
     // Set up VIC memory callbacks for accessing video and character memory
     vic_->set_memory_callbacks(
         VIC20System::vic_mem_read,      // Memory read callback
@@ -662,7 +650,6 @@ bool VIC20System::initialize() {
     via1_->reset();
     if (via1_) {
         via1_->interrupt_bit = BUS_NMI_BIT;
-        memory_->via1_chip = via1_;
     } else {
         printf("VIC20: Failed to create VIA1\n");
     }
@@ -671,7 +658,6 @@ bool VIC20System::initialize() {
     via2_->reset();
     if (via2_) {
         via2_->interrupt_bit = BUS_IRQ_BIT;
-        memory_->via2_chip = via2_;
     } else {
         printf("VIC20: Warning: VIA2 not created (optional)\n");
     }
@@ -700,15 +686,24 @@ bool VIC20System::initialize() {
         printf("VIC20: Warning: Could not create keyboard\n");
     }
     
-    // Initialize I/O handlers now that all chips are created
-    vic20_memory_init_io_handlers(memory_);
-    
     // Setup connector ports (generic framework from EmulatedSystem)
     setup_connector_ports();
 
     // Register chips for the Hardware menu and debug windows
-    register_vic20_chips();
+    register_chip(static_cast<ChipBase*>(cpu_),
+        "MOS 6502 CPU", "6502", "CPU", 0x0000);
+    register_chip(vic_,
+        "VIC (MOS 6560/6561)", "VIC", "Video", 0x9000);
+    register_chip(via1_,
+        "VIA 1 (MOS 6522)", "VIA 1", "I/O", 0x9110);
+    register_chip(via2_,
+        "VIA 2 (MOS 6522)", "VIA 2", "I/O", 0x9120);
+    register_bus_chips(bus_mem_);
     
+    // Set up page pointers for current expansion and ROM banking
+    setup_expansion_map();
+    
+    initialized_ = true;
     return true;
 }
 
@@ -743,10 +738,10 @@ void VIC20System::reset() {
     }
     
     // Clear RAM (zero page, stack, main RAM $0000-$7FFF) but preserve ROMs
-    if (memory_ && memory_->buffer) {
-        memset(memory_->buffer, 0, 0x8000);           // $0000-$7FFF: all RAM
+    if (ram_) {
+        memset(ram_->data(), 0, 0x8000);             // $0000-$7FFF: all RAM
         // Reinitialize Color RAM to default cyan
-        memset(memory_->buffer + VIC20_BASE_COLOR_RAM, VIC_COLOR_CYAN, 1024);
+        memset(ram_->data() + VIC20_BASE_COLOR_RAM, VIC_COLOR_CYAN, 1024);
     }
     
     // Clear the framebuffer to black
@@ -773,9 +768,88 @@ void VIC20System::reset() {
 // Execution
 // ============================================================================
 
+// Unified bus dispatch: I/O region handled manually, everything else through MemoryBus.
 bus_state_t VIC20System::mem_tick(bus_state_t s) {
-    // Use the new memory banking system
-    return vic20_memory_cpu_tick(memory_, s);
+    uint16_t addr = BUS_GET_ADDR(s);
+    uint8_t page = addr >> 8;
+
+    // I/O region $9000-$9FFF (VIC + VIAs, Color RAM, expansion I/O)
+    if (page >= 0x90 && page <= 0x9F)
+        return io_tick(s);
+
+    // Everything else: MemoryBus page-pointer dispatch
+    return mem_bus_.tick(0, s);
+}
+
+// ── I/O dispatch for $9000-$9FFF ─────────────────────────────────────────
+// $9000-$93FF: VIC registers + VIA1 + VIA2 (with 64-byte mirror pattern)
+// $9400-$97FF: Color RAM (4-bit wide, upper nibble reads 0xF0)
+// $9800-$9FFF: I/O expansion slots (unmapped → floating bus)
+bus_state_t VIC20System::io_tick(bus_state_t s) {
+    uint16_t addr = BUS_GET_ADDR(s);
+    uint8_t io_page = (addr >> 10) & 3;  // 0-3 for $9000-$9FFF
+    bool is_read = BUS_GET_BIT(s, BUS_RW_BIT);
+
+    switch (io_page) {
+    case 0: {
+        // $9000-$93FF: VIC + VIA1 + VIA2 with 64-byte mirror pattern
+        uint8_t offset = addr & 0x3F;
+        if (offset < 0x10 || offset >= 0x30) {
+            // VIC registers ($9x00-$9x0F and mirrors at $9x30-$9x3F)
+            bus_state_t chip_state = 0;
+            BUS_SET_ADDR(chip_state, offset & 0x0F);
+            if (is_read) {
+                chip_state = vic_->registers_read(chip_state);
+                BUS_SET_DATA(s, BUS_GET_DATA(chip_state));
+            } else {
+                BUS_SET_DATA(chip_state, BUS_GET_DATA(s));
+                vic_->registers_write(chip_state);
+            }
+        } else if (offset < 0x20) {
+            // VIA1 registers ($9x10-$9x1F)
+            bus_state_t chip_state = 0;
+            BUS_SET_ADDR(chip_state, offset & 0x0F);
+            if (is_read) {
+                chip_state = via1_->registers_read(chip_state);
+                BUS_SET_DATA(s, BUS_GET_DATA(chip_state));
+            } else {
+                BUS_SET_DATA(chip_state, BUS_GET_DATA(s));
+                via1_->registers_write(chip_state);
+            }
+        } else {
+            // VIA2 registers ($9x20-$9x2F)
+            bus_state_t chip_state = 0;
+            BUS_SET_ADDR(chip_state, offset & 0x0F);
+            if (is_read) {
+                chip_state = via2_->registers_read(chip_state);
+                BUS_SET_DATA(s, BUS_GET_DATA(chip_state));
+            } else {
+                BUS_SET_DATA(chip_state, BUS_GET_DATA(s));
+                via2_->registers_write(chip_state);
+            }
+        }
+        break;
+    }
+    case 1: {
+        // $9400-$97FF: Color RAM (4-bit wide)
+        uint16_t offset = addr & 0x03FF;
+        uint8_t* colorram = ram_->data() + VIC20_BASE_COLOR_RAM;
+        if (is_read) {
+            BUS_SET_DATA(s, colorram[offset] | 0xF0);  // Upper nibble is garbage
+        } else {
+            colorram[offset] = BUS_GET_DATA(s) & 0x0F;  // Only lower 4 bits stored
+        }
+        break;
+    }
+    default:
+        // $9800-$9FFF: I/O expansion slots (unmapped by default)
+        if (is_read) {
+            BUS_SET_DATA(s, 0xFF);  // Floating bus
+        }
+        // Writes ignored
+        break;
+    }
+    return s;
 }
 
 void VIC20System::tick() {
@@ -853,19 +927,19 @@ void VIC20System::run_frame() {
 // ============================================================================
 
 static uint8_t vic20_mem_read_for_load(void* ctx, uint16_t addr) {
-    vic20_memory_t* mem = static_cast<vic20_memory_t*>(ctx);
-    return vic20_memory_read_byte(mem, addr);
+    RAMChip* ram = static_cast<RAMChip*>(ctx);
+    return ram->data()[addr];
 }
 
 static void vic20_mem_write_byte_cb(void* ctx, uint16_t addr, uint8_t val) {
-    vic20_memory_t* mem = static_cast<vic20_memory_t*>(ctx);
-    vic20_memory_write_byte(mem, addr, val);
+    RAMChip* ram = static_cast<RAMChip*>(ctx);
+    ram->data()[addr] = val;
 }
 
 bool VIC20System::is_basic_ready() const {
-    if (!memory_ || !cpu_) return false;
+    if (!ram_ || !cpu_) return false;
 
-    const uint8_t* ram = memory_->buffer;
+    const uint8_t* ram = ram_->data();
 
     // BASIC warm-start vector at $0302/$0303 = $C474
     if (ram[0x0302] != vic20_constants::BASIC_WARMSTART_LO ||
@@ -889,7 +963,7 @@ commodore_load_context_t VIC20System::build_load_context() {
     ctx.write_byte      = vic20_mem_write_byte_cb;
     ctx.write_block     = nullptr;  // VIC-20 uses banked memory, no memcpy
     ctx.mem_read        = vic20_mem_read_for_load;
-    ctx.mem_ctx         = memory_;
+    ctx.mem_ctx         = ram_;
     ctx.basic_params    = &COMMODORE_BASIC_VIC20;
     ctx.basic_start_addrs[0] = vic20_constants::BASIC_START_3K;
     ctx.basic_start_addrs[1] = vic20_constants::BASIC_START_UNEXPANDED;
@@ -901,8 +975,8 @@ commodore_load_context_t VIC20System::build_load_context() {
 }
 
 void VIC20System::inject_keys(const char* str) {
-    if (!memory_) return;
-    uint8_t* ram = memory_->buffer;
+    if (!ram_) return;
+    uint8_t* ram = ram_->data();
     int len = static_cast<int>(strlen(str));
     if (len > 10) len = 10;  // VIC-20 keyboard buffer capacity
     for (int i = 0; i < len; i++) {
@@ -932,13 +1006,13 @@ bool VIC20System::on_file_parsed(format_load_result_t& result,
     return true;
 }
 
-/// Callback context for CRT CHIP packet loading into VIC-20 memory.
+/// Callback context for CRT CHIP packet loading into VIC-20 RAM buffer.
 struct vic20_crt_load_ctx {
-    vic20_memory_t* memory;
+    RAMChip* ram;
     int chips_loaded;
 };
 
-/// CHIP packet callback — loads ROM data into the unified buffer.
+/// CHIP packet callback — loads ROM data into the RAM buffer.
 static bool vic20_crt_chip_loader(const commodore_crt_chip_t* chip,
                                   const uint8_t* rom_data,
                                   void* user_data) {
@@ -948,13 +1022,15 @@ static bool vic20_crt_chip_loader(const commodore_crt_chip_t* chip,
            chip->bank_number, chip->chip_type,
            chip->load_address, chip->rom_size);
 
-    // Load ROM data into the unified buffer at the specified address
-    if (!vic20_memory_load_rom(ctx->memory, chip->load_address,
-                               rom_data, chip->rom_size)) {
-        printf("VIC20: Failed to load CHIP bank %u at $%04X\n",
-               chip->bank_number, chip->load_address);
+    // Validate address range
+    if (chip->load_address + chip->rom_size > 65536) {
+        printf("VIC20: CHIP bank %u address out of range\n", chip->bank_number);
         return false;
     }
+
+    // Load ROM data into RAM buffer at the specified address
+    memcpy(ctx->ram->data() + chip->load_address, rom_data, chip->rom_size);
+    printf("VIC20: Loaded %uKB ROM at $%04X\n", chip->rom_size / 1024, chip->load_address);
 
     ctx->chips_loaded++;
     return true;  // Continue iterating
@@ -993,13 +1069,12 @@ bool VIC20System::pre_apply_pending_load() {
         return false;
     }
 
-    // Enable cartridge in the memory banking system
-    memory_->cartridge_present = true;
-    vic20_bank_map_init(&memory_->cpu_bank_map, expansion_flags_, true);
-    vic20_bank_map_init_vic(&memory_->vic_bank_map, expansion_flags_);
+    // Enable cartridge in the memory system
+    cartridge_present_ = true;
+    setup_cartridge_pages(true);
 
-    // Iterate CHIP packets and load ROM data into the unified buffer
-    vic20_crt_load_ctx load_ctx = { memory_, 0 };
+    // Iterate CHIP packets and load ROM data into the RAM buffer
+    vic20_crt_load_ctx load_ctx = { ram_, 0 };
     int chip_count = commodore_crt_iterate_chips(
         file_data, file_size, hdr,
         vic20_crt_chip_loader, &load_ctx);
@@ -1009,8 +1084,8 @@ bool VIC20System::pre_apply_pending_load() {
     if (chip_count <= 0) {
         printf("VIC20: No valid CHIP packets found in CRT file\n");
         // Revert cartridge state
-        memory_->cartridge_present = false;
-        vic20_bank_map_init(&memory_->cpu_bank_map, expansion_flags_, false);
+        cartridge_present_ = false;
+        setup_cartridge_pages(false);
         return false;
     }
 
@@ -1092,47 +1167,60 @@ void VIC20System::render_system_menu_items() {
 // Chip Registration — populate registered_chips_ for Hardware menu + debug
 // ============================================================================
 
-void VIC20System::register_vic20_chips() {
-    auto* cpu = cpu_;
-    auto* vic = vic_;
-    auto* via1 = via1_;
-    auto* via2 = via2_;
+// ── Expansion map ────────────────────────────────────────────────────────
+// Called after apply() and when expansion_flags_ changes.
+// Sets unmapped regions to "no chip selected" (floating bus on read, write ignored).
+// After apply(), all 256 pages point to RAM (read+write) with ROM overlays.
+// We override only the expansion blocks that are NOT present + I/O region.
+void VIC20System::setup_expansion_map() {
+    constexpr size_t kRamBase = kVIC20Chips.base_id(vic20_slot::kRam, 8);
 
-    // CPU — native ChipBase, registered directly
-    register_chip(static_cast<ChipBase*>(cpu_),
-        "MOS 6502 CPU", "6502", "CPU", 0x0000);
+    // Reset: apply() gives us full 64KB RAM + ROM overlays
+    bus_mem_.apply(mem_bus_);
 
-    // VIC — native ChipBase, registered directly
-    register_chip(vic,
-        "VIC (MOS 6560/6561)", "VIC", "Video", 0x9000);
+    // $9000-$9FFF (pages $90-$9F): I/O — handled manually in mem_tick/io_tick
+    // Pages don't matter since they're intercepted, but set to no-chip for correctness
+    mem_bus_.map_no_chip_selected(0, 0x90, 0x10);
 
-    // VIA 1 — native ChipBase, registered directly
-    register_chip(via1,
-        "VIA 1 (MOS 6522)", "VIA 1", "I/O", 0x9110);
+    // Expansion block 0: $0400-$0FFF (pages $04-$0F, 3KB = 12 pages)
+    if (!(expansion_flags_ & VIC20_EXP_BLOCK0))
+        mem_bus_.map_no_chip_selected(0, 0x04, 0x0C);
 
-    // VIA 2 — native ChipBase, registered directly
-    register_chip(via2,
-        "VIA 2 (MOS 6522)", "VIA 2", "I/O", 0x9120);
+    // Expansion block 2: $2000-$3FFF (pages $20-$3F, 8KB = 32 pages)
+    if (!(expansion_flags_ & VIC20_EXP_BLOCK2))
+        mem_bus_.map_no_chip_selected(0, 0x20, 0x20);
 
-    // RAM — RAMChip with layout rendering
-    register_chip(std::make_unique<RAMChip>(
-        ChipInfo{"DRAM", "Various"}, 32768, RAMChip::RAM, &bus_.state,
-        "RAM", 0x0000));
+    // Expansion block 3: $4000-$5FFF (pages $40-$5F, 8KB = 32 pages)
+    if (!(expansion_flags_ & VIC20_EXP_BLOCK3))
+        mem_bus_.map_no_chip_selected(0, 0x40, 0x20);
 
-    // Character ROM
-    register_chip(std::make_unique<ROMChip>(
-        ChipInfo{"MOS 901460-03", "Commodore"}, 4096, ROMChip::ROM, &bus_.state,
-        "CHARROM", 0x8000));
+    // Expansion block 5: $6000-$7FFF (pages $60-$7F, 8KB = 32 pages)
+    if (!(expansion_flags_ & VIC20_EXP_BLOCK5))
+        mem_bus_.map_no_chip_selected(0, 0x60, 0x20);
 
-    // BASIC ROM
-    register_chip(std::make_unique<ROMChip>(
-        ChipInfo{"MOS 901486-01", "Commodore"}, 8192, ROMChip::ROM, &bus_.state,
-        "BASIC", 0xC000));
+    // Cartridge ROM at $A000-$BFFF: handled via setup_cartridge_pages
+    setup_cartridge_pages(cartridge_present_);
 
-    // KERNAL ROM
-    register_chip(std::make_unique<ROMChip>(
-        ChipInfo{"MOS 901486-07", "Commodore"}, 8192, ROMChip::ROM, &bus_.state,
-        "KERNAL", 0xE000));
+    printf("VIC20: Expansion map configured (flags=$%02X, cart=%s)\n",
+           expansion_flags_, cartridge_present_ ? "yes" : "no");
+}
+
+// ── Cartridge page protection ────────────────────────────────────────────
+// When cartridge present: reads come from RAM buffer (where cart data was loaded),
+// writes are blocked (write pages → no chip selected).
+// When absent: $A000-$BFFF is unmapped (no chip selected for both read and write).
+void VIC20System::setup_cartridge_pages(bool present) {
+    using CId = typename Bus::ChipId;
+    constexpr size_t kRamBase = kVIC20Chips.base_id(vic20_slot::kRam, 8);
+
+    if (present) {
+        // Reads from RAM buffer (cartridge data loaded there), writes blocked
+        mem_bus_.fill_read_pages(0, 0xA0, 0x20, CId(kRamBase + 0xA0));
+        mem_bus_.map_write_no_chip_selected(0, 0xA0, 0x20);
+    } else {
+        // Unmapped: floating bus on read, writes ignored
+        mem_bus_.map_no_chip_selected(0, 0xA0, 0x20);
+    }
 }
 
 void VIC20System::render_configuration_ui() {
@@ -1347,20 +1435,30 @@ VIC20System::get_default_peripherals() const {
 // Private Helper Methods - VIC Memory Callbacks
 // ============================================================================
 
+// VIC chip memory read — 14-bit address space (16 KB window)
+// VA13=0 ($0000-$1FFF): Character ROM (4KB mirrored)
+// VA13=1 ($2000-$3FFF): CPU RAM $0000-$1FFF
 uint8_t VIC20System::vic_mem_read(void* user_data, uint16_t addr) {
     VIC20System* sys = static_cast<VIC20System*>(user_data);
-    
-    if (!sys || !sys->memory_) return 0xFF;
-    
-    return vic20_memory_vic_read(sys->memory_, addr);
+    if (!sys || !sys->ram_) return 0xFF;
+
+    if (addr < 0x2000) {
+        // Character ROM — 4KB at $8000 in ROM chip, mirrored to 8KB via 0x0FFF mask
+        if (sys->charrom_)
+            return sys->charrom_->data()[addr & 0x0FFF];
+        return 0xFF;
+    } else {
+        // RAM — VIC sees CPU $0000-$1FFF
+        return sys->ram_->data()[addr & 0x1FFF];
+    }
 }
 
+// Color RAM read — 10-bit address (1 KB), 4-bit wide
 uint8_t VIC20System::vic_color_read(void* user_data, uint16_t addr) {
     VIC20System* sys = static_cast<VIC20System*>(user_data);
-    
-    if (!sys || !sys->memory_) return 0x0F;
-    
-    return vic20_memory_color_read(sys->memory_, addr);
+    if (!sys || !sys->ram_) return 0x0F;
+
+    return sys->ram_->data()[VIC20_BASE_COLOR_RAM + (addr & 0x03FF)] & 0x0F;
 }
 
 // ============================================================================
@@ -1368,8 +1466,8 @@ uint8_t VIC20System::vic_color_read(void* user_data, uint16_t addr) {
 // ============================================================================
 
 bool VIC20System::load_roms() {
-    if (!memory_) {
-        printf("VIC20: Cannot load ROMs - memory system not initialized\n");
+    if (!charrom_ || !basic_rom_ || !kernal_rom_) {
+        printf("VIC20: Cannot load ROMs - memory chips not initialized\n");
         return false;
     }
     
@@ -1403,7 +1501,7 @@ bool VIC20System::load_roms() {
     );
     
     if (char_ok) {
-        vic20_memory_load_rom(memory_, VIC20_BASE_CHARROM, char_buf, sizeof(char_buf));
+        memcpy(charrom_->data(), char_buf, sizeof(char_buf));
     } else {
         printf("VIC20: Failed to load Character ROM\n");
     }
@@ -1422,7 +1520,7 @@ bool VIC20System::load_roms() {
     );
     
     if (basic_ok) {
-        vic20_memory_load_rom(memory_, VIC20_BASE_BASIC, basic_buf, sizeof(basic_buf));
+        memcpy(basic_rom_->data(), basic_buf, sizeof(basic_buf));
     } else {
         printf("VIC20: Failed to load BASIC ROM\n");
     }
@@ -1441,7 +1539,7 @@ bool VIC20System::load_roms() {
     );
     
     if (kernal_ok) {
-        vic20_memory_load_rom(memory_, VIC20_BASE_KERNAL, kernal_buf, sizeof(kernal_buf));
+        memcpy(kernal_rom_->data(), kernal_buf, sizeof(kernal_buf));
     } else {
         printf("VIC20: Failed to load KERNAL ROM\n");
     }
