@@ -183,28 +183,11 @@ bool Apple1System::apply_configuration() {
 bool Apple1System::initialize() {
     printf("Apple1: Initializing system\n");
     
-    // ── Create RAMChip wrappers (for Hardware menu + ROM loading) ────────
-    // RAM — bound to unified buffer at slot 0 (chip ids 0–255).
-    auto ram_chip = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "Various"}, apple1_constants::RAM_64K, RAMChip::SRAM, &pins_,
-        "RAM", 0x0000);
-    ram_ = ram_chip.get();
-
-    // Monitor ROM — bound at slot 1 (chip id 256).
-    auto monitor_chip = std::make_unique<ROMChip>(
-        ChipInfo{"PROM", "Various"}, 256, ROMChip::PROM, &pins_,
-        "Monitor", apple1_constants::MONITOR_BASE);
-    monitor_rom_ = monitor_chip.get();
-
-    // BASIC ROM — bound at slot 2 (chip ids 257–272).
-    auto basic_chip = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Apple"}, 4096, ROMChip::ROM, &pins_,
-        "BASIC", 0xE000);
-    basic_rom_ = basic_chip.get();
-
-    // Bind all manifest slots and wire the bus in one call.
-    // RAMChip::bind() is auto-called for buffer-backed slots.
-    bus_mem_.initialize(bus_, ram_, monitor_rom_, basic_rom_, &pia_);
+    // ── Pre-bind PIA, then factory-create memory chips ────────────────
+    bus_mem_.bind_chip(apple1_chips::kPiaSlot, &pia_);
+    bus_mem_.create_chips(&pins_);
+    monitor_rom_ = bus_mem_.chip_as<ROMChip>(apple1_chips::kMonitorSlot);
+    basic_rom_   = bus_mem_.chip_as<ROMChip>(apple1_chips::kBasicSlot);
 
     // Character ROM — not on the bus (used by terminal renderer only).
     auto char_chip = std::make_unique<ROMChip>(
@@ -259,11 +242,7 @@ bool Apple1System::initialize() {
         "PIA 6820 (Keyboard/Display)", "PIA", "I/O", apple1_constants::PIA_BASE);
     register_chip(std::make_unique<ChipPlaceholder>(
         ChipInfo{"Terminal", "Custom"}, "Text Terminal (40x24)", "Terminal", "Video"));
-    register_chip(std::move(ram_chip));
-    register_chip(std::move(monitor_chip));
-    if (has_basic_) {
-        register_chip(std::move(basic_chip));
-    }
+    register_bus_chips(bus_mem_);
     register_chip(std::move(char_chip));
     
     printf("Apple1: System initialized (RAM: %dKB)\n", ram_size_ / 1024);
