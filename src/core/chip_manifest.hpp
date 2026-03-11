@@ -1,38 +1,42 @@
 // =============================================================================
-// chip_manifest.hpp — Chip manifest, unified buffer ownership, hot-swap
+// chip_manifest.hpp — Chip manifest, unified buffer ownership, auto-wiring
 // =============================================================================
 //
-// This header provides the layer between the physical chip description of a
-// system and the MemoryBus page tables.  It answers the question: "which chip
-// ids does each chip get?" and owns the flat unified buffer whose layout those
-// ids index into.
+// Declarative chip-memory layout for emulated systems.  A constexpr manifest
+// describes WHERE each chip lives in address space and HOW BIG it is; the
+// framework derives everything else automatically:
 //
-// Three types are provided:
+//   ChipSlot          — one memory-mapped region (size, address, mask)
 //
-//   ChipDef          — describes one chip (name, size, ROM/RAM, page count)
+//   ChipManifest<N>   — compile-time array of N slots.  Assigns chip ids as
+//                       prefix sums of num_pages.  Provides constexpr queries
+//                       for auto-deriving a BusSpec (MMIO count, sub-tables).
 //
-//   ChipManifest<N>  — compile-time array of N ChipDef entries.
-//                      Assigns chip ids as prefix sums of num_pages, so every
-//                      chip's base chip id is a constexpr and can be captured
-//                      in a named symbol.  Optionally reserves a dynamic pool
-//                      at the end for hot-swap chips.
+//   ManifestBusSpec   — auto-derived BusSpec from a constexpr manifest.
+//                       Systems declare a manifest and get a BusSpec for free:
+//                         using Spec = ManifestBusSpec<kMyChips, 16, 8>;
 //
-//   BusMemory<Spec>   — runtime owner of the unified buffer.  Initialised from
-//                      a ChipManifest.  Provides:
-//                        • chip_buffer(base_id) → uint8_t*  (pointer into buf)
-//                        • load(base_id, data)              (fill from span)
-//                        • add_chip(...)  / remove_chip(...) (dynamic hot-swap)
-//                        • connect(MemoryBus<Spec>&)          (wire buffer ptr)
+//   BusMemory<Spec>   — runtime owner of the unified buffer.  After binding
+//                       runtime ChipBase* instances to slots, a single apply()
+//                       call programs all page tables, creates sub-tables, and
+//                       registers MMIO handlers automatically.
+//
+// Design principles:
+//   - Name and read_only are derived from ChipBase at runtime, not declared
+//     in the manifest.  The manifest carries only layout: sizes and addresses.
+//   - MMIO capability is detected via ChipBase::has_mmio() at bind time.
+//   - Sub-tables are auto-created for sub-page MMIO regions.
+//   - Banking mode switches remain explicit (ModeSnapshot / manual).
 //
 // Usage model:
 //
-//   1.  Define a constexpr ChipManifest for your system.
-//   2.  Capture the base chip ids as constexpr symbols via ChipManifest::base_id().
-//   3.  Construct a BusMemory from the manifest; it allocates the buffer.
-//   4.  Load ROM/RAM content via mem.load() or mem.chip_buffer().
-//   5.  Call mem.connect(bus) to wire the buffer pointer into MemoryBus.
-//   6.  Program the MemoryBus page tables using the captured chip ids.
-//   7.  For hot-swap: mem.add_chip() / mem.remove_chip() at runtime.
+//   1.  Define a constexpr ChipManifest using typed Slot<T> entries.
+//   2.  Derive a BusSpec: using Spec = ManifestBusSpec<kManifest, 16, 8>;
+//   3.  Construct a BusMemory<Spec> from the manifest; it allocates the buffer.
+//   4.  Bind ChipBase* instances via initialize(bus, chips...) — one call
+//       binds all slots, auto-calls MemoryChip::bind(), and wires the bus.
+//   5.  Load ROM/RAM content via mem.load() or mem.chip_buffer().
+//   6.  For banking: save/load snapshots after apply() has set up the default.
 //
 // =============================================================================
 #pragma once
@@ -47,17 +51,39 @@
 #include <string_view>
 #include <vector>
 
+#include "chip.h"
 #include "memory_bus.hpp"
 
 
 // =============================================================================
-// §1  ChipDef — compile-time description of one chip
+// §1  ChipSlot — compile-time description of one memory-mapped region
 // =============================================================================
+//
+// Each slot describes WHERE a chip lives and HOW BIG its buffer is.
+// Properties like name, read_only, and MMIO capability are derived from the
+// ChipBase subclass bound at runtime.
+//
+//   num_pages  — buffer pages in the unified buffer (0 = MMIO-only chip)
+//   base_addr  — default base address in the bus address space
+//   addr_mask  — sub-page address decode mask (0 = full-page decode)
+//                When non-zero, (addr & addr_mask) == (base_addr & addr_mask)
+//                selects this chip.  Triggers MaskedSubTable auto-creation.
+//
 
-struct ChipDef {
-    std::string_view name;
-    size_t           num_pages  = 0;    // size in bus pages (2^PageBits bytes each)
-    bool             read_only  = false; // true = ROM; write side maps to kNoChipSelected
+struct ChipSlot {
+    size_t   num_pages  = 0;
+    uint32_t base_addr  = 0;
+    uint32_t addr_mask  = 0;
+};
+
+// Typed slot wrapper — carries a chip type for expressive manifest declarations.
+// The type is visible in the source and available for compile-time automation
+// (e.g. auto-calling MemoryChip::bind()) but is NOT stored in the manifest.
+template<typename T>
+struct Slot {
+    size_t   num_pages = 0;
+    uint32_t base_addr = 0;
+    uint32_t addr_mask = 0;
 };
 
 
@@ -76,36 +102,31 @@ struct ChipDef {
 //
 // An optional dynamic pool of num_dynamic_pages pages is appended at the end
 // of the buffer.  BusMemory uses this pool for runtime chip addition (hot-swap).
-// The dynamic region is invisible to the MemoryBus itself; only the chip ids
-// and the buffer pointer matter there.
 //
-// Example — C64:
+// Constexpr query methods enable ManifestBusSpec to auto-derive all BusSpec
+// fields from the manifest alone.
 //
-//   constexpr auto kC64Chips = make_chip_manifest<6>({
-//       {"ROML",    1, true },   // 4 KB ROM
-//       {"ROMH",    1, true },   // 4 KB ROM
-//       {"KERNAL",  2, true },   // 8 KB ROM
-//       {"BASIC",   2, true },   // 8 KB ROM
-//       {"CHARROM", 2, true },   // 8 KB ROM
-//       {"RAM",    16, false},   // 64 KB RAM
-//   });
+// Example — Apple 1:
 //
-//   // Compile-time chip ids — usable in constexpr, template args, if constexpr
-//   constexpr auto kRomlId   = kC64Chips.base_id(0);  // = 0
-//   constexpr auto kRomhId   = kC64Chips.base_id(1);  // = 1
-//   constexpr auto kKernalId = kC64Chips.base_id(2);  // = 2
-//   constexpr auto kBasicId  = kC64Chips.base_id(3);  // = 4
-//   constexpr auto kCharId   = kC64Chips.base_id(4);  // = 6
-//   constexpr auto kRamId    = kC64Chips.base_id(5);  // = 8
-//   // MaxChipId = 8 + 16 - 1 = 23
-//   static_assert(kC64Chips.max_chip_id() == 23);
-//   static_assert(C64BusSpec::MaxChipId  == 23);  // spec must match
+//   inline constexpr auto kApple1Chips = make_chip_manifest(
+//       Slot<MemoryChip>{256, 0x0000},          // RAM: 256 pages at $0000
+//       Slot<MemoryChip>{  1, 0xFF00},          // Monitor ROM: 1 page at $FF00
+//       Slot<MemoryChip>{ 16, 0xE000},          // BASIC ROM: 16 pages at $E000
+//       Slot<pia6820_t> {  0, 0xD010, 0xFFFC}   // PIA: MMIO-only, 4-byte window
+//   );
+//
+//   constexpr auto kRamId      = kApple1Chips.base_id(0);   // = 0
+//   constexpr auto kMonitorId  = kApple1Chips.base_id(1);   // = 256
+//   constexpr auto kBasicId    = kApple1Chips.base_id(2);   // = 257
+//   // PIA has no buffer pages → no chip id assignment
 //
 
 template<size_t N>
 struct ChipManifest {
-    std::array<ChipDef, N> chips{};
+    std::array<ChipSlot, N> chips{};
     size_t num_dynamic_pages = 0;  // reserved for runtime-added chips
+
+    // ── Chip-id assignment ─────────────────────────────────────────────────
 
     // Base chip id of chip at index chip_index (0-based).
     [[nodiscard]] constexpr size_t base_id(size_t chip_index) const noexcept {
@@ -131,7 +152,7 @@ struct ChipManifest {
     }
 
     // Highest chip id that will ever appear in a page table.
-    // Set MaxChipId in your BusConfig to this value.
+    // Set MaxChipId in your BusSpec to this value.
     [[nodiscard]] constexpr size_t max_chip_id() const noexcept {
         return total_pages() > 0 ? total_pages() - 1 : 0;
     }
@@ -143,49 +164,189 @@ struct ChipManifest {
 
     // Convenience: number of static chips.
     [[nodiscard]] static constexpr size_t num_chips() noexcept { return N; }
+
+    // ── BusSpec derivation helpers ─────────────────────────────────────────
+
+    // Count of MMIO-only slots (num_pages == 0).
+    // These will need MmioHandler registration during apply().
+    [[nodiscard]] constexpr size_t mmio_slot_count() const noexcept {
+        size_t count = 0;
+        for (size_t i = 0; i < N; ++i) {
+            if (chips[i].num_pages == 0)
+                ++count;
+        }
+        return count;
+    }
+
+    // Count of unique pages requiring a MaskedSubTable.
+    // A sub-table is needed when an MMIO-only slot has addr_mask != 0,
+    // meaning it occupies a sub-page region carved from the page's base chip.
+    [[nodiscard]] constexpr size_t masked_sub_count(size_t page_bits) const noexcept {
+        const size_t page_size = size_t(1) << page_bits;
+        size_t count = 0;
+        for (size_t i = 0; i < N; ++i) {
+            if (chips[i].num_pages == 0 && chips[i].addr_mask != 0) {
+                const size_t page = chips[i].base_addr / page_size;
+                // Count only the first slot on each unique page
+                bool unique = true;
+                for (size_t j = 0; j < i; ++j) {
+                    if (chips[j].num_pages == 0 && chips[j].addr_mask != 0 &&
+                        chips[j].base_addr / page_size == page) {
+                        unique = false;
+                        break;
+                    }
+                }
+                if (unique) ++count;
+            }
+        }
+        return count;
+    }
+
+    // Maximum number of MMIO regions sharing any single MaskedSubTable page.
+    [[nodiscard]] constexpr size_t max_masked_regions_per_sub(size_t page_bits) const noexcept {
+        const size_t page_size = size_t(1) << page_bits;
+        size_t max_count = 0;
+        for (size_t i = 0; i < N; ++i) {
+            if (chips[i].num_pages == 0 && chips[i].addr_mask != 0) {
+                const size_t page = chips[i].base_addr / page_size;
+                size_t count = 0;
+                for (size_t j = 0; j < N; ++j) {
+                    if (chips[j].num_pages == 0 && chips[j].addr_mask != 0 &&
+                        chips[j].base_addr / page_size == page)
+                        ++count;
+                }
+                if (count > max_count) max_count = count;
+            }
+        }
+        return max_count;
+    }
+
+    // ── Chainable modifiers ────────────────────────────────────────────────
+
+    // Returns a copy with the dynamic pool set to the given number of pages.
+    // Use with the variadic make_chip_manifest() overload:
+    //
+    //   inline constexpr auto kChips = make_chip_manifest(
+    //       Slot<MemoryChip>{2, 0x0000}, ...
+    //   ).with_dynamic_pool(256);
+    //
+    [[nodiscard]] constexpr ChipManifest with_dynamic_pool(size_t pages) const noexcept {
+        auto copy = *this;
+        copy.num_dynamic_pages = pages;
+        return copy;
+    }
 };
 
 
 // =============================================================================
-// §2.1  make_chip_manifest — factory for clean brace-init syntax
+// §2.1  make_chip_manifest — factories
 // =============================================================================
 //
-// Usage:
-//   constexpr auto kMyChips = make_chip_manifest<5>({
-//       {"ROM",  4, true },
-//       {"RAM",  8, false},
-//       {"IO",   1, false},
-//       {"EXP",  2, true },
-//       {"VRAM", 2, false},
-//   }, /*num_dynamic_pages=*/4);
+// Array overload (untyped):
+//   inline constexpr auto kChips = make_chip_manifest<4>({
+//       {256, 0x0000}, {1, 0xFF00}, {16, 0xE000}, {0, 0xD010, 0xFFFC},
+//   });
+//
+// Variadic overload (typed — preferred):
+//   inline constexpr auto kChips = make_chip_manifest(
+//       Slot<MemoryChip>{256, 0x0000},
+//       Slot<MemoryChip>{  1, 0xFF00},
+//       Slot<pia6820_t> {  0, 0xD010, 0xFFFC}
+//   );
 //
 
 template<size_t N>
 [[nodiscard]] constexpr ChipManifest<N>
-make_chip_manifest(const ChipDef (&defs)[N],
+make_chip_manifest(const ChipSlot (&slots)[N],
                    size_t num_dynamic_pages = 0) noexcept
 {
     ChipManifest<N> manifest{};
     for (size_t i = 0; i < N; ++i)
-        manifest.chips[i] = defs[i];
+        manifest.chips[i] = slots[i];
     manifest.num_dynamic_pages = num_dynamic_pages;
+    return manifest;
+}
+
+// Variadic overload with typed slots — each entry carries its chip type
+// as a template parameter for self-documenting declarations:
+//
+//   inline constexpr auto kChips = make_chip_manifest(
+//       Slot<MemoryChip>{256, 0x0000},
+//       Slot<MemoryChip>{  1, 0xFF00},
+//       Slot<pia6820_t> {  0, 0xD010, 0xFFFC}
+//   );
+//
+// Types are visible in the source but stripped at compile time — the result
+// is a plain ChipManifest<N>.  Chain .with_dynamic_pool(n) to reserve a
+// dynamic chip pool.
+
+template<typename... Chips>
+[[nodiscard]] constexpr ChipManifest<sizeof...(Chips)>
+make_chip_manifest(Slot<Chips>... slots) noexcept
+{
+    ChipManifest<sizeof...(Chips)> manifest{};
+    size_t i = 0;
+    ((manifest.chips[i++] = ChipSlot{slots.num_pages, slots.base_addr, slots.addr_mask}), ...);
     return manifest;
 }
 
 
 // =============================================================================
-// §3  BusMemory<Spec> — runtime chip owner
+// §3  ManifestBusSpec — auto-derive BusSpec from a constexpr manifest
+// =============================================================================
+//
+// Given a constexpr ChipManifest, derives all BusSpec fields automatically.
+// Systems declare a manifest and alias the spec:
+//
+//   inline constexpr auto kChips = make_chip_manifest(Slot<MyChip>{...}, ...);
+//   using MyBusSpec = ManifestBusSpec<kChips, 16, 8>;
+//
+// Template parameters:
+//   Manifest  — const reference to a constexpr ChipManifest<N>
+//   AddrBits  — address bus width (8, 14, 16, 24, …)
+//   PgBits    — log2(page size in bytes)
+//   NViewers  — number of independent bus viewers (default 1)
+//
+
+template<const auto& Manifest,
+         size_t AddrBits = 16,
+         size_t PgBits   = 8,
+         size_t NViewers = 1>
+struct ManifestBusSpec {
+    using AddrType = std::conditional_t<AddrBits <= 8, uint8_t,
+                     std::conditional_t<AddrBits <= 16, uint16_t, uint32_t>>;
+
+    static constexpr size_t AddressBits    = AddrBits;
+    static constexpr size_t PageBits       = PgBits;
+    static constexpr size_t NumViewers     = NViewers;
+
+    // Chip id range — derived from manifest prefix-sum layout.
+    // MaxWriteChipId = MaxChipId (conservative; is_read_only() known at runtime only).
+    static constexpr size_t MaxChipId      = Manifest.max_chip_id();
+    static constexpr size_t MaxWriteChipId = MaxChipId;
+
+    // MMIO — derived from manifest slot analysis.
+    static constexpr bool   EnableMmio       = Manifest.mmio_slot_count() > 0;
+    static constexpr size_t MaxMmioHandlers  = Manifest.mmio_slot_count();
+
+    // Masked sub-tables — auto-detected from sub-page MMIO slots.
+    static constexpr size_t MaxMaskedSubTables = Manifest.masked_sub_count(PgBits);
+    static constexpr size_t MaxMaskedRegions   = Manifest.max_masked_regions_per_sub(PgBits);
+};
+
+
+// =============================================================================
+// §4  BusMemory<Spec> — runtime chip owner, buffer manager, auto-wiring
 // =============================================================================
 //
 // Owns the flat unified buffer.  Provides pointer access into the buffer for
-// each chip, handles dynamic chip add/remove for hot-swap, and wires the
-// buffer pointer into MemoryBus.
+// each chip, handles dynamic chip add/remove for hot-swap, and can auto-wire
+// a MemoryBus from the manifest + bound chips.
 //
-// Template parameter Spec must satisfy BusSpecConcept.  BusMemory uses
-// Bus::kPageSize to compute buffer offsets and buffer capacity.
+// Template parameter Spec must satisfy BusSpecConcept.
 //
 // Thread safety: none.  External synchronisation required if add/remove_chip
-// is called concurrently with bus accesses.
+// or apply() is called concurrently with bus accesses.
 //
 
 template<BusSpecConcept Spec>
@@ -194,22 +355,30 @@ public:
     using Bus         = MemoryBus<Spec>;
     using ChipId      = typename Bus::ChipId;
     using WriteChipId = typename Bus::WriteChipId;
+    using PT          = PackingTraits<Spec>;
+    using Addr        = typename Spec::AddrType;
 
     static constexpr size_t kPageSize = Bus::kPageSize;
+    static constexpr size_t kPageBits = Spec::PageBits;
 
-    // ── Per-chip runtime record ───────────────────────────────────────────────
+    // ── Per-slot runtime record ───────────────────────────────────────────
 
-    struct ChipInfo {
-        std::string_view name;
-        ChipId           base_id;    // first chip id (page-granular)
-        size_t           num_pages;  // number of page-granular ids occupied
-        bool             read_only;  // true = ROM
-        bool             dynamic;    // true = added at runtime (can be removed)
+    struct SlotRecord {
+        std::string_view name;                // From bound chip (or provided for dynamic)
+        ChipId           base_id;             // First chip id (prefix sum)
+        size_t           num_pages;           // Buffer pages (0 = MMIO-only)
+        uint32_t         base_addr  = 0;      // Default address in bus space
+        uint32_t         addr_mask  = 0;      // Sub-page decode mask
+        bool             read_only  = false;  // Derived from bound chip
+        bool             dynamic    = false;  // Runtime-added (can be removed)
+        ChipBase*        chip       = nullptr; // Bound chip instance
+        int              mmio_idx   = -1;     // Assigned MMIO handler index (-1 = none)
+        int              sub_table_idx = -1;  // Assigned MaskedSubTable index (-1 = none)
     };
 
-    // =========================================================================
-    // §3.1  Construction from a ChipManifest
-    // =========================================================================
+    // =====================================================================
+    // §4.1  Construction from a ChipManifest
+    // =====================================================================
     //
     // Allocates the unified buffer to exactly fit all static chips plus the
     // dynamic pool declared in the manifest.
@@ -220,30 +389,182 @@ public:
         const size_t total = manifest.total_pages();
         buffer_.assign(total * kPageSize, uint8_t(0xFF));  // default: 0xFF = pulled-high
 
-        // Record static chips
-        chips_.reserve(N);
+        slots_.reserve(N);
         for (size_t i = 0; i < N; ++i) {
-            const ChipDef& d = manifest.chips[i];
-            assert(d.num_pages > 0);
-            chips_.push_back({
-                d.name,
+            const ChipSlot& s = manifest.chips[i];
+            slots_.push_back({
+                {},                             // name: set during bind_chip
                 ChipId(manifest.base_id(i)),
-                d.num_pages,
-                d.read_only,
-                /*dynamic=*/false,
+                s.num_pages,
+                s.base_addr,
+                s.addr_mask,
+                false,                          // read_only: set during bind_chip
+                false,                          // dynamic
+                nullptr,                        // chip
+                -1,                             // mmio_idx
+                -1,                             // sub_table_idx
             });
         }
 
         // Initialise dynamic allocator
         if (manifest.num_dynamic_pages > 0) {
-            dynamic_base_  = manifest.dynamic_base_id();
+            dynamic_base_ = manifest.dynamic_base_id();
             free_list_.push_back({dynamic_base_, manifest.num_dynamic_pages});
         }
     }
 
-    // =========================================================================
-    // §3.2  Buffer and chip access
-    // =========================================================================
+    // =====================================================================
+    // §4.2  Chip binding
+    // =====================================================================
+    //
+    // Associates a runtime ChipBase* with a manifest slot.  Derives the
+    // chip's name and read_only from its virtual interface.  Assigns the
+    // bus chip id on the chip.
+    //
+    // Returns a pointer to the chip's region in the unified buffer
+    // (for MemoryChip::bind(), etc.), or nullptr for MMIO-only slots.
+    //
+
+    uint8_t* bind_chip(size_t slot_index, ChipBase* chip) {
+        assert(slot_index < slots_.size());
+        auto& slot = slots_[slot_index];
+        slot.chip = chip;
+        if (chip) {
+            slot.name      = chip->chip_info().part_number;
+            slot.read_only = chip->is_read_only();
+            chip->set_bus_chip_id(uint16_t(slot.base_id));
+        }
+        return slot.num_pages > 0 ? chip_buffer(slot.base_id) : nullptr;
+    }
+
+    // =====================================================================
+    // §4.3  Auto-wiring: apply()
+    // =====================================================================
+    //
+    // Programs a MemoryBus viewer from the manifest slots + bound chips:
+    //   - Resets the viewer and its masked sub-tables.
+    //   - Maps buffer chips (read pages for all, write pages for non-read-only).
+    //   - Registers MMIO handlers for chips with has_mmio().
+    //   - Auto-creates MaskedSubTables for sub-page MMIO regions.
+    //
+    // Safe to call multiple times (e.g. after RAM size reconfiguration).
+    // MMIO handlers are re-used on subsequent calls (update, not re-register).
+    //
+
+    void apply(Bus& bus, size_t viewer_id = 0) {
+        bus.set_unified_buffer(buffer_.data());
+        bus.reset_viewer(viewer_id);
+        if constexpr (Bus::kHasMaskedSub) bus.reset_masked_subs(viewer_id);
+
+        // ── Phase 1: Map buffer chips ─────────────────────────────────────
+        for (const auto& slot : slots_) {
+            if (slot.num_pages == 0 || slot.dynamic) continue;
+            const size_t first_page = slot.base_addr >> kPageBits;
+            bus.fill_read_pages(viewer_id, first_page, slot.num_pages, slot.base_id);
+            if (!slot.read_only) {
+                bus.fill_write_pages(viewer_id, first_page, slot.num_pages,
+                                     WriteChipId(slot.base_id));
+            }
+        }
+
+        // ── Phase 2: MMIO handlers and sub-tables ─────────────────────────
+        if constexpr (Spec::EnableMmio) {
+            // Track MaskedSubTable assignments for page deduplication.
+            struct SubInfo { size_t page; int sub_idx; };
+            static constexpr size_t kMaxSubs =
+                Bus::kHasMaskedSub ? Bus::kMaxMaskedSubs : 1;
+            std::array<SubInfo, kMaxSubs> sub_infos{};
+            size_t num_subs = 0;
+
+            for (auto& slot : slots_) {
+                if (!slot.chip || !slot.chip->has_mmio() || slot.dynamic)
+                    continue;
+
+                // Register (or update) MMIO handler
+                MmioHandler handler{
+                    slot.chip,
+                    mmio_read_trampoline_,
+                    mmio_write_trampoline_
+                };
+                if (slot.mmio_idx >= 0) {
+                    bus.update_handler(size_t(slot.mmio_idx), handler);
+                } else {
+                    slot.mmio_idx = bus.register_handler(handler);
+                    assert(slot.mmio_idx >= 0);
+                }
+
+                if constexpr (Bus::kHasMaskedSub) {
+                    if (slot.addr_mask != 0) {
+                        // Sub-page MMIO — route through a MaskedSubTable
+                        const size_t page = slot.base_addr >> kPageBits;
+
+                        // Find existing sub-table for this page, or create one
+                        int sub_idx = -1;
+                        for (size_t k = 0; k < num_subs; ++k) {
+                            if (sub_infos[k].page == page) {
+                                sub_idx = sub_infos[k].sub_idx;
+                                break;
+                            }
+                        }
+                        if (sub_idx < 0) {
+                            // Capture the page's current base chip before overwriting
+                            auto base_rd = bus.viewer(viewer_id).read_chip(page);
+                            auto base_wr = bus.viewer(viewer_id).write_chip(page);
+                            sub_idx = bus.add_masked_sub_table(
+                                viewer_id, base_rd, base_wr);
+                            assert(sub_idx >= 0);
+                            bus.map_to_masked_sub(
+                                viewer_id, page, size_t(sub_idx));
+                            sub_infos[num_subs++] = {page, sub_idx};
+                        }
+
+                        slot.sub_table_idx = sub_idx;
+
+                        bus.add_masked_region(
+                            viewer_id, size_t(sub_idx),
+                            Addr(slot.addr_mask),
+                            Addr(slot.base_addr & slot.addr_mask),
+                            ChipId(size_t(PT::kRegChipBase) + size_t(slot.mmio_idx)),
+                            WriteChipId(size_t(PT::kRegChipBaseWrite)
+                                        + size_t(slot.mmio_idx)));
+                        continue;  // skip full-page fallback
+                    }
+                }
+
+                // Full-page MMIO (or no masked sub-table support)
+                const size_t first_page = slot.base_addr >> kPageBits;
+                const size_t count = slot.num_pages > 0 ? slot.num_pages : 1;
+                bus.map_register_file(
+                    viewer_id, first_page, count, size_t(slot.mmio_idx));
+            }
+        }
+    }
+
+    // =====================================================================
+    // §4.4  Variadic initialization: bind + buffer-bind + apply
+    // =====================================================================
+    //
+    // Binds each chip pointer to its positional manifest slot, auto-calls
+    // bind(buffer_ptr) on chips that support it (detected via a C++20
+    // requires-expression), then calls apply() to wire page tables,
+    // sub-tables, and MMIO handlers.
+    //
+    // Pass nullptr for unbound slots (e.g. optional ROM not loaded).
+    //
+    //   bus_mem_.initialize(bus_, ram_, monitor_rom_, basic_rom_, &pia_);
+    //
+
+    template<typename... Chips>
+    void initialize(Bus& bus, Chips*... chips) {
+        assert(sizeof...(Chips) <= slots_.size());
+        size_t idx = 0;
+        (bind_one_(idx++, chips), ...);
+        apply(bus);
+    }
+
+    // =====================================================================
+    // §4.5  Buffer and chip access
+    // =====================================================================
 
     // Pointer to the start of the chip's region in the unified buffer.
     [[nodiscard]] uint8_t* chip_buffer(ChipId base_id) noexcept {
@@ -259,17 +580,17 @@ public:
         return num_pages * kPageSize;
     }
 
-    // =========================================================================
-    // §3.3  Load ROM/RAM data
-    // =========================================================================
+    // =====================================================================
+    // §4.5  Load ROM/RAM data
+    // =====================================================================
     //
     // Copies data into the chip's region.  Returns false if data is larger than
-    // the chip's allocated region.  Partial loads (data.size() < chip_bytes) fill
-    // only the beginning of the region; the rest retains its current value.
+    // the chip's allocated region.  Partial loads (data.size() < chip_bytes)
+    // fill only the beginning of the region; the rest retains its value.
     //
 
     bool load(ChipId base_id, std::span<const uint8_t> data) noexcept {
-        const ChipInfo* info = find(base_id);
+        const SlotRecord* info = find(base_id);
         if (!info) return false;
         const size_t capacity = info->num_pages * kPageSize;
         if (data.size() > capacity) return false;
@@ -279,14 +600,14 @@ public:
 
     // Fill a chip's region with a constant byte (e.g. 0xFF for unpopulated ROM).
     void fill(ChipId base_id, uint8_t value = 0xFF) noexcept {
-        const ChipInfo* info = find(base_id);
+        const SlotRecord* info = find(base_id);
         if (!info) return;
         std::memset(chip_buffer(base_id), value, info->num_pages * kPageSize);
     }
 
-    // =========================================================================
-    // §3.4  Dynamic chip management (hot-swap)
-    // =========================================================================
+    // =====================================================================
+    // §4.6  Dynamic chip management (hot-swap)
+    // =====================================================================
     //
     // add_chip allocates num_pages contiguous pages from the dynamic pool and
     // returns the base chip id.  Returns kInvalidChipId on failure (pool full
@@ -295,9 +616,6 @@ public:
     // remove_chip returns the pages to the free list and merges adjacent runs.
     // The caller must remap or unmap the chip in all MemoryBus viewers before
     // or after calling remove_chip.
-    //
-    // The dynamic pool is declared in the ChipManifest as num_dynamic_pages.
-    // All dynamic chip ids fall in [dynamic_base_, dynamic_base_ + pool_size).
     //
 
     static constexpr ChipId kInvalidChipId = ChipId(~ChipId(0));
@@ -312,7 +630,10 @@ public:
         for (auto it = free_list_.begin(); it != free_list_.end(); ++it) {
             if (it->pages >= num_pages) {
                 const ChipId base = ChipId(it->base);
-                chips_.push_back({name, base, num_pages, read_only, /*dynamic=*/true});
+                slots_.push_back({
+                    name, base, num_pages, 0, 0,
+                    read_only, /*dynamic=*/true, nullptr, -1, -1
+                });
 
                 // Consume from the free run
                 it->base  += num_pages;
@@ -327,14 +648,13 @@ public:
     }
 
     void remove_chip(ChipId base_id) noexcept {
-        auto it = std::find_if(chips_.begin(), chips_.end(),
-            [base_id](const ChipInfo& c){ return c.base_id == base_id; });
-        if (it == chips_.end() || !it->dynamic) return;
+        auto it = std::find_if(slots_.begin(), slots_.end(),
+            [base_id](const SlotRecord& s){ return s.base_id == base_id; });
+        if (it == slots_.end() || !it->dynamic) return;
 
-        const size_t base  = size_t(it->base_id);
-        const size_t pages = it->pages;  // wait, field is num_pages
+        const size_t base   = size_t(it->base_id);
         const size_t npages = it->num_pages;
-        chips_.erase(it);
+        slots_.erase(it);
 
         // Return pages to free list and merge adjacent runs
         FreeRun run{base, npages};
@@ -344,73 +664,74 @@ public:
         merge_free_list();
     }
 
-    // =========================================================================
-    // §3.5  Connect to a MemoryBus
-    // =========================================================================
+    // =====================================================================
+    // §4.7  Connect to a MemoryBus (standalone, without full apply)
+    // =====================================================================
     //
-    // Passes the unified buffer pointer to the bus.  Must be called before any
-    // bus accesses; re-call if the buffer is reallocated (e.g. after a resize).
+    // Passes the unified buffer pointer to the bus.  Called automatically by
+    // apply(), but can also be used standalone for manual page-table setup.
     //
 
     void connect(Bus& bus) noexcept {
         bus.set_unified_buffer(buffer_.data());
     }
 
-    // =========================================================================
-    // §3.6  Chip lookup
-    // =========================================================================
+    // =====================================================================
+    // §4.8  Slot lookup
+    // =====================================================================
 
-    [[nodiscard]] const ChipInfo* find(ChipId base_id) const noexcept {
-        for (const auto& c : chips_)
-            if (c.base_id == base_id) return &c;
+    [[nodiscard]] const SlotRecord* find(ChipId base_id) const noexcept {
+        for (const auto& s : slots_)
+            if (s.base_id == base_id) return &s;
         return nullptr;
     }
 
-    [[nodiscard]] const ChipInfo* find(std::string_view name) const noexcept {
-        for (const auto& c : chips_)
-            if (c.name == name) return &c;
+    [[nodiscard]] const SlotRecord* find(std::string_view name) const noexcept {
+        for (const auto& s : slots_)
+            if (s.name == name) return &s;
         return nullptr;
     }
 
-    [[nodiscard]] std::span<const ChipInfo> chips() const noexcept {
-        return chips_;
+    [[nodiscard]] SlotRecord& slot(size_t index) noexcept {
+        assert(index < slots_.size());
+        return slots_[index];
     }
 
-    // =========================================================================
-    // §3.7  Buffer introspection
-    // =========================================================================
+    [[nodiscard]] const SlotRecord& slot(size_t index) const noexcept {
+        assert(index < slots_.size());
+        return slots_[index];
+    }
+
+    [[nodiscard]] std::span<const SlotRecord> slots() const noexcept {
+        return slots_;
+    }
+
+    // =====================================================================
+    // §4.9  Buffer introspection
+    // =====================================================================
 
     [[nodiscard]] uint8_t*       buffer()       noexcept { return buffer_.data(); }
     [[nodiscard]] const uint8_t* buffer() const noexcept { return buffer_.data(); }
     [[nodiscard]] size_t buffer_size() const noexcept { return buffer_.size(); }
 
-    // =========================================================================
-    // §3.8  Convenience: program a MemoryBus viewer from ChipManifest
-    // =========================================================================
+    // =====================================================================
+    // §4.10  Convenience: manual page mapping
+    // =====================================================================
     //
-    // Helper that maps a chip's pages into a viewer's address space.
-    //
-    //   map_chip_read(bus, viewer, chip_base_addr_page, chip_base_id)
-    //     → fills num_pages pages starting at chip_base_addr_page in the
-    //       viewer's read table with sequential chip ids starting at chip_base_id.
-    //
-    //   map_chip_write: same for write table.
-    //   map_chip: both.
-    //
-    // For mirrored chips (all pages → same chip id, e.g. 2 KB RAM mirrored
-    // across 8 KB): use bus.fill_read_constant() directly.
+    // Helpers for systems that need manual page-table manipulation beyond
+    // what apply() provides (e.g. cartridge bank switching, PLA modes).
     //
 
     void map_chip_read(Bus& bus, size_t viewer_id,
                        size_t first_page, ChipId base_id) const noexcept {
-        const ChipInfo* info = find(base_id);
+        const SlotRecord* info = find(base_id);
         if (!info) return;
         bus.fill_read_pages(viewer_id, first_page, info->num_pages, base_id);
     }
 
     void map_chip_write(Bus& bus, size_t viewer_id,
                         size_t first_page, ChipId base_id) const noexcept {
-        const ChipInfo* info = find(base_id);
+        const SlotRecord* info = find(base_id);
         if (!info) return;
         bus.fill_write_pages(viewer_id, first_page, info->num_pages,
                              WriteChipId(base_id));
@@ -418,14 +739,37 @@ public:
 
     void map_chip(Bus& bus, size_t viewer_id,
                   size_t first_page, ChipId base_id) const noexcept {
-        const ChipInfo* info = find(base_id);
+        const SlotRecord* info = find(base_id);
         if (!info) return;
         bus.fill_pages(viewer_id, first_page, info->num_pages,
                        base_id, WriteChipId(base_id));
     }
 
 private:
-    // ── Dynamic allocator internal state ─────────────────────────────────────
+    // ── MMIO dispatch trampolines ────────────────────────────────────────
+    // Bridge ChipBase virtual on_bus_read/write to MmioHandler function ptrs.
+
+    static bus_state_t mmio_read_trampoline_(void* ctx, bus_state_t bus) noexcept {
+        return static_cast<ChipBase*>(ctx)->on_bus_read(bus);
+    }
+
+    static bus_state_t mmio_write_trampoline_(void* ctx, bus_state_t bus) noexcept {
+        return static_cast<ChipBase*>(ctx)->on_bus_write(bus);
+    }
+
+    // ── Variadic bind helper ─────────────────────────────────────────────
+    // Binds one chip to its slot; auto-calls bind(buffer) on types that have it.
+
+    template<typename T>
+    void bind_one_(size_t slot_index, T* chip) {
+        if (!chip) return;
+        uint8_t* buf = bind_chip(slot_index, chip);
+        if constexpr (requires(T& t, uint8_t* p) { t.bind(p); }) {
+            if (buf) chip->bind(buf);
+        }
+    }
+
+    // ── Dynamic allocator internal state ─────────────────────────────────
 
     struct FreeRun {
         size_t base;
@@ -446,10 +790,10 @@ private:
         }
     }
 
-    // ── State ─────────────────────────────────────────────────────────────────
+    // ── State ─────────────────────────────────────────────────────────────
 
-    std::vector<uint8_t>  buffer_;
-    std::vector<ChipInfo> chips_;
+    std::vector<uint8_t>     buffer_;
+    std::vector<SlotRecord>  slots_;
 
     size_t               dynamic_base_ = 0;
     std::vector<FreeRun> free_list_;
@@ -457,114 +801,53 @@ private:
 
 
 // =============================================================================
-// §4  Usage examples
+// §5  Usage examples
 // =============================================================================
 //
-// ── C64 setup ─────────────────────────────────────────────────────────────────
+// ── Apple 1 (minimal system) ──────────────────────────────────────────────────
 //
-//  // §4.1  Declare the chip manifest — one entry per physical chip
-//  //       num_pages is relative to PageBits=12 (4 KB pages)
+//  inline constexpr auto kApple1Chips = make_chip_manifest(
+//      Slot<MemoryChip>{256, 0x0000},          // RAM: 256 pages (64 KB max)
+//      Slot<MemoryChip>{  1, 0xFF00},          // Monitor ROM: 1 page at $FF00
+//      Slot<MemoryChip>{ 16, 0xE000},          // BASIC ROM: 16 pages at $E000
+//      Slot<pia6820_t> {  0, 0xD010, 0xFFFC}   // PIA: MMIO-only, 4-byte window
+//  );
 //
-//  inline constexpr auto kC64Chips = make_chip_manifest<6>({
-//      {"ROML",    1, true },   // $8000–$8FFF  4 KB
-//      {"ROMH",    1, true },   // $A000–$AFFF  4 KB
-//      {"KERNAL",  2, true },   // $E000–$FFFF  8 KB
-//      {"BASIC",   2, true },   // $A000–$BFFF  8 KB
-//      {"CHARROM", 2, true },   // mapped by VIC-II
-//      {"RAM",    16, false},   // 64 KB
-//  });
+//  // BusSpec auto-derived: MaxChipId=272, 1 MMIO handler, 1 MaskedSubTable
+//  using Apple1Spec = ManifestBusSpec<kApple1Chips, 16, 8>;
 //
-//  // §4.2  Capture compile-time chip ids — zero runtime cost
-//  constexpr auto kRomlId   = kC64Chips.base_id(0);  // 0
-//  constexpr auto kRomhId   = kC64Chips.base_id(1);  // 1
-//  constexpr auto kKernalId = kC64Chips.base_id(2);  // 2
-//  constexpr auto kBasicId  = kC64Chips.base_id(3);  // 4
-//  constexpr auto kCharId   = kC64Chips.base_id(4);  // 6
-//  constexpr auto kRamId    = kC64Chips.base_id(5);  // 8
-//  static_assert(kC64Chips.max_chip_id() == 23);
-//  // → C64BusSpec::MaxChipId must be 23
+//  // At runtime:
+//  BusMemory<Apple1Spec> mem{kApple1Chips};
+//  MemoryBus<Apple1Spec> bus;
 //
-//  // §4.3  Create BusMemory; it allocates the unified buffer
-//  BusMemory<C64BusSpec> mem{kC64Chips};
+//  // Single call: bind all chips, auto-call MemoryChip::bind(), wire bus
+//  mem.initialize(bus, ram_, monitor_rom_, basic_rom_, &pia_);
 //
-//  // §4.4  Load ROM images
-//  mem.load(kRomlId,   roml_bytes);
-//  mem.load(kKernalId, kernal_bytes);
-//  // RAM region is pre-filled with 0xFF; overwrite if needed
+// ── C64 (complex system with indexed sub-table) ──────────────────────────────
 //
-//  // §4.5  Wire buffer into the bus
-//  C64Bus bus;
-//  mem.connect(bus);
+//  inline constexpr auto kC64Chips = make_chip_manifest(
+//      Slot<MemoryChip>{ 1, 0x8000},          // ROML:    4 KB at $8000
+//      Slot<MemoryChip>{ 1, 0xA000},          // ROMH:    4 KB at $A000
+//      Slot<MemoryChip>{ 2, 0xE000},          // KERNAL:  8 KB at $E000
+//      Slot<MemoryChip>{ 2, 0xA000},          // BASIC:   8 KB at $A000
+//      Slot<MemoryChip>{ 2, 0xD000},          // CHARROM: 8 KB (VIC-II only)
+//      Slot<MemoryChip>{16, 0x0000}           // RAM:    64 KB at $0000
+//  );
 //
-//  // §4.6  Program one PLA mode — chip ids are the symbols above
-//  //       (In practice use pre-computed ModeSnapshot arrays)
-//  bus.set_read_page (C64BusSpec::Cpu, 0x8, ChipId(kRomlId));
-//  bus.set_read_page (C64BusSpec::Cpu, 0xA, ChipId(kBasicId));
-//  bus.set_read_page (C64BusSpec::Cpu, 0xB, ChipId(kBasicId + 1));
-//  bus.fill_read_pages(C64BusSpec::Cpu, 0x0, 16, ChipId(kRamId));
-//  // etc. for all 16 pages × all 32 PLA modes → saved as ModeSnapshot
+//  // C64 uses a hand-written BusSpec due to indexed sub-tables for the I/O
+//  // page at $D000 and dual viewers (CPU + VIC-II).  ManifestBusSpec handles
+//  // the common case; complex systems extend it or write their own spec.
 //
-// ── NES cartridge hot-swap (dynamic chip) ─────────────────────────────────────
+// ── NES cartridge hot-swap ────────────────────────────────────────────────────
 //
-//  // Reserve a 256 KB dynamic pool for PRG-ROM cartridges
-//  inline constexpr auto kNesChips = make_chip_manifest<3>({
-//      {"WRAM",  2, false},   // 2 KB internal RAM   (2 × 1 KB pages at PageBits=10)
-//      {"CIRAM", 2, false},   // 2 KB nametable RAM
-//      {"SRAM",  8, false},   // 8 KB battery-backed RAM
-//  }, /*num_dynamic_pages=*/256);  // 256 × 1 KB dynamic pool for cartridge ROM
+//  inline constexpr auto kNesChips = make_chip_manifest(
+//      Slot<MemoryChip>{ 2, 0x0000},          // WRAM:  2 KB at $0000
+//      Slot<MemoryChip>{ 2, 0x2000},          // CIRAM: 2 KB nametable RAM
+//      Slot<MemoryChip>{ 8, 0x6000}           // SRAM:  8 KB battery-backed RAM
+//  ).with_dynamic_pool(256);
 //
-//  constexpr auto kWramId  = kNesChips.base_id(0);  // 0
-//  constexpr auto kCiramId = kNesChips.base_id(1);  // 2
-//  constexpr auto kSramId  = kNesChips.base_id(2);  // 4
-//  // dynamic pool starts at kNesChips.dynamic_base_id() = 12
-//
-//  BusMemory<NesCpuBusSpec> mem{kNesChips};
-//
-//  // Insert cartridge at runtime (e.g. on file load)
-//  void insert_cartridge(BusMemory<NesCpuBusSpec>& mem,
-//                        NesCpuBus& bus,
-//                        std::span<const uint8_t> prg_data) {
-//      const size_t num_pages = (prg_data.size() + 1023) / 1024;
-//      const auto cart_id = mem.add_chip("PRG-ROM", num_pages, /*read_only=*/true);
-//      assert(cart_id != BusMemory<NesCpuBusSpec>::kInvalidChipId);
-//      mem.load(cart_id, prg_data);
-//      // Map last 16 KB of ROM fixed at $C000–$FFFF
-//      const size_t last_bank = num_pages - 16;
-//      bus.fill_read_pages(0, 48, 16, cart_id + last_bank);
-//  }
-//
-//  // Remove cartridge
-//  void remove_cartridge(BusMemory<NesCpuBusSpec>& mem,
-//                        NesCpuBus& bus,
-//                        ChipId cart_id) {
-//      bus.map_no_chip_selected(0, 48, 16);  // unmap before removing
-//      mem.remove_chip(cart_id);
-//  }
-//
-// ── Partial-bus mask setup (Apple I) ─────────────────────────────────────────
-//
-//  inline constexpr auto kApple1Chips = make_chip_manifest<4>({
-//      {"RAM_LO", 1, false},  // first 2114:  D0–D3
-//      {"RAM_HI", 1, false},  // second 2114: D4–D7
-//      {"ROM",    2, true },  // 2 KB ROM
-//      {"PIA",    1, false},  // 6820 PIA
-//  });
-//
-//  constexpr auto kRamLoId = kApple1Chips.base_id(0);
-//  constexpr auto kRamHiId = kApple1Chips.base_id(1);
-//  constexpr auto kRomId   = kApple1Chips.base_id(2);
-//  constexpr auto kPiaId   = kApple1Chips.base_id(3);
-//
-//  MemoryBus<Generic8BitBusSpec> bus;
-//  BusMemory<Generic8BitBusSpec> mem{kApple1Chips};
-//  mem.connect(bus);
-//
-//  // Set 4-bit data masks for the two 2114 chips
-//  bus.set_chip_data_mask(kRamLoId, 0x0Fu);  // D0–D3
-//  bus.set_chip_data_mask(kRamHiId, 0xF0u);  // D4–D7
-//
-//  // Normal mode: treat each pair as a single 8-bit chip (default mask=0xFF)
-//  // Fault-injection: route both chip ids to the same page; each bitmix pass
-//  // contributes its nibble, leaving the other nibble from the bus word.
+//  // Dynamic cartridge insertion at runtime:
+//  auto cart_id = mem.add_chip("PRG-ROM", 256, /*read_only=*/true);
+//  mem.load(cart_id, prg_data);
 //
 // =============================================================================

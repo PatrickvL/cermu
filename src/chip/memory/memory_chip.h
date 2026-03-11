@@ -66,6 +66,11 @@ public:
     std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout) override;
 #endif
 
+    // --- ChipBase overrides --------------------------------------------
+    bool is_read_only() const override {
+        return type_ == ROM || type_ == PROM || type_ == EPROM;
+    }
+
     // --- Data access -------------------------------------------------
     uint8_t*       data()       { return data_; }
     const uint8_t* data() const { return data_; }

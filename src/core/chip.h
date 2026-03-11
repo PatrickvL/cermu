@@ -97,6 +97,21 @@ public:
     ChipDebugRegistry debug_registry_;
 #endif
 
+    // --- Bus chip identity (assigned by BusMemory during bind) ---
+    uint16_t bus_chip_id() const { return bus_chip_id_; }
+    void set_bus_chip_id(uint16_t id) { bus_chip_id_ = id; }
+
+    // --- Bus MMIO interface (opt-in via override) ---
+    // Chips that handle register-file access on the memory bus override these.
+    // The default returns false / passes bus through unchanged.
+    virtual bool has_mmio() const { return false; }
+    virtual bus_state_t on_bus_read (bus_state_t bus) noexcept { return bus; }
+    virtual bus_state_t on_bus_write(bus_state_t bus) noexcept { return bus; }
+
+    // --- Memory properties (opt-in via override) ---
+    // MemoryChip and ROM chips override this to return true.
+    virtual bool is_read_only() const { return false; }
+
     // Bus state snapshot — stores the bus state at the end of each tick.
     // Used by the emulation loop for edge detection (A12, NMI) and
     // open-bus decay, and by GUI code for layout pin rendering.
@@ -145,6 +160,9 @@ protected:
     virtual ChipLayout* create_chip_layout() const { return nullptr; }
     void invalidate_layout() const { layout_initialized_ = false; layout_ = nullptr; }
 #endif
+
+    // Registration metadata — set by derived constructors or by register_chip()
+    uint16_t bus_chip_id_ = 0xFFFF;        // MemoryBus chip id (0xFFFF = unassigned)
 
     // Registration metadata — set by derived constructors or by register_chip()
     const char* display_name_ = nullptr;  // "VIA 1 (MOS 6522)" — full UI label
