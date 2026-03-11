@@ -57,11 +57,11 @@
 // Video RAM is 8 KB (power of 2); only $8000–$97FF is used by the MC6847.
 //
 inline constexpr auto kAcornAtomChips = make_chip_manifest(
-    Slot<MemoryChip>{0x0000, 32768},        // RAM: 32 KB at $0000
-    Slot<MemoryChip>{0x8000,  8192},        // Video RAM: 8 KB at $8000
-    Slot<MemoryChip>{0xC000,  4096},        // BASIC ROM: 4 KB at $C000
-    Slot<MemoryChip>{0xD000,  2048},        // FP ROM: 2 KB at $D000
-    Slot<MemoryChip>{0xF000,  4096},        // OS ROM: 4 KB at $F000
+    Slot<RAMChip>{0x0000, 32768},        // RAM: 32 KB at $0000
+    Slot<RAMChip>{0x8000,  8192},        // Video RAM: 8 KB at $8000
+    Slot<ROMChip>{0xC000,  4096},        // BASIC ROM: 4 KB at $C000
+    Slot<ROMChip>{0xD000,  2048},        // FP ROM: 2 KB at $D000
+    Slot<ROMChip>{0xF000,  4096},        // OS ROM: 4 KB at $F000
     Slot<i8255_t>   {0xB000,     0, 0xFFFC}, // PPI: MMIO-only, 4-byte window
     Slot<mos6522_t> {0xB800,     0, 0xFFF0}  // VIA: MMIO-only, 16-byte window
 );
@@ -127,11 +127,11 @@ private:
     mos6522_t   via_;                // MOS 6522 VIA (timers, cassette, printer)
 
     // ── Memory chips — owned by registered_chips_ ────────────────────────
-    MemoryChip* ram_       = nullptr;  // 32 KB at $0000 (actual size configurable)
-    MemoryChip* video_ram_ = nullptr;  // 8 KB at $8000 (MC6847 reads from here)
-    MemoryChip* basic_rom_ = nullptr;  // 4 KB at $C000
-    MemoryChip* fp_rom_    = nullptr;  // 2 KB at $D000
-    MemoryChip* os_rom_    = nullptr;  // 4 KB at $F000
+    RAMChip* ram_       = nullptr;  // 32 KB at $0000 (actual size configurable)
+    RAMChip* video_ram_ = nullptr;  // 8 KB at $8000 (MC6847 reads from here)
+    ROMChip* basic_rom_ = nullptr;  // 4 KB at $C000
+    ROMChip* fp_rom_    = nullptr;  // 2 KB at $D000
+    ROMChip* os_rom_    = nullptr;  // 4 KB at $F000
 
     // Direct pointer into unified buffer for VDG rendering
     uint8_t* video_ram_ptr_ = nullptr;

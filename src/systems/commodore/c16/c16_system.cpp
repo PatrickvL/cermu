@@ -542,18 +542,18 @@ bool Commodore264System<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
     
     // Create memory chips early — storage is ready for ROM loading
-    auto ram_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"DRAM", "Various"}, c16_constants::RAM_SIZE_PLUS4, MemoryChip::RAM, &bus_state_,
+    auto ram_chip = std::make_unique<RAMChip>(
+        ChipInfo{"DRAM", "Various"}, c16_constants::RAM_SIZE_PLUS4, RAMChip::RAM, &bus_state_,
         "RAM", 0x0000);
     ram_ = ram_chip.get();
 
-    auto basic_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"ROM", "Commodore"}, c16_constants::ROM_HALF_SIZE, MemoryChip::ROM, &bus_state_,
+    auto basic_chip = std::make_unique<ROMChip>(
+        ChipInfo{"ROM", "Commodore"}, c16_constants::ROM_HALF_SIZE, ROMChip::ROM, &bus_state_,
         "BASIC", 0x8000);
     basic_rom_ = basic_chip.get();
 
-    auto kernal_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"ROM", "Commodore"}, c16_constants::ROM_HALF_SIZE, MemoryChip::ROM, &bus_state_,
+    auto kernal_chip = std::make_unique<ROMChip>(
+        ChipInfo{"ROM", "Commodore"}, c16_constants::ROM_HALF_SIZE, ROMChip::ROM, &bus_state_,
         "KERNAL", 0xC000);
     kernal_rom_ = kernal_chip.get();
     

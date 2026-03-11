@@ -10,7 +10,7 @@ static uint16_t read_le16(const uint8_t* data) {
     return data[0] | (data[1] << 8);
 }
 
-bool c64_test_load_prg_file(const char* filename, MemoryChip* ram, 
+bool c64_test_load_prg_file(const char* filename, RAMChip* ram, 
                             uint16_t* out_load_address, uint16_t* out_sys_address) {
     if (!filename || !ram || !ram->data()) {
         printf("ERROR: Invalid parameters for PRG loading\n");
@@ -81,7 +81,7 @@ bool c64_test_load_prg_file(const char* filename, MemoryChip* ram,
     return true;
 }
 
-bool c64_test_load_bin_file(const char* filename, MemoryChip* ram, uint16_t load_address) {
+bool c64_test_load_bin_file(const char* filename, RAMChip* ram, uint16_t load_address) {
     if (!filename || !ram || !ram->data()) {
         printf("ERROR: Invalid parameters for BIN loading\n");
         return false;
@@ -125,7 +125,7 @@ bool c64_test_load_bin_file(const char* filename, MemoryChip* ram, uint16_t load
 // Helper to evaluate simple BASIC expression for SYS command
 // Handles: PEEK(addr), numbers, +, *, and combinations
 // Supports both tokenized BASIC ($C2 for PEEK) and text
-static uint16_t evaluate_basic_expression(MemoryChip* ram, const char* expr, size_t len, uint16_t load_address) {
+static uint16_t evaluate_basic_expression(RAMChip* ram, const char* expr, size_t len, uint16_t load_address) {
     // Parse SYS address from BASIC expression
     // Handles both simple numeric addresses and complex PEEK expressions
     
@@ -220,7 +220,7 @@ static uint16_t evaluate_basic_expression(MemoryChip* ram, const char* expr, siz
     return 0;  // Unable to parse
 }
 
-uint16_t c64_test_parse_sys_address(MemoryChip* ram, uint16_t start_address, uint16_t load_address) {
+uint16_t c64_test_parse_sys_address(RAMChip* ram, uint16_t start_address, uint16_t load_address) {
     if (!ram || !ram->data()) {
         return 0;
     }

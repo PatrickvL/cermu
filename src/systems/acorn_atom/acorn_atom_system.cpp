@@ -195,32 +195,32 @@ bool AcornAtomSystem::apply_configuration() { return true; }
 bool AcornAtomSystem::initialize() {
     printf("Acorn Atom: Initializing system\n");
 
-    // ── Create MemoryChip wrappers ──────────────────────────────────────
-    auto ram_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"SRAM", "Various"}, 32768, MemoryChip::SRAM, &pins_,
+    // ── Create RAMChip wrappers ──────────────────────────────────────
+    auto ram_chip = std::make_unique<RAMChip>(
+        ChipInfo{"SRAM", "Various"}, 32768, RAMChip::SRAM, &pins_,
         "RAM", 0x0000);
     ram_ = ram_chip.get();
 
-    auto vram_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"SRAM", "Various"}, 8192, MemoryChip::SRAM, &pins_,
+    auto vram_chip = std::make_unique<RAMChip>(
+        ChipInfo{"SRAM", "Various"}, 8192, RAMChip::SRAM, &pins_,
         "Video RAM", acorn_atom_constants::VIDEO_RAM_BASE);
     video_ram_ = vram_chip.get();
 
-    auto basic_chip = std::make_unique<MemoryChip>(
+    auto basic_chip = std::make_unique<ROMChip>(
         ChipInfo{"ROM", "Acorn"}, acorn_atom_constants::BASIC_ROM_SIZE,
-        MemoryChip::ROM, &pins_,
+        ROMChip::ROM, &pins_,
         "BASIC", acorn_atom_constants::BASIC_ROM_BASE);
     basic_rom_ = basic_chip.get();
 
-    auto fp_chip = std::make_unique<MemoryChip>(
+    auto fp_chip = std::make_unique<ROMChip>(
         ChipInfo{"ROM", "Acorn"}, acorn_atom_constants::FP_ROM_SIZE,
-        MemoryChip::ROM, &pins_,
+        ROMChip::ROM, &pins_,
         "FP ROM", acorn_atom_constants::FP_ROM_BASE);
     fp_rom_ = fp_chip.get();
 
-    auto os_chip = std::make_unique<MemoryChip>(
+    auto os_chip = std::make_unique<ROMChip>(
         ChipInfo{"ROM", "Acorn"}, acorn_atom_constants::OS_ROM_SIZE,
-        MemoryChip::ROM, &pins_,
+        ROMChip::ROM, &pins_,
         "OS ROM", acorn_atom_constants::OS_ROM_BASE);
     os_rom_ = os_chip.get();
 

@@ -104,23 +104,23 @@ template<CPCModel M>
 bool AmstradCPCSystem<M>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
 
-    // ── Create MemoryChip wrappers ──────────────────────────────────────
+    // ── Create RAMChip wrappers ──────────────────────────────────────
     constexpr size_t ram_bytes = Traits::ram_size_kb * 1024;
     constexpr size_t rom_bytes = amstrad_cpc_constants::ROM_SIZE;
 
-    auto ram_chip = std::make_unique<MemoryChip>(
+    auto ram_chip = std::make_unique<RAMChip>(
         ChipInfo{"DRAM", "Various"}, ram_bytes,
-        MemoryChip::RAM, &pins_, "RAM", 0x0000);
+        RAMChip::RAM, &pins_, "RAM", 0x0000);
     ram_chip_ = ram_chip.get();
 
-    auto lower_rom_chip = std::make_unique<MemoryChip>(
+    auto lower_rom_chip = std::make_unique<ROMChip>(
         ChipInfo{"ROM", "Amstrad"}, rom_bytes,
-        MemoryChip::ROM, &pins_, "Lower ROM", 0x0000);
+        ROMChip::ROM, &pins_, "Lower ROM", 0x0000);
     lower_rom_chip_ = lower_rom_chip.get();
 
-    auto upper_rom_chip = std::make_unique<MemoryChip>(
+    auto upper_rom_chip = std::make_unique<ROMChip>(
         ChipInfo{"ROM", "Amstrad"}, rom_bytes,
-        MemoryChip::ROM, &pins_, "Upper ROM", 0xC000);
+        ROMChip::ROM, &pins_, "Upper ROM", 0xC000);
     upper_rom_chip_ = upper_rom_chip.get();
 
     // ── Bind manifest slots, wire the bus ───────────────────────────────

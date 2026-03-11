@@ -93,23 +93,23 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
 //   KC85/4 IRM bank: selected via port $84 bits 0-1
 //
 inline constexpr auto kKC852Chips = make_chip_manifest(
-    Slot<MemoryChip>{0x0000, 16384},        // RAM: 16 KB
-    Slot<MemoryChip>{0x8000, 16384},        // IRM: 16 KB
-    Slot<MemoryChip>{0xE000,  8192}         // CAOS ROM: 8 KB
+    Slot<RAMChip>{0x0000, 16384},        // RAM: 16 KB
+    Slot<RAMChip>{0x8000, 16384},        // IRM: 16 KB
+    Slot<ROMChip>{0xE000,  8192}         // CAOS ROM: 8 KB
 );
 
 inline constexpr auto kKC853Chips = make_chip_manifest(
-    Slot<MemoryChip>{0x0000, 16384},        // RAM: 16 KB
-    Slot<MemoryChip>{0x8000, 16384},        // IRM: 16 KB
-    Slot<MemoryChip>{0xC000,  8192},        // BASIC ROM: 8 KB
-    Slot<MemoryChip>{0xE000,  8192}         // CAOS ROM: 8 KB
+    Slot<RAMChip>{0x0000, 16384},        // RAM: 16 KB
+    Slot<RAMChip>{0x8000, 16384},        // IRM: 16 KB
+    Slot<ROMChip>{0xC000,  8192},        // BASIC ROM: 8 KB
+    Slot<ROMChip>{0xE000,  8192}         // CAOS ROM: 8 KB
 );
 
 inline constexpr auto kKC854Chips = make_chip_manifest(
-    Slot<MemoryChip>{0x0000, 32768},        // RAM: 32 KB
-    Slot<MemoryChip>{0x8000, 65536},        // IRM: 64 KB (4 banks, only 16 KB visible)
-    Slot<MemoryChip>{0xC000,  8192},        // BASIC ROM: 8 KB
-    Slot<MemoryChip>{0xE000,  8192}         // CAOS ROM: 8 KB
+    Slot<RAMChip>{0x0000, 32768},        // RAM: 32 KB
+    Slot<RAMChip>{0x8000, 65536},        // IRM: 64 KB (4 banks, only 16 KB visible)
+    Slot<ROMChip>{0xC000,  8192},        // BASIC ROM: 8 KB
+    Slot<ROMChip>{0xE000,  8192}         // CAOS ROM: 8 KB
 );
 
 // BusTraits — selects the correct manifest per variant
@@ -174,10 +174,10 @@ private:
     kc85_module_system_t modules_;            // Expansion module slot controller
 
     // ── Memory — owned by registered_chips_, managed via BusMemory ──────
-    MemoryChip* ram_chip_       = nullptr;
-    MemoryChip* irm_chip_       = nullptr;   // Video RAM (16 KB for /2,/3; 64 KB for /4)
-    MemoryChip* basic_rom_chip_ = nullptr;   // KC85/3, /4 only
-    MemoryChip* caos_rom_chip_  = nullptr;
+    RAMChip* ram_chip_       = nullptr;
+    RAMChip* irm_chip_       = nullptr;   // Video RAM (16 KB for /2,/3; 64 KB for /4)
+    ROMChip* basic_rom_chip_ = nullptr;   // KC85/3, /4 only
+    ROMChip* caos_rom_chip_  = nullptr;
 
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using BT  = KC85BusTraits<V>;

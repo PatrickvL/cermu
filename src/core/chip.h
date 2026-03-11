@@ -59,7 +59,7 @@ public:
     // --- Registration metadata (how this chip appears in a specific system) ---
     // These fields describe the chip's *placement* in a system: its role name,
     // category for menu grouping, and memory-mapped base address.
-    // For owned chips (MemoryChip, ChipPlaceholder, PlaChip) these are set in the
+    // For owned chips (RAMChip, ChipPlaceholder, PlaChip) these are set in the
     // constructor.  For borrowed chips (CPU, VIA, etc.) the system sets them via
     // the register_chip() overload that accepts placement arguments.
     const char* display_name() const { return display_name_ ? display_name_ : info_.part_number.data(); }
@@ -83,7 +83,7 @@ public:
     //
     // get_chip_layout() is a lazy-init accessor: it calls create_chip_layout()
     // once and caches the result.  Chips that need dynamic layouts (e.g.
-    // MemoryChip with varying pin count) can override get_chip_layout() directly.
+    // RAMChip with varying pin count) can override get_chip_layout() directly.
     virtual ChipLayout* get_chip_layout() const;
     virtual std::vector<PinSignalState> get_layout_pin_states(ChipLayout& layout);
     virtual const char* get_layout_chip_name() const;
@@ -109,7 +109,7 @@ public:
     virtual bus_state_t on_bus_write(bus_state_t bus) noexcept { return bus; }
 
     // --- Memory properties (opt-in via override) ---
-    // MemoryChip and ROM chips override this to return true.
+    // RAMChip and ROM chips override this to return true.
     virtual bool is_read_only() const { return false; }
 
     // Bus state snapshot — stores the bus state at the end of each tick.

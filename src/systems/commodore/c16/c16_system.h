@@ -128,10 +128,10 @@ public:
     // --- Test / debug accessors ---
     CSG7501*     cpu()       { return cpu_; }
     ted7360_t*   ted()       { return ted_; }
-    MemoryChip*  ram()       { return ram_; }
+    RAMChip*  ram()       { return ram_; }
     const CSG7501*    cpu() const { return cpu_; }
     const ted7360_t*  ted() const { return ted_; }
-    const MemoryChip* ram() const { return ram_; }
+    const RAMChip* ram() const { return ram_; }
 
     // Debug cart ($FDCF) — VICE convention for Plus4 test programs.
     // When enabled, writes to $FDCF are captured instead of being silently ignored.
@@ -157,9 +157,9 @@ private:
     bus_state_t bus_state_;
 
     // Memory chips — owned by registered_chips_ (base class), borrowed here
-    MemoryChip* ram_         = nullptr;  // Up to 64KB RAM (C16/C116 use 16KB, Plus/4 uses 64KB)
-    MemoryChip* basic_rom_   = nullptr;  // BASIC ROM $8000-$BFFF (16KB)
-    MemoryChip* kernal_rom_  = nullptr;  // Kernal ROM $C000-$FFFF (16KB)
+    RAMChip* ram_         = nullptr;  // Up to 64KB RAM (C16/C116 use 16KB, Plus/4 uses 64KB)
+    ROMChip* basic_rom_   = nullptr;  // BASIC ROM $8000-$BFFF (16KB)
+    ROMChip* kernal_rom_  = nullptr;  // Kernal ROM $C000-$FFFF (16KB)
     size_t  ram_size_ = 16384;           // Cached configured RAM size (updated in apply_configuration)
 
     // PIO2 ($FD30) — keyboard row select (active-low)

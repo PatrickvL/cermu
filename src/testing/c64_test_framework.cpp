@@ -894,7 +894,7 @@ TestProtocol TestFramework::detect_test_protocol(const TestDescriptor& test, C64
     }
     
     // Check for BASIC two-stage loader pattern
-    MemoryChip* ram = c64->ram;
+    RAMChip* ram = c64->ram;
     auto* cpu = c64->mos6510;
     uint16_t pc = cpu->get(REG_PC);
     
@@ -922,7 +922,7 @@ TestProtocol TestFramework::detect_test_protocol(const TestDescriptor& test, C64
 }
 
 // Detect BASIC two-stage loader (loads at $0801, calculates entry point)
-bool TestFramework::detect_basic_two_stage_loader(MemoryChip* ram, uint16_t load_addr) {
+bool TestFramework::detect_basic_two_stage_loader(RAMChip* ram, uint16_t load_addr) {
     // BASIC programs start with link address at $0801/$0802
     if (load_addr != 0x0801) return false;
     
@@ -944,7 +944,7 @@ bool TestFramework::detect_basic_two_stage_loader(MemoryChip* ram, uint16_t load
 }
 
 // Calculate entry point from BASIC SYS command
-uint16_t TestFramework::calculate_basic_entry_point(MemoryChip* ram, uint16_t sys_addr) {
+uint16_t TestFramework::calculate_basic_entry_point(RAMChip* ram, uint16_t sys_addr) {
     // Parse ASCII digits after SYS token
     uint16_t addr = 0;
     for (int i = sys_addr + 1; i < sys_addr + 20; i++) {

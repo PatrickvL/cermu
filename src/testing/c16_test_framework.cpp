@@ -6,7 +6,7 @@
 // =============================================================================
 
 #include "c16_test_framework.h"
-#include "c64_test_loader.h"     // Reuse PRG loader (writes raw bytes to MemoryChip)
+#include "c64_test_loader.h"     // Reuse PRG loader (writes raw bytes to RAMChip)
 #include "../systems/commodore/c16/c16_system.h"
 #include "../systems/commodore/c16/c16_constants.h"
 #include "../chip/memory/memory_chip.h"
@@ -336,7 +336,7 @@ TestResult TestFramework::run_test(const TestDescriptor& test) {
     sys.set_framebuffer(framebuffer.data(), fb_w, fb_h);
 
     // ---- Load PRG into RAM ----
-    MemoryChip* ram = sys.ram();
+    RAMChip* ram = sys.ram();
     if (!ram) {
         result.status = TestStatus::ERROR;
         result.message = "No RAM chip available";

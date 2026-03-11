@@ -30,9 +30,9 @@
 // Page $D0 uses an auto-created MaskedSubTable for PIA ($D010–$D013).
 //
 inline constexpr auto kApple1Chips = make_chip_manifest(
-    Slot<MemoryChip>{0x0000, 65536},        // RAM: 64 KB at $0000
-    Slot<MemoryChip>{0xFF00,   256},        // Monitor ROM: 256 bytes at $FF00
-    Slot<MemoryChip>{0xE000,  4096},        // BASIC ROM: 4 KB at $E000
+    Slot<RAMChip>{0x0000, 65536},        // RAM: 64 KB at $0000
+    Slot<ROMChip>{0xFF00,   256},        // Monitor ROM: 256 bytes at $FF00
+    Slot<ROMChip>{0xE000,  4096},        // BASIC ROM: 4 KB at $E000
     Slot<pia6820_t> {0xD010,     0, 0xFFFC} // PIA: MMIO-only, 4-byte window
 );
 
@@ -111,10 +111,10 @@ private:
     TextTerminal* terminal_;         // Text terminal (40x24)
     
     // Memory chips — owned by registered_chips_ (base class), borrowed here
-    MemoryChip* ram_         = nullptr;  // Up to 64KB RAM (typically 8KB at $0000-$1FFF)
-    MemoryChip* monitor_rom_ = nullptr;  // Woz Monitor ROM at $FF00-$FFFF (256 bytes)
-    MemoryChip* basic_rom_   = nullptr;  // Optional Apple 1 BASIC (4KB at various addresses)
-    MemoryChip* char_rom_    = nullptr;  // Signetics 2513 character ROM (512 bytes)
+    RAMChip* ram_         = nullptr;  // Up to 64KB RAM (typically 8KB at $0000-$1FFF)
+    ROMChip* monitor_rom_ = nullptr;  // Woz Monitor ROM at $FF00-$FFFF (256 bytes)
+    ROMChip* basic_rom_   = nullptr;  // Optional Apple 1 BASIC (4KB at various addresses)
+    ROMChip* char_rom_    = nullptr;  // Signetics 2513 character ROM (512 bytes)
     
     // MemoryBus — declarative setup via chip manifest + BusMemory::apply()
     using Bus = MemoryBus<Apple1BusSpec>;

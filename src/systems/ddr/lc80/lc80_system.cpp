@@ -52,15 +52,15 @@ bool LC80System::apply_configuration() { return true; }
 bool LC80System::initialize() {
     printf("LC 80: Initializing system\n");
 
-    // ── Create MemoryChip wrappers ──────────────────────────────────────
-    auto rom_chip = std::make_unique<MemoryChip>(
+    // ── Create chip wrappers ─────────────────────────────────────────
+    auto rom_chip = std::make_unique<ROMChip>(
         ChipInfo{"ROM", "VEB"}, lc80_constants::ROM_SIZE,
-        MemoryChip::ROM, &pins_, "Monitor ROM", 0x0000);
+        ROMChip::ROM, &pins_, "Monitor ROM", 0x0000);
     rom_chip_ = rom_chip.get();
 
-    auto ram_chip = std::make_unique<MemoryChip>(
+    auto ram_chip = std::make_unique<RAMChip>(
         ChipInfo{"SRAM", "VEB"}, lc80_constants::RAM_SIZE_MIN,
-        MemoryChip::RAM, &pins_, "RAM", 0x2000);
+        RAMChip::RAM, &pins_, "RAM", 0x2000);
     ram_chip_ = ram_chip.get();
 
     // ── Bind manifest slots, wire the bus ───────────────────────────────
