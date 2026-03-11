@@ -32,8 +32,8 @@
 // Addresses above $3FFF are unmapped (reads return bus default).
 //
 inline constexpr auto kLC80Chips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 2048},         // ROM: 2 KB
-    Slot<RAMChip>{0x2000, 1024}          // RAM: 1 KB
+    Slot<ROMChip>{0x0000, 2048, 0, "Monitor ROM"},   // ROM: 2 KB
+    Slot<RAMChip>{0x2000, 1024, 0, "RAM"}             // RAM: 1 KB
 );
 
 namespace lc80_chips {
@@ -82,10 +82,6 @@ private:
     z80_pio_t   pio1_;               // U855 PIO #1 (LED display + keyboard)
     z80_pio_t   pio2_;               // U855 PIO #2 (keyboard scan + cassette)
     z80_ctc_t   ctc_;                // U857 CTC (speaker on channel 2)
-
-    // ── Memory — owned by registered_chips_, managed via BusMemory ──────
-    ROMChip* rom_chip_ = nullptr;    // 2 KB monitor ROM
-    RAMChip* ram_chip_ = nullptr;    // 1 KB RAM
 
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<LC80BusSpec>;

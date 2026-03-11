@@ -52,19 +52,9 @@ bool LC80System::apply_configuration() { return true; }
 bool LC80System::initialize() {
     printf("LC 80: Initializing system\n");
 
-    // ── Create chip wrappers ─────────────────────────────────────────
-    auto rom_chip = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "VEB"}, lc80_constants::ROM_SIZE,
-        ROMChip::ROM, &pins_, "Monitor ROM", 0x0000);
-    rom_chip_ = rom_chip.get();
-
-    auto ram_chip = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "VEB"}, lc80_constants::RAM_SIZE_MIN,
-        RAMChip::RAM, &pins_, "RAM", 0x2000);
-    ram_chip_ = ram_chip.get();
-
-    // ── Bind manifest slots, wire the bus ───────────────────────────────
-    bus_mem_.initialize(bus_, rom_chip_, ram_chip_);
+    // ── Create memory chips from manifest and wire bus ────────────────────
+    bus_mem_.create_chips(&pins_);
+    bus_mem_.apply(bus_);
 
     // ── Configure page tables (mirroring) ───────────────────────────────
     configure_bus_memory_map();
@@ -87,8 +77,7 @@ bool LC80System::initialize() {
         "U855 PIO #2", "U855", "I/O", lc80_constants::PIO2_PORT_A);
     register_chip(&ctc_,
         "U857 CTC", "U857", "Timer", lc80_constants::CTC_CH0);
-    register_chip(std::move(rom_chip));
-    register_chip(std::move(ram_chip));
+    register_bus_chips(bus_mem_);
 
     system_ready_ = true;
     return true;
