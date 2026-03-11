@@ -14,12 +14,61 @@
 #include "bombjack_constants.h"
 #include "../../../core/emulated_system.h"
 #include "../../../core/system_lines.h"
+#include "../../../core/chip_manifest.hpp"
 #include "../../../chip/cpu/z80/zilog_z80a.h"
 #include "../../../chip/sound/ay_3_8910.h"
+#include "../../../chip/memory/memory_chip.h"
 #include <cstdint>
 #include <vector>
 
 #define BOMBJACK_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
+
+// ============================================================================
+// Bomb Jack chip manifests — declarative memory layout (dual-CPU)
+// ============================================================================
+//
+// Main CPU ($0000-$7FFF ROM, $8000 RAM, $9xxx video/sprite/palette, $Bxxx I/O):
+//   Slot 0: Program ROM    — 32 KB at $0000  (read-only)
+//   Slot 1: Work RAM       —  4 KB at $8000
+//   Slot 2: FG tilemap     —  1 KB at $9000
+//   Slot 3: FG attributes  —  1 KB at $9400
+//   Slot 4: Sprite area    — 256 bytes at $9800  (sprite RAM at offset $20)
+//   Slot 5: Palette RAM    — 256 bytes at $9C00
+//
+// Sound CPU ($0000-$1FFF ROM, $4000 RAM, $6000 latch via manual dispatch):
+//   Slot 0: Sound ROM  — 8 KB at $0000  (read-only)
+//   Slot 1: Sound RAM  — 1 KB at $4000
+//
+// I/O registers ($B000+ main, $6000 sound latch) handled separately due to
+// side effects (NMI clear, overlapping read/write semantics).
+// AY-3-8910 ports use Z80 IORQ, not memory-mapped.
+// Graphics ROMs (char, sprite, bg) are NOT bus-mapped.
+//
+inline constexpr auto kBombJackMainChips = make_chip_manifest(
+    Slot<ROMChip>{0x0000, 32768},        // Slot 0: Program ROM 32 KB
+    Slot<RAMChip>{0x8000,  4096},        // Slot 1: Work RAM 4 KB
+    Slot<RAMChip>{0x9000,  1024},        // Slot 2: FG tilemap 1 KB
+    Slot<RAMChip>{0x9400,  1024},        // Slot 3: FG attributes 1 KB
+    Slot<RAMChip>{0x9800,   256},        // Slot 4: Sprite area 256 bytes
+    Slot<RAMChip>{0x9C00,   256}         // Slot 5: Palette RAM 256 bytes
+);
+
+inline constexpr auto kBombJackSoundChips = make_chip_manifest(
+    Slot<ROMChip>{0x0000,  8192},        // Slot 0: Sound ROM 8 KB
+    Slot<RAMChip>{0x4000,  1024}         // Slot 1: Sound RAM 1 KB
+);
+
+// ── Bus traits — one per CPU ─────────────────────────────────────────────
+
+struct BombJackMainBusTraits {
+    static constexpr const auto& kManifest = kBombJackMainChips;
+    using Spec = ManifestBusSpec<kBombJackMainChips, 16, 8>;
+};
+
+struct BombJackSoundBusTraits {
+    static constexpr const auto& kManifest = kBombJackSoundChips;
+    using Spec = ManifestBusSpec<kBombJackSoundChips, 16, 8>;
+};
 
 class BombJackSystem : public EmulatedSystem {
 public:
@@ -62,22 +111,34 @@ private:
     // ── Sound ────────────────────────────────────────────────────────────
     ay_3_8910_t ay_[3];                  // 3× AY-3-8910 PSG
 
-    // ── Memory (main CPU) ────────────────────────────────────────────────
-    std::vector<uint8_t> main_rom_;      // 32 KB program ROM
-    std::vector<uint8_t> main_ram_;      // 4 KB work RAM
-    std::vector<uint8_t> fg_tilemap_;    // 1 KB foreground tilemap
-    std::vector<uint8_t> fg_attr_;       // 1 KB foreground attributes
-    std::vector<uint8_t> sprite_ram_;    // Sprite attribute table (96 bytes)
-    std::vector<uint8_t> palette_ram_;   // 256 bytes palette RAM
+    // ── Main CPU memory — owned by registered_chips_, managed via BusMemory
+    ROMChip* main_rom_chip_      = nullptr;  // 32 KB program ROM
+    RAMChip* main_ram_chip_      = nullptr;  // 4 KB work RAM
+    RAMChip* fg_tilemap_chip_    = nullptr;  // 1 KB foreground tilemap
+    RAMChip* fg_attr_chip_       = nullptr;  // 1 KB foreground attributes
+    RAMChip* sprite_area_chip_   = nullptr;  // 256 bytes (sprite RAM at offset $20)
+    RAMChip* palette_ram_chip_   = nullptr;  // 256 bytes palette RAM
 
-    // ── Memory (sound CPU) ───────────────────────────────────────────────
-    std::vector<uint8_t> sound_rom_;     // 8 KB sound program ROM
-    std::vector<uint8_t> sound_ram_;     // 1 KB sound work RAM
+    // ── Sound CPU memory — owned by registered_chips_, managed via BusMemory
+    ROMChip* sound_rom_chip_     = nullptr;  // 8 KB sound ROM
+    RAMChip* sound_ram_chip_     = nullptr;  // 1 KB sound RAM
 
-    // ── Graphics ROM ─────────────────────────────────────────────────────
+    // ── Graphics ROM — NOT bus-mapped (display rendering only) ───────────
     std::vector<uint8_t> char_rom_;      // Character/tile ROM
     std::vector<uint8_t> sprite_rom_;    // Sprite graphics ROM
     std::vector<uint8_t> bg_rom_;        // Background image ROM
+
+    // ── Main bus ─────────────────────────────────────────────────────────
+    using MainBus = MemoryBus<BombJackMainBusTraits::Spec>;
+    using MainMem = BusMemory<BombJackMainBusTraits::Spec>;
+    MainBus main_bus_;
+    MainMem main_bus_mem_{kBombJackMainChips};
+
+    // ── Sound bus ────────────────────────────────────────────────────────
+    using SoundBus = MemoryBus<BombJackSoundBusTraits::Spec>;
+    using SoundMem = BusMemory<BombJackSoundBusTraits::Spec>;
+    SoundBus sound_bus_;
+    SoundMem sound_bus_mem_{kBombJackSoundChips};
 
     // ── Inter-CPU communication ──────────────────────────────────────────
     uint8_t sound_latch_ = 0;           // Main → Sound command latch
@@ -104,9 +165,7 @@ private:
     float speed_multiplier_ = 1.0f;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    bus_state_t main_mem_tick(bus_state_t pins);
-    bus_state_t main_io_tick(bus_state_t pins);
-    bus_state_t sound_mem_tick(bus_state_t pins);
-    bus_state_t sound_io_tick(bus_state_t pins);
+    bus_state_t main_io_tick(bus_state_t pins);   // $B000+ I/O registers
+    bus_state_t sound_io_tick(bus_state_t pins);   // AY-3-8910 port I/O
     bool load_roms();
 };
