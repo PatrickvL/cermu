@@ -27,9 +27,9 @@
 //         $FC00-$FEFF (FRED/JIM/SHEILA) handled by sheila_tick(), not the bus.
 //
 inline constexpr auto kBBCMicroChips = make_chip_manifest(
-    Slot<RAMChip>{0x0000,  32768},       // RAM: 32 KB
-    Slot<ROMChip>{0x8000, 262144},       // Paged ROM pool: 256 KB (16 × 16 KB)
-    Slot<ROMChip>{0xC000,  16384}        // OS ROM: 16 KB
+    Slot<RAMChip>{0x0000,  32768, 0, "RAM"},            // RAM: 32 KB
+    Slot<ROMChip>{0x8000, 262144, 0, "Paged ROM"},      // Paged ROM pool: 256 KB (16 × 16 KB)
+    Slot<ROMChip>{0xC000,  16384, 0, "MOS ROM"}         // OS ROM: 16 KB
 );
 
 namespace bbc_chips {
