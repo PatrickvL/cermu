@@ -74,17 +74,17 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
 // RAM reads, then Video RAM and Monitor ROM overlay the remaining gaps.
 //
 inline constexpr auto kZ1013_16K_Chips = make_chip_manifest(
-    Slot<MemoryChip>{16384, 0x0000},         // RAM: 16 KB
-    Slot<MemoryChip>{1024,  0xEC00},         // Video RAM: 1 KB
-    Slot<MemoryChip>{2048,  0xF000}          // Monitor ROM: 2 KB
+    Slot<MemoryChip>{0x0000, 16384},         // RAM: 16 KB
+    Slot<MemoryChip>{0xEC00,  1024},         // Video RAM: 1 KB
+    Slot<MemoryChip>{0xF000,  2048}          // Monitor ROM: 2 KB
 );
 
 inline constexpr auto kZ1013_64K_Chips = make_chip_manifest(
-    Slot<MemoryChip>{65536, 0x0000},         // RAM: 64 KB
-    Slot<MemoryChip>{8192,  0xC000},         // BASIC ROM lo: 8 KB ($C000-$DFFF)
-    Slot<MemoryChip>{2048,  0xE000},         // BASIC ROM hi: 2 KB ($E000-$E7FF)
-    Slot<MemoryChip>{1024,  0xEC00},         // Video RAM: 1 KB
-    Slot<MemoryChip>{2048,  0xF000}          // Monitor ROM: 2 KB
+    Slot<MemoryChip>{0x0000, 65536},         // RAM: 64 KB
+    Slot<MemoryChip>{0xC000,  8192},         // BASIC ROM lo: 8 KB ($C000-$DFFF)
+    Slot<MemoryChip>{0xE000,  2048},         // BASIC ROM hi: 2 KB ($E000-$E7FF)
+    Slot<MemoryChip>{0xEC00,  1024},         // Video RAM: 1 KB
+    Slot<MemoryChip>{0xF000,  2048}          // Monitor ROM: 2 KB
 );
 
 // BusTraits — selects the correct manifest per variant

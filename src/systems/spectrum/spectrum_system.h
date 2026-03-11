@@ -90,13 +90,13 @@ template<> struct SpectrumVariantTraits<SpectrumVariant::ZX128K> {
 //   Slot 1: ROM —  32 KB at $0000 (2 × 16 KB banks; selected by $7FFD bit 4)
 //
 inline constexpr auto kSpectrum48KChips = make_chip_manifest(
-    Slot<MemoryChip>{65536, 0x0000},        // RAM: 64 KB
-    Slot<MemoryChip>{16384, 0x0000}         // ROM: 16 KB overlay at $0000
+    Slot<MemoryChip>{0x0000, 65536},        // RAM: 64 KB
+    Slot<MemoryChip>{0x0000, 16384}         // ROM: 16 KB overlay at $0000
 );
 
 inline constexpr auto kSpectrum128KChips = make_chip_manifest(
-    Slot<MemoryChip>{131072, 0x0000},       // RAM: 128 KB (8 banks)
-    Slot<MemoryChip>{ 32768, 0x0000}        // ROM: 32 KB (2 banks) overlay at $0000
+    Slot<MemoryChip>{0x0000, 131072},       // RAM: 128 KB (8 banks)
+    Slot<MemoryChip>{0x0000,  32768}        // ROM: 32 KB (2 banks) overlay at $0000
 );
 
 namespace spectrum_chips {

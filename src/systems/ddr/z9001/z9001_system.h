@@ -11,10 +11,12 @@
 #include "z9001_constants.h"
 #include "../../../core/emulated_system.h"
 #include "../../../core/system_lines.h"
+#include "../../../core/chip_manifest.hpp"
 #include "../../../chip/cpu/z80/u880.h"
 #include "../../../chip/cpu/z80/z80.hpp"   // Z80_MREQ_BIT / Z80_IORQ_BIT
 #include "../../../chip/io/z80_pio.h"
 #include "../../../chip/io/z80_ctc.h"
+#include "../../../chip/memory/memory_chip.h"
 #include <cstdint>
 #include <vector>
 
@@ -41,6 +43,59 @@ template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
     static constexpr uint32_t    ram_size        = z9001_constants::RAM_SIZE_KC87;
     static constexpr bool        has_color_ram   = true;
     static constexpr bool        has_basic_rom   = true;
+};
+
+// ============================================================================
+// Z9001 / KC87 chip manifests — declarative memory layout
+// ============================================================================
+//
+// Z9001 (16 KB RAM, no color, no BASIC):
+//   Slot 0: RAM          — 16 KB at $0000
+//   Slot 1: Video RAM    —  1 KB at $EC00
+//   Slot 2: OS ROM       —  4 KB at $F000
+//
+// KC 87 (48 KB RAM, color RAM, BASIC ROM):
+//   Slot 0: RAM          — 64 KB at $0000 (trimmed to 48 KB)
+//   Slot 1: BASIC ROM lo —  8 KB at $C000  (first 8 KB of 10 KB BASIC)
+//   Slot 2: BASIC ROM hi —  2 KB at $E000  (last 2 KB of 10 KB BASIC)
+//   Slot 3: Color RAM    —  1 KB at $E800
+//   Slot 4: Video RAM    —  1 KB at $EC00
+//   Slot 5: OS ROM       —  4 KB at $F000
+//
+// The character ROM is NOT bus-mapped (used only for display rendering).
+// All I/O is Z80 port-based (IORQ) — no MMIO slots needed.
+//
+// BASIC ROM is split into 8 KB + 2 KB because ChipSlot requires power-of-2
+// sizes and the original 10 KB ($2800) is not a power of 2.
+// RAM for KC87 is allocated as 64 KB (power of 2); configure_bus_memory_map()
+// trims write pages above 48 KB ($C000+).
+//
+inline constexpr auto kZ9001Chips = make_chip_manifest(
+    Slot<MemoryChip>{0x0000, 16384},        // RAM: 16 KB
+    Slot<MemoryChip>{0xEC00,  1024},        // Video RAM: 1 KB
+    Slot<MemoryChip>{0xF000,  4096}         // OS ROM: 4 KB
+);
+
+inline constexpr auto kKC87Chips = make_chip_manifest(
+    Slot<MemoryChip>{0x0000, 65536},        // RAM: 64 KB (trimmed to 48 KB)
+    Slot<MemoryChip>{0xC000,  8192},        // BASIC ROM lo: 8 KB ($C000-$DFFF)
+    Slot<MemoryChip>{0xE000,  2048},        // BASIC ROM hi: 2 KB ($E000-$E7FF)
+    Slot<MemoryChip>{0xE800,  1024},        // Color RAM: 1 KB
+    Slot<MemoryChip>{0xEC00,  1024},        // Video RAM: 1 KB
+    Slot<MemoryChip>{0xF000,  4096}         // OS ROM: 4 KB
+);
+
+// BusTraits — selects the correct manifest per variant
+template<Z9001Variant V> struct Z9001BusTraits;
+
+template<> struct Z9001BusTraits<Z9001Variant::Z9001> {
+    static constexpr const auto& kManifest = kZ9001Chips;
+    using Spec = ManifestBusSpec<kZ9001Chips, 16, 8>;
+};
+
+template<> struct Z9001BusTraits<Z9001Variant::KC87> {
+    static constexpr const auto& kManifest = kKC87Chips;
+    using Spec = ManifestBusSpec<kKC87Chips, 16, 8>;
 };
 
 // ── System ───────────────────────────────────────────────────────────────
@@ -85,13 +140,24 @@ private:
     z80_pio_t   pio2_;               // U855 PIO #2 (keyboard + cassette)
     z80_ctc_t   ctc_;                // U857 CTC (timing + sound)
 
-    // ── Memory ───────────────────────────────────────────────────────────
-    std::vector<uint8_t> ram_;       // 16 KB (Z9001) or 48 KB (KC 87)
-    std::vector<uint8_t> os_rom_;    // 4 KB OS ROM
-    std::vector<uint8_t> basic_rom_; // 10 KB BASIC ROM (KC 87 only)
-    std::vector<uint8_t> video_ram_; // 1 KB screen buffer
-    std::vector<uint8_t> color_ram_; // 1 KB color attributes (KC 87 only)
-    std::vector<uint8_t> char_rom_;  // 2 KB character generator
+    // ── Memory — owned by registered_chips_, managed via BusMemory ──────
+    MemoryChip* ram_chip_           = nullptr;
+    MemoryChip* basic_rom_lo_chip_  = nullptr;  // KC 87 only
+    MemoryChip* basic_rom_hi_chip_  = nullptr;  // KC 87 only
+    MemoryChip* color_ram_chip_     = nullptr;  // KC 87 only
+    MemoryChip* video_ram_chip_     = nullptr;
+    MemoryChip* os_rom_chip_        = nullptr;
+
+    // Character ROM — NOT bus-mapped (used for display rendering only)
+    std::vector<uint8_t> char_rom_;
+
+    // ── MemoryBus — declarative setup via chip manifest ──────────────────
+    using BT  = Z9001BusTraits<V>;
+    using Bus = MemoryBus<typename BT::Spec>;
+    using PT  = PackingTraits<typename BT::Spec>;
+    using Mem = BusMemory<typename BT::Spec>;
+    Bus bus_;
+    Mem bus_mem_{BT::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
     uint32_t framebuffer_[z9001_constants::FB_WIDTH *
@@ -108,7 +174,7 @@ private:
     float speed_multiplier_ = 1.0f;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    bus_state_t mem_tick(bus_state_t pins);
+    void        configure_bus_memory_map();  // Trim RAM pages for KC87
     bus_state_t io_tick(bus_state_t pins);
     void        render_frame();   // Render one complete video frame to framebuffer_
     bool        load_roms();
