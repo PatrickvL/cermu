@@ -10,8 +10,10 @@
 #include "namco_arcade_constants.h"
 #include "../../../core/emulated_system.h"
 #include "../../../core/system_lines.h"
+#include "../../../core/chip_manifest.hpp"
 #include "../../../chip/cpu/z80/zilog_z80a.h"
 #include "../../../chip/sound/namco_wsg.h"
+#include "../../../chip/memory/memory_chip.h"
 #include <cstdint>
 #include <vector>
 
@@ -30,6 +32,11 @@ template<> struct NamcoGameTraits<NamcoGame::PacMan> {
     static constexpr uint32_t    char_rom_size   = namco_arcade_constants::PACMAN_CHAR_ROM_SIZE;
     static constexpr bool        encrypted_roms  = false;
     static constexpr int         wsg_voices      = 3;
+    // Memory layout — Pac-Man starts at $4000
+    static constexpr uint16_t    vram_base       = 0x4000;
+    static constexpr uint16_t    cram_base       = 0x4400;
+    static constexpr uint16_t    wram_base       = 0x4C00;
+    static constexpr uint16_t    io_base         = 0x5000;
 };
 
 template<> struct NamcoGameTraits<NamcoGame::Pengo> {
@@ -38,8 +45,60 @@ template<> struct NamcoGameTraits<NamcoGame::Pengo> {
     static constexpr const char* description     = "Sega/Coreland Pengo — Z80A @ 3.072MHz, WSG3 sound, 224×288 (1982)";
     static constexpr uint32_t    rom_size        = namco_arcade_constants::PENGO_ROM_SIZE;
     static constexpr uint32_t    char_rom_size   = namco_arcade_constants::PENGO_CHAR_ROM_SIZE;
-    static constexpr bool        encrypted_roms  = true;   // Sega encryption on some ROMs
+    static constexpr bool        encrypted_roms  = true;
     static constexpr int         wsg_voices      = 3;
+    // Memory layout — Pengo starts at $8000
+    static constexpr uint16_t    vram_base       = 0x8000;
+    static constexpr uint16_t    cram_base       = 0x8400;
+    static constexpr uint16_t    wram_base       = 0x8C00;
+    static constexpr uint16_t    io_base         = 0x9000;
+};
+
+// ============================================================================
+// Namco chip manifests — declarative memory layout
+// ============================================================================
+//
+// Pac-Man ($0000-$3FFF ROM, $4000/$4400/$4C00 work areas, $5xxx I/O):
+//   Slot 0: ROM       — 16 KB at $0000     (read-only)
+//   Slot 1: Video RAM —  1 KB at $4000
+//   Slot 2: Color RAM —  1 KB at $4400
+//   Slot 3: Work RAM  —  1 KB at $4C00
+//
+// Pengo ($0000-$7FFF ROM, $8000/$8400/$8C00 work areas, $9xxx I/O):
+//   Slot 0: ROM       — 32 KB at $0000     (read-only)
+//   Slot 1: Video RAM —  1 KB at $8000
+//   Slot 2: Color RAM —  1 KB at $8400
+//   Slot 3: Work RAM  —  1 KB at $8C00
+//
+// I/O registers at $5000/$9000 are memory-mapped but handled separately
+// (asymmetric read/write behavior: reads → input ports, writes → control regs).
+// Graphics ROMs (char, sprite, palette, waveform) are NOT bus-mapped.
+//
+inline constexpr auto kPacManChips = make_chip_manifest(
+    Slot<MemoryChip>{0x0000, 16384},        // ROM: 16 KB
+    Slot<MemoryChip>{0x4000,  1024},        // Video RAM: 1 KB
+    Slot<MemoryChip>{0x4400,  1024},        // Color RAM: 1 KB
+    Slot<MemoryChip>{0x4C00,  1024}         // Work RAM: 1 KB
+);
+
+inline constexpr auto kPengoChips = make_chip_manifest(
+    Slot<MemoryChip>{0x0000, 32768},        // ROM: 32 KB
+    Slot<MemoryChip>{0x8000,  1024},        // Video RAM: 1 KB
+    Slot<MemoryChip>{0x8400,  1024},        // Color RAM: 1 KB
+    Slot<MemoryChip>{0x8C00,  1024}         // Work RAM: 1 KB
+);
+
+// BusTraits — selects the correct manifest per game
+template<NamcoGame G> struct NamcoBusTraits;
+
+template<> struct NamcoBusTraits<NamcoGame::PacMan> {
+    static constexpr const auto& kManifest = kPacManChips;
+    using Spec = ManifestBusSpec<kPacManChips, 16, 8>;
+};
+
+template<> struct NamcoBusTraits<NamcoGame::Pengo> {
+    static constexpr const auto& kManifest = kPengoChips;
+    using Spec = ManifestBusSpec<kPengoChips, 16, 8>;
 };
 
 // ── System ───────────────────────────────────────────────────────────────
@@ -82,18 +141,26 @@ private:
     ZilogZ80A*       cpu_ = nullptr;     // Z80A @ 3.072 MHz
     namco_wsg_t      wsg_;               // Namco WSG3 wavetable sound
 
-    // ── Memory ───────────────────────────────────────────────────────────
-    std::vector<uint8_t> rom_;           // Program ROM (16 KB or 32 KB)
-    std::vector<uint8_t> ram_;           // 1 KB work RAM
-    std::vector<uint8_t> video_ram_;     // 1 KB tilemap
-    std::vector<uint8_t> color_ram_;     // 1 KB color attributes
+    // ── Memory — owned by registered_chips_, managed via BusMemory ──────
+    MemoryChip* rom_chip_       = nullptr;
+    MemoryChip* video_ram_chip_ = nullptr;
+    MemoryChip* color_ram_chip_ = nullptr;
+    MemoryChip* work_ram_chip_  = nullptr;
 
-    // ── Graphics ROM ─────────────────────────────────────────────────────
-    std::vector<uint8_t> char_rom_;      // Character/tile ROM (4 or 8 KB)
-    std::vector<uint8_t> sprite_rom_;    // Sprite ROM (4 KB)
-    std::vector<uint8_t> palette_prom_;  // 32 bytes palette
-    std::vector<uint8_t> colortable_prom_; // 256 bytes color table
-    std::vector<uint8_t> waveform_rom_;  // 256 bytes waveform data for WSG
+    // ── Graphics ROM — NOT bus-mapped (display rendering only) ───────────
+    std::vector<uint8_t> char_rom_;
+    std::vector<uint8_t> sprite_rom_;
+    std::vector<uint8_t> palette_prom_;
+    std::vector<uint8_t> colortable_prom_;
+    std::vector<uint8_t> waveform_rom_;
+
+    // ── MemoryBus — declarative setup via chip manifest ──────────────────
+    using BT  = NamcoBusTraits<G>;
+    using Bus = MemoryBus<typename BT::Spec>;
+    using PT  = PackingTraits<typename BT::Spec>;
+    using Mem = BusMemory<typename BT::Spec>;
+    Bus bus_;
+    Mem bus_mem_{BT::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
     uint32_t framebuffer_[namco_arcade_constants::FB_WIDTH *
@@ -116,6 +183,6 @@ private:
     float speed_multiplier_ = 1.0f;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    bus_state_t mem_tick(bus_state_t pins);
+    bus_state_t io_tick(bus_state_t pins);   // Handle I/O region ($5xxx/$9xxx)
     bool load_roms();
 };

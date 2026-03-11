@@ -4,6 +4,8 @@
 
 #include "namco_arcade_system.h"
 #include "../../../core/system_registry.h"
+#include "../../../core/storage/rom_loader.h"
+#include "../../../core/config/path_discovery.h"
 #include <cstring>
 #include <cstdio>
 
@@ -68,20 +70,56 @@ template<NamcoGame G> bool NamcoArcadeSystem<G>::apply_configuration() { return 
 template<NamcoGame G>
 bool NamcoArcadeSystem<G>::initialize() {
     printf("%s: Initializing arcade system\n", Traits::name);
+
+    // ── Create MemoryChip wrappers ──────────────────────────────────────
+    auto rom = std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "Namco"}, Traits::rom_size,
+        MemoryChip::ROM, &pins_, "Program ROM", 0x0000);
+    rom_chip_ = rom.get();
+
+    auto video_ram = std::make_unique<MemoryChip>(
+        ChipInfo{"SRAM", "Namco"}, namco_arcade_constants::VIDEO_RAM_SIZE,
+        MemoryChip::RAM, &pins_, "Video RAM", Traits::vram_base);
+    video_ram_chip_ = video_ram.get();
+
+    auto color_ram = std::make_unique<MemoryChip>(
+        ChipInfo{"SRAM", "Namco"}, namco_arcade_constants::COLOR_RAM_SIZE,
+        MemoryChip::RAM, &pins_, "Color RAM", Traits::cram_base);
+    color_ram_chip_ = color_ram.get();
+
+    auto work_ram = std::make_unique<MemoryChip>(
+        ChipInfo{"SRAM", "Namco"}, namco_arcade_constants::RAM_SIZE,
+        MemoryChip::RAM, &pins_, "Work RAM", Traits::wram_base);
+    work_ram_chip_ = work_ram.get();
+
+    // ── Bind manifest slots, wire the bus ───────────────────────────────
+    bus_mem_.initialize(bus_, rom_chip_, video_ram_chip_,
+                        color_ram_chip_, work_ram_chip_);
+
+    // ── Init CPU + sound ────────────────────────────────────────────────
     cpu_ = new ZilogZ80A();
     pins_ = cpu_->init();
     wsg_.init();
 
-    rom_.resize(Traits::rom_size, 0xFF);
-    ram_.resize(namco_arcade_constants::RAM_SIZE, 0x00);
-    video_ram_.resize(namco_arcade_constants::VIDEO_RAM_SIZE, 0x00);
-    color_ram_.resize(namco_arcade_constants::COLOR_RAM_SIZE, 0x00);
+    // Graphics ROMs — not bus-mapped
     char_rom_.resize(Traits::char_rom_size, 0xFF);
     sprite_rom_.resize(namco_arcade_constants::SPRITE_ROM_SIZE, 0xFF);
     palette_prom_.resize(namco_arcade_constants::PALETTE_PROM_SIZE, 0x00);
     colortable_prom_.resize(namco_arcade_constants::COLORTABLE_PROM_SIZE, 0x00);
     waveform_rom_.resize(namco_arcade_constants::WAVEFORM_ROM_SIZE, 0x00);
+
     load_roms();
+
+    // ── Register chips for Hardware menu ────────────────────────────────
+    register_chip(static_cast<ChipBase*>(cpu_),
+        "Z80A CPU", "Z80A", "CPU", 0x0000);
+    register_chip(std::move(rom));
+    register_chip(std::move(video_ram));
+    register_chip(std::move(color_ram));
+    register_chip(std::move(work_ram));
+
+    printf("%s: System initialized (ROM: %d KB)\n",
+           Traits::name, Traits::rom_size / 1024);
     system_ready_ = true;
     return true;
 }
@@ -96,6 +134,10 @@ template<NamcoGame G> void NamcoArcadeSystem<G>::reset() {
     scanline_ = 0;
 }
 
+// ============================================================================
+// TICK
+// ============================================================================
+
 template<NamcoGame G>
 void NamcoArcadeSystem<G>::tick() {
     if (!cpu_) return;
@@ -106,11 +148,17 @@ void NamcoArcadeSystem<G>::tick() {
     // Bus dispatch — Namco hardware uses memory-mapped I/O only
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
     if (mreq) {
-        pins_ = mem_tick(pins_);
+        uint16_t addr = BUS_GET_ADDR(pins_);
+        // I/O region ($5xxx Pac-Man / $9xxx Pengo) needs manual dispatch
+        // due to asymmetric read/write behavior
+        if ((addr & 0xF000) == Traits::io_base) {
+            pins_ = io_tick(pins_);
+        } else {
+            pins_ = bus_.tick(0, pins_);
+        }
     }
 
-    // VBLANK IRQ generation — count cycles per scanline
-    // Total scanlines: 264 (224 visible + 40 blanking)
+    // VBLANK IRQ generation
     constexpr uint32_t total_scanlines = 264;
     constexpr uint32_t cycles_per_scanline = namco_arcade_constants::TSTATES_PER_FRAME / total_scanlines;
     if (cycles_per_scanline > 0 && total_cycles_ % cycles_per_scanline == 0) {
@@ -152,77 +200,52 @@ template<NamcoGame G> void NamcoArcadeSystem<G>::render_system_menu_items() {}
 template<NamcoGame G> void NamcoArcadeSystem<G>::render_configuration_ui() {}
 template<NamcoGame G> void NamcoArcadeSystem<G>::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
+// ============================================================================
+// I/O DISPATCH
+// ============================================================================
+//
+// I/O is memory-mapped at $5000-$50FF (Pac-Man) / $9000-$90FF (Pengo).
+// Reads and writes at the SAME addresses serve DIFFERENT purposes:
+//
+//   Reads:
+//     $x000-$x03F: IN0 (joystick + coins)
+//     $x040-$x07F: IN1 (P2 + start buttons)
+//     $x080-$x0BF: DSW1 (DIP switches)
+//
+//   Writes:
+//     $x000-$x007: Control registers (int_enable, sound_enable, flip_screen, …)
+//     $x040-$x05F: WSG3 sound registers (frequency, volume, waveform)
+//     $x060-$x06F: Sprite positions (write-only)
+//     $x0C0:       Watchdog reset (ignored)
+//
 template<NamcoGame G>
-bus_state_t NamcoArcadeSystem<G>::mem_tick(bus_state_t pins) {
+bus_state_t NamcoArcadeSystem<G>::io_tick(bus_state_t pins) {
     uint16_t addr = BUS_GET_ADDR(pins);
     bool is_read = BUS_GET_BIT(pins, BUS_RW_BIT);
 
-    // Memory layout varies by game:
-    //   Pac-Man: ROM $0000-$3FFF, video/color/RAM at $4000+, I/O at $5000+
-    //   Pengo:   ROM $0000-$7FFF, video/color/RAM at $8000+, I/O at $9000+
-    constexpr uint16_t vram_base = (G == NamcoGame::PacMan) ? 0x4000 : 0x8000;
-    constexpr uint16_t cram_base = vram_base + 0x0400;
-    constexpr uint16_t wram_base = vram_base + 0x0C00;
-    constexpr uint16_t io_base   = (G == NamcoGame::PacMan) ? 0x5000 : 0x9000;
-
     if (is_read) {
         uint8_t data = 0xFF;
-        // ROM
-        if (addr < vram_base && addr < Traits::rom_size) {
-            data = rom_[addr];
-        }
-        // Video RAM (1 KB tilemap)
-        else if (addr >= vram_base && addr < vram_base + 0x0400) {
-            data = video_ram_[addr - vram_base];
-        }
-        // Color RAM (1 KB attributes)
-        else if (addr >= cram_base && addr < cram_base + 0x0400) {
-            data = color_ram_[addr - cram_base];
-        }
-        // Work RAM (1 KB, includes sprite attributes at offset $FF0)
-        else if (addr >= wram_base && addr < wram_base + 0x0400) {
-            data = ram_[addr - wram_base];
-        }
-        // I/O reads
-        else if ((addr & ~0x3F) == io_base) {
-            data = in0_;              // IN0 at $x000
-        }
-        else if ((addr & ~0x3F) == (io_base + 0x40)) {
-            data = in1_;              // IN1 at $x040
-        }
-        else if ((addr & ~0x3F) == (io_base + 0x80)) {
-            data = dsw1_;             // DSW1 at $x080
+        if ((addr & ~0x3F) == Traits::io_base) {
+            data = in0_;
+        } else if ((addr & ~0x3F) == (Traits::io_base + 0x40)) {
+            data = in1_;
+        } else if ((addr & ~0x3F) == (Traits::io_base + 0x80)) {
+            data = dsw1_;
         }
         BUS_SET_DATA(pins, data);
     } else {
         uint8_t data = BUS_GET_DATA(pins);
-        // Video RAM
-        if (addr >= vram_base && addr < vram_base + 0x0400) {
-            video_ram_[addr - vram_base] = data;
-        }
-        // Color RAM
-        else if (addr >= cram_base && addr < cram_base + 0x0400) {
-            color_ram_[addr - cram_base] = data;
-        }
-        // Work RAM
-        else if (addr >= wram_base && addr < wram_base + 0x0400) {
-            ram_[addr - wram_base] = data;
-        }
         // Control registers at $x000-$x007
-        else if (addr >= io_base && addr < io_base + 0x08) {
+        if (addr >= Traits::io_base && addr < Traits::io_base + 0x08) {
             uint8_t reg = addr & 0x07;
-            if (reg == 0) {
-                int_enable_ = data & 0x01;
-            } else if (reg == 1) {
-                sound_enable_ = data & 0x01;
-            } else if (reg == 3) {
-                flip_screen_ = data & 0x01;
-            }
+            if (reg == 0)      int_enable_   = data & 0x01;
+            else if (reg == 1) sound_enable_ = data & 0x01;
+            else if (reg == 3) flip_screen_  = data & 0x01;
             // reg 7 = watchdog (ignored)
         }
         // WSG sound registers at $x040-$x05F
-        else if (addr >= io_base + 0x40 && addr < io_base + 0x60) {
-            uint8_t offset = addr - (io_base + 0x40);
+        else if (addr >= Traits::io_base + 0x40 && addr < Traits::io_base + 0x60) {
+            uint8_t offset = addr - (Traits::io_base + 0x40);
             if (offset < 5) {
                 wsg_.write_freq(0, offset, data);
             } else if (offset < 10) {
@@ -243,7 +266,15 @@ bus_state_t NamcoArcadeSystem<G>::mem_tick(bus_state_t pins) {
 
     return pins;
 }
-template<NamcoGame G> bool NamcoArcadeSystem<G>::load_roms() { return false; }
+
+// ============================================================================
+// ROM LOADING
+// ============================================================================
+
+template<NamcoGame G>
+bool NamcoArcadeSystem<G>::load_roms() {
+    return false;  // ROM loading not yet implemented — requires romset handling
+}
 
 // ============================================================================
 // EXPLICIT INSTANTIATIONS
