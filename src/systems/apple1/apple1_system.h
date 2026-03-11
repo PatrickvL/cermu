@@ -20,9 +20,9 @@
 // Apple 1 chip manifest — declarative memory layout
 // =============================================================================
 //
-// Slot 0: RAM         — 256 pages (64 KB address space, actual size configurable)
-// Slot 1: Monitor ROM — 1 page at $FF00
-// Slot 2: BASIC ROM   — 16 pages at $E000
+// Slot 0: RAM         — 64 KB (full address space, actual size configurable)
+// Slot 1: Monitor ROM — 256 bytes at $FF00
+// Slot 2: BASIC ROM   — 4 KB at $E000
 // Slot 3: PIA         — MMIO-only, 4-byte window at $D010
 //
 // Write side: only RAM.  ROM reads overlay RAM; writes pass through to RAM
@@ -30,10 +30,10 @@
 // Page $D0 uses an auto-created MaskedSubTable for PIA ($D010–$D013).
 //
 inline constexpr auto kApple1Chips = make_chip_manifest(
-    Slot<MemoryChip>{256, 0x0000},          // RAM: 256 pages at $0000
-    Slot<MemoryChip>{  1, 0xFF00},          // Monitor ROM: 1 page at $FF00
-    Slot<MemoryChip>{ 16, 0xE000},          // BASIC ROM: 16 pages at $E000
-    Slot<pia6820_t> {  0, 0xD010, 0xFFFC}   // PIA: MMIO-only, 4-byte window
+    Slot<MemoryChip>{65536, 0x0000},        // RAM: 64 KB at $0000
+    Slot<MemoryChip>{  256, 0xFF00},        // Monitor ROM: 256 bytes at $FF00
+    Slot<MemoryChip>{ 4096, 0xE000},        // BASIC ROM: 4 KB at $E000
+    Slot<pia6820_t> {    0, 0xD010, 0xFFFC} // PIA: MMIO-only, 4-byte window
 );
 
 // BusSpec auto-derived from the manifest
@@ -46,9 +46,9 @@ namespace apple1_chips {
     inline constexpr size_t kPiaSlot     = 3;
 
     // Compile-time chip ids (from manifest prefix-sum)
-    inline constexpr size_t kRamId       = kApple1Chips.base_id(kRamSlot);      // 0
-    inline constexpr size_t kMonitorId   = kApple1Chips.base_id(kMonitorSlot);  // 256
-    inline constexpr size_t kBasicId     = kApple1Chips.base_id(kBasicSlot);    // 257
+    inline constexpr size_t kRamId       = kApple1Chips.base_id(kRamSlot, Apple1BusSpec::PageBits);      // 0
+    inline constexpr size_t kMonitorId   = kApple1Chips.base_id(kMonitorSlot, Apple1BusSpec::PageBits);  // 256
+    inline constexpr size_t kBasicId     = kApple1Chips.base_id(kBasicSlot, Apple1BusSpec::PageBits);    // 257
 }
 
 
