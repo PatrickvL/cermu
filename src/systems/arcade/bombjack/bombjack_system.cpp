@@ -55,63 +55,12 @@ bool BombJackSystem::apply_configuration() { return true; }
 bool BombJackSystem::initialize() {
     printf("Bomb Jack: Initializing arcade system\n");
 
-    // ── Create MemoryChip wrappers (main CPU) ────────────────────────────
-    auto main_rom = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Tehkan"}, bombjack_constants::MAIN_ROM_SIZE,
-        ROMChip::ROM, &main_pins_,
-        "Program ROM", bombjack_constants::MAIN_ROM_BASE);
-    main_rom_chip_ = main_rom.get();
+    // ── Create memory chips from manifest and wire buses ─────────────────
+    main_bus_mem_.create_chips(&main_pins_);
+    main_bus_mem_.apply(main_bus_);
 
-    auto main_ram = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "Various"}, bombjack_constants::MAIN_RAM_SIZE,
-        RAMChip::SRAM, &main_pins_,
-        "Work RAM", bombjack_constants::MAIN_RAM_BASE);
-    main_ram_chip_ = main_ram.get();
-
-    auto fg_tilemap = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "Various"}, bombjack_constants::FG_TILEMAP_SIZE,
-        RAMChip::SRAM, &main_pins_,
-        "FG Tilemap", bombjack_constants::FG_TILEMAP_BASE);
-    fg_tilemap_chip_ = fg_tilemap.get();
-
-    auto fg_attr = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "Various"}, bombjack_constants::FG_TILEMAP_SIZE,
-        RAMChip::SRAM, &main_pins_,
-        "FG Attributes", bombjack_constants::FG_ATTR_BASE);
-    fg_attr_chip_ = fg_attr.get();
-
-    auto sprite_area = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "Various"}, 256,
-        RAMChip::SRAM, &main_pins_,
-        "Sprite Area", 0x9800);
-    sprite_area_chip_ = sprite_area.get();
-
-    auto palette_ram = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "Various"}, bombjack_constants::PALETTE_RAM_SIZE,
-        RAMChip::SRAM, &main_pins_,
-        "Palette RAM", bombjack_constants::PALETTE_RAM_BASE);
-    palette_ram_chip_ = palette_ram.get();
-
-    // ── Create MemoryChip wrappers (sound CPU) ───────────────────────────
-    auto sound_rom = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Tehkan"}, bombjack_constants::SOUND_ROM_SIZE,
-        ROMChip::ROM, &sound_pins_,
-        "Sound ROM", bombjack_constants::SOUND_ROM_BASE);
-    sound_rom_chip_ = sound_rom.get();
-
-    auto sound_ram = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "Various"}, bombjack_constants::SOUND_RAM_SIZE,
-        RAMChip::SRAM, &sound_pins_,
-        "Sound RAM", bombjack_constants::SOUND_RAM_BASE);
-    sound_ram_chip_ = sound_ram.get();
-
-    // ── Initialize buses ─────────────────────────────────────────────────
-    main_bus_mem_.initialize(main_bus_,
-        main_rom_chip_, main_ram_chip_, fg_tilemap_chip_,
-        fg_attr_chip_, sprite_area_chip_, palette_ram_chip_);
-
-    sound_bus_mem_.initialize(sound_bus_,
-        sound_rom_chip_, sound_ram_chip_);
+    sound_bus_mem_.create_chips(&sound_pins_);
+    sound_bus_mem_.apply(sound_bus_);
 
     // ── Init chips ───────────────────────────────────────────────────────
     main_cpu_  = new ZilogZ80A();
@@ -127,14 +76,8 @@ bool BombJackSystem::initialize() {
         "Main Z80A CPU", "Z80A", "CPU", 0x0000);
     register_chip(static_cast<ChipBase*>(sound_cpu_),
         "Sound Z80A CPU", "Z80A", "CPU", 0x0000);
-    register_chip(std::move(main_rom));
-    register_chip(std::move(main_ram));
-    register_chip(std::move(fg_tilemap));
-    register_chip(std::move(fg_attr));
-    register_chip(std::move(sprite_area));
-    register_chip(std::move(palette_ram));
-    register_chip(std::move(sound_rom));
-    register_chip(std::move(sound_ram));
+    register_bus_chips(main_bus_mem_);
+    register_bus_chips(sound_bus_mem_);
 
     system_ready_ = true;
     return true;
