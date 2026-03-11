@@ -81,11 +81,11 @@ public:
 public:
     c64_bus_t bus{};                    // C64 bus controller (embedded, not heap-allocated)
     MOS6510* mos6510 = nullptr;         // MOS6510 CPU instance
-    MemoryChip* ram = nullptr;          // RAM memory $0000-$FFFF (64KB)
-    MemoryChip* cartridge_roml = nullptr; // Cartridge ROM Low $8000-$9FFF (8KB)
-    MemoryChip* cartridge_romh = nullptr; // Cartridge ROM High $A000-$BFFF (8KB)
-    MemoryChip* basic = nullptr;        // Basic ROM $A000-$BFFF (8KB)
-    MemoryChip* charrom = nullptr;      // Character ROM $D000-$DFFF (4KB) when CHAREN=0
+    RAMChip* ram = nullptr;          // RAM memory $0000-$FFFF (64KB)
+    ROMChip* cartridge_roml = nullptr; // Cartridge ROM Low $8000-$9FFF (8KB)
+    ROMChip* cartridge_romh = nullptr; // Cartridge ROM High $A000-$BFFF (8KB)
+    ROMChip* basic = nullptr;        // Basic ROM $A000-$BFFF (8KB)
+    ROMChip* charrom = nullptr;      // Character ROM $D000-$DFFF (4KB) when CHAREN=0
     vicii_t* vicii = nullptr;           // mos6567_t (NTSC) or mos6569_t (PAL) ($D000-$DFFF, 4KB)
     mos6581_t* sid = nullptr;           // MOS6581 SID sound chip ($D400-$D7FF, 1KB)
     MOS2114* colorram = nullptr;        // Color RAM (1KB at $D800-$DBFF)
@@ -94,7 +94,7 @@ public:
     commodore_keyboard_t* keyboard = nullptr; // Keyboard matrix (connected to CIA1)
     void* io1 = nullptr;               // Cartridge I/O 1 ($DE00-$DEFF)
     void* io2 = nullptr;               // Cartridge I/O 2 ($DF00-$DFFF)
-    MemoryChip* kernal = nullptr;       // Kernal ROM $E000-$FFFF (8KB)
+    ROMChip* kernal = nullptr;       // Kernal ROM $E000-$FFFF (8KB)
 
 private:
     bool initialized_ = false;          // True when initialize() has succeeded

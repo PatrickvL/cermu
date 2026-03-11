@@ -74,17 +74,17 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
 // RAM reads, then Video RAM and Monitor ROM overlay the remaining gaps.
 //
 inline constexpr auto kZ1013_16K_Chips = make_chip_manifest(
-    Slot<MemoryChip>{0x0000, 16384},         // RAM: 16 KB
-    Slot<MemoryChip>{0xEC00,  1024},         // Video RAM: 1 KB
-    Slot<MemoryChip>{0xF000,  2048}          // Monitor ROM: 2 KB
+    Slot<RAMChip>{0x0000, 16384},         // RAM: 16 KB
+    Slot<RAMChip>{0xEC00,  1024},         // Video RAM: 1 KB
+    Slot<ROMChip>{0xF000,  2048}          // Monitor ROM: 2 KB
 );
 
 inline constexpr auto kZ1013_64K_Chips = make_chip_manifest(
-    Slot<MemoryChip>{0x0000, 65536},         // RAM: 64 KB
-    Slot<MemoryChip>{0xC000,  8192},         // BASIC ROM lo: 8 KB ($C000-$DFFF)
-    Slot<MemoryChip>{0xE000,  2048},         // BASIC ROM hi: 2 KB ($E000-$E7FF)
-    Slot<MemoryChip>{0xEC00,  1024},         // Video RAM: 1 KB
-    Slot<MemoryChip>{0xF000,  2048}          // Monitor ROM: 2 KB
+    Slot<RAMChip>{0x0000, 65536},         // RAM: 64 KB
+    Slot<ROMChip>{0xC000,  8192},         // BASIC ROM lo: 8 KB ($C000-$DFFF)
+    Slot<ROMChip>{0xE000,  2048},         // BASIC ROM hi: 2 KB ($E000-$E7FF)
+    Slot<RAMChip>{0xEC00,  1024},         // Video RAM: 1 KB
+    Slot<ROMChip>{0xF000,  2048}          // Monitor ROM: 2 KB
 );
 
 // BusTraits — selects the correct manifest per variant
@@ -146,11 +146,11 @@ private:
     z80_pio_t   pio_;                // U855 PIO (keyboard + cassette)
 
     // ── Memory — owned by registered_chips_, managed via BusMemory ──────
-    MemoryChip* ram_chip_             = nullptr;
-    MemoryChip* basic_rom_lo_chip_    = nullptr;  // Z1013.64 only
-    MemoryChip* basic_rom_hi_chip_    = nullptr;  // Z1013.64 only
-    MemoryChip* video_ram_chip_       = nullptr;
-    MemoryChip* monitor_rom_chip_     = nullptr;
+    RAMChip* ram_chip_             = nullptr;
+    ROMChip* basic_rom_lo_chip_    = nullptr;  // Z1013.64 only
+    ROMChip* basic_rom_hi_chip_    = nullptr;  // Z1013.64 only
+    RAMChip* video_ram_chip_       = nullptr;
+    ROMChip* monitor_rom_chip_     = nullptr;
 
     // Character ROM — NOT bus-mapped (used for display rendering only)
     std::vector<uint8_t> char_rom_;

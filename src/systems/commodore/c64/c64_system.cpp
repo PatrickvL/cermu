@@ -398,12 +398,12 @@ bool C64System::initialize() {
     // =========================================================================
     // Create all chips
     // =========================================================================
-    this->ram = new MemoryChip(ChipInfo{"4164", "Various"}, 65536, MemoryChip::RAM, &bus.state, "RAM", 0x0000);
+    this->ram = new RAMChip(ChipInfo{"4164", "Various"}, 65536, RAMChip::RAM, &bus.state, "RAM", 0x0000);
     if (!(this->mos6510 = new MOS6510())) { cleanup(); return false; }
-    this->cartridge_roml = new MemoryChip(ChipInfo{"ROM", "Various"}, c64_constants::BASIC_ROM_SIZE, MemoryChip::ROM, &bus.state, "ROML", c64_constants::ROML_BASE);
-    this->basic = new MemoryChip(ChipInfo{"MOS 901226-01", "Commodore"}, c64_constants::BASIC_ROM_SIZE, MemoryChip::ROM, &bus.state, "BASIC", c64_constants::BASIC_ROM_BASE);
-    this->cartridge_romh = new MemoryChip(ChipInfo{"ROM", "Various"}, c64_constants::BASIC_ROM_SIZE, MemoryChip::ROM, &bus.state, "ROMH", c64_constants::BASIC_ROM_BASE);
-    this->charrom = new MemoryChip(ChipInfo{"MOS 901225-01", "Commodore"}, c64_constants::CHAR_ROM_SIZE, MemoryChip::ROM, &bus.state, "CHARROM", c64_constants::CHAR_ROM_BASE);
+    this->cartridge_roml = new ROMChip(ChipInfo{"ROM", "Various"}, c64_constants::BASIC_ROM_SIZE, ROMChip::ROM, &bus.state, "ROML", c64_constants::ROML_BASE);
+    this->basic = new ROMChip(ChipInfo{"MOS 901226-01", "Commodore"}, c64_constants::BASIC_ROM_SIZE, ROMChip::ROM, &bus.state, "BASIC", c64_constants::BASIC_ROM_BASE);
+    this->cartridge_romh = new ROMChip(ChipInfo{"ROM", "Various"}, c64_constants::BASIC_ROM_SIZE, ROMChip::ROM, &bus.state, "ROMH", c64_constants::BASIC_ROM_BASE);
+    this->charrom = new ROMChip(ChipInfo{"MOS 901225-01", "Commodore"}, c64_constants::CHAR_ROM_SIZE, ROMChip::ROM, &bus.state, "CHARROM", c64_constants::CHAR_ROM_BASE);
     this->vicii = new vicii_t();
     this->vicii->init(vicii_t::get_default_config(get_vicii_standard() == VIC_PAL), vicii_t::memory_bank_change);
     if (!this->vicii) { cleanup(); return false; }
@@ -452,7 +452,7 @@ bool C64System::initialize() {
     }
     printf("C64: Keyboard matrix initialized (all keys released)\n");
 
-    this->kernal = new MemoryChip(ChipInfo{"MOS 901227-03", "Commodore"}, c64_constants::KERNAL_ROM_SIZE, MemoryChip::ROM, &bus.state, "KERNAL", c64_constants::KERNAL_BASE);
+    this->kernal = new ROMChip(ChipInfo{"MOS 901227-03", "Commodore"}, c64_constants::KERNAL_ROM_SIZE, ROMChip::ROM, &bus.state, "KERNAL", c64_constants::KERNAL_BASE);
 
     // No cartridge I/O by default
     this->io1 = nullptr;
@@ -958,18 +958,18 @@ void C64System::run_frame() {
 // ============================================================================
 
 static uint8_t c64_mem_read(void* ctx, uint16_t addr) {
-    auto* ram = static_cast<MemoryChip*>(ctx);
+    auto* ram = static_cast<RAMChip*>(ctx);
     return ram->data()[addr];
 }
 
 static void c64_mem_write_byte(void* ctx, uint16_t addr, uint8_t val) {
-    auto* ram = static_cast<MemoryChip*>(ctx);
+    auto* ram = static_cast<RAMChip*>(ctx);
     ram->data()[addr] = val;
 }
 
 static void c64_mem_write_block(void* ctx, uint16_t addr,
                                 const uint8_t* data, size_t len) {
-    auto* ram = static_cast<MemoryChip*>(ctx);
+    auto* ram = static_cast<RAMChip*>(ctx);
     memcpy(&ram->data()[addr], data, len);
 }
 
@@ -1394,7 +1394,7 @@ void C64System::register_c64_chips() {
     register_chip(colorram,
         "Color RAM (MOS 2114)", "Color RAM", "I/O", 0xD800);
 
-    // RAM — MemoryChip with layout rendering
+    // RAM — RAMChip with layout rendering
     register_chip(this->ram,
         "RAM (4164)", "RAM", "Memory", 0x0000);
 
@@ -1835,7 +1835,7 @@ void C64System::memory_init() {
     // -------------------------------------------------------------------------
     // Load ROMs from files
     // -------------------------------------------------------------------------
-    struct { MemoryChip* rom; const char** filenames; uint16_t size; const char* name; } roms[] = {
+    struct { ROMChip* rom; const char** filenames; uint16_t size; const char* name; } roms[] = {
         { this->basic,   rom_config ? (const char**)rom_config->basic_rom_filenames   : nullptr, c64_constants::BASIC_ROM_SIZE, "BASIC" },
         { this->kernal,  rom_config ? (const char**)rom_config->kernal_rom_filenames  : nullptr, c64_constants::KERNAL_ROM_SIZE, "KERNAL" },
         { this->charrom, rom_config ? (const char**)rom_config->chargen_rom_filenames : nullptr, c64_constants::CHAR_ROM_SIZE, "Character" },

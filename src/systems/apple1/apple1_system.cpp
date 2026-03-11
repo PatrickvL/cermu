@@ -183,32 +183,32 @@ bool Apple1System::apply_configuration() {
 bool Apple1System::initialize() {
     printf("Apple1: Initializing system\n");
     
-    // ── Create MemoryChip wrappers (for Hardware menu + ROM loading) ────────
+    // ── Create RAMChip wrappers (for Hardware menu + ROM loading) ────────
     // RAM — bound to unified buffer at slot 0 (chip ids 0–255).
-    auto ram_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"SRAM", "Various"}, apple1_constants::RAM_64K, MemoryChip::SRAM, &pins_,
+    auto ram_chip = std::make_unique<RAMChip>(
+        ChipInfo{"SRAM", "Various"}, apple1_constants::RAM_64K, RAMChip::SRAM, &pins_,
         "RAM", 0x0000);
     ram_ = ram_chip.get();
 
     // Monitor ROM — bound at slot 1 (chip id 256).
-    auto monitor_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"PROM", "Various"}, 256, MemoryChip::PROM, &pins_,
+    auto monitor_chip = std::make_unique<ROMChip>(
+        ChipInfo{"PROM", "Various"}, 256, ROMChip::PROM, &pins_,
         "Monitor", apple1_constants::MONITOR_BASE);
     monitor_rom_ = monitor_chip.get();
 
     // BASIC ROM — bound at slot 2 (chip ids 257–272).
-    auto basic_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"ROM", "Apple"}, 4096, MemoryChip::ROM, &pins_,
+    auto basic_chip = std::make_unique<ROMChip>(
+        ChipInfo{"ROM", "Apple"}, 4096, ROMChip::ROM, &pins_,
         "BASIC", 0xE000);
     basic_rom_ = basic_chip.get();
 
     // Bind all manifest slots and wire the bus in one call.
-    // MemoryChip::bind() is auto-called for buffer-backed slots.
+    // RAMChip::bind() is auto-called for buffer-backed slots.
     bus_mem_.initialize(bus_, ram_, monitor_rom_, basic_rom_, &pia_);
 
     // Character ROM — not on the bus (used by terminal renderer only).
-    auto char_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"2513", "Signetics"}, 512, MemoryChip::ROM, &pins_,
+    auto char_chip = std::make_unique<ROMChip>(
+        ChipInfo{"2513", "Signetics"}, 512, ROMChip::ROM, &pins_,
         "CharROM");
     char_rom_ = char_chip.get();
     

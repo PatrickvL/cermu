@@ -166,21 +166,21 @@ bool BBCMicroSystem::apply_configuration() {
 bool BBCMicroSystem::initialize() {
     printf("BBC Micro: Initializing system\n");
 
-    // ── Create MemoryChip wrappers ──────────────────────────────────────
-    auto ram_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"DRAM", "Various"}, bbc_constants::RAM_SIZE, MemoryChip::RAM, &pins_,
+    // ── Create RAMChip wrappers ──────────────────────────────────────
+    auto ram_chip = std::make_unique<RAMChip>(
+        ChipInfo{"DRAM", "Various"}, bbc_constants::RAM_SIZE, RAMChip::RAM, &pins_,
         "RAM", bbc_constants::RAM_START);
     ram_chip_ = ram_chip.get();
 
     // Paged ROM pool: 256 KB (16 sideways slots × 16 KB each)
-    auto paged_rom_chip = std::make_unique<MemoryChip>(
+    auto paged_rom_chip = std::make_unique<ROMChip>(
         ChipInfo{"ROM", "Various"},
-        bbc_constants::PAGED_ROM_SIZE * 16, MemoryChip::ROM, &pins_,
+        bbc_constants::PAGED_ROM_SIZE * 16, ROMChip::ROM, &pins_,
         "Paged ROM", bbc_constants::PAGED_ROM_START);
     paged_rom_chip_ = paged_rom_chip.get();
 
-    auto os_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"ROM", "Acorn"}, bbc_constants::OS_ROM_SIZE, MemoryChip::ROM, &pins_,
+    auto os_chip = std::make_unique<ROMChip>(
+        ChipInfo{"ROM", "Acorn"}, bbc_constants::OS_ROM_SIZE, ROMChip::ROM, &pins_,
         "MOS ROM", bbc_constants::OS_ROM_START);
     os_rom_chip_ = os_chip.get();
 

@@ -138,21 +138,21 @@ template<SpectrumVariant V>
 bool SpectrumSystem<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
 
-    // ── Create MemoryChip wrappers ──────────────────────────────────────
+    // ── Create RAMChip wrappers ──────────────────────────────────────
     constexpr size_t ram_bytes = Traits::ram_size_kb * 1024;
     constexpr size_t rom_bytes = Traits::rom_count * spectrum_constants::ROM_SIZE_48K;
 
     // RAM: power-of-2 allocation (64KB for 48K, 128KB for 128K)
-    auto ram_chip = std::make_unique<MemoryChip>(
+    auto ram_chip = std::make_unique<RAMChip>(
         ChipInfo{"DRAM", "Various"},
         (V == SpectrumVariant::ZX48K) ? 65536 : ram_bytes,
-        MemoryChip::RAM, &pins_, "RAM", 0x0000);
+        RAMChip::RAM, &pins_, "RAM", 0x0000);
     ram_ = ram_chip.get();
 
     // ROM: 16KB (48K) or 32KB (128K)
-    auto rom_chip = std::make_unique<MemoryChip>(
+    auto rom_chip = std::make_unique<ROMChip>(
         ChipInfo{"ROM", "Sinclair"}, rom_bytes,
-        MemoryChip::ROM, &pins_, "ROM", 0x0000);
+        ROMChip::ROM, &pins_, "ROM", 0x0000);
     rom_ = rom_chip.get();
 
     // ── Bind manifest slots, wire the bus ───────────────────────────────

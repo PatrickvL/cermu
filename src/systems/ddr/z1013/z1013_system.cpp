@@ -71,33 +71,33 @@ template<Z1013Variant V>
 bool Z1013System<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
 
-    // ── Create MemoryChip wrappers ──────────────────────────────────────
-    auto ram = std::make_unique<MemoryChip>(
+    // ── Create RAMChip wrappers ──────────────────────────────────────
+    auto ram = std::make_unique<RAMChip>(
         ChipInfo{"DRAM", "VEB"}, Traits::ram_size,
-        MemoryChip::RAM, &pins_, "RAM", 0x0000);
+        RAMChip::RAM, &pins_, "RAM", 0x0000);
     ram_chip_ = ram.get();
 
-    auto video_ram = std::make_unique<MemoryChip>(
+    auto video_ram = std::make_unique<RAMChip>(
         ChipInfo{"SRAM", "VEB"}, z1013_constants::VIDEO_RAM_SIZE,
-        MemoryChip::RAM, &pins_, "Video RAM", z1013_constants::VIDEO_RAM_BASE);
+        RAMChip::RAM, &pins_, "Video RAM", z1013_constants::VIDEO_RAM_BASE);
     video_ram_chip_ = video_ram.get();
 
-    auto monitor_rom = std::make_unique<MemoryChip>(
+    auto monitor_rom = std::make_unique<ROMChip>(
         ChipInfo{"ROM", "VEB"}, z1013_constants::MONITOR_ROM_SIZE,
-        MemoryChip::ROM, &pins_, "Monitor ROM", z1013_constants::MONITOR_ROM_BASE);
+        ROMChip::ROM, &pins_, "Monitor ROM", z1013_constants::MONITOR_ROM_BASE);
     monitor_rom_chip_ = monitor_rom.get();
 
-    std::unique_ptr<MemoryChip> basic_rom_lo;
-    std::unique_ptr<MemoryChip> basic_rom_hi;
+    std::unique_ptr<ROMChip> basic_rom_lo;
+    std::unique_ptr<ROMChip> basic_rom_hi;
     if constexpr (Traits::has_basic_rom) {
-        basic_rom_lo = std::make_unique<MemoryChip>(
+        basic_rom_lo = std::make_unique<ROMChip>(
             ChipInfo{"ROM", "VEB"}, 8192,
-            MemoryChip::ROM, &pins_, "BASIC ROM lo", z1013_constants::BASIC_ROM_BASE);
+            ROMChip::ROM, &pins_, "BASIC ROM lo", z1013_constants::BASIC_ROM_BASE);
         basic_rom_lo_chip_ = basic_rom_lo.get();
 
-        basic_rom_hi = std::make_unique<MemoryChip>(
+        basic_rom_hi = std::make_unique<ROMChip>(
             ChipInfo{"ROM", "VEB"}, 2048,
-            MemoryChip::ROM, &pins_, "BASIC ROM hi", 0xE000);
+            ROMChip::ROM, &pins_, "BASIC ROM hi", 0xE000);
         basic_rom_hi_chip_ = basic_rom_hi.get();
     }
 

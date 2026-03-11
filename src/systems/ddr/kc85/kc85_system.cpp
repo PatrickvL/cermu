@@ -71,29 +71,29 @@ template<KC85Variant V>
 bool KC85System<V>::initialize() {
     printf("%s: Initializing system (CAOS %s)\n", Traits::name, Traits::caos_version);
 
-    // ── Create MemoryChip wrappers ──────────────────────────────────────
-    auto ram = std::make_unique<MemoryChip>(
+    // ── Create RAMChip wrappers ──────────────────────────────────────
+    auto ram = std::make_unique<RAMChip>(
         ChipInfo{"DRAM", "VEB"}, Traits::ram_size <= 16384 ? 16384u : 32768u,
-        MemoryChip::RAM, &pins_, "RAM", 0x0000);
+        RAMChip::RAM, &pins_, "RAM", 0x0000);
     ram_chip_ = ram.get();
 
     // IRM: 16 KB for /2,/3; 64 KB for /4 (4 video banks)
     constexpr uint32_t irm_size = Traits::has_extended_video ? 65536u : 16384u;
-    auto irm = std::make_unique<MemoryChip>(
+    auto irm = std::make_unique<RAMChip>(
         ChipInfo{"SRAM", "VEB"}, irm_size,
-        MemoryChip::RAM, &pins_, "Video RAM (IRM)", kc85_constants::PIXEL_RAM_BASE);
+        RAMChip::RAM, &pins_, "Video RAM (IRM)", kc85_constants::PIXEL_RAM_BASE);
     irm_chip_ = irm.get();
 
-    auto caos_rom = std::make_unique<MemoryChip>(
+    auto caos_rom = std::make_unique<ROMChip>(
         ChipInfo{"ROM", "VEB"}, kc85_constants::OS_ROM_SIZE,
-        MemoryChip::ROM, &pins_, "CAOS ROM", kc85_constants::OS_ROM_BASE);
+        ROMChip::ROM, &pins_, "CAOS ROM", kc85_constants::OS_ROM_BASE);
     caos_rom_chip_ = caos_rom.get();
 
-    std::unique_ptr<MemoryChip> basic_rom;
+    std::unique_ptr<ROMChip> basic_rom;
     if constexpr (Traits::has_basic_rom) {
-        basic_rom = std::make_unique<MemoryChip>(
+        basic_rom = std::make_unique<ROMChip>(
             ChipInfo{"ROM", "VEB"}, kc85_constants::BASIC_ROM_SIZE,
-            MemoryChip::ROM, &pins_, "BASIC ROM", kc85_constants::BASIC_ROM_BASE);
+            ROMChip::ROM, &pins_, "BASIC ROM", kc85_constants::BASIC_ROM_BASE);
         basic_rom_chip_ = basic_rom.get();
     }
 

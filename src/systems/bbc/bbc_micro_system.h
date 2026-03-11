@@ -27,9 +27,9 @@
 //         $FC00-$FEFF (FRED/JIM/SHEILA) handled by sheila_tick(), not the bus.
 //
 inline constexpr auto kBBCMicroChips = make_chip_manifest(
-    Slot<MemoryChip>{0x0000,  32768},       // RAM: 32 KB
-    Slot<MemoryChip>{0x8000, 262144},       // Paged ROM pool: 256 KB (16 × 16 KB)
-    Slot<MemoryChip>{0xC000,  16384}        // OS ROM: 16 KB
+    Slot<RAMChip>{0x0000,  32768},       // RAM: 32 KB
+    Slot<ROMChip>{0x8000, 262144},       // Paged ROM pool: 256 KB (16 × 16 KB)
+    Slot<ROMChip>{0xC000,  16384}        // OS ROM: 16 KB
 );
 
 namespace bbc_chips {
@@ -115,9 +115,9 @@ private:
     Mem bus_mem_{kBBCMicroChips};
 
     // Memory chip pointers (into registered_chips_; bus_mem_ owns buffer)
-    MemoryChip* ram_chip_       = nullptr;
-    MemoryChip* paged_rom_chip_ = nullptr;   // 256 KB pool (16 × 16 KB sideways slots)
-    MemoryChip* os_rom_chip_    = nullptr;
+    RAMChip* ram_chip_       = nullptr;
+    ROMChip* paged_rom_chip_ = nullptr;   // 256 KB pool (16 × 16 KB sideways slots)
+    ROMChip* os_rom_chip_    = nullptr;
 
     // Convenience pointers into the unified buffer
     uint8_t*    memory_ = nullptr;       // → ram_chip_->data() (for rendering)

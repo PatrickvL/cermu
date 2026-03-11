@@ -71,25 +71,25 @@ template<NamcoGame G>
 bool NamcoArcadeSystem<G>::initialize() {
     printf("%s: Initializing arcade system\n", Traits::name);
 
-    // ── Create MemoryChip wrappers ──────────────────────────────────────
-    auto rom = std::make_unique<MemoryChip>(
+    // ── Create chip wrappers ─────────────────────────────────────────
+    auto rom = std::make_unique<ROMChip>(
         ChipInfo{"ROM", "Namco"}, Traits::rom_size,
-        MemoryChip::ROM, &pins_, "Program ROM", 0x0000);
+        ROMChip::ROM, &pins_, "Program ROM", 0x0000);
     rom_chip_ = rom.get();
 
-    auto video_ram = std::make_unique<MemoryChip>(
+    auto video_ram = std::make_unique<RAMChip>(
         ChipInfo{"SRAM", "Namco"}, namco_arcade_constants::VIDEO_RAM_SIZE,
-        MemoryChip::RAM, &pins_, "Video RAM", Traits::vram_base);
+        RAMChip::RAM, &pins_, "Video RAM", Traits::vram_base);
     video_ram_chip_ = video_ram.get();
 
-    auto color_ram = std::make_unique<MemoryChip>(
+    auto color_ram = std::make_unique<RAMChip>(
         ChipInfo{"SRAM", "Namco"}, namco_arcade_constants::COLOR_RAM_SIZE,
-        MemoryChip::RAM, &pins_, "Color RAM", Traits::cram_base);
+        RAMChip::RAM, &pins_, "Color RAM", Traits::cram_base);
     color_ram_chip_ = color_ram.get();
 
-    auto work_ram = std::make_unique<MemoryChip>(
+    auto work_ram = std::make_unique<RAMChip>(
         ChipInfo{"SRAM", "Namco"}, namco_arcade_constants::RAM_SIZE,
-        MemoryChip::RAM, &pins_, "Work RAM", Traits::wram_base);
+        RAMChip::RAM, &pins_, "Work RAM", Traits::wram_base);
     work_ram_chip_ = work_ram.get();
 
     // ── Bind manifest slots, wire the bus ───────────────────────────────

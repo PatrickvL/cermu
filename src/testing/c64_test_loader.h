@@ -5,7 +5,7 @@
 #include <cstddef>
 
 // Forward declaration
-class MemoryChip;
+class RAMChip;
 
 /**
  * Load a PRG file into RAM.
@@ -17,7 +17,7 @@ class MemoryChip;
  * @param out_sys_address Output parameter for SYS address if found in BASIC program (0 if not found)
  * @return true on success, false on failure
  */
-bool c64_test_load_prg_file(const char* filename, MemoryChip* ram, 
+bool c64_test_load_prg_file(const char* filename, RAMChip* ram, 
                             uint16_t* out_load_address, uint16_t* out_sys_address);
 
 /**
@@ -29,7 +29,7 @@ bool c64_test_load_prg_file(const char* filename, MemoryChip* ram,
  * @param load_address Address where the binary should be loaded
  * @return true on success, false on failure
  */
-bool c64_test_load_bin_file(const char* filename, MemoryChip* ram, uint16_t load_address);
+bool c64_test_load_bin_file(const char* filename, RAMChip* ram, uint16_t load_address);
 
 /**
  * Parse a BASIC program in RAM to extract the SYS address.
@@ -40,4 +40,4 @@ bool c64_test_load_bin_file(const char* filename, MemoryChip* ram, uint16_t load
  * @param load_address Load address of the program (used for PEEK expression evaluation)
  * @return SYS address if found, 0 if not found
  */
-uint16_t c64_test_parse_sys_address(MemoryChip* ram, uint16_t start_address, uint16_t load_address);
+uint16_t c64_test_parse_sys_address(RAMChip* ram, uint16_t start_address, uint16_t load_address);

@@ -1114,24 +1114,24 @@ void VIC20System::register_vic20_chips() {
     register_chip(via2,
         "VIA 2 (MOS 6522)", "VIA 2", "I/O", 0x9120);
 
-    // RAM — MemoryChip with layout rendering
-    register_chip(std::make_unique<MemoryChip>(
-        ChipInfo{"DRAM", "Various"}, 32768, MemoryChip::RAM, &bus_.state,
+    // RAM — RAMChip with layout rendering
+    register_chip(std::make_unique<RAMChip>(
+        ChipInfo{"DRAM", "Various"}, 32768, RAMChip::RAM, &bus_.state,
         "RAM", 0x0000));
 
     // Character ROM
-    register_chip(std::make_unique<MemoryChip>(
-        ChipInfo{"MOS 901460-03", "Commodore"}, 4096, MemoryChip::ROM, &bus_.state,
+    register_chip(std::make_unique<ROMChip>(
+        ChipInfo{"MOS 901460-03", "Commodore"}, 4096, ROMChip::ROM, &bus_.state,
         "CHARROM", 0x8000));
 
     // BASIC ROM
-    register_chip(std::make_unique<MemoryChip>(
-        ChipInfo{"MOS 901486-01", "Commodore"}, 8192, MemoryChip::ROM, &bus_.state,
+    register_chip(std::make_unique<ROMChip>(
+        ChipInfo{"MOS 901486-01", "Commodore"}, 8192, ROMChip::ROM, &bus_.state,
         "BASIC", 0xC000));
 
     // KERNAL ROM
-    register_chip(std::make_unique<MemoryChip>(
-        ChipInfo{"MOS 901486-07", "Commodore"}, 8192, MemoryChip::ROM, &bus_.state,
+    register_chip(std::make_unique<ROMChip>(
+        ChipInfo{"MOS 901486-07", "Commodore"}, 8192, ROMChip::ROM, &bus_.state,
         "KERNAL", 0xE000));
 }
 
