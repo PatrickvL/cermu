@@ -136,14 +136,17 @@ void reset(harness_t* h) {
 
 void write_reg(harness_t* h, uint8_t reg, uint8_t value) {
     if (!h || !h->sid) return;
-    bus_state_t bs = BUS_STATE(0xD400 + reg, value, 0);
+    bus_state_t bs = 0;
+    BUS_SET_ADDR(bs, 0xD400 + reg);
+    BUS_SET_DATA(bs, value);
     mos6581_t::registers_write(h->sid, bs);
 }
 
 uint8_t read_osc3(harness_t* h) {
     if (!h || !h->sid) return 0;
     // Read through the actual register path — tests what the CPU would see
-    bus_state_t bs = BUS_STATE(0xD400 + REG_OSC3, 0, 0);
+    bus_state_t bs = 0;
+    BUS_SET_ADDR(bs, 0xD400 + REG_OSC3);
     bs = mos6581_t::registers_read(h->sid, bs);
     return BUS_GET_DATA(bs);
 }
@@ -151,7 +154,8 @@ uint8_t read_osc3(harness_t* h) {
 uint8_t read_env3(harness_t* h) {
     if (!h || !h->sid) return 0;
     // Read through the actual register path — tests what the CPU would see
-    bus_state_t bs = BUS_STATE(0xD400 + REG_ENV3, 0, 0);
+    bus_state_t bs = 0;
+    BUS_SET_ADDR(bs, 0xD400 + REG_ENV3);
     bs = mos6581_t::registers_read(h->sid, bs);
     return BUS_GET_DATA(bs);
 }
@@ -159,7 +163,7 @@ uint8_t read_env3(harness_t* h) {
 void clock_cycles(harness_t* h, uint32_t n) {
     if (!h || !h->sid) return;
 
-    bus_state_t bs = BUS_STATE(0, 0, 0);
+    bus_state_t bs = 0;
     for (uint32_t i = 0; i < n; i++) {
         h->sid->tick(bs);
         h->total_cycles++;
