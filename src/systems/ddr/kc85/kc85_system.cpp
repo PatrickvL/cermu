@@ -4,6 +4,8 @@
 
 #include "kc85_system.h"
 #include "../../../core/system_registry.h"
+#include "../../../core/storage/rom_loader.h"
+#include "../../../core/config/path_discovery.h"
 #include <cstring>
 #include <cstdio>
 
@@ -68,6 +70,51 @@ template<KC85Variant V> bool KC85System<V>::apply_configuration() { return true;
 template<KC85Variant V>
 bool KC85System<V>::initialize() {
     printf("%s: Initializing system (CAOS %s)\n", Traits::name, Traits::caos_version);
+
+    // ── Create MemoryChip wrappers ──────────────────────────────────────
+    auto ram = std::make_unique<MemoryChip>(
+        ChipInfo{"DRAM", "VEB"}, Traits::ram_size <= 16384 ? 16384u : 32768u,
+        MemoryChip::RAM, &pins_, "RAM", 0x0000);
+    ram_chip_ = ram.get();
+
+    // IRM: 16 KB for /2,/3; 64 KB for /4 (4 video banks)
+    constexpr uint32_t irm_size = Traits::has_extended_video ? 65536u : 16384u;
+    auto irm = std::make_unique<MemoryChip>(
+        ChipInfo{"SRAM", "VEB"}, irm_size,
+        MemoryChip::RAM, &pins_, "Video RAM (IRM)", kc85_constants::PIXEL_RAM_BASE);
+    irm_chip_ = irm.get();
+
+    auto caos_rom = std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "VEB"}, kc85_constants::OS_ROM_SIZE,
+        MemoryChip::ROM, &pins_, "CAOS ROM", kc85_constants::OS_ROM_BASE);
+    caos_rom_chip_ = caos_rom.get();
+
+    std::unique_ptr<MemoryChip> basic_rom;
+    if constexpr (Traits::has_basic_rom) {
+        basic_rom = std::make_unique<MemoryChip>(
+            ChipInfo{"ROM", "VEB"}, kc85_constants::BASIC_ROM_SIZE,
+            MemoryChip::ROM, &pins_, "BASIC ROM", kc85_constants::BASIC_ROM_BASE);
+        basic_rom_chip_ = basic_rom.get();
+    }
+
+    // ── Bind manifest slots, wire the bus ───────────────────────────────
+    if constexpr (V == KC85Variant::KC85_2) {
+        bus_mem_.initialize(bus_, ram_chip_, irm_chip_, caos_rom_chip_);
+    } else {
+        bus_mem_.initialize(bus_, ram_chip_, irm_chip_,
+                            basic_rom_chip_, caos_rom_chip_);
+    }
+
+    // ── Set initial banking state ───────────────────────────────────────
+    caos_rom_on_  = true;
+    irm_enabled_  = true;
+    basic_rom_on_ = false;
+    bank_ctrl_    = 0;
+    bank_ctrl2_   = 0;
+    active_plane_ = 0;
+    configure_bus_memory_map();
+
+    // ── Init chips ──────────────────────────────────────────────────────
     cpu_ = new U880();
     pins_ = cpu_->init();
     pio1_.init();
@@ -75,23 +122,28 @@ bool KC85System<V>::initialize() {
     ctc_.init();
     modules_.init();
 
-    ram_.resize(Traits::ram_size, 0x00);
-    os_rom_.resize(kc85_constants::OS_ROM_SIZE, 0xFF);
-    pixel_ram_.resize(kc85_constants::PIXEL_RAM_SIZE, 0x00);
-    color_ram_.resize(kc85_constants::PIXEL_RAM_SIZE, 0x07);  // Default: white-on-black
-
-    if constexpr (Traits::has_basic_rom) {
-        basic_rom_.resize(kc85_constants::BASIC_ROM_SIZE, 0xFF);
-    }
-    if constexpr (Traits::has_extended_video) {
-        // KC85/4: second screen plane
-        pixel_ram_2_.resize(kc85_constants::KC4_PIXEL_RAM_SIZE, 0x00);
-        color_ram_2_.resize(kc85_constants::KC4_COLOR_RAM_SIZE, 0x07);
-    }
+    std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 
     load_roms();
-    caos_rom_on_ = true;
-    irm_enabled_ = true;
+
+    // ── Register chips for Hardware menu ────────────────────────────────
+    register_chip(static_cast<ChipBase*>(cpu_),
+        "U880 CPU", "U880", "CPU", 0x0000);
+    register_chip(&pio1_,
+        "U855 PIO #1", "U855", "I/O", kc85_constants::PIO_A_DATA);
+    register_chip(&pio2_,
+        "U855 PIO #2", "U855", "I/O", 0x00);
+    register_chip(&ctc_,
+        "U857 CTC", "U857", "I/O", kc85_constants::CTC_CH0);
+    register_chip(std::move(ram));
+    register_chip(std::move(irm));
+    register_chip(std::move(caos_rom));
+    if constexpr (Traits::has_basic_rom) {
+        register_chip(std::move(basic_rom));
+    }
+
+    printf("%s: System initialized (RAM: %d KB, IRM: %d KB)\n",
+           Traits::name, Traits::ram_size / 1024, irm_size / 1024);
     system_ready_ = true;
     return true;
 }
@@ -110,28 +162,167 @@ template<KC85Variant V> void KC85System<V>::reset() {
     basic_rom_on_ = false;
     irm_enabled_ = true;
     active_plane_ = 0;
+    configure_bus_memory_map();
 }
+
+// ============================================================================
+// BUS CONFIGURATION
+// ============================================================================
+
+template<KC85Variant V>
+void KC85System<V>::configure_bus_memory_map() {
+    using ChipId      = typename PT::ChipId;
+    using WriteChipId = typename PT::WriteChipId;
+
+    // apply() maps all slots per the manifest.  We adjust for initial banking.
+    bus_mem_.apply(bus_);
+
+    // ── KC85/4: Trim IRM write pages that spill into ROM area ───────────
+    // The 64 KB IRM at $8000 maps write pages $80-$FF (128 pages, clipped).
+    // Pages $C0-$FF overlap with BASIC/CAOS ROM — unmap those writes.
+    if constexpr (Traits::has_extended_video) {
+        for (size_t page = 0xC0; page < 0x100; ++page)
+            bus_.set_write_page(0, page, PT::kNoChipSelectedWrite);
+    }
+
+    // ── BASIC ROM: initially disabled — unmap read pages $C0-$DF ────────
+    if constexpr (Traits::has_basic_rom) {
+        if (!basic_rom_on_) {
+            constexpr size_t kBasicSlot = (V == KC85Variant::KC85_2) ? 0 : 2;
+            (void)kBasicSlot;
+            for (size_t page = 0xC0; page < 0xE0; ++page)
+                bus_.set_read_page(0, page, PT::kNoChipSelected);
+        }
+    }
+
+    // ── CAOS ROM: apply current enable state ────────────────────────────
+    if (!caos_rom_on_) {
+        for (size_t page = 0xE0; page < 0x100; ++page)
+            bus_.set_read_page(0, page, PT::kNoChipSelected);
+    }
+
+    // ── IRM: apply current enable state ─────────────────────────────────
+    if (irm_enabled_) {
+        if constexpr (Traits::has_extended_video) {
+            // KC85/4: Map the currently selected IRM bank to $80-$BF
+            constexpr size_t kIrmSlot = 1;
+            constexpr size_t kIrmBaseId = BT::kManifest.base_id(kIrmSlot, BT::Spec::PageBits);
+            constexpr size_t kPagesPerBank = 64;  // 16 KB / 256 = 64 pages
+
+            // Bank layout: pixel0=0, pixel1=1, color0=2, color1=3
+            // bank_ctrl_ bits: bit 0 = plane, bit 1 = pixel/color
+            uint8_t bank = bank_ctrl_ & 0x03;
+            size_t bank_offset = bank * kPagesPerBank;
+            bus_.fill_pages(0, 0x80, kPagesPerBank,
+                ChipId(kIrmBaseId + bank_offset),
+                WriteChipId(kIrmBaseId + bank_offset));
+        }
+        // KC85/2-3: apply() already mapped IRM pages $80-$BF correctly
+    } else {
+        // IRM disabled — unmap $80-$BF
+        for (size_t page = 0x80; page < 0xC0; ++page) {
+            bus_.set_read_page(0, page, PT::kNoChipSelected);
+            bus_.set_write_page(0, page, PT::kNoChipSelectedWrite);
+        }
+    }
+}
+
+// ============================================================================
+// DYNAMIC BANKING
+// ============================================================================
+
+template<KC85Variant V>
+void KC85System<V>::update_bank_state() {
+    using ChipId      = typename PT::ChipId;
+    using WriteChipId = typename PT::WriteChipId;
+
+    uint8_t pio_b = pio1_.get_output(1);
+
+    bool new_caos = (pio_b & 0x01) != 0;
+    bool new_irm  = (pio_b & 0x04) != 0;
+    bool new_basic = (pio_b & 0x40) != 0;
+
+    // ── IRM at $8000-$BFFF ──────────────────────────────────────────────
+    if (new_irm != irm_enabled_) {
+        irm_enabled_ = new_irm;
+        if (irm_enabled_) {
+            if constexpr (Traits::has_extended_video) {
+                // KC85/4: Map selected bank
+                constexpr size_t kIrmSlot = 1;
+                constexpr size_t kIrmBaseId = BT::kManifest.base_id(kIrmSlot, BT::Spec::PageBits);
+                constexpr size_t kPagesPerBank = 64;
+                uint8_t bank = bank_ctrl_ & 0x03;
+                bus_.fill_pages(0, 0x80, kPagesPerBank,
+                    ChipId(kIrmBaseId + bank * kPagesPerBank),
+                    WriteChipId(kIrmBaseId + bank * kPagesPerBank));
+            } else {
+                // KC85/2-3: Map single IRM plane
+                constexpr size_t kIrmSlot = 1;
+                constexpr size_t kIrmBaseId = BT::kManifest.base_id(kIrmSlot, BT::Spec::PageBits);
+                bus_.fill_pages(0, 0x80, 64,
+                    ChipId(kIrmBaseId), WriteChipId(kIrmBaseId));
+            }
+        } else {
+            for (size_t p = 0x80; p < 0xC0; ++p) {
+                bus_.set_read_page(0, p, PT::kNoChipSelected);
+                bus_.set_write_page(0, p, PT::kNoChipSelectedWrite);
+            }
+        }
+    }
+
+    // ── CAOS ROM at $E000-$FFFF ─────────────────────────────────────────
+    if (new_caos != caos_rom_on_) {
+        caos_rom_on_ = new_caos;
+        constexpr size_t kCaosSlot = (V == KC85Variant::KC85_2) ? 2 : 3;
+        constexpr size_t kCaosBaseId = BT::kManifest.base_id(kCaosSlot, BT::Spec::PageBits);
+        if (caos_rom_on_) {
+            bus_.fill_read_pages(0, 0xE0, 32, ChipId(kCaosBaseId));
+        } else {
+            for (size_t p = 0xE0; p < 0x100; ++p)
+                bus_.set_read_page(0, p, PT::kNoChipSelected);
+        }
+    }
+
+    // ── BASIC ROM at $C000-$DFFF ────────────────────────────────────────
+    if constexpr (Traits::has_basic_rom) {
+        if (new_basic != basic_rom_on_) {
+            basic_rom_on_ = new_basic;
+            constexpr size_t kBasicSlot = 2;
+            constexpr size_t kBasicBaseId = BT::kManifest.base_id(kBasicSlot, BT::Spec::PageBits);
+            if (basic_rom_on_) {
+                bus_.fill_read_pages(0, 0xC0, 32, ChipId(kBasicBaseId));
+            } else {
+                for (size_t p = 0xC0; p < 0xE0; ++p)
+                    bus_.set_read_page(0, p, PT::kNoChipSelected);
+            }
+        }
+    }
+
+    if constexpr (Traits::has_extended_video) {
+        active_plane_ = bank_ctrl_ & 0x01;
+    }
+}
+
+// ============================================================================
+// TICK
+// ============================================================================
 
 template<KC85Variant V>
 void KC85System<V>::tick() {
     if (!cpu_) return;
 
-    // CPU tick
     pins_ = cpu_->tick(pins_);
 
-    // Bus dispatch
-    bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);  // Active-low
-    bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);  // Active-low
+    bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);
+    bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);
 
     if (mreq) {
-        pins_ = mem_tick(pins_);
+        pins_ = bus_.tick(0, pins_);
     } else if (iorq) {
         pins_ = io_tick(pins_);
     }
 
-    // CTC tick (drives timing and sound)
     ctc_.tick();
-
     total_cycles_++;
 }
 
@@ -152,86 +343,14 @@ template<KC85Variant V> void KC85System<V>::render_system_menu_items() {}
 template<KC85Variant V> void KC85System<V>::render_configuration_ui() {}
 template<KC85Variant V> void KC85System<V>::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
-template<KC85Variant V>
-bus_state_t KC85System<V>::mem_tick(bus_state_t pins) {
-    uint16_t addr = BUS_GET_ADDR(pins);
-    bool is_read = BUS_GET_BIT(pins, BUS_RW_BIT);
+// ============================================================================
+// I/O BUS DISPATCH
+// ============================================================================
 
-    if (is_read) {
-        uint8_t data = 0xFF;
-        if (addr < 0x4000) {
-            // Base RAM (always present)
-            if (addr < ram_.size()) data = ram_[addr];
-        } else if (addr < 0x8000) {
-            // KC85/4: extended RAM; KC85/2+3: expansion modules (open bus)
-            if constexpr (Traits::has_extended_video) {
-                if (addr < ram_.size()) data = ram_[addr];
-            }
-        } else if (addr < 0xC000) {
-            // IRM (video RAM) — accessible only when enabled
-            if (irm_enabled_) {
-                uint16_t offset = addr - 0x8000;
-                if constexpr (Traits::has_extended_video) {
-                    // KC85/4: bank_ctrl_ selects plane and pixel/color
-                    bool is_color = bank_ctrl_ & 0x02;
-                    bool plane1   = bank_ctrl_ & 0x01;
-                    if (is_color) {
-                        data = plane1 ? color_ram_2_[offset] : color_ram_[offset];
-                    } else {
-                        data = plane1 ? pixel_ram_2_[offset] : pixel_ram_[offset];
-                    }
-                } else {
-                    // KC85/2+3: single interleaved plane
-                    data = pixel_ram_[offset];
-                }
-            }
-        } else if (addr < 0xE000) {
-            // BASIC ROM (KC85/3, /4) or open bus
-            if constexpr (Traits::has_basic_rom) {
-                if (basic_rom_on_ && static_cast<size_t>(addr - 0xC000) < basic_rom_.size())
-                    data = basic_rom_[addr - 0xC000];
-            }
-        } else {
-            // CAOS (OS) ROM
-            if (caos_rom_on_ && static_cast<size_t>(addr - 0xE000) < os_rom_.size())
-                data = os_rom_[addr - 0xE000];
-        }
-        BUS_SET_DATA(pins, data);
-    } else {
-        uint8_t data = BUS_GET_DATA(pins);
-        if (addr < 0x4000) {
-            if (addr < ram_.size()) ram_[addr] = data;
-        } else if (addr < 0x8000) {
-            if constexpr (Traits::has_extended_video) {
-                if (addr < ram_.size()) ram_[addr] = data;
-            }
-        } else if (addr < 0xC000) {
-            // IRM write
-            if (irm_enabled_) {
-                uint16_t offset = addr - 0x8000;
-                if constexpr (Traits::has_extended_video) {
-                    bool is_color = bank_ctrl_ & 0x02;
-                    bool plane1   = bank_ctrl_ & 0x01;
-                    if (is_color) {
-                        (plane1 ? color_ram_2_ : color_ram_)[offset] = data;
-                    } else {
-                        (plane1 ? pixel_ram_2_ : pixel_ram_)[offset] = data;
-                    }
-                } else {
-                    pixel_ram_[offset] = data;
-                }
-            }
-        }
-        // ROM regions ($C000-$FFFF) are read-only
-    }
-
-    return pins;
-}
 template<KC85Variant V>
 bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
     // Interrupt acknowledge: IORQ + M1
     if (!BUS_GET_BIT(pins, Z80_M1_BIT)) {
-        // CTC provides the interrupt vector in daisy chain
         if (ctc_.interrupt_pending()) {
             BUS_SET_DATA(pins, ctc_.interrupt_vector());
         } else {
@@ -245,7 +364,6 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
     uint8_t data = BUS_GET_DATA(pins);
 
     // PIO 1 at $88-$8B (system + keyboard)
-    // Bit 0: port (0=A, 1=B), Bit 1: data/control (0=data, 1=control)
     if ((port & 0xFC) == kc85_constants::PIO_A_DATA) {
         int port_idx = port & 0x01;
         bool is_ctrl = (port >> 1) & 0x01;
@@ -287,32 +405,71 @@ bus_state_t KC85System<V>::io_tick(bus_state_t pins) {
     // KC85/4: additional banking control ports
     if constexpr (Traits::has_extended_video) {
         if (port == kc85_constants::KC4_CTRL_PORT && !is_read) {
+            using ChipId      = typename PT::ChipId;
+            using WriteChipId = typename PT::WriteChipId;
+
+            uint8_t old_bank = bank_ctrl_ & 0x03;
             bank_ctrl_ = data;
-            update_bank_state();
+            uint8_t new_bank = bank_ctrl_ & 0x03;
+
+            // Remap IRM bank if changed and IRM is enabled
+            if (new_bank != old_bank && irm_enabled_) {
+                constexpr size_t kIrmSlot = 1;
+                constexpr size_t kIrmBaseId = BT::kManifest.base_id(kIrmSlot, BT::Spec::PageBits);
+                constexpr size_t kPagesPerBank = 64;
+                bus_.fill_pages(0, 0x80, kPagesPerBank,
+                    ChipId(kIrmBaseId + new_bank * kPagesPerBank),
+                    WriteChipId(kIrmBaseId + new_bank * kPagesPerBank));
+            }
+            active_plane_ = bank_ctrl_ & 0x01;
             return pins;
         }
         if (port == kc85_constants::KC4_CTRL2_PORT && !is_read) {
             bank_ctrl2_ = data;
-            update_bank_state();
             return pins;
         }
     }
 
     return pins;
 }
-template<KC85Variant V>
-void KC85System<V>::update_bank_state() {
-    uint8_t pio_b = pio1_.get_output(1);
-    caos_rom_on_  = pio_b & 0x01;    // Bit 0: CAOS ROM enable
-    irm_enabled_  = pio_b & 0x04;    // Bit 2: IRM (video RAM) enable
-    basic_rom_on_ = pio_b & 0x40;    // Bit 6: BASIC ROM enable
 
-    if constexpr (Traits::has_extended_video) {
-        // KC85/4: bank_ctrl_ selects video plane and type
-        active_plane_ = bank_ctrl_ & 0x01;
+// ============================================================================
+// ROM LOADING
+// ============================================================================
+
+template<KC85Variant V>
+bool KC85System<V>::load_roms() {
+    char rom_root[512];
+    const char* names[] = {"kc85", "KC85", nullptr};
+    if (!system_config_discover_rom_root(names, rom_root, sizeof(rom_root))) {
+        printf("%s: ROM path not found\n", Traits::name);
+        return false;
     }
+
+    bool ok = true;
+
+    // CAOS (OS) ROM (8 KB at $E000)
+    const char* caos_names[] = {"caos.rom", "CAOS.ROM", nullptr};
+    if (!rom_loader_load_from_root(rom_root, caos_names,
+                                   kc85_constants::OS_ROM_SIZE,
+                                   caos_rom_chip_->data(), caos_rom_chip_->size_bytes())) {
+        printf("%s: CAOS ROM not loaded\n", Traits::name);
+        ok = false;
+    }
+
+    // BASIC ROM (8 KB, KC85/3 and /4 only)
+    if constexpr (Traits::has_basic_rom) {
+        const char* basic_names[] = {"basic.rom", "BASIC.ROM", nullptr};
+        if (!rom_loader_load_from_root(rom_root, basic_names,
+                                       kc85_constants::BASIC_ROM_SIZE,
+                                       basic_rom_chip_->data(), basic_rom_chip_->size_bytes())) {
+            printf("%s: BASIC ROM not loaded\n", Traits::name);
+            ok = false;
+        }
+    }
+
+    return ok;
 }
-template<KC85Variant V> bool KC85System<V>::load_roms() { return false; }
 
 // ============================================================================
 // EXPLICIT INSTANTIATIONS

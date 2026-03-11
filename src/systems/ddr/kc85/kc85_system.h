@@ -12,10 +12,13 @@
 #include "kc85_constants.h"
 #include "../../../core/emulated_system.h"
 #include "../../../core/system_lines.h"
+#include "../../../core/chip_manifest.hpp"
 #include "../../../chip/cpu/z80/u880.h"
+#include "../../../chip/cpu/z80/z80.hpp"   // Z80_MREQ_BIT / Z80_IORQ_BIT
 #include "../../../chip/io/z80_pio.h"
 #include "../../../chip/io/z80_ctc.h"
 #include "../../../chip/io/kc85_module_system.h"
+#include "../../../chip/memory/memory_chip.h"
 #include <cstdint>
 #include <vector>
 
@@ -54,6 +57,77 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
     static constexpr bool        has_basic_rom   = true;
     static constexpr bool        has_extended_video = true;
     static constexpr const char* caos_version    = "4.2";
+};
+
+// ============================================================================
+// KC 85 chip manifests — declarative memory layout
+// ============================================================================
+//
+// KC85/2 (3 slots):
+//   Slot 0: RAM       — 16 KB at $0000         (always mapped)
+//   Slot 1: IRM       — 16 KB at $8000         (pixel + color interleaved)
+//   Slot 2: CAOS ROM  —  8 KB at $E000         (OS ROM)
+//
+// KC85/3 (4 slots):
+//   Slot 0: RAM       — 16 KB at $0000         (always mapped)
+//   Slot 1: IRM       — 16 KB at $8000         (pixel + color interleaved)
+//   Slot 2: BASIC ROM —  8 KB at $C000
+//   Slot 3: CAOS ROM  —  8 KB at $E000
+//
+// KC85/4 (4 slots):
+//   Slot 0: RAM       — 32 KB at $0000         ($0000-$7FFF, always mapped)
+//   Slot 1: IRM       — 64 KB at $8000         (4 banks: pixel0/pixel1/color0/color1)
+//   Slot 2: BASIC ROM —  8 KB at $C000
+//   Slot 3: CAOS ROM  —  8 KB at $E000
+//
+// KC85/4 IRM bank layout (64 KB, 256 pages):
+//   Pages   0- 63: Pixel RAM plane 0
+//   Pages  64-127: Pixel RAM plane 1
+//   Pages 128-191: Color RAM plane 0
+//   Pages 192-255: Color RAM plane 1
+//
+// Banking (all variants):
+//   IRM at $8000-$BFFF: enabled/disabled via PIO B bit 2
+//   BASIC ROM at $C000-$DFFF: enabled/disabled via PIO B bit 6 (KC85/3,/4)
+//   CAOS ROM at $E000-$FFFF: enabled/disabled via PIO B bit 0
+//   KC85/4 IRM bank: selected via port $84 bits 0-1
+//
+inline constexpr auto kKC852Chips = make_chip_manifest(
+    Slot<MemoryChip>{0x0000, 16384},        // RAM: 16 KB
+    Slot<MemoryChip>{0x8000, 16384},        // IRM: 16 KB
+    Slot<MemoryChip>{0xE000,  8192}         // CAOS ROM: 8 KB
+);
+
+inline constexpr auto kKC853Chips = make_chip_manifest(
+    Slot<MemoryChip>{0x0000, 16384},        // RAM: 16 KB
+    Slot<MemoryChip>{0x8000, 16384},        // IRM: 16 KB
+    Slot<MemoryChip>{0xC000,  8192},        // BASIC ROM: 8 KB
+    Slot<MemoryChip>{0xE000,  8192}         // CAOS ROM: 8 KB
+);
+
+inline constexpr auto kKC854Chips = make_chip_manifest(
+    Slot<MemoryChip>{0x0000, 32768},        // RAM: 32 KB
+    Slot<MemoryChip>{0x8000, 65536},        // IRM: 64 KB (4 banks, only 16 KB visible)
+    Slot<MemoryChip>{0xC000,  8192},        // BASIC ROM: 8 KB
+    Slot<MemoryChip>{0xE000,  8192}         // CAOS ROM: 8 KB
+);
+
+// BusTraits — selects the correct manifest per variant
+template<KC85Variant V> struct KC85BusTraits;
+
+template<> struct KC85BusTraits<KC85Variant::KC85_2> {
+    static constexpr const auto& kManifest = kKC852Chips;
+    using Spec = ManifestBusSpec<kKC852Chips, 16, 8>;
+};
+
+template<> struct KC85BusTraits<KC85Variant::KC85_3> {
+    static constexpr const auto& kManifest = kKC853Chips;
+    using Spec = ManifestBusSpec<kKC853Chips, 16, 8>;
+};
+
+template<> struct KC85BusTraits<KC85Variant::KC85_4> {
+    static constexpr const auto& kManifest = kKC854Chips;
+    using Spec = ManifestBusSpec<kKC854Chips, 16, 8>;
 };
 
 // ── System ───────────────────────────────────────────────────────────────
@@ -99,19 +173,19 @@ private:
     z80_ctc_t            ctc_;                // U857 CTC (timing + sound + tape)
     kc85_module_system_t modules_;            // Expansion module slot controller
 
-    // ── Memory ───────────────────────────────────────────────────────────
-    std::vector<uint8_t> ram_;       // 16 KB (KC85/2,/3) or 64 KB (KC85/4)
-    std::vector<uint8_t> os_rom_;    // 8 KB CAOS ROM
-    std::vector<uint8_t> basic_rom_; // 8 KB BASIC ROM (KC85/3, /4)
+    // ── Memory — owned by registered_chips_, managed via BusMemory ──────
+    MemoryChip* ram_chip_       = nullptr;
+    MemoryChip* irm_chip_       = nullptr;   // Video RAM (16 KB for /2,/3; 64 KB for /4)
+    MemoryChip* basic_rom_chip_ = nullptr;   // KC85/3, /4 only
+    MemoryChip* caos_rom_chip_  = nullptr;
 
-    // ── Video RAM ────────────────────────────────────────────────────────
-    // KC85/2 and /3: single plane, 16 KB pixel RAM (interleaved with color)
-    std::vector<uint8_t> pixel_ram_;     // 16 KB pixel data
-    std::vector<uint8_t> color_ram_;     // Color attributes (interleaved or separate)
-
-    // KC85/4: second screen plane
-    std::vector<uint8_t> pixel_ram_2_;   // 16 KB pixel data (plane 2)
-    std::vector<uint8_t> color_ram_2_;   // Color data (plane 2)
+    // ── MemoryBus — declarative setup via chip manifest ──────────────────
+    using BT  = KC85BusTraits<V>;
+    using Bus = MemoryBus<typename BT::Spec>;
+    using PT  = PackingTraits<typename BT::Spec>;
+    using Mem = BusMemory<typename BT::Spec>;
+    Bus bus_;
+    Mem bus_mem_{BT::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
     uint32_t framebuffer_[kc85_constants::FB_WIDTH *
@@ -120,12 +194,12 @@ private:
     // ── Keyboard ─────────────────────────────────────────────────────────
     uint8_t keyboard_matrix_[kc85_constants::KEYBOARD_ROWS] = {};
 
-    // ── Banking state (KC85/4 only) ──────────────────────────────────────
-    uint8_t bank_ctrl_     = 0;      // Port $84 value
-    uint8_t bank_ctrl2_    = 0;      // Port $86 value
-    bool    irm_enabled_   = false;  // Video RAM access enabled
-    bool    caos_rom_on_   = true;   // CAOS ROM bank enabled
-    bool    basic_rom_on_  = false;  // BASIC ROM bank enabled
+    // ── Banking state ────────────────────────────────────────────────────
+    uint8_t bank_ctrl_     = 0;      // Port $84 value (KC85/4 only)
+    uint8_t bank_ctrl2_    = 0;      // Port $86 value (KC85/4 only)
+    bool    irm_enabled_   = false;  // PIO B bit 2: video RAM access enabled
+    bool    caos_rom_on_   = true;   // PIO B bit 0: CAOS ROM enabled
+    bool    basic_rom_on_  = false;  // PIO B bit 6: BASIC ROM enabled
     uint8_t active_plane_  = 0;      // Display plane (KC85/4: 0 or 1)
 
     // ── System state ─────────────────────────────────────────────────────
@@ -136,8 +210,8 @@ private:
     float speed_multiplier_ = 1.0f;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    bus_state_t mem_tick(bus_state_t pins);
+    void        configure_bus_memory_map();   // Initial banking setup after apply()
+    void        update_bank_state();          // Remap pages on PIO B / port write
     bus_state_t io_tick(bus_state_t pins);
-    void update_bank_state();        // Decode PIO B + $84/$86 → memory mapping
-    bool load_roms();
+    bool        load_roms();
 };
