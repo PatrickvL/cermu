@@ -1,15 +1,19 @@
 #pragma once
 
 #include "../commodore_system.h"
-#include "pet_bus.h"
 #include "pet_constants.h"
+#include "../../../core/chip_manifest.hpp"
 #include "../../../chip/cpu/fam65xx/mos6502.h"
 #include "../../../chip/io/pia6820.h"
 #include "../../../chip/io/mos6522.h"
 #include "../../../chip/video/mc6845/mc6845.h"
+#include "../../../chip/memory/memory_chip.h"
 
 #include <cstdint>
 #include <string>
+
+#define PET_BUS_DEFAULT_STATE \
+    (MOS6502::default_bus_state() | BUS_DATA_MASK)
 
 /**
  * Commodore PET System Implementation
@@ -40,6 +44,38 @@
  * $E900–$EFFF  ~2KB  Unmapped (expansion I/O)
  * $F000–$FFFF  4KB   KERNAL ROM
  */
+
+// ============================================================================
+// PET chip manifest — declarative memory layout
+// ============================================================================
+//
+// Memory-mapped chips:
+//   Slot 0: Main RAM       — 32 KB at $0000
+//   Slot 1: Screen RAM     —  1 KB at $8000  (mirrored at $8400 post-apply)
+//   Slot 2: BASIC ROM low  —  4 KB at $B000  (901465-23)
+//   Slot 3: BASIC ROM mid  —  4 KB at $C000  (901465-20)
+//   Slot 4: BASIC ROM high —  4 KB at $D000  (901465-21)
+//   Slot 5: Editor ROM     —  2 KB at $E000
+//   Slot 6: Kernal ROM     —  4 KB at $F000
+//
+// I/O at $E800–$E8FF handled separately (PIA1, PIA2, VIA, CRTC).
+// Character ROM is NOT bus-mapped.
+//
+inline constexpr auto kPETChips = make_chip_manifest(
+    Slot<RAMChip>{0x0000, 32768},        // Slot 0: Main RAM 32 KB
+    Slot<RAMChip>{0x8000,  1024},        // Slot 1: Screen RAM 1 KB
+    Slot<ROMChip>{0xB000,  4096},        // Slot 2: BASIC ROM $B000
+    Slot<ROMChip>{0xC000,  4096},        // Slot 3: BASIC ROM $C000
+    Slot<ROMChip>{0xD000,  4096},        // Slot 4: BASIC ROM $D000
+    Slot<ROMChip>{0xE000,  2048},        // Slot 5: Editor ROM
+    Slot<ROMChip>{0xF000,  4096}         // Slot 6: Kernal ROM
+);
+
+struct PETBusTraits {
+    static constexpr const auto& kManifest = kPETChips;
+    using Spec = ManifestBusSpec<kPETChips, 16, 8>;
+};
+
 class PETSystem : public CommodoreSystem {
 public:
     PETSystem();
@@ -77,10 +113,21 @@ public:
     void set_audio_sample_rate(int sample_rate_hz) override;
 
 private:
-    pet_bus_t bus_;
+    // ── Bus ──────────────────────────────────────────────────────────────
+    using Bus    = MemoryBus<PETBusTraits::Spec>;
+    using BusMem = BusMemory<PETBusTraits::Spec>;
+    Bus    bus_;
+    BusMem bus_mem_{kPETChips};
+    bus_state_t pins_ = PET_BUS_DEFAULT_STATE;
 
-    // Unified 64KB memory buffer — flat, no banking
-    uint8_t* memory_ = nullptr;
+    // ── Memory chips (owned by registered_chips_, managed via BusMemory) ─
+    RAMChip* main_ram_chip_      = nullptr;  // 32 KB main RAM
+    RAMChip* screen_ram_chip_    = nullptr;  // 1 KB screen RAM
+    ROMChip* basic_rom_b_chip_   = nullptr;  // 4 KB BASIC $B000
+    ROMChip* basic_rom_c_chip_   = nullptr;  // 4 KB BASIC $C000
+    ROMChip* basic_rom_d_chip_   = nullptr;  // 4 KB BASIC $D000
+    ROMChip* editor_rom_chip_    = nullptr;  // 2 KB Editor ROM
+    ROMChip* kernal_rom_chip_    = nullptr;  // 4 KB Kernal ROM
 
     // Character ROM (loaded separately, not mapped directly in address space for display)
     uint8_t char_rom_[4096] = {};
@@ -109,13 +156,17 @@ private:
     bool is_basic_ready() const override;
     commodore_load_context_t build_load_context() override;
     void inject_keys(const char* str) override;
-    bool is_system_initialized() const override { return memory_ != nullptr && cpu_ != nullptr; }
+    bool is_system_initialized() const override { return main_ram_chip_ != nullptr && cpu_ != nullptr; }
+
+    // Static callbacks for CommodoreSystem load context
+    static uint8_t load_mem_read(void* ctx, uint16_t addr);
+    static void    load_mem_write(void* ctx, uint16_t addr, uint8_t val);
 
     // ROM loading
     bool load_roms();
 
-    // Memory access for CPU
-    bus_state_t mem_tick(bus_state_t s);
+    // Configure memory map (screen RAM mirror, etc.)
+    void configure_memory_map();
 
     // I/O dispatch ($E800-$E8FF)
     uint8_t io_read(uint16_t addr);
@@ -137,7 +188,4 @@ private:
 
     // Keyboard row select state (written by PIA1 Port A output)
     uint8_t keyboard_row_select_ = 0;
-
-    /// Register all PET chips into registered_chips_ for the Hardware menu.
-    void register_pet_chips();
 };
