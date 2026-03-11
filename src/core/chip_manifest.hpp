@@ -72,8 +72,8 @@
 //
 
 struct ChipSlot {
-    size_t   size_bytes = 0;
     uint32_t base_addr  = 0;
+    size_t   size_bytes = 0;
     uint32_t addr_mask  = 0;
 
     // Page count for a given page size (size_bytes >> page_bits).
@@ -92,8 +92,8 @@ struct ChipSlot {
 // (e.g. auto-calling MemoryChip::bind()) but is NOT stored in the manifest.
 template<typename T>
 struct Slot {
-    size_t   size_bytes = 0;
     uint32_t base_addr  = 0;
+    size_t   size_bytes = 0;
     uint32_t addr_mask  = 0;
 };
 
@@ -120,10 +120,10 @@ struct Slot {
 // Example — Apple 1:
 //
 //   inline constexpr auto kApple1Chips = make_chip_manifest(
-//       Slot<MemoryChip>{65536, 0x0000},        // RAM: 64 KB at $0000
-//       Slot<MemoryChip>{  256, 0xFF00},        // Monitor ROM: 256 bytes at $FF00
-//       Slot<MemoryChip>{ 4096, 0xE000},        // BASIC ROM: 4 KB at $E000
-//       Slot<pia6820_t> {    0, 0xD010, 0xFFFC} // PIA: MMIO-only, 4-byte window
+//       Slot<MemoryChip>{0x0000, 65536},        // RAM: 64 KB at $0000
+//       Slot<MemoryChip>{0xFF00,   256},        // Monitor ROM: 256 bytes at $FF00
+//       Slot<MemoryChip>{0xE000,  4096},        // BASIC ROM: 4 KB at $E000
+//       Slot<pia6820_t> {0xD010,     0, 0xFFFC} // PIA: MMIO-only, 4-byte window
 //   );
 //
 //   // With PageBits = 8 (256-byte pages):
@@ -244,7 +244,7 @@ struct ChipManifest {
     // Use with the variadic make_chip_manifest() overload:
     //
     //   inline constexpr auto kChips = make_chip_manifest(
-    //       Slot<MemoryChip>{2, 0x0000}, ...
+    //       Slot<MemoryChip>{0x0000, 2}, ...
     //   ).with_dynamic_pool(256);
     //
     [[nodiscard]] constexpr ChipManifest with_dynamic_pool(size_t pages) const noexcept {
@@ -263,9 +263,9 @@ struct ChipManifest {
 // self-documenting declarations:
 //
 //   inline constexpr auto kChips = make_chip_manifest(
-//       Slot<MemoryChip>{65536, 0x0000},
-//       Slot<MemoryChip>{  256, 0xFF00},
-//       Slot<pia6820_t> {    0, 0xD010, 0xFFFC}
+//       Slot<MemoryChip>{0x0000, 65536},
+//       Slot<MemoryChip>{0xFF00,   256},
+//       Slot<pia6820_t> {0xD010,     0, 0xFFFC}
 //   );
 //
 // Types are visible in the source but stripped at compile time — the result
@@ -279,7 +279,7 @@ make_chip_manifest(Slot<Chips>... slots) noexcept
     ChipManifest<sizeof...(Chips)> manifest{};
     size_t i = 0;
     ((assert(slots.size_bytes == 0 || (slots.size_bytes & (slots.size_bytes - 1)) == 0),
-      manifest.chips[i++] = ChipSlot{slots.size_bytes, slots.base_addr, slots.addr_mask}), ...);
+      manifest.chips[i++] = ChipSlot{slots.base_addr, slots.size_bytes, slots.addr_mask}), ...);
     return manifest;
 }
 
@@ -806,10 +806,10 @@ private:
 // ── Apple 1 (minimal system) ──────────────────────────────────────────────────
 //
 //  inline constexpr auto kApple1Chips = make_chip_manifest(
-//      Slot<MemoryChip>{65536, 0x0000},        // RAM: 64 KB
-//      Slot<MemoryChip>{  256, 0xFF00},        // Monitor ROM: 256 bytes at $FF00
-//      Slot<MemoryChip>{ 4096, 0xE000},        // BASIC ROM: 4 KB at $E000
-//      Slot<pia6820_t> {    0, 0xD010, 0xFFFC} // PIA: MMIO-only, 4-byte window
+//      Slot<MemoryChip>{0x0000, 65536},        // RAM: 64 KB
+//      Slot<MemoryChip>{0xFF00,   256},        // Monitor ROM: 256 bytes at $FF00
+//      Slot<MemoryChip>{0xE000,  4096},        // BASIC ROM: 4 KB at $E000
+//      Slot<pia6820_t> {0xD010,     0, 0xFFFC} // PIA: MMIO-only, 4-byte window
 //  );
 //
 //  // BusSpec auto-derived: MaxChipId=272, 1 MMIO handler, 1 MaskedSubTable
@@ -825,12 +825,12 @@ private:
 // ── C64 (complex system with indexed sub-table) ──────────────────────────────
 //
 //  inline constexpr auto kC64Chips = make_chip_manifest(
-//      Slot<MemoryChip>{ 4096, 0x8000},       // ROML:    4 KB at $8000
-//      Slot<MemoryChip>{ 4096, 0xA000},       // ROMH:    4 KB at $A000
-//      Slot<MemoryChip>{ 8192, 0xE000},       // KERNAL:  8 KB at $E000
-//      Slot<MemoryChip>{ 8192, 0xA000},       // BASIC:   8 KB at $A000
-//      Slot<MemoryChip>{ 8192, 0xD000},       // CHARROM: 8 KB (VIC-II only)
-//      Slot<MemoryChip>{65536, 0x0000}        // RAM:    64 KB at $0000
+//      Slot<MemoryChip>{0x8000,  4096},       // ROML:    4 KB at $8000
+//      Slot<MemoryChip>{0xA000,  4096},       // ROMH:    4 KB at $A000
+//      Slot<MemoryChip>{0xE000,  8192},       // KERNAL:  8 KB at $E000
+//      Slot<MemoryChip>{0xA000,  8192},       // BASIC:   8 KB at $A000
+//      Slot<MemoryChip>{0xD000,  8192},       // CHARROM: 8 KB (VIC-II only)
+//      Slot<MemoryChip>{0x0000, 65536}        // RAM:    64 KB at $0000
 //  );
 //
 //  // C64 uses a hand-written BusSpec due to indexed sub-tables for the I/O
@@ -840,9 +840,9 @@ private:
 // ── NES cartridge hot-swap ────────────────────────────────────────────────────
 //
 //  inline constexpr auto kNesChips = make_chip_manifest(
-//      Slot<MemoryChip>{ 2048, 0x0000},       // WRAM:  2 KB at $0000
-//      Slot<MemoryChip>{ 2048, 0x2000},       // CIRAM: 2 KB nametable RAM
-//      Slot<MemoryChip>{ 8192, 0x6000}        // SRAM:  8 KB battery-backed RAM
+//      Slot<MemoryChip>{0x0000, 2048},       // WRAM:  2 KB at $0000
+//      Slot<MemoryChip>{0x2000, 2048},       // CIRAM: 2 KB nametable RAM
+//      Slot<MemoryChip>{0x6000, 8192}        // SRAM:  8 KB battery-backed RAM
 //  ).with_dynamic_pool(256);
 //
 //  // Dynamic cartridge insertion at runtime:
