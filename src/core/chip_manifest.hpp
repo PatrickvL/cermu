@@ -9,7 +9,7 @@
 //   ChipSlot          — one memory-mapped region (size, address, mask)
 //
 //   ChipManifest<N>   — compile-time array of N slots.  Assigns chip ids as
-//                       prefix sums of num_pages.  Provides constexpr queries
+//                       prefix sums of page counts.  Provides constexpr queries
 //                       for auto-deriving a BusSpec (MMIO count, sub-tables).
 //
 //   ManifestBusSpec   — auto-derived BusSpec from a constexpr manifest.
@@ -63,7 +63,8 @@
 // Properties like name, read_only, and MMIO capability are derived from the
 // ChipBase subclass bound at runtime.
 //
-//   num_pages  — buffer pages in the unified buffer (0 = MMIO-only chip)
+//   size_bytes — chip buffer size in bytes; must be 0 or a power of two.
+//                0 means MMIO-only (no buffer allocation).
 //   base_addr  — default base address in the bus address space
 //   addr_mask  — sub-page address decode mask (0 = full-page decode)
 //                When non-zero, (addr & addr_mask) == (base_addr & addr_mask)
@@ -71,9 +72,19 @@
 //
 
 struct ChipSlot {
-    size_t   num_pages  = 0;
+    size_t   size_bytes = 0;
     uint32_t base_addr  = 0;
     uint32_t addr_mask  = 0;
+
+    // Page count for a given page size (size_bytes >> page_bits).
+    [[nodiscard]] constexpr size_t pages(size_t page_bits) const noexcept {
+        return size_bytes >> page_bits;
+    }
+
+    // True when the chip has no buffer (MMIO-only).
+    [[nodiscard]] constexpr bool is_mmio_only() const noexcept {
+        return size_bytes == 0;
+    }
 };
 
 // Typed slot wrapper — carries a chip type for expressive manifest declarations.
@@ -81,9 +92,9 @@ struct ChipSlot {
 // (e.g. auto-calling MemoryChip::bind()) but is NOT stored in the manifest.
 template<typename T>
 struct Slot {
-    size_t   num_pages = 0;
-    uint32_t base_addr = 0;
-    uint32_t addr_mask = 0;
+    size_t   size_bytes = 0;
+    uint32_t base_addr  = 0;
+    uint32_t addr_mask  = 0;
 };
 
 
@@ -91,13 +102,13 @@ struct Slot {
 // §2  ChipManifest<N> — compile-time chip-id assignment
 // =============================================================================
 //
-// Chip ids are assigned as the prefix sum of num_pages across the array.
+// Chip ids are assigned as the prefix sum of page counts across the array.
 // A chip of M pages occupies ids [base_id, base_id + M - 1].
 //
 // The hot-path formula for a chip_id → buffer offset is:
 //   offset = (chip_id << PageBits) | page_local_offset
 // which requires that the first page of chip K sits at the page-granular
-// position sum(chips[0..K-1].num_pages) in the unified buffer — exactly
+// position sum(chips[0..K-1].pages()) in the unified buffer — exactly
 // what this assignment guarantees.
 //
 // An optional dynamic pool of num_dynamic_pages pages is appended at the end
@@ -109,15 +120,16 @@ struct Slot {
 // Example — Apple 1:
 //
 //   inline constexpr auto kApple1Chips = make_chip_manifest(
-//       Slot<MemoryChip>{256, 0x0000},          // RAM: 256 pages at $0000
-//       Slot<MemoryChip>{  1, 0xFF00},          // Monitor ROM: 1 page at $FF00
-//       Slot<MemoryChip>{ 16, 0xE000},          // BASIC ROM: 16 pages at $E000
-//       Slot<pia6820_t> {  0, 0xD010, 0xFFFC}   // PIA: MMIO-only, 4-byte window
+//       Slot<MemoryChip>{65536, 0x0000},        // RAM: 64 KB at $0000
+//       Slot<MemoryChip>{  256, 0xFF00},        // Monitor ROM: 256 bytes at $FF00
+//       Slot<MemoryChip>{ 4096, 0xE000},        // BASIC ROM: 4 KB at $E000
+//       Slot<pia6820_t> {    0, 0xD010, 0xFFFC} // PIA: MMIO-only, 4-byte window
 //   );
 //
-//   constexpr auto kRamId      = kApple1Chips.base_id(0);   // = 0
-//   constexpr auto kMonitorId  = kApple1Chips.base_id(1);   // = 256
-//   constexpr auto kBasicId    = kApple1Chips.base_id(2);   // = 257
+//   // With PageBits = 8 (256-byte pages):
+//   constexpr auto kRamId      = kApple1Chips.base_id(0, 8);   // = 0
+//   constexpr auto kMonitorId  = kApple1Chips.base_id(1, 8);   // = 256
+//   constexpr auto kBasicId    = kApple1Chips.base_id(2, 8);   // = 257
 //   // PIA has no buffer pages → no chip id assignment
 //
 
@@ -127,39 +139,44 @@ struct ChipManifest {
     size_t num_dynamic_pages = 0;  // reserved for runtime-added chips
 
     // ── Chip-id assignment ─────────────────────────────────────────────────
+    //
+    // All page-count-dependent queries take page_bits so that manifests
+    // declared with size_bytes remain page-size-independent.
+    //
 
     // Base chip id of chip at index chip_index (0-based).
-    [[nodiscard]] constexpr size_t base_id(size_t chip_index) const noexcept {
+    [[nodiscard]] constexpr size_t base_id(size_t chip_index, size_t page_bits) const noexcept {
         size_t id = 0;
         for (size_t i = 0; i < chip_index; ++i)
-            id += chips[i].num_pages;
+            id += chips[i].pages(page_bits);
         return id;
     }
 
     // Total pages occupied by all static chips.
-    [[nodiscard]] constexpr size_t static_pages() const noexcept {
-        return base_id(N);
+    [[nodiscard]] constexpr size_t static_pages(size_t page_bits) const noexcept {
+        return base_id(N, page_bits);
     }
 
     // First chip id in the dynamic pool (= one past the last static chip id).
-    [[nodiscard]] constexpr size_t dynamic_base_id() const noexcept {
-        return static_pages();
+    [[nodiscard]] constexpr size_t dynamic_base_id(size_t page_bits) const noexcept {
+        return static_pages(page_bits);
     }
 
     // Total pages in the unified buffer (static + dynamic pool).
-    [[nodiscard]] constexpr size_t total_pages() const noexcept {
-        return static_pages() + num_dynamic_pages;
+    [[nodiscard]] constexpr size_t total_pages(size_t page_bits) const noexcept {
+        return static_pages(page_bits) + num_dynamic_pages;
     }
 
     // Highest chip id that will ever appear in a page table.
     // Set MaxChipId in your BusSpec to this value.
-    [[nodiscard]] constexpr size_t max_chip_id() const noexcept {
-        return total_pages() > 0 ? total_pages() - 1 : 0;
+    [[nodiscard]] constexpr size_t max_chip_id(size_t page_bits) const noexcept {
+        const size_t tp = total_pages(page_bits);
+        return tp > 0 ? tp - 1 : 0;
     }
 
-    // Buffer size in bytes for a given page size (= 2^PageBits).
-    [[nodiscard]] constexpr size_t buffer_bytes(size_t page_size) const noexcept {
-        return total_pages() * page_size;
+    // Buffer size in bytes for a given page size.
+    [[nodiscard]] constexpr size_t buffer_bytes(size_t page_bits) const noexcept {
+        return total_pages(page_bits) << page_bits;
     }
 
     // Convenience: number of static chips.
@@ -167,12 +184,12 @@ struct ChipManifest {
 
     // ── BusSpec derivation helpers ─────────────────────────────────────────
 
-    // Count of MMIO-only slots (num_pages == 0).
+    // Count of MMIO-only slots (size_bytes == 0).
     // These will need MmioHandler registration during apply().
     [[nodiscard]] constexpr size_t mmio_slot_count() const noexcept {
         size_t count = 0;
         for (size_t i = 0; i < N; ++i) {
-            if (chips[i].num_pages == 0)
+            if (chips[i].is_mmio_only())
                 ++count;
         }
         return count;
@@ -185,12 +202,12 @@ struct ChipManifest {
         const size_t page_size = size_t(1) << page_bits;
         size_t count = 0;
         for (size_t i = 0; i < N; ++i) {
-            if (chips[i].num_pages == 0 && chips[i].addr_mask != 0) {
+            if (chips[i].is_mmio_only() && chips[i].addr_mask != 0) {
                 const size_t page = chips[i].base_addr / page_size;
                 // Count only the first slot on each unique page
                 bool unique = true;
                 for (size_t j = 0; j < i; ++j) {
-                    if (chips[j].num_pages == 0 && chips[j].addr_mask != 0 &&
+                    if (chips[j].is_mmio_only() && chips[j].addr_mask != 0 &&
                         chips[j].base_addr / page_size == page) {
                         unique = false;
                         break;
@@ -207,11 +224,11 @@ struct ChipManifest {
         const size_t page_size = size_t(1) << page_bits;
         size_t max_count = 0;
         for (size_t i = 0; i < N; ++i) {
-            if (chips[i].num_pages == 0 && chips[i].addr_mask != 0) {
+            if (chips[i].is_mmio_only() && chips[i].addr_mask != 0) {
                 const size_t page = chips[i].base_addr / page_size;
                 size_t count = 0;
                 for (size_t j = 0; j < N; ++j) {
-                    if (chips[j].num_pages == 0 && chips[j].addr_mask != 0 &&
+                    if (chips[j].is_mmio_only() && chips[j].addr_mask != 0 &&
                         chips[j].base_addr / page_size == page)
                         ++count;
                 }
@@ -239,46 +256,21 @@ struct ChipManifest {
 
 
 // =============================================================================
-// §2.1  make_chip_manifest — factories
+// §2.1  make_chip_manifest — variadic factory
 // =============================================================================
 //
-// Array overload (untyped):
-//   inline constexpr auto kChips = make_chip_manifest<4>({
-//       {256, 0x0000}, {1, 0xFF00}, {16, 0xE000}, {0, 0xD010, 0xFFFC},
-//   });
-//
-// Variadic overload (typed — preferred):
-//   inline constexpr auto kChips = make_chip_manifest(
-//       Slot<MemoryChip>{256, 0x0000},
-//       Slot<MemoryChip>{  1, 0xFF00},
-//       Slot<pia6820_t> {  0, 0xD010, 0xFFFC}
-//   );
-//
-
-template<size_t N>
-[[nodiscard]] constexpr ChipManifest<N>
-make_chip_manifest(const ChipSlot (&slots)[N],
-                   size_t num_dynamic_pages = 0) noexcept
-{
-    ChipManifest<N> manifest{};
-    for (size_t i = 0; i < N; ++i)
-        manifest.chips[i] = slots[i];
-    manifest.num_dynamic_pages = num_dynamic_pages;
-    return manifest;
-}
-
-// Variadic overload with typed slots — each entry carries its chip type
-// as a template parameter for self-documenting declarations:
+// Each entry carries its chip type as a template parameter for
+// self-documenting declarations:
 //
 //   inline constexpr auto kChips = make_chip_manifest(
-//       Slot<MemoryChip>{256, 0x0000},
-//       Slot<MemoryChip>{  1, 0xFF00},
-//       Slot<pia6820_t> {  0, 0xD010, 0xFFFC}
+//       Slot<MemoryChip>{65536, 0x0000},
+//       Slot<MemoryChip>{  256, 0xFF00},
+//       Slot<pia6820_t> {    0, 0xD010, 0xFFFC}
 //   );
 //
 // Types are visible in the source but stripped at compile time — the result
-// is a plain ChipManifest<N>.  Chain .with_dynamic_pool(n) to reserve a
-// dynamic chip pool.
+// is a plain ChipManifest<N>.  size_bytes must be 0 or a power of two.
+// Chain .with_dynamic_pool(n) to reserve a dynamic chip pool.
 
 template<typename... Chips>
 [[nodiscard]] constexpr ChipManifest<sizeof...(Chips)>
@@ -286,7 +278,8 @@ make_chip_manifest(Slot<Chips>... slots) noexcept
 {
     ChipManifest<sizeof...(Chips)> manifest{};
     size_t i = 0;
-    ((manifest.chips[i++] = ChipSlot{slots.num_pages, slots.base_addr, slots.addr_mask}), ...);
+    ((assert(slots.size_bytes == 0 || (slots.size_bytes & (slots.size_bytes - 1)) == 0),
+      manifest.chips[i++] = ChipSlot{slots.size_bytes, slots.base_addr, slots.addr_mask}), ...);
     return manifest;
 }
 
@@ -321,7 +314,7 @@ struct ManifestBusSpec {
 
     // Chip id range — derived from manifest prefix-sum layout.
     // MaxWriteChipId = MaxChipId (conservative; is_read_only() known at runtime only).
-    static constexpr size_t MaxChipId      = Manifest.max_chip_id();
+    static constexpr size_t MaxChipId      = Manifest.max_chip_id(PgBits);
     static constexpr size_t MaxWriteChipId = MaxChipId;
 
     // MMIO — derived from manifest slot analysis.
@@ -385,7 +378,7 @@ public:
 
     template<size_t N>
     explicit BusMemory(const ChipManifest<N>& manifest) {
-        const size_t total = manifest.total_pages();
+        const size_t total = manifest.total_pages(kPageBits);
         buffer_.assign(total * kPageSize, uint8_t(0xFF));  // default: 0xFF = pulled-high
 
         slots_.reserve(N);
@@ -393,8 +386,8 @@ public:
             const ChipSlot& s = manifest.chips[i];
             slots_.push_back({
                 {},                             // name: set during bind_chip
-                ChipId(manifest.base_id(i)),
-                s.num_pages,
+                ChipId(manifest.base_id(i, kPageBits)),
+                s.pages(kPageBits),
                 s.base_addr,
                 s.addr_mask,
                 false,                          // read_only: set during bind_chip
@@ -407,7 +400,7 @@ public:
 
         // Initialise dynamic allocator
         if (manifest.num_dynamic_pages > 0) {
-            dynamic_base_ = manifest.dynamic_base_id();
+            dynamic_base_ = manifest.dynamic_base_id(kPageBits);
             free_list_.push_back({dynamic_base_, manifest.num_dynamic_pages});
         }
     }
@@ -806,10 +799,10 @@ private:
 // ── Apple 1 (minimal system) ──────────────────────────────────────────────────
 //
 //  inline constexpr auto kApple1Chips = make_chip_manifest(
-//      Slot<MemoryChip>{256, 0x0000},          // RAM: 256 pages (64 KB max)
-//      Slot<MemoryChip>{  1, 0xFF00},          // Monitor ROM: 1 page at $FF00
-//      Slot<MemoryChip>{ 16, 0xE000},          // BASIC ROM: 16 pages at $E000
-//      Slot<pia6820_t> {  0, 0xD010, 0xFFFC}   // PIA: MMIO-only, 4-byte window
+//      Slot<MemoryChip>{65536, 0x0000},        // RAM: 64 KB
+//      Slot<MemoryChip>{  256, 0xFF00},        // Monitor ROM: 256 bytes at $FF00
+//      Slot<MemoryChip>{ 4096, 0xE000},        // BASIC ROM: 4 KB at $E000
+//      Slot<pia6820_t> {    0, 0xD010, 0xFFFC} // PIA: MMIO-only, 4-byte window
 //  );
 //
 //  // BusSpec auto-derived: MaxChipId=272, 1 MMIO handler, 1 MaskedSubTable
@@ -825,12 +818,12 @@ private:
 // ── C64 (complex system with indexed sub-table) ──────────────────────────────
 //
 //  inline constexpr auto kC64Chips = make_chip_manifest(
-//      Slot<MemoryChip>{ 1, 0x8000},          // ROML:    4 KB at $8000
-//      Slot<MemoryChip>{ 1, 0xA000},          // ROMH:    4 KB at $A000
-//      Slot<MemoryChip>{ 2, 0xE000},          // KERNAL:  8 KB at $E000
-//      Slot<MemoryChip>{ 2, 0xA000},          // BASIC:   8 KB at $A000
-//      Slot<MemoryChip>{ 2, 0xD000},          // CHARROM: 8 KB (VIC-II only)
-//      Slot<MemoryChip>{16, 0x0000}           // RAM:    64 KB at $0000
+//      Slot<MemoryChip>{ 4096, 0x8000},       // ROML:    4 KB at $8000
+//      Slot<MemoryChip>{ 4096, 0xA000},       // ROMH:    4 KB at $A000
+//      Slot<MemoryChip>{ 8192, 0xE000},       // KERNAL:  8 KB at $E000
+//      Slot<MemoryChip>{ 8192, 0xA000},       // BASIC:   8 KB at $A000
+//      Slot<MemoryChip>{ 8192, 0xD000},       // CHARROM: 8 KB (VIC-II only)
+//      Slot<MemoryChip>{65536, 0x0000}        // RAM:    64 KB at $0000
 //  );
 //
 //  // C64 uses a hand-written BusSpec due to indexed sub-tables for the I/O
@@ -840,9 +833,9 @@ private:
 // ── NES cartridge hot-swap ────────────────────────────────────────────────────
 //
 //  inline constexpr auto kNesChips = make_chip_manifest(
-//      Slot<MemoryChip>{ 2, 0x0000},          // WRAM:  2 KB at $0000
-//      Slot<MemoryChip>{ 2, 0x2000},          // CIRAM: 2 KB nametable RAM
-//      Slot<MemoryChip>{ 8, 0x6000}           // SRAM:  8 KB battery-backed RAM
+//      Slot<MemoryChip>{ 2048, 0x0000},       // WRAM:  2 KB at $0000
+//      Slot<MemoryChip>{ 2048, 0x2000},       // CIRAM: 2 KB nametable RAM
+//      Slot<MemoryChip>{ 8192, 0x6000}        // SRAM:  8 KB battery-backed RAM
 //  ).with_dynamic_pool(256);
 //
 //  // Dynamic cartridge insertion at runtime:
