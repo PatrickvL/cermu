@@ -85,3 +85,22 @@ typedef uint64_t bus_state_t;
 /* Convenience: bitmix within the DATA field (bits 7-0). */
 #define BUS_BITMIX_DATA(state, new_val, data_mask) \
     BUS_BITMIX(state, new_val, data_mask, BUS_DATA_MASK, BUS_DATA_SHIFT)
+
+/* ── Data bus floating ────────────────────────────────────────────────────
+   For systems with TTL/NMOS buses (NES, etc.) where undriven data lines
+   float toward a deterministic idle level.  Call once per bus cycle before
+   the address-decode / memory-tick to model impedance pull-up or pull-down.
+
+   BUS_FLOAT_DATA_HIGH — all 8 data bits → 1  (NMOS pull-up default)
+   BUS_FLOAT_DATA_LOW  — all 8 data bits → 0  (CMOS pull-down default)
+
+   For gradual decay, apply an LFSR mask to float a subset of bits per tick:
+     BUS_FLOAT_DATA_DECAY_HIGH(state, mask) — set only bits where mask = 1
+     BUS_FLOAT_DATA_DECAY_LOW (state, mask) — clear only bits where mask = 1
+   Feed the mask from a 16-bit Galois LFSR (see lfsr16_step in cermu.h) to
+   randomly select ~50% of bits each tick; repeated application floats all
+   bits to the idle level after a few cycles. */
+#define BUS_FLOAT_DATA_HIGH(state)              ((state) |=  BUS_DATA_MASK)
+#define BUS_FLOAT_DATA_LOW(state)               ((state) &= ~BUS_DATA_MASK)
+#define BUS_FLOAT_DATA_DECAY_HIGH(state, mask)  BUS_BITMIX_DATA(state, 0xFF, mask)
+#define BUS_FLOAT_DATA_DECAY_LOW(state, mask)   BUS_BITMIX_DATA(state, 0x00, mask)
