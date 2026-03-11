@@ -138,25 +138,9 @@ template<SpectrumVariant V>
 bool SpectrumSystem<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
 
-    // ── Create RAMChip wrappers ──────────────────────────────────────
-    constexpr size_t ram_bytes = Traits::ram_size_kb * 1024;
-    constexpr size_t rom_bytes = Traits::rom_count * spectrum_constants::ROM_SIZE_48K;
-
-    // RAM: power-of-2 allocation (64KB for 48K, 128KB for 128K)
-    auto ram_chip = std::make_unique<RAMChip>(
-        ChipInfo{"DRAM", "Various"},
-        (V == SpectrumVariant::ZX48K) ? 65536 : ram_bytes,
-        RAMChip::RAM, &pins_, "RAM", 0x0000);
-    ram_ = ram_chip.get();
-
-    // ROM: 16KB (48K) or 32KB (128K)
-    auto rom_chip = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Sinclair"}, rom_bytes,
-        ROMChip::ROM, &pins_, "ROM", 0x0000);
-    rom_ = rom_chip.get();
-
-    // ── Bind manifest slots, wire the bus ───────────────────────────────
-    bus_mem_.initialize(bus_, ram_, rom_);
+    // ── Create chips via factory, wire the bus ────────────────────────
+    bus_mem_.create_chips(&pins_);
+    bus_mem_.apply(bus_);
 
     // ── Configure page tables for this variant ──────────────────────────
     configure_bus_memory_map();
@@ -186,8 +170,7 @@ bool SpectrumSystem<V>::initialize() {
         register_chip(&ay_,
             "AY-3-8912 Sound", "AY-3-8912", "Sound", 0);
     }
-    register_chip(std::move(ram_chip));
-    register_chip(std::move(rom_chip));
+    register_bus_chips(bus_mem_);
 
     printf("%s: System initialized (%dKB RAM)\n", Traits::name, Traits::ram_size_kb);
     system_ready_ = true;
