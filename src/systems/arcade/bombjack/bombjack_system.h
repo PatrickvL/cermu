@@ -17,9 +17,9 @@
 #include "../../../core/chip_manifest.hpp"
 #include "../../../chip/cpu/z80/zilog_z80a.h"
 #include "../../../chip/sound/ay_3_8910.h"
-#include "../../../chip/memory/memory_chip.h"
+#include "../../../chip/memory/ram_chip.h"
+#include "../../../chip/memory/rom_chip.h"
 #include <cstdint>
-#include <vector>
 
 #define BOMBJACK_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
 
@@ -45,18 +45,31 @@
 // Graphics ROMs (char, sprite, bg) are NOT bus-mapped.
 //
 inline constexpr auto kBombJackMainChips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 32768},        // Slot 0: Program ROM 32 KB
-    Slot<RAMChip>{0x8000,  4096},        // Slot 1: Work RAM 4 KB
-    Slot<RAMChip>{0x9000,  1024},        // Slot 2: FG tilemap 1 KB
-    Slot<RAMChip>{0x9400,  1024},        // Slot 3: FG attributes 1 KB
-    Slot<RAMChip>{0x9800,   256},        // Slot 4: Sprite area 256 bytes
-    Slot<RAMChip>{0x9C00,   256}         // Slot 5: Palette RAM 256 bytes
+    Slot<ROMChip>{0x0000, 32768, 0, "Program ROM"},   // Slot 0: 32 KB
+    Slot<RAMChip>{0x8000,  4096, 0, "Work RAM"},      // Slot 1: 4 KB
+    Slot<RAMChip>{0x9000,  1024, 0, "FG Tilemap"},    // Slot 2: 1 KB
+    Slot<RAMChip>{0x9400,  1024, 0, "FG Attributes"}, // Slot 3: 1 KB
+    Slot<RAMChip>{0x9800,   256, 0, "Sprite Area"},   // Slot 4: 256 bytes
+    Slot<RAMChip>{0x9C00,   256, 0, "Palette RAM"}    // Slot 5: 256 bytes
 );
 
 inline constexpr auto kBombJackSoundChips = make_chip_manifest(
-    Slot<ROMChip>{0x0000,  8192},        // Slot 0: Sound ROM 8 KB
-    Slot<RAMChip>{0x4000,  1024}         // Slot 1: Sound RAM 1 KB
+    Slot<ROMChip>{0x0000,  8192, 0, "Sound ROM"},     // Slot 0: 8 KB
+    Slot<RAMChip>{0x4000,  1024, 0, "Sound RAM"}      // Slot 1: 1 KB
 );
+
+namespace bj_main {
+    inline constexpr size_t kProgramRom  = 0;
+    inline constexpr size_t kWorkRam     = 1;
+    inline constexpr size_t kFgTilemap   = 2;
+    inline constexpr size_t kFgAttr      = 3;
+    inline constexpr size_t kSpriteArea  = 4;
+    inline constexpr size_t kPaletteRam  = 5;
+}
+namespace bj_sound {
+    inline constexpr size_t kSoundRom = 0;
+    inline constexpr size_t kSoundRam = 1;
+}
 
 // ── Bus traits — one per CPU ─────────────────────────────────────────────
 
@@ -111,17 +124,8 @@ private:
     // ── Sound ────────────────────────────────────────────────────────────
     ay_3_8910_t ay_[3];                  // 3× AY-3-8910 PSG
 
-    // ── Main CPU memory — owned by registered_chips_, managed via BusMemory
-    ROMChip* main_rom_chip_      = nullptr;  // 32 KB program ROM
-    RAMChip* main_ram_chip_      = nullptr;  // 4 KB work RAM
-    RAMChip* fg_tilemap_chip_    = nullptr;  // 1 KB foreground tilemap
-    RAMChip* fg_attr_chip_       = nullptr;  // 1 KB foreground attributes
-    RAMChip* sprite_area_chip_   = nullptr;  // 256 bytes (sprite RAM at offset $20)
-    RAMChip* palette_ram_chip_   = nullptr;  // 256 bytes palette RAM
-
-    // ── Sound CPU memory — owned by registered_chips_, managed via BusMemory
-    ROMChip* sound_rom_chip_     = nullptr;  // 8 KB sound ROM
-    RAMChip* sound_ram_chip_     = nullptr;  // 1 KB sound RAM
+    // Memory chips are auto-created by BusMemory::create_chips() and accessed
+    // via bus_mem_.chip_as<T>(slot_index).  No manual pointers needed.
 
     // ── Graphics ROM — NOT bus-mapped (display rendering only) ───────────
     std::vector<uint8_t> char_rom_;      // Character/tile ROM

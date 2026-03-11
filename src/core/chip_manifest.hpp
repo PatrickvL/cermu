@@ -659,7 +659,11 @@ public:
             if (!rec.factory) continue;    // No factory (must be bound manually)
 
             uint8_t* buf = rec.num_pages > 0 ? chip_buffer(rec.base_id) : nullptr;
-            ChipBase* chip = rec.factory(rec, system_bus, buf);
+
+            // Reconstruct a ChipSlot from the SlotRecord for the factory call.
+            ChipSlot slot{rec.base_addr, rec.num_pages * kPageSize,
+                          rec.addr_mask, rec.factory, rec.label};
+            ChipBase* chip = rec.factory(slot, system_bus, buf);
 
             // Apply placement metadata from the manifest slot.
             if (rec.label) chip->set_short_name(rec.label);
