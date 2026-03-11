@@ -449,12 +449,19 @@ public:
         if constexpr (Bus::kHasMaskedSub) bus.reset_masked_subs(viewer_id);
 
         // ── Phase 1: Map buffer chips ─────────────────────────────────────
+        //
+        // Clip num_pages to the address space so that bank-switching pools
+        // (buffer larger than the visible window) don't overflow the page
+        // table.  The system's configure_bus_memory_map() remaps banks later.
+        //
+        static constexpr size_t kNumPages = Bus::kNumPages;
         for (const auto& slot : slots_) {
             if (slot.num_pages == 0 || slot.dynamic) continue;
             const size_t first_page = slot.base_addr >> kPageBits;
-            bus.fill_read_pages(viewer_id, first_page, slot.num_pages, slot.base_id);
+            const size_t mappable   = std::min(slot.num_pages, kNumPages - first_page);
+            bus.fill_read_pages(viewer_id, first_page, mappable, slot.base_id);
             if (!slot.read_only) {
-                bus.fill_write_pages(viewer_id, first_page, slot.num_pages,
+                bus.fill_write_pages(viewer_id, first_page, mappable,
                                      WriteChipId(slot.base_id));
             }
         }

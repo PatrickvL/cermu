@@ -2,16 +2,43 @@
 
 #include "../../core/emulated_system.h"
 #include "../../core/system_lines.h"
+#include "../../core/chip_manifest.hpp"
 #include "../../chip/cpu/fam65xx/mos6502.h"
 #include "../../chip/io/mos6522.h"
 #include "../../chip/video/mc6845/mc6845.h"
 #include "../../chip/sound/sn76489/sn76489.h"
 #include "../../chip/memory/memory_chip.h"
+#include "bbc_micro_constants.h"
 #include <cstdint>
 #include <memory>
 
 // BBC Micro bus is derived from 6502 — shares address, data, and control signals.
 #define BBC_BUS_DEFAULT_STATE (MOS6502::default_bus_state())
+
+// =============================================================================
+// BBC Micro chip manifest — declarative memory layout
+// =============================================================================
+//
+// Slot 0: RAM — 32 KB at $0000-$7FFF
+// Slot 1: Paged ROM pool — 256 KB at $8000 (16 × 16 KB sideways ROM slots)
+//         Only one 16 KB bank visible at $8000-$BFFF; selected by rom_select_.
+//         apply() clips to available pages; configure_bus_memory_map() remaps.
+// Slot 2: OS ROM — 16 KB at $C000-$FFFF
+//         $FC00-$FEFF (FRED/JIM/SHEILA) handled by sheila_tick(), not the bus.
+//
+inline constexpr auto kBBCMicroChips = make_chip_manifest(
+    Slot<MemoryChip>{ 32768, 0x0000},       // RAM: 32 KB
+    Slot<MemoryChip>{262144, 0x8000},       // Paged ROM pool: 256 KB (16 × 16 KB)
+    Slot<MemoryChip>{ 16384, 0xC000}        // OS ROM: 16 KB
+);
+
+namespace bbc_chips {
+    inline constexpr size_t kRamSlot       = 0;
+    inline constexpr size_t kPagedRomSlot  = 1;
+    inline constexpr size_t kOsRomSlot     = 2;
+}
+
+using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroChips, 16, 8>;
 
 /**
  * BBC Micro Model B System Implementation
@@ -80,16 +107,23 @@ private:
     mos6522_t   system_via_;        // System VIA ($FE40-$FE5F)
     mos6522_t   user_via_;          // User VIA ($FE60-$FE7F)
 
-    // Memory
-    uint8_t*    memory_ = nullptr;       // 64 KB flat address space (for fast dispatch)
-    uint8_t*    os_rom_ = nullptr;       // 16 KB MOS ROM data
-    uint8_t*    paged_rom_[16]{};        // Up to 16 sideways ROM slots (16 KB each)
-    uint8_t     rom_select_ = 0;         // Currently selected paged ROM bank
+    // ── MemoryBus — declarative setup via chip manifest ──────────────────
+    using Bus = MemoryBus<BBCMicroBusSpec>;
+    using PT  = PackingTraits<BBCMicroBusSpec>;
+    using Mem = BusMemory<BBCMicroBusSpec>;
+    Bus bus_;
+    Mem bus_mem_{kBBCMicroChips};
 
-    // Memory chips (for Hardware debug menu — own the ROM data)
-    MemoryChip* ram_chip_ = nullptr;
-    MemoryChip* os_rom_chip_ = nullptr;
-    MemoryChip* basic_rom_chip_ = nullptr;
+    // Memory chip pointers (into registered_chips_; bus_mem_ owns buffer)
+    MemoryChip* ram_chip_       = nullptr;
+    MemoryChip* paged_rom_chip_ = nullptr;   // 256 KB pool (16 × 16 KB sideways slots)
+    MemoryChip* os_rom_chip_    = nullptr;
+
+    // Convenience pointers into the unified buffer
+    uint8_t*    memory_ = nullptr;       // → ram_chip_->data() (for rendering)
+
+    // Paged ROM state
+    uint8_t     rom_select_ = 0;         // Currently selected paged ROM bank (0-15)
 
     // Video ULA state
     uint8_t     video_ula_control_ = 0;  // $FE20 control register
@@ -123,7 +157,9 @@ private:
 
     // Helper methods
     void tick_cpu();
-    bus_state_t mem_tick(bus_state_t s);
+    bus_state_t sheila_tick(bus_state_t s);   // FRED/JIM/SHEILA I/O ($FC00-$FEFF)
+    void configure_bus_memory_map();          // Post-apply() page table fixups
+    void update_paged_rom();                  // Remap $8000-$BFFF after rom_select_ change
 
     // CRTC display callbacks
     void crtc_display_char(uint16_t ma, uint8_t ra, bool cursor);

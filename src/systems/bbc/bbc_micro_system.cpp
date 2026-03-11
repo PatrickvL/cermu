@@ -1,6 +1,4 @@
 #include "bbc_micro_system.h"
-#include "bbc_micro_constants.h"
-#include "../../core/chip.h"
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
 #include "../../core/system_registry.h"
@@ -136,12 +134,8 @@ BBCMicroSystem::~BBCMicroSystem() {
     delete cpu_;    cpu_ = nullptr;
     delete crtc_;   crtc_ = nullptr;
     delete psg_;    psg_ = nullptr;
-
-    // memory_ is owned by ram_chip_ (via MemoryChip bind); don't free directly
-    // Paged ROM slots — allocated individually
-    for (auto& slot : paged_rom_) {
-        if (slot) { delete[] slot; slot = nullptr; }
-    }
+    // memory_ points into the unified buffer (owned by bus_mem_); don't free.
+    // Paged ROM data lives in the unified buffer; no manual cleanup.
 }
 
 // ============================================================================
@@ -172,33 +166,35 @@ bool BBCMicroSystem::apply_configuration() {
 bool BBCMicroSystem::initialize() {
     printf("BBC Micro: Initializing system\n");
 
-    // ---- Memory ----
-    // Allocate 64 KB flat address space for fast dispatch.
-    // RAM is $0000-$7FFF, rest mapped by mem_tick.
+    // ── Create MemoryChip wrappers ──────────────────────────────────────
     auto ram_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"DRAM", "Various"}, 65536, MemoryChip::RAM, &pins_,
-        "RAM", 0x0000);
+        ChipInfo{"DRAM", "Various"}, bbc_constants::RAM_SIZE, MemoryChip::RAM, &pins_,
+        "RAM", bbc_constants::RAM_START);
     ram_chip_ = ram_chip.get();
-    memory_ = ram_chip_->data();
 
-    // OS ROM (16 KB loaded at $C000-$FFFF in logical space)
+    // Paged ROM pool: 256 KB (16 sideways slots × 16 KB each)
+    auto paged_rom_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "Various"},
+        bbc_constants::PAGED_ROM_SIZE * 16, MemoryChip::ROM, &pins_,
+        "Paged ROM", bbc_constants::PAGED_ROM_START);
+    paged_rom_chip_ = paged_rom_chip.get();
+
     auto os_chip = std::make_unique<MemoryChip>(
         ChipInfo{"ROM", "Acorn"}, bbc_constants::OS_ROM_SIZE, MemoryChip::ROM, &pins_,
         "MOS ROM", bbc_constants::OS_ROM_START);
     os_rom_chip_ = os_chip.get();
-    os_rom_ = os_rom_chip_->data();
 
-    // BASIC ROM (loaded into sideways ROM slot 15 — the default bank)
-    auto basic_chip = std::make_unique<MemoryChip>(
-        ChipInfo{"ROM", "Acorn"}, bbc_constants::PAGED_ROM_SIZE, MemoryChip::ROM, &pins_,
-        "BASIC ROM", bbc_constants::PAGED_ROM_START);
-    basic_rom_chip_ = basic_chip.get();
+    // ── Bind manifest slots, wire the bus ───────────────────────────────
+    bus_mem_.initialize(bus_, ram_chip_, paged_rom_chip_, os_rom_chip_);
 
-    // Set up paged ROM slot 15 to point to BASIC ROM chip data
-    paged_rom_[15] = basic_rom_chip_->data();
+    // ── Convenience pointer for rendering functions ─────────────────────
+    memory_ = ram_chip_->data();
+
+    // ── Post-apply page table fixups ────────────────────────────────────
     rom_select_ = 15;
+    configure_bus_memory_map();
 
-    // Load ROMs
+    // Load ROMs (into unified buffer via chip data pointers)
     bool roms_loaded = load_roms();
     if (!roms_loaded) {
         printf("BBC Micro: Warning — ROMs not loaded, system will not boot correctly\n");
@@ -264,8 +260,8 @@ bool BBCMicroSystem::initialize() {
 
     // Register memory and ROM chips — transfer ownership
     register_chip(std::move(ram_chip));
+    register_chip(std::move(paged_rom_chip));
     register_chip(std::move(os_chip));
-    register_chip(std::move(basic_chip));
 
     printf("BBC Micro: System initialized\n");
     return true;
@@ -295,6 +291,7 @@ void BBCMicroSystem::reset() {
     // Reset state
     pins_ = BBC_BUS_DEFAULT_STATE;
     rom_select_ = 15;
+    configure_bus_memory_map();
     video_ula_control_ = 0x00;
     addressable_latch_ = 0;
     std::memset(key_matrix_, 0, sizeof(key_matrix_));
@@ -348,7 +345,14 @@ void BBCMicroSystem::tick() {
     s = cpu_->tick<MOS6502::Phase::PHI2>(s);
 
     // ---- Memory / I/O service ----
-    s = mem_tick(s);
+    {
+        uint16_t addr = BUS_GET_ADDR(s);
+        if (__builtin_expect(addr >= bbc_constants::FRED_START && addr <= bbc_constants::SHEILA_END, 0)) {
+            s = sheila_tick(s);     // FRED/JIM/SHEILA I/O ($FC00-$FEFF)
+        } else {
+            s = bus_.tick(0, s);    // Memory dispatch via MemoryBus
+        }
+    }
 
     // ---- NMI edge detection ----
     cpu_->sample_nmi_pin(s);
@@ -370,56 +374,74 @@ void BBCMicroSystem::run_frame() {
 }
 
 // ============================================================================
-// Memory / I/O Bus
+// Bus Configuration
 // ============================================================================
 
-bus_state_t BBCMicroSystem::mem_tick(bus_state_t s) {
+void BBCMicroSystem::configure_bus_memory_map() {
+    // apply() establishes the default linear map from the manifest:
+    //   $00-$7F: RAM (read+write)
+    //   $80-$BF: Paged ROM bank 0 (read) — clipped from 256 KB pool
+    //   $C0-$FF: OS ROM (read) — overrides clipped paged ROM pages
+    //
+    // We fix up: write-protect ROM regions, unmap I/O pages, select active bank.
+    bus_mem_.apply(bus_);
+
+    // Write-protect ROM regions ($80-$FF)
+    for (size_t page = 0x80; page < 0x100; ++page)
+        bus_.set_write_page(0, page, PT::kNoChipSelectedWrite);
+
+    // Unmap FRED ($FC), JIM ($FD), SHEILA ($FE) — handled by sheila_tick()
+    bus_.map_no_chip_selected(0, 0xFC, 3);
+
+    // Map currently selected paged ROM bank to $80-$BF
+    update_paged_rom();
+}
+
+void BBCMicroSystem::update_paged_rom() {
+    using ChipId = typename PT::ChipId;
+
+    constexpr size_t kPagesPerBank = bbc_constants::PAGED_ROM_SIZE / Bus::kPageSize;  // 64
+    constexpr size_t kRomPoolBase  = kBBCMicroChips.base_id(bbc_chips::kPagedRomSlot, 8);
+
+    size_t bank_offset = (rom_select_ & 0x0F) * kPagesPerBank;
+    bus_.fill_read_pages(0, 0x80, kPagesPerBank, ChipId(kRomPoolBase + bank_offset));
+}
+
+// ============================================================================
+// SHEILA / FRED / JIM I/O Dispatch ($FC00-$FEFF)
+// ============================================================================
+
+bus_state_t BBCMicroSystem::sheila_tick(bus_state_t s) {
     uint16_t addr = BUS_GET_ADDR(s);
 
+    // FRED ($FC00-$FCFF) and JIM ($FD00-$FDFF): 1 MHz bus, not implemented
+    if (addr < bbc_constants::SHEILA_START) {
+        if (BUS_GET_BIT(s, BUS_RW_BIT))
+            BUS_SET_DATA(s, 0xFF);
+        return s;
+    }
+
+    // SHEILA I/O page ($FE00-$FEFF)
     if (BUS_GET_BIT(s, BUS_RW_BIT)) {
         // ---- Read cycle ----
         uint8_t data = 0xFF;
 
-        if (addr <= bbc_constants::RAM_END) {
-            // $0000-$7FFF: RAM
-            data = memory_[addr];
+        if (addr >= bbc_constants::CRTC_BASE && addr <= bbc_constants::CRTC_END) {
+            data = crtc_->read(addr);
         }
-        else if (addr >= bbc_constants::PAGED_ROM_START && addr <= bbc_constants::PAGED_ROM_END) {
-            // $8000-$BFFF: Paged (sideways) ROM
-            uint8_t* rom = paged_rom_[rom_select_ & 0x0F];
-            if (rom) {
-                data = rom[addr - bbc_constants::PAGED_ROM_START];
-            }
+        else if (addr >= bbc_constants::SYSTEM_VIA_BASE && addr <= bbc_constants::SYSTEM_VIA_END) {
+            bus_state_t via_s = BBC_BUS_DEFAULT_STATE;
+            BUS_SET_ADDR(via_s, addr - bbc_constants::SYSTEM_VIA_BASE);
+            BUS_SET_BIT(via_s, BUS_RW_BIT);
+            via_s = system_via_.registers_read(via_s);
+            data = BUS_GET_DATA(via_s);
         }
-        else if (addr >= bbc_constants::SHEILA_START && addr <= bbc_constants::SHEILA_END) {
-            // $FE00-$FEFF: SHEILA I/O page
-            data = 0xFF;
-            if (addr >= bbc_constants::CRTC_BASE && addr <= bbc_constants::CRTC_END) {
-                data = crtc_->read(addr);
-            }
-            else if (addr >= bbc_constants::SYSTEM_VIA_BASE && addr <= bbc_constants::SYSTEM_VIA_END) {
-                bus_state_t via_s = BBC_BUS_DEFAULT_STATE;
-                BUS_SET_ADDR(via_s, addr - bbc_constants::SYSTEM_VIA_BASE);
-                BUS_SET_BIT(via_s, BUS_RW_BIT);
-                via_s = system_via_.registers_read(via_s);
-                data = BUS_GET_DATA(via_s);
-            }
-            else if (addr >= bbc_constants::USER_VIA_BASE && addr <= bbc_constants::USER_VIA_END) {
-                bus_state_t via_s = BBC_BUS_DEFAULT_STATE;
-                BUS_SET_ADDR(via_s, addr - bbc_constants::USER_VIA_BASE);
-                BUS_SET_BIT(via_s, BUS_RW_BIT);
-                via_s = user_via_.registers_read(via_s);
-                data = BUS_GET_DATA(via_s);
-            }
-            // FRED ($FC00) / JIM ($FD00) — not implemented, return $FF
-        }
-        else if (addr >= bbc_constants::FRED_START && addr <= bbc_constants::JIM_END) {
-            // $FC00-$FDFF: FRED + JIM 1 MHz bus — not implemented
-            data = 0xFF;
-        }
-        else {
-            // $C000-$FBFF, $FF00-$FFFF: OS ROM
-            data = os_rom_[addr - bbc_constants::OS_ROM_START];
+        else if (addr >= bbc_constants::USER_VIA_BASE && addr <= bbc_constants::USER_VIA_END) {
+            bus_state_t via_s = BBC_BUS_DEFAULT_STATE;
+            BUS_SET_ADDR(via_s, addr - bbc_constants::USER_VIA_BASE);
+            BUS_SET_BIT(via_s, BUS_RW_BIT);
+            via_s = user_via_.registers_read(via_s);
+            data = BUS_GET_DATA(via_s);
         }
 
         BUS_SET_DATA(s, data);
@@ -427,61 +449,51 @@ bus_state_t BBCMicroSystem::mem_tick(bus_state_t s) {
         // ---- Write cycle ----
         uint8_t data = BUS_GET_DATA(s);
 
-        if (addr <= bbc_constants::RAM_END) {
-            // $0000-$7FFF: RAM
-            memory_[addr] = data;
+        if (addr >= bbc_constants::CRTC_BASE && addr <= bbc_constants::CRTC_END) {
+            crtc_->write(addr, data);
         }
-        else if (addr >= bbc_constants::SHEILA_START && addr <= bbc_constants::SHEILA_END) {
-            // SHEILA I/O page
-            if (addr >= bbc_constants::CRTC_BASE && addr <= bbc_constants::CRTC_END) {
-                crtc_->write(addr, data);
-            }
-            else if (addr == bbc_constants::VIDEO_ULA_CONTROL) {
-                video_ula_control_ = data;
-            }
-            else if (addr == bbc_constants::VIDEO_ULA_PALETTE) {
-                // Palette register: bits 7-4 = logical color, bits 3-1 = physical color (EOR)
-                // bit 0 is complement of bit 0 of physical
-                uint8_t logical = (data >> 4) & 0x0F;
-                // Physical color: bits 3-1 directly, bit 0 is inverted
-                uint8_t physical = ((data >> 1) & 0x07) ^ 0x07;
-                video_ula_palette_[logical] = physical;
-            }
-            else if (addr == bbc_constants::ROM_SELECT_REG) {
-                rom_select_ = data & 0x0F;
-            }
-            else if (addr >= bbc_constants::SYSTEM_VIA_BASE && addr <= bbc_constants::SYSTEM_VIA_END) {
-                bus_state_t via_s = BBC_BUS_DEFAULT_STATE;
-                BUS_SET_ADDR(via_s, addr - bbc_constants::SYSTEM_VIA_BASE);
-                BUS_SET_DATA(via_s, data);
-                BUS_CLR_BIT(via_s, BUS_RW_BIT);
-                system_via_.registers_write(via_s);
+        else if (addr == bbc_constants::VIDEO_ULA_CONTROL) {
+            video_ula_control_ = data;
+        }
+        else if (addr == bbc_constants::VIDEO_ULA_PALETTE) {
+            // Palette register: bits 7-4 = logical color, bits 3-1 = physical color (EOR)
+            // bit 0 is complement of bit 0 of physical
+            uint8_t logical = (data >> 4) & 0x0F;
+            // Physical color: bits 3-1 directly, bit 0 is inverted
+            uint8_t physical = ((data >> 1) & 0x07) ^ 0x07;
+            video_ula_palette_[logical] = physical;
+        }
+        else if (addr == bbc_constants::ROM_SELECT_REG) {
+            rom_select_ = data & 0x0F;
+            update_paged_rom();
+        }
+        else if (addr >= bbc_constants::SYSTEM_VIA_BASE && addr <= bbc_constants::SYSTEM_VIA_END) {
+            bus_state_t via_s = BBC_BUS_DEFAULT_STATE;
+            BUS_SET_ADDR(via_s, addr - bbc_constants::SYSTEM_VIA_BASE);
+            BUS_SET_DATA(via_s, data);
+            BUS_CLR_BIT(via_s, BUS_RW_BIT);
+            system_via_.registers_write(via_s);
 
-                // Check if writing to Port B triggers sound chip or addressable latch
-                uint8_t via_reg = (addr - bbc_constants::SYSTEM_VIA_BASE) & 0x0F;
-                if (via_reg == 0x00) {  // ORB — Port B output
-                    // Addressable latch: PB0-PB2 = address, PB3 = data
-                    uint8_t latch_addr = data & 0x07;
-                    bool latch_data = (data >> 3) & 0x01;
-                    if (latch_data) {
-                        addressable_latch_ |= (1 << latch_addr);
-                    } else {
-                        addressable_latch_ &= ~(1 << latch_addr);
-                    }
+            // Check if writing to Port B triggers sound chip or addressable latch
+            uint8_t via_reg = (addr - bbc_constants::SYSTEM_VIA_BASE) & 0x0F;
+            if (via_reg == 0x00) {  // ORB — Port B output
+                // Addressable latch: PB0-PB2 = address, PB3 = data
+                uint8_t latch_addr = data & 0x07;
+                bool latch_data = (data >> 3) & 0x01;
+                if (latch_data) {
+                    addressable_latch_ |= (1 << latch_addr);
+                } else {
+                    addressable_latch_ &= ~(1 << latch_addr);
                 }
             }
-            else if (addr >= bbc_constants::USER_VIA_BASE && addr <= bbc_constants::USER_VIA_END) {
-                bus_state_t via_s = BBC_BUS_DEFAULT_STATE;
-                BUS_SET_ADDR(via_s, addr - bbc_constants::USER_VIA_BASE);
-                BUS_SET_DATA(via_s, data);
-                BUS_CLR_BIT(via_s, BUS_RW_BIT);
-                user_via_.registers_write(via_s);
-            }
         }
-        else if (addr >= bbc_constants::FRED_START && addr <= bbc_constants::JIM_END) {
-            // FRED + JIM — writes ignored (no hardware mapped)
+        else if (addr >= bbc_constants::USER_VIA_BASE && addr <= bbc_constants::USER_VIA_END) {
+            bus_state_t via_s = BBC_BUS_DEFAULT_STATE;
+            BUS_SET_ADDR(via_s, addr - bbc_constants::USER_VIA_BASE);
+            BUS_SET_DATA(via_s, data);
+            BUS_CLR_BIT(via_s, BUS_RW_BIT);
+            user_via_.registers_write(via_s);
         }
-        // All other writes (ROM regions) are silently ignored
     }
 
     return s;
@@ -992,7 +1004,8 @@ bool BBCMicroSystem::load_roms() {
 
     printf("BBC Micro: ROM root: %s\n", rom_root);
 
-    // OS ROM (MOS 1.20 — 16 KB)
+    // OS ROM (MOS 1.20 — 16 KB) → into unified buffer via os_rom_chip_
+    uint8_t* os_rom_data = os_rom_chip_->data();
     const char* os_files[] = {
         "os12.rom",
         "os.rom",
@@ -1004,12 +1017,14 @@ bool BBCMicroSystem::load_roms() {
     };
     bool os_ok = rom_loader_load_from_root(rom_root, os_files,
                                            bbc_constants::OS_ROM_SIZE,
-                                           os_rom_, bbc_constants::OS_ROM_SIZE);
+                                           os_rom_data, bbc_constants::OS_ROM_SIZE);
     if (!os_ok) {
         printf("BBC Micro: OS ROM not found\n");
     }
 
-    // BASIC ROM (BBC BASIC II — 16 KB, loaded into slot 15)
+    // BASIC ROM (BBC BASIC II — 16 KB) → into paged ROM pool slot 15
+    uint8_t* basic_rom_data = paged_rom_chip_->data()
+                            + 15 * bbc_constants::PAGED_ROM_SIZE;
     const char* basic_files[] = {
         "basic2.rom",
         "BASIC2.rom",
@@ -1020,7 +1035,7 @@ bool BBCMicroSystem::load_roms() {
     };
     bool basic_ok = rom_loader_load_from_root(rom_root, basic_files,
                                               bbc_constants::PAGED_ROM_SIZE,
-                                              paged_rom_[15], bbc_constants::PAGED_ROM_SIZE);
+                                              basic_rom_data, bbc_constants::PAGED_ROM_SIZE);
     if (!basic_ok) {
         printf("BBC Micro: BASIC ROM not found\n");
     }
