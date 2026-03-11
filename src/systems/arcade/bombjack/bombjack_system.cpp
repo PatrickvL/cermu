@@ -54,21 +54,88 @@ bool BombJackSystem::apply_configuration() { return true; }
 
 bool BombJackSystem::initialize() {
     printf("Bomb Jack: Initializing arcade system\n");
+
+    // ── Create MemoryChip wrappers (main CPU) ────────────────────────────
+    auto main_rom = std::make_unique<ROMChip>(
+        ChipInfo{"ROM", "Tehkan"}, bombjack_constants::MAIN_ROM_SIZE,
+        ROMChip::ROM, &main_pins_,
+        "Program ROM", bombjack_constants::MAIN_ROM_BASE);
+    main_rom_chip_ = main_rom.get();
+
+    auto main_ram = std::make_unique<RAMChip>(
+        ChipInfo{"SRAM", "Various"}, bombjack_constants::MAIN_RAM_SIZE,
+        RAMChip::SRAM, &main_pins_,
+        "Work RAM", bombjack_constants::MAIN_RAM_BASE);
+    main_ram_chip_ = main_ram.get();
+
+    auto fg_tilemap = std::make_unique<RAMChip>(
+        ChipInfo{"SRAM", "Various"}, bombjack_constants::FG_TILEMAP_SIZE,
+        RAMChip::SRAM, &main_pins_,
+        "FG Tilemap", bombjack_constants::FG_TILEMAP_BASE);
+    fg_tilemap_chip_ = fg_tilemap.get();
+
+    auto fg_attr = std::make_unique<RAMChip>(
+        ChipInfo{"SRAM", "Various"}, bombjack_constants::FG_TILEMAP_SIZE,
+        RAMChip::SRAM, &main_pins_,
+        "FG Attributes", bombjack_constants::FG_ATTR_BASE);
+    fg_attr_chip_ = fg_attr.get();
+
+    auto sprite_area = std::make_unique<RAMChip>(
+        ChipInfo{"SRAM", "Various"}, 256,
+        RAMChip::SRAM, &main_pins_,
+        "Sprite Area", 0x9800);
+    sprite_area_chip_ = sprite_area.get();
+
+    auto palette_ram = std::make_unique<RAMChip>(
+        ChipInfo{"SRAM", "Various"}, bombjack_constants::PALETTE_RAM_SIZE,
+        RAMChip::SRAM, &main_pins_,
+        "Palette RAM", bombjack_constants::PALETTE_RAM_BASE);
+    palette_ram_chip_ = palette_ram.get();
+
+    // ── Create MemoryChip wrappers (sound CPU) ───────────────────────────
+    auto sound_rom = std::make_unique<ROMChip>(
+        ChipInfo{"ROM", "Tehkan"}, bombjack_constants::SOUND_ROM_SIZE,
+        ROMChip::ROM, &sound_pins_,
+        "Sound ROM", bombjack_constants::SOUND_ROM_BASE);
+    sound_rom_chip_ = sound_rom.get();
+
+    auto sound_ram = std::make_unique<RAMChip>(
+        ChipInfo{"SRAM", "Various"}, bombjack_constants::SOUND_RAM_SIZE,
+        RAMChip::SRAM, &sound_pins_,
+        "Sound RAM", bombjack_constants::SOUND_RAM_BASE);
+    sound_ram_chip_ = sound_ram.get();
+
+    // ── Initialize buses ─────────────────────────────────────────────────
+    main_bus_mem_.initialize(main_bus_,
+        main_rom_chip_, main_ram_chip_, fg_tilemap_chip_,
+        fg_attr_chip_, sprite_area_chip_, palette_ram_chip_);
+
+    sound_bus_mem_.initialize(sound_bus_,
+        sound_rom_chip_, sound_ram_chip_);
+
+    // ── Init chips ───────────────────────────────────────────────────────
     main_cpu_  = new ZilogZ80A();
     sound_cpu_ = new ZilogZ80A();
     main_pins_  = main_cpu_->init();
     sound_pins_ = sound_cpu_->init();
     for (auto& ay : ay_) ay.init();
 
-    main_rom_.resize(bombjack_constants::MAIN_ROM_SIZE, 0xFF);
-    main_ram_.resize(bombjack_constants::MAIN_RAM_SIZE, 0x00);
-    fg_tilemap_.resize(bombjack_constants::FG_TILEMAP_SIZE, 0x00);
-    fg_attr_.resize(bombjack_constants::FG_TILEMAP_SIZE, 0x00);
-    sprite_ram_.resize(bombjack_constants::SPRITE_RAM_SIZE, 0x00);
-    palette_ram_.resize(bombjack_constants::PALETTE_RAM_SIZE, 0x00);
-    sound_rom_.resize(bombjack_constants::SOUND_ROM_SIZE, 0xFF);
-    sound_ram_.resize(bombjack_constants::SOUND_RAM_SIZE, 0x00);
     load_roms();
+
+    // ── Register chips for Hardware menu ─────────────────────────────────
+    register_chip(static_cast<ChipBase*>(main_cpu_),
+        "Main Z80A CPU", "Z80A", "CPU", 0x0000);
+    register_chip(static_cast<ChipBase*>(sound_cpu_),
+        "Sound Z80A CPU", "Z80A", "CPU", 0x0000);
+    register_chip(std::move(main_rom));
+    register_chip(std::move(main_ram));
+    register_chip(std::move(fg_tilemap));
+    register_chip(std::move(fg_attr));
+    register_chip(std::move(sprite_area));
+    register_chip(std::move(palette_ram));
+    register_chip(std::move(sound_rom));
+    register_chip(std::move(sound_ram));
+
     system_ready_ = true;
     return true;
 }
@@ -94,14 +161,14 @@ void BombJackSystem::tick() {
     // Main CPU tick
     main_pins_ = main_cpu_->tick(main_pins_);
 
-    // Main CPU bus dispatch
-    bool mreq = !BUS_GET_BIT(main_pins_, Z80_MREQ_BIT);
-    bool iorq = !BUS_GET_BIT(main_pins_, Z80_IORQ_BIT);
-
-    if (mreq) {
-        main_pins_ = main_mem_tick(main_pins_);
-    } else if (iorq) {
-        main_pins_ = main_io_tick(main_pins_);
+    // Main CPU bus dispatch — memory-mapped only (no IORQ for main CPU)
+    if (!BUS_GET_BIT(main_pins_, Z80_MREQ_BIT)) {
+        uint16_t addr = BUS_GET_ADDR(main_pins_);
+        if ((addr & 0xF000) == 0xB000) {
+            main_pins_ = main_io_tick(main_pins_);
+        } else {
+            main_pins_ = main_bus_.tick(0, main_pins_);
+        }
     }
 
     // Sound CPU runs at 3/4 speed (3 MHz vs 4 MHz main)
@@ -116,12 +183,19 @@ void BombJackSystem::tick() {
 
         sound_pins_ = sound_cpu_->tick(sound_pins_);
 
-        bool s_mreq = !BUS_GET_BIT(sound_pins_, Z80_MREQ_BIT);
-        bool s_iorq = !BUS_GET_BIT(sound_pins_, Z80_IORQ_BIT);
-
-        if (s_mreq) {
-            sound_pins_ = sound_mem_tick(sound_pins_);
-        } else if (s_iorq) {
+        // Sound CPU bus dispatch
+        if (!BUS_GET_BIT(sound_pins_, Z80_MREQ_BIT)) {
+            uint16_t addr = BUS_GET_ADDR(sound_pins_);
+            if (addr == 0x6000) {
+                // Sound latch read — clear NMI
+                if (BUS_GET_BIT(sound_pins_, BUS_RW_BIT)) {
+                    BUS_SET_DATA(sound_pins_, sound_latch_);
+                    sound_nmi_ = false;
+                }
+            } else {
+                sound_pins_ = sound_bus_.tick(0, sound_pins_);
+            }
+        } else if (!BUS_GET_BIT(sound_pins_, Z80_IORQ_BIT)) {
             sound_pins_ = sound_io_tick(sound_pins_);
         }
 
@@ -159,97 +233,32 @@ void BombJackSystem::render_system_menu_items() {}
 void BombJackSystem::render_configuration_ui() {}
 void BombJackSystem::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
-bus_state_t BombJackSystem::main_mem_tick(bus_state_t pins) {
-    uint16_t addr = BUS_GET_ADDR(pins);
-    bool is_read = BUS_GET_BIT(pins, BUS_RW_BIT);
+// ============================================================================
+// I/O DISPATCH — Main CPU ($B000-$BFFF memory-mapped registers)
+// ============================================================================
 
-    if (is_read) {
+bus_state_t BombJackSystem::main_io_tick(bus_state_t pins) {
+    uint16_t addr = BUS_GET_ADDR(pins);
+
+    if (BUS_GET_BIT(pins, BUS_RW_BIT)) {
+        // Reads: input ports and DIP switches
         uint8_t data = 0xFF;
-        if (addr < 0x8000) {
-            // Program ROM (32 KB)
-            data = main_rom_[addr];
-        } else if (addr < 0x9000) {
-            // Work RAM (4 KB)
-            data = main_ram_[addr - 0x8000];
-        } else if (addr < 0x9400) {
-            // FG tilemap (1 KB)
-            data = fg_tilemap_[addr - 0x9000];
-        } else if (addr < 0x9800) {
-            // FG attributes (1 KB)
-            data = fg_attr_[addr - 0x9400];
-        } else if (addr >= bombjack_constants::SPRITE_RAM_BASE &&
-                   addr < bombjack_constants::SPRITE_RAM_BASE + bombjack_constants::SPRITE_RAM_SIZE) {
-            data = sprite_ram_[addr - bombjack_constants::SPRITE_RAM_BASE];
-        } else if (addr >= bombjack_constants::PALETTE_RAM_BASE &&
-                   addr < bombjack_constants::PALETTE_RAM_BASE + bombjack_constants::PALETTE_RAM_SIZE) {
-            data = palette_ram_[addr - bombjack_constants::PALETTE_RAM_BASE];
-        } else if (addr == bombjack_constants::INPUT_P1) {
-            data = input_p1_;
-        } else if (addr == bombjack_constants::INPUT_P2) {
-            data = input_p2_;
-        } else if (addr == bombjack_constants::INPUT_SYSTEM) {
-            data = input_system_;
-        } else if (addr == bombjack_constants::DSW1) {
-            data = dsw1_;
-        } else if (addr == bombjack_constants::DSW2) {
-            data = dsw2_;
-        }
+        if (addr == bombjack_constants::INPUT_P1)         data = input_p1_;
+        else if (addr == bombjack_constants::INPUT_P2)    data = input_p2_;
+        else if (addr == bombjack_constants::INPUT_SYSTEM) data = input_system_;
+        else if (addr == bombjack_constants::DSW1)        data = dsw1_;
+        else if (addr == bombjack_constants::DSW2)        data = dsw2_;
         BUS_SET_DATA(pins, data);
     } else {
+        // Writes: sound latch, background select, watchdog
         uint8_t data = BUS_GET_DATA(pins);
-        if (addr >= 0x8000 && addr < 0x9000) {
-            main_ram_[addr - 0x8000] = data;
-        } else if (addr >= 0x9000 && addr < 0x9400) {
-            fg_tilemap_[addr - 0x9000] = data;
-        } else if (addr >= 0x9400 && addr < 0x9800) {
-            fg_attr_[addr - 0x9400] = data;
-        } else if (addr >= bombjack_constants::SPRITE_RAM_BASE &&
-                   addr < bombjack_constants::SPRITE_RAM_BASE + bombjack_constants::SPRITE_RAM_SIZE) {
-            sprite_ram_[addr - bombjack_constants::SPRITE_RAM_BASE] = data;
-        } else if (addr >= bombjack_constants::PALETTE_RAM_BASE &&
-                   addr < bombjack_constants::PALETTE_RAM_BASE + bombjack_constants::PALETTE_RAM_SIZE) {
-            palette_ram_[addr - bombjack_constants::PALETTE_RAM_BASE] = data;
-        } else if (addr == bombjack_constants::SOUND_LATCH) {
-            // Write to sound latch triggers NMI on sound CPU
+        if (addr == bombjack_constants::SOUND_LATCH) {
             sound_latch_ = data;
             sound_nmi_ = true;
         } else if (addr == bombjack_constants::BG_SELECT) {
-            // Background image select (write overlaps DSW2 read address)
             bg_image_select_ = data & 0x07;
         }
-    }
-
-    return pins;
-}
-bus_state_t BombJackSystem::main_io_tick(bus_state_t pins) {
-    // Bomb Jack main CPU uses memory-mapped I/O — no port-based I/O
-    return pins;
-}
-bus_state_t BombJackSystem::sound_mem_tick(bus_state_t pins) {
-    uint16_t addr = BUS_GET_ADDR(pins);
-    bool is_read = BUS_GET_BIT(pins, BUS_RW_BIT);
-
-    if (is_read) {
-        uint8_t data = 0xFF;
-        if (addr < bombjack_constants::SOUND_ROM_SIZE) {
-            // Sound ROM (8 KB)
-            data = sound_rom_[addr];
-        } else if (addr >= bombjack_constants::SOUND_RAM_BASE &&
-                   addr < bombjack_constants::SOUND_RAM_BASE + bombjack_constants::SOUND_RAM_SIZE) {
-            // Sound RAM (1 KB)
-            data = sound_ram_[addr - bombjack_constants::SOUND_RAM_BASE];
-        } else if (addr == 0x6000) {
-            // Sound latch read — clear NMI
-            data = sound_latch_;
-            sound_nmi_ = false;
-        }
-        BUS_SET_DATA(pins, data);
-    } else {
-        uint8_t data = BUS_GET_DATA(pins);
-        if (addr >= bombjack_constants::SOUND_RAM_BASE &&
-            addr < bombjack_constants::SOUND_RAM_BASE + bombjack_constants::SOUND_RAM_SIZE) {
-            sound_ram_[addr - bombjack_constants::SOUND_RAM_BASE] = data;
-        }
+        // Watchdog write at $B800 is intentionally ignored
     }
 
     return pins;
