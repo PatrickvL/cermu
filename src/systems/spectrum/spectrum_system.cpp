@@ -138,21 +138,36 @@ template<SpectrumVariant V>
 bool SpectrumSystem<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
 
-    // Create CPU
+    // ── Create MemoryChip wrappers ──────────────────────────────────────
+    constexpr size_t ram_bytes = Traits::ram_size_kb * 1024;
+    constexpr size_t rom_bytes = Traits::rom_count * spectrum_constants::ROM_SIZE_48K;
+
+    // RAM: power-of-2 allocation (64KB for 48K, 128KB for 128K)
+    auto ram_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"DRAM", "Various"},
+        (V == SpectrumVariant::ZX48K) ? 65536 : ram_bytes,
+        MemoryChip::RAM, &pins_, "RAM", 0x0000);
+    ram_ = ram_chip.get();
+
+    // ROM: 16KB (48K) or 32KB (128K)
+    auto rom_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "Sinclair"}, rom_bytes,
+        MemoryChip::ROM, &pins_, "ROM", 0x0000);
+    rom_ = rom_chip.get();
+
+    // ── Bind manifest slots, wire the bus ───────────────────────────────
+    bus_mem_.initialize(bus_, ram_, rom_);
+
+    // ── Configure page tables for this variant ──────────────────────────
+    configure_bus_memory_map();
+
+    // ── Init chips ──────────────────────────────────────────────────────
     cpu_ = new ZilogZ80A();
     pins_ = cpu_->init();
-
-    // Initialize ULA
     ula_.init();
-
-    // Initialize AY (128K only, but always present)
     if constexpr (Traits::has_ay_sound) {
         ay_.init();
     }
-
-    // Allocate memory
-    ram_.resize(Traits::ram_size_kb * 1024, 0x00);
-    rom_.resize(Traits::rom_count * spectrum_constants::ROM_SIZE_48K, 0xFF);
 
     // Audio setup
     audio_sample_period_ = spectrum_constants::CPU_FREQ_HZ / audio_sample_rate_;
@@ -162,6 +177,19 @@ bool SpectrumSystem<V>::initialize() {
         printf("%s: Warning — ROMs not loaded, system may not function\n", Traits::name);
     }
 
+    // ── Register chips for Hardware menu ────────────────────────────────
+    register_chip(static_cast<ChipBase*>(cpu_),
+        "Zilog Z80A CPU", "Z80A", "CPU", 0x0000);
+    register_chip(&ula_,
+        "Ferranti ULA", "ULA", "Video", spectrum_constants::SCREEN_BASE);
+    if constexpr (Traits::has_ay_sound) {
+        register_chip(&ay_,
+            "AY-3-8912 Sound", "AY-3-8912", "Sound", 0);
+    }
+    register_chip(std::move(ram_chip));
+    register_chip(std::move(rom_chip));
+
+    printf("%s: System initialized (%dKB RAM)\n", Traits::name, Traits::ram_size_kb);
     system_ready_ = true;
     return true;
 }
@@ -170,8 +198,6 @@ template<SpectrumVariant V>
 void SpectrumSystem<V>::shutdown() {
     delete cpu_;
     cpu_ = nullptr;
-    ram_.clear();
-    rom_.clear();
     system_ready_ = false;
 }
 
@@ -211,15 +237,12 @@ void SpectrumSystem<V>::tick() {
     pins_ = cpu_->tick(pins_);
 
     // Bus dispatch
-    uint16_t addr = BUS_GET_ADDR(pins_);
-    bool is_read = BUS_GET_BIT(pins_, BUS_RW_BIT);
-
     // Check for I/O request vs memory request
     bool mreq = !BUS_GET_BIT(pins_, Z80_MREQ_BIT);  // Active-low
     bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);  // Active-low
 
     if (mreq) {
-        pins_ = mem_tick(pins_);
+        pins_ = bus_.tick(0, pins_);
     } else if (iorq) {
         pins_ = io_tick(pins_);
     }
@@ -260,59 +283,81 @@ void SpectrumSystem<V>::run_frame() {
 }
 
 // ============================================================================
-// MEMORY DISPATCH
+// BUS CONFIGURATION
 // ============================================================================
 
 template<SpectrumVariant V>
-bus_state_t SpectrumSystem<V>::mem_tick(bus_state_t pins) {
-    uint16_t addr = BUS_GET_ADDR(pins);
-    bool is_read = BUS_GET_BIT(pins, BUS_RW_BIT);
+void SpectrumSystem<V>::configure_bus_memory_map() {
+    using ChipId      = typename PT::ChipId;
+    using WriteChipId = typename PT::WriteChipId;
 
-    if (is_read) {
-        uint8_t data;
-        if (addr < 0x4000) {
-            // ROM
-            if constexpr (Traits::has_banking) {
-                uint16_t rom_bank = (bank_select_ & 0x10) ? 1 : 0;
-                data = rom_[rom_bank * 0x4000 + addr];
-            } else {
-                data = rom_[addr];
-            }
-        } else {
-            // RAM
-            if constexpr (Traits::has_banking) {
-                if (addr < 0x8000) {
-                    data = ram_[5 * 0x4000 + (addr - 0x4000)];  // Bank 5
-                } else if (addr < 0xC000) {
-                    data = ram_[2 * 0x4000 + (addr - 0x8000)];  // Bank 2
-                } else {
-                    uint8_t bank = bank_select_ & 0x07;
-                    data = ram_[bank * 0x4000 + (addr - 0xC000)];
-                }
-            } else {
-                data = ram_[addr - 0x4000];
-            }
-        }
-        BUS_SET_DATA(pins, data);
-    } else {
-        uint8_t data = BUS_GET_DATA(pins);
-        if (addr >= 0x4000) {
-            // RAM write (ROM is write-protected)
-            if constexpr (Traits::has_banking) {
-                if (addr < 0x8000) {
-                    ram_[5 * 0x4000 + (addr - 0x4000)] = data;
-                } else if (addr < 0xC000) {
-                    ram_[2 * 0x4000 + (addr - 0x8000)] = data;
-                } else {
-                    uint8_t bank = bank_select_ & 0x07;
-                    ram_[bank * 0x4000 + (addr - 0xC000)] = data;
-                }
-            } else {
-                ram_[addr - 0x4000] = data;
-            }
-        }
+    // apply() establishes the default map from the manifest:
+    //   48K:  RAM pages 0-255 (read+write), ROM overlays read pages 0-63
+    //   128K: RAM pages 0-255 (read+write from first 64KB), ROM overlays read pages 0-63
+    bus_mem_.apply(bus_);
+
+    // ROM region ($0000-$3FFF): no writes — unmap write pages
+    for (size_t page = 0; page < 64; ++page)
+        bus_.set_write_page(0, page, PT::kNoChipSelectedWrite);
+
+    if constexpr (Traits::has_banking) {
+        // 128K: remap fixed banks and current paging state.
+        // RAM base_id is always 0 (slot 0), 64 pages per 16KB bank.
+        //
+        //   $4000-$7FFF: always bank 5
+        //   $8000-$BFFF: always bank 2
+        //   $C000-$FFFF: selected by bank_select_ bits 0-2
+        //   $0000-$3FFF: ROM bank selected by bank_select_ bit 4
+        constexpr size_t kPagesPerBank = 64;  // 16384 / 256
+
+        // Bank 5 at $4000
+        bus_.fill_read_pages (0, 0x40, kPagesPerBank, ChipId(5 * kPagesPerBank));
+        bus_.fill_write_pages(0, 0x40, kPagesPerBank, WriteChipId(5 * kPagesPerBank));
+
+        // Bank 2 at $8000
+        bus_.fill_read_pages (0, 0x80, kPagesPerBank, ChipId(2 * kPagesPerBank));
+        bus_.fill_write_pages(0, 0x80, kPagesPerBank, WriteChipId(2 * kPagesPerBank));
+
+        // Switchable bank at $C000 + ROM bank at $0000
+        update_banking();
     }
-    return pins;
+
+    // Screen RAM pointer — bank 5 for 128K (default), $4000 offset for 48K
+    if constexpr (Traits::has_banking) {
+        constexpr size_t kPagesPerBank = 64;
+        bool use_bank7 = (bank_select_ & 0x08) != 0;
+        size_t screen_bank = use_bank7 ? 7 : 5;
+        screen_ram_ptr_ = bus_mem_.chip_buffer(ChipId(screen_bank * kPagesPerBank));
+    } else {
+        // 48K: screen starts at $4000 = page $40 = chip ID 64
+        screen_ram_ptr_ = bus_mem_.chip_buffer(ChipId(0x40));
+    }
+}
+
+template<SpectrumVariant V>
+void SpectrumSystem<V>::update_banking() {
+    if constexpr (!Traits::has_banking) return;
+
+    using ChipId      = typename PT::ChipId;
+    using WriteChipId = typename PT::WriteChipId;
+
+    constexpr size_t kPagesPerBank = 64;  // 16384 / 256
+
+    // Switchable RAM bank at $C000-$FFFF (bits 0-2 of bank_select_)
+    uint8_t ram_bank = bank_select_ & 0x07;
+    bus_.fill_read_pages (0, 0xC0, kPagesPerBank, ChipId(ram_bank * kPagesPerBank));
+    bus_.fill_write_pages(0, 0xC0, kPagesPerBank, WriteChipId(ram_bank * kPagesPerBank));
+
+    // ROM bank at $0000-$3FFF (bit 4 of bank_select_)
+    constexpr size_t rom_base = kSpectrum128KChips.base_id(
+        spectrum_chips::kRomSlot, SpectrumBusTraits<SpectrumVariant::ZX128K>::Spec::PageBits);
+    uint8_t rom_bank = (bank_select_ & 0x10) ? 1 : 0;
+    bus_.fill_read_pages(0, 0x00, kPagesPerBank, ChipId(rom_base + rom_bank * kPagesPerBank));
+
+    // Screen bank: bit 3 selects bank 5 or 7
+    bool use_bank7 = (bank_select_ & 0x08) != 0;
+    size_t screen_bank = use_bank7 ? 7 : 5;
+    screen_ram_ptr_ = bus_mem_.chip_buffer(ChipId(screen_bank * kPagesPerBank));
 }
 
 // ============================================================================
@@ -340,6 +385,7 @@ bus_state_t SpectrumSystem<V>::io_tick(bus_state_t pins) {
             if (!bank_locked_) {
                 bank_select_ = BUS_GET_DATA(pins);
                 bank_locked_ = (bank_select_ & 0x20) != 0;
+                update_banking();
             }
         }
 
