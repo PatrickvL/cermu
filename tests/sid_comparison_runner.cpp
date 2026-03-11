@@ -822,7 +822,7 @@ public:
 
         for (uint32_t i = 0; i < cycles; i++) {
             // Clock cermu
-            bus_state_t bs = BUS_STATE(0, 0, 0);
+            bus_state_t bs = 0;
             harness_->sid->tick(bs);
             harness_->total_cycles++;
 
@@ -1294,7 +1294,7 @@ static int run_log_comparison(const char* log_path, bool verbose, bool no_filter
     auto clock_both = [&](uint32_t delta) {
         // Clock cermu cycle-by-cycle
         for (uint32_t c = 0; c < delta; c++) {
-            bus_state_t bs = BUS_STATE(0, 0, 0);
+            bus_state_t bs = 0;
             harness->sid->tick(bs);
             harness->total_cycles++;
 

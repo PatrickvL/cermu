@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 /*
-Unified 64-bit bus state layout (compatible with new C++ core pins)
+Unified 64-bit bus state layout
 Layout:
 - [DATA:7-0]    (lowest 8 bits)
 - [ADDR:23-8]   (next 16 bits)
@@ -9,7 +9,6 @@ Layout:
 - [INPUT PINS:47-32]  (active-low for IRQ/NMI/RES, others active-high)
 - [OUTPUT PINS:63-48] (active-high)
 All pin access uses direct BUS_GET_BIT/BUS_SET_BIT/BUS_CLR_BIT operations.
-Legacy BUS_MASK, bus_lines_apply, BUS_STATE retained for NES and test helpers.
 */
 
 typedef uint64_t bus_state_t;
@@ -71,47 +70,18 @@ typedef uint64_t bus_state_t;
    argument are automatically discarded. */
 #define BUS_SET_DATA(state, data)   ((state) = (state) ^ (((state) ^ ((bus_state_t)(data) << BUS_DATA_SHIFT)) & BUS_DATA_MASK))
 #define BUS_SET_ADDR(state, addr)   ((state) = (state) ^ (((state) ^ ((bus_state_t)(addr) << BUS_ADDR_SHIFT)) & BUS_ADDR_MASK))
-#define BUS_SET_BANK(state, bank)   ((state) = (state) ^ (((state) ^ ((bus_state_t)(bank) << BUS_BANK_SHIFT)) & BUS_BANK_MASK)) 
+#define BUS_SET_BANK(state, bank)   ((state) = (state) ^ (((state) ^ ((bus_state_t)(bank) << BUS_BANK_SHIFT)) & BUS_BANK_MASK))
 
-/* Legacy bus control line definitions (kept stable for callers) */
-#define BUS_LINE_IRQ    0 // Interrupt request line (legacy: 1 = asserted)
-#define BUS_LINE_NMI    1 // Non-maskable interrupt line (legacy: 1 = asserted)
-#define BUS_LINE_RW     2 // Read/Write line (1 = read, 0 = write)
-#define BUS_LINE_BA     3 // Bus available line (1 = available)
-#define BUS_LINE_AEC    4 // Address enable control line (1 = CPU drives address bus)
-#define BUS_LINE_RDY    5 // Ready line (1 = ready)
+/* Bitwise multiplexer within a bus_state_t field.
+   Merges NEW_VAL into STATE's field (at FIELD_MASK / SHIFT) using DATA_MASK:
+   where DATA_MASK bit = 1 → take from NEW_VAL, where 0 → keep from STATE.
+   Compiles to the same XOR-AND-XOR as BUS_SET_*, but with a narrower mask
+   so only the data-mask–selected bits change.  The compound mask is a
+   compile-time constant when DATA_MASK is, so cost is identical. */
+#define BUS_BITMIX(state, new_val, data_mask, field_mask, shift) \
+    ((state) = (state) ^ (((state) ^ ((bus_state_t)(new_val) << (shift))) \
+                          & ((bus_state_t)(data_mask) << (shift)) & (field_mask)))
 
-/* Legacy bit masks (on the synthetic 8-bit lines value) */
-#define BUS_MASK_IRQ        (1 << BUS_LINE_IRQ)
-#define BUS_MASK_NMI        (1 << BUS_LINE_NMI)
-#define BUS_MASK_RW         (1 << BUS_LINE_RW)
-#define BUS_MASK_BA         (1 << BUS_LINE_BA)
-#define BUS_MASK_AEC        (1 << BUS_LINE_AEC)
-#define BUS_MASK_RDY        (1 << BUS_LINE_RDY)
-
-/* Apply legacy 8-bit LINES to 64-bit pin layout (retained for BUS_STATE helper) */
-static inline bus_state_t bus_lines_apply(bus_state_t s, uint8_t lines) {
-    /* IRQ/NMI are active-low inputs on the core */
-    if (lines & BUS_MASK_IRQ)  BUS_CLR_BIT(s, BUS_IRQ_BIT); else BUS_SET_BIT(s, BUS_IRQ_BIT);
-    if (lines & BUS_MASK_NMI)  BUS_CLR_BIT(s, BUS_NMI_BIT); else BUS_SET_BIT(s, BUS_NMI_BIT);
-
-    /* Active-high pins */
-    if (lines & BUS_MASK_RW)   BUS_SET_BIT(s, BUS_RW_BIT);  else BUS_CLR_BIT(s, BUS_RW_BIT);
-    if (lines & BUS_MASK_BA)   BUS_SET_BIT(s, BUS_BA_BIT);  else BUS_CLR_BIT(s, BUS_BA_BIT);
-    if (lines & BUS_MASK_AEC)  BUS_SET_BIT(s, BUS_AEC_BIT); else BUS_CLR_BIT(s, BUS_AEC_BIT);
-    if (lines & BUS_MASK_RDY)  BUS_SET_BIT(s, BUS_RDY_BIT); else BUS_CLR_BIT(s, BUS_RDY_BIT);
-
-    return s;
-}
-
-/* Constructor helper — uses bus_lines_apply for legacy mask→pin-bit translation */
-/* Prefer direct BUS_SET_BIT/BUS_CLR_BIT for new code. */
-static inline bus_state_t bus_state_make(uint16_t addr, uint8_t data, uint8_t lines) {
-    bus_state_t s = 0;
-    s |= (((bus_state_t)data & 0xFFULL) << BUS_DATA_SHIFT);
-    s |= (((bus_state_t)addr & 0xFFFFULL) << BUS_ADDR_SHIFT);
-    /* BANK defaults to 0 for 6502/6510 family */
-    s = bus_lines_apply(s, lines);
-    return s;
-}
-#define BUS_STATE(addr, data, lines) (bus_state_make((uint16_t)(addr), (uint8_t)(data), (uint8_t)(lines)))
+/* Convenience: bitmix within the DATA field (bits 7-0). */
+#define BUS_BITMIX_DATA(state, new_val, data_mask) \
+    BUS_BITMIX(state, new_val, data_mask, BUS_DATA_MASK, BUS_DATA_SHIFT)
