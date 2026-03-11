@@ -75,17 +75,17 @@ template<> struct NamcoGameTraits<NamcoGame::Pengo> {
 // Graphics ROMs (char, sprite, palette, waveform) are NOT bus-mapped.
 //
 inline constexpr auto kPacManChips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 16384},        // ROM: 16 KB
-    Slot<RAMChip>{0x4000,  1024},        // Video RAM: 1 KB
-    Slot<RAMChip>{0x4400,  1024},        // Color RAM: 1 KB
-    Slot<RAMChip>{0x4C00,  1024}         // Work RAM: 1 KB
+    Slot<ROMChip>{0x0000, 16384, 0, "Program ROM"},  // ROM: 16 KB
+    Slot<RAMChip>{0x4000,  1024, 0, "Video RAM"},    // Video RAM: 1 KB
+    Slot<RAMChip>{0x4400,  1024, 0, "Color RAM"},    // Color RAM: 1 KB
+    Slot<RAMChip>{0x4C00,  1024, 0, "Work RAM"}      // Work RAM: 1 KB
 );
 
 inline constexpr auto kPengoChips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 32768},        // ROM: 32 KB
-    Slot<RAMChip>{0x8000,  1024},        // Video RAM: 1 KB
-    Slot<RAMChip>{0x8400,  1024},        // Color RAM: 1 KB
-    Slot<RAMChip>{0x8C00,  1024}         // Work RAM: 1 KB
+    Slot<ROMChip>{0x0000, 32768, 0, "Program ROM"},  // ROM: 32 KB
+    Slot<RAMChip>{0x8000,  1024, 0, "Video RAM"},    // Video RAM: 1 KB
+    Slot<RAMChip>{0x8400,  1024, 0, "Color RAM"},    // Color RAM: 1 KB
+    Slot<RAMChip>{0x8C00,  1024, 0, "Work RAM"}      // Work RAM: 1 KB
 );
 
 // BusTraits — selects the correct manifest per game
@@ -140,12 +140,6 @@ private:
     // ── Chips ────────────────────────────────────────────────────────────
     ZilogZ80A*       cpu_ = nullptr;     // Z80A @ 3.072 MHz
     namco_wsg_t      wsg_;               // Namco WSG3 wavetable sound
-
-    // ── Memory — owned by registered_chips_, managed via BusMemory ──────
-    ROMChip* rom_chip_       = nullptr;
-    RAMChip* video_ram_chip_ = nullptr;
-    RAMChip* color_ram_chip_ = nullptr;
-    RAMChip* work_ram_chip_  = nullptr;
 
     // ── Graphics ROM — NOT bus-mapped (display rendering only) ───────────
     std::vector<uint8_t> char_rom_;
