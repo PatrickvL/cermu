@@ -62,25 +62,93 @@ template<Z9001Variant V> bool Z9001System<V>::apply_configuration() { return tru
 template<Z9001Variant V>
 bool Z9001System<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
+
+    // ── Create MemoryChip wrappers ──────────────────────────────────────
+    auto ram = std::make_unique<MemoryChip>(
+        ChipInfo{"DRAM", "VEB"}, Traits::has_basic_rom ? 65536u : uint32_t(Traits::ram_size),
+        MemoryChip::RAM, &pins_, "RAM", 0x0000);
+    ram_chip_ = ram.get();
+
+    auto video_ram = std::make_unique<MemoryChip>(
+        ChipInfo{"SRAM", "VEB"}, z9001_constants::VIDEO_RAM_SIZE,
+        MemoryChip::RAM, &pins_, "Video RAM", z9001_constants::VIDEO_RAM_BASE);
+    video_ram_chip_ = video_ram.get();
+
+    auto os_rom = std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "VEB"}, z9001_constants::OS_ROM_SIZE,
+        MemoryChip::ROM, &pins_, "OS ROM", z9001_constants::OS_ROM_BASE);
+    os_rom_chip_ = os_rom.get();
+
+    std::unique_ptr<MemoryChip> basic_rom_lo;
+    std::unique_ptr<MemoryChip> basic_rom_hi;
+    std::unique_ptr<MemoryChip> color_ram;
+    if constexpr (Traits::has_basic_rom) {
+        basic_rom_lo = std::make_unique<MemoryChip>(
+            ChipInfo{"ROM", "VEB"}, 8192,
+            MemoryChip::ROM, &pins_, "BASIC ROM lo", z9001_constants::BASIC_ROM_BASE);
+        basic_rom_lo_chip_ = basic_rom_lo.get();
+
+        basic_rom_hi = std::make_unique<MemoryChip>(
+            ChipInfo{"ROM", "VEB"}, 2048,
+            MemoryChip::ROM, &pins_, "BASIC ROM hi", 0xE000);
+        basic_rom_hi_chip_ = basic_rom_hi.get();
+    }
+    if constexpr (Traits::has_color_ram) {
+        color_ram = std::make_unique<MemoryChip>(
+            ChipInfo{"SRAM", "VEB"}, z9001_constants::COLOR_RAM_SIZE,
+            MemoryChip::SRAM, &pins_, "Color RAM", z9001_constants::COLOR_RAM_BASE);
+        color_ram_chip_ = color_ram.get();
+    }
+
+    // ── Bind manifest slots, wire the bus ───────────────────────────────
+    if constexpr (Traits::has_basic_rom) {
+        bus_mem_.initialize(bus_, ram_chip_, basic_rom_lo_chip_,
+                            basic_rom_hi_chip_, color_ram_chip_,
+                            video_ram_chip_, os_rom_chip_);
+    } else {
+        bus_mem_.initialize(bus_, ram_chip_, video_ram_chip_, os_rom_chip_);
+    }
+
+    // ── Trim RAM pages for KC87 (48 KB out of 64 KB allocated) ──────────
+    configure_bus_memory_map();
+
+    // ── Init chips ──────────────────────────────────────────────────────
     cpu_ = new U880();
     pins_ = cpu_->init();
     pio1_.init();
     pio2_.init();
     ctc_.init();
-    ram_.resize(Traits::ram_size, 0x00);
-    os_rom_.resize(z9001_constants::OS_ROM_SIZE, 0xFF);
-    video_ram_.resize(z9001_constants::VIDEO_RAM_SIZE, 0x00);
+
+    // Character ROM — not bus-mapped, used for display rendering only
     char_rom_.resize(z9001_constants::CHAR_ROM_SIZE, 0xFF);
-    if constexpr (Traits::has_color_ram) {
-        color_ram_.resize(z9001_constants::COLOR_RAM_SIZE, 0x07);  // White-on-black default
-    }
-    if constexpr (Traits::has_basic_rom) {
-        basic_rom_.resize(z9001_constants::BASIC_ROM_SIZE, 0xFF);
-    }
+
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
+
     if (!load_roms()) {
         printf("%s: Warning — ROMs not loaded\n", Traits::name);
     }
+
+    // ── Register chips for Hardware menu ────────────────────────────────
+    register_chip(static_cast<ChipBase*>(cpu_),
+        "U880 CPU", "U880", "CPU", 0x0000);
+    register_chip(&pio1_,
+        "U855 PIO #1", "U855", "I/O", z9001_constants::PIO1_PORT_A);
+    register_chip(&pio2_,
+        "U855 PIO #2", "U855", "I/O", z9001_constants::PIO2_PORT_A);
+    register_chip(&ctc_,
+        "U857 CTC", "U857", "I/O", z9001_constants::CTC_CH0);
+    register_chip(std::move(ram));
+    register_chip(std::move(video_ram));
+    register_chip(std::move(os_rom));
+    if constexpr (Traits::has_basic_rom) {
+        register_chip(std::move(basic_rom_lo));
+        register_chip(std::move(basic_rom_hi));
+    }
+    if constexpr (Traits::has_color_ram) {
+        register_chip(std::move(color_ram));
+    }
+
+    printf("%s: System initialized (RAM: %d KB)\n", Traits::name, Traits::ram_size / 1024);
     system_ready_ = true;
     return true;
 }
@@ -95,6 +163,34 @@ template<Z9001Variant V> void Z9001System<V>::reset() {
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
 }
 
+// ============================================================================
+// BUS CONFIGURATION
+// ============================================================================
+
+template<Z9001Variant V>
+void Z9001System<V>::configure_bus_memory_map() {
+    if constexpr (V == Z9001Variant::KC87) {
+        // KC87 allocates 64 KB RAM but real hardware has 48 KB ($0000-$BFFF).
+        // Trim RAM write pages above $C000 that weren't overlaid by Color/Video RAM.
+        // (BASIC ROM is read-only so apply() didn't map write pages for it;
+        //  Color RAM and Video RAM already overlaid their write pages.)
+        constexpr size_t kRamSlot   = 0;
+        constexpr size_t kRamBaseId = BT::kManifest.base_id(kRamSlot, BT::Spec::PageBits);
+        constexpr size_t ram_pages  = z9001_constants::RAM_SIZE_KC87 / Bus::kPageSize;
+        for (size_t page = ram_pages; page < 256; ++page) {
+            auto wr = bus_.viewer(0).write_chip(page);
+            // Only unmap if this page still points to a RAM chip id
+            if (size_t(wr) == kRamBaseId + page)
+                bus_.set_write_page(0, page, PT::kNoChipSelectedWrite);
+        }
+    }
+    // Z9001: RAM is exactly 16 KB, manifest allocates exactly 16 KB — no trimming needed.
+}
+
+// ============================================================================
+// TICK
+// ============================================================================
+
 template<Z9001Variant V>
 void Z9001System<V>::tick() {
     if (!cpu_) return;
@@ -107,7 +203,7 @@ void Z9001System<V>::tick() {
     bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);
 
     if (mreq) {
-        pins_ = mem_tick(pins_);
+        pins_ = bus_.tick(0, pins_);
     } else if (iorq) {
         pins_ = io_tick(pins_);
     }
@@ -236,74 +332,6 @@ void Z9001System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 }
 
 // ============================================================================
-// MEMORY BUS DISPATCH
-// ============================================================================
-
-template<Z9001Variant V>
-bus_state_t Z9001System<V>::mem_tick(bus_state_t pins) {
-    uint16_t addr  = BUS_GET_ADDR(pins);
-    bool     is_rd = BUS_GET_BIT(pins, BUS_RW_BIT);
-
-    if (is_rd) {
-        uint8_t data = 0xFF;
-
-        if (static_cast<size_t>(addr) < ram_.size()) {
-            data = ram_[addr];
-        }
-        // Video RAM and color RAM override the underlying RAM for their address ranges
-        if (addr >= z9001_constants::VIDEO_RAM_BASE &&
-            addr <  z9001_constants::VIDEO_RAM_BASE + z9001_constants::VIDEO_RAM_SIZE) {
-            data = video_ram_[addr - z9001_constants::VIDEO_RAM_BASE];
-        } else if constexpr (Traits::has_color_ram) {
-            if (addr >= z9001_constants::COLOR_RAM_BASE &&
-                addr <  z9001_constants::COLOR_RAM_BASE + z9001_constants::COLOR_RAM_SIZE) {
-                data = color_ram_[addr - z9001_constants::COLOR_RAM_BASE];
-            }
-        }
-        if constexpr (Traits::has_basic_rom) {
-            if (addr >= z9001_constants::BASIC_ROM_BASE &&
-                addr <  z9001_constants::BASIC_ROM_BASE + z9001_constants::BASIC_ROM_SIZE) {
-                data = basic_rom_[addr - z9001_constants::BASIC_ROM_BASE];
-            }
-        }
-        if (addr >= z9001_constants::OS_ROM_BASE &&
-            addr <  z9001_constants::OS_ROM_BASE + z9001_constants::OS_ROM_SIZE) {
-            data = os_rom_[addr - z9001_constants::OS_ROM_BASE];
-        }
-
-        BUS_SET_DATA(pins, data);
-    } else {
-        uint8_t data = BUS_GET_DATA(pins);
-
-        if (addr >= z9001_constants::VIDEO_RAM_BASE &&
-            addr <  z9001_constants::VIDEO_RAM_BASE + z9001_constants::VIDEO_RAM_SIZE) {
-            video_ram_[addr - z9001_constants::VIDEO_RAM_BASE] = data;
-        } else if constexpr (Traits::has_color_ram) {
-            if (addr >= z9001_constants::COLOR_RAM_BASE &&
-                addr <  z9001_constants::COLOR_RAM_BASE + z9001_constants::COLOR_RAM_SIZE) {
-                color_ram_[addr - z9001_constants::COLOR_RAM_BASE] = data;
-            }
-        }
-        if (static_cast<size_t>(addr) < ram_.size()) {
-            // Do not shadow video/color RAM writes to main RAM
-            bool in_vram = addr >= z9001_constants::VIDEO_RAM_BASE &&
-                           addr <  z9001_constants::VIDEO_RAM_BASE + z9001_constants::VIDEO_RAM_SIZE;
-            bool in_cram = false;
-            if constexpr (Traits::has_color_ram) {
-                in_cram = addr >= z9001_constants::COLOR_RAM_BASE &&
-                          addr <  z9001_constants::COLOR_RAM_BASE + z9001_constants::COLOR_RAM_SIZE;
-            }
-            if (!in_vram && !in_cram) {
-                ram_[addr] = data;
-            }
-        }
-        // ROM writes are silently ignored
-    }
-
-    return pins;
-}
-
-// ============================================================================
 // I/O BUS DISPATCH
 // ============================================================================
 //
@@ -398,19 +426,32 @@ void Z9001System<V>::render_frame() {
         0xFFAAAAAA,  // 7: Light Grey
     };
 
+    const uint8_t* vram = video_ram_chip_ ? video_ram_chip_->data() : nullptr;
+    if (!vram) return;
+
+    const uint8_t* cram = nullptr;
+    if constexpr (Traits::has_color_ram) {
+        cram = color_ram_chip_ ? color_ram_chip_->data() : nullptr;
+    }
+
     for (int row = 0; row < ROWS; row++) {
         for (int col = 0; col < COLS; col++) {
             int    pos  = row * COLS + col;
-            uint8_t chr = video_ram_[pos];
+            uint8_t chr = vram[pos];
             int fb_x = col * CW;
             int fb_y = row * CH;
 
             // Determine foreground / background colors
             uint32_t fg, bg;
             if constexpr (Traits::has_color_ram) {
-                uint8_t attr = color_ram_[pos];
-                fg = kPalette[attr & 0x07];
-                bg = kPalette[(attr >> 3) & 0x07];
+                if (cram) {
+                    uint8_t attr = cram[pos];
+                    fg = kPalette[attr & 0x07];
+                    bg = kPalette[(attr >> 3) & 0x07];
+                } else {
+                    fg = 0xFFFFFFFF;
+                    bg = 0xFF000000;
+                }
             } else {
                 fg = 0xFFFFFFFF;   // White on black (monochrome)
                 bg = 0xFF000000;
@@ -448,23 +489,29 @@ bool Z9001System<V>::load_roms() {
     const char* os_names[] = {"z9001_os.rom", "os.rom", "OS.ROM", nullptr};
     if (!rom_loader_load_from_root(rom_root, os_names,
                                    z9001_constants::OS_ROM_SIZE,
-                                   os_rom_.data(), os_rom_.size())) {
+                                   os_rom_chip_->data(), os_rom_chip_->size_bytes())) {
         printf("%s: OS ROM not loaded\n", Traits::name);
         ok = false;
     }
 
-    // Character ROM (2 KB)
+    // Character ROM (2 KB, not bus-mapped)
     const char* char_names[] = {"z9001_char.rom", "charrom.bin", "CHAR.ROM", nullptr};
     rom_loader_load_from_root(rom_root, char_names,
                               z9001_constants::CHAR_ROM_SIZE,
                               char_rom_.data(), char_rom_.size());  // optional
 
-    // BASIC ROM (10 KB, KC 87 only)
+    // BASIC ROM (10 KB split into 8 KB + 2 KB, KC 87 only)
     if constexpr (Traits::has_basic_rom) {
         const char* basic_names[] = {"z9001_basic.rom", "BASIC.ROM", nullptr};
-        if (!rom_loader_load_from_root(rom_root, basic_names,
-                                       z9001_constants::BASIC_ROM_SIZE,
-                                       basic_rom_.data(), basic_rom_.size())) {
+        // Try loading the full 10 KB ROM into a temp buffer, then split
+        std::vector<uint8_t> full_basic(z9001_constants::BASIC_ROM_SIZE, 0xFF);
+        if (rom_loader_load_from_root(rom_root, basic_names,
+                                      z9001_constants::BASIC_ROM_SIZE,
+                                      full_basic.data(), full_basic.size())) {
+            // Split: first 8 KB → basic_rom_lo, next 2 KB → basic_rom_hi
+            std::memcpy(basic_rom_lo_chip_->data(), full_basic.data(), 8192);
+            std::memcpy(basic_rom_hi_chip_->data(), full_basic.data() + 8192, 2048);
+        } else {
             printf("%s: BASIC ROM not loaded\n", Traits::name);
             ok = false;
         }
