@@ -166,26 +166,11 @@ bool BBCMicroSystem::apply_configuration() {
 bool BBCMicroSystem::initialize() {
     printf("BBC Micro: Initializing system\n");
 
-    // ── Create RAMChip wrappers ──────────────────────────────────────
-    auto ram_chip = std::make_unique<RAMChip>(
-        ChipInfo{"DRAM", "Various"}, bbc_constants::RAM_SIZE, RAMChip::RAM, &pins_,
-        "RAM", bbc_constants::RAM_START);
-    ram_chip_ = ram_chip.get();
-
-    // Paged ROM pool: 256 KB (16 sideways slots × 16 KB each)
-    auto paged_rom_chip = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Various"},
-        bbc_constants::PAGED_ROM_SIZE * 16, ROMChip::ROM, &pins_,
-        "Paged ROM", bbc_constants::PAGED_ROM_START);
-    paged_rom_chip_ = paged_rom_chip.get();
-
-    auto os_chip = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Acorn"}, bbc_constants::OS_ROM_SIZE, ROMChip::ROM, &pins_,
-        "MOS ROM", bbc_constants::OS_ROM_START);
-    os_rom_chip_ = os_chip.get();
-
-    // ── Bind manifest slots, wire the bus ───────────────────────────────
-    bus_mem_.initialize(bus_, ram_chip_, paged_rom_chip_, os_rom_chip_);
+    // ── Factory-create memory chips from manifest ─────────────────────
+    bus_mem_.create_chips(&pins_);
+    ram_chip_        = bus_mem_.chip_as<RAMChip>(bbc_chips::kRamSlot);
+    paged_rom_chip_  = bus_mem_.chip_as<ROMChip>(bbc_chips::kPagedRomSlot);
+    os_rom_chip_     = bus_mem_.chip_as<ROMChip>(bbc_chips::kOsRomSlot);
 
     // ── Convenience pointer for rendering functions ─────────────────────
     memory_ = ram_chip_->data();
@@ -259,9 +244,7 @@ bool BBCMicroSystem::initialize() {
     register_chips();
 
     // Register memory and ROM chips — transfer ownership
-    register_chip(std::move(ram_chip));
-    register_chip(std::move(paged_rom_chip));
-    register_chip(std::move(os_chip));
+    register_bus_chips(bus_mem_);
 
     printf("BBC Micro: System initialized\n");
     return true;

@@ -44,7 +44,6 @@ namespace bbc_constants {
     // or 2 MHz in modes 4-7 (teletext modes use 1 MHz effective).
     inline constexpr uint32_t MASTER_CLOCK          = 16000000;
     inline constexpr uint32_t CPU_FREQ              = 2000000;   // 2 MHz
-    inline constexpr uint32_t CRTC_CLOCK            = 1000000;   // 1 MHz character clock (modes 0-3)
     inline constexpr uint32_t SN76489_CLOCK         = 250000;    // 4 MHz / 16 internal divider
     inline constexpr uint32_t TARGET_FPS            = 50;        // PAL
     inline constexpr uint32_t CYCLES_PER_FRAME      = CPU_FREQ / TARGET_FPS;  // 40000
@@ -54,14 +53,6 @@ namespace bbc_constants {
     inline constexpr uint32_t OS_ROM_SIZE           = 16384;     // 16 KB MOS
     inline constexpr uint32_t PAGED_ROM_SIZE        = 16384;     // 16 KB per sideways ROM slot
 
-    // Memory map boundaries
-    inline constexpr uint16_t RAM_START             = 0x0000;
-    inline constexpr uint16_t RAM_END               = 0x7FFF;
-    inline constexpr uint16_t PAGED_ROM_START       = 0x8000;
-    inline constexpr uint16_t PAGED_ROM_END         = 0xBFFF;
-    inline constexpr uint16_t OS_ROM_START          = 0xC000;
-    inline constexpr uint16_t OS_ROM_END            = 0xFFFF;
-
     // SHEILA I/O page ($FE00-$FEFF)
     inline constexpr uint16_t SHEILA_START          = 0xFE00;
     inline constexpr uint16_t SHEILA_END            = 0xFEFF;
@@ -69,8 +60,6 @@ namespace bbc_constants {
     // SHEILA sub-ranges
     inline constexpr uint16_t CRTC_BASE             = 0xFE00;    // $FE00-$FE07
     inline constexpr uint16_t CRTC_END              = 0xFE07;
-    inline constexpr uint16_t VIDEO_ULA_BASE        = 0xFE20;    // $FE20-$FE2F
-    inline constexpr uint16_t VIDEO_ULA_END         = 0xFE2F;
     inline constexpr uint16_t ROM_SELECT_REG        = 0xFE30;    // $FE30 — paged ROM bank select
     inline constexpr uint16_t SYSTEM_VIA_BASE       = 0xFE40;    // $FE40-$FE5F
     inline constexpr uint16_t SYSTEM_VIA_END        = 0xFE5F;
@@ -79,9 +68,6 @@ namespace bbc_constants {
 
     // FRED / JIM I/O pages (active-low accent on the 1 MHz bus)
     inline constexpr uint16_t FRED_START            = 0xFC00;
-    inline constexpr uint16_t FRED_END              = 0xFCFF;
-    inline constexpr uint16_t JIM_START             = 0xFD00;
-    inline constexpr uint16_t JIM_END               = 0xFDFF;
 
     // Display
     // Mode 7 (Teletext): 40×25 characters — simplified text display
@@ -89,8 +75,6 @@ namespace bbc_constants {
     // We start with Mode 7 (text) as the default boot mode
     inline constexpr uint32_t MODE7_COLS            = 40;
     inline constexpr uint32_t MODE7_ROWS            = 25;
-    inline constexpr uint32_t MODE7_CHAR_WIDTH      = 16;  // Teletext chars are 12×20, padded
-    inline constexpr uint32_t MODE7_CHAR_HEIGHT     = 20;
 
     // Bitmap modes: max is Mode 0 (640×256, 2 colors)
     inline constexpr uint32_t DISPLAY_WIDTH         = 640;
