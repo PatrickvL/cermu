@@ -327,6 +327,53 @@
 
 #include <cstdint>
 
+/* ========================================================================== */
+/* BITMIX — bitwise multiplexer: select bits from A or B per mask             */
+/* ========================================================================== */
+/*
+ * bitmix(a, b, mask) = (a & mask) | (b & ~mask)
+ *
+ * Equivalent to the RISC-V Zbt "cmix" instruction.
+ * The XOR-AND-XOR form  b ^ ((a ^ b) & mask)  avoids NOT and compiles to
+ * the optimal sequence on every target: ANDN+OR (x86 BMI1), BIC+ORR (AArch64),
+ * single cmix (RISC-V Zbt).  When mask is a compile-time constant the compiler
+ * eliminates even the XOR pair.
+ */
+#ifdef __cplusplus
+#include <concepts>
+#include <type_traits>
+
+template<std::unsigned_integral T>
+[[nodiscard]] FORCE_INLINE T bitmix(T a, T b, T mask) noexcept {
+#if defined(__riscv) && defined(__riscv_xlen) && __riscv_xlen >= 32 \
+    && defined(__riscv_zbt)
+    if constexpr (sizeof(T) <= sizeof(uint32_t)) {
+        uint32_t r;
+        __asm__ volatile("cmix %0, %1, %2, %3"
+                         : "=r"(r)
+                         : "r"(uint32_t(mask)), "r"(uint32_t(a)), "r"(uint32_t(b)));
+        return T(r);
+    } else {
+        uint64_t r;
+        __asm__ volatile("cmix %0, %1, %2, %3"
+                         : "=r"(r)
+                         : "r"(uint64_t(mask)), "r"(uint64_t(a)), "r"(uint64_t(b)));
+        return T(r);
+    }
+#else
+    return T(b ^ ((a ^ b) & mask));
+#endif
+}
+
+/* Smallest unsigned type that can hold any value in [0, 2^Bits). */
+template<size_t Bits>
+using uint_least_bits_t =
+    std::conditional_t<(Bits <=  8), uint8_t,
+    std::conditional_t<(Bits <= 16), uint16_t,
+    std::conditional_t<(Bits <= 32), uint32_t,
+    uint64_t>>>;
+
+#else /* C fallback — uint8_t only */
 #if defined(__riscv) && __riscv_xlen >= 32 && defined(__riscv_zbt)
 static inline uint8_t bitmix(uint8_t a, uint8_t b, uint8_t mask) {
     uint32_t r;
@@ -338,6 +385,7 @@ static inline uint8_t bitmix(uint8_t a, uint8_t b, uint8_t mask) {
     return b ^ ((a ^ b) & mask);
 }
 #endif
+#endif /* __cplusplus */
 
 /* ========================================================================== */
 /* FEATURE FLAGS — AUTOMATIC IMPLICATIONS                                     */
