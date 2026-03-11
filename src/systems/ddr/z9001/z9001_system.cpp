@@ -63,50 +63,19 @@ template<Z9001Variant V>
 bool Z9001System<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
 
-    // ── Create RAMChip wrappers ──────────────────────────────────────
-    auto ram = std::make_unique<RAMChip>(
-        ChipInfo{"DRAM", "VEB"}, Traits::has_basic_rom ? 65536u : uint32_t(Traits::ram_size),
-        RAMChip::RAM, &pins_, "RAM", 0x0000);
-    ram_chip_ = ram.get();
+    // ── Create chips via factory, wire the bus ────────────────────────
+    bus_mem_.create_chips(&pins_);
+    bus_mem_.apply(bus_);
 
-    auto video_ram = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "VEB"}, z9001_constants::VIDEO_RAM_SIZE,
-        RAMChip::RAM, &pins_, "Video RAM", z9001_constants::VIDEO_RAM_BASE);
-    video_ram_chip_ = video_ram.get();
-
-    auto os_rom = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "VEB"}, z9001_constants::OS_ROM_SIZE,
-        ROMChip::ROM, &pins_, "OS ROM", z9001_constants::OS_ROM_BASE);
-    os_rom_chip_ = os_rom.get();
-
-    std::unique_ptr<ROMChip> basic_rom_lo;
-    std::unique_ptr<ROMChip> basic_rom_hi;
-    std::unique_ptr<RAMChip> color_ram;
+    // Retrieve typed pointers for chips accessed after initialize()
+    video_ram_chip_ = bus_mem_.template chip_as<RAMChip>(Traits::kVideoRamSlot);
+    os_rom_chip_    = bus_mem_.template chip_as<ROMChip>(Traits::kOsRomSlot);
     if constexpr (Traits::has_basic_rom) {
-        basic_rom_lo = std::make_unique<ROMChip>(
-            ChipInfo{"ROM", "VEB"}, 8192,
-            ROMChip::ROM, &pins_, "BASIC ROM lo", z9001_constants::BASIC_ROM_BASE);
-        basic_rom_lo_chip_ = basic_rom_lo.get();
-
-        basic_rom_hi = std::make_unique<ROMChip>(
-            ChipInfo{"ROM", "VEB"}, 2048,
-            ROMChip::ROM, &pins_, "BASIC ROM hi", 0xE000);
-        basic_rom_hi_chip_ = basic_rom_hi.get();
+        basic_rom_lo_chip_ = bus_mem_.template chip_as<ROMChip>(Traits::kBasicRomLoSlot);
+        basic_rom_hi_chip_ = bus_mem_.template chip_as<ROMChip>(Traits::kBasicRomHiSlot);
     }
     if constexpr (Traits::has_color_ram) {
-        color_ram = std::make_unique<RAMChip>(
-            ChipInfo{"SRAM", "VEB"}, z9001_constants::COLOR_RAM_SIZE,
-            RAMChip::SRAM, &pins_, "Color RAM", z9001_constants::COLOR_RAM_BASE);
-        color_ram_chip_ = color_ram.get();
-    }
-
-    // ── Bind manifest slots, wire the bus ───────────────────────────────
-    if constexpr (Traits::has_basic_rom) {
-        bus_mem_.initialize(bus_, ram_chip_, basic_rom_lo_chip_,
-                            basic_rom_hi_chip_, color_ram_chip_,
-                            video_ram_chip_, os_rom_chip_);
-    } else {
-        bus_mem_.initialize(bus_, ram_chip_, video_ram_chip_, os_rom_chip_);
+        color_ram_chip_ = bus_mem_.template chip_as<RAMChip>(Traits::kColorRamSlot);
     }
 
     // ── Trim RAM pages for KC87 (48 KB out of 64 KB allocated) ──────────
@@ -137,16 +106,7 @@ bool Z9001System<V>::initialize() {
         "U855 PIO #2", "U855", "I/O", z9001_constants::PIO2_PORT_A);
     register_chip(&ctc_,
         "U857 CTC", "U857", "I/O", z9001_constants::CTC_CH0);
-    register_chip(std::move(ram));
-    register_chip(std::move(video_ram));
-    register_chip(std::move(os_rom));
-    if constexpr (Traits::has_basic_rom) {
-        register_chip(std::move(basic_rom_lo));
-        register_chip(std::move(basic_rom_hi));
-    }
-    if constexpr (Traits::has_color_ram) {
-        register_chip(std::move(color_ram));
-    }
+    register_bus_chips(bus_mem_);
 
     printf("%s: System initialized (RAM: %d KB)\n", Traits::name, Traits::ram_size / 1024);
     system_ready_ = true;
