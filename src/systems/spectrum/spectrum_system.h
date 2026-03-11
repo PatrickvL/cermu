@@ -25,13 +25,14 @@
 
 #include "../../core/emulated_system.h"
 #include "../../core/system_lines.h"
+#include "../../core/chip_manifest.hpp"
 #include "../../chip/cpu/z80/zilog_z80a.h"
 #include "../../chip/video/spectrum_ula/ferranti_ula.h"
 #include "../../chip/sound/ay_3_8910.h"
+#include "../../chip/memory/memory_chip.h"
 #include "spectrum_constants.h"
 #include <cstdint>
 #include <memory>
-#include <vector>
 
 // ============================================================================
 // Spectrum Variant Template
@@ -74,6 +75,47 @@ template<> struct SpectrumVariantTraits<SpectrumVariant::ZX128K> {
 // ============================================================================
 
 #define SPECTRUM_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
+
+// =============================================================================
+// ZX Spectrum chip manifests — declarative memory layout
+// =============================================================================
+//
+// 48K:
+//   Slot 0: RAM — 64 KB at $0000 (only $4000–$FFFF used; ROM overlays reads)
+//   Slot 1: ROM — 16 KB at $0000 (read overlay)
+//
+// 128K:
+//   Slot 0: RAM — 128 KB at $0000 (8 × 16 KB banks; $4000=$bank5, $8000=$bank2,
+//                                  $C000=switchable via port $7FFD)
+//   Slot 1: ROM —  32 KB at $0000 (2 × 16 KB banks; selected by $7FFD bit 4)
+//
+inline constexpr auto kSpectrum48KChips = make_chip_manifest(
+    Slot<MemoryChip>{65536, 0x0000},        // RAM: 64 KB
+    Slot<MemoryChip>{16384, 0x0000}         // ROM: 16 KB overlay at $0000
+);
+
+inline constexpr auto kSpectrum128KChips = make_chip_manifest(
+    Slot<MemoryChip>{131072, 0x0000},       // RAM: 128 KB (8 banks)
+    Slot<MemoryChip>{ 32768, 0x0000}        // ROM: 32 KB (2 banks) overlay at $0000
+);
+
+namespace spectrum_chips {
+    inline constexpr size_t kRamSlot = 0;
+    inline constexpr size_t kRomSlot = 1;
+}
+
+// BusTraits — selects the correct manifest per variant
+template<SpectrumVariant V> struct SpectrumBusTraits;
+
+template<> struct SpectrumBusTraits<SpectrumVariant::ZX48K> {
+    static constexpr const auto& kManifest = kSpectrum48KChips;
+    using Spec = ManifestBusSpec<kSpectrum48KChips, 16, 8>;
+};
+
+template<> struct SpectrumBusTraits<SpectrumVariant::ZX128K> {
+    static constexpr const auto& kManifest = kSpectrum128KChips;
+    using Spec = ManifestBusSpec<kSpectrum128KChips, 16, 8>;
+};
 
 // ============================================================================
 // ZX Spectrum System
@@ -137,11 +179,22 @@ private:
     ay_3_8910_t     ay_;              // AY-3-8912 sound (128K only, but always present for simplicity)
 
     // ========================================================================
-    // MEMORY
+    // MEMORY — owned by registered_chips_
     // ========================================================================
 
-    std::vector<uint8_t> ram_;        // 48KB or 128KB
-    std::vector<uint8_t> rom_;        // 16KB or 32KB
+    MemoryChip* ram_ = nullptr;       // 64KB (48K) or 128KB (128K)
+    MemoryChip* rom_ = nullptr;       // 16KB (48K) or 32KB (128K)
+
+    // Direct pointer into unified buffer for screen rendering
+    uint8_t* screen_ram_ptr_ = nullptr;
+
+    // ── MemoryBus — declarative setup via chip manifest ──────────────────
+    using BT  = SpectrumBusTraits<V>;
+    using Bus = MemoryBus<typename BT::Spec>;
+    using PT  = PackingTraits<typename BT::Spec>;
+    using Mem = BusMemory<typename BT::Spec>;
+    Bus bus_;
+    Mem bus_mem_{BT::kManifest};
 
     // 128K banking state
     uint8_t  bank_select_ = 0;       // Port $7FFD latch
@@ -174,7 +227,8 @@ private:
     // HELPERS
     // ========================================================================
 
-    bus_state_t mem_tick(bus_state_t pins);
+    void configure_bus_memory_map();
+    void update_banking();           // 128K: remap pages after $7FFD write
     bus_state_t io_tick(bus_state_t pins);
     void update_framebuffer();
     bool load_roms();
