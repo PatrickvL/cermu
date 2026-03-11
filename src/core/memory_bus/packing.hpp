@@ -3,7 +3,7 @@
 // =============================================================================
 //
 // PackingTraits derives every compile-time constant the bus needs from the
-// user's config struct: chip-id integer types, sentinel thresholds, the
+// user's spec struct: chip-id integer types, sentinel thresholds, the
 // packed/separate R/W decision, CS-line bit-width, and sub-table capacity.
 //
 // Sentinel layout (read side — write side mirrors with MaxWriteChipId):
@@ -31,13 +31,13 @@
 #include <cstdint>
 
 
-template<BusConfigConcept Cfg>
+template<BusSpecConcept Spec>
 struct PackingTraits {
     // ── Sub-table configuration ─────────────────────────────────────────────
-    static constexpr size_t kMaxIndexedSubs   = cfg_max_indexed_subs_v<Cfg>;
-    static constexpr size_t kIndexedSubBits   = cfg_indexed_sub_bits_v<Cfg>;
-    static constexpr size_t kMaxMaskedSubs    = cfg_max_masked_subs_v<Cfg>;
-    static constexpr size_t kMaxMaskedRegions = cfg_max_masked_regions_v<Cfg>;
+    static constexpr size_t kMaxIndexedSubs   = spec_max_indexed_subs_v<Spec>;
+    static constexpr size_t kIndexedSubBits   = spec_indexed_sub_bits_v<Spec>;
+    static constexpr size_t kMaxMaskedSubs    = spec_max_masked_subs_v<Spec>;
+    static constexpr size_t kMaxMaskedRegions = spec_max_masked_regions_v<Spec>;
 
     static constexpr bool kHasIndexedSub = (kMaxIndexedSubs > 0);
     static constexpr bool kHasMaskedSub  = (kMaxMaskedSubs  > 0);
@@ -52,11 +52,11 @@ struct PackingTraits {
         1
         + kMaxIndexedSubs
         + kMaxMaskedSubs
-        + (Cfg::EnableMmio ? Cfg::MaxMmioHandlers : 0);
+        + (Spec::EnableMmio ? Spec::MaxMmioHandlers : 0);
 
     // ── Chip-id range and type derivation ───────────────────────────────────
-    static constexpr size_t kReadMaxId  = Cfg::MaxChipId      + kNumSentinels;
-    static constexpr size_t kWriteMaxId = Cfg::MaxWriteChipId + kNumSentinels;
+    static constexpr size_t kReadMaxId  = Spec::MaxChipId      + kNumSentinels;
+    static constexpr size_t kWriteMaxId = Spec::MaxWriteChipId + kNumSentinels;
 
     static constexpr size_t kReadBits  = std::bit_width(kReadMaxId);
     static constexpr size_t kWriteBits = std::bit_width(kWriteMaxId);
@@ -71,8 +71,8 @@ struct PackingTraits {
     using PackedId = uint_least_bits_t<kPackedBits>;
 
     static constexpr bool kPackedRW = [] {
-        if constexpr (membus_detail::has_packed_rw_override<Cfg>::value)
-            return Cfg::PackedRW;
+        if constexpr (membus_detail::has_packed_rw_override<Spec>::value)
+            return Spec::PackedRW;
         else
             return (kPackedBits <= 32);
     }();
@@ -84,8 +84,8 @@ struct PackingTraits {
 
     // ── Sentinel thresholds ─────────────────────────────────────────────────
 
-    static constexpr ChipId      kReadSentinelMin  = ChipId     (Cfg::MaxChipId      + 1);
-    static constexpr WriteChipId kWriteSentinelMin = WriteChipId(Cfg::MaxWriteChipId + 1);
+    static constexpr ChipId      kReadSentinelMin  = ChipId     (Spec::MaxChipId      + 1);
+    static constexpr WriteChipId kWriteSentinelMin = WriteChipId(Spec::MaxWriteChipId + 1);
 
     // kNoChipSelected: no chip's /CS line is asserted; data bus floats.
     static constexpr ChipId      kNoChipSelected      = kReadSentinelMin;
@@ -94,8 +94,8 @@ struct PackingTraits {
     // kIndexedSubBase: indexed sub-table dispatch sentinels.
     // Range [kIndexedSubBase, kIndexedSubBase + kMaxIndexedSubs).
     // Empty range when kMaxIndexedSubs = 0.
-    static constexpr ChipId      kIndexedSubBase      = ChipId     (Cfg::MaxChipId      + 2);
-    static constexpr WriteChipId kIndexedSubBaseWrite = WriteChipId(Cfg::MaxWriteChipId + 2);
+    static constexpr ChipId      kIndexedSubBase      = ChipId     (Spec::MaxChipId      + 2);
+    static constexpr WriteChipId kIndexedSubBaseWrite = WriteChipId(Spec::MaxWriteChipId + 2);
 
     // kMaskedSubBase: masked sub-table dispatch sentinels.
     // Range [kMaskedSubBase, kMaskedSubBase + kMaxMaskedSubs).
@@ -113,15 +113,15 @@ struct PackingTraits {
         WriteChipId(size_t(kMaskedSubBaseWrite) + kMaxMaskedSubs);
 
     // ── CS line bits (multiplexed encoding) ─────────────────────────────────
-    static constexpr size_t kCsLineBits = cfg_cs_line_bits_v<Cfg>;
-    static constexpr size_t kCsBitShift = cfg_cs_bit_shift_v<Cfg>;
+    static constexpr size_t kCsLineBits = spec_cs_line_bits_v<Spec>;
+    static constexpr size_t kCsBitShift = spec_cs_bit_shift_v<Spec>;
     static constexpr bool   kCsLines    = (kCsLineBits > 0);
     static constexpr uint64_t kCsMask =
         kCsLines ? (((uint64_t(1) << kCsLineBits) - 1) << kCsBitShift) : 0;
 
     // ── Static assertions ───────────────────────────────────────────────────
-    static_assert(Cfg::MaxWriteChipId <= Cfg::MaxChipId);
-    static_assert(Cfg::PageBits >= 1 && Cfg::PageBits < Cfg::AddressBits);
+    static_assert(Spec::MaxWriteChipId <= Spec::MaxChipId);
+    static_assert(Spec::PageBits >= 1 && Spec::PageBits < Spec::AddressBits);
     static_assert(kReadMaxId  < (size_t(1) << (sizeof(ChipId)      * 8)));
     static_assert(kWriteMaxId < (size_t(1) << (sizeof(WriteChipId) * 8)));
     static_assert(!kCsLines || kCsLineBits >= std::bit_width(kReadMaxId),

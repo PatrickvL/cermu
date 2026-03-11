@@ -15,7 +15,7 @@
 //   until a terminal chip id (direct, kNoChipSelected, or MMIO) is reached.
 //   Supports arbitrary recursion depth (bounded by total sub-table pool).
 //
-// BusView is a thin compile-time–bound wrapper: BusView<Cfg, ViewerId> binds
+// BusView is a thin compile-time–bound wrapper: BusView<Spec, ViewerId> binds
 // a viewer id at compile time so call sites pass only bus_state_t.
 //
 // =============================================================================
@@ -39,27 +39,27 @@
 // §1  MemoryBus
 // =============================================================================
 
-template<BusConfigConcept Cfg = DefaultBusConfig>
+template<BusSpecConcept Spec = DefaultBusSpec>
 class MemoryBus {
 public:
-    using Addr        = typename Cfg::AddrType;
-    using DataType    = cfg_data_type_t<Cfg>;
-    using PT          = PackingTraits<Cfg>;
-    using Viewer      = ViewerState<Cfg>;
-    using Snapshot    = ModeSnapshot<Cfg>;
+    using Addr        = typename Spec::AddrType;
+    using DataType    = spec_data_type_t<Spec>;
+    using PT          = PackingTraits<Spec>;
+    using Viewer      = ViewerState<Spec>;
+    using Snapshot    = ModeSnapshot<Spec>;
     using ChipId      = typename PT::ChipId;
     using WriteChipId = typename PT::WriteChipId;
     using BlockId     = typename PT::BlockId;
     using PageSlot    = typename PT::PageSlot;
 
-    static constexpr bool   kPartialBus     = cfg_partial_bus_v<Cfg>;
+    static constexpr bool   kPartialBus     = spec_partial_bus_v<Spec>;
     static constexpr bool   kCsLines        = PT::kCsLines;
     static constexpr size_t kCsLineBits     = PT::kCsLineBits;
     static constexpr size_t kNumPages       = Viewer::kNumPages;
     static constexpr size_t kPageSize       = Viewer::kPageSize;
     static constexpr size_t kPageMask       = Viewer::kPageMask;
-    static constexpr size_t kNumViewers     = Cfg::NumViewers;
-    static constexpr size_t kMaxHandlers    = Cfg::EnableMmio ? Cfg::MaxMmioHandlers : 0;
+    static constexpr size_t kNumViewers     = Spec::NumViewers;
+    static constexpr size_t kMaxHandlers    = Spec::EnableMmio ? Spec::MaxMmioHandlers : 0;
     static constexpr bool   kHasIndexedSub  = PT::kHasIndexedSub;
     static constexpr bool   kHasMaskedSub   = PT::kHasMaskedSub;
     static constexpr bool   kHasSubTables   = PT::kHasSubTables;
@@ -263,7 +263,7 @@ public:
 
     void map_read_register_file(size_t viewer_id, size_t first_page,
                                 size_t count, size_t handler_idx) noexcept
-        requires(Cfg::EnableMmio)
+        requires(Spec::EnableMmio)
     {
         assert(handler_idx < mmio_count_);
         fill_read_constant(viewer_id, first_page, count,
@@ -272,7 +272,7 @@ public:
 
     void map_write_register_file(size_t viewer_id, size_t first_page,
                                  size_t count, size_t handler_idx) noexcept
-        requires(Cfg::EnableMmio)
+        requires(Spec::EnableMmio)
     {
         assert(handler_idx < mmio_count_);
         fill_write_constant(viewer_id, first_page, count,
@@ -281,7 +281,7 @@ public:
 
     void map_register_file(size_t viewer_id, size_t first_page,
                            size_t count, size_t handler_idx) noexcept
-        requires(Cfg::EnableMmio)
+        requires(Spec::EnableMmio)
     {
         map_read_register_file (viewer_id, first_page, count, handler_idx);
         map_write_register_file(viewer_id, first_page, count, handler_idx);
@@ -352,7 +352,7 @@ public:
 
     [[nodiscard]]
     int register_handler(MmioHandler handler) noexcept
-        requires(Cfg::EnableMmio)
+        requires(Spec::EnableMmio)
     {
         if (mmio_count_ >= kMaxHandlers) return -1;
         const int idx = int(mmio_count_++);
@@ -361,22 +361,22 @@ public:
     }
 
     [[nodiscard]] int register_mmio(MmioHandler h) noexcept
-        requires(Cfg::EnableMmio) { return register_handler(h); }
+        requires(Spec::EnableMmio) { return register_handler(h); }
 
     void update_handler(size_t idx, MmioHandler handler) noexcept
-        requires(Cfg::EnableMmio)
+        requires(Spec::EnableMmio)
     {
         assert(idx < mmio_count_);
         handlers_[idx] = handler;
     }
 
     void update_mmio(size_t idx, MmioHandler h) noexcept
-        requires(Cfg::EnableMmio) { update_handler(idx, h); }
+        requires(Spec::EnableMmio) { update_handler(idx, h); }
 
     [[nodiscard]] MmioHandler&       handler(size_t idx)       noexcept
-        requires(Cfg::EnableMmio) { return handlers_[idx]; }
+        requires(Spec::EnableMmio) { return handlers_[idx]; }
     [[nodiscard]] const MmioHandler& handler(size_t idx) const noexcept
-        requires(Cfg::EnableMmio) { return handlers_[idx]; }
+        requires(Spec::EnableMmio) { return handlers_[idx]; }
     [[nodiscard]] size_t handler_count() const noexcept { return mmio_count_; }
 
     // =========================================================================
@@ -521,14 +521,14 @@ public:
     }
 
     // Direct access to an indexed sub-table (for advanced manipulation).
-    [[nodiscard]] IndexedSubTable<Cfg>& indexed_sub(size_t viewer_id,
+    [[nodiscard]] IndexedSubTable<Spec>& indexed_sub(size_t viewer_id,
                                                      size_t table_idx) noexcept
         requires(kHasIndexedSub)
     {
         return indexed_subs_[viewer_id][table_idx];
     }
 
-    [[nodiscard]] const IndexedSubTable<Cfg>& indexed_sub(
+    [[nodiscard]] const IndexedSubTable<Spec>& indexed_sub(
         size_t viewer_id, size_t table_idx) const noexcept
         requires(kHasIndexedSub)
     {
@@ -599,14 +599,14 @@ public:
                  masked_sub_write_chip(table_idx));
     }
 
-    [[nodiscard]] MaskedSubTable<Cfg>& masked_sub(size_t viewer_id,
+    [[nodiscard]] MaskedSubTable<Spec>& masked_sub(size_t viewer_id,
                                                     size_t table_idx) noexcept
         requires(kHasMaskedSub)
     {
         return masked_subs_[viewer_id][table_idx];
     }
 
-    [[nodiscard]] const MaskedSubTable<Cfg>& masked_sub(
+    [[nodiscard]] const MaskedSubTable<Spec>& masked_sub(
         size_t viewer_id, size_t table_idx) const noexcept
         requires(kHasMaskedSub)
     {
@@ -688,7 +688,7 @@ private:
     [[nodiscard]] __attribute__((always_inline)) inline
     bus_state_t read_buffer(ChipId chip_id, bus_state_t bus) const noexcept {
         const Addr     addr    = Addr(BUS_GET_ADDR(bus));
-        const size_t   offset  = (size_t(chip_id) << Cfg::PageBits)
+        const size_t   offset  = (size_t(chip_id) << Spec::PageBits)
                                  | Viewer::offset_of(addr);
         const DataType mem_val = static_cast<DataType>(unified_buf_[offset]);
 
@@ -696,7 +696,7 @@ private:
 
         if constexpr (kPartialBus) {
             const DataType mask = bus_masks_.read(size_t(chip_id));
-            if (__builtin_expect(mask != DataBusMasks<Cfg>::kFullMask, 0)) {
+            if (__builtin_expect(mask != DataBusMasks<Spec>::kFullMask, 0)) {
                 BUS_BITMIX_DATA(bus, mem_val, mask);
                 return bus;
             }
@@ -709,7 +709,7 @@ private:
     __attribute__((always_inline)) inline
     bus_state_t write_buffer(WriteChipId chip_id, bus_state_t bus) noexcept {
         const Addr     addr    = Addr(BUS_GET_ADDR(bus));
-        const size_t   offset  = (size_t(chip_id) << Cfg::PageBits)
+        const size_t   offset  = (size_t(chip_id) << Spec::PageBits)
                                  | Viewer::offset_of(addr);
         const DataType bus_val = static_cast<DataType>(BUS_GET_DATA(bus));
 
@@ -717,7 +717,7 @@ private:
 
         if constexpr (kPartialBus) {
             const DataType mask = bus_masks_.write(size_t(chip_id));
-            if (__builtin_expect(mask != DataBusMasks<Cfg>::kFullMask, 0)) {
+            if (__builtin_expect(mask != DataBusMasks<Spec>::kFullMask, 0)) {
                 const DataType old_val = static_cast<DataType>(unified_buf_[offset]);
                 unified_buf_[offset] =
                     static_cast<uint8_t>(bitmix(bus_val, old_val, mask));
@@ -735,13 +735,13 @@ private:
     [[nodiscard]] __attribute__((always_inline)) inline
     bus_state_t read_buffer_no_cs(ChipId chip_id, bus_state_t bus) const noexcept {
         const Addr     addr    = Addr(BUS_GET_ADDR(bus));
-        const size_t   offset  = (size_t(chip_id) << Cfg::PageBits)
+        const size_t   offset  = (size_t(chip_id) << Spec::PageBits)
                                  | Viewer::offset_of(addr);
         const DataType mem_val = static_cast<DataType>(unified_buf_[offset]);
 
         if constexpr (kPartialBus) {
             const DataType mask = bus_masks_.read(size_t(chip_id));
-            if (__builtin_expect(mask != DataBusMasks<Cfg>::kFullMask, 0)) {
+            if (__builtin_expect(mask != DataBusMasks<Spec>::kFullMask, 0)) {
                 BUS_BITMIX_DATA(bus, mem_val, mask);
                 return bus;
             }
@@ -754,13 +754,13 @@ private:
     __attribute__((always_inline)) inline
     bus_state_t write_buffer_no_cs(WriteChipId chip_id, bus_state_t bus) noexcept {
         const Addr     addr    = Addr(BUS_GET_ADDR(bus));
-        const size_t   offset  = (size_t(chip_id) << Cfg::PageBits)
+        const size_t   offset  = (size_t(chip_id) << Spec::PageBits)
                                  | Viewer::offset_of(addr);
         const DataType bus_val = static_cast<DataType>(BUS_GET_DATA(bus));
 
         if constexpr (kPartialBus) {
             const DataType mask = bus_masks_.write(size_t(chip_id));
-            if (__builtin_expect(mask != DataBusMasks<Cfg>::kFullMask, 0)) {
+            if (__builtin_expect(mask != DataBusMasks<Spec>::kFullMask, 0)) {
                 const DataType old_val = static_cast<DataType>(unified_buf_[offset]);
                 unified_buf_[offset] =
                     static_cast<uint8_t>(bitmix(bus_val, old_val, mask));
@@ -778,7 +778,7 @@ private:
 
     [[nodiscard]] __attribute__((always_inline)) inline
     bus_state_t read_mmio(ChipId chip_id, bus_state_t bus) noexcept {
-        if constexpr (Cfg::EnableMmio) {
+        if constexpr (Spec::EnableMmio) {
             const size_t idx = size_t(chip_id) - size_t(PT::kRegChipBase);
             if (idx < mmio_count_) {
                 if constexpr (kCsLines) { set_cs(bus, size_t(chip_id)); }
@@ -791,7 +791,7 @@ private:
 
     __attribute__((always_inline)) inline
     bus_state_t write_mmio(WriteChipId chip_id, bus_state_t bus) noexcept {
-        if constexpr (Cfg::EnableMmio) {
+        if constexpr (Spec::EnableMmio) {
             const size_t idx = size_t(chip_id) - size_t(PT::kRegChipBaseWrite);
             if (idx < mmio_count_) {
                 if constexpr (kCsLines) { set_cs(bus, size_t(chip_id)); }
@@ -886,7 +886,7 @@ private:
         }
 
         // MMIO handler dispatch
-        if constexpr (Cfg::EnableMmio) {
+        if constexpr (Spec::EnableMmio) {
             if (chip_id >= PT::kRegChipBase)
                 return read_mmio(chip_id, bus);
         }
@@ -908,7 +908,7 @@ private:
                 return bus;
         }
 
-        if constexpr (Cfg::EnableMmio) {
+        if constexpr (Spec::EnableMmio) {
             if (chip_id >= PT::kRegChipBaseWrite)
                 return write_mmio(chip_id, bus);
         }
@@ -927,12 +927,12 @@ private:
     // Data-bus masks — zero storage when EnablePartialBus is absent or false.
     [[no_unique_address]]
     std::conditional_t<kPartialBus,
-        DataBusMasks<Cfg>,
+        DataBusMasks<Spec>,
         std::monostate> bus_masks_{};
 
     // MMIO handler table — zero storage when EnableMmio is false.
     [[no_unique_address]]
-    std::conditional_t<Cfg::EnableMmio,
+    std::conditional_t<Spec::EnableMmio,
         std::array<MmioHandler, (kMaxHandlers > 0 ? kMaxHandlers : 1)>,
         std::monostate> handlers_{};
 
@@ -941,7 +941,7 @@ private:
     // ── Indexed sub-tables — per-viewer, zero storage when disabled ─────────
     [[no_unique_address]]
     std::conditional_t<kHasIndexedSub,
-        std::array<std::array<IndexedSubTable<Cfg>, kMaxIndexedSubs>, kNumViewers>,
+        std::array<std::array<IndexedSubTable<Spec>, kMaxIndexedSubs>, kNumViewers>,
         std::monostate> indexed_subs_{};
 
     [[no_unique_address]]
@@ -952,7 +952,7 @@ private:
     // ── Masked sub-tables — per-viewer, zero storage when disabled ──────────
     [[no_unique_address]]
     std::conditional_t<kHasMaskedSub,
-        std::array<std::array<MaskedSubTable<Cfg>, kMaxMaskedSubs>, kNumViewers>,
+        std::array<std::array<MaskedSubTable<Spec>, kMaxMaskedSubs>, kNumViewers>,
         std::monostate> masked_subs_{};
 
     [[no_unique_address]]
@@ -966,11 +966,11 @@ private:
 // §7  BusView — compile-time–bound viewer accessor
 // =============================================================================
 
-template<BusConfigConcept Cfg, size_t ViewerId>
+template<BusSpecConcept Spec, size_t ViewerId>
 class BusView {
-    static_assert(ViewerId < Cfg::NumViewers, "ViewerId out of range");
+    static_assert(ViewerId < Spec::NumViewers, "ViewerId out of range");
 public:
-    using Bus = MemoryBus<Cfg>;
+    using Bus = MemoryBus<Spec>;
 
     explicit BusView(Bus& bus) noexcept : bus_(bus) {}
 

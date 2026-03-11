@@ -29,18 +29,18 @@
 // §1  ViewerState
 // =============================================================================
 
-template<BusConfigConcept Cfg>
+template<BusSpecConcept Spec>
 struct ViewerState {
-    using PT          = PackingTraits<Cfg>;
-    using Addr        = typename Cfg::AddrType;
+    using PT          = PackingTraits<Spec>;
+    using Addr        = typename Spec::AddrType;
     using ChipId      = typename PT::ChipId;
     using WriteChipId = typename PT::WriteChipId;
     using BlockId     = typename PT::BlockId;
     using PackedId    = typename PT::PackedId;
     using PageSlot    = typename PT::PageSlot;
 
-    static constexpr size_t kNumPages = (size_t(1) << Cfg::AddressBits) >> Cfg::PageBits;
-    static constexpr size_t kPageSize = size_t(1) << Cfg::PageBits;
+    static constexpr size_t kNumPages = (size_t(1) << Spec::AddressBits) >> Spec::PageBits;
+    static constexpr size_t kPageSize = size_t(1) << Spec::PageBits;
     static constexpr size_t kPageMask = kPageSize - 1;
 
     // Read-side chip table: page → ChipId.
@@ -106,7 +106,7 @@ struct ViewerState {
         }
     }
 
-    [[nodiscard]] static constexpr size_t page_of  (Addr a) noexcept { return size_t(a) >> Cfg::PageBits; }
+    [[nodiscard]] static constexpr size_t page_of  (Addr a) noexcept { return size_t(a) >> Spec::PageBits; }
     [[nodiscard]] static constexpr size_t offset_of(Addr a) noexcept { return size_t(a) &  kPageMask; }
 };
 
@@ -121,17 +121,17 @@ struct ViewerState {
 // cpu_encoded_chip_per_bank.
 //
 
-template<BusConfigConcept Cfg>
+template<BusSpecConcept Spec>
 struct ModeSnapshot {
-    using V        = ViewerState<Cfg>;
+    using V        = ViewerState<Spec>;
     using PageSlot = typename V::PageSlot;
-    using BlockId  = typename PackingTraits<Cfg>::BlockId;
+    using BlockId  = typename PackingTraits<Spec>::BlockId;
     static constexpr size_t N = V::kNumPages;
 
     std::array<PageSlot, N> chip_table{};
 
     [[no_unique_address]]
-    std::conditional_t<!PackingTraits<Cfg>::kPackedRW,
+    std::conditional_t<!PackingTraits<Spec>::kPackedRW,
         std::array<BlockId, N>,
         std::monostate> write_chip_table{};
 };

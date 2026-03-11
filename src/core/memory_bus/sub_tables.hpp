@@ -49,10 +49,10 @@
 //   bit_shift — addr >> bit_shift before masking (e.g. 8 for bits 11-8)
 //
 
-template<BusConfigConcept Cfg>
+template<BusSpecConcept Spec>
 struct IndexedSubTable {
-    using PT          = PackingTraits<Cfg>;
-    using Addr        = typename Cfg::AddrType;
+    using PT          = PackingTraits<Spec>;
+    using Addr        = typename Spec::AddrType;
     using ChipId      = typename PT::ChipId;
     using WriteChipId = typename PT::WriteChipId;
     using PageSlot    = typename PT::PageSlot;
@@ -167,10 +167,10 @@ struct IndexedSubTable {
 // It can be changed at runtime (e.g. C16 ROM ↔ RAM toggle) via set_base().
 //
 
-template<BusConfigConcept Cfg>
+template<BusSpecConcept Spec>
 struct MaskedSubTable {
-    using PT          = PackingTraits<Cfg>;
-    using Addr        = typename Cfg::AddrType;
+    using PT          = PackingTraits<Spec>;
+    using Addr        = typename Spec::AddrType;
     using ChipId      = typename PT::ChipId;
     using WriteChipId = typename PT::WriteChipId;
 
