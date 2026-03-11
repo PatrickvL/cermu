@@ -18,7 +18,6 @@
 
 template<CPCModel M>
 static HardwareTraits create_cpc_hardware_traits() {
-    using Traits = CPCModelTraits<M>;
     HardwareTraits traits = {};
 
     traits.display.native_width    = amstrad_cpc_constants::FB_WIDTH;
@@ -70,7 +69,7 @@ static SystemDescriptor cpc6128_descriptor = {
 };
 
 // ============================================================================
-// IMPLEMENTATION (stub — follows Spectrum pattern)
+// CONSTRUCTION / DESTRUCTION
 // ============================================================================
 
 template<CPCModel M>
@@ -97,9 +96,40 @@ bool AmstradCPCSystem<M>::set_configuration(const SystemConfiguration& config) {
 template<CPCModel M>
 bool AmstradCPCSystem<M>::apply_configuration() { return true; }
 
+// ============================================================================
+// LIFECYCLE
+// ============================================================================
+
 template<CPCModel M>
 bool AmstradCPCSystem<M>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
+
+    // ── Create MemoryChip wrappers ──────────────────────────────────────
+    constexpr size_t ram_bytes = Traits::ram_size_kb * 1024;
+    constexpr size_t rom_bytes = amstrad_cpc_constants::ROM_SIZE;
+
+    auto ram_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"DRAM", "Various"}, ram_bytes,
+        MemoryChip::RAM, &pins_, "RAM", 0x0000);
+    ram_chip_ = ram_chip.get();
+
+    auto lower_rom_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "Amstrad"}, rom_bytes,
+        MemoryChip::ROM, &pins_, "Lower ROM", 0x0000);
+    lower_rom_chip_ = lower_rom_chip.get();
+
+    auto upper_rom_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "Amstrad"}, rom_bytes,
+        MemoryChip::ROM, &pins_, "Upper ROM", 0xC000);
+    upper_rom_chip_ = upper_rom_chip.get();
+
+    // ── Bind manifest slots, wire the bus ───────────────────────────────
+    bus_mem_.initialize(bus_, ram_chip_, lower_rom_chip_, upper_rom_chip_);
+
+    // ── Configure page tables for this variant ──────────────────────────
+    configure_bus_memory_map();
+
+    // ── Init chips ──────────────────────────────────────────────────────
     cpu_ = new ZilogZ80A();
     pins_ = cpu_->init();
     crtc_.init();
@@ -114,23 +144,44 @@ bool AmstradCPCSystem<M>::initialize() {
     ppi_.init();
     ay_.init();
     gate_array_.reset();
-    ram_.resize(Traits::ram_size_kb * 1024, 0x00);
-    lower_rom_.resize(amstrad_cpc_constants::ROM_SIZE, 0xFF);
-    upper_rom_.resize(amstrad_cpc_constants::ROM_SIZE, 0xFF);
+
     load_roms();
+
+    // ── Register chips for Hardware menu ────────────────────────────────
+    register_chip(static_cast<ChipBase*>(cpu_),
+        "Zilog Z80A CPU", "Z80A", "CPU", 0x0000);
+    register_chip(&crtc_,
+        "MC6845 CRTC", "MC6845", "Video", 0);
+    register_chip(&ppi_,
+        "Intel 8255 PPI", "i8255", "I/O", 0);
+    register_chip(&ay_,
+        "AY-3-8912 PSG", "AY-3-8912", "Sound", 0);
+    register_chip(std::move(ram_chip));
+    register_chip(std::move(lower_rom_chip));
+    register_chip(std::move(upper_rom_chip));
+
+    printf("%s: System initialized (%dKB RAM)\n", Traits::name, Traits::ram_size_kb);
     system_ready_ = true;
     return true;
 }
 
-template<CPCModel M> void AmstradCPCSystem<M>::shutdown() { delete cpu_; cpu_ = nullptr; system_ready_ = false; }
-template<CPCModel M> void AmstradCPCSystem<M>::reset() {
+template<CPCModel M>
+void AmstradCPCSystem<M>::shutdown() { delete cpu_; cpu_ = nullptr; system_ready_ = false; }
+
+template<CPCModel M>
+void AmstradCPCSystem<M>::reset() {
     if (!cpu_) return;
     pins_ = cpu_->reset(pins_);
     crtc_.init();
     ppi_.init();
     ay_.reset();
     gate_array_.reset();
+    configure_bus_memory_map();
 }
+
+// ============================================================================
+// EXECUTION
+// ============================================================================
 
 template<CPCModel M>
 void AmstradCPCSystem<M>::tick() {
@@ -144,7 +195,7 @@ void AmstradCPCSystem<M>::tick() {
     bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);  // Active-low
 
     if (mreq) {
-        pins_ = mem_tick(pins_);
+        pins_ = bus_.tick(0, pins_);
     } else if (iorq) {
         pins_ = io_tick(pins_);
     }
@@ -163,7 +214,8 @@ void AmstradCPCSystem<M>::tick() {
     total_cycles_++;
 }
 
-template<CPCModel M> void AmstradCPCSystem<M>::run_frame() {
+template<CPCModel M>
+void AmstradCPCSystem<M>::run_frame() {
     for (uint32_t i = 0; i < amstrad_cpc_constants::TSTATES_PER_FRAME; ++i) tick();
 }
 
@@ -180,47 +232,75 @@ template<CPCModel M> void AmstradCPCSystem<M>::render_system_menu_items() {}
 template<CPCModel M> void AmstradCPCSystem<M>::render_configuration_ui() {}
 template<CPCModel M> void AmstradCPCSystem<M>::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
+// ============================================================================
+// BUS CONFIGURATION
+// ============================================================================
+
 template<CPCModel M>
-bus_state_t AmstradCPCSystem<M>::mem_tick(bus_state_t pins) {
-    uint16_t addr = BUS_GET_ADDR(pins);
-    bool is_read = BUS_GET_BIT(pins, BUS_RW_BIT);
+void AmstradCPCSystem<M>::configure_bus_memory_map() {
+    // apply() establishes the default map from the manifest:
+    //   RAM pages 0-255 (read+write), Lower ROM overlays read pages 0-63,
+    //   Upper ROM overlays read pages C0-FF.
+    //   Writes always go to RAM (ROMs are read-only -> no write pages).
+    bus_mem_.apply(bus_);
 
-    // CPC6128 RAM banking — map address to physical RAM offset
-    auto ram_offset = [&](uint16_t a) -> uint32_t {
-        if constexpr (Traits::ram_size_kb == 128) {
-            // 8 banking configurations: each maps 4 × 16KB pages to 8 × 16KB banks
-            static constexpr uint8_t bank_table[8][4] = {
-                {0, 1, 2, 3}, {0, 1, 2, 7}, {4, 5, 6, 7}, {0, 3, 2, 7},
-                {0, 4, 2, 3}, {0, 5, 2, 3}, {0, 6, 2, 3}, {0, 7, 2, 3}
-            };
-            int page = a >> 14;
-            int bank = bank_table[gate_array_.ram_config & 7][page];
-            return static_cast<uint32_t>(bank) * 0x4000 + (a & 0x3FFF);
-        } else {
-            return a;
-        }
-    };
+    if constexpr (Traits::ram_size_kb == 128) {
+        // 6128: remap RAM banks per current gate_array_.ram_config.
+        // Default config 0 = {0,1,2,3} -- identity, matches apply() output.
+        update_banking();
+    }
+    // For 464/664, ROM overlays from apply() match the initial state
+    // (lower_rom_enabled = true, upper_rom_enabled = true).
+}
 
-    if (is_read) {
-        uint8_t data;
-        if (addr < 0x4000) {
-            // Lower ROM (BIOS) / RAM — ROM overlays RAM when enabled
-            data = gate_array_.lower_rom_enabled ? lower_rom_[addr] : ram_[ram_offset(addr)];
-        } else if (addr >= 0xC000) {
-            // Upper ROM (BASIC) / RAM
-            data = gate_array_.upper_rom_enabled ? upper_rom_[addr - 0xC000] : ram_[ram_offset(addr)];
-        } else {
-            data = ram_[ram_offset(addr)];
+template<CPCModel M>
+void AmstradCPCSystem<M>::update_banking() {
+    using ChipId      = typename PT::ChipId;
+    using WriteChipId = typename PT::WriteChipId;
+
+    constexpr size_t kPagesPerBank = 64;  // 16384 / 256
+
+    // ── Step 1: Map all 4 x 16 KB regions to RAM ────────────────────────
+    if constexpr (Traits::ram_size_kb == 128) {
+        // CPC 6128: 8 banking configurations mapping 4 logical pages to 8 physical banks
+        static constexpr uint8_t bank_table[8][4] = {
+            {0, 1, 2, 3}, {0, 1, 2, 7}, {4, 5, 6, 7}, {0, 3, 2, 7},
+            {0, 4, 2, 3}, {0, 5, 2, 3}, {0, 6, 2, 3}, {0, 7, 2, 3}
+        };
+        uint8_t config = gate_array_.ram_config & 7;
+        for (int pg = 0; pg < 4; ++pg) {
+            uint8_t bank = bank_table[config][pg];
+            size_t first = pg * kPagesPerBank;
+            auto id = ChipId(bank * kPagesPerBank);
+            bus_.fill_read_pages (0, first, kPagesPerBank, id);
+            bus_.fill_write_pages(0, first, kPagesPerBank, WriteChipId(id));
         }
-        BUS_SET_DATA(pins, data);
     } else {
-        // Writes always go to RAM (ROMs are read-only overlays)
-        uint8_t data = BUS_GET_DATA(pins);
-        ram_[ram_offset(addr)] = data;
+        // CPC 464/664: identity RAM mapping (no banking)
+        for (int pg = 0; pg < 4; ++pg) {
+            size_t first = pg * kPagesPerBank;
+            auto id = ChipId(first);
+            bus_.fill_read_pages (0, first, kPagesPerBank, id);
+            bus_.fill_write_pages(0, first, kPagesPerBank, WriteChipId(id));
+        }
     }
 
-    return pins;
+    // ── Step 2: Overlay ROM reads where enabled ─────────────────────────
+    // Writes still route to RAM (write pages untouched above).
+    constexpr auto& manifest = BT::kManifest;
+    constexpr auto lower_rom_base = ChipId(manifest.base_id(cpc_chips::kLowerRomSlot, BT::Spec::PageBits));
+    constexpr auto upper_rom_base = ChipId(manifest.base_id(cpc_chips::kUpperRomSlot, BT::Spec::PageBits));
+
+    if (gate_array_.lower_rom_enabled)
+        bus_.fill_read_pages(0, 0x00, kPagesPerBank, lower_rom_base);
+    if (gate_array_.upper_rom_enabled)
+        bus_.fill_read_pages(0, 0xC0, kPagesPerBank, upper_rom_base);
 }
+
+// ============================================================================
+// I/O DISPATCH
+// ============================================================================
+
 template<CPCModel M>
 bus_state_t AmstradCPCSystem<M>::io_tick(bus_state_t pins) {
     // Interrupt acknowledge: IORQ + M1 asserted simultaneously
@@ -237,7 +317,7 @@ bus_state_t AmstradCPCSystem<M>::io_tick(bus_state_t pins) {
 
     // CPC uses partial address-line decoding for I/O
 
-    // Gate Array (active when A15=0) — write-only
+    // Gate Array (active when A15=0) -- write-only
     if (!is_read && !(addr & 0x8000)) {
         switch (data >> 6) {
             case 0:  // Pen select
@@ -256,10 +336,12 @@ bus_state_t AmstradCPCSystem<M>::io_tick(bus_state_t pins) {
                     gate_array_.interrupt_pending = false;
                     BUS_SET_BIT(pins, BUS_IRQ_BIT);
                 }
+                update_banking();  // ROM visibility changed
                 break;
             case 3:  // RAM banking (CPC6128 only)
                 if constexpr (Traits::ram_size_kb == 128) {
                     gate_array_.ram_config = data & 0x3F;
+                    update_banking();  // RAM bank configuration changed
                 }
                 break;
         }
@@ -304,7 +386,9 @@ bus_state_t AmstradCPCSystem<M>::io_tick(bus_state_t pins) {
 
     return pins;
 }
-template<CPCModel M> bool AmstradCPCSystem<M>::load_roms() { return false; }
+
+template<CPCModel M>
+bool AmstradCPCSystem<M>::load_roms() { return false; }
 
 // ============================================================================
 // EXPLICIT INSTANTIATIONS

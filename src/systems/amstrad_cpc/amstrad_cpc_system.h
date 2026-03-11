@@ -21,10 +21,12 @@
 
 #include "../../core/emulated_system.h"
 #include "../../core/system_lines.h"
+#include "../../core/chip_manifest.hpp"
 #include "../../chip/cpu/z80/zilog_z80a.h"
 #include "../../chip/video/mc6845/mc6845.h"
 #include "../../chip/io/i8255.h"
 #include "../../chip/sound/ay_3_8910.h"
+#include "../../chip/memory/memory_chip.h"
 #include "amstrad_cpc_constants.h"
 #include <cstdint>
 #include <memory>
@@ -76,7 +78,7 @@ template<> struct CPCModelTraits<CPCModel::CPC6128> {
 
 struct amstrad_gate_array_t {
     uint8_t  pen_select = 0;                        // Selected pen (0-16, 16=border)
-    uint8_t  ink[amstrad_cpc_constants::GA_PEN_COUNT]{};  // Pen→hardware color mapping
+    uint8_t  ink[amstrad_cpc_constants::GA_PEN_COUNT]{};  // Pen->hardware color mapping
     uint8_t  screen_mode = 1;                       // 0, 1, or 2
     bool     lower_rom_enabled = true;              // BIOS ROM at $0000-$3FFF
     bool     upper_rom_enabled = true;              // BASIC ROM at $C000-$FFFF
@@ -101,6 +103,58 @@ struct amstrad_gate_array_t {
 // ============================================================================
 
 #define CPC_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())
+
+// =============================================================================
+// Amstrad CPC chip manifests — declarative memory layout
+// =============================================================================
+//
+// CPC 464/664 (64 KB RAM):
+//   Slot 0: RAM — 64 KB at $0000 (full address space)
+//   Slot 1: Lower ROM — 16 KB at $0000 (BIOS, read overlay when enabled)
+//   Slot 2: Upper ROM — 16 KB at $C000 (BASIC, read overlay when enabled)
+//
+// CPC 6128 (128 KB RAM):
+//   Slot 0: RAM — 128 KB at $0000 (8 x 16 KB banks, banked via Gate Array)
+//   Slot 1: Lower ROM — 16 KB at $0000 (BIOS, read overlay when enabled)
+//   Slot 2: Upper ROM — 16 KB at $C000 (BASIC/AMSDOS, read overlay when enabled)
+//
+// All I/O is Z80 port-based (IORQ) — no MMIO slots needed.
+//
+inline constexpr auto kCPC464Chips = make_chip_manifest(
+    Slot<MemoryChip>{65536,  0x0000},       // RAM: 64 KB
+    Slot<MemoryChip>{16384,  0x0000},       // Lower ROM: 16 KB overlay at $0000
+    Slot<MemoryChip>{16384,  0xC000}        // Upper ROM: 16 KB overlay at $C000
+);
+
+inline constexpr auto kCPC6128Chips = make_chip_manifest(
+    Slot<MemoryChip>{131072, 0x0000},       // RAM: 128 KB (8 banks)
+    Slot<MemoryChip>{ 16384, 0x0000},       // Lower ROM: 16 KB overlay at $0000
+    Slot<MemoryChip>{ 16384, 0xC000}        // Upper ROM: 16 KB overlay at $C000
+);
+
+namespace cpc_chips {
+    inline constexpr size_t kRamSlot      = 0;
+    inline constexpr size_t kLowerRomSlot = 1;
+    inline constexpr size_t kUpperRomSlot = 2;
+}
+
+// BusTraits — selects the correct manifest per CPC model
+template<CPCModel M> struct CPCBusTraits;
+
+template<> struct CPCBusTraits<CPCModel::CPC464> {
+    static constexpr const auto& kManifest = kCPC464Chips;
+    using Spec = ManifestBusSpec<kCPC464Chips, 16, 8>;
+};
+
+template<> struct CPCBusTraits<CPCModel::CPC664> {
+    static constexpr const auto& kManifest = kCPC464Chips;  // Same layout as 464
+    using Spec = ManifestBusSpec<kCPC464Chips, 16, 8>;
+};
+
+template<> struct CPCBusTraits<CPCModel::CPC6128> {
+    static constexpr const auto& kManifest = kCPC6128Chips;
+    using Spec = ManifestBusSpec<kCPC6128Chips, 16, 8>;
+};
 
 // ============================================================================
 // Amstrad CPC System
@@ -153,12 +207,20 @@ private:
     amstrad_gate_array_t    gate_array_;  // Amstrad custom gate array
 
     // ========================================================================
-    // MEMORY
+    // MEMORY — owned by registered_chips_, managed via BusMemory
     // ========================================================================
 
-    std::vector<uint8_t> ram_;
-    std::vector<uint8_t> lower_rom_;     // 16KB firmware
-    std::vector<uint8_t> upper_rom_;     // 16KB BASIC (+ AMSDOS)
+    MemoryChip* ram_chip_       = nullptr;   // 64 KB (464/664) or 128 KB (6128)
+    MemoryChip* lower_rom_chip_ = nullptr;   // 16 KB firmware/BIOS
+    MemoryChip* upper_rom_chip_ = nullptr;   // 16 KB BASIC (+ AMSDOS)
+
+    // ── MemoryBus — declarative setup via chip manifest ──────────────────
+    using BT  = CPCBusTraits<M>;
+    using Bus = MemoryBus<typename BT::Spec>;
+    using PT  = PackingTraits<typename BT::Spec>;
+    using Mem = BusMemory<typename BT::Spec>;
+    Bus bus_;
+    Mem bus_mem_{BT::kManifest};
 
     // ========================================================================
     // SYSTEM STATE
@@ -184,7 +246,8 @@ private:
     // HELPERS
     // ========================================================================
 
-    bus_state_t mem_tick(bus_state_t pins);
+    void configure_bus_memory_map();
+    void update_banking();           // Remap pages after ROM toggle / 6128 bank switch
     bus_state_t io_tick(bus_state_t pins);
     bool load_roms();
 };
