@@ -32,8 +32,8 @@
 // Addresses above $3FFF are unmapped (reads return bus default).
 //
 inline constexpr auto kLC80Chips = make_chip_manifest(
-    Slot<ROMChip>{0x0000, 2048, 0, "Monitor ROM"},   // ROM: 2 KB
-    Slot<RAMChip>{0x2000, 1024, 0, "RAM"}             // RAM: 1 KB
+    Slot<ROMChip>{0x0000, 2048, 0, "Monitor ROM"},
+    Slot<RAMChip>{0x2000, 1024, 0, "RAM"}
 );
 
 namespace lc80_chips {

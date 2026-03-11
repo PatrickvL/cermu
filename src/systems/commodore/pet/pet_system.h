@@ -62,13 +62,13 @@
 // Character ROM is NOT bus-mapped.
 //
 inline constexpr auto kPETChips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 32768, 0, "Main RAM"},        // Slot 0: Main RAM 32 KB
-    Slot<RAMChip>{0x8000,  1024, 0, "Screen RAM"},      // Slot 1: Screen RAM 1 KB
-    Slot<ROMChip>{0xB000,  4096, 0, "BASIC ROM $B000"}, // Slot 2: BASIC ROM $B000
-    Slot<ROMChip>{0xC000,  4096, 0, "BASIC ROM $C000"}, // Slot 3: BASIC ROM $C000
-    Slot<ROMChip>{0xD000,  4096, 0, "BASIC ROM $D000"}, // Slot 4: BASIC ROM $D000
-    Slot<ROMChip>{0xE000,  2048, 0, "Editor ROM"},      // Slot 5: Editor ROM
-    Slot<ROMChip>{0xF000,  4096, 0, "Kernal ROM"}       // Slot 6: Kernal ROM
+    Slot<RAMChip>{0x0000, 32768, 0, "Main RAM"},
+    Slot<RAMChip>{0x8000,  1024, 0, "Screen RAM"},
+    Slot<ROMChip>{0xB000,  4096, 0, "BASIC ROM $B000"},
+    Slot<ROMChip>{0xC000,  4096, 0, "BASIC ROM $C000"},
+    Slot<ROMChip>{0xD000,  4096, 0, "BASIC ROM $D000"},
+    Slot<ROMChip>{0xE000,  2048, 0, "Editor ROM"},
+    Slot<ROMChip>{0xF000,  4096, 0, "Kernal ROM"}
 );
 
 struct PETBusTraits {
