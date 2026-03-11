@@ -71,38 +71,14 @@ template<KC85Variant V>
 bool KC85System<V>::initialize() {
     printf("%s: Initializing system (CAOS %s)\n", Traits::name, Traits::caos_version);
 
-    // ── Create RAMChip wrappers ──────────────────────────────────────
-    auto ram = std::make_unique<RAMChip>(
-        ChipInfo{"DRAM", "VEB"}, Traits::ram_size <= 16384 ? 16384u : 32768u,
-        RAMChip::RAM, &pins_, "RAM", 0x0000);
-    ram_chip_ = ram.get();
+    // ── Create chips via factory, wire the bus ────────────────────────
+    bus_mem_.create_chips(&pins_);
+    bus_mem_.apply(bus_);
 
-    // IRM: 16 KB for /2,/3; 64 KB for /4 (4 video banks)
-    constexpr uint32_t irm_size = Traits::has_extended_video ? 65536u : 16384u;
-    auto irm = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "VEB"}, irm_size,
-        RAMChip::RAM, &pins_, "Video RAM (IRM)", kc85_constants::PIXEL_RAM_BASE);
-    irm_chip_ = irm.get();
-
-    auto caos_rom = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "VEB"}, kc85_constants::OS_ROM_SIZE,
-        ROMChip::ROM, &pins_, "CAOS ROM", kc85_constants::OS_ROM_BASE);
-    caos_rom_chip_ = caos_rom.get();
-
-    std::unique_ptr<ROMChip> basic_rom;
+    // Retrieve typed pointers for chips accessed after initialize()
+    caos_rom_chip_ = bus_mem_.template chip_as<ROMChip>(Traits::kCaosRomSlot);
     if constexpr (Traits::has_basic_rom) {
-        basic_rom = std::make_unique<ROMChip>(
-            ChipInfo{"ROM", "VEB"}, kc85_constants::BASIC_ROM_SIZE,
-            ROMChip::ROM, &pins_, "BASIC ROM", kc85_constants::BASIC_ROM_BASE);
-        basic_rom_chip_ = basic_rom.get();
-    }
-
-    // ── Bind manifest slots, wire the bus ───────────────────────────────
-    if constexpr (V == KC85Variant::KC85_2) {
-        bus_mem_.initialize(bus_, ram_chip_, irm_chip_, caos_rom_chip_);
-    } else {
-        bus_mem_.initialize(bus_, ram_chip_, irm_chip_,
-                            basic_rom_chip_, caos_rom_chip_);
+        basic_rom_chip_ = bus_mem_.template chip_as<ROMChip>(Traits::kBasicRomSlot);
     }
 
     // ── Set initial banking state ───────────────────────────────────────
@@ -135,15 +111,11 @@ bool KC85System<V>::initialize() {
         "U855 PIO #2", "U855", "I/O", 0x00);
     register_chip(&ctc_,
         "U857 CTC", "U857", "I/O", kc85_constants::CTC_CH0);
-    register_chip(std::move(ram));
-    register_chip(std::move(irm));
-    register_chip(std::move(caos_rom));
-    if constexpr (Traits::has_basic_rom) {
-        register_chip(std::move(basic_rom));
-    }
+    register_bus_chips(bus_mem_);
 
     printf("%s: System initialized (RAM: %d KB, IRM: %d KB)\n",
-           Traits::name, Traits::ram_size / 1024, irm_size / 1024);
+           Traits::name, Traits::ram_size / 1024,
+           Traits::has_extended_video ? 64 : 16);
     system_ready_ = true;
     return true;
 }
