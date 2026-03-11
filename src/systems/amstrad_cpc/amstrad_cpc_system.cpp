@@ -104,27 +104,8 @@ template<CPCModel M>
 bool AmstradCPCSystem<M>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
 
-    // ── Create RAMChip wrappers ──────────────────────────────────────
-    constexpr size_t ram_bytes = Traits::ram_size_kb * 1024;
-    constexpr size_t rom_bytes = amstrad_cpc_constants::ROM_SIZE;
-
-    auto ram_chip = std::make_unique<RAMChip>(
-        ChipInfo{"DRAM", "Various"}, ram_bytes,
-        RAMChip::RAM, &pins_, "RAM", 0x0000);
-    ram_chip_ = ram_chip.get();
-
-    auto lower_rom_chip = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Amstrad"}, rom_bytes,
-        ROMChip::ROM, &pins_, "Lower ROM", 0x0000);
-    lower_rom_chip_ = lower_rom_chip.get();
-
-    auto upper_rom_chip = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Amstrad"}, rom_bytes,
-        ROMChip::ROM, &pins_, "Upper ROM", 0xC000);
-    upper_rom_chip_ = upper_rom_chip.get();
-
-    // ── Bind manifest slots, wire the bus ───────────────────────────────
-    bus_mem_.initialize(bus_, ram_chip_, lower_rom_chip_, upper_rom_chip_);
+    // ── Factory-create memory chips from manifest ─────────────────────
+    bus_mem_.create_chips(&pins_);
 
     // ── Configure page tables for this variant ──────────────────────────
     configure_bus_memory_map();
@@ -156,9 +137,7 @@ bool AmstradCPCSystem<M>::initialize() {
         "Intel 8255 PPI", "i8255", "I/O", 0);
     register_chip(&ay_,
         "AY-3-8912 PSG", "AY-3-8912", "Sound", 0);
-    register_chip(std::move(ram_chip));
-    register_chip(std::move(lower_rom_chip));
-    register_chip(std::move(upper_rom_chip));
+    register_bus_chips(bus_mem_);
 
     printf("%s: System initialized (%dKB RAM)\n", Traits::name, Traits::ram_size_kb);
     system_ready_ = true;

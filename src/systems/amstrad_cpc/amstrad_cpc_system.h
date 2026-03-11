@@ -121,15 +121,15 @@ struct amstrad_gate_array_t {
 // All I/O is Z80 port-based (IORQ) — no MMIO slots needed.
 //
 inline constexpr auto kCPC464Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536},       // RAM: 64 KB
-    Slot<ROMChip>{0x0000, 16384},       // Lower ROM: 16 KB overlay at $0000
-    Slot<ROMChip>{0xC000, 16384}        // Upper ROM: 16 KB overlay at $C000
+    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},            // RAM: 64 KB
+    Slot<ROMChip>{0x0000, 16384, 0, "Lower ROM"},      // Lower ROM: 16 KB overlay at $0000
+    Slot<ROMChip>{0xC000, 16384, 0, "Upper ROM"}       // Upper ROM: 16 KB overlay at $C000
 );
 
 inline constexpr auto kCPC6128Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 131072},       // RAM: 128 KB (8 banks)
-    Slot<ROMChip>{0x0000,  16384},       // Lower ROM: 16 KB overlay at $0000
-    Slot<ROMChip>{0xC000,  16384}        // Upper ROM: 16 KB overlay at $C000
+    Slot<RAMChip>{0x0000, 131072, 0, "RAM"},           // RAM: 128 KB (8 banks)
+    Slot<ROMChip>{0x0000,  16384, 0, "Lower ROM"},     // Lower ROM: 16 KB overlay at $0000
+    Slot<ROMChip>{0xC000,  16384, 0, "Upper ROM"}      // Upper ROM: 16 KB overlay at $C000
 );
 
 namespace cpc_chips {
@@ -209,10 +209,6 @@ private:
     // ========================================================================
     // MEMORY — owned by registered_chips_, managed via BusMemory
     // ========================================================================
-
-    RAMChip* ram_chip_       = nullptr;   // 64 KB (464/664) or 128 KB (6128)
-    ROMChip* lower_rom_chip_ = nullptr;   // 16 KB firmware/BIOS
-    ROMChip* upper_rom_chip_ = nullptr;   // 16 KB BASIC (+ AMSDOS)
 
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using BT  = CPCBusTraits<M>;
