@@ -10,9 +10,11 @@
 #include "z1013_constants.h"
 #include "../../../core/emulated_system.h"
 #include "../../../core/system_lines.h"
+#include "../../../core/chip_manifest.hpp"
 #include "../../../chip/cpu/z80/u880.h"
 #include "../../../chip/cpu/z80/z80.hpp"   // Z80_MREQ_BIT / Z80_IORQ_BIT
 #include "../../../chip/io/z80_pio.h"
+#include "../../../chip/memory/memory_chip.h"
 #include <cstdint>
 #include <vector>
 
@@ -45,6 +47,62 @@ template<> struct Z1013VariantTraits<Z1013Variant::Z1013_64> {
     static constexpr const char* description     = "Robotron Z1013.64 — U880 @ 2MHz, 64KB RAM, ROM BASIC (1988)";
     static constexpr uint32_t    ram_size        = z1013_constants::RAM_SIZE_64K;
     static constexpr bool        has_basic_rom   = true;
+};
+
+// ============================================================================
+// Z1013 chip manifests — declarative memory layout
+// ============================================================================
+//
+// Z1013.01 / Z1013.16 (16 KB RAM):
+//   Slot 0: RAM          — 16 KB at $0000
+//   Slot 1: Video RAM    —  1 KB at $EC00
+//   Slot 2: Monitor ROM  —  2 KB at $F000
+//
+// Z1013.64 (64 KB RAM, ROM BASIC):
+//   Slot 0: RAM          — 64 KB at $0000
+//   Slot 1: BASIC ROM lo —  8 KB at $C000  (first 8 KB of 10 KB BASIC ROM)
+//   Slot 2: BASIC ROM hi —  2 KB at $E000  (last 2 KB of 10 KB BASIC ROM)
+//   Slot 3: Video RAM    —  1 KB at $EC00
+//   Slot 4: Monitor ROM  —  2 KB at $F000
+//
+// The character ROM is NOT bus-mapped (used only for display rendering).
+// All I/O is Z80 port-based (IORQ) — no MMIO slots needed.
+//
+// BASIC ROM is split into 8 KB + 2 KB because ChipSlot requires power-of-2
+// sizes and the original 10 KB is not a power of 2.  The ordering ensures
+// apply() maps them correctly: RAM first (base layer), BASIC ROM overlays
+// RAM reads, then Video RAM and Monitor ROM overlay the remaining gaps.
+//
+inline constexpr auto kZ1013_16K_Chips = make_chip_manifest(
+    Slot<MemoryChip>{16384, 0x0000},         // RAM: 16 KB
+    Slot<MemoryChip>{1024,  0xEC00},         // Video RAM: 1 KB
+    Slot<MemoryChip>{2048,  0xF000}          // Monitor ROM: 2 KB
+);
+
+inline constexpr auto kZ1013_64K_Chips = make_chip_manifest(
+    Slot<MemoryChip>{65536, 0x0000},         // RAM: 64 KB
+    Slot<MemoryChip>{8192,  0xC000},         // BASIC ROM lo: 8 KB ($C000-$DFFF)
+    Slot<MemoryChip>{2048,  0xE000},         // BASIC ROM hi: 2 KB ($E000-$E7FF)
+    Slot<MemoryChip>{1024,  0xEC00},         // Video RAM: 1 KB
+    Slot<MemoryChip>{2048,  0xF000}          // Monitor ROM: 2 KB
+);
+
+// BusTraits — selects the correct manifest per variant
+template<Z1013Variant V> struct Z1013BusTraits;
+
+template<> struct Z1013BusTraits<Z1013Variant::Z1013_01> {
+    static constexpr const auto& kManifest = kZ1013_16K_Chips;
+    using Spec = ManifestBusSpec<kZ1013_16K_Chips, 16, 8>;
+};
+
+template<> struct Z1013BusTraits<Z1013Variant::Z1013_16> {
+    static constexpr const auto& kManifest = kZ1013_16K_Chips;
+    using Spec = ManifestBusSpec<kZ1013_16K_Chips, 16, 8>;
+};
+
+template<> struct Z1013BusTraits<Z1013Variant::Z1013_64> {
+    static constexpr const auto& kManifest = kZ1013_64K_Chips;
+    using Spec = ManifestBusSpec<kZ1013_64K_Chips, 16, 8>;
 };
 
 // ── System ───────────────────────────────────────────────────────────────
@@ -87,12 +145,23 @@ private:
     U880*       cpu_  = nullptr;     // U880 (Z80A clone) @ 2 MHz
     z80_pio_t   pio_;                // U855 PIO (keyboard + cassette)
 
-    // ── Memory ───────────────────────────────────────────────────────────
-    std::vector<uint8_t> ram_;       // 16 KB or 64 KB
-    std::vector<uint8_t> monitor_rom_;  // 2 KB monitor
-    std::vector<uint8_t> basic_rom_;    // 10 KB ROM BASIC (Z1013.64 only)
-    std::vector<uint8_t> video_ram_;    // 1 KB screen buffer ($EC00–$EFFF)
-    std::vector<uint8_t> char_rom_;     // 2 KB character generator
+    // ── Memory — owned by registered_chips_, managed via BusMemory ──────
+    MemoryChip* ram_chip_             = nullptr;
+    MemoryChip* basic_rom_lo_chip_    = nullptr;  // Z1013.64 only
+    MemoryChip* basic_rom_hi_chip_    = nullptr;  // Z1013.64 only
+    MemoryChip* video_ram_chip_       = nullptr;
+    MemoryChip* monitor_rom_chip_     = nullptr;
+
+    // Character ROM — NOT bus-mapped (used for display rendering only)
+    std::vector<uint8_t> char_rom_;
+
+    // ── MemoryBus — declarative setup via chip manifest ──────────────────
+    using BT  = Z1013BusTraits<V>;
+    using Bus = MemoryBus<typename BT::Spec>;
+    using PT  = PackingTraits<typename BT::Spec>;
+    using Mem = BusMemory<typename BT::Spec>;
+    Bus bus_;
+    Mem bus_mem_{BT::kManifest};
 
     // ── Display ──────────────────────────────────────────────────────────
     uint32_t framebuffer_[z1013_constants::FB_WIDTH *
@@ -110,7 +179,6 @@ private:
     float speed_multiplier_ = 1.0f;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    bus_state_t mem_tick(bus_state_t pins);
     bus_state_t io_tick(bus_state_t pins);
     void        render_frame();   // Render one complete video frame to framebuffer_
     bool        load_roms();

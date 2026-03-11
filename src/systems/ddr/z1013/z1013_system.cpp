@@ -70,21 +70,75 @@ template<Z1013Variant V> bool Z1013System<V>::apply_configuration() { return tru
 template<Z1013Variant V>
 bool Z1013System<V>::initialize() {
     printf("%s: Initializing system\n", Traits::name);
+
+    // ── Create MemoryChip wrappers ──────────────────────────────────────
+    auto ram = std::make_unique<MemoryChip>(
+        ChipInfo{"DRAM", "VEB"}, Traits::ram_size,
+        MemoryChip::RAM, &pins_, "RAM", 0x0000);
+    ram_chip_ = ram.get();
+
+    auto video_ram = std::make_unique<MemoryChip>(
+        ChipInfo{"SRAM", "VEB"}, z1013_constants::VIDEO_RAM_SIZE,
+        MemoryChip::RAM, &pins_, "Video RAM", z1013_constants::VIDEO_RAM_BASE);
+    video_ram_chip_ = video_ram.get();
+
+    auto monitor_rom = std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "VEB"}, z1013_constants::MONITOR_ROM_SIZE,
+        MemoryChip::ROM, &pins_, "Monitor ROM", z1013_constants::MONITOR_ROM_BASE);
+    monitor_rom_chip_ = monitor_rom.get();
+
+    std::unique_ptr<MemoryChip> basic_rom_lo;
+    std::unique_ptr<MemoryChip> basic_rom_hi;
+    if constexpr (Traits::has_basic_rom) {
+        basic_rom_lo = std::make_unique<MemoryChip>(
+            ChipInfo{"ROM", "VEB"}, 8192,
+            MemoryChip::ROM, &pins_, "BASIC ROM lo", z1013_constants::BASIC_ROM_BASE);
+        basic_rom_lo_chip_ = basic_rom_lo.get();
+
+        basic_rom_hi = std::make_unique<MemoryChip>(
+            ChipInfo{"ROM", "VEB"}, 2048,
+            MemoryChip::ROM, &pins_, "BASIC ROM hi", 0xE000);
+        basic_rom_hi_chip_ = basic_rom_hi.get();
+    }
+
+    // ── Bind manifest slots, wire the bus ───────────────────────────────
+    if constexpr (Traits::has_basic_rom) {
+        bus_mem_.initialize(bus_, ram_chip_, basic_rom_lo_chip_,
+                            basic_rom_hi_chip_, video_ram_chip_,
+                            monitor_rom_chip_);
+    } else {
+        bus_mem_.initialize(bus_, ram_chip_, video_ram_chip_,
+                            monitor_rom_chip_);
+    }
+
+    // ── Init chips ──────────────────────────────────────────────────────
     cpu_ = new U880();
     pins_ = cpu_->init();
     pio_.init();
-    ram_.resize(Traits::ram_size, 0x00);
-    monitor_rom_.resize(z1013_constants::MONITOR_ROM_SIZE, 0xFF);
-    video_ram_.resize(z1013_constants::VIDEO_RAM_SIZE, 0x00);
+
+    // Character ROM — not bus-mapped, used for display rendering only
     char_rom_.resize(z1013_constants::CHAR_ROM_SIZE, 0xFF);
-    if constexpr (Traits::has_basic_rom) {
-        basic_rom_.resize(z1013_constants::BASIC_ROM_SIZE, 0xFF);
-    }
+
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
     keyboard_column_select_ = 0xFF;
+
     if (!load_roms()) {
         printf("%s: Warning — ROMs not loaded\n", Traits::name);
     }
+
+    // ── Register chips for Hardware menu ────────────────────────────────
+    register_chip(static_cast<ChipBase*>(cpu_),
+        "U880 CPU", "U880", "CPU", 0x0000);
+    register_chip(&pio_,
+        "U855 PIO", "U855", "I/O", z1013_constants::PIO_PORT_A);
+    register_chip(std::move(ram));
+    register_chip(std::move(video_ram));
+    register_chip(std::move(monitor_rom));
+    if constexpr (Traits::has_basic_rom) {
+        register_chip(std::move(basic_rom_lo));
+        register_chip(std::move(basic_rom_hi));
+    }
+
     system_ready_ = true;
     return true;
 }
@@ -110,7 +164,7 @@ void Z1013System<V>::tick() {
     bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);
 
     if (mreq) {
-        pins_ = mem_tick(pins_);
+        pins_ = bus_.tick(0, pins_);
     } else if (iorq) {
         pins_ = io_tick(pins_);
     }
@@ -219,54 +273,6 @@ void Z1013System<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 }
 
 // ============================================================================
-// MEMORY BUS DISPATCH
-// ============================================================================
-
-template<Z1013Variant V>
-bus_state_t Z1013System<V>::mem_tick(bus_state_t pins) {
-    uint16_t addr  = BUS_GET_ADDR(pins);
-    bool     is_rd = BUS_GET_BIT(pins, BUS_RW_BIT);
-
-    if (is_rd) {
-        uint8_t data = 0xFF;
-
-        if (static_cast<size_t>(addr) < ram_.size()) {
-            // $0000–$3FFF (16K) or $0000–$FFFF (64K): RAM
-            data = ram_[addr];
-        }
-        // Priority overrides — ROM and special memory areas shadow the RAM
-        if constexpr (Traits::has_basic_rom) {
-            if (addr >= z1013_constants::BASIC_ROM_BASE &&
-                addr <  z1013_constants::BASIC_ROM_BASE + z1013_constants::BASIC_ROM_SIZE) {
-                data = basic_rom_[addr - z1013_constants::BASIC_ROM_BASE];
-            }
-        }
-        if (addr >= z1013_constants::VIDEO_RAM_BASE &&
-            addr <  z1013_constants::VIDEO_RAM_BASE + z1013_constants::VIDEO_RAM_SIZE) {
-            data = video_ram_[addr - z1013_constants::VIDEO_RAM_BASE];
-        }
-        if (addr >= z1013_constants::MONITOR_ROM_BASE &&
-            addr <  z1013_constants::MONITOR_ROM_BASE + z1013_constants::MONITOR_ROM_SIZE) {
-            data = monitor_rom_[addr - z1013_constants::MONITOR_ROM_BASE];
-        }
-
-        BUS_SET_DATA(pins, data);
-    } else {
-        uint8_t data = BUS_GET_DATA(pins);
-
-        if (addr >= z1013_constants::VIDEO_RAM_BASE &&
-            addr <  z1013_constants::VIDEO_RAM_BASE + z1013_constants::VIDEO_RAM_SIZE) {
-            video_ram_[addr - z1013_constants::VIDEO_RAM_BASE] = data;
-        } else if (static_cast<size_t>(addr) < ram_.size()) {
-            ram_[addr] = data;
-        }
-        // Monitor ROM / BASIC ROM: writes silently ignored
-    }
-
-    return pins;
-}
-
-// ============================================================================
 // I/O BUS DISPATCH
 // ============================================================================
 
@@ -333,9 +339,12 @@ void Z1013System<V>::render_frame() {
     static constexpr uint32_t FG = 0xFFFFFFFF;  // White text
     static constexpr uint32_t BG = 0xFF000000;  // Black background
 
+    const uint8_t* vram = video_ram_chip_ ? video_ram_chip_->data() : nullptr;
+    if (!vram) return;
+
     for (int row = 0; row < ROWS; row++) {
         for (int col = 0; col < COLS; col++) {
-            uint8_t chr = video_ram_[row * COLS + col];
+            uint8_t chr = vram[row * COLS + col];
             int fb_x = col * CW;
             int fb_y = row * CH;
 
@@ -372,23 +381,29 @@ bool Z1013System<V>::load_roms() {
     const char* mon_names[] = {"z1013_mon.rom", "monitor.rom", "MON.ROM", nullptr};
     if (!rom_loader_load_from_root(rom_root, mon_names,
                                    z1013_constants::MONITOR_ROM_SIZE,
-                                   monitor_rom_.data(), monitor_rom_.size())) {
+                                   monitor_rom_chip_->data(),
+                                   monitor_rom_chip_->size_bytes())) {
         printf("%s: Monitor ROM not loaded\n", Traits::name);
         ok = false;
     }
 
-    // Character ROM (2 KB)
+    // Character ROM (2 KB) — not bus-mapped, used for rendering
     const char* char_names[] = {"z1013_char.rom", "charrom.bin", "CHAR.ROM", nullptr};
     rom_loader_load_from_root(rom_root, char_names,
                               z1013_constants::CHAR_ROM_SIZE,
                               char_rom_.data(), char_rom_.size());  // optional
 
-    // BASIC ROM (10 KB, Z1013.64 only)
+    // BASIC ROM (10 KB, Z1013.64 only — split into 8 KB + 2 KB chips)
     if constexpr (Traits::has_basic_rom) {
         const char* basic_names[] = {"z1013_basic.rom", "BASIC.ROM", nullptr};
-        if (!rom_loader_load_from_root(rom_root, basic_names,
+        uint8_t basic_buf[z1013_constants::BASIC_ROM_SIZE];
+        std::memset(basic_buf, 0xFF, sizeof(basic_buf));
+        if (rom_loader_load_from_root(rom_root, basic_names,
                                        z1013_constants::BASIC_ROM_SIZE,
-                                       basic_rom_.data(), basic_rom_.size())) {
+                                       basic_buf, sizeof(basic_buf))) {
+            std::memcpy(basic_rom_lo_chip_->data(), basic_buf, 8192);
+            std::memcpy(basic_rom_hi_chip_->data(), basic_buf + 8192, 2048);
+        } else {
             printf("%s: BASIC ROM not loaded\n", Traits::name);
             ok = false;
         }
