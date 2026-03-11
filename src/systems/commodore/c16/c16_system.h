@@ -2,7 +2,9 @@
 
 #include "../commodore_system.h"
 #include "../../core/system_lines.h"
-#include "../../chip/memory/memory_chip.h"
+#include "../../core/chip_manifest.hpp"
+#include "../../chip/memory/ram_chip.h"
+#include "../../chip/memory/rom_chip.h"
 #include "../../chip/video/ted/ted7360.h"
 #include "../../chip/cpu/fam65xx/mos7501.h"
 
@@ -60,6 +62,40 @@ template<> struct C264SeriesVariantTraits<C264SeriesVariant::PLUS4> {
     static std::vector<const char*> get_aliases() { return {"Plus4", "Plus/4", "Plus-4"}; }
     static constexpr const char* description =
         "Commodore Plus/4 (1984) - 64KB RAM, TED 7360, built-in 3-PLUS-1 software";
+};
+
+// ============================================================================
+// C264 chip manifest — declarative memory layout
+// ============================================================================
+//
+// Memory map (CPU view):
+//   $0000-$7FFF  RAM (always)
+//   $8000-$BFFF  BASIC ROM (read, when ROM enabled) / RAM
+//   $C000-$FCFF  KERNAL ROM (read, when ROM enabled) / RAM
+//   $FD00-$FDFF  I/O area (PIO2, ACIA — handled manually, not in manifest)
+//   $FE00-$FEFF  KERNAL ROM (cont.) / RAM
+//   $FF00-$FF3F  TED registers (always visible — handled manually)
+//   $FF40-$FFFF  KERNAL ROM (cont.) / RAM
+//
+// ROM banking is controlled by TED latch writes ($FF3E/$FF3F).
+// RAM size varies: 16 KB (C16/C116) with mirroring, 64 KB (Plus/4).
+// Page $FD and TED registers are dispatched before the bus in mem_tick().
+//
+inline constexpr auto kC264Chips = make_chip_manifest(
+    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},             // Slot 0: 64 KB (max)
+    Slot<ROMChip>{0x8000, 16384, 0, "BASIC ROM"},       // Slot 1: 16 KB
+    Slot<ROMChip>{0xC000, 16384, 0, "KERNAL ROM"}       // Slot 2: 16 KB
+);
+
+namespace c264_slot {
+    inline constexpr size_t kRam       = 0;
+    inline constexpr size_t kBasicRom  = 1;
+    inline constexpr size_t kKernalRom = 2;
+}
+
+struct C264BusTraits {
+    static constexpr const auto& kManifest = kC264Chips;
+    using Spec = ManifestBusSpec<kC264Chips, 16, 8>;
 };
 
 // ============================================================================
@@ -156,7 +192,13 @@ private:
     ted7360_t* ted_;
     bus_state_t bus_state_;
 
-    // Memory chips — owned by registered_chips_ (base class), borrowed here
+    // ── Memory bus (declarative manifest + page-pointer dispatch) ────────
+    using Bus = MemoryBus<C264BusTraits::Spec>;
+    using Mem = BusMemory<C264BusTraits::Spec>;
+    Bus bus_;
+    Mem bus_mem_{kC264Chips};
+
+    // Convenience chip pointers (owned by bus_mem_, accessed via chip_as)
     RAMChip* ram_         = nullptr;  // Up to 64KB RAM (C16/C116 use 16KB, Plus/4 uses 64KB)
     ROMChip* basic_rom_   = nullptr;  // BASIC ROM $8000-$BFFF (16KB)
     ROMChip* kernal_rom_  = nullptr;  // Kernal ROM $C000-$FFFF (16KB)
@@ -184,6 +226,9 @@ private:
     // Helper methods
     bool load_roms();
     bus_state_t mem_tick(bus_state_t s);
+    bus_state_t io_tick(bus_state_t s);         // $FD00-$FDFF I/O dispatch
+    void setup_ram_mirroring();                 // configure page pointers for current ram_size_
+    void update_rom_banking();                  // switch read pages on rom_enabled change
     void setup_connector_ports();
     std::vector<DefaultPeripheral> get_default_peripherals() const override;
     static uint8_t io_port_in(void* user_data);
