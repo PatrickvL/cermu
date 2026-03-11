@@ -244,54 +244,17 @@ bool PETSystem::apply_configuration() {
 bool PETSystem::initialize() {
     printf("PET: Initializing system\n");
 
-    // ── Create MemoryChip wrappers ───────────────────────────────────────
-    auto main_ram = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "Various"}, 32768,
-        RAMChip::SRAM, &pins_,
-        "Main RAM", 0x0000);
-    main_ram_chip_ = main_ram.get();
+    // ── Create memory chips from manifest and wire bus ─────────────────
+    bus_mem_.create_chips(&pins_);
+    bus_mem_.apply(bus_);
 
-    auto screen_ram = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "Various"}, 1024,
-        RAMChip::SRAM, &pins_,
-        "Screen RAM", pet_constants::SCREEN_RAM_START);
-    screen_ram_chip_ = screen_ram.get();
-
-    auto basic_b = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Commodore"}, 4096,
-        ROMChip::ROM, &pins_,
-        "BASIC ROM $B000", 0xB000);
-    basic_rom_b_chip_ = basic_b.get();
-
-    auto basic_c = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Commodore"}, 4096,
-        ROMChip::ROM, &pins_,
-        "BASIC ROM $C000", 0xC000);
-    basic_rom_c_chip_ = basic_c.get();
-
-    auto basic_d = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Commodore"}, 4096,
-        ROMChip::ROM, &pins_,
-        "BASIC ROM $D000", 0xD000);
-    basic_rom_d_chip_ = basic_d.get();
-
-    auto editor = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Commodore"}, 2048,
-        ROMChip::ROM, &pins_,
-        "Editor ROM", pet_constants::EDITOR_ROM_START);
-    editor_rom_chip_ = editor.get();
-
-    auto kernal = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Commodore"}, 4096,
-        ROMChip::ROM, &pins_,
-        "Kernal ROM", pet_constants::KERNAL_ROM_START);
-    kernal_rom_chip_ = kernal.get();
-
-    // ── Initialize bus ───────────────────────────────────────────────────
-    bus_mem_.initialize(bus_,
-        main_ram_chip_, screen_ram_chip_,
-        basic_rom_b_chip_, basic_rom_c_chip_, basic_rom_d_chip_,
-        editor_rom_chip_, kernal_rom_chip_);
+    main_ram_chip_    = bus_mem_.template chip_as<RAMChip>(0);
+    screen_ram_chip_  = bus_mem_.template chip_as<RAMChip>(1);
+    basic_rom_b_chip_ = bus_mem_.template chip_as<ROMChip>(2);
+    basic_rom_c_chip_ = bus_mem_.template chip_as<ROMChip>(3);
+    basic_rom_d_chip_ = bus_mem_.template chip_as<ROMChip>(4);
+    editor_rom_chip_  = bus_mem_.template chip_as<ROMChip>(5);
+    kernal_rom_chip_  = bus_mem_.template chip_as<ROMChip>(6);
 
     // Screen RAM mirror at $8400-$87FF and configure memory map
     configure_memory_map();
@@ -379,13 +342,7 @@ bool PETSystem::initialize() {
         "PIA 2 (IEEE-488)", "6820", "I/O", pet_constants::PIA2_BASE);
     register_chip(static_cast<ChipBase*>(via_),
         "MOS 6522 VIA", "6522", "I/O", pet_constants::VIA_BASE);
-    register_chip(std::move(main_ram));
-    register_chip(std::move(screen_ram));
-    register_chip(std::move(basic_b));
-    register_chip(std::move(basic_c));
-    register_chip(std::move(basic_d));
-    register_chip(std::move(editor));
-    register_chip(std::move(kernal));
+    register_bus_chips(bus_mem_);
 
     printf("PET: Initialization complete\n");
     return true;
