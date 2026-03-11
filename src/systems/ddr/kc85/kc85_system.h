@@ -37,6 +37,8 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_2> {
     static constexpr bool        has_basic_rom   = false;
     static constexpr bool        has_extended_video = false;
     static constexpr const char* caos_version    = "2.2";
+    // Slot indices into kKC852Chips
+    static constexpr size_t kCaosRomSlot         = 2;
 };
 
 template<> struct KC85VariantTraits<KC85Variant::KC85_3> {
@@ -47,6 +49,9 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_3> {
     static constexpr bool        has_basic_rom   = true;
     static constexpr bool        has_extended_video = false;
     static constexpr const char* caos_version    = "3.1";
+    // Slot indices into kKC853Chips
+    static constexpr size_t kBasicRomSlot        = 2;
+    static constexpr size_t kCaosRomSlot         = 3;
 };
 
 template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
@@ -57,6 +62,9 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
     static constexpr bool        has_basic_rom   = true;
     static constexpr bool        has_extended_video = true;
     static constexpr const char* caos_version    = "4.2";
+    // Slot indices into kKC854Chips
+    static constexpr size_t kBasicRomSlot        = 2;
+    static constexpr size_t kCaosRomSlot         = 3;
 };
 
 // ============================================================================
@@ -93,23 +101,23 @@ template<> struct KC85VariantTraits<KC85Variant::KC85_4> {
 //   KC85/4 IRM bank: selected via port $84 bits 0-1
 //
 inline constexpr auto kKC852Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 16384},        // RAM: 16 KB
-    Slot<RAMChip>{0x8000, 16384},        // IRM: 16 KB
-    Slot<ROMChip>{0xE000,  8192}         // CAOS ROM: 8 KB
+    Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
+    Slot<RAMChip>{0x8000, 16384, 0, "IRM"},
+    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM"}
 );
 
 inline constexpr auto kKC853Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 16384},        // RAM: 16 KB
-    Slot<RAMChip>{0x8000, 16384},        // IRM: 16 KB
-    Slot<ROMChip>{0xC000,  8192},        // BASIC ROM: 8 KB
-    Slot<ROMChip>{0xE000,  8192}         // CAOS ROM: 8 KB
+    Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
+    Slot<RAMChip>{0x8000, 16384, 0, "IRM"},
+    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM"},
+    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM"}
 );
 
 inline constexpr auto kKC854Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 32768},        // RAM: 32 KB
-    Slot<RAMChip>{0x8000, 65536},        // IRM: 64 KB (4 banks, only 16 KB visible)
-    Slot<ROMChip>{0xC000,  8192},        // BASIC ROM: 8 KB
-    Slot<ROMChip>{0xE000,  8192}         // CAOS ROM: 8 KB
+    Slot<RAMChip>{0x0000, 32768, 0, "RAM"},
+    Slot<RAMChip>{0x8000, 65536, 0, "IRM"},
+    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM"},
+    Slot<ROMChip>{0xE000,  8192, 0, "CAOS ROM"}
 );
 
 // BusTraits — selects the correct manifest per variant
@@ -173,9 +181,7 @@ private:
     z80_ctc_t            ctc_;                // U857 CTC (timing + sound + tape)
     kc85_module_system_t modules_;            // Expansion module slot controller
 
-    // ── Memory — owned by registered_chips_, managed via BusMemory ──────
-    RAMChip* ram_chip_       = nullptr;
-    RAMChip* irm_chip_       = nullptr;   // Video RAM (16 KB for /2,/3; 64 KB for /4)
+    // ── Memory — owned by BusMemory, accessed via chip_as<>() ────────────
     ROMChip* basic_rom_chip_ = nullptr;   // KC85/3, /4 only
     ROMChip* caos_rom_chip_  = nullptr;
 
