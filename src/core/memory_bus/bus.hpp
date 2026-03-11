@@ -69,9 +69,94 @@ public:
     MemoryBus() noexcept { reset_all_viewers(); }
 
     // =========================================================================
-    // §1.1  Hot-path read
+    // §1.1  CS resolve — address decode only (CS-enabled systems)
     // =========================================================================
     //
+    // Performs the same page-table lookup and sub-table resolution as
+    // read()/write(), but does NOT transfer data.  Instead it embeds the
+    // resolved chip id into the bus_state_t CS field.  Each chip's tick then
+    // checks  get_cs_from_bus(bus) == MY_CHIP_ID  to decide if it is selected.
+    //
+    // CS resolve is the emulated equivalent of the combinational address
+    // decoder (PLA, 74138, etc.) asserting a single /CS line per bus cycle.
+    //
+    // MMIO-only chips handle register access in-place during their tick.
+    // Buffer-backed chips (RAM, ROM) call service_read/service_write to
+    // perform the unified-buffer transfer.
+    //
+    // When CsLineBits = 0 this function is not available — use read()/write()
+    // or tick() with callback-based MMIO handlers instead.
+    //
+
+    [[nodiscard]] __attribute__((always_inline)) inline
+    bus_state_t resolve(size_t viewer_id, bus_state_t bus) const noexcept
+        requires(kCsLines)
+    {
+        const Addr addr = Addr(BUS_GET_ADDR(bus));
+
+        if (BUS_GET_BIT(bus, BUS_RW_BIT)) {
+            ChipId chip_id = viewers_[viewer_id].read_chip(Viewer::page_of(addr));
+            if constexpr (kHasSubTables) {
+                if (__builtin_expect(chip_id >= PT::kReadSentinelMin, 0))
+                    chip_id = resolve_read_terminal(viewer_id, chip_id, addr);
+            }
+            set_cs(bus, size_t(chip_id));
+        } else {
+            WriteChipId chip_id = viewers_[viewer_id].write_chip(Viewer::page_of(addr));
+            if constexpr (kHasSubTables) {
+                if (__builtin_expect(chip_id >= PT::kWriteSentinelMin, 0))
+                    chip_id = resolve_write_terminal(viewer_id, chip_id, addr);
+            }
+            set_cs(bus, size_t(chip_id));
+        }
+
+        return bus;
+    }
+
+    // =========================================================================
+    // §1.1b  Post-resolve buffer access (CS-enabled systems)
+    // =========================================================================
+    //
+    // Called by buffer-backed chips (RAM, ROM) during their tick, after
+    // resolve() has embedded the chip id in the CS field.  Extracts CS from
+    // bus, performs the unified-buffer read or write.
+    //
+    // For MMIO chips this is unnecessary — they handle registers in-place.
+    //
+
+    [[nodiscard]] __attribute__((always_inline)) inline
+    bus_state_t service_read(bus_state_t bus) const noexcept
+        requires(kCsLines)
+    {
+        const ChipId chip_id = get_cs(bus);
+        if (__builtin_expect(chip_id < PT::kReadSentinelMin, 1))
+            return read_buffer_no_cs(chip_id, bus);
+        return bus;  // not a buffer chip — caller handles
+    }
+
+    __attribute__((always_inline)) inline
+    bus_state_t service_write(bus_state_t bus) noexcept
+        requires(kCsLines)
+    {
+        const ChipId chip_id = get_cs(bus);
+        if (__builtin_expect(WriteChipId(chip_id) < PT::kWriteSentinelMin, 1))
+            return write_buffer_no_cs(WriteChipId(chip_id), bus);
+        return bus;  // not a buffer chip — caller handles
+    }
+
+    [[nodiscard]] __attribute__((always_inline)) inline
+    bus_state_t service(bus_state_t bus) noexcept
+        requires(kCsLines)
+    {
+        return BUS_GET_BIT(bus, BUS_RW_BIT)
+            ? service_read(bus) : service_write(bus);
+    }
+
+    // =========================================================================
+    // §1.2  Hot-path read (non-CS / callback-driven systems)
+    // =========================================================================
+    //
+    // Full dispatch: page lookup → buffer access or MMIO handler callback.
     // Fast path (chip_id < kReadSentinelMin, full data bus):
     //   page_of → read_chip → CMP → buffer index → BUS_SET_DATA
     //   ≈ 5–6 instructions; zero branches taken on happy path.
@@ -89,7 +174,7 @@ public:
     }
 
     // =========================================================================
-    // §1.2  Hot-path write
+    // §1.3  Hot-path write (non-CS / callback-driven systems)
     // =========================================================================
 
     __attribute__((always_inline)) inline
@@ -104,7 +189,7 @@ public:
     }
 
     // =========================================================================
-    // §1.3  Combined tick (checks R/W bit in bus_state_t)
+    // §1.4  Combined tick (checks R/W bit in bus_state_t)
     // =========================================================================
 
     [[nodiscard]] __attribute__((always_inline)) inline
@@ -566,8 +651,39 @@ private:
     }
 
     // =========================================================================
+    // §1.99b  Resolve helpers — chase sub-tables to a terminal chip id
+    // =========================================================================
+    //
+    // Used by resolve() when the initial page lookup yields a sentinel.
+    // Returns the terminal chip id (direct, kNoChipSelected, or MMIO) —
+    // unlike resolve_read_chip which may still return a sub-table sentinel
+    // when max depth is hit, these flatten all the way through.
+    //
+
+    [[nodiscard]] __attribute__((always_inline)) inline
+    ChipId resolve_read_terminal(size_t viewer_id, ChipId chip_id,
+                                 Addr addr) const noexcept {
+        if (chip_id == PT::kNoChipSelected) return chip_id;
+        if constexpr (kHasSubTables)
+            chip_id = resolve_read_chip(viewer_id, chip_id, addr);
+        return chip_id;
+    }
+
+    [[nodiscard]] __attribute__((always_inline)) inline
+    WriteChipId resolve_write_terminal(size_t viewer_id, WriteChipId chip_id,
+                                       Addr addr) const noexcept {
+        if (chip_id == PT::kNoChipSelectedWrite) return chip_id;
+        if constexpr (kHasSubTables)
+            chip_id = resolve_write_chip(viewer_id, chip_id, addr);
+        return chip_id;
+    }
+
+    // =========================================================================
     // §2  Buffer read/write helpers (shared by hot path and slow path)
     // =========================================================================
+
+    // read_buffer / write_buffer: used by tick()/read()/write() (non-CS path).
+    // They optionally set CS as a side-effect when kCsLines is enabled.
 
     [[nodiscard]] __attribute__((always_inline)) inline
     bus_state_t read_buffer(ChipId chip_id, bus_state_t bus) const noexcept {
@@ -598,6 +714,49 @@ private:
         const DataType bus_val = static_cast<DataType>(BUS_GET_DATA(bus));
 
         if constexpr (kCsLines) { set_cs(bus, size_t(chip_id)); }
+
+        if constexpr (kPartialBus) {
+            const DataType mask = bus_masks_.write(size_t(chip_id));
+            if (__builtin_expect(mask != DataBusMasks<Cfg>::kFullMask, 0)) {
+                const DataType old_val = static_cast<DataType>(unified_buf_[offset]);
+                unified_buf_[offset] =
+                    static_cast<uint8_t>(bitmix(bus_val, old_val, mask));
+                return bus;
+            }
+        }
+
+        unified_buf_[offset] = static_cast<uint8_t>(bus_val);
+        return bus;
+    }
+
+    // read_buffer_no_cs / write_buffer_no_cs: used by service_read/service_write
+    // after resolve() has already set the CS field.  Skips set_cs().
+
+    [[nodiscard]] __attribute__((always_inline)) inline
+    bus_state_t read_buffer_no_cs(ChipId chip_id, bus_state_t bus) const noexcept {
+        const Addr     addr    = Addr(BUS_GET_ADDR(bus));
+        const size_t   offset  = (size_t(chip_id) << Cfg::PageBits)
+                                 | Viewer::offset_of(addr);
+        const DataType mem_val = static_cast<DataType>(unified_buf_[offset]);
+
+        if constexpr (kPartialBus) {
+            const DataType mask = bus_masks_.read(size_t(chip_id));
+            if (__builtin_expect(mask != DataBusMasks<Cfg>::kFullMask, 0)) {
+                BUS_BITMIX_DATA(bus, mem_val, mask);
+                return bus;
+            }
+        }
+
+        BUS_SET_DATA(bus, mem_val);
+        return bus;
+    }
+
+    __attribute__((always_inline)) inline
+    bus_state_t write_buffer_no_cs(WriteChipId chip_id, bus_state_t bus) noexcept {
+        const Addr     addr    = Addr(BUS_GET_ADDR(bus));
+        const size_t   offset  = (size_t(chip_id) << Cfg::PageBits)
+                                 | Viewer::offset_of(addr);
+        const DataType bus_val = static_cast<DataType>(BUS_GET_DATA(bus));
 
         if constexpr (kPartialBus) {
             const DataType mask = bus_masks_.write(size_t(chip_id));
@@ -814,6 +973,26 @@ public:
     using Bus = MemoryBus<Cfg>;
 
     explicit BusView(Bus& bus) noexcept : bus_(bus) {}
+
+    // ── CS-enabled workflow: resolve then service ──────────────────────────
+
+    [[nodiscard]] __attribute__((always_inline)) inline
+    bus_state_t resolve(bus_state_t bus) const noexcept
+        requires(Bus::kCsLines) { return bus_.resolve(ViewerId, bus); }
+
+    [[nodiscard]] __attribute__((always_inline)) inline
+    bus_state_t service_read(bus_state_t bus) const noexcept
+        requires(Bus::kCsLines) { return bus_.service_read(bus); }
+
+    __attribute__((always_inline)) inline
+    bus_state_t service_write(bus_state_t bus) noexcept
+        requires(Bus::kCsLines) { return bus_.service_write(bus); }
+
+    [[nodiscard]] __attribute__((always_inline)) inline
+    bus_state_t service(bus_state_t bus) noexcept
+        requires(Bus::kCsLines) { return bus_.service(bus); }
+
+    // ── Non-CS workflow: full dispatch ─────────────────────────────────────
 
     [[nodiscard]] __attribute__((always_inline)) inline
     bus_state_t read (bus_state_t bus) noexcept { return bus_.read (ViewerId, bus); }

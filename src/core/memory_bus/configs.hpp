@@ -291,4 +291,66 @@ using VicView_C64 = BusView<C64BusConfig, C64BusConfig::Vic>;
 //  are secondary decode logic, orthogonal to PLA bank switching.  Update
 //  sub-table base chips (e.g. set_masked_base) explicitly when needed.
 //
+// ── CS-enabled workflow: resolve → chip tick → service ───────────────────────
+//
+//  When CsLineBits > 0, the bus supports a two-phase access model that
+//  mirrors real hardware address decode → chip /CS assertion:
+//
+//  Phase 1 — Address decode (once per bus cycle):
+//    bus = mem_bus.resolve(viewer_id, bus);
+//
+//    resolve() reads the address from bus, performs the page-table lookup
+//    (including sub-table resolution), and embeds the terminal chip id in
+//    the bus_state_t CS field.  No data transfer happens.
+//
+//  Phase 2 — Chip ticks (each chip, every cycle):
+//    void my_chip_tick(bus_state_t& bus) {
+//        advance_internal_counters();   // always, regardless of CS
+//        if (NesCpuBus::get_cs_from_bus(bus) != MY_CHIP_ID) return;
+//
+//        // Selected: handle the bus access
+//        if (BUS_GET_BIT(bus, BUS_RW_BIT))
+//            BUS_SET_DATA(bus, registers_[BUS_GET_ADDR(bus) & reg_mask]);
+//        else
+//            registers_[BUS_GET_ADDR(bus) & reg_mask] = BUS_GET_DATA(bus);
+//    }
+//
+//    MMIO-only chips (SID, CIA, PPU regs, …) handle register access
+//    directly — they know their own register layout.
+//
+//    Buffer-backed chips (RAM, ROM) call service_read/service_write instead:
+//
+//    void ram_tick(NesCpuBus& mem_bus, bus_state_t& bus) {
+//        if (NesCpuBus::get_cs_from_bus(bus) != MY_CHIP_ID) return;
+//        bus = BUS_GET_BIT(bus, BUS_RW_BIT)
+//            ? mem_bus.service_read(bus)
+//            : mem_bus.service_write(bus);
+//    }
+//
+//    service_read/service_write extract the chip id from the CS field (already
+//    embedded by resolve) and perform the unified-buffer transfer.  This
+//    avoids a redundant page-table lookup.
+//
+//  Non-CS systems (CsLineBits absent or 0) use the callback workflow:
+//    bus = mem_bus.tick(viewer_id, bus);
+//    — performs page lookup, buffer access, and MMIO handler dispatch.
+//
+// ── Bus floating (NES open-bus behaviour) ────────────────────────────────────
+//
+//  On the NES (and similar), undriven data lines float toward VCC over time.
+//  Model this with a pre-read float step:
+//
+//    // Simple: all data bits → 1 before every read
+//    BUS_FLOAT_DATA_HIGH(bus);
+//    bus = mem_bus.resolve(viewer_id, bus);
+//
+//    // Gradual decay via LFSR (more accurate, passes NES test ROMs):
+//    lfsr = lfsr16_step(lfsr);
+//    BUS_FLOAT_DATA_DECAY_HIGH(bus, uint8_t(lfsr));
+//    bus = mem_bus.resolve(viewer_id, bus);
+//
+//  Reads from connected chips overwrite the floated data.  Reads from
+//  unconnected addresses (kNoChipSelected) leave the floated bits intact,
+//  modelling the impedance-driven open-bus behaviour.
+//
 // =============================================================================
