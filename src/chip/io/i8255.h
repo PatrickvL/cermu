@@ -115,6 +115,19 @@ public:
         return 0xFF;
     }
 
+    // --- ChipBase bus interface (MMIO) ---
+    bool has_mmio() const override { return true; }
+    bus_state_t on_bus_read(bus_state_t bus) noexcept override {
+        if (port_b_read_callback_)
+            port_b_in_ = port_b_read_callback_(port_b_read_context_, port_a_out_);
+        BUS_SET_DATA(bus, read(BUS_GET_ADDR(bus)));
+        return bus;
+    }
+    bus_state_t on_bus_write(bus_state_t bus) noexcept override {
+        write(BUS_GET_ADDR(bus), BUS_GET_DATA(bus));
+        return bus;
+    }
+
     // === External port inputs from system/devices ===
 
     void set_port_a_input(uint8_t data) { port_a_in_ = data; }
@@ -124,6 +137,14 @@ public:
     uint8_t get_port_a_output() const { return port_a_out_; }
     uint8_t get_port_b_output() const { return port_b_out_; }
     uint8_t get_port_c_output() const { return port_c_out_; }
+
+    // Port B read callback — called before every register read to refresh
+    // external input (e.g. keyboard matrix column data driven by Port A rows).
+    // Signature: uint8_t callback(void* context, uint8_t port_a_output)
+    void set_port_b_read_callback(uint8_t (*callback)(void*, uint8_t), void* context) {
+        port_b_read_callback_ = callback;
+        port_b_read_context_ = context;
+    }
 
     // === Direction queries ===
     bool port_a_input() const { return (control_ & 0x10) != 0; }
@@ -160,6 +181,9 @@ private:
     uint8_t port_a_in_ = 0xFF;
     uint8_t port_b_in_ = 0xFF;
     uint8_t port_c_in_ = 0xFF;
+
+    uint8_t (*port_b_read_callback_)(void*, uint8_t) = nullptr;
+    void* port_b_read_context_ = nullptr;
 
     // Register file mirror (for debug inspection — backed by ChipBase::regs_)
 

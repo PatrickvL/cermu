@@ -154,6 +154,15 @@ struct mos6522_t : public IoChipBase {
     bool interrupt_active = false;
     int interrupt_bit = 0;  // Bus pin bit index (BUS_IRQ_BIT or BUS_NMI_BIT); 0 = not wired
 
+    // --- ChipBase bus interface (MMIO) ---
+    bool has_mmio() const override { return true; }
+    bus_state_t on_bus_read(bus_state_t bus) noexcept override {
+        return registers_read(bus);
+    }
+    bus_state_t on_bus_write(bus_state_t bus) noexcept override {
+        return registers_write(bus);
+    }
+
     // --- ChipBase interface ---
 #ifdef CERMU_HAS_GUI
     bool has_settings_content() const override;

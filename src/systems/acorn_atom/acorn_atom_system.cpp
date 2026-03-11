@@ -194,21 +194,83 @@ bool AcornAtomSystem::apply_configuration() { return true; }
 
 bool AcornAtomSystem::initialize() {
     printf("Acorn Atom: Initializing system\n");
+
+    // ── Create MemoryChip wrappers ──────────────────────────────────────
+    auto ram_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"SRAM", "Various"}, 32768, MemoryChip::SRAM, &pins_,
+        "RAM", 0x0000);
+    ram_ = ram_chip.get();
+
+    auto vram_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"SRAM", "Various"}, 8192, MemoryChip::SRAM, &pins_,
+        "Video RAM", acorn_atom_constants::VIDEO_RAM_BASE);
+    video_ram_ = vram_chip.get();
+
+    auto basic_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "Acorn"}, acorn_atom_constants::BASIC_ROM_SIZE,
+        MemoryChip::ROM, &pins_,
+        "BASIC", acorn_atom_constants::BASIC_ROM_BASE);
+    basic_rom_ = basic_chip.get();
+
+    auto fp_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "Acorn"}, acorn_atom_constants::FP_ROM_SIZE,
+        MemoryChip::ROM, &pins_,
+        "FP ROM", acorn_atom_constants::FP_ROM_BASE);
+    fp_rom_ = fp_chip.get();
+
+    auto os_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "Acorn"}, acorn_atom_constants::OS_ROM_SIZE,
+        MemoryChip::ROM, &pins_,
+        "OS ROM", acorn_atom_constants::OS_ROM_BASE);
+    os_rom_ = os_chip.get();
+
+    // ── Bind manifest slots, wire the bus ───────────────────────────────
+    bus_mem_.initialize(bus_,
+        ram_,        // slot 0: RAM
+        video_ram_,  // slot 1: Video RAM
+        basic_rom_,  // slot 2: BASIC ROM
+        fp_rom_,     // slot 3: FP ROM
+        os_rom_,     // slot 4: OS ROM
+        &ppi_,       // slot 5: PPI (MMIO)
+        &via_);      // slot 6: VIA (MMIO)
+
+    // Direct pointer for MC6847 rendering
+    video_ram_ptr_ = bus_mem_.chip_buffer(
+        static_cast<PT::ChipId>(acorn_atom_chips::kVideoRamId));
+
+    // ── Init chips ──────────────────────────────────────────────────────
     cpu_ = new MOS6502();
     pins_ = cpu_->init();
     vdg_.init();
     ppi_.init();
+    ppi_.set_port_b_read_callback(ppi_keyboard_scan, this);
     via_.reset();
     via_.interrupt_bit = BUS_IRQ_BIT;
-    ram_.resize(ram_size_kb_ * 1024, 0x00);
-    video_ram_.resize(acorn_atom_constants::VIDEO_RAM_SIZE, 0x00);
-    basic_rom_.resize(acorn_atom_constants::BASIC_ROM_SIZE, 0xFF);
-    fp_rom_.resize(acorn_atom_constants::FP_ROM_SIZE, 0xFF);
-    os_rom_.resize(acorn_atom_constants::OS_ROM_SIZE, 0xFF);
+
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_)); // all keys released (active-low)
+
+    // ── Trim page tables to current RAM config ──────────────────────────
+    configure_bus_memory_map();
+
+    // ── Load ROMs into unified buffer ───────────────────────────────────
     if (!load_roms()) {
         printf("Acorn Atom: Warning — ROMs not loaded, system will not boot correctly\n");
     }
+
+    // ── Register chips for Hardware menu ────────────────────────────────
+    register_chip(static_cast<ChipBase*>(cpu_),
+        "MOS 6502 CPU", "6502", "CPU", 0x0000);
+    register_chip(&ppi_,
+        "Intel 8255 PPI", "8255", "I/O", acorn_atom_constants::PPI_BASE);
+    register_chip(&via_,
+        "MOS 6522 VIA", "6522", "I/O", acorn_atom_constants::VIA_BASE);
+    register_chip(std::move(ram_chip));
+    register_chip(std::move(vram_chip));
+    register_chip(std::move(basic_chip));
+    register_chip(std::move(fp_chip));
+    register_chip(std::move(os_chip));
+
+    printf("Acorn Atom: System initialized (RAM: %dKB)\n", ram_size_kb_);
     system_ready_ = true;
     return true;
 }
@@ -220,6 +282,7 @@ void AcornAtomSystem::reset() {
     pins_ = cpu_->reset(pins_);
     vdg_.init();
     ppi_.init();
+    ppi_.set_port_b_read_callback(ppi_keyboard_scan, this);
     via_.reset();
     via_.interrupt_bit = BUS_IRQ_BIT;
     std::memset(keyboard_matrix_, 0xFF, sizeof(keyboard_matrix_));
@@ -241,8 +304,8 @@ void AcornAtomSystem::tick() {
     // ---- CPU PHI2 — address/R#W valid on bus ----
     pins_ = cpu_->tick<MOS6502::Phase::PHI2>(pins_);
 
-    // ---- Memory dispatch ----
-    pins_ = mem_tick(pins_);
+    // ---- Memory dispatch via MemoryBus ----
+    pins_ = bus_.tick(0, pins_);
 
     // ---- CPU PHI1 ----
     pins_ = cpu_->tick<MOS6502::Phase::PHI1>(pins_);
@@ -368,89 +431,68 @@ void AcornAtomSystem::handle_keyboard_event(SDL_Keycode key, bool pressed) {
 }
 
 // ============================================================================
-// MEMORY BUS DISPATCH
+// BUS CONFIGURATION
 // ============================================================================
 
-bus_state_t AcornAtomSystem::mem_tick(bus_state_t pins) {
-    uint16_t addr  = BUS_GET_ADDR(pins);
-    bool     is_rd = BUS_GET_BIT(pins, BUS_RW_BIT);
+void AcornAtomSystem::configure_bus_memory_map() {
+    const size_t ram_pages = (ram_size_kb_ * 1024) / Bus::kPageSize;
 
-    if (is_rd) {
-        uint8_t data = 0xFF;
+    // apply() establishes the full default map from the manifest:
+    //   - RAM 128 pages ($0000–$7FFF)
+    //   - Video RAM 32 pages ($8000–$9FFF)
+    //   - BASIC ROM 16 pages ($C000–$CFFF)
+    //   - FP ROM 8 pages ($D000–$D7FF)
+    //   - OS ROM 16 pages ($F000–$FFFF)
+    //   - PPI MMIO via MaskedSubTable on page $B0
+    //   - VIA MMIO via MaskedSubTable on page $B8
+    bus_mem_.apply(bus_);
 
-        if (addr < (uint16_t)ram_.size()) {
-            // $0000–$2BFF: RAM
-            data = ram_[addr];
-        } else if (addr >= acorn_atom_constants::VIDEO_RAM_BASE &&
-                   addr <  acorn_atom_constants::VIDEO_RAM_BASE + (uint16_t)video_ram_.size()) {
-            // $8000–$97FF: Video RAM
-            data = video_ram_[addr - acorn_atom_constants::VIDEO_RAM_BASE];
-        } else if (addr >= acorn_atom_constants::PPI_BASE &&
-                   addr <  acorn_atom_constants::PPI_BASE + acorn_atom_constants::PPI_SIZE) {
-            // $B000–$B003: Intel 8255 PPI
-            // Before reading Port B, update column data from keyboard matrix.
-            // Port A (output) selects which rows to scan; active-low strobe.
-            uint8_t row_sel = ppi_.get_port_a_output();
-            uint8_t cols = 0xFF;
-            for (int r = 0; r < 8; r++) {
-                if (!(row_sel & (1u << r))) {
-                    cols &= keyboard_matrix_[r];
-                }
-            }
-            ppi_.set_port_b_input(cols);
-            data = ppi_.read(static_cast<uint8_t>(addr - acorn_atom_constants::PPI_BASE));
-        } else if (addr >= acorn_atom_constants::VIA_BASE &&
-                   addr <  acorn_atom_constants::VIA_BASE + acorn_atom_constants::VIA_SIZE) {
-            // $B800–$B80F: MOS 6522 VIA
-            bus_state_t v = ATOM_BUS_DEFAULT_STATE;
-            BUS_SET_ADDR(v, addr - acorn_atom_constants::VIA_BASE);
-            BUS_SET_BIT(v, BUS_RW_BIT);
-            v    = via_.registers_read(v);
-            data = BUS_GET_DATA(v);
-        } else if (addr >= acorn_atom_constants::BASIC_ROM_BASE &&
-                   addr <  acorn_atom_constants::BASIC_ROM_BASE + (uint16_t)basic_rom_.size()) {
-            // $C000–$CFFF: BASIC ROM
-            data = basic_rom_[addr - acorn_atom_constants::BASIC_ROM_BASE];
-        } else if (addr >= acorn_atom_constants::FP_ROM_BASE &&
-                   addr <  acorn_atom_constants::FP_ROM_BASE + (uint16_t)fp_rom_.size()) {
-            // $D000–$D7FF: Floating-point ROM
-            data = fp_rom_[addr - acorn_atom_constants::FP_ROM_BASE];
-        } else if (addr >= acorn_atom_constants::OS_ROM_BASE &&
-                   addr <  acorn_atom_constants::OS_ROM_BASE + (uint16_t)os_rom_.size()) {
-            // $F000–$FFFF: OS ROM
-            data = os_rom_[addr - acorn_atom_constants::OS_ROM_BASE];
+    // ── Trim RAM to actual configured size ──────────────────────────────
+    // Pages above the real RAM size get unmapped.  ROM overlays and MMIO
+    // sub-tables on higher pages are left alone (they have different chip ids).
+    if (ram_pages < 128) {
+        for (size_t page = ram_pages; page < 128; ++page) {
+            auto rd = bus_.viewer(0).read_chip(page);
+            auto wr = bus_.viewer(0).write_chip(page);
+
+            // Only unmap if this page still points to its RAM chip id
+            if (size_t(rd) == acorn_atom_chips::kRamId + page)
+                bus_.set_read_page(0, page, PT::kNoChipSelected);
+            if (size_t(wr) == acorn_atom_chips::kRamId + page)
+                bus_.set_write_page(0, page, PT::kNoChipSelectedWrite);
         }
-
-        BUS_SET_DATA(pins, data);
-    } else {
-        uint8_t data = BUS_GET_DATA(pins);
-
-        if (addr < (uint16_t)ram_.size()) {
-            ram_[addr] = data;
-        } else if (addr >= acorn_atom_constants::VIDEO_RAM_BASE &&
-                   addr <  acorn_atom_constants::VIDEO_RAM_BASE + (uint16_t)video_ram_.size()) {
-            video_ram_[addr - acorn_atom_constants::VIDEO_RAM_BASE] = data;
-        } else if (addr >= acorn_atom_constants::PPI_BASE &&
-                   addr <  acorn_atom_constants::PPI_BASE + acorn_atom_constants::PPI_SIZE) {
-            ppi_.write(static_cast<uint8_t>(addr - acorn_atom_constants::PPI_BASE), data);
-            // Port A write: row strobe changed — column data will be refreshed on next read
-        } else if (addr >= acorn_atom_constants::VIA_BASE &&
-                   addr <  acorn_atom_constants::VIA_BASE + acorn_atom_constants::VIA_SIZE) {
-            bus_state_t v = ATOM_BUS_DEFAULT_STATE;
-            BUS_SET_ADDR(v, addr - acorn_atom_constants::VIA_BASE);
-            BUS_SET_DATA(v, data);
-            BUS_CLR_BIT(v, BUS_RW_BIT);
-            via_.registers_write(v);
-        }
-        // Writes to ROM regions are silently ignored
     }
 
-    return pins;
+    // ── PPI page ($B0) — update MaskedSubTable base chip ────────────────
+    // apply() captured the base as RAM page $B0.  If RAM doesn't reach
+    // that page, switch the base to open bus.
+    const int ppi_sub = bus_mem_.slot(acorn_atom_chips::kPpiSlot).sub_table_idx;
+    if (ppi_sub >= 0 && ram_pages <= 0xB0) {
+        bus_.set_masked_base(0, size_t(ppi_sub),
+            PT::kNoChipSelected, PT::kNoChipSelectedWrite);
+    }
+
+    // ── VIA page ($B8) — same treatment ─────────────────────────────────
+    const int via_sub = bus_mem_.slot(acorn_atom_chips::kViaSlot).sub_table_idx;
+    if (via_sub >= 0 && ram_pages <= 0xB8) {
+        bus_.set_masked_base(0, size_t(via_sub),
+            PT::kNoChipSelected, PT::kNoChipSelectedWrite);
+    }
 }
 
-bus_state_t AcornAtomSystem::io_tick(bus_state_t pins) {
-    // The Acorn Atom uses memory-mapped I/O (no separate I/O address space)
-    return pins;
+// ============================================================================
+// KEYBOARD MATRIX CALLBACK — called by i8255_t before Port B reads
+// ============================================================================
+
+uint8_t AcornAtomSystem::ppi_keyboard_scan(void* context, uint8_t port_a_output) {
+    auto* sys = static_cast<AcornAtomSystem*>(context);
+    uint8_t cols = 0xFF;
+    for (int r = 0; r < 8; r++) {
+        if (!(port_a_output & (1u << r))) {
+            cols &= sys->keyboard_matrix_[r];
+        }
+    }
+    return cols;
 }
 
 // ============================================================================
@@ -483,7 +525,7 @@ void AcornAtomSystem::render_frame() {
 
     for (int row = 0; row < VROWS; row++) {
         for (int col = 0; col < VCOLS; col++) {
-            uint8_t byte = video_ram_[row * VCOLS + col];
+            uint8_t byte = video_ram_ptr_[row * VCOLS + col];
             bool     inv = (byte & 0x80) != 0;
             bool     sem = (byte & 0x40) != 0;
             uint8_t  chr = byte & 0x3F;
@@ -555,7 +597,7 @@ bool AcornAtomSystem::load_roms() {
     const char* basic_names[] = {"atom_basic.rom", "BASIC.ROM", "basic.rom", nullptr};
     if (!rom_loader_load_from_root(rom_root, basic_names,
                                    acorn_atom_constants::BASIC_ROM_SIZE,
-                                   basic_rom_.data(), basic_rom_.size())) {
+                                   basic_rom_->data(), basic_rom_->size_bytes())) {
         printf("Acorn Atom: BASIC ROM not loaded\n");
         ok = false;
     }
@@ -564,13 +606,13 @@ bool AcornAtomSystem::load_roms() {
     const char* fp_names[] = {"atom_fp.rom", "FP.ROM", "fp.rom", nullptr};
     rom_loader_load_from_root(rom_root, fp_names,
                               acorn_atom_constants::FP_ROM_SIZE,
-                              fp_rom_.data(), fp_rom_.size());  // optional
+                              fp_rom_->data(), fp_rom_->size_bytes());  // optional
 
     // OS / Monitor ROM (~4 KB at $F000)
     const char* os_names[] = {"atom_os.rom", "ABASIC.ROM", "os.rom", nullptr};
     if (!rom_loader_load_from_root(rom_root, os_names,
                                    acorn_atom_constants::OS_ROM_SIZE,
-                                   os_rom_.data(), os_rom_.size())) {
+                                   os_rom_->data(), os_rom_->size_bytes())) {
         printf("Acorn Atom: OS ROM not loaded\n");
         ok = false;
     }
