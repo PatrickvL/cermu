@@ -28,15 +28,63 @@
 #include "acorn_atom_constants.h"
 #include "../../core/emulated_system.h"
 #include "../../core/system_lines.h"
+#include "../../core/chip_manifest.hpp"
 #include "../../chip/cpu/fam65xx/mos6502.h"
 #include "../../chip/video/mc6847/mc6847.h"
 #include "../../chip/io/i8255.h"
 #include "../../chip/io/mos6522.h"
+#include "../../chip/memory/memory_chip.h"
 #include <cstdint>
-#include <vector>
 
 // Default bus state for the Atom — inherited from MOS 6502 defaults.
 #define ATOM_BUS_DEFAULT_STATE (MOS6502::default_bus_state())
+
+
+// =============================================================================
+// Acorn Atom chip manifest — declarative memory layout
+// =============================================================================
+//
+// Slot 0: RAM       — 32 KB at $0000 (covers full lower half; actual size configurable)
+// Slot 1: Video RAM — 8 KB at $8000 (real hardware: 6 KB at $8000–$97FF)
+// Slot 2: BASIC ROM — 4 KB at $C000
+// Slot 3: FP ROM    — 2 KB at $D000
+// Slot 4: OS ROM    — 4 KB at $F000
+// Slot 5: PPI       — MMIO-only, 4-byte window at $B000
+// Slot 6: VIA       — MMIO-only, 16-byte window at $B800
+//
+// RAM is allocated as 32 KB (power of 2) covering $0000–$7FFF; the system
+// trims actual read/write pages to the configured size (2/5/8/12 KB).
+// Video RAM is 8 KB (power of 2); only $8000–$97FF is used by the MC6847.
+//
+inline constexpr auto kAcornAtomChips = make_chip_manifest(
+    Slot<MemoryChip>{32768, 0x0000},        // RAM: 32 KB at $0000
+    Slot<MemoryChip>{ 8192, 0x8000},        // Video RAM: 8 KB at $8000
+    Slot<MemoryChip>{ 4096, 0xC000},        // BASIC ROM: 4 KB at $C000
+    Slot<MemoryChip>{ 2048, 0xD000},        // FP ROM: 2 KB at $D000
+    Slot<MemoryChip>{ 4096, 0xF000},        // OS ROM: 4 KB at $F000
+    Slot<i8255_t>   {    0, 0xB000, 0xFFFC}, // PPI: MMIO-only, 4-byte window
+    Slot<mos6522_t> {    0, 0xB800, 0xFFF0}  // VIA: MMIO-only, 16-byte window
+);
+
+// BusSpec auto-derived from the manifest
+using AcornAtomBusSpec = ManifestBusSpec<kAcornAtomChips, 16, 8>;
+
+namespace acorn_atom_chips {
+    inline constexpr size_t kRamSlot      = 0;
+    inline constexpr size_t kVideoRamSlot = 1;
+    inline constexpr size_t kBasicSlot    = 2;
+    inline constexpr size_t kFpRomSlot    = 3;
+    inline constexpr size_t kOsRomSlot    = 4;
+    inline constexpr size_t kPpiSlot      = 5;
+    inline constexpr size_t kViaSlot      = 6;
+
+    // Compile-time chip ids (from manifest prefix-sum)
+    inline constexpr size_t kRamId      = kAcornAtomChips.base_id(kRamSlot, AcornAtomBusSpec::PageBits);
+    inline constexpr size_t kVideoRamId = kAcornAtomChips.base_id(kVideoRamSlot, AcornAtomBusSpec::PageBits);
+    inline constexpr size_t kBasicId    = kAcornAtomChips.base_id(kBasicSlot, AcornAtomBusSpec::PageBits);
+    inline constexpr size_t kFpRomId    = kAcornAtomChips.base_id(kFpRomSlot, AcornAtomBusSpec::PageBits);
+    inline constexpr size_t kOsRomId    = kAcornAtomChips.base_id(kOsRomSlot, AcornAtomBusSpec::PageBits);
+}
 
 class AcornAtomSystem : public EmulatedSystem {
 public:
@@ -78,12 +126,22 @@ private:
     i8255_t     ppi_;                // Intel 8255 PPI (keyboard + cassette ctrl)
     mos6522_t   via_;                // MOS 6522 VIA (timers, cassette, printer)
 
-    // ── Memory ───────────────────────────────────────────────────────────
-    std::vector<uint8_t> ram_;       // $0000–$2BFF (up to 11KB)
-    std::vector<uint8_t> video_ram_; // $8000–$97FF (6KB)
-    std::vector<uint8_t> basic_rom_; // $C000–$CFFF (4KB BASIC)
-    std::vector<uint8_t> fp_rom_;    // $D000–$D7FF (2KB floating point)
-    std::vector<uint8_t> os_rom_;    // $F000–$FFFF (4KB OS)
+    // ── Memory chips — owned by registered_chips_ ────────────────────────
+    MemoryChip* ram_       = nullptr;  // 32 KB at $0000 (actual size configurable)
+    MemoryChip* video_ram_ = nullptr;  // 8 KB at $8000 (MC6847 reads from here)
+    MemoryChip* basic_rom_ = nullptr;  // 4 KB at $C000
+    MemoryChip* fp_rom_    = nullptr;  // 2 KB at $D000
+    MemoryChip* os_rom_    = nullptr;  // 4 KB at $F000
+
+    // Direct pointer into unified buffer for VDG rendering
+    uint8_t* video_ram_ptr_ = nullptr;
+
+    // ── MemoryBus — declarative setup via chip manifest ──────────────────
+    using Bus = MemoryBus<AcornAtomBusSpec>;
+    using PT  = PackingTraits<AcornAtomBusSpec>;
+    using Mem = BusMemory<AcornAtomBusSpec>;
+    Bus bus_;
+    Mem bus_mem_{kAcornAtomChips};
 
     // ── Display ──────────────────────────────────────────────────────────
     uint32_t framebuffer_[acorn_atom_constants::FB_WIDTH *
@@ -101,8 +159,10 @@ private:
     float speed_multiplier_ = 1.0f;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    bus_state_t mem_tick(bus_state_t pins);
-    bus_state_t io_tick(bus_state_t pins);
-    void        render_frame();   // Render one complete video frame to framebuffer_
-    bool        load_roms();
+    void configure_bus_memory_map();  // Setup page tables for current config
+    void render_frame();   // Render one complete video frame to framebuffer_
+    bool load_roms();
+
+    // PPI keyboard matrix callback — called before every PPI register read
+    static uint8_t ppi_keyboard_scan(void* context, uint8_t port_a_output);
 };
