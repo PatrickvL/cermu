@@ -183,23 +183,30 @@ bool Apple1System::apply_configuration() {
 bool Apple1System::initialize() {
     printf("Apple1: Initializing system\n");
     
-    // Create memory chips — registered later, storage is ready immediately
-    // RAM chip — allocated at full 64KB but only ram_size_ is addressable
+    // ── Create MemoryChip wrappers (for Hardware menu + ROM loading) ────────
+    // RAM — bound to unified buffer at slot 0 (chip ids 0–255).
     auto ram_chip = std::make_unique<MemoryChip>(
         ChipInfo{"SRAM", "Various"}, apple1_constants::RAM_64K, MemoryChip::SRAM, &pins_,
         "RAM", 0x0000);
     ram_ = ram_chip.get();
 
+    // Monitor ROM — bound at slot 1 (chip id 256).
     auto monitor_chip = std::make_unique<MemoryChip>(
         ChipInfo{"PROM", "Various"}, 256, MemoryChip::PROM, &pins_,
         "Monitor", apple1_constants::MONITOR_BASE);
     monitor_rom_ = monitor_chip.get();
 
+    // BASIC ROM — bound at slot 2 (chip ids 257–272).
     auto basic_chip = std::make_unique<MemoryChip>(
         ChipInfo{"ROM", "Apple"}, 4096, MemoryChip::ROM, &pins_,
         "BASIC", 0xE000);
     basic_rom_ = basic_chip.get();
 
+    // Bind all manifest slots and wire the bus in one call.
+    // MemoryChip::bind() is auto-called for buffer-backed slots.
+    bus_mem_.initialize(bus_, ram_, monitor_rom_, basic_rom_, &pia_);
+
+    // Character ROM — not on the bus (used by terminal renderer only).
     auto char_chip = std::make_unique<MemoryChip>(
         ChipInfo{"2513", "Signetics"}, 512, MemoryChip::ROM, &pins_,
         "CharROM");
@@ -216,6 +223,11 @@ bool Apple1System::initialize() {
     if (!roms_loaded) {
         printf("Apple1: Warning - ROMs not loaded, system may not function correctly\n");
     }
+
+    // ── Configure page tables for the current ram_size_ ─────────────────────
+    // apply() auto-wires: RAM pages, ROM overlays, PIA MMIO + MaskedSubTable.
+    // configure_bus_memory_map() then trims to actual RAM size.
+    configure_bus_memory_map();
     
     // Create CPU (MOS6502) — direct C++ instantiation
     cpu_ = new MOS6502();
@@ -466,62 +478,80 @@ void Apple1System::set_speed_multiplier(float multiplier) {
 // ============================================================================
 
 // ============================================================================
-// BUS MEMORY SERVICE
+// BUS MEMORY MAP CONFIGURATION
 // ============================================================================
 
-bus_state_t Apple1System::mem_tick(bus_state_t s) {
-    uint16_t addr = BUS_GET_ADDR(s);
+void Apple1System::configure_bus_memory_map() {
+    using ChipId      = PT::ChipId;
+    using WriteChipId = PT::WriteChipId;
 
-    if (BUS_GET_BIT(s, BUS_RW_BIT)) {
-        // ---- Read cycle ----
-        uint8_t data = 0xFF;
+    const size_t ram_pages = ram_size_ / Bus::kPageSize;  // 16 (4K), 32 (8K), or 256 (64K)
 
-        // PIA 6820 registers (0xD010-0xD013) — highest priority I/O
-        if (addr >= apple1_constants::PIA_BASE && addr <= apple1_constants::PIA_BASE + 3) {
-            data = pia_.read(addr);
-        }
-        // Monitor ROM (0xFF00-0xFFFF = 256 bytes)
-        else if (addr >= apple1_constants::MONITOR_BASE) {
-            data = (*monitor_rom_)[addr - apple1_constants::MONITOR_BASE];
-        }
-        // BASIC ROM (0xE000-0xEFFF = 4KB, optional)
-        else if (has_basic_ && addr >= 0xE000 && addr < 0xF000) {
-            data = (*basic_rom_)[addr - 0xE000];
-        }
-        // RAM — for 64KB configurations, skip ROM/IO regions already handled above
-        else if (addr < ram_size_) {
-            data = (*ram_)[addr];
-        }
+    // apply() establishes the full default map from the manifest:
+    //   - All 256 RAM pages (read + write)
+    //   - Monitor ROM overlays read page $FF
+    //   - BASIC ROM overlays read pages $E0–$EF
+    //   - PIA MMIO via MaskedSubTable on page $D0
+    bus_mem_.apply(bus_);
 
-        BUS_SET_DATA(s, data);
-    } else {
-        // ---- Write cycle ----
-        uint8_t data = BUS_GET_DATA(s);
+    // ── Trim RAM to actual size ─────────────────────────────────────────────
+    // Selectively unmap pages beyond actual RAM that aren't ROM-covered or
+    // PIA sub-table–routed.  Check each page's current chip id to avoid
+    // clobbering ROM overlays or sub-table sentinels.
+    if (ram_pages < 256) {
+        for (size_t page = ram_pages; page < 256; ++page) {
+            auto rd = bus_.viewer(0).read_chip(page);
+            auto wr = bus_.viewer(0).write_chip(page);
 
-        // PIA 6820 registers (0xD010-0xD013)
-        if (addr >= apple1_constants::PIA_BASE && addr <= apple1_constants::PIA_BASE + 3) {
-            pia_.write(addr, data);
-        }
-        // ROM areas are read-only — writes to Monitor/BASIC ROM are ignored
-        else if (addr >= apple1_constants::MONITOR_BASE) {
-            // Ignore writes to Monitor ROM region
-        }
-        else if (has_basic_ && addr >= 0xE000 && addr < 0xF000) {
-            // Ignore writes to BASIC ROM region
-        }
-        // RAM
-        else if (addr < ram_size_) {
-            (*ram_)[addr] = data;
+            // Only unmap if this page still points to its RAM chip id
+            if (size_t(rd) < 256 && size_t(rd) == page)
+                bus_.set_read_page(0, page, PT::kNoChipSelected);
+            if (size_t(wr) < 256 && size_t(wr) == page)
+                bus_.set_write_page(0, page, PT::kNoChipSelectedWrite);
         }
     }
 
-    return s;
+    // ── BASIC ROM — unmap if not loaded ─────────────────────────────────────
+    if (!has_basic_) {
+        for (size_t i = 0; i < 16; ++i) {
+            const size_t page = 0xE0 + i;
+            // Restore underlying RAM (if present) or leave unmapped
+            if (page < ram_pages) {
+                bus_.set_read_page(0, page, ChipId(page));
+            } else {
+                bus_.set_read_page(0, page, PT::kNoChipSelected);
+            }
+        }
+    }
+
+    // ── 64K mode: ROM writes pass through to underlying RAM ─────────────────
+    if (ram_size_ == apple1_constants::RAM_64K) {
+        bus_.set_write_page(0, 0xFF, WriteChipId(0xFF));
+        if (has_basic_) {
+            for (size_t i = 0; i < 16; ++i)
+                bus_.set_write_page(0, 0xE0 + i, WriteChipId(0xE0 + i));
+        }
+    }
+
+    // ── PIA page ($D0) — update MaskedSubTable base chip ────────────────────
+    // apply() created the sub-table with base = RAM $D0.  If RAM doesn't
+    // reach $D0, switch the base to open bus.
+    const int pia_sub = bus_mem_.slot(apple1_chips::kPiaSlot).sub_table_idx;
+    if (pia_sub >= 0) {
+        if (ram_pages > 0xD0) {
+            bus_.set_masked_base(0, size_t(pia_sub),
+                ChipId(0xD0), WriteChipId(0xD0));
+        } else {
+            bus_.set_masked_base(0, size_t(pia_sub),
+                PT::kNoChipSelected, PT::kNoChipSelectedWrite);
+        }
+    }
 }
 
 void Apple1System::tick_cpu() {
     if (cpu_) {
         pins_ = cpu_->tick<MOS6502::Phase::PHI2>(pins_);
-        pins_ = mem_tick(pins_);
+        pins_ = bus_.tick(0, pins_);
         pins_ = cpu_->tick<MOS6502::Phase::PHI1>(pins_);
         cpu_->sample_nmi_pin(pins_);
     }

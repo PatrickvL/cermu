@@ -3,16 +3,54 @@
 #include "../../core/emulated_system.h"
 #include "../../core/system_lines.h"
 #include "../../core/text_terminal.h"
+#include "../../core/chip_manifest.hpp"
 #include "../../chip/cpu/fam65xx/mos6502.h"
 #include "../../chip/io/pia6820.h"
 #include "../../chip/memory/memory_chip.h"
 #include <cstdint>
+#include <memory>
 
 // Apple 1 default bus state — derived from CPU.
 // MOS6502 provides: RW, RDY, IRQ, NMI, RES.
 #define APPLE1_BUS_DEFAULT_STATE \
     (MOS6502::default_bus_state())
-#include <memory>
+
+
+// =============================================================================
+// Apple 1 chip manifest — declarative memory layout
+// =============================================================================
+//
+// Slot 0: RAM         — 256 pages (64 KB address space, actual size configurable)
+// Slot 1: Monitor ROM — 1 page at $FF00
+// Slot 2: BASIC ROM   — 16 pages at $E000
+// Slot 3: PIA         — MMIO-only, 4-byte window at $D010
+//
+// Write side: only RAM.  ROM reads overlay RAM; writes pass through to RAM
+// (4K/8K modes unmap ROM read pages; 64K mode never maps ROM at all).
+// Page $D0 uses an auto-created MaskedSubTable for PIA ($D010–$D013).
+//
+inline constexpr auto kApple1Chips = make_chip_manifest(
+    Slot<MemoryChip>{256, 0x0000},          // RAM: 256 pages at $0000
+    Slot<MemoryChip>{  1, 0xFF00},          // Monitor ROM: 1 page at $FF00
+    Slot<MemoryChip>{ 16, 0xE000},          // BASIC ROM: 16 pages at $E000
+    Slot<pia6820_t> {  0, 0xD010, 0xFFFC}   // PIA: MMIO-only, 4-byte window
+);
+
+// BusSpec auto-derived from the manifest
+using Apple1BusSpec = ManifestBusSpec<kApple1Chips, 16, 8>;
+
+namespace apple1_chips {
+    inline constexpr size_t kRamSlot     = 0;
+    inline constexpr size_t kMonitorSlot = 1;
+    inline constexpr size_t kBasicSlot   = 2;
+    inline constexpr size_t kPiaSlot     = 3;
+
+    // Compile-time chip ids (from manifest prefix-sum)
+    inline constexpr size_t kRamId       = kApple1Chips.base_id(kRamSlot);      // 0
+    inline constexpr size_t kMonitorId   = kApple1Chips.base_id(kMonitorSlot);  // 256
+    inline constexpr size_t kBasicId     = kApple1Chips.base_id(kBasicSlot);    // 257
+}
+
 
 /**
  * Apple 1 System Implementation
@@ -78,6 +116,13 @@ private:
     MemoryChip* basic_rom_   = nullptr;  // Optional Apple 1 BASIC (4KB at various addresses)
     MemoryChip* char_rom_    = nullptr;  // Signetics 2513 character ROM (512 bytes)
     
+    // MemoryBus — declarative setup via chip manifest + BusMemory::apply()
+    using Bus = MemoryBus<Apple1BusSpec>;
+    using PT  = PackingTraits<Apple1BusSpec>;
+    using Mem = BusMemory<Apple1BusSpec>;
+    Bus bus_;
+    Mem bus_mem_{kApple1Chips};
+
     // System state
     uint32_t cycles_per_frame_;
     uint32_t ram_size_;              // Configured RAM size (4KB or 8KB)
@@ -88,7 +133,7 @@ private:
 
     // Helper methods
     void tick_cpu();
-    bus_state_t mem_tick(bus_state_t s);
+    void configure_bus_memory_map();  // (Re)configure page tables for current ram_size_
 
     // Connector port setup (registers Apple 1 connector ports with base class)
     void setup_connector_ports();
@@ -99,7 +144,7 @@ private:
     // PIA callbacks
     static uint8_t pia_keyboard_read(void* user_data);  // Port A read (keyboard)
     static void pia_display_write(void* user_data, uint8_t data);  // Port B write (display)
-    
+
     // Apple 1 keyboard helpers (PIA Port A specific)
     void set_keyboard_data(uint8_t key_code);   // Sets bit 7 strobe + ASCII in bits 0-6
     bool keyboard_ready() const;                 // Checks if bit 7 is set
