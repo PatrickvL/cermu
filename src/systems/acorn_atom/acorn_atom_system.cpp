@@ -195,44 +195,13 @@ bool AcornAtomSystem::apply_configuration() { return true; }
 bool AcornAtomSystem::initialize() {
     printf("Acorn Atom: Initializing system\n");
 
-    // ── Create RAMChip wrappers ──────────────────────────────────────
-    auto ram_chip = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "Various"}, 32768, RAMChip::SRAM, &pins_,
-        "RAM", 0x0000);
-    ram_ = ram_chip.get();
-
-    auto vram_chip = std::make_unique<RAMChip>(
-        ChipInfo{"SRAM", "Various"}, 8192, RAMChip::SRAM, &pins_,
-        "Video RAM", acorn_atom_constants::VIDEO_RAM_BASE);
-    video_ram_ = vram_chip.get();
-
-    auto basic_chip = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Acorn"}, acorn_atom_constants::BASIC_ROM_SIZE,
-        ROMChip::ROM, &pins_,
-        "BASIC", acorn_atom_constants::BASIC_ROM_BASE);
-    basic_rom_ = basic_chip.get();
-
-    auto fp_chip = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Acorn"}, acorn_atom_constants::FP_ROM_SIZE,
-        ROMChip::ROM, &pins_,
-        "FP ROM", acorn_atom_constants::FP_ROM_BASE);
-    fp_rom_ = fp_chip.get();
-
-    auto os_chip = std::make_unique<ROMChip>(
-        ChipInfo{"ROM", "Acorn"}, acorn_atom_constants::OS_ROM_SIZE,
-        ROMChip::ROM, &pins_,
-        "OS ROM", acorn_atom_constants::OS_ROM_BASE);
-    os_rom_ = os_chip.get();
-
-    // ── Bind manifest slots, wire the bus ───────────────────────────────
-    bus_mem_.initialize(bus_,
-        ram_,        // slot 0: RAM
-        video_ram_,  // slot 1: Video RAM
-        basic_rom_,  // slot 2: BASIC ROM
-        fp_rom_,     // slot 3: FP ROM
-        os_rom_,     // slot 4: OS ROM
-        &ppi_,       // slot 5: PPI (MMIO)
-        &via_);      // slot 6: VIA (MMIO)
+    // ── Pre-bind MMIO chips, then factory-create memory chips ──────────
+    bus_mem_.bind_chip(acorn_atom_chips::kPpiSlot, &ppi_);
+    bus_mem_.bind_chip(acorn_atom_chips::kViaSlot, &via_);
+    bus_mem_.create_chips(&pins_);
+    basic_rom_ = bus_mem_.chip_as<ROMChip>(acorn_atom_chips::kBasicSlot);
+    fp_rom_    = bus_mem_.chip_as<ROMChip>(acorn_atom_chips::kFpRomSlot);
+    os_rom_    = bus_mem_.chip_as<ROMChip>(acorn_atom_chips::kOsRomSlot);
 
     // Direct pointer for MC6847 rendering
     video_ram_ptr_ = bus_mem_.chip_buffer(
@@ -264,11 +233,7 @@ bool AcornAtomSystem::initialize() {
         "Intel 8255 PPI", "8255", "I/O", acorn_atom_constants::PPI_BASE);
     register_chip(&via_,
         "MOS 6522 VIA", "6522", "I/O", acorn_atom_constants::VIA_BASE);
-    register_chip(std::move(ram_chip));
-    register_chip(std::move(vram_chip));
-    register_chip(std::move(basic_chip));
-    register_chip(std::move(fp_chip));
-    register_chip(std::move(os_chip));
+    register_bus_chips(bus_mem_);
 
     printf("Acorn Atom: System initialized (RAM: %dKB)\n", ram_size_kb_);
     system_ready_ = true;
