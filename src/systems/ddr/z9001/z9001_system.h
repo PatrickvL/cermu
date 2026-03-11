@@ -34,6 +34,9 @@ template<> struct Z9001VariantTraits<Z9001Variant::Z9001> {
     static constexpr uint32_t    ram_size        = z9001_constants::RAM_SIZE_Z9001;
     static constexpr bool        has_color_ram   = false;
     static constexpr bool        has_basic_rom   = false;
+    // Slot indices into kZ9001Chips
+    static constexpr size_t kVideoRamSlot        = 1;
+    static constexpr size_t kOsRomSlot           = 2;
 };
 
 template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
@@ -43,6 +46,12 @@ template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
     static constexpr uint32_t    ram_size        = z9001_constants::RAM_SIZE_KC87;
     static constexpr bool        has_color_ram   = true;
     static constexpr bool        has_basic_rom   = true;
+    // Slot indices into kKC87Chips
+    static constexpr size_t kBasicRomLoSlot      = 1;
+    static constexpr size_t kBasicRomHiSlot      = 2;
+    static constexpr size_t kColorRamSlot        = 3;
+    static constexpr size_t kVideoRamSlot        = 4;
+    static constexpr size_t kOsRomSlot           = 5;
 };
 
 // ============================================================================
@@ -71,18 +80,18 @@ template<> struct Z9001VariantTraits<Z9001Variant::KC87> {
 // trims write pages above 48 KB ($C000+).
 //
 inline constexpr auto kZ9001Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 16384},        // RAM: 16 KB
-    Slot<RAMChip>{0xEC00,  1024},        // Video RAM: 1 KB
-    Slot<ROMChip>{0xF000,  4096}         // OS ROM: 4 KB
+    Slot<RAMChip>{0x0000, 16384, 0, "RAM"},
+    Slot<RAMChip>{0xEC00,  1024, 0, "Video RAM"},
+    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"}
 );
 
 inline constexpr auto kKC87Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536},        // RAM: 64 KB (trimmed to 48 KB)
-    Slot<ROMChip>{0xC000,  8192},        // BASIC ROM lo: 8 KB ($C000-$DFFF)
-    Slot<ROMChip>{0xE000,  2048},        // BASIC ROM hi: 2 KB ($E000-$E7FF)
-    Slot<RAMChip>{0xE800,  1024},        // Color RAM: 1 KB
-    Slot<RAMChip>{0xEC00,  1024},        // Video RAM: 1 KB
-    Slot<ROMChip>{0xF000,  4096}         // OS ROM: 4 KB
+    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
+    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM lo"},
+    Slot<ROMChip>{0xE000,  2048, 0, "BASIC ROM hi"},
+    Slot<RAMChip>{0xE800,  1024, 0, "Color RAM"},
+    Slot<RAMChip>{0xEC00,  1024, 0, "Video RAM"},
+    Slot<ROMChip>{0xF000,  4096, 0, "OS ROM"}
 );
 
 // BusTraits — selects the correct manifest per variant
@@ -140,8 +149,7 @@ private:
     z80_pio_t   pio2_;               // U855 PIO #2 (keyboard + cassette)
     z80_ctc_t   ctc_;                // U857 CTC (timing + sound)
 
-    // ── Memory — owned by registered_chips_, managed via BusMemory ──────
-    RAMChip* ram_chip_           = nullptr;
+    // ── Memory — owned by BusMemory, accessed via chip_as<>() ────────────
     ROMChip* basic_rom_lo_chip_  = nullptr;  // KC 87 only
     ROMChip* basic_rom_hi_chip_  = nullptr;  // KC 87 only
     RAMChip* color_ram_chip_     = nullptr;  // KC 87 only
