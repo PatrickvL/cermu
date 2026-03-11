@@ -90,13 +90,13 @@ template<> struct SpectrumVariantTraits<SpectrumVariant::ZX128K> {
 //   Slot 1: ROM —  32 KB at $0000 (2 × 16 KB banks; selected by $7FFD bit 4)
 //
 inline constexpr auto kSpectrum48KChips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536},        // RAM: 64 KB
-    Slot<ROMChip>{0x0000, 16384}         // ROM: 16 KB overlay at $0000
+    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
+    Slot<ROMChip>{0x0000, 16384, 0, "ROM"}
 );
 
 inline constexpr auto kSpectrum128KChips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 131072},       // RAM: 128 KB (8 banks)
-    Slot<ROMChip>{0x0000,  32768}        // ROM: 32 KB (2 banks) overlay at $0000
+    Slot<RAMChip>{0x0000, 131072, 0, "RAM"},
+    Slot<ROMChip>{0x0000,  32768, 0, "ROM"}
 );
 
 namespace spectrum_chips {
@@ -179,11 +179,8 @@ private:
     ay_3_8910_t     ay_;              // AY-3-8912 sound (128K only, but always present for simplicity)
 
     // ========================================================================
-    // MEMORY — owned by registered_chips_
+    // MEMORY — owned by BusMemory
     // ========================================================================
-
-    RAMChip* ram_ = nullptr;       // 64KB (48K) or 128KB (128K)
-    ROMChip* rom_ = nullptr;       // 16KB (48K) or 32KB (128K)
 
     // Direct pointer into unified buffer for screen rendering
     uint8_t* screen_ram_ptr_ = nullptr;
