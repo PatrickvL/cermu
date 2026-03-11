@@ -10,14 +10,38 @@
 #include "lc80_constants.h"
 #include "../../../core/emulated_system.h"
 #include "../../../core/system_lines.h"
+#include "../../../core/chip_manifest.hpp"
 #include "../../../chip/cpu/z80/u880.h"
 #include "../../../chip/io/z80_pio.h"
 #include "../../../chip/io/z80_ctc.h"
+#include "../../../chip/memory/memory_chip.h"
 #include <cstdint>
 #include <vector>
 
 // LC80 bus — Z80 bus defaults
 #define LC80_BUS_DEFAULT_STATE (U880::default_bus_state())
+
+// =============================================================================
+// LC80 chip manifest — declarative memory layout
+// =============================================================================
+//
+// Slot 0: ROM — 2 KB at $0000 (monitor, mirrored through $0000-$1FFF)
+// Slot 1: RAM — 1 KB at $2000 (mirrored through $2000-$3FFF)
+//
+// All I/O is Z80 port-based (IORQ) — no MMIO slots needed.
+// Addresses above $3FFF are unmapped (reads return bus default).
+//
+inline constexpr auto kLC80Chips = make_chip_manifest(
+    Slot<MemoryChip>{2048, 0x0000},         // ROM: 2 KB
+    Slot<MemoryChip>{1024, 0x2000}          // RAM: 1 KB
+);
+
+namespace lc80_chips {
+    inline constexpr size_t kRomSlot = 0;
+    inline constexpr size_t kRamSlot = 1;
+}
+
+using LC80BusSpec = ManifestBusSpec<kLC80Chips, 16, 8>;
 
 class LC80System : public EmulatedSystem {
 public:
@@ -59,16 +83,23 @@ private:
     z80_pio_t   pio2_;               // U855 PIO #2 (keyboard scan + cassette)
     z80_ctc_t   ctc_;                // U857 CTC (speaker on channel 2)
 
-    // ── Memory ───────────────────────────────────────────────────────────
-    std::vector<uint8_t> rom_;       // 2 KB monitor ROM
-    std::vector<uint8_t> ram_;       // 1–2 KB RAM
+    // ── Memory — owned by registered_chips_, managed via BusMemory ──────
+    MemoryChip* rom_chip_ = nullptr;    // 2 KB monitor ROM
+    MemoryChip* ram_chip_ = nullptr;    // 1 KB RAM
+
+    // ── MemoryBus — declarative setup via chip manifest ──────────────────
+    using Bus = MemoryBus<LC80BusSpec>;
+    using PT  = PackingTraits<LC80BusSpec>;
+    using Mem = BusMemory<LC80BusSpec>;
+    Bus bus_;
+    Mem bus_mem_{kLC80Chips};
 
     // ── LED display ──────────────────────────────────────────────────────
     // Segment data for each of the 6 digits (bit 0..6 = a..g, bit 7 = dp)
     uint8_t led_segments_[lc80_constants::LED_DIGIT_COUNT] = {};
 
     // Render the LED display into a small framebuffer for visualization
-    static constexpr int FB_WIDTH  = 192;   // 6 digits × 32 px each
+    static constexpr int FB_WIDTH  = 192;   // 6 digits x 32 px each
     static constexpr int FB_HEIGHT = 48;
     uint32_t framebuffer_[FB_WIDTH * FB_HEIGHT] = {};
 
@@ -86,7 +117,7 @@ private:
     float speed_multiplier_ = 1.0f;
 
     // ── Internal helpers ─────────────────────────────────────────────────
-    bus_state_t mem_tick(bus_state_t pins);
+    void configure_bus_memory_map();
     bus_state_t io_tick(bus_state_t pins);
     bool load_roms();
 };

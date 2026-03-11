@@ -19,7 +19,7 @@ static SystemDescriptor lc80_descriptor = {
 };
 
 // ============================================================================
-// IMPLEMENTATION
+// CONSTRUCTION / DESTRUCTION
 // ============================================================================
 
 LC80System::LC80System() : EmulatedSystem(), pins_(LC80_BUS_DEFAULT_STATE) {
@@ -45,21 +45,57 @@ const SystemDescriptor& LC80System::get_descriptor() const { return lc80_descrip
 bool LC80System::set_configuration(const SystemConfiguration& config) { config_ = config; return true; }
 bool LC80System::apply_configuration() { return true; }
 
+// ============================================================================
+// LIFECYCLE
+// ============================================================================
+
 bool LC80System::initialize() {
     printf("LC 80: Initializing system\n");
+
+    // ── Create MemoryChip wrappers ──────────────────────────────────────
+    auto rom_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"ROM", "VEB"}, lc80_constants::ROM_SIZE,
+        MemoryChip::ROM, &pins_, "Monitor ROM", 0x0000);
+    rom_chip_ = rom_chip.get();
+
+    auto ram_chip = std::make_unique<MemoryChip>(
+        ChipInfo{"SRAM", "VEB"}, lc80_constants::RAM_SIZE_MIN,
+        MemoryChip::RAM, &pins_, "RAM", 0x2000);
+    ram_chip_ = ram_chip.get();
+
+    // ── Bind manifest slots, wire the bus ───────────────────────────────
+    bus_mem_.initialize(bus_, rom_chip_, ram_chip_);
+
+    // ── Configure page tables (mirroring) ───────────────────────────────
+    configure_bus_memory_map();
+
+    // ── Init chips ──────────────────────────────────────────────────────
     cpu_ = new U880();
     pins_ = cpu_->init();
     pio1_.init();
     pio2_.init();
     ctc_.init();
-    rom_.resize(lc80_constants::ROM_SIZE, 0xFF);
-    ram_.resize(lc80_constants::RAM_SIZE_MIN, 0x00);
+
     load_roms();
+
+    // ── Register chips for Hardware menu ────────────────────────────────
+    register_chip(static_cast<ChipBase*>(cpu_),
+        "U880 CPU", "U880", "CPU", 0x0000);
+    register_chip(&pio1_,
+        "U855 PIO #1", "U855", "I/O", lc80_constants::PIO1_PORT_A);
+    register_chip(&pio2_,
+        "U855 PIO #2", "U855", "I/O", lc80_constants::PIO2_PORT_A);
+    register_chip(&ctc_,
+        "U857 CTC", "U857", "Timer", lc80_constants::CTC_CH0);
+    register_chip(std::move(rom_chip));
+    register_chip(std::move(ram_chip));
+
     system_ready_ = true;
     return true;
 }
 
 void LC80System::shutdown() { delete cpu_; cpu_ = nullptr; system_ready_ = false; }
+
 void LC80System::reset() {
     if (!cpu_) return;
     pins_ = cpu_->reset(pins_);
@@ -68,6 +104,10 @@ void LC80System::reset() {
     ctc_.init();
     std::memset(led_segments_, 0, sizeof(led_segments_));
 }
+
+// ============================================================================
+// EXECUTION
+// ============================================================================
 
 void LC80System::tick() {
     if (!cpu_) return;
@@ -80,7 +120,7 @@ void LC80System::tick() {
     bool iorq = !BUS_GET_BIT(pins_, Z80_IORQ_BIT);  // Active-low
 
     if (mreq) {
-        pins_ = mem_tick(pins_);
+        pins_ = bus_.tick(0, pins_);
     } else if (iorq) {
         pins_ = io_tick(pins_);
     }
@@ -106,30 +146,48 @@ void LC80System::render_system_menu_items() {}
 void LC80System::render_configuration_ui() {}
 void LC80System::set_speed_multiplier(float m) { speed_multiplier_ = m; }
 
-bus_state_t LC80System::mem_tick(bus_state_t pins) {
-    uint16_t addr = BUS_GET_ADDR(pins);
-    bool is_read = BUS_GET_BIT(pins, BUS_RW_BIT);
+// ============================================================================
+// BUS CONFIGURATION
+// ============================================================================
 
-    if (is_read) {
-        uint8_t data = 0xFF;
-        if (addr < 0x2000) {
-            // ROM (2 KB, mirrored through $0000-$1FFF)
-            data = rom_[addr & (lc80_constants::ROM_SIZE - 1)];
-        } else if (addr < 0x4000) {
-            // RAM (1 KB at $2000, mirrored through $2000-$3FFF)
-            data = ram_[(addr - 0x2000) & (ram_.size() - 1)];
-        }
-        BUS_SET_DATA(pins, data);
-    } else {
-        uint8_t data = BUS_GET_DATA(pins);
-        if (addr >= 0x2000 && addr < 0x4000) {
-            // RAM write (ROM is read-only)
-            ram_[(addr - 0x2000) & (ram_.size() - 1)] = data;
+void LC80System::configure_bus_memory_map() {
+    using ChipId      = PT::ChipId;
+    using WriteChipId = PT::WriteChipId;
+
+    // apply() maps:
+    //   ROM: pages $00-$07 (read only, $0000-$07FF)
+    //   RAM: pages $20-$23 (read+write, $2000-$23FF)
+    // We need to add mirrors for the full decoded address ranges.
+
+    // ROM is 2 KB = 8 pages, mirrored 4x through $0000-$1FFF (32 pages)
+    constexpr size_t rom_pages = lc80_constants::ROM_SIZE / 256;   // 8
+    constexpr size_t rom_range = 0x2000 / 256;                     // 32 pages
+    for (size_t base = rom_pages; base < rom_range; base += rom_pages) {
+        for (size_t p = 0; p < rom_pages; ++p) {
+            bus_.set_read_page(0, base + p, ChipId(p));
         }
     }
 
-    return pins;
+    // RAM is 1 KB = 4 pages, mirrored 8x through $2000-$3FFF (32 pages)
+    constexpr size_t ram_base_id = kLC80Chips.base_id(lc80_chips::kRamSlot, LC80BusSpec::PageBits);
+    constexpr size_t ram_pages   = lc80_constants::RAM_SIZE_MIN / 256;  // 4
+    constexpr size_t ram_first   = 0x2000 / 256;                        // page 32
+    constexpr size_t ram_range   = 0x2000 / 256;                        // 32 pages
+    for (size_t base = ram_pages; base < ram_range; base += ram_pages) {
+        for (size_t p = 0; p < ram_pages; ++p) {
+            auto id = ChipId(ram_base_id + p);
+            bus_.set_read_page (0, ram_first + base + p, id);
+            bus_.set_write_page(0, ram_first + base + p, WriteChipId(id));
+        }
+    }
+
+    // Pages $40-$FF ($4000-$FFFF) remain unmapped — reads return bus default
 }
+
+// ============================================================================
+// I/O DISPATCH
+// ============================================================================
+
 bus_state_t LC80System::io_tick(bus_state_t pins) {
     // Interrupt acknowledge: IORQ + M1
     if (!BUS_GET_BIT(pins, Z80_M1_BIT)) {
@@ -191,6 +249,7 @@ bus_state_t LC80System::io_tick(bus_state_t pins) {
 
     return pins;
 }
+
 bool LC80System::load_roms() { return false; }
 
 // ============================================================================
