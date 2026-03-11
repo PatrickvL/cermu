@@ -14,7 +14,6 @@
 
 #include "pet_system.h"
 #include "pet_constants.h"
-#include "pet_bus.h"
 #include "pet_keyboard_matrix.h"
 #include "../../core/cermu.h"
 #include "../../chip/input/commodore_keyboard.h"
@@ -36,9 +35,6 @@
 #include "../../chip/io/mos6522.h"
 #include "../../chip/video/mc6845/mc6845.h"
 #include "../../core/chip.h"
-
-// Include bus interface
-#include "../../core/bus_cycle_interface.h"
 
 // Include ROM loader
 #include "../../core/storage/rom_loader.h"
@@ -195,19 +191,11 @@ static SystemDescriptor pet_descriptor = {
 
 PETSystem::PETSystem()
     : CommodoreSystem()
-    , memory_(nullptr)
-    , cpu_(nullptr)
-    , pia1_(nullptr)
-    , pia2_(nullptr)
-    , via_(nullptr)
-    , crtc_(nullptr)
+    , pins_(PET_BUS_DEFAULT_STATE)
 {
     cycles_per_frame_ = pet_constants::CYCLES_PER_FRAME_NTSC;
     hardware_traits_  = create_pet_hardware_traits();
     current_palette_  = hardware_traits_.display.default_palette;
-
-    bus_.default_state = PET_BUS_DEFAULT_STATE;
-    bus_.state = bus_.default_state;
 
     // Pre-compute audio sample timing
     audio_cycles_per_sample_ = pet_constants::CPU_FREQ_HZ / audio_sample_rate_;
@@ -224,9 +212,6 @@ PETSystem::~PETSystem() {
         delete keyboard_;
         keyboard_ = nullptr;
     }
-
-    delete[] memory_;
-    memory_ = nullptr;
 }
 
 // ============================================================================
@@ -259,9 +244,57 @@ bool PETSystem::apply_configuration() {
 bool PETSystem::initialize() {
     printf("PET: Initializing system\n");
 
-    // Allocate 64KB flat memory buffer (entire address space)
-    memory_ = new uint8_t[65536];
-    memset(memory_, 0, 65536);
+    // ── Create MemoryChip wrappers ───────────────────────────────────────
+    auto main_ram = std::make_unique<RAMChip>(
+        ChipInfo{"SRAM", "Various"}, 32768,
+        RAMChip::SRAM, &pins_,
+        "Main RAM", 0x0000);
+    main_ram_chip_ = main_ram.get();
+
+    auto screen_ram = std::make_unique<RAMChip>(
+        ChipInfo{"SRAM", "Various"}, 1024,
+        RAMChip::SRAM, &pins_,
+        "Screen RAM", pet_constants::SCREEN_RAM_START);
+    screen_ram_chip_ = screen_ram.get();
+
+    auto basic_b = std::make_unique<ROMChip>(
+        ChipInfo{"ROM", "Commodore"}, 4096,
+        ROMChip::ROM, &pins_,
+        "BASIC ROM $B000", 0xB000);
+    basic_rom_b_chip_ = basic_b.get();
+
+    auto basic_c = std::make_unique<ROMChip>(
+        ChipInfo{"ROM", "Commodore"}, 4096,
+        ROMChip::ROM, &pins_,
+        "BASIC ROM $C000", 0xC000);
+    basic_rom_c_chip_ = basic_c.get();
+
+    auto basic_d = std::make_unique<ROMChip>(
+        ChipInfo{"ROM", "Commodore"}, 4096,
+        ROMChip::ROM, &pins_,
+        "BASIC ROM $D000", 0xD000);
+    basic_rom_d_chip_ = basic_d.get();
+
+    auto editor = std::make_unique<ROMChip>(
+        ChipInfo{"ROM", "Commodore"}, 2048,
+        ROMChip::ROM, &pins_,
+        "Editor ROM", pet_constants::EDITOR_ROM_START);
+    editor_rom_chip_ = editor.get();
+
+    auto kernal = std::make_unique<ROMChip>(
+        ChipInfo{"ROM", "Commodore"}, 4096,
+        ROMChip::ROM, &pins_,
+        "Kernal ROM", pet_constants::KERNAL_ROM_START);
+    kernal_rom_chip_ = kernal.get();
+
+    // ── Initialize bus ───────────────────────────────────────────────────
+    bus_mem_.initialize(bus_,
+        main_ram_chip_, screen_ram_chip_,
+        basic_rom_b_chip_, basic_rom_c_chip_, basic_rom_d_chip_,
+        editor_rom_chip_, kernal_rom_chip_);
+
+    // Screen RAM mirror at $8400-$87FF and configure memory map
+    configure_memory_map();
 
     // Load ROMs into memory
     bool roms_loaded = load_roms();
@@ -336,7 +369,23 @@ bool PETSystem::initialize() {
     }
 
     // Register chips for the Hardware debug menu
-    register_pet_chips();
+    register_chip(static_cast<ChipBase*>(cpu_),
+        "MOS 6502 CPU", "6502", "CPU", 0x0000);
+    register_chip(static_cast<ChipBase*>(crtc_),
+        "MC6845 CRTC", "6845", "Video", pet_constants::CRTC_BASE);
+    register_chip(static_cast<ChipBase*>(pia1_),
+        "PIA 1 (Keyboard)", "6820", "I/O", pet_constants::PIA1_BASE);
+    register_chip(static_cast<ChipBase*>(pia2_),
+        "PIA 2 (IEEE-488)", "6820", "I/O", pet_constants::PIA2_BASE);
+    register_chip(static_cast<ChipBase*>(via_),
+        "MOS 6522 VIA", "6522", "I/O", pet_constants::VIA_BASE);
+    register_chip(std::move(main_ram));
+    register_chip(std::move(screen_ram));
+    register_chip(std::move(basic_b));
+    register_chip(std::move(basic_c));
+    register_chip(std::move(basic_d));
+    register_chip(std::move(editor));
+    register_chip(std::move(kernal));
 
     printf("PET: Initialization complete\n");
     return true;
@@ -357,8 +406,11 @@ void PETSystem::reset() {
     if (via_)  via_->reset();
 
     // Clear RAM but preserve ROMs
-    if (memory_) {
-        memset(memory_, 0, pet_constants::RAM_END_32K);
+    if (main_ram_chip_) {
+        memset(main_ram_chip_->data(), 0, 32768);
+    }
+    if (screen_ram_chip_) {
+        memset(screen_ram_chip_->data(), 0, 1024);
     }
 
     // Clear framebuffer
@@ -379,7 +431,7 @@ void PETSystem::reset() {
     // Reset CPU last
     if (cpu_) cpu_->reset(0);
 
-    bus_.state = bus_.default_state;
+    pins_ = PET_BUS_DEFAULT_STATE;
     total_cycles_ = 0;
 
     // Reset deferred loading state
@@ -389,60 +441,6 @@ void PETSystem::reset() {
 // ============================================================================
 // Execution
 // ============================================================================
-
-bus_state_t PETSystem::mem_tick(bus_state_t s) {
-    uint16_t addr = BUS_GET_ADDR(s);
-    bool is_write = !BUS_GET_BIT(s, BUS_RW_BIT);
-
-    if (is_write) {
-        uint8_t data = BUS_GET_DATA(s);
-
-        if (addr < pet_constants::RAM_END_32K) {
-            // RAM write ($0000-$7FFF)
-            memory_[addr] = data;
-        } else if (addr >= pet_constants::SCREEN_RAM_START && addr < pet_constants::SCREEN_RAM_END) {
-            // Screen RAM write ($8000-$83FF)
-            memory_[addr] = data;
-        } else if (addr >= pet_constants::IO_START && addr < pet_constants::IO_END) {
-            // I/O write ($E800-$E8FF)
-            io_write(addr, data);
-        }
-        // ROM regions silently ignore writes
-    } else {
-        // Read
-        uint8_t data;
-
-        if (addr < pet_constants::RAM_END_32K) {
-            // RAM read ($0000-$7FFF)
-            data = memory_[addr];
-        } else if (addr >= pet_constants::SCREEN_RAM_START && addr < pet_constants::SCREEN_RAM_END) {
-            // Screen RAM read ($8000-$83FF)
-            data = memory_[addr];
-        } else if (addr >= pet_constants::SCREEN_RAM_END && addr < 0x8800) {
-            // Screen RAM mirror ($8400-$87FF)
-            data = memory_[pet_constants::SCREEN_RAM_START + (addr & 0x03FF)];
-        } else if (addr >= pet_constants::BASIC_ROM_START && addr < pet_constants::BASIC_ROM_END) {
-            // BASIC ROM ($C000-$DFFF)
-            data = memory_[addr];
-        } else if (addr >= pet_constants::EDITOR_ROM_START && addr < pet_constants::EDITOR_ROM_END) {
-            // Editor ROM ($E000-$E7FF)
-            data = memory_[addr];
-        } else if (addr >= pet_constants::IO_START && addr < pet_constants::IO_END) {
-            // I/O read ($E800-$E8FF)
-            data = io_read(addr);
-        } else if (addr >= pet_constants::KERNAL_ROM_START) {
-            // Kernal ROM ($F000-$FFFF)
-            data = memory_[addr];
-        } else {
-            // Unmapped regions — open bus
-            data = 0xFF;
-        }
-
-        BUS_SET_DATA(s, data);
-    }
-
-    return s;
-}
 
 // ============================================================================
 // I/O Dispatch ($E800-$E8FF)
@@ -470,7 +468,7 @@ uint8_t PETSystem::io_read(uint16_t addr) {
         if (via_) {
             // VIA registers are at offset 0-15 within the chip
             // Build a bus state for the VIA read
-            bus_state_t vs = bus_.default_state;
+            bus_state_t vs = PET_BUS_DEFAULT_STATE;
             BUS_SET_ADDR(vs, addr & 0x0F);
             BUS_SET_BIT(vs, BUS_RW_BIT);  // Read
             vs = via_->tick(vs);
@@ -502,7 +500,7 @@ void PETSystem::io_write(uint16_t addr, uint8_t data) {
     if ((offset & 0xF0) == 0x40) {
         // VIA
         if (via_) {
-            bus_state_t vs = bus_.default_state;
+            bus_state_t vs = PET_BUS_DEFAULT_STATE;
             BUS_SET_ADDR(vs, addr & 0x0F);
             BUS_CLR_BIT(vs, BUS_RW_BIT);  // Write
             BUS_SET_DATA(vs, data);
@@ -522,11 +520,11 @@ void PETSystem::io_write(uint16_t addr, uint8_t data) {
 // ============================================================================
 
 void PETSystem::tick() {
-    bus_state_t s = bus_.default_state;
+    bus_state_t s = PET_BUS_DEFAULT_STATE;
 
     // Preserve address and data from previous cycle
-    BUS_SET_ADDR(s, BUS_GET_ADDR(bus_.state));
-    BUS_SET_DATA(s, BUS_GET_DATA(bus_.state));
+    BUS_SET_ADDR(s, BUS_GET_ADDR(pins_));
+    BUS_SET_DATA(s, BUS_GET_DATA(pins_));
 
     // ---- Phase 1: CRTC character clock ----
     // MC6845 runs at the same 1 MHz character clock as the CPU.
@@ -539,7 +537,7 @@ void PETSystem::tick() {
     if (via_) {
         // VIA tick — don't pass CPU bus state; VIA is accessed via I/O dispatch.
         // But we need the VIA to tick for timer countdown + IRQ generation.
-        bus_state_t via_bus = bus_.default_state;
+        bus_state_t via_bus = PET_BUS_DEFAULT_STATE;
         BUS_SET_BIT(via_bus, BUS_RW_BIT);  // Idle read (no chip select)
         via_bus = via_->tick(via_bus);
 
@@ -559,7 +557,19 @@ void PETSystem::tick() {
     s = cpu_->tick<MOS6502::Phase::PHI2>(s);
 
     // ---- Phase 4: Memory service ----
-    s = mem_tick(s);
+    {
+        uint16_t addr = BUS_GET_ADDR(s);
+        if (addr >= pet_constants::IO_START && addr < pet_constants::IO_END) {
+            // I/O page ($E800-$E8FF) — manual dispatch to PIAs, VIA, CRTC
+            if (!BUS_GET_BIT(s, BUS_RW_BIT)) {
+                io_write(addr, BUS_GET_DATA(s));
+            } else {
+                BUS_SET_DATA(s, io_read(addr));
+            }
+        } else {
+            s = bus_.tick(0, s);
+        }
+    }
 
     // NMI edge detection
     cpu_->sample_nmi_pin(s);
@@ -580,7 +590,7 @@ void PETSystem::tick() {
         audio_write_pos_++;
     }
 
-    bus_.state = s;
+    pins_ = s;
     total_cycles_++;
 }
 
@@ -601,14 +611,14 @@ void PETSystem::run_frame() {
 // ============================================================================
 
 void PETSystem::crtc_display_char(uint16_t ma, uint8_t ra, bool cursor) {
-    if (!rgba_framebuffer_ || !memory_) return;
+    if (!rgba_framebuffer_ || !screen_ram_chip_) return;
 
     // ma = character address from CRTC (relative to display start).
     // On PET, screen RAM is at $8000.  The CRTC display start (R12:R13) is
     // typically $1000 (so ma ranges from $1000 to $13E7 for 40×25).
     // We mask to get the offset within screen RAM.
     uint16_t screen_offset = ma & 0x03FF;           // 1000 chars max
-    uint8_t char_code = memory_[pet_constants::SCREEN_RAM_START + screen_offset];
+    uint8_t char_code = screen_ram_chip_->data()[screen_offset];
 
     // Look up character ROM for this scan line
     // Character ROM is 4KB: 256 chars × 8 bytes (normal) + 256 chars × 8 (inverted)
@@ -811,33 +821,38 @@ void PETSystem::render_configuration_ui() {
 // CommodoreSystem Loading Hooks
 // ============================================================================
 
-static uint8_t pet_mem_read_for_load(void* ctx, uint16_t addr) {
-    uint8_t* mem = static_cast<uint8_t*>(ctx);
-    return mem[addr];
+uint8_t PETSystem::load_mem_read(void* ctx, uint16_t addr) {
+    auto* sys = static_cast<PETSystem*>(ctx);
+    if (addr < pet_constants::RAM_END_32K)
+        return sys->main_ram_chip_->data()[addr];
+    if (addr >= pet_constants::SCREEN_RAM_START && addr < pet_constants::SCREEN_RAM_END)
+        return sys->screen_ram_chip_->data()[addr - pet_constants::SCREEN_RAM_START];
+    return 0xFF;
 }
 
-static void pet_mem_write_for_load(void* ctx, uint16_t addr, uint8_t val) {
-    uint8_t* mem = static_cast<uint8_t*>(ctx);
-    // Only allow writes to RAM + screen RAM
-    if (addr < pet_constants::RAM_END_32K ||
-        (addr >= pet_constants::SCREEN_RAM_START && addr < pet_constants::SCREEN_RAM_END)) {
-        mem[addr] = val;
+void PETSystem::load_mem_write(void* ctx, uint16_t addr, uint8_t val) {
+    auto* sys = static_cast<PETSystem*>(ctx);
+    if (addr < pet_constants::RAM_END_32K) {
+        sys->main_ram_chip_->data()[addr] = val;
+    } else if (addr >= pet_constants::SCREEN_RAM_START && addr < pet_constants::SCREEN_RAM_END) {
+        sys->screen_ram_chip_->data()[addr - pet_constants::SCREEN_RAM_START] = val;
     }
 }
 
 bool PETSystem::is_basic_ready() const {
-    if (!memory_ || !cpu_) return false;
+    if (!main_ram_chip_ || !cpu_) return false;
 
     // PET BASIC warm-start vector at $0302/$0303 — should point to BASIC's main loop
     // For BASIC 4.0, the warm-start vector is typically $B3FF
-    uint16_t warmstart = memory_[0x0302] | (memory_[0x0303] << 8);
+    const uint8_t* ram = main_ram_chip_->data();
+    uint16_t warmstart = ram[0x0302] | (ram[0x0303] << 8);
     if (warmstart < 0xB000 || warmstart > 0xE000) return false;
 
     // Keyboard buffer must be empty
-    if (memory_[pet_constants::KBD_BUFFER_COUNT] != 0) return false;
+    if (ram[pet_constants::KBD_BUFFER_COUNT] != 0) return false;
 
     // First boot: wait until BASIC's NEW has run (VARTAB at $2A/$2B != 0)
-    if (!boot_completed_ && memory_[0x002A] == 0 && memory_[0x002B] == 0) return false;
+    if (!boot_completed_ && ram[0x002A] == 0 && ram[0x002B] == 0) return false;
 
     return true;
 }
@@ -845,10 +860,10 @@ bool PETSystem::is_basic_ready() const {
 commodore_load_context_t PETSystem::build_load_context() {
     commodore_load_context_t ctx = {};
     ctx.system_name       = "PET";
-    ctx.write_byte        = pet_mem_write_for_load;
+    ctx.write_byte        = load_mem_write;
     ctx.write_block       = nullptr;
-    ctx.mem_read          = pet_mem_read_for_load;
-    ctx.mem_ctx           = memory_;
+    ctx.mem_read          = load_mem_read;
+    ctx.mem_ctx           = this;
     ctx.basic_params      = &COMMODORE_BASIC_PET;
     ctx.basic_start_addrs[0] = 0x0401;  // PET BASIC start
     ctx.default_raw_addr  = 0xA000;      // Expansion ROM area for raw ML
@@ -858,14 +873,15 @@ commodore_load_context_t PETSystem::build_load_context() {
 }
 
 void PETSystem::inject_keys(const char* str) {
-    if (!memory_) return;
+    if (!main_ram_chip_) return;
+    uint8_t* ram = main_ram_chip_->data();
     int len = static_cast<int>(strlen(str));
     if (len > static_cast<int>(pet_constants::KBD_BUFFER_SIZE))
         len = static_cast<int>(pet_constants::KBD_BUFFER_SIZE);
     for (int i = 0; i < len; i++) {
-        memory_[pet_constants::KBD_BUFFER + i] = static_cast<uint8_t>(str[i]);
+        ram[pet_constants::KBD_BUFFER + i] = static_cast<uint8_t>(str[i]);
     }
-    memory_[pet_constants::KBD_BUFFER_COUNT] = static_cast<uint8_t>(len);
+    ram[pet_constants::KBD_BUFFER_COUNT] = static_cast<uint8_t>(len);
 }
 
 // ============================================================================
@@ -873,7 +889,7 @@ void PETSystem::inject_keys(const char* str) {
 // ============================================================================
 
 bool PETSystem::load_roms() {
-    if (!memory_) {
+    if (!basic_rom_b_chip_) {
         printf("PET: Cannot load ROMs - memory not initialized\n");
         return false;
     }
@@ -933,7 +949,9 @@ bool PETSystem::load_roms() {
     bool basic_ok = rom_loader_load_from_root(rom_root, basic_files,
                                                sizeof(basic_buf), basic_buf, sizeof(basic_buf));
     if (basic_ok) {
-        memcpy(memory_ + pet_constants::BASIC_ROM_START, basic_buf, sizeof(basic_buf));
+        memcpy(basic_rom_b_chip_->data(), basic_buf, 4096);
+        memcpy(basic_rom_c_chip_->data(), basic_buf + 4096, 4096);
+        memcpy(basic_rom_d_chip_->data(), basic_buf + 8192, 4096);
         printf("PET: BASIC 4.0 ROM loaded (12KB combined)\n");
     } else {
         // Try loading as three 4KB ROMs
@@ -945,9 +963,9 @@ bool PETSystem::load_roms() {
         bool c_ok = rom_loader_load_from_root(rom_root, rom_c_files, 4096, rom_c, sizeof(rom_c));
         bool d_ok = rom_loader_load_from_root(rom_root, rom_d_files, 4096, rom_d, sizeof(rom_d));
         if (b_ok && c_ok && d_ok) {
-            memcpy(memory_ + 0xB000, rom_b, 4096);
-            memcpy(memory_ + 0xC000, rom_c, 4096);
-            memcpy(memory_ + 0xD000, rom_d, 4096);
+            memcpy(basic_rom_b_chip_->data(), rom_b, 4096);
+            memcpy(basic_rom_c_chip_->data(), rom_c, 4096);
+            memcpy(basic_rom_d_chip_->data(), rom_d, 4096);
             printf("PET: BASIC 4.0 ROM loaded (3 × 4KB)\n");
             basic_ok = true;
         } else {
@@ -956,7 +974,8 @@ bool PETSystem::load_roms() {
             const char* basic8k_files[] = { "basic4.rom", nullptr };
             bool ok8 = rom_loader_load_from_root(rom_root, basic8k_files, 8192, basic8k, sizeof(basic8k));
             if (ok8) {
-                memcpy(memory_ + 0xC000, basic8k, 8192);
+                memcpy(basic_rom_c_chip_->data(), basic8k, 4096);
+                memcpy(basic_rom_d_chip_->data(), basic8k + 4096, 4096);
                 printf("PET: BASIC ROM loaded (8KB fallback at $C000)\n");
                 basic_ok = true;
             } else {
@@ -978,7 +997,7 @@ bool PETSystem::load_roms() {
     bool editor_ok = rom_loader_load_from_root(rom_root, editor_files,
                                                 sizeof(editor_buf), editor_buf, sizeof(editor_buf));
     if (editor_ok) {
-        memcpy(memory_ + pet_constants::EDITOR_ROM_START, editor_buf, sizeof(editor_buf));
+        memcpy(editor_rom_chip_->data(), editor_buf, sizeof(editor_buf));
         printf("PET: Editor ROM loaded\n");
     } else {
         printf("PET: Failed to load Editor ROM\n");
@@ -996,7 +1015,7 @@ bool PETSystem::load_roms() {
     bool kernal_ok = rom_loader_load_from_root(rom_root, kernal_files,
                                                 sizeof(kernal_buf), kernal_buf, sizeof(kernal_buf));
     if (kernal_ok) {
-        memcpy(memory_ + pet_constants::KERNAL_ROM_START, kernal_buf, sizeof(kernal_buf));
+        memcpy(kernal_rom_chip_->data(), kernal_buf, sizeof(kernal_buf));
         printf("PET: Kernal ROM loaded\n");
     } else {
         printf("PET: Failed to load Kernal ROM\n");
@@ -1006,24 +1025,19 @@ bool PETSystem::load_roms() {
 }
 
 // ============================================================================
-// Chip Registration — Hardware menu + debug windows
+// Memory Map Configuration
 // ============================================================================
 
-void PETSystem::register_pet_chips() {
-    register_chip(static_cast<ChipBase*>(cpu_),
-        "MOS 6502 CPU", "6502", "CPU", 0x0000);
+void PETSystem::configure_memory_map() {
+    using ChipId      = Bus::ChipId;
+    using WriteChipId = Bus::WriteChipId;
 
-    register_chip(static_cast<ChipBase*>(crtc_),
-        "MC6845 CRTC", "6845", "Video", pet_constants::CRTC_BASE);
-
-    register_chip(static_cast<ChipBase*>(pia1_),
-        "PIA 1 (Keyboard)", "6820", "I/O", pet_constants::PIA1_BASE);
-
-    register_chip(static_cast<ChipBase*>(pia2_),
-        "PIA 2 (IEEE-488)", "6820", "I/O", pet_constants::PIA2_BASE);
-
-    register_chip(static_cast<ChipBase*>(via_),
-        "MOS 6522 VIA", "6522", "I/O", pet_constants::VIA_BASE);
+    // Screen RAM mirror ($8400-$87FF → same data as $8000-$83FF)
+    // Slot 1 (screen RAM) base_id gives the chip_id for pages $80-$83.
+    // Map pages $84-$87 to the same chip pages.
+    constexpr auto screen_base = ChipId(kPETChips.base_id(1, 8));
+    bus_.fill_read_pages(0, 0x84, 4, screen_base);
+    bus_.fill_write_pages(0, 0x84, 4, WriteChipId(screen_base));
 }
 
 // ============================================================================
