@@ -1,5 +1,5 @@
 // =============================================================================
-// configs.hpp — Pre-baked bus configurations, type aliases, usage examples
+// configs.hpp — Pre-baked bus specs, type aliases, usage examples
 // =============================================================================
 #pragma once
 
@@ -7,7 +7,7 @@
 
 
 // =============================================================================
-// §1  Pre-baked configurations
+// §1  Pre-baked specs
 // =============================================================================
 
 // ── Commodore 64 ──────────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@
 // SID, Color RAM, CIA1, CIA2, I/O1, I/O2).  Dispatch is O(1): one shift,
 // one mask, one table lookup.
 //
-struct C64BusConfig {
+struct C64BusSpec {
     using AddrType = uint16_t;
     static constexpr size_t AddressBits         = 16;
     static constexpr size_t PageBits            = 12;   // 4 KB pages → 16 pages
@@ -55,7 +55,7 @@ struct C64BusConfig {
 // The $FD00–$FDFF range is an I/O page with PIO, ACIA, and other peripherals.
 // With PageBits=8, $FD is its own 256 B page → direct MMIO handler, no sub-table.
 //
-struct C16BusConfig {
+struct C16BusSpec {
     using AddrType = uint16_t;
     static constexpr size_t AddressBits        = 16;
     static constexpr size_t PageBits           = 8;    // 256 B pages → 256 pages
@@ -77,7 +77,7 @@ struct C16BusConfig {
 // CsLineBits = 10: the resolved chip id is emitted into bus_state_t after each
 // access.  10 bits covers all ids (512 buffer + sentinels).
 //
-struct NesCpuBusConfig {
+struct NesCpuBusSpec {
     using AddrType = uint16_t;
     static constexpr size_t AddressBits    = 16;
     static constexpr size_t PageBits       = 10;   // 1 KB pages → 64 pages
@@ -91,7 +91,7 @@ struct NesCpuBusConfig {
 };
 
 // ── NES / Famicom — PPU bus ───────────────────────────────────────────────────
-struct NesPpuBusConfig {
+struct NesPpuBusSpec {
     using AddrType = uint16_t;
     static constexpr size_t AddressBits    = 14;
     static constexpr size_t PageBits       = 10;   // 1 KB pages → 16 pages
@@ -107,7 +107,7 @@ struct NesPpuBusConfig {
 // EnablePartialBus = true: covers systems (e.g. Apple I) where 4-bit SRAM is
 // directly chip-selected with no register-file handler in front of it.
 //
-struct Generic8BitConfig {
+struct Generic8BitBusSpec {
     using AddrType = uint16_t;
     static constexpr size_t AddressBits    = 16;
     static constexpr size_t PageBits       = 12;   // 4 KB pages → 16 pages
@@ -120,7 +120,7 @@ struct Generic8BitConfig {
 };
 
 // ── Minimal / embedded ────────────────────────────────────────────────────────
-struct MinimalBusConfig {
+struct MinimalBusSpec {
     using AddrType = uint16_t;
     static constexpr size_t AddressBits    = 16;
     static constexpr size_t PageBits       = 12;
@@ -136,13 +136,13 @@ struct MinimalBusConfig {
 // §2  Convenience type aliases
 // =============================================================================
 
-using C64Bus    = MemoryBus<C64BusConfig>;
-using NesCpuBus = MemoryBus<NesCpuBusConfig>;
-using NesPpuBus = MemoryBus<NesPpuBusConfig>;
-using C16Bus    = MemoryBus<C16BusConfig>;
+using C64Bus    = MemoryBus<C64BusSpec>;
+using NesCpuBus = MemoryBus<NesCpuBusSpec>;
+using NesPpuBus = MemoryBus<NesPpuBusSpec>;
+using C16Bus    = MemoryBus<C16BusSpec>;
 
-using CpuView_C64 = BusView<C64BusConfig, C64BusConfig::Cpu>;
-using VicView_C64 = BusView<C64BusConfig, C64BusConfig::Vic>;
+using CpuView_C64 = BusView<C64BusSpec, C64BusSpec::Cpu>;
+using VicView_C64 = BusView<C64BusSpec, C64BusSpec::Vic>;
 
 
 // =============================================================================
@@ -177,10 +177,10 @@ using VicView_C64 = BusView<C64BusConfig, C64BusConfig::Vic>;
 //    const int hIO1    = bus.register_handler({nullptr, unmapped_read, unmapped_write});
 //    const int hIO2    = bus.register_handler({nullptr, unmapped_read, unmapped_write});
 //
-//    using PT = PackingTraits<C64BusConfig>;
+//    using PT = PackingTraits<C64BusSpec>;
 //
 //    // Create indexed sub-table: 4 bits → 16 entries, bit_shift=8 (bits 11-8)
-//    const int io_sub = bus.add_indexed_sub_table(C64BusConfig::Cpu, 4, 8);
+//    const int io_sub = bus.add_indexed_sub_table(C64BusSpec::Cpu, 4, 8);
 //
 //    // Helper to create MMIO sentinel chip ids
 //    auto mmio_rd = [](int h) { return PT::ChipId(PT::kRegChipBase + h); };
@@ -199,7 +199,7 @@ using VicView_C64 = BusView<C64BusConfig, C64BusConfig::Vic>;
 //    bus.set_indexed_entry(0, io_sub, 15, mmio_rd(hIO2),  mmio_wr(hIO2));
 //
 //    // In PLA modes where I/O is visible: route page $D to the sub-table
-//    bus.map_to_indexed_sub(C64BusConfig::Cpu, 0xD, io_sub);
+//    bus.map_to_indexed_sub(C64BusSpec::Cpu, 0xD, io_sub);
 //
 //    // In modes where CHARROM or RAM is at $D000: just set the page's chip id
 //    // directly — the sub-table is bypassed.
@@ -212,7 +212,7 @@ using VicView_C64 = BusView<C64BusConfig, C64BusConfig::Vic>;
 //
 //    C16Bus bus;
 //    const int hTED = bus.register_handler({ted, ted_read, ted_write});
-//    using PT = PackingTraits<C16BusConfig>;
+//    using PT = PackingTraits<C16BusSpec>;
 //
 //    // Base = KERNAL ROM chip (initially ROM visible after reset)
 //    const int ted_sub = bus.add_masked_sub_table(0,
@@ -245,8 +245,8 @@ using VicView_C64 = BusView<C64BusConfig, C64BusConfig::Vic>;
 //
 //    // Point indexed entry 5 to the masked sub-table
 //    bus.set_indexed_entry(0, lvl1, 5,
-//                          MemoryBus<Cfg>::masked_sub_chip(lvl2),
-//                          MemoryBus<Cfg>::masked_sub_write_chip(lvl2));
+//                          MemoryBus<Spec>::masked_sub_chip(lvl2),
+//                          MemoryBus<Spec>::masked_sub_write_chip(lvl2));
 //
 //    // Point page $D to the first-level indexed sub-table
 //    bus.map_to_indexed_sub(0, 0xD, lvl1);
@@ -281,7 +281,7 @@ using VicView_C64 = BusView<C64BusConfig, C64BusConfig::Vic>;
 // ── Apple I RAM (MOS 2114) — bitmix IS on the bus ────────────────────────────
 //
 //  The Apple I 2114 pairs are directly chip-selected (no handler):
-//    MemoryBus<Generic8BitConfig> bus;
+//    MemoryBus<Generic8BitBusSpec> bus;
 //    bus.set_chip_data_mask(kRamCsLo, 0x0Fu);  // D0–D3
 //    bus.set_chip_data_mask(kRamCsHi, 0xF0u);  // D4–D7
 //

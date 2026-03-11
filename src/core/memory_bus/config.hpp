@@ -1,13 +1,13 @@
 // =============================================================================
-// config.hpp — Bus configuration concept, feature probes, default config
+// config.hpp — Bus spec concept, feature probes, default spec
 // =============================================================================
 //
-// Defines the compile-time contract every bus configuration must satisfy,
-// plus optional-feature probes that detect extra fields in the config struct.
+// Defines the compile-time contract every bus spec must satisfy,
+// plus optional-feature probes that detect extra fields in the spec struct.
 // Each probe defaults to "disabled" when the field is absent, giving every
 // optional feature true zero cost.
 //
-// The BusConfigConcept is the single gate for all MemoryBus template
+// The BusSpecConcept is the single gate for all MemoryBus template
 // parameters: if the concept doesn't accept a struct, nothing compiles.
 //
 // =============================================================================
@@ -37,7 +37,7 @@ struct has_packed_rw_override<C, std::void_t<decltype(C::PackedRW)>>
 
 
 // =============================================================================
-// §2  Bus configuration concept
+// §2  Bus spec concept
 // =============================================================================
 //
 // Required fields:
@@ -63,7 +63,7 @@ struct has_packed_rw_override<C, std::void_t<decltype(C::PackedRW)>>
 //
 
 template<typename C>
-concept BusConfigConcept = requires {
+concept BusSpecConcept = requires {
     typename C::AddrType;
     { C::AddressBits }     -> std::convertible_to<size_t>;
     { C::PageBits }        -> std::convertible_to<size_t>;
@@ -84,102 +84,102 @@ concept BusConfigConcept = requires {
 //   cfg_<feature>_v     — constexpr shorthand for value
 //   cfg_<feature>_t     — alias shorthand for type (when applicable)
 //
-// When the probed field is absent from the config, the trait yields a safe
+// When the probed field is absent from the spec, the trait yields a safe
 // default (false, 0, uint8_t, …) and the compiler eliminates all code gated
 // on it through `if constexpr` or `std::conditional_t`.
 //
 
 // ── EnablePartialBus ──────────────────────────────────────────────────────────
 template<typename C, typename = void>
-struct cfg_partial_bus : std::false_type {};
+struct spec_partial_bus : std::false_type {};
 template<typename C>
-struct cfg_partial_bus<C, std::void_t<decltype(C::EnablePartialBus)>>
+struct spec_partial_bus<C, std::void_t<decltype(C::EnablePartialBus)>>
     : std::bool_constant<C::EnablePartialBus> {};
 
 template<typename C>
-inline constexpr bool cfg_partial_bus_v = cfg_partial_bus<C>::value;
+inline constexpr bool spec_partial_bus_v = spec_partial_bus<C>::value;
 
 // ── CsLineBits ────────────────────────────────────────────────────────────────
 template<typename C, typename = void>
-struct cfg_cs_line_bits : std::integral_constant<size_t, 0> {};
+struct spec_cs_line_bits : std::integral_constant<size_t, 0> {};
 template<typename C>
-struct cfg_cs_line_bits<C, std::void_t<decltype(C::CsLineBits)>>
+struct spec_cs_line_bits<C, std::void_t<decltype(C::CsLineBits)>>
     : std::integral_constant<size_t, C::CsLineBits> {};
 
 template<typename C>
-inline constexpr size_t cfg_cs_line_bits_v = cfg_cs_line_bits<C>::value;
+inline constexpr size_t spec_cs_line_bits_v = spec_cs_line_bits<C>::value;
 
 // ── CsBitShift — starting bit position of the CS field in bus_state_t ────────
 // Defaults to 55 (first reserved output pin).  Systems may override.
 template<typename C, typename = void>
-struct cfg_cs_bit_shift : std::integral_constant<size_t, 55> {};
+struct spec_cs_bit_shift : std::integral_constant<size_t, 55> {};
 template<typename C>
-struct cfg_cs_bit_shift<C, std::void_t<decltype(C::CsBitShift)>>
+struct spec_cs_bit_shift<C, std::void_t<decltype(C::CsBitShift)>>
     : std::integral_constant<size_t, C::CsBitShift> {};
 
 template<typename C>
-inline constexpr size_t cfg_cs_bit_shift_v = cfg_cs_bit_shift<C>::value;
+inline constexpr size_t spec_cs_bit_shift_v = spec_cs_bit_shift<C>::value;
 
 // ── DataType ──────────────────────────────────────────────────────────────────
 template<typename C, typename = void>
-struct cfg_data_type { using type = uint8_t; };
+struct spec_data_type { using type = uint8_t; };
 template<typename C>
-struct cfg_data_type<C, std::void_t<typename C::DataType>>
+struct spec_data_type<C, std::void_t<typename C::DataType>>
     { using type = typename C::DataType; };
 
 template<typename C>
-using cfg_data_type_t = typename cfg_data_type<C>::type;
+using spec_data_type_t = typename spec_data_type<C>::type;
 
 // ── MaxIndexedSubTables ───────────────────────────────────────────────────────
 // Number of indexed sub-tables per viewer.  0 = disabled.
 template<typename C, typename = void>
-struct cfg_max_indexed_subs : std::integral_constant<size_t, 0> {};
+struct spec_max_indexed_subs : std::integral_constant<size_t, 0> {};
 template<typename C>
-struct cfg_max_indexed_subs<C, std::void_t<decltype(C::MaxIndexedSubTables)>>
+struct spec_max_indexed_subs<C, std::void_t<decltype(C::MaxIndexedSubTables)>>
     : std::integral_constant<size_t, C::MaxIndexedSubTables> {};
 
 template<typename C>
-inline constexpr size_t cfg_max_indexed_subs_v = cfg_max_indexed_subs<C>::value;
+inline constexpr size_t spec_max_indexed_subs_v = spec_max_indexed_subs<C>::value;
 
 // ── IndexedSubBits ────────────────────────────────────────────────────────────
 // Max address bits per indexed sub-table.  Entry count = 2^N.  0 when unused.
 template<typename C, typename = void>
-struct cfg_indexed_sub_bits : std::integral_constant<size_t, 0> {};
+struct spec_indexed_sub_bits : std::integral_constant<size_t, 0> {};
 template<typename C>
-struct cfg_indexed_sub_bits<C, std::void_t<decltype(C::IndexedSubBits)>>
+struct spec_indexed_sub_bits<C, std::void_t<decltype(C::IndexedSubBits)>>
     : std::integral_constant<size_t, C::IndexedSubBits> {};
 
 template<typename C>
-inline constexpr size_t cfg_indexed_sub_bits_v = cfg_indexed_sub_bits<C>::value;
+inline constexpr size_t spec_indexed_sub_bits_v = spec_indexed_sub_bits<C>::value;
 
 // ── MaxMaskedSubTables ────────────────────────────────────────────────────────
 // Number of masked sub-tables per viewer.  0 = disabled.
 template<typename C, typename = void>
-struct cfg_max_masked_subs : std::integral_constant<size_t, 0> {};
+struct spec_max_masked_subs : std::integral_constant<size_t, 0> {};
 template<typename C>
-struct cfg_max_masked_subs<C, std::void_t<decltype(C::MaxMaskedSubTables)>>
+struct spec_max_masked_subs<C, std::void_t<decltype(C::MaxMaskedSubTables)>>
     : std::integral_constant<size_t, C::MaxMaskedSubTables> {};
 
 template<typename C>
-inline constexpr size_t cfg_max_masked_subs_v = cfg_max_masked_subs<C>::value;
+inline constexpr size_t spec_max_masked_subs_v = spec_max_masked_subs<C>::value;
 
 // ── MaxMaskedRegions ──────────────────────────────────────────────────────────
 // Max mask/match regions per masked sub-table.  0 when unused.
 template<typename C, typename = void>
-struct cfg_max_masked_regions : std::integral_constant<size_t, 0> {};
+struct spec_max_masked_regions : std::integral_constant<size_t, 0> {};
 template<typename C>
-struct cfg_max_masked_regions<C, std::void_t<decltype(C::MaxMaskedRegions)>>
+struct spec_max_masked_regions<C, std::void_t<decltype(C::MaxMaskedRegions)>>
     : std::integral_constant<size_t, C::MaxMaskedRegions> {};
 
 template<typename C>
-inline constexpr size_t cfg_max_masked_regions_v = cfg_max_masked_regions<C>::value;
+inline constexpr size_t spec_max_masked_regions_v = spec_max_masked_regions<C>::value;
 
 
 // =============================================================================
-// §4  Default bus configuration
+// §4  Default bus spec
 // =============================================================================
 
-struct DefaultBusConfig {
+struct DefaultBusSpec {
     using AddrType = uint16_t;
     static constexpr size_t AddressBits    = 16;
     static constexpr size_t PageBits       = 8;

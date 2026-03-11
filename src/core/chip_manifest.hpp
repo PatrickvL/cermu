@@ -17,12 +17,12 @@
 //                      in a named symbol.  Optionally reserves a dynamic pool
 //                      at the end for hot-swap chips.
 //
-//   BusMemory<Cfg>   — runtime owner of the unified buffer.  Initialised from
+//   BusMemory<Spec>   — runtime owner of the unified buffer.  Initialised from
 //                      a ChipManifest.  Provides:
 //                        • chip_buffer(base_id) → uint8_t*  (pointer into buf)
 //                        • load(base_id, data)              (fill from span)
 //                        • add_chip(...)  / remove_chip(...) (dynamic hot-swap)
-//                        • connect(MemoryBus<Cfg>&)          (wire buffer ptr)
+//                        • connect(MemoryBus<Spec>&)          (wire buffer ptr)
 //
 // Usage model:
 //
@@ -99,7 +99,7 @@ struct ChipDef {
 //   constexpr auto kRamId    = kC64Chips.base_id(5);  // = 8
 //   // MaxChipId = 8 + 16 - 1 = 23
 //   static_assert(kC64Chips.max_chip_id() == 23);
-//   static_assert(C64BusConfig::MaxChipId  == 23);  // config must match
+//   static_assert(C64BusSpec::MaxChipId  == 23);  // spec must match
 //
 
 template<size_t N>
@@ -174,24 +174,24 @@ make_chip_manifest(const ChipDef (&defs)[N],
 
 
 // =============================================================================
-// §3  BusMemory<Cfg> — runtime chip owner
+// §3  BusMemory<Spec> — runtime chip owner
 // =============================================================================
 //
 // Owns the flat unified buffer.  Provides pointer access into the buffer for
 // each chip, handles dynamic chip add/remove for hot-swap, and wires the
 // buffer pointer into MemoryBus.
 //
-// Template parameter Cfg must satisfy BusConfigConcept.  BusMemory uses
+// Template parameter Spec must satisfy BusSpecConcept.  BusMemory uses
 // Bus::kPageSize to compute buffer offsets and buffer capacity.
 //
 // Thread safety: none.  External synchronisation required if add/remove_chip
 // is called concurrently with bus accesses.
 //
 
-template<BusConfigConcept Cfg>
+template<BusSpecConcept Spec>
 class BusMemory {
 public:
-    using Bus         = MemoryBus<Cfg>;
+    using Bus         = MemoryBus<Spec>;
     using ChipId      = typename Bus::ChipId;
     using WriteChipId = typename Bus::WriteChipId;
 
@@ -482,10 +482,10 @@ private:
 //  constexpr auto kCharId   = kC64Chips.base_id(4);  // 6
 //  constexpr auto kRamId    = kC64Chips.base_id(5);  // 8
 //  static_assert(kC64Chips.max_chip_id() == 23);
-//  // → C64BusConfig::MaxChipId must be 23
+//  // → C64BusSpec::MaxChipId must be 23
 //
 //  // §4.3  Create BusMemory; it allocates the unified buffer
-//  BusMemory<C64BusConfig> mem{kC64Chips};
+//  BusMemory<C64BusSpec> mem{kC64Chips};
 //
 //  // §4.4  Load ROM images
 //  mem.load(kRomlId,   roml_bytes);
@@ -498,10 +498,10 @@ private:
 //
 //  // §4.6  Program one PLA mode — chip ids are the symbols above
 //  //       (In practice use pre-computed ModeSnapshot arrays)
-//  bus.set_read_page (C64BusConfig::Cpu, 0x8, ChipId(kRomlId));
-//  bus.set_read_page (C64BusConfig::Cpu, 0xA, ChipId(kBasicId));
-//  bus.set_read_page (C64BusConfig::Cpu, 0xB, ChipId(kBasicId + 1));
-//  bus.fill_read_pages(C64BusConfig::Cpu, 0x0, 16, ChipId(kRamId));
+//  bus.set_read_page (C64BusSpec::Cpu, 0x8, ChipId(kRomlId));
+//  bus.set_read_page (C64BusSpec::Cpu, 0xA, ChipId(kBasicId));
+//  bus.set_read_page (C64BusSpec::Cpu, 0xB, ChipId(kBasicId + 1));
+//  bus.fill_read_pages(C64BusSpec::Cpu, 0x0, 16, ChipId(kRamId));
 //  // etc. for all 16 pages × all 32 PLA modes → saved as ModeSnapshot
 //
 // ── NES cartridge hot-swap (dynamic chip) ─────────────────────────────────────
@@ -518,15 +518,15 @@ private:
 //  constexpr auto kSramId  = kNesChips.base_id(2);  // 4
 //  // dynamic pool starts at kNesChips.dynamic_base_id() = 12
 //
-//  BusMemory<NesCpuBusConfig> mem{kNesChips};
+//  BusMemory<NesCpuBusSpec> mem{kNesChips};
 //
 //  // Insert cartridge at runtime (e.g. on file load)
-//  void insert_cartridge(BusMemory<NesCpuBusConfig>& mem,
+//  void insert_cartridge(BusMemory<NesCpuBusSpec>& mem,
 //                        NesCpuBus& bus,
 //                        std::span<const uint8_t> prg_data) {
 //      const size_t num_pages = (prg_data.size() + 1023) / 1024;
 //      const auto cart_id = mem.add_chip("PRG-ROM", num_pages, /*read_only=*/true);
-//      assert(cart_id != BusMemory<NesCpuBusConfig>::kInvalidChipId);
+//      assert(cart_id != BusMemory<NesCpuBusSpec>::kInvalidChipId);
 //      mem.load(cart_id, prg_data);
 //      // Map last 16 KB of ROM fixed at $C000–$FFFF
 //      const size_t last_bank = num_pages - 16;
@@ -534,7 +534,7 @@ private:
 //  }
 //
 //  // Remove cartridge
-//  void remove_cartridge(BusMemory<NesCpuBusConfig>& mem,
+//  void remove_cartridge(BusMemory<NesCpuBusSpec>& mem,
 //                        NesCpuBus& bus,
 //                        ChipId cart_id) {
 //      bus.map_no_chip_selected(0, 48, 16);  // unmap before removing
@@ -555,8 +555,8 @@ private:
 //  constexpr auto kRomId   = kApple1Chips.base_id(2);
 //  constexpr auto kPiaId   = kApple1Chips.base_id(3);
 //
-//  MemoryBus<Generic8BitConfig> bus;
-//  BusMemory<Generic8BitConfig> mem{kApple1Chips};
+//  MemoryBus<Generic8BitBusSpec> bus;
+//  BusMemory<Generic8BitBusSpec> mem{kApple1Chips};
 //  mem.connect(bus);
 //
 //  // Set 4-bit data masks for the two 2114 chips

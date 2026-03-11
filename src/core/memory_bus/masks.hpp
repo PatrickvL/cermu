@@ -19,10 +19,10 @@
 #include <cassert>
 
 
-template<BusConfigConcept Cfg>
+template<BusSpecConcept Spec>
 struct DataBusMasks {
-    using DataType = cfg_data_type_t<Cfg>;
-    static constexpr size_t   kTableSize = Cfg::MaxChipId + 1;
+    using DataType = spec_data_type_t<Spec>;
+    static constexpr size_t   kTableSize = Spec::MaxChipId + 1;
     static constexpr DataType kFullMask  = DataType(~DataType(0));
 
     std::array<DataType, kTableSize> read_masks{};
