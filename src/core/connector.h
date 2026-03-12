@@ -20,6 +20,7 @@
  * DeviceRegistry can match peripherals to compatible ports.
  */
 
+#include "component_base.h"
 #include <cstdint>
 #include <cstddef>
 #include <functional>
@@ -119,13 +120,16 @@ class PeripheralDevice;
  * An optional callback (on_device_output_changed) lets the system react
  * immediately when the device drives new signal values.
  */
-class ConnectorPort {
+class ConnectorPort : public ComponentBase {
 public:
     /// Callback: invoked when the attached device's output signals change.
     using SignalChangeCallback = std::function<void(ConnectorPort* port, uint32_t combined_state)>;
 
     explicit ConnectorPort(const ConnectorDefinition& def, int port_index = 0);
-    ~ConnectorPort();
+    ~ConnectorPort() override;
+
+    // --- ComponentBase interface ----------------------------------------
+    const char* name() const override { return get_name(); }
 
     // --- Identification ------------------------------------------------
 
