@@ -44,11 +44,12 @@ enum scaling_mode_t {
 };
 
 /**
- * GenericEmulatorGUI - Base class for all emulator GUIs
+ * EmulatorHost - Host substrate for the emulator
  * 
- * This class provides the common SDL/ImGui initialization, window management,
- * and basic rendering loop. Derived classes (C64GUI, SystemGUI, etc.)
- * override virtual methods to provide system-specific behavior.
+ * Owns everything on the host side: SDL window, GL context, ImGui loop,
+ * primary emu thread, framebuffer pipeline, audio device, input queue.
+ * Has no knowledge of what system is running. Derived classes (SessionGUI)
+ * wire a Session/System into this substrate.
  *
  * Threading model:
  *   - GUI thread   : SDL events, ImGui rendering, texture upload
@@ -61,7 +62,7 @@ enum scaling_mode_t {
  *   fb_mutex_    \u2014 protects the framebuffer snapshot (very brief lock).
  *   input_mutex_ \u2014 protects the queued SDL input events.
  */
-class GenericEmulatorGUI {
+class EmulatorHost {
 protected:
     // SDL/OpenGL state
     SDL_Window* window_;
@@ -181,8 +182,8 @@ protected:
     std::vector<float> emu_audio_tmp_;
 
 public:
-    GenericEmulatorGUI();
-    virtual ~GenericEmulatorGUI();
+    EmulatorHost();
+    virtual ~EmulatorHost();
     
     // Generic initialization/cleanup (non-virtual, final)
     bool init(const char* window_title, int width, int height);
@@ -413,7 +414,7 @@ protected:
 
 private:
     // Prevent copying
-    GenericEmulatorGUI(const GenericEmulatorGUI&) = delete;
-    GenericEmulatorGUI& operator=(const GenericEmulatorGUI&) = delete;
+    EmulatorHost(const EmulatorHost&) = delete;
+    EmulatorHost& operator=(const EmulatorHost&) = delete;
 };
 

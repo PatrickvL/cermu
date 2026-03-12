@@ -1,6 +1,6 @@
 #define SDL_MAIN_HANDLED
 #include "../core/emulated_system.h"
-#include "../gui/system_gui.h"
+#include "../gui/session_gui.h"
 #include "../testing/vicii_test_harness.h"
 #include "../testing/vicii_pixel_tests.h"
 #include "../testing/sid_write_log.h"
@@ -599,7 +599,7 @@ int main(int argc, char** argv) {
     // Create GUI (with or without a system)
     // If no system, nullptr will cause GUI to show system selection dialog
     // Pass any pending file path so it can be loaded after system selection
-    SystemGUI gui(std::move(system), file_path);
+    SessionGUI gui(std::move(system), file_path);
     
     // Initialize GUI — window title is managed dynamically by update_window_title()
     if (!gui.init("cermu", 1200, 800)) {

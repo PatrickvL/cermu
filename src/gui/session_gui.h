@@ -1,6 +1,6 @@
 #pragma once
 
-#include "generic_gui.h"
+#include "emulator_host.h"
 #include "system_selection_dialog.h"
 #include "../core/emulated_system.h"
 #include <memory>
@@ -9,16 +9,16 @@
 class Drive1541Device;  // Forward declaration for drive file dialog
 
 /**
- * SystemGUI - GUI for any EmulatedSystem
+ * SessionGUI - Owns an EmulatedSystem and implements EmulatorHost hooks
  *
- * This class provides a GUI that works with any system implementing
- * the EmulatedSystem interface. It handles display scaling, keyboard input,
- * and basic menus. Systems can extend menus via their callback methods.
+ * Routes input queue events to the focused system, manages system switching,
+ * drag-and-drop file loading, and display scaling. Systems extend menus
+ * via their callback methods.
  *
- * Generic emulation infrastructure (threading, audio, framebuffer,
- * frame pacing, FPS tracking) lives in the GenericEmulatorGUI base class.
+ * Generic host infrastructure (threading, audio, framebuffer,
+ * frame pacing, FPS tracking) lives in the EmulatorHost base class.
  */
-class SystemGUI : public GenericEmulatorGUI {
+class SessionGUI : public EmulatorHost {
 private:
     std::unique_ptr<EmulatedSystem> system_;
 
@@ -41,13 +41,13 @@ public:
     /**
      * Constructor - takes ownership of the system (can be nullptr to show selection dialog)
      */
-    explicit SystemGUI(std::unique_ptr<EmulatedSystem> system, const char* pending_file = nullptr);
-    virtual ~SystemGUI();
+    explicit SessionGUI(std::unique_ptr<EmulatedSystem> system, const char* pending_file = nullptr);
+    virtual ~SessionGUI();
     
     // Override init to allocate framebuffer after OpenGL context is created
     bool init(const char* window_title, int width, int height);
     
-    // Override virtual hooks from GenericEmulatorGUI
+    // Override virtual hooks from EmulatorHost
     void handle_events() override;
     void update_frame() override;
     void render_frame() override;

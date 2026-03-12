@@ -14,7 +14,7 @@
  *
  * This header is included from two places:
  *   1. ImGuiFileDialog.cpp — via CUSTOM_FILESYSTEM_INCLUDE (IGFD types in scope)
- *   2. Project code (e.g. system_gui.cpp) — for the static utility methods
+ *   2. Project code (e.g. session_gui.cpp) — for the static utility methods
  * Including ImGuiFileDialog.h is safe in both cases (#pragma once).
  */
 
