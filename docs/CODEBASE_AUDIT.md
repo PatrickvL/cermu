@@ -200,7 +200,7 @@ The `fam65xx` traits system defines CPU variants that would enable new platforms
 | CPU family | `fam65xx_t<CPUTraits>` NTTP | Exemplary design |
 | Keyboard matrix | `keyboard_matrix_config_t` | All 4 Commodore systems use same framework |
 | Commodore file formats | `commodore_load_helpers.cpp` | Shared across C64, VIC-20, C16 |
-| Connector / peripheral framework | `ConnectorPort`, `PeripheralDevice` | Generic across all systems |
+| Port / peripheral framework | `Port`, `PeripheralDevice` | Generic across all systems |
 | MOS6522 (VIA) | `src/chip/io/mos6522.h` | Shared by VIC-20, PET, Apple 1 |
 | MC6845 (CRTC) | `src/chip/video/mc6845/mc6845.h` | Used by PET; ready for BBC Micro |
 

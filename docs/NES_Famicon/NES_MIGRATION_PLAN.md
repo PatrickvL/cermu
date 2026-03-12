@@ -11,7 +11,7 @@ Restructure the NES/Famicom emulation from a monolithic `nes_system.cpp` + `nes_
 5. Code is header-only where possible, with limited visibility (`private`/`protected`)
 6. No global or free functions — everything lives inside types
 7. Mapper implementations are individually compilable, not nested private classes
-8. Entities reusable across systems live in shared folders (`src/chip/`, `src/connectors/`, `src/devices/`), not under any system
+8. Entities reusable across systems live in shared folders (`src/chip/`, `src/ports/`, `src/devices/`), not under any system
 9. PPU bus shares bit positions with CPU bus for bridging signals — enables zero-cost bitmixing
 10. Edge detection (A12, NMI) uses `bus_snapshot_` comparison, not callbacks
 
@@ -128,10 +128,10 @@ src/chip/input/                       # Cross-system input chips
 └── cd4021_gui.cpp                    #   CD4021 16-pin DIP layout + debug
 │                                     #   (#ifdef CERMU_HAS_GUI)
 
-src/connectors/                       # Cross-system connector definitions
-└── nes_connectors.h                  #   NES 72-pin, FC 60-pin, controller 7-pin,
+src/ports/                       # Cross-system connector definitions
+└── nes_ports.h                  #   NES 72-pin, FC 60-pin, controller 7-pin,
                                       #   FC 15-pin expansion, VS. System ports
-                                      #   ConnectorDefinition constants (header-only)
+                                      #   PortDefinition constants (header-only)
 
 src/devices/input/                    # Cross-system peripheral devices
 ├── nes_standard_controller.h         #   NES standard gamepad : PeripheralDevice
@@ -148,13 +148,13 @@ src/devices/input/                    # Cross-system peripheral devices
 > | Entity type | Shared location | Layout |
 > |-------------|-----------------|--------|
 > | Chips | `src/chip/<category>/` | `cpu/`, `io/`, `input/`, `video/`, `sound/`, `logic/`, `memory/` |
-> | Connector definitions | `src/connectors/` | One header per connector family |
+> | Port definitions | `src/ports/` | One header per port family |
 > | Peripheral devices | `src/devices/<category>/` | `input/`, `storage/`, etc. |
 >
 > NES-specific chips (RP2C02, cartridge) stay under `src/systems/nes/`.
 > Examples of shared entities:
 > - **CD4021** — standard CMOS shift register used in NES, SNES, arcade boards → `src/chip/input/`
-> - **NES controller port definitions** — used by NES, Famicom, VS. System, PlayChoice-10 → `src/connectors/`
+> - **NES controller port definitions** — used by NES, Famicom, VS. System, PlayChoice-10 → `src/ports/`
 > - **NES Standard Controller** — peripheral device usable on any system with a `CONTROLLER_NES` port → `src/devices/input/`
 
 ### Design Principles
@@ -163,7 +163,7 @@ src/devices/input/                    # Cross-system peripheral devices
 |-----------|-----------|
 | **One chip = one header** | Each hardware chip (2A03, 2C02, cartridge) is a self-contained `ChipBase` subclass. The header defines the type and bus interface. Layouts are NOT in the chip header — they live in `_gui` files. |
 | **Layouts in `_gui` files, `CERMU_HAS_GUI` guarded** | All `ChipLayout` definitions and pin-state rendering live in files with a `_gui` suffix (e.g. `nes_ppu_gui.cpp`). Everything layout-related is compiled only when `#ifdef CERMU_HAS_GUI`. This keeps non-GUI builds (test runners, headless) free of ImGui dependencies. Matches the existing convention in VIC-II, TED, MOS6522, etc. |
-| **Cross-system entities in shared folders** | Any entity used by multiple systems lives in a shared folder: chips in `src/chip/<category>/`, connector definitions in `src/connectors/`, peripheral devices in `src/devices/<category>/`. Only system-specific chips (RP2C02, cartridge) stay in `src/systems/nes/`. |
+| **Cross-system entities in shared folders** | Any entity used by multiple systems lives in a shared folder: chips in `src/chip/<category>/`, connector definitions in `src/ports/`, peripheral devices in `src/devices/<category>/`. Only system-specific chips (RP2C02, cartridge) stay in `src/systems/nes/`. |
 | **Header-only where side-effect-free** | Palette LUTs, bus signal definitions, mapper bank logic, controller shift register — all compile down to inline code or constexpr data. |
 | **`.cpp` only for rendering + I/O** | ImGui rendering, file I/O, and the system tick loop need translation units. The hot-path memory dispatch lives in the header via `inline` / `__attribute__((always_inline))`. |
 | **Edge detection via `bus_snapshot_`** | All edge-sensitive signals (PPU A12 for MMC3, NMI for CPU) are detected by comparing the current bus state against `bus_snapshot_` — a copy stored at the end of each tick. No callbacks, no state machines in the mapper. Already proven in ChipBase (VIC-II, TED, MOS6522). |
@@ -805,24 +805,24 @@ Pin 8:  VSS                 Pin  9: Q7 (serial out)
 
 ### 72-pin Cartridge Connector (NES) / 60-pin (Famicom)
 
-Defined in `src/connectors/nes_connectors.h` as `ConnectorDefinition` constants — already partially in `nes_system.cpp`, just needs extraction to the shared connectors folder (used by NES, Famicom, VS. System, PlayChoice-10).
+Defined in `src/ports/nes_ports.h` as `PortDefinition` constants — already partially in `nes_system.cpp`, just needs extraction to the shared connectors folder (used by NES, Famicom, VS. System, PlayChoice-10).
 
 ---
 
-## Part 6 — Connector Ports and Peripheral Devices
+## Part 6 — Ports and Peripheral Devices
 
-The current codebase has a well-developed Connector/Peripheral framework
-(`src/core/connector.h`) with wired-AND signal propagation, host input
+The current codebase has a well-developed Port/Peripheral framework
+(`src/core/port.hpp`) with wired-AND signal propagation, host input
 binding, and device registration. The NES system already uses it:
 
-- `ConnectorPort` instances for controller port 1, controller port 2, expansion port
-- `ConnectorDefinition` with `NESControllerBit` signal lines (CLK, LATCH, D0, D3, D4)
+- `Port` instances for controller port 1, controller port 2, expansion port
+- `PortDefinition` with `NESControllerBit` signal lines (CLK, LATCH, D0, D3, D4)
 - `NESExpansionBit` signal lines (D0–D4, OUT0–OUT2, CLK, LATCH, /IRQ)
 - NES vs Famicom variants (removable vs hardwired controllers, 48-pin vs 15-pin expansion)
 
 **What's missing**: NES-specific `PeripheralDevice` subclasses. Currently the NES
 system hardcodes its controller handling (reading button state and running a shift
-register internally), bypassing the `ConnectorPort` ↔ `PeripheralDevice` signal
+register internally), bypassing the `Port` ↔ `PeripheralDevice` signal
 protocol entirely. The migration must make these real peripherals.
 
 ### 6.1 NES Peripheral Device Hierarchy
@@ -837,7 +837,7 @@ The directory tree for NES peripheral devices is shown in Part 1 under `src/devi
 > The standard controller and Zapper work across all of them. Famicom controllers
 > also work via adapters on SNES. Following the cross-system rule, any entity
 > used by multiple products goes in a shared folder — this applies equally to
-> connector definitions (`src/connectors/`), chips (`src/chip/`), and
+> connector definitions (`src/ports/`), chips (`src/chip/`), and
 > peripheral devices (`src/devices/input/`).
 
 ### 6.2 NES Standard Controller (`NesStandardController`)
@@ -864,11 +864,11 @@ public:
     // --- PeripheralDevice interface ---
     const char* get_name() const override { return "NES Standard Controller"; }
     const char* get_id()   const override { return "nes_gamepad"; }
-    ConnectorType get_connector_type() const override { return ConnectorType::CONTROLLER_NES; }
+    PortType get_port_type() const override { return PortType::CONTROLLER_NES; }
     void reset() override;
 
     // --- Signal protocol ---
-    // System drives CLK and LATCH via ConnectorPort::write_system_signals().
+    // System drives CLK and LATCH via Port::write_system_signals().
     // Device responds via on_signal_change() → updates output D0.
     void on_signal_change(uint32_t signal_state) override;
     uint32_t get_output_signals() const override;
@@ -896,7 +896,7 @@ private:
 
 ### 6.3 Signal Protocol Flow
 
-The real hardware protocol and how it maps to the `ConnectorPort` framework:
+The real hardware protocol and how it maps to the `Port` framework:
 
 ```
 System tick loop:
@@ -917,7 +917,7 @@ System tick loop:
 ```
 
 This replaces the current hardcoded `Controller::read()` / `Controller::write()`
-with proper `ConnectorPort` signal protocol. The system tick loop now drives
+with proper `Port` signal protocol. The system tick loop now drives
 CLK/LATCH through the port, and the device responds via signal change callbacks.
 
 ### 6.4 Integration with CD4021 Chip
@@ -953,48 +953,48 @@ The `NesStandardController` peripheral (in `src/devices/input/`) handles:
 - Host input binding (keyboard keys / SDL gamepad)
 - Button state management
 - Signal protocol (LATCH/CLK edge detection)
-- `ConnectorPort` integration (signal I/O)
+- `Port` integration (signal I/O)
 
-### 6.5 Connector Port Setup After Migration
+### 6.5 Port Setup After Migration
 
-The existing `setup_connector_ports()` code moves to `src/connectors/nes_connectors.h`
-as static `ConnectorDefinition` constants (shared — used by NES, Famicom, VS. System,
+The existing `setup_ports()` code moves to `src/ports/nes_ports.hpp`
+as static `PortDefinition` constants (shared — used by NES, Famicom, VS. System,
 PlayChoice-10), with the setup function remaining in `nes_system.cpp`:
 
 ```cpp
-// src/connectors/nes_connectors.h — header-only, cross-system
-namespace NesConnectors {
+// src/ports/nes_ports.h — header-only, cross-system
+namespace NesPorts {
 
-inline const ConnectorDefinition NES_CONTROLLER_1 = {
-    ConnectorType::CONTROLLER_NES,
+inline const PortDefinition NES_CONTROLLER_1 = {
+    PortType::CONTROLLER_NES,
     "Controller Port 1",
-    ConnectorSignals::NES_CONTROLLER_SIGNALS,
-    ConnectorSignals::NES_CONTROLLER_SIGNAL_COUNT,
+    PortSignals::NES_CONTROLLER_SIGNALS,
+    PortSignals::NES_CONTROLLER_SIGNAL_COUNT,
     false, false  // not internal, not bus
 };
 
-inline const ConnectorDefinition NES_CONTROLLER_2 = { /* ... */ };
-inline const ConnectorDefinition NES_EXPANSION = { /* ... */ };
-inline const ConnectorDefinition FC_CONTROLLER_1 = {
-    ConnectorType::CONTROLLER_NES,
+inline const PortDefinition NES_CONTROLLER_2 = { /* ... */ };
+inline const PortDefinition NES_EXPANSION = { /* ... */ };
+inline const PortDefinition FC_CONTROLLER_1 = {
+    PortType::CONTROLLER_NES,
     "Controller I (hardwired)",
-    ConnectorSignals::NES_CONTROLLER_SIGNALS,
-    ConnectorSignals::NES_CONTROLLER_SIGNAL_COUNT,
+    PortSignals::NES_CONTROLLER_SIGNALS,
+    PortSignals::NES_CONTROLLER_SIGNAL_COUNT,
     true, false   // internal (hardwired, cannot detach via UI)
 };
-inline const ConnectorDefinition FC_CONTROLLER_2 = { /* ... microphone on Famicom */ };
-inline const ConnectorDefinition FC_EXPANSION_15PIN = { /* ... */ };
+inline const PortDefinition FC_CONTROLLER_2 = { /* ... microphone on Famicom */ };
+inline const PortDefinition FC_EXPANSION_15PIN = { /* ... */ };
 
-} // namespace NesConnectors
+} // namespace NesPorts
 ```
 
 **Device Registration**: `NesStandardController` is registered in the `DeviceRegistry`
-with `ConnectorType::CONTROLLER_NES`, so it auto-appears in the port attachment UI for
+with `PortType::CONTROLLER_NES`, so it auto-appears in the port attachment UI for
 NES and Famicom controller ports.
 
 ### 6.6 Future NES Peripherals
 
-| Device | Connector | Notes |
+| Device | Port | Notes |
 |--------|-----------|-------|
 | **NES Zapper** | `CONTROLLER_NES` | Light gun — reads PPU pixel color at aim position; trigger on D4. Uses `CONTROLLER_NES` port but drives D3/D4 expansion bits. |
 | **NES Arkanoid Vaus** | `CONTROLLER_NES` | Paddle — potentiometer value via serial protocol on D0, fire button on D3. |
@@ -1005,7 +1005,7 @@ NES and Famicom controller ports.
 
 Each is a `PeripheralDevice` subclass in a shared folder (`src/devices/input/` for
 input peripherals, `src/devices/storage/` for FDS), registered with the appropriate
-`ConnectorType`. None live under `src/systems/nes/` — they all serve multiple products.
+`PortType`. None live under `src/systems/nes/` — they all serve multiple products.
 
 ---
 
@@ -1017,7 +1017,7 @@ The migration is designed to be done in small, testable steps. Each step compile
 
 | Step | Action | Files Created | Risk |
 |------|--------|---------------|------|
-| 1.1 | Create directory structure | `bus/`, `cpu/`, `ppu/`, `apu/`, `cartridge/`, `cartridge/mappers/`, `nsf/`, `screen/` under `src/systems/nes/`; shared `src/connectors/` and `src/devices/input/` | None |
+| 1.1 | Create directory structure | `bus/`, `cpu/`, `ppu/`, `apu/`, `cartridge/`, `cartridge/mappers/`, `nsf/`, `screen/` under `src/systems/nes/`; shared `src/ports/` and `src/devices/input/` | None |
 | 1.2 | Extract `nes_bus_chips.h` — CHIP ID enum (new, no code moves yet) | `bus/nes_bus_chips.h` | None |
 | 1.3 | Extract `nes_bus_signals.h` — PPU bus typedefs, bitmix macros, signal macros | `bus/nes_bus_signals.h` | None |
 | 1.4 | Move PPU class declaration → `ppu/nes_ppu.h` (keep impl in `nes_system.cpp` for now) | `ppu/nes_ppu.h` | Low — header split |
@@ -1032,14 +1032,14 @@ The migration is designed to be done in small, testable steps. Each step compile
 | 1.13 | Create mapper factory → `cartridge/nes_mapper_factory.h` | 1 file | Low |
 | 1.14 | Create CD4021 in cross-system location → `src/chip/input/cd4021.h` (header-only) | 1 file | Low |
 | 1.15 | Create CD4021 GUI → `src/chip/input/cd4021_gui.cpp` (16-pin DIP layout, `#ifdef CERMU_HAS_GUI`) | 1 file | Low |
-| 1.16 | Extract connector definitions → `src/connectors/nes_connectors.h` (shared, header-only) | 1 file | Low |
+| 1.16 | Extract connector definitions → `src/ports/nes_ports.h` (shared, header-only) | 1 file | Low |
 | 1.17 | Create NES standard controller → `src/devices/input/nes_standard_controller.h` + `.cpp` | 2 files | Medium |
 | 1.18 | Create NES Zapper → `src/devices/input/nes_zapper.h` + `.cpp` | 2 files | Medium |
 | 1.19 | Register NES peripherals in `DeviceRegistry` | 0 files (existing registry) | Low |
 | 1.20 | Remove old `controller/` directory — NES system uses `CD4021` directly | Delete dir | Low |
 | 1.21 | Move NSF files → `nsf/` | Move 3 files | Low |
 | 1.22 | Move screen utils → `screen/` | Move 2 files | Low |
-| 1.23 | Update CMakeLists.txt with new source list (incl. `src/chip/input/`, `src/connectors/`, `src/devices/input/`) | Modified | Medium |
+| 1.23 | Update CMakeLists.txt with new source list (incl. `src/chip/input/`, `src/ports/`, `src/devices/input/`) | Modified | Medium |
 | 1.24 | Compile + run nestest — verify identical behavior | — | Gate |
 
 ### Phase 2: Introduce Unified Buffer + Bank Map (Behavior Change)
@@ -1094,7 +1094,7 @@ The migration is designed to be done in small, testable steps. Each step compile
 | 5.1 | Move `nes_palette[]` global into `PPU::palette()` static | Low |
 | 5.2 | Move NSF free functions into `NsfPlayer` type | Medium |
 | 5.3 | Move screen utils free functions into `ScreenUtils` type | Low |
-| 5.4 | Move connector definitions into `NesConnectors` namespace | Low |
+| 5.4 | Move connector definitions into `NesPorts` namespace | Low |
 | 5.5 | Audit for remaining non-member functions; encapsulate | Low |
 | 5.6 | Final clean build + test suite | Gate |
 
@@ -1231,7 +1231,7 @@ void NintendoSystem<V>::clock() {
             }
         } else {
             // I/O dispatch (PPU regs, APU, controller ports)
-            // Controller I/O ($4016/$4017) is handled via ConnectorPort:
+            // Controller I/O ($4016/$4017) is handled via Port:
             //   Write $4016 bit 0 → port->write_system_signals(LATCH, val)
             //     → PeripheralDevice::on_signal_change() → CD4021::latch()
             //   Read $4016/$4017 → port->read_signals() reads D0 from device
