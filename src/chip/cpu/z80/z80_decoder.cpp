@@ -39,10 +39,11 @@ static const char* r_iy_names[8] = { "B", "C", "D", "E", "IYH", "IYL", "(IY%+d)"
 // ============================================================================
 
 // Append formatted string to buffer, updating position
-static int emit(char* buf, size_t bufsize, int pos, const char* fmt, ...)
 #if defined(__GNUC__) || defined(__clang__)
+static int emit(char* buf, size_t bufsize, int pos, const char* fmt, ...)
     __attribute__((format(printf, 4, 5)));
 #endif
+static int emit(char* buf, size_t bufsize, int pos, const char* fmt, ...)
 {
     if (pos < 0 || static_cast<size_t>(pos) >= bufsize) return pos;
     va_list args;
