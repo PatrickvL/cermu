@@ -214,8 +214,8 @@ void Atari2600System::shutdown() {
 void Atari2600System::reset() {
     printf("Atari2600: Reset\n");
 
-    tia_->reset();
-    riot_->reset();
+    // Reset all manifest chips (TIA, RIOT; CartChip is no-op)
+    bus_mem_.reset_chips();
 
     if (cpu_) {
         cpu_->reset(0);
