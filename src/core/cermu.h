@@ -1,6 +1,6 @@
 #pragma once
 
-/* 
+/*
  * CERMU - Cross-platform compiler compatibility macros
  * Provides consistent interface for compiler-specific optimizations and attributes
  *
@@ -9,8 +9,13 @@
  * instead include this header and use the CERMU_* macros defined below.
  */
 
+#include <concepts>
+#include <cstdint>
+#include <cstdlib>
+#include <type_traits>
+
 /* ========================================================================== */
-/* COMPILER IDENTIFICATION */
+/* COMPILER IDENTIFICATION                                                    */
 /* ========================================================================== */
 
 /* Useful for conditional compilation based on compiler capabilities */
@@ -25,7 +30,7 @@
 #endif
 
 /* ========================================================================== */
-/* PLATFORM IDENTIFICATION */
+/* PLATFORM IDENTIFICATION                                                    */
 /* ========================================================================== */
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -68,7 +73,7 @@
     CERMU_PP_EXPAND_(CERMU_PP_CAT_(prefix, CERMU_PP_NARGS_(__VA_ARGS__))(__VA_ARGS__))
 
 /* ========================================================================== */
-/* PATH SEPARATOR */
+/* PATH SEPARATOR                                                             */
 /* ========================================================================== */
 
 #ifdef CERMU_PLATFORM_WINDOWS
@@ -80,7 +85,7 @@
 #endif
 
 /* ========================================================================== */
-/* CASE-INSENSITIVE STRING COMPARISON */
+/* CASE-INSENSITIVE STRING COMPARISON                                         */
 /* ========================================================================== */
 
 /* Portability wrappers for strcasecmp / strncasecmp (POSIX) vs
@@ -97,7 +102,7 @@
 #endif
 
 /* ========================================================================== */
-/* POSIX STAT COMPATIBILITY */
+/* POSIX STAT COMPATIBILITY                                                   */
 /* ========================================================================== */
 
 /* MSVC <sys/stat.h> does not define S_ISREG / S_ISDIR.  Provide them here
@@ -113,7 +118,7 @@
 #endif
 
 /* ========================================================================== */
-/* DIRECTORY ITERATION SUPPORT */
+/* DIRECTORY ITERATION SUPPORT                                                */
 /* ========================================================================== */
 
 /* MSVC does not ship <dirent.h>; use C++17 <filesystem> instead. */
@@ -124,7 +129,7 @@
 #endif
 
 /* ========================================================================== */
-/* SEH (STRUCTURED EXCEPTION HANDLING) SUPPORT */
+/* SEH (STRUCTURED EXCEPTION HANDLING) SUPPORT                                */
 /* ========================================================================== */
 
 /* Only available on Windows (MSVC). */
@@ -133,7 +138,7 @@
 #endif
 
 /* ========================================================================== */
-/* WARNING MANAGEMENT */
+/* WARNING MANAGEMENT                                                         */
 /* ========================================================================== */
 
 /* Portable MSVC-warning push/pop/disable.  On non-MSVC compilers these
@@ -162,25 +167,7 @@
 #endif
 
 /* ========================================================================== */
-/* ALIGNMENT MACROS */
-/* ========================================================================== */
-
-/* C11 standard alignment support with fallback to compiler-specific versions */
-#ifdef __cplusplus
-    /* In C++, alignas is a keyword - don't redefine it */
-#elif __STDC_VERSION__ >= 201112L
-    #include <stdalign.h>
-    /* alignas is already defined in C11 */
-#elif defined(_MSC_VER)
-    #define alignas(x) __declspec(align(x))
-#elif defined(__GNUC__) || defined(__clang__)
-    #define alignas(x) __attribute__((aligned(x)))
-#else
-    #define alignas(x) /* alignment not supported */
-#endif
-
-/* ========================================================================== */
-/* BRANCH PREDICTION HINTS */
+/* BRANCH PREDICTION HINTS                                                    */
 /* ========================================================================== */
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -192,67 +179,59 @@
 #endif
 
 /* ========================================================================== */
-/* FALLTHROUGH ATTRIBUTE */
+/* FALLTHROUGH ATTRIBUTE                                                      */
 /* ========================================================================== */
 
-/* Fall-through marker for switch statements to suppress compiler warnings */
-#if defined(__cplusplus) && __cplusplus >= 201703L
-    #define FALLTHROUGH [[fallthrough]]
-#elif defined(__GNUC__) && __GNUC__ >= 7
-    #define FALLTHROUGH __attribute__((fallthrough))
-#elif defined(__clang__)
-    #define FALLTHROUGH __attribute__((fallthrough))
-#else
-    #define FALLTHROUGH ((void)0)
-#endif
+/* [[fallthrough]] is a C++17 standard attribute. */
+#define FALLTHROUGH [[fallthrough]]
 
 /* ========================================================================== */
-/* INLINE FORCING */
+/* INLINE FORCING                                                             */
 /* ========================================================================== */
 
-#if defined(_MSC_VER)
+#if defined(CERMU_COMPILER_MSVC)
     #define FORCE_INLINE __forceinline
-#elif defined(__GNUC__) || defined(__clang__)
+#elif defined(CERMU_COMPILER_GCC) || defined(CERMU_COMPILER_CLANG)
     #define FORCE_INLINE __attribute__((always_inline)) inline
 #else
     #define FORCE_INLINE inline
 #endif
 
 /* ========================================================================== */
-/* COUNT TRAILING ZEROS */
+/* COUNT TRAILING ZEROS                                                       */
 /* ========================================================================== */
 
 /* Cross-platform count-trailing-zeros for unsigned 32-bit values.
  * Undefined when x == 0 (matches hardware CTZ behavior). */
-#if defined(_MSC_VER)
+#if defined(CERMU_COMPILER_MSVC)
     #include <intrin.h>
-    static inline int cermu_ctz(unsigned int x) {
+    [[nodiscard]] FORCE_INLINE int cermu_ctz(unsigned int x) noexcept {
         unsigned long idx;
         _BitScanForward(&idx, x);
-        return (int)idx;
+        return static_cast<int>(idx);
     }
-#elif defined(__GNUC__) || defined(__clang__)
+#elif defined(CERMU_COMPILER_GCC) || defined(CERMU_COMPILER_CLANG)
     #define cermu_ctz(x) __builtin_ctz(x)
 #else
-    static inline int cermu_ctz(unsigned int x) {
+    [[nodiscard]] FORCE_INLINE int cermu_ctz(unsigned int x) noexcept {
         int n = 0;
-        if (!(x & 0x0000FFFF)) { n += 16; x >>= 16; }
-        if (!(x & 0x000000FF)) { n +=  8; x >>=  8; }
-        if (!(x & 0x0000000F)) { n +=  4; x >>=  4; }
-        if (!(x & 0x00000003)) { n +=  2; x >>=  2; }
-        if (!(x & 0x00000001)) { n +=  1; }
+        if (!(x & 0x0000FFFFu)) { n += 16; x >>= 16; }
+        if (!(x & 0x000000FFu)) { n +=  8; x >>=  8; }
+        if (!(x & 0x0000000Fu)) { n +=  4; x >>=  4; }
+        if (!(x & 0x00000003u)) { n +=  2; x >>=  2; }
+        if (!(x & 0x00000001u)) { n +=  1; }
         return n;
     }
 #endif
 
 /* ========================================================================== */
-/* REGISTER CALLING CONVENTIONS */
+/* REGISTER CALLING CONVENTIONS                                               */
 /* ========================================================================== */
 
 /* Optimize function calls by using register calling convention where supported */
-#if defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
+#if defined(CERMU_COMPILER_MSVC) && (defined(_M_IX86) || defined(_M_X64))
     #define REGISTER_CALL __fastcall
-#elif defined(__GNUC__) || defined(__clang__)
+#elif defined(CERMU_COMPILER_GCC) || defined(CERMU_COMPILER_CLANG)
     #if defined(__i386__) || defined(__x86_64__)
         #define REGISTER_CALL __attribute__((regparm(3)))
     #else
@@ -263,69 +242,51 @@
 #endif
 
 /* ========================================================================== */
-/* ALIGNED MEMORY ALLOCATION */
+/* ALIGNED MEMORY ALLOCATION                                                  */
 /* ========================================================================== */
 
-/* Cross-platform aligned memory allocation and deallocation */
-#include <cstdlib>
-
-#if defined(_WIN32)
+#if defined(CERMU_PLATFORM_WINDOWS)
     #include <malloc.h>
     #define cermu_aligned_alloc(alignment, size) _aligned_malloc((size), (alignment))
-    #define cermu_aligned_free(ptr) _aligned_free(ptr)
-#elif defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
-    /* C11 aligned_alloc */
-    #define cermu_aligned_alloc(alignment, size) aligned_alloc((alignment), (size))
-    #define cermu_aligned_free(ptr) free(ptr)
-#elif defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L
-    /* POSIX posix_memalign */
-    static inline void* cermu_aligned_alloc(size_t alignment, size_t size) {
-        void* ptr = NULL;
-        return (posix_memalign(&ptr, alignment, size) == 0) ? ptr : NULL;
-    }
-    #define cermu_aligned_free(ptr) free(ptr)
+    #define cermu_aligned_free(ptr)              _aligned_free(ptr)
 #else
-    /* Fallback to regular malloc - alignment not guaranteed */
-    #define cermu_aligned_alloc(alignment, size) malloc(size)
-    #define cermu_aligned_free(ptr) free(ptr)
+    /* C++17 std::aligned_alloc is available on all remaining targets. */
+    #define cermu_aligned_alloc(alignment, size) std::aligned_alloc((alignment), (size))
+    #define cermu_aligned_free(ptr)              std::free(ptr)
 #endif
 
 /* ========================================================================== */
-/* BIT MANIPULATION FUNCTIONS */
+/* BIT MANIPULATION FUNCTIONS                                                 */
 /* ========================================================================== */
 
 /* Population count (number of set bits) */
-#if defined(__GNUC__) || defined(__clang__)
-    #define cermu_popcount(x) __builtin_popcount(x)
-    #define cermu_popcountl(x) __builtin_popcountl(x)
+#if defined(CERMU_COMPILER_GCC) || defined(CERMU_COMPILER_CLANG)
+    #define cermu_popcount(x)   __builtin_popcount(x)
+    #define cermu_popcountl(x)  __builtin_popcountl(x)
     #define cermu_popcountll(x) __builtin_popcountll(x)
-#elif defined(_MSC_VER) && defined(_WIN64)
+#elif defined(CERMU_COMPILER_MSVC)
     #include <intrin.h>
-    #define cermu_popcount(x) __popcnt(x)
-    #define cermu_popcountl(x) __popcnt(x)
+    #define cermu_popcount(x)   __popcnt(x)
+    #define cermu_popcountl(x)  __popcnt(x)
     #define cermu_popcountll(x) __popcnt64(x)
 #else
-    /* Fallback implementations */
-    static inline int cermu_popcount(unsigned int x) {
+    [[nodiscard]] FORCE_INLINE int cermu_popcount(unsigned int x) noexcept {
         x = x - ((x >> 1) & 0x55555555u);
         x = (x & 0x33333333u) + ((x >> 2) & 0x33333333u);
-        x = (x + (x >> 4)) & 0x0f0f0f0fu;
+        x = (x + (x >> 4)) & 0x0F0F0F0Fu;
         x = x + (x >> 8);
         x = x + (x >> 16);
-        return x & 0x3fu;
+        return static_cast<int>(x & 0x3Fu);
     }
-    
-    static inline int cermu_popcountl(unsigned long x) {
-        return cermu_popcount((unsigned int)x) + 
-               (sizeof(long) > sizeof(int) ? cermu_popcount((unsigned int)(x >> 32)) : 0);
+    [[nodiscard]] FORCE_INLINE int cermu_popcountl(unsigned long x) noexcept {
+        return cermu_popcount(static_cast<unsigned int>(x)) +
+               (sizeof(long) > sizeof(int) ? cermu_popcount(static_cast<unsigned int>(x >> 32)) : 0);
     }
-    
-    static inline int cermu_popcountll(unsigned long long x) {
-        return cermu_popcount((unsigned int)x) + cermu_popcount((unsigned int)(x >> 32));
+    [[nodiscard]] FORCE_INLINE int cermu_popcountll(unsigned long long x) noexcept {
+        return cermu_popcount(static_cast<unsigned int>(x)) +
+               cermu_popcount(static_cast<unsigned int>(x >> 32));
     }
 #endif
-
-#include <cstdint>
 
 /* ========================================================================== */
 /* BITMIX — bitwise multiplexer: select bits from A or B per mask             */
@@ -339,10 +300,6 @@
  * single cmix (RISC-V Zbt).  When mask is a compile-time constant the compiler
  * eliminates even the XOR pair.
  */
-#ifdef __cplusplus
-#include <concepts>
-#include <type_traits>
-
 template<std::unsigned_integral T>
 [[nodiscard]] FORCE_INLINE T bitmix(T a, T b, T mask) noexcept {
 #if defined(__riscv) && defined(__riscv_xlen) && __riscv_xlen >= 32 \
@@ -366,7 +323,7 @@ template<std::unsigned_integral T>
 }
 
 /* Smallest unsigned type that can hold any value in [0, 2^Bits). */
-template<size_t Bits>
+template<std::size_t Bits>
 using uint_least_bits_t =
     std::conditional_t<(Bits <=  8), uint8_t,
     std::conditional_t<(Bits <= 16), uint16_t,
@@ -386,30 +343,20 @@ using uint_least_bits_t =
  * Galois form: new_state = (state >> 1) ^ ((0 - (state & 1)) & taps)
  * Zero is an absorbing state — callers must seed with a non-zero value.
  */
+template<std::unsigned_integral T, T Taps>
+[[nodiscard]] FORCE_INLINE T lfsr_step(T state) noexcept {
+    return T((state >> 1) ^ ((T{0} - (state & T{1})) & Taps));
+}
 
 /* 16-bit Galois LFSR — maximal period 65535. Taps: 0xB400 (poly x^16+x^14+x^13+x^11+1). */
 [[nodiscard]] FORCE_INLINE uint16_t lfsr16_step(uint16_t state) noexcept {
-    return uint16_t((state >> 1) ^ ((0u - (state & 1u)) & 0xB400u));
+    return lfsr_step<uint16_t, 0xB400>(state);
 }
 
 /* 8-bit Galois LFSR — maximal period 255. Taps: 0xB4 (poly x^8+x^6+x^5+x^4+1). */
 [[nodiscard]] FORCE_INLINE uint8_t lfsr8_step(uint8_t state) noexcept {
-    return uint8_t((state >> 1) ^ ((0u - (state & 1u)) & 0xB4u));
+    return lfsr_step<uint8_t, 0xB4>(state);
 }
-
-#else /* C fallback — uint8_t only */
-#if defined(__riscv) && __riscv_xlen >= 32 && defined(__riscv_zbt)
-static inline uint8_t bitmix(uint8_t a, uint8_t b, uint8_t mask) {
-    uint32_t r;
-    __asm__("cmix %0, %1, %2, %3" : "=r"(r) : "r"(mask), "r"(a), "r"(b));
-    return (uint8_t)r;
-}
-#else
-static inline uint8_t bitmix(uint8_t a, uint8_t b, uint8_t mask) {
-    return b ^ ((a ^ b) & mask);
-}
-#endif
-#endif /* __cplusplus */
 
 /* ========================================================================== */
 /* FEATURE FLAGS — AUTOMATIC IMPLICATIONS                                     */
