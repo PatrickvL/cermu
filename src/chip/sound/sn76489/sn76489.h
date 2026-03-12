@@ -44,6 +44,7 @@
 
 #include "../sound_chip_base.h"
 #include "../../../utils/ring_buffer.hpp"
+#include "../../../core/cermu.h"
 #include <cstdint>
 #include <cstring>
 
@@ -193,7 +194,7 @@ public:
             if (noise_reg_ & 0x04) {
                 // White noise: XOR of tapped bits
                 uint16_t tapped = noise_shift_ & traits.noise_taps;
-                feedback = __builtin_parity(tapped);
+                feedback = cermu_parity(tapped);
             } else {
                 // Periodic noise: bit 0 only
                 feedback = noise_shift_ & 1;

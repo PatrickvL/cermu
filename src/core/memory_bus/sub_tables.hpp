@@ -30,6 +30,8 @@
 
 #include "packing.hpp"
 
+#include "../cermu.h"          // FORCE_INLINE
+
 #include <array>
 #include <cassert>
 #include <type_traits>
@@ -98,7 +100,7 @@ struct IndexedSubTable {
 
     // ── Read-side lookup ────────────────────────────────────────────────────
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     ChipId read_chip(Addr addr) const noexcept {
         const size_t idx = (size_t(addr) >> bit_shift) & entry_mask;
         if constexpr (PT::kPackedRW)
@@ -109,7 +111,7 @@ struct IndexedSubTable {
 
     // ── Write-side lookup ───────────────────────────────────────────────────
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     WriteChipId write_chip(Addr addr) const noexcept {
         const size_t idx = (size_t(addr) >> bit_shift) & entry_mask;
         if constexpr (PT::kPackedRW)

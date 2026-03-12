@@ -19,6 +19,8 @@
 
 #include "packing.hpp"
 
+#include "../cermu.h"          // FORCE_INLINE
+
 #include <array>
 #include <cstring>
 #include <type_traits>
@@ -66,20 +68,20 @@ struct ViewerState {
     }
 
     // Return the chip id selected for a read from the given page.
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     ChipId read_chip(size_t page) const noexcept {
         if constexpr (PT::kPackedRW) return ChipId(chip_table_[page] & PT::kReadMask);
         else                         return ChipId(chip_table_[page]);
     }
 
     // Return the chip id selected for a write to the given page.
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     WriteChipId write_chip(size_t page) const noexcept {
         if constexpr (PT::kPackedRW) return WriteChipId(chip_table_[page] >> PT::kWriteShift);
         else                         return WriteChipId(write_chip_table_[page]);
     }
 
-    __attribute__((always_inline)) inline
+    FORCE_INLINE
     void set_read_chip(size_t page, ChipId id) noexcept {
         if constexpr (PT::kPackedRW) {
             auto& s = chip_table_[page];
@@ -87,7 +89,7 @@ struct ViewerState {
         } else { chip_table_[page] = PageSlot(id); }
     }
 
-    __attribute__((always_inline)) inline
+    FORCE_INLINE
     void set_write_chip(size_t page, WriteChipId id) noexcept {
         if constexpr (PT::kPackedRW) {
             auto& s = chip_table_[page];
@@ -96,7 +98,7 @@ struct ViewerState {
         } else { write_chip_table_[page] = BlockId(id); }
     }
 
-    __attribute__((always_inline)) inline
+    FORCE_INLINE
     void set_chip(size_t page, ChipId rd, WriteChipId wr) noexcept {
         if constexpr (PT::kPackedRW)
             chip_table_[page] = PageSlot(PackedId(rd) | (PackedId(wr) << PT::kWriteShift));

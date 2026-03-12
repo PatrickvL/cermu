@@ -1,4 +1,5 @@
 #include "bbc_micro_system.h"
+#include "../../core/cermu.h"
 #include "../../core/storage/rom_loader.h"
 #include "../../core/config/path_discovery.h"
 #include "../../core/system_registry.h"
@@ -77,15 +78,15 @@ static SystemProbeResult bbc_probe_file(
     const char* ext = filepath ? strrchr(filepath, '.') : nullptr;
     if (ext) {
         // BBC Micro disc image formats
-        if (strcasecmp(ext, ".ssd") == 0 || strcasecmp(ext, ".dsd") == 0) {
+        if (cermu_strcasecmp(ext, ".ssd") == 0 || cermu_strcasecmp(ext, ".dsd") == 0) {
             result.confidence = 0.8f;
         }
         // UEF tape format
-        else if (strcasecmp(ext, ".uef") == 0) {
+        else if (cermu_strcasecmp(ext, ".uef") == 0) {
             result.confidence = 0.8f;
         }
         // Raw binary (low confidence)
-        else if (strcasecmp(ext, ".bin") == 0 || strcasecmp(ext, ".rom") == 0) {
+        else if (cermu_strcasecmp(ext, ".bin") == 0 || cermu_strcasecmp(ext, ".rom") == 0) {
             // Check for 16K sideways ROM size
             if (size == 16384) {
                 result.confidence = 0.3f;
@@ -330,7 +331,7 @@ void BBCMicroSystem::tick() {
     // ---- Memory / I/O service ----
     {
         uint16_t addr = BUS_GET_ADDR(s);
-        if (__builtin_expect(addr >= bbc_constants::FRED_START && addr <= bbc_constants::SHEILA_END, 0)) {
+        if (unlikely(addr >= bbc_constants::FRED_START && addr <= bbc_constants::SHEILA_END)) {
             s = sheila_tick(s);     // FRED/JIM/SHEILA I/O ($FC00-$FEFF)
         } else {
             s = bus_.tick(0, s);    // Memory dispatch via MemoryBus

@@ -5,6 +5,7 @@
 #include "format_handler.h"
 #include "format_registry.h"
 #include "vfs/vfs.h"
+#include "../cermu.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -98,7 +99,7 @@ static uint8_t* format_try_container_extract(const char* filepath, size_t* out_s
 
     int match_index = -1;
     for (int i = 0; i < count; ++i) {
-        if (strcasecmp(entries[i].display_name, entry_name.c_str()) == 0) {
+        if (cermu_strcasecmp(entries[i].display_name, entry_name.c_str()) == 0) {
             match_index = entries[i].index;
             break;
         }
