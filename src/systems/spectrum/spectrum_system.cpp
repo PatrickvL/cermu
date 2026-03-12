@@ -25,6 +25,8 @@
 
 #include "spectrum_system.h"
 #include "../../core/system_registry.h"
+#include "../../core/storage/rom_loader.h"
+#include "../../core/config/path_discovery.h"
 #include <cstring>
 #include <cstdio>
 
@@ -423,10 +425,71 @@ void SpectrumSystem<V>::set_framebuffer(uint32_t* buffer, int width, int height)
 
 template<SpectrumVariant V>
 void SpectrumSystem<V>::update_framebuffer() {
-    // TODO: Render Spectrum display from screen RAM + attributes
-    // Border → ula_.border_color()
-    // Bitmap at $4000-$57FF (interleaved: lines 0,8,16..., 1,9,17..., etc.)
-    // Attributes at $5800-$5AFF (32×24 cells, INK/PAPER/BRIGHT/FLASH)
+    const uint32_t border = spectrum_ula::PALETTE[ula_.border_color()];
+    const bool flash = ula_.flash_state();
+
+    // Border: top (48 lines), bottom (56 lines), left/right (48 px each)
+    constexpr int W  = spectrum_constants::TOTAL_WIDTH;    // 352
+    constexpr int BL = 48;   // border left
+    constexpr int BT = 48;   // border top
+    constexpr int SW = 256;  // screen width
+    constexpr int SH = 192;  // screen height
+
+    // Fill top border
+    for (int i = 0; i < BT * W; ++i)
+        framebuffer_[i] = border;
+
+    // Fill bottom border
+    for (int i = (BT + SH) * W; i < spectrum_constants::TOTAL_HEIGHT * W; ++i)
+        framebuffer_[i] = border;
+
+    // Render screen area (192 lines)
+    const uint8_t* bitmap = screen_ram_ptr_;           // $4000
+    const uint8_t* attrs  = screen_ram_ptr_ + 0x1800;  // $5800
+
+    for (int y = 0; y < SH; ++y) {
+        uint32_t* line = &framebuffer_[(BT + y) * W];
+
+        // Left border
+        for (int i = 0; i < BL; ++i)
+            line[i] = border;
+
+        // Bitmap addressing: the Spectrum interleaves scanlines within each
+        // character row third.  Address bits: [Y7 Y6] [Y2 Y1 Y0] [Y5 Y4 Y3] [X4..X0]
+        uint16_t bmp_offset = ((y & 0xC0) << 5) | ((y & 0x07) << 8) | ((y & 0x38) << 2);
+
+        // Attribute addressing: one byte per 8×8 cell
+        uint16_t attr_row = ((y >> 3) << 5);  // (y / 8) * 32
+
+        for (int col = 0; col < 32; ++col) {
+            uint8_t byte = bitmap[bmp_offset + col];
+            uint8_t attr = attrs[attr_row + col];
+
+            uint8_t ink   = attr & 0x07;
+            uint8_t paper = (attr >> 3) & 0x07;
+            bool    bright = (attr & 0x40) != 0;
+            bool    fl     = (attr & 0x80) != 0;
+
+            // BRIGHT shifts colors into the upper 8 entries of the palette
+            if (bright) { ink += 8; paper += 8; }
+
+            // FLASH swaps ink and paper when flash_state_ is active
+            if (fl && flash) { uint8_t tmp = ink; ink = paper; paper = tmp; }
+
+            uint32_t ink_rgba   = spectrum_ula::PALETTE[ink];
+            uint32_t paper_rgba = spectrum_ula::PALETTE[paper];
+
+            // Render 8 pixels (MSB first)
+            uint32_t* px = &line[BL + col * 8];
+            for (int bit = 7; bit >= 0; --bit) {
+                *px++ = (byte & (1 << bit)) ? ink_rgba : paper_rgba;
+            }
+        }
+
+        // Right border
+        for (int i = BL + SW; i < W; ++i)
+            line[i] = border;
+    }
 }
 
 // ============================================================================
@@ -456,8 +519,65 @@ void SpectrumSystem<V>::set_audio_sample_rate(int sample_rate_hz) {
 
 template<SpectrumVariant V>
 void SpectrumSystem<V>::handle_keyboard_event(SDL_Keycode key, bool pressed) {
-    // TODO: Map SDL keycodes to Spectrum keyboard matrix half-rows
-    (void)key; (void)pressed;
+    // ZX Spectrum keyboard matrix: 8 half-rows × 5 keys, active-low.
+    //
+    // Row 0 (port $FEFE): CAPS SHIFT, Z, X, C, V       (bits 0-4)
+    // Row 1 (port $FDFE): A, S, D, F, G
+    // Row 2 (port $FBFE): Q, W, E, R, T
+    // Row 3 (port $F7FE): 1, 2, 3, 4, 5
+    // Row 4 (port $EFFE): 0, 9, 8, 7, 6
+    // Row 5 (port $DFFE): P, O, I, U, Y
+    // Row 6 (port $BFFE): ENTER, L, K, J, H
+    // Row 7 (port $7FFE): SPACE, SYMBOL SHIFT, M, N, B
+
+    struct KeyMapping { SDL_Keycode sdl_key; int row; int bit; };
+    static constexpr KeyMapping mappings[] = {
+        // Row 0: CAPS SHIFT, Z, X, C, V
+        { SDLK_LSHIFT,  0, 0 }, { SDLK_RSHIFT,  0, 0 },
+        { SDLK_z,        0, 1 }, { SDLK_x,        0, 2 },
+        { SDLK_c,        0, 3 }, { SDLK_v,        0, 4 },
+        // Row 1: A, S, D, F, G
+        { SDLK_a,        1, 0 }, { SDLK_s,        1, 1 },
+        { SDLK_d,        1, 2 }, { SDLK_f,        1, 3 },
+        { SDLK_g,        1, 4 },
+        // Row 2: Q, W, E, R, T
+        { SDLK_q,        2, 0 }, { SDLK_w,        2, 1 },
+        { SDLK_e,        2, 2 }, { SDLK_r,        2, 3 },
+        { SDLK_t,        2, 4 },
+        // Row 3: 1, 2, 3, 4, 5
+        { SDLK_1,        3, 0 }, { SDLK_2,        3, 1 },
+        { SDLK_3,        3, 2 }, { SDLK_4,        3, 3 },
+        { SDLK_5,        3, 4 },
+        // Row 4: 0, 9, 8, 7, 6
+        { SDLK_0,        4, 0 }, { SDLK_9,        4, 1 },
+        { SDLK_8,        4, 2 }, { SDLK_7,        4, 3 },
+        { SDLK_6,        4, 4 },
+        // Row 5: P, O, I, U, Y
+        { SDLK_p,        5, 0 }, { SDLK_o,        5, 1 },
+        { SDLK_i,        5, 2 }, { SDLK_u,        5, 3 },
+        { SDLK_y,        5, 4 },
+        // Row 6: ENTER, L, K, J, H
+        { SDLK_RETURN,  6, 0 }, { SDLK_l,        6, 1 },
+        { SDLK_k,        6, 2 }, { SDLK_j,        6, 3 },
+        { SDLK_h,        6, 4 },
+        // Row 7: SPACE, SYMBOL SHIFT, M, N, B
+        { SDLK_SPACE,   7, 0 }, { SDLK_LCTRL,   7, 1 }, { SDLK_RCTRL, 7, 1 },
+        { SDLK_m,        7, 2 }, { SDLK_n,        7, 3 },
+        { SDLK_b,        7, 4 },
+        // Convenience: Backspace → CAPS SHIFT + 0 (DELETE)
+        { SDLK_BACKSPACE, 0, 0 }, { SDLK_BACKSPACE, 4, 0 },
+    };
+
+    for (const auto& m : mappings) {
+        if (m.sdl_key == key) {
+            uint8_t row_state = ula_.read_keyboard_row(m.row);
+            if (pressed)
+                row_state &= ~(1 << m.bit);  // Active-low: clear bit
+            else
+                row_state |= (1 << m.bit);   // Release: set bit
+            ula_.set_keyboard_row(m.row, row_state);
+        }
+    }
 }
 
 // ============================================================================
@@ -481,8 +601,48 @@ void SpectrumSystem<V>::set_speed_multiplier(float multiplier) {
 
 template<SpectrumVariant V>
 bool SpectrumSystem<V>::load_roms() {
-    // TODO: Load ROM from data/spectrum/ directory
-    return false;
+    char rom_root[1024];
+    if (!system_config_discover_rom_root(Traits::data_folder, rom_root, sizeof(rom_root))) {
+        printf("Spectrum: Could not find ROM root folder\n");
+        return false;
+    }
+
+    auto* rom = bus_mem_.template chip_as<ROMChip>(spectrum_chips::kRomSlot);
+    if (!rom) {
+        printf("Spectrum: ROM chip not created\n");
+        return false;
+    }
+
+    if constexpr (V == SpectrumVariant::ZX48K) {
+        const char* filenames[] = {
+            "spectrum48k.rom", "48.rom", "spectrum.rom", "zx48.rom", nullptr
+        };
+        bool ok = rom_loader_load_from_root(
+            rom_root, filenames,
+            rom->size_bytes(), rom->data(), rom->size_bytes()
+        );
+        if (!ok) {
+            printf("Spectrum 48K: Failed to load ROM\n");
+            return false;
+        }
+        printf("Spectrum 48K: ROM loaded (%zu bytes)\n", rom->size_bytes());
+    } else {
+        // 128K: two 16KB ROMs (ROM 0 = 128K editor, ROM 1 = 48K BASIC)
+        const char* filenames[] = {
+            "spectrum128k.rom", "128.rom", "128-0.rom", nullptr
+        };
+        bool ok = rom_loader_load_from_root(
+            rom_root, filenames,
+            rom->size_bytes(), rom->data(), rom->size_bytes()
+        );
+        if (!ok) {
+            printf("Spectrum 128K: Failed to load ROM\n");
+            return false;
+        }
+        printf("Spectrum 128K: ROM loaded (%zu bytes)\n", rom->size_bytes());
+    }
+
+    return true;
 }
 
 // ============================================================================
