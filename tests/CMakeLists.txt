@@ -530,3 +530,62 @@ else()
     message(STATUS "  APU Comparison Runner: SKIPPED (Nes_Snd_Emu not found)")
     message(STATUS "    To enable: place Blargg's nes_snd_emu in external/nes_snd_emu/")
 endif()
+
+# =============================================================================
+# Z80 SingleStepTests Processor Tests Runner
+# =============================================================================
+# Runs the JSON-based Z80 single-step tests from:
+#   https://github.com/SingleStepTests/z80
+# =============================================================================
+
+set(Z80_DIR ${CPU_DIR}/z80)
+
+set(Z80_GUI_STUBS
+    ${Z80_DIR}/z80_gui.cpp
+)
+
+add_executable(z80_processor_tests_runner
+    z80_processor_tests_runner.cpp
+    ${Z80_DIR}/z80_decoder.cpp
+    ${Z80_GUI_STUBS}
+    ${CORE_DIR}/chip.cpp
+    ${CORE_DIR}/chip_layout.cpp
+    ${CORE_DIR}/pin_labels.cpp
+    ${CORE_DIR}/ioport.cpp
+)
+target_include_directories(z80_processor_tests_runner PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chip/cpu/z80
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+target_compile_definitions(z80_processor_tests_runner PRIVATE CERMU_IMPL PROCESSOR_TESTS)
+set_property(TARGET z80_processor_tests_runner PROPERTY CXX_STANDARD 20)
+set_property(TARGET z80_processor_tests_runner PROPERTY CXX_STANDARD_REQUIRED ON)
+if(MSVC)
+    target_compile_options(z80_processor_tests_runner PRIVATE /W4)
+else()
+    target_compile_options(z80_processor_tests_runner PRIVATE -Wall -Wextra)
+endif()
+target_link_libraries(z80_processor_tests_runner json_parser)
+if(NOT WIN32 AND NOT MSVC)
+    target_link_libraries(z80_processor_tests_runner m)
+endif()
+
+# Z80 test CTest integration
+add_test(NAME z80_processor_tests
+    COMMAND z80_processor_tests_runner ${CMAKE_CURRENT_SOURCE_DIR}/z80_tests/v1/
+)
+set_tests_properties(z80_processor_tests PROPERTIES
+    TIMEOUT 600
+    PASS_REGULAR_EXPRESSION "ALL TESTS PASSED"
+)
+
+# Custom target for running Z80 tests
+add_custom_target(run_z80_tests
+    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -R z80 --verbose
+    DEPENDS z80_processor_tests_runner
+    COMMENT "Running Z80 SingleStepTests validation"
+)
+
+message(STATUS "  Z80 Processor Tests Runner: Built")
