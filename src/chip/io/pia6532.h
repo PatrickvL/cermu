@@ -163,7 +163,7 @@ private:
 #endif
 
     static constexpr const char* divider_names_[] = {
-        "TIM1T (\xC3\xB71)", "TIM8T (\xC3\xB78)",
-        "TIM64T (\xC3\xB764)", "TIM1024T (\xC3\xB71024)"
+        "TIM1T (\xC3\xB7" "1)", "TIM8T (\xC3\xB7" "8)",
+        "TIM64T (\xC3\xB7" "64)", "TIM1024T (\xC3\xB7" "1024)"
     };
 };
