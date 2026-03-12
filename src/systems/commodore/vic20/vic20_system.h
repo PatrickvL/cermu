@@ -49,7 +49,7 @@
  */
 
 // ============================================================================
-// VIC-20 chip manifest — declarative memory layout
+// VIC-20 chip manifest — declarative system chip list
 // ============================================================================
 //
 // Memory map (CPU view):
@@ -60,7 +60,7 @@
 //   $4000-$5FFF  Expansion block 3 (8KB) or unmapped
 //   $6000-$7FFF  Expansion block 5 (8KB) or unmapped
 //   $8000-$8FFF  Character ROM (4KB, read-only)
-//   $9000-$9FFF  I/O (VIC, VIAs, Color RAM — handled manually, not in manifest)
+//   $9000-$9FFF  I/O (VIC, VIAs, Color RAM — handled manually in io_tick())
 //   $A000-$BFFF  Cartridge ROM or unmapped (loaded into RAM buffer, write-protected)
 //   $C000-$DFFF  BASIC ROM (8KB, read-only)
 //   $E000-$FFFF  KERNAL ROM (8KB, read-only)
@@ -68,11 +68,29 @@
 // Expansion mapping is controlled by page-pointer reconfiguration.
 // Cartridge ROM is loaded into the RAM buffer and write-protected via page pointers.
 //
+// Non-bus chips (CPU, VIC, VIAs) are declared with size_bytes=0 — they are
+// factory-created by BusMemory::create_chips() but not mapped into the bus.
+// Conditional chips use condition tags evaluated at create_chips() time.
+//
+
+// Condition tags for VIC-20 configuration-dependent chips.
+namespace vic20_cond {
+    inline constexpr uint16_t kPAL  = 1;   // PAL region (MOS 6561)
+    inline constexpr uint16_t kNTSC = 2;   // NTSC region (MOS 6560)
+}
+
 inline constexpr auto kVIC20Chips = make_chip_manifest(
-    Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
-    Slot<ROMChip>{0x8000,  4096, 0, "CHARROM"},
-    Slot<ROMChip>{0xC000,  8192, 0, "BASIC ROM"},
-    Slot<ROMChip>{0xE000,  8192, 0, "KERNAL ROM"}
+    // ── Bus-mapped memory chips ──────────────────────────────────────────
+    Slot<RAMChip>   {0x0000, 65536, 0, "RAM"},
+    Slot<ROMChip>   {0x8000,  4096, 0, "CHARROM"},
+    Slot<ROMChip>   {0xC000,  8192, 0, "BASIC ROM"},
+    Slot<ROMChip>   {0xE000,  8192, 0, "KERNAL ROM"},
+    // ── Non-bus chips (factory-created, not mapped) ──────────────────────
+    Slot<MOS6502>   {0, 0, 0, "MOS 6502"},
+    Slot<mos6561_t> {0, 0, 0, "MOS 6561 (PAL)",  vic20_cond::kPAL},
+    Slot<mos6560_t> {0, 0, 0, "MOS 6560 (NTSC)", vic20_cond::kNTSC},
+    Slot<mos6522_t> {0, 0, 0, "VIA 1"},
+    Slot<mos6522_t> {0, 0, 0, "VIA 2"}
 );
 
 namespace vic20_slot {
@@ -80,6 +98,11 @@ namespace vic20_slot {
     inline constexpr size_t kCharRom   = 1;
     inline constexpr size_t kBasicRom  = 2;
     inline constexpr size_t kKernalRom = 3;
+    inline constexpr size_t kCpu       = 4;
+    inline constexpr size_t kVicPal    = 5;
+    inline constexpr size_t kVicNtsc   = 6;
+    inline constexpr size_t kVia1      = 7;
+    inline constexpr size_t kVia2      = 8;
 }
 
 struct VIC20BusTraits {
@@ -131,17 +154,15 @@ private:
     Bus mem_bus_;
     Mem bus_mem_{kVIC20Chips};
 
-    // Convenience chip pointers (owned by bus_mem_, accessed via chip_as)
+    // Convenience chip pointers (all owned by bus_mem_, accessed via chip_as/first_chip)
     RAMChip* ram_         = nullptr;  // 64 KB unified buffer
     ROMChip* charrom_     = nullptr;  // Character ROM $8000-$8FFF (4 KB)
     ROMChip* basic_rom_   = nullptr;  // BASIC ROM $C000-$DFFF (8 KB)
     ROMChip* kernal_rom_  = nullptr;  // KERNAL ROM $E000-$FFFF (8 KB)
-    
-    // Chip instances (properly typed)
-    MOS6502* cpu_ = nullptr;         // MOS6502 CPU instance
-    vic_base_t* vic_;                // VIC chip: MOS6561 (PAL) or MOS6560 (NTSC)
-    mos6522_t* via1_;                // MOS6522 VIA 1 - keyboard, joystick
-    mos6522_t* via2_;                // MOS6522 VIA 2 - user port, serial
+    MOS6502* cpu_         = nullptr;  // MOS 6502 CPU
+    vic_base_t* vic_      = nullptr;  // VIC chip: MOS 6561 (PAL) or MOS 6560 (NTSC)
+    mos6522_t* via1_      = nullptr;  // MOS 6522 VIA 1 - keyboard, joystick
+    mos6522_t* via2_      = nullptr;  // MOS 6522 VIA 2 - user port, serial
     
     // System state
     uint8_t expansion_flags_;        // Expansion RAM configuration
