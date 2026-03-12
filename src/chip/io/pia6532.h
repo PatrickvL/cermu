@@ -53,6 +53,33 @@ struct pia6532_t : public IoChipBase {
 #endif
     }
 
+    // --- ChipBase bus interface (MMIO) ---
+    //
+    // Dispatches to RAM or I/O based on the RS (Register Select) signal.
+    // On the real 6532, RS selects between RAM (RS=0) and I/O+Timer (RS=1).
+    // The system wires a specific address line to RS — default: A9 (Atari 2600).
+    //
+    uint16_t rs_mask = 0x0200;  // Address bit wired to RS pin (A9 for Atari 2600)
+
+    bool has_mmio() const override { return true; }
+    bus_state_t on_bus_read(bus_state_t bus) noexcept override {
+        uint16_t addr = BUS_GET_ADDR(bus);
+        if (addr & rs_mask)
+            BUS_SET_DATA(bus, read_io(addr));
+        else
+            BUS_SET_DATA(bus, read_ram(addr & 0x7F));
+        return bus;
+    }
+    bus_state_t on_bus_write(bus_state_t bus) noexcept override {
+        uint16_t addr = BUS_GET_ADDR(bus);
+        uint8_t data = BUS_GET_DATA(bus);
+        if (addr & rs_mask)
+            write_io(addr, data);
+        else
+            write_ram(addr & 0x7F, data);
+        return bus;
+    }
+
     // --- ChipBase GUI interface ---
 #ifdef CERMU_HAS_GUI
     ChipLayout* create_chip_layout() const override;

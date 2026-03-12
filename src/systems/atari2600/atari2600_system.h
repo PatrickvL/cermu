@@ -16,6 +16,7 @@
  */
 
 #include "../../core/emulated_system.h"
+#include "../../core/chip_manifest.hpp"
 #include "../../chip/cpu/fam65xx/mos6507.h"
 #include "../../chip/video/tia/tia.h"
 #include "../../chip/io/pia6532.h"
@@ -27,6 +28,73 @@
 
 // Atari 2600 default bus state — derived from MOS6507 CPU.
 #define ATARI2600_BUS_DEFAULT_STATE (MOS6507::default_bus_state())
+
+
+// =============================================================================
+// Cartridge MMIO adapter — wraps the runtime-polymorphic A2600Mapper as a
+// ChipBase so it can participate in MemoryBus MMIO dispatch for the $1000-$1FFF
+// cartridge address window.  The actual mapper is set after load_file().
+// =============================================================================
+
+class Atari2600CartChip : public ChipBase {
+public:
+    Atari2600CartChip() : ChipBase(ChipInfo{"Cartridge", "Various"}) {}
+
+    void set_mapper(A2600Mapper* m) { mapper_ = m; }
+
+    bool has_mmio() const override { return true; }
+    bus_state_t on_bus_read(bus_state_t bus) noexcept override {
+        if (mapper_)
+            BUS_SET_DATA(bus, mapper_->read(BUS_GET_ADDR(bus) & 0x0FFF));
+        return bus;
+    }
+    bus_state_t on_bus_write(bus_state_t bus) noexcept override {
+        if (mapper_)
+            mapper_->write(BUS_GET_ADDR(bus) & 0x0FFF, BUS_GET_DATA(bus));
+        return bus;
+    }
+
+private:
+    A2600Mapper* mapper_ = nullptr;  // non-owning; system owns the mapper
+};
+
+
+// =============================================================================
+// Atari 2600 chip manifest — declarative memory layout
+// =============================================================================
+//
+// 13-bit address bus ($0000-$1FFF), 256-byte pages (32 pages).
+// All chips are MMIO-only — no buffer-backed RAM or ROM in the manifest.
+//
+// Address decode (from the real hardware):
+//   A12=0, A7=0          → TIA registers (mirrors every 128 bytes)
+//   A12=0, A7=1          → RIOT (A9 selects RAM vs I/O inside the chip)
+//   A12=1                → Cartridge ROM (through bank-switching mapper)
+//
+// Slot 0: TIA  — MMIO-only, sub-page decode via A7 (addr_mask=0x0080, match A7=0)
+// Slot 1: RIOT — MMIO-only, sub-page decode via A7 (addr_mask=0x0080, match A7=1)
+// Slot 2: Cart — MMIO-only, full-page, wraps A2600Mapper
+//
+// After apply():
+//   - Page 0 gets a MaskedSubTable with two regions (TIA + RIOT)
+//   - Pages 1-15 are manually mirrored to the same sub-table
+//   - Page 16 gets full-page MMIO for cartridge
+//   - Pages 17-31 are manually mirrored to the same cart MMIO handler
+//
+inline constexpr auto kAtari2600Chips = make_chip_manifest(
+    Slot<tia_t>             {0x0000, 0, 0x0080},
+    Slot<pia6532_t>         {0x0080, 0, 0x0080},
+    Slot<Atari2600CartChip> {0x1000, 0}
+);
+
+// BusSpec auto-derived from the manifest (13-bit address, 256-byte pages)
+using Atari2600BusSpec = ManifestBusSpec<kAtari2600Chips, 13, 8>;
+
+namespace atari2600_chips {
+    inline constexpr size_t kTiaSlot  = 0;
+    inline constexpr size_t kRiotSlot = 1;
+    inline constexpr size_t kCartSlot = 2;
+}
 
 class Atari2600System : public EmulatedSystem {
 public:
@@ -76,12 +144,13 @@ public:
 
 private:
     // ========================================================================
-    // CHIPS
+    // CHIPS — owned by bus_mem_, borrowed here for direct access
     // ========================================================================
 
-    MOS6507*    cpu_ = nullptr;     // MOS 6507 CPU (6502, 13-bit address bus)
-    tia_t       tia_;               // TIA — Television Interface Adapter
-    pia6532_t   riot_;              // PIA 6532 RIOT — RAM, I/O, Timer
+    MOS6507*           cpu_       = nullptr;  // MOS 6507 CPU (6502, 13-bit address bus)
+    tia_t*             tia_       = nullptr;  // TIA — Television Interface Adapter
+    pia6532_t*         riot_      = nullptr;  // PIA 6532 RIOT — RAM, I/O, Timer
+    Atari2600CartChip* cart_chip_ = nullptr;  // Cart MMIO adapter (wraps mapper)
 
     // ========================================================================
     // CARTRIDGE ROM
@@ -91,6 +160,16 @@ private:
     uint32_t cart_size_ = 0;                // Actual ROM size in bytes
     std::unique_ptr<A2600Mapper> mapper_;   // Bank-switching mapper
     bool mapper_snoop_ = false;             // Cached: mapper needs bus_snoop() calls
+
+    // ========================================================================
+    // MEMORY BUS — declarative setup via chip manifest + BusMemory::apply()
+    // ========================================================================
+
+    using Bus = MemoryBus<Atari2600BusSpec>;
+    using Mem = BusMemory<Atari2600BusSpec>;
+
+    Bus bus_;
+    Mem bus_mem_{kAtari2600Chips};
 
     // ========================================================================
     // SYSTEM STATE
@@ -122,7 +201,9 @@ private:
     // ========================================================================
 
     void tick_cpu();
-    bus_state_t mem_tick(bus_state_t s);
+
+    // Configure page tables — mirrors non-cart pages and cart pages
+    void configure_bus_memory_map();
 
     // Connector port setup
     void setup_connector_ports();
