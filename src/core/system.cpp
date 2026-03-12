@@ -1,7 +1,7 @@
-#include "system.h"
-#include "chip.h"
-#include "formats/format_handler.h"
-#include "vfs/vfs.h"
+#include "core/system.h"
+#include "core/chip.h"
+#include "core/formats/format_handler.h"
+#include "core/vfs/vfs.h"
 #include <cstring>
 #include <cctype>
 #include <cmath>
@@ -14,11 +14,11 @@
 #include <SDL_joystick.h>
 
 // stb_image_write header (implementation lives in stb_impl.cpp)
-#include "../../external/stb_image_write.h"
+#include <stb_image_write.h>
 
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
-#include "../gui/connector_icons.h"
+#include "gui/connector_icons.h"
 #endif
 
 // ============================================================================

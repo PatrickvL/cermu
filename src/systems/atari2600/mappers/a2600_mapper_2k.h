@@ -6,7 +6,7 @@
  * Games: Combat, Air-Sea Battle, many early titles.
  */
 
-#include "a2600_mapper.h"
+#include "systems/atari2600/mappers/a2600_mapper.h"
 
 struct A2600Mapper2K : public A2600Mapper {
     uint8_t read(uint16_t offset) override {

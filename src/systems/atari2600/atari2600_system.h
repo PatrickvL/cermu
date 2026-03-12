@@ -15,13 +15,13 @@
  * Display: 160×~192 visible pixels, 128-color NTSC palette.
  */
 
-#include "../../core/system.h"
-#include "../../core/board.hpp"
-#include "../../chip/cpu/fam65xx/mos6507.h"
-#include "../../chip/video/tia/tia.h"
-#include "../../chip/io/pia6532.h"
-#include "mappers/a2600_mapper.h"
-#include "atari2600_constants.h"
+#include "core/system.h"
+#include "core/board.hpp"
+#include "chip/cpu/fam65xx/mos6507.h"
+#include "chip/video/tia/tia.h"
+#include "chip/io/pia6532.h"
+#include "systems/atari2600/mappers/a2600_mapper.h"
+#include "systems/atari2600/atari2600_constants.h"
 #include <cstdint>
 #include <memory>
 #include <vector>

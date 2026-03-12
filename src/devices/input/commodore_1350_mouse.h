@@ -14,7 +14,7 @@
  * proportional tracking that the 1351 provides.
  */
 
-#include "../../core/peripherals/control_port_device.h"
+#include "core/peripherals/control_port_device.h"
 
 class Commodore1350Mouse : public ControlPortInputDevice {
 public:

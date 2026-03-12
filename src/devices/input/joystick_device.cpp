@@ -2,8 +2,8 @@
  * joystick_device.cpp - Digital Joystick Peripheral Implementation
  */
 
-#include "joystick_device.h"
-#include "../../core/device_registry.h"
+#include "devices/input/joystick_device.h"
+#include "core/device_registry.h"
 #include <cstdio>
 #include <SDL_events.h>
 #include <SDL_gamecontroller.h>

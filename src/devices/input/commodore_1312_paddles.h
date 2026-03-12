@@ -7,7 +7,7 @@
  * and a fire button.
  */
 
-#include "../../core/peripherals/pot_input_device.h"
+#include "core/peripherals/pot_input_device.h"
 #include <algorithm>
 
 class Commodore1312Paddles : public PotInputDevice {

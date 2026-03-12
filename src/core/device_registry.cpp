@@ -2,7 +2,7 @@
  * device_registry.cpp - Peripheral Device Registry Implementation
  */
 
-#include "device_registry.h"
+#include "core/device_registry.h"
 #include <cstdio>
 #include <cstring>
 

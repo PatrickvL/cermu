@@ -7,7 +7,7 @@
 
 #pragma once
 
-#include "component_info.h"
+#include "core/component_info.h"
 #include <cstdint>
 #include <string>
 

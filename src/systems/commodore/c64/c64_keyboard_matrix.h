@@ -1,6 +1,6 @@
 #pragma once
 
-#include "commodore_keyboard.h"
+#include "chip/input/commodore_keyboard.h"
 
 // C64 Keyboard Matrix — 8×8
 // CIA Port A ($DC00) = column select (output)

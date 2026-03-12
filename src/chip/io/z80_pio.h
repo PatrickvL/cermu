@@ -25,8 +25,8 @@
  * 40-pin DIP package.
  */
 
-#include "io_chip_base.h"
-#include "../../core/system_lines.h"
+#include "chip/io/io_chip_base.h"
+#include "core/system_lines.h"
 #include <cstdint>
 #include <cstring>
 

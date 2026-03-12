@@ -1,7 +1,7 @@
-#include "chip8_system.h"
-#include "chip8_constants.h"
-#include "../../core/chip.h"
-#include "../../core/vfs/vfs.h"
+#include "systems/chip8/chip8_system.h"
+#include "systems/chip8/chip8_constants.h"
+#include "core/chip.h"
+#include "core/vfs/vfs.h"
 #include <fstream>
 #include <cstring>
 #include <cstdio>
@@ -11,7 +11,7 @@
 // SDL is only needed for keyboard mapping in GUI builds
 #ifdef CERMU_HAS_GUI
 #include <SDL.h>
-#include "imgui.h"
+#include <imgui.h>
 #endif
 
 // ============================================================================

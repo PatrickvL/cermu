@@ -37,7 +37,7 @@
 //   # comment                    # Comments (also inline after commands)
 // =============================================================================
 
-#include "../chip/sound/mos6581.h"
+#include "chip/sound/mos6581.h"
 #include <cstdint>
 #include <cstdio>
 #include <cstring>

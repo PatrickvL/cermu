@@ -1,4 +1,4 @@
-#include "vic20_keyboard_matrix.h"
+#include "systems/commodore/vic20/vic20_keyboard_matrix.h"
 
 // ============================================================================
 // VIC-20 Keyboard Matrix — 8×8 (EmuKey-based)

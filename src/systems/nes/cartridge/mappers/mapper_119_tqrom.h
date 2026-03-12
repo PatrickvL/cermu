@@ -13,7 +13,7 @@
  *   D1-D0: CHR-RAM bank (when D6 = 1), addresses 8KB CHR-RAM as 1KB pages
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 #include <cstring>
 
 namespace nes_system {

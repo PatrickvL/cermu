@@ -21,9 +21,9 @@
 // safe because SID tunes never use tape I/O.
 // =============================================================================
 
-#include "c64_system.h"
-#include "../../core/formats/sid_format.h"
-#include "../../core/formats/format_handler.h"
+#include "systems/commodore/c64/c64_system.h"
+#include "core/formats/sid_format.h"
+#include "core/formats/format_handler.h"
 
 /**
  * Write the SID header info page to C64 screen RAM ($0400) and colour RAM.

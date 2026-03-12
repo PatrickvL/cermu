@@ -12,8 +12,8 @@
  *   D7-D4: 4KB CHR bank at $1000 (only low bits used, high bit often ignored)
  */
 
-#include "../nes_mapper.h"
-#include "mapper_helpers.h"
+#include "systems/nes/cartridge/nes_mapper.h"
+#include "systems/nes/cartridge/mappers/mapper_helpers.h"
 
 namespace nes_system {
 

@@ -9,7 +9,7 @@
  * system layer; this module provides the shared header/CHIP parsing.
  */
 
-#include "format_handler.h"
+#include "core/formats/format_handler.h"
 #include <cstring>  // memcmp for commodore_crt_machine()
 // ============================================================================
 // CRT Types

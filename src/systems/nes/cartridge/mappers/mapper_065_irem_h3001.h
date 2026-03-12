@@ -10,7 +10,7 @@
  * CHR: 8 individual 1KB registers at $B000-$B007.
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 

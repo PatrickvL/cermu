@@ -18,7 +18,7 @@
  * Including ImGuiFileDialog.h is safe in both cases (#pragma once).
  */
 
-#include "ImGuiFileDialog.h"
+#include <ImGuiFileDialog.h>
 
 #include <cstdint>
 #include <string>

@@ -7,7 +7,7 @@
  * USAGE:
  * ======
  * At the end of each .inc.hpp file:
- *   #include "inc_lint_prevention_footer.hpp"
+ *   #include "chip/cpu/fam65xx/operations/inc_lint_prevention_footer.hpp"
  */
 
 #ifndef FAM65XX_TEMPLATE_CONTEXT

@@ -16,7 +16,7 @@
  *   $F000: D3-D0 = 4KB CHR bank 1 (low nibble)
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 

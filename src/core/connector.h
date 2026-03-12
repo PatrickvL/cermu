@@ -20,7 +20,7 @@
  * DeviceRegistry can match peripherals to compatible ports.
  */
 
-#include "component_base.h"
+#include "core/component_base.h"
 #include <cstdint>
 #include <cstddef>
 #include <functional>

@@ -25,7 +25,7 @@
  * References: https://www.nesdev.org/wiki/Action_53_mapper
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 

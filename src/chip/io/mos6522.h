@@ -1,10 +1,10 @@
 #pragma once
 
 #include <cstdint>
-#include "io_chip_base.h"
-#include "../../core/bus_cycle_interface.h"
-#include "../../core/system_lines.h"
-#include "../../core/ioport.h"       // For io_port<Mask> and io_port_state
+#include "chip/io/io_chip_base.h"
+#include "core/bus_cycle_interface.h"
+#include "core/system_lines.h"
+#include "core/ioport.h"       // For io_port<Mask> and io_port_state
 
 // ============================================================================
 // MOS6522 UNIFIED DECLARATION TABLE — single source of truth

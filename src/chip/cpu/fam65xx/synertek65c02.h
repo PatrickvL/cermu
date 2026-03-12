@@ -6,9 +6,9 @@
  * Pin-compatible with the NMOS 6502 (40-pin DIP, same pinout).
  */
 
-#include "fam65xx.hpp"
+#include "chip/cpu/fam65xx/fam65xx.hpp"
 #ifdef CERMU_HAS_GUI
-#include "fam65xx_pin_layout.h"
+#include "chip/cpu/fam65xx/fam65xx_pin_layout.h"
 #endif
 
 namespace fam65xx {

@@ -12,8 +12,8 @@
  *   D7: Mirroring (0=vertical, 1=horizontal)  [on some boards]
  */
 
-#include "../nes_mapper.h"
-#include "mapper_helpers.h"
+#include "systems/nes/cartridge/nes_mapper.h"
+#include "systems/nes/cartridge/mappers/mapper_helpers.h"
 
 namespace nes_system {
 

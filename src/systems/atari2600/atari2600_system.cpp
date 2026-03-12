@@ -19,17 +19,17 @@
  * by ROM size and content analysis in a2600_mapper_factory.
  */
 
-#include "atari2600_system.h"
-#include "mappers/a2600_mapper_factory.h"
-#include "../../core/system_registry.h"
-#include "../../core/connector.h"
-#include "../../core/vfs/vfs.h"
+#include "systems/atari2600/atari2600_system.h"
+#include "systems/atari2600/mappers/a2600_mapper_factory.h"
+#include "core/system_registry.h"
+#include "core/connector.h"
+#include "core/vfs/vfs.h"
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
 
 #ifdef CERMU_HAS_GUI
-#include "imgui.h"
+#include <imgui.h>
 #endif
 
 // ============================================================================

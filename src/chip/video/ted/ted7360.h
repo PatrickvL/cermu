@@ -33,9 +33,9 @@
 
 #include <cstdint>
 
-#include "../video_chip_base.h"
-#include "../../core/system_lines.h"
-#include "../video_pixel_unit.h"
+#include "chip/video/video_chip_base.h"
+#include "core/system_lines.h"
+#include "chip/video/video_pixel_unit.h"
 
 // ============================================================================
 // TED REGISTER TABLE — single source of truth

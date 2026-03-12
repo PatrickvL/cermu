@@ -1,4 +1,4 @@
-#include "c64_keyboard_matrix.h"
+#include "systems/commodore/c64/c64_keyboard_matrix.h"
 
 // ============================================================================
 // C64 Keyboard Matrix — 8×8 (EmuKey-based)

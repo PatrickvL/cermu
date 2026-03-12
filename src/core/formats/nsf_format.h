@@ -9,7 +9,7 @@
  * Reference: https://www.nesdev.org/wiki/NSF
  */
 
-#include "format_handler.h"
+#include "core/formats/format_handler.h"
 #include <cstdint>
 
 // ============================================================================

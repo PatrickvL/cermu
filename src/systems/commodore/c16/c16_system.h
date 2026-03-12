@@ -1,18 +1,18 @@
 #pragma once
 
-#include "../commodore_system.h"
-#include "../../core/system_lines.h"
-#include "../../core/board.hpp"
-#include "../../chip/memory/ram_chip.h"
-#include "../../chip/memory/rom_chip.h"
-#include "../../chip/video/ted/ted7360.h"
-#include "../../chip/cpu/fam65xx/mos7501.h"
+#include "systems/commodore/commodore_system.h"
+#include "core/system_lines.h"
+#include "core/board.hpp"
+#include "chip/memory/ram_chip.h"
+#include "chip/memory/rom_chip.h"
+#include "chip/video/ted/ted7360.h"
+#include "chip/cpu/fam65xx/mos7501.h"
 
 // C264 series (C16/C116/Plus4) default bus state — derived from CPU.
 // CSG7501 provides: RW, RDY, IRQ, AEC.  (No NMI — NO_NMI_LINE flag.)
 #define C264_BUS_DEFAULT_STATE  CSG7501::default_bus_state()
 
-#include "../../core/formats/format_handler.h"
+#include "core/formats/format_handler.h"
 #include <string>
 #include <cstdint>
 

@@ -8,7 +8,7 @@
  * cycle-accurate tape emulation (not handled here).
  */
 
-#include "format_handler.h"
+#include "core/formats/format_handler.h"
 // ============================================================================
 // TAP Types
 // ============================================================================

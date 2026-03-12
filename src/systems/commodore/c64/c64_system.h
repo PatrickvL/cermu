@@ -1,23 +1,23 @@
 #pragma once
 
-#include "../commodore_system.h"
-#include "../../core/connector.h"
-#include "../../core/device_registry.h"
-#include "../../core/formats/format_handler.h"
-#include "../../core/formats/sid_format.h"
+#include "systems/commodore/commodore_system.h"
+#include "core/connector.h"
+#include "core/device_registry.h"
+#include "core/formats/format_handler.h"
+#include "core/formats/sid_format.h"
 // Chip headers (previously included via c64.h)
-#include "../../chip/memory/memory_chip.h"
-#include "../../chip/memory/mos2114.h"
-#include "../../chip/sound/mos6581.h"
-#include "../../chip/io/mos6526.h"
-#include "../../chip/video/vic_ii/vicii_common.h"
-#include "../../chip/input/commodore_keyboard.h"
-#include "c64_bus.h"
-#include "c64_config.h"
+#include "chip/memory/memory_chip.h"
+#include "chip/memory/mos2114.h"
+#include "chip/sound/mos6581.h"
+#include "chip/io/mos6526.h"
+#include "chip/video/vic_ii/vicii_common.h"
+#include "chip/input/commodore_keyboard.h"
+#include "systems/commodore/c64/c64_bus.h"
+#include "systems/commodore/c64/c64_config.h"
 #include <string>
 #include <vector>
 
-#include "../../chip/cpu/fam65xx/mos6510.h"
+#include "chip/cpu/fam65xx/mos6510.h"
 
 class LightpenDevice;
 

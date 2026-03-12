@@ -1,5 +1,5 @@
-#include "rom_loader.h"
-#include "../cermu.h"
+#include "core/storage/rom_loader.h"
+#include "core/cermu.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

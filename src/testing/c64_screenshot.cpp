@@ -1,4 +1,4 @@
-#include "c64_screenshot.h"
+#include "testing/c64_screenshot.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -7,7 +7,7 @@
 #include <unordered_set>
 
 // stb_image for PNG loading (test comparison only — implementation in stb_impl.cpp)
-#include "../../external/stb_image.h"
+#include <stb_image.h>
 
 namespace c64_test {
 

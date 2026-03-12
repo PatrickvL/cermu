@@ -3,10 +3,10 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "../../core/cermu.h"
-#include "../../core/system_lines.h"
-#include "../../chip/cpu/fam65xx/mos6510.h"
-#include "c64_chips.h"
+#include "core/cermu.h"
+#include "core/system_lines.h"
+#include "chip/cpu/fam65xx/mos6510.h"
+#include "systems/commodore/c64/c64_chips.h"
 
 // =============================
 // Bus Types & Macros

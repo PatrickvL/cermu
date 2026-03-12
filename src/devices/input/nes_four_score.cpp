@@ -13,8 +13,8 @@
  * reading 24 bits from each port.
  */
 
-#include "nes_four_score.h"
-#include "../../core/device_registry.h"
+#include "devices/input/nes_four_score.h"
+#include "core/device_registry.h"
 
 #include <cstdio>
 #include <SDL_events.h>

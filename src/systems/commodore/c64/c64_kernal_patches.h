@@ -13,7 +13,7 @@
 //       users can enable/disable via a configuration UI.
 // =============================================================================
 
-#include "c64_system.h"
+#include "systems/commodore/c64/c64_system.h"
 
 /**
  * Patch KERNAL RAMTAS routine at $FD5F to skip the memory-test loop.

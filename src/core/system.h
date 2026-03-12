@@ -7,11 +7,11 @@
 #include <functional>
 #include <mutex>
 #include <SDL_keycode.h>
-#include "hardware_traits.h"
-#include "chip.h"     // ChipBase, ChipInfo
-#include "connector.h"
-#include "peripherals/input_peripheral_device.h"
-#include "device_registry.h"
+#include "core/hardware_traits.h"
+#include "core/chip.h"     // ChipBase, ChipInfo
+#include "core/connector.h"
+#include "core/peripherals/input_peripheral_device.h"
+#include "core/device_registry.h"
 
 // Forward-declare format descriptor so SystemDescriptor can reference it
 struct format_descriptor_t;
@@ -486,4 +486,4 @@ public:
 };
 
 // Include SystemRegistry (moved to separate file)
-#include "system_registry.h"
+#include "core/system_registry.h"

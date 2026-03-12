@@ -12,41 +12,41 @@
  * characters into the RGBA framebuffer via character ROM lookup.
  */
 
-#include "pet_system.h"
-#include "pet_constants.h"
-#include "pet_keyboard_matrix.h"
-#include "../../core/cermu.h"
-#include "../../chip/input/commodore_keyboard.h"
-#include "../../core/input/emu_key_sdl_map.h"
-#include "../../core/input/keyboard_mapper.h"
-#include "../basic_parser.h"
+#include "systems/commodore/pet/pet_system.h"
+#include "systems/commodore/pet/pet_constants.h"
+#include "systems/commodore/pet/pet_keyboard_matrix.h"
+#include "core/cermu.h"
+#include "chip/input/commodore_keyboard.h"
+#include "core/input/emu_key_sdl_map.h"
+#include "core/input/keyboard_mapper.h"
+#include "systems/commodore/basic_parser.h"
 #include <cstring>
 #include <cstdio>
 #include <cctype>
 #include <algorithm>
 
 #ifdef CERMU_HAS_GUI
-#include "imgui.h"
+#include <imgui.h>
 #endif
 
 // Include chip headers
-#include "../../chip/cpu/fam65xx/mos6502.h"
-#include "../../chip/io/pia6820.h"
-#include "../../chip/io/mos6522.h"
-#include "../../chip/video/mc6845/mc6845.h"
-#include "../../core/chip.h"
+#include "chip/cpu/fam65xx/mos6502.h"
+#include "chip/io/pia6820.h"
+#include "chip/io/mos6522.h"
+#include "chip/video/mc6845/mc6845.h"
+#include "core/chip.h"
 
 // Include ROM loader
-#include "../../core/storage/rom_loader.h"
-#include "../../core/config/path_discovery.h"
+#include "core/storage/rom_loader.h"
+#include "core/config/path_discovery.h"
 
 // File format handlers
-#include "../../core/formats/format_registry.h"
-#include "../../core/formats/prg_format.h"
-#include "../../core/formats/d64_format.h"
-#include "../../core/formats/tap_format.h"
-#include "../commodore_load_helpers.h"
-#include "../../devices/keyboard/commodore_keyboard_device.h"
+#include "core/formats/format_registry.h"
+#include "core/formats/prg_format.h"
+#include "core/formats/d64_format.h"
+#include "core/formats/tap_format.h"
+#include "systems/commodore/commodore_load_helpers.h"
+#include "devices/keyboard/commodore_keyboard_device.h"
 
 // ============================================================================
 // PET Monochrome Display Colors (green phosphor CRT)

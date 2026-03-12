@@ -5,4 +5,4 @@
  * This file is kept for future layout/settings GUI methods.
  */
 
-#include "nes_cartridge.h"
+#include "systems/nes/cartridge/nes_cartridge.h"

@@ -18,8 +18,8 @@
  * This avoids forking ImGuiFileDialog for a trivial UI preference.
  */
 
-#include "ImGuiFileDialog.h"
-#include "vfs_file_system.h"
+#include <ImGuiFileDialog.h>
+#include "gui/vfs_file_system.h"
 
 #include <cstdarg>
 

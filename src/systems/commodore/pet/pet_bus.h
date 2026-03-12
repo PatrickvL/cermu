@@ -9,9 +9,9 @@
 
 #include <cstdint>
 
-#include "../../../core/bus_cycle_interface.h"
-#include "../../../core/system_lines.h"
-#include "../../../chip/cpu/fam65xx/mos6502.h"
+#include "core/bus_cycle_interface.h"
+#include "core/system_lines.h"
+#include "chip/cpu/fam65xx/mos6502.h"
 
 // PET default bus state — MOS6502 defaults + data lines all high (pull-up)
 #define PET_BUS_DEFAULT_STATE \

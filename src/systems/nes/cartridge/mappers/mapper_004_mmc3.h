@@ -8,7 +8,7 @@
  * Games: Super Mario Bros. 2/3, Kirby's Adventure, Mega Man 3-6, etc.
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 #include <cstring>  // std::memset
 
 namespace nes_system {

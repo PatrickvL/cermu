@@ -16,7 +16,7 @@
  * Mode 3: 16KB switchable at $8000, next 16KB at $C000
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 

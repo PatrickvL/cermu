@@ -2,7 +2,7 @@
  * PETSCII Character Encoding Utilities — Implementation
  */
 
-#include "petscii.h"
+#include "systems/commodore/petscii.h"
 
 void petscii_trim_padding(char* str, int maxlen) {
     int end = maxlen - 1;

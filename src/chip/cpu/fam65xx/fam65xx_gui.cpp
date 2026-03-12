@@ -11,31 +11,31 @@
 #include <cstring>
 
 // Include the modern fam65xx implementation
-#include "fam65xx.hpp"
-#include "fam65xx_decoder.h"
-#include "fam65xx_types.h"
+#include "chip/cpu/fam65xx/fam65xx.hpp"
+#include "chip/cpu/fam65xx/fam65xx_decoder.h"
+#include "chip/cpu/fam65xx/fam65xx_types.h"
 
 // Per-CPU headers for explicit template instantiations below
-#include "mos6502.h"
-#include "mos6510.h"
-#include "mos7501.h"
-#include "ricoh_2a03.h"
-#include "mos6507.h"
-#include "wdc65c02.h"
-#include "synertek65c02.h"
-#include "rockwell65c02.h"
-#include "wdc_w65c02s.h"
-#include "wdc65c816.h"
+#include "chip/cpu/fam65xx/mos6502.h"
+#include "chip/cpu/fam65xx/mos6510.h"
+#include "chip/cpu/fam65xx/mos7501.h"
+#include "chip/cpu/fam65xx/ricoh_2a03.h"
+#include "chip/cpu/fam65xx/mos6507.h"
+#include "chip/cpu/fam65xx/wdc65c02.h"
+#include "chip/cpu/fam65xx/synertek65c02.h"
+#include "chip/cpu/fam65xx/rockwell65c02.h"
+#include "chip/cpu/fam65xx/wdc_w65c02s.h"
+#include "chip/cpu/fam65xx/wdc65c816.h"
 
 // Include GUI interface first (defines CERMU_HAS_GUI)
-#include "../../../core/chip_layout.h"
+#include "core/chip_layout.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
 #ifdef CERMU_HAS_GUI
-#include "../../../gui/chip_visualization.h"
-#include "../../../gui/global_chip_style.h"
+#include "gui/chip_visualization.h"
+#include "gui/global_chip_style.h"
 #include <imgui.h>
 #endif
-#include "fam65xx_pin_states.h"
+#include "chip/cpu/fam65xx/fam65xx_pin_states.h"
 
 using namespace fam65xx;
 

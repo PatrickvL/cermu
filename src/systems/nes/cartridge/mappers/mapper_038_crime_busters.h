@@ -12,8 +12,8 @@
  *   D3-D2: CHR 8KB bank select
  */
 
-#include "../nes_mapper.h"
-#include "mapper_helpers.h"
+#include "systems/nes/cartridge/nes_mapper.h"
+#include "systems/nes/cartridge/mappers/mapper_helpers.h"
 
 namespace nes_system {
 

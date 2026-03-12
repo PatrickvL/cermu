@@ -17,7 +17,7 @@
 
 #pragma once
 
-#include "cermu.h"          // CERMU_HAS_VA_OPT, CERMU_PP_OVERLOAD_
+#include "core/cermu.h"          // CERMU_HAS_VA_OPT, CERMU_PP_OVERLOAD_
 
 #include <array>
 #include <cstdint>

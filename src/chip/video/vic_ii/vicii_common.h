@@ -1,11 +1,11 @@
 #pragma once
 
-#include "../../../core/chip.h"
-#include "../video_chip_base.h"
+#include "core/chip.h"
+#include "chip/video/video_chip_base.h"
 #include <cstdint>
-#include "../../../core/system_lines.h" // For bus_state_t
-#include "../../../chip/memory/mos2114.h"  // For MOS2114
-#include "../video_pixel_unit.h"
+#include "core/system_lines.h" // For bus_state_t
+#include "chip/memory/mos2114.h"  // For MOS2114
+#include "chip/video/video_pixel_unit.h"
 // ============================================================================
 // VIC-II UNIFIED DECLARATION TABLE — single source of truth
 // ============================================================================

@@ -2,12 +2,12 @@
 // C64 SID Player — Implementation
 // =============================================================================
 
-#include "c64_sid_player.h"
-#include "c64_screen_utils.h"
-#include "c64_constants.h"
-#include "../../chip/cpu/fam65xx/fam65xx.hpp"
-#include "../../chip/sound/mos6581.h"
-#include "asm6510.h"
+#include "systems/commodore/c64/c64_sid_player.h"
+#include "systems/commodore/c64/c64_screen_utils.h"
+#include "systems/commodore/c64/c64_constants.h"
+#include "chip/cpu/fam65xx/fam65xx.hpp"
+#include "chip/sound/mos6581.h"
+#include "chip/cpu/fam65xx/asm6510.h"
 #include <cstdio>
 #include <cstring>
 

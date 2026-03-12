@@ -1,4 +1,4 @@
-#include "emu_key_sdl_map.h"
+#include "core/input/emu_key_sdl_map.h"
 #include <SDL_scancode.h>
 #include <SDL_keycode.h>
 #include <cstring>

@@ -1,9 +1,9 @@
-#include "c64_bus.h"
-#include "c64_system.h"
-#include "c64_constants.h"
-#include "../../chip/io/mos6526.h"
-#include "../../chip/logic/pla.h"
-#include "../../core/cermu.h"
+#include "systems/commodore/c64/c64_bus.h"
+#include "systems/commodore/c64/c64_system.h"
+#include "systems/commodore/c64/c64_constants.h"
+#include "chip/io/mos6526.h"
+#include "chip/logic/pla.h"
+#include "core/cermu.h"
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>

@@ -11,12 +11,12 @@
  * Pinout reference: MOS Technology MOS 6560/6561 Datasheet (1980)
  */
 
-#include "vic_common.h"
-#include "../../../core/chip_layout.h"
+#include "chip/video/vic/vic_common.h"
+#include "core/chip_layout.h"
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
-#include "../../../gui/chip_visualization.h"
-#include "../../../gui/global_chip_style.h"
+#include "gui/chip_visualization.h"
+#include "gui/global_chip_style.h"
 #endif
 #include <cstdio>
 

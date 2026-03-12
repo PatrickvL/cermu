@@ -16,7 +16,7 @@
  * than calling format-specific APIs directly.
  */
 
-#include "format_handler.h"
+#include "core/formats/format_handler.h"
 /**
  * Load any supported file format (C API).
  * Identifies the format and dispatches to its load() callback.

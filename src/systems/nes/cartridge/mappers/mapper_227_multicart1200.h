@@ -16,7 +16,7 @@
  *   A9:    NROM-256 mode (0 = normal, 1 = NROM-256 / 32KB)
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 

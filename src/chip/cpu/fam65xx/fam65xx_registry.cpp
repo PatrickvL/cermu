@@ -9,22 +9,22 @@
 // Registration names match the chip_id field in each variant's CPUTraits.
 // =============================================================================
 
-#include "../../../core/chip_manifest.hpp"
-#include "../../../core/chip_registry.h"
+#include "core/chip_manifest.hpp"
+#include "core/chip_registry.h"
 
 // 6502 family — NMOS
-#include "mos6502.h"
-#include "mos6510.h"
-#include "mos6507.h"
-#include "mos7501.h"
-#include "ricoh_2a03.h"
+#include "chip/cpu/fam65xx/mos6502.h"
+#include "chip/cpu/fam65xx/mos6510.h"
+#include "chip/cpu/fam65xx/mos6507.h"
+#include "chip/cpu/fam65xx/mos7501.h"
+#include "chip/cpu/fam65xx/ricoh_2a03.h"
 
 // 6502 family — CMOS
-#include "wdc65c02.h"
-#include "wdc_w65c02s.h"
-#include "wdc65c816.h"
-#include "rockwell65c02.h"
-#include "synertek65c02.h"
+#include "chip/cpu/fam65xx/wdc65c02.h"
+#include "chip/cpu/fam65xx/wdc_w65c02s.h"
+#include "chip/cpu/fam65xx/wdc65c816.h"
+#include "chip/cpu/fam65xx/rockwell65c02.h"
+#include "chip/cpu/fam65xx/synertek65c02.h"
 
 REGISTER_CHIP_TYPE("MOS6502",        MOS6502)
 REGISTER_CHIP_TYPE("MOS6510",        MOS6510)

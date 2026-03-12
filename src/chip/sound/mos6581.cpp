@@ -1,5 +1,5 @@
-#include "mos6581.h"
-#include "sid_waveform_tables.h"
+#include "chip/sound/mos6581.h"
+#include "chip/sound/sid_waveform_tables.h"
 #include <cstring>
 #include <cstdlib>
 #include <cmath>

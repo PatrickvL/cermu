@@ -8,7 +8,7 @@
  * No dedicated pin layout yet — falls through to generic DIP fallback.
  */
 
-#include "fam65xx.hpp"
+#include "chip/cpu/fam65xx/fam65xx.hpp"
 
 namespace fam65xx {
 

@@ -14,7 +14,7 @@
  * Games: Mike Tyson's Punch-Out!!, Punch-Out!! (all versions)
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 

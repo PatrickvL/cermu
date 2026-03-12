@@ -16,8 +16,8 @@
  *   - If CHR banks > 0  (CHR-ROM)   → NINA-001 behavior
  */
 
-#include "../nes_mapper.h"
-#include "mapper_helpers.h"
+#include "systems/nes/cartridge/nes_mapper.h"
+#include "systems/nes/cartridge/mappers/mapper_helpers.h"
 
 namespace nes_system {
 

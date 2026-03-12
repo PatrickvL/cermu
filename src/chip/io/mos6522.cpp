@@ -1,6 +1,6 @@
-#include "mos6522.h"
-#include "../../core/chip_manifest.hpp"
-#include "../../core/chip_registry.h"
+#include "chip/io/mos6522.h"
+#include "core/chip_manifest.hpp"
+#include "core/chip_registry.h"
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>

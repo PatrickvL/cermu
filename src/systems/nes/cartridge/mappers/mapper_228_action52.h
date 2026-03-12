@@ -18,7 +18,7 @@
  *     D1-D0:  CHR bank low bits (from address A3-A1 too)
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 

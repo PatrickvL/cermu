@@ -36,7 +36,7 @@
  * - Multiple drive units on the same IEC bus (device #8-11)
  */
 
-#include "storage_device.h"
+#include "devices/storage/storage_device.h"
 #include <cstdint>
 #include <string>
 #include <vector>

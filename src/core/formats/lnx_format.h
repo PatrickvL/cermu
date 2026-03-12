@@ -8,8 +8,8 @@
  * extraction of individual or all PRG files.
  */
 
-#include "format_handler.h"
-#include "prg_format.h"   /* commodore_prg_t used as extraction target */
+#include "core/formats/format_handler.h"
+#include "core/formats/prg_format.h"   /* commodore_prg_t used as extraction target */
 // ============================================================================
 // LNX Constants
 // ============================================================================

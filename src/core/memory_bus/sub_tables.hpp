@@ -28,9 +28,9 @@
 // =============================================================================
 #pragma once
 
-#include "packing.hpp"
+#include "core/memory_bus/packing.hpp"
 
-#include "../cermu.h"          // FORCE_INLINE
+#include "core/cermu.h"          // FORCE_INLINE
 
 #include <array>
 #include <cassert>

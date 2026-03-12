@@ -23,11 +23,11 @@
 //   4. Destroy: a2600_test::destroy()
 // =============================================================================
 
-#include "../chip/video/tia/tia.h"
-#include "../chip/io/pia6532.h"
-#include "../systems/atari2600/atari2600_constants.h"
-#include "../systems/atari2600/mappers/a2600_mapper.h"
-#include "../systems/atari2600/mappers/a2600_mapper_factory.h"
+#include "chip/video/tia/tia.h"
+#include "chip/io/pia6532.h"
+#include "systems/atari2600/atari2600_constants.h"
+#include "systems/atari2600/mappers/a2600_mapper.h"
+#include "systems/atari2600/mappers/a2600_mapper_factory.h"
 #include <cstdint>
 #include <cstdio>
 #include <cstring>

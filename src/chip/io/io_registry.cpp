@@ -6,13 +6,13 @@
 // their headers and register them in the ChipRegistry.
 // =============================================================================
 
-#include "../../core/chip_manifest.hpp"
-#include "../../core/chip_registry.h"
+#include "core/chip_manifest.hpp"
+#include "core/chip_registry.h"
 
-#include "i8255.h"
-#include "z80_pio.h"
-#include "z80_ctc.h"
-#include "kc85_module_system.h"
+#include "chip/io/i8255.h"
+#include "chip/io/z80_pio.h"
+#include "chip/io/z80_ctc.h"
+#include "chip/io/kc85_module_system.h"
 
 REGISTER_CHIP_TYPE("8255",          i8255_t)
 REGISTER_CHIP_TYPE("Z80 PIO",      z80_pio_t)

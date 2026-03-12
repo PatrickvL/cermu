@@ -6,10 +6,10 @@
  * Consumer code includes just this header to get the MOS 6510 variant.
  */
 
-#include "fam65xx.hpp"
+#include "chip/cpu/fam65xx/fam65xx.hpp"
 #ifdef CERMU_HAS_GUI
-#include "fam65xx_pin_layout.h"
-#include "../../../core/system_lines.h"
+#include "chip/cpu/fam65xx/fam65xx_pin_layout.h"
+#include "core/system_lines.h"
 #endif
 
 namespace fam65xx {

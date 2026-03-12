@@ -1,6 +1,6 @@
 #pragma once
 
-#include "emu_keys.h"
+#include "core/input/emu_keys.h"
 #include <cstdint>
 #include <bitset>
 #include <unordered_map>

@@ -8,7 +8,7 @@
 #include <string>
 #include <functional>
 
-#include "commodore_keyboard.h"
+#include "chip/input/commodore_keyboard.h"
 
 // ============================================================================
 // Layered Keyboard Mapping System

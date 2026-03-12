@@ -12,7 +12,7 @@
  * 40-pin DIP package.
  */
 
-#include "z80.hpp"
+#include "chip/cpu/z80/z80.hpp"
 
 namespace z80 {
 

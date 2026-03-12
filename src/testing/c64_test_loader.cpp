@@ -1,5 +1,5 @@
-#include "c64_test_loader.h"
-#include "../chip/memory/memory_chip.h"
+#include "testing/c64_test_loader.h"
+#include "chip/memory/memory_chip.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

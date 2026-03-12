@@ -5,32 +5,32 @@
  * hardware-accurate components and precise timing.
  */
 
-#include "nes_system.h"
-#include "../../chip/video/nes_ppu/nes_palette.h"
-#include "nsf/nes_nsf_player.h"
-#include "cartridge/mappers/mapper_nsf.h"
-#include "../../core/formats/nsf_format.h"
-#include "../../core/formats/ines_format.h"
-#include "../../core/vfs/vfs.h"
+#include "systems/nes/nes_system.h"
+#include "chip/video/nes_ppu/nes_palette.h"
+#include "systems/nes/nsf/nes_nsf_player.h"
+#include "systems/nes/cartridge/mappers/mapper_nsf.h"
+#include "core/formats/nsf_format.h"
+#include "core/formats/ines_format.h"
+#include "core/vfs/vfs.h"
 // CPU is now a native ChipBase (via fam65xx_t<Traits> inheritance)
-#include "../../core/chip.h"
-#include "../../chip/input/cd4021.h"
-#include "../../chip/memory/memory_chip.h"
-#include "../../devices/input/nes_standard_controller.h"
+#include "core/chip.h"
+#include "chip/input/cd4021.h"
+#include "chip/memory/memory_chip.h"
+#include "devices/input/nes_standard_controller.h"
 #include <fstream>
 #include <iostream>
 #include <cmath>
 #include <algorithm>
 #include <cstring>
 
-#include "nes_profiling.h"
+#include "systems/nes/nes_profiling.h"
 
 #ifdef NES_PROFILING
 NesProfileCounters g_nes_profile;
 #endif
 
 #ifdef CERMU_HAS_GUI
-#include "imgui.h"
+#include <imgui.h>
 #include <SDL.h>
 #endif
 
@@ -1352,7 +1352,7 @@ void NintendoSystem<V>::power_cycle() {
 // NES has: 2× front controller ports (7-pin) and 1× bottom expansion port (48-pin).
 // Controller ports use a serial shift-register protocol (LATCH + CLK + D0).
 // Connector definitions are now in src/connectors/nes_connectors.h (shared).
-#include "../../connectors/nes_connectors.h"
+#include "connectors/nes_connectors.h"
 
 template<NintendoVariant V>
 void NintendoSystem<V>::setup_connector_ports() {

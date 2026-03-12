@@ -21,7 +21,7 @@
  *   raster_counter → LPY, and sets the ILP interrupt flag (once per frame).
  */
 
-#include "../../core/peripherals/control_port_device.h"
+#include "core/peripherals/control_port_device.h"
 #include <functional>
 
 class LightpenDevice : public ControlPortInputDevice {

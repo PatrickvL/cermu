@@ -6,8 +6,8 @@
  * 0x20-0x7E (96 printable characters).
  */
 
-#include "nes_screen_utils.h"
-#include "nes_system.h"
+#include "systems/nes/nes_screen_utils.h"
+#include "systems/nes/nes_system.h"
 #include <cstring>
 #include <cstdio>
 

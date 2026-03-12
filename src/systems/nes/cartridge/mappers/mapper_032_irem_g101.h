@@ -14,7 +14,7 @@
  *   $B000-$B007: 1KB CHR banks 0-7 (D7-D0)
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 

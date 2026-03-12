@@ -15,8 +15,8 @@
 // This catches bugs where registers read back correctly but rendering is wrong.
 // =============================================================================
 
-#include "../systems/commodore/c64/c64_system.h"
-#include "../core/system.h"
+#include "systems/commodore/c64/c64_system.h"
+#include "core/system.h"
 #include <cstdint>
 
 namespace vicii_test {

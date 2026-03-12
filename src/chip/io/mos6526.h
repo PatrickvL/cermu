@@ -1,14 +1,14 @@
 #pragma once
 
-#include "io_chip_base.h"
-//#include "../../core/bus_cycle_interface.h"
+#include "chip/io/io_chip_base.h"
+//#include "core/bus_cycle_interface.h"
 #include <cstdint>
-#include "../../core/system_lines.h" // For bus_state_t
-#include "../../core/ioport.h"       // For io_port<Mask>
+#include "core/system_lines.h" // For bus_state_t
+#include "core/ioport.h"       // For io_port<Mask>
 #include <cstdint>
 
 
-#include "../../utils/shift_register.hpp" // For delay line implementation
+#include "utils/shift_register.hpp" // For delay line implementation
 
 // CIA MOS 6526 DIP has 40 pins; Pinout :
 enum mos6526_pin_t {

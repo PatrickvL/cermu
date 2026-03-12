@@ -21,12 +21,12 @@
 #include <vector>
 #include <array>
 
-#include "../video_chip_base.h"
-#include "../../core/system_lines.h"
-#include "../video_pixel_unit.h"
-#include "../../../systems/nes/bus/nes_bus.h"
-#include "../../../systems/nes/bus/nes_bus_signals.h"
-#include "nes_palette.h"
+#include "chip/video/video_chip_base.h"
+#include "core/system_lines.h"
+#include "chip/video/video_pixel_unit.h"
+#include "systems/nes/bus/nes_bus.h"
+#include "systems/nes/bus/nes_bus_signals.h"
+#include "chip/video/nes_ppu/nes_palette.h"
 
 // Forward declarations
 namespace nes_system {

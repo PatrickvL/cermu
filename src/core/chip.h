@@ -1,18 +1,18 @@
 #pragma once
 
-#include "cermu.h"  // Compiler compatibility macros
-#include "chip_debug_registry.h"  // Always included: DECL_EXTRACT_ALL/REGS_ONLY
+#include "core/cermu.h"  // Compiler compatibility macros
+#include "core/chip_debug_registry.h"  // Always included: DECL_EXTRACT_ALL/REGS_ONLY
                                   // macros are used at file scope in chip headers
                                   // and need RegEntry/FieldEntry types even in
                                   // non-debug builds.  All data is constexpr —
                                   // zero runtime overhead.
 
-#include "component_base.h"
-#include "component_info.h"
+#include "core/component_base.h"
+#include "core/component_info.h"
 #include <cstdint>
 #include <memory>
 #include <vector>
-#include "system_lines.h"
+#include "core/system_lines.h"
 
 // Forward declarations for layout support
 struct ChipLayout;

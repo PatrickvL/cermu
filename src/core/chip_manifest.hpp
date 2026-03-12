@@ -61,7 +61,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "chip.h"
+#include "core/chip.h"
 
 
 // =============================================================================

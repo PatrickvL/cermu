@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../core/chip.h"
+#include "core/chip.h"
 #include <cstdint>
 
 // ============================================================================

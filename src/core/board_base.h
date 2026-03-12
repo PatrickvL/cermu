@@ -12,7 +12,7 @@
 // component hierarchy (e.g. a Drive1541Board attached as a peripheral).
 //
 
-#include "component_base.h"
+#include "core/component_base.h"
 
 #include <cstring>
 #include <span>

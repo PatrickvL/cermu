@@ -20,7 +20,7 @@
 //   4. Destroy: apu_test::destroy()
 // =============================================================================
 
-#include "../chip/sound/nes_apu.h"
+#include "chip/sound/nes_apu.h"
 #include <cstdint>
 #include <cstdio>
 #include <cstring>

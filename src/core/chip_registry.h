@@ -20,7 +20,7 @@
 //
 // =============================================================================
 
-#include "chip.h"          // ChipBase, bus_state_t
+#include "core/chip.h"          // ChipBase, bus_state_t
 #include <string_view>
 
 // Forward declaration — full definition in chip_manifest.hpp.
@@ -78,7 +78,7 @@ private:
 //
 // Usage with a type that satisfies SlotCreatable or is default-constructible:
 //   REGISTER_CHIP_TYPE("MOS6502", MOS6502)
-//   (requires #include "chip_manifest.hpp" for resolve_slot_factory<T>())
+//   (requires #include "core/chip_manifest.hpp" for resolve_slot_factory<T>())
 //
 
 #define REGISTER_CHIP_CONCAT_IMPL_(a, b) a##b
@@ -115,8 +115,8 @@ private:
 // This function is intentionally a template so that it compiles without
 // ChipSlot being complete in this header (deferred instantiation).
 //
-//   #include "chip_manifest.hpp"   // for ChipSlot
-//   #include "chip_registry.h"
+//   #include "core/chip_manifest.hpp"   // for ChipSlot
+//   #include "core/chip_registry.h"
 //   ChipSlot slot = make_slot_from_registry("MOS6502", 0, 0);
 //
 

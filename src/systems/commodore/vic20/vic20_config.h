@@ -1,5 +1,5 @@
 #pragma once
-#include "../../core/config/rom_config.h"
+#include "core/config/rom_config.h"
 
 enum vic20_video_standard_t {
     VIC20_PAL,

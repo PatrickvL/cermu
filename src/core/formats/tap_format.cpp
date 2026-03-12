@@ -2,8 +2,8 @@
  * TAP Format Handler — Implementation
  */
 
-#include "tap_format.h"
-#include "format_registry.h"
+#include "core/formats/tap_format.h"
+#include "core/formats/format_registry.h"
 #include <cstdio>
 #include <cstring>
 

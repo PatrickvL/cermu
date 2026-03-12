@@ -16,7 +16,7 @@
  * No IRQ, no mirroring control (except 095's D5 trick).
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 #include <cstring>
 
 namespace nes_system {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "commodore_keyboard.h"
+#include "chip/input/commodore_keyboard.h"
 
 // VIC-20 Keyboard Matrix — 8×8
 // VIA Port B ($9120) = column select (output)

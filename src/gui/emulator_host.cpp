@@ -1,7 +1,7 @@
-#include "emulator_host.h"
-#include "imgui.h"
-#include "imgui_impl_opengl3.h"
-#include "imgui_impl_sdl2.h"
+#include "gui/emulator_host.h"
+#include <imgui.h>
+#include <imgui_impl_opengl3.h>
+#include <imgui_impl_sdl2.h>
 #include <cstdio>
 #include <algorithm>
 #include <chrono>

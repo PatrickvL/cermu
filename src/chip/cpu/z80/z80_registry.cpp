@@ -9,13 +9,13 @@
 // Registration names match the chip_id field in each variant's Z80Traits.
 // =============================================================================
 
-#include "../../../core/chip_manifest.hpp"
-#include "../../../core/chip_registry.h"
+#include "core/chip_manifest.hpp"
+#include "core/chip_registry.h"
 
-#include "zilog_z80.h"
-#include "zilog_z80a.h"
-#include "zilog_z80b.h"
-#include "u880.h"
+#include "chip/cpu/z80/zilog_z80.h"
+#include "chip/cpu/z80/zilog_z80a.h"
+#include "chip/cpu/z80/zilog_z80b.h"
+#include "chip/cpu/z80/u880.h"
 
 REGISTER_CHIP_TYPE("Z80",  ZilogZ80)
 REGISTER_CHIP_TYPE("Z80A", ZilogZ80A)

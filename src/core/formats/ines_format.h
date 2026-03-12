@@ -8,6 +8,6 @@
  * Cartridge class rather than the generic format_load_result_t path.
  */
 
-#include "format_handler.h"
+#include "core/formats/format_handler.h"
 
 extern const format_descriptor_t INES_FORMAT_DESCRIPTOR;

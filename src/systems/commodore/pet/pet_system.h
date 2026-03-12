@@ -1,13 +1,13 @@
 #pragma once
 
-#include "../commodore_system.h"
-#include "pet_constants.h"
-#include "../../../core/board.hpp"
-#include "../../../chip/cpu/fam65xx/mos6502.h"
-#include "../../../chip/io/pia6820.h"
-#include "../../../chip/io/mos6522.h"
-#include "../../../chip/video/mc6845/mc6845.h"
-#include "../../../chip/memory/memory_chip.h"
+#include "systems/commodore/commodore_system.h"
+#include "systems/commodore/pet/pet_constants.h"
+#include "core/board.hpp"
+#include "chip/cpu/fam65xx/mos6502.h"
+#include "chip/io/pia6820.h"
+#include "chip/io/mos6522.h"
+#include "chip/video/mc6845/mc6845.h"
+#include "chip/memory/memory_chip.h"
 
 #include <cstdint>
 #include <string>

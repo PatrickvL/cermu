@@ -41,7 +41,7 @@
  * USAGE:
  * ======
  * ```cpp
- * #include "zilog_z80a.h"
+ * #include "chip/cpu/z80/zilog_z80a.h"
  *
  * ZilogZ80A cpu;
  * bus_state_t pins = cpu.init();
@@ -54,15 +54,15 @@
 #include <cstring>
 #include <utility> // std::swap
 
-#include "z80_traits.hpp"
-#include "z80_types.h"
-#include "z80_opcodes.h"
-#include "../cpu_chip_base.h"
-#include "../../../core/system_lines.h"
-#include "../../../core/cermu.h"
+#include "chip/cpu/z80/z80_traits.hpp"
+#include "chip/cpu/z80/z80_types.h"
+#include "chip/cpu/z80/z80_opcodes.h"
+#include "chip/cpu/cpu_chip_base.h"
+#include "core/system_lines.h"
+#include "core/cermu.h"
 
 // Opcode table generation — self-contained with own namespace wrapper
-#include "z80_opcode_tables.inc.hpp"
+#include "chip/cpu/z80/z80_opcode_tables.inc.hpp"
 
 namespace z80 {
 
@@ -296,13 +296,13 @@ private:
     // REGISTER ACCESS HELPERS (included mid-class)
     // ========================================================================
 
-#include "z80_registers.inc.hpp"
+#include "chip/cpu/z80/z80_registers.inc.hpp"
 
     // ========================================================================
     // ALU OPERATIONS AND FLAG TABLES (included mid-class)
     // ========================================================================
 
-#include "z80_alu.inc.hpp"
+#include "chip/cpu/z80/z80_alu.inc.hpp"
 
     // ========================================================================
     // BUS SIGNAL HELPERS
@@ -1064,9 +1064,9 @@ private:
     // ========================================================================
 
 #define Z80_TEMPLATE_CONTEXT
-#include "operations/z80_base_ops.inc.hpp"
-#include "operations/z80_cb_ops.inc.hpp"
-#include "operations/z80_ed_ops.inc.hpp"
+#include "chip/cpu/z80/operations/z80_base_ops.inc.hpp"
+#include "chip/cpu/z80/operations/z80_cb_ops.inc.hpp"
+#include "chip/cpu/z80/operations/z80_ed_ops.inc.hpp"
 #undef Z80_TEMPLATE_CONTEXT
 
     // ========================================================================

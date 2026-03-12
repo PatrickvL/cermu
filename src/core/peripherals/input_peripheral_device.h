@@ -23,15 +23,15 @@
  *     }
  */
 
-#include "../connector.h"
-#include "../host_input.h"
+#include "core/connector.h"
+#include "core/host_input.h"
 
 #include <cstdio>
 #include <SDL_events.h>
 #include <SDL_gamecontroller.h>
 
 #ifdef CERMU_HAS_GUI
-#include "imgui.h"
+#include <imgui.h>
 #endif
 
 /**

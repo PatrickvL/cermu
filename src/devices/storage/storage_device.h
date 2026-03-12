@@ -13,7 +13,7 @@
  *   - Disc/tape fliplist for quick media cycling
  */
 
-#include "../../core/connector.h"
+#include "core/connector.h"
 #include <cstdint>
 #include <string>
 #include <vector>

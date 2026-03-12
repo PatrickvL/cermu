@@ -14,7 +14,7 @@
  *          Mode: 32KB when inner bank is even, 16KB when odd
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 

@@ -17,7 +17,7 @@
  * Games: Mountain King, Omega Race, Tunnel Runner.
  */
 
-#include "a2600_mapper.h"
+#include "systems/atari2600/mappers/a2600_mapper.h"
 #include <cstring>
 
 struct A2600MapperFA : public A2600Mapper {

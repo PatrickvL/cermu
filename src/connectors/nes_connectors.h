@@ -8,7 +8,7 @@
  * Lives in src/connectors/ because multiple system variants reference them.
  */
 
-#include "../core/connector.h"
+#include "core/connector.h"
 
 namespace NesConnectors {
 

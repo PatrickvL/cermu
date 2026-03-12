@@ -8,14 +8,14 @@
  * Pinout reference: MOS Technology MOS 6522 Datasheet (1977)
  */
 
-#include "mos6522.h"
-#include "../../core/chip_layout.h"
-#include "../../core/pin_macros.h"
+#include "chip/io/mos6522.h"
+#include "core/chip_layout.h"
+#include "core/pin_macros.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
-#include "../../gui/chip_visualization.h"
-#include "../../gui/global_chip_style.h"
+#include "gui/chip_visualization.h"
+#include "gui/global_chip_style.h"
 #endif
 #include <cstdio>
 #include <memory>

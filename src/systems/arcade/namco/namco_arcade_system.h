@@ -7,13 +7,13 @@
  */
 
 
-#include "namco_arcade_constants.h"
-#include "../../../core/system.h"
-#include "../../../core/system_lines.h"
-#include "../../../core/board.hpp"
-#include "../../../chip/cpu/z80/zilog_z80a.h"
-#include "../../../chip/sound/namco_wsg.h"
-#include "../../../chip/memory/memory_chip.h"
+#include "systems/arcade/namco/namco_arcade_constants.h"
+#include "core/system.h"
+#include "core/system_lines.h"
+#include "core/board.hpp"
+#include "chip/cpu/z80/zilog_z80a.h"
+#include "chip/sound/namco_wsg.h"
+#include "chip/memory/memory_chip.h"
 #include <cstdint>
 #include <vector>
 

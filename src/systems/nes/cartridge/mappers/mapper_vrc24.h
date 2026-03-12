@@ -21,7 +21,7 @@
  * Scanline mode uses A12 rising edges; cycle mode is approximate.
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 

@@ -45,7 +45,7 @@
  *   - HVSC (High Voltage SID Collection) — 50,000+ test cases
  */
 
-#include "format_handler.h"
+#include "core/formats/format_handler.h"
 // ============================================================================
 // SID Header — Parsed representation
 // ============================================================================

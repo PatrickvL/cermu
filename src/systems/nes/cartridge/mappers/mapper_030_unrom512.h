@@ -19,8 +19,8 @@
  * expanded banking.
  */
 
-#include "../nes_mapper.h"
-#include "mapper_helpers.h"
+#include "systems/nes/cartridge/nes_mapper.h"
+#include "systems/nes/cartridge/mappers/mapper_helpers.h"
 #include <cstring>
 
 namespace nes_system {

@@ -14,8 +14,8 @@
  *   D6 high = arm CHR bank select; next write with D6 low = apply CHR bank
  */
 
-#include "../nes_mapper.h"
-#include "mapper_helpers.h"
+#include "systems/nes/cartridge/nes_mapper.h"
+#include "systems/nes/cartridge/mappers/mapper_helpers.h"
 
 namespace nes_system {
 

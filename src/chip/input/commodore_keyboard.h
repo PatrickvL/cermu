@@ -4,9 +4,9 @@
 
 #include <unordered_map>
 
-#include "emu_keys.h"
-#include "../../core/chip.h"
-#include "../../core/system_lines.h"
+#include "core/input/emu_keys.h"
+#include "core/chip.h"
+#include "core/system_lines.h"
 
 // ============================================================================
 // Commodore Keyboard Matrix Emulation — Multi-System Architecture

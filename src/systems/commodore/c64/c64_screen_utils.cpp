@@ -2,7 +2,7 @@
 // C64 Screen Text Utilities — Implementation
 // =============================================================================
 
-#include "c64_screen_utils.h"
+#include "systems/commodore/c64/c64_screen_utils.h"
 
 uint8_t c64_ascii_to_screencode(char c) {
     // Used for labels — always uppercase.  In upper/lower charset mode,

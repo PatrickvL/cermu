@@ -17,7 +17,7 @@
  *   D0:    Upper PRG chip select bit
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 

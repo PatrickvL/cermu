@@ -5,7 +5,7 @@
  * supporting both plain text and Unicode display formats.
  */
 
-#include "chip_layout.h"
+#include "core/chip_layout.h"
 #include <unordered_map>
 #include <string>
 

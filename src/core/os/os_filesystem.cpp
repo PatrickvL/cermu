@@ -7,7 +7,7 @@
  * <windows.h>, or use fopen/fread/fclose directly.
  */
 
-#include "os.h"
+#include "core/os/os.h"
 
 #include <cstdio>
 #include <cstdlib>

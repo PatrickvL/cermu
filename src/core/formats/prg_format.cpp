@@ -2,8 +2,8 @@
  * PRG Format Handler — Implementation
  */
 
-#include "prg_format.h"
-#include "format_registry.h"
+#include "core/formats/prg_format.h"
+#include "core/formats/format_registry.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

@@ -1,4 +1,4 @@
-#include "c64_config.h"
+#include "systems/commodore/c64/c64_config.h"
 #include <cstring>
 
 const rom_config_t* system_config_get_default_roms(void) {

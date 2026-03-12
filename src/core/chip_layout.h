@@ -9,9 +9,9 @@
 
 
 // Include all separated chip layout components
-#include "pin_types.h"
-#include "package_types.h"
-#include "pin_macros.h"
+#include "core/pin_types.h"
+#include "core/package_types.h"
+#include "core/pin_macros.h"
 #include <vector>
 #include <string>
 

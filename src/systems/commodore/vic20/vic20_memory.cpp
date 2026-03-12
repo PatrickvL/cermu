@@ -1,8 +1,8 @@
-#include "vic20_memory.h"
-#include "vic20_chips.h"
-#include "../../core/cermu.h"
-#include "../../chip/io/mos6522.h"
-#include "../../chip/video/vic/vic_common.h"
+#include "systems/commodore/vic20/vic20_memory.h"
+#include "systems/commodore/vic20/vic20_chips.h"
+#include "core/cermu.h"
+#include "chip/io/mos6522.h"
+#include "chip/video/vic/vic_common.h"
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>

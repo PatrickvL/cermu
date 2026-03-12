@@ -8,10 +8,10 @@
  * USAGE:
  * ======
  * At the start of each .inc.hpp file:
- *   #include "inc_lint_prevention.hpp"
+ *   #include "chip/cpu/fam65xx/operations/inc_lint_prevention.hpp"
  *
  * At the end of each .inc.hpp file:
- *   #include "inc_lint_prevention_footer.hpp"
+ *   #include "chip/cpu/fam65xx/operations/inc_lint_prevention_footer.hpp"
  */
 
 #pragma once
@@ -23,8 +23,8 @@
 // inside the fam65xx_t class definition.
 
 // Include the types needed for basic IDE symbol resolution
-#include "../fam65xx_types.h"
-#include "../../../../core/cermu.h"
+#include "chip/cpu/fam65xx/fam65xx_types.h"
+#include "core/cermu.h"
 
 // Suppress all compiler diagnostics for standalone analysis
 CERMU_PRAGMA_SYSTEM_HEADER

@@ -12,7 +12,7 @@
 #error "global_chip_style.h requires CERMU_HAS_GUI to be defined. This header should only be included in GUI builds."
 #endif
 
-#include "chip_visualization.h"
+#include "gui/chip_visualization.h"
 #include <functional>
 #include <vector>
 #include <memory>

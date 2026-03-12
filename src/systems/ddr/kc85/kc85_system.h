@@ -9,16 +9,16 @@
  */
 
 
-#include "kc85_constants.h"
-#include "../../../core/system.h"
-#include "../../../core/system_lines.h"
-#include "../../../core/board.hpp"
-#include "../../../chip/cpu/z80/u880.h"
-#include "../../../chip/cpu/z80/z80.hpp"   // Z80_MREQ_BIT / Z80_IORQ_BIT
-#include "../../../chip/io/z80_pio.h"
-#include "../../../chip/io/z80_ctc.h"
-#include "../../../chip/io/kc85_module_system.h"
-#include "../../../chip/memory/memory_chip.h"
+#include "systems/ddr/kc85/kc85_constants.h"
+#include "core/system.h"
+#include "core/system_lines.h"
+#include "core/board.hpp"
+#include "chip/cpu/z80/u880.h"
+#include "chip/cpu/z80/z80.hpp"   // Z80_MREQ_BIT / Z80_IORQ_BIT
+#include "chip/io/z80_pio.h"
+#include "chip/io/z80_ctc.h"
+#include "chip/io/kc85_module_system.h"
+#include "chip/memory/memory_chip.h"
 #include <cstdint>
 #include <vector>
 

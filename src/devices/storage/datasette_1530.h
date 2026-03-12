@@ -7,7 +7,7 @@
  * according to the TAP format's cycle counts and presented on the READ line.
  */
 
-#include "storage_device.h"
+#include "devices/storage/storage_device.h"
 #include <cstdint>
 #include <vector>
 #include <string>

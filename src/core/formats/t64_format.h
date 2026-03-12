@@ -7,8 +7,8 @@
  * entries.  Provides directory listing and file extraction.
  */
 
-#include "format_handler.h"
-#include "prg_format.h"   /* commodore_prg_t used as extraction target */
+#include "core/formats/format_handler.h"
+#include "core/formats/prg_format.h"   /* commodore_prg_t used as extraction target */
 // ============================================================================
 // T64 Constants
 // ============================================================================

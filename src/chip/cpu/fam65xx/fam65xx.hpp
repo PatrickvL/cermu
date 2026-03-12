@@ -29,7 +29,7 @@
  * USAGE:
  * ======
  * ```cpp
- * #include "fam65xx.hpp"
+ * #include "chip/cpu/fam65xx/fam65xx.hpp"
  *
  * // Create a C64 CPU instance
  * fam65xx::fam65xx_t<MOS6510Tag> c64_cpu;
@@ -49,11 +49,11 @@
 //#include <type_traits>
 
 // Include instruction decoder for disassembly (outside extern "C" to avoid template linkage issues)
-#include "fam65xx_decoder.h"
+#include "chip/cpu/fam65xx/fam65xx_decoder.h"
 
-#include "fam65xx_mixins.hpp"
-#include "fam65xx_processor_traits.hpp"
-#include "fam65xx_types.h"
+#include "chip/cpu/fam65xx/fam65xx_mixins.hpp"
+#include "chip/cpu/fam65xx/fam65xx_processor_traits.hpp"
+#include "chip/cpu/fam65xx/fam65xx_types.h"
 
 // ============================================================================
 // C++ NAMESPACE - MAIN CPU TEMPLATE IMPLEMENTATION
@@ -70,7 +70,7 @@ constexpr std::array<opcode_info_t, 256>
 generate_opcode_table_for_traits(const CPUTraits &traits);
 
 // Include opcode table generation implementation first
-#include "operations/opcode_tables.inc.hpp"
+#include "chip/cpu/fam65xx/operations/opcode_tables.inc.hpp"
 
 // Now define the template function
 // Generate processor-specific opcode table at compile time
@@ -126,7 +126,7 @@ template <uint32_t Key> struct SharedOpcodeTable {
 template <const CPUTraits &Traits>
 class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_base_t<Traits> {
 // Include register declarations and accessors
-#include "fam65xx_registers.inc.hpp"
+#include "chip/cpu/fam65xx/fam65xx_registers.inc.hpp"
 
   // CPUTraits-based feature detection helpers for operations files
   static constexpr bool has_apu() { return Traits.has_apu(); }
@@ -671,7 +671,7 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
   // HARDWARE-ACCURATE BCD ARITHMETIC HELPERS (extracted to separate file)
   // ========================================================================
 
-#include "fam65xx_arithmetic.inc.hpp"
+#include "chip/cpu/fam65xx/fam65xx_arithmetic.inc.hpp"
 
   // ========================================================================
   // INTERNAL I/O PORT AND APU ACCESS (CALLED FROM PHI1 HANDLERS)
@@ -906,19 +906,19 @@ class fam65xx_t : public CpuChipBase, public io_port_base_t<Traits>, public apu_
 // Define template context guard for .inc.hpp files BEFORE including them
 #define FAM65XX_TEMPLATE_CONTEXT
 
-#include "operations/addressing_modes.inc.hpp" // Addressing mode handlers
-#include "operations/arithmetic.inc.hpp"       // ADC, SBC, CMP operations
-#include "operations/branches.inc.hpp"         // Branch operations
-#include "operations/cmos.inc.hpp"             // 65C02 enhancements
-#include "operations/control.inc.hpp"          // Control flow operations
-#include "operations/flags.inc.hpp"            // Flag manipulation operations
-#include "operations/illegal.inc.hpp"          // Illegal/undocumented opcodes
-#include "operations/memory.inc.hpp"           // Load/store operations
-#include "operations/rmw.inc.hpp"              // Read-modify-write operations
-#include "operations/rockwell.inc.hpp"  // Rockwell 65C02 bit manipulation
-#include "operations/stack.inc.hpp"     // Stack operations
-#include "operations/transfers.inc.hpp" // Register transfer operations
-#include "operations/wide.inc.hpp"      // 65C816 16-bit operations
+#include "chip/cpu/fam65xx/operations/addressing_modes.inc.hpp" // Addressing mode handlers
+#include "chip/cpu/fam65xx/operations/arithmetic.inc.hpp"       // ADC, SBC, CMP operations
+#include "chip/cpu/fam65xx/operations/branches.inc.hpp"         // Branch operations
+#include "chip/cpu/fam65xx/operations/cmos.inc.hpp"             // 65C02 enhancements
+#include "chip/cpu/fam65xx/operations/control.inc.hpp"          // Control flow operations
+#include "chip/cpu/fam65xx/operations/flags.inc.hpp"            // Flag manipulation operations
+#include "chip/cpu/fam65xx/operations/illegal.inc.hpp"          // Illegal/undocumented opcodes
+#include "chip/cpu/fam65xx/operations/memory.inc.hpp"           // Load/store operations
+#include "chip/cpu/fam65xx/operations/rmw.inc.hpp"              // Read-modify-write operations
+#include "chip/cpu/fam65xx/operations/rockwell.inc.hpp"  // Rockwell 65C02 bit manipulation
+#include "chip/cpu/fam65xx/operations/stack.inc.hpp"     // Stack operations
+#include "chip/cpu/fam65xx/operations/transfers.inc.hpp" // Register transfer operations
+#include "chip/cpu/fam65xx/operations/wide.inc.hpp"      // 65C816 16-bit operations
 
 // Undefine the guard after inclusion
 #undef FAM65XX_TEMPLATE_CONTEXT

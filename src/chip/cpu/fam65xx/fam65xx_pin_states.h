@@ -12,9 +12,9 @@
 
 #pragma once
 
-#include "../../../core/chip_layout.h"
-#include "../../../core/system_lines.h"
-#include "fam65xx.hpp"
+#include "core/chip_layout.h"
+#include "core/system_lines.h"
+#include "chip/cpu/fam65xx/fam65xx.hpp"
 
 // ============================================================================
 // CPU PIN STATE EXTRACTION WITH BUS STATE

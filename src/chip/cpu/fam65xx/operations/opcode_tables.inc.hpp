@@ -8,8 +8,8 @@
  */
 
 // Always include required headers for both standalone analysis and production
-#include "../fam65xx_processor_traits.hpp"
-#include "../fam65xx_types.h"
+#include "chip/cpu/fam65xx/fam65xx_processor_traits.hpp"
+#include "chip/cpu/fam65xx/fam65xx_types.h"
 #include <array>
 
 #ifndef FAM65XX_SKIP_IMPLEMENTATION

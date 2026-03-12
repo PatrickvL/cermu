@@ -2,8 +2,8 @@
  * commodore_1312_paddles.cpp - Commodore 1312 Paddle Controller Implementation
  */
 
-#include "commodore_1312_paddles.h"
-#include "../../core/device_registry.h"
+#include "devices/input/commodore_1312_paddles.h"
+#include "core/device_registry.h"
 #include <cstdio>
 #include <algorithm>
 

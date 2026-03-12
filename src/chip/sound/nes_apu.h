@@ -16,8 +16,8 @@
 
 #include <cstdint>
 
-#include "sound_chip_base.h"
-#include "../../core/system_lines.h"
+#include "chip/sound/sound_chip_base.h"
+#include "core/system_lines.h"
 
 // ============================================================================
 // INTEGRATED APU IMPLEMENTATION (C++)

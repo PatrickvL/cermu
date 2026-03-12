@@ -7,7 +7,7 @@
  * Games: Zelda, Metroid, Mega Man 2, Final Fantasy, Kid Icarus, etc.
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 

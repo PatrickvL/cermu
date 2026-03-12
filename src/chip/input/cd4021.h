@@ -15,7 +15,7 @@
  * Header-only — no side effects, suitable for inline use.
  */
 
-#include "input_chip_base.h"
+#include "chip/input/input_chip_base.h"
 
 #include <cstdint>
 #include <cstring>
