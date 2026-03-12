@@ -216,12 +216,38 @@ public:
     void set_bc(uint16_t v) { regs_.bc = v; }
     void set_de(uint16_t v) { regs_.de = v; }
     void set_hl_direct(uint16_t v) { regs_.hl = v; }
+    void set_ix(uint16_t v) { regs_.ix = v; }
+    void set_iy(uint16_t v) { regs_.iy = v; }
+    void set_i(uint8_t v)   { regs_.i = v; }
+    void set_r(uint8_t v)   { regs_.r = v; }
+    void set_im(uint8_t v)  { regs_.im = v; }
+    void set_iff1(bool v)   { regs_.iff1 = v; }
+    void set_iff2(bool v)   { regs_.iff2 = v; }
+    void set_wz(uint16_t v) { regs_.wz = v; }
 
     // === Shadow register access ===
     uint16_t af_prime() const { return regs_.af_; }
     uint16_t bc_prime() const { return regs_.bc_; }
     uint16_t de_prime() const { return regs_.de_; }
     uint16_t hl_prime() const { return regs_.hl_; }
+
+    void set_af_prime(uint16_t v) { regs_.af_ = v; }
+    void set_bc_prime(uint16_t v) { regs_.bc_ = v; }
+    void set_de_prime(uint16_t v) { regs_.de_ = v; }
+    void set_hl_prime(uint16_t v) { regs_.hl_ = v; }
+
+    // === Execution state access (for test harness) ===
+    void set_halted(bool v)      { halted_ = v; }
+    void set_ei_pending(bool v)  { ei_pending_ = v; }
+
+    /// Returns true when the CPU is at an instruction boundary.
+    /// Used by test harnesses to detect instruction completion.
+    bool opdone() const {
+        return current_handler_ == &z80_t::m1_fetch
+            && step_ == 0
+            && ix_iy_prefix_ == 0
+            && prefix_state_ == PREFIX_NONE;
+    }
 
 private:
     // === Prefix state constants ===
