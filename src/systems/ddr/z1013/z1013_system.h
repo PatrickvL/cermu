@@ -7,14 +7,14 @@
  */
 
 
-#include "z1013_constants.h"
-#include "../../../core/system.h"
-#include "../../../core/system_lines.h"
-#include "../../../core/board.hpp"
-#include "../../../chip/cpu/z80/u880.h"
-#include "../../../chip/cpu/z80/z80.hpp"   // Z80_MREQ_BIT / Z80_IORQ_BIT
-#include "../../../chip/io/z80_pio.h"
-#include "../../../chip/memory/memory_chip.h"
+#include "systems/ddr/z1013/z1013_constants.h"
+#include "core/system.h"
+#include "core/system_lines.h"
+#include "core/board.hpp"
+#include "chip/cpu/z80/u880.h"
+#include "chip/cpu/z80/z80.hpp"   // Z80_MREQ_BIT / Z80_IORQ_BIT
+#include "chip/io/z80_pio.h"
+#include "chip/memory/memory_chip.h"
 #include <cstdint>
 #include <vector>
 

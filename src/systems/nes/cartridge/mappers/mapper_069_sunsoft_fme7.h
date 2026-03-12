@@ -20,7 +20,7 @@
  * Command F: IRQ counter high byte
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 

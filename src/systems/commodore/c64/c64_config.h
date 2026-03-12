@@ -3,7 +3,7 @@
 #include <cstdint>
 
 #include <cstddef>
-#include "../../core/config/path_discovery.h"
+#include "core/config/path_discovery.h"
 
 enum vicii_standard_t {
     VIC_PAL,   // PAL timing standard

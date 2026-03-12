@@ -25,7 +25,7 @@
 
 // Include ImGui (always available since header is GUI-only)
 #include <imgui.h>
-#include "../core/chip_layout.h"
+#include "core/chip_layout.h"
 
 // ============================================================================
 // COLOR SCHEME AND VISUAL SETTINGS

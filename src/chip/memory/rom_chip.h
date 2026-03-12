@@ -1,6 +1,6 @@
 #pragma once
 
-#include "memory_chip_base.h"
+#include "chip/memory/memory_chip_base.h"
 
 struct ChipSlot;  // Forward declaration for factory
 

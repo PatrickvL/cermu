@@ -9,7 +9,7 @@
 
 #include <cstdint>
 #include <string>
-#include "system_lines.h"
+#include "core/system_lines.h"
 
 // ============================================================================
 // PIN TYPES AND ENUMERATIONS

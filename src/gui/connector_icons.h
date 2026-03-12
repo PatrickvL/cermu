@@ -8,7 +8,7 @@
  */
 
 #include <SDL_opengl.h>
-#include "../core/connector.h"
+#include "core/connector.h"
 
 namespace ConnectorIcons {
 

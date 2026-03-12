@@ -23,8 +23,8 @@
  * a small context struct of system-specific callbacks + parameters.
  */
 
-#include "../../core/formats/format_handler.h"
-#include "basic_parser.h"
+#include "core/formats/format_handler.h"
+#include "systems/commodore/basic_parser.h"
 
 #include <cstdint>
 

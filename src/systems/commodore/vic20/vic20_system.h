@@ -1,17 +1,17 @@
 #pragma once
 
-#include "../commodore_system.h"
-#include "../../core/board.hpp"
-#include "../../chip/memory/ram_chip.h"
-#include "../../chip/memory/rom_chip.h"
-#include "../../chip/io/mos6522.h"
-#include "../../chip/video/vic/mos6560.h"
-#include "../../chip/video/vic/mos6561.h"
-#include "../../chip/video/vic/vic_common.h"
-#include "vic20_bus.h"
-#include "vic20_config.h"
-#include "vic20_chips.h"
-#include "../../chip/cpu/fam65xx/mos6502.h"
+#include "systems/commodore/commodore_system.h"
+#include "core/board.hpp"
+#include "chip/memory/ram_chip.h"
+#include "chip/memory/rom_chip.h"
+#include "chip/io/mos6522.h"
+#include "chip/video/vic/mos6560.h"
+#include "chip/video/vic/mos6561.h"
+#include "chip/video/vic/vic_common.h"
+#include "systems/commodore/vic20/vic20_bus.h"
+#include "systems/commodore/vic20/vic20_config.h"
+#include "systems/commodore/vic20/vic20_chips.h"
+#include "chip/cpu/fam65xx/mos6502.h"
 
 #include <cstdint>
 #include <string>

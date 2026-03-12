@@ -11,7 +11,7 @@
  * RAM and character ROM and produce pixel output.
  */
 
-#include "mc6845.h"
+#include "chip/video/mc6845/mc6845.h"
 
 #include <cstdio>
 #include <cstring>

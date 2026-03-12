@@ -7,14 +7,14 @@
  */
 
 
-#include "lc80_constants.h"
-#include "../../../core/system.h"
-#include "../../../core/system_lines.h"
-#include "../../../core/board.hpp"
-#include "../../../chip/cpu/z80/u880.h"
-#include "../../../chip/io/z80_pio.h"
-#include "../../../chip/io/z80_ctc.h"
-#include "../../../chip/memory/memory_chip.h"
+#include "systems/ddr/lc80/lc80_constants.h"
+#include "core/system.h"
+#include "core/system_lines.h"
+#include "core/board.hpp"
+#include "chip/cpu/z80/u880.h"
+#include "chip/io/z80_pio.h"
+#include "chip/io/z80_ctc.h"
+#include "chip/memory/memory_chip.h"
 #include <cstdint>
 #include <vector>
 

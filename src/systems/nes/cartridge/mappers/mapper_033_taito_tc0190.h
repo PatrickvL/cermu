@@ -20,7 +20,7 @@
  *   $A003: D7-D0 = 1KB CHR at $1C00
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 

@@ -27,7 +27,7 @@
  *   bitmix(a, b, m) = select a where m=1, b where m=0
  */
 
-#include "cermu.h"
+#include "core/cermu.h"
 #include <cstdint>
 
 // ---------------------------------------------------------------------------

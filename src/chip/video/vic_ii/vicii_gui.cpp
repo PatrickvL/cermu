@@ -1,10 +1,10 @@
-#include "vicii_common.h"
-#include "../../../core/chip_layout.h"
+#include "chip/video/vic_ii/vicii_common.h"
+#include "core/chip_layout.h"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
-#include "../../../gui/chip_visualization.h"
-#include "../../../gui/global_chip_style.h"
+#include "gui/chip_visualization.h"
+#include "gui/global_chip_style.h"
 #endif
 #include <cstdio>
 #include <cstring>

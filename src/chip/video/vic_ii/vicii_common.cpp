@@ -1,7 +1,7 @@
-#include "vicii_common.h"
-#include "../../memory/mos2114.h"
-#include "../../../core/system_lines.h"
-#include "../../../core/cermu.h"
+#include "chip/video/vic_ii/vicii_common.h"
+#include "chip/memory/mos2114.h"
+#include "core/system_lines.h"
+#include "core/cermu.h"
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>

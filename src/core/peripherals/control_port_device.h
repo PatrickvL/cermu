@@ -20,7 +20,7 @@
  * inherit from PotInputDevice instead.
  */
 
-#include "input_peripheral_device.h"
+#include "core/peripherals/input_peripheral_device.h"
 
 class ControlPortInputDevice : public InputPeripheralDevice {
 public:

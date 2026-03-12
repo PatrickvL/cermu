@@ -5,7 +5,7 @@
 #include <array>
 #include <stdexcept>
 #include <cstring>
-#include "../core/cermu.h"
+#include "core/cermu.h"
 
 // =============================================================================
 // DYNAMIC VERSION: Runtime allocation with small-vector optimization

@@ -26,8 +26,8 @@
  * is the defining component of multiple Spectrum variants (48K, 128K, +2, +3).
  */
 
-#include "../video_chip_base.h"
-#include "../../core/system_lines.h"
+#include "chip/video/video_chip_base.h"
+#include "core/system_lines.h"
 #include <cstdint>
 #include <cstring>
 

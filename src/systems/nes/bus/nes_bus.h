@@ -23,10 +23,10 @@
 #include <cstdint>
 #include <cstring>
 
-#include "../../../core/cermu.h"         // likely/unlikely
-#include "../../../core/system_lines.h"  // bus_state_t, BUS_* macros
-#include "nes_bus_chips.h"               // BLOCK_*, unified buffer constants
-#include "../cartridge/nes_mapper.h"     // MapperBankConfig, MapperChrConfig
+#include "core/cermu.h"         // likely/unlikely
+#include "core/system_lines.h"  // bus_state_t, BUS_* macros
+#include "systems/nes/bus/nes_bus_chips.h"               // BLOCK_*, unified buffer constants
+#include "systems/nes/cartridge/nes_mapper.h"     // MapperBankConfig, MapperChrConfig
 
 namespace nes_bus {
 

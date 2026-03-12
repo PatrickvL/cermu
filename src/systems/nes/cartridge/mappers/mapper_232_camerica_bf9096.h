@@ -12,7 +12,7 @@
  * $C000-$FFFF: Page select (D1-D0 → inner bank within block)
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 

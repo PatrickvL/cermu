@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include "system_lines.h"
+#include "core/system_lines.h"
 
 /**
  * Generic control lines interface for chips that need access to shared bus control lines.

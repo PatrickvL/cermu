@@ -47,15 +47,15 @@ namespace nes_constants {
     constexpr uint32_t INES_PRG_RAM_DEFAULT = 8192;       // default 8KB PRG-RAM
 }
 
-#include "../../chip/cpu/fam65xx/ricoh_2a03.h"
-#include "../../core/chip.h"
-#include "../../core/system_lines.h"
-#include "../../core/system.h"
-#include "../../core/formats/nsf_format.h"
-#include "cartridge/nes_mapper.h"
-#include "cartridge/nes_cartridge.h"
-#include "../../chip/video/nes_ppu/nes_ppu.h"
-#include "bus/nes_bus.h"
+#include "chip/cpu/fam65xx/ricoh_2a03.h"
+#include "core/chip.h"
+#include "core/system_lines.h"
+#include "core/system.h"
+#include "core/formats/nsf_format.h"
+#include "systems/nes/cartridge/nes_mapper.h"
+#include "systems/nes/cartridge/nes_cartridge.h"
+#include "chip/video/nes_ppu/nes_ppu.h"
+#include "systems/nes/bus/nes_bus.h"
 
 // NES default bus state — derived from CPU.
 // RICOH_2A03 provides: RW, RDY, IRQ, NMI, RES.

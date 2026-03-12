@@ -42,9 +42,9 @@
  *   Attenuation: 0 = full volume, 15 = silence.  Each step ≈ 2 dB.
  */
 
-#include "../sound_chip_base.h"
-#include "../../../utils/ring_buffer.hpp"
-#include "../../../core/cermu.h"
+#include "chip/sound/sound_chip_base.h"
+#include "utils/ring_buffer.hpp"
+#include "core/cermu.h"
 #include <cstdint>
 #include <cstring>
 

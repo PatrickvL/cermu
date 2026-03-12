@@ -23,9 +23,9 @@
  *   262 lines/frame @ ~60 Hz
  */
 
-#include "../video_chip_base.h"
-#include "../../utils/ring_buffer.hpp"
-#include "../video_pixel_unit.h"
+#include "chip/video/video_chip_base.h"
+#include "utils/ring_buffer.hpp"
+#include "chip/video/video_pixel_unit.h"
 #include <cstdint>
 
 // ============================================================================

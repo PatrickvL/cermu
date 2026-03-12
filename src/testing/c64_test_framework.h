@@ -6,7 +6,7 @@
 #include <functional>
 #include <memory>
 #include <cstdint>
-#include "../core/system_lines.h"  // bus_state_t, BUS_GET_ADDR, BUS_GET_DATA
+#include "core/system_lines.h"  // bus_state_t, BUS_GET_ADDR, BUS_GET_DATA
 
 // Forward declarations
 class RAMChip;

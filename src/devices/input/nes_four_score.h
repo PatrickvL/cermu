@@ -19,8 +19,8 @@
  * NES controller port accessory.
  */
 
-#include "../../core/peripherals/input_peripheral_device.h"
-#include "nes_standard_controller.h"
+#include "core/peripherals/input_peripheral_device.h"
+#include "devices/input/nes_standard_controller.h"
 
 #include <cstdint>
 #include <memory>

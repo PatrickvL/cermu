@@ -11,9 +11,9 @@
 #include <type_traits>
 
 // Include system-wide bus definitions
-#include "../../../core/cermu.h"
-#include "../cpu_chip_base.h"
-#include "../../../core/system_lines.h"
+#include "core/cermu.h"
+#include "chip/cpu/cpu_chip_base.h"
+#include "core/system_lines.h"
 
 // ============================================================================
 // Bus State and Pin Definitions

@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#include "../../core/chip.h"
+#include "core/chip.h"
 
 // Forward declare C64System
 class C64System;

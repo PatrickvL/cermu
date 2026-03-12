@@ -11,7 +11,7 @@
  * extractors (D64, T64, LNX) and legacy consumer code.
  */
 
-#include "format_handler.h"
+#include "core/formats/format_handler.h"
 // ============================================================================
 // Backward-Compatible Alias
 // ============================================================================

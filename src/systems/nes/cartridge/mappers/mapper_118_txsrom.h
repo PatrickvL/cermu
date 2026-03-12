@@ -14,7 +14,7 @@
  *   register that maps into that slot's address range.
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 #include <cstring>
 
 namespace nes_system {

@@ -18,7 +18,7 @@
  * Games: Decathlon, Robot Tank.
  */
 
-#include "a2600_mapper.h"
+#include "systems/atari2600/mappers/a2600_mapper.h"
 
 struct A2600MapperFE : public A2600Mapper {
     uint8_t read(uint16_t offset) override {

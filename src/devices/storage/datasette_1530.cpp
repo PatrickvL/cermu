@@ -6,14 +6,14 @@
  * TAP v1: byte 0x00 signals a 3-byte little-endian long pulse.
  */
 
-#include "datasette_1530.h"
-#include "../../core/device_registry.h"
-#include "../../core/vfs/vfs.h"
+#include "devices/storage/datasette_1530.h"
+#include "core/device_registry.h"
+#include "core/vfs/vfs.h"
 #include <cstdio>
 #include <cstring>
 
 #ifdef CERMU_HAS_GUI
-#include "imgui.h"
+#include <imgui.h>
 #endif
 
 // TAP file header

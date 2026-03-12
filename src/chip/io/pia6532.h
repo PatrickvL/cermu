@@ -19,7 +19,7 @@
  *   RIOT I/O: $0280-$02FF (A12=0, A7=1, A9=1)
  */
 
-#include "io_chip_base.h"
+#include "chip/io/io_chip_base.h"
 #include <cstdint>
 
 // Timer divider values (set via address bits A4:A3)

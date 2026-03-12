@@ -14,7 +14,7 @@
 #include <windows.h>
 #endif
 
-#include "../utils/ring_buffer.hpp"
+#include "utils/ring_buffer.hpp"
 
 // Forward declarations
 struct ImGuiIO;

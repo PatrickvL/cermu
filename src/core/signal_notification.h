@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <cstddef>
-#include "system_lines.h"
+#include "core/system_lines.h"
 
 /**
  * Lightweight signal change notification system.

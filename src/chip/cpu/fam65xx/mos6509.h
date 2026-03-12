@@ -14,10 +14,10 @@
  * specific bus phases — no additional address pins are exposed.
  */
 
-#include "fam65xx.hpp"
+#include "chip/cpu/fam65xx/fam65xx.hpp"
 #ifdef CERMU_HAS_GUI
-#include "fam65xx_pin_layout.h"
-#include "../../../core/system_lines.h"
+#include "chip/cpu/fam65xx/fam65xx_pin_layout.h"
+#include "core/system_lines.h"
 #endif
 
 namespace fam65xx {

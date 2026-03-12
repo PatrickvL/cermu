@@ -1,19 +1,19 @@
-#include "apple1_system.h"
-#include "apple1_constants.h"
-#include "../../core/chip.h"
+#include "systems/apple1/apple1_system.h"
+#include "systems/apple1/apple1_constants.h"
+#include "core/chip.h"
 #include <cstring>
 #include <cstdio>
 
 #ifdef CERMU_HAS_GUI
-#include "imgui.h"
+#include <imgui.h>
 #endif
 
 // CPU type included via apple1_system.h → fam65xx.hpp
 
 // Include ROM loader
-#include "../../core/storage/rom_loader.h"
-#include "../../core/config/path_discovery.h"
-#include "../../core/system_registry.h"
+#include "core/storage/rom_loader.h"
+#include "core/config/path_discovery.h"
+#include "core/system_registry.h"
 
 // ============================================================================
 // Hardware Traits Definition

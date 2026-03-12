@@ -10,7 +10,7 @@
  * different physical layout; the configuration data is the same.
  */
 
-#include "../../../chip/input/commodore_keyboard.h"
+#include "chip/input/commodore_keyboard.h"
 
 #define PET_KEYBOARD_ROWS 10
 #define PET_KEYBOARD_COLS  8

@@ -7,8 +7,8 @@
  *   screen memory + mode/color decoding.  AY-3-8912 driven via PPI port.
  */
 
-#include "amstrad_cpc_system.h"
-#include "../../core/system_registry.h"
+#include "systems/amstrad_cpc/amstrad_cpc_system.h"
+#include "core/system_registry.h"
 #include <cstring>
 #include <cstdio>
 

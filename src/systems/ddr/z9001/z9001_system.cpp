@@ -2,10 +2,10 @@
  * z9001_system.cpp — Robotron Z9001 / KC 87 system implementation
  */
 
-#include "z9001_system.h"
-#include "../../../core/system_registry.h"
-#include "../../../core/storage/rom_loader.h"
-#include "../../../core/config/path_discovery.h"
+#include "systems/ddr/z9001/z9001_system.h"
+#include "core/system_registry.h"
+#include "core/storage/rom_loader.h"
+#include "core/config/path_discovery.h"
 #include <cstring>
 #include <cstdio>
 

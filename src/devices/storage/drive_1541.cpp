@@ -22,9 +22,9 @@
  * mode can address this).
  */
 
-#include "drive_1541.h"
-#include "../../core/device_registry.h"
-#include "../../core/vfs/vfs.h"
+#include "devices/storage/drive_1541.h"
+#include "core/device_registry.h"
+#include "core/vfs/vfs.h"
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
@@ -33,7 +33,7 @@
 #include <filesystem>
 
 #ifdef CERMU_HAS_GUI
-#include "imgui.h"
+#include <imgui.h>
 #endif
 
 // ============================================================================

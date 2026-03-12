@@ -2,9 +2,9 @@
 
 #include <cstdint>
 
-#include "../../core/system_lines.h"
-#include "../../core/cermu.h"  // For REGISTER_CALL macro
-#include "vic20_chips.h"
+#include "core/system_lines.h"
+#include "core/cermu.h"  // For REGISTER_CALL macro
+#include "systems/commodore/vic20/vic20_chips.h"
 /**
  * VIC-20 Memory Banking System - Optimized Encoded Bank Type Design
  * 

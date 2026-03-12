@@ -18,7 +18,7 @@
  * point directly into the ROM at fixed offsets from load_addr.
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 #include <cstdio>
 #include <cstring>
 

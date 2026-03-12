@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include "memory_chip_base.h"
+#include "chip/memory/memory_chip_base.h"
 
 // ============================================================================
 // MOS Technology 2114 Static RAM — 1K × 4-bit

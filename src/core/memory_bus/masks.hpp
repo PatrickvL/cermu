@@ -13,7 +13,7 @@
 // =============================================================================
 #pragma once
 
-#include "config.hpp"
+#include "core/memory_bus/config.hpp"
 
 #include <array>
 #include <cassert>

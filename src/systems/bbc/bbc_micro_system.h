@@ -1,14 +1,14 @@
 #pragma once
 
-#include "../../core/system.h"
-#include "../../core/system_lines.h"
-#include "../../core/board.hpp"
-#include "../../chip/cpu/fam65xx/mos6502.h"
-#include "../../chip/io/mos6522.h"
-#include "../../chip/video/mc6845/mc6845.h"
-#include "../../chip/sound/sn76489/sn76489.h"
-#include "../../chip/memory/memory_chip.h"
-#include "bbc_micro_constants.h"
+#include "core/system.h"
+#include "core/system_lines.h"
+#include "core/board.hpp"
+#include "chip/cpu/fam65xx/mos6502.h"
+#include "chip/io/mos6522.h"
+#include "chip/video/mc6845/mc6845.h"
+#include "chip/sound/sn76489/sn76489.h"
+#include "chip/memory/memory_chip.h"
+#include "systems/bbc/bbc_micro_constants.h"
 #include <cstdint>
 #include <memory>
 

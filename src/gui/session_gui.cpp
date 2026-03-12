@@ -1,16 +1,16 @@
-#include "session_gui.h"
-#include "connector_icons.h"
-#include "vfs_file_system.h"
+#include "gui/session_gui.h"
+#include "gui/connector_icons.h"
+#include "gui/vfs_file_system.h"
 #define IMGUI_DEFINE_MATH_OPERATORS
-#include "imgui.h"
-#include "imgui_impl_sdl2.h"
-#include "imgui_impl_opengl3.h"
-#include "../core/config/path_discovery.h"
-#include "../core/archive_scanner.h"
-#include "../core/formats/format_handler.h"
-#include "../core/formats/format_registry.h"
-#include "../core/vfs/vfs.h"
-#include "../devices/storage/drive_1541.h"
+#include <imgui.h>
+#include <imgui_impl_sdl2.h>
+#include <imgui_impl_opengl3.h>
+#include "core/config/path_discovery.h"
+#include "core/archive_scanner.h"
+#include "core/formats/format_handler.h"
+#include "core/formats/format_registry.h"
+#include "core/vfs/vfs.h"
+#include "devices/storage/drive_1541.h"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -19,7 +19,7 @@
 
 #ifdef __has_include
 #if __has_include("ImGuiFileDialog.h")
-#include "cermu_file_dialog.h"
+#include "gui/cermu_file_dialog.h"
 #define HAS_IMGUIFILEDIALOG 1
 #endif
 #endif

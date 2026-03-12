@@ -1,6 +1,6 @@
-#include "pia6820.h"
-#include "../../core/chip_manifest.hpp"
-#include "../../core/chip_registry.h"
+#include "chip/io/pia6820.h"
+#include "core/chip_manifest.hpp"
+#include "core/chip_registry.h"
 #include <cstring>
 
 // PIA 6820 Register offsets

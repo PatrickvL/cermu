@@ -15,16 +15,16 @@
  *    -               16KB  → F6
  */
 
-#include "a2600_mapper.h"
-#include "a2600_mapper_2k.h"
-#include "a2600_mapper_4k.h"
-#include "a2600_mapper_f8.h"
-#include "a2600_mapper_f6.h"
-#include "a2600_mapper_f4.h"
-#include "a2600_mapper_e0.h"
-#include "a2600_mapper_3f.h"
-#include "a2600_mapper_fe.h"
-#include "a2600_mapper_fa.h"
+#include "systems/atari2600/mappers/a2600_mapper.h"
+#include "systems/atari2600/mappers/a2600_mapper_2k.h"
+#include "systems/atari2600/mappers/a2600_mapper_4k.h"
+#include "systems/atari2600/mappers/a2600_mapper_f8.h"
+#include "systems/atari2600/mappers/a2600_mapper_f6.h"
+#include "systems/atari2600/mappers/a2600_mapper_f4.h"
+#include "systems/atari2600/mappers/a2600_mapper_e0.h"
+#include "systems/atari2600/mappers/a2600_mapper_3f.h"
+#include "systems/atari2600/mappers/a2600_mapper_fe.h"
+#include "systems/atari2600/mappers/a2600_mapper_fa.h"
 #include <memory>
 #include <cstdio>
 

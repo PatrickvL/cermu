@@ -1,8 +1,8 @@
 #pragma once
 
-#include "emulator_host.h"
-#include "system_selection_dialog.h"
-#include "../core/system.h"
+#include "gui/emulator_host.h"
+#include "gui/system_selection_dialog.h"
+#include "core/system.h"
 #include <memory>
 #include <string>
 

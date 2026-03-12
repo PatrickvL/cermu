@@ -10,11 +10,11 @@
  * to avoid reading entries that have no recognised format.
  */
 
-#include "archive_scanner.h"
-#include "formats/format_registry.h"
-#include "system_registry.h"
-#include "system.h"
-#include "vfs/vfs.h"
+#include "core/archive_scanner.h"
+#include "core/formats/format_registry.h"
+#include "core/system_registry.h"
+#include "core/system.h"
+#include "core/vfs/vfs.h"
 
 #include <cstdlib>
 

@@ -5,7 +5,7 @@
  * included within the fam65xx_t template class.
  */
 
-#include "inc_lint_prevention.hpp"
+#include "chip/cpu/fam65xx/operations/inc_lint_prevention.hpp"
 
 #ifndef FAM65XX_SKIP_IMPLEMENTATION
 
@@ -608,4 +608,4 @@ bus_state_t op_las(bus_state_t pins) {
 
 #endif // FAM65XX_SKIP_IMPLEMENTATION
 
-#include "inc_lint_prevention_footer.hpp"
+#include "chip/cpu/fam65xx/operations/inc_lint_prevention_footer.hpp"

@@ -6,7 +6,7 @@
  */
 
 #pragma once
-#include "pin_types.h"
+#include "core/pin_types.h"
 #include <string>
 
 // Fast enum-to-string lookup for basic pin names

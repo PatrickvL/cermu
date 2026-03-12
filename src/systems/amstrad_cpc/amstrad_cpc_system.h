@@ -19,15 +19,15 @@
  * disc controller presence, ROM set).
  */
 
-#include "../../core/system.h"
-#include "../../core/system_lines.h"
-#include "../../core/board.hpp"
-#include "../../chip/cpu/z80/zilog_z80a.h"
-#include "../../chip/video/mc6845/mc6845.h"
-#include "../../chip/io/i8255.h"
-#include "../../chip/sound/ay_3_8910.h"
-#include "../../chip/memory/memory_chip.h"
-#include "amstrad_cpc_constants.h"
+#include "core/system.h"
+#include "core/system_lines.h"
+#include "core/board.hpp"
+#include "chip/cpu/z80/zilog_z80a.h"
+#include "chip/video/mc6845/mc6845.h"
+#include "chip/io/i8255.h"
+#include "chip/sound/ay_3_8910.h"
+#include "chip/memory/memory_chip.h"
+#include "systems/amstrad_cpc/amstrad_cpc_constants.h"
 #include <cstdint>
 #include <memory>
 #include <vector>

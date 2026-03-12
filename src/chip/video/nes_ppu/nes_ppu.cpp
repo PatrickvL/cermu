@@ -11,11 +11,11 @@
  */
 
 // Include nes_system.h for full type definitions (Cartridge, etc.)
-#include "../../../systems/nes/nes_system.h"
+#include "systems/nes/nes_system.h"
 
 // nes_ppu.h is transitively included via nes_system.h but be explicit
-#include "nes_ppu.h"
-#include "nes_palette.h"
+#include "chip/video/nes_ppu/nes_ppu.h"
+#include "chip/video/nes_ppu/nes_palette.h"
 
 // ============================================================================
 // Optional PPU sub-component profiling — enabled with -DNES_PROFILING

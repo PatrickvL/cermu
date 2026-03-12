@@ -15,7 +15,7 @@
  *   D4 (bit 4): Trigger — LOW when trigger is pulled
  */
 
-#include "../../core/peripherals/input_peripheral_device.h"
+#include "core/peripherals/input_peripheral_device.h"
 
 #include <cstdint>
 

@@ -11,14 +11,14 @@
  */
 
 
-#include "bombjack_constants.h"
-#include "../../../core/system.h"
-#include "../../../core/system_lines.h"
-#include "../../../core/board.hpp"
-#include "../../../chip/cpu/z80/zilog_z80a.h"
-#include "../../../chip/sound/ay_3_8910.h"
-#include "../../../chip/memory/ram_chip.h"
-#include "../../../chip/memory/rom_chip.h"
+#include "systems/arcade/bombjack/bombjack_constants.h"
+#include "core/system.h"
+#include "core/system_lines.h"
+#include "core/board.hpp"
+#include "chip/cpu/z80/zilog_z80a.h"
+#include "chip/sound/ay_3_8910.h"
+#include "chip/memory/ram_chip.h"
+#include "chip/memory/rom_chip.h"
 #include <cstdint>
 
 #define BOMBJACK_BUS_DEFAULT_STATE (ZilogZ80A::default_bus_state())

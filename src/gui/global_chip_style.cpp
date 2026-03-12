@@ -2,7 +2,7 @@
  * global_chip_style.cpp - Global chip visualization style management implementation
  */
 
-#include "global_chip_style.h"
+#include "gui/global_chip_style.h"
 #include <map>
 #include <imgui.h>
 #include <algorithm>

@@ -1,8 +1,8 @@
-#include "system_selection_dialog.h"
-#include "../core/system.h"
-#include "../core/system_registry.h"
-#include "../core/formats/format_handler.h"
-#include "imgui.h"
+#include "gui/system_selection_dialog.h"
+#include "core/system.h"
+#include "core/system_registry.h"
+#include "core/formats/format_handler.h"
+#include <imgui.h>
 #include <cstdio>
 #include <cstring>
 #include <cctype>

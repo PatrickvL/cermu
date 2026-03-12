@@ -12,7 +12,7 @@
  *   - DD CB dd xx:   indexed bit operations (FD CB dd xx for IY)
  */
 
-#include "z80_decoder.h"
+#include "chip/cpu/z80/z80_decoder.h"
 
 #include <cstdarg>
 #include <cstdio>

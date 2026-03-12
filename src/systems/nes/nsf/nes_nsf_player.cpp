@@ -17,11 +17,11 @@
  *   $0770-$077F  — IRQ handler
  */
 
-#include "nes_nsf_player.h"
-#include "../cartridge/mappers/mapper_nsf.h"
-#include "../nes_screen_utils.h"
-#include "../nes_system.h"
-#include "asm6510.h"
+#include "systems/nes/nsf/nes_nsf_player.h"
+#include "systems/nes/cartridge/mappers/mapper_nsf.h"
+#include "systems/nes/nes_screen_utils.h"
+#include "systems/nes/nes_system.h"
+#include "chip/cpu/fam65xx/asm6510.h"
 #include <cstdio>
 #include <cstring>
 

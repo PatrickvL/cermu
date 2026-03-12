@@ -7,7 +7,7 @@
  * Load address defaults to 0; systems override as needed.
  */
 
-#include "format_handler.h"
+#include "core/formats/format_handler.h"
 
 // ============================================================================
 // Format Descriptor

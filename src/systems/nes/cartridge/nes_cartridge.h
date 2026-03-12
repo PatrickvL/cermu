@@ -15,10 +15,10 @@
 #include <string>
 #include <vector>
 
-#include "../../../core/chip.h"           // ChipBase, ChipInfo
-#include "../bus/nes_bus.h"              // nes_bus_t, block dispatch, PPU_PAGE_SHIFT
-#include "../bus/nes_bus_signals.h"      // ppu_bus_state_t, PPU_BUS_* macros
-#include "nes_mapper.h"                  // Mirror, Mapper, MapperBankConfig, MapperChrConfig
+#include "core/chip.h"           // ChipBase, ChipInfo
+#include "systems/nes/bus/nes_bus.h"              // nes_bus_t, block dispatch, PPU_PAGE_SHIFT
+#include "systems/nes/bus/nes_bus_signals.h"      // ppu_bus_state_t, PPU_BUS_* macros
+#include "systems/nes/cartridge/nes_mapper.h"                  // Mirror, Mapper, MapperBankConfig, MapperChrConfig
 
 namespace nes_system {
 

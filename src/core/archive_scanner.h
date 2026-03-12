@@ -13,7 +13,7 @@
  * of them needs to know about the others' internals.
  */
 
-#include "vfs/vfs.h"
+#include "core/vfs/vfs.h"
 
 #include <string>
 #include <vector>

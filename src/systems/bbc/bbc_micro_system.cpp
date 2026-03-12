@@ -1,13 +1,13 @@
-#include "bbc_micro_system.h"
-#include "../../core/cermu.h"
-#include "../../core/storage/rom_loader.h"
-#include "../../core/config/path_discovery.h"
-#include "../../core/system_registry.h"
+#include "systems/bbc/bbc_micro_system.h"
+#include "core/cermu.h"
+#include "core/storage/rom_loader.h"
+#include "core/config/path_discovery.h"
+#include "core/system_registry.h"
 #include <cstring>
 #include <cstdio>
 
 #ifdef CERMU_HAS_GUI
-#include "imgui.h"
+#include <imgui.h>
 #endif
 
 // ============================================================================

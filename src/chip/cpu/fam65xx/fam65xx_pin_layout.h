@@ -12,8 +12,8 @@
 
 #ifdef CERMU_HAS_GUI
 
-#include "../../../core/chip_layout.h"
-#include "fam65xx_processor_traits.hpp"
+#include "core/chip_layout.h"
+#include "chip/cpu/fam65xx/fam65xx_processor_traits.hpp"
 
 // ============================================================================
 // PRIMARY TEMPLATE — generic DIP-40 fallback

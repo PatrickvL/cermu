@@ -25,7 +25,7 @@
  *          Galaga, Dig Dug, Pole Position, Xevious (WSG8 variant)
  */
 
-#include "sound_chip_base.h"
+#include "chip/sound/sound_chip_base.h"
 #include <cstdint>
 #include <cstdio>
 #include <cstring>

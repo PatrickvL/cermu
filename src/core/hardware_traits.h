@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-#include "chip.h"     // VideoStandard
+#include "core/chip.h"     // VideoStandard
 
 // ============================================================================
 // SYSTEM HARDWARE TRAITS

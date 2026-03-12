@@ -1,1 +1,1 @@
-#include "mos6567.h"
+#include "chip/video/vic_ii/mos6567.h"

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "sound_chip_base.h"
-#include "../../core/bus_cycle_interface.h"
-#include "../../core/system_lines.h" // For bus_state_t
+#include "chip/sound/sound_chip_base.h"
+#include "core/bus_cycle_interface.h"
+#include "core/system_lines.h" // For bus_state_t
 #include <atomic>
 #include <cstdint>
 

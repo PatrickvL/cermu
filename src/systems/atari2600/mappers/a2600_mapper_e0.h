@@ -14,7 +14,7 @@
  *        Popeye, Q*bert's Qubes, Super Cobra, Tooth Protectors.
  */
 
-#include "a2600_mapper.h"
+#include "systems/atari2600/mappers/a2600_mapper.h"
 
 struct A2600MapperE0 : public A2600Mapper {
     uint8_t read(uint16_t offset) override {

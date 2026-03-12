@@ -1,4 +1,4 @@
-#include "vic_common.h"
+#include "chip/video/vic/vic_common.h"
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>

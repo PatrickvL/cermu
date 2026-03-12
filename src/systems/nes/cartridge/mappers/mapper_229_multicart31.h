@@ -14,7 +14,7 @@
  *          When 0 → first 32KB of PRG, first 8KB of CHR
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 

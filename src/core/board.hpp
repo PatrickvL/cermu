@@ -12,8 +12,8 @@
 // =============================================================================
 #pragma once
 
-#include "chip_manifest.hpp"
-#include "memory_bus.hpp"
+#include "core/chip_manifest.hpp"
+#include "core/memory_bus.hpp"
 
 // §4  Board<Spec> — runtime chip owner, buffer manager, auto-wiring
 // =============================================================================

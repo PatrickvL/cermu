@@ -13,7 +13,7 @@
  * - Factory creation of device instances by ID
  */
 
-#include "connector.h"
+#include "core/connector.h"
 #include <functional>
 #include <memory>
 #include <string>

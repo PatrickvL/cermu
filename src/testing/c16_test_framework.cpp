@@ -5,14 +5,14 @@
 // Detection: $FDCF debug cart register, infinite loop + border color fallback.
 // =============================================================================
 
-#include "c16_test_framework.h"
-#include "c64_test_loader.h"     // Reuse PRG loader (writes raw bytes to RAMChip)
-#include "../systems/commodore/c16/c16_system.h"
-#include "../systems/commodore/c16/c16_constants.h"
-#include "../chip/memory/memory_chip.h"
-#include "../chip/cpu/fam65xx/fam65xx.hpp"
-#include "../chip/video/ted/ted7360.h"
-#include "../core/os/os.h"
+#include "testing/c16_test_framework.h"
+#include "testing/c64_test_loader.h"     // Reuse PRG loader (writes raw bytes to RAMChip)
+#include "systems/commodore/c16/c16_system.h"
+#include "systems/commodore/c16/c16_constants.h"
+#include "chip/memory/memory_chip.h"
+#include "chip/cpu/fam65xx/fam65xx.hpp"
+#include "chip/video/ted/ted7360.h"
+#include "core/os/os.h"
 
 #ifdef CERMU_USE_STD_FILESYSTEM
     #include <filesystem>

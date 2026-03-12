@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#include "../../core/system_lines.h"
+#include "core/system_lines.h"
 
 // Commodore PLA MOS 906114-01 REV3 8411
 // https://www.c64-wiki.com/wiki/PLA_(C64_chip)

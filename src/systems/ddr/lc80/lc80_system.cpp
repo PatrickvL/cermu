@@ -2,8 +2,8 @@
  * lc80_system.cpp — LC 80 learning computer system implementation
  */
 
-#include "lc80_system.h"
-#include "../../../core/system_registry.h"
+#include "systems/ddr/lc80/lc80_system.h"
+#include "core/system_registry.h"
 #include <cstring>
 #include <cstdio>
 

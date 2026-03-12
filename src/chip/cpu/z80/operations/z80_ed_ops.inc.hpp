@@ -10,7 +10,7 @@
  * Included inside z80_t class with Z80_TEMPLATE_CONTEXT defined.
  */
 
-#include "inc_lint_prevention.hpp"
+#include "chip/cpu/z80/operations/inc_lint_prevention.hpp"
 
 #ifndef Z80_SKIP_IMPLEMENTATION
 
@@ -667,4 +667,4 @@ bus_state_t op_otir_otdr(bus_state_t pins) {
 
 #endif // Z80_SKIP_IMPLEMENTATION
 
-#include "inc_lint_prevention_footer.hpp"
+#include "chip/cpu/z80/operations/inc_lint_prevention_footer.hpp"

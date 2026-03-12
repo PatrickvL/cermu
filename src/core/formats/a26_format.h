@@ -15,6 +15,6 @@
  * loads cartridge data directly, like the NES/iNES handler.
  */
 
-#include "format_handler.h"
+#include "core/formats/format_handler.h"
 
 extern const format_descriptor_t A26_FORMAT_DESCRIPTOR;

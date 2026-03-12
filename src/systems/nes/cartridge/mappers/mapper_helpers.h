@@ -7,7 +7,7 @@
  * Zero-overhead: all functions inlined, no vtables or indirection.
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 
 namespace nes_system {
 namespace mapper_helpers {

@@ -9,7 +9,7 @@
  * sizes in the ImGui menu bar.
  */
 
-#include "connector_icons.h"
+#include "gui/connector_icons.h"
 #include <cstring>
 #include <cstdio>
 

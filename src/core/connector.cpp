@@ -2,7 +2,7 @@
  * connector.cpp - Generic Connector Framework Implementation
  */
 
-#include "connector.h"
+#include "core/connector.h"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../core/chip.h"
+#include "core/chip.h"
 
 // ============================================================================
 // SOUND CHIP BASE — intermediate base for all sound/audio chips

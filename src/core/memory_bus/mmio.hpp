@@ -12,7 +12,7 @@
 // =============================================================================
 #pragma once
 
-#include "../system_lines.h"   // bus_state_t
+#include "core/system_lines.h"   // bus_state_t
 
 
 struct MmioHandler {

@@ -20,7 +20,7 @@
  * Reference: https://www.nesdev.org/wiki/MMC5
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 #include <cstring>
 
 namespace nes_system {

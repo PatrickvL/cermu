@@ -2,9 +2,9 @@
  * T64 Format Handler — Implementation
  */
 
-#include "t64_format.h"
-#include "format_registry.h"
-#include "../../systems/commodore/petscii.h"
+#include "core/formats/t64_format.h"
+#include "core/formats/format_registry.h"
+#include "systems/commodore/petscii.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

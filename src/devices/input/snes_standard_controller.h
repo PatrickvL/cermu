@@ -19,7 +19,7 @@
  * after all 12 buttons have been shifted out.
  */
 
-#include "../../core/peripherals/input_peripheral_device.h"
+#include "core/peripherals/input_peripheral_device.h"
 
 #include <cstdint>
 #include <SDL_scancode.h>

@@ -23,10 +23,10 @@
  *   $BFFD:     AY data write
  */
 
-#include "spectrum_system.h"
-#include "../../core/system_registry.h"
-#include "../../core/storage/rom_loader.h"
-#include "../../core/config/path_discovery.h"
+#include "systems/spectrum/spectrum_system.h"
+#include "core/system_registry.h"
+#include "core/storage/rom_loader.h"
+#include "core/config/path_discovery.h"
 #include <cstring>
 #include <cstdio>
 

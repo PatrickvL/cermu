@@ -159,19 +159,8 @@ endif()
 # keyboard_mapper.h) reference SDL_Keycode types unconditionally.
 # LIBARCHIVE include dirs added because os_archive.cpp needs <archive.h>.
 include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/core/input
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/cpu/fam65xx
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/input
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/io
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/logic
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/memory
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/sound
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/chip/video
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/systems/commodore/c64
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/systems/commodore
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/main
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/gui
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/external
     ${SDL2_INCLUDE_DIRS}
     ${LIBARCHIVE_INCLUDE_DIRS}
 )

@@ -14,7 +14,7 @@
  * and feeds them to the SID's POTX ($D419) / POTY ($D41A) registers.
  */
 
-#include "control_port_device.h"
+#include "core/peripherals/control_port_device.h"
 
 class PotInputDevice : public ControlPortInputDevice {
 public:

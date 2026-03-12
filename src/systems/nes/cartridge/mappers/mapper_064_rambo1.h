@@ -11,7 +11,7 @@
  * Register interface mirrors MMC3 ($8000-$FFFF even/odd pairs).
  */
 
-#include "../nes_mapper.h"
+#include "systems/nes/cartridge/nes_mapper.h"
 #include <cstring>
 
 namespace nes_system {

@@ -16,7 +16,7 @@
  */
 
 #include <cstdint>
-#include "../../core/system_lines.h"
+#include "core/system_lines.h"
 
 // ============================================================================
 // PPU BUS STATE — 64-bit bus word for the PPU's 14-bit address bus

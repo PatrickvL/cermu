@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../../core/system.h"
-#include "../../core/formats/format_handler.h"
-#include "commodore_load_helpers.h"
-#include "../../chip/input/commodore_keyboard.h"
-#include "../../core/input/keyboard_mapper.h"
+#include "core/system.h"
+#include "core/formats/format_handler.h"
+#include "systems/commodore/commodore_load_helpers.h"
+#include "chip/input/commodore_keyboard.h"
+#include "core/input/keyboard_mapper.h"
 #include <memory>
 #include <string>
 

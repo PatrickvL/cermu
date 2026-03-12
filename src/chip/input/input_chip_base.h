@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../core/chip.h"
+#include "core/chip.h"
 
 // ============================================================================
 // INPUT CHIP BASE — intermediate base for all input/shift-register chips

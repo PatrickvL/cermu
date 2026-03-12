@@ -14,8 +14,8 @@
  * same LATCH/CLK/D0 signals but shifts out 16 bits instead of 8.
  */
 
-#include "snes_standard_controller.h"
-#include "../../core/device_registry.h"
+#include "devices/input/snes_standard_controller.h"
+#include "core/device_registry.h"
 
 #include <cstdio>
 #include <SDL_events.h>

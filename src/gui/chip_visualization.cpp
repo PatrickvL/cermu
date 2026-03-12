@@ -2,8 +2,8 @@
  * chip_visualization.cpp - Generic chip visualization system implementation
  */
 
-#include "chip_visualization.h"
-#include "global_chip_style.h"
+#include "gui/chip_visualization.h"
+#include "gui/global_chip_style.h"
 #include <algorithm>
 #include <cstdio>
 

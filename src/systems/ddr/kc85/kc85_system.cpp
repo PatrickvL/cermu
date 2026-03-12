@@ -2,10 +2,10 @@
  * kc85_system.cpp — KC 85/2, /3, /4 system implementation
  */
 
-#include "kc85_system.h"
-#include "../../../core/system_registry.h"
-#include "../../../core/storage/rom_loader.h"
-#include "../../../core/config/path_discovery.h"
+#include "systems/ddr/kc85/kc85_system.h"
+#include "core/system_registry.h"
+#include "core/storage/rom_loader.h"
+#include "core/config/path_discovery.h"
 #include <cstring>
 #include <cstdio>
 

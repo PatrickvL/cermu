@@ -2,7 +2,7 @@
 // C64 KERNAL ROM Patches — Implementation
 // =============================================================================
 
-#include "c64_kernal_patches.h"
+#include "systems/commodore/c64/c64_kernal_patches.h"
 #include <cstdio>
 #include <cstring>
 

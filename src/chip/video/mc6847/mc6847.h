@@ -22,8 +22,8 @@
  * 40-pin DIP package.
  */
 
-#include "../video_chip_base.h"
-#include "../../core/system_lines.h"
+#include "chip/video/video_chip_base.h"
+#include "core/system_lines.h"
 #include <cstdint>
 #include <cstring>
 

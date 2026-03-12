@@ -1,48 +1,48 @@
-﻿#include "c64_system.h"
-#include "c64_kernal_patches.h"
-#include "c64_sid_player.h"
-#include "../../chip/input/commodore_keyboard.h"
-#include "../../core/input/emu_key_sdl_map.h"
+﻿#include "systems/commodore/c64/c64_system.h"
+#include "systems/commodore/c64/c64_kernal_patches.h"
+#include "systems/commodore/c64/c64_sid_player.h"
+#include "chip/input/commodore_keyboard.h"
+#include "core/input/emu_key_sdl_map.h"
 // gui_state_t dependency eliminated — chip debug uses base class,
 // system menu items are inlined, test binary dialog removed.
 #ifdef CERMU_HAS_GUI
-#include "imgui.h"
+#include <imgui.h>
 #endif
-#include "../../core/formats/format_registry.h"
-#include "../../core/formats/prg_format.h"
-#include "../../core/formats/bin_format.h"
-#include "../../core/formats/d64_format.h"
-#include "../../core/formats/t64_format.h"
-#include "../../core/formats/tap_format.h"
-#include "../../core/formats/crt_format.h"
-#include "../../core/formats/lnx_format.h"
-#include "../../core/formats/sid_format.h"
-#include "../commodore_load_helpers.h"
-#include "../../chip/cpu/fam65xx/mos6510.h"
+#include "core/formats/format_registry.h"
+#include "core/formats/prg_format.h"
+#include "core/formats/bin_format.h"
+#include "core/formats/d64_format.h"
+#include "core/formats/t64_format.h"
+#include "core/formats/tap_format.h"
+#include "core/formats/crt_format.h"
+#include "core/formats/lnx_format.h"
+#include "core/formats/sid_format.h"
+#include "systems/commodore/commodore_load_helpers.h"
+#include "chip/cpu/fam65xx/mos6510.h"
 // CPU (fam65xx) is a native C++ ChipBase — no separate GUI header needed
-#include "../../chip/video/vic_ii/vicii_common.h"
+#include "chip/video/vic_ii/vicii_common.h"
 // VIC-II is a native C++ ChipBase — no separate GUI header needed
 // MOS6526 is a native C++ ChipBase — no separate GUI header needed
 // MOS2114 is a native C++ ChipBase — no separate GUI header needed
 // MOS6581 is a native C++ ChipBase — no separate GUI header needed
-#include "../../chip/logic/pla.h"
-#include "c64_pla_chip.h"
-#include "../../core/chip.h"
-#include "../../chip/memory/memory_chip.h"
-#include "../../core/storage/rom_loader.h"
-#include "../../core/config/path_discovery.h"
-#include "c64_keyboard_matrix.h"
-#include "../../devices/input/joystick_device.h"
-#include "../../devices/input/lightpen_device.h"
-#include "../../devices/storage/drive_1541.h"
-#include "../../devices/storage/datasette_1530.h"
-#include "../../devices/keyboard/commodore_keyboard_device.h"
-#include "../prg_content_analysis.h"
+#include "chip/logic/pla.h"
+#include "systems/commodore/c64/c64_pla_chip.h"
+#include "core/chip.h"
+#include "chip/memory/memory_chip.h"
+#include "core/storage/rom_loader.h"
+#include "core/config/path_discovery.h"
+#include "systems/commodore/c64/c64_keyboard_matrix.h"
+#include "devices/input/joystick_device.h"
+#include "devices/input/lightpen_device.h"
+#include "devices/storage/drive_1541.h"
+#include "devices/storage/datasette_1530.h"
+#include "devices/keyboard/commodore_keyboard_device.h"
+#include "systems/commodore/prg_content_analysis.h"
 #include <cstring>
 #include <cstdio>
 #include <cctype>
 #include <algorithm>
-#include "c64_constants.h"
+#include "systems/commodore/c64/c64_constants.h"
 
 /**
  * C64 System Implementation

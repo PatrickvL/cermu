@@ -1,5 +1,5 @@
-#include "../core/system.h"
-#include "../core/formats/format_handler.h"
+#include "core/system.h"
+#include "core/formats/format_handler.h"
 #include <cstdio>
 #include <cstring>
 #include <memory>

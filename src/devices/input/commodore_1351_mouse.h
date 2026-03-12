@@ -7,7 +7,7 @@
  * joystick lines for button presses.
  */
 
-#include "../../core/peripherals/pot_input_device.h"
+#include "core/peripherals/pot_input_device.h"
 
 class Commodore1351Mouse : public PotInputDevice {
 public:

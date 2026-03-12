@@ -10,9 +10,9 @@
 //   - System: address decoding, CPU-TIA sync timing, frame cycle count
 // =============================================================================
 
-#include "a2600_test_harness.h"
-#include "../systems/atari2600/mappers/a2600_mapper_3f.h"
-#include "../systems/atari2600/mappers/a2600_mapper_e0.h"
+#include "testing/a2600_test_harness.h"
+#include "systems/atari2600/mappers/a2600_mapper_3f.h"
+#include "systems/atari2600/mappers/a2600_mapper_e0.h"
 #include <cassert>
 
 namespace a2600_test {

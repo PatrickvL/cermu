@@ -1,8 +1,8 @@
 #pragma once
 
-#include "chip8_constants.h"
-#include "../../core/system.h"
-#include "../../core/framebuffer_renderer.h"
+#include "systems/chip8/chip8_constants.h"
+#include "core/system.h"
+#include "core/framebuffer_renderer.h"
 #include <cstdint>
 #include <cstring>
 #include <vector>

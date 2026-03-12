@@ -5,8 +5,8 @@
  * a FORMAT_LOAD_PROGRAM result with SID metadata in the metadata blob.
  */
 
-#include "sid_format.h"
-#include "format_registry.h"
+#include "core/formats/sid_format.h"
+#include "core/formats/format_registry.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

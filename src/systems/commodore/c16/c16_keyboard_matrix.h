@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../chip/input/commodore_keyboard.h"
+#include "chip/input/commodore_keyboard.h"
 
 // C16 / Plus/4 Keyboard Matrix — 8×8
 // TED 7360 integrated keyboard scanning:

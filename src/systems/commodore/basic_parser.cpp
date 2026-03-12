@@ -2,8 +2,8 @@
  * Commodore BASIC SYS Address Parser — Implementation
  */
 
-#include "basic_parser.h"
-#include "../../core/cermu.h"
+#include "systems/commodore/basic_parser.h"
+#include "core/cermu.h"
 #include <cstdio>
 #include <cstring>
 #include <ctype.h>

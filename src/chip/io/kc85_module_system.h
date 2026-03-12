@@ -23,7 +23,7 @@
  *   Port+1: slot control write
  */
 
-#include "io_chip_base.h"
+#include "chip/io/io_chip_base.h"
 #include <cstdint>
 #include <cstring>
 #include <cstdio>

@@ -14,8 +14,8 @@
  *   7  6    5       4     3    2     1      0
  */
 
-#include "../../core/peripherals/input_peripheral_device.h"
-#include "../../chip/input/cd4021.h"
+#include "core/peripherals/input_peripheral_device.h"
+#include "chip/input/cd4021.h"
 
 #include <cstdint>
 #include <SDL_scancode.h>

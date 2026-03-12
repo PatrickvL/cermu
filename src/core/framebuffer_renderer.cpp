@@ -1,4 +1,4 @@
-#include "framebuffer_renderer.h"
+#include "core/framebuffer_renderer.h"
 #include <algorithm>
 
 // ============================================================================

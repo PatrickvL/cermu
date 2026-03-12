@@ -6,8 +6,8 @@
  * the accumulated delta exceeds a threshold.
  */
 
-#include "commodore_1350_mouse.h"
-#include "../../core/device_registry.h"
+#include "devices/input/commodore_1350_mouse.h"
+#include "core/device_registry.h"
 #include <cstdio>
 #include <cmath>
 

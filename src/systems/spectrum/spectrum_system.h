@@ -23,14 +23,14 @@
  *   - Port $7FFD controls RAM/ROM banking + display bank
  */
 
-#include "../../core/system.h"
-#include "../../core/system_lines.h"
-#include "../../core/board.hpp"
-#include "../../chip/cpu/z80/zilog_z80a.h"
-#include "../../chip/video/spectrum_ula/ferranti_ula.h"
-#include "../../chip/sound/ay_3_8910.h"
-#include "../../chip/memory/memory_chip.h"
-#include "spectrum_constants.h"
+#include "core/system.h"
+#include "core/system_lines.h"
+#include "core/board.hpp"
+#include "chip/cpu/z80/zilog_z80a.h"
+#include "chip/video/spectrum_ula/ferranti_ula.h"
+#include "chip/sound/ay_3_8910.h"
+#include "chip/memory/memory_chip.h"
+#include "systems/spectrum/spectrum_constants.h"
 #include <cstdint>
 #include <memory>
 

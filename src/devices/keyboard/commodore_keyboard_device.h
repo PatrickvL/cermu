@@ -10,8 +10,8 @@
  * does NOT handle SDL events directly.
  */
 
-#include "../../core/peripherals/input_peripheral_device.h"
-#include "../../chip/input/commodore_keyboard.h"
+#include "core/peripherals/input_peripheral_device.h"
+#include "chip/input/commodore_keyboard.h"
 
 class CommodoreKeyboardDevice : public InputPeripheralDevice {
 public:

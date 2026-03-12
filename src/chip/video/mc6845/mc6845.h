@@ -15,7 +15,7 @@
  * I/O interface: two registers at base+0 (address) and base+1 (data).
  */
 
-#include "../video_chip_base.h"
+#include "chip/video/video_chip_base.h"
 #include <cstdint>
 #include <functional>
 

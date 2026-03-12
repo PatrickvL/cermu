@@ -10,7 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 
-#include "fam65xx_types.h"
+#include "chip/cpu/fam65xx/fam65xx_types.h"
 // ============================================================================
 // INSTRUCTION DECODING FUNCTIONS
 // ============================================================================
