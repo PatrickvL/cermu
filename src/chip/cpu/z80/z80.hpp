@@ -117,6 +117,7 @@ public:
                         BUS_BIT(Z80_RFSH_BIT)     |  // RFSH deasserted
                         BUS_BIT(Z80_HALT_BIT)     |  // HALT deasserted
                         BUS_BIT(Z80_WAIT_BIT)     |  // WAIT deasserted (active-low)
+                        BUS_BIT(Z80_BUSREQ_BIT)   |  // BUSREQ deasserted (active-low)
                         BUS_BIT(Z80_BUSACK_BIT);     // BUSACK deasserted
         return s;
     }
@@ -396,11 +397,11 @@ private:
     bus_state_t m1_fetch(bus_state_t pins) {
         switch (step_++) {
         case 0: { // T1: interrupt check + address setup
-            // Handle EI delayed effect — interrupts enable after NEXT instruction
+            // EI suppresses interrupt checking for one instruction.
+            // The IFF flags were already set by the EI instruction itself.
+            bool suppress_int = ei_pending_;
             if (ei_pending_) {
                 ei_pending_ = false;
-                regs_.iff1 = true;
-                regs_.iff2 = true;
             }
 
             // NMI edge detection (falling edge of /NMI = HIGH→LOW transition)
@@ -410,11 +411,10 @@ private:
                 nmi_pending_ = true;
             }
 
-            // Check NMI (higher priority than INT)
+            // Check NMI (higher priority than INT, not suppressed by EI)
             if (nmi_pending_) {
                 nmi_pending_ = false;
                 if (halted_) {
-                    regs_.pc++; // Advance past HALT for correct return address
                     halted_ = false;
                     BUS_SET_BIT(pins, Z80_HALT_BIT);
                 }
@@ -425,9 +425,9 @@ private:
             }
 
             // Check INT (level-sensitive, only when IFF1 is set)
-            if (regs_.iff1 && !BUS_GET_BIT(pins, Z80_INT_BIT)) {
+            // Suppressed for one instruction after EI
+            if (!suppress_int && regs_.iff1 && !BUS_GET_BIT(pins, Z80_INT_BIT)) {
                 if (halted_) {
-                    regs_.pc++;
                     halted_ = false;
                     BUS_SET_BIT(pins, Z80_HALT_BIT);
                 }
@@ -622,8 +622,12 @@ private:
 
         case 1: // LD block (0x40-0x7F)
             if (z == 6 && y == 6) {
-                // HALT
-                transition_to(&z80_t::op_halt);
+                // HALT — 4T (executed inline during M1, like NOP)
+                // PC already incremented by M1 fetch; halted_ flag controls
+                // NOP re-execution until an interrupt arrives.
+                halted_ = true;
+                BUS_CLR_BIT(pins, Z80_HALT_BIT); // Assert HALT signal
+                transition_to_fetch();
             } else if (z == 6) {
                 // LD r,(HL)
                 transition_to(&z80_t::op_ld_r_hl);
@@ -712,9 +716,12 @@ private:
                     transition_to_fetch();
                     break;
                 case 7: // EI
-                    // Note: iff1/iff2 are not set here — they're set at the
-                    // start of the NEXT instruction's M1 fetch, implementing
-                    // the Z80's one-instruction interrupt delay.
+                    // EI sets IFF1/IFF2 immediately, but the Z80 does not
+                    // check interrupts until after the NEXT instruction.
+                    // ei_pending_ suppresses the interrupt check in the
+                    // following M1 fetch cycle.
+                    regs_.iff1 = true;
+                    regs_.iff2 = true;
                     ei_pending_ = true;
                     transition_to_fetch();
                     break;

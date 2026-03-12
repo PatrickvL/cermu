@@ -362,10 +362,12 @@ bus_state_t op_ld_hl_nn(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_ld_sp_hl(bus_state_t pins) {
     switch (step_++) {
-    case 0: case 1: return pins; // 2 internal T-states
+    case 0: return pins; // 1st internal T-state
+    case 1: // 2nd internal T-state
+        regs_.sp = get_hl();
+        transition_to_fetch();
+        return pins;
     }
-    regs_.sp = get_hl();
-    transition_to_fetch();
     return pins;
 }
 
@@ -524,21 +526,27 @@ bus_state_t op_dec_hl(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_inc_rr(bus_state_t pins) {
     switch (step_++) {
-    case 0: case 1: return pins;
+    case 0: return pins;
+    case 1: {
+        uint8_t p = (opcode_ >> 4) & 3;
+        set_reg16(p, get_reg16(p) + 1);
+        transition_to_fetch();
+        return pins;
     }
-    uint8_t p = (opcode_ >> 4) & 3;
-    set_reg16(p, get_reg16(p) + 1);
-    transition_to_fetch();
+    }
     return pins;
 }
 
 bus_state_t op_dec_rr(bus_state_t pins) {
     switch (step_++) {
-    case 0: case 1: return pins;
+    case 0: return pins;
+    case 1: {
+        uint8_t p = (opcode_ >> 4) & 3;
+        set_reg16(p, get_reg16(p) - 1);
+        transition_to_fetch();
+        return pins;
     }
-    uint8_t p = (opcode_ >> 4) & 3;
-    set_reg16(p, get_reg16(p) - 1);
-    transition_to_fetch();
+    }
     return pins;
 }
 
@@ -547,14 +555,17 @@ bus_state_t op_dec_rr(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_add_hl_rr(bus_state_t pins) {
     switch (step_++) {
-    case 0: case 1: case 2: case 3: case 4: case 5: case 6:
+    case 0: case 1: case 2: case 3: case 4: case 5:
+        return pins;
+    case 6: {
+        uint8_t p = (opcode_ >> 4) & 3;
+        uint16_t hl = get_hl();
+        alu_add16(hl, get_reg16(p));
+        set_hl(hl);
+        transition_to_fetch();
         return pins;
     }
-    uint8_t p = (opcode_ >> 4) & 3;
-    uint16_t hl = get_hl();
-    alu_add16(hl, get_reg16(p));
-    set_hl(hl);
-    transition_to_fetch();
+    }
     return pins;
 }
 
@@ -639,12 +650,13 @@ bus_state_t op_ex_sp_hl(bus_state_t pins) {
     case 12:
         bus_finish_mem(pins);
         return pins;
-    case 13: case 14: // 2 internal T-states
+    case 13: return pins; // 1st internal T-state
+    case 14: // 2nd internal T-state
+        set_hl(addr_latch_);
+        regs_.wz = addr_latch_;
+        transition_to_fetch();
         return pins;
     }
-    set_hl(addr_latch_);
-    regs_.wz = addr_latch_;
-    transition_to_fetch();
     return pins;
 }
 
@@ -713,12 +725,14 @@ bus_state_t op_jr_e(bus_state_t pins) {
         regs_.pc++;
         bus_finish_mem(pins);
         return pins;
-    case 3: case 4: case 5: case 6: case 7: // 5 internal T-states
+    case 3: case 4: case 5: case 6: // 4 internal T-states
+        return pins;
+    case 7: // 5th internal T-state
+        regs_.pc = static_cast<uint16_t>(regs_.pc + displacement_);
+        regs_.wz = regs_.pc;
+        transition_to_fetch();
         return pins;
     }
-    regs_.pc = static_cast<uint16_t>(regs_.pc + displacement_);
-    regs_.wz = regs_.pc;
-    transition_to_fetch();
     return pins;
 }
 
@@ -739,12 +753,14 @@ bus_state_t op_jr_cc_e(bus_state_t pins) {
             transition_to_fetch();
         }
         return pins;
-    case 3: case 4: case 5: case 6: case 7: // 5 internal T-states (branch taken)
+    case 3: case 4: case 5: case 6: // 4 internal T-states (branch taken)
+        return pins;
+    case 7: // 5th internal T-state
+        regs_.pc = static_cast<uint16_t>(regs_.pc + displacement_);
+        regs_.wz = regs_.pc;
+        transition_to_fetch();
         return pins;
     }
-    regs_.pc = static_cast<uint16_t>(regs_.pc + displacement_);
-    regs_.wz = regs_.pc;
-    transition_to_fetch();
     return pins;
 }
 
@@ -766,12 +782,14 @@ bus_state_t op_djnz(bus_state_t pins) {
             transition_to_fetch(); // Not taken: 8T
         }
         return pins;
-    case 4: case 5: case 6: case 7: case 8: // 5 internal (branch taken)
+    case 4: case 5: case 6: case 7: // 4 internal T-states (branch taken)
+        return pins;
+    case 8: // 5th internal T-state
+        regs_.pc = static_cast<uint16_t>(regs_.pc + displacement_);
+        regs_.wz = regs_.pc;
+        transition_to_fetch();
         return pins;
     }
-    regs_.pc = static_cast<uint16_t>(regs_.pc + displacement_);
-    regs_.wz = regs_.pc;
-    transition_to_fetch();
     return pins;
 }
 
@@ -997,12 +1015,11 @@ bus_state_t op_out_n_a(bus_state_t pins) {
 }
 
 // ========================================================================
-// HALT — enters halt state, executes NOPs until interrupt
+// HALT — now handled inline in decode_and_execute (z80.hpp).
+// This handler is kept as a fallback but should not be reached.
 // ========================================================================
 bus_state_t op_halt(bus_state_t pins) {
-    // HALT decrements PC so it re-fetches HALT continuously
     halted_ = true;
-    regs_.pc--;
     BUS_CLR_BIT(pins, Z80_HALT_BIT); // Assert HALT signal
     transition_to_fetch();
     return pins;
