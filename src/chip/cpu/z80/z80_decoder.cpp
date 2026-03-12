@@ -620,87 +620,86 @@ int z80_instruction_length(const uint8_t* memory) {
     if (!memory) return 1;
 
     int offset = 0;
-    uint8_t prefix = 0;
+    bool has_prefix = false;
 
     while (memory[offset] == 0xDD || memory[offset] == 0xFD) {
-        prefix = memory[offset];
+        has_prefix = true;
         offset++;
     }
 
-    uint8_t op = memory[offset];
-    offset++;
+    const uint8_t op = memory[offset++];
 
-    if (op == 0xCB) {
-        if (prefix) return offset + 2; // DD CB dd xx
-        return offset + 1;             // CB xx
-    }
+    /* CB prefix: unprefixed CB xx = 2, prefixed DD/FD CB d xx = 4 */
+    if (op == 0xCB)
+        return offset + (has_prefix ? 2 : 1);
 
+    /* ED prefix: most ops = 2; LD (nn),rr / LD rr,(nn) = 4.
+       x==1, z==3 is the only ED form with a 16-bit immediate,
+       caught by the mask (edop & 0xC7) == 0x43. */
     if (op == 0xED) {
-        uint8_t edop = memory[offset];
-        uint8_t x = (edop >> 6) & 3;
-        uint8_t z = edop & 7;
-        // ED instructions with 16-bit immediate: LD (nn),rr / LD rr,(nn)
-        if (x == 1 && z == 3) return offset + 3; // +2 for nn
-        return offset + 1; // Most ED ops: opcode only
+        const uint8_t edop = memory[offset];
+        return offset + (((edop & 0xC7u) == 0x43u) ? 3 : 1);
     }
 
     // Base opcode length calculation:
-    uint8_t x = (op >> 6) & 3;
-    uint8_t y = (op >> 3) & 7;
-    uint8_t z = op & 7;
-    uint8_t p = y >> 1;
-    uint8_t q = y & 1;
+    const uint8_t x = op >> 6;
+    const uint8_t y = (op >> 3) & 7;
+    const uint8_t z = op & 7;
+    const uint8_t p = y >> 1;
+    const uint8_t q = y & 1;
+
+    /* y==6 normally addresses (HL); with DD/FD it becomes (IX/IY+d),
+       adding a displacement byte.  Cache the test — used in x==0. */
+    const int idxmem = has_prefix && (y == 6);
+
+    int extra;
 
     switch (x) {
     case 0:
         switch (z) {
-        case 0:
-            if (y >= 2) return offset + 1; // DJNZ d, JR d, JR cc,d
-            return offset;
-        case 1:
-            if (q == 0) return offset + 2; // LD rr,nn
-            return offset;
-        case 2:
-            if (p == 2 || p == 3) return offset + 2; // LD (nn),HL/A, LD HL/A,(nn)
-            return offset;
-        case 3: return offset;
-        case 4: // INC r
-            if (y == 6 && prefix) return offset + 1; // INC (IX+d)
-            return offset;
-        case 5: // DEC r
-            if (y == 6 && prefix) return offset + 1;
-            return offset;
-        case 6: // LD r,n
-            if (y == 6 && prefix) return offset + 2; // LD (IX+d),n
-            return offset + 1;
-        case 7: return offset;
+        case 0: extra = (y >= 2);       break; /* NOP, EX AF, DJNZ d, JR d/cc */
+        case 1: extra = q ? 0 : 2;      break; /* ADD HL,rr | LD rr,nn */
+        case 2: extra = (p >= 2) ? 2:0; break; /* LD (BC/DE),A|A,(BC/DE) | LD (nn),HL|A / HL|A,(nn) */
+        case 3: extra = 0;              break; /* INC/DEC rr */
+        case 4: extra = idxmem;         break; /* INC r | INC (IX+d) */
+        case 5: extra = idxmem;         break; /* DEC r | DEC (IX+d) */
+        case 6: extra = 1 + idxmem;     break; /* LD r,n | LD (IX+d),n */
+        default: extra = 0;             break; /* RLCA/RRCA/RLA/RRA/DAA/CPL/SCF/CCF */
         }
         break;
+
     case 1:
-        // (HL) with prefix adds displacement byte
-        if ((z == 6 || y == 6) && prefix && !(z == 6 && y == 6)) return offset + 1;
-        return offset;
+        /* LD r,r — gains displacement when exactly one operand is (HL),
+           i.e. when z==6 XOR y==6 (both==6 would be HALT, no prefix effect). */
+        extra = has_prefix && ((z == 6) != (y == 6));
+        break;
+
     case 2:
-        if (z == 6 && prefix) return offset + 1;
-        return offset;
+        /* ALU op r — source (HL) becomes (IX+d) with prefix */
+        extra = has_prefix && (z == 6);
+        break;
+
     case 3:
         switch (z) {
-        case 0: return offset;
-        case 1: return offset;
-        case 2: return offset + 2; // JP cc,nn
+        case 0: extra = 0; break;                        /* RET cc */
+        case 1: extra = 0; break;                        /* POP rr, RET, EXX, JP (HL), LD SP,HL */
+        case 2: extra = 2; break;                        /* JP cc,nn */
         case 3:
-            if (y == 0) return offset + 2; // JP nn
-            if (y == 2 || y == 3) return offset + 1; // OUT/IN
-            return offset;
-        case 4: return offset + 2; // CALL cc,nn
-        case 5:
-            if (q == 0) return offset;
-            if (p == 0) return offset + 2; // CALL nn
-            return offset;
-        case 6: return offset + 1; // ALU A,n
-        case 7: return offset;
+            if      (y == 0)           extra = 2;        /* JP nn */
+            else if (y == 2 || y == 3) extra = 1;        /* OUT (n),A | IN A,(n) */
+            else                       extra = 0;        /* EX (SP),HL, EX DE,HL, DI, EI */
+            break;
+        case 4: extra = 2; break;                        /* CALL cc,nn */
+        case 5: extra = (q && p == 0) ? 2 : 0; break;    /* PUSH rr | CALL nn (q=1,p=0) */
+        case 6: extra = 1; break;                        /* ALU A,n */
+        default: extra = 0; break;                       /* RST p */
         }
         break;
+
+    default:
+        extra = 0;
+        break;
     }
-    return offset;
+
+    return offset + extra;
 }
