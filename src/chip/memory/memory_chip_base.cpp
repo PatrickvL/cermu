@@ -360,6 +360,7 @@ void MemoryChipBase::register_debug_fields() {
 #include "ram_chip.h"
 #include "rom_chip.h"
 #include "../../core/chip_manifest.hpp"
+#include "../../core/chip_registry.h"
 
 ChipBase* RAMChip::create_from_slot(const ChipSlot& slot,
                                      const bus_state_t* system_bus,
@@ -380,3 +381,6 @@ ChipBase* ROMChip::create_from_slot(const ChipSlot& slot,
     if (buffer) chip->bind(buffer);
     return chip;
 }
+
+REGISTER_CHIP("RAMChip", &RAMChip::create_from_slot)
+REGISTER_CHIP("ROMChip", &ROMChip::create_from_slot)
