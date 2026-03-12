@@ -304,7 +304,8 @@ target_include_directories(z80_decoder PUBLIC
 
 # Chip library sources
 set(CHIP_SOURCES
-    # CPU - fam65xx is header-only (template-based); no .cpp wrappers needed
+    # CPU - fam65xx template instantiation + ChipRegistry registration
+    src/chip/cpu/fam65xx/fam65xx_registry.cpp
 )
 # Always include other chip sources
 list(APPEND CHIP_SOURCES
