@@ -492,9 +492,9 @@ if(BUILD_GUI)
     )
     
     # Generic GUI sources for multi-system support
-    set(GENERIC_GUI_SOURCES
-        src/gui/generic_gui.cpp
-        src/gui/system_gui.cpp
+    set(EMULATOR_HOST_SOURCES
+        src/gui/emulator_host.cpp
+        src/gui/session_gui.cpp
         src/gui/system_selection_dialog.cpp
         src/gui/connector_icons.cpp
         src/gui/vfs_file_system.cpp
@@ -566,7 +566,7 @@ if(BUILD_GUI)
         ${TESTING_SOURCES}
         ${CORE_UTIL_SOURCES}
         ${GUI_SOURCES}
-        ${GENERIC_GUI_SOURCES}
+        ${EMULATOR_HOST_SOURCES}
     )
     
     # Add include directories

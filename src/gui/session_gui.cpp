@@ -1,4 +1,4 @@
-#include "system_gui.h"
+#include "session_gui.h"
 #include "connector_icons.h"
 #include "vfs_file_system.h"
 #define IMGUI_DEFINE_MATH_OPERATORS
@@ -52,8 +52,8 @@ static SDL_Keycode normalize_fkey_keysym(SDL_Keycode sym, SDL_Scancode sc) {
 // Constructor / Destructor
 // ============================================================================
 
-SystemGUI::SystemGUI(std::unique_ptr<EmulatedSystem> system, const char* pending_file)
-    : GenericEmulatorGUI()
+SessionGUI::SessionGUI(std::unique_ptr<EmulatedSystem> system, const char* pending_file)
+    : EmulatorHost()
     , system_(std::move(system))
     , system_selection_dialog_()
     , pending_file_path_(pending_file ? pending_file : "")
@@ -67,15 +67,15 @@ SystemGUI::SystemGUI(std::unique_ptr<EmulatedSystem> system, const char* pending
         // so clear the pending file path — it must not survive into a later
         // system switch (otherwise the new system would try to load it).
         pending_file_path_.clear();
-        printf("SystemGUI created for system: %s\n",
+        printf("SessionGUI created for system: %s\n",
                system_->get_descriptor().name);
     } else {
-        printf("SystemGUI created without system - selection dialog will be shown\n");
+        printf("SessionGUI created without system - selection dialog will be shown\n");
         system_selection_dialog_.open();  // Open dialog if no system provided
     }
 }
 
-SystemGUI::~SystemGUI() {
+SessionGUI::~SessionGUI() {
     stop_emu_thread();
     close_audio_device();
     teardown_current_system();
@@ -86,9 +86,9 @@ SystemGUI::~SystemGUI() {
 // Initialization Override
 // ============================================================================
 
-bool SystemGUI::init(const char* window_title, int width, int height) {
+bool SessionGUI::init(const char* window_title, int width, int height) {
     // Call base class init to create OpenGL context
-    if (!GenericEmulatorGUI::init(window_title, width, height)) {
+    if (!EmulatorHost::init(window_title, width, height)) {
         return false;
     }
     
@@ -114,7 +114,7 @@ bool SystemGUI::init(const char* window_title, int width, int height) {
 // Virtual Hook Implementations
 // ============================================================================
 
-void SystemGUI::handle_events() {
+void SessionGUI::handle_events() {
     // Dynamically toggle keyboard navigation based on whether any GUI
     // overlay is active (menus, popups, dialogs, settings windows).
     // When enabled, ImGui reports WantCaptureKeyboard=true for focused
@@ -259,7 +259,7 @@ void SystemGUI::handle_events() {
 // Virtual Mouse Detection
 // ============================================================================
 
-bool SystemGUI::has_virtual_mouse_attached() const {
+bool SessionGUI::has_virtual_mouse_attached() const {
     if (!system_) return false;
 
     for (auto& port : system_->get_connector_ports()) {
@@ -273,7 +273,7 @@ bool SystemGUI::has_virtual_mouse_attached() const {
     return false;
 }
 
-void SystemGUI::update_frame() {
+void SessionGUI::update_frame() {
     // Emulation now runs on a separate thread (emu_thread_func).
     // The GUI thread only updates the FPS counter from the atomic frame count.
     update_fps();
@@ -290,7 +290,7 @@ void SystemGUI::update_frame() {
     update_window_title();
 }
 
-void SystemGUI::render_frame() {
+void SessionGUI::render_frame() {
     begin_frame();
     
     // Only render dialog if it's actually open
@@ -447,7 +447,7 @@ void SystemGUI::render_frame() {
     end_frame();
 }
 
-void SystemGUI::render_menu_bar() {
+void SessionGUI::render_menu_bar() {
     if (!ImGui::BeginMainMenuBar()) {
         return;
     }
@@ -854,7 +854,7 @@ void SystemGUI::render_menu_bar() {
     ImGui::EndMainMenuBar();
 }
 
-void SystemGUI::render_screen() {
+void SessionGUI::render_screen() {
     if (!system_) return;
     
     // Get viewport for fullscreen rendering
@@ -943,7 +943,7 @@ void SystemGUI::render_screen() {
     ImGui::End();
 }
 
-void SystemGUI::render_memory_viewer() {
+void SessionGUI::render_memory_viewer() {
     if (!ImGui::Begin("Memory Viewer", &show_memory_viewer_)) {
         ImGui::End();
         return;
@@ -955,7 +955,7 @@ void SystemGUI::render_memory_viewer() {
     ImGui::End();
 }
 
-void SystemGUI::render_settings() {
+void SessionGUI::render_settings() {
     if (!ImGui::Begin("Settings", &show_settings_, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::End();
         return;
@@ -995,7 +995,7 @@ void SystemGUI::render_settings() {
     ImGui::End();
 }
 
-void SystemGUI::render_about() {
+void SessionGUI::render_about() {
     render_about_dialog_generic();
 }
 
@@ -1003,7 +1003,7 @@ void SystemGUI::render_about() {
 // System Control
 // ============================================================================
 
-void SystemGUI::reset_emulation() {
+void SessionGUI::reset_emulation() {
     if (system_) {
         // Stop the emu thread so we have exclusive access to system_
         stop_emu_thread();
@@ -1020,7 +1020,7 @@ void SystemGUI::reset_emulation() {
     }
 }
 
-void SystemGUI::step_emulation() {
+void SessionGUI::step_emulation() {
     if (system_ && emulation_paused_.load()) {
         std::lock_guard<std::mutex> lock(emu_mutex_);
         system_->tick();
@@ -1038,7 +1038,7 @@ void SystemGUI::step_emulation() {
 // Helper Functions
 // ============================================================================
 
-void SystemGUI::update_window_title() {
+void SessionGUI::update_window_title() {
     if (!system_) {
         if (last_window_title_ != "cermu") {
             last_window_title_ = "cermu";
@@ -1077,7 +1077,7 @@ void SystemGUI::update_window_title() {
     }
 }
 
-void SystemGUI::allocate_framebuffer() {
+void SessionGUI::allocate_framebuffer() {
     if (!system_) return;
     
     // Get display dimensions from system
@@ -1123,7 +1123,7 @@ void SystemGUI::allocate_framebuffer() {
 // System Switching
 // ============================================================================
 
-void SystemGUI::teardown_current_system() {
+void SessionGUI::teardown_current_system() {
     // Stop emulation thread before touching system_
     stop_emu_thread();
 
@@ -1149,7 +1149,7 @@ void SystemGUI::teardown_current_system() {
     actual_fps_ = 0;
     reset_frame_pacing();
 }
-void SystemGUI::switch_system(const char* system_name, int memory_option, int region_option, const std::map<std::string, bool>* peripherals, const char* pending_file, const std::map<std::string, std::string>* custom_settings) {
+void SessionGUI::switch_system(const char* system_name, int memory_option, int region_option, const std::map<std::string, bool>* peripherals, const char* pending_file, const std::map<std::string, std::string>* custom_settings) {
     if (!system_name) {
         printf("ERROR: switch_system called with null system name\n");
         return;
@@ -1270,7 +1270,7 @@ void SystemGUI::switch_system(const char* system_name, int memory_option, int re
 // File Loading
 // ============================================================================
 
-void SystemGUI::load_file_dialog() {
+void SessionGUI::load_file_dialog() {
     open_file_dialog("ChooseFileDlgKey", "Choose File");
 }
 
@@ -1285,7 +1285,7 @@ void SystemGUI::load_file_dialog() {
 //    b) Everything else (PRG, CRT, NES, NSF, …) → load_selected_file().
 // ============================================================================
 
-void SystemGUI::handle_dropped_file(const std::string& filepath) {
+void SessionGUI::handle_dropped_file(const std::string& filepath) {
     printf("Drop received: %s\n", filepath.c_str());
 
     // Resolve archives: if the dropped file is a .zip/.7z/etc., find the
@@ -1371,7 +1371,7 @@ void SystemGUI::handle_dropped_file(const std::string& filepath) {
     load_selected_file(resolved);
 }
 
-void SystemGUI::open_file_dialog(const char* dialog_key, const char* title) {
+void SessionGUI::open_file_dialog(const char* dialog_key, const char* title) {
     if (!system_) return;
     
 #ifdef HAS_IMGUIFILEDIALOG
@@ -1456,7 +1456,7 @@ void SystemGUI::open_file_dialog(const char* dialog_key, const char* title) {
 // Load a Selected File
 // ============================================================================
 
-void SystemGUI::load_selected_file(const std::string& resolved_path,
+void SessionGUI::load_selected_file(const std::string& resolved_path,
                                    const char* display_path) {
     if (!system_) return;
     (void)display_path;  // TODO: use for window title when loading from containers
@@ -1515,7 +1515,7 @@ void SystemGUI::load_selected_file(const std::string& resolved_path,
 // Emulation Thread
 // ============================================================================
 
-void SystemGUI::emu_thread_func() {
+void SessionGUI::emu_thread_func() {
     uint64_t pace_counter = 0;
     double accumulator = 0.0;
     bool was_running = false;
@@ -1671,7 +1671,7 @@ void SystemGUI::emu_thread_func() {
 // Drive File Dialog Polling
 // ============================================================================
 
-void SystemGUI::poll_drive_file_dialog_requests() {
+void SessionGUI::poll_drive_file_dialog_requests() {
 #ifdef HAS_IMGUIFILEDIALOG
     if (!system_ || pending_drive_insert_) return;  // Already have a pending request
 
@@ -1699,7 +1699,7 @@ void SystemGUI::poll_drive_file_dialog_requests() {
 // Audio Output
 // ============================================================================
 
-void SystemGUI::open_audio_device() {
+void SessionGUI::open_audio_device() {
     close_audio_device();
 
     if (!system_) return;

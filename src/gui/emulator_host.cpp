@@ -1,4 +1,4 @@
-#include "generic_gui.h"
+#include "emulator_host.h"
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_sdl2.h"
@@ -11,7 +11,7 @@
 // Constructor / Destructor
 // ============================================================================
 
-GenericEmulatorGUI::GenericEmulatorGUI()
+EmulatorHost::EmulatorHost()
     : window_(nullptr)
     , gl_context_(nullptr)
     , should_quit_(false)
@@ -61,7 +61,7 @@ GenericEmulatorGUI::GenericEmulatorGUI()
 {
 }
 
-GenericEmulatorGUI::~GenericEmulatorGUI() {
+EmulatorHost::~EmulatorHost() {
     cleanup();
 }
 
@@ -69,7 +69,7 @@ GenericEmulatorGUI::~GenericEmulatorGUI() {
 // Initialization / Cleanup
 // ============================================================================
 
-bool GenericEmulatorGUI::init(const char* window_title, int width, int height) {
+bool EmulatorHost::init(const char* window_title, int width, int height) {
     window_width_ = width;
     window_height_ = height;
     
@@ -155,7 +155,7 @@ bool GenericEmulatorGUI::init(const char* window_title, int width, int height) {
     // It causes io.WantCaptureKeyboard to be true whenever any ImGui window
     // is present (including the always-visible menu bar), which blocks ALL
     // keyboard events from reaching the emulated systems.
-    // SystemGUI::handle_events() toggles it dynamically when a menu,
+    // SessionGUI::handle_events() toggles it dynamically when a menu,
     // dialog, or settings window is active.
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     
@@ -180,7 +180,7 @@ bool GenericEmulatorGUI::init(const char* window_title, int width, int height) {
     return true;
 }
 
-void GenericEmulatorGUI::cleanup() {
+void EmulatorHost::cleanup() {
     // Cleanup screen texture if allocated
     if (screen_texture_id_ != 0) {
         glDeleteTextures(1, &screen_texture_id_);
@@ -220,7 +220,7 @@ void GenericEmulatorGUI::cleanup() {
 // Main Loop
 // ============================================================================
 
-void GenericEmulatorGUI::run() {
+void EmulatorHost::run() {
     printf("Starting main loop\n");
     
     while (!should_quit_) {
@@ -256,7 +256,7 @@ void GenericEmulatorGUI::run() {
 // Mouse Cursor Auto-Hide
 // ============================================================================
 
-void GenericEmulatorGUI::update_mouse_cursor_visibility() {
+void EmulatorHost::update_mouse_cursor_visibility() {
     int mx, my;
     SDL_GetMouseState(&mx, &my);
 
@@ -313,13 +313,13 @@ void GenericEmulatorGUI::update_mouse_cursor_visibility() {
 // Generic Helper Functions
 // ============================================================================
 
-void GenericEmulatorGUI::begin_frame() {
+void EmulatorHost::begin_frame() {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     ImGui::NewFrame();
 }
 
-void GenericEmulatorGUI::end_frame() {
+void EmulatorHost::end_frame() {
     ImGui::Render();
     ImGuiIO& io = ImGui::GetIO();
     glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
@@ -329,22 +329,22 @@ void GenericEmulatorGUI::end_frame() {
     SDL_GL_SwapWindow(window_);
 }
 
-void GenericEmulatorGUI::render_file_menu_generic() {
+void EmulatorHost::render_file_menu_generic() {
     if (ImGui::MenuItem("Exit")) {
         should_quit_ = true;
     }
 }
 
-void GenericEmulatorGUI::render_view_menu_generic() {
+void EmulatorHost::render_view_menu_generic() {
     ImGui::MenuItem("Screen Display", nullptr, &show_screen_);
     ImGui::MenuItem("Memory Viewer", nullptr, &show_memory_viewer_);
 }
 
-void GenericEmulatorGUI::render_help_menu_generic() {
+void EmulatorHost::render_help_menu_generic() {
     ImGui::MenuItem("About", nullptr, &show_about_);
 }
 
-void GenericEmulatorGUI::render_about_dialog_generic() {
+void EmulatorHost::render_about_dialog_generic() {
     if (!show_about_) return;
     
     if (ImGui::Begin("About", &show_about_, ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -366,7 +366,7 @@ void GenericEmulatorGUI::render_about_dialog_generic() {
 // OpenGL Texture Management
 // ============================================================================
 
-GLuint GenericEmulatorGUI::create_screen_texture(int width, int height) {
+GLuint EmulatorHost::create_screen_texture(int width, int height) {
     GLuint texture_id = 0;
     glGenTextures(1, &texture_id);
     glBindTexture(GL_TEXTURE_2D, texture_id);
@@ -385,7 +385,7 @@ GLuint GenericEmulatorGUI::create_screen_texture(int width, int height) {
     return texture_id;
 }
 
-void GenericEmulatorGUI::update_screen_texture(GLuint texture_id, int width, int height,
+void EmulatorHost::update_screen_texture(GLuint texture_id, int width, int height,
                                                const uint32_t* pixels) {
     if (texture_id == 0 || !pixels) return;
     
@@ -398,7 +398,7 @@ void GenericEmulatorGUI::update_screen_texture(GLuint texture_id, int width, int
 // Display Scaling Helper
 // ============================================================================
 
-void GenericEmulatorGUI::calculate_integer_scaled_dimensions(
+void EmulatorHost::calculate_integer_scaled_dimensions(
     int window_width, int window_height,
     int content_width, int content_height,
     int* out_display_width, int* out_display_height,
@@ -427,7 +427,7 @@ void GenericEmulatorGUI::calculate_integer_scaled_dimensions(
 // ============================================================================
 
 // Get target aspect ratio based on configuration
-float GenericEmulatorGUI::get_target_aspect_ratio(float guest_width, float guest_height,
+float EmulatorHost::get_target_aspect_ratio(float guest_width, float guest_height,
                                                    bool is_pal, bool use_pixel_aspect) const {
     switch (aspect_ratio_mode_) {
     case ASPECT_RATIO_4_3:
@@ -461,7 +461,7 @@ float GenericEmulatorGUI::get_target_aspect_ratio(float guest_width, float guest
 }
 
 // Calculate display dimensions with full aspect ratio and scaling support
-void GenericEmulatorGUI::calculate_display_dimensions(
+void EmulatorHost::calculate_display_dimensions(
     float viewport_width, float viewport_height,
     float guest_width, float guest_height,
     bool is_pal, bool use_pixel_aspect,
@@ -557,7 +557,7 @@ void GenericEmulatorGUI::calculate_display_dimensions(
 // Screen Menu with Display Controls
 // ============================================================================
 
-void GenericEmulatorGUI::render_screen_menu_generic() {
+void EmulatorHost::render_screen_menu_generic() {
     ImGui::Text("Display Controls");
     ImGui::Separator();
     
@@ -617,7 +617,7 @@ void GenericEmulatorGUI::render_screen_menu_generic() {
 // Emulation Lifecycle (generic)
 // ============================================================================
 
-void GenericEmulatorGUI::start_emulation() {
+void EmulatorHost::start_emulation() {
     emulation_running_.store(true);
     emulation_paused_.store(false);
     // Frame pacing is reset inside the emu thread when it detects
@@ -625,12 +625,12 @@ void GenericEmulatorGUI::start_emulation() {
     printf("Emulation started\n");
 }
 
-void GenericEmulatorGUI::pause_emulation() {
+void EmulatorHost::pause_emulation() {
     emulation_paused_.store(true);
     printf("Emulation paused\n");
 }
 
-void GenericEmulatorGUI::update_fps() {
+void EmulatorHost::update_fps() {
     // Count emulated frames completed this second (not main loop iterations).
     // total_frames_ is incremented once per run_frame() call, so the delta
     // over one second gives the true emulated FPS.
@@ -647,12 +647,12 @@ void GenericEmulatorGUI::update_fps() {
     }
 }
 
-void GenericEmulatorGUI::reset_frame_pacing() {
+void EmulatorHost::reset_frame_pacing() {
     frame_pace_counter_ = 0;
     frame_time_accumulator_ = 0.0;
 }
 
-void GenericEmulatorGUI::free_framebuffer() {
+void EmulatorHost::free_framebuffer() {
     if (framebuffer_) {
         delete[] framebuffer_;
         framebuffer_ = nullptr;
@@ -676,15 +676,15 @@ void GenericEmulatorGUI::free_framebuffer() {
 // Threading (generic)
 // ============================================================================
 
-void GenericEmulatorGUI::start_emu_thread() {
+void EmulatorHost::start_emu_thread() {
     if (emu_thread_running_.load()) return;  // Already running
     emu_thread_running_.store(true);
     audio_ring_->reset();
-    emu_thread_ = std::thread(&GenericEmulatorGUI::emu_thread_func, this);
+    emu_thread_ = std::thread(&EmulatorHost::emu_thread_func, this);
     printf("Emulation thread started\n");
 }
 
-void GenericEmulatorGUI::stop_emu_thread() {
+void EmulatorHost::stop_emu_thread() {
     if (!emu_thread_running_.load()) return;
     emu_thread_running_.store(false);
     if (emu_thread_.joinable()) {
@@ -697,8 +697,8 @@ void GenericEmulatorGUI::stop_emu_thread() {
 // Audio (generic)
 // ============================================================================
 
-void GenericEmulatorGUI::sdl_audio_callback(void* userdata, uint8_t* stream, int len) {
-    GenericEmulatorGUI* gui = static_cast<GenericEmulatorGUI*>(userdata);
+void EmulatorHost::sdl_audio_callback(void* userdata, uint8_t* stream, int len) {
+    EmulatorHost* gui = static_cast<EmulatorHost*>(userdata);
     int sample_count = len / static_cast<int>(sizeof(float));
     float* out = reinterpret_cast<float*>(stream);
 
@@ -714,7 +714,7 @@ void GenericEmulatorGUI::sdl_audio_callback(void* userdata, uint8_t* stream, int
     }
 }
 
-void GenericEmulatorGUI::close_audio_device() {
+void EmulatorHost::close_audio_device() {
     if (audio_device_ != 0) {
         SDL_CloseAudioDevice(audio_device_);
         audio_device_ = 0;
