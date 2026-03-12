@@ -8,7 +8,7 @@
 
 
 #include "namco_arcade_constants.h"
-#include "../../../core/emulated_system.h"
+#include "../../../core/system.h"
 #include "../../../core/system_lines.h"
 #include "../../../core/chip_manifest.hpp"
 #include "../../../chip/cpu/z80/zilog_z80a.h"
@@ -103,7 +103,7 @@ template<> struct NamcoBusTraits<NamcoGame::Pengo> {
 
 // ── System ───────────────────────────────────────────────────────────────
 template<NamcoGame G>
-class NamcoArcadeSystem : public EmulatedSystem {
+class NamcoArcadeSystem : public System {
     using Traits = NamcoGameTraits<G>;
 public:
     NamcoArcadeSystem();

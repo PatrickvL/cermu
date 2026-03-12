@@ -52,7 +52,7 @@ static SDL_Keycode normalize_fkey_keysym(SDL_Keycode sym, SDL_Scancode sc) {
 // Constructor / Destructor
 // ============================================================================
 
-SessionGUI::SessionGUI(std::unique_ptr<EmulatedSystem> system, const char* pending_file)
+SessionGUI::SessionGUI(std::unique_ptr<System> system, const char* pending_file)
     : EmulatorHost()
     , system_(std::move(system))
     , system_selection_dialog_()

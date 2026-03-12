@@ -10,7 +10,7 @@
 
 
 #include "kc85_constants.h"
-#include "../../../core/emulated_system.h"
+#include "../../../core/system.h"
 #include "../../../core/system_lines.h"
 #include "../../../core/chip_manifest.hpp"
 #include "../../../chip/cpu/z80/u880.h"
@@ -140,7 +140,7 @@ template<> struct KC85BusTraits<KC85Variant::KC85_4> {
 
 // ── System ───────────────────────────────────────────────────────────────
 template<KC85Variant V>
-class KC85System : public EmulatedSystem {
+class KC85System : public System {
     using Traits = KC85VariantTraits<V>;
 public:
     KC85System();

@@ -1,4 +1,4 @@
-#include "emulated_system.h"
+#include "system.h"
 #include "chip.h"
 #include "formats/format_handler.h"
 #include "vfs/vfs.h"
@@ -22,10 +22,10 @@
 #endif
 
 // ============================================================================
-// EmulatedSystem Base Class Implementation
+// System Base Class Implementation
 // ============================================================================
 
-EmulatedSystem::EmulatedSystem()
+System::System()
     : rgba_framebuffer_(nullptr)
     , rgba_width_(0)
     , rgba_height_(0)
@@ -36,15 +36,15 @@ EmulatedSystem::EmulatedSystem()
 }
 
 // Final implementations (identical for all systems)
-const SystemConfiguration& EmulatedSystem::get_configuration() const {
+const SystemConfiguration& System::get_configuration() const {
     return config_;
 }
 
-const HardwareTraits& EmulatedSystem::get_hardware_traits() const {
+const HardwareTraits& System::get_hardware_traits() const {
     return hardware_traits_;
 }
 
-const SystemTiming& EmulatedSystem::get_current_timing() const {
+const SystemTiming& System::get_current_timing() const {
     int idx = config_.region_option_index;
     if (idx >= 0 && idx < static_cast<int>(hardware_traits_.video_standard_configs.size())) {
         return hardware_traits_.video_standard_configs[idx].timing;
@@ -52,24 +52,24 @@ const SystemTiming& EmulatedSystem::get_current_timing() const {
     return hardware_traits_.timing;
 }
 
-const DisplayTraits& EmulatedSystem::get_display_traits() const {
+const DisplayTraits& System::get_display_traits() const {
     return hardware_traits_.display;
 }
 
-const AudioTraits& EmulatedSystem::get_audio_traits() const {
+const AudioTraits& System::get_audio_traits() const {
     return hardware_traits_.audio;
 }
 
-uint64_t EmulatedSystem::get_total_cycles() const {
+uint64_t System::get_total_cycles() const {
     return total_cycles_;
 }
 
-float EmulatedSystem::get_speed_multiplier() const {
+float System::get_speed_multiplier() const {
     return speed_multiplier_;
 }
 
 // Default implementations (can be overridden)
-void EmulatedSystem::set_framebuffer(uint32_t* buffer, int width, int height) {
+void System::set_framebuffer(uint32_t* buffer, int width, int height) {
     rgba_framebuffer_ = buffer;
     rgba_width_ = width;
     rgba_height_ = height;
@@ -79,7 +79,7 @@ void EmulatedSystem::set_framebuffer(uint32_t* buffer, int width, int height) {
 // Screenshot
 // ============================================================================
 
-bool EmulatedSystem::save_screenshot(const char* filename) const {
+bool System::save_screenshot(const char* filename) const {
     if (!rgba_framebuffer_ || rgba_width_ <= 0 || rgba_height_ <= 0 || !filename) {
         fprintf(stderr, "ERROR: Cannot save screenshot — framebuffer not initialized\n");
         return false;
@@ -94,7 +94,7 @@ bool EmulatedSystem::save_screenshot(const char* filename) const {
     return true;
 }
 
-bool EmulatedSystem::save_screenshot_cropped(const char* filename,
+bool System::save_screenshot_cropped(const char* filename,
                                              int crop_x, int crop_y,
                                              int crop_w, int crop_h) const {
     if (!rgba_framebuffer_ || rgba_width_ <= 0 || rgba_height_ <= 0 || !filename) {
@@ -128,12 +128,12 @@ bool EmulatedSystem::save_screenshot_cropped(const char* filename,
     return true;
 }
 
-bool EmulatedSystem::initialize() {
+bool System::initialize() {
     reset();
     return true;
 }
 
-void EmulatedSystem::shutdown() {
+void System::shutdown() {
     // Detach all devices from ports before clearing (clean teardown)
     for (auto& port : connector_ports_) {
         port->detach_device();
@@ -144,14 +144,14 @@ void EmulatedSystem::shutdown() {
     owned_chip_adapters_.clear();
 }
 
-void EmulatedSystem::handle_controller_event(int controller, int button, bool pressed) {
+void System::handle_controller_event(int controller, int button, bool pressed) {
     // Default: no controller support
     (void)controller;
     (void)button;
     (void)pressed;
 }
 
-void EmulatedSystem::render_debug_windows(void* gui_state, std::mutex& emu_mutex) {
+void System::render_debug_windows(void* gui_state, std::mutex& emu_mutex) {
     // Render detached combined windows for chips that were "detached" from
     // the Hardware menu preview.  Each detached window shows layout + debug
     // + settings content in a standalone ImGui window.
@@ -184,7 +184,7 @@ void EmulatedSystem::render_debug_windows(void* gui_state, std::mutex& emu_mutex
 #endif
 }
 
-void EmulatedSystem::register_chip(std::unique_ptr<ChipBase> chip) {
+void System::register_chip(std::unique_ptr<ChipBase> chip) {
     ChipBase* raw = chip.get();
     owned_chip_adapters_.push_back(std::move(chip));
 
@@ -198,7 +198,7 @@ void EmulatedSystem::register_chip(std::unique_ptr<ChipBase> chip) {
     registered_chips_.push_back(std::move(sc));
 }
 
-void EmulatedSystem::register_chip(std::unique_ptr<ChipBase> chip,
+void System::register_chip(std::unique_ptr<ChipBase> chip,
                                    const char* display_name, const char* short_name,
                                    const char* category, uint16_t base_address) {
     ChipBase* raw = chip.get();
@@ -206,7 +206,7 @@ void EmulatedSystem::register_chip(std::unique_ptr<ChipBase> chip,
     register_chip(raw, display_name, short_name, category, base_address);
 }
 
-void EmulatedSystem::register_chip(ChipBase* chip,
+void System::register_chip(ChipBase* chip,
                                    const char* display_name, const char* short_name,
                                    const char* category, uint16_t base_address) {
     SystemChip sc;
@@ -219,7 +219,7 @@ void EmulatedSystem::register_chip(ChipBase* chip,
     registered_chips_.push_back(std::move(sc));
 }
 
-void EmulatedSystem::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) {
+void System::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) {
     // Default: fall back to the simple handle_keyboard_event (ignoring extra info)
     (void)scancode;
     (void)mod;
@@ -229,16 +229,16 @@ void EmulatedSystem::handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scan
     }
 }
 
-void EmulatedSystem::handle_text_input(const char* text) {
+void System::handle_text_input(const char* text) {
     // Default: no text input handling (systems using KeyboardMapper override this)
     (void)text;
 }
 
-void EmulatedSystem::release_all_keys() {
+void System::release_all_keys() {
     // Default: nothing to release
 }
 
-SystemConfiguration EmulatedSystem::default_configuration() const {
+SystemConfiguration System::default_configuration() const {
     // Walk hardware traits and select the default option for each axis
     SystemConfiguration config;
 
@@ -266,7 +266,7 @@ SystemConfiguration EmulatedSystem::default_configuration() const {
     return config;
 }
 
-void EmulatedSystem::apply_file_configuration(const char* filepath) {
+void System::apply_file_configuration(const char* filepath) {
     if (!filepath) return;
 
     const SystemDescriptor& desc = get_descriptor();
@@ -321,11 +321,11 @@ void EmulatedSystem::apply_file_configuration(const char* filepath) {
     apply_configuration();
 }
 
-uint32_t EmulatedSystem::get_audio_samples(float* /*buffer*/, uint32_t /*max_samples*/) {
+uint32_t System::get_audio_samples(float* /*buffer*/, uint32_t /*max_samples*/) {
     return 0; // No audio by default
 }
 
-void EmulatedSystem::set_audio_sample_rate(int /*sample_rate_hz*/) {
+void System::set_audio_sample_rate(int /*sample_rate_hz*/) {
     // No-op by default; systems with audio override this.
 }
 
@@ -333,19 +333,19 @@ void EmulatedSystem::set_audio_sample_rate(int /*sample_rate_hz*/) {
 // CONNECTOR PORT & PERIPHERAL DEVICE MANAGEMENT (generic)
 // ============================================================================
 
-int EmulatedSystem::add_connector_port(const ConnectorDefinition& def, int port_number) {
+int System::add_connector_port(const ConnectorDefinition& def, int port_number) {
     int index = static_cast<int>(connector_ports_.size());
     connector_ports_.push_back(std::make_unique<ConnectorPort>(def, port_number));
     return index;
 }
 
-void EmulatedSystem::tick_peripherals() {
+void System::tick_peripherals() {
     for (auto& device : owned_devices_) {
         device->tick();
     }
 }
 
-void EmulatedSystem::attach_default_peripherals() {
+void System::attach_default_peripherals() {
     auto defaults = get_default_peripherals();
     for (auto& dp : defaults) {
         attach_device_to_port(dp.port_index, dp.device_id);
@@ -355,7 +355,7 @@ void EmulatedSystem::attach_default_peripherals() {
     auto_assign_controller_keymaps();
 }
 
-void EmulatedSystem::auto_assign_controller_keymaps() {
+void System::auto_assign_controller_keymaps() {
     const SDL_Scancode* guest_keys = nullptr;
     int guest_count = get_guest_keyboard_scancodes(&guest_keys);
 
@@ -407,7 +407,7 @@ void EmulatedSystem::auto_assign_controller_keymaps() {
     }
 }
 
-bool EmulatedSystem::attach_device_to_port(int port_index, const char* device_id) {
+bool System::attach_device_to_port(int port_index, const char* device_id) {
     if (port_index < 0 || port_index >= static_cast<int>(connector_ports_.size())) {
         printf("System: Invalid port index %d\n", port_index);
         return false;
@@ -443,7 +443,7 @@ bool EmulatedSystem::attach_device_to_port(int port_index, const char* device_id
     return true;
 }
 
-void EmulatedSystem::detach_device_from_port(int port_index) {
+void System::detach_device_from_port(int port_index) {
     if (port_index < 0 || port_index >= static_cast<int>(connector_ports_.size())) return;
 
     auto& port = connector_ports_[port_index];
@@ -468,7 +468,7 @@ void EmulatedSystem::detach_device_from_port(int port_index) {
     on_port_device_changed(port_index);
 }
 
-void EmulatedSystem::detach_device_from_port(int port_index, PeripheralDevice* device) {
+void System::detach_device_from_port(int port_index, PeripheralDevice* device) {
     if (port_index < 0 || port_index >= static_cast<int>(connector_ports_.size())) return;
     if (!device) return;
 
@@ -487,7 +487,7 @@ void EmulatedSystem::detach_device_from_port(int port_index, PeripheralDevice* d
     on_port_device_changed(port_index);
 }
 
-bool EmulatedSystem::process_sdl_event_for_devices(const SDL_Event& event) {
+bool System::process_sdl_event_for_devices(const SDL_Event& event) {
     bool consumed = false;
     for (auto& device : owned_devices_) {
         if (auto* input = device->as_input_device()) {
@@ -499,7 +499,7 @@ bool EmulatedSystem::process_sdl_event_for_devices(const SDL_Event& event) {
     return consumed;
 }
 
-void EmulatedSystem::render_peripheral_connector_ui() {
+void System::render_peripheral_connector_ui() {
 #ifdef CERMU_HAS_GUI
     if (connector_ports_.empty()) return;
 
@@ -650,7 +650,7 @@ void EmulatedSystem::render_peripheral_connector_ui() {
 #endif
 }
 
-void EmulatedSystem::render_host_input_binding_ui(InputPeripheralDevice* device) {
+void System::render_host_input_binding_ui(InputPeripheralDevice* device) {
 #ifdef CERMU_HAS_GUI
     if (!device) return;
 
@@ -747,7 +747,7 @@ static const char* connector_device_noun(ConnectorType type) {
 // CONNECTOR MENU BAR ICONS — Right-aligned icon buttons with popup menus
 // ============================================================================
 
-float EmulatedSystem::render_connector_menu_bar_icons() {
+float System::render_connector_menu_bar_icons() {
 #ifdef CERMU_HAS_GUI
     if (connector_ports_.empty()) return 0.0f;
 
@@ -1001,7 +1001,7 @@ float EmulatedSystem::render_connector_menu_bar_icons() {
 // AUTO-BIND HOST INPUTS — assign available controllers to peripherals
 // ============================================================================
 
-void EmulatedSystem::auto_bind_host_inputs() {
+void System::auto_bind_host_inputs() {
     // Collect owned devices that accept host input
     std::vector<InputPeripheralDevice*> gamepad_devices;   // devices that support SDL_GAMEPAD
     std::vector<InputPeripheralDevice*> keyboard_devices;  // devices that support KEYBOARD (but not gamepad-assigned)

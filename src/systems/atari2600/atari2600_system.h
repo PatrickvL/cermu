@@ -15,7 +15,7 @@
  * Display: 160×~192 visible pixels, 128-color NTSC palette.
  */
 
-#include "../../core/emulated_system.h"
+#include "../../core/system.h"
 #include "../../core/chip_manifest.hpp"
 #include "../../chip/cpu/fam65xx/mos6507.h"
 #include "../../chip/video/tia/tia.h"
@@ -96,7 +96,7 @@ namespace atari2600_chips {
     inline constexpr size_t kCartSlot = 2;
 }
 
-class Atari2600System : public EmulatedSystem {
+class Atari2600System : public System {
 public:
     Atari2600System();
     ~Atari2600System() override;

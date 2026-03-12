@@ -32,7 +32,7 @@ public:
     C64System();
     ~C64System() override;
     
-    // EmulatedSystem interface - system-specific overrides
+    // System interface - system-specific overrides
     const SystemDescriptor& get_descriptor() const override;
     bool initialize() override;
     void shutdown() override;
@@ -70,7 +70,7 @@ public:
     // --- Connector Port Access -----------------------------------------
     //
     // Connector ports, owned devices, attach/detach, and the generic
-    // peripheral connector UI are all provided by the EmulatedSystem base
+    // peripheral connector UI are all provided by the System base
     // class.  The C64 only defines its port layout constants and the
     // system-specific setup_connector_ports() initializer below.
     //
@@ -152,7 +152,7 @@ private:
     bool handle_sid_player_key(SDL_Keycode key);
 
     // Note: hardware_traits_, config_ (SystemConfiguration), speed_multiplier_,
-    // total_cycles_ are now stored in EmulatedSystem base class
+    // total_cycles_ are now stored in System base class
     
     // =========================================================================
     // CONNECTOR PORTS — C64-SPECIFIC LAYOUT

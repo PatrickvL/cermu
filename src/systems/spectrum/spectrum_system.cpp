@@ -92,7 +92,7 @@ static SystemDescriptor spectrum128k_descriptor = {
 
 template<SpectrumVariant V>
 SpectrumSystem<V>::SpectrumSystem()
-    : EmulatedSystem()
+    : System()
     , ay_(Traits::has_ay_sound ? AYVariant::AY_3_8912 : AYVariant::AY_3_8910)
     , pins_(SPECTRUM_BUS_DEFAULT_STATE)
 {

@@ -8,7 +8,7 @@
 
 
 #include "lc80_constants.h"
-#include "../../../core/emulated_system.h"
+#include "../../../core/system.h"
 #include "../../../core/system_lines.h"
 #include "../../../core/chip_manifest.hpp"
 #include "../../../chip/cpu/z80/u880.h"
@@ -43,12 +43,12 @@ namespace lc80_chips {
 
 using LC80BusSpec = ManifestBusSpec<kLC80Chips, 16, 8>;
 
-class LC80System : public EmulatedSystem {
+class LC80System : public System {
 public:
     LC80System();
     ~LC80System() override;
 
-    // ── EmulatedSystem interface ─────────────────────────────────────────
+    // ── System interface ─────────────────────────────────────────
     const SystemDescriptor& get_descriptor() const override;
     bool set_configuration(const SystemConfiguration& config) override;
     bool apply_configuration() override;

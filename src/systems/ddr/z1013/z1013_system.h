@@ -8,7 +8,7 @@
 
 
 #include "z1013_constants.h"
-#include "../../../core/emulated_system.h"
+#include "../../../core/system.h"
 #include "../../../core/system_lines.h"
 #include "../../../core/chip_manifest.hpp"
 #include "../../../chip/cpu/z80/u880.h"
@@ -116,7 +116,7 @@ template<> struct Z1013BusTraits<Z1013Variant::Z1013_64> {
 
 // ── System ───────────────────────────────────────────────────────────────
 template<Z1013Variant V>
-class Z1013System : public EmulatedSystem {
+class Z1013System : public System {
     using Traits = Z1013VariantTraits<V>;
 public:
     Z1013System();

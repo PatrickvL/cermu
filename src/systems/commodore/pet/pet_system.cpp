@@ -350,7 +350,7 @@ bool PETSystem::initialize() {
 
 void PETSystem::shutdown() {
     printf("PET: Shutting down system\n");
-    EmulatedSystem::shutdown();
+    System::shutdown();
 }
 
 void PETSystem::reset() {

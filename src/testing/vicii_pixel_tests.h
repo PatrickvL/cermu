@@ -16,7 +16,7 @@
 // =============================================================================
 
 #include "../systems/commodore/c64/c64_system.h"
-#include "../core/emulated_system.h"
+#include "../core/system.h"
 #include <cstdint>
 
 namespace vicii_test {
@@ -44,7 +44,7 @@ struct pixel_test_results_t {
 // ---------------------------------------------------------------------------
 pixel_test_results_t run_pixel_verification_tests(
     C64System* c64,
-    EmulatedSystem* system,
+    System* system,
     uint32_t* framebuffer,
     int fb_width,
     int fb_height);

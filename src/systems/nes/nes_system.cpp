@@ -213,7 +213,7 @@ const SystemDescriptor& NintendoSystem<V>::static_descriptor() {
 
 template<NintendoVariant V>
 NintendoSystem<V>::NintendoSystem()
-    : EmulatedSystem()
+    : System()
     , cpu_(nullptr)
     , pins_(0)
     , is_pal_(false)
@@ -344,7 +344,7 @@ void NintendoSystem<V>::shutdown() {
     initialized_ = false;
     system_ready_ = false;
 
-    EmulatedSystem::shutdown();
+    System::shutdown();
 }
 
 template<NintendoVariant V>
@@ -1382,7 +1382,7 @@ void NintendoSystem<V>::setup_connector_ports() {
 }
 
 template<NintendoVariant V>
-std::vector<EmulatedSystem::DefaultPeripheral>
+std::vector<System::DefaultPeripheral>
 NintendoSystem<V>::get_default_peripherals() const {
     return {
         { 0, "nes_gamepad" },   // Controller Port 1

@@ -74,7 +74,7 @@ static SystemDescriptor cpc6128_descriptor = {
 
 template<CPCModel M>
 AmstradCPCSystem<M>::AmstradCPCSystem()
-    : EmulatedSystem()
+    : System()
     , ay_(AYVariant::AY_3_8912)
     , pins_(CPC_BUS_DEFAULT_STATE)
 {

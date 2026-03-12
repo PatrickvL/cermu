@@ -32,7 +32,7 @@ static SystemDescriptor kc87_descriptor = {
 // ============================================================================
 
 template<Z9001Variant V>
-Z9001System<V>::Z9001System() : EmulatedSystem(), pins_(Z9001_BUS_DEFAULT_STATE) {
+Z9001System<V>::Z9001System() : System(), pins_(Z9001_BUS_DEFAULT_STATE) {
     HardwareTraits traits = {};
     traits.display.native_width    = z9001_constants::FB_WIDTH;
     traits.display.native_height   = z9001_constants::FB_HEIGHT;

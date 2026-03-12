@@ -18,7 +18,7 @@
 
 /**
  * VIC-20 System Implementation
- * Clean implementation using the new EmulatedSystem architecture (CHIP-8 pattern)
+ * Clean implementation using the new System architecture (CHIP-8 pattern)
  *
  * The VIC-20 was Commodore's first successful mass-market home computer (1980-1985)
  * Features:

@@ -1,5 +1,5 @@
 #include "system_registry.h"
-#include "emulated_system.h"
+#include "system.h"
 #include "formats/format_handler.h"
 #include "vfs/vfs.h"
 #include <cstring>
@@ -125,7 +125,7 @@ SystemMatch SystemRegistry::identify_system(const char* filepath,
 // create_system_for_file - read file, identify system, instantiate
 // ============================================================================
 
-std::unique_ptr<EmulatedSystem> SystemRegistry::create_system_for_file(const char* filepath) {
+std::unique_ptr<System> SystemRegistry::create_system_for_file(const char* filepath) {
     if (!filepath) {
         return nullptr;
     }
@@ -168,7 +168,7 @@ std::unique_ptr<EmulatedSystem> SystemRegistry::create_system_for_file(const cha
     return nullptr;
 }
 
-std::unique_ptr<EmulatedSystem> SystemRegistry::create_system_by_name(const char* name) {
+std::unique_ptr<System> SystemRegistry::create_system_by_name(const char* name) {
     if (!name) {
         return nullptr;
     }

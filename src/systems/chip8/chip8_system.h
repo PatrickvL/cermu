@@ -1,7 +1,7 @@
 #pragma once
 
 #include "chip8_constants.h"
-#include "../../core/emulated_system.h"
+#include "../../core/system.h"
 #include "../../core/framebuffer_renderer.h"
 #include <cstdint>
 #include <cstring>
@@ -25,12 +25,12 @@ enum class Chip8Mode {
     XOCHIP   // XO-CHIP
 };
 
-class Chip8System : public EmulatedSystem {
+class Chip8System : public System {
 public:
     Chip8System();
     ~Chip8System() override = default;
     
-    // EmulatedSystem interface
+    // System interface
     const SystemDescriptor& get_descriptor() const override;
     
     // Configuration management

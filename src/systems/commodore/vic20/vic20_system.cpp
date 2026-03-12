@@ -669,7 +669,7 @@ bool VIC20System::initialize() {
         printf("VIC20: Warning: Could not create keyboard\n");
     }
     
-    // Setup connector ports (generic framework from EmulatedSystem)
+    // Setup connector ports (generic framework from System)
     setup_connector_ports();
 
     // Register all manifest-created chips for the Hardware menu and debug windows
@@ -684,7 +684,7 @@ bool VIC20System::initialize() {
 
 void VIC20System::shutdown() {
     printf("VIC20: Shutting down system\n");
-    EmulatedSystem::shutdown();
+    System::shutdown();
 }
 
 void VIC20System::reset() {
@@ -1388,7 +1388,7 @@ void VIC20System::setup_connector_ports() {
     printf("VIC20: Created %zu connector ports\n", connector_ports_.size());
 }
 
-std::vector<EmulatedSystem::DefaultPeripheral>
+std::vector<System::DefaultPeripheral>
 VIC20System::get_default_peripherals() const {
     return {
         { 0, "joystick"  },  // Control Port — joystick

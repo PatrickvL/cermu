@@ -22,7 +22,7 @@ static SystemDescriptor lc80_descriptor = {
 // CONSTRUCTION / DESTRUCTION
 // ============================================================================
 
-LC80System::LC80System() : EmulatedSystem(), pins_(LC80_BUS_DEFAULT_STATE) {
+LC80System::LC80System() : System(), pins_(LC80_BUS_DEFAULT_STATE) {
     HardwareTraits traits = {};
     // The LC80 has no CRT — LED display rendered into small framebuffer
     traits.display.native_width    = FB_WIDTH;

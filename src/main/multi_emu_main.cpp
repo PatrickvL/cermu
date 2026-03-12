@@ -1,5 +1,5 @@
 #define SDL_MAIN_HANDLED
-#include "../core/emulated_system.h"
+#include "../core/system.h"
 #include "../gui/session_gui.h"
 #include "../testing/vicii_test_harness.h"
 #include "../testing/vicii_pixel_tests.h"
@@ -150,7 +150,7 @@ int main(int argc, char** argv) {
         }
     }
     
-    std::unique_ptr<EmulatedSystem> system;
+    std::unique_ptr<System> system;
     
     // If system name specified, create it directly
     if (system_name != nullptr) {

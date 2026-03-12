@@ -152,7 +152,7 @@ else()
 endif()
 
 # Include directories
-# SDL2 include dirs added project-wide because core headers (emulated_system.h,
+# SDL2 include dirs added project-wide because core headers (system.h,
 # keyboard_mapper.h) reference SDL_Keycode types unconditionally.
 # LIBARCHIVE include dirs added because os_archive.cpp needs <archive.h>.
 include_directories(
@@ -259,7 +259,7 @@ set(CORE_SOURCES
     src/core/ioport.cpp
     src/core/chip_layout.cpp
     src/core/pin_labels.cpp
-    src/core/emulated_system.cpp
+    src/core/system.cpp
     src/utils/stb_impl.cpp
     src/core/system_registry.cpp
     src/core/framebuffer_renderer.cpp
@@ -378,7 +378,7 @@ set(SYSTEM_SOURCES
     # Commodore shared base class (keyboard mapper, config, speed control)
     src/systems/commodore/commodore_system.cpp
     
-    # NES system (clean EmulatedSystem implementation)
+    # NES system (clean System implementation)
     src/systems/nes/nes_system.cpp
     src/chip/video/nes_ppu/nes_ppu.cpp
     src/systems/nes/bus/nes_bus.cpp
@@ -390,7 +390,7 @@ set(SYSTEM_SOURCES
     src/systems/commodore/c16/c16_system.cpp
     src/systems/commodore/c16/c16_keyboard_matrix.cpp
     
-    # Apple 1 system (clean EmulatedSystem implementation)
+    # Apple 1 system (clean System implementation)
     src/systems/apple1/apple1_system.cpp
     
     # Commodore PET system

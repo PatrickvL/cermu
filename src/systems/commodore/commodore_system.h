@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../core/emulated_system.h"
+#include "../../core/system.h"
 #include "../../core/formats/format_handler.h"
 #include "commodore_load_helpers.h"
 #include "../../chip/input/commodore_keyboard.h"
@@ -11,7 +11,7 @@
 /**
  * CommodoreSystem — shared base class for all Commodore 8-bit systems
  *
- * Sits between EmulatedSystem and the three Commodore system families:
+ * Sits between System and the three Commodore system families:
  *   - VIC-20     (VIC20System)
  *   - 264 Series (Commodore264System<V>: C16, C116, Plus/4)
  *   - C64        (C64System)
@@ -35,7 +35,7 @@
  * C64System overrides handle_keyboard_event_ex() to add SID player
  * and disc-flip hotkey intercepts before the mapper dispatch.
  */
-class CommodoreSystem : public EmulatedSystem {
+class CommodoreSystem : public System {
 protected:
     // Commodore keyboard matrix — owned by the derived system's chip
     // infrastructure.  May be nullptr for C64System (which accesses

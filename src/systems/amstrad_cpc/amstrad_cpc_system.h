@@ -19,7 +19,7 @@
  * disc controller presence, ROM set).
  */
 
-#include "../../core/emulated_system.h"
+#include "../../core/system.h"
 #include "../../core/system_lines.h"
 #include "../../core/chip_manifest.hpp"
 #include "../../chip/cpu/z80/zilog_z80a.h"
@@ -161,7 +161,7 @@ template<> struct CPCBusTraits<CPCModel::CPC6128> {
 // ============================================================================
 
 template<CPCModel M>
-class AmstradCPCSystem : public EmulatedSystem {
+class AmstradCPCSystem : public System {
     using Traits = CPCModelTraits<M>;
 
 public:

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "emulated_system.h"
+#include "system.h"
 #include <cstdint>
 #include <cstring>
 

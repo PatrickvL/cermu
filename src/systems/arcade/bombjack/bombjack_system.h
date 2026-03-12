@@ -12,7 +12,7 @@
 
 
 #include "bombjack_constants.h"
-#include "../../../core/emulated_system.h"
+#include "../../../core/system.h"
 #include "../../../core/system_lines.h"
 #include "../../../core/chip_manifest.hpp"
 #include "../../../chip/cpu/z80/zilog_z80a.h"
@@ -83,12 +83,12 @@ struct BombJackSoundBusTraits {
     using Spec = ManifestBusSpec<kBombJackSoundChips, 16, 8>;
 };
 
-class BombJackSystem : public EmulatedSystem {
+class BombJackSystem : public System {
 public:
     BombJackSystem();
     ~BombJackSystem() override;
 
-    // ── EmulatedSystem interface ─────────────────────────────────────────
+    // ── System interface ─────────────────────────────────────────
     const SystemDescriptor& get_descriptor() const override;
     bool set_configuration(const SystemConfiguration& config) override;
     bool apply_configuration() override;
