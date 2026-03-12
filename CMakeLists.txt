@@ -266,6 +266,7 @@ set(CORE_SOURCES
     src/core/text_terminal.cpp
     src/core/connector.cpp
     src/core/device_registry.cpp
+    src/core/chip_registry.cpp
     # Devices — input peripherals
     src/devices/input/joystick_device.cpp
     src/devices/input/commodore_1351_mouse.cpp

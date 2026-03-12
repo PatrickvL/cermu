@@ -28,6 +28,14 @@
 //   - Sub-tables are auto-created for sub-page MMIO regions.
 //   - Banking mode switches remain explicit (ModeSnapshot / manual).
 //
+// Factory resolution — two equivalent paths:
+//   - Compile-time:  Slot<T> resolves factories via resolve_slot_factory<T>()
+//                    at compile time.  Used by C++ manifests (make_chip_manifest).
+//   - Runtime:       ChipRegistry maps string names to the same FactoryFn
+//                    at runtime.  Used by file-driven declarations (TOML/LJON).
+//   Both produce ChipSlot::FactoryFn — same type, same contract.
+//   See chip_registry.h for the runtime path.
+//
 // Usage model:
 //
 //   1.  Define a constexpr ChipManifest using typed Slot<T> entries.
