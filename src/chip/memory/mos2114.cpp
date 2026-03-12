@@ -1,5 +1,7 @@
 #include "mos2114.h"
 #include "../../core/system_lines.h"
+#include "../../core/chip_manifest.hpp"
+#include "../../core/chip_registry.h"
 #include <cstring>
 
 // ============================================================================
@@ -72,4 +74,8 @@ bus_state_t MOS2114::bus_write(void* context, bus_state_t bus_state) {
     self->memory[offset] = BUS_GET_DATA(bus_state) & 0x0F;
     return bus_state;
 }
+
+REGISTER_CHIP_TYPE("MOS2114", MOS2114)
+
+REGISTER_CHIP_TYPE("MOS2114", MOS2114)
 
