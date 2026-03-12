@@ -7,6 +7,7 @@
                                   // non-debug builds.  All data is constexpr —
                                   // zero runtime overhead.
 
+#include "component_base.h"
 #include "component_info.h"
 #include <cstdint>
 #include <memory>
@@ -47,11 +48,18 @@ enum class VideoStandard : uint8_t {
 /// to the protected info_ after construction for late-bound cases like
 /// PAL/NTSC chip variants).
 ///
-class ChipBase {
+class ChipBase : public ComponentBase {
 public:
     ChipBase() = default;
     explicit ChipBase(ChipInfo info) : info_(std::move(info)) {}
-    virtual ~ChipBase() = default;
+    ~ChipBase() override = default;
+
+    // Movable (needed by MemoryChipBase), non-copyable (inherited from ComponentBase).
+    ChipBase(ChipBase&&) noexcept = default;
+    ChipBase& operator=(ChipBase&&) noexcept = default;
+
+    // --- ComponentBase interface ---
+    const char* name() const override { return display_name(); }
 
     // --- Identity (non-virtual — data lives here, not in subclasses) ---
     const ChipInfo& chip_info() const { return info_; }
@@ -110,7 +118,7 @@ public:
     // Called by BusMemory::reset_chips() during system reset.
     // Chips with internal state override this to clear registers, timers, etc.
     // CPUs use a separate pin-based reset protocol and leave this as no-op.
-    virtual void reset() {}
+    // reset() is inherited from ComponentBase with an empty default.
 
     // --- Bus MMIO interface (opt-in via override) ---
     // Chips that handle register-file access on the memory bus override these.
