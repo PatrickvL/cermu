@@ -21,8 +21,16 @@ const char* connector_type_name(ConnectorType type) {
         case ConnectorType::CONTROLLER_NES:   return "NES Controller";
         case ConnectorType::CONTROLLER_SNES:  return "SNES Controller";
         case ConnectorType::CONTROLLER_ATARI: return "Atari Controller";
-        case ConnectorType::AUDIO_VIDEO:      return "Audio/Video";
-        case ConnectorType::POWER:            return "Power";
+        case ConnectorType::VIDEO_COMPOSITE:  return "Composite Video";
+        case ConnectorType::VIDEO_SVIDEO:     return "S-Video";
+        case ConnectorType::VIDEO_RGB:        return "RGB Video";
+        case ConnectorType::VIDEO_RGBI:       return "RGBI Video";
+        case ConnectorType::VIDEO_COMPONENT:  return "Component Video";
+        case ConnectorType::VIDEO_HDMI:       return "HDMI Video";
+        case ConnectorType::AUDIO_MONO:       return "Audio (Mono)";
+        case ConnectorType::AUDIO_STEREO:     return "Audio (Stereo)";
+        case ConnectorType::AUDIO_SPDIF:      return "S/PDIF Audio";
+        case ConnectorType::AUDIO_HDMI:       return "HDMI Audio";
         case ConnectorType::CUSTOM:           return "Custom";
         default:                              return "Unknown";
     }

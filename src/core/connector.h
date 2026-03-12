@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -61,9 +62,21 @@ enum class ConnectorType {
     // --- Atari ---
     CONTROLLER_ATARI,   ///< Atari 2600 controller port (DB-9, similar to Commodore)
 
+    // --- Video outputs ---
+    VIDEO_COMPOSITE,    ///< Composite video (CVBS via RCA/DIN)
+    VIDEO_SVIDEO,       ///< S-Video (separate luma/chroma)
+    VIDEO_RGB,          ///< RGB analog (SCART, DB-23, DIN, etc.)
+    VIDEO_RGBI,         ///< RGBI digital (TTL, e.g. C128 80-column)
+    VIDEO_COMPONENT,    ///< Component video (YPbPr)
+    VIDEO_HDMI,         ///< HDMI digital video/audio
+
+    // --- Audio outputs ---
+    AUDIO_MONO,         ///< Single-channel audio output
+    AUDIO_STEREO,       ///< Stereo audio output (left/right)
+    AUDIO_SPDIF,        ///< S/PDIF digital audio
+    AUDIO_HDMI,         ///< HDMI audio (separate from HDMI video)
+
     // --- Generic ---
-    AUDIO_VIDEO,        ///< A/V output (active peripherals rarely connect here)
-    POWER,              ///< Power supply connector
     CUSTOM,             ///< System-specific / non-standard
 
     COUNT               ///< Sentinel — total number of types
@@ -71,6 +84,53 @@ enum class ConnectorType {
 
 /// Human-readable name for a ConnectorType.
 const char* connector_type_name(ConnectorType type);
+
+// ============================================================================
+// OUTPUT SIGNAL TYPES
+// ============================================================================
+
+/// Video signal encoding standard.
+enum class VideoSignalType {
+    Composite,      ///< CVBS composite
+    SVideo,         ///< Separate luma + chroma
+    RGB,            ///< Analog RGB
+    RGBI,           ///< Digital RGBI (TTL)
+    YPbPr,          ///< Analog component (Y/Pb/Pr)
+    Digital,        ///< Generic digital (HDMI, DVI, etc.)
+};
+
+/// Audio signal encoding.
+enum class AudioSignalType {
+    Mono,           ///< Single channel
+    Stereo,         ///< Two channels (left/right)
+    Quadraphonic,   ///< Four channels
+};
+
+// ============================================================================
+// OUTPUT DESCRIPTORS
+// ============================================================================
+
+/// Describes the video signal produced by a video output connector.
+/// The `pixels` pointer is host-allocated and written by the board's video chip.
+struct VideoOutput {
+    VideoSignalType signal_type         = VideoSignalType::Composite;
+    int             width               = 0;
+    int             height              = 0;
+    float           refresh_rate_hz     = 0.0f;
+    float           dot_clock_mhz       = 0.0f;
+    float           pixel_aspect_ratio  = 1.0f;
+    uint32_t*       pixels              = nullptr;  ///< ARGB8888 framebuffer (host-allocated)
+};
+
+/// Describes the audio signal produced by an audio output connector.
+/// The `samples` pointer is host-allocated and written by the board's sound chip.
+struct AudioOutput {
+    AudioSignalType signal_type         = AudioSignalType::Mono;
+    int             sample_rate_hz      = 0;
+    float*          samples             = nullptr;  ///< Interleaved float [-1,1] (host-allocated)
+    uint32_t        capacity            = 0;        ///< Buffer capacity in frames
+    uint32_t        written             = 0;        ///< Frames written by producer
+};
 
 // ============================================================================
 // SIGNAL LINE DEFINITION
@@ -193,6 +253,16 @@ public:
     /// Called by the attached device when it changes its output signals.
     void notify_device_output_changed(uint32_t device_signals);
 
+    // --- Output signal descriptors -------------------------------------
+    // Absent on input-only and bus connectors.
+
+    void               set_video_output(VideoOutput vo) { video_output_ = vo; }
+    void               set_audio_output(AudioOutput ao) { audio_output_ = ao; }
+    VideoOutput*       video_output()       { return video_output_ ? &*video_output_ : nullptr; }
+    const VideoOutput* video_output() const { return video_output_ ? &*video_output_ : nullptr; }
+    AudioOutput*       audio_output()       { return audio_output_ ? &*audio_output_ : nullptr; }
+    const AudioOutput* audio_output() const { return audio_output_ ? &*audio_output_ : nullptr; }
+
 private:
     ConnectorDefinition                 definition_;
     int                                 port_index_;        ///< E.g. port 1 vs port 2
@@ -200,6 +270,8 @@ private:
     uint32_t                            combined_device_signals_;  ///< AND of all device outputs
     std::vector<PeripheralDevice*>      attached_devices_;  ///< Attached devices (1 for point-to-point, N for bus)
     SignalChangeCallback                on_device_output_changed_;
+    std::optional<VideoOutput>          video_output_;      ///< Present on video output connectors
+    std::optional<AudioOutput>          audio_output_;      ///< Present on audio output connectors
 
     /// Recompute combined_device_signals_ from all attached devices.
     void recompute_device_signals();
