@@ -389,12 +389,12 @@ using uint_least_bits_t =
 
 /* 16-bit Galois LFSR — maximal period 65535. Taps: 0xB400 (poly x^16+x^14+x^13+x^11+1). */
 [[nodiscard]] FORCE_INLINE uint16_t lfsr16_step(uint16_t state) noexcept {
-    return uint16_t((state >> 1) ^ (-(state & 1u) & 0xB400u));
+    return uint16_t((state >> 1) ^ (~((state & 1u) - 1u) & 0xB400u));
 }
 
 /* 8-bit Galois LFSR — maximal period 255. Taps: 0xB4 (poly x^8+x^6+x^5+x^4+1). */
 [[nodiscard]] FORCE_INLINE uint8_t lfsr8_step(uint8_t state) noexcept {
-    return uint8_t((state >> 1) ^ (-(state & 1u) & 0xB4u));
+    return uint8_t((state >> 1) ^ (~((state & 1u) - 1u) & 0xB4u));
 }
 
 #else /* C fallback — uint8_t only */
