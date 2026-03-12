@@ -154,7 +154,7 @@ class EmulatedSystem {
 
 A board is a named collection of:
 - **Chips** — from the manifest (memory + I/O + CPU + support)
-- **Connectors** — physical ports (joystick, cartridge, serial, power)
+- **Ports** — physical ports (joystick, cartridge, serial, power)
 - **Embedded components** — keyboards, LEDs, speakers, DIP switches
 - **Bus wiring** — which chips share which bus, address decoding rules
 
@@ -162,7 +162,7 @@ A board is a named collection of:
 struct BoardDeclaration {
     const char* name;                    // "C64 Main Board", "NES CPU Board"
     ChipManifest<N> chips;               // All chips on this board
-    std::span<const ConnectorDef> connectors;  // Physical ports
+    std::span<const PortDef> ports;  // Physical ports
     std::span<const ComponentDef> components;  // Non-chip components
     // Bus wiring is implicit from the manifest's address map
 };
@@ -206,7 +206,7 @@ TOML schema design.  Key bridge from Phase 3:
 
 - Generic tick scheduler (clock dividers, multi-CPU coordination)
 - Chip registry (string name → factory function mapping)
-- Connector registry (string name → ConnectorDefinition)
+- Port registry (string name → PortDefinition)
 - Bus wiring DSL (address decode rules in TOML)
 - Callback wiring (chip-to-chip signal routing without C++ glue)
 

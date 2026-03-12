@@ -11,11 +11,11 @@ All four registries follow the same static self-registration pattern.
 
 **`ChipRegistry`** — string → `ChipSlot::FactoryFn`. `REGISTER_CHIP` / `REGISTER_CHIP_TYPE` macros. `make_slot_from_registry()` bridge for file-driven slots.
 
-**`DeviceRegistry`** — string → `DeviceFactory`. `REGISTER_DEVICE` macro. `get_compatible_devices(ConnectorType)` for port matching. Complex peripherals (1541) register here and produce a `Board` instance rather than a bare `PeripheralDevice`.
+**`DeviceRegistry`** — string → `DeviceFactory`. `REGISTER_DEVICE` macro. `get_compatible_devices(PortType)` for port matching. Complex peripherals (1541) register here and produce a `Board` instance rather than a bare `PeripheralDevice`.
 
 **`SystemRegistry`** — two-phase file identification, alias-boost, confidence scoring. `create_system_for_file()` / `create_system_by_name()`. Produces a `System`. No changes.
 
-**`ConnectorRegistry`** — string / `ConnectorType` → `ConnectorDefinition`. `REGISTER_CONNECTOR` macro. Standard connector definitions in `ConnectorSignals::` self-register from `connector.cpp`. System-specific connectors register from their own `.cpp`. Not yet implemented.
+**`PortRegistry`** — string / `PortType` → `PortDefinition`. `REGISTER_PORT` macro. Standard connector definitions in `PortSignals::` self-register from `connector.cpp`. System-specific connectors register from their own `.cpp`. Not yet implemented.
 
 ---
 
@@ -24,7 +24,7 @@ All four registries follow the same static self-registration pattern.
 ```
 ComponentBase
 ├── ChipBase                — bus-attached; registered in BoardBase::components_
-└── ConnectorPort           — signal ports; registered in BoardBase::components_
+└── Port           — signal ports; registered in BoardBase::components_
 
 BoardBase : ComponentBase   — non-templated base; owns component list
 └── Board<Spec>             — owns chips, connectors, unified buffer, BusMap
@@ -33,7 +33,7 @@ BoardBase : ComponentBase   — non-templated base; owns component list
 System                      — one or more BoardBase instances + inter-board Connections
 Session                     — one or more Systems + inter-system Connections
 
-PeripheralDevice            — external attachment to a ConnectorPort
+PeripheralDevice            — external attachment to a Port
 └── InputPeripheralDevice   — adds host input binding, SDL routing, keymap presets
 ```
 
@@ -54,14 +54,14 @@ public:
 };
 ```
 
-`ChipBase` and `ConnectorPort` already derive from this. Complete.
+`ChipBase` and `Port` already derive from this. Complete.
 
 ---
 
-## ConnectorType and Signal Tables
+## PortType and Signal Tables
 
 ```cpp
-enum class ConnectorType {
+enum class PortType {
     // Commodore
     CONTROL_PORT_DB9,
     IEC_SERIAL,
@@ -99,7 +99,7 @@ enum class ConnectorType {
 
 ## Output Signal Descriptors
 
-Signal descriptors describe what a connector carries. They live on `ConnectorPort` instances.
+Signal descriptors describe what a connector carries. They live on `Port` instances.
 
 ```cpp
 enum class VideoSignalType {
@@ -138,18 +138,18 @@ struct AudioOutput {
 
 ---
 
-## ConnectorPort
+## Port
 
 Extends the existing open-collector signal model with optional output descriptors. All existing attach/detach/signal API unchanged.
 
 ```cpp
-class ConnectorPort : public ComponentBase {
+class Port : public ComponentBase {
 public:
-    explicit ConnectorPort(const ConnectorDefinition& def, int port_index = 0);
+    explicit Port(const PortDefinition& def, int port_index = 0);
 
     // Existing API — unchanged
-    const ConnectorDefinition& get_definition()    const;
-    ConnectorType              get_type()           const;
+    const PortDefinition& get_definition()    const;
+    PortType              get_type()           const;
     const char*                get_name()           const;
     int                        get_port_index()     const;
     uint32_t                   read_signals()       const;
@@ -338,7 +338,7 @@ public:
     void initialize(Bus& bus, Chips*... chips);
 
 protected:
-    void add_connector(std::unique_ptr<ConnectorPort> port) {
+    void add_connector(std::unique_ptr<Port> port) {
         connectors_.push_back(std::move(port));
     }
 
@@ -353,7 +353,7 @@ protected:
 
     std::vector<uint8_t>                    buffer_;       // unified address-space buffer
     std::vector<std::unique_ptr<ChipBase>>  owned_chips_;  // chip ownership
-    std::vector<std::unique_ptr<ConnectorPort>> connectors_;
+    std::vector<std::unique_ptr<Port>> connectors_;
     Bus mem_bus_;
     Map bus_map_;
 };
@@ -415,9 +415,9 @@ vic_        = first_chip<vic_base_t>({vic20_slot::kVicPal, vic20_slot::kVicNtsc}
 via1_       = chip_as<mos6522_t> (vic20_slot::kVia1);
 via2_       = chip_as<mos6522_t> (vic20_slot::kVia2);
 
-// Connectors
-auto composite = std::make_unique<ConnectorPort>(
-    ConnectorRegistry::instance().lookup(ConnectorType::VIDEO_COMPOSITE));
+// Ports
+auto composite = std::make_unique<Port>(
+    PortRegistry::instance().lookup(PortType::VIDEO_COMPOSITE));
 composite->set_video_output(VideoOutput{
     .signal_type        = VideoSignalType::Composite,
     .width              = 284,
@@ -428,8 +428,8 @@ composite->set_video_output(VideoOutput{
 });
 add_connector(std::move(composite));
 
-auto audio_jack = std::make_unique<ConnectorPort>(
-    ConnectorRegistry::instance().lookup(ConnectorType::AUDIO_MONO));
+auto audio_jack = std::make_unique<Port>(
+    PortRegistry::instance().lookup(PortType::AUDIO_MONO));
 audio_jack->set_audio_output(AudioOutput{
     .signal_type    = AudioSignalType::Mono,
     .sample_rate_hz = 44100,
@@ -511,17 +511,17 @@ private:
 class Connection {
 public:
     virtual ~Connection() = default;
-    virtual void connect   (ConnectorPort* a, ConnectorPort* b) = 0;
+    virtual void connect   (Port* a, Port* b) = 0;
     virtual void disconnect() = 0;
 };
 
 class DirectConnection : public Connection {
 public:
-    void connect   (ConnectorPort* a, ConnectorPort* b) override;
+    void connect   (Port* a, Port* b) override;
     void disconnect() override;
 private:
-    ConnectorPort* a_ = nullptr;
-    ConnectorPort* b_ = nullptr;
+    Port* a_ = nullptr;
+    Port* b_ = nullptr;
 };
 
 // Future
@@ -542,7 +542,7 @@ Before starting the emu thread, `SessionGUI` walks all boards and attaches host 
 void SessionGUI::attach_output_buffers() {
     for (auto& board : session_->primary_system()->boards()) {
         for (auto* component : board->components()) {
-            auto* port = dynamic_cast<ConnectorPort*>(component);
+            auto* port = dynamic_cast<Port*>(component);
             if (!port) continue;
             if (auto* vo = port->video_output())
                 vo->pixels = new uint32_t[vo->width * vo->height];
@@ -573,17 +573,17 @@ Multiple video outputs on the same board each get their own buffer. The GUI pres
 
 ## Phase Plan
 
-| Priority | Work item |
+| Priority | Work item |b
 |----------|-----------|
-| 1 | ~~`ComponentBase`; `ChipBase` and `ConnectorPort` derive from it~~ |
+| 1 | ~~`ComponentBase`; `ChipBase` and `Port` derive from it~~ |
 | 2 | ~~Rename `GenericEmulatorGUI` → `EmulatorHost`; `SystemGUI` → `SessionGUI`~~ |
 | 3 | ~~Rename `EmulatedSystem` → `System`~~ |
-| 4 | ~~`ConnectorType` A/V output variants; `VideoOutput` / `AudioOutput` descriptors; `ConnectorPort` optional output fields~~ |
-| 5 | ~~Rename `BusMemory` → `Board`~~; extract `BusMap` from address-decode logic; chip and connector ownership on `Board`; `BoardBase` non-owning component index |
-| 6 | `VIC20Board` migration; `VIC20System` stripped to system-level concerns |
-| 7 | `System` composes boards; `Session` composes systems; `SessionGUI` owns `Session` |
-| 8 | `ConnectorRegistry`; `REGISTER_CONNECTOR`; standard connectors self-register |
-| 9 | `DirectConnection`; inter-board wiring |
+| 4 | ~~`PortType` A/V output variants; `VideoOutput` / `AudioOutput` descriptors; `Port` optional output fields~~ |
+| 5 | ~~Rename `BusMemory` → `Board`~~; ~~`BoardBase` non-owning component index~~; extract `BusMap` from address-decode logic; chip and connector ownership on `Board` |
+| 6 | Deferred — `VIC20Board` migration; `VIC20System` stripped to system-level concerns |
+| 7 | ~~`Session` composes systems~~; `System` composes boards; `SessionGUI` owns `Session` |
+| 8 | ~~`PortRegistry`; `REGISTER_PORT`; standard connectors self-register~~ |
+| 9 | ~~`DirectConnection`; inter-board wiring~~ |
 | 10 | Internal device auto-attachment via `DeviceRegistry` during board init |
 | 11 | `power_on()` lifecycle; unified `Board`-level reset path |
 | 12 | `GenericBusSpec`; `GenericSystem`; file parser; register with `SystemRegistry` |

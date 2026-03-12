@@ -22,7 +22,7 @@ EmulatedSystem                              (src/core/emulated_system.h)
 ChipBase                                    (src/core/chip.h)
   └─ ConcreteChip                           e.g. MOS6581, VIC-II, PPU, CD4021
 
-ConnectorPort                               (src/core/connector.h)
+Port                               (src/core/connector.h)
   → attaches PeripheralDevice               e.g. JoystickDevice, NesStandardController
 
 PeripheralDevice                            (src/core/connector.h)
@@ -46,7 +46,7 @@ PeripheralDevice                            (src/core/connector.h)
 | Entity | Shared location | Examples |
 |--------|----------------|----------|
 | Chips | `src/chip/<category>/` | CD4021, future shared sound ICs |
-| Connector definitions | `src/connectors/` | NES controller port (NES, Famicom, VS. System) |
+| Port definitions | `src/ports/` | NES controller port (NES, Famicom, VS. System) |
 | Peripheral devices | `src/devices/<category>/` | NES gamepad, Zapper, joystick, mice |
 | CPU cores | `src/chip/cpu/<family>/` | fam65xx (6502/6510/2A03/…) |
 
@@ -73,7 +73,7 @@ C++17. Use `if constexpr`, structured bindings, `std::string_view`, fold express
 
 | Element | Convention | Example |
 |---------|-----------|---------|
-| Classes / scoped enums | PascalCase | `ChipBase`, `ConnectorType` |
+| Classes / scoped enums | PascalCase | `ChipBase`, `PortType` |
 | Methods, functions | snake_case | `get_chip_info()`, `mem_tick()` |
 | Private/protected members | trailing `_` | `cpu_`, `pins_`, `bus_snapshot_` |
 | Public struct fields | no trailing `_` | `cutoff_frequency`, `sample_rate` |
@@ -148,7 +148,7 @@ C++17. Use `if constexpr`, structured bindings, `std::string_view`, fold express
 |-----------|------|
 | One chip = one header | Each hardware chip is a self-contained `ChipBase` subclass. |
 | Layouts in `_gui` files | `ChipLayout` definitions + pin rendering under `#ifdef CERMU_HAS_GUI`. |
-| Cross-system entities in shared folders | Chips, connectors, and peripherals used by >1 system go in `src/chip/`, `src/connectors/`, `src/devices/`. |
+| Cross-system entities in shared folders | Chips, connectors, and peripherals used by >1 system go in `src/chip/`, `src/ports/`, `src/devices/`. |
 | Edge detection via snapshot | Compare current bus against `bus_snapshot_`; no callbacks or state machines. |
 | No free functions | Everything is a static member or method. Namespace-level constants are `inline constexpr`. |
 | Chip decoupling | Chips must not include system headers. Use opaque callbacks/descriptors to access system resources. |
@@ -162,7 +162,7 @@ C++17. Use `if constexpr`, structured bindings, `std::string_view`, fold express
 
 ```
 src/
-├── core/               # Framework: EmulatedSystem, ChipBase, ConnectorPort, bus_state_t
+├── core/               # Framework: EmulatedSystem, ChipBase, Port, bus_state_t
 ├── chip/               # Cross-system chip implementations (by category)
 │   ├── cpu/            #   CPU cores (fam65xx family, Z80, …)
 │   ├── input/          #   Input chips (CD4021 shift register, …)
@@ -171,7 +171,7 @@ src/
 │   ├── memory/         #   Memory chips (MOS2114 color RAM, …)
 │   ├── sound/          #   Sound chips (MOS6581 SID, …)
 │   └── video/          #   Video chips (VIC-II, TED, VIC 6560/6561, …)
-├── connectors/         # Cross-system ConnectorDefinition constants
+├── ports/         # Cross-system PortDefinition constants
 ├── devices/            # Cross-system PeripheralDevice implementations
 │   ├── input/          #   Controllers, mice, light guns, paddles
 │   └── storage/        #   Disk drives, tape drives
@@ -187,12 +187,12 @@ src/
 
 ---
 
-## Connector / Peripheral Protocol
+## Port / Peripheral Protocol
 
-- `ConnectorPort` models a physical jack with wired-AND signal propagation (active-low convention).
+- `Port` models a physical jack with wired-AND signal propagation (active-low convention).
 - `PeripheralDevice` is the abstract base for anything plugged into a port: lifecycle hooks, signal I/O, host input binding, optional `#ifdef CERMU_HAS_GUI` rendering.
-- Systems drive connector signals via `ConnectorPort::write_system_signals()`; devices respond via `on_signal_change()` and update their output signals.
-- Devices are registered in `DeviceRegistry` with a `ConnectorType` so they auto-appear in the UI for compatible ports.
+- Systems drive connector signals via `Port::write_system_signals()`; devices respond via `on_signal_change()` and update their output signals.
+- Devices are registered in `DeviceRegistry` with a `PortType` so they auto-appear in the UI for compatible ports.
 
 ---
 
@@ -214,4 +214,4 @@ src/
 | CPU template | `fam65xx_t<CPUTraits>` | NTTP + `if constexpr` for zero-overhead variant dispatch |
 | C++ chip conversion | TED 7360 | ChipBase inheritance, callbacks via descriptor, proper encapsulation |
 | Chip debug/settings | MOS 6581 SID | Left panel (chip viz) + right panel (registers), collapsible sections |
-| Connector/peripheral | DB-9 `ControlPortInputDevice` + `JoystickDevice` | Signal protocol, host input binding, `#ifdef CERMU_HAS_GUI` |
+| Port/peripheral | DB-9 `ControlPortInputDevice` + `JoystickDevice` | Signal protocol, host input binding, `#ifdef CERMU_HAS_GUI` |
