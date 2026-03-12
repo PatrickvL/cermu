@@ -222,6 +222,17 @@ struct tia_t : public VideoChipBase {
         init_split_regs(WRITE_REG_COUNT, READ_REG_COUNT);
     }
 
+    // --- ChipBase bus interface (MMIO) ---
+    bool has_mmio() const override { return true; }
+    bus_state_t on_bus_read(bus_state_t bus) noexcept override {
+        BUS_SET_DATA(bus, read(BUS_GET_ADDR(bus)));
+        return bus;
+    }
+    bus_state_t on_bus_write(bus_state_t bus) noexcept override {
+        write(BUS_GET_ADDR(bus), BUS_GET_DATA(bus));
+        return bus;
+    }
+
     // --- ChipBase GUI interface ---
 #ifdef CERMU_HAS_GUI
     ChipLayout* create_chip_layout() const override;

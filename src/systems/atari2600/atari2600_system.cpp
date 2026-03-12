@@ -131,16 +131,13 @@ Atari2600System::Atari2600System()
 {
     hardware_traits_ = create_atari2600_hardware_traits();
     current_palette_ = hardware_traits_.display.default_palette;
-
-    tia_.init();
-    riot_.init();
 }
 
 Atari2600System::~Atari2600System() {
-    if (cpu_) {
-        delete cpu_;
-        cpu_ = nullptr;
-    }
+    // CPU is manually new'd — clean up.
+    // TIA, RIOT, CartChip are owned by bus_mem_ (factory-created).
+    delete cpu_;
+    cpu_ = nullptr;
 }
 
 // ============================================================================
@@ -171,7 +168,16 @@ bool Atari2600System::apply_configuration() {
 bool Atari2600System::initialize() {
     printf("Atari2600: Initializing system\n");
 
-    // Create CPU
+    // ── Factory-create TIA, RIOT, and CartChip from the manifest ────────
+    bus_mem_.create_chips(&pins_);
+    tia_       = bus_mem_.chip_as<tia_t>(atari2600_chips::kTiaSlot);
+    riot_      = bus_mem_.chip_as<pia6532_t>(atari2600_chips::kRiotSlot);
+    cart_chip_ = bus_mem_.chip_as<Atari2600CartChip>(atari2600_chips::kCartSlot);
+
+    // ── Configure MemoryBus page tables (mirrors + cart pages) ──────────
+    configure_bus_memory_map();
+
+    // ── Create CPU — direct instantiation (not in manifest) ─────────────
     cpu_ = new MOS6507();
     if (!cpu_) {
         printf("Atari2600: Failed to create MOS6507 CPU\n");
@@ -181,9 +187,9 @@ bool Atari2600System::initialize() {
     cpu_->reset(0);
 
     // Initialize TIA and RIOT
-    tia_.init();
-    tia_.set_audio_sample_rate(atari2600_constants::DEFAULT_SAMPLE_RATE);
-    riot_.init();
+    tia_->init();
+    tia_->set_audio_sample_rate(atari2600_constants::DEFAULT_SAMPLE_RATE);
+    riot_->init();
 
     // Console switches default: color mode, both difficulty A, not pressed
     console_switches_ = 0xFF;  // All bits high = not pressed (active-low)
@@ -194,10 +200,7 @@ bool Atari2600System::initialize() {
     // Register chips for debug/hardware menu
     register_chip(static_cast<ChipBase*>(cpu_),
         "MOS 6507 CPU", "6507", "CPU", 0x0000);
-    register_chip(&tia_,
-        "TIA (Television Interface Adapter)", "TIA", "Video/Audio", 0x0000);
-    register_chip(&riot_,
-        "PIA 6532 RIOT", "6532", "I/O", 0x0080);
+    register_bus_chips(bus_mem_);
 
     printf("Atari2600: System initialized\n");
     return true;
@@ -211,8 +214,8 @@ void Atari2600System::shutdown() {
 void Atari2600System::reset() {
     printf("Atari2600: Reset\n");
 
-    tia_.reset();
-    riot_.reset();
+    tia_->reset();
+    riot_->reset();
 
     if (cpu_) {
         cpu_->reset(0);
@@ -236,15 +239,15 @@ void Atari2600System::reset() {
 
 void Atari2600System::tick() {
     // TIA tick: 3 color clocks per CPU cycle
-    tia_.tick_cpu_cycle();
+    tia_->tick_cpu_cycle();
 
     // If WSYNC is pending, the CPU is halted — skip the CPU tick
-    if (!tia_.is_cpu_halted()) {
+    if (!tia_->is_cpu_halted()) {
         tick_cpu();
     }
 
     // RIOT timer tick (once per CPU cycle)
-    riot_.tick();
+    riot_->tick();
 
     // Read joystick inputs from connector ports
     update_joystick_state();
@@ -254,11 +257,11 @@ void Atari2600System::tick() {
     // Frame boundary detection:
     // When TIA VSYNC transitions from active to inactive, a new frame starts.
     // We detect this by watching the TIA's vsync flag.
-    bool vsync_active = (tia_.regs_[TIA_VSYNC] & 0x02) != 0;
+    bool vsync_active = (tia_->regs_[TIA_VSYNC] & 0x02) != 0;
     if (in_vsync_ && !vsync_active) {
         // VSYNC just ended — frame is complete
         frame_complete_ = true;
-        tia_.scanline = 0;  // Reset scanline counter for new frame
+        tia_->scanline = 0;  // Reset scanline counter for new frame
     }
     in_vsync_ = vsync_active;
 }
@@ -280,7 +283,7 @@ void Atari2600System::run_frame() {
 
     // If we hit the safety limit, force frame completion
     if (!frame_complete_) {
-        tia_.scanline = 0;
+        tia_->scanline = 0;
     }
 
     // Copy framebuffer
@@ -297,7 +300,18 @@ void Atari2600System::run_frame() {
 void Atari2600System::tick_cpu() {
     if (cpu_) {
         pins_ = cpu_->tick<MOS6507::Phase::PHI2>(pins_);
-        pins_ = mem_tick(pins_);
+
+        // Memory dispatch through MemoryBus (TIA, RIOT, Cart all via MMIO)
+        pins_ = bus_.tick(0, pins_);
+
+        // Bus snooping for mappers that monitor all accesses
+        // (e.g. 3F watches TIA writes, FE watches stack at $01FE)
+        if (mapper_snoop_) {
+            uint16_t addr = BUS_GET_ADDR(pins_);
+            mapper_->bus_snoop(addr, BUS_GET_DATA(pins_),
+                               !BUS_GET_BIT(pins_, BUS_RW_BIT));
+        }
+
         pins_ = cpu_->tick<MOS6507::Phase::PHI1>(pins_);
         // MOS6507 has no IRQ pin, and NMI is unused — still call sample_nmi_pin
         // for completeness (the 6507 traits disable it internally)
@@ -306,65 +320,30 @@ void Atari2600System::tick_cpu() {
 }
 
 // ============================================================================
-// MEMORY ACCESS
+// BUS MEMORY MAP CONFIGURATION
 // ============================================================================
 
-bus_state_t Atari2600System::mem_tick(bus_state_t s) {
-    // 6507 has 13-bit address bus
-    uint16_t addr = BUS_GET_ADDR(s) & 0x1FFF;
+void Atari2600System::configure_bus_memory_map() {
+    // apply() auto-wires page 0 with a MaskedSubTable (TIA + RIOT regions)
+    // and maps page 16 to the cart MMIO handler.
+    bus_mem_.apply(bus_);
 
-    if (BUS_GET_BIT(s, BUS_RW_BIT)) {
-        // ---- READ CYCLE ----
-        uint8_t data = 0x00;
-
-        if (addr & 0x1000) {
-            // A12=1: Cartridge ROM (through mapper)
-            data = mapper_->read(addr & 0x0FFF);
-        } else if (addr & 0x0080) {
-            if (addr & 0x0200) {
-                // A12=0, A7=1, A9=1: RIOT I/O registers
-                data = riot_.read_io(addr);
-            } else {
-                // A12=0, A7=1, A9=0: RIOT RAM (128 bytes)
-                data = riot_.read_ram(addr & 0x7F);
-            }
-        } else {
-            // A12=0, A7=0: TIA read registers
-            data = tia_.read(addr);
-        }
-
-        BUS_SET_DATA(s, data);
-
-        // Bus snooping for mappers that monitor accesses outside cart space
-        // (e.g. 3F watches TIA writes, FE watches stack at $01FE)
-        if (mapper_snoop_)
-            mapper_->bus_snoop(addr, data, false);
-    } else {
-        // ---- WRITE CYCLE ----
-        uint8_t data = BUS_GET_DATA(s);
-
-        if (addr & 0x1000) {
-            // A12=1: Cartridge write (bank switching hotspots)
-            mapper_->write(addr & 0x0FFF, data);
-        } else if (addr & 0x0080) {
-            if (addr & 0x0200) {
-                // RIOT I/O registers
-                riot_.write_io(addr, data);
-            } else {
-                // RIOT RAM
-                riot_.write_ram(addr & 0x7F, data);
-            }
-        } else {
-            // TIA write registers
-            tia_.write(addr, data);
-        }
-
-        // Bus snooping on write cycles
-        if (mapper_snoop_)
-            mapper_->bus_snoop(addr, data, true);
+    // ── Mirror non-cart pages (1-15) to the same sub-table as page 0 ────
+    // The Atari 2600 uses incomplete address decoding: A12=0 pages all have
+    // the same TIA (A7=0) / RIOT (A7=1) split.  Pages 1-15 mirror page 0.
+    int sub_idx = bus_mem_.slot(atari2600_chips::kTiaSlot).sub_table_idx;
+    if (sub_idx >= 0) {
+        for (size_t page = 1; page < 16; ++page)
+            bus_.map_to_masked_sub(0, page, size_t(sub_idx));
     }
 
-    return s;
+    // ── Mirror cart pages (17-31) to the same MMIO handler as page 16 ───
+    // A12=1 always selects the cartridge; pages 17-31 are mirrors of page 16.
+    int cart_mmio = bus_mem_.slot(atari2600_chips::kCartSlot).mmio_idx;
+    if (cart_mmio >= 0) {
+        for (size_t page = 17; page < 32; ++page)
+            bus_.map_register_file(0, page, 1, size_t(cart_mmio));
+    }
 }
 
 // ============================================================================
@@ -409,6 +388,9 @@ bool Atari2600System::load_file(const char* filepath) {
     mapper_ = a2600_mapper_factory::create(cart_rom_.data(), cart_size_);
     mapper_snoop_ = mapper_->needs_bus_snoop();
 
+    // Wire the mapper into the cart MMIO adapter for MemoryBus dispatch
+    cart_chip_->set_mapper(mapper_.get());
+
     printf("Atari2600: Loaded %u bytes, mapper=%s, %d bank(s)\n",
            cart_size_, mapper_->name(), mapper_->bank_count());
 
@@ -437,7 +419,7 @@ bool Atari2600System::load_file(const char* filepath) {
         }
 
         // Flush stale audio from the ring buffer
-        tia_.audio_buffer_.reset();
+        tia_->audio_buffer_.reset();
     }
 
     return true;
@@ -463,7 +445,7 @@ void Atari2600System::set_framebuffer(uint32_t* buffer, int width, int height) {
     rgba_height_ = height;
 
     // Pass framebuffer to TIA for direct rendering
-    tia_.set_framebuffer(buffer, width, height);
+    tia_->set_framebuffer(buffer, width, height);
 }
 
 // ============================================================================
@@ -472,11 +454,11 @@ void Atari2600System::set_framebuffer(uint32_t* buffer, int width, int height) {
 
 uint32_t Atari2600System::get_audio_samples(float* buffer, uint32_t max_samples) {
     if (!buffer || max_samples == 0) return 0;
-    return tia_.audio_read(buffer, max_samples);
+    return tia_->audio_read(buffer, max_samples);
 }
 
 void Atari2600System::set_audio_sample_rate(int sample_rate_hz) {
-    tia_.set_audio_sample_rate(sample_rate_hz);
+    tia_->set_audio_sample_rate(sample_rate_hz);
 }
 
 // ============================================================================
@@ -544,7 +526,7 @@ void Atari2600System::update_joystick_state() {
         if (!(sig0 & (1u << ConnectorSignals::JOY_LEFT)))  joystick_state_ &= ~0x40;
         if (!(sig0 & (1u << ConnectorSignals::JOY_RIGHT))) joystick_state_ &= ~0x80;
         // Fire button → TIA INPT4 (active-low: 0=pressed, 1=not pressed)
-        tia_.read_regs_[TIA_INPT4] = (sig0 & (1u << ConnectorSignals::JOY_FIRE)) ? 0x80 : 0x00;
+        tia_->read_regs_[TIA_INPT4] = (sig0 & (1u << ConnectorSignals::JOY_FIRE)) ? 0x80 : 0x00;
     }
 
     // Player 1 (connector port 1)
@@ -554,12 +536,12 @@ void Atari2600System::update_joystick_state() {
         if (!(sig1 & (1u << ConnectorSignals::JOY_DOWN)))  joystick_state_ &= ~0x02;
         if (!(sig1 & (1u << ConnectorSignals::JOY_LEFT)))  joystick_state_ &= ~0x04;
         if (!(sig1 & (1u << ConnectorSignals::JOY_RIGHT))) joystick_state_ &= ~0x08;
-        tia_.read_regs_[TIA_INPT5] = (sig1 & (1u << ConnectorSignals::JOY_FIRE)) ? 0x80 : 0x00;
+        tia_->read_regs_[TIA_INPT5] = (sig1 & (1u << ConnectorSignals::JOY_FIRE)) ? 0x80 : 0x00;
     }
 
     // Write joystick state to RIOT Port A and console switches to Port B
-    riot_.port_a_input = joystick_state_;
-    riot_.port_b_input = console_switches_;
+    riot_->port_a_input = joystick_state_;
+    riot_->port_b_input = console_switches_;
 }
 
 // ============================================================================
