@@ -102,6 +102,7 @@ public:
     void set_bus_chip_id(uint16_t id) { bus_chip_id_ = id; }
 
     // --- Placement metadata setters (used by BusMemory::create_chips) ---
+    void set_display_name(const char* name) { display_name_ = name; }
     void set_short_name(const char* name) { short_name_ = name; }
     void set_base_address(uint16_t addr) { base_address_ = addr; }
 

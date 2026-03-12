@@ -93,6 +93,13 @@ struct ChipSlot {
     // the chip's own part_number is used as fallback.
     const char* label = nullptr;
 
+    // Condition tag for configuration-dependent chips.  0 means the chip is
+    // always present (unconditional).  Values >0 are system-defined and
+    // evaluated at runtime by a ConditionFn callback passed to
+    // create_chips().  Use this for PAL/NTSC variants, optional RAM
+    // expansions, optional sound chips, etc.
+    uint16_t condition = 0;
+
     // Page count for a given page size (size_bytes >> page_bits).
     [[nodiscard]] constexpr size_t pages(size_t page_bits) const noexcept {
         return size_bytes >> page_bits;
@@ -109,12 +116,17 @@ struct ChipSlot {
 //   - Compile-time automation (auto MemoryChipBase::bind() detection)
 //   - Factory resolution: make_chip_manifest() stores a factory function
 //     pointer derived from T via the SlotCreatable concept.
+//
+// Category is NOT declared here — it is derived at runtime from the chip's
+// base-class constructor (CpuChipBase → "CPU", VideoChipBase → "Video",
+// etc.).  See ChipBase::category().
 template<typename T>
 struct Slot {
     uint32_t    base_addr  = 0;
     size_t      size_bytes = 0;
     uint32_t    addr_mask  = 0;
     const char* label      = nullptr;
+    uint16_t    condition  = 0;
 };
 
 
@@ -344,7 +356,8 @@ make_chip_manifest(Slot<Chips>... slots) noexcept
       manifest.chips[i++] = ChipSlot{
           slots.base_addr, slots.size_bytes, slots.addr_mask,
           resolve_slot_factory<Chips>(),
-          slots.label
+          slots.label,
+          slots.condition
       }), ...);
     return manifest;
 }
@@ -433,10 +446,11 @@ public:
         int              mmio_idx   = -1;     // Assigned MMIO handler index (-1 = none)
         int              sub_table_idx = -1;  // Assigned MaskedSubTable index (-1 = none)
 
-        // Factory and label — copied from ChipSlot at construction time.
+        // Factory and label — copied from ChipSlot at construction.
         // Used by create_chips() to auto-create chip instances.
-        ChipSlot::FactoryFn factory = nullptr;
-        const char*         label   = nullptr;
+        ChipSlot::FactoryFn factory   = nullptr;
+        const char*         label     = nullptr;
+        uint16_t            condition = 0;
     };
 
     // =====================================================================
@@ -468,6 +482,7 @@ public:
                 -1,                             // sub_table_idx
                 s.factory,
                 s.label,
+                s.condition,
             });
         }
 
@@ -644,6 +659,11 @@ public:
     // skipped — this allows systems to pre-bind MMIO chips that need
     // custom initialization before calling create_chips().
     //
+    // Conditional chips:  Slots with condition != 0 are evaluated against
+    // the user-supplied ConditionFn callback.  Slots whose condition is not
+    // met are skipped (chip remains nullptr).  This enables configuration-
+    // dependent chip sets (PAL/NTSC variants, optional RAM expansions, etc.).
+    //
     // After create_chips(), call apply(bus) to wire page tables + MMIO.
     //
     // Usage:
@@ -651,22 +671,44 @@ public:
     //   bus_mem_.create_chips(&pins_);          // auto-create the rest
     //   bus_mem_.apply(bus_);
     //
+    // With conditions:
+    //   bus_mem_.create_chips(&pins_, my_condition_fn, &config_);
+    //
 
-    void create_chips(const bus_state_t* system_bus) {
+    /// Condition evaluation callback — returns true if the chip should be
+    /// created.  The condition tag is a system-defined uint16_t; the context
+    /// pointer is opaque and typically points to a SystemConfiguration.
+    using ConditionFn = bool (*)(uint16_t condition, const void* context);
+
+    void create_chips(const bus_state_t* system_bus,
+                      ConditionFn condition_fn = nullptr,
+                      const void* condition_ctx = nullptr) {
         for (size_t i = 0; i < slots_.size(); ++i) {
             auto& rec = slots_[i];
             if (rec.chip) continue;        // Already manually bound
             if (!rec.factory) continue;    // No factory (must be bound manually)
 
+            // Evaluate condition — skip if condition tag is set and not met
+            if (rec.condition != 0) {
+                if (!condition_fn || !condition_fn(rec.condition, condition_ctx))
+                    continue;
+            }
+
             uint8_t* buf = rec.num_pages > 0 ? chip_buffer(rec.base_id) : nullptr;
 
             // Reconstruct a ChipSlot from the SlotRecord for the factory call.
             ChipSlot slot{rec.base_addr, rec.num_pages * kPageSize,
-                          rec.addr_mask, rec.factory, rec.label};
+                          rec.addr_mask, rec.factory, rec.label,
+                          rec.condition};
             ChipBase* chip = rec.factory(slot, system_bus, buf);
 
             // Apply placement metadata from the manifest slot.
-            if (rec.label) chip->set_short_name(rec.label);
+            // Category is NOT overridden — it comes from the chip's base-class
+            // constructor (CpuChipBase → "CPU", VideoChipBase → "Video", etc.).
+            if (rec.label) {
+                chip->set_display_name(rec.label);
+                chip->set_short_name(rec.label);
+            }
             chip->set_base_address(static_cast<uint16_t>(rec.base_addr));
 
             bind_chip(i, chip);
@@ -692,6 +734,36 @@ public:
     [[nodiscard]] const T* chip_as(size_t slot_index) const noexcept {
         assert(slot_index < slots_.size());
         return static_cast<const T*>(slots_[slot_index].chip);
+    }
+
+    // =====================================================================
+    // §4.4b′  Variant chip lookup
+    // =====================================================================
+    //
+    // Returns the first non-null chip among the given slot indices, cast to
+    // the requested type.  Useful for configuration-dependent chips where
+    // exactly one of several conditional slots was created (e.g. PAL/NTSC
+    // video chip variants).
+    //
+    //   vic_ = bus_mem_.first_chip<vic_base_t>({kVicPal, kVicNtsc});
+    //
+
+    template<typename T>
+    [[nodiscard]] T* first_chip(std::initializer_list<size_t> slot_indices) noexcept {
+        for (size_t idx : slot_indices) {
+            if (idx < slots_.size() && slots_[idx].chip)
+                return static_cast<T*>(slots_[idx].chip);
+        }
+        return nullptr;
+    }
+
+    template<typename T>
+    [[nodiscard]] const T* first_chip(std::initializer_list<size_t> slot_indices) const noexcept {
+        for (size_t idx : slot_indices) {
+            if (idx < slots_.size() && slots_[idx].chip)
+                return static_cast<const T*>(slots_[idx].chip);
+        }
+        return nullptr;
     }
 
     // =====================================================================
@@ -992,5 +1064,45 @@ private:
 //  // Dynamic cartridge insertion at runtime:
 //  auto cart_id = mem.add_chip("PRG-ROM", 256, /*read_only=*/true);
 //  mem.load(cart_id, prg_data);
+//
+// ── VIC-20 (non-bus chips + conditional variants) ─────────────────────────────
+//
+//  namespace vic20_cond {
+//      inline constexpr uint16_t kPAL  = 1;
+//      inline constexpr uint16_t kNTSC = 2;
+//  }
+//
+//  inline constexpr auto kVIC20Chips = make_chip_manifest(
+//      // Bus-mapped memory chips
+//      Slot<RAMChip>  {0x0000, 65536, 0, "RAM"},
+//      Slot<ROMChip>  {0x8000,  4096, 0, "CHARROM"},
+//      Slot<ROMChip>  {0xC000,  8192, 0, "BASIC ROM"},
+//      Slot<ROMChip>  {0xE000,  8192, 0, "KERNAL ROM"},
+//      // Non-bus chips: size_bytes=0, no addr_mask → factory-created but not mapped
+//      // Category is auto-derived from each chip's base class at construction time.
+//      Slot<MOS6502>  {0, 0, 0, "MOS 6502"},
+//      Slot<mos6561_t>{0, 0, 0, "MOS 6561 (PAL)",  vic20_cond::kPAL},
+//      Slot<mos6560_t>{0, 0, 0, "MOS 6560 (NTSC)", vic20_cond::kNTSC},
+//      Slot<mos6522_t>{0, 0, 0, "VIA 1"},
+//      Slot<mos6522_t>{0, 0, 0, "VIA 2"}
+//  );
+//
+//  // Condition callback — evaluates condition tags against system config:
+//  static bool vic20_condition(uint16_t tag, const void* ctx) {
+//      auto* config = static_cast<const SystemConfiguration*>(ctx);
+//      switch (tag) {
+//          case vic20_cond::kPAL:  return config->region_option_index <= 0;
+//          case vic20_cond::kNTSC: return config->region_option_index > 0;
+//      }
+//      return true;
+//  }
+//
+//  // At runtime — all chips created from manifest:
+//  bus_mem_.create_chips(&bus_.state, vic20_condition, &config_);
+//  bus_mem_.apply(mem_bus_);
+//
+//  // Typed access — exact slot or variant lookup:
+//  cpu_ = bus_mem_.chip_as<MOS6502>(kCpu);
+//  vic_ = bus_mem_.first_chip<vic_base_t>({kVicPal, kVicNtsc});
 //
 // =============================================================================
