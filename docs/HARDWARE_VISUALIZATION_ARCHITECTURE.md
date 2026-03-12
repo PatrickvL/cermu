@@ -419,7 +419,7 @@ public:
 private:
     std::string system_name_;
     std::vector<BoardInstance> boards_;
-    std::vector<BoardConnector> connectors_;
+    std::vector<BoardConnector> ports_;
     std::string cabinet_model_;
     
 public:

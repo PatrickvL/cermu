@@ -15,7 +15,7 @@ All four registries follow the same static self-registration pattern.
 
 **`SystemRegistry`** — two-phase file identification, alias-boost, confidence scoring. `create_system_for_file()` / `create_system_by_name()`. Produces a `System`. No changes.
 
-**`PortRegistry`** — string / `PortType` → `PortDefinition`. `REGISTER_PORT` macro. Standard connector definitions in `PortSignals::` self-register from `connector.cpp`. System-specific connectors register from their own `.cpp`. Not yet implemented.
+**`PortRegistry`** — string / `PortType` → `PortDefinition`. `REGISTER_PORT` macro. Standard port definitions in `PortSignals::` self-register from `port.cpp`. System-specific ports register from their own `.cpp`. Not yet implemented.
 
 ---
 
@@ -27,7 +27,7 @@ ComponentBase
 └── Port           — signal ports; registered in BoardBase::components_
 
 BoardBase : ComponentBase   — non-templated base; owns component list
-└── Board<Spec>             — owns chips, connectors, unified buffer, BusMap
+└── Board<Spec>             — owns chips, ports, unified buffer, BusMap
     └── (e.g. VIC20Board)   — concrete board implementation
 
 System                      — one or more BoardBase instances + inter-board Connections
@@ -99,7 +99,7 @@ enum class PortType {
 
 ## Output Signal Descriptors
 
-Signal descriptors describe what a connector carries. They live on `Port` instances.
+Signal descriptors describe what a port carries. They live on `Port` instances.
 
 ```cpp
 enum class VideoSignalType {
@@ -159,7 +159,7 @@ public:
     void   set_signal_change_callback(SignalChangeCallback cb);
     void   notify_device_output_changed(uint32_t device_signals);
 
-    // Output signal descriptors — absent on input and bus connectors
+    // Output signal descriptors — absent on input and bus ports
     void         set_video_output(VideoOutput vo) { video_output_ = vo; }
     void         set_audio_output(AudioOutput ao) { audio_output_ = ao; }
     VideoOutput* video_output() { return video_output_ ? &*video_output_ : nullptr; }
@@ -228,7 +228,7 @@ private:
 
 ## BoardBase and Board\<Spec\>
 
-`BoardBase` is the non-templated base. It owns the component list as a non-owning index (raw pointers) into chip and connector storage that `Board<Spec>` owns.
+`BoardBase` is the non-templated base. It owns the component list as a non-owning index (raw pointers) into chip and port storage that `Board<Spec>` owns.
 
 ```cpp
 class BoardBase : public ComponentBase {
@@ -338,22 +338,22 @@ public:
     void initialize(Bus& bus, Chips*... chips);
 
 protected:
-    void add_connector(std::unique_ptr<Port> port) {
-        connectors_.push_back(std::move(port));
+    void add_port(std::unique_ptr<Port> port) {
+        ports_.push_back(std::move(port));
     }
 
     // Call after create_chips() + apply() — registers all chips and
-    // connectors as non-owning pointers in BoardBase::components_
+    // ports as non-owning pointers in BoardBase::components_
     void register_board_components() {
         for (auto& chip : owned_chips_)
             register_component(chip.get());
-        for (auto& port : connectors_)
+        for (auto& port : ports_)
             register_component(port.get());
     }
 
     std::vector<uint8_t>                    buffer_;       // unified address-space buffer
     std::vector<std::unique_ptr<ChipBase>>  owned_chips_;  // chip ownership
-    std::vector<std::unique_ptr<Port>> connectors_;
+    std::vector<std::unique_ptr<Port>> ports_;
     Bus mem_bus_;
     Map bus_map_;
 };
@@ -426,7 +426,7 @@ composite->set_video_output(VideoOutput{
     .dot_clock_mhz      = 4.43361875f,
     .pixel_aspect_ratio = 1.0f,
 });
-add_connector(std::move(composite));
+add_port(std::move(composite));
 
 auto audio_jack = std::make_unique<Port>(
     PortRegistry::instance().lookup(PortType::AUDIO_MONO));
@@ -434,13 +434,13 @@ audio_jack->set_audio_output(AudioOutput{
     .signal_type    = AudioSignalType::Mono,
     .sample_rate_hz = 44100,
 });
-add_connector(std::move(audio_jack));
+add_port(std::move(audio_jack));
 
-add_connector(make_control_port(0));
-add_connector(make_iec_port());
-add_connector(make_cassette_port());
-add_connector(make_user_port());
-add_connector(make_expansion_port());
+add_port(make_control_port(0));
+add_port(make_iec_port());
+add_port(make_cassette_port());
+add_port(make_user_port());
+add_port(make_expansion_port());
 
 register_board_components();
 ```
@@ -536,7 +536,7 @@ class NetworkConnection : public Connection {};  // cross-machine
 
 ## SessionGUI Output Buffer Attachment
 
-Before starting the emu thread, `SessionGUI` walks all boards and attaches host buffers to every output connector:
+Before starting the emu thread, `SessionGUI` walks all boards and attaches host buffers to every output port:
 
 ```cpp
 void SessionGUI::attach_output_buffers() {
@@ -579,15 +579,15 @@ Multiple video outputs on the same board each get their own buffer. The GUI pres
 | 2 | ~~Rename `GenericEmulatorGUI` → `EmulatorHost`; `SystemGUI` → `SessionGUI`~~ |
 | 3 | ~~Rename `EmulatedSystem` → `System`~~ |
 | 4 | ~~`PortType` A/V output variants; `VideoOutput` / `AudioOutput` descriptors; `Port` optional output fields~~ |
-| 5 | ~~Rename `BusMemory` → `Board`~~; ~~`BoardBase` non-owning component index~~; extract `BusMap` from address-decode logic; chip and connector ownership on `Board` |
+| 5 | ~~Rename `BusMemory` → `Board`~~; ~~`BoardBase` non-owning component index~~; extract `BusMap` from address-decode logic; chip and port ownership on `Board` |
 | 6 | Deferred — `VIC20Board` migration; `VIC20System` stripped to system-level concerns |
 | 7 | ~~`Session` composes systems~~; `System` composes boards; `SessionGUI` owns `Session` |
-| 8 | ~~`PortRegistry`; `REGISTER_PORT`; standard connectors self-register~~ |
+| 8 | ~~`PortRegistry`; `REGISTER_PORT`; standard ports self-register~~ |
 | 9 | ~~`DirectConnection`; inter-board wiring~~ |
 | 10 | Internal device auto-attachment via `DeviceRegistry` during board init |
 | 11 | `power_on()` lifecycle; unified `Board`-level reset path |
 | 12 | `GenericBusSpec`; `GenericSystem`; file parser; register with `SystemRegistry` |
 | 13 | `BoardThread`; secondary board scheduling; `ChannelConnection` |
-| 14 | `Drive1541Board`; disk-slot connector; remove `SessionGUI` drive smell |
+| 14 | `Drive1541Board`; disk-slot port; remove `SessionGUI` drive smell |
 | 15 | Multi-system `Session`; framebuffer composition; audio mixing; input dispatch |
 | Deferred | `IPCConnection`; `NetworkConnection`; cross-process / cross-machine sessions |

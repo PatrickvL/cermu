@@ -22,10 +22,10 @@ EmulatedSystem                              (src/core/emulated_system.h)
 ChipBase                                    (src/core/chip.h)
   └─ ConcreteChip                           e.g. MOS6581, VIC-II, PPU, CD4021
 
-Port                               (src/core/connector.h)
+Port                               (src/core/port.hpp)
   → attaches PeripheralDevice               e.g. JoystickDevice, NesStandardController
 
-PeripheralDevice                            (src/core/connector.h)
+PeripheralDevice                            (src/core/port.hpp)
   └─ [optional intermediate]                e.g. ControlPortInputDevice (DB-9 base)
        └─ ConcreteDevice                    e.g. JoystickDevice, Commodore1351Mouse
 ```
