@@ -382,5 +382,5 @@ ChipBase* ROMChip::create_from_slot(const ChipSlot& slot,
     return chip;
 }
 
-REGISTER_CHIP("RAMChip", &RAMChip::create_from_slot)
-REGISTER_CHIP("ROMChip", &ROMChip::create_from_slot)
+REGISTER_CHIP("RAM", &RAMChip::create_from_slot)
+REGISTER_CHIP("ROM", &ROMChip::create_from_slot)
