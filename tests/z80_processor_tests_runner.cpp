@@ -403,6 +403,9 @@ private:
     // Recorded I/O port transactions during test execution
     std::vector<z80_port_access_t> actual_ports_;
 
+    // Edge detection: only record port access on the first T-state where IORQ becomes active
+    bool prev_iorq_active_;
+
     // Recorded bus cycles
     struct recorded_bus_cycle_t {
         uint16_t address;
@@ -414,7 +417,7 @@ private:
 
 public:
     Z80TestHarness()
-        : memory_(test_memory), t_state_count_(0), pins_(CPU::default_bus_state()) {
+        : memory_(test_memory), t_state_count_(0), pins_(CPU::default_bus_state()), prev_iorq_active_(false) {
         std::fill(memory_, memory_ + 65536, static_cast<uint8_t>(0));
         std::memset(io_ports_, 0, sizeof(io_ports_));
         cpu.init();
@@ -456,6 +459,7 @@ public:
             memory_[initial->ram[i].address] = initial->ram[i].value;
 
         t_state_count_ = 0;
+        prev_iorq_active_ = false;
     }
 
     // Load CPU registers from test initial state
@@ -482,8 +486,7 @@ public:
         cpu.set_de_prime(s->de_);
         cpu.set_hl_prime(s->hl_);
         cpu.set_ei_pending(s->ei);
-        // p and q flags are internal tracking that we don't set directly;
-        // they're determined by instruction execution
+        cpu.set_q(s->q);
 
         // Ensure interrupt lines are inactive (high) for test
         pins_ = CPU::default_bus_state();
@@ -526,23 +529,30 @@ public:
         else if (iorq && rd && !m1) {
             uint8_t io_data = io_ports_[addr];
             BUS_SET_DATA(pins, io_data);
-            z80_port_access_t pa;
-            pa.address = addr;
-            pa.data = io_data;
-            pa.is_write = false;
-            actual_ports_.push_back(pa);
+            // Only record port access on the first T-state where IORQ becomes active
+            if (!prev_iorq_active_) {
+                z80_port_access_t pa;
+                pa.address = addr;
+                pa.data = io_data;
+                pa.is_write = false;
+                actual_ports_.push_back(pa);
+            }
         }
         // I/O write (IORQ + WR active)
         else if (iorq && wr && !m1) {
             uint8_t io_data = BUS_GET_DATA(pins);
             io_ports_[addr] = io_data;
-            z80_port_access_t pa;
-            pa.address = addr;
-            pa.data = io_data;
-            pa.is_write = true;
-            actual_ports_.push_back(pa);
+            // Only record port access on the first T-state where IORQ becomes active
+            if (!prev_iorq_active_) {
+                z80_port_access_t pa;
+                pa.address = addr;
+                pa.data = io_data;
+                pa.is_write = true;
+                actual_ports_.push_back(pa);
+            }
         }
 
+        prev_iorq_active_ = iorq && !m1;
         return pins;
     }
 
@@ -607,7 +617,7 @@ public:
         // ei, p, q are internal tracking — not directly readable
         s->ei = false;
         s->p = false;
-        s->q = false;
+        s->q = cpu.q();
         s->ram_count = 0;
     }
 

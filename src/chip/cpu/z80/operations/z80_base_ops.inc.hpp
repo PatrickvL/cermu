@@ -59,7 +59,11 @@ bus_state_t op_ld_r_hl(bus_state_t pins) {
             return pins;
         case 3: case 4: case 5: case 6: case 7: // 5 idle T-states
             return pins;
-        case 8: return bus_setup_mem_read(pins, get_hl_addr()); // Read from (IX+d)
+        case 8: {
+            uint16_t addr = get_hl_addr();
+            regs_.wz = addr;
+            return bus_setup_mem_read(pins, addr); // Read from (IX+d)
+        }
         case 9: if (!wait_check(pins)) return pins; return pins;
         case 10:
             set_reg8_direct((opcode_ >> 3) & 7, BUS_GET_DATA(pins));
@@ -96,7 +100,11 @@ bus_state_t op_ld_hl_r(bus_state_t pins) {
             return pins;
         case 3: case 4: case 5: case 6: case 7:
             return pins;
-        case 8: return bus_setup_mem_write(pins, get_hl_addr(), get_reg8_direct(opcode_ & 7));
+        case 8: {
+            uint16_t addr = get_hl_addr();
+            regs_.wz = addr;
+            return bus_setup_mem_write(pins, addr, get_reg8_direct(opcode_ & 7));
+        }
         case 9: if (!wait_check(pins)) return pins; return pins;
         case 10:
             bus_finish_mem(pins);
@@ -146,7 +154,11 @@ bus_state_t op_ld_hl_n(bus_state_t pins) {
             return pins;
         case 6: case 7: // 2 idle T-states
             return pins;
-        case 8: return bus_setup_mem_write(pins, get_hl_addr(), data_latch_);
+        case 8: {
+            uint16_t addr = get_hl_addr();
+            regs_.wz = addr;
+            return bus_setup_mem_write(pins, addr, data_latch_);
+        }
         case 9: if (!wait_check(pins)) return pins; return pins;
         case 10:
             bus_finish_mem(pins);
@@ -189,10 +201,14 @@ bus_state_t op_ld_indirect_a(bus_state_t pins) {
         return bus_setup_mem_write(pins, addr, regs_.a);
     }
     case 1: if (!wait_check(pins)) return pins; return pins;
-    case 2:
+    case 2: {
         bus_finish_mem(pins);
+        // WZ: low byte = (addr + 1) & 0xFF, high byte = A
+        uint16_t addr = (opcode_ & 0x10) ? regs_.de : regs_.bc;
+        regs_.wz = (static_cast<uint16_t>(regs_.a) << 8) | ((addr + 1) & 0xFF);
         transition_to_fetch();
         return pins;
+    }
     }
     return pins;
 }
@@ -251,6 +267,8 @@ bus_state_t op_ld_nn_a(bus_state_t pins) {
     case 7: if (!wait_check(pins)) return pins; return pins;
     case 8:
         bus_finish_mem(pins);
+        // WZ: low byte = (nn + 1) & 0xFF, high byte = A
+        regs_.wz = (static_cast<uint16_t>(regs_.a) << 8) | ((addr_latch_ + 1) & 0xFF);
         transition_to_fetch();
         return pins;
     }
@@ -414,7 +432,11 @@ bus_state_t op_alu_hl(bus_state_t pins) {
             return pins;
         case 3: case 4: case 5: case 6: case 7:
             return pins;
-        case 8: return bus_setup_mem_read(pins, get_hl_addr());
+        case 8: {
+            uint16_t addr = get_hl_addr();
+            regs_.wz = addr;
+            return bus_setup_mem_read(pins, addr);
+        }
         case 9: if (!wait_check(pins)) return pins; return pins;
         case 10:
             alu_op((opcode_ >> 3) & 7, BUS_GET_DATA(pins));
@@ -457,14 +479,19 @@ bus_state_t op_inc_hl(bus_state_t pins) {
             return pins;
         case 3: case 4: case 5: case 6: case 7:
             return pins;
-        case 8: return bus_setup_mem_read(pins, get_hl_addr());
+        case 8: {
+            uint16_t addr = get_hl_addr();
+            regs_.wz = addr;
+            addr_latch_ = addr;
+            return bus_setup_mem_read(pins, addr);
+        }
         case 9: if (!wait_check(pins)) return pins; return pins;
         case 10:
             data_latch_ = alu_inc(BUS_GET_DATA(pins));
             bus_finish_mem(pins);
             return pins;
         case 11: return pins;
-        case 12: return bus_setup_mem_write(pins, get_hl_addr(), data_latch_);
+        case 12: return bus_setup_mem_write(pins, addr_latch_, data_latch_);
         case 13: if (!wait_check(pins)) return pins; return pins;
         case 14:
             bus_finish_mem(pins);
@@ -503,14 +530,19 @@ bus_state_t op_dec_hl(bus_state_t pins) {
             return pins;
         case 3: case 4: case 5: case 6: case 7:
             return pins;
-        case 8: return bus_setup_mem_read(pins, get_hl_addr());
+        case 8: {
+            uint16_t addr = get_hl_addr();
+            regs_.wz = addr;
+            addr_latch_ = addr;
+            return bus_setup_mem_read(pins, addr);
+        }
         case 9: if (!wait_check(pins)) return pins; return pins;
         case 10:
             data_latch_ = alu_dec(BUS_GET_DATA(pins));
             bus_finish_mem(pins);
             return pins;
         case 11: return pins;
-        case 12: return bus_setup_mem_write(pins, get_hl_addr(), data_latch_);
+        case 12: return bus_setup_mem_write(pins, addr_latch_, data_latch_);
         case 13: if (!wait_check(pins)) return pins; return pins;
         case 14:
             bus_finish_mem(pins);
@@ -560,6 +592,7 @@ bus_state_t op_add_hl_rr(bus_state_t pins) {
     case 6: {
         uint8_t p = (opcode_ >> 4) & 3;
         uint16_t hl = get_hl();
+        regs_.wz = hl + 1; // WZ = HL_before + 1
         alu_add16(hl, get_reg16(p));
         set_hl(hl);
         transition_to_fetch();
@@ -973,14 +1006,15 @@ bus_state_t op_in_a_n(bus_state_t pins) {
         return pins;
     case 3: {
         uint16_t port = (static_cast<uint16_t>(regs_.a) << 8) | data_latch_;
+        addr_latch_ = port; // Save port address for WZ calculation
         return bus_setup_io_read(pins, port);
     }
     case 4: if (!wait_check(pins)) return pins; return pins;
-    case 5: return pins; // IO extra wait
+    case 5: return pins; // IO automatic TW
     case 6:
         regs_.a = BUS_GET_DATA(pins);
         bus_finish_io(pins);
-        regs_.wz = (static_cast<uint16_t>(regs_.a) << 8) | ((data_latch_ + 1) & 0xFF);
+        regs_.wz = addr_latch_ + 1; // WZ = port address + 1
         transition_to_fetch();
         return pins;
     }
@@ -1004,9 +1038,11 @@ bus_state_t op_out_n_a(bus_state_t pins) {
         return bus_setup_io_write(pins, port, regs_.a);
     }
     case 4: if (!wait_check(pins)) return pins; return pins;
-    case 5: return pins;
+    case 5: return pins; // IO automatic TW
     case 6:
         bus_finish_io(pins);
+        // WZ: low byte = (n + 1) & 0xFF, high byte = A
+        regs_.wz = (static_cast<uint16_t>(regs_.a) << 8) | ((data_latch_ + 1) & 0xFF);
         transition_to_fetch();
         return pins;
     }
