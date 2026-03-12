@@ -60,18 +60,21 @@ bus_state_t op_out_c_r(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_adc_sbc_hl(bus_state_t pins) {
     switch (step_++) {
-    case 0: case 1: case 2: case 3: case 4: case 5: case 6:
+    case 0: case 1: case 2: case 3: case 4: case 5:
+        return pins;
+    case 6: {
+        uint8_t p = (ed_opcode_ >> 4) & 3;
+        uint16_t val = get_reg16(p);
+        if (ed_opcode_ & 0x08) {
+            alu_adc16(val);
+        } else {
+            alu_sbc16(val);
+        }
+        regs_.wz = regs_.hl; // Actually WZ = HL_before + 1, but close enough
+        transition_to_fetch();
         return pins;
     }
-    uint8_t p = (ed_opcode_ >> 4) & 3;
-    uint16_t val = get_reg16(p);
-    if (ed_opcode_ & 0x08) {
-        alu_adc16(val);
-    } else {
-        alu_sbc16(val);
     }
-    regs_.wz = regs_.hl; // Actually WZ = HL_before + 1, but close enough
-    transition_to_fetch();
     return pins;
 }
 
@@ -161,19 +164,18 @@ bus_state_t op_ed_ld_rr_nn(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_ld_a_ir(bus_state_t pins) {
     switch (step_++) {
-    case 0: return pins; // 1 internal T-state
+    case 0: // 1 internal T-state
+        if (ed_opcode_ == 0x57) {
+            regs_.a = regs_.i;
+        } else {
+            regs_.a = (regs_.r & 0x80) | (regs_.r & 0x7F);
+        }
+        regs_.f = (regs_.f & Flags::C)
+                | sz53_table[regs_.a]
+                | (regs_.iff2 ? Flags::PV : 0);
+        transition_to_fetch();
+        return pins;
     }
-    if (ed_opcode_ == 0x57) {
-        // LD A,I
-        regs_.a = regs_.i;
-    } else {
-        // LD A,R
-        regs_.a = (regs_.r & 0x80) | (regs_.r & 0x7F);
-    }
-    regs_.f = (regs_.f & Flags::C)
-            | sz53_table[regs_.a]
-            | (regs_.iff2 ? Flags::PV : 0);
-    transition_to_fetch();
     return pins;
 }
 
@@ -182,14 +184,15 @@ bus_state_t op_ld_a_ir(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_ld_ir_a(bus_state_t pins) {
     switch (step_++) {
-    case 0: return pins;
+    case 0:
+        if (ed_opcode_ == 0x47) {
+            regs_.i = regs_.a;
+        } else {
+            regs_.r = regs_.a;
+        }
+        transition_to_fetch();
+        return pins;
     }
-    if (ed_opcode_ == 0x47) {
-        regs_.i = regs_.a;
-    } else {
-        regs_.r = regs_.a;
-    }
-    transition_to_fetch();
     return pins;
 }
 
@@ -299,10 +302,8 @@ bus_state_t op_ldi_ldd(bus_state_t pins) {
     case 5:
         bus_finish_mem(pins);
         return pins;
-    case 6: case 7: // 2 internal T-states
-        return pins;
-    }
-    {
+    case 6: return pins; // 1st internal T-state
+    case 7: { // 2nd internal T-state
         int16_t dir = (ed_opcode_ & 0x08) ? -1 : 1;
         regs_.hl += dir;
         regs_.de += dir;
@@ -312,8 +313,10 @@ bus_state_t op_ldi_ldd(bus_state_t pins) {
                 | (regs_.bc ? Flags::PV : 0)
                 | (n & Flags::X)
                 | ((n << 4) & Flags::Y);
+        transition_to_fetch();
+        return pins;
     }
-    transition_to_fetch();
+    }
     return pins;
 }
 
@@ -333,30 +336,32 @@ bus_state_t op_ldir_lddr(bus_state_t pins) {
     case 5:
         bus_finish_mem(pins);
         return pins;
-    case 6: case 7: {
-        if (step_ == 8) { // After the 2 internal T-states
-            int16_t dir = (ed_opcode_ & 0x08) ? -1 : 1;
-            regs_.hl += dir;
-            regs_.de += dir;
-            regs_.bc--;
-            uint8_t n = data_latch_ + regs_.a;
-            regs_.f = (regs_.f & (Flags::S | Flags::Z | Flags::C))
-                    | (regs_.bc ? Flags::PV : 0)
-                    | (n & Flags::X)
-                    | ((n << 4) & Flags::Y);
-            if (regs_.bc == 0) {
-                transition_to_fetch(); // 16T total
-            }
-            // If BC != 0, continue with 5 more internal T-states
+    case 6: return pins; // 1st internal T-state
+    case 7: { // 2nd internal T-state
+        int16_t dir = (ed_opcode_ & 0x08) ? -1 : 1;
+        regs_.hl += dir;
+        regs_.de += dir;
+        regs_.bc--;
+        uint8_t n = data_latch_ + regs_.a;
+        regs_.f = (regs_.f & (Flags::S | Flags::Z | Flags::C))
+                | (regs_.bc ? Flags::PV : 0)
+                | (n & Flags::X)
+                | ((n << 4) & Flags::Y);
+        if (regs_.bc == 0) {
+            transition_to_fetch(); // 16T total
+            return pins;
         }
+        // If BC != 0, continue with 5 more internal T-states
         return pins;
     }
-    case 8: case 9: case 10: case 11: case 12: // 5 internal T-states (repeat)
+    case 8: case 9: case 10: case 11: // 4 internal T-states (repeat)
+        return pins;
+    case 12: // 5th internal T-state (repeat)
+        regs_.pc -= 2; // Back up to re-execute
+        regs_.wz = regs_.pc + 1;
+        transition_to_fetch();
         return pins;
     }
-    regs_.pc -= 2; // Back up to re-execute
-    regs_.wz = regs_.pc + 1;
-    transition_to_fetch();
     return pins;
 }
 
@@ -371,10 +376,9 @@ bus_state_t op_cpi_cpd(bus_state_t pins) {
         data_latch_ = BUS_GET_DATA(pins);
         bus_finish_mem(pins);
         return pins;
-    case 3: case 4: case 5: case 6: case 7: // 5 internal T-states
+    case 3: case 4: case 5: case 6: // 4 internal T-states
         return pins;
-    }
-    {
+    case 7: { // 5th internal T-state
         int16_t dir = (ed_opcode_ & 0x08) ? -1 : 1;
         uint8_t val = data_latch_;
         uint8_t result = regs_.a - val;
@@ -391,8 +395,10 @@ bus_state_t op_cpi_cpd(bus_state_t pins) {
                 | (n & Flags::X)
                 | ((n << 4) & Flags::Y);
         regs_.wz += dir;
+        transition_to_fetch();
+        return pins;
     }
-    transition_to_fetch();
+    }
     return pins;
 }
 
@@ -407,35 +413,39 @@ bus_state_t op_cpir_cpdr(bus_state_t pins) {
         data_latch_ = BUS_GET_DATA(pins);
         bus_finish_mem(pins);
         return pins;
-    case 3: case 4: case 5: case 6: case 7:
-        if (step_ == 8) {
-            int16_t dir = (ed_opcode_ & 0x08) ? -1 : 1;
-            uint8_t val = data_latch_;
-            uint8_t result = regs_.a - val;
-            uint8_t hc = (regs_.a ^ val ^ result) & Flags::H;
-            uint8_t n = result - (hc ? 1 : 0);
-            regs_.hl += dir;
-            regs_.bc--;
-            regs_.f = (regs_.f & Flags::C)
-                    | Flags::N
-                    | (result ? 0 : Flags::Z)
-                    | (result & Flags::S)
-                    | hc
-                    | (regs_.bc ? Flags::PV : 0)
-                    | (n & Flags::X)
-                    | ((n << 4) & Flags::Y);
-            regs_.wz += dir;
-            if (regs_.bc == 0 || result == 0) {
-                transition_to_fetch();
-            }
+    case 3: case 4: case 5: case 6: // 4 internal T-states
+        return pins;
+    case 7: { // 5th internal T-state
+        int16_t dir = (ed_opcode_ & 0x08) ? -1 : 1;
+        uint8_t val = data_latch_;
+        uint8_t result = regs_.a - val;
+        uint8_t hc = (regs_.a ^ val ^ result) & Flags::H;
+        uint8_t n = result - (hc ? 1 : 0);
+        regs_.hl += dir;
+        regs_.bc--;
+        regs_.f = (regs_.f & Flags::C)
+                | Flags::N
+                | (result ? 0 : Flags::Z)
+                | (result & Flags::S)
+                | hc
+                | (regs_.bc ? Flags::PV : 0)
+                | (n & Flags::X)
+                | ((n << 4) & Flags::Y);
+        regs_.wz += dir;
+        if (regs_.bc == 0 || result == 0) {
+            transition_to_fetch();
+            return pins;
         }
         return pins;
-    case 8: case 9: case 10: case 11: case 12:
+    }
+    case 8: case 9: case 10: case 11: // 4 internal T-states (repeat)
+        return pins;
+    case 12: // 5th internal T-state (repeat)
+        regs_.pc -= 2;
+        regs_.wz = regs_.pc + 1;
+        transition_to_fetch();
         return pins;
     }
-    regs_.pc -= 2;
-    regs_.wz = regs_.pc + 1;
-    transition_to_fetch();
     return pins;
 }
 
@@ -494,14 +504,17 @@ bus_state_t op_inir_indr(bus_state_t pins) {
                 | (regs_.b == 0 ? Flags::Z : 0);
         if (regs_.b == 0) {
             transition_to_fetch();
+            return pins;
         }
         return pins;
     }
-    case 8: case 9: case 10: case 11: case 12:
+    case 8: case 9: case 10: case 11: // 4 internal T-states (repeat)
+        return pins;
+    case 12: // 5th internal T-state (repeat)
+        regs_.pc -= 2;
+        transition_to_fetch();
         return pins;
     }
-    regs_.pc -= 2;
-    transition_to_fetch();
     return pins;
 }
 
@@ -560,14 +573,17 @@ bus_state_t op_otir_otdr(bus_state_t pins) {
                 | (regs_.b == 0 ? Flags::Z : 0);
         if (regs_.b == 0) {
             transition_to_fetch();
+            return pins;
         }
         return pins;
     }
-    case 8: case 9: case 10: case 11: case 12:
+    case 8: case 9: case 10: case 11: // 4 internal T-states (repeat)
+        return pins;
+    case 12: // 5th internal T-state (repeat)
+        regs_.pc -= 2;
+        transition_to_fetch();
         return pins;
     }
-    regs_.pc -= 2;
-    transition_to_fetch();
     return pins;
 }
 

@@ -60,9 +60,10 @@ bus_state_t op_cb_bit_hl(bus_state_t pins) {
         alu_bit_hl((cb_opcode_ >> 3) & 7, BUS_GET_DATA(pins), addr);
         bus_finish_mem(pins);
         return pins;
-    case 3: return pins; // 1 internal T-state
+    case 3: // 1 internal T-state
+        transition_to_fetch();
+        return pins;
     }
-    transition_to_fetch();
     return pins;
 }
 
@@ -119,20 +120,18 @@ bus_state_t op_ddfd_cb(bus_state_t pins) {
         regs_.pc++;
         bus_finish_mem(pins);
         return pins;
-    case 6: case 7: // 2 idle T-states
+    case 6: return pins; // 1st idle T-state
+    case 7: { // 2nd idle T-state — dispatch based on CB opcode
+        uint8_t x = (cb_opcode_ >> 6) & 3;
+        if (x == 0) {
+            transition_to(&z80_t::op_cb_shift_hl);
+        } else if (x == 1) {
+            transition_to(&z80_t::op_cb_bit_hl);
+        } else {
+            transition_to(&z80_t::op_cb_setres_hl);
+        }
         return pins;
     }
-    // Now dispatch based on CB opcode
-    uint8_t x = (cb_opcode_ >> 6) & 3;
-    if (x == 0) {
-        // Shift/rotate on (IX+d)/(IY+d)
-        transition_to(&z80_t::op_cb_shift_hl);
-    } else if (x == 1) {
-        // BIT on (IX+d)/(IY+d)
-        transition_to(&z80_t::op_cb_bit_hl);
-    } else {
-        // SET/RES on (IX+d)/(IY+d)
-        transition_to(&z80_t::op_cb_setres_hl);
     }
     return pins;
 }
