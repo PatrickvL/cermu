@@ -1,11 +1,11 @@
-﻿#include "systems/commodore/vic20/vic20_system.h"
-#include "systems/commodore/vic20/vic20_constants.h"
-#include "systems/commodore/vic20/vic20_chips.h"
-#include "core/cermu.h"
-#include "chip/input/commodore_keyboard.h"
-#include "core/input/emu_key_sdl_map.h"
-#include "systems/commodore/vic20/vic20_keyboard_matrix.h" // VIC-20 keyboard matrix data
-#include "systems/commodore/prg_content_analysis.h"
+﻿#include "systems/commodore/vic20/vic20_system.hpp"
+#include "systems/commodore/vic20/vic20_constants.hpp"
+#include "systems/commodore/vic20/vic20_chips.hpp"
+#include "core/cermu.hpp"
+#include "chip/input/commodore_keyboard.hpp"
+#include "core/input/emu_key_sdl_map.hpp"
+#include "systems/commodore/vic20/vic20_keyboard_matrix.hpp" // VIC-20 keyboard matrix data
+#include "systems/commodore/prg_content_analysis.hpp"
 #include <cstring>
 #include <cstdio>
 #include <cctype>
@@ -16,31 +16,31 @@
 #endif
 
 // Include chip headers — CPU uses fam65xx.hpp directly for inlining
-#include "chip/cpu/fam65xx/mos6502.h"
-#include "chip/video/vic/mos6560.h"
-#include "chip/video/vic/mos6561.h"
-#include "chip/video/vic/vic_common.h"  // For VIC_COLOR_* constants
-#include "chip/io/mos6522.h"
-#include "core/chip.h"
+#include "chip/cpu/fam65xx/mos6502.hpp"
+#include "chip/video/vic/mos6560.hpp"
+#include "chip/video/vic/mos6561.hpp"
+#include "chip/video/vic/vic_common.hpp"  // For VIC_COLOR_* constants
+#include "chip/io/mos6522.hpp"
+#include "core/chip.hpp"
 
 // Include bus interface
-#include "core/bus_cycle_interface.h"
+#include "core/bus_cycle_interface.hpp"
 
 // Include ROM loader
-#include "core/storage/rom_loader.h"
-#include "core/config/path_discovery.h"
+#include "core/storage/rom_loader.hpp"
+#include "core/config/path_discovery.hpp"
 
 // File format handlers and registry
-#include "core/formats/format_registry.h"
-#include "core/formats/prg_format.h"
-#include "core/formats/bin_format.h"
-#include "core/formats/d64_format.h"
-#include "core/formats/t64_format.h"
-#include "core/formats/tap_format.h"
-#include "core/formats/crt_format.h"
-#include "core/formats/lnx_format.h"
-#include "systems/commodore/commodore_load_helpers.h"
-#include "devices/keyboard/commodore_keyboard_device.h"
+#include "core/formats/format_registry.hpp"
+#include "core/formats/prg_format.hpp"
+#include "core/formats/bin_format.hpp"
+#include "core/formats/d64_format.hpp"
+#include "core/formats/t64_format.hpp"
+#include "core/formats/tap_format.hpp"
+#include "core/formats/crt_format.hpp"
+#include "core/formats/lnx_format.hpp"
+#include "systems/commodore/commodore_load_helpers.hpp"
+#include "devices/keyboard/commodore_keyboard_device.hpp"
 
 // ============================================================================
 // Hardware Traits Definition

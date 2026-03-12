@@ -30,7 +30,7 @@
 
 #include "core/memory_bus/packing.hpp"
 
-#include "core/cermu.h"          // FORCE_INLINE
+#include "core/cermu.hpp"          // FORCE_INLINE
 
 #include <array>
 #include <cassert>

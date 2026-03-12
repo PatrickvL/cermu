@@ -2,8 +2,8 @@
  * commodore_1351_mouse.cpp - Commodore 1351 Proportional Mouse Implementation
  */
 
-#include "devices/input/commodore_1351_mouse.h"
-#include "core/device_registry.h"
+#include "devices/input/commodore_1351_mouse.hpp"
+#include "core/device_registry.hpp"
 #include <cstdio>
 
 Commodore1351Mouse::Commodore1351Mouse() {

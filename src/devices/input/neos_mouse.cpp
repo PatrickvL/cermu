@@ -5,8 +5,8 @@
  * over CIA port lines.  See header for protocol details.
  */
 
-#include "devices/input/neos_mouse.h"
-#include "core/device_registry.h"
+#include "devices/input/neos_mouse.hpp"
+#include "core/device_registry.hpp"
 #include <cstdio>
 #include <algorithm>
 

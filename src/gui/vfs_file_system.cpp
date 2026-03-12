@@ -6,11 +6,11 @@
  * emulator container.  See vfs_file_system.h for the full design.
  */
 
-#include "gui/vfs_file_system.h"
-#include "core/vfs/vfs.h"
-#include "core/formats/format_handler.h"
-#include "core/formats/format_registry.h"
-#include "core/cermu.h"
+#include "gui/vfs_file_system.hpp"
+#include "core/vfs/vfs.hpp"
+#include "core/formats/format_handler.hpp"
+#include "core/formats/format_registry.hpp"
+#include "core/cermu.hpp"
 
 #ifdef CERMU_USE_STD_FILESYSTEM
     #include <filesystem>

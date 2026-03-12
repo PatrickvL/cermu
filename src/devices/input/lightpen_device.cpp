@@ -11,8 +11,8 @@
  * coordinates internally — the device itself never touches LPX/LPY.
  */
 
-#include "devices/input/lightpen_device.h"
-#include "core/device_registry.h"
+#include "devices/input/lightpen_device.hpp"
+#include "core/device_registry.hpp"
 #include <cstdio>
 
 LightpenDevice::LightpenDevice()

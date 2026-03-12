@@ -2,10 +2,10 @@
  * Format Handler — Shared utility implementations
  */
 
-#include "core/formats/format_handler.h"
-#include "core/formats/format_registry.h"
-#include "core/vfs/vfs.h"
-#include "core/cermu.h"
+#include "core/formats/format_handler.hpp"
+#include "core/formats/format_registry.hpp"
+#include "core/vfs/vfs.hpp"
+#include "core/cermu.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

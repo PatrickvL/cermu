@@ -1,4 +1,4 @@
-#include "testing/c64_screenshot.h"
+#include "testing/c64_screenshot.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

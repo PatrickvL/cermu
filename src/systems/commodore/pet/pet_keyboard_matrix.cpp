@@ -17,8 +17,8 @@
  *            Commodore PET Service Manual keyboard matrix schematic
  */
 
-#include "systems/commodore/pet/pet_keyboard_matrix.h"
-#include "core/input/emu_keys.h"
+#include "systems/commodore/pet/pet_keyboard_matrix.hpp"
+#include "core/input/emu_keys.hpp"
 
 // ============================================================================
 // PET Keyboard Matrix — 10×8 (EmuKey-based)

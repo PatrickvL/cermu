@@ -5,7 +5,7 @@
  * concrete storage peripherals.
  */
 
-#include "devices/storage/storage_device.h"
+#include "devices/storage/storage_device.hpp"
 #include <cstdio>
 
 // ============================================================================

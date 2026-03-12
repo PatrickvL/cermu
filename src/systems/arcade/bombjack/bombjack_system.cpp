@@ -2,8 +2,8 @@
  * bombjack_system.cpp — Bomb Jack arcade system implementation
  */
 
-#include "systems/arcade/bombjack/bombjack_system.h"
-#include "core/system_registry.h"
+#include "systems/arcade/bombjack/bombjack_system.hpp"
+#include "core/system_registry.hpp"
 #include <cstring>
 #include <cstdio>
 

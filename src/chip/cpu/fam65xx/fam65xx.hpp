@@ -49,11 +49,11 @@
 //#include <type_traits>
 
 // Include instruction decoder for disassembly (outside extern "C" to avoid template linkage issues)
-#include "chip/cpu/fam65xx/fam65xx_decoder.h"
+#include "chip/cpu/fam65xx/fam65xx_decoder.hpp"
 
 #include "chip/cpu/fam65xx/fam65xx_mixins.hpp"
 #include "chip/cpu/fam65xx/fam65xx_processor_traits.hpp"
-#include "chip/cpu/fam65xx/fam65xx_types.h"
+#include "chip/cpu/fam65xx/fam65xx_types.hpp"
 
 // ============================================================================
 // C++ NAMESPACE - MAIN CPU TEMPLATE IMPLEMENTATION

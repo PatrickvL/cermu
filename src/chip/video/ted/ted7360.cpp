@@ -30,7 +30,7 @@
  *         On DMA lines, screen codes delivered from memory system (c-access)
  */
 
-#include "chip/video/ted/ted7360.h"
+#include "chip/video/ted/ted7360.hpp"
 #include <algorithm>
 #include <array>
 #include <cstring>

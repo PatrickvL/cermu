@@ -20,7 +20,7 @@
 #include <stdexcept>
 
 extern "C" {
-#include "json_parser.h"
+#include "json_parser.hpp"
 }
 
 #ifndef CERMU_IMPL
@@ -28,13 +28,13 @@ extern "C" {
 #endif
 
 // Per-CPU headers for the variants tested here (each pulls in fam65xx.hpp)
-#include "../src/chip/cpu/fam65xx/mos6502.h"
-#include "../src/chip/cpu/fam65xx/mos6510.h"
-#include "../src/chip/cpu/fam65xx/ricoh_2a03.h"
-#include "../src/chip/cpu/fam65xx/synertek65c02.h"
-#include "../src/chip/cpu/fam65xx/rockwell65c02.h"
-#include "../src/chip/cpu/fam65xx/wdc_w65c02s.h"
-#include "../src/chip/cpu/fam65xx/wdc65c816.h"
+#include "../src/chip/cpu/fam65xx/mos6502.hpp"
+#include "../src/chip/cpu/fam65xx/mos6510.hpp"
+#include "../src/chip/cpu/fam65xx/ricoh_2a03.hpp"
+#include "../src/chip/cpu/fam65xx/synertek65c02.hpp"
+#include "../src/chip/cpu/fam65xx/rockwell65c02.hpp"
+#include "../src/chip/cpu/fam65xx/wdc_w65c02s.hpp"
+#include "../src/chip/cpu/fam65xx/wdc65c816.hpp"
 
 using namespace fam65xx;
 

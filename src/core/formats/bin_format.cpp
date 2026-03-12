@@ -2,8 +2,8 @@
  * BIN Format Handler — Implementation
  */
 
-#include "core/formats/bin_format.h"
-#include "core/formats/format_registry.h"
+#include "core/formats/bin_format.hpp"
+#include "core/formats/format_registry.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

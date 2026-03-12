@@ -25,8 +25,8 @@
 #include <chrono>
 #include <filesystem>
 
-#include "../src/systems/nes/nes_system.h"
-#include "../src/systems/nes/nes_profiling.h"
+#include "../src/systems/nes/nes_system.hpp"
+#include "../src/systems/nes/nes_profiling.hpp"
 
 using NES = nes_system::NESSystem;
 

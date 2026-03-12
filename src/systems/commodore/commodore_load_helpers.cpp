@@ -5,9 +5,9 @@
  * systems.  See commodore_load_helpers.h for design rationale.
  */
 
-#include "systems/commodore/commodore_load_helpers.h"
-#include "core/formats/tap_format.h"
-#include "core/formats/crt_format.h"
+#include "systems/commodore/commodore_load_helpers.hpp"
+#include "core/formats/tap_format.hpp"
+#include "core/formats/crt_format.hpp"
 
 #include <cstdio>
 #include <cstring>

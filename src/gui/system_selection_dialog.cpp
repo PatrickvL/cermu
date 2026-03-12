@@ -1,7 +1,7 @@
-#include "gui/system_selection_dialog.h"
-#include "core/system.h"
-#include "core/system_registry.h"
-#include "core/formats/format_handler.h"
+#include "gui/system_selection_dialog.hpp"
+#include "core/system.hpp"
+#include "core/system_registry.hpp"
+#include "core/formats/format_handler.hpp"
 #include <imgui.h>
 #include <cstdio>
 #include <cstring>

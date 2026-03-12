@@ -28,13 +28,13 @@
 // Exit code: 0 = all match, non-zero = number of mismatches
 // =============================================================================
 
-#include "../src/testing/sid_test_harness.h"
+#include "../src/testing/sid_test_harness.hpp"
 
 // reSID headers — we compile against the VICE copy with our standalone siddefs.h
-#include "resid_probe.h"
+#include "resid_probe.hpp"
 
 // SID register write log (binary capture/replay format)
-#include "../src/testing/sid_write_log.h"
+#include "../src/testing/sid_write_log.hpp"
 
 #include <cstdio>
 #include <cstring>

@@ -1,4 +1,4 @@
-#include "gui/emulator_host.h"
+#include "gui/emulator_host.hpp"
 #include <imgui.h>
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_sdl2.h>

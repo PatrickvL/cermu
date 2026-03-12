@@ -1,13 +1,13 @@
-#include "chip/logic/pla.h"
-#include "systems/commodore/c64/c64_pla_chip.h"
-#include "core/chip_layout.h"
-#include "systems/commodore/c64/c64_bus.h"
-#include "systems/commodore/c64/c64_system.h"
+#include "chip/logic/pla.hpp"
+#include "systems/commodore/c64/c64_pla_chip.hpp"
+#include "core/chip_layout.hpp"
+#include "systems/commodore/c64/c64_bus.hpp"
+#include "systems/commodore/c64/c64_system.hpp"
 // Native Dear ImGui C++ - conditional compilation for GUI availability
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
-#include "gui/chip_visualization.h"
-#include "gui/global_chip_style.h"
+#include "gui/chip_visualization.hpp"
+#include "gui/global_chip_style.hpp"
 #endif
 #include <cstdio>
 #include <cstring>

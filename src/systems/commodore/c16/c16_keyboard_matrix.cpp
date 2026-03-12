@@ -1,4 +1,4 @@
-#include "systems/commodore/c16/c16_keyboard_matrix.h"
+#include "systems/commodore/c16/c16_keyboard_matrix.hpp"
 
 // ============================================================================
 // C16 / Plus/4 Keyboard Matrix — 8×8 (EmuKey-based)

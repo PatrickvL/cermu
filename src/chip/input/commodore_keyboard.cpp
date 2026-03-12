@@ -1,4 +1,4 @@
-#include "chip/input/commodore_keyboard.h"
+#include "chip/input/commodore_keyboard.hpp"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>

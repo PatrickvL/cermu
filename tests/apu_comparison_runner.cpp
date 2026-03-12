@@ -16,7 +16,7 @@
 // Exit code: 0 = all match, non-zero = number of failed tests
 // =============================================================================
 
-#include "../src/testing/apu_test_harness.h"
+#include "../src/testing/apu_test_harness.hpp"
 
 // Blargg's Nes_Snd_Emu
 #include "Nes_Apu.h"

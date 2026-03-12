@@ -2,10 +2,10 @@
  * z1013_system.cpp — Robotron Z1013 system implementation
  */
 
-#include "systems/ddr/z1013/z1013_system.h"
-#include "core/system_registry.h"
-#include "core/storage/rom_loader.h"
-#include "core/config/path_discovery.h"
+#include "systems/ddr/z1013/z1013_system.hpp"
+#include "core/system_registry.hpp"
+#include "core/storage/rom_loader.hpp"
+#include "core/config/path_discovery.hpp"
 #include <cstring>
 #include <cstdio>
 

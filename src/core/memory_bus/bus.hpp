@@ -26,8 +26,8 @@
 #include "core/memory_bus/sub_tables.hpp"
 #include "core/memory_bus/viewer.hpp"
 
-#include "core/system_lines.h"   // bus_state_t, BUS_GET_DATA, BUS_SET_DATA, BUS_GET_ADDR, …
-#include "core/cermu.h"          // FORCE_INLINE, likely(), unlikely()
+#include "core/system_lines.hpp"   // bus_state_t, BUS_GET_DATA, BUS_SET_DATA, BUS_GET_ADDR, …
+#include "core/cermu.hpp"          // FORCE_INLINE, likely(), unlikely()
 
 #include <array>
 #include <cassert>

@@ -1,9 +1,9 @@
 #define SDL_MAIN_HANDLED
-#include "core/system.h"
-#include "gui/session_gui.h"
-#include "testing/vicii_test_harness.h"
-#include "testing/vicii_pixel_tests.h"
-#include "testing/sid_write_log.h"
+#include "core/system.hpp"
+#include "gui/session_gui.hpp"
+#include "testing/vicii_test_harness.hpp"
+#include "testing/vicii_pixel_tests.hpp"
+#include "testing/sid_write_log.hpp"
 #include <cstdio>
 #include <memory>
 #include <cstring>
@@ -74,8 +74,8 @@ static void win32_attach_parent_console() {
 // Force linker to include system registrations
 // Systems self-register during static initialization via REGISTER_SYSTEM macro
 // We just need to ensure the system object files are linked
-#include "systems/chip8/chip8_system.h"
-#include "systems/commodore/c64/c64_system.h"
+#include "systems/chip8/chip8_system.hpp"
+#include "systems/commodore/c64/c64_system.hpp"
 
 // ============================================================================
 // MAIN FUNCTION - Multi-System Emulator with Automatic Detection

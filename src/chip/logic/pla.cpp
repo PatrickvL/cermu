@@ -1,6 +1,6 @@
 //#define DEBUG_PLA_BANKING
 
-#include "chip/logic/pla.h"
+#include "chip/logic/pla.hpp"
 #ifdef DEBUG_PLA_BANKING
 #include <cstdio>
 #endif

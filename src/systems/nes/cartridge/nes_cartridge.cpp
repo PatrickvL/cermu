@@ -5,10 +5,10 @@
  * and battery-backed SRAM persistence.
  */
 
-#include "systems/nes/cartridge/nes_cartridge.h"
-#include "systems/nes/cartridge/nes_mapper_factory.h"
-#include "systems/nes/bus/nes_bus.h"
-#include "systems/nes/nes_system.h"
+#include "systems/nes/cartridge/nes_cartridge.hpp"
+#include "systems/nes/cartridge/nes_mapper_factory.hpp"
+#include "systems/nes/bus/nes_bus.hpp"
+#include "systems/nes/nes_system.hpp"
 
 #include <fstream>
 #include <iostream>

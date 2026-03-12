@@ -1,12 +1,12 @@
-#include "testing/c64_test_framework.h"
-#include "systems/commodore/c64/c64_system.h"
-#include "testing/c64_test_loader.h"
-#include "testing/c64_screenshot.h"
-#include "chip/memory/memory_chip.h"
+#include "testing/c64_test_framework.hpp"
+#include "systems/commodore/c64/c64_system.hpp"
+#include "testing/c64_test_loader.hpp"
+#include "testing/c64_screenshot.hpp"
+#include "chip/memory/memory_chip.hpp"
 #include "chip/cpu/fam65xx/fam65xx.hpp"
-#include "chip/video/vic_ii/vicii_common.h"
-#include "core/os/os.h"
-#include "core/cermu.h"
+#include "chip/video/vic_ii/vicii_common.hpp"
+#include "core/os/os.hpp"
+#include "core/cermu.hpp"
 #ifdef CERMU_USE_STD_FILESYSTEM
     #include <filesystem>
     namespace cermu_fs = std::filesystem;

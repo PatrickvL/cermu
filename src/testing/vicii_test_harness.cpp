@@ -7,8 +7,8 @@
 //   3. C++ harness that reads the results buffer after tests complete
 // =============================================================================
 
-#include "testing/vicii_test_harness.h"
-#include "systems/commodore/c64/c64_kernal_patches.h"
+#include "testing/vicii_test_harness.hpp"
+#include "systems/commodore/c64/c64_kernal_patches.hpp"
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
@@ -67,7 +67,7 @@ void patch_kernal_for_test(C64System* c64) {
 // ============================================================================
 
 // Mini 6502 assembler — shared definition in src/core/asm6510.h
-#include "chip/cpu/fam65xx/asm6510.h"
+#include "chip/cpu/fam65xx/asm6510.hpp"
 
 // --- Harness-specific composite helpers (use vicii_test constants) ---
 struct asm6510_harness : asm6510 {

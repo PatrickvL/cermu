@@ -6,14 +6,14 @@
  * Compiled only when CERMU_HAS_GUI is defined.
  */
 
-#include "chip/io/i8255.h"
-#include "core/chip_layout.h"
-#include "core/pin_macros.h"
+#include "chip/io/i8255.hpp"
+#include "core/chip_layout.hpp"
+#include "core/pin_macros.hpp"
 
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
-#include "gui/chip_visualization.h"
-#include "gui/global_chip_style.h"
+#include "gui/chip_visualization.hpp"
+#include "gui/global_chip_style.hpp"
 #endif
 
 // ============================================================================

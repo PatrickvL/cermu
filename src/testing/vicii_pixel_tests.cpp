@@ -9,9 +9,9 @@
 //   4. Samples specific framebuffer pixels and compares to palette
 // =============================================================================
 
-#include "testing/vicii_pixel_tests.h"
-#include "chip/cpu/fam65xx/asm6510.h"  // src/core/asm6510.h (via include path)
-#include "chip/video/vic_ii/vicii_common.h"
+#include "testing/vicii_pixel_tests.hpp"
+#include "chip/cpu/fam65xx/asm6510.hpp"  // src/core/asm6510.h (via include path)
+#include "chip/video/vic_ii/vicii_common.hpp"
 #include "chip/cpu/fam65xx/fam65xx.hpp"
 #include <cstring>
 #include <cstdio>

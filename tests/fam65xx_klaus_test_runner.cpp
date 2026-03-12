@@ -11,7 +11,7 @@
 
 
 // Include processor-specific headers
-#include "../src/chip/cpu/fam65xx/mos6502.h"
+#include "../src/chip/cpu/fam65xx/mos6502.hpp"
 
 
 // ============================================================================

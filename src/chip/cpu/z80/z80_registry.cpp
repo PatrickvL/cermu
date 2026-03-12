@@ -10,12 +10,12 @@
 // =============================================================================
 
 #include "core/chip_manifest.hpp"
-#include "core/chip_registry.h"
+#include "core/chip_registry.hpp"
 
-#include "chip/cpu/z80/zilog_z80.h"
-#include "chip/cpu/z80/zilog_z80a.h"
-#include "chip/cpu/z80/zilog_z80b.h"
-#include "chip/cpu/z80/u880.h"
+#include "chip/cpu/z80/zilog_z80.hpp"
+#include "chip/cpu/z80/zilog_z80a.hpp"
+#include "chip/cpu/z80/zilog_z80b.hpp"
+#include "chip/cpu/z80/u880.hpp"
 
 REGISTER_CHIP_TYPE("Z80",  ZilogZ80)
 REGISTER_CHIP_TYPE("Z80A", ZilogZ80A)

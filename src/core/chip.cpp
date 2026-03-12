@@ -1,7 +1,7 @@
-#include "core/chip.h"
+#include "core/chip.hpp"
 
 #ifdef CERMU_HAS_GUI
-#include "core/chip_layout.h"
+#include "core/chip_layout.hpp"
 
 ChipLayout* ChipBase::get_chip_layout() const {
     if (!layout_initialized_) {

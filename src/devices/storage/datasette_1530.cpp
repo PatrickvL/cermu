@@ -6,9 +6,9 @@
  * TAP v1: byte 0x00 signals a 3-byte little-endian long pulse.
  */
 
-#include "devices/storage/datasette_1530.h"
-#include "core/device_registry.h"
-#include "core/vfs/vfs.h"
+#include "devices/storage/datasette_1530.hpp"
+#include "core/device_registry.hpp"
+#include "core/vfs/vfs.hpp"
 #include <cstdio>
 #include <cstring>
 

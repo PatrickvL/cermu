@@ -5,8 +5,8 @@
  * The hot-path read/write helpers are inline in nes_bus.h.
  */
 
-#include "systems/nes/bus/nes_bus.h"
-#include "systems/nes/bus/nes_bus_chips.h"
+#include "systems/nes/bus/nes_bus.hpp"
+#include "systems/nes/bus/nes_bus_chips.hpp"
 
 #include <algorithm>
 #include <cstring>

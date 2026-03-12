@@ -1,7 +1,7 @@
-#include "systems/chip8/chip8_system.h"
-#include "systems/chip8/chip8_constants.h"
-#include "core/chip.h"
-#include "core/vfs/vfs.h"
+#include "systems/chip8/chip8_system.hpp"
+#include "systems/chip8/chip8_constants.hpp"
+#include "core/chip.hpp"
+#include "core/vfs/vfs.hpp"
 #include <fstream>
 #include <cstring>
 #include <cstdio>

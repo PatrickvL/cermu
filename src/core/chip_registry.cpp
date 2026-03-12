@@ -2,7 +2,7 @@
 // chip_registry.cpp — Global chip factory registry implementation
 // =============================================================================
 
-#include "core/chip_registry.h"
+#include "core/chip_registry.hpp"
 #include <cstdio>
 
 // ============================================================================

@@ -23,8 +23,8 @@
 // inside the fam65xx_t class definition.
 
 // Include the types needed for basic IDE symbol resolution
-#include "chip/cpu/fam65xx/fam65xx_types.h"
-#include "core/cermu.h"
+#include "chip/cpu/fam65xx/fam65xx_types.hpp"
+#include "core/cermu.hpp"
 
 // Suppress all compiler diagnostics for standalone analysis
 CERMU_PRAGMA_SYSTEM_HEADER

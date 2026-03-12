@@ -1,4 +1,4 @@
-#include "chip/video/vic/mos6560.h"
+#include "chip/video/vic/mos6560.hpp"
 #include <cstring>
 
 // VIC-6560 chip configuration — NTSC variant

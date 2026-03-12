@@ -23,8 +23,8 @@
 // inside the z80_t class definition.
 
 // Include the types needed for basic IDE symbol resolution
-#include "chip/cpu/z80/z80_types.h"
-#include "core/cermu.h"
+#include "chip/cpu/z80/z80_types.hpp"
+#include "core/cermu.hpp"
 
 // Suppress all compiler diagnostics for standalone analysis
 CERMU_PRAGMA_SYSTEM_HEADER

@@ -1,5 +1,5 @@
-#include "systems/commodore/c64/c64_hardware_config.h"
-#include "testing/c64_test_framework.h"
+#include "systems/commodore/c64/c64_hardware_config.hpp"
+#include "testing/c64_test_framework.hpp"
 #include <cstdio>
 #include <cstring>
 

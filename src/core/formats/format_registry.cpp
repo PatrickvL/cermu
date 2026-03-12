@@ -5,9 +5,9 @@
  * It contains ZERO format-specific logic.
  */
 
-#include "core/formats/format_registry.h"
-#include "core/formats/format_handler.h"
-#include "core/vfs/vfs.h"
+#include "core/formats/format_registry.hpp"
+#include "core/formats/format_handler.hpp"
+#include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <algorithm>
 #include <cstdio>

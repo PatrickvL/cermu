@@ -1,4 +1,4 @@
-#include "core/text_terminal.h"
+#include "core/text_terminal.hpp"
 #include <cstring>
 #include <algorithm>
 

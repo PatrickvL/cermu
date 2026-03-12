@@ -2,10 +2,10 @@
  * acorn_atom_system.cpp — Acorn Atom system implementation
  */
 
-#include "systems/acorn_atom/acorn_atom_system.h"
-#include "core/system_registry.h"
-#include "core/storage/rom_loader.h"
-#include "core/config/path_discovery.h"
+#include "systems/acorn_atom/acorn_atom_system.hpp"
+#include "core/system_registry.hpp"
+#include "core/storage/rom_loader.hpp"
+#include "core/config/path_discovery.hpp"
 #include <cstring>
 #include <cstdio>
 

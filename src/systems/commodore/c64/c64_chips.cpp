@@ -1,5 +1,5 @@
-#include "systems/commodore/c64/c64_chips.h"
-#include "systems/commodore/c64/c64_bus.h"
+#include "systems/commodore/c64/c64_chips.hpp"
+#include "systems/commodore/c64/c64_bus.hpp"
 #include <cstring>
 #include <cstdio>
 

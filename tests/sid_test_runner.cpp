@@ -15,7 +15,7 @@
 // Exit code: 0 = all tests passed, non-zero = failure count
 // =============================================================================
 
-#include "../src/testing/sid_test_harness.h"
+#include "../src/testing/sid_test_harness.hpp"
 #include <cstring>
 #include <cstdio>
 

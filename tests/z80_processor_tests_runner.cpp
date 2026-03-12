@@ -36,17 +36,17 @@
 #include <stdexcept>
 
 // Low-level JSON utilities (shared with fam65xx runner)
-#include "json_parser.h"
+#include "json_parser.hpp"
 
 #ifndef CERMU_IMPL
     #define CERMU_IMPL
 #endif
 
 // Z80 CPU variant headers
-#include "../src/chip/cpu/z80/zilog_z80.h"
-#include "../src/chip/cpu/z80/zilog_z80a.h"
-#include "../src/chip/cpu/z80/zilog_z80b.h"
-#include "../src/chip/cpu/z80/u880.h"
+#include "../src/chip/cpu/z80/zilog_z80.hpp"
+#include "../src/chip/cpu/z80/zilog_z80a.hpp"
+#include "../src/chip/cpu/z80/zilog_z80b.hpp"
+#include "../src/chip/cpu/z80/u880.hpp"
 
 using namespace z80;
 

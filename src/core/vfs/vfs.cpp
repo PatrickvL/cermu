@@ -6,8 +6,8 @@
  * platform-specific code or archive-library includes.
  */
 
-#include "core/vfs/vfs.h"
-#include "core/os/os.h"
+#include "core/vfs/vfs.hpp"
+#include "core/os/os.hpp"
 
 #include <cstring>
 #include <algorithm>
