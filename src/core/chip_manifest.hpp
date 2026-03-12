@@ -775,6 +775,27 @@ public:
     }
 
     // =====================================================================
+    // §4.4d  Chip lifecycle — bulk reset
+    // =====================================================================
+    //
+    // Calls ChipBase::reset() on every non-null chip bound to a manifest
+    // slot.  Safe for all chip types:
+    //   - RAM/ROM chips: default no-op (no internal state to clear)
+    //   - CPU chips: no-op (CPUs use a separate pin-based reset protocol)
+    //   - I/O chips: clears registers, timers, interrupt state
+    //
+    // Systems with chips that need post-reset callback re-wiring should
+    // call reset_chips() first, then apply their chip-specific fixups.
+    //
+
+    void reset_chips() noexcept {
+        for (const auto& rec : slots_) {
+            if (rec.chip)
+                rec.chip->reset();
+        }
+    }
+
+    // =====================================================================
     // §4.5  Buffer and chip access
     // =====================================================================
 
