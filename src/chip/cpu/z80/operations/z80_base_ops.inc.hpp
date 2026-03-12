@@ -907,22 +907,21 @@ bus_state_t op_ret(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_ret_cc(bus_state_t pins) {
     switch (step_++) {
-    case 0: return pins; // 1 extra internal T-state (5T M1 total)
-    case 1:
+    case 0: // 1 extra internal T-state (5T M1 total) + condition check
         if (!test_cc((opcode_ >> 3) & 7)) {
             transition_to_fetch(); // Not taken: 5T
         }
         return pins;
-    case 2: return bus_setup_mem_read(pins, regs_.sp);
-    case 3: if (!wait_check(pins)) return pins; return pins;
-    case 4:
+    case 1: return bus_setup_mem_read(pins, regs_.sp);
+    case 2: if (!wait_check(pins)) return pins; return pins;
+    case 3:
         addr_latch_ = BUS_GET_DATA(pins);
         regs_.sp++;
         bus_finish_mem(pins);
         return pins;
-    case 5: return bus_setup_mem_read(pins, regs_.sp);
-    case 6: if (!wait_check(pins)) return pins; return pins;
-    case 7:
+    case 4: return bus_setup_mem_read(pins, regs_.sp);
+    case 5: if (!wait_check(pins)) return pins; return pins;
+    case 6:
         addr_latch_ |= static_cast<uint16_t>(BUS_GET_DATA(pins)) << 8;
         regs_.sp++;
         bus_finish_mem(pins);
