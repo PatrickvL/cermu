@@ -16,7 +16,7 @@
  */
 
 #include "../../core/system.h"
-#include "../../core/chip_manifest.hpp"
+#include "../../core/board.hpp"
 #include "../../chip/cpu/fam65xx/mos6507.h"
 #include "../../chip/video/tia/tia.h"
 #include "../../chip/io/pia6532.h"

@@ -2,7 +2,7 @@
 
 #include "../commodore_system.h"
 #include "../../core/system_lines.h"
-#include "../../core/chip_manifest.hpp"
+#include "../../core/board.hpp"
 #include "../../chip/memory/ram_chip.h"
 #include "../../chip/memory/rom_chip.h"
 #include "../../chip/video/ted/ted7360.h"

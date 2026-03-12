@@ -11,7 +11,7 @@
 #include "z9001_constants.h"
 #include "../../../core/system.h"
 #include "../../../core/system_lines.h"
-#include "../../../core/chip_manifest.hpp"
+#include "../../../core/board.hpp"
 #include "../../../chip/cpu/z80/u880.h"
 #include "../../../chip/cpu/z80/z80.hpp"   // Z80_MREQ_BIT / Z80_IORQ_BIT
 #include "../../../chip/io/z80_pio.h"

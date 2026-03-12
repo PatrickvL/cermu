@@ -28,7 +28,7 @@
 #include "acorn_atom_constants.h"
 #include "../../core/system.h"
 #include "../../core/system_lines.h"
-#include "../../core/chip_manifest.hpp"
+#include "../../core/board.hpp"
 #include "../../chip/cpu/fam65xx/mos6502.h"
 #include "../../chip/video/mc6847/mc6847.h"
 #include "../../chip/io/i8255.h"

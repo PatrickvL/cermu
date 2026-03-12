@@ -14,7 +14,7 @@
 #include "bombjack_constants.h"
 #include "../../../core/system.h"
 #include "../../../core/system_lines.h"
-#include "../../../core/chip_manifest.hpp"
+#include "../../../core/board.hpp"
 #include "../../../chip/cpu/z80/zilog_z80a.h"
 #include "../../../chip/sound/ay_3_8910.h"
 #include "../../../chip/memory/ram_chip.h"
