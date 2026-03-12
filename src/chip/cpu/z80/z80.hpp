@@ -381,7 +381,9 @@ private:
 
     /// Transition to M1 fetch for prefix continuation.
     /// Preserves DD/FD and CB/ED prefix state for the next M1 decode.
+    /// Also preserves Q so prefixes don't break Q tracking for SCF/CCF.
     inline void transition_to_fetch_prefix() {
+        prefix_fetch_ = true;
         current_handler_ = &z80_t::m1_fetch;
         step_ = 0;
     }
@@ -405,9 +407,13 @@ private:
         switch (step_++) {
         case 0: { // T1: interrupt check + address setup
             // Save Q from previous instruction for SCF/CCF, then snapshot F
-            q_saved_ = regs_.q;
-            f_snapshot_ = regs_.f;
-            regs_.q = false;
+            // Skip during prefix fetches (DD/FD/CB/ED) — prefixes are transparent to Q
+            if (!prefix_fetch_) {
+                q_saved_ = regs_.q;
+                f_snapshot_ = regs_.f;
+                regs_.q = false;
+            }
+            prefix_fetch_ = false;
 
             // EI suppresses interrupt checking for one instruction.
             // The IFF flags were already set by the EI instruction itself.
@@ -1088,10 +1094,10 @@ private:
     bool nmi_pending_ = false;  // NMI edge detected, waiting to be serviced
 
     // Temporary latches for multi-cycle operations
-    int8_t   displacement_ = 0;  // IX/IY+d displacement byte
-    uint8_t  data_latch_ = 0;   // Temporary data storage
-    uint16_t addr_latch_ = 0;   // Temporary address assembly
-    uint8_t  int_data_latch_ = 0; // Data bus value during INT ack (for IM2)
+    int8_t   displacement_ = 0;    // IX/IY+d displacement byte
+    uint8_t  data_latch_ = 0;      // Temporary data storage
+    uint16_t addr_latch_ = 0;      // Temporary address assembly
+    uint8_t  int_data_latch_ = 0;  // Data bus value during INT ack (for IM2)
 
     // Bus state snapshot for edge detection (NMI, etc.)
     bus_state_t bus_prev_ = 0;
@@ -1099,6 +1105,7 @@ private:
     // Q register support: saved Q from previous instruction + F snapshot for change detection
     bool q_saved_ = false;       // Q value from previous instruction (used by SCF/CCF)
     uint8_t f_snapshot_ = 0;     // F at instruction start (to detect if instruction modified flags)
+    bool prefix_fetch_ = false;  // Next M1 is a prefix continuation (DD/FD/CB/ED), skip Q update
 
     // ========================================================================
     // ChipBase VIRTUAL METHOD IMPLEMENTATIONS

@@ -59,7 +59,7 @@ bus_state_t op_cb_bit_hl(bus_state_t pins) {
     case 0: return bus_setup_mem_read(pins, addr);
     case 1: if (!wait_check(pins)) return pins; return pins;
     case 2:
-        alu_bit_hl((cb_opcode_ >> 3) & 7, BUS_GET_DATA(pins), addr);
+        alu_bit_hl((cb_opcode_ >> 3) & 7, BUS_GET_DATA(pins));
         bus_finish_mem(pins);
         return pins;
     case 3: // 1 internal T-state

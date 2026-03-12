@@ -356,11 +356,15 @@ bus_state_t op_ldir_lddr(bus_state_t pins) {
     }
     case 8: case 9: case 10: case 11: // 4 internal T-states (repeat)
         return pins;
-    case 12: // 5th internal T-state (repeat)
+    case 12: { // 5th internal T-state (repeat)
         regs_.pc -= 2; // Back up to re-execute
         regs_.wz = regs_.pc + 1;
+        // In repeat path, Y/X come from PCi high byte (David Banks)
+        uint8_t pch = static_cast<uint8_t>(regs_.pc >> 8);
+        regs_.f = (regs_.f & ~(Flags::Y | Flags::X)) | (pch & (Flags::Y | Flags::X));
         transition_to_fetch();
         return pins;
+    }
     }
     return pins;
 }
@@ -440,11 +444,15 @@ bus_state_t op_cpir_cpdr(bus_state_t pins) {
     }
     case 8: case 9: case 10: case 11: // 4 internal T-states (repeat)
         return pins;
-    case 12: // 5th internal T-state (repeat)
+    case 12: { // 5th internal T-state (repeat)
         regs_.pc -= 2;
         regs_.wz = regs_.pc + 1;
+        // In repeat path, Y/X come from PCi high byte (David Banks)
+        uint8_t pch = static_cast<uint8_t>(regs_.pc >> 8);
+        regs_.f = (regs_.f & ~(Flags::Y | Flags::X)) | (pch & (Flags::Y | Flags::X));
         transition_to_fetch();
         return pins;
+    }
     }
     return pins;
 }
@@ -466,12 +474,17 @@ bus_state_t op_ini_ind(bus_state_t pins) {
     case 6: if (!wait_check(pins)) return pins; return pins;
     case 7: {
         bus_finish_mem(pins);
-        int16_t dir = (ed_opcode_ & 0x08) ? -1 : 1;
+        int dir = (ed_opcode_ & 0x08) ? -1 : 1;
         regs_.hl += dir;
+        // WZ = BC ± 1 (using original B before decrement)
+        regs_.wz = regs_.bc + dir;
         regs_.b--;
+        // Undocumented flags for block I/O input
+        uint16_t k = static_cast<uint16_t>(data_latch_) + ((regs_.c + dir) & 0xFF);
         regs_.f = sz53_table[regs_.b]
-                | Flags::N // TODO: full undocumented flag behavior
-                | (regs_.b == 0 ? Flags::Z : 0);
+                | ((data_latch_ & 0x80) ? Flags::N : 0)
+                | ((k > 0xFF) ? (Flags::H | Flags::C) : 0)
+                | parity_table[(k & 7) ^ regs_.b];
         transition_to_fetch();
         return pins;
     }
@@ -496,15 +509,43 @@ bus_state_t op_inir_indr(bus_state_t pins) {
     case 6: if (!wait_check(pins)) return pins; return pins;
     case 7: {
         bus_finish_mem(pins);
-        int16_t dir = (ed_opcode_ & 0x08) ? -1 : 1;
+        int dir = (ed_opcode_ & 0x08) ? -1 : 1;
         regs_.hl += dir;
+        // WZ = BC ± 1 (using original B before decrement)
+        regs_.wz = regs_.bc + dir;
         regs_.b--;
-        regs_.f = sz53_table[regs_.b]
-                | Flags::N
-                | (regs_.b == 0 ? Flags::Z : 0);
+        uint16_t k = static_cast<uint16_t>(data_latch_) + ((regs_.c + dir) & 0xFF);
+        bool hc = k > 0xFF;
+        uint8_t nf = (data_latch_ & 0x80) ? Flags::N : 0;
+        uint8_t hcf = hc ? (Flags::H | Flags::C) : 0;
         if (regs_.b == 0) {
+            // Non-repeat: standard flags (same as INI/IND)
+            regs_.f = sz53_table[regs_.b] | nf | hcf
+                    | parity_table[(k & 7) ^ regs_.b];
             transition_to_fetch();
             return pins;
+        }
+        // Repeat: S from B, Y/X from PCi high byte (rewound PC), complex H/PV from David Banks
+        // Reference: redcode/Z80 (Manuel Sainz) — INXR_OTXR_COMMON
+        {
+            uint8_t pch = static_cast<uint8_t>((regs_.pc - 2) >> 8); // PCi = rewound PC
+            uint8_t p = (k & 7) ^ regs_.b;
+            uint8_t pv_hf;
+            if (hc) {
+                if (nf) {
+                    pv_hf = (!(regs_.b & 0x0F) ? Flags::H : 0)
+                          | parity_table[p ^ ((regs_.b - 1) & 7)];
+                } else {
+                    pv_hf = ((regs_.b & 0x0F) == 0x0F ? Flags::H : 0)
+                          | parity_table[p ^ ((regs_.b + 1) & 7)];
+                }
+            } else {
+                pv_hf = parity_table[p ^ (regs_.b & 7)];
+            }
+            regs_.f = (regs_.b & Flags::S)
+                    | (pch & (Flags::Y | Flags::X))
+                    | nf | (hc ? Flags::C : 0)
+                    | pv_hf;
         }
         return pins;
     }
@@ -512,6 +553,7 @@ bus_state_t op_inir_indr(bus_state_t pins) {
         return pins;
     case 12: // 5th internal T-state (repeat)
         regs_.pc -= 2;
+        regs_.wz = regs_.pc + 1;
         transition_to_fetch();
         return pins;
     }
@@ -523,7 +565,9 @@ bus_state_t op_inir_indr(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_outi_outd(bus_state_t pins) {
     switch (step_++) {
-    case 0: return pins; // 1 extra internal
+    case 0:
+        regs_.b--; // B decremented first for output instructions
+        return pins;
     case 1: return bus_setup_mem_read(pins, regs_.hl);
     case 2: if (!wait_check(pins)) return pins; return pins;
     case 3:
@@ -535,12 +579,16 @@ bus_state_t op_outi_outd(bus_state_t pins) {
     case 6: return pins;
     case 7: {
         bus_finish_io(pins);
-        int16_t dir = (ed_opcode_ & 0x08) ? -1 : 1;
+        int dir = (ed_opcode_ & 0x08) ? -1 : 1;
         regs_.hl += dir;
-        regs_.b--;
+        // WZ = BC ± 1 (B already decremented)
+        regs_.wz = regs_.bc + dir;
+        // Undocumented flags for block I/O output: k = data + L (L after HL change)
+        uint16_t k = static_cast<uint16_t>(data_latch_) + regs_.l;
         regs_.f = sz53_table[regs_.b]
-                | Flags::N
-                | (regs_.b == 0 ? Flags::Z : 0);
+                | ((data_latch_ & 0x80) ? Flags::N : 0)
+                | ((k > 0xFF) ? (Flags::H | Flags::C) : 0)
+                | parity_table[(k & 7) ^ regs_.b];
         transition_to_fetch();
         return pins;
     }
@@ -553,7 +601,9 @@ bus_state_t op_outi_outd(bus_state_t pins) {
 // ========================================================================
 bus_state_t op_otir_otdr(bus_state_t pins) {
     switch (step_++) {
-    case 0: return pins;
+    case 0:
+        regs_.b--; // B decremented first for output instructions
+        return pins;
     case 1: return bus_setup_mem_read(pins, regs_.hl);
     case 2: if (!wait_check(pins)) return pins; return pins;
     case 3:
@@ -565,15 +615,42 @@ bus_state_t op_otir_otdr(bus_state_t pins) {
     case 6: return pins;
     case 7: {
         bus_finish_io(pins);
-        int16_t dir = (ed_opcode_ & 0x08) ? -1 : 1;
+        int dir = (ed_opcode_ & 0x08) ? -1 : 1;
         regs_.hl += dir;
-        regs_.b--;
-        regs_.f = sz53_table[regs_.b]
-                | Flags::N
-                | (regs_.b == 0 ? Flags::Z : 0);
+        // WZ = BC ± 1 (B already decremented)
+        regs_.wz = regs_.bc + dir;
+        uint16_t k = static_cast<uint16_t>(data_latch_) + regs_.l;
+        bool hc = k > 0xFF;
+        uint8_t nf = (data_latch_ & 0x80) ? Flags::N : 0;
+        uint8_t hcf = hc ? (Flags::H | Flags::C) : 0;
         if (regs_.b == 0) {
+            // Non-repeat: standard flags (same as OUTI/OUTD)
+            regs_.f = sz53_table[regs_.b] | nf | hcf
+                    | parity_table[(k & 7) ^ regs_.b];
             transition_to_fetch();
             return pins;
+        }
+        // Repeat: S from B, Y/X from PCi high byte (rewound PC), complex H/PV from David Banks
+        // Reference: redcode/Z80 (Manuel Sainz) — INXR_OTXR_COMMON
+        {
+            uint8_t pch = static_cast<uint8_t>((regs_.pc - 2) >> 8); // PCi = rewound PC
+            uint8_t p = (k & 7) ^ regs_.b;
+            uint8_t pv_hf;
+            if (hc) {
+                if (nf) {
+                    pv_hf = (!(regs_.b & 0x0F) ? Flags::H : 0)
+                          | parity_table[p ^ ((regs_.b - 1) & 7)];
+                } else {
+                    pv_hf = ((regs_.b & 0x0F) == 0x0F ? Flags::H : 0)
+                          | parity_table[p ^ ((regs_.b + 1) & 7)];
+                }
+            } else {
+                pv_hf = parity_table[p ^ (regs_.b & 7)];
+            }
+            regs_.f = (regs_.b & Flags::S)
+                    | (pch & (Flags::Y | Flags::X))
+                    | nf | (hc ? Flags::C : 0)
+                    | pv_hf;
         }
         return pins;
     }
@@ -581,6 +658,7 @@ bus_state_t op_otir_otdr(bus_state_t pins) {
         return pins;
     case 12: // 5th internal T-state (repeat)
         regs_.pc -= 2;
+        regs_.wz = regs_.pc + 1;
         transition_to_fetch();
         return pins;
     }

@@ -326,14 +326,14 @@ void alu_bit(uint8_t bit, uint8_t val) {
             | (val & (Flags::Y | Flags::X));
 }
 
-// BIT test for (HL)/(IX+d)/(IY+d) — undocumented flags from high byte of address
-void alu_bit_hl(uint8_t bit, uint8_t val, uint16_t addr) {
+// BIT test for (HL)/(IX+d)/(IY+d) — undocumented flags from high byte of WZ (MEMPTR)
+void alu_bit_hl(uint8_t bit, uint8_t val) {
     uint8_t result = val & (1 << bit);
     regs_.f = (regs_.f & Flags::C)
             | Flags::H
             | (result ? 0 : (Flags::Z | Flags::PV))
             | (result & Flags::S)
-            | (static_cast<uint8_t>(addr >> 8) & (Flags::Y | Flags::X));
+            | (regs_.w & (Flags::Y | Flags::X));
 }
 
 // ========================================================================
