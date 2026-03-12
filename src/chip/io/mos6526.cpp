@@ -1215,3 +1215,7 @@ bus_state_t mos6526_t::tick(bus_state_t bus_state) {
     bus_state = tick_phi1(bus_state);
     return bus_state;
 }
+
+#include "../../core/chip_manifest.hpp"
+#include "../../core/chip_registry.h"
+REGISTER_CHIP_TYPE("MOS6526", mos6526_t)

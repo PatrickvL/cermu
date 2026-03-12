@@ -323,6 +323,7 @@ list(APPEND CHIP_SOURCES
     src/chip/io/mos6522.cpp
     src/chip/io/pia6820.cpp
     src/chip/io/pia6532.cpp
+    src/chip/io/io_registry.cpp
 
     # Logic
     src/chip/logic/pla.cpp
