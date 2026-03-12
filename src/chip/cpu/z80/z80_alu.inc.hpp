@@ -374,15 +374,21 @@ void alu_neg() {
 }
 
 void alu_ccf() {
+    // Y/X flags: if previous instruction modified flags (q_saved_), use A only;
+    // otherwise use (A | F) to include old flag bits in Y/X.
+    uint8_t yx = q_saved_ ? (regs_.a & (Flags::Y | Flags::X))
+                          : ((regs_.a | regs_.f) & (Flags::Y | Flags::X));
     regs_.f = (regs_.f & (Flags::S | Flags::Z | Flags::PV))
             | ((regs_.f & Flags::C) ? Flags::H : 0)
-            | (regs_.a & (Flags::Y | Flags::X))
+            | yx
             | ((regs_.f & Flags::C) ^ Flags::C);
 }
 
 void alu_scf() {
+    uint8_t yx = q_saved_ ? (regs_.a & (Flags::Y | Flags::X))
+                          : ((regs_.a | regs_.f) & (Flags::Y | Flags::X));
     regs_.f = (regs_.f & (Flags::S | Flags::Z | Flags::PV))
-            | (regs_.a & (Flags::Y | Flags::X))
+            | yx
             | Flags::C;
 }
 

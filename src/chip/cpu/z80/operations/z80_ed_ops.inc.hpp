@@ -25,10 +25,10 @@ bus_state_t op_in_r_c(bus_state_t pins) {
     case 3: {
         uint8_t val = BUS_GET_DATA(pins);
         bus_finish_io(pins);
+        regs_.wz = regs_.bc + 1; // WZ = BC + 1 (before register write modifies BC)
         uint8_t y = (ed_opcode_ >> 3) & 7;
         if (y != 6) set_reg8_direct(y, val); // IN (C) just sets flags, discards value
         regs_.f = (regs_.f & Flags::C) | sz53p_table[val];
-        regs_.wz = regs_.bc + 1;
         transition_to_fetch();
         return pins;
     }
@@ -65,12 +65,12 @@ bus_state_t op_adc_sbc_hl(bus_state_t pins) {
     case 6: {
         uint8_t p = (ed_opcode_ >> 4) & 3;
         uint16_t val = get_reg16(p);
+        regs_.wz = regs_.hl + 1; // WZ = HL_before + 1
         if (ed_opcode_ & 0x08) {
             alu_adc16(val);
         } else {
             alu_sbc16(val);
         }
-        regs_.wz = regs_.hl; // Actually WZ = HL_before + 1, but close enough
         transition_to_fetch();
         return pins;
     }

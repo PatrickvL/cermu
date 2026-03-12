@@ -240,6 +240,8 @@ public:
     // === Execution state access (for test harness) ===
     void set_halted(bool v)      { halted_ = v; }
     void set_ei_pending(bool v)  { ei_pending_ = v; }
+    void set_q(bool v)           { regs_.q = v; }
+    bool q() const               { return regs_.q; }
 
     /// Returns true when the CPU is at an instruction boundary.
     /// Used by test harnesses to detect instruction completion.
@@ -285,6 +287,9 @@ private:
 
         // Internal WZ register (MEMPTR) — observable via undocumented flags
         union { struct { uint8_t z, w; }; uint16_t wz; };
+
+        // Q register — tracks whether previous instruction modified F (affects SCF/CCF Y/X flags)
+        bool q;
     };
 
     // ========================================================================
@@ -366,6 +371,8 @@ private:
     /// Transition to M1 fetch for the next instruction.
     /// Clears prefix state (DD/FD/CB/ED all done).
     inline void transition_to_fetch() {
+        // Update Q: if F was modified during this instruction, set Q = true
+        regs_.q = (regs_.f != f_snapshot_);
         ix_iy_prefix_ = 0;
         prefix_state_ = PREFIX_NONE;
         current_handler_ = &z80_t::m1_fetch;
@@ -397,6 +404,11 @@ private:
     bus_state_t m1_fetch(bus_state_t pins) {
         switch (step_++) {
         case 0: { // T1: interrupt check + address setup
+            // Save Q from previous instruction for SCF/CCF, then snapshot F
+            q_saved_ = regs_.q;
+            f_snapshot_ = regs_.f;
+            regs_.q = false;
+
             // EI suppresses interrupt checking for one instruction.
             // The IFF flags were already set by the EI instruction itself.
             bool suppress_int = ei_pending_;
@@ -472,13 +484,8 @@ private:
             // Check prefix state from a previous M1 cycle
             if (prefix_state_ == PREFIX_CB) {
                 prefix_state_ = PREFIX_NONE;
-                if (ix_iy_prefix_) {
-                    // DD CB / FD CB — indexed bit operations
-                    // The opcode_ here is the SECOND M1 byte (after CB).
-                    // But for DD CB, we need displacement + opcode via memory reads.
-                    transition_to(&z80_t::op_ddfd_cb);
-                    return pins;
-                }
+                // DD/FD + CB is handled directly in decode_and_execute,
+                // so this path is only reached for plain CB prefix
                 return decode_cb(pins, opcode_);
             }
             if (prefix_state_ == PREFIX_ED) {
@@ -694,8 +701,13 @@ private:
                     transition_to(&z80_t::op_jp_nn);
                     break;
                 case 1: // CB prefix
-                    prefix_state_ = PREFIX_CB;
-                    transition_to_fetch_prefix();
+                    if (has_ix_iy_prefix()) {
+                        // DD CB / FD CB: displacement + sub-opcode follow as non-M1 reads
+                        transition_to(&z80_t::op_ddfd_cb);
+                    } else {
+                        prefix_state_ = PREFIX_CB;
+                        transition_to_fetch_prefix();
+                    }
                     break;
                 case 2: // OUT (n),A
                     transition_to(&z80_t::op_out_n_a);
@@ -874,12 +886,12 @@ private:
 
             case 7:
                 switch (y) {
-                case 0: // LD I,A
-                case 2: // LD R,A
+                case 0: // LD I,A (ED 47, y=0)
+                case 1: // LD R,A (ED 4F, y=1)
                     transition_to(&z80_t::op_ld_ir_a);
                     return pins;
-                case 1: // LD A,I
-                case 3: // LD A,R
+                case 2: // LD A,I (ED 57, y=2)
+                case 3: // LD A,R (ED 5F, y=3)
                     transition_to(&z80_t::op_ld_a_ir);
                     return pins;
                 case 4: // RRD
@@ -1083,6 +1095,10 @@ private:
 
     // Bus state snapshot for edge detection (NMI, etc.)
     bus_state_t bus_prev_ = 0;
+
+    // Q register support: saved Q from previous instruction + F snapshot for change detection
+    bool q_saved_ = false;       // Q value from previous instruction (used by SCF/CCF)
+    uint8_t f_snapshot_ = 0;     // F at instruction start (to detect if instruction modified flags)
 
     // ========================================================================
     // ChipBase VIRTUAL METHOD IMPLEMENTATIONS

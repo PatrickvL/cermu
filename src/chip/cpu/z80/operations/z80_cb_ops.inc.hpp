@@ -27,6 +27,7 @@
 // With DD/FD: on (IX+d)/(IY+d) — displacement already read before CB
 bus_state_t op_cb_shift_hl(bus_state_t pins) {
     uint16_t addr = get_hl_addr();
+    if (has_ix_iy_prefix()) regs_.wz = addr;
     switch (step_++) {
     case 0: return bus_setup_mem_read(pins, addr);
     case 1: if (!wait_check(pins)) return pins; return pins;
@@ -53,6 +54,7 @@ bus_state_t op_cb_shift_hl(bus_state_t pins) {
 // CB BIT test on (HL) — 12T total (M1:4 + M1:4 + read:4)
 bus_state_t op_cb_bit_hl(bus_state_t pins) {
     uint16_t addr = get_hl_addr();
+    if (has_ix_iy_prefix()) regs_.wz = addr;
     switch (step_++) {
     case 0: return bus_setup_mem_read(pins, addr);
     case 1: if (!wait_check(pins)) return pins; return pins;
@@ -70,6 +72,7 @@ bus_state_t op_cb_bit_hl(bus_state_t pins) {
 // CB SET/RES on (HL) — 15T total (M1:4 + M1:4 + read:4 + write:3)
 bus_state_t op_cb_setres_hl(bus_state_t pins) {
     uint16_t addr = get_hl_addr();
+    if (has_ix_iy_prefix()) regs_.wz = addr;
     uint8_t bit = (cb_opcode_ >> 3) & 7;
     switch (step_++) {
     case 0: return bus_setup_mem_read(pins, addr);
