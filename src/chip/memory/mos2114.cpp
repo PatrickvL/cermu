@@ -76,6 +76,3 @@ bus_state_t MOS2114::bus_write(void* context, bus_state_t bus_state) {
 }
 
 REGISTER_CHIP_TYPE("MOS2114", MOS2114)
-
-REGISTER_CHIP_TYPE("MOS2114", MOS2114)
-

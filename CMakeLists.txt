@@ -306,6 +306,8 @@ target_include_directories(z80_decoder PUBLIC
 set(CHIP_SOURCES
     # CPU - fam65xx template instantiation + ChipRegistry registration
     src/chip/cpu/fam65xx/fam65xx_registry.cpp
+    # CPU - Z80 template instantiation + ChipRegistry registration
+    src/chip/cpu/z80/z80_registry.cpp
 )
 # Always include other chip sources
 list(APPEND CHIP_SOURCES
