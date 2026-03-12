@@ -5,6 +5,8 @@
  */
 
 #include "pia6532.h"
+#include "../../core/chip_manifest.hpp"
+#include "../../core/chip_registry.h"
 #include <cstring>
 
 void pia6532_t::init() {
@@ -145,6 +147,4 @@ void pia6532_t::write_io(uint16_t addr, uint8_t data) {
     }
 }
 
-#include "../../core/chip_manifest.hpp"
-#include "../../core/chip_registry.h"
 REGISTER_CHIP_TYPE("PIA6532", pia6532_t)
