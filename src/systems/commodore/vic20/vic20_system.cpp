@@ -484,36 +484,14 @@ VIC20System::VIC20System()
 }
 
 VIC20System::~VIC20System() {
-    // Destroy CPU
-    if (cpu_) {
-        delete cpu_;
-        cpu_ = nullptr;
-    }
-    
-    // Destroy VIC chip — virtual destructor dispatches correctly
-    if (vic_) {
-        delete vic_;
-        vic_ = nullptr;
-    }
-    
-    // Destroy VIA chips
-    if (via1_) {
-        delete via1_;
-        via1_ = nullptr;
-    }
-    
-    if (via2_) {
-        delete via2_;
-        via2_ = nullptr;
-    }
-    
-    // Destroy keyboard
+    // Destroy keyboard (not part of chip manifest)
     if (keyboard_) {
         delete keyboard_;
         keyboard_ = nullptr;
     }
     
-    // Memory chips are owned by bus_mem_ and cleaned up automatically
+    // CPU, VIC, VIA1, VIA2, and memory chips are all owned by bus_mem_
+    // and cleaned up automatically via its owned_chips_ vector.
 }
 
 // ============================================================================
@@ -585,15 +563,30 @@ bool VIC20System::initialize() {
     
     printf("VIC20: Initializing system\n");
     
-    // ── Create memory chips from manifest and wire bus ───────────────────
-    bus_mem_.create_chips(&bus_.state);
+    // ── Condition callback for PAL/NTSC variant selection ────────────────
+    auto vic20_condition = [](uint16_t cond, const void* ctx) -> bool {
+        auto* cfg = static_cast<const SystemConfiguration*>(ctx);
+        bool is_pal = (cfg->region_option_index <= 0);
+        switch (cond) {
+            case vic20_cond::kPAL:  return is_pal;
+            case vic20_cond::kNTSC: return !is_pal;
+            default:                return false;
+        }
+    };
+
+    // ── Create ALL chips from manifest (memory + CPU + VIC + VIAs) ──────
+    bus_mem_.create_chips(&bus_.state, vic20_condition, &config_);
     bus_mem_.apply(mem_bus_);
 
-    // Convenience pointers for direct buffer access (ROM loading, VIC callbacks, etc.)
+    // ── Retrieve typed convenience pointers ──────────────────────────────
     ram_        = bus_mem_.chip_as<RAMChip>(vic20_slot::kRam);
     charrom_    = bus_mem_.chip_as<ROMChip>(vic20_slot::kCharRom);
     basic_rom_  = bus_mem_.chip_as<ROMChip>(vic20_slot::kBasicRom);
     kernal_rom_ = bus_mem_.chip_as<ROMChip>(vic20_slot::kKernalRom);
+    cpu_        = bus_mem_.chip_as<MOS6502>(vic20_slot::kCpu);
+    vic_        = bus_mem_.first_chip<vic_base_t>({vic20_slot::kVicPal, vic20_slot::kVicNtsc});
+    via1_       = bus_mem_.chip_as<mos6522_t>(vic20_slot::kVia1);
+    via2_       = bus_mem_.chip_as<mos6522_t>(vic20_slot::kVia2);
     
     // Initialize Color RAM to cyan (color 3) for proper text visibility
     // Color RAM lives in the RAM buffer at $9400 (within the I/O-handled region)
@@ -605,36 +598,28 @@ bool VIC20System::initialize() {
         printf("VIC20: Warning - ROMs not loaded, system may not function correctly\n");
     }
     
-    // Create CPU (MOS6502) — direct C++ instantiation for inlining
-    cpu_ = new MOS6502();
+    // ── Post-creation wiring: init/reset/callbacks ──────────────────────
+    
+    // CPU
     if (!cpu_) {
         printf("VIC20: Failed to create MOS6502 CPU\n");
         return false;
     }
-    
-    // Initialize CPU (descriptor-free — memory I/O is handled via bus_state_t pins)
     cpu_->init();
-    
-    // Reset CPU to initialize state
     cpu_->reset(0);
     
-    // Create VIC chip — region-aware: MOS6561 for PAL, MOS6560 for NTSC
-    bool is_pal_region = (config_.region_option_index <= 0);
-    if (is_pal_region) {
-        auto* pal_vic = new mos6561_t();
-        pal_vic->init();
-        vic_ = pal_vic;
-        printf("VIC20: Created MOS6561 (PAL) VIC chip\n");
-    } else {
-        auto* ntsc_vic = new mos6560_t();
-        ntsc_vic->init();
-        vic_ = ntsc_vic;
-        printf("VIC20: Created MOS6560 (NTSC) VIC chip\n");
-    }
+    // VIC — region-dependent variant was selected by condition callback
     if (!vic_) {
         printf("VIC20: Failed to create VIC chip\n");
         return false;
     }
+    // init() is on the concrete types, not on vic_base_t — call via the slot
+    if (auto* pal = bus_mem_.chip_as<mos6561_t>(vic20_slot::kVicPal))
+        pal->init();
+    else if (auto* ntsc = bus_mem_.chip_as<mos6560_t>(vic20_slot::kVicNtsc))
+        ntsc->init();
+    printf("VIC20: Created %s VIC chip\n",
+           (config_.region_option_index <= 0) ? "MOS6561 (PAL)" : "MOS6560 (NTSC)");
     
     // Set up VIC memory callbacks for accessing video and character memory
     vic_->set_memory_callbacks(
@@ -643,20 +628,18 @@ bool VIC20System::initialize() {
         VIC20System::vic_color_read,    // Color RAM read callback
         this);                           // User data for color RAM
     
-    // Create VIA chips (MOS6522)
+    // VIA chips (MOS6522)
     // VIC-20 hardware: VIA1 ($9110) → NMI line, VIA2 ($9120) → IRQ line
     // VIA2 Timer 1 is the system heartbeat (jiffy clock, keyboard scan, cursor blink)
-    via1_ = new mos6522_t();
-    via1_->reset();
     if (via1_) {
+        via1_->reset();
         via1_->interrupt_bit = BUS_NMI_BIT;
     } else {
         printf("VIC20: Failed to create VIA1\n");
     }
     
-    via2_ = new mos6522_t();
-    via2_->reset();
     if (via2_) {
+        via2_->reset();
         via2_->interrupt_bit = BUS_IRQ_BIT;
     } else {
         printf("VIC20: Warning: VIA2 not created (optional)\n");
@@ -689,15 +672,7 @@ bool VIC20System::initialize() {
     // Setup connector ports (generic framework from EmulatedSystem)
     setup_connector_ports();
 
-    // Register chips for the Hardware menu and debug windows
-    register_chip(static_cast<ChipBase*>(cpu_),
-        "MOS 6502 CPU", "6502", "CPU", 0x0000);
-    register_chip(vic_,
-        "VIC (MOS 6560/6561)", "VIC", "Video", 0x9000);
-    register_chip(via1_,
-        "VIA 1 (MOS 6522)", "VIA 1", "I/O", 0x9110);
-    register_chip(via2_,
-        "VIA 2 (MOS 6522)", "VIA 2", "I/O", 0x9120);
+    // Register all manifest-created chips for the Hardware menu and debug windows
     register_bus_chips(bus_mem_);
     
     // Set up page pointers for current expansion and ROM banking
