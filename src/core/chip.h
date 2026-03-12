@@ -106,6 +106,12 @@ public:
     void set_short_name(const char* name) { short_name_ = name; }
     void set_base_address(uint16_t addr) { base_address_ = addr; }
 
+    // --- Chip reset (opt-in via override) ---
+    // Called by BusMemory::reset_chips() during system reset.
+    // Chips with internal state override this to clear registers, timers, etc.
+    // CPUs use a separate pin-based reset protocol and leave this as no-op.
+    virtual void reset() {}
+
     // --- Bus MMIO interface (opt-in via override) ---
     // Chips that handle register-file access on the memory bus override these.
     // The default returns false / passes bus through unchanged.
