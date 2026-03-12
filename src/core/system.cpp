@@ -1,7 +1,7 @@
-#include "core/system.h"
-#include "core/chip.h"
-#include "core/formats/format_handler.h"
-#include "core/vfs/vfs.h"
+#include "core/system.hpp"
+#include "core/chip.hpp"
+#include "core/formats/format_handler.hpp"
+#include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cctype>
 #include <cmath>
@@ -18,7 +18,7 @@
 
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
-#include "gui/connector_icons.h"
+#include "gui/connector_icons.hpp"
 #endif
 
 // ============================================================================

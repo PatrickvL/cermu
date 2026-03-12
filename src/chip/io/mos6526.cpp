@@ -1,7 +1,7 @@
-#include "chip/io/mos6526.h" // cia
+#include "chip/io/mos6526.hpp" // cia
 #include "core/chip_manifest.hpp"
-#include "core/chip_registry.h"
-#include "core/system_lines.h"
+#include "core/chip_registry.hpp"
+#include "core/system_lines.hpp"
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>

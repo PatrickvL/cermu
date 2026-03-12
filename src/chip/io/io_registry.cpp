@@ -7,12 +7,12 @@
 // =============================================================================
 
 #include "core/chip_manifest.hpp"
-#include "core/chip_registry.h"
+#include "core/chip_registry.hpp"
 
-#include "chip/io/i8255.h"
-#include "chip/io/z80_pio.h"
-#include "chip/io/z80_ctc.h"
-#include "chip/io/kc85_module_system.h"
+#include "chip/io/i8255.hpp"
+#include "chip/io/z80_pio.hpp"
+#include "chip/io/z80_ctc.hpp"
+#include "chip/io/kc85_module_system.hpp"
 
 REGISTER_CHIP_TYPE("8255",          i8255_t)
 REGISTER_CHIP_TYPE("Z80 PIO",      z80_pio_t)

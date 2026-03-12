@@ -10,8 +10,8 @@
  *   D0 output         → active-low (bit CLEAR = button pressed)
  */
 
-#include "devices/input/nes_standard_controller.h"
-#include "core/device_registry.h"
+#include "devices/input/nes_standard_controller.hpp"
+#include "core/device_registry.hpp"
 
 #include <cstdio>
 #include <SDL_events.h>

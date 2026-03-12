@@ -6,8 +6,8 @@
  * parses cartridge data directly through its Cartridge class.
  */
 
-#include "core/formats/ines_format.h"
-#include "core/formats/format_registry.h"
+#include "core/formats/ines_format.hpp"
+#include "core/formats/format_registry.hpp"
 #include <cstring>
 
 // ============================================================================

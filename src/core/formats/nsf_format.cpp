@@ -6,8 +6,8 @@
  * to SID files for the Commodore 64.
  */
 
-#include "core/formats/nsf_format.h"
-#include "core/formats/format_registry.h"
+#include "core/formats/nsf_format.hpp"
+#include "core/formats/format_registry.hpp"
 #include <cstdio>
 #include <cstring>
 

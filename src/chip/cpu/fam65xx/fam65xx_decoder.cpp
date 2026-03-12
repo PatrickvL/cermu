@@ -5,7 +5,7 @@
  * FAM65XX CPU family, supporting all variants from 6502 to 65C816.
  */
 
-#include "chip/cpu/fam65xx/fam65xx_decoder.h"
+#include "chip/cpu/fam65xx/fam65xx_decoder.hpp"
 
 #include <cstdio>
 #include <cstring>

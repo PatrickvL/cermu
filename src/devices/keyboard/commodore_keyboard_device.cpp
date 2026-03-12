@@ -2,8 +2,8 @@
  * commodore_keyboard_device.cpp - Commodore Keyboard Internal Peripheral
  */
 
-#include "devices/keyboard/commodore_keyboard_device.h"
-#include "core/device_registry.h"
+#include "devices/keyboard/commodore_keyboard_device.hpp"
+#include "core/device_registry.hpp"
 
 CommodoreKeyboardDevice::CommodoreKeyboardDevice(commodore_keyboard_t* keyboard)
     : keyboard_(keyboard)

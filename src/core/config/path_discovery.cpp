@@ -1,5 +1,5 @@
-#include "core/config/path_discovery.h"
-#include "core/cermu.h"
+#include "core/config/path_discovery.hpp"
+#include "core/cermu.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

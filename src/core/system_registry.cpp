@@ -1,7 +1,7 @@
-#include "core/system_registry.h"
-#include "core/system.h"
-#include "core/formats/format_handler.h"
-#include "core/vfs/vfs.h"
+#include "core/system_registry.hpp"
+#include "core/system.hpp"
+#include "core/formats/format_handler.hpp"
+#include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <algorithm>
 #include <cstdio>

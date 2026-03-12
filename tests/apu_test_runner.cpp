@@ -10,7 +10,7 @@
 // Exit code: 0 = all tests passed, non-zero = failure count
 // =============================================================================
 
-#include "../src/testing/apu_test_harness.h"
+#include "../src/testing/apu_test_harness.hpp"
 #include <cstring>
 #include <cstdio>
 

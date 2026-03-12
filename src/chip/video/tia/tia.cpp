@@ -19,7 +19,7 @@
  *        how often polynomial counters update. Various waveform modes.
  */
 
-#include "chip/video/tia/tia.h"
+#include "chip/video/tia/tia.hpp"
 #include <cstring>
 #include <algorithm>
 

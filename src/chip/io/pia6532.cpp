@@ -4,9 +4,9 @@
  * Timer, I/O ports, and 128 bytes of RAM.
  */
 
-#include "chip/io/pia6532.h"
+#include "chip/io/pia6532.hpp"
 #include "core/chip_manifest.hpp"
-#include "core/chip_registry.h"
+#include "core/chip_registry.hpp"
 #include <cstring>
 
 void pia6532_t::init() {

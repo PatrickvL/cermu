@@ -1,10 +1,10 @@
-#include "chip/memory/memory_chip_base.h"
-#include "core/chip_layout.h"
+#include "chip/memory/memory_chip_base.hpp"
+#include "core/chip_layout.hpp"
 #include "core/chip_manifest.hpp"
-#include "core/chip_registry.h"
-#include "core/pin_macros.h"
+#include "core/chip_registry.hpp"
+#include "core/pin_macros.hpp"
 #ifdef CERMU_HAS_GUI
-#include "gui/chip_visualization.h"
+#include "gui/chip_visualization.hpp"
 #endif
 #include <cmath>
 #include <cstdlib>
@@ -359,8 +359,8 @@ void MemoryChipBase::register_debug_fields() {
 // Defined here rather than in the thin subclass headers to keep ChipSlot
 // (and its host chip_manifest.hpp) out of the header dependency graph.
 
-#include "chip/memory/ram_chip.h"
-#include "chip/memory/rom_chip.h"
+#include "chip/memory/ram_chip.hpp"
+#include "chip/memory/rom_chip.hpp"
 
 ChipBase* RAMChip::create_from_slot(const ChipSlot& slot,
                                      const bus_state_t* system_bus,

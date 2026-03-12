@@ -14,9 +14,9 @@
  * Reference: cbmconvert lynx.c by Marko Mäkelä.
  */
 
-#include "core/formats/lnx_format.h"
-#include "core/formats/format_registry.h"
-#include "systems/commodore/petscii.h"
+#include "core/formats/lnx_format.hpp"
+#include "core/formats/format_registry.hpp"
+#include "systems/commodore/petscii.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

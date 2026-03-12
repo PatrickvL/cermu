@@ -155,8 +155,8 @@ else()
 endif()
 
 # Include directories
-# SDL2 include dirs added project-wide because core headers (system.h,
-# keyboard_mapper.h) reference SDL_Keycode types unconditionally.
+# SDL2 include dirs added project-wide because core headers (system.hpp,
+# keyboard_mapper.hpp) reference SDL_Keycode types unconditionally.
 # LIBARCHIVE include dirs added because os_archive.cpp needs <archive.h>.
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -230,7 +230,7 @@ if(BUILD_GUI)
         # cermu customizations: VFS integration
         target_compile_definitions(ImGuiFileDialog PRIVATE
             USE_CUSTOM_FILESYSTEM
-            CUSTOM_FILESYSTEM_INCLUDE="vfs_file_system.h"
+            CUSTOM_FILESYSTEM_INCLUDE="vfs_file_system.hpp"
         )
         
         # Link ImGuiFileDialog with ImGui

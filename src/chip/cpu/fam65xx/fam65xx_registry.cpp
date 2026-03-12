@@ -10,21 +10,21 @@
 // =============================================================================
 
 #include "core/chip_manifest.hpp"
-#include "core/chip_registry.h"
+#include "core/chip_registry.hpp"
 
 // 6502 family — NMOS
-#include "chip/cpu/fam65xx/mos6502.h"
-#include "chip/cpu/fam65xx/mos6510.h"
-#include "chip/cpu/fam65xx/mos6507.h"
-#include "chip/cpu/fam65xx/mos7501.h"
-#include "chip/cpu/fam65xx/ricoh_2a03.h"
+#include "chip/cpu/fam65xx/mos6502.hpp"
+#include "chip/cpu/fam65xx/mos6510.hpp"
+#include "chip/cpu/fam65xx/mos6507.hpp"
+#include "chip/cpu/fam65xx/mos7501.hpp"
+#include "chip/cpu/fam65xx/ricoh_2a03.hpp"
 
 // 6502 family — CMOS
-#include "chip/cpu/fam65xx/wdc65c02.h"
-#include "chip/cpu/fam65xx/wdc_w65c02s.h"
-#include "chip/cpu/fam65xx/wdc65c816.h"
-#include "chip/cpu/fam65xx/rockwell65c02.h"
-#include "chip/cpu/fam65xx/synertek65c02.h"
+#include "chip/cpu/fam65xx/wdc65c02.hpp"
+#include "chip/cpu/fam65xx/wdc_w65c02s.hpp"
+#include "chip/cpu/fam65xx/wdc65c816.hpp"
+#include "chip/cpu/fam65xx/rockwell65c02.hpp"
+#include "chip/cpu/fam65xx/synertek65c02.hpp"
 
 REGISTER_CHIP_TYPE("MOS6502",        MOS6502)
 REGISTER_CHIP_TYPE("MOS6510",        MOS6510)

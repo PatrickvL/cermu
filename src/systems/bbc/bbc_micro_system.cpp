@@ -1,8 +1,8 @@
-#include "systems/bbc/bbc_micro_system.h"
-#include "core/cermu.h"
-#include "core/storage/rom_loader.h"
-#include "core/config/path_discovery.h"
-#include "core/system_registry.h"
+#include "systems/bbc/bbc_micro_system.hpp"
+#include "core/cermu.hpp"
+#include "core/storage/rom_loader.hpp"
+#include "core/config/path_discovery.hpp"
+#include "core/system_registry.hpp"
 #include <cstring>
 #include <cstdio>
 

@@ -41,7 +41,7 @@
  * USAGE:
  * ======
  * ```cpp
- * #include "chip/cpu/z80/zilog_z80a.h"
+ * #include "chip/cpu/z80/zilog_z80a.hpp"
  *
  * ZilogZ80A cpu;
  * bus_state_t pins = cpu.init();
@@ -55,11 +55,11 @@
 #include <utility> // std::swap
 
 #include "chip/cpu/z80/z80_traits.hpp"
-#include "chip/cpu/z80/z80_types.h"
-#include "chip/cpu/z80/z80_opcodes.h"
-#include "chip/cpu/cpu_chip_base.h"
-#include "core/system_lines.h"
-#include "core/cermu.h"
+#include "chip/cpu/z80/z80_types.hpp"
+#include "chip/cpu/z80/z80_opcodes.hpp"
+#include "chip/cpu/cpu_chip_base.hpp"
+#include "core/system_lines.hpp"
+#include "core/cermu.hpp"
 
 // Opcode table generation — self-contained with own namespace wrapper
 #include "chip/cpu/z80/z80_opcode_tables.inc.hpp"

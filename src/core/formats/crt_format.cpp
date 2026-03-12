@@ -2,8 +2,8 @@
  * CRT Format Handler — Implementation
  */
 
-#include "core/formats/crt_format.h"
-#include "core/formats/format_registry.h"
+#include "core/formats/crt_format.hpp"
+#include "core/formats/format_registry.hpp"
 #include <cstdio>
 #include <cstring>
 

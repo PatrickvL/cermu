@@ -22,9 +22,9 @@
  * mode can address this).
  */
 
-#include "devices/storage/drive_1541.h"
-#include "core/device_registry.h"
-#include "core/vfs/vfs.h"
+#include "devices/storage/drive_1541.hpp"
+#include "core/device_registry.hpp"
+#include "core/vfs/vfs.hpp"
 #include <cstdio>
 #include <cstring>
 #include <algorithm>

@@ -6,8 +6,8 @@
  * (non-GUI builds).
  */
 
-#include "core/chip_debug_registry.h"
-#include "core/cermu.h"
+#include "core/chip_debug_registry.hpp"
+#include "core/cermu.hpp"
 
 #ifdef CERMU_HAS_CHIP_DEBUG
 

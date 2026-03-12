@@ -19,11 +19,11 @@
  * by ROM size and content analysis in a2600_mapper_factory.
  */
 
-#include "systems/atari2600/atari2600_system.h"
-#include "systems/atari2600/mappers/a2600_mapper_factory.h"
-#include "core/system_registry.h"
-#include "core/connector.h"
-#include "core/vfs/vfs.h"
+#include "systems/atari2600/atari2600_system.hpp"
+#include "systems/atari2600/mappers/a2600_mapper_factory.hpp"
+#include "core/system_registry.hpp"
+#include "core/connector.hpp"
+#include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cstdio>
 #include <algorithm>

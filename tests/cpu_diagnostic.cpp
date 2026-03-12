@@ -12,7 +12,7 @@
 // Include fam65xx CPU implementation
 #include "../src/chip/cpu/fam65xx/fam65xx.hpp"
 #include "../src/chip/cpu/fam65xx/cpu_config.hpp"
-#include "../src/core/system_lines.h"
+#include "../src/core/system_lines.hpp"
 
 // Simple memory interface for testing
 class TestMemory {

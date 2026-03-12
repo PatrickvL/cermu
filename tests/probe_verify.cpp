@@ -10,11 +10,11 @@
  * Exit code: 0 = all pass, 1 = mismatches found
  */
 
-#include "../src/core/emulated_system.h"
-#include "../src/core/system_registry.h"
-#include "../src/core/formats/format_handler.h"
-#include "../src/core/formats/format_registry.h"
-#include "../src/core/vfs/vfs.h"
+#include "../src/core/system.hpp"
+#include "../src/core/system_registry.hpp"
+#include "../src/core/formats/format_handler.hpp"
+#include "../src/core/formats/format_registry.hpp"
+#include "../src/core/vfs/vfs.hpp"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>

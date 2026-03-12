@@ -3,7 +3,7 @@
  * Comprehensive package support
  */
 
-#include "core/chip_layout.h"
+#include "core/chip_layout.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cmath>

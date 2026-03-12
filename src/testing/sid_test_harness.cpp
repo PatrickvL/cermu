@@ -5,7 +5,7 @@
 // See sid_test_harness.h for the full API and format documentation.
 // =============================================================================
 
-#include "testing/sid_test_harness.h"
+#include "testing/sid_test_harness.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cinttypes>

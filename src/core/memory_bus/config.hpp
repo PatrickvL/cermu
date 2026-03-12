@@ -13,7 +13,7 @@
 // =============================================================================
 #pragma once
 
-#include "core/cermu.h"          // uint_least_bits_t, bitmix, FORCE_INLINE
+#include "core/cermu.hpp"          // uint_least_bits_t, bitmix, FORCE_INLINE
 
 #include <cstddef>
 #include <cstdint>

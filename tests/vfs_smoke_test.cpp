@@ -5,7 +5,7 @@
  * Without arguments, tests with a known ROM zip if present.
  */
 
-#include "vfs/vfs.h"
+#include "vfs/vfs.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

@@ -9,15 +9,15 @@
  */
 
 #include "chip/cpu/z80/z80.hpp"
-#include "chip/cpu/z80/zilog_z80.h"
-#include "chip/cpu/z80/zilog_z80a.h"
-#include "chip/cpu/z80/zilog_z80b.h"
-#include "chip/cpu/z80/u880.h"
+#include "chip/cpu/z80/zilog_z80.hpp"
+#include "chip/cpu/z80/zilog_z80a.hpp"
+#include "chip/cpu/z80/zilog_z80b.hpp"
+#include "chip/cpu/z80/u880.hpp"
 
-#include "core/chip_layout.h"
+#include "core/chip_layout.hpp"
 #ifdef CERMU_HAS_GUI
-#include "gui/chip_visualization.h"
-#include "gui/global_chip_style.h"
+#include "gui/chip_visualization.hpp"
+#include "gui/global_chip_style.hpp"
 #include <imgui.h>
 #endif
 

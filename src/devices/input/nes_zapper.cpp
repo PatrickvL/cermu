@@ -12,8 +12,8 @@
  * set_light_detected() each frame.
  */
 
-#include "devices/input/nes_zapper.h"
-#include "core/device_registry.h"
+#include "devices/input/nes_zapper.hpp"
+#include "core/device_registry.hpp"
 
 #include <cstdio>
 #include <SDL_events.h>

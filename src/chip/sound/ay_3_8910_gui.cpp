@@ -10,13 +10,13 @@
  * Compiled only when CERMU_HAS_GUI is defined.
  */
 
-#include "chip/sound/ay_3_8910.h"
-#include "core/chip_layout.h"
+#include "chip/sound/ay_3_8910.hpp"
+#include "core/chip_layout.hpp"
 
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
-#include "gui/chip_visualization.h"
-#include "gui/global_chip_style.h"
+#include "gui/chip_visualization.hpp"
+#include "gui/global_chip_style.hpp"
 #endif
 
 // ============================================================================

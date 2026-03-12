@@ -1,5 +1,5 @@
-#include "core/input/keyboard_mapper.h"
-#include "core/input/emu_key_sdl_map.h"
+#include "core/input/keyboard_mapper.hpp"
+#include "core/input/emu_key_sdl_map.hpp"
 #include <SDL.h>
 #include <cstdio>
 #include <cstring>

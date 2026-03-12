@@ -2,10 +2,10 @@
  * namco_arcade_system.cpp — Namco Pac-Man / Pengo arcade system implementation
  */
 
-#include "systems/arcade/namco/namco_arcade_system.h"
-#include "core/system_registry.h"
-#include "core/storage/rom_loader.h"
-#include "core/config/path_discovery.h"
+#include "systems/arcade/namco/namco_arcade_system.hpp"
+#include "core/system_registry.hpp"
+#include "core/storage/rom_loader.hpp"
+#include "core/config/path_discovery.hpp"
 #include <cstring>
 #include <cstdio>
 

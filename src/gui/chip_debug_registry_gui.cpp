@@ -10,11 +10,11 @@
  * The non-GUI stub is at the bottom of this file.
  */
 
-#include "core/chip.h"
+#include "core/chip.hpp"
 
 #ifdef CERMU_HAS_GUI
 #include <imgui.h>
-#include "gui/chip_visualization.h"
+#include "gui/chip_visualization.hpp"
 #include <cstdio>
 #include <algorithm>
 

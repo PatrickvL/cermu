@@ -7,7 +7,7 @@
 // Follows the same CLI pattern as c64_test_runner.
 // =============================================================================
 
-#include "../src/testing/c16_test_framework.h"
+#include "../src/testing/c16_test_framework.hpp"
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>

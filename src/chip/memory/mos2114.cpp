@@ -1,7 +1,7 @@
-#include "chip/memory/mos2114.h"
-#include "core/system_lines.h"
+#include "chip/memory/mos2114.hpp"
+#include "core/system_lines.hpp"
 #include "core/chip_manifest.hpp"
-#include "core/chip_registry.h"
+#include "core/chip_registry.hpp"
 #include <cstring>
 
 // ============================================================================

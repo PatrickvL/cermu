@@ -10,7 +10,7 @@
  * handled transparently by libarchive.
  */
 
-#include "core/os/os.h"
+#include "core/os/os.hpp"
 
 #ifdef CERMU_NO_LIBARCHIVE
 // Stub implementations when libarchive is not available

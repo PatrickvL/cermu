@@ -12,7 +12,7 @@
  * Uses the OpcodeInfo struct from z80_opcodes.h.
  */
 
-#include "chip/cpu/z80/z80_opcodes.h"
+#include "chip/cpu/z80/z80_opcodes.hpp"
 #include <array>
 
 namespace z80 {

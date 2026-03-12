@@ -1,8 +1,8 @@
-#include "systems/commodore/commodore_system.h"
-#include "devices/storage/drive_1541.h"
-#include "devices/storage/datasette_1530.h"
-#include "core/formats/format_registry.h"
-#include "core/vfs/vfs.h"
+#include "systems/commodore/commodore_system.hpp"
+#include "devices/storage/drive_1541.hpp"
+#include "devices/storage/datasette_1530.hpp"
+#include "core/formats/format_registry.hpp"
+#include "core/vfs/vfs.hpp"
 #include <cstring>
 #include <cstdio>
 

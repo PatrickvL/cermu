@@ -2,9 +2,9 @@
  * D64 Format Handler — Implementation
  */
 
-#include "core/formats/d64_format.h"
-#include "core/formats/format_registry.h"
-#include "systems/commodore/petscii.h"
+#include "core/formats/d64_format.hpp"
+#include "core/formats/format_registry.hpp"
+#include "systems/commodore/petscii.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>

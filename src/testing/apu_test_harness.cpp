@@ -2,7 +2,7 @@
 // NES APU Digital Test Harness — Implementation
 // =============================================================================
 
-#include "testing/apu_test_harness.h"
+#include "testing/apu_test_harness.hpp"
 #include <cassert>
 
 namespace apu_test {

@@ -1,4 +1,4 @@
-#include "chip/video/vic/mos6561.h"
+#include "chip/video/vic/mos6561.hpp"
 #include <cstring>
 
 // MOS6561 chip configuration — PAL variant

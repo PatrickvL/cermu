@@ -1,6 +1,6 @@
-#include "systems/apple1/apple1_system.h"
-#include "systems/apple1/apple1_constants.h"
-#include "core/chip.h"
+#include "systems/apple1/apple1_system.hpp"
+#include "systems/apple1/apple1_constants.hpp"
+#include "core/chip.hpp"
 #include <cstring>
 #include <cstdio>
 
@@ -11,9 +11,9 @@
 // CPU type included via apple1_system.h → fam65xx.hpp
 
 // Include ROM loader
-#include "core/storage/rom_loader.h"
-#include "core/config/path_discovery.h"
-#include "core/system_registry.h"
+#include "core/storage/rom_loader.hpp"
+#include "core/config/path_discovery.hpp"
+#include "core/system_registry.hpp"
 
 // ============================================================================
 // Hardware Traits Definition
