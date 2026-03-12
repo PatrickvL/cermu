@@ -27,6 +27,7 @@
 #include "viewer.hpp"
 
 #include "../system_lines.h"   // bus_state_t, BUS_GET_DATA, BUS_SET_DATA, BUS_GET_ADDR, …
+#include "../cermu.h"          // FORCE_INLINE, likely(), unlikely()
 
 #include <array>
 #include <cassert>
@@ -88,7 +89,7 @@ public:
     // or tick() with callback-based MMIO handlers instead.
     //
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     bus_state_t resolve(size_t viewer_id, bus_state_t bus) const noexcept
         requires(kCsLines)
     {
@@ -97,14 +98,14 @@ public:
         if (BUS_GET_BIT(bus, BUS_RW_BIT)) {
             ChipId chip_id = viewers_[viewer_id].read_chip(Viewer::page_of(addr));
             if constexpr (kHasSubTables) {
-                if (__builtin_expect(chip_id >= PT::kReadSentinelMin, 0))
+                if (unlikely(chip_id >= PT::kReadSentinelMin))
                     chip_id = resolve_read_terminal(viewer_id, chip_id, addr);
             }
             set_cs(bus, size_t(chip_id));
         } else {
             WriteChipId chip_id = viewers_[viewer_id].write_chip(Viewer::page_of(addr));
             if constexpr (kHasSubTables) {
-                if (__builtin_expect(chip_id >= PT::kWriteSentinelMin, 0))
+                if (unlikely(chip_id >= PT::kWriteSentinelMin))
                     chip_id = resolve_write_terminal(viewer_id, chip_id, addr);
             }
             set_cs(bus, size_t(chip_id));
@@ -124,27 +125,27 @@ public:
     // For MMIO chips this is unnecessary — they handle registers in-place.
     //
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     bus_state_t service_read(bus_state_t bus) const noexcept
         requires(kCsLines)
     {
         const ChipId chip_id = get_cs(bus);
-        if (__builtin_expect(chip_id < PT::kReadSentinelMin, 1))
+        if (likely(chip_id < PT::kReadSentinelMin))
             return read_buffer_no_cs(chip_id, bus);
         return bus;  // not a buffer chip — caller handles
     }
 
-    __attribute__((always_inline)) inline
+    FORCE_INLINE
     bus_state_t service_write(bus_state_t bus) noexcept
         requires(kCsLines)
     {
         const ChipId chip_id = get_cs(bus);
-        if (__builtin_expect(WriteChipId(chip_id) < PT::kWriteSentinelMin, 1))
+        if (likely(WriteChipId(chip_id) < PT::kWriteSentinelMin))
             return write_buffer_no_cs(WriteChipId(chip_id), bus);
         return bus;  // not a buffer chip — caller handles
     }
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     bus_state_t service(bus_state_t bus) noexcept
         requires(kCsLines)
     {
@@ -162,12 +163,12 @@ public:
     //   ≈ 5–6 instructions; zero branches taken on happy path.
     //
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     bus_state_t read(size_t viewer_id, bus_state_t bus) noexcept {
         const Addr   addr    = Addr(BUS_GET_ADDR(bus));
         const ChipId chip_id = viewers_[viewer_id].read_chip(Viewer::page_of(addr));
 
-        if (__builtin_expect(chip_id < PT::kReadSentinelMin, 1))
+        if (likely(chip_id < PT::kReadSentinelMin))
             return read_buffer(chip_id, bus);
 
         return read_slow(viewer_id, chip_id, bus);
@@ -177,12 +178,12 @@ public:
     // §1.3  Hot-path write (non-CS / callback-driven systems)
     // =========================================================================
 
-    __attribute__((always_inline)) inline
+    FORCE_INLINE
     bus_state_t write(size_t viewer_id, bus_state_t bus) noexcept {
         const Addr        addr    = Addr(BUS_GET_ADDR(bus));
         const WriteChipId chip_id = viewers_[viewer_id].write_chip(Viewer::page_of(addr));
 
-        if (__builtin_expect(chip_id < PT::kWriteSentinelMin, 1))
+        if (likely(chip_id < PT::kWriteSentinelMin))
             return write_buffer(chip_id, bus);
 
         return write_slow(viewer_id, chip_id, bus);
@@ -192,7 +193,7 @@ public:
     // §1.4  Combined tick (checks R/W bit in bus_state_t)
     // =========================================================================
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     bus_state_t tick(size_t viewer_id, bus_state_t bus) noexcept {
         return BUS_GET_BIT(bus, BUS_RW_BIT)
             ? read (viewer_id, bus)
@@ -640,12 +641,12 @@ private:
     // §1.99  CS line helpers (config-driven, no macros needed)
     // =========================================================================
 
-    static __attribute__((always_inline)) inline
+    static FORCE_INLINE
     ChipId get_cs(bus_state_t bus) noexcept {
         return ChipId((bus >> PT::kCsBitShift) & ((bus_state_t(1) << PT::kCsLineBits) - 1));
     }
 
-    static __attribute__((always_inline)) inline
+    static FORCE_INLINE
     void set_cs(bus_state_t& bus, size_t cs_id) noexcept {
         bus = (bus & ~PT::kCsMask) | (bus_state_t(cs_id) << PT::kCsBitShift);
     }
@@ -660,7 +661,7 @@ private:
     // when max depth is hit, these flatten all the way through.
     //
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     ChipId resolve_read_terminal(size_t viewer_id, ChipId chip_id,
                                  Addr addr) const noexcept {
         if (chip_id == PT::kNoChipSelected) return chip_id;
@@ -669,7 +670,7 @@ private:
         return chip_id;
     }
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     WriteChipId resolve_write_terminal(size_t viewer_id, WriteChipId chip_id,
                                        Addr addr) const noexcept {
         if (chip_id == PT::kNoChipSelectedWrite) return chip_id;
@@ -685,7 +686,7 @@ private:
     // read_buffer / write_buffer: used by tick()/read()/write() (non-CS path).
     // They optionally set CS as a side-effect when kCsLines is enabled.
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     bus_state_t read_buffer(ChipId chip_id, bus_state_t bus) const noexcept {
         const Addr     addr    = Addr(BUS_GET_ADDR(bus));
         const size_t   offset  = (size_t(chip_id) << Spec::PageBits)
@@ -696,7 +697,7 @@ private:
 
         if constexpr (kPartialBus) {
             const DataType mask = bus_masks_.read(size_t(chip_id));
-            if (__builtin_expect(mask != DataBusMasks<Spec>::kFullMask, 0)) {
+            if (unlikely(mask != DataBusMasks<Spec>::kFullMask)) {
                 BUS_BITMIX_DATA(bus, mem_val, mask);
                 return bus;
             }
@@ -706,7 +707,7 @@ private:
         return bus;
     }
 
-    __attribute__((always_inline)) inline
+    FORCE_INLINE
     bus_state_t write_buffer(WriteChipId chip_id, bus_state_t bus) noexcept {
         const Addr     addr    = Addr(BUS_GET_ADDR(bus));
         const size_t   offset  = (size_t(chip_id) << Spec::PageBits)
@@ -717,7 +718,7 @@ private:
 
         if constexpr (kPartialBus) {
             const DataType mask = bus_masks_.write(size_t(chip_id));
-            if (__builtin_expect(mask != DataBusMasks<Spec>::kFullMask, 0)) {
+            if (unlikely(mask != DataBusMasks<Spec>::kFullMask)) {
                 const DataType old_val = static_cast<DataType>(unified_buf_[offset]);
                 unified_buf_[offset] =
                     static_cast<uint8_t>(bitmix(bus_val, old_val, mask));
@@ -732,7 +733,7 @@ private:
     // read_buffer_no_cs / write_buffer_no_cs: used by service_read/service_write
     // after resolve() has already set the CS field.  Skips set_cs().
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     bus_state_t read_buffer_no_cs(ChipId chip_id, bus_state_t bus) const noexcept {
         const Addr     addr    = Addr(BUS_GET_ADDR(bus));
         const size_t   offset  = (size_t(chip_id) << Spec::PageBits)
@@ -741,7 +742,7 @@ private:
 
         if constexpr (kPartialBus) {
             const DataType mask = bus_masks_.read(size_t(chip_id));
-            if (__builtin_expect(mask != DataBusMasks<Spec>::kFullMask, 0)) {
+            if (unlikely(mask != DataBusMasks<Spec>::kFullMask)) {
                 BUS_BITMIX_DATA(bus, mem_val, mask);
                 return bus;
             }
@@ -751,7 +752,7 @@ private:
         return bus;
     }
 
-    __attribute__((always_inline)) inline
+    FORCE_INLINE
     bus_state_t write_buffer_no_cs(WriteChipId chip_id, bus_state_t bus) noexcept {
         const Addr     addr    = Addr(BUS_GET_ADDR(bus));
         const size_t   offset  = (size_t(chip_id) << Spec::PageBits)
@@ -760,7 +761,7 @@ private:
 
         if constexpr (kPartialBus) {
             const DataType mask = bus_masks_.write(size_t(chip_id));
-            if (__builtin_expect(mask != DataBusMasks<Spec>::kFullMask, 0)) {
+            if (unlikely(mask != DataBusMasks<Spec>::kFullMask)) {
                 const DataType old_val = static_cast<DataType>(unified_buf_[offset]);
                 unified_buf_[offset] =
                     static_cast<uint8_t>(bitmix(bus_val, old_val, mask));
@@ -776,7 +777,7 @@ private:
     // §3  MMIO dispatch helpers
     // =========================================================================
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     bus_state_t read_mmio(ChipId chip_id, bus_state_t bus) noexcept {
         if constexpr (Spec::EnableMmio) {
             const size_t idx = size_t(chip_id) - size_t(PT::kRegChipBase);
@@ -789,7 +790,7 @@ private:
         return bus;
     }
 
-    __attribute__((always_inline)) inline
+    FORCE_INLINE
     bus_state_t write_mmio(WriteChipId chip_id, bus_state_t bus) noexcept {
         if constexpr (Spec::EnableMmio) {
             const size_t idx = size_t(chip_id) - size_t(PT::kRegChipBaseWrite);
@@ -813,7 +814,7 @@ private:
     //   as long as sub-tables don't reference themselves).
     //
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     ChipId resolve_read_chip(size_t viewer_id, ChipId chip_id,
                              Addr addr) const noexcept {
         constexpr size_t kMaxDepth = kMaxIndexedSubs + kMaxMaskedSubs;
@@ -839,7 +840,7 @@ private:
         return chip_id;
     }
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     WriteChipId resolve_write_chip(size_t viewer_id, WriteChipId chip_id,
                                    Addr addr) const noexcept {
         constexpr size_t kMaxDepth = kMaxIndexedSubs + kMaxMaskedSubs;
@@ -869,7 +870,7 @@ private:
     // §5  Slow paths — sub-table, MMIO, and open-bus dispatch
     // =========================================================================
 
-    [[nodiscard]] __attribute__((noinline))
+    [[nodiscard]] FORCE_NOINLINE
     bus_state_t read_slow(size_t viewer_id, ChipId chip_id,
                           bus_state_t bus) noexcept {
         // Fast exit for open bus (common sentinel)
@@ -894,7 +895,7 @@ private:
         return bus;   // fallthrough: bus floats
     }
 
-    __attribute__((noinline))
+    FORCE_NOINLINE
     bus_state_t write_slow(size_t viewer_id, WriteChipId chip_id,
                            bus_state_t bus) noexcept {
         if (chip_id == PT::kNoChipSelectedWrite) return bus;
@@ -976,31 +977,31 @@ public:
 
     // ── CS-enabled workflow: resolve then service ──────────────────────────
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     bus_state_t resolve(bus_state_t bus) const noexcept
         requires(Bus::kCsLines) { return bus_.resolve(ViewerId, bus); }
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     bus_state_t service_read(bus_state_t bus) const noexcept
         requires(Bus::kCsLines) { return bus_.service_read(bus); }
 
-    __attribute__((always_inline)) inline
+    FORCE_INLINE
     bus_state_t service_write(bus_state_t bus) noexcept
         requires(Bus::kCsLines) { return bus_.service_write(bus); }
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     bus_state_t service(bus_state_t bus) noexcept
         requires(Bus::kCsLines) { return bus_.service(bus); }
 
     // ── Non-CS workflow: full dispatch ─────────────────────────────────────
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     bus_state_t read (bus_state_t bus) noexcept { return bus_.read (ViewerId, bus); }
 
-    __attribute__((always_inline)) inline
+    FORCE_INLINE
     bus_state_t write(bus_state_t bus) noexcept { return bus_.write(ViewerId, bus); }
 
-    [[nodiscard]] __attribute__((always_inline)) inline
+    [[nodiscard]] FORCE_INLINE
     bus_state_t tick (bus_state_t bus) noexcept { return bus_.tick (ViewerId, bus); }
 
     [[nodiscard]] Bus& bus() noexcept { return bus_; }

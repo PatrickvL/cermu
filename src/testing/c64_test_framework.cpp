@@ -6,11 +6,15 @@
 #include "../chip/cpu/fam65xx/fam65xx.hpp"
 #include "../chip/video/vic_ii/vicii_common.h"
 #include "../core/os/os.h"
+#include "../core/cermu.h"
 #ifdef CERMU_USE_STD_FILESYSTEM
     #include <filesystem>
     namespace cermu_fs = std::filesystem;
 #else
     #include <dirent.h>
+#endif
+#ifdef CERMU_PLATFORM_WINDOWS
+    #include <excpt.h>
 #endif
 #include <cstdio>
 #include <cstring>

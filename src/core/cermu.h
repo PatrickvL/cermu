@@ -197,6 +197,14 @@
     #define FORCE_INLINE inline
 #endif
 
+#if defined(CERMU_COMPILER_MSVC)
+    #define FORCE_NOINLINE __declspec(noinline)
+#elif defined(CERMU_COMPILER_GCC) || defined(CERMU_COMPILER_CLANG)
+    #define FORCE_NOINLINE __attribute__((noinline))
+#else
+    #define FORCE_NOINLINE
+#endif
+
 /* ========================================================================== */
 /* COUNT TRAILING ZEROS                                                       */
 /* ========================================================================== */
@@ -286,6 +294,14 @@
         return cermu_popcount(static_cast<unsigned int>(x)) +
                cermu_popcount(static_cast<unsigned int>(x >> 32));
     }
+#endif
+
+/* Parity (1 when an odd number of bits are set, 0 otherwise).
+   Equivalent to __builtin_parity on GCC/Clang. */
+#if defined(CERMU_COMPILER_GCC) || defined(CERMU_COMPILER_CLANG)
+    #define cermu_parity(x) __builtin_parity(x)
+#else
+    #define cermu_parity(x) (cermu_popcount(x) & 1)
 #endif
 
 /* ========================================================================== */

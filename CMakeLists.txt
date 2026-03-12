@@ -73,6 +73,7 @@ if(MSVC)
         /W4                     # Enable all warnings
         /WX                     # Treat warnings as errors
         /utf-8                  # Source and execution character set UTF-8
+        /FS                     # Force synchronous PDB writes (parallel compilation)
         /wd4324                 # Disable "structure was padded" warning
         /wd4459                 # Disable declaration hiding global declaration warnings
         /wd4201                 # Disable nameless struct/union warning (ImGui compatibility)
@@ -94,6 +95,8 @@ if(MSVC)
         /wd4661                 # Disable missing template instantiation warnings (GUI methods in non-GUI builds)
         /wd4701                 # Disable potentially uninitialized local variable warnings
         /wd4127                 # Disable constant conditional expression warnings (if constexpr pattern)
+        /wd4456                 # Disable declaration hides previous local declaration warnings
+        /wd4576                 # Disable non-standard explicit type conversion warnings (compound literals)
     )
     # Define to silence C++17 deprecation warnings
     add_compile_definitions(_SILENCE_CXX17_C_HEADER_DEPRECATION_WARNING)

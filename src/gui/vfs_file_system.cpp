@@ -10,9 +10,18 @@
 #include "../core/vfs/vfs.h"
 #include "../core/formats/format_handler.h"
 #include "../core/formats/format_registry.h"
+#include "../core/cermu.h"
 
-#include <dirent.h>
+#ifdef CERMU_USE_STD_FILESYSTEM
+    #include <filesystem>
+    namespace cermu_fs = std::filesystem;
+#else
+    #include <dirent.h>
+#endif
 #include <sys/stat.h>
+#ifdef _WIN32
+    #include <direct.h>
+#endif
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -180,8 +189,12 @@ bool VfsFileSystem::IsDirectoryCanBeOpened(const std::string& vName) {
     if (vName.empty()) return false;
 
     // Real directory?
+#ifdef CERMU_USE_STD_FILESYSTEM
+    { std::error_code ec; if (cermu_fs::is_directory(vName, ec)) return true; }
+#else
     DIR* pDir = opendir(vName.c_str());
     if (pDir) { closedir(pDir); return true; }
+#endif
 
     // Real file that we browse as a virtual folder?
     struct stat sb;
@@ -197,8 +210,12 @@ bool VfsFileSystem::IsDirectoryCanBeOpened(const std::string& vName) {
 bool VfsFileSystem::IsDirectoryExist(const std::string& vName) {
     if (vName.empty()) return false;
 
+#ifdef CERMU_USE_STD_FILESYSTEM
+    { std::error_code ec; if (cermu_fs::is_directory(vName, ec)) return true; }
+#else
     DIR* pDir = opendir(vName.c_str());
     if (pDir) { closedir(pDir); return true; }
+#endif
 
     struct stat sb;
     if (stat(vName.c_str(), &sb) == 0 && S_ISREG(sb.st_mode))
@@ -223,15 +240,19 @@ bool VfsFileSystem::CreateDirectoryIfNotExist(const std::string& vName) {
     if (IsDirectoryExist(vName)) return true;
     if (split_at_archive(vName).has_boundary) return false; // can't create inside archive
 #ifdef _WIN32
-    return CreateDirectoryA(vName.c_str(), nullptr) != 0;
+    return _mkdir(vName.c_str()) == 0;
 #else
     return mkdir(vName.c_str(), 0755) == 0;
 #endif
 }
 
 bool VfsFileSystem::IsDirectory(const std::string& vFilePathName) {
+#ifdef CERMU_USE_STD_FILESYSTEM
+    { std::error_code ec; if (cermu_fs::is_directory(vFilePathName, ec)) return true; }
+#else
     DIR* pDir = opendir(vFilePathName.c_str());
     if (pDir) { closedir(pDir); return true; }
+#endif
 
     struct stat sb;
     if (stat(vFilePathName.c_str(), &sb) == 0 && S_ISREG(sb.st_mode))
@@ -400,6 +421,46 @@ std::vector<IGFD::FileInfos> VfsFileSystem::ScanDirectory(const std::string& vPa
 std::vector<IGFD::FileInfos> VfsFileSystem::scan_real_directory(const std::string& path) {
     std::vector<IGFD::FileInfos> res;
 
+#ifdef CERMU_USE_STD_FILESYSTEM
+    std::error_code ec;
+    for (const auto& entry : cermu_fs::directory_iterator(path, ec)) {
+        IGFD::FileType ft;
+
+        if (entry.is_symlink(ec)) {
+            ft.SetSymLink(true);
+            auto target = cermu_fs::status(entry.path(), ec);
+            if (!ec) {
+                if (cermu_fs::is_regular_file(target))
+                    ft.SetContent(IGFD::FileType::ContentType::File);
+                else if (cermu_fs::is_directory(target))
+                    ft.SetContent(IGFD::FileType::ContentType::Directory);
+            }
+        } else if (entry.is_directory(ec)) {
+            ft.SetContent(IGFD::FileType::ContentType::Directory);
+        } else if (entry.is_regular_file(ec)) {
+            ft.SetContent(IGFD::FileType::ContentType::File);
+        }
+
+        if (ft.isValid()) {
+            std::string name = entry.path().filename().string();
+            // Present browsable archives/containers as directories.
+            if (ft.isFile() && is_browsable(name))
+                ft.SetContent(IGFD::FileType::ContentType::Directory);
+
+            IGFD::FileInfos info;
+            info.filePath    = path;
+            info.fileNameExt = name;
+            info.fileType    = ft;
+            res.push_back(info);
+        }
+    }
+
+    // Sort by filename to match scandir's alphasort behavior.
+    std::sort(res.begin(), res.end(),
+              [](const IGFD::FileInfos& a, const IGFD::FileInfos& b) {
+                  return a.fileNameExt < b.fileNameExt;
+              });
+#else
     struct dirent** files = nullptr;
     int n = scandir(path.c_str(), &files, nullptr,
                     [](const struct dirent** a, const struct dirent** b) -> int {
@@ -452,6 +513,7 @@ std::vector<IGFD::FileInfos> VfsFileSystem::scan_real_directory(const std::strin
         for (int i = 0; i < n; ++i) free(files[i]);
         free(files);
     }
+#endif
 
     return res;
 }
@@ -553,7 +615,7 @@ bool VfsFileSystem::is_active_format_ext(const std::string& ext) {
     for (const format_descriptor_t* const* p = s_active_formats_; *p; ++p) {
         const format_descriptor_t* fmt = *p;
         for (const char* const* e = fmt->extensions; e && *e; ++e) {
-            if (strcasecmp(ext.c_str(), *e) == 0)
+            if (cermu_strcasecmp(ext.c_str(), *e) == 0)
                 return true;
         }
     }

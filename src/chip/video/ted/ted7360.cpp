@@ -576,7 +576,7 @@ void ted7360_t::pixel_sequencer() {
                 //   Blink: attribute bit 7 → character alternates with BG0 color.
                 uint8_t pixel_bit = (seq->shift_reg >> 7) & 1u;
 
-                if (reverse_mode & (screen_code >> 7)) {
+                if (reverse_mode && (screen_code >> 7)) {
                     pixel_bit ^= 1u;
                 }
 
