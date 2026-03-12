@@ -201,10 +201,10 @@ constexpr ChipSlot::FactoryFn resolve_slot_factory() {
 // Example — Apple 1:
 //
 //   inline constexpr auto kApple1Chips = make_chip_manifest(
-//       Slot<RAMChip>{0x0000, 65536},        // RAM: 64 KB at $0000
-//       Slot<ROMChip>{0xFF00,   256},        // Monitor ROM: 256 bytes at $FF00
-//       Slot<ROMChip>{0xE000,  4096},        // BASIC ROM: 4 KB at $E000
-//       Slot<pia6820_t> {0xD010,     0, 0xFFFC} // PIA: MMIO-only, 4-byte window
+//       Slot<RAMChip>{0x0000, 65536, 0, "RAM"},
+//       Slot<ROMChip>{0xFF00,   256, 0, "Monitor ROM"},
+//       Slot<ROMChip>{0xE000,  4096, 0, "BASIC ROM"},
+//       Slot<pia6820_t>{0xD010, 0, 0xFFFC, "PIA"} // MMIO-only, 4-byte window
 //   );
 //
 //   // With PageBits = 8 (256-byte pages):
