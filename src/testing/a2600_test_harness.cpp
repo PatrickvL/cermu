@@ -818,16 +818,16 @@ int test_tia_hmclr(harness_t* h) {
     tia_write(h, TIA_W_HMBL, 0xD0);
 
     A26_ASSERT_TRUE(h, "HMCLR_PRE",
-                    h->tia.write_regs[TIA_HMP0] != 0 || h->tia.write_regs[TIA_HMP1] != 0 || h->tia.write_regs[TIA_HMM0] != 0,
+                    h->tia.regs_[TIA_HMP0] != 0 || h->tia.regs_[TIA_HMP1] != 0 || h->tia.regs_[TIA_HMM0] != 0,
                     "HM values non-zero before clear");
 
     tia_write(h, TIA_W_HMCLR, 0x00);
 
-    A26_ASSERT_EQ(h, "HMCLR", (uint8_t)h->tia.write_regs[TIA_HMP0], 0, "HMP0 cleared");
-    A26_ASSERT_EQ(h, "HMCLR", (uint8_t)h->tia.write_regs[TIA_HMP1], 0, "HMP1 cleared");
-    A26_ASSERT_EQ(h, "HMCLR", (uint8_t)h->tia.write_regs[TIA_HMM0], 0, "HMM0 cleared");
-    A26_ASSERT_EQ(h, "HMCLR", (uint8_t)h->tia.write_regs[TIA_HMM1], 0, "HMM1 cleared");
-    A26_ASSERT_EQ(h, "HMCLR", (uint8_t)h->tia.write_regs[TIA_HMBL], 0, "HMBL cleared");
+    A26_ASSERT_EQ(h, "HMCLR", (uint8_t)h->tia.regs_[TIA_HMP0], 0, "HMP0 cleared");
+    A26_ASSERT_EQ(h, "HMCLR", (uint8_t)h->tia.regs_[TIA_HMP1], 0, "HMP1 cleared");
+    A26_ASSERT_EQ(h, "HMCLR", (uint8_t)h->tia.regs_[TIA_HMM0], 0, "HMM0 cleared");
+    A26_ASSERT_EQ(h, "HMCLR", (uint8_t)h->tia.regs_[TIA_HMM1], 0, "HMM1 cleared");
+    A26_ASSERT_EQ(h, "HMCLR", (uint8_t)h->tia.regs_[TIA_HMBL], 0, "HMBL cleared");
 
     return h->fail_count - prev_fail;
 }
@@ -864,10 +864,10 @@ int test_tia_vsync_frame_boundary(harness_t* h) {
 
     // VSYNC set: bit 1 of VSYNC register
     tia_write(h, TIA_W_VSYNC, 0x02);
-    A26_ASSERT_TRUE(h, "VSYNC", (h->tia.write_regs[TIA_VSYNC] & 0x02) != 0, "VSYNC active after write $02");
+    A26_ASSERT_TRUE(h, "VSYNC", (h->tia.regs_[TIA_VSYNC] & 0x02) != 0, "VSYNC active after write $02");
 
     tia_write(h, TIA_W_VSYNC, 0x00);
-    A26_ASSERT_TRUE(h, "VSYNC", !(h->tia.write_regs[TIA_VSYNC] & 0x02), "VSYNC inactive after write $00");
+    A26_ASSERT_TRUE(h, "VSYNC", !(h->tia.regs_[TIA_VSYNC] & 0x02), "VSYNC inactive after write $00");
 
     return h->fail_count - prev_fail;
 }
@@ -909,20 +909,20 @@ int test_tia_color_registers(harness_t* h) {
 
     // Write color registers and verify internal state
     tia_write(h, TIA_W_COLUP0, 0x3C);
-    A26_ASSERT_EQ(h, "COLOR", h->tia.write_regs[TIA_COLUP0], 0x3C, "COLUP0 written");
+    A26_ASSERT_EQ(h, "COLOR", h->tia.regs_[TIA_COLUP0], 0x3C, "COLUP0 written");
 
     tia_write(h, TIA_W_COLUP1, 0x56);
-    A26_ASSERT_EQ(h, "COLOR", h->tia.write_regs[TIA_COLUP1], 0x56, "COLUP1 written");
+    A26_ASSERT_EQ(h, "COLOR", h->tia.regs_[TIA_COLUP1], 0x56, "COLUP1 written");
 
     tia_write(h, TIA_W_COLUPF, 0x78);
-    A26_ASSERT_EQ(h, "COLOR", h->tia.write_regs[TIA_COLUPF], 0x78, "COLUPF written");
+    A26_ASSERT_EQ(h, "COLOR", h->tia.regs_[TIA_COLUPF], 0x78, "COLUPF written");
 
     tia_write(h, TIA_W_COLUBK, 0x9A);
-    A26_ASSERT_EQ(h, "COLOR", h->tia.write_regs[TIA_COLUBK], 0x9A, "COLUBK written");
+    A26_ASSERT_EQ(h, "COLOR", h->tia.regs_[TIA_COLUBK], 0x9A, "COLUBK written");
 
     // Color bit 0 is irrelevant — palette lookup shifts right by 1
     tia_write(h, TIA_W_COLUP0, 0x3D);
-    A26_ASSERT_EQ(h, "COLOR", h->tia.write_regs[TIA_COLUP0], 0x3D, "COLUP0 stores raw value");
+    A26_ASSERT_EQ(h, "COLOR", h->tia.regs_[TIA_COLUP0], 0x3D, "COLUP0 stores raw value");
 
     return h->fail_count - prev_fail;
 }
@@ -985,7 +985,7 @@ int test_tia_audio_waveforms(harness_t* h) {
                             "AUDC%X: constant ON mode", mode);
         }
         // We can't predict all polynomial outputs, but verify control was stored
-        A26_ASSERT_EQ(h, "AUDIO", h->tia.write_regs[TIA_AUDC0], mode,
+        A26_ASSERT_EQ(h, "AUDIO", h->tia.regs_[TIA_AUDC0], mode,
                       "AUDC control register = %X", mode);
     }
 
@@ -2203,7 +2203,7 @@ int test_tia_resmp_lock(harness_t* h) {
 
     // Lock missile to player
     tia_write(h, TIA_W_RESMP0, 0x02);
-    A26_ASSERT_TRUE(h, "RESMP", (h->tia.write_regs[TIA_RESMP0] & 0x02) != 0, "RESMP0 set");
+    A26_ASSERT_TRUE(h, "RESMP", (h->tia.regs_[TIA_RESMP0] & 0x02) != 0, "RESMP0 set");
 
     // Render — missile should NOT appear (disabled while locked)
     tia_write(h, TIA_W_VBLANK, 0x00);
@@ -2217,7 +2217,7 @@ int test_tia_resmp_lock(harness_t* h) {
 
     // Release lock — missile should now be at player position
     tia_write(h, TIA_W_RESMP0, 0x00);
-    A26_ASSERT_TRUE(h, "RESMP", !(h->tia.write_regs[TIA_RESMP0] & 0x02), "RESMP0 cleared");
+    A26_ASSERT_TRUE(h, "RESMP", !(h->tia.regs_[TIA_RESMP0] & 0x02), "RESMP0 cleared");
 
     return h->fail_count - prev_fail;
 }
@@ -2233,15 +2233,15 @@ int test_tia_nusiz_masking(harness_t* h) {
     int prev_fail = h->fail_count;
 
     tia_write(h, TIA_W_NUSIZ0, 0xFF);
-    A26_ASSERT_EQ(h, "NUSIZ_MASK", h->tia.write_regs[TIA_NUSIZ0], 0xFF,
+    A26_ASSERT_EQ(h, "NUSIZ_MASK", h->tia.regs_[TIA_NUSIZ0], 0xFF,
                   "NUSIZ0 stores raw value");
 
     tia_write(h, TIA_W_NUSIZ1, 0xC8);
-    A26_ASSERT_EQ(h, "NUSIZ_MASK", h->tia.write_regs[TIA_NUSIZ1], 0xC8,
+    A26_ASSERT_EQ(h, "NUSIZ_MASK", h->tia.regs_[TIA_NUSIZ1], 0xC8,
                   "NUSIZ1 stores raw value");
 
     tia_write(h, TIA_W_NUSIZ0, 0x15);
-    A26_ASSERT_EQ(h, "NUSIZ_MASK", h->tia.write_regs[TIA_NUSIZ0], 0x15,
+    A26_ASSERT_EQ(h, "NUSIZ_MASK", h->tia.regs_[TIA_NUSIZ0], 0x15,
                   "NUSIZ0 $15 stored");
 
     return h->fail_count - prev_fail;
@@ -2258,11 +2258,11 @@ int test_tia_ctrlpf_masking(harness_t* h) {
     int prev_fail = h->fail_count;
 
     tia_write(h, TIA_W_CTRLPF, 0xFF);
-    A26_ASSERT_EQ(h, "CTRLPF_MASK", h->tia.write_regs[TIA_CTRLPF], 0xFF,
+    A26_ASSERT_EQ(h, "CTRLPF_MASK", h->tia.regs_[TIA_CTRLPF], 0xFF,
                   "CTRLPF stores raw value");
 
     tia_write(h, TIA_W_CTRLPF, 0x25);
-    A26_ASSERT_EQ(h, "CTRLPF_MASK", h->tia.write_regs[TIA_CTRLPF], 0x25,
+    A26_ASSERT_EQ(h, "CTRLPF_MASK", h->tia.regs_[TIA_CTRLPF], 0x25,
                   "CTRLPF $25 stored");
 
     return h->fail_count - prev_fail;
@@ -2449,9 +2449,9 @@ int test_tia_grp_48pixel_sequence(harness_t* h) {
     // Write GRP1=BB:  GRP0_OLD = GRP0(0xAA) → GRP0_OLD=0xAA. GRP1=0xBB. ENABL_OLD=ENABL.
     // Write GRP0=CC:  GRP1_OLD = GRP1(0xBB) → GRP1_OLD=0xBB. GRP0=0xCC
 
-    A26_ASSERT_EQ(h, "48PIX", h->tia.write_regs[TIA_GRP0], 0xCC, "GRP0 current = CC");
+    A26_ASSERT_EQ(h, "48PIX", h->tia.regs_[TIA_GRP0], 0xCC, "GRP0 current = CC");
     A26_ASSERT_EQ(h, "48PIX", h->tia.grp0_old, 0xAA, "GRP0_OLD = AA");
-    A26_ASSERT_EQ(h, "48PIX", h->tia.write_regs[TIA_GRP1], 0xBB, "GRP1 current = BB");
+    A26_ASSERT_EQ(h, "48PIX", h->tia.regs_[TIA_GRP1], 0xBB, "GRP1 current = BB");
     A26_ASSERT_EQ(h, "48PIX", h->tia.grp1_old, 0xBB, "GRP1_OLD = BB");
 
     // With VDEL enabled:
@@ -2556,12 +2556,12 @@ int test_tia_input_latch_mode(harness_t* h) {
 
     // Enable input latch mode
     tia_write(h, TIA_W_VBLANK, 0x42);   // Bit 6 set, bit 1 set (VBLANK ON)
-    A26_ASSERT_TRUE(h, "LATCH_IN", (h->tia.write_regs[TIA_VBLANK] & 0x40) != 0,
+    A26_ASSERT_TRUE(h, "LATCH_IN", (h->tia.regs_[TIA_VBLANK] & 0x40) != 0,
                     "Input latch enabled via VBLANK bit 6");
 
     // Disable input latch mode
     tia_write(h, TIA_W_VBLANK, 0x02);   // Bit 6 clear
-    A26_ASSERT_TRUE(h, "LATCH_IN", !(h->tia.write_regs[TIA_VBLANK] & 0x40),
+    A26_ASSERT_TRUE(h, "LATCH_IN", !(h->tia.regs_[TIA_VBLANK] & 0x40),
                     "Input latch disabled");
 
     return h->fail_count - prev_fail;
@@ -2751,13 +2751,13 @@ int test_tia_hmove_blanking(harness_t* h) {
     int prev_fail = h->fail_count;
 
     // Set up a visible scanline with P0 at position 0, solid 8px
-    h->tia.write_regs[TIA_VBLANK] &= ~0x02;
+    h->tia.regs_[TIA_VBLANK] &= ~0x02;
     h->tia.visible_row = 0;
-    h->tia.write_regs[TIA_COLUP0] = 0x1A;   // Non-zero color
-    h->tia.write_regs[TIA_COLUBK] = 0x00;
-    h->tia.write_regs[TIA_GRP0] = 0xFF;
+    h->tia.regs_[TIA_COLUP0] = 0x1A;   // Non-zero color
+    h->tia.regs_[TIA_COLUBK] = 0x00;
+    h->tia.regs_[TIA_GRP0] = 0xFF;
     h->tia.pos_p0 = 0;
-    h->tia.write_regs[TIA_NUSIZ0] = 0;
+    h->tia.regs_[TIA_NUSIZ0] = 0;
 
     // Strobe HMOVE during HBLANK (h_counter < 68)
     h->tia.h_counter = 0;
@@ -2784,7 +2784,7 @@ int test_tia_hmove_blanking(harness_t* h) {
     // If not implemented, player will show through.
     uint32_t px4 = fb[0 * 160 + 4];
     uint32_t bg_color = h->tia.palette_rgba_[0];
-    uint32_t p0_color = h->tia.palette_rgba_[(h->tia.write_regs[TIA_COLUP0] >> 1) & 0x7F];
+    uint32_t p0_color = h->tia.palette_rgba_[(h->tia.regs_[TIA_COLUP0] >> 1) & 0x7F];
 
     // This test documents expected behavior — may initially fail
     A26_ASSERT_EQ(h, "HMOVE_BLANK", px4, bg_color,
@@ -2804,22 +2804,22 @@ int test_tia_score_mode_priority_interaction(harness_t* h) {
     int prev_fail = h->fail_count;
 
     // Set score mode + PF priority (bits 1 + 2 = 0x06)
-    h->tia.write_regs[TIA_CTRLPF] = 0x06;
-    h->tia.write_regs[TIA_COLUP0] = 0x1A;
-    h->tia.write_regs[TIA_COLUP1] = 0x2A;
-    h->tia.write_regs[TIA_COLUPF] = 0x3A;
-    h->tia.write_regs[TIA_COLUBK] = 0x00;
+    h->tia.regs_[TIA_CTRLPF] = 0x06;
+    h->tia.regs_[TIA_COLUP0] = 0x1A;
+    h->tia.regs_[TIA_COLUP1] = 0x2A;
+    h->tia.regs_[TIA_COLUPF] = 0x3A;
+    h->tia.regs_[TIA_COLUBK] = 0x00;
 
     // Player at x=20 (left half), PF bit set at same position
-    h->tia.write_regs[TIA_GRP0] = 0xFF;
+    h->tia.regs_[TIA_GRP0] = 0xFF;
     h->tia.pos_p0 = 20;
-    h->tia.write_regs[TIA_NUSIZ0] = 0;
-    h->tia.write_regs[TIA_PF0] = 0xFF;   // All PF0 bits set
+    h->tia.regs_[TIA_NUSIZ0] = 0;
+    h->tia.regs_[TIA_PF0] = 0xFF;   // All PF0 bits set
 
     // Set up framebuffer
     uint32_t fb[160 * 300] = {};
     h->tia.set_framebuffer(fb, 160, 300);
-    h->tia.write_regs[TIA_VBLANK] &= ~0x02;
+    h->tia.regs_[TIA_VBLANK] &= ~0x02;
     h->tia.visible_row = 0;
     h->tia.h_counter = 0;
 
@@ -2830,7 +2830,7 @@ int test_tia_score_mode_priority_interaction(harness_t* h) {
 
     // At x=0 (left half, PF set, no player): should be COLUP0 (score mode)
     // PF0 bits 4-7 → PF pixels 0-3, each 4 clocks wide = pixels 0-15
-    uint32_t colup0_rgba = h->tia.palette_rgba_[(h->tia.write_regs[TIA_COLUP0] >> 1) & 0x7F];
+    uint32_t colup0_rgba = h->tia.palette_rgba_[(h->tia.regs_[TIA_COLUP0] >> 1) & 0x7F];
     uint32_t px0 = fb[0 * 160 + 0];
     A26_ASSERT_EQ(h, "SCORE_PRI", px0, colup0_rgba,
                   "Score+Priority: left PF uses COLUP0");
@@ -2844,7 +2844,7 @@ int test_tia_score_mode_priority_interaction(harness_t* h) {
                   "Score+Priority: PF over player, uses COLUP0");
 
     // Right half (x=100): PF should use COLUP1 (score mode right half)
-    uint32_t colup1_rgba = h->tia.palette_rgba_[(h->tia.write_regs[TIA_COLUP1] >> 1) & 0x7F];
+    uint32_t colup1_rgba = h->tia.palette_rgba_[(h->tia.regs_[TIA_COLUP1] >> 1) & 0x7F];
     // PF0 reflects, so PF is set at right half too
     uint32_t px100 = fb[0 * 160 + 100];
     // Non-reflected PF0 repeats, so bits 4-7 are at right half pixels 80-95
@@ -2871,17 +2871,17 @@ int test_tia_missile_copies(harness_t* h) {
 
     // Render a scanline with missile 0 and check framebuffer for copy positions.
     // NUSIZ0 = 1 (two copies close, +16 apart), missile 1px wide
-    h->tia.write_regs[TIA_NUSIZ0] = 0x01;
-    h->tia.write_regs[TIA_ENAM0] = 0x02;
-    h->tia.write_regs[TIA_RESMP0] = 0x00;
+    h->tia.regs_[TIA_NUSIZ0] = 0x01;
+    h->tia.regs_[TIA_ENAM0] = 0x02;
+    h->tia.regs_[TIA_RESMP0] = 0x00;
     h->tia.pos_m0 = 40;
-    h->tia.write_regs[TIA_COLUP0] = 0x1A;   // Non-zero color for missile 0
-    h->tia.write_regs[TIA_COLUBK] = 0x00;
-    h->tia.write_regs[TIA_GRP0] = 0;        // No player graphics
+    h->tia.regs_[TIA_COLUP0] = 0x1A;   // Non-zero color for missile 0
+    h->tia.regs_[TIA_COLUBK] = 0x00;
+    h->tia.regs_[TIA_GRP0] = 0;        // No player graphics
 
     uint32_t fb[160 * 4] = {};
     h->tia.set_framebuffer(fb, 160, 4);
-    h->tia.write_regs[TIA_VBLANK] &= ~0x02;
+    h->tia.regs_[TIA_VBLANK] &= ~0x02;
     h->tia.visible_row = 0;
     h->tia.h_counter = 0;
 
@@ -2889,7 +2889,7 @@ int test_tia_missile_copies(harness_t* h) {
         h->tia.tick_color_clock();
     }
 
-    uint32_t m0_color = h->tia.palette_rgba_[(h->tia.write_regs[TIA_COLUP0] >> 1) & 0x7F];
+    uint32_t m0_color = h->tia.palette_rgba_[(h->tia.regs_[TIA_COLUP0] >> 1) & 0x7F];
     uint32_t bg_color = h->tia.palette_rgba_[0];
 
     // Primary missile at position 40
@@ -2902,7 +2902,7 @@ int test_tia_missile_copies(harness_t* h) {
                   "Missile copy at +16 (NUSIZ=1, two close)");
 
     // Third copy: switch to NUSIZ=3, re-render
-    h->tia.write_regs[TIA_NUSIZ0] = 0x03;
+    h->tia.regs_[TIA_NUSIZ0] = 0x03;
     memset(fb, 0, sizeof(fb));
     h->tia.visible_row = 0;
     h->tia.h_counter = 0;
@@ -2925,7 +2925,7 @@ int test_tia_visible_row_tracking(harness_t* h) {
     reset(h);
     int prev_fail = h->fail_count;
 
-    h->tia.write_regs[TIA_VBLANK] |= 0x02;
+    h->tia.regs_[TIA_VBLANK] |= 0x02;
     h->tia.visible_row = -1;
     h->tia.h_counter = 0;
 
@@ -2937,7 +2937,7 @@ int test_tia_visible_row_tracking(harness_t* h) {
                   "visible_row stays -1 during VBLANK");
 
     // Disable VBLANK, run another scanline
-    h->tia.write_regs[TIA_VBLANK] &= ~0x02;
+    h->tia.regs_[TIA_VBLANK] &= ~0x02;
     for (int i = 0; i < tia_constants::CLOCKS_PER_LINE; i++) {
         h->tia.tick_color_clock();
     }
@@ -2945,7 +2945,7 @@ int test_tia_visible_row_tracking(harness_t* h) {
                   "visible_row=1 after second visible scanline end");
 
     // Re-enable VBLANK, visible_row should reset to -1
-    h->tia.write_regs[TIA_VBLANK] |= 0x02;
+    h->tia.regs_[TIA_VBLANK] |= 0x02;
     for (int i = 0; i < tia_constants::CLOCKS_PER_LINE; i++) {
         h->tia.tick_color_clock();
     }
@@ -3027,14 +3027,14 @@ int test_tia_vblank_transition_mid_scanline(harness_t* h) {
 
     uint32_t fb[160 * 300] = {};
     h->tia.set_framebuffer(fb, 160, 300);
-    h->tia.write_regs[TIA_VBLANK] |= 0x02;
+    h->tia.regs_[TIA_VBLANK] |= 0x02;
     h->tia.visible_row = -1;
     h->tia.h_counter = 0;
-    h->tia.write_regs[TIA_COLUBK] = 0x2A;
-    h->tia.write_regs[TIA_COLUP0] = 0x1A;
-    h->tia.write_regs[TIA_GRP0] = 0xFF;
+    h->tia.regs_[TIA_COLUBK] = 0x2A;
+    h->tia.regs_[TIA_COLUP0] = 0x1A;
+    h->tia.regs_[TIA_GRP0] = 0xFF;
     h->tia.pos_p0 = 80;
-    h->tia.write_regs[TIA_NUSIZ0] = 0;
+    h->tia.regs_[TIA_NUSIZ0] = 0;
 
     // Tick into visible area while still in VBLANK
     for (int i = 0; i < tia_constants::HBLANK_CLOCKS + 40; i++) {
@@ -3047,7 +3047,7 @@ int test_tia_vblank_transition_mid_scanline(harness_t* h) {
                   "visible_row set to 0 on VBLANK→off mid-scanline");
 
     // Continue rest of scanline — pixels after position 40 should render
-    A26_ASSERT_TRUE(h, "VBL_MID", !(h->tia.write_regs[TIA_VBLANK] & 0x02),
+    A26_ASSERT_TRUE(h, "VBL_MID", !(h->tia.regs_[TIA_VBLANK] & 0x02),
                     "VBLANK is off after write");
 
     return h->fail_count - prev_fail;
@@ -3064,10 +3064,10 @@ int test_tia_color_clock_rendering_window(harness_t* h) {
     uint32_t fb[160 * 300] = {};
     memset(fb, 0xCC, sizeof(fb));  // Fill with sentinel
     h->tia.set_framebuffer(fb, 160, 300);
-    h->tia.write_regs[TIA_VBLANK] &= ~0x02;
+    h->tia.regs_[TIA_VBLANK] &= ~0x02;
     h->tia.visible_row = 0;
     h->tia.h_counter = 0;
-    h->tia.write_regs[TIA_COLUBK] = 0x00;
+    h->tia.regs_[TIA_COLUBK] = 0x00;
 
     // Render a full scanline
     for (int i = 0; i < tia_constants::CLOCKS_PER_LINE; i++) {
@@ -3101,7 +3101,7 @@ int test_tia_hmove_motion_sign_convention(harness_t* h) {
     h->tia.write(TIA_HMP0, 0x70);
     // Upper nibble is the 4-bit signed motion value
     auto decode_hm = [](uint8_t reg) -> int { return static_cast<int8_t>(reg) >> 4; };
-    A26_ASSERT_EQ(h, "HM_SIGN", decode_hm(h->tia.write_regs[TIA_HMP0]), 7,
+    A26_ASSERT_EQ(h, "HM_SIGN", decode_hm(h->tia.regs_[TIA_HMP0]), 7,
                   "HMP0=$70 → motion value +7");
 
     h->tia.write(TIA_HMOVE, 0);
@@ -3112,7 +3112,7 @@ int test_tia_hmove_motion_sign_convention(harness_t* h) {
     // HMP0 = $80 (= -8 when decoded, should move RIGHT by 8)
     h->tia.pos_p0 = 80;
     h->tia.write(TIA_HMP0, 0x80);
-    A26_ASSERT_EQ(h, "HM_SIGN", decode_hm(h->tia.write_regs[TIA_HMP0]), -8,
+    A26_ASSERT_EQ(h, "HM_SIGN", decode_hm(h->tia.regs_[TIA_HMP0]), -8,
                   "HMP0=$80 → motion value -8");
 
     h->tia.write(TIA_HMOVE, 0);
@@ -3123,7 +3123,7 @@ int test_tia_hmove_motion_sign_convention(harness_t* h) {
     // HMP0 = $F0 (= -1, move right by 1)
     h->tia.pos_p0 = 80;
     h->tia.write(TIA_HMP0, 0xF0);
-    A26_ASSERT_EQ(h, "HM_SIGN", decode_hm(h->tia.write_regs[TIA_HMP0]), -1,
+    A26_ASSERT_EQ(h, "HM_SIGN", decode_hm(h->tia.regs_[TIA_HMP0]), -1,
                   "HMP0=$F0 → motion value -1");
 
     h->tia.write(TIA_HMOVE, 0);
@@ -3145,25 +3145,25 @@ int test_tia_playfield_score_mode_with_priority(harness_t* h) {
     int prev_fail = h->fail_count;
 
     // CTRLPF = $06: score + priority, no reflect
-    h->tia.write_regs[TIA_CTRLPF] = 0x06;
-    h->tia.write_regs[TIA_COLUP0] = 0x2A;   // Player 0 color
-    h->tia.write_regs[TIA_COLUP1] = 0x4A;   // Player 1 color
-    h->tia.write_regs[TIA_COLUPF] = 0x6A;   // PF color (should NOT be used when score mode active)
-    h->tia.write_regs[TIA_COLUBK] = 0x00;
+    h->tia.regs_[TIA_CTRLPF] = 0x06;
+    h->tia.regs_[TIA_COLUP0] = 0x2A;   // Player 0 color
+    h->tia.regs_[TIA_COLUP1] = 0x4A;   // Player 1 color
+    h->tia.regs_[TIA_COLUPF] = 0x6A;   // PF color (should NOT be used when score mode active)
+    h->tia.regs_[TIA_COLUBK] = 0x00;
 
     // PF0 = $F0 → bits 4-7 set → PF pixels 0-15
-    h->tia.write_regs[TIA_PF0] = 0xF0;
-    h->tia.write_regs[TIA_PF1] = 0;
-    h->tia.write_regs[TIA_PF2] = 0;
+    h->tia.regs_[TIA_PF0] = 0xF0;
+    h->tia.regs_[TIA_PF1] = 0;
+    h->tia.regs_[TIA_PF2] = 0;
 
     // Player 0 fully solid at position 2 (overlaps PF)
-    h->tia.write_regs[TIA_GRP0] = 0xFF;
+    h->tia.regs_[TIA_GRP0] = 0xFF;
     h->tia.pos_p0 = 2;
-    h->tia.write_regs[TIA_NUSIZ0] = 0;
+    h->tia.regs_[TIA_NUSIZ0] = 0;
 
     uint32_t fb[160 * 4] = {};
     h->tia.set_framebuffer(fb, 160, 4);
-    h->tia.write_regs[TIA_VBLANK] &= ~0x02;
+    h->tia.regs_[TIA_VBLANK] &= ~0x02;
     h->tia.visible_row = 0;
     h->tia.h_counter = 0;
 
@@ -3198,12 +3198,12 @@ int test_tia_collision_during_hblank(harness_t* h) {
     // collisions should never fire during HBLANK.
 
     // Player at pos=0, ball at pos=0 — they overlap in visible area
-    h->tia.write_regs[TIA_GRP0] = 0xFF;
+    h->tia.regs_[TIA_GRP0] = 0xFF;
     h->tia.pos_p0 = 0;
-    h->tia.write_regs[TIA_NUSIZ0] = 0;
-    h->tia.write_regs[TIA_ENABL] = 0x02;
+    h->tia.regs_[TIA_NUSIZ0] = 0;
+    h->tia.regs_[TIA_ENABL] = 0x02;
     h->tia.pos_bl = 0;
-    h->tia.write_regs[TIA_VBLANK] &= ~0x02;
+    h->tia.regs_[TIA_VBLANK] &= ~0x02;
     memset(h->tia.cx, 0, sizeof(h->tia.cx));
 
     // Set up framebuffer for rendering
@@ -3240,17 +3240,17 @@ int test_tia_player_copy_positions_exact(harness_t* h) {
     // Render scanlines and verify player copies appear at correct framebuffer positions.
     uint32_t fb[160 * 8] = {};
     h->tia.set_framebuffer(fb, 160, 8);
-    h->tia.write_regs[TIA_COLUP0] = 0x1A;
-    h->tia.write_regs[TIA_COLUBK] = 0x00;
-    h->tia.write_regs[TIA_GRP0] = 0x80;  // Single pixel (bit 7 = leftmost)
+    h->tia.regs_[TIA_COLUP0] = 0x1A;
+    h->tia.regs_[TIA_COLUBK] = 0x00;
+    h->tia.regs_[TIA_GRP0] = 0x80;  // Single pixel (bit 7 = leftmost)
     h->tia.pos_p0 = 10;
-    h->tia.write_regs[TIA_REFP0] = 0x00;
+    h->tia.regs_[TIA_REFP0] = 0x00;
 
-    uint32_t p0_color = h->tia.palette_rgba_[(h->tia.write_regs[TIA_COLUP0] >> 1) & 0x7F];
+    uint32_t p0_color = h->tia.palette_rgba_[(h->tia.regs_[TIA_COLUP0] >> 1) & 0x7F];
     uint32_t bg_color = h->tia.palette_rgba_[0];
 
     auto render_line = [&](int row) {
-        h->tia.write_regs[TIA_VBLANK] &= ~0x02;
+        h->tia.regs_[TIA_VBLANK] &= ~0x02;
         h->tia.visible_row = row;
         h->tia.h_counter = 0;
         for (int i = 0; i < tia_constants::CLOCKS_PER_LINE; i++)
@@ -3258,32 +3258,32 @@ int test_tia_player_copy_positions_exact(harness_t* h) {
     };
 
     // Mode 1: two close (0, +16)
-    h->tia.write_regs[TIA_NUSIZ0] = 0x01;
+    h->tia.regs_[TIA_NUSIZ0] = 0x01;
     render_line(0);
     A26_ASSERT_EQ(h, "COPY_POS", fb[0 * 160 + 10], p0_color, "Mode 1: primary at 10");
     A26_ASSERT_EQ(h, "COPY_POS", fb[0 * 160 + 26], p0_color, "Mode 1: copy at 10+16=26");
     A26_ASSERT_EQ(h, "COPY_POS", fb[0 * 160 + 42], bg_color, "Mode 1: no copy at 42");
 
     // Mode 2: two medium (0, +32)
-    h->tia.write_regs[TIA_NUSIZ0] = 0x02;
+    h->tia.regs_[TIA_NUSIZ0] = 0x02;
     render_line(1);
     A26_ASSERT_EQ(h, "COPY_POS", fb[1 * 160 + 42], p0_color, "Mode 2: copy at 10+32=42");
     A26_ASSERT_EQ(h, "COPY_POS", fb[1 * 160 + 26], bg_color, "Mode 2: no copy at 26");
 
     // Mode 3: three close (0, +16, +32)
-    h->tia.write_regs[TIA_NUSIZ0] = 0x03;
+    h->tia.regs_[TIA_NUSIZ0] = 0x03;
     render_line(2);
     A26_ASSERT_EQ(h, "COPY_POS", fb[2 * 160 + 10], p0_color, "Mode 3: primary at 10");
     A26_ASSERT_EQ(h, "COPY_POS", fb[2 * 160 + 26], p0_color, "Mode 3: copy1 at 26");
     A26_ASSERT_EQ(h, "COPY_POS", fb[2 * 160 + 42], p0_color, "Mode 3: copy2 at 42");
 
     // Mode 4: two wide (0, +64)
-    h->tia.write_regs[TIA_NUSIZ0] = 0x04;
+    h->tia.regs_[TIA_NUSIZ0] = 0x04;
     render_line(3);
     A26_ASSERT_EQ(h, "COPY_POS", fb[3 * 160 + 74], p0_color, "Mode 4: copy at 10+64=74");
 
     // Mode 6: three medium (0, +32, +64)
-    h->tia.write_regs[TIA_NUSIZ0] = 0x06;
+    h->tia.regs_[TIA_NUSIZ0] = 0x06;
     render_line(4);
     A26_ASSERT_EQ(h, "COPY_POS", fb[4 * 160 + 42], p0_color, "Mode 6: copy1 at 10+32=42");
     A26_ASSERT_EQ(h, "COPY_POS", fb[4 * 160 + 74], p0_color, "Mode 6: copy2 at 10+64=74");
@@ -3399,21 +3399,21 @@ int test_tia_grp_vdel_cross_latch_sequence(harness_t* h) {
     int prev_fail = h->fail_count;
 
     // Start with known state
-    h->tia.write_regs[TIA_GRP0] = 0xAA;
-    h->tia.write_regs[TIA_GRP1] = 0x55;
+    h->tia.regs_[TIA_GRP0] = 0xAA;
+    h->tia.regs_[TIA_GRP1] = 0x55;
     h->tia.grp0_old = 0;
     h->tia.grp1_old = 0;
 
     // Write GRP0 = $FF → should latch current GRP1 ($55) into GRP1_OLD
     h->tia.write(TIA_GRP0, 0xFF);
-    A26_ASSERT_EQ(h, "GRP_XLATCH", h->tia.write_regs[TIA_GRP0], 0xFF,
+    A26_ASSERT_EQ(h, "GRP_XLATCH", h->tia.regs_[TIA_GRP0], 0xFF,
                   "GRP0 written to $FF");
     A26_ASSERT_EQ(h, "GRP_XLATCH", h->tia.grp1_old, 0x55,
                   "GRP1_OLD latched from GRP1 ($55) on GRP0 write");
 
     // Write GRP1 = $CC → should latch current GRP0 ($FF) into GRP0_OLD
     h->tia.write(TIA_GRP1, 0xCC);
-    A26_ASSERT_EQ(h, "GRP_XLATCH", h->tia.write_regs[TIA_GRP1], 0xCC,
+    A26_ASSERT_EQ(h, "GRP_XLATCH", h->tia.regs_[TIA_GRP1], 0xCC,
                   "GRP1 written to $CC");
     A26_ASSERT_EQ(h, "GRP_XLATCH", h->tia.grp0_old, 0xFF,
                   "GRP0_OLD latched from GRP0 ($FF) on GRP1 write");
@@ -3489,33 +3489,33 @@ int test_tia_enam_bit1_only(harness_t* h) {
 
     // Writing $01 to ENAM0 should NOT enable (bit 1 = 0)
     h->tia.write(TIA_ENAM0, 0x01);
-    A26_ASSERT_TRUE(h, "ENAM_BIT", !(h->tia.write_regs[TIA_ENAM0] & 0x02),
+    A26_ASSERT_TRUE(h, "ENAM_BIT", !(h->tia.regs_[TIA_ENAM0] & 0x02),
                     "ENAM0: writing $01 → disabled (bit 1 = 0)");
 
     // Writing $02 should enable (bit 1 = 1)
     h->tia.write(TIA_ENAM0, 0x02);
-    A26_ASSERT_TRUE(h, "ENAM_BIT", (h->tia.write_regs[TIA_ENAM0] & 0x02) != 0,
+    A26_ASSERT_TRUE(h, "ENAM_BIT", (h->tia.regs_[TIA_ENAM0] & 0x02) != 0,
                     "ENAM0: writing $02 → enabled (bit 1 = 1)");
 
     // Writing $FD should NOT enable ($FD & 0x02 = 0)
     h->tia.write(TIA_ENAM0, 0xFD);
-    A26_ASSERT_TRUE(h, "ENAM_BIT", !(h->tia.write_regs[TIA_ENAM0] & 0x02),
+    A26_ASSERT_TRUE(h, "ENAM_BIT", !(h->tia.regs_[TIA_ENAM0] & 0x02),
                     "ENAM0: writing $FD → disabled (bit 1 = 0)");
 
     // Same for ENAM1
     h->tia.write(TIA_ENAM1, 0x01);
-    A26_ASSERT_TRUE(h, "ENAM_BIT", !(h->tia.write_regs[TIA_ENAM1] & 0x02),
+    A26_ASSERT_TRUE(h, "ENAM_BIT", !(h->tia.regs_[TIA_ENAM1] & 0x02),
                     "ENAM1: writing $01 → disabled");
     h->tia.write(TIA_ENAM1, 0x03);
-    A26_ASSERT_TRUE(h, "ENAM_BIT", (h->tia.write_regs[TIA_ENAM1] & 0x02) != 0,
+    A26_ASSERT_TRUE(h, "ENAM_BIT", (h->tia.regs_[TIA_ENAM1] & 0x02) != 0,
                     "ENAM1: writing $03 → enabled (bit 1 = 1)");
 
     // Same for ENABL
     h->tia.write(TIA_ENABL, 0x01);
-    A26_ASSERT_TRUE(h, "ENAM_BIT", !(h->tia.write_regs[TIA_ENABL] & 0x02),
+    A26_ASSERT_TRUE(h, "ENAM_BIT", !(h->tia.regs_[TIA_ENABL] & 0x02),
                     "ENABL: writing $01 → disabled");
     h->tia.write(TIA_ENABL, 0x02);
-    A26_ASSERT_TRUE(h, "ENAM_BIT", (h->tia.write_regs[TIA_ENABL] & 0x02) != 0,
+    A26_ASSERT_TRUE(h, "ENAM_BIT", (h->tia.regs_[TIA_ENABL] & 0x02) != 0,
                     "ENABL: writing $02 → enabled");
 
     return h->fail_count - prev_fail;
@@ -3529,7 +3529,7 @@ int test_tia_enabl_write_updates_old_on_grp1(harness_t* h) {
     reset(h);
     int prev_fail = h->fail_count;
 
-    h->tia.write_regs[TIA_ENABL] = 0x02;
+    h->tia.regs_[TIA_ENABL] = 0x02;
     h->tia.enabl_old = false;
 
     // Writing GRP1 should latch ENABL→ENABL_OLD
@@ -3538,7 +3538,7 @@ int test_tia_enabl_write_updates_old_on_grp1(harness_t* h) {
                     "ENABL_OLD latched from ENABL (true) on GRP1 write");
 
     // Change ENABL, verify ENABL_OLD doesn't change until next GRP1 write
-    h->tia.write_regs[TIA_ENABL] = 0x00;
+    h->tia.regs_[TIA_ENABL] = 0x00;
     A26_ASSERT_TRUE(h, "ENABL_GRP1", h->tia.enabl_old,
                     "ENABL_OLD unchanged after ENABL cleared (no GRP1 write)");
 
@@ -3658,16 +3658,16 @@ int test_tia_late_hmove_no_blanking(harness_t* h) {
     int prev_fail = h->fail_count;
 
     // Set up a visible scanline with player 0 at position 4
-    h->tia.write_regs[TIA_VBLANK] &= ~0x02;
+    h->tia.regs_[TIA_VBLANK] &= ~0x02;
     h->tia.visible_row = 0;
-    h->tia.write_regs[TIA_COLUP0] = 0x1A;
-    h->tia.write_regs[TIA_COLUBK] = 0x00;
-    h->tia.write_regs[TIA_GRP0] = 0xFF;
+    h->tia.regs_[TIA_COLUP0] = 0x1A;
+    h->tia.regs_[TIA_COLUBK] = 0x00;
+    h->tia.regs_[TIA_GRP0] = 0xFF;
     h->tia.pos_p0 = 0;
-    h->tia.write_regs[TIA_NUSIZ0] = 0;  // Single copy
+    h->tia.regs_[TIA_NUSIZ0] = 0;  // Single copy
 
     // Set motion register: upper nibble 0xE = -2 → move right 2
-    h->tia.write_regs[TIA_HMP0] = 0xE0;
+    h->tia.regs_[TIA_HMP0] = 0xE0;
 
     // Tick to the visible area (past HBLANK)
     h->tia.h_counter = 0;
@@ -3698,20 +3698,20 @@ int test_tia_write_address_mirroring(harness_t* h) {
 
     // Write COLUBK via base address $09
     h->tia.write(TIA_COLUBK, 0x4E);
-    A26_ASSERT_EQ(h, "WR_MIR", (int)h->tia.write_regs[TIA_COLUBK], 0x4E,
+    A26_ASSERT_EQ(h, "WR_MIR", (int)h->tia.regs_[TIA_COLUBK], 0x4E,
                   "COLUBK via $09");
 
     // Write COLUBK via mirror at $09 + $40 = $49
     h->tia.write(0x49, 0x82);
-    A26_ASSERT_EQ(h, "WR_MIR", (int)h->tia.write_regs[TIA_COLUBK], 0x82,
+    A26_ASSERT_EQ(h, "WR_MIR", (int)h->tia.regs_[TIA_COLUBK], 0x82,
                   "COLUBK via mirror $49");
 
     // Write GRP0 via $1B and mirror at $5B
     h->tia.write(TIA_GRP0, 0xAA);
-    A26_ASSERT_EQ(h, "WR_MIR", (int)h->tia.write_regs[TIA_GRP0], 0xAA,
+    A26_ASSERT_EQ(h, "WR_MIR", (int)h->tia.regs_[TIA_GRP0], 0xAA,
                   "GRP0 via $1B");
     h->tia.write(0x5B, 0x55);
-    A26_ASSERT_EQ(h, "WR_MIR", (int)h->tia.write_regs[TIA_GRP0], 0x55,
+    A26_ASSERT_EQ(h, "WR_MIR", (int)h->tia.regs_[TIA_GRP0], 0x55,
                   "GRP0 via mirror $5B");
 
     return h->fail_count - prev_fail;
@@ -3758,14 +3758,14 @@ int test_tia_playfield_all_40_pixels(harness_t* h) {
 
     // Set PF0=$F0 (bits 4-7 set), PF1=$AA (10101010), PF2=$55 (01010101)
     // Repeat mode (no reflect)
-    h->tia.write_regs[TIA_PF0] = 0xF0;
-    h->tia.write_regs[TIA_PF1] = 0xAA;
-    h->tia.write_regs[TIA_PF2] = 0x55;
-    h->tia.write_regs[TIA_CTRLPF] = 0;  // No reflect, no score, no priority
+    h->tia.regs_[TIA_PF0] = 0xF0;
+    h->tia.regs_[TIA_PF1] = 0xAA;
+    h->tia.regs_[TIA_PF2] = 0x55;
+    h->tia.regs_[TIA_CTRLPF] = 0;  // No reflect, no score, no priority
 
-    h->tia.write_regs[TIA_COLUPF] = 0x1A;
-    h->tia.write_regs[TIA_COLUBK] = 0x00;
-    h->tia.write_regs[TIA_VBLANK] &= ~0x02;
+    h->tia.regs_[TIA_COLUPF] = 0x1A;
+    h->tia.regs_[TIA_COLUBK] = 0x00;
+    h->tia.regs_[TIA_VBLANK] &= ~0x02;
     h->tia.visible_row = 0;
     h->tia.h_counter = 0;
 
@@ -3826,14 +3826,14 @@ int test_tia_collision_persistence_across_scanlines(harness_t* h) {
     int prev_fail = h->fail_count;
 
     // Set up overlapping P0 and P1
-    h->tia.write_regs[TIA_VBLANK] &= ~0x02;
+    h->tia.regs_[TIA_VBLANK] &= ~0x02;
     h->tia.visible_row = 0;
-    h->tia.write_regs[TIA_GRP0] = 0xFF;
-    h->tia.write_regs[TIA_GRP1] = 0xFF;
+    h->tia.regs_[TIA_GRP0] = 0xFF;
+    h->tia.regs_[TIA_GRP1] = 0xFF;
     h->tia.pos_p0 = 40;
     h->tia.pos_p1 = 40;
-    h->tia.write_regs[TIA_COLUP0] = 0x10;
-    h->tia.write_regs[TIA_COLUP1] = 0x20;
+    h->tia.regs_[TIA_COLUP0] = 0x10;
+    h->tia.regs_[TIA_COLUP1] = 0x20;
     h->tia.h_counter = 0;
 
     // Render one scanline — collision should occur
@@ -3869,7 +3869,7 @@ int test_tia_multiple_hmove_same_scanline(harness_t* h) {
     int prev_fail = h->fail_count;
 
     h->tia.pos_p0 = 80;
-    h->tia.write_regs[TIA_HMP0] = 0xE0;  // Upper nibble 0xE = -2 → right 2
+    h->tia.regs_[TIA_HMP0] = 0xE0;  // Upper nibble 0xE = -2 → right 2
 
     // First HMOVE during HBLANK
     h->tia.h_counter = 10;
@@ -3980,16 +3980,16 @@ int test_tia_grp_immediate_effect_on_scanline(harness_t* h) {
     reset(h);
     int prev_fail = h->fail_count;
 
-    h->tia.write_regs[TIA_VBLANK] &= ~0x02;
+    h->tia.regs_[TIA_VBLANK] &= ~0x02;
     h->tia.visible_row = 0;
-    h->tia.write_regs[TIA_COLUP0] = 0x1A;
-    h->tia.write_regs[TIA_COLUBK] = 0x00;
-    h->tia.write_regs[TIA_NUSIZ0] = 0;
+    h->tia.regs_[TIA_COLUP0] = 0x1A;
+    h->tia.regs_[TIA_COLUBK] = 0x00;
+    h->tia.regs_[TIA_NUSIZ0] = 0;
     h->tia.pos_p0 = 40;
     h->tia.h_counter = 0;
 
     // Start with GRP0 = 0 (no player visible)
-    h->tia.write_regs[TIA_GRP0] = 0x00;
+    h->tia.regs_[TIA_GRP0] = 0x00;
 
     uint32_t p0_rgba = h->tia.palette_rgba_[(0x1A >> 1) & 0x7F];
     uint32_t bk_rgba = h->tia.palette_rgba_[0];
@@ -3999,7 +3999,7 @@ int test_tia_grp_immediate_effect_on_scanline(harness_t* h) {
         h->tia.tick_color_clock();
 
     // Now write GRP0 mid-scanline — pixels 41+ should reflect the new value
-    h->tia.write_regs[TIA_GRP0] = 0xFF;
+    h->tia.regs_[TIA_GRP0] = 0xFF;
 
     // Complete the scanline to flush color_line_buffer to framebuffer
     while (h->tia.h_counter != 0)
@@ -4027,19 +4027,19 @@ int test_tia_color_register_bit0_ignored(harness_t* h) {
     // Color registers store raw values — bit 0 is discarded at palette
     // lookup time by (color >> 1) & 0x7F, so no write-time mask needed.
     h->tia.write(TIA_COLUP0, 0x1B);
-    A26_ASSERT_EQ(h, "COL_B0", (int)h->tia.write_regs[TIA_COLUP0], 0x1B,
+    A26_ASSERT_EQ(h, "COL_B0", (int)h->tia.regs_[TIA_COLUP0], 0x1B,
                   "COLUP0 stores raw value");
 
     h->tia.write(TIA_COLUP1, 0xFF);
-    A26_ASSERT_EQ(h, "COL_B0", (int)h->tia.write_regs[TIA_COLUP1], 0xFF,
+    A26_ASSERT_EQ(h, "COL_B0", (int)h->tia.regs_[TIA_COLUP1], 0xFF,
                   "COLUP1 stores raw value");
 
     h->tia.write(TIA_COLUPF, 0x01);
-    A26_ASSERT_EQ(h, "COL_B0", (int)h->tia.write_regs[TIA_COLUPF], 0x01,
+    A26_ASSERT_EQ(h, "COL_B0", (int)h->tia.regs_[TIA_COLUPF], 0x01,
                   "COLUPF stores raw value");
 
     h->tia.write(TIA_COLUBK, 0x83);
-    A26_ASSERT_EQ(h, "COL_B0", (int)h->tia.write_regs[TIA_COLUBK], 0x83,
+    A26_ASSERT_EQ(h, "COL_B0", (int)h->tia.regs_[TIA_COLUBK], 0x83,
                   "COLUBK stores raw value");
 
     return h->fail_count - prev_fail;
@@ -4054,21 +4054,21 @@ int test_tia_ball_color_in_score_mode(harness_t* h) {
     int prev_fail = h->fail_count;
 
     // Score mode on, no priority
-    h->tia.write_regs[TIA_CTRLPF] = 0x02;  // Score mode
-    h->tia.write_regs[TIA_COLUP0] = 0x1A;
-    h->tia.write_regs[TIA_COLUP1] = 0x2A;
-    h->tia.write_regs[TIA_COLUPF] = 0x4A;
-    h->tia.write_regs[TIA_COLUBK] = 0x00;
+    h->tia.regs_[TIA_CTRLPF] = 0x02;  // Score mode
+    h->tia.regs_[TIA_COLUP0] = 0x1A;
+    h->tia.regs_[TIA_COLUP1] = 0x2A;
+    h->tia.regs_[TIA_COLUPF] = 0x4A;
+    h->tia.regs_[TIA_COLUBK] = 0x00;
 
     // Enable ball at left half (position 20)
-    h->tia.write_regs[TIA_ENABL] = 0x02;
+    h->tia.regs_[TIA_ENABL] = 0x02;
     h->tia.pos_bl = 20;
 
     // Enable ball also at right half (position 100)
     // We need two separate scanlines for this since ball is one object.
     // First test: ball in left half → should use COLUP0
 
-    h->tia.write_regs[TIA_VBLANK] &= ~0x02;
+    h->tia.regs_[TIA_VBLANK] &= ~0x02;
     h->tia.visible_row = 0;
     h->tia.h_counter = 0;
 
@@ -4102,12 +4102,12 @@ int test_tia_missile_width_all_copies(harness_t* h) {
     int prev_fail = h->fail_count;
 
     // NUSIZ0 = 0x11: two close copies (bits 0-2 = 1) + missile width 2 (bits 4-5 = 01)
-    h->tia.write_regs[TIA_NUSIZ0] = 0x11;
-    h->tia.write_regs[TIA_ENAM0] = 0x02;
+    h->tia.regs_[TIA_NUSIZ0] = 0x11;
+    h->tia.regs_[TIA_ENAM0] = 0x02;
     h->tia.pos_m0 = 30;
-    h->tia.write_regs[TIA_COLUP0] = 0x1A;
-    h->tia.write_regs[TIA_COLUBK] = 0x00;
-    h->tia.write_regs[TIA_VBLANK] &= ~0x02;
+    h->tia.regs_[TIA_COLUP0] = 0x1A;
+    h->tia.regs_[TIA_COLUBK] = 0x00;
+    h->tia.regs_[TIA_VBLANK] &= ~0x02;
     h->tia.visible_row = 0;
     h->tia.h_counter = 0;
 
@@ -4138,13 +4138,13 @@ int test_tia_hmove_blanking_clears_each_scanline(harness_t* h) {
     reset(h);
     int prev_fail = h->fail_count;
 
-    h->tia.write_regs[TIA_VBLANK] &= ~0x02;
+    h->tia.regs_[TIA_VBLANK] &= ~0x02;
     h->tia.visible_row = 0;
-    h->tia.write_regs[TIA_COLUP0] = 0x1A;
-    h->tia.write_regs[TIA_COLUBK] = 0x00;
-    h->tia.write_regs[TIA_GRP0] = 0xFF;
+    h->tia.regs_[TIA_COLUP0] = 0x1A;
+    h->tia.regs_[TIA_COLUBK] = 0x00;
+    h->tia.regs_[TIA_GRP0] = 0xFF;
     h->tia.pos_p0 = 0;
-    h->tia.write_regs[TIA_NUSIZ0] = 0;
+    h->tia.regs_[TIA_NUSIZ0] = 0;
 
     // Scanline 1: HMOVE during HBLANK → blanking active
     h->tia.h_counter = 0;
@@ -4255,11 +4255,11 @@ int test_tia_collision_all_15_pairs(harness_t* h) {
         int pf = h->fail_count;
         h->tia.write(TIA_CXCLR, 0);  // Clear all collisions
 
-        h->tia.write_regs[TIA_GRP0] = set_p0 ? 0xFF : 0x00;
-        h->tia.write_regs[TIA_GRP1] = set_p1 ? 0xFF : 0x00;
-        h->tia.write_regs[TIA_ENAM0] = set_m0 ? 0x02 : 0x00;
-        h->tia.write_regs[TIA_ENAM1] = set_m1 ? 0x02 : 0x00;
-        h->tia.write_regs[TIA_ENABL] = set_bl ? 0x02 : 0x00;
+        h->tia.regs_[TIA_GRP0] = set_p0 ? 0xFF : 0x00;
+        h->tia.regs_[TIA_GRP1] = set_p1 ? 0xFF : 0x00;
+        h->tia.regs_[TIA_ENAM0] = set_m0 ? 0x02 : 0x00;
+        h->tia.regs_[TIA_ENAM1] = set_m1 ? 0x02 : 0x00;
+        h->tia.regs_[TIA_ENABL] = set_bl ? 0x02 : 0x00;
 
         // All objects at position 40
         h->tia.pos_p0 = 40;
@@ -4267,27 +4267,27 @@ int test_tia_collision_all_15_pairs(harness_t* h) {
         h->tia.pos_m0 = 40;
         h->tia.pos_m1 = 40;
         h->tia.pos_bl = 40;
-        h->tia.write_regs[TIA_NUSIZ0] = 0;
-        h->tia.write_regs[TIA_NUSIZ1] = 0;
+        h->tia.regs_[TIA_NUSIZ0] = 0;
+        h->tia.regs_[TIA_NUSIZ1] = 0;
 
         // For playfield: set PF2 bit 3 (pixel index 15, covers pixels 60-63)
         // Actually, position 40 is in PF1 range. Let's use PF all-on.
         if (set_pf) {
-            h->tia.write_regs[TIA_PF0] = 0xF0;
-            h->tia.write_regs[TIA_PF1] = 0xFF;
-            h->tia.write_regs[TIA_PF2] = 0xFF;
+            h->tia.regs_[TIA_PF0] = 0xF0;
+            h->tia.regs_[TIA_PF1] = 0xFF;
+            h->tia.regs_[TIA_PF2] = 0xFF;
         } else {
-            h->tia.write_regs[TIA_PF0] = 0x00;
-            h->tia.write_regs[TIA_PF1] = 0x00;
-            h->tia.write_regs[TIA_PF2] = 0x00;
+            h->tia.regs_[TIA_PF0] = 0x00;
+            h->tia.regs_[TIA_PF1] = 0x00;
+            h->tia.regs_[TIA_PF2] = 0x00;
         }
 
-        h->tia.write_regs[TIA_VBLANK] &= ~0x02;
+        h->tia.regs_[TIA_VBLANK] &= ~0x02;
         h->tia.visible_row = 0;
-        h->tia.write_regs[TIA_COLUP0] = 0x10;
-        h->tia.write_regs[TIA_COLUP1] = 0x20;
-        h->tia.write_regs[TIA_COLUPF] = 0x30;
-        h->tia.write_regs[TIA_COLUBK] = 0x00;
+        h->tia.regs_[TIA_COLUP0] = 0x10;
+        h->tia.regs_[TIA_COLUP1] = 0x20;
+        h->tia.regs_[TIA_COLUPF] = 0x30;
+        h->tia.regs_[TIA_COLUBK] = 0x00;
         h->tia.h_counter = 0;
 
         // Render one scanline
