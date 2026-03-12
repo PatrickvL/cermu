@@ -194,7 +194,7 @@ private:
 
     // ── Memory bus (declarative manifest + page-pointer dispatch) ────────
     using Bus = MemoryBus<C264BusTraits::Spec>;
-    using Mem = BusMemory<C264BusTraits::Spec>;
+    using Mem = Board<C264BusTraits::Spec>;
     Bus bus_;
     Mem bus_mem_{kC264Chips};
 

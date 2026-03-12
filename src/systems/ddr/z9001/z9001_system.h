@@ -149,7 +149,7 @@ private:
     z80_pio_t   pio2_;               // U855 PIO #2 (keyboard + cassette)
     z80_ctc_t   ctc_;                // U857 CTC (timing + sound)
 
-    // ── Memory — owned by BusMemory, accessed via chip_as<>() ────────────
+    // ── Memory — owned by Board, accessed via chip_as<>() ────────────
     ROMChip* basic_rom_lo_chip_  = nullptr;  // KC 87 only
     ROMChip* basic_rom_hi_chip_  = nullptr;  // KC 87 only
     RAMChip* color_ram_chip_     = nullptr;  // KC 87 only
@@ -163,7 +163,7 @@ private:
     using BT  = Z9001BusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using Mem = BusMemory<typename BT::Spec>;
+    using Mem = Board<typename BT::Spec>;
     Bus bus_;
     Mem bus_mem_{BT::kManifest};
 

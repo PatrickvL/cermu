@@ -180,7 +180,7 @@ private:
 
 ## BusMap
 
-Extracted from the current `BusMemory`. Owns address-decode logic only — page table wiring, MMIO handler registration, sub-table management. Holds no chip lifetime, no buffer ownership.
+Extracted from `Board` (formerly `BusMemory`). Owns address-decode logic only — page table wiring, MMIO handler registration, sub-table management. Holds no chip lifetime, no buffer ownership.
 
 `BusMap` takes a non-owning pointer to the unified buffer (owned by `Board`) and non-owning chip pointers (owned by `Board`) during `apply()`.
 
@@ -578,8 +578,8 @@ Multiple video outputs on the same board each get their own buffer. The GUI pres
 | 1 | ~~`ComponentBase`; `ChipBase` and `ConnectorPort` derive from it~~ |
 | 2 | ~~Rename `GenericEmulatorGUI` → `EmulatorHost`; `SystemGUI` → `SessionGUI`~~ |
 | 3 | ~~Rename `EmulatedSystem` → `System`~~ |
-| 4 | `ConnectorType` A/V output variants; `VideoOutput` / `AudioOutput` descriptors; `ConnectorPort` optional output fields |
-| 5 | Rename `BusMemory` → `Board`; extract `BusMap` from address-decode logic; chip and connector ownership on `Board`; `BoardBase` non-owning component index |
+| 4 | ~~`ConnectorType` A/V output variants; `VideoOutput` / `AudioOutput` descriptors; `ConnectorPort` optional output fields~~ |
+| 5 | ~~Rename `BusMemory` → `Board`~~; extract `BusMap` from address-decode logic; chip and connector ownership on `Board`; `BoardBase` non-owning component index |
 | 6 | `VIC20Board` migration; `VIC20System` stripped to system-level concerns |
 | 7 | `System` composes boards; `Session` composes systems; `SessionGUI` owns `Session` |
 | 8 | `ConnectorRegistry`; `REGISTER_CONNECTOR`; standard connectors self-register |

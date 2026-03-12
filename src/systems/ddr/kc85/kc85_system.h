@@ -181,7 +181,7 @@ private:
     z80_ctc_t            ctc_;                // U857 CTC (timing + sound + tape)
     kc85_module_system_t modules_;            // Expansion module slot controller
 
-    // ── Memory — owned by BusMemory, accessed via chip_as<>() ────────────
+    // ── Memory — owned by Board, accessed via chip_as<>() ────────────
     ROMChip* basic_rom_chip_ = nullptr;   // KC85/3, /4 only
     ROMChip* caos_rom_chip_  = nullptr;
 
@@ -189,7 +189,7 @@ private:
     using BT  = KC85BusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using Mem = BusMemory<typename BT::Spec>;
+    using Mem = Board<typename BT::Spec>;
     Bus bus_;
     Mem bus_mem_{BT::kManifest};
 

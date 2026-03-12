@@ -207,14 +207,14 @@ private:
     amstrad_gate_array_t    gate_array_;  // Amstrad custom gate array
 
     // ========================================================================
-    // MEMORY — owned by registered_chips_, managed via BusMemory
+    // MEMORY — owned by registered_chips_, managed via Board
     // ========================================================================
 
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using BT  = CPCBusTraits<M>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using Mem = BusMemory<typename BT::Spec>;
+    using Mem = Board<typename BT::Spec>;
     Bus bus_;
     Mem bus_mem_{BT::kManifest};
 

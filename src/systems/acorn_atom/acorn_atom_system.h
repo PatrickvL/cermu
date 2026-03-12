@@ -137,7 +137,7 @@ private:
     // ── MemoryBus — declarative setup via chip manifest ──────────────────
     using Bus = MemoryBus<AcornAtomBusSpec>;
     using PT  = PackingTraits<AcornAtomBusSpec>;
-    using Mem = BusMemory<AcornAtomBusSpec>;
+    using Mem = Board<AcornAtomBusSpec>;
     Bus bus_;
     Mem bus_mem_{kAcornAtomChips};
 

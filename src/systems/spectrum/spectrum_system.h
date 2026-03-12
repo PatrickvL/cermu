@@ -179,7 +179,7 @@ private:
     ay_3_8910_t     ay_;              // AY-3-8912 sound (128K only, but always present for simplicity)
 
     // ========================================================================
-    // MEMORY — owned by BusMemory
+    // MEMORY — owned by Board
     // ========================================================================
 
     // Direct pointer into unified buffer for screen rendering
@@ -189,7 +189,7 @@ private:
     using BT  = SpectrumBusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using Mem = BusMemory<typename BT::Spec>;
+    using Mem = Board<typename BT::Spec>;
     Bus bus_;
     Mem bus_mem_{BT::kManifest};
 

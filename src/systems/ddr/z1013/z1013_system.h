@@ -154,7 +154,7 @@ private:
     U880*       cpu_  = nullptr;     // U880 (Z80A clone) @ 2 MHz
     z80_pio_t   pio_;                // U855 PIO (keyboard + cassette)
 
-    // ── Memory — chip pointers for post-init access (owned by BusMemory) ─
+    // ── Memory — chip pointers for post-init access (owned by Board) ─
     ROMChip* basic_rom_lo_chip_    = nullptr;  // Z1013.64 only
     ROMChip* basic_rom_hi_chip_    = nullptr;  // Z1013.64 only
     RAMChip* video_ram_chip_       = nullptr;
@@ -167,7 +167,7 @@ private:
     using BT  = Z1013BusTraits<V>;
     using Bus = MemoryBus<typename BT::Spec>;
     using PT  = PackingTraits<typename BT::Spec>;
-    using Mem = BusMemory<typename BT::Spec>;
+    using Mem = Board<typename BT::Spec>;
     Bus bus_;
     Mem bus_mem_{BT::kManifest};
 
