@@ -310,3 +310,7 @@ bus_state_t mos6522_t::tick(bus_state_t bus_state) {
 #endif
     return bus_state;
 }
+
+#include "../../core/chip_manifest.hpp"
+#include "../../core/chip_registry.h"
+REGISTER_CHIP_TYPE("MOS6522", mos6522_t)

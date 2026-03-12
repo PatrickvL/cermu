@@ -144,3 +144,7 @@ void pia6532_t::write_io(uint16_t addr, uint8_t data) {
         case 0x03: port_b_ddr  = data; break;   // SWBCNT
     }
 }
+
+#include "../../core/chip_manifest.hpp"
+#include "../../core/chip_registry.h"
+REGISTER_CHIP_TYPE("PIA6532", pia6532_t)
