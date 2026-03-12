@@ -309,7 +309,7 @@ static SystemDescriptor chip8_descriptor = {
 // Constructor
 // ============================================================================
 Chip8System::Chip8System()
-    : EmulatedSystem()
+    : System()
     , mode_(Chip8Mode::CHIP8)
     , memory_(4096, 0)
     , hires_(false)

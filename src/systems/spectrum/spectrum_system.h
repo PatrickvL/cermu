@@ -23,7 +23,7 @@
  *   - Port $7FFD controls RAM/ROM banking + display bank
  */
 
-#include "../../core/emulated_system.h"
+#include "../../core/system.h"
 #include "../../core/system_lines.h"
 #include "../../core/chip_manifest.hpp"
 #include "../../chip/cpu/z80/zilog_z80a.h"
@@ -122,7 +122,7 @@ template<> struct SpectrumBusTraits<SpectrumVariant::ZX128K> {
 // ============================================================================
 
 template<SpectrumVariant V>
-class SpectrumSystem : public EmulatedSystem {
+class SpectrumSystem : public System {
     using Traits = SpectrumVariantTraits<V>;
 
 public:

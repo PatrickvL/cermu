@@ -1,4 +1,4 @@
-#include "../core/emulated_system.h"
+#include "../core/system.h"
 #include "../core/formats/format_handler.h"
 #include <cstdio>
 #include <cstring>

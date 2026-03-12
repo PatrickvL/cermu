@@ -144,7 +144,7 @@ ConnectorPort::ConnectorPort(const ConnectorDefinition& def, int port_index)
 ConnectorPort::~ConnectorPort() {
     // Don't call detach_device() here — it accesses device objects
     // (get_name, on_detach) that may already be destroyed when the
-    // owning EmulatedSystem's destructor runs (owned_devices_ is
+    // owning System's destructor runs (owned_devices_ is
     // destroyed before connector_ports_ due to member declaration order).
     attached_devices_.clear();
 }

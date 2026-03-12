@@ -2,14 +2,14 @@
 
 #include "emulator_host.h"
 #include "system_selection_dialog.h"
-#include "../core/emulated_system.h"
+#include "../core/system.h"
 #include <memory>
 #include <string>
 
 class Drive1541Device;  // Forward declaration for drive file dialog
 
 /**
- * SessionGUI - Owns an EmulatedSystem and implements EmulatorHost hooks
+ * SessionGUI - Owns an System and implements EmulatorHost hooks
  *
  * Routes input queue events to the focused system, manages system switching,
  * drag-and-drop file loading, and display scaling. Systems extend menus
@@ -20,7 +20,7 @@ class Drive1541Device;  // Forward declaration for drive file dialog
  */
 class SessionGUI : public EmulatorHost {
 private:
-    std::unique_ptr<EmulatedSystem> system_;
+    std::unique_ptr<System> system_;
 
     // System selection dialog
     SystemSelectionDialog system_selection_dialog_;
@@ -41,7 +41,7 @@ public:
     /**
      * Constructor - takes ownership of the system (can be nullptr to show selection dialog)
      */
-    explicit SessionGUI(std::unique_ptr<EmulatedSystem> system, const char* pending_file = nullptr);
+    explicit SessionGUI(std::unique_ptr<System> system, const char* pending_file = nullptr);
     virtual ~SessionGUI();
     
     // Override init to allocate framebuffer after OpenGL context is created

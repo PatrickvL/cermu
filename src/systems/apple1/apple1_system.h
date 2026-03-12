@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../core/emulated_system.h"
+#include "../../core/system.h"
 #include "../../core/system_lines.h"
 #include "../../core/text_terminal.h"
 #include "../../core/chip_manifest.hpp"
@@ -54,7 +54,7 @@ namespace apple1_chips {
 
 /**
  * Apple 1 System Implementation
- * Clean implementation using the new EmulatedSystem architecture (VIC-20 pattern)
+ * Clean implementation using the new System architecture (VIC-20 pattern)
  *
  * The Apple 1 was Steve Wozniak's first computer design (1976)
  * Features:
@@ -64,7 +64,7 @@ namespace apple1_chips {
  * - Woz Monitor ROM (256 bytes at $FF00-$FFFF)
  * - Optional BASIC ROM
  */
-class Apple1System : public EmulatedSystem {
+class Apple1System : public System {
 public:
     Apple1System();
     ~Apple1System() override;

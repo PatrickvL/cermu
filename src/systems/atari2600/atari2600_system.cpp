@@ -125,7 +125,7 @@ static SystemDescriptor atari2600_descriptor = {
 // ============================================================================
 
 Atari2600System::Atari2600System()
-    : EmulatedSystem()
+    : System()
     , pins_(ATARI2600_BUS_DEFAULT_STATE)
     , cycles_per_frame_(atari2600_constants::CYCLES_PER_FRAME_NTSC)
 {
@@ -208,7 +208,7 @@ bool Atari2600System::initialize() {
 
 void Atari2600System::shutdown() {
     printf("Atari2600: Shutting down\n");
-    EmulatedSystem::shutdown();
+    System::shutdown();
 }
 
 void Atari2600System::reset() {
@@ -579,7 +579,7 @@ void Atari2600System::setup_connector_ports() {
     attach_default_peripherals();
 }
 
-std::vector<EmulatedSystem::DefaultPeripheral>
+std::vector<System::DefaultPeripheral>
 Atari2600System::get_default_peripherals() const {
     return {
         { 0, "joystick" },   // Left Controller

@@ -170,7 +170,7 @@ static SystemDescriptor atom_descriptor = {
 // IMPLEMENTATION
 // ============================================================================
 
-AcornAtomSystem::AcornAtomSystem() : EmulatedSystem(), pins_(ATOM_BUS_DEFAULT_STATE) {
+AcornAtomSystem::AcornAtomSystem() : System(), pins_(ATOM_BUS_DEFAULT_STATE) {
     HardwareTraits traits = {};
     traits.display.native_width    = acorn_atom_constants::FB_WIDTH;
     traits.display.native_height   = acorn_atom_constants::FB_HEIGHT;

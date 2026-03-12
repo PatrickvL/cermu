@@ -33,7 +33,7 @@ static SystemDescriptor pengo_descriptor = {
 
 template<NamcoGame G>
 NamcoArcadeSystem<G>::NamcoArcadeSystem()
-    : EmulatedSystem()
+    : System()
     , wsg_(WSGVariant::WSG3)
     , pins_(NAMCO_BUS_DEFAULT_STATE)
 {

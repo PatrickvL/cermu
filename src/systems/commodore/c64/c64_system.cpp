@@ -49,7 +49,7 @@
  *
  * ARCHITECTURE:
  * =============
- * This file implements the C64 system as a self-contained EmulatedSystem.
+ * This file implements the C64 system as a self-contained System.
  * All core functions (initialize, shutdown, tick, reset, framebuffer, PLA
  * generation, memory init, CPU banking callback) live here.
  *
@@ -574,7 +574,7 @@ void C64System::shutdown() {
         // Chip pointers already nulled above
     }
 
-    EmulatedSystem::shutdown();
+    System::shutdown();
 }
 
 void C64System::reset() {
@@ -1352,7 +1352,7 @@ std::string C64System::get_subtitle_info() const {
 void C64System::render_debug_windows(void* gui_state, std::mutex& emu_mutex) {
 #ifdef CERMU_HAS_GUI
     if (!initialized_) return;
-    EmulatedSystem::render_debug_windows(gui_state, emu_mutex);
+    System::render_debug_windows(gui_state, emu_mutex);
 #endif
 }
 
@@ -1477,7 +1477,7 @@ void C64System::render_configuration_ui() {
     // internal state are tightly coupled to the chosen revision.
 
     // Peripheral connector UI is rendered generically by the GUI layer
-    // via EmulatedSystem::render_peripheral_connector_ui() — no C64-specific
+    // via System::render_peripheral_connector_ui() — no C64-specific
     // duplication needed here.
 #endif
 }
@@ -1713,7 +1713,7 @@ void C64System::update_lightpen_display_rect() {
     cached_lightpen_->set_display_screen_rect(rect.x, rect.y, rect.w, rect.h);
 }
 
-std::vector<EmulatedSystem::DefaultPeripheral>
+std::vector<System::DefaultPeripheral>
 C64System::get_default_peripherals() const {
     return {
         { PORT_CONTROL1,   "mouse_1351" },  // Control Port 1 — mouse (GEOS, etc.)

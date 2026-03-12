@@ -292,7 +292,7 @@ struct SystemDescriptor {
  *   - system-specific metadata (display name, category, address)
  *   - GUI toggle state (debug/settings window visibility)
  *
- * Stored in EmulatedSystem::registered_chips_, populated during initialize().
+ * Stored in System::registered_chips_, populated during initialize().
  * Uses uint8_t for toggle state because std::vector<bool> is bit-packed
  * and does not support taking the address of an element.
  */
@@ -322,7 +322,7 @@ struct SystemChip {
  * This class combines interface definition with shared implementation to reduce
  * boilerplate code across system implementations (~150 lines saved per system).
  */
-class EmulatedSystem {
+class System {
 protected:
     // Configuration (all systems need these)
     HardwareTraits hardware_traits_;
@@ -374,7 +374,7 @@ protected:
                        const char* category, uint16_t base_address = 0);
 
     /// Register a system-owned chip (borrowed pointer, no ownership transfer).
-    /// The system class must ensure the chip outlives the EmulatedSystem.
+    /// The system class must ensure the chip outlives the System.
     void register_chip(ChipBase* chip,
                        const char* display_name, const char* short_name,
                        const char* category, uint16_t base_address = 0);
@@ -458,8 +458,8 @@ protected:
     void auto_assign_controller_keymaps();
     
 public:
-    EmulatedSystem();
-    virtual ~EmulatedSystem() = default;
+    System();
+    virtual ~System() = default;
     
     // Non-virtual implementations (identical for all systems - cannot override)
     const SystemConfiguration& get_configuration() const;

@@ -9,7 +9,7 @@
 
 
 #include "z9001_constants.h"
-#include "../../../core/emulated_system.h"
+#include "../../../core/system.h"
 #include "../../../core/system_lines.h"
 #include "../../../core/chip_manifest.hpp"
 #include "../../../chip/cpu/z80/u880.h"
@@ -109,7 +109,7 @@ template<> struct Z9001BusTraits<Z9001Variant::KC87> {
 
 // ── System ───────────────────────────────────────────────────────────────
 template<Z9001Variant V>
-class Z9001System : public EmulatedSystem {
+class Z9001System : public System {
     using Traits = Z9001VariantTraits<V>;
 public:
     Z9001System();

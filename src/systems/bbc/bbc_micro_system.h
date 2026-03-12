@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../core/emulated_system.h"
+#include "../../core/system.h"
 #include "../../core/system_lines.h"
 #include "../../core/chip_manifest.hpp"
 #include "../../chip/cpu/fam65xx/mos6502.h"
@@ -56,7 +56,7 @@ using BBCMicroBusSpec = ManifestBusSpec<kBBCMicroChips, 16, 8>;
  * Display modes: text (Mode 7 teletext — 40×25) and bitmap (Modes 0-6).
  * Initial implementation: Mode 7 text + bitmap Modes 0-6 for booting the MOS.
  */
-class BBCMicroSystem : public EmulatedSystem {
+class BBCMicroSystem : public System {
 public:
     BBCMicroSystem();
     ~BBCMicroSystem() override;

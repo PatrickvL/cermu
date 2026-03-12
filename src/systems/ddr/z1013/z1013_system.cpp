@@ -39,7 +39,7 @@ static SystemDescriptor z1013_64_descriptor = {
 // ============================================================================
 
 template<Z1013Variant V>
-Z1013System<V>::Z1013System() : EmulatedSystem(), pins_(Z1013_BUS_DEFAULT_STATE) {
+Z1013System<V>::Z1013System() : System(), pins_(Z1013_BUS_DEFAULT_STATE) {
     HardwareTraits traits = {};
     traits.display.native_width    = z1013_constants::FB_WIDTH;
     traits.display.native_height   = z1013_constants::FB_HEIGHT;

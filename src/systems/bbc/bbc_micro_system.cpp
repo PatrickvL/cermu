@@ -122,7 +122,7 @@ REGISTER_SYSTEM(bbc_descriptor, []() {
 // ============================================================================
 
 BBCMicroSystem::BBCMicroSystem()
-    : EmulatedSystem()
+    : System()
     , pins_(BBC_BUS_DEFAULT_STATE)
     , cycles_per_frame_(bbc_constants::CYCLES_PER_FRAME)
 {
@@ -252,7 +252,7 @@ bool BBCMicroSystem::initialize() {
 
 void BBCMicroSystem::shutdown() {
     printf("BBC Micro: Shutting down\n");
-    EmulatedSystem::shutdown();
+    System::shutdown();
 }
 
 void BBCMicroSystem::reset() {

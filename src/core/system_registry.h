@@ -1,6 +1,6 @@
 #pragma once
 
-#include "emulated_system.h"
+#include "system.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -8,7 +8,7 @@
 #include <utility>
 
 // Forward declarations
-class EmulatedSystem;
+class System;
 struct SystemDescriptor;
 struct format_descriptor_t;
 
@@ -16,7 +16,7 @@ struct format_descriptor_t;
  * System factory function type
  * Each system provides a factory function to create instances
  */
-using SystemFactory = std::function<std::unique_ptr<EmulatedSystem>()>;
+using SystemFactory = std::function<std::unique_ptr<System>()>;
 
 /**
  * Result of identifying which emulated system best matches a file.
@@ -71,14 +71,14 @@ public:
                                 const uint8_t* data, size_t size) const;
     
     // Find best system for a file (returns nullptr if no suitable system found)
-    std::unique_ptr<EmulatedSystem> create_system_for_file(const char* filepath);
+    std::unique_ptr<System> create_system_for_file(const char* filepath);
     
     // Create a system by name — matches against short_name and aliases
     // (case-insensitive).  E.g., "c64", "VIC-20", "plus/4" all work.
-    std::unique_ptr<EmulatedSystem> create_system_by_name(const char* name);
+    std::unique_ptr<System> create_system_by_name(const char* name);
     
     // Alias for consistency
-    std::unique_ptr<EmulatedSystem> create_system(const char* name) {
+    std::unique_ptr<System> create_system(const char* name) {
         return create_system_by_name(name);
     }
     

@@ -13,7 +13,7 @@
 #include "archive_scanner.h"
 #include "formats/format_registry.h"
 #include "system_registry.h"
-#include "emulated_system.h"
+#include "system.h"
 #include "vfs/vfs.h"
 
 #include <cstdlib>

@@ -1,5 +1,5 @@
 #include "system_selection_dialog.h"
-#include "../core/emulated_system.h"
+#include "../core/system.h"
 #include "../core/system_registry.h"
 #include "../core/formats/format_handler.h"
 #include "imgui.h"

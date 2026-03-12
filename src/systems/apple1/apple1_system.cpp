@@ -114,7 +114,7 @@ static SystemDescriptor apple1_descriptor = {
 // Constructor / Destructor
 // ============================================================================
 Apple1System::Apple1System()
-    : EmulatedSystem()
+    : System()
     , cpu_(nullptr)
     , terminal_(nullptr)
     , cycles_per_frame_(apple1_constants::CYCLES_PER_FRAME)
@@ -251,7 +251,7 @@ bool Apple1System::initialize() {
 
 void Apple1System::shutdown() {
     printf("Apple1: Shutting down system\n");
-    EmulatedSystem::shutdown();
+    System::shutdown();
 }
 
 void Apple1System::reset() {

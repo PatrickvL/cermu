@@ -654,7 +654,7 @@ void Commodore264System<V>::shutdown() {
 
     initialized_ = false;
 
-    EmulatedSystem::shutdown();
+    System::shutdown();
 }
 
 template<C264SeriesVariant V>
@@ -1277,7 +1277,7 @@ void Commodore264System<V>::setup_connector_ports() {
 }
 
 template<C264SeriesVariant V>
-std::vector<EmulatedSystem::DefaultPeripheral>
+std::vector<System::DefaultPeripheral>
 Commodore264System<V>::get_default_peripherals() const {
     return {
         { 0, "joystick"  },  // Joystick Port 1

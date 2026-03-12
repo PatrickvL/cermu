@@ -23,7 +23,7 @@ static SystemDescriptor bombjack_descriptor = {
 // ============================================================================
 
 BombJackSystem::BombJackSystem()
-    : EmulatedSystem()
+    : System()
     , main_pins_(BOMBJACK_BUS_DEFAULT_STATE)
     , sound_pins_(BOMBJACK_BUS_DEFAULT_STATE)
 {

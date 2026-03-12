@@ -26,7 +26,7 @@
 
 
 #include "acorn_atom_constants.h"
-#include "../../core/emulated_system.h"
+#include "../../core/system.h"
 #include "../../core/system_lines.h"
 #include "../../core/chip_manifest.hpp"
 #include "../../chip/cpu/fam65xx/mos6502.h"
@@ -86,12 +86,12 @@ namespace acorn_atom_chips {
     inline constexpr size_t kOsRomId    = kAcornAtomChips.base_id(kOsRomSlot, AcornAtomBusSpec::PageBits);
 }
 
-class AcornAtomSystem : public EmulatedSystem {
+class AcornAtomSystem : public System {
 public:
     AcornAtomSystem();
     ~AcornAtomSystem() override;
 
-    // ── EmulatedSystem interface ─────────────────────────────────────────
+    // ── System interface ─────────────────────────────────────────
     const SystemDescriptor& get_descriptor() const override;
     bool set_configuration(const SystemConfiguration& config) override;
     bool apply_configuration() override;

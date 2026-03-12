@@ -39,7 +39,7 @@ static SystemDescriptor kc85_4_descriptor = {
 // ============================================================================
 
 template<KC85Variant V>
-KC85System<V>::KC85System() : EmulatedSystem(), pins_(KC85_BUS_DEFAULT_STATE) {
+KC85System<V>::KC85System() : System(), pins_(KC85_BUS_DEFAULT_STATE) {
     HardwareTraits traits = {};
     traits.display.native_width    = kc85_constants::FB_WIDTH;
     traits.display.native_height   = kc85_constants::FB_HEIGHT;

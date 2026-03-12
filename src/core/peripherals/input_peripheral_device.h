@@ -93,7 +93,7 @@ public:
     virtual int get_active_keymap_preset() const { return -1; }
 
     /// Provide guest keyboard scancode context for collision UI display.
-    /// Called by EmulatedSystem::auto_assign_controller_keymaps().
+    /// Called by System::auto_assign_controller_keymaps().
     void set_guest_keyboard_context(const SDL_Scancode* keys, int count) {
         guest_keyboard_scancodes_.clear();
         guest_keyboard_scancodes_.add_from_array(keys, count);
@@ -102,7 +102,7 @@ public:
     // --- Input-source-dependent settings UI -----------------------------
 
     /// Render settings that depend on the current input source (e.g. keyboard
-    /// key-map preset selector).  Called by EmulatedSystem after the Input
+    /// key-map preset selector).  Called by System after the Input
     /// Source combo so that source-dependent controls appear below it.
     /// Default implementation renders the keymap preset combo when keyboard
     /// is the active input source and presets are available.

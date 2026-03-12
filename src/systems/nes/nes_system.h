@@ -50,7 +50,7 @@ namespace nes_constants {
 #include "../../chip/cpu/fam65xx/ricoh_2a03.h"
 #include "../../core/chip.h"
 #include "../../core/system_lines.h"
-#include "../../core/emulated_system.h"
+#include "../../core/system.h"
 #include "../../core/formats/nsf_format.h"
 #include "cartridge/nes_mapper.h"
 #include "cartridge/nes_cartridge.h"
@@ -106,7 +106,7 @@ template<> struct NintendoVariantTraits<NintendoVariant::FAMICOM> {
 // ============================================================================
 
 template<NintendoVariant V>
-class NintendoSystem : public EmulatedSystem {
+class NintendoSystem : public System {
     using Traits = NintendoVariantTraits<V>;
 
 private:
@@ -154,37 +154,37 @@ public:
     NintendoSystem();
     ~NintendoSystem() override;
     
-    // EmulatedSystem interface - System identification
+    // System interface - System identification
     const SystemDescriptor& get_descriptor() const override;
     static const SystemDescriptor& static_descriptor();
     
-    // EmulatedSystem interface - Configuration management
+    // System interface - Configuration management
     bool set_configuration(const SystemConfiguration& config) override;
     bool apply_configuration() override;
     
-    // EmulatedSystem interface - System lifecycle
+    // System interface - System lifecycle
     bool initialize() override;
     void shutdown() override;
     void reset() override;
     
-    // EmulatedSystem interface - Execution
+    // System interface - Execution
     void tick() override;
     void run_frame() override;
     
-    // EmulatedSystem interface - File loading
+    // System interface - File loading
     bool load_file(const char* filepath) override;
     
-    // EmulatedSystem interface - Display
+    // System interface - Display
     uint32_t* get_framebuffer() override;
     void get_display_dimensions(int* width, int* height) const override;
     void set_framebuffer(uint32_t* buffer, int width, int height) override;
     
-    // EmulatedSystem interface - Input
+    // System interface - Input
     void handle_keyboard_event(SDL_Keycode key, bool pressed) override;
     void handle_keyboard_event_ex(SDL_Keycode key, SDL_Scancode scancode, uint16_t mod, bool pressed, bool repeat) override;
     void handle_controller_event(int controller, int button, bool pressed) override;
     
-    // EmulatedSystem interface - GUI integration
+    // System interface - GUI integration
     void render_system_menu_items() override;
     void render_configuration_ui() override;
 
@@ -192,7 +192,7 @@ public:
     const char* get_mode_label() const override;
     std::string get_subtitle_info() const override;
     
-    // EmulatedSystem interface - Emulation control
+    // System interface - Emulation control
     void set_speed_multiplier(float multiplier) override;
 
     // Audio output — drains NES APU sample buffer
